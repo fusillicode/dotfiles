@@ -84,8 +84,9 @@ echo "gem: --no-document" >> ~/.gemrc
 # TODO Install gems
 # . ~/.rvm/scripts/rvm
 # gem install bundler
-# gem install wordmove
 # gem install compass
+# gem install rake
+# gem install wordmove
 
 # Install Oh My Zsh
 curl -L https://github.com/robbyrussell/oh-my-zsh/raw/master/tools/install.sh | sh
