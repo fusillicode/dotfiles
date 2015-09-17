@@ -112,7 +112,7 @@ defaults write NSGlobalDomain NSDisableAutomaticTermination -bool true
 #fusillicode sudo systemsetup -setrestartfreeze on
 
 # Never go into computer sleep mode
-sudo systemsetup -setcomputersleep Off > /dev/null
+#fusillicode sudo systemsetup -setcomputersleep Off > /dev/null
 
 # Check for software updates daily, not just once per week
 defaults write com.apple.SoftwareUpdate ScheduleFrequency -int 1
