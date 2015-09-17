@@ -29,7 +29,7 @@ brew install mysql
 brew install php55
 brew unlink php55
 brew install php56
-brew install phpmyadmin
+brew install adminer
 brew install composer
 brew install postgres
 brew install redis
@@ -97,7 +97,5 @@ mysql.server start
 mysql_secure_installation
 
 # Set up git
-git config --global user.name "fusillicode"
-git config --global user.email "fusillicode@gmail.com"
 git config --global push.default current
-git config --global core.filemode current
+git config --global core.filemode false
