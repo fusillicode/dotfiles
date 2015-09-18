@@ -24,6 +24,9 @@ defaults write NSGlobalDomain AppleInterfaceStyle Dark
 # Set standby delay to 24 hours (default is 1 hour)
 sudo pmset -a standbydelay 86400
 
+# Disable automatic power off
+sudo pmset -a autopoweroff 0
+
 # Disable the sound effects on boot
 #fusillicode sudo nvram SystemAudioVolume=%80
 
