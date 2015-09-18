@@ -90,6 +90,9 @@ echo "gem: --no-document" >> ~/.gemrc
 # Install Oh My Zsh
 curl -L https://github.com/robbyrussell/oh-my-zsh/raw/master/tools/install.sh | sh
 
+# Symlink Firefox to global Applications directory to fix Selenium driver
+ln -s ~/Applications/Firefox.app /Applications/
+
 # Set up MySQL
 cd ~
 mysql.server stop
