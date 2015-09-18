@@ -29,7 +29,6 @@ brew install mysql
 brew install php55
 brew unlink php55
 brew install php56
-brew install adminer
 brew install composer
 brew install postgres
 brew install redis
