@@ -22,12 +22,12 @@ while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 defaults write NSGlobalDomain AppleInterfaceStyle Dark
 
 # Set standby delay to 24 hours (default is 1 hour)
-#fusillicode sudo pmset -a standbydelay 86400
+sudo pmset -a standbydelay 86400
 
 # Disable automatic power off
-#fusillicode sudo pmset -a autopoweroff 0
+sudo pmset -a autopoweroff 0
 
-# Disable the sound effects on boot
+# Disable the sound effects on boot (Just mute the Mac ;))
 #fusillicode sudo nvram SystemAudioVolume=%80
 
 # Disable transparency in the menu bar and elsewhere on Yosemite
@@ -143,7 +143,7 @@ defaults write NSGlobalDomain NSAutomaticDashSubstitutionEnabled -bool false
 #fusillicode sudo tmutil disablelocal
 
 # Disable hibernation (speeds up entering sleep mode)
-#fusillicode sudo pmset -a hibernatemode 0
+sudo pmset -a hibernatemode 0
 
 # Remove the sleep image file to save disk space
 #fusillicode sudo rm /private/var/vm/sleepimage
