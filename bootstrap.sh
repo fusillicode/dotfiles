@@ -49,6 +49,7 @@ brew cask install firefox
 brew cask install istat-menus
 brew cask install libreoffice
 brew cask install mpv
+brew cask install rcdefaultapp
 brew cask install screenhero
 brew cask install slack
 brew cask install skype
