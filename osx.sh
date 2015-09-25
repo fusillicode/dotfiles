@@ -573,7 +573,7 @@ sudo mdutil -E / > /dev/null
 # Only use UTF-8 in Terminal.app
 #fusillicode defaults write com.apple.terminal StringEncodings -array 4
 
-#fusillicode Use a modified version of the Solarized Light theme by default in Terminal.app
+#fusillicode Use a the classic Solarized Dark theme by default in Terminal.app
 SCRIPT_DIR="$( cd "$( dirname "$0" )" && pwd )"
 osascript <<EOD
 
@@ -582,7 +582,7 @@ tell application "Terminal"
 	local allOpenedWindows
 	local initialOpenedWindows
 	local windowID
-	set themeName to "Solarized Light xterm-256color"
+	set themeName to "Solarized Dark xterm-256color"
 
 	(* Store the IDs of all the open terminal windows. *)
 	set initialOpenedWindows to id of every window
@@ -629,8 +629,8 @@ EOD
 #defaults write com.apple.terminal FocusFollowsMouse -bool true
 #defaults write org.x.X11 wm_ffm -bool true
 
-# Install the Solarized Light theme for iTerm
-#fusillicode open "${HOME}/init/Solarized Light.itermcolors"
+# Install the Solarized Dark theme for iTerm
+#fusillicode open "${HOME}/init/Solarized Dark.itermcolors"
 
 # Don’t display the annoying prompt when quitting iTerm
 #fusillicode defaults write com.googlecode.iterm2 PromptOnQuit -bool false
