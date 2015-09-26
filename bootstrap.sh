@@ -18,6 +18,7 @@ brew tap caskroom/versions
 # Install Homebrew apps
 brew install awscli
 brew install boot2docker
+brew install cputhrottle
 brew install docker
 brew install elixir
 brew install git
