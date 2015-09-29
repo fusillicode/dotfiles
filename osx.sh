@@ -59,6 +59,11 @@ defaults write NSGlobalDomain NSTableViewDefaultSizeMode -int 1
 defaults write NSGlobalDomain AppleShowScrollBars -string "Always"
 # Possible values: `WhenScrolling`, `Automatic` and `Always`
 
+#fusillicode Click in the scroll bar to
+#   false: jump to the next page
+#   true: jump to the spot that's clicked
+defaults write -g AppleScrollerPagingBehavior -bool true
+
 # Disable smooth scrolling
 # (Uncomment if you’re on an older Mac that messes up the animation)
 #defaults write NSGlobalDomain NSScrollAnimationEnabled -bool false
