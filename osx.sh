@@ -116,6 +116,9 @@ defaults write NSGlobalDomain NSDisableAutomaticTermination -bool true
 # in the login window
 #fusillicode sudo defaults write /Library/Preferences/com.apple.loginwindow AdminHostInfo HostName
 
+#fusillicode Disallow guests to log in to this computer
+sudo defaults write /Library/Preferences/com.apple.loginwindow 'GuestEnabled' -bool false
+
 # Restart automatically if the computer freezes
 #fusillicode sudo systemsetup -setrestartfreeze on
 
