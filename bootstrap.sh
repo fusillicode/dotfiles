@@ -26,10 +26,13 @@ brew install gpg
 brew install heroku-toolbelt
 brew install imagemagick
 brew install mackup
+brew install mcrypt
 brew install mysql
 brew install php55
+brew install php55-mcrypt
 brew unlink php55
 brew install php56
+brew install php56-mcrypt
 brew install composer
 brew install postgres
 brew install redis
