@@ -36,18 +36,18 @@ defaults write com.apple.universalaccess reduceTransparency -bool true
 #fusillicode Disable Fast User Switching (and consequently hide the current user name from the panel)
 #sudo defaults write /Library/Preferences/.GlobalPreferences MultipleSessionEnabled -bool 'NO'
 
-# Menu bar: hide the Time Machine, Volume, and User icons
+#fusillicode Menu bar: hide the Time Machine, Volume, and User icons
 for domain in ~/Library/Preferences/ByHost/com.apple.systemuiserver.*; do
 	defaults write "${domain}" dontAutoLoad -array \
 		"/System/Library/CoreServices/Menu Extras/TimeMachine.menu" \
 		"/System/Library/CoreServices/Menu Extras/Volume.menu" \
-		"/System/Library/CoreServices/Menu Extras/User.menu"
+		"/System/Library/CoreServices/Menu Extras/User.menu" \
+		"/System/Library/CoreServices/Menu Extras/Clock.menu"
 done
 defaults write com.apple.systemuiserver menuExtras -array \
 	"/System/Library/CoreServices/Menu Extras/Bluetooth.menu" \
 	"/System/Library/CoreServices/Menu Extras/AirPort.menu" \
-	"/System/Library/CoreServices/Menu Extras/Battery.menu" \
-	"/System/Library/CoreServices/Menu Extras/Clock.menu"
+	"/System/Library/CoreServices/Menu Extras/Battery.menu"
 
 # Set highlight color to green
 #fusillicode defaults write NSGlobalDomain AppleHighlightColor -string "0.764700 0.976500 0.568600"
