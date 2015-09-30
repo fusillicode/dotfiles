@@ -36,6 +36,7 @@ brew install php56-mcrypt
 brew install composer
 brew install postgres
 brew install redis
+brew install wp-cli
 brew install youtube-dl
 brew install zsh
 
