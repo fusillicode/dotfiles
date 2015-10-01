@@ -17,9 +17,7 @@ brew tap caskroom/versions
 
 # Install Homebrew apps
 brew install awscli
-brew install boot2docker
 brew install cputhrottle
-brew install docker
 brew install elixir
 brew install git
 brew install gpg
@@ -47,6 +45,7 @@ brew update && brew upgrade brew-cask && brew cleanup && brew cask cleanup
 # Install Homebrew-Cask apps
 brew cask install adium
 brew cask install appcleaner
+brew cask install dockertoolbox
 brew cask install dropbox
 brew cask install google-chrome
 brew cask install filezilla
