@@ -45,6 +45,7 @@ brew update && brew upgrade brew-cask && brew cleanup && brew cask cleanup
 # Install Homebrew-Cask apps
 brew cask install adium
 brew cask install appcleaner
+brew cask install virtualbox
 brew cask install dockertoolbox
 brew cask install dropbox
 brew cask install google-chrome
@@ -60,8 +61,6 @@ brew cask install slack
 brew cask install skype
 brew cask install sublime-text3
 brew cask install transmission
-brew cask install vagrant
-brew cask install virtualbox
 
 # Upgrade everything and remove outdated versions from the cellar
 brew update && brew upgrade && brew cleanup -n && brew cask cleanup
