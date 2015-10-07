@@ -46,12 +46,12 @@ for domain in ~/Library/Preferences/ByHost/com.apple.systemuiserver.*; do
 done
 defaults write com.apple.systemuiserver menuExtras -array \
 	"/System/Library/CoreServices/Menu Extras/Bluetooth.menu" \
-	"/System/Library/CoreServices/Menu Extras/AirPort.menu" \
-	"/System/Library/CoreServices/Menu Extras/Battery.menu"
+	"/System/Library/CoreServices/Menu Extras/AirPort.menu"
+	#fusillicode "/System/Library/CoreServices/Menu Extras/Battery.menu"
 
 #fusillicode Menu bar: customize Battery icon
-defaults write com.apple.menuextra.battery ShowPercent -string "NO"
-defaults write com.apple.menuextra.battery ShowTime -string "YES"
+#fusillicode defaults write com.apple.menuextra.battery ShowPercent -string "NO"
+#fusillicode defaults write com.apple.menuextra.battery ShowTime -string "YES"
 
 # Set highlight color to green
 #fusillicode defaults write NSGlobalDomain AppleHighlightColor -string "0.764700 0.976500 0.568600"
