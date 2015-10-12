@@ -14,7 +14,7 @@
 	<key>Bell</key>
 	<false/>
 	<key>BlinkText</key>
-	<false/>
+	<true/>
 	<key>CursorBlink</key>
 	<false/>
 	<key>CursorColor</key>
