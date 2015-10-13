@@ -22,7 +22,7 @@ while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 defaults write NSGlobalDomain AppleInterfaceStyle Dark
 
 # Set standby delay to 24 hours (default is 1 hour)
-sudo pmset -a standbydelay 86400
+#fusillicode sudo pmset -a standbydelay 86400
 
 # Disable automatic power off
 sudo pmset -a autopoweroff 0
