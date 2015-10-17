@@ -58,6 +58,7 @@ brew cask install slack
 brew cask install skype
 brew cask install sublime-text3
 brew cask install transmission
+brew cask install vagrant
 
 # Upgrade everything and remove outdated versions from the cellar
 brew update && brew upgrade && brew cleanup -n && brew cask cleanup
