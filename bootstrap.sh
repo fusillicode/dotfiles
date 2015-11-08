@@ -12,11 +12,13 @@ brew prune
 brew tap homebrew/dupes
 brew tap homebrew/versions
 brew tap homebrew/homebrew-php
+brew tap beeftornado/rmtree
 brew tap caskroom/cask
 brew tap caskroom/versions
 
 # Install Homebrew apps
 brew install awscli
+brew install beeftornado/rmtree/brew-rmtree
 brew install cputhrottle
 brew install elixir
 brew install git
