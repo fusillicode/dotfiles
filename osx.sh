@@ -131,7 +131,7 @@ sudo defaults write /Library/Preferences/com.apple.loginwindow 'GuestEnabled' -b
 #fusillicode sudo systemsetup -setcomputersleep Off > /dev/null
 
 # Check for software updates daily, not just once per week
-defaults write com.apple.SoftwareUpdate ScheduleFrequency -int 1
+#fusillicode defaults write com.apple.SoftwareUpdate ScheduleFrequency -int 1
 
 # Disable Notification Center and remove the menu bar icon
 #fusillicode launchctl unload -w /System/Library/LaunchAgents/com.apple.notificationcenterui.plist 2> /dev/null
