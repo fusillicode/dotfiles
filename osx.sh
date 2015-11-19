@@ -33,6 +33,9 @@ sudo pmset -a autopoweroff 0
 # Disable transparency in the menu bar and elsewhere on Yosemite
 defaults write com.apple.universalaccess reduceTransparency -bool true
 
+#fusillicode Increase tooltip pop up speed
+defaults write -g NSInitialToolTipDelay -int 500
+
 #fusillicode Disable Fast User Switching (and consequently hide the current user name from the panel)
 #sudo defaults write /Library/Preferences/.GlobalPreferences MultipleSessionEnabled -bool 'NO'
 
