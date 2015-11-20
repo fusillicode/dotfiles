@@ -206,7 +206,7 @@ defaults write NSGlobalDomain AppleKeyboardUIMode -int 3
 #fusillicode defaults write NSGlobalDomain ApplePressAndHoldEnabled -bool false
 
 # Set a blazingly fast keyboard repeat rate
-defaults write NSGlobalDomain KeyRepeat -int 0
+#fusillicode defaults write NSGlobalDomain KeyRepeat -int 0
 
 #fusillicode Set language and text formats
 # Note: if you’re in the US, replace `EUR` with `USD`, `Centimeters` with
