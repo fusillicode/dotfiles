@@ -25,6 +25,7 @@ brew install git
 brew install gpg
 brew install heroku-toolbelt
 brew install imagemagick
+brew install jq
 brew install mackup
 brew install mcrypt
 brew install mysql
@@ -67,10 +68,12 @@ brew cask install vagrant
 # Upgrade everything and remove outdated versions from the cellar
 brew update && brew upgrade && brew cleanup -n && brew cask cleanup
 
-# Install PHP Switcher Script
+# Install PHP Switcher Script, Docker cleanup and ECS deploy utilities
 mkdir -p ~/bin/
 curl -L https://raw.githubusercontent.com/conradkleinespel/sphp-osx/master/sphp > ~/bin/sphp
-chmod +x ~/bin/sphp
+curl -L https://raw.githubusercontent.com/fusillicode/dotfiles/master/docker-cleanup.sh > ~/bin/docker-cleanup
+curl -L https://raw.githubusercontent.com/silinternational/ecs-deploy/master/ecs-deploy > ~/bin/ecs-deploy
+chmod +x ~/bin/*
 # This should already be handled by other stuff
 # echo "export PATH=/usr/local/bin:/usr/local/sbin:$PATH:/Users/`whoami`/bin" >> ~/.profile
 
