@@ -70,9 +70,9 @@ brew update && brew upgrade && brew cleanup -n && brew cask cleanup
 
 # Install PHP Switcher Script, Docker cleanup and ECS deploy utilities
 mkdir -p ~/bin/
-curl -L https://raw.githubusercontent.com/conradkleinespel/sphp-osx/master/sphp > ~/bin/sphp
 curl -L https://raw.githubusercontent.com/fusillicode/dotfiles/master/docker-cleanup.sh > ~/bin/docker-cleanup
 curl -L https://raw.githubusercontent.com/silinternational/ecs-deploy/master/ecs-deploy > ~/bin/ecs-deploy
+curl -L https://raw.githubusercontent.com/conradkleinespel/sphp-osx/master/sphp > ~/bin/sphp
 chmod +x ~/bin/*
 # This should already be handled by other stuff
 # echo "export PATH=/usr/local/bin:/usr/local/sbin:$PATH:/Users/`whoami`/bin" >> ~/.profile
