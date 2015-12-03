@@ -29,6 +29,7 @@ brew install jq
 brew install mackup
 brew install mcrypt
 brew install mysql
+brew install homebrew/versions/mysql56
 brew install php56
 brew install php56-mcrypt
 brew install phpunit
