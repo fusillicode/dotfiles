@@ -115,3 +115,6 @@ mysql_secure_installation
 # Set up git
 git config --global push.default current
 git config --global core.filemode false
+
+# Set up Vim temp files directories
+mkdir -p ~/.vim/.backup ~/.vim/.swp ~/.vim/.undo
