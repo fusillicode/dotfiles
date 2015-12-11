@@ -119,3 +119,7 @@ git config --global core.filemode false
 
 # Set up Vim temp files directories
 mkdir -p ~/.vim/.backup ~/.vim/.swp ~/.vim/.undo
+
+# Set up symlinks for NeoVim
+ln -s ~/.vim ~/.config/nvim
+ln -s ~/.vimrc ~/.config/nvim/init.vim
