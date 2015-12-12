@@ -36,6 +36,7 @@ brew install composer
 brew install postgres
 brew install qt
 brew install redis
+brew install siege
 brew install wp-cli
 brew install youtube-dl
 brew install zsh
