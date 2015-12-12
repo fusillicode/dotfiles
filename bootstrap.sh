@@ -29,7 +29,6 @@ brew install jq
 brew install mackup
 brew install mcrypt
 brew install mysql
-brew install neovim/neovim/neovim
 brew install php56
 brew install php56-mcrypt
 brew install phpunit
@@ -119,7 +118,3 @@ git config --global core.filemode false
 
 # Set up Vim temp files directories
 mkdir -p ~/.vim/.backup ~/.vim/.swp ~/.vim/.undo
-
-# Set up symlinks for NeoVim
-ln -s ~/.vim ~/.config/nvim
-ln -s ~/.vimrc ~/.config/nvim/init.vim
