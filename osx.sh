@@ -45,12 +45,13 @@ for domain in ~/Library/Preferences/ByHost/com.apple.systemuiserver.*; do
 		"/System/Library/CoreServices/Menu Extras/TimeMachine.menu" \
 		#"/System/Library/CoreServices/Menu Extras/Volume.menu" \
 		"/System/Library/CoreServices/Menu Extras/User.menu" \
-		"/System/Library/CoreServices/Menu Extras/Clock.menu"
+		"/System/Library/CoreServices/Menu Extras/Clock.menu" \
+		"/System/Library/CoreServices/Menu Extras/Battery.menu"
 done
 defaults write com.apple.systemuiserver menuExtras -array \
 	"/System/Library/CoreServices/Menu Extras/Bluetooth.menu" \
 	"/System/Library/CoreServices/Menu Extras/AirPort.menu" \
-	"/System/Library/CoreServices/Menu Extras/Battery.menu" \
+	#"/System/Library/CoreServices/Menu Extras/Battery.menu" \
 	"/System/Library/CoreServices/Menu Extras/Volume.menu"
 
 #fusillicode Menu bar: customize Battery icon
