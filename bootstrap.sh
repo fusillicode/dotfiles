@@ -98,6 +98,7 @@ echo "gem: --no-document" >> ~/.gemrc
 # gem install rake
 # gem install v8
 # gem install wordmove
+# gem install rubocop
 
 # Install Oh My Zsh
 curl -L https://github.com/robbyrussell/oh-my-zsh/raw/master/tools/install.sh | sh
