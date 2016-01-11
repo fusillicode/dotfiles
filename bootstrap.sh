@@ -15,6 +15,7 @@ brew tap homebrew/homebrew-php
 brew tap beeftornado/rmtree
 brew tap caskroom/cask
 brew tap caskroom/versions
+brew tap petere/postgresql
 
 # Install Homebrew apps
 brew install awscli
