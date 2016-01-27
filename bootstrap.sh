@@ -98,6 +98,7 @@ echo "gem: --no-document" >> ~/.gemrc
 # gem install rake
 # gem install v8
 # gem install wordmove
+# gem install rubycritic
 # gem install rubocop
 
 # Install Oh My Zsh
