@@ -48,6 +48,7 @@ brew update && brew upgrade brew-cask && brew cleanup && brew cask cleanup
 
 # Install Homebrew-Cask apps
 brew cask install adium
+brew cask install appcleaner
 brew cask install virtualbox
 brew cask install dockertoolbox
 brew cask install dropbox
