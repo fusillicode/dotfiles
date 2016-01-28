@@ -20,6 +20,7 @@ brew tap caskroom/versions
 brew install awscli
 brew install beeftornado/rmtree/brew-rmtree
 brew install cputhrottle
+brew install drush
 brew install elixir
 brew install git
 brew install gpg
