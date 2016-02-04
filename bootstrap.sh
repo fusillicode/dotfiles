@@ -37,6 +37,7 @@ brew install composer
 brew install postgres
 brew install qt
 brew install redis
+brew install sbt
 brew install scala
 brew install siege
 brew install wp-cli
