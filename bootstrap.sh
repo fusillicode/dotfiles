@@ -37,6 +37,7 @@ brew install composer
 brew install postgres
 brew install qt
 brew install redis
+brew install scala
 brew install siege
 brew install wp-cli
 brew install youtube-dl
@@ -56,6 +57,7 @@ brew cask install google-chrome
 brew cask install filezilla
 brew cask install firefox
 brew cask install istat-menus
+brew cask install java
 brew cask install libreoffice
 brew cask install mpv
 brew cask install poedit
