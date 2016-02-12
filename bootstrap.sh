@@ -102,7 +102,6 @@ echo "gem: --no-document" >> ~/.gemrc
 # gem install bundler
 # gem install compass
 # gem install rake
-# gem install v8
 # gem install wordmove
 # gem install rubycritic
 # gem install rubocop
