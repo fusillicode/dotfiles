@@ -102,9 +102,10 @@ echo "gem: --no-document" >> ~/.gemrc
 # gem install bundler
 # gem install compass
 # gem install rake
-# gem install wordmove
-# gem install rubycritic
+# gem install rails
 # gem install rubocop
+# gem install rubycritic
+# gem install wordmove
 
 # Install Oh My Zsh
 curl -L https://github.com/robbyrussell/oh-my-zsh/raw/master/tools/install.sh | sh
