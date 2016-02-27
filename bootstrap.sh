@@ -79,7 +79,7 @@ mkdir -p ~/bin/
 curl -L https://raw.githubusercontent.com/fusillicode/dotfiles/master/docker-cleanup.sh > ~/bin/docker-cleanup
 curl -L https://raw.githubusercontent.com/silinternational/ecs-deploy/master/ecs-deploy > ~/bin/ecs-deploy
 curl -L https://raw.githubusercontent.com/conradkleinespel/sphp-osx/master/sphp > ~/bin/sphp
-curl -L https://raw.github.com/wiki/rebar/rebar/rebar > ~/bin/rebar
+curl -L https://s3.amazonaws.com/rebar3/rebar3 > ~/bin/rebar3
 chmod +x ~/bin/*
 # This should already be handled by other stuff
 # echo "export PATH=/usr/local/bin:/usr/local/sbin:$PATH:/Users/`whoami`/bin" >> ~/.profile
