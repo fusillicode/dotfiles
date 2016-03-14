@@ -68,6 +68,7 @@ brew cask install slack
 brew cask install skype
 brew cask install spectacle
 brew cask install sublime-text3
+brew cask install the-unarchiver
 brew cask install transmission
 brew cask install vagrant
 
