@@ -107,6 +107,10 @@ echo "gem: --no-document" >> ~/.gemrc
 # gem install rubocop
 # gem install rubycritic
 # gem install wordmove
+# git clone https://github.com/wpscanteam/wpscan.git
+# cd wpscan
+# bundle install --without test
+# cd .. && rm -rf wpscan
 
 # Install Oh My Zsh
 curl -L https://github.com/robbyrussell/oh-my-zsh/raw/master/tools/install.sh | sh
