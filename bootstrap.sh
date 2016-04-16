@@ -30,6 +30,7 @@ brew install jq
 brew install mackup
 brew install mcrypt
 brew install mysql
+brew install mpv
 brew install php56
 brew install php56-mcrypt
 brew install phpunit
@@ -60,7 +61,6 @@ brew cask install firefox
 brew cask install istat-menus
 brew cask install java
 brew cask install libreoffice
-brew cask install mpv
 brew cask install poedit
 brew cask install rcdefaultapp
 brew cask install screenhero
