@@ -38,6 +38,7 @@ brew install composer
 brew install postgres
 brew install qt
 brew install redis
+brew install rust
 brew install sbt
 brew install scala
 brew install siege
@@ -55,9 +56,10 @@ brew cask install appcleaner
 brew cask install virtualbox
 brew cask install dockertoolbox
 brew cask install dropbox
-brew cask install google-chrome
+brew cask install elm-platform
 brew cask install filezilla
 brew cask install firefox
+brew cask install google-chrome
 brew cask install istat-menus
 brew cask install java
 brew cask install libreoffice
