@@ -15,11 +15,13 @@ brew tap homebrew/homebrew-php
 brew tap beeftornado/rmtree
 brew tap caskroom/cask
 brew tap caskroom/versions
+brew tap zzrotdesign/tap
 
 # Install Homebrew apps
 brew install awscli
 brew install beeftornado/rmtree/brew-rmtree
 brew install cputhrottle
+brew install docker-clean
 brew install drush
 brew install elixir
 brew install git
@@ -79,7 +81,7 @@ brew update && brew upgrade && brew cleanup -n && brew cask cleanup
 
 # Install PHP Switcher Script, Docker cleanup, ECS deploy and Rebar
 mkdir -p ~/bin/
-curl -L https://raw.githubusercontent.com/fusillicode/dotfiles/master/docker-cleanup.sh > ~/bin/docker-cleanup
+# curl -L https://raw.githubusercontent.com/fusillicode/dotfiles/master/docker-cleanup.sh > ~/bin/docker-cleanup
 curl -L https://raw.githubusercontent.com/silinternational/ecs-deploy/master/ecs-deploy > ~/bin/ecs-deploy
 curl -L https://raw.githubusercontent.com/conradkleinespel/sphp-osx/master/sphp > ~/bin/sphp
 curl -L https://s3.amazonaws.com/rebar3/rebar3 > ~/bin/rebar3
