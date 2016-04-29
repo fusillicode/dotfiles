@@ -29,6 +29,7 @@ brew install gpg
 brew install heroku-toolbelt
 brew install imagemagick
 brew install jq
+brew install leiningen
 brew install mackup
 brew install mcrypt
 brew install mysql
