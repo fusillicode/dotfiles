@@ -24,6 +24,7 @@ brew install cputhrottle
 brew install docker-clean
 brew install drush
 brew install elixir
+brew install exercism
 brew install git
 brew install gpg
 brew install heroku-toolbelt
