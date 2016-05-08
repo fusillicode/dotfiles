@@ -20,11 +20,13 @@ brew tap zzrotdesign/tap
 # Install Homebrew apps
 brew install awscli
 brew install beeftornado/rmtree/brew-rmtree
+brew install cabal-install
 brew install cputhrottle
 brew install docker-clean
 brew install drush
 brew install elixir
 brew install exercism
+brew install ghc
 brew install git
 brew install gpg
 brew install heroku-toolbelt
