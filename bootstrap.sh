@@ -137,5 +137,6 @@ mysql.server start
 mysql_secure_installation
 
 # Set up git
-git config --global push.default current
 git config --global core.filemode false
+git config --global merge.tool opendiff
+git config --global push.default current
