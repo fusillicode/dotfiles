@@ -58,6 +58,7 @@ brew update && brew upgrade brew-cask && brew cleanup && brew cask cleanup
 # Install Homebrew-Cask apps
 brew cask install adium
 brew cask install appcleaner
+brew cask install atom
 brew cask install dropbox
 brew cask install elm-platform
 brew cask install filezilla
@@ -68,13 +69,11 @@ brew cask install java
 brew cask install libreoffice
 brew cask install poedit
 brew cask install rcdefaultapp
-brew cask install screenhero
 brew cask install slack
 brew cask install skype
 brew cask install spectacle
 brew cask install the-unarchiver
 brew cask install transmission
-brew cask install visual-studio-code
 
 # Upgrade everything and remove outdated versions from the cellar
 brew update && brew upgrade && brew cleanup -n && brew cask cleanup
