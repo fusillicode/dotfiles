@@ -29,6 +29,7 @@ brew install ghc
 brew install git
 brew install gpg
 brew install heroku-toolbelt
+brew install hybridgroup/tools/gort
 brew install imagemagick
 brew install jq
 brew install leiningen
@@ -58,6 +59,7 @@ brew update && brew upgrade brew-cask && brew cleanup && brew cask cleanup
 # Install Homebrew-Cask apps
 brew cask install adium
 brew cask install appcleaner
+brew cask install arduino
 brew cask install atom
 brew cask install dropbox
 brew cask install elm-platform
@@ -103,6 +105,7 @@ echo "gem: --no-document" >> ~/.gemrc
 
 # TODO Install gems
 # . ~/.rvm/scripts/rvm
+# gem install artoo
 # gem install bundler
 # gem install compass
 # gem install rake
