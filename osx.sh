@@ -204,7 +204,7 @@ defaults write NSGlobalDomain AppleKeyboardUIMode -int 3
 #fusillicode defaults write com.apple.universalaccess closeViewZoomFollowsFocus -bool true
 
 # Disable press-and-hold for keys in favor of key repeat
-#fusillicode defaults write NSGlobalDomain ApplePressAndHoldEnabled -bool false
+defaults write NSGlobalDomain ApplePressAndHoldEnabled -bool false
 
 # Set a blazingly fast keyboard repeat rate
 #fusillicode defaults write NSGlobalDomain KeyRepeat -int 0
