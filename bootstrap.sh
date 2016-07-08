@@ -60,6 +60,7 @@ brew update && brew upgrade brew-cask && brew cleanup && brew cask cleanup
 brew cask install adium
 brew cask install appcleaner
 brew cask install arduino
+brew cask install atom-beta
 brew cask install dropbox
 brew cask install elm-platform
 brew cask install filezilla
@@ -73,7 +74,6 @@ brew cask install rcdefaultapp
 brew cask install slack
 brew cask install skype
 brew cask install spectacle
-brew cask install visual-studio-code
 brew cask install the-unarchiver
 brew cask install transmission
 
@@ -116,24 +116,8 @@ echo "gem: --no-document" >> ~/.gemrc
 # Install Oh My Zsh
 curl -L https://github.com/robbyrussell/oh-my-zsh/raw/master/tools/install.sh | sh
 
-# Install Visual Studio Code theme and extensions
-# code --install-extension gerane.Theme-FlatlandMonokai
-# code --install-extension RoscoP.ActiveFileInStatusBar
-# code --install-extension waderyan.gitblame
-# code --install-extension wmaurer.change-case
-# code --install-extension sporto.rails-go-to-spec
-# code --install-extension groksrc.ruby
-# code --install-extension CraigMaslowski.erb
-# code --install-extension groksrc.haml
-# code --install-extension sianglim.slim
-# code --install-extension mjmcloug.vscode-elixir
-# code --install-extension pgourlain.erlang
-# code --install-extension sbrink.elm
-# code --install-extension mrmlnc.vscode-apache
-# code --install-extension shanoor.vscode-nginx
-# code --install-extension PeterJausovec.vscode-docker
-# code --install-extension justusadam.language-haskell
-# code --install-extension crisward.cjsx
+# Install Atom packages
+apm install language-apache language-babel language-docker language-elixir language-elm language-generic-config language-haproxy language-haskell language-nginx language-rspec language-rust language-scala language-slim atom-alignment change-case custom-title git-plus highlight-column open-git-modified-files pinned-tabs rails-open-rspec ruby-test
 
 # Symlink Firefox to global Applications directory to fix Selenium driver
 ln -s ~/Applications/Firefox.app /Applications/
