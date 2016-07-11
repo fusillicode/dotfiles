@@ -49,7 +49,6 @@ brew install sbt
 brew install scala
 brew install siege
 brew install wp-cli
-brew install youtube-dl
 brew install zsh
 
 # Install Homebrew-Cask
