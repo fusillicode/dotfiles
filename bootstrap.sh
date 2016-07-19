@@ -62,7 +62,6 @@ brew cask install arduino
 brew cask install atom-beta
 brew cask install dropbox
 brew cask install elm-platform
-brew cask install filezilla
 brew cask install firefox
 brew cask install google-chrome
 brew cask install istat-menus
