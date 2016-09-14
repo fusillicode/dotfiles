@@ -53,13 +53,14 @@ brew install zsh
 
 # Install Homebrew-Cask
 brew install caskroom/cask/brew-cask
-brew update && brew upgrade brew-cask && brew cleanup && brew cask cleanup
+brew update && brew upgrade brew-cask && brew cleanup -s && brew cask cleanup && rm -rf ~/Library/Caches/Homebrew/*
 
 # Install Homebrew-Cask apps
 brew cask install adium
 brew cask install appcleaner
 brew cask install arduino
 brew cask install atom-beta
+brew cask install ccleaner
 brew cask install dropbox
 brew cask install elm-platform
 brew cask install firefox
@@ -76,11 +77,10 @@ brew cask install the-unarchiver
 brew cask install transmission
 
 # Upgrade everything and remove outdated versions from the cellar
-brew update && brew upgrade && brew cleanup -n && brew cask cleanup
+brew update && brew upgrade brew-cask && brew cleanup -s && brew cask cleanup && rm -rf ~/Library/Caches/Homebrew/*
 
 # Install PHP Switcher Script, Docker cleanup, ECS deploy and Rebar
 mkdir -p ~/bin/
-# curl -L https://raw.githubusercontent.com/fusillicode/dotfiles/master/docker-cleanup.sh > ~/bin/docker-cleanup
 curl -L https://raw.githubusercontent.com/silinternational/ecs-deploy/master/ecs-deploy > ~/bin/ecs-deploy
 curl -L https://raw.githubusercontent.com/conradkleinespel/sphp-osx/master/sphp > ~/bin/sphp
 curl -L https://s3.amazonaws.com/rebar3/rebar3 > ~/bin/rebar3
@@ -115,7 +115,7 @@ echo "gem: --no-document" >> ~/.gemrc
 curl -L https://github.com/robbyrussell/oh-my-zsh/raw/master/tools/install.sh | sh
 
 # Install Atom packages
-apm install language-apache language-babel language-docker language-elixir language-elm language-generic-config language-haproxy language-haskell language-nginx language-rspec language-rust language-scala language-slim atom-alignment change-case custom-title git-plus highlight-column lines open-git-modified-files pinned-tabs rails-open-rspec ruby-test travis-ci-status
+apm install language-apache language-babel language-docker language-elixir language-elm language-generic-config language-haproxy language-haskell language-nginx language-rspec language-rust language-scala language-slim atom-alignment change-case custom-title git-plus highlight-column lines open-git-modified-files pinned-tabs rails-open-rspec ruby-test
 
 # Symlink Firefox to global Applications directory to fix Selenium driver
 ln -s ~/Applications/Firefox.app /Applications/
