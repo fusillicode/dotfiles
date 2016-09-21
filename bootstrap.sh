@@ -102,7 +102,7 @@ echo "gem: --no-document" >> ~/.gemrc
 
 # TODO Install gems
 # . ~/.rvm/scripts/rvm
-# gem install artoo brakeman bundle-audit bundler cane compass consistency_fail html2slim license_finder rails rails-audit rails_best_practices rake rubocop rubycritic wordmove
+# gem install artoo brakeman bundler-audit bundler cane compass consistency_fail html2slim license_finder rails rails-audit rails_best_practices rake rubocop rubycritic wordmove
 
 # Install WPScan
 # cd ~/bin &&
