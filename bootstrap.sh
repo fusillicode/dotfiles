@@ -18,6 +18,7 @@ brew tap caskroom/versions
 
 # Install Homebrew apps
 brew install awscli
+brew install ansible
 brew install beeftornado/rmtree/brew-rmtree
 brew install cabal-install
 brew install cputhrottle
