@@ -59,7 +59,6 @@ brew update && brew upgrade brew-cask && brew cleanup -s && brew cask cleanup &&
 # Install Homebrew-Cask apps
 brew cask install adium
 brew cask install appcleaner
-brew cask install arduino
 brew cask install atom-beta
 brew cask install ccleaner
 brew cask install dropbox
