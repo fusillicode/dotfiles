@@ -59,12 +59,12 @@ brew update && brew upgrade brew-cask && brew cleanup -s && brew cask cleanup &&
 brew cask install adium
 brew cask install arduino
 brew cask install atom-beta
+brew cask install bitbar
 brew cask install ccleaner
 brew cask install dropbox
 brew cask install elm-platform
 brew cask install firefox
 brew cask install google-chrome
-brew cask install istat-menus
 brew cask install java
 brew cask install libreoffice
 brew cask install poedit
@@ -77,6 +77,12 @@ brew cask install transmission
 
 # Upgrade everything and remove outdated versions from the cellar
 brew update && brew upgrade brew-cask && brew cleanup -s && brew cask cleanup && rm -rf ~/Library/Caches/Homebrew/*
+
+# Install smc for BitBar
+curl -LO http://www.eidac.de/smcfancontrol/smcfancontrol_2_6.zip && \
+unzip -d temp_dir_smc smcfancontrol_2_6.zip && \
+cp temp_dir_smc/smcFanControl.app/Contents/Resources/smc /usr/local/bin/smc && \
+rm -rf temp_dir_smc smcfancontrol_2_6.zip
 
 # Install PHP Switcher Script, Docker cleanup, ECS deploy and Rebar
 mkdir -p ~/bin/
