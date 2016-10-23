@@ -78,17 +78,15 @@ brew cask install transmission
 # Upgrade everything and remove outdated versions from the cellar
 brew update && brew upgrade brew-cask && brew cleanup -s && brew cask cleanup && rm -rf ~/Library/Caches/Homebrew/*
 
-# Install smc for BitBar
-curl -LO http://www.eidac.de/smcfancontrol/smcfancontrol_2_6.zip && \
-unzip -d temp_dir_smc smcfancontrol_2_6.zip && \
-cp temp_dir_smc/smcFanControl.app/Contents/Resources/smc /usr/local/bin/smc && \
-rm -rf temp_dir_smc smcfancontrol_2_6.zip
-
-# Install PHP Switcher Script, Docker cleanup, ECS deploy and Rebar
+# Install PHP Switcher Script, Docker cleanup, ECS deploy, Rebar and smc utility
 mkdir -p ~/bin/
 curl -L https://raw.githubusercontent.com/silinternational/ecs-deploy/master/ecs-deploy > ~/bin/ecs-deploy
 curl -L https://raw.githubusercontent.com/conradkleinespel/sphp-osx/master/sphp > ~/bin/sphp
 curl -L https://s3.amazonaws.com/rebar3/rebar3 > ~/bin/rebar3
+curl -LO http://www.eidac.de/smcfancontrol/smcfancontrol_2_6.zip && \
+unzip -d temp_dir_smc smcfancontrol_2_6.zip && \
+yes | cp -f temp_dir_smc/smcFanControl.app/Contents/Resources/smc ~/bin/smc && \
+rm -rf temp_dir_smc smcfancontrol_2_6.zip
 chmod +x ~/bin/*
 # This should already be handled by other stuff
 # echo "export PATH=/usr/local/bin:/usr/local/sbin:$PATH:/Users/`whoami`/bin" >> ~/.profile
