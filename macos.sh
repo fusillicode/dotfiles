@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 
-# ~/.osx — https://mths.be/osx
+# ~/.macos — https://mths.be/macos
+
+# Close any open System Preferences panes, to prevent them from overriding
+# settings we’re about to change
+osascript -e 'tell application "System Preferences" to quit'
 
 # Ask for the administrator password upfront
 sudo -v
 
-# Keep-alive: update existing `sudo` time stamp until `.osx` has finished
+# Keep-alive: update existing `sudo` time stamp until `.macos` has finished
 while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 
 ###############################################################################
@@ -98,7 +102,7 @@ defaults write com.apple.print.PrintingPrefs "Quit When Finished" -bool true
 #fusillicode defaults write com.apple.LaunchServices LSQuarantine -bool false
 
 # Remove duplicates in the “Open With” menu (also see `lscleanup` alias)
-#fusillicode /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -kill -r -domain local -domain system -domain user
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -kill -r -domain local -domain system -domain user
 
 # Display ASCII control characters using caret notation in standard text views
 # Try e.g. `cd /tmp; unidecode "\x{0000}" > cc.txt; open -e cc.txt`
@@ -208,6 +212,7 @@ defaults write NSGlobalDomain ApplePressAndHoldEnabled -bool false
 
 # Set a blazingly fast keyboard repeat rate
 #fusillicode defaults write NSGlobalDomain KeyRepeat -int 0
+#fusillicode defaults write NSGlobalDomain InitialKeyRepeat -int 10
 
 #fusillicode Set language and text formats
 # Note: if you’re in the US, replace `EUR` with `USD`, `Centimeters` with
@@ -282,11 +287,11 @@ defaults write com.apple.finder ShowStatusBar -bool true
 # Finder: show path bar
 #fusillicode defaults write com.apple.finder ShowPathbar -bool true
 
-# Finder: allow text selection in Quick Look
-defaults write com.apple.finder QLEnableTextSelection -bool true
-
 # Display full POSIX path as Finder window title
 defaults write com.apple.finder _FXShowPosixPathInTitle -bool true
+
+# Keep folders on top when sorting by name
+#fusillicode defaults write com.apple.finder _FXSortFoldersFirst -bool true
 
 # When performing a search, search the current folder by default
 defaults write com.apple.finder FXDefaultSearchScope -string "SCcf"
@@ -343,9 +348,6 @@ defaults write com.apple.finder FXPreferredViewStyle -string "Nlsv"
 # Disable the warning before emptying the Trash
 defaults write com.apple.finder WarnOnEmptyTrash -bool false
 
-# Empty Trash securely by default
-defaults write com.apple.finder EmptyTrashSecurely -bool true
-
 # Enable AirDrop over Ethernet and on unsupported Macs running Lion
 defaults write com.apple.NetworkBrowser BrowseAllInterfaces -bool true
 
@@ -354,6 +356,9 @@ sudo nvram boot-args="mbasd=1"
 
 # Show the ~/Library folder
 chflags nohidden ~/Library
+
+# Show the /Volumes folder
+sudo chflags nohidden /Volumes
 
 # Remove Dropbox’s green checkmark icons in Finder
 #fusillicode file=/Applications/Dropbox.app/Contents/Resources/emblem-dropbox-uptodate.icns
@@ -397,6 +402,9 @@ defaults write com.apple.dock show-process-indicators -bool true
 # the Dock to launch apps.
 defaults write com.apple.dock persistent-apps -array
 
+# Show only open applications in the Dock
+defaults write com.apple.dock static-only -bool true
+
 # Don’t animate opening applications from the Dock
 defaults write com.apple.dock launchanim -bool false
 
@@ -433,8 +441,9 @@ defaults write com.apple.dock autohide -bool true
 # Reset Launchpad, but keep the desktop wallpaper intact
 #fusillicode find "${HOME}/Library/Application Support/Dock" -name "*-*.db" -maxdepth 1 -delete
 
-# Add iOS Simulator to Launchpad
-#fusillicode sudo ln -sf "/Applications/Xcode.app/Contents/Developer/Applications/iOS Simulator.app" "/Applications/iOS Simulator.app"
+# Add iOS & Watch Simulator to Launchpad
+#fusillicode sudo ln -sf "/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app" "/Applications/Simulator.app"
+#fusillicode sudo ln -sf "/Applications/Xcode.app/Contents/Developer/Applications/Simulator (Watch).app" "/Applications/Simulator (Watch).app"
 
 # Add a spacer to the left side of the Dock (where the applications are)
 #defaults write com.apple.dock persistent-apps -array-add '{tile-data={}; tile-type="spacer-tile";}'
@@ -478,8 +487,8 @@ defaults write com.apple.Safari com.apple.Safari.ContentPageGroupIdentifier.WebK
 # Show the full URL in the address bar (note: this still hides the scheme)
 defaults write com.apple.Safari ShowFullURLInSmartSearchField -bool true
 
-#fusillicode Set Safari’s home page to `www.google.com`
-#fusillicode defaults write com.apple.Safari HomePage -string "www.google.com"
+# Set Safari’s home page to `about:blank` for faster loading
+defaults write com.apple.Safari HomePage -string "about:blank"
 
 # Prevent Safari from opening ‘safe’ files automatically after downloading
 defaults write com.apple.Safari AutoOpenSafeDownloads -bool false
@@ -512,6 +521,38 @@ defaults write com.apple.Safari com.apple.Safari.ContentPageGroupIdentifier.WebK
 
 # Add a context menu item for showing the Web Inspector in web views
 defaults write NSGlobalDomain WebKitDeveloperExtras -bool true
+
+# Enable continuous spellchecking
+#fusillicode faults write com.apple.Safari WebContinuousSpellCheckingEnabled -bool true
+# Disable auto-correct
+#fusillicode defaults write com.apple.Safari WebAutomaticSpellingCorrectionEnabled -bool false
+
+# Disable AutoFill
+#fusillicode defaults write com.apple.Safari AutoFillFromAddressBook -bool false
+#fusillicode defaults write com.apple.Safari AutoFillPasswords -bool false
+#fusillicode defaults write com.apple.Safari AutoFillCreditCardData -bool false
+#fusillicode defaults write com.apple.Safari AutoFillMiscellaneousForms -bool false
+
+# Warn about fraudulent websites
+defaults write com.apple.Safari WarnAboutFraudulentWebsites -bool true
+
+# Disable plug-ins
+#fusillicode defaults write com.apple.Safari WebKitPluginsEnabled -bool false
+#fusillicode defaults write com.apple.Safari com.apple.Safari.ContentPageGroupIdentifier.WebKit2PluginsEnabled -bool false
+
+# Disable Java
+#fusillicode defaults write com.apple.Safari WebKitJavaEnabled -bool false
+#fusillicode defaults write com.apple.Safari com.apple.Safari.ContentPageGroupIdentifier.WebKit2JavaEnabled -bool false
+
+# Block pop-up windows
+defaults write com.apple.Safari WebKitJavaScriptCanOpenWindowsAutomatically -bool false
+defaults write com.apple.Safari com.apple.Safari.ContentPageGroupIdentifier.WebKit2JavaScriptCanOpenWindowsAutomatically -bool false
+
+# Enable “Do Not Track”
+defaults write com.apple.Safari SendDoNotTrackHTTPHeader -bool true
+
+# Update extensions automatically
+defaults write com.apple.Safari InstallExtensionUpdatesAutomatically -bool true
 
 ###############################################################################
 # Mail                                                                        #
@@ -593,61 +634,64 @@ sudo mdutil -E / > /dev/null
 # Only use UTF-8 in Terminal.app
 #fusillicode defaults write com.apple.terminal StringEncodings -array 4
 
-#fusillicode Use a the classic Solarized Dark theme by default in Terminal.app
-SCRIPT_DIR="$( cd "$( dirname "$0" )" && pwd )"
-osascript <<EOD
-
-tell application "Terminal"
-
-	local allOpenedWindows
-	local initialOpenedWindows
-	local windowID
-	set themeName to "Solarized Dark xterm-256color"
-
-	(* Store the IDs of all the open terminal windows. *)
-	set initialOpenedWindows to id of every window
-
-	(* Open the custom theme so that it gets added to the list
-	   of available terminal themes (note: this will open two
-	   additional terminal windows). *)
-	do shell script "open '$SCRIPT_DIR/" & themeName & ".terminal'"
-
-	(* Wait a little bit to ensure that the custom theme is added. *)
-	delay 1
-
-	(* Set the custom theme as the default terminal theme. *)
-	set default settings to settings set themeName
-
-	(* Get the IDs of all the currently opened terminal windows. *)
-	set allOpenedWindows to id of every window
-
-	repeat with windowID in allOpenedWindows
-
-		(* Close the additional windows that were opened in order
-		   to add the custom theme to the list of terminal themes. *)
-		if initialOpenedWindows does not contain windowID then
-			close (every window whose id is windowID)
-
-		(* Change the theme for the initial opened terminal windows
-		   to remove the need to close them in order for the custom
-		   theme to be applied. *)
-		else
-			set current settings of tabs of (every window whose id is windowID) to settings set themeName
-		end if
-
-	end repeat
-
-end tell
-
-EOD
-
-#fusillicode Change terminal opacity
-# defaults write com.apple.terminal TerminalOpaqueness '1'
+# Use a modified version of the Solarized Dark theme by default in Terminal.app
+#fusillicode osascript <<EOD
+#fusillicode
+#fusillicode tell application "Terminal"
+#fusillicode
+#fusillicode 	local allOpenedWindows
+#fusillicode 	local initialOpenedWindows
+#fusillicode 	local windowID
+#fusillicode 	set themeName to "Solarized Dark xterm-256color"
+#fusillicode
+#fusillicode 	(* Store the IDs of all the open terminal windows. *)
+#fusillicode 	set initialOpenedWindows to id of every window
+#fusillicode
+#fusillicode 	(* Open the custom theme so that it gets added to the list
+#fusillicode 	   of available terminal themes (note: this will open two
+#fusillicode 	   additional terminal windows). *)
+#fusillicode 	do shell script "open '$HOME/init/" & themeName & ".terminal'"
+#fusillicode
+#fusillicode 	(* Wait a little bit to ensure that the custom theme is added. *)
+#fusillicode 	delay 1
+#fusillicode
+#fusillicode 	(* Set the custom theme as the default terminal theme. *)
+#fusillicode 	set default settings to settings set themeName
+#fusillicode
+#fusillicode 	(* Get the IDs of all the currently opened terminal windows. *)
+#fusillicode 	set allOpenedWindows to id of every window
+#fusillicode
+#fusillicode 	repeat with windowID in allOpenedWindows
+#fusillicode
+#fusillicode 		(* Close the additional windows that were opened in order
+#fusillicode 		   to add the custom theme to the list of terminal themes. *)
+#fusillicode 		if initialOpenedWindows does not contain windowID then
+#fusillicode 			close (every window whose id is windowID)
+#fusillicode
+#fusillicode 		(* Change the theme for the initial opened terminal windows
+#fusillicode 		   to remove the need to close them in order for the custom
+#fusillicode 		   theme to be applied. *)
+#fusillicode 		else
+#fusillicode 			set current settings of tabs of (every window whose id is windowID) to settings set themeName
+#fusillicode 		end if
+#fusillicode
+#fusillicode 	end repeat
+#fusillicode
+#fusillicode end tell
+#fusillicode
+#fusillicode EOD
 
 # Enable “focus follows mouse” for Terminal.app and all X11 apps
 # i.e. hover over a window and start typing in it without clicking first
 #defaults write com.apple.terminal FocusFollowsMouse -bool true
 #defaults write org.x.X11 wm_ffm -bool true
+
+# Enable Secure Keyboard Entry in Terminal.app
+# See: https://security.stackexchange.com/a/47786/8918
+#fusillicode faults write com.apple.terminal SecureKeyboardEntry -bool true
+
+# Disable the annoying line marks
+#fusillicode defaults write com.apple.Terminal ShowLineMarks -int 0
 
 # Install the Solarized Dark theme for iTerm
 #fusillicode open "${HOME}/init/Solarized Dark.itermcolors"
@@ -705,6 +749,9 @@ defaults write com.apple.TextEdit PlainTextEncodingForWrite -int 4
 defaults write com.apple.DiskUtility DUDebugMenuEnabled -bool true
 defaults write com.apple.DiskUtility advanced-image-options -bool true
 
+# Auto-play videos when opened with QuickTime Player
+#fusillicode faults write com.apple.QuickTimePlayerX MGPlayMovieOnOpen -bool true
+
 ###############################################################################
 # Mac App Store                                                               #
 ###############################################################################
@@ -714,6 +761,27 @@ defaults write com.apple.appstore WebKitDeveloperExtras -bool true
 
 # Enable Debug Menu in the Mac App Store
 defaults write com.apple.appstore ShowDebugMenu -bool true
+
+# Enable the automatic update check
+#fusillicode defaults write com.apple.SoftwareUpdate AutomaticCheckEnabled -bool true
+
+# Check for software updates daily, not just once per week
+#fusillicode defaults write com.apple.SoftwareUpdate ScheduleFrequency -int 1
+
+# Download newly available updates in background
+#fusillicode defaults write com.apple.SoftwareUpdate AutomaticDownload -int 1
+
+# Install System data files & security updates
+#fusillicode defaults write com.apple.SoftwareUpdate CriticalUpdateInstall -int 1
+
+# Automatically download apps purchased on other Macs
+#fusillicode defaults write com.apple.SoftwareUpdate ConfigDataInstall -int 1
+
+# Turn on app auto-update
+#fusillicode defaults write com.apple.commerce AutoUpdate -bool true
+
+# Allow the App Store to reboot machine on macOS updates
+#fusillicode faults write com.apple.commerce AutoUpdateRestartRequired -bool true
 
 ###############################################################################
 # Photos                                                                      #
@@ -810,11 +878,14 @@ defaults write org.m0k.transmission WarningDonate -bool false
 # Hide the legal disclaimer
 defaults write org.m0k.transmission WarningLegal -bool false
 
-# Setting up the best block list
+#fusillicode Require encryption
 defaults write org.m0k.transmission EncryptionRequire -bool true
-defaults write org.m0k.transmission BlocklistAutoUpdate -bool true
+
+#fusillicode IP block list.
+#fusillicode Source: http://list.iblocklist.com/?list=ydxerpxkpcfqjaybcssw&fileformat=p2p&archiveformat=gz
 defaults write org.m0k.transmission BlocklistNew -bool true
 defaults write org.m0k.transmission BlocklistURL -string "http://list.iblocklist.com/?list=ydxerpxkpcfqjaybcssw&fileformat=p2p&archiveformat=gz"
+defaults write org.m0k.transmission BlocklistAutoUpdate -bool true
 
 ###############################################################################
 # Twitter.app                                                                 #
@@ -840,6 +911,13 @@ defaults write org.m0k.transmission BlocklistURL -string "http://list.iblocklist
 
 # Hide the app in the background if it’s not the front-most window
 #fusillicode defaults write com.twitter.twitter-mac HideInBackground -bool true
+
+###############################################################################
+# Tweetbot.app                                                                #
+###############################################################################
+
+# Bypass the annoyingly slow t.co URL shortener
+#fusillicode defaults write com.tapbots.TweetbotMac OpenURLsDirectly -bool true
 
 ###############################################################################
 # Spectacle.app                                                               #
@@ -876,7 +954,7 @@ defaults write org.m0k.transmission BlocklistURL -string "http://list.iblocklist
 for app in "Activity Monitor" "Address Book" "Calendar" "Contacts" "cfprefsd" \
 	"Dock" "Finder" "Google Chrome" "Google Chrome Canary" "Mail" "Messages" \
 	"Opera" "Photos" "Safari" "SizeUp" "Spectacle" "SystemUIServer" "Terminal" \
-	"Transmission" "Twitter" "iCal"; do
+	"Transmission" "Tweetbot" "Twitter" "iCal"; do
 	killall "${app}" > /dev/null 2>&1
 done
 echo "Done. Note that some of these changes require a logout/restart to take effect."
@@ -891,4 +969,3 @@ echo "Done. Note that some of these changes require a logout/restart to take eff
 #     exit 0
 #     ;;
 # esac
-
