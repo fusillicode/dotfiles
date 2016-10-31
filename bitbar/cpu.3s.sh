@@ -20,7 +20,7 @@ get_cpu_stats() {
 }
 
 get_cpu_stats
-echo "${top_5[1]} | size=12"
+echo "${top_5[1]} | size=11"
 
 echo "---"
 
