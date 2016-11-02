@@ -67,7 +67,6 @@ brew cask install firefox
 brew cask install google-chrome
 brew cask install java
 brew cask install libreoffice
-brew cask install poedit
 brew cask install rcdefaultapp
 brew cask install slack
 brew cask install skype
