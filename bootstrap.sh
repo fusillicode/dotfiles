@@ -68,11 +68,12 @@ brew cask install google-chrome
 brew cask install java
 brew cask install libreoffice
 brew cask install rcdefaultapp
-brew cask install slack
 brew cask install skype
+brew cask install slack
 brew cask install spectacle
 brew cask install the-unarchiver
 brew cask install transmission
+brew cask install yubico-authenticator
 
 # Upgrade everything and remove outdated versions from the cellar
 brew update && brew upgrade brew-cask && brew cleanup -s && brew cask cleanup && rm -rf ~/Library/Caches/Homebrew/*
