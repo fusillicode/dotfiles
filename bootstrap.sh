@@ -21,7 +21,6 @@ brew install awscli
 brew install beeftornado/rmtree/brew-rmtree
 brew install cabal-install
 brew install cputhrottle
-brew install docker-clean
 brew install elixir
 brew install exercism
 brew install ghc
