@@ -20,6 +20,7 @@ brew tap caskroom/versions
 brew install awscli
 brew install beeftornado/rmtree/brew-rmtree
 brew install cabal-install
+brew install chromedriver
 brew install cputhrottle
 brew install elixir
 brew install exercism
