@@ -121,7 +121,7 @@ echo "gem: --no-document" >> ~/.gemrc
 curl -L https://github.com/robbyrussell/oh-my-zsh/raw/master/tools/install.sh | sh
 
 # Install Atom packages
-apm install atom-alignment atom-beautify change-case custom-title git-plus highlight-column language-babel language-docker language-elixir language-elm language-haskell language-rspec language-rust language-scala language-slim lines monokai open-git-modified-files pinned-tabs rails-transporter ruby-test trailing-spaces
+apm install atom-alignment atom-beautify change-case custom-title git-tools highlight-column language-babel language-docker language-elixir language-elm language-haskell language-rspec language-rust language-scala language-slim lines monokai open-git-modified-files pinned-tabs rails-transporter ruby-test trailing-spaces
 
 # Symlink Firefox to global Applications directory to fix Selenium driver
 ln -s ~/Applications/Firefox.app /Applications/
