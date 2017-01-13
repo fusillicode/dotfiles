@@ -32,9 +32,8 @@ brew install mcrypt
 brew install mysql
 brew install mpv
 brew install phantomjs
-brew install postgres # TODO remove when asdf is working
+brew install postgres # TODO: remove when asdf is working
 brew install qt
-brew install redis # TODO remove when asdf is working
 brew install siege
 brew install zsh
 
@@ -64,6 +63,30 @@ brew cask install yubico-authenticator
 # Upgrade everything and remove outdated versions from the cellar
 brew update && brew upgrade brew-cask && brew cleanup -s && brew cask cleanup && rm -rf ~/Library/Caches/Homebrew/*
 
+# Install Oh My Zsh
+curl -L https://github.com/robbyrussell/oh-my-zsh/raw/master/tools/install.sh | sh
+
+# Install and configure asdf
+git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.2.1
+echo -e '\n. $HOME/.asdf/asdf.sh' >> ~/.zshrc
+echo -e '\n. $HOME/.asdf/completions/asdf.bash' >> ~/.zshrc
+
+# Install asdf plugins
+asdf plugin-add clojure https://github.com/vic/asdf-clojure.git
+asdf plugin-add elixir https://github.com/asdf-vm/asdf-elixir.git
+asdf plugin-add elm https://github.com/vic/asdf-elm.git
+asdf plugin-add erlang https://github.com/asdf-vm/asdf-erlang.git
+asdf plugin-add golang https://github.com/kennyp/asdf-golang.git
+asdf plugin-add haskell https://github.com/vic/asdf-haskell.git
+asdf plugin-add php https://github.com/odarriba/asdf-php.git
+asdf plugin-add postgres https://github.com/smashedtoatoms/asdf-postgres.git
+asdf plugin-add redis https://github.com/smashedtoatoms/asdf-redis.git
+asdf plugin-add ruby https://github.com/asdf-vm/asdf-ruby.git
+asdf plugin-add rust https://github.com/code-lever/asdf-rust.git
+asdf plugin-add scala https://github.com/mtatheonly/asdf-scala
+
+# TODO: install asdf versions
+
 # Install ECS deploy and smc utility
 mkdir -p ~/bin/
 curl -L https://raw.githubusercontent.com/silinternational/ecs-deploy/master/ecs-deploy > ~/bin/ecs-deploy
@@ -75,10 +98,10 @@ chmod +x ~/bin/*
 # This should already be handled by other stuff
 # echo "export PATH=/usr/local/bin:/usr/local/sbin:$PATH:/Users/`whoami`/bin" >> ~/.profile
 
-# TODO Install gems
+# TODO: install gems
 # gem install brakeman bundler-audit bundler cane compass consistency_fail html2slim license_finder rails rails-audit rails_best_practices rake rubocop rubycritic wordmove
 
-# TODO Install python modules (ansible and its requirements)
+# TODO: install python modules (ansible and its requirements)
 # pip install ansible boto boto3 psycopg2
 
 # Install WPScan
@@ -86,9 +109,6 @@ chmod +x ~/bin/*
 #   git clone https://github.com/wpscanteam/wpscan.git &&
 #   cd wpscan
 #   bundle install --without test
-
-# Install Oh My Zsh
-curl -L https://github.com/robbyrussell/oh-my-zsh/raw/master/tools/install.sh | sh
 
 # Install Atom packages
 apm install atom-alignment atom-beautify atom-material-syntax-dark change-case custom-title git-tools highlight-column language-babel language-docker language-elixir language-elm language-haml language-haskell language-rspec language-rust language-scala language-slim lines open-git-modified-files pinned-tabs rails-transporter ruby-test trailing-spaces
