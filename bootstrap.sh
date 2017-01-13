@@ -36,6 +36,7 @@ brew install mackup
 brew install mcrypt
 brew install mysql
 brew install mpv
+brew install phantomjs
 brew install php56
 brew install php56-mcrypt
 brew install phpunit
