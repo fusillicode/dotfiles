@@ -68,10 +68,6 @@ curl -L https://github.com/robbyrussell/oh-my-zsh/raw/master/tools/install.sh | 
 
 # Install and configure asdf
 git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.2.1
-echo -e '\n. $HOME/.asdf/asdf.sh' >> ~/.zshrc
-echo -e '\n. $HOME/.asdf/completions/asdf.bash' >> ~/.zshrc
-
-# Install asdf plugins
 asdf plugin-add clojure https://github.com/vic/asdf-clojure.git
 asdf plugin-add elixir https://github.com/asdf-vm/asdf-elixir.git
 asdf plugin-add elm https://github.com/vic/asdf-elm.git
@@ -84,7 +80,6 @@ asdf plugin-add redis https://github.com/smashedtoatoms/asdf-redis.git
 asdf plugin-add ruby https://github.com/asdf-vm/asdf-ruby.git
 asdf plugin-add rust https://github.com/code-lever/asdf-rust.git
 asdf plugin-add scala https://github.com/mtatheonly/asdf-scala
-
 # TODO: install asdf versions
 
 # Install ECS deploy and smc utility
