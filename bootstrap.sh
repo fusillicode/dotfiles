@@ -11,7 +11,6 @@ brew doctor
 brew prune
 brew tap homebrew/dupes
 brew tap homebrew/versions
-brew tap homebrew/homebrew-php
 brew tap beeftornado/rmtree
 brew tap caskroom/cask
 brew tap caskroom/versions
@@ -19,37 +18,24 @@ brew tap caskroom/versions
 # Install Homebrew apps
 brew install awscli
 brew install beeftornado/rmtree/brew-rmtree
-brew install cabal-install
 brew install chromedriver
 brew install cputhrottle
-brew install elixir
 brew install exercism
-brew install ghc
 brew install git
 brew install gpg
 brew install heroku-toolbelt
 brew install hybridgroup/tools/gort
 brew install imagemagick
 brew install jq
-brew install leiningen
 brew install mackup
 brew install mcrypt
 brew install mysql
 brew install mpv
 brew install phantomjs
-brew install php56
-brew install php56-mcrypt
-brew install phpunit
-brew install python
-brew install composer
-brew install postgres
+brew install postgres # TODO remove when asdf is working
 brew install qt
-brew install redis
-brew install rust
-brew install sbt
-brew install scala
+brew install redis # TODO remove when asdf is working
 brew install siege
-brew install wp-cli
 brew install zsh
 
 # Install Homebrew-Cask
@@ -63,7 +49,6 @@ brew cask install atom-beta
 brew cask install bitbar
 brew cask install ccleaner
 brew cask install dropbox
-brew cask install elm-platform
 brew cask install firefox
 brew cask install google-chrome
 brew cask install java
