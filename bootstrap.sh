@@ -106,7 +106,7 @@ echo "gem: --no-document" >> ~/.gemrc
 
 # TODO Install gems
 # . ~/.rvm/scripts/rvm
-# gem install brakeman bundler-audit bundler cane compass consistency_fail html2slim license_finder rails rails-audit rails_best_practices rake rubocop rubycritic t wordmove
+# gem install brakeman bundler-audit bundler cane compass consistency_fail html2slim license_finder rails rails-audit rails_best_practices rake rubocop rubycritic wordmove
 
 # TODO Install python modules (ansible and its requirements)
 # pip install ansible boto boto3 psycopg2
