@@ -78,11 +78,9 @@ brew cask install yubico-authenticator
 # Upgrade everything and remove outdated versions from the cellar
 brew update && brew upgrade brew-cask && brew cleanup -s && brew cask cleanup && rm -rf ~/Library/Caches/Homebrew/*
 
-# Install PHP Switcher Script, Docker cleanup, ECS deploy, Rebar and smc utility
+# Install ECS deploy and smc utility
 mkdir -p ~/bin/
 curl -L https://raw.githubusercontent.com/silinternational/ecs-deploy/master/ecs-deploy > ~/bin/ecs-deploy
-curl -L https://raw.githubusercontent.com/conradkleinespel/sphp-osx/master/sphp > ~/bin/sphp
-curl -L https://s3.amazonaws.com/rebar3/rebar3 > ~/bin/rebar3
 curl -LO http://www.eidac.de/smcfancontrol/smcfancontrol_2_6.zip && \
 unzip -d temp_dir_smc smcfancontrol_2_6.zip && \
 yes | cp -f temp_dir_smc/smcFanControl.app/Contents/Resources/smc ~/bin/smc && \
