@@ -89,21 +89,7 @@ chmod +x ~/bin/*
 # This should already be handled by other stuff
 # echo "export PATH=/usr/local/bin:/usr/local/sbin:$PATH:/Users/`whoami`/bin" >> ~/.profile
 
-# Install NVM
-curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.26.1/install.sh | bash
-
-# TODO Install Node stable and make it default
-# . ~/.nvm/nvm.sh
-# nvm install stable
-# nvm alias default stable
-
-# Install RVM and Ruby stable
-gpg --keyserver hkp://keys.gnupg.net --recv-keys 409B6B1796C275462A1703113804BB82D39DC0E3
-curl -sSL https://get.rvm.io | bash -s stable --autolibs=enable --auto-dotfiles --ruby
-echo "gem: --no-document" >> ~/.gemrc
-
 # TODO Install gems
-# . ~/.rvm/scripts/rvm
 # gem install brakeman bundler-audit bundler cane compass consistency_fail html2slim license_finder rails rails-audit rails_best_practices rake rubocop rubycritic wordmove
 
 # TODO Install python modules (ansible and its requirements)
