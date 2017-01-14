@@ -32,7 +32,6 @@ brew install mcrypt
 brew install mysql
 brew install mpv
 brew install phantomjs
-brew install postgres # TODO: remove when asdf is working
 brew install qt
 brew install siege
 brew install zsh
