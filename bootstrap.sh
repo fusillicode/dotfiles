@@ -81,9 +81,10 @@ asdf plugin-add rust https://github.com/code-lever/asdf-rust.git
 asdf plugin-add scala https://github.com/mtatheonly/asdf-scala
 # TODO: install asdf versions
 
-# Install ECS deploy and smc utility
+# Install ECS deploy
 mkdir -p ~/bin/
 curl -L https://raw.githubusercontent.com/silinternational/ecs-deploy/master/ecs-deploy > ~/bin/ecs-deploy
+# Install smc utility
 curl -LO http://www.eidac.de/smcfancontrol/smcfancontrol_2_6.zip && \
 unzip -d temp_dir_smc smcfancontrol_2_6.zip && \
 yes | cp -f temp_dir_smc/smcFanControl.app/Contents/Resources/smc ~/bin/smc && \
