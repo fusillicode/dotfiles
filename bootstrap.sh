@@ -106,7 +106,7 @@ chmod +x ~/bin/*
 #   bundle install --without test
 
 # Install Atom packages
-apm install atom-alignment atom-beautify atom-material-syntax-dark change-case custom-title git-tools highlight-column language-babel language-docker language-elixir language-elm language-haml language-haskell language-rspec language-rust language-scala language-slim lines open-git-modified-files pinned-tabs rails-transporter ruby-test trailing-spaces
+apm install atom-alignment atom-beautify atom-material-syntax-dark change-case custom-title export-html git-tools highlight-column language-babel language-docker language-elixir language-elm language-haml language-haskell language-rspec language-rust language-scala language-slim lines open-git-modified-files pinned-tabs rails-transporter ruby-test trailing-spaces
 
 # Symlink Firefox to global Applications directory to fix Selenium driver
 ln -s ~/Applications/Firefox.app /Applications/
