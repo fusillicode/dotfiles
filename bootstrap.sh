@@ -94,7 +94,7 @@ chmod +x ~/bin/*
 # echo "export PATH=/usr/local/bin:/usr/local/sbin:$PATH:/Users/`whoami`/bin" >> ~/.profile
 
 # TODO: install gems
-# gem install brakeman bundler-audit bundler cane compass consistency_fail html2slim license_finder rails rails-audit rails_best_practices rake rubocop rubycritic wordmove
+# gem install brakeman bundler-audit bundler cane compass consistency_fail html2slim license_finder rails rails-audit rails_best_practices rake reek rubocop rubycritic wordmove
 
 # TODO: install python modules (ansible and its requirements)
 # pip install ansible boto boto3 psycopg2
@@ -106,7 +106,7 @@ chmod +x ~/bin/*
 #   bundle install --without test
 
 # Install Atom packages
-apm install atom-alignment atom-beautify atom-material-syntax-dark change-case custom-title export-html git-tools highlight-column language-babel language-docker language-elixir language-elm language-haml language-haskell language-rspec language-rust language-scala language-slim lines open-git-modified-files pinned-tabs rails-transporter ruby-test trailing-spaces
+apm install atom-alignment atom-beautify change-case custom-title export-html git-tools gruvbox highlight-column language-babel language-docker language-elixir language-elm language-haml language-haskell language-rspec language-rust language-scala language-slim lines open-git-modified-files pinned-tabs rails-transporter ruby-test trailing-spaces
 
 # Symlink Firefox to global Applications directory to fix Selenium driver
 ln -s ~/Applications/Firefox.app /Applications/
