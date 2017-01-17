@@ -94,7 +94,7 @@ chmod +x ~/bin/*
 # echo "export PATH=/usr/local/bin:/usr/local/sbin:$PATH:/Users/`whoami`/bin" >> ~/.profile
 
 # TODO: install gems
-# gem install brakeman bundler-audit bundler cane compass consistency_fail html2slim license_finder rails rails-audit rails_best_practices rake reek rubocop rubycritic wordmove
+# gem install brakeman bundler-audit bundler cane compass consistency_fail html2slim license_finder rails rails-audit rails_best_practices rake reek ruby-lint rubocop rubycritic wordmove
 
 # TODO: install python modules (ansible and its requirements)
 # pip install ansible boto boto3 psycopg2
