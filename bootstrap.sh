@@ -21,6 +21,7 @@ brew install beeftornado/rmtree/brew-rmtree
 brew install chromedriver
 brew install cputhrottle
 brew install exercism
+brew install fwup
 brew install git
 brew install gpg
 brew install heroku-toolbelt
@@ -34,6 +35,7 @@ brew install mpv
 brew install phantomjs
 brew install qt
 brew install siege
+brew install squashfs
 brew install zsh
 
 # Install Homebrew-Cask
@@ -95,6 +97,12 @@ chmod +x ~/bin/*
 
 # TODO: install gems
 # gem install brakeman bundler-audit bundler cane compass consistency_fail html2slim license_finder rails rails-audit rails_best_practices rake reek ruby-lint rubocop rubycritic wordmove
+
+# TODO: install elixir libs
+# mix local.hex
+# mix local.rebar
+# mix archive.install https://github.com/phoenixframework/archives/raw/master/phoenix_new.ez
+# mix archive.install https://github.com/nerves-project/archives/raw/master/nerves_bootstrap.ez
 
 # TODO: install python modules (ansible and its requirements)
 # pip install ansible boto boto3 psycopg2
