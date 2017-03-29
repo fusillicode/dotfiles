@@ -23,7 +23,7 @@ while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 #sudo defaults write /Library/Preferences/SystemConfiguration/com.apple.smb.server NetBIOSName -string "0x6D746873"
 
 #fusillicode Enable Dark UI
-defaults write NSGlobalDomain AppleInterfaceStyle Dark
+#defaults write NSGlobalDomain AppleInterfaceStyle Dark
 
 # Set standby delay to 24 hours (default is 1 hour)
 #fusillicode sudo pmset -a standbydelay 86400
