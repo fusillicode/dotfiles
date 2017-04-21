@@ -18,18 +18,14 @@ brew tap caskroom/versions
 # Install Homebrew apps
 brew install awscli
 brew install chromedriver
-brew install coreutils
 brew install cputhrottle
 brew install exercism
 brew install fwup
 brew install git
-brew install gpg
 brew install heroku
-brew install hybridgroup/tools/gort
 brew install imagemagick@6
 brew install jq
 brew install mackup
-brew install mcrypt
 brew install mysql
 brew install mpv
 brew install phantomjs
@@ -74,6 +70,7 @@ asdf plugin-add erlang https://github.com/asdf-vm/asdf-erlang.git
 # asdf plugin-add golang https://github.com/kennyp/asdf-golang.git
 # asdf plugin-add haskell https://github.com/vic/asdf-haskell.git
 asdf plugin-add nodejs https://github.com/asdf-vm/asdf-nodejs.git
+brew install gpg
 bash ~/.asdf/plugins/nodejs/bin/import-release-team-keyring
 # asdf plugin-add php https://github.com/odarriba/asdf-php.git
 asdf plugin-add postgres https://github.com/smashedtoatoms/asdf-postgres.git
@@ -99,6 +96,12 @@ chmod +x ~/bin/*
 # TODO: install gems
 # gem install brakeman bundler-audit bundler cane compass consistency_fail html2slim license_finder rails rails-audit rails_best_practices rake reek ruby-lint rubocop rubycritic wordmove
 
+# Install WPScan
+# cd ~/bin &&
+#   git clone https://github.com/wpscanteam/wpscan.git &&
+#   cd wpscan
+#   bundle install --without test
+
 # TODO: install elixir libs
 # mix local.hex
 # mix local.rebar
@@ -107,12 +110,6 @@ chmod +x ~/bin/*
 
 # TODO: install python modules (ansible and its requirements)
 # pip install ansible boto boto3 psycopg2
-
-# Install WPScan
-# cd ~/bin &&
-#   git clone https://github.com/wpscanteam/wpscan.git &&
-#   cd wpscan
-#   bundle install --without test
 
 # Install Visual Studio code
 # code --install-extension
