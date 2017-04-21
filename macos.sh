@@ -16,15 +16,15 @@ while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 # General UI/UX                                                               #
 ###############################################################################
 
+#fusillicode Enable Dark UI
+#defaults write NSGlobalDomain AppleInterfaceStyle Dark
+
 # Set computer name (as done via System Preferences → Sharing)
 read -p "How do you want to name your computer: " pc_name
 sudo scutil --set ComputerName "$pc_name"
 sudo scutil --set HostName "$pc_name"
 sudo scutil --set LocalHostName "$pc_name"
 sudo defaults write /Library/Preferences/SystemConfiguration/com.apple.smb.server NetBIOSName -string "$pc_name"
-
-#fusillicode Enable Dark UI
-#defaults write NSGlobalDomain AppleInterfaceStyle Dark
 
 # Set standby delay to 24 hours (default is 1 hour)
 #fusillicode sudo pmset -a standbydelay 86400
@@ -40,17 +40,17 @@ defaults write com.apple.universalaccess reduceTransparency -bool true
 
 #fusillicode Menu bar: hide the Time Machine, Volume, and User icons
 defaults -currentHost write dontAutoLoad -array \
-		"/System/Library/CoreServices/Menu Extras/TimeMachine.menu" \
-		"/System/Library/CoreServices/Menu Extras/User.menu"
-		#"/System/Library/CoreServices/Menu Extras/Battery.menu"
-		#"/System/Library/CoreServices/Menu Extras/Clock.menu" \
-		#"/System/Library/CoreServices/Menu Extras/Volume.menu" \
+		"/System/Library/CoreServices/Menu Extras/TimeMachine.menu"
+		# "/System/Library/CoreServices/Menu Extras/User.menu" \
+		# "/System/Library/CoreServices/Menu Extras/Battery.menu" \
+		# "/System/Library/CoreServices/Menu Extras/Clock.menu" \
+		# "/System/Library/CoreServices/Menu Extras/Volume.menu" \
 defaults write com.apple.systemuiserver menuExtras -array \
-	"/System/Library/CoreServices/Menu Extras/AirPort.menu" \
 	"/System/Library/CoreServices/Menu Extras/Battery.menu" \
 	"/System/Library/CoreServices/Menu Extras/Bluetooth.menu" \
 	"/System/Library/CoreServices/Menu Extras/Clock.menu" \
 	"/System/Library/CoreServices/Menu Extras/Volume.menu"
+	# "/System/Library/CoreServices/Menu Extras/AirPort.menu"
 
 #fusillicode Menu bar: customize Battery icon
 defaults write com.apple.menuextra.battery ShowPercent -string "YES"
@@ -111,8 +111,8 @@ defaults write com.apple.print.PrintingPrefs "Quit When Finished" -bool true
 # Try e.g. `cd /tmp; unidecode "\x{0000}" > cc.txt; open -e cc.txt`
 #fusillicode defaults write NSGlobalDomain NSTextShowsControlCharacters -bool true
 
-#fusillicode Disable Resume system-wide
-defaults write com.apple.systempreferences NSQuitAlwaysKeepsWindows -bool true
+# Disable Resume system-wide
+defaults write com.apple.systempreferences NSQuitAlwaysKeepsWindows -bool false
 
 # Disable automatic termination of inactive apps
 #fusillicode defaults write NSGlobalDomain NSDisableAutomaticTermination -bool true
@@ -505,7 +505,7 @@ defaults write com.apple.Safari ShowFullURLInSmartSearchField -bool true
 defaults write com.apple.Safari HomePage -string "about:blank"
 
 # Prevent Safari from opening ‘safe’ files automatically after downloading
-#fusillicode defaults write com.apple.Safari AutoOpenSafeDownloads -bool false
+defaults write com.apple.Safari AutoOpenSafeDownloads -bool false
 
 # Allow hitting the Backspace key to go to the previous page in history
 #fusillicode defaults write com.apple.Safari com.apple.Safari.ContentPageGroupIdentifier.WebKit2BackspaceKeyNavigationEnabled -bool true
@@ -542,10 +542,10 @@ defaults write NSGlobalDomain WebKitDeveloperExtras -bool true
 #fusillicode defaults write com.apple.Safari WebAutomaticSpellingCorrectionEnabled -bool false
 
 # Disable AutoFill
-#fusillicode defaults write com.apple.Safari AutoFillFromAddressBook -bool false
-#fusillicode defaults write com.apple.Safari AutoFillPasswords -bool false
-#fusillicode defaults write com.apple.Safari AutoFillCreditCardData -bool false
-#fusillicode defaults write com.apple.Safari AutoFillMiscellaneousForms -bool false
+defaults write com.apple.Safari AutoFillFromAddressBook -bool false
+defaults write com.apple.Safari AutoFillPasswords -bool false
+defaults write com.apple.Safari AutoFillCreditCardData -bool false
+defaults write com.apple.Safari AutoFillMiscellaneousForms -bool false
 
 # Warn about fraudulent websites
 defaults write com.apple.Safari WarnAboutFraudulentWebsites -bool true
