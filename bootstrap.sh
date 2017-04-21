@@ -17,7 +17,6 @@ brew tap caskroom/versions
 
 # Install Homebrew apps
 brew install awscli
-brew install beeftornado/rmtree/brew-rmtree
 brew install chromedriver
 brew install coreutils
 brew install cputhrottle
@@ -25,30 +24,23 @@ brew install exercism
 brew install fwup
 brew install git
 brew install gpg
-brew install heroku-toolbelt
+brew install heroku
 brew install hybridgroup/tools/gort
-brew install imagemagick
+brew install imagemagick@6
 brew install jq
 brew install mackup
 brew install mcrypt
 brew install mysql
 brew install mpv
 brew install phantomjs
-brew install qt
 brew install siege
 brew install squashfs
 brew install zsh
 
-# Install Homebrew-Cask
-brew install caskroom/cask/brew-cask
-brew update && brew upgrade brew-cask && brew cleanup -s && brew cask cleanup && rm -rf ~/Library/Caches/Homebrew/*
-
 # Install Homebrew-Cask apps
 brew cask install adium
 brew cask install appcleaner
-brew cask install atom-beta
 brew cask install bitbar
-brew cask install ccleaner
 brew cask install dropbox
 brew cask install firefox
 brew cask install google-chrome
@@ -63,29 +55,36 @@ brew cask install the-unarchiver
 brew cask install transmission
 brew cask install yubico-authenticator
 
-# Upgrade everything and remove outdated versions from the cellar
-brew update && brew upgrade brew-cask && brew cleanup -s && brew cask cleanup && rm -rf ~/Library/Caches/Homebrew/*
+# Upgrade and cleanup brew stuff...
+brew update && brew upgrade && brew cleanup -s && brew cask cleanup && rm -rf ~/Library/Caches/Homebrew/*
 
 # Install Oh My Zsh
 curl -L https://github.com/robbyrussell/oh-my-zsh/raw/master/tools/install.sh | sh
 
 # Install and configure asdf
-git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.2.1
-asdf plugin-add clojure https://github.com/vic/asdf-clojure.git
+git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.3.0
+brew install coreutils automake autoconf openssl libyaml readline libxslt libtool unixodbc
+echo -e '\n. $HOME/.asdf/asdf.sh' >> ~/.zshrc
+echo -e '\n. $HOME/.asdf/completions/asdf.bash' >> ~/.zshrc
+# asdf plugin-add clojure https://github.com/vic/asdf-clojure.git
+# asdf plugin-add crystal https://github.com/marciogm/asdf-crystal.git
 asdf plugin-add elixir https://github.com/asdf-vm/asdf-elixir.git
-asdf plugin-add elm https://github.com/vic/asdf-elm.git
+# asdf plugin-add elm https://github.com/vic/asdf-elm.git
 asdf plugin-add erlang https://github.com/asdf-vm/asdf-erlang.git
-asdf plugin-add golang https://github.com/kennyp/asdf-golang.git
-asdf plugin-add haskell https://github.com/vic/asdf-haskell.git
+# asdf plugin-add golang https://github.com/kennyp/asdf-golang.git
+# asdf plugin-add haskell https://github.com/vic/asdf-haskell.git
 asdf plugin-add nodejs https://github.com/asdf-vm/asdf-nodejs.git
 bash ~/.asdf/plugins/nodejs/bin/import-release-team-keyring
-asdf plugin-add php https://github.com/odarriba/asdf-php.git
+# asdf plugin-add php https://github.com/odarriba/asdf-php.git
 asdf plugin-add postgres https://github.com/smashedtoatoms/asdf-postgres.git
+# asdf plugin-add python https://github.com/tuvistavie/asdf-python.git
 asdf plugin-add redis https://github.com/smashedtoatoms/asdf-redis.git
 asdf plugin-add ruby https://github.com/asdf-vm/asdf-ruby.git
-asdf plugin-add rust https://github.com/code-lever/asdf-rust.git
-asdf plugin-add scala https://github.com/mtatheonly/asdf-scala
-# TODO: install asdf versions
+# asdf plugin-add rust https://github.com/code-lever/asdf-rust.git
+# asdf plugin-add sbt https://github.com/lerencao/asdf-sbt
+# asdf plugin-add scala https://github.com/mtatheonly/asdf-scala
+
+# TODO: install asdf plugins versions
 
 # Install ECS deploy
 mkdir -p ~/bin/
@@ -96,8 +95,6 @@ unzip -d temp_dir_smc smcfancontrol_2_6.zip && \
 yes | cp -f temp_dir_smc/smcFanControl.app/Contents/Resources/smc ~/bin/smc && \
 rm -rf temp_dir_smc smcfancontrol_2_6.zip
 chmod +x ~/bin/*
-# This should already be handled by other stuff
-# echo "export PATH=/usr/local/bin:/usr/local/sbin:$PATH:/Users/`whoami`/bin" >> ~/.profile
 
 # TODO: install gems
 # gem install brakeman bundler-audit bundler cane compass consistency_fail html2slim license_finder rails rails-audit rails_best_practices rake reek ruby-lint rubocop rubycritic wordmove
@@ -117,11 +114,8 @@ chmod +x ~/bin/*
 #   cd wpscan
 #   bundle install --without test
 
-# Install Atom packages
-apm install atom-alignment atom-beautify change-case custom-title export-html git-tools highlight-column language-babel language-docker language-elixir language-elm language-haml language-haskell language-rspec language-rust language-scala language-slim lines monokai-blackboard open-git-modified-files pinned-tabs rails-transporter ruby-test trailing-spaces
-
-# Symlink Firefox to global Applications directory to fix Selenium driver
-ln -s ~/Applications/Firefox.app /Applications/
+# Install Visual Studio code
+# code --install-extension
 
 # Set up MySQL
 cd ~
@@ -136,3 +130,4 @@ git config --global core.editor vim
 git config --global core.filemode false
 git config --global merge.tool opendiff
 git config --global push.default current
+git config --global branch.autosetuprebase always
