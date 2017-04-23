@@ -383,7 +383,7 @@ sudo chflags nohidden /Volumes
 defaults write com.apple.finder FXInfoPanesExpanded -dict \
 	General -bool true \
 	OpenWith -bool true \
-  Preview -bool false \
+	Preview -bool false \
 	Privileges -bool true
 
 ###############################################################################

@@ -85,9 +85,12 @@ bash ~/.asdf/plugins/nodejs/bin/import-release-team-keyring
 # asdf plugin-add haskell https://github.com/vic/asdf-haskell.git
 # asdf plugin-add php https://github.com/odarriba/asdf-php.git
 # asdf plugin-add python https://github.com/tuvistavie/asdf-python.git
+# brew install gcc
+# asdf plugin-add riak https://github.com/smashedtoatoms/asdf-riak
 # asdf plugin-add rust https://github.com/code-lever/asdf-rust.git
 # asdf plugin-add sbt https://github.com/lerencao/asdf-sbt
 # asdf plugin-add scala https://github.com/mtatheonly/asdf-scala
+# asdf plugin-add swift https://github.com/fcrespo82/asdf-swift
 
 # Install gems
 gem install --no-rdoc --no-ri brakeman bundler-audit bundler cane compass consistency_fail html2slim license_finder rails rails-audit rails_best_practices rake reek ruby-lint rubocop rubycritic wordmove
