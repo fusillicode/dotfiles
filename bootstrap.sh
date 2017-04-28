@@ -69,6 +69,7 @@ echo -e '\n. $HOME/.asdf/completions/asdf.bash' >> ~/.zshrc
 
 # Install asdf plugins
 asdf plugin-add ruby https://github.com/asdf-vm/asdf-ruby.git
+brew install wxmac
 asdf plugin-add erlang https://github.com/asdf-vm/asdf-erlang.git
 asdf plugin-add elixir https://github.com/asdf-vm/asdf-elixir.git
 asdf plugin-add redis https://github.com/smashedtoatoms/asdf-redis.git
