@@ -53,10 +53,12 @@ curl -L https://github.com/robbyrussell/oh-my-zsh/raw/master/tools/install.sh | 
 brew install jq
 mkdir -p ~/bin/
 curl -L https://raw.githubusercontent.com/silinternational/ecs-deploy/master/ecs-deploy > ~/bin/ecs-deploy
+chmod +x ~/bin/*
 
 # Install smc utility
 curl -LO http://www.eidac.de/smcfancontrol/smcfancontrol_2_6.zip && \
 unzip -d temp_dir_smc smcfancontrol_2_6.zip && \
+mkdir -p ~/bin/ && \
 yes | cp -f temp_dir_smc/smcFanControl.app/Contents/Resources/smc ~/bin/smc && \
 rm -rf temp_dir_smc smcfancontrol_2_6.zip
 chmod +x ~/bin/*
@@ -93,23 +95,31 @@ bash ~/.asdf/plugins/nodejs/bin/import-release-team-keyring
 # asdf plugin-add scala https://github.com/mtatheonly/asdf-scala
 # asdf plugin-add swift https://github.com/fcrespo82/asdf-swift
 
-# Install gems
+# Install Ruby gems
 gem install --no-rdoc --no-ri brakeman bundler-audit bundler cane compass consistency_fail html2slim license_finder rails rails-audit rails_best_practices rake reek ruby-lint rubocop rubycritic wordmove
 
-# Install wpscan
+# Install WpScan
 mkdir -p ~/bin/ && ~/bin && git clone https://github.com/wpscanteam/wpscan.git && cd wpscan && bundle install --without test
 
-# Install elixir libs
+# Install Elixir libs
 mix local.hex
 mix local.rebar
 mix archive.install https://github.com/phoenixframework/archives/raw/master/phoenix_new.ez
 brew install coreutils fwup squashfs
 mix archive.install https://github.com/nerves-project/archives/raw/master/nerves_bootstrap.ez
 
-# Install python modules
+# Install Erlang tools
+curl -OL https://github.com/erlanglab/erlangpl/releases/download/0.6.1/erlangpl.tar.gz && \
+tar -zxvf erlangpl.tar.gz && \
+rm -rf erlangpl.tar.gz && \
+mkdir -p ~/bin/ && \
+mv erlangpl ~/bin
+chmod +x ~/bin/*
+
+# Install Python modules
 pip install ansible boto boto3 psycopg2
 
-# Install Visual Studio code
+# TODO: Install Visual Studio Code extensions
 code --install-extension
 
 # Upgrade and cleanup brew stuff...
