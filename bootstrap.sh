@@ -22,9 +22,10 @@ brew install exercism
 brew install git
 brew install heroku
 brew install imagemagick@6
+brew install kubectl
 brew install mackup
-brew install mysql
 brew install mpv
+brew install mysql
 brew install phantomjs
 brew install siege
 brew install zsh
@@ -38,12 +39,15 @@ brew cask install firefox
 brew cask install google-chrome
 brew cask install java
 brew cask install libreoffice
+brew cask install minikube
+brew cask install openshift-cli
 brew cask install rcdefaultapp
 brew cask install skype
 brew cask install slack
 brew cask install spectacle
 brew cask install the-unarchiver
 brew cask install transmission
+brew cask install virtualbox
 brew cask install yubico-authenticator
 
 # Install Oh My Zsh
