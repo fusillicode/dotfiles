@@ -123,8 +123,8 @@ chmod +x ~/bin/*
 # Install Python modules
 pip install ansible boto boto3 psycopg2
 
-# Install PureScript
-npm install -g purescript pulp bower
+# Install Node stuff...(e.g. yarn, PureScript, Bower, etc.)
+npm install -g yarn purescript pulp bower
 
 # TODO: Install Visual Studio Code extensions
 code --install-extension
