@@ -19,6 +19,7 @@ brew tap caskroom/versions
 brew install awscli
 brew install chromedriver
 brew install exercism
+brew install geckodriver
 brew install git
 brew install heroku
 brew install imagemagick@6
