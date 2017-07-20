@@ -17,7 +17,7 @@ while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 ###############################################################################
 
 #fusillicode Enable Dark UI
-#defaults write NSGlobalDomain AppleInterfaceStyle Dark
+defaults write NSGlobalDomain AppleInterfaceStyle Dark
 
 # Set computer name (as done via System Preferences → Sharing)
 read -p "How do you want to name your computer: " pc_name
