@@ -19,7 +19,6 @@ brew tap caskroom/versions
 brew install awscli
 brew install chromedriver
 brew install exercism
-brew install geckodriver
 brew install git
 brew install heroku
 brew install imagemagick@6
@@ -101,7 +100,7 @@ bash ~/.asdf/plugins/nodejs/bin/import-release-team-keyring
 # asdf plugin-add swift https://github.com/fcrespo82/asdf-swift
 
 # Install Ruby gems
-gem install --no-rdoc --no-ri brakeman bundler-audit bundler cane compass consistency_fail html2slim license_finder rails rails-audit rails_best_practices rake reek ruby-lint rubocop rubycritic wordmove
+gem install --no-rdoc --no-ri brakeman bundler-audit bundler cane compass consistency_fail fasterer html2slim license_finder rails rails-audit rails_best_practices rake reek ruby-lint rubocop rubycritic wordmove
 
 # Install WpScan
 mkdir -p ~/bin/ && ~/bin && git clone https://github.com/wpscanteam/wpscan.git && cd wpscan && bundle install --without test
