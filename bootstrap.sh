@@ -27,6 +27,7 @@ brew install mackup
 brew install mpv
 brew install mysql
 brew install phantomjs
+brew install ripgrep
 brew install siege
 brew install zsh
 
@@ -127,7 +128,7 @@ pip install ansible boto boto3 psycopg2
 npm install -g yarn purescript pulp bower
 
 # TODO: Install Visual Studio Code extensions
-ext install Align All-Autocomplete Ruby change-case cucumberautocomplete elm erlang gitlens haml json-tools language-haskell language-purescript rspec-snippets ruby-snippet sass-indented slim smarty sort-lines trailing-spaces vscode-docker vscode-elixir vscode-eslint vscode-fileutils xml
+ext install Align All-Autocomplete Ruby change-case cucumberautocomplete elm erlang gitlens haml json-tools language-haskell language-purescript referenceshelper rspec-snippets ruby-snippet sass-indented slim smarty sort-lines trailing-spaces vscode-docker vscode-elixir vscode-eslint vscode-fileutils xml
 
 # Upgrade and cleanup brew stuff...
 brew update && brew upgrade && brew cleanup -s && brew cask cleanup && rm -rf ~/Library/Caches/Homebrew/*
