@@ -21,6 +21,7 @@ brew install chromedriver
 brew install exercism
 brew install git
 brew install heroku
+brew install ifstat
 brew install imagemagick@6
 brew install kubectl
 brew install mackup
