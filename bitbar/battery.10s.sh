@@ -3,7 +3,7 @@
 battery_info=$(system_profiler SPPowerDataType)
 
 charge_remaining=$(echo "$battery_info" | grep "Charge Remaining" | awk '{print $4}')
-echo "$charge_remaining mAh | size=11"
+echo "$charge_remaining ⚡︎ | size=11"
 
 echo "---"
 
