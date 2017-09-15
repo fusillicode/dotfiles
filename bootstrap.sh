@@ -77,6 +77,9 @@ echo -e '\n. $HOME/.asdf/completions/asdf.bash' >> ~/.zshrc
 
 # Install asdf plugins
 asdf plugin-add ruby https://github.com/asdf-vm/asdf-ruby.git
+brew install bdw-gc libevent llvm
+brew link llvm --force
+asdf plugin-add crystal https://github.com/marciogm/asdf-crystal.git
 brew install wxmac
 asdf plugin-add erlang https://github.com/asdf-vm/asdf-erlang.git
 asdf plugin-add elixir https://github.com/asdf-vm/asdf-elixir.git
