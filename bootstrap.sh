@@ -18,6 +18,8 @@ brew tap caskroom/versions
 # Install Homebrew apps
 brew install awscli
 brew install chromedriver
+brew install cmake # Rugged gem needs it! (Mercatone!)
+brew install elasticsearch # Mercatone needs it!
 brew install exercism
 brew install git
 brew install heroku
