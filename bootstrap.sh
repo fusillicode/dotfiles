@@ -134,7 +134,7 @@ pip install ansible boto boto3 psycopg2
 npm install -g yarn purescript pulp bower
 
 # TODO: Install Visual Studio Code extensions
-ext install Align All-Autocomplete Ruby change-case crystal-lang cucumberautocomplete elm erb erlang erlang-otp gitlens haml json-tools language-haskell language-purescript monokai-plusplus rails-go-to-spec referenceshelper rspec-snippets ruby-snippet sass-indented selectline-statusbar slim smarty sort-lines trailing-spaces vscode-docker vscode-elixir vscode-eslint vscode-fileutils vscode-import-cost xml
+ext install Align All-Autocomplete Ruby change-case crystal-lang cucumberautocomplete elm erb erlang erlang-otp gitlens haml json-tools language-haskell language-purescript rails-go-to-spec referenceshelper rspec-snippets ruby-snippet sass-indented selectline-statusbar slim smarty sort-lines trailing-spaces trailscasts vscode-docker vscode-elixir vscode-eslint vscode-fileutils vscode-import-cost xml
 
 # Upgrade and cleanup brew stuff...
 brew update && brew upgrade && brew cleanup -s && brew cask cleanup && rm -rf ~/Library/Caches/Homebrew/*
