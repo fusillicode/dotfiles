@@ -133,8 +133,39 @@ pip install ansible boto boto3 psycopg2
 # Install Node stuff...(e.g. yarn, PureScript, Bower, etc.)
 npm install -g yarn purescript pulp bower
 
-# TODO: Install Visual Studio Code extensions
-ext install Align All-Autocomplete Ruby change-case crystal-lang cucumberautocomplete elm erb erlang erlang-otp gitlens haml json-tools language-haskell language-purescript rails-go-to-spec referenceshelper rspec-snippets ruby-snippet sass-indented selectline-statusbar slim smarty sort-lines trailing-spaces trailscasts vscode-docker vscode-elixir vscode-eslint vscode-fileutils vscode-import-cost xml
+# Install Visual Studio Code Insiders extensions
+code-insiders --install-extension Atishay-Jain.all-autocomplete
+code-insiders --install-extension CraigMaslowski.erb
+code-insiders --install-extension DotJoshJohnson.xml
+code-insiders --install-extension PeterJausovec.vscode-docker
+code-insiders --install-extension Tyriar.sort-lines
+code-insiders --install-extension alexkrechik.cucumberautocomplete
+code-insiders --install-extension dbaeumer.vscode-eslint
+code-insiders --install-extension eamodio.gitlens
+code-insiders --install-extension eriklynd.json-tools
+code-insiders --install-extension faustinoaq.crystal-lang
+code-insiders --install-extension gayanhewa.referenceshelper
+code-insiders --install-extension imperez.smarty
+code-insiders --install-extension justusadam.language-haskell
+code-insiders --install-extension karunamurti.haml
+code-insiders --install-extension karunamurti.rspec-snippets
+code-insiders --install-extension mjmcloug.vscode-elixir
+code-insiders --install-extension mksafi.trailscasts
+code-insiders --install-extension nwolverson.language-purescript
+code-insiders --install-extension pgourlain.erlang
+code-insiders --install-extension rebornix.ruby
+code-insiders --install-extension robert.ruby-snippet
+code-insiders --install-extension robinbentley.sass-indented
+code-insiders --install-extension sbrink.elm
+code-insiders --install-extension shardulm94.trailing-spaces
+code-insiders --install-extension sianglim.slim
+code-insiders --install-extension sleistner.vscode-fileutils
+code-insiders --install-extension sporto.rails-go-to-spec
+code-insiders --install-extension steve8708.Align
+code-insiders --install-extension tomoki1207.selectline-statusbar
+code-insiders --install-extension wix.vscode-import-cost
+code-insiders --install-extension wmaurer.change-case
+code-insiders --install-extension yuce.erlang-otp
 
 # Upgrade and cleanup brew stuff...
 brew update && brew upgrade && brew cleanup -s && brew cask cleanup && rm -rf ~/Library/Caches/Homebrew/*
