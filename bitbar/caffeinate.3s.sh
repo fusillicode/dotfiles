@@ -20,7 +20,9 @@ if [[ "$1" = "stop" ]]; then
 fi
 
 echo $(icon)
-
 echo "---"
-echo "Caffeinate | size=12 bash='$0' param1=start terminal=false"
-echo "Decaffeinate | size=12 bash='$0' param1=stop terminal=false"
+if [[ -z "$(pgrep caffeinate)" ]]; then
+  echo "Caffeinate | size=12 bash='$0' param1=start terminal=false"
+else
+  echo "Decaffeinate | size=12 bash='$0' param1=stop terminal=false"
+fi
