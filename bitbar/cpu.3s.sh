@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 OLDIFS=$IFS
 
@@ -20,10 +20,9 @@ get_cpu_stats() {
 }
 
 get_cpu_stats
-echo "${top_5[1]} | size=11"
+echo "${top_5[1]} | size=10"
 
 echo "---"
-
-top_5=("${top_5[@]/%/ | font=Menlo}")
+top_5=("${top_5[@]/%/ | font=Menlo size=12}")
 IFS=$'\n'
 echo "${top_5[*]}"

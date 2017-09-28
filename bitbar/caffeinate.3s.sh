@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 function icon {
   if [[ -z "$(pgrep caffeinate)" ]]; then echo "🍵"; else echo "☕️"; fi
@@ -20,6 +20,7 @@ if [[ "$1" = "stop" ]]; then
 fi
 
 echo $(icon)
+
 echo "---"
-echo "Caffeinate | bash='$0' param1=start terminal=false"
-echo "Decaffeinate | bash='$0' param1=stop terminal=false"
+echo "Caffeinate | size=12 bash='$0' param1=start terminal=false"
+echo "Decaffeinate | size=12 bash='$0' param1=stop terminal=false"

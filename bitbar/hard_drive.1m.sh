@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 free_space=$(df -H | grep '/dev/disk1' | grep -o '[0-9]\+G' | tail -1)
-echo "$free_space | size=11"
+echo "$free_space | size=10"
