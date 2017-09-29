@@ -22,6 +22,6 @@ get_cpu_stats() {
 get_cpu_stats
 echo "${top_5[1]} | size=10"
 echo "---"
-top_5=("${top_5[@]/%/ | font=Menlo size=12}")
+top_5=("${top_5[@]/%/ | font=Menlo size=12 color=white}")
 IFS=$'\n'
 echo "${top_5[*]}"

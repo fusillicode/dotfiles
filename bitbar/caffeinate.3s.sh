@@ -22,7 +22,7 @@ fi
 echo $(icon)
 echo "---"
 if [[ -z "$(pgrep caffeinate)" ]]; then
-  echo "Caffeinate | size=12 bash='$0' param1=start terminal=false"
+  echo "Caffeinate | size=12 color=white bash='$0' param1=start terminal=false"
 else
-  echo "Decaffeinate | size=12 bash='$0' param1=stop terminal=false"
+  echo "Decaffeinate | size=12 color=white bash='$0' param1=stop terminal=false"
 fi
