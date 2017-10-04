@@ -37,6 +37,7 @@ brew install zsh
 # Install Homebrew-Cask apps
 brew cask install adium
 brew cask install appcleaner
+brew cask install aptible
 brew cask install bitbar
 brew cask install dropbox
 brew cask install firefox
