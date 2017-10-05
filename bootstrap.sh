@@ -43,6 +43,7 @@ brew cask install dropbox
 brew cask install firefox
 brew cask install google-chrome
 brew cask install java
+brew cask install keybase
 brew cask install libreoffice
 brew cask install minikube
 brew cask install openshift-cli
