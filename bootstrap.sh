@@ -161,6 +161,7 @@ code-insiders --install-extension robinbentley.sass-indented
 code-insiders --install-extension sbrink.elm
 code-insiders --install-extension shardulm94.trailing-spaces
 code-insiders --install-extension sianglim.slim
+code-insiders --install-extension SirTori.indenticator
 code-insiders --install-extension sleistner.vscode-fileutils
 code-insiders --install-extension sporto.rails-go-to-spec
 code-insiders --install-extension steve8708.Align
