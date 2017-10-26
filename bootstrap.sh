@@ -46,6 +46,7 @@ brew cask install java
 brew cask install keybase
 brew cask install libreoffice
 brew cask install minikube
+brew cask install ngrok
 brew cask install openshift-cli
 brew cask install rcdefaultapp
 brew cask install skype
