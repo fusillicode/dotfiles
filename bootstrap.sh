@@ -140,7 +140,9 @@ npm install -g yarn purescript pulp bower
 code-insiders --install-extension Atishay-Jain.all-autocomplete
 code-insiders --install-extension CraigMaslowski.erb
 code-insiders --install-extension DotJoshJohnson.xml
+code-insiders --install-extension GrapeCity.gc-excelviewer
 code-insiders --install-extension PeterJausovec.vscode-docker
+code-insiders --install-extension SirTori.indenticator
 code-insiders --install-extension Tyriar.sort-lines
 code-insiders --install-extension alexkrechik.cucumberautocomplete
 code-insiders --install-extension dbaeumer.vscode-eslint
@@ -162,11 +164,12 @@ code-insiders --install-extension robinbentley.sass-indented
 code-insiders --install-extension sbrink.elm
 code-insiders --install-extension shardulm94.trailing-spaces
 code-insiders --install-extension sianglim.slim
-code-insiders --install-extension SirTori.indenticator
 code-insiders --install-extension sleistner.vscode-fileutils
 code-insiders --install-extension sporto.rails-go-to-spec
 code-insiders --install-extension steve8708.Align
 code-insiders --install-extension tomoki1207.selectline-statusbar
+code-insiders --install-extension vscjava.vscode-java-debug
+code-insiders --install-extension vscjava.vscode-java-pack
 code-insiders --install-extension wix.vscode-import-cost
 code-insiders --install-extension wmaurer.change-case
 code-insiders --install-extension yuce.erlang-otp
