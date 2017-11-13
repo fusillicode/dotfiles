@@ -154,6 +154,7 @@ code-insiders --install-extension imperez.smarty
 code-insiders --install-extension justusadam.language-haskell
 code-insiders --install-extension karunamurti.haml
 code-insiders --install-extension karunamurti.rspec-snippets
+code-insiders --install-extension misogi.ruby-rubocop
 code-insiders --install-extension mjmcloug.vscode-elixir
 code-insiders --install-extension mksafi.trailscasts
 code-insiders --install-extension nwolverson.language-purescript
