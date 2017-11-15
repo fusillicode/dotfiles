@@ -91,6 +91,7 @@ asdf plugin-add elixir https://github.com/asdf-vm/asdf-elixir.git
 asdf plugin-add redis https://github.com/smashedtoatoms/asdf-redis.git
 asdf plugin-add postgres https://github.com/smashedtoatoms/asdf-postgres.git
 asdf plugin-add nodejs https://github.com/asdf-vm/asdf-nodejs.git
+asdf plugin-add mongodb https://github.com/sylph01/asdf-mongodb.git # For FinReach...
 brew install gpg
 chmod 700 ~/.gnupg
 chmod 600 ~/.gnupg/*
