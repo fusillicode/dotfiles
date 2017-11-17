@@ -16,6 +16,7 @@ brew tap caskroom/cask
 brew tap caskroom/versions
 
 # Install Homebrew apps
+brew install aws-elasticbeanstalk
 brew install awscli
 brew install chromedriver
 brew install cmake # Rugged gem needs it! (Mercatone!)
