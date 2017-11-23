@@ -147,6 +147,7 @@ code-insiders --install-extension PeterJausovec.vscode-docker
 code-insiders --install-extension SirTori.indenticator
 code-insiders --install-extension Tyriar.sort-lines
 code-insiders --install-extension alexkrechik.cucumberautocomplete
+code-insiders --install-extension christian-kohler.path-intellisense
 code-insiders --install-extension dbaeumer.vscode-eslint
 code-insiders --install-extension eamodio.gitlens
 code-insiders --install-extension eriklynd.json-tools
