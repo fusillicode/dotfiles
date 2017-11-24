@@ -153,6 +153,7 @@ code-insiders --install-extension eamodio.gitlens
 code-insiders --install-extension eriklynd.json-tools
 code-insiders --install-extension faustinoaq.crystal-lang
 code-insiders --install-extension gayanhewa.referenceshelper
+code-insiders --install-extension iampeterbanjo.elixirlinter
 code-insiders --install-extension imperez.smarty
 code-insiders --install-extension justusadam.language-haskell
 code-insiders --install-extension karunamurti.haml
