@@ -149,6 +149,7 @@ code-insiders --install-extension Tyriar.sort-lines
 code-insiders --install-extension alexkrechik.cucumberautocomplete
 code-insiders --install-extension christian-kohler.path-intellisense
 code-insiders --install-extension dbaeumer.vscode-eslint
+code-insiders --install-extension dinhani.divider
 code-insiders --install-extension eamodio.gitlens
 code-insiders --install-extension eriklynd.json-tools
 code-insiders --install-extension faustinoaq.crystal-lang
@@ -158,6 +159,7 @@ code-insiders --install-extension imperez.smarty
 code-insiders --install-extension justusadam.language-haskell
 code-insiders --install-extension karunamurti.haml
 code-insiders --install-extension karunamurti.rspec-snippets
+code-insiders --install-extension kevinkyang.auto-comment-blocks
 code-insiders --install-extension misogi.ruby-rubocop
 code-insiders --install-extension mjmcloug.vscode-elixir
 code-insiders --install-extension mksafi.trailscasts
