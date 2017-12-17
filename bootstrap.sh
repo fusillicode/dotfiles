@@ -32,6 +32,7 @@ brew install mpv
 brew install mysql
 brew install phantomjs
 brew install ripgrep
+brew install sbt@1 # A New Hope!
 brew install siege
 brew install zsh
 
@@ -43,7 +44,6 @@ brew cask install bitbar
 brew cask install dropbox
 brew cask install firefox
 brew cask install google-chrome
-brew cask install java
 brew cask install keybase
 brew cask install libreoffice
 brew cask install minikube
@@ -82,23 +82,25 @@ echo -e '\n. $HOME/.asdf/asdf.sh' >> ~/.zshrc
 echo -e '\n. $HOME/.asdf/completions/asdf.bash' >> ~/.zshrc
 
 # Install asdf plugins
-asdf plugin-add ruby https://github.com/asdf-vm/asdf-ruby.git
 brew install bdw-gc libevent llvm
 brew link llvm --force
 asdf plugin-add crystal https://github.com/marciogm/asdf-crystal.git
 brew install wxmac
 asdf plugin-add erlang https://github.com/asdf-vm/asdf-erlang.git
 asdf plugin-add elixir https://github.com/asdf-vm/asdf-elixir.git
-asdf plugin-add redis https://github.com/smashedtoatoms/asdf-redis.git
-asdf plugin-add postgres https://github.com/smashedtoatoms/asdf-postgres.git
-asdf plugin-add nodejs https://github.com/asdf-vm/asdf-nodejs.git
+asdf plugin-add java https://github.com/skotchpine/asdf-java # A New Hope!
 asdf plugin-add mongodb https://github.com/sylph01/asdf-mongodb.git # For FinReach...
 brew install gpg
 chmod 700 ~/.gnupg
 chmod 600 ~/.gnupg/*
 bash ~/.asdf/plugins/nodejs/bin/import-release-team-keyring
+asdf plugin-add nodejs https://github.com/asdf-vm/asdf-nodejs.git
+asdf plugin-add postgres https://github.com/smashedtoatoms/asdf-postgres.git
+asdf plugin-add redis https://github.com/smashedtoatoms/asdf-redis.git
+asdf plugin-add ruby https://github.com/asdf-vm/asdf-ruby.git
+asdf plugin-add sbt https://github.com/lerencao/asdf-sbt # A New Hope!
+asdf plugin-add scala https://github.com/mtatheonly/asdf-scala # A New Hope!
 # asdf plugin-add clojure https://github.com/vic/asdf-clojure.git
-# asdf plugin-add crystal https://github.com/marciogm/asdf-crystal.git
 # asdf plugin-add elm https://github.com/vic/asdf-elm.git
 # asdf plugin-add golang https://github.com/kennyp/asdf-golang.git
 # asdf plugin-add haskell https://github.com/vic/asdf-haskell.git
@@ -107,8 +109,6 @@ bash ~/.asdf/plugins/nodejs/bin/import-release-team-keyring
 # brew install gcc
 # asdf plugin-add riak https://github.com/smashedtoatoms/asdf-riak
 # asdf plugin-add rust https://github.com/code-lever/asdf-rust.git
-# asdf plugin-add sbt https://github.com/lerencao/asdf-sbt
-# asdf plugin-add scala https://github.com/mtatheonly/asdf-scala
 # asdf plugin-add swift https://github.com/fcrespo82/asdf-swift
 
 # Install Ruby gems
@@ -150,6 +150,7 @@ code-insiders --install-extension alexkrechik.cucumberautocomplete
 code-insiders --install-extension christian-kohler.path-intellisense
 code-insiders --install-extension dbaeumer.vscode-eslint
 code-insiders --install-extension dinhani.divider
+code-insiders --install-extension dragos.scala-lsp
 code-insiders --install-extension eamodio.gitlens
 code-insiders --install-extension eriklynd.json-tools
 code-insiders --install-extension faustinoaq.crystal-lang
@@ -160,6 +161,7 @@ code-insiders --install-extension justusadam.language-haskell
 code-insiders --install-extension karunamurti.haml
 code-insiders --install-extension karunamurti.rspec-snippets
 code-insiders --install-extension kevinkyang.auto-comment-blocks
+code-insiders --install-extension lightbend.vscode-sbt-scala
 code-insiders --install-extension misogi.ruby-rubocop
 code-insiders --install-extension mjmcloug.vscode-elixir
 code-insiders --install-extension mksafi.trailscasts
@@ -175,8 +177,10 @@ code-insiders --install-extension sleistner.vscode-fileutils
 code-insiders --install-extension sporto.rails-go-to-spec
 code-insiders --install-extension steve8708.Align
 code-insiders --install-extension tomoki1207.selectline-statusbar
+code-insiders --install-extension trinm1709.dracula-theme-from-intellij
 code-insiders --install-extension vscjava.vscode-java-debug
 code-insiders --install-extension vscjava.vscode-java-pack
+code-insiders --install-extension wholroyd.jinja
 code-insiders --install-extension wix.vscode-import-cost
 code-insiders --install-extension wmaurer.change-case
 code-insiders --install-extension yuce.erlang-otp
