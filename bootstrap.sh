@@ -27,7 +27,6 @@ brew install heroku
 brew install ifstat
 brew install imagemagick@6
 brew install kubectl
-brew install mackup
 brew install mpv
 brew install mysql
 brew install phantomjs
