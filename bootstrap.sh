@@ -26,7 +26,6 @@ brew install git
 brew install heroku
 brew install ifstat
 brew install imagemagick@6
-brew install kubectl
 brew install mpv
 brew install mysql
 brew install phantomjs
@@ -36,25 +35,21 @@ brew install siege
 brew install zsh
 
 # Install Homebrew-Cask apps
-brew cask install adium
 brew cask install appcleaner
 brew cask install aptible
 brew cask install bitbar
 brew cask install dropbox
-brew cask install firefox
 brew cask install google-chrome
 brew cask install keybase
 brew cask install libreoffice
-brew cask install minikube
 brew cask install ngrok
-brew cask install openshift-cli
 brew cask install rcdefaultapp
 brew cask install skype
 brew cask install slack
 brew cask install spectacle
 brew cask install the-unarchiver
 brew cask install transmission
-brew cask install virtualbox
+brew cask install tunnelblick
 brew cask install yubico-authenticator
 
 # Install Oh My Zsh
