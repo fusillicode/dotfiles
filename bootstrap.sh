@@ -150,6 +150,7 @@ code-insiders --install-extension faustinoaq.crystal-lang
 code-insiders --install-extension gayanhewa.referenceshelper
 code-insiders --install-extension iampeterbanjo.elixirlinter
 code-insiders --install-extension imperez.smarty
+code-insiders --install-extension joaompinto.asciidoctor-vscode
 code-insiders --install-extension justusadam.language-haskell
 code-insiders --install-extension karunamurti.haml
 code-insiders --install-extension karunamurti.rspec-snippets
