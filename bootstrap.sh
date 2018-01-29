@@ -158,7 +158,6 @@ code-insiders --install-extension kevinkyang.auto-comment-blocks
 code-insiders --install-extension lightbend.vscode-sbt-scala
 code-insiders --install-extension misogi.ruby-rubocop
 code-insiders --install-extension mjmcloug.vscode-elixir
-code-insiders --install-extension mksafi.trailscasts
 code-insiders --install-extension nwolverson.language-purescript
 code-insiders --install-extension pgourlain.erlang
 code-insiders --install-extension rebornix.ruby
@@ -171,7 +170,6 @@ code-insiders --install-extension sleistner.vscode-fileutils
 code-insiders --install-extension sporto.rails-go-to-spec
 code-insiders --install-extension steve8708.Align
 code-insiders --install-extension tomoki1207.selectline-statusbar
-code-insiders --install-extension trinm1709.dracula-theme-from-intellij
 code-insiders --install-extension vscjava.vscode-java-debug
 code-insiders --install-extension vscjava.vscode-java-pack
 code-insiders --install-extension wholroyd.jinja
