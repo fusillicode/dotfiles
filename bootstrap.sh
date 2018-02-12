@@ -30,7 +30,7 @@ brew install mpv
 brew install mysql
 brew install phantomjs
 brew install ripgrep
-brew install sbt@1 # A New Hope!
+brew install sbt@0.13 # A New Hope!
 brew install siege
 brew install zsh
 
@@ -40,6 +40,7 @@ brew cask install aptible
 brew cask install bitbar
 brew cask install dropbox
 brew cask install google-chrome
+brew cask install java8 # A New Hope!
 brew cask install keybase
 brew cask install libreoffice
 brew cask install ngrok
@@ -82,7 +83,6 @@ asdf plugin-add crystal https://github.com/marciogm/asdf-crystal.git
 brew install wxmac
 asdf plugin-add erlang https://github.com/asdf-vm/asdf-erlang.git
 asdf plugin-add elixir https://github.com/asdf-vm/asdf-elixir.git
-asdf plugin-add java https://github.com/skotchpine/asdf-java # A New Hope!
 asdf plugin-add mongodb https://github.com/sylph01/asdf-mongodb.git # For FinReach...
 brew install gpg
 chmod 700 ~/.gnupg
@@ -169,6 +169,7 @@ code-insiders --install-extension sianglim.slim
 code-insiders --install-extension sleistner.vscode-fileutils
 code-insiders --install-extension sporto.rails-go-to-spec
 code-insiders --install-extension steve8708.Align
+code-insiders --install-extension streetsidesoftware.avro
 code-insiders --install-extension tomoki1207.selectline-statusbar
 code-insiders --install-extension vscjava.vscode-java-debug
 code-insiders --install-extension vscjava.vscode-java-pack
