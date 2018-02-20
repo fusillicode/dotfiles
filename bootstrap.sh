@@ -26,6 +26,7 @@ brew install git
 brew install heroku
 brew install ifstat
 brew install imagemagick@6
+brew install maven
 brew install mpv
 brew install mysql
 brew install phantomjs
@@ -92,7 +93,6 @@ asdf plugin-add nodejs https://github.com/asdf-vm/asdf-nodejs.git
 asdf plugin-add postgres https://github.com/smashedtoatoms/asdf-postgres.git
 asdf plugin-add redis https://github.com/smashedtoatoms/asdf-redis.git
 asdf plugin-add ruby https://github.com/asdf-vm/asdf-ruby.git
-asdf plugin-add sbt https://github.com/lerencao/asdf-sbt # A New Hope!
 asdf plugin-add scala https://github.com/mtatheonly/asdf-scala # A New Hope!
 # asdf plugin-add clojure https://github.com/vic/asdf-clojure.git
 # asdf plugin-add elm https://github.com/vic/asdf-elm.git
