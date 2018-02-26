@@ -40,6 +40,7 @@ brew cask install appcleaner
 brew cask install aptible
 brew cask install bitbar
 brew cask install dropbox
+brew cask install flyway # For testing "A new Hope!"
 brew cask install google-chrome
 brew cask install java8 # A New Hope!
 brew cask install keybase
