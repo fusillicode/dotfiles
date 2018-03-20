@@ -42,10 +42,12 @@ brew cask install bitbar
 brew cask install dropbox
 brew cask install flyway # For testing "A new Hope!"
 brew cask install google-chrome
+brew cask install intellij-idea
 brew cask install java8 # A New Hope!
 brew cask install keybase
 brew cask install libreoffice
 brew cask install ngrok
+brew cask install postman
 brew cask install rcdefaultapp
 brew cask install skype
 brew cask install slack
