@@ -9,8 +9,6 @@ ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/
 brew update
 brew doctor
 brew prune
-brew tap homebrew/dupes
-brew tap homebrew/versions
 brew tap beeftornado/rmtree
 brew tap caskroom/cask
 brew tap caskroom/versions
@@ -22,6 +20,7 @@ brew install chromedriver
 brew install cmake # Rugged gem needs it! (Mercatone!)
 brew install elasticsearch # Mercatone needs it!
 brew install exercism
+brew install flyway # For testing "A new Hope!"
 brew install git
 brew install heroku
 brew install ifstat
@@ -40,7 +39,6 @@ brew cask install appcleaner
 brew cask install aptible
 brew cask install bitbar
 brew cask install dropbox
-brew cask install flyway # For testing "A new Hope!"
 brew cask install google-chrome
 brew cask install intellij-idea
 brew cask install java8 # A New Hope!
@@ -52,9 +50,11 @@ brew cask install rcdefaultapp
 brew cask install skype
 brew cask install slack
 brew cask install spectacle
+brew cask install studio-3t
 brew cask install the-unarchiver
 brew cask install transmission
 brew cask install tunnelblick
+brew cask install whatsapp
 brew cask install yubico-authenticator
 
 # Install Oh My Zsh
@@ -122,7 +122,7 @@ brew install coreutils fwup squashfs
 mix archive.install https://github.com/nerves-project/archives/raw/master/nerves_bootstrap.ez
 
 # Install Erlang tools
-curl -OL https://github.com/erlanglab/erlangpl/releases/download/0.6.1/erlangpl.tar.gz && \
+curl -OL https://github.com/erlanglab/erlangpl/releases/download/0.9.0/erlangpl.tar.gz && \
 tar -zxvf erlangpl.tar.gz && \
 rm -rf erlangpl.tar.gz && \
 mkdir -p ~/bin/ && \
