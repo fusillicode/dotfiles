@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+CONTAINER_NAME=${1:-"fast-data-dev"}
+COMMAND=${2:-bash}
+
+docker exec -it $(docker ps | grep "$CONTAINER_NAME" | awk '{print $1;}') "$COMMAND"
