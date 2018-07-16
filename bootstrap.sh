@@ -38,6 +38,7 @@ brew install zsh
 brew cask install appcleaner
 brew cask install aptible
 brew cask install bitbar
+brew cask install camunda-modeler
 brew cask install dropbox
 brew cask install google-chrome
 brew cask install intellij-idea
