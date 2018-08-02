@@ -110,7 +110,7 @@ asdf plugin-add scala https://github.com/mtatheonly/asdf-scala # A New Hope!
 # asdf plugin-add swift https://github.com/fcrespo82/asdf-swift
 
 # Install Ruby gems
-gem install --no-rdoc --no-ri brakeman bundler-audit bundler cane compass consistency_fail fasterer html2slim license_finder loc_counter rails rails-audit rails_best_practices rake reek ruby-lint rubocop rubycritic wordmove
+gem install --no-rdoc --no-ri brakeman bundler-audit bundler cane compass consistency_fail fasterer html2slim license_finder loc_counter rails rails-audit rails_best_practices rake reek ruby-lint rubocop rubycritic solargraph wordmove
 
 # Install WpScan
 mkdir -p ~/bin/ && ~/bin && git clone https://github.com/wpscanteam/wpscan.git && cd wpscan && bundle install --without test
