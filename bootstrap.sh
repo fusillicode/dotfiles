@@ -39,7 +39,9 @@ brew cask install appcleaner
 brew cask install aptible
 brew cask install bitbar
 brew cask install camunda-modeler
+brew cask install dataloader
 brew cask install dropbox
+brew cask install firefox
 brew cask install google-chrome
 brew cask install intellij-idea
 brew cask install java8 # A New Hope!
@@ -51,12 +53,12 @@ brew cask install rcdefaultapp
 brew cask install skype
 brew cask install slack
 brew cask install spectacle
+brew cask install spotify
 brew cask install studio-3t
 brew cask install the-unarchiver
 brew cask install transmission
 brew cask install tunnelblick
 brew cask install whatsapp
-brew cask install yubico-authenticator
 
 # Install Oh My Zsh
 curl -L https://github.com/robbyrussell/oh-my-zsh/raw/master/tools/install.sh | sh
