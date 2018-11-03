@@ -16,7 +16,6 @@ brew tap caskroom/versions
 # Install Homebrew apps
 brew install aws-elasticbeanstalk
 brew install awscli
-brew install chromedriver
 brew install cmake # Rugged gem needs it! (Mercatone!)
 brew install elasticsearch # Mercatone needs it!
 brew install exercism
@@ -39,6 +38,7 @@ brew cask install appcleaner
 brew cask install aptible
 brew cask install bitbar
 brew cask install camunda-modeler
+brew cask install chromedriver
 brew cask install dataloader
 brew cask install dropbox
 brew cask install firefox
