@@ -21,9 +21,11 @@ brew install elasticsearch # Mercatone needs it!
 brew install exercism
 brew install flyway # For testing "A new Hope!"
 brew install git
+brew install helm
 brew install heroku
 brew install ifstat
 brew install imagemagick@6
+brew install kustomize
 brew install maven
 brew install mpv
 brew install mysql
