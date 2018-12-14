@@ -25,6 +25,8 @@ brew install helm
 brew install heroku
 brew install ifstat
 brew install imagemagick@6
+brew install kubectx
+brew install kube-ps1
 brew install kustomize
 brew install maven
 brew install mpv
@@ -44,6 +46,7 @@ brew cask install chromedriver
 brew cask install dataloader
 brew cask install dropbox
 brew cask install firefox
+brew cask install google-backup-and-sync
 brew cask install google-chrome
 brew cask install intellij-idea
 brew cask install java8 # A New Hope!
@@ -57,6 +60,7 @@ brew cask install slack
 brew cask install spectacle
 brew cask install spotify
 brew cask install studio-3t
+brew cask install telegram
 brew cask install the-unarchiver
 brew cask install transmission
 brew cask install tunnelblick
