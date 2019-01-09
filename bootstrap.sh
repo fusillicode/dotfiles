@@ -17,6 +17,7 @@ brew tap caskroom/versions
 brew install aws-elasticbeanstalk
 brew install awscli
 brew install cmake # Rugged gem needs it! (Mercatone!)
+brew install datawire/blackbird/telepresence
 brew install elasticsearch # Mercatone needs it!
 brew install exercism
 brew install flyway # For testing "A new Hope!"
@@ -25,8 +26,8 @@ brew install helm
 brew install heroku
 brew install ifstat
 brew install imagemagick@6
-brew install kubectx
 brew install kube-ps1
+brew install kubectx
 brew install kustomize
 brew install maven
 brew install mpv
@@ -53,6 +54,7 @@ brew cask install java8 # A New Hope!
 brew cask install keybase
 brew cask install libreoffice
 brew cask install ngrok
+brew cask install osxfuse
 brew cask install postman
 brew cask install rcdefaultapp
 brew cask install skype
