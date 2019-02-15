@@ -26,12 +26,14 @@ brew install helm
 brew install heroku
 brew install ifstat
 brew install imagemagick@6
+brew install kafkacat
 brew install kube-ps1
 brew install kubectx
 brew install kustomize
 brew install maven
 brew install mpv
 brew install mysql
+brew install nmap
 brew install phantomjs
 brew install ripgrep
 brew install sbt@0.13 # A New Hope!
