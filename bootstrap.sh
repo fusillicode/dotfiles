@@ -25,7 +25,6 @@ brew install kafkacat
 brew install kube-ps1
 brew install kubectx
 brew install kustomize
-brew install maven
 brew install mycli
 brew install nmap
 brew install pgcli
@@ -40,20 +39,16 @@ brew cask install bitbar
 brew cask install camunda-modeler
 brew cask install chromedriver
 brew cask install dataloader
-brew cask install dropbox
 brew cask install firefox
 brew cask install google-backup-and-sync
 brew cask install google-chrome
 brew cask install keybase
-brew cask install libreoffice
 brew cask install ngrok
 brew cask install postman
 brew cask install rcdefaultapp
 brew cask install skype
 brew cask install slack
 brew cask install spectacle
-brew cask install spotify
-brew cask install studio-3t
 brew cask install telegram
 brew cask install the-unarchiver
 brew cask install transmission
