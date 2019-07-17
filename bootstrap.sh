@@ -129,7 +129,6 @@ code --install-extensions kumar-harsh.graphql-for-vscode
 code --install-extensions mauve.terraform
 code --install-extensions misogi.ruby-rubocop
 code --install-extensions mitchdenny.ecdc
-code --install-extensions mksafi.trailscasts
 code --install-extensions ms-azuretools.vscode-docker
 code --install-extensions ms-kubernetes-tools.vscode-kubernetes-tools
 code --install-extensions ms-python.python
@@ -154,7 +153,6 @@ code --install-extensions sleistner.vscode-fileutils
 code --install-extensions sporto.rails-go-to-spec
 code --install-extensions steve8708.Align
 code --install-extensions stkb.rewrap
-code --install-extensions streetsidesoftware.avro
 code --install-extensions technosophos.vscode-helm
 code --install-extensions tomoki1207.selectline-statusbar
 code --install-extensions vscjava.vscode-java-debug
