@@ -8,8 +8,8 @@ ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/
 ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 brew update
 brew doctor
+brew cask doctor
 brew prune
-brew tap beeftornado/rmtree
 brew tap caskroom/cask
 brew tap caskroom/versions
 
@@ -21,12 +21,10 @@ brew install heroku
 brew install ifstat
 brew install imagemagick@6
 brew install jq
-brew install kafkacat
 brew install kube-ps1
 brew install kubectx
 brew install kustomize
 brew install mycli
-brew install nmap
 brew install pgcli
 brew install ripgrep
 brew install siege
@@ -38,13 +36,10 @@ brew cask install appcleaner
 brew cask install bitbar
 brew cask install camunda-modeler
 brew cask install chromedriver
-brew cask install dataloader
 brew cask install firefox
 brew cask install google-backup-and-sync
 brew cask install google-chrome
 brew cask install keybase
-brew cask install ngrok
-brew cask install postman
 brew cask install rcdefaultapp
 brew cask install skype
 brew cask install slack
@@ -67,8 +62,8 @@ rm -rf temp_dir_smc smcfancontrol_2_6.zip
 chmod +x ~/bin/*
 
 # Install and configure asdf
-git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.3.0
-brew install coreutils automake autoconf openssl libyaml readline libxslt libtool unixodbc
+git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.7.3
+brew install coreutils automake autoconf openssl libyaml readline libxslt libtool unixodbc unzip curl
 echo -e '\n. $HOME/.asdf/asdf.sh' >> ~/.zshrc
 echo -e '\n. $HOME/.asdf/completions/asdf.bash' >> ~/.zshrc
 
@@ -79,7 +74,6 @@ asdf plugin-add crystal https://github.com/marciogm/asdf-crystal.git
 brew install wxmac
 asdf plugin-add erlang https://github.com/asdf-vm/asdf-erlang.git
 asdf plugin-add elixir https://github.com/asdf-vm/asdf-elixir.git
-asdf plugin-add redis https://github.com/smashedtoatoms/asdf-redis.git
 asdf plugin-add ruby https://github.com/asdf-vm/asdf-ruby.git
 
 # Install Ruby gems
@@ -96,15 +90,15 @@ mix local.rebar
 mix archive.install https://github.com/phoenixframework/archives/raw/master/phoenix_new.ez
 
 # Install Erlang tools
-curl -OL https://github.com/erlanglab/erlangpl/releases/download/0.9.0/erlangpl.tar.gz && \
-tar -zxvf erlangpl.tar.gz && \
-rm -rf erlangpl.tar.gz && \
-mkdir -p ~/bin/ && \
-mv erlangpl ~/bin
-chmod +x ~/bin/*
+# curl -OL https://github.com/erlanglab/erlangpl/releases/download/0.9.0/erlangpl.tar.gz && \
+# tar -zxvf erlangpl.tar.gz && \
+# rm -rf erlangpl.tar.gz && \
+# mkdir -p ~/bin/ && \
+# mv erlangpl ~/bin
+# chmod +x ~/bin/*
 
 # Install Python modules
-pip install ansible black boto boto3 ipython psycopg2
+# pip install ansible black boto boto3 ipython psycopg2
 
 # Install Visual Studio Code Insiders extensions
 code --install-extensions Atishay-Jain.All-Autocomplete
@@ -174,8 +168,9 @@ code --install-extensions wmaurer.change-case
 code --install-extensions yuce.erlang-otp
 
 # Upgrade and cleanup brew stuff...
-brew update && brew upgrade && brew cleanup -s && brew cask cleanup && rm -rf ~/Library/Caches/Homebrew/*
+brew update && brew upgrade && brew cleanup -s && rm -rf ~/Library/Caches/Homebrew/*
 brew doctor
+brew cask doctor
 brew prune
 
 # Set up git
