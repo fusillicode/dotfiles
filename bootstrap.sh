@@ -42,6 +42,7 @@ brew cask install google-chrome
 brew cask install keybase
 brew cask install libreoffice
 brew cask install rcdefaultapp
+brew cask install sfdx
 brew cask install skype
 brew cask install slack
 brew cask install spectacle
