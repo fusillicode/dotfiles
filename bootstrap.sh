@@ -103,7 +103,6 @@ mix archive.install https://github.com/phoenixframework/archives/raw/master/phoe
 # pip install ansible black boto boto3 ipython psycopg2
 
 # Install Visual Studio Code Insiders extensions
-code --install-extensions Atishay-Jain.All-Autocomplete
 code --install-extensions CraigMaslowski.erb
 code --install-extensions DotJoshJohnson.xml
 code --install-extensions HaaLeo.timing
