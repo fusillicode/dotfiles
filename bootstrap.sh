@@ -42,6 +42,7 @@ brew cask install google-chrome
 brew cask install keybase
 brew cask install libreoffice
 brew cask install rcdefaultapp
+brew cask install smcfancontrol
 brew cask install sfdx
 brew cask install skype
 brew cask install slack
@@ -54,14 +55,6 @@ brew cask install whatsapp
 
 # Install Oh My Zsh
 curl -L https://github.com/robbyrussell/oh-my-zsh/raw/master/tools/install.sh | sh
-
-# Install smc utility
-curl -LO http://www.eidac.de/smcfancontrol/smcfancontrol_2_6.zip && \
-unzip -d temp_dir_smc smcfancontrol_2_6.zip && \
-mkdir -p ~/bin/ && \
-yes | cp -f temp_dir_smc/smcFanControl.app/Contents/Resources/smc ~/bin/smc && \
-rm -rf temp_dir_smc smcfancontrol_2_6.zip
-chmod +x ~/bin/*
 
 # Install and configure asdf
 git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.7.3
