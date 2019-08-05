@@ -147,7 +147,6 @@ code --install-extensions shardulm94.trailing-spaces
 code --install-extensions sianglim.slim
 code --install-extensions sleistner.vscode-fileutils
 code --install-extensions sporto.rails-go-to-spec
-code --install-extensions steve8708.Align
 code --install-extensions stkb.rewrap
 code --install-extensions technosophos.vscode-helm
 code --install-extensions tomoki1207.selectline-statusbar
