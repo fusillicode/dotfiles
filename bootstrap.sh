@@ -14,6 +14,7 @@ brew tap caskroom/versions
 
 # Install Homebrew apps
 brew install awscli
+brew install asdf
 brew install git
 # brew tap heroku/brew && brew install heroku
 # brew install ifstat # This was for the network.sh BitBar script...that I don't use it anymore ¯\_(ツ)_/¯
@@ -55,17 +56,14 @@ brew cask install whatsapp
 # Install Oh My Zsh
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
 
-# Install and configure asdf
-git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.7.3
-brew install coreutils automake autoconf openssl libyaml readline libxslt libtool unixodbc unzip curl
-echo -e '\n. $HOME/.asdf/asdf.sh' >> ~/.zshrc
-echo -e '\n. $HOME/.asdf/completions/asdf.bash' >> ~/.zshrc
+# Configure asdf
+echo -e "\n. $(brew --prefix asdf)/asdf.sh" >> ~/.zshrc
+echo -e "\n. $(brew --prefix asdf)/etc/bash_completion.d/asdf.bash" >> ~/.zshrc
 
 # Install asdf plugins
-brew install bdw-gc libevent llvm
-brew link llvm --force
+# brew install bdw-gc libevent llvm && brew link llvm --force # Don't know, seems not needed anymore...¯\_(ツ)_/¯
 asdf plugin-add crystal https://github.com/marciogm/asdf-crystal.git
-brew install wxmac
+brew install autoconf wxmac
 asdf plugin-add erlang https://github.com/asdf-vm/asdf-erlang.git
 asdf plugin-add elixir https://github.com/asdf-vm/asdf-elixir.git
 asdf plugin-add ruby https://github.com/asdf-vm/asdf-ruby.git
