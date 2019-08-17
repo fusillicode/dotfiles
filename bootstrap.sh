@@ -9,16 +9,14 @@ ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/
 brew update
 brew doctor
 brew cask doctor
-brew prune
 brew tap caskroom/cask
 brew tap caskroom/versions
 
 # Install Homebrew apps
 brew install awscli
 brew install git
-brew install helm
-brew install heroku
-brew install ifstat
+# brew tap heroku/brew && brew install heroku
+# brew install ifstat # This was for the network.sh BitBar script...that I don't use it anymore ¯\_(ツ)_/¯
 brew install imagemagick@6
 brew install jq
 brew install kube-ps1
@@ -36,10 +34,10 @@ brew cask install appcleaner
 brew cask install bitbar
 brew cask install camunda-modeler
 brew cask install chromedriver
-brew cask install docker-edge
 brew cask install firefox
 brew cask install google-backup-and-sync
 brew cask install google-chrome
+brew cask install helm
 brew cask install keybase
 brew cask install libreoffice
 brew cask install rcdefaultapp
@@ -52,11 +50,10 @@ brew cask install telegram
 brew cask install the-unarchiver
 brew cask install transmission
 brew cask install tunnelblick
-brew cask install visual-studio-code-insiders
 brew cask install whatsapp
 
 # Install Oh My Zsh
-curl -L https://github.com/robbyrussell/oh-my-zsh/raw/master/tools/install.sh | sh
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
 
 # Install and configure asdf
 git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.7.3
@@ -164,7 +161,6 @@ code --install-extensions yuce.erlang-otp
 brew update && brew upgrade && brew cleanup -s && rm -rf ~/Library/Caches/Homebrew/*
 brew doctor
 brew cask doctor
-brew prune
 
 # Set up git
 git config --global core.editor vim
