@@ -40,6 +40,7 @@ brew cask install google-backup-and-sync
 brew cask install google-chrome
 brew cask install helm
 brew cask install keybase
+brew cask install league-of-legends
 brew cask install libreoffice
 brew cask install rcdefaultapp
 brew cask install sfdx
