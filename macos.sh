@@ -960,6 +960,13 @@ defaults write org.m0k.transmission RandomPort -bool true
 #fusillicode defaults write com.tapbots.TweetbotMac OpenURLsDirectly -bool true
 
 ###############################################################################
+#fusillicode Tunnelblick.app                                                  #
+###############################################################################
+
+#fusillicode Disable launch at login
+defaults write net.tunnelblick.tunnelblick doNotLaunchOnLogin -bool yes
+
+###############################################################################
 # Kill affected applications                                                  #
 ###############################################################################
 
