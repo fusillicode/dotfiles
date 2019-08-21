@@ -24,6 +24,7 @@ brew install kube-ps1
 brew install kubectx
 brew install kustomize
 brew install mycli
+brew install mysql-connector-c
 brew install pgcli
 brew install ripgrep
 brew install siege
