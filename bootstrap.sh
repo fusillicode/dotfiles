@@ -95,28 +95,24 @@ mix archive.install https://github.com/phoenixframework/archives/raw/master/phoe
 # pip install ansible black boto boto3 ipython psycopg2
 
 # Install Visual Studio Code Insiders extensions
-code --install-extension CraigMaslowski.erb
-code --install-extension DotJoshJohnson.xml
-code --install-extension HaaLeo.timing
-code --install-extension JakeBecker.elixir-ls
-code --install-extension SirTori.indenticator
-code --install-extension VisualStudioExptTeam.vscodeintellicode
 code --install-extension alefragnani.project-manager
 code --install-extension bungcip.better-toml
 code --install-extension castwide.solargraph
 code --install-extension christian-kohler.path-intellisense
+code --install-extension CraigMaslowski.erb
 code --install-extension dakara.transformer
 code --install-extension dbaeumer.vscode-eslint
+code --install-extension DotJoshJohnson.xml
 code --install-extension eamodio.gitlens
 code --install-extension eriklynd.json-tools
 code --install-extension faustinoaq.crystal-lang
+code --install-extension HaaLeo.timing
 code --install-extension iampeterbanjo.elixirlinter
 code --install-extension imperez.smarty
-code --install-extension joaompinto.asciidoctor-vscode
+code --install-extension JakeBecker.elixir-ls
 code --install-extension justusadam.language-haskell
 code --install-extension karunamurti.haml
 code --install-extension karunamurti.rspec-snippets
-code --install-extension kevinkyang.auto-comment-blocks
 code --install-extension kumar-harsh.graphql-for-vscode
 code --install-extension mauve.terraform
 code --install-extension misogi.ruby-rubocop
@@ -140,11 +136,12 @@ code --install-extension scalameta.metals
 code --install-extension shanoor.vscode-nginx
 code --install-extension shardulm94.trailing-spaces
 code --install-extension sianglim.slim
+code --install-extension SirTori.indenticator
 code --install-extension sleistner.vscode-fileutils
 code --install-extension sporto.rails-go-to-spec
-code --install-extension stkb.rewrap
 code --install-extension technosophos.vscode-helm
 code --install-extension tomoki1207.selectline-statusbar
+code --install-extension VisualStudioExptTeam.vscodeintellicode
 code --install-extension vscjava.vscode-java-debug
 code --install-extension vscjava.vscode-java-dependency
 code --install-extension vscjava.vscode-java-pack
