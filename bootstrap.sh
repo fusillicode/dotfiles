@@ -37,7 +37,6 @@ brew cask install bitbar
 brew cask install camunda-modeler
 brew cask install chromedriver
 brew cask install firefox
-brew cask install google-backup-and-sync
 brew cask install google-chrome
 brew cask install helm
 brew cask install keybase
