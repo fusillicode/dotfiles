@@ -176,7 +176,7 @@ defaults write NSGlobalDomain NSAutomaticSpellingCorrectionEnabled -bool false
 #fusillicode sudo tmutil disablelocal
 
 # Disable hibernation (speeds up entering sleep mode)
-sudo pmset -a hibernatemode 0
+#fusillicode sudo pmset -a hibernatemode 0
 
 # Remove the sleep image file to save disk space
 #fusillicode sudo rm /private/var/vm/sleepimage
@@ -187,6 +187,19 @@ sudo pmset -a hibernatemode 0
 
 #fusillicode Disable the sudden motion sensor as it’s not useful for SSDs
 #sudo pmset -a sms 0
+
+###############################################################################
+#fusillicode SSD-specific tweaks                                              #
+###############################################################################
+
+#fusillicode Set hard hibernation (https://en.wikipedia.org/wiki/Pmset#Power_management_settings)
+sudo pmset -a hibernatemode 25
+
+#fusillicode Do not wake...uhm..."on proximity of devices" ¯\_(ツ)_/¯ (https://en.wikipedia.org/wiki/Pmset#Power_management_settings)
+sudo pmset -a proximitywake 0
+
+#fusillicode Do not wake on lid opening (https://en.wikipedia.org/wiki/Pmset#Power_management_settings)
+sudo pmset -a lidwake 0
 
 ###############################################################################
 # Trackpad, mouse, keyboard, Bluetooth accessories, and input                 #
