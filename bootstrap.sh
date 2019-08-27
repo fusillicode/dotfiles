@@ -110,6 +110,7 @@ code --install-extension eamodio.gitlens
 code --install-extension eriklynd.json-tools
 code --install-extension faustinoaq.crystal-lang
 code --install-extension HaaLeo.timing
+code --install-extension humao.rest-client
 code --install-extension iampeterbanjo.elixirlinter
 code --install-extension imperez.smarty
 code --install-extension JakeBecker.elixir-ls
