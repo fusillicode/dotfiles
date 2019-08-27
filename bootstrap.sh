@@ -94,6 +94,9 @@ mix archive.install https://github.com/phoenixframework/archives/raw/master/phoe
 # Install Python modules
 # pip install ansible black boto boto3 ipython psycopg2
 
+# Haskell
+curl https://get-ghcup.haskell.org -sSf | sh
+
 # Install Visual Studio Code Insiders extensions
 code --install-extension alefragnani.project-manager
 code --install-extension bungcip.better-toml
