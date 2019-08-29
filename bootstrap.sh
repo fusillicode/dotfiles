@@ -69,6 +69,11 @@ asdf plugin-add erlang https://github.com/asdf-vm/asdf-erlang.git
 asdf plugin-add elixir https://github.com/asdf-vm/asdf-elixir.git
 asdf plugin-add ruby https://github.com/asdf-vm/asdf-ruby.git
 asdf plugin-add python https://github.com/asdf-vm/asdf-python.git
+brew install gpg
+asdf plugin-add nodejs https://github.com/asdf-vm/asdf-nodejs.git
+bash ~/.asdf/plugins/nodejs/bin/import-release-team-keyring
+# https://github.com/asdf-vm/asdf-nodejs#nvmrc-and-node-version-files
+"legacy_version_file = yes" >> ~/.asdfrc
 
 # Install Ruby gems
 gem install --no-rdoc --no-ri \
