@@ -15,6 +15,7 @@ brew tap caskroom/versions
 # Install Homebrew apps
 brew install awscli
 brew install asdf
+brew install cpulimit
 brew install git
 # brew tap heroku/brew && brew install heroku
 # brew install ifstat # This was for the network.sh BitBar script...that I don't use it anymore ¯\_(ツ)_/¯
