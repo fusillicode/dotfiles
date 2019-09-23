@@ -111,6 +111,7 @@ code --install-extension christian-kohler.path-intellisense
 code --install-extension CraigMaslowski.erb
 code --install-extension dakara.transformer
 code --install-extension dbaeumer.vscode-eslint
+code --install-extension donjayamanne.githistory
 code --install-extension DotJoshJohnson.xml
 code --install-extension eamodio.gitlens
 code --install-extension eriklynd.json-tools
@@ -118,7 +119,6 @@ code --install-extension faustinoaq.crystal-lang
 code --install-extension HaaLeo.timing
 code --install-extension humao.rest-client
 code --install-extension iampeterbanjo.elixirlinter
-code --install-extension imperez.smarty
 code --install-extension JakeBecker.elixir-ls
 code --install-extension justusadam.language-haskell
 code --install-extension karunamurti.haml
@@ -136,7 +136,6 @@ code --install-extension nwolverson.language-purescript
 code --install-extension pgourlain.erlang
 code --install-extension quicktype.quicktype
 code --install-extension rebornix.ruby
-code --install-extension redhat.java
 code --install-extension redhat.vscode-yaml
 code --install-extension robert.ruby-snippet
 code --install-extension rust-lang.rust
@@ -151,12 +150,6 @@ code --install-extension sleistner.vscode-fileutils
 code --install-extension sporto.rails-go-to-spec
 code --install-extension technosophos.vscode-helm
 code --install-extension tomoki1207.selectline-statusbar
-code --install-extension VisualStudioExptTeam.vscodeintellicode
-code --install-extension vscjava.vscode-java-debug
-code --install-extension vscjava.vscode-java-dependency
-code --install-extension vscjava.vscode-java-pack
-code --install-extension vscjava.vscode-java-test
-code --install-extension vscjava.vscode-maven
 code --install-extension webfreak.debug
 code --install-extension wholroyd.jinja
 code --install-extension wmaurer.change-case
