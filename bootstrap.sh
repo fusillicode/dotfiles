@@ -75,6 +75,7 @@ asdf plugin-add nodejs https://github.com/asdf-vm/asdf-nodejs.git
 bash ~/.asdf/plugins/nodejs/bin/import-release-team-keyring
 # https://github.com/asdf-vm/asdf-nodejs#nvmrc-and-node-version-files
 "legacy_version_file = yes" >> ~/.asdfrc
+asdf plugin-add java https://github.com/halcyon/asdf-java.git
 
 # Install Ruby gems
 gem install --no-rdoc --no-ri \
