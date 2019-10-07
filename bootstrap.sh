@@ -25,10 +25,12 @@ brew install kube-ps1
 brew install kubectx
 brew install kustomize
 brew install mycli
+# For Python...& MySQL
 brew install mysql-connector-c
 brew install pgcli
 brew install ripgrep
 brew install siege
+brew install stern
 brew install txn2/tap/kubefwd
 brew install zsh
 
@@ -104,57 +106,8 @@ mix archive.install https://github.com/phoenixframework/archives/raw/master/phoe
 # Haskell
 curl https://get-ghcup.haskell.org -sSf | sh
 
-# Install Visual Studio Code Insiders extensions
-code --install-extension alefragnani.project-manager
-code --install-extension bungcip.better-toml
-code --install-extension castwide.solargraph
-code --install-extension christian-kohler.path-intellisense
-code --install-extension CraigMaslowski.erb
-code --install-extension dakara.transformer
-code --install-extension dbaeumer.vscode-eslint
-code --install-extension donjayamanne.githistory
-code --install-extension DotJoshJohnson.xml
-code --install-extension eamodio.gitlens
-code --install-extension eriklynd.json-tools
-code --install-extension faustinoaq.crystal-lang
-code --install-extension HaaLeo.timing
-code --install-extension humao.rest-client
-code --install-extension iampeterbanjo.elixirlinter
-code --install-extension JakeBecker.elixir-ls
-code --install-extension justusadam.language-haskell
-code --install-extension karunamurti.haml
-code --install-extension karunamurti.rspec-snippets
-code --install-extension kumar-harsh.graphql-for-vscode
-code --install-extension mauve.terraform
-code --install-extension misogi.ruby-rubocop
-code --install-extension mitchdenny.ecdc
-code --install-extension ms-azuretools.vscode-docker
-code --install-extension ms-kubernetes-tools.vscode-kubernetes-tools
-code --install-extension ms-python.python
-code --install-extension ms-vscode.vscode-typescript-tslint-plugin
-code --install-extension nextfaze.json-parse-stringify
-code --install-extension nwolverson.language-purescript
-code --install-extension pgourlain.erlang
-code --install-extension quicktype.quicktype
-code --install-extension rebornix.ruby
-code --install-extension redhat.vscode-yaml
-code --install-extension robert.ruby-snippet
-code --install-extension rust-lang.rust
-code --install-extension sbrink.elm
-code --install-extension scala-lang.scala
-code --install-extension scalameta.metals
-code --install-extension shanoor.vscode-nginx
-code --install-extension shardulm94.trailing-spaces
-code --install-extension sianglim.slim
-code --install-extension SirTori.indenticator
-code --install-extension sleistner.vscode-fileutils
-code --install-extension sporto.rails-go-to-spec
-code --install-extension technosophos.vscode-helm
-code --install-extension tomoki1207.selectline-statusbar
-code --install-extension webfreak.debug
-code --install-extension wholroyd.jinja
-code --install-extension wmaurer.change-case
-code --install-extension yuce.erlang-otp
+# Install Visual Studio Code Insiders extension
+code --install-extension Shan.code-settings-sync
 
 # Upgrade and cleanup brew stuff...
 brew update && brew upgrade && brew cleanup -s && rm -rf ~/Library/Caches/Homebrew/*
