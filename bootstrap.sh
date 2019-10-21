@@ -17,6 +17,7 @@ brew install awscli
 brew install asdf
 brew install cpulimit
 brew install git
+brew install hadolint
 # brew tap heroku/brew && brew install heroku
 # brew install ifstat # This was for the network.sh BitBar script...that I don't use it anymore ¯\_(ツ)_/¯
 brew install imagemagick@6
