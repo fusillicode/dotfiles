@@ -16,6 +16,7 @@ brew tap caskroom/versions
 brew install awscli
 brew install asdf
 brew install cpulimit
+brew install exa
 brew install git
 brew install hadolint
 # brew tap heroku/brew && brew install heroku
