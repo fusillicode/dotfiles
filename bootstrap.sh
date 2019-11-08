@@ -48,6 +48,7 @@ brew cask install helm
 brew cask install keybase
 brew cask install league-of-legends
 brew cask install libreoffice
+brew cask install mactext
 brew cask install rcdefaultapp
 brew cask install sfdx
 brew cask install skype
