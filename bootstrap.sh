@@ -24,6 +24,7 @@ brew install hadolint
 # brew install ifstat # This was for the network.sh BitBar script...that I don't use it anymore ¯\_(ツ)_/¯
 brew install htop
 brew install imagemagick@6
+brew install librdkafka # It installs also `lz4`, `lzlib` & `zstd`
 brew install jq
 brew install kube-ps1
 brew install kubectx
