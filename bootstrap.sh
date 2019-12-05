@@ -30,8 +30,8 @@ brew install kube-ps1
 brew install kubectx
 brew install kustomize
 brew install mycli
-# For Python...& MySQL
-brew install mysql-connector-c
+brew install mysql-client # For Python `mysqlclient`
+brew install openvpn # It installs also `lzo` & `pkcs11-helper`
 brew install pgcli
 brew install ripgrep
 brew install siege
