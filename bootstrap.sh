@@ -62,6 +62,9 @@ brew cask install transmission
 brew cask install tunnelblick
 brew cask install whatsapp
 
+# Install docker-slim
+curl -OL https://downloads.dockerslim.com/releases/1.26.1/dist_mac.zip && unzip dist_mac.zip && mv dist_mac/* ~/bin
+
 # Install Oh My Zsh
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
 
