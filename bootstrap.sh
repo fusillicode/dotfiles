@@ -13,8 +13,9 @@ brew tap caskroom/cask
 brew tap caskroom/versions
 
 # Install Homebrew apps
-brew install awscli
 brew install asdf
+brew install awscli
+brew install bat
 brew install cpulimit
 brew install exa
 brew install fd
