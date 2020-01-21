@@ -24,10 +24,11 @@ brew install exa
 brew install fd
 brew install git
 brew install hadolint
-# brew tap heroku/brew && brew install heroku
+brew tap heroku/brew && brew install heroku
 # brew install ifstat # This was for the network.sh BitBar script...that I don't use it anymore ¯\_(ツ)_/¯
 brew install htop
 brew install imagemagick@6
+brew install libpq && brew link libp --force
 brew install librdkafka # It installs also `lz4`, `lzlib` & `zstd`
 brew install jq
 brew install kube-ps1
