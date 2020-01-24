@@ -127,7 +127,12 @@ ks3 () {
   k get secrets -oname ${3:+--namespace=$3} | \
   rg "secret/(.*$2.*)" -r '$1' | xargs -I {} kubectl get secret {} -oyaml | \
   rg "\s+(.*$1.*):\s+(.*)" -r '$1:$2' | \
-  while read kv; do dv=$(echo ${kv} | rg ".*:(.*)" -r '$1' | base64 -D); echo "$(echo ${kv} | rg "(.*):.*" -r '$1') ${dv}"; done
+  while read kv
+  do
+    dv=$(echo $kv | rg ".*:(.*)" -r '$1' | base64 -D)
+    k=$(echo $kv | rg "(.*):.*" -r '$1')
+    echo $k $dv
+  done
 }
 
 # My local `~/bin` "stuff" :P
