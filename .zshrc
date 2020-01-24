@@ -107,23 +107,23 @@ alias jl="jq . "
 alias cf="codefresh"
 
 # Easy CF
-cf1 () {
+cfl () {
   cf get builds ${1:+--status=$1} --select-columns id,repository,pipeline-name,status
 }
-cf2 () {
+cff () {
   cf get builds ${2:+--status=$2} --select-columns id,repository,pipeline-name,status | \
-  rg "(.*)\s.*$1.*" -r '$1' | head -n 1 | xargs -I {} codefresh logs $3 {}
+  rg "([^\s]*)\s.*$1.*" -r '$1' | head -n 1 | xargs -I {} codefresh logs $3 {}
 }
 
 # Easy K8S
-ks1 () {
+ksl () {
   k get secrets -oname ${1:+--namespace=$1}
 }
-ks2 () {
+ksy () {
   k get secrets -oname ${2:+--namespace=$2} | \
   rg "secret/(.*$1.*)" -r '$1' | xargs -I {} kubectl get secret {} -oyaml
 }
-ks3 () {
+kss () {
   k get secrets -oname ${3:+--namespace=$3} | \
   rg "secret/(.*$2.*)" -r '$1' | xargs -I {} kubectl get secret {} -oyaml | \
   rg "\s+(.*$1.*):\s+(.*)" -r '$1:$2' | \
