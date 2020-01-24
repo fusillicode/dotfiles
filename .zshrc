@@ -107,26 +107,27 @@ alias jl="jq . "
 alias cf="codefresh"
 
 # Easy CF
-cfs () {
+cf1 () {
   cf get builds ${1:+--status=$1} --select-columns id,repository,pipeline-name,status
 }
-cfl () {
+cf2 () {
   cf get builds ${2:+--status=$2} --select-columns id,repository,pipeline-name,status | \
   rg "(.*)\s.*$1.*" -r '$1' | head -n 1 | xargs -I {} codefresh logs $3 {}
 }
 
 # Easy K8S
-ksl () {
+ks1 () {
   k get secrets -oname ${1:+--namespace=$1}
 }
-ksy () {
+ks2 () {
   k get secrets -oname ${2:+--namespace=$2} | \
   rg "secret/(.*$1.*)" -r '$1' | xargs -I {} kubectl get secret {} -oyaml
 }
-ksv () {
+ks3 () {
   k get secrets -oname ${3:+--namespace=$3} | \
   rg "secret/(.*$2.*)" -r '$1' | xargs -I {} kubectl get secret {} -oyaml | \
-  rg "\s+(.*$1.*):\s+(.*)" -r '$2' | while read i; do t=$(echo -n ${i} | base64 -D); echo ${t}; done
+  rg "\s+(.*$1.*):\s+(.*)" -r '$1:$2' | \
+  while read kv; do dv=$(echo ${kv} | rg ".*:(.*)" -r '$1' | base64 -D); echo "$(echo ${kv} | rg "(.*):.*" -r '$1') ${dv}"; done
 }
 
 # My local `~/bin` "stuff" :P
