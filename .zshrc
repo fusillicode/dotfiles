@@ -105,6 +105,7 @@ alias ls="exa --sort=modified"
 alias j="jq . -c"
 alias jl="jq . "
 alias cf="codefresh"
+alias g="git --no-pager"
 
 # Easy CF
 cfl () {
