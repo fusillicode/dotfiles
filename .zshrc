@@ -105,6 +105,7 @@ alias ls="exa --sort=modified"
 alias j="jq . -c"
 alias jl="jq . "
 alias cf="codefresh"
+alias gpn="git commit --amend --no-edit && git push --force"
 
 # Easy CF
 cfl () {
