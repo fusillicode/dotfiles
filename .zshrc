@@ -114,10 +114,10 @@ gtpn () {
 
 # Easy CF
 cfl () {
-  cf get builds ${1:+--status=$1} --select-columns id,repository,pipeline-name,status
+  cf get builds ${1:+--status=$1} --select-columns id,repository,pipeline-name,branch,status
 }
 cff () {
-  cf get builds ${2:+--status=$2} --select-columns id,repository,pipeline-name,status | \
+  cf get builds ${2:+--status=$2} --select-columns id,repository,pipeline-name,branch,status | \
   rg "([^\s]*)\s.*$1.*" -r '$1' | head -n 1 | xargs -I {} codefresh logs $3 {}
 }
 
