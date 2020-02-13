@@ -140,6 +140,9 @@ kss () {
     echo $k $dv
   done
 }
+kscj () {
+  k patch cronjobs $1 -p '{"spec" : {"suspend" : $2 }}'
+}
 
 # My local `~/bin` "stuff" :P
 export PATH=$HOME/bin:$PATH
