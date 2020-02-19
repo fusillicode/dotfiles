@@ -116,6 +116,9 @@ mix archive.install https://github.com/phoenixframework/archives/raw/master/phoe
 # Install Python modules
 # pip install ansible black boto boto3 ipython psycopg2
 
+# Poetry
+curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python
+
 # Haskell
 curl https://get-ghcup.haskell.org -sSf | sh
 
