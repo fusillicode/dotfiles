@@ -109,7 +109,7 @@ alias gcpn="git commit --amend --no-edit && git push --force"
 
 # Easy Git
 gtpn () {
-  g tag -d $1 && g push :origin $1 && g tag $1 && g push origin $1
+  g tag -f $1 && g push origin $1 -f
 }
 
 # Easy CF
