@@ -140,14 +140,17 @@ kss () {
     echo $k $dv
   done
 }
-kcjs () {
-  k patch cronjobs $1 -p '{"spec" : {"suspend" : $2 }}'
+kpcjs () {
+  k patch cronjobs $1 --patch '{"spec": {"suspend": '"$2"'}}'
 }
 kcjr () {
   maybe_namespace=${2:+--namespace=$2}
   k get cronjobs $1 $maybe_namespace --export -oyaml > foo.yaml
   k delete -f $1 $maybe_namespace --ignore-not-found
   k apply -f $maybe_namespace /tmp/cron_job.yaml
+}
+kpdr () {
+  k patch deployment $1 --patch '{"spec": {"replicas": '"$2"'}}'
 }
 
 # My local `~/bin` "stuff" :P
