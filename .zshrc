@@ -111,6 +111,10 @@ alias g-commit-nuke="git commit --amend --no-edit && git push --force"
 g-tag-nuke () {
   g tag -f $1 && g push origin $1 -f
 }
+g-tags () {
+  g --no-pager tag
+  g ls-remote --tags
+}
 
 # Easy CF
 cf-list () {
