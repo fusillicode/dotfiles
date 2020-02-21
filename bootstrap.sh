@@ -120,6 +120,10 @@ mix archive.install https://github.com/phoenixframework/archives/raw/master/phoe
 # Poetry
 curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python
 
+# Go stuff...for DevOps stuff...
+go get -u github.com/grafana/tanka/cmd/tk
+go get -u github.com/jsonnet-bundler/jsonnet-bundler/cmd/jb
+
 # Haskell
 curl https://get-ghcup.haskell.org -sSf | sh
 
