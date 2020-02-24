@@ -29,6 +29,7 @@ brew tap heroku/brew && brew install heroku
 brew install htop
 brew install imagemagick@6
 brew install jq
+brew install jsonnet # For VSCode Jsonnet extension
 brew install kube-ps1
 brew install kubectx
 brew install kustomize
