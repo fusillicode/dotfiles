@@ -150,8 +150,8 @@ k-cron-suspend () {
 k-cron-restart () {
   maybe_namespace=${2:+--namespace=$2}
   k get cronjobs $1 $maybe_namespace --export -oyaml > foo.yaml
-  k delete -f $1 $maybe_namespace --ignore-not-found
-  k apply -f $maybe_namespace /tmp/cron_job.yaml
+  k delete cronjobs -f $1 $maybe_namespace --ignore-not-found
+  k apply -f $maybe_namespace foo.yaml
 }
 k-depl-scale () {
   k patch deployment $1 --patch '{"spec": {"replicas": '"$2"'}}'
