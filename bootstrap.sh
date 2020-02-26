@@ -42,7 +42,6 @@ brew install pgcli
 brew install ripgrep
 brew install siege
 brew install stern
-brew install terraform
 brew install txn2/tap/kubefwd
 brew install watch
 brew install zsh
@@ -94,6 +93,7 @@ bash ~/.asdf/plugins/nodejs/bin/import-release-team-keyring
 # https://github.com/asdf-vm/asdf-nodejs#nvmrc-and-node-version-files
 "legacy_version_file = yes" >> ~/.asdfrc
 asdf plugin-add java https://github.com/halcyon/asdf-java.git
+asdf plugin-add terraform https://github.com/Banno/asdf-hashicorp.git
 
 # Install Ruby gems
 gem install --no-rdoc --no-ri \
