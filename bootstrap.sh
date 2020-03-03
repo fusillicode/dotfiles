@@ -33,6 +33,7 @@ brew install jsonnet # For VSCode Jsonnet extension
 brew install kube-ps1
 brew install kubectx
 brew install kustomize
+brew install lftp
 brew install libpq && brew link libp --force
 brew install librdkafka # It installs also `lz4`, `lzlib` & `zstd`
 brew install mycli
