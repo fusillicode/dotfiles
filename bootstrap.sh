@@ -16,12 +16,9 @@ brew tap caskroom/versions
 brew install asdf
 brew install awscli
 brew install ansible
-brew install bat
 brew tap codefresh-io/cli
 brew install codefresh
 brew install cpulimit
-brew install exa
-brew install fd
 brew install git
 brew install hadolint
 brew tap heroku/brew && brew install heroku
