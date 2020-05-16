@@ -35,10 +35,11 @@ brew install kubectx
 brew install kustomize
 brew install lftp
 brew install libpq && brew link libp --force
-brew install librdkafka # It installs also `lz4`, `lzlib` & `zstd`
+brew install librdkafka # It also installs `lz4`, `lzlib` & `zstd`
 brew install mycli
 brew install mysql-client # For Python `mysqlclient`
-brew install openvpn # It installs also `lzo` & `pkcs11-helper`
+brew install mpv # It also installs `youtube-dl` that's pretty handy
+brew install openvpn # It also installs `lzo` & `pkcs11-helper`
 brew install pgcli
 brew install ripgrep
 brew install siege
