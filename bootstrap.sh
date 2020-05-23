@@ -16,8 +16,7 @@ brew tap caskroom/versions
 brew install asdf
 brew install awscli
 brew install ansible
-brew tap codefresh-io/cli
-brew install codefresh
+brew tap codefresh-io/cli && brew install codefresh
 brew install cpulimit
 brew install git
 brew install hadolint
@@ -56,12 +55,11 @@ brew cask install helm
 brew cask install keybase
 brew cask install league-of-legends
 brew cask install libreoffice
-brew cask install rcdefaultapp
+brew cask install rectangle
 brew cask install sfdx
 brew cask install skype
 brew cask install slack
 brew cask install smcfancontrol
-brew cask install spectacle
 brew cask install telegram
 brew cask install the-unarchiver
 brew cask install transmission
@@ -69,7 +67,7 @@ brew cask install tunnelblick
 brew cask install whatsapp
 
 # Install docker-slim
-curl -OL https://downloads.dockerslim.com/releases/1.26.1/dist_mac.zip && unzip dist_mac.zip && mv dist_mac/* ~/bin
+# curl -OL https://downloads.dockerslim.com/releases/1.26.1/dist_mac.zip && unzip dist_mac.zip && mv dist_mac/* ~/bin
 
 # Install Oh My Zsh
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
@@ -81,14 +79,11 @@ echo -e "\n. $(brew --prefix asdf)/etc/bash_completion.d/asdf.bash" >> ~/.zshrc
 # Install asdf plugins
 # brew install bdw-gc libevent llvm && brew link llvm --force # Don't know, seems not needed anymore...¯\_(ツ)_/¯
 asdf plugin-add crystal https://github.com/marciogm/asdf-crystal.git
-brew install autoconf wxmac
-asdf plugin-add erlang https://github.com/asdf-vm/asdf-erlang.git
+brew install autoconf wxmac && asdf plugin-add erlang https://github.com/asdf-vm/asdf-erlang.git
 asdf plugin-add elixir https://github.com/asdf-vm/asdf-elixir.git
 asdf plugin-add ruby https://github.com/asdf-vm/asdf-ruby.git
 asdf plugin-add python https://github.com/asdf-vm/asdf-python.git
-brew install gpg
-asdf plugin-add nodejs https://github.com/asdf-vm/asdf-nodejs.git
-bash ~/.asdf/plugins/nodejs/bin/import-release-team-keyring
+brew install gpg && asdf plugin-add nodejs https://github.com/asdf-vm/asdf-nodejs.git && bash ~/.asdf/plugins/nodejs/bin/import-release-team-keyring
 # https://github.com/asdf-vm/asdf-nodejs#nvmrc-and-node-version-files
 "legacy_version_file = yes" >> ~/.asdfrc
 asdf plugin-add java https://github.com/halcyon/asdf-java.git
