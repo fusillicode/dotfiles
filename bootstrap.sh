@@ -46,6 +46,7 @@ brew install watch
 brew install zsh
 
 # Install Homebrew-Cask apps
+brew cask install alacritty
 brew cask install appcleaner
 brew cask install bitbar
 brew cask install camunda-modeler
