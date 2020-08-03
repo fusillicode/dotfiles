@@ -40,6 +40,7 @@ brew install pgcli
 brew install ripgrep
 brew install siege
 brew install stern
+brew install tmux
 brew install txn2/tap/kubefwd
 brew install watch
 brew install zsh
