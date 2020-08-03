@@ -160,6 +160,10 @@ kdeplscale () {
 # My local `~/bin` "stuff" :P
 export PATH=$HOME/bin:$PATH
 
+# To make `Alt-left` & `Alt-right` work on Alacritty
+bindkey "C" forward-word
+bindkey "D" backward-word
+
 # `brew link imagemagick@6` suggestion ¯\_(ツ)_/¯
 export PATH="/usr/local/opt/imagemagick@6:$PATH"
 
