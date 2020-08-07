@@ -126,6 +126,9 @@ cflog () {
 }
 
 # Easy K8S
+klfir() {
+  kgp | rg $1 | head -n 1 | rg "^(\S*).*" -r '$1' | xargs -I {} kubectl logs -f {}
+}
 kseclist () {
   k get secrets -oname ${1:+--namespace=$1}
 }
