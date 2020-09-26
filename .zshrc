@@ -160,6 +160,9 @@ kcronrest () {
 kdeplscale () {
   k patch deployment $1 --patch '{"spec": {"replicas": '"$2"'}}'
 }
+kdelerrpod () {
+  kgp | rg "(\S+).*Error.*" -r '$1' | xargs -I {} kubectl delete pod {}
+}
 
 # My local `~/bin` "stuff" :P
 export PATH=$HOME/bin:$PATH
@@ -197,7 +200,7 @@ export PATH="$HOME/go/bin:$PATH"
 
 # `asdf` installation suggestion ¯\_(ツ)_/¯
 [ -e /usr/local/opt/asdf/asdf.sh ] && . /usr/local/opt/asdf/asdf.sh
-[ -e /usr/local/opt/asdf/etc/bash_completion.d/asdf.bash ] && . /usr/local/opt/asdf/etc/bash_completion.d/asdf.bash
+# [ -e /usr/local/opt/asdf/etc/bash_completion.d/asdf.bash ] && . /usr/local/opt/asdf/etc/bash_completion.d/asdf.bash
 
 # ...Poetry...
 [ -e "$HOME/.poetry/env" ] && source $HOME/.poetry/env
