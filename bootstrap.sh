@@ -4,13 +4,10 @@
 xcode-select --install
 
 # Setup Homebrew
-ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/uninstall)"
-ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/uninstall.sh)"
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
 brew update
-brew doctor
-brew cask doctor
-brew tap caskroom/cask
-brew tap caskroom/versions
+brew doctor --verbose
 
 # Install Homebrew apps
 brew install asdf
@@ -31,16 +28,16 @@ brew install kube-ps1
 brew install kubectx
 brew install kustomize
 brew install lftp
-brew install libpq && brew link libp --force
+brew install libpq && brew link libpq --force
 brew install librdkafka # It also installs `lz4`, `lzlib` & `zstd`
 brew install mycli
 brew install mysql-client # For Python `mysqlclient`
-brew install mpv # It also installs `youtube-dl` that's pretty handy
-brew install openvpn # It also installs `lzo` & `pkcs11-helper`
+brew install mpv
+# brew install openvpn # It also installs `lzo` & `pkcs11-helper`
 brew install pgcli
 brew install ripgrep
 brew install siege
-brew install stern
+# brew install stern
 brew install tmux
 brew install txn2/tap/kubefwd
 brew install watch
@@ -121,19 +118,15 @@ mix archive.install https://github.com/phoenixframework/archives/raw/master/phoe
 curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python
 
 # Go stuff...for DevOps stuff...
-go get -u github.com/grafana/tanka/cmd/tk
-go get -u github.com/jsonnet-bundler/jsonnet-bundler/cmd/jb
+# go get -u github.com/grafana/tanka/cmd/tk
+# go get -u github.com/jsonnet-bundler/jsonnet-bundler/cmd/jb
 
 # Haskell
 curl https://get-ghcup.haskell.org -sSf | sh
 
-# Install Visual Studio Code Insiders extension
-code --install-extension Shan.code-settings-sync
-
 # Upgrade and cleanup brew stuff...
 brew update && brew upgrade && brew cleanup -s && rm -rf ~/Library/Caches/Homebrew/*
 brew doctor
-brew cask doctor
 
 # Set up git
 git config --global core.editor vim
