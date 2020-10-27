@@ -34,7 +34,6 @@ brew install mycli
 brew install mysql-client # For Python `mysqlclient`
 brew install mpv
 # brew install openvpn # It also installs `lzo` & `pkcs11-helper`
-brew install pgcli
 brew install ripgrep
 brew install siege
 # brew install stern
