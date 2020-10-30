@@ -164,6 +164,11 @@ kdelerrpod () {
   kgp | rg "(\S+).*Error.*" -r '$1' | xargs -I {} kubectl delete pod {}
 }
 
+# Easy Postgres
+pg_copy_table() {
+  pg_dump -a -t $1 $2 | psql $3
+}
+
 # My local `~/bin` "stuff" :P
 export PATH=$HOME/bin:$PATH
 
