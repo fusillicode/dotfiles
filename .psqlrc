@@ -1,4 +1,5 @@
 \pset null 'NULL'
 \pset pager 0
+\setenv PSQL_EDITOR "/usr/bin/vim"
 \timing
 \x auto
