@@ -32,7 +32,6 @@ brew install libpq && brew link libpq --force
 brew install librdkafka # It also installs `lz4`, `lzlib` & `zstd`
 brew install mycli
 brew install mysql-client # For Python `mysqlclient`
-brew install mpv
 # brew install openvpn # It also installs `lzo` & `pkcs11-helper`
 brew install ripgrep
 brew install siege
@@ -64,6 +63,7 @@ brew cask install telegram
 brew cask install the-unarchiver
 brew cask install transmission
 brew cask install tunnelblick
+brew cask install vlc
 brew cask install whatsapp
 
 # Install docker-slim
