@@ -30,8 +30,7 @@ brew install kustomize
 brew install lftp
 brew install libpq && brew link libpq --force
 brew install librdkafka # It also installs `lz4`, `lzlib` & `zstd`
-brew install mycli
-brew install mysql-client # For Python `mysqlclient`
+brew install mycli # For Python `mysqlclient`
 # brew install openvpn # It also installs `lzo` & `pkcs11-helper`
 brew install ripgrep
 brew install siege
@@ -42,7 +41,6 @@ brew install watch
 brew install zsh
 
 # Install Homebrew-Cask apps
-brew cask install alacritty
 brew cask install android-file-transfer
 brew cask install appcleaner
 brew cask install bitbar
