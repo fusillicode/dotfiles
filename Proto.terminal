@@ -182,6 +182,18 @@
 	pwDdARQBFgEYARoBIQEmASwBLgEwATINfg2DDY4Nlw2kDacNtA29DcINygAAAAAAAAIB
 	AAAAAAAAACgAAAAAAAAAAAAAAAAAAA3N
 	</data>
+	<key>ShowActiveProcessArgumentsInTitle</key>
+	<true/>
+	<key>ShowActiveProcessInTitle</key>
+	<true/>
+	<key>ShowDimensionsInTitle</key>
+	<false/>
+	<key>ShowRepresentedURLInTabTitle</key>
+	<true/>
+	<key>ShowRepresentedURLInTitle</key>
+	<true/>
+	<key>ShowRepresentedURLPathInTitle</key>
+	<true/>
 	<key>ShowWindowSettingsNameInTitle</key>
 	<false/>
 	<key>StrictVTKeypad</key>
