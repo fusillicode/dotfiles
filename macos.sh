@@ -26,9 +26,6 @@ sudo scutil --set HostName "$pc_name"
 sudo scutil --set LocalHostName "$pc_name"
 sudo defaults write /Library/Preferences/SystemConfiguration/com.apple.smb.server NetBIOSName -string "$pc_name"
 
-# Set standby delay to 24 hours (default is 1 hour)
-#fusillicode sudo pmset -a standbydelay 86400
-
 # Disable automatic power off
 sudo pmset -a autopoweroff 0
 
@@ -138,9 +135,6 @@ sudo defaults write /Library/Preferences/com.apple.loginwindow 'GuestEnabled' -b
 # Restart automatically if the computer freezes
 #fusillicode sudo systemsetup -setrestartfreeze on
 
-# Never go into computer sleep mode
-#fusillicode sudo systemsetup -setcomputersleep Off > /dev/null
-
 # Check for software updates daily, not just once per week
 #fusillicode defaults write com.apple.SoftwareUpdate ScheduleFrequency -int 1
 
@@ -175,9 +169,6 @@ defaults write NSGlobalDomain NSAutomaticSpellingCorrectionEnabled -bool false
 # Disable local Time Machine snapshots
 #fusillicode sudo tmutil disablelocal
 
-# Disable hibernation (speeds up entering sleep mode)
-#fusillicode sudo pmset -a hibernatemode 0
-
 # Remove the sleep image file to save disk space
 #fusillicode sudo rm /private/var/vm/sleepimage
 # Create a zero-byte file instead…
@@ -192,14 +183,8 @@ defaults write NSGlobalDomain NSAutomaticSpellingCorrectionEnabled -bool false
 #fusillicode SSD-specific tweaks                                              #
 ###############################################################################
 
-#fusillicode Set hard hibernation (https://en.wikipedia.org/wiki/Pmset#Power_management_settings)
-sudo pmset -a hibernatemode 25
-
 #fusillicode Do not wake...uhm..."on proximity of devices" ¯\_(ツ)_/¯ (https://en.wikipedia.org/wiki/Pmset#Power_management_settings)
 sudo pmset -a proximitywake 0
-
-#fusillicode Do not wake on lid opening (https://en.wikipedia.org/wiki/Pmset#Power_management_settings)
-sudo pmset -a lidwake 0
 
 ###############################################################################
 # Trackpad, mouse, keyboard, Bluetooth accessories, and input                 #
@@ -255,6 +240,49 @@ sudo systemsetup -settimezone "Europe/Rome" > /dev/null
 
 # Stop iTunes from responding to the keyboard media keys
 #launchctl unload -w /System/Library/LaunchAgents/com.apple.rcd.plist 2> /dev/null
+
+###############################################################################
+# Energy saving                                                               #
+###############################################################################
+
+# Enable lid wakeup
+#fusillicode Do not wake on lid opening (https://en.wikipedia.org/wiki/Pmset#Power_management_settings)
+sudo pmset -a lidwake 0
+
+# Restart automatically on power loss
+#fusillicode sudo pmset -a autorestart 1
+
+# Restart automatically if the computer freezes
+#fusillicode sudo systemsetup -setrestartfreeze on
+
+# Sleep the display after 15 minutes
+#fusillicode sudo pmset -a displaysleep 15
+
+# Disable machine sleep while charging
+#fusillicode sudo pmset -c sleep 0
+
+# Set machine sleep to 5 minutes on battery
+#fusillicode sudo pmset -b sleep 5
+
+# Set standby delay to 24 hours (default is 1 hour)
+#fusillicode sudo pmset -a standbydelay 86400
+
+# Never go into computer sleep mode
+#fusillicode sudo systemsetup -setcomputersleep Off > /dev/null
+
+# Hibernation mode
+# 0: Disable hibernation (speeds up entering sleep mode)
+# 3: Copy RAM to disk so the system state can still be restored in case of a
+#    power failure.
+#fusillicode Set hard hibernation (https://en.wikipedia.org/wiki/Pmset#Power_management_settings)
+sudo pmset -a hibernatemode 25
+
+# Remove the sleep image file to save disk space
+#fusillicode sudo rm /private/var/vm/sleepimage
+# Create a zero-byte file instead…
+#fusillicode sudo touch /private/var/vm/sleepimage
+# …and make sure it can’t be rewritten
+#fusillicode sudo chflags uchg /private/var/vm/sleepimage
 
 ###############################################################################
 # Screen                                                                      #
@@ -382,7 +410,7 @@ defaults write com.apple.NetworkBrowser BrowseAllInterfaces -bool true
 #fusillicode sudo nvram boot-args="mbasd=1"
 
 # Show the ~/Library folder
-chflags nohidden ~/Library
+chflags nohidden ~/Library && xattr -d com.apple.FinderInfo ~/Library
 
 # Show the /Volumes folder
 sudo chflags nohidden /Volumes
@@ -492,6 +520,7 @@ defaults write com.apple.dock autohide -bool true
 # 10: Put display to sleep
 # 11: Launchpad
 # 12: Notification Center
+# 13: Lock Screen
 #fusillicode Top left screen corner → Nothing
 defaults write com.apple.dock wvous-tl-corner -int 0
 defaults write com.apple.dock wvous-tl-modifier -int 0
@@ -900,7 +929,7 @@ defaults -currentHost write com.apple.ImageCapture disableHotPlug -bool true
 ###############################################################################
 
 # Set up my preferred keyboard shortcuts
-cp -r spectacle.json ~/Library/Application\ Support/Spectacle/Shortcuts.json 2> /dev/null
+#fusillicode cp -r spectacle.json ~/Library/Application\ Support/Spectacle/Shortcuts.json 2> /dev/null
 
 ###############################################################################
 # Transmission.app                                                            #
