@@ -209,3 +209,5 @@ export PATH="$HOME/go/bin:$PATH"
 
 # ...Poetry...
 [ -e "$HOME/.poetry/env" ] && source $HOME/.poetry/env
+
+export PATH="$HOME/.poetry/bin:$PATH"
