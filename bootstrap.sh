@@ -13,7 +13,7 @@ brew doctor --verbose
 brew install asdf
 brew install awscli
 brew install ansible
-brew tap codefresh-io/cli && brew install codefresh
+# brew tap codefresh-io/cli && brew install codefresh
 brew install cpulimit
 brew install git
 brew install hadolint
@@ -34,41 +34,44 @@ brew install mycli # For Python `mysqlclient`
 # brew install openvpn # It also installs `lzo` & `pkcs11-helper`
 brew install ripgrep
 brew install siege
-# brew install stern
+brew install stern
 brew install tmux
 brew install txn2/tap/kubefwd
 brew install watch
 brew install zsh
 
 # Install Homebrew-Cask apps
-brew cask install android-file-transfer
-brew cask install appcleaner
-brew cask install bitbar
-brew cask install camunda-modeler
-brew cask install chromedriver
-brew cask install firefox
-brew cask install google-chrome
-brew cask install helm
-brew cask install keybase
-brew cask install league-of-legends
-brew cask install libreoffice
-brew cask install rectangle
-brew cask install sfdx
-brew cask install skype
-brew cask install slack
-brew cask install smcfancontrol
-brew cask install telegram
-brew cask install the-unarchiver
-brew cask install transmission
-brew cask install tunnelblick
-brew cask install vlc
-brew cask install whatsapp
+brew install homebrew/cask/docker
+brew install android-file-transfer
+brew install appcleaner
+brew install bitbar
+# brew install camunda-modeler
+brew install chromedriver
+brew install firefox
+brew install google-chrome
+# brew install helm
+brew install league-of-legends
+# brew install libreoffice
+brew install rectangle
+# brew install sfdx
+brew install skype
+brew install slack
+brew install smcfancontrol
+brew install telegram
+brew install the-unarchiver
+brew install transmission
+brew install tunnelblick
+brew install vlc
+brew install whatsapp
 
 # Install docker-slim
 # curl -OL https://downloads.dockerslim.com/releases/1.26.1/dist_mac.zip && unzip dist_mac.zip && mv dist_mac/* ~/bin
 
 # Install Oh My Zsh
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
+
+# Install rustup ❤️
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Configure asdf
 echo -e "\n. $(brew --prefix asdf)/asdf.sh" >> ~/.zshrc
@@ -84,7 +87,7 @@ asdf plugin-add python https://github.com/asdf-vm/asdf-python.git
 brew install gpg && asdf plugin-add nodejs https://github.com/asdf-vm/asdf-nodejs.git && bash ~/.asdf/plugins/nodejs/bin/import-release-team-keyring
 # https://github.com/asdf-vm/asdf-nodejs#nvmrc-and-node-version-files
 "legacy_version_file = yes" >> ~/.asdfrc
-asdf plugin-add java https://github.com/halcyon/asdf-java.git
+# asdf plugin-add java https://github.com/halcyon/asdf-java.git
 asdf plugin-add terraform https://github.com/Banno/asdf-hashicorp.git
 
 # Install Ruby gems
@@ -98,7 +101,7 @@ mkdir -p ~/bin/ && ~/bin && git clone https://github.com/wpscanteam/wpscan.git &
 # Install Elixir libs
 mix local.hex
 mix local.rebar
-mix archive.install https://github.com/phoenixframework/archives/raw/master/phoenix_new.ez
+mix archive.install hex phx_new 1.5.8
 
 # Install Erlang tools
 # curl -OL https://github.com/erlanglab/erlangpl/releases/download/0.9.0/erlangpl.tar.gz && \
