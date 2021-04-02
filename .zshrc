@@ -203,11 +203,10 @@ export ERL_AFLAGS="-kernel shell_history enabled -kernel shell_history_file_byte
 # ...Go...
 export PATH="$HOME/go/bin:$PATH"
 
-# `asdf` installation suggestion ¯\_(ツ)_/¯
-[ -e /usr/local/opt/asdf/asdf.sh ] && . /usr/local/opt/asdf/asdf.sh
-# [ -e /usr/local/opt/asdf/etc/bash_completion.d/asdf.bash ] && . /usr/local/opt/asdf/etc/bash_completion.d/asdf.bash
-
 # ...Poetry...
 [ -e "$HOME/.poetry/env" ] && source $HOME/.poetry/env
 
 export PATH="$HOME/.poetry/bin:$PATH"
+
+# `asdf` installation suggestion ¯\_(ツ)_/¯
+. /usr/local/opt/asdf/asdf.sh
