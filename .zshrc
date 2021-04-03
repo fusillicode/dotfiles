@@ -107,6 +107,7 @@ alias jl="jq . "
 alias cf="codefresh"
 alias gcnuke="git commit --amend --no-edit && git push --force"
 alias kdebian="k exec -it debian -- bash || k run debian --image=debian:latest --rm -it --restart=Never --command --"
+alias source="set -a && source"
 
 # Easy Git
 gtnuke () {
