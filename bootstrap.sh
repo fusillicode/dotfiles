@@ -16,6 +16,7 @@ brew install ansible
 # brew tap codefresh-io/cli && brew install codefresh
 brew install cpulimit
 brew install git
+brew install gh
 brew install hadolint
 brew install hashicorp/tap/terraform-ls
 brew tap heroku/brew && brew install heroku
