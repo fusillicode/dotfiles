@@ -48,6 +48,7 @@ brew install appcleaner
 brew install bitbar
 # brew install camunda-modeler
 brew install chromedriver
+brew install discord
 brew install firefox
 brew install google-chrome
 # brew install helm
