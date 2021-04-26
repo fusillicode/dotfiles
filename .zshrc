@@ -109,7 +109,7 @@ alias gcnuke="git commit --amend --no-edit && git push --force"
 alias kdebian="k exec -it debian -- bash || k run debian --image=debian:latest --rm -it --restart=Never --command --"
 
 # Easy Shell commands
-ssource () {
+sorce () {
   set -a && source $@ && set +a
 }
 
