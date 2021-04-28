@@ -34,10 +34,10 @@ brew install librdkafka # It also installs `lz4`, `lzlib` & `zstd`
 brew install mycli # For Python `mysqlclient`
 # brew install openvpn # It also installs `lzo` & `pkcs11-helper`
 brew install ripgrep
-brew install siege
 brew install stern
 brew install tmux
 brew install txn2/tap/kubefwd
+brew install vegeta
 brew install watch
 brew install zsh
 
