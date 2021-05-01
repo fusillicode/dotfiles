@@ -10,6 +10,7 @@ brew update
 brew doctor --verbose
 
 # Install Homebrew apps
+brew install act
 brew install asdf
 brew install awscli
 brew install ansible
