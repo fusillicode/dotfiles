@@ -53,6 +53,7 @@ brew install discord
 brew install firefox
 brew install google-chrome
 # brew install helm
+brew install http-toolkit
 brew install league-of-legends
 # brew install libreoffice
 brew install rectangle
