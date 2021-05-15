@@ -107,6 +107,7 @@ alias jl="jq . "
 alias cf="codefresh"
 alias gcnuke="git commit --amend --no-edit --no-verify && git push --force --no-verify"
 alias gcnoke="git commit --amend --no-edit --no-verify"
+alias gs="git status"
 alias kdebian="k exec -it debian -- bash || k run debian --image=debian:latest --rm -it --restart=Never --command --"
 
 # Easy Shell commands
