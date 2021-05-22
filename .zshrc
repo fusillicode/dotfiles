@@ -101,7 +101,7 @@ fi
 # Short is better 🥞
 alias code="code-insiders"
 alias h="history -i"
-alias ls="exa --sort=modified"
+alias l="ls -latrh"
 alias j="jq . -c"
 alias jl="jq . "
 alias cf="codefresh"
