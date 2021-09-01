@@ -43,7 +43,6 @@ brew install watch
 brew install zsh
 
 # Install Homebrew-Cask apps
-brew install homebrew/cask/docker
 brew install android-file-transfer
 brew install appcleaner
 brew install bitbar
@@ -56,6 +55,7 @@ brew install google-chrome
 brew install http-toolkit
 brew install league-of-legends
 # brew install libreoffice
+brew install podman
 brew install rectangle
 # brew install sfdx
 brew install skype
