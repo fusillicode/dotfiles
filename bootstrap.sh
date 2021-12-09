@@ -40,6 +40,7 @@ brew install tmux
 brew install txn2/tap/kubefwd
 brew install vegeta
 brew install watch
+brew install yq
 brew install zsh
 
 # Install Homebrew-Cask apps
