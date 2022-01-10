@@ -38,6 +38,15 @@ prompt_char() {
   echo "%{$fg_bold[cyan]%}○%{$reset_color%}"
 }
 
+git_tag() {
+  tag=$(git describe --tags --exact-match 2> /dev/null)
+  if [[ -z "${tag// }" ]]; then
+    echo ""
+  else
+    echo " %{$fg_bold[magenta]%}%{$tag%}"
+  fi
+}
+
 launch_time() {
   echo "%*"
 }
@@ -50,5 +59,5 @@ path() {
 source "/usr/local/opt/kube-ps1/share/kube-ps1.sh"
 
 PROMPT=$'
-$(return_status) $(path)$(git_prompt_info)$(git_prompt_status)$(git_prompt_short_sha) $(kube_ps1)
+$(return_status) $(path)$(git_prompt_info)$(git_prompt_status)$(git_prompt_short_sha)$(git_tag) $(kube_ps1)
 $(prompt_char) '
