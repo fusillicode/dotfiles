@@ -14,6 +14,7 @@ brew install act
 brew install asdf
 brew install awscli
 brew install ansible
+brew install atuin
 # brew tap codefresh-io/cli && brew install codefresh
 brew install cpulimit
 brew install git
