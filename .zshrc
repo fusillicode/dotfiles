@@ -217,3 +217,8 @@ export PATH="$HOME/.poetry/bin:$PATH"
 
 # `asdf` installation suggestion ¯\_(ツ)_/¯
 . /usr/local/opt/asdf/asdf.sh
+
+# Atuin 🐢
+export ATUIN_NOBIND="true"
+eval "$(atuin init zsh)"
+bindkey '^r' _atuin_search_widget
