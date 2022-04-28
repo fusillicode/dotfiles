@@ -1,5 +1,7 @@
 \pset null 'NULL'
 \pset pager 0
+\set ON_ERROR_ROLLBACK interactive
+\set ON_ERROR_STOP on
 \setenv PSQL_EDITOR "/usr/bin/vim"
 \timing
 \x auto
