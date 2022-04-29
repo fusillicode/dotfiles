@@ -3,4 +3,4 @@
 CONTAINER_NAME=${1:-"fast-data-dev"}
 COMMAND=${2:-bash}
 
-docker exec -it $(docker ps | /usr/local/bin/rg "$CONTAINER_NAME" | awk '{print $1;}') "$COMMAND"
+docker exec -it $(docker ps | /opt/homebrew/bin/rg "$CONTAINER_NAME" | awk '{print $1;}') "$COMMAND"

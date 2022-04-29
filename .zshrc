@@ -215,9 +215,6 @@ export PATH="$HOME/go/bin:$PATH"
 
 export PATH="$HOME/.poetry/bin:$PATH"
 
-# `asdf` installation suggestion ¯\_(ツ)_/¯
-. /usr/local/opt/asdf/asdf.sh
-
 # Atuin 🐢
 export ATUIN_NOBIND="true"
 eval "$(atuin init zsh)"
