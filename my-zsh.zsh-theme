@@ -24,6 +24,8 @@ KUBE_PS1_PREFIX=
 KUBE_PS1_SEPARATOR=
 KUBE_PS1_SUFFIX=
 KUBE_PS1_SYMBOL_ENABLE=false
+source "/opt/homebrew/opt/kube-ps1/share/kube-ps1.sh"
+PS1='$(kube_ps1)'$PS1
 
 return_status() {
   if [[ $? -ne 0 ]]; then
@@ -54,9 +56,6 @@ launch_time() {
 path() {
   echo "%{$fg_bold[cyan]%}%~%{$reset_color%}"
 }
-
-# For k8s
-source "/usr/local/opt/kube-ps1/share/kube-ps1.sh"
 
 PROMPT=$'
 $(return_status) $(path)$(git_prompt_info)$(git_prompt_status)$(git_prompt_short_sha)$(git_tag) $(kube_ps1)

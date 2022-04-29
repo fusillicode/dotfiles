@@ -65,7 +65,7 @@ brew install slack
 brew install smcfancontrol
 brew install telegram
 brew install the-unarchiver
-brew install transmission
+brew install transmission --cask
 brew install tunnelblick
 brew install vlc
 brew install whatsapp
