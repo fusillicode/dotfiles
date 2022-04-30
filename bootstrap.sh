@@ -85,16 +85,21 @@ echo -e "\n. $(brew --prefix asdf)/etc/bash_completion.d/asdf.bash" >> ~/.zshrc
 
 # Install asdf plugins
 # brew install bdw-gc libevent llvm && brew link llvm --force # Don't know, seems not needed anymore...¯\_(ツ)_/¯
-asdf plugin-add crystal https://github.com/marciogm/asdf-crystal.git
-brew install autoconf wxmac && asdf plugin-add erlang https://github.com/asdf-vm/asdf-erlang.git
+# asdf plugin-add crystal https://github.com/marciogm/asdf-crystal.git
+brew install autoconf wxwidgets
+export KERL_CONFIGURE_OPTIONS="--without-javac --with-ssl=$(brew --prefix openssl@1.1)"
+asdf plugin-add erlang https://github.com/asdf-vm/asdf-erlang.git
+asdf install erlang latest
 asdf plugin-add elixir https://github.com/asdf-vm/asdf-elixir.git
-asdf plugin-add ruby https://github.com/asdf-vm/asdf-ruby.git
-asdf plugin-add python https://github.com/asdf-vm/asdf-python.git
-brew install gpg && asdf plugin-add nodejs https://github.com/asdf-vm/asdf-nodejs.git && bash ~/.asdf/plugins/nodejs/bin/import-release-team-keyring
+asdf install elixir latest
+# asdf plugin-add ruby https://github.com/asdf-vm/asdf-ruby.git
+asdf plugin-add python
+asdf install python latest
+# brew install gpg && asdf plugin-add nodejs https://github.com/asdf-vm/asdf-nodejs.git && bash ~/.asdf/plugins/nodejs/bin/import-release-team-keyring
 # https://github.com/asdf-vm/asdf-nodejs#nvmrc-and-node-version-files
-"legacy_version_file = yes" >> ~/.asdfrc
+# "legacy_version_file = yes" >> ~/.asdfrc
 # asdf plugin-add java https://github.com/halcyon/asdf-java.git
-asdf plugin-add terraform https://github.com/Banno/asdf-hashicorp.git
+# asdf plugin-add terraform https://github.com/Banno/asdf-hashicorp.git
 
 # Install Ruby gems
 gem install --no-rdoc --no-ri \
