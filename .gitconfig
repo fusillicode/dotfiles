@@ -1,0 +1,13 @@
+[core]
+	editor = vim
+	filemode = false
+[merge]
+	tool = opendiff
+[push]
+	default = current
+[branch]
+	autosetuprebase = always
+[user]
+	email = fusillicode@gmail.com
+[fetch]
+	prune = true
