@@ -139,12 +139,5 @@ curl https://get-ghcup.haskell.org -sSf | sh
 brew update && brew upgrade && brew cleanup -s && rm -rf ~/Library/Caches/Homebrew/*
 brew doctor
 
-# Set up git
-git config --global core.editor vim
-git config --global core.filemode false
-git config --global merge.tool opendiff
-git config --global push.default current
-git config --global branch.autosetuprebase always
-
 # Twitch miner
 pip install Twitch-Channel-Points-Miner-v2
