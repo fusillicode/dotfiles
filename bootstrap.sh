@@ -79,6 +79,10 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/mas
 # Install rustup ❤️
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
+# Rust CLI apps ❤️
+cargo install --force cargo-make
+cargo install sqlx-cli
+
 # Configure asdf
 echo -e "\n. $(brew --prefix asdf)/asdf.sh" >> ~/.zshrc
 echo -e "\n. $(brew --prefix asdf)/etc/bash_completion.d/asdf.bash" >> ~/.zshrc
