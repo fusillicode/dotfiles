@@ -226,6 +226,6 @@ export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
 # rdkafka & M1 🥲
 export PATH="/opt/homebrew/opt/openssl/bin:$PATH"
 export OPENSSL_ROOT_DIR="/opt/homebrew/opt/openssl"
-export LDFLAGS="-L/opt/homebrew/opt/openssl/lib"
-export CPPFLAGS="-I/opt/homebrew/opt/openssl/include"
+export LDFLAGS="-L/opt/homebrew/opt/openssl/lib -L/opt/homebrew/opt/llvm/lib"
+export CPPFLAGS="-I/opt/homebrew/opt/openssl/include -I/opt/homebrew/opt/llvm/include"
 export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl/lib/pkgconfig"
