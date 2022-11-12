@@ -1,0 +1,37 @@
+{
+  "Binding Pry": {
+    "prefix": "bp",
+    "body": [
+      "require IEx; IEx.pry;"
+    ]
+  },
+  "Module attributes order": {
+    "prefix": "mo",
+    "body": [
+      "@moduledoc",
+      "@behaviour",
+      "use",
+      "import",
+      "require",
+      "alias",
+      "@module_attribute",
+      "defstruct",
+      "@type",
+      "@callback",
+      "@macrocallback",
+      "@optional_callbacks"
+    ]
+  },
+  "IO.inspect": {
+    "prefix": "io",
+    "body": "IO.inspect(limit: :infinity, printable_limit: :infinity)"
+  },
+  "|> IO.inspect": {
+    "prefix": "iop",
+    "body": "|> IO.inspect(limit: :infinity, printable_limit: :infinity)"
+  },
+  "|> IO.inspect |> ": {
+    "prefix": "iopp",
+    "body": "|> IO.inspect(limit: :infinity, printable_limit: :infinity) |>"
+  }
+}
