@@ -215,7 +215,7 @@
   },
   {
     "key": "ctrl+x",
-    "command": "workbench.action.navigateToLastNavigationLocation"
+    "command": "workbench.action.navigateForward"
   },
   {
     "key": "ctrl+s",
