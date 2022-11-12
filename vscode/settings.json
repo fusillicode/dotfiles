@@ -1,0 +1,219 @@
+{
+  "breadcrumbs.enabled": false,
+  "crystal-lang.completion": true,
+  "crystal-lang.hover": true,
+  "crystal-lang.implementations": true,
+  "debug.allowBreakpointsEverywhere": true,
+  "diffEditor.ignoreTrimWhitespace": false,
+  "editor.acceptSuggestionOnEnter": "smart",
+  "editor.autoIndent": "full",
+  "editor.cursorBlinking": "solid",
+  "editor.cursorStyle": "block",
+  "editor.detectIndentation": false,
+  "editor.folding": true,
+  "editor.fontSize": 16,
+  "editor.formatOnSave": true,
+  "editor.glyphMargin": false,
+  "editor.guides.indentation": false,
+  "editor.hideCursorInOverviewRuler": true,
+  "editor.inlayHints.fontSize": 14,
+  "editor.lineNumbers": "off",
+  "editor.minimap.enabled": false,
+  "editor.multiCursorModifier": "ctrlCmd",
+  "editor.occurrencesHighlight": false,
+  "editor.overviewRulerBorder": false,
+  "editor.renderControlCharacters": true,
+  "editor.renderLineHighlight": "all",
+  "editor.renderWhitespace": "none",
+  "editor.rulers": [
+    120
+  ],
+  "editor.scrollbar.horizontal": "hidden",
+  "editor.scrollbar.vertical": "hidden",
+  "editor.scrollBeyondLastLine": false,
+  "editor.selectionHighlight": false,
+  "editor.showFoldingControls": "mouseover",
+  "editor.snippetSuggestions": "top",
+  "editor.suggestSelection": "first",
+  "editor.tabCompletion": "on",
+  "editor.tabSize": 2,
+  "editor.tokenColorCustomizations": {
+    "functions": {
+      "fontStyle": "bold"
+    },
+    "keywords": {
+      "fontStyle": "bold"
+    },
+    "types": {
+      "fontStyle": "bold"
+    },
+    "[Ariake Dark]": {
+      "comments": "#179effaf"
+    }
+  },
+  "editWithShell.processEntireTextIfNoneSelected": true,
+  "elixirLinter.useStrict": true,
+  "elixirLS.dialyzerEnabled": true,
+  "elixirLS.dialyzerFormat": "dialyxir_long",
+  "elixirLS.enableTestLenses": true,
+  "elixirLS.fetchDeps": false,
+  "elixirLS.mixEnv": "dev",
+  "elixirLS.suggestSpecs": true,
+  "elixirLS.trace.server": "verbose",
+  "emmet.includeLanguages": {
+    "html-eex": "html",
+    "elixir": "html"
+  },
+  "emmet.triggerExpansionOnTab": true,
+  "explorer.autoReveal": true,
+  "explorer.confirmDelete": false,
+  "explorer.openEditors.visible": 0,
+  "extensions.autoUpdate": false,
+  "extensions.ignoreRecommendations": true,
+  "files.associations": {
+    "*.coffee.erb": "coffeescript",
+    "*.drab": "HTML (Eex)",
+    "*.erb.deface": "erb",
+    "*.js.erb": "coffeescript",
+    "*.json.tpl": "json",
+    "Dockerfile*": "dockerfile"
+  },
+  "files.autoSave": "afterDelay",
+  "files.insertFinalNewline": true,
+  "files.watcherExclude": {
+    "**/.bloop": true,
+    "**/.metals": true,
+    "**/.ammonite": true
+  },
+  "liveshare.featureSet": "insiders",
+  "liveshare.focusBehavior": "prompt",
+  "liveshare.guestApprovalRequired": true,
+  "liveshare.showInStatusBar": "whileCollaborating",
+  "gitlens.codeLens.enabled": false,
+  "gitlens.currentLine.enabled": false,
+  "gitlens.hovers.currentLine.over": "line",
+  "gitlens.hovers.enabled": false,
+  "notebook.cellToolbarLocation": {
+    "default": "right",
+    "jupyter-notebook": "left"
+  },
+  "problems.decorations.enabled": false,
+  "projectManager.git.baseFolders": [
+    "$home/data/dev"
+  ],
+  "projectManager.openInNewWindowWhenClickingInStatusBar": true,
+  "projectManager.sortList": "Recent",
+  "python.formatting.blackArgs": [
+    "--line-length",
+    "120"
+  ],
+  "python.insidersChannel": "off",
+  "python.languageServer": "Pylance",
+  "python.linting.flake8Enabled": true,
+  "python.pythonPath": "$home/.asdf/shims/python",
+  "redhat.telemetry.enabled": false,
+  "rest-client.enableTelemetry": false,
+  "rewrap.autoWrap.enabled": true,
+  "rust-analyzer.checkOnSave.command": "clippy",
+  "rust-analyzer.completion.autoimport.enable": true,
+  "rust-analyzer.imports.granularity.group": "item",
+  "rust-analyzer.imports.prefix": "crate",
+  "rust-analyzer.lens.debug.enable": false,
+  "rust-analyzer.lens.implementations.enable": false,
+  "rust-analyzer.lens.run.enable": false,
+  "search.exclude": {
+    "**/.git": true,
+    "**/*target*": true,
+    "**/node_modules": true
+  },
+  "search.searchOnType": false,
+  "search.smartCase": true,
+  "search.useIgnoreFiles": false,
+  "security.workspace.trust.untrustedFiles": "open",
+  "telemetry.telemetryLevel": "off",
+  "terminal.integrated.copyOnSelection": true,
+  "terminal.integrated.defaultProfile.osx": "zsh",
+  "terminal.integrated.enablePersistentSessions": false,
+  "terminal.integrated.fontSize": 16,
+  "terminal.integrated.scrollback": 999999999,
+  "terminal.integrated.shellIntegration.decorationsEnabled": "never",
+  "terraform.languageServer": {
+    "external": true,
+    "args": [
+      "serve"
+    ]
+  },
+  "window.openFilesInNewWindow": "off",
+  "window.restoreFullscreen": true,
+  "window.title": "${dirty}${rootName}${separator}${activeEditorMedium}",
+  "workbench.activityBar.visible": false,
+  "workbench.colorCustomizations": {
+    "editor.findMatchBackground": "#b300ff9a",
+    "editor.findMatchHighlightBackground": "#b300ff9a",
+    "editor.lineHighlightBackground": "#ffffff09",
+    "editor.selectionBackground": "#b300ff9a",
+    "editorBracketMatch.background": "#b300ff9a",
+    "editorBracketMatch.border": "#b300ff9a",
+    "editorCursor.background": "#ffffffff",
+    "editorCursor.foreground": "#ffffff70",
+    "editorGutter.deletedBackground": "#d2772d",
+    "editorInlayHint.background": "#ffffff00",
+    "editorInlayHint.foreground": "#f8f8f87e",
+    "editorInlayHint.parameterBackground": "#ffffff00",
+    "editorInlayHint.parameterForeground": "#f8f8f87e",
+    "editorInlayHint.typeBackground": "#ffffff00",
+    "editorInlayHint.typeForeground": "#f8f8f87e",
+    "editorLineNumber.activeForeground": "#ffffff",
+    "editorLineNumber.foreground": "#777777",
+    "editorOverviewRuler.bracketMatchForeground": "#b300ff9a",
+    "editorOverviewRuler.findMatchForeground": "#b300ff9a",
+    "editorOverviewRuler.selectionHighlightForeground": "#b300ff9a",
+    "editorOverviewRuler.wordHighlightForeground": "#b300ff9a",
+    "editorOverviewRuler.wordHighlightStrongForeground": "#b300ff9a",
+    "list.focusBackground": "#b300ff9a",
+    "list.highlightForeground": "#ffffff",
+    "statusBar.foreground": "#ffffff",
+    "tab.activeBorderTop": "#ffd700",
+    "tab.activeForeground": "#cccccc",
+    "tab.inactiveForeground": "#cccccc",
+    "terminalCursor.foreground": "#ffffff"
+  },
+  "workbench.editorAssociations": {
+    "*.ipynb": "jupyter-notebook"
+  },
+  "workbench.editor.decorations.badges": false,
+  "workbench.editor.highlightModifiedTabs": true,
+  "workbench.editor.openPositioning": "right",
+  "workbench.editor.showIcons": false,
+  "workbench.editor.showTabs": true,
+  "workbench.editor.tabCloseButton": "off",
+  "workbench.layoutControl.enabled": false,
+  "workbench.list.horizontalScrolling": true,
+  "workbench.panel.defaultLocation": "left",
+  "workbench.sideBar.location": "right",
+  "workbench.startupEditor": "none",
+  "workbench.statusBar.visible": true,
+  "workbench.tree.indent": 12,
+  "vs-kubernetes": {
+    "vs-kubernetes.draft-path": "$home/.vs-kubernetes/tools/draft/darwin-amd64/draft",
+    "vs-kubernetes.minikube-path": "$home/.vs-kubernetes/tools/minikube/darwin-amd64/minikube"
+  },
+  "[elixir]": {
+    "editor.defaultFormatter": "JakeBecker.elixir-ls"
+  },
+  "[python]": {
+    "editor.autoIndent": "full",
+    "editor.insertSpaces": true,
+    "editor.tabSize": 4
+  },
+  "[rust]": {
+    "editor.autoIndent": "full",
+    "editor.insertSpaces": true,
+    "editor.tabSize": 4
+  },
+  "xml.server.binary.trustedHashes": [
+    "8080595d4aee6c70818be8c8c8f58db8e2214082492def527ac383970e75da4c"
+  ],
+  "workbench.editor.enablePreview": false,
+  "workbench.colorTheme": "Ariake Dark"
+}
