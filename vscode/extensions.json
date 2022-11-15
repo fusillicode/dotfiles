@@ -294,30 +294,6 @@
   },
   {
     "identifier": {
-      "id": "hashicorp.terraform",
-      "uuid": "4a23294b-fd16-4c51-9759-da9936474cf8"
-    },
-    "version": "2.24.3",
-    "location": {
-      "$mid": 1,
-      "fsPath": "/Users/gianlucarandazzo/.vscode-insiders/extensions/hashicorp.terraform-2.24.3-darwin-arm64",
-      "path": "/Users/gianlucarandazzo/.vscode-insiders/extensions/hashicorp.terraform-2.24.3-darwin-arm64",
-      "scheme": "file"
-    },
-    "metadata": {
-      "id": "4a23294b-fd16-4c51-9759-da9936474cf8",
-      "publisherId": "a8dd781d-e144-400a-943c-417165981be2",
-      "publisherDisplayName": "HashiCorp",
-      "targetPlatform": "darwin-arm64",
-      "isApplicationScoped": false,
-      "updated": true,
-      "isPreReleaseVersion": false,
-      "installedTimestamp": 1665743590820,
-      "preRelease": false
-    }
-  },
-  {
-    "identifier": {
       "id": "hbenl.vscode-test-explorer",
       "uuid": "ff96f1b4-a4b8-45ef-8ecf-c232c0cb75c8"
     },
@@ -1437,54 +1413,6 @@
   },
   {
     "identifier": {
-      "id": "ms-toolsai.jupyter",
-      "uuid": "6c2f1801-1e7f-45b2-9b5c-7782f1e076e8"
-    },
-    "version": "2022.11.1003161031",
-    "location": {
-      "$mid": 1,
-      "fsPath": "/Users/gianlucarandazzo/.vscode-insiders/extensions/ms-toolsai.jupyter-2022.11.1003161031",
-      "path": "/Users/gianlucarandazzo/.vscode-insiders/extensions/ms-toolsai.jupyter-2022.11.1003161031",
-      "scheme": "file"
-    },
-    "metadata": {
-      "id": "6c2f1801-1e7f-45b2-9b5c-7782f1e076e8",
-      "publisherId": "ac8eb7c9-3e59-4b39-8040-f0484d8170ce",
-      "publisherDisplayName": "Microsoft",
-      "targetPlatform": "undefined",
-      "isApplicationScoped": false,
-      "updated": true,
-      "isPreReleaseVersion": true,
-      "installedTimestamp": 1668085564452,
-      "preRelease": true
-    }
-  },
-  {
-    "identifier": {
-      "id": "rust-lang.rust-analyzer",
-      "uuid": "06574cb4-e5dc-4631-8174-a543a4533621"
-    },
-    "version": "0.4.1282",
-    "location": {
-      "$mid": 1,
-      "fsPath": "/Users/gianlucarandazzo/.vscode-insiders/extensions/rust-lang.rust-analyzer-0.4.1282-darwin-arm64",
-      "path": "/Users/gianlucarandazzo/.vscode-insiders/extensions/rust-lang.rust-analyzer-0.4.1282-darwin-arm64",
-      "scheme": "file"
-    },
-    "metadata": {
-      "id": "06574cb4-e5dc-4631-8174-a543a4533621",
-      "publisherId": "cb14a7a7-a188-40bd-a953-e0a20757c5dd",
-      "publisherDisplayName": "The Rust Programming Language ",
-      "targetPlatform": "darwin-arm64",
-      "isApplicationScoped": false,
-      "updated": true,
-      "isPreReleaseVersion": true,
-      "installedTimestamp": 1668236991831,
-      "preRelease": true
-    }
-  },
-  {
-    "identifier": {
       "id": "ms-python.python",
       "uuid": "f1f59ae4-9318-4f3c-a9b5-81b2eaa5f8a5"
     },
@@ -1533,14 +1461,38 @@
   },
   {
     "identifier": {
+      "id": "sleistner.vscode-fileutils",
+      "uuid": "d637104e-1fd7-4063-98fc-8afe46012c9b"
+    },
+    "version": "3.5.0",
+    "location": {
+      "$mid": 1,
+      "fsPath": "/Users/gianlucarandazzo/.vscode-insiders/extensions/sleistner.vscode-fileutils-3.5.0",
+      "path": "/Users/gianlucarandazzo/.vscode-insiders/extensions/sleistner.vscode-fileutils-3.5.0",
+      "scheme": "file"
+    },
+    "metadata": {
+      "id": "d637104e-1fd7-4063-98fc-8afe46012c9b",
+      "publisherId": "99ce6203-6065-4d93-983f-c3a097ebbfe2",
+      "publisherDisplayName": "Steffen Leistner",
+      "targetPlatform": "undefined",
+      "isApplicationScoped": false,
+      "updated": false,
+      "isPreReleaseVersion": false,
+      "installedTimestamp": 1668417955283,
+      "preRelease": false
+    }
+  },
+  {
+    "identifier": {
       "id": "eamodio.gitlens-insiders",
       "uuid": "b17b0387-ccfb-44a8-b75b-3b1f925bf2f6"
     },
-    "version": "2022.11.1204",
+    "version": "2022.11.1404",
     "location": {
       "$mid": 1,
-      "fsPath": "/Users/gianlucarandazzo/.vscode-insiders/extensions/eamodio.gitlens-insiders-2022.11.1204",
-      "path": "/Users/gianlucarandazzo/.vscode-insiders/extensions/eamodio.gitlens-insiders-2022.11.1204",
+      "fsPath": "/Users/gianlucarandazzo/.vscode-insiders/extensions/eamodio.gitlens-insiders-2022.11.1404",
+      "path": "/Users/gianlucarandazzo/.vscode-insiders/extensions/eamodio.gitlens-insiders-2022.11.1404",
       "scheme": "file"
     },
     "metadata": {
@@ -1551,7 +1503,103 @@
       "isApplicationScoped": false,
       "updated": true,
       "isPreReleaseVersion": false,
-      "installedTimestamp": 1668249194776,
+      "installedTimestamp": 1668420744635,
+      "preRelease": false
+    }
+  },
+  {
+    "identifier": {
+      "id": "ms-toolsai.jupyter",
+      "uuid": "6c2f1801-1e7f-45b2-9b5c-7782f1e076e8"
+    },
+    "version": "2022.11.1003201029",
+    "location": {
+      "$mid": 1,
+      "fsPath": "/Users/gianlucarandazzo/.vscode-insiders/extensions/ms-toolsai.jupyter-2022.11.1003201029",
+      "path": "/Users/gianlucarandazzo/.vscode-insiders/extensions/ms-toolsai.jupyter-2022.11.1003201029",
+      "scheme": "file"
+    },
+    "metadata": {
+      "id": "6c2f1801-1e7f-45b2-9b5c-7782f1e076e8",
+      "publisherId": "ac8eb7c9-3e59-4b39-8040-f0484d8170ce",
+      "publisherDisplayName": "Microsoft",
+      "targetPlatform": "undefined",
+      "isApplicationScoped": false,
+      "updated": true,
+      "isPreReleaseVersion": true,
+      "installedTimestamp": 1668420746005,
+      "preRelease": true
+    }
+  },
+  {
+    "identifier": {
+      "id": "rust-lang.rust-analyzer",
+      "uuid": "06574cb4-e5dc-4631-8174-a543a4533621"
+    },
+    "version": "0.4.1286",
+    "location": {
+      "$mid": 1,
+      "fsPath": "/Users/gianlucarandazzo/.vscode-insiders/extensions/rust-lang.rust-analyzer-0.4.1286-darwin-arm64",
+      "path": "/Users/gianlucarandazzo/.vscode-insiders/extensions/rust-lang.rust-analyzer-0.4.1286-darwin-arm64",
+      "scheme": "file"
+    },
+    "metadata": {
+      "id": "06574cb4-e5dc-4631-8174-a543a4533621",
+      "publisherId": "cb14a7a7-a188-40bd-a953-e0a20757c5dd",
+      "publisherDisplayName": "The Rust Programming Language ",
+      "targetPlatform": "darwin-arm64",
+      "isApplicationScoped": false,
+      "updated": true,
+      "isPreReleaseVersion": true,
+      "installedTimestamp": 1668493867530,
+      "preRelease": true
+    }
+  },
+  {
+    "identifier": {
+      "id": "hashicorp.terraform",
+      "uuid": "4a23294b-fd16-4c51-9759-da9936474cf8"
+    },
+    "version": "2.25.0",
+    "location": {
+      "$mid": 1,
+      "fsPath": "/Users/gianlucarandazzo/.vscode-insiders/extensions/hashicorp.terraform-2.25.0-darwin-arm64",
+      "path": "/Users/gianlucarandazzo/.vscode-insiders/extensions/hashicorp.terraform-2.25.0-darwin-arm64",
+      "scheme": "file"
+    },
+    "metadata": {
+      "id": "4a23294b-fd16-4c51-9759-da9936474cf8",
+      "publisherId": "a8dd781d-e144-400a-943c-417165981be2",
+      "publisherDisplayName": "HashiCorp",
+      "targetPlatform": "darwin-arm64",
+      "isApplicationScoped": false,
+      "updated": true,
+      "isPreReleaseVersion": false,
+      "installedTimestamp": 1668493869157,
+      "preRelease": false
+    }
+  },
+  {
+    "identifier": {
+      "id": "usernamehw.commands",
+      "uuid": "6eae6665-66dd-4245-89f2-f8be5ac85c2c"
+    },
+    "version": "1.6.0",
+    "location": {
+      "$mid": 1,
+      "fsPath": "/Users/gianlucarandazzo/.vscode-insiders/extensions/usernamehw.commands-1.6.0",
+      "path": "/Users/gianlucarandazzo/.vscode-insiders/extensions/usernamehw.commands-1.6.0",
+      "scheme": "file"
+    },
+    "metadata": {
+      "id": "6eae6665-66dd-4245-89f2-f8be5ac85c2c",
+      "publisherId": "151820df-5dc5-4c97-8751-eb84643203fa",
+      "publisherDisplayName": "Alexander",
+      "targetPlatform": "undefined",
+      "isApplicationScoped": false,
+      "updated": false,
+      "isPreReleaseVersion": false,
+      "installedTimestamp": 1668498353527,
       "preRelease": false
     }
   }

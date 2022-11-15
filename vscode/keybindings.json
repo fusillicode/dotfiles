@@ -260,7 +260,30 @@
   {
     "key": "cmd+2",
     "command": "workbench.action.focusActiveEditorGroup",
-    "when": "terminalFocus"
+    "when": "terminalFocus && !panelMaximized"
+  },
+  {
+    "key": "cmd+2",
+    "command": "workbench.action.focusActiveEditorGroup",
+    "when": "terminalFocus && panelMaximized"
+  },
+  {
+    "key": "cmd+2",
+    "command": "commands.run",
+    "when": "editorFocus || !editorIsOpen",
+    "args": [
+      "workbench.action.toggleMaximizedPanel",
+      "workbench.action.focusPanel"
+    ]
+  },
+  {
+    "key": "cmd+2",
+    "command": "commands.run",
+    "when": "panelMaximized",
+    "args": [
+      "workbench.action.toggleMaximizedPanel",
+      "workbench.action.focusActiveEditorGroup"
+    ]
   },
   {
     "key": "cmd+2",
