@@ -26,6 +26,7 @@
   "editor.renderLineHighlight": "all",
   "editor.renderWhitespace": "none",
   "editor.rulers": [
+    80,
     120
   ],
   "editor.scrollbar.horizontal": "hidden",
