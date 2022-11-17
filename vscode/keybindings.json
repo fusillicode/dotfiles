@@ -255,13 +255,13 @@
   },
   {
     "key": "cmd+1",
-    "command": "workbench.action.terminal.toggleTerminal",
-    "when": "!terminalFocus"
+    "command": "workbench.action.toggleMaximizedPanel",
+    "when": "terminalFocus"
   },
   {
     "key": "cmd+1",
-    "command": "workbench.action.toggleMaximizedPanel",
-    "when": "terminalFocus"
+    "command": "workbench.action.terminal.toggleTerminal",
+    "when": "!terminalFocus"
   },
   {
     "key": "cmd+2",
@@ -271,11 +271,11 @@
   {
     "key": "cmd+2",
     "command": "commands.run",
-    "when": "editorFocus && !panelVisible",
     "args": [
       "workbench.action.togglePanel",
       "workbench.action.focusActiveEditorGroup"
-    ]
+    ],
+    "when": "editorFocus && !panelVisible"
   },
   {
     "key": "cmd+2",
