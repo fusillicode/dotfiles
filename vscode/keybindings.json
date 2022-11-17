@@ -255,35 +255,41 @@
   },
   {
     "key": "cmd+1",
-    "command": "workbench.action.terminal.toggleTerminal"
+    "command": "workbench.action.terminal.toggleTerminal",
+    "when": "!terminalFocus"
+  },
+  {
+    "key": "cmd+1",
+    "command": "workbench.action.toggleMaximizedPanel",
+    "when": "terminalFocus"
   },
   {
     "key": "cmd+2",
-    "command": "workbench.action.focusActiveEditorGroup",
-    "when": "terminalFocus && !panelMaximized"
-  },
-  {
-    "key": "cmd+2",
-    "command": "workbench.action.focusActiveEditorGroup",
-    "when": "terminalFocus && panelMaximized"
+    "command": "workbench.action.closePanel",
+    "when": "editorFocus && panelVisible"
   },
   {
     "key": "cmd+2",
     "command": "commands.run",
-    "when": "editorFocus || !editorIsOpen",
+    "when": "editorFocus && !panelVisible",
     "args": [
-      "workbench.action.toggleMaximizedPanel",
-      "workbench.action.focusPanel"
+      "workbench.action.togglePanel",
+      "workbench.action.focusActiveEditorGroup"
     ]
   },
   {
     "key": "cmd+2",
+    "command": "workbench.action.focusActiveEditorGroup",
+    "when": "!editorFocus"
+  },
+  {
+    "key": "cmd+2",
     "command": "commands.run",
-    "when": "panelMaximized",
     "args": [
       "workbench.action.toggleMaximizedPanel",
       "workbench.action.focusActiveEditorGroup"
-    ]
+    ],
+    "when": "panelMaximized"
   },
   {
     "key": "cmd+2",
