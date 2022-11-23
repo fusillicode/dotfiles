@@ -17,7 +17,7 @@
   "editor.guides.indentation": false,
   "editor.hideCursorInOverviewRuler": true,
   "editor.inlayHints.fontSize": 14,
-  "editor.lineDecorationsWidth": 9,
+  "editor.lineDecorationsWidth": 7,
   "editor.lineNumbers": "on",
   "editor.minimap.enabled": false,
   "editor.multiCursorModifier": "ctrlCmd",
@@ -27,7 +27,6 @@
   "editor.renderLineHighlight": "all",
   "editor.renderWhitespace": "none",
   "editor.rulers": [
-    80,
     120
   ],
   "editor.scrollbar.horizontal": "hidden",
@@ -118,6 +117,7 @@
   "rewrap.autoWrap.enabled": true,
   "rust-analyzer.checkOnSave.command": "clippy",
   "rust-analyzer.completion.autoimport.enable": true,
+  "rust-analyzer.imports.granularity.enforce": true,
   "rust-analyzer.imports.granularity.group": "item",
   "rust-analyzer.imports.prefix": "crate",
   "rust-analyzer.lens.debug.enable": false,
@@ -217,5 +217,6 @@
     "8080595d4aee6c70818be8c8c8f58db8e2214082492def527ac383970e75da4c"
   ],
   "workbench.editor.enablePreview": false,
-  "workbench.colorTheme": "Ariake Dark"
+  "workbench.colorTheme": "Ariake Dark",
+  "terminal.integrated.enableMultiLinePasteWarning": false
 }
