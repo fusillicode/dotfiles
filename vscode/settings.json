@@ -66,6 +66,9 @@
     "elixir": "html"
   },
   "emmet.triggerExpansionOnTab": true,
+  "evenBetterToml.formatter.columnWidth": 180,
+  "evenBetterToml.formatter.compactArrays": true,
+  "evenBetterToml.formatter.arrayAutoCollapse": true,
   "explorer.autoReveal": true,
   "explorer.confirmDelete": false,
   "explorer.openEditors.visible": 0,
@@ -218,5 +221,5 @@
   ],
   "workbench.editor.enablePreview": false,
   "workbench.colorTheme": "Ariake Dark",
-  "terminal.integrated.enableMultiLinePasteWarning": false
+  "terminal.integrated.enableMultiLinePasteWarning": false,
 }
