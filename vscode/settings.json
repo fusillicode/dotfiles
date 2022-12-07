@@ -142,12 +142,6 @@
   "terminal.integrated.fontSize": 16,
   "terminal.integrated.scrollback": 999999999,
   "terminal.integrated.shellIntegration.decorationsEnabled": "never",
-  "terraform.languageServer": {
-    "external": true,
-    "args": [
-      "serve"
-    ]
-  },
   "window.openFilesInNewWindow": "off",
   "window.restoreFullscreen": true,
   "window.title": "${dirty}${rootName}${separator}${activeEditorMedium}",
@@ -170,11 +164,8 @@
     "editorInlayHint.typeForeground": "#f8f8f87e",
     "editorLineNumber.activeForeground": "#ffffff",
     "editorLineNumber.foreground": "#777777",
-    "editorOverviewRuler.addedForeground": "#ffffff00",
     "editorOverviewRuler.bracketMatchForeground": "#ffffff00",
-    "editorOverviewRuler.deletedForeground": "#ffffff00",
     "editorOverviewRuler.findMatchForeground": "#ffffff00",
-    "editorOverviewRuler.modifiedForeground": "#ffffff00",
     "editorOverviewRuler.selectionHighlightForeground": "#ffffff00",
     "editorOverviewRuler.wordHighlightForeground": "#ffffff00",
     "editorOverviewRuler.wordHighlightStrongForeground": "#ffffff00",
@@ -225,4 +216,5 @@
   "workbench.editor.enablePreview": false,
   "workbench.colorTheme": "Ariake Dark",
   "terminal.integrated.enableMultiLinePasteWarning": false,
+  "terraform.languageServer.enable": true,
 }
