@@ -8,6 +8,7 @@ vim.opt.expandtab = true
 vim.opt.guicursor = ''
 vim.opt.ignorecase = true
 vim.opt.iskeyword:append('-')
+vim.opt.mouse = 'a'
 vim.opt.number = true
 vim.opt.shiftwidth = 2
 vim.opt.smartcase = true
@@ -21,6 +22,14 @@ local builtin = require('telescope.builtin')
 vim.keymap.set('n', '<leader>ff', builtin.find_files, {})
 vim.keymap.set('n', '<leader>fg', builtin.live_grep, {})
 vim.keymap.set('n', '<leader>fb', builtin.buffers, {})
+require('telescope').setup({
+  defaults = {
+    layout_strategy = 'vertical',
+  },
+})
+
+vim.keymap.set('v', '<', '<gv', {})
+vim.keymap.set('v', '>', '>gv', {})
 
 local ensure_packer = function()
   local fn = vim.fn
@@ -37,14 +46,13 @@ require('packer').startup(function(use)
   use 'wbthomason/packer.nvim'
   use { 
     'jim-at-jibba/ariake-vim-colors',
-    as = 'ariake',
-    config = function()
-      vim.cmd('colorscheme ariake')
-    end
+     config = function()
+       vim.cmd('colorscheme ariake')
+     end
   }
   use {
     'nvim-telescope/telescope.nvim',
-    requires = { {'nvim-lua/plenary.nvim'} }
+    requires = { 'nvim-lua/plenary.nvim' }
   }
   use { 
     'lewis6991/gitsigns.nvim',
