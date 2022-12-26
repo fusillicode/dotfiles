@@ -1,7 +1,10 @@
 require('telescope').setup{
+  defaults = {
+    layout_strategy = 'vertical',
+  },
   pickers = {
     find_files = {
-      find_command = { 'rg', '--ignore', '-L', '--hidden', '--files' },
+      find_command = {'rg', '--ignore', '-L', '--hidden', '--files'},
     }
   }
 }

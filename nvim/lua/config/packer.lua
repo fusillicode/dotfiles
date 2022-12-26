@@ -14,8 +14,10 @@ local packer_bootstrap = ensure_packer()
 require('packer').startup(function(use)
   use 'wbthomason/packer.nvim'
   use 'jim-at-jibba/ariake-vim-colors'
-  use { 'nvim-telescope/telescope.nvim', requires = { 'nvim-lua/plenary.nvim' } }
+  use {'nvim-telescope/telescope.nvim', requires = {'nvim-lua/plenary.nvim'}}
   use 'lewis6991/gitsigns.nvim'
+  use 'Pocco81/auto-save.nvim'
+  use 'jghauser/mkdir.nvim'
   
   if packer_bootstrap then
     require('packer').sync()
