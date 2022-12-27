@@ -1,1 +1,1 @@
-vim.cmd('colorscheme ariake')
+vim.cmd('colorscheme gruvbox')
