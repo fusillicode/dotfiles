@@ -1,3 +1,4 @@
+vim.api.nvim_set_option('list', true)
 vim.g.mapleader = ' '
 vim.opt.autoindent = true
 vim.opt.background = 'dark'
@@ -14,6 +15,6 @@ vim.opt.shiftwidth = 2
 vim.opt.smartcase = true
 vim.opt.splitbelow = true
 vim.opt.splitright = true
-vim.opt.tabstop = 2 
+vim.opt.tabstop = 2
 vim.opt.termguicolors = true
 vim.opt.wrap = false

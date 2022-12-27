@@ -18,10 +18,10 @@ require('packer').startup(function(use)
   use 'lewis6991/gitsigns.nvim'
   use 'Pocco81/auto-save.nvim'
   use 'jghauser/mkdir.nvim'
-  
+  use 'cappyzawa/trim.nvim'
+
   if packer_bootstrap then
     require('packer').sync()
     return
   end
 end)
-
