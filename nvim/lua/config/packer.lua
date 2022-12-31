@@ -14,28 +14,30 @@ local packer_bootstrap = ensure_packer()
 require('packer').startup(function(use)
   use 'wbthomason/packer.nvim'
   use 'ellisonleao/gruvbox.nvim'
-  use {'nvim-telescope/telescope.nvim', requires = {'nvim-lua/plenary.nvim'}}
+  use { 'nvim-telescope/telescope.nvim', requires = { 'nvim-lua/plenary.nvim' } }
   use 'lewis6991/gitsigns.nvim'
   use 'Pocco81/auto-save.nvim'
-  use 'jghauser/mkdir.nvim'
-  use 'cappyzawa/trim.nvim'
-  use {'nvim-treesitter/nvim-treesitter', run = {':TSUpdate'}}
+  use { 'nvim-treesitter/nvim-treesitter', run = { ':TSUpdate' } }
+  use 'neovim/nvim-lspconfig'
+  use 'williamboman/mason.nvim'
+  use 'williamboman/mason-lspconfig.nvim'
+  use 'hrsh7th/nvim-cmp'
+  use 'hrsh7th/cmp-buffer'
+  use 'hrsh7th/cmp-path'
+  use 'saadparwaiz1/cmp_luasnip'
+  use 'hrsh7th/cmp-nvim-lsp'
+  use 'hrsh7th/cmp-nvim-lua'
+  use 'L3MON4D3/LuaSnip'
+  use 'rafamadriz/friendly-snippets'
+  use 'simrat39/rust-tools.nvim'
   use {
-    'VonHeikemen/lsp-zero.nvim',
-    requires = {
-      {'neovim/nvim-lspconfig'},
-      {'williamboman/mason.nvim'},
-      {'williamboman/mason-lspconfig.nvim'},
-      {'hrsh7th/nvim-cmp'},
-      {'hrsh7th/cmp-buffer'},
-      {'hrsh7th/cmp-path'},
-      {'saadparwaiz1/cmp_luasnip'},
-      {'hrsh7th/cmp-nvim-lsp'},
-      {'hrsh7th/cmp-nvim-lua'},
-      {'L3MON4D3/LuaSnip'},
-      {'rafamadriz/friendly-snippets'},
-    }
+    'saecki/crates.nvim',
+    requires = { 'nvim-lua/plenary.nvim' },
+    config = function()
+      require('crates').setup()
+    end,
   }
+  use 'windwp/nvim-spectre'
 
   if packer_bootstrap then
     require('packer').sync()
