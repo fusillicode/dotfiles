@@ -48,6 +48,7 @@ require('packer').startup(function(use)
       }
     end
   }
+  use 'nvim-tree/nvim-tree.lua'
 
   if packer_bootstrap then
     require('packer').sync()
