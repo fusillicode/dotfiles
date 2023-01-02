@@ -49,6 +49,8 @@ require('packer').startup(function(use)
     end
   }
   use 'nvim-tree/nvim-tree.lua'
+  use 'bogado/file-line'
+  use 'chrisgrieser/nvim-genghis'
 
   if packer_bootstrap then
     require('packer').sync()
