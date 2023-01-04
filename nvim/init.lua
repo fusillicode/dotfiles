@@ -110,21 +110,20 @@ vim.opt.iskeyword:append('-')
 vim.wo.number = true
 vim.wo.signcolumn = 'yes'
 
+vim.keymap.set('n', '<esc>', ':noh <CR>', {})
+
 vim.keymap.set('v', '<', '<gv', { noremap = true, silent = true })
 vim.keymap.set('v', '>', '>gv', { noremap = true, silent = true })
 vim.keymap.set({ 'n', 'v' }, '<Space>', '<Nop>', { silent = true })
-vim.keymap.set('n', 'k', "v:count == 0 ? 'gk' : 'k'", { expr = true, silent = true })
-vim.keymap.set('n', 'j', "v:count == 0 ? 'gj' : 'j'", { expr = true, silent = true })
 
 vim.keymap.set('n', '<leader>?', require('telescope.builtin').oldfiles, { desc = '[?] Find recently opened files' })
-vim.keymap.set('n', '<leader><space>', require('telescope.builtin').buffers, { desc = '[ ] Find existing buffers' })
 vim.keymap.set('n', '<leader>/', function()
-  -- You can pass additional configuration to telescope to change theme, layout, etc.
   require('telescope.builtin').current_buffer_fuzzy_find(require('telescope.themes').get_dropdown {
     winblend = 10,
     previewer = false,
   })
 end, { desc = '[/] Fuzzily search in current buffer]' })
+vim.keymap.set('n', '<leader>sb', require('telescope.builtin').buffers, { desc = '[ ] Find existing buffers' })
 vim.keymap.set('n', '<leader>sf', require('telescope.builtin').find_files, { desc = '[S]earch [F]iles' })
 vim.keymap.set('n', '<leader>sh', require('telescope.builtin').help_tags, { desc = '[S]earch [H]elp' })
 vim.keymap.set('n', '<leader>sw', require('telescope.builtin').grep_string, { desc = '[S]earch current [W]ord' })
@@ -132,7 +131,7 @@ vim.keymap.set('n', '<leader>sg', require('telescope.builtin').live_grep, { desc
 vim.keymap.set('n', '<leader>sd', require('telescope.builtin').diagnostics, { desc = '[S]earch [D]iagnostics' })
 
 require('telescope').load_extension('projects')
-vim.keymap.set("n", "<leader>sp", ":Telescope projects<cr>", {})
+vim.keymap.set("n", "<leader>sp", ":Telescope projects <CR>", {})
 
 local genghis = require("genghis")
 vim.keymap.set("n", "<leader>yp", genghis.copyFilepath)
@@ -166,9 +165,9 @@ require('lualine').setup {
     section_separators = '',
   },
   sections = {
-    lualine_a = { 'mode' },
+    lualine_a = { '' },
     lualine_b = { 'branch' },
-    lualine_c = { { 'filename', file_status = true, path = 3 }, 'diagnostics', 'encoding', 'searchcount' },
+    lualine_c = { 'diagnostics', 'searchcount', { 'filename', file_status = true, path = 3 }, 'encoding' },
     lualine_x = {},
     lualine_y = {},
     lualine_z = {}
@@ -198,10 +197,10 @@ require('nvim-treesitter.configs').setup {
   incremental_selection = {
     enable = true,
     keymaps = {
-      init_selection = '<c-space>',
-      node_incremental = '<c-space>',
-      scope_incremental = '<c-s>',
-      node_decremental = '<c-backspace>',
+      init_selection = '<C-Space>',
+      node_incremental = '<C-Space>',
+      scope_incremental = '<C-s>',
+      node_decremental = '<C-Backspace>',
     },
   },
   textobjects = {
@@ -348,6 +347,9 @@ cmp.setup {
   },
   sources = {
     { name = 'nvim_lsp' },
+    { name = 'path' },
+    { name = 'buffer' },
+    { name = 'crates' },
     { name = 'luasnip' },
   },
 }
