@@ -24,7 +24,13 @@ require('packer').startup(function(use)
   }
   use {
     'hrsh7th/nvim-cmp',
-    requires = { 'hrsh7th/cmp-nvim-lsp', 'L3MON4D3/LuaSnip', 'saadparwaiz1/cmp_luasnip' },
+    requires = {
+      'hrsh7th/cmp-nvim-lsp',
+      'L3MON4D3/LuaSnip',
+      'saadparwaiz1/cmp_luasnip',
+      'hrsh7th/cmp-buffer',
+      'hrsh7th/cmp-path'
+    },
   }
   use {
     'nvim-treesitter/nvim-treesitter',
@@ -41,6 +47,22 @@ require('packer').startup(function(use)
   use 'nvim-lualine/lualine.nvim'
   use 'numToStr/Comment.nvim'
   use { 'nvim-telescope/telescope.nvim', branch = '0.1.x', requires = { 'nvim-lua/plenary.nvim' } }
+  use {
+    "ahmedkhalf/project.nvim",
+    config = function()
+      require("project_nvim").setup {
+      }
+    end
+  }
+  use {
+    'saecki/crates.nvim',
+    requires = { 'nvim-lua/plenary.nvim' },
+    config = function()
+      require('crates').setup()
+    end,
+  }
+  use 'bogado/file-line'
+  use 'chrisgrieser/nvim-genghis'
 
   if is_packer_boostrapped then
     require('packer').sync()
@@ -87,9 +109,12 @@ vim.opt.iskeyword:append('-')
 vim.wo.number = true
 vim.wo.signcolumn = 'yes'
 
+vim.keymap.set('v', '<', '<gv', { noremap = true, silent = true })
+vim.keymap.set('v', '>', '>gv', { noremap = true, silent = true })
 vim.keymap.set({ 'n', 'v' }, '<Space>', '<Nop>', { silent = true })
 vim.keymap.set('n', 'k', "v:count == 0 ? 'gk' : 'k'", { expr = true, silent = true })
 vim.keymap.set('n', 'j', "v:count == 0 ? 'gj' : 'j'", { expr = true, silent = true })
+
 vim.keymap.set('n', '<leader>?', require('telescope.builtin').oldfiles, { desc = '[?] Find recently opened files' })
 vim.keymap.set('n', '<leader><space>', require('telescope.builtin').buffers, { desc = '[ ] Find existing buffers' })
 vim.keymap.set('n', '<leader>/', function()
@@ -104,6 +129,20 @@ vim.keymap.set('n', '<leader>sh', require('telescope.builtin').help_tags, { desc
 vim.keymap.set('n', '<leader>sw', require('telescope.builtin').grep_string, { desc = '[S]earch current [W]ord' })
 vim.keymap.set('n', '<leader>sg', require('telescope.builtin').live_grep, { desc = '[S]earch by [G]rep' })
 vim.keymap.set('n', '<leader>sd', require('telescope.builtin').diagnostics, { desc = '[S]earch [D]iagnostics' })
+
+require('telescope').load_extension('projects')
+vim.keymap.set("n", "<leader>sp", ":Telescope projects<cr>", {})
+
+local genghis = require("genghis")
+vim.keymap.set("n", "<leader>yp", genghis.copyFilepath)
+vim.keymap.set("n", "<leader>yn", genghis.copyFilename)
+vim.keymap.set("n", "<leader>cx", genghis.chmodx)
+vim.keymap.set("n", "<leader>rf", genghis.renameFile)
+vim.keymap.set("n", "<leader>mf", genghis.moveAndRenameFile)
+vim.keymap.set("n", "<leader>nf", genghis.createNewFile)
+vim.keymap.set("n", "<leader>yf", genghis.duplicateFile)
+vim.keymap.set("x", "<leader>x", genghis.moveSelectionToNewFile)
+
 vim.keymap.set('n', '[d', vim.diagnostic.goto_prev)
 vim.keymap.set('n', ']d', vim.diagnostic.goto_next)
 vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float)
@@ -121,13 +160,22 @@ vim.api.nvim_create_autocmd('TextYankPost', {
 require('lualine').setup {
   options = {
     icons_enabled = false,
-    theme = 'gruvbox_dark',
-    component_separators = '|',
+    theme = 'auto',
+    component_separators = '',
     section_separators = '',
+  },
+  sections = {
+    lualine_a = { 'mode' },
+    lualine_b = { 'branch' },
+    lualine_c = { { 'filename', file_status = true, path = 3 }, 'diagnostics', 'encoding', 'searchcount' },
+    lualine_x = {},
+    lualine_y = {},
+    lualine_z = {}
   },
 }
 
 require('Comment').setup()
+require('gitsigns').setup()
 
 require('telescope').setup {
   defaults = {
@@ -141,7 +189,6 @@ require('telescope').setup {
 }
 
 require('nvim-treesitter.configs').setup {
-  -- Add languages to be installed here that you want installed for treesitter
   ensure_installed = { 'lua', 'python', 'rust', 'help', 'vim' },
 
   highlight = { enable = true },
@@ -157,9 +204,8 @@ require('nvim-treesitter.configs').setup {
   textobjects = {
     select = {
       enable = true,
-      lookahead = true, -- Automatically jump forward to textobj, similar to targets.vim
+      lookahead = true,
       keymaps = {
-        -- You can use the capture groups defined in textobjects.scm
         ['aa'] = '@parameter.outer',
         ['ia'] = '@parameter.inner',
         ['af'] = '@function.outer',
@@ -170,7 +216,7 @@ require('nvim-treesitter.configs').setup {
     },
     move = {
       enable = true,
-      set_jumps = true, -- whether to set jumps in the jumplist
+      set_jumps = true,
       goto_next_start = {
         [']m'] = '@function.outer',
         [']]'] = '@class.outer',
@@ -234,10 +280,10 @@ local on_attach = function(_, bufnr)
   end, { desc = 'Format current buffer with LSP' })
 end
 
-local servers = {
-  -- pyright = {},
-  -- rust_analyzer = {},
-  -- tsserver = {},
+local lsp_servers = {
+  pyright = {},
+  rust_analyzer = {},
+  tsserver = {},
 
   sumneko_lua = {
     Lua = {
@@ -253,7 +299,7 @@ require('mason').setup()
 
 local mason_lspconfig = require 'mason-lspconfig'
 mason_lspconfig.setup {
-  ensure_installed = vim.tbl_keys(servers),
+  ensure_installed = vim.tbl_keys(lsp_servers),
 }
 
 local capabilities = vim.lsp.protocol.make_client_capabilities()
@@ -264,7 +310,7 @@ mason_lspconfig.setup_handlers {
     require('lspconfig')[server_name].setup {
       capabilities = capabilities,
       on_attach = on_attach,
-      settings = servers[server_name],
+      settings = lsp_servers[server_name],
     }
   end,
 }
@@ -312,4 +358,3 @@ cmp.setup {
     { name = 'luasnip' },
   },
 }
-
