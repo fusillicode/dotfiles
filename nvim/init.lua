@@ -38,31 +38,17 @@ require('packer').startup(function(use)
       pcall(require('nvim-treesitter.install').update { with_sync = true })
     end,
   }
-  use {
-    'nvim-treesitter/nvim-treesitter-textobjects',
-    after = 'nvim-treesitter',
-  }
+  use { 'nvim-treesitter/nvim-treesitter-textobjects', after = 'nvim-treesitter' }
   use 'lewis6991/gitsigns.nvim'
   use 'ellisonleao/gruvbox.nvim'
   use 'nvim-lualine/lualine.nvim'
   use 'numToStr/Comment.nvim'
   use { 'nvim-telescope/telescope.nvim', branch = '0.1.x', requires = { 'nvim-lua/plenary.nvim' } }
-  use {
-    "ahmedkhalf/project.nvim",
-    config = function()
-      require("project_nvim").setup {
-      }
-    end
-  }
-  use {
-    'saecki/crates.nvim',
-    requires = { 'nvim-lua/plenary.nvim' },
-    config = function()
-      require('crates').setup()
-    end,
-  }
+  use "ahmedkhalf/project.nvim"
+  use { 'saecki/crates.nvim', requires = { 'nvim-lua/plenary.nvim' } }
   use 'bogado/file-line'
   use 'chrisgrieser/nvim-genghis'
+  use 'mg979/vim-visual-multi'
 
   if is_packer_boostrapped then
     require('packer').sync()
@@ -116,32 +102,33 @@ vim.keymap.set('v', '<', '<gv', { noremap = true, silent = true })
 vim.keymap.set('v', '>', '>gv', { noremap = true, silent = true })
 vim.keymap.set({ 'n', 'v' }, '<Space>', '<Nop>', { silent = true })
 
-vim.keymap.set('n', '<leader>?', require('telescope.builtin').oldfiles, { desc = '[?] Find recently opened files' })
+vim.keymap.set('n', '<leader>?', require('telescope.builtin').oldfiles)
 vim.keymap.set('n', '<leader>/', function()
   require('telescope.builtin').current_buffer_fuzzy_find(require('telescope.themes').get_dropdown {
     winblend = 10,
     previewer = false,
   })
-end, { desc = '[/] Fuzzily search in current buffer]' })
-vim.keymap.set('n', '<leader>sb', require('telescope.builtin').buffers, { desc = '[ ] Find existing buffers' })
-vim.keymap.set('n', '<leader>sf', require('telescope.builtin').find_files, { desc = '[S]earch [F]iles' })
-vim.keymap.set('n', '<leader>sh', require('telescope.builtin').help_tags, { desc = '[S]earch [H]elp' })
-vim.keymap.set('n', '<leader>sw', require('telescope.builtin').grep_string, { desc = '[S]earch current [W]ord' })
-vim.keymap.set('n', '<leader>sg', require('telescope.builtin').live_grep, { desc = '[S]earch by [G]rep' })
-vim.keymap.set('n', '<leader>sd', require('telescope.builtin').diagnostics, { desc = '[S]earch [D]iagnostics' })
+end)
+vim.keymap.set('n', '<leader>sb', require('telescope.builtin').buffers)
+vim.keymap.set('n', '<leader>sf', require('telescope.builtin').find_files)
+vim.keymap.set('n', '<leader>sh', require('telescope.builtin').help_tags)
+vim.keymap.set('n', '<leader>sw', require('telescope.builtin').grep_string)
+vim.keymap.set('n', '<leader>sg', require('telescope.builtin').live_grep)
+vim.keymap.set('n', '<leader>sd', require('telescope.builtin').diagnostics)
 
 require('telescope').load_extension('projects')
 vim.keymap.set("n", "<leader>sp", ":Telescope projects <CR>", {})
 
 local genghis = require("genghis")
-vim.keymap.set("n", "<leader>yp", genghis.copyFilepath)
-vim.keymap.set("n", "<leader>yn", genghis.copyFilename)
-vim.keymap.set("n", "<leader>cx", genghis.chmodx)
-vim.keymap.set("n", "<leader>rf", genghis.renameFile)
-vim.keymap.set("n", "<leader>mf", genghis.moveAndRenameFile)
-vim.keymap.set("n", "<leader>nf", genghis.createNewFile)
-vim.keymap.set("n", "<leader>yf", genghis.duplicateFile)
-vim.keymap.set("x", "<leader>x", genghis.moveSelectionToNewFile)
+vim.keymap.set("n", "<leader>fp", genghis.copyFilepath)
+vim.keymap.set("n", "<leader>fn", genghis.copyFilename)
+vim.keymap.set("n", "<leader>fx", genghis.chmodx)
+vim.keymap.set("n", "<leader>fr", genghis.renameFile)
+vim.keymap.set("n", "<leader>fm", genghis.moveAndRenameFile)
+vim.keymap.set("n", "<leader>fc", genghis.createNewFile)
+vim.keymap.set("n", "<leader>fd", genghis.duplicateFile)
+vim.keymap.set("n", "<leader>ft", genghis.trashFile)
+vim.keymap.set("x", "<leader>fa", genghis.moveSelectionToNewFile)
 
 vim.keymap.set('n', '[d', vim.diagnostic.goto_prev)
 vim.keymap.set('n', ']d', vim.diagnostic.goto_next)
@@ -176,6 +163,7 @@ require('lualine').setup {
 
 require('Comment').setup()
 require('gitsigns').setup()
+require("project_nvim").setup()
 
 require('telescope').setup {
   defaults = {
@@ -249,27 +237,19 @@ require('nvim-treesitter.configs').setup {
 }
 
 local on_attach = function(_, bufnr)
-  local nmap = function(keys, func, desc)
-    if desc then
-      desc = 'LSP: ' .. desc
-    end
-
-    vim.keymap.set('n', keys, func, { buffer = bufnr, desc = desc })
-  end
-
-  nmap('gd', vim.lsp.buf.definition, '[G]oto [D]efinition')
-  nmap('gD', vim.lsp.buf.declaration, '[G]oto [D]eclaration')
-  nmap('gr', require('telescope.builtin').lsp_references, '[G]oto [R]eferences')
-  nmap('gi', vim.lsp.buf.implementation, '[G]oto [I]mplementation')
-  nmap('K', vim.lsp.buf.hover, 'Hover Documentation')
-  nmap('<C-k>', vim.lsp.buf.signature_help, 'Signature Documentation')
+  vim.keymap.set('n', 'gd', vim.lsp.buf.definition, { buffer = bufnr })
+  vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, { buffer = bufnr })
+  vim.keymap.set('n', 'gr', require('telescope.builtin').lsp_references, { buffer = bufnr })
+  vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, { buffer = bufnr })
+  vim.keymap.set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr })
+  vim.keymap.set('n', '<C-k>', vim.lsp.buf.signature_help, { buffer = bufnr })
   vim.keymap.set('n', '<leader>f', function() vim.lsp.buf.format { async = true } end)
-  nmap('<leader>rn', vim.lsp.buf.rename, '[R]e[n]ame')
-  nmap('<leader>ca', vim.lsp.buf.code_action, '[C]ode [A]ction')
+  vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, { buffer = bufnr })
+  vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, { buffer = bufnr })
 
   vim.api.nvim_buf_create_user_command(bufnr, 'Format', function(_)
     vim.lsp.buf.format()
-  end, { desc = 'Format current buffer with LSP' })
+  end, {})
 end
 
 local lsp_servers = {
@@ -349,7 +329,51 @@ cmp.setup {
     { name = 'nvim_lsp' },
     { name = 'path' },
     { name = 'buffer' },
-    { name = 'crates' },
     { name = 'luasnip' },
+    { name = 'crates' },
+  },
+}
+
+require('crates').setup {
+  text = {
+    loading = "  Loading...",
+    version = "  %s",
+    prerelease = "  %s",
+    yanked = "  %s yanked",
+    nomatch = "  Not found",
+    upgrade = "  %s",
+    error = "  Error fetching crate",
+  },
+  popup = {
+    text = {
+      title = "# %s",
+      pill_left = "",
+      pill_right = "",
+      created_label = "created        ",
+      updated_label = "updated        ",
+      downloads_label = "downloads      ",
+      homepage_label = "homepage       ",
+      repository_label = "repository     ",
+      documentation_label = "documentation  ",
+      crates_io_label = "crates.io      ",
+      categories_label = "categories     ",
+      keywords_label = "keywords       ",
+      version = "%s",
+      prerelease = "%s pre-release",
+      yanked = "%s yanked",
+      enabled = "* s",
+      transitive = "~ s",
+      normal_dependencies_title = "  Dependencies",
+      build_dependencies_title = "  Build dependencies",
+      dev_dependencies_title = "  Dev dependencies",
+      optional = "? %s",
+      loading = " ...",
+    },
+  },
+  src = {
+    text = {
+      prerelease = " pre-release ",
+      yanked = " yanked ",
+    },
   },
 }
