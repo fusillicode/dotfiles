@@ -40,7 +40,7 @@ require('packer').startup(function(use)
   }
   use { 'nvim-treesitter/nvim-treesitter-textobjects', after = 'nvim-treesitter' }
   use 'lewis6991/gitsigns.nvim'
-  use 'ellisonleao/gruvbox.nvim'
+  use 'EdenEast/nightfox.nvim'
   use 'nvim-lualine/lualine.nvim'
   use 'numToStr/Comment.nvim'
   use { 'nvim-telescope/telescope.nvim', branch = '0.1.x', requires = { 'nvim-lua/plenary.nvim' } }
@@ -64,8 +64,8 @@ if is_packer_boostrapped then
   return
 end
 
-vim.cmd [[colorscheme gruvbox]]
-vim.cmd [[autocmd BufWritePre * lua vim.lsp.buf.formatting_sync()]]
+vim.cmd('colorscheme carbonfox')
+vim.cmd('autocmd BufWritePre * lua vim.lsp.buf.formatting_sync()')
 vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
 vim.o.autoindent = true
@@ -111,7 +111,6 @@ vim.keymap.set('n', '<leader>/', function()
 end)
 vim.keymap.set('n', '<leader>sb', require('telescope.builtin').buffers)
 vim.keymap.set('n', '<leader>sf', require('telescope.builtin').find_files)
-vim.keymap.set('n', '<leader>sh', require('telescope.builtin').help_tags)
 vim.keymap.set('n', '<leader>sw', require('telescope.builtin').grep_string)
 vim.keymap.set('n', '<leader>sg', require('telescope.builtin').live_grep)
 vim.keymap.set('n', '<leader>sd', require('telescope.builtin').diagnostics)
