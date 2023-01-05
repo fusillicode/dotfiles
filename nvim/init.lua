@@ -49,6 +49,9 @@ require('packer').startup(function(use)
   use 'bogado/file-line'
   use 'chrisgrieser/nvim-genghis'
   use 'mg979/vim-visual-multi'
+  use 'kdarkhan/rust-tools.nvim'
+  use 'Pocco81/auto-save.nvim'
+  use 'nvim-telescope/telescope-file-browser.nvim'
 
   if is_packer_boostrapped then
     require('packer').sync()
@@ -64,8 +67,8 @@ if is_packer_boostrapped then
   return
 end
 
-vim.cmd('colorscheme carbonfox')
 vim.cmd('autocmd BufWritePre * lua vim.lsp.buf.formatting_sync()')
+vim.cmd('colorscheme carbonfox')
 vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
 vim.o.autoindent = true
@@ -74,6 +77,7 @@ vim.o.backspace = 'indent,eol,start'
 vim.o.breakindent = true
 vim.o.colorcolumn = '120'
 vim.o.completeopt = 'menuone,noselect'
+vim.o.cursorline = true
 vim.o.expandtab = true
 vim.o.guicursor = ''
 vim.o.hlsearch = true
@@ -114,7 +118,8 @@ vim.keymap.set('n', '<leader>sf', require('telescope.builtin').find_files)
 vim.keymap.set('n', '<leader>sw', require('telescope.builtin').grep_string)
 vim.keymap.set('n', '<leader>sg', require('telescope.builtin').live_grep)
 vim.keymap.set('n', '<leader>sd', require('telescope.builtin').diagnostics)
-
+require("telescope").load_extension("file_browser")
+vim.keymap.set("n", "<leader>fb", ":Telescope file_browser <CR>", { noremap = true })
 require('telescope').load_extension('projects')
 vim.keymap.set("n", "<leader>sp", ":Telescope projects <CR>", {})
 
@@ -153,7 +158,7 @@ require('lualine').setup {
   sections = {
     lualine_a = { '' },
     lualine_b = { 'branch' },
-    lualine_c = { 'diagnostics', 'searchcount', { 'filename', file_status = true, path = 3 }, 'encoding' },
+    lualine_c = { 'diagnostics', 'searchcount', { 'filename', file_status = true, path = 1 }, 'encoding' },
     lualine_x = {},
     lualine_y = {},
     lualine_z = {}
@@ -376,3 +381,7 @@ require('crates').setup {
     },
   },
 }
+
+-- require("rust-tools").setup()
+
+require("auto-save").setup()
