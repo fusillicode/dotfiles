@@ -47,7 +47,6 @@ require('packer').startup(function(use)
   use "ahmedkhalf/project.nvim"
   use { 'saecki/crates.nvim', requires = { 'nvim-lua/plenary.nvim' } }
   use 'bogado/file-line'
-  use 'chrisgrieser/nvim-genghis'
   use 'mg979/vim-visual-multi'
   use 'kdarkhan/rust-tools.nvim'
   use 'Pocco81/auto-save.nvim'
@@ -102,9 +101,9 @@ vim.wo.signcolumn = 'yes'
 
 vim.keymap.set('n', '<esc>', ':noh <CR>', {})
 
-vim.keymap.set('v', '<', '<gv', { noremap = true, silent = true })
-vim.keymap.set('v', '>', '>gv', { noremap = true, silent = true })
-vim.keymap.set({ 'n', 'v' }, '<Space>', '<Nop>', { silent = true })
+vim.keymap.set('v', '<', '<gv')
+vim.keymap.set('v', '>', '>gv')
+vim.keymap.set({ 'n', 'v' }, '<Space>', '<Nop>')
 
 vim.keymap.set('n', '<leader>?', require('telescope.builtin').oldfiles)
 vim.keymap.set('n', '<leader>/', function()
@@ -119,20 +118,9 @@ vim.keymap.set('n', '<leader>sw', require('telescope.builtin').grep_string)
 vim.keymap.set('n', '<leader>sg', require('telescope.builtin').live_grep)
 vim.keymap.set('n', '<leader>sd', require('telescope.builtin').diagnostics)
 require("telescope").load_extension("file_browser")
-vim.keymap.set("n", "<leader>fb", ":Telescope file_browser <CR>", { noremap = true })
+vim.keymap.set("n", "<leader>fb", ":Telescope file_browser <CR>")
 require('telescope').load_extension('projects')
 vim.keymap.set("n", "<leader>sp", ":Telescope projects <CR>", {})
-
-local genghis = require("genghis")
-vim.keymap.set("n", "<leader>fp", genghis.copyFilepath)
-vim.keymap.set("n", "<leader>fn", genghis.copyFilename)
-vim.keymap.set("n", "<leader>fx", genghis.chmodx)
-vim.keymap.set("n", "<leader>fr", genghis.renameFile)
-vim.keymap.set("n", "<leader>fm", genghis.moveAndRenameFile)
-vim.keymap.set("n", "<leader>fc", genghis.createNewFile)
-vim.keymap.set("n", "<leader>fd", genghis.duplicateFile)
-vim.keymap.set("n", "<leader>ft", genghis.trashFile)
-vim.keymap.set("x", "<leader>fa", genghis.moveSelectionToNewFile)
 
 vim.keymap.set('n', '[d', vim.diagnostic.goto_prev)
 vim.keymap.set('n', ']d', vim.diagnostic.goto_next)
