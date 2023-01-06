@@ -50,7 +50,7 @@ require('packer').startup(function(use)
   use 'mg979/vim-visual-multi'
   use 'kdarkhan/rust-tools.nvim'
   use 'Pocco81/auto-save.nvim'
-  use 'nvim-telescope/telescope-file-browser.nvim'
+  use 'nvim-tree/nvim-tree.lua'
 
   if is_packer_boostrapped then
     require('packer').sync()
@@ -68,6 +68,8 @@ end
 
 vim.cmd('autocmd BufWritePre * lua vim.lsp.buf.formatting_sync()')
 vim.cmd('colorscheme carbonfox')
+vim.g.loaded_netrw = 1
+vim.g.loaded_netrwPlugin = 1
 vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
 vim.o.autoindent = true
@@ -100,11 +102,9 @@ vim.wo.number = true
 vim.wo.signcolumn = 'yes'
 
 vim.keymap.set('n', '<esc>', ':noh <CR>', {})
-
 vim.keymap.set('v', '<', '<gv')
 vim.keymap.set('v', '>', '>gv')
 vim.keymap.set({ 'n', 'v' }, '<Space>', '<Nop>')
-
 vim.keymap.set('n', '<leader>?', require('telescope.builtin').oldfiles)
 vim.keymap.set('n', '<leader>/', function()
   require('telescope.builtin').current_buffer_fuzzy_find(require('telescope.themes').get_dropdown {
@@ -117,11 +117,9 @@ vim.keymap.set('n', '<leader>sf', require('telescope.builtin').find_files)
 vim.keymap.set('n', '<leader>sw', require('telescope.builtin').grep_string)
 vim.keymap.set('n', '<leader>sg', require('telescope.builtin').live_grep)
 vim.keymap.set('n', '<leader>sd', require('telescope.builtin').diagnostics)
-require("telescope").load_extension("file_browser")
-vim.keymap.set("n", "<leader>fb", ":Telescope file_browser <CR>")
 require('telescope').load_extension('projects')
 vim.keymap.set("n", "<leader>sp", ":Telescope projects <CR>", {})
-
+vim.keymap.set("n", "<leader>fr", ":NvimTreeFindFileToggle <CR>", {})
 vim.keymap.set('n', '[d', vim.diagnostic.goto_prev)
 vim.keymap.set('n', ']d', vim.diagnostic.goto_next)
 vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float)
@@ -377,3 +375,17 @@ require('crates').setup {
 -- require("rust-tools").setup()
 
 require("auto-save").setup()
+
+require("nvim-tree").setup({
+  renderer = {
+    icons = {
+      show = {
+        file = false,
+        folder = false,
+        folder_arrow = false,
+        git = true,
+        modified = true
+      }
+    }
+  }
+})
