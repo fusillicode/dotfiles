@@ -100,10 +100,10 @@ vim.opt.iskeyword:append('-')
 vim.wo.number = true
 vim.wo.signcolumn = 'yes'
 
-vim.keymap.set('n', '<esc>', ':noh <CR>', {})
-vim.keymap.set('v', '<', '<gv')
+vim.keymap.set({ 'n', 'v' }, '<leader>', '<Nop>')
 vim.keymap.set('v', '>', '>gv')
-vim.keymap.set({ 'n', 'v' }, '<Space>', '<Nop>')
+vim.keymap.set('v', '<', '<gv')
+vim.keymap.set('n', '<esc>', ':noh <CR>', {})
 vim.keymap.set('n', '<leader>so', require('telescope.builtin').oldfiles)
 vim.keymap.set('n', '<leader>sb', require('telescope.builtin').buffers)
 vim.keymap.set('n', '<leader>sf', require('telescope.builtin').find_files)
@@ -122,6 +122,19 @@ vim.cmd([[
   let g:VM_maps["Add Cursor Down"] = '<C-j>'
   let g:VM_maps["Add Cursor Up"] = '<C-k>'
 ]])
+
+local lsp_on_attach = function(_, bufnr)
+  vim.keymap.set('n', 'gd', vim.lsp.buf.definition, { buffer = bufnr })
+  vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, { buffer = bufnr })
+  vim.keymap.set('n', 'gr', require('telescope.builtin').lsp_references, { buffer = bufnr })
+  vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, { buffer = bufnr })
+  vim.keymap.set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr })
+  vim.keymap.set('n', '<C-h>', vim.lsp.buf.signature_help, { buffer = bufnr })
+  vim.keymap.set('n', '<leader>f', function() vim.lsp.buf.format { async = true } end)
+  vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, { buffer = bufnr })
+  vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, { buffer = bufnr })
+  vim.api.nvim_buf_create_user_command(bufnr, 'Format', function(_) vim.lsp.buf.format() end, {})
+end
 
 local highlight_group = vim.api.nvim_create_augroup('YankHighlight', { clear = true })
 vim.api.nvim_create_autocmd('TextYankPost', {
@@ -216,19 +229,6 @@ require('nvim-treesitter.configs').setup {
   },
 }
 
-local on_attach = function(_, bufnr)
-  vim.keymap.set('n', 'gd', vim.lsp.buf.definition, { buffer = bufnr })
-  vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, { buffer = bufnr })
-  vim.keymap.set('n', 'gr', require('telescope.builtin').lsp_references, { buffer = bufnr })
-  vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, { buffer = bufnr })
-  vim.keymap.set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr })
-  vim.keymap.set('n', '<C-h>', vim.lsp.buf.signature_help, { buffer = bufnr })
-  vim.keymap.set('n', '<leader>f', function() vim.lsp.buf.format { async = true } end)
-  vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, { buffer = bufnr })
-  vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, { buffer = bufnr })
-  vim.api.nvim_buf_create_user_command(bufnr, 'Format', function(_) vim.lsp.buf.format() end, {})
-end
-
 local lsp_servers = {
   pyright = {},
   rust_analyzer = {},
@@ -260,7 +260,7 @@ mason_lspconfig.setup_handlers {
   function(server_name)
     require('lspconfig')[server_name].setup {
       capabilities = capabilities,
-      on_attach = on_attach,
+      on_attach = lsp_on_attach,
       settings = lsp_servers[server_name],
     }
   end,
@@ -366,7 +366,7 @@ require('rust-tools').setup({
     }
   },
   server = {
-    on_attach = on_attach
+    on_attach = lsp_on_attach
   }
 })
 
