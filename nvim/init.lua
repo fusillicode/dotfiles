@@ -117,6 +117,11 @@ vim.keymap.set('n', '[d', vim.diagnostic.goto_prev)
 vim.keymap.set('n', ']d', vim.diagnostic.goto_next)
 vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float)
 vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist)
+vim.cmd([[
+  let g:VM_maps = {}
+  let g:VM_maps["Add Cursor Down"] = '<C-j>'
+  let g:VM_maps["Add Cursor Up"] = '<C-k>'
+]])
 
 local highlight_group = vim.api.nvim_create_augroup('YankHighlight', { clear = true })
 vim.api.nvim_create_autocmd('TextYankPost', {
@@ -217,7 +222,7 @@ local on_attach = function(_, bufnr)
   vim.keymap.set('n', 'gr', require('telescope.builtin').lsp_references, { buffer = bufnr })
   vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, { buffer = bufnr })
   vim.keymap.set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr })
-  vim.keymap.set('n', '<C-k>', vim.lsp.buf.signature_help, { buffer = bufnr })
+  vim.keymap.set('n', '<C-h>', vim.lsp.buf.signature_help, { buffer = bufnr })
   vim.keymap.set('n', '<leader>f', function() vim.lsp.buf.format { async = true } end)
   vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, { buffer = bufnr })
   vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, { buffer = bufnr })
