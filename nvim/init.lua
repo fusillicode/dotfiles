@@ -52,6 +52,7 @@ require('packer').startup(function(use)
   use 'Pocco81/auto-save.nvim'
   use 'nvim-tree/nvim-tree.lua'
   use 'windwp/nvim-autopairs'
+  use 'arnamak/stay-centered.nvim'
 
   if is_packer_boostrapped then
     require('packer').sync()
@@ -63,7 +64,7 @@ if is_packer_boostrapped then
   return
 end
 
-require('tokyonight').setup({ style = 'night', })
+require('tokyonight').setup({ style = 'night' })
 
 vim.cmd('autocmd BufWritePre * lua vim.lsp.buf.formatting_sync()')
 vim.cmd('colorscheme tokyonight')
@@ -271,7 +272,12 @@ mason_lspconfig.setup_handlers {
   end,
 }
 
-require('fidget').setup()
+require('fidget').setup({
+  align = {
+    bottom = false,
+    right = true,
+  },
+})
 
 local cmp = require 'cmp'
 local luasnip = require 'luasnip'
