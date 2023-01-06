@@ -40,17 +40,18 @@ require('packer').startup(function(use)
   }
   use { 'nvim-treesitter/nvim-treesitter-textobjects', after = 'nvim-treesitter' }
   use 'lewis6991/gitsigns.nvim'
-  use 'EdenEast/nightfox.nvim'
   use 'nvim-lualine/lualine.nvim'
+  use { 'folke/tokyonight.nvim', branch = 'main' }
   use 'numToStr/Comment.nvim'
   use { 'nvim-telescope/telescope.nvim', branch = '0.1.x', requires = { 'nvim-lua/plenary.nvim' } }
-  use "ahmedkhalf/project.nvim"
+  use 'ahmedkhalf/project.nvim'
   use { 'saecki/crates.nvim', requires = { 'nvim-lua/plenary.nvim' } }
   use 'bogado/file-line'
   use 'mg979/vim-visual-multi'
   use 'kdarkhan/rust-tools.nvim'
   use 'Pocco81/auto-save.nvim'
   use 'nvim-tree/nvim-tree.lua'
+  use 'windwp/nvim-autopairs'
 
   if is_packer_boostrapped then
     require('packer').sync()
@@ -58,16 +59,14 @@ require('packer').startup(function(use)
 end)
 
 if is_packer_boostrapped then
-  print '=================================='
-  print '    Plugins are being installed'
-  print '    Wait until Packer completes,'
-  print '       then restart nvim'
-  print '=================================='
+  print 'Packer not installed :('
   return
 end
 
+require('tokyonight').setup({ style = 'night', })
+
 vim.cmd('autocmd BufWritePre * lua vim.lsp.buf.formatting_sync()')
-vim.cmd('colorscheme carbonfox')
+vim.cmd('colorscheme tokyonight')
 vim.g.loaded_netrw = 1
 vim.g.loaded_netrwPlugin = 1
 vim.g.mapleader = ' '
@@ -95,7 +94,7 @@ vim.o.tabstop = 2
 vim.o.termguicolors = true
 vim.o.undofile = true
 vim.o.updatetime = 250
-vim.o.wrap = false
+vim.o.wrap = true
 vim.opt.clipboard:append('unnamedplus')
 vim.opt.iskeyword:append('-')
 vim.wo.number = true
@@ -105,21 +104,15 @@ vim.keymap.set('n', '<esc>', ':noh <CR>', {})
 vim.keymap.set('v', '<', '<gv')
 vim.keymap.set('v', '>', '>gv')
 vim.keymap.set({ 'n', 'v' }, '<Space>', '<Nop>')
-vim.keymap.set('n', '<leader>?', require('telescope.builtin').oldfiles)
-vim.keymap.set('n', '<leader>/', function()
-  require('telescope.builtin').current_buffer_fuzzy_find(require('telescope.themes').get_dropdown {
-    winblend = 10,
-    previewer = false,
-  })
-end)
+vim.keymap.set('n', '<leader>so', require('telescope.builtin').oldfiles)
 vim.keymap.set('n', '<leader>sb', require('telescope.builtin').buffers)
 vim.keymap.set('n', '<leader>sf', require('telescope.builtin').find_files)
 vim.keymap.set('n', '<leader>sw', require('telescope.builtin').grep_string)
 vim.keymap.set('n', '<leader>sg', require('telescope.builtin').live_grep)
 vim.keymap.set('n', '<leader>sd', require('telescope.builtin').diagnostics)
 require('telescope').load_extension('projects')
-vim.keymap.set("n", "<leader>sp", ":Telescope projects <CR>", {})
-vim.keymap.set("n", "<leader>fr", ":NvimTreeFindFileToggle <CR>", {})
+vim.keymap.set('n', '<leader>sp', ':Telescope projects <CR>', {})
+vim.keymap.set('n', '<leader>fr', ':NvimTreeFindFileToggle <CR>', {})
 vim.keymap.set('n', '[d', vim.diagnostic.goto_prev)
 vim.keymap.set('n', ']d', vim.diagnostic.goto_next)
 vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float)
@@ -144,8 +137,7 @@ require('lualine').setup {
   sections = {
     lualine_a = {},
     lualine_b = {},
-    lualine_c = { 'searchcount', 'diagnostics', { 'filename', file_status = true, path = 1 }, 'encoding',
-    },
+    lualine_c = { 'searchcount', 'diagnostics', { 'filename', file_status = true, path = 1 }, 'encoding' },
     lualine_x = { { 'branch', fmt = function(str) return str:sub(1, 33) end } },
     lualine_y = {},
     lualine_z = {}
@@ -154,21 +146,13 @@ require('lualine').setup {
 
 require('Comment').setup()
 require('gitsigns').setup()
-require("project_nvim").setup()
-
-require('telescope').setup {
-  defaults = {
-    mappings = {
-      i = {
-        ['<C-u>'] = false,
-        ['<C-d>'] = false,
-      },
-    },
-  },
-}
+require('project_nvim').setup({
+  detection_methods = { 'pattern' },
+  show_hidden = false,
+})
 
 require('nvim-treesitter.configs').setup {
-  ensure_installed = { 'lua', 'python', 'rust', 'help', 'vim' },
+  ensure_installed = { 'rust', 'lua', 'python', 'help', 'vim' },
   sync_install = true,
   auto_install = false,
 
@@ -237,17 +221,13 @@ local on_attach = function(_, bufnr)
   vim.keymap.set('n', '<leader>f', function() vim.lsp.buf.format { async = true } end)
   vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, { buffer = bufnr })
   vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, { buffer = bufnr })
-
-  vim.api.nvim_buf_create_user_command(bufnr, 'Format', function(_)
-    vim.lsp.buf.format()
-  end, {})
+  vim.api.nvim_buf_create_user_command(bufnr, 'Format', function(_) vim.lsp.buf.format() end, {})
 end
 
 local lsp_servers = {
   pyright = {},
   rust_analyzer = {},
   tsserver = {},
-
   sumneko_lua = {
     Lua = {
       workspace = { checkThirdParty = false },
@@ -330,53 +310,64 @@ cmp.setup {
 
 require('crates').setup {
   text = {
-    loading = "  Loading...",
-    version = "  %s",
-    prerelease = "  %s",
-    yanked = "  %s yanked",
-    nomatch = "  Not found",
-    upgrade = "  %s",
-    error = "  Error fetching crate",
+    loading = '  Loading...',
+    version = '  %s',
+    prerelease = '  %s',
+    yanked = '  %s yanked',
+    nomatch = '  Not found',
+    upgrade = '  %s',
+    error = '  Error fetching crate',
   },
   popup = {
     text = {
-      title = "# %s",
-      pill_left = "",
-      pill_right = "",
-      created_label = "created        ",
-      updated_label = "updated        ",
-      downloads_label = "downloads      ",
-      homepage_label = "homepage       ",
-      repository_label = "repository     ",
-      documentation_label = "documentation  ",
-      crates_io_label = "crates.io      ",
-      categories_label = "categories     ",
-      keywords_label = "keywords       ",
-      version = "%s",
-      prerelease = "%s pre-release",
-      yanked = "%s yanked",
-      enabled = "* s",
-      transitive = "~ s",
-      normal_dependencies_title = "  Dependencies",
-      build_dependencies_title = "  Build dependencies",
-      dev_dependencies_title = "  Dev dependencies",
-      optional = "? %s",
-      loading = " ...",
+      title = '# %s',
+      pill_left = '',
+      pill_right = '',
+      created_label = 'created        ',
+      updated_label = 'updated        ',
+      downloads_label = 'downloads      ',
+      homepage_label = 'homepage       ',
+      repository_label = 'repository     ',
+      documentation_label = 'documentation  ',
+      crates_io_label = 'crates.io      ',
+      categories_label = 'categories     ',
+      keywords_label = 'keywords       ',
+      version = '%s',
+      prerelease = '%s pre-release',
+      yanked = '%s yanked',
+      enabled = '* s',
+      transitive = '~ s',
+      normal_dependencies_title = '  Dependencies',
+      build_dependencies_title = '  Build dependencies',
+      dev_dependencies_title = '  Dev dependencies',
+      optional = '? %s',
+      loading = ' ...',
     },
   },
   src = {
     text = {
-      prerelease = " pre-release ",
-      yanked = " yanked ",
+      prerelease = ' pre-release ',
+      yanked = ' yanked ',
     },
   },
 }
 
--- require("rust-tools").setup()
+require('rust-tools').setup({
+  tools = {
+    inlay_hints = {
+      enable = true,
+      parameter_hints_prefix = '',
+      other_hints_prefix = '',
+    }
+  },
+  server = {
+    on_attach = on_attach
+  }
+})
 
-require("auto-save").setup()
+require('auto-save').setup()
 
-require("nvim-tree").setup({
+require('nvim-tree').setup({
   renderer = {
     icons = {
       show = {
@@ -389,3 +380,11 @@ require("nvim-tree").setup({
     }
   }
 })
+
+require('nvim-autopairs').setup()
+
+require('telescope').setup {
+  defaults = {
+    layout_strategy = 'center',
+  },
+}
