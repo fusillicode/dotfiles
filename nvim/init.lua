@@ -119,8 +119,8 @@ vim.keymap.set('n', '[d', vim.diagnostic.goto_prev)
 vim.keymap.set('n', ']d', vim.diagnostic.goto_next)
 vim.cmd([[
   let g:VM_maps = {}
-  let g:VM_maps["Add Cursor Down"] = '<C-j>'
-  let g:VM_maps["Add Cursor Up"] = '<C-k>'
+  let g:VM_maps['Add Cursor Down'] = '<C-j>'
+  let g:VM_maps['Add Cursor Up'] = '<C-k>'
 ]])
 
 local lsp_on_attach = function(_, bufnr)
@@ -230,12 +230,12 @@ require('nvim-treesitter.configs').setup {
 local lsp_servers = {
   pyright = {},
   rust_analyzer = {
-    ["rust-analyzer"] = {
+    ['rust-analyzer'] = {
       imports = {
         granularity = {
-          group = "item",
+          group = 'item',
         },
-        prefix = "crate",
+        prefix = 'crate',
       },
       checkOnSave = 'clippy'
     }
