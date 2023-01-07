@@ -229,7 +229,17 @@ require('nvim-treesitter.configs').setup {
 
 local lsp_servers = {
   pyright = {},
-  rust_analyzer = {},
+  rust_analyzer = {
+    ["rust-analyzer"] = {
+      imports = {
+        granularity = {
+          group = "item",
+        },
+        prefix = "crate",
+      },
+      checkOnSave = 'clippy'
+    }
+  },
   tsserver = {},
   sumneko_lua = {
     Lua = {
@@ -367,7 +377,8 @@ require('rust-tools').setup({
     }
   },
   server = {
-    on_attach = lsp_on_attach
+    on_attach = lsp_on_attach,
+    settings = lsp_servers['rust_analyzer']
   }
 })
 
