@@ -404,7 +404,7 @@ require 'nvim-autopairs'.setup {}
 
 require 'telescope'.setup {
   defaults = {
-    layout_strategy = 'center',
+    layout_strategy = 'vertical',
   },
   pickers = {
     find_files = {
