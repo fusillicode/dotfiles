@@ -404,6 +404,11 @@ require('telescope').setup {
   defaults = {
     layout_strategy = 'center',
   },
+  pickers = {
+    find_files = {
+      find_command = { 'rg', '--files', '--hidden', '--glob', '!**/.git/*' },
+    }
+  }
 }
 
 require('spectre').setup({
