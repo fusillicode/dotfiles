@@ -11,7 +11,7 @@ end
 
 local is_packer_boostrapped = ensure_packer()
 
-require('packer').startup(function(use)
+require 'packer'.startup(function(use)
   use 'wbthomason/packer.nvim'
   use {
     'neovim/nvim-lspconfig',
@@ -34,7 +34,7 @@ require('packer').startup(function(use)
   }
   use {
     'nvim-treesitter/nvim-treesitter',
-    run = function() pcall(require('nvim-treesitter.install').update { with_sync = true }) end,
+    run = function() pcall(require 'nvim-treesitter.install'.update { with_sync = true }) end,
   }
   use { 'nvim-treesitter/nvim-treesitter-textobjects', after = 'nvim-treesitter' }
   use 'lewis6991/gitsigns.nvim'
@@ -53,7 +53,7 @@ require('packer').startup(function(use)
   use 'windwp/nvim-spectre'
 
   if is_packer_boostrapped then
-    require('packer').sync()
+    require 'packer'.sync()
   end
 end)
 
@@ -62,7 +62,7 @@ if is_packer_boostrapped then
   return
 end
 
-require('tokyonight').setup({ style = 'night' })
+require 'tokyonight'.setup { style = 'night' }
 
 vim.cmd('autocmd BufWritePre * lua vim.lsp.buf.formatting_sync()')
 vim.cmd('colorscheme tokyonight')
@@ -103,18 +103,18 @@ vim.keymap.set({ 'n', 'v' }, '<leader>', '<Nop>')
 vim.keymap.set('v', '>', '>gv')
 vim.keymap.set('v', '<', '<gv')
 vim.keymap.set('n', '<esc>', ':noh <CR>', {})
-require('telescope').load_extension('projects')
+require 'telescope'.load_extension('projects')
 vim.keymap.set('n', '<leader>fp', ':Telescope projects <CR>', {})
-vim.keymap.set('n', '<leader>fo', require('telescope.builtin').oldfiles)
-vim.keymap.set('n', '<leader>fb', require('telescope.builtin').buffers)
-vim.keymap.set('n', '<leader>ff', require('telescope.builtin').find_files)
-vim.keymap.set('n', '<leader>gc', require('telescope.builtin').git_commits)
-vim.keymap.set('n', '<leader>gbc', require('telescope.builtin').git_bcommits)
-vim.keymap.set('n', '<leader>gb', require('telescope.builtin').git_branches)
-vim.keymap.set('n', '<leader>gs', require('telescope.builtin').git_status)
+vim.keymap.set('n', '<leader>fo', require 'telescope.builtin'.oldfiles)
+vim.keymap.set('n', '<leader>fb', require 'telescope.builtin'.buffers)
+vim.keymap.set('n', '<leader>ff', require 'telescope.builtin'.find_files)
+vim.keymap.set('n', '<leader>gc', require 'telescope.builtin'.git_commits)
+vim.keymap.set('n', '<leader>gbc', require 'telescope.builtin'.git_bcommits)
+vim.keymap.set('n', '<leader>gb', require 'telescope.builtin'.git_branches)
+vim.keymap.set('n', '<leader>gs', require 'telescope.builtin'.git_status)
 vim.keymap.set('n', '<leader>rf', ':NvimTreeFindFileToggle <CR>', {})
 vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float)
-vim.keymap.set('n', '<leader>s', require('spectre').open_visual)
+vim.keymap.set('n', '<leader>s', require 'spectre'.open_visual)
 vim.keymap.set('n', '[d', vim.diagnostic.goto_prev)
 vim.keymap.set('n', ']d', vim.diagnostic.goto_next)
 vim.cmd([[
@@ -126,7 +126,7 @@ vim.cmd([[
 local lsp_on_attach = function(_, bufnr)
   vim.keymap.set('n', 'gd', vim.lsp.buf.definition, { buffer = bufnr })
   vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, { buffer = bufnr })
-  vim.keymap.set('n', 'gr', require('telescope.builtin').lsp_references, { buffer = bufnr })
+  vim.keymap.set('n', 'gr', require 'telescope.builtin'.lsp_references, { buffer = bufnr })
   vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, { buffer = bufnr })
   vim.keymap.set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr })
   vim.keymap.set('n', '<C-h>', vim.lsp.buf.signature_help, { buffer = bufnr })
@@ -143,7 +143,7 @@ vim.api.nvim_create_autocmd('TextYankPost', {
   pattern = '*',
 })
 
-require('lualine').setup {
+require 'lualine'.setup {
   options = {
     icons_enabled = false,
     theme = 'auto',
@@ -160,14 +160,14 @@ require('lualine').setup {
   },
 }
 
-require('Comment').setup({})
-require('gitsigns').setup({})
-require('project_nvim').setup({
+require 'Comment'.setup {}
+require 'gitsigns'.setup {}
+require 'project_nvim'.setup {
   detection_methods = { 'pattern' },
   show_hidden = false,
-})
+}
 
-require('nvim-treesitter.configs').setup {
+require 'nvim-treesitter.configs'.setup {
   ensure_installed = { 'rust', 'lua', 'python', 'help', 'vim' },
   sync_install = true,
   auto_install = false,
@@ -252,9 +252,9 @@ local lsp_servers = {
   },
 }
 
-require('neodev').setup({})
+require 'neodev'.setup {}
 
-require('mason').setup({})
+require 'mason'.setup {}
 
 local mason_lspconfig = require 'mason-lspconfig'
 mason_lspconfig.setup {
@@ -262,11 +262,11 @@ mason_lspconfig.setup {
 }
 
 local capabilities = vim.lsp.protocol.make_client_capabilities()
-capabilities = require('cmp_nvim_lsp').default_capabilities(capabilities)
+capabilities = require 'cmp_nvim_lsp'.default_capabilities(capabilities)
 
 mason_lspconfig.setup_handlers {
   function(server_name)
-    require('lspconfig')[server_name].setup {
+    require 'lspconfig'[server_name].setup {
       capabilities = capabilities,
       on_attach = lsp_on_attach,
       settings = lsp_servers[server_name],
@@ -274,12 +274,12 @@ mason_lspconfig.setup_handlers {
   end,
 }
 
-require('fidget').setup({
+require 'fidget'.setup {
   align = {
     bottom = false,
     right = true,
   },
-})
+}
 
 local cmp = require 'cmp'
 local luasnip = require 'luasnip'
@@ -324,7 +324,7 @@ cmp.setup {
   },
 }
 
-require('crates').setup {
+require 'crates'.setup {
   text = {
     loading = '  Loading...',
     version = '  %s',
@@ -368,7 +368,7 @@ require('crates').setup {
   },
 }
 
-require('rust-tools').setup({
+require 'rust-tools'.setup {
   tools = {
     inlay_hints = {
       enable = true,
@@ -380,11 +380,11 @@ require('rust-tools').setup({
     on_attach = lsp_on_attach,
     settings = lsp_servers['rust_analyzer']
   }
-})
+}
 
-require('auto-save').setup({})
+require 'auto-save'.setup {}
 
-require('nvim-tree').setup({
+require 'nvim-tree'.setup {
   renderer = {
     icons = {
       show = {
@@ -396,11 +396,11 @@ require('nvim-tree').setup({
       }
     }
   }
-})
+}
 
-require('nvim-autopairs').setup({})
+require 'nvim-autopairs'.setup {}
 
-require('telescope').setup {
+require 'telescope'.setup {
   defaults = {
     layout_strategy = 'center',
   },
@@ -411,7 +411,7 @@ require('telescope').setup {
   }
 }
 
-require('spectre').setup({
+require 'spectre'.setup {
   open_cmd = 'new',
   is_insert_mode = true
-})
+}
