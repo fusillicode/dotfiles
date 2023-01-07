@@ -412,5 +412,6 @@ require('telescope').setup {
 }
 
 require('spectre').setup({
+  open_cmd = 'new',
   is_insert_mode = true
 })
