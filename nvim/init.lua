@@ -53,6 +53,7 @@ require('packer').startup(function(use)
   use 'nvim-tree/nvim-tree.lua'
   use 'windwp/nvim-autopairs'
   use 'arnamak/stay-centered.nvim'
+  use 'windwp/nvim-spectre'
 
   if is_packer_boostrapped then
     require('packer').sync()
@@ -168,8 +169,8 @@ require('lualine').setup {
   },
 }
 
-require('Comment').setup()
-require('gitsigns').setup()
+require('Comment').setup({})
+require('gitsigns').setup({})
 require('project_nvim').setup({
   detection_methods = { 'pattern' },
   show_hidden = false,
@@ -250,9 +251,9 @@ local lsp_servers = {
   },
 }
 
-require('neodev').setup()
+require('neodev').setup({})
 
-require('mason').setup()
+require('mason').setup({})
 
 local mason_lspconfig = require 'mason-lspconfig'
 mason_lspconfig.setup {
@@ -381,7 +382,7 @@ require('rust-tools').setup({
   }
 })
 
-require('auto-save').setup()
+require('auto-save').setup({})
 
 require('nvim-tree').setup({
   renderer = {
@@ -397,10 +398,12 @@ require('nvim-tree').setup({
   }
 })
 
-require('nvim-autopairs').setup()
+require('nvim-autopairs').setup({})
 
 require('telescope').setup {
   defaults = {
     layout_strategy = 'center',
   },
 }
+
+require('spectre').setup({})
