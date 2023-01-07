@@ -230,7 +230,6 @@ require 'nvim-treesitter.configs'.setup {
 }
 
 local lsp_servers = {
-  pyright = {},
   rust_analyzer = {
     ['rust-analyzer'] = {
       imports = {
@@ -242,7 +241,6 @@ local lsp_servers = {
       checkOnSave = 'clippy'
     }
   },
-  tsserver = {},
   sumneko_lua = {
     Lua = {
       workspace = { checkThirdParty = false },
@@ -252,6 +250,8 @@ local lsp_servers = {
       }
     },
   },
+  pyright = {},
+  tsserver = {},
 }
 
 require 'neodev'.setup {}
