@@ -103,23 +103,20 @@ vim.keymap.set({ 'n', 'v' }, '<leader>', '<Nop>')
 vim.keymap.set('v', '>', '>gv')
 vim.keymap.set('v', '<', '<gv')
 vim.keymap.set('n', '<esc>', ':noh <CR>', {})
-vim.keymap.set('n', '<leader>so', require('telescope.builtin').oldfiles)
-vim.keymap.set('n', '<leader>sb', require('telescope.builtin').buffers)
-vim.keymap.set('n', '<leader>sf', require('telescope.builtin').find_files)
--- vim.keymap.set('n', '<leader>sw', require('telescope.builtin').grep_string)
--- vim.keymap.set('n', '<leader>sg', require('telescope.builtin').live_grep)
-vim.keymap.set('n', '<leader>lr', require('telescope.builtin').lsp_references)
-vim.keymap.set('n', '<leader>ld', require('telescope.builtin').diagnostics)
+require('telescope').load_extension('projects')
+vim.keymap.set('n', '<leader>fp', ':Telescope projects <CR>', {})
+vim.keymap.set('n', '<leader>fo', require('telescope.builtin').oldfiles)
+vim.keymap.set('n', '<leader>fb', require('telescope.builtin').buffers)
+vim.keymap.set('n', '<leader>ff', require('telescope.builtin').find_files)
 vim.keymap.set('n', '<leader>gc', require('telescope.builtin').git_commits)
 vim.keymap.set('n', '<leader>gbc', require('telescope.builtin').git_bcommits)
 vim.keymap.set('n', '<leader>gb', require('telescope.builtin').git_branches)
 vim.keymap.set('n', '<leader>gs', require('telescope.builtin').git_status)
-require('telescope').load_extension('projects')
-vim.keymap.set('n', '<leader>sp', ':Telescope projects <CR>', {})
 vim.keymap.set('n', '<leader>rf', ':NvimTreeFindFileToggle <CR>', {})
+vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float)
+vim.keymap.set('n', '<leader>s', require('spectre').open_visual)
 vim.keymap.set('n', '[d', vim.diagnostic.goto_prev)
 vim.keymap.set('n', ']d', vim.diagnostic.goto_next)
-vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float)
 vim.cmd([[
   let g:VM_maps = {}
   let g:VM_maps["Add Cursor Down"] = '<C-j>'
@@ -398,4 +395,6 @@ require('telescope').setup {
   },
 }
 
-require('spectre').setup({})
+require('spectre').setup({
+  is_insert_mode = true
+})
