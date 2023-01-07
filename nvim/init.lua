@@ -161,7 +161,9 @@ require 'lualine'.setup {
 }
 
 require 'Comment'.setup {}
+
 require 'gitsigns'.setup {}
+
 require 'project_nvim'.setup {
   detection_methods = { 'pattern' },
   show_hidden = false,
