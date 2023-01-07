@@ -34,9 +34,7 @@ require('packer').startup(function(use)
   }
   use {
     'nvim-treesitter/nvim-treesitter',
-    run = function()
-      pcall(require('nvim-treesitter.install').update { with_sync = true })
-    end,
+    run = function() pcall(require('nvim-treesitter.install').update { with_sync = true }) end,
   }
   use { 'nvim-treesitter/nvim-treesitter-textobjects', after = 'nvim-treesitter' }
   use 'lewis6991/gitsigns.nvim'
@@ -52,7 +50,6 @@ require('packer').startup(function(use)
   use 'Pocco81/auto-save.nvim'
   use 'nvim-tree/nvim-tree.lua'
   use 'windwp/nvim-autopairs'
-  use 'arnamak/stay-centered.nvim'
   use 'windwp/nvim-spectre'
 
   if is_packer_boostrapped then
@@ -144,9 +141,7 @@ end
 
 local highlight_group = vim.api.nvim_create_augroup('YankHighlight', { clear = true })
 vim.api.nvim_create_autocmd('TextYankPost', {
-  callback = function()
-    vim.highlight.on_yank()
-  end,
+  callback = function() vim.highlight.on_yank() end,
   group = highlight_group,
   pattern = '*',
 })
@@ -284,9 +279,7 @@ local luasnip = require 'luasnip'
 
 cmp.setup {
   snippet = {
-    expand = function(args)
-      luasnip.lsp_expand(args.body)
-    end,
+    expand = function(args) luasnip.lsp_expand(args.body) end,
   },
   mapping = cmp.mapping.preset.insert {
     ['<C-d>'] = cmp.mapping.scroll_docs(-4),
