@@ -423,11 +423,17 @@ require 'nvim-tree'.setup {
 require 'nvim-autopairs'.setup {}
 
 require 'telescope'.setup {
-  defaults = {
-    layout_strategy = 'vertical',
+  defaults = require 'telescope.themes'.get_ivy {
+    layout_config = {
+      height = 13
+    }
   },
   pickers = {
     find_files = {
+      theme = 'ivy',
+      layout_config = {
+        height = 13
+      },
       find_command = { 'rg', '--files', '--hidden', '--glob', '!**/.git/*' },
     }
   }
