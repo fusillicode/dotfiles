@@ -45,12 +45,12 @@ require 'packer'.startup(function(use)
   use 'ahmedkhalf/project.nvim'
   use { 'saecki/crates.nvim', requires = { 'nvim-lua/plenary.nvim' } }
   use 'bogado/file-line'
-  use 'mg979/vim-visual-multi'
   use 'kdarkhan/rust-tools.nvim'
   use 'Pocco81/auto-save.nvim'
   use 'nvim-tree/nvim-tree.lua'
   use 'windwp/nvim-autopairs'
   use 'windwp/nvim-spectre'
+  use 'gbprod/cutlass.nvim'
 
   if is_packer_boostrapped then
     require 'packer'.sync()
@@ -118,11 +118,6 @@ vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float)
 vim.keymap.set('n', '<leader>s', require 'spectre'.open_visual)
 vim.keymap.set('n', '[d', vim.diagnostic.goto_prev)
 vim.keymap.set('n', ']d', vim.diagnostic.goto_next)
-vim.cmd([[
-  let g:VM_maps = {}
-  let g:VM_maps['Add Cursor Down'] = '<C-j>'
-  let g:VM_maps['Add Cursor Up'] = '<C-k>'
-]])
 
 local lsp_on_attach = function(_, bufnr)
   vim.keymap.set('n', 'gd', vim.lsp.buf.definition, { buffer = bufnr })
