@@ -37,17 +37,17 @@ require 'packer'.startup(function(use)
     run = function() pcall(require 'nvim-treesitter.install'.update { with_sync = true }) end,
   }
   use { 'nvim-treesitter/nvim-treesitter-textobjects', after = 'nvim-treesitter' }
-  use 'lewis6991/gitsigns.nvim'
-  use 'nvim-lualine/lualine.nvim'
   use { 'folke/tokyonight.nvim', branch = 'main' }
-  use 'numToStr/Comment.nvim'
   use { 'nvim-telescope/telescope.nvim', branch = '0.1.x', requires = { 'nvim-lua/plenary.nvim' } }
+  use 'nvim-lualine/lualine.nvim'
+  use 'nvim-tree/nvim-tree.lua'
   use 'ahmedkhalf/project.nvim'
+  use 'lewis6991/gitsigns.nvim'
+  use 'numToStr/Comment.nvim'
+  use 'kdarkhan/rust-tools.nvim'
   use { 'saecki/crates.nvim', requires = { 'nvim-lua/plenary.nvim' } }
   use 'bogado/file-line'
-  use 'kdarkhan/rust-tools.nvim'
   use 'Pocco81/auto-save.nvim'
-  use 'nvim-tree/nvim-tree.lua'
   use 'windwp/nvim-autopairs'
   use 'windwp/nvim-spectre'
   use 'gbprod/cutlass.nvim'
