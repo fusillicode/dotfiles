@@ -38,7 +38,14 @@ require 'packer'.startup(function(use)
   }
   use { 'nvim-treesitter/nvim-treesitter-textobjects', after = 'nvim-treesitter' }
   use { 'folke/tokyonight.nvim', branch = 'main' }
-  use { 'nvim-telescope/telescope.nvim', branch = '0.1.x', requires = { 'nvim-lua/plenary.nvim' } }
+  use {
+    'nvim-telescope/telescope.nvim',
+    branch = '0.1.x',
+    requires = {
+      'nvim-lua/plenary.nvim',
+      'nvim-telescope/telescope-live-grep-args.nvim'
+    }
+  }
   use 'nvim-lualine/lualine.nvim'
   use 'nvim-tree/nvim-tree.lua'
   use 'ahmedkhalf/project.nvim'
@@ -94,7 +101,7 @@ vim.o.tabstop = 2
 vim.o.termguicolors = true
 vim.o.undofile = true
 vim.o.updatetime = 250
-vim.o.wrap = true
+vim.o.wrap = false
 vim.opt.clipboard:append('unnamedplus')
 vim.opt.iskeyword:append('-')
 vim.wo.number = true
@@ -110,6 +117,7 @@ vim.keymap.set('n', '<leader>fp', ':Telescope projects <CR>', {})
 vim.keymap.set('n', '<leader>fo', require 'telescope.builtin'.oldfiles)
 vim.keymap.set('n', '<leader>fb', require 'telescope.builtin'.buffers)
 vim.keymap.set('n', '<leader>ff', require 'telescope.builtin'.find_files)
+vim.keymap.set('n', '<leader>fw', require('telescope').extensions.live_grep_args.live_grep_args)
 vim.keymap.set('n', '<leader>gc', require 'telescope.builtin'.git_commits)
 vim.keymap.set('n', '<leader>gbc', require 'telescope.builtin'.git_bcommits)
 vim.keymap.set('n', '<leader>gb', require 'telescope.builtin'.git_branches)
