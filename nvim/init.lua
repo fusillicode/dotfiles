@@ -66,6 +66,7 @@ require 'tokyonight'.setup { style = 'night' }
 
 vim.cmd('autocmd BufWritePre * lua vim.lsp.buf.formatting_sync()')
 vim.cmd('colorscheme tokyonight')
+vim.cmd('autocmd! CursorHold, CursorHoldI * lua vim.diagnostic.open_float(nil, { focus = false })')
 vim.g.loaded_netrw = 1
 vim.g.loaded_netrwPlugin = 1
 vim.g.mapleader = ' '
@@ -140,7 +141,7 @@ vim.diagnostic.config {
   virtual_text = true,
   signs = true,
   update_in_insert = false,
-  underline = true,
+  underline = false,
   severity_sort = true,
   float = {
     focusable = false,
