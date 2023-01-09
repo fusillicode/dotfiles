@@ -169,7 +169,7 @@ require 'lualine'.setup {
   sections = {
     lualine_a = {},
     lualine_b = {},
-    lualine_c = { 'diagnostics', { 'filename', file_status = true, path = 1 }, 'encoding' },
+    lualine_c = { 'diagnostics', 'diff', { 'filename', file_status = true, path = 1 }, 'encoding' },
     lualine_x = { { 'branch', fmt = function(str) return str:sub(1, 33) end } },
     lualine_y = {},
     lualine_z = {}
