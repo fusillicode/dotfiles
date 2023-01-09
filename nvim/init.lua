@@ -125,11 +125,27 @@ local lsp_on_attach = function(_, bufnr)
   vim.keymap.set('n', 'gr', require 'telescope.builtin'.lsp_references, { buffer = bufnr })
   vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, { buffer = bufnr })
   vim.keymap.set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr })
-  vim.keymap.set('n', '<C-h>', vim.lsp.buf.signature_help, { buffer = bufnr })
+  vim.keymap.set('n', '<C-k>', vim.lsp.buf.signature_help, { buffer = bufnr })
   vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, { buffer = bufnr })
   vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, { buffer = bufnr })
   vim.api.nvim_buf_create_user_command(bufnr, 'Format', function(_) vim.lsp.buf.format() end, {})
 end
+
+vim.diagnostic.config {
+  virtual_text = true,
+  signs = true,
+  update_in_insert = false,
+  underline = true,
+  severity_sort = true,
+  float = {
+    focusable = false,
+    style = 'minimal',
+    border = 'single',
+    source = 'always',
+    header = '',
+    prefix = '',
+  },
+}
 
 local highlight_group = vim.api.nvim_create_augroup('YankHighlight', { clear = true })
 vim.api.nvim_create_autocmd('TextYankPost', {
@@ -251,6 +267,11 @@ local lsp_servers = {
 
 require 'neodev'.setup {}
 
+vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, { border = "single" })
+vim.lsp.handlers["textDocument/signatureHelp"] = vim.lsp.with(
+  vim.lsp.handlers.signature_help, { border = "single" }
+)
+
 require 'mason'.setup {}
 
 local mason_lspconfig = require 'mason-lspconfig'
@@ -282,6 +303,10 @@ local cmp = require 'cmp'
 local luasnip = require 'luasnip'
 
 cmp.setup {
+  window = {
+    completion = { border = 'single' },
+    documentation = { border = 'single' },
+  },
   snippet = {
     expand = function(args) luasnip.lsp_expand(args.body) end,
   },
