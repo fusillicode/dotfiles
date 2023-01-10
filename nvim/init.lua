@@ -58,6 +58,7 @@ require 'packer'.startup(function(use)
   use 'windwp/nvim-autopairs'
   use 'windwp/nvim-spectre'
   use 'gbprod/cutlass.nvim'
+  use 'arnamak/stay-centered.nvim'
 
   if is_packer_boostrapped then
     require 'packer'.sync()
@@ -93,6 +94,7 @@ vim.o.list = true
 vim.o.mouse = 'a'
 vim.o.number = true
 vim.o.shiftwidth = 2
+vim.o.sidescroll = 1
 vim.o.signcolumn = 'yes'
 vim.o.smartcase = true
 vim.o.splitbelow = true
