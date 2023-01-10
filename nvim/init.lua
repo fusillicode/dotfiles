@@ -37,7 +37,7 @@ require 'packer'.startup(function(use)
     run = function() pcall(require 'nvim-treesitter.install'.update { with_sync = true }) end,
   }
   use { 'nvim-treesitter/nvim-treesitter-textobjects', after = 'nvim-treesitter' }
-  use 'EdenEast/nightfox.nvim'
+  use 'folke/tokyonight.nvim'
   use {
     'nvim-telescope/telescope.nvim',
     branch = '0.1.x',
@@ -69,15 +69,14 @@ if is_packer_boostrapped then
   return
 end
 
-require 'nightfox'.setup {
-  options = {
-    dim_inactive = true,
-    styles = {
-      functions = 'bold',
-      keywords = 'bold',
-      types = 'bold',
-    }
-  }
+require 'tokyonight'.setup {
+  style = 'night',
+  styles = {
+    types = { bold = true },
+    keywords = { bold = true },
+    functions = { bold = true },
+  },
+  dim_inactive = true,
 }
 
 vim.cmd('autocmd BufWritePre * lua vim.lsp.buf.formatting_sync()')
