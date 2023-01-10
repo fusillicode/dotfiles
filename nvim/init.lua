@@ -37,7 +37,7 @@ require 'packer'.startup(function(use)
     run = function() pcall(require 'nvim-treesitter.install'.update { with_sync = true }) end,
   }
   use { 'nvim-treesitter/nvim-treesitter-textobjects', after = 'nvim-treesitter' }
-  use { 'folke/tokyonight.nvim', branch = 'main' }
+  use 'EdenEast/nightfox.nvim'
   use {
     'nvim-telescope/telescope.nvim',
     branch = '0.1.x',
@@ -58,7 +58,6 @@ require 'packer'.startup(function(use)
   use 'windwp/nvim-autopairs'
   use 'windwp/nvim-spectre'
   use 'gbprod/cutlass.nvim'
-  use 'arnamak/stay-centered.nvim'
 
   if is_packer_boostrapped then
     require 'packer'.sync()
@@ -70,11 +69,20 @@ if is_packer_boostrapped then
   return
 end
 
-require 'tokyonight'.setup { style = 'night' }
+require 'nightfox'.setup {
+  options = {
+    dim_inactive = true,
+    styles = {
+      functions = 'bold',
+      keywords = 'bold',
+      types = 'bold',
+    }
+  }
+}
 
 vim.cmd('autocmd BufWritePre * lua vim.lsp.buf.formatting_sync()')
-vim.cmd('colorscheme tokyonight')
 vim.cmd('autocmd! CursorHold,CursorHoldI * lua vim.diagnostic.open_float(nil, { focus = false })')
+vim.cmd.colorscheme 'carbonfox'
 vim.g.loaded_netrw = 1
 vim.g.loaded_netrwPlugin = 1
 vim.g.mapleader = ' '
