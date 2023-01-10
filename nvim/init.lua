@@ -54,7 +54,6 @@ require 'packer'.startup(function(use)
   use 'kdarkhan/rust-tools.nvim'
   use { 'saecki/crates.nvim', requires = { 'nvim-lua/plenary.nvim' } }
   use 'bogado/file-line'
-  use 'Pocco81/auto-save.nvim'
   use 'windwp/nvim-autopairs'
   use 'windwp/nvim-spectre'
   use 'gbprod/cutlass.nvim'
@@ -422,8 +421,6 @@ require 'rust-tools'.setup {
     settings = lsp_servers['rust_analyzer']
   }
 }
-
-require 'auto-save'.setup {}
 
 require 'nvim-tree'.setup {
   renderer = {
