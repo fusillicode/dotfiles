@@ -81,7 +81,7 @@ require 'nightfox'.setup {
 }
 
 vim.cmd('autocmd BufWritePre * lua vim.lsp.buf.formatting_sync()')
-vim.cmd('autocmd! CursorHold,CursorHoldI * lua vim.diagnostic.open_float(nil, { focus = false })')
+vim.cmd('autocmd! CursorHold,CursorHoldI * lua vim.diagnostic.open_float(nil, { focus = true })')
 vim.cmd.colorscheme 'carbonfox'
 vim.g.loaded_netrw = 1
 vim.g.loaded_netrwPlugin = 1
@@ -162,7 +162,7 @@ vim.diagnostic.config {
   underline = false,
   severity_sort = true,
   float = {
-    focusable = false,
+    focusable = true,
     style = 'minimal',
     border = 'single',
     source = 'always',
