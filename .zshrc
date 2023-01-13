@@ -178,6 +178,7 @@ pg_copy_table() {
 
 # My local `~/bin` "stuff" :P
 export PATH=$HOME/bin:$PATH
+export PATH=$HOME/.local/bin:$PATH
 
 # To make `Alt-left` & `Alt-right` work on Alacritty
 bindkey "^[[1;3C" forward-word
