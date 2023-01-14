@@ -29,3 +29,22 @@
     height: 110% !important;
     position: absolute;
 }
+
+/* # Show the bottom bar even if it is toggled off. */
+body>div.file-icons-enabled.reduce-motion.monaco-workbench.chromium.nosidebar.nopanel.noauxiliarybar.maximized.vs.nostatusbar>div.monaco-grid-view>div>div>div.monaco-scrollable-element>div.split-view-container>div:nth-child(4),
+body>div.file-icons-enabled.reduce-motion.monaco-workbench.chromium.nopanel.noauxiliarybar.nostatusbar.maximized.vs>div.monaco-grid-view>div>div>div.monaco-scrollable-element>div.split-view-container>div:nth-child(4) {
+    bottom: 0px;
+    height: unset !important;
+    top: unset !important;
+    display: unset;
+}
+
+#workbench\.parts\.statusbar {
+    height: unset !important;
+}
+
+/* ## Show the horizontal scrollbar */
+#workbench\.parts\.editor>div.content>div.grid-view-container>div>div>div>div.monaco-scrollable-element>div.split-view-container>div>div>div.editor-container>div>div>div.overflow-guard>div.monaco-scrollable-element.editor-scrollable.vs>div.visible.scrollbar.horizontal,
+body>div.file-icons-enabled.reduce-motion.monaco-workbench.chromium.nopanel.noauxiliarybar.maximized.vs.nostatusbar.nosidebar>div.monaco-grid-view>div>div>div.monaco-scrollable-element>div.split-view-container>div:nth-child(3)>div>div>div.monaco-scrollable-element>div.visible.scrollbar {
+    bottom: 12px !important;
+}

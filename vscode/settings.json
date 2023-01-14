@@ -193,6 +193,9 @@
   "workbench.startupEditor": "none",
   "workbench.statusBar.visible": true,
   "workbench.tree.indent": 12,
+  "vscode_custom_css.imports": [
+    "file:///Users/gianluca.randazzo/data/dev/dotfiles/dotfiles/vscode/vscode.css"
+  ],
   "vs-kubernetes": {
     "vs-kubernetes.draft-path": "$home/.vs-kubernetes/tools/draft/darwin-amd64/draft",
     "vs-kubernetes.minikube-path": "$home/.vs-kubernetes/tools/minikube/darwin-amd64/minikube"
