@@ -11,3 +11,5 @@
 	email = fusillicode@gmail.com
 [fetch]
 	prune = true
+[pager]
+	branch = false
