@@ -27,11 +27,6 @@
     "when": "editorHasDefinitionProvider && editorTextFocus && !inReferenceSearchEditor && !isInEmbeddedEditor"
   },
   {
-    "key": "alt+f12",
-    "command": "-editor.action.previewDeclaration",
-    "when": "editorHasDefinitionProvider && editorTextFocus && !inReferenceSearchEditor && !isInEmbeddedEditor"
-  },
-  {
     "key": "shift+alt+up",
     "command": "editor.action.insertCursorAbove",
     "when": "editorTextFocus"
@@ -57,11 +52,6 @@
     "when": "editorHasReferenceProvider"
   },
   {
-    "key": "shift+alt+f12",
-    "command": "-references-view.find",
-    "when": "editorHasReferenceProvider"
-  },
-  {
     "key": "cmd+g",
     "command": "workbench.action.gotoLine"
   },
@@ -84,11 +74,6 @@
   {
     "key": "ctrl+g",
     "command": "editor.action.revealDefinition",
-    "when": "editorHasDefinitionProvider && editorTextFocus && !isInEmbeddedEditor"
-  },
-  {
-    "key": "f12",
-    "command": "-editor.action.revealDefinition",
     "when": "editorHasDefinitionProvider && editorTextFocus && !isInEmbeddedEditor"
   },
   {
@@ -227,11 +212,6 @@
     "when": "editorHasImplementationProvider && editorTextFocus && !isInEmbeddedEditor"
   },
   {
-    "key": "cmd+f12",
-    "command": "-editor.action.goToImplementation",
-    "when": "editorHasImplementationProvider && editorTextFocus && !isInEmbeddedEditor"
-  },
-  {
     "key": "cmd+;",
     "command": "githubLinker.copyUrl"
   },
@@ -242,11 +222,6 @@
   {
     "key": "ctrl+c",
     "command": "editor.action.goToReferences",
-    "when": "editorHasReferenceProvider && editorTextFocus && !inReferenceSearchEditor && !isInEmbeddedEditor"
-  },
-  {
-    "key": "shift+f12",
-    "command": "-editor.action.goToReferences",
     "when": "editorHasReferenceProvider && editorTextFocus && !inReferenceSearchEditor && !isInEmbeddedEditor"
   },
   {
