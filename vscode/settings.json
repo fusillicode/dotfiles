@@ -218,6 +218,8 @@
   ],
   "workbench.editor.enablePreview": false,
   "workbench.colorTheme": "Ariake Dark",
+  "security.workspace.trust.enabled": false,
   "terminal.integrated.enableMultiLinePasteWarning": false,
   "terraform.languageServer.enable": true,
+  "editor.accessibilitySupport": "off",
 }
