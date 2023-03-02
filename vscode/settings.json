@@ -182,6 +182,7 @@
   },
   "workbench.editor.decorations.badges": false,
   "workbench.editor.highlightModifiedTabs": true,
+  "workbench.editor.labelFormat": "short",
   "workbench.editor.openPositioning": "right",
   "workbench.editor.showIcons": false,
   "workbench.editor.showTabs": true,
