@@ -6,6 +6,7 @@
   "debug.allowBreakpointsEverywhere": true,
   "diffEditor.ignoreTrimWhitespace": false,
   "editor.acceptSuggestionOnEnter": "smart",
+  "editor.accessibilitySupport": "off",
   "editor.autoIndent": "full",
   "editor.cursorBlinking": "solid",
   "editor.cursorStyle": "block",
@@ -172,9 +173,6 @@
     "list.focusBackground": "#b300ff9a",
     "list.highlightForeground": "#ffffff",
     "statusBar.foreground": "#ffffff",
-    "tab.activeBorderTop": "#ffd700",
-    "tab.activeForeground": "#cccccc",
-    "tab.inactiveForeground": "#cccccc",
     "terminalCursor.foreground": "#ffffff"
   },
   "workbench.editorAssociations": {
@@ -221,6 +219,5 @@
   "workbench.colorTheme": "Ariake Dark",
   "security.workspace.trust.enabled": false,
   "terminal.integrated.enableMultiLinePasteWarning": false,
-  "terraform.languageServer.enable": true,
-  "editor.accessibilitySupport": "off",
+  "terraform.languageServer.enable": true
 }
