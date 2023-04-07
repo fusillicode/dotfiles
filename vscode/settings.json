@@ -127,6 +127,7 @@
   "rust-analyzer.lens.debug.enable": false,
   "rust-analyzer.lens.implementations.enable": false,
   "rust-analyzer.lens.run.enable": false,
+  "rust-analyzer.showUnlinkedFileNotification": false,
   "search.exclude": {
     "**/.git": true,
     "**/*target*": true,
@@ -135,14 +136,17 @@
   "search.searchOnType": false,
   "search.smartCase": true,
   "search.useIgnoreFiles": false,
+  "security.workspace.trust.enabled": false,
   "security.workspace.trust.untrustedFiles": "open",
   "telemetry.telemetryLevel": "off",
   "terminal.integrated.copyOnSelection": true,
   "terminal.integrated.defaultProfile.osx": "zsh",
+  "terminal.integrated.enableMultiLinePasteWarning": false,
   "terminal.integrated.enablePersistentSessions": false,
   "terminal.integrated.fontSize": 16,
   "terminal.integrated.scrollback": 999999999,
   "terminal.integrated.shellIntegration.decorationsEnabled": "never",
+  "terraform.languageServer.enable": true,
   "window.openFilesInNewWindow": "off",
   "window.restoreFullscreen": true,
   "window.title": "${dirty}${rootName}${separator}${activeEditorMedium}",
@@ -178,10 +182,12 @@
     "tab.inactiveForeground": "#cccccc",
     "terminalCursor.foreground": "#ffffff",
   },
+  "workbench.colorTheme": "Ariake Dark",
   "workbench.editorAssociations": {
     "*.ipynb": "jupyter-notebook"
   },
   "workbench.editor.decorations.badges": false,
+  "workbench.editor.enablePreview": false,
   "workbench.editor.highlightModifiedTabs": true,
   "workbench.editor.labelFormat": "short",
   "workbench.editor.openPositioning": "right",
@@ -202,6 +208,9 @@
     "vs-kubernetes.draft-path": "$home/.vs-kubernetes/tools/draft/darwin-amd64/draft",
     "vs-kubernetes.minikube-path": "$home/.vs-kubernetes/tools/minikube/darwin-amd64/minikube"
   },
+  "xml.server.binary.trustedHashes": [
+    "8080595d4aee6c70818be8c8c8f58db8e2214082492def527ac383970e75da4c"
+  ],
   "[elixir]": {
     "editor.defaultFormatter": "JakeBecker.elixir-ls"
   },
@@ -214,13 +223,5 @@
     "editor.autoIndent": "full",
     "editor.insertSpaces": true,
     "editor.tabSize": 4
-  },
-  "xml.server.binary.trustedHashes": [
-    "8080595d4aee6c70818be8c8c8f58db8e2214082492def527ac383970e75da4c"
-  ],
-  "workbench.editor.enablePreview": false,
-  "workbench.colorTheme": "Ariake Dark",
-  "security.workspace.trust.enabled": false,
-  "terminal.integrated.enableMultiLinePasteWarning": false,
-  "terraform.languageServer.enable": true
+  }
 }
