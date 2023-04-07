@@ -10,7 +10,7 @@
     "command": "workbench.action.moveEditorLeftInGroup"
   },
   {
-    "key": "cmd+k shift+cmd+left",
+    "key": "cmd+l shift+cmd+left",
     "command": "-workbench.action.moveEditorLeftInGroup"
   },
   {
@@ -18,7 +18,7 @@
     "command": "workbench.action.moveEditorRightInGroup"
   },
   {
-    "key": "cmd+k shift+cmd+right",
+    "key": "cmd+l shift+cmd+right",
     "command": "-workbench.action.moveEditorRightInGroup"
   },
   {
@@ -109,8 +109,20 @@
     "command": "workbench.action.closePanel"
   },
   {
+    "key": "ctrl+1",
+    "command": "-workbench.action.openEditorAtIndex1"
+  },
+  {
+    "key": "cmd+1",
+    "command": "workbench.action.openEditorAtIndex1"
+  },
+  {
     "key": "ctrl+2",
     "command": "-workbench.action.openEditorAtIndex2"
+  },
+  {
+    "key": "cmd+2",
+    "command": "workbench.action.openEditorAtIndex2"
   },
   {
     "key": "cmd+3",
@@ -177,7 +189,7 @@
     "command": "-workbench.action.lastEditorInGroup"
   },
   {
-    "key": "cmd+l",
+    "key": "cmd+'",
     "command": "copy-relative-path-and-line-numbers.both",
     "when": "editorTextFocus"
   },
@@ -225,22 +237,22 @@
     "when": "editorHasReferenceProvider && editorTextFocus && !inReferenceSearchEditor && !isInEmbeddedEditor"
   },
   {
-    "key": "cmd+1",
+    "key": "cmd+h",
     "command": "workbench.action.toggleMaximizedPanel",
     "when": "terminalFocus"
   },
   {
-    "key": "cmd+1",
+    "key": "cmd+h",
     "command": "workbench.action.terminal.toggleTerminal",
     "when": "!terminalFocus"
   },
   {
-    "key": "cmd+2",
+    "key": "cmd+l",
     "command": "workbench.action.closePanel",
     "when": "editorFocus && panelVisible"
   },
   {
-    "key": "cmd+2",
+    "key": "cmd+l",
     "command": "commands.run",
     "args": [
       "workbench.action.togglePanel",
@@ -249,12 +261,12 @@
     "when": "editorFocus && !panelVisible"
   },
   {
-    "key": "cmd+2",
+    "key": "cmd+l",
     "command": "workbench.action.focusActiveEditorGroup",
     "when": "!editorFocus"
   },
   {
-    "key": "cmd+2",
+    "key": "cmd+l",
     "command": "commands.run",
     "args": [
       "workbench.action.toggleMaximizedPanel",
@@ -263,25 +275,16 @@
     "when": "panelMaximized"
   },
   {
-    "key": "cmd+2",
+    "key": "cmd+l",
     "command": "-workbench.action.focusSecondEditorGroup"
   },
   {
-    "key": "cmd+3",
-    "command": "workbench.view.explorer"
-  },
-  {
-    "key": "cmd+3",
-    "command": "workbench.action.toggleSidebarVisibility",
-    "when": "explorerViewletFocus"
-  },
-  {
-    "key": "cmd+r",
+    "key": "cmd+e",
     "command": "workbench.files.action.showActiveFileInExplorer",
     "when": "!explorerViewletVisible"
   },
   {
-    "key": "cmd+r",
+    "key": "cmd+e",
     "command": "workbench.action.toggleSidebarVisibility",
     "when": "explorerViewletVisible"
   },
