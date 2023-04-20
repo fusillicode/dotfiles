@@ -13,3 +13,5 @@
 	prune = true
 [pager]
 	branch = false
+[diff]
+	submodule = log
