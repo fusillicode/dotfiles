@@ -102,6 +102,7 @@
     "default": "right",
     "jupyter-notebook": "left"
   },
+  "pomsky.defaultFlavor": "Rust",
   "problems.decorations.enabled": false,
   "projectManager.git.baseFolders": [
     "$home/data/dev"
