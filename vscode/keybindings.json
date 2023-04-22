@@ -237,22 +237,22 @@
     "when": "editorHasReferenceProvider && editorTextFocus && !inReferenceSearchEditor && !isInEmbeddedEditor"
   },
   {
-    "key": "cmd+h",
+    "key": "ctrl+b left",
     "command": "workbench.action.toggleMaximizedPanel",
     "when": "terminalFocus"
   },
   {
-    "key": "cmd+h",
+    "key": "ctrl+b left",
     "command": "workbench.action.terminal.toggleTerminal",
     "when": "!terminalFocus"
   },
   {
-    "key": "cmd+l",
+    "key": "ctrl+b right",
     "command": "workbench.action.closePanel",
     "when": "editorFocus && panelVisible"
   },
   {
-    "key": "cmd+l",
+    "key": "ctrl+b right",
     "command": "commands.run",
     "args": [
       "workbench.action.togglePanel",
@@ -261,12 +261,12 @@
     "when": "editorFocus && !panelVisible"
   },
   {
-    "key": "cmd+l",
+    "key": "ctrl+b right",
     "command": "workbench.action.focusActiveEditorGroup",
     "when": "!editorFocus"
   },
   {
-    "key": "cmd+l",
+    "key": "ctrl+b right",
     "command": "commands.run",
     "args": [
       "workbench.action.toggleMaximizedPanel",
@@ -275,7 +275,7 @@
     "when": "panelMaximized"
   },
   {
-    "key": "cmd+l",
+    "key": "ctrl+b right",
     "command": "-workbench.action.focusSecondEditorGroup"
   },
   {
