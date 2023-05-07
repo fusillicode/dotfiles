@@ -145,6 +145,7 @@
   "terminal.integrated.fontSize": 16,
   "terminal.integrated.scrollback": 999999999,
   "terminal.integrated.shellIntegration.decorationsEnabled": "never",
+  "terminal.integrated.tabs.enabled": false,
   "terraform.languageServer.enable": true,
   "window.openFilesInNewWindow": "off",
   "window.restoreFullscreen": true,
