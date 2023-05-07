@@ -92,6 +92,8 @@
   "liveshare.focusBehavior": "prompt",
   "liveshare.guestApprovalRequired": true,
   "liveshare.showInStatusBar": "whileCollaborating",
+  "git.openRepositoryInParentFolders": "never",
+  "git.suggestSmartCommit": false,
   "gitlens.codeLens.enabled": false,
   "gitlens.currentLine.enabled": false,
   "gitlens.hovers.currentLine.over": "line",
