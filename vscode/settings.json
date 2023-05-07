@@ -11,7 +11,7 @@
   "editor.cursorBlinking": "solid",
   "editor.cursorStyle": "block",
   "editor.detectIndentation": false,
-  "editor.folding": false,
+  "editor.folding": true,
   "editor.fontSize": 16,
   "editor.formatOnSave": true,
   "editor.glyphMargin": false,
@@ -30,8 +30,6 @@
   "editor.rulers": [
     120
   ],
-  "editor.scrollbar.horizontal": "hidden",
-  "editor.scrollbar.vertical": "hidden",
   "editor.scrollBeyondLastLine": false,
   "editor.selectionHighlight": false,
   "editor.showFoldingControls": "mouseover",
