@@ -160,8 +160,6 @@
     "editor.selectionBackground": "#b300ff77",
     "editorBracketMatch.background": "#b300ff77",
     "editorBracketMatch.border": "#b300ff77",
-    "editorCursor.background": "#ffffffff",
-    "editorCursor.foreground": "#ffffff70",
     "editorGutter.deletedBackground": "#d2772d",
     "editorInlayHint.background": "#ffffff00",
     "editorInlayHint.foreground": "#808080",
