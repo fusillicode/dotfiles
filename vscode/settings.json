@@ -24,6 +24,7 @@
   "editor.multiCursorModifier": "ctrlCmd",
   "editor.occurrencesHighlight": false,
   "editor.overviewRulerBorder": false,
+  "editor.pasteAs.enabled": false,
   "editor.renderControlCharacters": true,
   "editor.renderLineHighlight": "all",
   "editor.renderWhitespace": "none",
