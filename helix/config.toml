@@ -1,0 +1,22 @@
+theme = "my_github_dark"
+
+[editor]
+auto-save = true
+rulers = [120]
+cursorline = true
+
+[editor.statusline]
+left = ["mode", "spinner", "diagnostics", "file-modification-indicator", "file-name"]
+center = ["version-control"]
+right = ["workspace-diagnostics", "selections", "position"]
+mode.normal = "N"
+mode.insert = "I"
+mode.select = "V"
+
+[editor.lsp]
+display-inlay-hints = true
+
+[editor.whitespace.render]
+space = "all"
+nbsp = "all"
+tab = "all"
