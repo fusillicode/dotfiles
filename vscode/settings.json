@@ -1,10 +1,13 @@
 {
   "breadcrumbs.enabled": false,
+  "code-runner.enableAppInsights": false,
   "crystal-lang.completion": true,
   "crystal-lang.hover": true,
   "crystal-lang.implementations": true,
   "debug.allowBreakpointsEverywhere": true,
+  "diffEditor.diffAlgorithm": "advanced",
   "diffEditor.ignoreTrimWhitespace": false,
+  "docker-explorer.enableTelemetry": false,
   "editor.acceptSuggestionOnEnter": "smart",
   "editor.accessibilitySupport": "off",
   "editor.autoIndent": "full",
@@ -39,18 +42,36 @@
   "editor.tabCompletion": "on",
   "editor.tabSize": 2,
   "editor.tokenColorCustomizations": {
-    "functions": {
-      "fontStyle": "bold"
-    },
-    "keywords": {
-      "fontStyle": "bold"
-    },
-    "types": {
-      "fontStyle": "bold"
-    },
     "[Ariake Dark]": {
-      "comments": "#179effaf"
-    }
+      "comments": {
+        "fontStyle": "italic",
+        "foreground": "#179effaf"
+      },
+      "functions": {
+        "fontStyle": "bold"
+      },
+      "keywords": {
+        "fontStyle": "bold"
+      },
+      "types": {
+        "fontStyle": "bold"
+      },
+    },
+    "[Atom One Light]": {
+      "comments": {
+        "fontStyle": "italic",
+        "foreground": "#179effaf"
+      },
+      "functions": {
+        "fontStyle": "bold"
+      },
+      "keywords": {
+        "fontStyle": "bold"
+      },
+      "types": {
+        "fontStyle": "bold"
+      },
+    },
   },
   "editWithShell.processEntireTextIfNoneSelected": true,
   "elixirLinter.useStrict": true,
@@ -66,12 +87,12 @@
     "elixir": "html"
   },
   "emmet.triggerExpansionOnTab": true,
+  "evenBetterToml.formatter.arrayAutoCollapse": true,
   "evenBetterToml.formatter.columnWidth": 180,
   "evenBetterToml.formatter.compactArrays": true,
-  "evenBetterToml.formatter.arrayAutoCollapse": true,
   "explorer.autoReveal": true,
   "explorer.confirmDelete": false,
-  "explorer.openEditors.visible": 0,
+  "explorer.openEditors.minVisible": 0,
   "extensions.autoUpdate": false,
   "extensions.ignoreRecommendations": true,
   "files.associations": {
@@ -89,16 +110,25 @@
     "**/.metals": true,
     "**/.ammonite": true
   },
-  "liveshare.featureSet": "insiders",
-  "liveshare.focusBehavior": "prompt",
-  "liveshare.guestApprovalRequired": true,
-  "liveshare.showInStatusBar": "whileCollaborating",
   "git.openRepositoryInParentFolders": "never",
   "git.suggestSmartCommit": false,
   "gitlens.codeLens.enabled": false,
   "gitlens.currentLine.enabled": false,
   "gitlens.hovers.currentLine.over": "line",
   "gitlens.hovers.enabled": false,
+  "gitlens.showWelcomeOnInstall": false,
+  "gitlens.showWhatsNewAfterUpgrades": false,
+  "java.help.firstView": "none",
+  "java.help.showReleaseNotes": false,
+  "julia.enableTelemetry": false,
+  "kite.showWelcomeNotificationOnStartup": false,
+  "liveServer.settings.donotShowInfoMsg": true,
+  "liveshare.featureSet": "insiders",
+  "liveshare.focusBehavior": "prompt",
+  "liveshare.guestApprovalRequired": true,
+  "liveshare.showInStatusBar": "whileCollaborating",
+  "Lua.telemetry.enable": false,
+  "material-icon-theme.showWelcomeMessage": false,
   "notebook.cellToolbarLocation": {
     "default": "right",
     "jupyter-notebook": "left"
@@ -114,6 +144,8 @@
     "--line-length",
     "120"
   ],
+  "pros.showWelcomeOnStartup": false,
+  "pros.useGoogleAnalytics": false,
   "python.insidersChannel": "off",
   "python.languageServer": "Pylance",
   "python.linting.flake8Enabled": true,
@@ -121,6 +153,7 @@
   "redhat.telemetry.enabled": false,
   "rest-client.enableTelemetry": false,
   "rewrap.autoWrap.enabled": true,
+  "rpcServer.showStartupMessage": false,
   "rust-analyzer.checkOnSave.command": "clippy",
   "rust-analyzer.completion.autoimport.enable": true,
   "rust-analyzer.imports.granularity.enforce": true,
@@ -140,6 +173,8 @@
   "search.useIgnoreFiles": false,
   "security.workspace.trust.enabled": false,
   "security.workspace.trust.untrustedFiles": "open",
+  "shellcheck.disableVersionCheck": true,
+  "sonarlint.disableTelemetry": true,
   "telemetry.telemetryLevel": "off",
   "terminal.integrated.copyOnSelection": true,
   "terminal.integrated.defaultProfile.osx": "zsh",
@@ -150,6 +185,15 @@
   "terminal.integrated.shellIntegration.decorationsEnabled": "never",
   "terminal.integrated.tabs.enabled": false,
   "terraform.languageServer.enable": true,
+  "terraform.telemetry.enabled": false,
+  "vscode_custom_css.imports": [
+    "file:///Users/gianluca.randazzo/data/dev/dotfiles/dotfiles/vscode/vscode.css"
+  ],
+  "vsicons.dontShowNewVersionMessage": true,
+  "vs-kubernetes": {
+    "vs-kubernetes.draft-path": "$home/.vs-kubernetes/tools/draft/darwin-amd64/draft",
+    "vs-kubernetes.minikube-path": "$home/.vs-kubernetes/tools/minikube/darwin-amd64/minikube"
+  },
   "window.openFilesInNewWindow": "off",
   "window.restoreFullscreen": true,
   "window.title": "${dirty}${rootName}${separator}${activeEditorMedium}",
@@ -162,7 +206,6 @@
       "editor.selectionBackground": "#b300ff77",
       "editorBracketMatch.background": "#b300ff77",
       "editorBracketMatch.border": "#b300ff77",
-      "editorGutter.deletedBackground": "#d2772d",
       "editorInlayHint.background": "#ffffff00",
       "editorInlayHint.foreground": "#777777",
       "editorInlayHint.parameterBackground": "#ffffff00",
@@ -204,13 +247,7 @@
   "workbench.startupEditor": "none",
   "workbench.statusBar.visible": true,
   "workbench.tree.indent": 12,
-  "vscode_custom_css.imports": [
-    "file:///Users/gianluca.randazzo/data/dev/dotfiles/dotfiles/vscode/vscode.css"
-  ],
-  "vs-kubernetes": {
-    "vs-kubernetes.draft-path": "$home/.vs-kubernetes/tools/draft/darwin-amd64/draft",
-    "vs-kubernetes.minikube-path": "$home/.vs-kubernetes/tools/minikube/darwin-amd64/minikube"
-  },
+  "workbench.welcomePage.walkthroughs.openOnInstall": false,
   "xml.server.binary.trustedHashes": [
     "8080595d4aee6c70818be8c8c8f58db8e2214082492def527ac383970e75da4c"
   ],
@@ -226,5 +263,5 @@
     "editor.autoIndent": "full",
     "editor.insertSpaces": true,
     "editor.tabSize": 4
-  }
+  },
 }
