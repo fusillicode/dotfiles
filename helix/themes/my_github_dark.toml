@@ -1,3 +1,4 @@
 inherits = "github_dark"
 
 "ui.cursor" = { fg = "black", bg = "white" }
+"ui.virtual.ruler" = { bg = "canvas.subtle" }
