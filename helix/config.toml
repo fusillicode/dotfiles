@@ -3,7 +3,6 @@ theme = "my_github_dark"
 [editor]
 auto-save = true
 cursorline = true
-line-number = "relative"
 rulers = [120]
 
 [editor.statusline]
@@ -12,7 +11,7 @@ left = ["mode", "spinner", "diagnostics", "file-modification-indicator", "file-n
 mode.insert = "I"
 mode.normal = "N"
 mode.select = "S"
-right = ["workspace-diagnostics", "selections", "position"]
+right = ["selections", "position"]
 
 [editor.lsp]
 display-inlay-hints = true
