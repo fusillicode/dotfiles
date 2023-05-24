@@ -232,4 +232,4 @@ export CPPFLAGS="-I/opt/homebrew/opt/openssl/include -I/opt/homebrew/opt/llvm/in
 export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl/lib/pkgconfig"
 
 # Goodbye asdf 🥲, welcome rtx 😍
-eval "$(~/.local/bin/rtx activate zsh)"
+eval "$(rtx activate zsh)"
