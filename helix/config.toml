@@ -7,7 +7,13 @@ rulers = [120]
 
 [editor.statusline]
 center = ["version-control"]
-left = ["mode", "spinner", "diagnostics", "file-modification-indicator", "file-name"]
+left = [
+  "mode",
+  "spinner",
+  "diagnostics",
+  "file-modification-indicator",
+  "file-name",
+]
 mode.insert = "I"
 mode.normal = "N"
 mode.select = "S"
