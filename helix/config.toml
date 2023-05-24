@@ -9,7 +9,6 @@ rulers = [120]
 hidden = false
 
 [editor.statusline]
-center = ["version-control"]
 left = [
   "mode",
   "spinner",
@@ -17,10 +16,10 @@ left = [
   "file-modification-indicator",
   "file-name",
 ]
+right = ["version-control", "selections"]
 mode.insert = "I"
 mode.normal = "N"
 mode.select = "S"
-right = ["selections", "position"]
 
 [editor.lsp]
 display-inlay-hints = true
