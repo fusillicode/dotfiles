@@ -11,7 +11,6 @@ brew doctor --verbose
 
 # Install Homebrew apps
 # brew install act
-brew install jdxcode/tap/rtx
 brew install awscli
 brew install ansible
 brew install atuin
@@ -25,6 +24,7 @@ brew install hashicorp/tap/terraform-ls
 # brew install ifstat # This was for the network.sh BitBar script...that I don't use it anymore ¯\_(ツ)_/¯
 # brew install htop
 # brew install imagemagick@6
+brew install jdxcode/tap/rtx
 brew install jq
 # brew install jsonnet # For VSCode Jsonnet extension
 brew install kube-ps1
@@ -36,6 +36,7 @@ brew install librdkafka # It also installs `lz4`, `lzlib` & `zstd`
 brew install mycli # For Python `mysqlclient`
 # brew install openvpn # It also installs `lzo` & `pkcs11-helper`
 brew install ripgrep
+brew install sd
 brew install stern
 brew install tmux
 brew install txn2/tap/kubefwd
