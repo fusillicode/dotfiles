@@ -5,6 +5,9 @@ auto-save = true
 cursorline = true
 rulers = [120]
 
+[editor.file-picker]
+hidden = false
+
 [editor.statusline]
 center = ["version-control"]
 left = [
