@@ -10,8 +10,8 @@ brew update
 brew doctor --verbose
 
 # Install Homebrew apps
-brew install act
-brew install asdf
+# brew install act
+brew install jdxcode/tap/rtx
 brew install awscli
 brew install ansible
 brew install atuin
@@ -21,12 +21,12 @@ brew install git
 brew install gh
 brew install hadolint
 brew install hashicorp/tap/terraform-ls
-brew tap heroku/brew && brew install heroku
+# brew tap heroku/brew && brew install heroku
 # brew install ifstat # This was for the network.sh BitBar script...that I don't use it anymore ¯\_(ツ)_/¯
-brew install htop
-brew install imagemagick@6
+# brew install htop
+# brew install imagemagick@6
 brew install jq
-brew install jsonnet # For VSCode Jsonnet extension
+# brew install jsonnet # For VSCode Jsonnet extension
 brew install kube-ps1
 brew install kubectx
 brew install kustomize
@@ -55,14 +55,14 @@ brew install discord
 brew install firefox
 brew install google-chrome
 # brew install helm
-brew install http-toolkit
+# brew install http-toolkit
 brew install league-of-legends
 # brew install libreoffice
 brew install rectangle
 # brew install sfdx
-brew install skype
+# brew install skype
 brew install slack
-brew install smcfancontrol
+# brew install smcfancontrol
 brew install telegram
 brew install the-unarchiver
 brew install transmission --cask
@@ -144,4 +144,4 @@ brew update && brew upgrade && brew cleanup -s && rm -rf ~/Library/Caches/Homebr
 brew doctor
 
 # Twitch miner
-pip install Twitch-Channel-Points-Miner-v2
+# pip install Twitch-Channel-Points-Miner-v2
