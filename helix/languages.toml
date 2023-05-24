@@ -1,0 +1,21 @@
+use-grammars = { only = ["rust", "elm", "toml", "json", "yaml"] }
+
+[[language]]
+name = "rust"
+config.checkOnSave.command = "clippy"
+config.completion.autoimport.enable = true
+config.imports.granularity.enforce = true
+config.imports.granularity.group = "item"
+config.imports.prefix = "crate"
+config.lens.debug.enable = false
+config.lens.implementations.enable = false
+config.lens.run.enable = false
+config.showUnlinkedFileNotification = false
+
+[[language]]
+name = "toml"
+auto-format = true
+
+[[language]]
+name = "python"
+config.pylsp.plugins.ruff = { enabled = true, lineLength = 120 }
