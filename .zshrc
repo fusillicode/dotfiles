@@ -68,7 +68,7 @@ ZSH_THEME="my-zsh"
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(asdf git gitfast kubectl)
+plugins=(git gitfast kubectl)
 
 . $ZSH/oh-my-zsh.sh
 
@@ -205,8 +205,8 @@ export ERL_AFLAGS="-kernel shell_history enabled -kernel shell_history_file_byte
 # Haskell
 [ -e "$HOME/.ghcup/env" ] && . $HOME/.ghcup/env
 
-# ...Java...
-[ -e "$HOME/.asdf/plugins/java/set-java-home.sh" ] && . $HOME/.asdf/plugins/java/set-java-home.sh
+# # ...Java...
+# [ -e "$HOME/.asdf/plugins/java/set-java-home.sh" ] && . $HOME/.asdf/plugins/java/set-java-home.sh
 
 # ...Go...
 export PATH="$HOME/go/bin:$PATH"
@@ -230,3 +230,6 @@ export OPENSSL_ROOT_DIR="/opt/homebrew/opt/openssl"
 export LDFLAGS="-L/opt/homebrew/opt/openssl/lib -L/opt/homebrew/opt/llvm/lib"
 export CPPFLAGS="-I/opt/homebrew/opt/openssl/include -I/opt/homebrew/opt/llvm/include"
 export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl/lib/pkgconfig"
+
+# Goodbye asdf 🥲, welcome rtx 😍
+eval "$(~/.local/bin/rtx activate zsh)"
