@@ -1,6 +1,6 @@
 inherits = "github_dark"
 
 "comment" = { modifiers = ["italic"] }
-"ui.cursor" = { fg = "black", bg = "white" }
+"ui.cursor" = { fg = "black", bg = "white", modifiers = ["slow_blink"] }
 "ui.virtual.inlay-hint" = { fg = "gray" }
 "ui.virtual.ruler" = { bg = "canvas.subtle" }
