@@ -2,6 +2,7 @@ use-grammars = { only = ["rust", "elm", "toml", "json", "yaml"] }
 
 [[language]]
 name = "rust"
+config.check.command = "clippy"
 config.checkOnSave.command = "clippy"
 config.completion.autoimport.enable = true
 config.imports.granularity.enforce = true
