@@ -20,3 +20,7 @@ auto-format = true
 [[language]]
 name = "python"
 config.pylsp.plugins.ruff = { enabled = true, lineLength = 120 }
+
+[[language]]
+name = "bash"
+auto-format = true
