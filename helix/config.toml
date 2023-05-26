@@ -15,7 +15,7 @@ select = "underline"
 hidden = false
 
 [editor.statusline]
-left = ["spinner", "diagnostics", "file-modification-indicator", "file-name"]
+left = ["spinner", "file-modification-indicator", "file-name", "diagnostics"]
 right = ["version-control", "selections", "primary-selection-length"]
 mode.insert = "I"
 mode.normal = "N"
