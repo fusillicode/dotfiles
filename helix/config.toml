@@ -5,18 +5,17 @@ auto-save = true
 cursorline = true
 rulers = [120]
 
+[editor.cursor-shape]
+insert = "bar"
+normal = "block"
+select = "underline"
+
 [editor.file-picker]
 hidden = false
 
 [editor.statusline]
-left = [
-  "mode",
-  "spinner",
-  "diagnostics",
-  "file-modification-indicator",
-  "file-name",
-]
-right = ["version-control", "selections"]
+left = ["spinner", "diagnostics", "file-modification-indicator", "file-name"]
+right = ["version-control", "selections", "primary-selection-length"]
 mode.insert = "I"
 mode.normal = "N"
 mode.select = "S"
