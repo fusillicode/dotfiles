@@ -70,12 +70,12 @@ echo 'eval "$(rtx activate zsh)"' >> ~/.zshrc
 # Install rtx plugins
 brew install autoconf wxwidgets
 export KERL_CONFIGURE_OPTIONS="--without-javac --with-ssl=$(brew --prefix openssl@1.1)"
-rtx install erlang latest
 rtx install elixir latest
-rtx install python latest
-rtx install poetry latest
-rtx install node latest
 rtx install elm latest
+rtx install erlang latest
+rtx install node latest
+rtx install poetry latest
+rtx install python latest
 
 # Install Elixir libs
 mix local.hex
