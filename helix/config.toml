@@ -2,6 +2,7 @@ theme = "my_github_dark"
 
 [editor]
 auto-save = true
+completion-replace = true
 cursorline = true
 rulers = [120]
 
@@ -22,6 +23,7 @@ mode.select = "S"
 
 [editor.lsp]
 display-inlay-hints = true
+display-messages = true
 
 [editor.whitespace.render]
 nbsp = "all"
