@@ -24,6 +24,7 @@ brew install kustomize
 brew install lftp
 brew install libpq && brew link libpq --force
 brew install librdkafka # It also installs `lz4`, `lzlib` & `zstd`
+brew install marksman
 brew install mycli # For Python `mysqlclient`
 brew install stern
 brew install txn2/tap/kubefwd
@@ -82,11 +83,12 @@ mix local.hex
 mix local.rebar
 mix archive.install hex phx_new 1.5.8
 
-# Install Python stuff...
-pip install ruff python-lsp-server python-lsp-ruff
-
 # Install Node stuff...
-npm install -g @elm-tooling/elm-language-server yaml-language-server yarn
+npm install -g yarn
+
+# Setup Helix LSP
+pip install ruff python-lsp-server python-lsp-ruff
+npm install -g @elm-tooling/elm-language-server bash-language-server yaml-language-server vscode-languageservers-extracted
 
 # Upgrade and cleanup brew stuff...
 brew update && brew upgrade && brew cleanup -s && rm -rf ~/Library/Caches/Homebrew/*
