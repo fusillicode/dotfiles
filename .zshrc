@@ -83,7 +83,7 @@ plugins=(git gitfast kubectl)
 if [[ -n $SSH_CONNECTION ]]; then
   export EDITOR='vim'
 else
-  export EDITOR='code-insiders'
+  export EDITOR='hx'
 fi
 
 # Compilation flags
