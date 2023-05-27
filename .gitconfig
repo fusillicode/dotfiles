@@ -1,17 +1,28 @@
 [core]
-	editor = vim
-	filemode = false
-[merge]
-	tool = opendiff
-[push]
-	default = current
+    editor = hx
+    filemode = false
+    pager = delta
 [branch]
-	autosetuprebase = always
-[user]
-	email = fusillicode@gmail.com
-[fetch]
-	prune = true
-[pager]
-	branch = false
+    autosetuprebase = always
+[delta]
+    commit-decoration-style = bold yellow box ul
+    file-decoration-style = none
+    file-style = bold yellow box
+    hunk-header-decoration-style = yellow box
+    line-numbers = true
+    navigate = true
+    side-by-side = true
 [diff]
-	submodule = log
+    colorMoved = default
+[fetch]
+    prune = true
+[interactive]
+    diffFilter = delta --color-only
+[merge]
+    conflictstyle = diff3
+[pager]
+    branch = false
+[push]
+    default = current
+[user]
+    email = fusillicode@gmail.com
