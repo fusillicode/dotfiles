@@ -1,4 +1,4 @@
-use-grammars = { only = ["rust", "elm", "toml", "json", "yaml"] }
+use-grammars = { only = ["rust", "elm", "toml", "json", "yaml", "bash"] }
 
 [[language]]
 name = "rust"
@@ -19,8 +19,21 @@ auto-format = true
 
 [[language]]
 name = "python"
+auto-format = true
 config.pylsp.plugins.ruff = { enabled = true, lineLength = 120 }
 
 [[language]]
 name = "bash"
+auto-format = true
+
+[[language]]
+name = "yaml"
+auto-format = true
+
+[[language]]
+name = "json"
+auto-format = true
+
+[[language]]
+name = "markdown"
 auto-format = true
