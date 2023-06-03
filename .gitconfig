@@ -10,7 +10,7 @@
     file-modified-label = ""
     file-removed-label = ""
     file-renamed-label = ""
-    file-decoration-style = omit
+    file-decoration-style = ul yellow
     file-style = bold yellow
     hunk-header-style = omit
     line-numbers = true
