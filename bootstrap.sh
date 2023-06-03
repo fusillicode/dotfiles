@@ -84,7 +84,7 @@ mix local.rebar
 mix archive.install hex phx_new 1.5.8
 
 # Install Node stuff...
-npm install -g yarn
+npm install -g yarn quicktype
 
 # Setup Helix LSP
 pip install ruff python-lsp-server python-lsp-ruff
