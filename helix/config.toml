@@ -29,3 +29,6 @@ display-messages = true
 nbsp = "all"
 space = "all"
 tab = "all"
+
+[keys.normal]
+"esc" = "keep_primary_selection"
