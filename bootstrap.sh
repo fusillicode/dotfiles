@@ -30,6 +30,8 @@ brew install stern
 brew install txn2/tap/kubefwd
 brew install vegeta
 brew install watch
+brew tap homebrew/cask-versions
+brew install wezterm-nightly
 brew install yq
 brew install zsh
 
