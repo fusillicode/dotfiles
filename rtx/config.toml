@@ -1,0 +1,12 @@
+[tools]
+elixir = "latest"
+elm = "latest"
+erlang = "latest"
+helm = "3.12.0"
+java = "adoptopenjdk-18.0.1+10"
+kubectl = "1.23.7"
+node = "latest"
+poetry = "latest"
+protoc = "3.20.0"
+python = "latest"
+lua-language-server = "latest"
