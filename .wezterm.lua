@@ -23,6 +23,38 @@ config.font = wezterm.font('Monaco')
 config.font_size = 16
 config.inactive_pane_hsb = { brightness = 0.3 }
 config.hide_tab_bar_if_only_one_tab = true
+config.keys = {
+  {
+    key = 'h',
+    mods = 'CMD|SHIFT',
+    action = wezterm.action.ActivatePaneDirection 'Left',
+  },
+  {
+    key = 'l',
+    mods = 'CMD|SHIFT',
+    action = wezterm.action.ActivatePaneDirection 'Right',
+  },
+  {
+    key = 'k',
+    mods = 'CMD|SHIFT',
+    action = wezterm.action.ActivatePaneDirection 'Up',
+  },
+  {
+    key = 'j',
+    mods = 'CMD|SHIFT',
+    action = wezterm.action.ActivatePaneDirection 'Down',
+  },
+  {
+    key = 'n',
+    mods = 'CMD|SHIFT',
+    action = wezterm.action.SplitVertical { domain = "CurrentPaneDomain" },
+  },
+  {
+    key = 't',
+    mods = 'CMD|SHIFT',
+    action = wezterm.action.SplitHorizontal { domain = "CurrentPaneDomain" },
+  },
+}
 config.line_height = 1.2
 config.show_new_tab_button_in_tab_bar = false
 config.switch_to_last_active_tab_when_closing_tab = true
