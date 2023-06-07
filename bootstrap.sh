@@ -73,12 +73,12 @@ echo 'eval "$(rtx activate zsh)"' >> ~/.zshrc
 # Install rtx plugins
 brew install autoconf wxwidgets
 export KERL_CONFIGURE_OPTIONS="--without-javac --with-ssl=$(brew --prefix openssl@1.1)"
-rtx install elixir latest
-rtx install elm latest
-rtx install erlang latest
-rtx install node latest
-rtx install poetry latest
-rtx install python latest
+rtx use -g elixir@latest
+rtx use -g elm@latest
+rtx use -g erlang@latest
+rtx use -g node@latest
+rtx use -g poetry@latest
+rtx use -g python@latest
 
 # Install Elixir libs
 mix local.hex
@@ -91,6 +91,7 @@ npm install -g yarn quicktype
 # Setup Helix LSP
 pip install ruff python-lsp-server python-lsp-ruff
 npm install -g @elm-tooling/elm-language-server bash-language-server yaml-language-server vscode-languageservers-extracted
+rtx use -g lua-language-server@latest
 
 # Upgrade and cleanup brew stuff...
 brew update && brew upgrade && brew cleanup -s && rm -rf ~/Library/Caches/Homebrew/*
