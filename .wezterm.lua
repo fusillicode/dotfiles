@@ -8,7 +8,7 @@ config.colors = {
   tab_bar = {
     active_tab = {
       bg_color = 'black',
-      fg_color = 'white',
+      fg_color = 'lime',
     },
     inactive_tab = {
       bg_color = 'black',
