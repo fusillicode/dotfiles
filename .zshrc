@@ -180,10 +180,6 @@ pg_copy_table() {
 export PATH=$HOME/bin:$PATH
 export PATH=$HOME/.local/bin:$PATH
 
-# To make `Alt-left` & `Alt-right` work on Alacritty
-bindkey "^[[1;3C" forward-word
-bindkey "^[[1;3D" backward-word
-
 # `brew link imagemagick@6` suggestion ¯\_(ツ)_/¯
 export PATH="/usr/local/opt/imagemagick@6:$PATH"
 
