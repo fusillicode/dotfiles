@@ -1,6 +1,6 @@
 local wezterm = require 'wezterm'
 
-config = wezterm.config_builder()
+local config = wezterm.config_builder()
 
 config.animation_fps = 1
 config.colors = {
@@ -24,6 +24,16 @@ config.font_size = 16
 config.inactive_pane_hsb = { brightness = 0.3 }
 config.hide_tab_bar_if_only_one_tab = true
 config.keys = {
+  {
+    key = 'LeftArrow',
+    mods = 'OPT',
+    action = wezterm.action.SendKey { key = 'b', mods = 'ALT', },
+  },
+  {
+    key = 'RightArrow',
+    mods = 'OPT',
+    action = wezterm.action.SendKey { key = 'f', mods = 'ALT' },
+  },
   {
     key = 'h',
     mods = 'CMD|SHIFT',
@@ -65,5 +75,5 @@ config.window_frame = {
   active_titlebar_bg = 'black',
   inactive_titlebar_bg = 'black',
 }
- 
+
 return config
