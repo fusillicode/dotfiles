@@ -37,3 +37,7 @@ auto-format = true
 [[language]]
 name = "markdown"
 auto-format = true
+
+[[language]]
+name = "lua"
+auto-format = true
