@@ -65,15 +65,16 @@ config.keys = {
     action = wezterm.action.SplitHorizontal { domain = "CurrentPaneDomain" },
   },
   {
-    key = 'x',
-    mods = 'CMD|SHIFT',
-    action = wezterm.action.ActivateCopyMode,
-  },
-  {
     key = 'p',
     mods = 'CMD|SHIFT',
     action = wezterm.action.ActivateCommandPalette,
   },
+  {
+    key = 'x',
+    mods = 'CMD',
+    action = wezterm.action.ActivateCopyMode,
+  },
+
 }
 config.line_height = 1.2
 config.show_new_tab_button_in_tab_bar = false
