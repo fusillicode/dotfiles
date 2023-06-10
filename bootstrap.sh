@@ -63,6 +63,7 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/mas
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Rust bins ❤️
+rustup component add rust-analyzer
 cargo install atuin cargo-make git-delta ripgrep rtx-cli sd sk sqlx-cli taplo-cli
 cargo install qsv --features all_features
 
