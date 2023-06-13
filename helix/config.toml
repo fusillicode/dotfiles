@@ -2,7 +2,6 @@ theme = "my_github_dark"
 
 [editor]
 auto-save = true
-completion-replace = true
 cursorline = true
 rulers = [120]
 
@@ -16,7 +15,7 @@ hidden = false
 
 [editor.statusline]
 left = ["spinner", "file-modification-indicator", "diagnostics", "file-name"]
-right = ["version-control", "selections", "primary-selection-length", "workspace-diagnostics"]
+right = ["selections", "primary-selection-length", "workspace-diagnostics"]
 mode.insert = "I"
 mode.normal = "N"
 mode.select = "S"
