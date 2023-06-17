@@ -1,0 +1,22 @@
+#!/bin/bash
+
+HELIX_PANE_ID=$(wezterm cli get-pane-direction Right)
+
+sk --multi --height 12 --ansi --interactive \
+    --cmd 'rg --color=always --line-number --no-heading "{}"' \
+    --preview \
+      'bat \
+        --color=always \
+        --style=header,numbers \
+        --highlight-line="$(echo {1} | cut -d: -f2)" "$(echo {1} | cut -d: -f1)"' | \
+  while read sk_line; do
+    file=$(echo "$sk_line" | cut -d: -f1)
+    line_number=$(echo "$sk_line" | cut -d: -f2)
+    echo "$file:$line_number"
+  done
+
+if [[ -n "$FILE_PATHS" ]]; then
+  wezterm cli send-text --pane-id "$HELIX_PANE_ID" --no-paste ":"
+  wezterm cli send-text --pane-id "$HELIX_PANE_ID" "open $FILE_PATHS"
+  printf "\r" | wezterm cli send-text --pane-id "$HELIX_PANE_ID" --no-paste
+fi
