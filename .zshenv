@@ -33,20 +33,19 @@ kseclist () {
 }
 
 ksecyaml () {
-  k get secrets -oname ${2:+--namespace=$2} | \
-  rg "secret/(.*$1.*)" -r '$1' | xargs -I {} kubectl get secret {} -oyaml
+  k get secrets -oname ${2:+--namespace=$2} | rg "secret/(.*$1.*)" -r '$1' | xargs -I {} kubectl get secret {} -oyaml
 }
 
 ksecdec () {
   k get secrets -oname ${3:+--namespace=$3} | \
-  rg "secret/(.*$2.*)" -r '$1' | xargs -I {} kubectl get secret {} -oyaml | \
-  rg "\s+(.*$1.*):\s+(.*)" -r '$1:$2' | \
-  while read kv
-  do
-    dv=$(echo $kv | rg ".*:(.*)" -r '$1' | base64 -D)
-    k=$(echo $kv | rg "(.*):.*" -r '$1')
-    echo $k $dv
-  done
+    rg "secret/(.*$2.*)" -r '$1' | xargs -I {} kubectl get secret {} -oyaml | \
+    rg "\s+(.*$1.*):\s+(.*)" -r '$1:$2' | \
+    while read kv
+    do
+      dv=$(echo $kv | rg ".*:(.*)" -r '$1' | base64 -D)
+      k=$(echo $kv | rg "(.*):.*" -r '$1')
+      echo $k $dv
+    done
 }
 
 kcronsus () {
