@@ -4,6 +4,7 @@ theme = "my_github_dark"
 auto-save = true
 cursorline = true
 rulers = [120]
+shell = ["zsh", "-c"]
 
 [editor.cursor-shape]
 insert = "bar"
