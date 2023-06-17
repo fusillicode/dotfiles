@@ -30,4 +30,6 @@ space = "all"
 tab = "all"
 
 [keys.normal]
+"C-e" = ":reset-diff-change"
+"C-r" = ":reload-all"
 "esc" = "keep_primary_selection"
