@@ -10,3 +10,6 @@ poetry = "latest"
 protoc = "3.20.0"
 python = "latest"
 lua-language-server = "latest"
+
+[settings]
+experimental = true
