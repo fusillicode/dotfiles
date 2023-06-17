@@ -81,7 +81,7 @@ plugins=(git gitfast kubectl)
 
 # Preferred editor for local and remote sessions
 if [[ -n $SSH_CONNECTION ]]; then
-  export EDITOR='vim'
+  export EDITOR='hx'
 else
   export EDITOR='hx'
 fi
