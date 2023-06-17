@@ -104,7 +104,6 @@ alias h="history -i"
 alias l="ls -latrh"
 alias j="jq . -c"
 alias jl="jq . "
-alias cf="codefresh"
 alias gcnuke="git commit --amend --no-edit --no-verify --allow-empty && git push --force-with-lease --no-verify"
 alias gcnoke="git commit --amend --no-edit --no-verify --allow-empty"
 alias gs="git status"
@@ -119,31 +118,26 @@ sorce () {
 gtnuke () {
   g tag -f $1 && g push origin $1 -f
 }
+
 gt () {
   g --no-pager tag
   g ls-remote --tags
-}
-
-# Easy CF
-cflist () {
-  cf get builds ${1:+--status=$1} --select-columns id,repository,pipeline-name,branch,status
-}
-cflog () {
-  cf get builds ${2:+--status=$2} --select-columns id,repository,pipeline-name,branch,status | \
-  rg "([^\s]*)\s.*$1.*" -r '$1' | head -n 1 | xargs -I {} codefresh logs $3 {}
 }
 
 # Easy K8S
 klfir() {
   kgp | rg $1 | head -n 1 | rg "^(\S*).*" -r '$1' | xargs -I {} kubectl logs -f {} $2
 }
+
 kseclist () {
   k get secrets -oname ${1:+--namespace=$1}
 }
+
 ksecyaml () {
   k get secrets -oname ${2:+--namespace=$2} | \
   rg "secret/(.*$1.*)" -r '$1' | xargs -I {} kubectl get secret {} -oyaml
 }
+
 ksecdec () {
   k get secrets -oname ${3:+--namespace=$3} | \
   rg "secret/(.*$2.*)" -r '$1' | xargs -I {} kubectl get secret {} -oyaml | \
@@ -155,18 +149,22 @@ ksecdec () {
     echo $k $dv
   done
 }
+
 kcronsus () {
   k patch cronjobs $1 --patch '{"spec": {"suspend": '"$2"'}}'
 }
+
 kcronrest () {
   maybe_namespace=${2:+--namespace=$2}
   k get cronjobs $1 $maybe_namespace --export -oyaml > foo.yaml
   k delete cronjobs -f $1 $maybe_namespace --ignore-not-found
   k apply -f $maybe_namespace foo.yaml
 }
+
 kdeplscale () {
   k patch deployment $1 --patch '{"spec": {"replicas": '"$2"'}}'
 }
+
 kdelerrpod () {
   kgp | rg "(\S+).*Error.*" -r '$1' | xargs -I {} kubectl delete pod {}
 }
