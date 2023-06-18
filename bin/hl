@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 sk_matches=$(
   sk --multi --height 12 --ansi --interactive \
     --cmd 'rg --color=always --line-number --no-heading "{}"' \
@@ -7,7 +9,8 @@ sk_matches=$(
       'bat \
         --color=always \
         --style=numbers \
-        --highlight-line "$(echo {1} | cut -d: -f2)" "$(echo {1} | cut -d: -f1)"
+        --highlight-line "$(echo {1} | cut -d: -f2)" \
+        "$(echo {1} | cut -d: -f1)"
       '
 )
 
