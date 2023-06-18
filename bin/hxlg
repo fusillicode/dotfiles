@@ -12,12 +12,12 @@ sk_matches=$(
 
 file_paths=""
 while read sk_match; do
-  file_path=$(echo "$sk_match" | cut -d: -f1 | sed -e "s/ /\\\ /g") 
-  if [ -z "$file_path" ]; then
+  file=$(echo "$sk_match" | cut -d: -f1 | sed -e "s/ /\\\ /g") 
+  if [ -z "$file" ]; then
     break
   fi 
   line_number=$(echo "$sk_match" | cut -d: -f2)
-  file_paths+=" $file_path:$line_number"
+  file_paths+=" $file:$line_number"
 done <<< "$sk_matches"
 
 if [[ -n "$file_paths" ]]; then
