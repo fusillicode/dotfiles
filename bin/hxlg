@@ -24,6 +24,6 @@ if [[ -n "$file_paths" ]]; then
   helix_pane_id=$(wezterm cli get-pane-direction Right)
   wezterm cli send-text --pane-id "$helix_pane_id" --no-paste ":"
   wezterm cli send-text --pane-id "$helix_pane_id" "open $file_paths"
-  wezterm cli send-text --pane-id "$helix_pane_id" --no-paste "\r"
+  printf "\r" | wezterm cli send-text --pane-id "$helix_pane_id" --no-paste
   wezterm cli activate-pane --pane-id "$helix_pane_id"
 fi
