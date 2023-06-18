@@ -7,7 +7,8 @@ sk_matches=$(
       'bat \
         --color=always \
         --style=numbers \
-        --highlight-line="$(echo {1} | cut -d: -f2)" "$(echo {1} | cut -d: -f1)"'
+        --highlight-line "$(echo {1} | cut -d: -f2)" "$(echo {1} | cut -d: -f1)"
+      '
 )
 
 file_paths=""
