@@ -1,22 +1,29 @@
 #!/bin/bash
 
-HELIX_PANE_ID=$(wezterm cli get-pane-direction Right)
-
-sk --multi --height 12 --ansi --interactive \
+sk_matches=$(
+  sk --multi --height 12 --ansi --interactive \
     --cmd 'rg --color=always --line-number --no-heading "{}"' \
     --preview \
       'bat \
         --color=always \
         --style=header,numbers \
-        --highlight-line="$(echo {1} | cut -d: -f2)" "$(echo {1} | cut -d: -f1)"' | \
-  while read sk_line; do
-    file=$(echo "$sk_line" | cut -d: -f1)
-    line_number=$(echo "$sk_line" | cut -d: -f2)
-    echo "$file:$line_number"
-  done
+        --highlight-line="$(echo {1} | cut -d: -f2)" "$(echo {1} | cut -d: -f1)"'
+)
 
-if [[ -n "$FILE_PATHS" ]]; then
-  wezterm cli send-text --pane-id "$HELIX_PANE_ID" --no-paste ":"
-  wezterm cli send-text --pane-id "$HELIX_PANE_ID" "open $FILE_PATHS"
-  printf "\r" | wezterm cli send-text --pane-id "$HELIX_PANE_ID" --no-paste
+file_paths=""
+while read sk_match; do
+  file=$(echo "$sk_match" | cut -d: -f1 | sed -e "s/ /\\\ /g") 
+  if [ -z "$file" ]; then
+    break
+  fi 
+  line_number=$(echo "$sk_match" | cut -d: -f2)
+  file_paths+=" $file:$line_number"
+done <<< "$sk_matches"
+
+if [[ -n "$file_paths" ]]; then
+  helix_pane_id=$(wezterm cli get-pane-direction Right)
+  wezterm cli send-text --pane-id "$helix_pane_id" --no-paste ":"
+  wezterm cli send-text --pane-id "$helix_pane_id" "open $file_paths"
+  printf "\r" | wezterm cli send-text --pane-id "$helix_pane_id" --no-paste
+  wezterm cli activate-pane --pane-id "$helix_pane_id"
 fi
