@@ -64,7 +64,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Rust bins ❤️
 rustup component add rust-analyzer
-cargo install atuin bat cargo-make drill git-delta ripgrep rtx-cli sd sk sqlx-cli taplo-cli
+cargo install atuin bat cargo-make ccase drill git-delta rgr ripgrep rtx-cli sd sk sqlx-cli taplo-cli
 cargo install qsv --features all_features
 
 # Configure atuin
