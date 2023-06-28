@@ -12,6 +12,8 @@ config.lens.debug.enable = false
 config.lens.implementations.enable = false
 config.lens.run.enable = false
 config.showUnlinkedFileNotification = false
+config.cargo.extraArgs = ["--profile", "rust-analyzer"]
+config.cargo.extraEnv = { "CARGO_PROFILE_RUST_ANALYZER_INHERITS" = "dev" }
 
 [[language]]
 name = "toml"
