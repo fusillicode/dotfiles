@@ -40,9 +40,9 @@ C-l = "move_char_right"
 C-w = ["move_next_word_start"]
 
 [keys.normal]
-"C-d" = ["half_page_down", "goto_window_center"]
-"C-u" = ["half_page_up", "goto_window_center"]
-"esc" = "keep_primary_selection"
+C-j = ["half_page_down", "goto_window_center"]
+C-k = ["half_page_up", "goto_window_center"]
+esc = "keep_primary_selection"
 
 [keys.normal.";"]
 S = [":pipe ccase -t screamingsnake", "delete_char_forward"]
