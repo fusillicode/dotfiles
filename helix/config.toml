@@ -5,6 +5,7 @@ auto-save = true
 cursorline = true
 rulers = [120]
 shell = ["zsh", "-c"]
+text-width = 120
 
 [editor.cursor-shape]
 insert = "bar"
@@ -40,15 +41,28 @@ C-w = ["move_next_word_start"]
 
 [keys.normal]
 "C-d" = ["half_page_down", "goto_window_center"]
-"C-e" = ":reset-diff-change"
-"C-r" = ":reload-all"
 "C-u" = ["half_page_up", "goto_window_center"]
 "esc" = "keep_primary_selection"
 
+[keys.normal.";"]
+S = [":pipe ccase -t screamingsnake", "delete_char_forward"]
+c = [":pipe ccase -t camel", "delete_char_forward"]
+k = [":pipe ccase -t kebab", "delete_char_forward"]
+K = [":pipe ccase -t upperkebab", "delete_char_forward"]
+l = [":pipe ccase -t lower", "delete_char_forward"]
+p = [":pipe ccase -t pascal", "delete_char_forward"]
+s = [":pipe ccase -t snake", "delete_char_forward"]
+u = [":pipe ccase -t upper", "delete_char_forward"]
+
 [keys.normal.space]
 F = "file_picker_in_current_buffer_directory"
-W = ":write-all"
-X = ":buffer-close-others"
-q = ":quit-all"
+Q = ":quit-all!"
+U = ":reload-all"
+W = ":write!"
+X = ":buffer-close!"
+e = ":reset-diff-change"
+n = ":new"
+o = ":buffer-close-others"
+u = ":reload"
 w = ":write"
 x = ":buffer-close"
