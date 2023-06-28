@@ -21,7 +21,7 @@ config.cursor_blink_ease_out = 'Constant'
 config.cursor_blink_rate = 0
 config.font = wezterm.font('Monaco')
 config.font_size = 16
-config.inactive_pane_hsb = { brightness = 0.3 }
+config.inactive_pane_hsb = { brightness = 0.5 }
 config.hide_tab_bar_if_only_one_tab = true
 config.keys = {
   {
@@ -77,14 +77,12 @@ config.keys = {
 
 }
 config.line_height = 1.2
+config.pane_focus_follows_mouse = true
 config.show_new_tab_button_in_tab_bar = false
 config.switch_to_last_active_tab_when_closing_tab = true
 config.text_blink_rate = 0
 config.window_decorations = "RESIZE"
 config.window_padding = { left = 0, right = 0, top = 0, bottom = 0 }
-config.window_frame = {
-  active_titlebar_bg = 'black',
-  inactive_titlebar_bg = 'black',
-}
+config.window_frame = { active_titlebar_bg = 'black', inactive_titlebar_bg = 'black' }
 
 return config
