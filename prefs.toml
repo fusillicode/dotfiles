@@ -1,7 +1,9 @@
+summary = true
+
 [keybindings]
+ctrl-g = "scroll-to-bottom"
 ctrl-j = "scroll-pages(1)"
 ctrl-k = "scroll-pages(-1)"
 g = "scroll-to-top"
 j = "scroll-lines(1)"
 k = "scroll-lines(-1)"
-shift-g = "scroll-to-bottom"
