@@ -77,7 +77,6 @@ config.keys = {
 
 }
 config.line_height = 1.2
-config.pane_focus_follows_mouse = true
 config.show_new_tab_button_in_tab_bar = false
 config.switch_to_last_active_tab_when_closing_tab = true
 config.text_blink_rate = 0
