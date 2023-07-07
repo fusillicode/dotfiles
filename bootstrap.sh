@@ -92,7 +92,7 @@ npm install -g yarn quicktype
 
 # Setup Helix LSP
 pip install ruff python-lsp-server python-lsp-ruff
-npm install -g @elm-tooling/elm-language-server bash-language-server yaml-language-server vscode-languageservers-extracted
+npm install -g @elm-tooling/elm-language-server bash-language-server yaml-language-server vscode-langservers-extracted
 rtx use -g lua-language-server@latest
 
 # Upgrade and cleanup brew stuff...
