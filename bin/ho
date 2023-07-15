@@ -6,10 +6,10 @@ set -euo pipefail
 wezterm_panes=$(wezterm cli list --format json)
 
 # Get tab id of the pane from where `ho` is invoked
-current_tab_id=$(echo $wezterm_panes | jq '.[] | select(.pane_id=='$WEZTERM_PANE') | .tab_id')
+current_tab_id=$(echo "$wezterm_panes" | jq '.[] | select(.pane_id=='"$WEZTERM_PANE"') | .tab_id')
 
 # Get first (we don't care which) pane id where Helix is running 
-hx_pane_id=$(echo $wezterm_panes | jq '.[] | select(.tab_id=='$current_tab_id' and .title=="hx") | .pane_id')
+hx_pane_id=$(echo "$wezterm_panes" | jq '.[] | select(.tab_id=='"$current_tab_id"' and .title=="hx") | .pane_id')
 
 # Exit if there's no pane with Helix running 
 if [ -z "$hx_pane_id" ]; then
@@ -18,10 +18,10 @@ if [ -z "$hx_pane_id" ]; then
 fi
 
 # Send "open file" cmd to Helix pane
-wezterm cli send-text --pane-id $hx_pane_id ":o $1" --no-paste
+wezterm cli send-text --pane-id "$hx_pane_id" ":o $1" --no-paste
 
 # Simulate 'Enter' press to execute "open file" cmd in Helix pane
 printf "\r" | wezterm cli send-text --pane-id "$hx_pane_id" --no-paste
 
 # Focus Helix pane
-wezterm cli activate-pane --pane-id $hx_pane_id
+wezterm cli activate-pane --pane-id "$hx_pane_id"
