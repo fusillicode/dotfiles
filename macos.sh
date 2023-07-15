@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 # ~/.macos — https://mths.be/macos
 
@@ -20,7 +20,7 @@ while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 defaults write NSGlobalDomain AppleInterfaceStyle Dark
 
 # Set computer name (as done via System Preferences → Sharing)
-read -p "How do you want to name your computer: " pc_name
+read -r -p "How do you want to name your computer: " pc_name
 sudo scutil --set ComputerName "$pc_name"
 sudo scutil --set HostName "$pc_name"
 sudo scutil --set LocalHostName "$pc_name"
