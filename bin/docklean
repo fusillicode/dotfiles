@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
-docker rm $(docker ps -aq)
-docker volume rm $(docker volume ls --format "{{.Name}}")
+docker rm "$(docker ps -aq)"
+docker volume rm "$(docker volume ls --format '{{.Name}}')"
