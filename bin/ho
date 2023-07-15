@@ -2,6 +2,12 @@
 
 set -euo pipefail
 
+# Exit if no file is supplied 
+if [ $# -eq 0 ]; then  
+  echo -e "\n No file supplied 😞"
+  exit 1
+fi
+
 # Get list of panes
 wezterm_panes=$(wezterm cli list --format json)
 
@@ -13,7 +19,7 @@ hx_pane_id=$(echo "$wezterm_panes" | jq '.[] | select(.tab_id=='"$current_tab_id
 
 # Exit if there's no pane with Helix running 
 if [ -z "$hx_pane_id" ]; then
-  echo -e "\n No pane running Helix found in current tab (id $current_tab_id) 😞"
+  echo -e "\n No Helix found in any panes of the current tab (id $current_tab_id) 😞"
   exit 1
 fi
 
