@@ -4,12 +4,12 @@ OLDIFS=$IFS
 
 get_cpu_stats() {
   local IFS=$'\n'
-  topdata=($(top -F -R -l2 -o cpu -n 5 -s 2 -stats pid,command,cpu))
+  topdata=("$(top -F -R -l2 -o cpu -n 5 -s 2 -stats pid,command,cpu)")
   nlines=${#topdata[@]}
 
   IFS=$OLDIFS
   for ((i = nlines / 2; i < nlines; i++)); do
-    line=(${topdata[$i]})
+    line=("${topdata[$i]}")
     word=${line[0]}
     if [ "$word" = PID ]; then
       top_5=("${topdata[@]:$i}")
