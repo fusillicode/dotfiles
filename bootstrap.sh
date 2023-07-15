@@ -26,6 +26,7 @@ brew install libpq && brew link libpq --force
 brew install librdkafka # It also installs `lz4`, `lzlib` & `zstd`
 brew install marksman
 brew install mycli # For Python `mysqlclient`
+brew install shellcheck
 brew install stern
 brew install txn2/tap/kubefwd
 brew install vegeta
@@ -68,13 +69,16 @@ cargo install atuin bacon bat cargo-make ccase drill git-delta rgr ripgrep rtx-c
 cargo install qsv --features all_features
 
 # Configure atuin
+# shellcheck disable=SC2016
 echo 'eval "$(atuin init zsh)"' >> ~/.zshrc
 # Configure rtx
+# shellcheck disable=SC2016
 echo 'eval "$(rtx activate zsh)"' >> ~/.zshrc
 
 # Install rtx plugins
 brew install autoconf wxwidgets
-export KERL_CONFIGURE_OPTIONS="--without-javac --with-ssl=$(brew --prefix openssl@1.1)"
+KERL_CONFIGURE_OPTIONS="--without-javac --with-ssl=$(brew --prefix openssl@1.1)"
+export KERL_CONFIGURE_OPTIONS
 rtx use -g elixir@latest
 rtx use -g elm@latest
 rtx use -g erlang@latest
