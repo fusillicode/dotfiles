@@ -1,5 +1,7 @@
 #!/bin/bash
 
+script_dir="${BASH_SOURCE%/*}"
+
 # Install Xcode tools
 xcode-select --install
 
@@ -63,10 +65,9 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/mas
 # Install rustup ❤️
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# Rust bins ❤️
-rustup component add rust-analyzer
-cargo install atuin bacon bat cargo-make ccase drill git-delta rgr ripgrep rtx-cli sd sk sqlx-cli taplo-cli
-cargo install qsv --features all_features
+# Install cargo bins ❤️
+/bin/bash "${script_dir}/bin/cargobu"
+cargo install --force qsv --features all_features
 
 # Configure atuin
 # shellcheck disable=SC2016
@@ -86,19 +87,13 @@ rtx use -g node@latest
 rtx use -g poetry@latest
 rtx use -g python@latest
 
+# Install rtx related tools
+/bin/bash "${script_dir}/bin/rtxtu"
+
 # Install Elixir libs
 mix local.hex
 mix local.rebar
 mix archive.install hex phx_new 1.5.8
 
-# Install Node stuff...
-npm install -g yarn quicktype
-
-# Setup Helix LSP
-pip install ruff python-lsp-server python-lsp-ruff
-npm install -g @elm-tooling/elm-language-server bash-language-server yaml-language-server vscode-langservers-extracted
-rtx use -g lua-language-server@latest
-
-# Upgrade and cleanup brew stuff...
-brew update && brew upgrade && brew cleanup -s && rm -rf ~/Library/Caches/Homebrew/*
-brew doctor
+# Update & cleanup brew
+/bin/bash "${script_dir}/bin/brewu"

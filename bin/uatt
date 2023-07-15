@@ -1,0 +1,10 @@
+#!/bin/bash
+
+set -euo pipefail
+
+script_dir="${BASH_SOURCE%/*}"
+
+rustup update
+/bin/bash "${script_dir}/cargobu"
+/bin/bash "${script_dir}/brewu"
+/bin/bash "${script_dir}/rtxtu"
