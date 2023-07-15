@@ -62,7 +62,10 @@ config.keys = {
   {
     key = 't',
     mods = 'CMD|SHIFT',
-    action = wezterm.action.SplitHorizontal { domain = "CurrentPaneDomain" },
+    action = wezterm.action.SplitPane {
+      direction = "Right",
+      size = { Percent = 59 }
+    },
   },
   {
     key = 'p',
