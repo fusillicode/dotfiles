@@ -2,6 +2,7 @@
 
 set -euo pipefail
 
+# shellcheck disable=SC2016
 sk_matches=$(
   sk --multi --height 12 --ansi --interactive \
     --cmd 'rg --color=always --line-number --no-heading "{}"' \
@@ -15,7 +16,7 @@ sk_matches=$(
 )
 
 file_paths=""
-while read sk_match; do
+while read -r sk_match; do
   file_path=$(echo "$sk_match" | cut -d: -f1 | sed -e "s/ /\\\ /g") 
   if [ -z "$file_path" ]; then
     break
@@ -25,9 +26,9 @@ while read sk_match; do
 done <<< "$sk_matches"
 
 if [[ -n "$file_paths" ]]; then
-  helix_pane_id=$(wezterm cli get-pane-direction Right)
-  wezterm cli send-text --pane-id "$helix_pane_id" --no-paste ":"
-  wezterm cli send-text --pane-id "$helix_pane_id" "open $file_paths"
-  printf "\r" | wezterm cli send-text --pane-id "$helix_pane_id" --no-paste
-  wezterm cli activate-pane --pane-id "$helix_pane_id"
+  hx_pane_id=$(wezterm cli get-pane-direction Right)
+  wezterm cli send-text --pane-id "$hx_pane_id" --no-paste ":"
+  wezterm cli send-text --pane-id "$hx_pane_id" "open $file_paths"
+  printf "\r" | wezterm cli send-text --pane-id "$hx_pane_id" --no-paste
+  wezterm cli activate-pane --pane-id "$hx_pane_id"
 fi
