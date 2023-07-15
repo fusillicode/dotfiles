@@ -1,5 +1,7 @@
 #!/bin/bash
 
+script_dir="${BASH_SOURCE%/*}"
+
 # Install Xcode tools
 xcode-select --install
 
@@ -62,8 +64,10 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/mas
 
 # Install rustup ❤️
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
 # Install cargo bins ❤️
-/bin/bash ./bin/cargobu
+/bin/bash "${script_dir}/bin/cargobu"
+cargo install --force qsv --features all_features
 
 # Configure atuin
 # shellcheck disable=SC2016
@@ -83,13 +87,13 @@ rtx use -g node@latest
 rtx use -g poetry@latest
 rtx use -g python@latest
 
+# Install rtx related tools
+/bin/bash "${script_dir}/bin/rtxtu"
+
 # Install Elixir libs
 mix local.hex
 mix local.rebar
 mix archive.install hex phx_new 1.5.8
 
-# Install rtx related tools
-/bin/bash ./bin/rtxtu
-
 # Update & cleanup brew
-/bin/bash ./bin/brewu
+/bin/bash "${script_dir}/bin/brewu"

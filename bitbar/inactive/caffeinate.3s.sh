@@ -19,7 +19,7 @@ if [[ "$1" = "stop" ]]; then
   exit
 fi
 
-echo icon
+icon
 echo "---"
 if [[ -z "$(pgrep caffeinate)" ]]; then
   echo "Caffeinate | size=12 color=white bash='$0' param1=start terminal=false"
