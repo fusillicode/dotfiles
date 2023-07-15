@@ -1,0 +1,8 @@
+#!/bin/bash
+
+set -euo pipefail
+
+# cargo bins ❤️
+rustup component add rust-analyzer
+cargo install --force \
+  atuin bacon bat cargo-make ccase drill git-delta repgrep ripgrep rtx-cli sd skim sqlx-cli taplo-cli
