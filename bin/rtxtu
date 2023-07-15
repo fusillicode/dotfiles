@@ -1,0 +1,10 @@
+#!/bin/bash
+
+set -euo pipefail
+
+# rtx dependant tools
+npm install -g \
+  yarn quicktype @elm-tooling/elm-language-server bash-language-server yaml-language-server \
+  vscode-langservers-extracted
+pip install ruff python-lsp-server python-lsp-ruff
+rtx use -g lua-language-server@latest

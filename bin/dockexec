@@ -1,6 +1,6 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
-CONTAINER_NAME=${1:-"fast-data-dev"}
-COMMAND=${2:-bash}
+container_name=${1:-"fast-data-dev"}
+command=${2:-bash}
 
-docker exec -it $(docker ps | /opt/homebrew/bin/rg "$CONTAINER_NAME" | awk '{print $1;}') "$COMMAND"
+docker exec -it "$(docker ps | /opt/homebrew/bin/rg "$container_name" | awk '{print $1;}')" "$command"
