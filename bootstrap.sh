@@ -26,6 +26,7 @@ brew install libpq && brew link libpq --force
 brew install librdkafka # It also installs `lz4`, `lzlib` & `zstd`
 brew install marksman
 brew install mycli # For Python `mysqlclient`
+brew install shellcheck
 brew install stern
 brew install txn2/tap/kubefwd
 brew install vegeta
