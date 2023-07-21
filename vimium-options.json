@@ -4,7 +4,7 @@
   "filterLinkHints": false,
   "waitForEnterForFilteredHints": true,
   "hideHud": false,
-  "keyMappings": "# Insert your preferred key mappings here.\nmap <c-j> scrollPageDown\nmap <c-k> scrollPageUp\nmap ge scrollToBottom\nmap H goBack\nmap G goForward\nmap <c-h> previousTab\nmap <c-l> nextTab",
+  "keyMappings": "# Insert your preferred key mappings here.\nmap <c-j> scrollPageDown\nmap <c-k> scrollPageUp\nmap ge scrollToBottom\nmap <c-h> goBack\nmap <c-l> goForward\nmap h goBack\nmap l goForward\nmap H previousTab\nmap L nextTab",
   "linkHintCharacters": "sadfjklewcmpgh",
   "linkHintNumbers": "0123456789",
   "newTabUrl": "about:newtab",
