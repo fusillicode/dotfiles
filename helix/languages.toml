@@ -26,6 +26,7 @@ auto-format = true
 [[language]]
 name = "json"
 auto-format = true
+formatter = { command = 'prettier', args = ["--parser", "json"] }
 
 [[language]]
 name = "lua"
@@ -43,7 +44,29 @@ auto-format = true
 [[language]]
 name = "yaml"
 auto-format = true
+formatter = { command = 'prettier', args = ["--parser", "yaml"] }
 
 [[language]]
 name = "markdown"
+auto-format = true
+formatter = { command = 'prettier', args = ["--parser", "markdown"] }
+
+[[language]]
+name = "html"
+auto-format = true
+formatter = { command = 'prettier', args = ["--parser", "html"] }
+
+[[language]]
+name = "css"
+auto-format = true
+formatter = { command = 'prettier', args = ["--parser", "css"] }
+
+[[language]]
+name = "javascript"
+formatter = { command = 'prettier', args = ["--parser", "typescript"] }
+auto-format = true
+
+[[language]]
+name = "typescript"
+formatter = { command = 'prettier', args = ["--parser", "typescript"] }
 auto-format = true
