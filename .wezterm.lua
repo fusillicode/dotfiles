@@ -77,7 +77,11 @@ config.keys = {
     mods = 'CMD',
     action = wezterm.action.ActivateCopyMode,
   },
-
+  {
+    key = 'a',
+    mods = 'CMD|SHIFT',
+    action = wezterm.action.TogglePaneZoomState,
+  },
 }
 config.line_height = 1.2
 config.show_new_tab_button_in_tab_bar = false
