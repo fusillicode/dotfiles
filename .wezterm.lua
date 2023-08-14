@@ -82,6 +82,16 @@ config.keys = {
     mods = 'CMD|SHIFT',
     action = wezterm.action.TogglePaneZoomState,
   },
+  {
+    key = '[',
+    mods = 'CMD|CTRL',
+    action = wezterm.action.MoveTabRelative(-1),
+  },
+  {
+    key = ']',
+    mods = 'CMD|CTRL',
+    action = wezterm.action.MoveTabRelative(1),
+  },
 }
 config.line_height = 1.2
 config.show_new_tab_button_in_tab_bar = false
