@@ -84,12 +84,12 @@ config.keys = {
   },
   {
     key = '[',
-    mods = 'CMD|CTRL',
+    mods = 'CTRL|OPT',
     action = wezterm.action.MoveTabRelative(-1),
   },
   {
     key = ']',
-    mods = 'CMD|CTRL',
+    mods = 'CTRL|OPT',
     action = wezterm.action.MoveTabRelative(1),
   },
 }
