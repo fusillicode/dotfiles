@@ -151,3 +151,6 @@ export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl/lib/pkgconfig"
 
 # Goodbye asdf 🥲, welcome rtx 😍
 eval "$(rtx activate zsh)"
+
+# Helix from the source! 😎
+export HELIX_RUNTIME=~/helix/runtime 
