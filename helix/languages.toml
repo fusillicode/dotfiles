@@ -2,18 +2,7 @@ use-grammars = { only = ["rust", "toml", "elm", "json", "lua", "python", "bash",
 
 [[language]]
 name = "rust"
-config.check.command = "clippy"
-config.checkOnSave.command = "clippy"
-config.completion.autoimport.enable = true
-config.imports.granularity.enforce = true
-config.imports.granularity.group = "item"
-config.imports.prefix = "crate"
-config.lens.debug.enable = false
-config.lens.implementations.enable = false
-config.lens.run.enable = false
-config.showUnlinkedFileNotification = false
-config.cargo.extraArgs = ["--profile", "rust-analyzer"]
-config.cargo.extraEnv = { "CARGO_PROFILE_RUST_ANALYZER_INHERITS" = "dev" }
+language-servers = ["rust-analyzer"]
 
 [[language]]
 name = "toml"
@@ -35,7 +24,7 @@ auto-format = true
 [[language]]
 name = "python"
 auto-format = true
-config.pylsp.plugins.ruff = { enabled = true, lineLength = 120 }
+language-servers = ["pylsp"]
 
 [[language]]
 name = "bash"
@@ -70,3 +59,20 @@ formatter = { command = 'prettier', args = ["--parser", "typescript"] }
 name = "typescript"
 auto-format = true
 formatter = { command = 'prettier', args = ["--parser", "typescript"] }
+
+[language-server.rust-analyzer]
+config.check.command = "clippy"
+config.checkOnSave.command = "clippy"
+config.completion.autoimport.enable = true
+config.imports.granularity.enforce = true
+config.imports.granularity.group = "item"
+config.imports.prefix = "crate"
+config.lens.debug.enable = false
+config.lens.implementations.enable = false
+config.lens.run.enable = false
+config.showUnlinkedFileNotification = false
+config.cargo.extraArgs = ["--profile", "rust-analyzer"]
+config.cargo.extraEnv = { "CARGO_PROFILE_RUST_ANALYZER_INHERITS" = "dev" }
+
+[language-server.pylsp]
+config.pylsp.plugins.ruff = { enabled = true, lineLength = 120 }
