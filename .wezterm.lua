@@ -92,6 +92,11 @@ config.keys = {
     mods = 'CTRL|OPT',
     action = wezterm.action.MoveTabRelative(1),
   },
+  {
+    key = 'Enter',
+    mods = 'ALT',
+    action = wezterm.action.Nop,
+  },
 }
 config.line_height = 1.2
 config.show_new_tab_button_in_tab_bar = false
