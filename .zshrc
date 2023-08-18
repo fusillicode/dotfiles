@@ -70,7 +70,7 @@ ZSH_THEME="my-zsh"
 # Add wisely, as too many plugins slow down shell startup.
 plugins=(git gitfast kubectl)
 
-. $ZSH/oh-my-zsh.sh
+. "$ZSH/oh-my-zsh.sh"
 
 # User configuration
 
@@ -118,10 +118,10 @@ export KUBECONFIG=~/.kube/config:~/.kube/config.qa:~/.kube/config.prod
 export ERL_AFLAGS="-kernel shell_history enabled -kernel shell_history_file_bytes 1024000"
 
 # Rust
-[ -e "$HOME/.cargo/env" ] && . $HOME/.cargo/env
+[ -e "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
 
 # Haskell
-[ -e "$HOME/.ghcup/env" ] && . $HOME/.ghcup/env
+[ -e "$HOME/.ghcup/env" ] && . "$HOME/.ghcup/env"
 
 # # ...Java...
 # [ -e "$HOME/.asdf/plugins/java/set-java-home.sh" ] && . $HOME/.asdf/plugins/java/set-java-home.sh
@@ -130,7 +130,7 @@ export ERL_AFLAGS="-kernel shell_history enabled -kernel shell_history_file_byte
 export PATH="$HOME/go/bin:$PATH"
 
 # ...Poetry...
-[ -e "$HOME/.poetry/env" ] && source $HOME/.poetry/env
+[ -e "$HOME/.poetry/env" ] && source "$HOME/.poetry/env"
 
 export PATH="$HOME/.poetry/bin:$PATH"
 
