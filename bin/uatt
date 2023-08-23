@@ -7,4 +7,5 @@ script_dir="${BASH_SOURCE%/*}"
 rustup update
 /bin/bash "${script_dir}/cargobu"
 /bin/bash "${script_dir}/brewu"
+rtx upgrade
 /bin/bash "${script_dir}/rtxtu"
