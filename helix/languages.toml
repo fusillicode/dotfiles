@@ -1,8 +1,13 @@
 use-grammars = { only = [
   "bash",
+  "comment",
   "css",
   "dockerfile",
   "elm",
+  "git-attributes",
+  "git-commit",
+  "git-ignore",
+  "git-rebase",
   "html",
   "javascript",
   "json",
@@ -13,11 +18,16 @@ use-grammars = { only = [
   "rust",
   "toml",
   "typescript",
+  "xml",
   "yaml",
 ] }
 
 [[language]]
 name = "bash"
+auto-format = true
+
+[[language]]
+name = "comment"
 auto-format = true
 
 [[language]]
@@ -31,6 +41,26 @@ auto-format = true
 
 [[language]]
 name = "elm"
+auto-format = true
+
+[[language]]
+name = "git-attributes"
+auto-format = true
+
+[[language]]
+name = "git-commit"
+auto-format = true
+
+[[language]]
+name = "git-config"
+auto-format = true
+
+[[language]]
+name = "git-ignore"
+auto-format = true
+
+[[language]]
+name = "git-rebase"
 auto-format = true
 
 [[language]]
@@ -79,6 +109,10 @@ auto-format = true
 name = "typescript"
 auto-format = true
 formatter = { command = 'prettier', args = ["--parser", "typescript"] }
+
+[[language]]
+name = "xml"
+auto-format = true
 
 [[language]]
 name = "yaml"
