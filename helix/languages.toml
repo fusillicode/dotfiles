@@ -1,27 +1,47 @@
 use-grammars = { only = [
-  "rust",
-  "toml",
+  "bash",
+  "css",
+  "dockerfile",
   "elm",
+  "html",
+  "javascript",
   "json",
   "lua",
-  "python",
-  "bash",
-  "yaml",
   "markdown",
   "protobuf",
+  "python",
+  "rust",
+  "toml",
+  "typescript",
+  "yaml",
 ] }
 
 [[language]]
-name = "rust"
-language-servers = ["rust-analyzer"]
+name = "bash"
+auto-format = true
 
 [[language]]
-name = "toml"
+name = "css"
+auto-format = true
+formatter = { command = 'prettier', args = ["--parser", "css"] }
+
+[[language]]
+name = "dockerfile"
 auto-format = true
 
 [[language]]
 name = "elm"
 auto-format = true
+
+[[language]]
+name = "html"
+auto-format = true
+formatter = { command = 'prettier', args = ["--parser", "html"] }
+
+[[language]]
+name = "javascript"
+auto-format = true
+formatter = { command = 'prettier', args = ["--parser", "typescript"] }
 
 [[language]]
 name = "json"
@@ -33,38 +53,27 @@ name = "lua"
 auto-format = true
 
 [[language]]
-name = "python"
-auto-format = true
-language-servers = ["pylsp"]
-
-[[language]]
-name = "bash"
-auto-format = true
-
-[[language]]
-name = "yaml"
-auto-format = true
-formatter = { command = 'prettier', args = ["--parser", "yaml"] }
-
-[[language]]
 name = "markdown"
 auto-format = true
 formatter = { command = 'prettier', args = ["--parser", "markdown"] }
 
 [[language]]
-name = "html"
+name = "protobuf"
 auto-format = true
-formatter = { command = 'prettier', args = ["--parser", "html"] }
+language-servers = ["bufls"]
 
 [[language]]
-name = "css"
+name = "python"
 auto-format = true
-formatter = { command = 'prettier', args = ["--parser", "css"] }
+language-servers = ["pylsp"]
 
 [[language]]
-name = "javascript"
+name = "rust"
+language-servers = ["rust-analyzer"]
+
+[[language]]
+name = "toml"
 auto-format = true
-formatter = { command = 'prettier', args = ["--parser", "typescript"] }
 
 [[language]]
 name = "typescript"
@@ -72,9 +81,16 @@ auto-format = true
 formatter = { command = 'prettier', args = ["--parser", "typescript"] }
 
 [[language]]
-name = "protobuf"
+name = "yaml"
 auto-format = true
-language-servers = ["bufls"]
+formatter = { command = 'prettier', args = ["--parser", "yaml"] }
+
+[language-server.bufls]
+command = "bufls"
+args = ["serve"]
+
+[language-server.pylsp]
+config.pylsp.plugins.ruff = { enabled = true, lineLength = 120 }
 
 [language-server.rust-analyzer]
 config.check.command = "clippy"
@@ -89,6 +105,3 @@ config.lens.run.enable = false
 config.showUnlinkedFileNotification = false
 config.cargo.extraArgs = ["--profile", "rust-analyzer"]
 config.cargo.extraEnv = { "CARGO_PROFILE_RUST_ANALYZER_INHERITS" = "dev" }
-
-[language-server.pylsp]
-config.pylsp.plugins.ruff = { enabled = true, lineLength = 120 }
