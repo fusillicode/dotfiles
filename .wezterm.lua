@@ -53,6 +53,22 @@ if wezterm.gui then
       action = wezterm.action.CopyMode { SetSelectionMode = 'Line' },
     }
   )
+  table.insert(
+    copy_mode,
+    {
+      key = 'j',
+      mods = 'CTRL',
+      action = wezterm.action.CopyMode { MoveByPage = 0.5 },
+    }
+  )
+  table.insert(
+    copy_mode,
+    {
+      key = 'k',
+      mods = 'CTRL',
+      action = wezterm.action.CopyMode { MoveByPage = -0.5 },
+    }
+  )
 end
 config.key_tables = { copy_mode = copy_mode }
 config.line_height = 1.2
