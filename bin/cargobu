@@ -5,4 +5,5 @@ set -euo pipefail
 # cargo bins ❤️
 rustup component add rust-analyzer
 cargo install --force \
-  atuin bacon bat cargo-make ccase drill git-delta pv repgrep ripgrep rtx-cli sd skim sqlx-cli taplo-cli
+  atuin bat broot cargo-make ccase drill git-delta pv ripgrep rtx-cli sd sqlx-cli
+cargo install --force taplo-cli --all-features
