@@ -1,8 +1,8 @@
 local wezterm = require 'wezterm'
-
 local config = wezterm.config_builder()
 
 config.animation_fps = 1
+
 config.colors = {
   foreground = 'white',
   tab_bar = {
@@ -16,6 +16,7 @@ config.colors = {
     }
   }
 }
+
 config.cursor_blink_ease_in = 'Constant'
 config.cursor_blink_ease_out = 'Constant'
 config.cursor_blink_rate = 0
@@ -23,6 +24,7 @@ config.font = wezterm.font('Monaco')
 config.font_size = 16
 config.inactive_pane_hsb = { brightness = 0.5 }
 config.hide_tab_bar_if_only_one_tab = true
+
 config.keys = {
   { key = 'LeftArrow',  mods = 'OPT',       action = wezterm.action.SendKey { key = 'b', mods = 'ALT', }, },
   { key = 'RightArrow', mods = 'OPT',       action = wezterm.action.SendKey { key = 'f', mods = 'ALT' }, },
@@ -43,34 +45,24 @@ config.keys = {
   { key = ']',     mods = 'CTRL|OPT',  action = wezterm.action.MoveTabRelative(1), },
   { key = 'Enter', mods = 'ALT',       action = wezterm.action.Nop, },
 }
+
 local copy_mode = nil
 if wezterm.gui then
   copy_mode = wezterm.gui.default_key_tables().copy_mode
-  table.insert(
-    copy_mode,
+  for _, custom_copy_key in pairs({
     {
       key = 'x',
       action = wezterm.action.CopyMode { SetSelectionMode = 'Line' },
+    },
+    { key = 'j', mods = 'CTRL', action = wezterm.action.CopyMode { MoveByPage = 0.5 }, },
+    { key = 'k', mods = 'CTRL', action = wezterm.action.CopyMode { MoveByPage = -0.5 },
     }
-  )
-  table.insert(
-    copy_mode,
-    {
-      key = 'j',
-      mods = 'CTRL',
-      action = wezterm.action.CopyMode { MoveByPage = 0.5 },
-    }
-  )
-  table.insert(
-    copy_mode,
-    {
-      key = 'k',
-      mods = 'CTRL',
-      action = wezterm.action.CopyMode { MoveByPage = -0.5 },
-    }
-  )
+  }) do
+    table.insert(copy_mode, custom_copy_key)
+  end
 end
 config.key_tables = { copy_mode = copy_mode }
+
 config.line_height = 1.2
 config.show_new_tab_button_in_tab_bar = false
 config.switch_to_last_active_tab_when_closing_tab = true
