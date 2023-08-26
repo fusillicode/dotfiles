@@ -24,80 +24,37 @@ config.font_size = 16
 config.inactive_pane_hsb = { brightness = 0.5 }
 config.hide_tab_bar_if_only_one_tab = true
 config.keys = {
+  { key = 'LeftArrow',  mods = 'OPT',       action = wezterm.action.SendKey { key = 'b', mods = 'ALT', }, },
+  { key = 'RightArrow', mods = 'OPT',       action = wezterm.action.SendKey { key = 'f', mods = 'ALT' }, },
+  { key = 'h',          mods = 'CMD|SHIFT', action = wezterm.action.ActivatePaneDirection 'Left', },
+  { key = 'l',          mods = 'CMD|SHIFT', action = wezterm.action.ActivatePaneDirection 'Right', },
+  { key = 'k',          mods = 'CMD|SHIFT', action = wezterm.action.ActivatePaneDirection 'Up', },
+  { key = 'j',          mods = 'CMD|SHIFT', action = wezterm.action.ActivatePaneDirection 'Down', },
   {
-    key = 'LeftArrow',
-    mods = 'OPT',
-    action = wezterm.action.SendKey { key = 'b', mods = 'ALT', },
+    key = 'n', mods = 'CMD|SHIFT', action = wezterm.action.SplitVertical { domain = "CurrentPaneDomain" }
   },
   {
-    key = 'RightArrow',
-    mods = 'OPT',
-    action = wezterm.action.SendKey { key = 'f', mods = 'ALT' },
+    key = 't', mods = 'CMD|SHIFT', action = wezterm.action.SplitPane { direction = "Right", size = { Percent = 59 } }
   },
-  {
-    key = 'h',
-    mods = 'CMD|SHIFT',
-    action = wezterm.action.ActivatePaneDirection 'Left',
-  },
-  {
-    key = 'l',
-    mods = 'CMD|SHIFT',
-    action = wezterm.action.ActivatePaneDirection 'Right',
-  },
-  {
-    key = 'k',
-    mods = 'CMD|SHIFT',
-    action = wezterm.action.ActivatePaneDirection 'Up',
-  },
-  {
-    key = 'j',
-    mods = 'CMD|SHIFT',
-    action = wezterm.action.ActivatePaneDirection 'Down',
-  },
-  {
-    key = 'n',
-    mods = 'CMD|SHIFT',
-    action = wezterm.action.SplitVertical { domain = "CurrentPaneDomain" },
-  },
-  {
-    key = 't',
-    mods = 'CMD|SHIFT',
-    action = wezterm.action.SplitPane {
-      direction = "Right",
-      size = { Percent = 59 }
-    },
-  },
-  {
-    key = 'p',
-    mods = 'CMD|SHIFT',
-    action = wezterm.action.ActivateCommandPalette,
-  },
-  {
-    key = 'x',
-    mods = 'CMD',
-    action = wezterm.action.ActivateCopyMode,
-  },
-  {
-    key = 'a',
-    mods = 'CMD|SHIFT',
-    action = wezterm.action.TogglePaneZoomState,
-  },
-  {
-    key = '[',
-    mods = 'CTRL|OPT',
-    action = wezterm.action.MoveTabRelative(-1),
-  },
-  {
-    key = ']',
-    mods = 'CTRL|OPT',
-    action = wezterm.action.MoveTabRelative(1),
-  },
-  {
-    key = 'Enter',
-    mods = 'ALT',
-    action = wezterm.action.Nop,
-  },
+  { key = 'p',     mods = 'CMD|SHIFT', action = wezterm.action.ActivateCommandPalette, },
+  { key = 'x',     mods = 'CMD',       action = wezterm.action.ActivateCopyMode, },
+  { key = 'a',     mods = 'CMD|SHIFT', action = wezterm.action.TogglePaneZoomState, },
+  { key = '[',     mods = 'CTRL|OPT',  action = wezterm.action.MoveTabRelative(-1), },
+  { key = ']',     mods = 'CTRL|OPT',  action = wezterm.action.MoveTabRelative(1), },
+  { key = 'Enter', mods = 'ALT',       action = wezterm.action.Nop, },
 }
+local copy_mode = nil
+if wezterm.gui then
+  copy_mode = wezterm.gui.default_key_tables().copy_mode
+  table.insert(
+    copy_mode,
+    {
+      key = 'x',
+      action = wezterm.action.CopyMode { SetSelectionMode = 'Line' },
+    }
+  )
+end
+config.key_tables = { copy_mode = copy_mode }
 config.line_height = 1.2
 config.show_new_tab_button_in_tab_bar = false
 config.switch_to_last_active_tab_when_closing_tab = true
