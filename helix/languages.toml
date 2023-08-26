@@ -12,10 +12,13 @@ use-grammars = { only = [
   "javascript",
   "json",
   "lua",
+  "make",
   "markdown",
   "protobuf",
   "python",
+  "regex",
   "rust",
+  "sql",
   "toml",
   "typescript",
   "xml",
@@ -90,7 +93,6 @@ formatter = { command = 'prettier', args = ["--parser", "markdown"] }
 [[language]]
 name = "protobuf"
 auto-format = true
-language-servers = ["bufls"]
 
 [[language]]
 name = "python"
@@ -118,10 +120,6 @@ auto-format = true
 name = "yaml"
 auto-format = true
 formatter = { command = 'prettier', args = ["--parser", "yaml"] }
-
-[language-server.bufls]
-command = "bufls"
-args = ["serve"]
 
 [language-server.pylsp]
 config.pylsp.plugins.ruff = { enabled = true, lineLength = 120 }
