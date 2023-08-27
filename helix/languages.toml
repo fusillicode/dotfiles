@@ -77,6 +77,7 @@ auto-format = true
 formatter = { command = 'prettier', args = ["--parser", "typescript"] }
 
 [[language]]
+file-types = ["json", "hjson", "ndjson"]
 name = "json"
 auto-format = true
 formatter = { command = 'prettier', args = ["--parser", "json"] }
