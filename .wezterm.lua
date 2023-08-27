@@ -44,6 +44,22 @@ config.keys = {
   { key = '[',     mods = 'CTRL|OPT',  action = wezterm.action.MoveTabRelative(-1), },
   { key = ']',     mods = 'CTRL|OPT',  action = wezterm.action.MoveTabRelative(1), },
   { key = 'Enter', mods = 'ALT',       action = wezterm.action.Nop, },
+  {
+    key = 'j',
+    mods = 'CTRL',
+    action = wezterm.action.Multiple {
+      wezterm.action.ActivateCopyMode,
+      wezterm.action.CopyMode { MoveByPage = 0.5 },
+    },
+  },
+  {
+    key = 'k',
+    mods = 'CTRL',
+    action = wezterm.action.Multiple {
+      wezterm.action.ActivateCopyMode,
+      wezterm.action.CopyMode { MoveByPage = -0.5 },
+    },
+  },
 }
 
 local copy_mode = nil
@@ -51,12 +67,15 @@ if wezterm.gui then
   copy_mode = wezterm.gui.default_key_tables().copy_mode
   for _, custom_copy_key in pairs({
     {
+      key = '/',
+      action = wezterm.action.CopyMode 'EditPattern'
+    },
+    {
       key = 'x',
       action = wezterm.action.CopyMode { SetSelectionMode = 'Line' },
     },
     { key = 'j', mods = 'CTRL', action = wezterm.action.CopyMode { MoveByPage = 0.5 }, },
-    { key = 'k', mods = 'CTRL', action = wezterm.action.CopyMode { MoveByPage = -0.5 },
-    }
+    { key = 'k', mods = 'CTRL', action = wezterm.action.CopyMode { MoveByPage = -0.5 } },
   }) do
     table.insert(copy_mode, custom_copy_key)
   end
