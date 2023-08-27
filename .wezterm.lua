@@ -44,22 +44,6 @@ config.keys = {
   { key = '[',     mods = 'CTRL|OPT',  action = wezterm.action.MoveTabRelative(-1), },
   { key = ']',     mods = 'CTRL|OPT',  action = wezterm.action.MoveTabRelative(1), },
   { key = 'Enter', mods = 'ALT',       action = wezterm.action.Nop, },
-  {
-    key = 'j',
-    mods = 'CTRL',
-    action = wezterm.action.Multiple {
-      wezterm.action.ActivateCopyMode,
-      wezterm.action.CopyMode { MoveByPage = 0.5 },
-    },
-  },
-  {
-    key = 'k',
-    mods = 'CTRL',
-    action = wezterm.action.Multiple {
-      wezterm.action.ActivateCopyMode,
-      wezterm.action.CopyMode { MoveByPage = -0.5 },
-    },
-  },
 }
 
 local copy_mode = nil
