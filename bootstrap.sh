@@ -34,7 +34,7 @@ brew install txn2/tap/kubefwd
 brew install vegeta
 brew install watch
 brew tap homebrew/cask-versions
-brew install wezterm-nightly
+brew install --cask wez/wezterm/wezterm-nightly --no-quarantine
 brew install yq
 brew install zsh
 
