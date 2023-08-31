@@ -1,31 +1,14 @@
 [core]
     editor = hx
     filemode = false
-    pager = delta
 [branch]
     autosetuprebase = always
-[delta]
-    file-added-label = ""
-    file-copied-label = ""
-    file-modified-label = ""
-    file-removed-label = ""
-    file-renamed-label = ""
-    file-decoration-style = ul yellow
-    file-style = bold yellow
-    hunk-header-style = omit
-    line-numbers = true
-    line-numbers-left-format = "{nm} "
-    line-numbers-right-format = "{np} "
-    navigate = true
-    side-by-side = true
 [diff]
-    colorMoved = default
+    submodule = log
 [fetch]
     prune = true
-[interactive]
-    diffFilter = delta --color-only
 [merge]
-    conflictstyle = diff3
+    tool = opendiff
 [pager]
     branch = false
 [push]
