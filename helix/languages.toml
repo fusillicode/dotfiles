@@ -6,6 +6,7 @@ use-grammars = { only = [
   "elm",
   "git-attributes",
   "git-commit",
+  "git-config",
   "git-ignore",
   "git-rebase",
   "html",
