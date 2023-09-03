@@ -10,12 +10,12 @@ alias kdebian="kubectl exec -it debian -- bash || kubectl run debian --image=deb
 
 # Easy Shell commands
 sorce () {
-  set -a && source $@ && set +a
+  set -a && source "$@" && set +a
 }
 
 # Easy Git
 gtnuke () {
-  git tag -f $1 && git push origin $1 -f
+  git tag -f "$1" && git push origin "$1" -f
 }
 
 gt () {
@@ -25,7 +25,7 @@ gt () {
 
 # Easy K8S
 klfir() {
-  kubectl get pods | rg $1 | head -n 1 | rg "^(\S*).*" -r '$1' | xargs -I {} kubectl logs -f {} $2
+  kubectl get pods | rg "$1" | head -n 1 | rg "^(\S*).*" -r '$1' | xargs -I {} kubectl logs -f {} "$2"
 }
 
 kseclist () {
@@ -40,27 +40,27 @@ ksecdec () {
   k get secrets -oname ${3:+--namespace=$3} | \
     rg "secret/(.*$2.*)" -r '$1' | xargs -I {} kubectl get secret {} -oyaml | \
     rg "\s+(.*$1.*):\s+(.*)" -r '$1:$2' | \
-    while read kv
+    while read -r kv
     do
-      dv=$(echo $kv | rg ".*:(.*)" -r '$1' | base64 -D)
-      k=$(echo $kv | rg "(.*):.*" -r '$1')
-      echo $k $dv
+      dv=$(echo "$kv" | rg ".*:(.*)" -r '$1' | base64 -D)
+      k=$(echo "$kv" | rg "(.*):.*" -r '$1')
+      echo "$k" "$dv"
     done
 }
 
 kcronsus () {
-  k patch cronjobs $1 --patch '{"spec": {"suspend": '"$2"'}}'
+  k patch cronjobs "$1" --patch '{"spec": {"suspend": '"$2"'}}'
 }
 
 kcronrest () {
   maybe_namespace=${2:+--namespace=$2}
-  k get cronjobs $1 $maybe_namespace --export -oyaml > foo.yaml
-  k delete cronjobs -f $1 $maybe_namespace --ignore-not-found
-  k apply -f $maybe_namespace foo.yaml
+  k get cronjobs "$1" "$maybe_namespace" --export -oyaml > foo.yaml
+  k delete cronjobs -f "$1" "$maybe_namespace" --ignore-not-found
+  k apply -f "$maybe_namespace" foo.yaml
 }
 
 kdeplscale () {
-  k patch deployment $1 --patch '{"spec": {"replicas": '"$2"'}}'
+  k patch deployment "$1" --patch '{"spec": {"replicas": '"$2"'}}'
 }
 
 kdelerrpod () {
@@ -69,5 +69,8 @@ kdelerrpod () {
 
 # Easy Postgres
 pg_copy_table() {
-  pg_dump -a -t $1 $2 | psql $3
+  pg_dump -a -t "$1" "$2" | psql "$3"
 }
+
+# FFS 😩
+source "$HOME/.rover/env"
