@@ -1,4 +1,4 @@
-inherits = "tokyonight_storm"
+inherits = "github_dark"
 
 "comment" = { modifiers = ["italic"] }
 "ui.cursor" = { fg = "my_black", bg = "my_white" }
