@@ -13,6 +13,8 @@ normal = "block"
 select = "underline"
 
 [editor.file-picker]
+git-global = false
+git-ignore = false
 hidden = false
 
 [editor.statusline]
