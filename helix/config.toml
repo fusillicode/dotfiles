@@ -3,6 +3,7 @@ theme = "me"
 [editor]
 auto-save = true
 cursorline = true
+insert-final-newline = true
 rulers = [120]
 shell = ["zsh", "-c"]
 text-width = 120
