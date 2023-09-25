@@ -30,7 +30,8 @@ config.colors = {
 config.cursor_blink_ease_in = 'Constant'
 config.cursor_blink_ease_out = 'Constant'
 config.cursor_blink_rate = 0
-config.font_size = 16.3
+config.font = wezterm.font('Monaco')
+config.font_size = 16
 config.inactive_pane_hsb = { brightness = 0.5 }
 config.hide_tab_bar_if_only_one_tab = true
 
