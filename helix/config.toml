@@ -1,4 +1,4 @@
-theme = "me"
+theme = "my_gruvbox"
 
 [editor]
 auto-save = true
@@ -86,6 +86,7 @@ u = [":pipe ccase -t upper", "delete_char_forward"]
 F = ["file_picker_in_current_buffer_directory"]
 Q = [":quit-all!"]
 U = [":reload-all"]
+W = [":write!"]
 X = [":buffer-close!"]
 e = [":reset-diff-change"]
 n = [":new"]
@@ -93,7 +94,6 @@ o = [":buffer-close-others"]
 q = [":quit-all"]
 space = [":write"]
 u = [":reload"]
-w = [":write!"]
 x = [":buffer-close"]
 
 [keys.select]

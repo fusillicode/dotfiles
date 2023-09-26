@@ -1,0 +1,10 @@
+inherits = "gruvbox_dark_hard"
+
+"ui.cursor" = { fg = "my_black", bg = "my_white" }
+"ui.cursor.match" = { fg = "my_black", bg = "my_orange" }
+"ui.cursor.primary" = { fg = "my_black", bg = "my_white" }
+
+[palette]
+my_white = "#ffffff"
+my_black = "#000000"
+my_orange = "#ff9933"
