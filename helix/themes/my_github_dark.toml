@@ -1,6 +1,7 @@
 inherits = "github_dark"
 
 "comment" = { modifiers = ["italic"] }
+"hint" = "my_blue"
 "ui.cursor" = { fg = "my_black", bg = "my_white" }
 "ui.cursor.match" = { fg = "my_black", bg = "my_orange" }
 "ui.cursor.primary" = { fg = "my_black", bg = "my_white" }
@@ -10,7 +11,7 @@ inherits = "github_dark"
 "ui.virtual.ruler" = { bg = "my_gray" }
 
 [palette]
-my_white = "#ffffff"
 my_black = "#000000"
-my_orange = "#ff9933"
 my_gray = "#666666"
+my_orange = "#ff9933"
+my_white = "#ffffff"

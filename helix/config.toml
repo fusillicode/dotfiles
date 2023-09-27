@@ -1,4 +1,4 @@
-theme = "my_gruvbox"
+theme = "my_github_dark"
 
 [editor]
 auto-save = true
