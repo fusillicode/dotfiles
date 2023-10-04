@@ -1,4 +1,4 @@
-theme = "my_github_dark"
+theme = "my_tokyonight"
 
 [editor]
 auto-save = true
@@ -27,7 +27,12 @@ left = [
   "diagnostics",
   "file-name",
 ]
-right = ["selections", "primary-selection-length", "workspace-diagnostics"]
+right = [
+  "selections",
+  "primary-selection-length",
+  "workspace-diagnostics",
+  "position",
+]
 mode.insert = "I"
 mode.normal = "N"
 mode.select = "S"
