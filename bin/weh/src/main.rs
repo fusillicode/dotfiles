@@ -25,7 +25,7 @@ fn open_in_hx<'a>(mut args: impl Iterator<Item = &'a str>) -> Result<(), anyhow:
         anyhow::bail!("BOOM")
     };
 
-    let hx_pane_id = 2;
+    let hx_pane_id = dbg!(get_current_pane_sibling_with_title("hx")).pane_id;
 
     new_sh_cmd(&format!(
         r#"
@@ -41,25 +41,7 @@ fn open_in_hx<'a>(mut args: impl Iterator<Item = &'a str>) -> Result<(), anyhow:
 }
 
 fn copy_link_to_github<'a>(_args: impl Iterator<Item = &'a str>) -> Result<(), anyhow::Error> {
-    let wezterm_panes: Vec<WezTermPane> = serde_json::from_slice(
-        &new_sh_cmd("wezterm cli list --format json")
-            .output()
-            .unwrap()
-            .stdout,
-    )
-    .unwrap();
-
-    let current_pane_id: i64 = std::env::var("WEZTERM_PANE").unwrap().parse().unwrap();
-
-    let current_tab = wezterm_panes
-        .iter()
-        .find(|w| w.pane_id == current_pane_id)
-        .unwrap();
-
-    let hx_pane = wezterm_panes
-        .iter()
-        .find(|w| w.tab_id == current_tab.tab_id && w.title == "hx")
-        .unwrap();
+    let hx_pane = get_current_pane_sibling_with_title("hx");
 
     let current_git_branch = String::from_utf8(
         new_sh_cmd("git branch --show-current")
@@ -116,6 +98,29 @@ fn new_sh_cmd(cmd: &str) -> Command {
     sh
 }
 
+fn get_current_pane_sibling_with_title(pane_title: &str) -> WezTermPane {
+    let current_pane_id: i64 = std::env::var("WEZTERM_PANE").unwrap().parse().unwrap();
+
+    let all_panes: Vec<WezTermPane> = serde_json::from_slice(
+        &new_sh_cmd("wezterm cli list --format json")
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap();
+
+    let current_pane = all_panes
+        .iter()
+        .find(|w| w.pane_id == current_pane_id)
+        .unwrap();
+
+    all_panes
+        .iter()
+        .find(|w| w.tab_id == current_pane.tab_id && w.title == pane_title)
+        .unwrap()
+        .clone()
+}
+
 #[derive(Debug, PartialEq)]
 pub struct HxPosition {
     file_path: String,
@@ -168,7 +173,7 @@ impl FromStr for HxLineColumn {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[allow(dead_code)]
 pub struct WezTermPane {
     window_id: i64,
@@ -191,7 +196,7 @@ pub struct WezTermPane {
     tty_name: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[allow(dead_code)]
 pub struct Size {
     rows: i64,
