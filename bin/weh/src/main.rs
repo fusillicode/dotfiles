@@ -55,11 +55,11 @@ fn main() {
 
     let hx_status_line = wezterm_pane_text.lines().nth_back(1).unwrap();
 
-    let foo = Foo::from_str(hx_status_line).unwrap();
+    let hx_position = HxPosition::from_str(hx_status_line).unwrap();
 
     let path_to_github = format!(
         "{}/tree/{}/{}",
-        gh_repo_view.url, current_git_branch, foo.path
+        gh_repo_view.url, current_git_branch, hx_position.file_path
     );
 
     dbg!(
@@ -70,7 +70,7 @@ fn main() {
         &gh_repo_view,
         &wezterm_pane_text,
         hx_status_line,
-        &foo,
+        &hx_position,
         &path_to_github
     );
 
@@ -86,13 +86,13 @@ fn new_sh_cmd(args: &[&str]) -> Command {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Foo {
-    path: String,
+pub struct HxPosition {
+    file_path: String,
     line: i64,
     column: i64,
 }
 
-impl FromStr for Foo {
+impl FromStr for HxPosition {
     type Err = anyhow::Error;
 
     fn from_str(hx_status_line: &str) -> Result<Self, Self::Err> {
@@ -107,11 +107,11 @@ impl FromStr for Foo {
             anyhow::bail!("BOOM");
         };
 
-        let LineColumn { line, column } =
-            LineColumn::from_str(elements.last().ok_or_else(|| anyhow::anyhow!("BOOM"))?)?;
+        let HxLineColumn { line, column } =
+            HxLineColumn::from_str(elements.last().ok_or_else(|| anyhow::anyhow!("BOOM"))?)?;
 
         Ok(Self {
-            path: path.into(),
+            file_path: path.into(),
             line,
             column,
         })
@@ -119,12 +119,12 @@ impl FromStr for Foo {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct LineColumn {
+pub struct HxLineColumn {
     line: i64,
     column: i64,
 }
 
-impl FromStr for LineColumn {
+impl FromStr for HxLineColumn {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -179,18 +179,18 @@ mod tests {
 
     #[test]
     fn test_foo_from_str_works_as_expected() {
-        let result = Foo::from_str("      ● 1 ` bin/weh/src/main.rs `                                                                  1 sel  1 char  W ● 1  42:33 ");
-        let expected = Foo {
-            path: "bin/weh/src/main.rs".into(),
+        let result = HxPosition::from_str("      ● 1 ` bin/weh/src/main.rs `                                                                  1 sel  1 char  W ● 1  42:33 ");
+        let expected = HxPosition {
+            file_path: "bin/weh/src/main.rs".into(),
             line: 42,
             column: 33,
         };
 
         assert_eq!(expected, result.unwrap());
 
-        let result = Foo::from_str("⣷      ` bin/weh/src/main.rs `                                                                  1 sel  1 char  W ● 1  33:42 ");
-        let expected = Foo {
-            path: "bin/weh/src/main.rs".into(),
+        let result = HxPosition::from_str("⣷      ` bin/weh/src/main.rs `                                                                  1 sel  1 char  W ● 1  33:42 ");
+        let expected = HxPosition {
+            file_path: "bin/weh/src/main.rs".into(),
             line: 33,
             column: 42,
         };
