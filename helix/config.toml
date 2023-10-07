@@ -25,7 +25,9 @@ left = [
   "file-modification-indicator",
   "spacer",
   "diagnostics",
+  "separator",
   "file-name",
+  "separator",
 ]
 right = [
   "selections",
@@ -36,6 +38,7 @@ right = [
 mode.insert = "I"
 mode.normal = "N"
 mode.select = "S"
+separator = '`'
 
 [editor.lsp]
 display-inlay-hints = true

@@ -57,7 +57,10 @@ fn main() {
 
     let foo = Foo::from_str(hx_status_line).unwrap();
 
-    let path_to_github = format!("{}/{}/{}", gh_repo_view.url, current_git_branch, foo.path);
+    let path_to_github = format!(
+        "{}/tree/{}/{}",
+        gh_repo_view.url, current_git_branch, foo.path
+    );
 
     dbg!(
         &wezterm_panes,
@@ -95,9 +98,14 @@ impl FromStr for Foo {
     fn from_str(hx_status_line: &str) -> Result<Self, Self::Err> {
         let hx_status_line = hx_status_line.trim();
 
-        let mut elements = hx_status_line.split_ascii_whitespace();
+        let elements: Vec<&str> = hx_status_line.split_ascii_whitespace().collect();
 
-        let path = elements.nth(2).ok_or_else(|| anyhow::anyhow!("BOOM"))?;
+        let path_left_separator_idx = elements.iter().position(|x| x == &"`").unwrap();
+        let path_right_separator_idx = elements.iter().rposition(|x| x == &"`").unwrap();
+
+        let &["`", path] = &elements[path_left_separator_idx..path_right_separator_idx] else {
+            anyhow::bail!("BOOM");
+        };
 
         let LineColumn { line, column } =
             LineColumn::from_str(elements.last().ok_or_else(|| anyhow::anyhow!("BOOM"))?)?;
@@ -171,11 +179,20 @@ mod tests {
 
     #[test]
     fn test_foo_from_str_works_as_expected() {
-        let result = Foo::from_str("● 1  bin/weh/src/main.rs                                                                      1 sel  1 char  W ● 1  42:33");
+        let result = Foo::from_str("      ● 1 ` bin/weh/src/main.rs `                                                                  1 sel  1 char  W ● 1  42:33 ");
         let expected = Foo {
             path: "bin/weh/src/main.rs".into(),
             line: 42,
             column: 33,
+        };
+
+        assert_eq!(expected, result.unwrap());
+
+        let result = Foo::from_str("⣷      ` bin/weh/src/main.rs `                                                                  1 sel  1 char  W ● 1  33:42 ");
+        let expected = Foo {
+            path: "bin/weh/src/main.rs".into(),
+            line: 33,
+            column: 42,
         };
 
         assert_eq!(expected, result.unwrap());
