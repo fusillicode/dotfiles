@@ -2,7 +2,6 @@ use std::process::Command;
 use std::str::FromStr;
 
 use serde::Deserialize;
-use serde::Serialize;
 use url::Url;
 
 fn main() {
@@ -131,7 +130,8 @@ impl FromStr for HxLineColumn {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct WezTermPane {
     window_id: i64,
     tab_id: i64,
@@ -153,7 +153,8 @@ pub struct WezTermPane {
     tty_name: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct Size {
     rows: i64,
     cols: i64,
@@ -162,7 +163,7 @@ pub struct Size {
     dpi: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct GhRepoView {
     url: Url,
 }
