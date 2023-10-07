@@ -58,8 +58,12 @@ fn main() {
     let hx_position = HxPosition::from_str(hx_status_line).unwrap();
 
     let path_to_github = format!(
-        "{}/tree/{}/{}",
-        gh_repo_view.url, current_git_branch, hx_position.file_path
+        "{}/tree/{}/{}#L{}C{}",
+        gh_repo_view.url,
+        current_git_branch,
+        hx_position.file_path,
+        hx_position.line,
+        hx_position.column,
     );
 
     new_sh_cmd(&format!("echo '{}' | pbcopy", path_to_github))
