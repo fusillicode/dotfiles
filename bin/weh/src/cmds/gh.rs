@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::str::FromStr;
 
 use crate::utils::get_current_pane_sibling_with_title;
@@ -48,12 +49,20 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> Result<(), anyhow::Error
     )
     .unwrap();
 
-    let mut link_to_github = gh_repo_view.url;
-    let file_path_parts = hx_position
-        .file_path
+    let missing_path_part = current_dir
+        .to_str()
+        .unwrap()
+        .replace(git_repo_root_dir.trim(), "");
+
+    let mut missing_path_part: PathBuf = missing_path_part.trim_start_matches('/').into();
+    missing_path_part.push(hx_position.file_path);
+
+    let file_path_parts = missing_path_part
         .iter()
         .map(|x| x.to_str().unwrap())
         .collect::<Vec<_>>();
+
+    let mut link_to_github = gh_repo_view.url;
     link_to_github
         .path_segments_mut()
         .unwrap()
