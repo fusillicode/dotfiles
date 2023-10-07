@@ -40,16 +40,21 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> Result<(), anyhow::Error
     let hx_position = HxPosition::from_str(hx_status_line).unwrap();
 
     let mut link_to_github = gh_repo_view.url;
-    link_to_github.set_path(&format!(
-        "tree/{}/{}",
-        current_git_branch, hx_position.file_path
-    ));
+    let file_path_parts = hx_position
+        .file_path
+        .iter()
+        .map(|x| x.to_str().unwrap())
+        .collect::<Vec<_>>();
+    link_to_github
+        .path_segments_mut()
+        .unwrap()
+        .extend([&["tree", current_git_branch], file_path_parts.as_slice()].concat());
     link_to_github.set_fragment(Some(&format!(
         "L{}C{}",
         hx_position.line, hx_position.column
     )));
 
-    crate::utils::new_sh_cmd(&format!("echo '{}' | pbcopy", link_to_github))
+    crate::utils::new_sh_cmd(&format!("echo '{}' | pbcopy", link_to_github.as_str()))
         .output()
         .unwrap();
 
