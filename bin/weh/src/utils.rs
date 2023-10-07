@@ -11,27 +11,32 @@ pub fn new_sh_cmd(cmd: &str) -> Command {
     sh
 }
 
-pub fn get_current_pane_sibling_with_title(pane_title: &str) -> WezTermPane {
-    let current_pane_id: i64 = std::env::var("WEZTERM_PANE").unwrap().parse().unwrap();
+pub fn get_current_pane_sibling_with_title(pane_title: &str) -> anyhow::Result<WezTermPane> {
+    let current_pane_id: i64 = std::env::var("WEZTERM_PANE")?.parse()?;
 
     let all_panes: Vec<WezTermPane> = serde_json::from_slice(
         &new_sh_cmd("wezterm cli list --format json")
             .output()
             .unwrap()
             .stdout,
-    )
-    .unwrap();
+    )?;
 
     let current_pane = all_panes
         .iter()
         .find(|w| w.pane_id == current_pane_id)
-        .unwrap();
+        .ok_or_else(|| anyhow::anyhow!("no pane with id {}", current_pane_id))?;
 
-    all_panes
+    Ok(all_panes
         .iter()
         .find(|w| w.tab_id == current_pane.tab_id && w.title == pane_title)
-        .unwrap()
-        .clone()
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "no pane with title {} under tab with id {}",
+                pane_title,
+                current_pane.tab_id
+            )
+        })?
+        .clone())
 }
 
 #[derive(Debug, Deserialize, Clone)]

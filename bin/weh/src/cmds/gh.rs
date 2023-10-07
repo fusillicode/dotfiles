@@ -6,7 +6,7 @@ use crate::utils::GhRepoView;
 use crate::utils::HxPosition;
 
 pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> Result<(), anyhow::Error> {
-    let hx_pane = get_current_pane_sibling_with_title("hx");
+    let hx_pane = get_current_pane_sibling_with_title("hx")?;
 
     let current_git_branch = String::from_utf8(
         crate::utils::new_sh_cmd("git branch --show-current")
