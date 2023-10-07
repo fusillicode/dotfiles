@@ -39,6 +39,15 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> Result<(), anyhow::Error
 
     let hx_position = HxPosition::from_str(hx_status_line).unwrap();
 
+    let current_dir = std::env::current_dir().unwrap();
+    let git_repo_root_dir = String::from_utf8(
+        crate::utils::new_sh_cmd("git rev-parse --show-toplevel")
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap();
+
     let mut link_to_github = gh_repo_view.url;
     let file_path_parts = hx_position
         .file_path
