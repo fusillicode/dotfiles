@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
 
@@ -73,7 +74,7 @@ pub struct GhRepoView {
 
 #[derive(Debug, PartialEq)]
 pub struct HxPosition {
-    pub file_path: String,
+    pub file_path: PathBuf,
     pub line: i64,
     pub column: i64,
 }
