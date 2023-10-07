@@ -6,7 +6,7 @@ use serde::Serialize;
 
 fn main() {
     let wezterm_panes: Vec<WezTermPane> = serde_json::from_slice(
-        &new_sh_cmd(&["wezterm cli list --format json"])
+        &new_sh_cmd("wezterm cli list --format json")
             .output()
             .unwrap()
             .stdout,
@@ -26,7 +26,7 @@ fn main() {
         .unwrap();
 
     let current_git_branch = String::from_utf8(
-        new_sh_cmd(&["git branch --show-current"])
+        new_sh_cmd("git branch --show-current")
             .output()
             .unwrap()
             .stdout,
@@ -35,7 +35,7 @@ fn main() {
     let current_git_branch = current_git_branch.trim();
 
     let gh_repo_view: GhRepoView = serde_json::from_slice(
-        &new_sh_cmd(&["gh repo view --json url"])
+        &new_sh_cmd("gh repo view --json url")
             .output()
             .unwrap()
             .stdout,
@@ -43,10 +43,10 @@ fn main() {
     .unwrap();
 
     let wezterm_pane_text = String::from_utf8(
-        new_sh_cmd(&[&format!(
+        new_sh_cmd(&format!(
             "wezterm cli get-text --pane-id {}",
             hx_pane.pane_id
-        )])
+        ))
         .output()
         .unwrap()
         .stdout,
@@ -62,26 +62,14 @@ fn main() {
         gh_repo_view.url, current_git_branch, hx_position.file_path
     );
 
-    dbg!(
-        &wezterm_panes,
-        &current_tab,
-        &hx_pane,
-        &current_git_branch,
-        &gh_repo_view,
-        &wezterm_pane_text,
-        hx_status_line,
-        &hx_position,
-        &path_to_github
-    );
-
-    new_sh_cmd(&[&format!("echo '{}' | pbcopy", path_to_github)])
+    new_sh_cmd(&format!("echo '{}' | pbcopy", path_to_github))
         .output()
         .unwrap();
 }
 
-fn new_sh_cmd(args: &[&str]) -> Command {
+fn new_sh_cmd(cmd: &str) -> Command {
     let mut sh = Command::new("sh");
-    sh.args([&["-c"], args].concat());
+    sh.args(["-c", cmd]);
     sh
 }
 
