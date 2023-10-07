@@ -25,7 +25,7 @@ fn open_in_hx<'a>(mut args: impl Iterator<Item = &'a str>) -> Result<(), anyhow:
         anyhow::bail!("BOOM")
     };
 
-    let hx_pane_id = dbg!(get_current_pane_sibling_with_title("hx")).pane_id;
+    let hx_pane_id = get_current_pane_sibling_with_title("hx").pane_id;
 
     new_sh_cmd(&format!(
         r#"
