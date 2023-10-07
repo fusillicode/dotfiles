@@ -16,8 +16,7 @@ pub fn get_current_pane_sibling_with_title(pane_title: &str) -> anyhow::Result<W
 
     let all_panes: Vec<WezTermPane> = serde_json::from_slice(
         &new_sh_cmd("wezterm cli list --format json")
-            .output()
-            .unwrap()
+            .output()?
             .stdout,
     )?;
 
@@ -92,15 +91,31 @@ impl FromStr for HxPosition {
 
         let elements: Vec<&str> = hx_status_line.split_ascii_whitespace().collect();
 
-        let path_left_separator_idx = elements.iter().position(|x| x == &"`").unwrap();
-        let path_right_separator_idx = elements.iter().rposition(|x| x == &"`").unwrap();
+        let path_left_separator_idx = elements.iter().position(|x| x == &"`").ok_or_else(|| {
+            anyhow::anyhow!(
+                "no left path separator found among status line elements {:?}",
+                elements
+            )
+        })?;
+        let path_right_separator_idx =
+            elements.iter().rposition(|x| x == &"`").ok_or_else(|| {
+                anyhow::anyhow!(
+                    "no rigth path separator found among status line elements {:?}",
+                    elements
+                )
+            })?;
 
         let &["`", path] = &elements[path_left_separator_idx..path_right_separator_idx] else {
             anyhow::bail!("BOOM");
         };
 
         let HxLineColumn { line, column } =
-            HxLineColumn::from_str(elements.last().ok_or_else(|| anyhow::anyhow!("BOOM"))?)?;
+            HxLineColumn::from_str(elements.last().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "cannot get last element from status line elements {:?}",
+                    elements
+                )
+            })?)?;
 
         Ok(Self {
             file_path: path.into(),
@@ -120,7 +135,9 @@ impl FromStr for HxLineColumn {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (line, column) = s.split_once(':').ok_or_else(|| anyhow::anyhow!("BOOM"))?;
+        let (line, column) = s
+            .split_once(':')
+            .ok_or_else(|| anyhow::anyhow!("no line column delimiter found"))?;
 
         Ok(Self {
             line: line.parse()?,
