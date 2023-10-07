@@ -4,7 +4,43 @@ use std::str::FromStr;
 use serde::Deserialize;
 use url::Url;
 
-fn main() {
+fn main() -> anyhow::Result<()> {
+    let args = std::env::args().collect::<Vec<String>>();
+    let (_, args) = args.split_first().unwrap();
+
+    let (cmd, args) = args
+        .split_first()
+        .map(|(cmd, rest)| (cmd.as_str(), rest.iter().map(String::as_str)))
+        .unwrap();
+
+    match cmd {
+        "gh" => copy_link_to_github(args),
+        "ho" => open_in_hx(args),
+        unexpected_cmd => anyhow::bail!("BOOM {} {:?}", unexpected_cmd, args.collect::<Vec<_>>()),
+    }
+}
+
+fn open_in_hx<'a>(mut args: impl Iterator<Item = &'a str>) -> Result<(), anyhow::Error> {
+    let Some(file_to_open) = args.next() else {
+        anyhow::bail!("BOOM")
+    };
+
+    let hx_pane_id = 2;
+
+    new_sh_cmd(&format!(
+        r#"
+            wezterm cli send-text --pane-id '{hx_pane_id}' ':o {file_to_open}' --no-paste && \
+                printf "\r" | wezterm cli send-text --pane-id '{hx_pane_id}' --no-paste && \
+                wezterm cli activate-pane --pane-id '{hx_pane_id}'
+        "#,
+    ))
+    .spawn()
+    .unwrap();
+
+    Ok(())
+}
+
+fn copy_link_to_github<'a>(_args: impl Iterator<Item = &'a str>) -> Result<(), anyhow::Error> {
     let wezterm_panes: Vec<WezTermPane> = serde_json::from_slice(
         &new_sh_cmd("wezterm cli list --format json")
             .output()
@@ -70,6 +106,8 @@ fn main() {
     new_sh_cmd(&format!("echo '{}' | pbcopy", link_to_github))
         .output()
         .unwrap();
+
+    Ok(())
 }
 
 fn new_sh_cmd(cmd: &str) -> Command {
