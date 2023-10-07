@@ -3,6 +3,7 @@ use std::str::FromStr;
 
 use serde::Deserialize;
 use serde::Serialize;
+use url::Url;
 
 fn main() {
     let wezterm_panes: Vec<WezTermPane> = serde_json::from_slice(
@@ -57,16 +58,17 @@ fn main() {
 
     let hx_position = HxPosition::from_str(hx_status_line).unwrap();
 
-    let path_to_github = format!(
-        "{}/tree/{}/{}#L{}C{}",
-        gh_repo_view.url,
-        current_git_branch,
-        hx_position.file_path,
-        hx_position.line,
-        hx_position.column,
-    );
+    let mut link_to_github = gh_repo_view.url;
+    link_to_github.set_path(&format!(
+        "tree/{}/{}",
+        current_git_branch, hx_position.file_path
+    ));
+    link_to_github.set_fragment(Some(&format!(
+        "L{}C{}",
+        hx_position.line, hx_position.column
+    )));
 
-    new_sh_cmd(&format!("echo '{}' | pbcopy", path_to_github))
+    new_sh_cmd(&format!("echo '{}' | pbcopy", link_to_github))
         .output()
         .unwrap();
 }
@@ -162,7 +164,7 @@ pub struct Size {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GhRepoView {
-    url: String,
+    url: Url,
 }
 
 #[cfg(test)]
