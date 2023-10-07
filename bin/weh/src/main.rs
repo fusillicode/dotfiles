@@ -25,13 +25,14 @@ fn main() {
         .find(|w| w.tab_id == current_tab.tab_id && w.title == "hx")
         .unwrap();
 
-    let current_branch = String::from_utf8(
+    let current_git_branch = String::from_utf8(
         new_sh_cmd(&["git branch --show-current"])
             .output()
             .unwrap()
             .stdout,
     )
     .unwrap();
+    let current_git_branch = current_git_branch.trim();
 
     let gh_repo_view: GhRepoView = serde_json::from_slice(
         &new_sh_cmd(&["gh repo view --json url"])
@@ -52,23 +53,27 @@ fn main() {
     )
     .unwrap();
 
-    let hx_status_line = wezterm_pane_text.lines().nth_back(1).unwrap().trim();
+    let hx_status_line = wezterm_pane_text.lines().nth_back(1).unwrap();
 
-    let path_to_github = r"bar";
+    let foo = Foo::from_str(hx_status_line).unwrap();
 
-    new_sh_cmd(&[&format!("echo '{}' | pbcopy", path_to_github)])
-        .output()
-        .unwrap();
+    let path_to_github = format!("{}/{}/{}", gh_repo_view.url, current_git_branch, foo.path);
 
     dbg!(
         &wezterm_panes,
         &current_tab,
         &hx_pane,
-        &current_branch,
+        &current_git_branch,
         &gh_repo_view,
         &wezterm_pane_text,
-        hx_status_line
+        hx_status_line,
+        &foo,
+        &path_to_github
     );
+
+    new_sh_cmd(&[&format!("echo '{}' | pbcopy", path_to_github)])
+        .output()
+        .unwrap();
 }
 
 fn new_sh_cmd(args: &[&str]) -> Command {
