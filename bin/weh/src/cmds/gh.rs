@@ -4,6 +4,7 @@ use std::process::Stdio;
 use std::str::FromStr;
 
 use anyhow::anyhow;
+use anyhow::bail;
 use url::Url;
 
 use crate::utils::get_current_pane_sibling_with_title;
@@ -73,7 +74,9 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
             .as_mut()
             .ok_or_else(|| anyhow!("cannot get child stdin as mut"))?,
     )?;
-    pbcopy_child.wait()?;
+    if !pbcopy_child.wait()?.success() {
+        bail!("error copy link {link_to_github} to system clipboard");
+    }
 
     Ok(())
 }
