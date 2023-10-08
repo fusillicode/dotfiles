@@ -24,8 +24,8 @@ config.color_scheme = 'GruvboxDark'
 config.colors = {
   foreground = 'white',
   tab_bar = {
-    active_tab = { bg_color = 'black', fg_color = 'lime', },
-    inactive_tab = { bg_color = 'black', fg_color = 'grey', }
+    active_tab = { bg_color = '282828', fg_color = 'lime', },
+    inactive_tab = { bg_color = '282828', fg_color = 'grey', }
   }
 }
 config.cursor_blink_ease_in = 'Constant'
@@ -75,6 +75,6 @@ config.switch_to_last_active_tab_when_closing_tab = true
 config.text_blink_rate = 0
 config.window_decorations = "RESIZE"
 config.window_padding = { left = 0, right = 0, top = 0, bottom = 0 }
-config.window_frame = { active_titlebar_bg = 'black', inactive_titlebar_bg = 'black' }
+config.window_frame = { active_titlebar_bg = '282828', inactive_titlebar_bg = '282828' }
 
 return config
