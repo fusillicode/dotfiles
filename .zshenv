@@ -13,6 +13,10 @@ sorce () {
   set -a && source "$@" && set +a
 }
 
+ho () {
+  ~/bin/weh ho "$@"
+}
+
 # Easy Git
 gtnuke () {
   git tag -f "$1" && git push origin "$1" -f
