@@ -1,4 +1,4 @@
-inherits = "gruvbox_dark_hard"
+inherits = "gruvbox"
 
 "ui.cursor" = { fg = "my_black", bg = "my_white" }
 "ui.cursor.match" = { fg = "my_black", bg = "my_orange" }
