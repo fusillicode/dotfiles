@@ -1,4 +1,4 @@
-theme = "my_tokyonight"
+theme = "my_gruvbox"
 
 [editor]
 auto-save = true
