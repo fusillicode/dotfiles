@@ -37,7 +37,7 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> Result<(), anyhow::Error
 
     let hx_status_line = wezterm_pane_text.lines().nth_back(1).ok_or_else(|| {
         anyhow::anyhow!(
-            "cannot get hx status line from pane text {:?}",
+            "missing hx status line in pane text {:?}",
             wezterm_pane_text
         )
     })?;
