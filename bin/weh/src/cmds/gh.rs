@@ -62,15 +62,14 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> Result<(), anyhow::Error
         })
         .collect::<Vec<_>>();
 
-    let mut link_to_github = gh_repo_view.url;
+    let mut link_to_github = gh_repo_view.url.clone();
     let segments = [&["tree", current_git_branch], file_path_parts.as_slice()].concat();
     link_to_github
-        .clone()
         .path_segments_mut()
         .map_err(|_| {
             anyhow::anyhow!(
                 "cannot extend URL {} with segments {:?}",
-                link_to_github,
+                gh_repo_view.url,
                 segments
             )
         })?
