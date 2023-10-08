@@ -1,11 +1,18 @@
 use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
+use std::thread::JoinHandle;
 
 use anyhow::anyhow;
 use anyhow::bail;
 use serde::Deserialize;
 use url::Url;
+
+pub fn exec<T>(join_handle: JoinHandle<anyhow::Result<T>>) -> Result<T, anyhow::Error> {
+    join_handle
+        .join()
+        .map_err(|e| anyhow!("join error {e:?}"))?
+}
 
 pub fn get_current_pane_sibling_with_title(pane_title: &str) -> anyhow::Result<WezTermPane> {
     let current_pane_id: i64 = std::env::var("WEZTERM_PANE")?.parse()?;
