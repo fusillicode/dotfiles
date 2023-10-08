@@ -2,6 +2,8 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
 
+use anyhow::anyhow;
+use anyhow::bail;
 use serde::Deserialize;
 use url::Url;
 
@@ -15,20 +17,19 @@ pub fn get_current_pane_sibling_with_title(pane_title: &str) -> anyhow::Result<W
             .stdout,
     )?;
 
-    let current_pane = all_panes
+    let current_pane_tab_id = all_panes
         .iter()
         .find(|w| w.pane_id == current_pane_id)
-        .ok_or_else(|| anyhow::anyhow!("no pane with id {}", current_pane_id))?;
+        .ok_or_else(|| {
+            anyhow!("current pane id {current_pane_id} not found among panes {all_panes:?}")
+        })?
+        .tab_id;
 
     Ok(all_panes
         .iter()
-        .find(|w| w.tab_id == current_pane.tab_id && w.title == pane_title)
+        .find(|w| w.tab_id == current_pane_tab_id && w.title == pane_title)
         .ok_or_else(|| {
-            anyhow::anyhow!(
-                "no pane with title {} under tab with id {}",
-                pane_title,
-                current_pane.tab_id
-            )
+            anyhow!("pane with title {pane_title} not found in tab {current_pane_tab_id}")
         })?
         .clone())
 }
@@ -87,29 +88,20 @@ impl FromStr for HxPosition {
         let elements: Vec<&str> = hx_status_line.split_ascii_whitespace().collect();
 
         let path_left_separator_idx = elements.iter().position(|x| x == &"`").ok_or_else(|| {
-            anyhow::anyhow!(
-                "missing left path separator in status line elements {:?}",
-                elements
-            )
+            anyhow!("missing left path separator in status line elements {elements:?}")
         })?;
         let path_right_separator_idx =
             elements.iter().rposition(|x| x == &"`").ok_or_else(|| {
-                anyhow::anyhow!(
-                    "missing right path separator in status line elements {:?}",
-                    elements
-                )
+                anyhow!("missing right path separator in status line elements {elements:?}")
             })?;
 
         let &["`", path] = &elements[path_left_separator_idx..path_right_separator_idx] else {
-            anyhow::bail!("missing path in status line elements {:?}", elements);
+            bail!("missing path in status line elements {elements:?}");
         };
 
         let HxLineColumn { line, column } =
             HxLineColumn::from_str(elements.last().ok_or_else(|| {
-                anyhow::anyhow!(
-                    "missing last element in status line elements {:?}",
-                    elements
-                )
+                anyhow!("missing last element in status line elements {elements:?}")
             })?)?;
 
         Ok(Self {
@@ -132,7 +124,7 @@ impl FromStr for HxLineColumn {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (line, column) = s
             .split_once(':')
-            .ok_or_else(|| anyhow::anyhow!("no line column delimiter found"))?;
+            .ok_or_else(|| anyhow!("no line column delimiter found"))?;
 
         Ok(Self {
             line: line.parse()?,
@@ -146,7 +138,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_foo_from_str_works_as_expected() {
+    fn test_hx_position_from_str_works_as_expected() {
         let result = HxPosition::from_str("      ● 1 ` bin/weh/src/main.rs `                                                                  1 sel  1 char  W ● 1  42:33 ");
         let expected = HxPosition {
             file_path: "bin/weh/src/main.rs".into(),
