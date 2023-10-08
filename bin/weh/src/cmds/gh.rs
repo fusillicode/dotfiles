@@ -3,6 +3,8 @@ use std::process::Command;
 use std::process::Stdio;
 use std::str::FromStr;
 
+use url::Url;
+
 use crate::utils::get_current_pane_sibling_with_title;
 use crate::utils::GhRepoView;
 use crate::utils::HxPosition;
@@ -15,8 +17,9 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> Result<(), anyhow::Error
             .args(["branch", "--show-current"])
             .output()?
             .stdout,
-    )?;
-    let current_git_branch = current_git_branch.trim();
+    )?
+    .trim()
+    .to_owned();
 
     let gh_repo_view: GhRepoView = serde_json::from_slice(
         &Command::new("gh")
@@ -49,6 +52,34 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> Result<(), anyhow::Error
             .stdout,
     )?;
 
+    let link_to_github = build_link_to_github(
+        current_dir,
+        git_repo_root_dir,
+        hx_position,
+        gh_repo_view.url,
+        &current_git_branch,
+    )?;
+
+    let mut copy_child = Command::new("pbcopy").stdin(Stdio::piped()).spawn()?;
+    std::io::copy(
+        &mut link_to_github.to_string().as_bytes(),
+        copy_child
+            .stdin
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("cannot get copy_child stdin as mut"))?,
+    )?;
+    copy_child.wait()?;
+
+    Ok(())
+}
+
+fn build_link_to_github(
+    current_dir: PathBuf,
+    git_repo_root_dir: String,
+    hx_position: HxPosition,
+    gh_repo_url: Url,
+    current_git_branch: &str,
+) -> Result<url::Url, anyhow::Error> {
     let missing_path_part = current_dir
         .to_str()
         .ok_or_else(|| anyhow::anyhow!("cannot get str from OsStr {:?}", current_dir))?
@@ -65,14 +96,14 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> Result<(), anyhow::Error
         })
         .collect::<Vec<_>>();
 
-    let mut link_to_github = gh_repo_view.url.clone();
+    let mut link_to_github = gh_repo_url.clone();
     let segments = [&["tree", current_git_branch], file_path_parts.as_slice()].concat();
     link_to_github
         .path_segments_mut()
         .map_err(|_| {
             anyhow::anyhow!(
                 "cannot extend URL {} with segments {:?}",
-                gh_repo_view.url,
+                gh_repo_url,
                 segments
             )
         })?
@@ -82,15 +113,5 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> Result<(), anyhow::Error
         hx_position.line, hx_position.column
     )));
 
-    let mut copy_child = Command::new("pbcopy").stdin(Stdio::piped()).spawn()?;
-    std::io::copy(
-        &mut link_to_github.to_string().as_bytes(),
-        copy_child
-            .stdin
-            .as_mut()
-            .ok_or_else(|| anyhow::anyhow!("cannot get copy_child stdin as mut"))?,
-    )?;
-    copy_child.wait()?;
-
-    Ok(())
+    Ok(link_to_github)
 }
