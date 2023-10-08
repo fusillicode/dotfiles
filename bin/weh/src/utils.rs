@@ -5,17 +5,12 @@ use std::str::FromStr;
 use serde::Deserialize;
 use url::Url;
 
-pub fn new_sh_cmd(cmd: &str) -> Command {
-    let mut sh = Command::new("sh");
-    sh.args(["-c", cmd]);
-    sh
-}
-
 pub fn get_current_pane_sibling_with_title(pane_title: &str) -> anyhow::Result<WezTermPane> {
     let current_pane_id: i64 = std::env::var("WEZTERM_PANE")?.parse()?;
 
     let all_panes: Vec<WezTermPane> = serde_json::from_slice(
-        &new_sh_cmd("wezterm cli list --format json")
+        &Command::new("wezterm")
+            .args(["cli", "list", "--format", "json"])
             .output()?
             .stdout,
     )?;
