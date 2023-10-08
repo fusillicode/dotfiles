@@ -20,6 +20,7 @@ local function up_and_down_with_hx(key)
 end
 
 config.animation_fps = 1
+config.color_scheme = 'GruvboxDark'
 config.colors = {
   foreground = 'white',
   tab_bar = {

@@ -60,15 +60,15 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> Result<(), anyhow::Error
         &current_git_branch,
     )?;
 
-    let mut copy_child = Command::new("pbcopy").stdin(Stdio::piped()).spawn()?;
+    let mut pbcopy_child = Command::new("pbcopy").stdin(Stdio::piped()).spawn()?;
     std::io::copy(
         &mut link_to_github.to_string().as_bytes(),
-        copy_child
+        pbcopy_child
             .stdin
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("cannot get copy_child stdin as mut"))?,
     )?;
-    copy_child.wait()?;
+    pbcopy_child.wait()?;
 
     Ok(())
 }
