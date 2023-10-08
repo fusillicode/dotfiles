@@ -88,26 +88,26 @@ impl FromStr for HxPosition {
 
         let path_left_separator_idx = elements.iter().position(|x| x == &"`").ok_or_else(|| {
             anyhow::anyhow!(
-                "no left path separator found among status line elements {:?}",
+                "missing left path separator in status line elements {:?}",
                 elements
             )
         })?;
         let path_right_separator_idx =
             elements.iter().rposition(|x| x == &"`").ok_or_else(|| {
                 anyhow::anyhow!(
-                    "no rigth path separator found among status line elements {:?}",
+                    "missing right path separator in status line elements {:?}",
                     elements
                 )
             })?;
 
         let &["`", path] = &elements[path_left_separator_idx..path_right_separator_idx] else {
-            anyhow::bail!("BOOM");
+            anyhow::bail!("missing path in status line elements {:?}", elements);
         };
 
         let HxLineColumn { line, column } =
             HxLineColumn::from_str(elements.last().ok_or_else(|| {
                 anyhow::anyhow!(
-                    "cannot get last element from status line elements {:?}",
+                    "missing last element in status line elements {:?}",
                     elements
                 )
             })?)?;
