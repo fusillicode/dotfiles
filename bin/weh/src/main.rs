@@ -6,7 +6,7 @@ mod utils;
 
 fn main() -> anyhow::Result<()> {
     let args = get_args();
-    let (cmd, args) = parse_cmd_and_args(&args)?;
+    let (cmd, args) = split_cmd_and_args(&args)?;
 
     match cmd {
         "gh" => cmds::gh::run(args.into_iter()),
@@ -21,7 +21,7 @@ fn get_args() -> Vec<String> {
     args.collect::<Vec<String>>()
 }
 
-fn parse_cmd_and_args(args: &[String]) -> anyhow::Result<(&str, Vec<&str>)> {
+fn split_cmd_and_args(args: &[String]) -> anyhow::Result<(&str, Vec<&str>)> {
     args.split_first()
         .map(|(cmd, cmd_args)| (cmd.as_str(), cmd_args.iter().map(String::as_str).collect()))
         .ok_or_else(|| anyhow!("cannot parse cmd and args from input args {args:?}"))
