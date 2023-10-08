@@ -11,51 +11,58 @@ use crate::utils::GhRepoView;
 use crate::utils::HxPosition;
 
 pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
-    let hx_pane_id = get_current_pane_sibling_with_title("hx")?.pane_id;
+    let get_current_git_branch = std::thread::spawn(|| -> anyhow::Result<String> {
+        Ok(String::from_utf8(
+            Command::new("git")
+                .args(["branch", "--show-current"])
+                .output()?
+                .stdout,
+        )?
+        .trim()
+        .to_owned())
+    });
 
-    let current_git_branch = String::from_utf8(
-        Command::new("git")
-            .args(["branch", "--show-current"])
-            .output()?
-            .stdout,
-    )?
-    .trim()
-    .to_owned();
+    let get_gh_repo_view = std::thread::spawn(|| -> anyhow::Result<GhRepoView> {
+        Ok(serde_json::from_slice(
+            &Command::new("gh")
+                .args(["repo", "view", "--json", "url"])
+                .output()?
+                .stdout,
+        )?)
+    });
 
-    let gh_repo_view: GhRepoView = serde_json::from_slice(
-        &Command::new("gh")
-            .args(["repo", "view", "--json", "url"])
-            .output()?
-            .stdout,
-    )?;
+    let get_hx_position = std::thread::spawn(move || -> anyhow::Result<HxPosition> {
+        let hx_pane_id = get_current_pane_sibling_with_title("hx")?.pane_id;
 
-    let wezterm_pane_text = String::from_utf8(
-        Command::new("wezterm")
-            .args(["cli", "get-text", "--pane-id", &hx_pane_id.to_string()])
-            .output()?
-            .stdout,
-    )?;
+        let wezterm_pane_text = String::from_utf8(
+            Command::new("wezterm")
+                .args(["cli", "get-text", "--pane-id", &hx_pane_id.to_string()])
+                .output()?
+                .stdout,
+        )?;
 
-    let hx_status_line = wezterm_pane_text.lines().nth_back(1).ok_or_else(|| {
-        anyhow!("missing hx status line in pane {hx_pane_id} text {wezterm_pane_text:?}")
-    })?;
+        let hx_status_line = wezterm_pane_text.lines().nth_back(1).ok_or_else(|| {
+            anyhow!("missing hx status line in pane {hx_pane_id} text {wezterm_pane_text:?}")
+        })?;
 
-    let hx_position = HxPosition::from_str(hx_status_line)?;
+        HxPosition::from_str(hx_status_line)
+    });
 
-    let current_dir = std::env::current_dir()?;
-    let git_repo_root_dir = String::from_utf8(
-        Command::new("git")
-            .args(["rev-parse", "--show-toplevel"])
-            .output()?
-            .stdout,
-    )?;
+    let get_git_repo_root_dir = std::thread::spawn(|| -> anyhow::Result<String> {
+        Ok(String::from_utf8(
+            Command::new("git")
+                .args(["rev-parse", "--show-toplevel"])
+                .output()?
+                .stdout,
+        )?)
+    });
 
     let link_to_github = build_link_to_github(
-        current_dir,
-        git_repo_root_dir,
-        hx_position,
-        gh_repo_view.url,
-        &current_git_branch,
+        std::env::current_dir()?,
+        crate::utils::exec(get_git_repo_root_dir)?,
+        crate::utils::exec(get_hx_position)?,
+        crate::utils::exec(get_gh_repo_view)?.url,
+        &crate::utils::exec(get_current_git_branch)?,
     )?;
 
     let mut pbcopy_child = Command::new("pbcopy").stdin(Stdio::piped()).spawn()?;
