@@ -86,6 +86,12 @@ pub struct HxPosition {
     pub column: i64,
 }
 
+impl HxPosition {
+    pub fn as_github_url_segment(&self) -> String {
+        format!("L{}C{}", self.line, self.column)
+    }
+}
+
 impl FromStr for HxPosition {
     type Err = anyhow::Error;
 

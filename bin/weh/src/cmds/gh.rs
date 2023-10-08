@@ -94,7 +94,7 @@ fn build_link_to_github(
         .replace(git_repo_root_dir.trim(), "");
 
     let mut missing_path_part: PathBuf = missing_path_part.trim_start_matches('/').into();
-    missing_path_part.push(hx_position.file_path);
+    missing_path_part.push(hx_position.file_path.as_path());
 
     let file_path_parts = missing_path_part
         .iter()
@@ -110,10 +110,7 @@ fn build_link_to_github(
         .path_segments_mut()
         .map_err(|_| anyhow!("cannot extend URL {gh_repo_url} with segments {segments:?}"))?
         .extend(&segments);
-    link_to_github.set_fragment(Some(&format!(
-        "L{}C{}",
-        hx_position.line, hx_position.column
-    )));
+    link_to_github.set_fragment(Some(&hx_position.as_github_url_segment()));
 
     Ok(link_to_github)
 }
