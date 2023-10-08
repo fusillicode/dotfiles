@@ -6,12 +6,12 @@ mod utils;
 
 fn main() -> anyhow::Result<()> {
     let args = get_args();
-    let (cmd, args) = split_cmd_and_args(&args)?;
+    let (cmd, cmd_args) = split_cmd_and_args(&args)?;
 
     match cmd {
-        "gh" => cmds::gh::run(args.into_iter()),
-        "ho" => cmds::ho::run(args.into_iter()),
-        unknown_cmd => bail!("unknown cmd {unknown_cmd} from args {args:?}"),
+        "gh" => cmds::gh::run(cmd_args.into_iter()),
+        "ho" => cmds::ho::run(cmd_args.into_iter()),
+        unknown_cmd => bail!("unknown cmd {unknown_cmd} in args {args:?}"),
     }
 }
 
