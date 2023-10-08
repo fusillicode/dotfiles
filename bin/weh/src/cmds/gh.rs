@@ -3,14 +3,15 @@ use std::process::Command;
 use std::process::Stdio;
 use std::str::FromStr;
 
+use anyhow::anyhow;
 use url::Url;
 
 use crate::utils::get_current_pane_sibling_with_title;
 use crate::utils::GhRepoView;
 use crate::utils::HxPosition;
 
-pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> Result<(), anyhow::Error> {
-    let hx_pane = get_current_pane_sibling_with_title("hx")?;
+pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
+    let hx_pane_id = get_current_pane_sibling_with_title("hx")?.pane_id;
 
     let current_git_branch = String::from_utf8(
         Command::new("git")
@@ -30,16 +31,13 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> Result<(), anyhow::Error
 
     let wezterm_pane_text = String::from_utf8(
         Command::new("wezterm")
-            .args(["cli", "get-text", "--pane-id", &hx_pane.pane_id.to_string()])
+            .args(["cli", "get-text", "--pane-id", &hx_pane_id.to_string()])
             .output()?
             .stdout,
     )?;
 
     let hx_status_line = wezterm_pane_text.lines().nth_back(1).ok_or_else(|| {
-        anyhow::anyhow!(
-            "missing hx status line in pane text {:?}",
-            wezterm_pane_text
-        )
+        anyhow!("missing hx status line in pane {hx_pane_id} text {wezterm_pane_text:?}")
     })?;
 
     let hx_position = HxPosition::from_str(hx_status_line)?;
@@ -66,7 +64,7 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> Result<(), anyhow::Error
         pbcopy_child
             .stdin
             .as_mut()
-            .ok_or_else(|| anyhow::anyhow!("cannot get copy_child stdin as mut"))?,
+            .ok_or_else(|| anyhow!("cannot get child stdin as mut"))?,
     )?;
     pbcopy_child.wait()?;
 
@@ -79,10 +77,10 @@ fn build_link_to_github(
     hx_position: HxPosition,
     gh_repo_url: Url,
     current_git_branch: &str,
-) -> Result<url::Url, anyhow::Error> {
+) -> anyhow::Result<Url> {
     let missing_path_part = current_dir
         .to_str()
-        .ok_or_else(|| anyhow::anyhow!("cannot get str from OsStr {:?}", current_dir))?
+        .ok_or_else(|| anyhow!("cannot get str from OsStr {current_dir:?}"))?
         .replace(git_repo_root_dir.trim(), "");
 
     let mut missing_path_part: PathBuf = missing_path_part.trim_start_matches('/').into();
@@ -100,13 +98,7 @@ fn build_link_to_github(
     let segments = [&["tree", current_git_branch], file_path_parts.as_slice()].concat();
     link_to_github
         .path_segments_mut()
-        .map_err(|_| {
-            anyhow::anyhow!(
-                "cannot extend URL {} with segments {:?}",
-                gh_repo_url,
-                segments
-            )
-        })?
+        .map_err(|_| anyhow!("cannot extend URL {gh_repo_url} with segments {segments:?}"))?
         .extend(&segments);
     link_to_github.set_fragment(Some(&format!(
         "L{}C{}",

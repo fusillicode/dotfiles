@@ -1,8 +1,10 @@
 use std::process::Command;
 
-pub fn run<'a>(mut args: impl Iterator<Item = &'a str>) -> Result<(), anyhow::Error> {
+use anyhow::bail;
+
+pub fn run<'a>(mut args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
     let Some(file_to_open) = args.next() else {
-        anyhow::bail!("no input file supplied {:?}", args.collect::<Vec<_>>())
+        bail!("no input file supplied {:?}", args.collect::<Vec<_>>())
     };
 
     let hx_pane_id = crate::utils::get_current_pane_sibling_with_title("hx")?.pane_id;
