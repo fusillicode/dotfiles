@@ -1,0 +1,14 @@
+inherits = "ayu_dark"
+
+"ui.cursor" = { fg = "my_black", bg = "my_white" }
+"ui.cursor.match" = { fg = "my_black", bg = "my_orange" }
+"ui.cursor.primary" = { fg = "my_black", bg = "my_white" }
+"ui.linenr" = { fg = "my_gray" }
+"ui.linenr.selected" = { fg = "my_white" }
+"ui.virtual.inlay-hint" = { fg = "my_gray" }
+
+[palette]
+my_black = "#000000"
+my_gray = "#666666"
+my_orange = "#ff9933"
+my_white = "#ffffff"
