@@ -1,7 +1,6 @@
 inherits = "github_dark"
 
 "comment" = { modifiers = ["italic"] }
-"hint" = "my_blue"
 "ui.cursor" = { fg = "my_black", bg = "my_white" }
 "ui.cursor.match" = { fg = "my_black", bg = "my_orange" }
 "ui.cursor.primary" = { fg = "my_black", bg = "my_white" }
