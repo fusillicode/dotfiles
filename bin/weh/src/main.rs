@@ -9,6 +9,7 @@ fn main() -> anyhow::Result<()> {
     let (cmd, cmd_args) = split_cmd_and_args(&args)?;
 
     match cmd {
+        "fp" => cmds::fp::run(cmd_args.into_iter()),
         "ghl" => cmds::ghl::run(cmd_args.into_iter()),
         "ho" => cmds::ho::run(cmd_args.into_iter()),
         unknown_cmd => bail!("unknown cmd {unknown_cmd} in args {args:?}"),
