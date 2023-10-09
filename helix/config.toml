@@ -1,4 +1,4 @@
-theme = "my_gruvbox"
+theme = "my_ayu_dark"
 
 [editor]
 auto-save = true
@@ -63,9 +63,10 @@ esc = ["collapse_selection", "normal_mode"]
 A-b = ["move_prev_word_start"]
 A-f = ["move_next_word_start"]
 C-d = ["half_page_down", "goto_window_center"]
-C-l = [":sh weh gh"]
+C-l = [":sh weh ghl"]
 C-r = [":lsp-restart"]
 C-u = ["half_page_up", "goto_window_center"]
+C-y = [":sh weh fp"]
 D = ["delete_selection_noyank"]
 F = ["search_selection", "global_search"]
 X = ["extend_line_up", "extend_to_line_bounds"]
@@ -107,9 +108,10 @@ x = [":buffer-close"]
 
 [keys.select]
 C-d = ["half_page_down", "goto_window_center"]
-C-l = [":sh weh gh"]
+C-l = [":sh weh ghl"]
 C-r = [":lsp-restart"]
 C-u = ["half_page_up", "goto_window_center"]
+C-y = [":sh weh fp"]
 D = ["delete_selection_noyank"]
 F = ["search_selection", "global_search"]
 X = ["extend_line_up", "extend_to_line_bounds"]
