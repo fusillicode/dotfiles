@@ -1,10 +1,8 @@
 use std::path::PathBuf;
 use std::process::Command;
-use std::process::Stdio;
 use std::str::FromStr;
 
 use anyhow::anyhow;
-use anyhow::bail;
 use url::Url;
 
 use crate::utils::get_current_pane_sibling_with_title;
@@ -66,17 +64,7 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
         &crate::utils::exec(get_current_git_branch)?,
     )?;
 
-    let mut pbcopy_child = Command::new("pbcopy").stdin(Stdio::piped()).spawn()?;
-    std::io::copy(
-        &mut link_to_github.to_string().as_bytes(),
-        pbcopy_child
-            .stdin
-            .as_mut()
-            .ok_or_else(|| anyhow!("cannot get child stdin as mut"))?,
-    )?;
-    if !pbcopy_child.wait()?.success() {
-        bail!("error copy link {link_to_github} to system clipboard");
-    }
+    crate::utils::copy_to_system_clipboard(&mut link_to_github.as_str().as_bytes())?;
 
     Ok(())
 }

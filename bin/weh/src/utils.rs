@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::process::Command;
+use std::process::Stdio;
 use std::str::FromStr;
 use std::thread::JoinHandle;
 
@@ -12,6 +13,21 @@ pub fn exec<T>(join_handle: JoinHandle<anyhow::Result<T>>) -> Result<T, anyhow::
     join_handle
         .join()
         .map_err(|e| anyhow!("join error {e:?}"))?
+}
+
+pub fn copy_to_system_clipboard(content: &mut &[u8]) -> anyhow::Result<()> {
+    let mut pbcopy_child = Command::new("pbcopy").stdin(Stdio::piped()).spawn()?;
+    std::io::copy(
+        content,
+        pbcopy_child
+            .stdin
+            .as_mut()
+            .ok_or_else(|| anyhow!("cannot get child stdin as mut"))?,
+    )?;
+    if !pbcopy_child.wait()?.success() {
+        bail!("error copy content to system clipboard, content {content:?}");
+    }
+    Ok(())
 }
 
 pub fn get_current_pane_sibling_with_title(pane_title: &str) -> anyhow::Result<WezTermPane> {
