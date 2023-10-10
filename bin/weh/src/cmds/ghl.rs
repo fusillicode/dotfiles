@@ -30,7 +30,7 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
         )?)
     });
 
-    let get_hx_position = std::thread::spawn(move || -> anyhow::Result<HxCursorPosition> {
+    let get_hx_cursor_position = std::thread::spawn(move || -> anyhow::Result<HxCursorPosition> {
         let hx_pane_id = get_current_pane_sibling_with_title("hx")?.pane_id;
 
         let wezterm_pane_text = String::from_utf8(
@@ -59,7 +59,7 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
     let link_to_github = build_link_to_github(
         std::env::current_dir()?,
         crate::utils::exec(get_git_repo_root_dir)?,
-        crate::utils::exec(get_hx_position)?,
+        crate::utils::exec(get_hx_cursor_position)?,
         crate::utils::exec(get_gh_repo_view)?.url,
         &crate::utils::exec(get_current_git_branch)?,
     )?;
@@ -72,7 +72,7 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
 fn build_link_to_github(
     current_dir: PathBuf,
     git_repo_root_dir: String,
-    hx_position: HxCursorPosition,
+    hx_cursor_position: HxCursorPosition,
     gh_repo_url: Url,
     current_git_branch: &str,
 ) -> anyhow::Result<Url> {
@@ -82,7 +82,7 @@ fn build_link_to_github(
         .replace(git_repo_root_dir.trim(), "");
 
     let mut missing_path_part: PathBuf = missing_path_part.trim_start_matches('/').into();
-    missing_path_part.push(hx_position.file_path.as_path());
+    missing_path_part.push(hx_cursor_position.file_path.as_path());
 
     let file_path_parts = missing_path_part
         .iter()
@@ -98,7 +98,7 @@ fn build_link_to_github(
         .path_segments_mut()
         .map_err(|_| anyhow!("cannot extend URL {gh_repo_url} with segments {segments:?}"))?
         .extend(&segments);
-    link_to_github.set_fragment(Some(&hx_position.as_github_url_segment()));
+    link_to_github.set_fragment(Some(&hx_cursor_position.as_github_url_segment()));
 
     Ok(link_to_github)
 }
