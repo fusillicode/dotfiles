@@ -20,14 +20,22 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
         anyhow!("missing hx status line in pane {hx_pane_id} text {wezterm_pane_text:?}")
     })?;
 
-    let file_path = HxCursorPosition::from_str(hx_status_line)?.file_path;
+    let hx_cursor_position = HxCursorPosition::from_str(hx_status_line)?;
 
     crate::utils::copy_to_system_clipboard(
-        &mut file_path
-            .to_str()
-            .ok_or_else(|| anyhow!("cannot convert PathBuf {file_path:?} to str"))?
-            .as_bytes(),
+        &mut format_hx_cursor_position(&hx_cursor_position)?.as_bytes(),
     )?;
 
     Ok(())
+}
+
+fn format_hx_cursor_position(hx_cursor_position: &HxCursorPosition) -> anyhow::Result<String> {
+    let file_path = hx_cursor_position.file_path.to_str().ok_or_else(|| {
+        anyhow!(
+            "cannot convert PathBuf {:?} to str",
+            hx_cursor_position.file_path
+        )
+    })?;
+
+    Ok(format!("{}:{}", file_path, hx_cursor_position.line))
 }

@@ -167,7 +167,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_hx_position_from_str_works_as_expected() {
+    fn test_hx_cursor_position_from_str_works_as_expected() {
         let result = HxCursorPosition::from_str("      ● 1 ` bin/weh/src/main.rs `                                                                  1 sel  1 char  W ● 1  42:33 ");
         let expected = HxCursorPosition {
             file_path: "bin/weh/src/main.rs".into(),
