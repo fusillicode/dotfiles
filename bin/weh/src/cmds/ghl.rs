@@ -7,7 +7,7 @@ use url::Url;
 
 use crate::utils::get_current_pane_sibling_with_title;
 use crate::utils::GhRepoView;
-use crate::utils::HxPosition;
+use crate::utils::HxCursorPosition;
 
 pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
     let get_current_git_branch = std::thread::spawn(|| -> anyhow::Result<String> {
@@ -30,7 +30,7 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
         )?)
     });
 
-    let get_hx_position = std::thread::spawn(move || -> anyhow::Result<HxPosition> {
+    let get_hx_position = std::thread::spawn(move || -> anyhow::Result<HxCursorPosition> {
         let hx_pane_id = get_current_pane_sibling_with_title("hx")?.pane_id;
 
         let wezterm_pane_text = String::from_utf8(
@@ -44,7 +44,7 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
             anyhow!("missing hx status line in pane {hx_pane_id} text {wezterm_pane_text:?}")
         })?;
 
-        HxPosition::from_str(hx_status_line)
+        HxCursorPosition::from_str(hx_status_line)
     });
 
     let get_git_repo_root_dir = std::thread::spawn(|| -> anyhow::Result<String> {
@@ -72,7 +72,7 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
 fn build_link_to_github(
     current_dir: PathBuf,
     git_repo_root_dir: String,
-    hx_position: HxPosition,
+    hx_position: HxCursorPosition,
     gh_repo_url: Url,
     current_git_branch: &str,
 ) -> anyhow::Result<Url> {
