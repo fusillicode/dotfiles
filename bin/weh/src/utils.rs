@@ -96,19 +96,19 @@ pub struct GhRepoView {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct HxPosition {
+pub struct HxCursorPosition {
     pub file_path: PathBuf,
     pub line: i64,
     pub column: i64,
 }
 
-impl HxPosition {
+impl HxCursorPosition {
     pub fn as_github_url_segment(&self) -> String {
         format!("L{}C{}", self.line, self.column)
     }
 }
 
-impl FromStr for HxPosition {
+impl FromStr for HxCursorPosition {
     type Err = anyhow::Error;
 
     fn from_str(hx_status_line: &str) -> Result<Self, Self::Err> {
@@ -168,8 +168,8 @@ mod tests {
 
     #[test]
     fn test_hx_position_from_str_works_as_expected() {
-        let result = HxPosition::from_str("      ● 1 ` bin/weh/src/main.rs `                                                                  1 sel  1 char  W ● 1  42:33 ");
-        let expected = HxPosition {
+        let result = HxCursorPosition::from_str("      ● 1 ` bin/weh/src/main.rs `                                                                  1 sel  1 char  W ● 1  42:33 ");
+        let expected = HxCursorPosition {
             file_path: "bin/weh/src/main.rs".into(),
             line: 42,
             column: 33,
@@ -177,8 +177,8 @@ mod tests {
 
         assert_eq!(expected, result.unwrap());
 
-        let result = HxPosition::from_str("⣷      ` bin/weh/src/main.rs `                                                                  1 sel  1 char  W ● 1  33:42 ");
-        let expected = HxPosition {
+        let result = HxCursorPosition::from_str("⣷      ` bin/weh/src/main.rs `                                                                  1 sel  1 char  W ● 1  33:42 ");
+        let expected = HxCursorPosition {
             file_path: "bin/weh/src/main.rs".into(),
             line: 33,
             column: 42,
