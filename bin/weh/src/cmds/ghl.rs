@@ -25,8 +25,9 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
             anyhow!("missing hx status line in pane '{hx_pane_id}' text {wezterm_pane_text:?}")
         })?)?;
 
-    let file_parent_dir = dbg!(get_parent_dir(&hx_cursor_position.file_path)?.to_owned());
-    let git_repo_root = Arc::new(
+    let file_parent_dir = get_parent_dir(&hx_cursor_position.file_path)?.to_owned();
+
+    let git_repo_root_dir = Arc::new(
         String::from_utf8(
             Command::new("sh")
                 .args([
@@ -40,11 +41,11 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
         .to_owned(),
     );
 
-    let git_repo_root_clone = dbg!(git_repo_root.clone());
+    let git_repo_root_dir_clone = git_repo_root_dir.clone();
     let get_git_current_branch = std::thread::spawn(move || -> anyhow::Result<String> {
         Ok(String::from_utf8(
             Command::new("git")
-                .args(["-C", &git_repo_root_clone, "branch", "--show-current"])
+                .args(["-C", &git_repo_root_dir_clone, "branch", "--show-current"])
                 .output()?
                 .stdout,
         )?
@@ -52,11 +53,11 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
         .to_owned())
     });
 
-    let git_repo_root_clone = git_repo_root.clone();
+    let git_repo_root_dir_clone = git_repo_root_dir.clone();
     let get_github_repo_url = std::thread::spawn(move || -> anyhow::Result<Url> {
         get_github_url_from_git_remote_output(&String::from_utf8(
             Command::new("git")
-                .args(["-C", &git_repo_root_clone, "remote", "-v"])
+                .args(["-C", &git_repo_root_dir_clone, "remote", "-v"])
                 .output()?
                 .stdout,
         )?)
@@ -64,7 +65,7 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
 
     let link_to_github = build_link_to_github(
         std::env::current_dir()?,
-        git_repo_root.to_string(),
+        git_repo_root_dir.to_string(),
         hx_cursor_position,
         crate::utils::exec(get_github_repo_url)?,
         &crate::utils::exec(get_git_current_branch)?,
@@ -116,7 +117,7 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> anyhow::Result<
 
 fn build_link_to_github(
     current_dir: PathBuf,
-    git_repo_root: String,
+    git_repo_root_dir: String,
     hx_cursor_position: HxCursorPosition,
     github_repo_url: Url,
     git_current_branch: &str,
@@ -124,7 +125,7 @@ fn build_link_to_github(
     let missing_path_part = current_dir
         .to_str()
         .ok_or_else(|| anyhow!("cannot get str from PathBuf {current_dir:?}"))?
-        .replace(git_repo_root.trim(), "");
+        .replace(git_repo_root_dir.trim(), "");
 
     let mut missing_path_part: PathBuf = missing_path_part.trim_start_matches('/').into();
     missing_path_part.push(hx_cursor_position.file_path.as_path());
