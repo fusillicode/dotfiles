@@ -7,7 +7,6 @@ use std::thread::JoinHandle;
 use anyhow::anyhow;
 use anyhow::bail;
 use serde::Deserialize;
-use url::Url;
 
 pub fn exec<T>(join_handle: JoinHandle<anyhow::Result<T>>) -> Result<T, anyhow::Error> {
     join_handle
@@ -44,7 +43,7 @@ pub fn get_current_pane_sibling_with_title(pane_title: &str) -> anyhow::Result<W
         .iter()
         .find(|w| w.pane_id == current_pane_id)
         .ok_or_else(|| {
-            anyhow!("current pane id {current_pane_id} not found among panes {all_panes:?}")
+            anyhow!("current pane id '{current_pane_id}' not found among panes {all_panes:?}")
         })?
         .tab_id;
 
@@ -52,7 +51,7 @@ pub fn get_current_pane_sibling_with_title(pane_title: &str) -> anyhow::Result<W
         .iter()
         .find(|w| w.tab_id == current_pane_tab_id && w.title == pane_title)
         .ok_or_else(|| {
-            anyhow!("pane with title {pane_title} not found in tab {current_pane_tab_id}")
+            anyhow!("pane with title '{pane_title}' not found in tab '{current_pane_tab_id}'")
         })?
         .clone())
 }
@@ -88,11 +87,6 @@ pub struct Size {
     pixel_width: i64,
     pixel_height: i64,
     dpi: i64,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct GhRepoView {
-    pub url: Url,
 }
 
 #[derive(Debug, PartialEq)]

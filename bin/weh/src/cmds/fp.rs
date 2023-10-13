@@ -17,7 +17,7 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
     )?;
 
     let hx_status_line = wezterm_pane_text.lines().nth_back(1).ok_or_else(|| {
-        anyhow!("missing hx status line in pane {hx_pane_id} text {wezterm_pane_text:?}")
+        anyhow!("missing hx status line in pane '{hx_pane_id}' text {wezterm_pane_text:?}")
     })?;
 
     let hx_cursor_position = HxCursorPosition::from_str(hx_status_line)?;
