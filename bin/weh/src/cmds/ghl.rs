@@ -154,10 +154,18 @@ fn build_github_link<'a>(
 ) -> anyhow::Result<Url> {
     let file_path_parts = file_path
         .components()
-        .map(|x| x.as_os_str().to_str().unwrap())
+        .map(|x| x.as_os_str().to_string_lossy().to_string())
         .collect::<Vec<_>>();
 
-    let segments = [&["tree", git_current_branch], file_path_parts.as_slice()].concat();
+    let segments = [
+        &["tree", git_current_branch],
+        file_path_parts
+            .iter()
+            .map(AsRef::as_ref)
+            .collect::<Vec<_>>()
+            .as_slice(),
+    ]
+    .concat();
     let mut github_link = github_repo_url.clone();
     github_link
         .path_segments_mut()
