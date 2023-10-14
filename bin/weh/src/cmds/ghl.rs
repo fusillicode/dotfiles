@@ -1,5 +1,4 @@
 use std::path::Path;
-use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -63,10 +62,10 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
     });
 
     let link_to_github = build_link_to_github(
-        dbg!(git_repo_root.to_string()),
-        dbg!(hx_cursor_position),
+        hx_cursor_position,
+        git_repo_root.to_string(),
+        &crate::utils::exec(get_git_current_branch)?,
         crate::utils::exec(get_github_repo_url)?,
-        dbg!(&crate::utils::exec(get_git_current_branch)?),
     )?;
 
     crate::utils::copy_to_system_clipboard(&mut link_to_github.as_str().as_bytes())?;
@@ -114,10 +113,10 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> anyhow::Result<
 }
 
 fn build_link_to_github(
-    git_repo_root: String,
     hx_cursor_position: HxCursorPosition,
-    github_repo_url: Url,
+    git_repo_root: String,
     git_current_branch: &str,
+    github_repo_url: Url,
 ) -> anyhow::Result<Url> {
     let file_path = hx_cursor_position.file_path.to_str().ok_or_else(|| {
         anyhow!(
