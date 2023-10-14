@@ -143,6 +143,7 @@ fn get_file_path_relative_to_git_repo_root(
             .to_owned()
     }
     .replace(&git_repo_root, "")
+    .trim_start_matches(std::path::MAIN_SEPARATOR_STR)
     .into())
 }
 
