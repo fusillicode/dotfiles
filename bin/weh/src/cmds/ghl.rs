@@ -158,7 +158,7 @@ fn build_github_link<'a>(
 ) -> anyhow::Result<Url> {
     let file_path_parts = file_path
         .components()
-        .map(|x| x.as_os_str().to_string_lossy().to_string())
+        .map(|x| x.as_os_str().to_str().unwrap().to_string())
         .collect::<Vec<_>>();
 
     let segments = [
