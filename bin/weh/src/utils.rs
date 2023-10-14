@@ -92,11 +92,11 @@ pub struct Size {
 #[derive(Debug, PartialEq)]
 pub struct HxCursor {
     pub file_path: PathBuf,
-    pub position: Position,
+    pub position: HxCursorPosition,
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Position {
+pub struct HxCursorPosition {
     pub line: i64,
     pub column: i64,
 }
@@ -128,7 +128,7 @@ impl FromStr for HxCursor {
 
         Ok(Self {
             file_path: path.into(),
-            position: Position { line, column },
+            position: HxCursorPosition { line, column },
         })
     }
 }
@@ -163,7 +163,7 @@ mod tests {
         let result = HxCursor::from_str("      ● 1 ` bin/weh/src/main.rs `                                                                  1 sel  1 char  W ● 1  42:33 ");
         let expected = HxCursor {
             file_path: "bin/weh/src/main.rs".into(),
-            position: Position {
+            position: HxCursorPosition {
                 line: 42,
                 column: 33,
             },
@@ -174,7 +174,7 @@ mod tests {
         let result = HxCursor::from_str("⣷      ` bin/weh/src/main.rs `                                                                  1 sel  1 char  W ● 1  33:42 ");
         let expected = HxCursor {
             file_path: "bin/weh/src/main.rs".into(),
-            position: Position {
+            position: HxCursorPosition {
                 line: 33,
                 column: 42,
             },
