@@ -90,19 +90,18 @@ pub struct Size {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct HxCursorPosition {
+pub struct HxCursor {
     pub file_path: PathBuf,
+    pub position: Position,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Position {
     pub line: i64,
     pub column: i64,
 }
 
-impl HxCursorPosition {
-    pub fn as_github_url_segment(&self) -> String {
-        format!("L{}C{}", self.line, self.column)
-    }
-}
-
-impl FromStr for HxCursorPosition {
+impl FromStr for HxCursor {
     type Err = anyhow::Error;
 
     fn from_str(hx_status_line: &str) -> Result<Self, Self::Err> {
@@ -129,8 +128,7 @@ impl FromStr for HxCursorPosition {
 
         Ok(Self {
             file_path: path.into(),
-            line,
-            column,
+            position: Position { line, column },
         })
     }
 }
@@ -161,21 +159,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_hx_cursor_position_from_str_works_as_expected() {
-        let result = HxCursorPosition::from_str("      ● 1 ` bin/weh/src/main.rs `                                                                  1 sel  1 char  W ● 1  42:33 ");
-        let expected = HxCursorPosition {
+    fn test_hx_cursor_from_str_works_as_expected() {
+        let result = HxCursor::from_str("      ● 1 ` bin/weh/src/main.rs `                                                                  1 sel  1 char  W ● 1  42:33 ");
+        let expected = HxCursor {
             file_path: "bin/weh/src/main.rs".into(),
-            line: 42,
-            column: 33,
+            position: Position {
+                line: 42,
+                column: 33,
+            },
         };
 
         assert_eq!(expected, result.unwrap());
 
-        let result = HxCursorPosition::from_str("⣷      ` bin/weh/src/main.rs `                                                                  1 sel  1 char  W ● 1  33:42 ");
-        let expected = HxCursorPosition {
+        let result = HxCursor::from_str("⣷      ` bin/weh/src/main.rs `                                                                  1 sel  1 char  W ● 1  33:42 ");
+        let expected = HxCursor {
             file_path: "bin/weh/src/main.rs".into(),
-            line: 33,
-            column: 42,
+            position: Position {
+                line: 33,
+                column: 42,
+            },
         };
 
         assert_eq!(expected, result.unwrap());
