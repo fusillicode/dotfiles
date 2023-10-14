@@ -95,12 +95,6 @@ pub struct HxCursor {
     pub position: HxCursorPosition,
 }
 
-#[derive(Debug, PartialEq)]
-pub struct HxCursorPosition {
-    pub line: i64,
-    pub column: i64,
-}
-
 impl FromStr for HxCursor {
     type Err = anyhow::Error;
 
@@ -121,31 +115,33 @@ impl FromStr for HxCursor {
             bail!("missing path in status line elements {elements:?}");
         };
 
-        let HxLineColumn { line, column } =
-            HxLineColumn::from_str(elements.last().ok_or_else(|| {
-                anyhow!("missing last element in status line elements {elements:?}")
-            })?)?;
+        let file_path: PathBuf = path.into();
+        if !file_path.is_file() {
+            bail!("'{file_path:?}' doesn't point to an existing file")
+        }
 
         Ok(Self {
-            file_path: path.into(),
-            position: HxCursorPosition { line, column },
+            file_path,
+            position: HxCursorPosition::from_str(elements.last().ok_or_else(|| {
+                anyhow!("missing last element in status line elements {elements:?}")
+            })?)?,
         })
     }
 }
 
 #[derive(Debug, PartialEq)]
-pub struct HxLineColumn {
-    line: i64,
-    column: i64,
+pub struct HxCursorPosition {
+    pub line: i64,
+    pub column: i64,
 }
 
-impl FromStr for HxLineColumn {
+impl FromStr for HxCursorPosition {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (line, column) = s
             .split_once(':')
-            .ok_or_else(|| anyhow!("no line column delimiter found"))?;
+            .ok_or_else(|| anyhow!("no line column delimiter found in str '{s}'"))?;
 
         Ok(Self {
             line: line.parse()?,
@@ -159,10 +155,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_hx_cursor_from_str_works_as_expected() {
-        let result = HxCursor::from_str("      ● 1 ` bin/weh/src/main.rs `                                                                  1 sel  1 char  W ● 1  42:33 ");
+    fn test_hx_cursor_from_str_works_as_expected_with_a_file_path_pointing_to_an_existent_file_in_normal_mode(
+    ) {
+        let result = HxCursor::from_str("      ● 1 ` src/utils.rs `                                                                  1 sel  1 char  W ● 1  42:33 ");
         let expected = HxCursor {
-            file_path: "bin/weh/src/main.rs".into(),
+            file_path: "src/utils.rs".into(),
             position: HxCursorPosition {
                 line: 42,
                 column: 33,
@@ -170,10 +167,14 @@ mod tests {
         };
 
         assert_eq!(expected, result.unwrap());
+    }
 
-        let result = HxCursor::from_str("⣷      ` bin/weh/src/main.rs `                                                                  1 sel  1 char  W ● 1  33:42 ");
+    #[test]
+    fn test_hx_cursor_from_str_works_as_expected_with_a_file_path_pointing_to_an_existent_file_and_a_spinner(
+    ) {
+        let result = HxCursor::from_str("⣷      ` src/utils.rs `                                                                  1 sel  1 char  W ● 1  33:42 ");
         let expected = HxCursor {
-            file_path: "bin/weh/src/main.rs".into(),
+            file_path: "src/utils.rs".into(),
             position: HxCursorPosition {
                 line: 33,
                 column: 42,
@@ -181,5 +182,26 @@ mod tests {
         };
 
         assert_eq!(expected, result.unwrap());
+    }
+
+    #[test]
+    fn test_hx_cursor_from_str_errs_with_a_file_path_pointing_to_an_existing_directory() {
+        let result = HxCursor::from_str("⣷      ` src/cmds `                                                                  1 sel  1 char  W ● 1  33:42 ");
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_hx_cursor_from_str_errs_with_a_file_path_pointing_to_an_inexistent_directory() {
+        let result = HxCursor::from_str("⣷      ` foo/bar `                                                                  1 sel  1 char  W ● 1  33:42 ");
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_hx_cursor_from_str_errs_with_a_file_path_pointing_to_an_inexistent_file() {
+        let result = HxCursor::from_str("⣷      ` src/foo.rs `                                                                  1 sel  1 char  W ● 1  33:42 ");
+
+        assert!(result.is_err());
     }
 }
