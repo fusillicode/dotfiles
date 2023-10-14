@@ -64,7 +64,13 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
     });
 
     // `get_relative_file_path` is before the `join`s to let them work in the background as much as possible.
-    let file_path = get_relative_file_path(&hx_cursor, git_repo_root.to_string())?;
+    let file_path = get_relative_file_path(
+        hx_cursor
+            .file_path
+            .to_str()
+            .ok_or_else(|| anyhow!("cannot get str from Path {:?}", hx_cursor.file_path))?,
+        git_repo_root.as_str(),
+    )?;
     let github_repo_url = crate::utils::join(get_github_repo_url)?;
     let git_current_branch = crate::utils::join(get_git_current_branch)?;
 
@@ -120,16 +126,11 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> anyhow::Result<
 }
 
 // FIXME: TEST ME PLEASE!!!
-fn get_relative_file_path(hx_cursor: &HxCursor, git_repo_root: String) -> anyhow::Result<String> {
-    let file_path = hx_cursor
-        .file_path
-        .to_str()
-        .ok_or_else(|| anyhow!("cannot get str from Path {:?}", hx_cursor.file_path))?;
-
+fn get_relative_file_path(file_path: &str, git_repo_root: &str) -> anyhow::Result<String> {
     Ok(if file_path.starts_with('~') {
-        file_path.replace("~", &std::env::var("HOME").unwrap())
+        file_path.replace("~", &std::env::var("HOME")?)
     } else if !file_path.starts_with('/') {
-        let mut current_dir = std::env::current_dir().unwrap();
+        let mut current_dir = std::env::current_dir()?;
         current_dir.push(file_path);
         current_dir.to_str().unwrap().to_owned()
     } else {
