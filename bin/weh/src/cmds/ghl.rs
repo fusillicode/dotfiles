@@ -7,7 +7,7 @@ use anyhow::anyhow;
 use url::Url;
 
 use crate::utils::get_current_pane_sibling_with_title;
-use crate::utils::HxCursorPosition;
+use crate::utils::HxCursor;
 
 pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
     let hx_pane_id = get_current_pane_sibling_with_title("hx")?.pane_id;
@@ -19,12 +19,12 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
             .stdout,
     )?;
 
-    let hx_cursor_position =
-        HxCursorPosition::from_str(wezterm_pane_text.lines().nth_back(1).ok_or_else(|| {
+    let hx_cursor =
+        HxCursor::from_str(wezterm_pane_text.lines().nth_back(1).ok_or_else(|| {
             anyhow!("missing hx status line in pane '{hx_pane_id}' text {wezterm_pane_text:?}")
         })?)?;
 
-    let file_parent_dir = get_parent_dir(&hx_cursor_position.file_path)?.to_owned();
+    let file_parent_dir = get_parent_dir(&hx_cursor.file_path)?.to_owned();
     let git_repo_root = Arc::new(
         String::from_utf8(
             Command::new("sh")
@@ -62,7 +62,7 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
     });
 
     let link_to_github = build_link_to_github(
-        hx_cursor_position,
+        hx_cursor,
         git_repo_root.to_string(),
         &crate::utils::exec(get_git_current_branch)?,
         crate::utils::exec(get_github_repo_url)?,
@@ -113,17 +113,15 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> anyhow::Result<
 }
 
 fn build_link_to_github(
-    hx_cursor_position: HxCursorPosition,
+    hx_cursor: HxCursor,
     git_repo_root: String,
     git_current_branch: &str,
     github_repo_url: Url,
 ) -> anyhow::Result<Url> {
-    let file_path = hx_cursor_position.file_path.to_str().ok_or_else(|| {
-        anyhow!(
-            "cannot get str from Path {:?}",
-            hx_cursor_position.file_path
-        )
-    })?;
+    let file_path = hx_cursor
+        .file_path
+        .to_str()
+        .ok_or_else(|| anyhow!("cannot get str from Path {:?}", hx_cursor.file_path))?;
 
     let relative_file_path_to_git_repo_root = if file_path.starts_with('~') {
         file_path.replace("~", &std::env::var("HOME").unwrap())
@@ -147,7 +145,10 @@ fn build_link_to_github(
         .path_segments_mut()
         .map_err(|_| anyhow!("cannot extend URL '{github_repo_url}' with segments {segments:?}"))?
         .extend(&segments);
-    link_to_github.set_fragment(Some(&hx_cursor_position.as_github_url_segment()));
+    link_to_github.set_fragment(Some(&format!(
+        "L{}C{}",
+        hx_cursor.position.line, hx_cursor.position.column
+    )));
 
     Ok(link_to_github)
 }
