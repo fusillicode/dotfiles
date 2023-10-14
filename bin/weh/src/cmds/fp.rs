@@ -4,7 +4,7 @@ use std::str::FromStr;
 use anyhow::anyhow;
 
 use crate::utils::get_current_pane_sibling_with_title;
-use crate::utils::HxCursorPosition;
+use crate::utils::HxCursor;
 
 pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
     let hx_pane_id = get_current_pane_sibling_with_title("hx")?.pane_id;
@@ -20,22 +20,18 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
         anyhow!("missing hx status line in pane '{hx_pane_id}' text {wezterm_pane_text:?}")
     })?;
 
-    let hx_cursor_position = HxCursorPosition::from_str(hx_status_line)?;
+    let hx_cursor = HxCursor::from_str(hx_status_line)?;
 
-    crate::utils::copy_to_system_clipboard(
-        &mut format_hx_cursor_position(&hx_cursor_position)?.as_bytes(),
-    )?;
+    crate::utils::copy_to_system_clipboard(&mut format_hx_cursor(&hx_cursor)?.as_bytes())?;
 
     Ok(())
 }
 
-fn format_hx_cursor_position(hx_cursor_position: &HxCursorPosition) -> anyhow::Result<String> {
-    let file_path = hx_cursor_position.file_path.to_str().ok_or_else(|| {
-        anyhow!(
-            "cannot convert PathBuf {:?} to str",
-            hx_cursor_position.file_path
-        )
-    })?;
+fn format_hx_cursor(hx_cursor: &HxCursor) -> anyhow::Result<String> {
+    let file_path = hx_cursor
+        .file_path
+        .to_str()
+        .ok_or_else(|| anyhow!("cannot convert PathBuf {:?} to str", hx_cursor.file_path))?;
 
-    Ok(format!("{}:{}", file_path, hx_cursor_position.line))
+    Ok(format!("{}:{}", file_path, hx_cursor.position.line))
 }
