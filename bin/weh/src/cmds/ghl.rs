@@ -74,8 +74,7 @@ fn get_git_repo_root(file_path: &Path) -> anyhow::Result<String> {
         .parent()
         .ok_or_else(|| anyhow!("cannot get parent dir from path {file_path:?}"))?
         .to_str()
-        .ok_or_else(|| anyhow!("cannot get str from Path {file_path:?}"))?
-        .to_owned();
+        .ok_or_else(|| anyhow!("cannot get str from Path {file_path:?}"))?;
 
     let git_repo_root = Command::new("sh")
         .args([
@@ -92,7 +91,7 @@ fn get_git_repo_root(file_path: &Path) -> anyhow::Result<String> {
     Ok(String::from_utf8(git_repo_root)?.trim().to_owned())
 }
 
-fn get_github_url_from_git_remote_output(git_remote_output: &str) -> Result<Url, anyhow::Error> {
+fn get_github_url_from_git_remote_output(git_remote_output: &str) -> anyhow::Result<Url> {
     let git_remote_fetch_line = git_remote_output
         .trim()
         .lines()
@@ -131,7 +130,7 @@ fn get_file_path_relative_to_git_repo_root(
 ) -> anyhow::Result<PathBuf> {
     let file_path = file_path
         .to_str()
-        .ok_or_else(|| anyhow!("cannot get str from Path {:?}", file_path))?;
+        .ok_or_else(|| anyhow!("cannot get str from Path {file_path:?}"))?;
 
     Ok(if file_path.starts_with('~') {
         file_path.replace("~", &std::env::var("HOME")?)
@@ -142,7 +141,7 @@ fn get_file_path_relative_to_git_repo_root(
         current_dir.push(file_path);
         current_dir
             .to_str()
-            .ok_or_else(|| anyhow!("cannot get str from Path {:?}", current_dir))?
+            .ok_or_else(|| anyhow!("cannot get str from Path {current_dir:?}"))?
             .to_owned()
     }
     .replace(&git_repo_root, "")
@@ -156,20 +155,17 @@ fn build_github_link<'a>(
     file_path: &'a Path,
     hx_cursor_position: &'a HxCursorPosition,
 ) -> anyhow::Result<Url> {
-    let file_path_parts = file_path
-        .components()
-        .map(|x| x.as_os_str().to_str().unwrap().to_string())
-        .collect::<Vec<_>>();
+    let mut file_path_parts = vec![];
+    for component in file_path.components() {
+        file_path_parts.push(
+            component
+                .as_os_str()
+                .to_str()
+                .ok_or_else(|| anyhow!("cannot get str from path component {component:?}"))?,
+        );
+    }
 
-    let segments = [
-        &["tree", git_current_branch],
-        file_path_parts
-            .iter()
-            .map(AsRef::as_ref)
-            .collect::<Vec<_>>()
-            .as_slice(),
-    ]
-    .concat();
+    let segments = [&["tree", git_current_branch], file_path_parts.as_slice()].concat();
     let mut github_link = github_repo_url.clone();
     github_link
         .path_segments_mut()
