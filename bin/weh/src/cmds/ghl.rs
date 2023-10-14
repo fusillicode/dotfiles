@@ -5,6 +5,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::anyhow;
+use anyhow::bail;
 use url::Url;
 
 use crate::utils::get_current_pane_sibling_with_title;
@@ -26,21 +27,7 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
             anyhow!("missing hx status line in pane '{hx_pane_id}' text {wezterm_pane_text:?}")
         })?)?;
 
-    let file_parent_dir = get_parent_dir(&hx_cursor.file_path)?.to_owned();
-    let git_repo_root = Arc::new(
-        String::from_utf8(
-            // Without spawning a new `sh` shell I get an empty response from `git -C` 🤷‍♂️
-            Command::new("sh")
-                .args([
-                    "-c",
-                    &format!("git -C {file_parent_dir} rev-parse --show-toplevel"),
-                ])
-                .output()?
-                .stdout,
-        )?
-        .trim()
-        .to_owned(),
-    );
+    let git_repo_root = Arc::new(get_git_repo_root(&hx_cursor.file_path)?);
 
     let git_repo_root_clone = git_repo_root.clone();
     let get_git_current_branch = std::thread::spawn(move || -> anyhow::Result<String> {
@@ -82,11 +69,27 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn get_parent_dir(path: &Path) -> Result<&str, anyhow::Error> {
-    path.parent()
-        .ok_or_else(|| anyhow!("cannot get parent dir from path {path:?}"))?
+fn get_git_repo_root(file_path: &Path) -> anyhow::Result<String> {
+    let file_parent_dir = file_path
+        .parent()
+        .ok_or_else(|| anyhow!("cannot get parent dir from path {file_path:?}"))?
         .to_str()
-        .ok_or_else(|| anyhow!("cannot get str from Path {path:?}"))
+        .ok_or_else(|| anyhow!("cannot get str from Path {file_path:?}"))?
+        .to_owned();
+
+    let git_repo_root = Command::new("sh")
+        .args([
+            "-c",
+            &format!("git -C {file_parent_dir} rev-parse --show-toplevel"),
+        ])
+        .output()?
+        .stdout;
+
+    if git_repo_root.is_empty() {
+        bail!("{file_path:?} is not in a git repository");
+    }
+
+    Ok(String::from_utf8(git_repo_root)?.trim().to_owned())
 }
 
 fn get_github_url_from_git_remote_output(git_remote_output: &str) -> Result<Url, anyhow::Error> {
