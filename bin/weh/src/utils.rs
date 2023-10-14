@@ -115,13 +115,8 @@ impl FromStr for HxCursor {
             bail!("missing path in status line elements {elements:?}");
         };
 
-        let file_path: PathBuf = path.into();
-        if !file_path.is_file() {
-            bail!("'{file_path:?}' doesn't point to an existing file")
-        }
-
         Ok(Self {
-            file_path,
+            file_path: path.into(),
             position: HxCursorPosition::from_str(elements.last().ok_or_else(|| {
                 anyhow!("missing last element in status line elements {elements:?}")
             })?)?,
@@ -182,26 +177,5 @@ mod tests {
         };
 
         assert_eq!(expected, result.unwrap());
-    }
-
-    #[test]
-    fn test_hx_cursor_from_str_errs_with_a_file_path_pointing_to_an_existing_directory() {
-        let result = HxCursor::from_str("⣷      ` src/cmds `                                                                  1 sel  1 char  W ● 1  33:42 ");
-
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_hx_cursor_from_str_errs_with_a_file_path_pointing_to_an_inexistent_directory() {
-        let result = HxCursor::from_str("⣷      ` foo/bar `                                                                  1 sel  1 char  W ● 1  33:42 ");
-
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_hx_cursor_from_str_errs_with_a_file_path_pointing_to_an_inexistent_file() {
-        let result = HxCursor::from_str("⣷      ` src/foo.rs `                                                                  1 sel  1 char  W ● 1  33:42 ");
-
-        assert!(result.is_err());
     }
 }
