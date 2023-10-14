@@ -8,6 +8,7 @@ use url::Url;
 
 use crate::utils::get_current_pane_sibling_with_title;
 use crate::utils::HxCursor;
+use crate::utils::Position;
 
 pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
     let hx_pane_id = get_current_pane_sibling_with_title("hx")?.pane_id;
@@ -27,6 +28,7 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
     let file_parent_dir = get_parent_dir(&hx_cursor.file_path)?.to_owned();
     let git_repo_root = Arc::new(
         String::from_utf8(
+            // Without spawning a new `sh` shell I get an empty response from `git -C` 🤷‍♂️
             Command::new("sh")
                 .args([
                     "-c",
@@ -61,14 +63,19 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
         )?)
     });
 
-    let link_to_github = build_link_to_github(
-        hx_cursor,
-        git_repo_root.to_string(),
-        &crate::utils::exec(get_git_current_branch)?,
-        crate::utils::exec(get_github_repo_url)?,
+    // `get_relative_file_path` is before the `join`s to let them work in the background as much as possible.
+    let file_path = get_relative_file_path(&hx_cursor, git_repo_root.to_string())?;
+    let github_repo_url = crate::utils::join(get_github_repo_url)?;
+    let git_current_branch = crate::utils::join(get_git_current_branch)?;
+
+    let github_link = build_github_link(
+        &github_repo_url,
+        &git_current_branch,
+        &file_path,
+        &hx_cursor.position,
     )?;
 
-    crate::utils::copy_to_system_clipboard(&mut link_to_github.as_str().as_bytes())?;
+    crate::utils::copy_to_system_clipboard(&mut github_link.as_str().as_bytes())?;
 
     Ok(())
 }
@@ -112,18 +119,13 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> anyhow::Result<
     Ok(url)
 }
 
-fn build_link_to_github(
-    hx_cursor: HxCursor,
-    git_repo_root: String,
-    git_current_branch: &str,
-    github_repo_url: Url,
-) -> anyhow::Result<Url> {
+fn get_relative_file_path(hx_cursor: &HxCursor, git_repo_root: String) -> anyhow::Result<String> {
     let file_path = hx_cursor
         .file_path
         .to_str()
         .ok_or_else(|| anyhow!("cannot get str from Path {:?}", hx_cursor.file_path))?;
 
-    let relative_file_path_to_git_repo_root = if file_path.starts_with('~') {
+    Ok(if file_path.starts_with('~') {
         file_path.replace("~", &std::env::var("HOME").unwrap())
     } else if !file_path.starts_with('/') {
         let mut current_dir = std::env::current_dir().unwrap();
@@ -132,25 +134,29 @@ fn build_link_to_github(
     } else {
         file_path.to_owned()
     }
-    .replace(&git_repo_root, "");
+    .replace(&git_repo_root, ""))
+}
 
-    let file_path_parts = relative_file_path_to_git_repo_root
+fn build_github_link<'a>(
+    github_repo_url: &'a Url,
+    git_current_branch: &'a str,
+    file_path: &'a str,
+    position: &'a Position,
+) -> anyhow::Result<Url> {
+    let file_path_parts = file_path
         .trim_start_matches(std::path::MAIN_SEPARATOR)
         .split(std::path::MAIN_SEPARATOR)
         .collect::<Vec<_>>();
 
-    let mut link_to_github = github_repo_url.clone();
     let segments = [&["tree", git_current_branch], file_path_parts.as_slice()].concat();
-    link_to_github
+    let mut github_link = github_repo_url.clone();
+    github_link
         .path_segments_mut()
         .map_err(|_| anyhow!("cannot extend URL '{github_repo_url}' with segments {segments:?}"))?
         .extend(&segments);
-    link_to_github.set_fragment(Some(&format!(
-        "L{}C{}",
-        hx_cursor.position.line, hx_cursor.position.column
-    )));
+    github_link.set_fragment(Some(&format!("L{}C{}", position.line, position.column)));
 
-    Ok(link_to_github)
+    Ok(github_link)
 }
 
 #[cfg(test)]
