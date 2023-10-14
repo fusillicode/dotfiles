@@ -8,7 +8,7 @@ use url::Url;
 
 use crate::utils::get_current_pane_sibling_with_title;
 use crate::utils::HxCursor;
-use crate::utils::Position;
+use crate::utils::HxCursorPosition;
 
 pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
     let hx_pane_id = get_current_pane_sibling_with_title("hx")?.pane_id;
@@ -119,6 +119,7 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> anyhow::Result<
     Ok(url)
 }
 
+// FIXME: TEST ME PLEASE!!!
 fn get_relative_file_path(hx_cursor: &HxCursor, git_repo_root: String) -> anyhow::Result<String> {
     let file_path = hx_cursor
         .file_path
@@ -141,7 +142,7 @@ fn build_github_link<'a>(
     github_repo_url: &'a Url,
     git_current_branch: &'a str,
     file_path: &'a str,
-    position: &'a Position,
+    hx_cursor_position: &'a HxCursorPosition,
 ) -> anyhow::Result<Url> {
     let file_path_parts = file_path
         .trim_start_matches(std::path::MAIN_SEPARATOR)
@@ -154,7 +155,10 @@ fn build_github_link<'a>(
         .path_segments_mut()
         .map_err(|_| anyhow!("cannot extend URL '{github_repo_url}' with segments {segments:?}"))?
         .extend(&segments);
-    github_link.set_fragment(Some(&format!("L{}C{}", position.line, position.column)));
+    github_link.set_fragment(Some(&format!(
+        "L{}C{}",
+        hx_cursor_position.line, hx_cursor_position.column
+    )));
 
     Ok(github_link)
 }
