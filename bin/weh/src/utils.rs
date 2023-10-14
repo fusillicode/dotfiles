@@ -8,7 +8,7 @@ use anyhow::anyhow;
 use anyhow::bail;
 use serde::Deserialize;
 
-pub fn exec<T>(join_handle: JoinHandle<anyhow::Result<T>>) -> Result<T, anyhow::Error> {
+pub fn join<T>(join_handle: JoinHandle<anyhow::Result<T>>) -> Result<T, anyhow::Error> {
     join_handle
         .join()
         .map_err(|e| anyhow!("join error {e:?}"))?
