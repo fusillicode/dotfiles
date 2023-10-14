@@ -64,6 +64,9 @@ if wezterm.gui then
     { key = 'x', action = act.CopyMode { SetSelectionMode = 'Line' }, },
     { key = 'd', mods = 'CTRL',                                       action = act.CopyMode { MoveByPage = 0.5 }, },
     { key = 'u', mods = 'CTRL',                                       action = act.CopyMode { MoveByPage = -0.5 } },
+    { key = 'y', mods = 'NONE', action = act.Multiple { { CopyTo = 'ClipboardAndPrimarySelection' } },
+    },
+
   }) do
     table.insert(copy_mode, custom_copy_key)
   end
