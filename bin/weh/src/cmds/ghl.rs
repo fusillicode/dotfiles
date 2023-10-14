@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -64,13 +65,8 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
     });
 
     // `get_relative_file_path` is before the `join`s to let them work in the background as much as possible.
-    let file_path = get_relative_file_path(
-        hx_cursor
-            .file_path
-            .to_str()
-            .ok_or_else(|| anyhow!("cannot get str from Path {:?}", hx_cursor.file_path))?,
-        git_repo_root.as_str(),
-    )?;
+    let file_path =
+        get_file_path_relative_to_git_repo_root(&hx_cursor.file_path, git_repo_root.as_str())?;
     let github_repo_url = crate::utils::join(get_github_repo_url)?;
     let git_current_branch = crate::utils::join(get_git_current_branch)?;
 
@@ -126,28 +122,39 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> anyhow::Result<
 }
 
 // FIXME: TEST ME PLEASE!!!
-fn get_relative_file_path(file_path: &str, git_repo_root: &str) -> anyhow::Result<String> {
+fn get_file_path_relative_to_git_repo_root(
+    file_path: &Path,
+    git_repo_root: &str,
+) -> anyhow::Result<PathBuf> {
+    let file_path = file_path
+        .to_str()
+        .ok_or_else(|| anyhow!("cannot get str from Path {:?}", file_path))?;
+
     Ok(if file_path.starts_with('~') {
         file_path.replace("~", &std::env::var("HOME")?)
-    } else if !file_path.starts_with('/') {
+    } else if file_path.starts_with('/') {
+        file_path.to_owned()
+    } else {
         let mut current_dir = std::env::current_dir()?;
         current_dir.push(file_path);
-        current_dir.to_str().unwrap().to_owned()
-    } else {
-        file_path.to_owned()
+        current_dir
+            .to_str()
+            .ok_or_else(|| anyhow!("cannot get str from Path {:?}", current_dir))?
+            .to_owned()
     }
-    .replace(&git_repo_root, ""))
+    .replace(&git_repo_root, "")
+    .into())
 }
 
 fn build_github_link<'a>(
     github_repo_url: &'a Url,
     git_current_branch: &'a str,
-    file_path: &'a str,
+    file_path: &'a Path,
     hx_cursor_position: &'a HxCursorPosition,
 ) -> anyhow::Result<Url> {
     let file_path_parts = file_path
-        .trim_start_matches(std::path::MAIN_SEPARATOR)
-        .split(std::path::MAIN_SEPARATOR)
+        .components()
+        .map(|x| x.as_os_str().to_str().unwrap())
         .collect::<Vec<_>>();
 
     let segments = [&["tree", git_current_branch], file_path_parts.as_slice()].concat();
@@ -201,4 +208,34 @@ mod tests {
         let expected = Url::parse("https://github.com/fusillicode/dotfiles").unwrap();
         assert_eq!(expected, result);
     }
+
+    // #[test]
+    // fn test_get_relative_file_path_works_as_expected_with_home_relative_path() {
+    //     // Act
+    //     let result =
+    //         get_file_path_relative_to_git_repo_root(Path::new("~/foo/bar/baz.rs"), "/bar").unwrap();
+
+    //     // Assert
+    //     assert_eq!("foo", result);
+    // }
+
+    // #[test]
+    // fn test_get_relative_file_path_works_as_expected_with_absolute_path() {
+    //     // Act
+    //     let result =
+    //         get_file_path_relative_to_git_repo_root(Path::new("/foo/bar/baz.rs"), "/bar").unwrap();
+
+    //     // Assert
+    //     assert_eq!("foo", result);
+    // }
+
+    // #[test]
+    // fn test_get_relative_file_path_works_as_expected_with_current_path() {
+    //     // Act
+    //     let result =
+    //         get_file_path_relative_to_git_repo_root(Path::new("foo/bar/baz.rs"), "/bar").unwrap();
+
+    //     // Assert
+    //     assert_eq!("foo", result);
+    // }
 }
