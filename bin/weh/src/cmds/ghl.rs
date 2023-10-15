@@ -194,15 +194,16 @@ mod tests {
                 ..Faker.fake()
             };
             let hx_pane = WezTermPane {
-                cwd: Path::new("file://pc/Users/Foo/dev").into(),
+                cwd: Path::new("file://hostname/Users/Foo/dev").into(),
                 ..Faker.fake()
             };
 
             // Act
-            let result = build_hx_cursor_absolute_file_path(&hx_cursor, &hx_pane).unwrap();
+            let result = build_hx_cursor_absolute_file_path(&hx_cursor, &hx_pane);
 
             // Assert
-            assert_eq!(Path::new("/Users/Foo/src/bar/baz.rs").to_path_buf(), result);
+            let expected = Path::new("/Users/Foo/src/bar/baz.rs").to_path_buf();
+            assert_eq!(expected, result.unwrap());
         })
     }
 
@@ -215,7 +216,7 @@ mod tests {
             ..Faker.fake()
         };
         let hx_pane = WezTermPane {
-            cwd: Path::new("file://pc/Users/Foo/dev").into(),
+            cwd: Path::new("file://hostname/Users/Foo/dev").into(),
             ..Faker.fake()
         };
 
@@ -223,10 +224,8 @@ mod tests {
         let result = build_hx_cursor_absolute_file_path(&hx_cursor, &hx_pane).unwrap();
 
         // Assert
-        assert_eq!(
-            Path::new("/Users/Foo/dev/src/bar/baz.rs").to_path_buf(),
-            result
-        );
+        let expected = Path::new("/Users/Foo/dev/src/bar/baz.rs").to_path_buf();
+        assert_eq!(expected, result);
     }
 
     #[test]
@@ -237,7 +236,7 @@ mod tests {
             ..Faker.fake()
         };
         let hx_pane = WezTermPane {
-            cwd: Path::new("file://pc/Users/Foo/dev").into(),
+            cwd: Path::new("file://hostname/Users/Foo/dev").into(),
             ..Faker.fake()
         };
 
@@ -245,10 +244,8 @@ mod tests {
         let result = build_hx_cursor_absolute_file_path(&hx_cursor, &hx_pane).unwrap();
 
         // Assert
-        assert_eq!(
-            Path::new("/Users/Foo/dev/src/bar/baz.rs").to_path_buf(),
-            result
-        );
+        let expected = Path::new("/Users/Foo/dev/src/bar/baz.rs").to_path_buf();
+        assert_eq!(expected, result);
     }
 
     #[test]
