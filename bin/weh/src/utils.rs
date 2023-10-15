@@ -57,39 +57,42 @@ pub fn get_current_pane_sibling_with_title(pane_title: &str) -> anyhow::Result<W
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[cfg_attr(any(test), derive(fake::Dummy))]
 #[allow(dead_code)]
 pub struct WezTermPane {
-    window_id: i64,
-    tab_id: i64,
+    pub window_id: i64,
+    pub tab_id: i64,
     pub pane_id: i64,
-    workspace: String,
-    size: Size,
-    title: String,
+    pub workspace: String,
+    pub size: Size,
+    pub title: String,
     pub cwd: PathBuf,
-    cursor_x: i64,
-    cursor_y: i64,
-    cursor_shape: String,
-    cursor_visibility: String,
-    left_col: i64,
-    top_row: i64,
-    tab_title: String,
-    window_title: String,
-    is_active: bool,
-    is_zoomed: bool,
-    tty_name: String,
+    pub cursor_x: i64,
+    pub cursor_y: i64,
+    pub cursor_shape: String,
+    pub cursor_visibility: String,
+    pub left_col: i64,
+    pub top_row: i64,
+    pub tab_title: String,
+    pub window_title: String,
+    pub is_active: bool,
+    pub is_zoomed: bool,
+    pub tty_name: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[cfg_attr(any(test), derive(fake::Dummy))]
 #[allow(dead_code)]
 pub struct Size {
-    rows: i64,
-    cols: i64,
-    pixel_width: i64,
-    pixel_height: i64,
-    dpi: i64,
+    pub rows: i64,
+    pub cols: i64,
+    pub pixel_width: i64,
+    pub pixel_height: i64,
+    pub dpi: i64,
 }
 
 #[derive(Debug, PartialEq)]
+#[cfg_attr(any(test), derive(fake::Dummy))]
 pub struct HxCursor {
     pub file_path: PathBuf,
     pub position: HxCursorPosition,
@@ -125,6 +128,7 @@ impl FromStr for HxCursor {
 }
 
 #[derive(Debug, PartialEq)]
+#[cfg_attr(any(test), derive(fake::Dummy))]
 pub struct HxCursorPosition {
     pub line: i64,
     pub column: i64,
