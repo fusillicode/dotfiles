@@ -1,3 +1,4 @@
+use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -11,20 +12,24 @@ use url::Url;
 use crate::utils::get_current_pane_sibling_with_title;
 use crate::utils::HxCursor;
 use crate::utils::HxCursorPosition;
+use crate::utils::WezTermPane;
 
 pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
-    let hx_pane_id = get_current_pane_sibling_with_title("hx")?.pane_id;
+    let hx_pane = get_current_pane_sibling_with_title("hx")?;
 
     let wezterm_pane_text = String::from_utf8(
         Command::new("wezterm")
-            .args(["cli", "get-text", "--pane-id", &hx_pane_id.to_string()])
+            .args(["cli", "get-text", "--pane-id", &hx_pane.pane_id.to_string()])
             .output()?
             .stdout,
     )?;
 
     let hx_cursor =
         HxCursor::from_str(wezterm_pane_text.lines().nth_back(1).ok_or_else(|| {
-            anyhow!("missing hx status line in pane '{hx_pane_id}' text {wezterm_pane_text:?}")
+            anyhow!(
+                "missing hx status line in pane '{}' text {wezterm_pane_text:?}",
+                hx_pane.pane_id
+            )
         })?)?;
 
     let git_repo_root = Arc::new(get_git_repo_root(&hx_cursor.file_path)?);
@@ -51,18 +56,14 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
         )?)
     });
 
-    // `get_relative_file_path` is called before the 🧵s `join` to let them work in the background as much as possible.
-    let file_path = get_file_path_relative_to_git_repo_root(
-        &hx_cursor.file_path,
-        Path::new(git_repo_root.as_str()),
-    )?;
-    let github_repo_url = crate::utils::join(get_github_repo_url)?;
-    let git_current_branch = crate::utils::join(get_git_current_branch)?;
+    // `build_file_path_relative_to_git_repo_root` are called before the 🧵s `join` to let them work in the background
+    // as much as possible
+    let hx_cursor_absolute_file_path = build_hx_cursor_absolute_file_path(&hx_cursor, &hx_pane)?;
 
     let github_link = build_github_link(
-        &github_repo_url,
-        &git_current_branch,
-        &file_path,
+        &crate::utils::join(get_github_repo_url)?,
+        &crate::utils::join(get_git_current_branch)?,
+        hx_cursor_absolute_file_path.strip_prefix(git_repo_root.as_ref())?,
         &hx_cursor.position,
     )?;
 
@@ -126,39 +127,24 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> anyhow::Result<
     Ok(url)
 }
 
-// FIXME: TEST ME PLEASE!!!
-fn get_file_path_relative_to_git_repo_root(
-    file_path: &Path,
-    git_repo_root: &Path,
+fn build_hx_cursor_absolute_file_path(
+    hx_cursor: &HxCursor,
+    hx_pane: &WezTermPane,
 ) -> anyhow::Result<PathBuf> {
-    if let Ok(file_path) = file_path.strip_prefix("~") {
+    if let Ok(hx_cursor_file_path) = hx_cursor.file_path.strip_prefix("~") {
         let mut home_absolute_path = Path::new(&std::env::var("HOME")?).to_path_buf();
-        home_absolute_path.push(file_path);
-        return Ok(Path::new(&home_absolute_path)
-            .strip_prefix(git_repo_root)?
-            .to_path_buf());
+        home_absolute_path.push(hx_cursor_file_path);
+        return Ok(home_absolute_path);
     }
-    todo!()
-    // let git_repo_root = git_repo_root.to_str().unwrap();
-    // let file_path = file_path
-    //     .to_str()
-    //     .ok_or_else(|| anyhow!("cannot get str from Path {file_path:?}"))?;
 
-    // Ok(if file_path.starts_with('~') {
-    //     file_path.replace("~", &std::env::var("HOME")?)
-    // } else if file_path.starts_with('/') {
-    //     file_path.to_owned()
-    // } else {
-    //     let mut current_dir = std::env::current_dir()?;
-    //     current_dir.push(file_path);
-    //     current_dir
-    //         .to_str()
-    //         .ok_or_else(|| anyhow!("cannot get str from Path {current_dir:?}"))?
-    //         .to_owned()
-    // }
-    // .replace(&git_repo_root, "")
-    // .trim_start_matches(std::path::MAIN_SEPARATOR_STR)
-    // .into())
+    let mut components = hx_pane.cwd.components();
+    components.next();
+    components.next();
+
+    Ok(std::iter::once(Component::RootDir)
+        .chain(components)
+        .chain(hx_cursor.file_path.components())
+        .collect())
 }
 
 fn build_github_link<'a>(
@@ -193,7 +179,77 @@ fn build_github_link<'a>(
 
 #[cfg(test)]
 mod tests {
+    use fake::Fake;
+    use fake::Faker;
+
     use super::*;
+
+    #[test]
+    fn test_build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_relative_to_home_dir(
+    ) {
+        // Arrange
+        temp_env::with_vars([("HOME", Some("/Users/Foo"))], || {
+            let hx_cursor = HxCursor {
+                file_path: Path::new("~/src/bar/baz.rs").into(),
+                ..Faker.fake()
+            };
+            let hx_pane = WezTermPane {
+                cwd: Path::new("file://pc/Users/Foo/dev").into(),
+                ..Faker.fake()
+            };
+
+            // Act
+            let result = build_hx_cursor_absolute_file_path(&hx_cursor, &hx_pane).unwrap();
+
+            // Assert
+            assert_eq!(Path::new("/Users/Foo/src/bar/baz.rs").to_path_buf(), result);
+        })
+    }
+
+    #[test]
+    fn test_build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_relative_to_hx_root(
+    ) {
+        // Arrange
+        let hx_cursor = HxCursor {
+            file_path: Path::new("src/bar/baz.rs").into(),
+            ..Faker.fake()
+        };
+        let hx_pane = WezTermPane {
+            cwd: Path::new("file://pc/Users/Foo/dev").into(),
+            ..Faker.fake()
+        };
+
+        // Act
+        let result = build_hx_cursor_absolute_file_path(&hx_cursor, &hx_pane).unwrap();
+
+        // Assert
+        assert_eq!(
+            Path::new("/Users/Foo/dev/src/bar/baz.rs").to_path_buf(),
+            result
+        );
+    }
+
+    #[test]
+    fn test_build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_absolute() {
+        // Arrange
+        let hx_cursor = HxCursor {
+            file_path: Path::new("/Users/Foo/dev/src/bar/baz.rs").into(),
+            ..Faker.fake()
+        };
+        let hx_pane = WezTermPane {
+            cwd: Path::new("file://pc/Users/Foo/dev").into(),
+            ..Faker.fake()
+        };
+
+        // Act
+        let result = build_hx_cursor_absolute_file_path(&hx_cursor, &hx_pane).unwrap();
+
+        // Assert
+        assert_eq!(
+            Path::new("/Users/Foo/dev/src/bar/baz.rs").to_path_buf(),
+            result
+        );
+    }
 
     #[test]
     fn test_get_github_url_from_git_remote_output_works_as_expected_with_ssh_remotes() {
@@ -228,39 +284,4 @@ mod tests {
         let expected = Url::parse("https://github.com/fusillicode/dotfiles").unwrap();
         assert_eq!(expected, result);
     }
-
-    #[test]
-    fn test_get_relative_file_path_works_as_expected_with_home_relative_path() {
-        temp_env::with_vars([("HOME", Some("/Users/foo"))], || {
-            // Act
-            let result = get_file_path_relative_to_git_repo_root(
-                Path::new("~/42/bar/src/baz.rs"),
-                Path::new("/Users/foo/42/bar"),
-            )
-            .unwrap();
-
-            // Assert
-            assert_eq!(Path::new("src/baz.rs").to_path_buf(), result);
-        })
-    }
-
-    // #[test]
-    // fn test_get_relative_file_path_works_as_expected_with_absolute_path() {
-    //     // Act
-    //     let result =
-    //         get_file_path_relative_to_git_repo_root(Path::new("/foo/bar/baz.rs"), "/bar").unwrap();
-
-    //     // Assert
-    //     assert_eq!("foo", result);
-    // }
-
-    // #[test]
-    // fn test_get_relative_file_path_works_as_expected_with_current_path() {
-    //     // Act
-    //     let result =
-    //         get_file_path_relative_to_git_repo_root(Path::new("foo/bar/baz.rs"), "/bar").unwrap();
-
-    //     // Assert
-    //     assert_eq!("foo", result);
-    // }
 }
