@@ -34,21 +34,19 @@ brew install txn2/tap/kubefwd
 brew install vegeta
 brew install watch
 brew tap homebrew/cask-versions
-brew install --cask wez/wezterm/wezterm-nightly --no-quarantine
 brew install yq
 brew install zsh
 
 # Install Homebrew casks
-brew install android-file-transfer
+brew install alt-tab --cask
 brew install appcleaner
 brew install bitbar
 brew install chromedriver
+brew install wez/wezterm/wezterm-nightly --cask  --no-quarantine
 brew install discord
 brew install firefox
 brew install google-chrome
-brew install helix
 brew install homebrew/cask/docker
-brew install iterm2
 brew install league-of-legends
 brew install rectangle
 brew install slack
