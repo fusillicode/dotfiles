@@ -76,6 +76,7 @@ fn get_git_repo_root(file_path: &Path) -> anyhow::Result<String> {
         .to_str()
         .ok_or_else(|| anyhow!("cannot get str from Path {file_path:?}"))?;
 
+    // Without spawning an additional `sh` shell I get an empty `Command` output 🥲
     let git_repo_root = Command::new("sh")
         .args([
             "-c",
