@@ -51,9 +51,11 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
         )?)
     });
 
-    // `get_relative_file_path` is before the `join`s to let them work in the background as much as possible.
-    let file_path =
-        get_file_path_relative_to_git_repo_root(&hx_cursor.file_path, git_repo_root.as_str())?;
+    // `get_relative_file_path` is called before the 🧵s `join` to let them work in the background as much as possible.
+    let file_path = get_file_path_relative_to_git_repo_root(
+        &hx_cursor.file_path,
+        Path::new(git_repo_root.as_str()),
+    )?;
     let github_repo_url = crate::utils::join(get_github_repo_url)?;
     let git_current_branch = crate::utils::join(get_git_current_branch)?;
 
@@ -127,27 +129,36 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> anyhow::Result<
 // FIXME: TEST ME PLEASE!!!
 fn get_file_path_relative_to_git_repo_root(
     file_path: &Path,
-    git_repo_root: &str,
+    git_repo_root: &Path,
 ) -> anyhow::Result<PathBuf> {
-    let file_path = file_path
-        .to_str()
-        .ok_or_else(|| anyhow!("cannot get str from Path {file_path:?}"))?;
-
-    Ok(if file_path.starts_with('~') {
-        file_path.replace("~", &std::env::var("HOME")?)
-    } else if file_path.starts_with('/') {
-        file_path.to_owned()
-    } else {
-        let mut current_dir = std::env::current_dir()?;
-        current_dir.push(file_path);
-        current_dir
-            .to_str()
-            .ok_or_else(|| anyhow!("cannot get str from Path {current_dir:?}"))?
-            .to_owned()
+    if let Ok(file_path) = file_path.strip_prefix("~") {
+        let mut home_absolute_path = Path::new(&std::env::var("HOME")?).to_path_buf();
+        home_absolute_path.push(file_path);
+        return Ok(Path::new(&home_absolute_path)
+            .strip_prefix(git_repo_root)?
+            .to_path_buf());
     }
-    .replace(&git_repo_root, "")
-    .trim_start_matches(std::path::MAIN_SEPARATOR_STR)
-    .into())
+    todo!()
+    // let git_repo_root = git_repo_root.to_str().unwrap();
+    // let file_path = file_path
+    //     .to_str()
+    //     .ok_or_else(|| anyhow!("cannot get str from Path {file_path:?}"))?;
+
+    // Ok(if file_path.starts_with('~') {
+    //     file_path.replace("~", &std::env::var("HOME")?)
+    // } else if file_path.starts_with('/') {
+    //     file_path.to_owned()
+    // } else {
+    //     let mut current_dir = std::env::current_dir()?;
+    //     current_dir.push(file_path);
+    //     current_dir
+    //         .to_str()
+    //         .ok_or_else(|| anyhow!("cannot get str from Path {current_dir:?}"))?
+    //         .to_owned()
+    // }
+    // .replace(&git_repo_root, "")
+    // .trim_start_matches(std::path::MAIN_SEPARATOR_STR)
+    // .into())
 }
 
 fn build_github_link<'a>(
@@ -218,15 +229,20 @@ mod tests {
         assert_eq!(expected, result);
     }
 
-    // #[test]
-    // fn test_get_relative_file_path_works_as_expected_with_home_relative_path() {
-    //     // Act
-    //     let result =
-    //         get_file_path_relative_to_git_repo_root(Path::new("~/foo/bar/baz.rs"), "/bar").unwrap();
+    #[test]
+    fn test_get_relative_file_path_works_as_expected_with_home_relative_path() {
+        temp_env::with_vars([("HOME", Some("/Users/foo"))], || {
+            // Act
+            let result = get_file_path_relative_to_git_repo_root(
+                Path::new("~/42/bar/src/baz.rs"),
+                Path::new("/Users/foo/42/bar"),
+            )
+            .unwrap();
 
-    //     // Assert
-    //     assert_eq!("foo", result);
-    // }
+            // Assert
+            assert_eq!(Path::new("src/baz.rs").to_path_buf(), result);
+        })
+    }
 
     // #[test]
     // fn test_get_relative_file_path_works_as_expected_with_absolute_path() {
