@@ -107,22 +107,24 @@ impl FromStr for HxCursor {
         let elements: Vec<&str> = hx_status_line.split_ascii_whitespace().collect();
 
         let path_left_separator_idx = elements.iter().position(|x| x == &"`").ok_or_else(|| {
-            anyhow!("missing left path separator in status line elements {elements:?}")
+            anyhow!("no left path separator in status line elements {elements:?}")
         })?;
         let path_right_separator_idx =
             elements.iter().rposition(|x| x == &"`").ok_or_else(|| {
-                anyhow!("missing right path separator in status line elements {elements:?}")
+                anyhow!("no right path separator in status line elements {elements:?}")
             })?;
 
         let &["`", path] = &elements[path_left_separator_idx..path_right_separator_idx] else {
-            bail!("missing path in status line elements {elements:?}");
+            bail!("no path in status line elements {elements:?}");
         };
 
         Ok(Self {
             file_path: path.into(),
-            position: HxCursorPosition::from_str(elements.last().ok_or_else(|| {
-                anyhow!("missing last element in status line elements {elements:?}")
-            })?)?,
+            position: HxCursorPosition::from_str(
+                elements.last().ok_or_else(|| {
+                    anyhow!("no last element in status line elements {elements:?}")
+                })?,
+            )?,
         })
     }
 }
