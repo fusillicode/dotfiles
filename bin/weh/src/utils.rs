@@ -65,7 +65,7 @@ pub struct WezTermPane {
     workspace: String,
     size: Size,
     title: String,
-    cwd: String,
+    pub cwd: PathBuf,
     cursor_x: i64,
     cursor_y: i64,
     cursor_shape: String,
