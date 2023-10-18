@@ -12,6 +12,7 @@ use-grammars = { only = [
   "html",
   "javascript",
   "json",
+  "kdl",
   "lua",
   "make",
   "markdown",
