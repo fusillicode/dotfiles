@@ -281,4 +281,69 @@ mod tests {
         let expected = Url::parse("https://github.com/fusillicode/dotfiles").unwrap();
         assert_eq!(expected, result);
     }
+
+    #[test]
+    fn test_foo() {
+        // Arrange
+        let input = "
+              285 ▍····#[test]                                                                      
+              286 ▍····fn·test_foo()·{                                                              
+              287 ▍········//·Arrange                                                               
+              288 ▍········let·input: &str·=·r#\"                                                    
+              289 ▍········\"#;                                                                      
+              290 ▍                                                                                 
+              291 ▍········//·Act                                                                   
+              292 ▍········let·result: Url·=·get_github_url_from_git_remote_output(input).unwrap(); 
+              293 ▍                                                                                 
+              294 ▍········//·Assert                                                                
+              295 ▍········let·expected: Url·=·Url::parse(input: \"https://github.com/fusillicode/dotfiles\").unwrap();
+              296 ▍········assert_eq!(expected,·result);                                            
+            ◯ 297 ▍····}                                                                            
+              298  } mod tests                                                                      
+                ~  ·                                                                                
+        ";
+
+        fn foo(
+            hx_cursor_position: &HxCursorPosition,
+            pane_content: &str,
+            selection: usize,
+        ) -> usize {
+            let mut parsed_hx_pane_content = vec![];
+
+            for (idx, line) in pane_content.lines().enumerate() {
+                let clean_line = line.trim_start().trim_start_matches("◯ ");
+
+                if let Some(foo) =
+                    clean_line
+                        .split_once(" ")
+                        .and_then(|(maybe_line_number, line_content)| {
+                            if let Ok(line_number) = maybe_line_number.parse::<usize>() {
+                                if let Some((_, bar)) = line_content.split_once(" ") {
+                                    return Some((line_number, bar));
+                                };
+                            }
+                            None
+                        })
+                {
+                    parsed_hx_pane_content.push(foo);
+                }
+            }
+
+            dbg!(parsed_hx_pane_content);
+            todo!()
+        }
+
+        // Act
+        let result = foo(
+            &HxCursorPosition {
+                line: 297,
+                column: 6,
+            },
+            input,
+            329,
+        );
+
+        // Assert
+        assert_eq!(42, result);
+    }
 }
