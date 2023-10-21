@@ -50,8 +50,6 @@ space = "all"
 tab = "all"
 
 [keys.insert]
-A-b = ["move_prev_word_start"]
-A-f = ["move_next_word_start"]
 C-a = ["goto_first_nonwhitespace"]
 C-b = ["move_prev_word_start"]
 C-e = ["goto_line_end"]
@@ -60,8 +58,6 @@ esc = ["collapse_selection", "normal_mode"]
 
 [keys.normal]
 '/' = ["search_selection", "search"]
-A-b = ["move_prev_word_start"]
-A-f = ["move_next_word_start"]
 C-d = ["half_page_down", "goto_window_center"]
 C-l = [":sh weh ghl"]
 C-p = [":sh weh fp"]
