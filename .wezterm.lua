@@ -52,9 +52,8 @@ config.keys = {
   { key = '[',          mods = 'CTRL|OPT',  action = act.MoveTabRelative(-1), },
   { key = ']',          mods = 'CTRL|OPT',  action = act.MoveTabRelative(1), },
   { key = 'Enter',      mods = 'ALT',       action = act.Nop, },
-  -- Commented out while trying zellij
-  -- { key = 'd',          mods = 'CTRL',      action = wezterm.action_callback(up_and_down_with_hx('d')), },
-  -- { key = 'u',          mods = 'CTRL',      action = wezterm.action_callback(up_and_down_with_hx('u')), },
+  { key = 'd',          mods = 'CTRL',      action = wezterm.action_callback(up_and_down_with_hx('d')), },
+  { key = 'u',          mods = 'CTRL',      action = wezterm.action_callback(up_and_down_with_hx('u')), },
 }
 
 local copy_mode = nil
@@ -63,9 +62,8 @@ if wezterm.gui then
   for _, custom_copy_key in pairs({
     { key = '/', action = act.CopyMode 'EditPattern' },
     { key = 'x', action = act.CopyMode { SetSelectionMode = 'Line' }, },
-    -- Commented out while trying zellij
-    -- { key = 'd', mods = 'CTRL',                                       action = act.CopyMode { MoveByPage = 0.5 }, },
-    -- { key = 'u', mods = 'CTRL',                                       action = act.CopyMode { MoveByPage = -0.5 } },
+    { key = 'd', mods = 'CTRL',                                       action = act.CopyMode { MoveByPage = 0.5 }, },
+    { key = 'u', mods = 'CTRL',                                       action = act.CopyMode { MoveByPage = -0.5 } },
     { key = 'y', mods = 'NONE', action = act.Multiple { { CopyTo = 'ClipboardAndPrimarySelection' } },
     },
 

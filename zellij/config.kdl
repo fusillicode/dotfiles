@@ -1,52 +1,32 @@
 keybinds {
-    normal clear-defaults=true {
+    normal {
         // Panes
-        bind "Alt r" { NewPane "Right"; }
-        bind "Alt d" { NewPane "Down"; }
-        bind "Alt h" { MoveFocusOrTab "Left"; }
-        bind "Alt l" { MoveFocusOrTab "Right"; }
+        bind "Alt h" { MoveFocus "Left"; }
+        bind "Alt l" { MoveFocus "Right"; }
         bind "Alt j" { MoveFocus "Down"; }
         bind "Alt k" { MoveFocus "Up"; }
         bind "Alt a" { ToggleFocusFullscreen; }
+        bind "Alt r" { NewPane "Right"; }
+        bind "Alt d" { NewPane "Down"; }
 
         // Tabs
-        bind "Alt t" { NewTab; }
+        bind "Alt t" { NewTab; SwitchToMode "Normal"; }
+        bind "Alt w" { CloseTab; }
         bind "Alt [" { GoToPreviousTab; }
         bind "Alt ]" { GoToNextTab; }
-        bind "Alt 1" { GoToTab 1; }
-        bind "Alt 2" { GoToTab 2; }
-        bind "Alt 3" { GoToTab 3; }
-        bind "Alt 4" { GoToTab 4; }
-        bind "Alt 5" { GoToTab 5; }
-        bind "Alt 6" { GoToTab 6; }
-        bind "Alt 7" { GoToTab 7; }
-        bind "Alt 8" { GoToTab 8; }
-        bind "Alt 9" { GoToTab 9; }
 
-        // Scroll + Search
-        bind "Alt s" { EditScrollback; }
+        // Scroll
+        bind "Alt u" { SwitchToMode "Scroll"; }
 
-        // Resize
-        bind "Alt z" { SwitchToMode "Resize"; }
+        // Search
+        bind "Alt s" { SwitchToMode "EnterSearch"; SearchInput 0; }
     }
-    // Default Resize bindings
-    resize {
-        bind "h" "Left" { Resize "Increase Left"; }
-        bind "j" "Down" { Resize "Increase Down"; }
-        bind "k" "Up" { Resize "Increase Up"; }
-        bind "l" "Right" { Resize "Increase Right"; }
-        bind "H" { Resize "Decrease Left"; }
-        bind "J" { Resize "Decrease Down"; }
-        bind "K" { Resize "Decrease Up"; }
-        bind "L" { Resize "Decrease Right"; }
-        bind "=" "+" { Resize "Increase"; }
-        bind "-" { Resize "Decrease"; }
-    }
+    // "q" too please 🥲
     shared_among "locked" "resize" "pane" "move" "tab" "scroll" "session" "tmux" {
-        bind "Enter" "Esc" "q" "Ctrl c" { SwitchToMode "Normal"; }
+        bind "Enter" "Esc" "q" { SwitchToMode "Normal"; }
     }
     shared_among "search" "entersearch" "renametab" "renamepane" {
-        bind "Esc" "q" "Ctrl c" { SwitchToMode "Normal"; }
+        bind "Esc" "q" { SwitchToMode "Normal"; }
     }
 }
 
@@ -100,26 +80,26 @@ pane_frames false
 // For more examples, see: https://github.com/zellij-org/zellij/tree/main/example/themes
 // Once these themes are defined, one of them should to be selected in the "theme" section of this file
 //
-themes {
-    my_default {
-        fg "#ffffff"
-        bg "#0f1419"
-        red "#ff0000"
-        green "#666666"
-        yellow "#ffff00"
-        blue "#0000ff"
-        magenta "#ff00ff"
-        orange "#ffa500"
-        cyan "#00ffff"
-        black "#000000"
-        white "#ffffff"
-    }
-}
+// themes {
+//     dracula {
+//         fg 248 248 242
+//         bg 40 42 54
+//         red 255 85 85
+//         green 80 250 123
+//         yellow 241 250 140
+//         blue 98 114 164
+//         magenta 255 121 198
+//         orange 255 184 108
+//         cyan 139 233 253
+//         black 0 0 0
+//         white 255 255 255
+//     }
+// }
 
 // Choose the theme that is specified in the themes section.
 // Default: default
 //
-theme "my_default"
+// theme "default"
 
 // The name of the default layout to load on startup
 // Default: "default"
@@ -191,9 +171,3 @@ mirror_session false
 // The folder in which Zellij will look for themes
 //
 // theme_dir "/path/to/my/theme_dir"
-
-ui {
-    pane_frames {
-        hide_session_name true
-    }
-}
