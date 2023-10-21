@@ -1,8 +1,17 @@
 layout {
     default_tab_template {
         pane size=1 borderless=true {
-            plugin location="zellij:compact-bar"
+            plugin location="file:/usr/local/bin/zjstatus.wasm" {
+                format_left "{mode} {tabs}"
+                format_space ""
+                mode_resize "#[bg=red]"
+                tab_normal "#[fg=#666666] {name}"
+                tab_active "#[fg=#ffffff,bold] [{name}]"
+            }
         }
-        children
+        pane split_direction="vertical" {
+            pane size="41%"
+            pane size="59%"
+        }
     }
 }
