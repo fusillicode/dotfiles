@@ -1,8 +1,0 @@
-- gitsigns keymap to stage, unstage and revert hunk
-- go next and prev git change in file
-- customize telescope ivy layout
-- duplicate file nvim-tree
-- install trouble for global diagnostic
-- run clippy on lsp
-- highlight trailing spaces
-- change lualine bg color
