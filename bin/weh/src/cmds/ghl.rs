@@ -61,12 +61,20 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>, stdin: Stdin) -> anyhow::Re
     // as much as possible
     let hx_cursor_absolute_file_path = build_hx_cursor_absolute_file_path(&hx_cursor, &hx_pane)?;
 
+    let mut hx_selected_lines = vec![];
+    for hx_selected_line in stdin.lines() {
+        hx_selected_lines.push(
+            hx_selected_line
+                .map_err(|e| anyhow!("error reading hx selected line from stdin {e:?}"))?,
+        )
+    }
+
     let github_link = build_github_link(
         &crate::utils::join(get_github_repo_url)?,
         &crate::utils::join(get_git_current_branch)?,
         hx_cursor_absolute_file_path.strip_prefix(git_repo_root.as_ref())?,
         &hx_cursor.position,
-        stdin.lines().count(),
+        &hx_selected_lines,
     )?;
 
     crate::utils::copy_to_system_clipboard(&mut github_link.as_str().as_bytes())?;
@@ -154,7 +162,7 @@ fn build_github_link<'a>(
     git_current_branch: &'a str,
     file_path: &'a Path,
     hx_cursor_position: &'a HxCursorPosition,
-    hx_selected_lines_count: usize,
+    hx_selected_lines: &[String],
 ) -> anyhow::Result<Url> {
     let mut file_path_parts = vec![];
     for component in file_path.components() {
