@@ -94,3 +94,6 @@ ctrl_n_shortcuts = true
 # cwd_filter = [
 #   "^/very/secret/area"
 # ]
+
+## Thanks Ellie! 🙇‍♂️
+enter_accept = true
