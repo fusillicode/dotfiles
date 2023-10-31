@@ -18,20 +18,30 @@ use crate::utils::WezTermPane;
 pub fn run<'a>(_args: impl Iterator<Item = &'a str>, stdin: Stdin) -> anyhow::Result<()> {
     let hx_pane = get_current_pane_sibling_with_title("hx")?;
 
-    let wezterm_pane_text = String::from_utf8(
-        Command::new("wezterm")
-            .args(["cli", "get-text", "--pane-id", &hx_pane.pane_id.to_string()])
-            .output()?
-            .stdout,
-    )?;
+    let hx_pane_ansi_escaped_content = Command::new("wezterm")
+        .args([
+            "cli",
+            "get-text",
+            "--pane-id",
+            &hx_pane.pane_id.to_string(),
+            "--escapes",
+        ])
+        .output()?
+        .stdout;
 
-    let hx_cursor =
-        HxCursor::from_str(wezterm_pane_text.lines().nth_back(1).ok_or_else(|| {
-            anyhow!(
-                "no hx status line in pane '{}' text {wezterm_pane_text:?}",
-                hx_pane.pane_id
-            )
-        })?)?;
+    let hx_pane_ansi_escaped_content_text = String::from_utf8_lossy(&hx_pane_ansi_escaped_content);
+
+    let hx_cursor = HxCursor::from_str(&strip_ansi_escapes::strip_str(
+        hx_pane_ansi_escaped_content_text
+            .lines()
+            .nth_back(2)
+            .ok_or_else(|| {
+                anyhow!(
+                    "no hx status line in pane '{}' ANSI escaped text {hx_pane_ansi_escaped_content_text}",
+                    hx_pane.pane_id
+                )
+            })?,
+    ))?;
 
     let git_repo_root = Arc::new(get_git_repo_root(&hx_cursor.file_path)?);
 
@@ -61,20 +71,11 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>, stdin: Stdin) -> anyhow::Re
     // as much as possible
     let hx_cursor_absolute_file_path = build_hx_cursor_absolute_file_path(&hx_cursor, &hx_pane)?;
 
-    let mut hx_selected_lines = vec![];
-    for hx_selected_line in stdin.lines() {
-        hx_selected_lines.push(
-            hx_selected_line
-                .map_err(|e| anyhow!("error reading hx selected line from stdin {e:?}"))?,
-        )
-    }
-
     let github_link = build_github_link(
         &crate::utils::join(get_github_repo_url)?,
         &crate::utils::join(get_git_current_branch)?,
         hx_cursor_absolute_file_path.strip_prefix(git_repo_root.as_ref())?,
         &hx_cursor.position,
-        &hx_selected_lines,
     )?;
 
     crate::utils::copy_to_system_clipboard(&mut github_link.as_str().as_bytes())?;
@@ -162,7 +163,6 @@ fn build_github_link<'a>(
     git_current_branch: &'a str,
     file_path: &'a Path,
     hx_cursor_position: &'a HxCursorPosition,
-    hx_selected_lines: &[String],
 ) -> anyhow::Result<Url> {
     let mut file_path_parts = vec![];
     for component in file_path.components() {
