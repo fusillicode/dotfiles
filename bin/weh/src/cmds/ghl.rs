@@ -10,13 +10,12 @@ use anyhow::anyhow;
 use anyhow::bail;
 use url::Url;
 
-use crate::utils::get_current_pane_sibling_with_title;
-use crate::utils::HxCursor;
-use crate::utils::HxCursorPosition;
-use crate::utils::WezTermPane;
+use crate::utils::hx::HxCursor;
+use crate::utils::hx::HxCursorPosition;
+use crate::utils::wezterm::WezTermPane;
 
 pub fn run<'a>(_args: impl Iterator<Item = &'a str>, stdin: Stdin) -> anyhow::Result<()> {
-    let hx_pane = get_current_pane_sibling_with_title("hx")?;
+    let hx_pane = crate::utils::wezterm::get_current_pane_sibling_with_title("hx")?;
 
     let hx_pane_ansi_escaped_content = Command::new("wezterm")
         .args([
@@ -72,13 +71,13 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>, stdin: Stdin) -> anyhow::Re
     let hx_cursor_absolute_file_path = build_hx_cursor_absolute_file_path(&hx_cursor, &hx_pane)?;
 
     let github_link = build_github_link(
-        &crate::utils::join(get_github_repo_url)?,
-        &crate::utils::join(get_git_current_branch)?,
+        &crate::utils::system::join(get_github_repo_url)?,
+        &crate::utils::system::join(get_git_current_branch)?,
         hx_cursor_absolute_file_path.strip_prefix(git_repo_root.as_ref())?,
         &hx_cursor.position,
     )?;
 
-    crate::utils::copy_to_system_clipboard(&mut github_link.as_str().as_bytes())?;
+    crate::utils::system::copy_to_system_clipboard(&mut github_link.as_str().as_bytes())?;
 
     Ok(())
 }
