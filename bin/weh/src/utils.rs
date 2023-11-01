@@ -67,7 +67,7 @@ pub struct WezTermPane {
     pub tab_id: i64,
     pub pane_id: i64,
     pub workspace: String,
-    pub size: Size,
+    pub size: WezTermPaneSize,
     pub title: String,
     pub cwd: PathBuf,
     pub cursor_x: i64,
@@ -86,7 +86,7 @@ pub struct WezTermPane {
 #[derive(Debug, Deserialize, Clone)]
 #[cfg_attr(any(test), derive(fake::Dummy))]
 #[allow(dead_code)]
-pub struct Size {
+pub struct WezTermPaneSize {
     pub rows: i64,
     pub cols: i64,
     pub pixel_width: i64,
