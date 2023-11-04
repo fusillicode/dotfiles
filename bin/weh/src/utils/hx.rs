@@ -1,6 +1,7 @@
 use std::ops::Range;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::str::SplitWhitespace;
 
 use anyhow::anyhow;
 use anyhow::bail;
@@ -66,40 +67,55 @@ impl FromStr for HxCursorPosition {
 }
 
 const ANSI_ESCAPED_SELECTION_BG_COLOR: &str = "[48:2::45:54:64m";
-const ANSI_ESCAPED_BG_COLOR: &str = "[48:2::45:54:64m";
 
-#[derive(Debug)]
-struct HxViewportSelectionLine<'a> {
-    idx: usize,
-    content: &'a str,
+#[derive(Debug, PartialEq)]
+enum SelectionDirection {
+    Up,
+    Down,
 }
 
-impl<'a> HxViewportSelectionLine<'a> {
-    pub fn next_matching_background_in(
-        mut viewport_lines: std::iter::Enumerate<std::str::Lines<'a>>,
-        ansi_escaped_background_color: &str,
-    ) -> Option<(std::iter::Enumerate<std::str::Lines<'a>>, Self)> {
-        if let Some(viewport_selection_line) = viewport_lines
-            .find_map(|(idx, line)| {
-                line.contains(ansi_escaped_background_color)
-                    .then_some((idx, line))
-            })
-            .map(|(idx, content)| Self { idx, content })
-        {
-            return Some((viewport_lines, viewport_selection_line));
+impl SelectionDirection {
+    fn parse_line_number(stripped_line_parts: &mut SplitWhitespace<'_>) -> anyhow::Result<usize> {
+        if let Some(line_number) = Self::parse_next_part_as_usize(stripped_line_parts) {
+            return Ok(line_number);
         }
-        None
+        if let Some(line_number) = Self::parse_next_part_as_usize(stripped_line_parts) {
+            return Ok(line_number);
+        }
+        bail!("missing line number in '{stripped_line_parts:?}', line number expected to be in 1st or 2nd position")
     }
 
-    pub fn nbr_of_lines_from(&self, other: &Self) -> usize {
-        self.idx.abs_diff(other.idx)
+    fn parse_next_part_as_usize(line_parts: &mut SplitWhitespace<'_>) -> Option<usize> {
+        line_parts.next().and_then(|x| x.parse::<usize>().ok())
     }
 
-    pub fn get_line_number(&self) -> anyhow::Result<usize> {
-        strip_ansi_escapes::strip_str(self.content)
-            .split_whitespace()
-            .find_map(|x| x.parse::<usize>().ok())
-            .ok_or_else(|| anyhow!("no line number found in line '{}'", self.content))
+    fn is_line_selected(line: &str) -> bool {
+        line.contains(ANSI_ESCAPED_SELECTION_BG_COLOR)
+    }
+}
+
+impl TryFrom<(usize, &str)> for SelectionDirection {
+    type Error = anyhow::Error;
+
+    fn try_from(
+        (hx_cursor_line_number, hx_pane_ansi_escaped_viewport): (usize, &str),
+    ) -> Result<Self, Self::Error> {
+        let prev_hx_cursor_line_number = hx_cursor_line_number - 1;
+        let next_hx_cursor_line_number = hx_cursor_line_number + 1;
+
+        for line in hx_pane_ansi_escaped_viewport.lines() {
+            let stripped_line = strip_ansi_escapes::strip_str(line);
+            let mut stripped_line_parts = stripped_line.split_whitespace();
+            let line_number = Self::parse_line_number(&mut stripped_line_parts)?;
+            if line_number == prev_hx_cursor_line_number && Self::is_line_selected(line) {
+                return Ok(SelectionDirection::Up);
+            }
+            if line_number == next_hx_cursor_line_number && Self::is_line_selected(line) {
+                return Ok(SelectionDirection::Down);
+            }
+        }
+
+        bail!("cannot get selection direction from cursor line number {hx_cursor_line_number} and ansi escaped viewport {hx_pane_ansi_escaped_viewport}")
     }
 }
 
@@ -112,37 +128,17 @@ fn get_selection_range(
         return Ok(hx_cursor_line_number..hx_cursor_line_number);
     }
 
-    let viewport_lines = hx_pane_ansi_escaped_viewport.lines().enumerate();
-    let (viewport_lines, viewport_selection_line_start) =
-        HxViewportSelectionLine::next_matching_background_in(viewport_lines).unwrap();
-    let (_, viewport_selection_line_end) =
-        HxViewportSelectionLine::next_matching_background_in(viewport_lines).unwrap();
-    let viewport_selection_size =
-        viewport_selection_line_start.nbr_of_lines_from(&viewport_selection_line_end);
-
-    dbg!(&viewport_selection_line_start);
-    dbg!(&viewport_selection_line_end);
-
-    // If the actual selection is fully contained in the viewport
-    if hx_actual_selection_size == viewport_selection_size {
-        return Ok(viewport_selection_line_start.get_line_number().unwrap()
-            ..viewport_selection_line_end.get_line_number().unwrap());
-    }
-
-    // If the actual selection expand before the viewport
-    let selection = if viewport_selection_line_start.idx == 0 {
-        hx_cursor_line_number - hx_actual_selection_size..hx_cursor_line_number
-    // If the actual selection expand after the viewport
-    } else {
-        hx_cursor_line_number..hx_cursor_line_number + hx_actual_selection_size
-    };
-
-    // Sanity check if actual selection is smaller than the viewport selection. This should not happen.
-    if hx_actual_selection_size < viewport_selection_size {
-        bail!("foo")
-    }
-
-    Ok(selection)
+    Ok(
+        match SelectionDirection::try_from((hx_cursor_line_number, hx_pane_ansi_escaped_viewport))?
+        {
+            SelectionDirection::Up => {
+                hx_cursor_line_number - hx_actual_selection_size..hx_cursor_line_number
+            }
+            SelectionDirection::Down => {
+                hx_cursor_line_number..hx_cursor_line_number + hx_actual_selection_size
+            }
+        },
+    )
 }
 
 #[cfg(test)]
@@ -180,75 +176,58 @@ mod tests {
     }
 
     #[test]
-    fn test_get_line_number_returns_the_expected_line_number() {
-        let result = HxViewportSelectionLine {
-            idx: 0,
-            content: "[38:2::230:180:80m[48:2::15:20:25m●[39m [38:2::102:102:102m42[39m [38:2::170:217:76m▍[38:2::45:54:64m········[38:2::255:143:64mlet[38:2::45:54:64m·(B[0m[38:2::191:189:182m[48:2::15:20:25mselection_start_line(B[0m[38:2::102:102:102m[48:2::15:20:25m:[38:2::45:54:64m [38:2::102:102:102mi32[38:2::45:54:64m·[38:2::255:143:64m=[38:2::45:54:64m·[38:2::210:166:255m190[38:2::191:189:182m;[38:2::45:54:64m [39m                                                                           [48:2::19:23:33m[K"
-        }.get_line_number();
-
-        assert_eq!(42, result.unwrap());
-    }
-
-    #[test]
-    fn test_get_line_number_returns_the_expected_error_if_doenst_find_a_line_number() {
-        let result = HxViewportSelectionLine {
-            idx: 0,
-            content: "",
-        }
-        .get_line_number();
-
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_get_selection_range_returns_the_expected_range_if_the_actual_selection_is_fully_contained_in_the_viewport(
-    ) {
-        let result = get_selection_range(
-            &std::fs::read_to_string("./fixtures/actual_selection_fully_contained_in_viewport.txt")
-                .unwrap(),
+    fn test_get_selection_direction_returns_up_if_selection_expands_up_to_the_supplied_cursor_line()
+    {
+        let result = SelectionDirection::try_from((
             113,
-            7,
-        );
+            std::fs::read_to_string("./fixtures/actual_selection_expands_up_the_viewport.txt")
+                .unwrap()
+                .as_str(),
+        ));
 
-        assert_eq!((108..113), result.unwrap());
+        assert_eq!(SelectionDirection::Up, result.unwrap());
     }
 
     #[test]
-    fn test_get_selection_range_returns_the_expected_range_if_the_actual_selection_expands_before_the_viewport(
+    fn test_get_selection_direction_returns_down_if_selection_expands_down_to_the_supplied_cursor_line(
     ) {
-        let result = get_selection_range(
-            &std::fs::read_to_string("./fixtures/actual_selection_expands_before_the_viewport.txt")
-                .unwrap(),
-            3,
-            3,
-        );
+        let result = SelectionDirection::try_from((
+            65,
+            std::fs::read_to_string("./fixtures/actual_selection_expands_after_the_viewport.txt")
+                .unwrap()
+                .as_str(),
+        ));
 
-        assert_eq!((1..2), result.unwrap());
+        assert_eq!(SelectionDirection::Down, result.unwrap());
     }
 
     #[test]
-    fn test_get_selection_range_returns_the_expected_range_if_the_actual_selection_expands_after_the_viewport(
-    ) {
-        let result = get_selection_range(
-            &std::fs::read_to_string("./fixtures/actual_selection_expands_after_the_viewport.txt")
-                .unwrap(),
-            3,
-            3,
-        );
+    fn test_get_selection_direction_returns_an_error_if_line_number_cannot_be_parsed() {
+        let result = SelectionDirection::try_from((
+            65,
+            std::fs::read_to_string("./fixtures/foo.txt")
+                .unwrap()
+                .as_str(),
+        ));
 
-        assert_eq!((1..2), result.unwrap());
+        assert_eq!(
+            "cannot parse line number from '{stripped_line_parts:?}'",
+            result.unwrap_err().to_string()
+        );
     }
 
     #[test]
-    fn test_get_selection_range_returns_the_expected_error_if_the_actual_selection_is_fully_contained_in_the_viewport_but_the_viewport_is_smaller_than_the_actual_selection(
-    ) {
-        let result = get_selection_range(
-            &std::fs::read_to_string("./fixtures/actual_selection_fully_contained_in_viewport.txt")
-                .unwrap(),
-            3,
-            3,
-        );
+    fn test_get_selection_direction_returns_an_error_if_selection_is_one_line() {
+        let result = SelectionDirection::try_from((
+            65,
+            std::fs::read_to_string("./fixtures/foo.txt")
+                .unwrap()
+                .as_str(),
+        ));
 
-        assert_eq!((1..2), result.unwrap());
+        assert_eq!(
+            "cannot parse line number from '{stripped_line_parts:?}'",
+            result.unwrap_err().to_string()
+        );
     }
 }
