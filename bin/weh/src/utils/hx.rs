@@ -76,17 +76,21 @@ enum SelectionDirection {
 
 impl SelectionDirection {
     fn parse_line_number(stripped_line_parts: &mut SplitWhitespace<'_>) -> anyhow::Result<usize> {
-        if let Some(line_number) = Self::parse_next_part_as_usize(stripped_line_parts) {
-            return Ok(line_number);
+        fn parse_next_part_as_usize(line_parts: &mut SplitWhitespace<'_>) -> Option<usize> {
+            line_parts.next().and_then(|x| x.parse::<usize>().ok())
         }
-        if let Some(line_number) = Self::parse_next_part_as_usize(stripped_line_parts) {
-            return Ok(line_number);
-        }
-        bail!("missing line number in '{stripped_line_parts:?}', line number expected to be in 1st or 2nd position")
-    }
 
-    fn parse_next_part_as_usize(line_parts: &mut SplitWhitespace<'_>) -> Option<usize> {
-        line_parts.next().and_then(|x| x.parse::<usize>().ok())
+        if let Some(line_number) = parse_next_part_as_usize(stripped_line_parts) {
+            return Ok(line_number);
+        }
+        if let Some(line_number) = parse_next_part_as_usize(stripped_line_parts) {
+            return Ok(line_number);
+        }
+
+        bail!(
+            "missing line number in '{:?}', line number expected in 1st or 2nd position",
+            stripped_line_parts.collect::<Vec<&str>>()
+        )
     }
 
     fn is_line_selected(line: &str) -> bool {
@@ -103,10 +107,18 @@ impl TryFrom<(usize, &str)> for SelectionDirection {
         let prev_hx_cursor_line_number = hx_cursor_line_number - 1;
         let next_hx_cursor_line_number = hx_cursor_line_number + 1;
 
-        for line in hx_pane_ansi_escaped_viewport.lines() {
+        let mut lines: Vec<_> = hx_pane_ansi_escaped_viewport
+            .lines()
+            .rev()
+            .skip(3)
+            .collect();
+        lines.reverse();
+
+        for line in lines {
             let stripped_line = strip_ansi_escapes::strip_str(line);
             let mut stripped_line_parts = stripped_line.split_whitespace();
             let line_number = Self::parse_line_number(&mut stripped_line_parts)?;
+
             if line_number == prev_hx_cursor_line_number && Self::is_line_selected(line) {
                 return Ok(SelectionDirection::Up);
             }
@@ -115,7 +127,7 @@ impl TryFrom<(usize, &str)> for SelectionDirection {
             }
         }
 
-        bail!("cannot get selection direction from cursor line number {hx_cursor_line_number} and ansi escaped viewport {hx_pane_ansi_escaped_viewport}")
+        bail!("cannot get selection direction from cursor line number {hx_cursor_line_number} and ansi escaped viewport")
     }
 }
 
@@ -176,11 +188,11 @@ mod tests {
     }
 
     #[test]
-    fn test_get_selection_direction_returns_up_if_selection_expands_up_to_the_supplied_cursor_line()
-    {
+    fn test_selection_direction_try_from_returns_up_if_selection_expands_up_to_the_supplied_cursor_line(
+    ) {
         let result = SelectionDirection::try_from((
-            113,
-            std::fs::read_to_string("./fixtures/actual_selection_expands_up_the_viewport.txt")
+            29,
+            std::fs::read_to_string("./fixtures/ansi_escaped_selection_expands_up.txt")
                 .unwrap()
                 .as_str(),
         ));
@@ -189,11 +201,11 @@ mod tests {
     }
 
     #[test]
-    fn test_get_selection_direction_returns_down_if_selection_expands_down_to_the_supplied_cursor_line(
+    fn test_selection_direction_try_from_returns_down_if_selection_expands_down_to_the_supplied_cursor_line(
     ) {
         let result = SelectionDirection::try_from((
-            65,
-            std::fs::read_to_string("./fixtures/actual_selection_expands_after_the_viewport.txt")
+            14,
+            std::fs::read_to_string("./fixtures/ansi_escaped_selection_expands_down.txt")
                 .unwrap()
                 .as_str(),
         ));
@@ -202,31 +214,46 @@ mod tests {
     }
 
     #[test]
-    fn test_get_selection_direction_returns_an_error_if_line_number_cannot_be_parsed() {
+    fn test_selection_direction_try_from_returns_an_error_if_a_line_number_is_missing() {
         let result = SelectionDirection::try_from((
-            65,
-            std::fs::read_to_string("./fixtures/foo.txt")
+            29,
+            std::fs::read_to_string("./fixtures/ansi_escaped_selection_missing_line_number.txt")
+                .unwrap()
+                .as_str(),
+        ));
+
+        let error_message = result.unwrap_err().to_string();
+
+        assert!(error_message.contains("missing line number in "));
+        assert!(error_message.contains(", line number expected in 1st or 2nd position"));
+    }
+
+    #[test]
+    fn test_selection_direction_try_from_returns_an_error_if_selection_is_one_single_line() {
+        let result = SelectionDirection::try_from((
+            14,
+            std::fs::read_to_string("./fixtures/ansi_escaped_selection_single_line.txt")
                 .unwrap()
                 .as_str(),
         ));
 
         assert_eq!(
-            "cannot parse line number from '{stripped_line_parts:?}'",
+            "cannot get selection direction from cursor line number 14 and ansi escaped viewport",
             result.unwrap_err().to_string()
         );
     }
 
     #[test]
-    fn test_get_selection_direction_returns_an_error_if_selection_is_one_line() {
+    fn test_selection_direction_try_from_returns_an_error_if_there_is_no_selection() {
         let result = SelectionDirection::try_from((
             65,
-            std::fs::read_to_string("./fixtures/foo.txt")
+            std::fs::read_to_string("./fixtures/ansi_escaped_no_selection.txt")
                 .unwrap()
                 .as_str(),
         ));
 
         assert_eq!(
-            "cannot parse line number from '{stripped_line_parts:?}'",
+            "cannot get selection direction from cursor line number 65 and ansi escaped viewport",
             result.unwrap_err().to_string()
         );
     }
