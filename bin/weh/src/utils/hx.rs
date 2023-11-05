@@ -8,12 +8,12 @@ use anyhow::bail;
 
 #[derive(Debug, PartialEq)]
 #[cfg_attr(any(test), derive(fake::Dummy))]
-pub struct HxCursor {
+pub struct HxStatusLine {
     pub file_path: PathBuf,
     pub position: HxCursorPosition,
 }
 
-impl FromStr for HxCursor {
+impl FromStr for HxStatusLine {
     type Err = anyhow::Error;
 
     fn from_str(hx_status_line: &str) -> Result<Self, Self::Err> {
@@ -160,8 +160,8 @@ mod tests {
     #[test]
     fn test_hx_cursor_from_str_works_as_expected_with_a_file_path_pointing_to_an_existent_file_in_normal_mode(
     ) {
-        let result = HxCursor::from_str("      ● 1 ` src/utils.rs `                                                                  1 sel  1 char  W ● 1  42:33 ");
-        let expected = HxCursor {
+        let result = HxStatusLine::from_str("      ● 1 ` src/utils.rs `                                                                  1 sel  1 char  W ● 1  42:33 ");
+        let expected = HxStatusLine {
             file_path: "src/utils.rs".into(),
             position: HxCursorPosition {
                 line: 42,
@@ -175,8 +175,8 @@ mod tests {
     #[test]
     fn test_hx_cursor_from_str_works_as_expected_with_a_file_path_pointing_to_an_existent_file_and_a_spinner(
     ) {
-        let result = HxCursor::from_str("⣷      ` src/utils.rs `                                                                  1 sel  1 char  W ● 1  33:42 ");
-        let expected = HxCursor {
+        let result = HxStatusLine::from_str("⣷      ` src/utils.rs `                                                                  1 sel  1 char  W ● 1  33:42 ");
+        let expected = HxStatusLine {
             file_path: "src/utils.rs".into(),
             position: HxCursorPosition {
                 line: 33,

@@ -10,8 +10,8 @@ use anyhow::anyhow;
 use anyhow::bail;
 use url::Url;
 
-use crate::utils::hx::HxCursor;
 use crate::utils::hx::HxCursorPosition;
+use crate::utils::hx::HxStatusLine;
 use crate::utils::wezterm::WezTermPane;
 
 pub fn run<'a>(_args: impl Iterator<Item = &'a str>, stdin: Stdin) -> anyhow::Result<()> {
@@ -30,7 +30,7 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>, stdin: Stdin) -> anyhow::Re
 
     let hx_pane_ansi_escaped_content_text = String::from_utf8_lossy(&hx_pane_ansi_escaped_content);
 
-    let hx_cursor = HxCursor::from_str(&strip_ansi_escapes::strip_str(
+    let hx_status_line = HxStatusLine::from_str(&strip_ansi_escapes::strip_str(
         hx_pane_ansi_escaped_content_text
             .lines()
             .nth_back(2)
@@ -42,7 +42,7 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>, stdin: Stdin) -> anyhow::Re
             })?,
     ))?;
 
-    let git_repo_root = Arc::new(get_git_repo_root(&hx_cursor.file_path)?);
+    let git_repo_root = Arc::new(get_git_repo_root(&hx_status_line.file_path)?);
 
     let git_repo_root_clone = git_repo_root.clone();
     let get_git_current_branch = std::thread::spawn(move || -> anyhow::Result<String> {
@@ -68,13 +68,14 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>, stdin: Stdin) -> anyhow::Re
 
     // `build_file_path_relative_to_git_repo_root` are called before the 🧵s `join` to let them work in the background
     // as much as possible
-    let hx_cursor_absolute_file_path = build_hx_cursor_absolute_file_path(&hx_cursor, &hx_pane)?;
+    let hx_cursor_absolute_file_path =
+        build_hx_status_line_absolute_file_path(&hx_status_line, &hx_pane)?;
 
     let github_link = build_github_link(
         &crate::utils::system::join(get_github_repo_url)?,
         &crate::utils::system::join(get_git_current_branch)?,
         hx_cursor_absolute_file_path.strip_prefix(git_repo_root.as_ref())?,
-        &hx_cursor.position,
+        &hx_status_line.position,
     )?;
 
     crate::utils::system::copy_to_system_clipboard(&mut github_link.as_str().as_bytes())?;
@@ -137,11 +138,11 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> anyhow::Result<
     Ok(url)
 }
 
-fn build_hx_cursor_absolute_file_path(
-    hx_cursor: &HxCursor,
+fn build_hx_status_line_absolute_file_path(
+    hx_status_line: &HxStatusLine,
     hx_pane: &WezTermPane,
 ) -> anyhow::Result<PathBuf> {
-    if let Ok(hx_cursor_file_path) = hx_cursor.file_path.strip_prefix("~") {
+    if let Ok(hx_cursor_file_path) = hx_status_line.file_path.strip_prefix("~") {
         let mut home_absolute_path = Path::new(&std::env::var("HOME")?).to_path_buf();
         home_absolute_path.push(hx_cursor_file_path);
         return Ok(home_absolute_path);
@@ -153,7 +154,7 @@ fn build_hx_cursor_absolute_file_path(
 
     Ok(std::iter::once(Component::RootDir)
         .chain(components)
-        .chain(hx_cursor.file_path.components())
+        .chain(hx_status_line.file_path.components())
         .collect())
 }
 
@@ -195,11 +196,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_relative_to_home_dir(
+    fn test_build_hx_status_line_absolute_file_path_works_as_expected_with_file_path_as_relative_to_home_dir(
     ) {
         // Arrange
         temp_env::with_vars([("HOME", Some("/Users/Foo"))], || {
-            let hx_cursor = HxCursor {
+            let hx_status_line = HxStatusLine {
                 file_path: Path::new("~/src/bar/baz.rs").into(),
                 ..Faker.fake()
             };
@@ -209,7 +210,7 @@ mod tests {
             };
 
             // Act
-            let result = build_hx_cursor_absolute_file_path(&hx_cursor, &hx_pane);
+            let result = build_hx_status_line_absolute_file_path(&hx_status_line, &hx_pane);
 
             // Assert
             let expected = Path::new("/Users/Foo/src/bar/baz.rs").to_path_buf();
@@ -218,10 +219,10 @@ mod tests {
     }
 
     #[test]
-    fn test_build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_relative_to_hx_root(
+    fn test_build_hx_status_line_absolute_file_path_works_as_expected_with_file_path_as_relative_to_hx_root(
     ) {
         // Arrange
-        let hx_cursor = HxCursor {
+        let hx_status_line = HxStatusLine {
             file_path: Path::new("src/bar/baz.rs").into(),
             ..Faker.fake()
         };
@@ -231,7 +232,7 @@ mod tests {
         };
 
         // Act
-        let result = build_hx_cursor_absolute_file_path(&hx_cursor, &hx_pane).unwrap();
+        let result = build_hx_status_line_absolute_file_path(&hx_status_line, &hx_pane).unwrap();
 
         // Assert
         let expected = Path::new("/Users/Foo/dev/src/bar/baz.rs").to_path_buf();
@@ -239,9 +240,9 @@ mod tests {
     }
 
     #[test]
-    fn test_build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_absolute() {
+    fn test_build_hx_status_line_absolute_file_path_works_as_expected_with_file_path_as_absolute() {
         // Arrange
-        let hx_cursor = HxCursor {
+        let hx_status_line = HxStatusLine {
             file_path: Path::new("/Users/Foo/dev/src/bar/baz.rs").into(),
             ..Faker.fake()
         };
@@ -251,7 +252,7 @@ mod tests {
         };
 
         // Act
-        let result = build_hx_cursor_absolute_file_path(&hx_cursor, &hx_pane).unwrap();
+        let result = build_hx_status_line_absolute_file_path(&hx_status_line, &hx_pane).unwrap();
 
         // Assert
         let expected = Path::new("/Users/Foo/dev/src/bar/baz.rs").to_path_buf();
