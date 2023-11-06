@@ -1,6 +1,7 @@
 use std::ops::Range;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::str::Lines;
 use std::str::SplitWhitespace;
 
 use anyhow::anyhow;
@@ -76,15 +77,14 @@ enum SelectionAroundHxCursor {
 
 impl SelectionAroundHxCursor {
     fn find_idx_and_line_matching_line_number(
-        hx_pane_ansi_stripped_viewport: &str,
+        hx_pane_ansi_stripped_viewport_lines: Lines<'_>,
         hx_cursor_line_number: usize,
     ) -> Option<(usize, &str)> {
         fn parse_next_as_usize(line_parts: &mut SplitWhitespace<'_>) -> Option<usize> {
             line_parts.next().and_then(|x| x.parse::<usize>().ok())
         }
 
-        hx_pane_ansi_stripped_viewport
-            .lines()
+        hx_pane_ansi_stripped_viewport_lines
             .enumerate()
             .find(|(_, line)| {
                 let mut line_parts = line.split_whitespace();
@@ -110,24 +110,26 @@ impl TryFrom<(usize, &str)> for SelectionAroundHxCursor {
         let hx_pane_ansi_stripped_viewport =
             strip_ansi_escapes::strip_str(hx_pane_ansi_escaped_viewport);
 
+        let hx_pane_ansi_stripped_viewport_lines = hx_pane_ansi_stripped_viewport.lines();
+        let mut hx_pane_ansi_escaped_viewport_lines = hx_pane_ansi_escaped_viewport.lines();
+
         // ANSI escaped viewport and stripped one should have the same length
-        let ansi_escaped_lines_count = hx_pane_ansi_escaped_viewport.lines().count();
-        let ansi_stripped_lines_count = hx_pane_ansi_stripped_viewport.lines().count();
+        let ansi_stripped_lines_count = hx_pane_ansi_stripped_viewport_lines.clone().count();
+        let ansi_escaped_lines_count = hx_pane_ansi_escaped_viewport_lines.clone().count();
         if ansi_stripped_lines_count != ansi_escaped_lines_count {
             bail!("lines count of ANSI stripped '{ansi_stripped_lines_count}' doesn't match ANSI escaped viewport one '{ansi_escaped_lines_count}'")
         }
 
         let (hx_cursor_line_idx, _) = Self::find_idx_and_line_matching_line_number(
-            &hx_pane_ansi_stripped_viewport,
+            hx_pane_ansi_stripped_viewport_lines,
             hx_cursor_line_number,
         )
         .ok_or_else(|| {
             anyhow!("cannot find line number '{hx_cursor_line_number}' in ANSI stripped viewport")
         })?;
 
-        let mut lines = hx_pane_ansi_escaped_viewport.lines();
         let prev_line_idx = hx_cursor_line_idx - 1;
-        let prev_line = lines
+        let prev_line = hx_pane_ansi_escaped_viewport_lines
             .nth(prev_line_idx)
             .ok_or_else(|| anyhow!("cannot find prev line of hx cursor, idx '{prev_line_idx}'"))?;
         if Self::is_line_selected(prev_line) {
@@ -135,7 +137,7 @@ impl TryFrom<(usize, &str)> for SelectionAroundHxCursor {
         }
 
         let next_line_idx = hx_cursor_line_idx - 1;
-        let next_line = lines
+        let next_line = hx_pane_ansi_escaped_viewport_lines
             .nth(next_line_idx)
             .ok_or_else(|| anyhow!("cannot find next of hx cursor, idx '{next_line_idx}'"))?;
         if Self::is_line_selected(next_line) {
