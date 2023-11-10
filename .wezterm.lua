@@ -11,7 +11,8 @@ end
 
 local function up_and_down_with_hx(key)
   return function(win, pane)
-    if 'hx' == base_name(pane:get_foreground_process_name()) then
+    local process_name = base_name(pane:get_foreground_process_name())
+    if 'hx' == process_name or 'nvim' == process_name then
       win:perform_action(act.SendKey { key = key, mods = 'CTRL' }, pane)
     else
       win:perform_action(act.ActivateCopyMode, pane)
