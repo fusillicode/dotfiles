@@ -15,8 +15,11 @@ vim.o.termguicolors = true
 vim.o.timeoutlen = 300
 vim.o.undofile = true
 vim.o.updatetime = 250
+vim.o.cursorline = true
 vim.wo.number = true
 vim.wo.signcolumn = 'yes'
+
+vim.api.nvim_set_hl(0, 'CursorLineNr', { fg = 'white' })
 
 -- [[ Install `lazy.nvim` plugin manager ]]
 --    https://github.com/folke/lazy.nvim
@@ -92,10 +95,10 @@ require('lazy').setup({
     },
   },
   {
-    'navarasu/onedark.nvim',
+    'RRethy/nvim-base16',
     priority = 1000,
     config = function()
-      vim.cmd.colorscheme 'onedark'
+      vim.cmd.colorscheme 'base16-gruvbox-dark-soft'
     end,
   },
   {
@@ -103,10 +106,17 @@ require('lazy').setup({
     opts = {
       options = {
         icons_enabled = false,
-        theme = 'onedark',
-        component_separators = '|',
+        component_separators = '',
         section_separators = '',
       },
+      sections = {
+        lualine_a = { { 'mode', fmt = function(str) return str:sub(1, 1) end } },
+        lualine_b = { 'diagnostics' },
+        lualine_c = { { 'filename', path = 1 } },
+        lualine_x = { 'filetype' },
+        lualine_y = {},
+        lualine_z = { 'location' }
+      }
     },
   },
   { 'numToStr/Comment.nvim', opts = {} },
