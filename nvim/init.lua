@@ -5,8 +5,7 @@ vim.g.loaded_netrwPlugin = 1
 vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
 vim.o.breakindent = true
-vim.o.clipboard = 'unnamedplus'
-vim.o.completeopt = 'menuone,noselect'
+vim.o.cursorline = true
 vim.o.hlsearch = false
 vim.o.ignorecase = true
 vim.o.mouse = 'a'
@@ -15,15 +14,14 @@ vim.o.termguicolors = true
 vim.o.timeoutlen = 300
 vim.o.undofile = true
 vim.o.updatetime = 250
-vim.o.cursorline = true
+vim.o.wrap = false
 vim.wo.number = true
 vim.wo.signcolumn = 'yes'
 
 vim.api.nvim_set_hl(0, 'CursorLineNr', { fg = 'white' })
+vim.api.nvim_set_hl(0, 'LineNr', { fg = 'gray' })
 
--- [[ Install `lazy.nvim` plugin manager ]]
---    https://github.com/folke/lazy.nvim
---    `:help lazy.nvim.txt` for more info
+
 local lazypath = vim.fn.stdpath 'data' .. '/lazy/lazy.nvim'
 if not vim.loop.fs_stat(lazypath) then
   vim.fn.system {
@@ -31,64 +29,49 @@ if not vim.loop.fs_stat(lazypath) then
     'clone',
     '--filter=blob:none',
     'https://github.com/folke/lazy.nvim.git',
-    '--branch=stable', -- latest stable release
+    '--branch=stable',
     lazypath,
   }
 end
 vim.opt.rtp:prepend(lazypath)
 
 require('lazy').setup({
-  'tpope/vim-fugitive',
-  'tpope/vim-rhubarb',
-  'tpope/vim-sleuth',
   {
     'neovim/nvim-lspconfig',
     dependencies = {
-      'williamboman/mason.nvim',
-      'williamboman/mason-lspconfig.nvim',
-      { 'j-hui/fidget.nvim', tag = 'legacy', opts = {} },
       'folke/neodev.nvim',
+      'j-hui/fidget.nvim',
+      'williamboman/mason-lspconfig.nvim',
+      'williamboman/mason.nvim',
     },
   },
   {
     'hrsh7th/nvim-cmp',
     dependencies = {
       'L3MON4D3/LuaSnip',
-      'saadparwaiz1/cmp_luasnip',
+      'hrsh7th/cmp-buffer',
       'hrsh7th/cmp-nvim-lsp',
+      'hrsh7th/cmp-path',
       'rafamadriz/friendly-snippets',
+      'saadparwaiz1/cmp_luasnip',
     },
   },
   { 'folke/which-key.nvim',  opts = {} },
   {
     'lewis6991/gitsigns.nvim',
     opts = {
-      signs = {
-        add = { text = '+' },
-        change = { text = '~' },
-        delete = { text = '_' },
-        topdelete = { text = '‾' },
-        changedelete = { text = '~' },
-      },
       on_attach = function(bufnr)
-        vim.keymap.set('n', '<leader>hp', require('gitsigns').preview_hunk, { buffer = bufnr, desc = 'Preview git hunk' })
+        vim.keymap.set('n', '<leader>hp', require('gitsigns').preview_hunk,
+          { buffer = bufnr, desc = 'Preview git hunk' })
         local gs = package.loaded.gitsigns
         vim.keymap.set({ 'n', 'v' }, ']c', function()
-          if vim.wo.diff then
-            return ']c'
-          end
-          vim.schedule(function()
-            gs.next_hunk()
-          end)
+          if vim.wo.diff then return ']c' end
+          vim.schedule(function() gs.next_hunk() end)
           return '<Ignore>'
         end, { expr = true, buffer = bufnr, desc = 'Jump to next hunk' })
         vim.keymap.set({ 'n', 'v' }, '[c', function()
-          if vim.wo.diff then
-            return '[c'
-          end
-          vim.schedule(function()
-            gs.prev_hunk()
-          end)
+          if vim.wo.diff then return '[c' end
+          vim.schedule(function() gs.prev_hunk() end)
           return '<Ignore>'
         end, { expr = true, buffer = bufnr, desc = 'Jump to previous hunk' })
       end,
@@ -97,9 +80,7 @@ require('lazy').setup({
   {
     'RRethy/nvim-base16',
     priority = 1000,
-    config = function()
-      vim.cmd.colorscheme 'base16-gruvbox-dark-soft'
-    end,
+    config = function() vim.cmd.colorscheme 'base16-gruvbox-dark-hard' end,
   },
   {
     'nvim-lualine/lualine.nvim',
@@ -121,6 +102,11 @@ require('lazy').setup({
   },
   { 'numToStr/Comment.nvim', opts = {} },
   {
+    'windwp/nvim-autopairs',
+    event = "InsertEnter",
+    opts = {} -- this is equalent to setup({}) function
+  },
+  {
     'nvim-telescope/telescope.nvim',
     branch = '0.1.x',
     dependencies = {
@@ -128,9 +114,7 @@ require('lazy').setup({
       {
         'nvim-telescope/telescope-fzf-native.nvim',
         build = 'make',
-        cond = function()
-          return vim.fn.executable 'make' == 1
-        end,
+        cond = function() return vim.fn.executable 'make' == 1 end,
       },
     },
   },
@@ -177,9 +161,7 @@ vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagn
 -- See `:help vim.highlight.on_yank()`
 local highlight_group = vim.api.nvim_create_augroup('YankHighlight', { clear = true })
 vim.api.nvim_create_autocmd('TextYankPost', {
-  callback = function()
-    vim.highlight.on_yank()
-  end,
+  callback = function() vim.highlight.on_yank() end,
   group = highlight_group,
   pattern = '*',
 })
@@ -216,7 +198,8 @@ local function find_git_root()
   end
 
   -- Find the Git root directory from the current file's path
-  local git_root = vim.fn.systemlist("git -C " .. vim.fn.escape(current_dir, " ") .. " rev-parse --show-toplevel")[1]
+  local git_root = vim.fn.systemlist("git -C " .. vim.fn.escape(current_dir, " ") .. " rev-parse --show-toplevel")
+      [1]
   if vim.v.shell_error ~= 0 then
     print("Not a git repository. Searching on current working directory")
     return cwd
@@ -262,7 +245,7 @@ vim.keymap.set('n', '<leader>sr', require('telescope.builtin').resume, { desc = 
 vim.defer_fn(function()
   require('nvim-treesitter.configs').setup {
     -- Add languages to be installed here that you want installed for treesitter
-    ensure_installed = { 'c', 'cpp', 'go', 'lua', 'python', 'rust', 'tsx', 'javascript', 'typescript', 'vimdoc', 'vim', 'bash' },
+    ensure_installed = { 'lua', 'python', 'rust', 'vimdoc', 'vim', 'bash', 'markdown', 'toml', 'yaml', 'json' },
 
     -- Autoinstall languages that are not installed. Defaults to false (but you can change for yourself!)
     auto_install = false,
@@ -360,9 +343,8 @@ local on_attach = function(_, bufnr)
   nmap('gD', vim.lsp.buf.declaration, '[G]oto [D]eclaration')
   nmap('<leader>wa', vim.lsp.buf.add_workspace_folder, '[W]orkspace [A]dd Folder')
   nmap('<leader>wr', vim.lsp.buf.remove_workspace_folder, '[W]orkspace [R]emove Folder')
-  nmap('<leader>wl', function()
-    print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
-  end, '[W]orkspace [L]ist Folders')
+  nmap('<leader>wl', function() print(vim.inspect(vim.lsp.buf.list_workspace_folders())) end,
+    '[W]orkspace [L]ist Folders')
 
   -- Create a command `:Format` local to the LSP buffer
   vim.api.nvim_buf_create_user_command(bufnr, 'Format', function(_)
