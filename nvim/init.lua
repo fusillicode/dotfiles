@@ -47,15 +47,12 @@ require 'packer'.startup(function(use)
     }
   }
   use 'nvim-lualine/lualine.nvim'
-  use 'nvim-tree/nvim-tree.lua'
-  use 'ahmedkhalf/project.nvim'
   use 'lewis6991/gitsigns.nvim'
   use 'numToStr/Comment.nvim'
   use 'kdarkhan/rust-tools.nvim'
   use { 'saecki/crates.nvim', requires = { 'nvim-lua/plenary.nvim' } }
   use 'bogado/file-line'
   use 'windwp/nvim-autopairs'
-  use 'windwp/nvim-spectre'
   use 'gbprod/cutlass.nvim'
 
   if is_packer_boostrapped then
@@ -198,10 +195,6 @@ require 'Comment'.setup {}
 
 require 'gitsigns'.setup {}
 
-require 'project_nvim'.setup {
-  detection_methods = { 'pattern' },
-  show_hidden = false,
-}
 
 require 'nvim-treesitter.configs'.setup {
   ensure_installed = { 'rust', 'lua', 'python', 'help', 'vim' },
@@ -422,19 +415,6 @@ require 'rust-tools'.setup {
   }
 }
 
-require 'nvim-tree'.setup {
-  renderer = {
-    icons = {
-      show = {
-        file = false,
-        folder = false,
-        folder_arrow = false,
-        git = true,
-        modified = true
-      }
-    }
-  }
-}
 
 require 'nvim-autopairs'.setup {}
 
@@ -453,11 +433,6 @@ require 'telescope'.setup {
       find_command = { 'rg', '--files', '--hidden', '--glob', '!**/.git/*' },
     }
   }
-}
-
-require 'spectre'.setup {
-  open_cmd = 'new',
-  is_insert_mode = true
 }
 
 require 'cutlass'.setup {}
