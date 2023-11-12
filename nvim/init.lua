@@ -1,86 +1,77 @@
-local ensure_packer = function()
-  local fn = vim.fn
-  local install_path = fn.stdpath('data') .. '/site/pack/packer/start/packer.nvim'
-  if fn.empty(fn.glob(install_path)) > 0 then
-    fn.system({ 'git', 'clone', '--depth', '1', 'https://github.com/wbthomason/packer.nvim', install_path })
-    vim.cmd([[packadd packer.nvim]])
-    return true
-  end
-  return false
+vim.g.mapleader = ' '
+vim.g.maplocalleader = ' '
+
+local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
+if not vim.loop.fs_stat(lazypath) then
+  vim.fn.system({
+    "git",
+    "clone",
+    "--filter=blob:none",
+    "https://github.com/folke/lazy.nvim.git",
+    "--branch=stable",
+    lazypath,
+  })
 end
+vim.opt.rtp:prepend(lazypath)
 
-local is_packer_boostrapped = ensure_packer()
-
-require 'packer'.startup(function(use)
-  use 'wbthomason/packer.nvim'
-  use {
+require 'lazy'.setup {
+  {
     'neovim/nvim-lspconfig',
-    requires = {
+    dependencies = {
       'williamboman/mason.nvim',
       'williamboman/mason-lspconfig.nvim',
       'j-hui/fidget.nvim',
       'folke/neodev.nvim',
     },
-  }
-  use {
+  },
+  {
     'hrsh7th/nvim-cmp',
-    requires = {
+    dependencies = {
       'hrsh7th/cmp-nvim-lsp',
       'hrsh7th/cmp-buffer',
       'hrsh7th/cmp-path',
       'saadparwaiz1/cmp_luasnip',
       'L3MON4D3/LuaSnip',
     },
-  }
-  use {
+  },
+  {
     'nvim-treesitter/nvim-treesitter',
-    run = function() pcall(require 'nvim-treesitter.install'.update { with_sync = true }) end,
-  }
-  use { 'nvim-treesitter/nvim-treesitter-textobjects', after = 'nvim-treesitter' }
-  use 'folke/tokyonight.nvim'
-  use {
+    dependencies = { 'nvim-treesitter/nvim-treesitter-textobjects' },
+    build = ':TSUpdate',
+  },
+  {
+    "folke/tokyonight.nvim",
+    lazy = false,
+    priority = 1000,
+    opts = {},
+  },
+  {
     'nvim-telescope/telescope.nvim',
     branch = '0.1.x',
-    requires = {
+    dependencies = {
       'nvim-lua/plenary.nvim',
-      'nvim-telescope/telescope-live-grep-args.nvim'
+      'nvim-telescope/telescope-live-grep-args.nvim',
+      {
+        'nvim-telescope/telescope-fzf-native.nvim',
+        build = 'make',
+        cond = function() return vim.fn.executable 'make' == 1 end,
+      },
     }
-  }
-  use 'nvim-lualine/lualine.nvim'
-  use 'lewis6991/gitsigns.nvim'
-  use 'numToStr/Comment.nvim'
-  use 'kdarkhan/rust-tools.nvim'
-  use { 'saecki/crates.nvim', requires = { 'nvim-lua/plenary.nvim' } }
-  use 'bogado/file-line'
-  use 'windwp/nvim-autopairs'
-  use 'gbprod/cutlass.nvim'
-
-  if is_packer_boostrapped then
-    require 'packer'.sync()
-  end
-end)
-
-if is_packer_boostrapped then
-  print 'Packer not installed :('
-  return
-end
-
-require 'tokyonight'.setup {
-  style = 'night',
-  styles = {
-    types = { bold = true },
-    keywords = { bold = true },
-    functions = { bold = true },
   },
-  dim_inactive = true,
+  'nvim-lualine/lualine.nvim',
+  'lewis6991/gitsigns.nvim',
+  'numToStr/Comment.nvim',
+  'simrat39/rust-tools.nvim',
+  { 'saecki/crates.nvim', dependencies = { 'nvim-lua/plenary.nvim' } },
+  'bogado/file-line',
+  'windwp/nvim-autopairs',
+  'gbprod/cutlass.nvim',
 }
 
 vim.cmd('autocmd BufWritePre * lua vim.lsp.buf.formatting_sync()')
 vim.cmd('autocmd! CursorHold,CursorHoldI * lua vim.diagnostic.open_float(nil, { focus = false })')
-vim.g.loaded_netrw = 1
-vim.g.loaded_netrwPlugin = 1
-vim.g.mapleader = ' '
-vim.g.maplocalleader = ' '
+vim.cmd.colorscheme 'tokyonight'
+
 vim.o.autoindent = true
 vim.o.background = 'dark'
 vim.o.backspace = 'indent,eol,start'
@@ -118,8 +109,6 @@ vim.keymap.set('n', '<esc>', ':noh <CR>', {})
 vim.keymap.set('n', '<C-s>', ':update <CR>', {})
 vim.keymap.set('', '<C-c>', '<C-c> :noh <CR>', {})
 vim.keymap.set('n', '<leader>fd', ':bd! <CR>', {})
-require 'telescope'.load_extension('projects')
-vim.keymap.set('n', '<leader>fp', ':Telescope projects <CR>', {})
 vim.keymap.set('n', '<leader>fo', require 'telescope.builtin'.oldfiles)
 vim.keymap.set('n', '<leader>fb', require 'telescope.builtin'.buffers)
 vim.keymap.set('n', '<leader>ff', require 'telescope.builtin'.find_files)
@@ -128,9 +117,7 @@ vim.keymap.set('n', '<leader>gc', require 'telescope.builtin'.git_commits)
 vim.keymap.set('n', '<leader>gbc', require 'telescope.builtin'.git_bcommits)
 vim.keymap.set('n', '<leader>gb', require 'telescope.builtin'.git_branches)
 vim.keymap.set('n', '<leader>gs', require 'telescope.builtin'.git_status)
-vim.keymap.set('n', '<leader>rf', ':NvimTreeFindFileToggle <CR>', {})
 vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float)
-vim.keymap.set('n', '<leader>s', require 'spectre'.open_visual)
 vim.keymap.set('n', '[d', vim.diagnostic.goto_prev)
 vim.keymap.set('n', ']d', vim.diagnostic.goto_next)
 
@@ -174,6 +161,16 @@ vim.api.nvim_create_autocmd('TextYankPost', {
   pattern = '*',
 })
 
+require 'tokyonight'.setup {
+  style = 'night',
+  styles = {
+    types = { bold = true },
+    keywords = { bold = true },
+    functions = { bold = true },
+  },
+  dim_inactive = true,
+}
+
 require 'lualine'.setup {
   options = {
     icons_enabled = false,
@@ -195,9 +192,8 @@ require 'Comment'.setup {}
 
 require 'gitsigns'.setup {}
 
-
 require 'nvim-treesitter.configs'.setup {
-  ensure_installed = { 'rust', 'lua', 'python', 'help', 'vim' },
+  ensure_installed = { 'rust', 'lua', 'python' },
   sync_install = true,
   auto_install = false,
 
@@ -268,7 +264,7 @@ local lsp_servers = {
       checkOnSave = 'clippy'
     }
   },
-  sumneko_lua = {
+  lua_ls = {
     Lua = {
       workspace = { checkThirdParty = false },
       telemetry = { enable = false },
@@ -278,7 +274,6 @@ local lsp_servers = {
     },
   },
   pyright = {},
-  tsserver = {},
 }
 
 require 'neodev'.setup {}
@@ -434,5 +429,6 @@ require 'telescope'.setup {
     }
   }
 }
+pcall(require('telescope').load_extension, 'fzf')
 
 require 'cutlass'.setup {}
