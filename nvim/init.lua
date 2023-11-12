@@ -132,6 +132,8 @@ vim.wo.signcolumn = 'yes'
 vim.keymap.set({ 'n', 'v' }, 'gh', '0')
 vim.keymap.set({ 'n', 'v' }, 'gl', '$')
 vim.keymap.set({ 'n', 'v' }, 'gs', '_')
+vim.keymap.set({ 'n', 'v' }, 'mm', '%')
+vim.keymap.set({ 'n', 'v' }, 'U', '<C-r>')
 vim.keymap.set({ 'n', 'v' }, '<leader><leader>', ':w! <CR>', {})
 vim.keymap.set({ 'n', 'v' }, '<leader>x', ':bd <CR>', {})
 vim.keymap.set({ 'n', 'v' }, '<leader>X', ':bd! <CR>', {})
@@ -177,7 +179,7 @@ vim.lsp.handlers["textDocument/signatureHelp"] = vim.lsp.with(
 )
 
 vim.diagnostic.config {
-  virtual_text = true,
+  virtual_text = false,
   signs = true,
   update_in_insert = false,
   underline = false,
