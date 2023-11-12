@@ -79,6 +79,7 @@ require 'tokyonight'.setup {
     functions = { bold = true },
   },
   on_highlights = function(highlights, _)
+    highlights.CursorLine = { bg = "#16161e" }
     highlights.CursorLineNr = { fg = "white" }
     highlights.MatchParen = { fg = "black", bg = "orange" }
   end,
@@ -86,9 +87,9 @@ require 'tokyonight'.setup {
 }
 vim.cmd [[colorscheme tokyonight-night]]
 
-vim.api.nvim_create_augroup('LspAutoFormat', {})
+vim.api.nvim_create_augroup('LspFormatOnSave', {})
 vim.api.nvim_create_autocmd('BufWritePre', {
-  group = 'LspAutoFormat',
+  group = 'LspFormatOnSave',
   callback = function() vim.lsp.buf.format({ async = false }) end,
 })
 
@@ -140,23 +141,28 @@ vim.keymap.set({ 'n', 'v' }, '<leader>x', ':bd <CR>', {})
 vim.keymap.set({ 'n', 'v' }, '<leader>X', ':bd! <CR>', {})
 vim.keymap.set({ 'n', 'v' }, '<leader>q', ':q <CR>', {})
 vim.keymap.set({ 'n', 'v' }, '<leader>Q', ':q! <CR>', {})
-
 vim.keymap.set({ 'n', 'v' }, '<leader>', '<Nop>')
 vim.keymap.set({ 'n', 'v' }, '>', '>gv')
 vim.keymap.set({ 'n', 'v' }, '<', '<gv')
+vim.keymap.set({ 'n', 'v' }, 'c', 's')
+vim.keymap.set({ 'n', 'v' }, 'd', 'x')
+vim.keymap.set('n', 'x', '<S-v>$')
+vim.keymap.set('v', 'x', 'j')
+vim.keymap.set('v', '<S-x>', 'k')
+
 vim.keymap.set('n', '<esc>', ':noh <CR>', {})
 vim.keymap.set('n', '<C-s>', ':update <CR>', {})
 vim.keymap.set('', '<C-c>', '<C-c> :noh <CR>', {})
 
 vim.keymap.set('n', '<leader>b', require 'telescope.builtin'.buffers)
 vim.keymap.set('n', '<leader>f', require 'telescope.builtin'.find_files)
-vim.keymap.set('n', '<leader>fw', require 'telescope'.extensions.live_grep_args.live_grep_args)
+vim.keymap.set('n', '<leader>l', require 'telescope'.extensions.live_grep_args.live_grep_args)
 vim.keymap.set('n', '<leader>c', require 'telescope.builtin'.git_commits)
 vim.keymap.set('n', '<leader>bc', require 'telescope.builtin'.git_bcommits)
 vim.keymap.set('n', '<leader>gb', require 'telescope.builtin'.git_branches)
 vim.keymap.set('n', '<leader>s', require 'telescope.builtin'.git_status)
 vim.keymap.set('n', '<leader>d', require 'telescope.builtin'.diagnostics)
-vim.keymap.set('n', '<leader>D', require 'telescope.builtin'.diagnostics, { buffer = 0, noremap = true })
+vim.keymap.set('n', '<leader>D', require 'telescope.builtin'.diagnostics, { buffer = 0 })
 vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float)
 vim.keymap.set('n', 'dp', vim.diagnostic.goto_prev)
 vim.keymap.set('n', 'dn', vim.diagnostic.goto_next)
@@ -170,7 +176,6 @@ local lsp_on_attach = function(_, bufnr)
   vim.keymap.set('n', '<C-k>', vim.lsp.buf.signature_help, { buffer = bufnr })
   vim.keymap.set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr })
   vim.keymap.set('n', '<leader>a', vim.lsp.buf.code_action, { buffer = bufnr })
-  vim.api.nvim_buf_create_user_command(bufnr, 'Format', function(_) vim.lsp.buf.format() end, {})
 end
 
 vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, { border = "single" })
@@ -204,7 +209,7 @@ require 'lualine'.setup {
   sections = {
     lualine_a = {},
     lualine_b = {},
-    lualine_c = { { 'filename', file_status = true, path = 1 }, 'encoding' },
+    lualine_c = { { 'filename', file_status = true, path = 1 } },
     lualine_x = { 'diagnostics' },
     lualine_y = {},
     lualine_z = {}
