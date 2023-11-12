@@ -58,22 +58,46 @@ require 'lazy'.setup {
       },
     }
   },
+  {
+    "folke/todo-comments.nvim",
+    dependencies = { "nvim-lua/plenary.nvim" },
+    opts = {}
+  },
   'nvim-lualine/lualine.nvim',
   'lewis6991/gitsigns.nvim',
   'numToStr/Comment.nvim',
   'simrat39/rust-tools.nvim',
   { 'saecki/crates.nvim', dependencies = { 'nvim-lua/plenary.nvim' } },
   'bogado/file-line',
-  'windwp/nvim-autopairs',
-  'gbprod/cutlass.nvim',
+  'windwp/nvim-autopairs'
 }
 
-vim.cmd('autocmd BufWritePre * lua vim.lsp.buf.formatting_sync()')
-vim.cmd('autocmd! CursorHold,CursorHoldI * lua vim.diagnostic.open_float(nil, { focus = false })')
-vim.cmd.colorscheme 'tokyonight'
+require 'tokyonight'.setup {
+  styles = {
+    types = { bold = true },
+    keywords = { bold = true },
+    functions = { bold = true },
+  },
+  dim_inactive = true,
+}
+vim.cmd [[colorscheme tokyonight-night]]
+
+-- vim.api.nvim_create_augroup('LspAutoFormat', {})
+-- vim.api.nvim_create_autocmd('BufWritePre', {
+--   group = 'LspAutoFormat',
+--   callback = function() vim.lsp.buf.format({ async = false }) end,
+-- })
+-- vim.cmd('autocmd! CursorHold,CursorHoldI * lua vim.diagnostic.open_float(nil, { focus = false })')
+-- vim.cmd.colorscheme 'tokyonight'
+--
+-- vim.api.nvim_create_augroup('YankHighlight', { clear = true })
+-- vim.api.nvim_create_autocmd('TextYankPost', {
+--   group = 'YankHighlight',
+--   pattern = '*',
+--   callback = function() vim.highlight.on_yank() end,
+-- })
 
 vim.o.autoindent = true
-vim.o.background = 'dark'
 vim.o.backspace = 'indent,eol,start'
 vim.o.breakindent = true
 vim.o.colorcolumn = '120'
@@ -102,21 +126,28 @@ vim.opt.iskeyword:append('-')
 vim.wo.number = true
 vim.wo.signcolumn = 'yes'
 
+vim.keymap.set({ 'n', 'v' }, 'gh', '0')
+vim.keymap.set({ 'n', 'v' }, 'gl', '$')
+vim.keymap.set({ 'n', 'v' }, 'gs', '_')
+vim.keymap.set({ 'n', 'v' }, '<leader><leader>', ':w! <CR>', {})
+vim.keymap.set({ 'n', 'v' }, '<leader>x', ':bd <CR>', {})
+vim.keymap.set({ 'n', 'v' }, '<leader>X', ':bd! <CR>', {})
+vim.keymap.set({ 'n', 'v' }, '<leader>q', ':q <CR>', {})
+vim.keymap.set({ 'n', 'v' }, '<leader>Q', ':q! <CR>', {})
+
 vim.keymap.set({ 'n', 'v' }, '<leader>', '<Nop>')
 vim.keymap.set('v', '>', '>gv')
 vim.keymap.set('v', '<', '<gv')
 vim.keymap.set('n', '<esc>', ':noh <CR>', {})
 vim.keymap.set('n', '<C-s>', ':update <CR>', {})
 vim.keymap.set('', '<C-c>', '<C-c> :noh <CR>', {})
-vim.keymap.set('n', '<leader>fd', ':bd! <CR>', {})
-vim.keymap.set('n', '<leader>fo', require 'telescope.builtin'.oldfiles)
-vim.keymap.set('n', '<leader>fb', require 'telescope.builtin'.buffers)
-vim.keymap.set('n', '<leader>ff', require 'telescope.builtin'.find_files)
+vim.keymap.set('n', '<leader>b', require 'telescope.builtin'.buffers)
+vim.keymap.set('n', '<leader>f', require 'telescope.builtin'.find_files)
 vim.keymap.set('n', '<leader>fw', require('telescope').extensions.live_grep_args.live_grep_args)
-vim.keymap.set('n', '<leader>gc', require 'telescope.builtin'.git_commits)
-vim.keymap.set('n', '<leader>gbc', require 'telescope.builtin'.git_bcommits)
+vim.keymap.set('n', '<leader>c', require 'telescope.builtin'.git_commits)
+vim.keymap.set('n', '<leader>bc', require 'telescope.builtin'.git_bcommits)
 vim.keymap.set('n', '<leader>gb', require 'telescope.builtin'.git_branches)
-vim.keymap.set('n', '<leader>gs', require 'telescope.builtin'.git_status)
+vim.keymap.set('n', '<leader>s', require 'telescope.builtin'.git_status)
 vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float)
 vim.keymap.set('n', '[d', vim.diagnostic.goto_prev)
 vim.keymap.set('n', ']d', vim.diagnostic.goto_next)
@@ -128,8 +159,8 @@ local lsp_on_attach = function(_, bufnr)
   vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, { buffer = bufnr })
   vim.keymap.set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr })
   vim.keymap.set('n', '<C-k>', vim.lsp.buf.signature_help, { buffer = bufnr })
-  vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, { buffer = bufnr })
-  vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, { buffer = bufnr })
+  vim.keymap.set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr })
+  vim.keymap.set('n', '<leader>a', vim.lsp.buf.code_action, { buffer = bufnr })
   vim.api.nvim_buf_create_user_command(bufnr, 'Format', function(_) vim.lsp.buf.format() end, {})
 end
 
@@ -154,23 +185,6 @@ vim.diagnostic.config {
   },
 }
 
-local highlight_group = vim.api.nvim_create_augroup('YankHighlight', { clear = true })
-vim.api.nvim_create_autocmd('TextYankPost', {
-  callback = function() vim.highlight.on_yank() end,
-  group = highlight_group,
-  pattern = '*',
-})
-
-require 'tokyonight'.setup {
-  style = 'night',
-  styles = {
-    types = { bold = true },
-    keywords = { bold = true },
-    functions = { bold = true },
-  },
-  dim_inactive = true,
-}
-
 require 'lualine'.setup {
   options = {
     icons_enabled = false,
@@ -181,8 +195,8 @@ require 'lualine'.setup {
   sections = {
     lualine_a = {},
     lualine_b = {},
-    lualine_c = { 'diagnostics', 'diff', { 'filename', file_status = true, path = 1 }, 'encoding' },
-    lualine_x = { { 'branch', fmt = function(str) return str:sub(1, 33) end } },
+    lualine_c = { { 'filename', file_status = true, path = 1 }, 'encoding' },
+    lualine_x = { 'diagnostics', 'location' },
     lualine_y = {},
     lualine_z = {}
   },
@@ -352,49 +366,7 @@ cmp.setup {
   },
 }
 
-require 'crates'.setup {
-  text = {
-    loading = '  Loading...',
-    version = '  %s',
-    prerelease = '  %s',
-    yanked = '  %s yanked',
-    nomatch = '  Not found',
-    upgrade = '  %s',
-    error = '  Error fetching crate',
-  },
-  popup = {
-    text = {
-      title = '# %s',
-      pill_left = '',
-      pill_right = '',
-      created_label = 'created        ',
-      updated_label = 'updated        ',
-      downloads_label = 'downloads      ',
-      homepage_label = 'homepage       ',
-      repository_label = 'repository     ',
-      documentation_label = 'documentation  ',
-      crates_io_label = 'crates.io      ',
-      categories_label = 'categories     ',
-      keywords_label = 'keywords       ',
-      version = '%s',
-      prerelease = '%s pre-release',
-      yanked = '%s yanked',
-      enabled = '* s',
-      transitive = '~ s',
-      normal_dependencies_title = '  Dependencies',
-      build_dependencies_title = '  Build dependencies',
-      dev_dependencies_title = '  Dev dependencies',
-      optional = '? %s',
-      loading = ' ...',
-    },
-  },
-  src = {
-    text = {
-      prerelease = ' pre-release ',
-      yanked = ' yanked ',
-    },
-  },
-}
+require 'crates'.setup {}
 
 require 'rust-tools'.setup {
   tools = {
@@ -414,21 +386,10 @@ require 'rust-tools'.setup {
 require 'nvim-autopairs'.setup {}
 
 require 'telescope'.setup {
-  defaults = require 'telescope.themes'.get_ivy {
-    layout_config = {
-      height = 13
-    }
-  },
   pickers = {
     find_files = {
-      theme = 'ivy',
-      layout_config = {
-        height = 13
-      },
       find_command = { 'rg', '--files', '--hidden', '--glob', '!**/.git/*' },
     }
   }
 }
 pcall(require('telescope').load_extension, 'fzf')
-
-require 'cutlass'.setup {}

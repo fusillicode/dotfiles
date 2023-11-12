@@ -6,7 +6,6 @@
   "cmp-path": { "branch": "main", "commit": "91ff86cd9c29299a64f968ebb45846c485725f23" },
   "cmp_luasnip": { "branch": "master", "commit": "05a9ab28b53f71d1aece421ef32fee2cb857a843" },
   "crates.nvim": { "branch": "main", "commit": "f47c77d99f11362ddc2f4891f35407fb0b76d485" },
-  "cutlass.nvim": { "branch": "main", "commit": "708864fb2263226aabceaf5b2c2eee9841132668" },
   "fidget.nvim": { "branch": "main", "commit": "1f56334e398c5aff0ff711881da74840e22fc51d" },
   "file-line": { "branch": "main", "commit": "559088afaf10124ea663ee0f4f73b1de48fb1632" },
   "gitsigns.nvim": { "branch": "main", "commit": "af0f583cd35286dd6f0e3ed52622728703237e50" },
@@ -25,5 +24,6 @@
   "telescope-fzf-native.nvim": { "branch": "main", "commit": "6c921ca12321edaa773e324ef64ea301a1d0da62" },
   "telescope-live-grep-args.nvim": { "branch": "master", "commit": "851c0997d55601f2afd7290db0f90dc364e29f58" },
   "telescope.nvim": { "branch": "0.1.x", "commit": "7011eaae0ac1afe036e30c95cf80200b8dc3f21a" },
+  "todo-comments.nvim": { "branch": "main", "commit": "4a6737a8d70fe1ac55c64dfa47fcb189ca431872" },
   "tokyonight.nvim": { "branch": "main", "commit": "f247ee700b569ed43f39320413a13ba9b0aef0db" }
 }
