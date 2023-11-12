@@ -100,7 +100,17 @@ vim.api.nvim_create_autocmd('TextYankPost', {
   callback = function() vim.highlight.on_yank() end,
 })
 
--- vim.cmd('autocmd! CursorHold,CursorHoldI * lua vim.diagnostic.open_float(nil, { focus = false })')
+vim.api.nvim_create_autocmd("CursorHold", {
+  buffer = bufnr,
+  callback = function()
+    vim.diagnostic.open_float(nil, {
+      focusable = false,
+      close_events = { "BufLeave", "CursorMoved", "InsertEnter", "FocusLost" },
+      source = 'always',
+      scope = 'cursor',
+    })
+  end
+})
 
 vim.o.autoindent = true
 vim.o.backspace = 'indent,eol,start'
@@ -144,11 +154,11 @@ vim.keymap.set({ 'n', 'v' }, '<leader>Q', ':q! <CR>', {})
 vim.keymap.set({ 'n', 'v' }, '<leader>', '<Nop>')
 vim.keymap.set({ 'n', 'v' }, '>', '>gv')
 vim.keymap.set({ 'n', 'v' }, '<', '<gv')
-vim.keymap.set({ 'n', 'v' }, 'c', 's')
-vim.keymap.set({ 'n', 'v' }, 'd', 'x')
-vim.keymap.set('n', 'x', '<S-v>$')
-vim.keymap.set('v', 'x', 'j')
-vim.keymap.set('v', '<S-x>', 'k')
+-- vim.keymap.set({ 'n', 'v' }, 'c', 's')
+-- vim.keymap.set({ 'n', 'v' }, 'd', 'x')
+-- vim.keymap.set('n', 'x', '<S-v>$')
+-- vim.keymap.set('v', 'x', 'j')
+-- vim.keymap.set('v', '<S-x>', 'k')
 
 vim.keymap.set('n', '<esc>', ':noh <CR>', {})
 vim.keymap.set('n', '<C-s>', ':update <CR>', {})
