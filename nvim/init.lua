@@ -78,6 +78,9 @@ require 'tokyonight'.setup {
     keywords = { bold = true },
     functions = { bold = true },
   },
+  on_highlights = function (highlights, _)
+    highlights.CursorLineNr = { fg = "white" }
+  end,
   dim_inactive = true,
 }
 vim.cmd [[colorscheme tokyonight-night]]
@@ -141,6 +144,7 @@ vim.keymap.set('v', '<', '<gv')
 vim.keymap.set('n', '<esc>', ':noh <CR>', {})
 vim.keymap.set('n', '<C-s>', ':update <CR>', {})
 vim.keymap.set('', '<C-c>', '<C-c> :noh <CR>', {})
+
 vim.keymap.set('n', '<leader>b', require 'telescope.builtin'.buffers)
 vim.keymap.set('n', '<leader>f', require 'telescope.builtin'.find_files)
 vim.keymap.set('n', '<leader>fw', require('telescope').extensions.live_grep_args.live_grep_args)
@@ -148,6 +152,9 @@ vim.keymap.set('n', '<leader>c', require 'telescope.builtin'.git_commits)
 vim.keymap.set('n', '<leader>bc', require 'telescope.builtin'.git_bcommits)
 vim.keymap.set('n', '<leader>gb', require 'telescope.builtin'.git_branches)
 vim.keymap.set('n', '<leader>s', require 'telescope.builtin'.git_status)
+
+vim.keymap.set('n', '<leader>d', require 'telescope.builtin'.diagnostics)
+vim.keymap.set('n', '<leader>D', require 'telescope.builtin'.diagnostics, {buffer = 0})
 vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float)
 vim.keymap.set('n', '[d', vim.diagnostic.goto_prev)
 vim.keymap.set('n', ']d', vim.diagnostic.goto_next)
@@ -392,4 +399,4 @@ require 'telescope'.setup {
     }
   }
 }
-pcall(require('telescope').load_extension, 'fzf')
+require('telescope').load_extension('fzf')
