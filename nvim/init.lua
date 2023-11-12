@@ -78,27 +78,28 @@ require 'tokyonight'.setup {
     keywords = { bold = true },
     functions = { bold = true },
   },
-  on_highlights = function (highlights, _)
+  on_highlights = function(highlights, _)
     highlights.CursorLineNr = { fg = "white" }
+    highlights.MatchParen = { fg = "black", bg = "orange" }
   end,
   dim_inactive = true,
 }
 vim.cmd [[colorscheme tokyonight-night]]
 
--- vim.api.nvim_create_augroup('LspAutoFormat', {})
--- vim.api.nvim_create_autocmd('BufWritePre', {
---   group = 'LspAutoFormat',
---   callback = function() vim.lsp.buf.format({ async = false }) end,
--- })
+vim.api.nvim_create_augroup('LspAutoFormat', {})
+vim.api.nvim_create_autocmd('BufWritePre', {
+  group = 'LspAutoFormat',
+  callback = function() vim.lsp.buf.format({ async = false }) end,
+})
+
+vim.api.nvim_create_augroup('YankHighlight', { clear = true })
+vim.api.nvim_create_autocmd('TextYankPost', {
+  group = 'YankHighlight',
+  pattern = '*',
+  callback = function() vim.highlight.on_yank() end,
+})
+
 -- vim.cmd('autocmd! CursorHold,CursorHoldI * lua vim.diagnostic.open_float(nil, { focus = false })')
--- vim.cmd.colorscheme 'tokyonight'
---
--- vim.api.nvim_create_augroup('YankHighlight', { clear = true })
--- vim.api.nvim_create_autocmd('TextYankPost', {
---   group = 'YankHighlight',
---   pattern = '*',
---   callback = function() vim.highlight.on_yank() end,
--- })
 
 vim.o.autoindent = true
 vim.o.backspace = 'indent,eol,start'
@@ -141,25 +142,24 @@ vim.keymap.set({ 'n', 'v' }, '<leader>q', ':q <CR>', {})
 vim.keymap.set({ 'n', 'v' }, '<leader>Q', ':q! <CR>', {})
 
 vim.keymap.set({ 'n', 'v' }, '<leader>', '<Nop>')
-vim.keymap.set('v', '>', '>gv')
-vim.keymap.set('v', '<', '<gv')
+vim.keymap.set({ 'n', 'v' }, '>', '>gv')
+vim.keymap.set({ 'n', 'v' }, '<', '<gv')
 vim.keymap.set('n', '<esc>', ':noh <CR>', {})
 vim.keymap.set('n', '<C-s>', ':update <CR>', {})
 vim.keymap.set('', '<C-c>', '<C-c> :noh <CR>', {})
 
 vim.keymap.set('n', '<leader>b', require 'telescope.builtin'.buffers)
 vim.keymap.set('n', '<leader>f', require 'telescope.builtin'.find_files)
-vim.keymap.set('n', '<leader>fw', require('telescope').extensions.live_grep_args.live_grep_args)
+vim.keymap.set('n', '<leader>fw', require 'telescope'.extensions.live_grep_args.live_grep_args)
 vim.keymap.set('n', '<leader>c', require 'telescope.builtin'.git_commits)
 vim.keymap.set('n', '<leader>bc', require 'telescope.builtin'.git_bcommits)
 vim.keymap.set('n', '<leader>gb', require 'telescope.builtin'.git_branches)
 vim.keymap.set('n', '<leader>s', require 'telescope.builtin'.git_status)
-
 vim.keymap.set('n', '<leader>d', require 'telescope.builtin'.diagnostics)
-vim.keymap.set('n', '<leader>D', require 'telescope.builtin'.diagnostics, {buffer = 0})
+vim.keymap.set('n', '<leader>D', require 'telescope.builtin'.diagnostics, { buffer = 0, noremap = true })
 vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float)
-vim.keymap.set('n', '[d', vim.diagnostic.goto_prev)
-vim.keymap.set('n', ']d', vim.diagnostic.goto_next)
+vim.keymap.set('n', 'dp', vim.diagnostic.goto_prev)
+vim.keymap.set('n', 'dn', vim.diagnostic.goto_next)
 
 local lsp_on_attach = function(_, bufnr)
   vim.keymap.set('n', 'gd', vim.lsp.buf.definition, { buffer = bufnr })
@@ -205,13 +205,13 @@ require 'lualine'.setup {
     lualine_a = {},
     lualine_b = {},
     lualine_c = { { 'filename', file_status = true, path = 1 }, 'encoding' },
-    lualine_x = { 'diagnostics', 'location' },
+    lualine_x = { 'diagnostics' },
     lualine_y = {},
     lualine_z = {}
   },
 }
 
-require 'Comment'.setup {}
+require 'Comment'.setup { toggler = { line = '<C-c>' }, opleader = { line = '<C-c>' } }
 
 require 'gitsigns'.setup {}
 
@@ -401,4 +401,4 @@ require 'telescope'.setup {
     }
   }
 }
-require('telescope').load_extension('fzf')
+require 'telescope'.load_extension('fzf')

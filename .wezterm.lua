@@ -23,12 +23,14 @@ end
 local background = '0f1419'
 config.animation_fps = 1
 config.colors = {
-  foreground = 'white',
+  cursor_bg = 'white',
+  cursor_border = 'white',
   background = background,
+  foreground = 'white',
   tab_bar = {
     active_tab = { bg_color = background, fg_color = 'lime', },
     inactive_tab = { bg_color = background, fg_color = 'grey', }
-  }
+  },
 }
 config.cursor_blink_ease_in = 'Constant'
 config.cursor_blink_ease_out = 'Constant'
