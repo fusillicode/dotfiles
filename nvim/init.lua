@@ -64,7 +64,7 @@ require 'lazy'.setup {
     opts = { signs = false }
   },
   { 'saecki/crates.nvim',   dependencies = { 'nvim-lua/plenary.nvim' } },
-  { 'ruifm/gitlinker.nvim', dependencies = 'nvim-lua/plenary.nvim' },
+  { 'ruifm/gitlinker.nvim', dependencies = { 'nvim-lua/plenary.nvim' } },
   'nvim-lualine/lualine.nvim',
   'lewis6991/gitsigns.nvim',
   'numToStr/Comment.nvim',
@@ -76,9 +76,10 @@ require 'lazy'.setup {
 
 require 'tokyonight'.setup {
   styles = {
-    types = { bold = true },
-    keywords = { bold = true },
+    comments = { italic = false },
     functions = { bold = true },
+    keywords = { bold = true, italic = false },
+    types = { bold = true },
   },
   on_highlights = function(highlights, _)
     highlights.CursorLine = { bg = "#16161e" }
