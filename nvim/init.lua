@@ -175,13 +175,13 @@ vim.keymap.set('n', '<leader>l', require 'telescope'.extensions.live_grep_args.l
 vim.keymap.set('n', '<leader>c', require 'telescope.builtin'.git_commits)
 vim.keymap.set('n', '<leader>bc', require 'telescope.builtin'.git_bcommits)
 vim.keymap.set('n', '<leader>gb', require 'telescope.builtin'.git_branches)
-vim.keymap.set('n', '<leader>s', require 'telescope.builtin'.git_status)
+vim.keymap.set('n', '<leader>gs', require 'telescope.builtin'.git_status)
 vim.keymap.set('n', '<leader>d', require 'telescope.builtin'.diagnostics, { buffer = 0 })
 vim.keymap.set('n', '<leader>D', require 'telescope.builtin'.diagnostics)
 vim.keymap.set('n', '<leader>s', require 'telescope.builtin'.lsp_document_symbols)
 vim.keymap.set('n', '<leader>S', require 'telescope.builtin'.lsp_workspace_symbols)
 vim.keymap.set('n', '<leader>t', ':TodoTelescope<CR>')
-vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float)
+vim.keymap.set('n', '<leader>z', vim.diagnostic.open_float)
 
 local lsp_keybindings = function(_, bufnr)
   vim.keymap.set('n', 'gd', require 'telescope.builtin'.lsp_definitions, { buffer = bufnr })
@@ -331,7 +331,7 @@ cmp.setup {
   },
   mapping = cmp.mapping.preset.insert {
     ['<C-d>'] = cmp.mapping.scroll_docs(-4),
-    ['<C-f>'] = cmp.mapping.scroll_docs(4),
+    ['<C-u>'] = cmp.mapping.scroll_docs(4),
     ['<C-Space>'] = cmp.mapping.complete(),
     ['<CR>'] = cmp.mapping.confirm {
       behavior = cmp.ConfirmBehavior.Replace,
