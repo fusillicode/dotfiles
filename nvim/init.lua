@@ -70,7 +70,8 @@ require 'lazy'.setup {
   { 'saecki/crates.nvim',   dependencies = { 'nvim-lua/plenary.nvim' } },
   'bogado/file-line',
   'windwp/nvim-autopairs',
-  { 'ruifm/gitlinker.nvim', dependencies = 'nvim-lua/plenary.nvim' }
+  { 'ruifm/gitlinker.nvim', dependencies = 'nvim-lua/plenary.nvim' },
+  'andymass/vim-matchup',
 }
 
 require 'tokyonight'.setup {
@@ -83,7 +84,6 @@ require 'tokyonight'.setup {
     highlights.CursorLine = { bg = "#16161e" }
     highlights.CursorLineNr = { fg = "white" }
     highlights.MatchParen = { fg = "black", bg = "orange" }
-    highlights.IncSearch = { fg = "orange" }
   end,
   dim_inactive = true,
 }
@@ -149,7 +149,7 @@ vim.keymap.set('', 'ga', '<C-^>', {})
 vim.keymap.set({ 'n', 'v' }, 'gh', '0')
 vim.keymap.set({ 'n', 'v' }, 'gl', '$')
 vim.keymap.set({ 'n', 'v' }, 'gs', '_')
-vim.keymap.set({ 'n', 'v' }, 'mm', '%')
+vim.keymap.set({ 'n', 'v' }, 'mm', '%', { remap = true })
 vim.keymap.set({ 'n', 'v' }, 'U', '<C-r>')
 vim.keymap.set({ 'n', 'v' }, '>', '>gv')
 vim.keymap.set({ 'n', 'v' }, '<', '<gv')
@@ -239,6 +239,7 @@ require 'Comment'.setup { toggler = { line = '<C-c>' }, opleader = { line = '<C-
 require 'gitsigns'.setup {}
 
 require 'nvim-treesitter.configs'.setup {
+  matchup = { enable = true },
   ensure_installed = { 'rust', 'lua', 'python' },
   sync_install = true,
   auto_install = false,
