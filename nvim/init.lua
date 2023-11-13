@@ -67,9 +67,10 @@ require 'lazy'.setup {
   'lewis6991/gitsigns.nvim',
   'numToStr/Comment.nvim',
   'simrat39/rust-tools.nvim',
-  { 'saecki/crates.nvim', dependencies = { 'nvim-lua/plenary.nvim' } },
+  { 'saecki/crates.nvim',   dependencies = { 'nvim-lua/plenary.nvim' } },
   'bogado/file-line',
-  'windwp/nvim-autopairs'
+  'windwp/nvim-autopairs',
+  { 'ruifm/gitlinker.nvim', dependencies = 'nvim-lua/plenary.nvim' }
 }
 
 require 'tokyonight'.setup {
@@ -436,3 +437,5 @@ require 'telescope'.setup {
   }
 }
 require 'telescope'.load_extension('fzf')
+
+require 'gitlinker'.setup {}
