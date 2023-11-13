@@ -292,16 +292,44 @@ require 'nvim-treesitter.configs'.setup {
   },
 }
 
+-- [language-server.rust-analyzer]
+-- config.check.command = "clippy"
+-- config.checkOnSave.command = "clippy"
+-- config.completion.autoimport.enable = true
+-- config.imports.granularity.enforce = true
+-- config.imports.granularity.group = "item"
+-- config.imports.prefix = "crate"
+-- config.lens.debug.enable = false
+-- config.lens.implementations.enable = false
+-- config.lens.run.enable = false
+-- config.showUnlinkedFileNotification = false
+-- config.cargo.extraArgs = ["--profile", "rust-analyzer"]
+-- config.cargo.extraEnv = { "CARGO_PROFILE_RUST_ANALYZER_INHERITS" = "dev" }
 local lsp_servers = {
   rust_analyzer = {
     ['rust-analyzer'] = {
+      check = { command = 'clippy' },
+      checkOnSave = { command = 'clippy' },
+      completion = {
+        autoimport = { enable = true }
+      },
       imports = {
+        enforce = true,
         granularity = {
           group = 'item',
         },
         prefix = 'crate',
       },
-      checkOnSave = 'clippy'
+      lens = {
+        debug = { enable = false },
+        implementations = { enable = false },
+        run = { enable = false },
+      },
+      showUnlinkedFileNotification = false,
+      cargo = {
+        extraArgs = { "--profile", "rust-analyzer" },
+        extraEnv = { CARGO_PROFILE_RUST_ANALYZER_INHERITS = "dev" },
+      }
     }
   },
   lua_ls = {
