@@ -143,9 +143,9 @@ vim.opt.iskeyword:append('-')
 vim.wo.number = true
 vim.wo.signcolumn = 'yes'
 
-vim.keymap.set('', 'gn', ':bnext<CR>', {})
-vim.keymap.set('', 'gp', ':bprevious<CR>', {})
-vim.keymap.set('', 'ga', '<C-^>', {})
+vim.keymap.set('', 'gn', ':bnext<CR>')
+vim.keymap.set('', 'gp', ':bprevious<CR>')
+vim.keymap.set('', 'ga', '<C-^>')
 vim.keymap.set({ 'n', 'v' }, 'gh', '0')
 vim.keymap.set({ 'n', 'v' }, 'gl', '$')
 vim.keymap.set({ 'n', 'v' }, 'gs', '_')
@@ -153,18 +153,20 @@ vim.keymap.set({ 'n', 'v' }, 'mm', '%', { remap = true })
 vim.keymap.set({ 'n', 'v' }, 'U', '<C-r>')
 vim.keymap.set({ 'n', 'v' }, '>', '>gv')
 vim.keymap.set({ 'n', 'v' }, '<', '<gv')
+vim.keymap.set("n", "<C-u>", "<C-u>zz")
+vim.keymap.set("n", "<C-d>", "<C-d>zz")
 vim.keymap.set('n', 'dp', vim.diagnostic.goto_prev)
 vim.keymap.set('n', 'dn', vim.diagnostic.goto_next)
-vim.keymap.set('n', '<esc>', ':noh<CR>', {})
-vim.keymap.set('n', '<C-s>', ':update<CR>', {})
-vim.keymap.set('', '<C-c>', '<C-c>:noh<CR>', {})
-vim.keymap.set('', '<C-r>', ':LspRestart<CR>', {})
+vim.keymap.set('n', '<esc>', ':noh<CR>')
+vim.keymap.set('n', '<C-s>', ':update<CR>')
+vim.keymap.set('', '<C-c>', '<C-c>:noh<CR>')
+vim.keymap.set('', '<C-r>', ':LspRestart<CR>')
 
-vim.keymap.set({ 'n', 'v' }, '<leader><leader>', ':w! <CR>', {})
-vim.keymap.set({ 'n', 'v' }, '<leader>x', ':bd <CR>', {})
-vim.keymap.set({ 'n', 'v' }, '<leader>X', ':bd! <CR>', {})
-vim.keymap.set({ 'n', 'v' }, '<leader>q', ':q <CR>', {})
-vim.keymap.set({ 'n', 'v' }, '<leader>Q', ':q! <CR>', {})
+vim.keymap.set({ 'n', 'v' }, '<leader><leader>', ':w! <CR>')
+vim.keymap.set({ 'n', 'v' }, '<leader>x', ':bd <CR>')
+vim.keymap.set({ 'n', 'v' }, '<leader>X', ':bd! <CR>')
+vim.keymap.set({ 'n', 'v' }, '<leader>q', ':q <CR>')
+vim.keymap.set({ 'n', 'v' }, '<leader>Q', ':q! <CR>')
 vim.keymap.set({ 'n', 'v' }, '<leader>', '<Nop>')
 vim.keymap.set('n', '<leader>b', require 'telescope.builtin'.buffers)
 vim.keymap.set('n', '<leader>f', require 'telescope.builtin'.find_files)
@@ -244,10 +246,10 @@ require 'nvim-treesitter.configs'.setup {
       enable = true,
       set_jumps = true,
       goto_next_start = {
-        ['L'] = '@block.outer',
+        ['<C-l>'] = '@block.outer',
       },
       goto_previous_end = {
-        ['H'] = '@block.outer',
+        ['<C-h>'] = '@block.outer',
       },
     },
   },
