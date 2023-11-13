@@ -163,6 +163,7 @@ vim.keymap.set({ 'n', 'v' }, '<', '<gv')
 vim.keymap.set('n', '<esc>', ':noh <CR>', {})
 vim.keymap.set('n', '<C-s>', ':update <CR>', {})
 vim.keymap.set('', '<C-c>', '<C-c> :noh <CR>', {})
+vim.keymap.set('', '<C-r>', ':LspRestart <CR>', {})
 
 vim.keymap.set('n', '<leader>b', require 'telescope.builtin'.buffers)
 vim.keymap.set('n', '<leader>f', require 'telescope.builtin'.find_files)
@@ -179,7 +180,7 @@ vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float)
 vim.keymap.set('n', 'dp', vim.diagnostic.goto_prev)
 vim.keymap.set('n', 'dn', vim.diagnostic.goto_next)
 
-local lsp_on_attach = function(_, bufnr)
+local lsp_keybindings = function(_, bufnr)
   vim.keymap.set('n', 'gd', vim.lsp.buf.definition, { buffer = bufnr })
   vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, { buffer = bufnr })
   vim.keymap.set('n', 'gr', require 'telescope.builtin'.lsp_references, { buffer = bufnr })
@@ -360,7 +361,7 @@ mason_lspconfig.setup_handlers {
   function(server_name)
     require 'lspconfig'[server_name].setup {
       capabilities = capabilities,
-      on_attach = lsp_on_attach,
+      on_attach = lsp_keybindings,
       settings = lsp_servers[server_name],
     }
   end,
@@ -431,7 +432,7 @@ require 'rust-tools'.setup {
     }
   },
   server = {
-    on_attach = lsp_on_attach,
+    on_attach = lsp_keybindings,
     settings = lsp_servers['rust_analyzer']
   }
 }
