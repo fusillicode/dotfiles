@@ -317,12 +317,7 @@ mason_lspconfig.setup_handlers {
   end,
 }
 
-require 'fidget'.setup {
-  align = {
-    bottom = false,
-    right = true,
-  },
-}
+require 'fidget'.setup {}
 
 local cmp = require 'cmp'
 local luasnip = require 'luasnip'
