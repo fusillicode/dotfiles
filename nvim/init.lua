@@ -82,8 +82,9 @@ require 'tokyonight'.setup {
   },
   on_highlights = function(highlights, _)
     highlights.CursorLine = { bg = "#16161e" }
-    highlights.CursorLineNr = { fg = "white" }
+    highlights.CursorLineNr = { fg = "white", bold = true }
     highlights.MatchParen = { fg = "black", bg = "orange" }
+    highlights.LineNr = { fg = "gray" }
   end,
   dim_inactive = true,
 }
