@@ -83,6 +83,7 @@ require 'tokyonight'.setup {
     highlights.CursorLine = { bg = "#16161e" }
     highlights.CursorLineNr = { fg = "white" }
     highlights.MatchParen = { fg = "black", bg = "orange" }
+    highlights.IncSearch = { fg = "orange" }
   end,
   dim_inactive = true,
 }
@@ -142,17 +143,14 @@ vim.opt.iskeyword:append('-')
 vim.wo.number = true
 vim.wo.signcolumn = 'yes'
 
+vim.keymap.set('', 'gn', ':bnext<CR>', {})
+vim.keymap.set('', 'gp', ':bprevious<CR>', {})
+vim.keymap.set('', 'ga', '<C-^>', {})
 vim.keymap.set({ 'n', 'v' }, 'gh', '0')
 vim.keymap.set({ 'n', 'v' }, 'gl', '$')
 vim.keymap.set({ 'n', 'v' }, 'gs', '_')
 vim.keymap.set({ 'n', 'v' }, 'mm', '%')
 vim.keymap.set({ 'n', 'v' }, 'U', '<C-r>')
-vim.keymap.set({ 'n', 'v' }, '<leader><leader>', ':w! <CR>', {})
-vim.keymap.set({ 'n', 'v' }, '<leader>x', ':bd <CR>', {})
-vim.keymap.set({ 'n', 'v' }, '<leader>X', ':bd! <CR>', {})
-vim.keymap.set({ 'n', 'v' }, '<leader>q', ':q <CR>', {})
-vim.keymap.set({ 'n', 'v' }, '<leader>Q', ':q! <CR>', {})
-vim.keymap.set({ 'n', 'v' }, '<leader>', '<Nop>')
 vim.keymap.set({ 'n', 'v' }, '>', '>gv')
 vim.keymap.set({ 'n', 'v' }, '<', '<gv')
 -- vim.keymap.set({ 'n', 'v' }, 'c', 's')
@@ -160,12 +158,19 @@ vim.keymap.set({ 'n', 'v' }, '<', '<gv')
 -- vim.keymap.set('n', 'x', '<S-v>$')
 -- vim.keymap.set('v', 'x', 'j')
 -- vim.keymap.set('v', '<S-x>', 'k')
-
+vim.keymap.set('n', 'dp', vim.diagnostic.goto_prev)
+vim.keymap.set('n', 'dn', vim.diagnostic.goto_next)
 vim.keymap.set('n', '<esc>', ':noh<CR>', {})
 vim.keymap.set('n', '<C-s>', ':update<CR>', {})
 vim.keymap.set('', '<C-c>', '<C-c>:noh<CR>', {})
 vim.keymap.set('', '<C-r>', ':LspRestart<CR>', {})
 
+vim.keymap.set({ 'n', 'v' }, '<leader><leader>', ':w! <CR>', {})
+vim.keymap.set({ 'n', 'v' }, '<leader>x', ':bd <CR>', {})
+vim.keymap.set({ 'n', 'v' }, '<leader>X', ':bd! <CR>', {})
+vim.keymap.set({ 'n', 'v' }, '<leader>q', ':q <CR>', {})
+vim.keymap.set({ 'n', 'v' }, '<leader>Q', ':q! <CR>', {})
+vim.keymap.set({ 'n', 'v' }, '<leader>', '<Nop>')
 vim.keymap.set('n', '<leader>b', require 'telescope.builtin'.buffers)
 vim.keymap.set('n', '<leader>f', require 'telescope.builtin'.find_files)
 vim.keymap.set('n', '<leader>l', require 'telescope'.extensions.live_grep_args.live_grep_args)
@@ -179,8 +184,6 @@ vim.keymap.set('n', '<leader>s', require 'telescope.builtin'.lsp_document_symbol
 vim.keymap.set('n', '<leader>S', require 'telescope.builtin'.lsp_workspace_symbols)
 vim.keymap.set('n', '<leader>t', ':TodoTelescope<CR>')
 vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float)
-vim.keymap.set('n', 'dp', vim.diagnostic.goto_prev)
-vim.keymap.set('n', 'dn', vim.diagnostic.goto_next)
 
 local lsp_keybindings = function(_, bufnr)
   vim.keymap.set('n', 'gd', vim.lsp.buf.definition, { buffer = bufnr })
