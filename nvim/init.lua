@@ -63,14 +63,14 @@ require 'lazy'.setup {
     dependencies = { "nvim-lua/plenary.nvim" },
     opts = { signs = false }
   },
+  { 'saecki/crates.nvim',   dependencies = { 'nvim-lua/plenary.nvim' } },
+  { 'ruifm/gitlinker.nvim', dependencies = 'nvim-lua/plenary.nvim' },
   'nvim-lualine/lualine.nvim',
   'lewis6991/gitsigns.nvim',
   'numToStr/Comment.nvim',
   'simrat39/rust-tools.nvim',
-  { 'saecki/crates.nvim',   dependencies = { 'nvim-lua/plenary.nvim' } },
   'bogado/file-line',
   'windwp/nvim-autopairs',
-  { 'ruifm/gitlinker.nvim', dependencies = 'nvim-lua/plenary.nvim' },
   'andymass/vim-matchup',
 }
 
