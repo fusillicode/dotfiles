@@ -122,7 +122,6 @@ vim.o.colorcolumn = '120'
 vim.o.completeopt = 'menuone,noselect'
 vim.o.cursorline = true
 vim.o.expandtab = true
-vim.o.guicursor = ''
 vim.o.hlsearch = true
 vim.o.ignorecase = true
 vim.o.list = true
@@ -239,57 +238,16 @@ require 'nvim-treesitter.configs'.setup {
   ensure_installed = { 'rust', 'lua', 'python' },
   sync_install = true,
   auto_install = false,
-
   highlight = { enable = true },
-  incremental_selection = {
-    enable = true,
-    keymaps = {
-      init_selection = '<C-Space>',
-      node_incremental = '<C-Space>',
-      scope_incremental = '<C-s>',
-      node_decremental = '<C-Backspace>',
-    },
-  },
   textobjects = {
-    select = {
-      enable = true,
-      lookahead = true,
-      keymaps = {
-        ['aa'] = '@parameter.outer',
-        ['ia'] = '@parameter.inner',
-        ['af'] = '@function.outer',
-        ['if'] = '@function.inner',
-        ['ac'] = '@class.outer',
-        ['ic'] = '@class.inner',
-      },
-    },
     move = {
       enable = true,
       set_jumps = true,
       goto_next_start = {
-        [']m'] = '@function.outer',
-        [']]'] = '@class.outer',
-      },
-      goto_next_end = {
-        [']M'] = '@function.outer',
-        [']['] = '@class.outer',
-      },
-      goto_previous_start = {
-        ['[m'] = '@function.outer',
-        ['[['] = '@class.outer',
+        ['L'] = '@block.outer',
       },
       goto_previous_end = {
-        ['[M'] = '@function.outer',
-        ['[]'] = '@class.outer',
-      },
-    },
-    swap = {
-      enable = true,
-      swap_next = {
-        ['<leader>a'] = '@parameter.inner',
-      },
-      swap_previous = {
-        ['<leader>A'] = '@parameter.inner',
+        ['H'] = '@block.outer',
       },
     },
   },
