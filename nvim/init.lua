@@ -234,7 +234,7 @@ require 'Comment'.setup { toggler = { line = '<C-c>' }, opleader = { line = '<C-
 require 'gitsigns'.setup {}
 
 require 'nvim-treesitter.configs'.setup {
-  matchup = { enable = true },
+  matchup = { enable = true, enable_quotes = true },
   ensure_installed = { 'rust', 'lua', 'python' },
   sync_install = true,
   auto_install = false,
