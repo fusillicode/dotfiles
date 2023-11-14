@@ -81,9 +81,9 @@ plugins=(git gitfast kubectl)
 
 # Preferred editor for local and remote sessions
 if [[ -n $SSH_CONNECTION ]]; then
-  export EDITOR='neovim'
+  export EDITOR='nvim'
 else
-  export EDITOR='neovim'
+  export EDITOR='nvim'
 fi
 
 # Compilation flags
