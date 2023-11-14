@@ -28,7 +28,7 @@ config.colors = {
   background = background,
   foreground = 'white',
   tab_bar = {
-    active_tab = { bg_color = background, fg_color = 'lime', },
+    active_tab = { bg_color = background, fg_color = 'limegreen', },
     inactive_tab = { bg_color = background, fg_color = 'grey', }
   },
 }

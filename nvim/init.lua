@@ -91,7 +91,10 @@ require 'tokyonight'.setup {
     highlights.CursorLine = { bg = "#16161e" }
     highlights.CursorLineNr = { fg = "white", bold = true }
     highlights.MatchParen = { fg = "black", bg = "orange" }
-    highlights.LineNr = { fg = "gray" }
+    highlights.LineNr = { fg = "grey" }
+    highlights.GitSignsAdd = { fg = 'limegreen' }
+    highlights.GitSignsChange = { fg = 'orange' }
+    highlights.GitSignsDelete = { fg = 'red' }
   end,
   dim_inactive = true,
 }
