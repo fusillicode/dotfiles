@@ -78,6 +78,32 @@ require 'lazy'.setup {
   'bogado/file-line',
   'windwp/nvim-autopairs',
   'andymass/vim-matchup',
+  {
+    "smoka7/multicursors.nvim",
+    event = "VeryLazy",
+    dependencies = { 'smoka7/hydra.nvim' },
+    opts = {},
+    cmd = { 'MCstart', 'MCvisual', 'MCclear', 'MCpattern', 'MCvisualPattern', 'MCunderCursor' },
+    keys = {
+      {
+        mode = { 'v', 'n' },
+        '<leader>m',
+        '<cmd>MCunderCursor<cr>',
+      },
+    },
+  }
+}
+
+require('multicursors').setup {
+  hint_config = { position = 'bottom-right' },
+  generate_hints = {
+    normal = true,
+    insert = true,
+    extend = true,
+    config = {
+      column_count = 1,
+    },
+  },
 }
 
 require 'tokyonight'.setup {
@@ -256,32 +282,32 @@ require 'gitsigns'.setup {
     end
 
     -- Navigation
-    map('n', ']c', function()
+    vim.keymap.set('n', ']c', function()
       if vim.wo.diff then return ']c' end
       vim.schedule(function() gs.next_hunk() end)
       return '<Ignore>'
     end, { expr = true })
 
-    map('n', '[c', function()
+    vim.keymap.set('n', '[c', function()
       if vim.wo.diff then return '[c' end
       vim.schedule(function() gs.prev_hunk() end)
       return '<Ignore>'
     end, { expr = true })
 
     -- Actions
-    map('n', '<leader>hs', gs.stage_hunk)
-    map('n', '<leader>hr', gs.reset_hunk)
-    map('v', '<leader>hs', function() gs.stage_hunk { vim.fn.line('.'), vim.fn.line('v') } end)
-    map('v', '<leader>hr', function() gs.reset_hunk { vim.fn.line('.'), vim.fn.line('v') } end)
-    map('n', '<leader>hS', gs.stage_buffer)
-    map('n', '<leader>hu', gs.undo_stage_hunk)
-    map('n', '<leader>hR', gs.reset_buffer)
-    map('n', '<leader>hp', gs.preview_hunk)
-    map('n', '<leader>hb', function() gs.blame_line { full = true } end)
-    map('n', '<leader>tb', gs.toggle_current_line_blame)
-    map('n', '<leader>hd', gs.diffthis)
-    map('n', '<leader>hD', function() gs.diffthis('~') end)
-    map('n', '<leader>td', gs.toggle_deleted)
+    vim.keymap.set('n', '<leader>hs', gs.stage_hunk)
+    vim.keymap.set('n', '<leader>hr', gs.reset_hunk)
+    vim.keymap.set('v', '<leader>hs', function() gs.stage_hunk { vim.fn.line('.'), vim.fn.line('v') } end)
+    vim.keymap.set('v', '<leader>hr', function() gs.reset_hunk { vim.fn.line('.'), vim.fn.line('v') } end)
+    vim.keymap.set('n', '<leader>hS', gs.stage_buffer)
+    vim.keymap.set('n', '<leader>hu', gs.undo_stage_hunk)
+    vim.keymap.set('n', '<leader>hR', gs.reset_buffer)
+    vim.keymap.set('n', '<leader>hp', gs.preview_hunk)
+    vim.keymap.set('n', '<leader>hb', function() gs.blame_line { full = true } end)
+    vim.keymap.set('n', '<leader>tb', gs.toggle_current_line_blame)
+    vim.keymap.set('n', '<leader>hd', gs.diffthis)
+    vim.keymap.set('n', '<leader>hD', function() gs.diffthis('~') end)
+    vim.keymap.set('n', '<leader>td', gs.toggle_deleted)
 
     -- Text object
     map({ 'o', 'x' }, 'ih', ':<C-U>Gitsigns select_hunk<CR>')
