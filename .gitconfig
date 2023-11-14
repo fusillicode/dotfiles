@@ -1,5 +1,4 @@
 [core]
-    editor = hx
     filemode = false
 [branch]
     autosetuprebase = always
