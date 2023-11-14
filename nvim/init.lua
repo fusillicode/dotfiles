@@ -169,6 +169,7 @@ vim.keymap.set('n', '<C-s>', ':update<CR>')
 vim.keymap.set('', '<C-c>', '<C-c>:noh<CR>')
 vim.keymap.set('', '<C-r>', ':LspRestart<CR>')
 
+local telescope_builtin = require 'telescope.builtin'
 vim.keymap.set({ 'n', 'v' }, '<leader><leader>', ':w! <CR>')
 vim.keymap.set({ 'n', 'v' }, '<leader>x', ':bd <CR>')
 vim.keymap.set({ 'n', 'v' }, '<leader>X', ':bd! <CR>')
@@ -177,6 +178,7 @@ vim.keymap.set({ 'n', 'v' }, '<leader>Q', ':q! <CR>')
 vim.keymap.set({ 'n', 'v' }, '<leader>', '<Nop>')
 vim.keymap.set('n', '<leader>b', require 'telescope.builtin'.buffers)
 vim.keymap.set('n', '<leader>f', require 'telescope.builtin'.find_files)
+vim.keymap.set('n', '<leader>F', ":Telescope file_browser path=%:p:h select_buffer=true<CR>")
 vim.keymap.set('n', '<leader>l', require 'telescope'.extensions.live_grep_args.live_grep_args)
 vim.keymap.set('n', '<leader>c', require 'telescope.builtin'.git_commits)
 vim.keymap.set('n', '<leader>bc', require 'telescope.builtin'.git_bcommits)
@@ -390,13 +392,28 @@ require 'rust-tools'.setup {
 
 require 'nvim-autopairs'.setup {}
 
+local fb_actions = require "telescope._extensions.file_browser.actions"
 require 'telescope'.setup {
+  extensions = {
+    file_browser = {
+      hide_parent_dir = true,
+      dir_icon = '',
+      hidden = { file_browser = true, folder_browser = true },
+      grouped = true,
+      mappings = {
+        ['n'] = {
+          ['h'] = fb_actions.goto_parent_dir,
+        }
+      }
+    }
+  },
   pickers = {
     find_files = {
       find_command = { 'rg', '--files', '--hidden', '--glob', '!**/.git/*' },
     }
   }
 }
-require 'telescope'.load_extension('fzf')
+require 'telescope'.load_extension 'fzf'
+require 'telescope'.load_extension 'file_browser'
 
 require 'gitlinker'.setup {}
