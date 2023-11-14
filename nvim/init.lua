@@ -111,7 +111,6 @@ vim.api.nvim_create_autocmd('TextYankPost', {
 })
 
 vim.api.nvim_create_autocmd("CursorHold", {
-  buffer = bufnr,
   callback = function()
     vim.diagnostic.open_float(nil, {
       focusable = false,
