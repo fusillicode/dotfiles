@@ -18,7 +18,7 @@ if not v.loop.fs_stat(lazypath) then
 end
 v.opt.rtp:prepend(lazypath)
 
-require 'lazy'.setup {
+require 'lazy'.setup({
   {
     'neovim/nvim-lspconfig',
     dependencies = {
@@ -83,7 +83,9 @@ require 'lazy'.setup {
   'mg979/vim-visual-multi',
   'mfussenegger/nvim-lint',
   'mhartington/formatter.nvim'
-}
+}, {
+  ui = { border = 'single' }
+})
 
 require 'tokyonight'.setup {
   styles = {
