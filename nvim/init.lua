@@ -1,13 +1,13 @@
 ---@diagnostic disable: missing-fields
 
-local vm = vim
+local v = vim
 
-vm.g.mapleader = ' '
-vm.g.maplocalleader = ' '
+v.g.mapleader = ' '
+v.g.maplocalleader = ' '
 
-local lazypath = vm.fn.stdpath('data') .. '/lazy/lazy.nvim'
-if not vm.loop.fs_stat(lazypath) then
-  vm.fn.system({
+local lazypath = v.fn.stdpath('data') .. '/lazy/lazy.nvim'
+if not v.loop.fs_stat(lazypath) then
+  v.fn.system({
     'git',
     'clone',
     '--filter=blob:none',
@@ -16,7 +16,7 @@ if not vm.loop.fs_stat(lazypath) then
     lazypath,
   })
 end
-vm.opt.rtp:prepend(lazypath)
+v.opt.rtp:prepend(lazypath)
 
 require 'lazy'.setup {
   {
@@ -58,7 +58,7 @@ require 'lazy'.setup {
       {
         'nvim-telescope/telescope-fzf-native.nvim',
         build = 'make',
-        cond = function() return vm.fn.executable 'make' == 1 end,
+        cond = function() return v.fn.executable 'make' == 1 end,
       },
     }
   },
@@ -104,24 +104,24 @@ require 'tokyonight'.setup {
   end,
   dim_inactive = true,
 }
-vm.cmd [[colorscheme tokyonight-night]]
+v.cmd [[colorscheme tokyonight-night]]
 
-vm.api.nvim_create_augroup('LspFormatOnSave', {})
-vm.api.nvim_create_autocmd('BufWritePre', {
+v.api.nvim_create_augroup('LspFormatOnSave', {})
+v.api.nvim_create_autocmd('BufWritePre', {
   group = 'LspFormatOnSave',
-  callback = function() vm.lsp.buf.format({ async = false }) end,
+  callback = function() v.lsp.buf.format({ async = false }) end,
 })
 
-vm.api.nvim_create_augroup('YankHighlight', { clear = true })
-vm.api.nvim_create_autocmd('TextYankPost', {
+v.api.nvim_create_augroup('YankHighlight', { clear = true })
+v.api.nvim_create_autocmd('TextYankPost', {
   group = 'YankHighlight',
   pattern = '*',
-  callback = function() vm.highlight.on_yank() end,
+  callback = function() v.highlight.on_yank() end,
 })
 
-vm.api.nvim_create_autocmd('CursorHold', {
+v.api.nvim_create_autocmd('CursorHold', {
   callback = function()
-    vm.diagnostic.open_float(nil, {
+    v.diagnostic.open_float(nil, {
       focusable = false,
       close_events = { 'BufLeave', 'CursorMoved', 'InsertEnter', 'FocusLost' },
       source = 'always',
@@ -130,95 +130,95 @@ vm.api.nvim_create_autocmd('CursorHold', {
   end
 })
 
-vm.g.VM_theme = 'purplegray'
+v.g.VM_theme = 'purplegray'
 
-vm.o.autoindent = true
-vm.o.backspace = 'indent,eol,start'
-vm.o.breakindent = true
-vm.o.colorcolumn = '120'
-vm.o.completeopt = 'menuone,noselect'
-vm.o.cursorline = true
-vm.o.expandtab = true
-vm.o.hlsearch = true
-vm.o.ignorecase = true
-vm.o.list = true
-vm.o.mouse = 'a'
-vm.o.number = true
-vm.o.shiftwidth = 2
-vm.o.sidescroll = 1
-vm.o.signcolumn = 'yes'
-vm.o.smartcase = true
-vm.o.splitbelow = true
-vm.o.splitright = true
-vm.o.tabstop = 2
-vm.o.termguicolors = true
-vm.o.undofile = true
-vm.o.updatetime = 250
-vm.o.wrap = false
-vm.opt.clipboard:append('unnamedplus')
-vm.opt.iskeyword:append('-')
-vm.wo.number = true
-vm.wo.signcolumn = 'yes'
+v.o.autoindent = true
+v.o.backspace = 'indent,eol,start'
+v.o.breakindent = true
+v.o.colorcolumn = '120'
+v.o.completeopt = 'menuone,noselect'
+v.o.cursorline = true
+v.o.expandtab = true
+v.o.hlsearch = true
+v.o.ignorecase = true
+v.o.list = true
+v.o.mouse = 'a'
+v.o.number = true
+v.o.shiftwidth = 2
+v.o.sidescroll = 1
+v.o.signcolumn = 'yes'
+v.o.smartcase = true
+v.o.splitbelow = true
+v.o.splitright = true
+v.o.tabstop = 2
+v.o.termguicolors = true
+v.o.undofile = true
+v.o.updatetime = 250
+v.o.wrap = false
+v.opt.clipboard:append('unnamedplus')
+v.opt.iskeyword:append('-')
+v.wo.number = true
+v.wo.signcolumn = 'yes'
 
-vm.keymap.set('', 'gn', ':bnext<CR>')
-vm.keymap.set('', 'gp', ':bprevious<CR>')
-vm.keymap.set('', 'ga', '<C-^>')
-vm.keymap.set({ 'n', 'v' }, 'gh', '0')
-vm.keymap.set({ 'n', 'v' }, 'gl', '$')
-vm.keymap.set({ 'n', 'v' }, 'gs', '_')
-vm.keymap.set({ 'n', 'v' }, 'mm', '%', { remap = true })
-vm.keymap.set({ 'n', 'v' }, 'U', '<C-r>')
-vm.keymap.set('v', '>', '>gv')
-vm.keymap.set('v', '<', '<gv')
-vm.keymap.set('n', '>', '>>')
-vm.keymap.set('n', '<', '<<')
-vm.keymap.set('n', '<C-u>', '<C-u>zz')
-vm.keymap.set('n', '<C-d>', '<C-d>zz')
-vm.keymap.set('n', '<C-j>', '<C-Down>', { remap = true })
-vm.keymap.set('n', '<C-k>', '<C-Up>', { remap = true })
-vm.keymap.set('n', 'dp', vm.diagnostic.goto_prev)
-vm.keymap.set('n', 'dn', vm.diagnostic.goto_next)
-vm.keymap.set('n', '<esc>', ':noh<CR>')
-vm.keymap.set('n', '<C-s>', ':update<CR>')
-vm.keymap.set('', '<C-c>', '<C-c>:noh<CR>')
-vm.keymap.set('', '<C-r>', ':LspRestart<CR>')
+v.keymap.set('', 'gn', ':bnext<CR>')
+v.keymap.set('', 'gp', ':bprevious<CR>')
+v.keymap.set('', 'ga', '<C-^>')
+v.keymap.set({ 'n', 'v' }, 'gh', '0')
+v.keymap.set({ 'n', 'v' }, 'gl', '$')
+v.keymap.set({ 'n', 'v' }, 'gs', '_')
+v.keymap.set({ 'n', 'v' }, 'mm', '%', { remap = true })
+v.keymap.set({ 'n', 'v' }, 'U', '<C-r>')
+v.keymap.set('v', '>', '>gv')
+v.keymap.set('v', '<', '<gv')
+v.keymap.set('n', '>', '>>')
+v.keymap.set('n', '<', '<<')
+v.keymap.set('n', '<C-u>', '<C-u>zz')
+v.keymap.set('n', '<C-d>', '<C-d>zz')
+v.keymap.set('n', '<C-j>', '<C-Down>', { remap = true })
+v.keymap.set('n', '<C-k>', '<C-Up>', { remap = true })
+v.keymap.set('n', 'dp', v.diagnostic.goto_prev)
+v.keymap.set('n', 'dn', v.diagnostic.goto_next)
+v.keymap.set('n', '<esc>', ':noh<CR>')
+v.keymap.set('n', '<C-s>', ':update<CR>')
+v.keymap.set('', '<C-c>', '<C-c>:noh<CR>')
+v.keymap.set('', '<C-r>', ':LspRestart<CR>')
 
-vm.keymap.set({ 'n', 'v' }, '<leader><leader>', ':w! <CR>')
-vm.keymap.set({ 'n', 'v' }, '<leader>x', ':bd <CR>')
-vm.keymap.set({ 'n', 'v' }, '<leader>X', ':bd! <CR>')
-vm.keymap.set({ 'n', 'v' }, '<leader>q', ':q <CR>')
-vm.keymap.set({ 'n', 'v' }, '<leader>Q', ':q! <CR>')
-vm.keymap.set({ 'n', 'v' }, '<leader>', '<Nop>')
+v.keymap.set({ 'n', 'v' }, '<leader><leader>', ':w! <CR>')
+v.keymap.set({ 'n', 'v' }, '<leader>x', ':bd <CR>')
+v.keymap.set({ 'n', 'v' }, '<leader>X', ':bd! <CR>')
+v.keymap.set({ 'n', 'v' }, '<leader>q', ':q <CR>')
+v.keymap.set({ 'n', 'v' }, '<leader>Q', ':q! <CR>')
+v.keymap.set({ 'n', 'v' }, '<leader>', '<Nop>')
 
 local telescope = require 'telescope'
 local telescope_builtin = require 'telescope.builtin'
-vm.keymap.set('n', '<leader>b', telescope_builtin.buffers)
-vm.keymap.set('n', '<leader>f', telescope_builtin.find_files)
-vm.keymap.set('n', '<leader>F', ':Telescope file_browser path=%:p:h select_buffer=true<CR>')
-vm.keymap.set('n', '<leader>l', telescope.extensions.live_grep_args.live_grep_args)
-vm.keymap.set('n', '<leader>c', telescope_builtin.git_commits)
-vm.keymap.set('n', '<leader>bc', telescope_builtin.git_bcommits)
-vm.keymap.set('n', '<leader>gb', telescope_builtin.git_branches)
-vm.keymap.set('n', '<leader>gs', telescope_builtin.git_status)
-vm.keymap.set('n', '<leader>d', function() telescope_builtin.diagnostics({ bufnr = 0 }) end)
-vm.keymap.set('n', '<leader>D', telescope_builtin.diagnostics)
-vm.keymap.set('n', '<leader>s', telescope_builtin.lsp_document_symbols)
-vm.keymap.set('n', '<leader>S', telescope_builtin.lsp_dynamic_workspace_symbols)
-vm.keymap.set('n', '<leader>t', ':TodoTelescope<CR>')
-vm.keymap.set('n', '<leader>z', vm.diagnostic.open_float)
+v.keymap.set('n', '<leader>b', telescope_builtin.buffers)
+v.keymap.set('n', '<leader>f', telescope_builtin.find_files)
+v.keymap.set('n', '<leader>F', ':Telescope file_browser path=%:p:h select_buffer=true<CR>')
+v.keymap.set('n', '<leader>l', telescope.extensions.live_grep_args.live_grep_args)
+v.keymap.set('n', '<leader>c', telescope_builtin.git_commits)
+v.keymap.set('n', '<leader>bc', telescope_builtin.git_bcommits)
+v.keymap.set('n', '<leader>gb', telescope_builtin.git_branches)
+v.keymap.set('n', '<leader>gs', telescope_builtin.git_status)
+v.keymap.set('n', '<leader>d', function() telescope_builtin.diagnostics({ bufnr = 0 }) end)
+v.keymap.set('n', '<leader>D', telescope_builtin.diagnostics)
+v.keymap.set('n', '<leader>s', telescope_builtin.lsp_document_symbols)
+v.keymap.set('n', '<leader>S', telescope_builtin.lsp_dynamic_workspace_symbols)
+v.keymap.set('n', '<leader>t', ':TodoTelescope<CR>')
+v.keymap.set('n', '<leader>z', v.diagnostic.open_float)
 
 local lsp_keybindings = function(_, bufnr)
-  vm.keymap.set('n', 'gd', telescope_builtin.lsp_definitions, { buffer = bufnr })
-  vm.keymap.set('n', 'gr', telescope_builtin.lsp_references, { buffer = bufnr })
-  vm.keymap.set('n', 'gi', telescope_builtin.lsp_implementations, { buffer = bufnr })
-  vm.keymap.set('n', 'K', vm.lsp.buf.hover, { buffer = bufnr })
-  vm.keymap.set('n', '<leader>r', vm.lsp.buf.rename, { buffer = bufnr })
-  vm.keymap.set('n', '<leader>a', vm.lsp.buf.code_action, { buffer = bufnr })
+  v.keymap.set('n', 'gd', telescope_builtin.lsp_definitions, { buffer = bufnr })
+  v.keymap.set('n', 'gr', telescope_builtin.lsp_references, { buffer = bufnr })
+  v.keymap.set('n', 'gi', telescope_builtin.lsp_implementations, { buffer = bufnr })
+  v.keymap.set('n', 'K', v.lsp.buf.hover, { buffer = bufnr })
+  v.keymap.set('n', '<leader>r', v.lsp.buf.rename, { buffer = bufnr })
+  v.keymap.set('n', '<leader>a', v.lsp.buf.code_action, { buffer = bufnr })
 end
 
-vm.lsp.handlers['textDocument/hover'] = vm.lsp.with(vm.lsp.handlers.hover, { border = 'single' })
+v.lsp.handlers['textDocument/hover'] = v.lsp.with(v.lsp.handlers.hover, { border = 'single' })
 
-vm.diagnostic.config {
+v.diagnostic.config {
   float = {
     border = 'single',
     focusable = false,
@@ -257,25 +257,25 @@ require 'gitsigns'.setup {
   on_attach = function(_)
     local gs = package.loaded.gitsigns
 
-    vm.keymap.set('n', ']c', function()
-      if vm.wo.diff then return ']c' end
-      vm.schedule(function() gs.next_hunk() end)
+    v.keymap.set('n', ']c', function()
+      if v.wo.diff then return ']c' end
+      v.schedule(function() gs.next_hunk() end)
       return '<Ignore>'
     end, { expr = true })
 
-    vm.keymap.set('n', '[c', function()
-      if vm.wo.diff then return '[c' end
-      vm.schedule(function() gs.prev_hunk() end)
+    v.keymap.set('n', '[c', function()
+      if v.wo.diff then return '[c' end
+      v.schedule(function() gs.prev_hunk() end)
       return '<Ignore>'
     end, { expr = true })
 
-    vm.keymap.set('n', '<leader>hs', gs.stage_hunk)
-    vm.keymap.set('n', '<leader>hr', gs.reset_hunk)
-    vm.keymap.set('v', '<leader>hs', function() gs.stage_hunk { vm.fn.line('.'), vm.fn.line('v') } end)
-    vm.keymap.set('v', '<leader>hr', function() gs.reset_hunk { vm.fn.line('.'), vm.fn.line('v') } end)
-    vm.keymap.set('n', '<leader>hu', gs.undo_stage_hunk)
-    vm.keymap.set('n', '<leader>tb', gs.toggle_current_line_blame)
-    vm.keymap.set('n', '<leader>td', gs.toggle_deleted)
+    v.keymap.set('n', '<leader>hs', gs.stage_hunk)
+    v.keymap.set('n', '<leader>hr', gs.reset_hunk)
+    v.keymap.set('v', '<leader>hs', function() gs.stage_hunk { v.fn.line('.'), v.fn.line('v') } end)
+    v.keymap.set('v', '<leader>hr', function() gs.reset_hunk { v.fn.line('.'), v.fn.line('v') } end)
+    v.keymap.set('n', '<leader>hu', gs.undo_stage_hunk)
+    v.keymap.set('n', '<leader>tb', gs.toggle_current_line_blame)
+    v.keymap.set('n', '<leader>td', gs.toggle_deleted)
   end
 }
 
@@ -380,10 +380,10 @@ require 'mason'.setup {}
 
 local mason_lspconfig = require 'mason-lspconfig'
 mason_lspconfig.setup {
-  ensure_installed = vm.tbl_keys(lsp_servers),
+  ensure_installed = v.tbl_keys(lsp_servers),
 }
 
-local capabilities = vm.lsp.protocol.make_client_capabilities()
+local capabilities = v.lsp.protocol.make_client_capabilities()
 capabilities = require 'cmp_nvim_lsp'.default_capabilities(capabilities)
 
 mason_lspconfig.setup_handlers {
