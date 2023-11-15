@@ -276,7 +276,30 @@ require 'gitsigns'.setup {
 
 require 'nvim-treesitter.configs'.setup {
   matchup = { enable = true, enable_quotes = true },
-  ensure_installed = { 'rust', 'lua', 'python' },
+  ensure_installed = {
+    "bash",
+    "comment",
+    "css",
+    "diff",
+    "dockerfile",
+    "elm",
+    "html",
+    "javascript",
+    "json",
+    "kdl",
+    "lua",
+    "make",
+    "markdown",
+    "python",
+    "regex",
+    "rust",
+    "sql",
+    "textproto",
+    "toml",
+    "typescript",
+    "xml",
+    "yaml",
+  },
   sync_install = true,
   auto_install = false,
   highlight = { enable = true },
@@ -295,6 +318,25 @@ require 'nvim-treesitter.configs'.setup {
 }
 
 local lsp_servers = {
+  bashls = {},
+  docker_compose_language_service = {},
+  dockerls = {},
+  dotls = {},
+  graphql = {},
+  html = {},
+  helm_ls = {},
+  jsonls = {},
+  lua_ls = {
+    Lua = {
+      workspace = { checkThirdParty = false },
+      telemetry = { enable = false },
+      diagnostics = {
+        globals = { 'vim' }
+      }
+    },
+  },
+  marksman = {},
+  ruff_lsp = {},
   rust_analyzer = {
     ['rust-analyzer'] = {
       check = { command = 'clippy' },
@@ -321,16 +363,10 @@ local lsp_servers = {
       }
     }
   },
-  lua_ls = {
-    Lua = {
-      workspace = { checkThirdParty = false },
-      telemetry = { enable = false },
-      diagnostics = {
-        globals = { 'vim' }
-      }
-    },
-  },
-  pyright = {},
+  sqlls = {},
+  taplo = {},
+  tsserver = {},
+  yamlls = {}
 }
 
 require 'neodev'.setup {}
