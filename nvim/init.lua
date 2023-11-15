@@ -3,14 +3,14 @@
 vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
 
-local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
+local lazypath = vim.fn.stdpath('data') .. '/lazy/lazy.nvim'
 if not vim.loop.fs_stat(lazypath) then
   vim.fn.system({
-    "git",
-    "clone",
-    "--filter=blob:none",
-    "https://github.com/folke/lazy.nvim.git",
-    "--branch=stable",
+    'git',
+    'clone',
+    '--filter=blob:none',
+    'https://github.com/folke/lazy.nvim.git',
+    '--branch=stable',
     lazypath,
   })
 end
@@ -42,7 +42,7 @@ require 'lazy'.setup {
     build = ':TSUpdate',
   },
   {
-    "folke/tokyonight.nvim",
+    'folke/tokyonight.nvim',
     lazy = false,
     priority = 1000,
     opts = {},
@@ -61,12 +61,12 @@ require 'lazy'.setup {
     }
   },
   {
-    "nvim-telescope/telescope-file-browser.nvim",
-    dependencies = { "nvim-telescope/telescope.nvim", "nvim-lua/plenary.nvim" }
+    'nvim-telescope/telescope-file-browser.nvim',
+    dependencies = { 'nvim-telescope/telescope.nvim', 'nvim-lua/plenary.nvim' }
   },
   {
-    "folke/todo-comments.nvim",
-    dependencies = { "nvim-lua/plenary.nvim" },
+    'folke/todo-comments.nvim',
+    dependencies = { 'nvim-lua/plenary.nvim' },
     opts = { signs = false, highlight = { after = '' } }
   },
   { 'saecki/crates.nvim',   dependencies = { 'nvim-lua/plenary.nvim' } },
@@ -91,14 +91,14 @@ require 'tokyonight'.setup {
     types = { bold = true },
   },
   on_highlights = function(highlights, _)
-    highlights.CursorLine = { bg = "#16161e" }
-    highlights.CursorLineNr = { fg = "white", bold = true }
+    highlights.CursorLine = { bg = '#16161e' }
+    highlights.CursorLineNr = { fg = 'white', bold = true }
     highlights.GitSignsAdd = { fg = 'limegreen' }
     highlights.GitSignsChange = { fg = 'orange' }
     highlights.GitSignsDelete = { fg = 'red' }
-    highlights.LineNr = { fg = "grey" }
+    highlights.LineNr = { fg = 'grey' }
     highlights.LspInlayHint = { fg = '#565f89' }
-    highlights.MatchParen = { fg = "black", bg = "orange" }
+    highlights.MatchParen = { fg = 'black', bg = 'orange' }
   end,
   dim_inactive = true,
 }
@@ -117,11 +117,11 @@ vim.api.nvim_create_autocmd('TextYankPost', {
   callback = function() vim.highlight.on_yank() end,
 })
 
-vim.api.nvim_create_autocmd("CursorHold", {
+vim.api.nvim_create_autocmd('CursorHold', {
   callback = function()
     vim.diagnostic.open_float(nil, {
       focusable = false,
-      close_events = { "BufLeave", "CursorMoved", "InsertEnter", "FocusLost" },
+      close_events = { 'BufLeave', 'CursorMoved', 'InsertEnter', 'FocusLost' },
       source = 'always',
       scope = 'cursor',
     })
@@ -170,8 +170,8 @@ vim.keymap.set('v', '>', '>gv')
 vim.keymap.set('v', '<', '<gv')
 vim.keymap.set('n', '>', '>>')
 vim.keymap.set('n', '<', '<<')
-vim.keymap.set("n", "<C-u>", "<C-u>zz")
-vim.keymap.set("n", "<C-d>", "<C-d>zz")
+vim.keymap.set('n', '<C-u>', '<C-u>zz')
+vim.keymap.set('n', '<C-d>', '<C-d>zz')
 vim.keymap.set('n', '<C-j>', '<C-Down>', { remap = true })
 vim.keymap.set('n', '<C-k>', '<C-Up>', { remap = true })
 vim.keymap.set('n', 'dp', vim.diagnostic.goto_prev)
@@ -189,7 +189,7 @@ vim.keymap.set({ 'n', 'v' }, '<leader>Q', ':q! <CR>')
 vim.keymap.set({ 'n', 'v' }, '<leader>', '<Nop>')
 vim.keymap.set('n', '<leader>b', require 'telescope.builtin'.buffers)
 vim.keymap.set('n', '<leader>f', require 'telescope.builtin'.find_files)
-vim.keymap.set('n', '<leader>F', ":Telescope file_browser path=%:p:h select_buffer=true<CR>")
+vim.keymap.set('n', '<leader>F', ':Telescope file_browser path=%:p:h select_buffer=true<CR>')
 vim.keymap.set('n', '<leader>l', require 'telescope'.extensions.live_grep_args.live_grep_args)
 vim.keymap.set('n', '<leader>c', require 'telescope.builtin'.git_commits)
 vim.keymap.set('n', '<leader>bc', require 'telescope.builtin'.git_bcommits)
@@ -211,7 +211,7 @@ local lsp_keybindings = function(_, bufnr)
   vim.keymap.set('n', '<leader>a', vim.lsp.buf.code_action, { buffer = bufnr })
 end
 
-vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, { border = "single" })
+vim.lsp.handlers['textDocument/hover'] = vim.lsp.with(vim.lsp.handlers.hover, { border = 'single' })
 
 vim.diagnostic.config {
   virtual_text = true,
@@ -277,28 +277,28 @@ require 'gitsigns'.setup {
 require 'nvim-treesitter.configs'.setup {
   matchup = { enable = true, enable_quotes = true },
   ensure_installed = {
-    "bash",
-    "comment",
-    "css",
-    "diff",
-    "dockerfile",
-    "elm",
-    "html",
-    "javascript",
-    "json",
-    "kdl",
-    "lua",
-    "make",
-    "markdown",
-    "python",
-    "regex",
-    "rust",
-    "sql",
-    "textproto",
-    "toml",
-    "typescript",
-    "xml",
-    "yaml",
+    'bash',
+    'comment',
+    'css',
+    'diff',
+    'dockerfile',
+    'elm',
+    'html',
+    'javascript',
+    'json',
+    'kdl',
+    'lua',
+    'make',
+    'markdown',
+    'python',
+    'regex',
+    'rust',
+    'sql',
+    'textproto',
+    'toml',
+    'typescript',
+    'xml',
+    'yaml',
   },
   sync_install = true,
   auto_install = false,
@@ -358,8 +358,8 @@ local lsp_servers = {
       },
       showUnlinkedFileNotification = false,
       cargo = {
-        extraArgs = { "--profile", "rust-analyzer" },
-        extraEnv = { CARGO_PROFILE_RUST_ANALYZER_INHERITS = "dev" },
+        extraArgs = { '--profile', 'rust-analyzer' },
+        extraEnv = { CARGO_PROFILE_RUST_ANALYZER_INHERITS = 'dev' },
       }
     }
   },
@@ -467,7 +467,7 @@ require 'rust-tools'.setup {
 
 require 'nvim-autopairs'.setup {}
 
-local fb_actions = require "telescope._extensions.file_browser.actions"
+local fb_actions = require 'telescope._extensions.file_browser.actions'
 require 'telescope'.setup {
   extensions = {
     file_browser = {
