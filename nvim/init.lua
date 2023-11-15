@@ -189,25 +189,28 @@ vm.keymap.set({ 'n', 'v' }, '<leader>X', ':bd! <CR>')
 vm.keymap.set({ 'n', 'v' }, '<leader>q', ':q <CR>')
 vm.keymap.set({ 'n', 'v' }, '<leader>Q', ':q! <CR>')
 vm.keymap.set({ 'n', 'v' }, '<leader>', '<Nop>')
-vm.keymap.set('n', '<leader>b', require 'telescope.builtin'.buffers)
-vm.keymap.set('n', '<leader>f', require 'telescope.builtin'.find_files)
+
+local telescope = require 'telescope'
+local telescope_builtin = require 'telescope.builtin'
+vm.keymap.set('n', '<leader>b', telescope_builtin.buffers)
+vm.keymap.set('n', '<leader>f', telescope_builtin.find_files)
 vm.keymap.set('n', '<leader>F', ':Telescope file_browser path=%:p:h select_buffer=true<CR>')
-vm.keymap.set('n', '<leader>l', require 'telescope'.extensions.live_grep_args.live_grep_args)
-vm.keymap.set('n', '<leader>c', require 'telescope.builtin'.git_commits)
-vm.keymap.set('n', '<leader>bc', require 'telescope.builtin'.git_bcommits)
-vm.keymap.set('n', '<leader>gb', require 'telescope.builtin'.git_branches)
-vm.keymap.set('n', '<leader>gs', require 'telescope.builtin'.git_status)
-vm.keymap.set('n', '<leader>d', function() require 'telescope.builtin'.diagnostics({ bufnr = 0 }) end)
-vm.keymap.set('n', '<leader>D', require 'telescope.builtin'.diagnostics)
-vm.keymap.set('n', '<leader>s', require 'telescope.builtin'.lsp_document_symbols)
-vm.keymap.set('n', '<leader>S', require 'telescope.builtin'.lsp_dynamic_workspace_symbols)
+vm.keymap.set('n', '<leader>l', telescope.extensions.live_grep_args.live_grep_args)
+vm.keymap.set('n', '<leader>c', telescope_builtin.git_commits)
+vm.keymap.set('n', '<leader>bc', telescope_builtin.git_bcommits)
+vm.keymap.set('n', '<leader>gb', telescope_builtin.git_branches)
+vm.keymap.set('n', '<leader>gs', telescope_builtin.git_status)
+vm.keymap.set('n', '<leader>d', function() telescope_builtin.diagnostics({ bufnr = 0 }) end)
+vm.keymap.set('n', '<leader>D', telescope_builtin.diagnostics)
+vm.keymap.set('n', '<leader>s', telescope_builtin.lsp_document_symbols)
+vm.keymap.set('n', '<leader>S', telescope_builtin.lsp_dynamic_workspace_symbols)
 vm.keymap.set('n', '<leader>t', ':TodoTelescope<CR>')
 vm.keymap.set('n', '<leader>z', vm.diagnostic.open_float)
 
 local lsp_keybindings = function(_, bufnr)
-  vm.keymap.set('n', 'gd', require 'telescope.builtin'.lsp_definitions, { buffer = bufnr })
-  vm.keymap.set('n', 'gr', require 'telescope.builtin'.lsp_references, { buffer = bufnr })
-  vm.keymap.set('n', 'gi', require 'telescope.builtin'.lsp_implementations, { buffer = bufnr })
+  vm.keymap.set('n', 'gd', telescope_builtin.lsp_definitions, { buffer = bufnr })
+  vm.keymap.set('n', 'gr', telescope_builtin.lsp_references, { buffer = bufnr })
+  vm.keymap.set('n', 'gi', telescope_builtin.lsp_implementations, { buffer = bufnr })
   vm.keymap.set('n', 'K', vm.lsp.buf.hover, { buffer = bufnr })
   vm.keymap.set('n', '<leader>r', vm.lsp.buf.rename, { buffer = bufnr })
   vm.keymap.set('n', '<leader>a', vm.lsp.buf.code_action, { buffer = bufnr })
@@ -470,7 +473,7 @@ require 'rust-tools'.setup {
 require 'nvim-autopairs'.setup {}
 
 local fb_actions = require 'telescope._extensions.file_browser.actions'
-require 'telescope'.setup {
+telescope.setup {
   extensions = {
     file_browser = {
       hide_parent_dir = true,
@@ -490,7 +493,7 @@ require 'telescope'.setup {
     }
   }
 }
-require 'telescope'.load_extension 'fzf'
-require 'telescope'.load_extension 'file_browser'
+telescope.load_extension 'fzf'
+telescope.load_extension 'file_browser'
 
 require 'gitlinker'.setup {}
