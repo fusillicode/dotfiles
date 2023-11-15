@@ -333,39 +333,27 @@ local lsp_servers = {
   jsonls = {},
   lua_ls = {
     Lua = {
-      workspace = { checkThirdParty = false },
+      diagnostics = { globals = { 'vim' } },
       telemetry = { enable = false },
-      diagnostics = {
-        globals = { 'vim' }
-      }
+      workspace = { checkThirdParty = false }
     },
   },
   marksman = {},
   ruff_lsp = {},
   rust_analyzer = {
     ['rust-analyzer'] = {
-      check = { command = 'clippy' },
-      checkOnSave = { command = 'clippy' },
-      completion = {
-        autoimport = { enable = true }
-      },
-      imports = {
-        enforce = true,
-        granularity = {
-          group = 'item',
-        },
-        prefix = 'crate',
-      },
-      lens = {
-        debug = { enable = false },
-        implementations = { enable = false },
-        run = { enable = false },
-      },
-      showUnlinkedFileNotification = false,
       cargo = {
+        build_script = { enable = true },
         extraArgs = { '--profile', 'rust-analyzer' },
         extraEnv = { CARGO_PROFILE_RUST_ANALYZER_INHERITS = 'dev' },
-      }
+      },
+      check = { command = 'clippy' },
+      checkOnSave = { command = 'clippy' },
+      completion = { autoimport = { enable = true } },
+      imports = { enforce = true, granularity = { group = 'item' }, prefix = 'crate' },
+      lens = { debug = { enable = false }, implementations = { enable = false }, run = { enable = false } },
+      proc_macro = { enable = true },
+      showUnlinkedFileNotification = false
     }
   },
   sqlls = {},
