@@ -474,6 +474,7 @@ require 'nvim-autopairs'.setup {}
 
 local fb_actions = require 'telescope._extensions.file_browser.actions'
 telescope.setup {
+  defaults = { layout_strategy = 'vertical' },
   extensions = {
     file_browser = {
       dir_icon = '',
