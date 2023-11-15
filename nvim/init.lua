@@ -76,7 +76,25 @@ require 'lazy'.setup({
   'nvim-lualine/lualine.nvim',
   'lewis6991/gitsigns.nvim',
   'numToStr/Comment.nvim',
-  'simrat39/rust-tools.nvim',
+  {
+    'lvimuser/lsp-inlayhints.nvim',
+    event = 'LspAttach',
+    config = function()
+      vim.api.nvim_create_augroup("LspAttach_inlayhints", {})
+      vim.api.nvim_create_autocmd("LspAttach", {
+        group = "LspAttach_inlayhints",
+        callback = function(args)
+          if not (args.data and args.data.client_id) then
+            return
+          end
+
+          local client = vim.lsp.get_client_by_id(args.data.client_id)
+          require("lsp-inlayhints").on_attach(client, args.buf)
+        end,
+      })
+      require('lsp-inlayhints').setup()
+    end
+  },
   'bogado/file-line',
   'windwp/nvim-autopairs',
   'andymass/vim-matchup',
@@ -366,23 +384,37 @@ local lsp_servers = {
 
 require 'neodev'.setup {}
 
-require 'mason'.setup {}
-
-local mason_lspconfig = require 'mason-lspconfig'
-mason_lspconfig.setup {
-  ensure_installed = v.tbl_keys(lsp_servers),
-}
+require 'mason'.setup { ui = { border = 'single' } }
 
 local capabilities = v.lsp.protocol.make_client_capabilities()
 capabilities = require 'cmp_nvim_lsp'.default_capabilities(capabilities)
 
+local mason_lspconfig = require 'mason-lspconfig'
+mason_lspconfig.setup { ensure_installed = v.tbl_keys(lsp_servers) }
+
+local lspconfig = require 'lspconfig'
+
+local function dump(o)
+  if type(o) == 'table' then
+    local s = '{ '
+    for k, v in pairs(o) do
+      if type(k) ~= 'number' then k = '"' .. k .. '"' end
+      s = s .. '[' .. k .. '] = ' .. dump(v) .. ','
+    end
+    return s .. '} '
+  else
+    return tostring(o)
+  end
+end
+
 mason_lspconfig.setup_handlers {
   function(server_name)
-    require 'lspconfig'[server_name].setup {
+    print(server_name .. " " .. dump(lsp_servers[server_name]))
+    lspconfig[server_name].setup({
       capabilities = capabilities,
       on_attach = lsp_keybindings,
       settings = lsp_servers[server_name],
-    }
+    })
   end,
 }
 
@@ -443,22 +475,6 @@ cmp.setup {
 }
 
 require 'crates'.setup {}
-
-require 'rust-tools'.setup {
-  tools = {
-    inlay_hints = {
-      enable = true,
-      parameter_hints_prefix = '',
-      other_hints_prefix = '',
-      highlight = 'LspInlayHint'
-    }
-  },
-  server = {
-    on_attach = lsp_keybindings,
-    settings = lsp_servers['rust_analyzer']
-  }
-}
-
 
 require 'nvim-autopairs'.setup {}
 

@@ -28,7 +28,7 @@ config.colors = {
   background = background,
   foreground = 'white',
   tab_bar = {
-    active_tab = { bg_color = background, fg_color = 'limegreen', },
+    active_tab = { bg_color = background, fg_color = 'lime', },
     inactive_tab = { bg_color = background, fg_color = 'grey', }
   },
 }
@@ -66,7 +66,6 @@ if wezterm.gui then
     { key = 'u', mods = 'CTRL',                                       action = act.CopyMode { MoveByPage = -0.5 } },
     { key = 'y', mods = 'NONE', action = act.Multiple { { CopyTo = 'ClipboardAndPrimarySelection' } },
     },
-
   }) do
     table.insert(copy_mode, custom_copy_key)
   end
