@@ -67,7 +67,7 @@ require 'lazy'.setup {
   {
     "folke/todo-comments.nvim",
     dependencies = { "nvim-lua/plenary.nvim" },
-    opts = { signs = false }
+    opts = { signs = false, highlight = { after = '' } }
   },
   { 'saecki/crates.nvim',   dependencies = { 'nvim-lua/plenary.nvim' } },
   { 'ruifm/gitlinker.nvim', dependencies = { 'nvim-lua/plenary.nvim' } },
@@ -78,37 +78,14 @@ require 'lazy'.setup {
   'bogado/file-line',
   'windwp/nvim-autopairs',
   'andymass/vim-matchup',
-  {
-    "smoka7/multicursors.nvim",
-    event = "VeryLazy",
-    dependencies = { 'smoka7/hydra.nvim' },
-    opts = {},
-    cmd = { 'MCstart', 'MCvisual', 'MCclear', 'MCpattern', 'MCvisualPattern', 'MCunderCursor' },
-    keys = {
-      {
-        mode = { 'v', 'n' },
-        '<leader>m',
-        '<cmd>MCunderCursor<cr>',
-      },
-    },
-  }
-}
-
-require('multicursors').setup {
-  hint_config = { position = 'bottom-right' },
-  generate_hints = {
-    normal = true,
-    insert = true,
-    extend = true,
-    config = {
-      column_count = 1,
-    },
-  },
+  'mg979/vim-visual-multi',
+  'mfussenegger/nvim-lint',
+  'mhartington/formatter.nvim'
 }
 
 require 'tokyonight'.setup {
   styles = {
-    comments = { italic = false },
+    comments = { italic = false, fg = 'grey' },
     functions = { bold = true },
     keywords = { bold = true, italic = false },
     types = { bold = true },
@@ -116,11 +93,12 @@ require 'tokyonight'.setup {
   on_highlights = function(highlights, _)
     highlights.CursorLine = { bg = "#16161e" }
     highlights.CursorLineNr = { fg = "white", bold = true }
-    highlights.MatchParen = { fg = "black", bg = "orange" }
-    highlights.LineNr = { fg = "grey" }
     highlights.GitSignsAdd = { fg = 'limegreen' }
     highlights.GitSignsChange = { fg = 'orange' }
     highlights.GitSignsDelete = { fg = 'red' }
+    highlights.LineNr = { fg = "grey" }
+    highlights.LspInlayHint = { fg = '#565f89' }
+    highlights.MatchParen = { fg = "black", bg = "orange" }
   end,
   dim_inactive = true,
 }
@@ -441,6 +419,7 @@ require 'rust-tools'.setup {
       enable = true,
       parameter_hints_prefix = '',
       other_hints_prefix = '',
+      highlight = 'LspInlayHint'
     }
   },
   server = {
