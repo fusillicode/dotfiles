@@ -128,6 +128,8 @@ vim.api.nvim_create_autocmd("CursorHold", {
   end
 })
 
+vim.g.VM_theme = 'purplegray'
+
 vim.o.autoindent = true
 vim.o.backspace = 'indent,eol,start'
 vim.o.breakindent = true
@@ -170,6 +172,8 @@ vim.keymap.set('n', '>', '>>')
 vim.keymap.set('n', '<', '<<')
 vim.keymap.set("n", "<C-u>", "<C-u>zz")
 vim.keymap.set("n", "<C-d>", "<C-d>zz")
+vim.keymap.set('n', '<C-j>', '<C-Down>', { remap = true })
+vim.keymap.set('n', '<C-k>', '<C-Up>', { remap = true })
 vim.keymap.set('n', 'dp', vim.diagnostic.goto_prev)
 vim.keymap.set('n', 'dn', vim.diagnostic.goto_next)
 vim.keymap.set('n', '<esc>', ':noh<CR>')
