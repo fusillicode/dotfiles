@@ -92,8 +92,14 @@ require 'lazy'.setup({
           require("lsp-inlayhints").on_attach(client, args.buf)
         end,
       })
-      require('lsp-inlayhints').setup()
-    end
+      require('lsp-inlayhints').setup({
+        inlay_hints = {
+          parameter_hints = {
+            prefix = '',
+          }
+        }
+      })
+    end,
   },
   'bogado/file-line',
   'windwp/nvim-autopairs',
@@ -394,22 +400,8 @@ mason_lspconfig.setup { ensure_installed = v.tbl_keys(lsp_servers) }
 
 local lspconfig = require 'lspconfig'
 
-local function dump(o)
-  if type(o) == 'table' then
-    local s = '{ '
-    for k, v in pairs(o) do
-      if type(k) ~= 'number' then k = '"' .. k .. '"' end
-      s = s .. '[' .. k .. '] = ' .. dump(v) .. ','
-    end
-    return s .. '} '
-  else
-    return tostring(o)
-  end
-end
-
 mason_lspconfig.setup_handlers {
   function(server_name)
-    print(server_name .. " " .. dump(lsp_servers[server_name]))
     lspconfig[server_name].setup({
       capabilities = capabilities,
       on_attach = lsp_keybindings,
