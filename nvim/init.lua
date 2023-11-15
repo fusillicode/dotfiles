@@ -219,27 +219,27 @@ end
 vm.lsp.handlers['textDocument/hover'] = vm.lsp.with(vm.lsp.handlers.hover, { border = 'single' })
 
 vm.diagnostic.config {
-  virtual_text = true,
-  signs = true,
-  update_in_insert = true,
-  underline = false,
-  severity_sort = true,
   float = {
-    focusable = false,
-    style = 'minimal',
     border = 'single',
-    source = 'always',
+    focusable = false,
     header = '',
     prefix = '',
+    source = 'always',
+    style = 'minimal',
   },
+  severity_sort = true,
+  signs = true,
+  underline = false,
+  update_in_insert = true,
+  virtual_text = true
 }
 
 require 'lualine'.setup {
   options = {
-    icons_enabled = false,
-    theme = 'auto',
     component_separators = '',
+    icons_enabled = false,
     section_separators = '',
+    theme = 'auto',
   },
   sections = {
     lualine_a = {},
@@ -251,7 +251,7 @@ require 'lualine'.setup {
   },
 }
 
-require 'Comment'.setup { toggler = { line = '<C-c>' }, opleader = { line = '<C-c>' } }
+require 'Comment'.setup { opleader = { line = '<C-c>' }, toggler = { line = '<C-c>' } }
 
 require 'gitsigns'.setup {
   on_attach = function(_)
@@ -476,10 +476,11 @@ local fb_actions = require 'telescope._extensions.file_browser.actions'
 telescope.setup {
   extensions = {
     file_browser = {
-      hide_parent_dir = true,
       dir_icon = '',
-      hidden = { file_browser = true, folder_browser = true },
       grouped = true,
+      hidden = { file_browser = true, folder_browser = true },
+      hide_parent_dir = true,
+      hijack_netrw = true,
       mappings = {
         ['n'] = {
           ['h'] = fb_actions.goto_parent_dir,
