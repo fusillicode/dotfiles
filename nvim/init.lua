@@ -25,7 +25,6 @@ require 'lazy'.setup({
       'williamboman/mason.nvim',
       'williamboman/mason-lspconfig.nvim',
       'j-hui/fidget.nvim',
-      'folke/neodev.nvim',
     },
   },
   {
@@ -47,7 +46,29 @@ require 'lazy'.setup({
     'folke/tokyonight.nvim',
     lazy = false,
     priority = 1000,
-    opts = {},
+    config = function()
+      require('tokyonight').setup({
+        styles = {
+          comments = { italic = false, fg = 'grey' },
+          functions = { bold = true },
+          keywords = { bold = true, italic = false },
+          types = { bold = true },
+        },
+        on_highlights = function(highlights, _)
+          highlights.CursorLine = { bg = '#16161e' }
+          highlights.CursorLineNr = { fg = 'white', bold = true }
+          highlights.GitSignsAdd = { fg = 'limegreen' }
+          highlights.GitSignsChange = { fg = 'orange' }
+          highlights.GitSignsDelete = { fg = 'red' }
+          highlights.LineNr = { fg = 'grey' }
+          highlights.LspInlayHint = { fg = '#565f89' }
+          highlights.MatchParen = { fg = 'black', bg = 'orange' }
+        end,
+        dim_inactive = true,
+      })
+
+      v.cmd([[colorscheme tokyonight-night]])
+    end,
   },
   {
     'nvim-telescope/telescope.nvim',
@@ -71,11 +92,59 @@ require 'lazy'.setup({
     dependencies = { 'nvim-lua/plenary.nvim' },
     opts = { signs = false, highlight = { after = '' } }
   },
-  { 'saecki/crates.nvim',   dependencies = { 'nvim-lua/plenary.nvim' } },
-  { 'ruifm/gitlinker.nvim', dependencies = { 'nvim-lua/plenary.nvim' } },
-  'nvim-lualine/lualine.nvim',
-  'lewis6991/gitsigns.nvim',
-  'numToStr/Comment.nvim',
+  { 'saecki/crates.nvim',   dependencies = { 'nvim-lua/plenary.nvim' }, config = true },
+  { 'ruifm/gitlinker.nvim', dependencies = { 'nvim-lua/plenary.nvim' }, config = true },
+  {
+    'nvim-lualine/lualine.nvim',
+    opts = {
+      options = {
+        component_separators = '',
+        icons_enabled = false,
+        section_separators = '',
+        theme = 'auto',
+      },
+      sections = {
+        lualine_a = {},
+        lualine_b = {},
+        lualine_c = { { 'diagnostics', sources = { 'nvim_diagnostic' } }, { 'filename', file_status = true, path = 1 } },
+        lualine_x = { { 'diagnostics', sources = { 'nvim_workspace_diagnostic' } } },
+        lualine_y = {},
+        lualine_z = {}
+      },
+    }
+  },
+  {
+    'lewis6991/gitsigns.nvim',
+    opts = {
+      on_attach = function(_)
+        local gs = package.loaded.gitsigns
+
+        v.keymap.set('n', ']c', function()
+          if v.wo.diff then return ']c' end
+          v.schedule(function() gs.next_hunk() end)
+          return '<Ignore>'
+        end, { expr = true })
+
+        v.keymap.set('n', '[c', function()
+          if v.wo.diff then return '[c' end
+          v.schedule(function() gs.prev_hunk() end)
+          return '<Ignore>'
+        end, { expr = true })
+
+        v.keymap.set('n', '<leader>hs', gs.stage_hunk)
+        v.keymap.set('n', '<leader>hr', gs.reset_hunk)
+        v.keymap.set('v', '<leader>hs', function() gs.stage_hunk { v.fn.line('.'), v.fn.line('v') } end)
+        v.keymap.set('v', '<leader>hr', function() gs.reset_hunk { v.fn.line('.'), v.fn.line('v') } end)
+        v.keymap.set('n', '<leader>hu', gs.undo_stage_hunk)
+        v.keymap.set('n', '<leader>tb', gs.toggle_current_line_blame)
+        v.keymap.set('n', '<leader>td', gs.toggle_deleted)
+      end
+    }
+  },
+  {
+    'numToStr/Comment.nvim',
+    opts = { opleader = { line = '<C-c>' }, toggler = { line = '<C-c>' } }
+  },
   {
     'lvimuser/lsp-inlayhints.nvim',
     event = 'LspAttach',
@@ -92,6 +161,7 @@ require 'lazy'.setup({
           require("lsp-inlayhints").on_attach(client, args.buf)
         end,
       })
+
       require('lsp-inlayhints').setup({
         inlay_hints = {
           parameter_hints = {
@@ -101,36 +171,20 @@ require 'lazy'.setup({
       })
     end,
   },
+  { 'windwp/nvim-autopairs', config = true },
+  {
+    'mg979/vim-visual-multi',
+    config = function()
+      v.g.VM_theme = 'purplegray'
+    end
+  },
   'bogado/file-line',
-  'windwp/nvim-autopairs',
   'andymass/vim-matchup',
-  'mg979/vim-visual-multi',
   'mfussenegger/nvim-lint',
   'mhartington/formatter.nvim'
 }, {
   ui = { border = 'single' }
 })
-
-require 'tokyonight'.setup {
-  styles = {
-    comments = { italic = false, fg = 'grey' },
-    functions = { bold = true },
-    keywords = { bold = true, italic = false },
-    types = { bold = true },
-  },
-  on_highlights = function(highlights, _)
-    highlights.CursorLine = { bg = '#16161e' }
-    highlights.CursorLineNr = { fg = 'white', bold = true }
-    highlights.GitSignsAdd = { fg = 'limegreen' }
-    highlights.GitSignsChange = { fg = 'orange' }
-    highlights.GitSignsDelete = { fg = 'red' }
-    highlights.LineNr = { fg = 'grey' }
-    highlights.LspInlayHint = { fg = '#565f89' }
-    highlights.MatchParen = { fg = 'black', bg = 'orange' }
-  end,
-  dim_inactive = true,
-}
-v.cmd [[colorscheme tokyonight-night]]
 
 v.api.nvim_create_augroup('LspFormatOnSave', {})
 v.api.nvim_create_autocmd('BufWritePre', {
@@ -155,8 +209,6 @@ v.api.nvim_create_autocmd('CursorHold', {
     })
   end
 })
-
-v.g.VM_theme = 'purplegray'
 
 v.o.autoindent = true
 v.o.backspace = 'indent,eol,start'
@@ -260,51 +312,6 @@ v.diagnostic.config {
   virtual_text = true
 }
 
-require 'lualine'.setup {
-  options = {
-    component_separators = '',
-    icons_enabled = false,
-    section_separators = '',
-    theme = 'auto',
-  },
-  sections = {
-    lualine_a = {},
-    lualine_b = {},
-    lualine_c = { { 'diagnostics', sources = { 'nvim_diagnostic' } }, { 'filename', file_status = true, path = 1 } },
-    lualine_x = { { 'diagnostics', sources = { 'nvim_workspace_diagnostic' } } },
-    lualine_y = {},
-    lualine_z = {}
-  },
-}
-
-require 'Comment'.setup { opleader = { line = '<C-c>' }, toggler = { line = '<C-c>' } }
-
-require 'gitsigns'.setup {
-  on_attach = function(_)
-    local gs = package.loaded.gitsigns
-
-    v.keymap.set('n', ']c', function()
-      if v.wo.diff then return ']c' end
-      v.schedule(function() gs.next_hunk() end)
-      return '<Ignore>'
-    end, { expr = true })
-
-    v.keymap.set('n', '[c', function()
-      if v.wo.diff then return '[c' end
-      v.schedule(function() gs.prev_hunk() end)
-      return '<Ignore>'
-    end, { expr = true })
-
-    v.keymap.set('n', '<leader>hs', gs.stage_hunk)
-    v.keymap.set('n', '<leader>hr', gs.reset_hunk)
-    v.keymap.set('v', '<leader>hs', function() gs.stage_hunk { v.fn.line('.'), v.fn.line('v') } end)
-    v.keymap.set('v', '<leader>hr', function() gs.reset_hunk { v.fn.line('.'), v.fn.line('v') } end)
-    v.keymap.set('n', '<leader>hu', gs.undo_stage_hunk)
-    v.keymap.set('n', '<leader>tb', gs.toggle_current_line_blame)
-    v.keymap.set('n', '<leader>td', gs.toggle_deleted)
-  end
-}
-
 require 'nvim-treesitter.configs'.setup {
   matchup = { enable = true, enable_quotes = true },
   ensure_installed = {
@@ -388,8 +395,6 @@ local lsp_servers = {
   yamlls = {}
 }
 
-require 'neodev'.setup {}
-
 require 'mason'.setup { ui = { border = 'single' } }
 
 local capabilities = v.lsp.protocol.make_client_capabilities()
@@ -466,10 +471,6 @@ cmp.setup {
   },
 }
 
-require 'crates'.setup {}
-
-require 'nvim-autopairs'.setup {}
-
 local fb_actions = require 'telescope._extensions.file_browser.actions'
 telescope.setup {
   defaults = { layout_strategy = 'vertical' },
@@ -495,5 +496,3 @@ telescope.setup {
 }
 telescope.load_extension 'fzf'
 telescope.load_extension 'file_browser'
-
-require 'gitlinker'.setup {}
