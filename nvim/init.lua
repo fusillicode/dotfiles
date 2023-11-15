@@ -207,20 +207,16 @@ local lsp_keybindings = function(_, bufnr)
   vim.keymap.set('n', 'gr', require 'telescope.builtin'.lsp_references, { buffer = bufnr })
   vim.keymap.set('n', 'gi', require 'telescope.builtin'.lsp_implementations, { buffer = bufnr })
   vim.keymap.set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr })
-  vim.keymap.set('n', '<C-k>', vim.lsp.buf.signature_help, { buffer = bufnr })
   vim.keymap.set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr })
   vim.keymap.set('n', '<leader>a', vim.lsp.buf.code_action, { buffer = bufnr })
 end
 
 vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, { border = "single" })
-vim.lsp.handlers["textDocument/signatureHelp"] = vim.lsp.with(
-  vim.lsp.handlers.signature_help, { border = "single" }
-)
 
 vim.diagnostic.config {
-  virtual_text = false,
+  virtual_text = true,
   signs = true,
-  update_in_insert = false,
+  update_in_insert = true,
   underline = false,
   severity_sort = true,
   float = {
