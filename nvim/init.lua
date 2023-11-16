@@ -24,7 +24,17 @@ require('lazy').setup({
     dependencies = {
       'williamboman/mason.nvim',
       'williamboman/mason-lspconfig.nvim',
-      'j-hui/fidget.nvim',
+      {
+        'j-hui/fidget.nvim',
+        opts = {
+          progress = {
+            display = {
+              render_limit = 1,
+              done_ttl = 1
+            }
+          }
+        }
+      },
     },
   },
   {
@@ -404,15 +414,6 @@ mason_lspconfig.setup_handlers {
     })
   end,
 }
-
-require('fidget').setup({
-  progress = {
-    display = {
-      render_limit = 1,
-      done_ttl = 1
-    }
-  }
-})
 
 local cmp = require('cmp')
 local luasnip = require('luasnip')
