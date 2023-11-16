@@ -41,6 +41,50 @@ require('lazy').setup({
     'nvim-treesitter/nvim-treesitter',
     dependencies = { 'nvim-treesitter/nvim-treesitter-textobjects' },
     build = ':TSUpdate',
+    config = function()
+      require('nvim-treesitter.configs').setup({
+        matchup = { enable = true, enable_quotes = true },
+        ensure_installed = {
+          'bash',
+          'comment',
+          'css',
+          'diff',
+          'dockerfile',
+          'elm',
+          'html',
+          'javascript',
+          'json',
+          'kdl',
+          'lua',
+          'make',
+          'markdown',
+          'python',
+          'regex',
+          'rust',
+          'sql',
+          'textproto',
+          'toml',
+          'typescript',
+          'xml',
+          'yaml',
+        },
+        sync_install = true,
+        auto_install = false,
+        highlight = { enable = true },
+        textobjects = {
+          move = {
+            enable = true,
+            set_jumps = true,
+            goto_next_start = {
+              ['<C-l>'] = '@block.outer',
+            },
+            goto_previous_end = {
+              ['<C-h>'] = '@block.outer',
+            },
+          },
+        },
+      })
+    end
   },
   {
     'folke/tokyonight.nvim',
@@ -300,49 +344,6 @@ v.diagnostic.config {
   update_in_insert = true,
   virtual_text = true
 }
-
-require('nvim-treesitter.configs').setup({
-  matchup = { enable = true, enable_quotes = true },
-  ensure_installed = {
-    'bash',
-    'comment',
-    'css',
-    'diff',
-    'dockerfile',
-    'elm',
-    'html',
-    'javascript',
-    'json',
-    'kdl',
-    'lua',
-    'make',
-    'markdown',
-    'python',
-    'regex',
-    'rust',
-    'sql',
-    'textproto',
-    'toml',
-    'typescript',
-    'xml',
-    'yaml',
-  },
-  sync_install = true,
-  auto_install = false,
-  highlight = { enable = true },
-  textobjects = {
-    move = {
-      enable = true,
-      set_jumps = true,
-      goto_next_start = {
-        ['<C-l>'] = '@block.outer',
-      },
-      goto_previous_end = {
-        ['<C-h>'] = '@block.outer',
-      },
-    },
-  },
-})
 
 local lsp_servers = {
   bashls = {},
