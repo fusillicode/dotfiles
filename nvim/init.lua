@@ -182,8 +182,6 @@ require 'lazy'.setup({
   'andymass/vim-matchup',
   'mfussenegger/nvim-lint',
   'mhartington/formatter.nvim'
-}, {
-  ui = { border = 'single' }
 })
 
 v.api.nvim_create_augroup('LspFormatOnSave', {})
@@ -197,17 +195,6 @@ v.api.nvim_create_autocmd('TextYankPost', {
   group = 'YankHighlight',
   pattern = '*',
   callback = function() v.highlight.on_yank() end,
-})
-
-v.api.nvim_create_autocmd('CursorHold', {
-  callback = function()
-    v.diagnostic.open_float(nil, {
-      focusable = false,
-      close_events = { 'BufLeave', 'CursorMoved', 'InsertEnter', 'FocusLost' },
-      source = 'always',
-      scope = 'cursor',
-    })
-  end
 })
 
 v.o.autoindent = true
@@ -251,7 +238,7 @@ v.keymap.set('v', '<', '<gv')
 v.keymap.set('n', '>', '>>')
 v.keymap.set('n', '<', '<<')
 v.keymap.set('n', '<C-u>', '<C-u>zz')
-v.keymap.set('n', '<C-u>', '<C-u>zz')
+v.keymap.set('n', '<C-d>', '<C-d>zz')
 v.keymap.set('n', '<C-o>', '<C-o>zz')
 v.keymap.set('n', '<C-i>', '<C-i>zz')
 v.keymap.set('n', '<C-j>', '<C-Down>', { remap = true })
@@ -287,7 +274,7 @@ v.keymap.set('n', '<leader>D', telescope_builtin.diagnostics)
 v.keymap.set('n', '<leader>s', telescope_builtin.lsp_document_symbols)
 v.keymap.set('n', '<leader>S', telescope_builtin.lsp_dynamic_workspace_symbols)
 v.keymap.set('n', '<leader>t', ':TodoTelescope<CR>')
-v.keymap.set('n', '<leader>z', v.diagnostic.open_float)
+v.keymap.set('n', '<leader>e', v.diagnostic.open_float)
 
 local lsp_keybindings = function(_, bufnr)
   v.keymap.set('n', 'gd', telescope_builtin.lsp_definitions, { buffer = bufnr })
@@ -399,7 +386,7 @@ local lsp_servers = {
   yamlls = {}
 }
 
-require 'mason'.setup { ui = { border = 'single' } }
+require 'mason'.setup {}
 
 local capabilities = v.lsp.protocol.make_client_capabilities()
 capabilities = require 'cmp_nvim_lsp'.default_capabilities(capabilities)
