@@ -225,8 +225,8 @@ v.opt.iskeyword:append('-')
 v.wo.number = true
 v.wo.signcolumn = 'yes'
 
-v.keymap.set('', 'gn', ':bnext<CR>')
-v.keymap.set('', 'gp', ':bprev<CR>')
+v.keymap.set('', 'gn', ':bn<CR>')
+v.keymap.set('', 'gp', ':bp<CR>')
 v.keymap.set('', 'ga', '<C-^>')
 v.keymap.set({ 'n', 'v' }, 'gh', '0')
 v.keymap.set({ 'n', 'v' }, 'gl', '$')
@@ -246,7 +246,6 @@ v.keymap.set('n', '<C-k>', '<C-Up>', { remap = true })
 v.keymap.set('n', 'dp', v.diagnostic.goto_prev)
 v.keymap.set('n', 'dn', v.diagnostic.goto_next)
 v.keymap.set('n', '<esc>', ':noh<CR>')
-v.keymap.set('n', '<C-s>', ':update<CR>')
 v.keymap.set('', '<C-r>', ':LspRestart<CR>')
 
 v.keymap.set({ 'n', 'v' }, '<leader><leader>', ':w!<CR>')
