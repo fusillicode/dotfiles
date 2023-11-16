@@ -263,11 +263,13 @@ v.keymap.set('n', '<C-s>', ':update<CR>')
 v.keymap.set('', '<C-c>', '<C-c>:noh<CR>')
 v.keymap.set('', '<C-r>', ':LspRestart<CR>')
 
-v.keymap.set({ 'n', 'v' }, '<leader><leader>', ':w! <CR>')
-v.keymap.set({ 'n', 'v' }, '<leader>x', ':bd <CR>')
-v.keymap.set({ 'n', 'v' }, '<leader>X', ':bd! <CR>')
-v.keymap.set({ 'n', 'v' }, '<leader>q', ':q <CR>')
-v.keymap.set({ 'n', 'v' }, '<leader>Q', ':q! <CR>')
+v.keymap.set({ 'n', 'v' }, '<leader><leader>', ':w!<CR>')
+v.keymap.set({ 'n', 'v' }, '<leader>x', ':bd<CR>')
+v.keymap.set({ 'n', 'v' }, '<leader>X', ':bd!<CR>')
+v.keymap.set({ 'n', 'v' }, '<leader>w', ':wa<CR>')
+v.keymap.set({ 'n', 'v' }, '<leader>W', ':wa!<CR>')
+v.keymap.set({ 'n', 'v' }, '<leader>q', ':q<CR>')
+v.keymap.set({ 'n', 'v' }, '<leader>Q', ':q!<CR>')
 v.keymap.set({ 'n', 'v' }, '<leader>', '<Nop>')
 
 local telescope = require 'telescope'
