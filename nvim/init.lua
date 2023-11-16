@@ -18,7 +18,7 @@ if not v.loop.fs_stat(lazypath) then
 end
 v.opt.rtp:prepend(lazypath)
 
-require 'lazy'.setup({
+require('lazy').setup({
   {
     'neovim/nvim-lspconfig',
     dependencies = {
@@ -67,7 +67,7 @@ require 'lazy'.setup({
         dim_inactive = true,
       })
 
-      v.cmd([[colorscheme tokyonight-night]])
+      v.cmd.colorscheme('tokyonight-night')
     end,
   },
   {
@@ -133,8 +133,8 @@ require 'lazy'.setup({
 
         v.keymap.set('n', '<leader>hs', gs.stage_hunk)
         v.keymap.set('n', '<leader>hr', gs.reset_hunk)
-        v.keymap.set('v', '<leader>hs', function() gs.stage_hunk { v.fn.line('.'), v.fn.line('v') } end)
-        v.keymap.set('v', '<leader>hr', function() gs.reset_hunk { v.fn.line('.'), v.fn.line('v') } end)
+        v.keymap.set('v', '<leader>hs', function() gs.stage_hunk({ v.fn.line('.'), v.fn.line('v') }) end)
+        v.keymap.set('v', '<leader>hr', function() gs.reset_hunk({ v.fn.line('.'), v.fn.line('v') }) end)
         v.keymap.set('n', '<leader>hu', gs.undo_stage_hunk)
         v.keymap.set('n', '<leader>tb', gs.toggle_current_line_blame)
         v.keymap.set('n', '<leader>td', gs.toggle_deleted)
@@ -258,8 +258,8 @@ v.keymap.set({ 'n', 'v' }, '<leader>q', ':q<CR>')
 v.keymap.set({ 'n', 'v' }, '<leader>Q', ':q!<CR>')
 v.keymap.set({ 'n', 'v' }, '<leader>', '<Nop>')
 
-local telescope = require 'telescope'
-local telescope_builtin = require 'telescope.builtin'
+local telescope = require('telescope')
+local telescope_builtin = require('telescope.builtin')
 v.keymap.set('n', '<leader>b', telescope_builtin.buffers)
 v.keymap.set('n', '<leader>f', telescope_builtin.find_files)
 v.keymap.set('n', '<leader>F', ':Telescope file_browser path=%:p:h select_buffer=true<CR>')
@@ -302,7 +302,7 @@ v.diagnostic.config {
   virtual_text = true
 }
 
-require 'nvim-treesitter.configs'.setup {
+require('nvim-treesitter.configs').setup({
   matchup = { enable = true, enable_quotes = true },
   ensure_installed = {
     'bash',
@@ -343,7 +343,7 @@ require 'nvim-treesitter.configs'.setup {
       },
     },
   },
-}
+})
 
 local lsp_servers = {
   bashls = {},
@@ -385,15 +385,15 @@ local lsp_servers = {
   yamlls = {}
 }
 
-require 'mason'.setup {}
+require('mason').setup({})
 
 local capabilities = v.lsp.protocol.make_client_capabilities()
-capabilities = require 'cmp_nvim_lsp'.default_capabilities(capabilities)
+capabilities = require('cmp_nvim_lsp').default_capabilities(capabilities)
 
-local mason_lspconfig = require 'mason-lspconfig'
-mason_lspconfig.setup { ensure_installed = v.tbl_keys(lsp_servers) }
+local mason_lspconfig = require('mason-lspconfig')
+mason_lspconfig.setup({ ensure_installed = v.tbl_keys(lsp_servers) })
 
-local lspconfig = require 'lspconfig'
+local lspconfig = require('lspconfig')
 
 mason_lspconfig.setup_handlers {
   function(server_name)
@@ -405,19 +405,19 @@ mason_lspconfig.setup_handlers {
   end,
 }
 
-require 'fidget'.setup {
+require('fidget').setup({
   progress = {
     display = {
       render_limit = 1,
       done_ttl = 1
     }
   }
-}
+})
 
-local cmp = require 'cmp'
-local luasnip = require 'luasnip'
+local cmp = require('cmp')
+local luasnip = require('luasnip')
 
-cmp.setup {
+cmp.setup({
   window = {
     completion = { border = 'single' },
     documentation = { border = 'single' },
@@ -425,7 +425,7 @@ cmp.setup {
   snippet = {
     expand = function(args) luasnip.lsp_expand(args.body) end,
   },
-  mapping = cmp.mapping.preset.insert {
+  mapping = cmp.mapping.preset.insert({
     ['<C-d>'] = cmp.mapping.scroll_docs(-4),
     ['<C-u>'] = cmp.mapping.scroll_docs(4),
     ['<C-Space>'] = cmp.mapping.complete(),
@@ -451,7 +451,7 @@ cmp.setup {
         fallback()
       end
     end, { 'i', 's' }),
-  },
+  }),
   sources = {
     { name = 'nvim_lsp' },
     { name = 'path' },
@@ -459,10 +459,10 @@ cmp.setup {
     { name = 'luasnip' },
     { name = 'crates' },
   },
-}
+})
 
-local fb_actions = require 'telescope._extensions.file_browser.actions'
-telescope.setup {
+local fb_actions = require('telescope._extensions.file_browser.actions')
+telescope.setup({
   defaults = { layout_strategy = 'vertical' },
   extensions = {
     file_browser = {
@@ -483,6 +483,6 @@ telescope.setup {
       find_command = { 'rg', '--files', '--hidden', '--glob', '!**/.git/*' },
     }
   }
-}
-telescope.load_extension 'fzf'
-telescope.load_extension 'file_browser'
+})
+telescope.load_extension('fzf')
+telescope.load_extension('file_browser')
