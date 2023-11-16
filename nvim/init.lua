@@ -1,13 +1,11 @@
 ---@diagnostic disable: missing-fields
 
-local v = vim
+vim.g.mapleader = ' '
+vim.g.maplocalleader = ' '
 
-v.g.mapleader = ' '
-v.g.maplocalleader = ' '
-
-local lazypath = v.fn.stdpath('data') .. '/lazy/lazy.nvim'
-if not v.loop.fs_stat(lazypath) then
-  v.fn.system({
+local lazypath = vim.fn.stdpath('data') .. '/lazy/lazy.nvim'
+if not vim.loop.fs_stat(lazypath) then
+  vim.fn.system({
     'git',
     'clone',
     '--filter=blob:none',
@@ -16,7 +14,7 @@ if not v.loop.fs_stat(lazypath) then
     lazypath,
   })
 end
-v.opt.rtp:prepend(lazypath)
+vim.opt.rtp:prepend(lazypath)
 
 require('lazy').setup({
   {
@@ -121,7 +119,7 @@ require('lazy').setup({
         dim_inactive = true,
       })
 
-      v.cmd.colorscheme('tokyonight-night')
+      vim.cmd.colorscheme('tokyonight-night')
     end,
   },
   {
@@ -133,7 +131,7 @@ require('lazy').setup({
       {
         'nvim-telescope/telescope-fzf-native.nvim',
         build = 'make',
-        cond = function() return v.fn.executable 'make' == 1 end,
+        cond = function() return vim.fn.executable 'make' == 1 end,
       },
     }
   },
@@ -173,25 +171,25 @@ require('lazy').setup({
       on_attach = function(_)
         local gs = package.loaded.gitsigns
 
-        v.keymap.set('n', ']c', function()
-          if v.wo.diff then return ']c' end
-          v.schedule(function() gs.next_hunk() end)
+        vim.keymap.set('n', ']c', function()
+          if vim.wo.diff then return ']c' end
+          vim.schedule(function() gs.next_hunk() end)
           return '<Ignore>'
         end, { expr = true })
 
-        v.keymap.set('n', '[c', function()
-          if v.wo.diff then return '[c' end
-          v.schedule(function() gs.prev_hunk() end)
+        vim.keymap.set('n', '[c', function()
+          if vim.wo.diff then return '[c' end
+          vim.schedule(function() gs.prev_hunk() end)
           return '<Ignore>'
         end, { expr = true })
 
-        v.keymap.set('n', '<leader>hs', gs.stage_hunk)
-        v.keymap.set('n', '<leader>hr', gs.reset_hunk)
-        v.keymap.set('v', '<leader>hs', function() gs.stage_hunk({ v.fn.line('.'), v.fn.line('v') }) end)
-        v.keymap.set('v', '<leader>hr', function() gs.reset_hunk({ v.fn.line('.'), v.fn.line('v') }) end)
-        v.keymap.set('n', '<leader>hu', gs.undo_stage_hunk)
-        v.keymap.set('n', '<leader>tb', gs.toggle_current_line_blame)
-        v.keymap.set('n', '<leader>td', gs.toggle_deleted)
+        vim.keymap.set('n', '<leader>hs', gs.stage_hunk)
+        vim.keymap.set('n', '<leader>hr', gs.reset_hunk)
+        vim.keymap.set('v', '<leader>hs', function() gs.stage_hunk({ vim.fn.line('.'), vim.fn.line('v') }) end)
+        vim.keymap.set('v', '<leader>hr', function() gs.reset_hunk({ vim.fn.line('.'), vim.fn.line('v') }) end)
+        vim.keymap.set('n', '<leader>hu', gs.undo_stage_hunk)
+        vim.keymap.set('n', '<leader>tb', gs.toggle_current_line_blame)
+        vim.keymap.set('n', '<leader>td', gs.toggle_deleted)
       end
     }
   },
@@ -229,7 +227,7 @@ require('lazy').setup({
   {
     'mg979/vim-visual-multi',
     config = function()
-      v.g.VM_theme = 'purplegray'
+      vim.g.VM_theme = 'purplegray'
     end
   },
   'bogado/file-line',
@@ -238,108 +236,108 @@ require('lazy').setup({
   'mhartington/formatter.nvim'
 })
 
-v.api.nvim_create_augroup('LspFormatOnSave', {})
-v.api.nvim_create_autocmd('BufWritePre', {
+vim.api.nvim_create_augroup('LspFormatOnSave', {})
+vim.api.nvim_create_autocmd('BufWritePre', {
   group = 'LspFormatOnSave',
-  callback = function() v.lsp.buf.format({ async = false }) end,
+  callback = function() vim.lsp.buf.format({ async = false }) end,
 })
 
-v.api.nvim_create_augroup('YankHighlight', { clear = true })
-v.api.nvim_create_autocmd('TextYankPost', {
+vim.api.nvim_create_augroup('YankHighlight', { clear = true })
+vim.api.nvim_create_autocmd('TextYankPost', {
   group = 'YankHighlight',
   pattern = '*',
-  callback = function() v.highlight.on_yank() end,
+  callback = function() vim.highlight.on_yank() end,
 })
 
-v.o.autoindent = true
-v.o.backspace = 'indent,eol,start'
-v.o.breakindent = true
-v.o.colorcolumn = '120'
-v.o.completeopt = 'menuone,noselect'
-v.o.cursorline = true
-v.o.expandtab = true
-v.o.hlsearch = true
-v.o.ignorecase = true
-v.o.list = true
-v.o.mouse = 'a'
-v.o.number = true
-v.o.shiftwidth = 2
-v.o.sidescroll = 1
-v.o.signcolumn = 'yes'
-v.o.smartcase = true
-v.o.splitbelow = true
-v.o.splitright = true
-v.o.tabstop = 2
-v.o.termguicolors = true
-v.o.undofile = true
-v.o.updatetime = 250
-v.o.wrap = false
-v.opt.clipboard:append('unnamedplus')
-v.opt.iskeyword:append('-')
-v.wo.number = true
-v.wo.signcolumn = 'yes'
+vim.o.autoindent = true
+vim.o.backspace = 'indent,eol,start'
+vim.o.breakindent = true
+vim.o.colorcolumn = '120'
+vim.o.completeopt = 'menuone,noselect'
+vim.o.cursorline = true
+vim.o.expandtab = true
+vim.o.hlsearch = true
+vim.o.ignorecase = true
+vim.o.list = true
+vim.o.mouse = 'a'
+vim.o.number = true
+vim.o.shiftwidth = 2
+vim.o.sidescroll = 1
+vim.o.signcolumn = 'yes'
+vim.o.smartcase = true
+vim.o.splitbelow = true
+vim.o.splitright = true
+vim.o.tabstop = 2
+vim.o.termguicolors = true
+vim.o.undofile = true
+vim.o.updatetime = 250
+vim.o.wrap = false
+vim.opt.clipboard:append('unnamedplus')
+vim.opt.iskeyword:append('-')
+vim.wo.number = true
+vim.wo.signcolumn = 'yes'
 
-v.keymap.set('', 'gn', ':bn<CR>')
-v.keymap.set('', 'gp', ':bp<CR>')
-v.keymap.set('', 'ga', '<C-^>')
-v.keymap.set({ 'n', 'v' }, 'gh', '0')
-v.keymap.set({ 'n', 'v' }, 'gl', '$')
-v.keymap.set({ 'n', 'v' }, 'gs', '_')
-v.keymap.set({ 'n', 'v' }, 'mm', '%', { remap = true })
-v.keymap.set({ 'n', 'v' }, 'U', '<C-r>')
-v.keymap.set('v', '>', '>gv')
-v.keymap.set('v', '<', '<gv')
-v.keymap.set('n', '>', '>>')
-v.keymap.set('n', '<', '<<')
-v.keymap.set('n', '<C-u>', '<C-u>zz')
-v.keymap.set('n', '<C-d>', '<C-d>zz')
-v.keymap.set('n', '<C-o>', '<C-o>zz')
-v.keymap.set('n', '<C-i>', '<C-i>zz')
-v.keymap.set('n', '<C-j>', '<C-Down>', { remap = true })
-v.keymap.set('n', '<C-k>', '<C-Up>', { remap = true })
-v.keymap.set('n', 'dp', v.diagnostic.goto_prev)
-v.keymap.set('n', 'dn', v.diagnostic.goto_next)
-v.keymap.set('n', '<esc>', ':noh<CR>')
-v.keymap.set('', '<C-r>', ':LspRestart<CR>')
+vim.keymap.set('', 'gn', ':bn<CR>')
+vim.keymap.set('', 'gp', ':bp<CR>')
+vim.keymap.set('', 'ga', '<C-^>')
+vim.keymap.set({ 'n', 'v' }, 'gh', '0')
+vim.keymap.set({ 'n', 'v' }, 'gl', '$')
+vim.keymap.set({ 'n', 'v' }, 'gs', '_')
+vim.keymap.set({ 'n', 'v' }, 'mm', '%', { remap = true })
+vim.keymap.set({ 'n', 'v' }, 'U', '<C-r>')
+vim.keymap.set('v', '>', '>gv')
+vim.keymap.set('v', '<', '<gv')
+vim.keymap.set('n', '>', '>>')
+vim.keymap.set('n', '<', '<<')
+vim.keymap.set('n', '<C-u>', '<C-u>zz')
+vim.keymap.set('n', '<C-d>', '<C-d>zz')
+vim.keymap.set('n', '<C-o>', '<C-o>zz')
+vim.keymap.set('n', '<C-i>', '<C-i>zz')
+vim.keymap.set('n', '<C-j>', '<C-Down>', { remap = true })
+vim.keymap.set('n', '<C-k>', '<C-Up>', { remap = true })
+vim.keymap.set('n', 'dp', vim.diagnostic.goto_prev)
+vim.keymap.set('n', 'dn', vim.diagnostic.goto_next)
+vim.keymap.set('n', '<esc>', ':noh<CR>')
+vim.keymap.set('', '<C-r>', ':LspRestart<CR>')
 
-v.keymap.set({ 'n', 'v' }, '<leader><leader>', ':w!<CR>')
-v.keymap.set({ 'n', 'v' }, '<leader>x', ':bd<CR>')
-v.keymap.set({ 'n', 'v' }, '<leader>X', ':bd!<CR>')
-v.keymap.set({ 'n', 'v' }, '<leader>w', ':wa<CR>')
-v.keymap.set({ 'n', 'v' }, '<leader>W', ':wa!<CR>')
-v.keymap.set({ 'n', 'v' }, '<leader>q', ':q<CR>')
-v.keymap.set({ 'n', 'v' }, '<leader>Q', ':q!<CR>')
-v.keymap.set({ 'n', 'v' }, '<leader>', '<Nop>')
+vim.keymap.set({ 'n', 'v' }, '<leader><leader>', ':w!<CR>')
+vim.keymap.set({ 'n', 'v' }, '<leader>x', ':bd<CR>')
+vim.keymap.set({ 'n', 'v' }, '<leader>X', ':bd!<CR>')
+vim.keymap.set({ 'n', 'v' }, '<leader>w', ':wa<CR>')
+vim.keymap.set({ 'n', 'v' }, '<leader>W', ':wa!<CR>')
+vim.keymap.set({ 'n', 'v' }, '<leader>q', ':q<CR>')
+vim.keymap.set({ 'n', 'v' }, '<leader>Q', ':q!<CR>')
+vim.keymap.set({ 'n', 'v' }, '<leader>', '<Nop>')
 
 local telescope = require('telescope')
 local telescope_builtin = require('telescope.builtin')
-v.keymap.set('n', '<leader>b', telescope_builtin.buffers)
-v.keymap.set('n', '<leader>f', telescope_builtin.find_files)
-v.keymap.set('n', '<leader>F', ':Telescope file_browser path=%:p:h select_buffer=true<CR>')
-v.keymap.set('n', '<leader>l', telescope.extensions.live_grep_args.live_grep_args)
-v.keymap.set('n', '<leader>c', telescope_builtin.git_commits)
-v.keymap.set('n', '<leader>bc', telescope_builtin.git_bcommits)
-v.keymap.set('n', '<leader>gb', telescope_builtin.git_branches)
-v.keymap.set('n', '<leader>gs', telescope_builtin.git_status)
-v.keymap.set('n', '<leader>d', function() telescope_builtin.diagnostics({ bufnr = 0 }) end)
-v.keymap.set('n', '<leader>D', telescope_builtin.diagnostics)
-v.keymap.set('n', '<leader>s', telescope_builtin.lsp_document_symbols)
-v.keymap.set('n', '<leader>S', telescope_builtin.lsp_dynamic_workspace_symbols)
-v.keymap.set('n', '<leader>t', ':TodoTelescope<CR>')
-v.keymap.set('n', '<leader>e', v.diagnostic.open_float)
+vim.keymap.set('n', '<leader>b', telescope_builtin.buffers)
+vim.keymap.set('n', '<leader>f', telescope_builtin.find_files)
+vim.keymap.set('n', '<leader>F', ':Telescope file_browser path=%:p:h select_buffer=true<CR>')
+vim.keymap.set('n', '<leader>l', telescope.extensions.live_grep_args.live_grep_args)
+vim.keymap.set('n', '<leader>c', telescope_builtin.git_commits)
+vim.keymap.set('n', '<leader>bc', telescope_builtin.git_bcommits)
+vim.keymap.set('n', '<leader>gb', telescope_builtin.git_branches)
+vim.keymap.set('n', '<leader>gs', telescope_builtin.git_status)
+vim.keymap.set('n', '<leader>d', function() telescope_builtin.diagnostics({ bufnr = 0 }) end)
+vim.keymap.set('n', '<leader>D', telescope_builtin.diagnostics)
+vim.keymap.set('n', '<leader>s', telescope_builtin.lsp_document_symbols)
+vim.keymap.set('n', '<leader>S', telescope_builtin.lsp_dynamic_workspace_symbols)
+vim.keymap.set('n', '<leader>t', ':TodoTelescope<CR>')
+vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float)
 
 local lsp_keybindings = function(_, bufnr)
-  v.keymap.set('n', 'gd', telescope_builtin.lsp_definitions, { buffer = bufnr })
-  v.keymap.set('n', 'gr', telescope_builtin.lsp_references, { buffer = bufnr })
-  v.keymap.set('n', 'gi', telescope_builtin.lsp_implementations, { buffer = bufnr })
-  v.keymap.set('n', 'K', v.lsp.buf.hover, { buffer = bufnr })
-  v.keymap.set('n', '<leader>r', v.lsp.buf.rename, { buffer = bufnr })
-  v.keymap.set('n', '<leader>a', v.lsp.buf.code_action, { buffer = bufnr })
+  vim.keymap.set('n', 'gd', telescope_builtin.lsp_definitions, { buffer = bufnr })
+  vim.keymap.set('n', 'gr', telescope_builtin.lsp_references, { buffer = bufnr })
+  vim.keymap.set('n', 'gi', telescope_builtin.lsp_implementations, { buffer = bufnr })
+  vim.keymap.set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr })
+  vim.keymap.set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr })
+  vim.keymap.set('n', '<leader>a', vim.lsp.buf.code_action, { buffer = bufnr })
 end
 
-v.lsp.handlers['textDocument/hover'] = v.lsp.with(v.lsp.handlers.hover, { border = 'single' })
+vim.lsp.handlers['textDocument/hover'] = vim.lsp.with(vim.lsp.handlers.hover, { border = 'single' })
 
-v.diagnostic.config {
+vim.diagnostic.config {
   float = {
     border = 'single',
     focusable = false,
@@ -397,11 +395,11 @@ local lsp_servers = {
 
 require('mason').setup({})
 
-local capabilities = v.lsp.protocol.make_client_capabilities()
+local capabilities = vim.lsp.protocol.make_client_capabilities()
 capabilities = require('cmp_nvim_lsp').default_capabilities(capabilities)
 
 local mason_lspconfig = require('mason-lspconfig')
-mason_lspconfig.setup({ ensure_installed = v.tbl_keys(lsp_servers) })
+mason_lspconfig.setup({ ensure_installed = vim.tbl_keys(lsp_servers) })
 
 local lspconfig = require('lspconfig')
 
