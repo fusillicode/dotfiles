@@ -1,5 +1,3 @@
----@diagnostic disable: missing-fields
-
 vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
 
