@@ -34,6 +34,73 @@ require('lazy').setup({
         }
       },
     },
+    config = function()
+      local lsp_servers = {
+        bashls = {},
+        docker_compose_language_service = {},
+        dockerls = {},
+        dotls = {},
+        graphql = {},
+        html = {},
+        helm_ls = {},
+        jsonls = {},
+        lua_ls = {
+          Lua = {
+            diagnostics = { globals = { 'vim' } },
+            telemetry = { enable = false },
+            workspace = { checkThirdParty = false }
+          },
+        },
+        marksman = {},
+        ruff_lsp = {},
+        rust_analyzer = {
+          ['rust-analyzer'] = {
+            cargo = {
+              build_script = { enable = true },
+              extraArgs = { '--profile', 'rust-analyzer' },
+              extraEnv = { CARGO_PROFILE_RUST_ANALYZER_INHERITS = 'dev' },
+            },
+            check = { command = 'clippy' },
+            checkOnSave = { command = 'clippy' },
+            completion = { autoimport = { enable = true } },
+            imports = { enforce = true, granularity = { group = 'item' }, prefix = 'crate' },
+            lens = { debug = { enable = false }, implementations = { enable = false }, run = { enable = false } },
+            proc_macro = { enable = true },
+            showUnlinkedFileNotification = false
+          }
+        },
+        sqlls = {},
+        taplo = {},
+        tsserver = {},
+        yamlls = {}
+      }
+
+      require('mason').setup({})
+
+      local mason_lspconfig = require('mason-lspconfig')
+      mason_lspconfig.setup({ ensure_installed = vim.tbl_keys(lsp_servers) })
+
+      local capabilities = vim.lsp.protocol.make_client_capabilities()
+      capabilities = require('cmp_nvim_lsp').default_capabilities(capabilities)
+
+      local lsp_keybindings = function(_, bufnr)
+        vim.keymap.set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr })
+        vim.keymap.set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr })
+        vim.keymap.set('n', '<leader>a', vim.lsp.buf.code_action, { buffer = bufnr })
+      end
+
+      local lspconfig = require('lspconfig')
+
+      mason_lspconfig.setup_handlers {
+        function(server_name)
+          lspconfig[server_name].setup({
+            capabilities = capabilities,
+            on_attach = lsp_keybindings,
+            settings = lsp_servers[server_name],
+          })
+        end,
+      }
+    end
   },
   {
     'hrsh7th/nvim-cmp',
@@ -347,9 +414,9 @@ vim.keymap.set('n', '<C-j>', '<C-Down>', { remap = true })
 vim.keymap.set('n', '<C-k>', '<C-Up>', { remap = true })
 vim.keymap.set('n', 'dp', vim.diagnostic.goto_prev)
 vim.keymap.set('n', 'dn', vim.diagnostic.goto_next)
+vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float)
 vim.keymap.set('n', '<esc>', ':noh<CR>')
 vim.keymap.set('', '<C-r>', ':LspRestart<CR>')
-
 vim.keymap.set({ 'n', 'v' }, '<leader><leader>', ':w!<CR>')
 vim.keymap.set({ 'n', 'v' }, '<leader>x', ':bd<CR>')
 vim.keymap.set({ 'n', 'v' }, '<leader>X', ':bd!<CR>')
@@ -373,17 +440,10 @@ vim.keymap.set('n', '<leader>d', function() telescope_builtin.diagnostics({ bufn
 vim.keymap.set('n', '<leader>D', telescope_builtin.diagnostics)
 vim.keymap.set('n', '<leader>s', telescope_builtin.lsp_document_symbols)
 vim.keymap.set('n', '<leader>S', telescope_builtin.lsp_dynamic_workspace_symbols)
+vim.keymap.set('n', 'gd', telescope_builtin.lsp_definitions)
+vim.keymap.set('n', 'gr', telescope_builtin.lsp_references)
+vim.keymap.set('n', 'gi', telescope_builtin.lsp_implementations)
 vim.keymap.set('n', '<leader>t', ':TodoTelescope<CR>')
-vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float)
-
-local lsp_keybindings = function(_, bufnr)
-  vim.keymap.set('n', 'gd', telescope_builtin.lsp_definitions, { buffer = bufnr })
-  vim.keymap.set('n', 'gr', telescope_builtin.lsp_references, { buffer = bufnr })
-  vim.keymap.set('n', 'gi', telescope_builtin.lsp_implementations, { buffer = bufnr })
-  vim.keymap.set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr })
-  vim.keymap.set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr })
-  vim.keymap.set('n', '<leader>a', vim.lsp.buf.code_action, { buffer = bufnr })
-end
 
 vim.lsp.handlers['textDocument/hover'] = vim.lsp.with(vim.lsp.handlers.hover, { border = 'single' })
 
@@ -401,66 +461,6 @@ vim.diagnostic.config {
   underline = false,
   update_in_insert = true,
   virtual_text = true
-}
-
-local lsp_servers = {
-  bashls = {},
-  docker_compose_language_service = {},
-  dockerls = {},
-  dotls = {},
-  graphql = {},
-  html = {},
-  helm_ls = {},
-  jsonls = {},
-  lua_ls = {
-    Lua = {
-      diagnostics = { globals = { 'vim' } },
-      telemetry = { enable = false },
-      workspace = { checkThirdParty = false }
-    },
-  },
-  marksman = {},
-  ruff_lsp = {},
-  rust_analyzer = {
-    ['rust-analyzer'] = {
-      cargo = {
-        build_script = { enable = true },
-        extraArgs = { '--profile', 'rust-analyzer' },
-        extraEnv = { CARGO_PROFILE_RUST_ANALYZER_INHERITS = 'dev' },
-      },
-      check = { command = 'clippy' },
-      checkOnSave = { command = 'clippy' },
-      completion = { autoimport = { enable = true } },
-      imports = { enforce = true, granularity = { group = 'item' }, prefix = 'crate' },
-      lens = { debug = { enable = false }, implementations = { enable = false }, run = { enable = false } },
-      proc_macro = { enable = true },
-      showUnlinkedFileNotification = false
-    }
-  },
-  sqlls = {},
-  taplo = {},
-  tsserver = {},
-  yamlls = {}
-}
-
-require('mason').setup({})
-
-local capabilities = vim.lsp.protocol.make_client_capabilities()
-capabilities = require('cmp_nvim_lsp').default_capabilities(capabilities)
-
-local mason_lspconfig = require('mason-lspconfig')
-mason_lspconfig.setup({ ensure_installed = vim.tbl_keys(lsp_servers) })
-
-local lspconfig = require('lspconfig')
-
-mason_lspconfig.setup_handlers {
-  function(server_name)
-    lspconfig[server_name].setup({
-      capabilities = capabilities,
-      on_attach = lsp_keybindings,
-      settings = lsp_servers[server_name],
-    })
-  end,
 }
 
 
