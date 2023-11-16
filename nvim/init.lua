@@ -247,7 +247,6 @@ v.keymap.set('n', 'dp', v.diagnostic.goto_prev)
 v.keymap.set('n', 'dn', v.diagnostic.goto_next)
 v.keymap.set('n', '<esc>', ':noh<CR>')
 v.keymap.set('n', '<C-s>', ':update<CR>')
-v.keymap.set('', '<C-c>', '<C-c>:noh<CR>')
 v.keymap.set('', '<C-r>', ':LspRestart<CR>')
 
 v.keymap.set({ 'n', 'v' }, '<leader><leader>', ':w!<CR>')
