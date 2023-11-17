@@ -17,6 +17,7 @@ vim.opt.rtp:prepend(lazypath)
 require('lazy').setup({
   {
     'neovim/nvim-lspconfig',
+    event = { "BufReadPre", "BufNewFile" },
     dependencies = {
       'williamboman/mason.nvim',
       'williamboman/mason-lspconfig.nvim',
@@ -102,6 +103,7 @@ require('lazy').setup({
   },
   {
     'hrsh7th/nvim-cmp',
+    event = 'InsertEnter',
     dependencies = {
       'L3MON4D3/LuaSnip',
       'hrsh7th/cmp-buffer',
@@ -162,6 +164,7 @@ require('lazy').setup({
   },
   {
     'nvim-treesitter/nvim-treesitter',
+    event = { "BufReadPre", "BufNewFile" },
     dependencies = { 'nvim-treesitter/nvim-treesitter-textobjects' },
     build = ':TSUpdate',
     config = function()
@@ -261,11 +264,21 @@ require('lazy').setup({
   },
   {
     'folke/todo-comments.nvim',
+    event = 'BufEnter',
     dependencies = { 'nvim-lua/plenary.nvim' },
     opts = { signs = false, highlight = { after = '' } }
   },
-  { 'saecki/crates.nvim',   dependencies = { 'nvim-lua/plenary.nvim' }, config = true },
-  { 'ruifm/gitlinker.nvim', dependencies = { 'nvim-lua/plenary.nvim' }, config = true },
+  {
+    'saecki/crates.nvim',
+    event = { "BufRead Cargo.toml" },
+    dependencies = { 'nvim-lua/plenary.nvim' },
+    config = true
+  },
+  {
+    'ruifm/gitlinker.nvim',
+    dependencies = { 'nvim-lua/plenary.nvim' },
+    config = true
+  },
   {
     'nvim-lualine/lualine.nvim',
     opts = {
@@ -287,6 +300,7 @@ require('lazy').setup({
   },
   {
     'lewis6991/gitsigns.nvim',
+    event = 'BufEnter',
     opts = {
       on_attach = function(_)
         local gs = package.loaded.gitsigns
@@ -346,12 +360,16 @@ require('lazy').setup({
   { 'windwp/nvim-autopairs', config = true },
   {
     'mg979/vim-visual-multi',
+    event = 'InsertEnter',
     config = function()
       vim.g.VM_theme = 'purplegray'
     end
   },
   'bogado/file-line',
-  'andymass/vim-matchup',
+  {
+    'andymass/vim-matchup',
+    event = 'InsertEnter',
+  },
   'mfussenegger/nvim-lint',
   'mhartington/formatter.nvim'
 })
