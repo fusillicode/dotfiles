@@ -20,7 +20,7 @@ local function up_and_down_with_hx(key)
   end
 end
 
-local background = '1a1b26'
+local background = '1e1e2d'
 config.animation_fps = 1
 config.colors = {
   cursor_bg = 'white',
