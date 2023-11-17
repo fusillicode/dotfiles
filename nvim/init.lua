@@ -229,14 +229,14 @@ require('lazy').setup({
           keywords = { 'bold' },
           types = { 'bold' },
         },
-        custom_highlights = function(_)
+        custom_highlights = function(colors)
           return {
             CursorLineNr = { fg = 'white', bold = true },
             GitSignsAdd = { fg = 'limegreen' },
             GitSignsChange = { fg = 'orange' },
             GitSignsDelete = { fg = 'red' },
             LineNr = { fg = 'grey' },
-            LspInlayHint = { fg = 'grey' },
+            LspInlayHint = { fg = 'grey', bg = colors.none },
             MatchParen = { fg = 'black', bg = 'orange' },
           }
         end
@@ -483,7 +483,6 @@ vim.diagnostic.config {
   update_in_insert = true,
   virtual_text = true
 }
-
 
 local fb_actions = require('telescope._extensions.file_browser.actions')
 telescope.setup({
