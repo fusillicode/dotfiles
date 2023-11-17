@@ -113,7 +113,7 @@ require('lazy').setup({
     config = function()
       local cmp = require('cmp')
       local luasnip = require('luasnip')
-      require("luasnip.loaders.from_vscode").lazy_load()
+      require('luasnip.loaders.from_vscode').lazy_load()
 
       cmp.setup({
         window = {
@@ -193,7 +193,7 @@ require('lazy').setup({
         },
         sync_install = true,
         auto_install = false,
-        highlight = { enable = true },
+        highlight = { enable = true, additional_vim_regex_highlighting = false },
         textobjects = {
           move = {
             enable = true,
@@ -210,25 +210,23 @@ require('lazy').setup({
     end
   },
   {
-    'rebelot/kanagawa.nvim',
+    'catppuccin/nvim',
+    name = 'catppuccin',
+    priority = 1000,
     config = function()
-      require('kanagawa').setup({
-        compile = true,
-        commentStyle = { italic = false },
-        functionStyle = { bold = true },
-        keywordStyle = { italic = false, bold = true },
-        statementStyle = { bold = true },
-        typeStyle = { bold = true },
-        dimInactive = true,
-        colors = {
-          theme = { all = { ui = { bg_gutter = 'none' } } },
+      require('catppuccin').setup({
+        background = { dark = 'mocha', light = 'latte' },
+        dim_inactive = { enabled = true },
+        no_italic = true,
+        styles = {
+          comments = {},
+          conditionals = { 'bold' },
+          loops = { 'bold' },
+          functions = { 'bold' },
+          keywords = { 'bold' },
+          types = { 'bold' },
         },
-        background = {
-          dark = 'wave',
-          light = 'lotus'
-        },
-        overrides = function(colors)
-          local theme = colors.theme
+        custom_highlights = function(_)
           return {
             CursorLineNr = { fg = 'white', bold = true },
             GitSignsAdd = { fg = 'limegreen' },
@@ -237,13 +235,11 @@ require('lazy').setup({
             LineNr = { fg = 'grey' },
             LspInlayHint = { fg = 'grey' },
             MatchParen = { fg = 'black', bg = 'orange' },
-            Pmenu = { fg = theme.ui.shade0, bg = theme.ui.bg_p1 },
-            PmenuSel = { fg = "none", bg = theme.ui.bg_p2 },
-            PmenuSbar = { bg = theme.ui.bg_m1 },
-            PmenuThumb = { bg = theme.ui.bg_p2 },
           }
-        end,
+        end
       })
+
+      vim.cmd.colorscheme('catppuccin')
     end,
   },
   {
@@ -325,16 +321,16 @@ require('lazy').setup({
     'lvimuser/lsp-inlayhints.nvim',
     event = 'LspAttach',
     config = function()
-      vim.api.nvim_create_augroup("LspAttach_inlayhints", {})
-      vim.api.nvim_create_autocmd("LspAttach", {
-        group = "LspAttach_inlayhints",
+      vim.api.nvim_create_augroup('LspAttach_inlayhints', {})
+      vim.api.nvim_create_autocmd('LspAttach', {
+        group = 'LspAttach_inlayhints',
         callback = function(args)
           if not (args.data and args.data.client_id) then
             return
           end
 
           local client = vim.lsp.get_client_by_id(args.data.client_id)
-          require("lsp-inlayhints").on_attach(client, args.buf)
+          require('lsp-inlayhints').on_attach(client, args.buf)
         end,
       })
 
