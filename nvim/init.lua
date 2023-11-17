@@ -103,12 +103,12 @@ require('lazy').setup({
   {
     'hrsh7th/nvim-cmp',
     dependencies = {
-      'hrsh7th/cmp-nvim-lsp',
-      'hrsh7th/cmp-buffer',
-      'hrsh7th/cmp-path',
-      'saadparwaiz1/cmp_luasnip',
       'L3MON4D3/LuaSnip',
-      'rafamadriz/friendly-snippets'
+      'hrsh7th/cmp-buffer',
+      'hrsh7th/cmp-nvim-lsp',
+      'hrsh7th/cmp-path',
+      'rafamadriz/friendly-snippets',
+      'saadparwaiz1/cmp_luasnip',
     },
     config = function()
       local cmp = require('cmp')
@@ -210,31 +210,40 @@ require('lazy').setup({
     end
   },
   {
-    'folke/tokyonight.nvim',
-    lazy = false,
-    priority = 1000,
+    'rebelot/kanagawa.nvim',
     config = function()
-      require('tokyonight').setup({
-        styles = {
-          comments = { italic = false, fg = 'grey' },
-          functions = { bold = true },
-          keywords = { bold = true, italic = false },
-          types = { bold = true },
+      require('kanagawa').setup({
+        compile = true,
+        commentStyle = { italic = false },
+        functionStyle = { bold = true },
+        keywordStyle = { italic = false, bold = true },
+        statementStyle = { bold = true },
+        typeStyle = { bold = true },
+        dimInactive = true,
+        colors = {
+          theme = { all = { ui = { bg_gutter = 'none' } } },
         },
-        on_highlights = function(highlights, _)
-          highlights.CursorLine = { bg = '#16161e' }
-          highlights.CursorLineNr = { fg = 'white', bold = true }
-          highlights.GitSignsAdd = { fg = 'limegreen' }
-          highlights.GitSignsChange = { fg = 'orange' }
-          highlights.GitSignsDelete = { fg = 'red' }
-          highlights.LineNr = { fg = 'grey' }
-          highlights.LspInlayHint = { fg = '#565f89' }
-          highlights.MatchParen = { fg = 'black', bg = 'orange' }
+        background = {
+          dark = 'wave',
+          light = 'lotus'
+        },
+        overrides = function(colors)
+          local theme = colors.theme
+          return {
+            CursorLineNr = { fg = 'white', bold = true },
+            GitSignsAdd = { fg = 'limegreen' },
+            GitSignsChange = { fg = 'orange' },
+            GitSignsDelete = { fg = 'red' },
+            LineNr = { fg = 'grey' },
+            LspInlayHint = { fg = 'grey' },
+            MatchParen = { fg = 'black', bg = 'orange' },
+            Pmenu = { fg = theme.ui.shade0, bg = theme.ui.bg_p1 },
+            PmenuSel = { fg = "none", bg = theme.ui.bg_p2 },
+            PmenuSbar = { bg = theme.ui.bg_m1 },
+            PmenuThumb = { bg = theme.ui.bg_p2 },
+          }
         end,
-        dim_inactive = true,
       })
-
-      vim.cmd.colorscheme('tokyonight-night')
     end,
   },
   {
