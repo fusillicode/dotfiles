@@ -55,6 +55,7 @@ return {
     capabilities = require('cmp_nvim_lsp').default_capabilities(capabilities)
 
     local lsp_keybindings = function(_, bufnr)
+      vim.keymap.set('', '<C-r>', ':LspRestart<CR>')
       vim.keymap.set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr })
       vim.keymap.set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr })
       vim.keymap.set('n', '<leader>a', vim.lsp.buf.code_action, { buffer = bufnr })
@@ -71,6 +72,9 @@ return {
         })
       end,
     }
+
+    vim.lsp.handlers['textDocument/hover'] = vim.lsp.with(vim.lsp.handlers.hover, { border = 'single' })
+
     vim.api.nvim_create_augroup('LspFormatOnSave', {})
     vim.api.nvim_create_autocmd('BufWritePre', {
       group = 'LspFormatOnSave',
