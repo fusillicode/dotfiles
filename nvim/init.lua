@@ -1,9 +1,4 @@
-vim.g.mapleader = ' '
-vim.g.maplocalleader = ' '
-
-for _, provider in ipairs { "node", "perl", "python3", "ruby" } do
-  vim.g["loaded_" .. provider .. "_provider"] = 0
-end
+require('core')
 
 local lazypath = vim.fn.stdpath('data') .. '/lazy/lazy.nvim'
 if not vim.loop.fs_stat(lazypath) then
@@ -338,9 +333,9 @@ require('lazy').setup({
     'lvimuser/lsp-inlayhints.nvim',
     event = 'LspAttach',
     config = function()
-      vim.api.nvim_create_augroup('LspAttach_inlayhints', {})
+      vim.api.nvim_create_augroup('LspAttachInlayHints', {})
       vim.api.nvim_create_autocmd('LspAttach', {
-        group = 'LspAttach_inlayhints',
+        group = 'LspAttachInlayHints',
         callback = function(args)
           if not (args.data and args.data.client_id) then
             return
@@ -423,35 +418,6 @@ vim.api.nvim_create_autocmd('TextYankPost', {
   pattern = '*',
   callback = function() vim.highlight.on_yank() end,
 })
-
-vim.o.autoindent = true
-vim.o.backspace = 'indent,eol,start'
-vim.o.breakindent = true
-vim.o.colorcolumn = '120'
-vim.o.completeopt = 'menuone,noselect'
-vim.o.cursorline = true
-vim.o.expandtab = true
-vim.o.hlsearch = true
-vim.o.ignorecase = true
-vim.o.list = true
-vim.o.mouse = 'a'
-vim.o.number = true
-vim.o.shiftwidth = 2
-vim.o.sidescroll = 1
-vim.o.signcolumn = 'yes'
-vim.o.smartcase = true
-vim.o.splitbelow = true
-vim.o.splitright = true
-vim.o.tabstop = 2
-vim.o.termguicolors = true
-vim.o.undofile = true
-vim.o.updatetime = 250
-vim.o.wrap = false
-vim.opt.clipboard:append('unnamedplus')
-vim.opt.iskeyword:append('-')
-vim.opt.shortmess:append('sI')
-vim.wo.number = true
-vim.wo.signcolumn = 'yes'
 
 vim.keymap.set('', 'gn', ':bn<CR>')
 vim.keymap.set('', 'gp', ':bp<CR>')
