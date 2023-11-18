@@ -6,8 +6,8 @@ local vwo = vim.wo
 vg.mapleader = ' '
 vg.maplocalleader = ' '
 
-for _, provider in ipairs { "node", "perl", "python3", "ruby" } do
-  vg["loaded_" .. provider .. "_provider"] = 0
+for _, provider in ipairs { 'node', 'perl', 'python3', 'ruby' } do
+  vg['loaded_' .. provider .. '_provider'] = 0
 end
 
 vo.autoindent = true
