@@ -25,6 +25,7 @@ return {
       options = {
         component_separators = '',
         icons_enabled = false,
+        theme = 'catppuccin',
         section_separators = '',
       },
       sections = {
