@@ -4,17 +4,6 @@ return {
   dependencies = {
     'williamboman/mason.nvim',
     'williamboman/mason-lspconfig.nvim',
-    {
-      'j-hui/fidget.nvim',
-      opts = {
-        progress = {
-          display = {
-            render_limit = 1,
-            done_ttl = 1
-          }
-        }
-      }
-    },
   },
   config = function()
     local lsp_servers = {
