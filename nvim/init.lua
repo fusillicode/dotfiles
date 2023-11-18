@@ -218,7 +218,6 @@ require('lazy').setup({
     priority = 1000,
     config = function()
       require('catppuccin').setup({
-        background = { dark = 'mocha', light = 'latte' },
         dim_inactive = { enabled = true },
         no_italic = true,
         styles = {
