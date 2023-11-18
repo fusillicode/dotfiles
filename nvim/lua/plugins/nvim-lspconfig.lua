@@ -75,9 +75,8 @@ return {
 
     vim.lsp.handlers['textDocument/hover'] = vim.lsp.with(vim.lsp.handlers.hover, { border = 'single' })
 
-    vim.api.nvim_create_augroup('LspFormatOnSave', {})
     vim.api.nvim_create_autocmd('BufWritePre', {
-      group = 'LspFormatOnSave',
+      group = vim.api.nvim_create_augroup('LspFormatOnSave', {}),
       callback = function() vim.lsp.buf.format({ async = false }) end,
     })
   end
