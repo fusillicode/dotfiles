@@ -1,6 +1,10 @@
 vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
 
+for _, provider in ipairs { "node", "perl", "python3", "ruby" } do
+  vim.g["loaded_" .. provider .. "_provider"] = 0
+end
+
 local lazypath = vim.fn.stdpath('data') .. '/lazy/lazy.nvim'
 if not vim.loop.fs_stat(lazypath) then
   vim.fn.system({
@@ -371,6 +375,40 @@ require('lazy').setup({
   },
   'mfussenegger/nvim-lint',
   'mhartington/formatter.nvim'
+}, {
+  performance = {
+    rtp = {
+      disabled_plugins = {
+        "2html_plugin",
+        "bugreport",
+        "compiler",
+        "ftplugin",
+        "getscript",
+        "getscriptPlugin",
+        "gzip",
+        "logipat",
+        "matchit",
+        "netrw",
+        "netrwFileHandlers",
+        "netrwPlugin",
+        "netrwSettings",
+        "optwin",
+        "rplugin",
+        "rrhelper",
+        "spellfile_plugin",
+        "synmenu",
+        "syntax",
+        "tar",
+        "tarPlugin",
+        "tohtml",
+        "tutor",
+        "vimball",
+        "vimballPlugin",
+        "zip",
+        "zipPlugin",
+      },
+    },
+  },
 })
 
 vim.api.nvim_create_augroup('LspFormatOnSave', {})
@@ -411,6 +449,7 @@ vim.o.updatetime = 250
 vim.o.wrap = false
 vim.opt.clipboard:append('unnamedplus')
 vim.opt.iskeyword:append('-')
+vim.opt.shortmess:append('sI')
 vim.wo.number = true
 vim.wo.signcolumn = 'yes'
 
