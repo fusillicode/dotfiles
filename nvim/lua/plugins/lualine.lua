@@ -5,17 +5,17 @@ return {
     {
       "linrongbin16/lsp-progress.nvim",
       opts = {
-        client_format = function(client_name, spinner, series_messages)
+        spinner = { '' },
+        client_format = function(client_name, _, series_messages)
           local first_message = series_messages[1]
           return first_message ~= nil
-              and "[" .. client_name .. "] " .. spinner .. " " .. first_message
+              and "[" .. client_name .. "] " .. first_message
               or nil
         end,
         format = function(client_messages)
-          if #client_messages > 0 then
-            return table.concat(client_messages, " ")
-          end
-          return ""
+          return #client_messages > 0 and
+              table.concat(client_messages, " ")
+              or ""
         end,
       },
     },
