@@ -35,7 +35,7 @@ require('lazy').setup('plugins', {
         'optwin',
         'rplugin',
         'rrhelper',
-        'spellfile_plugin',
+        'spellfile',
         'synmenu',
         'syntax',
         'tar',
