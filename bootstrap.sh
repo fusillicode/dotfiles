@@ -34,20 +34,21 @@ brew install stern
 brew install txn2/tap/kubefwd
 brew install vegeta
 brew install watch
-brew tap homebrew/cask-versions
 brew install yq
 brew install zsh
+
+brew tap homebrew/cask-versions
 
 # Install Homebrew casks
 brew install alt-tab --cask
 brew install appcleaner
 brew install bitbar
 brew install chromedriver
-brew install wez/wezterm/wezterm-nightly --cask  --no-quarantine
 brew install discord
 brew install firefox
 brew install google-chrome
 brew install homebrew/cask/docker
+brew install keepingyouawake
 brew install league-of-legends
 brew install rectangle
 brew install slack
@@ -56,6 +57,7 @@ brew install the-unarchiver
 brew install transmission --cask
 brew install tunnelblick
 brew install vlc
+brew install wez/wezterm/wezterm-nightly --cask  --no-quarantine
 brew install whatsapp
 
 # Install Oh My Zsh
