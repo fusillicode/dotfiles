@@ -50,19 +50,6 @@ require('lazy').setup('plugins', {
   },
 })
 
-vim.api.nvim_create_augroup('LspFormatOnSave', {})
-vim.api.nvim_create_autocmd('BufWritePre', {
-  group = 'LspFormatOnSave',
-  callback = function() vim.lsp.buf.format({ async = false }) end,
-})
-
-vim.api.nvim_create_augroup('YankHighlight', { clear = true })
-vim.api.nvim_create_autocmd('TextYankPost', {
-  group = 'YankHighlight',
-  pattern = '*',
-  callback = function() vim.highlight.on_yank() end,
-})
-
 vim.keymap.set('', 'gn', ':bn<CR>')
 vim.keymap.set('', 'gp', ':bp<CR>')
 vim.keymap.set('', 'ga', '<C-^>')
