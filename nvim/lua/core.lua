@@ -89,9 +89,8 @@ vim.diagnostic.config {
   virtual_text = true
 }
 
-vim.api.nvim_create_augroup('YankHighlight', { clear = true })
 vim.api.nvim_create_autocmd('TextYankPost', {
-  group = 'YankHighlight',
+  group = vim.api.nvim_create_augroup('YankHighlight', { clear = true }),
   pattern = '*',
   callback = function() vim.highlight.on_yank() end,
 })

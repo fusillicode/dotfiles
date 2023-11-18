@@ -2,9 +2,8 @@ return {
   'lvimuser/lsp-inlayhints.nvim',
   event = 'LspAttach',
   config = function()
-    vim.api.nvim_create_augroup('LspAttachInlayHints', {})
     vim.api.nvim_create_autocmd('LspAttach', {
-      group = 'LspAttachInlayHints',
+      group = vim.api.nvim_create_augroup('LspAttachInlayHints', {}),
       callback = function(args)
         if not (args.data and args.data.client_id) then
           return
