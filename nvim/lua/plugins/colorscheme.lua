@@ -1,32 +1,32 @@
 return {
-  'catppuccin/nvim',
-  name = 'catppuccin',
+  'EdenEast/nightfox.nvim',
   priority = 1000,
   config = function()
-    require('catppuccin').setup({
-      dim_inactive = { enabled = true },
-      no_italic = true,
-      styles = {
-        comments = {},
-        conditionals = { 'bold' },
-        loops = { 'bold' },
-        functions = { 'bold' },
-        keywords = { 'bold' },
-        types = { 'bold' },
+    require('nightfox').setup({
+      options = {
+        colorblind = {
+          enable = true,
+        },
+        styles = {
+          conditionals = "bold",
+          functions = "bold",
+          keywords = "bold",
+          types = "bold",
+        },
       },
-      custom_highlights = function(colors)
-        return {
-          CursorLineNr = { fg = 'white', bold = true },
-          GitSignsAdd = { fg = 'limegreen' },
-          GitSignsChange = { fg = 'orange' },
-          GitSignsDelete = { fg = 'red' },
-          LineNr = { fg = 'grey' },
-          LspInlayHint = { fg = 'grey', bg = colors.none },
-          MatchParen = { fg = 'black', bg = 'orange' },
-        }
-      end
+      groups = {
+        all = {
+          CursorLineNr      = { fg = 'white', style = 'bold' },
+          GitSignsAdd       = { fg = 'limegreen' },
+          GitSignsChange    = { fg = 'orange' },
+          GitSignsDelete    = { fg = 'red' },
+          LspInlayHint      = { fg = 'grey', bg = 'none' },
+          MatchParen        = { fg = 'black', bg = 'orange' },
+          TelescopeMatching = { fg = 'orange' }
+        },
+      },
     })
 
-    vim.cmd.colorscheme('catppuccin')
+    vim.cmd.colorscheme('duskfox')
   end,
 }
