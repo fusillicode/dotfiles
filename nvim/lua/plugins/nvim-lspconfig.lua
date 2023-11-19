@@ -54,14 +54,11 @@ return {
     local capabilities = vim.lsp.protocol.make_client_capabilities()
     capabilities = require('cmp_nvim_lsp').default_capabilities(capabilities)
 
-    local vlspbuf = vim.lsp.buf
     local lsp_keybindings = function(_, bufnr)
-      local vkeyset = vim.keymap.set
-
-      vkeyset.set('', '<C-r>', ':LspRestart<CR>')
-      vkeyset.set('n', 'K', vlspbuf.hover, { buffer = bufnr })
-      vkeyset.set('n', '<leader>r', vlspbuf.rename, { buffer = bufnr })
-      vkeyset.set('n', '<leader>a', vlspbuf.code_action, { buffer = bufnr })
+      vim.keymap.set('', '<C-r>', ':LspRestart<CR>')
+      vim.keymap.set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr })
+      vim.keymap.set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr })
+      vim.keymap.set('n', '<leader>a', vim.lsp.buf.code_action, { buffer = bufnr })
     end
 
     local lspconfig = require('lspconfig')
@@ -79,8 +76,8 @@ return {
     vim.lsp.handlers['textDocument/hover'] = vim.lsp.with(vim.lsp.handlers.hover, { border = 'single' })
 
     vim.api.nvim_create_autocmd('BufWritePre', {
-      group = vim.api.nvim_create_augroup('LspFormatOnSave', { clear = true}),
-      callback = function() vlspbuf.format({ async = false }) end,
+      group = vim.api.nvim_create_augroup('LspFormatOnSave', { clear = true }),
+      callback = function() vim.lsp.buf.format({ async = false }) end,
     })
   end
 }
