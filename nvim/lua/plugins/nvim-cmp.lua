@@ -1,11 +1,13 @@
 return {
   'hrsh7th/nvim-cmp',
-  event = { "InsertEnter", "CmdlineEnter" },
+  event = { "InsertEnter" },
   dependencies = {
     'L3MON4D3/LuaSnip',
     'hrsh7th/cmp-buffer',
     'hrsh7th/cmp-nvim-lsp',
+    'hrsh7th/cmp-nvim-lsp-signature-help',
     'hrsh7th/cmp-path',
+    'lukas-reineke/cmp-rg',
     'rafamadriz/friendly-snippets',
     'saadparwaiz1/cmp_luasnip',
   },
@@ -55,6 +57,10 @@ return {
         { name = 'buffer' },
         { name = 'luasnip' },
         { name = 'crates' },
+        {
+          name = 'rg',
+          keyword_length = 3
+        }
       },
     })
   end
