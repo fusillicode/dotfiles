@@ -16,24 +16,29 @@ return {
     local telescope = require('telescope')
     local telescope_builtin = require('telescope.builtin')
     local vkeyset = vim.keymap.set
+    local custom_preview = {
+      show_line = false,
+      results_title = false,
+      preview_title = false,
+    }
 
-    vkeyset('n', '<leader>b', telescope_builtin.buffers)
-    vkeyset('n', '<leader>f', telescope_builtin.find_files)
-    vkeyset('n', '<leader>j', telescope_builtin.jumplist)
+    vkeyset('n', '<leader>b', function() telescope_builtin.buffers(custom_preview) end)
+    vkeyset('n', '<leader>f', function() telescope_builtin.find_files(custom_preview) end)
+    vkeyset('n', '<leader>j', function() telescope_builtin.jumplist(custom_preview) end)
+    vkeyset('n', '<leader>c', function() telescope_builtin.git_commits(custom_preview) end)
+    vkeyset('n', '<leader>bc', function() telescope_builtin.git_bcommits(custom_preview) end)
+    vkeyset('n', '<leader>gb', function() telescope_builtin.git_branches(custom_preview) end)
+    vkeyset('n', '<leader>gs', function() telescope_builtin.git_status(custom_preview) end)
+    vkeyset('n', '<leader>d', function() telescope_builtin.diagnostics({ bufnr = 0 }) end)
+    vkeyset('n', '<leader>D', function() telescope_builtin.diagnostics(custom_preview) end)
+    vkeyset('n', '<leader>s', function() telescope_builtin.lsp_document_symbols(custom_preview) end)
+    vkeyset('n', '<leader>S', function() telescope_builtin.lsp_dynamic_workspace_symbols(custom_preview) end)
+    vkeyset('n', 'gd', function() telescope_builtin.lsp_definitions(custom_preview) end)
+    vkeyset('n', 'gr', function() telescope_builtin.lsp_references(custom_preview) end)
+    vkeyset('n', 'gi', function() telescope_builtin.lsp_implementations(custom_preview) end)
+    vkeyset('n', '<leader>l', function() telescope.extensions.live_grep_args.live_grep_args(custom_preview) end)
     vkeyset('n', '<leader>F', ':Telescope file_browser path=%:p:h select_buffer=true<CR>')
     vkeyset('n', '<leader>t', ':TodoTelescope<CR>')
-    vkeyset('n', '<leader>l', telescope.extensions.live_grep_args.live_grep_args)
-    vkeyset('n', '<leader>c', telescope_builtin.git_commits)
-    vkeyset('n', '<leader>bc', telescope_builtin.git_bcommits)
-    vkeyset('n', '<leader>gb', telescope_builtin.git_branches)
-    vkeyset('n', '<leader>gs', telescope_builtin.git_status)
-    vkeyset('n', '<leader>d', function() telescope_builtin.diagnostics({ bufnr = 0 }) end)
-    vkeyset('n', '<leader>D', telescope_builtin.diagnostics)
-    vkeyset('n', '<leader>s', telescope_builtin.lsp_document_symbols)
-    vkeyset('n', '<leader>S', telescope_builtin.lsp_dynamic_workspace_symbols)
-    vkeyset('n', 'gd', telescope_builtin.lsp_definitions)
-    vkeyset('n', 'gr', telescope_builtin.lsp_references)
-    vkeyset('n', 'gi', telescope_builtin.lsp_implementations)
 
     local file_browser_actions = require('telescope._extensions.file_browser.actions')
     telescope.setup({
