@@ -1,12 +1,9 @@
 return {
-  'EdenEast/nightfox.nvim',
+  'projekt0n/github-nvim-theme',
   priority = 1000,
   config = function()
-    require('nightfox').setup({
+    require('github-theme').setup({
       options = {
-        colorblind = {
-          enable = true,
-        },
         styles = {
           conditionals = 'bold',
           functions = 'bold',
@@ -27,6 +24,6 @@ return {
       },
     })
 
-    vim.cmd.colorscheme('duskfox')
+    vim.cmd.colorscheme('github_dark_dimmed')
   end,
 }
