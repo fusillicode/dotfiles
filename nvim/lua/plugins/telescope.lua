@@ -18,7 +18,9 @@ return {
 
     vim.keymap.set('n', '<leader>b', telescope_builtin.buffers)
     vim.keymap.set('n', '<leader>f', telescope_builtin.find_files)
+    vim.keymap.set('n', '<leader>j', telescope_builtin.jumplist)
     vim.keymap.set('n', '<leader>F', ':Telescope file_browser path=%:p:h select_buffer=true<CR>')
+    vim.keymap.set('n', '<leader>t', ':TodoTelescope<CR>')
     vim.keymap.set('n', '<leader>l', telescope.extensions.live_grep_args.live_grep_args)
     vim.keymap.set('n', '<leader>c', telescope_builtin.git_commits)
     vim.keymap.set('n', '<leader>bc', telescope_builtin.git_bcommits)
@@ -28,7 +30,6 @@ return {
     vim.keymap.set('n', '<leader>D', telescope_builtin.diagnostics)
     vim.keymap.set('n', '<leader>s', telescope_builtin.lsp_document_symbols)
     vim.keymap.set('n', '<leader>S', telescope_builtin.lsp_dynamic_workspace_symbols)
-    vim.keymap.set('n', '<leader>t', ':TodoTelescope<CR>')
     vim.keymap.set('n', 'gd', telescope_builtin.lsp_definitions)
     vim.keymap.set('n', 'gr', telescope_builtin.lsp_references)
     vim.keymap.set('n', 'gi', telescope_builtin.lsp_implementations)
