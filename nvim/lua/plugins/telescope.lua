@@ -26,10 +26,12 @@ return {
     vkeyset('n', '<leader>f', function() telescope_builtin.find_files(custom_preview) end)
     vkeyset('n', '<leader>j', function() telescope_builtin.jumplist(custom_preview) end)
     vkeyset('n', '<leader>c', function() telescope_builtin.git_commits(custom_preview) end)
-    vkeyset('n', '<leader>bc', function() telescope_builtin.git_bcommits(custom_preview) end)
+    vkeyset('n', '<leader>bc',
+      function() telescope_builtin.git_bcommits(vim.tbl_extend('force', custom_preview, { bufnr = 0 })) end)
     vkeyset('n', '<leader>gb', function() telescope_builtin.git_branches(custom_preview) end)
     vkeyset('n', '<leader>gs', function() telescope_builtin.git_status(custom_preview) end)
-    vkeyset('n', '<leader>d', function() telescope_builtin.diagnostics({ bufnr = 0 }) end)
+    vkeyset('n', '<leader>d',
+      function() telescope_builtin.diagnostics(vim.tbl_extend('force', custom_preview, { bufnr = 0 })) end)
     vkeyset('n', '<leader>D', function() telescope_builtin.diagnostics(custom_preview) end)
     vkeyset('n', '<leader>s', function() telescope_builtin.lsp_document_symbols(custom_preview) end)
     vkeyset('n', '<leader>S', function() telescope_builtin.lsp_dynamic_workspace_symbols(custom_preview) end)
