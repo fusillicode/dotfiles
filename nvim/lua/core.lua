@@ -1,8 +1,4 @@
 local vg = vim.g
-local vo = vim.o
-local vopt = vim.opt
-local vwo = vim.wo
-
 vg.mapleader = ' '
 vg.maplocalleader = ' '
 
@@ -10,6 +6,7 @@ for _, provider in ipairs { 'node', 'perl', 'python3', 'ruby' } do
   vg['loaded_' .. provider .. '_provider'] = 0
 end
 
+local vo = vim.o
 vo.autoindent = true
 vo.backspace = 'indent,eol,start'
 vo.breakindent = true
@@ -34,48 +31,54 @@ vo.termguicolors = true
 vo.undofile = true
 vo.updatetime = 250
 vo.wrap = false
+
+local vopt = vim.opt
 vopt.clipboard:append('unnamedplus')
 vopt.iskeyword:append('-')
 vopt.shortmess:append('sI')
+
+local vwo = vim.wo
 vwo.number = true
 vwo.signcolumn = 'yes'
 
-vim.keymap.set('', 'gn', ':bn<CR>')
-vim.keymap.set('', 'gp', ':bp<CR>')
-vim.keymap.set('', 'ga', '<C-^>')
-vim.keymap.set({ 'n', 'v' }, 'gh', '0')
-vim.keymap.set({ 'n', 'v' }, 'gl', '$')
-vim.keymap.set({ 'n', 'v' }, 'gs', '_')
-vim.keymap.set({ 'n', 'v' }, 'mm', '%', { remap = true })
+local vkeyset = vim.keymap.set
+vkeyset('', 'gn', ':bn<CR>')
+vkeyset('', 'gp', ':bp<CR>')
+vkeyset('', 'ga', '<C-^>')
+vkeyset({ 'n', 'v' }, 'gh', '0')
+vkeyset({ 'n', 'v' }, 'gl', '$')
+vkeyset({ 'n', 'v' }, 'gs', '_')
+vkeyset({ 'n', 'v' }, 'mm', '%', { remap = true })
 
-vim.keymap.set('v', 'p', '"_dP')
-vim.keymap.set('v', '>', '>gv')
-vim.keymap.set('v', '<', '<gv')
-vim.keymap.set('n', '>', '>>')
-vim.keymap.set('n', '<', '<<')
-vim.keymap.set({ 'n', 'v' }, 'U', '<C-r>')
+vkeyset('v', 'p', '"_dP')
+vkeyset('v', '>', '>gv')
+vkeyset('v', '<', '<gv')
+vkeyset('n', '>', '>>')
+vkeyset('n', '<', '<<')
+vkeyset({ 'n', 'v' }, 'U', '<C-r>')
 
-vim.keymap.set('n', '<C-u>', '<C-u>zz')
-vim.keymap.set('n', '<C-d>', '<C-d>zz')
-vim.keymap.set('n', '<C-o>', '<C-o>zz')
-vim.keymap.set('n', '<C-i>', '<C-i>zz')
-vim.keymap.set('n', '<C-j>', '<C-Down>', { remap = true })
-vim.keymap.set('n', '<C-k>', '<C-Up>', { remap = true })
+vkeyset('n', '<C-u>', '<C-u>zz')
+vkeyset('n', '<C-d>', '<C-d>zz')
+vkeyset('n', '<C-o>', '<C-o>zz')
+vkeyset('n', '<C-i>', '<C-i>zz')
+vkeyset('n', '<C-j>', '<C-Down>', { remap = true })
+vkeyset('n', '<C-k>', '<C-Up>', { remap = true })
 
-vim.keymap.set({ 'n', 'v' }, '<leader><leader>', ':w!<CR>')
-vim.keymap.set({ 'n', 'v' }, '<leader>x', ':bd<CR>')
-vim.keymap.set({ 'n', 'v' }, '<leader>X', ':bd!<CR>')
-vim.keymap.set({ 'n', 'v' }, '<leader>w', ':wa<CR>')
-vim.keymap.set({ 'n', 'v' }, '<leader>W', ':wa!<CR>')
-vim.keymap.set({ 'n', 'v' }, '<leader>q', ':q<CR>')
-vim.keymap.set({ 'n', 'v' }, '<leader>Q', ':q!<CR>')
-vim.keymap.set('n', '<esc>', ':noh<CR>')
+vkeyset({ 'n', 'v' }, '<leader><leader>', ':w!<CR>')
+vkeyset({ 'n', 'v' }, '<leader>x', ':bd<CR>')
+vkeyset({ 'n', 'v' }, '<leader>X', ':bd!<CR>')
+vkeyset({ 'n', 'v' }, '<leader>w', ':wa<CR>')
+vkeyset({ 'n', 'v' }, '<leader>W', ':wa!<CR>')
+vkeyset({ 'n', 'v' }, '<leader>q', ':q<CR>')
+vkeyset({ 'n', 'v' }, '<leader>Q', ':q!<CR>')
+vkeyset('n', '<esc>', ':noh<CR>')
 
-vim.keymap.set('n', 'dp', vim.diagnostic.goto_prev)
-vim.keymap.set('n', 'dn', vim.diagnostic.goto_next)
-vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float)
+local vdiag = vim.diagnostic
+vkeyset('n', 'dp', vdiag.goto_prev)
+vkeyset('n', 'dn', vdiag.goto_next)
+vkeyset('n', '<leader>e', vdiag.open_float)
 
-vim.diagnostic.config {
+vdiag.config {
   float = {
     border = 'single',
     focusable = false,
