@@ -8,10 +8,10 @@ return {
           enable = true,
         },
         styles = {
-          conditionals = "bold",
-          functions = "bold",
-          keywords = "bold",
-          types = "bold",
+          conditionals = 'bold',
+          functions = 'bold',
+          keywords = 'bold',
+          types = 'bold',
         },
       },
       groups = {
