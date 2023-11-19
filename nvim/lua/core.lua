@@ -99,3 +99,8 @@ vim.api.nvim_create_autocmd('TextYankPost', {
   pattern = '*',
   callback = function() vim.highlight.on_yank() end,
 })
+
+vim.api.nvim_create_autocmd('FocusLost', {
+  group = vim.api.nvim_create_augroup('AutosaveBuffer', { clear = true }),
+  command = 'w'
+})
