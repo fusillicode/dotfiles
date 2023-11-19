@@ -50,7 +50,7 @@ vkeyset({ 'n', 'v' }, 'gl', '$')
 vkeyset({ 'n', 'v' }, 'gs', '_')
 vkeyset({ 'n', 'v' }, 'mm', '%', { remap = true })
 
-vkeyset('v', 'p', ''_dP')
+vkeyset('v', 'p', '"_dP')
 vkeyset('v', '>', '>gv')
 vkeyset('v', '<', '<gv')
 vkeyset('n', '>', '>>')
