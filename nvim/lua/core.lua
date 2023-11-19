@@ -21,6 +21,7 @@ vo.hlsearch = true
 vo.ignorecase = true
 vo.list = true
 vo.mouse = 'a'
+vo.showmode = false
 vo.number = true
 vo.shiftwidth = 2
 vo.sidescroll = 1
