@@ -47,6 +47,7 @@ vim.keymap.set({ 'n', 'v' }, 'gl', '$')
 vim.keymap.set({ 'n', 'v' }, 'gs', '_')
 vim.keymap.set({ 'n', 'v' }, 'mm', '%', { remap = true })
 
+vim.keymap.set('v', 'p', '"_dP')
 vim.keymap.set('v', '>', '>gv')
 vim.keymap.set('v', '<', '<gv')
 vim.keymap.set('n', '>', '>>')
