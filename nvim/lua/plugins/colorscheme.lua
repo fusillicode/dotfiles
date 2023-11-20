@@ -1,8 +1,8 @@
 return {
-  'projekt0n/github-nvim-theme',
+  'EdenEast/nightfox.nvim',
   priority = 1000,
   config = function()
-    require('github-theme').setup({
+    require('nightfox').setup({
       options = {
         styles = {
           conditionals = 'bold',
@@ -10,9 +10,14 @@ return {
           keywords = 'bold',
           types = 'bold',
         },
+        color_blind = {
+          enable = true
+        }
       },
       groups = {
         all = {
+          ColorColumn       = { bg = '#242830' },
+          CursorLine        = { bg = '#242830' },
           CursorLineNr      = { fg = 'white', style = 'bold' },
           GitSignsAdd       = { fg = 'limegreen' },
           GitSignsChange    = { fg = 'orange' },
@@ -22,8 +27,13 @@ return {
           TelescopeMatching = { fg = 'orange' }
         },
       },
+      palettes = {
+        all = {
+          bg1 = '#171b21'
+        }
+      }
     })
 
-    vim.cmd.colorscheme('github_dark_dimmed')
+    vim.cmd.colorscheme('nordfox')
   end,
 }
