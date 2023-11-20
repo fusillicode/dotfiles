@@ -44,7 +44,7 @@ return {
 
     local file_browser_actions = require('telescope._extensions.file_browser.actions')
     telescope.setup({
-      defaults = { layout_strategy = 'vertical' },
+      defaults = require('telescope.themes').get_dropdown({}),
       extensions = {
         file_browser = {
           dir_icon = '',
