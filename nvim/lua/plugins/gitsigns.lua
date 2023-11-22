@@ -5,16 +5,18 @@ return {
     on_attach = function(_)
       local gs = package.loaded.gitsigns
       local vkeyset = vim.keymap.set
+      local vwod = vim.wo.diff
+      local vsched = vim.schedule
 
       vkeyset('n', ']c', function()
-        if vim.wo.diff then return ']c' end
-        vim.schedule(function() gs.next_hunk() end)
+        if vwod then return ']c' end
+        vsched(function() gs.next_hunk() end)
         return '<Ignore>'
       end, { expr = true, })
 
       vkeyset('n', '[c', function()
-        if vim.wo.diff then return '[c' end
-        vim.schedule(function() gs.prev_hunk() end)
+        if vwod then return '[c' end
+        vsched(function() gs.prev_hunk() end)
         return '<Ignore>'
       end, { expr = true, })
 
