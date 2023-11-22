@@ -2,7 +2,7 @@ local vg = vim.g
 vg.mapleader = ' '
 vg.maplocalleader = ' '
 
-for _, provider in ipairs { 'node', 'perl', 'python3', 'ruby' } do
+for _, provider in ipairs { 'node', 'perl', 'python3', 'ruby', } do
   vg['loaded_' .. provider .. '_provider'] = 0
 end
 
@@ -45,32 +45,32 @@ local vkeyset = vim.keymap.set
 vkeyset('', 'gn', ':bn<CR>')
 vkeyset('', 'gp', ':bp<CR>')
 vkeyset('', 'ga', '<C-^>')
-vkeyset({ 'n', 'v' }, 'gh', '0')
-vkeyset({ 'n', 'v' }, 'gl', '$')
-vkeyset({ 'n', 'v' }, 'gs', '_')
-vkeyset({ 'n', 'v' }, 'mm', '%', { remap = true })
+vkeyset({ 'n', 'v', }, 'gh', '0')
+vkeyset({ 'n', 'v', }, 'gl', '$')
+vkeyset({ 'n', 'v', }, 'gs', '_')
+vkeyset({ 'n', 'v', }, 'mm', '%', { remap = true, })
 
 vkeyset('v', 'p', '"_dP')
 vkeyset('v', '>', '>gv')
 vkeyset('v', '<', '<gv')
 vkeyset('n', '>', '>>')
 vkeyset('n', '<', '<<')
-vkeyset({ 'n', 'v' }, 'U', '<C-r>')
+vkeyset({ 'n', 'v', }, 'U', '<C-r>')
 
 vkeyset('n', '<C-u>', '<C-u>zz')
 vkeyset('n', '<C-d>', '<C-d>zz')
 vkeyset('n', '<C-o>', '<C-o>zz')
 vkeyset('n', '<C-i>', '<C-i>zz')
-vkeyset('n', '<C-j>', '<C-Down>', { remap = true })
-vkeyset('n', '<C-k>', '<C-Up>', { remap = true })
+vkeyset('n', '<C-j>', '<C-Down>', { remap = true, })
+vkeyset('n', '<C-k>', '<C-Up>', { remap = true, })
 
-vkeyset({ 'n', 'v' }, '<leader><leader>', ':w!<CR>')
-vkeyset({ 'n', 'v' }, '<leader>x', ':bd<CR>')
-vkeyset({ 'n', 'v' }, '<leader>X', ':bd!<CR>')
-vkeyset({ 'n', 'v' }, '<leader>w', ':wa<CR>')
-vkeyset({ 'n', 'v' }, '<leader>W', ':wa!<CR>')
-vkeyset({ 'n', 'v' }, '<leader>q', ':q<CR>')
-vkeyset({ 'n', 'v' }, '<leader>Q', ':q!<CR>')
+vkeyset({ 'n', 'v', }, '<leader><leader>', ':w!<CR>')
+vkeyset({ 'n', 'v', }, '<leader>x', ':bd<CR>')
+vkeyset({ 'n', 'v', }, '<leader>X', ':bd!<CR>')
+vkeyset({ 'n', 'v', }, '<leader>w', ':wa<CR>')
+vkeyset({ 'n', 'v', }, '<leader>W', ':wa!<CR>')
+vkeyset({ 'n', 'v', }, '<leader>q', ':q<CR>')
+vkeyset({ 'n', 'v', }, '<leader>Q', ':q!<CR>')
 vkeyset('n', '<esc>', ':noh<CR>')
 
 local vdiag = vim.diagnostic
@@ -91,16 +91,16 @@ vdiag.config {
   signs = true,
   underline = false,
   update_in_insert = true,
-  virtual_text = true
+  virtual_text = true,
 }
 
 vim.api.nvim_create_autocmd('TextYankPost', {
-  group = vim.api.nvim_create_augroup('YankHighlight', { clear = true }),
+  group = vim.api.nvim_create_augroup('YankHighlight', { clear = true, }),
   pattern = '*',
   callback = function() vim.highlight.on_yank() end,
 })
 
 vim.api.nvim_create_autocmd('FocusLost', {
-  group = vim.api.nvim_create_augroup('AutosaveBuffer', { clear = true }),
-  command = ':silent! wa!'
+  group = vim.api.nvim_create_augroup('AutosaveBuffer', { clear = true, }),
+  command = ':silent! wa!',
 })

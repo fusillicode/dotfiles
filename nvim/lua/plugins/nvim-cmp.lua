@@ -1,6 +1,6 @@
 return {
   'hrsh7th/nvim-cmp',
-  event = { 'InsertEnter', 'CmdlineEnter' },
+  event = { 'InsertEnter', 'CmdlineEnter', },
   dependencies = {
     'L3MON4D3/LuaSnip',
     'hrsh7th/cmp-buffer',
@@ -21,14 +21,14 @@ return {
         format = function(_, vim_item)
           vim_item.abbr = string.sub(vim_item.abbr, 1, 48)
           return vim_item
-        end
+        end,
       },
       snippet = {
         expand = function(args) luasnip.lsp_expand(args.body) end,
       },
       window = {
-        completion = { border = 'single' },
-        documentation = { border = 'single' },
+        completion = { border = 'single', },
+        documentation = { border = 'single', },
       },
       mapping = cmp.mapping.preset.insert({
         ['<C-d>'] = cmp.mapping.scroll_docs(-4),
@@ -37,13 +37,13 @@ return {
         ['<CR>'] = cmp.mapping({
           i = function(fallback)
             if cmp.visible() and cmp.get_active_entry() then
-              cmp.confirm({ behavior = cmp.ConfirmBehavior.Replace, select = false })
+              cmp.confirm({ behavior = cmp.ConfirmBehavior.Replace, select = false, })
             else
               fallback()
             end
           end,
-          s = cmp.mapping.confirm({ select = true }),
-          c = cmp.mapping.confirm({ behavior = cmp.ConfirmBehavior.Replace, select = true }),
+          s = cmp.mapping.confirm({ select = true, }),
+          c = cmp.mapping.confirm({ behavior = cmp.ConfirmBehavior.Replace, select = true, }),
         }),
         ['<Tab>'] = cmp.mapping(function(fallback)
           if cmp.visible() then
@@ -53,7 +53,7 @@ return {
           else
             fallback()
           end
-        end, { 'i', 's' }),
+        end, { 'i', 's', }),
         ['<S-Tab>'] = cmp.mapping(function(fallback)
           if cmp.visible() then
             cmp.select_prev_item()
@@ -62,19 +62,19 @@ return {
           else
             fallback()
           end
-        end, { 'i', 's' }),
+        end, { 'i', 's', }),
       }),
       sources = {
-        { name = 'nvim_lsp' },
-        { name = 'path' },
-        { name = 'buffer' },
-        { name = 'luasnip' },
-        { name = 'crates' },
+        { name = 'nvim_lsp', },
+        { name = 'path', },
+        { name = 'buffer', },
+        { name = 'luasnip', },
+        { name = 'crates', },
         {
           name = 'rg',
-          keyword_length = 3
-        }
+          keyword_length = 3,
+        },
       },
     })
-  end
+  end,
 }

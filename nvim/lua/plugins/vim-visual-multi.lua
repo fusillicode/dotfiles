@@ -3,5 +3,5 @@ return {
   event = 'ModeChanged',
   config = function()
     vim.g.VM_theme = 'purplegray'
-  end
+  end,
 }

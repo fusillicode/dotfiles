@@ -1,11 +1,11 @@
 return {
   'nvim-treesitter/nvim-treesitter',
-  event = { 'BufReadPost' },
-  dependencies = { 'nvim-treesitter/nvim-treesitter-textobjects' },
+  event = { 'BufReadPost', },
+  dependencies = { 'nvim-treesitter/nvim-treesitter-textobjects', },
   build = ':TSUpdate',
   config = function()
     require('nvim-treesitter.configs').setup({
-      matchup = { enable = true, enable_quotes = true },
+      matchup = { enable = true, enable_quotes = true, },
       ensure_installed = {
         'bash',
         'comment',
@@ -32,7 +32,7 @@ return {
       },
       sync_install = true,
       auto_install = false,
-      highlight = { enable = true, additional_vim_regex_highlighting = false },
+      highlight = { enable = true, additional_vim_regex_highlighting = false, },
       textobjects = {
         move = {
           enable = true,
@@ -46,5 +46,5 @@ return {
         },
       },
     })
-  end
+  end,
 }
