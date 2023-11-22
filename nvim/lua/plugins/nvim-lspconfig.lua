@@ -66,7 +66,7 @@ return {
     local capabilities = vim.lsp.protocol.make_client_capabilities()
     capabilities = require('cmp_nvim_lsp').default_capabilities(capabilities)
 
-    local lsp_keybindings = function(_, bufnr)
+    local function lsp_keybindings(_, bufnr)
       vim.keymap.set('', '<C-r>', ':LspRestart<CR>')
       vim.keymap.set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr, })
       vim.keymap.set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, })
