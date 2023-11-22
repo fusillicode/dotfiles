@@ -1,5 +1,5 @@
 return {
   'windwp/nvim-autopairs',
   event = 'InsertCharPre',
-  config = true
+  config = true,
 }

@@ -5,7 +5,7 @@ return {
     {
       'linrongbin16/lsp-progress.nvim',
       opts = {
-        spinner = { '' },
+        spinner = { '', },
         client_format = function(client_name, _, series_messages)
           local first_message = series_messages[1]
           return first_message ~= nil
@@ -30,11 +30,11 @@ return {
       sections = {
         lualine_a = {},
         lualine_b = {},
-        lualine_c = { { 'diagnostics', sources = { 'nvim_diagnostic' } }, { 'filename', file_status = true, path = 1 } },
-        lualine_x = { { require('lsp-progress').progress }, { 'diagnostics', sources = { 'nvim_workspace_diagnostic' } } },
+        lualine_c = { { 'diagnostics', sources = { 'nvim_diagnostic', }, }, { 'filename', file_status = true, path = 1, }, },
+        lualine_x = { { require('lsp-progress').progress, }, { 'diagnostics', sources = { 'nvim_workspace_diagnostic', }, }, },
         lualine_y = {},
-        lualine_z = {}
+        lualine_z = {},
       },
     })
-  end
+  end,
 }

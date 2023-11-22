@@ -3,7 +3,7 @@ return {
   event = 'LspAttach',
   config = function()
     vim.api.nvim_create_autocmd('LspAttach', {
-      group = vim.api.nvim_create_augroup('LspAttachInlayHints', { clear = true }),
+      group = vim.api.nvim_create_augroup('LspAttachInlayHints', { clear = true, }),
       callback = function(args)
         if not (args.data and args.data.client_id) then
           return
@@ -18,13 +18,13 @@ return {
       inlay_hints = {
         parameter_hints = {
           prefix = '',
-          remove_colon_start = true
+          remove_colon_start = true,
         },
         type_hints = {
           remove_colon_start = true,
-          remove_colon_end = true
+          remove_colon_end = true,
         },
-      }
+      },
     })
   end,
 }
