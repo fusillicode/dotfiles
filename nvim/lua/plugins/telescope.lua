@@ -54,7 +54,11 @@ return {
       function()
         telescope.extensions.egrepify.egrepify(vim.tbl_extend('force', my_default, { prompt_prefix = 'rg: ', }))
       end)
-    vkeyset('n', '<leader>F', ':Telescope file_browser path=%:p:h select_buffer=true<CR>')
+    vkeyset('n', '<leader>F', function()
+      telescope.extensions.file_browser.file_browser(
+        vim.tbl_extend('force', my_default, { prompt_prefix = 'Dir/File: ', path = '%:p:h', select_buffer = true, })
+      )
+    end)
     vkeyset('n', '<leader>T', ':TodoTelescope<CR>')
 
     local file_browser_actions = require('telescope._extensions.file_browser.actions')
