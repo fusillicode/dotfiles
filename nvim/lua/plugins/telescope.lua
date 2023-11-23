@@ -69,8 +69,8 @@ return {
           hide_parent_dir = true,
           hijack_netrw = true,
           mappings = {
-            ['n'] = {
-              ['h'] = file_browser_actions.goto_parent_dir,
+            ['i'] = {
+              ['<C-h>'] = file_browser_actions.goto_parent_dir,
             },
           },
         },
