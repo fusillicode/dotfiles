@@ -50,7 +50,7 @@ return {
     vkeyset('n', '<leader>gs', with_my_default('git_status', { prompt_prefix = 'Git Status: ', }))
     vkeyset('n', '<leader>d', with_my_default('diagnostics', { prompt_prefix = 'Diagnostic: ', bufnr = 0, }))
     vkeyset('n', '<leader>D', with_my_default('diagnostics', { prompt_prefix = 'Diagnostic Workspace: ', }))
-    vkeyset('n', '<leader>l',
+    vkeyset('n', '<leader>/',
       function()
         telescope.extensions.egrepify.egrepify(vim.tbl_extend('force', my_default, { prompt_prefix = 'rg: ', }))
       end)
