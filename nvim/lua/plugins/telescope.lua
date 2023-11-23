@@ -6,6 +6,7 @@ return {
     'nvim-lua/plenary.nvim',
     'nvim-telescope/telescope-live-grep-args.nvim',
     'nvim-telescope/telescope-file-browser.nvim',
+    'fdschmidt93/telescope-egrepify.nvim',
     {
       'nvim-telescope/telescope-fzf-native.nvim',
       build = 'make',
@@ -51,9 +52,7 @@ return {
     vkeyset('n', '<leader>D', with_my_default('diagnostics', { prompt_prefix = 'Diagnostic Workspace: ', }))
     vkeyset('n', '<leader>l',
       function()
-        telescope.extensions.live_grep_args.live_grep_args(
-          vim.tbl_extend('force', my_default, { prompt_prefix = 'rg: ', })
-        )
+        telescope.extensions.egrepify.egrepify(vim.tbl_extend('force', my_default, { prompt_prefix = 'rg: ', }))
       end)
     vkeyset('n', '<leader>F', ':Telescope file_browser path=%:p:h select_buffer=true<CR>')
     vkeyset('n', '<leader>T', ':TodoTelescope<CR>')
@@ -84,5 +83,6 @@ return {
 
     telescope.load_extension('fzf')
     telescope.load_extension('file_browser')
+    telescope.load_extension('egrepify')
   end,
 }
