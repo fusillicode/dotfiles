@@ -1,6 +1,6 @@
 return {
   'ruifm/gitlinker.nvim',
-  keys = { '<leader>yy', mode = { 'n', 'v', }, },
+  keys = { '<leader>gy', mode = { 'n', 'v', }, },
   dependencies = { 'nvim-lua/plenary.nvim', },
   config = true,
 }
