@@ -4,12 +4,6 @@ return {
   config = function()
     require('nightfox').setup({
       options = {
-        styles = {
-          conditionals = 'bold',
-          functions = 'bold',
-          keywords = 'bold',
-          types = 'bold',
-        },
         color_blind = {
           enable = true,
         },
