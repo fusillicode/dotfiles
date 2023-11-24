@@ -50,10 +50,10 @@ return {
     vkeyset('n', '<leader>gs', with_my_default('git_status', { prompt_prefix = 'Git Status: ', }))
     vkeyset('n', '<leader>d', with_my_default('diagnostics', { prompt_prefix = 'Diagnostic: ', bufnr = 0, }))
     vkeyset('n', '<leader>D', with_my_default('diagnostics', { prompt_prefix = 'Diagnostic Workspace: ', }))
-    vkeyset('n', '<leader>/',
-      function()
-        telescope.extensions.egrepify.egrepify(vim.tbl_extend('force', my_default, { prompt_prefix = 'rg: ', }))
-      end)
+    vkeyset('n', '<leader>h', with_my_default('help_tags', { prompt_prefix = 'Help tag: ', }))
+    vkeyset('n', '<leader>/', function()
+      telescope.extensions.egrepify.egrepify(vim.tbl_extend('force', my_default, { prompt_prefix = 'rg: ', }))
+    end)
     vkeyset('n', '<leader>F', function()
       telescope.extensions.file_browser.file_browser(
         vim.tbl_extend('force', my_default, { prompt_prefix = 'Dir/File: ', path = '%:p:h', select_buffer = true, })
