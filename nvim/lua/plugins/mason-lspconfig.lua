@@ -6,7 +6,7 @@ return {
   lazy = true,
   config = function()
     require('mason-lspconfig').setup({
-      ensure_installed = vim.tbl_keys(require('../lsp-servers')),
+      ensure_installed = vim.tbl_keys(require('../lsps')),
       automatic_installation = true,
     })
   end,
