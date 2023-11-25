@@ -17,7 +17,7 @@ return {
       vim.keymap.set('n', '<leader>a', vim.lsp.buf.code_action, { buffer = bufnr, })
     end
 
-    for lsp, settings in pairs(require('../mason-tools')['lsps']) do
+    for lsp, settings in pairs(require('../lsps')) do
       lspconfig[lsp].setup({
         capabilities = capabilities,
         on_attach = on_attach,
