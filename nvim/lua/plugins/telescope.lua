@@ -18,7 +18,7 @@ return {
     local telescope_builtin = require('telescope.builtin')
     local telescope_actions = require('telescope.actions')
     local vkeyset = vim.keymap.set
-    local my_default = {
+    local picker_config = {
       show_line = false,
       prompt_title = false,
       results_title = false,
@@ -28,10 +28,14 @@ return {
           ['<esc>'] = telescope_actions.close,
         },
       },
+      layout_config = {
+        anchor = 'N',
+        width = 100,
+      },
     }
     local function with_my_default(picker, opts)
       return function()
-        telescope_builtin[picker](vim.tbl_extend('force', my_default, opts or {}))
+        telescope_builtin[picker](vim.tbl_extend('force', picker_config, opts or {}))
       end
     end
 
@@ -52,18 +56,18 @@ return {
     vkeyset('n', '<leader>D', with_my_default('diagnostics', { prompt_prefix = 'Diagnostic Workspace: ', }))
     vkeyset('n', '<leader>h', with_my_default('help_tags', { prompt_prefix = 'Help tag: ', }))
     vkeyset('n', '<leader>/', function()
-      telescope.extensions.egrepify.egrepify(vim.tbl_extend('force', my_default, { prompt_prefix = 'rg: ', }))
+      telescope.extensions.egrepify.egrepify(vim.tbl_extend('force', picker_config, { prompt_prefix = 'rg: ', }))
     end)
     vkeyset('n', '<leader>F', function()
       telescope.extensions.file_browser.file_browser(
-        vim.tbl_extend('force', my_default, { prompt_prefix = 'Dir/File: ', path = '%:p:h', select_buffer = true, })
+        vim.tbl_extend('force', picker_config, { prompt_prefix = 'Dir/File: ', path = '%:p:h', select_buffer = true, })
       )
     end)
     vkeyset('n', '<leader>T', ':TodoTelescope<CR>')
 
     local file_browser_actions = require('telescope._extensions.file_browser.actions')
     telescope.setup({
-      defaults = vim.tbl_extend('force', require('telescope.themes').get_dropdown(), my_default),
+      defaults = vim.tbl_extend('force', require('telescope.themes').get_dropdown(), picker_config),
       extensions = {
         file_browser = {
           dir_icon = '',
