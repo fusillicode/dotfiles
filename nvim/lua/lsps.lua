@@ -48,4 +48,5 @@ return {
   taplo = {},
   tsserver = {},
   yamlls = {},
+  hadolint = {},
 }
