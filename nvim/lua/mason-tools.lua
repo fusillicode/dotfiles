@@ -3,7 +3,6 @@ return {
     bashls = {},
     docker_compose_language_service = {},
     dockerls = {},
-    dotls = {},
     graphql = {},
     html = {},
     helm_ls = {},
