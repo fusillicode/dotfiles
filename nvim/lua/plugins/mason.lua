@@ -9,21 +9,32 @@ return {
     local mason_registry = require('mason-registry')
     local mason_tools = require('../mason-tools')
 
-    local function install_mason_pkg(pkg_registry_name)
-      local ok, pkg = pcall(mason_registry.get_package, pkg_registry_name)
-      if ok then
+    local function sync_mason_pkg(installed_tools)
+      return function(pkg_name)
+        local ok, pkg = pcall(mason_registry.get_package, pkg_name)
+        if not ok then return end
+        print(vim.inspect(pkg.name) .. ' ' .. vim.inspect(pkg_name))
+        print(vim.inspect(installed_tools))
+        print(vim.inspect(pkg:is_installed()))
+
+        if pkg:is_installed() and not installed_tools[pkg_name] then
+          return pkg:uninstall()
+        end
+
         if not pkg:is_installed() then
-          pkg:install()
+          return pkg:install()
         end
       end
     end
 
+    local installed_pkgs = mason_registry.get_installed_package_names()
+
     for lspconfig_name, _ in pairs(mason_tools['lsps']) do
-      install_mason_pkg(lspconfig_mappings_server.lspconfig_to_package[lspconfig_name])
+      sync_mason_pkg(installed_pkgs)(lspconfig_mappings_server.lspconfig_to_package[lspconfig_name])
     end
 
     for mason_tool_name, _ in pairs(mason_tools['others']) do
-      install_mason_pkg(mason_tool_name)
+      sync_mason_pkg(installed_pkgs)(mason_tool_name)
     end
   end,
 }
