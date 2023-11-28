@@ -46,7 +46,11 @@ return {
     },
     sqlls = {},
     taplo = {},
-    typos_lsp = {},
+    typos_lsp = {
+      typos = {
+        diagnosticSeverity = 'Hint',
+      },
+    },
     tsserver = {},
     yamlls = {},
   },
