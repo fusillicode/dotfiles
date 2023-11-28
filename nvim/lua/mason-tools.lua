@@ -46,6 +46,7 @@ return {
     },
     sqlls = {},
     taplo = {},
+    typos_lsp = {},
     tsserver = {},
     yamlls = {},
   },
