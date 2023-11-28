@@ -16,18 +16,12 @@ return {
   config = function()
     local telescope = require('telescope')
     local telescope_builtin = require('telescope.builtin')
-    local telescope_actions = require('telescope.actions')
     local vkeyset = vim.keymap.set
     local picker_config = {
       show_line = false,
       prompt_title = false,
       results_title = false,
       preview_title = false,
-      mappings = {
-        i = {
-          ['<esc>'] = telescope_actions.close,
-        },
-      },
       layout_config = {
         anchor = 'S',
         width = 100,
@@ -54,7 +48,7 @@ return {
     vkeyset('n', '<leader>gs', with_my_default('git_status', { prompt_prefix = 'Git Status: ', }))
     vkeyset('n', '<leader>d', with_my_default('diagnostics', { prompt_prefix = 'Diagnostic: ', bufnr = 0, }))
     vkeyset('n', '<leader>D', with_my_default('diagnostics', { prompt_prefix = 'Diagnostic Workspace: ', }))
-    vkeyset('n', '<leader>ht', with_my_default('help_tags', { prompt_prefix = 'Help tag: ', }))
+    vkeyset('n', '<leader>hh', with_my_default('help_tags', { prompt_prefix = 'Help tag: ', }))
     vkeyset('n', '<leader>/', function()
       telescope.extensions.egrepify.egrepify(vim.tbl_extend('force', picker_config, { prompt_prefix = 'rg: ', }))
     end)
