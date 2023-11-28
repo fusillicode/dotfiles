@@ -8,15 +8,15 @@ return {
       local vwod = vim.wo.diff
       local vsched = vim.schedule
 
-      vkeyset('n', ']c', function()
-        if vwod then return ']c' end
-        vsched(function() gs.next_hunk() end)
+      vkeyset('n', 'cn', function()
+        if vwod then return 'cn' end
+        vsched(function() gs.next_hunk({ wrap = true, }) end)
         return '<Ignore>'
       end, { expr = true, })
 
-      vkeyset('n', '[c', function()
-        if vwod then return '[c' end
-        vsched(function() gs.prev_hunk() end)
+      vkeyset('n', 'cp', function()
+        if vwod then return 'cp' end
+        vsched(function() gs.prev_hunk({ wrap = true, }) end)
         return '<Ignore>'
       end, { expr = true, })
 
