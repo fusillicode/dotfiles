@@ -13,12 +13,14 @@ return {
       local ok, pkg = pcall(mason_registry.get_package, pkg_name)
 
       if not ok then
-        print('Error getting pkg from masonr-registry' .. pkg_name)
+        print('Error getting pkg ' .. pkg_name .. ' from mason-registry')
         return
       end
 
       if not pkg:is_installed() then
+        print(pkg_name .. ' installing')
         pkg:install()
+        print(pkg_name .. ' installed')
       end
     end
 
