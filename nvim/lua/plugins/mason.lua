@@ -9,12 +9,16 @@ return {
     local mason_registry = require('mason-registry')
     local mason_tools = require('../mason-tools')
 
-    local function install_mason_pkg(pkg_registry_name)
-      local ok, pkg = pcall(mason_registry.get_package, pkg_registry_name)
-      if ok then
-        if not pkg:is_installed() then
-          pkg:install()
-        end
+    local function install_mason_pkg(pkg_name)
+      local ok, pkg = pcall(mason_registry.get_package, pkg_name)
+
+      if not ok then
+        print('Error getting pkg from masonr-registry' .. pkg_name)
+        return
+      end
+
+      if not pkg:is_installed() then
+        pkg:install()
       end
     end
 
