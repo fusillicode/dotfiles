@@ -49,6 +49,7 @@ return {
     vkeyset('n', '<leader>d', with_my_default('diagnostics', { prompt_prefix = 'Diagnostic: ', bufnr = 0, }))
     vkeyset('n', '<leader>D', with_my_default('diagnostics', { prompt_prefix = 'Diagnostic Workspace: ', }))
     vkeyset('n', '<leader>hh', with_my_default('help_tags', { prompt_prefix = 'Help tag: ', }))
+    vkeyset('n', '<leader>l', ':Telescope resume<CR>')
     vkeyset('n', '<leader>/', function()
       telescope.extensions.egrepify.egrepify(vim.tbl_extend('force', picker_config, { prompt_prefix = 'rg: ', }))
     end)
