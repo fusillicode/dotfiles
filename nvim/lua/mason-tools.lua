@@ -47,18 +47,8 @@ return {
     sqlls = {},
     taplo = {},
     typos_lsp = {
-      diagnosticSeverity = 'Hint',
-      typos = {
-        diagnosticSeverity = 'Hint',
-      },
-      typoslsp = {
-        diagnosticSeverity = 'Hint',
-      },
-      typos_lsp = {
-        diagnosticSeverity = 'Hint',
-      },
-      ['typos-lsp'] = {
-        diagnosticSeverity = 'Hint',
+      init_options = {
+        diagnosticSeverity = 'Warning',
       },
     },
     tsserver = {},
