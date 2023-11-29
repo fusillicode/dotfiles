@@ -18,6 +18,9 @@ return {
     end
 
     for lsp, settings in pairs(require('../mason-tools')['lsps']) do
+      if lsp == 'typos_lsp' then
+        print(vim.inspect(settings))
+      end
       lspconfig[lsp].setup({
         capabilities = capabilities,
         on_attach = on_attach,
