@@ -7,11 +7,9 @@ return {
       dockerfile = { 'hadolint', },
     }
 
-    vim.api.nvim_create_autocmd({ 'BufWritePost', }, {
+    vim.api.nvim_create_autocmd('BufWritePost', {
       group = vim.api.nvim_create_augroup('FormatBufferWithNvimLint', { clear = true, }),
-      callback = function()
-        lint.try_lint()
-      end,
+      callback = function() lint.try_lint() end,
     })
   end,
 }
