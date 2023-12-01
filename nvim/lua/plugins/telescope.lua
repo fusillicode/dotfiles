@@ -17,19 +17,30 @@ return {
     local telescope = require('telescope')
     local telescope_builtin = require('telescope.builtin')
     local vkeyset = vim.keymap.set
-    local picker_config = {
-      show_line = false,
-      prompt_title = false,
-      results_title = false,
-      preview_title = false,
+    local my_global_defaults = {
+      mappings = {
+        i = {
+          ['<C-a>'] = function() vim.cmd 'normal! ^' end,
+          ['<C-e>'] = function() vim.cmd 'normal! $' end,
+          ['<C-b>'] = function() vim.cmd 'normal! h' end,
+          ['<C-f>'] = function() vim.cmd 'normal! l' end,
+          ['<A-f>'] = function() vim.cmd 'normal! w' end,
+          ['<A-b>'] = function() vim.cmd 'normal! b' end,
+          ['<C-k>'] = function() vim.cmd 'normal! d$' end,
+        },
+      },
       layout_config = {
         anchor = 'S',
         width = 100,
       },
+      preview_title = false,
+      prompt_title = false,
+      results_title = false,
+      show_line = false,
     }
     local function with_my_default(picker, opts)
       return function()
-        telescope_builtin[picker](vim.tbl_extend('force', picker_config, opts or {}))
+        telescope_builtin[picker](vim.tbl_extend('force', my_global_defaults, opts or {}))
       end
     end
 
@@ -51,18 +62,19 @@ return {
     vkeyset('n', '<leader>hh', with_my_default('help_tags', { prompt_prefix = 'Help tag: ', }))
     vkeyset('n', '<leader>l', ':Telescope resume<CR>')
     vkeyset('n', '<leader>/', function()
-      telescope.extensions.egrepify.egrepify(vim.tbl_extend('force', picker_config, { prompt_prefix = 'rg: ', }))
+      telescope.extensions.egrepify.egrepify(vim.tbl_extend('force', my_global_defaults, { prompt_prefix = 'rg: ', }))
     end)
     vkeyset('n', '<leader>F', function()
       telescope.extensions.file_browser.file_browser(
-        vim.tbl_extend('force', picker_config, { prompt_prefix = 'Dir/File: ', path = '%:p:h', select_buffer = true, })
+        vim.tbl_extend('force', my_global_defaults,
+          { prompt_prefix = 'Dir/File: ', path = '%:p:h', select_buffer = true, })
       )
     end)
     vkeyset('n', '<leader>T', ':TodoTelescope<CR>')
 
     local file_browser_actions = require('telescope._extensions.file_browser.actions')
     telescope.setup({
-      defaults = vim.tbl_extend('force', require('telescope.themes').get_dropdown(), picker_config),
+      defaults = vim.tbl_extend('force', require('telescope.themes').get_dropdown(), my_global_defaults),
       extensions = {
         egrepify = {
           prefixes = {
