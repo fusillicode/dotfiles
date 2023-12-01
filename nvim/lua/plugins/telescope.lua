@@ -20,13 +20,13 @@ return {
     local my_global_defaults = {
       mappings = {
         i = {
-          ['<C-a>'] = function() vim.cmd 'normal! ^' end,
-          ['<C-e>'] = function() vim.cmd 'normal! $' end,
-          ['<C-b>'] = function() vim.cmd 'normal! h' end,
-          ['<C-f>'] = function() vim.cmd 'normal! l' end,
-          ['<A-f>'] = function() vim.cmd 'normal! w' end,
-          ['<A-b>'] = function() vim.cmd 'normal! b' end,
-          ['<C-k>'] = function() vim.cmd 'normal! d$' end,
+          ['<C-a>'] = function() vim.cmd('normal! ^') end,
+          ['<C-e>'] = function() vim.cmd('normal! $') end,
+          ['<C-b>'] = function() vim.cmd('normal! h') end,
+          ['<C-f>'] = function() vim.cmd('normal! l') end,
+          ['<A-f>'] = function() vim.cmd('normal! w') end,
+          ['<A-b>'] = function() vim.cmd('normal! b') end,
+          ['<C-k>'] = function() vim.cmd('normal! d$') end,
         },
       },
       layout_config = {
@@ -38,28 +38,29 @@ return {
       results_title = false,
       show_line = false,
     }
-    local function with_my_default(picker, opts)
+    local function with_my_global_defaults(picker, opts)
       return function()
         telescope_builtin[picker](vim.tbl_extend('force', my_global_defaults, opts or {}))
       end
     end
 
-    vkeyset('n', 'gd', with_my_default('lsp_definitions', { prompt_prefix = 'LSP Def: ', }))
-    vkeyset('n', 'gr', with_my_default('lsp_references', { prompt_prefix = 'LSP Ref: ', }))
-    vkeyset('n', 'gi', with_my_default('lsp_implementations', { prompt_prefix = 'LSP Impl: ', }))
-    vkeyset('n', '<leader>s', with_my_default('lsp_document_symbols', { prompt_prefix = 'LSP Symbol: ', }))
+    vkeyset('n', 'gd', with_my_global_defaults('lsp_definitions', { prompt_prefix = 'LSP Def: ', }))
+    vkeyset('n', 'gr', with_my_global_defaults('lsp_references', { prompt_prefix = 'LSP Ref: ', }))
+    vkeyset('n', 'gi', with_my_global_defaults('lsp_implementations', { prompt_prefix = 'LSP Impl: ', }))
+    vkeyset('n', '<leader>s', with_my_global_defaults('lsp_document_symbols', { prompt_prefix = 'LSP Symbol: ', }))
     vkeyset('n', '<leader>S',
-      with_my_default('lsp_dynamic_workspace_symbols', { prompt_prefix = 'LSP Symbol Workspace: ', }))
-    vkeyset('n', '<leader>b', with_my_default('buffers', { prompt_prefix = 'Buffer: ', }))
-    vkeyset('n', '<leader>f', with_my_default('find_files', { prompt_prefix = 'File: ', }))
-    vkeyset('n', '<leader>j', with_my_default('jumplist', { prompt_prefix = 'Jump: ', }))
-    vkeyset('n', '<leader>gc', with_my_default('git_commits', { prompt_prefix = 'Git Commit: ', }))
-    vkeyset('n', '<leader>gbb', with_my_default('git_bcommits', { prompt_prefix = ' Git Commit Buffer >', bufnr = 0, }))
-    vkeyset('n', '<leader>gb', with_my_default('git_branches', { prompt_prefix = 'Git Branch: ', }))
-    vkeyset('n', '<leader>gs', with_my_default('git_status', { prompt_prefix = 'Git Status: ', }))
-    vkeyset('n', '<leader>d', with_my_default('diagnostics', { prompt_prefix = 'Diagnostic: ', bufnr = 0, }))
-    vkeyset('n', '<leader>D', with_my_default('diagnostics', { prompt_prefix = 'Diagnostic Workspace: ', }))
-    vkeyset('n', '<leader>hh', with_my_default('help_tags', { prompt_prefix = 'Help tag: ', }))
+      with_my_global_defaults('lsp_dynamic_workspace_symbols', { prompt_prefix = 'LSP Symbol Workspace: ', }))
+    vkeyset('n', '<leader>b', with_my_global_defaults('buffers', { prompt_prefix = 'Buffer: ', }))
+    vkeyset('n', '<leader>f', with_my_global_defaults('find_files', { prompt_prefix = 'File: ', }))
+    vkeyset('n', '<leader>j', with_my_global_defaults('jumplist', { prompt_prefix = 'Jump: ', }))
+    vkeyset('n', '<leader>gc', with_my_global_defaults('git_commits', { prompt_prefix = 'Git Commit: ', }))
+    vkeyset('n', '<leader>gbb',
+      with_my_global_defaults('git_bcommits', { prompt_prefix = ' Git Commit Buffer >', bufnr = 0, }))
+    vkeyset('n', '<leader>gb', with_my_global_defaults('git_branches', { prompt_prefix = 'Git Branch: ', }))
+    vkeyset('n', '<leader>gs', with_my_global_defaults('git_status', { prompt_prefix = 'Git Status: ', }))
+    vkeyset('n', '<leader>d', with_my_global_defaults('diagnostics', { prompt_prefix = 'Diagnostic: ', bufnr = 0, }))
+    vkeyset('n', '<leader>D', with_my_global_defaults('diagnostics', { prompt_prefix = 'Diagnostic Workspace: ', }))
+    vkeyset('n', '<leader>hh', with_my_global_defaults('help_tags', { prompt_prefix = 'Help tag: ', }))
     vkeyset('n', '<leader>l', ':Telescope resume<CR>')
     vkeyset('n', '<leader>/', function()
       telescope.extensions.egrepify.egrepify(vim.tbl_extend('force', my_global_defaults, { prompt_prefix = 'rg: ', }))
