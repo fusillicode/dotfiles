@@ -64,6 +64,11 @@ return {
     telescope.setup({
       defaults = vim.tbl_extend('force', require('telescope.themes').get_dropdown(), picker_config),
       extensions = {
+        egrepify = {
+          prefixes = {
+            ['h'] = { flag = 'hidden', },
+          },
+        },
         file_browser = {
           dir_icon = '',
           grouped = true,
