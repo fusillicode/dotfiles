@@ -62,8 +62,8 @@ if wezterm.gui then
   for _, custom_copy_key in pairs({
     { key = '/', action = act.CopyMode 'EditPattern', },
     { key = 'x', action = act.CopyMode { SetSelectionMode = 'Line', }, },
-    { key = 'd', mods = 'CTRL',                                        action = act.CopyMode { MoveByPage = 0.5, }, },
-    { key = 'u', mods = 'CTRL',                                        action = act.CopyMode { MoveByPage = -0.5, }, },
+    { key = 'd', mods = 'CTRL',                                       action = act.CopyMode { MoveByPage = 0.5, }, },
+    { key = 'u', mods = 'CTRL',                                       action = act.CopyMode { MoveByPage = -0.5, }, },
     { key = 'y', mods = 'NONE', action = act.Multiple { { CopyTo = 'ClipboardAndPrimarySelection', }, },
     },
   }) do
@@ -72,7 +72,7 @@ if wezterm.gui then
 end
 config.key_tables = { copy_mode = copy_mode, }
 
-config.line_height = 1.3
+config.line_height = 1.2
 config.show_new_tab_button_in_tab_bar = false
 config.switch_to_last_active_tab_when_closing_tab = true
 config.text_blink_rate = 0
