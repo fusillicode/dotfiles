@@ -19,7 +19,7 @@ return {
     local vkeyset = vim.keymap.set
     local my_global_defaults = {
       mappings = {
-        i = {
+        ['i'] = {
           ['<C-a>'] = function() vim.cmd('normal! ^') end,
           ['<C-e>'] = function() vim.cmd('normal! $') end,
           ['<C-b>'] = function() vim.cmd('normal! h') end,
@@ -90,6 +90,9 @@ return {
           hijack_netrw = true,
           mappings = {
             ['i'] = {
+              ['<C-h>'] = file_browser_actions.goto_parent_dir,
+            },
+            ['n'] = {
               ['<C-h>'] = file_browser_actions.goto_parent_dir,
             },
           },
