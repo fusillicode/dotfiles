@@ -1,12 +1,14 @@
 local M = {}
 
-local mason_tools_pkg_name = '../mason-tools'
+local mason_tools_module = 'mason-tools'
+local mason_registry_module = 'mason-registry'
 
 function M.sync_mason_tools()
   local lspconfig_mappings_server = require('mason-lspconfig.mappings.server')
-  local mason_registry = require('mason-registry')
-  package.loaded[mason_tools_pkg_name] = nil
-  local mason_tools = require(mason_tools_pkg_name)
+  package.loaded[mason_registry_module] = nil
+  local mason_registry = require(mason_registry_module)
+  package.loaded[mason_tools_module] = nil
+  local mason_tools = require(mason_tools_module)
 
   local pkgs_names = {}
   for mason_tool_name, _ in pairs(vim.tbl_extend('error', mason_tools['lsps'], mason_tools['others'])) do
@@ -28,8 +30,8 @@ function M.sync_mason_tools()
     if pkg then M.uninstall_mason_pkg(pkg) end
   end
 
-  if #pkgs_to_install == 0 and #pkgs_to_uninstall == 0 then
-    print('Everything already synced')
+  if not next(pkgs_to_install) and not next(pkgs_to_uninstall) then
+    print('Nothing to do')
   end
 end
 
