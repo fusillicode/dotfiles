@@ -1,9 +1,12 @@
 local M = {}
 
+local mason_tools_pkg_name = '../mason-tools'
+
 function M.sync_mason_tools()
   local lspconfig_mappings_server = require('mason-lspconfig.mappings.server')
   local mason_registry = require('mason-registry')
-  local mason_tools = require('../mason-tools')
+  package.loaded[mason_tools_pkg_name] = nil
+  local mason_tools = require(mason_tools_pkg_name)
 
   local pkgs_names = {}
   for mason_tool_name, _ in pairs(vim.tbl_extend('error', mason_tools['lsps'], mason_tools['others'])) do
