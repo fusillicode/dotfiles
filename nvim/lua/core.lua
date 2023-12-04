@@ -100,4 +100,4 @@ vim.api.nvim_create_autocmd('FocusLost', {
   command = ':silent! wa!',
 })
 
-vim.api.nvim_create_user_command('MasonSync', require('utils').sync_mason_tools, {})
+vim.api.nvim_create_user_command('MasonSync', require('mason-tools').sync, {})
