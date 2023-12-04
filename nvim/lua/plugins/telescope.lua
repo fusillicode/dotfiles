@@ -5,7 +5,6 @@ return {
   dependencies = {
     'nvim-lua/plenary.nvim',
     'nvim-telescope/telescope-live-grep-args.nvim',
-    'nvim-telescope/telescope-file-browser.nvim',
     'fdschmidt93/telescope-egrepify.nvim',
     {
       'nvim-telescope/telescope-fzf-native.nvim',
@@ -65,36 +64,14 @@ return {
     vkeyset('n', '<leader>/', function()
       telescope.extensions.egrepify.egrepify(vim.tbl_extend('force', my_global_defaults, { prompt_prefix = 'rg: ', }))
     end)
-    vkeyset('n', '<leader>F', function()
-      telescope.extensions.file_browser.file_browser(
-        vim.tbl_extend('force', my_global_defaults,
-          { prompt_prefix = 'Dir/File: ', path = '%:p:h', select_buffer = true, })
-      )
-    end)
     vkeyset('n', '<leader>T', ':TodoTelescope<CR>')
 
-    local file_browser_actions = require('telescope._extensions.file_browser.actions')
     telescope.setup({
       defaults = vim.tbl_extend('force', require('telescope.themes').get_dropdown(), my_global_defaults),
       extensions = {
         egrepify = {
           prefixes = {
             ['h'] = { flag = 'hidden', },
-          },
-        },
-        file_browser = {
-          dir_icon = '',
-          grouped = true,
-          hidden = { file_browser = true, folder_browser = true, },
-          hide_parent_dir = true,
-          hijack_netrw = true,
-          mappings = {
-            ['i'] = {
-              ['<C-h>'] = file_browser_actions.goto_parent_dir,
-            },
-            ['n'] = {
-              ['<C-h>'] = file_browser_actions.goto_parent_dir,
-            },
           },
         },
       },
@@ -106,7 +83,6 @@ return {
     })
 
     telescope.load_extension('fzf')
-    telescope.load_extension('file_browser')
     telescope.load_extension('egrepify')
   end,
 }
