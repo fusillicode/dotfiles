@@ -10,6 +10,7 @@ return {
       },
       groups = {
         all = {
+          CmpDocumentation      = { bg = '#404a5a', },
           ColorColumn           = { bg = '#242830', },
           CursorLine            = { bg = '#242830', },
           CursorLineNr          = { fg = 'white', style = 'bold', },
@@ -18,6 +19,7 @@ return {
           GitSignsDelete        = { fg = 'red', },
           LspInlayHint          = { fg = 'grey', bg = 'none', },
           MatchParen            = { fg = 'black', bg = 'orange', },
+          NormalFloat           = { bg = '#404a5a', },
           TelescopeMatching     = { fg = 'orange', },
           TelescopePromptPrefix = { link = 'TelescopePromptBorder', },
         },
