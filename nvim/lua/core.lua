@@ -80,7 +80,6 @@ vkeyset('n', '<leader>e', vdiag.open_float)
 
 vdiag.config {
   float = {
-    border = 'single',
     focusable = false,
     header = '',
     prefix = '',
