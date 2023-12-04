@@ -17,7 +17,7 @@ return {
         end,
       },
       keymaps = {
-        ['<esc>'] = ':bd<CR>',
+        ['<esc>'] = ':bd!<CR>',
       },
     })
   end,
