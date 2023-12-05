@@ -1,79 +1,74 @@
-local vg = vim.g
-vg.mapleader = ' '
-vg.maplocalleader = ' '
+vim.g.mapleader = ' '
+vim.g.maplocalleader = ' '
 
 for _, provider in ipairs { 'node', 'perl', 'python3', 'ruby', } do
-  vg['loaded_' .. provider .. '_provider'] = 0
+  vim.g['loaded_' .. provider .. '_provider'] = 0
 end
 
-local vo = vim.o
-vo.autoindent = true
-vo.backspace = 'indent,eol,start'
-vo.breakindent = true
-vo.colorcolumn = '120'
-vo.completeopt = 'menuone,noselect'
-vo.cursorline = true
-vo.expandtab = true
-vo.hlsearch = true
-vo.ignorecase = true
-vo.list = true
-vo.mouse = 'a'
-vo.showmode = false
-vo.number = true
-vo.shiftwidth = 2
-vo.sidescroll = 1
-vo.signcolumn = 'auto:2'
-vo.smartcase = true
-vo.splitbelow = true
-vo.splitright = true
-vo.tabstop = 2
-vo.termguicolors = true
-vo.undofile = true
-vo.updatetime = 250
-vo.wrap = false
+vim.o.autoindent = true
+vim.o.backspace = 'indent,eol,start'
+vim.o.breakindent = true
+vim.o.colorcolumn = '120'
+vim.o.completeopt = 'menuone,noselect'
+vim.o.cursorline = true
+vim.o.expandtab = true
+vim.o.hlsearch = true
+vim.o.ignorecase = true
+vim.o.list = true
+vim.o.mouse = 'a'
+vim.o.showmode = false
+vim.o.number = true
+vim.o.shiftwidth = 2
+vim.o.sidescroll = 1
+vim.o.signcolumn = 'auto:2'
+vim.o.smartcase = true
+vim.o.splitbelow = true
+vim.o.splitright = true
+vim.o.tabstop = 2
+vim.o.termguicolors = true
+vim.o.undofile = true
+vim.o.updatetime = 250
+vim.o.wrap = false
 
-local vopt = vim.opt
-vopt.clipboard:append('unnamedplus')
-vopt.iskeyword:append('-')
-vopt.shortmess:append('sI')
+vim.opt.clipboard:append('unnamedplus')
+vim.opt.iskeyword:append('-')
+vim.opt.shortmess:append('sI')
 
-local vkeyset = vim.keymap.set
-vkeyset('', 'gn', ':bn<CR>')
-vkeyset('', 'gp', ':bp<CR>')
-vkeyset('', 'ga', '<C-^>')
-vkeyset({ 'n', 'v', }, 'gh', '0')
-vkeyset({ 'n', 'v', }, 'gl', '$')
-vkeyset({ 'n', 'v', }, 'gs', '_')
-vkeyset({ 'n', 'v', }, 'mm', '%', { remap = true, })
+vim.keymap.set('', 'gn', ':bn<CR>')
+vim.keymap.set('', 'gp', ':bp<CR>')
+vim.keymap.set('', 'ga', '<C-^>')
+vim.keymap.set({ 'n', 'v', }, 'gh', '0')
+vim.keymap.set({ 'n', 'v', }, 'gl', '$')
+vim.keymap.set({ 'n', 'v', }, 'gs', '_')
+vim.keymap.set({ 'n', 'v', }, 'mm', '%', { remap = true, })
 
-vkeyset('v', 'p', '"_dP')
-vkeyset('v', '>', '>gv')
-vkeyset('v', '<', '<gv')
-vkeyset('n', '>', '>>')
-vkeyset('n', '<', '<<')
-vkeyset({ 'n', 'v', }, 'U', '<C-r>')
+vim.keymap.set('v', 'p', '"_dP')
+vim.keymap.set('v', '>', '>gv')
+vim.keymap.set('v', '<', '<gv')
+vim.keymap.set('n', '>', '>>')
+vim.keymap.set('n', '<', '<<')
+vim.keymap.set({ 'n', 'v', }, 'U', '<C-r>')
 
-vkeyset('n', '<C-u>', '<C-u>zz')
-vkeyset('n', '<C-d>', '<C-d>zz')
-vkeyset('n', '<C-o>', '<C-o>zz')
-vkeyset('n', '<C-i>', '<C-i>zz')
-vkeyset('n', '<C-j>', '<C-Down>', { remap = true, })
-vkeyset('n', '<C-k>', '<C-Up>', { remap = true, })
+vim.keymap.set('n', '<C-u>', '<C-u>zz')
+vim.keymap.set('n', '<C-d>', '<C-d>zz')
+vim.keymap.set('n', '<C-o>', '<C-o>zz')
+vim.keymap.set('n', '<C-i>', '<C-i>zz')
+vim.keymap.set('n', '<C-j>', '<C-Down>', { remap = true, })
+vim.keymap.set('n', '<C-k>', '<C-Up>', { remap = true, })
 
-vkeyset({ 'n', 'v', }, '<leader><leader>', ':w!<CR>')
-vkeyset({ 'n', 'v', }, '<leader>x', ':bd<CR>')
-vkeyset({ 'n', 'v', }, '<leader>X', ':bd!<CR>')
-vkeyset({ 'n', 'v', }, '<leader>w', ':wa<CR>')
-vkeyset({ 'n', 'v', }, '<leader>W', ':wa!<CR>')
-vkeyset({ 'n', 'v', }, '<leader>q', ':q<CR>')
-vkeyset({ 'n', 'v', }, '<leader>Q', ':q!<CR>')
-vkeyset('n', '<esc>', ':noh<CR>')
+vim.keymap.set({ 'n', 'v', }, '<leader><leader>', ':w!<CR>')
+vim.keymap.set({ 'n', 'v', }, '<leader>x', ':bd<CR>')
+vim.keymap.set({ 'n', 'v', }, '<leader>X', ':bd!<CR>')
+vim.keymap.set({ 'n', 'v', }, '<leader>w', ':wa<CR>')
+vim.keymap.set({ 'n', 'v', }, '<leader>W', ':wa!<CR>')
+vim.keymap.set({ 'n', 'v', }, '<leader>q', ':q<CR>')
+vim.keymap.set({ 'n', 'v', }, '<leader>Q', ':q!<CR>')
+vim.keymap.set('n', '<esc>', ':noh<CR>')
 
-local vdiag = vim.diagnostic
-vkeyset('n', 'dp', vdiag.goto_prev)
-vkeyset('n', 'dn', vdiag.goto_next)
-vkeyset('n', '<leader>e', vdiag.open_float)
-vdiag.config {
+vim.keymap.set('n', 'dp', vim.diagnostic.goto_prev)
+vim.keymap.set('n', 'dn', vim.diagnostic.goto_next)
+vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float)
+vim.diagnostic.config {
   float = {
     focusable = true,
     format = function(diagnostic)
