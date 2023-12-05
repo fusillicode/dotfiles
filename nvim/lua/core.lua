@@ -77,20 +77,19 @@ local vdiag = vim.diagnostic
 vkeyset('n', 'dp', vdiag.goto_prev)
 vkeyset('n', 'dn', vdiag.goto_next)
 vkeyset('n', '<leader>e', vdiag.open_float)
-
 vdiag.config {
   float = {
-    focusable = false,
+    focusable = true,
     header = '',
     prefix = '',
     source = 'always',
-    style = 'minimal',
+    -- style = 'minimal',
   },
   severity_sort = true,
   signs = true,
   underline = false,
   update_in_insert = true,
-  virtual_text = true,
+  virtual_text = false,
 }
 
 vim.api.nvim_create_autocmd('TextYankPost', {
