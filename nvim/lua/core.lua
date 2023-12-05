@@ -22,7 +22,7 @@ vo.showmode = false
 vo.number = true
 vo.shiftwidth = 2
 vo.sidescroll = 1
-vo.signcolumn = 'yes'
+vo.signcolumn = 'auto:2'
 vo.smartcase = true
 vo.splitbelow = true
 vo.splitright = true
@@ -36,10 +36,6 @@ local vopt = vim.opt
 vopt.clipboard:append('unnamedplus')
 vopt.iskeyword:append('-')
 vopt.shortmess:append('sI')
-
-local vwo = vim.wo
-vwo.number = true
-vwo.signcolumn = 'yes'
 
 local vkeyset = vim.keymap.set
 vkeyset('', 'gn', ':bn<CR>')
@@ -80,15 +76,21 @@ vkeyset('n', '<leader>e', vdiag.open_float)
 vdiag.config {
   float = {
     focusable = true,
+    format = function(diagnostic)
+      return '☛ '
+          .. diagnostic.message
+          .. ' [ ' .. diagnostic.source .. ' ] '
+          .. (diagnostic.code and '[ ' .. diagnostic.code .. ' ]' or '')
+    end,
     header = '',
     prefix = '',
-    source = 'always',
-    -- style = 'minimal',
+    source = false,
+    suffix = '',
   },
   severity_sort = true,
   signs = true,
   underline = false,
-  update_in_insert = true,
+  update_in_insert = false,
   virtual_text = false,
 }
 
