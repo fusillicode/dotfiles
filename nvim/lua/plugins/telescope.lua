@@ -15,6 +15,7 @@ return {
   config = function()
     local telescope = require('telescope')
     local telescope_builtin = require('telescope.builtin')
+    local actions = require('telescope.actions')
     local vkeyset = vim.keymap.set
     local my_global_defaults = {
       mappings = {
@@ -26,6 +27,7 @@ return {
           ['<A-f>'] = function() vim.cmd('normal! w') end,
           ['<A-b>'] = function() vim.cmd('normal! b') end,
           ['<C-k>'] = function() vim.cmd('normal! d$') end,
+          ['<esc>'] = actions.close,
         },
       },
       layout_config = {
