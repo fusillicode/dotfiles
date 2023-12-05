@@ -16,7 +16,6 @@ return {
     local telescope = require('telescope')
     local telescope_builtin = require('telescope.builtin')
     local actions = require('telescope.actions')
-    local vkeyset = vim.keymap.set
     local my_global_defaults = {
       mappings = {
         ['i'] = {
@@ -45,28 +44,30 @@ return {
       end
     end
 
-    vkeyset('n', 'gd', with_my_global_defaults('lsp_definitions', { prompt_prefix = 'LSP Def: ', }))
-    vkeyset('n', 'gr', with_my_global_defaults('lsp_references', { prompt_prefix = 'LSP Ref: ', }))
-    vkeyset('n', 'gi', with_my_global_defaults('lsp_implementations', { prompt_prefix = 'LSP Impl: ', }))
-    vkeyset('n', '<leader>s', with_my_global_defaults('lsp_document_symbols', { prompt_prefix = 'LSP Symbol: ', }))
-    vkeyset('n', '<leader>S',
+    vim.keymap.set('n', 'gd', with_my_global_defaults('lsp_definitions', { prompt_prefix = 'LSP Def: ', }))
+    vim.keymap.set('n', 'gr', with_my_global_defaults('lsp_references', { prompt_prefix = 'LSP Ref: ', }))
+    vim.keymap.set('n', 'gi', with_my_global_defaults('lsp_implementations', { prompt_prefix = 'LSP Impl: ', }))
+    vim.keymap.set('n', '<leader>s', with_my_global_defaults('lsp_document_symbols', { prompt_prefix = 'LSP Symbol: ', }))
+    vim.keymap.set('n', '<leader>S',
       with_my_global_defaults('lsp_dynamic_workspace_symbols', { prompt_prefix = 'LSP Symbol Workspace: ', }))
-    vkeyset('n', '<leader>b', with_my_global_defaults('buffers', { prompt_prefix = 'Buffer: ', }))
-    vkeyset('n', '<leader>f', with_my_global_defaults('find_files', { prompt_prefix = 'File: ', }))
-    vkeyset('n', '<leader>j', with_my_global_defaults('jumplist', { prompt_prefix = 'Jump: ', }))
-    vkeyset('n', '<leader>gc', with_my_global_defaults('git_commits', { prompt_prefix = 'Git Commit: ', }))
-    vkeyset('n', '<leader>gbb',
+    vim.keymap.set('n', '<leader>b', with_my_global_defaults('buffers', { prompt_prefix = 'Buffer: ', }))
+    vim.keymap.set('n', '<leader>f', with_my_global_defaults('find_files', { prompt_prefix = 'File: ', }))
+    vim.keymap.set('n', '<leader>j', with_my_global_defaults('jumplist', { prompt_prefix = 'Jump: ', }))
+    vim.keymap.set('n', '<leader>gc', with_my_global_defaults('git_commits', { prompt_prefix = 'Git Commit: ', }))
+    vim.keymap.set('n', '<leader>gbb',
       with_my_global_defaults('git_bcommits', { prompt_prefix = ' Git Commit Buffer >', bufnr = 0, }))
-    vkeyset('n', '<leader>gb', with_my_global_defaults('git_branches', { prompt_prefix = 'Git Branch: ', }))
-    vkeyset('n', '<leader>gs', with_my_global_defaults('git_status', { prompt_prefix = 'Git Status: ', }))
-    vkeyset('n', '<leader>d', with_my_global_defaults('diagnostics', { prompt_prefix = 'Diagnostic: ', bufnr = 0, }))
-    vkeyset('n', '<leader>D', with_my_global_defaults('diagnostics', { prompt_prefix = 'Diagnostic Workspace: ', }))
-    vkeyset('n', '<leader>hh', with_my_global_defaults('help_tags', { prompt_prefix = 'Help tag: ', }))
-    vkeyset('n', '<leader>l', ':Telescope resume<CR>')
-    vkeyset('n', '<leader>/', function()
+    vim.keymap.set('n', '<leader>gb', with_my_global_defaults('git_branches', { prompt_prefix = 'Git Branch: ', }))
+    vim.keymap.set('n', '<leader>gs', with_my_global_defaults('git_status', { prompt_prefix = 'Git Status: ', }))
+    vim.keymap.set('n', '<leader>d',
+      with_my_global_defaults('diagnostics', { prompt_prefix = 'Diagnostic: ', bufnr = 0, }))
+    vim.keymap.set('n', '<leader>D',
+      with_my_global_defaults('diagnostics', { prompt_prefix = 'Diagnostic Workspace: ', }))
+    vim.keymap.set('n', '<leader>hh', with_my_global_defaults('help_tags', { prompt_prefix = 'Help tag: ', }))
+    vim.keymap.set('n', '<leader>l', ':Telescope resume<CR>')
+    vim.keymap.set('n', '<leader>/', function()
       telescope.extensions.egrepify.egrepify(vim.tbl_extend('force', my_global_defaults, { prompt_prefix = 'rg: ', }))
     end)
-    vkeyset('n', '<leader>T', ':TodoTelescope<CR>')
+    vim.keymap.set('n', '<leader>T', ':TodoTelescope<CR>')
 
     telescope.setup({
       defaults = vim.tbl_extend('force', require('telescope.themes').get_dropdown(), my_global_defaults),
