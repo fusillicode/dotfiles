@@ -2,6 +2,8 @@ return {
   'EdenEast/nightfox.nvim',
   priority = 1000,
   config = function()
+    local nordfox_light_bg = '#242830'
+
     require('nightfox').setup({
       options = {
         color_blind = {
@@ -10,19 +12,19 @@ return {
       },
       groups = {
         all = {
-          ColorColumn             = { bg = '#242830', },
-          CursorLine              = { bg = '#242830', },
+          ColorColumn             = { bg = nordfox_light_bg, },
+          CursorLine              = { bg = nordfox_light_bg, },
           CursorLineNr            = { fg = 'white', style = 'bold', },
           DiagnosticError         = { fg = 'red', },
           DiagnosticHint          = { fg = 'aqua', },
           DiagnosticInfo          = { fg = 'white', },
           DiagnosticOk            = { fg = 'limegreen', },
           DiagnosticWarn          = { fg = 'orange', },
-          DiagnosticFloatingError = { fg = 'red', bg = '#242830', },
-          DiagnosticFloatingHint  = { fg = 'aqua', bg = '#242830', },
-          DiagnosticFloatingInfo  = { fg = 'white', bg = '#242830', },
-          DiagnosticFloatingOk    = { fg = 'limegreen', bg = '#242830', },
-          DiagnosticFloatingWarn  = { fg = 'orange', bg = '#242830', },
+          DiagnosticFloatingError = { fg = 'red', bg = nordfox_light_bg, },
+          DiagnosticFloatingHint  = { fg = 'aqua', bg = nordfox_light_bg, },
+          DiagnosticFloatingInfo  = { fg = 'white', bg = nordfox_light_bg, },
+          DiagnosticFloatingOk    = { fg = 'limegreen', bg = nordfox_light_bg, },
+          DiagnosticFloatingWarn  = { fg = 'orange', bg = nordfox_light_bg, },
           GitSignsAdd             = { fg = 'limegreen', },
           GitSignsChange          = { fg = 'orange', },
           GitSignsDelete          = { fg = 'red', },
