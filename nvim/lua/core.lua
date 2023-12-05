@@ -16,15 +16,15 @@ vim.o.hlsearch = true
 vim.o.ignorecase = true
 vim.o.list = true
 vim.o.mouse = 'a'
+vim.o.showmode = false
 vim.o.number = true
 vim.o.shiftwidth = 2
-vim.o.showmode = false
 vim.o.sidescroll = 1
 vim.o.signcolumn = 'yes:1'
+vim.o.statuscolumn = '%=%{v:lnum}%=%s'
 vim.o.smartcase = true
 vim.o.splitbelow = true
 vim.o.splitright = true
-vim.o.statuscolumn = '%=%{v:lnum}%=%s'
 vim.o.tabstop = 2
 vim.o.termguicolors = true
 vim.o.undofile = true
