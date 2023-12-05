@@ -1,5 +1,8 @@
 return {
   'stevearc/oil.nvim',
+  keys = {
+    { '<leader>F', },
+  },
   config = function()
     vim.keymap.set('n', '<leader>F', '<CMD>Oil --float<CR>')
 
@@ -17,7 +20,7 @@ return {
         end,
       },
       keymaps = {
-        ['<esc>'] = ':bd<CR>',
+        ['<esc>'] = ':bd!<CR>',
       },
     })
   end,
