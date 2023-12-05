@@ -1,8 +1,7 @@
 return {
   'stevearc/oil.nvim',
   config = function()
-    local vkeyset = vim.keymap.set
-    vkeyset('n', '<leader>F', '<CMD>Oil --float<CR>')
+    vim.keymap.set('n', '<leader>F', '<CMD>Oil --float<CR>')
 
     require('oil').setup({
       delete_to_trash = true,
