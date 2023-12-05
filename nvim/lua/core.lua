@@ -20,8 +20,8 @@ vim.o.showmode = false
 vim.o.number = true
 vim.o.shiftwidth = 2
 vim.o.sidescroll = 1
-vim.opt.numberwidth = 3
-vim.opt.statuscolumn = '%{v:lnum}%=%s'
+vim.o.signcolumn = 'yes:1'
+vim.o.statuscolumn = '%=%{v:lnum}%=%s'
 vim.o.smartcase = true
 vim.o.splitbelow = true
 vim.o.splitright = true
