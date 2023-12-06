@@ -54,7 +54,7 @@ return {
     vim.keymap.set('n', '<leader>f', with_my_global_defaults('find_files', { prompt_prefix = 'File: ', }))
     vim.keymap.set('n', '<leader>j', with_my_global_defaults('jumplist', { prompt_prefix = 'Jump: ', }))
     vim.keymap.set('n', '<leader>gc', with_my_global_defaults('git_commits', { prompt_prefix = 'Git Commit: ', }))
-    vim.keymap.set('n', '<leader>gbb',
+    vim.keymap.set('n', '<leader>gcb',
       with_my_global_defaults('git_bcommits', { prompt_prefix = ' Git Commit Buffer >', bufnr = 0, }))
     vim.keymap.set('n', '<leader>gb', with_my_global_defaults('git_branches', { prompt_prefix = 'Git Branch: ', }))
     vim.keymap.set('n', '<leader>gs', with_my_global_defaults('git_status', { prompt_prefix = 'Git Status: ', }))
