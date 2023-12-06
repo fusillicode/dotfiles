@@ -4,7 +4,7 @@ return {
     { '<leader>F', },
   },
   config = function()
-    vim.keymap.set('n', '<leader>F', '<CMD>Oil --float<CR>')
+    vim.keymap.set('n', '<leader>F', '<CMD>Oil<CR>')
 
     require('oil').setup({
       delete_to_trash = true,
