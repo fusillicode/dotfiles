@@ -74,7 +74,7 @@ return {
       extensions = {
         egrepify = {
           prefixes = {
-            ['h'] = { flag = 'hidden', },
+            ['.'] = { flag = 'hidden', },
           },
         },
       },
@@ -87,5 +87,7 @@ return {
 
     telescope.load_extension('fzf')
     telescope.load_extension('egrepify')
+
+    require('telescope._extensions.egrepify.config').values.mappings = {}
   end,
 }
