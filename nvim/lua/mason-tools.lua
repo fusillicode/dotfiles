@@ -61,6 +61,7 @@ M.tools = {
     yamlls = {},
   },
   others = {
+    commitlint = {},
     hadolint = {},
   },
 }
@@ -69,7 +70,7 @@ M.tools = {
 local function get_mason_pkg(mason_registry, pkg_name)
   local ok, pkg = pcall(mason_registry.get_package, pkg_name)
   if not ok then
-    print('❌ Error getting pkg "' .. pkg_name .. '" from mason-registry')
+    print('ⓧ  Error getting pkg "' .. pkg_name .. '" from mason-registry')
     return
   end
   return pkg
@@ -77,20 +78,20 @@ end
 
 local function install_mason_pkg(pkg)
   if pkg:is_installed() then
-    print('⚠️ "' .. pkg.name .. '" already installed')
+    print('⚠ "' .. pkg.name .. '" already installed')
     return
   end
   pkg:install()
-  print('✅ ' .. pkg.name .. ' installed')
+  print('✓ ' .. pkg.name .. ' installed')
 end
 
 local function uninstall_mason_pkg(pkg)
   if not pkg:is_installed() then
-    print('⚠️ "' .. pkg.name .. '" already not installed')
+    print('⚠ "' .. pkg.name .. '" already not installed')
     return
   end
   pkg:uninstall()
-  print('✅ "' .. pkg.name .. '" uninstalled')
+  print('✓ "' .. pkg.name .. '" uninstalled')
 end
 
 function M.sync()
@@ -122,7 +123,7 @@ function M.sync()
   end
 
   if not next(pkgs_to_install) and not next(pkgs_to_uninstall) then
-    print("👍 Everything's already synced")
+    print("✓ Everything's already synced")
   end
 end
 
