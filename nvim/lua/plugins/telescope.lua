@@ -89,5 +89,6 @@ return {
     telescope.load_extension('egrepify')
 
     require('telescope._extensions.egrepify.config').values.mappings = {}
+    vim.cmd('autocmd User TelescopePreviewerLoaded setlocal number')
   end,
 }
