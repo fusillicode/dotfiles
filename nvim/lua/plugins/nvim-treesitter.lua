@@ -12,6 +12,7 @@ return {
         'css',
         'diff',
         'dockerfile',
+        'elixir',
         'elm',
         'html',
         'javascript',

@@ -18,12 +18,11 @@ return {
     end
 
     for lsp, config in pairs(require('mason-tools')['tools']['lsps']) do
-      lspconfig[lsp].setup({
-        capabilities = capabilities,
-        on_attach = on_attach,
-        settings = config['settings'] or {},
-        init_options = config['init_options'] or {},
-      })
+      local lsp_setup = { capabilities = capabilities, on_attach = on_attach, }
+      if config['cmd'] then lsp_setup.cmd = config['cmd'] end
+      if config['settings'] then lsp_setup.settings = config['settings'] end
+      if config['init_options'] then lsp_setup.settings = config['init_options'] end
+      lspconfig[lsp].setup(lsp_setup)
     end
 
     vim.api.nvim_create_autocmd('BufWritePre', {
