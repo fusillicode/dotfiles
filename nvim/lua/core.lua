@@ -61,7 +61,7 @@ keymap_set('n', '<C-i>', '<C-i>zz')
 keymap_set('n', '<C-j>', '<C-Down>', { remap = true, })
 keymap_set('n', '<C-k>', '<C-Up>', { remap = true, })
 
-keymap_set({ 'n', 'v', }, '<leader><leader>', ':w!<CR>')
+keymap_set({ 'n', 'v', }, '<leader><leader>', ':silent :w!<CR>')
 keymap_set({ 'n', 'v', }, '<leader>x', ':bd<CR>')
 keymap_set({ 'n', 'v', }, '<leader>X', ':bd!<CR>')
 keymap_set({ 'n', 'v', }, '<leader>w', ':wa<CR>')
