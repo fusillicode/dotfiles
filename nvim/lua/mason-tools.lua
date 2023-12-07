@@ -5,6 +5,9 @@ M.tools = {
     bashls = {},
     docker_compose_language_service = {},
     dockerls = {},
+    elixirls = {
+      cmd = { vim.fn.stdpath('data') .. '/mason/bin' .. '/elixir-ls', },
+    },
     graphql = {},
     html = {},
     helm_ls = {},
