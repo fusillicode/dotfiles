@@ -57,7 +57,12 @@ brew install the-unarchiver
 brew install transmission --cask
 brew install tunnelblick
 brew install vlc
-brew install wez/wezterm/wezterm-nightly --cask  --no-quarantine
+brew install wez/wezterm/wezterm-nightly --cask --no-quarantine
+# 🥲 https://wezfurlong.org/wezterm/faq.html#how-do-i-enable-undercurl-curly-underlines
+tempfile=$(mktemp) \
+  && curl -o "$tempfile" https://raw.githubusercontent.com/wez/wezterm/master/termwiz/data/wezterm.terminfo \
+  && tic -x -o ~/.terminfo "$tempfile" \
+  && rm "$tempfile"
 brew install whatsapp
 
 # Install Oh My Zsh
