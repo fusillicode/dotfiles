@@ -22,6 +22,7 @@ vim.o.shiftwidth = 2
 vim.o.sidescroll = 1
 vim.o.signcolumn = 'yes:1'
 vim.o.statuscolumn = '%=%{v:lnum}%=%s'
+vim.o.showtabline = 0
 vim.o.smartcase = true
 vim.o.splitbelow = true
 vim.o.splitright = true
