@@ -72,6 +72,7 @@ vim.keymap.set('n', 'dn', vim.diagnostic.goto_next)
 vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float)
 vim.diagnostic.config {
   float = {
+    anchor_bias = 'above',
     focusable = true,
     format = function(diagnostic)
       return '☛ '
