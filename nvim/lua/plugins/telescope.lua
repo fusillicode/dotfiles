@@ -16,6 +16,7 @@ return {
     local telescope = require('telescope')
     local telescope_builtin = require('telescope.builtin')
     local actions = require('telescope.actions')
+    local keymap_set = require('utils').keymap_set
     local my_global_defaults = {
       mappings = {
         ['i'] = {
@@ -44,30 +45,30 @@ return {
       end
     end
 
-    vim.keymap.set('n', 'gd', with_my_global_defaults('lsp_definitions', { prompt_prefix = 'LSP Def: ', }))
-    vim.keymap.set('n', 'gr', with_my_global_defaults('lsp_references', { prompt_prefix = 'LSP Ref: ', }))
-    vim.keymap.set('n', 'gi', with_my_global_defaults('lsp_implementations', { prompt_prefix = 'LSP Impl: ', }))
-    vim.keymap.set('n', '<leader>s', with_my_global_defaults('lsp_document_symbols', { prompt_prefix = 'LSP Symbol: ', }))
-    vim.keymap.set('n', '<leader>S',
+    keymap_set('n', 'gd', with_my_global_defaults('lsp_definitions', { prompt_prefix = 'LSP Def: ', }))
+    keymap_set('n', 'gr', with_my_global_defaults('lsp_references', { prompt_prefix = 'LSP Ref: ', }))
+    keymap_set('n', 'gi', with_my_global_defaults('lsp_implementations', { prompt_prefix = 'LSP Impl: ', }))
+    keymap_set('n', '<leader>s', with_my_global_defaults('lsp_document_symbols', { prompt_prefix = 'LSP Symbol: ', }))
+    keymap_set('n', '<leader>S',
       with_my_global_defaults('lsp_dynamic_workspace_symbols', { prompt_prefix = 'LSP Symbol Workspace: ', }))
-    vim.keymap.set('n', '<leader>b', with_my_global_defaults('buffers', { prompt_prefix = 'Buffer: ', }))
-    vim.keymap.set('n', '<leader>f', with_my_global_defaults('find_files', { prompt_prefix = 'File: ', }))
-    vim.keymap.set('n', '<leader>j', with_my_global_defaults('jumplist', { prompt_prefix = 'Jump: ', }))
-    vim.keymap.set('n', '<leader>gc', with_my_global_defaults('git_commits', { prompt_prefix = 'Git Commit: ', }))
-    vim.keymap.set('n', '<leader>gcb',
+    keymap_set('n', '<leader>b', with_my_global_defaults('buffers', { prompt_prefix = 'Buffer: ', }))
+    keymap_set('n', '<leader>f', with_my_global_defaults('find_files', { prompt_prefix = 'File: ', }))
+    keymap_set('n', '<leader>j', with_my_global_defaults('jumplist', { prompt_prefix = 'Jump: ', }))
+    keymap_set('n', '<leader>gc', with_my_global_defaults('git_commits', { prompt_prefix = 'Git Commit: ', }))
+    keymap_set('n', '<leader>gcb',
       with_my_global_defaults('git_bcommits', { prompt_prefix = ' Git Commit Buffer >', bufnr = 0, }))
-    vim.keymap.set('n', '<leader>gb', with_my_global_defaults('git_branches', { prompt_prefix = 'Git Branch: ', }))
-    vim.keymap.set('n', '<leader>gs', with_my_global_defaults('git_status', { prompt_prefix = 'Git Status: ', }))
-    vim.keymap.set('n', '<leader>d',
+    keymap_set('n', '<leader>gb', with_my_global_defaults('git_branches', { prompt_prefix = 'Git Branch: ', }))
+    keymap_set('n', '<leader>gs', with_my_global_defaults('git_status', { prompt_prefix = 'Git Status: ', }))
+    keymap_set('n', '<leader>d',
       with_my_global_defaults('diagnostics', { prompt_prefix = 'Diagnostic: ', bufnr = 0, }))
-    vim.keymap.set('n', '<leader>D',
+    keymap_set('n', '<leader>D',
       with_my_global_defaults('diagnostics', { prompt_prefix = 'Diagnostic Workspace: ', }))
-    vim.keymap.set('n', '<leader>hh', with_my_global_defaults('help_tags', { prompt_prefix = 'Help tag: ', }))
-    vim.keymap.set('n', '<leader>/', function()
+    keymap_set('n', '<leader>hh', with_my_global_defaults('help_tags', { prompt_prefix = 'Help tag: ', }))
+    keymap_set('n', '<leader>/', function()
       telescope.extensions.egrepify.egrepify(vim.tbl_extend('force', my_global_defaults, { prompt_prefix = 'rg: ', }))
     end)
-    vim.keymap.set('n', '<leader>T', ':TodoTelescope<CR>')
-    vim.keymap.set('n', '<leader>l', telescope_builtin.resume)
+    keymap_set('n', '<leader>T', ':TodoTelescope<CR>')
+    keymap_set('n', '<leader>l', telescope_builtin.resume)
 
     telescope.setup({
       defaults = vim.tbl_extend('force', require('telescope.themes').get_dropdown(), my_global_defaults),

@@ -9,12 +9,13 @@ return {
   config = function()
     local lspconfig = require('lspconfig')
     local capabilities = require('cmp_nvim_lsp').default_capabilities(vim.lsp.protocol.make_client_capabilities())
+    local keymap_set = require('utils').keymap_set
 
     local function on_attach(_, bufnr)
-      vim.keymap.set('', '<C-r>', ':LspRestart<CR>')
-      vim.keymap.set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr, })
-      vim.keymap.set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, })
-      vim.keymap.set('n', '<leader>a', vim.lsp.buf.code_action, { buffer = bufnr, })
+      keymap_set('', '<C-r>', ':LspRestart<CR>')
+      keymap_set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr, })
+      keymap_set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, })
+      keymap_set('n', '<leader>a', vim.lsp.buf.code_action, { buffer = bufnr, })
     end
 
     for lsp, config in pairs(require('mason-tools')['tools']['lsps']) do
