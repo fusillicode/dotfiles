@@ -63,11 +63,11 @@ return {
     vim.keymap.set('n', '<leader>D',
       with_my_global_defaults('diagnostics', { prompt_prefix = 'Diagnostic Workspace: ', }))
     vim.keymap.set('n', '<leader>hh', with_my_global_defaults('help_tags', { prompt_prefix = 'Help tag: ', }))
-    vim.keymap.set('n', '<leader>l', ':Telescope resume<CR>')
     vim.keymap.set('n', '<leader>/', function()
       telescope.extensions.egrepify.egrepify(vim.tbl_extend('force', my_global_defaults, { prompt_prefix = 'rg: ', }))
     end)
     vim.keymap.set('n', '<leader>T', ':TodoTelescope<CR>')
+    vim.keymap.set('n', '<leader>l', telescope_builtin.resume)
 
     telescope.setup({
       defaults = vim.tbl_extend('force', require('telescope.themes').get_dropdown(), my_global_defaults),
