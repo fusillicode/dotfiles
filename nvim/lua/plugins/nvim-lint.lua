@@ -5,6 +5,8 @@ return {
 
     lint.linters_by_ft = {
       dockerfile = { 'hadolint', },
+      elixir = { 'credo', },
+      markdown = { 'vale', },
     }
 
     vim.api.nvim_create_autocmd('BufWritePost', {
