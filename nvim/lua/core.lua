@@ -68,7 +68,7 @@ keymap_set({ 'n', 'v', }, '<leader>w', ':wa<CR>')
 keymap_set({ 'n', 'v', }, '<leader>W', ':wa!<CR>')
 keymap_set({ 'n', 'v', }, '<leader>q', ':q<CR>')
 keymap_set({ 'n', 'v', }, '<leader>Q', ':q!<CR>')
-keymap_set('n', '<esc>', ':noh<CR>')
+keymap_set('n', '<esc>', ':noh<CR>', { silent = false, })
 
 keymap_set('n', 'dp', vim.diagnostic.goto_prev)
 keymap_set('n', 'dn', vim.diagnostic.goto_next)
