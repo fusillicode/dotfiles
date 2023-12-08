@@ -5,7 +5,7 @@ return {
   build = ':TSUpdate',
   config = function()
     require('nvim-treesitter.configs').setup({
-      matchup = { enable = true, enable_quotes = true, },
+      auto_install = false,
       ensure_installed = {
         'bash',
         'comment',
@@ -31,9 +31,18 @@ return {
         'xml',
         'yaml',
       },
-      sync_install = true,
-      auto_install = false,
       highlight = { enable = true, additional_vim_regex_highlighting = false, },
+      incremental_selection = {
+        enable = true,
+        keymaps = {
+          init_selection = '<CR>',
+          scope_incremental = '<CR>',
+          node_incremental = '<TAB>',
+          node_decremental = '<S-TAB>',
+        },
+      },
+      matchup = { enable = true, enable_quotes = true, },
+      sync_install = true,
       textobjects = {
         move = {
           enable = true,
