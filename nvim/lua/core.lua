@@ -102,7 +102,7 @@ vim.api.nvim_create_autocmd('TextYankPost', {
 })
 
 vim.api.nvim_create_autocmd('FocusLost', {
-  group = vim.api.nvim_create_augroup('AutosaveBuffer', { clear = true, }),
+  group = vim.api.nvim_create_augroup('AutosaveBuffers', { clear = true, }),
   command = ':silent! wa!',
 })
 
