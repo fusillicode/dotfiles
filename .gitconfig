@@ -1,0 +1,14 @@
+[core]
+    filemode = false
+[branch]
+    autosetuprebase = always
+[diff]
+    submodule = log
+[fetch]
+    prune = true
+[merge]
+    tool = opendiff
+[pager]
+    branch = false
+[push]
+    default = current
