@@ -23,7 +23,6 @@ vim.o.shiftwidth = 2
 vim.o.showmode = false
 vim.o.showtabline = 0
 vim.o.sidescroll = 1
-vim.o.signcolumn = 'yes:1'
 vim.o.smartcase = true
 vim.o.splitbelow = true
 vim.o.splitright = true
@@ -37,22 +36,33 @@ function format_statuscolumn(bufnr, row)
   local signs = vim.api.nvim_buf_get_extmarks(bufnr, -1, { row - 1, 0, }, { row - 1, -1, },
     { type = 'sign', details = true, overlap = false, })
 
-  local git_sign, diagnostic
+  local git_sign, error, warn, hint, info, ok
   for _, sign in ipairs(signs) do
-    if git_sign and diagnostic then break end
     local sign_details = sign[4]
+
     if sign_details.sign_hl_group:sub(1, 8) == 'GitSigns' then
       git_sign = sign_details
-    elseif sign_details.sign_hl_group:sub(1, 10) == 'Diagnostic' then
-      diagnostic = sign_details
+    elseif sign_details.sign_hl_group == 'DiagnosticSignError' then
+      error = sign_details
+    elseif sign_details.sign_hl_group == 'DiagnosticSignWarn' then
+      warn = sign_details
+    elseif sign_details.sign_hl_group == 'DiagnosticSignHint' then
+      hint = sign_details
+    elseif sign_details.sign_hl_group == 'DiagnosticSignInfo' then
+      info = sign_details
+    elseif sign_details.sign_hl_group == 'DiagnosticSignOk' then
+      ok = sign_details
     end
   end
 
-  return '%{v:lnum}' .. format_extmark(git_sign) .. format_extmark(diagnostic)
+  return '%{v:lnum}'
+      .. format_extmark(git_sign)
+      .. format_extmark(error or warn or hint or info or ok)
 end
 
+local trim = require('utils').trim
 function format_extmark(extmark)
-  return (extmark and ('%#' .. extmark.sign_hl_group .. '#' .. extmark.sign_text .. '%*') or ' ')
+  return (extmark and ('%#' .. extmark.sign_hl_group .. '#' .. trim(extmark.sign_text) .. '%*') or '')
 end
 
 vim.o.statuscolumn = '%{%v:lua.format_statuscolumn(bufnr(), v:lnum)%}'
