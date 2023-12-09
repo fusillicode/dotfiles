@@ -34,33 +34,26 @@ vim.o.updatetime = 250
 vim.o.wrap = true
 
 function format_statuscolumn(bufnr, row)
-  local extmarks = vim.api.nvim_buf_get_extmarks(bufnr, -1, { row - 1, 0, }, { row - 1, -1, },
+  local signs = vim.api.nvim_buf_get_extmarks(bufnr, -1, { row - 1, 0, }, { row - 1, -1, },
     { type = 'sign', details = true, overlap = false, })
 
-  local git_sign, diagnostics
-  for _, sign in ipairs(extmarks) do
-    if git_sign and diagnostics then break end
+  local git_sign, diagnostic
+  for _, sign in ipairs(signs) do
+    if git_sign and diagnostic then break end
     local sign_details = sign[4]
     if sign_details.sign_hl_group:sub(1, 8) == 'GitSigns' then
       git_sign = sign_details
     elseif sign_details.sign_hl_group:sub(1, 10) == 'Diagnostic' then
-      diagnostics = sign_details
+      diagnostic = sign_details
     end
   end
 
-  return (
-    '%{v:lnum}'
-    .. (git_sign and ('%#' .. git_sign.sign_hl_group .. '#' .. git_sign.sign_text .. '%*') or ' ')
-    .. (diagnostics and ('%#' .. diagnostics.sign_hl_group .. '#' .. diagnostics.sign_text .. '%*') or ' ')
-  )
+  return '%{v:lnum}' .. format_extmark(git_sign) .. format_extmark(diagnostic)
 end
 
--- function format_extmark(extmark)
---   return (extmark and
---     ('%#' .. extmark.sign_hl_group .. '#' .. extmark.sign_text:gsub('^%s*(.-)%s*$', '%1') .. '%*')
---     or ' '
---   )
--- end
+function format_extmark(extmark)
+  return (extmark and ('%#' .. extmark.sign_hl_group .. '#' .. extmark.sign_text .. '%*') or ' ')
+end
 
 vim.o.statuscolumn = '%{%v:lua.format_statuscolumn(bufnr(), v:lnum)%}'
 
