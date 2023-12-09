@@ -33,7 +33,7 @@ vim.o.updatetime = 250
 vim.o.wrap = true
 
 require('statuscol')
-vim.o.statuscolumn = '%{%v:lua.statuscol.signs(bufnr(), v:lnum)%}'
+vim.o.statuscolumn = '%{%v:lua.statuscol.draw(bufnr(), v:lnum)%}'
 vim.o.signcolumn = 'no'
 
 vim.opt.clipboard:append('unnamedplus')
