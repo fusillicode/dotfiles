@@ -27,12 +27,45 @@ vim.o.signcolumn = 'yes:1'
 vim.o.smartcase = true
 vim.o.splitbelow = true
 vim.o.splitright = true
-vim.o.statuscolumn = '%=%{v:lnum}%=%s'
+-- vim.o.statuscolumn = '%=%{v:lnum}%=%s'
 vim.o.tabstop = 2
 vim.o.termguicolors = true
 vim.o.undofile = true
 vim.o.updatetime = 250
-vim.o.wrap = false
+vim.o.wrap = true 
+
+-- function get_signs()
+--   local buf = vim.api.nvim_win_get_buf(vim.g.statusline_winid)
+--   return vim.tbl_map(function(sign)
+--     return vim.fn.sign_getdefined(sign.name)[1]
+--   end, vim.fn.sign_getplaced(buf, { group = '*', lnum = vim.v.lnum, })[1].signs)
+-- end
+
+-- require('utils').dbg(vim.api.nvim_buf_get_name(0))
+-- require('utils').dbg(vim.fn.sign_getplaced(vim.api.nvim_buf_get_name(0), { group = '*', lnum = vim.v.lnum, })[1].signs)
+local row = vim.api.nvim_win_get_cursor(0)[1]
+require('utils').dbg(row)
+require('utils').dbg(vim.api.nvim_buf_get_extmarks(0, -1, { row - 1, 0, }, { row - 1, -1, },
+  { type = 'sign', details = true, overlap = false, }))
+-- require('utils').dbg(vim.fn.sign_getdefined)
+
+-- function column()
+--   local sign, git_sign
+--   for _, s in ipairs(get_signs()) do
+--     if s.name:find('GitSign') then
+--       git_sign = s
+--     else
+--       sign = s
+--     end
+--   end
+--   local components = {
+--     sign and ('%#' .. sign.texthl .. '#' .. sign.text .. '%*') or ' ',
+--     [[%=]],
+--     [[%{&nu?(&rnu&&v:relnum?v:relnum:v:lnum):''} ]],
+--     git_sign and ('%#' .. git_sign.texthl .. '#' .. git_sign.text .. '%*') or '  ',
+--   }
+--   return table.concat(components, '')
+-- end
 
 vim.opt.clipboard:append('unnamedplus')
 vim.opt.iskeyword:append('-')
