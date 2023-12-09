@@ -33,68 +33,36 @@ vim.o.undofile = true
 vim.o.updatetime = 250
 vim.o.wrap = true
 
--- function get_signs()
---   local buf = vim.api.nvim_win_get_buf(vim.g.statusline_winid)
---   return vim.tbl_map(function(sign)
---     return vim.fn.sign_getdefined(sign.name)[1]
---   end, vim.fn.sign_getplaced(buf, { group = '*', lnum = vim.v.lnum, })[1].signs)
--- end
-
-local M = {}
-
-function M.foo()
-  require('utils').dbg(vim.l)
-  if not vim then return end
-
-  local row = vim.l.lnum
-  local extmarks = vim.api.nvim_buf_get_extmarks(0, -1, { row - 1, 0, }, { row - 1, -1, },
+function format_statuscolumn(bufnr, row)
+  local extmarks = vim.api.nvim_buf_get_extmarks(bufnr, -1, { row - 1, 0, }, { row - 1, -1, },
     { type = 'sign', details = true, overlap = false, })
-
-  print('--------')
-  require('utils').dbg(extmarks)
-  print('--------')
 
   local git_sign, diagnostics
   for _, sign in ipairs(extmarks) do
     if git_sign and diagnostics then break end
     local sign_details = sign[4]
-    if sign_details.sign_hl_group:sub(1, #'GitSigns') == 'GitSigns' then
+    if sign_details.sign_hl_group:sub(1, 8) == 'GitSigns' then
       git_sign = sign_details
-    elseif sign_details.sign_hl_group:sub(1, #'Diagnostic') == 'Diagnostic' then
+    elseif sign_details.sign_hl_group:sub(1, 10) == 'Diagnostic' then
       diagnostics = sign_details
     end
   end
-  local status_col = (
+
+  return (
     '%{v:lnum}'
     .. (git_sign and ('%#' .. git_sign.sign_hl_group .. '#' .. git_sign.sign_text .. '%*') or ' ')
     .. (diagnostics and ('%#' .. diagnostics.sign_hl_group .. '#' .. diagnostics.sign_text .. '%*') or ' ')
   )
-
---  vim.o.statuscolumn = status_col
-  return status_col
 end
 
--- M.foo()
-
--- require('utils').dbg(vim.fn.sign_getdefined)
-
--- function column()
---   local sign, git_sign
---   for _, s in ipairs(get_signs()) do
---     if s.name:find('GitSign') then
---       git_sign = s
---     else
---       sign = s
---     end
---   end
---   local components = {
---     sign and ('%#' .. sign.texthl .. '#' .. sign.text .. '%*') or ' ',
---     [[%=]],
---     [[%{&nu?(&rnu&&v:relnum?v:relnum:v:lnum):''} ]],
---     git_sign and ('%#' .. git_sign.texthl .. '#' .. git_sign.text .. '%*') or '  ',
---   }
---   return table.concat(components, '')
+-- function format_extmark(extmark)
+--   return (extmark and
+--     ('%#' .. extmark.sign_hl_group .. '#' .. extmark.sign_text:gsub('^%s*(.-)%s*$', '%1') .. '%*')
+--     or ' '
+--   )
 -- end
+
+vim.o.statuscolumn = '%{%v:lua.format_statuscolumn(bufnr(), v:lnum)%}'
 
 vim.opt.clipboard:append('unnamedplus')
 vim.opt.iskeyword:append('-')
