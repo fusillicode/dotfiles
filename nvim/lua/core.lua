@@ -32,30 +32,30 @@ vim.o.undofile = true
 vim.o.updatetime = 250
 vim.o.wrap = true
 
-function format_statuscolumn(bufnr, row)
-  local signs = vim.api.nvim_buf_get_extmarks(bufnr, -1, { row - 1, 0, }, { row - 1, -1, },
+function statuscol_signs(bufnr, current_lnum)
+  local line_signs = vim.api.nvim_buf_get_extmarks(bufnr, -1, { current_lnum - 1, 0, }, { current_lnum - 1, -1, },
     { type = 'sign', details = true, overlap = false, })
 
-  local git_sign, error, warn, hint, info, ok
-  for _, sign in ipairs(signs) do
+  local git_sign, error_sign, warn_sign, hint_sign, info_sign, ok_sign
+  for _, sign in ipairs(line_signs) do
     local sign_details = sign[4]
 
     if sign_details.sign_hl_group:sub(1, 8) == 'GitSigns' then
       git_sign = sign_details
     elseif sign_details.sign_hl_group == 'DiagnosticSignError' then
-      error = sign_details
+      error_sign = sign_details
     elseif sign_details.sign_hl_group == 'DiagnosticSignWarn' then
-      warn = sign_details
+      warn_sign = sign_details
     elseif sign_details.sign_hl_group == 'DiagnosticSignHint' then
-      hint = sign_details
+      hint_sign = sign_details
     elseif sign_details.sign_hl_group == 'DiagnosticSignInfo' then
-      info = sign_details
+      info_sign = sign_details
     elseif sign_details.sign_hl_group == 'DiagnosticSignOk' then
-      ok = sign_details
+      ok_sign = sign_details
     end
   end
 
-  return format_extmark(git_sign) .. format_extmark(error or warn or hint or info or ok)
+  return format_extmark(git_sign) .. format_extmark(error_sign or warn_sign or hint_sign or info_sign or ok_sign)
 end
 
 local trim = require('utils').trim
@@ -63,7 +63,7 @@ function format_extmark(extmark)
   return (extmark and ('%#' .. extmark.sign_hl_group .. '#' .. trim(extmark.sign_text) .. '%*') or ' ')
 end
 
-vim.o.statuscolumn = '%{v:lnum}%{%v:lua.format_statuscolumn(bufnr(), v:lnum)%}'
+vim.o.statuscolumn = '%{v:lnum}%{%v:lua.statuscol_signs(bufnr(), v:lnum)%}'
 vim.o.signcolumn = 'no'
 
 vim.opt.clipboard:append('unnamedplus')
