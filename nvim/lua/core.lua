@@ -55,17 +55,16 @@ function format_statuscolumn(bufnr, row)
     end
   end
 
-  return '%{v:lnum}'
-      .. format_extmark(git_sign)
-      .. format_extmark(error or warn or hint or info or ok)
+  return format_extmark(git_sign) .. format_extmark(error or warn or hint or info or ok)
 end
 
 local trim = require('utils').trim
 function format_extmark(extmark)
-  return (extmark and ('%#' .. extmark.sign_hl_group .. '#' .. trim(extmark.sign_text) .. '%*') or '')
+  return (extmark and ('%#' .. extmark.sign_hl_group .. '#' .. trim(extmark.sign_text) .. '%*') or ' ')
 end
 
-vim.o.statuscolumn = '%{%v:lua.format_statuscolumn(bufnr(), v:lnum)%}'
+vim.o.statuscolumn = '%{v:lnum}%{%v:lua.format_statuscolumn(bufnr(), v:lnum)%}'
+vim.o.signcolumn = 'no'
 
 vim.opt.clipboard:append('unnamedplus')
 vim.opt.iskeyword:append('-')
