@@ -32,7 +32,7 @@ function M.signs(bufnr, current_lnum)
 
   return format_extmark(error_sign or warn_sign or hint_sign or info_sign or ok_sign)
       .. ' %=%{v:lnum} '
-      .. format_extmark(git_sign) .. ' '
+      .. format_extmark(git_sign)
 end
 
 return M
