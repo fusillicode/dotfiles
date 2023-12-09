@@ -27,12 +27,11 @@ vim.o.signcolumn = 'yes:1'
 vim.o.smartcase = true
 vim.o.splitbelow = true
 vim.o.splitright = true
--- vim.o.statuscolumn = '%=%{v:lnum}%=%s'
 vim.o.tabstop = 2
 vim.o.termguicolors = true
 vim.o.undofile = true
 vim.o.updatetime = 250
-vim.o.wrap = true 
+vim.o.wrap = true
 
 -- function get_signs()
 --   local buf = vim.api.nvim_win_get_buf(vim.g.statusline_winid)
@@ -41,12 +40,42 @@ vim.o.wrap = true
 --   end, vim.fn.sign_getplaced(buf, { group = '*', lnum = vim.v.lnum, })[1].signs)
 -- end
 
--- require('utils').dbg(vim.api.nvim_buf_get_name(0))
--- require('utils').dbg(vim.fn.sign_getplaced(vim.api.nvim_buf_get_name(0), { group = '*', lnum = vim.v.lnum, })[1].signs)
-local row = vim.api.nvim_win_get_cursor(0)[1]
-require('utils').dbg(row)
-require('utils').dbg(vim.api.nvim_buf_get_extmarks(0, -1, { row - 1, 0, }, { row - 1, -1, },
-  { type = 'sign', details = true, overlap = false, }))
+local M = {}
+
+function M.foo()
+  require('utils').dbg(vim.l)
+  if not vim then return end
+
+  local row = vim.l.lnum
+  local extmarks = vim.api.nvim_buf_get_extmarks(0, -1, { row - 1, 0, }, { row - 1, -1, },
+    { type = 'sign', details = true, overlap = false, })
+
+  print('--------')
+  require('utils').dbg(extmarks)
+  print('--------')
+
+  local git_sign, diagnostics
+  for _, sign in ipairs(extmarks) do
+    if git_sign and diagnostics then break end
+    local sign_details = sign[4]
+    if sign_details.sign_hl_group:sub(1, #'GitSigns') == 'GitSigns' then
+      git_sign = sign_details
+    elseif sign_details.sign_hl_group:sub(1, #'Diagnostic') == 'Diagnostic' then
+      diagnostics = sign_details
+    end
+  end
+  local status_col = (
+    '%{v:lnum}'
+    .. (git_sign and ('%#' .. git_sign.sign_hl_group .. '#' .. git_sign.sign_text .. '%*') or ' ')
+    .. (diagnostics and ('%#' .. diagnostics.sign_hl_group .. '#' .. diagnostics.sign_text .. '%*') or ' ')
+  )
+
+--  vim.o.statuscolumn = status_col
+  return status_col
+end
+
+-- M.foo()
+
 -- require('utils').dbg(vim.fn.sign_getdefined)
 
 -- function column()
