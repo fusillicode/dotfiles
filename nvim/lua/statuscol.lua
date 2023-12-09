@@ -7,7 +7,7 @@ local function format_extmark(extmark)
   return (extmark and ('%#' .. extmark.sign_hl_group .. '#' .. trim(extmark.sign_text) .. '%*') or ' ')
 end
 
-function M.signs(bufnr, current_lnum)
+function M.draw(bufnr, current_lnum)
   local line_signs = vim.api.nvim_buf_get_extmarks(bufnr, -1, { current_lnum - 1, 0, }, { current_lnum - 1, -1, },
     { type = 'sign', details = true, overlap = false, })
 
