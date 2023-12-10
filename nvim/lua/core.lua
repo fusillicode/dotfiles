@@ -73,9 +73,18 @@ keymap_set({ 'n', 'v', }, '<leader>Q', ':q!<CR>')
 keymap_set({ 'n', 'v', }, '<C-r>', ':luafile %<CR>')
 keymap_set('n', '<esc>', ':noh<CR>', { silent = false, })
 
+keymap_set('i', "'", "''<left>")
+keymap_set('i', '"', '""<left>')
+keymap_set('i', '(', '()<left>')
+keymap_set('i', '[', '[]<left>')
+keymap_set('i', '{', '{}<left>')
+keymap_set('i', '<', '<><left>')
+keymap_set('i', '{;', '{};<left><left>')
+
 keymap_set('n', 'dp', vim.diagnostic.goto_prev)
 keymap_set('n', 'dn', vim.diagnostic.goto_next)
 keymap_set('n', '<leader>e', vim.diagnostic.open_float)
+
 vim.diagnostic.config {
   float = {
     anchor_bias = 'above',
