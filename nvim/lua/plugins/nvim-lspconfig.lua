@@ -12,7 +12,6 @@ return {
     local keymap_set = require('utils').keymap_set
 
     local function on_attach(_, bufnr)
-      keymap_set('', '<C-r>', ':LspRestart<CR>')
       keymap_set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr, })
       keymap_set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, })
       keymap_set('n', '<leader>a', vim.lsp.buf.code_action, { buffer = bufnr, })
