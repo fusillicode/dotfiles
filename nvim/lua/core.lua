@@ -22,6 +22,8 @@ vim.o.number = true
 vim.o.shiftwidth = 2
 vim.o.showmode = false
 vim.o.showtabline = 0
+vim.o.statuscolumn = '%{%v:lua.require("statuscol").draw(bufnr(), v:lnum)%}'
+vim.o.signcolumn = 'no'
 vim.o.sidescroll = 1
 vim.o.smartcase = true
 vim.o.splitbelow = true
@@ -31,10 +33,6 @@ vim.o.termguicolors = true
 vim.o.undofile = true
 vim.o.updatetime = 250
 vim.o.wrap = true
-
-require('statuscol')
-vim.o.statuscolumn = '%{%v:lua.statuscol.draw(bufnr(), v:lnum)%}'
-vim.o.signcolumn = 'no'
 
 vim.opt.clipboard:append('unnamedplus')
 vim.opt.iskeyword:append('-')

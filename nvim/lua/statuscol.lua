@@ -1,5 +1,4 @@
 local M = {}
-_G.statuscol = M
 
 local function format_extmark(extmark)
   return (extmark and ('%#' .. extmark.sign_hl_group .. '#' .. vim.trim(extmark.sign_text) .. '%*') or ' ')
