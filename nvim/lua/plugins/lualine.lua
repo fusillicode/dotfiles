@@ -24,6 +24,7 @@ return {
     require('lualine').setup({
       options = {
         component_separators = '',
+        globalstatus = true,
         icons_enabled = false,
         section_separators = '',
       },
