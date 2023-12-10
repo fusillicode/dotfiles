@@ -22,8 +22,37 @@ vim.o.number = true
 vim.o.shiftwidth = 2
 vim.o.showmode = false
 vim.o.showtabline = 0
-vim.o.statuscolumn = '%{%v:lua.require("statuscol").draw(bufnr(), v:lnum)%}'
 vim.o.signcolumn = 'no'
+vim.o.statuscolumn = '%{%v:lua.require("statuscol").draw(bufnr(), v:lnum)%}'
+
+function statusline()
+  local errors, warns, hints, infos, oks = 0, 0, 0, 0, 0
+  for _, diagnostic in ipairs(vim.diagnostic.get()) do
+    if diagnostic.severity == vim.diagnostic.severity.ERROR then
+      errors = errors + 1
+    elseif diagnostic.severity == vim.diagnostic.severity.WARN then
+      warns = warns + 1
+    elseif diagnostic.severity == vim.diagnostic.severity.HINT then
+      hints = hints + 1
+    elseif diagnostic.severity == vim.diagnostic.severity.INFO then
+      infos = infos + 1
+    end
+  end
+
+  return (errors ~= 0 and '%#DiagnosticError#' .. 'E:' .. errors .. ' ' or '')
+      .. (warns ~= 0 and '%#DiagnosticWarn#' .. 'W:' .. warns .. ' ' or '')
+      .. (hints ~= 0 and '%#DiagnosticHint#' .. 'H:' .. hints .. ' ' or '')
+      .. (infos ~= 0 and '%#DiagnosticInfo#' .. 'I:' .. infos .. ' ' or '')
+      .. '%f %m %r'
+end
+
+vim.o.statusline = '%{%v:lua.statusline()%}'
+
+vim.api.nvim_create_autocmd('DiagnosticChanged', {
+  group = vim.api.nvim_create_augroup('StatusLine', { clear = true, }),
+  callback = function(_) vim.wo.statusline = statusline() end,
+})
+
 vim.o.sidescroll = 1
 vim.o.smartcase = true
 vim.o.splitbelow = true
