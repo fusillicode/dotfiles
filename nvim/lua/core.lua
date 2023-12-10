@@ -43,7 +43,13 @@ function statusline()
       .. (warns ~= 0 and '%#DiagnosticWarn#' .. 'W:' .. warns .. ' ' or '')
       .. (hints ~= 0 and '%#DiagnosticHint#' .. 'H:' .. hints .. ' ' or '')
       .. (infos ~= 0 and '%#DiagnosticInfo#' .. 'I:' .. infos .. ' ' or '')
+      .. '%#StatusLine#'
       .. '%f %m %r'
+      .. '%='
+      .. (errors ~= 0 and '%#DiagnosticError#' .. 'E:' .. errors .. ' ' or '')
+      .. (warns ~= 0 and '%#DiagnosticWarn#' .. 'W:' .. warns .. ' ' or '')
+      .. (hints ~= 0 and '%#DiagnosticHint#' .. 'H:' .. hints .. ' ' or '')
+      .. (infos ~= 0 and '%#DiagnosticInfo#' .. 'I:' .. infos .. ' ' or '')
 end
 
 vim.o.statusline = '%{%v:lua.statusline()%}'
