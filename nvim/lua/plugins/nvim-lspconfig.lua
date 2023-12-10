@@ -22,7 +22,7 @@ return {
       local lsp_setup = { capabilities = capabilities, on_attach = on_attach, }
       if config['cmd'] then lsp_setup.cmd = config['cmd'] end
       if config['settings'] then lsp_setup.settings = config['settings'] end
-      if config['init_options'] then lsp_setup.settings = config['init_options'] end
+      if config['init_options'] then lsp_setup.init_options = config['init_options'] end
       lspconfig[lsp].setup(lsp_setup)
     end
 
