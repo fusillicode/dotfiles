@@ -4,10 +4,6 @@ function M.keymap_set(modes, lhs, rhs, opts)
   vim.keymap.set(modes, lhs, rhs, vim.tbl_extend('force', { silent = true, }, opts or {}))
 end
 
-function M.trim(s)
-  return (s:gsub('^%s*(.-)%s*$', '%1'))
-end
-
 function M.dbg(foo)
   print(vim.inspect(foo))
   return foo

@@ -1,10 +1,8 @@
 local M = {}
 _G.statuscol = M
 
-local trim = require('utils').trim
-
 local function format_extmark(extmark)
-  return (extmark and ('%#' .. extmark.sign_hl_group .. '#' .. trim(extmark.sign_text) .. '%*') or ' ')
+  return (extmark and ('%#' .. extmark.sign_hl_group .. '#' .. vim.trim(extmark.sign_text) .. '%*') or ' ')
 end
 
 function M.draw(bufnr, current_lnum)
