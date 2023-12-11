@@ -4,8 +4,9 @@ local function format_extmark(extmark)
   return (extmark and ('%#' .. extmark.sign_hl_group .. '#' .. vim.trim(extmark.sign_text) .. '%*') or ' ')
 end
 
-function M.draw(bufnr, current_lnum)
-  local line_signs = vim.api.nvim_buf_get_extmarks(bufnr, -1, { current_lnum - 1, 0, }, { current_lnum - 1, -1, },
+function M.draw(current_lnum)
+  local buffer = vim.fn.bufnr()
+  local line_signs = vim.api.nvim_buf_get_extmarks(buffer, -1, { current_lnum - 1, 0, }, { current_lnum - 1, -1, },
     { type = 'sign', details = true, overlap = false, })
 
   local git_sign, error_sign, warn_sign, hint_sign, info_sign, ok_sign
