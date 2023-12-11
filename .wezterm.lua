@@ -62,8 +62,8 @@ if wezterm.gui then
   for _, custom_copy_key in pairs({
     { key = '/', action = act.CopyMode 'EditPattern', },
     { key = 'x', action = act.CopyMode { SetSelectionMode = 'Line', }, },
-    { key = 'd', mods = 'CTRL',                                       action = act.CopyMode { MoveByPage = 0.5, }, },
-    { key = 'u', mods = 'CTRL',                                       action = act.CopyMode { MoveByPage = -0.5, }, },
+    { key = 'd', mods = 'CTRL',                                        action = act.CopyMode { MoveByPage = 0.5, }, },
+    { key = 'u', mods = 'CTRL',                                        action = act.CopyMode { MoveByPage = -0.5, }, },
     { key = 'y', mods = 'NONE', action = act.Multiple { { CopyTo = 'ClipboardAndPrimarySelection', }, },
     },
   }) do

@@ -21,7 +21,10 @@ M.tools = {
           },
           format = {
             defaultConfig = {
+              align_array_table = false,
               align_continuous_assign_statement = false,
+              align_continuous_rect_table_field = false,
+              align_if_branch = false,
               insert_final_newline = 'true',
               quote_style = 'single',
               trailing_table_separator = 'always',
