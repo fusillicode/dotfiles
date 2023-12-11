@@ -10,7 +10,6 @@ for _, diagnostic_hl_group in ipairs({
   'DiagnosticOk',
   'DiagnosticWarn',
 }) do
-  vim.api.nvim_get_hl(0, { name = diagnostic_hl_group, })
   vim.api.nvim_set_hl(0, diagnostic_hl_group .. 'StatusLine',
     vim.tbl_extend(
       'force',
