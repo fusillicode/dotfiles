@@ -21,9 +21,10 @@ M.tools = {
           },
           format = {
             defaultConfig = {
+              align_continuous_assign_statement = false,
+              insert_final_newline = 'true',
               quote_style = 'single',
               trailing_table_separator = 'always',
-              insert_final_newline = 'true',
             },
           },
           hint = { enable = true, setType = true, },
