@@ -19,16 +19,16 @@ function M.draw(current_lnum)
       error_sign = sign_details
     elseif sign_details.sign_hl_group == 'DiagnosticSignWarn' then
       warn_sign = sign_details
-    elseif sign_details.sign_hl_group == 'DiagnosticSignHint' then
-      hint_sign = sign_details
     elseif sign_details.sign_hl_group == 'DiagnosticSignInfo' then
       info_sign = sign_details
+    elseif sign_details.sign_hl_group == 'DiagnosticSignHint' then
+      hint_sign = sign_details
     elseif sign_details.sign_hl_group == 'DiagnosticSignOk' then
       ok_sign = sign_details
     end
   end
 
-  return format_extmark(error_sign or warn_sign or hint_sign or info_sign or ok_sign)
+  return format_extmark(error_sign or warn_sign or info_sign or hint_sign or ok_sign)
       .. format_extmark(git_sign)
       .. ' %=%{v:lnum} '
 end
