@@ -2,6 +2,24 @@ local M = {}
 
 local draw_lsp_progress = require('lsp-progress').progress
 
+local status_line_hl_group = vim.api.nvim_get_hl(0, { name = 'StatusLine', })
+for _, diagnostic_hl_group in ipairs({
+  'DiagnosticError',
+  'DiagnosticHint',
+  'DiagnosticInfo',
+  'DiagnosticOk',
+  'DiagnosticWarn',
+}) do
+  vim.api.nvim_get_hl(0, { name = diagnostic_hl_group, })
+  vim.api.nvim_set_hl(0, diagnostic_hl_group .. 'StatusLine',
+    vim.tbl_extend(
+      'force',
+      status_line_hl_group,
+      vim.api.nvim_get_hl(0, { name = diagnostic_hl_group, })
+    )
+  )
+end
+
 function M.draw()
   local buffer = vim.fn.bufnr()
   local buffer_errors, buffer_warns, buffer_hints, buffer_infos = 0, 0, 0, 0
@@ -30,19 +48,19 @@ function M.draw()
     end
   end
 
-  return (buffer_errors ~= 0 and '%#DiagnosticError#' .. 'E:' .. buffer_errors .. ' ' or '')
-      .. (buffer_warns ~= 0 and '%#DiagnosticWarn#' .. 'W:' .. buffer_warns .. ' ' or '')
-      .. (buffer_hints ~= 0 and '%#DiagnosticHint#' .. 'H:' .. buffer_hints .. ' ' or '')
-      .. (buffer_infos ~= 0 and '%#DiagnosticInfo#' .. 'I:' .. buffer_infos .. ' ' or '')
+  return (buffer_errors ~= 0 and '%#DiagnosticErrorStatusLine#' .. 'E:' .. buffer_errors .. ' ' or '')
+      .. (buffer_warns ~= 0 and '%#DiagnosticWarnStatusLine#' .. 'W:' .. buffer_warns .. ' ' or '')
+      .. (buffer_hints ~= 0 and '%#DiagnosticHintStatusLine#' .. 'H:' .. buffer_hints .. ' ' or '')
+      .. (buffer_infos ~= 0 and '%#DiagnosticInfoStatusLine#' .. 'I:' .. buffer_infos .. ' ' or '')
       .. '%#StatusLine#'
       .. ' %f %m %r'
       .. '%='
       .. draw_lsp_progress()
       .. ' '
-      .. (workspace_errors ~= 0 and '%#DiagnosticError#' .. 'E:' .. workspace_errors .. ' ' or '')
-      .. (workspace_warns ~= 0 and '%#DiagnosticWarn#' .. 'W:' .. workspace_warns .. ' ' or '')
-      .. (workspace_hints ~= 0 and '%#DiagnosticHint#' .. 'H:' .. workspace_hints .. ' ' or '')
-      .. (workspace_infos ~= 0 and '%#DiagnosticInfo#' .. 'I:' .. workspace_infos .. ' ' or '')
+      .. (workspace_errors ~= 0 and '%#DiagnosticErrorStatusLine#' .. 'E:' .. workspace_errors .. ' ' or '')
+      .. (workspace_warns ~= 0 and '%#DiagnosticWarnStatusLine#' .. 'W:' .. workspace_warns .. ' ' or '')
+      .. (workspace_hints ~= 0 and '%#DiagnosticHintStatusLine#' .. 'H:' .. workspace_hints .. ' ' or '')
+      .. (workspace_infos ~= 0 and '%#DiagnosticInfoStatusLine#' .. 'I:' .. workspace_infos .. ' ' or '')
 end
 
 local function redraw()
