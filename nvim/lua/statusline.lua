@@ -5,10 +5,10 @@ local draw_lsp_progress = require('lsp-progress').progress
 local status_line_hl_group = vim.api.nvim_get_hl(0, { name = 'StatusLine', })
 for _, diagnostic_hl_group in ipairs({
   'DiagnosticError',
-  'DiagnosticHint',
-  'DiagnosticInfo',
-  'DiagnosticOk',
   'DiagnosticWarn',
+  'DiagnosticInfo',
+  'DiagnosticHint',
+  'DiagnosticOk',
 }) do
   vim.api.nvim_set_hl(0, diagnostic_hl_group .. 'StatusLine',
     vim.tbl_extend(
@@ -21,8 +21,8 @@ end
 
 function M.draw()
   local buffer = vim.fn.bufnr()
-  local buffer_errors, buffer_warns, buffer_hints, buffer_infos = 0, 0, 0, 0
-  local workspace_errors, workspace_warns, workspace_hints, workspace_infos = 0, 0, 0, 0
+  local buffer_errors, buffer_warns, buffer_infos, buffer_hints = 0, 0, 0, 0
+  local workspace_errors, workspace_warns, workspace_infos, workspace_hints = 0, 0, 0, 0
 
   for _, diagnostic in ipairs(vim.diagnostic.get()) do
     if diagnostic.bufnr == buffer then
@@ -30,27 +30,27 @@ function M.draw()
         buffer_errors = buffer_errors + 1
       elseif diagnostic.severity == vim.diagnostic.severity.WARN then
         buffer_warns = buffer_warns + 1
-      elseif diagnostic.severity == vim.diagnostic.severity.HINT then
-        buffer_hints = buffer_hints + 1
       elseif diagnostic.severity == vim.diagnostic.severity.INFO then
         buffer_infos = buffer_infos + 1
+      elseif diagnostic.severity == vim.diagnostic.severity.HINT then
+        buffer_hints = buffer_hints + 1
       end
     end
     if diagnostic.severity == vim.diagnostic.severity.ERROR then
       workspace_errors = workspace_errors + 1
     elseif diagnostic.severity == vim.diagnostic.severity.WARN then
       workspace_warns = workspace_warns + 1
-    elseif diagnostic.severity == vim.diagnostic.severity.HINT then
-      workspace_hints = workspace_hints + 1
     elseif diagnostic.severity == vim.diagnostic.severity.INFO then
       workspace_infos = workspace_infos + 1
+    elseif diagnostic.severity == vim.diagnostic.severity.HINT then
+      workspace_hints = workspace_hints + 1
     end
   end
 
   return (buffer_errors ~= 0 and '%#DiagnosticErrorStatusLine#' .. 'E:' .. buffer_errors .. ' ' or '')
       .. (buffer_warns ~= 0 and '%#DiagnosticWarnStatusLine#' .. 'W:' .. buffer_warns .. ' ' or '')
-      .. (buffer_hints ~= 0 and '%#DiagnosticHintStatusLine#' .. 'H:' .. buffer_hints .. ' ' or '')
       .. (buffer_infos ~= 0 and '%#DiagnosticInfoStatusLine#' .. 'I:' .. buffer_infos .. ' ' or '')
+      .. (buffer_hints ~= 0 and '%#DiagnosticHintStatusLine#' .. 'H:' .. buffer_hints .. ' ' or '')
       .. '%#StatusLine#'
       .. ' %f %m %r'
       .. '%='
@@ -58,8 +58,8 @@ function M.draw()
       .. ' '
       .. (workspace_errors ~= 0 and '%#DiagnosticErrorStatusLine#' .. 'E:' .. workspace_errors .. ' ' or '')
       .. (workspace_warns ~= 0 and '%#DiagnosticWarnStatusLine#' .. 'W:' .. workspace_warns .. ' ' or '')
-      .. (workspace_hints ~= 0 and '%#DiagnosticHintStatusLine#' .. 'H:' .. workspace_hints .. ' ' or '')
       .. (workspace_infos ~= 0 and '%#DiagnosticInfoStatusLine#' .. 'I:' .. workspace_infos .. ' ' or '')
+      .. (workspace_hints ~= 0 and '%#DiagnosticHintStatusLine#' .. 'H:' .. workspace_hints .. ' ' or '')
 end
 
 local function redraw()
