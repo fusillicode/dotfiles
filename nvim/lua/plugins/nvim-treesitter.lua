@@ -28,6 +28,8 @@ return {
         'textproto',
         'toml',
         'typescript',
+        'vim',
+        'vimdoc',
         'xml',
         'yaml',
       },
