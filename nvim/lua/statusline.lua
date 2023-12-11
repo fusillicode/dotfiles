@@ -1,5 +1,7 @@
 local M = {}
 
+local draw_lsp_progress = require('lsp-progress').progress
+
 function M.draw()
   local buffer = vim.fn.bufnr()
   local buffer_errors, buffer_warns, buffer_hints, buffer_infos = 0, 0, 0, 0
@@ -35,7 +37,7 @@ function M.draw()
       .. '%#StatusLine#'
       .. ' %f %m %r'
       .. '%='
-      .. require('lsp-progress').progress()
+      .. draw_lsp_progress()
       .. ' '
       .. (workspace_errors ~= 0 and '%#DiagnosticError#' .. 'E:' .. workspace_errors .. ' ' or '')
       .. (workspace_warns ~= 0 and '%#DiagnosticWarn#' .. 'W:' .. workspace_warns .. ' ' or '')
@@ -43,15 +45,19 @@ function M.draw()
       .. (workspace_infos ~= 0 and '%#DiagnosticInfo#' .. 'I:' .. workspace_infos .. ' ' or '')
 end
 
+local function redraw()
+  vim.o.statusline = M.draw()
+end
+
 vim.api.nvim_create_autocmd({ 'DiagnosticChanged', 'BufEnter', }, {
   group = vim.api.nvim_create_augroup('StatusLine', {}),
-  callback = function(_) vim.o.statusline = M.draw() end,
+  callback = redraw,
 })
 
 vim.api.nvim_create_autocmd({ 'User', }, {
   group = vim.api.nvim_create_augroup('StatusLine', {}),
   pattern = 'LspProgressStatusUpdated',
-  callback = function(_) vim.o.statusline = M.draw() end,
+  callback = redraw,
 })
 
 return M

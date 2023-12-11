@@ -25,6 +25,7 @@ vim.o.showtabline = 0
 vim.o.signcolumn = 'no'
 vim.o.statuscolumn = '%{%v:lua.require("statuscol").draw(bufnr(), v:lnum)%}'
 vim.o.statusline = '%{%v:lua.require("statusline").draw()%}'
+vim.o.laststatus = 3
 vim.o.sidescroll = 1
 vim.o.smartcase = true
 vim.o.splitbelow = true
