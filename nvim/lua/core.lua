@@ -71,6 +71,7 @@ keymap_set({ 'n', 'v', }, '<leader>W', ':wa!<CR>')
 keymap_set({ 'n', 'v', }, '<leader>q', ':q<CR>')
 keymap_set({ 'n', 'v', }, '<leader>Q', ':q!<CR>')
 keymap_set({ 'n', 'v', }, '<C-e>', ':luafile %<CR>')
+keymap_set({ 'n', 'v', }, '<C-a>', 'ggVG')
 keymap_set('n', '<esc>', ':noh<CR>', { silent = false, })
 
 keymap_set('i', "'", "''<left>")
