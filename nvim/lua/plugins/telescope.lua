@@ -83,6 +83,9 @@ return {
         find_files = {
           find_command = { 'rg', '--files', '--hidden', '--glob', '!**/.git/*', },
         },
+        diagnostics = {
+          line_width = 'full',
+        },
       },
     })
 
