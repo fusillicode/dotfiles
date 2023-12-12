@@ -102,6 +102,30 @@ keymap_set('n', 'dp', vim.diagnostic.goto_prev)
 keymap_set('n', 'dn', vim.diagnostic.goto_next)
 keymap_set('n', '<leader>e', vim.diagnostic.open_float)
 
+keymap_set('n', '<leader>0', function()
+  local cursor_pos = vim.api.nvim_win_get_cursor(0)
+  local cursor_col = cursor_pos[2]
+  local line = vim.api.nvim_get_current_line()
+
+  local before = require('utils').dbg(line:sub(1, cursor_col))
+  local after = require('utils').dbg(line:sub(cursor_col, #line))
+
+  local _, _, before_match = before:find('(%S+)$')
+  local _, _, after_match = after:find('^(%S+)')
+
+  require('utils').dbg((before_match or '') .. (after_match or ''))
+
+  -- local url = 'foo'
+  -- vim.fn.jobstart('open ' .. vim.fn.shellscape(url), {
+  --   detach = true,
+  --   on_exit = function(_, code, _)
+  --     if code ~= 0 then
+  --       print('Is ' .. url .. ' really an URL? 😕')
+  --     end
+  --   end,
+  -- })
+end)
+
 vim.diagnostic.config {
   float = {
     anchor_bias = 'above',
