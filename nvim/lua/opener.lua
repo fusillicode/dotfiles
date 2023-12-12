@@ -10,9 +10,9 @@ function M.open_under_cursor()
   local _, _, before_match = before:find('(%S+)$')
   local _, _, after_match = after:find('^(%S+)')
 
-  local thing = vim.fn.trim((before_match or '') .. (after_match or ''))
+  local thing = vim.fn.expand(vim.fn.trim((before_match or '') .. (after_match or '')))
   if thing == '' then return end
-  vim.fn.jobstart({ 'open', thing }, {
+  vim.fn.jobstart({ 'open', thing, }, {
     detach = true,
     on_exit = function(_, code, _)
       if code ~= 0 then
