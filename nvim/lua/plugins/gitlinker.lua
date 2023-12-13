@@ -9,10 +9,10 @@ return {
   dependencies = { 'nvim-lua/plenary.nvim', },
   config = function()
     local keymap_set = require('utils').keymap_set
-    keymap_set({ 'n', 'v', }, 'yg', '<cmd>GitLink<cr>')
-    keymap_set({ 'n', 'v', }, 'yG', '<cmd>GitLink!<cr>')
-    keymap_set({ 'n', 'v', }, 'yb', '<cmd>GitLink blame<cr>')
-    keymap_set({ 'n', 'v', }, 'yB', '<cmd>GitLink! blame<cr>')
+    keymap_set({ 'n', 'v', }, '<leader>yl', '<cmd>GitLink<cr>')
+    keymap_set({ 'n', 'v', }, '<leader>yL', '<cmd>GitLink!<cr>')
+    keymap_set({ 'n', 'v', }, '<leader>yb', '<cmd>GitLink blame<cr>')
+    keymap_set({ 'n', 'v', }, '<leader>yB', '<cmd>GitLink! blame<cr>')
 
     require('gitlinker').setup()
   end,
