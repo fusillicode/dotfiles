@@ -27,7 +27,7 @@ return {
     end)
 
     keymap_set('n', 'gr', function()
-      fzf_lua.lsp_references({ jump_to_single_result = true, })
+      fzf_lua.lsp_references({ ignore_current_line = true, jump_to_single_result = true, })
     end)
     keymap_set('n', 'gd', function()
       fzf_lua.lsp_definitions({ jump_to_single_result = true, })
@@ -75,6 +75,21 @@ return {
     fzf_lua.setup({
       'max-perf',
       fzf_opts = { ['--cycle'] = '', },
+      fzf_colors = {
+        ['fg']      = { 'fg', 'CursorLine', },
+        ['bg']      = { 'bg', 'Normal', },
+        ['hl']      = { 'fg', 'TelescopeMatching', },
+        ['fg+']     = { 'fg', 'Normal', },
+        ['bg+']     = { 'bg', 'CursorLine', },
+        ['hl+']     = { 'fg', 'TelescopeMatching', },
+        ['info']    = { 'fg', 'Comment', },
+        ['prompt']  = { 'fg', 'Comment', },
+        ['pointer'] = { 'bg', 'CursorLine', },
+        ['marker']  = { 'fg', 'Keyword', },
+        ['spinner'] = { 'fg', 'Label', },
+        ['header']  = { 'fg', 'Comment', },
+        ['gutter']  = { 'bg', 'Normal', },
+      },
       winopts = {
         preview = {
           default = 'builtin',
