@@ -4,7 +4,7 @@ return {
     { '<leader>F', },
   },
   config = function()
-    require('utils').keymap_set('n', '<leader>F', ':lua Oil<CR>')
+    require('utils').keymap_set('n', '<leader>F', ':lua Oil<cr>')
     require('oil').setup({
       delete_to_trash = true,
       view_options = {
@@ -19,7 +19,7 @@ return {
         end,
       },
       keymaps = {
-        ['<esc>'] = ':bd!<CR>',
+        ['<esc>'] = ':bd!<cr>',
       },
     })
   end,
