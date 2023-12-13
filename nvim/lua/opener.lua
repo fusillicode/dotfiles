@@ -13,17 +13,6 @@ local function open(s)
   })
 end
 
-local function region_to_text(region)
-  local text = ''
-  local maxcol = vim.v.maxcol
-  for line, cols in vim.spairs(region) do
-    local endcol = cols[2] == maxcol and -1 or cols[2]
-    local chunk = vim.api.nvim_buf_get_text(0, line, cols[1], line, endcol, {})[1]
-    text = ('%s%s\n'):format(text, chunk)
-  end
-  return text
-end
-
 function M.open_under_cursor()
   local cursor_col = vim.api.nvim_win_get_cursor(0)[2]
   local line = vim.api.nvim_get_current_line()
@@ -37,8 +26,11 @@ function M.open_under_cursor()
   open((before_match or '') .. (after_match or ''))
 end
 
+-- 👉 https://github.com/neovim/neovim/pull/13896
 function M.open_selection()
-  open(region_to_text(vim.region(0, "'<", "'>", vim.fn.visualmode(), true)))
+  local _, ls, cs = table.unpack(vim.fn.getpos('v'))
+  local _, le, ce = table.unpack(vim.fn.getpos('.'))
+  open(vim.api.nvim_buf_get_text(0, ls - 1, cs - 1, le - 1, ce, {}))
 end
 
 return M
