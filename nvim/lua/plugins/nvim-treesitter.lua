@@ -37,8 +37,8 @@ return {
       incremental_selection = {
         enable = true,
         keymaps = {
-          init_selection = '<CR>',
-          scope_incremental = '<CR>',
+          init_selection = '<cr>',
+          scope_incremental = '<cr>',
           node_incremental = '<TAB>',
           node_decremental = '<S-TAB>',
         },
@@ -50,10 +50,10 @@ return {
           enable = true,
           set_jumps = true,
           goto_next_start = {
-            ['<C-l>'] = '@block.outer',
+            ['<c-l>'] = '@block.outer',
           },
           goto_previous_end = {
-            ['<C-h>'] = '@block.outer',
+            ['<c-h>'] = '@block.outer',
           },
         },
       },
