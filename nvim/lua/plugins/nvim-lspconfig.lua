@@ -15,7 +15,6 @@ return {
       keymap_set('', '<C-r>', ':LspRestart<CR>')
       keymap_set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr, })
       keymap_set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, })
-      keymap_set('n', '<leader>a', vim.lsp.buf.code_action, { buffer = bufnr, })
     end
 
     for lsp, config in pairs(require('mason-tools')['tools']['lsps']) do
