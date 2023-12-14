@@ -6,8 +6,8 @@ return {
     local fzf_lua = require('fzf-lua')
     local keymap_set = require('utils').keymap_set
 
-    keymap_set('n', '<leader>b', function() fzf_lua.buffers({ prompt = 'Buffers: ', }) end)
     keymap_set('n', '<leader>f', function() fzf_lua.files({ prompt = 'Files: ', }) end)
+    keymap_set('n', '<leader>b', function() fzf_lua.buffers({ prompt = 'Buffers: ', }) end)
 
     keymap_set('n', '<leader>gs', function() fzf_lua.git_status({ prompt = 'Changes: ', }) end)
     keymap_set('n', '<leader>gc', function() fzf_lua.git_commits({ prompt = 'Commits: ', }) end)
@@ -33,7 +33,7 @@ return {
     keymap_set('n', '<leader>D', function() fzf_lua.diagnostics_workspace({ prompt = 'Workspace diagnostics: ', }) end)
 
     keymap_set('n', '<leader>/', function()
-      fzf_lua.live_grep_glob({ continue_last_search = true, prompt = 'Workspace rg: ', })
+      fzf_lua.live_grep_glob({ continue_last_search = true, prompt = 'rg: ', })
     end)
 
     local todo_comments_cfg = { search = 'TODO:|HACK:|PERF:|NOTE:|FIX:|WARN:', no_esc = true, }
@@ -47,8 +47,6 @@ return {
     keymap_set('n', '<leader>l', function() fzf_lua.resume() end)
 
     fzf_lua.setup({
-      'max-perf',
-      fzf_opts = { ['--cycle'] = '', },
       fzf_colors = {
         ['fg']      = { 'fg', 'CursorLine', },
         ['bg']      = { 'bg', 'Normal', },
@@ -56,7 +54,7 @@ return {
         ['fg+']     = { 'fg', 'Normal', },
         ['bg+']     = { 'bg', 'CursorLine', },
         ['hl+']     = { 'fg', 'TelescopeMatching', },
-        ['info']    = { 'fg', 'LineNr', },
+        ['info']    = { 'fg', 'Keyword', },
         ['prompt']  = { 'fg', 'Keyword', },
         ['pointer'] = { 'bg', 'CursorLine', },
         ['marker']  = { 'fg', 'Keyword', },
@@ -72,9 +70,14 @@ return {
           title = false,
         },
       },
-      files = {
-        prompt = 'Files> ',
+      defaults = {
+        file_icons = false,
+        git_icons = false,
         cwd_prompt = false,
+        fzf_opts = {
+          ['--cycle'] = '',
+          ['--info'] = 'inline',
+        },
       },
       keymap = {
         builtin = {
