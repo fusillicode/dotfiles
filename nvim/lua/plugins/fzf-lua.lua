@@ -77,6 +77,7 @@ return {
         fzf_opts = {
           ['--cycle'] = '',
           ['--info'] = 'inline',
+          ['--no-header'] = '',
         },
       },
       keymap = {
