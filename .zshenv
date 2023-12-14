@@ -1,3 +1,4 @@
+alias nv="nvim"
 alias code="code-insiders"
 alias gs="git status"
 alias h="atuin history list -f '{time} | {command}'"
