@@ -36,7 +36,7 @@ return {
       fzf_lua.live_grep_glob({ continue_last_search = true, prompt = 'rg: ', })
     end)
 
-    local todo_comments_cfg = { search = 'TODO:|HACK:|PERF:|NOTE:|FIX:|WARN:', no_esc = true, }
+    local todo_comments_cfg = { search = 'TODO:|HACK:|PERF:|NOTE:|FIX:|FIXME:|WARN:', no_esc = true, }
     keymap_set('n', '<leader>t', function()
       fzf_lua.grep_curbuf(vim.tbl_extend('error', todo_comments_cfg, { prompt = 'Buffer TODOs: ', }))
     end)
