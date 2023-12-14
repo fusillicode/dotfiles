@@ -11,7 +11,7 @@ return {
 
     keymap_set('n', '<leader>gs', function() fzf_lua.git_status() end)
     keymap_set('n', '<leader>gc', function() fzf_lua.git_commits() end)
-    keymap_set('n', '<leader>gfc', function() fzf_lua.git_bcommits({ prompt = 'Buffer Commits>', }) end)
+    keymap_set('n', '<leader>gcc', function() fzf_lua.git_bcommits({ prompt = 'Buffer Commits>', }) end)
     keymap_set('n', '<leader>gb', function() fzf_lua.git_branches() end)
 
     local lsp_jumps_cfg = { ignore_current_line = true, jump_to_single_result = true, }
@@ -26,12 +26,8 @@ return {
     keymap_set('n', '<leader>d', function() fzf_lua.diagnostics_document({ prompt = 'Buffer Diagnostics>', }) end)
     keymap_set('n', '<leader>D', function() fzf_lua.diagnostics_workspace({ prompt = 'Workspace Diagnostics>', }) end)
 
-    local live_grep_cfg = { continue_last_search = true, }
-    keymap_set('n', '/', function()
-      fzf_lua.lgrep_curbuf(vim.tbl_extend('error', live_grep_cfg, { prompt = 'Buffer rg> ', }))
-    end)
     keymap_set('n', '<leader>/', function()
-      fzf_lua.live_grep_glob(vim.tbl_extend('error', live_grep_cfg, { prompt = 'Workspace rg> ', }))
+      fzf_lua.live_grep_glob({ continue_last_search = true, prompt = 'Workspace rg> ', })
     end)
 
     local todo_comments_cfg = { search = 'TODO:|HACK:|PERF:|NOTE:|FIX:|WARN:', no_esc = true, }
@@ -67,11 +63,18 @@ return {
           default = 'builtin',
           layout = 'vertical',
           delay = 0,
+          title = false,
         },
       },
       files = {
         prompt = 'Files> ',
         cwd_prompt = false,
+      },
+      keymap = {
+        builtin = {
+          ['<c-n>'] = 'preview-page-down',
+          ['<c-p>'] = 'preview-page-up',
+        },
       },
     })
   end,
