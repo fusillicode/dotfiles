@@ -1,6 +1,6 @@
 return {
   'mg979/vim-visual-multi',
-  event = 'ModeChanged',
+  keys = { '<c-j>', '<c-k>', '<c-n>', },
   config = function()
     vim.g.VM_theme = 'purplegray'
   end,
