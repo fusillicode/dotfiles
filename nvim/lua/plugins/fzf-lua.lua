@@ -48,7 +48,7 @@ return {
 
     fzf_lua.setup({
       fzf_colors = {
-        ['fg']      = { 'fg', 'LineNr', },
+        ['fg']      = { 'fg', 'StatusLine', },
         ['bg']      = { 'bg', 'Normal', },
         ['hl']      = { 'fg', 'TelescopeMatching', },
         ['fg+']     = { 'fg', 'Normal', },
