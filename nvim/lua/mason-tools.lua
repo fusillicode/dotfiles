@@ -35,6 +35,7 @@ M.tools = {
     },
     marksman = {},
     phpactor = {},
+    psalm = {},
     ruff_lsp = {},
     rust_analyzer = {
       settings = {
@@ -67,6 +68,7 @@ M.tools = {
   others = {
     commitlint = {},
     hadolint = {},
+    ['php-cs-fixer'] = {},
   },
 }
 
