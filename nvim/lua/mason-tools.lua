@@ -34,6 +34,7 @@ M.tools = {
       },
     },
     marksman = {},
+    phpactor = {},
     ruff_lsp = {},
     rust_analyzer = {
       settings = {
