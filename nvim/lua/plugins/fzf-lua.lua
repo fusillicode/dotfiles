@@ -90,6 +90,11 @@ return {
           ['ctrl-u'] = 'preview-page-up',
         },
       },
+      previewers = {
+        builtin = {
+          limit_b = 1200000,
+        },
+      },
       git = {
         branches = {
           cmd = 'git branch --all --color --sort=-committerdate',
