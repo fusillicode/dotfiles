@@ -86,6 +86,11 @@ return {
           ['<c-u>'] = 'preview-page-up',
         },
       },
+      git = {
+        branches = {
+          cmd = 'git branch --all --color --sort=-committerdate',
+        },
+      },
     })
   end,
 }
