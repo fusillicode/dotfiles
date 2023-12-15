@@ -34,7 +34,7 @@ vim.o.tabstop = 2
 vim.o.termguicolors = true
 vim.o.undofile = true
 vim.o.updatetime = 250
-vim.o.wrap = true
+vim.o.wrap = false
 
 vim.opt.clipboard:append('unnamedplus')
 vim.opt.iskeyword:append('-')
