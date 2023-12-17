@@ -97,7 +97,6 @@ keymap_set('n', '<c-s>{', 'ciw{}<esc>P')
 keymap_set('n', "<c-s>'", "ciw''<esc>P")
 keymap_set('n', '<c-s><', 'ciw<><esc>P')
 keymap_set('n', '<c-s>`', 'ciw``<esc>P')
-
 keymap_set('v', '<c-s>"', 'c""<esc>P')
 keymap_set('v', '<c-s>(', 'c()<esc>P')
 keymap_set('v', '<c-s>[', 'c[]<esc>P')
