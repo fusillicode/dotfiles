@@ -8,13 +8,19 @@ return {
 
       keymap_set('n', 'cn', function()
         if vim.wo.diff then return 'cn' end
-        vim.schedule(function() gs.next_hunk({ wrap = true, }) end)
+        vim.schedule(function()
+          gs.next_hunk({ wrap = true, })
+          vim.cmd.normal('zz')
+        end)
         return '<Ignore>'
       end, { expr = true, })
 
       keymap_set('n', 'cp', function()
         if vim.wo.diff then return 'cp' end
-        vim.schedule(function() gs.prev_hunk({ wrap = true, }) end)
+        vim.schedule(function()
+          gs.prev_hunk({ wrap = true, })
+          vim.cmd.normal('zz')
+        end)
         return '<Ignore>'
       end, { expr = true, })
 
