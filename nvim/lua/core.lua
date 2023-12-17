@@ -105,8 +105,8 @@ keymap_set('v', "<c-s>'", "c''<esc>P")
 keymap_set('v', '<c-s><', 'c<><esc>P')
 keymap_set('v', '<c-s>`', 'c``<esc>P')
 
-keymap_set('n', 'dp', vim.diagnostic.goto_prev)
-keymap_set('n', 'dn', vim.diagnostic.goto_next)
+keymap_set('n', 'dp', '<cmd>lua vim.diagnostic.goto_prev()<cr>zz')
+keymap_set('n', 'dn', '<cmd>lua vim.diagnostic.goto_next()<cr>zz')
 keymap_set('n', '<leader>e', vim.diagnostic.open_float)
 
 keymap_set('n', '<leader>gx', require('opener').open_under_cursor)
