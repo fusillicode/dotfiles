@@ -61,6 +61,13 @@ keymap_set('n', '<c-u>', '<c-u>zz')
 keymap_set('n', '<c-d>', '<c-d>zz')
 keymap_set('n', '<c-o>', '<c-o>zz')
 keymap_set('n', '<c-i>', '<c-i>zz')
+keymap_set('n', 'n', 'nzz')
+keymap_set('n', 'N', 'Nzz')
+keymap_set('n', '*', '*zz')
+keymap_set('n', '#', '#zz')
+keymap_set('n', 'g*', 'g*zz')
+keymap_set('n', 'g#', 'g#zz')
+
 keymap_set('n', '<c-j>', '<c-down>', { remap = true, })
 keymap_set('n', '<c-k>', '<c-up>', { remap = true, })
 
