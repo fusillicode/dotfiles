@@ -5,6 +5,7 @@ return {
     'hrsh7th/cmp-nvim-lsp',
     'williamboman/mason-lspconfig.nvim',
     'williamboman/mason.nvim',
+    'b0o/schemastore.nvim',
   },
   config = function()
     local lspconfig = require('lspconfig')
@@ -17,7 +18,7 @@ return {
       keymap_set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, })
     end
 
-    for lsp, config in pairs(require('mason-tools')['tools']['lsps']) do
+    for lsp, config in pairs(require('mason-tools').tools()['lsps']) do
       local lsp_setup = { capabilities = capabilities, on_attach = on_attach, }
       if config['cmd'] then lsp_setup.cmd = config['cmd'] end
       if config['settings'] then lsp_setup.settings = config['settings'] end
