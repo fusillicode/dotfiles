@@ -114,7 +114,7 @@ function M.tools()
                 select = {
                   'kustomization.yaml',
                   'GitHub Workflow',
-                  'docker-compose.yml'
+                  'docker-compose.yml',
                 },
               }),
               { kubernetes = { 'k8s**.yaml', 'kube*/*.yaml', }, }
