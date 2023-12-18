@@ -145,4 +145,10 @@ vim.api.nvim_create_autocmd('FocusLost', {
   command = ':silent! wa!',
 })
 
+vim.api.nvim_create_autocmd('FileType', {
+  group = vim.api.nvim_create_augroup('IndentFiles', { clear = true, }),
+  pattern = 'php',
+  command = 'setlocal shiftwidth=4 tabstop=4',
+})
+
 vim.api.nvim_create_user_command('MasonSync', require('mason-tools').sync, {})
