@@ -33,7 +33,7 @@ return {
     keymap_set('n', '<leader>D', function() fzf_lua.diagnostics_workspace({ prompt = 'Workspace diagnostics: ', }) end)
 
     keymap_set('n', '<leader>/', function()
-      fzf_lua.live_grep_glob({ continue_last_search = true, prompt = 'rg: ', })
+      fzf_lua.live_grep_glob({ prompt = 'rg: ', })
     end)
 
     local todo_comments_cfg = { search = 'TODO:|HACK:|PERF:|NOTE:|FIX:|FIXME:|WARN:', no_esc = true, }
