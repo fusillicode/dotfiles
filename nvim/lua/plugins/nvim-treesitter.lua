@@ -21,6 +21,7 @@ return {
         'lua',
         'make',
         'markdown',
+        'php',
         'python',
         'regex',
         'rust',
