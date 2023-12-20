@@ -35,6 +35,7 @@ return {
           GitSignsDelete = { fg = 'red', },
           LspInlayHint = { fg = 'grey', bg = 'none', },
           MatchParen = { fg = 'black', bg = 'orange', },
+          NvimGitLinkerHighlightTextObject = { link = 'IncSearch', },
           TelescopeMatching = { fg = 'orange', },
           TelescopePromptPrefix = { link = 'TelescopePromptBorder', },
         },
