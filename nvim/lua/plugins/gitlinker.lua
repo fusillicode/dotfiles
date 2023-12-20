@@ -9,6 +9,8 @@ return {
     keymap_set({ 'n', 'v', }, '<leader>yb', '<cmd>GitLink blame<cr>')
     keymap_set({ 'n', 'v', }, '<leader>yB', '<cmd>GitLink! blame<cr>')
 
-    require('gitlinker').setup()
+    require('gitlinker').setup({
+      message = false,
+    })
   end,
 }
