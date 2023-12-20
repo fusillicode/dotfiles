@@ -22,13 +22,13 @@
   "nightfox.nvim": { "branch": "main", "commit": "5a7746360f044820a97e654fa4fc7043c744e8e8" },
   "nvim-cmp": { "branch": "main", "commit": "538e37ba87284942c1d76ed38dd497e54e65b891" },
   "nvim-lint": { "branch": "master", "commit": "32f98300881f38f4e022391f240188fec42f74db" },
-  "nvim-lspconfig": { "branch": "master", "commit": "e85816c5803410cacb52e9b4fbdb72a1f1a6bd11" },
-  "nvim-treesitter": { "branch": "master", "commit": "0dfbf5e48e8551212c2a9f1c74cb080c8e76b5d1" },
+  "nvim-lspconfig": { "branch": "master", "commit": "ab49b26438976fb63ad73f392bc41185d00fa8b6" },
+  "nvim-treesitter": { "branch": "master", "commit": "cdb2ec999c1fb173500e2f9ab4dcd9aa62506c72" },
   "nvim-treesitter-textobjects": { "branch": "master", "commit": "ec1c5bdb3d87ac971749fa6c7dbc2b14884f1f6a" },
   "oil.nvim": { "branch": "master", "commit": "24027ed8d7f3ee5c38cfd713915e2e16d89e79b3" },
   "plenary.nvim": { "branch": "master", "commit": "55d9fe89e33efd26f532ef20223e5f9430c8b0c0" },
   "schemastore.nvim": { "branch": "main", "commit": "c23407de1f76df30ca197b69d78a11be5ce26009" },
   "todo-comments.nvim": { "branch": "main", "commit": "4a6737a8d70fe1ac55c64dfa47fcb189ca431872" },
-  "vim-matchup": { "branch": "master", "commit": "269f9bea87e20a01438085eb13df539929a12727" },
+  "vim-matchup": { "branch": "master", "commit": "2550178c43464134ce65328da458905f70dbe041" },
   "vim-visual-multi": { "branch": "master", "commit": "aec289a9fdabaa0ee6087d044d75b32e12084344" }
 }
