@@ -1,7 +1,5 @@
 local M = {}
 
-local draw_lsp_progress = require('lsp-progress').progress
-
 local status_line_hl_group = vim.api.nvim_get_hl(0, { name = 'StatusLine', })
 for _, diagnostic_hl_group in ipairs({
   'DiagnosticError',
@@ -54,8 +52,6 @@ function M.draw()
       .. '%#StatusLine#'
       .. ' %f %m %r'
       .. '%='
-      .. draw_lsp_progress()
-      .. ' '
       .. (workspace_errors ~= 0 and '%#DiagnosticErrorStatusLine#' .. 'E:' .. workspace_errors .. ' ' or '')
       .. (workspace_warns ~= 0 and '%#DiagnosticWarnStatusLine#' .. 'W:' .. workspace_warns .. ' ' or '')
       .. (workspace_infos ~= 0 and '%#DiagnosticInfoStatusLine#' .. 'I:' .. workspace_infos .. ' ' or '')
