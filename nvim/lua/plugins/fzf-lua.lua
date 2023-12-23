@@ -47,6 +47,7 @@ return {
     keymap_set('n', '<leader>l', function() fzf_lua.resume() end)
 
     fzf_lua.setup({
+      'max-perf',
       fzf_colors = {
         ['fg']      = { 'fg', 'StatusLine', },
         ['bg']      = { 'bg', 'Normal', },
