@@ -51,6 +51,7 @@ keymap_set({ 'n', 'v', }, 'gs', '_')
 keymap_set({ 'n', 'v', }, 'mm', '%', { remap = true, })
 
 keymap_set({ 'n', 'v', }, '<leader>yf', '<cmd>let @+ = expand("%") . ":" . line(".")<cr>')
+keymap_set('v', 'y', 'ygv<esc>')
 keymap_set('v', 'p', '"_dP')
 keymap_set('v', '>', '>gv')
 keymap_set('v', '<', '<gv')
