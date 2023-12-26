@@ -32,6 +32,7 @@ config.colors = {
     inactive_tab = { bg_color = background, fg_color = 'grey', },
   },
 }
+config.font = wezterm.font('Monaco')
 config.font_size = 16
 config.inactive_pane_hsb = { brightness = 0.5, }
 config.hide_tab_bar_if_only_one_tab = true
