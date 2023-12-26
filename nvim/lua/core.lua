@@ -38,8 +38,7 @@ vim.o.wrap = false
 
 vim.opt.clipboard:append('unnamedplus')
 vim.opt.iskeyword:append('-')
-vim.opt.listchars = { eol = '⤵', multispace = '·', tab = '––', trail = '␣', extends = '↘', precedes = '↖', }
-vim.opt.shortmess:append('asi')
+vim.opt.shortmess:append('asI')
 
 local keymap_set = require('utils').keymap_set
 keymap_set('', 'gn', ':bn<cr>')
