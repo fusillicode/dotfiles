@@ -120,7 +120,7 @@ vim.diagnostic.config {
     format = function(diagnostic)
       return '☛ '
           .. diagnostic.message
-          .. ' [ ' .. diagnostic.source .. ' ] '
+          .. (diagnostic.source and ' [ ' .. diagnostic.source .. ' ] ' or '')
           .. (diagnostic.code and '[ ' .. diagnostic.code .. ' ]' or '')
     end,
     header = '',
