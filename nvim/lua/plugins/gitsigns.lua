@@ -29,7 +29,7 @@ return {
       keymap_set('v', '<leader>hs', function() gs.stage_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end)
       keymap_set('v', '<leader>hr', function() gs.reset_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end)
       keymap_set('n', '<leader>hu', gs.undo_stage_hunk)
-      keymap_set('n', '<leader>tb', function() gs.blame_line({ full = true, }) end)
+      keymap_set({ 'n', 'v', }, '<c-b>', function() gs.blame_line({ full = true, }) end)
     end,
   },
 }
