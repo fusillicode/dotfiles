@@ -67,10 +67,4 @@ vim.api.nvim_create_autocmd({ 'DiagnosticChanged', 'BufEnter', }, {
   callback = redraw,
 })
 
-vim.api.nvim_create_autocmd({ 'User', }, {
-  group = vim.api.nvim_create_augroup('StatusLine', {}),
-  pattern = 'LspProgressStatusUpdated',
-  callback = redraw,
-})
-
 return M
