@@ -118,7 +118,7 @@ vim.diagnostic.config {
     anchor_bias = 'above',
     focusable = true,
     format = function(diagnostic)
-      return '• '
+      return '■ '
           .. diagnostic.message
           .. (diagnostic.source and ' [ ' .. diagnostic.source .. ' ] ' or '')
           .. (diagnostic.code and '[ ' .. diagnostic.code .. ' ]' or '')
