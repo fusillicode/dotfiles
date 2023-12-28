@@ -19,14 +19,6 @@ ZSH_THEME_GIT_PROMPT_UNTRACKED="%{$fg_bold[cyan]%}? %{$reset_color%}"
 ZSH_THEME_GIT_PROMPT_SHA_BEFORE="%{$fg_bold[yellow]%}"
 ZSH_THEME_GIT_PROMPT_SHA_AFTER="%{$reset_color%}"
 
-# For kube-ps1
-KUBE_PS1_PREFIX=
-KUBE_PS1_SEPARATOR=
-KUBE_PS1_SUFFIX=
-KUBE_PS1_SYMBOL_ENABLE=false
-source "/opt/homebrew/opt/kube-ps1/share/kube-ps1.sh"
-PS1='$(kube_ps1)'$PS1
-
 return_status() {
   if [[ $? -ne 0 ]]; then
     echo "%{$fg_bold[red]%}$(launch_time)%{$reset_color%}";
@@ -35,9 +27,12 @@ return_status() {
   fi
 }
 
-prompt_char() {
-  git branch >/dev/null 2>/dev/null && echo "%{$fg_bold[cyan]%}±%{$reset_color%}" && return
-  echo "%{$fg_bold[cyan]%}○%{$reset_color%}"
+launch_time() {
+  echo "%*"
+}
+
+path() {
+  echo "%{$fg_bold[cyan]%}%~%{$reset_color%}"
 }
 
 git_tag() {
@@ -49,12 +44,16 @@ git_tag() {
   fi
 }
 
-launch_time() {
-  echo "%*"
-}
 
-path() {
-  echo "%{$fg_bold[cyan]%}%~%{$reset_color%}"
+# For kube-ps1
+KUBE_PS1_PREFIX=
+KUBE_PS1_SEPARATOR=
+KUBE_PS1_SUFFIX=
+KUBE_PS1_SYMBOL_ENABLE=false
+
+prompt_char() {
+  git branch >/dev/null 2>/dev/null && echo "%{$fg_bold[cyan]%}±%{$reset_color%}" && return
+  echo "%{$fg_bold[cyan]%}○%{$reset_color%}"
 }
 
 PROMPT=$'
