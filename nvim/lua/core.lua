@@ -147,7 +147,7 @@ vim.api.nvim_create_autocmd('FocusLost', {
 })
 
 vim.api.nvim_create_autocmd('FileType', {
-  group = vim.api.nvim_create_augroup('IndentFiles', { clear = true, }),
+  group = vim.api.nvim_create_augroup('IndentBuffer', { clear = true, }),
   pattern = 'php',
   command = 'setlocal shiftwidth=4 tabstop=4',
 })
