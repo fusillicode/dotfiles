@@ -74,7 +74,13 @@ function M.tools()
       },
       marksman = {},
       phpactor = {},
-      psalm = {},
+      psalm = {
+        settings = {
+          psalm = {
+            configPaths = { 'psalm.xml', 'psalm.xml.dist', 'psalm-baseline.xml', },
+          },
+        },
+      },
       ruff_lsp = {},
       rust_analyzer = {
         settings = {
