@@ -124,6 +124,7 @@ vim.diagnostic.config {
           .. (diagnostic.code and '[ ' .. diagnostic.code .. ' ]' or '')
     end,
     header = '',
+    max_width = 90,
     prefix = '',
     source = false,
     suffix = '',
