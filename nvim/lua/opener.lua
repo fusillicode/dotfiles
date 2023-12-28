@@ -26,7 +26,7 @@ function M.open_under_cursor()
   open((before_match or '') .. (after_match or ''))
 end
 
--- 👉 https://github.com/neovim/neovim/pull/13896
+-- https://github.com/neovim/neovim/pull/13896
 function M.open_selection()
   local _, ls, cs = table.unpack(vim.fn.getpos('v'))
   local _, le, ce = table.unpack(vim.fn.getpos('.'))

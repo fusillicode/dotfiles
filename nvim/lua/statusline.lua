@@ -50,6 +50,7 @@ function M.draw()
       .. (buffer_infos ~= 0 and '%#DiagnosticInfoStatusLine#' .. 'I:' .. buffer_infos .. ' ' or '')
       .. (buffer_hints ~= 0 and '%#DiagnosticHintStatusLine#' .. 'H:' .. buffer_hints .. ' ' or '')
       .. '%#StatusLine#'
+      -- https://stackoverflow.com/a/45244610
       .. '%{expand("%:~:.")} %m %r'
       .. '%='
       .. (workspace_errors ~= 0 and '%#DiagnosticErrorStatusLine#' .. 'E:' .. workspace_errors .. ' ' or '')
