@@ -21,7 +21,6 @@ require('lazy').setup('plugins', {
         '2html_plugin',
         'bugreport',
         'compiler',
-        'ftplugin',
         'getscript',
         'getscriptPlugin',
         'gzip',
