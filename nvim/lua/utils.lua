@@ -1,7 +1,7 @@
 local M = {}
 
 function M.keymap_set(modes, lhs, rhs, opts)
-  vim.keymap.set(modes, lhs, rhs, vim.tbl_extend('force', { silent = true, }, opts or {}))
+  vim.keymap.set(modes, lhs, rhs, vim.tbl_extend('force', { silent = true, unique = true, }, opts or {}))
 end
 
 function M.dbg(foo)

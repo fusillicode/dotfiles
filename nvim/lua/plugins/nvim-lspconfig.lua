@@ -13,9 +13,9 @@ return {
     local keymap_set = require('utils').keymap_set
 
     local function on_attach(_, bufnr)
-      keymap_set('', '<c-r>', ':LspRestart<cr>')
-      keymap_set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr, })
-      keymap_set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, })
+      keymap_set('', '<c-r>', ':LspRestart<cr>', { unique = false, })
+      keymap_set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr, unique = false, })
+      keymap_set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, unique = false, })
     end
 
     for lsp, config in pairs(require('mason-tools').tools()['lsps']) do
