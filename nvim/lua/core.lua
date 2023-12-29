@@ -49,7 +49,7 @@ keymap_set({ 'n', 'v', }, 'gl', '$')
 keymap_set({ 'n', 'v', }, 'gs', '_')
 keymap_set({ 'n', 'v', }, 'mm', '%', { remap = true, })
 
-keymap_set({ 'n', 'v', }, '<leader>yf', '<cmd>let @+ = expand("%") . ":" . line(".")<cr>')
+keymap_set({ 'n', 'v', }, '<leader>yf', ':let @+ = expand("%") . ":" . line(".")<cr>')
 keymap_set('v', 'y', 'ygv<esc>')
 keymap_set('v', 'p', '"_dP')
 
@@ -95,8 +95,8 @@ keymap_set('i', '<', '<><left>')
 keymap_set('i', '`', '``<left>')
 keymap_set('i', '{;', '{};<left><left>')
 
-keymap_set('n', 'dp', '<cmd>lua vim.diagnostic.goto_prev()<cr>zz')
-keymap_set('n', 'dn', '<cmd>lua vim.diagnostic.goto_next()<cr>zz')
+keymap_set('n', 'dp', ':lua vim.diagnostic.goto_prev()<cr>zz')
+keymap_set('n', 'dn', ':lua vim.diagnostic.goto_next()<cr>zz')
 keymap_set('n', '<leader>e', vim.diagnostic.open_float)
 
 keymap_set('n', '<leader>gx', require('opener').open_under_cursor)
