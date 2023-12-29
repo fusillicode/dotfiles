@@ -4,7 +4,7 @@ return {
     { '<leader>F', },
   },
   config = function()
-    require('utils').keymap_set('n', '<leader>F', '<cmd>Oil<cr>')
+    require('utils').keymap_set('n', '<leader>F', ':Oil<cr>')
     require('oil').setup({
       delete_to_trash = true,
       view_options = {
