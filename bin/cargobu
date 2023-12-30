@@ -5,5 +5,5 @@ set -euo pipefail
 # cargo bins ❤️
 rustup component add rust-analyzer
 cargo install --force \
-  atuin cargo-make ccase drill fd-find gitui pv ripgrep rtx-cli typos-cli sd sqlx-cli
+  atuin cargo-make ccase drill fd-find gitui pv ripgrep rtx-cli tailspin typos-cli sd sqlx-cli
 cargo install --force taplo-cli --all-features
