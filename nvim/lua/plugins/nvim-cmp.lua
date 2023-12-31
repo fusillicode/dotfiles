@@ -10,6 +10,7 @@ return {
     'lukas-reineke/cmp-rg',
     'rafamadriz/friendly-snippets',
     'saadparwaiz1/cmp_luasnip',
+    'davidsierradz/cmp-conventionalcommits',
   },
   config = function()
     local cmp = require('cmp')
