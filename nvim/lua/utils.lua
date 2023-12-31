@@ -25,7 +25,7 @@ function M.esc_without_jumps()
   local mode = vim.api.nvim_get_mode()['mode']
   local goto_mark = ''
   if mode == 'v' or mode == 'V' or mode == 'CTRL-V' then
-    goto_mark = vim.fn.line('.') < vim.fn.line('v') and ":<c-u>'<<cr>" or ":<c-u>'><cr>"
+    goto_mark = ":<c-u>'" .. (vim.fn.line('.') < vim.fn.line('v') and '<' or '>') .. '<cr>'
   end
   return goto_mark .. ':<cr>:noh<cr>:echo""<cr>'
 end
