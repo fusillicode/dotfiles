@@ -1,6 +1,6 @@
 return {
   'andymass/vim-matchup',
-  event = 'BufRead',
+  event = 'BufEnter',
   config = function()
     vim.g.matchup_matchparen_offscreen = {}
   end,
