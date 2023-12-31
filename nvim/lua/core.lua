@@ -84,17 +84,7 @@ keymap_set({ 'n', 'v', }, '<leader>Q', ':q!<cr>')
 keymap_set({ 'n', 'v', }, '<c-e>', ':luafile %<cr>')
 keymap_set({ 'n', 'v', }, '<c-a>', 'ggVG')
 keymap_set({ 'n', 'v', }, '<c-s>', ':set wrap!<cr>')
-
-local function foo()
-  local mode = vim.api.nvim_get_mode()['mode']
-  local goto_mark = ''
-  if mode == 'v' or mode == 'V' or mode == 'CTRL-V' then
-    goto_mark = vim.fn.line('.') < vim.fn.line('v') and ":<c-u>'<<cr>" or ":<c-u>'><cr>"
-  end
-  return goto_mark .. ':<cr>:noh<cr>:echo""<cr>'
-end
-
-keymap_set({ 'n', 'v', }, '<esc>', foo, { expr = true, })
+keymap_set({ 'n', 'v', }, '<esc>', require('utils').no_jumping_esc, { expr = true, })
 
 keymap_set('i', "'", "''<left>")
 keymap_set('i', '"', '""<left>')
