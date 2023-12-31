@@ -1,6 +1,6 @@
 return {
   'linrongbin16/gitlinker.nvim',
-  keys = { { '<leader>', mode = { 'n', 'v', }, }, },
+  keys = { '<leader>', mode = { 'n', 'v', }, },
   dependencies = { 'nvim-lua/plenary.nvim', },
   config = function()
     local keymap_set = require('utils').keymap_set
