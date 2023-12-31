@@ -21,4 +21,13 @@ function M.new_set(table)
   return set
 end
 
+function M.no_jumping_esc()
+  local mode = vim.api.nvim_get_mode()['mode']
+  local goto_mark = ''
+  if mode == 'v' or mode == 'V' or mode == 'CTRL-V' then
+    goto_mark = vim.fn.line('.') < vim.fn.line('v') and ":<c-u>'<<cr>" or ":<c-u>'><cr>"
+  end
+  return goto_mark .. ':<cr>:noh<cr>:echo""<cr>'
+end
+
 return M
