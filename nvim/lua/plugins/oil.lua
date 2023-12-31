@@ -1,8 +1,6 @@
 return {
   'stevearc/oil.nvim',
-  keys = {
-    { '<leader>F', },
-  },
+  keys = '<leader>F',
   config = function()
     require('utils').keymap_set('n', '<leader>F', ':Oil<cr>')
     require('oil').setup({
