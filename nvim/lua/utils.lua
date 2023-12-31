@@ -21,7 +21,7 @@ function M.new_set(table)
   return set
 end
 
-function M.no_jumping_esc()
+function M.esc_without_jumps()
   local mode = vim.api.nvim_get_mode()['mode']
   local goto_mark = ''
   if mode == 'v' or mode == 'V' or mode == 'CTRL-V' then
