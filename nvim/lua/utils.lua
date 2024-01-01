@@ -21,13 +21,10 @@ function M.new_set(table)
   return set
 end
 
-M.visual_mode = M.new_set({ 'v', 'V', 'CTRL-V', })
+M.normal_esc = ':noh<cr>:echo""<cr>'
 
-function M.esc_without_jumps()
-  return (M.visual_mode[vim.api.nvim_get_mode()['mode']]
-        and ":<c-u>'" .. (vim.fn.line('.') < vim.fn.line('v') and '<' or '>') .. '<cr>'
-        or '')
-      .. ':<cr>:noh<cr>:echo""<cr>'
+function M.visual_esc()
+  return ":<c-u>'" .. (vim.fn.line('.') < vim.fn.line('v') and '<' or '>') .. '<cr>' .. M.normal_esc
 end
 
 return M
