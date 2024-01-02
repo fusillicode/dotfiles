@@ -14,6 +14,7 @@ return {
         'dockerfile',
         'elixir',
         'elm',
+        'graphql',
         'html',
         'javascript',
         'json',
