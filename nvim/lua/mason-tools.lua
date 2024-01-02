@@ -36,6 +36,7 @@ function M.tools()
       elixirls = {
         cmd = { vim.fn.stdpath('data') .. '/mason/bin' .. '/elixir-ls', },
       },
+      elmls = {},
       graphql = {},
       html = {},
       helm_ls = {},
@@ -144,7 +145,7 @@ function M.sync()
   local mason_registry = require('mason-registry')
   package.loaded['mason-tools'] = nil
   local mason_tools = require('mason-tools')
-  local tools = mason_tools['tools']
+  local tools = mason_tools['tools']()
 
   local pkgs_names = {}
   for mason_tool_name, _ in pairs(vim.tbl_extend('error', tools['lsps'], tools['others'])) do
