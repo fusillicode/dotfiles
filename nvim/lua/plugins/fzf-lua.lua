@@ -32,9 +32,8 @@ return {
     keymap_set('n', '<leader>d', function() fzf_lua.diagnostics_document({ prompt = 'Buffer aiagnostics: ', }) end)
     keymap_set('n', '<leader>D', function() fzf_lua.diagnostics_workspace({ prompt = 'Workspace diagnostics: ', }) end)
 
-    keymap_set('n', '<leader>/', function()
-      fzf_lua.live_grep_glob({ prompt = 'rg: ', })
-    end)
+    keymap_set('n', '<leader>/', function() fzf_lua.live_grep_glob({ prompt = 'rg: ', }) end)
+    keymap_set('n', '<leader>w', function() fzf_lua.grep_cword({ prompt = 'rgw: ', }) end)
 
     local todo_comments_cfg = { search = 'TODO:|HACK:|PERF:|NOTE:|FIX:|FIXME:|WARN:', no_esc = true, }
     keymap_set('n', '<leader>t', function()
