@@ -38,6 +38,8 @@ return {
           NvimGitLinkerHighlightTextObject = { link = 'IncSearch', },
           TelescopeMatching = { fg = 'orange', },
           TelescopePromptPrefix = { link = 'TelescopePromptBorder', },
+          TODO = { bg = 'cyan', },
+          ['@text.todo'] = { bg = 'cyan', },
         },
       },
       palettes = {
