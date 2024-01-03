@@ -29,11 +29,12 @@ return {
     keymap_set('n', '<leader>S', function() fzf_lua.lsp_live_workspace_symbols({ prompt = 'Workspace symbols: ', }) end)
     keymap_set('n', '<leader>a', function() fzf_lua.lsp_code_actions({ prompt = 'Code actions: ', }) end)
 
-    keymap_set('n', '<leader>d', function() fzf_lua.diagnostics_document({ prompt = 'Buffer aiagnostics: ', }) end)
+    keymap_set('n', '<leader>d', function() fzf_lua.diagnostics_document({ prompt = 'Buffer diagnostics: ', }) end)
     keymap_set('n', '<leader>D', function() fzf_lua.diagnostics_workspace({ prompt = 'Workspace diagnostics: ', }) end)
 
     keymap_set('n', '<leader>/', function() fzf_lua.live_grep_glob({ prompt = 'rg: ', }) end)
     keymap_set('n', '<leader>w', function() fzf_lua.grep_cword({ prompt = 'rgw: ', }) end)
+    keymap_set('v', '<leader>w', function() fzf_lua.grep_visual({ prompt = 'rgv: ', }) end)
 
     local todo_comments_cfg = { search = 'TODO:|HACK:|PERF:|NOTE:|FIX:|FIXME:|WARN:', no_esc = true, }
     keymap_set('n', '<leader>t', function()
@@ -98,6 +99,9 @@ return {
         branches = {
           cmd = 'git branch --all --color --sort=-committerdate',
         },
+      },
+      grep = {
+        rg_glob = true,
       },
     })
   end,
