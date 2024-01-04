@@ -51,10 +51,10 @@ return {
       fzf_colors = {
         ['fg']      = { 'fg', 'StatusLine', },
         ['bg']      = { 'bg', 'Normal', },
-        ['hl']      = { 'fg', 'TelescopeMatching', },
+        ['hl']      = { 'bg', 'Search', },
         ['fg+']     = { 'fg', 'Normal', },
         ['bg+']     = { 'bg', 'CursorLine', },
-        ['hl+']     = { 'fg', 'TelescopeMatching', },
+        ['hl+']     = { 'bg', 'Search', },
         ['info']    = { 'fg', 'Keyword', },
         ['prompt']  = { 'fg', 'Keyword', },
         ['pointer'] = { 'bg', 'CursorLine', },
