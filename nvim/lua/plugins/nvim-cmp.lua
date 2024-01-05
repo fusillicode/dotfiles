@@ -18,6 +18,9 @@ return {
     require('luasnip.loaders.from_vscode').lazy_load()
 
     cmp.setup({
+      performance = {
+        max_view_entries = 12,
+      },
       formatting = {
         format = function(_, vim_item)
           vim_item.abbr = string.sub(vim_item.abbr, 1, 48)
