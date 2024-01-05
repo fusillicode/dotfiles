@@ -5,6 +5,7 @@ return {
     vim.g.bones_compat = 1
     vim.cmd.colorscheme('tokyobones')
 
+    vim.api.nvim_set_hl(0, 'CursorLine', { bg = vim.api.nvim_get_hl(0, { name = 'StatusLine', }).bg, })
     vim.api.nvim_set_hl(0, 'ColorColumn', { link = 'StatusLine', })
     vim.api.nvim_set_hl(0, 'DiagnosticError', { fg = 'red', })
     vim.api.nvim_set_hl(0, 'DiagnosticWarn', { fg = 'orange', })
@@ -26,6 +27,8 @@ return {
     vim.api.nvim_set_hl(0, 'DiagnosticUnderlineInfo', { undercurl = true, sp = 'cyan', })
     vim.api.nvim_set_hl(0, 'DiagnosticUnderlineHint', { undercurl = true, sp = 'white', })
     vim.api.nvim_set_hl(0, 'DiagnosticUnderlineOk', { undercurl = true, sp = 'limegreen', })
+    vim.api.nvim_set_hl(0, 'DiagnosticUnnecessary', { fg = '', undercurl = true, sp = 'orange', })
+    vim.api.nvim_set_hl(0, 'DiagnosticDeprecated', { fg = '', strikethrough = true, })
     vim.api.nvim_set_hl(0, 'GitSignsAdd', { fg = 'limegreen', })
     vim.api.nvim_set_hl(0, 'GitSignsChange', { fg = 'orange', })
     vim.api.nvim_set_hl(0, 'GitSignsDelete', { fg = 'red', })
