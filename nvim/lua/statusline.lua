@@ -12,7 +12,7 @@ for _, diagnostic_hl_group in ipairs({
     vim.tbl_extend(
       'force',
       status_line_hl_group,
-      { fg = vim.api.nvim_get_hl(0, { name = diagnostic_hl_group, })['fg'], }
+      { fg = vim.api.nvim_get_hl(0, { name = diagnostic_hl_group, }).fg, }
     )
   )
 end

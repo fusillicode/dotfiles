@@ -51,10 +51,10 @@ return {
       fzf_colors = {
         ['fg']      = { 'fg', 'StatusLine', },
         ['bg']      = { 'bg', 'Normal', },
-        ['hl']      = { 'bg', 'Search', },
+        ['hl']      = { 'fg', 'Number', },
         ['fg+']     = { 'fg', 'Normal', },
         ['bg+']     = { 'bg', 'CursorLine', },
-        ['hl+']     = { 'bg', 'Search', },
+        ['hl+']     = { 'fg', 'Number', },
         ['info']    = { 'fg', 'Keyword', },
         ['prompt']  = { 'fg', 'Keyword', },
         ['pointer'] = { 'bg', 'CursorLine', },
