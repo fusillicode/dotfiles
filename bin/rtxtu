@@ -5,28 +5,33 @@ set -euo pipefail
 mkdir -p ~/.local/bin
 
 curl -L https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rust-analyzer-aarch64-apple-darwin.gz | \
-  gunzip -c - > ~/.local/bin/rust-analyzer
-chmod +x ~/.local/bin/rust-analyzer
+  gunzip -c - > ~/.local/bin/rust-analyzer && \
+  chmod +x ~/.local/bin/rust-analyzer
+
+mkdir -p ~/.local/bin/elixir-ls && \
+  curl -L https://github.com/elixir-lsp/elixir-ls/releases/download/v0.18.1/elixir-ls-v0.18.1.zip | \
+  tar -xf - -C ~/.local/bin/elixir-ls - && \
+  chmod +x ~/.local/bin/elixir-ls/*.sh
 
 curl -L https://github.com/tekumara/typos-vscode/releases/download/v0.1.10/typos-lsp-v0.1.10-aarch64-apple-darwin.tar.gz | \
-  tar -xzsf - -C ~/.local/bin/typos-lsp
-chmod +x ~/.local/bin/typos-lsp
+  tar -xzsf - -C ~/.local/bin/typos-lsp && \
+  chmod +x ~/.local/bin/typos-lsp
 
 curl -L https://github.com/tamasfe/taplo/releases/latest/download/taplo-darwin-aarch64.gz | \
-  gunzip -c - > ~/.local/bin/taplo
-chmod +x ~/.local/bin/taplo
+  gunzip -c - > ~/.local/bin/taplo && \
+  chmod +x ~/.local/bin/taplo
 
-curl -L https://github.com/mrjosh/helm-ls/releases/latest/download/helm_ls_darwin_amd64 --output ~/.local/bin/helm_ls
-chmod +x ~/.local/bin/helm_ls
+curl -L https://github.com/mrjosh/helm-ls/releases/latest/download/helm_ls_darwin_amd64 --output ~/.local/bin/helm_ls && \
+  chmod +x ~/.local/bin/helm_ls
 
-curl -L https://cs.symfony.com/download/php-cs-fixer-v3.phar --output ~/.local/bin/php-cs-fixer
-chmod +x ~/.local/bin/php-cs-fixer
+curl -L https://cs.symfony.com/download/php-cs-fixer-v3.phar --output ~/.local/bin/php-cs-fixer && \
+  chmod +x ~/.local/bin/php-cs-fixer
 
-curl -L https://github.com/phpactor/phpactor/releases/latest/download/phpactor.phar --output ~/.local/bin/phpactor
-chmod +x ~/.local/bin/phpactor
+curl -L https://github.com/phpactor/phpactor/releases/latest/download/phpactor.phar --output ~/.local/bin/phpactor && \
+  chmod +x ~/.local/bin/phpactor
 
-curl -L https://github.com/vimeo/psalm/releases/latest/download/psalm.phar --output ~/.local/bin/psalm
-chmod +x ~/.local/bin/psalm
+curl -L https://github.com/vimeo/psalm/releases/latest/download/psalm.phar --output ~/.local/bin/psalm && \
+  chmod +x ~/.local/bin/psalm
 
 brew install hadolint
 brew install hashicorp/tap/terraform-ls
