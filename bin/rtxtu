@@ -2,9 +2,52 @@
 
 set -euo pipefail
 
-# rtx dependant tools
+mkdir -p ~/.local/bin
+curl -L https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rust-analyzer-aarch64-apple-darwin.gz | \
+  gunzip -c - > ~/.local/bin/rust-analyzer
+chmod +x ~/.local/bin/rust-analyzer
+
+curl -L https://github.com/tekumara/typos-vscode/releases/download/v0.1.10/typos-lsp-v0.1.10-aarch64-apple-darwin.tar.gz | \
+  gunzip -c - > ~/.local/bin/typos-lsp
+chmod +x ~/.local/bin/typos-lsp
+
+curl -L https://github.com/tamasfe/taplo/releases/latest/download/taplo-darwin-aarch64.gz | \
+  gunzip -c - > ~/.local/bin/taplo
+chmod +x ~/.local/bin/taplo
+
+curl -L https://github.com/mrjosh/helm-ls/releases/latest/download/helm_ls_darwin_amd64 --output ~/.local/bin/helm_ls
+chmod +x ~/.local/bin/helm_ls
+
+curl -L https://cs.symfony.com/download/php-cs-fixer-v3.phar --output ~/.local/bin/php-cs-fixer
+chmod +x ~/.local/bin/php-cs-fixer
+
+curl -L https://github.com/phpactor/phpactor/releases/latest/download/phpactor.phar --output ~/.local/bin/phpactor
+chmod +x ~/.local/bin/phpactor
+
+curl -L https://github.com/vimeo/psalm/releases/latest/download/psalm.phar --output ~/.local/bin/psalm
+chmod +x psalm
+
+brew install hadolint
+brew install hashicorp/tap/terraform-ls
+brew install marksman
+brew install shellcheck
+
 npm install -g \
-  yarn quicktype @elm-tooling/elm-language-server bash-language-server yaml-language-server \
-  vscode-langservers-extracted prettier dockerfile-language-server-nodejs
-pip install ruff python-lsp-server python-lsp-ruff
+  @elm-tooling/elm-language-server \
+  @microsoft/compose-language-service \
+  bash-language-server \
+  dockerfile-language-server-nodejs \
+  graphql-language-service-cli \
+  prettier \
+  sql-language-server \
+  vscode-html-languageservice \
+  vscode-json-languageservice \
+  vscode-langservers-extracted \
+  yaml-language-server \
+  yarn
+
+pip install \
+  ruff \
+  ruff-lsp
+
 rtx use -g lua-language-server@latest
