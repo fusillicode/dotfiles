@@ -39,9 +39,9 @@ brew install marksman
 brew install shellcheck
 
 npm install -g \
+  @commitlint/{cli,config-conventional} \
   @elm-tooling/elm-language-server \
   @microsoft/compose-language-service \
-  @commitlint/{cli,config-conventional} \
   bash-language-server \
   dockerfile-language-server-nodejs \
   graphql-language-service-cli \
