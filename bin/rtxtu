@@ -3,6 +3,7 @@
 set -euo pipefail
 
 mkdir -p ~/.local/bin
+
 curl -L https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rust-analyzer-aarch64-apple-darwin.gz | \
   gunzip -c - > ~/.local/bin/rust-analyzer
 chmod +x ~/.local/bin/rust-analyzer
@@ -25,7 +26,7 @@ curl -L https://github.com/phpactor/phpactor/releases/latest/download/phpactor.p
 chmod +x ~/.local/bin/phpactor
 
 curl -L https://github.com/vimeo/psalm/releases/latest/download/psalm.phar --output ~/.local/bin/psalm
-chmod +x psalm
+chmod +x ~/.local/bin/psalm
 
 brew install hadolint
 brew install hashicorp/tap/terraform-ls
@@ -43,8 +44,7 @@ npm install -g \
   vscode-html-languageservice \
   vscode-json-languageservice \
   vscode-langservers-extracted \
-  yaml-language-server \
-  yarn
+  yaml-language-server
 
 pip install \
   ruff \
