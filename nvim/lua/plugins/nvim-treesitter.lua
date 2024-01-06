@@ -1,7 +1,10 @@
 return {
   'nvim-treesitter/nvim-treesitter',
   event = 'BufReadPost',
-  dependencies = { 'nvim-treesitter/nvim-treesitter-textobjects', },
+  dependencies = {
+    'nvim-treesitter/nvim-treesitter-textobjects',
+    'theHamsta/nvim-treesitter-pairs',
+  },
   build = ':TSUpdate',
   config = function()
     require('nvim-treesitter.configs').setup({
@@ -45,7 +48,12 @@ return {
           node_decremental = '<S-TAB>',
         },
       },
-      matchup = { enable = true, enable_quotes = true, },
+      pairs = {
+        enable = true,
+        highlight_pair_events = { 'CursorMoved', },
+        keymaps = { goto_partner = 'mm', },
+        fallback_cmd_normal = 'normal! %',
+      },
       sync_install = true,
       textobjects = {
         move = {
