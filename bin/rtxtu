@@ -41,6 +41,7 @@ brew install shellcheck
 npm install -g \
   @elm-tooling/elm-language-server \
   @microsoft/compose-language-service \
+  @commitlint/{cli,config-conventional} \
   bash-language-server \
   dockerfile-language-server-nodejs \
   graphql-language-service-cli \
