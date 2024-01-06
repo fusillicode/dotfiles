@@ -9,7 +9,7 @@ curl -L https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rus
 chmod +x ~/.local/bin/rust-analyzer
 
 curl -L https://github.com/tekumara/typos-vscode/releases/download/v0.1.10/typos-lsp-v0.1.10-aarch64-apple-darwin.tar.gz | \
-  gunzip -c - > ~/.local/bin/typos-lsp
+  tar -xzsf - -C ~/.local/bin/typos-lsp
 chmod +x ~/.local/bin/typos-lsp
 
 curl -L https://github.com/tamasfe/taplo/releases/latest/download/taplo-darwin-aarch64.gz | \
