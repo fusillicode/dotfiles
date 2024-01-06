@@ -60,17 +60,6 @@ keymap_set('n', '>', '>>')
 keymap_set('n', '<', '<<')
 keymap_set({ 'n', 'v', }, 'U', '<c-r>')
 
-keymap_set('n', '<c-u>', '<c-u>zz')
-keymap_set('n', '<c-d>', '<c-d>zz')
-keymap_set('n', '<c-o>', '<c-o>zz')
-keymap_set('n', '<c-i>', '<c-i>zz')
-keymap_set('n', 'n', 'nzz')
-keymap_set('n', 'N', 'Nzz')
-keymap_set('n', '*', '*zz')
-keymap_set('n', '#', '#zz')
-keymap_set('n', 'g*', 'g*zz')
-keymap_set('n', 'g#', 'g#zz')
-
 keymap_set('n', '<c-j>', '<c-down>', { remap = true, })
 keymap_set('n', '<c-k>', '<c-up>', { remap = true, })
 
@@ -97,8 +86,8 @@ keymap_set('i', '<', '<><left>')
 keymap_set('i', '`', '``<left>')
 keymap_set('i', '{;', '{};<left><left>')
 
-keymap_set('n', 'dp', ':lua vim.diagnostic.goto_prev()<cr>zz')
-keymap_set('n', 'dn', ':lua vim.diagnostic.goto_next()<cr>zz')
+keymap_set('n', 'dp', vim.diagnostic.goto_prev)
+keymap_set('n', 'dn', vim.diagnostic.goto_next)
 keymap_set('n', '<leader>e', vim.diagnostic.open_float)
 
 keymap_set('n', '<leader>gx', require('opener').open_under_cursor)
@@ -136,6 +125,11 @@ vim.api.nvim_create_autocmd('TextYankPost', {
 vim.api.nvim_create_autocmd('FocusLost', {
   group = vim.api.nvim_create_augroup('AutosaveBuffers', { clear = true, }),
   command = ':silent! wa!',
+})
+
+vim.api.nvim_create_autocmd({ 'BufEnter', 'CursorMoved', }, {
+  group = vim.api.nvim_create_augroup('VerticallyCenterCursorLine', { clear = true, }),
+  callback = function() vim.cmd.norm('zz') end,
 })
 
 vim.api.nvim_create_user_command('MasonSync', require('mason-tools').sync, {})
