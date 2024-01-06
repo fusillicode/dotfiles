@@ -126,9 +126,4 @@ vim.api.nvim_create_autocmd('FocusLost', {
   command = ':silent! wa!',
 })
 
-vim.api.nvim_create_autocmd({ 'BufEnter', 'CursorMoved', }, {
-  group = vim.api.nvim_create_augroup('VerticallyCenterCursorLine', { clear = true, }),
-  callback = function() vim.cmd.norm('zz') end,
-})
-
 vim.api.nvim_create_user_command('MasonSync', require('mason-tools').sync, {})
