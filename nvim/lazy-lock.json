@@ -31,6 +31,7 @@
   "oil.nvim": { "branch": "master", "commit": "a128e6f75c6a71b7b9ac7ea663949a5209771cd5" },
   "plenary.nvim": { "branch": "master", "commit": "55d9fe89e33efd26f532ef20223e5f9430c8b0c0" },
   "schemastore.nvim": { "branch": "main", "commit": "7ccffe69a8c24fcd8637788955e13d7fd8aa2f46" },
+  "scrollofffraction.nvim": { "branch": "master", "commit": "0321a6790e756c9f243627e2d75745283748c3d2" },
   "todo-comments.nvim": { "branch": "main", "commit": "4a6737a8d70fe1ac55c64dfa47fcb189ca431872" },
   "vim-visual-multi": { "branch": "master", "commit": "aec289a9fdabaa0ee6087d044d75b32e12084344" },
   "zenbones.nvim": { "branch": "main", "commit": "510d12c088ed45a410371c63ebd62ffb54c1615f" }
