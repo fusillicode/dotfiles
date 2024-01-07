@@ -11,21 +11,26 @@ return {
     'rafamadriz/friendly-snippets',
     'saadparwaiz1/cmp_luasnip',
     'davidsierradz/cmp-conventionalcommits',
+    'Exafunction/codeium.nvim',
   },
   config = function()
     local cmp = require('cmp')
     local luasnip = require('luasnip')
     require('luasnip.loaders.from_vscode').lazy_load()
+    require('codeium').setup({})
 
     cmp.setup({
-      performance = {
-        max_view_entries = 12,
+      experimental = {
+        ghost_text = true,
       },
       formatting = {
         format = function(_, vim_item)
           vim_item.abbr = string.sub(vim_item.abbr, 1, 48)
           return vim_item
         end,
+      },
+      performance = {
+        max_view_entries = 12,
       },
       snippet = {
         expand = function(args) luasnip.lsp_expand(args.body) end,
@@ -56,6 +61,7 @@ return {
       }),
       sources = {
         { name = 'nvim_lsp', },
+        { name = 'codeium', },
         { name = 'path', },
         { name = 'buffer', },
         { name = 'luasnip', },
