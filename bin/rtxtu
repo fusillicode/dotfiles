@@ -2,18 +2,24 @@
 
 set -euo pipefail
 
+get_latest_release() {
+  curl -s https://api.github.com/repos/"$1"/releases/latest | grep "tag_name" | cut -d '"' -f 4 | cat
+}
+
 mkdir -p ~/.local/bin
 
 curl -L https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rust-analyzer-aarch64-apple-darwin.gz | \
   gunzip -c - > ~/.local/bin/rust-analyzer && \
   chmod +x ~/.local/bin/rust-analyzer
 
+latest_release=$(get_latest_release "elixir-lsp/elixir-ls")
 mkdir -p ~/.local/bin/elixir-ls && \
-  curl -L https://github.com/elixir-lsp/elixir-ls/releases/download/v0.18.1/elixir-ls-v0.18.1.zip | \
+  curl -L https://github.com/elixir-lsp/elixir-ls/releases/download/v"$latest_release"/elixir-ls-v"$latest_release".zip | \
   tar -xf - -C ~/.local/bin/elixir-ls - && \
   chmod +x ~/.local/bin/elixir-ls/*.sh
 
-curl -L https://github.com/tekumara/typos-vscode/releases/download/v0.1.10/typos-lsp-v0.1.10-aarch64-apple-darwin.tar.gz | \
+latest_release=$(get_latest_release "tekumara/typos-vscode")
+curl -L https://github.com/tekumara/typos-vscode/releases/download/v"$latest_release"/typos-lsp-v"$latest_release"/-aarch64-apple-darwin.tar.gz | \
   tar -xzsf - -C ~/.local/bin/typos-lsp && \
   chmod +x ~/.local/bin/typos-lsp
 
