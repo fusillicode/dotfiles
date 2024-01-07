@@ -16,26 +16,29 @@ curl -L https://github.com/tamasfe/taplo/releases/latest/download/taplo-darwin-a
   gunzip -c - > taplo && \
   chmod +x taplo
 
-latest_release=$(get_latest_release "elixir-lsp/elixir-ls")
+repo="elixir-lsp/elixir-ls"
+latest_release=$(get_latest_release $repo)
 mkdir -p elixir-ls && \
-  curl -L https://github.com/elixir-lsp/elixir-ls/releases/download/v"$latest_release"/elixir-ls-v"$latest_release".zip | \
+  curl -L https://github.com/"$repo"/releases/download/v"$latest_release"/elixir-ls-v"$latest_release".zip | \
   tar -xf - -C elixir-ls - && \
   chmod +x elixir-ls/*.sh
 
-latest_release=$(get_latest_release "tekumara/typos-vscode")
-curl -L https://github.com/tekumara/typos-vscode/releases/download/v"$latest_release"/typos-lsp-v"$latest_release"/-aarch64-apple-darwin.tar.gz | \
+repo="tekumara/typos-vscode"
+latest_release=$(get_latest_release $repo)
+curl -L https://github.com/"$repo"/releases/download/v"$latest_release"/typos-lsp-v"$latest_release"/-aarch64-apple-darwin.tar.gz | \
   tar -xzsf - -C typos-lsp && \
   chmod +x typos-lsp
+
+repo="koalaman/shellcheck"
+latest_release=$(get_latest_release $repo)
+curl -L https://github.com/"$repo"/releases/download/v"$latest_release"/shellcheck-v"$latest_release".darwin.x86_64.tar.xz | \
+  tar -xzsf - -C shellcheck && \
+  chmod +x shellcheck
 
 latest_release=$(get_latest_release "hashicorp/terraform-ls")
 curl -L https://releases.hashicorp.com/terraform-ls/"$latest_release"/terraform-ls_"$latest_release"_darwin_arm64.zip && \
   tar -xf - && \
   chmod +x terraform-ls
-
-latest_release=$(get_latest_release "koalaman/shellcheck")
-curl -L https://github.com/koalaman/shellcheck/releases/download/v"$latest_release"/shellcheck-v"$latest_release".darwin.x86_64.tar.xz | \
-  tar -xzsf - -C shellcheck && \
-  chmod +x shellcheck 
 
 curl -L https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Darwin-x86_64 --output hadolint && \
   chmod +x hadolint
