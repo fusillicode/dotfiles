@@ -30,19 +30,14 @@ curl -L https://github.com/tamasfe/taplo/releases/latest/download/taplo-darwin-a
 curl -L https://github.com/mrjosh/helm-ls/releases/latest/download/helm_ls_darwin_amd64 --output ~/.local/bin/helm_ls && \
   chmod +x ~/.local/bin/helm_ls
 
-curl -L https://cs.symfony.com/download/php-cs-fixer-v3.phar --output ~/.local/bin/php-cs-fixer && \
-  chmod +x ~/.local/bin/php-cs-fixer
-
-curl -L https://github.com/phpactor/phpactor/releases/latest/download/phpactor.phar --output ~/.local/bin/phpactor && \
-  chmod +x ~/.local/bin/phpactor
-
-curl -L https://github.com/vimeo/psalm/releases/latest/download/psalm.phar --output ~/.local/bin/psalm && \
-  chmod +x ~/.local/bin/psalm
-
 brew install hadolint
 brew install hashicorp/tap/terraform-ls
 brew install marksman
 brew install shellcheck
+
+composer require --dev phpactor/phpactor
+composer require --dev friendsofphp/php-cs-fixer
+composer require --dev vimeo/psalm
 
 npm install --save-dev \
   @commitlint/{cli,config-conventional} \
