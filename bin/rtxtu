@@ -38,7 +38,7 @@ brew install hashicorp/tap/terraform-ls
 brew install marksman
 brew install shellcheck
 
-npm install -g \
+npm install --save-dev \
   @commitlint/{cli,config-conventional} \
   @elm-tooling/elm-language-server \
   @microsoft/compose-language-service \
