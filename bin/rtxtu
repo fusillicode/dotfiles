@@ -49,23 +49,22 @@ curl -L https://github.com/mrjosh/helm-ls/releases/latest/download/helm_ls_darwi
 curl -L https://github.com/artempyanykh/marksman/releases/latest/download/marksman-macos --output marksman && \
   chmod +x marksman
 
-composer require --dev phpactor/phpactor
-composer require --dev friendsofphp/php-cs-fixer
-composer require --dev vimeo/psalm
+mkdir -p phpactor && cd "$_" && composer require --dev phpactor/phpactor &&
+mkdir -p php-cs-fixer && cd "$_" && composer require --dev friendsofphp/php-cs-fixer &&
+mkdir -p psalm && cd "$_" && composer require --dev vimeo/psalm &&
 
-npm install --save-dev \
-  @commitlint/{cli,config-conventional} \
-  @elm-tooling/elm-language-server \
-  @microsoft/compose-language-service \
-  bash-language-server \
-  dockerfile-language-server-nodejs \
-  graphql-language-service-cli \
-  prettier \
-  sql-language-server \
-  vscode-html-languageservice \
-  vscode-json-languageservice \
-  vscode-langservers-extracted \
-  yaml-language-server
+mkdir -p commitlint && cd "$_" && npm install --save-dev @commitlint/{cli,config-conventional} &&
+mkdir -p elm-language-server && cd "$_" && npm install --save-dev @elm-tooling/elm-language-server &&
+mkdir -p compose-language-service && cd "$_" && npm install --save-dev @microsoft/compose-language-service &&
+mkdir -p bash-language-server && cd "$_" && npm install --save-dev bash-language-server &&
+mkdir -p dockerfile-language-server-nodejs && cd "$_" && npm install --save-dev dockerfile-language-server-nodejs &&
+mkdir -p graphql-language-service-cli && cd "$_" && npm install --save-dev graphql-language-service-cli &&
+mkdir -p prettier && cd "$_" && npm install --save-dev prettier &&
+mkdir -p sql-language-server && cd "$_" && npm install --save-dev sql-language-server &&
+mkdir -p vscode-html-languageservice && cd "$_" && npm install --save-dev vscode-html-languageservice &&
+mkdir -p vscode-json-languageservice && cd "$_" && npm install --save-dev vscode-json-languageservice &&
+mkdir -p vscode-langservers-extracted && cd "$_" && npm install --save-dev vscode-langservers-extracted &&
+mkdir -p yaml-language-server && cd "$_" && npm install --save-dev yaml-language-server &&
 
 pip install \
   ruff \
