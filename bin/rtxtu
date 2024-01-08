@@ -49,25 +49,39 @@ curl -L https://github.com/mrjosh/helm-ls/releases/latest/download/helm_ls_darwi
 curl -L https://github.com/artempyanykh/marksman/releases/latest/download/marksman-macos --output marksman && \
   chmod +x marksman
 
-mkdir -p phpactor && cd "$_" && composer require --dev phpactor/phpactor &&
-mkdir -p php-cs-fixer && cd "$_" && composer require --dev friendsofphp/php-cs-fixer &&
-mkdir -p psalm && cd "$_" && composer require --dev vimeo/psalm &&
+mkdir -p phpactor && \
+  composer require --working-dir "$_" --dev phpactor/phpactor &&
+mkdir -p php-cs-fixer && \
+  composer require --working-dir "$_" --dev friendsofphp/php-cs-fixer &&
+mkdir -p psalm && \
+  composer require --working-dir "$_" --dev vimeo/psalm &&
 
-mkdir -p commitlint && cd "$_" && npm install --save-dev @commitlint/{cli,config-conventional} &&
-mkdir -p elm-language-server && cd "$_" && npm install --save-dev @elm-tooling/elm-language-server &&
-mkdir -p compose-language-service && cd "$_" && npm install --save-dev @microsoft/compose-language-service &&
-mkdir -p bash-language-server && cd "$_" && npm install --save-dev bash-language-server &&
-mkdir -p dockerfile-language-server-nodejs && cd "$_" && npm install --save-dev dockerfile-language-server-nodejs &&
-mkdir -p graphql-language-service-cli && cd "$_" && npm install --save-dev graphql-language-service-cli &&
-mkdir -p prettier && cd "$_" && npm install --save-dev prettier &&
-mkdir -p sql-language-server && cd "$_" && npm install --save-dev sql-language-server &&
-mkdir -p vscode-html-languageservice && cd "$_" && npm install --save-dev vscode-html-languageservice &&
-mkdir -p vscode-json-languageservice && cd "$_" && npm install --save-dev vscode-json-languageservice &&
-mkdir -p vscode-langservers-extracted && cd "$_" && npm install --save-dev vscode-langservers-extracted &&
-mkdir -p yaml-language-server && cd "$_" && npm install --save-dev yaml-language-server &&
+mkdir -p commitlint && \
+  npm install --prefix "$_" --save-dev @commitlint/{cli,config-conventional} &&
+mkdir -p elm-language-server && \
+  npm install --prefix "$_" --save-dev @elm-tooling/elm-language-server &&
+mkdir -p compose-language-service && \
+  npm install --prefix "$_" --save-dev @microsoft/compose-language-service &&
+mkdir -p bash-language-server && \
+  npm install --prefix "$_" --save-dev bash-language-server &&
+mkdir -p dockerfile-language-server-nodejs && \
+  npm install --prefix "$_" --save-dev dockerfile-language-server-nodejs &&
+mkdir -p graphql-language-service-cli && \
+  npm install --prefix "$_" --save-dev graphql-language-service-cli &&
+mkdir -p prettier && \
+  npm install --prefix "$_" --save-dev prettier &&
+mkdir -p sql-language-server && \
+  npm install --prefix "$_" --save-dev sql-language-server &&
+mkdir -p vscode-html-languageservice && \
+  npm install --prefix "$_" --save-dev vscode-html-languageservice &&
+mkdir -p vscode-json-languageservice && \
+  npm install --prefix "$_" --save-dev vscode-json-languageservice &&
+mkdir -p vscode-langservers-extracted && \
+  npm install --prefix "$_" --save-dev vscode-langservers-extracted &&
+mkdir -p yaml-language-server && \
+  npm install --prefix "$_" --save-dev yaml-language-server &&
 
-pip install \
-  ruff \
-  ruff-lsp
+mkdir -p ruff-lsp && \
+  pip install --target=./"$_"
 
 rtx use -g lua-language-server@latest
