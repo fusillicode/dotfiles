@@ -12,63 +12,65 @@ bin_dir="$HOME"/.local/bin
 mkdir -p dev_tools_dir bin_dir
 
 curl -L https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rust-analyzer-aarch64-apple-darwin.gz | \
-  gunzip -c - > rust-analyzer && \
-  chmod +x rust-analyzer
+  gunzip -c - > "$bin_dir"/rust-analyzer && \
+  chmod +x "$bin_dir"/rust-analyzer
 
 curl -L https://github.com/tamasfe/taplo/releases/latest/download/taplo-darwin-aarch64.gz | \
-  gunzip -c - > taplo && \
-  chmod +x taplo
+  gunzip -c - > "$bin_dir"/rtaplo && \
+  chmod +x "$bin_dir"/taplo
 
 repo="elixir-lsp/elixir-ls"
 latest_release=$(get_latest_release $repo)
-mkdir -p elixir-ls && \
+mkdir -p "$bin_dir"/elixir-ls && \
   curl -L https://github.com/"$repo"/releases/download/v"$latest_release"/elixir-ls-v"$latest_release".zip | \
-  tar -xf - -C elixir-ls - && \
-  chmod +x elixir-ls/*.sh
+  tar -xf - -C "$bin_dir"/elixir-ls - && \
+  chmod +x "$bin_dir"/elixir-ls/*.sh
 
 repo="tekumara/typos-vscode"
 latest_release=$(get_latest_release $repo)
 curl -L https://github.com/"$repo"/releases/download/v"$latest_release"/typos-lsp-v"$latest_release"/-aarch64-apple-darwin.tar.gz | \
-  tar -xzsf - -C typos-lsp && \
-  chmod +x typos-lsp
+  tar -xzsf - -C "$bin_dir"/typos-lsp && \
+  chmod +x "$bin_dir"/typos-lsp
 
 repo="koalaman/shellcheck"
 latest_release=$(get_latest_release $repo)
 curl -L https://github.com/"$repo"/releases/download/v"$latest_release"/shellcheck-v"$latest_release".darwin.x86_64.tar.xz | \
-  tar -xzsf - -C shellcheck && \
-  chmod +x shellcheck
+  tar -xzsf - -C "$bin_dir"/shellcheck && \
+  chmod +x "$bin_dir"/shellcheck
 
 latest_release=$(get_latest_release "hashicorp/terraform-ls")
 curl -L https://releases.hashicorp.com/terraform-ls/"$latest_release"/terraform-ls_"$latest_release"_darwin_arm64.zip && \
-  tar -xf - && \
-  chmod +x terraform-ls
+  tar -xf - "$bin_dir"/terraform-ls && \
+  chmod +x "$bin_dir"/terraform-ls
 
 curl -L https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Darwin-x86_64 --output hadolint && \
-  chmod +x hadolint
+  chmod +x "$bin_dir"/hadolint
 
 curl -L https://github.com/mrjosh/helm-ls/releases/latest/download/helm_ls_darwin_amd64 --output helm_ls && \
-  chmod +x helm_ls
+  chmod +x "$bin_dir"/helm_ls
 
 curl -L https://github.com/artempyanykh/marksman/releases/latest/download/marksman-macos --output marksman && \
-  chmod +x marksman
+  chmod +x "$bin_dir"/marksman
 
 repo="lexical"
-git clone git@github.com:lexical-lsp/"$repo".git && \
-  cd "$repo" && \
+dev_tool_repo_dir="$dev_tools_dir"/"$repo"
+mkdir -p "$dev_tool_repo_dir" && \
+  git clone git@github.com:lexical-lsp/"$repo".git "$_" \
+  cd "$dev_tool_repo_dir" && \
   mix deps.get && \
   mix package && \
 
 mkdir -p "$dev_tools_dir"/phpactor && \
   composer require --working-dir "$_" --dev phpactor/phpactor &&
-  ln -s "$dev_tools_dir"/phpactor/vendor/bin/phpactor "$HOME"/.local/bin
+  ln -s "$dev_tools_dir"/phpactor/vendor/bin/phpactor "$bin_dir"
 
 mkdir -p "$dev_tools_dir"/php-cs-fixer && \
   composer require --working-dir "$_" --dev friendsofphp/php-cs-fixer &&
-  ln -s "$dev_tools_dir"/php-cs-fixer/vendor/bin/php-cs-fixer "$HOME"/.local/bin
+  ln -s "$dev_tools_dir"/php-cs-fixer/vendor/bin/php-cs-fixer "$bin_dir"
 
 mkdir -p "$dev_tools_dir"/psalm && \
   composer require --working-dir "$_" --dev vimeo/psalm &&
-  ln -s "$dev_tools_dir"/psalm/vendor/bin/* "$HOME"/.local/bin
+  ln -s "$dev_tools_dir"/psalm/vendor/bin/* "$bin_dir"
 
 mkdir -p commitlint && \
   npm install --prefix "$_" --save-dev @commitlint/{cli,config-conventional} && \
