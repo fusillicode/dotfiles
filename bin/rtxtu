@@ -49,6 +49,12 @@ curl -L https://github.com/mrjosh/helm-ls/releases/latest/download/helm_ls_darwi
 curl -L https://github.com/artempyanykh/marksman/releases/latest/download/marksman-macos --output marksman && \
   chmod +x marksman
 
+repo="lexical"
+git clone git@github.com:lexical-lsp/"$repo".git && \
+  cd "$repo" && \
+  mix deps.get && \
+  mix package && \
+
 mkdir -p phpactor && \
   composer require --working-dir "$_" --dev phpactor/phpactor &&
 mkdir -p php-cs-fixer && \
