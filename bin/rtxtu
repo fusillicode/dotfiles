@@ -55,12 +55,16 @@ git clone git@github.com:lexical-lsp/"$repo".git && \
   mix deps.get && \
   mix package && \
 
-mkdir -p phpactor && \
+dev_tools_dir="$HOME"/.dev-tools
+mkdir -p "$dev_tools_dir"/phpactor && \
   composer require --working-dir "$_" --dev phpactor/phpactor &&
-mkdir -p php-cs-fixer && \
+  ln -s "$dev_tools_dir"/phpactor/vendor/bin/phpactor "$HOME"/.local/bin
+mkdir -p "$dev_tools_dir"/php-cs-fixer && \
   composer require --working-dir "$_" --dev friendsofphp/php-cs-fixer &&
-mkdir -p psalm && \
+  ln -s "$dev_tools_dir"/php-cs-fixer/vendor/bin/php-cs-fixer "$HOME"/.local/bin
+mkdir -p "$dev_tools_dir"/psalm && \
   composer require --working-dir "$_" --dev vimeo/psalm &&
+  ln -s "$dev_tools_dir"/psalm/vendor/bin/* "$HOME"/.local/bin
 
 mkdir -p commitlint && \
   npm install --prefix "$_" --save-dev @commitlint/{cli,config-conventional} &&
