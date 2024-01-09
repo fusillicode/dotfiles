@@ -13,13 +13,8 @@
   "crates.nvim": { "branch": "main", "commit": "6d779c7b85139d89d92a4a0bcf0afbdcf0cd961a" },
   "fidget.nvim": { "branch": "main", "commit": "3a93300c076109d86c7ce35ec67a8034ae6ba9db" },
   "friendly-snippets": { "branch": "main", "commit": "69a2c1675b66e002799f5eef803b87a12f593049" },
-<<<<<<< HEAD
   "fzf": { "branch": "master", "commit": "e4d0f7acd516d8f5869d3a2210fbf552743a129a" },
   "fzf-lua": { "branch": "main", "commit": "210f6657c54084cddbbfe52f993f5c7a18761a74" },
-=======
-  "fzf": { "branch": "master", "commit": "250496c953f8e36cb70ca99d58034bd79a1d0670" },
-  "fzf-lua": { "branch": "main", "commit": "5890b84b07f842da292ee9067b7363ac2af02d92" },
->>>>>>> 7bf61da (huff...)
   "gitlinker.nvim": { "branch": "master", "commit": "008d8d7f8218d38bf87ae4c3f61a42843c31a8f1" },
   "gitsigns.nvim": { "branch": "main", "commit": "3e6e91b09f0468c32d3b96dcacf4b947f037ce25" },
   "lazy.nvim": { "branch": "main", "commit": "96584866b9c5e998cbae300594d0ccfd0c464627" },
