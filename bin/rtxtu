@@ -17,7 +17,7 @@ curl -sSL https://github.com/rust-lang/rust-analyzer/releases/download/nightly/r
 curl -sSL https://github.com/tamasfe/taplo/releases/latest/download/taplo-darwin-aarch64.gz | \
   gunzip -c - > "$bin_dir"/taplo
 
-# this need to be but in dev-tools
+# this need to be put in dev-tools
 repo="elixir-lsp/elixir-ls"
 latest_release=$(get_latest_release $repo)
 curl -sSL https://github.com/"$repo"/releases/download/"$latest_release"/elixir-ls-"$latest_release".zip | \
@@ -28,7 +28,7 @@ latest_release=$(get_latest_release $repo)
 curl -sSL https://github.com/"$repo"/releases/download/"$latest_release"/typos-lsp-"$latest_release"-aarch64-apple-darwin.tar.gz | \
   tar -xz -C "$bin_dir"
 
-# this need to be but in dev-tools
+# this need to be put in dev-tools
 repo="koalaman/shellcheck"
 latest_release=$(get_latest_release $repo)
 curl -sSL https://github.com/"$repo"/releases/download/"$latest_release"/shellcheck-"$latest_release".darwin.x86_64.tar.xz | \
@@ -38,12 +38,10 @@ latest_release=$(get_latest_release "hashicorp/terraform-ls" | cut -c2-)
 curl -sSL https://releases.hashicorp.com/terraform-ls/"$latest_release"/terraform-ls_"$latest_release"_darwin_arm64.zip | \
   tar -xz -C "$bin_dir"
 
-# curl -sSL https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Darwin-x86_64 --output hadolint 
-#
-# curl -sSL https://github.com/mrjosh/helm-ls/releases/latest/download/helm_ls_darwin_amd64 --output helm_ls 
-#
-# curl -sSL https://github.com/artempyanykh/marksman/releases/latest/download/marksman-macos --output marksman
-#
+curl -sSL https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Darwin-x86_64 --output "$bin_dir"/hadolint
+curl -sSL https://github.com/mrjosh/helm-ls/releases/latest/download/helm_ls_darwin_amd64 --output "$bin_dir"/helm_ls
+curl -sSL https://github.com/artempyanykh/marksman/releases/latest/download/marksman-macos --output "$bin_dir"/marksmam
+
 # repo="lexical"
 # dev_tool_repo_dir="$dev_tools_dir"/"$repo"
 # mkdir -p "$dev_tool_repo_dir" && \
