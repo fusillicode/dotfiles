@@ -51,59 +51,59 @@ curl -sSL https://github.com/"$repo"/releases/download/"$latest_release"/shellch
 #   mix package && \
 #
 # mkdir -p "$dev_tools_dir"/phpactor && \
-#   composer require --working-dir "$_" --dev phpactor/phpactor &&
+#   composer require --working-dir "$_" phpactor/phpactor &&
 #   ln -s "$dev_tools_dir"/phpactor/vendor/bin/phpactor "$bin_dir"
 #
 # mkdir -p "$dev_tools_dir"/php-cs-fixer && \
-#   composer require --working-dir "$_" --dev friendsofphp/php-cs-fixer &&
+#   composer require --working-dir "$_" friendsofphp/php-cs-fixer &&
 #   ln -s "$dev_tools_dir"/php-cs-fixer/vendor/bin/php-cs-fixer "$bin_dir"
 #
 # mkdir -p "$dev_tools_dir"/psalm && \
-#   composer require --working-dir "$_" --dev vimeo/psalm &&
+#   composer require --working-dir "$_" vimeo/psalm &&
 #   ln -s "$dev_tools_dir"/psalm/vendor/bin/* "$bin_dir"
 #
 # mkdir -p "$dev_tools_dir"/commitlint && \
-#   npm install --prefix "$_" --save-dev @commitlint/{cli,config-conventional} && \
+#   npm install --prefix "$_" @commitlint/{cli,config-conventional} && \
 #   ln -s "$dev_tools_dir"/commitlint/node_modules/.bin/commitlint "$bin_dir"
 #
 # mkdir -p "$dev_tools_dir"/elm-language-server && \
-#   npm install --prefix "$_" --save-dev @elm-tooling/elm-language-server && \
+#   npm install --prefix "$_" @elm-tooling/elm-language-server && \
 #   ln -s "$dev_tools_dir"/elm-language-server/node_modules/.bin/elm-language-server "$bin_dir"
 #
 # mkdir -p "$dev_tools_dir"/compose-language-service && \
-#   npm install --prefix "$_" --save-dev @microsoft/compose-language-service && \
+#   npm install --prefix "$_" @microsoft/compose-language-service && \
 #   ln -s "$dev_tools_dir"/compose-language-service/node_modules/.bin/docker-compose-langserver "$bin_dir"
 #
 # mkdir -p "$dev_tools_dir"/bash-language-server && \
-#   npm install --prefix "$_" --save-dev bash-language-server && \
+#   npm install --prefix "$_" bash-language-server && \
 #   ln -s "$dev_tools_dir"/bash-language-server/node_modules/.bin/bash-language-server "$bin_dir"
 #
 # mkdir -p "$dev_tools_dir"/dockerfile-language-server-nodejs && \
-#   npm install --prefix "$_" --save-dev dockerfile-language-server-nodejs && \
+#   npm install --prefix "$_" dockerfile-language-server-nodejs && \
 #   ln -s "$dev_tools_dir"/dockerfile-language-server-nodejs/node_modules/.bin/docker-langserver "$bin_dir"
 #
 # mkdir -p "$dev_tools_dir"/graphql-language-service-cli && \
-#   npm install --prefix "$_" --save-dev graphql-language-service-cli && \
+#   npm install --prefix "$_" graphql-language-service-cli && \
 #   ln -s "$dev_tools_dir"/graphql-language-service-cli/node_modules/.bin/graphql-lsp "$bin_dir"
 #
 # mkdir -p "$dev_tools_dir"/prettier && \
-#   npm install --prefix "$_" --save-dev prettier && \
+#   npm install --prefix "$_" prettier && \
 #   ln -s "$dev_tools_dir"/prettier/node_modules/.bin/prettier "$bin_dir"
 #
 # mkdir -p "$dev_tools_dir"/sql-language-server && \
-#   npm install --prefix "$_" --save-dev sql-language-server && \
+#   npm install --prefix "$_" sql-language-server && \
 #   ln -s "$dev_tools_dir"/sql-language-server/node_modules/.bin/sql-language-server "$bin_dir"
 #
 # mkdir -p "$dev_tools_dir"/vscode-html-languageservice && \
-#   npm install --prefix "$_" --save-dev vscode-html-languageservice && \
+#   npm install --prefix "$_" vscode-html-languageservice && \
 #   ln -s "$dev_tools_dir"/vscode-html-languageservice/node_modules/.bin/vscode-html-language-server "$bin_dir"
 #
 # mkdir -p "$dev_tools_dir"/vscode-json-languageservice && \
-#   npm install --prefix "$_" --save-dev vscode-json-languageservice && \
+#   npm install --prefix "$_" vscode-json-languageservice && \
 #   ln -s "$dev_tools_dir"/vscode-json-languageservice/node_modules/.bin/vscode-json-language-server "$bin_dir"
 #
 # mkdir -p "$dev_tools_dir"/yaml-language-server && \
-#   npm install --prefix "$_" --save-dev yaml-language-server && \
+#   npm install --prefix "$_" yaml-language-server && \
 #   ln -s "$dev_tools_dir"/yaml-language-server/node_modules/.bin/yaml-language-server "$bin_dir"
 #
 # mkdir -p "$dev_tools_dir"/ruff-lsp && \
