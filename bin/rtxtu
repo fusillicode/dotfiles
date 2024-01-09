@@ -3,7 +3,7 @@
 set -euo pipefail
 
 get_latest_release() {
-  curl -s https://api.github.com/repos/"$1"/releases/latest | grep "tag_name" | cut -d '"' -f 4 | cat
+  curl -sSL https://api.github.com/repos/"$1"/releases/latest | grep "tag_name" | cut -d '"' -f 4 | cat
 }
 
 dev_tools_dir="$HOME"/.dev-tools
@@ -11,46 +11,38 @@ bin_dir="$HOME"/.local/bin
 
 mkdir -p "$dev_tools_dir" "$bin_dir"
 
-curl -L https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rust-analyzer-aarch64-apple-darwin.gz | \
-  gunzip -c - > "$bin_dir"/rust-analyzer && \
-  chmod +x "$bin_dir"/rust-analyzer
+curl -sSL https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rust-analyzer-aarch64-apple-darwin.gz | \
+  gunzip -c - > "$bin_dir"/rust-analyzer
 
-curl -L https://github.com/tamasfe/taplo/releases/latest/download/taplo-darwin-aarch64.gz | \
-  gunzip -c - > "$bin_dir"/taplo && \
-  chmod +x "$bin_dir"/taplo
+curl -sSL https://github.com/tamasfe/taplo/releases/latest/download/taplo-darwin-aarch64.gz | \
+  gunzip -c - > "$bin_dir"/taplo
 
+# this need to be but in dev-tools
 repo="elixir-lsp/elixir-ls"
 latest_release=$(get_latest_release $repo)
-mkdir -p "$bin_dir"/elixir-ls && \
-  curl -L https://github.com/"$repo"/releases/download/"$latest_release"/elixir-ls-"$latest_release".zip | \
-  tar -xf - -C "$bin_dir"/elixir-ls - && \
-  chmod +x "$bin_dir"/elixir-ls/*.sh
+curl -sSL https://github.com/"$repo"/releases/download/"$latest_release"/elixir-ls-"$latest_release".zip | \
+  tar -xz -C "$bin_dir"
 
 repo="tekumara/typos-vscode"
 latest_release=$(get_latest_release $repo)
-curl -L https://github.com/"$repo"/releases/download/"$latest_release"/typos-lsp-"$latest_release"-aarch64-apple-darwin.tar.gz | \
-  tar -xzsf - -C "$bin_dir"/typos-lsp && \
-  chmod +x "$bin_dir"/typos-lsp
+curl -sSL https://github.com/"$repo"/releases/download/"$latest_release"/typos-lsp-"$latest_release"-aarch64-apple-darwin.tar.gz | \
+  tar -xz -C "$bin_dir"
 
+# this need to be but in dev-tools
 repo="koalaman/shellcheck"
 latest_release=$(get_latest_release $repo)
-curl -L https://github.com/"$repo"/releases/download/"$latest_release"/shellcheck-"$latest_release".darwin.x86_64.tar.xz | \
-  tar -xzsf - -C "$bin_dir"/shellcheck && \
-  chmod +x "$bin_dir"/shellcheck
+curl -sSL https://github.com/"$repo"/releases/download/"$latest_release"/shellcheck-"$latest_release".darwin.x86_64.tar.xz | \
+  tar -xz -C "$bin_dir"
 
-# latest_release=$(get_latest_release "hashicorp/terraform-ls")
-# curl -L https://releases.hashicorp.com/terraform-ls/"$latest_release"/terraform-ls_"$latest_release"_darwin_arm64.zip && \
-#   tar -xf - "$bin_dir"/terraform-ls && \
-#   chmod +x "$bin_dir"/terraform-ls
+latest_release=$(get_latest_release "hashicorp/terraform-ls" | cut -c2-)
+curl -sSL https://releases.hashicorp.com/terraform-ls/"$latest_release"/terraform-ls_"$latest_release"_darwin_arm64.zip | \
+  tar -xz -C "$bin_dir"
+
+# curl -sSL https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Darwin-x86_64 --output hadolint 
 #
-# curl -L https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Darwin-x86_64 --output hadolint && \
-#   chmod +x "$bin_dir"/hadolint
+# curl -sSL https://github.com/mrjosh/helm-ls/releases/latest/download/helm_ls_darwin_amd64 --output helm_ls 
 #
-# curl -L https://github.com/mrjosh/helm-ls/releases/latest/download/helm_ls_darwin_amd64 --output helm_ls && \
-#   chmod +x "$bin_dir"/helm_ls
-#
-# curl -L https://github.com/artempyanykh/marksman/releases/latest/download/marksman-macos --output marksman && \
-#   chmod +x "$bin_dir"/marksman
+# curl -sSL https://github.com/artempyanykh/marksman/releases/latest/download/marksman-macos --output marksman
 #
 # repo="lexical"
 # dev_tool_repo_dir="$dev_tools_dir"/"$repo"
