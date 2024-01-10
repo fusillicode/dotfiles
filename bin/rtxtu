@@ -9,117 +9,113 @@ get_latest_release() {
 dev_tools_dir="$HOME"/.dev-tools
 bin_dir="$HOME"/.local/bin
 
-# mkdir -p "$dev_tools_dir" "$bin_dir"
-#
-# curl -sSL https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rust-analyzer-aarch64-apple-darwin.gz | \
-#   gunzip -c - > "$bin_dir"/rust-analyzer
-#
-# curl -sSL https://github.com/tamasfe/taplo/releases/latest/download/taplo-darwin-aarch64.gz | \
-#   gunzip -c - > "$bin_dir"/taplo
-#
-# latest_release=$(get_latest_release "hashicorp/terraform-ls" | cut -c2-)
-# curl -sSL https://releases.hashicorp.com/terraform-ls/"$latest_release"/terraform-ls_"$latest_release"_darwin_arm64.zip | \
-#   tar -xz -C "$bin_dir"
-#
-# repo="tekumara/typos-vscode"
-# latest_release=$(get_latest_release $repo)
-# curl -sSL https://github.com/"$repo"/releases/download/"$latest_release"/typos-lsp-"$latest_release"-aarch64-apple-darwin.tar.gz | \
-#   tar -xz -C "$dev_tools_dir"
-#
-# curl -sSL https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Darwin-x86_64 --output "$bin_dir"/hadolint
-# curl -sSL https://github.com/mrjosh/helm-ls/releases/latest/download/helm_ls_darwin_amd64 --output "$bin_dir"/helm_ls
-# curl -sSL https://github.com/artempyanykh/marksman/releases/latest/download/marksman-macos --output "$bin_dir"/marksmam
-#
-# tool="elixir-ls"
-# repo="elixir-lsp/$tool"
-# dev_tools_repo_dir="$dev_tools_dir"/"$tool"
-# latest_release=$(get_latest_release $repo)
-# mkdir -p "$dev_tools_repo_dir" && \
-#   curl -sSL https://github.com/"$repo"/releases/download/"$latest_release"/"$tool"-"$latest_release".zip | \
-#   tar -xz -C "$dev_tools_repo_dir" && \
-#   chmod +x "$dev_tools_repo_dir"/* && \
-#   ln -sf "$dev_tools_repo_dir"/language_server.sh "$bin_dir"/elixir-ls
-#
-# tool="shellcheck"
-# repo="koalaman/$tool"
-# latest_release=$(get_latest_release $repo)
-# curl -sSL https://github.com/"$repo"/releases/download/"$latest_release"/"$tool"-"$latest_release".darwin.x86_64.tar.xz | \
-#   tar -xz -C "$dev_tools_dir" && \
-#   ln -sf "$dev_tools_dir"/"$tool-$latest_release"/"$tool" "$bin_dir"
-#
+mkdir -p "$dev_tools_dir" "$bin_dir"
+
+curl -sSL https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rust-analyzer-aarch64-apple-darwin.gz | \
+  gunzip -c - > "$bin_dir"/rust-analyzer
+
+curl -sSL https://github.com/tamasfe/taplo/releases/latest/download/taplo-darwin-aarch64.gz | \
+  gunzip -c - > "$bin_dir"/taplo
+
+latest_release=$(get_latest_release "hashicorp/terraform-ls" | cut -c2-)
+curl -sSL https://releases.hashicorp.com/terraform-ls/"$latest_release"/terraform-ls_"$latest_release"_darwin_arm64.zip | \
+  tar -xz -C "$bin_dir"
+
+repo="tekumara/typos-vscode"
+latest_release=$(get_latest_release $repo)
+curl -sSL https://github.com/"$repo"/releases/download/"$latest_release"/typos-lsp-"$latest_release"-aarch64-apple-darwin.tar.gz | \
+  tar -xz -C "$dev_tools_dir"
+
+curl -sSL https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Darwin-x86_64 --output "$bin_dir"/hadolint
+curl -sSL https://github.com/mrjosh/helm-ls/releases/latest/download/helm_ls_darwin_amd64 --output "$bin_dir"/helm_ls
+curl -sSL https://github.com/artempyanykh/marksman/releases/latest/download/marksman-macos --output "$bin_dir"/marksmam
+
+tool="elixir-ls"
+repo="elixir-lsp/$tool"
+dev_tools_repo_dir="$dev_tools_dir"/"$tool"
+latest_release=$(get_latest_release $repo)
+mkdir -p "$dev_tools_repo_dir" && \
+  curl -sSL https://github.com/"$repo"/releases/download/"$latest_release"/"$tool"-"$latest_release".zip | \
+  tar -xz -C "$dev_tools_repo_dir" && \
+  chmod +x "$dev_tools_repo_dir"/* && \
+  ln -sf "$dev_tools_repo_dir"/language_server.sh "$bin_dir"/elixir-ls
+
+tool="shellcheck"
+repo="koalaman/$tool"
+latest_release=$(get_latest_release $repo)
+curl -sSL https://github.com/"$repo"/releases/download/"$latest_release"/"$tool"-"$latest_release".darwin.x86_64.tar.xz | \
+  tar -xz -C "$dev_tools_dir" && \
+  ln -sf "$dev_tools_dir"/"$tool-$latest_release"/"$tool" "$bin_dir"
+
 repo="lexical"
-dev_tools_repo_dir="$dev_tools_dir"/"$repo"
-rm -rf "$dev_tools_repo_dir" && \
-  mkdir -p "$dev_tools_repo_dir" && \
+bin_repo_dir="$bin_dir"/"$repo"
+rm -rf "$bin_repo_dir" && \
+  mkdir -p "$bin_repo_dir" && \
   cd "$_" && \
   git clone git@github.com:"$repo"-lsp/"$repo".git --depth=1 --single-branch --branch=main . && \
   mix deps.get && \
-  mix package && \
-  cd - && \
-  ln -sf "$dev_tools_repo_dir"/_build/dev/package/"$repo"/bin "$bin_dir"/"$repo"
+  mix package
 
-#
-# mkdir -p "$dev_tools_dir"/phpactor && \
-#   composer require --working-dir "$_" phpactor/phpactor &&
-#   ln -sf "$dev_tools_dir"/phpactor/vendor/bin/phpactor "$bin_dir"
-#
-# mkdir -p "$dev_tools_dir"/php-cs-fixer && \
-#   composer require --working-dir "$_" friendsofphp/php-cs-fixer &&
-#   ln -sf "$dev_tools_dir"/php-cs-fixer/vendor/bin/php-cs-fixer "$bin_dir"
-#
-# mkdir -p "$dev_tools_dir"/psalm && \
-#   composer require --working-dir "$_" vimeo/psalm &&
-#   ln -sf "$dev_tools_dir"/psalm/vendor/bin/* "$bin_dir"
-#
-# mkdir -p "$dev_tools_dir"/commitlint && \
-#   npm install --prefix "$_" @commitlint/{cli,config-conventional} && \
-#   ln -sf "$dev_tools_dir"/commitlint/node_modules/.bin/commitlint "$bin_dir"
-#
-# mkdir -p "$dev_tools_dir"/elm-language-server && \
-#   npm install --prefix "$_" @elm-tooling/elm-language-server && \
-#   ln -sf "$dev_tools_dir"/elm-language-server/node_modules/.bin/elm-language-server "$bin_dir"
-#
-# mkdir -p "$dev_tools_dir"/compose-language-service && \
-#   npm install --prefix "$_" @microsoft/compose-language-service && \
-#   ln -sf "$dev_tools_dir"/compose-language-service/node_modules/.bin/docker-compose-langserver "$bin_dir"
-#
-# mkdir -p "$dev_tools_dir"/bash-language-server && \
-#   npm install --prefix "$_" bash-language-server && \
-#   ln -sf "$dev_tools_dir"/bash-language-server/node_modules/.bin/bash-language-server "$bin_dir"
-#
-# mkdir -p "$dev_tools_dir"/dockerfile-language-server-nodejs && \
-#   npm install --prefix "$_" dockerfile-language-server-nodejs && \
-#   ln -sf "$dev_tools_dir"/dockerfile-language-server-nodejs/node_modules/.bin/docker-langserver "$bin_dir"
-#
-# mkdir -p "$dev_tools_dir"/graphql-language-service-cli && \
-#   npm install --prefix "$_" graphql-language-service-cli && \
-#   ln -sf "$dev_tools_dir"/graphql-language-service-cli/node_modules/.bin/graphql-lsp "$bin_dir"
-#
-# mkdir -p "$dev_tools_dir"/prettier && \
-#   npm install --prefix "$_" prettier && \
-#   ln -sf "$dev_tools_dir"/prettier/node_modules/.bin/prettier "$bin_dir"
-#
-# mkdir -p "$dev_tools_dir"/sql-language-server && \
-#   npm install --prefix "$_" sql-language-server && \
-#   ln -sf "$dev_tools_dir"/sql-language-server/node_modules/.bin/sql-language-server "$bin_dir"
-#
-# mkdir -p "$dev_tools_dir"/vscode-html-languageservice && \
-#   npm install --prefix "$_" vscode-html-languageservice && \
-#   ln -sf "$dev_tools_dir"/vscode-html-languageservice/node_modules/.bin/vscode-html-language-server "$bin_dir"
-#
-# mkdir -p "$dev_tools_dir"/vscode-json-languageservice && \
-#   npm install --prefix "$_" vscode-json-languageservice && \
-#   ln -sf "$dev_tools_dir"/vscode-json-languageservice/node_modules/.bin/vscode-json-language-server "$bin_dir"
-#
-# mkdir -p "$dev_tools_dir"/yaml-language-server && \
-#   npm install --prefix "$_" yaml-language-server && \
-#   ln -sf "$dev_tools_dir"/yaml-language-server/node_modules/.bin/yaml-language-server "$bin_dir"
-#
-# mkdir -p "$dev_tools_dir"/ruff-lsp && \
-#   pip install ruff-lsp --target=./"$_" && \
-#   ln -sf "$dev_tools_dir"/ruff-lsp/bin/ruff "$bin_dir"
-#
+mkdir -p "$dev_tools_dir"/phpactor && \
+  composer require --working-dir "$_" phpactor/phpactor &&
+  ln -sf "$dev_tools_dir"/phpactor/vendor/bin/phpactor "$bin_dir"
+
+mkdir -p "$dev_tools_dir"/php-cs-fixer && \
+  composer require --working-dir "$_" friendsofphp/php-cs-fixer &&
+  ln -sf "$dev_tools_dir"/php-cs-fixer/vendor/bin/php-cs-fixer "$bin_dir"
+
+mkdir -p "$dev_tools_dir"/psalm && \
+  composer require --working-dir "$_" vimeo/psalm &&
+  ln -sf "$dev_tools_dir"/psalm/vendor/bin/* "$bin_dir"
+
+mkdir -p "$dev_tools_dir"/commitlint && \
+  npm install --prefix "$_" @commitlint/{cli,config-conventional} && \
+  ln -sf "$dev_tools_dir"/commitlint/node_modules/.bin/commitlint "$bin_dir"
+
+mkdir -p "$dev_tools_dir"/elm-language-server && \
+  npm install --prefix "$_" @elm-tooling/elm-language-server && \
+  ln -sf "$dev_tools_dir"/elm-language-server/node_modules/.bin/elm-language-server "$bin_dir"
+
+mkdir -p "$dev_tools_dir"/compose-language-service && \
+  npm install --prefix "$_" @microsoft/compose-language-service && \
+  ln -sf "$dev_tools_dir"/compose-language-service/node_modules/.bin/docker-compose-langserver "$bin_dir"
+
+mkdir -p "$dev_tools_dir"/bash-language-server && \
+  npm install --prefix "$_" bash-language-server && \
+  ln -sf "$dev_tools_dir"/bash-language-server/node_modules/.bin/bash-language-server "$bin_dir"
+
+mkdir -p "$dev_tools_dir"/dockerfile-language-server-nodejs && \
+  npm install --prefix "$_" dockerfile-language-server-nodejs && \
+  ln -sf "$dev_tools_dir"/dockerfile-language-server-nodejs/node_modules/.bin/docker-langserver "$bin_dir"
+
+mkdir -p "$dev_tools_dir"/graphql-language-service-cli && \
+  npm install --prefix "$_" graphql-language-service-cli && \
+  ln -sf "$dev_tools_dir"/graphql-language-service-cli/node_modules/.bin/graphql-lsp "$bin_dir"
+
+mkdir -p "$dev_tools_dir"/prettier && \
+  npm install --prefix "$_" prettier && \
+  ln -sf "$dev_tools_dir"/prettier/node_modules/.bin/prettier "$bin_dir"
+
+mkdir -p "$dev_tools_dir"/sql-language-server && \
+  npm install --prefix "$_" sql-language-server && \
+  ln -sf "$dev_tools_dir"/sql-language-server/node_modules/.bin/sql-language-server "$bin_dir"
+
+mkdir -p "$dev_tools_dir"/vscode-html-languageservice && \
+  npm install --prefix "$_" vscode-html-languageservice && \
+  ln -sf "$dev_tools_dir"/vscode-html-languageservice/node_modules/.bin/vscode-html-language-server "$bin_dir"
+
+mkdir -p "$dev_tools_dir"/vscode-json-languageservice && \
+  npm install --prefix "$_" vscode-json-languageservice && \
+  ln -sf "$dev_tools_dir"/vscode-json-languageservice/node_modules/.bin/vscode-json-language-server "$bin_dir"
+
+mkdir -p "$dev_tools_dir"/yaml-language-server && \
+  npm install --prefix "$_" yaml-language-server && \
+  ln -sf "$dev_tools_dir"/yaml-language-server/node_modules/.bin/yaml-language-server "$bin_dir"
+
+mkdir -p "$dev_tools_dir"/ruff-lsp && \
+  pip install ruff-lsp --target=./"$_" && \
+  ln -sf "$dev_tools_dir"/ruff-lsp/bin/ruff "$bin_dir"
+
+rtx use -g lua-language-server@latest
 
 chmod +x "$bin_dir"
-
-# rtx use -g lua-language-server@latest
