@@ -2,8 +2,10 @@
 
 set -euo pipefail
 
+gh auth login
+
 get_latest_release() {
-  curl -SL https://api.github.com/repos/"$1"/releases/latest | grep "tag_name" | cut -d '"' -f 4 | cat
+  gh api repos/"$1"/releases/latest --jq '.tag_name'
 }
 
 dev_tools_dir="$HOME"/.dev-tools
