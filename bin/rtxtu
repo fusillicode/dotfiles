@@ -6,12 +6,6 @@ get_latest_release() {
   curl -sSL https://api.github.com/repos/"$1"/releases/latest | grep "tag_name" | cut -d '"' -f 4 | cat
 }
 
-install_composer_tool() {
-  mkdir -p "$1"/"$3" && \
-    composer require --dev --working-dir "$_" "$2"/"$3" && \
-    ln -sf "$1"/"$3"/vendor/bin/"$3" "$4"
-}
-
 dev_tools_dir="$HOME"/.dev-tools
 bin_dir="$HOME"/.local/bin
 
@@ -52,21 +46,17 @@ bin_dir="$HOME"/.local/bin
 # curl -sSL https://github.com/"$repo"/releases/download/"$latest_release"/"$tool"-"$latest_release".darwin.x86_64.tar.xz | \
 #   tar -xz -C "$dev_tools_dir" && \
 #   ln -sf "$dev_tools_dir"/"$tool-$latest_release"/"$tool" "$bin_dir"
-
-# repo="lexical"
-# dev_tools_repo_dir="$dev_tools_dir"/"$repo"
-# rm -rf "$dev_tools_repo_dir" && \
-#   mkdir -p "$dev_tools_repo_dir" && \
-#   cd "$_" && \
-#   git clone git@github.com:"$repo"-lsp/"$repo".git --depth=1 --single-branch --branch=main . && \
-#   mix deps.get && \
-#   mix package && \
-#   cd - && \
-#   ln -sf "$dev_tools_repo_dir"/_build/dev/package/"$repo"/bin "$bin_dir"/"$repo"
-
-install_composer_tool "$dev_tools_dir" phpactor phpactor "$bin_dir"
-install_composer_tool "$dev_tools_dir" friendsofphp php-cs-fixer "$bin_dir"
-install_composer_tool "$dev_tools_dir" vimeo psalm "$bin_dir"
+#
+repo="lexical"
+dev_tools_repo_dir="$dev_tools_dir"/"$repo"
+rm -rf "$dev_tools_repo_dir" && \
+  mkdir -p "$dev_tools_repo_dir" && \
+  cd "$_" && \
+  git clone git@github.com:"$repo"-lsp/"$repo".git --depth=1 --single-branch --branch=main . && \
+  mix deps.get && \
+  mix package && \
+  cd - && \
+  ln -sf "$dev_tools_repo_dir"/_build/dev/package/"$repo"/bin "$bin_dir"/"$repo"
 
 #
 # mkdir -p "$dev_tools_dir"/phpactor && \
