@@ -6,30 +6,17 @@ get_latest_release() {
   curl -sSL https://api.github.com/repos/"$1"/releases/latest | grep "tag_name" | cut -d '"' -f 4 | cat
 }
 
-# mkdir -p "$dev_tools_dir"/phpactor && \
-#   composer require --working-dir "$_" phpactor/phpactor &&
-#   ln -sf "$dev_tools_dir"/phpactor/vendor/bin/phpactor "$bin_dir"
 install_composer_tool() {
   mkdir -p "$1"/"$3" && \
     composer require --dev --working-dir "$_" "$2"/"$3" && \
     ln -sf "$1"/"$3"/vendor/bin/"$3" "$4"
 }
 
-# mkdir -p "$dev_tools_dir"/commitlint && \
-#   npm install --prefix "$_" @commitlint/{cli,config-conventional} && \
-#   ln -sf "$dev_tools_dir"/commitlint/node_modules/.bin/commitlint "$bin_dir"
-install_npm_tool() {
-  mkdir -p "$1"/"$3" && \
-    npm install --prefix "$_" "$2" && \
-    ln -sf "$1"/"$3"/node_modules/.bin/"$4" "$5"
-}
-install_npm_tool "$dev_tools_dir" @commitlint/{cli,config-conventional} commitlint commitlint "$bin_dir"
-
 dev_tools_dir="$HOME"/.dev-tools
 bin_dir="$HOME"/.local/bin
 
-mkdir -p "$dev_tools_dir" "$bin_dir"
-
+# mkdir -p "$dev_tools_dir" "$bin_dir"
+#
 # curl -sSL https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rust-analyzer-aarch64-apple-darwin.gz | \
 #   gunzip -c - > "$bin_dir"/rust-analyzer
 #
@@ -81,6 +68,19 @@ install_composer_tool "$dev_tools_dir" phpactor phpactor "$bin_dir"
 install_composer_tool "$dev_tools_dir" friendsofphp php-cs-fixer "$bin_dir"
 install_composer_tool "$dev_tools_dir" vimeo psalm "$bin_dir"
 
+#
+# mkdir -p "$dev_tools_dir"/phpactor && \
+#   composer require --working-dir "$_" phpactor/phpactor &&
+#   ln -sf "$dev_tools_dir"/phpactor/vendor/bin/phpactor "$bin_dir"
+#
+# mkdir -p "$dev_tools_dir"/php-cs-fixer && \
+#   composer require --working-dir "$_" friendsofphp/php-cs-fixer &&
+#   ln -sf "$dev_tools_dir"/php-cs-fixer/vendor/bin/php-cs-fixer "$bin_dir"
+#
+# mkdir -p "$dev_tools_dir"/psalm && \
+#   composer require --working-dir "$_" vimeo/psalm &&
+#   ln -sf "$dev_tools_dir"/psalm/vendor/bin/* "$bin_dir"
+#
 # mkdir -p "$dev_tools_dir"/commitlint && \
 #   npm install --prefix "$_" @commitlint/{cli,config-conventional} && \
 #   ln -sf "$dev_tools_dir"/commitlint/node_modules/.bin/commitlint "$bin_dir"
