@@ -55,15 +55,6 @@ mkdir -p "$dev_tools_repo_dir" && \
   ln -sf "$dev_tools_repo_dir"/language_server.sh "$bin_dir"/elixir-ls
   ln -sf "$dev_tools_repo_dir"/debug_adapter.sh "$bin_dir"/elixir-ls-debugger
 
-tool="shellcheck"
-repo="koalaman/$tool"
-dev_tool_dir="$dev_tools_dir"/"$tool"
-latest_release=$(get_latest_release $repo)
-curl -SL https://github.com/"$repo"/releases/download/"$latest_release"/"$tool"-"$latest_release".darwin.x86_64.tar.xz | \
-  tar -xz -C "$dev_tools_dir" && \
-  mv "$dev_tool_dir"-"$latest_release" "$dev_tool_dir" && \
-  ln -sf "$dev_tool_dir"/"$tool" "$bin_dir"
-
 repo="lexical"
 bin_repo_dir="$bin_dir"/"$repo"
 rm -rf "$bin_repo_dir" && \
@@ -72,6 +63,15 @@ rm -rf "$bin_repo_dir" && \
   git clone git@github.com:"$repo"-lsp/"$repo".git --depth=1 --single-branch --branch=main . && \
   mix deps.get --quiet && \
   mix package --quiet
+
+tool="shellcheck"
+repo="koalaman/$tool"
+dev_tool_dir="$dev_tools_dir"/"$tool"
+latest_release=$(get_latest_release $repo)
+curl -SL https://github.com/"$repo"/releases/download/"$latest_release"/"$tool"-"$latest_release".darwin.x86_64.tar.xz | \
+  tar -xz -C "$dev_tools_dir" && \
+  mv "$dev_tool_dir"-"$latest_release" "$dev_tool_dir" && \
+  ln -sf "$dev_tool_dir"/"$tool" "$bin_dir"
 
 mkdir -p "$dev_tools_dir"/phpactor && \
   composer require --dev --working-dir "$_" phpactor/phpactor > /dev/null 2>&1 &&
@@ -126,7 +126,5 @@ mkdir -p "$dev_tools_dir"/yaml-language-server && \
   ln -sf "$dev_tools_dir"/yaml-language-server/node_modules/.bin/yaml-language-server "$bin_dir"
 
 install_python_bin "$dev_tools_dir" ruff-lsp "$bin_dir"
-
-rtx use -g lua-language-server@latest
 
 chmod +x "$bin_dir"
