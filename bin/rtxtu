@@ -127,4 +127,4 @@ mkdir -p "$dev_tools_dir"/yaml-language-server && \
 
 install_python_bin "$dev_tools_dir" ruff-lsp "$bin_dir"
 
-chmod +x "$bin_dir"
+chmod +x "$bin_dir"/*
