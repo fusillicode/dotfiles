@@ -57,10 +57,12 @@ mkdir -p "$dev_tools_repo_dir" && \
 
 tool="shellcheck"
 repo="koalaman/$tool"
+dev_tool_dir="$dev_tools_dir"/"$tool"
 latest_release=$(get_latest_release $repo)
 curl -SL https://github.com/"$repo"/releases/download/"$latest_release"/"$tool"-"$latest_release".darwin.x86_64.tar.xz | \
   tar -xz -C "$dev_tools_dir" && \
-  ln -sf "$dev_tools_dir"/"$tool-$latest_release"/"$tool" "$bin_dir"
+  mv "$dev_tool_dir"-"$latest_release" "$dev_tool_dir" && \
+  ln -sf "$dev_tool_dir"/"$tool" "$bin_dir"
 
 repo="lexical"
 bin_repo_dir="$bin_dir"/"$repo"
