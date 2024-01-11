@@ -2,7 +2,9 @@
 
 set -euo pipefail
 
-gh auth login
+dev_tools_dir="$HOME"/.dev-tools
+bin_dir="$HOME"/.local/bin
+mkdir -p "$dev_tools_dir" "$bin_dir"
 
 get_latest_release() {
   gh api repos/"$1"/releases/latest --jq '.tag_name'
@@ -21,10 +23,7 @@ install_python_bin() {
     ln -sf "$tool_dir"/.venv/bin/"$2" "$3"
 }
 
-dev_tools_dir="$HOME"/.dev-tools
-bin_dir="$HOME"/.local/bin
-
-mkdir -p "$dev_tools_dir" "$bin_dir"
+gh auth login
 
 curl -SL https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rust-analyzer-aarch64-apple-darwin.gz | \
   gunzip -c - > "$bin_dir"/rust-analyzer
