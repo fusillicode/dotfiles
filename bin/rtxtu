@@ -44,6 +44,15 @@ curl -SL https://github.com/hadolint/hadolint/releases/latest/download/hadolint-
 curl -SL https://github.com/mrjosh/helm-ls/releases/latest/download/helm_ls_darwin_amd64 --output "$bin_dir"/helm_ls
 curl -SL https://github.com/artempyanykh/marksman/releases/latest/download/marksman-macos --output "$bin_dir"/marksmam
 
+tool="shellcheck"
+repo="koalaman/$tool"
+latest_release=$(get_latest_release $repo)
+unarchived_tool_dir="$dev_tools_dir"/"$tool"-"$latest_release"/"$tool"
+curl -SL https://github.com/"$repo"/releases/download/"$latest_release"/"$tool"-"$latest_release".darwin.x86_64.tar.xz | \
+  tar -xz -C "$dev_tools_dir" && \
+  mv "$unarchived_tool_dir" "$bin_dir" && \
+  rm -rf "$unarchived_tool_dir"
+
 tool="elixir-ls"
 repo="elixir-lsp/$tool"
 dev_tools_repo_dir="$dev_tools_dir"/"$tool"
@@ -55,23 +64,25 @@ mkdir -p "$dev_tools_repo_dir" && \
   ln -sf "$dev_tools_repo_dir"/language_server.sh "$bin_dir"/elixir-ls
   ln -sf "$dev_tools_repo_dir"/debug_adapter.sh "$bin_dir"/elixir-ls-debugger
 
+# No `bin` link as it requires some local stuff so, leave the garbage in `dev-tools` and point to the `bin` there.
 repo="lexical"
-bin_repo_dir="$bin_dir"/"$repo"
-rm -rf "$bin_repo_dir" && \
-  mkdir -p "$bin_repo_dir" && \
+dev_tools_repo_dir="$dev_tools_dir"/"$repo"
+rm -rf "$dev_tools_repo_dir" && \
+  mkdir -p "$dev_tools_repo_dir" && \
   cd "$_" && \
   git clone git@github.com:"$repo"-lsp/"$repo".git --depth=1 --single-branch --branch=main . && \
   mix deps.get --quiet && \
   mix package --quiet
 
-tool="shellcheck"
-repo="koalaman/$tool"
+# No `bin` link as it requires some local stuff so, leave the garbage in `dev-tools` and point to the `bin` there.
+tool="lua-language-server"
+repo="LuaLS/$tool"
 latest_release=$(get_latest_release $repo)
-unarchived_tool_dir="$dev_tools_dir"/"$tool"-"$latest_release"/"$tool"
-curl -SL https://github.com/"$repo"/releases/download/"$latest_release"/"$tool"-"$latest_release".darwin.x86_64.tar.xz | \
+dev_tools_repo_dir="$dev_tools_dir"/"$tool"-"$latest_release"/"$tool"
+curl -SL https://github.com/"$repo"/releases/download/"$latest_release"/"$tool"-"$latest_release"-darwin.arm64.tar.gz | \
   tar -xz -C "$dev_tools_dir" && \
-  mv "$unarchived_tool_dir" "$bin_dir" && \
-  rm -rf "$unarchived_tool_dir"
+  mv "$dev_tools_repo_dir" "$dev_tools_dir"/"$tool" && \
+  rm -rf "$dev_tools_repo_dir"
 
 mkdir -p "$dev_tools_dir"/phpactor && \
   composer require --dev --working-dir "$_" phpactor/phpactor > /dev/null 2>&1 &&
