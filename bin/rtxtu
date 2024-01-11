@@ -64,7 +64,8 @@ mkdir -p "$dev_tools_repo_dir" && \
   ln -sf "$dev_tools_repo_dir"/language_server.sh "$bin_dir"/elixir-ls
   ln -sf "$dev_tools_repo_dir"/debug_adapter.sh "$bin_dir"/elixir-ls-debugger
 
-# No `bin` link as it requires some local stuff so, leave the garbage in `dev-tools` and point to the `bin` there.
+# No `bin` link as it requires some local stuff so, leave the garbage in `dev-tools` and configure the LSP to point to
+# the `bin` there.
 repo="lexical"
 dev_tools_repo_dir="$dev_tools_dir"/"$repo"
 rm -rf "$dev_tools_repo_dir" && \
@@ -74,7 +75,8 @@ rm -rf "$dev_tools_repo_dir" && \
   mix deps.get --quiet && \
   mix package --quiet
 
-# No `bin` link as it requires some local stuff so, leave the garbage in `dev-tools` and point to the `bin` there.
+# No `bin` link as it requires some local stuff so, leave the garbage in `dev-tools` and configure the LSP to point to
+# the `bin` there.
 tool="lua-language-server"
 repo="LuaLS/$tool"
 latest_release=$(get_latest_release $repo)
