@@ -66,12 +66,12 @@ rm -rf "$bin_repo_dir" && \
 
 tool="shellcheck"
 repo="koalaman/$tool"
-dev_tool_dir="$dev_tools_dir"/"$tool"
 latest_release=$(get_latest_release $repo)
+unarchived_tool_dir="$dev_tools_dir"/"$tool"-"$latest_release"/"$tool"
 curl -SL https://github.com/"$repo"/releases/download/"$latest_release"/"$tool"-"$latest_release".darwin.x86_64.tar.xz | \
   tar -xz -C "$dev_tools_dir" && \
-  mv "$dev_tool_dir"-"$latest_release" "$dev_tool_dir" && \
-  ln -sf "$dev_tool_dir"/"$tool" "$bin_dir"
+  mv "$unarchived_tool_dir" "$bin_dir" && \
+  rm -rf "$unarchived_tool_dir"
 
 mkdir -p "$dev_tools_dir"/phpactor && \
   composer require --dev --working-dir "$_" phpactor/phpactor > /dev/null 2>&1 &&
