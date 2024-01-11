@@ -117,13 +117,9 @@ mkdir -p "$dev_tools_dir"/sql-language-server && \
   npm install --silent --prefix "$_" sql-language-server && \
   ln -sf "$dev_tools_dir"/sql-language-server/node_modules/.bin/sql-language-server "$bin_dir"
 
-mkdir -p "$dev_tools_dir"/vscode-html-languageservice && \
-  npm install --silent --prefix "$_" vscode-html-languageservice && \
-  ln -sf "$dev_tools_dir"/vscode-html-languageservice/node_modules/.bin/vscode-html-language-server "$bin_dir"
-
-mkdir -p "$dev_tools_dir"/vscode-json-languageservice && \
-  npm install --silent --prefix "$_" vscode-json-languageservice && \
-  ln -sf "$dev_tools_dir"/vscode-json-languageservice/node_modules/.bin/vscode-json-language-server "$bin_dir"
+mkdir -p "$dev_tools_dir"/vscode-langservers-extracted && \
+  npm install --silent --prefix "$_" vscode-langservers-extracted && \
+  ln -sf "$dev_tools_dir"/vscode-langservers-extracted/node_modules/.bin/* "$bin_dir"
 
 mkdir -p "$dev_tools_dir"/yaml-language-server && \
   npm install --silent --prefix "$_" yaml-language-server && \
