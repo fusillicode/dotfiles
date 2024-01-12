@@ -1,10 +1,11 @@
-local function lsps_configs()
-  return {
+local function get_lsps_configs(lsps_common_configs)
+  local home_dir = os.getenv('HOME')
+  local lsps_configs = {
     bashls = {},
     docker_compose_language_service = {},
     dockerls = {},
     elixirls = {
-      cmd = { os.getenv('HOME') .. '/.local/bin' .. '/elixir-ls', },
+      cmd = { home_dir .. '/.local/bin/elixir-ls', },
     },
     elmls = {},
     graphql = {},
@@ -23,6 +24,7 @@ local function lsps_configs()
       },
     },
     lua_ls = {
+      cmd = { home_dir .. '/.dev-tools/lua-language-server/bin/lua-language-server', },
       settings = {
         Lua = {
           completion = {
@@ -100,6 +102,12 @@ local function lsps_configs()
       },
     },
   }
+
+  for lsp, lsp_config in pairs(lsps_configs) do
+    lsp_config[lsp] = vim.tbl_extend('error', lsps_common_configs, lsp_config)
+  end
+
+  return lsps_configs
 end
 
 return {
@@ -120,12 +128,8 @@ return {
       keymap_set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, })
     end
 
-    for lsp, config in pairs(lsps_configs()) do
-      local lsp_setup = { capabilities = capabilities, on_attach = on_attach, }
-      if config['cmd'] then lsp_setup.cmd = config['cmd'] end
-      if config['settings'] then lsp_setup.settings = config['settings'] end
-      if config['init_options'] then lsp_setup.init_options = config['init_options'] end
-      lspconfig[lsp].setup(lsp_setup)
+    for lsp, config in pairs(get_lsps_configs({ capabilities = capabilities, on_attach = on_attach, })) do
+      lspconfig[lsp].setup(config)
     end
 
     vim.api.nvim_create_autocmd('BufWritePre', {
