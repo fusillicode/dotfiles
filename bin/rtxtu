@@ -12,7 +12,7 @@ get_latest_release() {
 
 # shellcheck disable=SC1091
 install_python_bin() {
-  tool_dir="$1"/"$2"
+  local tool_dir="$1"/"$2"
   mkdir -p "$tool_dir" && \
     cd "$_" && \
     python3 -m venv .venv && \
