@@ -66,14 +66,15 @@ mkdir -p "$dev_tools_repo_dir" && \
 
 # No `bin` link as it requires some local stuff so, leave the garbage in `dev-tools` and configure the LSP to point to
 # the `bin` there.
-repo="lexical"
-dev_tools_repo_dir="$dev_tools_dir"/"$repo"
-rm -rf "$dev_tools_repo_dir" && \
-  mkdir -p "$dev_tools_repo_dir" && \
-  cd "$_" && \
-  git clone git@github.com:"$repo"-lsp/"$repo".git --depth=1 --single-branch --branch=main . && \
-  mix deps.get --quiet && \
-  mix package --quiet
+# TODO: commented out because it's not working with Elixir 1.16 🤷
+# repo="lexical"
+# dev_tools_repo_dir="$dev_tools_dir"/"$repo"
+# rm -rf "$dev_tools_repo_dir" && \
+#   mkdir -p "$dev_tools_repo_dir" && \
+#   cd "$_" && \
+#   git clone git@github.com:"$repo"-lsp/"$repo".git --depth=1 --single-branch --branch=main . && \
+#   mix deps.get > /dev/null && \
+#   mix package > /dev/null
 
 # No `bin` link as it requires some local stuff so, leave the garbage in `dev-tools` and configure the LSP to point to
 # the `bin` there.
@@ -86,15 +87,15 @@ dev_tool_dir="$dev_tools_dir"/"$tool"
   tar -xz -C "$dev_tool_dir"
 
 mkdir -p "$dev_tools_dir"/phpactor && \
-  composer require --dev --working-dir "$_" phpactor/phpactor > /dev/null 2>&1 &&
+  composer require --dev --working-dir "$_" phpactor/phpactor > /dev/null &&
   ln -sf "$dev_tools_dir"/phpactor/vendor/bin/phpactor "$bin_dir"
 
 mkdir -p "$dev_tools_dir"/php-cs-fixer && \
-  composer require --dev --working-dir "$_" friendsofphp/php-cs-fixer > /dev/null 2>&1 &&
+  composer require --dev --working-dir "$_" friendsofphp/php-cs-fixer > /dev/null &&
   ln -sf "$dev_tools_dir"/php-cs-fixer/vendor/bin/php-cs-fixer "$bin_dir"
 
 mkdir -p "$dev_tools_dir"/psalm && \
-  composer require --dev --working-dir "$_" vimeo/psalm > /dev/null 2>&1 &&
+  composer require --dev --working-dir "$_" vimeo/psalm > /dev/null &&
   ln -sf "$dev_tools_dir"/psalm/vendor/bin/* "$bin_dir"
 
 mkdir -p "$dev_tools_dir"/commitlint && \
