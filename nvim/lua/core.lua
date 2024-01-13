@@ -125,5 +125,3 @@ vim.api.nvim_create_autocmd('FocusLost', {
   group = vim.api.nvim_create_augroup('AutosaveBuffers', { clear = true, }),
   command = ':silent! wa!',
 })
-
-vim.api.nvim_create_user_command('MasonSync', require('mason-tools').sync, {})
