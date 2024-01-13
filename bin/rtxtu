@@ -80,11 +80,10 @@ rm -rf "$dev_tools_repo_dir" && \
 tool="lua-language-server"
 repo="LuaLS/$tool"
 latest_release=$(get_latest_release $repo)
-dev_tools_repo_dir="$dev_tools_dir"/"$tool"-"$latest_release"/"$tool"
-curl -SL https://github.com/"$repo"/releases/download/"$latest_release"/"$tool"-"$latest_release"-darwin.arm64.tar.gz | \
-  tar -xz -C "$dev_tools_dir" && \
-  mv "$dev_tools_repo_dir" "$dev_tools_dir"/"$tool" && \
-  rm -rf "$dev_tools_repo_dir"
+dev_tool_dir="$dev_tools_dir"/"$tool"
+ mkdir -p "$dev_tool_dir" && \
+  curl -SL https://github.com/"$repo"/releases/download/"$latest_release"/"$tool"-"$latest_release"-darwin-arm64.tar.gz | \
+  tar -xz -C "$dev_tool_dir"
 
 mkdir -p "$dev_tools_dir"/phpactor && \
   composer require --dev --working-dir "$_" phpactor/phpactor > /dev/null 2>&1 &&
