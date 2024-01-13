@@ -66,14 +66,15 @@ mkdir -p "$dev_tools_repo_dir" && \
 
 # No `bin` link as it requires some local stuff so, leave the garbage in `dev-tools` and configure the LSP to point to
 # the `bin` there.
-repo="lexical"
-dev_tools_repo_dir="$dev_tools_dir"/"$repo"
-rm -rf "$dev_tools_repo_dir" && \
-  mkdir -p "$dev_tools_repo_dir" && \
-  cd "$_" && \
-  git clone git@github.com:"$repo"-lsp/"$repo".git --depth=1 --single-branch --branch=main . && \
-  mix deps.get --quiet && \
-  mix package --quiet
+# TODO: commented out because it's not working with Elixir 1.16 🤷
+# repo="lexical"
+# dev_tools_repo_dir="$dev_tools_dir"/"$repo"
+# rm -rf "$dev_tools_repo_dir" && \
+#   mkdir -p "$dev_tools_repo_dir" && \
+#   cd "$_" && \
+#   git clone git@github.com:"$repo"-lsp/"$repo".git --depth=1 --single-branch --branch=main . && \
+#   mix deps.get > /dev/null && \
+#   mix package > /dev/null
 
 # No `bin` link as it requires some local stuff so, leave the garbage in `dev-tools` and configure the LSP to point to
 # the `bin` there.
