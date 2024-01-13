@@ -87,15 +87,15 @@ dev_tool_dir="$dev_tools_dir"/"$tool"
   tar -xz -C "$dev_tool_dir"
 
 mkdir -p "$dev_tools_dir"/phpactor && \
-  composer require --dev --working-dir "$_" phpactor/phpactor > /dev/null 2>&1 &&
+  composer require --dev --working-dir "$_" phpactor/phpactor > /dev/null &&
   ln -sf "$dev_tools_dir"/phpactor/vendor/bin/phpactor "$bin_dir"
 
 mkdir -p "$dev_tools_dir"/php-cs-fixer && \
-  composer require --dev --working-dir "$_" friendsofphp/php-cs-fixer > /dev/null 2>&1 &&
+  composer require --dev --working-dir "$_" friendsofphp/php-cs-fixer > /dev/null &&
   ln -sf "$dev_tools_dir"/php-cs-fixer/vendor/bin/php-cs-fixer "$bin_dir"
 
 mkdir -p "$dev_tools_dir"/psalm && \
-  composer require --dev --working-dir "$_" vimeo/psalm > /dev/null 2>&1 &&
+  composer require --dev --working-dir "$_" vimeo/psalm > /dev/null &&
   ln -sf "$dev_tools_dir"/psalm/vendor/bin/* "$bin_dir"
 
 mkdir -p "$dev_tools_dir"/commitlint && \
