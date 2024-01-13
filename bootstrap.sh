@@ -68,29 +68,28 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/mas
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Install cargo bins ❤️
-/bin/bash "${script_dir}/bin/cargobu"
-cargo install --force qsv --features all_features
+/bin/bash "${script_dir}/bin/update_cargo_bins.sh"
 
 # Configure atuin
 # shellcheck disable=SC2016
 echo 'eval "$(atuin init zsh)"' >> ~/.zshrc
-# Configure rtx
+# Configure mise
 # shellcheck disable=SC2016
-echo 'eval "$(rtx activate zsh)"' >> ~/.zshrc
+echo 'eval "$(mise activate zsh)"' >> ~/.zshrc
 
-# Install rtx plugins
+# Install mise plugins
 brew install autoconf wxwidgets
 KERL_CONFIGURE_OPTIONS="--without-javac --with-ssl=$(brew --prefix openssl@1.1)"
 export KERL_CONFIGURE_OPTIONS
-rtx use -g elixir@latest
-rtx use -g elm@latest
-rtx use -g erlang@latest
-rtx use -g node@latest
-rtx use -g poetry@latest
-rtx use -g python@latest
+mise use -g elixir@latest
+mise use -g elm@latest
+mise use -g erlang@latest
+mise use -g node@latest
+mise use -g poetry@latest
+mise use -g python@latest
 
-# Install rtx related tools
-/bin/bash "${script_dir}/bin/rtxtu"
+# Install ~/.dev_tools
+/bin/bash "${script_dir}/bin/install_dev_tools.sh"
 
 # Install Elixir libs
 mix local.hex
@@ -98,4 +97,4 @@ mix local.rebar
 mix archive.install hex phx_new 1.5.8
 
 # Update & cleanup brew
-/bin/bash "${script_dir}/bin/brewu"
+/bin/bash "${script_dir}/bin/update_brew.sh"
