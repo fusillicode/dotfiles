@@ -17,8 +17,6 @@ brew install awscli
 brew install cpulimit
 brew install gh
 brew install git
-brew install hadolint
-brew install hashicorp/tap/terraform-ls
 brew install jq
 brew install kube-ps1
 brew install kubectx
@@ -26,10 +24,8 @@ brew install kustomize
 brew install lftp
 brew install libpq && brew link libpq --force
 brew install librdkafka # It also installs `lz4`, `lzlib` & `zstd`
-brew install marksman
 brew install mycli # For Python `mysqlclient`
 brew install nvim
-brew install shellcheck
 brew install stern
 brew install txn2/tap/kubefwd
 brew install vegeta

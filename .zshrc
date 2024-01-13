@@ -98,10 +98,6 @@ fi
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 
-# My local `~/bin` "stuff" :P
-export PATH=$HOME/bin:$PATH
-export PATH=$HOME/.local/bin:$PATH
-
 # `brew link imagemagick@6` suggestion ¯\_(ツ)_/¯
 export PATH="/usr/local/opt/imagemagick@6:$PATH"
 
@@ -156,3 +152,7 @@ export HELIX_RUNTIME=~/helix/runtime
 
 # 🥲 https://wezfurlong.org/wezterm/faq.html#how-do-i-enable-undercurl-curly-underlines
 export TERM=wezterm
+
+# My local `~/bin` "stuff" :P
+export PATH=$HOME/bin:$PATH
+export PATH=$HOME/.local/bin:$PATH
