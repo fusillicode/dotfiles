@@ -77,16 +77,10 @@ echo 'eval "$(atuin init zsh)"' >> ~/.zshrc
 # shellcheck disable=SC2016
 echo 'eval "$(mise activate zsh)"' >> ~/.zshrc
 
-# Install mise plugins
+# Requirements for mise plugins
 brew install autoconf wxwidgets
 KERL_CONFIGURE_OPTIONS="--without-javac --with-ssl=$(brew --prefix openssl@1.1)"
 export KERL_CONFIGURE_OPTIONS
-mise use -g elixir@latest
-mise use -g elm@latest
-mise use -g erlang@latest
-mise use -g node@latest
-mise use -g poetry@latest
-mise use -g python@latest
 
 # Install ~/.dev_tools
 /bin/bash "${script_dir}/bin/install_dev_tools.sh"
