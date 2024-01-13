@@ -144,8 +144,8 @@ export LDFLAGS="-L/opt/homebrew/opt/openssl/lib -L/opt/homebrew/opt/llvm/lib"
 export CPPFLAGS="-I/opt/homebrew/opt/openssl/include -I/opt/homebrew/opt/llvm/include"
 export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl/lib/pkgconfig"
 
-# Goodbye asdf 🥲, welcome rtx 😍
-eval "$(rtx activate zsh)"
+# Mise 😎
+eval "$(mise activate zsh)"
 
 # Helix from the source! 😎
 export HELIX_RUNTIME=~/helix/runtime 
