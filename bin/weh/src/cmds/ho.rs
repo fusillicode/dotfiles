@@ -7,7 +7,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
         bail!("no input file supplied {:?}", args.collect::<Vec<_>>())
     };
 
-    let hx_pane_id = crate::utils::get_current_pane_sibling_with_title("hx")?.pane_id;
+    let hx_pane_id = crate::utils::wezterm::get_current_pane_sibling_with_title("hx")?.pane_id;
 
     Command::new("sh")
         .args([
