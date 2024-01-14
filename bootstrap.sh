@@ -79,11 +79,11 @@ echo 'eval "$(mise activate zsh)"' >> ~/.zshrc
 
 # Requirements for installning Erlang... 🥲
 brew install autoconf wxwidgets
-CC="/usr/bin/clang -I$(brew --prefix unixodbc)/include"
+CC="/usr/bin/clang -I$(brew --prefix openssl)/include"
 export CC
-LDFLAGS=-L$(brew --prefix unixodbc)/lib
+LDFLAGS="-L$(brew --prefix openssl)/lib:$LDFLAGS"
 export LDFLAGS
-KERL_CONFIGURE_OPTIONS="--disable-debug --disable-silent-rules --without-javac --enable-shared-zlib --enable-dynamic-ssl-lib --enable-threads --enable-kernel-poll --enable-wx --enable-webview --enable-darwin-64bit --enable-gettimeofday-as-os-system-time --with-ssl=$(brew --prefix openssl@1.1) --with-odbc=$(brew --prefix unixodbc)"
+KERL_CONFIGURE_OPTIONS="--without-javac --with-ssl=$(brew --prefix openssl)"
 export KERL_CONFIGURE_OPTIONS
 
 # Install ~/.dev_tools
