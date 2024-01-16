@@ -23,7 +23,9 @@ install_python_bin() {
     ln -sf "$tool_dir"/.venv/bin/"$2" "$3"
 }
 
-gh auth login
+if ! gh auth status; then
+  gh auth login
+fi
 
 curl -SL https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rust-analyzer-aarch64-apple-darwin.gz | \
   gunzip -c - > "$bin_dir"/rust-analyzer
