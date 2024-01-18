@@ -140,6 +140,10 @@ mkdir -p "$dev_tools_dir"/yaml-language-server && \
   npm install --silent --prefix "$_" yaml-language-server && \
   ln -sf "$dev_tools_dir"/yaml-language-server/node_modules/.bin/yaml-language-server "$bin_dir"
 
+mkdir -p "$dev_tools_dir"/quicktype && \
+  npm install --silent --prefix "$_" quicktype && \
+  ln -sf "$dev_tools_dir"/quicktype/node_modules/.bin/quicktype "$bin_dir"
+
 install_python_bin "$dev_tools_dir" ruff-lsp "$bin_dir"
 
 chmod +x "$bin_dir"/*
