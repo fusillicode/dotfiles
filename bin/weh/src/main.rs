@@ -10,7 +10,7 @@ fn main() -> anyhow::Result<()> {
 
     match cmd {
         "fp" => cmds::fp::run(cmd_args.into_iter()),
-        "ghl" => cmds::ghl::run(cmd_args.into_iter(), std::io::stdin()),
+        "ghl" => cmds::ghl::run(cmd_args.into_iter()),
         "ho" => cmds::ho::run(cmd_args.into_iter()),
         unknown_cmd => bail!("unknown cmd '{unknown_cmd}' in args {args:?}"),
     }
