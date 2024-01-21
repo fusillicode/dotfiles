@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
 
+use anyhow::anyhow;
 use anyhow::bail;
 
 pub fn run<'a>(mut args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
@@ -115,13 +116,19 @@ fn get_bin_via_curl(url: &str, output_option: OutputOption) -> anyhow::Result<()
     match output_option {
         OutputOption::PipeTo(mut cmd) => {
             let curl_child = curl_cmd.stdout(Stdio::piped()).spawn()?;
-            cmd.stdin(Stdio::from(curl_child.stdout.unwrap()))
-                .status()?;
+            cmd.stdin(Stdio::from(curl_child.stdout.ok_or_else(|| {
+                anyhow!("missing stdout from curl cmd {curl_cmd:?}")
+            })?))
+            .status()?;
             Ok(())
         }
         OutputOption::WriteTo(output_path) => {
             curl_cmd.arg("--output");
-            curl_cmd.arg(output_path.to_str().unwrap());
+            curl_cmd.arg(
+                output_path
+                    .to_str()
+                    .ok_or_else(|| anyhow!("invalid path {output_path:?}"))?,
+            );
             curl_cmd.status()?;
             Ok(())
         }
