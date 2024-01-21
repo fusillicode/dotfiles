@@ -57,12 +57,16 @@ fn authenticate_to_github() -> anyhow::Result<()> {
     }
 
     // Spawning a new shell because `gh` should block until the user is authenticated
-    Command::new("sh")
+    let exit_status = Command::new("sh")
         .args(["-c", "gh auth login"])
         .spawn()?
         .wait()?;
 
-    Ok(())
+    if exit_status.success() {
+        return Ok(());
+    }
+
+    bail!("error logging in to GitHub, exit status: {:?}", exit_status)
 }
 
 fn get_latest_release(repo: &str) -> anyhow::Result<String> {
