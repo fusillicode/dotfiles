@@ -13,7 +13,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
     std::fs::create_dir_all(dev_tools_dir)?;
     std::fs::create_dir_all(bin_dir)?;
 
-    authenticate_to_github()?;
+    log_to_github()?;
 
     let latest_release = get_latest_release("tekumara/typos-vscode");
 
@@ -47,7 +47,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
     todo!()
 }
 
-fn authenticate_to_github() -> anyhow::Result<()> {
+fn log_to_github() -> anyhow::Result<()> {
     if Command::new("gh")
         .args(["auth", "status"])
         .status()?
