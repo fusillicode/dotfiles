@@ -116,11 +116,15 @@ fn get_bin_via_curl(url: &str, output_option: OutputOption) -> anyhow::Result<()
     match output_option {
         OutputOption::PipeTo(mut cmd) => {
             let curl_child = curl_cmd.stdout(Stdio::piped()).spawn()?;
-            cmd.stdin(Stdio::from(curl_child.stdout.ok_or_else(|| {
-                anyhow!("missing stdout from curl cmd {curl_cmd:?}")
-            })?))
-            .status()?;
-            Ok(())
+            let exit_status = cmd
+                .stdin(Stdio::from(curl_child.stdout.ok_or_else(|| {
+                    anyhow!("missing stdout from curl cmd {curl_cmd:?}")
+                })?))
+                .status()?;
+            if exit_status.success() {
+                return Ok(());
+            }
+            bail!("error piping curl output to {cmd:?}, exit status: {exit_status:?}")
         }
         OutputOption::WriteTo(output_path) => {
             curl_cmd.arg("--output");
@@ -129,8 +133,11 @@ fn get_bin_via_curl(url: &str, output_option: OutputOption) -> anyhow::Result<()
                     .to_str()
                     .ok_or_else(|| anyhow!("invalid path {output_path:?}"))?,
             );
-            curl_cmd.status()?;
-            Ok(())
+            let exit_status = curl_cmd.status()?;
+            if exit_status.success() {
+                return Ok(());
+            }
+            bail!("error getting bin via curl cmd {curl_cmd:?}, exit status: {exit_status:?}")
         }
     }
 }
