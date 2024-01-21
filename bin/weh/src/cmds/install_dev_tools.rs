@@ -4,6 +4,9 @@ use std::process::Command;
 use std::process::ExitStatus;
 use std::process::Stdio;
 
+use anyhow::anyhow;
+use anyhow::bail;
+
 pub fn run<'a>(mut args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
     let home = PathBuf::from(std::env::var("HOME")?);
     let dev_tools_dir = home.to_path_buf().join(".dev-tools");
@@ -14,8 +17,8 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
 
     authenticate_to_github()?;
 
-    // let latest_release = get_latest_release("tekumara/typos-vscode");
-    //
+    let latest_release = get_latest_release("tekumara/typos-vscode");
+
     // let file = File::create(format!("{}/rust-analyzer", bin_dir.display())).unwrap();
     // cmd!("curl", "-SL", "https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rust-analyzer-aarch64-apple-darwin.gz")
     //     .pipe(cmd!("gunzip", "-c", "-")).stdout_file(file).run().unwrap();
@@ -64,13 +67,22 @@ fn authenticate_to_github() -> anyhow::Result<()> {
     Ok(())
 }
 
-// fn get_latest_release(repo: &str) -> String {
-//     cmd!(
-//         "gh",
-//         "api",
-//         &format!("repos/{repo}/releases/latest"),
-//         "--jq=.tag_name",
-//     )
-//     .read()
-//     .unwrap()
-// }
+fn get_latest_release(repo: &str) -> anyhow::Result<String> {
+    let output = Command::new("gh")
+        .args([
+            "api",
+            &format!("repos/{repo}/releases/latest"),
+            "--jq=.tag_name",
+        ])
+        .output()?;
+
+    if output.status.success() {
+        return Ok(std::str::from_utf8(&output.stdout)?.trim().into());
+    }
+
+    bail!(
+        "error getting latest release for repo {:?}, cmd output {:?}",
+        repo,
+        output
+    )
+}
