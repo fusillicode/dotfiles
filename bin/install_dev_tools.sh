@@ -42,6 +42,11 @@ latest_release=$(get_latest_release $repo)
 curl -SL https://github.com/"$repo"/releases/download/"$latest_release"/typos-lsp-"$latest_release"-aarch64-apple-darwin.tar.gz | \
   tar -xz -C "$bin_dir"
 
+repo="errata-ai/vale"
+latest_release=$(get_latest_release $repo)
+curl -SL https://github.com/"$repo"/releases/download/"$latest_release"/vale_"$(echo "$latest_release" | cut -c2-)"_macOS_arm64.tar.gz | \
+  tar -xz -C "$bin_dir"
+
 curl -SL https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Darwin-x86_64 --output "$bin_dir"/hadolint
 curl -SL https://github.com/mrjosh/helm-ls/releases/latest/download/helm_ls_darwin_amd64 --output "$bin_dir"/helm_ls
 curl -SL https://github.com/artempyanykh/marksman/releases/latest/download/marksman-macos --output "$bin_dir"/marksman
