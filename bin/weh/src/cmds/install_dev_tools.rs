@@ -66,7 +66,7 @@ fn log_into_github() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    bail!("error logging into GitHub, exit status: {:?}", exit_status)
+    bail!("error logging into GitHub, exit status: {exit_status:?}")
 }
 
 fn get_latest_release(repo: &str) -> anyhow::Result<String> {
@@ -82,11 +82,7 @@ fn get_latest_release(repo: &str) -> anyhow::Result<String> {
         return Ok(std::str::from_utf8(&output.stdout)?.trim().into());
     }
 
-    bail!(
-        "error getting latest release for repo {:?}, cmd output {:?}",
-        repo,
-        output
-    )
+    bail!("error getting latest release for repo {repo:?}, cmd output {output:?}")
 }
 
 enum OutputOption<'a> {
