@@ -58,9 +58,6 @@ fn authenticate_to_github() -> anyhow::Result<()> {
     // Spawning a new shell because `gh` should block until the user is authenticated
     Command::new("sh")
         .args(["-c", "gh auth login"])
-        .stdin(Stdio::inherit()) // Pass stdin to the child process
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
         .spawn()?
         .wait()?;
 
