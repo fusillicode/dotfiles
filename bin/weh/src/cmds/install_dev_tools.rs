@@ -6,10 +6,13 @@ use std::process::Stdio;
 use anyhow::anyhow;
 use anyhow::bail;
 
-pub fn run<'a>(mut args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
-    let home = PathBuf::from(std::env::var("HOME")?);
-    let dev_tools_dir = home.to_path_buf().join(".dev-tools");
-    let bin_dir = home.to_path_buf().join(".local/bin");
+pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + std::fmt::Debug) -> anyhow::Result<()> {
+    let dev_tools_dir = args
+        .next()
+        .ok_or_else(|| anyhow!("missing dev_tools_dir arg from {args:?}"))?;
+    let bin_dir = args
+        .next()
+        .ok_or_else(|| anyhow!("missing bin_dir arg from {args:?}"))?;
 
     std::fs::create_dir_all(dev_tools_dir)?;
     std::fs::create_dir_all(bin_dir)?;
@@ -44,7 +47,6 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
     // cmd!("chmod", "+x", format!("{}/*", bin_dir.display()))
     //     .run()
     //     .unwrap();
-    println!("{}", std::env::var("HOME").unwrap());
     todo!()
 }
 
