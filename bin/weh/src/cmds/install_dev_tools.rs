@@ -1,5 +1,6 @@
+use std::fs::File;
+use std::io::Write;
 use std::path::Path;
-use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
 
@@ -7,12 +8,14 @@ use anyhow::anyhow;
 use anyhow::bail;
 
 pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + std::fmt::Debug) -> anyhow::Result<()> {
-    let dev_tools_dir = args
-        .next()
-        .ok_or_else(|| anyhow!("missing dev_tools_dir arg from {args:?}"))?;
-    let bin_dir = args
-        .next()
-        .ok_or_else(|| anyhow!("missing bin_dir arg from {args:?}"))?;
+    let dev_tools_dir = Path::new(
+        args.next()
+            .ok_or_else(|| anyhow!("missing dev_tools_dir arg from {args:?}"))?,
+    );
+    let bin_dir = Path::new(
+        args.next()
+            .ok_or_else(|| anyhow!("missing bin_dir arg from {args:?}"))?,
+    );
 
     std::fs::create_dir_all(dev_tools_dir)?;
     std::fs::create_dir_all(bin_dir)?;
@@ -20,7 +23,10 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + std::fmt::Debug) -> any
     log_into_github()?;
 
     let latest_release = get_latest_release("tekumara/typos-vscode");
-
+    get_bin_via_curl(
+        "https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rust-analyzer-aarch64-apple-darwin.gz",
+        OutputOption::UnpackVia(Command::new("zcat"), &bin_dir.join("rust-analyzer"))
+    ).unwrap();
     // let file = File::create(format!("{}/rust-analyzer", bin_dir.display())).unwrap();
     // cmd!("curl", "-SL", "https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rust-analyzer-aarch64-apple-darwin.gz")
     //     .pipe(cmd!("gunzip", "-c", "-")).stdout_file(file).run().unwrap();
@@ -89,7 +95,8 @@ fn get_latest_release(repo: &str) -> anyhow::Result<String> {
 }
 
 enum OutputOption<'a> {
-    PipeTo(Command),
+    UnpackVia(Command, &'a Path),
+    PipeInto(Command),
     WriteTo(&'a Path),
 }
 
@@ -116,7 +123,24 @@ fn get_bin_via_curl(url: &str, output_option: OutputOption) -> anyhow::Result<()
     curl_cmd.args(["-SL", url]);
 
     match output_option {
-        OutputOption::PipeTo(mut cmd) => {
+        OutputOption::UnpackVia(mut cmd, path) => {
+            let curl_stdout = curl_cmd
+                .stdout(Stdio::piped())
+                .spawn()?
+                .stdout
+                .ok_or_else(|| anyhow!("missing stdout from curl cmd {curl_cmd:?}"))?;
+            let output = cmd.stdin(Stdio::from(curl_stdout)).output()?;
+            if output.status.success() {
+                let mut file = File::create(path)?;
+                file.write_all(&output.stdout)?;
+                return Ok(());
+            }
+            bail!(
+                "error handling curl output by cmd {cmd:?}, exit status: {0:?}",
+                output.status
+            )
+        }
+        OutputOption::PipeInto(mut cmd) => {
             let curl_stdout = curl_cmd
                 .stdout(Stdio::piped())
                 .spawn()?
