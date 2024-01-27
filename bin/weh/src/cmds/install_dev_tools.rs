@@ -57,6 +57,24 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + std::fmt::Debug) -> any
     )
     .unwrap();
 
+    get_bin_via_curl(
+        "https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Darwin-x86_64",
+        OutputOption::WriteTo(bin_dir),
+    )
+    .unwrap();
+
+    get_bin_via_curl(
+        "https://github.com/mrjosh/helm-ls/releases/latest/download/helm_ls_darwin_amd64",
+        OutputOption::WriteTo(bin_dir),
+    )
+    .unwrap();
+
+    get_bin_via_curl(
+        "https://github.com/artempyanykh/marksman/releases/latest/download/marksman-macos",
+        OutputOption::WriteTo(bin_dir),
+    )
+    .unwrap();
+
     todo!()
 }
 
@@ -104,24 +122,6 @@ enum OutputOption<'a> {
     WriteTo(&'a Path),
 }
 
-// curl -SL https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rust-analyzer-aarch64-apple-darwin.gz | \
-//   zcat > "$bin_dir"/rust-analyzer
-//
-// curl -SL https://github.com/tamasfe/taplo/releases/latest/download/taplo-full-darwin-aarch64.gz | \
-//   zcat > "$bin_dir"/taplo
-//
-// latest_release=$(get_latest_release "hashicorp/terraform-ls" | cut -c2-)
-// curl -SL https://releases.hashicorp.com/terraform-ls/"$latest_release"/terraform-ls_"$latest_release"_darwin_arm64.zip | \
-//   tar -xz -C "$bin_dir"
-//
-// repo="tekumara/typos-vscode"
-// latest_release=$(get_latest_release $repo)
-// curl -SL https://github.com/"$repo"/releases/download/"$latest_release"/typos-lsp-"$latest_release"-aarch64-apple-darwin.tar.gz | \
-//   tar -xz -C "$bin_dir"
-//
-// curl -SL https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Darwin-x86_64 --output "$bin_dir"/hadolint
-// curl -SL https://github.com/mrjosh/helm-ls/releases/latest/download/helm_ls_darwin_amd64 --output "$bin_dir"/helm_ls
-// curl -SL https://github.com/artempyanykh/marksman/releases/latest/download/marksman-macos --output "$bin_dir"/marksmam
 fn get_bin_via_curl(url: &str, output_option: OutputOption) -> anyhow::Result<()> {
     let mut curl_cmd = Command::new("curl");
     curl_cmd.args(["-SL", url]);
