@@ -25,55 +25,48 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + std::fmt::Debug) -> any
     get_bin_via_curl(
         "https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rust-analyzer-aarch64-apple-darwin.gz",
         OutputOption::UnpackVia(Command::new("zcat"), &bin_dir.join("rust-analyzer"))
-    ).unwrap();
+    )?;
 
     get_bin_via_curl(
         "https://github.com/tamasfe/taplo/releases/latest/download/taplo-full-darwin-aarch64.gz",
         OutputOption::UnpackVia(Command::new("zcat"), &bin_dir.join("taplo")),
-    )
-    .unwrap();
+    )?;
 
     let repo = "hashicorp/terraform-ls";
     let latest_release = &get_latest_release(repo)?[1..];
     get_bin_via_curl(
         &format!("https://github.com/{repo}/releases/download/{latest_release}/typos-lsp-{latest_release}-aarch64-apple-darwin.tar.gz"),
         OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir.to_str().unwrap()])),
-    )
-    .unwrap();
+    )?;
 
     let repo = "tekumara/typos-vscode";
     let latest_release = get_latest_release(repo)?;
     get_bin_via_curl(
         &format!("https://github.com/{repo}/releases/download/{latest_release}/typos-lsp-{latest_release}-aarch64-apple-darwin.tar.gz"),
         OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir.to_str().unwrap()])),
-    )
-    .unwrap();
+    )?;
 
     let repo = "errata-ai/vale";
     let latest_release = get_latest_release(repo)?;
     get_bin_via_curl(
         &format!("https://github.com/{repo}/releases/download/{latest_release}/vale_{0}_macOS_arm64.tar.gz ", latest_release[1..].to_owned()),
         OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir.to_str().unwrap()])),
-    )
-    .unwrap();
+    )?;
 
     get_bin_via_curl(
         "https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Darwin-x86_64",
         OutputOption::WriteTo(bin_dir),
-    )
-    .unwrap();
+    )?;
 
     get_bin_via_curl(
         "https://github.com/mrjosh/helm-ls/releases/latest/download/helm_ls_darwin_amd64",
         OutputOption::WriteTo(bin_dir),
-    )
-    .unwrap();
+    )?;
 
     get_bin_via_curl(
         "https://github.com/artempyanykh/marksman/releases/latest/download/marksman-macos",
         OutputOption::WriteTo(bin_dir),
-    )
-    .unwrap();
+    )?;
 
     todo!()
 }
