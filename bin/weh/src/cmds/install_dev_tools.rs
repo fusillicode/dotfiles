@@ -22,37 +22,41 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + std::fmt::Debug) -> any
 
     log_into_github()?;
 
-    let latest_release = get_latest_release("tekumara/typos-vscode");
     get_bin_via_curl(
         "https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rust-analyzer-aarch64-apple-darwin.gz",
         OutputOption::UnpackVia(Command::new("zcat"), &bin_dir.join("rust-analyzer"))
     ).unwrap();
-    // let file = File::create(format!("{}/rust-analyzer", bin_dir.display())).unwrap();
-    // cmd!("curl", "-SL", "https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rust-analyzer-aarch64-apple-darwin.gz")
-    //     .pipe(cmd!("gunzip", "-c", "-")).stdout_file(file).run().unwrap();
-    //
-    // let file = File::create(format!("{}/taplo", bin_dir.display())).unwrap();
-    // cmd!(
-    //     "curl",
-    //     "-SL",
-    //     "https://github.com/tamasfe/taplo/releases/latest/download/taplo-full-darwin-aarch64.gz"
-    // )
-    // .pipe(cmd!("gunzip", "-c", "-"))
-    // .stdout_file(file)
-    // .run()
-    // .unwrap();
-    //
-    // let latest_release = &get_latest_release("hashicorp/terraform-ls")[1..];
-    // cmd!(
-    //     "curl",
-    //     "-SL",
-    //     format!("https://releases.hashicorp.com/terraform-ls/{}/terraform-ls_{latest_release}_darwin_arm64.zip", latest_release)
-    // )
-    // .pipe(cmd!("tar", "-xz", "-C", format!("{}", bin_dir.display()))).run().unwrap();
-    //
-    // cmd!("chmod", "+x", format!("{}/*", bin_dir.display()))
-    //     .run()
-    //     .unwrap();
+
+    get_bin_via_curl(
+        "https://github.com/tamasfe/taplo/releases/latest/download/taplo-full-darwin-aarch64.gz",
+        OutputOption::UnpackVia(Command::new("zcat"), &bin_dir.join("taplo")),
+    )
+    .unwrap();
+
+    let repo = "hashicorp/terraform-ls";
+    let latest_release = &get_latest_release(repo)?[1..];
+    get_bin_via_curl(
+        &format!("https://github.com/{repo}/releases/download/{latest_release}/typos-lsp-{latest_release}-aarch64-apple-darwin.tar.gz"),
+        OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir.to_str().unwrap()])),
+    )
+    .unwrap();
+
+    let repo = "tekumara/typos-vscode";
+    let latest_release = get_latest_release(repo)?;
+    get_bin_via_curl(
+        &format!("https://github.com/{repo}/releases/download/{latest_release}/typos-lsp-{latest_release}-aarch64-apple-darwin.tar.gz"),
+        OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir.to_str().unwrap()])),
+    )
+    .unwrap();
+
+    let repo = "errata-ai/vale";
+    let latest_release = get_latest_release(repo)?;
+    get_bin_via_curl(
+        &format!("https://github.com/{repo}/releases/download/{latest_release}/vale_{0}_macOS_arm64.tar.gz ", latest_release[1..].to_owned()),
+        OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir.to_str().unwrap()])),
+    )
+    .unwrap();
+
     todo!()
 }
 
@@ -96,7 +100,7 @@ fn get_latest_release(repo: &str) -> anyhow::Result<String> {
 
 enum OutputOption<'a> {
     UnpackVia(Command, &'a Path),
-    PipeInto(Command),
+    PipeInto(&'a mut Command),
     WriteTo(&'a Path),
 }
 
@@ -123,7 +127,7 @@ fn get_bin_via_curl(url: &str, output_option: OutputOption) -> anyhow::Result<()
     curl_cmd.args(["-SL", url]);
 
     match output_option {
-        OutputOption::UnpackVia(mut cmd, path) => {
+        OutputOption::UnpackVia(mut cmd, output_path) => {
             let curl_stdout = curl_cmd
                 .stdout(Stdio::piped())
                 .spawn()?
@@ -131,16 +135,16 @@ fn get_bin_via_curl(url: &str, output_option: OutputOption) -> anyhow::Result<()
                 .ok_or_else(|| anyhow!("missing stdout from curl cmd {curl_cmd:?}"))?;
             let output = cmd.stdin(Stdio::from(curl_stdout)).output()?;
             if output.status.success() {
-                let mut file = File::create(path)?;
+                let mut file = File::create(output_path)?;
                 file.write_all(&output.stdout)?;
                 return Ok(());
             }
             bail!(
-                "error handling curl output by cmd {cmd:?} to write to path {path:?}, exit status: {0:?}",
+                "error handling curl output by cmd {cmd:?} to write to path {output_path:?}, exit status: {0:?}",
                 output.status
             )
         }
-        OutputOption::PipeInto(mut cmd) => {
+        OutputOption::PipeInto(cmd) => {
             let curl_stdout = curl_cmd
                 .stdout(Stdio::piped())
                 .spawn()?
