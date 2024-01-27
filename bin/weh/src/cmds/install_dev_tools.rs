@@ -136,7 +136,7 @@ fn get_bin_via_curl(url: &str, output_option: OutputOption) -> anyhow::Result<()
                 return Ok(());
             }
             bail!(
-                "error handling curl output by cmd {cmd:?}, exit status: {0:?}",
+                "error handling curl output by cmd {cmd:?} to write to path {path:?}, exit status: {0:?}",
                 output.status
             )
         }
