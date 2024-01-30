@@ -133,9 +133,9 @@ mkdir -p "$dev_tools_dir"/graphql-language-service-cli && \
   npm install --silent --prefix "$_" graphql-language-service-cli && \
   ln -sf "$dev_tools_dir"/graphql-language-service-cli/node_modules/.bin/graphql-lsp "$bin_dir"
 
-mkdir -p "$dev_tools_dir"/prettier && \
-  npm install --silent --prefix "$_" prettier && \
-  ln -sf "$dev_tools_dir"/prettier/node_modules/.bin/prettier "$bin_dir"
+mkdir -p "$dev_tools_dir"/prettierd && \
+  npm install --silent --prefix "$_" @fsouza/prettierd && \
+  ln -sf "$dev_tools_dir"/prettierd/node_modules/.bin/prettierd "$bin_dir"
 
 mkdir -p "$dev_tools_dir"/sql-language-server && \
   npm install --silent --prefix "$_" sql-language-server && \
