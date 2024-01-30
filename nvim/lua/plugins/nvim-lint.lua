@@ -7,6 +7,9 @@ return {
       dockerfile = { 'hadolint', },
       elixir = { 'credo', },
       markdown = { 'vale', },
+      javascript = { 'eslint', },
+      typescript = { 'eslint', },
+      typescriptreact = { 'eslint', },
     }
 
     vim.api.nvim_create_autocmd('BufWritePost', {

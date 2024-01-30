@@ -125,6 +125,10 @@ mkdir -p "$dev_tools_dir"/dockerfile-language-server-nodejs && \
   npm install --silent --prefix "$_" dockerfile-language-server-nodejs && \
   ln -sf "$dev_tools_dir"/dockerfile-language-server-nodejs/node_modules/.bin/docker-langserver "$bin_dir"
 
+mkdir -p "$dev_tools_dir"/eslint && \
+  npm install --silent --prefix "$_" eslint && \
+  ln -sf "$dev_tools_dir"/eslint/node_modules/.bin/eslint "$bin_dir"
+
 mkdir -p "$dev_tools_dir"/graphql-language-service-cli && \
   npm install --silent --prefix "$_" graphql-language-service-cli && \
   ln -sf "$dev_tools_dir"/graphql-language-service-cli/node_modules/.bin/graphql-lsp "$bin_dir"
