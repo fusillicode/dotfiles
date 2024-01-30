@@ -68,6 +68,26 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + std::fmt::Debug) -> any
         OutputOption::WriteTo(bin_dir),
     )?;
 
+    // tool="shellcheck"
+    // repo="koalaman/$tool"
+    // latest_release=$(get_latest_release $repo)
+    // unarchived_dir="$dev_tools_dir"/"$tool"-"$latest_release"
+    // curl -SL https://github.com/"$repo"/releases/download/"$latest_release"/"$tool"-"$latest_release".darwin.x86_64.tar.xz | \
+    //   tar -xz -C "$dev_tools_dir" && \
+    //   mv "$unarchived_dir"/"$tool" "$bin_dir" && \
+    //   rm -rf "$unarchived_dir"
+    //
+    // tool="elixir-ls"
+    // repo="elixir-lsp/$tool"
+    // dev_tools_repo_dir="$dev_tools_dir"/"$tool"
+    // latest_release=$(get_latest_release $repo)
+    // mkdir -p "$dev_tools_repo_dir" && \
+    //   curl -SL https://github.com/"$repo"/releases/download/"$latest_release"/"$tool"-"$latest_release".zip | \
+    //   tar -xz -C "$dev_tools_repo_dir" && \
+    //   chmod +x "$dev_tools_repo_dir"/* && \
+    //   ln -sf "$dev_tools_repo_dir"/language_server.sh "$bin_dir"/elixir-ls
+    //   ln -sf "$dev_tools_repo_dir"/debug_adapter.sh "$bin_dir"/elixir-ls-debugger
+
     todo!()
 }
 
