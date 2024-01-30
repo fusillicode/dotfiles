@@ -35,7 +35,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + std::fmt::Debug) -> any
     let repo = "hashicorp/terraform-ls";
     let latest_release = &get_latest_release(repo)?[1..];
     get_bin_via_curl(
-        &format!("https://github.com/{repo}/releases/download/{latest_release}/typos-lsp-{latest_release}-aarch64-apple-darwin.tar.gz"),
+        &format!("https://releases.hashicorp.com/terraform-ls/{latest_release}/terraform-ls_{latest_release}_darwin_arm64.zip"),
         OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir.to_str().unwrap()])),
     )?;
 
