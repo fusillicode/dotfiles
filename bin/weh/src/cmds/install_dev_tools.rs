@@ -88,10 +88,15 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + std::fmt::Debug) -> any
     //   ln -sf "$dev_tools_repo_dir"/language_server.sh "$bin_dir"/elixir-ls
     //   ln -sf "$dev_tools_repo_dir"/debug_adapter.sh "$bin_dir"/elixir-ls-debugger
 
-    Command::new("chmod")
-        .args(["+x", bin_dir.join("*").to_str().unwrap()])
-        .status()?
-        .success()
+    let exit_status = Command::new("chmod")
+        .args(["+x", &format!("{bin_dir}/*")])
+        .status()?;
+
+    if !exit_status.success() {
+        bail!("error setting executable permissions for binaries in {bin_dir:?}")
+    }
+
+    Ok(())
 }
 
 fn log_into_github() -> anyhow::Result<()> {
