@@ -88,7 +88,10 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + std::fmt::Debug) -> any
     //   ln -sf "$dev_tools_repo_dir"/language_server.sh "$bin_dir"/elixir-ls
     //   ln -sf "$dev_tools_repo_dir"/debug_adapter.sh "$bin_dir"/elixir-ls-debugger
 
-    todo!()
+    Command::new("chmod")
+        .args(["+x", bin_dir.join("*").to_str().unwrap()])
+        .status()?
+        .success()
 }
 
 fn log_into_github() -> anyhow::Result<()> {
