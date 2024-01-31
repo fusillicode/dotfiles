@@ -1,6 +1,5 @@
 use std::fs::File;
 use std::io::Write;
-use std::path::Path;
 use std::process::Command;
 use std::process::Stdio;
 
@@ -8,14 +7,12 @@ use anyhow::anyhow;
 use anyhow::bail;
 
 pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + std::fmt::Debug) -> anyhow::Result<()> {
-    let dev_tools_dir = Path::new(
-        args.next()
-            .ok_or_else(|| anyhow!("missing dev_tools_dir arg from {args:?}"))?,
-    );
-    let bin_dir = Path::new(
-        args.next()
-            .ok_or_else(|| anyhow!("missing bin_dir arg from {args:?}"))?,
-    );
+    let dev_tools_dir = args
+        .next()
+        .ok_or_else(|| anyhow!("missing dev_tools_dir arg from {args:?}"))?;
+    let bin_dir = args
+        .next()
+        .ok_or_else(|| anyhow!("missing bin_dir arg from {args:?}"))?;
 
     std::fs::create_dir_all(dev_tools_dir)?;
     std::fs::create_dir_all(bin_dir)?;
@@ -24,33 +21,33 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + std::fmt::Debug) -> any
 
     get_bin_via_curl(
         "https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rust-analyzer-aarch64-apple-darwin.gz",
-        OutputOption::UnpackVia(Command::new("zcat"), &bin_dir.join("rust-analyzer"))
+        OutputOption::UnpackVia(Command::new("zcat"), &format!("{bin_dir}/rust-analyzer"))
     )?;
 
     get_bin_via_curl(
         "https://github.com/tamasfe/taplo/releases/latest/download/taplo-full-darwin-aarch64.gz",
-        OutputOption::UnpackVia(Command::new("zcat"), &bin_dir.join("taplo")),
+        OutputOption::UnpackVia(Command::new("zcat"), &format!("{bin_dir}/taplo")),
     )?;
 
     let repo = "hashicorp/terraform-ls";
     let latest_release = &get_latest_release(repo)?[1..];
     get_bin_via_curl(
         &format!("https://releases.hashicorp.com/terraform-ls/{latest_release}/terraform-ls_{latest_release}_darwin_arm64.zip"),
-        OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir.to_str().unwrap()])),
+        OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir])),
     )?;
 
     let repo = "tekumara/typos-vscode";
     let latest_release = get_latest_release(repo)?;
     get_bin_via_curl(
         &format!("https://github.com/{repo}/releases/download/{latest_release}/typos-lsp-{latest_release}-aarch64-apple-darwin.tar.gz"),
-        OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir.to_str().unwrap()])),
+        OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir])),
     )?;
 
     let repo = "errata-ai/vale";
     let latest_release = get_latest_release(repo)?;
     get_bin_via_curl(
         &format!("https://github.com/{repo}/releases/download/{latest_release}/vale_{0}_macOS_arm64.tar.gz ", latest_release[1..].to_owned()),
-        OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir.to_str().unwrap()])),
+        OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir])),
     )?;
 
     get_bin_via_curl(
@@ -138,9 +135,9 @@ fn get_latest_release(repo: &str) -> anyhow::Result<String> {
 }
 
 enum OutputOption<'a> {
-    UnpackVia(Command, &'a Path),
+    UnpackVia(Command, &'a str),
     PipeInto(&'a mut Command),
-    WriteTo(&'a Path),
+    WriteTo(&'a str),
 }
 
 fn get_bin_via_curl(url: &str, output_option: OutputOption) -> anyhow::Result<()> {
@@ -179,11 +176,7 @@ fn get_bin_via_curl(url: &str, output_option: OutputOption) -> anyhow::Result<()
         }
         OutputOption::WriteTo(output_path) => {
             curl_cmd.arg("--output");
-            curl_cmd.arg(
-                output_path
-                    .to_str()
-                    .ok_or_else(|| anyhow!("invalid path {output_path:?}"))?,
-            );
+            curl_cmd.arg(output_path);
             let exit_status = curl_cmd.status()?;
             if exit_status.success() {
                 return Ok(());
