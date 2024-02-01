@@ -159,4 +159,6 @@ mkdir -p "$dev_tools_dir"/quicktype && \
 
 install_python_bin "$dev_tools_dir" ruff-lsp "$bin_dir"
 
+install_python_bin "$dev_tools_dir" sqlfluff "$bin_dir"
+
 chmod +x "$bin_dir"/*

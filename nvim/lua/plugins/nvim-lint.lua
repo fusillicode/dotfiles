@@ -6,8 +6,9 @@ return {
     lint.linters_by_ft = {
       dockerfile = { 'hadolint', },
       elixir = { 'credo', },
-      markdown = { 'vale', },
       javascript = { 'eslint_d', },
+      markdown = { 'vale', },
+      sql = { 'sqlfluff', },
       typescript = { 'eslint_d', },
       typescriptreact = { 'eslint_d', },
     }
