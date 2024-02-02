@@ -30,8 +30,8 @@ fi
 curl -SL https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rust-analyzer-aarch64-apple-darwin.gz | \
   zcat > "$bin_dir"/rust-analyzer
 
-curl -SL https://github.com/tamasfe/taplo/releases/latest/download/taplo-full-darwin-aarch64.gz | \
-  zcat > "$bin_dir"/taplo
+# curl -SL https://github.com/tamasfe/taplo/releases/latest/download/taplo-full-darwin-aarch64.gz | \
+#   zcat > "$bin_dir"/taplo
 
 latest_release=$(get_latest_release "hashicorp/terraform-ls" | cut -c2-)
 curl -SL https://releases.hashicorp.com/terraform-ls/"$latest_release"/terraform-ls_"$latest_release"_darwin_arm64.zip | \
