@@ -165,7 +165,7 @@ fn get_bin_via_curl(url: &str, output_option: OutputOption) -> anyhow::Result<()
                 .stdout(Stdio::piped())
                 .spawn()?
                 .stdout
-                .ok_or_else(|| anyhow!("missing stdout from curl cmd {curl_cmd:?}"))?;
+                .ok_or_else(|| anyhow!("missing stdout from cmd {curl_cmd:?}"))?;
             let output = cmd.stdin(Stdio::from(curl_stdout)).output()?;
             if output.status.success() {
                 let mut file = File::create(output_path)?;
@@ -182,7 +182,7 @@ fn get_bin_via_curl(url: &str, output_option: OutputOption) -> anyhow::Result<()
                 .stdout(Stdio::piped())
                 .spawn()?
                 .stdout
-                .ok_or_else(|| anyhow!("missing stdout from curl cmd {curl_cmd:?}"))?;
+                .ok_or_else(|| anyhow!("missing stdout from cmd {curl_cmd:?}"))?;
             let exit_status = cmd.stdin(Stdio::from(curl_stdout)).status()?;
             if exit_status.success() {
                 return Ok(());
