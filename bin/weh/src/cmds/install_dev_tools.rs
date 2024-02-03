@@ -80,23 +80,30 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + std::fmt::Debug) -> any
         bail!("error setting moving /tmp/{tool} to {bin_dir}")
     }
 
-    // tool="elixir-ls"
-    // repo="elixir-lsp/$tool"
-    // dev_tools_repo_dir="$dev_tools_dir"/"$tool"
-    // latest_release=$(get_latest_release $repo)
-    // mkdir -p "$dev_tools_repo_dir" && \
-    //   curl -SL https://github.com/"$repo"/releases/download/"$latest_release"/"$tool"-"$latest_release".zip | \
-    //   tar -xz -C "$dev_tools_repo_dir" && \
-    //   chmod +x "$dev_tools_repo_dir"/* && \
-    //   ln -sf "$dev_tools_repo_dir"/language_server.sh "$bin_dir"/elixir-ls
-    //   ln -sf "$dev_tools_repo_dir"/debug_adapter.sh "$bin_dir"/elixir-ls-debugger
+    let tool = "elixirls";
+    let repo = format!("elixir-lsp/{tool}");
+    let latest_release = get_latest_release(&repo)?;
+    get_bin_via_curl(
+        &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}.zip"),
+        OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", dev_tools_dir])),
+    )?;
+    let exit_status = Command::new("chmod")
+        .args(["+x", &format!("{bin_dir}/*")])
+        .status()?;
+    if !exit_status.success()? {
+        bail!("error setting executable permission for to /{bin_dir}/*")
+    }
+    std::os::unix::fs::symlink(
+        format!("{dev_tools_repo_dir}/language_server.sh"),
+        format!("{bin_dir}/elixir-ls"),
+    );
 
     let exit_status = Command::new("chmod")
         .args(["+x", &format!("{bin_dir}/*")])
         .status()?;
 
     if !exit_status.success() {
-        bail!("error setting executable permissions for binaries in {bin_dir:?}")
+        bail!("error setting executable permission to {bin_dir}")
     }
 
     Ok(())
