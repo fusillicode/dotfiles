@@ -24,10 +24,10 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + std::fmt::Debug) -> any
         OutputOption::UnpackVia(Command::new("zcat"), &format!("{bin_dir}/rust-analyzer"))
     )?;
 
-    get_bin_via_curl(
-        "https://github.com/tamasfe/taplo/releases/latest/download/taplo-full-darwin-aarch64.gz",
-        OutputOption::UnpackVia(Command::new("zcat"), &format!("{bin_dir}/taplo")),
-    )?;
+    // get_bin_via_curl(
+    //     "https://github.com/tamasfe/taplo/releases/latest/download/taplo-full-darwin-aarch64.gz",
+    //     OutputOption::UnpackVia(Command::new("zcat"), &format!("{bin_dir}/taplo")),
+    // )?;
 
     let repo = "hashicorp/terraform-ls";
     let latest_release = &get_latest_release(repo)?[1..];
@@ -52,17 +52,17 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + std::fmt::Debug) -> any
 
     get_bin_via_curl(
         "https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Darwin-x86_64",
-        OutputOption::WriteTo(bin_dir),
+        OutputOption::WriteTo(&format!("{bin_dir}/hadolint")),
     )?;
 
     get_bin_via_curl(
         "https://github.com/mrjosh/helm-ls/releases/latest/download/helm_ls_darwin_amd64",
-        OutputOption::WriteTo(bin_dir),
+        OutputOption::WriteTo(&format!("{bin_dir}/helm_ls")),
     )?;
 
     get_bin_via_curl(
         "https://github.com/artempyanykh/marksman/releases/latest/download/marksman-macos",
-        OutputOption::WriteTo(bin_dir),
+        OutputOption::WriteTo(&format!("{bin_dir}/marksman")),
     )?;
 
     // tool="shellcheck"
@@ -181,7 +181,7 @@ fn get_bin_via_curl(url: &str, output_option: OutputOption) -> anyhow::Result<()
             if exit_status.success() {
                 return Ok(());
             }
-            bail!("error getting bin via curl cmd {curl_cmd:?}, exit status: {exit_status:?}")
+            bail!("error getting bin via cmd {curl_cmd:?}, exit status: {exit_status:?}")
         }
     }
 }
