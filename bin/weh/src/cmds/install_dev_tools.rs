@@ -1,3 +1,4 @@
+use std::fmt::format;
 use std::fs::File;
 use std::io::Write;
 use std::process::Command;
@@ -65,15 +66,20 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + std::fmt::Debug) -> any
         OutputOption::WriteTo(&format!("{bin_dir}/marksman")),
     )?;
 
-    // tool="shellcheck"
-    // repo="koalaman/$tool"
-    // latest_release=$(get_latest_release $repo)
-    // unarchived_dir="$dev_tools_dir"/"$tool"-"$latest_release"
-    // curl -SL https://github.com/"$repo"/releases/download/"$latest_release"/"$tool"-"$latest_release".darwin.x86_64.tar.xz | \
-    //   tar -xz -C "$dev_tools_dir" && \
-    //   mv "$unarchived_dir"/"$tool" "$bin_dir" && \
-    //   rm -rf "$unarchived_dir"
-    //
+    let tool = "shellcheck";
+    let repo = format!("koalaman/{tool}");
+    let latest_release = get_latest_release(&repo)?;
+    get_bin_via_curl(
+        &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}.darwin.x86_64.tar.xz"),
+        OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", "/tmp"])),
+    )?;
+    let exit_status = Command::new("mv")
+        .args([&format!("/tmp/{tool}"), bin_dir])
+        .status()?;
+    if !exit_status.success()? {
+        bail!("error setting moving /tmp/{tool} to {bin_dir}")
+    }
+
     // tool="elixir-ls"
     // repo="elixir-lsp/$tool"
     // dev_tools_repo_dir="$dev_tools_dir"/"$tool"
