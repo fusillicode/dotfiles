@@ -46,7 +46,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + std::fmt::Debug) -> any
     let repo = "errata-ai/vale";
     let latest_release = get_latest_release(repo)?;
     get_bin_via_curl(
-        &format!("https://github.com/{repo}/releases/download/{latest_release}/vale_{0}_macOS_arm64.tar.gz ", latest_release[1..].to_owned()),
+        &format!("https://github.com/{repo}/releases/download/{latest_release}/vale_{}_macOS_arm64.tar.gz", latest_release[1..].to_owned()),
         OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir])),
     )?;
 
@@ -65,51 +65,41 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + std::fmt::Debug) -> any
         OutputOption::WriteTo(&format!("{bin_dir}/marksman")),
     )?;
 
-    let tool = "shellcheck";
-    let repo = format!("koalaman/{tool}");
-    let latest_release = get_latest_release(&repo)?;
-    get_bin_via_curl(
-        &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}.darwin.x86_64.tar.xz"),
-        OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", "/tmp"])),
-    )?;
-    let exit_status = Command::new("mv")
-        .args([&format!("/tmp/{tool}"), bin_dir])
-        .status()?;
-    if !exit_status.success() {
-        bail!("error setting moving /tmp/{tool} to {bin_dir}")
-    }
+    // let tool = "shellcheck";
+    // let repo = format!("koalaman/{tool}");
+    // let latest_release = get_latest_release(&repo)?;
+    // get_bin_via_curl(
+    //     &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}.darwin.x86_64.tar.xz"),
+    //     OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", "/tmp"])),
+    // )?;
+    // let exit_status = Command::new("mv")
+    //     .args([&format!("/tmp/{tool}"), bin_dir])
+    //     .status()?;
+    // if !exit_status.success() {
+    //     bail!("error setting moving /tmp/{tool} to {bin_dir}")
+    // }
+    //
+    // let tool = "elixirls";
+    // let repo = format!("elixir-lsp/{tool}");
+    // let dev_tools_repo_dir = format!("{dev_tools_dir}/{tool}");
+    // let latest_release = get_latest_release(&repo)?;
+    // get_bin_via_curl(
+    //     &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}.zip"),
+    //     OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &dev_tools_repo_dir])),
+    // )?;
+    // let exit_status = Command::new("sh")
+    //     .args(["-c", &format!("chmod +x {dev_tools_repo_dir}/*")])
+    //     .status()?;
+    // if !exit_status.success() {
+    //     bail!("error setting executable permission for to /{dev_tools_repo_dir}/*")
+    // }
+    // std::os::unix::fs::symlink(
+    //     format!("{dev_tools_repo_dir}/language_server.sh"),
+    //     format!("{bin_dir}/elixir-ls"),
+    // )?;
 
-    let tool = "elixirls";
-    let repo = format!("elixir-lsp/{tool}");
-    let dev_tools_repo_dir = format!("{dev_tools_dir}/{tool}");
-    let latest_release = get_latest_release(&repo)?;
-    get_bin_via_curl(
-        &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}.zip"),
-        OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &dev_tools_repo_dir])),
-    )?;
-    let exit_status = Command::new("chmod")
-        .args(["+x", &format!("{dev_tools_repo_dir}/*")])
-        .status()?;
-    if !exit_status.success() {
-        bail!("error setting executable permission for to /{dev_tools_repo_dir}/*")
-    }
-    std::os::unix::fs::symlink(
-        format!("{dev_tools_repo_dir}/language_server.sh"),
-        format!("{bin_dir}/elixir-ls"),
-    )?;
-    // tool="elixir-ls"
-    // repo="elixir-lsp/$tool"
-    // dev_tools_repo_dir="$dev_tools_dir"/"$tool"
-    // latest_release=$(get_latest_release $repo)
-    // mkdir -p "$dev_tools_repo_dir" && \
-    //   curl -SL https://github.com/"$repo"/releases/download/"$latest_release"/"$tool"-"$latest_release".zip | \
-    //   tar -xz -C "$dev_tools_repo_dir" && \
-    //   chmod +x "$dev_tools_repo_dir"/* && \
-    //   ln -sf "$dev_tools_repo_dir"/language_server.sh "$bin_dir"/elixir-ls
-    //   ln -sf "$dev_tools_repo_dir"/debug_adapter.sh "$bin_dir"/elixir-ls-debugger
-
-    let exit_status = Command::new("chmod")
-        .args(["+x", &format!("{bin_dir}/*")])
+    let exit_status = Command::new("sh")
+        .args(["-c", &format!("chmod +x {bin_dir}/*")])
         .status()?;
 
     if !exit_status.success() {
