@@ -103,7 +103,6 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + std::fmt::Debug) -> any
     let exit_status = Command::new("sh")
         .args(["-c", &format!("chmod +x {bin_dir}/*")])
         .status()?;
-
     if !exit_status.success() {
         bail!("error setting executable permission to {bin_dir}")
     }
