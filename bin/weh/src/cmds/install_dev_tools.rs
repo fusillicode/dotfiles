@@ -67,20 +67,20 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + std::fmt::Debug) -> any
         OutputOption::WriteTo(&format!("{bin_dir}/marksman")),
     )?;
 
-    // let tool = "shellcheck";
-    // let repo = format!("koalaman/{tool}");
-    // let latest_release = get_latest_release(&repo)?;
-    // get_bin_via_curl(
-    //     &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}.darwin.x86_64.tar.xz"),
-    //     OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", "/tmp"])),
-    // )?;
-    // let exit_status = Command::new("mv")
-    //     .args([&format!("/tmp/{tool}-{latest_release}"), bin_dir])
-    //     .status()?;
-    // if !exit_status.success() {
-    //     bail!("error setting moving /tmp/{tool} to {bin_dir}")
-    // }
-    //
+    let tool = "shellcheck";
+    let repo = format!("koalaman/{tool}");
+    let latest_release = get_latest_release(&repo)?;
+    get_bin_via_curl(
+        &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}.darwin.x86_64.tar.xz"),
+        OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", "/tmp"])),
+    )?;
+    let exit_status = Command::new("mv")
+        .args([&format!("/tmp/{tool}-{latest_release}/{tool}"), bin_dir])
+        .status()?;
+    if !exit_status.success() {
+        bail!("error setting moving /tmp/{tool} to {bin_dir}")
+    }
+
     // let tool = "elixirls";
     // let repo = format!("elixir-lsp/{tool}");
     // let dev_tools_repo_dir = format!("{dev_tools_dir}/{tool}");
