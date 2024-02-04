@@ -113,3 +113,18 @@ vim.api.nvim_create_autocmd('FocusLost', {
   group = vim.api.nvim_create_augroup('AutosaveBuffers', { clear = true, }),
   command = ':silent! wa!',
 })
+
+-- https://vinnymeller.com/posts/neovim_nightly_inlay_hints/#globally
+vim.api.nvim_create_autocmd('LspAttach', {
+  group = vim.api.nvim_create_augroup('LspAttachInlayHints', { clear = true, }),
+  callback = function(args)
+    if not (args.data and args.data.client_id) then
+      return
+    end
+
+    local client = vim.lsp.get_client_by_id(args.data.client_id)
+    if client.server_capabilities.inlayHintProvider then
+      vim.lsp.inlay_hint.enable(args.buf, true)
+    end
+  end,
+})
