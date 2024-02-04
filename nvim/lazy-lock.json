@@ -12,10 +12,10 @@
   "codeium.nvim": { "branch": "main", "commit": "f871000e91faa9ed334da2bfa4eadbf54d0e1047" },
   "conform.nvim": { "branch": "master", "commit": "c0e0e80f0c233cb3a249f719a44324c660163a3f" },
   "crates.nvim": { "branch": "main", "commit": "2bd990871f0aef159933bd5fe6da421690a832b9" },
-  "fidget.nvim": { "branch": "main", "commit": "1d1042d418ee8cb70d68f1e38db639844331c093" },
+  "fidget.nvim": { "branch": "main", "commit": "a3e1e79116ceb93d4c8c0ff432bf506b3213a24d" },
   "friendly-snippets": { "branch": "main", "commit": "b8fae73a479ae0a1c54f5c98fa687ae8a0addc53" },
-  "fzf": { "branch": "master", "commit": "3c0a6304756e890e0a605b742943a9bb8e1d2247" },
-  "fzf-lua": { "branch": "main", "commit": "fd567e008124428c281255feaa53873029326679" },
+  "fzf": { "branch": "master", "commit": "1a43259989fc84c0be85829f71ae21815e8d4620" },
+  "fzf-lua": { "branch": "main", "commit": "76ddb46f4a5d799555e19761735ef4842162d3cd" },
   "gitlinker.nvim": { "branch": "master", "commit": "f6705d4f38cc2727c34f196a49700d0d7c6f7464" },
   "gitsigns.nvim": { "branch": "main", "commit": "2c2463dbd82eddd7dbab881c3a62cfbfbe3c67ae" },
   "lazy.nvim": { "branch": "main", "commit": "aedcd79811d491b60d0a6577a9c1701063c2a609" },
@@ -23,7 +23,7 @@
   "nvim-autopairs": { "branch": "master", "commit": "096d0baecc34f6c5d8a6dd25851e9d5ad338209b" },
   "nvim-cmp": { "branch": "main", "commit": "04e0ca376d6abdbfc8b52180f8ea236cbfddf782" },
   "nvim-lint": { "branch": "master", "commit": "76af3422e3c82ea40adf9ade1ccf1dc1eb361789" },
-  "nvim-lspconfig": { "branch": "master", "commit": "9a6279953c82d01b58825a46ede032ab246a5983" },
+  "nvim-lspconfig": { "branch": "master", "commit": "d12140c5687a1186b95b3f42dbc6cc769df0cf0d" },
   "nvim-surround": { "branch": "main", "commit": "f81bbef3da28bd2a7d5a736575c71f3f953d49f9" },
   "nvim-treesitter": { "branch": "master", "commit": "4fbf150a1621d52f17b099506e1a32f107079210" },
   "nvim-treesitter-pairs": { "branch": "master", "commit": "f8c195d4d8464cba6971bf8de2d6a5c8c109b37a" },
@@ -33,5 +33,5 @@
   "schemastore.nvim": { "branch": "main", "commit": "be4d1084397c9b9d3d5a41bda871e6b20415bf48" },
   "scrollofffraction.nvim": { "branch": "master", "commit": "0321a6790e756c9f243627e2d75745283748c3d2" },
   "todo-comments.nvim": { "branch": "main", "commit": "833d8dd8b07eeda37a09e99460f72a02616935cb" },
-  "zenbones.nvim": { "branch": "main", "commit": "072b21d16cc1d5ae5701455fadaa47b1e8a61780" }
+  "zenbones.nvim": { "branch": "main", "commit": "5b0ca138e2e40f5439d67b6bb17cd6ce35d8f96c" }
 }

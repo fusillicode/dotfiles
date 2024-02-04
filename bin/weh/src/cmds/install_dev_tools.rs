@@ -75,7 +75,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + std::fmt::Debug) -> any
     //     OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", "/tmp"])),
     // )?;
     // let exit_status = Command::new("mv")
-    //     .args([&format!("/tmp/{tool}"), bin_dir])
+    //     .args([&format!("/tmp/{tool}-{latest_release}"), bin_dir])
     //     .status()?;
     // if !exit_status.success() {
     //     bail!("error setting moving /tmp/{tool} to {bin_dir}")
