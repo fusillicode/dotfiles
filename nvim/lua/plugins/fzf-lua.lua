@@ -67,7 +67,8 @@ return {
         preview = {
           default = 'builtin',
           layout = 'vertical',
-          title = false,
+          title = true,
+          title_pos = 'left',
         },
       },
       defaults = {
