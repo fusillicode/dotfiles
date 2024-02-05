@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::fs::File;
 use std::io::Write;
 use std::process::Command;
@@ -6,7 +7,7 @@ use std::process::Stdio;
 use anyhow::anyhow;
 use anyhow::bail;
 
-pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + std::fmt::Debug) -> anyhow::Result<()> {
+pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Result<()> {
     let dev_tools_dir = args
         .next()
         .ok_or_else(|| anyhow!("missing dev_tools_dir arg from {args:?}"))?
