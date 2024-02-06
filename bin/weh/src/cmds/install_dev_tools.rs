@@ -94,7 +94,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
     //     .args(["-c", &format!("chmod +x {dev_tools_repo_dir}/*")])
     //     .status()?;
     // if !exit_status.success() {
-    //     bail!("error setting executable permission for to /{dev_tools_repo_dir}/*")
+    //     bail!("error setting executable permission for to {dev_tools_repo_dir}/*")
     // }
     // std::os::unix::fs::symlink(
     //     format!("{dev_tools_repo_dir}/language_server.sh"),
