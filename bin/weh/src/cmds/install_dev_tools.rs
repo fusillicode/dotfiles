@@ -82,24 +82,31 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         bail!("error setting moving /tmp/{tool} to {bin_dir}")
     }
 
-    // let tool = "elixirls";
-    // let repo = format!("elixir-lsp/{tool}");
-    // let dev_tools_repo_dir = format!("{dev_tools_dir}/{tool}");
-    // let latest_release = get_latest_release(&repo)?;
-    // get_bin_via_curl(
-    //     &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}.zip"),
-    //     OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &dev_tools_repo_dir])),
-    // )?;
-    // let exit_status = Command::new("sh")
-    //     .args(["-c", &format!("chmod +x {dev_tools_repo_dir}/*")])
-    //     .status()?;
-    // if !exit_status.success() {
-    //     bail!("error setting executable permission for to {dev_tools_repo_dir}/*")
-    // }
-    // std::os::unix::fs::symlink(
-    //     format!("{dev_tools_repo_dir}/language_server.sh"),
-    //     format!("{bin_dir}/elixir-ls"),
-    // )?;
+    let tool = "elixir-ls";
+    let repo = format!("elixir-lsp/{tool}");
+    let dev_tools_repo_dir = format!("{dev_tools_dir}/{tool}");
+    let latest_release = get_latest_release(&repo)?;
+    std::fs::create_dir_all(&dev_tools_repo_dir)?;
+    get_bin_via_curl(
+        &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}.zip"),
+        OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &dev_tools_repo_dir])),
+    )?;
+    let exit_status = Command::new("sh")
+        .args(["-c", &format!("chmod +x {dev_tools_repo_dir}/*")])
+        .status()?;
+    if !exit_status.success() {
+        bail!("error setting executable permission for to {dev_tools_repo_dir}/*")
+    }
+    let exit_status = Command::new("ln")
+        .args([
+            "-sf",
+            &format!("{dev_tools_repo_dir}/language_server.sh"),
+            &format!("{bin_dir}/elixir-ls"),
+        ])
+        .status()?;
+    if !exit_status.success() {
+        bail!("error symlinking {dev_tools_repo_dir}/language_server.sh to {bin_dir}/elixir-ls")
+    }
 
     let exit_status = Command::new("sh")
         .args(["-c", &format!("chmod +x {bin_dir}/*")])
