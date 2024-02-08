@@ -32,5 +32,5 @@
   "schemastore.nvim": { "branch": "main", "commit": "d30f650b1b1b3b059328230a7ed8edccf6aaa522" },
   "scrollofffraction.nvim": { "branch": "master", "commit": "0321a6790e756c9f243627e2d75745283748c3d2" },
   "todo-comments.nvim": { "branch": "main", "commit": "833d8dd8b07eeda37a09e99460f72a02616935cb" },
-  "zenbones.nvim": { "branch": "main", "commit": "5b0ca138e2e40f5439d67b6bb17cd6ce35d8f96c" }
+  "zenbones.nvim": { "branch": "main", "commit": "fb60cdc424c9fff41ea3205d24ee30ee772b47ce" }
 }

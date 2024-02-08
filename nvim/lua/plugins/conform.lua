@@ -5,6 +5,7 @@ return {
   opts = {
     formatters_by_ft = {
       javascript = { { 'prettierd', }, },
+      markdown = { { 'prettierd', }, },
       sql = { { 'sqlfluff', }, },
       typescript = { { 'prettierd', }, },
       typescriptreact = { { 'prettierd', }, },
