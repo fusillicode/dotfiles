@@ -7,7 +7,7 @@ alias j="jq . -c"
 alias jl="jq . "
 alias gcnuke="git commit --amend --no-edit --no-verify --allow-empty && git push --force-with-lease --no-verify"
 alias gcnoke="git commit --amend --no-edit --no-verify --allow-empty"
-alias grr="git for-each-ref --sort=-committerdate refs/heads/ --format='%(HEAD) %(color:yellow)%(refname:short)%(color:reset) %(color:red)%(objectname:short)%(color:reset) - %(contents:subject) %(color:green)(%(committerdate:relative))%(color:reset) %(color:blue)<%(authorname)>%(color:reset)'"
+alias grr="git for-each-ref --sort=committerdate refs/heads/ --format='%(HEAD) %(color:yellow)%(refname:short)%(color:reset) %(color:red)%(objectname:short)%(color:reset) - %(contents:subject) %(color:green)(%(committerdate:relative))%(color:reset) %(color:blue)<%(authorname)>%(color:reset)'"
 alias kdebian="kubectl exec -it debian -- bash || kubectl run debian --image=debian:latest --rm -it --restart=Never --command --"
 
 # Easy Shell commands

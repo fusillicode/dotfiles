@@ -1,6 +1,6 @@
-local function get_lsps_configs(lsps_common_configs)
+local function get_lsps_configs()
   local home_dir = os.getenv('HOME')
-  local lsps_configs = {
+  return {
     bashls = {},
     docker_compose_language_service = {},
     dockerls = {},
@@ -80,7 +80,20 @@ local function get_lsps_configs(lsps_common_configs)
         diagnosticSeverity = 'Warning',
       },
     },
-    tsserver = {},
+    tsserver = {
+      init_options = {
+        preferences = {
+          includeInlayParameterNameHints = 'all',
+          includeInlayParameterNameHintsWhenArgumentMatchesName = true,
+          includeInlayFunctionParameterTypeHints = true,
+          includeInlayVariableTypeHints = true,
+          includeInlayPropertyDeclarationTypeHints = true,
+          includeInlayFunctionLikeReturnTypeHints = true,
+          includeInlayEnumMemberValueHints = true,
+          importModuleSpecifierPreference = 'non-relative',
+        },
+      },
+    },
     yamlls = {
       settings = {
         yaml = {
@@ -102,12 +115,6 @@ local function get_lsps_configs(lsps_common_configs)
       },
     },
   }
-
-  for lsp, lsp_config in pairs(lsps_configs) do
-    lsp_config[lsp] = vim.tbl_extend('error', lsps_common_configs, lsp_config)
-  end
-
-  return lsps_configs
 end
 
 return {
@@ -128,8 +135,8 @@ return {
       keymap_set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, })
     end
 
-    for lsp, config in pairs(get_lsps_configs({ capabilities = capabilities, on_attach = on_attach, })) do
-      lspconfig[lsp].setup(config)
+    for lsp, config in pairs(get_lsps_configs()) do
+      lspconfig[lsp].setup(vim.tbl_extend('error', { capabilities = capabilities, on_attach = on_attach, }, config))
     end
 
     vim.api.nvim_create_autocmd('BufWritePre', {
