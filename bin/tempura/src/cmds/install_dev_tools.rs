@@ -20,100 +20,118 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
     std::fs::create_dir_all(dev_tools_dir)?;
     std::fs::create_dir_all(bin_dir)?;
 
-    log_into_github()?;
-
-    curl_install(
-        "https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rust-analyzer-aarch64-apple-darwin.gz",
-        OutputOption::UnpackVia(Command::new("zcat"), &format!("{bin_dir}/rust-analyzer"))
-    )?;
-
-    // get_bin_via_curl(
-    //     "https://github.com/tamasfe/taplo/releases/latest/download/taplo-full-darwin-aarch64.gz",
-    //     OutputOption::UnpackVia(Command::new("zcat"), &format!("{bin_dir}/taplo")),
+    // log_into_github()?;
+    //
+    // curl_install(
+    //     "https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rust-analyzer-aarch64-apple-darwin.gz",
+    //     OutputOption::UnpackVia(Command::new("zcat"), &format!("{bin_dir}/rust-analyzer"))
+    // )?;
+    //
+    // // get_bin_via_curl(
+    // //     "https://github.com/tamasfe/taplo/releases/latest/download/taplo-full-darwin-aarch64.gz",
+    // //     OutputOption::UnpackVia(Command::new("zcat"), &format!("{bin_dir}/taplo")),
+    // // )?;
+    //
+    // let repo = "hashicorp/terraform-ls";
+    // let latest_release = &get_latest_release(repo)?[1..];
+    // curl_install(
+    //     &format!("https://releases.hashicorp.com/terraform-ls/{latest_release}/terraform-ls_{latest_release}_darwin_arm64.zip"),
+    //     OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir])),
+    // )?;
+    //
+    // let repo = "tekumara/typos-vscode";
+    // let latest_release = get_latest_release(repo)?;
+    // curl_install(
+    //     &format!("https://github.com/{repo}/releases/download/{latest_release}/typos-lsp-{latest_release}-aarch64-apple-darwin.tar.gz"),
+    //     OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir])),
+    // )?;
+    //
+    // let repo = "errata-ai/vale";
+    // let latest_release = get_latest_release(repo)?;
+    // curl_install(
+    //     &format!("https://github.com/{repo}/releases/download/{latest_release}/vale_{}_macOS_arm64.tar.gz", latest_release[1..].to_owned()),
+    //     OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir])),
+    // )?;
+    //
+    // curl_install(
+    //     "https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Darwin-x86_64",
+    //     OutputOption::WriteTo(&format!("{bin_dir}/hadolint")),
+    // )?;
+    //
+    // curl_install(
+    //     "https://github.com/mrjosh/helm-ls/releases/latest/download/helm_ls_darwin_amd64",
+    //     OutputOption::WriteTo(&format!("{bin_dir}/helm_ls")),
+    // )?;
+    //
+    // curl_install(
+    //     "https://github.com/artempyanykh/marksman/releases/latest/download/marksman-macos",
+    //     OutputOption::WriteTo(&format!("{bin_dir}/marksman")),
+    // )?;
+    //
+    // let tool = "shellcheck";
+    // let repo = format!("koalaman/{tool}");
+    // let latest_release = get_latest_release(&repo)?;
+    // curl_install(
+    //     &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}.darwin.x86_64.tar.xz"),
+    //     OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", "/tmp"])),
+    // )?;
+    // let exit_status = Command::new("mv")
+    //     .args([&format!("/tmp/{tool}-{latest_release}/{tool}"), bin_dir])
+    //     .status()?;
+    // if !exit_status.success() {
+    //     bail!("error moving /tmp/{tool} to {bin_dir}")
+    // }
+    //
+    // let tool = "elixir-ls";
+    // let repo = format!("elixir-lsp/{tool}");
+    // let dev_tools_repo_dir = format!("{dev_tools_dir}/{tool}");
+    // let latest_release = get_latest_release(&repo)?;
+    // std::fs::create_dir_all(&dev_tools_repo_dir)?;
+    // curl_install(
+    //     &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}.zip"),
+    //     OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &dev_tools_repo_dir])),
+    // )?;
+    // chmod_x(&format!("{dev_tools_repo_dir}/*"))?;
+    // let exit_status = Command::new("ln")
+    //     .args([
+    //         "-sf",
+    //         &format!("{dev_tools_repo_dir}/language_server.sh"),
+    //         &format!("{bin_dir}/elixir-ls"),
+    //     ])
+    //     .status()?;
+    // if !exit_status.success() {
+    //     bail!("error symlinking {dev_tools_repo_dir}/language_server.sh to {bin_dir}/elixir-ls")
+    // }
+    //
+    // // No `bin` link as it requires some local stuff so, leave the garbage in `dev-tools` and configure the LSP to point to
+    // // the `bin` there.
+    // let tool = "lua-language-server";
+    // let repo = format!("LuaLS/{tool}");
+    // let dev_tools_repo_dir = format!("{dev_tools_dir}/{tool}");
+    // let latest_release = get_latest_release(&repo)?;
+    // std::fs::create_dir_all(&dev_tools_repo_dir)?;
+    // curl_install(
+    //     &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}-darwin-arm64.tar.gz"),
+    //     OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &dev_tools_repo_dir])),
     // )?;
 
-    let repo = "hashicorp/terraform-ls";
-    let latest_release = &get_latest_release(repo)?[1..];
-    curl_install(
-        &format!("https://releases.hashicorp.com/terraform-ls/{latest_release}/terraform-ls_{latest_release}_darwin_arm64.zip"),
-        OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir])),
+    composer_install(
+        dev_tools_dir,
+        "phpactor",
+        "phpactor/phpactor",
+        bin_dir,
+        "phpactor",
     )?;
 
-    let repo = "tekumara/typos-vscode";
-    let latest_release = get_latest_release(repo)?;
-    curl_install(
-        &format!("https://github.com/{repo}/releases/download/{latest_release}/typos-lsp-{latest_release}-aarch64-apple-darwin.tar.gz"),
-        OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir])),
+    composer_install(
+        dev_tools_dir,
+        "php-cs-fixer",
+        "friendsofphp/php-cs-fixer",
+        bin_dir,
+        "php-cs-fixer",
     )?;
 
-    let repo = "errata-ai/vale";
-    let latest_release = get_latest_release(repo)?;
-    curl_install(
-        &format!("https://github.com/{repo}/releases/download/{latest_release}/vale_{}_macOS_arm64.tar.gz", latest_release[1..].to_owned()),
-        OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir])),
-    )?;
-
-    curl_install(
-        "https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Darwin-x86_64",
-        OutputOption::WriteTo(&format!("{bin_dir}/hadolint")),
-    )?;
-
-    curl_install(
-        "https://github.com/mrjosh/helm-ls/releases/latest/download/helm_ls_darwin_amd64",
-        OutputOption::WriteTo(&format!("{bin_dir}/helm_ls")),
-    )?;
-
-    curl_install(
-        "https://github.com/artempyanykh/marksman/releases/latest/download/marksman-macos",
-        OutputOption::WriteTo(&format!("{bin_dir}/marksman")),
-    )?;
-
-    let tool = "shellcheck";
-    let repo = format!("koalaman/{tool}");
-    let latest_release = get_latest_release(&repo)?;
-    curl_install(
-        &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}.darwin.x86_64.tar.xz"),
-        OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", "/tmp"])),
-    )?;
-    let exit_status = Command::new("mv")
-        .args([&format!("/tmp/{tool}-{latest_release}/{tool}"), bin_dir])
-        .status()?;
-    if !exit_status.success() {
-        bail!("error moving /tmp/{tool} to {bin_dir}")
-    }
-
-    let tool = "elixir-ls";
-    let repo = format!("elixir-lsp/{tool}");
-    let dev_tools_repo_dir = format!("{dev_tools_dir}/{tool}");
-    let latest_release = get_latest_release(&repo)?;
-    std::fs::create_dir_all(&dev_tools_repo_dir)?;
-    curl_install(
-        &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}.zip"),
-        OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &dev_tools_repo_dir])),
-    )?;
-    chmod_x(&format!("{dev_tools_repo_dir}/*"))?;
-    let exit_status = Command::new("ln")
-        .args([
-            "-sf",
-            &format!("{dev_tools_repo_dir}/language_server.sh"),
-            &format!("{bin_dir}/elixir-ls"),
-        ])
-        .status()?;
-    if !exit_status.success() {
-        bail!("error symlinking {dev_tools_repo_dir}/language_server.sh to {bin_dir}/elixir-ls")
-    }
-
-    // No `bin` link as it requires some local stuff so, leave the garbage in `dev-tools` and configure the LSP to point to
-    // the `bin` there.
-    let tool = "lua-language-server";
-    let repo = format!("LuaLS/{tool}");
-    let dev_tools_repo_dir = format!("{dev_tools_dir}/{tool}");
-    let latest_release = get_latest_release(&repo)?;
-    std::fs::create_dir_all(&dev_tools_repo_dir)?;
-    curl_install(
-        &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}-darwin-arm64.tar.gz"),
-        OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &dev_tools_repo_dir])),
-    )?;
+    composer_install(dev_tools_dir, "psalm", "vimeo/psalm", bin_dir, "*")?;
 
     chmod_x(&format!("{bin_dir}/*"))?;
 
@@ -208,6 +226,38 @@ fn curl_install(url: &str, output_option: OutputOption) -> anyhow::Result<()> {
             bail!("error getting bin via cmd {curl_cmd:?}, exit status: {exit_status:?}")
         }
     }
+}
+
+fn composer_install(
+    dev_tools_dir: &str,
+    tool: &str,
+    package: &str,
+    bin_dir: &str,
+    bin: &str,
+) -> anyhow::Result<()> {
+    let dev_tools_repo_dir = format!("{dev_tools_dir}/{tool}");
+
+    std::fs::create_dir_all(&dev_tools_repo_dir)?;
+
+    Command::new("composer")
+        .args([
+            "require",
+            "--dev",
+            "--working-dir",
+            &dev_tools_repo_dir,
+            package,
+        ])
+        .status()?;
+
+    Command::new("sh")
+        .args([
+            "-c",
+            &format!("ln -sf {dev_tools_repo_dir}/vendor/bin/{bin} {bin_dir}"),
+        ])
+        .spawn()?
+        .wait()?;
+
+    Ok(())
 }
 
 // Yes, `dir` is a `&str` and it's not sanitized but...I'm the alpha & the omega here!
