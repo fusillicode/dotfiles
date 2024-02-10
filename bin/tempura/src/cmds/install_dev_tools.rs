@@ -245,7 +245,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         "sqlfluff",
     )?;
 
-    // chmod_x(&format!("{bin_dir}/*"))?;
+    chmod_x(&format!("{bin_dir}/*"))?;
 
     Ok(())
 }
