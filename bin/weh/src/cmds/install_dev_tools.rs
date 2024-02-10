@@ -91,12 +91,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}.zip"),
         OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &dev_tools_repo_dir])),
     )?;
-    let exit_status = Command::new("sh")
-        .args(["-c", &format!("chmod +x {dev_tools_repo_dir}/*")])
-        .status()?;
-    if !exit_status.success() {
-        bail!("error setting executable permission for to {dev_tools_repo_dir}/*")
-    }
+    chmod_x(&format!("{dev_tools_repo_dir}/*"))?;
     let exit_status = Command::new("ln")
         .args([
             "-sf",
@@ -108,12 +103,19 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         bail!("error symlinking {dev_tools_repo_dir}/language_server.sh to {bin_dir}/elixir-ls")
     }
 
-    let exit_status = Command::new("sh")
-        .args(["-c", &format!("chmod +x {bin_dir}/*")])
-        .status()?;
-    if !exit_status.success() {
-        bail!("error setting executable permission to {bin_dir}")
-    }
+    // No `bin` link as it requires some local stuff so, leave the garbage in `dev-tools` and configure the LSP to point to
+    // the `bin` there.
+    let tool = "lua-language-server";
+    let repo = format!("LuaLS/{tool}");
+    let dev_tools_repo_dir = format!("{dev_tools_dir}/{tool}");
+    let latest_release = get_latest_release(&repo)?;
+    std::fs::create_dir_all(&dev_tools_repo_dir)?;
+    get_bin_via_curl(
+        &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}-darwin-arm64.tar.gz"),
+        OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &dev_tools_repo_dir])),
+    )?;
+
+    chmod_x(&format!("{bin_dir}/*"))?;
 
     Ok(())
 }
@@ -206,4 +208,14 @@ fn get_bin_via_curl(url: &str, output_option: OutputOption) -> anyhow::Result<()
             bail!("error getting bin via cmd {curl_cmd:?}, exit status: {exit_status:?}")
         }
     }
+}
+
+fn chmod_x(dir: &str) -> anyhow::Result<()> {
+    let exit_status = Command::new("sh")
+        .args(["-c", &format!("chmod +x {dir}")])
+        .status()?;
+    if !exit_status.success() {
+        bail!("error setting executable permission to {dir}")
+    }
+    Ok(())
 }
