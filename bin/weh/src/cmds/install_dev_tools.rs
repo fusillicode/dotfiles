@@ -210,6 +210,7 @@ fn get_bin_via_curl(url: &str, output_option: OutputOption) -> anyhow::Result<()
     }
 }
 
+// Yes, `dir` is a `&str` and it's not sanitized but...I'm the alpha & the omega here!
 fn chmod_x(dir: &str) -> anyhow::Result<()> {
     let exit_status = Command::new("sh")
         .args(["-c", &format!("chmod +x {dir}")])
