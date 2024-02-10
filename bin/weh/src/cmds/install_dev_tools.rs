@@ -22,7 +22,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
 
     log_into_github()?;
 
-    get_bin_via_curl(
+    curl_install(
         "https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rust-analyzer-aarch64-apple-darwin.gz",
         OutputOption::UnpackVia(Command::new("zcat"), &format!("{bin_dir}/rust-analyzer"))
     )?;
@@ -34,36 +34,36 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
 
     let repo = "hashicorp/terraform-ls";
     let latest_release = &get_latest_release(repo)?[1..];
-    get_bin_via_curl(
+    curl_install(
         &format!("https://releases.hashicorp.com/terraform-ls/{latest_release}/terraform-ls_{latest_release}_darwin_arm64.zip"),
         OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir])),
     )?;
 
     let repo = "tekumara/typos-vscode";
     let latest_release = get_latest_release(repo)?;
-    get_bin_via_curl(
+    curl_install(
         &format!("https://github.com/{repo}/releases/download/{latest_release}/typos-lsp-{latest_release}-aarch64-apple-darwin.tar.gz"),
         OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir])),
     )?;
 
     let repo = "errata-ai/vale";
     let latest_release = get_latest_release(repo)?;
-    get_bin_via_curl(
+    curl_install(
         &format!("https://github.com/{repo}/releases/download/{latest_release}/vale_{}_macOS_arm64.tar.gz", latest_release[1..].to_owned()),
         OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir])),
     )?;
 
-    get_bin_via_curl(
+    curl_install(
         "https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Darwin-x86_64",
         OutputOption::WriteTo(&format!("{bin_dir}/hadolint")),
     )?;
 
-    get_bin_via_curl(
+    curl_install(
         "https://github.com/mrjosh/helm-ls/releases/latest/download/helm_ls_darwin_amd64",
         OutputOption::WriteTo(&format!("{bin_dir}/helm_ls")),
     )?;
 
-    get_bin_via_curl(
+    curl_install(
         "https://github.com/artempyanykh/marksman/releases/latest/download/marksman-macos",
         OutputOption::WriteTo(&format!("{bin_dir}/marksman")),
     )?;
@@ -71,7 +71,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
     let tool = "shellcheck";
     let repo = format!("koalaman/{tool}");
     let latest_release = get_latest_release(&repo)?;
-    get_bin_via_curl(
+    curl_install(
         &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}.darwin.x86_64.tar.xz"),
         OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", "/tmp"])),
     )?;
@@ -87,7 +87,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
     let dev_tools_repo_dir = format!("{dev_tools_dir}/{tool}");
     let latest_release = get_latest_release(&repo)?;
     std::fs::create_dir_all(&dev_tools_repo_dir)?;
-    get_bin_via_curl(
+    curl_install(
         &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}.zip"),
         OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &dev_tools_repo_dir])),
     )?;
@@ -110,7 +110,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
     let dev_tools_repo_dir = format!("{dev_tools_dir}/{tool}");
     let latest_release = get_latest_release(&repo)?;
     std::fs::create_dir_all(&dev_tools_repo_dir)?;
-    get_bin_via_curl(
+    curl_install(
         &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}-darwin-arm64.tar.gz"),
         OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &dev_tools_repo_dir])),
     )?;
@@ -164,7 +164,7 @@ enum OutputOption<'a> {
     WriteTo(&'a str),
 }
 
-fn get_bin_via_curl(url: &str, output_option: OutputOption) -> anyhow::Result<()> {
+fn curl_install(url: &str, output_option: OutputOption) -> anyhow::Result<()> {
     let mut curl_cmd = Command::new("curl");
     curl_cmd.args(["-SL", url]);
 
