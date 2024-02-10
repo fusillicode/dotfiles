@@ -6,7 +6,11 @@ return {
     lint.linters_by_ft = {
       dockerfile = { 'hadolint', },
       elixir = { 'credo', },
+      javascript = { 'eslint_d', },
       markdown = { 'vale', },
+      sql = { 'sqlfluff', },
+      typescript = { 'eslint_d', },
+      typescriptreact = { 'eslint_d', },
     }
 
     vim.api.nvim_create_autocmd('BufWritePost', {
