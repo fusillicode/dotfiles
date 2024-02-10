@@ -51,10 +51,10 @@ return {
       fzf_colors = {
         ['fg']      = { 'fg', 'StatusLine', },
         ['bg']      = { 'bg', 'Normal', },
-        ['hl']      = { 'fg', 'Number', },
+        ['hl']      = { 'bg', 'IncSearch', },
         ['fg+']     = { 'fg', 'Normal', },
         ['bg+']     = { 'bg', 'CursorLine', },
-        ['hl+']     = { 'fg', 'Number', },
+        ['hl+']     = { 'bg', 'IncSearch', },
         ['info']    = { 'fg', 'Keyword', },
         ['prompt']  = { 'fg', 'Keyword', },
         ['pointer'] = { 'bg', 'CursorLine', },
@@ -67,7 +67,8 @@ return {
         preview = {
           default = 'builtin',
           layout = 'vertical',
-          title = false,
+          title = true,
+          title_pos = 'left',
         },
       },
       defaults = {
