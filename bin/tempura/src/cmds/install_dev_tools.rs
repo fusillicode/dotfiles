@@ -132,112 +132,128 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
     // )?;
     //
     // composer_install(dev_tools_dir, "psalm", "vimeo/psalm", bin_dir, "*")?;
+    //
+    // npm_install(
+    //     dev_tools_dir,
+    //     "commitlint",
+    //     &["@commitlint/cli", "@commitlint/config-conventional"],
+    //     bin_dir,
+    //     "commitlint",
+    // )?;
+    //
+    // npm_install(
+    //     dev_tools_dir,
+    //     "elm-language-server",
+    //     &["@elm-tooling/elm-language-server"],
+    //     bin_dir,
+    //     "elm-language-server",
+    // )?;
+    //
+    // npm_install(
+    //     dev_tools_dir,
+    //     "compose-language-service",
+    //     &["@microsoft/compose-language-service"],
+    //     bin_dir,
+    //     "docker-compose-langserver",
+    // )?;
+    //
+    // npm_install(
+    //     dev_tools_dir,
+    //     "bash-language-server",
+    //     &["bash-language-server"],
+    //     bin_dir,
+    //     "bash-language-server",
+    // )?;
+    //
+    // npm_install(
+    //     dev_tools_dir,
+    //     "dockerfile-language-server-nodejs",
+    //     &["dockerfile-language-server-nodejs"],
+    //     bin_dir,
+    //     "docker-langserver",
+    // )?;
+    //
+    // npm_install(
+    //     dev_tools_dir,
+    //     "eslint_d",
+    //     &["eslint_d"],
+    //     bin_dir,
+    //     "eslint_d",
+    // )?;
+    //
+    // npm_install(
+    //     dev_tools_dir,
+    //     "graphql-language-service-cli",
+    //     &["graphql-language-service-cli"],
+    //     bin_dir,
+    //     "graphql-lsp",
+    // )?;
+    //
+    // npm_install(
+    //     dev_tools_dir,
+    //     "prettierd",
+    //     &["@fsouza/prettierd"],
+    //     bin_dir,
+    //     "prettierd",
+    // )?;
+    //
+    // npm_install(
+    //     dev_tools_dir,
+    //     "sql-language-server",
+    //     &["sql-language-server"],
+    //     bin_dir,
+    //     "sql-language-server",
+    // )?;
+    //
+    // npm_install(
+    //     dev_tools_dir,
+    //     "vscode-langservers-extracted",
+    //     &["vscode-langservers-extracted"],
+    //     bin_dir,
+    //     "*",
+    // )?;
+    //
+    // npm_install(
+    //     dev_tools_dir,
+    //     "yaml-language-server",
+    //     &["yaml-language-server"],
+    //     bin_dir,
+    //     "yaml-language-server",
+    // )?;
+    //
+    // npm_install(
+    //     dev_tools_dir,
+    //     "typescript-language-server",
+    //     &["typescript-language-server", "typescript"],
+    //     bin_dir,
+    //     "typescript-language-server",
+    // )?;
+    //
+    // npm_install(
+    //     dev_tools_dir,
+    //     "quicktype",
+    //     &["quicktype"],
+    //     bin_dir,
+    //     "quicktype",
+    // )?;
 
-    npm_install(
+    pip_install(
         dev_tools_dir,
-        "commitlint",
-        &["@commitlint/cli", "@commitlint/config-conventional"],
+        "ruff-lsp",
+        &["ruff-lsp"],
         bin_dir,
-        "commitlint",
+        "ruff-lsp",
     )?;
 
-    npm_install(
+    pip_install(
         dev_tools_dir,
-        "elm-language-server",
-        &["@elm-tooling/elm-language-server"],
+        "sqlfluff",
+        &["sqlfluff"],
         bin_dir,
-        "elm-language-server",
+        "sqlfluff",
     )?;
 
-    npm_install(
-        dev_tools_dir,
-        "compose-language-service",
-        &["@microsoft/compose-language-service"],
-        bin_dir,
-        "docker-compose-langserver",
-    )?;
-
-    npm_install(
-        dev_tools_dir,
-        "bash-language-server",
-        &["bash-language-server"],
-        bin_dir,
-        "bash-language-server",
-    )?;
-
-    npm_install(
-        dev_tools_dir,
-        "dockerfile-language-server-nodejs",
-        &["dockerfile-language-server-nodejs"],
-        bin_dir,
-        "docker-langserver",
-    )?;
-
-    npm_install(
-        dev_tools_dir,
-        "eslint_d",
-        &["eslint_d"],
-        bin_dir,
-        "eslint_d",
-    )?;
-
-    npm_install(
-        dev_tools_dir,
-        "graphql-language-service-cli",
-        &["graphql-language-service-cli"],
-        bin_dir,
-        "graphql-lsp",
-    )?;
-
-    npm_install(
-        dev_tools_dir,
-        "prettierd",
-        &["@fsouza/prettierd"],
-        bin_dir,
-        "prettierd",
-    )?;
-
-    npm_install(
-        dev_tools_dir,
-        "sql-language-server",
-        &["sql-language-server"],
-        bin_dir,
-        "sql-language-server",
-    )?;
-
-    npm_install(
-        dev_tools_dir,
-        "vscode-langservers-extracted",
-        &["vscode-langservers-extracted"],
-        bin_dir,
-        "*",
-    )?;
-
-    npm_install(
-        dev_tools_dir,
-        "yaml-language-server",
-        &["yaml-language-server"],
-        bin_dir,
-        "yaml-language-server",
-    )?;
-
-    npm_install(
-        dev_tools_dir,
-        "typescript-language-server",
-        &["typescript-language-server", "typescript"],
-        bin_dir,
-        "typescript-language-server",
-    )?;
-
-    npm_install(
-        dev_tools_dir,
-        "quicktype",
-        &["quicktype"],
-        bin_dir,
-        "quicktype",
-    )?;
-
-    chmod_x(&format!("{bin_dir}/*"))?;
+    // chmod_x(&format!("{bin_dir}/*"))?;
 
     Ok(())
 }
@@ -389,6 +405,40 @@ fn npm_install(
         .args([
             "-c",
             &format!("ln -sf {dev_tools_repo_dir}/node_modules/.bin/{bin} {bin_dir}"),
+        ])
+        .spawn()?
+        .wait()?;
+
+    Ok(())
+}
+
+fn pip_install(
+    dev_tools_dir: &str,
+    tool: &str,
+    packages: &[&str],
+    bin_dir: &str,
+    bin: &str,
+) -> anyhow::Result<()> {
+    let dev_tools_repo_dir = format!("{dev_tools_dir}/{tool}");
+
+    std::fs::create_dir_all(&dev_tools_repo_dir)?;
+
+    Command::new("python3")
+        .args(["-m", "venv", &format!("{dev_tools_repo_dir}/.venv")])
+        .spawn()?
+        .wait()?;
+
+    Command::new("sh")
+        .args([
+            "-c",
+            &format!(
+                r#"
+                    source {dev_tools_repo_dir}/.venv/bin/activate && \
+                    pip install pip {packages} --upgrade  && \
+                    ln -sf {dev_tools_repo_dir}/.venv/bin/{bin} {bin_dir}
+                "#,
+                packages = packages.join(" "),
+            ),
         ])
         .spawn()?
         .wait()?;
