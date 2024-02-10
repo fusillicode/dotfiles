@@ -79,7 +79,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         .args([&format!("/tmp/{tool}-{latest_release}/{tool}"), bin_dir])
         .status()?;
     if !exit_status.success() {
-        bail!("error setting moving /tmp/{tool} to {bin_dir}")
+        bail!("error moving /tmp/{tool} to {bin_dir}")
     }
 
     let tool = "elixir-ls";
