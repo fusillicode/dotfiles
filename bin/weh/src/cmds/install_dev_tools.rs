@@ -11,11 +11,11 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
     let dev_tools_dir = args
         .next()
         .ok_or_else(|| anyhow!("missing dev_tools_dir arg from {args:?}"))?
-        .trim_end_matches("/");
+        .trim_end_matches('/');
     let bin_dir = args
         .next()
         .ok_or_else(|| anyhow!("missing bin_dir arg from {args:?}"))?
-        .trim_end_matches("/");
+        .trim_end_matches('/');
 
     std::fs::create_dir_all(dev_tools_dir)?;
     std::fs::create_dir_all(bin_dir)?;
