@@ -148,11 +148,10 @@ export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl/lib/pkgconfig"
 eval "$(mise activate zsh)"
 
 # Helix from the source! 😎
-export HELIX_RUNTIME=~/helix/runtime 
+export HELIX_RUNTIME=~/helix/runtime
 
 # 🥲 https://wezfurlong.org/wezterm/faq.html#how-do-i-enable-undercurl-curly-underlines
 export TERM=wezterm
 
-# My local `~/bin` "stuff" :P
-export PATH=$HOME/bin:$PATH
+# My bins
 export PATH=$HOME/.local/bin:$PATH

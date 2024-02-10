@@ -59,9 +59,6 @@ keymap_set('n', '>', '>>')
 keymap_set('n', '<', '<<')
 keymap_set({ 'n', 'v', }, 'U', '<c-r>')
 
-keymap_set('n', '<c-j>', '<c-down>', { remap = true, })
-keymap_set('n', '<c-k>', '<c-up>', { remap = true, })
-
 keymap_set({ 'n', 'v', }, '<leader><leader>', ':silent :w!<cr>')
 keymap_set({ 'n', 'v', }, '<leader>x', ':bd<cr>')
 keymap_set({ 'n', 'v', }, '<leader>X', ':bd!<cr>')
@@ -72,18 +69,9 @@ keymap_set({ 'n', 'v', }, '<leader>Q', ':q!<cr>')
 
 keymap_set({ 'n', 'v', }, '<c-e>', ':luafile %<cr>')
 keymap_set({ 'n', 'v', }, '<c-a>', 'ggVG')
-keymap_set({ 'n', 'v', }, '<c-s>', ':set wrap!<cr>')
+keymap_set({ 'n', 'v', }, '<c-w>', ':set wrap!<cr>')
 keymap_set('n', '<esc>', require('utils').normal_esc)
 keymap_set('v', '<esc>', require('utils').visual_esc, { expr = true, })
-
-keymap_set('i', "'", "''<left>")
-keymap_set('i', '"', '""<left>')
-keymap_set('i', '(', '()<left>')
-keymap_set('i', '[', '[]<left>')
-keymap_set('i', '{', '{}<left>')
-keymap_set('i', '<', '<><left>')
-keymap_set('i', '`', '``<left>')
-keymap_set('i', '{;', '{};<left><left>')
 
 keymap_set('n', 'dp', vim.diagnostic.goto_prev)
 keymap_set('n', 'dn', vim.diagnostic.goto_next)
@@ -124,4 +112,19 @@ vim.api.nvim_create_autocmd('TextYankPost', {
 vim.api.nvim_create_autocmd('FocusLost', {
   group = vim.api.nvim_create_augroup('AutosaveBuffers', { clear = true, }),
   command = ':silent! wa!',
+})
+
+-- https://vinnymeller.com/posts/neovim_nightly_inlay_hints/#globally
+vim.api.nvim_create_autocmd('LspAttach', {
+  group = vim.api.nvim_create_augroup('LspAttachInlayHints', { clear = true, }),
+  callback = function(args)
+    if not (args.data and args.data.client_id) then
+      return
+    end
+
+    local client = vim.lsp.get_client_by_id(args.data.client_id)
+    if client.server_capabilities.inlayHintProvider then
+      vim.lsp.inlay_hint.enable(args.buf, true)
+    end
+  end,
 })

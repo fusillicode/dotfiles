@@ -23,13 +23,15 @@ install_python_bin() {
     ln -sf "$tool_dir"/.venv/bin/"$2" "$3"
 }
 
-gh auth login
+if ! gh auth status; then
+  gh auth login
+fi
 
 curl -SL https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rust-analyzer-aarch64-apple-darwin.gz | \
-  gunzip -c - > "$bin_dir"/rust-analyzer
+  zcat > "$bin_dir"/rust-analyzer
 
-curl -SL https://github.com/tamasfe/taplo/releases/latest/download/taplo-full-darwin-aarch64.gz | \
-  gunzip -c - > "$bin_dir"/taplo
+# curl -SL https://github.com/tamasfe/taplo/releases/latest/download/taplo-full-darwin-aarch64.gz | \
+#   zcat > "$bin_dir"/taplo
 
 latest_release=$(get_latest_release "hashicorp/terraform-ls" | cut -c2-)
 curl -SL https://releases.hashicorp.com/terraform-ls/"$latest_release"/terraform-ls_"$latest_release"_darwin_arm64.zip | \
@@ -40,9 +42,14 @@ latest_release=$(get_latest_release $repo)
 curl -SL https://github.com/"$repo"/releases/download/"$latest_release"/typos-lsp-"$latest_release"-aarch64-apple-darwin.tar.gz | \
   tar -xz -C "$bin_dir"
 
+repo="errata-ai/vale"
+latest_release=$(get_latest_release $repo)
+curl -SL https://github.com/"$repo"/releases/download/"$latest_release"/vale_"$(echo "$latest_release" | cut -c2-)"_macOS_arm64.tar.gz | \
+  tar -xz -C "$bin_dir"
+
 curl -SL https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Darwin-x86_64 --output "$bin_dir"/hadolint
 curl -SL https://github.com/mrjosh/helm-ls/releases/latest/download/helm_ls_darwin_amd64 --output "$bin_dir"/helm_ls
-curl -SL https://github.com/artempyanykh/marksman/releases/latest/download/marksman-macos --output "$bin_dir"/marksmam
+curl -SL https://github.com/artempyanykh/marksman/releases/latest/download/marksman-macos --output "$bin_dir"/marksman
 
 tool="shellcheck"
 repo="koalaman/$tool"
@@ -118,13 +125,17 @@ mkdir -p "$dev_tools_dir"/dockerfile-language-server-nodejs && \
   npm install --silent --prefix "$_" dockerfile-language-server-nodejs && \
   ln -sf "$dev_tools_dir"/dockerfile-language-server-nodejs/node_modules/.bin/docker-langserver "$bin_dir"
 
+mkdir -p "$dev_tools_dir"/eslint_d && \
+  npm install --silent --prefix "$_" eslint_d && \
+  ln -sf "$dev_tools_dir"/eslint_d/node_modules/.bin/eslint_d "$bin_dir"
+
 mkdir -p "$dev_tools_dir"/graphql-language-service-cli && \
   npm install --silent --prefix "$_" graphql-language-service-cli && \
   ln -sf "$dev_tools_dir"/graphql-language-service-cli/node_modules/.bin/graphql-lsp "$bin_dir"
 
-mkdir -p "$dev_tools_dir"/prettier && \
-  npm install --silent --prefix "$_" prettier && \
-  ln -sf "$dev_tools_dir"/prettier/node_modules/.bin/prettier "$bin_dir"
+mkdir -p "$dev_tools_dir"/prettierd && \
+  npm install --silent --prefix "$_" @fsouza/prettierd && \
+  ln -sf "$dev_tools_dir"/prettierd/node_modules/.bin/prettierd "$bin_dir"
 
 mkdir -p "$dev_tools_dir"/sql-language-server && \
   npm install --silent --prefix "$_" sql-language-server && \
@@ -138,6 +149,16 @@ mkdir -p "$dev_tools_dir"/yaml-language-server && \
   npm install --silent --prefix "$_" yaml-language-server && \
   ln -sf "$dev_tools_dir"/yaml-language-server/node_modules/.bin/yaml-language-server "$bin_dir"
 
+mkdir -p "$dev_tools_dir"/typescript-language-server && \
+  npm install --silent --prefix "$_" typescript-language-server typescript && \
+  ln -sf "$dev_tools_dir"/typescript-language-server/node_modules/.bin/typescript-language-server "$bin_dir"
+
+mkdir -p "$dev_tools_dir"/quicktype && \
+  npm install --silent --prefix "$_" quicktype && \
+  ln -sf "$dev_tools_dir"/quicktype/node_modules/.bin/quicktype "$bin_dir"
+
 install_python_bin "$dev_tools_dir" ruff-lsp "$bin_dir"
+
+install_python_bin "$dev_tools_dir" sqlfluff "$bin_dir"
 
 chmod +x "$bin_dir"/*

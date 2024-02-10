@@ -17,6 +17,7 @@ return {
         'dockerfile',
         'elixir',
         'elm',
+        'gitcommit',
         'graphql',
         'html',
         'javascript',

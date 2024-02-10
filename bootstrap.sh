@@ -51,7 +51,6 @@ brew install slack
 brew install telegram
 brew install the-unarchiver
 brew install transmission --cask
-brew install tunnelblick
 brew install vlc
 brew install wez/wezterm/wezterm-nightly --cask --no-quarantine
 # 🥲 https://wezfurlong.org/wezterm/faq.html#how-do-i-enable-undercurl-curly-underlines
