@@ -409,6 +409,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "tempura"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "fake",
+ "serde",
+ "serde_json",
+ "strip-ansi-escapes",
+ "temp-env",
+ "url",
+]
+
+[[package]]
 name = "tinyvec"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -487,19 +500,6 @@ name = "wasi"
 version = "0.11.0+wasi-snapshot-preview1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
-
-[[package]]
-name = "weh"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "fake",
- "serde",
- "serde_json",
- "strip-ansi-escapes",
- "temp-env",
- "url",
-]
 
 [[package]]
 name = "windows-targets"
