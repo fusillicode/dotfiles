@@ -1,5 +1,5 @@
 [package]
-name = "weh"
+name = "tempura"
 version = "0.1.0"
 authors = ["Gian Lu"]
 edition = "2021"
@@ -8,7 +8,6 @@ edition = "2021"
 anyhow = { version = "1.0.79", features = ["backtrace"] }
 serde = { version = "1.0.196", features = ["derive"] }
 serde_json = "1.0.113"
-strip-ansi-escapes = { version = "0.2.0" }
 url = { version = "2.5.0", features = ["serde"] }
 
 [dev-dependencies]
