@@ -115,6 +115,24 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &dev_tools_repo_dir])),
     )?;
 
+    composer_install(
+        dev_tools_dir,
+        "phpactor",
+        "phpactor/phpactor",
+        bin_dir,
+        "phpactor",
+    )?;
+
+    composer_install(
+        dev_tools_dir,
+        "php-cs-fixer",
+        "friendsofphp/php-cs-fixer",
+        bin_dir,
+        "php-cs-fixer",
+    )?;
+
+    composer_install(dev_tools_dir, "psalm", "vimeo/psalm", bin_dir, "*")?;
+
     chmod_x(&format!("{bin_dir}/*"))?;
 
     Ok(())
@@ -208,6 +226,39 @@ fn curl_install(url: &str, output_option: OutputOption) -> anyhow::Result<()> {
             bail!("error getting bin via cmd {curl_cmd:?}, exit status: {exit_status:?}")
         }
     }
+}
+
+fn composer_install(
+    dev_tools_dir: &str,
+    tool: &str,
+    package: &str,
+    bin_dir: &str,
+    bin: &str,
+) -> anyhow::Result<()> {
+    let dev_tools_repo_dir = format!("{dev_tools_dir}/{tool}");
+
+    std::fs::create_dir_all(&dev_tools_repo_dir)?;
+
+    Command::new("composer")
+        .args([
+            "require",
+            "--dev",
+            "--working-dir",
+            &dev_tools_repo_dir,
+            // TODO: understand how to handle `> /dev/null`
+            package,
+        ])
+        .status()?;
+
+    Command::new("sh")
+        .args([
+            "-c",
+            &format!("ln -sf {dev_tools_repo_dir}/vendor/bin/{bin} {bin_dir}"),
+        ])
+        .spawn()?
+        .wait()?;
+
+    Ok(())
 }
 
 // Yes, `dir` is a `&str` and it's not sanitized but...I'm the alpha & the omega here!
