@@ -33,7 +33,7 @@ config.colors = {
   },
 }
 config.font = wezterm.font('Monaco')
-config.font_size = 16
+config.font_size = 17
 config.line_height = 1.2
 
 config.keys = {
