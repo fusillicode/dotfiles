@@ -86,7 +86,7 @@ KERL_CONFIGURE_OPTIONS="--without-javac --with-ssl=$(brew --prefix openssl)"
 export KERL_CONFIGURE_OPTIONS
 
 # Install ~/.dev_tools
-/bin/bash "${script_dir}/bin/tempura/target/release/tempura"
+./bin/tempura/target/release/tempura install-dev-tools ~/.dev-tools ~/.local/bin
 
 # Install Elixir libs
 mix local.hex
