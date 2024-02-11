@@ -27,10 +27,20 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         OutputOption::UnpackVia(Command::new("zcat"), &format!("{bin_dir}/rust-analyzer"))
     )?;
 
-    // get_bin_via_curl(
-    //     "https://github.com/tamasfe/taplo/releases/latest/download/taplo-full-darwin-aarch64.gz",
-    //     OutputOption::UnpackVia(Command::new("zcat"), &format!("{bin_dir}/taplo")),
-    // )?;
+    // Installing with `cargo` because:
+    // 1. no particular requirements
+    // 2. https://github.com/tamasfe/taplo/issues/542
+    Command::new("cargo")
+        .args(&[
+            "install",
+            "taplo-cli",
+            "--force",
+            "--all-features",
+            "--root",
+            // `--root` automatically append `bin` 🥲
+            bin_dir.trim_end_matches("bin"),
+        ])
+        .status()?;
 
     let repo = "hashicorp/terraform-ls";
     let latest_release = &get_latest_release(repo)?[1..];
