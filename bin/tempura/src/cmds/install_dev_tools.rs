@@ -118,7 +118,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
     composer_install(
         dev_tools_dir,
         "phpactor",
-        "phpactor/phpactor",
+        &["phpactor/phpactor"],
         bin_dir,
         "phpactor",
     )?;
@@ -126,12 +126,12 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
     composer_install(
         dev_tools_dir,
         "php-cs-fixer",
-        "friendsofphp/php-cs-fixer",
+        &["friendsofphp/php-cs-fixer"],
         bin_dir,
         "php-cs-fixer",
     )?;
 
-    composer_install(dev_tools_dir, "psalm", "vimeo/psalm", bin_dir, "*")?;
+    composer_install(dev_tools_dir, "psalm", &["vimeo/psalm"], bin_dir, "*")?;
 
     npm_install(
         dev_tools_dir,
@@ -343,7 +343,7 @@ fn curl_install(url: &str, output_option: OutputOption) -> anyhow::Result<()> {
 fn composer_install(
     dev_tools_dir: &str,
     tool: &str,
-    package: &str,
+    packages: &[&str],
     bin_dir: &str,
     bin: &str,
 ) -> anyhow::Result<()> {
@@ -352,13 +352,13 @@ fn composer_install(
     std::fs::create_dir_all(&dev_tools_repo_dir)?;
 
     Command::new("composer")
-        .args([
-            "require",
-            "--dev",
-            "--working-dir",
-            &dev_tools_repo_dir,
-            package,
-        ])
+        .args(
+            [
+                &["require", "--dev", "--working-dir", &dev_tools_repo_dir][..],
+                packages,
+            ]
+            .concat(),
+        )
         .status()?;
 
     Command::new("sh")
