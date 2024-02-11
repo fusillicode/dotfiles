@@ -27,7 +27,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         OutputOption::UnpackVia(Command::new("zcat"), &format!("{bin_dir}/rust-analyzer"))
     )?;
 
-    // Installing with `cargo` because:
+    // Installing with `cargo` because of:
     // 1. no particular requirements
     // 2. https://github.com/tamasfe/taplo/issues/542
     Command::new("cargo")
