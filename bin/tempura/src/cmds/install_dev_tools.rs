@@ -409,7 +409,7 @@ fn pip_install(
             &format!(
                 r#"
                     source {dev_tools_repo_dir}/.venv/bin/activate && \
-                    pip install pip {packages} --upgrade  && \
+                    pip install pip {packages} --upgrade && \
                     ln -sf {dev_tools_repo_dir}/.venv/bin/{bin} {bin_dir}
                 "#,
                 packages = packages.join(" "),
