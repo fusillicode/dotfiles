@@ -9,11 +9,16 @@ use anyhow::anyhow;
 pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Result<()> {
     let dev_tools_dir = args
         .next()
-        .ok_or_else(|| anyhow!("missing dev_tools_dir arg from {args:?}"))?
+        .ok_or_else(|| {
+            anyhow!(
+                "missing dev_tools_dir arg from {:?}",
+                args.collect::<Vec<_>>()
+            )
+        })?
         .trim_end_matches('/');
     let bin_dir = args
         .next()
-        .ok_or_else(|| anyhow!("missing bin_dir arg from {args:?}"))?
+        .ok_or_else(|| anyhow!("missing bin_dir arg from {:?}", args.collect::<Vec<_>>()))?
         .trim_end_matches('/');
 
     std::fs::create_dir_all(dev_tools_dir)?;
