@@ -3,7 +3,7 @@ return {
   priority = 1000,
   config = function()
     vim.g.bones_compat = 1
-    vim.cmd.colorscheme('rosebones')
+    vim.cmd.colorscheme('neobones')
 
     vim.api.nvim_set_hl(0, 'CursorLine', { bg = vim.api.nvim_get_hl(0, { name = 'StatusLine', }).bg, })
     vim.api.nvim_set_hl(0, 'ColorColumn', { link = 'StatusLine', })
