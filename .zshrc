@@ -97,6 +97,7 @@ fi
 # Example aliases
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
+source "$HOME/.zshenv"
 
 # `brew link imagemagick@6` suggestion ¯\_(ツ)_/¯
 export PATH="/usr/local/opt/imagemagick@6:$PATH"
