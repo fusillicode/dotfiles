@@ -19,8 +19,13 @@ return {
         ['*'] = { 'trim_whitespaces', 'trim_newlines', },
       },
       format_on_save = { timeout_ms = 500, lsp_fallback = true, },
+      -- https://github.com/stevearc/conform.nvim/blob/master/doc/recipes.md#lazy-loading-with-lazynvim
+      init = function()
+        vim.o.formatexpr = "v:lua.require'conform'.formatexpr()"
+      end,
     })
 
+    -- https://github.com/stevearc/conform.nvim/blob/master/doc/recipes.md#format-command
     vim.api.nvim_create_user_command('ConformAt', function(args)
       local range = nil
       if args.count ~= -1 then
