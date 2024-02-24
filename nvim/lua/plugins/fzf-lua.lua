@@ -33,8 +33,14 @@ return {
     keymap_set('n', '<leader>D', function() fzf_lua.diagnostics_workspace({ prompt = 'Workspace diagnostics: ', }) end)
 
     keymap_set('n', '<leader>/', function() fzf_lua.live_grep_glob({ prompt = 'rg: ', }) end)
-    keymap_set('n', '<leader>w', function() fzf_lua.grep_cword({ prompt = 'rgw: ', }) end)
-    keymap_set('v', '<leader>w', function() fzf_lua.grep_visual({ prompt = 'rgv: ', }) end)
+    keymap_set('n', '<leader>w', function()
+      local word = vim.fn.expand('<cword>')
+      if word then fzf_lua.live_grep_glob({ prompt = 'rg: ', query = word, }) end
+    end)
+    keymap_set('v', '<leader>w', function()
+      local selection = fzf_lua.utils.get_visual_selection()
+      if selection then fzf_lua.live_grep_glob({ prompt = 'rg: ', query = selection, }) end
+    end)
 
     local todo_comments_cfg = { search = 'TODO:|HACK:|PERF:|NOTE:|FIX:|FIXME:|WARN:', no_esc = true, }
     keymap_set('n', '<leader>t', function()
