@@ -110,6 +110,14 @@ return {
       grep = {
         rg_glob = true,
       },
+      diagnostics = {
+        signs = {
+          ['Error'] = { text = 'E', texthl = 'DiagnosticError', },
+          ['Warn']  = { text = 'W', texthl = 'DiagnosticWarn', },
+          ['Info']  = { text = 'I', texthl = 'DiagnosticInfo', },
+          ['Hint']  = { text = 'H', texthl = 'DiagnosticHint', },
+        },
+      },
     })
   end,
 }
