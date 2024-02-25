@@ -45,13 +45,15 @@ function M.draw()
     end
   end
 
+  local current_buffer_path = '%{expand("%:~:.")} %m %r'
+
   return (buffer_errors ~= 0 and '%#DiagnosticErrorStatusLine#' .. 'E:' .. buffer_errors .. ' ' or '')
       .. (buffer_warns ~= 0 and '%#DiagnosticWarnStatusLine#' .. 'W:' .. buffer_warns .. ' ' or '')
       .. (buffer_infos ~= 0 and '%#DiagnosticInfoStatusLine#' .. 'I:' .. buffer_infos .. ' ' or '')
       .. (buffer_hints ~= 0 and '%#DiagnosticHintStatusLine#' .. 'H:' .. buffer_hints .. ' ' or '')
       .. '%#StatusLine#'
       -- https://stackoverflow.com/a/45244610
-      .. '%{expand("%:~:.")} %m %r'
+      .. current_buffer_path
       .. '%='
       .. (workspace_errors ~= 0 and '%#DiagnosticErrorStatusLine#' .. 'E:' .. workspace_errors .. ' ' or '')
       .. (workspace_warns ~= 0 and '%#DiagnosticWarnStatusLine#' .. 'W:' .. workspace_warns .. ' ' or '')
