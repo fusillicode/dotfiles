@@ -62,7 +62,7 @@ return {
         ['bg+']     = { 'bg', 'CursorLine', },
         ['hl+']     = { 'bg', 'IncSearch', },
         ['info']    = { 'fg', 'Keyword', },
-        ['prompt']  = { 'fg', 'Keyword', },
+        ['prompt']  = { 'bg', 'IncSearch', },
         ['pointer'] = { 'bg', 'CursorLine', },
         ['marker']  = { 'fg', 'Keyword', },
         ['spinner'] = { 'fg', 'Label', },
