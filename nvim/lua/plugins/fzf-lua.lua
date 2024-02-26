@@ -109,6 +109,12 @@ return {
       },
       grep = {
         rg_glob = true,
+        rg_opts = '--column --line-number --no-heading --color=always --smart-case --max-columns=4096 ' ..
+            '--hidden --glob "!.git/*" --glob "!node_modules/*" --glob "!target/*" -e',
+      },
+      files = {
+        fd_opts = '--color=never --type f --hidden --follow --exclude .git ' ..
+            '--no-ignore-vcs --exclude target --exclude node_modules',
       },
       diagnostics = {
         signs = {
