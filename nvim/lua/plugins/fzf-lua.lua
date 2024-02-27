@@ -6,6 +6,7 @@ return {
     local fzf_lua = require('fzf-lua')
     local keymap_set = require('utils').keymap_set
 
+    keymap_set('n', '<leader>c', function() fzf_lua.commands() end)
     keymap_set('n', '<leader>f', function() fzf_lua.files({ prompt = 'Files: ', }) end)
     keymap_set('n', '<leader>b', function() fzf_lua.buffers({ prompt = 'Buffers: ', }) end)
 
@@ -24,6 +25,8 @@ return {
     keymap_set('n', 'gi', function()
       fzf_lua.lsp_implementations(vim.tbl_extend('error', { prompt = 'Implementations: ', }, lsp_jumps_cfg))
     end)
+
+    keymap_set('n', '<leader>j', function() fzf_lua.jumps() end)
 
     keymap_set('n', '<leader>s', function() fzf_lua.lsp_document_symbols({ prompt = 'Buffer symbols: ', }) end)
     keymap_set('n', '<leader>S', function() fzf_lua.lsp_live_workspace_symbols({ prompt = 'Workspace symbols: ', }) end)
@@ -115,6 +118,9 @@ return {
       files = {
         fd_opts = '--color=never --type f --hidden --follow --exclude .git ' ..
             '--no-ignore-vcs --exclude target --exclude node_modules',
+      },
+      commands = {
+        sort_lastused = true,
       },
       diagnostics = {
         signs = {
