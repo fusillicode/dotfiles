@@ -59,8 +59,6 @@ return {
       'max-perf',
       defaults = {
         cwd_prompt = false,
-        file_icons = false,
-        git_icons = false,
         no_header = true,
         fzf_opts = {
           ['--cycle'] = '',
