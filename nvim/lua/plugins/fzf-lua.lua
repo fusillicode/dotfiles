@@ -57,6 +57,16 @@ return {
 
     fzf_lua.setup({
       'max-perf',
+      defaults = {
+        cwd_prompt = false,
+        file_icons = false,
+        git_icons = false,
+        no_header = true,
+        fzf_opts = {
+          ['--cycle'] = '',
+          ['--info'] = 'inline',
+        },
+      },
       fzf_colors = {
         ['fg']      = { 'fg', 'StatusLine', },
         ['bg']      = { 'bg', 'Normal', },
@@ -72,24 +82,6 @@ return {
         ['header']  = { 'fg', 'Comment', },
         ['gutter']  = { 'bg', 'Normal', },
       },
-      winopts = {
-        preview = {
-          default = 'builtin',
-          layout = 'vertical',
-          title = true,
-          title_pos = 'left',
-        },
-      },
-      defaults = {
-        cwd_prompt = false,
-        file_icons = false,
-        git_icons = false,
-        no_header = true,
-        fzf_opts = {
-          ['--cycle'] = '',
-          ['--info'] = 'inline',
-        },
-      },
       keymap = {
         builtin = {
           ['<c-d>'] = 'preview-page-down',
@@ -100,24 +92,18 @@ return {
           ['ctrl-u'] = 'preview-page-up',
         },
       },
+      winopts = {
+        preview = {
+          default = 'builtin',
+          layout = 'vertical',
+          title = true,
+          title_pos = 'left',
+        },
+      },
       previewers = {
         builtin = {
           limit_b = 1200000,
         },
-      },
-      git = {
-        branches = {
-          cmd = 'git branch --all --color --sort=-committerdate',
-        },
-      },
-      grep = {
-        rg_glob = true,
-        rg_opts = '--column --line-number --no-heading --color=always --smart-case --max-columns=4096 ' ..
-            '--hidden --glob "!.git/*" --glob "!node_modules/*" --glob "!target/*" -e',
-      },
-      files = {
-        fd_opts = '--color=never --type f --hidden --follow --exclude .git ' ..
-            '--no-ignore-vcs --exclude target --exclude node_modules',
       },
       commands = {
         sort_lastused = true,
@@ -129,6 +115,20 @@ return {
           ['Info']  = { text = 'I', texthl = 'DiagnosticInfo', },
           ['Hint']  = { text = 'H', texthl = 'DiagnosticHint', },
         },
+      },
+      files = {
+        fd_opts = '--color=never --type f --hidden --follow --exclude .git ' ..
+            '--no-ignore-vcs --exclude target --exclude node_modules',
+      },
+      git = {
+        branches = {
+          cmd = 'git branch --all --color --sort=-committerdate',
+        },
+      },
+      grep = {
+        rg_glob = true,
+        rg_opts = '--column --line-number --no-heading --color=always --smart-case --max-columns=4096 ' ..
+            '--hidden --glob "!.git/*" --glob "!node_modules/*" --glob "!target/*" -e',
       },
     })
   end,
