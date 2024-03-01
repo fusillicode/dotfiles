@@ -30,7 +30,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
     // 1. no particular requirements
     // 2. https://github.com/tamasfe/taplo/issues/542
     Command::new("cargo")
-        .args(&[
+        .args([
             "install",
             "taplo-cli",
             "--force",
