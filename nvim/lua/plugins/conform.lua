@@ -18,7 +18,7 @@ return {
         typescript = { { 'prettierd', }, },
         typescriptreact = { { 'prettierd', }, },
         yaml = { { 'prettierd', }, },
-        ['*'] = { 'trim_whitespaces', 'trim_newlines', },
+        ['*'] = { 'trim_whitespace', 'trim_newlines', },
       },
       -- https://github.com/stevearc/conform.nvim/blob/master/doc/recipes.md#automatically-run-slow-formatters-async
       format_on_save = function(bufnr)
