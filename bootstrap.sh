@@ -25,12 +25,10 @@ brew install lftp
 brew install libpq && brew link libpq --force
 brew install librdkafka # It also installs `lz4`, `lzlib` & `zstd`
 brew install mycli # For Python `mysqlclient`
-brew install nvim
 brew install stern
 brew install txn2/tap/kubefwd
 brew install vegeta
 brew install watch
-brew install yq
 brew install zsh
 
 brew tap homebrew/cask-versions
@@ -91,7 +89,6 @@ export KERL_CONFIGURE_OPTIONS
 # Install Elixir libs
 mix local.hex
 mix local.rebar
-mix archive.install hex phx_new 1.5.8
 
 # Update & cleanup brew
 /bin/bash "${script_dir}/bin/update_brew.sh"
