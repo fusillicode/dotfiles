@@ -49,7 +49,7 @@ keymap_set({ 'n', 'v', }, 'gh', '0')
 keymap_set({ 'n', 'v', }, 'gl', '$')
 keymap_set({ 'n', 'v', }, 'gs', '_')
 
-keymap_set('n', 'xx', '"_dd')
+keymap_set('n', 'dd', '"_dd')
 keymap_set({ 'n', 'v', }, 'x', '"_x')
 keymap_set({ 'n', 'v', }, 'X', '"_X')
 keymap_set({ 'n', 'v', }, '<leader>yf', ':let @+ = expand("%") . ":" . line(".")<cr>')
