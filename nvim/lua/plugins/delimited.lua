@@ -1,5 +1,6 @@
 return {
   'mizlan/delimited.nvim',
+  event = 'DiagnosticChanged',
   opts = {
     post = function()
       local delimited = require('delimited')
