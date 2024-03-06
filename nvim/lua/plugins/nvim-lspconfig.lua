@@ -50,7 +50,7 @@ local function get_lsps_configs()
     psalm = {
       settings = {
         psalm = {
-          configPaths = { 'psalm.xml', 'psalm.xml.dist', 'psalm-baseline.xml', },
+          root_dir = { 'psalm.xml', 'psalm.xml.dist', 'psalm-baseline.xml', },
         },
       },
     },
