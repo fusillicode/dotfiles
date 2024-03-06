@@ -37,6 +37,7 @@ return {
         'sql',
         'textproto',
         'toml',
+        'twig',
         'typescript',
         'vim',
         'vimdoc',
