@@ -41,9 +41,9 @@ brew install chromedriver
 brew install discord
 brew install firefox
 brew install google-chrome
-brew install homebrew/cask/docker
 brew install keepingyouawake
 brew install league-of-legends
+brew install orbstack
 brew install rectangle
 brew install slack
 brew install telegram
