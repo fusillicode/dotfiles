@@ -4,6 +4,10 @@ return {
   config = function()
     require('utils').keymap_set('n', '<leader>F', ':Oil<cr>')
     require('oil').setup({
+      buf_options = {
+        buflisted = true,
+        bufhidden = 'hide',
+      },
       delete_to_trash = true,
       view_options = {
         show_hidden = true,

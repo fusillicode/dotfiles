@@ -1,5 +1,7 @@
 local function get_lsps_configs()
-  local home_dir = os.getenv('HOME')
+  local home_dir    = os.getenv('HOME')
+  local schemastore = require('schemastore')
+
   return {
     bashls = {},
     docker_compose_language_service = {},
@@ -15,7 +17,7 @@ local function get_lsps_configs()
       settings = {
         json = {
           validate = { enable = true, },
-          schemas = require('schemastore').json.schemas({
+          schemas = schemastore.json.schemas({
             select = {
               'GitHub Workflow Template Properties',
             },
@@ -48,11 +50,7 @@ local function get_lsps_configs()
     marksman = {},
     phpactor = {},
     psalm = {
-      settings = {
-        psalm = {
-          configPaths = { 'psalm.xml', 'psalm.xml.dist', 'psalm-baseline.xml', },
-        },
-      },
+      root_dir = require('lspconfig.util').root_pattern({ 'psalm.xml', 'psalm.xml.dist', 'psalm-baseline.xml', }),
     },
     ruff_lsp = {},
     rust_analyzer = {
@@ -66,9 +64,13 @@ local function get_lsps_configs()
           check = { command = 'clippy', },
           checkOnSave = { command = 'clippy', },
           completion = { autoimport = { enable = true, }, },
+          diagnostics = {
+            enable = true,
+            disabled = { 'unresolved-proc-macro', },
+          },
           imports = { enforce = true, granularity = { group = 'item', }, prefix = 'crate', },
           lens = { debug = { enable = false, }, implementations = { enable = false, }, run = { enable = false, }, },
-          proc_macro = { enable = true, },
+          procMacro = { enable = false, },
           showUnlinkedFileNotification = false,
         },
       },
@@ -102,7 +104,7 @@ local function get_lsps_configs()
             url = '',
           },
           schemas = vim.tbl_extend('error',
-            require('schemastore').yaml.schemas({
+            schemastore.yaml.schemas({
               select = {
                 'kustomization.yaml',
                 'GitHub Workflow',
@@ -130,13 +132,18 @@ return {
     local keymap_set = require('utils').keymap_set
 
     local function on_attach(_, bufnr)
-      keymap_set('', '<c-r>', ':LspRestart<cr>')
       keymap_set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr, })
       keymap_set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, })
     end
 
     for lsp, config in pairs(get_lsps_configs()) do
-      lspconfig[lsp].setup(vim.tbl_extend('error', { capabilities = capabilities, on_attach = on_attach, }, config))
+      -- 🥲 https://neovim.discourse.group/t/cannot-serialize-function-type-not-supported/4542/3
+      local lsp_setup = { capabilities = capabilities, on_attach = on_attach, }
+      if config['cmd'] then lsp_setup.cmd = config['cmd'] end
+      if config['init_options'] then lsp_setup.init_options = config['init_options'] end
+      if config['root_dir'] then lsp_setup.root_dir = config['root_dir'] end
+      if config['settings'] then lsp_setup.settings = config['settings'] end
+      lspconfig[lsp].setup(lsp_setup)
     end
 
     vim.api.nvim_create_autocmd('BufWritePre', {
