@@ -6,6 +6,7 @@ return {
     local fzf_lua = require('fzf-lua')
     local keymap_set = require('utils').keymap_set
 
+    keymap_set('n', '<leader>c', function() fzf_lua.commands() end)
     keymap_set('n', '<leader>f', function() fzf_lua.files({ prompt = 'Files: ', }) end)
     keymap_set('n', '<leader>b', function() fzf_lua.buffers({ prompt = 'Buffers: ', }) end)
 
@@ -25,6 +26,8 @@ return {
       fzf_lua.lsp_implementations(vim.tbl_extend('error', { prompt = 'Implementations: ', }, lsp_jumps_cfg))
     end)
 
+    keymap_set('n', '<leader>j', function() fzf_lua.jumps() end)
+
     keymap_set('n', '<leader>s', function() fzf_lua.lsp_document_symbols({ prompt = 'Buffer symbols: ', }) end)
     keymap_set('n', '<leader>S', function() fzf_lua.lsp_live_workspace_symbols({ prompt = 'Workspace symbols: ', }) end)
     keymap_set('n', '<leader>a', function() fzf_lua.lsp_code_actions({ prompt = 'Code actions: ', }) end)
@@ -33,8 +36,14 @@ return {
     keymap_set('n', '<leader>D', function() fzf_lua.diagnostics_workspace({ prompt = 'Workspace diagnostics: ', }) end)
 
     keymap_set('n', '<leader>/', function() fzf_lua.live_grep_glob({ prompt = 'rg: ', }) end)
-    keymap_set('n', '<leader>w', function() fzf_lua.grep_cword({ prompt = 'rgw: ', }) end)
-    keymap_set('v', '<leader>w', function() fzf_lua.grep_visual({ prompt = 'rgv: ', }) end)
+    keymap_set('n', '<leader>w', function()
+      local word = vim.fn.expand('<cword>')
+      if word then fzf_lua.live_grep_glob({ prompt = 'rg: ', query = word, }) end
+    end)
+    keymap_set('v', '<leader>w', function()
+      local selection = fzf_lua.utils.get_visual_selection()
+      if selection then fzf_lua.live_grep_glob({ prompt = 'rg: ', query = selection, }) end
+    end)
 
     local todo_comments_cfg = { search = 'TODO:|HACK:|PERF:|NOTE:|FIX:|FIXME:|WARN:', no_esc = true, }
     keymap_set('n', '<leader>t', function()
@@ -48,6 +57,14 @@ return {
 
     fzf_lua.setup({
       'max-perf',
+      defaults = {
+        cwd_prompt = false,
+        no_header = true,
+        fzf_opts = {
+          ['--cycle'] = '',
+          ['--info'] = 'inline',
+        },
+      },
       fzf_colors = {
         ['fg']      = { 'fg', 'StatusLine', },
         ['bg']      = { 'bg', 'Normal', },
@@ -56,30 +73,12 @@ return {
         ['bg+']     = { 'bg', 'CursorLine', },
         ['hl+']     = { 'bg', 'IncSearch', },
         ['info']    = { 'fg', 'Keyword', },
-        ['prompt']  = { 'fg', 'Keyword', },
+        ['prompt']  = { 'bg', 'IncSearch', },
         ['pointer'] = { 'bg', 'CursorLine', },
         ['marker']  = { 'fg', 'Keyword', },
         ['spinner'] = { 'fg', 'Label', },
         ['header']  = { 'fg', 'Comment', },
         ['gutter']  = { 'bg', 'Normal', },
-      },
-      winopts = {
-        preview = {
-          default = 'builtin',
-          layout = 'vertical',
-          title = true,
-          title_pos = 'left',
-        },
-      },
-      defaults = {
-        cwd_prompt = false,
-        file_icons = false,
-        git_icons = false,
-        no_header = true,
-        fzf_opts = {
-          ['--cycle'] = '',
-          ['--info'] = 'inline',
-        },
       },
       keymap = {
         builtin = {
@@ -91,10 +90,33 @@ return {
           ['ctrl-u'] = 'preview-page-up',
         },
       },
+      winopts = {
+        preview = {
+          default = 'builtin',
+          layout = 'vertical',
+          title = true,
+          title_pos = 'left',
+        },
+      },
       previewers = {
         builtin = {
           limit_b = 1200000,
         },
+      },
+      commands = {
+        sort_lastused = true,
+      },
+      diagnostics = {
+        signs = {
+          ['Error'] = { text = 'E', texthl = 'DiagnosticError', },
+          ['Warn']  = { text = 'W', texthl = 'DiagnosticWarn', },
+          ['Info']  = { text = 'I', texthl = 'DiagnosticInfo', },
+          ['Hint']  = { text = 'H', texthl = 'DiagnosticHint', },
+        },
+      },
+      files = {
+        fd_opts = '--color=never --type f --hidden --follow --exclude .git ' ..
+            '--no-ignore-vcs --exclude target --exclude node_modules',
       },
       git = {
         branches = {
@@ -103,6 +125,42 @@ return {
       },
       grep = {
         rg_glob = true,
+        rg_opts = '--column --line-number --no-heading --color=always --smart-case --max-columns=4096 ' ..
+            '--hidden --glob "!.git/*" --glob "!node_modules/*" --glob "!target/*" -e',
+      },
+      lsp = {
+        symbols = {
+          symbol_icons = {
+            File          = 'file',
+            Module        = 'mod',
+            Namespace     = 'namespace',
+            Package       = 'package',
+            Class         = 'class',
+            Method        = 'method',
+            Property      = 'prop',
+            Field         = 'field',
+            Constructor   = 'constructor',
+            Enum          = 'enum',
+            Interface     = 'interf',
+            Function      = 'fn',
+            Variable      = 'var',
+            Constant      = 'const',
+            String        = 'str',
+            Number        = 'num',
+            Boolean       = 'bool',
+            Array         = 'array',
+            Object        = 'obj',
+            Key           = 'key',
+            Null          = 'null',
+            EnumMember    = 'variant',
+            Struct        = 'struct',
+            Event         = 'event',
+            Operator      = 'operator',
+            TypeParameter = 'type',
+          },
+          symbol_fmt   = function(s, opts) return opts['symbol_icons'][s] .. ':' end,
+          child_prefix = false,
+        },
       },
     })
   end,

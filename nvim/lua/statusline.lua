@@ -17,6 +17,14 @@ for _, diagnostic_hl_group in ipairs({
   )
 end
 
+local function current_buffer_path()
+  if vim.bo.buftype == 'terminal' then
+    return ''
+  else
+    return vim.fn.expand('%:~:.')
+  end
+end
+
 function M.draw()
   local buffer = vim.fn.bufnr()
   local buffer_errors, buffer_warns, buffer_infos, buffer_hints = 0, 0, 0, 0
@@ -51,7 +59,7 @@ function M.draw()
       .. (buffer_hints ~= 0 and '%#DiagnosticHintStatusLine#' .. 'H:' .. buffer_hints .. ' ' or '')
       .. '%#StatusLine#'
       -- https://stackoverflow.com/a/45244610
-      .. '%{expand("%:~:.")} %m %r'
+      .. current_buffer_path() .. ' %m %r'
       .. '%='
       .. (workspace_errors ~= 0 and '%#DiagnosticErrorStatusLine#' .. 'E:' .. workspace_errors .. ' ' or '')
       .. (workspace_warns ~= 0 and '%#DiagnosticWarnStatusLine#' .. 'W:' .. workspace_warns .. ' ' or '')
