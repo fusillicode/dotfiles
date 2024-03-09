@@ -36,10 +36,10 @@ vim.o.undofile = true
 vim.o.updatetime = 250
 vim.o.wrap = false
 
+vim.opt.shortmess = 'asIF'
 vim.opt.clipboard:append('unnamedplus')
 vim.opt.iskeyword:append('-')
 vim.opt.jumpoptions:append('stack')
-vim.opt.shortmess:append('asi')
 
 local keymap_set = require('utils').keymap_set
 keymap_set('i', '<c-a>', '<esc>^i')
