@@ -30,6 +30,7 @@ return {
         'lua',
         'make',
         'markdown',
+        'mermaid',
         'php',
         'python',
         'regex',
