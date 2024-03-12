@@ -28,7 +28,6 @@ brew install mycli # For Python `mysqlclient`
 brew install stern
 brew install txn2/tap/kubefwd
 brew install vegeta
-brew install watch
 brew install zsh
 
 brew tap homebrew/cask-versions
