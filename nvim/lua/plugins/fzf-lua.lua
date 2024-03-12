@@ -25,6 +25,12 @@ return {
     keymap_set('n', 'gi', function()
       fzf_lua.lsp_implementations(vim.tbl_extend('error', { prompt = 'Implementations: ', }, lsp_jumps_cfg))
     end)
+    keymap_set('n', 'go', function()
+      fzf_lua.lsp_outgoing_calls(vim.tbl_extend('error', { prompt = 'Out calls: ', }, lsp_jumps_cfg))
+    end)
+    keymap_set('n', 'gz', function()
+      fzf_lua.lsp_incoming_calls(vim.tbl_extend('error', { prompt = 'In calls: ', }, lsp_jumps_cfg))
+    end)
 
     keymap_set('n', '<leader>j', function() fzf_lua.jumps() end)
 
