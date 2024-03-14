@@ -23,6 +23,7 @@ return {
         'gitcommit',
         'gitignore',
         'graphql',
+        'heex',
         'html',
         'javascript',
         'json',
