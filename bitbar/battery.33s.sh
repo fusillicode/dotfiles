@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 battery_info=$(system_profiler SPPowerDataType)
 
