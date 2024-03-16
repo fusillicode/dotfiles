@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 container_name=${1:-"fast-data-dev"}
 command=${2:-bash}

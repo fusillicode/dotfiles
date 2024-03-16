@@ -41,48 +41,7 @@ vim.opt.clipboard:append('unnamedplus')
 vim.opt.iskeyword:append('-')
 vim.opt.jumpoptions:append('stack')
 
-local keymap_set = require('utils').keymap_set
-keymap_set('i', '<c-a>', '<esc>^i')
-keymap_set('n', '<c-a>', '^i')
-keymap_set('i', '<c-e>', '<end>')
-keymap_set('n', '<c-e>', '$a')
-
-keymap_set('', 'gn', ':bn<cr>')
-keymap_set('', 'gp', ':bp<cr>')
-keymap_set('', 'ga', '<c-^>')
-keymap_set({ 'n', 'v', }, 'gh', '0')
-keymap_set({ 'n', 'v', }, 'gl', '$')
-keymap_set({ 'n', 'v', }, 'gs', '_')
-
-keymap_set('n', 'dd', '"_dd')
-keymap_set({ 'n', 'v', }, 'x', '"_x')
-keymap_set({ 'n', 'v', }, 'X', '"_X')
-keymap_set({ 'n', 'v', }, '<leader>yf', ':let @+ = expand("%") . ":" . line(".")<cr>')
-keymap_set('v', 'y', 'ygv<esc>')
-keymap_set('v', 'p', '"_dP')
-
-keymap_set('v', '>', '>gv')
-keymap_set('v', '<', '<gv')
-keymap_set('n', '>', '>>')
-keymap_set('n', '<', '<<')
-keymap_set({ 'n', 'v', }, 'U', '<c-r>')
-
-keymap_set({ 'n', 'v', }, '<leader><leader>', ':silent :w!<cr>')
-keymap_set({ 'n', 'v', }, '<leader>x', ':bd<cr>')
-keymap_set({ 'n', 'v', }, '<leader>X', ':bd!<cr>')
-keymap_set({ 'n', 'v', }, '<leader>w', ':wa<cr>')
-keymap_set({ 'n', 'v', }, '<leader>W', ':wa!<cr>')
-keymap_set({ 'n', 'v', }, '<leader>q', ':q<cr>')
-keymap_set({ 'n', 'v', }, '<leader>Q', ':q!<cr>')
-
-keymap_set({ 'n', 'v', }, '<c-w>', ':set wrap!<cr>')
-keymap_set('n', '<esc>', require('utils').normal_esc)
-keymap_set('v', '<esc>', require('utils').visual_esc, { expr = true, })
-
-keymap_set('n', '<leader>e', vim.diagnostic.open_float)
-
-keymap_set('n', '<leader>gx', require('opener').open_under_cursor)
-keymap_set('v', '<leader>gx', require('opener').open_selection)
+require('keymaps').core()
 
 vim.diagnostic.config {
   float = {

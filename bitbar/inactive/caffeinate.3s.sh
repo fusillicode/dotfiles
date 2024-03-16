@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function icon {
   if [[ -z "$(pgrep caffeinate)" ]]; then echo "🍵"; else echo "☕️"; fi
