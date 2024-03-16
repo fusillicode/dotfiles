@@ -10,8 +10,8 @@ function M.core()
   keymap_set('i', '<c-e>', '<end>')
   keymap_set('n', '<c-e>', '$a')
 
-  keymap_set('', 'gn', ':bn<cr>')
-  keymap_set('', 'gp', ':bp<cr>')
+  keymap_set('', 'gn', '<cmd>bn<cr>')
+  keymap_set('', 'gp', '<cmd>bp<cr>')
   keymap_set('', 'ga', '<c-^>')
   keymap_set({ 'n', 'v', }, 'gh', '0')
   keymap_set({ 'n', 'v', }, 'gl', '$')
@@ -20,7 +20,7 @@ function M.core()
   keymap_set('n', 'dd', '"_dd')
   keymap_set({ 'n', 'v', }, 'x', '"_x')
   keymap_set({ 'n', 'v', }, 'X', '"_X')
-  keymap_set({ 'n', 'v', }, '<leader>yf', ':let @+ = expand("%") . ":" . line(".")<cr>')
+  keymap_set({ 'n', 'v', }, '<leader>yf', '<cmd>let @+ = expand("%") . ":" . line(".")<cr>')
   keymap_set('v', 'y', 'ygv<esc>')
   keymap_set('v', 'p', '"_dP')
 
@@ -30,15 +30,15 @@ function M.core()
   keymap_set('n', '<', '<<')
   keymap_set({ 'n', 'v', }, 'U', '<c-r>')
 
-  keymap_set({ 'n', 'v', }, '<leader><leader>', ':silent :w!<cr>')
-  keymap_set({ 'n', 'v', }, '<leader>x', ':bd<cr>')
-  keymap_set({ 'n', 'v', }, '<leader>X', ':bd!<cr>')
-  keymap_set({ 'n', 'v', }, '<leader>w', ':wa<cr>')
-  keymap_set({ 'n', 'v', }, '<leader>W', ':wa!<cr>')
-  keymap_set({ 'n', 'v', }, '<leader>q', ':q<cr>')
-  keymap_set({ 'n', 'v', }, '<leader>Q', ':q!<cr>')
+  keymap_set({ 'n', 'v', }, '<leader><leader>', '<cmd>silent :w!<cr>')
+  keymap_set({ 'n', 'v', }, '<leader>x', '<cmd>bd<cr>')
+  keymap_set({ 'n', 'v', }, '<leader>X', '<cmd>bd!<cr>')
+  keymap_set({ 'n', 'v', }, '<leader>w', '<cmd>wa<cr>')
+  keymap_set({ 'n', 'v', }, '<leader>W', '<cmd>wa!<cr>')
+  keymap_set({ 'n', 'v', }, '<leader>q', '<cmd>q<cr>')
+  keymap_set({ 'n', 'v', }, '<leader>Q', '<cmd>q!<cr>')
 
-  keymap_set({ 'n', 'v', }, '<c-w>', ':set wrap!<cr>')
+  keymap_set({ 'n', 'v', }, '<c-w>', '<cmd>set wrap!<cr>')
   keymap_set('n', '<esc>', require('utils').normal_esc)
   keymap_set('v', '<esc>', require('utils').visual_esc, { expr = true, })
 
@@ -106,7 +106,7 @@ function M.fzf_lua(fzf_lua)
 end
 
 function M.oil()
-  keymap_set('n', '<leader>F', ':Oil<cr>')
+  keymap_set('n', '<leader>F', '<cmd>Oil<cr>')
 end
 
 function M.attempt(attempt)
@@ -124,10 +124,10 @@ function M.delimited(delimited)
 end
 
 function M.gitlinker()
-  keymap_set({ 'n', 'v', }, '<leader>yl', ':GitLink<cr>')
-  keymap_set({ 'n', 'v', }, '<leader>yL', ':GitLink!<cr>')
-  keymap_set({ 'n', 'v', }, '<leader>yb', ':GitLink blame<cr>')
-  keymap_set({ 'n', 'v', }, '<leader>yB', ':GitLink! blame<cr>')
+  keymap_set({ 'n', 'v', }, '<leader>yl', '<cmd>GitLink<cr>')
+  keymap_set({ 'n', 'v', }, '<leader>yL', '<cmd>GitLink!<cr>')
+  keymap_set({ 'n', 'v', }, '<leader>yb', '<cmd>GitLink blame<cr>')
+  keymap_set({ 'n', 'v', }, '<leader>yB', '<cmd>GitLink! blame<cr>')
 end
 
 function M.gitsigns(gitsigns)
@@ -163,9 +163,9 @@ function M.lspconfig()
 end
 
 function M.search_replace()
-  keymap_set('v', '<C-r>', '<cmd>SearchReplaceSingleBufferVisualSelection<cr>')
-  keymap_set('v', '<C-s>', '<cmd>SearchReplaceWithinVisualSelection<cr>')
-  keymap_set('v', '<C-b>', '<cmd>SearchReplaceWithinVisualSelectionCWord<cr>')
+  keymap_set('v', '<c-r>', '<cmd>SearchReplaceSingleBufferVisualSelection<cr>')
+  keymap_set('v', '<c-s>', '<cmd>SearchReplaceWithinVisualSelection<cr>')
+  keymap_set('v', '<c-b>', '<cmd>SearchReplaceWithinVisualSelectionCWord<cr>')
 
   keymap_set('n', '<leader>rs', '<cmd>SearchReplaceSingleBufferSelections<cr>')
   keymap_set('n', '<leader>ro', '<cmd>SearchReplaceSingleBufferOpen<cr>')
