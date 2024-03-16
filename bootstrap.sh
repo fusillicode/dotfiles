@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 script_dir="${BASH_SOURCE%/*}"
 
@@ -28,7 +28,6 @@ brew install mycli # For Python `mysqlclient`
 brew install stern
 brew install txn2/tap/kubefwd
 brew install vegeta
-brew install watch
 brew install zsh
 
 brew tap homebrew/cask-versions

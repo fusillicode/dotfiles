@@ -72,6 +72,14 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir])),
     )?;
 
+    // For Markdown preview with peek.nvim
+    let repo = "denoland/deno";
+    let latest_release = get_latest_release(repo)?;
+    curl_install(
+        &format!("https://github.com/{repo}/releases/download/{latest_release}/deno-aarch64-apple-darwin.zip"),
+        OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir])),
+    )?;
+
     let repo = "tekumara/typos-vscode";
     let latest_release = get_latest_release(repo)?;
     curl_install(

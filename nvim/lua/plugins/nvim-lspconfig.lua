@@ -129,12 +129,7 @@ return {
   config = function()
     local lspconfig = require('lspconfig')
     local capabilities = require('cmp_nvim_lsp').default_capabilities(vim.lsp.protocol.make_client_capabilities())
-    local keymap_set = require('utils').keymap_set
-
-    local function on_attach(_, bufnr)
-      keymap_set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr, })
-      keymap_set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, })
-    end
+    local on_attach = require('keymaps').lspconfig()
 
     for lsp, config in pairs(get_lsps_configs()) do
       -- 🥲 https://neovim.discourse.group/t/cannot-serialize-function-type-not-supported/4542/3

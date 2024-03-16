@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # shellcheck disable=SC2207
 cpu_burner_data=($(ps -Ar -o pid= -o %cpu= -o comm= | head -n 1))
