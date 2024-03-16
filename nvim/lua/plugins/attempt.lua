@@ -3,9 +3,7 @@ return {
   dependencies = { 'nvim-lua/plenary.nvim', },
   config = function()
     local attempt = require('attempt')
-    local keymap_set = require('utils').keymap_set
-
-    keymap_set('n', '<leader>n', attempt.new_input_ext)
+    require('keymaps').attempt(attempt)
 
     attempt.setup({
       autosave = true,
