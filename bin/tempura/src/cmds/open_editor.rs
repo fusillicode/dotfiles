@@ -48,19 +48,19 @@ impl FromStr for FileToOpen {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut file_parts = s.split(':');
-        let file_path = file_parts
+        let mut parts = s.split(':');
+        let path = parts
             .next()
             .ok_or_else(|| anyhow!("no file path found in {s}"))?;
-        let line_number = file_parts
+        let line_nbr = parts
             .next()
             .map(str::parse::<i64>)
             .transpose()?
             .unwrap_or_default();
 
         Ok(Self {
-            path: file_path.into(),
-            line_nbr: line_number,
+            path: path.into(),
+            line_nbr,
         })
     }
 }
