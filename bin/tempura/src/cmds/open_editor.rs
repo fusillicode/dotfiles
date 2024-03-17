@@ -81,7 +81,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
     };
 
     let editor_pane_id =
-        crate::utils::wezterm::get_current_pane_sibling_with_one_of_titles(editor.pane_titles())
+        crate::utils::wezterm::get_current_pane_sibling_matching_titles(editor.pane_titles())
             .map(|x| x.pane_id)?;
 
     let open_file_cmd = editor.open_file_cmd(&file_to_open);

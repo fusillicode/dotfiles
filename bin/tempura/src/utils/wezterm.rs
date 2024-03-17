@@ -4,7 +4,7 @@ use std::process::Command;
 use anyhow::anyhow;
 use serde::Deserialize;
 
-pub fn get_current_pane_sibling_with_one_of_titles(
+pub fn get_current_pane_sibling_matching_titles(
     pane_titles: &[&str],
 ) -> anyhow::Result<WezTermPane> {
     let current_pane_id: i64 = std::env::var("WEZTERM_PANE")?.parse()?;

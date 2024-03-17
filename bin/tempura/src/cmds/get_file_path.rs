@@ -7,7 +7,7 @@ use crate::cmds::open_editor::Editor;
 use crate::utils::hx::HxStatusLine;
 
 pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
-    let hx_pane_id = crate::utils::wezterm::get_current_pane_sibling_with_one_of_titles(
+    let hx_pane_id = crate::utils::wezterm::get_current_pane_sibling_matching_titles(
         Editor::Helix.pane_titles(),
     )?
     .pane_id;
