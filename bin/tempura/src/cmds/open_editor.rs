@@ -54,11 +54,13 @@ impl FromStr for FileToOpen {
             .ok_or_else(|| anyhow!("no file path found in {s}"))?;
         let line_number = file_parts
             .next()
-            .ok_or_else(|| anyhow!("no line number found in {s}"))?;
+            .map(str::parse::<i64>)
+            .transpose()?
+            .unwrap_or_default();
 
         Ok(Self {
             path: file_path.into(),
-            line_nbr: line_number.parse()?,
+            line_nbr: line_number,
         })
     }
 }
