@@ -3,10 +3,14 @@ use std::str::FromStr;
 
 use anyhow::anyhow;
 
+use crate::cmds::open_editor::Editor;
 use crate::utils::hx::HxStatusLine;
 
 pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
-    let hx_pane_id = crate::utils::wezterm::get_current_pane_sibling_with_title("hx")?.pane_id;
+    let hx_pane_id = crate::utils::wezterm::get_current_pane_sibling_with_one_of_titles(
+        Editor::Helix.pane_titles(),
+    )?
+    .pane_id;
 
     let wezterm_pane_text = String::from_utf8(
         Command::new("wezterm")

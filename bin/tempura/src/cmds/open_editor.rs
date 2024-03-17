@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 use anyhow::anyhow;
 
-enum Editor {
+pub enum Editor {
     Helix,
     Nvim,
 }
@@ -39,7 +39,7 @@ impl FromStr for Editor {
     }
 }
 
-struct FileToOpen {
+pub struct FileToOpen {
     path: String,
     line_nbr: i64,
 }
@@ -78,18 +78,9 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
         ));
     };
 
-    let editor_pane_id = {
-        let mut errors = vec![];
-        'editor_pane_id: for editor_pane_title in editor.pane_titles() {
-            match crate::utils::wezterm::get_current_pane_sibling_with_title(editor_pane_title)
-                .map(|x| x.pane_id)
-            {
-                Ok(_) => break 'editor_pane_id,
-                Err(error) => errors.push(error),
-            }
-        }
-        Result::<i64, _>::Err(anyhow!("foo {errors:?}"))
-    }?;
+    let editor_pane_id =
+        crate::utils::wezterm::get_current_pane_sibling_with_one_of_titles(editor.pane_titles())
+            .map(|x| x.pane_id)?;
 
     let open_file_cmd = editor.open_file_cmd(&file_to_open);
 
