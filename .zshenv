@@ -16,7 +16,11 @@ sorce () {
 }
 
 ho () {
-  ~/bin/weh ho "$@"
+  tempura open-editor hx "$@"
+}
+
+nvo () {
+  tempura open-editor nv "$@"
 }
 
 # Easy Git

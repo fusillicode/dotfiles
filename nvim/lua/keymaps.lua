@@ -162,6 +162,7 @@ function M.lspconfig()
   end
 end
 
+-- These definitely need to be refactored...
 function M.search_replace()
   keymap_set('v', '<c-r>', ':SearchReplaceSingleBufferVisualSelection<cr>')
   keymap_set('v', '<c-s>', ':SearchReplaceWithinVisualSelection<cr>')
