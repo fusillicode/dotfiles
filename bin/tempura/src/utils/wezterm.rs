@@ -4,7 +4,9 @@ use std::process::Command;
 use anyhow::anyhow;
 use serde::Deserialize;
 
-pub fn get_current_pane_sibling_with_title(pane_title: &str) -> anyhow::Result<WezTermPane> {
+pub fn get_current_pane_sibling_matching_titles(
+    pane_titles: &[&str],
+) -> anyhow::Result<WezTermPane> {
     let current_pane_id: i64 = std::env::var("WEZTERM_PANE")?.parse()?;
 
     let all_panes: Vec<WezTermPane> = serde_json::from_slice(
@@ -24,9 +26,9 @@ pub fn get_current_pane_sibling_with_title(pane_title: &str) -> anyhow::Result<W
 
     Ok(all_panes
         .iter()
-        .find(|w| w.tab_id == current_pane_tab_id && w.title == pane_title)
+        .find(|w| w.tab_id == current_pane_tab_id && pane_titles.contains(&w.title.as_str()))
         .ok_or({
-            anyhow!("pane with title '{pane_title}' not found in tab '{current_pane_tab_id}'")
+            anyhow!("pane with title '{pane_titles:?}' not found in tab '{current_pane_tab_id}'")
         })?
         .clone())
 }
