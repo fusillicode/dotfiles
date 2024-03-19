@@ -11,7 +11,7 @@ return {
       initial_content = {
         sh = '#!/usr/bin/env bash\n\nset -euo pipefail',
         json = '{}',
-        md = '# foo',
+        md = '# README.md',
         rs = 'fn main() {\n  println!("Hello, world!");\n}',
       },
       ext_options = { 'sh', 'json', 'md', 'rs', },
