@@ -21,7 +21,7 @@
   "gitlinker.nvim": { "branch": "master", "commit": "69bafe638626911ac4f56d66a1bc1bf75a3268ff" },
   "gitsigns.nvim": { "branch": "main", "commit": "078041e9d060a386b0c9d3a8c7a7b019a35d3fb0" },
   "lazy.nvim": { "branch": "main", "commit": "83493db50a434a4c5c648faf41e2ead80f96e478" },
-  "nvim-autopairs": { "branch": "master", "commit": "c6139ca0d5ad7af129ea6c89cb4c56093f2c034a" },
+  "nvim-autopairs": { "branch": "master", "commit": "797260ff31e8bdd9db0f0c352659a35aba335b0b" },
   "nvim-cmp": { "branch": "main", "commit": "04e0ca376d6abdbfc8b52180f8ea236cbfddf782" },
   "nvim-lint": { "branch": "master", "commit": "03b1fc593638098a35de26d768d5f43b0fe57041" },
   "nvim-lspconfig": { "branch": "master", "commit": "eb012f03bb3b4aca9e875d146008b923d0e07e65" },
