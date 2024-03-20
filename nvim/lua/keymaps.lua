@@ -162,15 +162,4 @@ function M.lspconfig()
   end
 end
 
-function M.search_replace()
-  keymap_set('v', '<c-r>', ':SearchReplaceSingleBufferVisualSelection<cr>')
-  keymap_set('v', '<c-s>', ':SearchReplaceWithinVisualSelection<cr>')
-
-  keymap_set('n', '<leader>rs', ':SearchReplaceSingleBufferSelections<cr>')
-  keymap_set('n', '<leader>ro', ':SearchReplaceSingleBufferOpen<cr>')
-
-  keymap_set('n', '<leader>rbs', ':SearchReplaceMultiBufferSelections<cr>')
-  keymap_set('n', '<leader>rbo', ':SearchReplaceMultiBufferOpen<cr>')
-end
-
 return M
