@@ -162,25 +162,15 @@ function M.lspconfig()
   end
 end
 
--- These definitely need to be refactored...
 function M.search_replace()
   keymap_set('v', '<c-r>', ':SearchReplaceSingleBufferVisualSelection<cr>')
   keymap_set('v', '<c-s>', ':SearchReplaceWithinVisualSelection<cr>')
-  keymap_set('v', '<c-b>', ':SearchReplaceWithinVisualSelectionCWord<cr>')
 
   keymap_set('n', '<leader>rs', ':SearchReplaceSingleBufferSelections<cr>')
   keymap_set('n', '<leader>ro', ':SearchReplaceSingleBufferOpen<cr>')
-  keymap_set('n', '<leader>rw', ':SearchReplaceSingleBufferCWord<cr>')
-  keymap_set('n', '<leader>rW', ':SearchReplaceSingleBufferCWORD<cr>')
-  keymap_set('n', '<leader>re', ':SearchReplaceSingleBufferCExpr<cr>')
-  keymap_set('n', '<leader>rf', ':SearchReplaceSingleBufferCFile<cr>')
 
   keymap_set('n', '<leader>rbs', ':SearchReplaceMultiBufferSelections<cr>')
   keymap_set('n', '<leader>rbo', ':SearchReplaceMultiBufferOpen<cr>')
-  keymap_set('n', '<leader>rbw', ':SearchReplaceMultiBufferCWord<cr>')
-  keymap_set('n', '<leader>rbW', ':SearchReplaceMultiBufferCWORD<cr>')
-  keymap_set('n', '<leader>rbe', ':SearchReplaceMultiBufferCExpr<cr>')
-  keymap_set('n', '<leader>rbf', ':SearchReplaceMultiBufferCFile<cr>')
 end
 
 return M
