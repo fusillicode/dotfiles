@@ -128,9 +128,7 @@ export PATH="$HOME/go/bin:$PATH"
 export PATH="$HOME/.poetry/bin:$PATH"
 
 # Atuin 🐢
-export ATUIN_NOBIND="true"
 eval "$(atuin init zsh)"
-bindkey '^r' _atuin_search_widget
 
 # Lira 🥲
 export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
