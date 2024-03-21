@@ -10,6 +10,7 @@ xcode-select --install
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
 brew update
 brew doctor --verbose
+brew analytics off
 
 # Install Homebrew apps
 brew install awscli
