@@ -105,9 +105,6 @@ export PATH="/usr/local/opt/imagemagick@6:$PATH"
 # Crystal 0.26.1 + macOS Mojave
 export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/usr/local/opt/openssl/lib/pkgconfig
 
-# Scala...
-export PATH="/usr/local/opt/sbt@0.13/bin:$PATH"
-
 # K8S
 export KUBECONFIG=~/.kube/config:~/.kube/config.qa:~/.kube/config.prod
 
