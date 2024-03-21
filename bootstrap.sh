@@ -12,9 +12,7 @@ brew update
 brew doctor --verbose
 
 # Install Homebrew apps
-brew install ansible
 brew install awscli
-brew install cpulimit
 brew install gh
 brew install git
 brew install jq
@@ -41,14 +39,14 @@ brew install discord
 brew install firefox
 brew install google-chrome
 brew install keepingyouawake
-brew install league-of-legends
+# brew install league-of-legends
 brew install orbstack
 brew install rectangle
 brew install slack
 brew install telegram
 brew install the-unarchiver
-brew install transmission --cask
-brew install vlc
+# brew install transmission --cask
+# brew install vlc
 brew install wez/wezterm/wezterm-nightly --cask --no-quarantine
 # 🥲 https://wezfurlong.org/wezterm/faq.html#how-do-i-enable-undercurl-curly-underlines
 tempfile=$(mktemp) \
