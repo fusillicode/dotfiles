@@ -151,3 +151,6 @@ export TERM=wezterm
 
 # My bins
 export PATH=$HOME/.local/bin:$PATH
+
+# FFS PHP...
+export PATH="/opt/homebrew/opt/m4/bin:$PATH"
