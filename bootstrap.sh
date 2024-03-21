@@ -84,9 +84,5 @@ export KERL_CONFIGURE_OPTIONS
 # Install ~/.dev_tools
 ./bin/tempura/target/release/tempura install-dev-tools ~/.dev-tools ~/.local/bin
 
-# Install Elixir libs
-mix local.hex
-mix local.rebar
-
 # Update & cleanup brew
 /bin/bash "${script_dir}/bin/update_brew.sh"
