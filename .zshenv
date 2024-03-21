@@ -12,7 +12,7 @@ alias kdebian="kubectl exec -it debian -- bash || kubectl run debian --image=deb
 
 # Easy Shell commands
 sorce () {
-  set -a && source "$@" && set +a
+  set -a && . "$@" && set +a
 }
 
 ho () {

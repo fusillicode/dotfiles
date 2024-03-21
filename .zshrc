@@ -97,7 +97,7 @@ fi
 # Example aliases
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
-source "$HOME/.zshenv"
+. "$HOME/.zshenv"
 
 # `brew link imagemagick@6` suggestion ¯\_(ツ)_/¯
 export PATH="/usr/local/opt/imagemagick@6:$PATH"
@@ -127,7 +127,7 @@ export ERL_AFLAGS="-kernel shell_history enabled -kernel shell_history_file_byte
 export PATH="$HOME/go/bin:$PATH"
 
 # ...Poetry...
-[ -e "$HOME/.poetry/env" ] && source "$HOME/.poetry/env"
+[ -e "$HOME/.poetry/env" ] && . "$HOME/.poetry/env"
 export PATH="$HOME/.poetry/bin:$PATH"
 
 # Atuin 🐢
