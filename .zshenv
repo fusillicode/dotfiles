@@ -83,4 +83,7 @@ pg_copy_table() {
 }
 
 # FFS 😩
-source "$HOME/.rover/env"
+[ -e "$HOME/.rover/env" ] && . "$HOME/.rover/env"
+
+# GIGACHAD 🦾
+[ -e "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
