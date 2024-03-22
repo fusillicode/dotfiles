@@ -1,7 +1,7 @@
 alias nv="nvim"
 alias code="code-insiders"
 alias gs="git status"
-alias h="atuin history list -f '{time} | {command}'"
+alias h="atuin history list"
 alias l="ls -llAtrh"
 alias j="jq . -c"
 alias jl="jq . "
