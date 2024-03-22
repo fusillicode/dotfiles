@@ -9,7 +9,7 @@ local function base_name(s)
   return string.gsub(s, '(.*[/\\])(.*)', '%2')
 end
 
-local function up_and_down_with_hx(key)
+local function up_and_down_in_editor(key)
   return function(win, pane)
     local process_name = base_name(pane:get_foreground_process_name())
     if 'hx' == process_name or 'nvim' == process_name then
@@ -51,8 +51,8 @@ config.keys = {
   { key = '[',          mods = 'CTRL|OPT',  action = act.MoveTabRelative(-1), },
   { key = ']',          mods = 'CTRL|OPT',  action = act.MoveTabRelative(1), },
   { key = 'Enter',      mods = 'ALT',       action = act.Nop, },
-  { key = 'd',          mods = 'CTRL',      action = wezterm.action_callback(up_and_down_with_hx('d')), },
-  { key = 'u',          mods = 'CTRL',      action = wezterm.action_callback(up_and_down_with_hx('u')), },
+  { key = 'd',          mods = 'CTRL',      action = wezterm.action_callback(up_and_down_in_editor('d')), },
+  { key = 'u',          mods = 'CTRL',      action = wezterm.action_callback(up_and_down_in_editor('u')), },
 }
 
 local copy_mode = nil
