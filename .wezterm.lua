@@ -80,4 +80,34 @@ config.window_decorations = 'RESIZE'
 config.window_padding = { left = 0, right = 0, top = 0, bottom = 0, }
 config.window_frame = { active_titlebar_bg = background, inactive_titlebar_bg = background, }
 
+local mux = wezterm.mux
+-- 🥲 https://github.com/wez/wezterm/issues/5052
+wezterm.on('gui-attached', function(_)
+  local workspace = mux.get_active_workspace()
+  for _, window in ipairs(mux.all_windows()) do
+    if window:get_workspace() == workspace then
+      window:gui_window():maximize()
+    end
+  end
+end)
+
+-- 🥲 https://github.com/wez/wezterm/issues/3173
+wezterm.on('window-config-reloaded', function(window, _)
+  -- approximately identify this gui window, by using the associated mux id
+  local id = tostring(window:window_id())
+
+  -- maintain a mapping of windows that we have previously seen before in this event handler
+  local seen = wezterm.GLOBAL.seen_windows or {}
+  -- set a flag if we haven't seen this window before
+  local is_new_window = not seen[id]
+  -- and update the mapping
+  seen[id] = true
+  wezterm.GLOBAL.seen_windows = seen
+
+  -- now act upon the flag
+  if is_new_window then
+    window:maximize()
+  end
+end)
+
 return config
