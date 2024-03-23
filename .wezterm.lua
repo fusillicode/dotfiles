@@ -44,7 +44,7 @@ config.keys = {
   { key = 'k',          mods = 'CMD|SHIFT', action = act.ActivatePaneDirection 'Up', },
   { key = 'j',          mods = 'CMD|SHIFT', action = act.ActivatePaneDirection 'Down', },
   { key = 'n',          mods = 'CMD|SHIFT', action = act.SplitVertical { domain = 'CurrentPaneDomain', }, },
-  { key = 't',          mods = 'CMD|SHIFT', action = act.SplitPane { direction = 'Right', size = { Percent = 59, }, }, },
+  { key = 't',          mods = 'CMD|SHIFT', action = act.SplitPane { direction = 'Right', size = { Percent = 60, }, }, },
   { key = 'p',          mods = 'CMD',       action = act.ActivateCommandPalette, },
   { key = 'x',          mods = 'CMD',       action = act.ActivateCopyMode, },
   { key = 'a',          mods = 'CMD|SHIFT', action = act.TogglePaneZoomState, },
@@ -80,17 +80,6 @@ config.window_decorations = 'RESIZE'
 config.window_padding = { left = 0, right = 0, top = 0, bottom = 0, }
 config.window_frame = { active_titlebar_bg = background, inactive_titlebar_bg = background, }
 
-local mux = wezterm.mux
--- 🥲 https://github.com/wez/wezterm/issues/5052
-wezterm.on('gui-attached', function(_)
-  local workspace = mux.get_active_workspace()
-  for _, window in ipairs(mux.all_windows()) do
-    if window:get_workspace() == workspace then
-      window:gui_window():maximize()
-    end
-  end
-end)
-
 -- 🥲 https://github.com/wez/wezterm/issues/3173
 wezterm.on('window-config-reloaded', function(window, _)
   -- approximately identify this gui window, by using the associated mux id
@@ -107,6 +96,8 @@ wezterm.on('window-config-reloaded', function(window, _)
   -- now act upon the flag
   if is_new_window then
     window:maximize()
+    local active_pane = window:active_pane()
+    active_pane:split { size = 0.6, }
   end
 end)
 
