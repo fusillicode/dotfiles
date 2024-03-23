@@ -37,22 +37,22 @@ config.font_size = 16
 config.line_height = 1.2
 
 config.keys = {
-  { key = 'LeftArrow',  mods = 'OPT',       action = act.SendKey { key = 'b', mods = 'ALT', }, },
-  { key = 'RightArrow', mods = 'OPT',       action = act.SendKey { key = 'f', mods = 'ALT', }, },
-  { key = 'h',          mods = 'CMD|SHIFT', action = act.ActivatePaneDirection 'Left', },
-  { key = 'l',          mods = 'CMD|SHIFT', action = act.ActivatePaneDirection 'Right', },
-  { key = 'k',          mods = 'CMD|SHIFT', action = act.ActivatePaneDirection 'Up', },
-  { key = 'j',          mods = 'CMD|SHIFT', action = act.ActivatePaneDirection 'Down', },
-  { key = 'n',          mods = 'CMD|SHIFT', action = act.SplitVertical { domain = 'CurrentPaneDomain', }, },
-  { key = 't',          mods = 'CMD|SHIFT', action = act.SplitPane { direction = 'Right', size = { Percent = 60, }, }, },
-  { key = 'p',          mods = 'CMD',       action = act.ActivateCommandPalette, },
-  { key = 'x',          mods = 'CMD',       action = act.ActivateCopyMode, },
-  { key = 'a',          mods = 'CMD|SHIFT', action = act.TogglePaneZoomState, },
-  { key = '[',          mods = 'CTRL|OPT',  action = act.MoveTabRelative(-1), },
-  { key = ']',          mods = 'CTRL|OPT',  action = act.MoveTabRelative(1), },
-  { key = 'Enter',      mods = 'ALT',       action = act.Nop, },
-  { key = 'd',          mods = 'CTRL',      action = wezterm.action_callback(up_and_down_in_editor('d')), },
-  { key = 'u',          mods = 'CTRL',      action = wezterm.action_callback(up_and_down_in_editor('u')), },
+  { key = 'LeftArrow',  mods = 'OPT',         action = act.SendKey { key = 'b', mods = 'ALT', }, },
+  { key = 'RightArrow', mods = 'OPT',         action = act.SendKey { key = 'f', mods = 'ALT', }, },
+  { key = 'h',          mods = 'SUPER|SHIFT', action = act.ActivatePaneDirection 'Left', },
+  { key = 'l',          mods = 'SUPER|SHIFT', action = act.ActivatePaneDirection 'Right', },
+  { key = 'k',          mods = 'SUPER|SHIFT', action = act.ActivatePaneDirection 'Up', },
+  { key = 'j',          mods = 'SUPER|SHIFT', action = act.ActivatePaneDirection 'Down', },
+  { key = 'n',          mods = 'SUPER|SHIFT', action = act.SplitVertical { domain = 'CurrentPaneDomain', }, },
+  { key = 't',          mods = 'SUPER|SHIFT', action = act.SplitPane { direction = 'Right', size = { Percent = 60, }, }, },
+  { key = 'p',          mods = 'SUPER',       action = act.ActivateCommandPalette, },
+  { key = 'x',          mods = 'SUPER',       action = act.ActivateCopyMode, },
+  { key = 'a',          mods = 'SUPER|SHIFT', action = act.TogglePaneZoomState, },
+  { key = '[',          mods = 'CTRL|OPT',    action = act.MoveTabRelative(-1), },
+  { key = ']',          mods = 'CTRL|OPT',    action = act.MoveTabRelative(1), },
+  { key = 'Enter',      mods = 'ALT',         action = act.Nop, },
+  { key = 'd',          mods = 'CTRL',        action = wezterm.action_callback(up_and_down_in_editor('d')), },
+  { key = 'u',          mods = 'CTRL',        action = wezterm.action_callback(up_and_down_in_editor('u')), },
 }
 
 local copy_mode = nil
