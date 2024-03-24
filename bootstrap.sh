@@ -2,29 +2,22 @@
 
 script_dir="${BASH_SOURCE%/*}"
 
-# Install Xcode tools
+# Xcode tools
 xcode-select --install
 
-# Install rustup ❤️
+# rustup ❤️
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# Install cargo bins ❤️
+# Cargo bins ❤️
 /bin/bash "${script_dir}/bin/update_cargo_bins.sh"
 
-# Configure atuin
-# shellcheck disable=SC2016
-echo 'eval "$(atuin init zsh)"' >> ~/.zshrc
-# Configure mise
-# shellcheck disable=SC2016
-echo 'eval "$(mise activate zsh)"' >> ~/.zshrc
-
-# Setup Homebrew
+# Homebrew
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
 brew analytics off
 brew update
 brew doctor --verbose
 
-# Install Homebrew apps
+# Homebrew apps
 brew install \
   awscli \
   gh \
@@ -44,7 +37,7 @@ brew install \
 
 brew link libpq --force
 
-# Install Homebrew casks
+# Homebrew casks
 brew tap homebrew/cask-versions
 brew install \
   alt-tab --cask \
@@ -69,12 +62,12 @@ brew install \
 tempfile=$(mktemp) \
   && curl -o "$tempfile" https://raw.githubusercontent.com/wez/wezterm/master/termwiz/data/wezterm.terminfo \
   && tic -x -o ~/.terminfo "$tempfile" \
-  && rm "$tempfile"
+  && rm "$tempfile" \
 
-# Install Oh My Zsh
+# Oh My Zsh
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
 
-# Requirements for installning Erlang... 🥲
+# Requirements for Erlang 🥲
 brew install autoconf wxwidgets
 CC="/usr/bin/clang -I$(brew --prefix openssl)/include"
 export CC
@@ -83,7 +76,7 @@ export LDFLAGS
 KERL_CONFIGURE_OPTIONS="--without-javac --with-ssl=$(brew --prefix openssl)"
 export KERL_CONFIGURE_OPTIONS
 
-# Install ~/.dev_tools
+# Setup ~/.dev_tools & ~/.local/bin
 ./bin/tempura/target/release/tempura install-dev-tools ~/.dev-tools ~/.local/bin
 
 # Update & cleanup brew
