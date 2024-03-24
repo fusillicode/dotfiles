@@ -5,12 +5,24 @@ script_dir="${BASH_SOURCE%/*}"
 # Install Xcode tools
 xcode-select --install
 
+# Install rustup ❤️
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Install cargo bins ❤️
+/bin/bash "${script_dir}/bin/update_cargo_bins.sh"
+
+# Configure atuin
+# shellcheck disable=SC2016
+echo 'eval "$(atuin init zsh)"' >> ~/.zshrc
+# Configure mise
+# shellcheck disable=SC2016
+echo 'eval "$(mise activate zsh)"' >> ~/.zshrc
+
 # Setup Homebrew
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/uninstall.sh)"
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
+brew analytics off
 brew update
 brew doctor --verbose
-brew analytics off
 
 # Install Homebrew apps
 brew install awscli
@@ -58,19 +70,6 @@ brew install whatsapp
 
 # Install Oh My Zsh
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
-
-# Install rustup ❤️
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# Install cargo bins ❤️
-/bin/bash "${script_dir}/bin/update_cargo_bins.sh"
-
-# Configure atuin
-# shellcheck disable=SC2016
-echo 'eval "$(atuin init zsh)"' >> ~/.zshrc
-# Configure mise
-# shellcheck disable=SC2016
-echo 'eval "$(mise activate zsh)"' >> ~/.zshrc
 
 # Requirements for installning Erlang... 🥲
 brew install autoconf wxwidgets
