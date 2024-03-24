@@ -83,18 +83,18 @@ config.window_frame = { active_titlebar_bg = background, inactive_titlebar_bg = 
 
 -- 🥲 https://github.com/wez/wezterm/issues/3173
 wezterm.on('window-config-reloaded', function(window, _)
-  -- approximately identify this gui window, by using the associated mux id
+  -- Approximately identify this gui window, by using the associated mux id
   local id = tostring(window:window_id())
 
-  -- maintain a mapping of windows that we have previously seen before in this event handler
+  -- Maintain a mapping of windows that we have previously seen before in this event handler
   local seen = wezterm.GLOBAL.seen_windows or {}
-  -- set a flag if we haven't seen this window before
+  -- Set a flag if we haven't seen this window before
   local is_new_window = not seen[id]
-  -- and update the mapping
+  -- And update the mapping
   seen[id] = true
   wezterm.GLOBAL.seen_windows = seen
 
-  -- now act upon the flag
+  -- Now act upon the flag
   if is_new_window then
     window:maximize()
     local active_pane = window:active_pane()
