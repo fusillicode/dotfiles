@@ -25,48 +25,51 @@ brew update
 brew doctor --verbose
 
 # Install Homebrew apps
-brew install awscli
-brew install gh
-brew install git
-brew install jq
-brew install kube-ps1
-brew install kubectx
-brew install kustomize
-brew install lftp
-brew install libpq && brew link libpq --force
-brew install librdkafka # It also installs `lz4`, `lzlib` & `zstd`
-brew install mycli # For Python `mysqlclient`
-brew install stern
-brew install txn2/tap/kubefwd
-brew install vegeta
-brew install zsh
+brew install \
+  awscli \
+  gh \
+  git \
+  jq \
+  kube-ps1 \
+  kubectx \
+  kustomize \
+  lftp \
+  libpq \
+  librdkafka \
+  mycli \
+  stern \
+  txn2/tap/kubefwd \
+  vegeta \
+  zsh \
 
-brew tap homebrew/cask-versions
+brew link libpq --force
 
 # Install Homebrew casks
-brew install alt-tab --cask
-brew install appcleaner
-brew install bitbar
-brew install chromedriver
-brew install discord
-brew install firefox
-brew install google-chrome
-brew install keepingyouawake
-# brew install league-of-legends
-brew install orbstack
-brew install rectangle
-brew install slack
-brew install telegram
-brew install the-unarchiver
-# brew install transmission --cask
-# brew install vlc
-brew install wez/wezterm/wezterm-nightly --cask --no-quarantine
+brew tap homebrew/cask-versions
+brew install \
+  alt-tab --cask \
+  appcleaner \
+  bitbar \
+  chromedriver \
+  discord \
+  firefox \
+  google-chrome \
+  keepingyouawake \
+  orbstack \
+  rectangle \
+  slack \
+  telegram \
+  the-unarchiver \
+  transmission --cask \
+  vlc \
+  wez/wezterm/wezterm-nightly --cask --no-quarantine \
+  whatsapp \
+
 # 🥲 https://wezfurlong.org/wezterm/faq.html#how-do-i-enable-undercurl-curly-underlines
 tempfile=$(mktemp) \
   && curl -o "$tempfile" https://raw.githubusercontent.com/wez/wezterm/master/termwiz/data/wezterm.terminfo \
   && tic -x -o ~/.terminfo "$tempfile" \
   && rm "$tempfile"
-brew install whatsapp
 
 # Install Oh My Zsh
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
