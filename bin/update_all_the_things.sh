@@ -5,6 +5,7 @@ set -euo pipefail
 script_dir="${BASH_SOURCE%/*}"
 
 rustup update
+
 mise self-update
 mise upgrade
 
