@@ -9,7 +9,7 @@ xcode-select --install
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Cargo bins ❤️
-/bin/bash "${script_dir}/bin/update_cargo_bins.sh"
+/bin/bash "$script_dir"/bin/update_cargo_bins.sh
 
 # Homebrew
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
@@ -80,4 +80,4 @@ export KERL_CONFIGURE_OPTIONS
 ./bin/tempura/target/release/tempura install-dev-tools ~/.dev-tools ~/.local/bin
 
 # Update & cleanup brew
-/bin/bash "${script_dir}/bin/update_brew.sh"
+/bin/bash "$script_dir"/bin/update_brew.sh
