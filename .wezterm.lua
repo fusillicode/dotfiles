@@ -45,6 +45,7 @@ config.keys = {
   { key = 'j',          mods = 'SUPER|SHIFT', action = act.ActivatePaneDirection 'Down', },
   { key = 'n',          mods = 'SUPER|SHIFT', action = act.SplitVertical { domain = 'CurrentPaneDomain', }, },
   { key = 't',          mods = 'SUPER|SHIFT', action = act.SplitPane { direction = 'Right', size = { Percent = 60, }, }, },
+  { key = 't',          mods = 'SUPER',       action = act.EmitEvent 'open-tab-with-custom-layout', },
   { key = 'p',          mods = 'SUPER',       action = act.ActivateCommandPalette, },
   { key = 'x',          mods = 'SUPER',       action = act.ActivateCopyMode, },
   { key = 'a',          mods = 'SUPER|SHIFT', action = act.TogglePaneZoomState, },
@@ -99,6 +100,11 @@ wezterm.on('window-config-reloaded', function(window, _)
     local active_pane = window:active_pane()
     active_pane:split { size = 0.6, }
   end
+end)
+
+wezterm.on('open-tab-with-custom-layout', function(window, _)
+  local _, pane, _ = window:mux_window():spawn_tab({})
+  pane:split { size = 0.6, }
 end)
 
 return config
