@@ -36,11 +36,15 @@ brew update
 brew doctor --verbose
 
 # Requirements for PHP...
+# https://github.com/asdf-community/asdf-php/blob/1eaf4de9b86bd0a45aa7ac3698d01d646a9b1037/.github/workflows/workflow.yml#L52
 brew install autoconf automake bison freetype gd gettext icu4c krb5 libedit libiconv libjpeg libpng libxml2 libzip pkg-config re2c zlib \
   # Requirements for Erlang...
+  # https://github.com/asdf-vm/asdf-erlang?tab=readme-ov-file#osx
+  openssl@1 \
   wxwidgets \
 
 # Requirements for Erlang...
+# https://github.com/asdf-vm/asdf-erlang?tab=readme-ov-file#use
 CC="/usr/bin/clang -I$(brew --prefix openssl)/include"
 export CC
 LDFLAGS="-L$(brew --prefix openssl)/lib:$LDFLAGS"
