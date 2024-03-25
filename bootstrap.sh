@@ -35,6 +35,22 @@ brew analytics off
 brew update
 brew doctor --verbose
 
+# Requirements for PHP...
+brew install autoconf automake bison freetype gd gettext icu4c krb5 libedit libiconv libjpeg libpng libxml2 libzip pkg-config re2c zlib \
+  # Requirements for Erlang...
+  wxwidgets \
+
+# Requirements for Erlang...
+CC="/usr/bin/clang -I$(brew --prefix openssl)/include"
+export CC
+LDFLAGS="-L$(brew --prefix openssl)/lib:$LDFLAGS"
+export LDFLAGS
+KERL_CONFIGURE_OPTIONS="--without-javac --with-ssl=$(brew --prefix openssl)"
+export KERL_CONFIGURE_OPTIONS
+
+mise self-update
+mise upgrade
+
 # Homebrew apps
 brew install \
   awscli \
@@ -85,14 +101,8 @@ tempfile=$(mktemp) \
 # Oh My Zsh
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
 
-# Requirements for Erlang 🥲
-brew install autoconf wxwidgets
-CC="/usr/bin/clang -I$(brew --prefix openssl)/include"
-export CC
-LDFLAGS="-L$(brew --prefix openssl)/lib:$LDFLAGS"
-export LDFLAGS
-KERL_CONFIGURE_OPTIONS="--without-javac --with-ssl=$(brew --prefix openssl)"
-export KERL_CONFIGURE_OPTIONS
+# Requirements for nvim
+brew install ninja cmake gettext curl
 
 # Setup ~/.dev_tools & ~/.local/bin
 ./bin/tempura/target/release/tempura install-dev-tools ~/.dev-tools ~/.local/bin
