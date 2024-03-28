@@ -109,7 +109,9 @@ return {
             Operator      = 'operator',
             TypeParameter = 'type',
           },
-          symbol_fmt   = function(s, opts) return opts['symbol_icons'][s] .. ':' end,
+          symbol_fmt   = function(s, opts)
+            return opts['symbol_icons'][s] and (opts['symbol_icons'][s] .. ':')
+          end,
           child_prefix = false,
         },
       },
