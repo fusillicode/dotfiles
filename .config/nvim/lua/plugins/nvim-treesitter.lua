@@ -28,6 +28,7 @@ return {
         'javascript',
         'json',
         'kdl',
+        'liquid',
         'lua',
         'make',
         'markdown',

@@ -67,7 +67,7 @@ return {
       },
       files = {
         fd_opts = '--color=never --type f --hidden --follow --exclude .git ' ..
-            '--no-ignore-vcs --exclude target --exclude node_modules',
+            '--no-ignore-vcs --exclude target --exclude node_modules --exclude _build --exclude deps --exclude .elixir_ls',
       },
       git = {
         branches = {
