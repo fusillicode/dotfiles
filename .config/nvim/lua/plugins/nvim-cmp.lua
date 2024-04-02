@@ -18,7 +18,7 @@ return {
     local luasnip = require('luasnip')
     local cmp_autopairs = require('nvim-autopairs.completion.cmp')
 
-    require('luasnip.loaders.from_vscode').lazy_load()
+    require('luasnip.loaders.from_vscode').lazy_load({ paths = { '../../../../vscode/snippets', }, })
 
     require('codeium').setup({})
 
