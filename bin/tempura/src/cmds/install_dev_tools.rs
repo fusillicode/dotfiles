@@ -31,35 +31,14 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
             &format!(
                 r#"
                     ([ ! -d "{nvim_source_dir}" ] && \
-                        git clone https://github.com/neovim/neovim {nvim_source_dir} || true
-                    ) && \
-                        cd {nvim_source_dir} && \
-                        git checkout master && \
-                        git pull origin master && \
-                        make distclean && \
-                        make CMAKE_BUILD_TYPE=Release CMAKE_EXTRA_FLAGS="-DCMAKE_INSTALL_PREFIX={nvim_release_dir}" && \
-                        make install
-                        ln -sf {nvim_release_dir}/bin/nvim {bin_dir}
-                "#,
-            ),
-        ])
-        .status()?
-        .exit_ok()?;
-
-    // Compiling from sources because I was used to do it 👍
-    let hx_source_dir = dbg!(format!("{dev_tools_dir}/hx"));
-    Command::new("sh")
-        .args([
-            "-c",
-            &format!(
-                r#"
-                    ([ ! -d "{hx_source_dir}" ] && \
-                        git clone https://github.com/helix-editor/helix {hx_source_dir} || true
-                    ) && \
-                        cd {hx_source_dir} && \
-                        git checkout master && \
-                        git pull origin master && \
-                        cargo install --path helix-term --locked
+                        git clone https://github.com/neovim/neovim {nvim_source_dir} || true) && \
+                    cd {nvim_source_dir} && \
+                    git checkout master && \
+                    git pull origin master && \
+                    make distclean && \
+                    make CMAKE_BUILD_TYPE=Release CMAKE_EXTRA_FLAGS="-DCMAKE_INSTALL_PREFIX={nvim_release_dir}" && \
+                    make install
+                    ln -sf {nvim_release_dir}/bin/nvim {bin_dir}
                 "#,
             ),
         ])
