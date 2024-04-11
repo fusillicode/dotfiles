@@ -5,6 +5,13 @@ local function keymap_set(modes, lhs, rhs, opts)
 end
 
 function M.core()
+  vim.g.mapleader = ' '
+  vim.g.maplocalleader = ' '
+
+  keymap_set('', '<c-n>', ':cn<cr>')
+  keymap_set('', '<c-p>', ':cp<cr>')
+  keymap_set('', '<c-x>', ':ccl<cr>')
+
   keymap_set('i', '<c-a>', '<esc>^i')
   keymap_set('n', '<c-a>', '^i')
   keymap_set('i', '<c-e>', '<end>')

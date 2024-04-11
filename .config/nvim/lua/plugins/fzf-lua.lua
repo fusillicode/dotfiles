@@ -37,14 +37,14 @@ return {
           ['<c-u>'] = 'preview-page-up',
         },
         fzf = {
-          ['ctrl-d'] = 'preview-page-down',
-          ['ctrl-u'] = 'preview-page-up',
+          ['ctrl-n'] = 'preview-page-down',
+          ['ctrl-p'] = 'preview-page-up',
+          ['ctrl-f'] = 'select-all+accept',
         },
       },
       winopts = {
         preview = {
           default = 'builtin',
-          layout = 'vertical',
           title = true,
           title_pos = 'left',
         },
@@ -67,7 +67,7 @@ return {
       },
       files = {
         fd_opts = '--color=never --type f --hidden --follow --exclude .git ' ..
-            '--no-ignore-vcs --exclude target --exclude node_modules',
+            '--no-ignore-vcs --exclude target --exclude node_modules --exclude _build --exclude deps --exclude .elixir_ls',
       },
       git = {
         branches = {
@@ -109,7 +109,9 @@ return {
             Operator      = 'operator',
             TypeParameter = 'type',
           },
-          symbol_fmt   = function(s, opts) return opts['symbol_icons'][s] .. ':' end,
+          symbol_fmt   = function(s, opts)
+            return opts['symbol_icons'][s] and (opts['symbol_icons'][s] .. ':')
+          end,
           child_prefix = false,
         },
       },

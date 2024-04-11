@@ -1,0 +1,42 @@
+{
+  "contributes": {
+    "snippets": [
+      {
+        "language": "coffeescript",
+        "path": "./coffeescript.json"
+      },
+      {
+        "language": "elixir",
+        "path": "./elixir.json"
+      },
+      {
+        "language": "erb",
+        "path": "./erb.json"
+      },
+      {
+        "language": "haml",
+        "path": "./haml.json"
+      },
+      {
+        "language": "javascript",
+        "path": "./javascript.json"
+      },
+      {
+        "language": "javascriptreact",
+        "path": "./javascriptreact.json"
+      },
+      {
+        "language": "python",
+        "path": "./python.json"
+      },
+      {
+        "language": "ruby",
+        "path": "./ruby.json"
+      },
+      {
+        "language": "slim",
+        "path": "./slim.json"
+      }
+    ]
+  }
+}
