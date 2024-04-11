@@ -13,6 +13,7 @@ return {
         graphql = { { 'prettierd', }, },
         html = { { 'prettierd', }, },
         javascript = { { 'prettierd', }, },
+        liquid = { { 'prettierd', }, },
         markdown = { { 'prettierd', }, },
         sql = { { 'sqlfluff', }, },
         typescript = { { 'prettierd', }, },

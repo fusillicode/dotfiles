@@ -64,10 +64,10 @@ style = "compact"
 
 ## the maximum number of lines the interface should take up
 ## set it to 0 to always go full screen
-inline_height = 12
+inline_height = 7
 
 ## Invert the UI - put the search bar at the top , Default to `false`
-invert = true
+# invert = false
 
 ## enable or disable showing a preview of the selected command
 ## useful when the command is longer than the terminal width and is cut off

@@ -99,17 +99,24 @@ fi
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 . "$HOME/.zshenv"
 
-# `brew link imagemagick@6` suggestion ¯\_(ツ)_/¯
-export PATH="/usr/local/opt/imagemagick@6:$PATH"
 
-# Crystal 0.26.1 + macOS Mojave
-export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/usr/local/opt/openssl/lib/pkgconfig
+# Atuin 🐢
+eval "$(atuin init zsh)"
+
+# Mise 😎
+eval "$(mise activate zsh)"
+
+# My bins
+export PATH=$HOME/.local/bin:$PATH
+
+# 🥲 https://wezfurlong.org/wezterm/faq.html#how-do-i-enable-undercurl-curly-underlines
+export TERM=wezterm
+
+# Helix from the source! 😎
+export HELIX_RUNTIME=~/.dev-tools/helix/runtime
 
 # K8S
 export KUBECONFIG=~/.kube/config:~/.kube/config.qa:~/.kube/config.prod
-
-# Elixir & Erlang
-export ERL_AFLAGS="-kernel shell_history enabled -kernel shell_history_file_bytes 1024000"
 
 # Rust
 [ -e "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
@@ -117,8 +124,8 @@ export ERL_AFLAGS="-kernel shell_history enabled -kernel shell_history_file_byte
 # Haskell
 [ -e "$HOME/.ghcup/env" ] && . "$HOME/.ghcup/env"
 
-# # ...Java...
-# [ -e "$HOME/.asdf/plugins/java/set-java-home.sh" ] && . $HOME/.asdf/plugins/java/set-java-home.sh
+# Elixir & Erlang
+export ERL_AFLAGS="-kernel shell_history enabled -kernel shell_history_file_bytes 1024000"
 
 # ...Go...
 export PATH="$HOME/go/bin:$PATH"
@@ -126,9 +133,6 @@ export PATH="$HOME/go/bin:$PATH"
 # ...Poetry...
 [ -e "$HOME/.poetry/env" ] && . "$HOME/.poetry/env"
 export PATH="$HOME/.poetry/bin:$PATH"
-
-# Atuin 🐢
-eval "$(atuin init zsh)"
 
 # Lira 🥲
 export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
@@ -139,18 +143,6 @@ export OPENSSL_ROOT_DIR="/opt/homebrew/opt/openssl"
 export LDFLAGS="-L/opt/homebrew/opt/openssl/lib -L/opt/homebrew/opt/llvm/lib"
 export CPPFLAGS="-I/opt/homebrew/opt/openssl/include -I/opt/homebrew/opt/llvm/include"
 export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl/lib/pkgconfig"
-
-# Mise 😎
-eval "$(mise activate zsh)"
-
-# Helix from the source! 😎
-export HELIX_RUNTIME=~/helix/runtime
-
-# 🥲 https://wezfurlong.org/wezterm/faq.html#how-do-i-enable-undercurl-curly-underlines
-export TERM=wezterm
-
-# My bins
-export PATH=$HOME/.local/bin:$PATH
 
 # FFS PHP...
 export PATH="/opt/homebrew/opt/m4/bin:$PATH"

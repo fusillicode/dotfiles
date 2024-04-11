@@ -11,4 +11,3 @@ brew upgrade --cask homebrew/cask-versions/wezterm-nightly --no-quarantine --gre
 brew cleanup -s
 rm -rf ~/Library/Caches/Homebrew/*
 brew doctor
-

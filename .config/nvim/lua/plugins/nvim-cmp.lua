@@ -18,7 +18,7 @@ return {
     local luasnip = require('luasnip')
     local cmp_autopairs = require('nvim-autopairs.completion.cmp')
 
-    require('luasnip.loaders.from_vscode').lazy_load()
+    require('luasnip.loaders.from_vscode').load({ paths = { './snippets', }, })
 
     require('codeium').setup({})
 
@@ -69,6 +69,7 @@ return {
       }),
       sources = {
         { name = 'nvim_lsp', },
+        { name = 'nvim_lsp_signature_help', },
         { name = 'codeium', },
         { name = 'path', },
         { name = 'buffer', },
