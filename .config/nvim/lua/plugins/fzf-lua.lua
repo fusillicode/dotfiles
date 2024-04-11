@@ -45,7 +45,6 @@ return {
       winopts = {
         preview = {
           default = 'builtin',
-          layout = 'vertical',
           title = true,
           title_pos = 'left',
         },
