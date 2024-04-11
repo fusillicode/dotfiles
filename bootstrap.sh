@@ -2,29 +2,60 @@
 
 script_dir="${BASH_SOURCE%/*}"
 
-# Install Xcode tools
+# Symlink configs
+ln -s "$HOME"/data/dev/dotfiles/dotfiles/.config/atuin/ "$HOME"/.config/atuin
+ln -s "$HOME"/data/dev/dotfiles/dotfiles/.config/helix/ "$HOME"/.config/helix
+ln -s "$HOME"/data/dev/dotfiles/dotfiles/.config/mise/ "$HOME"/.config/mise
+ln -s "$HOME"/data/dev/dotfiles/dotfiles/.config/nvim/ "$HOME"/.config/nvim
+
+cp "$HOME"/data/dev/dotfiles/dotfiles/.gitconfig "$HOME"
+ln -s "$HOME"/data/dev/dotfiles/dotfiles/.gitignore "$HOME"
+ln -s "$HOME"/data/dev/dotfiles/dotfiles/.gitignore_global "$HOME"
+ln -s "$HOME"/data/dev/dotfiles/dotfiles/.myclirc "$HOME"
+ln -s "$HOME"/data/dev/dotfiles/dotfiles/.psqlrc "$HOME"
+ln -s "$HOME"/data/dev/dotfiles/dotfiles/.psqlrc "$HOME"
+ln -s "$HOME"/data/dev/dotfiles/dotfiles/.vale.ini "$HOME"
+ln -s "$HOME"/data/dev/dotfiles/dotfiles/.wezterm "$HOME"
+ln -s "$HOME"/data/dev/dotfiles/dotfiles/.zshenv "$HOME"
+ln -s "$HOME"/data/dev/dotfiles/dotfiles/.zshrc "$HOME"
+ln -s "$HOME"/data/dev/dotfiles/dotfiles/my-zsh.zsh-theme "$HOME"/.oh-my-zsh/custom/themes
+
+# Xcode tools
 xcode-select --install
 
-# Install rustup ❤️
+# rustup ❤️
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# Install cargo bins ❤️
-/bin/bash "${script_dir}/bin/update_cargo_bins.sh"
+# Cargo bins ❤️
+/bin/bash "$script_dir"/bin/update_cargo_bins.sh
 
-# Configure atuin
-# shellcheck disable=SC2016
-echo 'eval "$(atuin init zsh)"' >> ~/.zshrc
-# Configure mise
-# shellcheck disable=SC2016
-echo 'eval "$(mise activate zsh)"' >> ~/.zshrc
-
-# Setup Homebrew
+# Homebrew
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
 brew analytics off
 brew update
 brew doctor --verbose
 
-# Install Homebrew apps
+# Requirements for PHP...
+# https://github.com/asdf-community/asdf-php/blob/1eaf4de9b86bd0a45aa7ac3698d01d646a9b1037/.github/workflows/workflow.yml#L52
+brew install autoconf automake bison freetype gd gettext icu4c krb5 libedit libiconv libjpeg libpng libxml2 libzip pkg-config re2c zlib \
+  # Requirements for Erlang...
+  # https://github.com/asdf-vm/asdf-erlang?tab=readme-ov-file#osx
+  openssl@1 \
+  wxwidgets \
+
+# Requirements for Erlang...
+# https://github.com/asdf-vm/asdf-erlang?tab=readme-ov-file#use
+CC="/usr/bin/clang -I$(brew --prefix openssl)/include"
+export CC
+LDFLAGS="-L$(brew --prefix openssl)/lib:$LDFLAGS"
+export LDFLAGS
+KERL_CONFIGURE_OPTIONS="--without-javac --with-ssl=$(brew --prefix openssl)"
+export KERL_CONFIGURE_OPTIONS
+
+mise self-update
+mise upgrade
+
+# Homebrew apps
 brew install \
   awscli \
   gh \
@@ -44,7 +75,7 @@ brew install \
 
 brew link libpq --force
 
-# Install Homebrew casks
+# Homebrew casks
 brew tap homebrew/cask-versions
 brew install \
   alt-tab --cask \
@@ -69,22 +100,16 @@ brew install \
 tempfile=$(mktemp) \
   && curl -o "$tempfile" https://raw.githubusercontent.com/wez/wezterm/master/termwiz/data/wezterm.terminfo \
   && tic -x -o ~/.terminfo "$tempfile" \
-  && rm "$tempfile"
+  && rm "$tempfile" \
 
-# Install Oh My Zsh
+# Oh My Zsh
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
 
-# Requirements for installning Erlang... 🥲
-brew install autoconf wxwidgets
-CC="/usr/bin/clang -I$(brew --prefix openssl)/include"
-export CC
-LDFLAGS="-L$(brew --prefix openssl)/lib:$LDFLAGS"
-export LDFLAGS
-KERL_CONFIGURE_OPTIONS="--without-javac --with-ssl=$(brew --prefix openssl)"
-export KERL_CONFIGURE_OPTIONS
+# Requirements for nvim
+brew install ninja cmake gettext curl
 
-# Install ~/.dev_tools
+# Setup ~/.dev_tools & ~/.local/bin
 ./bin/tempura/target/release/tempura install-dev-tools ~/.dev-tools ~/.local/bin
 
 # Update & cleanup brew
-/bin/bash "${script_dir}/bin/update_brew.sh"
+/bin/bash "$script_dir"/bin/update_brew.sh
