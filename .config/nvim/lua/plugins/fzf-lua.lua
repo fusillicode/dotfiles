@@ -66,20 +66,8 @@ return {
         },
       },
       files = {
-        -- GIGACHAD ✨ https://www.reddit.com/r/neovim/comments/1c1id24/comment/kz3jnkc/
-        fzf_opts = {
-          ['--ansi'] = '',
-          ['--with-nth'] = '2..',
-          ['--delimiter'] = '\\s',
-          ['--tiebreak'] = 'begin,index',
-        },
-        cmd = string.format(
-          'fd --color=never --type f --hidden --follow --no-ignore-vcs ' ..
-          '--exclude .git --exclude target --exclude node_modules --exclude _build --exclude deps --exclude .elixir_ls ' ..
-          '-x echo {} | awk -F / ' ..
-          [['{printf "%%s: ", $0; printf "%%s ", $NF; gsub(/^\.\//, "", $0); gsub($NF, "", $0); printf "%s ", $0; print ""}']],
-          require('fzf-lua.utils').ansi_codes.grey('%s')
-        ),
+        fd_opts = '--color=never --type f --hidden --follow --exclude .git ' ..
+            '--no-ignore-vcs --exclude target --exclude node_modules --exclude _build --exclude deps --exclude .elixir_ls',
       },
       git = {
         branches = {
