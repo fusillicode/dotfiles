@@ -5,6 +5,8 @@ return {
     vim.g.bones_compat = 1
     vim.cmd.colorscheme('neobones')
 
+    local match_highlight = { fg = vim.api.nvim_get_hl(0, { name = 'IncSearch', }).bg, bold = true, }
+
     vim.api.nvim_set_hl(0, 'CursorLine', { bg = vim.api.nvim_get_hl(0, { name = 'StatusLine', }).bg, })
     vim.api.nvim_set_hl(0, 'ColorColumn', { link = 'StatusLine', })
     vim.api.nvim_set_hl(0, 'DiagnosticError', { fg = 'red', })
@@ -37,5 +39,8 @@ return {
     vim.api.nvim_set_hl(0, 'GitSignsAdd', { fg = 'limegreen', })
     vim.api.nvim_set_hl(0, 'GitSignsChange', { fg = 'orange', })
     vim.api.nvim_set_hl(0, 'GitSignsDelete', { fg = 'red', })
+    vim.api.nvim_set_hl(0, 'TelescopeMatching', match_highlight)
+    vim.api.nvim_set_hl(0, 'TelescopePromptPrefix', { link = 'TelescopePromptBorder', })
+    vim.api.nvim_set_hl(0, 'TelescopePromptCounter', match_highlight)
   end,
 }
