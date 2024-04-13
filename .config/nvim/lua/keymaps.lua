@@ -5,8 +5,8 @@ local function keymap_set(modes, lhs, rhs, opts)
 end
 
 function M.core()
-  vim.g.mapleader = ' '
-  vim.g.maplocalleader = ' '
+  vim.g.mapleader = ';'
+  vim.g.maplocalleader = ';'
 
   keymap_set('', '<c-n>', ':cn<cr>')
   keymap_set('', '<c-p>', ':cp<cr>')
@@ -80,8 +80,8 @@ function M.telescope(telescope, telescope_builtin, defaults)
     with_defaults('diagnostics', { prompt_prefix = 'Diagnostic: ', bufnr = 0, }))
   keymap_set('n', '<leader>D',
     with_defaults('diagnostics', { prompt_prefix = 'Diagnostic Workspace: ', }))
-  keymap_set('n', '<leader>hh', with_defaults('help_tags', { prompt_prefix = 'Help tag: ', }))
-  keymap_set('n', '<leader>/', function()
+  keymap_set('n', '<leader>h', with_defaults('help_tags', { prompt_prefix = 'Help tag: ', }))
+  keymap_set('n', '<leader>e', function()
     telescope.extensions.egrepify.egrepify(vim.tbl_extend('force', defaults, { prompt_prefix = 'rg: ', }))
   end)
   keymap_set('n', '<leader>T', ':TodoTelescope<CR>')
