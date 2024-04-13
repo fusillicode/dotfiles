@@ -14,9 +14,6 @@ return {
     },
   },
   config = function()
-    local telescope = require('telescope')
-    local telescope_builtin = require('telescope.builtin')
-    local actions = require('telescope.actions')
     local defaults = {
       mappings = {
         ['i'] = {
@@ -27,7 +24,7 @@ return {
           ['<A-f>'] = function() vim.cmd('normal! w') end,
           ['<A-b>'] = function() vim.cmd('normal! b') end,
           ['<C-k>'] = function() vim.cmd('normal! d$') end,
-          ['<esc>'] = actions.close,
+          ['<esc>'] = require('telescope.actions').close,
         },
       },
       layout_config = {
@@ -39,10 +36,10 @@ return {
       results_title = false,
       show_line = false,
     }
-    require('keymaps').telescope(telescope, telescope_builtin, defaults)
+    local telescope = require('telescope')
+    require('keymaps').telescope(telescope, require('telescope.builtin'), defaults)
 
     local theme = vim.tbl_extend('force', require('telescope.themes').get_dropdown(), defaults)
-
     telescope.setup({
       defaults = theme,
       extensions = {

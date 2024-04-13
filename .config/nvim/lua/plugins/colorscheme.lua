@@ -7,40 +7,44 @@ return {
 
     local match_highlight = { fg = vim.api.nvim_get_hl(0, { name = 'IncSearch', }).bg, bold = true, }
 
-    vim.api.nvim_set_hl(0, 'CursorLine', { bg = vim.api.nvim_get_hl(0, { name = 'StatusLine', }).bg, })
-    vim.api.nvim_set_hl(0, 'ColorColumn', { link = 'StatusLine', })
-    vim.api.nvim_set_hl(0, 'DiagnosticError', { fg = 'red', })
-    vim.api.nvim_set_hl(0, 'DiagnosticWarn', { fg = 'orange', })
-    vim.api.nvim_set_hl(0, 'DiagnosticInfo', { fg = 'cyan', })
-    vim.api.nvim_set_hl(0, 'DiagnosticHint', { fg = 'white', })
-    vim.api.nvim_set_hl(0, 'DiagnosticOk', { fg = 'limegreen', })
-    vim.api.nvim_set_hl(0, 'DiagnosticFloatingError', { fg = 'red', })
-    vim.api.nvim_set_hl(0, 'DiagnosticFloatingWarn', { fg = 'orange', })
-    vim.api.nvim_set_hl(0, 'DiagnosticFloatingInfo', { fg = 'cyan', })
-    vim.api.nvim_set_hl(0, 'DiagnosticFloatingHint', { fg = 'white', })
-    vim.api.nvim_set_hl(0, 'DiagnosticFloatingOk', { fg = 'limegreen', })
-    vim.api.nvim_set_hl(0, 'DiagnosticSignError', { fg = 'red', })
-    vim.api.nvim_set_hl(0, 'DiagnosticSignWarn', { fg = 'orange', })
-    vim.api.nvim_set_hl(0, 'DiagnosticSignInfo', { fg = 'cyan', })
-    vim.api.nvim_set_hl(0, 'DiagnosticSignHint', { fg = 'white', })
-    vim.api.nvim_set_hl(0, 'DiagnosticSignOk', { fg = 'limegreen', })
-    vim.api.nvim_set_hl(0, 'DiagnosticUnderlineError', { undercurl = true, sp = 'red', })
-    vim.api.nvim_set_hl(0, 'DiagnosticUnderlineWarn', { undercurl = true, sp = 'orange', })
-    vim.api.nvim_set_hl(0, 'DiagnosticUnderlineInfo', { undercurl = true, sp = 'cyan', })
-    vim.api.nvim_set_hl(0, 'DiagnosticUnderlineHint', { undercurl = true, sp = 'white', })
-    vim.api.nvim_set_hl(0, 'DiagnosticUnderlineOk', { undercurl = true, sp = 'limegreen', })
-    vim.api.nvim_set_hl(0, 'DiagnosticVirtualTextError', { fg = 'red', })
-    vim.api.nvim_set_hl(0, 'DiagnosticVirtualTextWarn', { fg = 'orange', })
-    vim.api.nvim_set_hl(0, 'DiagnosticVirtualTextInfo', { fg = 'cyan', })
-    vim.api.nvim_set_hl(0, 'DiagnosticVirtualTextHint', { fg = 'white', })
-    vim.api.nvim_set_hl(0, 'DiagnosticVirtualTextOk', { fg = 'limegreen', })
-    vim.api.nvim_set_hl(0, 'DiagnosticUnnecessary', { fg = '', undercurl = true, sp = 'orange', })
-    vim.api.nvim_set_hl(0, 'DiagnosticDeprecated', { fg = '', strikethrough = true, })
-    vim.api.nvim_set_hl(0, 'GitSignsAdd', { fg = 'limegreen', })
-    vim.api.nvim_set_hl(0, 'GitSignsChange', { fg = 'orange', })
-    vim.api.nvim_set_hl(0, 'GitSignsDelete', { fg = 'red', })
-    vim.api.nvim_set_hl(0, 'TelescopeMatching', match_highlight)
-    vim.api.nvim_set_hl(0, 'TelescopePromptPrefix', { link = 'TelescopePromptBorder', })
-    vim.api.nvim_set_hl(0, 'TelescopePromptCounter', match_highlight)
+    for hl, value in pairs({
+      CursorLine = { bg = vim.api.nvim_get_hl(0, { name = 'StatusLine', }).bg, },
+      ColorColumn = { link = 'StatusLine', },
+      DiagnosticError = { fg = 'red', },
+      DiagnosticWarn = { fg = 'orange', },
+      DiagnosticInfo = { fg = 'cyan', },
+      DiagnosticHint = { fg = 'white', },
+      DiagnosticOk = { fg = 'limegreen', },
+      DiagnosticFloatingError = { fg = 'red', },
+      DiagnosticFloatingWarn = { fg = 'orange', },
+      DiagnosticFloatingInfo = { fg = 'cyan', },
+      DiagnosticFloatingHint = { fg = 'white', },
+      DiagnosticFloatingOk = { fg = 'limegreen', },
+      DiagnosticSignError = { fg = 'red', },
+      DiagnosticSignWarn = { fg = 'orange', },
+      DiagnosticSignInfo = { fg = 'cyan', },
+      DiagnosticSignHint = { fg = 'white', },
+      DiagnosticSignOk = { fg = 'limegreen', },
+      DiagnosticUnderlineError = { undercurl = true, sp = 'red', },
+      DiagnosticUnderlineWarn = { undercurl = true, sp = 'orange', },
+      DiagnosticUnderlineInfo = { undercurl = true, sp = 'cyan', },
+      DiagnosticUnderlineHint = { undercurl = true, sp = 'white', },
+      DiagnosticUnderlineOk = { undercurl = true, sp = 'limegreen', },
+      DiagnosticVirtualTextError = { fg = 'red', },
+      DiagnosticVirtualTextWarn = { fg = 'orange', },
+      DiagnosticVirtualTextInfo = { fg = 'cyan', },
+      DiagnosticVirtualTextHint = { fg = 'white', },
+      DiagnosticVirtualTextOk = { fg = 'limegreen', },
+      DiagnosticUnnecessary = { fg = '', undercurl = true, sp = 'orange', },
+      DiagnosticDeprecated = { fg = '', strikethrough = true, },
+      GitSignsAdd = { fg = 'limegreen', },
+      GitSignsChange = { fg = 'orange', },
+      GitSignsDelete = { fg = 'red', },
+      TelescopeMatching = match_highlight,
+      TelescopePromptPrefix = { link = 'TelescopePromptBorder', },
+      TelescopePromptCounter = match_highlight,
+    }) do
+      vim.api.nvim_set_hl(0, hl, value)
+    end
   end,
 }
