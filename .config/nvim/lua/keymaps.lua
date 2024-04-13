@@ -55,61 +55,37 @@ function M.core()
   keymap_set('v', '<leader>gx', require('opener').open_selection)
 end
 
-function M.fzf_lua(fzf_lua)
-  keymap_set('n', '<leader>c', function() fzf_lua.commands() end)
-  keymap_set('n', '<leader>f', function() fzf_lua.files({ prompt = 'Files: ', }) end)
-  keymap_set('n', '<leader>b', function() fzf_lua.buffers({ prompt = 'Buffers: ', }) end)
+function M.telescope(telescope, telescope_builtin, defaults)
+  local function with_defaults(picker, opts)
+    return function()
+      telescope_builtin[picker](vim.tbl_extend('force', defaults, opts or {}))
+    end
+  end
 
-  keymap_set('n', '<leader>gs', function() fzf_lua.git_status({ prompt = 'Changes: ', }) end)
-  keymap_set('n', '<leader>gc', function() fzf_lua.git_commits({ prompt = 'Commits: ', }) end)
-  keymap_set('n', '<leader>gcc', function() fzf_lua.git_bcommits({ prompt = 'Buffer commits: ', }) end)
-  keymap_set('n', '<leader>gb', function() fzf_lua.git_branches({ prompt = 'Branches: ', }) end)
-
-  local lsp_jumps_cfg = { ignore_current_line = true, jump_to_single_result = true, }
-  keymap_set('n', 'gr', function()
-    fzf_lua.lsp_references(vim.tbl_extend('error', { prompt = 'References: ', }, lsp_jumps_cfg))
+  keymap_set('n', 'gd', with_defaults('lsp_definitions', { prompt_prefix = 'LSP Def: ', }))
+  keymap_set('n', 'gr', with_defaults('lsp_references', { prompt_prefix = 'LSP Ref: ', }))
+  keymap_set('n', 'gi', with_defaults('lsp_implementations', { prompt_prefix = 'LSP Impl: ', }))
+  keymap_set('n', '<leader>s', with_defaults('lsp_document_symbols', { prompt_prefix = 'LSP Symbol: ', }))
+  keymap_set('n', '<leader>S',
+    with_defaults('lsp_dynamic_workspace_symbols', { prompt_prefix = 'LSP Symbol Workspace: ', }))
+  keymap_set('n', '<leader>b', with_defaults('buffers', { prompt_prefix = 'Buffer: ', }))
+  keymap_set('n', '<leader>f', with_defaults('find_files', { prompt_prefix = 'File: ', }))
+  keymap_set('n', '<leader>j', with_defaults('jumplist', { prompt_prefix = 'Jump: ', }))
+  keymap_set('n', '<leader>gc', with_defaults('git_commits', { prompt_prefix = 'Git Commit: ', }))
+  keymap_set('n', '<leader>gcb',
+    with_defaults('git_bcommits', { prompt_prefix = ' Git Commit Buffer >', bufnr = 0, }))
+  keymap_set('n', '<leader>gb', with_defaults('git_branches', { prompt_prefix = 'Git Branch: ', }))
+  keymap_set('n', '<leader>gs', with_defaults('git_status', { prompt_prefix = 'Git Status: ', }))
+  keymap_set('n', '<leader>d',
+    with_defaults('diagnostics', { prompt_prefix = 'Diagnostic: ', bufnr = 0, }))
+  keymap_set('n', '<leader>D',
+    with_defaults('diagnostics', { prompt_prefix = 'Diagnostic Workspace: ', }))
+  keymap_set('n', '<leader>hh', with_defaults('help_tags', { prompt_prefix = 'Help tag: ', }))
+  keymap_set('n', '<leader>/', function()
+    telescope.extensions.egrepify.egrepify(vim.tbl_extend('force', defaults, { prompt_prefix = 'rg: ', }))
   end)
-  keymap_set('n', 'gd', function()
-    fzf_lua.lsp_definitions(vim.tbl_extend('error', { prompt = 'Definitions: ', }, lsp_jumps_cfg))
-  end)
-  keymap_set('n', 'gi', function()
-    fzf_lua.lsp_implementations(vim.tbl_extend('error', { prompt = 'Implementations: ', }, lsp_jumps_cfg))
-  end)
-  keymap_set('n', 'go', function()
-    fzf_lua.lsp_outgoing_calls(vim.tbl_extend('error', { prompt = 'Out calls: ', }, lsp_jumps_cfg))
-  end)
-  keymap_set('n', 'gz', function()
-    fzf_lua.lsp_incoming_calls(vim.tbl_extend('error', { prompt = 'In calls: ', }, lsp_jumps_cfg))
-  end)
-
-  keymap_set('n', '<leader>j', function() fzf_lua.jumps() end)
-
-  keymap_set('n', '<leader>s', function() fzf_lua.lsp_document_symbols({ prompt = 'Buffer symbols: ', }) end)
-  keymap_set('n', '<leader>S', function() fzf_lua.lsp_live_workspace_symbols({ prompt = 'Workspace symbols: ', }) end)
-  keymap_set('n', '<leader>a', function() fzf_lua.lsp_code_actions({ prompt = 'Code actions: ', }) end)
-
-  keymap_set('n', '<leader>d', function() fzf_lua.diagnostics_document({ prompt = 'Buffer diagnostics: ', }) end)
-  keymap_set('n', '<leader>D', function() fzf_lua.diagnostics_workspace({ prompt = 'Workspace diagnostics: ', }) end)
-
-  keymap_set('n', '<leader>/', function() fzf_lua.live_grep_glob({ prompt = 'rg: ', }) end)
-  keymap_set('n', '<leader>w', function()
-    local word = vim.fn.expand('<cword>')
-    if word then fzf_lua.live_grep_glob({ prompt = 'rg: ', query = word, }) end
-  end)
-  keymap_set('v', '<leader>w', function()
-    local selection = fzf_lua.utils.get_visual_selection()
-    if selection then fzf_lua.live_grep_glob({ prompt = 'rg: ', query = selection, }) end
-  end)
-
-  local todo_comments_cfg = { search = 'TODO:|HACK:|PERF:|NOTE:|FIX:|FIXME:|WARN:', no_esc = true, }
-  keymap_set('n', '<leader>t', function()
-    fzf_lua.grep_curbuf(vim.tbl_extend('error', todo_comments_cfg, { prompt = 'Buffer TODOs: ', }))
-  end)
-  keymap_set('n', '<leader>T', function()
-    fzf_lua.grep(vim.tbl_extend('error', todo_comments_cfg, { prompt = 'Workspace TODOs: ', }))
-  end)
-
-  keymap_set('n', '<leader>l', function() fzf_lua.resume() end)
+  keymap_set('n', '<leader>T', ':TodoTelescope<CR>')
+  keymap_set('n', '<leader>l', telescope_builtin.resume)
 end
 
 function M.oil()
@@ -166,6 +142,7 @@ function M.lspconfig()
   return function(_, bufnr)
     keymap_set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr, })
     keymap_set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, })
+    keymap_set('n', '<leader>a', vim.lsp.buf.code_action, { buffer = bufnr, })
   end
 end
 
