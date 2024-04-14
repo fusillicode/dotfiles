@@ -41,8 +41,12 @@ return {
       GitSignsChange = { fg = 'orange', },
       GitSignsDelete = { fg = 'red', },
       TelescopeMatching = match_highlight,
-      TelescopePromptPrefix = { link = 'TelescopePromptBorder', },
       TelescopePromptCounter = match_highlight,
+      TelescopePromptPrefix = { link = 'TelescopePromptBorder', },
+      TelescopeResultsDiffAdd = { fg = 'limegreen', },
+      TelescopeResultsDiffChange = { fg = 'orange', },
+      TelescopeResultsDiffDelete = { fg = 'red', },
+      TelescopeResultsDiffUntracked = { fg = 'cyan', },
     }) do
       vim.api.nvim_set_hl(0, hl, value)
     end
