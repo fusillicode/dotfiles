@@ -5,8 +5,8 @@ local function keymap_set(modes, lhs, rhs, opts)
 end
 
 function M.core()
-  vim.g.mapleader = ';'
-  vim.g.maplocalleader = ';'
+  vim.g.mapleader = ' '
+  vim.g.maplocalleader = ' '
 
   keymap_set('', '<c-n>', ':cn<cr>')
   keymap_set('', '<c-p>', ':cp<cr>')
