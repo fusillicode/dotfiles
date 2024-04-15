@@ -4,7 +4,6 @@ return {
   branch = 'master',
   dependencies = {
     'nvim-lua/plenary.nvim',
-    'nvim-telescope/telescope-live-grep-args.nvim',
     'nvim-telescope/telescope-ui-select.nvim',
     'fdschmidt93/telescope-egrepify.nvim',
     {
