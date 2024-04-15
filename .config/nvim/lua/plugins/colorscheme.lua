@@ -42,7 +42,7 @@ return {
       GitSignsDelete = { fg = 'red', },
       TelescopeMatching = match_highlight,
       TelescopePromptCounter = match_highlight,
-      TelescopePromptPrefix = { link = 'TelescopePromptBorder', },
+      TelescopePromptPrefix = match_highlight,
       TelescopeResultsDiffAdd = { fg = 'limegreen', },
       TelescopeResultsDiffChange = { fg = 'orange', },
       TelescopeResultsDiffDelete = { fg = 'red', },
