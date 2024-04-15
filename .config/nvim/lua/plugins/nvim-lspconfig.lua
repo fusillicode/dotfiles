@@ -8,6 +8,8 @@ local function get_lsps_configs()
     dockerls = {},
     elixirls = {
       cmd = { home_dir .. '/.local/bin/elixir-ls', },
+      signatureAfterComplete = true,
+      suggestSpecs = true,
     },
     elmls = {},
     graphql = {},
