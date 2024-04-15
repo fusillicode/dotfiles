@@ -13,3 +13,8 @@ url = { version = "2.5.0", features = ["serde"] }
 [dev-dependencies]
 fake = { version = "2.9", features = ["derive"] }
 temp-env = { version = "0.3.6" }
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
