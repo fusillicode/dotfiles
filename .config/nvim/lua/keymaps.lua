@@ -79,7 +79,12 @@ function M.telescope(telescope, telescope_builtin, defaults)
   keymap_set('n', '<leader>h', with_defaults('help_tags', { prompt_prefix = 'Help: ', }))
   keymap_set('n', '<leader>c', with_defaults('commands', { prompt_prefix = 'Cmd: ', }))
   keymap_set('n', '<leader>/', function()
-    telescope.extensions.egrepify.egrepify(vim.tbl_extend('force', defaults, { prompt_prefix = 'rg: ', }))
+    telescope.extensions.live_grep_args.live_grep_args(vim.tbl_extend('force', defaults,
+      { prompt_prefix = 'rg: ', }))
+  end)
+  keymap_set('n', '<leader>w', function()
+    telescope.extensions.live_grep_args.live_grep_args(vim.tbl_extend('force', defaults,
+      { prompt_prefix = 'rgw: ', default_text = vim.fn.expand('<cword>'), postfix = '', }))
   end)
   keymap_set('n', '<leader>T', ':TodoTelescope<CR>')
   keymap_set('n', '<leader>l', telescope_builtin.resume)

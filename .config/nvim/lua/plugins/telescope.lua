@@ -5,7 +5,7 @@ return {
   dependencies = {
     'nvim-lua/plenary.nvim',
     'nvim-telescope/telescope-ui-select.nvim',
-    'fdschmidt93/telescope-egrepify.nvim',
+    'nvim-telescope/telescope-live-grep-args.nvim',
     {
       'nvim-telescope/telescope-fzf-native.nvim',
       build = 'make',
@@ -47,6 +47,21 @@ return {
             ['.'] = { flag = 'hidden', },
           },
         },
+        live_grep_args = {
+          prompt_title = false,
+          vimgrep_arguments = {
+            'rg',
+            '--color=never',
+            '--column',
+            '--line-number',
+            '--no-heading',
+            '--smart-case',
+            '--with-filename',
+            '--hidden',
+            '--glob',
+            '!**/.git/*',
+          },
+        },
         ['ui-select'] = { theme, },
       },
       pickers = {
@@ -56,11 +71,10 @@ return {
       },
     })
 
-    telescope.load_extension('fzf')
-    telescope.load_extension('egrepify')
     telescope.load_extension('ui-select')
+    telescope.load_extension('live_grep_args')
+    telescope.load_extension('fzf')
 
-    require('telescope._extensions.egrepify.config').values.mappings = {}
     vim.cmd('autocmd User TelescopePreviewerLoaded setlocal number')
   end,
 }
