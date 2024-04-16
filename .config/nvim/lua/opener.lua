@@ -28,9 +28,7 @@ end
 
 -- https://github.com/neovim/neovim/pull/13896
 function M.open_selection()
-  local _, ls, cs = table.unpack(vim.fn.getpos('v'))
-  local _, le, ce = table.unpack(vim.fn.getpos('.'))
-  open(vim.api.nvim_buf_get_text(0, ls - 1, cs - 1, le - 1, ce, {}))
+  open(require('utils').get_visual_selection())
 end
 
 return M
