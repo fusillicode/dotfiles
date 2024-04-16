@@ -17,12 +17,12 @@ for _, diagnostic_hl_group in ipairs({
   )
 end
 
+-- Thank you ChatGPT
 local function current_buffer_path()
-  if vim.bo.buftype == 'terminal' then
-    return ''
-  else
-    return vim.fn.expand('%:~:.')
-  end
+  return vim.fn.fnamemodify(
+    vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(vim.fn.win_getid(vim.fn.winnr('#')))),
+    ':~:.'
+  )
 end
 
 function M.draw()
