@@ -27,7 +27,6 @@ return {
         },
       },
       layout_config = {
-        anchor = 'S',
         width = 90,
       },
       preview_title = false,
