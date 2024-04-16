@@ -86,6 +86,10 @@ function M.telescope(telescope, telescope_builtin, defaults)
     telescope.extensions.live_grep_args.live_grep_args(vim.tbl_extend('force', defaults,
       { prompt_prefix = 'rgw: ', default_text = vim.fn.expand('<cword>'), postfix = '', }))
   end)
+  keymap_set('v', '<leader>w', function()
+    telescope.extensions.live_grep_args.live_grep_args(vim.tbl_extend('force', defaults,
+      { prompt_prefix = 'rgw: ', default_text = require('utils').get_visual_selection(), postfix = '', }))
+  end)
   keymap_set('n', '<leader>T', ':TodoTelescope<CR>')
   keymap_set('n', '<leader>l', telescope_builtin.resume)
 end
