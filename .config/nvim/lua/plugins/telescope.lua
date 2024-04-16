@@ -37,9 +37,9 @@ return {
     local telescope = require('telescope')
     require('keymaps').telescope(telescope, require('telescope.builtin'), defaults)
 
-    local theme = vim.tbl_extend('force', require('telescope.themes').get_dropdown(), defaults)
+    local defaults_and_theme = vim.tbl_extend('force', require('telescope.themes').get_dropdown(), defaults)
     telescope.setup({
-      defaults = theme,
+      defaults = defaults_and_theme,
       extensions = {
         egrepify = {
           prefixes = {
@@ -65,7 +65,7 @@ return {
             '--glob=!**/.node_modules/*',
           },
         },
-        ['ui-select'] = { theme, },
+        ['ui-select'] = { defaults_and_theme, },
       },
       pickers = {
         find_files = {
