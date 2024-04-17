@@ -29,6 +29,12 @@ return {
       layout_config = {
         width = 90,
       },
+      path_display = function(_, path)
+        local tail = vim.fs.basename(path)
+        local parent = vim.fs.dirname(path)
+        if parent == '.' then return tail end
+        return string.format('%s - %s', tail, parent)
+      end,
       preview_title = false,
       prompt_title = false,
       results_title = false,
