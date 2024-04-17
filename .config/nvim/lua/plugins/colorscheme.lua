@@ -6,6 +6,7 @@ return {
     vim.cmd.colorscheme('neobones')
 
     local match_highlight = { fg = vim.api.nvim_get_hl(0, { name = 'IncSearch', }).bg, bold = true, }
+    local telescope_border = { fg = vim.api.nvim_get_hl(0, { name = 'LineNr', }).fg, bold = true, }
 
     for hl, value in pairs({
       CursorLine = { bg = vim.api.nvim_get_hl(0, { name = 'StatusLine', }).bg, },
@@ -43,6 +44,9 @@ return {
       TelescopeMatching = match_highlight,
       TelescopePromptCounter = match_highlight,
       TelescopePromptPrefix = match_highlight,
+      TelescopePreviewBorder = telescope_border,
+      TelescopePromptBorder = telescope_border,
+      TelescopeResultsBorder = telescope_border,
       TelescopeResultsDiffAdd = { fg = 'limegreen', },
       TelescopeResultsDiffChange = { fg = 'orange', },
       TelescopeResultsDiffDelete = { fg = 'red', },
