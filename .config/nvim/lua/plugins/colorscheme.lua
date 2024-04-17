@@ -51,6 +51,7 @@ return {
       TelescopeResultsDiffChange = { fg = 'orange', },
       TelescopeResultsDiffDelete = { fg = 'red', },
       TelescopeResultsDiffUntracked = { fg = 'cyan', },
+      TelescopeParent = { fg = 'grey', italic = true, },
     }) do
       vim.api.nvim_set_hl(0, hl, value)
     end
