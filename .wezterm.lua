@@ -48,6 +48,7 @@ config.keys = {
   { key = 't',          mods = 'SUPER',       action = act.EmitEvent 'open-tab-with-custom-layout', },
   { key = 'p',          mods = 'SUPER',       action = act.ActivateCommandPalette, },
   { key = 'x',          mods = 'SUPER',       action = act.ActivateCopyMode, },
+  { key = 'f',          mods = 'SUPER',       action = act.Search 'CurrentSelectionOrEmptyString', },
   { key = 'a',          mods = 'SUPER|SHIFT', action = act.TogglePaneZoomState, },
   { key = '[',          mods = 'CTRL|OPT',    action = act.MoveTabRelative(-1), },
   { key = ']',          mods = 'CTRL|OPT',    action = act.MoveTabRelative(1), },
