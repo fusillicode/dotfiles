@@ -59,9 +59,15 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         Box::new(|| tools::sqlfluff::install(dev_tools_dir, bin_dir)),
     ];
 
-    std::thread::scope(|s| {
+    std::thread::scope(|scope| {
+        let mut install_results = vec![];
         for tool_installer in tools_installers {
-            s.spawn(tool_installer);
+            install_results.push(scope.spawn(tool_installer));
+        }
+        for install_result in install_results {
+            if let Err(e) = install_result.join() {
+                eprint!("failed to install tool: {e:?}");
+            }
         }
     });
 
