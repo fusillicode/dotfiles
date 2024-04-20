@@ -19,10 +19,11 @@ impl Editor {
     pub fn open_file_cmd(&self, file_to_open: &FileToOpen) -> String {
         let path = file_to_open.path.as_str();
         let line_nbr = file_to_open.line_nbr;
+        let column = file_to_open.column;
 
         match self {
             Self::Helix => format!("':o {path}:{line_nbr}'"),
-            Self::Nvim => format!(":e {path} | :{line_nbr}"),
+            Self::Nvim => format!(":e {path} | :call cursor({line_nbr}, {column})"),
         }
     }
 }
@@ -39,9 +40,11 @@ impl FromStr for Editor {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub struct FileToOpen {
     path: String,
     line_nbr: i64,
+    column: i64,
 }
 
 impl FromStr for FileToOpen {
@@ -57,10 +60,16 @@ impl FromStr for FileToOpen {
             .map(str::parse::<i64>)
             .transpose()?
             .unwrap_or_default();
+        let column = parts
+            .next()
+            .map(str::parse::<i64>)
+            .transpose()?
+            .unwrap_or_default();
 
         Ok(Self {
             path: path.into(),
             line_nbr,
+            column,
         })
     }
 }
@@ -100,4 +109,85 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
         .spawn()?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn file_to_open_is_properly_constructed_from_expected_str() {
+        assert_eq!(
+            FileToOpen {
+                path: "bootstrap.sh".into(),
+                line_nbr: 0,
+                column: 0
+            },
+            FileToOpen::from_str("bootstrap.sh").unwrap()
+        );
+        assert_eq!(
+            FileToOpen {
+                path: "bootstrap.sh".into(),
+                line_nbr: 3,
+                column: 0
+            },
+            FileToOpen::from_str("bootstrap.sh:3").unwrap()
+        );
+        assert_eq!(
+            FileToOpen {
+                path: "bootstrap.sh".into(),
+                line_nbr: 3,
+                column: 7
+            },
+            FileToOpen::from_str("bootstrap.sh:3:7").unwrap()
+        );
+        assert_eq!(
+            FileToOpen {
+                path: ".bootstrap.sh".into(),
+                line_nbr: 0,
+                column: 0
+            },
+            FileToOpen::from_str(".bootstrap.sh").unwrap()
+        );
+        assert_eq!(
+            FileToOpen {
+                path: ".bootstrap.sh".into(),
+                line_nbr: 3,
+                column: 0
+            },
+            FileToOpen::from_str(".bootstrap.sh:3").unwrap()
+        );
+        assert_eq!(
+            FileToOpen {
+                path: ".bootstrap.sh".into(),
+                line_nbr: 3,
+                column: 7
+            },
+            FileToOpen::from_str(".bootstrap.sh:3:7").unwrap()
+        );
+        assert_eq!(
+            FileToOpen {
+                path: "/root/bootstrap.sh".into(),
+                line_nbr: 0,
+                column: 0
+            },
+            FileToOpen::from_str("/root/bootstrap.sh").unwrap()
+        );
+        assert_eq!(
+            FileToOpen {
+                path: "/root/bootstrap.sh".into(),
+                line_nbr: 3,
+                column: 0
+            },
+            FileToOpen::from_str("/root/bootstrap.sh:3").unwrap()
+        );
+        assert_eq!(
+            FileToOpen {
+                path: "/root/bootstrap.sh".into(),
+                line_nbr: 3,
+                column: 7
+            },
+            FileToOpen::from_str("/root/bootstrap.sh:3:7").unwrap()
+        );
+    }
 }
