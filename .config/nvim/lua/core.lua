@@ -88,13 +88,3 @@ vim.api.nvim_create_autocmd('LspAttach', {
     end
   end,
 })
-
-vim.api.nvim_create_autocmd('FileType', {
-  group = vim.api.nvim_create_augroup('FormatTelescopeResults', { clear = true, }),
-  pattern = 'TelescopeResults',
-  callback = function(ctx)
-    vim.api.nvim_buf_call(ctx.buf, function()
-      vim.fn.matchadd('TelescopeParent', '- .*$')
-    end)
-  end,
-})
