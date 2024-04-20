@@ -9,6 +9,10 @@ use curl_install::OutputOption;
 use npm_install::npm_install;
 use pip_install::pip_install;
 
+use crate::utils::github::get_latest_release;
+use crate::utils::github::log_into_github;
+use crate::utils::system::chmod_x;
+
 mod composer_install;
 mod curl_install;
 mod npm_install;
@@ -296,41 +300,4 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
     chmod_x(&format!("{bin_dir}/*"))?;
 
     Ok(())
-}
-
-fn log_into_github() -> anyhow::Result<()> {
-    if Command::new("gh")
-        .args(["auth", "status"])
-        .status()?
-        .success()
-    {
-        return Ok(());
-    }
-
-    Ok(Command::new("sh")
-        .args(["-c", "gh auth login"])
-        .status()?
-        .exit_ok()?)
-}
-
-fn get_latest_release(repo: &str) -> anyhow::Result<String> {
-    let output = Command::new("gh")
-        .args([
-            "api",
-            &format!("repos/{repo}/releases/latest"),
-            "--jq=.tag_name",
-        ])
-        .output()?;
-
-    output.status.exit_ok()?;
-
-    Ok(std::str::from_utf8(&output.stdout)?.trim().into())
-}
-
-// Yes, `dir` is a `&str` and it's not sanitized but...I'm the alpha & the omega here!
-fn chmod_x(dir: &str) -> anyhow::Result<()> {
-    Ok(Command::new("sh")
-        .args(["-c", &format!("chmod +x {dir}")])
-        .status()?
-        .exit_ok()?)
 }
