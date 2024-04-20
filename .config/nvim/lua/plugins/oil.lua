@@ -3,15 +3,13 @@ return {
   keys = '<leader>F',
   config = function()
     require('keymaps').oil()
+
     require('oil').setup({
       buf_options = {
         buflisted = true,
         bufhidden = 'hide',
       },
       delete_to_trash = true,
-      view_options = {
-        show_hidden = true,
-      },
       float = {
         padding = 2,
         max_width = 100,
@@ -22,6 +20,10 @@ return {
       },
       keymaps = {
         ['<esc>'] = ':bd!<cr>',
+      },
+      prompt_save_on_select_new_entry = false,
+      view_options = {
+        show_hidden = true,
       },
     })
   end,
