@@ -25,3 +25,11 @@ pub fn copy_to_system_clipboard(content: &mut &[u8]) -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+// Yes, `dir` is a `&str` and it's not sanitized but...I'm the alpha & the omega here!
+pub fn chmod_x(dir: &str) -> anyhow::Result<()> {
+    Ok(Command::new("sh")
+        .args(["-c", &format!("chmod +x {dir}")])
+        .status()?
+        .exit_ok()?)
+}
