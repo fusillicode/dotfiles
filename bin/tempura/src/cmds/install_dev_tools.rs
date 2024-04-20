@@ -26,36 +26,50 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
 
     crate::utils::github::log_into_github()?;
 
-    tools::nvim::install(dev_tools_dir, bin_dir)?;
-    tools::rust_analyzer::install(bin_dir)?;
-    tools::taplo::install(bin_dir)?;
-    tools::terraform_ls::install(bin_dir)?;
-    tools::deno::install(bin_dir)?;
-    tools::typos_lsp::install(bin_dir)?;
-    tools::vale::install(bin_dir)?;
-    tools::hadonlint::install(bin_dir)?;
-    tools::helm_ls::install(bin_dir)?;
-    tools::marksman::install(bin_dir)?;
-    tools::shellcheck::install(bin_dir)?;
-    tools::elixir_ls::install(dev_tools_dir, bin_dir)?;
-    tools::lua_ls::install(bin_dir)?;
-    tools::phpactor::install(dev_tools_dir, bin_dir)?;
-    tools::php_cs_fixer::install(dev_tools_dir, bin_dir)?;
-    tools::psalm::install(dev_tools_dir, bin_dir)?;
-    tools::commitlint::install(dev_tools_dir, bin_dir)?;
-    tools::elm_language_server::install(dev_tools_dir, bin_dir)?;
-    tools::bash_language_server::install(dev_tools_dir, bin_dir)?;
-    tools::docker_langserver::install(dev_tools_dir, bin_dir)?;
-    tools::eslint_d::install(dev_tools_dir, bin_dir)?;
-    tools::graphql_lsp::install(dev_tools_dir, bin_dir)?;
-    tools::prettierd::install(dev_tools_dir, bin_dir)?;
-    tools::sql_language_server::install(dev_tools_dir, bin_dir)?;
-    tools::vscode_langservers::install(dev_tools_dir, bin_dir)?;
-    tools::yaml_language_server::install(dev_tools_dir, bin_dir)?;
-    tools::typescript_language_server::install(dev_tools_dir, bin_dir)?;
-    tools::quicktype::install(dev_tools_dir, bin_dir)?;
-    tools::ruff_lsp::install(dev_tools_dir, bin_dir)?;
-    tools::sqlfluff::install(dev_tools_dir, bin_dir)?;
+    let tools_installers: Vec<Box<dyn Fn() -> anyhow::Result<()> + Send + Sync>> = vec![
+        Box::new(|| tools::nvim::install(dev_tools_dir, bin_dir)),
+        Box::new(|| tools::rust_analyzer::install(bin_dir)),
+        Box::new(|| tools::taplo::install(bin_dir)),
+        Box::new(|| tools::terraform_ls::install(bin_dir)),
+        Box::new(|| tools::deno::install(bin_dir)),
+        Box::new(|| tools::typos_lsp::install(bin_dir)),
+        Box::new(|| tools::vale::install(bin_dir)),
+        Box::new(|| tools::hadonlint::install(bin_dir)),
+        Box::new(|| tools::helm_ls::install(bin_dir)),
+        Box::new(|| tools::marksman::install(bin_dir)),
+        Box::new(|| tools::shellcheck::install(bin_dir)),
+        Box::new(|| tools::elixir_ls::install(dev_tools_dir, bin_dir)),
+        Box::new(|| tools::lua_ls::install(bin_dir)),
+        Box::new(|| tools::phpactor::install(dev_tools_dir, bin_dir)),
+        Box::new(|| tools::php_cs_fixer::install(dev_tools_dir, bin_dir)),
+        Box::new(|| tools::psalm::install(dev_tools_dir, bin_dir)),
+        Box::new(|| tools::commitlint::install(dev_tools_dir, bin_dir)),
+        Box::new(|| tools::elm_language_server::install(dev_tools_dir, bin_dir)),
+        Box::new(|| tools::bash_language_server::install(dev_tools_dir, bin_dir)),
+        Box::new(|| tools::docker_langserver::install(dev_tools_dir, bin_dir)),
+        Box::new(|| tools::eslint_d::install(dev_tools_dir, bin_dir)),
+        Box::new(|| tools::graphql_lsp::install(dev_tools_dir, bin_dir)),
+        Box::new(|| tools::prettierd::install(dev_tools_dir, bin_dir)),
+        Box::new(|| tools::sql_language_server::install(dev_tools_dir, bin_dir)),
+        Box::new(|| tools::vscode_langservers::install(dev_tools_dir, bin_dir)),
+        Box::new(|| tools::yaml_language_server::install(dev_tools_dir, bin_dir)),
+        Box::new(|| tools::typescript_language_server::install(dev_tools_dir, bin_dir)),
+        Box::new(|| tools::quicktype::install(dev_tools_dir, bin_dir)),
+        Box::new(|| tools::ruff_lsp::install(dev_tools_dir, bin_dir)),
+        Box::new(|| tools::sqlfluff::install(dev_tools_dir, bin_dir)),
+    ];
+
+    std::thread::scope(|scope| {
+        let mut install_results = vec![];
+        for tool_installer in tools_installers {
+            install_results.push(scope.spawn(tool_installer));
+        }
+        for install_result in install_results {
+            if let Err(e) = install_result.join() {
+                eprint!("failed to install tool: {e:?}");
+            }
+        }
+    });
 
     crate::utils::system::chmod_x(&format!("{bin_dir}/*"))?;
 
