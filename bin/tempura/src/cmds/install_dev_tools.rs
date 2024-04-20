@@ -1,10 +1,18 @@
 use std::fmt::Debug;
-use std::fs::File;
-use std::io::Write;
 use std::process::Command;
-use std::process::Stdio;
 
 use anyhow::anyhow;
+
+use composer_install::composer_install;
+use curl_install::curl_install;
+use curl_install::OutputOption;
+use npm_install::npm_install;
+use pip_install::pip_install;
+
+mod composer_install;
+mod curl_install;
+mod npm_install;
+mod pip_install;
 
 // TODO: maybe this is enough to abstract installers 🤔
 // type Installer = Box<dyn Fn(&str, &str) -> anyhow::Result<()>>;
@@ -317,141 +325,6 @@ fn get_latest_release(repo: &str) -> anyhow::Result<String> {
     output.status.exit_ok()?;
 
     Ok(std::str::from_utf8(&output.stdout)?.trim().into())
-}
-
-enum OutputOption<'a> {
-    UnpackVia(Command, &'a str),
-    PipeInto(&'a mut Command),
-    WriteTo(&'a str),
-}
-
-fn curl_install(url: &str, output_option: OutputOption) -> anyhow::Result<()> {
-    let mut curl_cmd = Command::new("curl");
-    curl_cmd.args(["-SL", url]);
-
-    match output_option {
-        OutputOption::UnpackVia(mut cmd, output_path) => {
-            let curl_stdout = curl_cmd
-                .stdout(Stdio::piped())
-                .spawn()?
-                .stdout
-                .ok_or_else(|| anyhow!("missing stdout from cmd {curl_cmd:?}"))?;
-            let output = cmd.stdin(Stdio::from(curl_stdout)).output()?;
-            output.status.exit_ok()?;
-
-            let mut file = File::create(output_path)?;
-            Ok(file.write_all(&output.stdout)?)
-        }
-        OutputOption::PipeInto(cmd) => {
-            let curl_stdout = curl_cmd
-                .stdout(Stdio::piped())
-                .spawn()?
-                .stdout
-                .ok_or_else(|| anyhow!("missing stdout from cmd {curl_cmd:?}"))?;
-
-            Ok(cmd.stdin(Stdio::from(curl_stdout)).status()?.exit_ok()?)
-        }
-        OutputOption::WriteTo(output_path) => {
-            curl_cmd.arg("--output");
-            curl_cmd.arg(output_path);
-
-            Ok(curl_cmd.status()?.exit_ok()?)
-        }
-    }
-}
-
-fn composer_install(
-    dev_tools_dir: &str,
-    tool: &str,
-    packages: &[&str],
-    bin_dir: &str,
-    bin: &str,
-) -> anyhow::Result<()> {
-    let dev_tools_repo_dir = format!("{dev_tools_dir}/{tool}");
-
-    std::fs::create_dir_all(&dev_tools_repo_dir)?;
-
-    Command::new("composer")
-        .args(
-            [
-                &["require", "--dev", "--working-dir", &dev_tools_repo_dir][..],
-                packages,
-            ]
-            .concat(),
-        )
-        .status()?
-        .exit_ok()?;
-
-    Ok(Command::new("sh")
-        .args([
-            "-c",
-            &format!("ln -sf {dev_tools_repo_dir}/vendor/bin/{bin} {bin_dir}"),
-        ])
-        .status()?
-        .exit_ok()?)
-}
-
-fn npm_install(
-    dev_tools_dir: &str,
-    tool: &str,
-    packages: &[&str],
-    bin_dir: &str,
-    bin: &str,
-) -> anyhow::Result<()> {
-    let dev_tools_repo_dir = format!("{dev_tools_dir}/{tool}");
-
-    std::fs::create_dir_all(&dev_tools_repo_dir)?;
-
-    Command::new("npm")
-        .args(
-            [
-                &["install", "--silent", "--prefix", &dev_tools_repo_dir][..],
-                packages,
-            ]
-            .concat(),
-        )
-        .status()?
-        .exit_ok()?;
-
-    Ok(Command::new("sh")
-        .args([
-            "-c",
-            &format!("ln -sf {dev_tools_repo_dir}/node_modules/.bin/{bin} {bin_dir}"),
-        ])
-        .status()?
-        .exit_ok()?)
-}
-
-fn pip_install(
-    dev_tools_dir: &str,
-    tool: &str,
-    packages: &[&str],
-    bin_dir: &str,
-    bin: &str,
-) -> anyhow::Result<()> {
-    let dev_tools_repo_dir = format!("{dev_tools_dir}/{tool}");
-
-    std::fs::create_dir_all(&dev_tools_repo_dir)?;
-
-    Command::new("python3")
-        .args(["-m", "venv", &format!("{dev_tools_repo_dir}/.venv")])
-        .status()?
-        .exit_ok()?;
-
-    Ok(Command::new("sh")
-        .args([
-            "-c",
-            &format!(
-                r#"
-                    source {dev_tools_repo_dir}/.venv/bin/activate && \
-                    pip install pip {packages} --upgrade && \
-                    ln -sf {dev_tools_repo_dir}/.venv/bin/{bin} {bin_dir}
-                "#,
-                packages = packages.join(" "),
-            ),
-        ])
-        .status()?
-        .exit_ok()?)
 }
 
 // Yes, `dir` is a `&str` and it's not sanitized but...I'm the alpha & the omega here!
