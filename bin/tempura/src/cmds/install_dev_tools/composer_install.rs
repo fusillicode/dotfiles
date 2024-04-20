@@ -1,6 +1,6 @@
 use std::process::Command;
 
-pub fn composer_install(
+pub fn run(
     dev_tools_dir: &str,
     tool: &str,
     packages: &[&str],

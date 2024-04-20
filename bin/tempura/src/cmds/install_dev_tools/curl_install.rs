@@ -10,7 +10,7 @@ pub enum OutputOption<'a> {
     WriteTo(&'a str),
 }
 
-pub fn curl_install(url: &str, output_option: OutputOption) -> anyhow::Result<()> {
+pub fn run(url: &str, output_option: OutputOption) -> anyhow::Result<()> {
     let mut curl_cmd = Command::new("curl");
     curl_cmd.args(["-SL", url]);
 

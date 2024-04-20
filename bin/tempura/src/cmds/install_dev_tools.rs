@@ -3,15 +3,7 @@ use std::process::Command;
 
 use anyhow::anyhow;
 
-use composer_install::composer_install;
-use curl_install::curl_install;
 use curl_install::OutputOption;
-use npm_install::npm_install;
-use pip_install::pip_install;
-
-use crate::utils::github::get_latest_release;
-use crate::utils::github::log_into_github;
-use crate::utils::system::chmod_x;
 
 mod composer_install;
 mod curl_install;
@@ -34,7 +26,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
     std::fs::create_dir_all(dev_tools_dir)?;
     std::fs::create_dir_all(bin_dir)?;
 
-    log_into_github()?;
+    crate::utils::github::log_into_github()?;
 
     // Compiling from sources because I can checkout specific refs in case of broken nightly builds.
     // Moreover...it's pretty badass 😎
@@ -60,7 +52,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         .status()?
         .exit_ok()?;
 
-    curl_install(
+    curl_install::run(
         "https://github.com/rust-lang/rust-analyzer/releases/download/nightly/rust-analyzer-aarch64-apple-darwin.gz",
         OutputOption::UnpackVia(Command::new("zcat"), &format!("{bin_dir}/rust-analyzer"))
     )?;
@@ -81,53 +73,53 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         .status()?;
 
     let repo = "hashicorp/terraform-ls";
-    let latest_release = &get_latest_release(repo)?[1..];
-    curl_install(
+    let latest_release = &crate::utils::github::get_latest_release(repo)?[1..];
+    curl_install::run(
         &format!("https://releases.hashicorp.com/terraform-ls/{latest_release}/terraform-ls_{latest_release}_darwin_arm64.zip"),
         OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir])),
     )?;
 
     // For Markdown preview with peek.nvim
     let repo = "denoland/deno";
-    let latest_release = get_latest_release(repo)?;
-    curl_install(
+    let latest_release = crate::utils::github::get_latest_release(repo)?;
+    curl_install::run(
         &format!("https://github.com/{repo}/releases/download/{latest_release}/deno-aarch64-apple-darwin.zip"),
         OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir])),
     )?;
 
     let repo = "tekumara/typos-vscode";
-    let latest_release = get_latest_release(repo)?;
-    curl_install(
+    let latest_release = crate::utils::github::get_latest_release(repo)?;
+    curl_install::run(
         &format!("https://github.com/{repo}/releases/download/{latest_release}/typos-lsp-{latest_release}-aarch64-apple-darwin.tar.gz"),
         OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir])),
     )?;
 
     let repo = "errata-ai/vale";
-    let latest_release = get_latest_release(repo)?;
-    curl_install(
+    let latest_release = crate::utils::github::get_latest_release(repo)?;
+    curl_install::run(
         &format!("https://github.com/{repo}/releases/download/{latest_release}/vale_{}_macOS_arm64.tar.gz", latest_release[1..].to_owned()),
         OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", bin_dir])),
     )?;
 
-    curl_install(
+    curl_install::run(
         "https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Darwin-x86_64",
         OutputOption::WriteTo(&format!("{bin_dir}/hadolint")),
     )?;
 
-    curl_install(
+    curl_install::run(
         "https://github.com/mrjosh/helm-ls/releases/latest/download/helm_ls_darwin_amd64",
         OutputOption::WriteTo(&format!("{bin_dir}/helm_ls")),
     )?;
 
-    curl_install(
+    curl_install::run(
         "https://github.com/artempyanykh/marksman/releases/latest/download/marksman-macos",
         OutputOption::WriteTo(&format!("{bin_dir}/marksman")),
     )?;
 
     let tool = "shellcheck";
     let repo = format!("koalaman/{tool}");
-    let latest_release = get_latest_release(&repo)?;
-    curl_install(
+    let latest_release = crate::utils::github::get_latest_release(&repo)?;
+    curl_install::run(
         &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}.darwin.x86_64.tar.xz"),
         OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", "/tmp"])),
     )?;
@@ -139,13 +131,13 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
     let tool = "elixir-ls";
     let repo = format!("elixir-lsp/{tool}");
     let dev_tools_repo_dir = format!("{dev_tools_dir}/{tool}");
-    let latest_release = get_latest_release(&repo)?;
+    let latest_release = crate::utils::github::get_latest_release(&repo)?;
     std::fs::create_dir_all(&dev_tools_repo_dir)?;
-    curl_install(
+    curl_install::run(
         &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}.zip"),
         OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &dev_tools_repo_dir])),
     )?;
-    chmod_x(&format!("{dev_tools_repo_dir}/*"))?;
+    crate::utils::system::chmod_x(&format!("{dev_tools_repo_dir}/*"))?;
     Command::new("ln")
         .args([
             "-sf",
@@ -160,14 +152,14 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
     let tool = "lua-language-server";
     let repo = format!("LuaLS/{tool}");
     let dev_tools_repo_dir = format!("{dev_tools_dir}/{tool}");
-    let latest_release = get_latest_release(&repo)?;
+    let latest_release = crate::utils::github::get_latest_release(&repo)?;
     std::fs::create_dir_all(&dev_tools_repo_dir)?;
-    curl_install(
+    curl_install::run(
         &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}-darwin-arm64.tar.gz"),
         OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &dev_tools_repo_dir])),
     )?;
 
-    composer_install(
+    composer_install::run(
         dev_tools_dir,
         "phpactor",
         &["phpactor/phpactor"],
@@ -175,7 +167,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         "phpactor",
     )?;
 
-    composer_install(
+    composer_install::run(
         dev_tools_dir,
         "php-cs-fixer",
         &["friendsofphp/php-cs-fixer"],
@@ -183,9 +175,9 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         "php-cs-fixer",
     )?;
 
-    composer_install(dev_tools_dir, "psalm", &["vimeo/psalm"], bin_dir, "*")?;
+    composer_install::run(dev_tools_dir, "psalm", &["vimeo/psalm"], bin_dir, "*")?;
 
-    npm_install(
+    npm_install::run(
         dev_tools_dir,
         "commitlint",
         &["@commitlint/cli", "@commitlint/config-conventional"],
@@ -193,7 +185,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         "commitlint",
     )?;
 
-    npm_install(
+    npm_install::run(
         dev_tools_dir,
         "elm-language-server",
         &["@elm-tooling/elm-language-server"],
@@ -201,7 +193,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         "elm-language-server",
     )?;
 
-    npm_install(
+    npm_install::run(
         dev_tools_dir,
         "bash-language-server",
         &["bash-language-server"],
@@ -209,7 +201,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         "bash-language-server",
     )?;
 
-    npm_install(
+    npm_install::run(
         dev_tools_dir,
         "dockerfile-language-server-nodejs",
         &["dockerfile-language-server-nodejs"],
@@ -217,7 +209,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         "docker-langserver",
     )?;
 
-    npm_install(
+    npm_install::run(
         dev_tools_dir,
         "eslint_d",
         &["eslint_d"],
@@ -225,7 +217,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         "eslint_d",
     )?;
 
-    npm_install(
+    npm_install::run(
         dev_tools_dir,
         "graphql-language-service-cli",
         &["graphql-language-service-cli"],
@@ -233,7 +225,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         "graphql-lsp",
     )?;
 
-    npm_install(
+    npm_install::run(
         dev_tools_dir,
         "prettierd",
         &["@fsouza/prettierd"],
@@ -241,7 +233,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         "prettierd",
     )?;
 
-    npm_install(
+    npm_install::run(
         dev_tools_dir,
         "sql-language-server",
         &["sql-language-server"],
@@ -249,7 +241,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         "sql-language-server",
     )?;
 
-    npm_install(
+    npm_install::run(
         dev_tools_dir,
         "vscode-langservers-extracted",
         &["vscode-langservers-extracted"],
@@ -257,7 +249,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         "*",
     )?;
 
-    npm_install(
+    npm_install::run(
         dev_tools_dir,
         "yaml-language-server",
         &["yaml-language-server"],
@@ -265,7 +257,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         "yaml-language-server",
     )?;
 
-    npm_install(
+    npm_install::run(
         dev_tools_dir,
         "typescript-language-server",
         &["typescript-language-server", "typescript"],
@@ -273,7 +265,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         "typescript-language-server",
     )?;
 
-    npm_install(
+    npm_install::run(
         dev_tools_dir,
         "quicktype",
         &["quicktype"],
@@ -281,7 +273,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         "quicktype",
     )?;
 
-    pip_install(
+    pip_install::run(
         dev_tools_dir,
         "ruff-lsp",
         &["ruff-lsp"],
@@ -289,7 +281,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         "ruff-lsp",
     )?;
 
-    pip_install(
+    pip_install::run(
         dev_tools_dir,
         "sqlfluff",
         &["sqlfluff"],
@@ -297,7 +289,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         "sqlfluff",
     )?;
 
-    chmod_x(&format!("{bin_dir}/*"))?;
+    crate::utils::system::chmod_x(&format!("{bin_dir}/*"))?;
 
     Ok(())
 }
