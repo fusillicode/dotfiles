@@ -80,6 +80,9 @@ return {
           keyword_length = 3,
         },
       },
+      entries = {
+        follow_cursor = true,
+      },
     })
   end,
 }
