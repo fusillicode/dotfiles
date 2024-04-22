@@ -8,9 +8,6 @@ mod npm_install;
 mod pip_install;
 mod tools;
 
-// TODO: maybe this is enough to abstract installers 🤔
-// type Installer = Box<dyn Fn(&str, &str) -> anyhow::Result<()>>;
-
 pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Result<()> {
     let dev_tools_dir = args
         .next()
