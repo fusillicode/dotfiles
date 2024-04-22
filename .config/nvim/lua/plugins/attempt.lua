@@ -1,5 +1,6 @@
 return {
   'm-demare/attempt.nvim',
+  keys = { '<leader>n', },
   dependencies = { 'nvim-lua/plenary.nvim', },
   config = function()
     local attempt = require('attempt')
