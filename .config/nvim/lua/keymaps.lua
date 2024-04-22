@@ -95,7 +95,7 @@ function M.telescope(telescope, telescope_builtin, defaults)
 end
 
 function M.oil()
-  keymap_set('n', '<leader>F', ':Oil<cr>')
+  keymap_set('n', '<leader>F', ':Oil --float<cr>')
 end
 
 function M.attempt(attempt)
