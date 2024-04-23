@@ -69,6 +69,11 @@ return {
         ['ui-select'] = { defaults_and_theme, },
       },
       pickers = {
+        buffers = {
+          ignore_current_buffer = true,
+          sort_lastused = true,
+          sort_mru = true,
+        },
         find_files = {
           find_command = {
             'fd',
