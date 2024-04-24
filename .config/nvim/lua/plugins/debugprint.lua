@@ -1,6 +1,6 @@
 return {
   'andrewferrier/debugprint.nvim',
-  event = 'BufReadPost',
+  keys = { 'g?', },
   dependencies = {
     'nvim-treesitter/nvim-treesitter',
   },
