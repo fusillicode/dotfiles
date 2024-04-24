@@ -92,12 +92,13 @@ function M.telescope(telescope, telescope_builtin, defaults)
   keymap_set('n', '<leader>T', ':TodoTelescope<CR>')
   keymap_set('n', '<leader>l', telescope_builtin.resume)
   keymap_set('n', 'ga', function()
-    with_defaults('buffers', {
-      prompt_prefix = 'Bufs: ',
+    telescope_builtin.buffers({
+      previewer = false,
+      layout_config = { width = 0.0, height = 0.0, },
       on_complete = {
         function() vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<cr>', true, true, true), 'i', {}) end,
       },
-    })()
+    })
   end)
 end
 
