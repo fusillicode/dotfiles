@@ -19,7 +19,6 @@ function M.core()
 
   keymap_set('', 'gn', ':bn<cr>')
   keymap_set('', 'gp', ':bp<cr>')
-  keymap_set('', 'ga', '<c-^>')
   keymap_set({ 'n', 'v', }, 'gh', '0')
   keymap_set({ 'n', 'v', }, 'gl', '$')
   keymap_set({ 'n', 'v', }, 'gs', '_')
@@ -92,6 +91,14 @@ function M.telescope(telescope, telescope_builtin, defaults)
   end)
   keymap_set('n', '<leader>T', ':TodoTelescope<CR>')
   keymap_set('n', '<leader>l', telescope_builtin.resume)
+  keymap_set('n', 'ga', function()
+    with_defaults('buffers', {
+      prompt_prefix = 'Bufs: ',
+      on_complete = {
+        function() vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<cr>', true, true, true), 'i', {}) end,
+      },
+    })()
+  end)
 end
 
 function M.oil()
