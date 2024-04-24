@@ -33,5 +33,9 @@
   "|> IO.inspect |> ": {
     "prefix": "iopp",
     "body": "|> IO.inspect(limit: :infinity, printable_limit: :infinity) |>"
+  },
+  "Credo ignore next line": {
+    "prefix": "ign",
+    "body": "# credo:disable-for-next-line"
   }
 }
