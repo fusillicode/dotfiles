@@ -11,7 +11,14 @@ function M.core()
   keymap_set('', '<c-n>', ':cn<cr>')
   keymap_set('', '<c-p>', ':cp<cr>')
   keymap_set('', '<c-x>', ':ccl<cr>')
-
+  -- https://stackoverflow.com/a/3003636
+  keymap_set('n', 'i', function()
+    if vim.fn.empty(vim.fn.getline('.')) == 1 then
+      return '\"_cc'
+    else
+      return 'i'
+    end
+  end, { expr = true, })
   keymap_set('i', '<c-a>', '<esc>^i')
   keymap_set('n', '<c-a>', '^i')
   keymap_set('i', '<c-e>', '<end>')
