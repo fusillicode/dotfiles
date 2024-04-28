@@ -30,7 +30,14 @@ function M.core()
   keymap_set({ 'n', 'v', }, 'gl', '$')
   keymap_set({ 'n', 'v', }, 'gs', '_')
 
-  keymap_set('n', 'dd', '"_dd')
+  -- https://github.com/Abstract-IDE/abstract-autocmds/blob/main/lua/abstract-autocmds/mappings.lua#L8-L14
+  keymap_set('n', 'dd', function()
+    if vim.api.nvim_get_current_line():match('^%s*$') then
+      return '"_dd'
+    end
+    return 'dd'
+  end, { noremap = true, expr = true, })
+  keymap_set({ 'n', 'v', }, 'x', '"_x')
   keymap_set({ 'n', 'v', }, 'x', '"_x')
   keymap_set({ 'n', 'v', }, 'X', '"_X')
   keymap_set({ 'n', 'v', }, '<leader>yf', ':let @+ = expand("%") . ":" . line(".")<cr>')
