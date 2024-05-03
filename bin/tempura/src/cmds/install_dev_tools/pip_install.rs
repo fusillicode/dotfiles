@@ -1,4 +1,4 @@
-use std::process::Command;
+use crate::utils::system::silent_cmd;
 
 pub fn run(
     dev_tools_dir: &str,
@@ -11,12 +11,12 @@ pub fn run(
 
     std::fs::create_dir_all(&dev_tools_repo_dir)?;
 
-    Command::new("python3")
+    silent_cmd("python3")
         .args(["-m", "venv", &format!("{dev_tools_repo_dir}/.venv")])
         .status()?
         .exit_ok()?;
 
-    Ok(Command::new("sh")
+    Ok(silent_cmd("sh")
         .args([
             "-c",
             &format!(
