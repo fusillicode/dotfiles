@@ -12,7 +12,7 @@ pub fn join<T>(join_handle: JoinHandle<anyhow::Result<T>>) -> Result<T, anyhow::
 }
 
 pub fn copy_to_system_clipboard(content: &mut &[u8]) -> anyhow::Result<()> {
-    let mut pbcopy_child = Command::new("pbcopy").stdin(Stdio::piped()).spawn()?;
+    let mut pbcopy_child = silent_cmd("pbcopy").stdin(Stdio::piped()).spawn()?;
     std::io::copy(
         content,
         pbcopy_child
@@ -28,8 +28,16 @@ pub fn copy_to_system_clipboard(content: &mut &[u8]) -> anyhow::Result<()> {
 
 // Yes, `dir` is a `&str` and it's not sanitized but...I'm the alpha & the omega here!
 pub fn chmod_x(dir: &str) -> anyhow::Result<()> {
-    Ok(Command::new("sh")
+    Ok(silent_cmd("sh")
         .args(["-c", &format!("chmod +x {dir}")])
         .status()?
         .exit_ok()?)
+}
+
+pub fn silent_cmd(program: &str) -> Command {
+    let mut cmd = Command::new(program);
+    if !cfg!(debug_assertions) {
+        cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+    cmd
 }
