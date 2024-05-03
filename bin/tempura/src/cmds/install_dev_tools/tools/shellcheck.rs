@@ -1,6 +1,7 @@
 use std::process::Command;
 
 use crate::cmds::install_dev_tools::curl_install::OutputOption;
+use crate::utils::system::silent_cmd;
 
 pub fn install(bin_dir: &str) -> anyhow::Result<()> {
     let tool = "shellcheck";
@@ -10,7 +11,7 @@ pub fn install(bin_dir: &str) -> anyhow::Result<()> {
         &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}.darwin.x86_64.tar.xz"),
         OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", "/tmp"])),
     )?;
-    Command::new("mv")
+    silent_cmd("mv")
         .args([&format!("/tmp/{tool}-{latest_release}/{tool}"), bin_dir])
         .status()?
         .exit_ok()?;

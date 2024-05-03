@@ -1,4 +1,4 @@
-use std::process::Command;
+use crate::utils::system::silent_cmd;
 
 pub fn install(dev_tools_dir: &str, bin_dir: &str) -> anyhow::Result<()> {
     // Compiling from sources because I can checkout specific refs in case of broken nightly builds.
@@ -6,7 +6,7 @@ pub fn install(dev_tools_dir: &str, bin_dir: &str) -> anyhow::Result<()> {
     let nvim_source_dir = format!("{dev_tools_dir}/nvim/source");
     let nvim_release_dir = format!("{dev_tools_dir}/nvim/release");
 
-    Ok(Command::new("sh")
+    Ok(silent_cmd("sh")
         .args([
             "-c",
             &format!(
