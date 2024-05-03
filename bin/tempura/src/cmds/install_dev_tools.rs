@@ -62,8 +62,10 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
             install_results.push(scope.spawn(tool_installer));
         }
         for install_result in install_results {
-            if let Err(e) = install_result.join() {
-                eprint!("failed to install tool: {e:?}");
+            match install_result.join() {
+                Ok(Ok(_)) => println!("✅ tool installed"),
+                Ok(Err(e)) => eprintln!("‼️ tool not installed, error: {e:?}"),
+                Err(e) => eprintln!("❌ installer 🧵panicked: {e:?}"),
             }
         }
     });

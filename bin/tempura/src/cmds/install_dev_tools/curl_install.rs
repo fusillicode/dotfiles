@@ -4,6 +4,8 @@ use std::io::Write;
 use std::process::Command;
 use std::process::Stdio;
 
+use crate::utils::system::silent_cmd;
+
 pub enum OutputOption<'a> {
     UnpackVia(Command, &'a str),
     PipeInto(&'a mut Command),
@@ -11,7 +13,7 @@ pub enum OutputOption<'a> {
 }
 
 pub fn run(url: &str, output_option: OutputOption) -> anyhow::Result<()> {
-    let mut curl_cmd = Command::new("curl");
+    let mut curl_cmd = silent_cmd("curl");
     curl_cmd.args(["-SL", url]);
 
     match output_option {

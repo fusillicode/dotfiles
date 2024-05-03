@@ -1,7 +1,9 @@
 use std::process::Command;
 
+use crate::utils::system::silent_cmd;
+
 pub fn log_into_github() -> anyhow::Result<()> {
-    if Command::new("gh")
+    if silent_cmd("gh")
         .args(["auth", "status"])
         .status()?
         .success()
@@ -9,7 +11,7 @@ pub fn log_into_github() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    Ok(Command::new("sh")
+    Ok(silent_cmd("sh")
         .args(["-c", "gh auth login"])
         .status()?
         .exit_ok()?)

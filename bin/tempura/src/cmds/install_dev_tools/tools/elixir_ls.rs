@@ -1,6 +1,7 @@
 use std::process::Command;
 
 use crate::cmds::install_dev_tools::curl_install::OutputOption;
+use crate::utils::system::silent_cmd;
 
 pub fn install(dev_tools_dir: &str, bin_dir: &str) -> anyhow::Result<()> {
     let tool = "elixir-ls";
@@ -13,7 +14,7 @@ pub fn install(dev_tools_dir: &str, bin_dir: &str) -> anyhow::Result<()> {
         OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &dev_tools_repo_dir])),
     )?;
     crate::utils::system::chmod_x(&format!("{dev_tools_repo_dir}/*"))?;
-    Command::new("ln")
+    silent_cmd("ln")
         .args([
             "-sf",
             &format!("{dev_tools_repo_dir}/language_server.sh"),

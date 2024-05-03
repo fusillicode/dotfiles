@@ -1,7 +1,8 @@
-use std::process::Command;
 use std::str::FromStr;
 
 use anyhow::anyhow;
+
+use crate::utils::system::silent_cmd;
 
 pub enum Editor {
     Helix,
@@ -95,7 +96,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
 
     let open_file_cmd = editor.open_file_cmd(&file_to_open);
 
-    Command::new("sh")
+    silent_cmd("sh")
         .args([
             "-c",
             &format!(

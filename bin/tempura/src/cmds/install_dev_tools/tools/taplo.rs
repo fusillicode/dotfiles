@@ -1,10 +1,10 @@
-use std::process::Command;
+use crate::utils::system::silent_cmd;
 
 pub fn install(bin_dir: &str) -> anyhow::Result<()> {
     // Installing with `cargo` because of:
     // 1. no particular requirements
     // 2. https://github.com/tamasfe/taplo/issues/542
-    Command::new("cargo")
+    silent_cmd("cargo")
         .args([
             "install",
             "taplo-cli",

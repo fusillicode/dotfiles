@@ -1,4 +1,4 @@
-use std::process::Command;
+use crate::utils::system::silent_cmd;
 
 pub fn run(
     dev_tools_dir: &str,
@@ -11,7 +11,7 @@ pub fn run(
 
     std::fs::create_dir_all(&dev_tools_repo_dir)?;
 
-    Command::new("composer")
+    silent_cmd("composer")
         .args(
             [
                 &["require", "--dev", "--working-dir", &dev_tools_repo_dir][..],
@@ -22,7 +22,7 @@ pub fn run(
         .status()?
         .exit_ok()?;
 
-    Ok(Command::new("sh")
+    Ok(silent_cmd("sh")
         .args([
             "-c",
             &format!("ln -sf {dev_tools_repo_dir}/vendor/bin/{bin} {bin_dir}"),
