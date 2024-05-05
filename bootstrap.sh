@@ -93,7 +93,7 @@ brew install \
   the-unarchiver \
   transmission --cask \
   vlc \
-  wez/wezterm/wezterm-nightly --cask --no-quarantine \
+  wezterm@nightly --cask --no-quarantine --greedy-latest \
   whatsapp \
 
 # 🥲 https://wezfurlong.org/wezterm/faq.html#how-do-i-enable-undercurl-curly-underlines
