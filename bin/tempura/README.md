@@ -4,3 +4,14 @@
 > batter and deep fried. (cit. Wikipedia)
 
 Bunch of _personal_ command-line utilities built in [Rust](https://www.rust-lang.org/) because I felt like it.
+
+Requirements:
+
+- `curl`
+- `gh`
+- `git`
+- `hx`
+- `nvim`
+- `tar`
+- `wezterm`
+- `zcat`
