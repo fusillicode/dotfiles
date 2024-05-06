@@ -58,7 +58,7 @@ function M.core()
   keymap_set({ 'n', 'v', }, '<leader>q', ':q<cr>')
   keymap_set({ 'n', 'v', }, '<leader>Q', ':q!<cr>')
 
-  keymap_set({ 'n', 'v', }, '<c-w>', ':set wrap!<cr>')
+  keymap_set({ 'n', 'v', }, '<c-x>', ':set wrap!<cr>')
   keymap_set('n', '<esc>', require('utils').normal_esc)
   keymap_set('v', '<esc>', require('utils').visual_esc, { expr = true, })
 
