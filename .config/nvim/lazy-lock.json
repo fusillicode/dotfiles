@@ -32,12 +32,12 @@
   "oil.nvim": { "branch": "master", "commit": "3283deec96314326faed1d3a94ce142ae9773d8b" },
   "peek.nvim": { "branch": "master", "commit": "5820d937d5414baea5f586dc2a3d912a74636e5b" },
   "plenary.nvim": { "branch": "master", "commit": "08e301982b9a057110ede7a735dd1b5285eb341f" },
-  "schemastore.nvim": { "branch": "main", "commit": "8706b99e1253f54f640fbc4f4ae13cdf034c135a" },
+  "schemastore.nvim": { "branch": "main", "commit": "3e4f42970123ef11d23da4b2feb8c25b555b19f8" },
   "scrollofffraction.nvim": { "branch": "master", "commit": "0618a3e3e1a4e13a04edf6fd35bfcee4bd5afe38" },
   "telescope-fzf-native.nvim": { "branch": "main", "commit": "9ef21b2e6bb6ebeaf349a0781745549bbb870d27" },
   "telescope-live-grep-args.nvim": { "branch": "master", "commit": "731a046da7dd3adff9de871a42f9b7fb85f60f47" },
   "telescope-ui-select.nvim": { "branch": "master", "commit": "6e51d7da30bd139a6950adf2a47fda6df9fa06d2" },
-  "telescope.nvim": { "branch": "master", "commit": "e9be6bb7a78cd44b9183ede4627d2bfea4f301f0" },
+  "telescope.nvim": { "branch": "master", "commit": "6f6bb8065567b56c42e283b06e8a1c670c0092a1" },
   "todo-comments.nvim": { "branch": "main", "commit": "a7e39ae9e74f2c8c6dc4eea6d40c3971ae84752d" },
   "zenbones.nvim": { "branch": "main", "commit": "453ec69d82d644ee6998a3464da49d0261df9f80" }
 }
