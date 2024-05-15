@@ -26,7 +26,6 @@ return {
           ['<esc>'] = require('telescope.actions').close,
         },
       },
-      layout_strategy = 'vertical',
       layout_config = {
         anchor = 'N',
         height = 0.98,
@@ -35,6 +34,7 @@ return {
         prompt_position = 'top',
         width = 0.8,
       },
+      layout_strategy = 'vertical',
       path_display = { 'filename_first', },
       preview_title = false,
       prompt_title = false,
