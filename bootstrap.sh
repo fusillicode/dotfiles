@@ -4,6 +4,7 @@ script_dir="${BASH_SOURCE%/*}"
 
 # Symlink configs
 ln -s "$HOME"/data/dev/dotfiles/dotfiles/.config/atuin/ "$HOME"/.config/atuin
+ln -s "$HOME"/data/dev/dotfiles/dotfiles/.config/gitui/ "$HOME"/.config/gitui
 ln -s "$HOME"/data/dev/dotfiles/dotfiles/.config/helix/ "$HOME"/.config/helix
 ln -s "$HOME"/data/dev/dotfiles/dotfiles/.config/mise/ "$HOME"/.config/mise
 ln -s "$HOME"/data/dev/dotfiles/dotfiles/.config/nvim/ "$HOME"/.config/nvim
