@@ -27,7 +27,7 @@ return {
         },
       },
       layout_config = {
-        anchor = 'N',
+        anchor = 'S',
         height = 0.98,
         mirror = true,
         preview_height = 0.55,
