@@ -10,16 +10,16 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         .ok_or_else(|| anyhow!("missing path arg from {args:?}"))?;
 
     let metadata = std::fs::metadata(path)?;
+
     if metadata.is_dir() {
-        silent_cmd("sh")
-            .args(["-c", &format!("ls -llAtrh {}", path)])
+        return Ok(silent_cmd("ls")
+            .args(["-llAtrh", path])
             .status()?
-            .exit_ok()?;
-    } else if metadata.is_file() || metadata.is_symlink() {
-        silent_cmd("sh")
-            .args(["-c", &format!("cat {}", path)])
-            .status()?
-            .exit_ok()?;
+            .exit_ok()?);
+    }
+
+    if metadata.is_file() || metadata.is_symlink() {
+        return Ok(silent_cmd("sh").args(["cat", path]).status()?.exit_ok()?);
     }
 
     Ok(())
