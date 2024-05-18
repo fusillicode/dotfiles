@@ -1,12 +1,23 @@
+use crate::cmds::install_dev_tools::tools::Installer;
 use crate::utils::system::silent_cmd;
 
-pub fn install(dev_tools_dir: &str, bin_dir: &str) -> anyhow::Result<()> {
-    // Compiling from sources because I can checkout specific refs in case of broken nightly builds.
-    // Moreover...it's pretty badass 😎
-    let nvim_source_dir = format!("{dev_tools_dir}/nvim/source");
-    let nvim_release_dir = format!("{dev_tools_dir}/nvim/release");
+pub struct NvimInstaller {
+    pub dev_tools_dir: String,
+    pub bin_dir: String,
+}
 
-    Ok(silent_cmd("sh")
+impl Installer for NvimInstaller {
+    fn tool(&self) -> &'static str {
+        "nvim"
+    }
+
+    fn install(&self) -> anyhow::Result<()> {
+        // Compiling from sources because I can checkout specific refs in case of broken nightly builds.
+        // Moreover...it's pretty badass 😎
+        let nvim_source_dir = format!("{}/nvim/source", self.dev_tools_dir);
+        let nvim_release_dir = format!("{}/nvim/release", self.dev_tools_dir);
+
+        Ok(silent_cmd("sh")
         .args([
             "-c",
             &format!(
@@ -19,10 +30,12 @@ pub fn install(dev_tools_dir: &str, bin_dir: &str) -> anyhow::Result<()> {
                     make distclean && \
                     make CMAKE_BUILD_TYPE=Release CMAKE_EXTRA_FLAGS="-DCMAKE_INSTALL_PREFIX={nvim_release_dir}" && \
                     make install
-                    ln -sf {nvim_release_dir}/bin/nvim {bin_dir}
+                    ln -sf {nvim_release_dir}/bin/nvim {}
                 "#,
+                self.bin_dir
             ),
         ])
         .status()?
         .exit_ok()?)
+    }
 }

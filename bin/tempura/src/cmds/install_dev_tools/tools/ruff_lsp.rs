@@ -1,9 +1,22 @@
-pub fn install(dev_tools_dir: &str, bin_dir: &str) -> anyhow::Result<()> {
-    crate::cmds::install_dev_tools::pip_install::run(
-        dev_tools_dir,
-        "ruff-lsp",
-        &["ruff-lsp"],
-        bin_dir,
-        "ruff-lsp",
-    )
+use crate::cmds::install_dev_tools::tools::Installer;
+
+pub struct RuffLspInstaller {
+    pub dev_tools_dir: String,
+    pub bin_dir: String,
+}
+
+impl Installer for RuffLspInstaller {
+    fn tool(&self) -> &'static str {
+        "ruff_lsp"
+    }
+
+    fn install(&self) -> anyhow::Result<()> {
+        crate::cmds::install_dev_tools::pip_install::run(
+            &self.dev_tools_dir,
+            "ruff-lsp",
+            &["ruff-lsp"],
+            &self.bin_dir,
+            "ruff-lsp",
+        )
+    }
 }
