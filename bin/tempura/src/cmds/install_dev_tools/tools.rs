@@ -34,17 +34,8 @@ pub trait Installer: Sync + Send {
     fn install(&self) -> anyhow::Result<()>;
 }
 
-pub fn report_install(
-    tool: &str,
-    install_result: std::thread::Result<anyhow::Result<()>>,
-) -> anyhow::Result<()> {
-    match install_result {
-        Err(e) => {
-            eprintln!("❌ installer 🧵panicked: {e:?}");
-            anyhow::bail!("foo, {e:?}")
-        }
-        Ok(install_result) => install_result
-            .inspect(|_| println!("🎉 {tool} installed"))
-            .inspect_err(|e| eprintln!("❌ error installing {tool}: {e:?}")),
-    }
+pub fn report_install(tool: &str, install_result: anyhow::Result<()>) -> anyhow::Result<()> {
+    install_result
+        .inspect(|_| println!("🎉 {tool} installed"))
+        .inspect_err(|e| eprintln!("❌ error installing {tool}: {e:?}"))
 }

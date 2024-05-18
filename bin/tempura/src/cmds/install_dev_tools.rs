@@ -170,10 +170,15 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
     std::thread::scope(|scope| {
         let mut install_results = vec![];
         for installer in installers {
-            install_results.push((installer.bin(), scope.spawn(move || installer.install())));
+            install_results.push((
+                installer.bin(),
+                scope.spawn(move || tools::report_install(installer.bin(), installer.install())),
+            ));
         }
         for (tool, install_result) in install_results {
-            let _ = tools::report_install(tool, install_result.join());
+            if let Err(e) = install_result.join() {
+                eprintln!("❌ {tool} installer 🧵 panicked: {e:?}");
+            }
         }
     });
 
