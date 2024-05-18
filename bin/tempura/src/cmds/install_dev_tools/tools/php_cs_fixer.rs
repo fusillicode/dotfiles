@@ -6,17 +6,17 @@ pub struct PhpFixerInstaller {
 }
 
 impl Installer for PhpFixerInstaller {
-    fn tool(&self) -> &'static str {
-        "php_cs_fixer"
+    fn bin(&self) -> &'static str {
+        "php-cs-fixer"
     }
 
     fn install(&self) -> anyhow::Result<()> {
         crate::cmds::install_dev_tools::composer_install::run(
             &self.dev_tools_dir,
-            "php-cs-fixer",
-            &["friendsofphp/php-cs-fixer"],
+            self.bin(),
+            &[&format!("friendsofphp/{}", self.bin())],
             &self.bin_dir,
-            "php-cs-fixer",
+            self.bin(),
         )
     }
 }

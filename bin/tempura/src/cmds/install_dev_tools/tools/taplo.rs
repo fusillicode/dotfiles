@@ -6,7 +6,7 @@ pub struct TaploInstaller {
 }
 
 impl Installer for TaploInstaller {
-    fn tool(&self) -> &'static str {
+    fn bin(&self) -> &'static str {
         "taplo"
     }
 
@@ -17,7 +17,7 @@ impl Installer for TaploInstaller {
         silent_cmd("cargo")
             .args([
                 "install",
-                "taplo-cli",
+                &format!("{}-cli", self.bin()),
                 "--force",
                 "--all-features",
                 "--root",

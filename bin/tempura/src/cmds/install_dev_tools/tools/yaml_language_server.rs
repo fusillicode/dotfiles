@@ -6,17 +6,17 @@ pub struct YamlLanguageServerInstaller {
 }
 
 impl Installer for YamlLanguageServerInstaller {
-    fn tool(&self) -> &'static str {
-        "yaml_language_serve"
+    fn bin(&self) -> &'static str {
+        "yaml-language-server"
     }
 
     fn install(&self) -> anyhow::Result<()> {
         crate::cmds::install_dev_tools::npm_install::run(
             &self.dev_tools_dir,
-            "yaml-language-server",
-            &["yaml-language-server"],
+            self.bin(),
+            &[self.bin()],
             &self.bin_dir,
-            "yaml-language-server",
+            self.bin(),
         )
     }
 }

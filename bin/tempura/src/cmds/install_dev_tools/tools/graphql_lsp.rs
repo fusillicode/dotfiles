@@ -6,8 +6,8 @@ pub struct GraphQlLspInstaller {
 }
 
 impl Installer for GraphQlLspInstaller {
-    fn tool(&self) -> &'static str {
-        "graphql_lsp"
+    fn bin(&self) -> &'static str {
+        "graphql-lsp"
     }
 
     fn install(&self) -> anyhow::Result<()> {
@@ -16,7 +16,7 @@ impl Installer for GraphQlLspInstaller {
             "graphql-language-service-cli",
             &["graphql-language-service-cli"],
             &self.bin_dir,
-            "graphql-lsp",
+            self.bin(),
         )
     }
 }

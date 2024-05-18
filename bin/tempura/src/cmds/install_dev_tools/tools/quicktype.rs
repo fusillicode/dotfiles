@@ -6,17 +6,17 @@ pub struct QuicktypeInstaller {
 }
 
 impl Installer for QuicktypeInstaller {
-    fn tool(&self) -> &'static str {
+    fn bin(&self) -> &'static str {
         "quicktype"
     }
 
     fn install(&self) -> anyhow::Result<()> {
         crate::cmds::install_dev_tools::npm_install::run(
             &self.dev_tools_dir,
-            "quicktype",
-            &["quicktype"],
+            self.bin(),
+            &[self.bin()],
             &self.bin_dir,
-            "quicktype",
+            self.bin(),
         )
     }
 }

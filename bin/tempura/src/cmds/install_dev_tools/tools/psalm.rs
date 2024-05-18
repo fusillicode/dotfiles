@@ -6,15 +6,15 @@ pub struct PsalmInstaller {
 }
 
 impl Installer for PsalmInstaller {
-    fn tool(&self) -> &'static str {
-        "nvim"
+    fn bin(&self) -> &'static str {
+        "psalm"
     }
 
     fn install(&self) -> anyhow::Result<()> {
         crate::cmds::install_dev_tools::composer_install::run(
             &self.dev_tools_dir,
-            "psalm",
-            &["vimeo/psalm"],
+            self.bin(),
+            &[&format!("vimeo/{}", self.bin())],
             &self.bin_dir,
             "*",
         )

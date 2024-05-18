@@ -6,15 +6,15 @@ pub struct VsCodeLangServersInstaller {
 }
 
 impl Installer for VsCodeLangServersInstaller {
-    fn tool(&self) -> &'static str {
-        "vscode_langservers"
+    fn bin(&self) -> &'static str {
+        "vscode-langservers-extracted"
     }
 
     fn install(&self) -> anyhow::Result<()> {
         crate::cmds::install_dev_tools::npm_install::run(
             &self.dev_tools_dir,
-            "vscode-langservers-extracted",
-            &["vscode-langservers-extracted"],
+            self.bin(),
+            &[self.bin()],
             &self.bin_dir,
             "*",
         )

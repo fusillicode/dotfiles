@@ -6,17 +6,17 @@ pub struct ElmLanguageServerInstaller {
 }
 
 impl Installer for ElmLanguageServerInstaller {
-    fn tool(&self) -> &'static str {
-        "elm_language_server"
+    fn bin(&self) -> &'static str {
+        "elm-language-server"
     }
 
     fn install(&self) -> anyhow::Result<()> {
         crate::cmds::install_dev_tools::npm_install::run(
             &self.dev_tools_dir,
-            "elm-language-server",
-            &["@elm-tooling/elm-language-server"],
+            self.bin(),
+            &[&format!("@elm-tooling/{}", self.bin())],
             &self.bin_dir,
-            "elm-language-server",
+            self.bin(),
         )
     }
 }

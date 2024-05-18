@@ -6,8 +6,8 @@ pub struct DockerLangServerInstaller {
 }
 
 impl Installer for DockerLangServerInstaller {
-    fn tool(&self) -> &'static str {
-        "docker_langserver"
+    fn bin(&self) -> &'static str {
+        "docker-langserver"
     }
 
     fn install(&self) -> anyhow::Result<()> {
@@ -16,7 +16,7 @@ impl Installer for DockerLangServerInstaller {
             "dockerfile-language-server-nodejs",
             &["dockerfile-language-server-nodejs"],
             &self.bin_dir,
-            "docker-langserver",
+            self.bin(),
         )
     }
 }

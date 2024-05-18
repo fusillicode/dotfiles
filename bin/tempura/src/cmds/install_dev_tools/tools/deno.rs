@@ -8,16 +8,17 @@ pub struct DenoInstaller {
 }
 
 impl Installer for DenoInstaller {
-    fn tool(&self) -> &'static str {
+    fn bin(&self) -> &'static str {
         "deno"
     }
 
     fn install(&self) -> anyhow::Result<()> {
         // For Markdown preview with peek.nvim
-        let repo = "denoland/deno";
-        let latest_release = crate::utils::github::get_latest_release(repo)?;
+        let repo = format!("{0}land/{0}", self.bin());
+        let latest_release = crate::utils::github::get_latest_release(&repo)?;
+
         crate::cmds::install_dev_tools::curl_install::run(
-        &format!("https://github.com/{repo}/releases/download/{latest_release}/deno-aarch64-apple-darwin.zip"),
+            &format!("https://github.com/{repo}/releases/download/{latest_release}/{}-aarch64-apple-darwin.zip", self.bin()),
             OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &self.bin_dir])),
         )
     }

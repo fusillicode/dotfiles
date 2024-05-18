@@ -6,17 +6,20 @@ pub struct CommitlintInstaller {
 }
 
 impl Installer for CommitlintInstaller {
-    fn tool(&self) -> &'static str {
+    fn bin(&self) -> &'static str {
         "commitlint"
     }
 
     fn install(&self) -> anyhow::Result<()> {
         crate::cmds::install_dev_tools::npm_install::run(
             &self.dev_tools_dir,
-            "commitlint",
-            &["@commitlint/cli", "@commitlint/config-conventional"],
+            self.bin(),
+            &[
+                &format!("@{}/cli", self.bin()),
+                &format!("@{}/config-conventional", self.bin()),
+            ],
             &self.bin_dir,
-            "commitlint",
+            self.bin(),
         )
     }
 }

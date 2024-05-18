@@ -6,17 +6,17 @@ pub struct SqlLanguageServerInstaller {
 }
 
 impl Installer for SqlLanguageServerInstaller {
-    fn tool(&self) -> &'static str {
-        "sql_language_server"
+    fn bin(&self) -> &'static str {
+        "sql-language-server"
     }
 
     fn install(&self) -> anyhow::Result<()> {
         crate::cmds::install_dev_tools::npm_install::run(
             &self.dev_tools_dir,
-            "sql-language-server",
-            &["sql-language-server"],
+            self.bin(),
+            &[self.bin()],
             &self.bin_dir,
-            "sql-language-server",
+            self.bin(),
         )
     }
 }

@@ -6,14 +6,17 @@ pub struct HelmLsInstaller {
 }
 
 impl Installer for HelmLsInstaller {
-    fn tool(&self) -> &'static str {
+    fn bin(&self) -> &'static str {
         "helm_ls"
     }
 
     fn install(&self) -> anyhow::Result<()> {
         crate::cmds::install_dev_tools::curl_install::run(
-            "https://github.com/mrjosh/helm-ls/releases/latest/download/helm_ls_darwin_amd64",
-            OutputOption::WriteTo(&format!("{}/helm_ls", self.bin_dir)),
+            &format!(
+                "https://github.com/mrjosh/helm-ls/releases/latest/download/{}_darwin_amd64",
+                self.bin()
+            ),
+            OutputOption::WriteTo(&format!("{}/{}", self.bin_dir, self.bin())),
         )
     }
 }

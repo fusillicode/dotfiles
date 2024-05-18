@@ -9,21 +9,22 @@ pub struct ShellcheckInstaller {
 }
 
 impl Installer for ShellcheckInstaller {
-    fn tool(&self) -> &'static str {
+    fn bin(&self) -> &'static str {
         "shellcheck"
     }
 
     fn install(&self) -> anyhow::Result<()> {
-        let tool = "shellcheck";
-        let repo = format!("koalaman/{tool}");
+        let repo = format!("koalaman/{}", self.bin());
         let latest_release = crate::utils::github::get_latest_release(&repo)?;
+
         crate::cmds::install_dev_tools::curl_install::run(
-        &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}.darwin.x86_64.tar.xz"),
-        OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", "/tmp"])),
-    )?;
+            &format!("https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}.darwin.x86_64.tar.xz", self.bin()),
+            OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", "/tmp"])),
+        )?;
+
         silent_cmd("mv")
             .args([
-                &format!("/tmp/{tool}-{latest_release}/{tool}"),
+                &format!("/tmp/{0}-{latest_release}/{0}", self.bin()),
                 &self.bin_dir,
             ])
             .status()?

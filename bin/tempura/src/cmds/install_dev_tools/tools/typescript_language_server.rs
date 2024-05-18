@@ -6,17 +6,17 @@ pub struct TypescriptLanguageServerInstaller {
 }
 
 impl Installer for TypescriptLanguageServerInstaller {
-    fn tool(&self) -> &'static str {
-        "typescript_language_server"
+    fn bin(&self) -> &'static str {
+        "typescript-language-server"
     }
 
     fn install(&self) -> anyhow::Result<()> {
         crate::cmds::install_dev_tools::npm_install::run(
             &self.dev_tools_dir,
-            "typescript-language-server",
-            &["typescript-language-server", "typescript"],
+            self.bin(),
+            &[self.bin(), "typescript"],
             &self.bin_dir,
-            "typescript-language-server",
+            self.bin(),
         )
     }
 }

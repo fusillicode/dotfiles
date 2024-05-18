@@ -56,56 +56,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
     crate::utils::github::log_into_github()?;
 
     let installers: Vec<Box<dyn Installer>> = vec![
-        Box::new(NvimInstaller {
-            dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
-        }),
-        Box::new(RustAnalyzerInstaller {
-            bin_dir: bin_dir.into(),
-        }),
-        Box::new(TaploInstaller {
-            bin_dir: bin_dir.into(),
-        }),
-        Box::new(TerraformLsInstaller {
-            bin_dir: bin_dir.into(),
-        }),
-        Box::new(DenoInstaller {
-            bin_dir: bin_dir.into(),
-        }),
-        Box::new(TyposLspInstaller {
-            bin_dir: bin_dir.into(),
-        }),
-        Box::new(ValeInstaller {
-            bin_dir: bin_dir.into(),
-        }),
-        Box::new(HadolintInstaller {
-            bin_dir: bin_dir.into(),
-        }),
-        Box::new(HelmLsInstaller {
-            bin_dir: bin_dir.into(),
-        }),
-        Box::new(MarksmanInstaller {
-            bin_dir: bin_dir.into(),
-        }),
-        Box::new(ShellcheckInstaller {
-            bin_dir: bin_dir.into(),
-        }),
-        Box::new(ElixirLsInstaller {
-            dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
-        }),
-        Box::new(LuaLsInstaller {
-            dev_tools_dir: dev_tools_dir.into(),
-        }),
-        Box::new(PhpActorInstaller {
-            dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
-        }),
-        Box::new(PhpFixerInstaller {
-            dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
-        }),
-        Box::new(PsalmInstaller {
+        Box::new(BashLanguageServerInstaller {
             dev_tools_dir: dev_tools_dir.into(),
             bin_dir: bin_dir.into(),
         }),
@@ -113,15 +64,18 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
             dev_tools_dir: dev_tools_dir.into(),
             bin_dir: bin_dir.into(),
         }),
-        Box::new(ElmLanguageServerInstaller {
-            dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
-        }),
-        Box::new(BashLanguageServerInstaller {
-            dev_tools_dir: dev_tools_dir.into(),
+        Box::new(DenoInstaller {
             bin_dir: bin_dir.into(),
         }),
         Box::new(DockerLangServerInstaller {
+            dev_tools_dir: dev_tools_dir.into(),
+            bin_dir: bin_dir.into(),
+        }),
+        Box::new(ElixirLsInstaller {
+            dev_tools_dir: dev_tools_dir.into(),
+            bin_dir: bin_dir.into(),
+        }),
+        Box::new(ElmLanguageServerInstaller {
             dev_tools_dir: dev_tools_dir.into(),
             bin_dir: bin_dir.into(),
         }),
@@ -133,23 +87,35 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
             dev_tools_dir: dev_tools_dir.into(),
             bin_dir: bin_dir.into(),
         }),
+        Box::new(HadolintInstaller {
+            bin_dir: bin_dir.into(),
+        }),
+        Box::new(HelmLsInstaller {
+            bin_dir: bin_dir.into(),
+        }),
+        Box::new(LuaLsInstaller {
+            dev_tools_dir: dev_tools_dir.into(),
+        }),
+        Box::new(MarksmanInstaller {
+            bin_dir: bin_dir.into(),
+        }),
+        Box::new(NvimInstaller {
+            dev_tools_dir: dev_tools_dir.into(),
+            bin_dir: bin_dir.into(),
+        }),
+        Box::new(PhpActorInstaller {
+            dev_tools_dir: dev_tools_dir.into(),
+            bin_dir: bin_dir.into(),
+        }),
+        Box::new(PhpFixerInstaller {
+            dev_tools_dir: dev_tools_dir.into(),
+            bin_dir: bin_dir.into(),
+        }),
         Box::new(PrettierDInstaller {
             dev_tools_dir: dev_tools_dir.into(),
             bin_dir: bin_dir.into(),
         }),
-        Box::new(SqlLanguageServerInstaller {
-            dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
-        }),
-        Box::new(VsCodeLangServersInstaller {
-            dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
-        }),
-        Box::new(YamlLanguageServerInstaller {
-            dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
-        }),
-        Box::new(TypescriptLanguageServerInstaller {
+        Box::new(PsalmInstaller {
             dev_tools_dir: dev_tools_dir.into(),
             bin_dir: bin_dir.into(),
         }),
@@ -161,7 +127,41 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
             dev_tools_dir: dev_tools_dir.into(),
             bin_dir: bin_dir.into(),
         }),
+        Box::new(RustAnalyzerInstaller {
+            bin_dir: bin_dir.into(),
+        }),
+        Box::new(ShellcheckInstaller {
+            bin_dir: bin_dir.into(),
+        }),
         Box::new(SqlFluffInstaller {
+            dev_tools_dir: dev_tools_dir.into(),
+            bin_dir: bin_dir.into(),
+        }),
+        Box::new(SqlLanguageServerInstaller {
+            dev_tools_dir: dev_tools_dir.into(),
+            bin_dir: bin_dir.into(),
+        }),
+        Box::new(TaploInstaller {
+            bin_dir: bin_dir.into(),
+        }),
+        Box::new(TerraformLsInstaller {
+            bin_dir: bin_dir.into(),
+        }),
+        Box::new(TypescriptLanguageServerInstaller {
+            dev_tools_dir: dev_tools_dir.into(),
+            bin_dir: bin_dir.into(),
+        }),
+        Box::new(TyposLspInstaller {
+            bin_dir: bin_dir.into(),
+        }),
+        Box::new(ValeInstaller {
+            bin_dir: bin_dir.into(),
+        }),
+        Box::new(VsCodeLangServersInstaller {
+            dev_tools_dir: dev_tools_dir.into(),
+            bin_dir: bin_dir.into(),
+        }),
+        Box::new(YamlLanguageServerInstaller {
             dev_tools_dir: dev_tools_dir.into(),
             bin_dir: bin_dir.into(),
         }),
@@ -170,7 +170,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
     std::thread::scope(|scope| {
         let mut install_results = vec![];
         for installer in installers {
-            install_results.push((installer.tool(), scope.spawn(move || installer.install())));
+            install_results.push((installer.bin(), scope.spawn(move || installer.install())));
         }
         for (tool, install_result) in install_results {
             let _ = tools::report_install(tool, install_result.join());

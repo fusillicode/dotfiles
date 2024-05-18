@@ -6,17 +6,17 @@ pub struct RuffLspInstaller {
 }
 
 impl Installer for RuffLspInstaller {
-    fn tool(&self) -> &'static str {
-        "ruff_lsp"
+    fn bin(&self) -> &'static str {
+        "ruff-lsp"
     }
 
     fn install(&self) -> anyhow::Result<()> {
         crate::cmds::install_dev_tools::pip_install::run(
             &self.dev_tools_dir,
-            "ruff-lsp",
-            &["ruff-lsp"],
+            self.bin(),
+            &[self.bin()],
             &self.bin_dir,
-            "ruff-lsp",
+            self.bin(),
         )
     }
 }

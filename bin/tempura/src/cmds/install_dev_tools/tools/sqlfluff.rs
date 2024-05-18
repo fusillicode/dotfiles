@@ -6,17 +6,17 @@ pub struct SqlFluffInstaller {
 }
 
 impl Installer for SqlFluffInstaller {
-    fn tool(&self) -> &'static str {
+    fn bin(&self) -> &'static str {
         "sqlfluff"
     }
 
     fn install(&self) -> anyhow::Result<()> {
         crate::cmds::install_dev_tools::pip_install::run(
             &self.dev_tools_dir,
-            "sqlfluff",
-            &["sqlfluff"],
+            self.bin(),
+            &[self.bin()],
             &self.bin_dir,
-            "sqlfluf",
+            self.bin(),
         )
     }
 }

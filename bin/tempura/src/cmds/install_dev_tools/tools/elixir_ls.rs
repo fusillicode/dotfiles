@@ -10,18 +10,18 @@ pub struct ElixirLsInstaller {
 }
 
 impl Installer for ElixirLsInstaller {
-    fn tool(&self) -> &'static str {
-        "elixir_ls"
+    fn bin(&self) -> &'static str {
+        "elixir-ls"
     }
 
     fn install(&self) -> anyhow::Result<()> {
-        let tool = "elixir-ls";
-        let repo = format!("elixir-lsp/{tool}");
-        let dev_tools_repo_dir = format!("{}/{tool}", self.dev_tools_dir);
+        let repo = format!("elixir-lsp/{}", self.bin());
+        let dev_tools_repo_dir = format!("{}/{}", self.dev_tools_dir, self.bin());
         let latest_release = crate::utils::github::get_latest_release(&repo)?;
         std::fs::create_dir_all(&dev_tools_repo_dir)?;
+
         crate::cmds::install_dev_tools::curl_install::run(
-       &format!("https://github.com/{repo}/releases/download/{latest_release}/{tool}-{latest_release}.zip"),
+            &format!("https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}.zip", self.bin()),
             OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &dev_tools_repo_dir])),
         )?;
         crate::utils::system::chmod_x(&format!("{dev_tools_repo_dir}/*"))?;
@@ -29,7 +29,7 @@ impl Installer for ElixirLsInstaller {
             .args([
                 "-sf",
                 &format!("{dev_tools_repo_dir}/language_server.sh"),
-                &format!("{}/elixir-ls", self.bin_dir),
+                &format!("{}/{}", self.bin_dir, self.bin()),
             ])
             .status()?
             .exit_ok()?;

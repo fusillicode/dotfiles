@@ -7,15 +7,15 @@ pub struct NvimInstaller {
 }
 
 impl Installer for NvimInstaller {
-    fn tool(&self) -> &'static str {
+    fn bin(&self) -> &'static str {
         "nvim"
     }
 
     fn install(&self) -> anyhow::Result<()> {
         // Compiling from sources because I can checkout specific refs in case of broken nightly builds.
         // Moreover...it's pretty badass 😎
-        let nvim_source_dir = format!("{}/nvim/source", self.dev_tools_dir);
-        let nvim_release_dir = format!("{}/nvim/release", self.dev_tools_dir);
+        let nvim_source_dir = format!("{}/{}/source", self.dev_tools_dir, self.bin());
+        let nvim_release_dir = format!("{}/{}/release", self.dev_tools_dir, self.bin());
 
         Ok(silent_cmd("sh")
         .args([
@@ -30,8 +30,9 @@ impl Installer for NvimInstaller {
                     make distclean && \
                     make CMAKE_BUILD_TYPE=Release CMAKE_EXTRA_FLAGS="-DCMAKE_INSTALL_PREFIX={nvim_release_dir}" && \
                     make install
-                    ln -sf {nvim_release_dir}/bin/nvim {}
+                    ln -sf {nvim_release_dir}/bin/{} {}
                 "#,
+                self.bin(),
                 self.bin_dir
             ),
         ])
