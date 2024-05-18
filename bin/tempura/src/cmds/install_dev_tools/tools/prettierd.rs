@@ -1,9 +1,22 @@
-pub fn install(dev_tools_dir: &str, bin_dir: &str) -> anyhow::Result<()> {
-    crate::cmds::install_dev_tools::npm_install::run(
-        dev_tools_dir,
-        "prettierd",
-        &["@fsouza/prettierd"],
-        bin_dir,
-        "prettierd",
-    )
+use crate::cmds::install_dev_tools::tools::Installer;
+
+pub struct PrettierDInstaller {
+    pub dev_tools_dir: String,
+    pub bin_dir: String,
+}
+
+impl Installer for PrettierDInstaller {
+    fn bin(&self) -> &'static str {
+        "prettierd"
+    }
+
+    fn install(&self) -> anyhow::Result<()> {
+        crate::cmds::install_dev_tools::npm_install::run(
+            &self.dev_tools_dir,
+            self.bin(),
+            &[&format!("@fsouza/{}", self.bin())],
+            &self.bin_dir,
+            self.bin(),
+        )
+    }
 }
