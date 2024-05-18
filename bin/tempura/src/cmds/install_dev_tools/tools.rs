@@ -29,6 +29,11 @@ pub mod vale;
 pub mod vscode_langservers;
 pub mod yaml_language_server;
 
+pub trait Installer: Sync + Send {
+    fn bin(&self) -> &'static str;
+    fn install(&self) -> anyhow::Result<()>;
+}
+
 pub fn report_install(tool: &str, install_result: anyhow::Result<()>) -> anyhow::Result<()> {
     install_result
         .inspect(|_| println!("🎉 {tool} installed"))
