@@ -14,6 +14,7 @@ fn main() -> anyhow::Result<()> {
         "get-github-file-link" => cmds::get_github_file_link::run(cmd_args.into_iter()),
         "open-editor" => cmds::open_editor::run(cmd_args.into_iter()),
         "install-dev-tools" => cmds::install_dev_tools::run(cmd_args.into_iter()),
+        "catl" => cmds::catl::run(cmd_args.into_iter()),
         unknown_cmd => Err(anyhow!("unknown cmd '{unknown_cmd}' in args {args:?}")),
     }
 }

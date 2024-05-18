@@ -23,6 +23,10 @@ nvo () {
   tempura open-editor nv "$@"
 }
 
+catl () {
+  tempura catl "$@"
+}
+
 # Easy Git
 gtnuke () {
   git tag -f "$1" && git push origin "$1" -f
