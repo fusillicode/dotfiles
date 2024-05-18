@@ -19,7 +19,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
     }
 
     if metadata.is_file() || metadata.is_symlink() {
-        return Ok(silent_cmd("sh").args(["cat", path]).status()?.exit_ok()?);
+        return Ok(silent_cmd("cat").args([path]).status()?.exit_ok()?);
     }
 
     Ok(())
