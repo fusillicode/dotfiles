@@ -29,7 +29,7 @@ impl Installer for NvimInstaller {
                     git pull origin master && \
                     make distclean && \
                     make CMAKE_BUILD_TYPE=Release CMAKE_EXTRA_FLAGS="-DCMAKE_INSTALL_PREFIX={nvim_release_dir}" && \
-                    make install
+                    make install && \
                     ln -sf {nvim_release_dir}/bin/{} {}
                 "#,
                 self.bin(),
