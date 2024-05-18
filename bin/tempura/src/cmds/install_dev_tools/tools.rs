@@ -28,3 +28,9 @@ pub mod typos_lsp;
 pub mod vale;
 pub mod vscode_langservers;
 pub mod yaml_language_server;
+
+pub fn report_install(tool: &str, install_result: anyhow::Result<()>) -> anyhow::Result<()> {
+    install_result
+        .inspect(|_| println!("🎉 {tool} installed"))
+        .inspect_err(|e| eprintln!("❌ error installing {tool}: {e:?}"))
+}

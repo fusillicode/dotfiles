@@ -4,6 +4,7 @@ script_dir="${BASH_SOURCE%/*}"
 
 # Symlink configs
 ln -s "$HOME"/data/dev/dotfiles/dotfiles/.config/atuin/ "$HOME"/.config/atuin
+ln -s "$HOME"/data/dev/dotfiles/dotfiles/.config/gitui/ "$HOME"/.config/gitui
 ln -s "$HOME"/data/dev/dotfiles/dotfiles/.config/helix/ "$HOME"/.config/helix
 ln -s "$HOME"/data/dev/dotfiles/dotfiles/.config/mise/ "$HOME"/.config/mise
 ln -s "$HOME"/data/dev/dotfiles/dotfiles/.config/nvim/ "$HOME"/.config/nvim
@@ -93,7 +94,7 @@ brew install \
   the-unarchiver \
   transmission --cask \
   vlc \
-  wez/wezterm/wezterm-nightly --cask --no-quarantine \
+  wezterm@nightly --cask --no-quarantine --greedy-latest \
   whatsapp \
 
 # 🥲 https://wezfurlong.org/wezterm/faq.html#how-do-i-enable-undercurl-curly-underlines
