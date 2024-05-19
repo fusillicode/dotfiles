@@ -168,18 +168,20 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
     ];
 
     std::thread::scope(|scope| {
-        let mut install_results = vec![];
-        for installer in installers {
-            install_results.push((
-                installer.bin(),
-                scope.spawn(move || tools::report_install(installer.bin(), installer.install())),
-            ));
-        }
-        for (tool, install_result) in install_results {
-            if let Err(e) = install_result.join() {
-                eprintln!("❌ {tool} installer 🧵 panicked: {e:?}");
-            }
-        }
+        installers
+            .iter()
+            .fold(vec![], |mut acc, installer| {
+                let running_installer = scope
+                    .spawn(move || tools::report_install(installer.bin(), installer.install()));
+                acc.push((installer.bin(), running_installer));
+                acc
+            })
+            .into_iter()
+            .for_each(|(tool, running_installer)| {
+                if let Err(e) = running_installer.join() {
+                    eprintln!("❌ {tool} installer 🧵 panicked: {e:?}");
+                }
+            });
     });
 
     crate::utils::system::chmod_x(&format!("{bin_dir}/*"))?;
