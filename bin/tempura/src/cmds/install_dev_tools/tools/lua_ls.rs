@@ -3,11 +3,11 @@ use std::process::Command;
 use crate::cmds::install_dev_tools::curl_install::OutputOption;
 use crate::cmds::install_dev_tools::tools::Installer;
 
-pub struct LuaLsInstaller {
+pub struct LuaLanguageServer {
     pub dev_tools_dir: String,
 }
 
-impl Installer for LuaLsInstaller {
+impl Installer for LuaLanguageServer {
     fn bin(&self) -> &'static str {
         "lua-language-server"
     }

@@ -12,7 +12,7 @@ use crate::cmds::install_dev_tools::tools::eslint_d::EslintDInstaller;
 use crate::cmds::install_dev_tools::tools::graphql_lsp::GraphQlLspInstaller;
 use crate::cmds::install_dev_tools::tools::hadonlint::HadolintInstaller;
 use crate::cmds::install_dev_tools::tools::helm_ls::HelmLsInstaller;
-use crate::cmds::install_dev_tools::tools::lua_ls::LuaLsInstaller;
+use crate::cmds::install_dev_tools::tools::lua_ls::LuaLanguageServer;
 use crate::cmds::install_dev_tools::tools::marksman::MarksmanInstaller;
 use crate::cmds::install_dev_tools::tools::nvim::NvimInstaller;
 use crate::cmds::install_dev_tools::tools::php_cs_fixer::PhpFixerInstaller;
@@ -93,7 +93,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         Box::new(HelmLsInstaller {
             bin_dir: bin_dir.into(),
         }),
-        Box::new(LuaLsInstaller {
+        Box::new(LuaLanguageServer {
             dev_tools_dir: dev_tools_dir.into(),
         }),
         Box::new(MarksmanInstaller {
