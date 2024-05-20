@@ -1,0 +1,4 @@
+## cheatshit
+Open Lazy | :Lazy
+Update Lazy | :Lazy update
+Profile Lazy | :Lazy profile
