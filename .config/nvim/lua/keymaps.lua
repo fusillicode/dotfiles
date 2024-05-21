@@ -90,7 +90,7 @@ function M.telescope(telescope, telescope_builtin, defaults)
   keymap_set('n', '<leader>d', with_defaults('diagnostics', { prompt_prefix = 'Diags: ', bufnr = 0, }))
   keymap_set('n', '<leader>D', with_defaults('diagnostics', { prompt_prefix = 'Diags*: ', }))
   keymap_set('n', '<leader>h', with_defaults('help_tags', { prompt_prefix = 'Help: ', }))
-  keymap_set('n', '<leader>c', ':Cheatsheet<cr>')
+  keymap_set('n', '<leader>c', with_defaults('commands', { prompt_prefix = 'Cmds: ', }))
   keymap_set('n', '<leader>/', function()
     telescope.extensions.live_grep_args.live_grep_args(vim.tbl_extend('force', defaults,
       { prompt_prefix = 'rg: ', }))
