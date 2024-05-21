@@ -1,5 +1,6 @@
 vim.loader.enable()
 
+require('commands')
 require('keymaps').core()
 
 for _, provider in ipairs { 'node', 'perl', 'python3', 'ruby', } do
