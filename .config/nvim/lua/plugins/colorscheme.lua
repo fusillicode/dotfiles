@@ -41,6 +41,7 @@ return {
       GitSignsAdd = { fg = 'limegreen', },
       GitSignsChange = { fg = 'orange', },
       GitSignsDelete = { fg = 'red', },
+      LspInlayHint = { link = 'LineNr', },
       TelescopeMatching = match_highlight,
       TelescopePromptCounter = match_highlight,
       TelescopePromptPrefix = match_highlight,
