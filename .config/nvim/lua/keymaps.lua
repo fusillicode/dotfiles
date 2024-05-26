@@ -65,6 +65,29 @@ function M.core()
 
   keymap_set('n', '<leader>gx', require('opener').open_under_cursor)
   keymap_set('v', '<leader>gx', require('opener').open_selection)
+
+  keymap_set('v', '<leader>/', function()
+    ---@diagnostic disable-next-line: deprecated
+    local unpack = table.unpack or unpack
+
+    local _, start_ln, _ = unpack(vim.fn.getpos('v'))
+    local _, end_ln, _ = unpack(vim.fn.getpos('.'))
+    start_ln, end_ln = math.min(start_ln, end_ln), math.max(start_ln, end_ln)
+
+    local search = vim.fn.escape(vim.fn.input('Search: '), '/')
+    if search == '' then
+      print('No search')
+      return
+    end
+
+    local replace = vim.fn.escape(vim.fn.input('Replace: '), '/')
+    if replace == '' then
+      print('No replace')
+      return
+    end
+
+    vim.cmd(start_ln .. ',' .. end_ln .. 's/' .. search .. '/' .. replace .. '/g')
+  end)
 end
 
 function M.telescope(telescope_builtin, defaults)
@@ -163,7 +186,7 @@ function M.lspconfig()
 end
 
 function M.grug_far(grug_far)
-  keymap_set({ 'n', 'v', }, '<leader>w', function()
+  keymap_set('n', '<leader>w', function()
     grug_far.grug_far({ prefills = { search = vim.fn.expand('<cword>'), }, })
   end)
   keymap_set('n', '<leader>/', function()
