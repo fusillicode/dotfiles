@@ -53,7 +53,6 @@ function M.core()
   keymap_set({ 'n', 'v', }, '<leader><leader>', ':silent :w!<cr>')
   keymap_set({ 'n', 'v', }, '<leader>x', ':bd<cr>')
   keymap_set({ 'n', 'v', }, '<leader>X', ':bd!<cr>')
-  keymap_set({ 'n', 'v', }, '<leader>w', ':wa<cr>')
   keymap_set({ 'n', 'v', }, '<leader>W', ':wa!<cr>')
   keymap_set({ 'n', 'v', }, '<leader>q', ':q<cr>')
   keymap_set({ 'n', 'v', }, '<leader>Q', ':q!<cr>')
@@ -92,18 +91,6 @@ function M.telescope(telescope, telescope_builtin, defaults)
   keymap_set({ 'n', 'v', }, '<leader>D', with_defaults('diagnostics', { prompt_prefix = 'Diags*: ', }))
   keymap_set({ 'n', 'v', }, '<leader>h', with_defaults('help_tags', { prompt_prefix = 'Help: ', }))
   keymap_set({ 'n', 'v', }, '<leader>c', with_defaults('commands', { prompt_prefix = 'Cmds: ', }))
-  keymap_set({ 'n', 'v', }, '<leader>/', function()
-    telescope.extensions.live_grep_args.live_grep_args(vim.tbl_extend('force', defaults,
-      { prompt_prefix = 'rg: ', }))
-  end)
-  keymap_set({ 'n', 'v', }, '<leader>w', function()
-    telescope.extensions.live_grep_args.live_grep_args(vim.tbl_extend('force', defaults,
-      { prompt_prefix = 'rgw: ', default_text = vim.fn.expand('<cword>'), postfix = '', }))
-  end)
-  keymap_set('v', '<leader>w', function()
-    telescope.extensions.live_grep_args.live_grep_args(vim.tbl_extend('force', defaults,
-      { prompt_prefix = 'rgw: ', default_text = require('utils').get_visual_selection(), postfix = '', }))
-  end)
   keymap_set({ 'n', 'v', }, '<leader>T', ':TodoTelescope<CR>')
   keymap_set({ 'n', 'v', }, '<leader>l', telescope_builtin.resume)
   keymap_set({ 'n', 'v', }, 'ga', function()
@@ -173,6 +160,15 @@ function M.lspconfig()
     keymap_set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, })
     keymap_set('n', '<leader>a', vim.lsp.buf.code_action, { buffer = bufnr, })
   end
+end
+
+function M.grug_far(grug_far)
+  keymap_set({ 'n', 'v', }, '<leader>w', function()
+    grug_far.grug_far({ prefills = { search = vim.fn.expand('<cword>'), }, })
+  end)
+  keymap_set({ 'n', 'v', }, '<leader>/', function()
+    grug_far.grug_far({ prefills = { flags = vim.fn.expand('%'), search = vim.fn.expand('<cword>'), }, })
+  end)
 end
 
 return M
