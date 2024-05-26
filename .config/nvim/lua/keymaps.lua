@@ -67,12 +67,7 @@ function M.core()
   keymap_set('v', '<leader>gx', require('opener').open_selection)
 
   keymap_set('v', '<leader>/', function()
-    ---@diagnostic disable-next-line: deprecated
-    local unpack = table.unpack or unpack
-
-    local _, start_ln, _ = unpack(vim.fn.getpos('v'))
-    local _, end_ln, _ = unpack(vim.fn.getpos('.'))
-    start_ln, end_ln = math.min(start_ln, end_ln), math.max(start_ln, end_ln)
+    local start_ln, _, end_ln, _ = require('utils').get_visual_selection()
 
     local search = vim.fn.escape(vim.fn.input('Search: '), '/')
     if search == '' then

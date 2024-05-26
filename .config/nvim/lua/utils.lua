@@ -34,7 +34,7 @@ function M.get_visual_selection()
   start_ln, end_ln = math.min(start_ln, end_ln), math.max(start_ln, end_ln)
   start_col, end_col = math.min(start_col, end_col), math.max(start_col, end_col)
 
-  return vim.api.nvim_buf_get_text(0, start_ln - 1, start_col - 1, end_ln - 1, end_col, {})[1]
+  return start_ln, start_col, end_ln, end_col
 end
 
 return M
