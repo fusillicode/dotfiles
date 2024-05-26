@@ -41,7 +41,7 @@ return {
       show_line = false,
     }
     local telescope = require('telescope')
-    require('keymaps').telescope(telescope, require('telescope.builtin'), defaults)
+    require('keymaps').telescope(require('telescope.builtin'), defaults)
 
     local defaults_and_theme = vim.tbl_extend('force', require('telescope.themes').get_dropdown(), defaults)
     telescope.setup({

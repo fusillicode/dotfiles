@@ -67,7 +67,7 @@ function M.core()
   keymap_set('v', '<leader>gx', require('opener').open_selection)
 end
 
-function M.telescope(telescope, telescope_builtin, defaults)
+function M.telescope(telescope_builtin, defaults)
   local function with_defaults(picker, opts)
     return function()
       telescope_builtin[picker](vim.tbl_extend('force', defaults, opts or {}))
@@ -166,8 +166,8 @@ function M.grug_far(grug_far)
   keymap_set({ 'n', 'v', }, '<leader>w', function()
     grug_far.grug_far({ prefills = { search = vim.fn.expand('<cword>'), }, })
   end)
-  keymap_set({ 'n', 'v', }, '<leader>/', function()
-    grug_far.grug_far({ prefills = { flags = vim.fn.expand('%'), search = vim.fn.expand('<cword>'), }, })
+  keymap_set('n', '<leader>/', function()
+    grug_far.grug_far({ prefills = { filesFilter = vim.fn.expand('%'), }, })
   end)
 end
 
