@@ -23,6 +23,9 @@ return {
         enabled = false,
       },
       headerMaxWidth = 0,
+      placeholders = {
+        enabled = false,
+      },
       prefills = {
         filesFilter = '**/*',
       },
