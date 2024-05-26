@@ -26,15 +26,15 @@ end
 -- https://github.com/nvim-telescope/telescope-live-grep-args.nvim/blob/731a046da7dd3adff9de871a42f9b7fb85f60f47/lua/telescope-live-grep-args/shortcuts.lua#L8-L17
 function M.get_visual_selection()
   ---@diagnostic disable-next-line: deprecated
-  table.unpack = table.unpack or unpack
+  local unpack = table.unpack or unpack
 
-  local _, ls, cs = table.unpack(vim.fn.getpos('v'))
-  local _, le, ce = table.unpack(vim.fn.getpos('.'))
+  local _, start_ln, start_col = unpack(vim.fn.getpos('v'))
+  local _, end_ln, end_col = unpack(vim.fn.getpos('.'))
 
-  ls, le = math.min(ls, le), math.max(ls, le)
-  cs, ce = math.min(cs, ce), math.max(cs, ce)
+  start_ln, end_ln = math.min(start_ln, end_ln), math.max(start_ln, end_ln)
+  start_col, end_col = math.min(start_col, end_col), math.max(start_col, end_col)
 
-  return vim.api.nvim_buf_get_text(0, ls - 1, cs - 1, le - 1, ce, {})[1]
+  return vim.api.nvim_buf_get_text(0, start_ln - 1, start_col - 1, end_ln - 1, end_col, {})[1]
 end
 
 return M
