@@ -4,7 +4,7 @@ return {
   config = function()
     local grug_far = require('grug-far')
 
-    grug_far.setup({
+    local opts = {
       extraRgArgs =
           '--color=never' ..
           ' --column' ..
@@ -29,8 +29,10 @@ return {
       prefills = {
         filesFilter = '**/*',
       },
-    })
+    }
 
-    require('keymaps').grug_far(grug_far)
+    grug_far.setup(opts)
+
+    require('keymaps').grug_far(grug_far.grug_far, opts)
   end,
 }

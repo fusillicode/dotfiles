@@ -180,12 +180,12 @@ function M.lspconfig()
   end
 end
 
-function M.grug_far(grug_far)
+function M.grug_far(grug_far, opts)
   keymap_set('n', '<leader>w', function()
-    grug_far.grug_far({ prefills = { search = vim.fn.expand('<cword>'), }, })
+    grug_far(vim.tbl_deep_extend('force', opts, { prefills = { search = vim.fn.expand('<cword>'), }, }))
   end)
   keymap_set('n', '<leader>/', function()
-    grug_far.grug_far({ prefills = { filesFilter = vim.fn.expand('%'), }, })
+    grug_far(vim.tbl_deep_extend('force', opts, { prefills = { filesFilter = vim.fn.expand('%'), }, }))
   end)
 end
 
