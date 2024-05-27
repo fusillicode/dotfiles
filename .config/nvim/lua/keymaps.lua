@@ -181,7 +181,7 @@ function M.lspconfig()
 end
 
 function M.grug_far(grug_far, opts)
-  keymap_set('n', '<leader>w', function()
+  keymap_set({ 'n', 'v', }, '<leader>w', function()
     grug_far(vim.tbl_deep_extend('force', opts, { prefills = { search = vim.fn.expand('<cword>'), }, }))
   end)
   keymap_set('n', '<leader>/', function()
