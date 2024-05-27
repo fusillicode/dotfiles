@@ -42,4 +42,8 @@ function M.get_visual_selection()
   return vim.api.nvim_buf_get_text(0, start_ln - 1, start_col - 1, end_ln - 1, end_col, {})[1]
 end
 
+function M.escape_regex(str)
+  return vim.fn.escape(str, [[\.^$*+?()[]{}|]])
+end
+
 return M
