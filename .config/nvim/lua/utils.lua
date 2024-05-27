@@ -1,8 +1,8 @@
 local M = {}
 
-function M.dbg(foo)
-  print(vim.inspect(foo))
-  return foo
+function M.dbg(debug_value)
+  print(vim.inspect(debug_value))
+  return debug_value
 end
 
 function M.set_diff(s1, s2)
