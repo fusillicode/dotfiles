@@ -67,7 +67,7 @@ function M.core()
   keymap_set('v', '<leader>gx', require('opener').open_selection)
 
   keymap_set('v', '<leader>/', function()
-    local start_ln, _, end_ln, _ = require('utils').get_visual_selection()
+    local start_ln, _, end_ln, _ = require('utils').get_visual_selection_boundaries()
 
     local search = vim.fn.escape(vim.fn.input('Search: '), '/')
     if search == '' then
@@ -181,8 +181,12 @@ function M.lspconfig()
 end
 
 function M.grug_far(grug_far, opts)
-  keymap_set({ 'n', 'v', }, '<leader>w', function()
+  keymap_set('n', '<leader>w', function()
     grug_far(vim.tbl_deep_extend('force', opts, { prefills = { search = vim.fn.expand('<cword>'), }, }))
+  end)
+  keymap_set('v', '<leader>w', function()
+    local selection = require('utils').get_visual_selection()
+    grug_far(vim.tbl_deep_extend('force', opts, { prefills = { search = selection, }, }))
   end)
   keymap_set('n', '<leader>/', function()
     grug_far(vim.tbl_deep_extend('force', opts, { prefills = { filesFilter = vim.fn.expand('%'), }, }))

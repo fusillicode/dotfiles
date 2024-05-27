@@ -28,8 +28,7 @@ end
 
 -- https://github.com/neovim/neovim/pull/13896
 function M.open_selection()
-  local start_ln, start_col, end_ln, end_col = require('utils').get_visual_selection()
-  open(vim.api.nvim_buf_get_text(0, start_ln - 1, start_col - 1, end_ln - 1, end_col, {})[1])
+  open(require('utils').get_visual_selection())
 end
 
 return M

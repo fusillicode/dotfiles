@@ -1,6 +1,6 @@
 return {
   'MagicDuck/grug-far.nvim',
-  keys = { '<leader>w', '<leader>/', },
+  keys = { { '<leader>w', mode = { 'n', 'v', }, }, '<leader>/', },
   config = function()
     local grug_far = require('grug-far')
 

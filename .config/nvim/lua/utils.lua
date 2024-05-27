@@ -24,7 +24,7 @@ function M.visual_esc()
 end
 
 -- https://github.com/nvim-telescope/telescope-live-grep-args.nvim/blob/731a046da7dd3adff9de871a42f9b7fb85f60f47/lua/telescope-live-grep-args/shortcuts.lua#L8-L17
-function M.get_visual_selection()
+function M.get_visual_selection_boundaries()
   ---@diagnostic disable-next-line: deprecated
   local unpack = table.unpack or unpack
 
@@ -35,6 +35,11 @@ function M.get_visual_selection()
   start_col, end_col = math.min(start_col, end_col), math.max(start_col, end_col)
 
   return start_ln, start_col, end_ln, end_col
+end
+
+function M.get_visual_selection()
+  local start_ln, start_col, end_ln, end_col = require('utils').get_visual_selection_boundaries()
+  return vim.api.nvim_buf_get_text(0, start_ln - 1, start_col - 1, end_ln - 1, end_col, {})[1]
 end
 
 return M
