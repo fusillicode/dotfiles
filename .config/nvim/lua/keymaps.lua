@@ -191,7 +191,7 @@ function M.grug_far(grug_far, opts)
     grug_far(vim.tbl_deep_extend('force', opts, { prefills = { search = selection, }, }))
   end)
   keymap_set('n', '<leader>/', function()
-    grug_far(vim.tbl_deep_extend('force', opts, { prefills = { filesFilter = vim.fn.expand('%'), }, }))
+    grug_far(vim.tbl_deep_extend('force', opts, {}))
   end)
 end
 
