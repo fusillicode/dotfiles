@@ -26,9 +26,6 @@ return {
       placeholders = {
         enabled = false,
       },
-      prefills = {
-        filesFilter = '**/*',
-      },
     }
 
     grug_far.setup(opts)
