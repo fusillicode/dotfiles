@@ -195,4 +195,8 @@ function M.grug_far(grug_far, opts)
   end)
 end
 
+function M.gen()
+  keymap_set({ 'n', 'v', }, '<leader>g', ':Gen<cr>')
+end
+
 return M
