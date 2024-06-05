@@ -110,13 +110,13 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/mas
 brew install ninja cmake gettext curl
 
 # Setup ~/.dev_tools & ~/.local/bin
-./bin/tempura/target/release/tempura install-dev-tools ~/.dev-tools ~/.local/bin
+cd ./tempura &&
+  cargo build --release && \
+  ./target/release/tempura install-dev-tools ~/.dev-tools ~/.local/bin
 
-# TODO: symlink `./bin/update_*`. Think about moving out `tempura`.
+# Symlink bins
+ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/tempura* "$HOME"/.local/bin
 ln -s "$HOME"/data/dev/dotfiles/dotfiles/bin/update_* "$HOME"/.local/bin
-
-# TODO: symlink `./bin/dock*`. Think about moving out `tempura`.
-ln -s "$HOME"/data/dev/dotfiles/dotfiles/bin/dock* "$HOME"/.local/bin
 
 # Update & cleanup brew
 /bin/bash "$script_dir"/bin/update_brew.sh

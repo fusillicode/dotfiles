@@ -53,7 +53,6 @@ function M.core()
   keymap_set({ 'n', 'v', }, '<leader><leader>', ':silent :w!<cr>')
   keymap_set({ 'n', 'v', }, '<leader>x', ':bd<cr>')
   keymap_set({ 'n', 'v', }, '<leader>X', ':bd!<cr>')
-  keymap_set({ 'n', 'v', }, '<leader>w', ':wa<cr>')
   keymap_set({ 'n', 'v', }, '<leader>W', ':wa!<cr>')
   keymap_set({ 'n', 'v', }, '<leader>q', ':q<cr>')
   keymap_set({ 'n', 'v', }, '<leader>Q', ':q!<cr>')
@@ -66,46 +65,53 @@ function M.core()
 
   keymap_set('n', '<leader>gx', require('opener').open_under_cursor)
   keymap_set('v', '<leader>gx', require('opener').open_selection)
+
+  keymap_set('v', '<leader>/', function()
+    local start_ln, _, end_ln, _ = require('utils').get_visual_selection_boundaries()
+
+    local search = vim.fn.escape(vim.fn.input('Search: '), '/')
+    if search == '' then
+      print('No search')
+      return
+    end
+
+    local replace = vim.fn.escape(vim.fn.input('Replace: '), '/')
+    if replace == '' then
+      print('No replace')
+      return
+    end
+
+    vim.cmd(start_ln .. ',' .. end_ln .. 's/' .. search .. '/' .. replace .. '/g')
+  end)
 end
 
-function M.telescope(telescope, telescope_builtin, defaults)
+function M.telescope(telescope_builtin, defaults)
   local function with_defaults(picker, opts)
     return function()
       telescope_builtin[picker](vim.tbl_extend('force', defaults, opts or {}))
     end
   end
 
-  keymap_set('n', 'gd', with_defaults('lsp_definitions', { prompt_prefix = 'LSP Defs: ', }))
-  keymap_set('n', 'gr', with_defaults('lsp_references', { prompt_prefix = 'LSP Refs: ', }))
-  keymap_set('n', 'gi', with_defaults('lsp_implementations', { prompt_prefix = 'LSP Impls: ', }))
-  keymap_set('n', '<leader>s', with_defaults('lsp_document_symbols', { prompt_prefix = 'LSP Syms: ', }))
-  keymap_set('n', '<leader>S', with_defaults('lsp_dynamic_workspace_symbols', { prompt_prefix = 'LSP Syms*: ', }))
-  keymap_set('n', '<leader>b', with_defaults('buffers', { prompt_prefix = 'Bufs: ', }))
-  keymap_set('n', '<leader>f', with_defaults('find_files', { prompt_prefix = 'Files: ', }))
-  keymap_set('n', '<leader>j', with_defaults('jumplist', { prompt_prefix = 'Jumps: ', }))
-  keymap_set('n', '<leader>gc', with_defaults('git_commits', { prompt_prefix = 'gc*: ', }))
-  keymap_set('n', '<leader>gcb', with_defaults('git_bcommits', { prompt_prefix = 'gc: ', bufnr = 0, }))
-  keymap_set('n', '<leader>gb', with_defaults('git_branches', { prompt_prefix = 'gb: ', }))
-  keymap_set('n', '<leader>gs', with_defaults('git_status', { prompt_prefix = 'gst: ', }))
-  keymap_set('n', '<leader>d', with_defaults('diagnostics', { prompt_prefix = 'Diags: ', bufnr = 0, }))
-  keymap_set('n', '<leader>D', with_defaults('diagnostics', { prompt_prefix = 'Diags*: ', }))
-  keymap_set('n', '<leader>h', with_defaults('help_tags', { prompt_prefix = 'Help: ', }))
-  keymap_set('n', '<leader>c', with_defaults('commands', { prompt_prefix = 'Cmds: ', }))
-  keymap_set('n', '<leader>/', function()
-    telescope.extensions.live_grep_args.live_grep_args(vim.tbl_extend('force', defaults,
-      { prompt_prefix = 'rg: ', }))
-  end)
-  keymap_set('n', '<leader>w', function()
-    telescope.extensions.live_grep_args.live_grep_args(vim.tbl_extend('force', defaults,
-      { prompt_prefix = 'rgw: ', default_text = vim.fn.expand('<cword>'), postfix = '', }))
-  end)
-  keymap_set('v', '<leader>w', function()
-    telescope.extensions.live_grep_args.live_grep_args(vim.tbl_extend('force', defaults,
-      { prompt_prefix = 'rgw: ', default_text = require('utils').get_visual_selection(), postfix = '', }))
-  end)
-  keymap_set('n', '<leader>T', ':TodoTelescope<CR>')
-  keymap_set('n', '<leader>l', telescope_builtin.resume)
-  keymap_set('n', 'ga', function()
+  keymap_set({ 'n', 'v', }, 'gd', with_defaults('lsp_definitions', { prompt_prefix = 'LSP Defs: ', }))
+  keymap_set({ 'n', 'v', }, 'gr', with_defaults('lsp_references', { prompt_prefix = 'LSP Refs: ', }))
+  keymap_set({ 'n', 'v', }, 'gi', with_defaults('lsp_implementations', { prompt_prefix = 'LSP Impls: ', }))
+  keymap_set({ 'n', 'v', }, '<leader>s', with_defaults('lsp_document_symbols', { prompt_prefix = 'LSP Syms: ', }))
+  keymap_set({ 'n', 'v', }, '<leader>S',
+    with_defaults('lsp_dynamic_workspace_symbols', { prompt_prefix = 'LSP Syms*: ', }))
+  keymap_set({ 'n', 'v', }, '<leader>b', with_defaults('buffers', { prompt_prefix = 'Bufs: ', }))
+  keymap_set({ 'n', 'v', }, '<leader>f', with_defaults('find_files', { prompt_prefix = 'Files: ', }))
+  keymap_set({ 'n', 'v', }, '<leader>j', with_defaults('jumplist', { prompt_prefix = 'Jumps: ', }))
+  keymap_set({ 'n', 'v', }, '<leader>gc', with_defaults('git_commits', { prompt_prefix = 'gc*: ', }))
+  keymap_set({ 'n', 'v', }, '<leader>gcb', with_defaults('git_bcommits', { prompt_prefix = 'gc: ', bufnr = 0, }))
+  keymap_set({ 'n', 'v', }, '<leader>gb', with_defaults('git_branches', { prompt_prefix = 'gb: ', }))
+  keymap_set({ 'n', 'v', }, '<leader>gs', with_defaults('git_status', { prompt_prefix = 'gst: ', }))
+  keymap_set({ 'n', 'v', }, '<leader>d', with_defaults('diagnostics', { prompt_prefix = 'Diags: ', bufnr = 0, }))
+  keymap_set({ 'n', 'v', }, '<leader>D', with_defaults('diagnostics', { prompt_prefix = 'Diags*: ', }))
+  keymap_set({ 'n', 'v', }, '<leader>h', with_defaults('help_tags', { prompt_prefix = 'Help: ', }))
+  keymap_set({ 'n', 'v', }, '<leader>c', with_defaults('commands', { prompt_prefix = 'Cmds: ', }))
+  keymap_set({ 'n', 'v', }, '<leader>T', ':TodoTelescope<CR>')
+  keymap_set({ 'n', 'v', }, '<leader>l', telescope_builtin.resume)
+  keymap_set({ 'n', 'v', }, 'ga', function()
     telescope_builtin.buffers({
       previewer = false,
       layout_config = { width = 0.0, height = 0.0, },
@@ -172,6 +178,25 @@ function M.lspconfig()
     keymap_set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, })
     keymap_set('n', '<leader>a', vim.lsp.buf.code_action, { buffer = bufnr, })
   end
+end
+
+function M.grug_far(grug_far, opts)
+  keymap_set('n', '<leader>w', function()
+    local search = require('utils').escape_regex(vim.fn.expand('<cword>'))
+    grug_far(vim.tbl_deep_extend('force', opts, { prefills = { search = search, }, }))
+  end)
+  keymap_set('v', '<leader>w', function()
+    local utils = require('utils')
+    local selection = utils.escape_regex(utils.get_visual_selection())
+    grug_far(vim.tbl_deep_extend('force', opts, { prefills = { search = selection, }, }))
+  end)
+  keymap_set('n', '<leader>/', function()
+    grug_far(vim.tbl_deep_extend('force', opts, {}))
+  end)
+end
+
+function M.gen()
+  keymap_set({ 'n', 'v', }, '<leader>[', ':Gen<cr>')
 end
 
 return M

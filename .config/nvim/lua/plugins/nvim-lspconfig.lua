@@ -15,7 +15,9 @@ local function get_lsps_configs()
     },
     elmls = {},
     graphql = {},
-    html = {},
+    html = {
+      filetypes = { 'html', 'htmldjango', },
+    },
     helm_ls = {},
     jsonls = {
       settings = {
@@ -139,6 +141,7 @@ return {
       -- 🥲 https://neovim.discourse.group/t/cannot-serialize-function-type-not-supported/4542/3
       local lsp_setup = { capabilities = capabilities, on_attach = on_attach, }
       if config['cmd'] then lsp_setup.cmd = config['cmd'] end
+      if config['filetypes'] then lsp_setup.filetypes = config['filetypes'] end
       if config['init_options'] then lsp_setup.init_options = config['init_options'] end
       if config['root_dir'] then lsp_setup.root_dir = config['root_dir'] end
       if config['settings'] then lsp_setup.settings = config['settings'] end

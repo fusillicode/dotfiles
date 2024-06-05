@@ -15,6 +15,7 @@ use crate::cmds::install_dev_tools::tools::helm_ls::HelmLsInstaller;
 use crate::cmds::install_dev_tools::tools::lua_ls::LuaLanguageServer;
 use crate::cmds::install_dev_tools::tools::marksman::MarksmanInstaller;
 use crate::cmds::install_dev_tools::tools::nvim::NvimInstaller;
+use crate::cmds::install_dev_tools::tools::ollama::OllamaInstaller;
 use crate::cmds::install_dev_tools::tools::php_cs_fixer::PhpFixerInstaller;
 use crate::cmds::install_dev_tools::tools::phpactor::PhpActorInstaller;
 use crate::cmds::install_dev_tools::tools::prettierd::PrettierDInstaller;
@@ -163,6 +164,9 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
         }),
         Box::new(YamlLanguageServerInstaller {
             dev_tools_dir: dev_tools_dir.into(),
+            bin_dir: bin_dir.into(),
+        }),
+        Box::new(OllamaInstaller {
             bin_dir: bin_dir.into(),
         }),
     ];

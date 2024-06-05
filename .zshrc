@@ -146,3 +146,6 @@ export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl/lib/pkgconfig"
 
 # FFS PHP...
 export PATH="/opt/homebrew/opt/m4/bin:$PATH"
+
+# FFS...k8s
+export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"

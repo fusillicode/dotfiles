@@ -20,6 +20,8 @@ return {
       },
       keymaps = {
         ['<esc>'] = ':bd!<cr>',
+        ['<s-l>'] = 'actions.select',
+        ['<s-h>'] = 'actions.parent',
       },
       prompt_save_on_select_new_entry = false,
       skip_confirm_for_simple_edits = true,

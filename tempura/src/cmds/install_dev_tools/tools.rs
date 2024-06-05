@@ -11,6 +11,7 @@ pub mod helm_ls;
 pub mod lua_ls;
 pub mod marksman;
 pub mod nvim;
+pub mod ollama;
 pub mod php_cs_fixer;
 pub mod phpactor;
 pub mod prettierd;

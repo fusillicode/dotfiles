@@ -5,7 +5,6 @@ return {
   dependencies = {
     'nvim-lua/plenary.nvim',
     'nvim-telescope/telescope-ui-select.nvim',
-    'nvim-telescope/telescope-live-grep-args.nvim',
     {
       'nvim-telescope/telescope-fzf-native.nvim',
       build = 'make',
@@ -42,7 +41,7 @@ return {
       show_line = false,
     }
     local telescope = require('telescope')
-    require('keymaps').telescope(telescope, require('telescope.builtin'), defaults)
+    require('keymaps').telescope(require('telescope.builtin'), defaults)
 
     local defaults_and_theme = vim.tbl_extend('force', require('telescope.themes').get_dropdown(), defaults)
     telescope.setup({
@@ -51,25 +50,6 @@ return {
         egrepify = {
           prefixes = {
             ['.'] = { flag = 'hidden', },
-          },
-        },
-        live_grep_args = {
-          prompt_title = false,
-          vimgrep_arguments = {
-            'rg',
-            '--color=never',
-            '--column',
-            '--line-number',
-            '--no-heading',
-            '--smart-case',
-            '--with-filename',
-            '--hidden',
-            '--glob=!**/.git/*',
-            '--glob=!**/target/*',
-            '--glob=!**/_build/*',
-            '--glob=!**/deps/*',
-            '--glob=!**/.elixir_ls/*',
-            '--glob=!**/.node_modules/*',
           },
         },
         ['ui-select'] = { defaults_and_theme, },
@@ -100,7 +80,6 @@ return {
     })
 
     telescope.load_extension('ui-select')
-    telescope.load_extension('live_grep_args')
     telescope.load_extension('fzf')
 
     vim.cmd('autocmd User TelescopePreviewerLoaded setlocal number')
