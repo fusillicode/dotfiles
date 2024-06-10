@@ -16,23 +16,32 @@ return {
   config = function()
     local cmp = require('cmp')
     local luasnip = require('luasnip')
-    local cmp_autopairs = require('nvim-autopairs.completion.cmp')
 
     require('luasnip.loaders.from_vscode').load({ paths = { './snippets', }, })
-
     require('codeium').setup({})
 
     cmp.event:on(
       'confirm_done',
-      cmp_autopairs.on_confirm_done()
+      require('nvim-autopairs.completion.cmp').on_confirm_done()
     )
+
+    local sources = {
+      buffer = '[Buffer]',
+      codeium = '[Codeium]',
+      nvim_lsp = '[LSP]',
+      path = '[Path]',
+      luasnip = '[LuaSnip]',
+      crates = '[Crates]',
+      rg = '[rg]',
+    }
 
     cmp.setup({
       experimental = {
         ghost_text = true,
       },
       formatting = {
-        format = function(_, vim_item)
+        format = function(entry, vim_item)
+          vim_item.menu = sources[entry.source.name]
           vim_item.abbr = string.sub(vim_item.abbr, 1, 48)
           return vim_item
         end,
@@ -75,10 +84,7 @@ return {
         { name = 'buffer', },
         { name = 'luasnip', },
         { name = 'crates', },
-        {
-          name = 'rg',
-          keyword_length = 3,
-        },
+        { name = 'rg',                      keyword_length = 3, },
       },
       entries = {
         follow_cursor = true,
