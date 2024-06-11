@@ -26,13 +26,13 @@ return {
     )
 
     local sources = {
-      buffer = '[Buffer]',
-      codeium = '[Codeium]',
-      nvim_lsp = '[LSP]',
-      path = '[Path]',
-      luasnip = '[LuaSnip]',
-      crates = '[Crates]',
-      rg = '[rg]',
+      buffer = 'buffer',
+      codeium = 'codeium',
+      nvim_lsp = 'lsp',
+      path = 'path',
+      luasnip = 'luasnip',
+      crates = 'crates',
+      rg = 'rg',
     }
 
     cmp.setup({
@@ -41,6 +41,7 @@ return {
       },
       formatting = {
         format = function(entry, vim_item)
+          vim_item.kind = ''
           vim_item.menu = sources[entry.source.name]
           vim_item.abbr = vim_item.abbr:match('[^(]+')
           return vim_item
