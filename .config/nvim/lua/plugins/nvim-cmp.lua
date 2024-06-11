@@ -42,7 +42,7 @@ return {
       formatting = {
         format = function(entry, vim_item)
           vim_item.menu = sources[entry.source.name]
-          vim_item.abbr = string.sub(vim_item.abbr, 1, 48)
+          vim_item.abbr = vim_item.abbr:match('[^(]+')
           return vim_item
         end,
       },
