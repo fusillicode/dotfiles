@@ -9,6 +9,7 @@ return {
     local telescope_border = { fg = vim.api.nvim_get_hl(0, { name = 'LineNr', }).fg, bold = true, }
 
     for hl, value in pairs({
+      CmpItemMenu = { link = 'Comment', },
       CursorLine = { bg = vim.api.nvim_get_hl(0, { name = 'StatusLine', }).bg, },
       ColorColumn = { link = 'StatusLine', },
       DiagnosticError = { fg = 'red', },
