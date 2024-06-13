@@ -20,10 +20,7 @@ return {
     require('luasnip.loaders.from_vscode').load({ paths = { './snippets', }, })
     require('codeium').setup({})
 
-    cmp.event:on(
-      'confirm_done',
-      require('nvim-autopairs.completion.cmp').on_confirm_done()
-    )
+    cmp.event:on('confirm_done', require('nvim-autopairs.completion.cmp').on_confirm_done())
 
     local sources = {
       buffer = 'buffer',
@@ -36,9 +33,7 @@ return {
     }
 
     cmp.setup({
-      experimental = {
-        ghost_text = true,
-      },
+      experimental = { ghost_text = true, },
       formatting = {
         format = function(entry, vim_item)
           vim_item.kind = ' '
@@ -47,12 +42,8 @@ return {
           return vim_item
         end,
       },
-      performance = {
-        max_view_entries = 12,
-      },
-      snippet = {
-        expand = function(args) luasnip.lsp_expand(args.body) end,
-      },
+      performance = { max_view_entries = 12, },
+      snippet = { expand = function(args) luasnip.lsp_expand(args.body) end, },
       mapping = cmp.mapping.preset.insert({
         ['<c-d>'] = cmp.mapping.scroll_docs(-4),
         ['<c-u>'] = cmp.mapping.scroll_docs(4),
@@ -87,9 +78,7 @@ return {
         { name = 'crates', },
         { name = 'rg',                      keyword_length = 3, },
       },
-      entries = {
-        follow_cursor = true,
-      },
+      entries = { follow_cursor = true, },
       window = {
         completion = cmp.config.window.bordered(),
         documentation = cmp.config.window.bordered(),
