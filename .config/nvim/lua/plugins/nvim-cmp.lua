@@ -41,7 +41,7 @@ return {
       },
       formatting = {
         format = function(entry, vim_item)
-          vim_item.kind = ''
+          vim_item.kind = ' '
           vim_item.menu = sources[entry.source.name]
           vim_item.abbr = vim_item.abbr:match('[^(]+')
           return vim_item
@@ -89,6 +89,10 @@ return {
       },
       entries = {
         follow_cursor = true,
+      },
+      window = {
+        completion = cmp.config.window.bordered(),
+        documentation = cmp.config.window.bordered(),
       },
     })
   end,
