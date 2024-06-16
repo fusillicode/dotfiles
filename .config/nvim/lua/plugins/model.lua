@@ -18,6 +18,17 @@ local function llama3_chat(messages, config, system_prompt)
   return { prompt = prompt, raw = true, }
 end
 
+local function llama3_chat_config(system_prompt)
+  return {
+    provider = require('model.providers.ollama'),
+    params = { model = 'llama3:latest', },
+    create = function(input, context) return context.selection and input or '' end,
+    run = function(messages, config)
+      return llama3_chat(messages, config, system_prompt)
+    end,
+  }
+end
+
 return {
   'gsuuon/model.nvim',
   cmd = { 'M', 'Model', 'Mchat', },
@@ -30,24 +41,11 @@ return {
   end,
   ft = 'mchat',
   config = function()
-    local ollama = require('model.providers.ollama')
-
     require('model').setup({
       chats = {
-        llama3 = {
-          provider = ollama,
-          params = { model = 'llama3:latest', },
-          create = function(input, context)
-            return context.selection and input or ''
-          end,
-          run = function(messages, config)
-            return llama3_chat(
-              messages,
-              config,
-              "Use less words as possible and don't hallucinate!"
-            )
-          end,
-        },
+        concise = llama3_chat_config("Use less words as possible and don't hallucinate!"),
+        friendly = llama3_chat_config('Be kind and friendly'),
+        bool = llama3_chat_config('Answer ONLY with yes or no'),
       },
     })
   end,
