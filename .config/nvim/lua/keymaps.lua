@@ -192,4 +192,12 @@ function M.model()
   keymap_set({ 'n', 'v', }, '<leader>[', ':Mchat ', { silent = false, })
 end
 
+function M.mchat()
+  for _, mode in pairs({ 'n', 'v', }) do
+    vim.api.nvim_buf_set_keymap(0, mode, '<leader><leader>', ':Mchat<cr>', {})
+    vim.api.nvim_buf_set_keymap(0, mode, '<leader>x', ':bd!<cr>', {})
+    vim.api.nvim_buf_set_keymap(0, mode, '<c-c>', ':Mcancel<cr>', {})
+  end
+end
+
 return M
