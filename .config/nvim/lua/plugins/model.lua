@@ -31,6 +31,7 @@ end
 
 return {
   'gsuuon/model.nvim',
+  keys = { '<leader>[', },
   cmd = { 'M', 'Model', 'Mchat', },
   init = function()
     vim.filetype.add({
@@ -41,6 +42,8 @@ return {
   end,
   ft = 'mchat',
   config = function()
+    require('keymaps').model()
+
     require('model').setup({
       chats = {
         concise = llama3_chat_config("Use less words as possible and don't hallucinate!"),
