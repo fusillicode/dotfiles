@@ -87,13 +87,15 @@ return {
           params = { model = 'llama3:latest', },
           mode = require('model').mode.REPLACE,
           builder = function(input)
+            local lang = vim.fn.input('Language: ')
+
             local prompt = llama3_prompt_as(
                   'system',
-                  "You're an English native speaker who work as a translator."
+                  "You're an " .. lang .. ' native speaker who work as a translator.'
                 )
                 .. llama3_prompt_as(
                   'user',
-                  'Translate the following text into English and print ONLY the translation: '
+                  'Translate the following text into ' .. lang .. ' and print ONLY the translation: '
                   .. input
                   .. '<|eot_id|>'
                 )
