@@ -52,7 +52,7 @@ return {
         commit = {
           provider = require('model.providers.ollama'),
           params = { model = 'llama3:latest', },
-          mode = require('model').mode.INSERT,
+          mode = require('model').mode.INSERT_OR_REPLACE,
           builder = function()
             local git_diff = vim.fn.system({ 'git', 'diff', '--staged', })
 
@@ -80,7 +80,7 @@ return {
         translate = {
           provider = require('model.providers.ollama'),
           params = { model = 'llama3:latest', },
-          mode = require('model').mode.REPLACE,
+          mode = require('model').mode.INSERT_OR_REPLACE,
           builder = function(input)
             local lang = vim.fn.input('Language: ')
 
