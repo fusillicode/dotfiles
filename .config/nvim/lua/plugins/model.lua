@@ -66,7 +66,7 @@ return {
                 .. "You're a Software Engineer who write clear and succinct commits following the Convetional Commits convention."
                 .. '<|eot_id|>'
                 .. '<|start_header_id|>user<|end_header_id|>\n'
-                .. 'Write a short commit message for the following git diff: '
+                .. 'Write a short commit message for the following git diff with conventional commit type in lowercase: '
                 .. '```\n'
                 .. git_diff
                 .. '\n```'
