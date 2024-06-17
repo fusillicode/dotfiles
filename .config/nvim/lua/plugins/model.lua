@@ -71,7 +71,7 @@ return {
                 )
                 .. llama3_prompt_as(
                   'user',
-                  'Write a short commit message for the following git diff with conventional commit type in lowercase: '
+                  'Write JUST the commit message for the following git diff with conventional commit type in lowercase: '
                   .. '```\n'
                   .. git_diff
                   .. '\n```'
