@@ -62,7 +62,7 @@ return {
             local git_diff = vim.fn.system({ 'git', 'diff', '--staged', })
 
             if git_diff == '' then
-              return
+              error('Empty git diff')
             end
 
             local prompt = llama3_prompt_as(
@@ -88,6 +88,10 @@ return {
           mode = require('model').mode.REPLACE,
           builder = function(input)
             local lang = vim.fn.input('Language: ')
+
+            if lang == '' then
+              error('No language supplied')
+            end
 
             local prompt = llama3_prompt_as(
                   'system',
