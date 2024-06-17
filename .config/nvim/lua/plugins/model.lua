@@ -1,22 +1,22 @@
-local function llama3_header_role(role)
+local function llama3_header(role)
   return '<|start_header_id|>' .. role .. '<|end_header_id|>'
 end
 
-local function llama3_role_prompt(role, prompt)
-  return llama3_header_role(role) .. '\n' .. prompt .. '<|eot_id|>'
+local function llama3_prompt_as(role, prompt)
+  return llama3_header(role) .. '\n' .. prompt .. '<|eot_id|>'
 end
 
 local function llama3_chat(messages, config, system_prompt)
-  local prompt = llama3_role_prompt(
+  local prompt = llama3_prompt_as(
     'system',
     (system_prompt and system_prompt or '') .. (config.system and ('Additionally ' .. config.system) or '')
   )
 
   for _, msg in ipairs(messages) do
-    prompt = llama3_role_prompt(msg.role, msg.content)
+    prompt = llama3_prompt_as(msg.role, msg.content)
   end
 
-  prompt = prompt .. llama3_header_role('assistant')
+  prompt = prompt .. llama3_header('assistant')
 
   return { prompt = prompt, raw = true, }
 end
@@ -65,16 +65,19 @@ return {
               return
             end
 
-            local prompt = '<|start_header_id|>system<|end_header_id|>\n'
-                .. "You're a Software Engineer who write clear and succinct commits following the Convetional Commits convention."
-                .. '<|eot_id|>'
-                .. '<|start_header_id|>user<|end_header_id|>\n'
-                .. 'Write a short commit message for the following git diff with conventional commit type in lowercase: '
-                .. '```\n'
-                .. git_diff
-                .. '\n```'
-                .. '<|eot_id|>'
-                .. '<|start_header_id|>assistant<|end_header_id|>'
+            local prompt = llama3_prompt_as(
+                  'system',
+                  "You're a Software Engineer who write clear and succinct commits following the Convetional Commits convention."
+                )
+                .. llama3_prompt_as(
+                  'user',
+                  'Write a short commit message for the following git diff with conventional commit type in lowercase: '
+                  .. '```\n'
+                  .. git_diff
+                  .. '\n```'
+                  .. '<|eot_id|>'
+                )
+                .. llama3_header('assistant')
 
             return { prompt = prompt, }
           end,
@@ -84,14 +87,17 @@ return {
           params = { model = 'llama3:latest', },
           mode = require('model').mode.INSERT,
           builder = function(input)
-            local prompt = '<|start_header_id|>system<|end_header_id|>\n'
-                .. "You're an English native speaker who work as a translator."
-                .. '<|eot_id|>'
-                .. '<|start_header_id|>user<|end_header_id|>\n'
-                .. 'Translate the following text into English and print ONLY the translation: '
-                .. input
-                .. '<|eot_id|>'
-                .. '<|start_header_id|>assistant<|end_header_id|>'
+            local prompt = llama3_prompt_as(
+                  'system',
+                  "You're an English native speaker who work as a translator."
+                )
+                .. llama3_prompt_as(
+                  'user',
+                  'Translate the following text into English and print ONLY the translation: '
+                  .. input
+                  .. '<|eot_id|>'
+                )
+                .. llama3_header('assistant')
 
             return { prompt = prompt, }
           end,
