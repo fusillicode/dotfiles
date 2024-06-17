@@ -68,7 +68,6 @@ return {
                   .. '```\n'
                   .. git_diff
                   .. '\n```'
-                  .. '<|eot_id|>'
                 )
                 .. Llama3.header('assistant')
 
@@ -94,7 +93,6 @@ return {
                   'user',
                   'Translate the following text into ' .. lang .. ' and print ONLY the translation: '
                   .. input
-                  .. '<|eot_id|>'
                 )
                 .. Llama3.header('assistant')
 
@@ -122,7 +120,6 @@ return {
                   .. '```\n'
                   .. input
                   .. '\n```'
-                  .. '<|eot_id|>'
                 )
                 .. Llama3.header('assistant')
 
