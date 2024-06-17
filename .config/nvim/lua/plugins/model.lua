@@ -63,7 +63,10 @@ return {
             end
 
             local prompt = '<|start_header_id|>system<|end_header_id|>\n'
-                .. 'Use Convetional Commit with lowercase type and write ONLY the short commit message for the following git diff: '
+                .. "You're a Software Engineer who write clear and succinct commits following the Convetional Commits convention."
+                .. '<|eot_id|>'
+                .. '<|start_header_id|>user<|end_header_id|>\n'
+                .. 'Write a short commit message for the following git diff: '
                 .. '```\n'
                 .. git_diff
                 .. '\n```'
@@ -79,6 +82,9 @@ return {
           mode = require('model').mode.INSERT,
           builder = function(input)
             local prompt = '<|start_header_id|>system<|end_header_id|>\n'
+                .. "You're an English native speaker who work as a translator."
+                .. '<|eot_id|>'
+                .. '<|start_header_id|>user<|end_header_id|>\n'
                 .. 'Translate the following text into English and print ONLY the translation: '
                 .. input
                 .. '<|eot_id|>'
