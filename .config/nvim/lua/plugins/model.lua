@@ -73,6 +73,20 @@ return {
             return { prompt = prompt, }
           end,
         },
+        translate = {
+          provider = require('model.providers.ollama'),
+          params = { model = 'llama3:latest', },
+          mode = require('model').mode.INSERT,
+          builder = function(input)
+            local prompt = '<|start_header_id|>system<|end_header_id|>\n'
+                .. 'Translate the following text into English and print ONLY the translation: '
+                .. input
+                .. '<|eot_id|>'
+                .. '<|start_header_id|>assistant<|end_header_id|>'
+
+            return { prompt = prompt, }
+          end,
+        },
       },
     })
   end,
