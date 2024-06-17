@@ -1,19 +1,22 @@
+local function llama3_role(role)
+  return '<|start_header_id|>' .. role .. '<|end_header_id|>'
+end
+
+local function llama3_role_prompt(role, prompt)
+  return llama3_role(role) .. '\n' .. prompt .. '<|eot_id|>'
+end
+
 local function llama3_chat(messages, config, system_prompt)
-  local prompt = '<|start_header_id|>system<|end_header_id|>\n'
-      .. (system_prompt and system_prompt or '')
-      .. (config.system and ('Additionally ' .. config.system) or '')
-      .. '<|eot_id|>'
+  local prompt = llama3_role_prompt(
+    'system',
+    (system_prompt and system_prompt or '') .. (config.system and ('Additionally ' .. config.system) or '')
+  )
 
   for _, msg in ipairs(messages) do
-    prompt = prompt
-        .. '<|start_header_id|>'
-        .. (msg.role == 'user' and 'user' or 'assistant')
-        .. '<|end_header_id|>\n'
-        .. msg.content
-        .. '<|eot_id|>'
+    prompt = llama3_role_prompt(msg.role, msg.content)
   end
 
-  prompt = prompt .. '<|start_header_id|>assistant<|end_header_id|>'
+  prompt = prompt .. llama3_role('assistant')
 
   return { prompt = prompt, raw = true, }
 end
