@@ -101,6 +101,34 @@ return {
             return { prompt = prompt, raw = true, }
           end,
         },
+        refactor = {
+          provider = require('model.providers.ollama'),
+          params = { model = 'llama3:latest', },
+          mode = require('model').mode.INSERT_OR_REPLACE,
+          builder = function(input)
+            local lang = vim.fn.input('Language: ')
+
+            if lang == '' then
+              error('No language supplied')
+            end
+
+            local prompt = Llama3:prompt_as(
+                  'system',
+                  "You're a Software Engineer expert in " .. lang .. '.'
+                )
+                .. Llama3:prompt_as(
+                  'user',
+                  'Refactor the following code: '
+                  .. '```\n'
+                  .. input
+                  .. '\n```'
+                  .. '<|eot_id|>'
+                )
+                .. Llama3.header('assistant')
+
+            return { prompt = prompt, raw = true, }
+          end,
+        },
       },
     })
   end,
