@@ -1,9 +1,9 @@
-local function llama3_role(role)
+local function llama3_header_role(role)
   return '<|start_header_id|>' .. role .. '<|end_header_id|>'
 end
 
 local function llama3_role_prompt(role, prompt)
-  return llama3_role(role) .. '\n' .. prompt .. '<|eot_id|>'
+  return llama3_header_role(role) .. '\n' .. prompt .. '<|eot_id|>'
 end
 
 local function llama3_chat(messages, config, system_prompt)
@@ -16,7 +16,7 @@ local function llama3_chat(messages, config, system_prompt)
     prompt = llama3_role_prompt(msg.role, msg.content)
   end
 
-  prompt = prompt .. llama3_role('assistant')
+  prompt = prompt .. llama3_header_role('assistant')
 
   return { prompt = prompt, raw = true, }
 end
