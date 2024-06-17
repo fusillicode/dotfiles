@@ -13,7 +13,7 @@ local function llama3_chat(messages, config, system_prompt)
   )
 
   for _, msg in ipairs(messages) do
-    prompt = llama3_prompt_as(msg.role, msg.content)
+    prompt = prompt .. llama3_prompt_as(msg.role, msg.content)
   end
 
   prompt = prompt .. llama3_header('assistant')
