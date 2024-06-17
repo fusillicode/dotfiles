@@ -79,7 +79,7 @@ return {
                 )
                 .. llama3_header('assistant')
 
-            return { prompt = prompt, }
+            return { prompt = prompt, raw = true, }
           end,
         },
         translate = {
@@ -99,7 +99,7 @@ return {
                 )
                 .. llama3_header('assistant')
 
-            return { prompt = prompt, }
+            return { prompt = prompt, raw = true, }
           end,
         },
       },
