@@ -107,6 +107,19 @@ return {
             return { prompt = prompt, raw = true, }
           end,
         },
+        means = {
+          provider = require('model.providers.ollama'),
+          params = { model = 'llama3:latest', },
+          mode = require('model').mode.BUFFER,
+          builder = function(input)
+            local prompt = Llama3:prompt_as('system', "You're an expert linguist in all lanuages")
+                .. Llama3:prompt_as('user',
+                  'Explain in a concise but precise way what does the following means: ' .. input)
+                .. Llama3.header('assistant')
+
+            return { prompt = prompt, raw = true, }
+          end,
+        },
       },
     })
   end,
