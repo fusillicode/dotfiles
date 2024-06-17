@@ -85,7 +85,7 @@ return {
         translate = {
           provider = require('model.providers.ollama'),
           params = { model = 'llama3:latest', },
-          mode = require('model').mode.INSERT,
+          mode = require('model').mode.REPLACE,
           builder = function(input)
             local prompt = llama3_prompt_as(
                   'system',
