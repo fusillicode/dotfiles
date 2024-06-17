@@ -7,13 +7,9 @@ local Llama3 = {
       (system_prompt and system_prompt or '') .. (config.system and ('Additionally ' .. config.system) or '')
     )
 
-    for _, msg in ipairs(messages) do
-      prompt = prompt .. self:prompt_as(msg.role, msg.content)
-    end
+    for _, msg in ipairs(messages) do prompt = prompt .. self:prompt_as(msg.role, msg.content) end
 
-    prompt = prompt .. self.header('assistant')
-
-    return { prompt = prompt, raw = true, }
+    return { prompt = prompt .. self.header('assistant'), raw = true, }
   end,
   chat_config = function(self, system_prompt)
     return {
@@ -44,7 +40,7 @@ return {
       chats = {
         concise = Llama3:chat_config("Use less words as possible and don't hallucinate!"),
         friendly = Llama3:chat_config('Be kind and friendly'),
-        bool = Llama3:chat_config('Answer ONLY with yes or no'),
+        bool = Llama3:chat_config('Answer only with yes or no'),
       },
       prompts = {
         commit = {
@@ -54,9 +50,7 @@ return {
           builder = function()
             local git_diff = vim.fn.system({ 'git', 'diff', '--staged', })
 
-            if git_diff == '' then
-              error('Empty git diff')
-            end
+            if git_diff == '' then error('Empty git diff') end
 
             local prompt = Llama3:prompt_as(
                   'system',
@@ -64,10 +58,8 @@ return {
                 )
                 .. Llama3:prompt_as(
                   'user',
-                  'Write JUST the commit message for the following git diff with conventional commit type in lowercase: '
-                  .. '```\n'
-                  .. git_diff
-                  .. '\n```'
+                  'Write just a commit message for the following git diff with conventional commit type in lowercase: '
+                  .. '```\n' .. git_diff .. '\n```'
                 )
                 .. Llama3.header('assistant')
 
@@ -81,9 +73,7 @@ return {
           builder = function(input)
             local lang = vim.fn.input('Language: ')
 
-            if lang == '' then
-              error('No language supplied')
-            end
+            if lang == '' then error('No language supplied') end
 
             local prompt = Llama3:prompt_as(
                   'system',
@@ -91,8 +81,7 @@ return {
                 )
                 .. Llama3:prompt_as(
                   'user',
-                  'Translate the following text into ' .. lang .. ' and print ONLY the translation: '
-                  .. input
+                  'Translate the following text into ' .. lang .. ' and output only the translation: ' .. input
                 )
                 .. Llama3.header('assistant')
 
@@ -106,20 +95,12 @@ return {
           builder = function(input)
             local lang = vim.fn.input('Language: ')
 
-            if lang == '' then
-              error('No language supplied')
-            end
+            if lang == '' then error('No language supplied') end
 
-            local prompt = Llama3:prompt_as(
-                  'system',
-                  "You're a Software Engineer expert in " .. lang .. '.'
-                )
+            local prompt = Llama3:prompt_as('system', "You're a Software Engineer expert in " .. lang)
                 .. Llama3:prompt_as(
                   'user',
-                  'Refactor the following code: '
-                  .. '```\n'
-                  .. input
-                  .. '\n```'
+                  'Refactor the following code: ' .. '```\n' .. input .. '\n```'
                 )
                 .. Llama3.header('assistant')
 
