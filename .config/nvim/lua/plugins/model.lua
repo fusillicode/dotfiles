@@ -1,9 +1,9 @@
 local Llama3 = {
   header = function(role) return '<|start_header_id|>' .. role .. '<|end_header_id|>' end,
-  trigger_response = function(self) return self:header('assistant') end,
+  trigger_response = function(self) return self.header('assistant') end,
   prompt_as = function(self, role, prompt) return self.header(role) .. '\n' .. prompt .. '<|eot_id|>' end,
-  user_prompt = function(self, prompt) return self.prompt_as('user', prompt) end,
-  system_prompt = function(self, prompt) return self.prompt_as('system', prompt) end,
+  user_prompt = function(self, prompt) return self:prompt_as('user', prompt) end,
+  system_prompt = function(self, prompt) return self:prompt_as('system', prompt) end,
   chat = function(self, messages, config, system_prompt)
     local prompt = self:prompt_as(
       'system',
@@ -62,7 +62,7 @@ return {
                   'Write just a commit message for the following git diff with conventional commit type in lowercase: ' ..
                   '```\n' .. git_diff .. '\n```'
                 )
-                .. Llama3.trigger_response()
+                .. Llama3:trigger_response()
 
             return { prompt = prompt, raw = true, }
           end,
@@ -80,7 +80,7 @@ return {
                 .. Llama3:user_prompt(
                   'Translate the following text into ' .. lang .. ' and output only the translation: ' .. input
                 )
-                .. Llama3.trigger_response()
+                .. Llama3:trigger_response()
 
             return { prompt = prompt, raw = true, }
           end,
@@ -98,7 +98,7 @@ return {
                 .. Llama3:user_prompt(
                   'Refactor the following code: ' .. '```\n' .. input .. '\n```'
                 )
-                .. Llama3.trigger_response()
+                .. Llama3:trigger_response()
 
             return { prompt = prompt, raw = true, }
           end,
@@ -110,7 +110,7 @@ return {
           builder = function(input)
             local prompt = Llama3:system_prompt("You're an expert linguist in all lanuages")
                 .. Llama3:user_prompt('Explain in a concise but precise way what does the following means: ' .. input)
-                .. Llama3.trigger_response()
+                .. Llama3:trigger_response()
 
             return { prompt = prompt, raw = true, }
           end,
