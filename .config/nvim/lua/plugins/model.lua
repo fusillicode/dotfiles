@@ -20,9 +20,7 @@ local Llama3 = {
       provider = require('model.providers.ollama'),
       params = { model = 'llama3:latest', },
       create = function(input, context) return context.selection and input or '' end,
-      run = function(messages, config)
-        return self:chat(messages, config, system_prompt)
-      end,
+      run = function(messages, config) return self:chat(messages, config, system_prompt) end,
     }
   end,
 }
