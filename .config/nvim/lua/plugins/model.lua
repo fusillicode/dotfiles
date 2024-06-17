@@ -1,6 +1,9 @@
 local Llama3 = {
   header = function(role) return '<|start_header_id|>' .. role .. '<|end_header_id|>' end,
+  trigger_response = function(self) return self:header('assistant') end,
   prompt_as = function(self, role, prompt) return self.header(role) .. '\n' .. prompt .. '<|eot_id|>' end,
+  user_prompt = function(self, prompt) return self.prompt_as('user', prompt) end,
+  system_prompt = function(self, prompt) return self.prompt_as('system', prompt) end,
   chat = function(self, messages, config, system_prompt)
     local prompt = self:prompt_as(
       'system',
@@ -52,16 +55,14 @@ return {
 
             if git_diff == '' then error('Empty git diff') end
 
-            local prompt = Llama3:prompt_as(
-                  'system',
+            local prompt = Llama3:system_prompt(
                   "You're a Software Engineer who write clear and succinct commits following the Convetional Commits convention."
                 )
-                .. Llama3:prompt_as(
-                  'user',
-                  'Write just a commit message for the following git diff with conventional commit type in lowercase: '
-                  .. '```\n' .. git_diff .. '\n```'
+                .. Llama3:user_prompt(
+                  'Write just a commit message for the following git diff with conventional commit type in lowercase: ' ..
+                  '```\n' .. git_diff .. '\n```'
                 )
-                .. Llama3.header('assistant')
+                .. Llama3.trigger_response()
 
             return { prompt = prompt, raw = true, }
           end,
@@ -75,15 +76,11 @@ return {
 
             if lang == '' then error('No language supplied') end
 
-            local prompt = Llama3:prompt_as(
-                  'system',
-                  "You're an " .. lang .. ' native speaker who work as a translator.'
-                )
-                .. Llama3:prompt_as(
-                  'user',
+            local prompt = Llama3:system_prompt("You're an " .. lang .. ' native speaker who work as a translator.')
+                .. Llama3:user_prompt(
                   'Translate the following text into ' .. lang .. ' and output only the translation: ' .. input
                 )
-                .. Llama3.header('assistant')
+                .. Llama3.trigger_response()
 
             return { prompt = prompt, raw = true, }
           end,
@@ -98,11 +95,10 @@ return {
             if lang == '' then error('No language supplied') end
 
             local prompt = Llama3:prompt_as('system', "You're a Software Engineer expert in " .. lang)
-                .. Llama3:prompt_as(
-                  'user',
+                .. Llama3:user_prompt(
                   'Refactor the following code: ' .. '```\n' .. input .. '\n```'
                 )
-                .. Llama3.header('assistant')
+                .. Llama3.trigger_response()
 
             return { prompt = prompt, raw = true, }
           end,
@@ -112,10 +108,9 @@ return {
           params = { model = 'llama3:latest', },
           mode = require('model').mode.BUFFER,
           builder = function(input)
-            local prompt = Llama3:prompt_as('system', "You're an expert linguist in all lanuages")
-                .. Llama3:prompt_as('user',
-                  'Explain in a concise but precise way what does the following means: ' .. input)
-                .. Llama3.header('assistant')
+            local prompt = Llama3:system_prompt("You're an expert linguist in all lanuages")
+                .. Llama3:user_prompt('Explain in a concise but precise way what does the following means: ' .. input)
+                .. Llama3.trigger_response()
 
             return { prompt = prompt, raw = true, }
           end,
