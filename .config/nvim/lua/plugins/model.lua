@@ -4,7 +4,15 @@ local Llama3 = {
   prompt_as = function(self, role, prompt) return self.header(role) .. '\n' .. prompt .. '<|eot_id|>' end,
   user_prompt = function(self, prompt) return self:prompt_as('user', prompt) end,
   system_prompt = function(self, prompt) return self:prompt_as('system', prompt) end,
-  chat = function(self, messages, config, system_prompt)
+  chat = function(self, system_prompt)
+    return {
+      provider = require('model.providers.ollama'),
+      params = { model = 'llama3:latest', },
+      create = function(input, context) return context.selection and input or '' end,
+      run = function(messages, config) return self:run_chat(messages, config, system_prompt) end,
+    }
+  end,
+  run_chat = function(self, messages, config, system_prompt)
     local prompt = self:prompt_as(
       'system',
       (system_prompt and system_prompt or '') .. (config.system and ('Additionally ' .. config.system) or '')
@@ -13,14 +21,6 @@ local Llama3 = {
     for _, msg in ipairs(messages) do prompt = prompt .. self:prompt_as(msg.role, msg.content) end
 
     return { prompt = prompt .. self.header('assistant'), raw = true, }
-  end,
-  chat_config = function(self, system_prompt)
-    return {
-      provider = require('model.providers.ollama'),
-      params = { model = 'llama3:latest', },
-      create = function(input, context) return context.selection and input or '' end,
-      run = function(messages, config) return self:chat(messages, config, system_prompt) end,
-    }
   end,
 }
 
@@ -41,9 +41,9 @@ return {
 
     require('model').setup({
       chats = {
-        concise = Llama3:chat_config("Use less words as possible and don't hallucinate!"),
-        friendly = Llama3:chat_config('Be kind and friendly'),
-        bool = Llama3:chat_config('Answer only with yes or no'),
+        concise = Llama3:chat("Use less words as possible and don't hallucinate!"),
+        friendly = Llama3:chat('Be kind and friendly'),
+        bool = Llama3:chat('Answer only with yes or no'),
       },
       prompts = {
         commit = {
