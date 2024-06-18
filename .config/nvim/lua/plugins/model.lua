@@ -46,22 +46,13 @@ return {
         bool = Llama3:chat('Answer only with yes or no'),
       },
       prompts = {
-        commit = {
+        means = {
           provider = require('model.providers.ollama'),
           params = { model = 'llama3:latest', },
-          mode = require('model').mode.INSERT_OR_REPLACE,
-          builder = function()
-            local git_diff = vim.fn.system({ 'git', 'diff', '--staged', })
-
-            if git_diff == '' then error('Empty git diff') end
-
-            local prompt = Llama3:system_prompt(
-                  "You're a Software Engineer who write clear and succinct commits following the Convetional Commits convention."
-                )
-                .. Llama3:user_prompt(
-                  'Write just a commit message for the following git diff with conventional commit type in lowercase: ' ..
-                  '```\n' .. git_diff .. '\n```'
-                )
+          mode = require('model').mode.BUFFER,
+          builder = function(text)
+            local prompt = Llama3:system_prompt("You're an expert linguist in all lanuages")
+                .. Llama3:user_prompt('Explain in a concise but precise way what does the following means: ' .. text)
                 .. Llama3:trigger_response()
 
             return { prompt = prompt, raw = true, }
@@ -85,31 +76,22 @@ return {
             return { prompt = prompt, raw = true, }
           end,
         },
-        refactor = {
+        commit = {
           provider = require('model.providers.ollama'),
           params = { model = 'llama3:latest', },
           mode = require('model').mode.INSERT_OR_REPLACE,
-          builder = function(code)
-            local lang = vim.fn.input('Language: ')
+          builder = function()
+            local git_diff = vim.fn.system({ 'git', 'diff', '--staged', })
 
-            if lang == '' then error('No language supplied') end
+            if git_diff == '' then error('Empty git diff') end
 
-            local prompt = Llama3:prompt_as('system', "You're a Software Engineer expert in " .. lang)
-                .. Llama3:user_prompt(
-                  'Refactor the following code:\n' .. '```\n' .. code .. '\n```'
+            local prompt = Llama3:system_prompt(
+                  "You're a Software Engineer who write clear and succinct commits following the Convetional Commits convention."
                 )
-                .. Llama3:trigger_response()
-
-            return { prompt = prompt, raw = true, }
-          end,
-        },
-        means = {
-          provider = require('model.providers.ollama'),
-          params = { model = 'llama3:latest', },
-          mode = require('model').mode.BUFFER,
-          builder = function(text)
-            local prompt = Llama3:system_prompt("You're an expert linguist in all lanuages")
-                .. Llama3:user_prompt('Explain in a concise but precise way what does the following means: ' .. text)
+                .. Llama3:user_prompt(
+                  'Write just a commit message for the following git diff with conventional commit type in lowercase: ' ..
+                  '```\n' .. git_diff .. '\n```'
+                )
                 .. Llama3:trigger_response()
 
             return { prompt = prompt, raw = true, }
@@ -128,6 +110,24 @@ return {
                   "You're a " .. ' Software Engineer expert in writing well design and documented tests.')
                 .. Llama3:user_prompt(
                   'Write tests for the following ' .. lang .. ' code:\n' .. '```\n' .. code .. '\n```'
+                )
+                .. Llama3:trigger_response()
+
+            return { prompt = prompt, raw = true, }
+          end,
+        },
+        refactor = {
+          provider = require('model.providers.ollama'),
+          params = { model = 'llama3:latest', },
+          mode = require('model').mode.INSERT_OR_REPLACE,
+          builder = function(code)
+            local lang = vim.fn.input('Language: ')
+
+            if lang == '' then error('No language supplied') end
+
+            local prompt = Llama3:prompt_as('system', "You're a Software Engineer expert in " .. lang)
+                .. Llama3:user_prompt(
+                  'Refactor the following code:\n' .. '```\n' .. code .. '\n```'
                 )
                 .. Llama3:trigger_response()
 
