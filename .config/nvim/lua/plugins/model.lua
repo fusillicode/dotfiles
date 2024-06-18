@@ -126,7 +126,7 @@ return {
 
             if lang == '' then error('No language supplied') end
 
-            local prompt = Llama3:prompt_as('system', "You're a Software Engineer expert in " .. lang)
+            local prompt = Llama3:system_prompt("You're a Software Engineer expert in " .. lang)
                 .. Llama3:user_prompt(
                   'Refactor the following code:' .. Llama3.code_prompt(code)
                 )
