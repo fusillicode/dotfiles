@@ -4,6 +4,7 @@ local Llama3 = {
   prompt_as = function(self, role, prompt) return self.header(role) .. '\n' .. prompt .. '<|eot_id|>' end,
   user_prompt = function(self, prompt) return self:prompt_as('user', prompt) end,
   system_prompt = function(self, prompt) return self:prompt_as('system', prompt) end,
+  code_prompt = function(code, lang) return '\n```' .. (lang and lang or '') .. '\n' .. code .. '\n```' end,
   chat = function(self, system_prompt)
     return {
       provider = require('model.providers.ollama'),
@@ -52,7 +53,7 @@ return {
           mode = require('model').mode.BUFFER,
           builder = function(text)
             local prompt = Llama3:system_prompt("You're an expert linguist in all lanuages")
-                .. Llama3:user_prompt('Explain in a concise but precise way what does the following means: ' .. text)
+                .. Llama3:user_prompt('Explain in a concise but precise way what does this means: ' .. text)
                 .. Llama3:trigger_response()
 
             return { prompt = prompt, raw = true, }
@@ -89,8 +90,8 @@ return {
                   "You're a Software Engineer who write clear and succinct commits following the Convetional Commits convention."
                 )
                 .. Llama3:user_prompt(
-                  'Write just a commit message for the following git diff with conventional commit type in lowercase: ' ..
-                  '```\n' .. git_diff .. '\n```'
+                  'Write just a commit message for the following git diff with conventional commit type in lowercase: '
+                  .. Llama3.code_prompt(git_diff)
                 )
                 .. Llama3:trigger_response()
 
@@ -109,7 +110,7 @@ return {
             local prompt = Llama3:system_prompt(
                   "You're a " .. ' Software Engineer expert in writing well design and documented tests.')
                 .. Llama3:user_prompt(
-                  'Write tests for the following ' .. lang .. ' code:\n' .. '```\n' .. code .. '\n```'
+                  'Write tests for the following ' .. lang .. ' code:' .. Llama3.code_prompt(code)
                 )
                 .. Llama3:trigger_response()
 
@@ -127,7 +128,7 @@ return {
 
             local prompt = Llama3:prompt_as('system', "You're a Software Engineer expert in " .. lang)
                 .. Llama3:user_prompt(
-                  'Refactor the following code:\n' .. '```\n' .. code .. '\n```'
+                  'Refactor the following code:' .. Llama3.code_prompt(code)
                 )
                 .. Llama3:trigger_response()
 
