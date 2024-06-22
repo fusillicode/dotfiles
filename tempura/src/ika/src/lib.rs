@@ -14,7 +14,7 @@ fn ika() -> Dictionary {
     Dictionary::from_iter([("complete", Function::from(complete))])
 }
 
-fn complete(params: NvimCmpParmas) -> Array {
+fn complete(Input { params, callback }: Input) {
     // nvim_oxi::api::echo(
     //     [(format!("{params:?}").as_str(), None)],
     //     true,
@@ -46,7 +46,13 @@ fn complete(params: NvimCmpParmas) -> Array {
     // .unwrap();
 
     let first = Dictionary::from_iter([("label", res)]);
-    Array::from_iter([first])
+    callback.call(Array::from_iter([first])).unwrap();
+}
+
+#[derive(Deserialize, Debug)]
+struct Input {
+    params: NvimCmpParmas,
+    callback: Function<Array, ()>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -73,13 +79,13 @@ struct NvimCmpCursor {
     row: u32,
 }
 
-impl FromObject for NvimCmpParmas {
+impl FromObject for Input {
     fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
         Self::deserialize(Deserializer::new(obj)).map_err(Into::into)
     }
 }
 
-impl Poppable for NvimCmpParmas {
+impl Poppable for Input {
     unsafe fn pop(
         lstate: *mut nvim_oxi::lua::ffi::lua_State,
     ) -> Result<Self, nvim_oxi::lua::Error> {

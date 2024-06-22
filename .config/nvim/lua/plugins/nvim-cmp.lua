@@ -35,9 +35,7 @@ return {
 
     local ika = {}
     function ika:complete(params, callback)
-      vim.defer_fn(function()
-        callback(require('ika').complete(params))
-      end, 10000)
+      require('ika').complete({ params = params, callback = callback, })
     end
 
     cmp.register_source('ika', ika)
