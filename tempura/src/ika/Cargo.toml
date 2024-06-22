@@ -10,6 +10,9 @@ crate-type = ["cdylib"]
 [dependencies]
 anyhow = { version = "1.0", features = ["backtrace"] }
 nvim-oxi = { version = "0.5", features = ["neovim-0-10", "libuv"] }
+reqwest = { version = "0.12", features = ["blocking", "json"] }
+serde = { version = "1.0" }
+serde_json = { version = "1.0" }
 tokio = { version = "1.38", features = [
   "sync",
   "time",

@@ -30,7 +30,17 @@ return {
       luasnip = 'luasnip',
       crates = 'crates',
       rg = 'rg',
+      ika = 'ika',
     }
+
+    local ika = {}
+    function ika:complete(params, callback)
+      vim.defer_fn(function()
+        callback(require('ika').complete(params))
+      end, 10000)
+    end
+
+    cmp.register_source('ika', ika)
 
     cmp.setup({
       experimental = { ghost_text = true, },
@@ -77,6 +87,7 @@ return {
         { name = 'luasnip', },
         { name = 'crates', },
         { name = 'rg',                      keyword_length = 3, },
+        { name = 'ika', },
       },
       entries = { follow_cursor = true, },
       window = {

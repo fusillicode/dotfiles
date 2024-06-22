@@ -1,56 +1,89 @@
-use std::thread;
-use std::time::Duration;
-
-use nvim_oxi::libuv::{AsyncHandle, TimerHandle};
-use nvim_oxi::{print, schedule};
-use tokio::sync::mpsc::{self, UnboundedSender};
-use tokio::time;
+use nvim_oxi::api::opts::EchoOpts;
+use nvim_oxi::conversion::FromObject;
+use nvim_oxi::lua::Poppable;
+use nvim_oxi::serde::Deserializer;
+use nvim_oxi::Array;
+use nvim_oxi::Dictionary;
+use nvim_oxi::Function;
+use nvim_oxi::Object;
+use reqwest::blocking::Client;
+use serde::Deserialize;
 
 #[nvim_oxi::plugin]
-fn ika() {
-    // --
-    let mut n = 0;
-
-    let callback = move |timer: &mut TimerHandle| {
-        if n <= 10 {
-            let i = n;
-            schedule(move |_| print!("Callback called {i} times"));
-            n += 1;
-        } else {
-            timer.stop().unwrap();
-        }
-    };
-
-    let _handle = TimerHandle::start(Duration::from_millis(0), Duration::from_secs(1), callback);
-
-    // --
-    let msg = String::from("Hey there!");
-
-    let _handle = TimerHandle::once(Duration::from_secs(2), move || {
-        schedule(move |_| print!("{msg}"));
-    });
-
-    // --
-    let (sender, mut receiver) = mpsc::unbounded_channel::<i32>();
-
-    let handle = AsyncHandle::new(move || {
-        let i = receiver.blocking_recv().unwrap();
-        schedule(move |_| print!("Received number {i} from background thread"));
-    })
-    .unwrap();
-
-    let _ = thread::spawn(move || send_numbers(handle, sender));
+fn ika() -> Dictionary {
+    Dictionary::from_iter([("complete", Function::from(complete))])
 }
 
-#[tokio::main]
-async fn send_numbers(handle: AsyncHandle, sender: UnboundedSender<i32>) {
-    let mut i = 0;
+fn complete(params: NvimCmpParmas) -> Array {
+    // nvim_oxi::api::echo(
+    //     [(format!("{params:?}").as_str(), None)],
+    //     true,
+    //     &EchoOpts::default(),
+    // )
+    // .unwrap();
 
-    loop {
-        sender.send(i).unwrap();
-        handle.send().unwrap();
-        i += 1;
+    let client = Client::new();
 
-        time::sleep(Duration::from_secs(1)).await;
+    let data = serde_json::json!({
+        "model": "llama3",
+        "prompt": "Why is the sky blue?",
+        "stream": false,
+    });
+
+    let res = client
+        .post("http://localhost:11434/api/generate")
+        .json(&data)
+        .send()
+        .unwrap()
+        .text()
+        .unwrap();
+
+    // nvim_oxi::api::echo(
+    //     [(format!("{res:?}").as_str(), None)],
+    //     true,
+    //     &EchoOpts::default(),
+    // )
+    // .unwrap();
+
+    let first = Dictionary::from_iter([("label", res)]);
+    Array::from_iter([first])
+}
+
+#[derive(Deserialize, Debug)]
+struct NvimCmpParmas {
+    context: NvimCmpContext,
+}
+
+#[derive(Deserialize, Debug)]
+struct NvimCmpContext {
+    bufnr: u32,
+    filetype: String,
+    cursor_line: String,
+    cursor_after_line: String,
+    cursor_before_line: String,
+    aborted: bool,
+    cursor: NvimCmpCursor,
+}
+
+#[derive(Deserialize, Debug)]
+struct NvimCmpCursor {
+    character: u32,
+    col: u32,
+    line: u32,
+    row: u32,
+}
+
+impl FromObject for NvimCmpParmas {
+    fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
+        Self::deserialize(Deserializer::new(obj)).map_err(Into::into)
+    }
+}
+
+impl Poppable for NvimCmpParmas {
+    unsafe fn pop(
+        lstate: *mut nvim_oxi::lua::ffi::lua_State,
+    ) -> Result<Self, nvim_oxi::lua::Error> {
+        let obj = Object::pop(lstate)?;
+        Self::from_object(obj).map_err(nvim_oxi::lua::Error::pop_error_from_err::<Self, _>)
     }
 }
