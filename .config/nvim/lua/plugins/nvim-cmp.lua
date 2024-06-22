@@ -77,6 +77,7 @@ return {
         end, { 'i', 's', }),
       }),
       sources = {
+        { name = 'ika', },
         { name = 'nvim_lsp', },
         { name = 'nvim_lsp_signature_help', },
         { name = 'codeium', },
@@ -85,7 +86,6 @@ return {
         { name = 'luasnip', },
         { name = 'crates', },
         { name = 'rg',                      keyword_length = 3, },
-        { name = 'ika', },
       },
       entries = { follow_cursor = true, },
       window = {

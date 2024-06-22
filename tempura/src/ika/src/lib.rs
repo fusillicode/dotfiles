@@ -1,5 +1,8 @@
+use std::sync::Mutex;
+
 use nvim_oxi::api::opts::EchoOpts;
 use nvim_oxi::conversion::FromObject;
+use nvim_oxi::libuv::AsyncHandle;
 use nvim_oxi::lua::Poppable;
 use nvim_oxi::serde::Deserializer;
 use nvim_oxi::Array;
@@ -14,6 +17,11 @@ fn ika() -> Dictionary {
     Dictionary::from_iter([("complete", Function::from(complete))])
 }
 
+#[derive(Deserialize, Debug)]
+pub struct OllamaResponse {
+    pub response: String,
+}
+
 fn complete(Input { params, callback }: Input) {
     // nvim_oxi::api::echo(
     //     [(format!("{params:?}").as_str(), None)],
@@ -21,32 +29,42 @@ fn complete(Input { params, callback }: Input) {
     //     &EchoOpts::default(),
     // )
     // .unwrap();
+    //
+    let handle = AsyncHandle::new(move || {
+        let callback = callback.clone();
+        nvim_oxi::schedule(move |_| {
+            let client = Client::new();
 
-    let client = Client::new();
+            let prompt = format!("Print ONLY a word starting with f");
 
-    let data = serde_json::json!({
-        "model": "llama3",
-        "prompt": "Why is the sky blue?",
-        "stream": false,
-    });
+            let data = serde_json::json!({
+                "model": "llama3",
+                "prompt": prompt,
+                "stream": false,
+            });
 
-    let res = client
-        .post("http://localhost:11434/api/generate")
-        .json(&data)
-        .send()
-        .unwrap()
-        .text()
-        .unwrap();
+            let res = client
+                .post("http://localhost:11434/api/generate")
+                .json(&data)
+                .send()
+                .unwrap()
+                .json::<OllamaResponse>()
+                .unwrap();
 
-    // nvim_oxi::api::echo(
-    //     [(format!("{res:?}").as_str(), None)],
-    //     true,
-    //     &EchoOpts::default(),
-    // )
-    // .unwrap();
+            // nvim_oxi::api::echo(
+            //     [(format!("{res:?}").as_str(), None)],
+            //     true,
+            //     &EchoOpts::default(),
+            // )
+            // .unwrap();
 
-    let first = Dictionary::from_iter([("label", res)]);
-    callback.call(Array::from_iter([first])).unwrap();
+            let first = Dictionary::from_iter([("label", res.response)]);
+            callback.call(Array::from_iter([first])).unwrap();
+        })
+    })
+    .unwrap();
+
+    std::thread::spawn(move || handle.send());
 }
 
 #[derive(Deserialize, Debug)]
@@ -55,12 +73,12 @@ struct Input {
     callback: Function<Array, ()>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 struct NvimCmpParmas {
     context: NvimCmpContext,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 struct NvimCmpContext {
     bufnr: u32,
     filetype: String,
@@ -71,7 +89,7 @@ struct NvimCmpContext {
     cursor: NvimCmpCursor,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 struct NvimCmpCursor {
     character: u32,
     col: u32,
