@@ -22,17 +22,6 @@ return {
 
     cmp.event:on('confirm_done', require('nvim-autopairs.completion.cmp').on_confirm_done())
 
-    local sources = {
-      buffer = 'buffer',
-      codeium = 'codeium',
-      nvim_lsp = 'lsp',
-      path = 'path',
-      luasnip = 'luasnip',
-      crates = 'crates',
-      rg = 'rg',
-      ika = 'ika',
-    }
-
     local ok, ika = pcall(require, 'ika')
     if ok then
       local ika_source = {}
@@ -48,7 +37,7 @@ return {
       formatting = {
         format = function(entry, vim_item)
           vim_item.kind = ' '
-          vim_item.menu = sources[entry.source.name]
+          vim_item.menu = entry.source.name
           vim_item.abbr = vim_item.abbr:match('[^(]+')
           return vim_item
         end,
