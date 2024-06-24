@@ -33,12 +33,15 @@ return {
       ika = 'ika',
     }
 
-    local ika = {}
-    function ika:complete(params, callback)
-      require('ika').complete({ params = params, callback = callback, })
-    end
+    local ok, ika = pcall(require, 'ika')
+    if ok then
+      local ika_source = {}
+      function ika_source:complete(params, callback)
+        vim.defer_fn(function() callback(ika.complete(params)) end, 5000)
+      end
 
-    cmp.register_source('ika', ika)
+      cmp.register_source('ika', ika_source)
+    end
 
     cmp.setup({
       experimental = { ghost_text = true, },
