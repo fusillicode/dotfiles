@@ -26,7 +26,7 @@ return {
     if ok then
       local ika_source = {}
       function ika_source:complete(params, callback)
-        vim.defer_fn(function() callback(ika.complete(params)) end, 5000)
+        ika.complete({ params = params, callback = callback, })
       end
 
       cmp.register_source('ika', ika_source)
