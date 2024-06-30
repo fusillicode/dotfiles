@@ -42,15 +42,26 @@ vim.opt.clipboard:append('unnamedplus')
 vim.opt.iskeyword:append('-')
 vim.opt.jumpoptions:append('stack')
 
+local function trim_trailing_dot(str)
+  return string.gsub(str, '[\\.$]', '')
+end
+
 vim.diagnostic.config {
   float = {
     anchor_bias = 'above',
     focusable = true,
     format = function(diagnostic)
-      return '■ '
-          .. diagnostic.message
-          .. (diagnostic.source and ' [ ' .. diagnostic.source .. ' ] ' or '')
-          .. (diagnostic.code and '[ ' .. diagnostic.code .. ' ]' or '')
+      local src_code = {}
+      if diagnostic.source then
+        table.insert(src_code, (trim_trailing_dot(diagnostic.source)))
+      end
+      if diagnostic.code then
+        table.insert(src_code, (trim_trailing_dot(diagnostic.code)))
+      end
+
+      return '▶ '
+          .. trim_trailing_dot(string.gsub(diagnostic.message, '[\n\r]', ', '))
+          .. (next(src_code) == nil and '' or ' [' .. table.concat(src_code, ': ') .. ']')
     end,
     header = '',
     max_width = 90,
