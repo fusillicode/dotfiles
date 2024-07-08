@@ -11,14 +11,14 @@ return {
     'rafamadriz/friendly-snippets',
     'saadparwaiz1/cmp_luasnip',
     'davidsierradz/cmp-conventionalcommits',
-    'Exafunction/codeium.nvim',
+    -- 'Exafunction/codeium.nvim',
   },
   config = function()
     local cmp = require('cmp')
     local luasnip = require('luasnip')
 
     require('luasnip.loaders.from_vscode').load({ paths = { './snippets', }, })
-    require('codeium').setup({})
+    -- require('codeium').setup({})
 
     cmp.event:on('confirm_done', require('nvim-autopairs.completion.cmp').on_confirm_done())
 
