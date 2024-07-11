@@ -5,10 +5,10 @@ return {
     vim.g.bones_compat = 1
     vim.cmd.colorscheme('neobones')
 
-    local blue = 'cyan'
+    local cyan = 'cyan'
     local green = 'limegreen'
     local orange = 'orange'
-    local red = 'red'
+    local red = '#de6e7c'
     local white = 'white'
 
     local match_highlight = { fg = vim.api.nvim_get_hl(0, { name = 'IncSearch', }).bg, bold = true, }
@@ -20,27 +20,27 @@ return {
       ColorColumn = { link = 'StatusLine', },
       DiagnosticError = { fg = red, },
       DiagnosticWarn = { fg = orange, },
-      DiagnosticInfo = { fg = blue, },
+      DiagnosticInfo = { fg = cyan, },
       DiagnosticHint = { fg = white, },
       DiagnosticOk = { fg = green, },
       DiagnosticFloatingError = { fg = red, },
       DiagnosticFloatingWarn = { fg = orange, },
-      DiagnosticFloatingInfo = { fg = blue, },
+      DiagnosticFloatingInfo = { fg = cyan, },
       DiagnosticFloatingHint = { fg = white, },
       DiagnosticFloatingOk = { fg = green, },
       DiagnosticSignError = { fg = red, },
       DiagnosticSignWarn = { fg = orange, },
-      DiagnosticSignInfo = { fg = blue, },
+      DiagnosticSignInfo = { fg = cyan, },
       DiagnosticSignHint = { fg = white, },
       DiagnosticSignOk = { fg = green, },
       DiagnosticUnderlineError = { undercurl = true, sp = red, },
       DiagnosticUnderlineWarn = { undercurl = true, sp = orange, },
-      DiagnosticUnderlineInfo = { undercurl = true, sp = blue, },
+      DiagnosticUnderlineInfo = { undercurl = true, sp = cyan, },
       DiagnosticUnderlineHint = { undercurl = true, sp = white, },
       DiagnosticUnderlineOk = { undercurl = true, sp = green, },
       DiagnosticVirtualTextError = { fg = red, },
       DiagnosticVirtualTextWarn = { fg = orange, },
-      DiagnosticVirtualTextInfo = { fg = blue, },
+      DiagnosticVirtualTextInfo = { fg = cyan, },
       DiagnosticVirtualTextHint = { fg = white, },
       DiagnosticVirtualTextOk = { fg = green, },
       DiagnosticUnnecessary = { fg = '', undercurl = true, sp = orange, },
@@ -69,7 +69,7 @@ return {
       TelescopeResultsDiffAdd = { fg = green, },
       TelescopeResultsDiffChange = { fg = orange, },
       TelescopeResultsDiffDelete = { fg = red, },
-      TelescopeResultsDiffUntracked = { fg = blue, },
+      TelescopeResultsDiffUntracked = { fg = cyan, },
     }) do
       vim.api.nvim_set_hl(0, hl, value)
     end
