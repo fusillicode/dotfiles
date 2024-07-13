@@ -11,38 +11,39 @@ return {
     'rafamadriz/friendly-snippets',
     'saadparwaiz1/cmp_luasnip',
     'davidsierradz/cmp-conventionalcommits',
-    'Exafunction/codeium.nvim',
+    -- 'Exafunction/codeium.nvim',
   },
   config = function()
     local cmp = require('cmp')
     local luasnip = require('luasnip')
-    local cmp_autopairs = require('nvim-autopairs.completion.cmp')
 
     require('luasnip.loaders.from_vscode').load({ paths = { './snippets', }, })
+    -- require('codeium').setup({})
 
-    require('codeium').setup({})
+    cmp.event:on('confirm_done', require('nvim-autopairs.completion.cmp').on_confirm_done())
 
-    cmp.event:on(
-      'confirm_done',
-      cmp_autopairs.on_confirm_done()
-    )
+    local ok, ika = pcall(require, 'ika')
+    if ok then
+      local ika_source = {}
+      function ika_source:complete(params, callback)
+        ika.complete({ params = params, callback = callback, })
+      end
+
+      cmp.register_source('ika', ika_source)
+    end
 
     cmp.setup({
-      experimental = {
-        ghost_text = true,
-      },
+      experimental = { ghost_text = true, },
       formatting = {
-        format = function(_, vim_item)
-          vim_item.abbr = string.sub(vim_item.abbr, 1, 48)
+        format = function(entry, vim_item)
+          vim_item.kind = ' '
+          vim_item.menu = entry.source.name
+          vim_item.abbr = vim_item.abbr:match('[^(]+')
           return vim_item
         end,
       },
-      performance = {
-        max_view_entries = 12,
-      },
-      snippet = {
-        expand = function(args) luasnip.lsp_expand(args.body) end,
-      },
+      performance = { max_view_entries = 12, },
+      snippet = { expand = function(args) luasnip.lsp_expand(args.body) end, },
       mapping = cmp.mapping.preset.insert({
         ['<c-d>'] = cmp.mapping.scroll_docs(-4),
         ['<c-u>'] = cmp.mapping.scroll_docs(4),
@@ -68,6 +69,7 @@ return {
         end, { 'i', 's', }),
       }),
       sources = {
+        { name = 'ika', },
         { name = 'nvim_lsp', },
         { name = 'nvim_lsp_signature_help', },
         { name = 'codeium', },
@@ -75,13 +77,12 @@ return {
         { name = 'buffer', },
         { name = 'luasnip', },
         { name = 'crates', },
-        {
-          name = 'rg',
-          keyword_length = 3,
-        },
+        { name = 'rg',                      keyword_length = 3, },
       },
-      entries = {
-        follow_cursor = true,
+      entries = { follow_cursor = true, },
+      window = {
+        completion = cmp.config.window.bordered(),
+        documentation = cmp.config.window.bordered(),
       },
     })
   end,

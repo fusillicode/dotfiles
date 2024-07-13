@@ -13,11 +13,7 @@ function M.core()
   keymap_set('', '<c-x>', ':ccl<cr>')
   -- https://stackoverflow.com/a/3003636
   keymap_set('n', 'i', function()
-    if vim.fn.empty(vim.fn.getline('.')) == 1 then
-      return '\"_cc'
-    else
-      return 'i'
-    end
+    return (vim.fn.empty(vim.fn.getline('.')) == 1 and '\"_cc' or 'i')
   end, { expr = true, })
   keymap_set('i', '<c-a>', '<esc>^i')
   keymap_set('n', '<c-a>', '^i')
@@ -32,10 +28,7 @@ function M.core()
 
   -- https://github.com/Abstract-IDE/abstract-autocmds/blob/main/lua/abstract-autocmds/mappings.lua#L8-L14
   keymap_set('n', 'dd', function()
-    if vim.api.nvim_get_current_line():match('^%s*$') then
-      return '"_dd'
-    end
-    return 'dd'
+    return (vim.api.nvim_get_current_line():match('^%s*$') and '"_dd' or 'dd')
   end, { noremap = true, expr = true, })
   keymap_set({ 'n', 'v', }, 'x', '"_x')
   keymap_set({ 'n', 'v', }, 'x', '"_x')
@@ -195,8 +188,16 @@ function M.grug_far(grug_far, opts)
   end)
 end
 
-function M.gen()
-  keymap_set({ 'n', 'v', }, '<leader>[', ':Gen<cr>')
+function M.model()
+  keymap_set({ 'n', 'v', }, '<leader>[', ':Mchat ', { silent = false, })
+end
+
+function M.mchat()
+  for _, mode in pairs({ 'n', 'v', }) do
+    vim.api.nvim_buf_set_keymap(0, mode, '<leader><leader>', ':Mchat<cr>', {})
+    vim.api.nvim_buf_set_keymap(0, mode, '<leader>x', ':bd!<cr>', {})
+    vim.api.nvim_buf_set_keymap(0, mode, '<c-c>', ':Mcancel<cr>', {})
+  end
 end
 
 return M

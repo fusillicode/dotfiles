@@ -26,10 +26,9 @@ return {
         },
       },
       layout_config = {
-        anchor = 'S',
         height = 0.98,
         mirror = true,
-        preview_height = 0.55,
+        preview_height = 0.50,
         prompt_position = 'top',
         width = 0.8,
       },
@@ -47,11 +46,6 @@ return {
     telescope.setup({
       defaults = defaults_and_theme,
       extensions = {
-        egrepify = {
-          prefixes = {
-            ['.'] = { flag = 'hidden', },
-          },
-        },
         ['ui-select'] = { defaults_and_theme, },
       },
       pickers = {

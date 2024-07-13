@@ -16,15 +16,15 @@ sorce () {
 }
 
 ho () {
-  tempura open-editor hx "$@"
+  ebi open-editor hx "$@"
 }
 
 nvo () {
-  tempura open-editor nv "$@"
+  ebi open-editor nv "$@"
 }
 
 catl () {
-  tempura catl "$@"
+  ebi catl "$@"
 }
 
 # Easy Git
