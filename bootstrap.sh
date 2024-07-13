@@ -112,7 +112,7 @@ brew install ninja cmake gettext curl
 # Setup ~/.dev_tools & ~/.local/bin
 cd ./tempura &&
   cargo build --release && \
-  ./target/release/tempura install-dev-tools ~/.dev-tools ~/.local/bin
+  ./target/release/ebi install-dev-tools ~/.dev-tools ~/.local/bin
 
 # Symlink bins
 ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/tempura* "$HOME"/.local/bin
