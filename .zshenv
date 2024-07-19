@@ -9,6 +9,10 @@ alias gcnuke="git commit --amend --no-edit --no-verify --allow-empty && git push
 alias gcnoke="git commit --amend --no-edit --no-verify --allow-empty"
 alias gbrr="git for-each-ref --sort=committerdate refs/heads/ --format='%(HEAD) %(color:yellow)%(refname:short)%(color:reset) %(color:red)%(objectname:short)%(color:reset) - %(contents:subject) %(color:green)(%(committerdate:relative))%(color:reset) %(color:blue)<%(authorname)>%(color:reset)'"
 alias kdebian="kubectl exec -it debian -- bash || kubectl run debian --image=debian:latest --rm -it --restart=Never --command --"
+alias cmc="cargo make clippy"
+alias cmt="cargo make test"
+alias cmdr="cargo make db-reset"
+alias cmf="cargo make format"
 
 # Easy Shell commands
 sorce () {
