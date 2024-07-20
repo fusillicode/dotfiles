@@ -200,4 +200,21 @@ function M.mchat()
   end
 end
 
+function M.dropbar(dropbar_api, dropbar_utils)
+  keymap_set('n', '<leader>i', function()
+    local current_bar = dropbar_utils.bar.get_current()
+    if not current_bar then return end
+
+    local file = nil
+    for _, value in ipairs(current_bar.components) do
+      if string.find(string.lower(value.opts.name_hl), 'file') ~= nil then
+        file = value
+      end
+    end
+    if not file then return end
+
+    dropbar_api.pick(file.bar_idx)
+  end)
+end
+
 return M
