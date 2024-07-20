@@ -72,7 +72,7 @@ function M.draw()
     end
   end
 
-  local changes, insertions, deletions = get_git_diff()
+  local changes, inserts, deletes = get_git_diff()
   local git_sha = get_git_sha()
 
   return (buffer_errors ~= 0 and '%#DiagnosticErrorStatusLine#' .. 'E:' .. buffer_errors .. ' ' or '')
@@ -82,9 +82,9 @@ function M.draw()
       .. '%#StatusLine#'
       .. (get_git_branch() or '')
       .. (git_sha and ' ' .. git_sha or '')
-      .. (changes and '%#DiagnosticWarnStatusLine#' .. ' ~' .. changes or '')
-      .. (insertions and '%#DiagnosticOkStatusLine#' .. ' +' .. insertions or '')
-      .. (deletions and '%#DiagnosticErrorStatusLine#' .. ' -' .. deletions or '')
+      .. (changes and ' ~' .. changes or '')
+      .. (inserts and ' +' .. inserts or '')
+      .. (deletes and ' -' .. deletes or '')
       .. '%#StatusLine#'
       .. ' %m %r' .. '%='
       .. (workspace_errors ~= 0 and '%#DiagnosticErrorStatusLine#' .. 'E:' .. workspace_errors .. ' ' or '')
