@@ -31,6 +31,7 @@ return {
               if comp.menu then
                 menu:close()
                 api.pick(comp.bar_idx - 1)
+                return
               end
             end
           end,
