@@ -9,13 +9,8 @@ return {
     require('keymaps').dropbar(api, utils)
 
     require('dropbar').setup({
-      icons = {
-        ui = {
-          bar = {
-            separator = ' ',
-          },
-        },
-      },
+      bar = { sources = { require('dropbar.sources').path, }, },
+      icons = { ui = { bar = { separator = ' ', }, }, },
       menu = {
         keymaps = {
           ['h'] = function()
