@@ -27,23 +27,6 @@ end
 
 local M = {}
 
-local status_line_hl_group = vim.api.nvim_get_hl(0, { name = 'StatusLine', })
-for _, diagnostic_hl_group in ipairs({
-  'DiagnosticError',
-  'DiagnosticWarn',
-  'DiagnosticInfo',
-  'DiagnosticHint',
-  'DiagnosticOk',
-}) do
-  vim.api.nvim_set_hl(0, diagnostic_hl_group .. 'StatusLine',
-    vim.tbl_extend(
-      'force',
-      status_line_hl_group,
-      { fg = vim.api.nvim_get_hl(0, { name = diagnostic_hl_group, }).fg, }
-    )
-  )
-end
-
 function M.draw()
   local buffer = vim.fn.bufnr()
   local buffer_errors, buffer_warns, buffer_infos, buffer_hints = 0, 0, 0, 0
