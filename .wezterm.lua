@@ -20,7 +20,7 @@ local function up_and_down_in_editor(key)
   end
 end
 
-local background = '#0f191f'
+local background = '#14161b'
 config.animation_fps = 1
 config.colors = {
   cursor_bg = 'white',
