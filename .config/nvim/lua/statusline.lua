@@ -75,18 +75,18 @@ function M.draw()
   local changes, inserts, deletes = get_git_diff()
   local git_sha = get_git_sha()
 
-  return (buffer_errors ~= 0 and '%#DiagnosticErrorStatusLine#' .. 'E:' .. buffer_errors .. ' ' or '')
-      .. (buffer_warns ~= 0 and '%#DiagnosticWarnStatusLine#' .. 'W:' .. buffer_warns .. ' ' or '')
-      .. (buffer_infos ~= 0 and '%#DiagnosticInfoStatusLine#' .. 'I:' .. buffer_infos .. ' ' or '')
-      .. (buffer_hints ~= 0 and '%#DiagnosticHintStatusLine#' .. 'H:' .. buffer_hints .. ' ' or '')
-      .. '%#StatusLine#'
-      .. (get_git_branch() or '')
+  return (get_git_branch() or '')
       .. (git_sha and ' ' .. git_sha or '')
       .. (changes and ' ~' .. changes or '')
       .. (inserts and ' +' .. inserts or '')
       .. (deletes and ' -' .. deletes or '')
+      .. ' %m '
+      .. (buffer_errors ~= 0 and '%#DiagnosticErrorStatusLine#' .. 'E:' .. buffer_errors .. ' ' or '')
+      .. (buffer_warns ~= 0 and '%#DiagnosticWarnStatusLine#' .. 'W:' .. buffer_warns .. ' ' or '')
+      .. (buffer_infos ~= 0 and '%#DiagnosticInfoStatusLine#' .. 'I:' .. buffer_infos .. ' ' or '')
+      .. (buffer_hints ~= 0 and '%#DiagnosticHintStatusLine#' .. 'H:' .. buffer_hints .. ' ' or '')
       .. '%#StatusLine#'
-      .. ' %m %r' .. '%='
+      .. '%r%='
       .. (workspace_errors ~= 0 and '%#DiagnosticErrorStatusLine#' .. 'E:' .. workspace_errors .. ' ' or '')
       .. (workspace_warns ~= 0 and '%#DiagnosticWarnStatusLine#' .. 'W:' .. workspace_warns .. ' ' or '')
       .. (workspace_infos ~= 0 and '%#DiagnosticInfoStatusLine#' .. 'I:' .. workspace_infos .. ' ' or '')
