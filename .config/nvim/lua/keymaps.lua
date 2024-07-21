@@ -197,6 +197,7 @@ function M.dropbar(dropbar_api, dropbar_utils)
     for _, value in ipairs(current_bar.components) do
       if string.find(string.lower(value.opts.name_hl), 'file') ~= nil then
         file = value
+        break
       end
     end
     if not file then return end
