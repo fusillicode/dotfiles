@@ -4,11 +4,10 @@ vim.o.termguicolors = true
 local cyan = 'cyan'
 local green = 'limegreen'
 local orange = 'orange'
-local red = '#de6e7c'
+local red = 'red'
 local white = 'white'
 
 local match_highlight = { fg = vim.api.nvim_get_hl(0, { name = 'Special', }).fg, bold = true, }
-
 for hl, value in pairs({
   CmpItemMenu = { fg = vim.api.nvim_get_hl(0, { name = 'IncSearch', }).bg, italic = true, },
   ColorColumn = { link = 'CursorLine', },
@@ -55,12 +54,24 @@ for hl, value in pairs({
   GrugFarResultsPath = { link = 'Comment', },
   GrugFarResultsStats = match_highlight,
   LspInlayHint = { link = 'LineNr', },
+  TelescopeMatching = match_highlight,
   TelescopePromptCounter = match_highlight,
   TelescopePromptPrefix = match_highlight,
   TelescopeResultsDiffAdd = { fg = green, },
   TelescopeResultsDiffChange = { fg = orange, },
   TelescopeResultsDiffDelete = { fg = red, },
   TelescopeResultsDiffUntracked = { fg = cyan, },
+}) do vim.api.nvim_set_hl(0, hl, value) end
+
+local status_line_hl = vim.api.nvim_get_hl(0, { name = 'CursorLine', })
+for _, diagnostic_hl_group in ipairs({
+  'DiagnosticError',
+  'DiagnosticWarn',
+  'DiagnosticInfo',
+  'DiagnosticHint',
+  'DiagnosticOk',
 }) do
-  vim.api.nvim_set_hl(0, hl, value)
+  vim.api.nvim_set_hl(0, diagnostic_hl_group .. 'StatusLine',
+    { fg = vim.api.nvim_get_hl(0, { name = diagnostic_hl_group, }).fg, bg = status_line_hl.bg, }
+  )
 end
