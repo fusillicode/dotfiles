@@ -1,5 +1,6 @@
 vim.loader.enable()
 
+require('colorscheme')
 require('commands')
 require('keymaps').core()
 
@@ -10,7 +11,6 @@ end
 vim.o.autoindent = true
 vim.o.backspace = 'indent,eol,start'
 vim.o.breakindent = true
-vim.o.colorcolumn = '120'
 vim.o.completeopt = 'menuone,noselect'
 vim.o.cursorline = true
 vim.o.expandtab = true
@@ -33,7 +33,6 @@ vim.o.statuscolumn = '%{%v:lua.require("statuscolumn").draw(v:lnum)%}'
 vim.o.statusline = '%{%v:lua.require("statusline").draw()%}'
 vim.o.swapfile = false
 vim.o.tabstop = 2
-vim.o.termguicolors = true
 vim.o.undofile = true
 vim.o.updatetime = 250
 vim.o.wrap = false
