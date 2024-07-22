@@ -1,28 +1,9 @@
-local function get_git_branch()
-  local handle = io.popen('git rev-parse --abbrev-ref HEAD 2>/dev/null')
-  if not handle then return '' end
-
-  local result = handle:read('*a')
-  handle:close()
-  return result:gsub('%s+', '')
-end
-
-local function get_git_diff()
-  local handle = io.popen('git diff --shortstat 2>/dev/null')
-  if not handle then return '' end
-
-  local result = handle:read('*a')
-  handle:close()
-  return result:match('(%d+)%s*[^%d]*,%s*(%d+)%s*[^%d]*,%s*(%d+)')
-end
-
-local function get_git_sha()
-  local handle = io.popen('git rev-parse --short HEAD 2>/dev/null')
-  if not handle then return '' end
-
-  local result = handle:read('*a')
-  handle:close()
-  return result:gsub('%s+', '')
+-- Thank you ChatGPT
+local function current_buffer_path()
+  return vim.fn.fnamemodify(
+    vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(vim.fn.win_getid(vim.fn.winnr('#')))),
+    ':~:.'
+  )
 end
 
 local M = {}
@@ -55,21 +36,14 @@ function M.draw()
     end
   end
 
-  local changes, inserts, deletes = get_git_diff()
-  local git_sha = get_git_sha()
-
-  return (get_git_branch() or '')
-      .. (git_sha and ' ' .. git_sha or '')
-      .. (changes and ' ~' .. changes or '')
-      .. (inserts and ' +' .. inserts or '')
-      .. (deletes and ' -' .. deletes or '')
-      .. ' %m '
-      .. (buffer_errors ~= 0 and '%#DiagnosticErrorStatusLine#' .. 'E:' .. buffer_errors .. ' ' or '')
+  return (buffer_errors ~= 0 and '%#DiagnosticErrorStatusLine#' .. 'E:' .. buffer_errors .. ' ' or '')
       .. (buffer_warns ~= 0 and '%#DiagnosticWarnStatusLine#' .. 'W:' .. buffer_warns .. ' ' or '')
       .. (buffer_infos ~= 0 and '%#DiagnosticInfoStatusLine#' .. 'I:' .. buffer_infos .. ' ' or '')
       .. (buffer_hints ~= 0 and '%#DiagnosticHintStatusLine#' .. 'H:' .. buffer_hints .. ' ' or '')
       .. '%#StatusLine#'
-      .. '%r%='
+      -- https://stackoverflow.com/a/45244610
+      .. current_buffer_path() .. ' %m %r'
+      .. '%='
       .. (workspace_errors ~= 0 and '%#DiagnosticErrorStatusLine#' .. 'E:' .. workspace_errors .. ' ' or '')
       .. (workspace_warns ~= 0 and '%#DiagnosticWarnStatusLine#' .. 'W:' .. workspace_warns .. ' ' or '')
       .. (workspace_infos ~= 0 and '%#DiagnosticInfoStatusLine#' .. 'I:' .. workspace_infos .. ' ' or '')
