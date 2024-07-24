@@ -63,7 +63,6 @@ vim.diagnostic.config {
           .. (next(src_code) == nil and '' or ' [' .. table.concat(src_code, ': ') .. ']')
     end,
     header = '',
-    max_width = 90,
     prefix = '',
     source = false,
     suffix = '',
