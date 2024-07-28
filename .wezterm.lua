@@ -32,9 +32,9 @@ config.colors = {
     inactive_tab = { bg_color = background, fg_color = 'grey', },
   },
 }
-config.font = wezterm.font('Monaco')
+config.font = wezterm.font('Menlo')
 config.font_size = 15
-config.line_height = 1.2
+config.line_height = 1.3
 
 config.keys = {
   { key = 'LeftArrow',  mods = 'OPT',         action = act.SendKey { key = 'b', mods = 'ALT', }, },
