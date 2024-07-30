@@ -76,7 +76,7 @@ local function get_lsps_configs()
           },
           imports = { enforce = true, granularity = { group = 'item', }, prefix = 'crate', },
           lens = { debug = { enable = false, }, implementations = { enable = false, }, run = { enable = false, }, },
-          procMacro = { enable = false, },
+          procMacro = { enable = true, },
           showUnlinkedFileNotification = false,
         },
       },
