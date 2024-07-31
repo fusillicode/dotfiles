@@ -2,5 +2,5 @@ return {
   'saecki/crates.nvim',
   event = 'BufRead Cargo.toml',
   dependencies = { 'nvim-lua/plenary.nvim', },
-  opts = { src = { cmd = { enabled = true, }, }, },
+  opts = { completion = { cmp = { enabled = true, }, }, },
 }
