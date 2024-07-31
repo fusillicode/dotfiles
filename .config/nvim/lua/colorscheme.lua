@@ -51,7 +51,7 @@ for hl, value in pairs({
   GrugFarResultsLineColumn = { link = 'LineNr', },
   GrugFarResultsLineNo = { link = 'LineNr', },
   GrugFarResultsMatch = match_highlight,
-  GrugFarResultsPath = { link = 'Comment', },
+  GrugFarResultsPath = { link = 'ModeMsg', },
   GrugFarResultsStats = match_highlight,
   LspInlayHint = { link = 'LineNr', },
   TelescopeMatching = match_highlight,
