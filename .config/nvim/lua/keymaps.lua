@@ -116,7 +116,7 @@ function M.telescope(telescope_builtin, defaults)
 end
 
 function M.oil()
-  keymap_set('n', '<leader>m', ':Oil --float<cr>')
+  keymap_set('n', '<leader>k', ':Oil --float<cr>')
 end
 
 function M.attempt(attempt)
@@ -174,6 +174,9 @@ function M.lspconfig()
 end
 
 function M.grug_far(grug_far, opts)
+  keymap_set('n', '<leader>/', function()
+    grug_far(vim.tbl_deep_extend('force', opts, {}))
+  end)
   keymap_set('n', '<leader>w', function()
     local search = require('utils').escape_regex(vim.fn.expand('<cword>'))
     grug_far(vim.tbl_deep_extend('force', opts, { prefills = { search = search, }, }))
@@ -182,9 +185,6 @@ function M.grug_far(grug_far, opts)
     local utils = require('utils')
     local selection = utils.escape_regex(utils.get_visual_selection())
     grug_far(vim.tbl_deep_extend('force', opts, { prefills = { search = selection, }, }))
-  end)
-  keymap_set('n', '<leader>/', function()
-    grug_far(vim.tbl_deep_extend('force', opts, {}))
   end)
 end
 
