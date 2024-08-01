@@ -91,8 +91,8 @@ function M.telescope(telescope_builtin, defaults)
   keymap_set({ 'n', 'v', }, '<leader>s', with_defaults('lsp_document_symbols', { prompt_prefix = 'LSP Syms: ', }))
   keymap_set({ 'n', 'v', }, '<leader>S',
     with_defaults('lsp_dynamic_workspace_symbols', { prompt_prefix = 'LSP Syms*: ', }))
-  keymap_set({ 'n', 'v', }, '<leader>b', with_defaults('buffers', { prompt_prefix = 'Bufs: ', }))
-  keymap_set({ 'n', 'v', }, '<leader>f', with_defaults('find_files', { prompt_prefix = 'Files: ', }))
+  keymap_set({ 'n', 'v', }, '<leader>f', with_defaults('buffers', { prompt_prefix = 'Bufs: ', }))
+  keymap_set({ 'n', 'v', }, '<leader>F', with_defaults('find_files', { prompt_prefix = 'Files: ', }))
   keymap_set({ 'n', 'v', }, '<leader>j', with_defaults('jumplist', { prompt_prefix = 'Jumps: ', }))
   keymap_set({ 'n', 'v', }, '<leader>gc', with_defaults('git_commits', { prompt_prefix = 'gc*: ', }))
   keymap_set({ 'n', 'v', }, '<leader>gcb', with_defaults('git_bcommits', { prompt_prefix = 'gc: ', bufnr = 0, }))
@@ -116,7 +116,7 @@ function M.telescope(telescope_builtin, defaults)
 end
 
 function M.oil()
-  keymap_set('n', '<leader>F', ':Oil --float<cr>')
+  keymap_set('n', '<leader>m', ':Oil --float<cr>')
 end
 
 function M.attempt(attempt)
