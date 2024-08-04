@@ -5,20 +5,24 @@ return {
     local grug_far = require('grug-far')
 
     local opts = {
-      extraRgArgs =
-          '--color=never' ..
-          ' --column' ..
-          ' --line-number' ..
-          ' --no-heading' ..
-          ' --smart-case' ..
-          ' --with-filename' ..
-          ' --hidden' ..
-          ' --glob=!**/.git/*' ..
-          ' --glob=!**/target/*' ..
-          ' --glob=!**/_build/*' ..
-          ' --glob=!**/deps/*' ..
-          ' --glob=!**/.elixir_ls/*' ..
-          ' --glob=!**/.node_modules/*',
+      engines = {
+        ripgrep = {
+          extraRgArgs =
+              '--color=never' ..
+              ' --column' ..
+              ' --line-number' ..
+              ' --no-heading' ..
+              ' --smart-case' ..
+              ' --with-filename' ..
+              ' --hidden' ..
+              ' --glob=!**/.git/*' ..
+              ' --glob=!**/target/*' ..
+              ' --glob=!**/_build/*' ..
+              ' --glob=!**/deps/*' ..
+              ' --glob=!**/.elixir_ls/*' ..
+              ' --glob=!**/.node_modules/*',
+        },
+      },
       icons = {
         enabled = false,
       },
