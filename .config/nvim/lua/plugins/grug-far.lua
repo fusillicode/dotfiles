@@ -7,7 +7,7 @@ return {
     local opts = {
       engines = {
         ripgrep = {
-          extraRgArgs =
+          extraArgs =
               '--color=never' ..
               ' --column' ..
               ' --line-number' ..
@@ -21,15 +21,14 @@ return {
               ' --glob=!**/deps/*' ..
               ' --glob=!**/.elixir_ls/*' ..
               ' --glob=!**/.node_modules/*',
+          placeholders = {
+            enabled = false,
+          },
         },
       },
-      icons = {
-        enabled = false,
-      },
-      headerMaxWidth = 0,
-      placeholders = {
-        enabled = false,
-      },
+      -- icons = {
+      --   enabled = false,
+      -- },
     }
 
     grug_far.setup(opts)
