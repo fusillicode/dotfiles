@@ -91,19 +91,16 @@ function M.telescope(telescope_builtin, defaults)
   keymap_set({ 'n', 'v', }, '<leader>s', with_defaults('lsp_document_symbols', { prompt_prefix = 'LSP Syms: ', }))
   keymap_set({ 'n', 'v', }, '<leader>S',
     with_defaults('lsp_dynamic_workspace_symbols', { prompt_prefix = 'LSP Syms*: ', }))
-  keymap_set({ 'n', 'v', }, '<leader>f', with_defaults('buffers', { prompt_prefix = 'Bufs: ', }))
-  keymap_set({ 'n', 'v', }, '<leader>F', with_defaults('find_files', { prompt_prefix = 'Files: ', }))
-  keymap_set({ 'n', 'v', }, '<leader>j', with_defaults('jumplist', { prompt_prefix = 'Jumps: ', }))
+  keymap_set({ 'n', 'v', }, '<leader>f', with_defaults('find_files', { prompt_prefix = 'Files: ', }))
+  keymap_set({ 'n', 'v', }, '<leader>h', with_defaults('buffers', { prompt_prefix = 'Bufs: ', }))
   keymap_set({ 'n', 'v', }, '<leader>gc', with_defaults('git_commits', { prompt_prefix = 'gc*: ', }))
   keymap_set({ 'n', 'v', }, '<leader>gcb', with_defaults('git_bcommits', { prompt_prefix = 'gc: ', bufnr = 0, }))
   keymap_set({ 'n', 'v', }, '<leader>gb', with_defaults('git_branches', { prompt_prefix = 'gb: ', }))
   keymap_set({ 'n', 'v', }, '<leader>gs', with_defaults('git_status', { prompt_prefix = 'gst: ', }))
   keymap_set({ 'n', 'v', }, '<leader>d', with_defaults('diagnostics', { prompt_prefix = 'Diags: ', bufnr = 0, }))
   keymap_set({ 'n', 'v', }, '<leader>D', with_defaults('diagnostics', { prompt_prefix = 'Diags*: ', }))
-  keymap_set({ 'n', 'v', }, '<leader>h', with_defaults('help_tags', { prompt_prefix = 'Help: ', }))
   keymap_set({ 'n', 'v', }, '<leader>c', with_defaults('commands', { prompt_prefix = 'Cmds: ', }))
   keymap_set({ 'n', 'v', }, '<leader>T', ':TodoTelescope<CR>')
-  keymap_set({ 'n', 'v', }, '<leader>l', telescope_builtin.resume)
   keymap_set({ 'n', 'v', }, 'ga', function()
     telescope_builtin.buffers({
       previewer = false,
@@ -116,7 +113,7 @@ function M.telescope(telescope_builtin, defaults)
 end
 
 function M.oil()
-  keymap_set('n', '<leader>k', ':Oil --float<cr>')
+  keymap_set('n', '<leader>F', ':Oil --float<cr>')
 end
 
 function M.attempt(attempt)
