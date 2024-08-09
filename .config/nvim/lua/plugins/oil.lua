@@ -1,6 +1,6 @@
 return {
   'stevearc/oil.nvim',
-  keys = '<leader>k',
+  keys = '<leader>F',
   config = function()
     require('keymaps').oil()
 
