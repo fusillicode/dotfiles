@@ -126,11 +126,6 @@ function M.close_buffers(close_buffers)
   keymap_set('n', '<leader>O', function() close_buffers.wipe({ type = 'other', force = true, }) end)
 end
 
-function M.delimited(delimited)
-  keymap_set('n', 'dp', delimited.goto_prev)
-  keymap_set('n', 'dn', delimited.goto_next)
-end
-
 function M.gitlinker()
   keymap_set({ 'n', 'v', }, '<leader>yl', ':GitLink<cr>')
   keymap_set({ 'n', 'v', }, '<leader>yL', ':GitLink!<cr>')
@@ -183,24 +178,6 @@ function M.grug_far(grug_far, opts)
     local utils = require('utils')
     local selection = utils.escape_regex(utils.get_visual_selection())
     grug_far(vim.tbl_deep_extend('force', opts, { prefills = { search = selection, }, }))
-  end)
-end
-
-function M.dropbar(dropbar_api, dropbar_utils)
-  keymap_set('n', '<leader>i', function()
-    local current_bar = dropbar_utils.bar.get_current()
-    if not current_bar then return end
-
-    local file = nil
-    for _, value in ipairs(current_bar.components) do
-      if string.find(string.lower(value.opts.name_hl), 'file') ~= nil then
-        file = value
-        break
-      end
-    end
-    if not file then return end
-
-    dropbar_api.pick(file.bar_idx)
   end)
 end
 
