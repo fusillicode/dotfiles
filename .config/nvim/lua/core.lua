@@ -70,7 +70,7 @@ vim.diagnostic.config {
   severity_sort = true,
   signs = true,
   underline = true,
-  update_in_insert = false,
+  update_in_insert = true,
   virtual_text = false,
 }
 
