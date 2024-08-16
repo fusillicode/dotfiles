@@ -33,8 +33,8 @@ config.colors = {
   },
 }
 config.font = wezterm.font('Monaco')
-config.font_size = 15
-config.line_height = 1.2
+config.font_size = 15.5
+config.line_height = 1.3
 
 config.keys = {
   { key = 'LeftArrow',  mods = 'OPT',         action = act.SendKey { key = 'b', mods = 'ALT', }, },
