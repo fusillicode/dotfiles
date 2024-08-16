@@ -42,7 +42,7 @@ vim.opt.iskeyword:append('-')
 vim.opt.jumpoptions:append('stack')
 
 local function trim_trailing_dot(str)
-  return string.gsub(str, '[\\.$]', '')
+  return string.gsub(str, '%.(?=\r?\n)', '')
 end
 
 vim.diagnostic.config {
