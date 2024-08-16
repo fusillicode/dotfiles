@@ -1,53 +1,53 @@
 vim.o.colorcolumn = '120'
 vim.o.termguicolors = true
 
-local cyan = 'cyan'
-local green = 'limegreen'
-local orange = 'orange'
-local red = 'red'
-local fuchsia = 'fuchsia'
+local hint = 'cyan'
+local ok = 'limegreen'
+local warn = 'orange'
+local err = 'red'
+local note = 'fuchsia'
 
 local match_highlight = { fg = vim.api.nvim_get_hl(0, { name = 'Special', }).fg, bold = true, }
 for hl, value in pairs({
   CmpItemMenu = { fg = vim.api.nvim_get_hl(0, { name = 'IncSearch', }).bg, italic = true, },
   ColorColumn = { link = 'CursorLine', },
   StatusLine = { link = 'CursorLine', },
-  DiagnosticError = { fg = red, },
-  DiagnosticWarn = { fg = orange, },
-  DiagnosticInfo = { fg = cyan, },
-  DiagnosticHint = { fg = fuchsia, },
-  DiagnosticOk = { fg = green, },
-  DiagnosticFloatingError = { fg = red, },
-  DiagnosticFloatingWarn = { fg = orange, },
-  DiagnosticFloatingInfo = { fg = cyan, },
-  DiagnosticFloatingHint = { fg = fuchsia, },
-  DiagnosticFloatingOk = { fg = green, },
-  DiagnosticSignError = { fg = red, },
-  DiagnosticSignWarn = { fg = orange, },
-  DiagnosticSignInfo = { fg = cyan, },
-  DiagnosticSignHint = { fg = fuchsia, },
-  DiagnosticSignOk = { fg = green, },
-  DiagnosticUnderlineError = { undercurl = true, sp = red, },
-  DiagnosticUnderlineWarn = { undercurl = true, sp = orange, },
-  DiagnosticUnderlineInfo = { undercurl = true, sp = cyan, },
-  DiagnosticUnderlineHint = { undercurl = true, sp = fuchsia, },
-  DiagnosticUnderlineOk = { undercurl = true, sp = green, },
-  DiagnosticVirtualTextError = { fg = red, },
-  DiagnosticVirtualTextWarn = { fg = orange, },
-  DiagnosticVirtualTextInfo = { fg = cyan, },
-  DiagnosticVirtualTextHint = { fg = fuchsia, },
-  DiagnosticVirtualTextOk = { fg = green, },
-  DiagnosticUnnecessary = { fg = '', undercurl = true, sp = orange, },
+  DiagnosticError = { fg = err, },
+  DiagnosticWarn = { fg = warn, },
+  DiagnosticInfo = { fg = hint, },
+  DiagnosticHint = { fg = note, },
+  DiagnosticOk = { fg = ok, },
+  DiagnosticFloatingError = { fg = err, },
+  DiagnosticFloatingWarn = { fg = warn, },
+  DiagnosticFloatingInfo = { fg = hint, },
+  DiagnosticFloatingHint = { fg = note, },
+  DiagnosticFloatingOk = { fg = ok, },
+  DiagnosticSignError = { fg = err, },
+  DiagnosticSignWarn = { fg = warn, },
+  DiagnosticSignInfo = { fg = hint, },
+  DiagnosticSignHint = { fg = note, },
+  DiagnosticSignOk = { fg = ok, },
+  DiagnosticUnderlineError = { undercurl = true, sp = err, },
+  DiagnosticUnderlineWarn = { undercurl = true, sp = warn, },
+  DiagnosticUnderlineInfo = { undercurl = true, sp = hint, },
+  DiagnosticUnderlineHint = { undercurl = true, sp = note, },
+  DiagnosticUnderlineOk = { undercurl = true, sp = ok, },
+  DiagnosticVirtualTextError = { fg = err, },
+  DiagnosticVirtualTextWarn = { fg = warn, },
+  DiagnosticVirtualTextInfo = { fg = hint, },
+  DiagnosticVirtualTextHint = { fg = note, },
+  DiagnosticVirtualTextOk = { fg = ok, },
+  DiagnosticUnnecessary = { fg = '', undercurl = true, sp = warn, },
   DiagnosticDeprecated = { fg = '', strikethrough = true, },
   GitSignsAddInline = { link = 'GitSignsAdd', },
   GitSignsChangeInline = { link = 'GitSignsChange', },
   GitSignsDeleteInline = { link = 'GitSignsDelete', },
-  GitSignsAdd = { fg = green, },
-  GitSignsAddPreview = { fg = green, },
-  GitSignsChange = { fg = orange, },
-  GitSignsChangePreview = { fg = orange, },
-  GitSignsDelete = { fg = red, },
-  GitSignsDeletePreview = { fg = red, },
+  GitSignsAdd = { fg = ok, },
+  GitSignsAddPreview = { fg = ok, },
+  GitSignsChange = { fg = warn, },
+  GitSignsChangePreview = { fg = warn, },
+  GitSignsDelete = { fg = err, },
+  GitSignsDeletePreview = { fg = err, },
   GrugFarResultsLineColumn = { link = 'LineNr', },
   GrugFarResultsLineNo = { link = 'LineNr', },
   GrugFarResultsMatch = match_highlight,
@@ -57,10 +57,10 @@ for hl, value in pairs({
   TelescopeMatching = match_highlight,
   TelescopePromptCounter = match_highlight,
   TelescopePromptPrefix = match_highlight,
-  TelescopeResultsDiffAdd = { fg = green, },
-  TelescopeResultsDiffChange = { fg = orange, },
-  TelescopeResultsDiffDelete = { fg = red, },
-  TelescopeResultsDiffUntracked = { fg = cyan, },
+  TelescopeResultsDiffAdd = { fg = ok, },
+  TelescopeResultsDiffChange = { fg = warn, },
+  TelescopeResultsDiffDelete = { fg = err, },
+  TelescopeResultsDiffUntracked = { fg = hint, },
 }) do vim.api.nvim_set_hl(0, hl, value) end
 
 local status_line_hl = vim.api.nvim_get_hl(0, { name = 'CursorLine', })
