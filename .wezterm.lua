@@ -82,6 +82,8 @@ config.window_decorations = 'RESIZE'
 config.window_padding = { left = 0, right = 0, top = 0, bottom = 0, }
 config.window_frame = { active_titlebar_bg = background, inactive_titlebar_bg = background, }
 
+local split_perc = 0.6
+
 -- 🥲 https://github.com/wez/wezterm/issues/3173
 wezterm.on('window-config-reloaded', function(window, _)
   -- Approximately identify this gui window, by using the associated mux id
@@ -99,13 +101,13 @@ wezterm.on('window-config-reloaded', function(window, _)
   if is_new_window then
     window:maximize()
     local active_pane = window:active_pane()
-    active_pane:split { size = 0.6, }
+    active_pane:split { size = split_perc, }
   end
 end)
 
 wezterm.on('open-tab-with-custom-layout', function(window, _)
   local _, pane, _ = window:mux_window():spawn_tab({})
-  pane:split { size = 0.6, }
+  pane:split { size = split_perc, }
 end)
 
 return config
