@@ -26,9 +26,9 @@ return {
           },
         },
       },
-      -- icons = {
-      --   enabled = false,
-      -- },
+      icons = {
+        enabled = false,
+      },
     }
 
     grug_far.setup(opts)
