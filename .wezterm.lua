@@ -32,8 +32,8 @@ config.colors = {
     inactive_tab = { bg_color = background, fg_color = 'grey', },
   },
 }
-config.font = wezterm.font('Monaco')
-config.font_size = 15
+config.font = wezterm.font('Courier New')
+config.font_size = 16
 config.line_height = 1.2
 
 config.keys = {
