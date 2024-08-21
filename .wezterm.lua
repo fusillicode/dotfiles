@@ -32,7 +32,7 @@ config.colors = {
     inactive_tab = { bg_color = background, fg_color = 'grey', },
   },
 }
-config.font = wezterm.font('Courier New')
+config.font = wezterm.font('Courier Prime')
 config.font_size = 16
 config.line_height = 1.2
 
