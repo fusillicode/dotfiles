@@ -73,6 +73,7 @@ local function get_lsps_configs()
           diagnostics = {
             enable = true,
             disabled = { 'unresolved-proc-macro', },
+            styleLints = { enable = true, },
           },
           imports = { enforce = true, granularity = { group = 'item', }, prefix = 'crate', },
           lens = { debug = { enable = false, }, implementations = { enable = false, }, run = { enable = false, }, },
