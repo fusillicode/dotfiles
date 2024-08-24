@@ -97,8 +97,10 @@ function M.telescope(telescope_builtin, defaults)
   keymap_set({ 'n', 'v', }, '<leader>gcb', with_defaults('git_bcommits', { prompt_prefix = 'gc: ', bufnr = 0, }))
   keymap_set({ 'n', 'v', }, '<leader>gb', with_defaults('git_branches', { prompt_prefix = 'gb: ', }))
   keymap_set({ 'n', 'v', }, '<leader>gs', with_defaults('git_status', { prompt_prefix = 'gst: ', }))
-  keymap_set({ 'n', 'v', }, '<leader>d', with_defaults('diagnostics', { prompt_prefix = 'Diags: ', bufnr = 0, }))
-  keymap_set({ 'n', 'v', }, '<leader>D', with_defaults('diagnostics', { prompt_prefix = 'Diags*: ', }))
+  keymap_set({ 'n', 'v', }, '<leader>d',
+    with_defaults('diagnostics', { prompt_prefix = 'Diagn: ', bufnr = 0, sort_by = 'severity', }))
+  keymap_set({ 'n', 'v', }, '<leader>D',
+    with_defaults('diagnostics', { prompt_prefix = 'Diagn*: ', sort_by = 'severity', }))
   keymap_set({ 'n', 'v', }, '<leader>c', with_defaults('commands', { prompt_prefix = 'Cmds: ', }))
   keymap_set({ 'n', 'v', }, '<leader>T', ':TodoTelescope<CR>')
   keymap_set({ 'n', 'v', }, 'ga', function()
