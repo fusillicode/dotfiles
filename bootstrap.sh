@@ -112,11 +112,11 @@ brew install ninja cmake gettext curl
 # Setup ~/.dev_tools & ~/.local/bin
 cd ./tempura &&
   cargo build --release && \
-  ./target/release/ebi install-dev-tools ~/.dev-tools ~/.local/bin
-
-# Symlink bins
-ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/tempura* "$HOME"/.local/bin
-ln -s "$HOME"/data/dev/dotfiles/dotfiles/bin/update_* "$HOME"/.local/bin
+  cd - && \
+  rm "$HOME"/.local/bin/ebi && \
+  ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/ebi "$HOME"/.local/bin && \
+  ebi install-dev-tools ~/.dev-tools ~/.local/bin && \
+  ln -s "$HOME"/data/dev/dotfiles/dotfiles/bin/update_* "$HOME"/.local/bin
 
 # Update & cleanup brew
 /bin/bash "$script_dir"/bin/update_brew.sh
