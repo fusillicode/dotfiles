@@ -182,4 +182,15 @@ function M.grug_far(grug_far, opts)
   end)
 end
 
+function M.multicursor(mc)
+  keymap_set('n', '<esc>', function()
+    if mc.hasCursors() then mc.clearCursors() end
+    vim.api.nvim_command('noh | echo""')
+  end)
+
+  keymap_set('n', '<c-j>', function() mc.addCursor('j') end)
+  keymap_set('n', '<c-k>', function() mc.addCursor('k') end)
+  keymap_set('n', '<c-n>', function() mc.addCursor('*') end)
+end
+
 return M
