@@ -33,8 +33,8 @@ config.colors = {
   },
 }
 config.font = wezterm.font('Courier Prime')
-config.font_size = 17
-config.line_height = 1.3
+config.font_size = 16
+config.line_height = 1.2
 
 config.keys = {
   { key = 'LeftArrow',  mods = 'OPT',         action = act.SendKey { key = 'b', mods = 'ALT', }, },
@@ -82,7 +82,7 @@ config.window_decorations = 'RESIZE'
 config.window_padding = { left = 0, right = 0, top = 0, bottom = 0, }
 config.window_frame = { active_titlebar_bg = background, inactive_titlebar_bg = background, }
 
-local split_perc = 0.69
+local split_perc = 0.67
 
 -- 🥲 https://github.com/wez/wezterm/issues/3173
 wezterm.on('window-config-reloaded', function(window, _)
