@@ -34,8 +34,7 @@ config.colors = {
     inactive_tab = { bg_color = background, fg_color = 'grey', },
   },
 }
--- config.color_scheme = 'Catppuccin Latte'
-config.font = wezterm.font('Courier Prime')
+config.font = wezterm.font('Courier New')
 config.font_size = 16
 config.line_height = 1.2
 
@@ -76,7 +75,7 @@ if wezterm.gui then
 end
 config.key_tables = { copy_mode = copy_mode, }
 
-config.inactive_pane_hsb = { brightness = 0.8, }
+config.inactive_pane_hsb = { brightness = 0.6, }
 config.hide_tab_bar_if_only_one_tab = true
 config.show_new_tab_button_in_tab_bar = false
 config.switch_to_last_active_tab_when_closing_tab = true
@@ -85,7 +84,7 @@ config.window_decorations = 'RESIZE'
 config.window_padding = { left = 0, right = 0, top = 0, bottom = 0, }
 config.window_frame = { active_titlebar_bg = background, inactive_titlebar_bg = background, }
 
-local split_perc = 0.67
+local split_perc = 0.66
 
 -- 🥲 https://github.com/wez/wezterm/issues/3173
 wezterm.on('window-config-reloaded', function(window, _)
