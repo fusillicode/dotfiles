@@ -20,16 +20,21 @@ local function up_and_down_in_editor(key)
   end
 end
 
-local background = 'white'
 config.animation_fps = 1
+
+local background = 'white'
+local foreground = 'black'
 config.colors = {
   background = background,
+  foreground = foreground,
+  cursor_bg = foreground,
+  cursor_border = background,
   tab_bar = {
-    active_tab = { bg_color = background, fg_color = 'black', },
+    active_tab = { bg_color = background, fg_color = foreground, },
     inactive_tab = { bg_color = background, fg_color = 'grey', },
   },
 }
-config.color_scheme = 'zenbones'
+config.color_scheme = 'Catppuccin Latte'
 config.font = wezterm.font('Courier Prime')
 config.font_size = 16
 config.line_height = 1.2
