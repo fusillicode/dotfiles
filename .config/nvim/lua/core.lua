@@ -2,6 +2,7 @@ vim.loader.enable()
 
 require('commands')
 require('keymaps').core()
+require('colorscheme').setup()
 
 for _, provider in ipairs { 'node', 'perl', 'python3', 'ruby', } do
   vim.g['loaded_' .. provider .. '_provider'] = 0
@@ -84,4 +85,3 @@ vim.api.nvim_create_autocmd({ 'BufLeave', 'FocusLost', }, {
   group = vim.api.nvim_create_augroup('AutosaveBuffers', { clear = true, }),
   command = ':silent! wa!',
 })
-
