@@ -1,6 +1,5 @@
 vim.loader.enable()
 
-require('colorscheme')
 require('commands')
 require('keymaps').core()
 
