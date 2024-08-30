@@ -47,6 +47,7 @@ end
 vim.diagnostic.config {
   float = {
     anchor_bias = 'above',
+    border = 'rounded',
     focusable = true,
     format = function(diagnostic)
       local src_code = {}
@@ -84,29 +85,3 @@ vim.api.nvim_create_autocmd({ 'BufLeave', 'FocusLost', }, {
   command = ':silent! wa!',
 })
 
--- https://vinnymeller.com/posts/neovim_nightly_inlay_hints/#globally
-vim.api.nvim_create_autocmd('LspAttach', {
-  group = vim.api.nvim_create_augroup('LspAttachInlayHints', { clear = true, }),
-  callback = function(args)
-    if not (args.data and args.data.client_id) then
-      return
-    end
-
-    local client = vim.lsp.get_client_by_id(args.data.client_id)
-    if client.server_capabilities.inlayHintProvider then
-      vim.lsp.inlay_hint.enable(true, { args.buf, })
-    end
-  end,
-})
-
--- https://github.com/neovim/neovim/issues/12970
-vim.lsp.util.apply_text_document_edit = function(text_document_edit, _, offset_encoding)
-  local text_document = text_document_edit.textDocument
-  local bufnr = vim.uri_to_bufnr(text_document.uri)
-
-  if offset_encoding == nil then
-    vim.notify_once('apply_text_document_edit must be called with valid offset encoding', vim.log.levels.WARN)
-  end
-
-  vim.lsp.util.apply_text_edits(text_document_edit.edits, bufnr, offset_encoding)
-end
