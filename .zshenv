@@ -12,6 +12,7 @@ alias kdebian="kubectl exec -it debian -- bash || kubectl run debian --image=deb
 alias cmc="cargo make clippy"
 alias cmt="cargo make test"
 alias cmdr="cargo make db-reset"
+alias cmdp="cargo make db-prepare"
 alias cmf="cargo make format"
 
 # Easy Shell commands
