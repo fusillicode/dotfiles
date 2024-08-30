@@ -27,7 +27,7 @@ return {
       'DiagnosticOk',
     }) do
       vim.api.nvim_set_hl(0, diagnostic_hl_group .. 'StatusLine',
-        { fg = vim.api.nvim_get_hl(0, { name = diagnostic_hl_group, }).fg, bg = status_line_hl.bg, }
+        { fg = vim.api.nvim_get_hl(0, { name = diagnostic_hl_group, }).fg, bg = status_line_hl.bg, bold = true, }
       )
     end
   end,
