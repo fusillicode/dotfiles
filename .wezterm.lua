@@ -76,7 +76,7 @@ if wezterm.gui then
 end
 config.key_tables = { copy_mode = copy_mode, }
 
-config.inactive_pane_hsb = { brightness = 0.7, }
+config.inactive_pane_hsb = { brightness = 0.8, }
 config.hide_tab_bar_if_only_one_tab = true
 config.show_new_tab_button_in_tab_bar = false
 config.switch_to_last_active_tab_when_closing_tab = true
