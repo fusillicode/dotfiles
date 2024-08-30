@@ -22,8 +22,8 @@ end
 
 config.animation_fps = 1
 
-local background = 'white'
-local foreground = 'black'
+local background = '#14161b'
+local foreground = 'white'
 config.colors = {
   background = background,
   foreground = foreground,
@@ -34,7 +34,7 @@ config.colors = {
     inactive_tab = { bg_color = background, fg_color = 'grey', },
   },
 }
-config.color_scheme = 'Catppuccin Latte'
+-- config.color_scheme = 'Catppuccin Latte'
 config.font = wezterm.font('Courier Prime')
 config.font_size = 16
 config.line_height = 1.2
