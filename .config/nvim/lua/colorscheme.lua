@@ -8,8 +8,9 @@ function M.setup(colorscheme)
   vim.o.colorcolumn = '120'
 
   for hl, value in pairs({
-    ColorColumn = { link = 'CursorLine', },
-    StatusLine = { link = 'CursorLine', },
+    ColorColumn = { bg = 'NvimDarkGrey3', },
+    CursorLine = { bg = 'none', },
+    StatusLine = { bg = 'none', },
   }) do vim.api.nvim_set_hl(0, hl, value) end
 
   local status_line_hl = vim.api.nvim_get_hl(0, { name = 'CursorLine', })
