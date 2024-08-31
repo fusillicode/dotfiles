@@ -26,9 +26,17 @@ return {
           },
         },
       },
+      disableBufferLineNumbers = true,
       icons = {
         enabled = false,
       },
+      folding = {
+        enabled = false,
+      },
+      resultLocation = {
+        showNumberLabel = false,
+      },
+      wrap = false,
     }
 
     grug_far.setup(opts)
