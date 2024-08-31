@@ -36,7 +36,6 @@ return {
       resultLocation = {
         showNumberLabel = false,
       },
-      wrap = false,
     }
 
     grug_far.setup(opts)
