@@ -59,33 +59,25 @@ config.keys = {
   { key = 'u',          mods = 'CTRL',        action = wezterm.action_callback(up_and_down_in_editor('u')), },
 }
 
-local copy_mode = nil
-if wezterm.gui then
-  copy_mode = wezterm.gui.default_key_tables().copy_mode
-  for _, custom_copy_key in pairs({
-    { key = '/', action = act.CopyMode 'EditPattern', },
-    { key = 'x', action = act.CopyMode { SetSelectionMode = 'Line', }, },
-    { key = 'd', mods = 'CTRL',                                        action = act.CopyMode { MoveByPage = 0.5, }, },
-    { key = 'u', mods = 'CTRL',                                        action = act.CopyMode { MoveByPage = -0.5, }, },
-    { key = 'y', mods = 'NONE', action = act.Multiple { { CopyTo = 'ClipboardAndPrimarySelection', }, },
-    },
-  }) do
-    table.insert(copy_mode, custom_copy_key)
-  end
+local copy_mode = wezterm.gui.default_key_tables().copy_mode
+for _, custom_copy_key in pairs({
+  { key = '/', action = act.CopyMode 'EditPattern', },
+  { key = 'x', action = act.CopyMode { SetSelectionMode = 'Line', }, },
+  { key = 'd', mods = 'CTRL',                                        action = act.CopyMode { MoveByPage = 0.5, }, },
+  { key = 'u', mods = 'CTRL',                                        action = act.CopyMode { MoveByPage = -0.5, }, },
+  { key = 'y', mods = 'NONE', action = act.Multiple { { CopyTo = 'ClipboardAndPrimarySelection', }, },
+  },
+}) do
+  table.insert(copy_mode, custom_copy_key)
 end
-config.key_tables = { copy_mode = copy_mode, }
-
-local search_mode = nil
-if wezterm.gui then
-  search_mode = wezterm.gui.default_key_tables().search_mode
-  for _, custom_copy_key in pairs({
-    { key = 'Enter', mods = 'NONE',  action = wezterm.action.CopyMode 'NextMatch', },
-    { key = 'Enter', mods = 'SHIFT', action = wezterm.action.CopyMode 'PriorMatch', },
-  }) do
-    table.insert(search_mode, custom_copy_key)
-  end
+local search_mode = wezterm.gui.default_key_tables().search_mode
+for _, custom_copy_key in pairs({
+  { key = 'Enter', mods = 'NONE',  action = wezterm.action.CopyMode 'NextMatch', },
+  { key = 'Enter', mods = 'SHIFT', action = wezterm.action.CopyMode 'PriorMatch', },
+}) do
+  table.insert(search_mode, custom_copy_key)
 end
-config.key_tables = { search_mode = search_mode, }
+config.key_tables = { copy_mode = copy_mode, search_mode = search_mode, }
 
 config.inactive_pane_hsb = { brightness = 0.6, }
 config.hide_tab_bar_if_only_one_tab = true
