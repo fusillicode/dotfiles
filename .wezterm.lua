@@ -75,6 +75,18 @@ if wezterm.gui then
 end
 config.key_tables = { copy_mode = copy_mode, }
 
+local search_mode = nil
+if wezterm.gui then
+  search_mode = wezterm.gui.default_key_tables().search_mode
+  for _, custom_copy_key in pairs({
+    { key = 'Enter', mods = 'NONE',  action = wezterm.action.CopyMode 'NextMatch', },
+    { key = 'Enter', mods = 'SHIFT', action = wezterm.action.CopyMode 'PriorMatch', },
+  }) do
+    table.insert(search_mode, custom_copy_key)
+  end
+end
+config.key_tables = { search_mode = search_mode, }
+
 config.inactive_pane_hsb = { brightness = 0.6, }
 config.hide_tab_bar_if_only_one_tab = true
 config.show_new_tab_button_in_tab_bar = false
