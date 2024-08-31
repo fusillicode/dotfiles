@@ -60,23 +60,22 @@ config.keys = {
 }
 
 local copy_mode = wezterm.gui.default_key_tables().copy_mode
-for _, custom_copy_key in pairs({
+for _, keymap in pairs({
   { key = '/', action = act.CopyMode 'EditPattern', },
   { key = 'x', action = act.CopyMode { SetSelectionMode = 'Line', }, },
   { key = 'd', mods = 'CTRL',                                        action = act.CopyMode { MoveByPage = 0.5, }, },
   { key = 'u', mods = 'CTRL',                                        action = act.CopyMode { MoveByPage = -0.5, }, },
   { key = 'y', mods = 'NONE', action = act.Multiple { { CopyTo = 'ClipboardAndPrimarySelection', }, },
   },
-}) do
-  table.insert(copy_mode, custom_copy_key)
-end
+}) do table.insert(copy_mode, keymap) end
+
 local search_mode = wezterm.gui.default_key_tables().search_mode
-for _, custom_copy_key in pairs({
+for _, keymap in pairs({
   { key = 'Enter', mods = 'NONE',  action = wezterm.action.CopyMode 'NextMatch', },
   { key = 'Enter', mods = 'SHIFT', action = wezterm.action.CopyMode 'PriorMatch', },
-}) do
-  table.insert(search_mode, custom_copy_key)
-end
+  { key = 'c',     mods = 'CTRL',  action = wezterm.action.CopyMode 'ClearPattern', },
+}) do table.insert(search_mode, keymap) end
+
 config.key_tables = { copy_mode = copy_mode, search_mode = search_mode, }
 
 config.inactive_pane_hsb = { brightness = 0.6, }
