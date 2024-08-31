@@ -54,6 +54,8 @@ function M.core()
   keymap_set('n', '<esc>', require('utils').normal_esc)
   keymap_set('v', '<esc>', require('utils').visual_esc, { expr = true, })
 
+  keymap_set('n', 'dn', vim.diagnostic.goto_next)
+  keymap_set('n', 'dp', vim.diagnostic.goto_prev)
   keymap_set('n', '<leader>e', vim.diagnostic.open_float)
 
   keymap_set('n', '<leader>gx', require('opener').open_under_cursor)
