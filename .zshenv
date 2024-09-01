@@ -17,7 +17,7 @@ alias cmf="cargo make format"
 
 # Easy Shell commands
 sorce () {
-  set -a && . "$@" && set +a
+  set -a && source "$@" && set +a
 }
 
 ho () {
