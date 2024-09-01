@@ -3,10 +3,8 @@ return {
   dependencies = { 'nvim-telescope/telescope.nvim', },
   keys = '<leader>u',
   config = function()
-    local textcase = require('textcase')
-    textcase.setup({})
-
+    require('textcase').setup({})
     require('telescope').load_extension('textcase')
-    require('keymaps').textcase(textcase)
+    require('keymaps').textcase()
   end,
 }

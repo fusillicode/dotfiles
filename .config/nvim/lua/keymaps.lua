@@ -195,7 +195,7 @@ function M.multicursor(mc)
   keymap_set('n', '<c-n>', function() mc.addCursor('*') end)
 end
 
-function M.textcase(textcase)
+function M.textcase()
   keymap_set({ 'n', 'v', }, '<leader>u', ':TextCaseOpenTelescope<cr>')
 end
 
