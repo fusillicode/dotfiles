@@ -1,6 +1,7 @@
 return {
   'johmsalas/text-case.nvim',
   dependencies = { 'nvim-telescope/telescope.nvim', },
+  keys = '<leader>u',
   config = function()
     local textcase = require('textcase')
     textcase.setup({})
