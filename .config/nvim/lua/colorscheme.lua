@@ -7,9 +7,7 @@ function M.setup(colorscheme)
   vim.o.termguicolors = true
   vim.o.colorcolumn = '120'
 
-  local background = vim.api.nvim_get_hl(0, { name = 'Normal', }).bg
   for hl, value in pairs({
-    NormalFloat = { bg = background, },
     ColorColumn = { bg = 'NvimDarkGrey3', },
     CursorLine = { bg = 'none', },
     StatusLine = { bg = 'none', },
