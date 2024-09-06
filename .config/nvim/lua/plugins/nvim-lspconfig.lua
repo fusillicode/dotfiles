@@ -89,7 +89,7 @@ local function get_lsps_configs()
         diagnosticSeverity = 'Warning',
       },
     },
-    tsserver = {
+    ts_ls = {
       init_options = {
         preferences = {
           includeInlayParameterNameHints = 'all',
