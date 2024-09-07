@@ -74,6 +74,7 @@ return {
 
     telescope.load_extension('ui-select')
     telescope.load_extension('fzf')
+    telescope.load_extension('attempt')
 
     vim.cmd('autocmd User TelescopePreviewerLoaded setlocal number')
   end,
