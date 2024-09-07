@@ -121,7 +121,7 @@ function M.oil()
 end
 
 function M.attempt(attempt)
-  keymap_set('n', '<leader>n', attempt.new_input_ext)
+  keymap_set('n', '<leader>n', attempt.new_select)
 end
 
 function M.close_buffers(close_buffers)
