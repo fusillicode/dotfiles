@@ -118,11 +118,12 @@ end)
 config.hyperlink_rules = wezterm.default_hyperlink_rules()
 
 table.insert(config.hyperlink_rules, {
-  regex = '\\b\\S*\\b',
+  regex = [[(?<=^|\s)(\./|~/|/)?[\w.-]+(/[^\s/]+)*]],
   format = '$0',
 })
 
 wezterm.on('open-uri', function(_window, pane, uri)
+  wezterm.log_info(uri)
   -- local cmd =
   --     'export PATH=~/.local/bin:$PATH && '
   --     .. 'source ~/.zshenv && '
