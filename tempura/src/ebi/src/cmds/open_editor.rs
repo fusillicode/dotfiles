@@ -90,8 +90,14 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
         ));
     };
 
+    let pane_id = match args.next() {
+        Some(x) => x.into(),
+        None => std::env::var("WEZTERM_PANE")?,
+    }
+    .parse()?;
+
     let editor_pane_id =
-        crate::utils::wezterm::get_current_pane_sibling_matching_titles(editor.pane_titles())
+        crate::utils::wezterm::get_sibling_pane_matching_titles(pane_id, editor.pane_titles())
             .map(|x| x.pane_id)?;
 
     let open_file_cmd = editor.open_file_cmd(&file_to_open);

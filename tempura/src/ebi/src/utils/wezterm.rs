@@ -4,11 +4,10 @@ use std::process::Command;
 use anyhow::anyhow;
 use serde::Deserialize;
 
-pub fn get_current_pane_sibling_matching_titles(
+pub fn get_sibling_pane_matching_titles(
+    current_pane_id: i64,
     pane_titles: &[&str],
 ) -> anyhow::Result<WezTermPane> {
-    let current_pane_id: i64 = std::env::var("WEZTERM_PANE")?.parse()?;
-
     let all_panes: Vec<WezTermPane> = serde_json::from_slice(
         &Command::new("wezterm")
             .args(["cli", "list", "--format", "json"])
