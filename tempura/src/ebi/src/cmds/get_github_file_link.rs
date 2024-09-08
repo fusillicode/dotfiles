@@ -12,11 +12,14 @@ use url::Url;
 use crate::cmds::open_editor::Editor;
 use crate::utils::hx::HxCursorPosition;
 use crate::utils::hx::HxStatusLine;
-use crate::utils::wezterm::get_current_pane_sibling_matching_titles;
+use crate::utils::wezterm::get_sibling_pane_matching_titles;
 use crate::utils::wezterm::WezTermPane;
 
 pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
-    let hx_pane = get_current_pane_sibling_matching_titles(Editor::Helix.pane_titles())?;
+    let hx_pane = get_sibling_pane_matching_titles(
+        std::env::var("WEZTERM_PANE")?.parse()?,
+        Editor::Helix.pane_titles(),
+    )?;
 
     let wezterm_pane_text = String::from_utf8(
         Command::new("wezterm")
