@@ -27,7 +27,7 @@ return {
       },
       layout_config = {
         anchor = 'N',
-        height = 0.50,
+        height = 0.40,
         prompt_position = 'top',
         width = 0.8,
       },
