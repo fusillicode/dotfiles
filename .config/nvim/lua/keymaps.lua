@@ -95,7 +95,18 @@ function M.telescope(telescope_builtin, defaults)
     with_defaults('lsp_dynamic_workspace_symbols', { prompt_prefix = 'LSP Syms*: ', }))
   keymap_set({ 'n', 'v', }, '<leader>f', with_defaults('find_files', { prompt_prefix = 'Files: ', }))
   keymap_set({ 'n', 'v', }, '<leader>b', with_defaults('buffers', { prompt_prefix = 'Bufs: ', }))
-  keymap_set({ 'n', 'v', }, '<leader>l', with_defaults('live_grep', { prompt_prefix = 'rg: ', }))
+
+  keymap_set({ 'n', }, '<leader>l', function()
+    require('telescope').extensions.live_grep_args.live_grep_args(
+      { preview_title = false, prompt_prefix = 'rg: ', prompt_title = false, results_title = false, }
+    )
+  end)
+  keymap_set({ 'v', }, '<leader>l', function()
+    require('telescope-live-grep-args.shortcuts').grep_word_under_cursor(
+      { preview_title = false, prompt_prefix = 'rg: ', prompt_title = false, results_title = false, }
+    )
+  end)
+
   keymap_set({ 'n', 'v', }, '<leader>gc', with_defaults('git_commits', { prompt_prefix = 'gc*: ', }))
   keymap_set({ 'n', 'v', }, '<leader>gcb', with_defaults('git_bcommits', { prompt_prefix = 'gc: ', bufnr = 0, }))
   keymap_set({ 'n', 'v', }, '<leader>gb', with_defaults('git_branches', { prompt_prefix = 'gb: ', }))

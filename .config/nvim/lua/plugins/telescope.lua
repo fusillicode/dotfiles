@@ -10,6 +10,7 @@ return {
       build = 'make',
       cond = function() return vim.fn.executable 'make' == 1 end,
     },
+    'nvim-telescope/telescope-live-grep-args.nvim',
   },
   config = function()
     local defaults = {
@@ -75,6 +76,7 @@ return {
     telescope.load_extension('ui-select')
     telescope.load_extension('fzf')
     telescope.load_extension('attempt')
+    telescope.load_extension('live_grep_args')
 
     vim.cmd('autocmd User TelescopePreviewerLoaded setlocal number')
   end,
