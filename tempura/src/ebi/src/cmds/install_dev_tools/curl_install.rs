@@ -14,7 +14,8 @@ pub enum OutputOption<'a> {
 
 pub fn run(url: &str, output_option: OutputOption) -> anyhow::Result<()> {
     let mut curl_cmd = silent_cmd("curl");
-    curl_cmd.args(["-SL", url]);
+    let silent_flag = cfg!(debug_assertions).then(|| "S").unwrap_or("");
+    curl_cmd.args([&format!("-L{silent_flag}"), url]);
 
     match output_option {
         OutputOption::UnpackVia(mut cmd, output_path) => {
