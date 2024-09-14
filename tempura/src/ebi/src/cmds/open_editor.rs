@@ -64,12 +64,16 @@ impl TryFrom<(&str, i64, &[WezTermPane])> for FileToOpen {
         let mut source_pane_absolute_cwd = panes
             .iter()
             .find(|p| p.pane_id == pane_id)
-            .unwrap()
+            .ok_or_else(|| anyhow!("no panes matching id {pane_id} in {panes:?}"))?
             .absolute_cwd();
 
         source_pane_absolute_cwd.push(file_to_open);
 
-        Self::from_str(source_pane_absolute_cwd.to_str().unwrap())
+        Self::from_str(
+            source_pane_absolute_cwd.to_str().ok_or_else(|| {
+                anyhow!("cannot get &str from PathBuf {source_pane_absolute_cwd:?}")
+            })?,
+        )
     }
 }
 

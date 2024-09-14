@@ -124,7 +124,7 @@ table.insert(config.hyperlink_rules, {
 
 wezterm.on('open-uri', function(_, pane, uri)
   local cmd = {
-    os.getenv('HOME') .. '/data/dev/dotfiles/dotfiles/tempura/target/debug/ebi',
+    os.getenv('HOME') .. '/.local/bin/ebi',
     'open-editor',
     'nv',
     uri,
