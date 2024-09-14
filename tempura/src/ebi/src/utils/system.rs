@@ -41,3 +41,17 @@ pub fn silent_cmd(program: &str) -> Command {
     }
     cmd
 }
+
+pub fn rm_dead_symlinks(dir: &str) -> anyhow::Result<()> {
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        let metadata = std::fs::symlink_metadata(&path)?;
+        if metadata.file_type().is_symlink() && std::fs::metadata(&path).is_err() {
+            println!("Removing dead symlink: {path:?}");
+            std::fs::remove_file(&path)?;
+        }
+    }
+    Ok(())
+}
