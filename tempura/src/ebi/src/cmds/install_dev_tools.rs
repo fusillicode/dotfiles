@@ -188,6 +188,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
             });
     });
 
+    crate::utils::system::rm_dead_symlinks(bin_dir)?;
     crate::utils::system::chmod_x(&format!("{bin_dir}/*"))?;
 
     Ok(())
