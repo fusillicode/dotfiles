@@ -4,26 +4,29 @@ use std::process::Command;
 use anyhow::anyhow;
 use serde::Deserialize;
 
-pub fn get_sibling_pane_matching_titles(
-    current_pane_id: i64,
-    pane_titles: &[&str],
-) -> anyhow::Result<WezTermPane> {
-    let all_panes: Vec<WezTermPane> = serde_json::from_slice(
+pub fn get_all_panes() -> anyhow::Result<Vec<WezTermPane>> {
+    Ok(serde_json::from_slice(
         &Command::new("wezterm")
             .args(["cli", "list", "--format", "json"])
             .output()?
             .stdout,
-    )?;
+    )?)
+}
 
-    let current_pane_tab_id = all_panes
+pub fn get_sibling_pane_matching_titles(
+    panes: &[WezTermPane],
+    current_pane_id: i64,
+    pane_titles: &[&str],
+) -> anyhow::Result<WezTermPane> {
+    let current_pane_tab_id = panes
         .iter()
         .find(|w| w.pane_id == current_pane_id)
         .ok_or_else(|| {
-            anyhow!("current pane id '{current_pane_id}' not found among panes {all_panes:?}")
+            anyhow!("current pane id '{current_pane_id}' not found among panes {panes:?}")
         })?
         .tab_id;
 
-    Ok(all_panes
+    Ok(panes
         .iter()
         .find(|w| w.tab_id == current_pane_tab_id && pane_titles.contains(&w.title.as_str()))
         .ok_or({
@@ -54,6 +57,18 @@ pub struct WezTermPane {
     pub is_active: bool,
     pub is_zoomed: bool,
     pub tty_name: String,
+}
+
+impl WezTermPane {
+    pub fn absolute_cwd(&self) -> PathBuf {
+        let mut path_parts = self.cwd.components();
+        path_parts.next(); // Skip `file://`
+        path_parts.next(); // Skip hostname
+
+        let mut res = PathBuf::from("/");
+        res.push(path_parts.collect::<PathBuf>());
+        res
+    }
 }
 
 #[derive(Debug, Deserialize, Clone)]

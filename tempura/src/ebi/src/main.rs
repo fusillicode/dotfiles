@@ -8,6 +8,7 @@ mod utils;
 fn main() -> anyhow::Result<()> {
     let args = get_args();
     let (cmd, cmd_args) = split_cmd_and_args(&args)?;
+    load_additional_paths()?;
 
     match cmd {
         "get-file-path" => cmds::get_file_path::run(cmd_args.into_iter()),
@@ -29,4 +30,19 @@ fn split_cmd_and_args(args: &[String]) -> anyhow::Result<(&str, Vec<&str>)> {
     args.split_first()
         .map(|(cmd, cmd_args)| (cmd.as_str(), cmd_args.iter().map(String::as_str).collect()))
         .ok_or_else(|| anyhow!("cannot parse cmd and args from input args {args:?}"))
+}
+
+// Needed because calling ebi from wezterm open-uri handler doesn't retain the PATH
+fn load_additional_paths() -> anyhow::Result<()> {
+    let home = std::env::var("HOME")?;
+
+    let new_path = [
+        &std::env::var("PATH").unwrap_or_else(|_| String::new()),
+        "/opt/homebrew/bin",
+        &format!("{home}/.local/bin"),
+    ]
+    .join(":");
+
+    std::env::set_var("PATH", &new_path);
+    Ok(())
 }
