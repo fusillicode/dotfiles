@@ -11,16 +11,14 @@ pub fn run(
 
     std::fs::create_dir_all(&dev_tools_repo_dir)?;
 
-    silent_cmd("npm")
-        .args(
-            [
-                &["install", "--silent", "--prefix", &dev_tools_repo_dir][..],
-                packages,
-            ]
-            .concat(),
-        )
-        .status()?
-        .exit_ok()?;
+    let mut cmd_args = vec!["install"];
+    if cfg!(debug_assertions) {
+        cmd_args.push("--silent");
+    }
+    cmd_args.extend_from_slice(&["--prefix", &dev_tools_repo_dir]);
+    cmd_args.extend_from_slice(packages);
+
+    silent_cmd("npm").args(cmd_args).status()?.exit_ok()?;
 
     Ok(silent_cmd("sh")
         .args([
