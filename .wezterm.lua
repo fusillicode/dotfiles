@@ -134,15 +134,18 @@ wezterm.on('open-uri', function(_, pane, uri)
   }
 
   local success, _, err = wezterm.run_child_process(cmd)
-  if not success then
-    -- Logging like this because I don't know how to print
-    -- a table in lua without building a custom helper or rely
-    -- on an external library...
-    wezterm.log_error('Cmd')
-    wezterm.log_error(cmd)
-    wezterm.log_error('Error')
-    wezterm.log_error(err)
+  if success then
+    -- Prevent the default action from triggering
+    return false
   end
+
+  -- Logging like this because I don't know how to print
+  -- a table in lua without building a custom helper or rely
+  -- on an external library...
+  wezterm.log_error('Cmd')
+  wezterm.log_error(cmd)
+  wezterm.log_error('Error')
+  wezterm.log_error(err)
 end)
 
 return config
