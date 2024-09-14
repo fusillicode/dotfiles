@@ -40,6 +40,7 @@ return {
       show_line = false,
     }
     local telescope = require('telescope')
+    local lga_actions = require('telescope-live-grep-args.actions')
     require('keymaps').telescope(require('telescope.builtin'), defaults)
 
     local defaults_and_theme = vim.tbl_extend('force', require('telescope.themes').get_dropdown(), defaults)
@@ -47,6 +48,16 @@ return {
       defaults = defaults_and_theme,
       extensions = {
         ['ui-select'] = { defaults_and_theme, },
+        ['live_grep_args'] = {
+          auto_quoting = true,
+          mappings = {
+            i = {
+              ['<C-w>'] = lga_actions.quote_prompt(),
+              ['<C-i>'] = lga_actions.quote_prompt({ postfix = ' --iglob ', }),
+              ['<C-space>'] = lga_actions.to_fuzzy_refine,
+            },
+          },
+        },
       },
       pickers = {
         buffers = {
