@@ -32,6 +32,7 @@ fn split_cmd_and_args(args: &[String]) -> anyhow::Result<(&str, Vec<&str>)> {
         .ok_or_else(|| anyhow!("cannot parse cmd and args from input args {args:?}"))
 }
 
+// Needed because calling ebi from wezterm open-uri handler doesn't retain the PATH
 fn load_additional_paths() -> anyhow::Result<()> {
     let home = std::env::var("HOME")?;
 

@@ -123,6 +123,8 @@ table.insert(config.hyperlink_rules, {
 })
 
 wezterm.on('open-uri', function(_, pane, uri)
+  -- It would be beautiful to just load the env and PATH and avoid
+  -- pointing to the local bins
   local cmd = {
     os.getenv('HOME') .. '/.local/bin/ebi',
     'open-editor',
