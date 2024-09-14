@@ -1,8 +1,11 @@
+use std::path::Path;
 use std::str::FromStr;
 
 use anyhow::anyhow;
+use anyhow::bail;
 
 use crate::utils::system::silent_cmd;
+use crate::utils::wezterm::WezTermPane;
 
 pub enum Editor {
     Helix,
@@ -48,6 +51,32 @@ pub struct FileToOpen {
     column: i64,
 }
 
+impl TryFrom<(&str, i64, &[WezTermPane])> for FileToOpen {
+    type Error = anyhow::Error;
+
+    fn try_from(
+        (file_to_open, pane_id, panes): (&str, i64, &[WezTermPane]),
+    ) -> Result<Self, Self::Error> {
+        if Path::new(file_to_open).is_absolute() {
+            return Self::from_str(file_to_open);
+        }
+
+        let mut source_pane_absolute_cwd = panes
+            .iter()
+            .find(|p| p.pane_id == pane_id)
+            .ok_or_else(|| anyhow!("no panes matching id {pane_id} in {panes:?}"))?
+            .absolute_cwd();
+
+        source_pane_absolute_cwd.push(file_to_open);
+
+        Self::from_str(
+            source_pane_absolute_cwd.to_str().ok_or_else(|| {
+                anyhow!("cannot get &str from PathBuf {source_pane_absolute_cwd:?}")
+            })?,
+        )
+    }
+}
+
 impl FromStr for FileToOpen {
     type Err = anyhow::Error;
 
@@ -66,6 +95,9 @@ impl FromStr for FileToOpen {
             .map(str::parse::<i64>)
             .transpose()?
             .unwrap_or_default();
+        if !Path::new(path).exists() {
+            bail!("file {path} doesn't exists")
+        }
 
         Ok(Self {
             path: path.into(),
@@ -83,7 +115,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
         ));
     };
 
-    let Some(file_to_open) = args.next().map(FileToOpen::from_str).transpose()? else {
+    let Some(file_to_open) = args.next() else {
         return Err(anyhow!(
             "no input file specified {:?}",
             args.collect::<Vec<_>>()
@@ -96,9 +128,16 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
     }
     .parse()?;
 
-    let editor_pane_id =
-        crate::utils::wezterm::get_sibling_pane_matching_titles(pane_id, editor.pane_titles())
-            .map(|x| x.pane_id)?;
+    let panes = crate::utils::wezterm::get_all_panes()?;
+
+    let file_to_open = FileToOpen::try_from((file_to_open, pane_id, panes.as_slice()))?;
+
+    let editor_pane_id = crate::utils::wezterm::get_sibling_pane_matching_titles(
+        &panes,
+        pane_id,
+        editor.pane_titles(),
+    )
+    .map(|x| x.pane_id)?;
 
     let open_file_cmd = editor.open_file_cmd(&file_to_open);
 

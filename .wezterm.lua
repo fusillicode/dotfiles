@@ -117,32 +117,32 @@ end)
 
 config.hyperlink_rules = wezterm.default_hyperlink_rules()
 
--- table.insert(config.hyperlink_rules, {
---   regex = [[(?<=^|\s)(\./|~/|/)?[\w.-]+(/[^\s/]+)*]],
---   format = '$0',
--- })
---
--- wezterm.on('open-uri', function(_window, pane, uri)
---   wezterm.log_info(uri)
---   -- local cmd =
---   --     'export PATH=~/.local/bin:$PATH && '
---   --     .. 'source ~/.zshenv && '
---   --     .. '~/data/dev/dotfiles/dotfiles/tempura/target/debug/ebi open-editor nv '
---   --     .. uri
---   --     .. ' '
---   --     .. pane:pane_id()
---   --     .. ' 2>&1'
---   -- local cmd = '/Applications/WezTerm.app/Contents/MacOS/wezterm cli --no-auto-start list 2>&1'
---   -- local result, out, err = wezterm.run_child_process({
---   --   '~/data/dev/dotfiles/dotfiles/tempura/target/debug/ebi', 'open-editor', 'nv', uri, pane:pane_id(),
---   -- })
---   -- wezterm.log_info('RESULT LUA ' .. out)
---   -- wezterm.log_info('RESULT LUA ' .. err)
---   -- wezterm.log_info('CMD ' .. cmd)
---   -- local handle = io.popen('/opt/homebrew/bin/wezterm cli list')
---   -- local result = handle:read('*a')
---   -- handle:close()
---   -- wezterm.log_info('RESULT LUA ' .. result)
--- end)
+table.insert(config.hyperlink_rules, {
+  regex = [[(~|/)?[^:\s]+(\:\d+){0,2}]],
+  format = '$0',
+})
+
+wezterm.on('open-uri', function(_, pane, uri)
+  -- It would be beautiful to just load the env and PATH and avoid
+  -- pointing to the local bins
+  local cmd = {
+    os.getenv('HOME') .. '/.local/bin/ebi',
+    'open-editor',
+    'nv',
+    uri,
+    pane:pane_id(),
+  }
+
+  local success, _, err = wezterm.run_child_process(cmd)
+  if not success then
+    -- Logging like this because I don't know how to print
+    -- a table in lua without building a custom helper or rely
+    -- on an external library...
+    wezterm.log_error('Cmd')
+    wezterm.log_error(cmd)
+    wezterm.log_error('Error')
+    wezterm.log_error(err)
+  end
+end)
 
 return config
