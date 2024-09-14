@@ -109,10 +109,10 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
                 // `wezterm cli send-text $'\e'` sends the "ESC" to WezTerm to exit from insert mode
                 // https://github.com/wez/wezterm/discussions/3945
                 r#"
-                    /opt/homebrew/bin/wezterm cli send-text $'\e' --pane-id '{editor_pane_id}' --no-paste && \
-                        /opt/homebrew/bin/wezterm cli send-text '{open_file_cmd}' --pane-id '{editor_pane_id}' --no-paste && \
-                        printf "\r" | /opt/homebrew/bin/wezterm cli send-text --pane-id '{editor_pane_id}' --no-paste && \
-                        /opt/homebrew/bin/wezterm cli activate-pane --pane-id '{editor_pane_id}'
+                    wezterm cli send-text $'\e' --pane-id '{editor_pane_id}' --no-paste && \
+                        wezterm cli send-text '{open_file_cmd}' --pane-id '{editor_pane_id}' --no-paste && \
+                        printf "\r" | wezterm cli send-text --pane-id '{editor_pane_id}' --no-paste && \
+                        wezterm cli activate-pane --pane-id '{editor_pane_id}'
                 "#,
             ),
         ])

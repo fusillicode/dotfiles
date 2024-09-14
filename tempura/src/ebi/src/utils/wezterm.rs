@@ -9,7 +9,7 @@ pub fn get_sibling_pane_matching_titles(
     pane_titles: &[&str],
 ) -> anyhow::Result<WezTermPane> {
     let all_panes: Vec<WezTermPane> = serde_json::from_slice(
-        &Command::new("/opt/homebrew/bin/wezterm")
+        &Command::new("wezterm")
             .args(["cli", "list", "--format", "json"])
             .output()?
             .stdout,
