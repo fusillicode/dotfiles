@@ -122,14 +122,18 @@ table.insert(config.hyperlink_rules, {
   format = '$0',
 })
 
-wezterm.on('open-uri', function(_window, pane, uri)
-  local result, out, err = wezterm.run_child_process({
+wezterm.on('open-uri', function(_, pane, uri)
+  local cmd = {
     '/Users/gianlucarandazzo/data/dev/dotfiles/dotfiles/tempura/target/debug/ebi',
     'open-editor',
     'nv',
     uri,
     pane:pane_id(),
-  })
+  }
+  local success, _, err = wezterm.run_child_process(cmd)
+  if not success then
+    wezterm.log_error('Cmd ' .. vim.inspect(cmd) .. ' returned error ' .. vim.inspect(err))
+  end
 end)
 
 return config
