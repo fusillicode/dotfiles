@@ -118,7 +118,7 @@ end)
 config.hyperlink_rules = wezterm.default_hyperlink_rules()
 
 table.insert(config.hyperlink_rules, {
-  regex = [[(?<=^|\s)(\./|~/|/)?[\w.-]+(/[^\s/]+)*]],
+  regex = [[(~|/)?[^:\s]+(\:\d+){0,2}]],
   format = '$0',
 })
 
@@ -130,6 +130,7 @@ wezterm.on('open-uri', function(_, pane, uri)
     uri,
     pane:pane_id(),
   }
+
   local success, _, err = wezterm.run_child_process(cmd)
   if not success then
     wezterm.log_error('Cmd')
