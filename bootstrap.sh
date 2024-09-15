@@ -115,7 +115,7 @@ cd ./tempura &&
   cd - && \
   rm "$HOME"/.local/bin/ebi && \
   ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/ebi "$HOME"/.local/bin && \
-  ebi install-dev-tools ~/.dev-tools ~/.local/bin && \
+  ebi idt ~/.dev-tools ~/.local/bin && \
   ln -s "$HOME"/data/dev/dotfiles/dotfiles/bin/update_* "$HOME"/.local/bin
 
 # Update & cleanup brew

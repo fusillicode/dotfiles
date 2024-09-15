@@ -3,6 +3,7 @@ use std::process::Command;
 
 use anyhow::anyhow;
 
+/// `cat` or `ls` based on what's supplied, i.e. a file of a directory.
 pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Result<()> {
     let path = args
         .next()

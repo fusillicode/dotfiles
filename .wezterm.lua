@@ -127,7 +127,7 @@ wezterm.on('open-uri', function(_, pane, uri)
   -- pointing to the local bins
   local cmd = {
     os.getenv('HOME') .. '/.local/bin/ebi',
-    'open-editor',
+    'oe',
     'nv',
     uri,
     pane:pane_id(),
