@@ -11,10 +11,10 @@ fn main() -> anyhow::Result<()> {
     load_additional_paths()?;
 
     match cmd {
-        "get-file-path" => cmds::get_file_path::run(args.into_iter()),
-        "get-github-file-link" => cmds::get_github_file_link::run(args.into_iter()),
-        "open-editor" => cmds::open_editor::run(args.into_iter()),
-        "install-dev-tools" => cmds::install_dev_tools::run(args.into_iter()),
+        "yhfp" => cmds::yhfp::run(args.into_iter()),
+        "ghfl" => cmds::yghfl::run(args.into_iter()),
+        "oe" => cmds::oe::run(args.into_iter()),
+        "idt" => cmds::idt::run(args.into_iter()),
         "catl" => cmds::catl::run(args.into_iter()),
         unknown_cmd => Err(anyhow!("unknown cmd '{unknown_cmd}' in args {args:?}")),
     }
