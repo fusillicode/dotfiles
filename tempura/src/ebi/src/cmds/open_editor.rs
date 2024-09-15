@@ -64,7 +64,7 @@ impl TryFrom<(&str, i64, &[WezTermPane])> for FileToOpen {
         let mut source_pane_absolute_cwd = panes
             .iter()
             .find(|p| p.pane_id == pane_id)
-            .ok_or_else(|| anyhow!("no panes matching id {pane_id} in {panes:?}"))?
+            .ok_or_else(|| anyhow!("no panes with id {pane_id} in {panes:?}"))?
             .absolute_cwd();
 
         source_pane_absolute_cwd.push(file_to_open);
@@ -132,7 +132,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
 
     let file_to_open = FileToOpen::try_from((file_to_open, pane_id, panes.as_slice()))?;
 
-    let editor_pane_id = crate::utils::wezterm::get_sibling_pane_matching_titles(
+    let editor_pane_id = crate::utils::wezterm::get_sibling_pane_with_titles(
         &panes,
         pane_id,
         editor.pane_titles(),

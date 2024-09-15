@@ -13,7 +13,7 @@ pub fn get_all_panes() -> anyhow::Result<Vec<WezTermPane>> {
     )?)
 }
 
-pub fn get_sibling_pane_matching_titles(
+pub fn get_sibling_pane_with_titles(
     panes: &[WezTermPane],
     current_pane_id: i64,
     pane_titles: &[&str],
