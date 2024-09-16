@@ -198,7 +198,8 @@ end
 
 function M.multicursor(mc)
   keymap_set('n', '<esc>', function()
-    if mc.hasCursors() then mc.clearCursors() end
+    if not mc.cursorsEnabled() then return mc.enableCursors() end
+    if mc.hasCursors() then return mc.clearCursors() end
     vim.api.nvim_command('noh | echo""')
   end)
 
