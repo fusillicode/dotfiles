@@ -12,7 +12,6 @@ vim.o.autoindent = true
 vim.o.backspace = 'indent,eol,start'
 vim.o.breakindent = true
 vim.o.completeopt = 'menuone,noselect'
-vim.o.cursorline = true
 vim.o.expandtab = true
 vim.o.hlsearch = true
 vim.o.ignorecase = true
