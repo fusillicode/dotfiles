@@ -9,7 +9,6 @@ function M.setup(colorscheme)
 
   for hl, value in pairs({
     ColorColumn = { bg = 'NvimDarkGrey3', },
-    CursorLine = { bg = 'none', },
     StatusLine = { bg = 'none', },
   }) do vim.api.nvim_set_hl(0, hl, value) end
 
