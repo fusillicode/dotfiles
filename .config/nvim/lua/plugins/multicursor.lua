@@ -9,9 +9,6 @@ return {
     local mc = require('multicursor-nvim')
     mc.setup()
 
-    vim.cmd.hi('link', 'MultiCursorCursor', 'Cursor')
-    vim.cmd.hi('link', 'MultiCursorVisual', 'Visual')
-
     require('keymaps').multicursor(mc)
   end,
 }
