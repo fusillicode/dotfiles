@@ -7,12 +7,12 @@ function M.setup(colorscheme)
   vim.o.termguicolors = true
   vim.o.colorcolumn = '120'
 
+  local status_line_hl = { bg = 'none', }
   for hl, value in pairs({
     ColorColumn = { bg = 'NvimDarkGrey3', },
-    StatusLine = { bg = 'none', },
+    StatusLine = status_line_hl,
   }) do vim.api.nvim_set_hl(0, hl, value) end
 
-  local status_line_hl = vim.api.nvim_get_hl(0, { name = 'CursorLine', })
   for _, diagnostic_hl_group in ipairs({
     'DiagnosticError',
     'DiagnosticWarn',
