@@ -13,13 +13,7 @@ function M.setup(colorscheme)
     StatusLine = status_line_hl,
   }) do vim.api.nvim_set_hl(0, hl, value) end
 
-  for _, lvl in ipairs({
-    'Error',
-    'Warn',
-    'Info',
-    'Hint',
-    'Ok',
-  }) do
+  for _, lvl in ipairs({ 'Error', 'Warn', 'Info', 'Hint', 'Ok', }) do
     vim.api.nvim_set_hl(0, 'DiagnosticStatusLine' .. lvl,
       { fg = vim.api.nvim_get_hl(0, { name = 'Diagnostic' .. lvl, }).fg, bg = status_line_hl.bg, }
     )
