@@ -36,18 +36,18 @@ function M.draw()
     end
   end
 
-  return (buffer_errors ~= 0 and '%#DiagnosticErrorStatusLine#' .. 'E:' .. buffer_errors .. ' ' or '')
-      .. (buffer_warns ~= 0 and '%#DiagnosticWarnStatusLine#' .. 'W:' .. buffer_warns .. ' ' or '')
-      .. (buffer_infos ~= 0 and '%#DiagnosticInfoStatusLine#' .. 'I:' .. buffer_infos .. ' ' or '')
-      .. (buffer_hints ~= 0 and '%#DiagnosticHintStatusLine#' .. 'H:' .. buffer_hints .. ' ' or '')
+  return (buffer_errors ~= 0 and '%#DiagnosticStatusLineError#' .. 'E:' .. buffer_errors .. ' ' or '')
+      .. (buffer_warns ~= 0 and '%#DiagnosticStatusLineWarn#' .. 'W:' .. buffer_warns .. ' ' or '')
+      .. (buffer_infos ~= 0 and '%#DiagnosticStatusLineInfo#' .. 'I:' .. buffer_infos .. ' ' or '')
+      .. (buffer_hints ~= 0 and '%#DiagnosticStatusLineHint#' .. 'H:' .. buffer_hints .. ' ' or '')
       .. '%#StatusLine#'
       -- https://stackoverflow.com/a/45244610
       .. current_buffer_path() .. ' %m %r'
       .. '%='
-      .. (workspace_errors ~= 0 and '%#DiagnosticErrorStatusLine#' .. 'E:' .. workspace_errors .. ' ' or '')
-      .. (workspace_warns ~= 0 and '%#DiagnosticWarnStatusLine#' .. 'W:' .. workspace_warns .. ' ' or '')
-      .. (workspace_infos ~= 0 and '%#DiagnosticInfoStatusLine#' .. 'I:' .. workspace_infos .. ' ' or '')
-      .. (workspace_hints ~= 0 and '%#DiagnosticHintStatusLine#' .. 'H:' .. workspace_hints .. ' ' or '')
+      .. (workspace_errors ~= 0 and '%#DiagnosticStatusLineError#' .. 'E:' .. workspace_errors .. ' ' or '')
+      .. (workspace_warns ~= 0 and '%#DiagnosticStatusLineWarn#' .. 'W:' .. workspace_warns .. ' ' or '')
+      .. (workspace_infos ~= 0 and '%#DiagnosticStatusLineInfo#' .. 'I:' .. workspace_infos .. ' ' or '')
+      .. (workspace_hints ~= 0 and '%#DiagnosticStatusLineHint#' .. 'H:' .. workspace_hints .. ' ' or '')
 end
 
 local function redraw()
