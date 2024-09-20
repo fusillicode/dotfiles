@@ -36,6 +36,9 @@ return {
       resultLocation = {
         showNumberLabel = false,
       },
+      keymaps = {
+        swapReplacementInterpreter = { n = '<localleader>v', },
+      },
     }
 
     grug_far.setup(opts)
