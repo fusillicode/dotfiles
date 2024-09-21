@@ -8,5 +8,10 @@ return {
         overrides = {},
       },
     },
+    notification = {
+      window = {
+        align = 'top',
+      },
+    },
   },
 }
