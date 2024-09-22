@@ -54,8 +54,20 @@ function M.core()
   keymap_set('n', '<esc>', require('utils').normal_esc)
   keymap_set('v', '<esc>', require('utils').visual_esc, { expr = true, })
 
-  keymap_set('n', 'dn', vim.diagnostic.goto_next)
-  keymap_set('n', 'dp', vim.diagnostic.goto_prev)
+  keymap_set('n', 'dn', function()
+    local errs = vim.tbl_filter(function(diag)
+      return diag.severity == vim.diagnostic.severity.ERROR
+    end, vim.diagnostic.get(0))
+
+    if #errs > 0 then vim.diagnostic.goto_next({ severity = vim.diagnostic.severity.ERROR, }) end
+  end)
+  keymap_set('n', 'dp', function()
+    local errs = vim.tbl_filter(function(diag)
+      return diag.severity == vim.diagnostic.severity.ERROR
+    end, vim.diagnostic.get(0))
+
+    if #errs > 0 then vim.diagnostic.goto_prev({ severity = vim.diagnostic.severity.ERROR, }) end
+  end)
   keymap_set('n', '<leader>e', vim.diagnostic.open_float)
 
   keymap_set('n', '<leader>gx', require('opener').open_under_cursor)
@@ -97,7 +109,7 @@ function M.telescope(telescope_builtin, defaults)
   keymap_set({ 'n', 'v', }, '<leader>b', with_defaults('buffers', { prompt_prefix = 'Bufs: ', }))
 
   keymap_set('n', '<leader>l', function()
-    require('telescope').extensions.live_grep_args.live_grep_args(
+    require('telescope-live-grep-args.shortcuts').grep_word_under_cursor(
       { preview_title = false, prompt_prefix = 'rg: ', prompt_title = false, results_title = false, }
     )
   end)
