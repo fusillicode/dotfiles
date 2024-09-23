@@ -109,7 +109,7 @@ function M.telescope(telescope_builtin, defaults)
   keymap_set({ 'n', 'v', }, '<leader>b', with_defaults('buffers', { prompt_prefix = 'Bufs: ', }))
 
   keymap_set('n', '<leader>l', function()
-    require('telescope-live-grep-args.shortcuts').grep_word_under_cursor(
+    require('telescope').extensions.live_grep_args.live_grep_args(
       { preview_title = false, prompt_prefix = 'rg: ', prompt_title = false, results_title = false, }
     )
   end)
