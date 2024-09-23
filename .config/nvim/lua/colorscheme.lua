@@ -13,6 +13,7 @@ function M.setup(colorscheme)
   local status_line_hl = { bg = 'none', }
   for hl, value in pairs({
     ColorColumn = { bg = 'NvimDarkGrey3', },
+    CursorLine = { fg = 'none', },
     StatusLine = status_line_hl,
   }) do set_hl(0, hl, value) end
 
