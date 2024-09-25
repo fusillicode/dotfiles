@@ -34,7 +34,7 @@ return {
       },
       layout_strategy = 'center',
       path_display = { 'filename_first', },
-      preview_title = false,
+      dynamic_preview_title = true,
       prompt_title = false,
       results_title = false,
       show_line = false,
