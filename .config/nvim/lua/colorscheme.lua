@@ -16,6 +16,7 @@ function M.setup(colorscheme)
     ColorColumn = { bg = 'NvimDarkGrey3', },
     CursorLine = { fg = 'none', },
     StatusLine = status_line_hl,
+    MsgArea = status_line_hl,
     TelescopePreviewTitle = status_line_hl,
   }) do set_hl(0, hl, value) end
 
