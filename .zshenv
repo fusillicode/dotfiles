@@ -9,6 +9,7 @@ alias gcnuke="git commit --amend --no-edit --no-verify --allow-empty && git push
 alias gcnoke="git commit --amend --no-edit --no-verify --allow-empty"
 alias gbrr="git for-each-ref --sort=committerdate refs/heads/ --format='%(HEAD) %(color:yellow)%(refname:short)%(color:reset) %(color:red)%(objectname:short)%(color:reset) - %(contents:subject) %(color:green)(%(committerdate:relative))%(color:reset) %(color:blue)<%(authorname)>%(color:reset)'"
 alias gdh="git diff HEAD~1"
+alias gu="git fetch --all --prune && git pull origin $(git_current_branch)"
 alias kdebian="kubectl exec -it debian -- bash || kubectl run debian --image=debian:latest --rm -it --restart=Never --command --"
 alias carbo="cargo"
 alias cmc="cargo make clippy"
