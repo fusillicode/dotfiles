@@ -108,12 +108,12 @@ function M.telescope(telescope_builtin, defaults)
   keymap_set({ 'n', 'v', }, '<leader>f', with_defaults('find_files', { prompt_prefix = 'Files: ', }))
   keymap_set({ 'n', 'v', }, '<leader>b', with_defaults('buffers', { prompt_prefix = 'Bufs: ', }))
 
-  keymap_set('n', '<leader>l', function()
+  keymap_set('n', '<leader>w', function()
     require('telescope').extensions.live_grep_args.live_grep_args(
       { prompt_prefix = 'rg: ', prompt_title = false, results_title = false, }
     )
   end)
-  keymap_set('v', '<leader>l', function()
+  keymap_set('v', '<leader>w', function()
     require('telescope-live-grep-args.shortcuts').grep_visual_selection(
       { prompt_prefix = 'rg: ', prompt_title = false, results_title = false, }
     )
@@ -194,14 +194,10 @@ function M.lspconfig()
 end
 
 function M.grug_far(grug_far, opts)
-  keymap_set('n', '<leader>/', function()
+  keymap_set('n', '<leader>l', function()
     grug_far(vim.tbl_deep_extend('force', opts, {}))
   end)
-  keymap_set('n', '<leader>w', function()
-    local search = require('utils').escape_regex(vim.fn.expand('<cword>'))
-    grug_far(vim.tbl_deep_extend('force', opts, { prefills = { search = search, }, }))
-  end)
-  keymap_set('v', '<leader>w', function()
+  keymap_set('v', '<leader>l', function()
     local utils = require('utils')
     local selection = utils.escape_regex(utils.get_visual_selection())
     grug_far(vim.tbl_deep_extend('force', opts, { prefills = { search = selection, }, }))
