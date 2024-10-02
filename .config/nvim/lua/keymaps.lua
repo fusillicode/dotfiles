@@ -8,6 +8,8 @@ function M.core()
   vim.g.mapleader = ' '
   vim.g.maplocalleader = ' '
 
+  keymap_set('t', '<Esc>', '<C-\\><C-n>')
+
   keymap_set('', '<c-n>', ':cn<cr>')
   keymap_set('', '<c-p>', ':cp<cr>')
   keymap_set('', '<c-x>', ':ccl<cr>')
