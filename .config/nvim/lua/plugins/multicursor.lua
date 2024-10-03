@@ -4,6 +4,7 @@ return {
     { '<c-j>', mode = { 'n', }, },
     { '<c-k>', mode = { 'n', }, },
     { '<c-n>', mode = { 'n', }, },
+    { '<c-p>', mode = { 'n', }, },
   },
   config = function()
     local mc = require('multicursor-nvim')
