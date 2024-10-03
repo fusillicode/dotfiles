@@ -213,10 +213,10 @@ function M.multicursor(mc)
     vim.api.nvim_command('noh | echo""')
   end)
 
-  keymap_set('n', '<c-j>', function() mc.addCursor('j') end)
-  keymap_set('n', '<c-k>', function() mc.addCursor('k') end)
-  keymap_set('n', '<c-n>', function() mc.matchAddCursor(1) end)
-  keymap_set('n', '<c-p>', function() mc.matchAddCursor(-1) end)
+  keymap_set({ 'n', 'v', }, '<c-j>', function() mc.addCursor('j') end)
+  keymap_set({ 'n', 'v', }, '<c-k>', function() mc.addCursor('k') end)
+  keymap_set({ 'n', 'v', }, '<c-n>', function() mc.matchAddCursor(1) end)
+  keymap_set({ 'n', 'v', }, '<c-p>', function() mc.matchAddCursor(-1) end)
 end
 
 return M
