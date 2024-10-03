@@ -215,7 +215,8 @@ function M.multicursor(mc)
 
   keymap_set('n', '<c-j>', function() mc.addCursor('j') end)
   keymap_set('n', '<c-k>', function() mc.addCursor('k') end)
-  keymap_set('n', '<c-n>', function() mc.addCursor('*') end)
+  keymap_set('n', '<c-n>', function() mc.matchAddCursor(1) end)
+  keymap_set('n', '<c-p>', function() mc.matchAddCursor(-1) end)
 end
 
 return M
