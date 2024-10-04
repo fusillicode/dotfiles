@@ -18,19 +18,8 @@ return {
     local luasnip = require('luasnip')
 
     require('luasnip.loaders.from_vscode').load({ paths = { './snippets', }, })
-    -- require('codeium').setup({})
 
     cmp.event:on('confirm_done', require('nvim-autopairs.completion.cmp').on_confirm_done())
-
-    local ok, ika = pcall(require, 'ika')
-    if ok then
-      local ika_source = {}
-      function ika_source:complete(params, callback)
-        ika.complete({ params = params, callback = callback, })
-      end
-
-      cmp.register_source('ika', ika_source)
-    end
 
     cmp.setup({
       experimental = { ghost_text = true, },
