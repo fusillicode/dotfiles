@@ -10,9 +10,6 @@ function M.core()
 
   keymap_set('t', '<Esc>', '<C-\\><C-n>')
 
-  keymap_set('', '<c-n>', ':cn<cr>')
-  keymap_set('', '<c-p>', ':cp<cr>')
-  keymap_set('', '<c-x>', ':ccl<cr>')
   -- https://stackoverflow.com/a/3003636
   keymap_set('n', 'i', function()
     return (vim.fn.empty(vim.fn.getline('.')) == 1 and '\"_cc' or 'i')
@@ -217,6 +214,13 @@ function M.multicursor(mc)
   keymap_set({ 'n', 'v', }, '<c-k>', function() mc.addCursor('k') end)
   keymap_set({ 'n', 'v', }, '<c-n>', function() mc.matchAddCursor(1) end)
   keymap_set({ 'n', 'v', }, '<c-p>', function() mc.matchAddCursor(-1) end)
+end
+
+function M.quickfix()
+  local opts = { noremap = true, buffer = true, }
+  keymap_set('n', '<c-n>', ':cn<cr>', opts)
+  keymap_set('n', '<c-p>', ':cp<cr>', opts)
+  keymap_set('n', '<c-x>', ':ccl<cr>', opts)
 end
 
 return M
