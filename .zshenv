@@ -46,6 +46,10 @@ gt () {
   git ls-remote --tags
 }
 
+gcmm () {
+  git commit -m $1
+}
+
 # Easy K8S
 klfir() {
   kubectl get pods | rg "$1" | head -n 1 | rg "^(\S*).*" -r '$1' | xargs -I {} kubectl logs -f {} "$2"
