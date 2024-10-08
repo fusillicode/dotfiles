@@ -16,13 +16,13 @@ return {
     local defaults = {
       mappings = {
         ['i'] = {
-          ['<C-a>'] = function() vim.cmd('normal! ^') end,
-          ['<C-e>'] = function() vim.cmd('normal! $') end,
-          ['<C-b>'] = function() vim.cmd('normal! h') end,
-          ['<C-f>'] = function() vim.cmd('normal! l') end,
-          ['<A-f>'] = function() vim.cmd('normal! w') end,
-          ['<A-b>'] = function() vim.cmd('normal! b') end,
-          ['<C-k>'] = function() vim.cmd('normal! d$') end,
+          ['<c-a>'] = function() vim.cmd('normal! ^') end,
+          ['<c-e>'] = function() vim.cmd('normal! $') end,
+          ['<c-b>'] = function() vim.cmd('normal! h') end,
+          ['<c-f>'] = function() vim.cmd('normal! l') end,
+          ['<a-f>'] = function() vim.cmd('normal! w') end,
+          ['<a-b>'] = function() vim.cmd('normal! b') end,
+          ['<c-k>'] = function() vim.cmd('normal! d$') end,
           ['<esc>'] = require('telescope.actions').close,
         },
       },
