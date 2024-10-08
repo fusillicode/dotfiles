@@ -52,9 +52,9 @@ return {
           auto_quoting = true,
           mappings = {
             i = {
-              ['<C-w>'] = lga_actions.quote_prompt(),
-              ['<C-i>'] = lga_actions.quote_prompt({ postfix = ' --iglob ', }),
-              ['<C-space>'] = lga_actions.to_fuzzy_refine,
+              ['<c-w>'] = lga_actions.quote_prompt(),
+              ['<c-i>'] = lga_actions.quote_prompt({ postfix = ' --iglob ', }),
+              ['<c-f>'] = require('telescope.actions').to_fuzzy_refine,
             },
           },
         },
