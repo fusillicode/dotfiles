@@ -17,7 +17,7 @@
   "gitsigns.nvim": { "branch": "main", "commit": "863903631e676b33e8be2acb17512fdc1b80b4fb" },
   "grug-far.nvim": { "branch": "main", "commit": "f47594f05d10b0bedfc0ed78e488e7fd714d57be" },
   "lazy.nvim": { "branch": "main", "commit": "1159bdccd8910a0fd0914b24d6c3d186689023d9" },
-  "magazine.nvim": { "branch": "main", "commit": "4aec249cdcef9b269e962bf73ef976181ee7fdd9" },
+  "magazine.nvim": { "branch": "main", "commit": "a0ba161706147d010c015807380d3ea840ad7ef8" },
   "multicursor.nvim": { "branch": "main", "commit": "e2831091b3b514c882de7d599bfbe0d7b99bc73f" },
   "nvim-autopairs": { "branch": "master", "commit": "ee297f215e95a60b01fde33275cc3c820eddeebe" },
   "nvim-lint": { "branch": "master", "commit": "f707b3ae50417067fa63fdfe179b0bff6b380da1" },
