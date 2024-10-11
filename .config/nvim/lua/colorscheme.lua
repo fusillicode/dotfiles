@@ -10,7 +10,7 @@ function M.setup(colorscheme)
   vim.o.termguicolors = true
   vim.o.colorcolumn = '120'
 
-  local status_line_hl = { fg = 'gray', bg = 'none', bold = true, }
+  local status_line_hl = { fg = 'gray', bg = 'none', }
 
   for hl, value in pairs({
     ColorColumn = { bg = 'NvimDarkGrey3', },
