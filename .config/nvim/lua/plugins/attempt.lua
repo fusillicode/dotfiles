@@ -10,12 +10,19 @@ return {
       autosave = true,
       list_buffers = true,
       initial_content = {
-        sh = '#!/usr/bin/env bash\n\nset -euo pipefail',
         json = '{}',
         md = '# README.md',
         rs = 'fn main() {\n  println!("Hello, world!");\n}',
+        sh = '#!/usr/bin/env bash\n\nset -euo pipefail',
+        sql = 'select * from where',
       },
-      ext_options = { 'sh', 'json', 'md', 'rs', },
+      ext_options = {
+        'json',
+        'md',
+        'rs',
+        'sh',
+        'sql',
+      },
     })
   end,
 }
