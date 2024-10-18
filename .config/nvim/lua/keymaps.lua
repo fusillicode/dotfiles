@@ -176,6 +176,7 @@ function M.gitsigns(gitsigns)
     return '<Ignore>'
   end, { expr = true, })
 
+  keymap_set('n', '<leader>hd', gitsigns.preview_hunk)
   keymap_set('n', '<leader>hs', gitsigns.stage_hunk)
   keymap_set('n', '<leader>hr', gitsigns.reset_hunk)
   keymap_set('v', '<leader>hs', function() gitsigns.stage_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end)
