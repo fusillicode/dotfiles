@@ -46,7 +46,7 @@ gt () {
   git ls-remote --tags
 }
 
-gcmm () {
+gmm () {
   git commit -m $1
 }
 
