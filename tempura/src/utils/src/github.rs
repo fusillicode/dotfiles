@@ -77,10 +77,10 @@ fn extract_pr_id_form_pr_url(pr_url: &Url) -> anyhow::Result<String> {
         .ok_or_else(|| anyhow!("missing PR id in {path_segments:?} of {pr_url}"))?;
 
     const PR_ID_PREFIX: &str = "pull";
-    if path_segments
+    if !(path_segments
         .get(1)
         .ok_or_else(|| anyhow!("missing PR id prefix {path_segments:?} of {pr_url}"))?
-        == &PR_ID_PREFIX
+        == &PR_ID_PREFIX)
     {
         bail!("PR prefix in {pr_url} not matching {PR_ID_PREFIX}");
     }
