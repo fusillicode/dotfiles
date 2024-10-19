@@ -13,17 +13,17 @@ return {
     'nvim-telescope/telescope-live-grep-args.nvim',
   },
   config = function()
+    local telescope_actions = require('telescope.actions')
     local defaults = {
       mappings = {
         ['i'] = {
           ['<c-a>'] = function() vim.cmd('normal! ^') end,
           ['<c-e>'] = function() vim.cmd('normal! $') end,
-          ['<c-b>'] = function() vim.cmd('normal! h') end,
-          ['<c-f>'] = function() vim.cmd('normal! l') end,
-          ['<a-f>'] = function() vim.cmd('normal! w') end,
-          ['<a-b>'] = function() vim.cmd('normal! b') end,
+          ['<c-w>'] = function() vim.cmd('normal! w') end,
+          ['<c-b>'] = function() vim.cmd('normal! b') end,
           ['<c-k>'] = function() vim.cmd('normal! d$') end,
-          ['<esc>'] = require('telescope.actions').close,
+          ['<c-f>'] = telescope_actions.to_fuzzy_refine,
+          ['<esc>'] = telescope_actions.close,
         },
       },
       layout_config = {
@@ -52,9 +52,9 @@ return {
           auto_quoting = true,
           mappings = {
             i = {
-              ['<c-w>'] = lga_actions.quote_prompt(),
+              ['<c-s>'] = lga_actions.quote_prompt(),
               ['<c-i>'] = lga_actions.quote_prompt({ postfix = ' --iglob ', }),
-              ['<c-f>'] = require('telescope.actions').to_fuzzy_refine,
+              ['<c-f>'] = telescope_actions.to_fuzzy_refine,
             },
           },
           vimgrep_arguments = {
