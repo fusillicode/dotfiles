@@ -1,12 +1,12 @@
 use crate::Installer;
 use utils::system::silent_cmd;
 
-pub struct TaploInstaller {
+pub struct Taplo {
     pub bin_dir: String,
 }
 
-impl Installer for TaploInstaller {
-    fn bin(&self) -> &'static str {
+impl Installer for Taplo {
+    fn bin_name(&self) -> &'static str {
         "taplo"
     }
 
@@ -17,7 +17,7 @@ impl Installer for TaploInstaller {
         silent_cmd("cargo")
             .args([
                 "install",
-                &format!("{}-cli", self.bin()),
+                &format!("{}-cli", self.bin_name()),
                 "--force",
                 "--all-features",
                 "--root",

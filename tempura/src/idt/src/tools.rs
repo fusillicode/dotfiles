@@ -31,7 +31,7 @@ pub mod vscode_langservers;
 pub mod yaml_language_server;
 
 pub trait Installer: Sync + Send {
-    fn bin(&self) -> &'static str;
+    fn bin_name(&self) -> &'static str;
     fn install(&self) -> anyhow::Result<()>;
 }
 

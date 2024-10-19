@@ -1,25 +1,25 @@
 use crate::Installer;
 
-pub struct CommitlintInstaller {
+pub struct Commitlint {
     pub dev_tools_dir: String,
     pub bin_dir: String,
 }
 
-impl Installer for CommitlintInstaller {
-    fn bin(&self) -> &'static str {
+impl Installer for Commitlint {
+    fn bin_name(&self) -> &'static str {
         "commitlint"
     }
 
     fn install(&self) -> anyhow::Result<()> {
         crate::installers::npm_install::run(
             &self.dev_tools_dir,
-            self.bin(),
+            self.bin_name(),
             &[
-                &format!("@{}/cli", self.bin()),
-                &format!("@{}/config-conventional", self.bin()),
+                &format!("@{}/cli", self.bin_name()),
+                &format!("@{}/config-conventional", self.bin_name()),
             ],
             &self.bin_dir,
-            self.bin(),
+            self.bin_name(),
         )
     }
 }

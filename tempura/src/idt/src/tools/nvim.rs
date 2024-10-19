@@ -1,21 +1,21 @@
 use crate::Installer;
 use utils::system::silent_cmd;
 
-pub struct NvimInstaller {
+pub struct Nvim {
     pub dev_tools_dir: String,
     pub bin_dir: String,
 }
 
-impl Installer for NvimInstaller {
-    fn bin(&self) -> &'static str {
+impl Installer for Nvim {
+    fn bin_name(&self) -> &'static str {
         "nvim"
     }
 
     fn install(&self) -> anyhow::Result<()> {
         // Compiling from sources because I can checkout specific refs in case of broken nightly builds.
         // Moreover...it's pretty badass 😎
-        let nvim_source_dir = format!("{}/{}/source", self.dev_tools_dir, self.bin());
-        let nvim_release_dir = format!("{}/{}/release", self.dev_tools_dir, self.bin());
+        let nvim_source_dir = format!("{}/{}/source", self.dev_tools_dir, self.bin_name());
+        let nvim_release_dir = format!("{}/{}/release", self.dev_tools_dir, self.bin_name());
 
         Ok(silent_cmd("sh")
         .args([
@@ -32,7 +32,7 @@ impl Installer for NvimInstaller {
                     make install && \
                     ln -sf {nvim_release_dir}/bin/{} {}
                 "#,
-                self.bin(),
+                self.bin_name(),
                 self.bin_dir
             ),
         ])

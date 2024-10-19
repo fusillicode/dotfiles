@@ -1,22 +1,22 @@
 use crate::Installer;
 
-pub struct TypescriptLanguageServerInstaller {
+pub struct TypescriptLanguageServer {
     pub dev_tools_dir: String,
     pub bin_dir: String,
 }
 
-impl Installer for TypescriptLanguageServerInstaller {
-    fn bin(&self) -> &'static str {
+impl Installer for TypescriptLanguageServer {
+    fn bin_name(&self) -> &'static str {
         "typescript-language-server"
     }
 
     fn install(&self) -> anyhow::Result<()> {
         crate::installers::npm_install::run(
             &self.dev_tools_dir,
-            self.bin(),
-            &[self.bin(), "typescript"],
+            self.bin_name(),
+            &[self.bin_name(), "typescript"],
             &self.bin_dir,
-            self.bin(),
+            self.bin_name(),
         )
     }
 }
