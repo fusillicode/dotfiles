@@ -2,6 +2,13 @@
 resolver = "2"
 members = ["src/*"]
 
+[workspace.dependencies]
+anyhow = { version = "1.0", features = ["backtrace"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0" }
+url = { version = "2.5", features = ["serde"] }
+utils = { path = "./src/utils" }
+
 [profile.test]
 # Reduces the size of the target directory
 debug = false

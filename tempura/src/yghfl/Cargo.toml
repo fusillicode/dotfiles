@@ -1,0 +1,17 @@
+[package]
+name = "yghfl"
+version = "0.1.0"
+authors = ["Gian Lu"]
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+url = { workspace = true }
+utils = { workspace = true }
+
+[dev-dependencies]
+fake = { version = "2.9", features = ["derive"] }
+temp-env = { version = "0.3" }
+utils = { path = "../utils", features = ["fake"] }

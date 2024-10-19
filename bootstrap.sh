@@ -109,13 +109,21 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/mas
 # Requirements for nvim
 brew install ninja cmake gettext curl
 
-# Setup ~/.dev_tools & ~/.local/bin
+# Setup ~/.local/bin & ~/.dev_tools
 cd ./tempura &&
   cargo build --release && \
   cd - && \
-  rm "$HOME"/.local/bin/ebi && \
-  ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/ebi "$HOME"/.local/bin && \
-  ebi idt ~/.dev-tools ~/.local/bin && \
+  rm -f "$HOME"/.local/bin/catl && \
+  ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/catl "$HOME"/.local/bin && \
+  rm -f "$HOME"/.local/bin/idt && \
+  ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/idt "$HOME"/.local/bin && \
+  rm -f "$HOME"/.local/bin/oe && \
+  ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/oe "$HOME"/.local/bin && \
+  rm -f "$HOME"/.local/bin/yghfl && \
+  ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/yghfl "$HOME"/.local/bin && \
+  rm -f "$HOME"/.local/bin/yhfp && \
+  ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/yhfp "$HOME"/.local/bin && \
+  "$HOME"/.local/bin/idt ~/.dev-tools ~/.local/bin && \
   ln -s "$HOME"/data/dev/dotfiles/dotfiles/bin/update_* "$HOME"/.local/bin
 
 # Update & cleanup brew
