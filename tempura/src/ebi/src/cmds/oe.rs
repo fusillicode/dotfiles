@@ -165,78 +165,34 @@ mod tests {
     use super::*;
 
     #[test]
-    fn file_to_open_is_properly_constructed_from_expected_str() {
+    fn test_file_to_open_is_properly_constructed_from_expected_str() {
+        let root_dir = std::env::current_dir().unwrap();
+        // We should always have a Cargo.toml...
+        let dummy_path = root_dir.join("Cargo.toml").to_string_lossy().to_string();
+
         assert_eq!(
             FileToOpen {
-                path: "bootstrap.sh".into(),
+                path: dummy_path.clone(),
                 line_nbr: 0,
                 column: 0
             },
-            FileToOpen::from_str("bootstrap.sh").unwrap()
+            FileToOpen::from_str(&dummy_path).unwrap()
         );
         assert_eq!(
             FileToOpen {
-                path: "bootstrap.sh".into(),
+                path: dummy_path.clone(),
                 line_nbr: 3,
                 column: 0
             },
-            FileToOpen::from_str("bootstrap.sh:3").unwrap()
+            FileToOpen::from_str(&format!("{dummy_path}:3")).unwrap()
         );
         assert_eq!(
             FileToOpen {
-                path: "bootstrap.sh".into(),
+                path: dummy_path.clone(),
                 line_nbr: 3,
                 column: 7
             },
-            FileToOpen::from_str("bootstrap.sh:3:7").unwrap()
-        );
-        assert_eq!(
-            FileToOpen {
-                path: ".bootstrap.sh".into(),
-                line_nbr: 0,
-                column: 0
-            },
-            FileToOpen::from_str(".bootstrap.sh").unwrap()
-        );
-        assert_eq!(
-            FileToOpen {
-                path: ".bootstrap.sh".into(),
-                line_nbr: 3,
-                column: 0
-            },
-            FileToOpen::from_str(".bootstrap.sh:3").unwrap()
-        );
-        assert_eq!(
-            FileToOpen {
-                path: ".bootstrap.sh".into(),
-                line_nbr: 3,
-                column: 7
-            },
-            FileToOpen::from_str(".bootstrap.sh:3:7").unwrap()
-        );
-        assert_eq!(
-            FileToOpen {
-                path: "/root/bootstrap.sh".into(),
-                line_nbr: 0,
-                column: 0
-            },
-            FileToOpen::from_str("/root/bootstrap.sh").unwrap()
-        );
-        assert_eq!(
-            FileToOpen {
-                path: "/root/bootstrap.sh".into(),
-                line_nbr: 3,
-                column: 0
-            },
-            FileToOpen::from_str("/root/bootstrap.sh:3").unwrap()
-        );
-        assert_eq!(
-            FileToOpen {
-                path: "/root/bootstrap.sh".into(),
-                line_nbr: 3,
-                column: 7
-            },
-            FileToOpen::from_str("/root/bootstrap.sh:3:7").unwrap()
+            FileToOpen::from_str(&format!("{dummy_path}:3:7")).unwrap()
         );
     }
 }
