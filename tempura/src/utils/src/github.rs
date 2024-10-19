@@ -1,6 +1,6 @@
 use std::process::Command;
 
-use crate::utils::system::silent_cmd;
+use crate::system::silent_cmd;
 
 pub fn log_into_github() -> anyhow::Result<()> {
     if silent_cmd("gh")

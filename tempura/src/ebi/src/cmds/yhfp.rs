@@ -3,14 +3,15 @@ use std::str::FromStr;
 
 use anyhow::anyhow;
 
+use utils::hx::HxStatusLine;
+
 use crate::cmds::oe::Editor;
-use crate::utils::hx::HxStatusLine;
 
 /// Yank file path displayed in the status line of the first Helix instance found running alongside
 /// the Wezterm pane from where the cmd has been invoked.
 pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
-    let hx_pane_id = crate::utils::wezterm::get_sibling_pane_with_titles(
-        &crate::utils::wezterm::get_all_panes()?,
+    let hx_pane_id = utils::wezterm::get_sibling_pane_with_titles(
+        &utils::wezterm::get_all_panes()?,
         std::env::var("WEZTERM_PANE")?.parse()?,
         Editor::Helix.pane_titles(),
     )?
@@ -29,7 +30,7 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
 
     let hx_status_line = HxStatusLine::from_str(hx_status_line)?;
 
-    crate::utils::system::copy_to_system_clipboard(
+    utils::system::copy_to_system_clipboard(
         &mut format_hx_status_line(&hx_status_line)?.as_bytes(),
     )?;
 

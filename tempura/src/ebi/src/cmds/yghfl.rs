@@ -9,17 +9,18 @@ use anyhow::anyhow;
 use anyhow::bail;
 use url::Url;
 
+use utils::hx::HxCursorPosition;
+use utils::hx::HxStatusLine;
+use utils::wezterm::get_sibling_pane_with_titles;
+use utils::wezterm::WezTermPane;
+
 use crate::cmds::oe::Editor;
-use crate::utils::hx::HxCursorPosition;
-use crate::utils::hx::HxStatusLine;
-use crate::utils::wezterm::get_sibling_pane_with_titles;
-use crate::utils::wezterm::WezTermPane;
 
 /// Yank link to GitHub of the file displayed in the status line of the first Helix instance found running alongside
 /// the Wezterm pane from where the cmd has been invoked.
 pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
     let hx_pane = get_sibling_pane_with_titles(
-        &crate::utils::wezterm::get_all_panes()?,
+        &utils::wezterm::get_all_panes()?,
         std::env::var("WEZTERM_PANE")?.parse()?,
         Editor::Helix.pane_titles(),
     )?;
@@ -69,13 +70,13 @@ pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
         build_hx_cursor_absolute_file_path(&hx_status_line.file_path, &hx_pane)?;
 
     let github_link = build_github_link(
-        &crate::utils::system::join(get_github_repo_url)?,
-        &crate::utils::system::join(get_git_current_branch)?,
+        &utils::system::join(get_github_repo_url)?,
+        &utils::system::join(get_git_current_branch)?,
         hx_cursor_absolute_file_path.strip_prefix(git_repo_root.as_ref())?,
         &hx_status_line.position,
     )?;
 
-    crate::utils::system::copy_to_system_clipboard(&mut github_link.as_str().as_bytes())?;
+    utils::system::copy_to_system_clipboard(&mut github_link.as_str().as_bytes())?;
 
     Ok(())
 }

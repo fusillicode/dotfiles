@@ -5,7 +5,7 @@ use anyhow::anyhow;
 use anyhow::bail;
 
 #[derive(Debug, PartialEq)]
-#[cfg_attr(any(test), derive(fake::Dummy))]
+#[cfg_attr(any(test, feature = "fake"), derive(fake::Dummy))]
 pub struct HxStatusLine {
     pub file_path: PathBuf,
     pub position: HxCursorPosition,
@@ -43,7 +43,7 @@ impl FromStr for HxStatusLine {
 }
 
 #[derive(Debug, PartialEq)]
-#[cfg_attr(any(test), derive(fake::Dummy))]
+#[cfg_attr(any(test, feature = "fake"), derive(fake::Dummy))]
 pub struct HxCursorPosition {
     pub line: usize,
     pub column: usize,

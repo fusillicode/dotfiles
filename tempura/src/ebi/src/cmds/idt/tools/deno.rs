@@ -15,7 +15,7 @@ impl Installer for DenoInstaller {
 
     fn install(&self) -> anyhow::Result<()> {
         let repo = format!("{0}land/{0}", self.bin());
-        let latest_release = crate::utils::github::get_latest_release(&repo)?;
+        let latest_release = utils::github::get_latest_release(&repo)?;
 
         crate::cmds::idt::curl_install::run(
             &format!(

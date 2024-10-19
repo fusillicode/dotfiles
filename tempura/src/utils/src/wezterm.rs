@@ -36,7 +36,7 @@ pub fn get_sibling_pane_with_titles(
 }
 
 #[derive(Debug, Deserialize, Clone)]
-#[cfg_attr(any(test), derive(fake::Dummy))]
+#[cfg_attr(any(test, feature = "fake"), derive(fake::Dummy))]
 #[allow(dead_code)]
 pub struct WezTermPane {
     pub window_id: i64,
@@ -72,7 +72,7 @@ impl WezTermPane {
 }
 
 #[derive(Debug, Deserialize, Clone)]
-#[cfg_attr(any(test), derive(fake::Dummy))]
+#[cfg_attr(any(test, feature = "fake"), derive(fake::Dummy))]
 #[allow(dead_code)]
 pub struct WezTermPaneSize {
     pub rows: i64,

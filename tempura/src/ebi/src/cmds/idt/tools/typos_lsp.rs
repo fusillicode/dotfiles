@@ -14,7 +14,7 @@ impl Installer for TyposLspInstaller {
 
     fn install(&self) -> anyhow::Result<()> {
         let repo = "tekumara/typos-vscode";
-        let latest_release = crate::utils::github::get_latest_release(repo)?;
+        let latest_release = utils::github::get_latest_release(repo)?;
 
         crate::cmds::idt::curl_install::run(
             &format!("https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}-aarch64-apple-darwin.tar.gz", self.bin()),

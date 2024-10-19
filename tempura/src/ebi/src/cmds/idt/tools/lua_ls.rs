@@ -17,7 +17,7 @@ impl Installer for LuaLanguageServer {
         // the `bin` there.
         let repo = format!("LuaLS/{}", self.bin());
         let dev_tools_repo_dir = format!("{}/{}", self.dev_tools_dir, self.bin());
-        let latest_release = crate::utils::github::get_latest_release(&repo)?;
+        let latest_release = utils::github::get_latest_release(&repo)?;
         std::fs::create_dir_all(&dev_tools_repo_dir)?;
 
         crate::cmds::idt::curl_install::run(

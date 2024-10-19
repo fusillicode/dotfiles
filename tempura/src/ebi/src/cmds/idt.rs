@@ -55,7 +55,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
     std::fs::create_dir_all(dev_tools_dir)?;
     std::fs::create_dir_all(bin_dir)?;
 
-    crate::utils::github::log_into_github()?;
+    utils::github::log_into_github()?;
 
     let installers: Vec<Box<dyn Installer>> = vec![
         Box::new(BashLanguageServerInstaller {
@@ -189,8 +189,8 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str> + Debug) -> anyhow::Resul
             });
     });
 
-    crate::utils::system::rm_dead_symlinks(bin_dir)?;
-    crate::utils::system::chmod_x(&format!("{bin_dir}/*"))?;
+    utils::system::rm_dead_symlinks(bin_dir)?;
+    utils::system::chmod_x(&format!("{bin_dir}/*"))?;
 
     Ok(())
 }

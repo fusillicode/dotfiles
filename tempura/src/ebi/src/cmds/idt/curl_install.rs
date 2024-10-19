@@ -4,7 +4,7 @@ use std::io::Write;
 use std::process::Command;
 use std::process::Stdio;
 
-use crate::utils::system::silent_cmd;
+use utils::system::silent_cmd;
 
 pub enum OutputOption<'a> {
     UnpackVia(Command, &'a str),

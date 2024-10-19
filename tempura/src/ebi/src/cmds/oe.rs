@@ -4,8 +4,8 @@ use std::str::FromStr;
 use anyhow::anyhow;
 use anyhow::bail;
 
-use crate::utils::system::silent_cmd;
-use crate::utils::wezterm::WezTermPane;
+use utils::system::silent_cmd;
+use utils::wezterm::WezTermPane;
 
 /// Open the supplied file path in a running editor (Neovim or Helix) instance alongside the
 /// Wezterm pane from where the cmd has been invoked.
@@ -31,12 +31,12 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
     }
     .parse()?;
 
-    let panes = crate::utils::wezterm::get_all_panes()?;
+    let panes = utils::wezterm::get_all_panes()?;
 
     let file_to_open = FileToOpen::try_from((file_to_open, pane_id, panes.as_slice()))?;
 
     let editor_pane_id =
-        crate::utils::wezterm::get_sibling_pane_with_titles(&panes, pane_id, editor.pane_titles())
+        utils::wezterm::get_sibling_pane_with_titles(&panes, pane_id, editor.pane_titles())
             .map(|x| x.pane_id)?;
 
     let open_file_cmd = editor.open_file_cmd(&file_to_open);

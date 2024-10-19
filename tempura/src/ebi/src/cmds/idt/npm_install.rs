@@ -1,4 +1,4 @@
-use crate::utils::system::silent_cmd;
+use utils::system::silent_cmd;
 
 pub fn run(
     dev_tools_dir: &str,

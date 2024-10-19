@@ -14,7 +14,7 @@ impl Installer for ValeInstaller {
 
     fn install(&self) -> anyhow::Result<()> {
         let repo = format!("errata-ai/{}", self.bin());
-        let latest_release = crate::utils::github::get_latest_release(&repo)?;
+        let latest_release = utils::github::get_latest_release(&repo)?;
 
         crate::cmds::idt::curl_install::run(
             &format!("https://github.com/{repo}/releases/download/{latest_release}/{}_{}_macOS_arm64.tar.gz", self.bin(), latest_release[1..].to_owned()),

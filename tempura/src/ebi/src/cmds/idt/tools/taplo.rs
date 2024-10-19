@@ -1,5 +1,5 @@
 use crate::cmds::idt::tools::Installer;
-use crate::utils::system::silent_cmd;
+use utils::system::silent_cmd;
 
 pub struct TaploInstaller {
     pub bin_dir: String,

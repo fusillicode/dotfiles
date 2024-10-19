@@ -14,7 +14,7 @@ impl Installer for TerraformLsInstaller {
 
     fn install(&self) -> anyhow::Result<()> {
         let repo = format!("hashicorp/{}", self.bin());
-        let latest_release = &crate::utils::github::get_latest_release(&repo)?[1..];
+        let latest_release = &utils::github::get_latest_release(&repo)?[1..];
 
         crate::cmds::idt::curl_install::run(
             &format!("https://releases.hashicorp.com/{0}/{latest_release}/{0}_{latest_release}_darwin_arm64.zip", self.bin()),
