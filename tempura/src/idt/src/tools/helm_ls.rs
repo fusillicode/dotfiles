@@ -1,12 +1,12 @@
 use crate::installers::curl_install::OutputOption;
 use crate::Installer;
 
-pub struct HelmLsInstaller {
+pub struct HelmLs {
     pub bin_dir: String,
 }
 
-impl Installer for HelmLsInstaller {
-    fn bin(&self) -> &'static str {
+impl Installer for HelmLs {
+    fn bin_name(&self) -> &'static str {
         "helm_ls"
     }
 
@@ -14,9 +14,9 @@ impl Installer for HelmLsInstaller {
         crate::installers::curl_install::run(
             &format!(
                 "https://github.com/mrjosh/helm-ls/releases/latest/download/{}_darwin_amd64",
-                self.bin()
+                self.bin_name()
             ),
-            OutputOption::WriteTo(&format!("{}/{}", self.bin_dir, self.bin())),
+            OutputOption::WriteTo(&format!("{}/{}", self.bin_dir, self.bin_name())),
         )
     }
 }
