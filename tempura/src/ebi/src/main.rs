@@ -14,7 +14,6 @@ fn main() -> anyhow::Result<()> {
         "yghfl" => cmds::yghfl::run(args.into_iter()),
         "oe" => cmds::oe::run(args.into_iter()),
         "idt" => cmds::idt::run(args.into_iter()),
-        "catl" => cmds::catl::run(args.into_iter()),
         unknown_cmd => Err(anyhow!("unknown cmd '{unknown_cmd}' in args {args:?}")),
     }
 }
