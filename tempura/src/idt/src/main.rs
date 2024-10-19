@@ -39,7 +39,7 @@ mod tools;
 
 /// Install Dev Tools
 fn main() -> anyhow::Result<()> {
-    let args = utils::get_args();
+    let args = utils::system::get_args();
 
     let dev_tools_dir = args
         .first()

@@ -126,8 +126,7 @@ wezterm.on('open-uri', function(_, pane, uri)
   -- It would be beautiful to just load the env and PATH and avoid
   -- pointing to the local bins
   local cmd = {
-    os.getenv('HOME') .. '/.local/bin/ebi',
-    'oe',
+    os.getenv('HOME') .. '/.local/bin/oe',
     'nv',
     uri,
     pane:pane_id(),

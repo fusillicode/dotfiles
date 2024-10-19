@@ -11,7 +11,8 @@ use utils::system::silent_cmd;
 /// Wezterm pane from where the cmd has been invoked.
 /// Used both as a CLI and from Wezterm `open-uri` handler.
 fn main() -> anyhow::Result<()> {
-    let args = utils::get_args();
+    load_additional_paths()?;
+    let args = utils::system::get_args();
 
     let Some(editor) = args.first().map(|x| Editor::from_str(x)).transpose()? else {
         return Err(anyhow!("no editor specified {:?}", args));
@@ -53,5 +54,20 @@ fn main() -> anyhow::Result<()> {
         ])
         .spawn()?;
 
+    Ok(())
+}
+
+// Needed because calling oe from wezterm open-uri handler doesn't retain the PATH
+pub fn load_additional_paths() -> anyhow::Result<()> {
+    let home = std::env::var("HOME")?;
+
+    let new_path = [
+        &std::env::var("PATH").unwrap_or_else(|_| String::new()),
+        "/opt/homebrew/bin",
+        &format!("{home}/.local/bin"),
+    ]
+    .join(":");
+
+    std::env::set_var("PATH", &new_path);
     Ok(())
 }

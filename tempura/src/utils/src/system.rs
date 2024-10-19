@@ -5,6 +5,12 @@ use std::thread::JoinHandle;
 use anyhow::anyhow;
 use anyhow::bail;
 
+pub fn get_args() -> Vec<String> {
+    let mut args = std::env::args();
+    args.next();
+    args.collect::<Vec<String>>()
+}
+
 pub fn join<T>(join_handle: JoinHandle<anyhow::Result<T>>) -> Result<T, anyhow::Error> {
     join_handle
         .join()

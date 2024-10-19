@@ -5,7 +5,7 @@ use anyhow::anyhow;
 
 /// `cat` or `ls` based on what's supplied, i.e. a file of a directory.
 fn main() -> anyhow::Result<()> {
-    let args = utils::get_args();
+    let args = utils::system::get_args();
 
     let path = args
         .first()

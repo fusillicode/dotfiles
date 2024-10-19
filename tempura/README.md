@@ -16,11 +16,19 @@ Requirements:
 - `wezterm`
 - `zcat`
 
-Useful cmds:
+Bins:
 
 ```console
-# To install a new release
+# To install a new release of Tempura bins
 cargo build --release && \
-    rm "$HOME"/.local/bin/ebi && \
-    ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/ebi "$HOME"/.local/bin
+    rm "$HOME"/.local/bin/catl && \
+    ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/catl "$HOME"/.local/bin
+    rm "$HOME"/.local/bin/idt && \
+    ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/idt "$HOME"/.local/bin
+    rm "$HOME"/.local/bin/oe && \
+    ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/oe "$HOME"/.local/bin
+    rm "$HOME"/.local/bin/yghfl && \
+    ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/yghfl "$HOME"/.local/bin
+    rm "$HOME"/.local/bin/yhfp && \
+    ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/yhfp "$HOME"/.local/bin
 ```
