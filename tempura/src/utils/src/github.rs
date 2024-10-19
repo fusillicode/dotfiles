@@ -1,4 +1,5 @@
 use std::process::Command;
+use std::process::Output;
 
 use anyhow::anyhow;
 use anyhow::bail;
@@ -19,6 +20,18 @@ pub fn log_into_github() -> anyhow::Result<()> {
         .exit_ok()?)
 }
 
+pub fn get_latest_release(repo: &str) -> anyhow::Result<String> {
+    let output = Command::new("gh")
+        .args([
+            "api",
+            &format!("repos/{repo}/releases/latest"),
+            "--jq=.tag_name",
+        ])
+        .output()?;
+
+    output_as_utf8_string(output)
+}
+
 pub fn get_branch_name_from_pr_url(pr_url: &Url) -> anyhow::Result<String> {
     let pr_id = extract_pr_id_form_pr_url(&pr_url)?;
 
@@ -34,20 +47,10 @@ pub fn get_branch_name_from_pr_url(pr_url: &Url) -> anyhow::Result<String> {
         ])
         .output()?;
 
-    output.status.exit_ok()?;
-
-    Ok(std::str::from_utf8(&output.stdout)?.trim().into())
+    output_as_utf8_string(output)
 }
 
-pub fn get_latest_release(repo: &str) -> anyhow::Result<String> {
-    let output = Command::new("gh")
-        .args([
-            "api",
-            &format!("repos/{repo}/releases/latest"),
-            "--jq=.tag_name",
-        ])
-        .output()?;
-
+fn output_as_utf8_string(output: Output) -> anyhow::Result<String> {
     output.status.exit_ok()?;
 
     Ok(std::str::from_utf8(&output.stdout)?.trim().into())
