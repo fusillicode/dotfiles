@@ -3,9 +3,8 @@ use std::str::FromStr;
 
 use anyhow::anyhow;
 
+use utils::editor::Editor;
 use utils::hx::HxStatusLine;
-
-use crate::cmds::oe::Editor;
 
 /// Yank file path displayed in the status line of the first Helix instance found running alongside
 /// the Wezterm pane from where the cmd has been invoked.

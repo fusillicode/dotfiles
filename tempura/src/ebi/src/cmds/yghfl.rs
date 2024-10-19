@@ -9,12 +9,11 @@ use anyhow::anyhow;
 use anyhow::bail;
 use url::Url;
 
+use utils::editor::Editor;
 use utils::hx::HxCursorPosition;
 use utils::hx::HxStatusLine;
 use utils::wezterm::get_sibling_pane_with_titles;
 use utils::wezterm::WezTermPane;
-
-use crate::cmds::oe::Editor;
 
 /// Yank link to GitHub of the file displayed in the status line of the first Helix instance found running alongside
 /// the Wezterm pane from where the cmd has been invoked.

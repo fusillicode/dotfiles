@@ -6,6 +6,7 @@ pub mod github;
 pub mod hx;
 pub mod system;
 pub mod wezterm;
+pub mod editor;
 
 pub fn get_args() -> Vec<String> {
     let mut args = std::env::args();
