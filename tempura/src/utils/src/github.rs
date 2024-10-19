@@ -58,10 +58,10 @@ fn output_as_utf8_string(output: Output) -> anyhow::Result<String> {
 
 fn extract_pr_id_form_pr_url(pr_url: &Url) -> anyhow::Result<String> {
     const GITHUB_HOST: &str = "github.com";
-    if !pr_url
+    if !(pr_url
         .host_str()
-        .map(|x| x == GITHUB_HOST)
         .ok_or_else(|| anyhow!("missing host in {pr_url}"))?
+        == GITHUB_HOST)
     {
         bail!("host in {pr_url} not matching {GITHUB_HOST}")
     }
