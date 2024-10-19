@@ -4,27 +4,27 @@ use crate::installers::curl_install::OutputOption;
 use crate::Installer;
 use utils::system::silent_cmd;
 
-pub struct ShellcheckInstaller {
+pub struct Shellcheck {
     pub bin_dir: String,
 }
 
-impl Installer for ShellcheckInstaller {
-    fn bin(&self) -> &'static str {
+impl Installer for Shellcheck {
+    fn bin_name(&self) -> &'static str {
         "shellcheck"
     }
 
     fn install(&self) -> anyhow::Result<()> {
-        let repo = format!("koalaman/{}", self.bin());
+        let repo = format!("koalaman/{}", self.bin_name());
         let latest_release = utils::github::get_latest_release(&repo)?;
 
         crate::installers::curl_install::run(
-            &format!("https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}.darwin.x86_64.tar.xz", self.bin()),
+            &format!("https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}.darwin.x86_64.tar.xz", self.bin_name()),
             OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", "/tmp"])),
         )?;
 
         silent_cmd("mv")
             .args([
-                &format!("/tmp/{0}-{latest_release}/{0}", self.bin()),
+                &format!("/tmp/{0}-{latest_release}/{0}", self.bin_name()),
                 &self.bin_dir,
             ])
             .status()?

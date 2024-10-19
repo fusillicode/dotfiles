@@ -1,12 +1,12 @@
 use crate::installers::curl_install::OutputOption;
 use crate::Installer;
 
-pub struct MarksmanInstaller {
+pub struct Marksman {
     pub bin_dir: String,
 }
 
-impl Installer for MarksmanInstaller {
-    fn bin(&self) -> &'static str {
+impl Installer for Marksman {
+    fn bin_name(&self) -> &'static str {
         "marksman"
     }
 
@@ -14,9 +14,9 @@ impl Installer for MarksmanInstaller {
         crate::installers::curl_install::run(
             &format!(
                 "https://github.com/artempyanykh/{0}/releases/latest/download/{0}-macos",
-                self.bin()
+                self.bin_name()
             ),
-            OutputOption::WriteTo(&format!("{}/{}", self.bin_dir, self.bin())),
+            OutputOption::WriteTo(&format!("{}/{}", self.bin_dir, self.bin_name())),
         )
     }
 }
