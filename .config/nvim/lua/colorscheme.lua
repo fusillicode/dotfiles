@@ -6,10 +6,6 @@ local get_hl = vim.api.nvim_get_hl
 function M.setup(colorscheme)
   if colorscheme then vim.cmd.colorscheme(colorscheme) end
 
-  vim.cmd('highlight clear')
-  vim.cmd('syntax off')
-  vim.cmd('filetype off')
-
   vim.o.background = 'dark'
   vim.o.termguicolors = true
   vim.o.colorcolumn = '120'
