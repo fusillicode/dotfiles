@@ -12,7 +12,7 @@ fn main() -> anyhow::Result<()> {
 
     match cmd {
         "yhfp" => cmds::yhfp::run(args.into_iter()),
-        "ghfl" => cmds::yghfl::run(args.into_iter()),
+        "yghfl" => cmds::yghfl::run(args.into_iter()),
         "oe" => cmds::oe::run(args.into_iter()),
         "idt" => cmds::idt::run(args.into_iter()),
         "catl" => cmds::catl::run(args.into_iter()),
