@@ -1,6 +1,8 @@
 local M = {}
 
 local function keymap_set(modes, lhs, rhs, opts)
+  -- FIX: asdasd
+  -- TODO: asdasd
   vim.keymap.set(modes, lhs, rhs, vim.tbl_extend('force', { silent = true, }, opts or {}))
 end
 
@@ -127,7 +129,13 @@ function M.telescope(telescope_builtin, defaults)
   keymap_set({ 'n', 'v', }, '<leader>D',
     with_defaults('diagnostics', { prompt_prefix = 'Diagn*: ', sort_by = 'severity', }))
   keymap_set({ 'n', 'v', }, '<leader>c', with_defaults('commands', { prompt_prefix = 'Cmds: ', }))
-  keymap_set({ 'n', 'v', }, '<leader>T', ':TodoTelescope<CR>')
+  keymap_set({ 'n', 'v', }, '<leader>T', function()
+    require('telescope').extensions.live_grep_args.live_grep_args(
+      {
+        prompt_title = false,
+        default_text = 'FIX:|FIXME:|BUG:|FIXIT:|ISSUE:|TODO:|HACK:|WARN:|WARNING:|PERF:|OPTIM:|PERFORMANCE:|OPTIMIZE:|NOTE|:INFO',
+      })
+  end)
   keymap_set({ 'n', 'v', }, 'ga', function()
     telescope_builtin.buffers({
       previewer = false,
