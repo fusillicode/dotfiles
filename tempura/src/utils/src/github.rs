@@ -4,10 +4,8 @@ use anyhow::anyhow;
 use anyhow::bail;
 use url::Url;
 
-use crate::system::silent_cmd;
-
 pub fn log_into_github() -> anyhow::Result<()> {
-    if silent_cmd("gh")
+    if crate::system::silent_cmd("gh")
         .args(["auth", "status"])
         .status()?
         .success()
@@ -15,7 +13,7 @@ pub fn log_into_github() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    Ok(silent_cmd("sh")
+    Ok(crate::system::silent_cmd("sh")
         .args(["-c", "gh auth login"])
         .status()?
         .exit_ok()?)

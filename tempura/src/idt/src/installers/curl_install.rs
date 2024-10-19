@@ -4,8 +4,6 @@ use std::io::Write;
 use std::process::Command;
 use std::process::Stdio;
 
-use utils::system::silent_cmd;
-
 pub enum OutputOption<'a> {
     UnpackVia(Command, &'a str),
     PipeInto(&'a mut Command),
@@ -13,7 +11,7 @@ pub enum OutputOption<'a> {
 }
 
 pub fn run(url: &str, output_option: OutputOption) -> anyhow::Result<()> {
-    let mut curl_cmd = silent_cmd("curl");
+    let mut curl_cmd = utils::system::silent_cmd("curl");
     let silent_flag = cfg!(debug_assertions).then(|| "S").unwrap_or("");
     curl_cmd.args([&format!("-L{silent_flag}"), url]);
 

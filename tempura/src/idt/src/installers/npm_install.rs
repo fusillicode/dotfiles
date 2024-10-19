@@ -1,5 +1,3 @@
-use utils::system::silent_cmd;
-
 pub fn run(
     dev_tools_dir: &str,
     tool: &str,
@@ -18,9 +16,12 @@ pub fn run(
     cmd_args.extend_from_slice(&["--prefix", &dev_tools_repo_dir]);
     cmd_args.extend_from_slice(packages);
 
-    silent_cmd("npm").args(cmd_args).status()?.exit_ok()?;
+    utils::system::silent_cmd("npm")
+        .args(cmd_args)
+        .status()?
+        .exit_ok()?;
 
-    Ok(silent_cmd("sh")
+    Ok(utils::system::silent_cmd("sh")
         .args([
             "-c",
             &format!("ln -sf {dev_tools_repo_dir}/node_modules/.bin/{bin} {bin_dir}"),
