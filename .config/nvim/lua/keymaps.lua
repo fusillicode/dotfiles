@@ -109,12 +109,12 @@ function M.telescope(telescope_builtin, defaults)
 
   keymap_set('n', '<leader>w', function()
     require('telescope').extensions.live_grep_args.live_grep_args(
-      { prompt_prefix = 'rg: ', prompt_title = false, results_title = false, }
+      { prompt_title = false, prompt_prefix = 'rg: ', }
     )
   end)
   keymap_set('v', '<leader>w', function()
     require('telescope-live-grep-args.shortcuts').grep_visual_selection(
-      { prompt_prefix = 'rg: ', prompt_title = false, results_title = false, }
+      { prompt_title = false, prompt_prefix = 'rg: ', }
     )
   end)
 
