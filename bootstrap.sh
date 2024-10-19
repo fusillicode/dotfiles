@@ -113,7 +113,7 @@ brew install ninja cmake gettext curl
 cd ./tempura &&
   cargo build --release && \
   cd - && \
-  rm "$HOME"/.local/bin/idt && \
+  rm -f "$HOME"/.local/bin/idt && \
   ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/idt "$HOME"/.local/bin && \
   idt ~/.dev-tools ~/.local/bin && \
   ln -s "$HOME"/data/dev/dotfiles/dotfiles/bin/update_* "$HOME"/.local/bin
