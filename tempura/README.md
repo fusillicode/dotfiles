@@ -16,10 +16,9 @@ Requirements:
 - `wezterm`
 - `zcat`
 
-Bins:
+To install a new release of 🍤 bins:
 
 ```console
-# To install a new release of Tempura bins
 cargo build --release && \
     rm -f "$HOME"/.local/bin/catl && \
     ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/catl "$HOME"/.local/bin && \
