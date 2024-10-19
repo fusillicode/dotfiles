@@ -133,19 +133,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ebi"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "fake",
- "serde",
- "serde_json",
- "temp-env",
- "url",
- "utils",
-]
-
-[[package]]
 name = "fake"
 version = "2.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -202,6 +189,17 @@ checksum = "634d9b1461af396cad843f47fdba5597a4f9e6ddd4bfb6ff5d85028c25cb12f6"
 dependencies = [
  "unicode-bidi",
  "unicode-normalization",
+]
+
+[[package]]
+name = "idt"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "url",
+ "utils",
 ]
 
 [[package]]
