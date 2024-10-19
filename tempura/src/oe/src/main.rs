@@ -1,7 +1,7 @@
 #![feature(exit_status_error)]
 use std::str::FromStr;
 
-use anyhow::anyhow;
+use anyhow::bail;
 
 use utils::editor::Editor;
 use utils::editor::FileToOpen;
@@ -15,11 +15,11 @@ fn main() -> anyhow::Result<()> {
     let args = utils::system::get_args();
 
     let Some(editor) = args.first().map(|x| Editor::from_str(x)).transpose()? else {
-        return Err(anyhow!("no editor specified {:?}", args));
+        bail!("no editor specified {:?}", args);
     };
 
     let Some(file_to_open) = args.get(1) else {
-        return Err(anyhow!("no input file specified {:?}", args));
+        bail!("no input file specified {:?}", args);
     };
 
     let pane_id = match args.get(2) {

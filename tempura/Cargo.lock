@@ -159,6 +159,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "gcu"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "url",
+ "utils",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
