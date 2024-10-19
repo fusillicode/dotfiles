@@ -130,30 +130,23 @@ return {
   'neovim/nvim-lspconfig',
   event = 'BufRead',
   dependencies = {
-    { 'ms-jpq/coq_nvim',       branch = 'coq', },
-    { 'ms-jpq/coq.artifacts',  branch = 'artifacts', },
-    { 'ms-jpq/coq.thirdparty', branch = '3p', },
+    'hrsh7th/cmp-nvim-lsp',
     'b0o/schemastore.nvim',
   },
-  init = function()
-    vim.g.coq_settings = {
-      auto_start = true,
-    }
-  end,
   config = function()
     local lspconfig = require('lspconfig')
-    local coq = require('coq')
+    local capabilities = require('cmp_nvim_lsp').default_capabilities(vim.lsp.protocol.make_client_capabilities())
     local on_attach = require('keymaps').lspconfig()
 
     for lsp, config in pairs(get_lsps_configs()) do
       -- 🥲 https://neovim.discourse.group/t/cannot-serialize-function-type-not-supported/4542/3
-      local lsp_setup = { on_attach = on_attach, }
+      local lsp_setup = { capabilities = capabilities, on_attach = on_attach, }
       if config['cmd'] then lsp_setup.cmd = config['cmd'] end
       if config['filetypes'] then lsp_setup.filetypes = config['filetypes'] end
       if config['init_options'] then lsp_setup.init_options = config['init_options'] end
       if config['root_dir'] then lsp_setup.root_dir = config['root_dir'] end
       if config['settings'] then lsp_setup.settings = config['settings'] end
-      lspconfig[lsp].setup(coq.lsp_ensure_capabilities(lsp_setup))
+      lspconfig[lsp].setup(lsp_setup)
     end
 
     -- To show border with Shift-k (K)
