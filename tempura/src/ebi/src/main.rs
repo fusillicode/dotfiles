@@ -1,5 +1,4 @@
 #![feature(exit_status_error)]
-
 use anyhow::anyhow;
 
 mod cmds;
@@ -12,7 +11,6 @@ fn main() -> anyhow::Result<()> {
     match cmd {
         "yhfp" => cmds::yhfp::run(args.into_iter()),
         "yghfl" => cmds::yghfl::run(args.into_iter()),
-        "oe" => cmds::oe::run(args.into_iter()),
         "idt" => cmds::idt::run(args.into_iter()),
         unknown_cmd => Err(anyhow!("unknown cmd '{unknown_cmd}' in args {args:?}")),
     }

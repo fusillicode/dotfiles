@@ -1,5 +1,4 @@
 #![feature(exit_status_error)]
-
 use anyhow::anyhow;
 
 pub mod github;

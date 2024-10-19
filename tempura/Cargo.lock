@@ -251,6 +251,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "oe"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "url",
+ "utils",
+]
+
+[[package]]
 name = "parking_lot"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

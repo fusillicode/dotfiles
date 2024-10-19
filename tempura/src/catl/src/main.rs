@@ -1,5 +1,4 @@
 #![feature(exit_status_error)]
-
 use std::process::Command;
 
 use anyhow::anyhow;

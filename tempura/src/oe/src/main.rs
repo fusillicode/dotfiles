@@ -1,3 +1,4 @@
+#![feature(exit_status_error)]
 use std::str::FromStr;
 
 use anyhow::anyhow;
@@ -9,22 +10,18 @@ use utils::system::silent_cmd;
 /// Open the supplied file path in a running editor (Neovim or Helix) instance alongside the
 /// Wezterm pane from where the cmd has been invoked.
 /// Used both as a CLI and from Wezterm `open-uri` handler.
-pub fn run<'a>(mut args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
-    let Some(editor) = args.next().map(Editor::from_str).transpose()? else {
-        return Err(anyhow!(
-            "no editor specified {:?}",
-            args.collect::<Vec<_>>()
-        ));
+fn main() -> anyhow::Result<()> {
+    let args = utils::get_args();
+
+    let Some(editor) = args.first().map(|x| Editor::from_str(x)).transpose()? else {
+        return Err(anyhow!("no editor specified {:?}", args));
     };
 
-    let Some(file_to_open) = args.next() else {
-        return Err(anyhow!(
-            "no input file specified {:?}",
-            args.collect::<Vec<_>>()
-        ));
+    let Some(file_to_open) = args.get(1) else {
+        return Err(anyhow!("no input file specified {:?}", args));
     };
 
-    let pane_id = match args.next() {
+    let pane_id = match args.get(2) {
         Some(x) => x.into(),
         None => std::env::var("WEZTERM_PANE")?,
     }
@@ -32,7 +29,7 @@ pub fn run<'a>(mut args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
 
     let panes = utils::wezterm::get_all_panes()?;
 
-    let file_to_open = FileToOpen::try_from((file_to_open, pane_id, panes.as_slice()))?;
+    let file_to_open = FileToOpen::try_from((file_to_open.as_str(), pane_id, panes.as_slice()))?;
 
     let editor_pane_id =
         utils::wezterm::get_sibling_pane_with_titles(&panes, pane_id, editor.pane_titles())
