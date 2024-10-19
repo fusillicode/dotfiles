@@ -1,3 +1,4 @@
+#![feature(exit_status_error)]
 use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
@@ -17,7 +18,7 @@ use utils::wezterm::WezTermPane;
 
 /// Yank link to GitHub of the file displayed in the status line of the first Helix instance found running alongside
 /// the Wezterm pane from where the cmd has been invoked.
-pub fn run<'a>(_args: impl Iterator<Item = &'a str>) -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
     let hx_pane = get_sibling_pane_with_titles(
         &utils::wezterm::get_all_panes()?,
         std::env::var("WEZTERM_PANE")?.parse()?,
