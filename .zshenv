@@ -24,18 +24,6 @@ sorce () {
   set -a && source "$@" && set +a
 }
 
-ho () {
-  ebi oe hx "$@"
-}
-
-nvo () {
-  ebi oe nv "$@"
-}
-
-catl () {
-  ebi catl "$@"
-}
-
 # Easy Git
 gtnuke () {
   git tag -f "$1" && git push origin "$1" -f
