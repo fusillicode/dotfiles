@@ -40,6 +40,10 @@ mod tools;
 /// Install Dev Tools
 fn main() -> anyhow::Result<()> {
     let args = utils::system::get_args();
+    println!(
+        "🚀 Starting {:?} with args: {args:#?}",
+        std::env::current_exe()?
+    );
 
     let dev_tools_dir = args
         .first()
