@@ -1,5 +1,4 @@
 use crate::Installer;
-use utils::system::silent_cmd;
 
 pub struct Taplo {
     pub bin_dir: String,
@@ -14,7 +13,7 @@ impl Installer for Taplo {
         // Installing with `cargo` because of:
         // 1. no particular requirements
         // 2. https://github.com/tamasfe/taplo/issues/542
-        silent_cmd("cargo")
+        utils::system::silent_cmd("cargo")
             .args([
                 "install",
                 &format!("{}-cli", self.bin_name()),

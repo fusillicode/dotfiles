@@ -2,7 +2,6 @@ use std::process::Command;
 
 use crate::installers::curl_install::OutputOption;
 use crate::Installer;
-use utils::system::silent_cmd;
 
 pub struct ElixirLs {
     pub dev_tools_dir: String,
@@ -25,7 +24,7 @@ impl Installer for ElixirLs {
             OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &dev_tools_repo_dir])),
         )?;
         utils::system::chmod_x(&format!("{dev_tools_repo_dir}/*"))?;
-        silent_cmd("ln")
+        utils::system::silent_cmd("ln")
             .args([
                 "-sf",
                 &format!("{dev_tools_repo_dir}/language_server.sh"),
