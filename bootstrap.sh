@@ -113,17 +113,20 @@ brew install ninja cmake gettext curl
 cd ./tempura &&
   cargo build --release && \
   cd - && \
-  rm -f "$HOME"/.local/bin/catl && \
-  ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/catl "$HOME"/.local/bin && \
   rm -f "$HOME"/.local/bin/idt && \
   ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/idt "$HOME"/.local/bin && \
-  rm -f "$HOME"/.local/bin/oe && \
-  ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/oe "$HOME"/.local/bin && \
   rm -f "$HOME"/.local/bin/yghfl && \
   ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/yghfl "$HOME"/.local/bin && \
   rm -f "$HOME"/.local/bin/yhfp && \
   ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/yhfp "$HOME"/.local/bin && \
+  rm -f "$HOME"/.local/bin/oe && \
+  ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/oe "$HOME"/.local/bin && \
+  rm -f "$HOME"/.local/bin/catl && \
+  ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/catl "$HOME"/.local/bin && \
+  rm -f "$HOME"/.local/bin/gcu && \
+  ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/gcu "$HOME"/.local/bin && \
   "$HOME"/.local/bin/idt ~/.dev-tools ~/.local/bin && \
+  rm -f "$HOME"/.local/bin/update_* && \
   ln -s "$HOME"/data/dev/dotfiles/dotfiles/bin/update_* "$HOME"/.local/bin
 
 # Update & cleanup brew
