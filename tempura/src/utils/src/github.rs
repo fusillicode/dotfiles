@@ -46,7 +46,7 @@ pub fn get_branch_name_from_pr_url(pr_url: &Url) -> anyhow::Result<String> {
             "--json",
             "headRefName",
             "--jq",
-            "'.headRefName'",
+            ".headRefName",
         ])
         .output()?;
 
@@ -60,37 +60,27 @@ fn cmd_output_as_utf8_string(output: Output) -> anyhow::Result<String> {
 }
 
 fn extract_pr_id_form_pr_url(pr_url: &Url) -> anyhow::Result<String> {
-    if !(pr_url
+    let host = pr_url
         .host_str()
-        .ok_or_else(|| anyhow!("cannot extract host from {pr_url}"))?
-        == GITHUB_HOST)
-    {
-        bail!("host in {pr_url} doesn't match {GITHUB_HOST:?}")
+        .ok_or_else(|| anyhow!("cannot extract host from {pr_url}"))?;
+    if host != GITHUB_HOST {
+        bail!("host {host:?} in {pr_url} doesn't match {GITHUB_HOST:?}")
     }
 
-    let path_segments: Vec<&str> = pr_url
+    match pr_url
         .path_segments()
         .ok_or_else(|| anyhow!("{pr_url} cannot-be-a-base"))?
-        .collect();
-
-    let pr_prefix = path_segments.first().ok_or_else(|| {
-        anyhow!(
-            "missing PR id prefix {GITHUB_PR_ID_PREFIX:?} {pr_url} path segments {path_segments:?}"
-        )
-    })?;
-    if !(pr_prefix == &GITHUB_PR_ID_PREFIX) {
-        bail!("PR prefix {pr_prefix:?} in {pr_url} doesn't match {GITHUB_PR_ID_PREFIX:?}");
+        .collect::<Vec<_>>()
+        .as_slice()
+    {
+        [.., GITHUB_PR_ID_PREFIX, ""] => Err(anyhow!("empty PR id in {pr_url}")),
+        [.., GITHUB_PR_ID_PREFIX, pr_id] => Ok(pr_id.to_string()),
+        [.., GITHUB_PR_ID_PREFIX] => Err(anyhow!("missing PR id in {pr_url}")),
+        [] => Err(anyhow!("missing path in {pr_url}")),
+        segments => Err(anyhow!(
+            "missing PR id prefix {GITHUB_PR_ID_PREFIX:?} in {pr_url} path segments {segments:?}"
+        )),
     }
-
-    let pr_id = path_segments
-        .get(1)
-        .ok_or_else(|| anyhow!("missing PR id in {pr_url} path segments {path_segments:?}"))?;
-
-    if pr_id.is_empty() {
-        bail!("empty PR id in in {pr_url} path segments {path_segments:?}");
-    }
-
-    Ok((*pr_id).into())
 }
 
 #[cfg(test)]
@@ -112,7 +102,7 @@ mod tests {
         let pr_url = Url::parse("https://foo.bar").unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_pr_url(&pr_url));
         assert_eq!(
-            r#"host in https://foo.bar/ doesn't match "github.com""#,
+            r#"host "foo.bar" in https://foo.bar/ doesn't match "github.com""#,
             error.to_string()
         )
     }
@@ -123,7 +113,7 @@ mod tests {
         let pr_url = Url::parse(&format!("https://{GITHUB_HOST}")).unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_pr_url(&pr_url));
         assert_eq!(
-            r#"PR prefix "" in https://github.com/ doesn't match "pull""#,
+            r#"missing PR id prefix "pull" in https://github.com/ path segments [""]"#,
             error.to_string()
         )
     }
@@ -133,7 +123,7 @@ mod tests {
         let pr_url = Url::parse(&format!("https://{GITHUB_HOST}/pull")).unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_pr_url(&pr_url));
         assert_eq!(
-            r#"missing PR id in https://github.com/pull path segments ["pull"]"#,
+            r#"missing PR id in https://github.com/pull"#,
             error.to_string()
         )
     }
@@ -144,7 +134,7 @@ mod tests {
         let pr_url = Url::parse(&format!("https://{GITHUB_HOST}/foo")).unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_pr_url(&pr_url));
         assert_eq!(
-            r#"PR prefix "foo" in https://github.com/foo doesn't match "pull""#,
+            r#"missing PR id prefix "pull" in https://github.com/foo path segments ["foo"]"#,
             error.to_string()
         )
     }
