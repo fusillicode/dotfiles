@@ -1,8 +1,6 @@
 local M = {}
 
 local function keymap_set(modes, lhs, rhs, opts)
-  -- FIX: asdasd
-  -- TODO: asdasd
   vim.keymap.set(modes, lhs, rhs, vim.tbl_extend('force', { silent = true, }, opts or {}))
 end
 
