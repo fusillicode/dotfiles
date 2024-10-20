@@ -66,7 +66,7 @@ return {
               ['<c-f>'] = telescope_actions.to_fuzzy_refine,
             },
           },
-          vimgrep_arguments = vim.tbl_extend('keep',
+          vimgrep_arguments = vim.list_extend(
             {
               'rg',
               '--color=never',
@@ -77,7 +77,7 @@ return {
               '--smart-case',
               '--hidden',
             },
-            vim.tbl_map(function(glob) return '--glob=' .. glob end, GLOB_EXCLUSIONS)
+            vim.tbl_map(function(glob) return '--glob=!' .. glob end, GLOB_EXCLUSIONS)
           ),
         },
       },
@@ -88,7 +88,7 @@ return {
           sort_mru = true,
         },
         find_files = {
-          find_command = vim.tbl_extend('keep',
+          find_command = vim.list_extend(
             {
               'fd',
               '--color=never',
