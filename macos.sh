@@ -620,31 +620,6 @@ defaults write com.apple.Safari SendDoNotTrackHTTPHeader -bool true
 defaults write com.apple.Safari InstallExtensionUpdatesAutomatically -bool true
 
 ###############################################################################
-# Mail                                                                        #
-###############################################################################
-
-# Disable send and reply animations in Mail.app
-#fusillicode defaults write com.apple.mail DisableReplyAnimations -bool true
-#fusillicode defaults write com.apple.mail DisableSendAnimations -bool true
-
-# Copy email addresses as `foo@example.com` instead of `Foo Bar <foo@example.com>` in Mail.app
-#fusillicode defaults write com.apple.mail AddressesIncludeNameOnPasteboard -bool false
-
-# Add the keyboard shortcut ⌘ + Enter to send an email in Mail.app
-#fusillicode defaults write com.apple.mail NSUserKeyEquivalents -dict-add "Send" "@\U21a9"
-
-# Display emails in threaded mode, sorted by date (oldest at the top)
-#fusillicode defaults write com.apple.mail DraftsViewerAttributes -dict-add "DisplayInThreadedMode" -string "yes"
-#fusillicode defaults write com.apple.mail DraftsViewerAttributes -dict-add "SortedDescending" -string "yes"
-#fusillicode defaults write com.apple.mail DraftsViewerAttributes -dict-add "SortOrder" -string "received-date"
-
-# Disable inline attachments (just show the icons)
-#fusillicode defaults write com.apple.mail DisableInlineAttachmentViewing -bool true
-
-# Disable automatic spell checking
-#fusillicode defaults write com.apple.mail SpellCheckingBehavior -string "NoSpellCheckingEnabled"
-
-###############################################################################
 # Spotlight                                                                   #
 ###############################################################################
 
@@ -691,78 +666,6 @@ killall mds > /dev/null 2>&1
 sudo mdutil -i on / > /dev/null
 # Rebuild the index from scratch
 sudo mdutil -E / > /dev/null
-
-###############################################################################
-# Terminal & iTerm 2                                                          #
-###############################################################################
-
-# Only use UTF-8 in Terminal.app
-#fusillicode defaults write com.apple.terminal StringEncodings -array 4
-
-# Use a modified version of the Solarized Dark theme by default in Terminal.app
-#fusillicode osascript <<EOD
-#fusillicode
-#fusillicode tell application "Terminal"
-#fusillicode
-#fusillicode 	local allOpenedWindows
-#fusillicode 	local initialOpenedWindows
-#fusillicode 	local windowID
-#fusillicode 	set themeName to "Solarized Dark xterm-256color"
-#fusillicode
-#fusillicode 	(* Store the IDs of all the open terminal windows. *)
-#fusillicode 	set initialOpenedWindows to id of every window
-#fusillicode
-#fusillicode 	(* Open the custom theme so that it gets added to the list
-#fusillicode 	   of available terminal themes (note: this will open two
-#fusillicode 	   additional terminal windows). *)
-#fusillicode 	do shell script "open '$HOME/init/" & themeName & ".terminal'"
-#fusillicode
-#fusillicode 	(* Wait a little bit to ensure that the custom theme is added. *)
-#fusillicode 	delay 1
-#fusillicode
-#fusillicode 	(* Set the custom theme as the default terminal theme. *)
-#fusillicode 	set default settings to settings set themeName
-#fusillicode
-#fusillicode 	(* Get the IDs of all the currently opened terminal windows. *)
-#fusillicode 	set allOpenedWindows to id of every window
-#fusillicode
-#fusillicode 	repeat with windowID in allOpenedWindows
-#fusillicode
-#fusillicode 		(* Close the additional windows that were opened in order
-#fusillicode 		   to add the custom theme to the list of terminal themes. *)
-#fusillicode 		if initialOpenedWindows does not contain windowID then
-#fusillicode 			close (every window whose id is windowID)
-#fusillicode
-#fusillicode 		(* Change the theme for the initial opened terminal windows
-#fusillicode 		   to remove the need to close them in order for the custom
-#fusillicode 		   theme to be applied. *)
-#fusillicode 		else
-#fusillicode 			set current settings of tabs of (every window whose id is windowID) to settings set themeName
-#fusillicode 		end if
-#fusillicode
-#fusillicode 	end repeat
-#fusillicode
-#fusillicode end tell
-#fusillicode
-#fusillicode EOD
-
-# Enable “focus follows mouse” for Terminal.app and all X11 apps
-# i.e. hover over a window and start typing in it without clicking first
-#defaults write com.apple.terminal FocusFollowsMouse -bool true
-#defaults write org.x.X11 wm_ffm -bool true
-
-# Enable Secure Keyboard Entry in Terminal.app
-# See: https://security.stackexchange.com/a/47786/8918
-#fusillicode defaults write com.apple.terminal SecureKeyboardEntry -bool true
-
-# Disable the annoying line marks
-#fusillicode defaults write com.apple.Terminal ShowLineMarks -int 0
-
-# Install the Solarized Dark theme for iTerm
-#fusillicode open "${HOME}/init/Solarized Dark.itermcolors"
-
-# Don’t display the annoying prompt when quitting iTerm
-#fusillicode defaults write com.googlecode.iterm2 PromptOnQuit -bool false
 
 ###############################################################################
 # Time Machine                                                                #
@@ -856,82 +759,6 @@ defaults write com.apple.appstore ShowDebugMenu -bool true
 defaults -currentHost write com.apple.ImageCapture disableHotPlug -bool true
 
 ###############################################################################
-# Messages                                                                    #
-###############################################################################
-
-# Disable automatic emoji substitution (i.e. use plain text smileys)
-#fusillicode defaults write com.apple.messageshelper.MessageController SOInputLineSettings -dict-add "automaticEmojiSubstitutionEnablediMessage" -bool false
-
-# Disable smart quotes as it’s annoying for messages that contain code
-#fusillicode defaults write com.apple.messageshelper.MessageController SOInputLineSettings -dict-add "automaticQuoteSubstitutionEnabled" -bool false
-
-# Disable continuous spell checking
-#fusillicode defaults write com.apple.messageshelper.MessageController SOInputLineSettings -dict-add "continuousSpellCheckingEnabled" -bool false
-
-###############################################################################
-# Google Chrome & Google Chrome Canary                                        #
-###############################################################################
-
-# Allow installing user scripts via GitHub Gist or Userscripts.org
-#fusillicode defaults write com.google.Chrome ExtensionInstallSources -array "https://gist.githubusercontent.com/" "http://userscripts.org/*"
-#fusillicode defaults write com.google.Chrome.canary ExtensionInstallSources -array "https://gist.githubusercontent.com/" "http://userscripts.org/*"
-
-# Disable the all too sensitive backswipe on trackpads
-#fusillicode defaults write com.google.Chrome AppleEnableSwipeNavigateWithScrolls -bool false
-#fusillicode defaults write com.google.Chrome.canary AppleEnableSwipeNavigateWithScrolls -bool false
-
-# Disable the all too sensitive backswipe on Magic Mouse
-#fusillicode defaults write com.google.Chrome AppleEnableMouseSwipeNavigateWithScrolls -bool false
-#fusillicode defaults write com.google.Chrome.canary AppleEnableMouseSwipeNavigateWithScrolls -bool false
-
-# Use the system-native print preview dialog
-#fusillicode defaults write com.google.Chrome DisablePrintPreview -bool true
-#fusillicode defaults write com.google.Chrome.canary DisablePrintPreview -bool true
-
-# Expand the print dialog by default
-#fusillicode defaults write com.google.Chrome PMPrintingExpandedStateForPrint2 -bool true
-#fusillicode defaults write com.google.Chrome.canary PMPrintingExpandedStateForPrint2 -bool true
-
-###############################################################################
-# GPGMail 2                                                                   #
-###############################################################################
-
-# Disable signing emails by default
-#fusillicode defaults write ~/Library/Preferences/org.gpgtools.gpgmail SignNewEmailsByDefault -bool false
-
-###############################################################################
-# Opera & Opera Developer                                                     #
-###############################################################################
-
-# Expand the print dialog by default
-#fusillicode defaults write com.operasoftware.Opera PMPrintingExpandedStateForPrint2 -boolean true
-#fusillicode defaults write com.operasoftware.OperaDeveloper PMPrintingExpandedStateForPrint2 -boolean true
-
-###############################################################################
-# SizeUp.app                                                                  #
-###############################################################################
-
-# Start SizeUp at login
-#fusillicode defaults write com.irradiatedsoftware.SizeUp StartAtLogin -bool true
-
-# Don’t show the preferences window on next start
-#fusillicode defaults write com.irradiatedsoftware.SizeUp ShowPrefsOnNextStart -bool false
-
-###############################################################################
-# Sublime Text                                                                #
-###############################################################################
-
-# Install Sublime Text settings
-#fusillicode cp -r init/Preferences.sublime-settings ~/Library/Application\ Support/Sublime\ Text*/Packages/User/Preferences.sublime-settings 2> /dev/null
-
-###############################################################################
-# Spectacle.app                                                               #
-###############################################################################
-
-# Set up my preferred keyboard shortcuts
-#fusillicode cp -r spectacle.json ~/Library/Application\ Support/Spectacle/Shortcuts.json 2> /dev/null
-
-###############################################################################
 # Transmission.app                                                            #
 ###############################################################################
 
@@ -970,38 +797,6 @@ defaults write org.m0k.transmission BlocklistAutoUpdate -bool true
 defaults write org.m0k.transmission RandomPort -bool true
 
 ###############################################################################
-# Twitter.app                                                                 #
-###############################################################################
-
-# Disable smart quotes as it’s annoying for code tweets
-#fusillicode defaults write com.twitter.twitter-mac AutomaticQuoteSubstitutionEnabled -bool false
-
-# Show the app window when clicking the menu bar icon
-#fusillicode defaults write com.twitter.twitter-mac MenuItemBehavior -int 1
-
-# Enable the hidden ‘Develop’ menu
-#fusillicode defaults write com.twitter.twitter-mac ShowDevelopMenu -bool true
-
-# Open links in the background
-#fusillicode defaults write com.twitter.twitter-mac openLinksInBackground -bool true
-
-# Allow closing the ‘new tweet’ window by pressing `Esc`
-#fusillicode defaults write com.twitter.twitter-mac ESCClosesComposeWindow -bool true
-
-# Show full names rather than Twitter handles
-#fusillicode defaults write com.twitter.twitter-mac ShowFullNames -bool true
-
-# Hide the app in the background if it’s not the front-most window
-#fusillicode defaults write com.twitter.twitter-mac HideInBackground -bool true
-
-###############################################################################
-# Tweetbot.app                                                                #
-###############################################################################
-
-# Bypass the annoyingly slow t.co URL shortener
-#fusillicode defaults write com.tapbots.TweetbotMac OpenURLsDirectly -bool true
-
-###############################################################################
 #fusillicode Tunnelblick.app                                                  #
 ###############################################################################
 
@@ -1019,20 +814,11 @@ for app in "Activity Monitor" \
   "Contacts" \
   "Dock" \
   "Finder" \
-  "Google Chrome Canary" \
-  "Google Chrome" \
-  "Mail" \
   "Messages" \
-  "Opera" \
   "Photos" \
   "Safari" \
-  "SizeUp" \
-  "Spectacle" \
   "SystemUIServer" \
-  "Terminal" \
   "Transmission" \
-  "Tweetbot" \
-  "Twitter" \
   "iCal"; do
   killall "${app}" &> /dev/null
 done
