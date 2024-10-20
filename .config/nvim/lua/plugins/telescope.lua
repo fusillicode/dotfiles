@@ -1,3 +1,12 @@
+local GLOB_EXCLUSIONS = {
+  '**/.git/*',
+  '**/target/*',
+  '**/_build/*',
+  '**/deps/*',
+  '**/.elixir_ls/*',
+  '**/node_modules/*',
+}
+
 return {
   'nvim-telescope/telescope.nvim',
   keys = { '<leader>', 'gd', 'gr', 'gi', },
@@ -57,22 +66,19 @@ return {
               ['<c-f>'] = telescope_actions.to_fuzzy_refine,
             },
           },
-          vimgrep_arguments = {
-            'rg',
-            '--color=never',
-            '--no-heading',
-            '--with-filename',
-            '--line-number',
-            '--column',
-            '--smart-case',
-            '--hidden',
-            '--glob=!**/.git/*',
-            '--glob=!**/target/*',
-            '--glob=!**/_build/*',
-            '--glob=!**/deps/*',
-            '--glob=!**/.elixir_ls/*',
-            '--glob=!**/node_modules/*',
-          },
+          vimgrep_arguments = vim.tbl_extend('keep',
+            {
+              'rg',
+              '--color=never',
+              '--no-heading',
+              '--with-filename',
+              '--line-number',
+              '--column',
+              '--smart-case',
+              '--hidden',
+            },
+            vim.tbl_map(function(glob) return '--glob=' .. glob end, GLOB_EXCLUSIONS)
+          ),
         },
       },
       pickers = {
@@ -82,20 +88,17 @@ return {
           sort_mru = true,
         },
         find_files = {
-          find_command = {
-            'fd',
-            '--color=never',
-            '--type=f',
-            '--follow',
-            '--no-ignore-vcs',
-            '--hidden',
-            '--exclude=**/.git/*',
-            '--exclude=**/target/*',
-            '--exclude=**/_build/*',
-            '--exclude=**/deps/*',
-            '--exclude=**/.elixir_ls/*',
-            '--exclude=**/node_modules/*',
-          },
+          find_command = vim.tbl_extend('keep',
+            {
+              'fd',
+              '--color=never',
+              '--type=f',
+              '--follow',
+              '--no-ignore-vcs',
+              '--hidden',
+            },
+            vim.tbl_map(function(glob) return '--exclude=' .. glob end, GLOB_EXCLUSIONS)
+          ),
         },
       },
     })
