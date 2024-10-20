@@ -133,7 +133,8 @@ function M.telescope(telescope_builtin, defaults)
     require('telescope').extensions.live_grep_args.live_grep_args(
       {
         prompt_title = false,
-        default_text = 'FIX:|FIXME:|BUG:|FIXIT:|ISSUE:|TODO:|HACK:|WARN:|WARNING:|PERF:|OPTIM:|PERFORMANCE:|OPTIMIZE:|NOTE|:INFO',
+        default_text =
+        'FIX:|FIXME:|BUG:|FIXIT:|ISSUE:|TODO:|HACK:|WARN:|WARNING:|PERF:|OPTIM:|PERFORMANCE:|OPTIMIZE:|NOTE|:INFO',
       })
   end)
   keymap_set({ 'n', 'v', }, 'ga', function()
