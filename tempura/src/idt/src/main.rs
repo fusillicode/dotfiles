@@ -53,7 +53,7 @@ fn main() -> anyhow::Result<()> {
         .get(1)
         .ok_or_else(|| anyhow!("missing bin_dir arg from {args:?}"))?
         .trim_end_matches('/');
-    let tools_white_list: Vec<&str> = args.iter().skip(2).map(AsRef::as_ref).collect();
+    let tools_whitelist: Vec<&str> = args.iter().skip(2).map(AsRef::as_ref).collect();
 
     std::fs::create_dir_all(dev_tools_dir)?;
     std::fs::create_dir_all(bin_dir)?;
@@ -175,10 +175,18 @@ fn main() -> anyhow::Result<()> {
         }),
     ];
 
-    std::thread::scope(|scope| {
+    let whitelisted_tools: Vec<_> = if tools_whitelist.is_empty() {
+        tools.iter().collect()
+    } else {
         tools
             .iter()
-            .filter(|x| tools_white_list.contains(&x.bin_name()))
+            .filter(|x| tools_whitelist.contains(&x.bin_name()))
+            .collect()
+    };
+
+    std::thread::scope(|scope| {
+        whitelisted_tools
+            .iter()
             .fold(vec![], |mut acc, installer| {
                 let running_installer = scope.spawn(move || {
                     tools::report_install(installer.bin_name(), installer.install())
