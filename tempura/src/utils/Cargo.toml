@@ -15,5 +15,6 @@ serde_json = { version = "1.0" }
 url = { version = "2.5", features = ["serde"] }
 
 [dev-dependencies]
+assert2 = { version = "0.3" }
 fake = { version = "2.9", features = ["derive"] }
 temp-env = { version = "0.3" }

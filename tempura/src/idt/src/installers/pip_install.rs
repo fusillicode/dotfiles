@@ -1,5 +1,3 @@
-use utils::system::silent_cmd;
-
 pub fn run(
     dev_tools_dir: &str,
     tool: &str,
@@ -11,12 +9,12 @@ pub fn run(
 
     std::fs::create_dir_all(&dev_tools_repo_dir)?;
 
-    silent_cmd("python3")
+    utils::system::silent_cmd("python3")
         .args(["-m", "venv", &format!("{dev_tools_repo_dir}/.venv")])
         .status()?
         .exit_ok()?;
 
-    Ok(silent_cmd("sh")
+    Ok(utils::system::silent_cmd("sh")
         .args([
             "-c",
             &format!(
