@@ -1,5 +1,7 @@
 #![feature(exit_status_error)]
 
+use std::process::Command;
+
 use anyhow::bail;
 use url::Url;
 
@@ -17,12 +19,12 @@ fn main() -> anyhow::Result<()> {
         branch_or_url.into()
     };
 
-    if !utils::system::silent_cmd("git")
+    let output = Command::new("git")
         .args(["switch", &branch_or_url])
-        .status()?
-        .success()
-    {
-        bail!("error switching to git branch {branch_or_url}")
+        .output()?;
+
+    if !output.status.success() {
+        bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
     }
 
     Ok(())

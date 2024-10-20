@@ -1,4 +1,5 @@
 #![feature(exit_status_error)]
+
 use anyhow::anyhow;
 
 use crate::tools::bash_language_server::BashLanguageServer;
