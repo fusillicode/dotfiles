@@ -3,7 +3,7 @@
 use anyhow::bail;
 use url::Url;
 
-/// Switch to the GitHub branch that is supplied or get it if it's a PR URL and switch to it.
+/// Switch to the GitHub branch that is supplied or get it if it's a PR URL and then switch to it.
 fn main() -> anyhow::Result<()> {
     let args = utils::system::get_args();
     let Some(branch_or_url) = args.first() else {
