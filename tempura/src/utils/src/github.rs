@@ -32,7 +32,7 @@ pub fn get_latest_release(repo: &str) -> anyhow::Result<String> {
         ])
         .output()?;
 
-    cmd_output_as_utf8_string(output)
+    extract_success_output(output)
 }
 
 pub fn get_branch_name_from_pr_url(pr_url: &Url) -> anyhow::Result<String> {
@@ -50,12 +50,11 @@ pub fn get_branch_name_from_pr_url(pr_url: &Url) -> anyhow::Result<String> {
         ])
         .output()?;
 
-    cmd_output_as_utf8_string(output)
+    extract_success_output(output)
 }
 
-fn cmd_output_as_utf8_string(output: Output) -> anyhow::Result<String> {
+fn extract_success_output(output: Output) -> anyhow::Result<String> {
     output.status.exit_ok()?;
-
     Ok(std::str::from_utf8(&output.stdout)?.trim().into())
 }
 
