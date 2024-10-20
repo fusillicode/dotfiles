@@ -12,6 +12,6 @@ url = { workspace = true }
 utils = { workspace = true }
 
 [dev-dependencies]
-fake = { version = "2.9", features = ["derive"] }
+fake = { workspace = true }
 temp-env = { version = "0.3" }
 utils = { path = "../utils", features = ["fake"] }
