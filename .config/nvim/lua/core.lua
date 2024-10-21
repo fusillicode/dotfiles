@@ -89,7 +89,5 @@ vim.api.nvim_create_autocmd({ 'BufLeave', 'FocusLost', }, {
 vim.api.nvim_create_autocmd({ 'FileType', }, {
   group = vim.api.nvim_create_augroup('QuickfixConfig', { clear = true, }),
   pattern = 'qf',
-  callback = function()
-    require('keymaps').quickfix()
-  end,
+  callback = function() require('keymaps').quickfix() end,
 })
