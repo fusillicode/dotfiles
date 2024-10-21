@@ -55,7 +55,7 @@ pub fn rm_dead_symlinks(dir: &str) -> anyhow::Result<()> {
 
         let metadata = std::fs::symlink_metadata(&path)?;
         if metadata.file_type().is_symlink() && std::fs::metadata(&path).is_err() {
-            println!("Removing dead symlink: {path:?}");
+            println!("🗑️ Removing dead symlink: {path:?}");
             std::fs::remove_file(&path)?;
         }
     }
