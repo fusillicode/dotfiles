@@ -14,7 +14,8 @@ use anyhow::bail;
 use anyhow::Context;
 use serde::Deserialize;
 
-/// Connect to Postgres DB via alias & Vault.
+/// Copy to the system clipboard the psql connection cmd matching the supplied alias with Vault credentials
+/// refreshed.
 fn main() -> anyhow::Result<()> {
     std::env::var("VAULT_ADDR").context("VAULT_ADDR missing")?;
 
