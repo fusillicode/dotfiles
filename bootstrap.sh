@@ -110,23 +110,23 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/mas
 brew install ninja cmake gettext curl
 
 # Setup ~/.local/bin & ~/.dev_tools
-cd ./tempura &&
+cd ./yog &&
   cargo build --release && \
   cd - && \
   rm -f "$HOME"/.local/bin/idt && \
-  ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/idt "$HOME"/.local/bin && \
+  ln -s "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/idt "$HOME"/.local/bin && \
   rm -f "$HOME"/.local/bin/yghfl && \
-  ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/yghfl "$HOME"/.local/bin && \
+  ln -s "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/yghfl "$HOME"/.local/bin && \
   rm -f "$HOME"/.local/bin/yhfp && \
-  ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/yhfp "$HOME"/.local/bin && \
+  ln -s "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/yhfp "$HOME"/.local/bin && \
   rm -f "$HOME"/.local/bin/oe && \
-  ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/oe "$HOME"/.local/bin && \
+  ln -s "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/oe "$HOME"/.local/bin && \
   rm -f "$HOME"/.local/bin/catl && \
-  ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/catl "$HOME"/.local/bin && \
+  ln -s "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/catl "$HOME"/.local/bin && \
   rm -f "$HOME"/.local/bin/gcu && \
-  ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/gcu "$HOME"/.local/bin && \
+  ln -s "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/gcu "$HOME"/.local/bin && \
   rm -f "$HOME"/.local/bin/vpg && \
-  ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/vpg "$HOME"/.local/bin && \
+  ln -s "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/vpg "$HOME"/.local/bin && \
   "$HOME"/.local/bin/idt ~/.dev-tools ~/.local/bin && \
   rm -f "$HOME"/.local/bin/update_* && \
   ln -s "$HOME"/data/dev/dotfiles/dotfiles/bin/update_* "$HOME"/.local/bin
