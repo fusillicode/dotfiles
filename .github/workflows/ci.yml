@@ -54,4 +54,4 @@ jobs:
       - name: Build and test
         run: |
           cd yog
-          cargo test --workspace
+          cargo test --workspace --color=always
