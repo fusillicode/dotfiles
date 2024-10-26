@@ -22,8 +22,8 @@ fn main() -> anyhow::Result<()> {
     let Some(alias) = args.first() else {
         bail!("no alias specified {:?}", args);
     };
-    let mut pgpass_path = PathBuf::from(std::env::var("HOME")?);
-    pgpass_path.push(".pgpass");
+
+    let pgpass_path = get_pgpass_path()?;
 
     let mut lines = read_pgpass_lines(&pgpass_path)?;
 
@@ -48,6 +48,12 @@ fn main() -> anyhow::Result<()> {
     utils::system::copy_to_system_clipboard(&mut pgpass_line.psql_conn_cmd().as_bytes())?;
 
     Ok(())
+}
+
+fn get_pgpass_path() -> anyhow::Result<PathBuf> {
+    let mut pgpass_path = PathBuf::from(std::env::var("HOME")?);
+    pgpass_path.push(".pgpass");
+    Ok(pgpass_path)
 }
 
 fn read_pgpass_lines(pgpass_path: &Path) -> anyhow::Result<Vec<(usize, String)>> {
