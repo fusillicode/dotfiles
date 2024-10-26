@@ -16,9 +16,6 @@ concurrency:
 jobs:
   setup:
     runs-on: ubuntu-latest
-    outputs:
-      cargo_registry_cache_key: ${{ steps.cache_registry.outputs.cache-hit }}
-      cargo_git_cache_key: ${{ steps.cache_git.outputs.cache-hit }}
 
     steps:
       - name: Checkout code
@@ -47,6 +44,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-git-
 
+      - name: Cache Cargo build
+        uses: actions/cache@v3
+        with:
+          path: target
+          key: cargo-build-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            cargo-build-${{ runner.os }}-
+
       - name: Lint code
         run: |
           cd yog
@@ -55,4 +60,4 @@ jobs:
       - name: Build and test
         run: |
           cd yog
-          cargo test --workspace
+          cargo test --workspace --all-features
