@@ -1,0 +1,36 @@
+name: "Setup"
+description: "Set up Rust and cache dependencies"
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Rust
+      shell: bash
+      run: |
+        cd yog
+        rustup show
+
+    - name: Cache Cargo registry
+      id: cache_registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-registry-
+
+    - name: Cache Cargo index
+      id: cache_git
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-git-
+
+    - name: Cache Cargo build
+      uses: actions/cache@v3
+      with:
+        path: target
+        key: cargo-build-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('**/Cargo.toml') }}
+        restore-keys: |
+          cargo-build-${{ runner.os }}-

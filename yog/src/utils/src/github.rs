@@ -36,7 +36,7 @@ pub fn get_latest_release(repo: &str) -> anyhow::Result<String> {
 }
 
 pub fn get_branch_name_from_pr_url(pr_url: &Url) -> anyhow::Result<String> {
-    let pr_id = extract_pr_id_form_pr_url(&pr_url)?;
+    let pr_id = extract_pr_id_form_pr_url(pr_url)?;
 
     let output = Command::new("gh")
         .args([
