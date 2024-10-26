@@ -214,7 +214,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_pgpass_line_from_str_returns_the_expected_pgpass_line() {
+    fn test_pgpass_line_try_from_returns_the_expected_pgpass_line() {
         assert_eq!(
             PgpassLine {
                 idx: 42,
@@ -229,7 +229,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pgpass_line_from_str_returns_an_error_if_port_is_not_a_number() {
+    fn test_pgpass_line_try_from_returns_an_error_if_port_is_not_a_number() {
         assert_eq!(
             "Err(unexpected port value, found foo, required i32\n\nCaused by:\n    invalid digit found in string)",
             format!("{:?}", PgpassLine::try_from(&(42, "host:foo:db:user:pwd".into())))
@@ -237,7 +237,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pgpass_line_from_str_returns_an_error_if_str_is_malformed() {
+    fn test_pgpass_line_try_from_returns_an_error_if_str_is_malformed() {
         assert_eq!(
             r#"Err(unexpected split parts ["host", "5432", "db", "user"] for str host:5432:db:user)"#,
             format!(
