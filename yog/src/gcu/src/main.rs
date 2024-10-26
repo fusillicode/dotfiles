@@ -5,7 +5,9 @@ use std::process::Command;
 use anyhow::bail;
 use url::Url;
 
-/// Switch to the GitHub branch that is supplied or get it if it's a PR URL and then switch to it.
+/// Switch to the supplied GitHub branch or get it if a PR URL is supplied and then switch to it.
+/// If "-b" is supplied try to create a new branch with a name composed by all subsequent args
+/// converted in param case.
 fn main() -> anyhow::Result<()> {
     let args = utils::system::get_args();
 
