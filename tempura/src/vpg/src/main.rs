@@ -92,14 +92,14 @@ fn get_pgpass_line(
 }
 
 fn extract_vault_path(metadata_line: &str) -> anyhow::Result<&str> {
-    let &[_, vault_path] = metadata_line
+    match metadata_line
         .split_whitespace()
         .collect::<Vec<_>>()
         .as_slice()
-    else {
-        bail!("malformed metadata line {metadata_line}");
-    };
-    Ok(vault_path)
+    {
+        &[_, vault_path] => Ok(vault_path),
+        _ => bail!("malformed metadata line {metadata_line}"),
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
