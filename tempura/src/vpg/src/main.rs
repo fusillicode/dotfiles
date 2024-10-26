@@ -2,7 +2,9 @@
 
 use std::fmt::Display;
 use std::fs::File;
+use std::fs::OpenOptions;
 use std::io::Write;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -162,7 +164,14 @@ fn save_new_pgpass_file(lines: Vec<(usize, &str)>, pgpass_path: &Path) -> anyhow
     for (_, line) in lines {
         writeln!(tmp_file, "{}", line)?;
     }
+
     std::fs::rename(&tmp_path, pgpass_path)?;
+
+    let file = OpenOptions::new().read(true).open(pgpass_path)?;
+    let mut permissions = file.metadata()?.permissions();
+    permissions.set_mode(0o600);
+    file.set_permissions(permissions)?;
+
     Ok(())
 }
 
