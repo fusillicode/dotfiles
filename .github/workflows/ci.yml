@@ -5,9 +5,11 @@ on:
     branches:
       - main
     paths:
+      - ".github/**"
       - "yog/**"
   pull_request:
     paths:
+      - ".github/**"
       - "yog/**"
 
 env:
@@ -45,7 +47,23 @@ jobs:
       - name: Setup
         uses: ./.github/actions/setup
 
-      - name: Build and test
+      - name: Test
         run: |
           cd yog
           cargo test --workspace --all-features
+
+  release:
+    name: Build release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      - name: Test
+        run: |
+          cd yog
+          cargo build --release
