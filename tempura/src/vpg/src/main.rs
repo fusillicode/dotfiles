@@ -24,10 +24,9 @@ fn main() -> anyhow::Result<()> {
     };
 
     let pgpass_path = get_pgpass_path()?;
-
     let mut lines = read_pgpass_lines(&pgpass_path)?;
 
-    // We do all of this before interacting with Vault to avoid unneeded calls.
+    // We do all this before interacting with Vault to avoid unneeded calls.
     let (metadata_line_idx, metadata_line) = find_metadata_line(&lines, alias)?;
     let mut pgpass_line = get_pgpass_line(&lines, *metadata_line_idx)?;
     let vault_path = extract_vault_path(&metadata_line)?;
@@ -44,7 +43,6 @@ fn main() -> anyhow::Result<()> {
     pgpass_line.update(vault_read_output.data, &mut lines);
 
     save_new_pgpass_file(lines, &pgpass_path)?;
-
     utils::system::copy_to_system_clipboard(&mut pgpass_line.psql_conn_cmd().as_bytes())?;
 
     Ok(())
