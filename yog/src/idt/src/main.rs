@@ -38,7 +38,7 @@ use crate::tools::Installer;
 mod installers;
 mod tools;
 
-/// Install Dev Tools
+/// Install "Dev Tools"
 fn main() -> anyhow::Result<()> {
     let args = utils::system::get_args();
     println!(
