@@ -16,7 +16,7 @@ use serde::Deserialize;
 
 /// Connect to Postgres DB via alias & Vault.
 fn main() -> anyhow::Result<()> {
-    std::env::var("VAULT_ADDR")?;
+    std::env::var("VAULT_ADDR").context("VAULT_ADDR missing")?;
 
     let args = utils::system::get_args();
     let Some(alias) = args.first() else {
