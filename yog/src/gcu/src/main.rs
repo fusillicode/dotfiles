@@ -8,14 +8,11 @@ use url::Url;
 /// Switch to the supplied GitHub branch or get it if a PR URL is supplied and then switch to it.
 /// If "-b" is supplied try to create a new branch with a name composed by all subsequent args
 /// converted in param case.
+/// With no args default to switching to "-".
 fn main() -> anyhow::Result<()> {
     let args = utils::system::get_args();
 
-    let Some(arg) = args.first() else {
-        bail!("no args supplied {:?}", args);
-    };
-
-    match arg.as_str() {
+    match args.first().unwrap_or(&"-".to_string()).as_str() {
         "-b" => create_new_branch(&args),
         arg => switch_branch(arg),
     }
@@ -31,7 +28,6 @@ fn create_new_branch(args: &[String]) -> anyhow::Result<()> {
     let output = Command::new("git")
         .args(["checkout", "-b", &to_git_branch(&collected_args)?])
         .output()?;
-
     if !output.status.success() {
         bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
     }
