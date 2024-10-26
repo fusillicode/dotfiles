@@ -41,7 +41,7 @@ fn main() -> anyhow::Result<()> {
             .stdout,
     )?;
 
-    pgpass_line.update(vault_read_output, &mut lines);
+    pgpass_line.update(vault_read_output.data, &mut lines);
 
     save_new_pgpass_file(lines, &pgpass_path)?;
 
@@ -120,9 +120,9 @@ impl PgpassLine {
         )
     }
 
-    pub fn update(&mut self, vault_read_output: VaultReadOutput, lines: &mut [(usize, String)]) {
-        self.user = vault_read_output.data.username;
-        self.pwd = vault_read_output.data.password;
+    pub fn update(&mut self, creds: Credentials, lines: &mut [(usize, String)]) {
+        self.user = creds.username;
+        self.pwd = creds.password;
         lines[self.idx] = (self.idx, self.to_string());
     }
 }
