@@ -4,7 +4,7 @@ use std::process::Command;
 
 use anyhow::anyhow;
 
-/// `cat` or `ls` based on what's supplied, i.e. a file of a directory.
+/// `cat` or `ls` based on what's supplied, i.e. a file or a directory.
 fn main() -> anyhow::Result<()> {
     let args = utils::system::get_args();
 
