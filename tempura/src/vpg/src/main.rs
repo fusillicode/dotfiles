@@ -23,7 +23,6 @@ fn main() -> anyhow::Result<()> {
     let Some(alias) = args.first() else {
         bail!("no alias specified {:?}", args);
     };
-
     let mut pgpass_path = PathBuf::from(std::env::var("HOME")?);
     pgpass_path.push(".pgpass");
 
@@ -76,6 +75,8 @@ fn main() -> anyhow::Result<()> {
 
     save_new_pgpass_file(lines, &pgpass_path)?;
 
+    utils::system::copy_to_system_clipboard(&mut pgpass_line.psql_conn_cmd().as_bytes())?;
+
     Ok(())
 }
 
@@ -109,6 +110,15 @@ struct PgpassLine {
     pub db: String,
     pub user: String,
     pub pwd: String,
+}
+
+impl PgpassLine {
+    pub fn psql_conn_cmd(&self) -> String {
+        format!(
+            "psql postgres://{}@{}:{}/{}",
+            self.user, self.host, self.port, self.db
+        )
+    }
 }
 
 impl FromStr for PgpassLine {
@@ -206,6 +216,21 @@ mod tests {
         assert_eq!(
             r#"Err(unexpected split parts ["host", "5432", "db", "user"] for str host:5432:db:user)"#,
             format!("{:?}", PgpassLine::from_str("host:5432:db:user"))
+        )
+    }
+
+    #[test]
+    fn test_pgpass_line_psql_conn_cmd_returns_the_expected_output() {
+        assert_eq!(
+            "psql postgres://user@host:5432/db",
+            PgpassLine {
+                host: "host".into(),
+                port: 5432,
+                db: "db".into(),
+                user: "user".into(),
+                pwd: "whatever".into()
+            }
+            .psql_conn_cmd()
         )
     }
 }
