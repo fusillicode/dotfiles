@@ -8,27 +8,36 @@ use url::Url;
 /// Switch to the GitHub branch that is supplied or get it if it's a PR URL and then switch to it.
 fn main() -> anyhow::Result<()> {
     let args = utils::system::get_args();
+
     let Some(arg) = args.first() else {
-        bail!("no git branch or GitHub PR specified {:?}", args);
+        bail!("no args supplied {:?}", args);
     };
 
-    if arg == "-b" {
-        let collected_args = args[1..]
-            .iter()
-            .map(|x| x.to_string())
-            .collect::<Vec<_>>()
-            .join(" ");
+    match arg.as_str() {
+        "-b" => create_new_branch(&args),
+        arg => switch_branch(arg),
+    }
+}
 
-        let output = Command::new("git")
-            .args(["checkout", arg, &to_git_branch(&collected_args)?])
-            .output()?;
-        if !output.status.success() {
-            bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
-        }
+fn create_new_branch(args: &[String]) -> anyhow::Result<()> {
+    let collected_args = args[1..]
+        .iter()
+        .map(|x| x.to_string())
+        .collect::<Vec<_>>()
+        .join(" ");
 
-        return Ok(());
+    let output = Command::new("git")
+        .args(["checkout", "-b", &to_git_branch(&collected_args)?])
+        .output()?;
+
+    if !output.status.success() {
+        bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
     }
 
+    Ok(())
+}
+
+fn switch_branch(arg: &str) -> anyhow::Result<()> {
     let branch_or_url = if let Ok(url) = Url::parse(arg) {
         utils::github::log_into_github()?;
         utils::github::get_branch_name_from_pr_url(&url)?
