@@ -10,6 +10,7 @@ use std::str::FromStr;
 
 use anyhow::anyhow;
 use anyhow::bail;
+use anyhow::Context;
 use serde::Deserialize;
 
 /// Connect to Postgres DB via alias & Vault.
@@ -44,7 +45,7 @@ fn main() -> anyhow::Result<()> {
     let pgpass_line_idx = metadata_line_idx + 1;
     let mut pgpass_line = lines
         .get(metadata_line_idx + 1)
-        .map(|(_, line)| PgPassLine::from_str(*line))
+        .map(|(_, line)| PgpassLine::from_str(*line))
         .ok_or_else(|| anyhow!("no PgPassLine found at idx {pgpass_line_idx} for metadata line {metadata_line_idx} {metadata_line}"))??;
 
     let &[_, vault_path] = metadata_line
@@ -99,8 +100,8 @@ fn login_to_vault_if_required() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[derive(Debug)]
-struct PgPassLine {
+#[derive(Debug, PartialEq, Eq)]
+struct PgpassLine {
     pub host: String,
     pub port: i32,
     pub db: String,
@@ -108,14 +109,16 @@ struct PgPassLine {
     pub pwd: String,
 }
 
-impl FromStr for PgPassLine {
+impl FromStr for PgpassLine {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.split(':').collect::<Vec<_>>().as_slice() {
             [host, port, db, user, pwd] => Ok(Self {
                 host: host.to_string(),
-                port: port.parse()?,
+                port: port
+                    .parse()
+                    .context(format!("unexpected port value, found {port}, required i32"))?,
                 db: db.to_string(),
                 user: user.to_string(),
                 pwd: pwd.to_string(),
@@ -125,7 +128,7 @@ impl FromStr for PgPassLine {
     }
 }
 
-impl Display for PgPassLine {
+impl Display for PgpassLine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -161,4 +164,39 @@ fn save_new_pgpass_file(lines: Vec<(usize, &str)>, pgpass_path: &Path) -> anyhow
     }
     std::fs::rename(&tmp_path, pgpass_path)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pgpass_line_from_str_returns_the_expected_pgpass_line() {
+        assert_eq!(
+            PgpassLine {
+                host: "host".into(),
+                port: 5432,
+                db: "db".into(),
+                user: "user".into(),
+                pwd: "pwd".into(),
+            },
+            PgpassLine::from_str("host:5432:db:user:pwd").unwrap()
+        )
+    }
+
+    #[test]
+    fn test_pgpass_line_from_str_returns_an_error_if_port_is_not_a_number() {
+        assert_eq!(
+            "Err(unexpected port value, found foo, required i32\n\nCaused by:\n    invalid digit found in string)",
+            format!("{:?}", PgpassLine::from_str("host:foo:db:user:pwd"))
+        )
+    }
+
+    #[test]
+    fn test_pgpass_line_from_str_returns_an_error_if_str_is_malformed() {
+        assert_eq!(
+            r#"Err(unexpected split parts ["host", "5432", "db", "user"] for str host:5432:db:user)"#,
+            format!("{:?}", PgpassLine::from_str("host:5432:db:user"))
+        )
+    }
 }
