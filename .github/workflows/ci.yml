@@ -4,7 +4,11 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "yog/**"
   pull_request:
+    paths:
+      - "yog/**"
 
 env:
   CARGO_TERM_COLOR: always
