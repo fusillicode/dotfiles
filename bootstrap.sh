@@ -125,6 +125,8 @@ cd ./tempura &&
   ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/catl "$HOME"/.local/bin && \
   rm -f "$HOME"/.local/bin/gcu && \
   ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/gcu "$HOME"/.local/bin && \
+  rm -f "$HOME"/.local/bin/vpg && \
+  ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/vpg "$HOME"/.local/bin && \
   "$HOME"/.local/bin/idt ~/.dev-tools ~/.local/bin && \
   rm -f "$HOME"/.local/bin/update_* && \
   ln -s "$HOME"/data/dev/dotfiles/dotfiles/bin/update_* "$HOME"/.local/bin

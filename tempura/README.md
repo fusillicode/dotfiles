@@ -32,4 +32,6 @@ cargo build --release && \
     ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/catl "$HOME"/.local/bin && \
     rm -f "$HOME"/.local/bin/gcu && \
     ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/gcu "$HOME"/.local/bin
+    rm -f "$HOME"/.local/bin/vpg && \
+    ln -s "$HOME"/data/dev/dotfiles/dotfiles/tempura/target/release/vpg "$HOME"/.local/bin
 ```
