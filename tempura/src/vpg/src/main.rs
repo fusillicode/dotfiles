@@ -80,29 +80,6 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn login_to_vault_if_required() -> anyhow::Result<()> {
-    let token_lookup = Command::new("vault").args(["token", "lookup"]).output()?;
-    if token_lookup.status.success() {
-        return Ok(());
-    }
-    let stderr = std::str::from_utf8(&token_lookup.stderr)?.trim();
-    if !stderr.contains("permission denied") {
-        bail!("unexpected error checking Vault token, error {}", stderr)
-    }
-
-    let login = Command::new("vault")
-        .args(["login", "-method=oidc", "-path=okta", "--no-print"])
-        .output()?;
-    if !login.status.success() {
-        bail!(
-            "error authenticating to Vault, error {}",
-            std::str::from_utf8(&login.stderr)?.trim()
-        )
-    }
-
-    Ok(())
-}
-
 #[derive(Debug, PartialEq, Eq)]
 struct PgpassLine {
     pub host: String,
@@ -165,6 +142,29 @@ struct VaultPathOutput {
 struct Credentials {
     pub password: String,
     pub username: String,
+}
+
+fn login_to_vault_if_required() -> anyhow::Result<()> {
+    let token_lookup = Command::new("vault").args(["token", "lookup"]).output()?;
+    if token_lookup.status.success() {
+        return Ok(());
+    }
+    let stderr = std::str::from_utf8(&token_lookup.stderr)?.trim();
+    if !stderr.contains("permission denied") {
+        bail!("unexpected error checking Vault token, error {}", stderr)
+    }
+
+    let login = Command::new("vault")
+        .args(["login", "-method=oidc", "-path=okta", "--no-print"])
+        .output()?;
+    if !login.status.success() {
+        bail!(
+            "error authenticating to Vault, error {}",
+            std::str::from_utf8(&login.stderr)?.trim()
+        )
+    }
+
+    Ok(())
 }
 
 fn save_new_pgpass_file(lines: Vec<(usize, &str)>, pgpass_path: &Path) -> anyhow::Result<()> {
