@@ -26,27 +26,13 @@ fn main() -> anyhow::Result<()> {
     let mut pgpass_path = PathBuf::from(std::env::var("HOME")?);
     pgpass_path.push(".pgpass");
 
-    let pgpass_content = std::fs::read_to_string(&pgpass_path)?;
-    let mut lines = pgpass_content
-        .lines()
-        .enumerate()
-        .collect::<Vec<(usize, &str)>>();
-
-    let (metadata_line_idx, metadata_line) = match lines
-        .iter()
-        .filter(|(_, line)| line.contains(&format!("#{alias} ")))
-        .collect::<Vec<_>>()
-        .as_slice()
-    {
-        &[line] => line,
-        [] => bail!("no matching metadata line for alias {alias} in file {pgpass_path:?}"),
-        _ => bail!("multiple lines matching alias {alias} in file {pgpass_path:?}"),
-    };
+    let mut lines = get_pgpass_lines(&pgpass_path)?;
+    let (metadata_line_idx, metadata_line) = get_metadata_line(&lines, alias)?;
 
     let pgpass_line_idx = metadata_line_idx + 1;
     let mut pgpass_line = lines
         .get(metadata_line_idx + 1)
-        .map(|(_, line)| PgpassLine::from_str(*line))
+        .map(|(_, line)| PgpassLine::from_str(line))
         .ok_or_else(|| anyhow!("no PgPassLine found at idx {pgpass_line_idx} for metadata line {metadata_line_idx} {metadata_line}"))??;
 
     let &[_, vault_path] = metadata_line
@@ -71,13 +57,37 @@ fn main() -> anyhow::Result<()> {
     pgpass_line.user = vault_read_output.data.username;
     pgpass_line.pwd = vault_read_output.data.password;
     let new_pgpass_line = pgpass_line.to_string();
-    lines[pgpass_line_idx] = (pgpass_line_idx, &new_pgpass_line);
+    lines[pgpass_line_idx] = (pgpass_line_idx, new_pgpass_line);
 
     save_new_pgpass_file(lines, &pgpass_path)?;
 
     utils::system::copy_to_system_clipboard(&mut pgpass_line.psql_conn_cmd().as_bytes())?;
 
     Ok(())
+}
+
+fn get_pgpass_lines(pgpass_path: &Path) -> anyhow::Result<Vec<(usize, String)>> {
+    Ok(std::fs::read_to_string(pgpass_path)?
+        .lines()
+        .enumerate()
+        .map(|(idx, line)| (idx, line.to_string()))
+        .collect())
+}
+
+fn get_metadata_line<'a>(
+    lines: &'a [(usize, String)],
+    alias: &'a str,
+) -> anyhow::Result<&'a (usize, String)> {
+    match lines
+        .iter()
+        .filter(|(_, line)| line.contains(&format!("#{alias} ")))
+        .collect::<Vec<_>>()
+        .as_slice()
+    {
+        &[line] => Ok(line),
+        [] => bail!("no matching metadata line for alias {alias}"),
+        _ => bail!("multiple lines matching alias {alias}"),
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -167,7 +177,7 @@ fn login_to_vault_if_required() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn save_new_pgpass_file(lines: Vec<(usize, &str)>, pgpass_path: &Path) -> anyhow::Result<()> {
+fn save_new_pgpass_file(lines: Vec<(usize, String)>, pgpass_path: &Path) -> anyhow::Result<()> {
     let mut tmp_path = PathBuf::from(pgpass_path);
     tmp_path.set_file_name(".pgpass.tmp");
     let mut tmp_file = File::create(&tmp_path)?;
