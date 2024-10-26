@@ -46,24 +46,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-git-
 
-  lint:
-    runs-on: ubuntu-latest
-    needs: setup
-
-    steps:
       - name: Lint code
         run: |
-          ls -la
           cd yog
           cargo clippy --all-targets --all-features -- -D warnings
 
-  test:
-    runs-on: ubuntu-latest
-    needs: setup
-
-    steps:
       - name: Build and test
         run: |
-          ls -la
           cd yog
           cargo test --workspace
