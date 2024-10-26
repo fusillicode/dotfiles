@@ -30,7 +30,7 @@ fn main() -> anyhow::Result<()> {
     // We do all this before interacting with Vault to avoid unneeded calls.
     let (metadata_line_idx, metadata_line) = find_metadata_line(&lines, alias)?;
     let mut pgpass_line = get_pgpass_line(&lines, *metadata_line_idx)?;
-    let vault_path = extract_vault_path(&metadata_line)?;
+    let vault_path = extract_vault_path(metadata_line)?;
 
     login_to_vault_if_required()?;
 
@@ -84,10 +84,10 @@ fn get_pgpass_line(
     metadata_line_idx: usize,
 ) -> anyhow::Result<PgpassLine> {
     let pgpass_line_idx = metadata_line_idx + 1;
-    Ok(lines
+    lines
         .get(metadata_line_idx + 1)
         .map(PgpassLine::try_from)
-        .ok_or_else(|| anyhow!("no PgPassLine found at idx {pgpass_line_idx} for metadata line {metadata_line_idx}"))??)
+        .ok_or_else(|| anyhow!("no PgPassLine found at idx {pgpass_line_idx} for metadata line {metadata_line_idx}"))?
 }
 
 fn extract_vault_path(metadata_line: &str) -> anyhow::Result<&str> {
