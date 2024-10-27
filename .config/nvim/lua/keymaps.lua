@@ -192,12 +192,10 @@ function M.gitsigns(gitsigns)
   keymap_set({ 'n', 'v', }, '<c-b>', function() gitsigns.blame_line({ full = true, }) end)
 end
 
-function M.lspconfig()
-  return function(_, bufnr)
-    keymap_set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr, })
-    keymap_set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, })
-    keymap_set('n', '<leader>a', vim.lsp.buf.code_action, { buffer = bufnr, })
-  end
+function M.lspconfig(bufnr)
+  keymap_set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr, })
+  keymap_set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, })
+  keymap_set('n', '<leader>a', vim.lsp.buf.code_action, { buffer = bufnr, })
 end
 
 function M.grug_far(grug_far, opts)

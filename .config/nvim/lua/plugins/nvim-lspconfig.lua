@@ -136,11 +136,17 @@ return {
   config = function()
     local lspconfig = require('lspconfig')
     local capabilities = require('cmp_nvim_lsp').default_capabilities(vim.lsp.protocol.make_client_capabilities())
-    local on_attach = require('keymaps').lspconfig()
+    local lspconfig_keymaps = require('keymaps').lspconfig
 
     for lsp, config in pairs(get_lsps_configs()) do
       -- 🥲 https://neovim.discourse.group/t/cannot-serialize-function-type-not-supported/4542/3
-      local lsp_setup = { capabilities = capabilities, on_attach = on_attach, }
+      local lsp_setup = {
+        capabilities = capabilities,
+        on_attach = function(client, bufnr)
+          lspconfig_keymaps(bufnr)
+          if config['on_attach'] then config['on_attach'](client, bufnr) end
+        end,
+      }
       if config['cmd'] then lsp_setup.cmd = config['cmd'] end
       if config['filetypes'] then lsp_setup.filetypes = config['filetypes'] end
       if config['init_options'] then lsp_setup.init_options = config['init_options'] end
