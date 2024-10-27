@@ -1,23 +1,24 @@
-alias nv="nvim"
-alias code="code-insiders"
-alias gs="git status"
-alias h="atuin history list"
-alias l="ls -llAtrh"
-alias j="jq . -c"
-alias jl="jq . "
-alias gcnuke="git commit --amend --no-edit --no-verify --allow-empty && git push --force-with-lease --no-verify"
-alias gcnoke="git commit --amend --no-edit --no-verify --allow-empty"
-alias gbrr="git for-each-ref --sort=committerdate refs/heads/ --format='%(HEAD) %(color:yellow)%(refname:short)%(color:reset) %(color:red)%(objectname:short)%(color:reset) - %(contents:subject) %(color:green)(%(committerdate:relative))%(color:reset) %(color:blue)<%(authorname)>%(color:reset)'"
-alias gdh="git diff HEAD~1"
-alias gfp="git fetch --all --prune && git pull"
-alias kdebian="kubectl exec -it debian -- bash || kubectl run debian --image=debian:latest --rm -it --restart=Never --command --"
-alias carbo="cargo"
-alias cmc="cargo make clippy"
-alias cmch="cargo make check"
-alias cmt="cargo make test"
-alias cmdr="cargo make db-reset"
-alias cmdp="cargo make db-prepare"
-alias cmf="cargo make format"
+alias nv='nvim'
+alias code='code-insiders'
+alias h='atuin history list'
+alias l='ls -llAtrh'
+alias j='jq . -c'
+alias jl='jq . '
+alias gs='git status'
+alias gcnoke='git commit --amend --no-edit --no-verify --allow-empty'
+alias gcnuke='git commit --amend --no-edit --no-verify --allow-empty && git push --force-with-lease --no-verify'
+alias gbrr='git for-each-ref --sort=committerdate refs/heads/ --format="%(HEAD) %(color:yellow)%(refname:short)%(color:reset) %(color:red)%(objectname:short)%(color:reset) - %(contents:subject) %(color:green)(%(committerdate:relative))%(color:reset) %(color:blue)<%(authorname)>%(color:reset)"'
+alias gdh='git diff HEAD~1'
+alias gfp='git fetch --all --prune && git pull'
+alias gt='git --no-pager tag && git ls-remote --tags'
+alias kdebian='kubectl exec -it debian -- bash || kubectl run debian --image=debian:latest --rm -it --restart=Never --command --'
+alias carbo='cargo'
+alias cmc='cargo make clippy'
+alias cmch='cargo make check'
+alias cmt='cargo make test'
+alias cmdr='cargo make db-reset'
+alias cmdp='cargo make db-prepare'
+alias cmf='cargo make format'
 
 # Easy Shell commands
 sorce () {
@@ -29,13 +30,8 @@ gtnuke () {
   git tag -f "$1" && git push origin "$1" -f
 }
 
-gt () {
-  git --no-pager tag
-  git ls-remote --tags
-}
-
 gmm () {
-  git commit -m $1
+  git commit -m "$*"
 }
 
 # Easy K8S
