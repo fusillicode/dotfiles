@@ -1,0 +1,51 @@
+name: Build & publish doc
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/**"
+      - "yog/**"
+  pull_request:
+    paths:
+      - ".github/**"
+      - "yog/**"
+
+env:
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build & publish doc
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      - name: Build Rust doc
+        run: |
+          cd yog
+          cargo doc --all --no-deps --document-private-items
+
+      - name: Upload Rust doc as artifact
+        id: deployment
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: yog/target/doc
+
+      - name: Deploy Rust doc artifact to GitHub Pages
+        uses: actions/deploy-pages@v4
