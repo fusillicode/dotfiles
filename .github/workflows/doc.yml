@@ -1,4 +1,4 @@
-name: Build & publish doc
+name: Doc
 
 on:
   push:
@@ -16,7 +16,7 @@ env:
   CARGO_TERM_COLOR: always
 
 concurrency:
-  group: ${{ github.ref }}
+  group: ${{ github.ref }}-doc
   cancel-in-progress: true
 
 jobs:
@@ -40,6 +40,10 @@ jobs:
         run: |
           cd yog
           cargo doc --all --no-deps --document-private-items
+
+      # https://www.reddit.com/r/rust/comments/195ao81/comment/khm4xqa/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
+      - name: Add doc root index.html with redirect to 1st bin doc
+        run: echo '<meta http-equiv="refresh" content="0;url=catl/index.html">' > yog/target/doc/index.html
 
       - name: Upload Rust doc as artifact
         id: deployment
