@@ -66,18 +66,32 @@ fn extract_pr_id_form_pr_url(pr_url: &Url) -> anyhow::Result<String> {
         bail!("host {host:?} in {pr_url} doesn't match {GITHUB_HOST:?}")
     }
 
-    match pr_url
+    let path_segments = pr_url
         .path_segments()
         .ok_or_else(|| anyhow!("{pr_url} cannot-be-a-base"))?
+        .enumerate()
+        .collect::<Vec<_>>();
+
+    match path_segments
+        .iter()
+        .filter(|(_, ps)| ps == &GITHUB_PR_ID_PREFIX)
         .collect::<Vec<_>>()
         .as_slice()
     {
-        [.., GITHUB_PR_ID_PREFIX, ""] => Err(anyhow!("empty PR id in {pr_url}")),
-        [.., GITHUB_PR_ID_PREFIX, pr_id] => Ok(pr_id.to_string()),
-        [.., GITHUB_PR_ID_PREFIX] => Err(anyhow!("missing PR id in {pr_url}")),
-        [] => Err(anyhow!("missing path in {pr_url}")),
-        segments => Err(anyhow!(
-            "missing PR id prefix {GITHUB_PR_ID_PREFIX:?} in {pr_url} path segments {segments:?}"
+        [(idx, _)] => Ok(path_segments
+            .get(idx + 1)
+            .ok_or_else(|| anyhow!("missing PR id in {pr_url} path segments {path_segments:?}"))
+            .and_then(|(_, pr_id)| {
+                if pr_id.is_empty() {
+                    return Err(anyhow!("empty PR id in {pr_url} path segments {path_segments:?}"));
+                }
+                Ok(pr_id.to_string())
+            })?),
+        [] => Err(anyhow!(
+            "missing PR id prefix {GITHUB_PR_ID_PREFIX:?} in {pr_url} path segments {path_segments:?}"
+        )),
+        _ => Err(anyhow!(
+            "multiple {GITHUB_PR_ID_PREFIX:?} found in {pr_url} path segments {path_segments:?}"
         )),
     }
 }
@@ -112,7 +126,7 @@ mod tests {
         let pr_url = Url::parse(&format!("https://{GITHUB_HOST}")).unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_pr_url(&pr_url));
         assert_eq!(
-            r#"missing PR id prefix "pull" in https://github.com/ path segments [""]"#,
+            r#"missing PR id prefix "pull" in https://github.com/ path segments [(0, "")]"#,
             error.to_string()
         )
     }
@@ -122,7 +136,7 @@ mod tests {
         let pr_url = Url::parse(&format!("https://{GITHUB_HOST}/pull")).unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_pr_url(&pr_url));
         assert_eq!(
-            r#"missing PR id in https://github.com/pull"#,
+            r#"missing PR id in https://github.com/pull path segments [(0, "pull")]"#,
             error.to_string()
         )
     }
@@ -133,14 +147,40 @@ mod tests {
         let pr_url = Url::parse(&format!("https://{GITHUB_HOST}/foo")).unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_pr_url(&pr_url));
         assert_eq!(
-            r#"missing PR id prefix "pull" in https://github.com/foo path segments ["foo"]"#,
+            r#"missing PR id prefix "pull" in https://github.com/foo path segments [(0, "foo")]"#,
             error.to_string()
         )
     }
 
     #[test]
-    fn test_extract_pr_id_form_pr_url_returns_the_expected_pr_id_from_an_expected_github_pr_url() {
+    fn test_extract_pr_id_form_pr_url_returns_the_expected_error_when_url_has_multiple_pr_id_prefixes(
+    ) {
+        let pr_url = Url::parse(&format!("https://{GITHUB_HOST}/pull/42/pull/43")).unwrap();
+        assert2::let_assert!(Err(error) = extract_pr_id_form_pr_url(&pr_url));
+        assert_eq!(
+            r#"multiple "pull" found in https://github.com/pull/42/pull/43 path segments [(0, "pull"), (1, "42"), (2, "pull"), (3, "43")]"#,
+            error.to_string()
+        )
+    }
+
+    #[test]
+    fn test_extract_pr_id_form_pr_url_returns_the_expected_pr_id_from_a_github_pr_url_that_ends_with_the_pr_id(
+    ) {
         let pr_url = Url::parse(&format!("https://{GITHUB_HOST}/pull/42")).unwrap();
+        assert_eq!("42", extract_pr_id_form_pr_url(&pr_url).unwrap())
+    }
+
+    #[test]
+    fn test_extract_pr_id_form_pr_url_returns_the_expected_pr_id_from_a_github_pr_url_that_does_not_end_with_the_pr_id(
+    ) {
+        let pr_url = Url::parse(&format!("https://{GITHUB_HOST}/pull/42/foo")).unwrap();
+        assert_eq!("42", extract_pr_id_form_pr_url(&pr_url).unwrap())
+    }
+
+    #[test]
+    fn test_extract_pr_id_form_pr_url_returns_the_expected_pr_id_from_a_github_pr_url_if_pr_id_prefix_is_not_1st_path_segment(
+    ) {
+        let pr_url = Url::parse(&format!("https://{GITHUB_HOST}/foo/pull/42/foo")).unwrap();
         assert_eq!("42", extract_pr_id_form_pr_url(&pr_url).unwrap())
     }
 }
