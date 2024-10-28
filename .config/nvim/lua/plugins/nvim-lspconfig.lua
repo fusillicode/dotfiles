@@ -1,3 +1,5 @@
+local log_file = vim.lsp.get_log_path()
+
 local function get_lsps_configs()
   local home_dir    = os.getenv('HOME')
   local schemastore = require('schemastore')
@@ -81,6 +83,33 @@ local function get_lsps_configs()
           showUnlinkedFileNotification = false,
         },
       },
+      on_attach = function(client, _)
+        vim.lsp.handlers['textDocument/publishDiagnostics'] = function(_, result, ctx, bufnr)
+          print(vim.inspect(client.name))
+          if client.name ~= 'rust_analyzer' then return end
+          if next(result.diagnostics) == nil then return end
+
+          local file = io.open(log_file, 'a')
+          if file then
+            file:write(vim.inspect(result))
+            file:close()
+          end
+          vim.lsp.diagnostic.on_publish_diagnostics(_, result, ctx, bufnr)
+
+          for _, diagnostic in ipairs(result.diagnostics) do
+            local message = diagnostic.data.rendered
+            local severity = diagnostic.severity or vim.lsp.protocol.DiagnosticSeverity.Information
+
+            -- Show floating window
+            local opts = {
+              border = 'rounded',
+              focusable = true,
+              style = 'minimal',
+            }
+            local buf = vim.lsp.util.open_floating_preview({ message, }, 'markdown', opts)
+          end
+        end
+      end,
     },
     sqlls = {},
     taplo = {},
