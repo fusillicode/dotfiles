@@ -82,11 +82,10 @@ fn extract_pr_id_form_pr_url(pr_url: &Url) -> anyhow::Result<String> {
             .get(idx + 1)
             .ok_or_else(|| anyhow!("missing PR id in {pr_url} path segments {path_segments:?}"))
             .and_then(|(_, pr_id)| {
-                if *pr_id == "" {
-                    Err(anyhow!("empty PR id in {pr_url} path segments {path_segments:?}"))
-                } else {
-                    Ok(pr_id.to_string())
+                if pr_id.is_empty() {
+                    return Err(anyhow!("empty PR id in {pr_url} path segments {path_segments:?}"));
                 }
+                Ok(pr_id.to_string())
             })?),
         [] => Err(anyhow!(
             "missing PR id prefix {GITHUB_PR_ID_PREFIX:?} in {pr_url} path segments {path_segments:?}"
