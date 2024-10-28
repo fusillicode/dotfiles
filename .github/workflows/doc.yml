@@ -7,10 +7,6 @@ on:
     paths:
       - ".github/**"
       - "yog/**"
-  pull_request:
-    paths:
-      - ".github/**"
-      - "yog/**"
 
 env:
   CARGO_TERM_COLOR: always
