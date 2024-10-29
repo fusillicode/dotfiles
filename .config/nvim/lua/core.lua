@@ -48,17 +48,26 @@ vim.diagnostic.config {
     focusable = true,
     format = function(diagnostic)
       local message =
-          vim.tbl_get(diagnostic, 'user_data', 'lsp', 'data', 'rendered') or
-          vim.tbl_get(diagnostic, 'user_data', 'lsp', 'message')
-      local source = vim.tbl_get(diagnostic, 'user_data', 'lsp', 'source'):gsub('%.$', '')
-      local code = vim.tbl_get(diagnostic, 'user_data', 'lsp', 'code'):gsub('%.$', '')
-      local from = vim.tbl_get(diagnostic, 'user_data', 'lsp', 'range', 'start')
-      local to = vim.tbl_get(diagnostic, 'user_data', 'lsp', 'range', 'end')
+          (
+            vim.tbl_get(diagnostic, 'user_data', 'lsp', 'data', 'rendered') or
+            vim.tbl_get(diagnostic, 'user_data', 'lsp', 'message') or
+            ''
+          ):gsub('%.$', '')
+      if message == '' then return end
+
+      local lsp_data = vim.tbl_get(diagnostic, 'user_data', 'lsp')
+      if not lsp_data then return end
+
+      local source = lsp_data.source and lsp_data.source:gsub('%.$', '') or nil
+      local code = lsp_data.code and lsp_data.code:gsub('%.$', '') or nil
+
+      local from = vim.tbl_get(lsp_data, 'range', 'start')
+      local to = vim.tbl_get(lsp_data, 'range', 'end')
 
       return '▶ ' ..
-          message:gsub('%.$', '') ..
-          ' [' .. source .. ': ' .. code ..
-          ' @ ' .. from.line .. ':' .. from.character .. ';' .. to.line .. ':' .. to.character .. ']'
+          message ..
+          ' [' .. (source and source .. ': ' or '') .. (code and code .. ' ' or '') ..
+          '@ ' .. from.line .. ':' .. from.character .. ';' .. to.line .. ':' .. to.character .. ']'
     end,
     header = '',
     prefix = '',
