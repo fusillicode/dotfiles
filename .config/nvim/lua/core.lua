@@ -47,13 +47,6 @@ vim.diagnostic.config {
     border = 'rounded',
     focusable = true,
     format = function(diagnostic)
-      -- local log_file = vim.lsp.get_log_path()
-      -- local file = io.open(log_file, 'a')
-      -- if file then
-      --   file:write(vim.inspect(diagnostic))
-      --   file:close()
-      -- end
-
       local message =
           vim.tbl_get(diagnostic, 'user_data', 'lsp', 'data', 'rendered') or
           vim.tbl_get(diagnostic, 'user_data', 'lsp', 'message')
