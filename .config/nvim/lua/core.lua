@@ -41,27 +41,31 @@ vim.opt.clipboard:append('unnamedplus')
 vim.opt.iskeyword:append('-')
 vim.opt.jumpoptions:append('stack')
 
-local function trim_trailing_dot(str)
-  return string.gsub(str, '%.(?=\r?\n)', '')
-end
-
 vim.diagnostic.config {
   float = {
     anchor_bias = 'above',
     border = 'rounded',
     focusable = true,
     format = function(diagnostic)
-      local src_code = {}
-      if diagnostic.source then
-        table.insert(src_code, (trim_trailing_dot(diagnostic.source)))
-      end
-      if diagnostic.code then
-        table.insert(src_code, (trim_trailing_dot(diagnostic.code)))
-      end
+      -- local log_file = vim.lsp.get_log_path()
+      -- local file = io.open(log_file, 'a')
+      -- if file then
+      --   file:write(vim.inspect(diagnostic))
+      --   file:close()
+      -- end
 
-      return '▶ '
-          .. trim_trailing_dot(string.gsub(diagnostic.message, '[\n\r]', ', '))
-          .. (next(src_code) == nil and '' or ' [' .. table.concat(src_code, ': ') .. ']')
+      local message =
+          vim.tbl_get(diagnostic, 'user_data', 'lsp', 'data', 'rendered') or
+          vim.tbl_get(diagnostic, 'user_data', 'lsp', 'message')
+      local source = vim.tbl_get(diagnostic, 'user_data', 'lsp', 'source'):gsub('%.$', '')
+      local code = vim.tbl_get(diagnostic, 'user_data', 'lsp', 'code'):gsub('%.$', '')
+      local from = vim.tbl_get(diagnostic, 'user_data', 'lsp', 'range', 'start')
+      local to = vim.tbl_get(diagnostic, 'user_data', 'lsp', 'range', 'end')
+
+      return '▶ ' ..
+          message:gsub('%.$', '') ..
+          ' [' .. source .. ': ' .. code ..
+          ' @ ' .. from.line .. ':' .. from.character .. ';' .. to.line .. ':' .. to.character .. ']'
     end,
     header = '',
     prefix = '',
