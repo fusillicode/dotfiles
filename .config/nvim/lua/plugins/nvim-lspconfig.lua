@@ -83,33 +83,52 @@ local function get_lsps_configs()
           showUnlinkedFileNotification = false,
         },
       },
-      on_attach = function(client, _)
-        vim.lsp.handlers['textDocument/publishDiagnostics'] = function(_, result, ctx, bufnr)
-          print(vim.inspect(client.name))
-          if client.name ~= 'rust_analyzer' then return end
-          if next(result.diagnostics) == nil then return end
-
-          local file = io.open(log_file, 'a')
-          if file then
-            file:write(vim.inspect(result))
-            file:close()
-          end
-          vim.lsp.diagnostic.on_publish_diagnostics(_, result, ctx, bufnr)
-
-          for _, diagnostic in ipairs(result.diagnostics) do
-            local message = diagnostic.data.rendered
-            local severity = diagnostic.severity or vim.lsp.protocol.DiagnosticSeverity.Information
-
-            -- Show floating window
-            local opts = {
-              border = 'rounded',
-              focusable = true,
-              style = 'minimal',
-            }
-            local buf = vim.lsp.util.open_floating_preview({ message, }, 'markdown', opts)
-          end
-        end
-      end,
+      -- on_attach = function(client, _)
+      --   client.handlers['textDocument/publishDiagnostics'] = function(_, result, ctx, config)
+      --     local file = io.open(log_file, 'a')
+      --     if file then
+      --       local bufnr = vim.uri_to_bufnr(result.uri)
+      --       if not vim.api.nvim_buf_is_loaded(bufnr) then return end
+      --
+      --       vim.diagnostic.reset(vim.lsp.diagnostic.get_namespace(ctx.client_id), bufnr)
+      --
+      --       for idx, diagnostic in ipairs(result.diagnostics) do
+      --         if diagnostic.source == 'rustc' then
+      --           file:write(vim.inspect(diagnostic))
+      --           result.diagnostics[idx] = result.diagnostics[idx]
+      --         else
+      --           result.diagnostics[idx] = result.diagnostics[idx]
+      --         end
+      --       end
+      --       vim.lsp.diagnostic.on_publish_diagnostics(_, result, ctx, config)
+      --       file:close()
+      --     end
+      --   end
+      -- end,
+      -- handlers = {
+      --   ['textDocument/hover'] = function(_, result, _, config)
+      --     if not (result and result.contents) then return end
+      --
+      --     -- Get the current buffer number and cursor position
+      --     local bufnr = vim.api.nvim_get_current_buf()
+      --     local line = vim.api.nvim_win_get_cursor(0)[1] - 1 -- Adjust 1-indexed to 0-indexed
+      --
+      --     -- Retrieve all diagnostics for the current line
+      --     local diagnostics = vim.diagnostic.get(bufnr, { lnum = line, })
+      --
+      --     -- Concatenate the hover information with diagnostics if available
+      --     local message = vim.lsp.util.convert_input_to_markdown_lines(result.contents)
+      --     if diagnostics and #diagnostics > 0 then
+      --       table.insert(message, '\n\n**Rust Diagnostics:**')
+      --       for _, diagnostic in ipairs(diagnostics) do
+      --         table.insert(message, diagnostic.message)
+      --       end
+      --     end
+      --
+      --     -- Display the concatenated hover and diagnostic message
+      --     vim.lsp.util.open_floating_preview(message, 'markdown', config)
+      --   end,
+      -- },
     },
     sqlls = {},
     taplo = {},
@@ -181,6 +200,7 @@ return {
       if config['init_options'] then lsp_setup.init_options = config['init_options'] end
       if config['root_dir'] then lsp_setup.root_dir = config['root_dir'] end
       if config['settings'] then lsp_setup.settings = config['settings'] end
+      if config['handlers'] then lsp_setup.handlers = config['handlers'] end
       lspconfig[lsp].setup(lsp_setup)
     end
 
