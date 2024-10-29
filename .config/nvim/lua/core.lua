@@ -58,16 +58,13 @@ vim.diagnostic.config {
       local lsp_data = vim.tbl_get(diagnostic, 'user_data', 'lsp')
       if not lsp_data then return end
 
-      local source = lsp_data.source and lsp_data.source:gsub('%.$', '') or nil
-      local code = lsp_data.code and lsp_data.code:gsub('%.$', '') or nil
+      local source_code_tbl = vim.tbl_filter(function(x) return x ~= nil and x ~= '' end, {
+        lsp_data.source and lsp_data.source:gsub('%.$', '') or nil,
+        lsp_data.code and lsp_data.code:gsub('%.$', '') or nil,
+      })
+      local source_code = table.concat(source_code_tbl, ': ')
 
-      local from = vim.tbl_get(lsp_data, 'range', 'start')
-      local to = vim.tbl_get(lsp_data, 'range', 'end')
-
-      return '▶ ' ..
-          message ..
-          ' [' .. (source and source .. ': ' or '') .. (code and code .. ' ' or '') ..
-          '@ ' .. from.line .. ':' .. from.character .. ';' .. to.line .. ':' .. to.character .. ']'
+      return '▶ ' .. message .. (source_code ~= '' and ' [' .. source_code .. ']' or '')
     end,
     header = '',
     prefix = '',
