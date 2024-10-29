@@ -69,8 +69,8 @@ local function get_lsps_configs()
             extraArgs = { '--profile', 'rust-analyzer', },
             extraEnv = { CARGO_PROFILE_RUST_ANALYZER_INHERITS = 'dev', },
           },
-          check = { command = 'check', },
-          checkOnSave = { command = 'check', },
+          check = { command = 'clippy', },
+          checkOnSave = { command = 'clippy', },
           completion = { autoimport = { enable = true, }, },
           diagnostics = {
             enable = true,
