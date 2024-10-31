@@ -1,5 +1,3 @@
-local log_file = vim.lsp.get_log_path()
-
 local function get_lsps_configs()
   local home_dir    = os.getenv('HOME')
   local schemastore = require('schemastore')
@@ -77,6 +75,7 @@ local function get_lsps_configs()
             disabled = { 'unresolved-proc-macro', },
             styleLints = { enable = true, },
           },
+          files = { excludeDirs = { 'target', }, },
           imports = { enforce = true, granularity = { group = 'item', }, prefix = 'crate', },
           lens = { debug = { enable = false, }, implementations = { enable = false, }, run = { enable = false, }, },
           procMacro = { enable = true, },
