@@ -4,7 +4,7 @@ package.cpath =
     package.cpath .. ';'
     .. os.getenv('HOME') .. '/data/dev/dotfiles/dotfiles/yog/target/release/?.so'
 
-print(require('rua').format_diagnostic({ user_data = { lsp = { dat = 'foo', }, }, }))
+print(require('rua').format_diagnostic({ user_data = { lsp = { daa = 'foo', }, }, }))
 require('commands')
 require('diagnostics')
 require('keymaps').core()

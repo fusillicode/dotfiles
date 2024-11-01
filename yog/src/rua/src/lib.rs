@@ -28,26 +28,42 @@ fn rua(lua: &Lua) -> LuaResult<LuaTable> {
 //   return '▶ ' .. message .. (source_code ~= '' and ' [' .. source_code .. ']' or '')
 // end
 fn format_diagnostic(lua: &Lua, lsp_diagnostic: LuaTable) -> LuaResult<String> {
-    let oo = dig::<String>(lua, &lsp_diagnostic, &["user_data", "lsp", "data"]);
-    Ok(format!("hello {oo:?}"))
+    let rendered = dig::<String>(&lsp_diagnostic, &["user_data", "lsp", "data", "rendered"]);
+    let message = dig::<String>(&lsp_diagnostic, &["user_data", "lsp", "data", "message"]);
+
+    ndbg(lua, &rendered);
+    ndbg(lua, &message);
+
+    Ok(format!("hello"))
 }
 
-fn dig<T: FromLua>(lua: &Lua, tbl: &LuaTable, keys: &[&str]) -> LuaResult<T> {
+fn dig<T: FromLua>(tbl: &LuaTable, keys: &[&str]) -> Result<T, DigError> {
     match keys {
-        [] => Err(mlua::Error::RuntimeError("no keys supplied".into())),
-        [leaf] => tbl.raw_get::<T>(*leaf),
+        [] => Err(DigError::NoKeysSupplied),
+        [leaf] => tbl.raw_get::<T>(*leaf).map_err(DigError::ConversionError),
         [path @ .., leaf] => {
-            ndbg(lua, &leaf);
-            let mut res: LuaTable = tbl.clone();
+            let mut tbl = tbl.to_owned();
             for key in path {
-                ndbg(lua, &key);
-                res = res.raw_get::<LuaTable>(*key)?;
+                tbl = tbl
+                    .raw_get::<LuaTable>(*key)
+                    .map_err(|e| DigError::KeyNotFound(key.to_string(), e))?;
             }
-            res.raw_get::<T>(*leaf)
+            tbl.raw_get::<T>(*leaf).map_err(DigError::ConversionError)
         }
     }
 }
 
+#[derive(thiserror::Error, Debug)]
+enum DigError {
+    #[error("no keys supplied")]
+    NoKeysSupplied,
+    #[error("key {0:?} not found {1:?}")]
+    KeyNotFound(String, mlua::Error),
+    #[error("cannot convert to supplied type {0:?}")]
+    ConversionError(mlua::Error),
+}
+
+#[allow(dead_code)]
 fn ndbg<'a, T: std::fmt::Debug>(lua: &Lua, value: &'a T) -> &'a T {
     let print = lua.globals().get::<LuaFunction>("print").unwrap();
     // let inspect = lua.globals().get::<LuaTable>("vim").unwrap();
