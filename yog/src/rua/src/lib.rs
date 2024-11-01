@@ -1,5 +1,12 @@
 use mlua::prelude::*;
 
+#[mlua::lua_module]
+fn rua(lua: &Lua) -> LuaResult<LuaTable> {
+    let exports = lua.create_table()?;
+    exports.set("format_diagnostic", lua.create_function(format_diagnostic)?)?;
+    Ok(exports)
+}
+
 // local function format_diagnostic(diagnostic)
 //   local message =
 //       (
@@ -20,79 +27,30 @@ use mlua::prelude::*;
 //
 //   return '▶ ' .. message .. (source_code ~= '' and ' [' .. source_code .. ']' or '')
 // end
-fn format_diagnostic(_: &Lua, lsp_diagnostic: LuaTable) -> LuaResult<String> {
-    let oo = dig::<String>(lsp_diagnostic, &["user_data", "lsp", "data", "rendered"]);
+fn format_diagnostic(lua: &Lua, lsp_diagnostic: LuaTable) -> LuaResult<String> {
+    let oo = dig::<String>(lua, &lsp_diagnostic, &["user_data", "lsp", "data"]);
     Ok(format!("hello {oo:?}"))
 }
 
-fn dig<T: FromLua>(tbl: LuaTable, keys: &[&str]) -> LuaResult<T> {
+fn dig<T: FromLua>(lua: &Lua, tbl: &LuaTable, keys: &[&str]) -> LuaResult<T> {
     match keys {
         [] => Err(mlua::Error::RuntimeError("no keys supplied".into())),
         [leaf] => tbl.raw_get::<T>(*leaf),
         [path @ .., leaf] => {
-            let mut res: Option<LuaTable> = None;
+            ndbg(lua, &leaf);
+            let mut res: LuaTable = tbl.clone();
             for key in path {
-                res = Some(tbl.raw_get::<LuaTable>(*key)?);
+                ndbg(lua, &key);
+                res = res.raw_get::<LuaTable>(*key)?;
             }
-            if let Some(res) = res {
-                return res.raw_get::<T>(*leaf);
-            }
-            Err(mlua::Error::RuntimeError(format!(
-                "didn't find {keys:?} in {tbl:?}"
-            )))
+            res.raw_get::<T>(*leaf)
         }
     }
 }
 
-#[mlua::lua_module]
-fn rua(lua: &Lua) -> LuaResult<LuaTable> {
-    let exports = lua.create_table()?;
-    exports.set("format_diagnostic", lua.create_function(format_diagnostic)?)?;
-    Ok(exports)
+fn ndbg<'a, T: std::fmt::Debug>(lua: &Lua, value: &'a T) -> &'a T {
+    let print = lua.globals().get::<LuaFunction>("print").unwrap();
+    // let inspect = lua.globals().get::<LuaTable>("vim").unwrap();
+    print.call::<()>(format!("{value:?}")).unwrap();
+    value
 }
-
-// #[cfg(test)]
-// mod tests {
-//     use mlua::Lua;
-//
-//     use super::*;
-//
-//     #[test]
-//     fn test_dig_returns_an_error_in_case_of_no_keys_supplied() {
-//         let lua = Lua::new();
-//         let tbl: LuaTable = lua.create_table();
-//         let res = dig::<usize>(tbl, &["foo", "bar"]);
-//         dbg!(res);
-//         panic!()
-//     }
-//
-//     #[test]
-//     fn test_dig_returns_an_error_in_case_of_empty_table() {
-//         let lua = Lua::new();
-//         let tbl: LuaTable = lua.load(r#"{}"#).eval().unwrap();
-//         let res = dig::<usize>(tbl, &["foo", "bar"]);
-//         dbg!(res);
-//         panic!()
-//     }
-//
-//     #[test]
-//     fn test_dig_returns_the_value_under_the_supplied_keys() {
-//         let lua = Lua::new();
-//         let tbl: LuaTable = lua
-//             .load(
-//                 r#"
-//                     {
-//                         "foo" = {
-//                             "bar" = 42
-//                         },
-//                         "baz" = "boo"
-//                     }
-//                 "#,
-//             )
-//             .eval()
-//             .unwrap();
-//         let res = dig::<usize>(tbl, &["foo", "bar"]);
-//         dbg!(res);
-//         panic!()
-//     }
-// }
