@@ -50,8 +50,6 @@ kcronrest () {
   kubectl apply -f "$maybe_namespace" foo.yaml
 }
 
-# Easy Postgres
-
 # FFS 😩
 [ -e "$HOME/.rover/env" ] && . "$HOME/.rover/env"
 
