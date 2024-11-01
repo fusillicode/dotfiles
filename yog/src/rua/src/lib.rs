@@ -7,34 +7,35 @@ fn rua(lua: &Lua) -> LuaResult<LuaTable> {
     Ok(exports)
 }
 
-// local function format_diagnostic(diagnostic)
-//   local message =
-//       (
-//         vim.tbl_get(diagnostic, 'user_data', 'lsp', 'data', 'rendered') or
-//         vim.tbl_get(diagnostic, 'user_data', 'lsp', 'message') or
-//         ''
-//       ):gsub('%.$', '')
-//   if message == '' then return end
-//
-//   local lsp_data = vim.tbl_get(diagnostic, 'user_data', 'lsp')
-//   if not lsp_data then return end
-//
-//   local source_code_tbl = vim.tbl_filter(function(x) return x ~= nil and x ~= '' end, {
-//     lsp_data.source and lsp_data.source:gsub('%.$', '') or nil,
-//     lsp_data.code and lsp_data.code:gsub('%.$', '') or nil,
-//   })
-//   local source_code = table.concat(source_code_tbl, ': ')
-//
-//   return '▶ ' .. message .. (source_code ~= '' and ' [' .. source_code .. ']' or '')
-// end
-fn format_diagnostic(lua: &Lua, lsp_diagnostic: LuaTable) -> LuaResult<String> {
-    let rendered = dig::<String>(&lsp_diagnostic, &["user_data", "lsp", "data", "rendered"]);
-    let message = dig::<String>(&lsp_diagnostic, &["user_data", "lsp", "data", "message"]);
+fn format_diagnostic(_lua: &Lua, lsp_diag: LuaTable) -> LuaResult<String> {
+    let Ok(lsp_data) = dig::<LuaTable>(&lsp_diag, &["user_data", "lsp"]) else {
+        return Ok("".into()); // TODO: Maybe an error?
+    };
 
-    ndbg(lua, &rendered);
-    ndbg(lua, &message);
+    let Ok(diag_msg) = dig::<String>(&lsp_data, &["data", "rendered"])
+        .or_else(|_| dig::<String>(&lsp_data, &["message"]))
+        .map(|s| s.trim_end_matches('.').to_owned())
+    else {
+        return Ok("".into()); // TODO: Maybe an error?
+    };
 
-    Ok(format!("hello"))
+    let src_and_code = match (
+        dig::<String>(&lsp_data, &["source"])
+            .map(|s| s.trim_end_matches('.').to_owned())
+            .ok(),
+        dig::<String>(&lsp_data, &["code"])
+            .map(|s| s.trim_end_matches('.').to_owned())
+            .ok(),
+    ) {
+        (None, None) => None,
+        (Some(src), None) => Some(src),
+        (None, Some(code)) => Some(code),
+        (Some(src), Some(code)) => Some(format!("{src}: {code}")),
+    }
+    .map(|s| format!(" [{s}]"))
+    .unwrap_or_else(String::new);
+
+    Ok(format!("▶ {diag_msg}{src_and_code}"))
 }
 
 fn dig<T: FromLua>(tbl: &LuaTable, keys: &[&str]) -> Result<T, DigError> {
@@ -66,6 +67,7 @@ enum DigError {
 #[allow(dead_code)]
 fn ndbg<'a, T: std::fmt::Debug>(lua: &Lua, value: &'a T) -> &'a T {
     let print = lua.globals().get::<LuaFunction>("print").unwrap();
+    // TODO: try to understand how to print inspect
     // let inspect = lua.globals().get::<LuaTable>("vim").unwrap();
     print.call::<()>(format!("{value:?}")).unwrap();
     value
