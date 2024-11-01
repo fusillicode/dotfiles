@@ -4,14 +4,24 @@ alias h='atuin history list'
 alias l='ls -llAtrh'
 alias j='jq . -c'
 alias jl='jq . '
+alias sorce='f() { set -a && source "$@" && set +a; }; f'
 alias gs='git status'
 alias gcnoke='git commit --amend --no-edit --no-verify --allow-empty'
 alias gcnuke='git commit --amend --no-edit --no-verify --allow-empty && git push --force-with-lease --no-verify'
+alias gtnuke='f() { git tag -f "$1" && git push origin "$1" -f }; f'
 alias gbrr='git for-each-ref --sort=committerdate refs/heads/ --format="%(HEAD) %(color:yellow)%(refname:short)%(color:reset) %(color:red)%(objectname:short)%(color:reset) - %(contents:subject) %(color:green)(%(committerdate:relative))%(color:reset) %(color:blue)<%(authorname)>%(color:reset)"'
 alias gdh='git diff HEAD~1'
 alias gfp='git fetch --all --prune && git pull'
 alias gt='git --no-pager tag && git ls-remote --tags'
+alias gm='f() { git commit -m "$*" }; f'
 alias kdebian='kubectl exec -it debian -- bash || kubectl run debian --image=debian:latest --rm -it --restart=Never --command --'
+alias klfir='f() { kubectl get pods | rg "$1" | head -n 1 | rg "^(\S*).*" -r '\''$1'\'' | xargs -I {} kubectl logs -f {} "$2" }; f'
+alias kseclist='f() { kubectl get secrets -oname ${1:+--namespace=$1} }; f'
+alias ksecyaml='f() { kubectl get secrets -oname ${2:+--namespace=$2} | rg "secret/(.*$1.*)" -r '\''$1'\'' | xargs -I {} kubectl get secret {} -oyaml }; f'
+alias kcronsus='f() { kubectl patch cronjobs "$1" --patch '\''{"spec": {"suspend": '\''"$2"'\''}}'\'' }; f'
+alias kdeplscale='f() { kubectl patch deployment "$1" --patch '\''{"spec": {"replicas": '\''"$2"'\''}}'\'' }; f'
+alias kdelerrpod='f() { kubectl get pods | rg "(\S+).*Error.*" -r '\''$1'\'' | xargs -I {} kubectl delete pod {} }; f'
+alias pg_copy_table='f() { pg_dump -a -t "$1" "$2" | psql "$3" }; f'
 alias carbo='cargo'
 alias cmc='cargo make clippy'
 alias cmch='cargo make check'
@@ -20,35 +30,8 @@ alias cmdr='cargo make db-reset'
 alias cmdp='cargo make db-prepare'
 alias cmf='cargo make format'
 
-# Easy Shell commands
-sorce () {
-  set -a && source "$@" && set +a
-}
-
-# Easy Git
-gtnuke () {
-  git tag -f "$1" && git push origin "$1" -f
-}
-
-gmm () {
-  git commit -m "$*"
-}
-
-# Easy K8S
-klfir() {
-  kubectl get pods | rg "$1" | head -n 1 | rg "^(\S*).*" -r '$1' | xargs -I {} kubectl logs -f {} "$2"
-}
-
-kseclist () {
-  k get secrets -oname ${1:+--namespace=$1}
-}
-
-ksecyaml () {
-  k get secrets -oname ${2:+--namespace=$2} | rg "secret/(.*$1.*)" -r '$1' | xargs -I {} kubectl get secret {} -oyaml
-}
-
 ksecdec () {
-  k get secrets -oname ${3:+--namespace=$3} | \
+  kubectl get secrets -oname ${3:+--namespace=$3} | \
     rg "secret/(.*$2.*)" -r '$1' | xargs -I {} kubectl get secret {} -oyaml | \
     rg "\s+(.*$1.*):\s+(.*)" -r '$1:$2' | \
     while read -r kv
@@ -59,29 +42,14 @@ ksecdec () {
     done
 }
 
-kcronsus () {
-  k patch cronjobs "$1" --patch '{"spec": {"suspend": '"$2"'}}'
-}
-
 kcronrest () {
   maybe_namespace=${2:+--namespace=$2}
-  k get cronjobs "$1" "$maybe_namespace" --export -oyaml > foo.yaml
-  k delete cronjobs -f "$1" "$maybe_namespace" --ignore-not-found
-  k apply -f "$maybe_namespace" foo.yaml
-}
-
-kdeplscale () {
-  k patch deployment "$1" --patch '{"spec": {"replicas": '"$2"'}}'
-}
-
-kdelerrpod () {
-  kubectl get pods | rg "(\S+).*Error.*" -r '$1' | xargs -I {} kubectl delete pod {}
+  kubectl get cronjobs "$1" "$maybe_namespace" --export -oyaml > foo.yaml
+  kubectl delete cronjobs -f "$1" "$maybe_namespace" --ignore-not-found
+  kubectl apply -f "$maybe_namespace" foo.yaml
 }
 
 # Easy Postgres
-pg_copy_table() {
-  pg_dump -a -t "$1" "$2" | psql "$3"
-}
 
 # FFS 😩
 [ -e "$HOME/.rover/env" ] && . "$HOME/.rover/env"
