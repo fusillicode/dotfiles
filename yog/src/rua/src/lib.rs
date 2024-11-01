@@ -8,16 +8,11 @@ fn rua(lua: &Lua) -> LuaResult<LuaTable> {
 }
 
 fn format_diagnostic(_lua: &Lua, lsp_diag: LuaTable) -> LuaResult<String> {
-    let Ok(lsp_data) = dig::<LuaTable>(&lsp_diag, &["user_data", "lsp"]) else {
-        return Ok("".into()); // TODO: Maybe an error?
-    };
+    let lsp_data = dig::<LuaTable>(&lsp_diag, &["user_data", "lsp"])?;
 
-    let Ok(diag_msg) = dig::<String>(&lsp_data, &["data", "rendered"])
+    let diag_msg = dig::<String>(&lsp_data, &["data", "rendered"])
         .or_else(|_| dig::<String>(&lsp_data, &["message"]))
-        .map(|s| s.trim_end_matches('.').to_owned())
-    else {
-        return Ok("".into()); // TODO: Maybe an error?
-    };
+        .map(|s| s.trim_end_matches('.').to_owned())?;
 
     let src_and_code = match (
         dig::<String>(&lsp_data, &["source"])
@@ -62,6 +57,12 @@ enum DigError {
     KeyNotFound(String, mlua::Error),
     #[error("cannot convert to supplied type {0:?}")]
     ConversionError(mlua::Error),
+}
+
+impl From<DigError> for mlua::Error {
+    fn from(value: DigError) -> Self {
+        mlua::Error::external(value)
+    }
 }
 
 #[allow(dead_code)]
