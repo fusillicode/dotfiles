@@ -1,5 +1,10 @@
 vim.loader.enable()
 
+package.cpath =
+    package.cpath .. ';'
+    .. os.getenv('HOME') .. '/data/dev/dotfiles/dotfiles/yog/target/release/?.so'
+
+-- require('rua').format_diagnostic({ user_data = { lsp = { data = { rendered = 'foo', }, }, }, })
 require('commands')
 require('diagnostics')
 require('keymaps').core()
