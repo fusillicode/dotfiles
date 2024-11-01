@@ -53,9 +53,9 @@ fn dig<T: FromLua>(tbl: &LuaTable, keys: &[&str]) -> Result<T, DigError> {
 enum DigError {
     #[error("no keys supplied")]
     NoKeysSupplied,
-    #[error("key {0:?} not found {1:?}")]
+    #[error("key {0:?} not found, error {1:?}")]
     KeyNotFound(String, mlua::Error),
-    #[error("cannot convert to supplied type {0:?}")]
+    #[error("type conversion error {0:?}")]
     ConversionError(mlua::Error),
 }
 
