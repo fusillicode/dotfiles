@@ -1,3 +1,4 @@
+use mlua::chunk;
 use mlua::prelude::*;
 
 #[mlua::lua_module]
@@ -51,10 +52,10 @@ fn filter_diagnostics(lua: &Lua, lsp_diags: LuaTable) -> LuaResult<LuaTable> {
             let end = dig::<LuaTable>(&rel_info, &["location", "range", "end"])?;
             let end_line = dig::<usize>(&end, &["line"])?;
             let end_col = dig::<usize>(&end, &["character"])?;
-            ndbg(lua, &start_line);
-            ndbg(lua, &start_col);
-            ndbg(lua, &end_line);
-            ndbg(lua, &end_col);
+            ndbg(lua, start_line).unwrap();
+            ndbg(lua, start_col).unwrap();
+            ndbg(lua, end_line).unwrap();
+            ndbg(lua, end_col).unwrap();
         }
         filtered.push(lsp_diag)?;
     }
@@ -94,15 +95,8 @@ impl From<DigError> for mlua::Error {
 }
 
 #[allow(dead_code)]
-fn ndbg<'a, T: std::fmt::Debug>(lua: &Lua, value: &'a T) -> &'a T {
-    let print = lua.globals().get::<LuaFunction>("print").unwrap();
-    // TODO: try to understand how to print inspect
-    // let inspect = lua
-    //     .globals()
-    //     .get::<LuaTable>("vim")
-    //     .unwrap()
-    //     .get::<LuaFunction>("inspect")
-    //     .unwrap();
-    print.call::<()>(format!("{value:?}")).unwrap();
-    value
+fn ndbg<T: mlua::IntoLuaMulti>(lua: &Lua, value: T) -> mlua::Result<()> {
+    lua.load(chunk! { return function(tbl) print(vim.inspect(tbl)) end })
+        .eval::<mlua::Function>()?
+        .call::<()>(value)
 }
