@@ -1,5 +1,9 @@
 vim.loader.enable()
 
+package.cpath =
+    package.cpath .. ';'
+    .. os.getenv('HOME') .. '/data/dev/dotfiles/dotfiles/yog/target/release/?.so'
+
 require('commands')
 require('diagnostics')
 require('keymaps').core()

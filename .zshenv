@@ -6,6 +6,7 @@ alias j='jq . -c'
 alias jl='jq . '
 alias sorce='f() { set -a && source "$@" && set +a; }; f'
 alias gs='git status'
+alias gidf='git diff'
 alias gcnoke='git commit --amend --no-edit --no-verify --allow-empty'
 alias gcnuke='git commit --amend --no-edit --no-verify --allow-empty && git push --force-with-lease --no-verify'
 alias gtnuke='f() { git tag -f "$1" && git push origin "$1" -f }; f'
@@ -48,8 +49,6 @@ kcronrest () {
   kubectl delete cronjobs -f "$1" "$maybe_namespace" --ignore-not-found
   kubectl apply -f "$maybe_namespace" foo.yaml
 }
-
-# Easy Postgres
 
 # FFS 😩
 [ -e "$HOME/.rover/env" ] && . "$HOME/.rover/env"
