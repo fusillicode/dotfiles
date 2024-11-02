@@ -4,6 +4,10 @@ use mlua::prelude::*;
 fn rua(lua: &Lua) -> LuaResult<LuaTable> {
     let exports = lua.create_table()?;
     exports.set("format_diagnostic", lua.create_function(format_diagnostic)?)?;
+    exports.set(
+        "filter_diagnostics",
+        lua.create_function(filter_diagnostics)?,
+    )?;
     Ok(exports)
 }
 
@@ -31,6 +35,10 @@ fn format_diagnostic(_lua: &Lua, lsp_diag: LuaTable) -> LuaResult<String> {
     .unwrap_or_else(String::new);
 
     Ok(format!("▶ {diag_msg}{src_and_code}"))
+}
+
+fn filter_diagnostics(_lua: &Lua, lsp_diags: LuaTable) -> LuaResult<LuaTable> {
+    Ok(lsp_diags)
 }
 
 fn dig<T: FromLua>(tbl: &LuaTable, keys: &[&str]) -> Result<T, DigError> {
