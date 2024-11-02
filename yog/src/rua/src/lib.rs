@@ -37,8 +37,28 @@ fn format_diagnostic(_lua: &Lua, lsp_diag: LuaTable) -> LuaResult<String> {
     Ok(format!("▶ {diag_msg}{src_and_code}"))
 }
 
-fn filter_diagnostics(_lua: &Lua, lsp_diags: LuaTable) -> LuaResult<LuaTable> {
-    Ok(lsp_diags)
+fn filter_diagnostics(lua: &Lua, lsp_diags: LuaTable) -> LuaResult<LuaTable> {
+    let filtered = lua.create_table()?;
+    for lsp_diag in lsp_diags.sequence_values::<LuaTable>().flatten() {
+        let Ok(rel_infos) = dig::<LuaTable>(&lsp_diag, &["user_data", "lsp", "relatedInformation"])
+        else {
+            continue;
+        };
+        for rel_info in rel_infos.sequence_values::<LuaTable>().flatten() {
+            let start = dig::<LuaTable>(&rel_info, &["location", "range", "start"])?;
+            let start_line = dig::<usize>(&start, &["line"])?;
+            let start_col = dig::<usize>(&start, &["character"])?;
+            let end = dig::<LuaTable>(&rel_info, &["location", "range", "end"])?;
+            let end_line = dig::<usize>(&end, &["line"])?;
+            let end_col = dig::<usize>(&end, &["character"])?;
+            ndbg(lua, &start_line);
+            ndbg(lua, &start_col);
+            ndbg(lua, &end_line);
+            ndbg(lua, &end_col);
+        }
+        filtered.push(lsp_diag)?;
+    }
+    Ok(filtered)
 }
 
 fn dig<T: FromLua>(tbl: &LuaTable, keys: &[&str]) -> Result<T, DigError> {
@@ -77,7 +97,12 @@ impl From<DigError> for mlua::Error {
 fn ndbg<'a, T: std::fmt::Debug>(lua: &Lua, value: &'a T) -> &'a T {
     let print = lua.globals().get::<LuaFunction>("print").unwrap();
     // TODO: try to understand how to print inspect
-    // let inspect = lua.globals().get::<LuaTable>("vim").unwrap();
+    // let inspect = lua
+    //     .globals()
+    //     .get::<LuaTable>("vim")
+    //     .unwrap()
+    //     .get::<LuaFunction>("inspect")
+    //     .unwrap();
     print.call::<()>(format!("{value:?}")).unwrap();
     value
 }

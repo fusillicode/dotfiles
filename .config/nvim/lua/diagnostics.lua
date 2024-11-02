@@ -18,7 +18,10 @@ vim.diagnostic.config {
   virtual_text = false,
 }
 
+local log = require('utils').log
 local diag_set = vim.diagnostic.set
 vim.diagnostic.set = function(namespace, bufnr, diagnostics, opts)
+  log(diagnostics)
   diag_set(namespace, bufnr, rua.filter_diagnostics(diagnostics), opts)
+  -- diag_set(namespace, bufnr, diagnostics, opts)
 end
