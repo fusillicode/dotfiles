@@ -52,9 +52,9 @@ function M.log(value)
   if file then
     file:write(vim.inspect(value) .. '\n')
     file:close()
-  else
-    vim.api.nvim_err_writeln('Failed to open log file ' .. log_path)
+    return
   end
+  vim.api.nvim_err_writeln('Failed to open log file ' .. log_path)
 end
 
 return M
