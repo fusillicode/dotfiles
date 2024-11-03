@@ -110,7 +110,7 @@ struct Pos {
 }
 
 /// Utility to extract fields from deep nested [`LuaTable`]s.
-/// Similar to [vim.tbl_get()](https://neovim.io/doc/user/lua.html#vim.tbl_get())
+/// Similar to [vim.tbl_get()](https://neovim.io/doc/user/lua.html#vim.tbl_get()).
 fn dig<T: FromLua>(tbl: &LuaTable, keys: &[&str]) -> Result<T, DigError> {
     match keys {
         [] => Err(DigError::NoKeysSupplied),
