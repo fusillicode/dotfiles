@@ -72,11 +72,10 @@ fn get_related_info_diag(lsp_diags: &LuaTable) -> LuaResult<Vec<RelatedInfoDiag>
             continue;
         };
         for rel_info in rel_infos.sequence_values::<LuaTable>().flatten() {
-            let msg = dig::<String>(&rel_info, &["message"])?;
             let start = dig::<LuaTable>(&rel_info, &["location", "range", "start"])?;
             let end = dig::<LuaTable>(&rel_info, &["location", "range", "end"])?;
             rel_diags.push(RelatedInfoDiag {
-                msg,
+                msg: dig::<String>(&rel_info, &["message"])?,
                 start: Pos {
                     ln: dig::<usize>(&start, &["line"])?,
                     col: dig::<usize>(&start, &["character"])?,
