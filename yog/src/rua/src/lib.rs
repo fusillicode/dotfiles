@@ -40,19 +40,34 @@ fn format_diagnostic(_lua: &Lua, lsp_diag: LuaTable) -> LuaResult<String> {
 }
 
 fn filter_diagnostics(lua: &Lua, lsp_diags: LuaTable) -> LuaResult<LuaTable> {
-    let lsp_diags_vec = lsp_diags
-        .sequence_values::<LuaTable>()
-        .flatten()
-        .collect::<Vec<_>>();
-    let rel_info_diags = get_related_info_diag(&lsp_diags_vec)?;
-    ndbg(lua, lua.to_value(&rel_info_diags).unwrap()).unwrap();
-    Ok(lsp_diags)
+    let rel_info_diags = get_related_info_diag(&lsp_diags)?;
+    if rel_info_diags.is_empty() {
+        return Ok(lsp_diags);
+    }
+    let out = lua.create_table()?;
+    for lsp_diag in lsp_diags.sequence_values::<LuaTable>().flatten() {
+        let rel = RelatedInfoDiag {
+            msg: dig::<String>(&lsp_diag, &["message"])?,
+            start: Pos {
+                ln: dig::<usize>(&lsp_diag, &["lnum"])?,
+                col: dig::<usize>(&lsp_diag, &["col"])?,
+            },
+            end: Pos {
+                ln: dig::<usize>(&lsp_diag, &["end_lnum"])?,
+                col: dig::<usize>(&lsp_diag, &["end_col"])?,
+            },
+        };
+        if !rel_info_diags.contains(&rel) {
+            out.push(lsp_diag)?;
+        }
+    }
+    Ok(out)
 }
 
-fn get_related_info_diag(lsp_diags: &[LuaTable]) -> LuaResult<Vec<RelatedInfoDiag>> {
+fn get_related_info_diag(lsp_diags: &LuaTable) -> LuaResult<Vec<RelatedInfoDiag>> {
     let mut rel_diags = vec![];
-    for lsp_diag in lsp_diags {
-        let Ok(rel_infos) = dig::<LuaTable>(lsp_diag, &["user_data", "lsp", "relatedInformation"])
+    for lsp_diag in lsp_diags.sequence_values::<LuaTable>().flatten() {
+        let Ok(rel_infos) = dig::<LuaTable>(&lsp_diag, &["user_data", "lsp", "relatedInformation"])
         else {
             continue;
         };
