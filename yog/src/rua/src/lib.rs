@@ -52,7 +52,7 @@ fn filter_diagnostics(lua: &Lua, lsp_diags: LuaTable) -> LuaResult<LuaTable> {
 fn get_related_info_diag(lsp_diags: &[LuaTable]) -> LuaResult<Vec<RelatedInfoDiag>> {
     let mut rel_diags = vec![];
     for lsp_diag in lsp_diags {
-        let Ok(rel_infos) = dig::<LuaTable>(&lsp_diag, &["user_data", "lsp", "relatedInformation"])
+        let Ok(rel_infos) = dig::<LuaTable>(lsp_diag, &["user_data", "lsp", "relatedInformation"])
         else {
             continue;
         };
