@@ -1,9 +1,15 @@
+use mlua::chunk;
 use mlua::prelude::*;
+use serde::Serialize;
 
 #[mlua::lua_module]
 fn rua(lua: &Lua) -> LuaResult<LuaTable> {
     let exports = lua.create_table()?;
     exports.set("format_diagnostic", lua.create_function(format_diagnostic)?)?;
+    exports.set(
+        "filter_diagnostics",
+        lua.create_function(filter_diagnostics)?,
+    )?;
     Ok(exports)
 }
 
@@ -31,6 +37,70 @@ fn format_diagnostic(_lua: &Lua, lsp_diag: LuaTable) -> LuaResult<String> {
     .unwrap_or_else(String::new);
 
     Ok(format!("▶ {diag_msg}{src_and_code}"))
+}
+
+fn filter_diagnostics(lua: &Lua, lsp_diags: LuaTable) -> LuaResult<LuaTable> {
+    let rel_info_diags = get_related_info_diag(&lsp_diags)?;
+    if rel_info_diags.is_empty() {
+        return Ok(lsp_diags);
+    }
+    let out = lua.create_table()?;
+    for lsp_diag in lsp_diags.sequence_values::<LuaTable>().flatten() {
+        let rel = RelatedInfoDiag {
+            msg: dig::<String>(&lsp_diag, &["message"])?,
+            start: Pos {
+                ln: dig::<usize>(&lsp_diag, &["lnum"])?,
+                col: dig::<usize>(&lsp_diag, &["col"])?,
+            },
+            end: Pos {
+                ln: dig::<usize>(&lsp_diag, &["end_lnum"])?,
+                col: dig::<usize>(&lsp_diag, &["end_col"])?,
+            },
+        };
+        if !rel_info_diags.contains(&rel) {
+            out.push(lsp_diag)?;
+        }
+    }
+    Ok(out)
+}
+
+fn get_related_info_diag(lsp_diags: &LuaTable) -> LuaResult<Vec<RelatedInfoDiag>> {
+    let mut rel_diags = vec![];
+    for lsp_diag in lsp_diags.sequence_values::<LuaTable>().flatten() {
+        let Ok(rel_infos) = dig::<LuaTable>(&lsp_diag, &["user_data", "lsp", "relatedInformation"])
+        else {
+            continue;
+        };
+        for rel_info in rel_infos.sequence_values::<LuaTable>().flatten() {
+            let start = dig::<LuaTable>(&rel_info, &["location", "range", "start"])?;
+            let end = dig::<LuaTable>(&rel_info, &["location", "range", "end"])?;
+            rel_diags.push(RelatedInfoDiag {
+                msg: dig::<String>(&rel_info, &["message"])?,
+                start: Pos {
+                    ln: dig::<usize>(&start, &["line"])?,
+                    col: dig::<usize>(&start, &["character"])?,
+                },
+                end: Pos {
+                    ln: dig::<usize>(&end, &["line"])?,
+                    col: dig::<usize>(&end, &["character"])?,
+                },
+            });
+        }
+    }
+    Ok(rel_diags)
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize)]
+struct RelatedInfoDiag {
+    msg: String,
+    start: Pos,
+    end: Pos,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize)]
+struct Pos {
+    ln: usize,
+    col: usize,
 }
 
 fn dig<T: FromLua>(tbl: &LuaTable, keys: &[&str]) -> Result<T, DigError> {
@@ -66,10 +136,8 @@ impl From<DigError> for mlua::Error {
 }
 
 #[allow(dead_code)]
-fn ndbg<'a, T: std::fmt::Debug>(lua: &Lua, value: &'a T) -> &'a T {
-    let print = lua.globals().get::<LuaFunction>("print").unwrap();
-    // TODO: try to understand how to print inspect
-    // let inspect = lua.globals().get::<LuaTable>("vim").unwrap();
-    print.call::<()>(format!("{value:?}")).unwrap();
-    value
+fn ndbg<T: mlua::IntoLua>(lua: &Lua, value: T) -> mlua::Result<()> {
+    lua.load(chunk! { return function(tbl) print(vim.inspect(tbl)) end })
+        .eval::<mlua::Function>()?
+        .call::<()>(value)
 }
