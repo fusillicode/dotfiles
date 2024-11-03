@@ -2,6 +2,7 @@ use mlua::chunk;
 use mlua::prelude::*;
 use serde::Serialize;
 
+/// Entrypoint of Rust exported fns.
 #[mlua::lua_module]
 fn rua(lua: &Lua) -> LuaResult<LuaTable> {
     let exports = lua.create_table()?;
@@ -13,7 +14,9 @@ fn rua(lua: &Lua) -> LuaResult<LuaTable> {
     Ok(exports)
 }
 
-fn format_diagnostic(_lua: &Lua, lsp_diag: LuaTable) -> LuaResult<String> {
+/// Returns the formatted [`String`] representation of an LSP diagnostic.
+/// The fields of the LSP diagnostic are extracted 1 by 1 from its supplied [`LuaTable`] representation.
+pub fn format_diagnostic(_lua: &Lua, lsp_diag: LuaTable) -> LuaResult<String> {
     let lsp_data = dig::<LuaTable>(&lsp_diag, &["user_data", "lsp"])?;
 
     let diag_msg = dig::<String>(&lsp_data, &["data", "rendered"])
@@ -39,7 +42,9 @@ fn format_diagnostic(_lua: &Lua, lsp_diag: LuaTable) -> LuaResult<String> {
     Ok(format!("▶ {diag_msg}{src_and_code}"))
 }
 
-fn filter_diagnostics(lua: &Lua, lsp_diags: LuaTable) -> LuaResult<LuaTable> {
+/// Filter out the LSP diagnostics that are already represented by other ones, e.g. HINTs pointing
+/// to location already mentioned by other ERROR's rendered message.
+pub fn filter_diagnostics(lua: &Lua, lsp_diags: LuaTable) -> LuaResult<LuaTable> {
     let rel_info_diags = get_related_info_diag(&lsp_diags)?;
     if rel_info_diags.is_empty() {
         return Ok(lsp_diags);
@@ -64,6 +69,7 @@ fn filter_diagnostics(lua: &Lua, lsp_diags: LuaTable) -> LuaResult<LuaTable> {
     Ok(out)
 }
 
+/// Get the message and posisiton of the LSP "relatedInformation"s inside LSP diagnostics.
 fn get_related_info_diag(lsp_diags: &LuaTable) -> LuaResult<Vec<RelatedInfoDiag>> {
     let mut rel_diags = vec![];
     for lsp_diag in lsp_diags.sequence_values::<LuaTable>().flatten() {
@@ -103,6 +109,8 @@ struct Pos {
     col: usize,
 }
 
+/// Utility to extract fields from deep nested [`LuaTable`]s.
+/// Similar to [vim.tbl_get()](https://neovim.io/doc/user/lua.html#vim.tbl_get())
 fn dig<T: FromLua>(tbl: &LuaTable, keys: &[&str]) -> Result<T, DigError> {
     match keys {
         [] => Err(DigError::NoKeysSupplied),
@@ -135,6 +143,7 @@ impl From<DigError> for mlua::Error {
     }
 }
 
+/// Utility to print debug Rust constructed values directly into NVIM.
 #[allow(dead_code)]
 fn ndbg<T: mlua::IntoLua>(lua: &Lua, value: T) -> mlua::Result<()> {
     lua.load(chunk! { return function(tbl) print(vim.inspect(tbl)) end })
