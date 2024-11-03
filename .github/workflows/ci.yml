@@ -61,7 +61,7 @@ jobs:
       - name: Setup
         uses: ./.github/actions/setup
 
-      - name: Test
+      - name: Build
         run: |
           cd yog
           cargo build --release
