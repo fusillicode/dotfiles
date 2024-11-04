@@ -1,3 +1,17 @@
+-- Tmp fix for `rust_analyzer: -32802: server cancelled the request`:
+-- https://github.com/neovim/neovim/issues/30985
+local function fix_rust_analyzer_32802()
+  for _, method in ipairs({ 'textDocument/diagnostic', 'workspace/diagnostic', }) do
+    local default_diagnostic_handler = vim.lsp.handlers[method]
+    vim.lsp.handlers[method] = function(err, result, context, config)
+      if err ~= nil and err.code == -32802 then
+        return
+      end
+      return default_diagnostic_handler(err, result, context, config)
+    end
+  end
+end
+
 local function get_lsps_configs()
   local home_dir    = os.getenv('HOME')
   local schemastore = require('schemastore')
@@ -166,6 +180,8 @@ return {
       vim.lsp.handlers.signature_help,
       { border = 'rounded', }
     )
+
+    fix_rust_analyzer_32802()
 
     -- https://github.com/neovim/neovim/issues/12970
     vim.lsp.util.apply_text_document_edit = function(text_document_edit, _, offset_encoding)
