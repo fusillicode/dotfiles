@@ -14,7 +14,7 @@ alias gbrr='git for-each-ref --sort=committerdate refs/heads/ --format="%(HEAD) 
 alias gdh='git diff HEAD~1'
 alias gfp='git fetch --all --prune && git pull'
 alias gt='git --no-pager tag && git ls-remote --tags'
-alias gm='f() { git commit -m "$*" }; f'
+alias gc='f() { git commit -m "$*" }; f'
 alias kdebian='kubectl exec -it debian -- bash || kubectl run debian --image=debian:latest --rm -it --restart=Never --command --'
 alias klfir='f() { kubectl get pods | rg "$1" | head -n 1 | rg "^(\S*).*" -r '\''$1'\'' | xargs -I {} kubectl logs -f {} "$2" }; f'
 alias kseclist='f() { kubectl get secrets -oname ${1:+--namespace=$1} }; f'
