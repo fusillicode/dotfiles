@@ -72,7 +72,7 @@ local function get_lsps_configs()
     psalm = {
       root_dir = require('lspconfig.util').root_pattern({ 'psalm.xml', 'psalm.xml.dist', 'psalm-baseline.xml', }),
     },
-    ruff_lsp = {},
+    ruff = {},
     rust_analyzer = {
       settings = {
         ['rust-analyzer'] = {
