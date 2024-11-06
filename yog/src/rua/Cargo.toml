@@ -15,4 +15,4 @@ mlua = { version = "0.10", features = [
   "serialize",
 ] }
 serde = { workspace = true }
-thiserror = { version = "1.0" }
+thiserror = { version = "2.0" }
