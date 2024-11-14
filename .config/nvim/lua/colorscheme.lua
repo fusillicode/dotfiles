@@ -8,7 +8,6 @@ function M.setup(colorscheme)
 
   vim.o.background = 'dark'
   vim.o.termguicolors = true
-  vim.o.colorcolumn = '120'
 
   local status_line_hl = { fg = 'gray', bg = 'none', }
 
