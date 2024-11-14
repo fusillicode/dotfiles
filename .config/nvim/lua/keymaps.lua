@@ -53,20 +53,8 @@ function M.core()
   keymap_set('n', '<esc>', require('utils').normal_esc)
   keymap_set('v', '<esc>', require('utils').visual_esc, { expr = true, })
 
-  keymap_set('n', 'dn', function()
-    local errs = vim.tbl_filter(function(diag)
-      return diag.severity == vim.diagnostic.severity.ERROR
-    end, vim.diagnostic.get(0))
-
-    if #errs > 0 then vim.diagnostic.goto_next({ severity = vim.diagnostic.severity.ERROR, }) end
-  end)
-  keymap_set('n', 'dp', function()
-    local errs = vim.tbl_filter(function(diag)
-      return diag.severity == vim.diagnostic.severity.ERROR
-    end, vim.diagnostic.get(0))
-
-    if #errs > 0 then vim.diagnostic.goto_prev({ severity = vim.diagnostic.severity.ERROR, }) end
-  end)
+  keymap_set('n', 'dn', function() vim.diagnostic.goto_next() end)
+  keymap_set('n', 'dp', function() vim.diagnostic.goto_prev() end)
   keymap_set('n', '<leader>e', vim.diagnostic.open_float)
 
   keymap_set('n', '<leader>gx', require('opener').open_under_cursor)
