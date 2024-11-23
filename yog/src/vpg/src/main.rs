@@ -46,7 +46,8 @@ fn main() -> anyhow::Result<()> {
     save_new_pgpass_file(lines, &pgpass_path)?;
 
     let (cmd, arg) = pgpass_line.psql_conn_cmd();
-    println!("\n Executing {cmd} {arg}\n");
+    println!("\nConnecting to {alias}:\n");
+    println!("{cmd} {arg}\n");
 
     if let Some(psql_exit_code) = Command::new(cmd)
         .arg(&arg) // Host
