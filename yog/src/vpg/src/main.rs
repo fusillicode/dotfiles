@@ -8,6 +8,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
+use std::process::Stdio;
 
 use anyhow::anyhow;
 use anyhow::bail;
@@ -23,7 +24,6 @@ fn main() -> anyhow::Result<()> {
     let Some(alias) = args.first() else {
         bail!("no alias specified {:?}", args);
     };
-
     let pgpass_path = get_pgpass_path()?;
     let mut lines = read_pgpass_lines(&pgpass_path)?;
 
@@ -44,9 +44,24 @@ fn main() -> anyhow::Result<()> {
     pgpass_line.update(vault_read_output.data, &mut lines);
 
     save_new_pgpass_file(lines, &pgpass_path)?;
-    utils::system::copy_to_system_clipboard(&mut pgpass_line.psql_conn_cmd().as_bytes())?;
 
-    Ok(())
+    let (cmd, arg) = pgpass_line.psql_conn_cmd();
+    println!("\n Executing {cmd} {arg}\n");
+
+    if let Some(psql_exit_code) = Command::new(cmd)
+        .arg(&arg) // Host
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .spawn()?
+        .wait()?
+        .code()
+    {
+        std::process::exit(psql_exit_code);
+    }
+
+    eprintln!("{cmd} {arg} terminated by signal.");
+    std::process::exit(1);
 }
 
 fn get_pgpass_path() -> anyhow::Result<PathBuf> {
@@ -112,10 +127,13 @@ struct PgpassLine {
 }
 
 impl PgpassLine {
-    pub fn psql_conn_cmd(&self) -> String {
-        format!(
-            "psql postgres://{}@{}:{}/{}",
-            self.user, self.host, self.port, self.db
+    pub fn psql_conn_cmd(&self) -> (&str, String) {
+        (
+            "psql",
+            format!(
+                "postgres://{}@{}:{}/{}",
+                self.user, self.host, self.port, self.db
+            ),
         )
     }
 
@@ -255,7 +273,7 @@ mod tests {
     #[test]
     fn test_pgpass_line_psql_conn_cmd_returns_the_expected_output() {
         assert_eq!(
-            "psql postgres://user@host:5432/db",
+            ("psql", "postgres://user@host:5432/db".to_string()),
             PgpassLine {
                 idx: 42,
                 host: "host".into(),
