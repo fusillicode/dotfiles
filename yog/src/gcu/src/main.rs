@@ -16,38 +16,39 @@ fn main() -> anyhow::Result<()> {
     match args.split_first() {
         None => switch_branch("-"),
         Some((hd, _)) if hd == "-" => switch_branch(hd),
-        Some((hd, tail)) if hd == "-b" => {
-            Command::new("git")
-                .args(["checkout", "-b", &build_branch_name(tail)?])
-                .output()?;
-            Ok(())
-        }
+        Some((hd, tail)) if hd == "-b" => create_branch(&build_branch_name(tail)?),
         Some((hd, &[])) => {
             if let Ok(url) = Url::parse(hd) {
                 utils::github::log_into_github()?;
                 let branch_name = utils::github::get_branch_name_from_pr_url(&url)?;
                 return switch_branch(&branch_name);
             }
-            upsert_branch(&build_branch_name(&[hd.to_string()])?)?;
-            Ok(())
+            upsert_branch(&build_branch_name(&[hd.to_string()])?)
         }
-        _ => {
-            upsert_branch(&build_branch_name(&args)?)?;
-            Ok(())
-        }
-    }
+        _ => upsert_branch(&build_branch_name(&args)?),
+    }?;
+
+    Ok(())
 }
 
-fn upsert_branch(branch_name: &str) -> anyhow::Result<&str> {
+fn upsert_branch(branch_name: &str) -> anyhow::Result<()> {
     let output = Command::new("git")
         .args(["checkout", "-b", branch_name])
         .output()?;
-
     if !output.status.success() {
         bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
     }
+    Ok(())
+}
 
-    Ok(branch_name)
+fn create_branch(branch_name: &str) -> anyhow::Result<()> {
+    let output = Command::new("git")
+        .args(["checkout", "-b", branch_name])
+        .output()?;
+    if !output.status.success() {
+        bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
+    }
+    Ok(())
 }
 
 fn switch_branch(branch: &str) -> anyhow::Result<()> {
