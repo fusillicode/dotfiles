@@ -31,19 +31,19 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn upsert_branch(branch_name: &str) -> anyhow::Result<()> {
-    let output = Command::new("git")
-        .args(["checkout", "-b", branch_name])
-        .output()?;
-    if !output.status.success() {
-        bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
+fn upsert_branch(branch: &str) -> anyhow::Result<()> {
+    if let Err(error) = create_branch(branch) {
+        if error.to_string().contains("already exists") {
+            return switch_branch(branch);
+        }
+        return Err(error);
     }
     Ok(())
 }
 
-fn create_branch(branch_name: &str) -> anyhow::Result<()> {
+fn create_branch(branch: &str) -> anyhow::Result<()> {
     let output = Command::new("git")
-        .args(["checkout", "-b", branch_name])
+        .args(["checkout", "-b", branch])
         .output()?;
     if !output.status.success() {
         bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
