@@ -5,11 +5,13 @@ use std::process::Command;
 use anyhow::bail;
 use url::Url;
 
-/// Concat the supplied args in param case and switch to the related GitHub branch or
-/// create it with if not existing locally or remotely.
-/// If a PR URL is supplied switches to the related branch.
-/// With no args default to switching to "-".
-/// If "-b foo" is supplied it defaults to "git checkout -b foo"
+/// Create or switch to the GitHub branch built by parameterizing the
+/// supplied args.
+/// Existence of branch is checked only against local ones (to avoid
+/// fetching them remotely).
+/// If a PR URL is supplied as arg, switches to the related branch.
+/// With no args, defaults to switching to "-".
+/// If "-b" is supplied it defaults to "git checkout -b".
 fn main() -> anyhow::Result<()> {
     let args = utils::system::get_args();
 
@@ -82,7 +84,7 @@ fn build_branch_name(args: &[String]) -> anyhow::Result<String> {
         .join("-");
 
     if branch_name.is_empty() {
-        bail!("parameterizing {args:?} resulted in empty branch_name")
+        bail!("parameterizing {args:?} resulted in empty String")
     }
 
     Ok(branch_name)
@@ -95,11 +97,11 @@ mod tests {
     #[test]
     fn test_build_branch_name_works_as_expected() {
         assert_eq!(
-            r#"Err(parameterizing [""] resulted in empty branch_name)"#,
+            r#"Err(parameterizing [""] resulted in empty String)"#,
             format!("{:?}", build_branch_name(&["".into()]))
         );
         assert_eq!(
-            r#"Err(parameterizing ["❌"] resulted in empty branch_name)"#,
+            r#"Err(parameterizing ["❌"] resulted in empty String)"#,
             format!("{:?}", build_branch_name(&["❌".into()]))
         );
         assert_eq!(
