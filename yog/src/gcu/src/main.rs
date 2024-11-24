@@ -102,7 +102,6 @@ mod tests {
             r#"Err(parameterizing ["❌"] resulted in empty branch_name)"#,
             format!("{:?}", build_branch_name(&["❌".into()]))
         );
-
         assert_eq!(
             "helloworld",
             build_branch_name(&["HelloWorld".into()]).unwrap()
@@ -138,6 +137,22 @@ mod tests {
         assert_eq!(
             "smile-and-code",
             build_branch_name(&["Smile 😊 and 🤖 code".into()]).unwrap()
+        );
+        assert_eq!(
+            "hello-world",
+            build_branch_name(&["Hello".into(), "World".into()]).unwrap()
+        );
+        assert_eq!(
+            "hello-world-world",
+            build_branch_name(&["Hello World".into(), "World".into()]).unwrap()
+        );
+        assert_eq!(
+            "hello-world-42",
+            build_branch_name(&["Hello World".into(), "🌎".into(), "42".into()]).unwrap()
+        );
+        assert_eq!(
+            "this-is-a-test",
+            build_branch_name(&["This".into(), "---is.".into(), "..a_test".into()]).unwrap()
         );
     }
 }
