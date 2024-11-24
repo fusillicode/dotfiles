@@ -5,80 +5,89 @@ use std::process::Command;
 use anyhow::bail;
 use url::Url;
 
-/// Switch to the supplied GitHub branch or get it if a PR URL is supplied and then switch to it.
-/// If "-b" is supplied try to create a new branch with a name composed by all subsequent args
-/// converted in param case.
-/// With no args default to switching to "-".
+/// Create or switch to the GitHub branch built by parameterizing the
+/// supplied args.
+/// Existence of branch is checked only against local ones (to avoid
+/// fetching them remotely).
+/// If a PR URL is supplied as arg, switches to the related branch.
+/// With no args, defaults to switching to "-".
+/// If "-b" is supplied it defaults to "git checkout -b".
 fn main() -> anyhow::Result<()> {
     let args = utils::system::get_args();
 
-    match args.first().unwrap_or(&"-".to_string()).as_str() {
-        "-b" => create_new_branch(&args),
-        arg => switch_branch(arg),
-    }
-}
-
-fn create_new_branch(args: &[String]) -> anyhow::Result<()> {
-    let collected_args = args[1..]
-        .iter()
-        .map(|x| x.to_string())
-        .collect::<Vec<_>>()
-        .join(" ");
-
-    let output = Command::new("git")
-        .args(["checkout", "-b", &to_git_branch(&collected_args)?])
-        .output()?;
-    if !output.status.success() {
-        bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
-    }
-
-    Ok(())
-}
-
-fn switch_branch(arg: &str) -> anyhow::Result<()> {
-    let branch_or_url = if let Ok(url) = Url::parse(arg) {
-        utils::github::log_into_github()?;
-        utils::github::get_branch_name_from_pr_url(&url)?
-    } else {
-        arg.into()
-    };
-
-    let output = Command::new("git")
-        .args(["switch", &branch_or_url])
-        .output()?;
-    if !output.status.success() {
-        bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
-    }
-
-    Ok(())
-}
-
-fn to_git_branch(s: &str) -> anyhow::Result<String> {
-    if s.is_empty() {
-        bail!("empty string cannot be used as git branch")
-    }
-
-    let out = s
-        .trim()
-        .to_lowercase()
-        .chars()
-        .map(|c| {
-            if c.is_alphanumeric() || c.is_whitespace() {
-                c
-            } else {
-                ' '
+    match args.split_first() {
+        None => switch_branch("-"),
+        Some((hd, _)) if hd == "-" => switch_branch(hd),
+        Some((hd, tail)) if hd == "-b" => create_branch(&build_branch_name(tail)?),
+        Some((hd, &[])) => {
+            if let Ok(url) = Url::parse(hd) {
+                utils::github::log_into_github()?;
+                let branch_name = utils::github::get_branch_name_from_pr_url(&url)?;
+                return switch_branch(&branch_name);
             }
+            upsert_branch(&build_branch_name(&[hd.to_string()])?)
+        }
+        _ => upsert_branch(&build_branch_name(&args)?),
+    }?;
+
+    Ok(())
+}
+
+fn upsert_branch(branch: &str) -> anyhow::Result<()> {
+    if let Err(error) = create_branch(branch) {
+        if error.to_string().contains("already exists") {
+            return switch_branch(branch);
+        }
+        return Err(error);
+    }
+    Ok(())
+}
+
+fn create_branch(branch: &str) -> anyhow::Result<()> {
+    let output = Command::new("git")
+        .args(["checkout", "-b", branch])
+        .output()?;
+    if !output.status.success() {
+        bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
+    }
+    Ok(())
+}
+
+fn switch_branch(branch: &str) -> anyhow::Result<()> {
+    let output = Command::new("git").args(["switch", branch]).output()?;
+    if !output.status.success() {
+        bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
+    }
+    Ok(())
+}
+
+fn build_branch_name(args: &[String]) -> anyhow::Result<String> {
+    let branch_name = args
+        .iter()
+        .flat_map(|x| {
+            x.split_whitespace().filter_map(|y| {
+                let z = y
+                    .chars()
+                    .map(|c| if c.is_alphanumeric() { c } else { ' ' })
+                    .collect::<String>()
+                    .split_whitespace()
+                    .collect::<Vec<_>>()
+                    .join("-")
+                    .to_lowercase();
+                if z.is_empty() {
+                    return None;
+                }
+                Some(z)
+            })
         })
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<&str>>()
+        .collect::<Vec<_>>()
         .join("-");
 
-    if out.is_empty() {
-        bail!("parameterizing str {s} resulted in empty string")
+    if branch_name.is_empty() {
+        bail!("parameterizing {args:?} resulted in empty String")
     }
 
-    Ok(out)
+    Ok(branch_name)
 }
 
 #[cfg(test)]
@@ -86,36 +95,66 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_to_git_branch_works_as_expected() {
+    fn test_build_branch_name_works_as_expected() {
         assert_eq!(
-            "Err(empty string cannot be used as git branch)",
-            format!("{:?}", to_git_branch(""))
+            r#"Err(parameterizing [""] resulted in empty String)"#,
+            format!("{:?}", build_branch_name(&["".into()]))
         );
         assert_eq!(
-            "Err(parameterizing str ❌ resulted in empty string)",
-            format!("{:?}", to_git_branch("❌"))
+            r#"Err(parameterizing ["❌"] resulted in empty String)"#,
+            format!("{:?}", build_branch_name(&["❌".into()]))
         );
-
-        assert_eq!("helloworld", to_git_branch("HelloWorld").unwrap());
-        assert_eq!("hello-world", to_git_branch("Hello World").unwrap());
+        assert_eq!(
+            "helloworld",
+            build_branch_name(&["HelloWorld".into()]).unwrap()
+        );
+        assert_eq!(
+            "hello-world",
+            build_branch_name(&["Hello World".into()]).unwrap()
+        );
         assert_eq!(
             "feature-implement-user-login",
-            to_git_branch("Feature: Implement User Login!").unwrap()
+            build_branch_name(&["Feature: Implement User Login!".into()]).unwrap()
         );
-        assert_eq!("version-2-0", to_git_branch("Version 2.0").unwrap());
+        assert_eq!(
+            "version-2-0",
+            build_branch_name(&["Version 2.0".into()]).unwrap()
+        );
         assert_eq!(
             "this-is-a-test",
-            to_git_branch("This---is...a_test").unwrap()
+            build_branch_name(&["This---is...a_test".into()]).unwrap()
         );
         assert_eq!(
             "leading-and-trailing",
-            to_git_branch("  Leading and trailing   ").unwrap()
+            build_branch_name(&["  Leading and trailing   ".into()]).unwrap()
         );
-        assert_eq!("hello-world", to_git_branch("Hello 🌎 World").unwrap());
-        assert_eq!("launch-day", to_git_branch("🚀Launch🚀Day").unwrap());
+        assert_eq!(
+            "hello-world",
+            build_branch_name(&["Hello 🌎 World".into()]).unwrap()
+        );
+        assert_eq!(
+            "launch-day",
+            build_branch_name(&["🚀Launch🚀Day".into()]).unwrap()
+        );
         assert_eq!(
             "smile-and-code",
-            to_git_branch("Smile 😊 and 🤖 code").unwrap()
+            build_branch_name(&["Smile 😊 and 🤖 code".into()]).unwrap()
+        );
+        assert_eq!(
+            "hello-world",
+            build_branch_name(&["Hello".into(), "World".into()]).unwrap()
+        );
+        assert_eq!(
+            "hello-world-world",
+            build_branch_name(&["Hello World".into(), "World".into()]).unwrap()
+        );
+        assert_eq!(
+            "hello-world-42",
+            build_branch_name(&["Hello World".into(), "🌎".into(), "42".into()]).unwrap()
+        );
+        assert_eq!(
+            "this-is-a-test",
+            build_branch_name(&["This".into(), "---is.".into(), "..a_test".into()]).unwrap()
         );
     }
 }
