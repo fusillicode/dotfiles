@@ -28,11 +28,11 @@ fn main() -> anyhow::Result<()> {
                 let branch_name = utils::github::get_branch_name_from_pr_url(&url)?;
                 return switch_branch(&branch_name);
             }
-            // upsert_branch(&[hd])?;
+            upsert_branch(&build_branch_name(&[hd.to_string()])?)?;
             Ok(())
         }
         _ => {
-            upsert_branch(&build_branch_name(&args))?;
+            upsert_branch(&build_branch_name(&args)?)?;
             Ok(())
         }
     }
@@ -40,7 +40,7 @@ fn main() -> anyhow::Result<()> {
 
 fn upsert_branch(branch_name: &str) -> anyhow::Result<&str> {
     let output = Command::new("git")
-        .args(["checkout", "-b", &branch_name])
+        .args(["checkout", "-b", branch_name])
         .output()?;
 
     if !output.status.success() {
@@ -51,39 +51,40 @@ fn upsert_branch(branch_name: &str) -> anyhow::Result<&str> {
 }
 
 fn switch_branch(branch: &str) -> anyhow::Result<()> {
-    let output = Command::new("git").args(["switch", &branch]).output()?;
+    let output = Command::new("git").args(["switch", branch]).output()?;
     if !output.status.success() {
         bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
     }
     Ok(())
 }
 
-fn build_branch_name(s: &str) -> anyhow::Result<String> {
-    if s.is_empty() {
-        bail!("empty string cannot be used as git branch")
-    }
-
-    let out = s
-        .trim()
-        .to_lowercase()
-        .chars()
-        .map(|c| {
-            if c.is_alphanumeric() || c.is_whitespace() {
-                c
-            } else {
-                ' '
-            }
+fn build_branch_name(args: &[String]) -> anyhow::Result<String> {
+    let branch_name = args
+        .iter()
+        .flat_map(|x| {
+            x.split_whitespace().filter_map(|y| {
+                let z = y
+                    .chars()
+                    .map(|c| if c.is_alphanumeric() { c } else { ' ' })
+                    .collect::<String>()
+                    .split_whitespace()
+                    .collect::<Vec<_>>()
+                    .join("-")
+                    .to_lowercase();
+                if z.is_empty() {
+                    return None;
+                }
+                Some(z)
+            })
         })
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<&str>>()
+        .collect::<Vec<_>>()
         .join("-");
 
-    if out.is_empty() {
-        bail!("parameterizing str {s} resulted in empty string")
+    if branch_name.is_empty() {
+        bail!("parameterizing {args:?} resulted in empty branch_name")
     }
 
-    Ok(out)
+    Ok(branch_name)
 }
 
 #[cfg(test)]
@@ -93,34 +94,49 @@ mod tests {
     #[test]
     fn test_build_branch_name_works_as_expected() {
         assert_eq!(
-            "Err(empty string cannot be used as git branch)",
-            format!("{:?}", build_branch_name(""))
+            r#"Err(parameterizing [""] resulted in empty branch_name)"#,
+            format!("{:?}", build_branch_name(&["".into()]))
         );
         assert_eq!(
-            "Err(parameterizing str ❌ resulted in empty string)",
-            format!("{:?}", build_branch_name("❌"))
+            r#"Err(parameterizing ["❌"] resulted in empty branch_name)"#,
+            format!("{:?}", build_branch_name(&["❌".into()]))
         );
 
-        assert_eq!("helloworld", build_branch_name("HelloWorld").unwrap());
-        assert_eq!("hello-world", build_branch_name("Hello World").unwrap());
+        assert_eq!(
+            "helloworld",
+            build_branch_name(&["HelloWorld".into()]).unwrap()
+        );
+        assert_eq!(
+            "hello-world",
+            build_branch_name(&["Hello World".into()]).unwrap()
+        );
         assert_eq!(
             "feature-implement-user-login",
-            build_branch_name("Feature: Implement User Login!").unwrap()
+            build_branch_name(&["Feature: Implement User Login!".into()]).unwrap()
         );
-        assert_eq!("version-2-0", build_branch_name("Version 2.0").unwrap());
+        assert_eq!(
+            "version-2-0",
+            build_branch_name(&["Version 2.0".into()]).unwrap()
+        );
         assert_eq!(
             "this-is-a-test",
-            build_branch_name("This---is...a_test").unwrap()
+            build_branch_name(&["This---is...a_test".into()]).unwrap()
         );
         assert_eq!(
             "leading-and-trailing",
-            build_branch_name("  Leading and trailing   ").unwrap()
+            build_branch_name(&["  Leading and trailing   ".into()]).unwrap()
         );
-        assert_eq!("hello-world", build_branch_name("Hello 🌎 World").unwrap());
-        assert_eq!("launch-day", build_branch_name("🚀Launch🚀Day").unwrap());
+        assert_eq!(
+            "hello-world",
+            build_branch_name(&["Hello 🌎 World".into()]).unwrap()
+        );
+        assert_eq!(
+            "launch-day",
+            build_branch_name(&["🚀Launch🚀Day".into()]).unwrap()
+        );
         assert_eq!(
             "smile-and-code",
-            build_branch_name("Smile 😊 and 🤖 code").unwrap()
+            build_branch_name(&["Smile 😊 and 🤖 code".into()]).unwrap()
         );
     }
 }
