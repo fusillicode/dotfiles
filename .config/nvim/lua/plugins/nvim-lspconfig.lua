@@ -136,7 +136,16 @@ return {
   },
   config = function()
     local lspconfig = require('lspconfig')
-    local capabilities = require('cmp_nvim_lsp').default_capabilities(vim.lsp.protocol.make_client_capabilities())
+    local capabilities = vim.tbl_deep_extend(
+      'force',
+      require('cmp_nvim_lsp').default_capabilities(vim.lsp.protocol.make_client_capabilities()),
+      {
+        offsetEncoding = { 'utf-16', },
+        general = {
+          positionEncodings = { 'utf-16', },
+        },
+      }
+    )
     local lspconfig_keymaps = require('keymaps').lspconfig
 
     for lsp, config in pairs(get_lsps_configs()) do
@@ -166,18 +175,6 @@ return {
       vim.lsp.handlers.signature_help,
       { border = 'rounded', }
     )
-
-    -- https://github.com/neovim/neovim/issues/12970
-    vim.lsp.util.apply_text_document_edit = function(text_document_edit, _, offset_encoding)
-      local text_document = text_document_edit.textDocument
-      local bufnr = vim.uri_to_bufnr(text_document.uri)
-
-      if offset_encoding == nil then
-        vim.notify_once('apply_text_document_edit must be called with valid offset encoding', vim.log.levels.WARN)
-      end
-
-      vim.lsp.util.apply_text_edits(text_document_edit.edits, bufnr, offset_encoding)
-    end
 
     -- https://vinnymeller.com/posts/neovim_nightly_inlay_hints/#globally
     vim.api.nvim_create_autocmd('LspAttach', {
