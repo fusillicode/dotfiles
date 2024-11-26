@@ -21,7 +21,7 @@
   "multicursor.nvim": { "branch": "main", "commit": "b715cc5bf69cf6e338899510eb2b60b1dd7ccce0" },
   "nvim-autopairs": { "branch": "master", "commit": "b464658e9b880f463b9f7e6ccddd93fb0013f559" },
   "nvim-lint": { "branch": "master", "commit": "6b46370d02cd001509a765591a3ffc481b538794" },
-  "nvim-lspconfig": { "branch": "master", "commit": "064221eed39e7dc81cf1d27c0d016f4b29a9aad1" },
+  "nvim-lspconfig": { "branch": "master", "commit": "16008a64f6ab9309641f30b8a7c9a432f1649b9a" },
   "nvim-surround": { "branch": "main", "commit": "dca2e998ff26681ee422b92c6ed39b3d2908d8a9" },
   "nvim-treesitter": { "branch": "master", "commit": "28591731d84c2fc18ddda60e1d53da24c31c4987" },
   "nvim-treesitter-pairs": { "branch": "master", "commit": "f8c195d4d8464cba6971bf8de2d6a5c8c109b37a" },
