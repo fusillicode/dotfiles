@@ -5,8 +5,7 @@ local function keymap_set(modes, lhs, rhs, opts)
 end
 
 local function get_enclosing_fn_or_method_name()
-  local ts = require('nvim-treesitter.ts_utils')
-  local node = ts.get_node_at_cursor()
+  local node = require('nvim-treesitter.ts_utils').get_node_at_cursor()
   if not node then return end
 
   while node do
@@ -15,7 +14,7 @@ local function get_enclosing_fn_or_method_name()
         node_type == 'function_declaration' or node_type == 'method_declaration' or
         node_type == 'function' or node_type == 'method' or node_type == 'function_item' then
       local name_node = node:field('name')[1]
-      if name_node then return ts.get_node_text(name_node, 0)[1] end
+      if name_node then return vim.treesitter.get_node_text(name_node, 0) end
     end
     node = node:parent()
   end
