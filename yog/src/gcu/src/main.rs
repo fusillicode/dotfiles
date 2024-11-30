@@ -36,7 +36,7 @@ fn main() -> anyhow::Result<()> {
 fn upsert_branch(branch: &str) -> anyhow::Result<()> {
     if let Err(error) = create_branch(branch) {
         if error.to_string().contains("already exists") {
-            print!("Branch {branch} already exists");
+            println!("Branch {branch} already exists");
             return switch_branch(branch);
         }
         return Err(error);
@@ -51,7 +51,7 @@ fn create_branch(branch: &str) -> anyhow::Result<()> {
     if !output.status.success() {
         bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
     }
-    print!("Branch {branch} created");
+    println!("Branch {branch} created");
     Ok(())
 }
 
@@ -60,7 +60,7 @@ fn switch_branch(branch: &str) -> anyhow::Result<()> {
     if !output.status.success() {
         bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
     }
-    print!("Switched to {branch}");
+    println!("Switched to {branch}");
     Ok(())
 }
 
