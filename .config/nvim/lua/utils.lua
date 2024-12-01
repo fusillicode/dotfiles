@@ -1,5 +1,17 @@
 local M = {}
 
+local GLOB_EXCLUSIONS = {
+  '**/.git/*',
+  '**/target/*',
+  '**/_build/*',
+  '**/deps/*',
+  '**/.elixir_ls/*',
+  '**/node_modules/*',
+}
+
+M.RG_EXCLUSIONS = vim.tbl_map(function(glob) return '--glob=!' .. glob end, GLOB_EXCLUSIONS)
+M.FD_EXCLUSIONS = vim.tbl_map(function(glob) return '--exclude=' .. glob end, GLOB_EXCLUSIONS)
+
 function M.dbg(debug_value)
   print(vim.inspect(debug_value))
   return debug_value
