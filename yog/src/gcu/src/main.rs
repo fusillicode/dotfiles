@@ -71,7 +71,13 @@ fn build_branch_name(args: &[String]) -> anyhow::Result<String> {
             x.split_whitespace().filter_map(|y| {
                 let z = y
                     .chars()
-                    .map(|c| if c.is_alphanumeric() { c } else { ' ' })
+                    .map(|c| {
+                        if c.is_alphanumeric() || c == '.' || c == '/' {
+                            c
+                        } else {
+                            ' '
+                        }
+                    })
                     .collect::<String>()
                     .split_whitespace()
                     .collect::<Vec<_>>()
@@ -120,11 +126,11 @@ mod tests {
             build_branch_name(&["Feature: Implement User Login!".into()]).unwrap()
         );
         assert_eq!(
-            "version-2-0",
+            "version-2.0",
             build_branch_name(&["Version 2.0".into()]).unwrap()
         );
         assert_eq!(
-            "this-is-a-test",
+            "this-is...a-test",
             build_branch_name(&["This---is...a_test".into()]).unwrap()
         );
         assert_eq!(
@@ -156,8 +162,12 @@ mod tests {
             build_branch_name(&["Hello World".into(), "🌎".into(), "42".into()]).unwrap()
         );
         assert_eq!(
-            "this-is-a-test",
+            "this-is.-..a-test",
             build_branch_name(&["This".into(), "---is.".into(), "..a_test".into()]).unwrap()
+        );
+        assert_eq!(
+            "dependabot/cargo/opentelemetry-0.27.1",
+            build_branch_name(&["dependabot/cargo/opentelemetry-0.27.1".into()]).unwrap()
         );
     }
 }
