@@ -12,7 +12,7 @@ alias gcnuke='git commit --amend --no-edit --no-verify --allow-empty && git push
 alias gtnuke='f() { git tag -f "$1" && git push origin "$1" -f }; f'
 alias gbrr='git for-each-ref --sort=committerdate refs/heads/ --format="%(HEAD) %(color:yellow)%(refname:short)%(color:reset) %(color:red)%(objectname:short)%(color:reset) - %(contents:subject) %(color:green)(%(committerdate:relative))%(color:reset) %(color:blue)<%(authorname)>%(color:reset)"'
 alias gdh='git diff HEAD~1'
-alias gfp='git fetch --all --prune && git pull'
+alias gfp='git fetch --all --prune && git pull origin "$(git_current_branch)"'
 alias gt='git --no-pager tag && git ls-remote --tags'
 alias gm='f() { git commit -m "$*" }; f'
 alias kdebian='kubectl exec -it debian -- bash || kubectl run debian --image=debian:latest --rm -it --restart=Never --command --'
