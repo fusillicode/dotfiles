@@ -22,8 +22,8 @@ return {
           ['<c-u>'] = 'preview-page-up',
         },
         fzf = {
-          ['ctrl-n'] = 'preview-page-down',
-          ['ctrl-p'] = 'preview-page-up',
+          ['ctrl-d'] = 'preview-page-down',
+          ['ctrl-u'] = 'preview-page-up',
           ['ctrl-q'] = 'select-all+accept',
         },
       },
