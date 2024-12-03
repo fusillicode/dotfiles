@@ -101,44 +101,59 @@ function M.core()
   end)
 end
 
-function M.fzf_lua(fzf_lua)
-  keymap_set('n', '<leader>c', fzf_lua.commands)
-  keymap_set('n', '<leader>f', fzf_lua.files)
-  keymap_set('n', '<leader>b', fzf_lua.buffers)
-  keymap_set('n', '<leader>gs', fzf_lua.git_status)
-  keymap_set('n', '<leader>gc', fzf_lua.git_commits)
-  keymap_set('n', '<leader>gcc', fzf_lua.git_bcommits)
-  keymap_set('n', '<leader>gb', fzf_lua.git_branches)
+function M.telescope(telescope_builtin, defaults)
+  local function with_defaults(picker, opts)
+    return function()
+      telescope_builtin[picker](vim.tbl_extend('force', defaults, opts or {}))
+    end
+  end
 
-  local lsp_jumps_cfg = { ignore_current_line = true, jump_to_single_result = true, }
-  keymap_set('n', 'gr', function() fzf_lua.lsp_references(lsp_jumps_cfg) end)
-  keymap_set('n', 'gd', function() fzf_lua.lsp_definitions(lsp_jumps_cfg) end)
-  keymap_set('n', 'gi', function() fzf_lua.lsp_implementations(lsp_jumps_cfg) end)
-  keymap_set('n', 'go', function() fzf_lua.lsp_outgoing_calls(lsp_jumps_cfg) end)
-  keymap_set('n', 'gz', function() fzf_lua.lsp_incoming_calls(lsp_jumps_cfg) end)
+  keymap_set({ 'n', 'v', }, 'gd', with_defaults('lsp_definitions', { prompt_prefix = 'LSP Defs: ', }))
+  keymap_set({ 'n', 'v', }, 'gr', with_defaults('lsp_references', { prompt_prefix = 'LSP Refs: ', }))
+  keymap_set({ 'n', 'v', }, 'gi', with_defaults('lsp_implementations', { prompt_prefix = 'LSP Impls: ', }))
+  keymap_set({ 'n', 'v', }, '<leader>s', with_defaults('lsp_document_symbols', { prompt_prefix = 'LSP Syms: ', }))
+  keymap_set({ 'n', 'v', }, '<leader>S',
+    with_defaults('lsp_dynamic_workspace_symbols', { prompt_prefix = 'LSP Syms*: ', }))
+  keymap_set({ 'n', 'v', }, '<leader>f', with_defaults('find_files', { prompt_prefix = 'Files: ', }))
+  keymap_set({ 'n', 'v', }, '<leader>b', with_defaults('buffers', { prompt_prefix = 'Bufs: ', }))
 
-  keymap_set('n', '<leader>j', fzf_lua.jumps)
-  keymap_set('n', '<leader>s', fzf_lua.lsp_document_symbols)
-  keymap_set('n', '<leader>S', fzf_lua.lsp_live_workspace_symbols)
-  keymap_set('n', '<leader>a', fzf_lua.lsp_code_actions)
-  keymap_set('n', '<leader>d', fzf_lua.diagnostics_document)
-  keymap_set('n', '<leader>D', fzf_lua.diagnostics_workspace)
-
-  keymap_set('n', '<leader>w', fzf_lua.live_grep_glob)
+  keymap_set('n', '<leader>w', function()
+    require('telescope').extensions.live_grep_args.live_grep_args(
+      { prompt_title = false, prompt_prefix = 'rg: ', }
+    )
+  end)
   keymap_set('v', '<leader>w', function()
-    local selection = fzf_lua.utils.get_visual_selection()
-    if selection then fzf_lua.live_grep_glob({ query = selection, }) end
+    require('telescope-live-grep-args.shortcuts').grep_visual_selection(
+      { prompt_title = false, prompt_prefix = 'rg: ', }
+    )
   end)
 
-  local todo_comments_cfg = {
-    search =
-    ' FIX:| FIXME:| BUG:| FIXIT:| ISSUE:| TODO:| HACK:| WARN:| WARNING:| PERF:| OPTIM:| PERFORMANCE:| OPTIMIZE:| NOTE:| INFO:',
-    no_esc = true,
-  }
-  keymap_set('n', '<leader>t', function() fzf_lua.grep_curbuf(todo_comments_cfg) end)
-  keymap_set('n', '<leader>T', function() fzf_lua.grep(todo_comments_cfg) end)
-
-  keymap_set('n', '<leader>l', fzf_lua.resume)
+  keymap_set({ 'n', 'v', }, '<leader>gc', with_defaults('git_commits', { prompt_prefix = 'gc*: ', }))
+  keymap_set({ 'n', 'v', }, '<leader>gcb', with_defaults('git_bcommits', { prompt_prefix = 'gc: ', bufnr = 0, }))
+  keymap_set({ 'n', 'v', }, '<leader>gb', with_defaults('git_branches', { prompt_prefix = 'gb: ', }))
+  keymap_set({ 'n', 'v', }, '<leader>gs', with_defaults('git_status', { prompt_prefix = 'gst: ', }))
+  keymap_set({ 'n', 'v', }, '<leader>d',
+    with_defaults('diagnostics', { prompt_prefix = 'Diagn: ', bufnr = 0, sort_by = 'severity', }))
+  keymap_set({ 'n', 'v', }, '<leader>D',
+    with_defaults('diagnostics', { prompt_prefix = 'Diagn*: ', sort_by = 'severity', }))
+  keymap_set({ 'n', 'v', }, '<leader>c', with_defaults('commands', { prompt_prefix = 'Cmds: ', }))
+  keymap_set({ 'n', 'v', }, '<leader>T', function()
+    require('telescope').extensions.live_grep_args.live_grep_args(
+      {
+        prompt_title = false,
+        default_text =
+        'FIX:|FIXME:|BUG:|FIXIT:|ISSUE:|TODO:|HACK:|WARN:|WARNING:|PERF:|OPTIM:|PERFORMANCE:|OPTIMIZE:|NOTE|:INFO',
+      })
+  end)
+  keymap_set({ 'n', 'v', }, 'ga', function()
+    telescope_builtin.buffers({
+      previewer = false,
+      layout_config = { width = 0.0, height = 0.0, },
+      on_complete = {
+        function() vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<cr>', true, true, true), 'i', {}) end,
+      },
+    })
+  end)
 end
 
 function M.oil()
@@ -190,13 +205,14 @@ end
 function M.lspconfig(bufnr)
   keymap_set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr, })
   keymap_set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, })
+  keymap_set('n', '<leader>a', vim.lsp.buf.code_action, { buffer = bufnr, })
 end
 
 function M.grug_far(grug_far, opts)
-  keymap_set('n', '<leader>/', function()
+  keymap_set('n', '<leader>l', function()
     grug_far(vim.tbl_deep_extend('force', opts, {}))
   end)
-  keymap_set('v', '<leader>/', function()
+  keymap_set('v', '<leader>l', function()
     local utils = require('utils')
     local selection = utils.escape_regex(utils.get_visual_selection())
     grug_far(vim.tbl_deep_extend('force', opts, { prefills = { search = selection, }, }))
