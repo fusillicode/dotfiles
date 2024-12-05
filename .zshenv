@@ -29,6 +29,7 @@ alias cmch='cargo make check'
 alias cmt='f() { cargo make test "$*" }; f'
 alias cmdr='cargo make db-reset'
 alias cmdp='cargo make db-prepare'
+alias cmdm='cargo make db-migrate'
 alias cmf='cargo make format'
 alias cmr='cargo make run'
 
