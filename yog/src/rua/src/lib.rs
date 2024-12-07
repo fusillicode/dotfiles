@@ -29,21 +29,21 @@ pub fn format_diagnostic(_lua: &Lua, lsp_diag: LuaTable) -> LuaResult<String> {
 
 fn diag_msg_and_source_code_from_lsp_diag(lsp_diag: &LuaTable) -> LuaResult<(String, String)> {
     Ok((
-        dig::<String>(&lsp_diag, &["message"])?,
-        format_src_and_code(&dig::<String>(&lsp_diag, &["source"])?),
+        dig::<String>(lsp_diag, &["message"])?,
+        format_src_and_code(&dig::<String>(lsp_diag, &["source"])?),
     ))
 }
 
 fn diag_msg_and_source_from_lsp_data(lsp_data: &LuaTable) -> LuaResult<(String, String)> {
-    let diag_msg = dig::<String>(&lsp_data, &["data", "rendered"])
-        .or_else(|_| dig::<String>(&lsp_data, &["message"]))
+    let diag_msg = dig::<String>(lsp_data, &["data", "rendered"])
+        .or_else(|_| dig::<String>(lsp_data, &["message"]))
         .map(|s| s.trim_end_matches('.').to_owned())?;
 
     let src_and_code = match (
-        dig::<String>(&lsp_data, &["source"])
+        dig::<String>(lsp_data, &["source"])
             .map(|s| s.trim_end_matches('.').to_owned())
             .ok(),
-        dig::<String>(&lsp_data, &["code"])
+        dig::<String>(lsp_data, &["code"])
             .map(|s| s.trim_end_matches('.').to_owned())
             .ok(),
     ) {
