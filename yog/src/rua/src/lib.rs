@@ -17,17 +17,33 @@ fn rua(lua: &Lua) -> LuaResult<LuaTable> {
 /// Returns the formatted [`String`] representation of an LSP diagnostic.
 /// The fields of the LSP diagnostic are extracted 1 by 1 from its supplied [`LuaTable`] representation.
 pub fn format_diagnostic(_lua: &Lua, lsp_diag: LuaTable) -> LuaResult<String> {
-    let lsp_data = dig::<LuaTable>(&lsp_diag, &["user_data", "lsp"])?;
+    let (diag_msg, src_and_code) = dig::<LuaTable>(&lsp_diag, &["user_data", "lsp"])
+        .ok()
+        .as_ref()
+        .map_or_else(
+            || diag_msg_and_source_code_from_lsp_diag(&lsp_diag),
+            diag_msg_and_source_from_lsp_data,
+        )?;
+    Ok(format!("▶ {diag_msg}{src_and_code}"))
+}
 
-    let diag_msg = dig::<String>(&lsp_data, &["data", "rendered"])
-        .or_else(|_| dig::<String>(&lsp_data, &["message"]))
+fn diag_msg_and_source_code_from_lsp_diag(lsp_diag: &LuaTable) -> LuaResult<(String, String)> {
+    Ok((
+        dig::<String>(lsp_diag, &["message"])?,
+        format_src_and_code(&dig::<String>(lsp_diag, &["source"])?),
+    ))
+}
+
+fn diag_msg_and_source_from_lsp_data(lsp_data: &LuaTable) -> LuaResult<(String, String)> {
+    let diag_msg = dig::<String>(lsp_data, &["data", "rendered"])
+        .or_else(|_| dig::<String>(lsp_data, &["message"]))
         .map(|s| s.trim_end_matches('.').to_owned())?;
 
     let src_and_code = match (
-        dig::<String>(&lsp_data, &["source"])
+        dig::<String>(lsp_data, &["source"])
             .map(|s| s.trim_end_matches('.').to_owned())
             .ok(),
-        dig::<String>(&lsp_data, &["code"])
+        dig::<String>(lsp_data, &["code"])
             .map(|s| s.trim_end_matches('.').to_owned())
             .ok(),
     ) {
@@ -36,10 +52,14 @@ pub fn format_diagnostic(_lua: &Lua, lsp_diag: LuaTable) -> LuaResult<String> {
         (None, Some(code)) => Some(code),
         (Some(src), Some(code)) => Some(format!("{src}: {code}")),
     }
-    .map(|s| format!(" [{s}]"))
+    .map(|src_and_code| format_src_and_code(&src_and_code))
     .unwrap_or_else(String::new);
 
-    Ok(format!("▶ {diag_msg}{src_and_code}"))
+    Ok((diag_msg, src_and_code))
+}
+
+fn format_src_and_code(src_and_code: &str) -> String {
+    format!(" [{src_and_code}]")
 }
 
 /// Filter out the LSP diagnostics that are already represented by other ones, e.g. HINTs pointing

@@ -35,5 +35,6 @@ cargo build --release && \
     rm -f "$HOME"/.local/bin/gcu && \
     ln -s "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/gcu "$HOME"/.local/bin
     rm -f "$HOME"/.local/bin/vpg && \
-    ln -s "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/vpg "$HOME"/.local/bin
+    ln -s "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/vpg "$HOME"/.local/bin && \
+    mv "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/librua.dylib "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/rua.so
 ```
