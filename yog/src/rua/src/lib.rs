@@ -17,27 +17,35 @@ fn rua(lua: &Lua) -> LuaResult<LuaTable> {
 /// Returns the formatted [`String`] representation of an LSP diagnostic.
 /// The fields of the LSP diagnostic are extracted 1 by 1 from its supplied [`LuaTable`] representation.
 pub fn format_diagnostic(_lua: &Lua, lsp_diag: LuaTable) -> LuaResult<String> {
-    let lsp_data = dig::<LuaTable>(&lsp_diag, &["user_data", "lsp"])?;
+    let (diag_msg, src_and_code) =
+        if let Some(lsp_data) = dig::<LuaTable>(&lsp_diag, &["user_data", "lsp"]).ok() {
+            let diag_msg = dig::<String>(&lsp_data, &["data", "rendered"])
+                .or_else(|_| dig::<String>(&lsp_data, &["message"]))
+                .map(|s| s.trim_end_matches('.').to_owned())?;
 
-    let diag_msg = dig::<String>(&lsp_data, &["data", "rendered"])
-        .or_else(|_| dig::<String>(&lsp_data, &["message"]))
-        .map(|s| s.trim_end_matches('.').to_owned())?;
+            let src_and_code = match (
+                dig::<String>(&lsp_data, &["source"])
+                    .map(|s| s.trim_end_matches('.').to_owned())
+                    .ok(),
+                dig::<String>(&lsp_data, &["code"])
+                    .map(|s| s.trim_end_matches('.').to_owned())
+                    .ok(),
+            ) {
+                (None, None) => None,
+                (Some(src), None) => Some(src),
+                (None, Some(code)) => Some(code),
+                (Some(src), Some(code)) => Some(format!("{src}: {code}")),
+            }
+            .map(|s| format!(" [{s}]"))
+            .unwrap_or_else(String::new);
 
-    let src_and_code = match (
-        dig::<String>(&lsp_data, &["source"])
-            .map(|s| s.trim_end_matches('.').to_owned())
-            .ok(),
-        dig::<String>(&lsp_data, &["code"])
-            .map(|s| s.trim_end_matches('.').to_owned())
-            .ok(),
-    ) {
-        (None, None) => None,
-        (Some(src), None) => Some(src),
-        (None, Some(code)) => Some(code),
-        (Some(src), Some(code)) => Some(format!("{src}: {code}")),
-    }
-    .map(|s| format!(" [{s}]"))
-    .unwrap_or_else(String::new);
+            (diag_msg, src_and_code)
+        } else {
+            (
+                dig::<String>(&lsp_diag, &["message"])?,
+                format!(" [{}]", dig::<String>(&lsp_diag, &["source"])?),
+            )
+        };
 
     Ok(format!("▶ {diag_msg}{src_and_code}"))
 }
