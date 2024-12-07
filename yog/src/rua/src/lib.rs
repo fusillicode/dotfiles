@@ -22,44 +22,9 @@ pub fn format_diagnostic(_lua: &Lua, lsp_diag: LuaTable) -> LuaResult<String> {
         .as_ref()
         .map_or_else(
             || diag_msg_and_source_code_from_lsp_diag(&lsp_diag),
-            diag_msg_and_source_from_lsp_data,
+            diag_msg_and_source_from_lsp_user_data,
         )?;
     Ok(format!("▶ {diag_msg}{src_and_code}"))
-}
-
-fn diag_msg_and_source_code_from_lsp_diag(lsp_diag: &LuaTable) -> LuaResult<(String, String)> {
-    Ok((
-        dig::<String>(lsp_diag, &["message"])?,
-        format_src_and_code(&dig::<String>(lsp_diag, &["source"])?),
-    ))
-}
-
-fn diag_msg_and_source_from_lsp_data(lsp_data: &LuaTable) -> LuaResult<(String, String)> {
-    let diag_msg = dig::<String>(lsp_data, &["data", "rendered"])
-        .or_else(|_| dig::<String>(lsp_data, &["message"]))
-        .map(|s| s.trim_end_matches('.').to_owned())?;
-
-    let src_and_code = match (
-        dig::<String>(lsp_data, &["source"])
-            .map(|s| s.trim_end_matches('.').to_owned())
-            .ok(),
-        dig::<String>(lsp_data, &["code"])
-            .map(|s| s.trim_end_matches('.').to_owned())
-            .ok(),
-    ) {
-        (None, None) => None,
-        (Some(src), None) => Some(src),
-        (None, Some(code)) => Some(code),
-        (Some(src), Some(code)) => Some(format!("{src}: {code}")),
-    }
-    .map(|src_and_code| format_src_and_code(&src_and_code))
-    .unwrap_or_else(String::new);
-
-    Ok((diag_msg, src_and_code))
-}
-
-fn format_src_and_code(src_and_code: &str) -> String {
-    format!(" [{src_and_code}]")
 }
 
 /// Filter out the LSP diagnostics that are already represented by other ones, e.g. HINTs pointing
@@ -87,6 +52,44 @@ pub fn filter_diagnostics(lua: &Lua, lsp_diags: LuaTable) -> LuaResult<LuaTable>
         }
     }
     Ok(out)
+}
+
+/// Extract "dialog message" plus formatted "source and code" from the root LSP diagnostic.
+fn diag_msg_and_source_code_from_lsp_diag(lsp_diag: &LuaTable) -> LuaResult<(String, String)> {
+    Ok((
+        dig::<String>(lsp_diag, &["message"])?,
+        format_src_and_code(&dig::<String>(lsp_diag, &["source"])?),
+    ))
+}
+
+/// Extract "dialog message" plus formatted "source and code" from the LSP user data.
+fn diag_msg_and_source_from_lsp_user_data(lsp_user_data: &LuaTable) -> LuaResult<(String, String)> {
+    let diag_msg = dig::<String>(lsp_user_data, &["data", "rendered"])
+        .or_else(|_| dig::<String>(lsp_user_data, &["message"]))
+        .map(|s| s.trim_end_matches('.').to_owned())?;
+
+    let src_and_code = match (
+        dig::<String>(lsp_user_data, &["source"])
+            .map(|s| s.trim_end_matches('.').to_owned())
+            .ok(),
+        dig::<String>(lsp_user_data, &["code"])
+            .map(|s| s.trim_end_matches('.').to_owned())
+            .ok(),
+    ) {
+        (None, None) => None,
+        (Some(src), None) => Some(src),
+        (None, Some(code)) => Some(code),
+        (Some(src), Some(code)) => Some(format!("{src}: {code}")),
+    }
+    .map(|src_and_code| format_src_and_code(&src_and_code))
+    .unwrap_or_else(String::new);
+
+    Ok((diag_msg, src_and_code))
+}
+
+/// Format the supplied `[&str]` as the expected "source and code".
+fn format_src_and_code(src_and_code: &str) -> String {
+    format!(" [{src_and_code}]")
 }
 
 /// Get the message and posisiton of the LSP "relatedInformation"s inside LSP diagnostics.
