@@ -87,7 +87,7 @@ fn diag_msg_and_source_from_lsp_user_data(lsp_user_data: &LuaTable) -> LuaResult
     Ok((diag_msg, src_and_code))
 }
 
-/// Format the supplied `[&str]` as the expected "source and code".
+/// Format the supplied [`&str`] as the expected "source and code".
 fn format_src_and_code(src_and_code: &str) -> String {
     format!(" [{src_and_code}]")
 }
