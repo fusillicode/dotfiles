@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 pub fn run(
     dev_tools_dir: &str,
     tool: &str,

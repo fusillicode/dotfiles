@@ -16,10 +16,7 @@ use crate::tools::lua_ls::LuaLanguageServer;
 use crate::tools::marksman::Marksman;
 use crate::tools::nvim::Nvim;
 use crate::tools::ollama::Ollama;
-use crate::tools::php_cs_fixer::PhpFixer;
-use crate::tools::phpactor::PhpActor;
 use crate::tools::prettierd::PrettierD;
-use crate::tools::psalm::Psalm;
 use crate::tools::quicktype::Quicktype;
 use crate::tools::ruff_lsp::RuffLsp;
 use crate::tools::rust_analyzer::RustAnalyzer;
@@ -109,19 +106,7 @@ fn main() -> anyhow::Result<()> {
             dev_tools_dir: dev_tools_dir.into(),
             bin_dir: bin_dir.into(),
         }),
-        Box::new(PhpActor {
-            dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
-        }),
-        Box::new(PhpFixer {
-            dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
-        }),
         Box::new(PrettierD {
-            dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
-        }),
-        Box::new(Psalm {
             dev_tools_dir: dev_tools_dir.into(),
             bin_dir: bin_dir.into(),
         }),
