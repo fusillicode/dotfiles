@@ -3,6 +3,7 @@
 use std::process::Command;
 use std::process::ExitStatusError;
 use std::str::FromStr;
+use std::time::Duration;
 
 use anyhow::bail;
 use anyhow::Context;
@@ -14,7 +15,7 @@ fn main() -> anyhow::Result<()> {
     let Some((cooldown_secs, args)) = args.split_first() else {
         bail!("no cooldown supplied in {args:?}");
     };
-    let cooldown = std::time::Duration::from_secs(
+    let cooldown = Duration::from_secs(
         cooldown_secs
             .parse()
             .with_context(|| format!("cannot parse {cooldown_secs} into Duration"))?,
@@ -26,13 +27,23 @@ fn main() -> anyhow::Result<()> {
     let exit_cond =
         ExitCond::from_str(exit_cond).with_context(|| format!("in supplied args {args:?}"))?;
 
-    let Some((cmd, args)) = args.split_first() else {
-        bail!("no cmd supplied in {args:?}");
-    };
+    let cmd = args.join(" ");
 
     loop {
-        let cmd_res = Command::new(cmd).args(args).status()?.exit_ok();
-        if exit_cond.should_break(&cmd_res) {
+        let output = Command::new("sh")
+            .arg("-c")
+            .arg(&cmd)
+            .output()
+            .with_context(|| cmd.to_string())?;
+
+        let terminal_output = if output.status.success() {
+            output.stdout
+        } else {
+            output.stderr
+        };
+        println!("{}", String::from_utf8_lossy(&terminal_output));
+
+        if exit_cond.should_break(&output.status.exit_ok()) {
             break;
         }
         std::thread::sleep(cooldown);
