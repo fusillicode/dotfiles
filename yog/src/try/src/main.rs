@@ -4,6 +4,7 @@ use std::process::Command;
 use std::process::ExitStatusError;
 use std::str::FromStr;
 use std::time::Duration;
+use std::time::Instant;
 
 use anyhow::bail;
 use anyhow::Context;
@@ -29,12 +30,15 @@ fn main() -> anyhow::Result<()> {
 
     let cmd = args.join(" ");
 
+    let mut tries = vec![];
     loop {
+        let now = Instant::now();
         let output = Command::new("sh")
             .arg("-c")
             .arg(&cmd)
             .output()
             .with_context(|| cmd.to_string())?;
+        tries.push(now.elapsed());
 
         let terminal_output = if output.status.success() {
             output.stdout
@@ -48,6 +52,11 @@ fn main() -> anyhow::Result<()> {
         }
         std::thread::sleep(cooldown);
     }
+
+    let tries_count =
+        u32::try_from(tries.len()).with_context(|| format!("converting {} to u32", tries.len()))?;
+    let avg_runs_time = tries.iter().fold(Duration::ZERO, |acc, &d| acc + d) / tries_count;
+    println!("Summary:\n - tries {tries_count}\n - avg time {avg_runs_time:?}");
 
     Ok(())
 }
