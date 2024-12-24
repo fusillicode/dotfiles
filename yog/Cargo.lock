@@ -155,9 +155,9 @@ dependencies = [
 
 [[package]]
 name = "deunicode"
-version = "1.4.1"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a1abaf4d861455be59f64fd2b55606cb151fce304ede7165f410243ce96bde6"
+checksum = "339544cc9e2c4dc3fc7149fd630c5f22263a4fdf18a98afd0075784968b5cf00"
 
 [[package]]
 name = "diff"
@@ -178,9 +178,9 @@ dependencies = [
 
 [[package]]
 name = "dummy"
-version = "0.8.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1cac124e13ae9aa56acc4241f8c8207501d93afdd8d8e62f0c1f2e12f6508c65"
+checksum = "b3ee4e39146145f7dd28e6c85ffdce489d93c0d9c88121063b8aacabbd9858d2"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -206,9 +206,9 @@ dependencies = [
 
 [[package]]
 name = "fake"
-version = "2.10.0"
+version = "3.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d391ba4af7f1d93f01fcf7b2f29e2bc9348e109dfdbf4dcbdc51dfa38dab0b6"
+checksum = "661cb0601b5f4050d1e65452c5b0ea555c0b3e88fb5ed7855906adc6c42523ef"
 dependencies = [
  "deunicode",
  "dummy",
@@ -873,6 +873,14 @@ checksum = "9117f5d4db391c1cf6927e7bea3db74b9a1c1add8f7eda9ffd5364f40f57b82f"
 dependencies = [
  "displaydoc",
  "zerovec",
+]
+
+[[package]]
+name = "try"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "utils",
 ]
 
 [[package]]
