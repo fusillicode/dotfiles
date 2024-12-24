@@ -81,24 +81,6 @@ function M.core()
 
   keymap_set('n', '<leader>gx', require('opener').open_under_cursor)
   keymap_set('v', '<leader>gx', require('opener').open_selection)
-
-  keymap_set('v', '<leader>/', function()
-    local start_ln, _, end_ln, _ = require('utils').get_visual_selection_boundaries()
-
-    local search = vim.fn.escape(vim.fn.input('Search: '), '/')
-    if search == '' then
-      print('No search')
-      return
-    end
-
-    local replace = vim.fn.escape(vim.fn.input('Replace: '), '/')
-    if replace == '' then
-      print('No replace')
-      return
-    end
-
-    vim.cmd(start_ln .. ',' .. end_ln .. 's/' .. search .. '/' .. replace .. '/g')
-  end)
 end
 
 function M.telescope(telescope_builtin, defaults)
@@ -126,6 +108,12 @@ function M.telescope(telescope_builtin, defaults)
     require('telescope-live-grep-args.shortcuts').grep_visual_selection(
       { prompt_title = false, prompt_prefix = 'rg: ', }
     )
+  end)
+  keymap_set('n', '<leader>/', with_defaults('current_buffer_fuzzy_find', { prompt_prefix = 'rg: ', }))
+  keymap_set('v', '<leader>/', function()
+    local utils = require('utils')
+    local selection = utils.escape_regex(utils.get_visual_selection())
+    with_defaults('current_buffer_fuzzy_find', { prompt_prefix = 'rg: ', default_text = selection, })()
   end)
 
   keymap_set({ 'n', 'v', }, '<leader>gc', with_defaults('git_commits', { prompt_prefix = 'gc*: ', }))
