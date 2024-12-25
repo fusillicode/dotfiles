@@ -6,7 +6,6 @@ return {
     'L3MON4D3/LuaSnip',
   },
   opts = {
-    keymap = { preset = 'enter', },
     appearance = {
       use_nvim_cmp_as_default = true,
     },
@@ -29,6 +28,11 @@ return {
           },
         },
       },
+    },
+    keymap = {
+      preset = 'enter',
+      ['<C-u>'] = { 'scroll_documentation_up', 'fallback', },
+      ['<C-d>'] = { 'scroll_documentation_down', 'fallback', },
     },
     signature = { enabled = true, },
     snippets = {
