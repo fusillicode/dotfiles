@@ -7,13 +7,28 @@ return {
   },
   opts = {
     keymap = { preset = 'enter', },
+    appearance = {
+      use_nvim_cmp_as_default = true,
+    },
     completion = {
       documentation = {
         auto_show = true,
         auto_show_delay_ms = 0,
         window = { border = 'single', },
       },
-      menu = { border = 'single', },
+      menu = {
+        border = 'single',
+        draw = {
+          columns = {
+            { 'source_name', gap = 1, 'label', },
+          },
+          components = {
+            source_name = {
+              text = function(ctx) return '[' .. ctx.source_name .. ']' end,
+            },
+          },
+        },
+      },
     },
     signature = { enabled = true, },
     snippets = {
