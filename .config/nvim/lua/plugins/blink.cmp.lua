@@ -7,15 +7,13 @@ return {
   },
   opts = {
     keymap = { preset = 'enter', },
-    appearance = {
-      use_nvim_cmp_as_default = true,
-    },
     completion = {
       documentation = {
         auto_show = true,
         auto_show_delay_ms = 0,
+        window = { border = 'single', },
       },
-      ghost_text = { enabled = true, },
+      menu = { border = 'single', },
     },
     signature = { enabled = true, },
     snippets = {
