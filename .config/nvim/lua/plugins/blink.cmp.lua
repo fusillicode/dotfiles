@@ -47,5 +47,16 @@ return {
       end,
       jump = function(direction) require('luasnip').jump(direction) end,
     },
+    sources = {
+      providers = {
+        snippets = {
+          opts = {
+            search_paths = {
+              vim.fn.expand('~') .. '/data/dev/dotfiles/dotfiles/vscode/snippets',
+            },
+          },
+        },
+      },
+    },
   },
 }
