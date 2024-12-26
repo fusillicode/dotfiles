@@ -31,8 +31,10 @@ return {
     },
     keymap = {
       preset = 'enter',
-      ['<C-u>'] = { 'scroll_documentation_up', 'fallback', },
-      ['<C-d>'] = { 'scroll_documentation_down', 'fallback', },
+      -- For some reason <c-space> does't work...
+      ['<c-x>'] = { 'show', 'show_documentation', 'hide_documentation', },
+      ['<c-u>'] = { 'scroll_documentation_up', 'fallback', },
+      ['<c-d>'] = { 'scroll_documentation_down', 'fallback', },
     },
     signature = { enabled = true, },
     snippets = {
