@@ -29,7 +29,7 @@ function M.core()
   vim.g.mapleader = ' '
   vim.g.maplocalleader = ' '
 
-  keymap_set('t', '<Esc>', '<C-\\><C-n>')
+  keymap_set('t', '<Esc>', '<c-\\><c-n>')
 
   -- https://stackoverflow.com/a/3003636
   keymap_set('n', 'i', function()
