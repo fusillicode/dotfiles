@@ -131,27 +131,18 @@ return {
   'neovim/nvim-lspconfig',
   event = 'BufRead',
   dependencies = {
-    'hrsh7th/cmp-nvim-lsp',
+    'saghen/blink.cmp',
     'b0o/schemastore.nvim',
   },
   config = function()
     local lspconfig = require('lspconfig')
-    local capabilities = vim.tbl_deep_extend(
-      'force',
-      require('cmp_nvim_lsp').default_capabilities(vim.lsp.protocol.make_client_capabilities()),
-      {
-        offsetEncoding = { 'utf-16', },
-        general = {
-          positionEncodings = { 'utf-16', },
-        },
-      }
-    )
+    local blink_cmp = require('blink.cmp')
     local lspconfig_keymaps = require('keymaps').lspconfig
 
     for lsp, config in pairs(get_lsps_configs()) do
       -- 🥲 https://neovim.discourse.group/t/cannot-serialize-function-type-not-supported/4542/3
       local lsp_setup = {
-        capabilities = capabilities,
+        capabilities = blink_cmp.get_lsp_capabilities(config.capabilities),
         on_attach = function(client, bufnr)
           lspconfig_keymaps(bufnr)
           if config['on_attach'] then config['on_attach'](client, bufnr) end
