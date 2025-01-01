@@ -35,14 +35,12 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn upsert_branch(branch: &str) -> anyhow::Result<()> {
-    if let Err(error) = create_branch(branch) {
-        if error.to_string().contains("already exists") {
-            println!("{branch} exists");
-            return switch_branch(branch);
-        }
-        return Err(error);
+fn switch_branch(branch: &str) -> anyhow::Result<()> {
+    let output = Command::new("git").args(["switch", branch]).output()?;
+    if !output.status.success() {
+        bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
     }
+    println!("Switch to {branch}");
     Ok(())
 }
 
@@ -57,12 +55,14 @@ fn create_branch(branch: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn switch_branch(branch: &str) -> anyhow::Result<()> {
-    let output = Command::new("git").args(["switch", branch]).output()?;
-    if !output.status.success() {
-        bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
+fn upsert_branch(branch: &str) -> anyhow::Result<()> {
+    if let Err(error) = create_branch(branch) {
+        if error.to_string().contains("already exists") {
+            println!("{branch} exists");
+            return switch_branch(branch);
+        }
+        return Err(error);
     }
-    println!("Switch to {branch}");
     Ok(())
 }
 
