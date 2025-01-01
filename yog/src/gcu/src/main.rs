@@ -12,6 +12,8 @@ use url::Url;
 /// If a PR URL is supplied as arg, switches to the related branch.
 /// With no args, defaults to switching to "-".
 /// If "-b" is supplied it defaults to "git checkout -b".
+/// If the first arg is a valid path it tries to checkout it and all
+/// the other supplied path from the branch supplied as last arg.
 fn main() -> anyhow::Result<()> {
     let args = utils::system::get_args();
 
