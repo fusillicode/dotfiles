@@ -47,6 +47,14 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+// NOTE: just drafting some ideas
+// enum WhatToDo {
+//     SwitchToBranch { branch: String },
+//     CreateBranch { branch: String },
+//     CheckoutBranch { branch: String },
+//     CheckoutFiles { branch: String, files: Vec<String> },
+// }
+
 fn get_branch_and_files_to_checkout(
     args: &[String],
 ) -> anyhow::Result<Option<(&String, &[String])>> {
