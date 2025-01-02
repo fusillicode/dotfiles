@@ -28,7 +28,7 @@ fn main() -> anyhow::Result<()> {
                 let branch_name = utils::github::get_branch_name_from_pr_url(&url)?;
                 return switch_branch(&branch_name);
             }
-            upsert_branch(&build_branch_name(&[hd.to_string()])?)
+            create_branch_if_missing(&build_branch_name(&[hd.to_string()])?)
         }
         _ => {
             // Assumption: if the last arg is an existent local branch try to reset the files
@@ -40,17 +40,18 @@ fn main() -> anyhow::Result<()> {
                 );
             }
             // Assumption: if the last arg is NOT an existent local branch try to create a branch
-            upsert_branch(&build_branch_name(&args)?)
+            create_branch_if_missing(&build_branch_name(&args)?)
         }
     }?;
 
     Ok(())
 }
 
-// NOTE: just drafting some ideas
+// // NOTE: just some ideas
 // enum WhatToDo {
 //     SwitchToBranch { branch: String },
 //     CreateBranch { branch: String },
+//     CreateBranchIfMissing { branch: String },
 //     CheckoutBranch { branch: String },
 //     CheckoutFiles { branch: String, files: Vec<String> },
 // }
@@ -107,7 +108,7 @@ fn create_branch(branch: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn upsert_branch(branch: &str) -> anyhow::Result<()> {
+fn create_branch_if_missing(branch: &str) -> anyhow::Result<()> {
     if let Err(error) = create_branch(branch) {
         if error.to_string().contains("already exists") {
             println!("⚪️ exist: {branch}");
