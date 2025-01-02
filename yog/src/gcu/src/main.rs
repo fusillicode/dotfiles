@@ -19,6 +19,7 @@ fn main() -> anyhow::Result<()> {
 
     match args.split_first() {
         None => switch_branch("-"),
+        // Assumption: cannot create a branch with a name that starts with -
         Some((hd, _)) if hd == "-" => switch_branch(hd),
         Some((hd, tail)) if hd == "-b" => create_branch(&build_branch_name(tail)?),
         Some((hd, &[])) => {
@@ -29,9 +30,54 @@ fn main() -> anyhow::Result<()> {
             }
             upsert_branch(&build_branch_name(&[hd.to_string()])?)
         }
-        _ => upsert_branch(&build_branch_name(&args)?),
+        _ => {
+            // Assumption: if the last arg is an existent local branch try to reset the files
+            // represented by the previous args
+            if let Some((branch, files)) = get_branch_and_files_to_checkout(&args)? {
+                return checkout_files(
+                    &files.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
+                    branch,
+                );
+            }
+            // Assumption: if the last arg is NOT an existent local branch try to create a branch
+            upsert_branch(&build_branch_name(&args)?)
+        }
     }?;
 
+    Ok(())
+}
+
+fn get_branch_and_files_to_checkout(
+    args: &[String],
+) -> anyhow::Result<Option<(&String, &[String])>> {
+    if let Some((branch, files)) = args.split_last() {
+        if local_branch_exists(branch)? {
+            return Ok(Some((branch, files)));
+        }
+    }
+    Ok(None)
+}
+
+fn local_branch_exists(branch: &str) -> anyhow::Result<bool> {
+    let output = Command::new("git")
+        .args(["rev-parse", "--verify", branch])
+        .output()?;
+    if output.status.success() {
+        return Ok(true);
+    }
+    Ok(false)
+}
+
+fn checkout_files(files: &[&str], branch: &str) -> anyhow::Result<()> {
+    let mut args = vec!["checkout", branch];
+    args.extend_from_slice(files);
+    let output = Command::new("git").args(args).output()?;
+    if !output.status.success() {
+        bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
+    }
+    files
+        .iter()
+        .for_each(|f| println!("Checking out {f} from branch {branch}"));
     Ok(())
 }
 
@@ -40,7 +86,7 @@ fn switch_branch(branch: &str) -> anyhow::Result<()> {
     if !output.status.success() {
         bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
     }
-    println!("Switch to {branch}");
+    println!("Switch to branch {branch}");
     Ok(())
 }
 
@@ -51,14 +97,14 @@ fn create_branch(branch: &str) -> anyhow::Result<()> {
     if !output.status.success() {
         bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
     }
-    println!("Create {branch}");
+    println!("Create branch {branch}");
     Ok(())
 }
 
 fn upsert_branch(branch: &str) -> anyhow::Result<()> {
     if let Err(error) = create_branch(branch) {
         if error.to_string().contains("already exists") {
-            println!("{branch} exists");
+            println!("Existing branch {branch}");
             return switch_branch(branch);
         }
         return Err(error);
