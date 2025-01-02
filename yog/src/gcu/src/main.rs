@@ -83,9 +83,7 @@ fn checkout_files(files: &[&str], branch: &str) -> anyhow::Result<()> {
     if !output.status.success() {
         bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
     }
-    files
-        .iter()
-        .for_each(|f| println!("Checking out {f} from branch {branch}"));
+    files.iter().for_each(|f| println!("⭕️ get {branch} {f}"));
     Ok(())
 }
 
@@ -94,7 +92,7 @@ fn switch_branch(branch: &str) -> anyhow::Result<()> {
     if !output.status.success() {
         bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
     }
-    println!("Switch to branch {branch}");
+    println!("🔁 to: {branch}");
     Ok(())
 }
 
@@ -105,14 +103,14 @@ fn create_branch(branch: &str) -> anyhow::Result<()> {
     if !output.status.success() {
         bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
     }
-    println!("Create branch {branch}");
+    println!("✅ new: {branch}");
     Ok(())
 }
 
 fn upsert_branch(branch: &str) -> anyhow::Result<()> {
     if let Err(error) = create_branch(branch) {
         if error.to_string().contains("already exists") {
-            println!("Existing branch {branch}");
+            println!("⚪️ exist: {branch}");
             return switch_branch(branch);
         }
         return Err(error);
