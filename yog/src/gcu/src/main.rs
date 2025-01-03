@@ -126,13 +126,7 @@ fn build_branch_name(args: &[String]) -> anyhow::Result<String> {
             x.split_whitespace().filter_map(|y| {
                 let z = y
                     .chars()
-                    .map(|c| {
-                        if c.is_alphanumeric() || c == '.' || c == '/' || c == '_' {
-                            c
-                        } else {
-                            ' '
-                        }
-                    })
+                    .map(|c| if is_permitted(c) { c } else { ' ' })
                     .collect::<String>()
                     .split_whitespace()
                     .collect::<Vec<_>>()
@@ -152,6 +146,11 @@ fn build_branch_name(args: &[String]) -> anyhow::Result<String> {
     }
 
     Ok(branch_name)
+}
+
+fn is_permitted(c: char) -> bool {
+    const PERMITTED_CHARS: [char; 3] = ['.', '/', '_'];
+    c.is_alphanumeric() || PERMITTED_CHARS.contains(&c)
 }
 
 #[cfg(test)]
