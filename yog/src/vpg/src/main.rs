@@ -45,12 +45,12 @@ fn main() -> anyhow::Result<()> {
 
     save_new_pgpass_file(lines, &pgpass_path)?;
 
-    let (cmd, arg) = pgpass_line.psql_conn_cmd();
+    let (cmd, host) = pgpass_line.psql_conn_cmd();
     println!("\nConnecting to {alias}:\n");
-    println!("{cmd} {arg}\n");
+    println!("{cmd} {host}\n");
 
     if let Some(psql_exit_code) = Command::new(cmd)
-        .arg(&arg) // Host
+        .arg(&host)
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
@@ -61,7 +61,7 @@ fn main() -> anyhow::Result<()> {
         std::process::exit(psql_exit_code);
     }
 
-    eprintln!("{cmd} {arg} terminated by signal.");
+    eprintln!("{cmd} {host} terminated by signal.");
     std::process::exit(1);
 }
 
