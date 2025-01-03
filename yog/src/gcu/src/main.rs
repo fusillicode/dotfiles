@@ -127,7 +127,7 @@ fn build_branch_name(args: &[String]) -> anyhow::Result<String> {
                 let z = y
                     .chars()
                     .map(|c| {
-                        if c.is_alphanumeric() || c == '.' || c == '/' {
+                        if c.is_alphanumeric() || c == '.' || c == '/' || c == '_' {
                             c
                         } else {
                             ' '
@@ -185,7 +185,7 @@ mod tests {
             build_branch_name(&["Version 2.0".into()]).unwrap()
         );
         assert_eq!(
-            "this-is...a-test",
+            "this-is...a_test",
             build_branch_name(&["This---is...a_test".into()]).unwrap()
         );
         assert_eq!(
@@ -217,7 +217,7 @@ mod tests {
             build_branch_name(&["Hello World".into(), "🌎".into(), "42".into()]).unwrap()
         );
         assert_eq!(
-            "this-is.-..a-test",
+            "this-is.-..a_test",
             build_branch_name(&["This".into(), "---is.".into(), "..a_test".into()]).unwrap()
         );
         assert_eq!(
