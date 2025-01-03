@@ -93,7 +93,7 @@ fn switch_branch(branch: &str) -> anyhow::Result<()> {
     if !output.status.success() {
         bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
     }
-    println!("🔁 {branch}");
+    println!("🍃 {branch}");
     Ok(())
 }
 
