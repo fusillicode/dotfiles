@@ -34,8 +34,9 @@ config.colors = {
     inactive_tab = { bg_color = background, fg_color = 'grey', },
   },
 }
-config.font = wezterm.font('Monaco')
-config.font_size = 14
+config.font_size = 15
+-- No ligatures thanks
+config.harfbuzz_features = { 'calt=0', 'clig=0', 'liga=0', }
 config.line_height = 1.1
 
 config.keys = {
