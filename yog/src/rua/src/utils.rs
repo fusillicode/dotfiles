@@ -1,7 +1,7 @@
 use mlua::chunk;
 use mlua::prelude::*;
 
-/// Utility to extract fields from deep nested [`LuaTable`]s.
+/// Extracts a field of type T from deeply nested [`LuaTable`]s.
 /// Similar to [vim.tbl_get()](https://neovim.io/doc/user/lua.html#vim.tbl_get()).
 pub fn dig<T: FromLua>(tbl: &LuaTable, keys: &[&str]) -> Result<T, DigError> {
     match keys {
@@ -35,7 +35,7 @@ impl From<DigError> for mlua::Error {
     }
 }
 
-/// Utility to print debug Rust constructed values directly into NVIM.
+/// Print debug Rust constructed values directly into NVim.
 #[allow(dead_code)]
 pub fn ndbg<T: mlua::IntoLua>(lua: &Lua, value: T) -> mlua::Result<()> {
     lua.load(chunk! { return function(tbl) print(vim.inspect(tbl)) end })

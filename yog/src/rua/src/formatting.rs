@@ -11,7 +11,7 @@ pub fn format_diagnostic(_lua: &Lua, lsp_diag: LuaTable) -> LuaResult<String> {
     Ok(format!("▶ {msg} [{src_and_code}]"))
 }
 
-/// Extract LSP diagnostic message from `user_data.lsp.data.rendered` or directly from the supplied [`LuaTable`]
+/// Extracts LSP diagnostic message from `user_data.lsp.data.rendered` or directly from the supplied [`LuaTable`]
 fn get_msg(lsp_diag: &LuaTable) -> LuaResult<String> {
     Ok(dig::<LuaTable>(lsp_diag, &["user_data", "lsp"])
         .and_then(|x| {
@@ -21,7 +21,7 @@ fn get_msg(lsp_diag: &LuaTable) -> LuaResult<String> {
         .map(|s| s.trim_end_matches('.').to_owned())?)
 }
 
-/// Extract LSP diagnostic source and code from `user_data.lsp.data` or just `source` or directly from the supplied [`LuaTable`]
+/// Extracts LSP diagnostic source and code from `user_data.lsp.data` or just `source` or directly from the supplied [`LuaTable`]
 fn get_src_and_code(lsp_diag: &LuaTable) -> LuaResult<String> {
     Ok(dig::<LuaTable>(lsp_diag, &["user_data", "lsp"])
         .and_then(|x| {
