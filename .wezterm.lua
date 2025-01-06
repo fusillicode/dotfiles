@@ -140,13 +140,15 @@ wezterm.on('open-uri', function(_, pane, uri)
     return false
   end
 
-  -- Logging like this because I don't know how to print
-  -- a table in lua without building a custom helper or rely
-  -- on an external library...
-  wezterm.log_error('Cmd')
-  wezterm.log_error(cmd)
-  wezterm.log_error('Error')
-  wezterm.log_error(err)
+  if err then
+    -- Logging like this because I don't know how to print
+    -- a table in lua without building a custom helper or rely
+    -- on an external library...
+    wezterm.log_error('Cmd')
+    wezterm.log_error(cmd)
+    wezterm.log_error('Error')
+    wezterm.log_error(err)
+  end
 end)
 
 return config
