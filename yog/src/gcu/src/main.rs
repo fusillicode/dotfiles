@@ -12,11 +12,14 @@ use url::Url;
 /// If a PR URL is supplied as arg, switches to the related branch.
 /// With no args, defaults to switching to "-".
 /// If "-b" is supplied it defaults to "git checkout -b".
+/// If the first arg is a valid path it tries to checkout it and all
+/// the other supplied path from the branch supplied as last arg.
 fn main() -> anyhow::Result<()> {
     let args = utils::system::get_args();
 
     match args.split_first() {
         None => switch_branch("-"),
+        // Assumption: cannot create a branch with a name that starts with -
         Some((hd, _)) if hd == "-" => switch_branch(hd),
         Some((hd, tail)) if hd == "-b" => create_branch(&build_branch_name(tail)?),
         Some((hd, &[])) => {
@@ -25,22 +28,72 @@ fn main() -> anyhow::Result<()> {
                 let branch_name = utils::github::get_branch_name_from_pr_url(&url)?;
                 return switch_branch(&branch_name);
             }
-            upsert_branch(&build_branch_name(&[hd.to_string()])?)
+            create_branch_if_missing(&build_branch_name(&[hd.to_string()])?)
         }
-        _ => upsert_branch(&build_branch_name(&args)?),
+        _ => {
+            // Assumption: if the last arg is an existent local branch try to reset the files
+            // represented by the previous args
+            if let Some((branch, files)) = get_branch_and_files_to_checkout(&args)? {
+                return checkout_files(
+                    &files.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
+                    branch,
+                );
+            }
+            // Assumption: if the last arg is NOT an existent local branch try to create a branch
+            create_branch_if_missing(&build_branch_name(&args)?)
+        }
     }?;
 
     Ok(())
 }
 
-fn upsert_branch(branch: &str) -> anyhow::Result<()> {
-    if let Err(error) = create_branch(branch) {
-        if error.to_string().contains("already exists") {
-            println!("{branch} exists");
-            return switch_branch(branch);
+// // NOTE: just some ideas
+// enum WhatToDo {
+//     SwitchToBranch { branch: String },
+//     CreateBranch { branch: String },
+//     CreateBranchIfMissing { branch: String },
+//     CheckoutBranch { branch: String },
+//     CheckoutFiles { branch: String, files: Vec<String> },
+// }
+
+fn get_branch_and_files_to_checkout(
+    args: &[String],
+) -> anyhow::Result<Option<(&String, &[String])>> {
+    if let Some((branch, files)) = args.split_last() {
+        if local_branch_exists(branch)? {
+            return Ok(Some((branch, files)));
         }
-        return Err(error);
     }
+    Ok(None)
+}
+
+fn local_branch_exists(branch: &str) -> anyhow::Result<bool> {
+    let output = Command::new("git")
+        .args(["rev-parse", "--verify", branch])
+        .output()?;
+    if output.status.success() {
+        return Ok(true);
+    }
+    Ok(false)
+}
+
+fn checkout_files(files: &[&str], branch: &str) -> anyhow::Result<()> {
+    let mut args = vec!["checkout", branch];
+    args.extend_from_slice(files);
+    let output = Command::new("git").args(args).output()?;
+    if !output.status.success() {
+        bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
+    }
+    files.iter().for_each(|f| println!("🪚 {f} from {branch}"));
+    Ok(())
+}
+
+fn switch_branch(branch: &str) -> anyhow::Result<()> {
+    let output = Command::new("git").args(["switch", branch]).output()?;
+    if !output.status.success() {
+        bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
+    }
+    println!("🪵 {branch}");
     Ok(())
 }
 
@@ -51,16 +104,18 @@ fn create_branch(branch: &str) -> anyhow::Result<()> {
     if !output.status.success() {
         bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
     }
-    println!("Create {branch}");
+    println!("🌱 {branch}");
     Ok(())
 }
 
-fn switch_branch(branch: &str) -> anyhow::Result<()> {
-    let output = Command::new("git").args(["switch", branch]).output()?;
-    if !output.status.success() {
-        bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
+fn create_branch_if_missing(branch: &str) -> anyhow::Result<()> {
+    if let Err(error) = create_branch(branch) {
+        if error.to_string().contains("already exists") {
+            println!("🌳 {branch}");
+            return switch_branch(branch);
+        }
+        return Err(error);
     }
-    println!("Switch to {branch}");
     Ok(())
 }
 
@@ -71,13 +126,7 @@ fn build_branch_name(args: &[String]) -> anyhow::Result<String> {
             x.split_whitespace().filter_map(|y| {
                 let z = y
                     .chars()
-                    .map(|c| {
-                        if c.is_alphanumeric() || c == '.' || c == '/' {
-                            c
-                        } else {
-                            ' '
-                        }
-                    })
+                    .map(|c| if is_permitted(c) { c } else { ' ' })
                     .collect::<String>()
                     .split_whitespace()
                     .collect::<Vec<_>>()
@@ -97,6 +146,11 @@ fn build_branch_name(args: &[String]) -> anyhow::Result<String> {
     }
 
     Ok(branch_name)
+}
+
+fn is_permitted(c: char) -> bool {
+    const PERMITTED_CHARS: [char; 3] = ['.', '/', '_'];
+    c.is_alphanumeric() || PERMITTED_CHARS.contains(&c)
 }
 
 #[cfg(test)]
@@ -130,7 +184,7 @@ mod tests {
             build_branch_name(&["Version 2.0".into()]).unwrap()
         );
         assert_eq!(
-            "this-is...a-test",
+            "this-is...a_test",
             build_branch_name(&["This---is...a_test".into()]).unwrap()
         );
         assert_eq!(
@@ -162,7 +216,7 @@ mod tests {
             build_branch_name(&["Hello World".into(), "🌎".into(), "42".into()]).unwrap()
         );
         assert_eq!(
-            "this-is.-..a-test",
+            "this-is.-..a_test",
             build_branch_name(&["This".into(), "---is.".into(), "..a_test".into()]).unwrap()
         );
         assert_eq!(
