@@ -22,7 +22,7 @@ pub fn format_diagnostic(_lua: &Lua, lsp_diag: LuaTable) -> LuaResult<String> {
         .as_ref()
         .map_or_else(
             || diag_msg_and_source_code_from_lsp_diag(&lsp_diag),
-            diag_msg_and_source_from_lsp_user_data,
+            |lsp_user_data| diag_msg_and_source_from_lsp_user_data(&lsp_diag, lsp_user_data),
         )?;
     Ok(format!("▶ {diag_msg}{src_and_code}"))
 }
@@ -62,10 +62,16 @@ fn diag_msg_and_source_code_from_lsp_diag(lsp_diag: &LuaTable) -> LuaResult<(Str
     ))
 }
 
-/// Extract "dialog message" plus formatted "source and code" from the LSP user data.
-fn diag_msg_and_source_from_lsp_user_data(lsp_user_data: &LuaTable) -> LuaResult<(String, String)> {
+/// Extract "dialog message" and the formatted "source and code" from the LSP user data.
+/// If the "dialog message" is not in the LSP user data (e.g. `sqlfluff`) fallback to the message in the root
+/// "LSP diagnostic".
+fn diag_msg_and_source_from_lsp_user_data(
+    lsp_diag: &LuaTable,
+    lsp_user_data: &LuaTable,
+) -> LuaResult<(String, String)> {
     let diag_msg = dig::<String>(lsp_user_data, &["data", "rendered"])
         .or_else(|_| dig::<String>(lsp_user_data, &["message"]))
+        .or_else(|_| dig::<String>(lsp_diag, &["message"]))
         .map(|s| s.trim_end_matches('.').to_owned())?;
 
     let src_and_code = match (
