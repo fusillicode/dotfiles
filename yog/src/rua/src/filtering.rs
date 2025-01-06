@@ -3,7 +3,7 @@ use serde::Serialize;
 
 use crate::utils::dig;
 
-/// Filter out the LSP diagnostics that are already represented by other ones, e.g. HINTs pointing
+/// Filters out the LSP diagnostics that are already represented by other ones, e.g. HINTs pointing
 /// to location already mentioned by other ERROR's rendered message.
 pub fn filter_diagnostics(lua: &Lua, lsp_diags: LuaTable) -> LuaResult<LuaTable> {
     let rel_info_diags = get_related_info_diag(&lsp_diags)?;
