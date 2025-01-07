@@ -10,7 +10,7 @@ pub fn filter_diagnostics(lua: &Lua, lsp_diags: LuaTable) -> LuaResult<LuaTable>
     if rel_info_diags.is_empty() {
         return Ok(lsp_diags);
     }
-    let out = lua.create_table()?;
+    let mut out = vec![];
     for lsp_diag in lsp_diags.sequence_values::<LuaTable>().flatten() {
         let rel = RelatedInfoDiag {
             msg: dig::<String>(&lsp_diag, &["message"])?,
@@ -24,10 +24,10 @@ pub fn filter_diagnostics(lua: &Lua, lsp_diags: LuaTable) -> LuaResult<LuaTable>
             },
         };
         if !rel_info_diags.contains(&rel) {
-            out.push(lsp_diag)?;
+            out.push(lsp_diag);
         }
     }
-    Ok(out)
+    lua.create_sequence_from(out)
 }
 
 /// Get the message and posisiton of the LSP "relatedInformation"s inside LSP diagnostics.
