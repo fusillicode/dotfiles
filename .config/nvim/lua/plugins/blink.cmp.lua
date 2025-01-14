@@ -36,7 +36,6 @@ return {
       ['<c-u>'] = { 'scroll_documentation_up', 'fallback', },
       ['<c-d>'] = { 'scroll_documentation_down', 'fallback', },
     },
-    signature = { enabled = true, },
     snippets = {
       expand = function(snippet) require('luasnip').lsp_expand(snippet) end,
       active = function(filter)
