@@ -16,7 +16,7 @@ pub fn draw(
     };
 
     for diag in diags.sequence_values::<LuaTable>().flatten() {
-        let severity = dig::<u8>(&diag, &["severity"])?;
+        let severity = dig::<Severity>(&diag, &["severity"])?;
         if cur_buf_nr == dig::<f64>(&diag, &["bufnr"])? {
             *statusline.cur_buf_diags.entry(severity).or_insert(0) += 1;
         }
@@ -39,11 +39,55 @@ pub fn draw(
     Ok(format!("▶ {cur_buf_nr:?} {cur_buf_path:?} {statusline:?}]"))
 }
 
+#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone)]
+enum Severity {
+    Error,
+    Warn,
+    Info,
+    Hint,
+}
+
+impl Severity {
+    fn highlight_group(&self) -> &'static str {
+        match self {
+            Severity::Error => "DiagnosticStatusLineError",
+            Severity::Warn => "DiagnosticStatusLineWarn",
+            Severity::Info => "DiagnosticStatusLineInfo",
+            Severity::Hint => "DiagnosticStatusLineHint",
+        }
+    }
+
+    fn symbol(&self) -> &'static str {
+        match self {
+            Severity::Error => "E",
+            Severity::Warn => "W",
+            Severity::Info => "I",
+            Severity::Hint => "H",
+        }
+    }
+}
+
+impl FromLua for Severity {
+    fn from_lua(value: LuaValue, _: &Lua) -> LuaResult<Self> {
+        match value.as_i32().ok_or_else(|| {
+            mlua::Error::runtime(format!("cannot convert LuaValue {value:?} to i32"))
+        })? {
+            0 => Ok(Self::Error),
+            1 => Ok(Self::Warn),
+            2 => Ok(Self::Info),
+            3 => Ok(Self::Hint),
+            unexpected => Err(mlua::Error::runtime(format!(
+                "unexpected i32 {unexpected} for Severity"
+            ))),
+        }
+    }
+}
+
 #[derive(Debug)]
 struct Statusline {
     cuf_buf_path: String,
-    cur_buf_diags: HashMap<u8, i32>,
-    workspace_diags: HashMap<u8, i32>,
+    cur_buf_diags: HashMap<Severity, i32>,
+    workspace_diags: HashMap<Severity, i32>,
 }
 
 impl Statusline {
