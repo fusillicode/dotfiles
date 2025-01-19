@@ -38,6 +38,9 @@ impl Severity {
     const VARIANTS: &'static [Self] = &[Self::Error, Self::Warn, Self::Info, Self::Hint];
 
     fn draw_diagnostics(&self, diags_count: i32) -> String {
+        if diags_count == 0 {
+            return "".into();
+        }
         let (hg_group, sym) = match self {
             Severity::Error => ("DiagnosticStatusLineError", "E"),
             Severity::Warn => ("DiagnosticStatusLineWarn", "W"),
@@ -93,5 +96,80 @@ impl Statusline {
             "{curr_buf_diags}%#StatusLine#{} %m %r%={workspace_diags}",
             self.curr_buf_path
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_status_line_draw_works_as_expected() {
+        for statusline in [
+            Statusline {
+                curr_buf_path: "foo".into(),
+                curr_buf_diags: HashMap::new(),
+                workspace_diags: HashMap::new(),
+            },
+            Statusline {
+                curr_buf_path: "foo".into(),
+                curr_buf_diags: [(Severity::Info, 0)].into_iter().collect(),
+                workspace_diags: HashMap::new(),
+            },
+            Statusline {
+                curr_buf_path: "foo".into(),
+                curr_buf_diags: HashMap::new(),
+                workspace_diags: [(Severity::Info, 0)].into_iter().collect(),
+            },
+            Statusline {
+                curr_buf_path: "foo".into(),
+                curr_buf_diags: [(Severity::Info, 0)].into_iter().collect(),
+                workspace_diags: [(Severity::Info, 0)].into_iter().collect(),
+            },
+        ] {
+            let res = statusline.draw();
+            assert_eq!(
+                "%#StatusLine#foo %m %r%=", &res,
+                "unexpected not empty diagnosticts drawn, res {res}, statusline {statusline:?}"
+            );
+        }
+
+        let statusline = Statusline {
+            curr_buf_path: "foo".into(),
+            curr_buf_diags: [(Severity::Info, 1), (Severity::Error, 3)]
+                .into_iter()
+                .collect(),
+            workspace_diags: [(Severity::Info, 0)].into_iter().collect(),
+        };
+        assert_eq!(
+            "%#DiagnosticStatusLineError#E:3 %#DiagnosticStatusLineInfo#I:1 %#StatusLine#foo %m %r%=", 
+            &statusline.draw()
+        );
+
+        let statusline = Statusline {
+            curr_buf_path: "foo".into(),
+            curr_buf_diags: [(Severity::Info, 0)].into_iter().collect(),
+            workspace_diags: [(Severity::Info, 1), (Severity::Error, 3)]
+                .into_iter()
+                .collect(),
+        };
+        assert_eq!(
+            "%#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#E:3 %#DiagnosticStatusLineInfo#I:1", 
+            &statusline.draw()
+        );
+
+        let statusline = Statusline {
+            curr_buf_path: "foo".into(),
+            curr_buf_diags: [(Severity::Hint, 3), (Severity::Warn, 2)]
+                .into_iter()
+                .collect(),
+            workspace_diags: [(Severity::Info, 1), (Severity::Error, 3)]
+                .into_iter()
+                .collect(),
+        };
+        assert_eq!(
+            "%#DiagnosticStatusLineWarn#W:2 %#DiagnosticStatusLineHint#H:3 %#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#E:3 %#DiagnosticStatusLineInfo#I:1", 
+            &statusline.draw()
+        );
     }
 }
