@@ -2,12 +2,10 @@ use std::collections::HashMap;
 
 use mlua::prelude::*;
 
-use crate::utils::dig;
-
 /// Returns the formatted [`String`] representation of the statusline.
 pub fn draw(
     _lua: &Lua,
-    (curr_buf_nr, curr_buf_path, diags): (LuaInteger, LuaString, LuaTable),
+    (curr_buf_nr, curr_buf_path, diags): (LuaInteger, LuaString, Diagnostics),
 ) -> LuaResult<String> {
     let mut statusline = Statusline {
         curr_buf_path: curr_buf_path.to_string_lossy(),
@@ -15,23 +13,85 @@ pub fn draw(
         workspace_diags: HashMap::new(),
     };
 
-    for diag in diags.sequence_values::<LuaTable>().flatten() {
-        let severity = dig::<Severity>(&diag, &["severity"])?;
-        if curr_buf_nr == dig::<i64>(&diag, &["bufnr"])? {
-            *statusline.curr_buf_diags.entry(severity).or_insert(0) += 1;
+    for diag in diags.0 {
+        if curr_buf_nr == diag.bufnr {
+            *statusline.curr_buf_diags.entry(diag.severity).or_insert(0) += 1;
         }
-        *statusline.workspace_diags.entry(severity).or_insert(0) += 1;
+        *statusline.workspace_diags.entry(diag.severity).or_insert(0) += 1;
     }
 
     Ok(statusline.draw())
 }
 
+pub struct Diagnostics(Vec<Diagnostic>);
+
+impl FromLua for Diagnostics {
+    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
+        if let LuaValue::Table(table) = value {
+            let diagnostics = table
+                .sequence_values::<Diagnostic>()
+                .collect::<Result<Vec<Diagnostic>, _>>()?;
+
+            return Ok(Diagnostics(diagnostics));
+        }
+        Err(mlua::Error::FromLuaConversionError {
+            from: value.type_name(),
+            to: "Diagnostics".into(),
+            message: Some(format!("expected a table got {value:?}")),
+        })
+    }
+}
+
+pub struct Diagnostic {
+    bufnr: i64,
+    severity: Severity,
+}
+
+impl FromLua for Diagnostic {
+    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
+        if let LuaValue::Table(table) = value {
+            return Ok(Diagnostic {
+                bufnr: table.get("bufnr")?,
+                severity: table.get("severity")?,
+            });
+        }
+        Err(mlua::Error::FromLuaConversionError {
+            from: value.type_name(),
+            to: "Diagnostic".into(),
+            message: Some(format!("expected a table got {value:?}")),
+        })
+    }
+}
+
 #[derive(Debug, Hash, PartialEq, Eq, Copy, Clone)]
-enum Severity {
+pub enum Severity {
     Error,
     Warn,
     Info,
     Hint,
+}
+
+impl FromLua for Severity {
+    fn from_lua(value: LuaValue, _: &Lua) -> LuaResult<Self> {
+        if let LuaValue::Integer(int) = value {
+            return match int {
+                1 => Ok(Self::Error),
+                2 => Ok(Self::Warn),
+                3 => Ok(Self::Info),
+                4 => Ok(Self::Hint),
+                _ => Err(mlua::Error::FromLuaConversionError {
+                    from: value.type_name(),
+                    to: "Severity".into(),
+                    message: Some(format!("unexpected int {int}")),
+                }),
+            };
+        }
+        Err(mlua::Error::FromLuaConversionError {
+            from: value.type_name(),
+            to: "Severity".into(),
+            message: Some(format!("expected an integer got {value:?}")),
+        })
+    }
 }
 
 impl Severity {
@@ -48,22 +108,6 @@ impl Severity {
             Severity::Hint => ("DiagnosticStatusLineHint", "H"),
         };
         format!("%#{}#{}:{diags_count}", hg_group, sym)
-    }
-}
-
-impl FromLua for Severity {
-    fn from_lua(value: LuaValue, _: &Lua) -> LuaResult<Self> {
-        match value.as_i32().ok_or_else(|| {
-            mlua::Error::runtime(format!("cannot convert LuaValue {value:?} to i32"))
-        })? {
-            1 => Ok(Self::Error),
-            2 => Ok(Self::Warn),
-            3 => Ok(Self::Info),
-            4 => Ok(Self::Hint),
-            unexpected => Err(mlua::Error::runtime(format!(
-                "unexpected i32 {unexpected} for Severity"
-            ))),
-        }
     }
 }
 
