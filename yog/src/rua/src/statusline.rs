@@ -95,7 +95,7 @@ impl FromLua for Severity {
 }
 
 impl Severity {
-    const VARIANTS: &'static [Self] = &[Self::Error, Self::Warn, Self::Info, Self::Hint];
+    const ORDER: &'static [Self] = &[Self::Error, Self::Warn, Self::Info, Self::Hint];
 
     fn draw_diagnostics(&self, diags_count: i32) -> String {
         if diags_count == 0 {
@@ -120,13 +120,13 @@ struct Statusline {
 
 impl Statusline {
     fn draw(&self) -> String {
-        let mut curbuf_diags = Severity::VARIANTS
+        let mut curbuf_diags = Severity::ORDER
             .iter()
             .filter_map(|s| self.curbuf_diags.get(s).map(|c| s.draw_diagnostics(*c)))
             .collect::<Vec<_>>()
             .join(" ");
 
-        let workspace_diags = Severity::VARIANTS
+        let workspace_diags = Severity::ORDER
             .iter()
             .filter_map(|s| self.workspace_diags.get(s).map(|c| s.draw_diagnostics(*c)))
             .collect::<Vec<_>>()
