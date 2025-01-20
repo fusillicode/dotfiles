@@ -18,6 +18,9 @@ fn rua(lua: &Lua) -> LuaResult<LuaTable> {
         lua.create_function(diagnostics::filtering::filter_diagnostics)?,
     )?;
     exports.set("draw_statusline", lua.create_function(statusline::draw)?)?;
-    exports.set("draw_statuscolumn", lua.create_function(statuscolumn::draw)?)?;
+    exports.set(
+        "draw_statuscolumn",
+        lua.create_function(statuscolumn::draw)?,
+    )?;
     Ok(exports)
 }
