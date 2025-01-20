@@ -5,9 +5,12 @@ local function format_extmark(extmark)
 end
 
 function M.draw(current_lnum)
-  local buffer = vim.fn.bufnr()
-  local line_signs = vim.api.nvim_buf_get_extmarks(buffer, -1, { current_lnum - 1, 0, }, { current_lnum - 1, -1, },
-    { type = 'sign', details = true, overlap = false, })
+  local line_signs = vim.api.nvim_buf_get_extmarks(
+    vim.fn.bufnr(), -1, { current_lnum - 1, 0, }, { current_lnum - 1, -1, },
+    { type = 'sign', details = true, overlap = false, }
+  )
+  -- require('utils').dbg(line_signs)
+  -- require('rua').draw_statuscolumn(line_signs)
 
   local git_sign, error_sign, warn_sign, hint_sign, info_sign, ok_sign
   for _, sign in ipairs(line_signs) do
