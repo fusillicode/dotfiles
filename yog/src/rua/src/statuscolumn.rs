@@ -19,51 +19,6 @@ pub fn draw(_lua: &Lua, (cur_lnum, signs): (LuaString, Signs)) -> LuaResult<Stri
     Ok(statuscolumn.draw())
 }
 
-#[derive(Default)]
-struct Statuscolumn {
-    error: Option<Sign>,
-    warn: Option<Sign>,
-    info: Option<Sign>,
-    hint: Option<Sign>,
-    ok: Option<Sign>,
-    git: Option<Sign>,
-    cur_lnum: String,
-}
-
-impl Statuscolumn {
-    fn new(cur_lnum: String) -> Self {
-        Self {
-            cur_lnum,
-            ..Default::default()
-        }
-    }
-}
-
-impl Statuscolumn {
-    fn draw(&self) -> String {
-        let mut out = String::new();
-
-        let diag_sign = [&self.error, &self.warn, &self.info, &self.hint, &self.ok]
-            .iter()
-            .find_map(|s| s.as_ref().map(Sign::draw))
-            .unwrap_or_else(|| " ".into());
-
-        out.push_str(&diag_sign);
-        out.push_str(
-            &self
-                .git
-                .as_ref()
-                .map(Sign::draw)
-                .unwrap_or_else(|| " ".to_string()),
-        );
-        out.push_str(" %=% ");
-        out.push_str(&self.cur_lnum);
-        out.push(' ');
-
-        out
-    }
-}
-
 pub struct Signs(Vec<Sign>);
 
 impl FromLua for Signs {
@@ -108,6 +63,51 @@ impl FromLua for Sign {
 impl Sign {
     fn draw(&self) -> String {
         format!("%#{}#{}%*", self.sign_hl_group, self.sign_text.trim())
+    }
+}
+
+#[derive(Default)]
+struct Statuscolumn {
+    error: Option<Sign>,
+    warn: Option<Sign>,
+    info: Option<Sign>,
+    hint: Option<Sign>,
+    ok: Option<Sign>,
+    git: Option<Sign>,
+    cur_lnum: String,
+}
+
+impl Statuscolumn {
+    fn new(cur_lnum: String) -> Self {
+        Self {
+            cur_lnum,
+            ..Default::default()
+        }
+    }
+}
+
+impl Statuscolumn {
+    fn draw(&self) -> String {
+        let mut out = String::new();
+
+        let diag_sign = [&self.error, &self.warn, &self.info, &self.hint, &self.ok]
+            .iter()
+            .find_map(|s| s.as_ref().map(Sign::draw))
+            .unwrap_or_else(|| " ".into());
+
+        out.push_str(&diag_sign);
+        out.push_str(
+            &self
+                .git
+                .as_ref()
+                .map(Sign::draw)
+                .unwrap_or_else(|| " ".to_string()),
+        );
+        out.push_str(" %=% ");
+        out.push_str(&self.cur_lnum);
+        out.push(' ');
+
+        out
     }
 }
 
