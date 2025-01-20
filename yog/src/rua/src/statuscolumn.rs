@@ -40,19 +40,21 @@ impl Statuscolumn {
 
 impl Statuscolumn {
     fn draw(&self) -> String {
-        let mut out: String = [
-            &self.error,
-            &self.warn,
-            &self.info,
-            &self.hint,
-            &self.ok,
-            &self.git,
-        ]
-        .iter()
-        .filter_map(|s| s.as_ref().map(Sign::draw))
-        .collect();
+        let mut out = String::new();
 
-        out.insert(0, ' ');
+        let diag_sign = [&self.error, &self.warn, &self.info, &self.hint, &self.ok]
+            .iter()
+            .find_map(|s| s.as_ref().map(Sign::draw))
+            .unwrap_or_else(|| " ".into());
+
+        out.push_str(&diag_sign);
+        out.push_str(
+            &self
+                .git
+                .as_ref()
+                .map(Sign::draw)
+                .unwrap_or_else(|| " ".to_string()),
+        );
         out.push_str(" %=% ");
         out.push_str(&self.cur_lnum);
         out.push(' ');
