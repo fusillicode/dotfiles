@@ -1,5 +1,6 @@
 use mlua::prelude::*;
 
+/// Returns the formatted [`String`] representation of the statuscolumn.
 pub fn draw(_lua: &Lua, (cur_lnum, signs): (LuaString, Signs)) -> LuaResult<String> {
     let mut statuscolumn = Statuscolumn::new(cur_lnum.to_string_lossy());
 
@@ -58,6 +59,7 @@ impl Statuscolumn {
         out.push_str(" %=% ");
         out.push_str(&self.cur_lnum);
         out.push(' ');
+
         out
     }
 }
@@ -106,5 +108,71 @@ impl FromLua for Sign {
 impl Sign {
     fn draw(&self) -> String {
         format!("%#{}#{}%*", self.sign_hl_group, self.sign_text.trim())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_statuscolumn_draw_works_as_expected() {
+        let statuscolumn = Statuscolumn {
+            cur_lnum: "42".into(),
+            ..Default::default()
+        };
+        assert_eq!("   %=% 42 ", &statuscolumn.draw());
+
+        let statuscolumn = Statuscolumn {
+            error: Some(Sign {
+                sign_hl_group: "foo".into(),
+                sign_text: "E".into(),
+            }),
+            cur_lnum: "42".into(),
+            ..Default::default()
+        };
+        assert_eq!("%#foo#E%*  %=% 42 ", &statuscolumn.draw());
+
+        let statuscolumn = Statuscolumn {
+            error: Some(Sign {
+                sign_hl_group: "err".into(),
+                sign_text: "E".into(),
+            }),
+            warn: Some(Sign {
+                sign_hl_group: "warn".into(),
+                sign_text: "W".into(),
+            }),
+            cur_lnum: "42".into(),
+            ..Default::default()
+        };
+        assert_eq!("%#err#E%*  %=% 42 ", &statuscolumn.draw());
+
+        let statuscolumn = Statuscolumn {
+            git: Some(Sign {
+                sign_hl_group: "git".into(),
+                sign_text: "|".into(),
+            }),
+            cur_lnum: "42".into(),
+            ..Default::default()
+        };
+        assert_eq!(" %#git#|%* %=% 42 ", &statuscolumn.draw());
+
+        let statuscolumn = Statuscolumn {
+            error: Some(Sign {
+                sign_hl_group: "err".into(),
+                sign_text: "E".into(),
+            }),
+            warn: Some(Sign {
+                sign_hl_group: "warn".into(),
+                sign_text: "W".into(),
+            }),
+            git: Some(Sign {
+                sign_hl_group: "git".into(),
+                sign_text: "|".into(),
+            }),
+            cur_lnum: "42".into(),
+            ..Default::default()
+        };
+        assert_eq!("%#err#E%*%#git#|%* %=% 42 ", &statuscolumn.draw());
     }
 }
