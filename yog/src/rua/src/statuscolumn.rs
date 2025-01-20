@@ -1,7 +1,7 @@
 use mlua::prelude::*;
 
-pub fn draw(_lua: &Lua, signs: Signs) -> LuaResult<String> {
-    let mut statuscolumn = Statuscolumn::default();
+pub fn draw(_lua: &Lua, (cur_lnum, signs): (LuaString, Signs)) -> LuaResult<String> {
+    let mut statuscolumn = Statuscolumn::new(cur_lnum.to_string_lossy());
 
     for sign in signs.0 {
         match sign.sign_hl_group.as_str() {
@@ -26,11 +26,21 @@ struct Statuscolumn {
     hint: Option<Sign>,
     ok: Option<Sign>,
     git: Option<Sign>,
+    cur_lnum: String,
+}
+
+impl Statuscolumn {
+    fn new(cur_lnum: String) -> Self {
+        Self {
+            cur_lnum,
+            ..Default::default()
+        }
+    }
 }
 
 impl Statuscolumn {
     fn draw(&self) -> String {
-        [
+        let mut out: String = [
             &self.error,
             &self.warn,
             &self.info,
@@ -40,7 +50,13 @@ impl Statuscolumn {
         ]
         .iter()
         .filter_map(|s| s.as_ref().map(Sign::draw))
-        .collect()
+        .collect();
+
+        out.insert_str(0, " ");
+        out.push_str(" %=% ");
+        out.push_str(&self.cur_lnum);
+        out.push_str(" ");
+        out
     }
 }
 
