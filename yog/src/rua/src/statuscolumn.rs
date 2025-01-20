@@ -52,10 +52,10 @@ impl Statuscolumn {
         .filter_map(|s| s.as_ref().map(Sign::draw))
         .collect();
 
-        out.insert_str(0, " ");
+        out.insert(0, ' ');
         out.push_str(" %=% ");
         out.push_str(&self.cur_lnum);
-        out.push_str(" ");
+        out.push(' ');
         out
     }
 }
