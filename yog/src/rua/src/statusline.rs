@@ -107,7 +107,7 @@ impl Severity {
             Severity::Info => ("DiagnosticStatusLineInfo", "I"),
             Severity::Hint => ("DiagnosticStatusLineHint", "H"),
         };
-        format!("%#{}#{}:{diags_count}", hg_group, sym)
+        format!("%#{hg_group}#{sym}:{diags_count}")
     }
 }
 
