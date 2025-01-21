@@ -1,7 +1,11 @@
 use mlua::prelude::*;
 
 /// Filters out the LSP diagnostics that are already represented by other ones.
-/// E.g. HINTs pointing to location already mentioned by other ERROR's rendered message.
+/// E.g. HINTs pointing to a location already mentioned by other ERROR's rendered message.
+///
+/// The function uses a [`LuaTable`] rather than a user defined type that implements the [`FromLua`]
+/// trait because the deserialization logic in this case is incremental.
+/// I don't the complete "user_data.lsp.relatedInformation" upstream to handle the filtering.
 pub fn filter_diagnostics(lua: &Lua, lsp_diags: LuaTable) -> LuaResult<LuaTable> {
     let rel_infos = get_related_infos(&lsp_diags)?;
     if rel_infos.is_empty() {
@@ -11,7 +15,7 @@ pub fn filter_diagnostics(lua: &Lua, lsp_diags: LuaTable) -> LuaResult<LuaTable>
     let mut out = vec![];
     for table in lsp_diags.sequence_values::<LuaTable>().flatten() {
         // All LSPs diagnostics should be deserializable into [`RelatedInfo`]
-        let rel_info = RelatedInfo::from_root(&table)?;
+        let rel_info = RelatedInfo::from_lsp_diagnostic(&table)?;
         if !rel_infos.contains(&rel_info) {
             out.push(table);
         }
@@ -20,7 +24,7 @@ pub fn filter_diagnostics(lua: &Lua, lsp_diags: LuaTable) -> LuaResult<LuaTable>
     lua.create_sequence_from(out)
 }
 
-/// Get the message and posisiton of the LSP "relatedInformation" inside LSP diagnostics.
+/// Get the [`RelatedInfo`]s of an LSP diagnostic represented by a [`LuaTable`].
 fn get_related_infos(lsp_diags: &LuaTable) -> LuaResult<Vec<RelatedInfo>> {
     let mut out = vec![];
     for lsp_diag in lsp_diags.sequence_values::<LuaTable>().flatten() {
@@ -41,6 +45,7 @@ fn get_related_infos(lsp_diags: &LuaTable) -> LuaResult<Vec<RelatedInfo>> {
     Ok(out)
 }
 
+/// Common shape of a root LSP diagnostic and the elements of its "user_data.lsp.relatedInformation".
 #[derive(PartialEq)]
 struct RelatedInfo {
     message: String,
@@ -51,7 +56,8 @@ struct RelatedInfo {
 }
 
 impl RelatedInfo {
-    fn from_root(table: &LuaTable) -> LuaResult<Self> {
+    /// Create a [`RelatedInfo`] from a root LSP diagnostic.
+    fn from_lsp_diagnostic(table: &LuaTable) -> LuaResult<Self> {
         Ok(Self {
             message: table.get("message")?,
             lnum: table.get("lnum")?,
@@ -61,6 +67,7 @@ impl RelatedInfo {
         })
     }
 
+    /// Create a [`RelatedInfo`] from an element of an LSP diagnostic "user_data.lsp.relatedInformation" section.
     fn from_related_info(table: &LuaTable) -> LuaResult<Self> {
         let (start, end) = {
             let range = table
