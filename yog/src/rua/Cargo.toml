@@ -8,11 +8,4 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-mlua = { version = "0.10", features = [
-  "macros",
-  "module",
-  "luajit",
-  "serialize",
-] }
-serde = { workspace = true }
-thiserror = { version = "2.0" }
+mlua = { version = "0.10", features = ["macros", "module", "luajit"] }
