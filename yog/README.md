@@ -18,7 +18,7 @@ Requirements:
 - `wezterm`
 - `zcat`
 
-To install a new release of bins:
+To install a new release of bins and libs:
 
 ```console
 cargo build --release && \
