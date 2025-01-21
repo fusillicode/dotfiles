@@ -39,7 +39,7 @@ fn get_src(diag: &Diagnostic) -> Option<&str> {
     diag.user_data
         .as_ref()
         .and_then(|user_data| user_data.lsp.as_ref().and_then(|lsp| lsp.source.as_deref()))
-        .or_else(|| diag.source.as_deref())
+        .or(diag.source.as_deref())
 }
 
 /// Extracts LSP diagnostic source and code from `user_data.lsp.data` or just `source` or directly from the supplied [`LuaTable`]
@@ -47,5 +47,5 @@ fn get_code(diag: &Diagnostic) -> Option<&str> {
     diag.user_data
         .as_ref()
         .and_then(|user_data| user_data.lsp.as_ref().and_then(|lsp| lsp.code.as_deref()))
-        .or_else(|| diag.code.as_deref())
+        .or(diag.code.as_deref())
 }
