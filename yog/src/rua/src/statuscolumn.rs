@@ -40,7 +40,8 @@ impl FromLua for Signs {
 
 pub struct Sign {
     sign_hl_group: String,
-    sign_text: String,
+    // Option due to grug-far buffers
+    sign_text: Option<String>,
 }
 
 impl FromLua for Sign {
@@ -62,7 +63,11 @@ impl FromLua for Sign {
 
 impl Sign {
     fn draw(&self) -> String {
-        format!("%#{}#{}%*", self.sign_hl_group, self.sign_text.trim())
+        format!(
+            "%#{}#{}%*",
+            self.sign_hl_group,
+            self.sign_text.as_ref().map(|x| x.trim()).unwrap_or("")
+        )
     }
 }
 
