@@ -1,5 +1,4 @@
 use mlua::prelude::*;
-use serde::Serialize;
 
 use crate::utils::dig;
 
@@ -57,14 +56,14 @@ fn get_related_info_diag(lsp_diags: &LuaTable) -> LuaResult<Vec<RelatedInfoDiag>
     Ok(rel_diags)
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 struct RelatedInfoDiag {
     msg: String,
     start: Pos,
     end: Pos,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 struct Pos {
     ln: usize,
     col: usize,
