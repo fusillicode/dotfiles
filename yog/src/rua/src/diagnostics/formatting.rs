@@ -1,46 +1,144 @@
 use mlua::prelude::*;
 
-use crate::utils::dig;
-use crate::utils::DigError::KeyNotFound;
-
 /// Returns the formatted [`String`] representation of an LSP diagnostic.
-/// The fields of the LSP diagnostic are extracted 1 by 1 from its supplied [`LuaTable`] representation.
-pub fn format_diagnostic(_lua: &Lua, lsp_diag: LuaTable) -> LuaResult<String> {
-    let msg = get_msg(&lsp_diag)?;
-    let src_and_code = get_src_and_code(&lsp_diag)?;
+pub fn format_diagnostic(_lua: &Lua, diag: Diagnostic) -> LuaResult<String> {
+    let msg = get_msg(&diag).map_or_else(
+        || format!("no message in {diag:?}"),
+        |s| s.trim_end_matches('.').to_string(),
+    );
+    let src = get_src(&diag).map_or_else(|| format!("no source in {diag:?}"), str::to_string);
+    let code = get_code(&diag);
+    let src_and_code = code.map_or_else(|| src.clone(), |c| format!("{src}: {c}"));
+
     Ok(format!("▶ {msg} [{src_and_code}]"))
 }
 
-/// Extracts LSP diagnostic message from `user_data.lsp.data.rendered` or directly from the supplied [`LuaTable`]
-fn get_msg(lsp_diag: &LuaTable) -> LuaResult<String> {
-    Ok(dig::<LuaTable>(lsp_diag, &["user_data", "lsp"])
-        .and_then(|x| {
-            dig::<String>(&x, &["data", "rendered"]).or_else(|_| dig::<String>(&x, &["message"]))
+/// Extracts LSP diagnostic message from [`LspData::rendered`] or directly from the supplied [`Diagnostic`].
+fn get_msg(diag: &Diagnostic) -> Option<&str> {
+    diag.user_data
+        .as_ref()
+        .and_then(|user_data| {
+            user_data
+                .lsp
+                .as_ref()
+                .and_then(|lsp| {
+                    lsp.data
+                        .as_ref()
+                        .and_then(|lsp_data| lsp_data.rendered.as_deref())
+                })
+                .or(user_data.message.as_deref())
         })
-        .or_else(|_| dig::<String>(lsp_diag, &["message"]))
-        .map(|s| s.trim_end_matches('.').to_owned())?)
+        .or(diag.message.as_deref())
 }
 
-/// Extracts LSP diagnostic source and code from `user_data.lsp.data` or just `source` or directly from the supplied [`LuaTable`]
-fn get_src_and_code(lsp_diag: &LuaTable) -> LuaResult<String> {
-    Ok(dig::<LuaTable>(lsp_diag, &["user_data", "lsp"])
-        .and_then(|x| {
-            match (
-                dig::<String>(&x, &["source"])
-                    .map(|s| s.trim_end_matches('.').to_owned())
-                    .ok(),
-                dig::<String>(&x, &["code"])
-                    .map(|s| s.trim_end_matches('.').to_owned())
-                    .ok(),
-            ) {
-                (None, None) => Err(KeyNotFound(
-                    "source_and_code".into(),
-                    mlua::Error::runtime("user_data.lsp.{source|code} keys not found"),
-                )),
-                (Some(src), None) => Ok(src),
-                (None, Some(code)) => Ok(code),
-                (Some(src), Some(code)) => Ok(format!("{src}: {code}")),
-            }
+/// Extracts the "source" from [`Diagnostic::user_data`] or [`Diagnostic::source`].
+fn get_src(diag: &Diagnostic) -> Option<&str> {
+    diag.user_data
+        .as_ref()
+        .and_then(|user_data| user_data.lsp.as_ref().and_then(|lsp| lsp.source.as_deref()))
+        .or(diag.source.as_deref())
+}
+
+/// Extracts the "code" from [`Diagnostic::user_data`] or [`Diagnostic::code`].
+fn get_code(diag: &Diagnostic) -> Option<&str> {
+    diag.user_data
+        .as_ref()
+        .and_then(|user_data| user_data.lsp.as_ref().and_then(|lsp| lsp.code.as_deref()))
+        .or(diag.code.as_deref())
+}
+
+#[derive(Debug)]
+pub struct Diagnostic {
+    source: Option<String>,
+    code: Option<String>,
+    message: Option<String>,
+    user_data: Option<UserData>,
+}
+
+#[derive(Debug)]
+pub struct UserData {
+    lsp: Option<Lsp>,
+    message: Option<String>,
+}
+
+#[derive(Debug)]
+pub struct Lsp {
+    source: Option<String>,
+    code: Option<String>,
+    data: Option<LspData>,
+}
+
+#[derive(Debug)]
+pub struct LspData {
+    rendered: Option<String>,
+}
+
+impl FromLua for Diagnostic {
+    fn from_lua(value: mlua::Value, _lua: &mlua::Lua) -> mlua::Result<Self> {
+        if let LuaValue::Table(table) = value {
+            let out = Self {
+                source: table.get("source")?,
+                code: table.get("code")?,
+                message: table.get("message")?,
+                user_data: table.get("user_data")?,
+            };
+            return Ok(out);
+        }
+        Err(mlua::Error::FromLuaConversionError {
+            from: value.type_name(),
+            to: "Diagnostic".into(),
+            message: Some(format!("expected a table got {value:?}")),
         })
-        .or_else(|_| dig::<String>(lsp_diag, &["source"]))?)
+    }
+}
+
+impl FromLua for UserData {
+    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
+        if let LuaValue::Table(table) = value {
+            let out = UserData {
+                message: table.get("message")?,
+                lsp: table.get("lsp")?,
+            };
+            return Ok(out);
+        }
+        Err(mlua::Error::FromLuaConversionError {
+            from: value.type_name(),
+            to: "UserData".into(),
+            message: Some(format!("expected a table got {value:?}")),
+        })
+    }
+}
+
+impl FromLua for Lsp {
+    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
+        if let LuaValue::Table(table) = value {
+            let out = Lsp {
+                source: table.get("source")?,
+                code: table.get("code")?,
+                data: table.get("data")?,
+            };
+            return Ok(out);
+        }
+        Err(mlua::Error::FromLuaConversionError {
+            from: value.type_name(),
+            to: "Lsp".into(),
+            message: Some(format!("expected a table got {value:?}")),
+        })
+    }
+}
+
+impl FromLua for LspData {
+    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
+        if let LuaValue::Table(table) = value {
+            let out = LspData {
+                rendered: table.get("rendered")?,
+            };
+            return Ok(out);
+        }
+        Err(mlua::Error::FromLuaConversionError {
+            from: value.type_name(),
+            to: "LspData".into(),
+            message: Some(format!("expected a table got {value:?}")),
+        })
+    }
 }
