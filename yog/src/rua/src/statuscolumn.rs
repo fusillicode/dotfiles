@@ -1,7 +1,14 @@
 use mlua::prelude::*;
 
 /// Returns the formatted [`String`] representation of the statuscolumn.
-pub fn draw(_lua: &Lua, (cur_lnum, signs): (LuaString, Signs)) -> LuaResult<String> {
+pub fn draw(
+    _lua: &Lua,
+    (curbuf_type, cur_lnum, signs): (String, LuaString, Signs),
+) -> LuaResult<String> {
+    if curbuf_type == "grug-far" {
+        return Ok("".into());
+    }
+
     let mut statuscolumn = Statuscolumn::new(cur_lnum.to_string_lossy());
 
     for sign in signs.0 {
@@ -131,7 +138,7 @@ mod tests {
         let statuscolumn = Statuscolumn {
             error: Some(Sign {
                 sign_hl_group: "foo".into(),
-                sign_text: "E".into(),
+                sign_text: Some("E".into()),
             }),
             cur_lnum: "42".into(),
             ..Default::default()
@@ -141,11 +148,11 @@ mod tests {
         let statuscolumn = Statuscolumn {
             error: Some(Sign {
                 sign_hl_group: "err".into(),
-                sign_text: "E".into(),
+                sign_text: Some("E".into()),
             }),
             warn: Some(Sign {
                 sign_hl_group: "warn".into(),
-                sign_text: "W".into(),
+                sign_text: Some("W".into()),
             }),
             cur_lnum: "42".into(),
             ..Default::default()
@@ -155,7 +162,7 @@ mod tests {
         let statuscolumn = Statuscolumn {
             git: Some(Sign {
                 sign_hl_group: "git".into(),
-                sign_text: "|".into(),
+                sign_text: Some("|".into()),
             }),
             cur_lnum: "42".into(),
             ..Default::default()
@@ -165,15 +172,15 @@ mod tests {
         let statuscolumn = Statuscolumn {
             error: Some(Sign {
                 sign_hl_group: "err".into(),
-                sign_text: "E".into(),
+                sign_text: Some("E".into()),
             }),
             warn: Some(Sign {
                 sign_hl_group: "warn".into(),
-                sign_text: "W".into(),
+                sign_text: Some("W".into()),
             }),
             git: Some(Sign {
                 sign_hl_group: "git".into(),
-                sign_text: "|".into(),
+                sign_text: Some("|".into()),
             }),
             cur_lnum: "42".into(),
             ..Default::default()
