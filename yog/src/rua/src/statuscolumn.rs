@@ -5,8 +5,8 @@ pub fn draw(
     _lua: &Lua,
     (curbuf_type, cur_lnum, signs): (String, LuaString, Signs),
 ) -> LuaResult<String> {
-    if curbuf_type == "grug-far" {
-        return Ok("".into());
+    if let Some(out) = skip_for_buf_type(curbuf_type.as_str()) {
+        return Ok(out);
     }
 
     let mut statuscolumn = Statuscolumn::new(cur_lnum.to_string_lossy());
@@ -76,6 +76,14 @@ impl Sign {
             self.sign_text.as_ref().map(|x| x.trim()).unwrap_or("")
         )
     }
+}
+
+fn skip_for_buf_type(buf_type: &str) -> Option<String> {
+    const SKIPPED_BUF_TYPES: [&str; 1] = ["grug-far"];
+    if SKIPPED_BUF_TYPES.contains(&buf_type) {
+        return Some("".into());
+    }
+    None
 }
 
 #[derive(Default)]
