@@ -5,17 +5,17 @@ use mlua::prelude::*;
 /// Returns the formatted [`String`] representation of the statusline.
 pub fn draw(
     _lua: &Lua,
-    (curbuf_nr, curbuf_path, diags): (LuaInteger, LuaString, Diagnostics),
+    (cur_buf_nr, cur_buf_path, diags): (LuaInteger, LuaString, Diagnostics),
 ) -> LuaResult<String> {
     let mut statusline = Statusline {
-        curbuf_path: curbuf_path.to_string_lossy(),
-        curbuf_diags: HashMap::new(),
+        cur_buf_path: cur_buf_path.to_string_lossy(),
+        cur_buf_diags: HashMap::new(),
         workspace_diags: HashMap::new(),
     };
 
     for diag in diags.0 {
-        if curbuf_nr == diag.bufnr {
-            *statusline.curbuf_diags.entry(diag.severity).or_insert(0) += 1;
+        if cur_buf_nr == diag.bufnr {
+            *statusline.cur_buf_diags.entry(diag.severity).or_insert(0) += 1;
         }
         *statusline.workspace_diags.entry(diag.severity).or_insert(0) += 1;
     }
@@ -113,16 +113,16 @@ impl Severity {
 
 #[derive(Debug)]
 struct Statusline {
-    curbuf_path: String,
-    curbuf_diags: HashMap<Severity, i32>,
+    cur_buf_path: String,
+    cur_buf_diags: HashMap<Severity, i32>,
     workspace_diags: HashMap<Severity, i32>,
 }
 
 impl Statusline {
     fn draw(&self) -> String {
-        let mut curbuf_diags = Severity::ORDER
+        let mut cur_buf_diags = Severity::ORDER
             .iter()
-            .filter_map(|s| self.curbuf_diags.get(s).map(|c| s.draw_diagnostics(*c)))
+            .filter_map(|s| self.cur_buf_diags.get(s).map(|c| s.draw_diagnostics(*c)))
             .collect::<Vec<_>>()
             .join(" ");
 
@@ -132,13 +132,13 @@ impl Statusline {
             .collect::<Vec<_>>()
             .join(" ");
 
-        if !curbuf_diags.is_empty() {
-            curbuf_diags.push(' ');
+        if !cur_buf_diags.is_empty() {
+            cur_buf_diags.push(' ');
         }
 
         format!(
-            "{curbuf_diags}%#StatusLine#{} %m %r%={workspace_diags}",
-            self.curbuf_path
+            "{cur_buf_diags}%#StatusLine#{} %m %r%={workspace_diags}",
+            self.cur_buf_path
         )
     }
 }
@@ -151,23 +151,23 @@ mod tests {
     fn test_status_line_draw_works_as_expected() {
         for statusline in [
             Statusline {
-                curbuf_path: "foo".into(),
-                curbuf_diags: HashMap::new(),
+                cur_buf_path: "foo".into(),
+                cur_buf_diags: HashMap::new(),
                 workspace_diags: HashMap::new(),
             },
             Statusline {
-                curbuf_path: "foo".into(),
-                curbuf_diags: [(Severity::Info, 0)].into_iter().collect(),
+                cur_buf_path: "foo".into(),
+                cur_buf_diags: [(Severity::Info, 0)].into_iter().collect(),
                 workspace_diags: HashMap::new(),
             },
             Statusline {
-                curbuf_path: "foo".into(),
-                curbuf_diags: HashMap::new(),
+                cur_buf_path: "foo".into(),
+                cur_buf_diags: HashMap::new(),
                 workspace_diags: [(Severity::Info, 0)].into_iter().collect(),
             },
             Statusline {
-                curbuf_path: "foo".into(),
-                curbuf_diags: [(Severity::Info, 0)].into_iter().collect(),
+                cur_buf_path: "foo".into(),
+                cur_buf_diags: [(Severity::Info, 0)].into_iter().collect(),
                 workspace_diags: [(Severity::Info, 0)].into_iter().collect(),
             },
         ] {
@@ -179,8 +179,8 @@ mod tests {
         }
 
         let statusline = Statusline {
-            curbuf_path: "foo".into(),
-            curbuf_diags: [(Severity::Info, 1), (Severity::Error, 3)]
+            cur_buf_path: "foo".into(),
+            cur_buf_diags: [(Severity::Info, 1), (Severity::Error, 3)]
                 .into_iter()
                 .collect(),
             workspace_diags: [(Severity::Info, 0)].into_iter().collect(),
@@ -191,8 +191,8 @@ mod tests {
         );
 
         let statusline = Statusline {
-            curbuf_path: "foo".into(),
-            curbuf_diags: [(Severity::Info, 0)].into_iter().collect(),
+            cur_buf_path: "foo".into(),
+            cur_buf_diags: [(Severity::Info, 0)].into_iter().collect(),
             workspace_diags: [(Severity::Info, 1), (Severity::Error, 3)]
                 .into_iter()
                 .collect(),
@@ -203,8 +203,8 @@ mod tests {
         );
 
         let statusline = Statusline {
-            curbuf_path: "foo".into(),
-            curbuf_diags: [(Severity::Hint, 3), (Severity::Warn, 2)]
+            cur_buf_path: "foo".into(),
+            cur_buf_diags: [(Severity::Hint, 3), (Severity::Warn, 2)]
                 .into_iter()
                 .collect(),
             workspace_diags: [(Severity::Info, 1), (Severity::Error, 3)]

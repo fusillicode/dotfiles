@@ -3,10 +3,10 @@ use mlua::prelude::*;
 /// Returns the formatted [`String`] representation of the statuscolumn.
 pub fn draw(
     _lua: &Lua,
-    (curbuf_type, cur_lnum, signs): (LuaString, LuaString, Signs),
+    (cur_buf_type, cur_lnum, signs): (LuaString, LuaString, Signs),
 ) -> LuaResult<String> {
     Ok(Statuscolumn::draw(
-        curbuf_type.to_string_lossy().as_str(),
+        cur_buf_type.to_string_lossy().as_str(),
         cur_lnum.to_string_lossy(),
         signs.0,
     ))
@@ -76,8 +76,8 @@ struct Statuscolumn {
 }
 
 impl Statuscolumn {
-    fn draw(curbuf_type: &str, cur_lnum: String, signs: Vec<Sign>) -> String {
-        match curbuf_type {
+    fn draw(cur_buf_type: &str, cur_lnum: String, signs: Vec<Sign>) -> String {
+        match cur_buf_type {
             "grug-far" => " ".into(),
             _ => Self::new(cur_lnum, signs).to_string(),
         }
