@@ -9,16 +9,16 @@ return {
 
     conform.setup({
       formatters_by_ft = {
-        css = { { 'prettierd', }, },
-        graphql = { { 'prettierd', }, },
-        html = { { 'prettierd', }, },
-        javascript = { { 'prettierd', }, },
-        liquid = { { 'prettierd', }, },
-        markdown = { { 'prettierd', }, },
-        sql = { { 'sqlfluff', }, },
-        typescript = { { 'prettierd', }, },
-        typescriptreact = { { 'prettierd', }, },
-        yaml = { { 'prettierd', }, },
+        css = { 'prettierd', },
+        graphql = { 'prettierd', },
+        html = { 'prettierd', },
+        javascript = { 'prettierd', },
+        liquid = { 'prettierd', },
+        markdown = { 'prettierd', },
+        sql = { 'sqlfluff', },
+        typescript = { 'prettierd', },
+        typescriptreact = { 'prettierd', },
+        yaml = { 'prettierd', },
         ['*'] = { 'trim_whitespace', 'trim_newlines', },
       },
       -- https://github.com/stevearc/conform.nvim/blob/master/doc/recipes.md#automatically-run-slow-formatters-async
