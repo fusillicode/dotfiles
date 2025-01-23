@@ -128,9 +128,11 @@ mod tests {
 
     #[test]
     fn test_statuscolumn_draw_works_as_expected() {
+        // No signs
         let out = Statuscolumn::draw("foo", "42".into(), vec![]);
         assert_eq!("  %=% 42 ", &out);
 
+        // 1 diagnostic sign
         let out = Statuscolumn::draw(
             "foo",
             "42".into(),
@@ -141,6 +143,7 @@ mod tests {
         );
         assert_eq!("%#DiagnosticSignError#E%* %=% 42 ", &out);
 
+        // Multiple diagnostics signs and only the higher severity sign is displayed
         let out = Statuscolumn::draw(
             "foo",
             "42".into(),
@@ -157,6 +160,7 @@ mod tests {
         );
         assert_eq!("%#DiagnosticSignError#E%* %=% 42 ", &out);
 
+        // git sign
         let out = Statuscolumn::draw(
             "foo",
             "42".into(),
@@ -167,6 +171,7 @@ mod tests {
         );
         assert_eq!(" %#GitSignsFoo#|%*%=% 42 ", &out);
 
+        // Multiple diagnostics signs and a git sign
         let out = Statuscolumn::draw(
             "foo",
             "42".into(),
