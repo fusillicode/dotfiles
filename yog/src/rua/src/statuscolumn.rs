@@ -118,7 +118,7 @@ impl std::fmt::Display for Statuscolumn {
             .map(Sign::draw)
             .unwrap_or_else(|| " ".into());
 
-        write!(f, "{}{} %=% {} ", diag_sign, git_sign, self.cur_lnum)
+        write!(f, "{}{}%=% {} ", diag_sign, git_sign, self.cur_lnum)
     }
 }
 
@@ -129,7 +129,7 @@ mod tests {
     #[test]
     fn test_statuscolumn_draw_works_as_expected() {
         let out = Statuscolumn::draw("foo", "42".into(), vec![]);
-        assert_eq!("   %=% 42 ", &out);
+        assert_eq!("  %=% 42 ", &out);
 
         let out = Statuscolumn::draw(
             "foo",
@@ -139,7 +139,7 @@ mod tests {
                 sign_text: Some("E".into()),
             }],
         );
-        assert_eq!("%#DiagnosticSignError#E%*  %=% 42 ", &out);
+        assert_eq!("%#DiagnosticSignError#E%* %=% 42 ", &out);
 
         let out = Statuscolumn::draw(
             "foo",
@@ -155,7 +155,7 @@ mod tests {
                 },
             ],
         );
-        assert_eq!("%#DiagnosticSignError#E%*  %=% 42 ", &out);
+        assert_eq!("%#DiagnosticSignError#E%* %=% 42 ", &out);
 
         let out = Statuscolumn::draw(
             "foo",
@@ -165,7 +165,7 @@ mod tests {
                 sign_text: Some("|".into()),
             }],
         );
-        assert_eq!(" %#GitSignsFoo#|%* %=% 42 ", &out);
+        assert_eq!(" %#GitSignsFoo#|%*%=% 42 ", &out);
 
         let out = Statuscolumn::draw(
             "foo",
@@ -185,6 +185,6 @@ mod tests {
                 },
             ],
         );
-        assert_eq!("%#DiagnosticSignError#E%*%#GitSignsFoo#|%* %=% 42 ", &out);
+        assert_eq!("%#DiagnosticSignError#E%*%#GitSignsFoo#|%*%=% 42 ", &out);
     }
 }
