@@ -7,6 +7,7 @@ cargo install --force \
   atuin \
   cargo-make \
   ccase \
+  difftastic \
   drill \
   fd-find \
   pv \
