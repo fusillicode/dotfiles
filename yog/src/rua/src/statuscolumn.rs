@@ -107,26 +107,18 @@ impl Statuscolumn {
 
 impl std::fmt::Display for Statuscolumn {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut out = String::new();
-
         let diag_sign = [&self.error, &self.warn, &self.info, &self.hint, &self.ok]
             .iter()
             .find_map(|s| s.as_ref().map(Sign::draw))
             .unwrap_or_else(|| " ".into());
 
-        out.push_str(&diag_sign);
-        out.push_str(
-            &self
-                .git
-                .as_ref()
-                .map(Sign::draw)
-                .unwrap_or_else(|| " ".to_string()),
-        );
-        out.push_str(" %=% ");
-        out.push_str(&self.cur_lnum);
-        out.push(' ');
+        let git_sign = self
+            .git
+            .as_ref()
+            .map(Sign::draw)
+            .unwrap_or_else(|| " ".into());
 
-        f.write_str(&out)
+        write!(f, "{}{} %=% {} ", diag_sign, git_sign, self.cur_lnum)
     }
 }
 
