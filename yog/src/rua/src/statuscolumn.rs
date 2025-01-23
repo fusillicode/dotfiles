@@ -5,26 +5,11 @@ pub fn draw(
     _lua: &Lua,
     (curbuf_type, cur_lnum, signs): (LuaString, LuaString, Signs),
 ) -> LuaResult<String> {
-    match curbuf_type.to_string_lossy().as_str() {
-        "grug-far" => Ok(" ".into()),
-        _ => {
-            let mut statuscolumn = Statuscolumn::new(cur_lnum.to_string_lossy());
-
-            for sign in signs.0 {
-                match sign.sign_hl_group.as_str() {
-                    "DiagnosticSignError" => statuscolumn.error = Some(sign),
-                    "DiagnosticSignWarn" => statuscolumn.warn = Some(sign),
-                    "DiagnosticSignInfo" => statuscolumn.info = Some(sign),
-                    "DiagnosticSignHint" => statuscolumn.hint = Some(sign),
-                    "DiagnosticSignOk" => statuscolumn.ok = Some(sign),
-                    git if git.contains("GitSigns") => statuscolumn.git = Some(sign),
-                    _ => (),
-                };
-            }
-
-            Ok(statuscolumn.draw())
-        }
-    }
+    Ok(Statuscolumn::draw(
+        curbuf_type.to_string_lossy().as_str(),
+        cur_lnum.to_string_lossy(),
+        signs.0,
+    ))
 }
 
 pub struct Signs(Vec<Sign>);
@@ -91,16 +76,37 @@ struct Statuscolumn {
 }
 
 impl Statuscolumn {
-    fn new(cur_lnum: String) -> Self {
-        Self {
+    fn draw(curbuf_type: &str, cur_lnum: String, signs: Vec<Sign>) -> String {
+        match curbuf_type {
+            "grug-far" => " ".into(),
+            _ => Self::new(cur_lnum, signs).to_string(),
+        }
+    }
+
+    fn new(cur_lnum: String, signs: Vec<Sign>) -> Self {
+        let mut statuscolumn = Self {
             cur_lnum,
             ..Default::default()
+        };
+
+        for sign in signs {
+            match sign.sign_hl_group.as_str() {
+                "DiagnosticSignError" => statuscolumn.error = Some(sign),
+                "DiagnosticSignWarn" => statuscolumn.warn = Some(sign),
+                "DiagnosticSignInfo" => statuscolumn.info = Some(sign),
+                "DiagnosticSignHint" => statuscolumn.hint = Some(sign),
+                "DiagnosticSignOk" => statuscolumn.ok = Some(sign),
+                git if git.contains("GitSigns") => statuscolumn.git = Some(sign),
+                _ => (),
+            };
         }
+
+        statuscolumn
     }
 }
 
-impl Statuscolumn {
-    fn draw(&self) -> String {
+impl std::fmt::Display for Statuscolumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut out = String::new();
 
         let diag_sign = [&self.error, &self.warn, &self.info, &self.hint, &self.ok]
@@ -120,7 +126,7 @@ impl Statuscolumn {
         out.push_str(&self.cur_lnum);
         out.push(' ');
 
-        out
+        f.write_str(&out)
     }
 }
 
@@ -130,62 +136,63 @@ mod tests {
 
     #[test]
     fn test_statuscolumn_draw_works_as_expected() {
-        let statuscolumn = Statuscolumn {
-            cur_lnum: "42".into(),
-            ..Default::default()
-        };
-        assert_eq!("   %=% 42 ", &statuscolumn.draw());
+        let out = Statuscolumn::draw("foo", "42".into(), vec![]);
+        assert_eq!("   %=% 42 ", &out);
 
-        let statuscolumn = Statuscolumn {
-            error: Some(Sign {
-                sign_hl_group: "foo".into(),
+        let out = Statuscolumn::draw(
+            "foo",
+            "42".into(),
+            vec![Sign {
+                sign_hl_group: "DiagnosticSignError".into(),
                 sign_text: Some("E".into()),
-            }),
-            cur_lnum: "42".into(),
-            ..Default::default()
-        };
-        assert_eq!("%#foo#E%*  %=% 42 ", &statuscolumn.draw());
+            }],
+        );
+        assert_eq!("%#DiagnosticSignError#E%*  %=% 42 ", &out);
 
-        let statuscolumn = Statuscolumn {
-            error: Some(Sign {
-                sign_hl_group: "err".into(),
-                sign_text: Some("E".into()),
-            }),
-            warn: Some(Sign {
-                sign_hl_group: "warn".into(),
-                sign_text: Some("W".into()),
-            }),
-            cur_lnum: "42".into(),
-            ..Default::default()
-        };
-        assert_eq!("%#err#E%*  %=% 42 ", &statuscolumn.draw());
+        let out = Statuscolumn::draw(
+            "foo",
+            "42".into(),
+            vec![
+                Sign {
+                    sign_hl_group: "DiagnosticSignError".into(),
+                    sign_text: Some("E".into()),
+                },
+                Sign {
+                    sign_hl_group: "DiagnosticSignWarn".into(),
+                    sign_text: Some("W".into()),
+                },
+            ],
+        );
+        assert_eq!("%#DiagnosticSignError#E%*  %=% 42 ", &out);
 
-        let statuscolumn = Statuscolumn {
-            git: Some(Sign {
-                sign_hl_group: "git".into(),
+        let out = Statuscolumn::draw(
+            "foo",
+            "42".into(),
+            vec![Sign {
+                sign_hl_group: "GitSignsFoo".into(),
                 sign_text: Some("|".into()),
-            }),
-            cur_lnum: "42".into(),
-            ..Default::default()
-        };
-        assert_eq!(" %#git#|%* %=% 42 ", &statuscolumn.draw());
+            }],
+        );
+        assert_eq!(" %#GitSignsFoo#|%* %=% 42 ", &out);
 
-        let statuscolumn = Statuscolumn {
-            error: Some(Sign {
-                sign_hl_group: "err".into(),
-                sign_text: Some("E".into()),
-            }),
-            warn: Some(Sign {
-                sign_hl_group: "warn".into(),
-                sign_text: Some("W".into()),
-            }),
-            git: Some(Sign {
-                sign_hl_group: "git".into(),
-                sign_text: Some("|".into()),
-            }),
-            cur_lnum: "42".into(),
-            ..Default::default()
-        };
-        assert_eq!("%#err#E%*%#git#|%* %=% 42 ", &statuscolumn.draw());
+        let out = Statuscolumn::draw(
+            "foo",
+            "42".into(),
+            vec![
+                Sign {
+                    sign_hl_group: "DiagnosticSignError".into(),
+                    sign_text: Some("E".into()),
+                },
+                Sign {
+                    sign_hl_group: "DiagnosticSignWarn".into(),
+                    sign_text: Some("W".into()),
+                },
+                Sign {
+                    sign_hl_group: "GitSignsFoo".into(),
+                    sign_text: Some("|".into()),
+                },
+            ],
+        );
+        assert_eq!("%#DiagnosticSignError#E%*%#GitSignsFoo#|%* %=% 42 ", &out);
     }
 }
