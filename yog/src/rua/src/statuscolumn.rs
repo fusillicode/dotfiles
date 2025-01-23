@@ -3,27 +3,28 @@ use mlua::prelude::*;
 /// Returns the formatted [`String`] representation of the statuscolumn.
 pub fn draw(
     _lua: &Lua,
-    (curbuf_type, cur_lnum, signs): (String, LuaString, Signs),
+    (curbuf_type, cur_lnum, signs): (LuaString, LuaString, Signs),
 ) -> LuaResult<String> {
-    if let Some(out) = skip_for_buf_type(curbuf_type.as_str()) {
-        return Ok(out);
+    match curbuf_type.to_string_lossy().as_str() {
+        "grug-far" => Ok(" ".into()),
+        _ => {
+            let mut statuscolumn = Statuscolumn::new(cur_lnum.to_string_lossy());
+
+            for sign in signs.0 {
+                match sign.sign_hl_group.as_str() {
+                    "DiagnosticSignError" => statuscolumn.error = Some(sign),
+                    "DiagnosticSignWarn" => statuscolumn.warn = Some(sign),
+                    "DiagnosticSignInfo" => statuscolumn.info = Some(sign),
+                    "DiagnosticSignHint" => statuscolumn.hint = Some(sign),
+                    "DiagnosticSignOk" => statuscolumn.ok = Some(sign),
+                    git if git.contains("GitSigns") => statuscolumn.git = Some(sign),
+                    _ => (),
+                };
+            }
+
+            Ok(statuscolumn.draw())
+        }
     }
-
-    let mut statuscolumn = Statuscolumn::new(cur_lnum.to_string_lossy());
-
-    for sign in signs.0 {
-        match sign.sign_hl_group.as_str() {
-            "DiagnosticSignError" => statuscolumn.error = Some(sign),
-            "DiagnosticSignWarn" => statuscolumn.warn = Some(sign),
-            "DiagnosticSignInfo" => statuscolumn.info = Some(sign),
-            "DiagnosticSignHint" => statuscolumn.hint = Some(sign),
-            "DiagnosticSignOk" => statuscolumn.ok = Some(sign),
-            git if git.contains("GitSigns") => statuscolumn.git = Some(sign),
-            _ => (),
-        };
-    }
-
-    Ok(statuscolumn.draw())
 }
 
 pub struct Signs(Vec<Sign>);
@@ -76,14 +77,6 @@ impl Sign {
             self.sign_text.as_ref().map(|x| x.trim()).unwrap_or("")
         )
     }
-}
-
-fn skip_for_buf_type(buf_type: &str) -> Option<String> {
-    const SKIPPED_BUF_TYPES: [&str; 1] = ["grug-far"];
-    if SKIPPED_BUF_TYPES.contains(&buf_type) {
-        return Some("".into());
-    }
-    None
 }
 
 #[derive(Default)]
