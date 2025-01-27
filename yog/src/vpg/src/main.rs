@@ -45,12 +45,12 @@ fn main() -> anyhow::Result<()> {
 
     save_new_pgpass_file(lines, &pgpass_path)?;
 
-    let (cmd, host) = pgpass_line.psql_conn_cmd();
+    let db_url = pgpass_line.db_url();
     println!("\nConnecting to {alias}:\n");
-    println!("{cmd} {host}\n");
+    println!("{db_url}\n");
 
-    if let Some(psql_exit_code) = Command::new(cmd)
-        .arg(&host)
+    if let Some(psql_exit_code) = Command::new("psql")
+        .arg(&db_url)
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
@@ -61,7 +61,7 @@ fn main() -> anyhow::Result<()> {
         std::process::exit(psql_exit_code);
     }
 
-    eprintln!("{cmd} {host} terminated by signal.");
+    eprintln!("psql {db_url} terminated by signal.");
     std::process::exit(1);
 }
 
@@ -128,13 +128,10 @@ struct PgpassLine {
 }
 
 impl PgpassLine {
-    pub fn psql_conn_cmd(&self) -> (&str, String) {
-        (
-            "psql",
-            format!(
-                "postgres://{}@{}:{}/{}",
-                self.user, self.host, self.port, self.db
-            ),
+    pub fn db_url(&self) -> String {
+        format!(
+            "postgres://{}@{}:{}/{}",
+            self.user, self.host, self.port, self.db
         )
     }
 
@@ -272,9 +269,9 @@ mod tests {
     }
 
     #[test]
-    fn test_pgpass_line_psql_conn_cmd_returns_the_expected_output() {
+    fn test_pgpass_line_db_url_returns_the_expected_output() {
         assert_eq!(
-            ("psql", "postgres://user@host:5432/db".to_string()),
+            "postgres://user@host:5432/db".to_string(),
             PgpassLine {
                 idx: 42,
                 host: "host".into(),
@@ -283,7 +280,7 @@ mod tests {
                 user: "user".into(),
                 pwd: "whatever".into()
             }
-            .psql_conn_cmd()
+            .db_url()
         )
     }
 }
