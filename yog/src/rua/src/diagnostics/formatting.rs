@@ -25,8 +25,9 @@ fn get_msg(diag: &Diagnostic) -> Option<&str> {
                     lsp.data
                         .as_ref()
                         .and_then(|lsp_data| lsp_data.rendered.as_deref())
+                        .or(lsp.message.as_deref())
                 })
-                .or(user_data.message.as_deref())
+                .or(diag.message.as_deref())
         })
         .or(diag.message.as_deref())
 }
@@ -49,23 +50,23 @@ fn get_code(diag: &Diagnostic) -> Option<&str> {
 
 #[derive(Debug)]
 pub struct Diagnostic {
-    source: Option<String>,
     code: Option<String>,
     message: Option<String>,
+    source: Option<String>,
     user_data: Option<UserData>,
 }
 
 #[derive(Debug)]
 pub struct UserData {
     lsp: Option<Lsp>,
-    message: Option<String>,
 }
 
 #[derive(Debug)]
 pub struct Lsp {
-    source: Option<String>,
     code: Option<String>,
     data: Option<LspData>,
+    message: Option<String>,
+    source: Option<String>,
 }
 
 #[derive(Debug)]
@@ -77,10 +78,10 @@ impl FromLua for Diagnostic {
     fn from_lua(value: mlua::Value, _lua: &mlua::Lua) -> mlua::Result<Self> {
         if let LuaValue::Table(table) = value {
             let out = Self {
-                source: table.get("source")?,
-                code: table.get("code")?,
-                message: table.get("message")?,
-                user_data: table.get("user_data")?,
+                code: get_optional_value(&table, "code")?,
+                message: get_optional_value(&table, "message")?,
+                source: get_optional_value(&table, "source")?,
+                user_data: get_optional_value(&table, "user_data")?,
             };
             return Ok(out);
         }
@@ -96,8 +97,7 @@ impl FromLua for UserData {
     fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
         if let LuaValue::Table(table) = value {
             let out = UserData {
-                message: table.get("message")?,
-                lsp: table.get("lsp")?,
+                lsp: get_optional_value(&table, "lsp")?,
             };
             return Ok(out);
         }
@@ -113,9 +113,10 @@ impl FromLua for Lsp {
     fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
         if let LuaValue::Table(table) = value {
             let out = Lsp {
-                source: table.get("source")?,
-                code: table.get("code")?,
-                data: table.get("data")?,
+                code: get_optional_value(&table, "code")?,
+                data: get_optional_value(&table, "data")?,
+                message: get_optional_value(&table, "message")?,
+                source: get_optional_value(&table, "source")?,
             };
             return Ok(out);
         }
@@ -131,7 +132,7 @@ impl FromLua for LspData {
     fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
         if let LuaValue::Table(table) = value {
             let out = LspData {
-                rendered: table.get("rendered")?,
+                rendered: get_optional_value(&table, "rendered")?,
             };
             return Ok(out);
         }
@@ -140,5 +141,13 @@ impl FromLua for LspData {
             to: "LspData".into(),
             message: Some(format!("expected a table got {value:?}")),
         })
+    }
+}
+
+fn get_optional_value<T: FromLua>(table: &LuaTable, field: &str) -> mlua::Result<Option<T>> {
+    match table.get::<Option<T>>(field) {
+        Ok(out) => Ok(out),
+        Err(LuaError::FromLuaConversionError { .. }) => Ok(None),
+        e => e,
     }
 }
