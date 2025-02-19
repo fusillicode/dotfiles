@@ -34,12 +34,9 @@ pub fn filter_diagnostics(
 }
 
 // List of paths for which I don't want to report any diagnostic.
-fn unwanted_paths() -> Vec<String> {
-    let home_path = std::env::var("HOME");
-    [home_path.map(|x| format!("{x}/.cargo")).ok()]
-        .into_iter()
-        .flatten()
-        .collect()
+fn unwanted_paths() -> [String; 1] {
+    let home_path = std::env::var("HOME").unwrap_or_default();
+    [home_path + "/.cargo"]
 }
 
 /// Get the [`RelatedInfo`]s of an LSP diagnostic represented by a [`LuaTable`].
