@@ -13,8 +13,7 @@ pub fn filter_diagnostics(
     let mut out = vec![];
 
     let buf_path = buf_path.to_string_lossy();
-    let home_path = std::env::var("HOME").map(|x| format!("{x}/.cargo")).ok();
-    if home_path.is_some_and(|x| buf_path.contains(&x)) {
+    if unwanted_paths().iter().any(|up| buf_path.contains(up)) {
         return lua.create_sequence_from(out);
     }
 
@@ -32,6 +31,15 @@ pub fn filter_diagnostics(
     }
 
     lua.create_sequence_from(out)
+}
+
+// List of paths for which I don't want to report any diagnostic.
+fn unwanted_paths() -> Vec<String> {
+    let home_path = std::env::var("HOME");
+    [home_path.map(|x| format!("{x}/.cargo")).ok()]
+        .into_iter()
+        .flatten()
+        .collect()
 }
 
 /// Get the [`RelatedInfo`]s of an LSP diagnostic represented by a [`LuaTable`].
