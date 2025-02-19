@@ -6,13 +6,23 @@ use mlua::prelude::*;
 /// The function uses a [`LuaTable`] rather than a user defined type that implements the [`FromLua`]
 /// trait because the deserialization logic in this case is incremental.
 /// I don't the complete "user_data.lsp.relatedInformation" upstream to handle the filtering.
-pub fn filter_diagnostics(lua: &Lua, lsp_diags: LuaTable) -> LuaResult<LuaTable> {
+pub fn filter_diagnostics(
+    lua: &Lua,
+    (buf_path, lsp_diags): (LuaString, LuaTable),
+) -> LuaResult<LuaTable> {
+    let mut out = vec![];
+
+    let buf_path = buf_path.to_string_lossy();
+    let home_path = std::env::var("HOME").map(|x| format!("{x}/.cargo")).ok();
+    if home_path.is_some_and(|x| buf_path.contains(&x)) {
+        return lua.create_sequence_from(out);
+    }
+
     let rel_infos = get_related_infos(&lsp_diags)?;
     if rel_infos.is_empty() {
         return Ok(lsp_diags);
     }
 
-    let mut out = vec![];
     for table in lsp_diags.sequence_values::<LuaTable>().flatten() {
         // All LSPs diagnostics should be deserializable into [`RelatedInfo`]
         let rel_info = RelatedInfo::from_lsp_diagnostic(&table)?;
