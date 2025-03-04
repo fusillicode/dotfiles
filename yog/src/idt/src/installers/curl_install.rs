@@ -5,7 +5,7 @@ use std::process::Command;
 use std::process::Stdio;
 
 pub enum OutputOption<'a> {
-    UnpackVia(Command, &'a str),
+    UnpackVia(Box<Command>, &'a str),
     PipeInto(&'a mut Command),
     WriteTo(&'a str),
 }

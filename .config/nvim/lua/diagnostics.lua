@@ -24,5 +24,10 @@ vim.diagnostic.set = function(namespace, bufnr, diagnostics, opts)
   -- require('utils').log(diagnostics)
   -- NOTE: switch to this line if `rua.filter_diagnostics(diagnostics)` misbehave
   -- diag_set(namespace, bufnr, diagnostics, opts)
-  diag_set(namespace, bufnr, rua.filter_diagnostics(diagnostics), opts)
+  diag_set(
+    namespace,
+    bufnr,
+    rua.filter_diagnostics(vim.api.nvim_buf_get_name(bufnr), diagnostics),
+    opts
+  )
 end
