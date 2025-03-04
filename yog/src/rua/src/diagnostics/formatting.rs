@@ -56,24 +56,6 @@ pub struct Diagnostic {
     user_data: Option<UserData>,
 }
 
-#[derive(Debug)]
-pub struct UserData {
-    lsp: Option<Lsp>,
-}
-
-#[derive(Debug)]
-pub struct Lsp {
-    code: Option<String>,
-    data: Option<LspData>,
-    message: Option<String>,
-    source: Option<String>,
-}
-
-#[derive(Debug)]
-pub struct LspData {
-    rendered: Option<String>,
-}
-
 impl FromLua for Diagnostic {
     fn from_lua(value: mlua::Value, _lua: &mlua::Lua) -> mlua::Result<Self> {
         if let LuaValue::Table(table) = value {
@@ -93,6 +75,11 @@ impl FromLua for Diagnostic {
     }
 }
 
+#[derive(Debug)]
+pub struct UserData {
+    lsp: Option<Lsp>,
+}
+
 impl FromLua for UserData {
     fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
         if let LuaValue::Table(table) = value {
@@ -107,6 +94,14 @@ impl FromLua for UserData {
             message: Some(format!("expected a table got {value:?}")),
         })
     }
+}
+
+#[derive(Debug)]
+pub struct Lsp {
+    code: Option<String>,
+    data: Option<LspData>,
+    message: Option<String>,
+    source: Option<String>,
 }
 
 impl FromLua for Lsp {
@@ -126,6 +121,11 @@ impl FromLua for Lsp {
             message: Some(format!("expected a table got {value:?}")),
         })
     }
+}
+
+#[derive(Debug)]
+pub struct LspData {
+    rendered: Option<String>,
 }
 
 impl FromLua for LspData {
