@@ -1,5 +1,6 @@
 #![feature(exit_status_error)]
 
+use std::io::Write;
 use std::process::Command;
 
 use anyhow::bail;
@@ -39,7 +40,7 @@ fn main() -> anyhow::Result<()> {
                     branch,
                 );
             }
-            // Assumption: if the last arg is NOT an existent local branch try to create a branch
+            // Assumption: if the last arg is NOT an existing local branch try to create a branch
             create_branch_if_missing(&build_branch_name(&args)?)
         }
     }?;
@@ -98,6 +99,9 @@ fn switch_branch(branch: &str) -> anyhow::Result<()> {
 }
 
 fn create_branch(branch: &str) -> anyhow::Result<()> {
+    if !should_create_new_branch(branch)? {
+        return Ok(());
+    }
     let output = Command::new("git")
         .args(["checkout", "-b", branch])
         .output()?;
@@ -106,6 +110,45 @@ fn create_branch(branch: &str) -> anyhow::Result<()> {
     }
     println!("🌱 {branch}");
     Ok(())
+}
+
+// Create the supplied branch without asking only if:
+// - the passed branch is the default one (it will not be created because already there and I'll be
+//   switched to it)
+// - the current branch is the default one
+// This logic helps me to avoid inadvertently branching from branches different from the default
+// one as it doesn't happen often.
+fn should_create_new_branch(branch: &str) -> anyhow::Result<bool> {
+    if is_default_branch(branch) {
+        return Ok(true);
+    }
+    let curr_branch = get_current_branch()?;
+    if is_default_branch(&curr_branch) {
+        return Ok(true);
+    }
+    print!("🪚 {curr_branch} -> {branch} ");
+    std::io::stdout().flush()?;
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input)?;
+    if !input.trim().is_empty() {
+        print!("🪨 {branch} not created");
+        return Ok(false);
+    }
+    Ok(true)
+}
+
+fn is_default_branch(branch: &str) -> bool {
+    branch == "main" || branch == "master"
+}
+
+fn get_current_branch() -> anyhow::Result<String> {
+    let output = Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .output()?;
+    if !output.status.success() {
+        bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
+    }
+    Ok(std::str::from_utf8(&output.stdout)?.trim().to_string())
 }
 
 fn create_branch_if_missing(branch: &str) -> anyhow::Result<()> {

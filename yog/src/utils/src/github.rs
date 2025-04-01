@@ -7,6 +7,7 @@ use url::Url;
 
 const GITHUB_HOST: &str = "github.com";
 const GITHUB_PR_ID_PREFIX: &str = "pull";
+const GITHUB_PR_ID_QUERY_KEY: &str = "pr";
 
 pub fn log_into_github() -> anyhow::Result<()> {
     if crate::system::silent_cmd("gh")
@@ -65,6 +66,17 @@ fn extract_pr_id_form_pr_url(pr_url: &Url) -> anyhow::Result<String> {
     if host != GITHUB_HOST {
         bail!("host {host:?} in {pr_url} doesn't match {GITHUB_HOST:?}")
     }
+
+    // To handle URLs like:
+    // - https://github.com/<OWNER>/<REPO>/actions/runs/<RUN_ID>?pr=<PR_ID>
+    // - https://github.com/<OWNER>/<REPO>/actions/runs/<RUN_ID>/job/<JOB_ID>?pr=<PR_ID>
+    if let Some(pr_id) = pr_url
+        .query_pairs()
+        .find(|(key, _)| key == GITHUB_PR_ID_QUERY_KEY)
+        .map(|(_, pr_id)| pr_id.to_string())
+    {
+        return Ok(pr_id);
+    };
 
     let path_segments = pr_url
         .path_segments()
@@ -181,6 +193,22 @@ mod tests {
     fn test_extract_pr_id_form_pr_url_returns_the_expected_pr_id_from_a_github_pr_url_if_pr_id_prefix_is_not_1st_path_segment(
     ) {
         let pr_url = Url::parse(&format!("https://{GITHUB_HOST}/foo/pull/42/foo")).unwrap();
+        assert_eq!("42", extract_pr_id_form_pr_url(&pr_url).unwrap())
+    }
+
+    #[test]
+    fn test_extract_pr_id_form_pr_url_returns_the_expected_pr_id_from_a_github_pr_url_if_pr_is_in_query_string(
+    ) {
+        let pr_url = Url::parse(&format!(
+            "https://{GITHUB_HOST}/<OWNER>/<REPO>/actions/runs/<RUN_ID>?pr=42"
+        ))
+        .unwrap();
+        assert_eq!("42", extract_pr_id_form_pr_url(&pr_url).unwrap());
+
+        let pr_url = Url::parse(&format!(
+            "https://{GITHUB_HOST}/<OWNER>/<REPO>/actions/runs/<RUN_ID>/job/<JOB_ID>?pr=42"
+        ))
+        .unwrap();
         assert_eq!("42", extract_pr_id_form_pr_url(&pr_url).unwrap())
     }
 }
