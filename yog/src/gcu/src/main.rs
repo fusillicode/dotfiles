@@ -100,8 +100,8 @@ fn switch_branch(branch: &str) -> anyhow::Result<()> {
 
 fn create_branch(branch: &str) -> anyhow::Result<()> {
     let curr_branch = get_current_branch()?;
-    if curr_branch != "main" || curr_branch != "master" {
-        print!("❔ branch from {curr_branch}: ");
+    if curr_branch != "main" && curr_branch != "master" {
+        print!("🪚 {curr_branch} -> {branch} ");
         std::io::stdout().flush()?;
         let mut input = String::new();
         std::io::stdin().read_line(&mut input)?;
