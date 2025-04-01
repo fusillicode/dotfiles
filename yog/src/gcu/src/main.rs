@@ -99,16 +99,8 @@ fn switch_branch(branch: &str) -> anyhow::Result<()> {
 }
 
 fn create_branch(branch: &str) -> anyhow::Result<()> {
-    let curr_branch = get_current_branch()?;
-    if curr_branch != "main" && curr_branch != "master" {
-        print!("🪚 {curr_branch} -> {branch} ");
-        std::io::stdout().flush()?;
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input)?;
-        if !input.trim().is_empty() {
-            print!("🪨 {branch} not created");
-            return Ok(());
-        }
+    if !should_create_new_branch(branch)? {
+        return Ok(());
     }
     let output = Command::new("git")
         .args(["checkout", "-b", branch])
@@ -118,6 +110,25 @@ fn create_branch(branch: &str) -> anyhow::Result<()> {
     }
     println!("🌱 {branch}");
     Ok(())
+}
+
+fn should_create_new_branch(branch: &str) -> anyhow::Result<bool> {
+    if branch == "main" || branch == "master" {
+        return Ok(true);
+    }
+    let curr_branch = get_current_branch()?;
+    if curr_branch == "main" || curr_branch == "master" {
+        return Ok(true);
+    }
+    print!("🪚 {curr_branch} -> {branch} ");
+    std::io::stdout().flush()?;
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input)?;
+    if !input.trim().is_empty() {
+        print!("🪨 {branch} not created");
+        return Ok(false);
+    }
+    Ok(true)
 }
 
 fn get_current_branch() -> anyhow::Result<String> {
