@@ -43,6 +43,6 @@ return {
 
     grug_far.setup(opts)
 
-    require('keymaps').grug_far(grug_far.grug_far, opts)
+    require('keymaps').grug_far(grug_far, opts)
   end,
 }

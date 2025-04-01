@@ -198,12 +198,12 @@ end
 
 function M.grug_far(grug_far, opts)
   keymap_set('n', '<leader>l', function()
-    grug_far(vim.tbl_deep_extend('force', opts, {}))
+    grug_far.open(vim.tbl_deep_extend('force', opts, {}))
   end)
   keymap_set('v', '<leader>l', function()
     local utils = require('utils')
     local selection = utils.escape_regex(utils.get_visual_selection())
-    grug_far(vim.tbl_deep_extend('force', opts, { prefills = { search = selection, }, }))
+    grug_far.open(vim.tbl_deep_extend('force', opts, { prefills = { search = selection, }, }))
   end)
 end
 
