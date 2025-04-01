@@ -112,6 +112,12 @@ fn create_branch(branch: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+// Create the supplied branch without asking only if:
+// - the passed branch is the default one (it will not be created because already there and I'll be
+//   switched to it)
+// - the current branch is the default one
+// This logic helps me to avoid inadvertently branching from branches different from the default
+// one as it doesn't happen often.
 fn should_create_new_branch(branch: &str) -> anyhow::Result<bool> {
     if is_default_branch(branch) {
         return Ok(true);
