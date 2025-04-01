@@ -113,11 +113,11 @@ fn create_branch(branch: &str) -> anyhow::Result<()> {
 }
 
 fn should_create_new_branch(branch: &str) -> anyhow::Result<bool> {
-    if branch == "main" || branch == "master" {
+    if is_default_branch(branch) {
         return Ok(true);
     }
     let curr_branch = get_current_branch()?;
-    if curr_branch == "main" || curr_branch == "master" {
+    if is_default_branch(&curr_branch) {
         return Ok(true);
     }
     print!("🪚 {curr_branch} -> {branch} ");
@@ -129,6 +129,10 @@ fn should_create_new_branch(branch: &str) -> anyhow::Result<bool> {
         return Ok(false);
     }
     Ok(true)
+}
+
+fn is_default_branch(branch: &str) -> bool {
+    branch == "main" || branch == "master"
 }
 
 fn get_current_branch() -> anyhow::Result<String> {
