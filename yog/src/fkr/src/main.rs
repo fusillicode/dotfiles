@@ -1,9 +1,5 @@
 #![feature(exit_status_error)]
 
-use fake::faker::internet::en::IPv4;
-use fake::faker::internet::en::IPv6;
-use fake::faker::internet::en::SafeEmail;
-use fake::uuid::UUIDv4;
 use fake::Fake;
 use inquire::ui::RenderConfig;
 use inquire::Select;
@@ -42,17 +38,21 @@ fn main() -> anyhow::Result<()> {
 pub enum Dummy {
     Uuidv4,
     Email,
+    UserAgent,
     IPv4,
     IPv6,
+    MACAddress,
 }
 
 impl Dummy {
     pub fn gen(&self) -> String {
         match self {
-            Dummy::Uuidv4 => UUIDv4.fake::<String>(),
-            Dummy::Email => SafeEmail().fake::<String>(),
-            Dummy::IPv4 => IPv4().fake::<String>(),
-            Dummy::IPv6 => IPv6().fake::<String>(),
+            Dummy::Uuidv4 => fake::uuid::UUIDv4.fake::<String>(),
+            Dummy::Email => fake::faker::internet::en::SafeEmail().fake::<String>(),
+            Dummy::UserAgent => fake::faker::internet::en::UserAgent().fake::<String>(),
+            Dummy::MACAddress => fake::faker::internet::en::MACAddress().fake::<String>(),
+            Dummy::IPv4 => fake::faker::internet::en::IPv4().fake::<String>(),
+            Dummy::IPv6 => fake::faker::internet::en::IPv6().fake::<String>(),
         }
     }
 }
