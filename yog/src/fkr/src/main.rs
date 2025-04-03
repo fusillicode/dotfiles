@@ -9,7 +9,7 @@ use strum_macros::Display;
 use strum_macros::EnumIter;
 
 fn main() -> anyhow::Result<()> {
-    let selection_res = minimal_select(Dummy::iter().collect()).safe_prompt()?;
+    let selection_res = minimal_select(Dummy::iter().collect()).cancellable_prompt()?;
 
     if let Some(selected_dummy) = selection_res {
         println!("{}", selected_dummy.gen())
@@ -19,11 +19,11 @@ fn main() -> anyhow::Result<()> {
 }
 
 trait SelectExt<'a, T: std::fmt::Display> {
-    fn safe_prompt(self) -> InquireResult<Option<T>>;
+    fn cancellable_prompt(self) -> InquireResult<Option<T>>;
 }
 
 impl<'a, T: std::fmt::Display> SelectExt<'a, T> for Select<'a, T> {
-    fn safe_prompt(self) -> InquireResult<Option<T>> {
+    fn cancellable_prompt(self) -> InquireResult<Option<T>> {
         self.prompt().map(Some).or_else(|e| match e {
             inquire::InquireError::OperationCanceled
             | inquire::InquireError::OperationInterrupted => Ok(None),
