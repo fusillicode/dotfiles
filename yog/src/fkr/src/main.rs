@@ -1,6 +1,7 @@
 #![feature(exit_status_error)]
 
 use fake::Fake;
+use inquire::error::InquireResult;
 use inquire::ui::RenderConfig;
 use inquire::Select;
 use strum::IntoEnumIterator;
@@ -8,23 +9,30 @@ use strum_macros::Display;
 use strum_macros::EnumIter;
 
 fn main() -> anyhow::Result<()> {
-    let selection_res = minimal_select(Dummy::iter().collect())
-        .prompt()
-        .map(Some)
-        .or_else(|e| match e {
-            inquire::InquireError::OperationCanceled
-            | inquire::InquireError::OperationInterrupted => Ok(None),
-            inquire::InquireError::NotTTY
-            | inquire::InquireError::InvalidConfiguration(_)
-            | inquire::InquireError::IO(_)
-            | inquire::InquireError::Custom(_) => Err(e),
-        })?;
+    let selection_res = minimal_select(Dummy::iter().collect()).safe_prompt()?;
 
     if let Some(selected_dummy) = selection_res {
         println!("{}", selected_dummy.gen())
     }
 
     Ok(())
+}
+
+trait SelectExt<'a, T: std::fmt::Display> {
+    fn safe_prompt(self) -> InquireResult<Option<T>>;
+}
+
+impl<'a, T: std::fmt::Display> SelectExt<'a, T> for Select<'a, T> {
+    fn safe_prompt(self) -> InquireResult<Option<T>> {
+        self.prompt().map(Some).or_else(|e| match e {
+            inquire::InquireError::OperationCanceled
+            | inquire::InquireError::OperationInterrupted => Ok(None),
+            inquire::InquireError::NotTTY
+            | inquire::InquireError::InvalidConfiguration(_)
+            | inquire::InquireError::IO(_)
+            | inquire::InquireError::Custom(_) => Err(e),
+        })
+    }
 }
 
 fn minimal_select<'a, T: std::fmt::Display>(items: Vec<T>) -> Select<'a, T> {
