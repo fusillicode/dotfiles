@@ -17,19 +17,25 @@ fn main() -> anyhow::Result<()> {
         .with_canceled_prompt_indicator("".into())
         .with_answered_prompt_prefix("".into());
 
-    Ok(Select::new("", Dummy::iter().collect())
+    let selection_res = Select::new("", Dummy::iter().collect())
         .with_render_config(render_config)
         .without_help_message()
         .prompt()
-        .map(|selected_dummy| println!("{}", selected_dummy.gen()))
+        .map(Some)
         .or_else(|e| match e {
             inquire::InquireError::OperationCanceled
-            | inquire::InquireError::OperationInterrupted => Ok(()),
+            | inquire::InquireError::OperationInterrupted => Ok(None),
             inquire::InquireError::NotTTY
             | inquire::InquireError::InvalidConfiguration(_)
             | inquire::InquireError::IO(_)
             | inquire::InquireError::Custom(_) => Err(e),
-        })?)
+        })?;
+
+    if let Some(selected_dummy) = selection_res {
+        println!("{}", selected_dummy.gen())
+    }
+
+    Ok(())
 }
 
 #[derive(EnumIter, Display)]
