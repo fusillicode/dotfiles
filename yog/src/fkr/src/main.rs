@@ -8,14 +8,7 @@ use strum_macros::Display;
 use strum_macros::EnumIter;
 
 fn main() -> anyhow::Result<()> {
-    let render_config = RenderConfig::default_colored()
-        .with_prompt_prefix("".into())
-        .with_canceled_prompt_indicator("".into())
-        .with_answered_prompt_prefix("".into());
-
-    let selection_res = Select::new("", Dummy::iter().collect())
-        .with_render_config(render_config)
-        .without_help_message()
+    let selection_res = minimal_select(Dummy::iter().collect())
         .prompt()
         .map(Some)
         .or_else(|e| match e {
@@ -34,9 +27,21 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn minimal_select<'a, T: std::fmt::Display>(items: Vec<T>) -> Select<'a, T> {
+    let render_config = RenderConfig::default_colored()
+        .with_prompt_prefix("".into())
+        .with_canceled_prompt_indicator("".into())
+        .with_answered_prompt_prefix("".into());
+
+    Select::new("", items)
+        .with_render_config(render_config)
+        .without_help_message()
+}
+
 #[derive(EnumIter, Display)]
 pub enum Dummy {
     Uuidv4,
+    Uuidv7,
     Email,
     UserAgent,
     IPv4,
@@ -48,6 +53,7 @@ impl Dummy {
     pub fn gen(&self) -> String {
         match self {
             Dummy::Uuidv4 => fake::uuid::UUIDv4.fake::<String>(),
+            Dummy::Uuidv7 => fake::uuid::UUIDv7.fake::<String>(),
             Dummy::Email => fake::faker::internet::en::SafeEmail().fake::<String>(),
             Dummy::UserAgent => fake::faker::internet::en::UserAgent().fake::<String>(),
             Dummy::MACAddress => fake::faker::internet::en::MACAddress().fake::<String>(),
