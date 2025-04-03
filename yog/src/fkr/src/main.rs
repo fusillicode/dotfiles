@@ -28,14 +28,16 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn minimal_select<'a, T: std::fmt::Display>(items: Vec<T>) -> Select<'a, T> {
-    let render_config = RenderConfig::default_colored()
+    Select::new("", items)
+        .with_render_config(minimal_render_config())
+        .without_help_message()
+}
+
+fn minimal_render_config<'a>() -> RenderConfig<'a> {
+    RenderConfig::default_colored()
         .with_prompt_prefix("".into())
         .with_canceled_prompt_indicator("".into())
-        .with_answered_prompt_prefix("".into());
-
-    Select::new("", items)
-        .with_render_config(render_config)
-        .without_help_message()
+        .with_answered_prompt_prefix("".into())
 }
 
 #[derive(EnumIter, Display)]
