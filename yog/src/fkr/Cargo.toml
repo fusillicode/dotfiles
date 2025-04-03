@@ -1,0 +1,13 @@
+[package]
+name = "fkr"
+version = "0.1.0"
+authors = ["Gian Lu"]
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+fake = { workspace = true, features = ["uuid"] }
+inquire = { version = "0.7" }
+strum = { version = "0.27" }
+strum_macros = { version = "0.27" }
+utils = { workspace = true }
