@@ -1,6 +1,7 @@
 use mlua::prelude::*;
 
 mod diagnostics;
+mod fake_value_generator;
 mod statuscolumn;
 mod statusline;
 mod utils;
@@ -21,6 +22,14 @@ fn rua(lua: &Lua) -> LuaResult<LuaTable> {
     exports.set(
         "draw_statuscolumn",
         lua.create_function(statuscolumn::draw)?,
+    )?;
+    exports.set(
+        "gen_fake_cmds",
+        lua.create_function(fake_value_generator::gen_cmds)?,
+    )?;
+    exports.set(
+        "gen_fake_value",
+        lua.create_function(fake_value_generator::gen_value)?,
     )?;
     Ok(exports)
 }
