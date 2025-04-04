@@ -10,7 +10,6 @@ fn main() -> anyhow::Result<()> {
     if let Some(selected_opt) = minimal_select(FkrOption::to_vec()).cancellable_prompt()? {
         println!("{}", selected_opt.gen_string())
     }
-
     Ok(())
 }
 
