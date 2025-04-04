@@ -24,12 +24,12 @@ fn rua(lua: &Lua) -> LuaResult<LuaTable> {
         lua.create_function(statuscolumn::draw)?,
     )?;
     exports.set(
-        "gen_fake_cmds",
-        lua.create_function(fake_value_generator::gen_cmds)?,
+        "get_fkr_cmds",
+        lua.create_function(fake_value_generator::get_fkr_cmds)?,
     )?;
     exports.set(
-        "gen_fake_value",
-        lua.create_function(fake_value_generator::gen_value)?,
+        "gen_fkr_value",
+        lua.create_function(fake_value_generator::gen_fkr_value)?,
     )?;
     Ok(exports)
 }
