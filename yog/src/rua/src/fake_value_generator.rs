@@ -1,11 +1,11 @@
 use std::str::FromStr;
 
-use fkr::strum::IntoEnumIterator;
-use fkr::strum_macros::Display;
-use fkr::strum_macros::EnumIter;
-use fkr::strum_macros::EnumString;
 use fkr::FkrOption;
 use mlua::prelude::*;
+use strum::Display;
+use strum::EnumIter;
+use strum::EnumString;
+use strum::IntoEnumIterator;
 
 pub fn get_fkr_cmds(lua: &Lua, _: Option<LuaString>) -> LuaResult<LuaTable> {
     let mut fkr_cmds = vec![];
@@ -60,14 +60,14 @@ impl FromLua for FkrArg {
             return Self::from_str(lua_string.to_string_lossy().as_str()).map_err(|e| {
                 mlua::Error::FromLuaConversionError {
                     from: value.type_name(),
-                    to: "LuaFkrOption".into(),
+                    to: "FkrArg".into(),
                     message: Some(format!("error parsing string {lua_string:?}, error: {e:?}")),
                 }
             });
         }
         Err(mlua::Error::FromLuaConversionError {
             from: value.type_name(),
-            to: "LuaFkrOption".into(),
+            to: "FkrArg".into(),
             message: Some(format!("expected a string got {value:?}")),
         })
     }

@@ -10,4 +10,4 @@ crate-type = ["cdylib"]
 [dependencies]
 fkr = { path = "../fkr" }
 mlua = { version = "0.10", features = ["macros", "module", "luajit"] }
-strum = { version = "0.27" }
+strum = { workspace = true }

@@ -1,10 +1,7 @@
 use fake::Fake;
+use strum::Display;
+use strum::EnumIter;
 use strum::IntoEnumIterator;
-use strum_macros::Display;
-use strum_macros::EnumIter;
-
-pub use strum;
-pub use strum_macros;
 
 #[derive(EnumIter, Display, Clone, Copy)]
 pub enum FkrOption {

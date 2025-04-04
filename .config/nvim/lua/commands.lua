@@ -7,7 +7,7 @@ vim.api.nvim_create_user_command('Messages', ':Messages', {})
 
 local rua = require('rua')
 local utils = require('utils')
-for _, cmd in ipairs(require('rua').get_fkr_cmds()) do
+for _, cmd in ipairs(rua.get_fkr_cmds()) do
   vim.api.nvim_create_user_command(cmd.name, function()
     local row, col = utils.unpack(vim.api.nvim_win_get_cursor(0))
     vim.api.nvim_buf_set_text(0, row - 1, col, row - 1, col, { rua.gen_fkr_value(cmd.fkr_arg), })
