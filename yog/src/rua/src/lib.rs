@@ -1,7 +1,7 @@
 use mlua::prelude::*;
 
 mod diagnostics;
-mod fake_value_generator;
+mod fkr_generator;
 mod statuscolumn;
 mod statusline;
 mod utils;
@@ -25,11 +25,11 @@ fn rua(lua: &Lua) -> LuaResult<LuaTable> {
     )?;
     exports.set(
         "get_fkr_cmds",
-        lua.create_function(fake_value_generator::get_fkr_cmds)?,
+        lua.create_function(fkr_generator::get_cmds)?,
     )?;
     exports.set(
         "gen_fkr_value",
-        lua.create_function(fake_value_generator::gen_fkr_value)?,
+        lua.create_function(fkr_generator::gen_value)?,
     )?;
     Ok(exports)
 }

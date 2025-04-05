@@ -7,7 +7,7 @@ use strum::EnumIter;
 use strum::EnumString;
 use strum::IntoEnumIterator;
 
-pub fn get_fkr_cmds(lua: &Lua, _: Option<LuaString>) -> LuaResult<LuaTable> {
+pub fn get_cmds(lua: &Lua, _: Option<LuaString>) -> LuaResult<LuaTable> {
     let mut fkr_cmds = vec![];
     for fkr_arg in FkrArg::iter() {
         let fkr_cmd = lua.create_table()?;
@@ -18,7 +18,7 @@ pub fn get_fkr_cmds(lua: &Lua, _: Option<LuaString>) -> LuaResult<LuaTable> {
     lua.create_sequence_from(fkr_cmds)
 }
 
-pub fn gen_fkr_value(_lua: &Lua, fkr_arg: FkrArg) -> LuaResult<String> {
+pub fn gen_value(_lua: &Lua, fkr_arg: FkrArg) -> LuaResult<String> {
     Ok(FkrOption::from(fkr_arg).gen_string())
 }
 
