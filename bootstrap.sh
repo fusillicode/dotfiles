@@ -3,23 +3,23 @@
 script_dir="${BASH_SOURCE%/*}"
 
 # Symlink configs
-ln -s "$HOME"/data/dev/dotfiles/dotfiles/.config/atuin/ "$HOME"/.config/atuin
-ln -s "$HOME"/data/dev/dotfiles/dotfiles/.config/gitui/ "$HOME"/.config/gitui
-ln -s "$HOME"/data/dev/dotfiles/dotfiles/.config/helix/ "$HOME"/.config/helix
-ln -s "$HOME"/data/dev/dotfiles/dotfiles/.config/mise/ "$HOME"/.config/mise
-ln -s "$HOME"/data/dev/dotfiles/dotfiles/.config/nvim/ "$HOME"/.config/nvim
+ln -s "$HOME/data/dev/dotfiles/dotfiles/.config/atuin/" "$HOME/.config/atuin"
+ln -s "$HOME/data/dev/dotfiles/dotfiles/.config/gitui/" "$HOME/.config/gitui"
+ln -s "$HOME/data/dev/dotfiles/dotfiles/.config/helix/" "$HOME/.config/helix"
+ln -s "$HOME/data/dev/dotfiles/dotfiles/.config/mise/" "$HOME/.config/mise"
+ln -s "$HOME/data/dev/dotfiles/dotfiles/.config/nvim/" "$HOME/.config/nvim"
 
-cp "$HOME"/data/dev/dotfiles/dotfiles/.gitconfig "$HOME"
-ln -s "$HOME"/data/dev/dotfiles/dotfiles/.gitignore "$HOME"
-ln -s "$HOME"/data/dev/dotfiles/dotfiles/.gitignore_global "$HOME"
-ln -s "$HOME"/data/dev/dotfiles/dotfiles/.myclirc "$HOME"
-ln -s "$HOME"/data/dev/dotfiles/dotfiles/.psqlrc "$HOME"
-ln -s "$HOME"/data/dev/dotfiles/dotfiles/.psqlrc "$HOME"
-ln -s "$HOME"/data/dev/dotfiles/dotfiles/.vale.ini "$HOME"
-ln -s "$HOME"/data/dev/dotfiles/dotfiles/.wezterm "$HOME"
-ln -s "$HOME"/data/dev/dotfiles/dotfiles/.zshenv "$HOME"
-ln -s "$HOME"/data/dev/dotfiles/dotfiles/.zshrc "$HOME"
-ln -s "$HOME"/data/dev/dotfiles/dotfiles/my-zsh.zsh-theme "$HOME"/.oh-my-zsh/custom/themes
+cp "$HOME/data/dev/dotfiles/dotfiles/.gitconfig" "$HOME"
+ln -s "$HOME/data/dev/dotfiles/dotfiles/.gitignore" "$HOME"
+ln -s "$HOME/data/dev/dotfiles/dotfiles/.gitignore_global" "$HOME"
+ln -s "$HOME/data/dev/dotfiles/dotfiles/.myclirc" "$HOME"
+ln -s "$HOME/data/dev/dotfiles/dotfiles/.psqlrc" "$HOME"
+ln -s "$HOME/data/dev/dotfiles/dotfiles/.psqlrc" "$HOME"
+ln -s "$HOME/data/dev/dotfiles/dotfiles/.vale.ini" "$HOME"
+ln -s "$HOME/data/dev/dotfiles/dotfiles/.wezterm" "$HOME"
+ln -s "$HOME/data/dev/dotfiles/dotfiles/.zshenv" "$HOME"
+ln -s "$HOME/data/dev/dotfiles/dotfiles/.zshrc" "$HOME"
+ln -s "$HOME/data/dev/dotfiles/dotfiles/my-zsh.zsh-theme" "$HOME/.oh-my-zsh/custom/themes"
 
 # Xcode tools
 xcode-select --install
@@ -110,26 +110,10 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/mas
 brew install ninja cmake gettext curl
 
 # Setup ~/.local/bin & ~/.dev_tools
-cd ./yog &&
-  cargo build --release && \
-  cd - && \
-  rm -f "$HOME"/.local/bin/idt && \
-  ln -s "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/idt "$HOME"/.local/bin && \
-  rm -f "$HOME"/.local/bin/yghfl && \
-  ln -s "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/yghfl "$HOME"/.local/bin && \
-  rm -f "$HOME"/.local/bin/yhfp && \
-  ln -s "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/yhfp "$HOME"/.local/bin && \
-  rm -f "$HOME"/.local/bin/oe && \
-  ln -s "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/oe "$HOME"/.local/bin && \
-  rm -f "$HOME"/.local/bin/catl && \
-  ln -s "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/catl "$HOME"/.local/bin && \
-  rm -f "$HOME"/.local/bin/gcu && \
-  ln -s "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/gcu "$HOME"/.local/bin && \
-  rm -f "$HOME"/.local/bin/vpg && \
-  ln -s "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/vpg "$HOME"/.local/bin && \
-  "$HOME"/.local/bin/idt ~/.dev-tools ~/.local/bin && \
-  rm -f "$HOME"/.local/bin/update_* && \
-  ln -s "$HOME"/data/dev/dotfiles/dotfiles/bin/update_* "$HOME"/.local/bin
+cd ./yog && \
+  ./install.sh && \
+  rm -f "$HOME/.local/bin/update_*" && \
+  ln -s "$HOME/data/dev/dotfiles/dotfiles/bin/update_*" "$HOME/.local/bin"
 
 # Update & cleanup brew
-/bin/bash "$script_dir"/bin/update_brew.sh
+/bin/bash "$script_dir/bin/update_brew.sh"

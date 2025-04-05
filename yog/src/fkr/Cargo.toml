@@ -8,6 +8,5 @@ edition = "2021"
 anyhow = { workspace = true }
 fake = { workspace = true, features = ["uuid"] }
 inquire = { version = "0.7" }
-strum = { version = "0.27" }
-strum_macros = { version = "0.27" }
+strum = { workspace = true }
 utils = { workspace = true }
