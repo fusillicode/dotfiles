@@ -7,6 +7,7 @@ use strum::EnumIter;
 use strum::EnumString;
 use strum::IntoEnumIterator;
 
+/// Gets the commands that can be used to generate fake values via fkr.
 pub fn get_cmds(lua: &Lua, _: Option<LuaString>) -> LuaResult<LuaTable> {
     let mut fkr_cmds = vec![];
     for fkr_arg in FkrArg::iter() {
@@ -18,6 +19,7 @@ pub fn get_cmds(lua: &Lua, _: Option<LuaString>) -> LuaResult<LuaTable> {
     lua.create_sequence_from(fkr_cmds)
 }
 
+/// Generates, on the fly, a fake value based on the supplied argument.
 pub fn gen_value(_lua: &Lua, fkr_arg: FkrArg) -> LuaResult<String> {
     Ok(FkrOption::from(fkr_arg).gen_string())
 }

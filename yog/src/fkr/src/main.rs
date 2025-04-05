@@ -6,6 +6,9 @@ use inquire::ui::RenderConfig;
 use inquire::InquireError;
 use inquire::Select;
 
+/// Prints on terminal a fake value generated on the fly based on the selection.
+/// If the selection is cancelled (<ESC>) or interrupted (<CTRL-C>) exists with success without
+/// printing anything.
 fn main() -> anyhow::Result<()> {
     if let Some(selected_opt) = minimal_select(FkrOption::to_vec()).cancellable_prompt()? {
         println!("{}", selected_opt.gen_string())
