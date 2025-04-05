@@ -86,17 +86,3 @@ impl From<FkrArg> for FkrOption {
         }
     }
 }
-
-impl From<FkrOption> for FkrArg {
-    fn from(value: FkrOption) -> Self {
-        match value {
-            FkrOption::Uuidv4 => FkrArg::Uuidv4,
-            FkrOption::Uuidv7 => FkrArg::Uuidv7,
-            FkrOption::Email => FkrArg::Email,
-            FkrOption::UserAgent => FkrArg::UserAgent,
-            FkrOption::IPv4 => FkrArg::IPv4,
-            FkrOption::IPv6 => FkrArg::IPv6,
-            FkrOption::MACAddress => FkrArg::MACAddress,
-        }
-    }
-}
