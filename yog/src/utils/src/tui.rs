@@ -1,5 +1,6 @@
 use inquire::error::InquireResult;
 use inquire::ui::RenderConfig;
+use inquire::Autocomplete;
 use inquire::InquireError;
 use inquire::Select;
 use inquire::Text;
@@ -28,8 +29,10 @@ pub fn minimal_select<'a, T: std::fmt::Display>(options: Vec<T>) -> Select<'a, T
         .without_help_message()
 }
 
-pub fn minimal_text<'a, T: std::fmt::Display>() -> Text<'a> {
-    Text::new("").with_render_config(minimal_render_config())
+pub fn minimal_text<'a, T: std::fmt::Display>(ac: Option<Box<dyn Autocomplete>>) -> Text<'a> {
+    let mut text = Text::new("").with_render_config(minimal_render_config());
+    text.autocompleter = ac;
+    text
 }
 
 fn minimal_render_config<'a>() -> RenderConfig<'a> {
