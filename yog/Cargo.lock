@@ -299,7 +299,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "fake",
- "inquire",
  "strum",
  "utils",
 ]
@@ -1148,6 +1147,7 @@ dependencies = [
  "anyhow",
  "assert2",
  "fake",
+ "inquire",
  "serde",
  "serde_json",
  "url",

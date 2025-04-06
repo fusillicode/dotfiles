@@ -10,6 +10,7 @@ fake = ["dep:fake"]
 [dependencies]
 anyhow = { workspace = true }
 fake = { workspace = true, optional = true }
+inquire = { version = "0.7" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 url = { workspace = true }
