@@ -1,6 +1,7 @@
 use mlua::prelude::*;
 
 mod diagnostics;
+mod fkr_generator;
 mod statuscolumn;
 mod statusline;
 mod utils;
@@ -21,6 +22,14 @@ fn rua(lua: &Lua) -> LuaResult<LuaTable> {
     exports.set(
         "draw_statuscolumn",
         lua.create_function(statuscolumn::draw)?,
+    )?;
+    exports.set(
+        "get_fkr_cmds",
+        lua.create_function(fkr_generator::get_cmds)?,
+    )?;
+    exports.set(
+        "gen_fkr_value",
+        lua.create_function(fkr_generator::gen_value)?,
     )?;
     Ok(exports)
 }
