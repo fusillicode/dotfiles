@@ -23,13 +23,15 @@ function M.visual_esc()
   return ":<c-u>'" .. (vim.fn.line('.') < vim.fn.line('v') and '<' or '>') .. '<cr>' .. M.normal_esc
 end
 
+function M.unpack(list)
+  ---@diagnostic disable-next-line: deprecated
+  return (table.unpack or unpack)(list)
+end
+
 -- https://github.com/nvim-telescope/telescope-live-grep-args.nvim/blob/731a046da7dd3adff9de871a42f9b7fb85f60f47/lua/telescope-live-grep-args/shortcuts.lua#L8-L17
 function M.get_visual_selection_boundaries()
-  ---@diagnostic disable-next-line: deprecated
-  local unpack = table.unpack or unpack
-
-  local _, start_ln, start_col = unpack(vim.fn.getpos('v'))
-  local _, end_ln, end_col = unpack(vim.fn.getpos('.'))
+  local _, start_ln, start_col = M.unpack(vim.fn.getpos('v'))
+  local _, end_ln, end_col = M.unpack(vim.fn.getpos('.'))
 
   start_ln, end_ln = math.min(start_ln, end_ln), math.max(start_ln, end_ln)
   start_col, end_col = math.min(start_col, end_col), math.max(start_col, end_col)

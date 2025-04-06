@@ -21,24 +21,5 @@ Requirements:
 To install a new release of bins and libs:
 
 ```console
-cargo build --release && \
-    rm -f "$HOME"/.local/bin/idt && \
-    ln -s "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/idt "$HOME"/.local/bin && \
-    rm -f "$HOME"/.local/bin/yghfl && \
-    ln -s "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/yghfl "$HOME"/.local/bin && \
-    rm -f "$HOME"/.local/bin/yhfp && \
-    ln -s "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/yhfp "$HOME"/.local/bin && \
-    rm -f "$HOME"/.local/bin/oe && \
-    ln -s "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/oe "$HOME"/.local/bin && \
-    rm -f "$HOME"/.local/bin/catl && \
-    ln -s "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/catl "$HOME"/.local/bin && \
-    rm -f "$HOME"/.local/bin/gcu && \
-    ln -s "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/gcu "$HOME"/.local/bin
-    rm -f "$HOME"/.local/bin/vpg && \
-    ln -s "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/vpg "$HOME"/.local/bin && \
-    rm -f "$HOME"/.local/bin/try && \
-    ln -s "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/try "$HOME"/.local/bin && \
-    rm -f "$HOME"/.local/bin/fkr && \
-    ln -s "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/fkr "$HOME"/.local/bin && \
-    mv "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/librua.dylib "$HOME"/data/dev/dotfiles/dotfiles/yog/target/release/rua.so
+./install.sh
 ```
