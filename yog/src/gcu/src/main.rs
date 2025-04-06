@@ -23,39 +23,34 @@ fn main() -> anyhow::Result<()> {
         // Assumption: cannot create a branch with a name that starts with -
         Some((hd, _)) if hd == "-" => switch_branch(hd),
         Some((hd, tail)) if hd == "-b" => create_branch(&build_branch_name(tail)?),
-        Some((hd, &[])) => {
-            if let Ok(url) = Url::parse(hd) {
-                utils::github::log_into_github()?;
-                let branch_name = utils::github::get_branch_name_from_pr_url(&url)?;
-                return switch_branch(&branch_name);
-            }
-            create_branch_if_missing(&build_branch_name(&[hd.to_string()])?)
-        }
-        _ => {
-            // Assumption: if the last arg is an existent local branch try to reset the files
-            // represented by the previous args
-            if let Some((branch, files)) = get_branch_and_files_to_checkout(&args)? {
-                return checkout_files(
-                    &files.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
-                    branch,
-                );
-            }
-            // Assumption: if the last arg is NOT an existing local branch try to create a branch
-            create_branch_if_missing(&build_branch_name(&args)?)
-        }
+        Some((hd, &[])) => switch_branch_or_create_if_missing(hd),
+        _ => checkout_files_or_create_branch_if_missing(&args),
     }?;
 
     Ok(())
 }
 
-// // NOTE: just some ideas
-// enum WhatToDo {
-//     SwitchToBranch { branch: String },
-//     CreateBranch { branch: String },
-//     CreateBranchIfMissing { branch: String },
-//     CheckoutBranch { branch: String },
-//     CheckoutFiles { branch: String, files: Vec<String> },
-// }
+fn switch_branch_or_create_if_missing(arg: &str) -> anyhow::Result<()> {
+    if let Ok(url) = Url::parse(arg) {
+        utils::github::log_into_github()?;
+        let branch_name = utils::github::get_branch_name_from_pr_url(&url)?;
+        return switch_branch(&branch_name);
+    }
+    create_branch_if_missing(&build_branch_name(&[arg.to_string()])?)
+}
+
+// Assumptions:
+// - if the last arg is an existent local branch try to reset the files represented by the previous args
+// - if the last arg is NOT an existing local branch try to create a branch
+fn checkout_files_or_create_branch_if_missing(args: &[String]) -> anyhow::Result<()> {
+    if let Some((branch, files)) = get_branch_and_files_to_checkout(args)? {
+        return checkout_files(
+            &files.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
+            branch,
+        );
+    }
+    create_branch_if_missing(&build_branch_name(args)?)
+}
 
 fn get_branch_and_files_to_checkout(
     args: &[String],
