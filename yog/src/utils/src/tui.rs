@@ -2,6 +2,9 @@ use inquire::error::InquireResult;
 use inquire::ui::RenderConfig;
 use inquire::InquireError;
 use inquire::Select;
+use inquire::Text;
+
+pub use inquire;
 
 pub trait SelectExt<'a, T: std::fmt::Display> {
     fn cancellable_prompt(self) -> InquireResult<Option<T>>;
@@ -23,6 +26,10 @@ pub fn minimal_select<'a, T: std::fmt::Display>(options: Vec<T>) -> Select<'a, T
     Select::new("", options)
         .with_render_config(minimal_render_config())
         .without_help_message()
+}
+
+pub fn minimal_text<'a, T: std::fmt::Display>() -> Text<'a> {
+    Text::new("").with_render_config(minimal_render_config())
 }
 
 fn minimal_render_config<'a>() -> RenderConfig<'a> {

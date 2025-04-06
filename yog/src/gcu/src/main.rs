@@ -11,7 +11,8 @@ use url::Url;
 /// Existence of branch is checked only against local ones (to avoid
 /// fetching them remotely).
 /// If a PR URL is supplied as arg, switches to the related branch.
-/// With no args, defaults to switching to "-".
+/// With no args, fetches all the available branches and presents a TUI
+/// to select one.
 /// If "-b" is supplied it defaults to "git checkout -b".
 /// If the first arg is a valid path it tries to checkout it and all
 /// the other supplied path from the branch supplied as last arg.
@@ -71,6 +72,21 @@ fn local_branch_exists(branch: &str) -> anyhow::Result<bool> {
         return Ok(true);
     }
     Ok(false)
+}
+
+#[allow(dead_code)]
+fn get_all_branches() -> anyhow::Result<Vec<String>> {
+    let output = Command::new("git")
+        .args(["branch", "-a", "--format=%(refname:short)"])
+        .output()?;
+    if !output.status.success() {
+        bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
+    }
+    Ok(std::str::from_utf8(&output.stdout)?
+        .trim()
+        .split('\n')
+        .map(str::to_string)
+        .collect())
 }
 
 fn checkout_files(files: &[&str], branch: &str) -> anyhow::Result<()> {
