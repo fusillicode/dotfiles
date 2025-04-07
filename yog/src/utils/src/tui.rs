@@ -1,3 +1,4 @@
+use inquire::error::InquireResult;
 use inquire::ui::RenderConfig;
 
 pub mod git_branches_autocomplete;
@@ -5,6 +6,10 @@ pub mod select;
 pub mod text;
 
 pub use inquire;
+
+pub trait CancellablePrompt<'a, T: std::fmt::Display> {
+    fn cancellable_prompt(self) -> InquireResult<Option<T>>;
+}
 
 fn minimal_render_config<'a>() -> RenderConfig<'a> {
     RenderConfig::default_colored()

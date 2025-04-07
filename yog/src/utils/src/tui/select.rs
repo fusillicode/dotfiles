@@ -3,12 +3,9 @@ use inquire::InquireError;
 use inquire::Select;
 
 use crate::tui::minimal_render_config;
+use crate::tui::CancellablePrompt;
 
-pub trait SelectExt<'a, T: std::fmt::Display> {
-    fn cancellable_prompt(self) -> InquireResult<Option<T>>;
-}
-
-impl<'a, T: std::fmt::Display> SelectExt<'a, T> for Select<'a, T> {
+impl<'a, T: std::fmt::Display> CancellablePrompt<'a, T> for Select<'a, T> {
     fn cancellable_prompt(self) -> InquireResult<Option<T>> {
         self.prompt().map(Some).or_else(|e| match e {
             InquireError::OperationCanceled | InquireError::OperationInterrupted => Ok(None),

@@ -1,7 +1,7 @@
 #![feature(exit_status_error)]
 
 use fkr::FkrOption;
-use utils::tui::select::SelectExt;
+use utils::tui::CancellablePrompt;
 
 /// Prints on terminal a fake value generated on the fly based on the selection.
 /// If "cp" is supplied as first argument also copies the generated value to the system clipboard.

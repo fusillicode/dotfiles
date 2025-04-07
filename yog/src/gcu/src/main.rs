@@ -74,21 +74,6 @@ fn local_branch_exists(branch: &str) -> anyhow::Result<bool> {
     Ok(false)
 }
 
-#[allow(dead_code)]
-fn get_all_branches() -> anyhow::Result<Vec<String>> {
-    let output = Command::new("git")
-        .args(["branch", "-a", "--format=%(refname:short)"])
-        .output()?;
-    if !output.status.success() {
-        bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
-    }
-    Ok(std::str::from_utf8(&output.stdout)?
-        .trim()
-        .split('\n')
-        .map(str::to_string)
-        .collect())
-}
-
 fn checkout_files(files: &[&str], branch: &str) -> anyhow::Result<()> {
     let mut args = vec!["checkout", branch];
     args.extend_from_slice(files);
