@@ -81,7 +81,7 @@ fn checkout_files(files: &[&str], branch: &str) -> anyhow::Result<()> {
     if !output.status.success() {
         bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
     }
-    files.iter().for_each(|f| println!("🪚 {f} from {branch}"));
+    files.iter().for_each(|f| println!("🍁 {f} from {branch}"));
     Ok(())
 }
 
