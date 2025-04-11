@@ -10,10 +10,10 @@ return {
       documentation = {
         auto_show = true,
         auto_show_delay_ms = 0,
-        window = { border = 'single', },
+        window = { border = 'rounded', },
       },
       menu = {
-        border = 'single',
+        border = 'rounded',
         draw = {
           columns = {
             { 'source_name', gap = 1, 'label', },
@@ -33,7 +33,7 @@ return {
       ['<c-u>'] = { 'scroll_documentation_up', 'fallback', },
       ['<c-d>'] = { 'scroll_documentation_down', 'fallback', },
     },
-    signature = { window = { border = 'single', }, },
+    signature = { window = { border = 'rounded', }, },
     sources = {
       providers = {
         snippets = {
