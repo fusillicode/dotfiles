@@ -1,10 +1,10 @@
-use inquire::error::InquireResult;
 use inquire::Autocomplete;
 use inquire::InquireError;
 use inquire::Text;
 
 use crate::tui::minimal_render_config;
-use crate::tui::CancellablePrompt;
+use crate::tui::ClosablePrompt;
+use crate::tui::ClosablePromptError;
 
 pub fn minimal<'a, T: std::fmt::Display>(ac: Option<Box<dyn Autocomplete>>) -> Text<'a> {
     let mut text = Text::new("")
@@ -14,14 +14,19 @@ pub fn minimal<'a, T: std::fmt::Display>(ac: Option<Box<dyn Autocomplete>>) -> T
     text
 }
 
-impl<'a> CancellablePrompt<'a, String> for Text<'a> {
-    fn cancellable_prompt(self) -> InquireResult<Option<String>> {
-        self.prompt().map(Some).or_else(|e| match e {
-            InquireError::OperationCanceled | InquireError::OperationInterrupted => Ok(None),
-            InquireError::NotTTY
-            | InquireError::InvalidConfiguration(_)
-            | InquireError::IO(_)
-            | InquireError::Custom(_) => Err(e),
-        })
+impl<'a> ClosablePrompt<'a, String> for Text<'a> {
+    fn closable_prompt(self) -> Result<String, ClosablePromptError> {
+        self.prompt().map_or_else(
+            |error| match error {
+                InquireError::OperationCanceled | InquireError::OperationInterrupted => {
+                    Err(ClosablePromptError::Closed)
+                }
+                InquireError::NotTTY
+                | InquireError::InvalidConfiguration(_)
+                | InquireError::IO(_)
+                | InquireError::Custom(_) => Err(ClosablePromptError::Error(error)),
+            },
+            Result::Ok,
+        )
     }
 }

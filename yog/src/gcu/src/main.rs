@@ -6,15 +6,16 @@ use std::process::Command;
 use anyhow::bail;
 use url::Url;
 use utils::tui::git_branches_autocomplete::GitBranchesAutocomplete;
-use utils::tui::CancellablePrompt;
+use utils::tui::ClosablePrompt;
+use utils::tui::ClosablePromptError;
 
 /// Create or switch to the GitHub branch built by parameterizing the
 /// supplied args.
 /// Existence of branch is checked only against local ones (to avoid
 /// fetching them remotely).
 /// If a PR URL is supplied as arg, switches to the related branch.
-/// With no args, fetches all the available branches and presents a TUI
-/// to select one.
+/// If no args are supplied, fetches all the available branches and
+/// presents a TUI to select one.
 /// If "-b" is supplied it defaults to "git checkout -b".
 /// If the first arg is a valid path it tries to checkout it and all
 /// the other supplied path from the branch supplied as last arg.
@@ -34,11 +35,13 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn autocomplete_git_branches() -> anyhow::Result<()> {
-    let text = utils::tui::text::minimal::<String>(Some(Box::new(GitBranchesAutocomplete::new()?)))
-        .cancellable_prompt()?;
-    match text.as_deref() {
-        Some("-") | Some("") | None => switch_branch("-"),
-        Some(other) => switch_branch_or_create_if_missing(other),
+    match utils::tui::text::minimal::<String>(Some(Box::new(GitBranchesAutocomplete::new()?)))
+        .closable_prompt()
+    {
+        Ok(hd) if hd == "-" || hd.is_empty() => switch_branch("-"),
+        Ok(other) => switch_branch_or_create_if_missing(&other),
+        Err(ClosablePromptError::Closed) => Ok(()),
+        Err(error) => Err(error.into()),
     }
 }
 
