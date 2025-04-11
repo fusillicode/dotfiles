@@ -1,3 +1,4 @@
+
 pub mod bash_language_server;
 pub mod commitlint;
 pub mod deno;
@@ -29,10 +30,10 @@ pub mod yaml_language_server;
 
 pub trait Installer: Sync + Send {
     fn bin_name(&self) -> &'static str;
-    fn install(&self) -> anyhow::Result<()>;
+    fn install(&self) -> color_eyre::Result<()>;
 }
 
-pub fn report_install(tool: &str, install_result: anyhow::Result<()>) -> anyhow::Result<()> {
+pub fn report_install(tool: &str, install_result: color_eyre::Result<()>) -> color_eyre::Result<()> {
     install_result
         .inspect(|_| println!("🎉 {tool} installed"))
         .inspect_err(|e| eprintln!("❌ error installing {tool}: {e:?}"))

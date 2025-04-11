@@ -1,6 +1,6 @@
 use std::process::Command;
 
-use anyhow::bail;
+use color_eyre::eyre::bail;
 use inquire::autocompletion::Replacement;
 use inquire::Autocomplete;
 use inquire::CustomUserError;
@@ -11,7 +11,7 @@ pub struct GitBranchesAutocomplete {
 }
 
 impl GitBranchesAutocomplete {
-    pub fn new() -> anyhow::Result<Self> {
+    pub fn new() -> color_eyre::Result<Self> {
         Ok(Self {
             branches: get_all_branches()?,
         })
@@ -43,7 +43,7 @@ impl Autocomplete for GitBranchesAutocomplete {
     }
 }
 
-fn get_all_branches() -> anyhow::Result<Vec<String>> {
+fn get_all_branches() -> color_eyre::Result<Vec<String>> {
     let output = Command::new("git")
         .args(["branch", "-a", "--format=%(refname:short)"])
         .output()?;

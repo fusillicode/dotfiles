@@ -1,15 +1,15 @@
 use std::process::Command;
 use std::process::Output;
 
-use anyhow::anyhow;
-use anyhow::bail;
+use color_eyre::eyre::bail;
+use color_eyre::eyre::eyre;
 use url::Url;
 
 const GITHUB_HOST: &str = "github.com";
 const GITHUB_PR_ID_PREFIX: &str = "pull";
 const GITHUB_PR_ID_QUERY_KEY: &str = "pr";
 
-pub fn log_into_github() -> anyhow::Result<()> {
+pub fn log_into_github() -> color_eyre::Result<()> {
     if crate::system::silent_cmd("gh")
         .args(["auth", "status"])
         .status()?
@@ -24,7 +24,7 @@ pub fn log_into_github() -> anyhow::Result<()> {
         .exit_ok()?)
 }
 
-pub fn get_latest_release(repo: &str) -> anyhow::Result<String> {
+pub fn get_latest_release(repo: &str) -> color_eyre::Result<String> {
     let output = Command::new("gh")
         .args([
             "api",
@@ -36,7 +36,7 @@ pub fn get_latest_release(repo: &str) -> anyhow::Result<String> {
     extract_success_output(output)
 }
 
-pub fn get_branch_name_from_pr_url(pr_url: &Url) -> anyhow::Result<String> {
+pub fn get_branch_name_from_pr_url(pr_url: &Url) -> color_eyre::Result<String> {
     let pr_id = extract_pr_id_form_pr_url(pr_url)?;
 
     let output = Command::new("gh")
@@ -54,15 +54,15 @@ pub fn get_branch_name_from_pr_url(pr_url: &Url) -> anyhow::Result<String> {
     extract_success_output(output)
 }
 
-fn extract_success_output(output: Output) -> anyhow::Result<String> {
+fn extract_success_output(output: Output) -> color_eyre::Result<String> {
     output.status.exit_ok()?;
     Ok(std::str::from_utf8(&output.stdout)?.trim().into())
 }
 
-fn extract_pr_id_form_pr_url(pr_url: &Url) -> anyhow::Result<String> {
+fn extract_pr_id_form_pr_url(pr_url: &Url) -> color_eyre::Result<String> {
     let host = pr_url
         .host_str()
-        .ok_or_else(|| anyhow!("cannot extract host from {pr_url}"))?;
+        .ok_or_else(|| eyre!("cannot extract host from {pr_url}"))?;
     if host != GITHUB_HOST {
         bail!("host {host:?} in {pr_url} doesn't match {GITHUB_HOST:?}")
     }
@@ -80,7 +80,7 @@ fn extract_pr_id_form_pr_url(pr_url: &Url) -> anyhow::Result<String> {
 
     let path_segments = pr_url
         .path_segments()
-        .ok_or_else(|| anyhow!("{pr_url} cannot-be-a-base"))?
+        .ok_or_else(|| eyre!("{pr_url} cannot-be-a-base"))?
         .enumerate()
         .collect::<Vec<_>>();
 
@@ -92,17 +92,17 @@ fn extract_pr_id_form_pr_url(pr_url: &Url) -> anyhow::Result<String> {
     {
         [(idx, _)] => Ok(path_segments
             .get(idx + 1)
-            .ok_or_else(|| anyhow!("missing PR id in {pr_url} path segments {path_segments:?}"))
+            .ok_or_else(|| eyre!("missing PR id in {pr_url} path segments {path_segments:?}"))
             .and_then(|(_, pr_id)| {
                 if pr_id.is_empty() {
-                    return Err(anyhow!("empty PR id in {pr_url} path segments {path_segments:?}"));
+                    return Err(eyre!("empty PR id in {pr_url} path segments {path_segments:?}"));
                 }
                 Ok(pr_id.to_string())
             })?),
-        [] => Err(anyhow!(
+        [] => Err(eyre!(
             "missing PR id prefix {GITHUB_PR_ID_PREFIX:?} in {pr_url} path segments {path_segments:?}"
         )),
-        _ => Err(anyhow!(
+        _ => Err(eyre!(
             "multiple {GITHUB_PR_ID_PREFIX:?} found in {pr_url} path segments {path_segments:?}"
         )),
     }

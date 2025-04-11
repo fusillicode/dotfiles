@@ -7,8 +7,8 @@ use std::process::Command;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use anyhow::anyhow;
-use anyhow::bail;
+use color_eyre::eyre::bail;
+use color_eyre::eyre::eyre;
 use url::Url;
 
 use utils::editor::Editor;
@@ -19,7 +19,7 @@ use utils::wezterm::WezTermPane;
 
 /// Yank link to GitHub of the file displayed in the status line of the first Helix instance found running alongside
 /// the Wezterm pane from where the cmd has been invoked.
-fn main() -> anyhow::Result<()> {
+fn main() -> color_eyre::Result<()> {
     let hx_pane = get_sibling_pane_with_titles(
         &utils::wezterm::get_all_panes()?,
         std::env::var("WEZTERM_PANE")?.parse()?,
@@ -35,7 +35,7 @@ fn main() -> anyhow::Result<()> {
 
     let hx_status_line =
         HxStatusLine::from_str(wezterm_pane_text.lines().nth_back(1).ok_or_else(|| {
-            anyhow!(
+            eyre!(
                 "no hx status line in pane '{}' text {wezterm_pane_text:?}",
                 hx_pane.pane_id
             )
@@ -44,7 +44,7 @@ fn main() -> anyhow::Result<()> {
     let git_repo_root = Arc::new(get_git_repo_root(&hx_status_line.file_path)?);
 
     let git_repo_root_clone = git_repo_root.clone();
-    let get_git_current_branch = std::thread::spawn(move || -> anyhow::Result<String> {
+    let get_git_current_branch = std::thread::spawn(move || -> color_eyre::Result<String> {
         Ok(String::from_utf8(
             Command::new("git")
                 .args(["-C", &git_repo_root_clone, "branch", "--show-current"])
@@ -56,7 +56,7 @@ fn main() -> anyhow::Result<()> {
     });
 
     let git_repo_root_clone = git_repo_root.clone();
-    let get_github_repo_url = std::thread::spawn(move || -> anyhow::Result<Url> {
+    let get_github_repo_url = std::thread::spawn(move || -> color_eyre::Result<Url> {
         get_github_url_from_git_remote_output(&String::from_utf8(
             Command::new("git")
                 .args(["-C", &git_repo_root_clone, "remote", "-v"])
@@ -82,12 +82,12 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn get_git_repo_root(file_path: &Path) -> anyhow::Result<String> {
+fn get_git_repo_root(file_path: &Path) -> color_eyre::Result<String> {
     let file_parent_dir = file_path
         .parent()
-        .ok_or_else(|| anyhow!("cannot get parent dir from path {file_path:?}"))?
+        .ok_or_else(|| eyre!("cannot get parent dir from path {file_path:?}"))?
         .to_str()
-        .ok_or_else(|| anyhow!("cannot get str from Path {file_path:?}"))?;
+        .ok_or_else(|| eyre!("cannot get str from Path {file_path:?}"))?;
 
     // Without spawning an additional `sh` shell I get an empty `Command` output 🥲
     let git_repo_root = Command::new("sh")
@@ -105,22 +105,22 @@ fn get_git_repo_root(file_path: &Path) -> anyhow::Result<String> {
     Ok(String::from_utf8(git_repo_root)?.trim().to_owned())
 }
 
-fn get_github_url_from_git_remote_output(git_remote_output: &str) -> anyhow::Result<Url> {
+fn get_github_url_from_git_remote_output(git_remote_output: &str) -> color_eyre::Result<Url> {
     let git_remote_fetch_line = git_remote_output
         .trim()
         .lines()
         .find(|l| l.ends_with("(fetch)"))
-        .ok_or_else(|| anyhow!("no '(fetch)' line in git remote output '{git_remote_output}'"))?;
+        .ok_or_else(|| eyre!("no '(fetch)' line in git remote output '{git_remote_output}'"))?;
 
     let git_remote_url = git_remote_fetch_line
         .split_whitespace()
         .nth(1)
-        .ok_or_else(|| anyhow!("no git remote url in '(fetch)' line '{git_remote_fetch_line}'"))?;
+        .ok_or_else(|| eyre!("no git remote url in '(fetch)' line '{git_remote_fetch_line}'"))?;
 
     parse_github_url_from_git_remote_url(git_remote_url)
 }
 
-fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> anyhow::Result<Url> {
+fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> color_eyre::Result<Url> {
     if let Ok(mut url) = Url::parse(git_remote_url) {
         url.set_path(url.clone().path().trim_end_matches(".git"));
         return Ok(url);
@@ -129,7 +129,7 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> anyhow::Result<
     let path = git_remote_url
         .split_once(':')
         .map(|(_, path)| path.trim_end_matches(".git"))
-        .ok_or_else(|| anyhow!("cannot extract URL path from '{git_remote_url}'"))?;
+        .ok_or_else(|| eyre!("cannot extract URL path from '{git_remote_url}'"))?;
 
     let mut url = Url::parse("https://github.com")?;
     url.set_path(path);
@@ -140,7 +140,7 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> anyhow::Result<
 fn build_hx_cursor_absolute_file_path(
     hx_cursor_file_path: &Path,
     hx_pane: &WezTermPane,
-) -> anyhow::Result<PathBuf> {
+) -> color_eyre::Result<PathBuf> {
     if let Ok(hx_cursor_file_path) = hx_cursor_file_path.strip_prefix("~") {
         let mut home_absolute_path = Path::new(&std::env::var("HOME")?).to_path_buf();
         home_absolute_path.push(hx_cursor_file_path);
@@ -162,14 +162,14 @@ fn build_github_link<'a>(
     git_current_branch: &'a str,
     file_path: &'a Path,
     hx_cursor_position: &'a HxCursorPosition,
-) -> anyhow::Result<Url> {
+) -> color_eyre::Result<Url> {
     let mut file_path_parts = vec![];
     for component in file_path.components() {
         file_path_parts.push(
             component
                 .as_os_str()
                 .to_str()
-                .ok_or_else(|| anyhow!("cannot get str from path component {component:?}"))?,
+                .ok_or_else(|| eyre!("cannot get str from path component {component:?}"))?,
         );
     }
 
@@ -177,7 +177,7 @@ fn build_github_link<'a>(
     let mut github_link = github_repo_url.clone();
     github_link
         .path_segments_mut()
-        .map_err(|_| anyhow!("cannot extend URL '{github_repo_url}' with segments {segments:?}"))?
+        .map_err(|_| eyre!("cannot extend URL '{github_repo_url}' with segments {segments:?}"))?
         .extend(&segments);
     github_link.set_fragment(Some(&format!(
         "L{}C{}",

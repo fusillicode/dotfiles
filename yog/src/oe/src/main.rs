@@ -2,7 +2,7 @@
 
 use std::str::FromStr;
 
-use anyhow::bail;
+use color_eyre::eyre::bail;
 
 use utils::editor::Editor;
 use utils::editor::FileToOpen;
@@ -11,16 +11,16 @@ use utils::system::silent_cmd;
 /// Open the supplied file path in a running editor (Neovim or Helix) instance alongside the
 /// Wezterm pane from where the cmd has been invoked.
 /// Used both as a CLI and from Wezterm `open-uri` handler.
-fn main() -> anyhow::Result<()> {
+fn main() -> color_eyre::Result<()> {
     load_additional_paths()?;
     let args = utils::system::get_args();
 
     let Some(editor) = args.first().map(|x| Editor::from_str(x)).transpose()? else {
-        bail!("no editor specified {:?}", args);
+        bail!("no editor specified {args:?}");
     };
 
     let Some(file_to_open) = args.get(1) else {
-        bail!("no input file specified {:?}", args);
+        bail!("no input file specified {args:?}");
     };
 
     let pane_id = match args.get(2) {
@@ -59,7 +59,7 @@ fn main() -> anyhow::Result<()> {
 }
 
 // Needed because calling oe from wezterm open-uri handler doesn't retain the PATH
-pub fn load_additional_paths() -> anyhow::Result<()> {
+pub fn load_additional_paths() -> color_eyre::Result<()> {
     let home = std::env::var("HOME")?;
 
     let new_path = [

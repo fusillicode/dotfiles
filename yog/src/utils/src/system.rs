@@ -2,8 +2,9 @@ use std::process::Command;
 use std::process::Stdio;
 use std::thread::JoinHandle;
 
-use anyhow::anyhow;
-use anyhow::bail;
+use color_eyre::eyre;
+use color_eyre::eyre::bail;
+use color_eyre::eyre::eyre;
 
 pub fn get_args() -> Vec<String> {
     let mut args = std::env::args();
@@ -11,20 +12,18 @@ pub fn get_args() -> Vec<String> {
     args.collect::<Vec<String>>()
 }
 
-pub fn join<T>(join_handle: JoinHandle<anyhow::Result<T>>) -> Result<T, anyhow::Error> {
-    join_handle
-        .join()
-        .map_err(|e| anyhow!("join error {e:?}"))?
+pub fn join<T>(join_handle: JoinHandle<color_eyre::Result<T>>) -> Result<T, eyre::Error> {
+    join_handle.join().map_err(|e| eyre!("join error {e:?}"))?
 }
 
-pub fn copy_to_system_clipboard(content: &mut &[u8]) -> anyhow::Result<()> {
+pub fn copy_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
     let mut pbcopy_child = silent_cmd("pbcopy").stdin(Stdio::piped()).spawn()?;
     std::io::copy(
         content,
         pbcopy_child
             .stdin
             .as_mut()
-            .ok_or_else(|| anyhow!("cannot get child stdin as mut"))?,
+            .ok_or_else(|| eyre!("cannot get child stdin as mut"))?,
     )?;
     if !pbcopy_child.wait()?.success() {
         bail!("error copy content to system clipboard, content {content:?}");
@@ -33,7 +32,7 @@ pub fn copy_to_system_clipboard(content: &mut &[u8]) -> anyhow::Result<()> {
 }
 
 // Yes, `dir` is a `&str` and it's not sanitized but...I'm the alpha & the omega here!
-pub fn chmod_x(dir: &str) -> anyhow::Result<()> {
+pub fn chmod_x(dir: &str) -> color_eyre::Result<()> {
     Ok(silent_cmd("sh")
         .args(["-c", &format!("chmod +x {dir}")])
         .status()?
@@ -48,7 +47,7 @@ pub fn silent_cmd(program: &str) -> Command {
     cmd
 }
 
-pub fn rm_dead_symlinks(dir: &str) -> anyhow::Result<()> {
+pub fn rm_dead_symlinks(dir: &str) -> color_eyre::Result<()> {
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();

@@ -1,3 +1,4 @@
+
 use crate::Installer;
 
 pub struct SqlFluff {
@@ -10,7 +11,7 @@ impl Installer for SqlFluff {
         "sqlfluff"
     }
 
-    fn install(&self) -> anyhow::Result<()> {
+    fn install(&self) -> color_eyre::Result<()> {
         crate::installers::pip_install::run(
             &self.dev_tools_dir,
             self.bin_name(),

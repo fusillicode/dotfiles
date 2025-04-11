@@ -3,7 +3,7 @@
 use std::io::Write;
 use std::process::Command;
 
-use anyhow::bail;
+use color_eyre::eyre::bail;
 use url::Url;
 use utils::tui::git_branches_autocomplete::GitBranchesAutocomplete;
 use utils::tui::ClosablePrompt;
@@ -19,7 +19,7 @@ use utils::tui::ClosablePromptError;
 /// If "-b" is supplied it defaults to "git checkout -b".
 /// If the first arg is a valid path it tries to checkout it and all
 /// the other supplied path from the branch supplied as last arg.
-fn main() -> anyhow::Result<()> {
+fn main() -> color_eyre::Result<()> {
     let args = utils::system::get_args();
 
     match args.split_first() {
@@ -34,7 +34,7 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn autocomplete_git_branches() -> anyhow::Result<()> {
+fn autocomplete_git_branches() -> color_eyre::Result<()> {
     match utils::tui::text::minimal::<String>(Some(Box::new(GitBranchesAutocomplete::new()?)))
         .closable_prompt()
     {
@@ -45,7 +45,7 @@ fn autocomplete_git_branches() -> anyhow::Result<()> {
     }
 }
 
-fn switch_branch_or_create_if_missing(arg: &str) -> anyhow::Result<()> {
+fn switch_branch_or_create_if_missing(arg: &str) -> color_eyre::Result<()> {
     if let Ok(url) = Url::parse(arg) {
         utils::github::log_into_github()?;
         let branch_name = utils::github::get_branch_name_from_pr_url(&url)?;
@@ -57,7 +57,7 @@ fn switch_branch_or_create_if_missing(arg: &str) -> anyhow::Result<()> {
 // Assumptions:
 // - if the last arg is an existent local branch try to reset the files represented by the previous args
 // - if the last arg is NOT an existing local branch try to create a branch
-fn checkout_files_or_create_branch_if_missing(args: &[String]) -> anyhow::Result<()> {
+fn checkout_files_or_create_branch_if_missing(args: &[String]) -> color_eyre::Result<()> {
     if let Some((branch, files)) = get_branch_and_files_to_checkout(args)? {
         return checkout_files(
             &files.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
@@ -67,9 +67,7 @@ fn checkout_files_or_create_branch_if_missing(args: &[String]) -> anyhow::Result
     create_branch_if_missing(&build_branch_name(args)?)
 }
 
-fn get_branch_and_files_to_checkout(
-    args: &[String],
-) -> anyhow::Result<Option<(&String, &[String])>> {
+fn get_branch_and_files_to_checkout(args: &[String]) -> color_eyre::Result<Option<(&String, &[String])>> {
     if let Some((branch, files)) = args.split_last() {
         if local_branch_exists(branch)? {
             return Ok(Some((branch, files)));
@@ -78,7 +76,7 @@ fn get_branch_and_files_to_checkout(
     Ok(None)
 }
 
-fn local_branch_exists(branch: &str) -> anyhow::Result<bool> {
+fn local_branch_exists(branch: &str) -> color_eyre::Result<bool> {
     let output = Command::new("git")
         .args(["rev-parse", "--verify", branch])
         .output()?;
@@ -88,7 +86,7 @@ fn local_branch_exists(branch: &str) -> anyhow::Result<bool> {
     Ok(false)
 }
 
-fn checkout_files(files: &[&str], branch: &str) -> anyhow::Result<()> {
+fn checkout_files(files: &[&str], branch: &str) -> color_eyre::Result<()> {
     let mut args = vec!["checkout", branch];
     args.extend_from_slice(files);
     let output = Command::new("git").args(args).output()?;
@@ -99,7 +97,7 @@ fn checkout_files(files: &[&str], branch: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn switch_branch(branch: &str) -> anyhow::Result<()> {
+fn switch_branch(branch: &str) -> color_eyre::Result<()> {
     let output = Command::new("git").args(["switch", branch]).output()?;
     if !output.status.success() {
         bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
@@ -108,7 +106,7 @@ fn switch_branch(branch: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn create_branch(branch: &str) -> anyhow::Result<()> {
+fn create_branch(branch: &str) -> color_eyre::Result<()> {
     if !should_create_new_branch(branch)? {
         return Ok(());
     }
@@ -128,7 +126,7 @@ fn create_branch(branch: &str) -> anyhow::Result<()> {
 // - the current branch is the default one
 // This logic helps me to avoid inadvertently branching from branches different from the default
 // one as it doesn't happen often.
-fn should_create_new_branch(branch: &str) -> anyhow::Result<bool> {
+fn should_create_new_branch(branch: &str) -> color_eyre::Result<bool> {
     if is_default_branch(branch) {
         return Ok(true);
     }
@@ -151,7 +149,7 @@ fn is_default_branch(branch: &str) -> bool {
     branch == "main" || branch == "master"
 }
 
-fn get_current_branch() -> anyhow::Result<String> {
+fn get_current_branch() -> color_eyre::Result<String> {
     let output = Command::new("git")
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .output()?;
@@ -161,7 +159,7 @@ fn get_current_branch() -> anyhow::Result<String> {
     Ok(std::str::from_utf8(&output.stdout)?.trim().to_string())
 }
 
-fn create_branch_if_missing(branch: &str) -> anyhow::Result<()> {
+fn create_branch_if_missing(branch: &str) -> color_eyre::Result<()> {
     if let Err(error) = create_branch(branch) {
         if error.to_string().contains("already exists") {
             println!("🌳 {branch}");
@@ -172,7 +170,7 @@ fn create_branch_if_missing(branch: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn build_branch_name(args: &[String]) -> anyhow::Result<String> {
+fn build_branch_name(args: &[String]) -> color_eyre::Result<String> {
     let branch_name = args
         .iter()
         .flat_map(|x| {
@@ -213,11 +211,11 @@ mod tests {
     #[test]
     fn test_build_branch_name_works_as_expected() {
         assert_eq!(
-            r#"Err(parameterizing [""] resulted in empty String)"#,
+            "Err(parameterizing [\"\"] resulted in empty String\n\nLocation:\n    src/gcu/src/main.rs:196:9)",
             format!("{:?}", build_branch_name(&["".into()]))
         );
         assert_eq!(
-            r#"Err(parameterizing ["❌"] resulted in empty String)"#,
+            "Err(parameterizing [\"❌\"] resulted in empty String\n\nLocation:\n    src/gcu/src/main.rs:196:9)",
             format!("{:?}", build_branch_name(&["❌".into()]))
         );
         assert_eq!(

@@ -1,3 +1,4 @@
+
 use crate::installers::curl_install::OutputOption;
 use crate::Installer;
 
@@ -10,7 +11,7 @@ impl Installer for Hadolint {
         "hadolint"
     }
 
-    fn install(&self) -> anyhow::Result<()> {
+    fn install(&self) -> color_eyre::Result<()> {
         crate::installers::curl_install::run(
             &format!(
                 "https://github.com/{0}/{0}/releases/latest/download/{0}-Darwin-x86_64",

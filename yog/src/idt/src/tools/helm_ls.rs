@@ -1,3 +1,4 @@
+
 use crate::installers::curl_install::OutputOption;
 use crate::Installer;
 
@@ -10,7 +11,7 @@ impl Installer for HelmLs {
         "helm_ls"
     }
 
-    fn install(&self) -> anyhow::Result<()> {
+    fn install(&self) -> color_eyre::Result<()> {
         crate::installers::curl_install::run(
             &format!(
                 "https://github.com/mrjosh/helm-ls/releases/latest/download/{}_darwin_amd64",

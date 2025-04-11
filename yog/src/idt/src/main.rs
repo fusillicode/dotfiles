@@ -1,6 +1,6 @@
 #![feature(exit_status_error)]
 
-use anyhow::anyhow;
+use color_eyre::eyre::eyre;
 
 use crate::tools::bash_language_server::BashLanguageServer;
 use crate::tools::commitlint::Commitlint;
@@ -36,7 +36,7 @@ mod installers;
 mod tools;
 
 /// Install "Dev Tools"
-fn main() -> anyhow::Result<()> {
+fn main() -> color_eyre::Result<()> {
     let args = utils::system::get_args();
     println!(
         "🚀 Starting {:?} with args: {args:#?}",
@@ -45,11 +45,11 @@ fn main() -> anyhow::Result<()> {
 
     let dev_tools_dir = args
         .first()
-        .ok_or_else(|| anyhow!("missing dev_tools_dir arg from {args:?}"))?
+        .ok_or_else(|| eyre!("missing dev_tools_dir arg from {args:?}"))?
         .trim_end_matches('/');
     let bin_dir = args
         .get(1)
-        .ok_or_else(|| anyhow!("missing bin_dir arg from {args:?}"))?
+        .ok_or_else(|| eyre!("missing bin_dir arg from {args:?}"))?
         .trim_end_matches('/');
     let tools_whitelist: Vec<&str> = args.iter().skip(2).map(AsRef::as_ref).collect();
 

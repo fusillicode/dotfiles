@@ -1,8 +1,9 @@
 use std::path::Path;
 use std::str::FromStr;
 
-use anyhow::anyhow;
-use anyhow::bail;
+use color_eyre::eyre;
+use color_eyre::eyre::bail;
+use color_eyre::eyre::eyre;
 
 use crate::wezterm::WezTermPane;
 
@@ -32,13 +33,13 @@ impl Editor {
 }
 
 impl FromStr for Editor {
-    type Err = anyhow::Error;
+    type Err = eyre::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "hx" => Ok(Self::Helix),
             "nvim" | "nv" => Ok(Self::Nvim),
-            s => Err(anyhow!("unknown editor {s}")),
+            s => Err(eyre!("unknown editor {s}")),
         }
     }
 }
@@ -51,7 +52,7 @@ pub struct FileToOpen {
 }
 
 impl TryFrom<(&str, i64, &[WezTermPane])> for FileToOpen {
-    type Error = anyhow::Error;
+    type Error = eyre::Error;
 
     fn try_from(
         (file_to_open, pane_id, panes): (&str, i64, &[WezTermPane]),
@@ -63,27 +64,27 @@ impl TryFrom<(&str, i64, &[WezTermPane])> for FileToOpen {
         let mut source_pane_absolute_cwd = panes
             .iter()
             .find(|p| p.pane_id == pane_id)
-            .ok_or_else(|| anyhow!("no panes with id {pane_id} in {panes:?}"))?
+            .ok_or_else(|| eyre!("no panes with id {pane_id} in {panes:?}"))?
             .absolute_cwd();
 
         source_pane_absolute_cwd.push(file_to_open);
 
         Self::from_str(
             source_pane_absolute_cwd.to_str().ok_or_else(|| {
-                anyhow!("cannot get &str from PathBuf {source_pane_absolute_cwd:?}")
+                eyre!("cannot get &str from PathBuf {source_pane_absolute_cwd:?}")
             })?,
         )
     }
 }
 
 impl FromStr for FileToOpen {
-    type Err = anyhow::Error;
+    type Err = eyre::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut parts = s.split(':');
         let path = parts
             .next()
-            .ok_or_else(|| anyhow!("no file path found in {s}"))?;
+            .ok_or_else(|| eyre!("no file path found in {s}"))?;
         let line_nbr = parts
             .next()
             .map(str::parse::<i64>)
