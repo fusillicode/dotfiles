@@ -33,6 +33,7 @@ return {
       ['<c-u>'] = { 'scroll_documentation_up', 'fallback', },
       ['<c-d>'] = { 'scroll_documentation_down', 'fallback', },
     },
+    signature = { window = { border = 'single', }, },
     sources = {
       providers = {
         snippets = {
