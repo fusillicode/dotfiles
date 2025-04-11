@@ -16,11 +16,11 @@ fn main() -> color_eyre::Result<()> {
     let args = utils::system::get_args();
 
     let Some(editor) = args.first().map(|x| Editor::from_str(x)).transpose()? else {
-        bail!("no editor specified {:?}", args);
+        bail!("no editor specified {args:?}");
     };
 
     let Some(file_to_open) = args.get(1) else {
-        bail!("no input file specified {:?}", args);
+        bail!("no input file specified {args:?}");
     };
 
     let pane_id = match args.get(2) {

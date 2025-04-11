@@ -23,7 +23,7 @@ fn main() -> color_eyre::Result<()> {
 
     let args = utils::system::get_args();
     let Some(alias) = args.first() else {
-        bail!("no alias specified {:?}", args);
+        bail!("no alias specified {args:?}");
     };
     let pgpass_path = get_pgpass_path()?;
     let mut lines = read_pgpass_lines(&pgpass_path)?;
@@ -197,7 +197,7 @@ fn login_to_vault_if_required() -> color_eyre::Result<()> {
     }
     let stderr = std::str::from_utf8(&token_lookup.stderr)?.trim();
     if !stderr.contains("permission denied") {
-        bail!("unexpected error checking Vault token, error {}", stderr)
+        bail!("unexpected error checking Vault token, error {stderr}")
     }
 
     let login = Command::new("vault")
