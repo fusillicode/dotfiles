@@ -5,6 +5,8 @@ use std::process::Command;
 
 use anyhow::bail;
 use url::Url;
+use utils::tui::git_branches_autocomplete::GitBranchesAutocomplete;
+use utils::tui::CancellablePrompt;
 
 /// Create or switch to the GitHub branch built by parameterizing the
 /// supplied args.
@@ -20,7 +22,7 @@ fn main() -> anyhow::Result<()> {
     let args = utils::system::get_args();
 
     match args.split_first() {
-        None => switch_branch("-"),
+        None => autocomplete_git_branches(),
         // Assumption: cannot create a branch with a name that starts with -
         Some((hd, _)) if hd == "-" => switch_branch(hd),
         Some((hd, tail)) if hd == "-b" => create_branch(&build_branch_name(tail)?),
@@ -29,6 +31,15 @@ fn main() -> anyhow::Result<()> {
     }?;
 
     Ok(())
+}
+
+fn autocomplete_git_branches() -> anyhow::Result<()> {
+    let text = utils::tui::text::minimal::<String>(Some(Box::new(GitBranchesAutocomplete::new()?)))
+        .cancellable_prompt()?;
+    match text.as_deref() {
+        Some("-") | Some("") | None => switch_branch("-"),
+        Some(other) => switch_branch_or_create_if_missing(other),
+    }
 }
 
 fn switch_branch_or_create_if_missing(arg: &str) -> anyhow::Result<()> {
