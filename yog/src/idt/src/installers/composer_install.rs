@@ -1,3 +1,4 @@
+
 #[allow(dead_code)]
 pub fn run(
     dev_tools_dir: &str,
@@ -5,7 +6,7 @@ pub fn run(
     packages: &[&str],
     bin_dir: &str,
     bin: &str,
-) -> anyhow::Result<()> {
+) -> color_eyre::Result<()> {
     let dev_tools_repo_dir = format!("{dev_tools_dir}/{tool}");
 
     std::fs::create_dir_all(&dev_tools_repo_dir)?;

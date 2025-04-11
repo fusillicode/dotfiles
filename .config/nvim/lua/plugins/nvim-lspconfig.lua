@@ -158,14 +158,14 @@ return {
     end
 
     -- To show border with Shift-k (K)
-    vim.lsp.handlers['textDocument/hover'] = vim.lsp.with(
-      vim.lsp.handlers.hover,
-      { border = 'rounded', }
-    )
-    vim.lsp.handlers['textDocument/signatureHelp'] = vim.lsp.with(
-      vim.lsp.handlers.signature_help,
-      { border = 'rounded', }
-    )
+    -- https://www.reddit.com/r/neovim/comments/1jbegzo/how_to_change_border_style_in_floating_windows/
+    local orig_lsp_util_open_floating_preview = vim.lsp.util.open_floating_preview
+    local colorscheme = require('colorscheme')
+    function vim.lsp.util.open_floating_preview(contents, syntax, opts, ...)
+      opts = opts or {}
+      opts.border = opts.border or colorscheme.window.border
+      return orig_lsp_util_open_floating_preview(contents, syntax, opts, ...)
+    end
 
     -- https://vinnymeller.com/posts/neovim_nightly_inlay_hints/#globally
     vim.api.nvim_create_autocmd('LspAttach', {
