@@ -26,4 +26,6 @@ function M.setup(colorscheme)
   end
 end
 
+M.window = { border = 'rounded', }
+
 return M

@@ -3,7 +3,7 @@ local rua = require('rua')
 vim.diagnostic.config({
   float = {
     anchor_bias = 'above',
-    border = 'rounded',
+    border = require('colorscheme').window.border,
     focusable = true,
     format = rua.format_diagnostic,
     header = '',

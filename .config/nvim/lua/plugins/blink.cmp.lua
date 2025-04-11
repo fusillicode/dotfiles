@@ -1,3 +1,5 @@
+local colorscheme = require('colorscheme')
+
 return {
   'saghen/blink.cmp',
   event = 'InsertEnter',
@@ -10,10 +12,10 @@ return {
       documentation = {
         auto_show = true,
         auto_show_delay_ms = 0,
-        window = { border = 'rounded', },
+        window = colorscheme.window,
       },
       menu = {
-        border = 'rounded',
+        border = colorscheme.window.border,
         draw = {
           columns = {
             { 'source_name', gap = 1, 'label', },
@@ -33,7 +35,7 @@ return {
       ['<c-u>'] = { 'scroll_documentation_up', 'fallback', },
       ['<c-d>'] = { 'scroll_documentation_down', 'fallback', },
     },
-    signature = { window = { border = 'rounded', }, },
+    signature = { window = colorscheme.window, },
     sources = {
       providers = {
         snippets = {

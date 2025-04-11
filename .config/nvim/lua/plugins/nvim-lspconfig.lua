@@ -160,9 +160,10 @@ return {
     -- To show border with Shift-k (K)
     -- https://www.reddit.com/r/neovim/comments/1jbegzo/how_to_change_border_style_in_floating_windows/
     local orig_lsp_util_open_floating_preview = vim.lsp.util.open_floating_preview
+    local colorscheme = require('colorscheme')
     function vim.lsp.util.open_floating_preview(contents, syntax, opts, ...)
       opts = opts or {}
-      opts.border = opts.border or 'rounded'
+      opts.border = opts.border or colorscheme.window.border
       return orig_lsp_util_open_floating_preview(contents, syntax, opts, ...)
     end
 
