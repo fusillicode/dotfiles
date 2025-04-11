@@ -7,6 +7,5 @@ edition = "2021"
 [dependencies]
 anyhow = { workspace = true }
 fake = { workspace = true, features = ["uuid"] }
-inquire = { version = "0.7" }
 strum = { workspace = true }
 utils = { workspace = true }
