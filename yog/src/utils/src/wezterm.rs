@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-use anyhow::anyhow;
+use color_eyre::eyre::eyre;
 use serde::Deserialize;
 
-pub fn get_all_panes() -> anyhow::Result<Vec<WezTermPane>> {
+pub fn get_all_panes() -> color_eyre::Result<Vec<WezTermPane>> {
     Ok(serde_json::from_slice(
         &Command::new("wezterm")
             .args(["cli", "list", "--format", "json"])
@@ -17,12 +17,12 @@ pub fn get_sibling_pane_with_titles(
     panes: &[WezTermPane],
     current_pane_id: i64,
     pane_titles: &[&str],
-) -> anyhow::Result<WezTermPane> {
+) -> color_eyre::Result<WezTermPane> {
     let current_pane_tab_id = panes
         .iter()
         .find(|w| w.pane_id == current_pane_id)
         .ok_or_else(|| {
-            anyhow!("current pane id '{current_pane_id}' not found among panes {panes:?}")
+            eyre!("current pane id '{current_pane_id}' not found among panes {panes:?}")
         })?
         .tab_id;
 
@@ -30,7 +30,7 @@ pub fn get_sibling_pane_with_titles(
         .iter()
         .find(|w| w.tab_id == current_pane_tab_id && pane_titles.contains(&w.title.as_str()))
         .ok_or({
-            anyhow!("pane with title '{pane_titles:?}' not found in tab '{current_pane_tab_id}'")
+            eyre!("pane with title '{pane_titles:?}' not found in tab '{current_pane_tab_id}'")
         })?
         .clone())
 }

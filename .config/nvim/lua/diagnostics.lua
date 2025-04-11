@@ -1,9 +1,9 @@
 local rua = require('rua')
 
-vim.diagnostic.config {
+vim.diagnostic.config({
   float = {
     anchor_bias = 'above',
-    border = 'rounded',
+    border = require('colorscheme').window.border,
     focusable = true,
     format = rua.format_diagnostic,
     header = '',
@@ -16,7 +16,7 @@ vim.diagnostic.config {
   underline = true,
   update_in_insert = false,
   virtual_text = false,
-}
+})
 
 local diag_set = vim.diagnostic.set
 vim.diagnostic.set = function(namespace, bufnr, diagnostics, opts)

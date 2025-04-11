@@ -1,3 +1,4 @@
+
 use crate::Installer;
 
 pub struct GraphQlLsp {
@@ -10,7 +11,7 @@ impl Installer for GraphQlLsp {
         "graphql-lsp"
     }
 
-    fn install(&self) -> anyhow::Result<()> {
+    fn install(&self) -> color_eyre::Result<()> {
         crate::installers::npm_install::run(
             &self.dev_tools_dir,
             "graphql-language-service-cli",

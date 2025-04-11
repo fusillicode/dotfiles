@@ -1,3 +1,4 @@
+
 use crate::Installer;
 
 pub struct Taplo {
@@ -9,7 +10,7 @@ impl Installer for Taplo {
         "taplo"
     }
 
-    fn install(&self) -> anyhow::Result<()> {
+    fn install(&self) -> color_eyre::Result<()> {
         // Installing with `cargo` because of:
         // 1. no particular requirements
         // 2. https://github.com/tamasfe/taplo/issues/542
