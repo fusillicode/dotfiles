@@ -1,8 +1,9 @@
-use anyhow::anyhow;
 use std::fs::File;
 use std::io::Write;
 use std::process::Command;
 use std::process::Stdio;
+
+use color_eyre::eyre::eyre;
 
 pub enum OutputOption<'a> {
     UnpackVia(Box<Command>, &'a str),
@@ -10,7 +11,7 @@ pub enum OutputOption<'a> {
     WriteTo(&'a str),
 }
 
-pub fn run(url: &str, output_option: OutputOption) -> anyhow::Result<()> {
+pub fn run(url: &str, output_option: OutputOption) -> color_eyre::Result<()> {
     let mut curl_cmd = utils::system::silent_cmd("curl");
     let silent_flag = cfg!(debug_assertions).then(|| "S").unwrap_or("");
     curl_cmd.args([&format!("-L{silent_flag}"), url]);
@@ -21,7 +22,7 @@ pub fn run(url: &str, output_option: OutputOption) -> anyhow::Result<()> {
                 .stdout(Stdio::piped())
                 .spawn()?
                 .stdout
-                .ok_or_else(|| anyhow!("missing stdout from cmd {curl_cmd:?}"))?;
+                .ok_or_else(|| eyre!("missing stdout from cmd {curl_cmd:?}"))?;
             let output = cmd.stdin(Stdio::from(curl_stdout)).output()?;
             output.status.exit_ok()?;
 
@@ -33,7 +34,7 @@ pub fn run(url: &str, output_option: OutputOption) -> anyhow::Result<()> {
                 .stdout(Stdio::piped())
                 .spawn()?
                 .stdout
-                .ok_or_else(|| anyhow!("missing stdout from cmd {curl_cmd:?}"))?;
+                .ok_or_else(|| eyre!("missing stdout from cmd {curl_cmd:?}"))?;
 
             Ok(cmd.stdin(Stdio::from(curl_stdout)).status()?.exit_ok()?)
         }

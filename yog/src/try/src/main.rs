@@ -6,11 +6,12 @@ use std::str::FromStr;
 use std::time::Duration;
 use std::time::Instant;
 
-use anyhow::bail;
-use anyhow::Context;
+use color_eyre::eyre;
+use color_eyre::eyre::bail;
+use color_eyre::eyre::WrapErr;
 
 /// Executes the supplied command till it returns an ok status code.
-fn main() -> anyhow::Result<()> {
+fn main() -> color_eyre::Result<()> {
     let args = utils::system::get_args();
 
     let Some((cooldown_secs, args)) = args.split_first() else {
@@ -80,7 +81,7 @@ impl ExitCond {
 }
 
 impl FromStr for ExitCond {
-    type Err = anyhow::Error;
+    type Err = eyre::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {

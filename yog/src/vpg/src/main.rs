@@ -10,14 +10,15 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
 
-use anyhow::anyhow;
-use anyhow::bail;
-use anyhow::Context;
+use color_eyre::eyre;
+use color_eyre::eyre::bail;
+use color_eyre::eyre::eyre;
+use color_eyre::eyre::WrapErr;
 use serde::Deserialize;
 
 /// Copy to the system clipboard the psql cmd to connect to the DB matching the supplied alias with
 /// Vault credentials refreshed.
-fn main() -> anyhow::Result<()> {
+fn main() -> color_eyre::Result<()> {
     std::env::var("VAULT_ADDR").context("VAULT_ADDR missing")?;
 
     let args = utils::system::get_args();
@@ -65,13 +66,13 @@ fn main() -> anyhow::Result<()> {
     std::process::exit(1);
 }
 
-fn get_pgpass_path() -> anyhow::Result<PathBuf> {
+fn get_pgpass_path() -> color_eyre::Result<PathBuf> {
     let mut pgpass_path = PathBuf::from(std::env::var("HOME")?);
     pgpass_path.push(".pgpass");
     Ok(pgpass_path)
 }
 
-fn read_pgpass_lines(pgpass_path: &Path) -> anyhow::Result<Vec<(usize, String)>> {
+fn read_pgpass_lines(pgpass_path: &Path) -> color_eyre::Result<Vec<(usize, String)>> {
     Ok(std::fs::read_to_string(pgpass_path)?
         .lines()
         .enumerate()
@@ -82,7 +83,7 @@ fn read_pgpass_lines(pgpass_path: &Path) -> anyhow::Result<Vec<(usize, String)>>
 fn find_metadata_line<'a>(
     lines: &'a [(usize, String)],
     alias: &'a str,
-) -> anyhow::Result<&'a (usize, String)> {
+) -> color_eyre::Result<&'a (usize, String)> {
     match lines
         .iter()
         .filter(|(_, line)| line.contains(&format!("#{alias} ")))
@@ -98,15 +99,15 @@ fn find_metadata_line<'a>(
 fn get_pgpass_line(
     lines: &[(usize, String)],
     metadata_line_idx: usize,
-) -> anyhow::Result<PgpassLine> {
+) -> color_eyre::Result<PgpassLine> {
     let pgpass_line_idx = metadata_line_idx + 1;
     lines
         .get(metadata_line_idx + 1)
         .map(PgpassLine::try_from)
-        .ok_or_else(|| anyhow!("no PgPassLine found at idx {pgpass_line_idx} for metadata line {metadata_line_idx}"))?
+        .ok_or_else(|| eyre!("no PgPassLine found at idx {pgpass_line_idx} for metadata line {metadata_line_idx}"))?
 }
 
-fn extract_vault_path(metadata_line: &str) -> anyhow::Result<&str> {
+fn extract_vault_path(metadata_line: &str) -> color_eyre::Result<&str> {
     match metadata_line
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -143,7 +144,7 @@ impl PgpassLine {
 }
 
 impl TryFrom<&(usize, String)> for PgpassLine {
-    type Error = anyhow::Error;
+    type Error = eyre::Error;
 
     fn try_from((idx, s): &(usize, String)) -> Result<Self, Self::Error> {
         match s.split(':').collect::<Vec<_>>().as_slice() {
@@ -189,7 +190,7 @@ struct Credentials {
     pub username: String,
 }
 
-fn login_to_vault_if_required() -> anyhow::Result<()> {
+fn login_to_vault_if_required() -> color_eyre::Result<()> {
     let token_lookup = Command::new("vault").args(["token", "lookup"]).output()?;
     if token_lookup.status.success() {
         return Ok(());
@@ -212,7 +213,7 @@ fn login_to_vault_if_required() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn save_new_pgpass_file(lines: Vec<(usize, String)>, pgpass_path: &Path) -> anyhow::Result<()> {
+fn save_new_pgpass_file(lines: Vec<(usize, String)>, pgpass_path: &Path) -> color_eyre::Result<()> {
     let mut tmp_path = PathBuf::from(pgpass_path);
     tmp_path.set_file_name(".pgpass.tmp");
     let mut tmp_file = File::create(&tmp_path)?;
@@ -252,7 +253,7 @@ mod tests {
     #[test]
     fn test_pgpass_line_try_from_returns_an_error_if_port_is_not_a_number() {
         assert_eq!(
-            "Err(unexpected port value, found foo, required i32\n\nCaused by:\n    invalid digit found in string)",
+            "Err(unexpected port value, found foo, required i32\n\nCaused by:\n    invalid digit found in string\n\nLocation:\n    src/vpg/src/main.rs:156:22)",
             format!("{:?}", PgpassLine::try_from(&(42, "host:foo:db:user:pwd".into())))
         )
     }
@@ -260,7 +261,7 @@ mod tests {
     #[test]
     fn test_pgpass_line_try_from_returns_an_error_if_str_is_malformed() {
         assert_eq!(
-            r#"Err(unexpected split parts ["host", "5432", "db", "user"] for str host:5432:db:user)"#,
+            "Err(unexpected split parts [\"host\", \"5432\", \"db\", \"user\"] for str host:5432:db:user\n\nLocation:\n    src/vpg/src/main.rs:161:27)",
             format!(
                 "{:?}",
                 PgpassLine::try_from(&(42, "host:5432:db:user".into()))

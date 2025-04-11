@@ -1,5 +1,6 @@
 use std::process::Command;
 
+
 use crate::installers::curl_install::OutputOption;
 use crate::Installer;
 
@@ -12,7 +13,7 @@ impl Installer for TerraformLs {
         "terraform-ls"
     }
 
-    fn install(&self) -> anyhow::Result<()> {
+    fn install(&self) -> color_eyre::Result<()> {
         let repo = format!("hashicorp/{}", self.bin_name());
         let latest_release = &utils::github::get_latest_release(&repo)?[1..];
 

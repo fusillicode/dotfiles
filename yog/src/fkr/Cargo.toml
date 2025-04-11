@@ -5,7 +5,7 @@ authors = ["Gian Lu"]
 edition = "2021"
 
 [dependencies]
-anyhow = { workspace = true }
+color-eyre = { workspace = true }
 fake = { workspace = true, features = ["uuid"] }
 strum = { workspace = true }
 utils = { workspace = true }
