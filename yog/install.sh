@@ -3,8 +3,9 @@
 set -euo pipefail
 
 bins_path="$HOME/.local/bin"
-yog_release_path="$HOME/data/dev/dotfiles/dotfiles/yog/target/release"
+yog_release_path="$PWD/target/release"
 
+cargo clippy && \
 cargo build --release && \
     rm -f "$bins_path/idt" && \
     ln -s "$yog_release_path/idt" "$bins_path" && \
