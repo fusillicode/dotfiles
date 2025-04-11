@@ -4,4 +4,5 @@ pub mod editor;
 pub mod github;
 pub mod hx;
 pub mod system;
+pub mod tui;
 pub mod wezterm;

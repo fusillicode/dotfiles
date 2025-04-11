@@ -182,8 +182,8 @@ fn main() -> anyhow::Result<()> {
             })
             .into_iter()
             .for_each(|(tool, running_installer)| {
-                if let Err(e) = running_installer.join() {
-                    eprintln!("❌ {tool} installer 🧵 panicked: {e:?}");
+                if let Err(error) = running_installer.join() {
+                    eprintln!("❌ {tool} installer 🧵 panicked: {error:?}");
                 }
             });
     });
