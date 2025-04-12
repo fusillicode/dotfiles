@@ -44,7 +44,7 @@ impl Autocomplete for GitBranchesAutocomplete {
     }
 }
 
-/// Fetch all remotes and get all local and remote branches sorted by latest to oldest created.
+/// Fetch all remotes and get all local and remote branches sorted by latest to oldest modified.
 fn get_all_branches() -> color_eyre::Result<Vec<String>> {
     fetch_all_branches()?;
     let output = Command::new("git")
