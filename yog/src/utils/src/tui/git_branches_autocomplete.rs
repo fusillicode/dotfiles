@@ -8,13 +8,13 @@ use inquire::CustomUserError;
 
 #[derive(Clone)]
 pub struct GitBranchesAutocomplete {
-    branches: HashSet<String>,
+    branches: Vec<String>,
 }
 
 impl GitBranchesAutocomplete {
     pub fn new() -> color_eyre::Result<Self> {
         Ok(Self {
-            branches: get_all_branches()?,
+            branches: dedup_remotes(&get_all_branches()?),
         })
     }
 }
@@ -44,7 +44,7 @@ impl Autocomplete for GitBranchesAutocomplete {
     }
 }
 
-fn get_all_branches() -> color_eyre::Result<HashSet<String>> {
+fn get_all_branches() -> color_eyre::Result<Vec<String>> {
     let output = Command::new("git")
         .args([
             "for-each-ref",
@@ -57,14 +57,24 @@ fn get_all_branches() -> color_eyre::Result<HashSet<String>> {
     if !output.status.success() {
         bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
     }
-    const DEFAULT_REMOTE: &str = "origin";
     Ok(std::str::from_utf8(&output.stdout)?
         .trim()
         .split('\n')
+        .map(str::to_string)
+        .collect())
+}
+
+fn dedup_remotes(branches: &[String]) -> Vec<String> {
+    const DEFAULT_REMOTE: &str = "origin";
+    let mut seen = HashSet::new();
+    let mut out: Vec<_> = branches
+        .iter()
         .map(|x| {
             x.trim_start_matches(&format!("{DEFAULT_REMOTE}/"))
                 .to_string()
         })
         .filter(|x| x != DEFAULT_REMOTE)
-        .collect())
+        .collect();
+    out.retain(|x| seen.insert(x.clone()));
+    out
 }
