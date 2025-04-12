@@ -11,6 +11,7 @@ use utils::hx::HxStatusLine;
 /// Yank file path displayed in the status line of the first Helix instance found running alongside
 /// the Wezterm pane from where the cmd has been invoked.
 fn main() -> color_eyre::Result<()> {
+    color_eyre::install()?;
     let hx_pane_id = utils::wezterm::get_sibling_pane_with_titles(
         &utils::wezterm::get_all_panes()?,
         std::env::var("WEZTERM_PANE")?.parse()?,

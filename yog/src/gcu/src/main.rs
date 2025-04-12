@@ -9,16 +9,13 @@ use utils::tui::git_branches_autocomplete::GitBranchesAutocomplete;
 use utils::tui::ClosablePrompt;
 use utils::tui::ClosablePromptError;
 
-/// Create or switch to the GitHub branch built by parameterizing the
-/// supplied args.
-/// Existence of branch is checked only against local ones (to avoid
-/// fetching them remotely).
+/// Create or switch to the GitHub branch built by parameterizing the supplied args.
+/// Existence of branch is checked only against local ones (to avoid fetching them remotely).
 /// If a PR URL is supplied as arg, switches to the related branch.
-/// If no args are supplied, fetches all the available branches and
-/// presents a TUI to select one.
+/// If no args are supplied, fetches all the available branches and presents a TUI to select one.
 /// If "-b" is supplied it defaults to "git checkout -b".
-/// If the first arg is a valid path it tries to checkout it and all
-/// the other supplied path from the branch supplied as last arg.
+/// If the first arg is a valid path it tries to checkout it and all the other supplied path
+/// from the branch supplied as last arg.
 fn main() -> color_eyre::Result<()> {
     let args = utils::system::get_args();
 
@@ -67,7 +64,9 @@ fn checkout_files_or_create_branch_if_missing(args: &[String]) -> color_eyre::Re
     create_branch_if_missing(&build_branch_name(args)?)
 }
 
-fn get_branch_and_files_to_checkout(args: &[String]) -> color_eyre::Result<Option<(&String, &[String])>> {
+fn get_branch_and_files_to_checkout(
+    args: &[String],
+) -> color_eyre::Result<Option<(&String, &[String])>> {
     if let Some((branch, files)) = args.split_last() {
         if local_branch_exists(branch)? {
             return Ok(Some((branch, files)));
@@ -211,11 +210,11 @@ mod tests {
     #[test]
     fn test_build_branch_name_works_as_expected() {
         assert_eq!(
-            "Err(parameterizing [\"\"] resulted in empty String\n\nLocation:\n    src/gcu/src/main.rs:196:9)",
+            "Err(parameterizing [\"\"] resulted in empty String\n\nLocation:\n    src/gcu/src/main.rs:195:9)",
             format!("{:?}", build_branch_name(&["".into()]))
         );
         assert_eq!(
-            "Err(parameterizing [\"❌\"] resulted in empty String\n\nLocation:\n    src/gcu/src/main.rs:196:9)",
+            "Err(parameterizing [\"❌\"] resulted in empty String\n\nLocation:\n    src/gcu/src/main.rs:195:9)",
             format!("{:?}", build_branch_name(&["❌".into()]))
         );
         assert_eq!(
