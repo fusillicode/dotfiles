@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::process::Command;
 
 use color_eyre::eyre::bail;
@@ -7,7 +8,7 @@ use inquire::CustomUserError;
 
 #[derive(Clone)]
 pub struct GitBranchesAutocomplete {
-    branches: Vec<String>,
+    branches: HashSet<String>,
 }
 
 impl GitBranchesAutocomplete {
@@ -43,16 +44,27 @@ impl Autocomplete for GitBranchesAutocomplete {
     }
 }
 
-fn get_all_branches() -> color_eyre::Result<Vec<String>> {
+fn get_all_branches() -> color_eyre::Result<HashSet<String>> {
     let output = Command::new("git")
-        .args(["branch", "-a", "--format=%(refname:short)"])
+        .args([
+            "for-each-ref",
+            "--sort=-creatordate",
+            "refs/heads/",
+            "refs/remotes/",
+            "--format=%(refname:short)",
+        ])
         .output()?;
     if !output.status.success() {
         bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
     }
+    const DEFAULT_REMOTE: &str = "origin";
     Ok(std::str::from_utf8(&output.stdout)?
         .trim()
         .split('\n')
-        .map(str::to_string)
+        .map(|x| {
+            x.trim_start_matches(&format!("{DEFAULT_REMOTE}/"))
+                .to_string()
+        })
+        .filter(|x| x != DEFAULT_REMOTE)
         .collect())
 }

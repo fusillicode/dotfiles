@@ -67,7 +67,9 @@ fn checkout_files_or_create_branch_if_missing(args: &[String]) -> color_eyre::Re
     create_branch_if_missing(&build_branch_name(args)?)
 }
 
-fn get_branch_and_files_to_checkout(args: &[String]) -> color_eyre::Result<Option<(&String, &[String])>> {
+fn get_branch_and_files_to_checkout(
+    args: &[String],
+) -> color_eyre::Result<Option<(&String, &[String])>> {
     if let Some((branch, files)) = args.split_last() {
         if local_branch_exists(branch)? {
             return Ok(Some((branch, files)));
