@@ -213,11 +213,11 @@ mod tests {
     #[test]
     fn test_build_branch_name_works_as_expected() {
         assert_eq!(
-            "Err(parameterizing [\"\"] resulted in empty String\n\nLocation:\n    src/gcu/src/main.rs:196:9)",
+            "Err(parameterizing [\"\"] resulted in empty String\n\nLocation:\n    src/gcu/src/main.rs:198:9)",
             format!("{:?}", build_branch_name(&["".into()]))
         );
         assert_eq!(
-            "Err(parameterizing [\"❌\"] resulted in empty String\n\nLocation:\n    src/gcu/src/main.rs:196:9)",
+            "Err(parameterizing [\"❌\"] resulted in empty String\n\nLocation:\n    src/gcu/src/main.rs:198:9)",
             format!("{:?}", build_branch_name(&["❌".into()]))
         );
         assert_eq!(
