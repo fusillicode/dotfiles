@@ -44,7 +44,9 @@ impl Autocomplete for GitBranchesAutocomplete {
     }
 }
 
+/// Fetch all remotes and get all local and remote branches sorted by latest to oldest created.
 fn get_all_branches() -> color_eyre::Result<Vec<String>> {
+    fetch_all_remotes()?;
     let output = Command::new("git")
         .args([
             "for-each-ref",
@@ -64,8 +66,16 @@ fn get_all_branches() -> color_eyre::Result<Vec<String>> {
         .collect())
 }
 
+fn fetch_all_remotes() -> color_eyre::Result<()> {
+    let output = Command::new("git").args(["fetch", "--all"]).output()?;
+    if !output.status.success() {
+        bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
+    }
+    Ok(())
+}
+
 /// Removes all "origin" prefixes from branches, the "origin" branch and deduplicates the remotes
-/// and local branches
+/// and local branches.
 fn dedup_remotes(branches: &[String]) -> Vec<String> {
     const DEFAULT_REMOTE: &str = "origin";
     let mut seen = HashSet::new();
