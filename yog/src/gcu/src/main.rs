@@ -9,16 +9,13 @@ use utils::tui::git_branches_autocomplete::GitBranchesAutocomplete;
 use utils::tui::ClosablePrompt;
 use utils::tui::ClosablePromptError;
 
-/// Create or switch to the GitHub branch built by parameterizing the
-/// supplied args.
-/// Existence of branch is checked only against local ones (to avoid
-/// fetching them remotely).
+/// Create or switch to the GitHub branch built by parameterizing the supplied args.
+/// Existence of branch is checked only against local ones (to avoid fetching them remotely).
 /// If a PR URL is supplied as arg, switches to the related branch.
-/// If no args are supplied, fetches all the available branches and
-/// presents a TUI to select one.
+/// If no args are supplied, fetches all the available branches and presents a TUI to select one.
 /// If "-b" is supplied it defaults to "git checkout -b".
-/// If the first arg is a valid path it tries to checkout it and all
-/// the other supplied path from the branch supplied as last arg.
+/// If the first arg is a valid path it tries to checkout it and all the other supplied path
+/// from the branch supplied as last arg.
 fn main() -> color_eyre::Result<()> {
     let args = utils::system::get_args();
 
@@ -213,11 +210,11 @@ mod tests {
     #[test]
     fn test_build_branch_name_works_as_expected() {
         assert_eq!(
-            "Err(parameterizing [\"\"] resulted in empty String\n\nLocation:\n    src/gcu/src/main.rs:198:9)",
+            "Err(parameterizing [\"\"] resulted in empty String\n\nLocation:\n    src/gcu/src/main.rs:195:9)",
             format!("{:?}", build_branch_name(&["".into()]))
         );
         assert_eq!(
-            "Err(parameterizing [\"❌\"] resulted in empty String\n\nLocation:\n    src/gcu/src/main.rs:198:9)",
+            "Err(parameterizing [\"❌\"] resulted in empty String\n\nLocation:\n    src/gcu/src/main.rs:195:9)",
             format!("{:?}", build_branch_name(&["❌".into()]))
         );
         assert_eq!(

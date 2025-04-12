@@ -64,6 +64,8 @@ fn get_all_branches() -> color_eyre::Result<Vec<String>> {
         .collect())
 }
 
+/// Removes all "origin" prefixes from branches, the "origin" branch and deduplicates the remotes
+/// and local branches
 fn dedup_remotes(branches: &[String]) -> Vec<String> {
     const DEFAULT_REMOTE: &str = "origin";
     let mut seen = HashSet::new();
@@ -77,4 +79,24 @@ fn dedup_remotes(branches: &[String]) -> Vec<String> {
         .collect();
     out.retain(|x| seen.insert(x.clone()));
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_dedup_remotes_works_as_expected() {
+        assert_eq!(
+            vec!["foo", "bar", "baz"],
+            dedup_remotes(&[
+                "origin/foo".to_string(),
+                "bar".to_string(),
+                "origin".to_string(),
+                "origin/foo".to_string(),
+                "origin/bar".to_string(),
+                "origin/baz".to_string()
+            ])
+        )
+    }
 }

@@ -1,6 +1,5 @@
 #![feature(exit_status_error)]
 
-
 use fkr::FkrOption;
 use utils::tui::ClosablePrompt;
 use utils::tui::ClosablePromptError;
