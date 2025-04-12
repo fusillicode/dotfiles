@@ -1,6 +1,5 @@
 #![feature(exit_status_error)]
 
-
 use fkr::FkrOption;
 use utils::tui::ClosablePrompt;
 use utils::tui::ClosablePromptError;
@@ -10,6 +9,7 @@ use utils::tui::ClosablePromptError;
 /// If the selection is cancelled (<ESC>) or interrupted (<CTRL-C>) exists with success without
 /// printing anything.
 fn main() -> color_eyre::Result<()> {
+    color_eyre::install()?;
     let generated_value = match utils::tui::select::minimal(FkrOption::to_vec()).closable_prompt() {
         Ok(fkr_option) => fkr_option.gen_string(),
         Err(ClosablePromptError::Closed) => return Ok(()),

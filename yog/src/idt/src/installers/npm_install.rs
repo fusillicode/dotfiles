@@ -1,4 +1,3 @@
-
 pub fn run(
     dev_tools_dir: &str,
     tool: &str,

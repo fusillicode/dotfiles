@@ -1,4 +1,3 @@
-
 use crate::Installer;
 
 pub struct TypescriptLanguageServer {

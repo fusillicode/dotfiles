@@ -12,6 +12,7 @@ use utils::system::silent_cmd;
 /// Wezterm pane from where the cmd has been invoked.
 /// Used both as a CLI and from Wezterm `open-uri` handler.
 fn main() -> color_eyre::Result<()> {
+    color_eyre::install()?;
     load_additional_paths()?;
     let args = utils::system::get_args();
 
