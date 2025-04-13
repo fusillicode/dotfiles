@@ -15,7 +15,7 @@ return {
         javascript = { 'prettierd', },
         liquid = { 'prettierd', },
         markdown = { 'prettierd', },
-        sql = { 'sqlfluff', },
+        sql = { 'sqruff', },
         typescript = { 'prettierd', },
         typescriptreact = { 'prettierd', },
         yaml = { 'prettierd', },

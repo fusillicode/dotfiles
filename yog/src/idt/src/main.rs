@@ -22,7 +22,7 @@ use crate::tools::ruff_lsp::RuffLsp;
 use crate::tools::rust_analyzer::RustAnalyzer;
 use crate::tools::shellcheck::Shellcheck;
 use crate::tools::sql_language_server::SqlLanguageServer;
-use crate::tools::sqlfluff::SqlFluff;
+use crate::tools::sqruff::Sqruff;
 use crate::tools::taplo::Taplo;
 use crate::tools::terraform_ls::TerraformLs;
 use crate::tools::typescript_language_server::TypescriptLanguageServer;
@@ -125,8 +125,7 @@ fn main() -> color_eyre::Result<()> {
         Box::new(Shellcheck {
             bin_dir: bin_dir.into(),
         }),
-        Box::new(SqlFluff {
-            dev_tools_dir: dev_tools_dir.into(),
+        Box::new(Sqruff {
             bin_dir: bin_dir.into(),
         }),
         Box::new(SqlLanguageServer {
