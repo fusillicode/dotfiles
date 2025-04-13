@@ -7,7 +7,6 @@ use std::process::Command;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 use url::Url;
 
@@ -42,7 +41,9 @@ fn main() -> color_eyre::Result<()> {
             )
         })?)?;
 
-    let git_repo_root = Arc::new(get_git_repo_root(&hx_status_line.file_path)?);
+    let git_repo_root = Arc::new(utils::git::get_git_repo_root(Some(
+        &hx_status_line.file_path,
+    ))?);
 
     let git_repo_root_clone = git_repo_root.clone();
     let get_git_current_branch = std::thread::spawn(move || -> color_eyre::Result<String> {
@@ -81,29 +82,6 @@ fn main() -> color_eyre::Result<()> {
     utils::system::copy_to_system_clipboard(&mut github_link.as_str().as_bytes())?;
 
     Ok(())
-}
-
-fn get_git_repo_root(file_path: &Path) -> color_eyre::Result<String> {
-    let file_parent_dir = file_path
-        .parent()
-        .ok_or_else(|| eyre!("cannot get parent dir from path {file_path:?}"))?
-        .to_str()
-        .ok_or_else(|| eyre!("cannot get str from Path {file_path:?}"))?;
-
-    // Without spawning an additional `sh` shell I get an empty `Command` output 🥲
-    let git_repo_root = Command::new("sh")
-        .args([
-            "-c",
-            &format!("git -C {file_parent_dir} rev-parse --show-toplevel"),
-        ])
-        .output()?
-        .stdout;
-
-    if git_repo_root.is_empty() {
-        bail!("{file_path:?} is not in a git repository");
-    }
-
-    Ok(String::from_utf8(git_repo_root)?.trim().to_owned())
 }
 
 fn get_github_url_from_git_remote_output(git_remote_output: &str) -> color_eyre::Result<Url> {
