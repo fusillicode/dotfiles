@@ -16,7 +16,7 @@ fn main() -> color_eyre::Result<()> {
     let hx_pane_id = utils::wezterm::get_sibling_pane_with_titles(
         &utils::wezterm::get_all_panes()?,
         std::env::var("WEZTERM_PANE")?.parse()?,
-        Editor::Helix.pane_titles(),
+        Editor::Hx.pane_titles(),
     )?
     .pane_id;
 
