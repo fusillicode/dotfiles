@@ -6,13 +6,12 @@ pub mod text;
 
 pub use inquire;
 use inquire::InquireError;
-use thiserror::Error;
 
 pub trait ClosablePrompt<'a, T: std::fmt::Display> {
-    fn closable_prompt(self) -> Result<T, ClosablePromptError>;
+    fn closable_prompt(self) -> color_eyre::Result<T, ClosablePromptError>;
 }
 
-#[derive(Error, Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum ClosablePromptError {
     #[error("prompt has been closed, i.e. cancelled (<ESC>) or interrupted (<CTRL-C>) by user")]
     Closed,

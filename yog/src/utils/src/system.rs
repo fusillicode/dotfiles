@@ -1,4 +1,5 @@
 use std::process::Command;
+use std::process::Output;
 use std::process::Stdio;
 use std::thread::JoinHandle;
 
@@ -59,4 +60,24 @@ pub fn rm_dead_symlinks(dir: &str) -> color_eyre::Result<()> {
         }
     }
     Ok(())
+}
+
+pub fn exec_cmd(cmd: &mut Command) -> Result<Output, CmdError> {
+    let output = cmd.output()?;
+    if !output.status.success() {
+        return Err(CmdError::Stderr(
+            std::str::from_utf8(&output.stderr)?.trim().to_string(),
+        ));
+    }
+    Ok(output)
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum CmdError {
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[error(transparent)]
+    Utf8(#[from] std::str::Utf8Error),
+    #[error("cmd stderr: {0}")]
+    Stderr(String),
 }

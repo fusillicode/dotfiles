@@ -5,6 +5,7 @@ use std::process::Command;
 
 use color_eyre::eyre::bail;
 use url::Url;
+use utils::system::CmdError;
 use utils::tui::git_branches_autocomplete::GitBranchesAutocomplete;
 use utils::tui::ClosablePrompt;
 use utils::tui::ClosablePromptError;
@@ -78,31 +79,23 @@ fn get_branch_and_files_to_checkout(
 }
 
 fn local_branch_exists(branch: &str) -> color_eyre::Result<bool> {
-    let output = Command::new("git")
-        .args(["rev-parse", "--verify", branch])
-        .output()?;
-    if output.status.success() {
-        return Ok(true);
+    match utils::system::exec_cmd(Command::new("git").args(["rev-parse", "--verify", branch])) {
+        Ok(_) => Ok(true),
+        Err(CmdError::Stderr(_)) => Ok(false),
+        Err(error) => Err(error.into()),
     }
-    Ok(false)
 }
 
 fn checkout_files(files: &[&str], branch: &str) -> color_eyre::Result<()> {
     let mut args = vec!["checkout", branch];
     args.extend_from_slice(files);
-    let output = Command::new("git").args(args).output()?;
-    if !output.status.success() {
-        bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
-    }
+    utils::system::exec_cmd(Command::new("git").args(args))?;
     files.iter().for_each(|f| println!("🍁 {f} from {branch}"));
     Ok(())
 }
 
 fn switch_branch(branch: &str) -> color_eyre::Result<()> {
-    let output = Command::new("git").args(["switch", branch]).output()?;
-    if !output.status.success() {
-        bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
-    }
+    utils::system::exec_cmd(Command::new("git").args(["switch", branch]))?;
     println!("🪵 {branch}");
     Ok(())
 }
@@ -111,12 +104,7 @@ fn create_branch(branch: &str) -> color_eyre::Result<()> {
     if !should_create_new_branch(branch)? {
         return Ok(());
     }
-    let output = Command::new("git")
-        .args(["checkout", "-b", branch])
-        .output()?;
-    if !output.status.success() {
-        bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
-    }
+    utils::system::exec_cmd(Command::new("git").args(["checkout", "-b", branch]))?;
     println!("🌱 {branch}");
     Ok(())
 }
@@ -151,12 +139,7 @@ fn is_default_branch(branch: &str) -> bool {
 }
 
 fn get_current_branch() -> color_eyre::Result<String> {
-    let output = Command::new("git")
-        .args(["rev-parse", "--abbrev-ref", "HEAD"])
-        .output()?;
-    if !output.status.success() {
-        bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
-    }
+    let output = utils::system::exec_cmd(&mut Command::new("git"))?;
     Ok(std::str::from_utf8(&output.stdout)?.trim().to_string())
 }
 
