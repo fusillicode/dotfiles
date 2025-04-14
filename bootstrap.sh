@@ -1,25 +1,26 @@
 #!/usr/bin/env bash
 
 script_dir="${BASH_SOURCE%/*}"
+dotfiles_dir="$HOME/data/dev/dotfiles/dotfiles"
 
 # Symlink configs
-ln -s "$HOME/data/dev/dotfiles/dotfiles/.config/atuin/" "$HOME/.config/atuin"
-ln -s "$HOME/data/dev/dotfiles/dotfiles/.config/gitui/" "$HOME/.config/gitui"
-ln -s "$HOME/data/dev/dotfiles/dotfiles/.config/helix/" "$HOME/.config/helix"
-ln -s "$HOME/data/dev/dotfiles/dotfiles/.config/mise/" "$HOME/.config/mise"
-ln -s "$HOME/data/dev/dotfiles/dotfiles/.config/nvim/" "$HOME/.config/nvim"
+ln -s "$dotfiles_dir/.config/atuin/" "$HOME/.config/atuin"
+ln -s "$dotfiles_dir/.config/gitui/" "$HOME/.config/gitui"
+ln -s "$dotfiles_dir/.config/helix/" "$HOME/.config/helix"
+ln -s "$dotfiles_dir/.config/mise/" "$HOME/.config/mise"
+ln -s "$dotfiles_dir/.config/nvim/" "$HOME/.config/nvim"
 
-cp "$HOME/data/dev/dotfiles/dotfiles/.gitconfig" "$HOME"
-ln -s "$HOME/data/dev/dotfiles/dotfiles/.gitignore" "$HOME"
-ln -s "$HOME/data/dev/dotfiles/dotfiles/.gitignore_global" "$HOME"
-ln -s "$HOME/data/dev/dotfiles/dotfiles/.myclirc" "$HOME"
-ln -s "$HOME/data/dev/dotfiles/dotfiles/.psqlrc" "$HOME"
-ln -s "$HOME/data/dev/dotfiles/dotfiles/.psqlrc" "$HOME"
-ln -s "$HOME/data/dev/dotfiles/dotfiles/.vale.ini" "$HOME"
-ln -s "$HOME/data/dev/dotfiles/dotfiles/.wezterm" "$HOME"
-ln -s "$HOME/data/dev/dotfiles/dotfiles/.zshenv" "$HOME"
-ln -s "$HOME/data/dev/dotfiles/dotfiles/.zshrc" "$HOME"
-ln -s "$HOME/data/dev/dotfiles/dotfiles/my-zsh.zsh-theme" "$HOME/.oh-my-zsh/custom/themes"
+cp "$dotfiles_dir/.gitconfig" "$HOME"
+ln -s "$dotfiles_dir/.gitignore" "$HOME"
+ln -s "$dotfiles_dir/.gitignore_global" "$HOME"
+ln -s "$dotfiles_dir/.myclirc" "$HOME"
+ln -s "$dotfiles_dir/.psqlrc" "$HOME"
+ln -s "$dotfiles_dir/.psqlrc" "$HOME"
+ln -s "$dotfiles_dir/.vale.ini" "$HOME"
+ln -s "$dotfiles_dir/.wezterm" "$HOME"
+ln -s "$dotfiles_dir/.zshenv" "$HOME"
+ln -s "$dotfiles_dir/.zshrc" "$HOME"
+ln -s "$dotfiles_dir/my-zsh.zsh-theme" "$HOME/.oh-my-zsh/custom/themes"
 
 # Xcode tools
 xcode-select --install
