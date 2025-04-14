@@ -17,6 +17,8 @@ use utils::tui::ClosablePromptError;
 /// If the first arg is a valid path it tries to checkout it and all the other supplied path
 /// from the branch supplied as last arg.
 fn main() -> color_eyre::Result<()> {
+    color_eyre::install()?;
+
     let args = utils::system::get_args();
 
     match args.split_first() {

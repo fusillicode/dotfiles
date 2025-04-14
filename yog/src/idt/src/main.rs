@@ -38,6 +38,7 @@ mod tools;
 /// Install "Dev Tools"
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
+
     let args = utils::system::get_args();
     println!(
         "🚀 Starting {:?} with args: {args:#?}",

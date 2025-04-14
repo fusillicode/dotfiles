@@ -20,7 +20,6 @@ use serde::Deserialize;
 /// Vault credentials refreshed.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
-    std::env::var("VAULT_ADDR").context("VAULT_ADDR missing")?;
 
     let args = utils::system::get_args();
     let Some(alias) = args.first() else {

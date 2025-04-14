@@ -10,6 +10,7 @@ use utils::tui::ClosablePromptError;
 /// printing anything.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
+
     let generated_value = match utils::tui::select::minimal(FkrOption::to_vec()).closable_prompt() {
         Ok(fkr_option) => fkr_option.gen_string(),
         Err(ClosablePromptError::Closed) => return Ok(()),
