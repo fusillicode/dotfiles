@@ -5,6 +5,8 @@ use inquire::autocompletion::Replacement;
 use inquire::Autocomplete;
 use inquire::CustomUserError;
 
+use crate::system::CmdExt;
+
 #[derive(Clone)]
 pub struct GitBranchesAutocomplete {
     branches: Vec<String>,
@@ -47,13 +49,15 @@ impl Autocomplete for GitBranchesAutocomplete {
 fn get_all_branches() -> color_eyre::Result<Vec<String>> {
     fetch_all_branches()?;
 
-    let output = crate::system::exec_cmd(Command::new("git").args([
-        "for-each-ref",
-        "--sort=-creatordate",
-        "refs/heads/",
-        "refs/remotes/",
-        "--format=%(refname:short)",
-    ]))?;
+    let output = Command::new("git")
+        .args([
+            "for-each-ref",
+            "--sort=-creatordate",
+            "refs/heads/",
+            "refs/remotes/",
+            "--format=%(refname:short)",
+        ])
+        .exec()?;
 
     Ok(std::str::from_utf8(&output.stdout)?
         .trim()
@@ -63,15 +67,17 @@ fn get_all_branches() -> color_eyre::Result<Vec<String>> {
 }
 
 fn fetch_all_branches() -> color_eyre::Result<()> {
-    Ok(crate::system::exec_cmd(Command::new("git").args([
-        "fetch",
-        "--all",
-        "--jobs=4",
-        "--no-tags",
-        "--prune",
-        "--quiet",
-    ]))
-    .map(|_| ())?)
+    Ok(Command::new("git")
+        .args([
+            "fetch",
+            "--all",
+            "--jobs=4",
+            "--no-tags",
+            "--prune",
+            "--quiet",
+        ])
+        .exec()
+        .map(|_| ())?)
 }
 
 /// Removes all "origin" prefixes from branches, the "origin" branch and deduplicates the remotes
