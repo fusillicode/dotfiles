@@ -73,7 +73,6 @@ fn fetch_all_branches() -> color_eyre::Result<()> {
             "--all",
             "--jobs=4",
             "--no-tags",
-            "--depth=1",
             "--prune",
             "--quiet",
         ])
