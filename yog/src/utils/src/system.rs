@@ -62,14 +62,20 @@ pub fn rm_dead_symlinks(dir: &str) -> color_eyre::Result<()> {
     Ok(())
 }
 
-pub fn exec_cmd(cmd: &mut Command) -> Result<Output, CmdError> {
-    let output = cmd.output()?;
-    if !output.status.success() {
-        return Err(CmdError::Stderr(
-            std::str::from_utf8(&output.stderr)?.trim().to_string(),
-        ));
+pub trait CmdExt {
+    fn exec(&mut self) -> color_eyre::Result<Output, CmdError>;
+}
+
+impl CmdExt for Command {
+    fn exec(&mut self) -> color_eyre::Result<Output, CmdError> {
+        let output = self.output()?;
+        if !output.status.success() {
+            return Err(CmdError::Stderr(
+                std::str::from_utf8(&output.stderr)?.trim().to_string(),
+            ));
+        }
+        Ok(output)
     }
-    Ok(output)
 }
 
 #[derive(thiserror::Error, Debug)]
