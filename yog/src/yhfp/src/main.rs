@@ -33,7 +33,7 @@ fn main() -> color_eyre::Result<()> {
 
     let hx_status_line = HxStatusLine::from_str(hx_status_line)?;
 
-    utils::system::copy_to_system_clipboard(
+    utils::system::cp_to_system_clipboard(
         &mut format_hx_status_line(&hx_status_line)?.as_bytes(),
     )?;
 

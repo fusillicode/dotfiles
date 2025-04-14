@@ -80,7 +80,7 @@ fn main() -> color_eyre::Result<()> {
         &hx_status_line.position,
     )?;
 
-    utils::system::copy_to_system_clipboard(&mut github_link.as_str().as_bytes())?;
+    utils::system::cp_to_system_clipboard(&mut github_link.as_str().as_bytes())?;
 
     Ok(())
 }

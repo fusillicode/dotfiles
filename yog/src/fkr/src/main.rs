@@ -23,7 +23,7 @@ fn main() -> color_eyre::Result<()> {
         .first()
         .is_some_and(|arg| arg == "cp")
     {
-        utils::system::copy_to_system_clipboard(&mut generated_value.as_bytes())?;
+        utils::system::cp_to_system_clipboard(&mut generated_value.as_bytes())?;
     }
 
     Ok(())

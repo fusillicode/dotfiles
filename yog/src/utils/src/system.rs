@@ -17,7 +17,7 @@ pub fn join<T>(join_handle: JoinHandle<color_eyre::Result<T>>) -> Result<T, eyre
     join_handle.join().map_err(|e| eyre!("join error {e:?}"))?
 }
 
-pub fn copy_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
+pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
     let mut pbcopy_child = silent_cmd("pbcopy").stdin(Stdio::piped()).spawn()?;
     std::io::copy(
         content,
