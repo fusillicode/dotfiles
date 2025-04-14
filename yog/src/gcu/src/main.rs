@@ -145,9 +145,14 @@ fn is_default_branch(branch: &str) -> bool {
 }
 
 fn get_current_branch() -> color_eyre::Result<String> {
-    Ok(std::str::from_utf8(&Command::new("git").exec()?.stdout)?
-        .trim()
-        .to_string())
+    Ok(std::str::from_utf8(
+        &Command::new("git")
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .exec()?
+            .stdout,
+    )?
+    .trim()
+    .to_string())
 }
 
 fn create_branch_if_missing(branch: &str) -> color_eyre::Result<()> {
