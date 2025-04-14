@@ -211,14 +211,14 @@ mod tests {
 
     #[test]
     fn test_build_branch_name_works_as_expected() {
-        assert_eq!(
-            "Err(parameterizing [\"\"] resulted in empty String\n\nLocation:\n    src/gcu/src/main.rs:195:9)",
-            format!("{:?}", build_branch_name(&["".into()]))
-        );
-        assert_eq!(
-            "Err(parameterizing [\"❌\"] resulted in empty String\n\nLocation:\n    src/gcu/src/main.rs:195:9)",
-            format!("{:?}", build_branch_name(&["❌".into()]))
-        );
+        let res = build_branch_name(&["".into()]);
+        assert!(format!("{:?}", res)
+            .contains("Err(parameterizing [\"\"] resulted in empty String\n\nLocation:\n    src/gcu/src/main.rs:"));
+
+        let res = build_branch_name(&["❌".into()]);
+        assert!(format!("{:?}", res)
+            .contains("Err(parameterizing [\"❌\"] resulted in empty String\n\nLocation:\n    src/gcu/src/main.rs:"));
+
         assert_eq!(
             "helloworld",
             build_branch_name(&["HelloWorld".into()]).unwrap()
