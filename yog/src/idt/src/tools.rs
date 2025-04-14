@@ -18,7 +18,7 @@ pub mod ruff_lsp;
 pub mod rust_analyzer;
 pub mod shellcheck;
 pub mod sql_language_server;
-pub mod sqlfluff;
+pub mod sqruff;
 pub mod taplo;
 pub mod terraform_ls;
 pub mod typescript_language_server;

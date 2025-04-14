@@ -20,7 +20,6 @@ use serde::Deserialize;
 /// Vault credentials refreshed.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
-    std::env::var("VAULT_ADDR").context("VAULT_ADDR missing")?;
 
     let args = utils::system::get_args();
     let Some(alias) = args.first() else {
@@ -253,20 +252,17 @@ mod tests {
 
     #[test]
     fn test_pgpass_line_try_from_returns_an_error_if_port_is_not_a_number() {
-        assert_eq!(
-            "Err(unexpected port value, found foo, required i32\n\nCaused by:\n    invalid digit found in string\n\nLocation:\n    src/vpg/src/main.rs:157:22)",
-            format!("{:?}", PgpassLine::try_from(&(42, "host:foo:db:user:pwd".into())))
+        let res = PgpassLine::try_from(&(42, "host:foo:db:user:pwd".into()));
+        assert!(
+            format!("{:?}", res).contains("Err(unexpected port value, found foo, required i32\n\nCaused by:\n    invalid digit found in string\n\nLocation:\n    src/vpg/src/main.rs:")
         )
     }
 
     #[test]
     fn test_pgpass_line_try_from_returns_an_error_if_str_is_malformed() {
-        assert_eq!(
-            "Err(unexpected split parts [\"host\", \"5432\", \"db\", \"user\"] for str host:5432:db:user\n\nLocation:\n    src/vpg/src/main.rs:162:27)",
-            format!(
-                "{:?}",
-                PgpassLine::try_from(&(42, "host:5432:db:user".into()))
-            )
+        let res = PgpassLine::try_from(&(42, "host:5432:db:user".into()));
+        assert!(
+            format!( "{:?}", res).contains("Err(unexpected split parts [\"host\", \"5432\", \"db\", \"user\"] for str host:5432:db:user\n\nLocation:\n    src/vpg/src/main.rs:")
         )
     }
 

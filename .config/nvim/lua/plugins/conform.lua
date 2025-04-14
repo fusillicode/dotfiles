@@ -8,6 +8,12 @@ return {
     local slow_format_filetypes = {}
 
     conform.setup({
+      formatters = {
+        sqruff = {
+          prepend_args = { '--config', os.getenv('HOME') .. '/data/dev/dotfiles/dotfiles/.sqruff', },
+          require_cwd = false,
+        },
+      },
       formatters_by_ft = {
         css = { 'prettierd', },
         graphql = { 'prettierd', },
@@ -15,7 +21,7 @@ return {
         javascript = { 'prettierd', },
         liquid = { 'prettierd', },
         markdown = { 'prettierd', },
-        sql = { 'sqlfluff', },
+        sql = { 'sqruff', },
         typescript = { 'prettierd', },
         typescriptreact = { 'prettierd', },
         yaml = { 'prettierd', },
