@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 use std::process::Command;
 
-use color_eyre::eyre::bail;
 use inquire::autocompletion::Replacement;
 use inquire::Autocomplete;
 use inquire::CustomUserError;
@@ -47,18 +46,15 @@ impl Autocomplete for GitBranchesAutocomplete {
 /// Fetch all remotes and get all local and remote branches sorted by latest to oldest modified.
 fn get_all_branches() -> color_eyre::Result<Vec<String>> {
     fetch_all_branches()?;
-    let output = Command::new("git")
-        .args([
-            "for-each-ref",
-            "--sort=-creatordate",
-            "refs/heads/",
-            "refs/remotes/",
-            "--format=%(refname:short)",
-        ])
-        .output()?;
-    if !output.status.success() {
-        bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
-    }
+
+    let output = crate::system::exec_cmd(Command::new("git").args([
+        "for-each-ref",
+        "--sort=-creatordate",
+        "refs/heads/",
+        "refs/remotes/",
+        "--format=%(refname:short)",
+    ]))?;
+
     Ok(std::str::from_utf8(&output.stdout)?
         .trim()
         .split('\n')
@@ -67,20 +63,15 @@ fn get_all_branches() -> color_eyre::Result<Vec<String>> {
 }
 
 fn fetch_all_branches() -> color_eyre::Result<()> {
-    let output = Command::new("git")
-        .args([
-            "fetch",
-            "--all",
-            "--jobs=4",
-            "--no-tags",
-            "--prune",
-            "--quiet",
-        ])
-        .output()?;
-    if !output.status.success() {
-        bail!("{}", std::str::from_utf8(&output.stderr)?.trim())
-    }
-    Ok(())
+    Ok(crate::system::exec_cmd(Command::new("git").args([
+        "fetch",
+        "--all",
+        "--jobs=4",
+        "--no-tags",
+        "--prune",
+        "--quiet",
+    ]))
+    .map(|_| ())?)
 }
 
 /// Removes all "origin" prefixes from branches, the "origin" branch and deduplicates the remotes
