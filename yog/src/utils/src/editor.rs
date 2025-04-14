@@ -8,14 +8,14 @@ use color_eyre::eyre::eyre;
 use crate::wezterm::WezTermPane;
 
 pub enum Editor {
-    Helix,
+    Hx,
     Nvim,
 }
 
 impl Editor {
     pub fn pane_titles(&self) -> &[&str] {
         match self {
-            Self::Helix => &["hx"],
+            Self::Hx => &["hx"],
             Self::Nvim => &["nvim", "nv"],
         }
     }
@@ -26,7 +26,7 @@ impl Editor {
         let column = file_to_open.column;
 
         match self {
-            Self::Helix => format!("':o {path}:{line_nbr}'"),
+            Self::Hx => format!("':o {path}:{line_nbr}'"),
             Self::Nvim => format!(":e {path} | :call cursor({line_nbr}, {column})"),
         }
     }
@@ -37,7 +37,7 @@ impl FromStr for Editor {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "hx" => Ok(Self::Helix),
+            "hx" => Ok(Self::Hx),
             "nvim" | "nv" => Ok(Self::Nvim),
             s => Err(eyre!("unknown editor {s}")),
         }

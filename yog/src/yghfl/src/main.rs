@@ -24,7 +24,7 @@ fn main() -> color_eyre::Result<()> {
     let hx_pane = get_sibling_pane_with_titles(
         &utils::wezterm::get_all_panes()?,
         std::env::var("WEZTERM_PANE")?.parse()?,
-        Editor::Helix.pane_titles(),
+        Editor::Hx.pane_titles(),
     )?;
 
     let wezterm_pane_text = String::from_utf8(
