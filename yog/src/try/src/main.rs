@@ -13,6 +13,7 @@ use color_eyre::eyre::WrapErr;
 /// Executes the supplied command till it returns an ok status code.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
+
     let args = utils::system::get_args();
 
     let Some((cooldown_secs, args)) = args.split_first() else {

@@ -1,0 +1,7 @@
+[sqruff]
+exclude_rules = LT02
+max_line_length = 120
+
+[sqruff:indentation]
+indent_unit = space
+tab_space_size = 2

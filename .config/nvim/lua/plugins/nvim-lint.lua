@@ -38,7 +38,7 @@ return {
       elixir = { 'credo', },
       javascript = { 'eslint_d', },
       markdown = { 'vale', },
-      sql = { 'sqlfluff', },
+      sql = { 'sqruff', },
       typescript = { 'eslint_d', },
       typescriptreact = { 'eslint_d', },
     }
