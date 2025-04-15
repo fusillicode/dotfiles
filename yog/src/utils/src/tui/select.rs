@@ -5,6 +5,12 @@ use crate::tui::minimal_render_config;
 use crate::tui::ClosablePrompt;
 use crate::tui::ClosablePromptError;
 
+pub fn minimal<'a, T: std::fmt::Display>(options: Vec<T>) -> Select<'a, T> {
+    Select::new("", options)
+        .with_render_config(minimal_render_config())
+        .without_help_message()
+}
+
 impl<'a, T: std::fmt::Display> ClosablePrompt<'a, T> for Select<'a, T> {
     fn closable_prompt(self) -> Result<T, ClosablePromptError> {
         self.prompt().map_or_else(
@@ -20,10 +26,4 @@ impl<'a, T: std::fmt::Display> ClosablePrompt<'a, T> for Select<'a, T> {
             Result::Ok,
         )
     }
-}
-
-pub fn minimal<'a, T: std::fmt::Display>(options: Vec<T>) -> Select<'a, T> {
-    Select::new("", options)
-        .with_render_config(minimal_render_config())
-        .without_help_message()
 }
