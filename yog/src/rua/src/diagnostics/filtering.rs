@@ -1,11 +1,14 @@
 use mlua::prelude::*;
 
-/// Filters out the LSP diagnostics that are already represented by other ones.
-/// E.g. HINTs pointing to a location already mentioned by other ERROR's rendered message.
+/// Filters out the LSP diagnostics.
+///
+/// The filtered diagnostics are the ones:
+/// - already represented by other ones (e.g. HINTs pointing to a location already
+///   mentioned by other ERROR's rendered message)
+/// - related to the `unwanted_paths`
 ///
 /// The function uses a [`LuaTable`] rather than a user defined type that implements the [`FromLua`]
-/// trait because the deserialization logic in this case is incremental.
-/// I don't the complete "user_data.lsp.relatedInformation" upstream to handle the filtering.
+/// trait because the deserialization logic is incremental.
 pub fn filter_diagnostics(
     lua: &Lua,
     (buf_path, lsp_diags): (LuaString, LuaTable),
@@ -33,7 +36,7 @@ pub fn filter_diagnostics(
     lua.create_sequence_from(out)
 }
 
-// List of paths for which I don't want to report any diagnostic.
+/// List of paths for which I don't want to report any diagnostic.
 fn unwanted_paths() -> [String; 1] {
     let home_path = std::env::var("HOME").unwrap_or_default();
     [home_path + "/.cargo"]
