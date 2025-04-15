@@ -5,8 +5,8 @@ use std::process::Command;
 
 use color_eyre::eyre::bail;
 use url::Url;
-use utils::system::CmdError;
-use utils::system::CmdExt;
+use utils::cmd::CmdError;
+use utils::cmd::CmdExt;
 use utils::tui::git_branches_autocomplete::GitBranchesAutocomplete;
 use utils::tui::ClosablePrompt;
 use utils::tui::ClosablePromptError;
@@ -85,7 +85,7 @@ fn local_branch_exists(branch: &str) -> color_eyre::Result<bool> {
         .exec()
     {
         Ok(_) => Ok(true),
-        Err(CmdError::Stderr(_)) => Ok(false),
+        Err(CmdError::Stderr { .. }) => Ok(false),
         Err(error) => Err(error.into()),
     }
 }
