@@ -21,7 +21,7 @@ impl Installer for Shellcheck {
             OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", "/tmp"])),
         )?;
 
-        utils::system::silent_cmd("mv")
+        utils::cmd::silent_cmd("mv")
             .args([
                 &format!("/tmp/{0}-{latest_release}/{0}", self.bin_name()),
                 &self.bin_dir,

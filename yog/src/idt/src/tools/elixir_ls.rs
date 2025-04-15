@@ -24,7 +24,7 @@ impl Installer for ElixirLs {
             OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &dev_tools_repo_dir])),
         )?;
         utils::system::chmod_x(&format!("{dev_tools_repo_dir}/*"))?;
-        utils::system::silent_cmd("ln")
+        utils::cmd::silent_cmd("ln")
             .args([
                 "-sf",
                 &format!("{dev_tools_repo_dir}/language_server.sh"),

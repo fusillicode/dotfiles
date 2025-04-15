@@ -13,7 +13,7 @@ impl Installer for Taplo {
         // Installing with `cargo` because of:
         // 1. no particular requirements
         // 2. https://github.com/tamasfe/taplo/issues/542
-        utils::system::silent_cmd("cargo")
+        utils::cmd::silent_cmd("cargo")
             .args([
                 "install",
                 &format!("{}-cli", self.bin_name()),

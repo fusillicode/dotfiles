@@ -5,7 +5,7 @@ use inquire::autocompletion::Replacement;
 use inquire::Autocomplete;
 use inquire::CustomUserError;
 
-use crate::system::CmdExt;
+use crate::cmd::CmdExt;
 
 #[derive(Clone)]
 pub struct GitBranchesAutocomplete {

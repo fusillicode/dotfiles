@@ -10,7 +10,7 @@ pub fn run(
 
     std::fs::create_dir_all(&dev_tools_repo_dir)?;
 
-    utils::system::silent_cmd("composer")
+    utils::cmd::silent_cmd("composer")
         .args(
             [
                 &["require", "--dev", "--working-dir", &dev_tools_repo_dir][..],
@@ -21,7 +21,7 @@ pub fn run(
         .status()?
         .exit_ok()?;
 
-    Ok(utils::system::silent_cmd("sh")
+    Ok(utils::cmd::silent_cmd("sh")
         .args([
             "-c",
             &format!("ln -sf {dev_tools_repo_dir}/vendor/bin/{bin} {bin_dir}"),

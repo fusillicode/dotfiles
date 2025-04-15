@@ -16,12 +16,12 @@ pub fn run(
     cmd_args.extend_from_slice(&["--prefix", &dev_tools_repo_dir]);
     cmd_args.extend_from_slice(packages);
 
-    utils::system::silent_cmd("npm")
+    utils::cmd::silent_cmd("npm")
         .args(cmd_args)
         .status()?
         .exit_ok()?;
 
-    Ok(utils::system::silent_cmd("sh")
+    Ok(utils::cmd::silent_cmd("sh")
         .args([
             "-c",
             &format!("ln -sf {dev_tools_repo_dir}/node_modules/.bin/{bin} {bin_dir}"),

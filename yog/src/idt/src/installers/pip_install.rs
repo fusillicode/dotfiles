@@ -9,12 +9,12 @@ pub fn run(
 
     std::fs::create_dir_all(&dev_tools_repo_dir)?;
 
-    utils::system::silent_cmd("python3")
+    utils::cmd::silent_cmd("python3")
         .args(["-m", "venv", &format!("{dev_tools_repo_dir}/.venv")])
         .status()?
         .exit_ok()?;
 
-    Ok(utils::system::silent_cmd("sh")
+    Ok(utils::cmd::silent_cmd("sh")
         .args([
             "-c",
             &format!(

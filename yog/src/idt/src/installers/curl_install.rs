@@ -12,7 +12,7 @@ pub enum OutputOption<'a> {
 }
 
 pub fn run(url: &str, output_option: OutputOption) -> color_eyre::Result<()> {
-    let mut curl_cmd = utils::system::silent_cmd("curl");
+    let mut curl_cmd = utils::cmd::silent_cmd("curl");
     let silent_flag = cfg!(debug_assertions).then(|| "S").unwrap_or("");
     curl_cmd.args([&format!("-L{silent_flag}"), url]);
 

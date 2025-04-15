@@ -6,7 +6,7 @@ use color_eyre::eyre::bail;
 
 use utils::editor::Editor;
 use utils::editor::FileToOpen;
-use utils::system::silent_cmd;
+use utils::cmd::silent_cmd;
 
 /// Open the supplied file path in a running editor (Neovim or Helix) instance alongside the
 /// Wezterm pane from where the cmd has been invoked.
