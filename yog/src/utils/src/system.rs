@@ -1,5 +1,3 @@
-use std::process::Command;
-use std::process::Output;
 use std::process::Stdio;
 use std::thread::JoinHandle;
 
@@ -18,7 +16,9 @@ pub fn join<T>(join_handle: JoinHandle<color_eyre::Result<T>>) -> Result<T, eyre
 }
 
 pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
-    let mut pbcopy_child = silent_cmd("pbcopy").stdin(Stdio::piped()).spawn()?;
+    let mut pbcopy_child = crate::cmd::silent_cmd("pbcopy")
+        .stdin(Stdio::piped())
+        .spawn()?;
     std::io::copy(
         content,
         pbcopy_child
@@ -34,18 +34,10 @@ pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
 
 // Yes, `dir` is a `&str` and it's not sanitized but...I'm the alpha & the omega here!
 pub fn chmod_x(dir: &str) -> color_eyre::Result<()> {
-    Ok(silent_cmd("sh")
+    Ok(crate::cmd::silent_cmd("sh")
         .args(["-c", &format!("chmod +x {dir}")])
         .status()?
         .exit_ok()?)
-}
-
-pub fn silent_cmd(program: &str) -> Command {
-    let mut cmd = Command::new(program);
-    if !cfg!(debug_assertions) {
-        cmd.stdout(Stdio::null()).stderr(Stdio::null());
-    }
-    cmd
 }
 
 pub fn rm_dead_symlinks(dir: &str) -> color_eyre::Result<()> {
@@ -60,30 +52,4 @@ pub fn rm_dead_symlinks(dir: &str) -> color_eyre::Result<()> {
         }
     }
     Ok(())
-}
-
-pub trait CmdExt {
-    fn exec(&mut self) -> color_eyre::Result<Output, CmdError>;
-}
-
-impl CmdExt for Command {
-    fn exec(&mut self) -> color_eyre::Result<Output, CmdError> {
-        let output = self.output()?;
-        if !output.status.success() {
-            return Err(CmdError::Stderr(
-                std::str::from_utf8(&output.stderr)?.trim().to_string(),
-            ));
-        }
-        Ok(output)
-    }
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum CmdError {
-    #[error(transparent)]
-    Io(#[from] std::io::Error),
-    #[error(transparent)]
-    Utf8(#[from] std::str::Utf8Error),
-    #[error("cmd stderr: {0}")]
-    Stderr(String),
 }

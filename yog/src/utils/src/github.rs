@@ -10,7 +10,7 @@ const GITHUB_PR_ID_PREFIX: &str = "pull";
 const GITHUB_PR_ID_QUERY_KEY: &str = "pr";
 
 pub fn log_into_github() -> color_eyre::Result<()> {
-    if crate::system::silent_cmd("gh")
+    if crate::cmd::silent_cmd("gh")
         .args(["auth", "status"])
         .status()?
         .success()
@@ -18,7 +18,7 @@ pub fn log_into_github() -> color_eyre::Result<()> {
         return Ok(());
     }
 
-    Ok(crate::system::silent_cmd("sh")
+    Ok(crate::cmd::silent_cmd("sh")
         .args(["-c", "gh auth login"])
         .status()?
         .exit_ok()?)

@@ -1,5 +1,5 @@
 use crate::Installer;
-use utils::system::silent_cmd;
+use utils::cmd::silent_cmd;
 
 pub struct Nvim {
     pub dev_tools_dir: String,
