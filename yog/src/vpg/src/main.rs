@@ -17,6 +17,7 @@ use color_eyre::eyre::WrapErr;
 use serde::Deserialize;
 
 use utils::tui::ClosablePrompt;
+use utils::tui::ClosablePromptError;
 
 /// Copy to the system clipboard the psql cmd to connect to the DB matching the supplied alias with
 /// Vault credentials refreshed.
@@ -27,22 +28,22 @@ fn main() -> color_eyre::Result<()> {
     let mut pgpass_lines = read_pgpass_lines(&pgpass_path)?;
     let metadata_lines = get_metadata_lines(&pgpass_lines);
 
-    let args = utils::system::get_args();
-    let alias = if let Some(alias) = args.first() {
-        alias
-    } else {
-        let aliases = metadata_lines
-            .iter()
-            .flat_map(|(_, line)| {
-                line.strip_prefix('#')
-                    .and_then(|s| s.split_whitespace().next().map(str::to_string))
-            })
-            .collect();
-        &utils::tui::select::minimal::<String>(aliases).closable_prompt()?
+    let aliases = metadata_lines
+        .iter()
+        .flat_map(|(_, line)| {
+            line.strip_prefix('#')
+                .and_then(|s| s.split_whitespace().next().map(str::to_string))
+        })
+        .collect();
+
+    let alias = match utils::tui::select::minimal::<String>(aliases).closable_prompt() {
+        Ok(alias) => alias,
+        Err(ClosablePromptError::Closed) => return Ok(()),
+        Err(error) => return Err(error.into()),
     };
 
     // We do all this before interacting with Vault to avoid unneeded calls.
-    let (metadata_line_idx, metadata_line) = find_metadata_line(&metadata_lines, alias)?;
+    let (metadata_line_idx, metadata_line) = find_metadata_line(&metadata_lines, &alias)?;
     let mut pgpass_line = get_pgpass_line(&pgpass_lines, *metadata_line_idx)?;
     let vault_path = extract_vault_path(metadata_line)?;
 
