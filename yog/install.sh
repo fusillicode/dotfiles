@@ -6,7 +6,7 @@ bins_path="$HOME/.local/bin"
 yog_release_path="$PWD/target/release"
 
 cargo fmt && \
-cargo clippy && \
+cargo clippy --all-targets --all-features -- -D warnings && \
 cargo build --release && \
     rm -f "$bins_path/idt" && \
     ln -s "$yog_release_path/idt" "$bins_path" && \
