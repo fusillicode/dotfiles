@@ -26,14 +26,12 @@ fn main() -> color_eyre::Result<()> {
     let pgpass_content = std::fs::read_to_string(&pgpass_path)?;
     let pgpass_file = PgpassFile::parse(pgpass_content.as_str())?;
 
-    let PgpassEntry {
-        metadata_line,
-        mut content_line,
-    } = match utils::tui::select::minimal::<PgpassEntry>(pgpass_file.entries).closable_prompt() {
-        Ok(alias) => alias,
-        Err(ClosablePromptError::Closed) => return Ok(()),
-        Err(error) => return Err(error.into()),
-    };
+    let PgpassEntry { metadata, mut conn } =
+        match utils::tui::select::minimal::<PgpassEntry>(pgpass_file.entries).closable_prompt() {
+            Ok(alias) => alias,
+            Err(ClosablePromptError::Closed) => return Ok(()),
+            Err(error) => return Err(error.into()),
+        };
 
     println!(
         "\nLogging into Vault @ {}\n(be sure to have the VPN on!)",
@@ -42,16 +40,16 @@ fn main() -> color_eyre::Result<()> {
     log_into_vault_if_required()?;
     let vault_read_output: VaultReadOutput = serde_json::from_slice(
         &Command::new("vault")
-            .args(["read", metadata_line.vault_path, "--format=json"])
+            .args(["read", metadata.vault_path, "--format=json"])
             .output()?
             .stdout,
     )?;
 
-    content_line.update(&vault_read_output.data);
-    save_new_pgpass_file(pgpass_file.indexed_lines, &content_line, &pgpass_path)?;
+    conn.update(&vault_read_output.data);
+    save_new_pgpass_file(pgpass_file.idx_lines, &conn, &pgpass_path)?;
 
-    let db_url = content_line.db_url();
-    println!("\nConnecting to {} @\n\n{db_url}\n", metadata_line.alias);
+    let db_url = conn.db_url();
+    println!("\nConnecting to {} @\n\n{db_url}\n", metadata.alias);
 
     if let Some(psql_exit_code) = Command::new("psql")
         .arg(&db_url)
@@ -71,18 +69,18 @@ fn main() -> color_eyre::Result<()> {
 
 #[derive(Debug)]
 struct PgpassFile<'a> {
-    pub indexed_lines: Vec<(usize, &'a str)>,
+    pub idx_lines: Vec<(usize, &'a str)>,
     pub entries: Vec<PgpassEntry<'a>>,
 }
 
 impl<'a> PgpassFile<'a> {
     pub fn parse(pgpass_content: &'a str) -> color_eyre::eyre::Result<Self> {
-        let mut indexed_lines = vec![];
-        let mut pgpass_entries = vec![];
+        let mut idx_lines = vec![];
+        let mut entries = vec![];
 
         let mut file_lines = pgpass_content.lines().enumerate();
-        while let Some(indexed_line @ (_, line_content)) = file_lines.next() {
-            indexed_lines.push(indexed_line);
+        while let Some(idx_line @ (_, line_content)) = file_lines.next() {
+            idx_lines.push(idx_line);
 
             if line_content.is_empty() {
                 continue;
@@ -92,55 +90,52 @@ impl<'a> PgpassFile<'a> {
                 .strip_prefix('#')
                 .and_then(|s| s.split_once(' '))
             {
-                let metadata_line = MetadataLine { alias, vault_path };
+                let metadata = Metadata { alias, vault_path };
 
-                if let Some(indexed_line) = file_lines.next() {
-                    indexed_lines.push(indexed_line);
+                if let Some(idx_line) = file_lines.next() {
+                    idx_lines.push(idx_line);
 
-                    pgpass_entries.push(PgpassEntry {
-                        metadata_line,
-                        content_line: ContentLine::try_from(indexed_line)?,
+                    entries.push(PgpassEntry {
+                        metadata,
+                        conn: Conn::try_from(idx_line)?,
                     });
 
                     continue;
                 }
-                bail!("missing expected content line after metadata line {metadata_line:?} created from indexed line {indexed_line:?}")
+                bail!("missing expected conn after metadata {metadata:?} obtained from idx_line {idx_line:?}")
             }
         }
 
-        Ok(Self {
-            indexed_lines,
-            entries: pgpass_entries,
-        })
+        Ok(Self { idx_lines, entries })
     }
 }
 
 #[derive(Debug)]
 struct PgpassEntry<'a> {
-    pub metadata_line: MetadataLine<'a>,
-    pub content_line: ContentLine<'a>,
+    pub metadata: Metadata<'a>,
+    pub conn: Conn<'a>,
 }
 
 impl<'a> std::fmt::Display for PgpassEntry<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.metadata_line.alias)
+        write!(f, "{}", self.metadata.alias)
     }
 }
 
 #[derive(Debug, PartialEq, Eq)]
-struct MetadataLine<'a> {
+struct Metadata<'a> {
     pub alias: &'a str,
     pub vault_path: &'a str,
 }
 
-impl<'a> std::fmt::Display for MetadataLine<'a> {
+impl<'a> std::fmt::Display for Metadata<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.alias)
     }
 }
 
 #[derive(Debug, PartialEq, Eq)]
-struct ContentLine<'a> {
+struct Conn<'a> {
     pub file_line_idx: usize,
     pub host: &'a str,
     pub port: i32,
@@ -149,7 +144,7 @@ struct ContentLine<'a> {
     pub pwd: &'a str,
 }
 
-impl<'a> ContentLine<'a> {
+impl<'a> Conn<'a> {
     pub fn db_url(&self) -> String {
         format!(
             "postgres://{}@{}:{}/{}",
@@ -157,23 +152,23 @@ impl<'a> ContentLine<'a> {
         )
     }
 
-    pub fn update(&mut self, creds: &'a Credentials) {
-        self.user = creds.username.as_str();
-        self.pwd = creds.password.as_str();
+    pub fn update(&mut self, conn: &'a VaultCreds) {
+        self.user = conn.username.as_str();
+        self.pwd = conn.password.as_str();
     }
 }
 
-impl<'a> TryFrom<(usize, &'a str)> for ContentLine<'a> {
+impl<'a> TryFrom<(usize, &'a str)> for Conn<'a> {
     type Error = color_eyre::eyre::Error;
 
     fn try_from(
-        indexed_file_line @ (file_line_idx, file_line): (usize, &'a str),
+        idx_file_line @ (file_line_idx, file_line): (usize, &'a str),
     ) -> Result<Self, Self::Error> {
         if let [host, port, db, user, pwd] = file_line.split(':').collect::<Vec<_>>().as_slice() {
             let port = port
                 .parse()
                 .context(format!("unexpected port value, found {port}, required i32"))?;
-            return Ok(ContentLine {
+            return Ok(Conn {
                 file_line_idx,
                 host,
                 port,
@@ -182,11 +177,11 @@ impl<'a> TryFrom<(usize, &'a str)> for ContentLine<'a> {
                 pwd,
             });
         }
-        bail!("cannot build ContentLine from file line {indexed_file_line:?}")
+        bail!("cannot build CredsLine from file line {idx_file_line:?}")
     }
 }
 
-impl<'a> std::fmt::Display for ContentLine<'a> {
+impl<'a> std::fmt::Display for Conn<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -203,12 +198,12 @@ struct VaultReadOutput {
     pub lease_id: String,
     pub lease_duration: i32,
     pub renewable: bool,
-    pub data: Credentials,
+    pub data: VaultCreds,
     pub warnings: Vec<String>,
 }
 
 #[derive(Deserialize, Debug)]
-struct Credentials {
+struct VaultCreds {
     pub password: String,
     pub username: String,
 }
@@ -237,17 +232,17 @@ fn log_into_vault_if_required() -> color_eyre::Result<()> {
 }
 
 fn save_new_pgpass_file(
-    indexed_file_lines: Vec<(usize, &str)>,
-    updated_content_line: &ContentLine,
+    idx_file_lines: Vec<(usize, &str)>,
+    updated_creds: &Conn,
     pgpass_path: &Path,
 ) -> color_eyre::Result<()> {
     let mut tmp_path = PathBuf::from(pgpass_path);
     tmp_path.set_file_name(".pgpass.tmp");
     let mut tmp_file = File::create(&tmp_path)?;
 
-    for (idx, file_line) in indexed_file_lines {
-        let file_line_content = if idx == updated_content_line.file_line_idx {
-            updated_content_line.to_string()
+    for (idx, file_line) in idx_file_lines {
+        let file_line_content = if idx == updated_creds.file_line_idx {
+            updated_creds.to_string()
         } else {
             file_line.to_string()
         };
@@ -269,9 +264,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_content_line_try_from_returns_the_expected_content_line() {
+    fn test_creds_try_from_returns_the_expected_creds() {
         assert_eq!(
-            ContentLine {
+            Conn {
                 file_line_idx: 42,
                 host: "host".into(),
                 port: 5432,
@@ -279,30 +274,30 @@ mod tests {
                 user: "user".into(),
                 pwd: "pwd".into(),
             },
-            ContentLine::try_from((42, "host:5432:db:user:pwd")).unwrap()
+            Conn::try_from((42, "host:5432:db:user:pwd")).unwrap()
         )
     }
 
     #[test]
-    fn test_content_line_try_from_returns_an_error_if_port_is_not_a_number() {
-        let res = ContentLine::try_from((42, "host:foo:db:user:pwd"));
+    fn test_creds_try_from_returns_an_error_if_port_is_not_a_number() {
+        let res = Conn::try_from((42, "host:foo:db:user:pwd"));
         assert!(
             format!("{:?}", res).contains("Err(unexpected port value, found foo, required i32\n\nCaused by:\n    invalid digit found in string\n\nLocation:\n    src/vpg/src/main.rs:")
         )
     }
 
     #[test]
-    fn test_content_line_try_from_returns_an_error_if_str_is_malformed() {
-        let res = ContentLine::try_from((42, "host:5432:db:user"));
+    fn test_creds_try_from_returns_an_error_if_str_is_malformed() {
+        let res = Conn::try_from((42, "host:5432:db:user"));
         assert!(format!("{:?}", res)
-            .contains("cannot build ContentLine from file line (42, \"host:5432:db:user\")"))
+            .contains("cannot build CredsLine from file line (42, \"host:5432:db:user\")"))
     }
 
     #[test]
-    fn test_content_line_db_url_returns_the_expected_output() {
+    fn test_creds_db_url_returns_the_expected_output() {
         assert_eq!(
             "postgres://user@host:5432/db".to_string(),
-            ContentLine {
+            Conn {
                 file_line_idx: 42,
                 host: "host".into(),
                 port: 5432,
