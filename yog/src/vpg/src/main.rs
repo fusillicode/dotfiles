@@ -98,13 +98,15 @@ impl<'a> TryFrom<&'a str> for PgpassFile<'a> {
                 .and_then(|s| s.split_once(' '))
             {
                 let metadata_line = MetadataLine { alias, vault_path };
+
                 if let Some(indexed_line) = file_lines.next() {
                     indexed_lines.push(indexed_line);
-                    let content_line = ContentLine::try_from(indexed_line)?;
+
                     pgpass_entries.push(PgpassEntry {
                         metadata_line,
-                        content_line,
+                        content_line: ContentLine::try_from(indexed_line)?,
                     });
+
                     continue;
                 }
                 bail!("missing expected content line after metadata line {metadata_line:?} created from indexed line {indexed_line:?}")
@@ -169,8 +171,8 @@ impl ContentLine {
 impl TryFrom<(usize, &str)> for ContentLine {
     type Error = color_eyre::eyre::Error;
 
-    fn try_from((idx, line): (usize, &str)) -> Result<Self, Self::Error> {
-        if let [host, port, db, user, pwd] = line.split(':').collect::<Vec<_>>().as_slice() {
+    fn try_from(indexed_file_line @ (idx, file_line): (usize, &str)) -> Result<Self, Self::Error> {
+        if let [host, port, db, user, pwd] = file_line.split(':').collect::<Vec<_>>().as_slice() {
             return Ok(ContentLine {
                 file_line_idx: idx,
                 host: host.to_string(),
@@ -182,7 +184,7 @@ impl TryFrom<(usize, &str)> for ContentLine {
                 pwd: pwd.to_string(),
             });
         }
-        bail!("cannot build ContentLine for pgpass line {idx} {line}")
+        bail!("cannot build ContentLine from file line {indexed_file_line:?}")
     }
 }
 
@@ -295,7 +297,7 @@ mod tests {
     fn test_content_line_try_from_returns_an_error_if_str_is_malformed() {
         let res = ContentLine::try_from((42, "host:5432:db:user"));
         assert!(format!("{:?}", res)
-            .contains("cannot build ContentLine for pgpass line 42 host:5432:db:user"))
+            .contains("cannot build ContentLine from file line (42, \"host:5432:db:user\")"))
     }
 
     #[test]
