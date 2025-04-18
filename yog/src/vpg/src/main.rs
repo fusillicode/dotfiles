@@ -1,6 +1,5 @@
 #![feature(exit_status_error)]
 
-use std::fmt::Display;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -11,7 +10,6 @@ use std::process::Command;
 use std::process::Stdio;
 
 use color_eyre::eyre::bail;
-use color_eyre::eyre::eyre;
 use color_eyre::eyre::WrapErr;
 use serde::Deserialize;
 
@@ -27,12 +25,14 @@ fn main() -> color_eyre::Result<()> {
     pgpass_path.push(".pgpass");
     let pgpass_content = std::fs::read_to_string(&pgpass_path)?;
     let PgpassFile {
-        all_lines,
-        meta_lines,
-        mut content_lines,
+        file_lines,
+        pgpass_entries,
     } = PgpassFile::try_from(pgpass_content.as_str())?;
 
-    let meta_line = match utils::tui::select::minimal::<MetaLine>(meta_lines).closable_prompt() {
+    let PgpassEntry {
+        metadata_line,
+        mut content_line,
+    } = match utils::tui::select::minimal::<PgpassEntry>(pgpass_entries).closable_prompt() {
         Ok(alias) => alias,
         Err(ClosablePromptError::Closed) => return Ok(()),
         Err(error) => return Err(error.into()),
@@ -42,19 +42,16 @@ fn main() -> color_eyre::Result<()> {
     log_into_vault_if_required()?;
     let vault_read_output: VaultReadOutput = serde_json::from_slice(
         &Command::new("vault")
-            .args(["read", &meta_line.vault_path, "--format=json"])
+            .args(["read", &metadata_line.vault_path, "--format=json"])
             .output()?
             .stdout,
     )?;
 
-    let new_content_line = content_lines
-        .get_mut(meta_line.idx)
-        .ok_or_else(|| eyre!("content line not found for meta line {meta_line}"))?;
-    new_content_line.update(vault_read_output.data);
-    save_new_pgpass_file(all_lines, new_content_line, &pgpass_path).unwrap();
+    content_line.update(vault_read_output.data);
+    save_new_pgpass_file(file_lines, &content_line, &pgpass_path).unwrap();
 
-    let db_url = new_content_line.db_url();
-    println!("\nConnecting to {}:\n", meta_line.alias);
+    let db_url = content_line.db_url();
+    println!("\nConnecting to {}:\n", metadata_line.alias);
     println!("{db_url}\n");
 
     if let Some(psql_exit_code) = Command::new("psql")
@@ -73,23 +70,22 @@ fn main() -> color_eyre::Result<()> {
     std::process::exit(1);
 }
 
+#[derive(Debug)]
 struct PgpassFile<'a> {
-    pub all_lines: Vec<(usize, &'a str)>,
-    pub meta_lines: Vec<MetaLine>,
-    pub content_lines: Vec<ContentLine>,
+    pub file_lines: Vec<(usize, &'a str)>,
+    pub pgpass_entries: Vec<PgpassEntry>,
 }
 
 impl<'a> TryFrom<&'a str> for PgpassFile<'a> {
     type Error = color_eyre::eyre::Error;
 
     fn try_from(pgpass_content: &'a str) -> Result<Self, Self::Error> {
-        let mut all_lines: Vec<(_, &str)> = vec![];
-        let mut meta_lines = vec![];
-        let mut meta_lines_idx = 0;
-        let mut content_lines = vec![];
+        let mut lines: Vec<(_, &str)> = vec![];
+        let mut entries = vec![];
 
-        for (idx, line) in pgpass_content.lines().enumerate() {
-            all_lines.push((idx, line));
+        let mut file_lines = pgpass_content.lines().enumerate();
+        while let Some((idx, line)) = file_lines.next() {
+            lines.push((idx, line));
 
             if line.is_empty() {
                 continue;
@@ -98,35 +94,49 @@ impl<'a> TryFrom<&'a str> for PgpassFile<'a> {
             if let Some((alias, vault_path)) =
                 line.strip_prefix('#').and_then(|s| s.split_once(' '))
             {
-                let meta_line = MetaLine {
-                    idx: meta_lines_idx,
+                let metadata_line = MetadataLine {
                     alias: alias.to_string(),
                     vault_path: vault_path.to_string(),
                 };
-                meta_lines.push(meta_line);
-                meta_lines_idx += 1;
-                continue;
+                if let Some(file_line) = file_lines.next() {
+                    lines.push(file_line);
+                    let content_line = ContentLine::try_from(file_line)?;
+                    entries.push(PgpassEntry {
+                        metadata_line,
+                        content_line,
+                    });
+                    continue;
+                }
+                bail!("missing expected content line after metadata line {idx} {metadata_line}")
             }
-
-            content_lines.push(ContentLine::try_from((idx, line))?);
         }
 
         Ok(PgpassFile {
-            all_lines,
-            meta_lines,
-            content_lines,
+            file_lines: lines,
+            pgpass_entries: entries,
         })
     }
 }
 
+#[derive(Debug)]
+struct PgpassEntry {
+    pub metadata_line: MetadataLine,
+    pub content_line: ContentLine,
+}
+
+impl std::fmt::Display for PgpassEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.metadata_line.alias)
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
-struct MetaLine {
-    pub idx: usize,
+struct MetadataLine {
     pub alias: String,
     pub vault_path: String,
 }
 
-impl Display for MetaLine {
+impl std::fmt::Display for MetadataLine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.alias)
     }
@@ -134,7 +144,7 @@ impl Display for MetaLine {
 
 #[derive(Debug, PartialEq, Eq)]
 struct ContentLine {
-    pub idx: usize,
+    pub file_line_idx: usize,
     pub host: String,
     pub port: i32,
     pub db: String,
@@ -162,7 +172,7 @@ impl TryFrom<(usize, &str)> for ContentLine {
     fn try_from((idx, line): (usize, &str)) -> Result<Self, Self::Error> {
         if let [host, port, db, user, pwd] = line.split(':').collect::<Vec<_>>().as_slice() {
             return Ok(ContentLine {
-                idx,
+                file_line_idx: idx,
                 host: host.to_string(),
                 port: port
                     .parse()
@@ -227,7 +237,7 @@ fn log_into_vault_if_required() -> color_eyre::Result<()> {
 }
 
 fn save_new_pgpass_file(
-    all_lines: Vec<(usize, &str)>,
+    file_lines: Vec<(usize, &str)>,
     new_content_line: &ContentLine,
     pgpass_path: &Path,
 ) -> color_eyre::Result<()> {
@@ -235,8 +245,8 @@ fn save_new_pgpass_file(
     tmp_path.set_file_name(".pgpass.tmp");
     let mut tmp_file = File::create(&tmp_path)?;
 
-    for (idx, line) in all_lines {
-        let new_line = if idx == new_content_line.idx {
+    for (idx, line) in file_lines {
+        let new_line = if idx == new_content_line.file_line_idx {
             new_content_line.to_string()
         } else {
             line.to_string()
@@ -262,7 +272,7 @@ mod tests {
     fn test_content_line_try_from_returns_the_expected_content_line() {
         assert_eq!(
             ContentLine {
-                idx: 42,
+                file_line_idx: 42,
                 host: "host".into(),
                 port: 5432,
                 db: "db".into(),
@@ -293,7 +303,7 @@ mod tests {
         assert_eq!(
             "postgres://user@host:5432/db".to_string(),
             ContentLine {
-                idx: 42,
+                file_line_idx: 42,
                 host: "host".into(),
                 port: 5432,
                 db: "db".into(),
