@@ -5,6 +5,7 @@ use std::process::Command;
 
 use color_eyre::eyre::bail;
 use url::Url;
+
 use utils::cmd::CmdError;
 use utils::cmd::CmdExt;
 use utils::tui::git_branches_autocomplete::GitBranchesAutocomplete;

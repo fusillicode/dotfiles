@@ -33,13 +33,13 @@ impl CmdExt for Command {
 
 #[derive(thiserror::Error, Debug)]
 pub enum CmdError {
-    #[error("io error {source} - cmd {cmd_details}")]
+    #[error("io error {source} - {cmd_details}")]
     Io {
         cmd_details: CmdDetails,
         #[backtrace]
         source: std::io::Error,
     },
-    #[error("stderr {output:?} - cmd {cmd_details}")]
+    #[error("stderr {output:?} - {cmd_details}")]
     Stderr {
         cmd_details: CmdDetails,
         output: Box<Output>,
