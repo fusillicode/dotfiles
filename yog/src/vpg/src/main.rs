@@ -24,15 +24,12 @@ fn main() -> color_eyre::Result<()> {
     let mut pgpass_path = PathBuf::from(std::env::var("HOME")?);
     pgpass_path.push(".pgpass");
     let pgpass_content = std::fs::read_to_string(&pgpass_path)?;
-    let PgpassFile {
-        indexed_lines,
-        pgpass_entries,
-    } = PgpassFile::try_from(pgpass_content.as_str())?;
+    let pgpass_file = PgpassFile::parse(pgpass_content.as_str())?;
 
     let PgpassEntry {
         metadata_line,
         mut content_line,
-    } = match utils::tui::select::minimal::<PgpassEntry>(pgpass_entries).closable_prompt() {
+    } = match utils::tui::select::minimal::<PgpassEntry>(pgpass_file.entries).closable_prompt() {
         Ok(alias) => alias,
         Err(ClosablePromptError::Closed) => return Ok(()),
         Err(error) => return Err(error.into()),
@@ -51,7 +48,7 @@ fn main() -> color_eyre::Result<()> {
     )?;
 
     content_line.update(vault_read_output.data);
-    save_new_pgpass_file(indexed_lines, &content_line, &pgpass_path).unwrap();
+    save_new_pgpass_file(pgpass_file.indexed_lines, &content_line, &pgpass_path)?;
 
     let db_url = content_line.db_url();
     println!("\nConnecting to {} @\n\n{db_url}\n", metadata_line.alias);
@@ -75,13 +72,11 @@ fn main() -> color_eyre::Result<()> {
 #[derive(Debug)]
 struct PgpassFile<'a> {
     pub indexed_lines: Vec<(usize, &'a str)>,
-    pub pgpass_entries: Vec<PgpassEntry<'a>>,
+    pub entries: Vec<PgpassEntry<'a>>,
 }
 
-impl<'a> TryFrom<&'a str> for PgpassFile<'a> {
-    type Error = color_eyre::eyre::Error;
-
-    fn try_from(pgpass_content: &'a str) -> Result<Self, Self::Error> {
+impl<'a> PgpassFile<'a> {
+    pub fn parse(pgpass_content: &'a str) -> color_eyre::eyre::Result<Self> {
         let mut indexed_lines = vec![];
         let mut pgpass_entries = vec![];
 
@@ -113,9 +108,9 @@ impl<'a> TryFrom<&'a str> for PgpassFile<'a> {
             }
         }
 
-        Ok(PgpassFile {
+        Ok(Self {
             indexed_lines,
-            pgpass_entries,
+            entries: pgpass_entries,
         })
     }
 }
