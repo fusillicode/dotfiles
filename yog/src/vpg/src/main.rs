@@ -16,8 +16,8 @@ use serde::Deserialize;
 use utils::tui::ClosablePrompt;
 use utils::tui::ClosablePromptError;
 
-/// Copy to the system clipboard the psql cmd to connect to the DB matching the supplied alias with
-/// Vault credentials refreshed.
+/// Copy to the system clipboard the psql cmd to connect to the DB matching the selected alias with
+/// refreshed Vault credentials.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
@@ -95,14 +95,12 @@ impl<'a> PgpassFile<'a> {
                 if let Some(idx_line) = file_lines.next() {
                     idx_lines.push(idx_line);
 
-                    entries.push(PgpassEntry {
-                        metadata,
-                        conn: Conn::try_from(idx_line)?,
-                    });
+                    let conn = Conn::try_from(idx_line)?;
+                    entries.push(PgpassEntry { metadata, conn });
 
                     continue;
                 }
-                bail!("missing expected conn after metadata {metadata:?} obtained from idx_line {idx_line:?}")
+                bail!("missing expected conn line after metadata line {metadata:?} obtained from idx_line {idx_line:?}")
             }
         }
 
