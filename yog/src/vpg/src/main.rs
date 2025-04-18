@@ -47,7 +47,7 @@ fn main() -> color_eyre::Result<()> {
             .stdout,
     )?;
 
-    content_line.update(vault_read_output.data);
+    content_line.update(&vault_read_output.data);
     save_new_pgpass_file(pgpass_file.indexed_lines, &content_line, &pgpass_path)?;
 
     let db_url = content_line.db_url();
@@ -118,7 +118,7 @@ impl<'a> PgpassFile<'a> {
 #[derive(Debug)]
 struct PgpassEntry<'a> {
     pub metadata_line: MetadataLine<'a>,
-    pub content_line: ContentLine,
+    pub content_line: ContentLine<'a>,
 }
 
 impl<'a> std::fmt::Display for PgpassEntry<'a> {
@@ -140,16 +140,16 @@ impl<'a> std::fmt::Display for MetadataLine<'a> {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-struct ContentLine {
+struct ContentLine<'a> {
     pub file_line_idx: usize,
-    pub host: String,
+    pub host: &'a str,
     pub port: i32,
-    pub db: String,
-    pub user: String,
-    pub pwd: String,
+    pub db: &'a str,
+    pub user: &'a str,
+    pub pwd: &'a str,
 }
 
-impl ContentLine {
+impl<'a> ContentLine<'a> {
     pub fn db_url(&self) -> String {
         format!(
             "postgres://{}@{}:{}/{}",
@@ -157,33 +157,36 @@ impl ContentLine {
         )
     }
 
-    pub fn update(&mut self, creds: Credentials) {
-        self.user = creds.username;
-        self.pwd = creds.password;
+    pub fn update(&mut self, creds: &'a Credentials) {
+        self.user = creds.username.as_str();
+        self.pwd = creds.password.as_str();
     }
 }
 
-impl TryFrom<(usize, &str)> for ContentLine {
+impl<'a> TryFrom<(usize, &'a str)> for ContentLine<'a> {
     type Error = color_eyre::eyre::Error;
 
-    fn try_from(indexed_file_line @ (idx, file_line): (usize, &str)) -> Result<Self, Self::Error> {
+    fn try_from(
+        indexed_file_line @ (file_line_idx, file_line): (usize, &'a str),
+    ) -> Result<Self, Self::Error> {
         if let [host, port, db, user, pwd] = file_line.split(':').collect::<Vec<_>>().as_slice() {
+            let port = port
+                .parse()
+                .context(format!("unexpected port value, found {port}, required i32"))?;
             return Ok(ContentLine {
-                file_line_idx: idx,
-                host: host.to_string(),
-                port: port
-                    .parse()
-                    .context(format!("unexpected port value, found {port}, required i32"))?,
-                db: db.to_string(),
-                user: user.to_string(),
-                pwd: pwd.to_string(),
+                file_line_idx,
+                host,
+                port,
+                db,
+                user,
+                pwd,
             });
         }
         bail!("cannot build ContentLine from file line {indexed_file_line:?}")
     }
 }
 
-impl std::fmt::Display for ContentLine {
+impl<'a> std::fmt::Display for ContentLine<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
