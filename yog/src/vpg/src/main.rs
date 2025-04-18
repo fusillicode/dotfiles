@@ -136,7 +136,7 @@ impl<'a> std::fmt::Display for Metadata<'a> {
 struct Conn<'a> {
     pub file_line_idx: usize,
     pub host: &'a str,
-    pub port: i32,
+    pub port: u16,
     pub db: &'a str,
     pub user: &'a str,
     pub pwd: &'a str,
@@ -165,7 +165,7 @@ impl<'a> TryFrom<(usize, &'a str)> for Conn<'a> {
         if let [host, port, db, user, pwd] = file_line.split(':').collect::<Vec<_>>().as_slice() {
             let port = port
                 .parse()
-                .context(format!("unexpected port value, found {port}, required i32"))?;
+                .context(format!("unexpected port value {port}"))?;
             return Ok(Conn {
                 file_line_idx,
                 host,
@@ -280,7 +280,7 @@ mod tests {
     fn test_creds_try_from_returns_an_error_if_port_is_not_a_number() {
         let res = Conn::try_from((42, "host:foo:db:user:pwd"));
         assert!(
-            format!("{:?}", res).contains("Err(unexpected port value, found foo, required i32\n\nCaused by:\n    invalid digit found in string\n\nLocation:\n    src/vpg/src/main.rs:")
+            format!("{:?}", res).contains("Err(unexpected port value foo\n\nCaused by:\n    invalid digit found in string\n\nLocation:\n    src/vpg/src/main.rs:")
         )
     }
 
