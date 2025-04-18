@@ -67,9 +67,15 @@ fn main() -> color_eyre::Result<()> {
     std::process::exit(1);
 }
 
+/// A parsed `.pgpass` file with line references and connection entries.
+///
+/// Stores both raw lines (preserving comments and formatting) and validated connection entries.
+/// Follows PostgreSQL's password file format: `host:port:db:user:pwd` with colon-separated fields.
 #[derive(Debug)]
 struct PgpassFile<'a> {
+    /// Original file lines with their 0-based indices, preserving comments and metadata.
     pub idx_lines: Vec<(usize, &'a str)>,
+    /// Validated connection entries parsed from non-comment lines.
     pub entries: Vec<PgpassEntry<'a>>,
 }
 
@@ -108,9 +114,12 @@ impl<'a> PgpassFile<'a> {
     }
 }
 
+/// A validated `.pgpass` entry with associated metadata and connection parameters.
 #[derive(Debug)]
 struct PgpassEntry<'a> {
+    /// Metadata from preceding comment lines (alias/vault references).
     pub metadata: Metadata<'a>,
+    /// Parsed connection parameters from a valid `.pgpass` line.
     pub conn: Conn<'a>,
 }
 
@@ -120,9 +129,12 @@ impl<'a> std::fmt::Display for PgpassEntry<'a> {
     }
 }
 
+/// Metadata extracted from comment lines preceding a `.pgpass` entry.
 #[derive(Debug, PartialEq, Eq)]
 struct Metadata<'a> {
+    /// Human-readable identifier for the connection (from comments).
     pub alias: &'a str,
+    /// Vault path reference for secure password management (from comments).
     pub vault_path: &'a str,
 }
 
@@ -132,13 +144,20 @@ impl<'a> std::fmt::Display for Metadata<'a> {
     }
 }
 
+/// Connection parameters parsed from a `.pgpass` line.
 #[derive(Debug, PartialEq, Eq)]
 struct Conn<'a> {
+    /// 0-based index referencing the original line in `PgpassFile.idx_lines`.
     pub file_line_idx: usize,
+    /// Hostname.
     pub host: &'a str,
+    /// TCP port number.
     pub port: u16,
+    /// Database name.
     pub db: &'a str,
+    /// Username.
     pub user: &'a str,
+    /// Password.
     pub pwd: &'a str,
 }
 
