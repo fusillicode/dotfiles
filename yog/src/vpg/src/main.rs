@@ -268,11 +268,11 @@ mod tests {
         assert_eq!(
             Conn {
                 file_line_idx: 42,
-                host: "host".into(),
+                host: "host",
                 port: 5432,
-                db: "db".into(),
-                user: "user".into(),
-                pwd: "pwd".into(),
+                db: "db",
+                user: "user",
+                pwd: "pwd",
             },
             Conn::try_from((42, "host:5432:db:user:pwd")).unwrap()
         )
@@ -299,11 +299,11 @@ mod tests {
             "postgres://user@host:5432/db".to_string(),
             Conn {
                 file_line_idx: 42,
-                host: "host".into(),
+                host: "host",
                 port: 5432,
-                db: "db".into(),
-                user: "user".into(),
-                pwd: "whatever".into()
+                db: "db",
+                user: "user",
+                pwd: "whatever"
             }
             .db_url()
         )
