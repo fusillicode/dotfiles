@@ -5,6 +5,7 @@ set -euo pipefail
 bins_path="$HOME/.local/bin"
 yog_release_path="$PWD/target/release"
 
+cargo fmt && \
 cargo clippy && \
 cargo build --release && \
     rm -f "$bins_path/idt" && \
