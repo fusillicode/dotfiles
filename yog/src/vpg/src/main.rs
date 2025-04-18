@@ -25,7 +25,7 @@ fn main() -> color_eyre::Result<()> {
     pgpass_path.push(".pgpass");
     let pgpass_content = std::fs::read_to_string(&pgpass_path)?;
     let PgpassFile {
-        file_lines,
+        indexed_lines,
         pgpass_entries,
     } = PgpassFile::try_from(pgpass_content.as_str())?;
 
@@ -38,7 +38,10 @@ fn main() -> color_eyre::Result<()> {
         Err(error) => return Err(error.into()),
     };
 
-    println!("\nLogging into Vault @ {}", std::env::var("VAULT_ADDR")?);
+    println!(
+        "\nLogging into Vault @ {}\n(be sure to have the VPN on!)",
+        std::env::var("VAULT_ADDR")?
+    );
     log_into_vault_if_required()?;
     let vault_read_output: VaultReadOutput = serde_json::from_slice(
         &Command::new("vault")
@@ -48,11 +51,10 @@ fn main() -> color_eyre::Result<()> {
     )?;
 
     content_line.update(vault_read_output.data);
-    save_new_pgpass_file(file_lines, &content_line, &pgpass_path).unwrap();
+    save_new_pgpass_file(indexed_lines, &content_line, &pgpass_path).unwrap();
 
     let db_url = content_line.db_url();
-    println!("\nConnecting to {}:\n", metadata_line.alias);
-    println!("{db_url}\n");
+    println!("\nConnecting to {} @\n\n{db_url}\n", metadata_line.alias);
 
     if let Some(psql_exit_code) = Command::new("psql")
         .arg(&db_url)
@@ -72,7 +74,7 @@ fn main() -> color_eyre::Result<()> {
 
 #[derive(Debug)]
 struct PgpassFile<'a> {
-    pub file_lines: Vec<(usize, &'a str)>,
+    pub indexed_lines: Vec<(usize, &'a str)>,
     pub pgpass_entries: Vec<PgpassEntry>,
 }
 
@@ -80,40 +82,41 @@ impl<'a> TryFrom<&'a str> for PgpassFile<'a> {
     type Error = color_eyre::eyre::Error;
 
     fn try_from(pgpass_content: &'a str) -> Result<Self, Self::Error> {
-        let mut lines: Vec<(_, &str)> = vec![];
-        let mut entries = vec![];
+        let mut indexed_lines = vec![];
+        let mut pgpass_entries = vec![];
 
         let mut file_lines = pgpass_content.lines().enumerate();
-        while let Some((idx, line)) = file_lines.next() {
-            lines.push((idx, line));
+        while let Some(indexed_line @ (_, line_content)) = file_lines.next() {
+            indexed_lines.push(indexed_line);
 
-            if line.is_empty() {
+            if line_content.is_empty() {
                 continue;
             }
 
-            if let Some((alias, vault_path)) =
-                line.strip_prefix('#').and_then(|s| s.split_once(' '))
+            if let Some((alias, vault_path)) = line_content
+                .strip_prefix('#')
+                .and_then(|s| s.split_once(' '))
             {
                 let metadata_line = MetadataLine {
                     alias: alias.to_string(),
                     vault_path: vault_path.to_string(),
                 };
-                if let Some(file_line) = file_lines.next() {
-                    lines.push(file_line);
-                    let content_line = ContentLine::try_from(file_line)?;
-                    entries.push(PgpassEntry {
+                if let Some(indexed_line) = file_lines.next() {
+                    indexed_lines.push(indexed_line);
+                    let content_line = ContentLine::try_from(indexed_line)?;
+                    pgpass_entries.push(PgpassEntry {
                         metadata_line,
                         content_line,
                     });
                     continue;
                 }
-                bail!("missing expected content line after metadata line {idx} {metadata_line}")
+                bail!("missing expected content line after metadata line {metadata_line:?} created from indexed line {indexed_line:?}")
             }
         }
 
         Ok(PgpassFile {
-            file_lines: lines,
-            pgpass_entries: entries,
+            indexed_lines,
+            pgpass_entries,
         })
     }
 }
@@ -237,21 +240,21 @@ fn log_into_vault_if_required() -> color_eyre::Result<()> {
 }
 
 fn save_new_pgpass_file(
-    file_lines: Vec<(usize, &str)>,
-    new_content_line: &ContentLine,
+    indexed_file_lines: Vec<(usize, &str)>,
+    updated_content_line: &ContentLine,
     pgpass_path: &Path,
 ) -> color_eyre::Result<()> {
     let mut tmp_path = PathBuf::from(pgpass_path);
     tmp_path.set_file_name(".pgpass.tmp");
     let mut tmp_file = File::create(&tmp_path)?;
 
-    for (idx, line) in file_lines {
-        let new_line = if idx == new_content_line.file_line_idx {
-            new_content_line.to_string()
+    for (idx, file_line) in indexed_file_lines {
+        let file_line_content = if idx == updated_content_line.file_line_idx {
+            updated_content_line.to_string()
         } else {
-            line.to_string()
+            file_line.to_string()
         };
-        writeln!(tmp_file, "{new_line}")?;
+        writeln!(tmp_file, "{file_line_content}")?;
     }
 
     std::fs::rename(&tmp_path, pgpass_path)?;
