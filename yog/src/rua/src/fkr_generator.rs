@@ -63,7 +63,9 @@ impl FromLua for FkrArg {
                 mlua::Error::FromLuaConversionError {
                     from: value.type_name(),
                     to: "FkrArg".into(),
-                    message: Some(format!("error parsing string {lua_string:?} - error: {e:?}")),
+                    message: Some(format!(
+                        "error parsing string {lua_string:?} - error: {e:?}"
+                    )),
                 }
             });
         }
