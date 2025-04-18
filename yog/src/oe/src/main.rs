@@ -4,9 +4,9 @@ use std::str::FromStr;
 
 use color_eyre::eyre::bail;
 
+use utils::cmd::silent_cmd;
 use utils::editor::Editor;
 use utils::editor::FileToOpen;
-use utils::cmd::silent_cmd;
 
 /// Open the supplied file path in a running editor (Neovim or Helix) instance alongside the
 /// Wezterm pane from where the cmd has been invoked.
