@@ -45,7 +45,7 @@ fn main() -> color_eyre::Result<()> {
     log_into_vault_if_required()?;
     let vault_read_output: VaultReadOutput = serde_json::from_slice(
         &Command::new("vault")
-            .args(["read", &metadata_line.vault_path, "--format=json"])
+            .args(["read", metadata_line.vault_path, "--format=json"])
             .output()?
             .stdout,
     )?;
@@ -75,7 +75,7 @@ fn main() -> color_eyre::Result<()> {
 #[derive(Debug)]
 struct PgpassFile<'a> {
     pub indexed_lines: Vec<(usize, &'a str)>,
-    pub pgpass_entries: Vec<PgpassEntry>,
+    pub pgpass_entries: Vec<PgpassEntry<'a>>,
 }
 
 impl<'a> TryFrom<&'a str> for PgpassFile<'a> {
@@ -97,10 +97,7 @@ impl<'a> TryFrom<&'a str> for PgpassFile<'a> {
                 .strip_prefix('#')
                 .and_then(|s| s.split_once(' '))
             {
-                let metadata_line = MetadataLine {
-                    alias: alias.to_string(),
-                    vault_path: vault_path.to_string(),
-                };
+                let metadata_line = MetadataLine { alias, vault_path };
                 if let Some(indexed_line) = file_lines.next() {
                     indexed_lines.push(indexed_line);
                     let content_line = ContentLine::try_from(indexed_line)?;
@@ -122,24 +119,24 @@ impl<'a> TryFrom<&'a str> for PgpassFile<'a> {
 }
 
 #[derive(Debug)]
-struct PgpassEntry {
-    pub metadata_line: MetadataLine,
+struct PgpassEntry<'a> {
+    pub metadata_line: MetadataLine<'a>,
     pub content_line: ContentLine,
 }
 
-impl std::fmt::Display for PgpassEntry {
+impl<'a> std::fmt::Display for PgpassEntry<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.metadata_line.alias)
     }
 }
 
 #[derive(Debug, PartialEq, Eq)]
-struct MetadataLine {
-    pub alias: String,
-    pub vault_path: String,
+struct MetadataLine<'a> {
+    pub alias: &'a str,
+    pub vault_path: &'a str,
 }
 
-impl std::fmt::Display for MetadataLine {
+impl<'a> std::fmt::Display for MetadataLine<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.alias)
     }
