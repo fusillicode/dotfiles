@@ -85,16 +85,15 @@ impl<'a> PgpassFile<'a> {
         let mut entries = vec![];
 
         let mut file_lines = pgpass_content.lines().enumerate();
-        while let Some(idx_line @ (_, line_content)) = file_lines.next() {
+        while let Some(idx_line @ (_, line)) = file_lines.next() {
             idx_lines.push(idx_line);
 
-            if line_content.is_empty() {
+            if line.is_empty() {
                 continue;
             }
 
-            if let Some((alias, vault_path)) = line_content
-                .strip_prefix('#')
-                .and_then(|s| s.split_once(' '))
+            if let Some((alias, vault_path)) =
+                line.strip_prefix('#').and_then(|s| s.split_once(' '))
             {
                 let metadata = Metadata { alias, vault_path };
 
@@ -148,7 +147,7 @@ impl<'a> std::fmt::Display for Metadata<'a> {
 #[derive(Debug, PartialEq, Eq)]
 struct Conn<'a> {
     /// 0-based index referencing the original line in `PgpassFile.idx_lines`.
-    pub file_line_idx: usize,
+    pub idx: usize,
     /// Hostname.
     pub host: &'a str,
     /// TCP port number.
@@ -178,15 +177,13 @@ impl<'a> Conn<'a> {
 impl<'a> TryFrom<(usize, &'a str)> for Conn<'a> {
     type Error = color_eyre::eyre::Error;
 
-    fn try_from(
-        idx_file_line @ (file_line_idx, file_line): (usize, &'a str),
-    ) -> Result<Self, Self::Error> {
-        if let [host, port, db, user, pwd] = file_line.split(':').collect::<Vec<_>>().as_slice() {
+    fn try_from(idx_line @ (idx, line): (usize, &'a str)) -> Result<Self, Self::Error> {
+        if let [host, port, db, user, pwd] = line.split(':').collect::<Vec<_>>().as_slice() {
             let port = port
                 .parse()
                 .context(format!("unexpected port value {port}"))?;
             return Ok(Conn {
-                file_line_idx,
+                idx,
                 host,
                 port,
                 db,
@@ -194,7 +191,7 @@ impl<'a> TryFrom<(usize, &'a str)> for Conn<'a> {
                 pwd,
             });
         }
-        bail!("cannot build CredsLine from file line {idx_file_line:?}")
+        bail!("cannot build CredsLine from idx_line {idx_line:?}")
     }
 }
 
@@ -271,7 +268,7 @@ fn log_into_vault_if_required() -> color_eyre::Result<()> {
 /// Saves updated PostgreSQL .pgpass credentials to a temporary file, replaces the original, and sets permissions.
 ///
 /// # Arguments
-/// * `idx_file_lines` - Original file lines with their indices (to identify line needing update).
+/// * `pgpass_idx_lines` - Original file lines with their indices (to identify line needing update).
 /// * `updated_creds` - New connection credentials (must implement `ToString`).
 /// * `pgpass_path` - Path to the original .pgpass file.
 ///
@@ -281,7 +278,7 @@ fn log_into_vault_if_required() -> color_eyre::Result<()> {
 /// 3. Atomically replaces original file via rename.
 /// 4. Sets strict permissions (600) to match .pgpass security requirements.
 fn save_new_pgpass_file(
-    idx_file_lines: Vec<(usize, &str)>,
+    pgpass_idx_lines: Vec<(usize, &str)>,
     updated_creds: &Conn,
     pgpass_path: &Path,
 ) -> color_eyre::Result<()> {
@@ -289,11 +286,11 @@ fn save_new_pgpass_file(
     tmp_path.set_file_name(".pgpass.tmp");
     let mut tmp_file = File::create(&tmp_path)?;
 
-    for (idx, file_line) in idx_file_lines {
-        let file_line_content = if idx == updated_creds.file_line_idx {
+    for (idx, pgpass_line) in pgpass_idx_lines {
+        let file_line_content = if idx == updated_creds.idx {
             updated_creds.to_string()
         } else {
-            file_line.to_string()
+            pgpass_line.to_string()
         };
         writeln!(tmp_file, "{file_line_content}")?;
     }
@@ -316,7 +313,7 @@ mod tests {
     fn test_creds_try_from_returns_the_expected_creds() {
         assert_eq!(
             Conn {
-                file_line_idx: 42,
+                idx: 42,
                 host: "host",
                 port: 5432,
                 db: "db",
@@ -339,7 +336,7 @@ mod tests {
     fn test_creds_try_from_returns_an_error_if_str_is_malformed() {
         let res = Conn::try_from((42, "host:5432:db:user"));
         assert!(format!("{:?}", res)
-            .contains("cannot build CredsLine from file line (42, \"host:5432:db:user\")"))
+            .contains("Err(cannot build CredsLine from idx_line (42, \"host:5432:db:user\")\n\nLocation:\n    src/vpg/src/main.rs:"))
     }
 
     #[test]
@@ -347,7 +344,7 @@ mod tests {
         assert_eq!(
             "postgres://user@host:5432/db".to_string(),
             Conn {
-                file_line_idx: 42,
+                idx: 42,
                 host: "host",
                 port: 5432,
                 db: "db",
