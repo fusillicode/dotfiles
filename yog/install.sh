@@ -18,11 +18,10 @@ echo "Installing in $target_location mode"
 target_path+="/$target_location"
 
 cargo fmt && \
-cargo clippy --all-targets --all-features -- -D warnings && \
-cargo build $cargo_build_profile
+  cargo clippy --all-targets --all-features -- -D warnings && \
+  cargo build $cargo_build_profile
 
-for binary in idt yghfl yhfp oe catl gcu vpg try fkr; do
-  rm -f "$bins_path/$binary"
-  ln -s "$target_path/$binary" "$bins_path"
+for bin in idt yghfl yhfp oe catl gcu vpg try fkr; do
+  rm -f "$bins_path/$bin" && ln -s "$target_path/$bin" "$bins_path"
 done
 mv "$target_path/librua.dylib" "$target_path/rua.so"

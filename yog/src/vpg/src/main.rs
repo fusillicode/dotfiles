@@ -28,7 +28,7 @@ fn main() -> color_eyre::Result<()> {
 
     let PgpassEntry { metadata, mut conn } =
         match utils::tui::select::minimal::<PgpassEntry>(pgpass_file.entries).closable_prompt() {
-            Ok(alias) => alias,
+            Ok(pgpass_entry) => pgpass_entry,
             Err(ClosablePromptError::Closed) => return Ok(()),
             Err(error) => return Err(error.into()),
         };
