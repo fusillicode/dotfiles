@@ -68,7 +68,7 @@ local function get_lsps_configs()
             extraEnv = { CARGO_PROFILE_RUST_ANALYZER_INHERITS = 'dev', },
           },
           check = { command = 'check', },
-          checkOnSave = { command = 'check', },
+          checkOnSave = true,
           completion = { autoimport = { enable = true, }, },
           diagnostics = {
             enable = true,
