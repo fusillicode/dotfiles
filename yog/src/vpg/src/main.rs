@@ -25,8 +25,9 @@ fn main() -> color_eyre::Result<()> {
 
     let args = utils::system::get_args();
     let Some(PgpassEntry { metadata, mut conn }) =
-        utils::tui::select::get_entry_from_first_arg_or_tui(
+        utils::tui::select::get_opt_from_cli_args_or_tui_select(
             &args,
+            |(idx, _)| *idx == 0,
             pgpass_file.entries,
             |alias: &str| {
                 Box::new(move |pgpass_entry: &PgpassEntry<'_>| pgpass_entry.metadata.alias == alias)
