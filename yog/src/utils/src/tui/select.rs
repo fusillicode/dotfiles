@@ -12,41 +12,45 @@ pub fn minimal<'a, T: std::fmt::Display>(options: Vec<T>) -> Select<'a, T> {
         .without_help_message()
 }
 
-/// Get the entry that matches the supplied CLI argument or the one selected via the presented
-/// TUI if no CLI argument is supplied.
+/// Get the option matching a specific CLI argument or the one selected via an interactive
+/// TUI selection.
 ///
-/// # Parameters
-/// - `args`: all the CLI arguments
-/// - `entries`: list of available entries
+/// # Behavior
+/// 1. CLI arguments flow:
+///    - uses `cli_arg_selector` to find a specific CLI argument
+///    - returns first matching option or error if none found
+///
+/// 2. Interactive TUI flow:
+///    - falls back to TUI selection if no CLI argument matches
+///    - returns user selection or None if dialog closed
 ///
 /// # Returns
-/// - `Ok(Some(entry))` if an entry is found by CLI argument or TUI selection
+/// - `Ok(Some(option))` if an option is found by CLI argument or TUI selection
 /// - `Ok(None)` if the user closes the TUI selection
-/// - `Err` if no entry if found by CLI argument or if TUI lookup fails
-pub fn get_entry_from_first_arg_or_tui<'a, T, F, P>(
-    args: &'a [String],
-    entries: Vec<T>,
-    finder_by_arg: F,
-) -> color_eyre::Result<Option<T>>
+/// - `Err` if no option if found by CLI argument or if TUI lookup fails
+pub fn get_opt_from_cli_args_or_tui_select<'a, CAS, O, OBA, OF>(
+    cli_args: &'a [String],
+    mut cli_arg_selector: CAS,
+    otps: Vec<O>,
+    opt_find_by_arg: OBA,
+) -> color_eyre::Result<Option<O>>
 where
-    T: Clone + std::fmt::Debug + std::fmt::Display,
-    F: Fn(&'a str) -> P,
-    P: FnMut(&T) -> bool + 'a,
+    O: Clone + std::fmt::Debug + std::fmt::Display,
+    CAS: FnMut(&(usize, &String)) -> bool,
+    OBA: Fn(&'a str) -> OF,
+    OF: FnMut(&O) -> bool + 'a,
 {
-    if let Some(arg) = args.first() {
-        let mut finder = finder_by_arg(arg);
+    if let Some((_, cli_arg)) = cli_args.iter().enumerate().find(|x| cli_arg_selector(x)) {
+        let mut opt_find = opt_find_by_arg(cli_arg);
         return Ok(Some(
-            entries
-                .iter()
-                .find(|x| finder(*x))
+            otps.iter()
+                .find(|x| opt_find(*x))
                 .cloned()
-                .ok_or_else(|| {
-                    eyre!("no entry found matching the supplied arg {arg} in entries {entries:?}")
-                })?,
+                .ok_or_else(|| eyre!("no opt matches CLI arg {cli_arg} in opts {otps:?}"))?,
         ));
     }
-    match minimal::<T>(entries).closable_prompt() {
-        Ok(pgpass_entry) => Ok(Some(pgpass_entry)),
+    match minimal::<O>(otps).closable_prompt() {
+        Ok(opt) => Ok(Some(opt)),
         Err(ClosablePromptError::Closed) => Ok(None),
         Err(error) => Err(error.into()),
     }
