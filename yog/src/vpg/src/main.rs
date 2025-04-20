@@ -10,6 +10,7 @@ use std::process::Command;
 use std::process::Stdio;
 
 use color_eyre::eyre::bail;
+use color_eyre::eyre::eyre;
 use color_eyre::eyre::WrapErr;
 use serde::Deserialize;
 
@@ -26,12 +27,11 @@ fn main() -> color_eyre::Result<()> {
     let pgpass_content = std::fs::read_to_string(&pgpass_path)?;
     let pgpass_file = PgpassFile::parse(pgpass_content.as_str())?;
 
-    let PgpassEntry { metadata, mut conn } =
-        match utils::tui::select::minimal::<PgpassEntry>(pgpass_file.entries).closable_prompt() {
-            Ok(pgpass_entry) => pgpass_entry,
-            Err(ClosablePromptError::Closed) => return Ok(()),
-            Err(error) => return Err(error.into()),
-        };
+    let Some(PgpassEntry { metadata, mut conn }) =
+        get_pgpass_entry(&utils::system::get_args(), pgpass_file.entries)?
+    else {
+        return Ok(());
+    };
 
     println!(
         "\nLogging into Vault @ {}\n(be sure to have the VPN on!)",
@@ -65,6 +65,39 @@ fn main() -> color_eyre::Result<()> {
 
     eprintln!("psql {db_url} terminated by signal.");
     std::process::exit(1);
+}
+
+/// Get the [`PgpassEntry`] from the parsed pgpass entries that matches the supplied CLI argument
+/// or the one selected via the presented TUI prompt if no CLI argument is supplied.
+///
+/// # Parameters
+/// - `args`: all CLI arguments
+/// - `pgpass_entries`: list of available pgpass entries obtained by parsing the pgpass file
+///
+/// # Returns
+/// - `Ok(Some(entry))` if entry is found by CLI argument or TUI selection
+/// - `Ok(None)` if user closes TUI selection
+/// - `Err` if no entry if found by CLI argument or if TUI lookup fails
+fn get_pgpass_entry<'a>(
+    args: &[String],
+    pgpass_entries: Vec<PgpassEntry<'a>>,
+) -> color_eyre::Result<Option<PgpassEntry<'a>>> {
+    if let Some(alias) = args.first() {
+        return Ok(Some(
+            pgpass_entries
+                .iter()
+                .find(|x| x.metadata.alias == alias)
+                .cloned()
+                .ok_or_else(|| {
+                    eyre!("no PgpassEntry with alias {alias} in pgpass_entries {pgpass_entries:?}")
+                })?,
+        ));
+    }
+    match utils::tui::select::minimal::<PgpassEntry>(pgpass_entries).closable_prompt() {
+        Ok(pgpass_entry) => Ok(Some(pgpass_entry)),
+        Err(ClosablePromptError::Closed) => Ok(None),
+        Err(error) => Err(error.into()),
+    }
 }
 
 /// A parsed `.pgpass` file with line references and connection entries.
@@ -114,7 +147,7 @@ impl<'a> PgpassFile<'a> {
 }
 
 /// A validated `.pgpass` entry with associated metadata and connection parameters.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct PgpassEntry<'a> {
     /// Metadata from preceding comment lines (alias/vault references).
     pub metadata: Metadata<'a>,
@@ -129,7 +162,7 @@ impl<'a> std::fmt::Display for PgpassEntry<'a> {
 }
 
 /// Metadata extracted from comment lines preceding a `.pgpass` entry.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Metadata<'a> {
     /// Human-readable identifier for the connection (from comments).
     pub alias: &'a str,
@@ -144,7 +177,7 @@ impl<'a> std::fmt::Display for Metadata<'a> {
 }
 
 /// Connection parameters parsed from a `.pgpass` line.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Conn<'a> {
     /// 0-based index referencing the original line in `PgpassFile.idx_lines`.
     pub idx: usize,
