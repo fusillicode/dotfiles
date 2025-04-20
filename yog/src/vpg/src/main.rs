@@ -10,12 +10,8 @@ use std::process::Command;
 use std::process::Stdio;
 
 use color_eyre::eyre::bail;
-use color_eyre::eyre::eyre;
 use color_eyre::eyre::WrapErr;
 use serde::Deserialize;
-
-use utils::tui::ClosablePrompt;
-use utils::tui::ClosablePromptError;
 
 /// Copy to the system clipboard the psql cmd to connect to the DB matching the selected alias with
 /// refreshed Vault credentials.
@@ -27,8 +23,15 @@ fn main() -> color_eyre::Result<()> {
     let pgpass_content = std::fs::read_to_string(&pgpass_path)?;
     let pgpass_file = PgpassFile::parse(pgpass_content.as_str())?;
 
+    let args = utils::system::get_args();
     let Some(PgpassEntry { metadata, mut conn }) =
-        get_pgpass_entry(&utils::system::get_args(), pgpass_file.entries)?
+        utils::tui::select::get_entry_from_first_arg_or_tui(
+            &args,
+            pgpass_file.entries,
+            |alias: &str| {
+                Box::new(move |pgpass_entry: &PgpassEntry<'_>| pgpass_entry.metadata.alias == alias)
+            },
+        )?
     else {
         return Ok(());
     };
@@ -65,39 +68,6 @@ fn main() -> color_eyre::Result<()> {
 
     eprintln!("psql {db_url} terminated by signal.");
     std::process::exit(1);
-}
-
-/// Get the [`PgpassEntry`] from the parsed pgpass entries that matches the supplied CLI argument
-/// or the one selected via the presented TUI prompt if no CLI argument is supplied.
-///
-/// # Parameters
-/// - `args`: all CLI arguments
-/// - `pgpass_entries`: list of available pgpass entries obtained by parsing the pgpass file
-///
-/// # Returns
-/// - `Ok(Some(entry))` if entry is found by CLI argument or TUI selection
-/// - `Ok(None)` if user closes TUI selection
-/// - `Err` if no entry if found by CLI argument or if TUI lookup fails
-fn get_pgpass_entry<'a>(
-    args: &[String],
-    pgpass_entries: Vec<PgpassEntry<'a>>,
-) -> color_eyre::Result<Option<PgpassEntry<'a>>> {
-    if let Some(alias) = args.first() {
-        return Ok(Some(
-            pgpass_entries
-                .iter()
-                .find(|x| x.metadata.alias == alias)
-                .cloned()
-                .ok_or_else(|| {
-                    eyre!("no PgpassEntry with alias {alias} in pgpass_entries {pgpass_entries:?}")
-                })?,
-        ));
-    }
-    match utils::tui::select::minimal::<PgpassEntry>(pgpass_entries).closable_prompt() {
-        Ok(pgpass_entry) => Ok(Some(pgpass_entry)),
-        Err(ClosablePromptError::Closed) => Ok(None),
-        Err(error) => Err(error.into()),
-    }
 }
 
 /// A parsed `.pgpass` file with line references and connection entries.
