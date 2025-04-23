@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::process::Stdio;
 use std::thread::JoinHandle;
 
@@ -52,4 +53,13 @@ pub fn rm_dead_symlinks(dir: &str) -> color_eyre::Result<()> {
         }
     }
     Ok(())
+}
+
+pub fn rm_f<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
+    std::fs::remove_file(path).or_else(|error| {
+        if std::io::ErrorKind::NotFound == error.kind() {
+            return Ok(());
+        }
+        Err(error)
+    })
 }

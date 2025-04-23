@@ -1,6 +1,5 @@
 #![feature(exit_status_error)]
 
-use std::path::Path;
 use std::path::PathBuf;
 
 use utils::cmd::silent_cmd;
@@ -12,16 +11,18 @@ fn main() -> color_eyre::Result<()> {
     let mut args = utils::system::get_args();
 
     let is_debug = drop_element(&mut args, "--debug");
-    let bins_path = args
-        .first()
-        .cloned()
-        .unwrap_or_else(|| format!("{}/.local/bin", std::env::var("HOME").unwrap()));
-    let mut target_path = args.get(1).cloned().unwrap_or_else(|| {
-        format!(
-            "{}/target",
-            remove_last_n_dirs(std::env::var("CARGO_MANIFEST_DIR").unwrap().as_str(), 2)
-        )
-    });
+    let bins_path = args.first().cloned().map_or_else(
+        || std::env::var("HOME").map(|home| format!("{}/.local/bin", home)),
+        Result::Ok,
+    )?;
+    let mut target_path = args.get(1).cloned().map_or_else(
+        || {
+            std::env::var("CARGO_MANIFEST_DIR").map(|cargo_manifest_dir| {
+                format!("{}/target", remove_last_n_dirs(&cargo_manifest_dir, 2))
+            })
+        },
+        Result::Ok,
+    )?;
 
     let (target_location, build_profile) = if is_debug {
         ("debug", None)
@@ -52,7 +53,7 @@ fn main() -> color_eyre::Result<()> {
         "idt", "yghfl", "yhfp", "oe", "catl", "gcu", "vpg", "try", "fkr",
     ] {
         let bin_path = format!("{bins_path}/{bin}");
-        rm_f(&bin_path)?;
+        utils::system::rm_f(&bin_path)?;
         std::os::unix::fs::symlink(format!("{target_path}/{bin}"), &bin_path)?;
     }
     std::fs::rename(
@@ -71,15 +72,6 @@ fn remove_last_n_dirs(path: &str, n: usize) -> String {
         }
     }
     path.to_string_lossy().to_string()
-}
-
-fn rm_f<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
-    std::fs::remove_file(path).or_else(|error| {
-        if std::io::ErrorKind::NotFound == error.kind() {
-            return Ok(());
-        }
-        Err(error)
-    })
 }
 
 fn drop_element<T, U: ?Sized>(vec: &mut Vec<T>, target: &U) -> bool
