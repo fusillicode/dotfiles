@@ -7,20 +7,29 @@
   "fidget.nvim": { "branch": "main", "commit": "d9ba6b7bfe29b3119a610892af67602641da778e" },
   "gitlinker.nvim": { "branch": "master", "commit": "23982c86f50a9c3f4bc531d41b7a4a68ddd12355" },
 <<<<<<< HEAD
+<<<<<<< HEAD
   "gitsigns.nvim": { "branch": "main", "commit": "2149fc2009d1117d58e86e56836f70c969f60a82" },
 =======
   "gitsigns.nvim": { "branch": "main", "commit": "b79047e81f645875e500b4f433d8133bc421446c" },
 >>>>>>> bc639c4 (bumper)
+=======
+  "gitsigns.nvim": { "branch": "main", "commit": "550757c41a25b80447b821ca3b9ac1cfda894267" },
+>>>>>>> a4ce2d4 (bumper)
   "grug-far.nvim": { "branch": "main", "commit": "f66017591ffa611344b3b2b490df73464c33113e" },
   "lazy.nvim": { "branch": "main", "commit": "6c3bda4aca61a13a9c63f1c1d1b16b9d3be90d7a" },
   "multicursor.nvim": { "branch": "main", "commit": "0ca2ccdec1f10430940f751a2044a0955777f174" },
   "nvim-autopairs": { "branch": "master", "commit": "4d74e75913832866aa7de35e4202463ddf6efd1b" },
+<<<<<<< HEAD
   "nvim-lint": { "branch": "master", "commit": "d698d3b6fd7b1b85657d05a2a31d843ddb682c63" },
 <<<<<<< HEAD
   "nvim-lspconfig": { "branch": "master", "commit": "747de98ca607615f66af5864f3eeaa2eeeb3d2da" },
 =======
   "nvim-lspconfig": { "branch": "master", "commit": "5af60bbb835d5b6efdc64cdff2a5b27cde4120de" },
 >>>>>>> bc639c4 (bumper)
+=======
+  "nvim-lint": { "branch": "master", "commit": "9dfb77ef6c5092a19502883c02dc5a02ec648729" },
+  "nvim-lspconfig": { "branch": "master", "commit": "8b0f47d851ee5343d38fe194a06ad16b9b9bd086" },
+>>>>>>> a4ce2d4 (bumper)
   "nvim-spider": { "branch": "main", "commit": "be2ad4067bff11cd4b00be89d7034d5fd85aa96d" },
   "nvim-surround": { "branch": "main", "commit": "0e62500b98f4513feaaf7425c135472457ea5b7d" },
   "nvim-treesitter": { "branch": "master", "commit": "684eeac91ed8e297685a97ef70031d19ac1de25a" },
