@@ -79,7 +79,6 @@ for _, keymap in pairs({
 
 config.key_tables = { copy_mode = copy_mode, search_mode = search_mode, }
 
-config.inactive_pane_hsb = { brightness = 0.6, }
 config.hide_tab_bar_if_only_one_tab = true
 config.show_close_tab_button_in_tabs = false
 config.show_new_tab_button_in_tab_bar = false

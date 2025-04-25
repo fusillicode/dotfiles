@@ -21,5 +21,11 @@ Requirements:
 To install a new release of bins and libs:
 
 ```console
-./install.sh
+cargo run --bin evoke
+```
+
+To install a new release of bins and libs compiled in debug mode:
+
+```console
+cargo run --bin evoke -- debug
 ```
