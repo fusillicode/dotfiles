@@ -4,7 +4,9 @@ use std::path::PathBuf;
 
 use utils::cmd::silent_cmd;
 
-/// Install yog.
+/// Evoke yog 🍝 👀
+///
+/// Formats, lints, builds and links yog bins.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
