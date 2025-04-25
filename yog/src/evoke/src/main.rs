@@ -4,6 +4,10 @@ use std::path::PathBuf;
 
 use utils::cmd::silent_cmd;
 
+const BINS: &[&str] = &[
+    "idt", "yghfl", "yhfp", "oe", "catl", "gcu", "vpg", "try", "fkr",
+];
+
 /// Evoke yog 🍝 👀
 ///
 /// Formats, lints, builds and links yog bins.
@@ -51,12 +55,8 @@ fn main() -> color_eyre::Result<()> {
         .status()?
         .exit_ok()?;
 
-    for bin in [
-        "idt", "yghfl", "yhfp", "oe", "catl", "gcu", "vpg", "try", "fkr",
-    ] {
-        let bin_path = format!("{bins_path}/{bin}");
-        utils::system::rm_f(&bin_path)?;
-        std::os::unix::fs::symlink(format!("{target_path}/{bin}"), &bin_path)?;
+    for bin in BINS {
+        install_bin(&bins_path, bin, &target_path)?;
     }
     std::fs::rename(
         format!("{target_path}/librua.dylib"),
@@ -85,6 +85,13 @@ where
         return true;
     }
     false
+}
+
+fn install_bin(bins_path: &str, bin: &str, target_path: &str) -> color_eyre::Result<()> {
+    let bin_path = format!("{bins_path}/{bin}");
+    utils::system::rm_f(&bin_path)?;
+    std::os::unix::fs::symlink(format!("{target_path}/{bin}"), &bin_path)?;
+    Ok(())
 }
 
 #[cfg(test)]
