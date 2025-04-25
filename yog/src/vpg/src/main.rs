@@ -332,14 +332,14 @@ mod tests {
     fn test_creds_try_from_returns_an_error_if_port_is_not_a_number() {
         let res = Conn::try_from((42, "host:foo:db:user:pwd"));
         assert!(
-            format!("{:?}", res).contains("Err(unexpected port value foo\n\nCaused by:\n    invalid digit found in string\n\nLocation:\n    src/vpg/src/main.rs:")
+            format!("{res:?}").contains("Err(unexpected port value foo\n\nCaused by:\n    invalid digit found in string\n\nLocation:\n    src/vpg/src/main.rs:")
         )
     }
 
     #[test]
     fn test_creds_try_from_returns_an_error_if_str_is_malformed() {
         let res = Conn::try_from((42, "host:5432:db:user"));
-        assert!(format!("{:?}", res)
+        assert!(format!("{res:?}")
             .contains("Err(cannot build CredsLine from idx_line (42, \"host:5432:db:user\")\n\nLocation:\n    src/vpg/src/main.rs:"))
     }
 

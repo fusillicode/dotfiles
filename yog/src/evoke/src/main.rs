@@ -18,7 +18,7 @@ fn main() -> color_eyre::Result<()> {
 
     let is_debug = drop_element(&mut args, "--debug");
     let bins_path = args.first().cloned().map_or_else(
-        || std::env::var("HOME").map(|home| format!("{}/.local/bin", home)),
+        || std::env::var("HOME").map(|home| format!("{home}/.local/bin")),
         Result::Ok,
     )?;
     let mut target_path = args.get(1).cloned().map_or_else(
