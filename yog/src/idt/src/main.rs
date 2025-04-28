@@ -1,5 +1,6 @@
 #![feature(exit_status_error)]
 
+use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 
 use crate::tools::bash_language_server::BashLanguageServer;
@@ -171,26 +172,42 @@ fn main() -> color_eyre::Result<()> {
             .collect()
     };
 
-    std::thread::scope(|scope| {
-        whitelisted_tools
+    let errors = std::thread::scope(|scope| {
+        let handles = whitelisted_tools
             .iter()
-            .fold(vec![], |mut acc, installer| {
+            .map(|installer| {
                 let running_installer = scope.spawn(move || {
+                    // Reporting is done here instead afterwards using `errors` to receive results as soon
+                    // as possible.
                     tools::report_install(installer.bin_name(), installer.install())
                 });
-                acc.push((installer.bin_name(), running_installer));
+                (installer.bin_name(), running_installer)
+            })
+            .collect::<Vec<_>>();
+
+        handles
+            .into_iter()
+            .fold(vec![], |mut acc, (tool, running_installer)| {
+                if let Err(error) = running_installer.join() {
+                    eprintln!("❌ {tool} installer 🧵 panicked - error {error:?}");
+                    acc.push((tool, error));
+                }
                 acc
             })
-            .into_iter()
-            .for_each(|(tool, running_installer)| {
-                if let Err(error) = running_installer.join() {
-                    eprintln!("❌ {tool} installer 🧵 panicked: {error:?}");
-                }
-            });
     });
 
     utils::system::rm_dead_symlinks(bin_dir)?;
     utils::system::chmod_x(&format!("{bin_dir}/*"))?;
+
+    if !errors.is_empty() {
+        // This is a general report about the installation process. The single installation errors
+        // are reported directly via [`tools::report_install`].
+        bail!(
+            "❌ {} tools failed to install, namely: {:#?}",
+            errors.len(),
+            errors.iter().map(|(tool, _)| tool)
+        )
+    }
 
     Ok(())
 }
