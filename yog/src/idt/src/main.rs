@@ -172,7 +172,7 @@ fn main() -> color_eyre::Result<()> {
             .collect()
     };
 
-    let errors = std::thread::scope(|scope| {
+    let tools_errors = std::thread::scope(|scope| {
         let tools_handles = whitelisted_tools
             .iter()
             .map(|installer| {
@@ -200,14 +200,15 @@ fn main() -> color_eyre::Result<()> {
     utils::system::rm_dead_symlinks(bin_dir)?;
     utils::system::chmod_x(&format!("{bin_dir}/*"))?;
 
-    if !errors.is_empty() {
-        // This is a general report about the installation process. The single installation errors
-        // are reported directly via [`tools::report_install`].
-        bail!(
-            "❌ {} tools failed to install, namely: {:#?}",
-            errors.len(),
-            errors.iter().map(|(tool, _)| tool)
-        )
+    let (errors_count, tools) = tools_errors.iter().fold((0, vec![]), |mut acc, (tool, _)| {
+        acc.0 += 1;
+        acc.1.push(tool);
+        acc
+    });
+    if errors_count != 0 {
+        // This is a general report about the installation process. 
+        // The single installation errors are reported directly via [`tools::report_install`].
+        bail!("❌ {errors_count} tools failed to install, namely: {tools:#?}",)
     }
 
     Ok(())
