@@ -173,22 +173,23 @@ fn main() -> color_eyre::Result<()> {
     };
 
     let errors = std::thread::scope(|scope| {
-        let handles = whitelisted_tools
+        let tools_handles = whitelisted_tools
             .iter()
             .map(|installer| {
-                let running_installer = scope.spawn(move || {
+                let tool = installer.bin_name();
+                let handle = scope.spawn(move || {
                     // Reporting is done here instead afterwards using `errors` to receive results as soon
                     // as possible.
-                    tools::report_install(installer.bin_name(), installer.install())
+                    tools::report_install(tool, installer.install())
                 });
-                (installer.bin_name(), running_installer)
+                (tool, handle)
             })
             .collect::<Vec<_>>();
 
-        handles
+        tools_handles
             .into_iter()
-            .fold(vec![], |mut acc, (tool, running_installer)| {
-                if let Err(error) = running_installer.join() {
+            .fold(vec![], |mut acc, (tool, handle)| {
+                if let Err(error) = handle.join() {
                     eprintln!("❌ {tool} installer 🧵 panicked - error {error:?}");
                     acc.push((tool, error));
                 }
