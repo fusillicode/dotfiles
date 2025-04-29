@@ -1,5 +1,6 @@
 #![feature(exit_status_error)]
 
+use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 
 use crate::tools::bash_language_server::BashLanguageServer;
@@ -171,26 +172,44 @@ fn main() -> color_eyre::Result<()> {
             .collect()
     };
 
-    std::thread::scope(|scope| {
-        whitelisted_tools
+    let tools_errors = std::thread::scope(|scope| {
+        let tools_handles = whitelisted_tools
             .iter()
-            .fold(vec![], |mut acc, installer| {
-                let running_installer = scope.spawn(move || {
-                    tools::report_install(installer.bin_name(), installer.install())
+            .map(|installer| {
+                let tool = installer.bin_name();
+                let handle = scope.spawn(move || {
+                    // Reporting is done here instead afterwards using `errors` to receive results as soon
+                    // as possible.
+                    tools::report_install(tool, installer.install())
                 });
-                acc.push((installer.bin_name(), running_installer));
+                (tool, handle)
+            })
+            .collect::<Vec<_>>();
+
+        tools_handles
+            .into_iter()
+            .fold(vec![], |mut acc, (tool, handle)| {
+                if let Err(error) = handle.join() {
+                    eprintln!("❌ {tool} installer 🧵 panicked - error {error:?}");
+                    acc.push((tool, error));
+                }
                 acc
             })
-            .into_iter()
-            .for_each(|(tool, running_installer)| {
-                if let Err(error) = running_installer.join() {
-                    eprintln!("❌ {tool} installer 🧵 panicked: {error:?}");
-                }
-            });
     });
 
     utils::system::rm_dead_symlinks(bin_dir)?;
     utils::system::chmod_x(&format!("{bin_dir}/*"))?;
+
+    let (errors_count, tools) = tools_errors.iter().fold((0, vec![]), |mut acc, (tool, _)| {
+        acc.0 += 1;
+        acc.1.push(tool);
+        acc
+    });
+    if errors_count != 0 {
+        // This is a general report about the installation process.
+        // The single installation errors are reported directly via [`tools::report_install`].
+        bail!("❌ {errors_count} tools failed to install, namely: {tools:#?}",)
+    }
 
     Ok(())
 }
