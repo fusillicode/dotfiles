@@ -17,6 +17,9 @@ local function get_lsps_configs()
     graphql = {},
     html = {
       filetypes = { 'html', 'htmldjango', },
+      on_attach = function(client, _)
+        client.server_capabilities.documentFormattingProvider = false
+      end,
     },
     helm_ls = {},
     jsonls = {
