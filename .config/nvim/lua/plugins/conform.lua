@@ -17,7 +17,6 @@ return {
       formatters_by_ft = {
         css = { 'prettierd', },
         graphql = { 'prettierd', },
-        html = { 'prettierd', },
         javascript = { 'prettierd', },
         liquid = { 'prettierd', },
         markdown = { 'prettierd', },
@@ -29,9 +28,7 @@ return {
       },
       -- https://github.com/stevearc/conform.nvim/blob/master/doc/recipes.md#automatically-run-slow-formatters-async
       format_on_save = function(bufnr)
-        if slow_format_filetypes[vim.bo[bufnr].filetype] then
-          return
-        end
+        if slow_format_filetypes[vim.bo[bufnr].filetype] then return end
 
         local function on_format(err)
           if err and err:match('timeout$') then
@@ -43,9 +40,7 @@ return {
       end,
       -- https://github.com/stevearc/conform.nvim/blob/master/doc/recipes.md#automatically-run-slow-formatters-async
       format_after_save = function(bufnr)
-        if not slow_format_filetypes[vim.bo[bufnr].filetype] then
-          return
-        end
+        if not slow_format_filetypes[vim.bo[bufnr].filetype] then return end
         return { lsp_fallback = true, }
       end,
       -- https://github.com/stevearc/conform.nvim/blob/master/doc/recipes.md#lazy-loading-with-lazynvim
