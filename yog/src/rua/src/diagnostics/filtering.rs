@@ -13,12 +13,12 @@ pub fn filter_diagnostics(
     lua: &Lua,
     (buf_path, lsp_diags): (LuaString, LuaTable),
 ) -> LuaResult<LuaTable> {
-    let mut out = vec![];
-
     let buf_path = buf_path.to_string_lossy();
     if unwanted_paths().iter().any(|up| buf_path.contains(up)) {
-        return lua.create_sequence_from(out);
+        return lua.create_sequence_from::<LuaTable>(vec![]);
     }
+
+    let mut out = vec![];
 
     let rel_infos = get_related_infos(&lsp_diags)?;
     if rel_infos.is_empty() {
