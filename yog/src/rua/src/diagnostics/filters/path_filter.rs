@@ -1,8 +1,7 @@
 use mlua::prelude::*;
 
 /// Filters out diagnostics related to the `unwanted_paths`.
-pub fn no_diagnostics_for_path(lua: &Lua, buf_path: LuaString) -> Option<LuaResult<LuaTable>> {
-    let buf_path = buf_path.to_string_lossy();
+pub fn no_diagnostics_for_path(lua: &Lua, buf_path: &str) -> Option<LuaResult<LuaTable>> {
     if unwanted_paths().iter().any(|up| buf_path.contains(up)) {
         return Some(lua.create_sequence_from::<LuaTable>(vec![]));
     }

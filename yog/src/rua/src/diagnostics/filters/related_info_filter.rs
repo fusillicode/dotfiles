@@ -38,7 +38,7 @@ impl RelatedInfoFilter {
 }
 
 impl DiagnosticsFilter for RelatedInfoFilter {
-    fn apply(&self, out: &mut Vec<LuaTable>, lsp_diag: LuaTable) -> LuaResult<()> {
+    fn apply(&self, out: &mut Vec<LuaTable>, _buf_path: &str, lsp_diag: LuaTable) -> LuaResult<()> {
         if self.rel_infos.is_empty() {
             return Ok(());
         }
