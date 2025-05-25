@@ -45,6 +45,7 @@ pub fn filter_diagnostics(
         for filter in &filters {
             if filter.keep_diagnostic(&buf_path, lsp_diag)? {
                 out.push(lsp_diag.clone());
+                break;
             }
         }
     }
