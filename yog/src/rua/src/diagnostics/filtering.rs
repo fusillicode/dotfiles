@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use mlua::prelude::*;
 
+use crate::diagnostics::filters::lsp_msg_blacklist_filter::LspMsgBlacklistFilter;
 use crate::diagnostics::filters::path_filter::no_diagnostics_for_path;
 use crate::diagnostics::filters::related_info_filter::RelatedInfoFilter;
-use crate::diagnostics::filters::unwanted_lsp_msgs_filter::UnwantedLspMsgsFilter;
 use crate::diagnostics::filters::DiagnosticsFilter;
 
 /// Filters out the LSP diagnostics based on the coded filters.
@@ -17,11 +17,13 @@ pub fn filter_diagnostics(
         return out;
     }
 
+    // Order of filters is IMPORTANT.
+    // 1st one returning true keeps the LSP diagnostic and skips all subsequent filters.
     let filters: Vec<Box<dyn DiagnosticsFilter>> = vec![
         Box::new(RelatedInfoFilter::new(&lsp_diags)?),
-        Box::new(UnwantedLspMsgsFilter {
+        Box::new(LspMsgBlacklistFilter {
             buf_path: "es-be".into(),
-            lsp_unwanted_msgs: vec![(
+            blacklist: vec![(
                 "typos".into(),
                 vec![
                     "`calle` should be".into(),
