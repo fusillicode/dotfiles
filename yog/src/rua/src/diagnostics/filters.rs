@@ -1,8 +1,8 @@
 use mlua::prelude::*;
 
-pub mod path_filter;
-pub mod related_info_filter;
-pub mod lsp_msg_blacklist_filter;
+pub mod buffers;
+pub mod lsps_msgs_blacklist;
+pub mod lsps_related_info;
 
 pub trait DiagnosticsFilter {
     fn keep_diagnostic(&self, buf_path: &str, lsp_diag: &LuaTable) -> LuaResult<bool>;
