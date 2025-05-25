@@ -7,17 +7,16 @@ use crate::diagnostics::filters::DiagnosticsFilter;
 pub struct TyposLspFilter;
 
 impl DiagnosticsFilter for TyposLspFilter {
-    fn apply(&self, out: &mut Vec<LuaTable>, buf_path: &str, lsp_diag: LuaTable) -> LuaResult<()> {
+    fn keep(&self, buf_path: &str, lsp_diag: &LuaTable) -> LuaResult<bool> {
         if lsp_diag.get::<String>("source")? != "typos" {
-            return Ok(());
+            return Ok(true);
         }
         if buf_path.contains("es-be") {
             let msg: String = lsp_diag.get("message")?;
             if msg.to_lowercase().contains("`calle` should be") {
-                return Ok(());
+                return Ok(false);
             }
         }
-        out.push(lsp_diag);
-        Ok(())
+        Ok(true)
     }
 }

@@ -18,7 +18,9 @@ pub fn filter_diagnostics(
 
     let mut out = vec![];
     for lsp_diag in lsp_diags.sequence_values::<LuaTable>().flatten() {
-        related_info_filter.apply(&mut out, &buf_path, lsp_diag)?;
+        if related_info_filter.keep(&buf_path, &lsp_diag)? {
+            out.push(lsp_diag);
+        }
     }
 
     lua.create_sequence_from(out)
