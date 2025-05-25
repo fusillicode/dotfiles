@@ -7,7 +7,7 @@ use crate::diagnostics::filters::DiagnosticsFilter;
 pub struct TyposLspFilter;
 
 impl DiagnosticsFilter for TyposLspFilter {
-    fn keep(&self, buf_path: &str, lsp_diag: &LuaTable) -> LuaResult<bool> {
+    fn should_keep_diagnostic(&self, buf_path: &str, lsp_diag: &LuaTable) -> LuaResult<bool> {
         if lsp_diag.get::<String>("source")? != "typos" {
             return Ok(true);
         }

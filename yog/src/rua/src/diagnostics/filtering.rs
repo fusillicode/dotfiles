@@ -1,7 +1,10 @@
+use std::collections::HashMap;
+
 use mlua::prelude::*;
 
 use crate::diagnostics::filters::path_filter::no_diagnostics_for_path;
 use crate::diagnostics::filters::related_info_filter::RelatedInfoFilter;
+use crate::diagnostics::filters::unwanted_lsp_msgs_filter::UnwantedLspMsgsFilter;
 use crate::diagnostics::filters::DiagnosticsFilter;
 
 /// Filters out the LSP diagnostics based on the coded filters.
@@ -14,12 +17,35 @@ pub fn filter_diagnostics(
         return out;
     }
 
-    let related_info_filter = RelatedInfoFilter::new(&lsp_diags)?;
+    let filters: Vec<Box<dyn DiagnosticsFilter>> = vec![
+        Box::new(RelatedInfoFilter::new(&lsp_diags)?),
+        Box::new(UnwantedLspMsgsFilter {
+            buf_path: "es-be".into(),
+            lsp_unwanted_msgs: vec![(
+                "typos".into(),
+                vec![
+                    "`calle` should be".into(),
+                    "producto".into(),
+                    "emision".into(),
+                    "clase".into(),
+                ],
+            )]
+            .into_iter()
+            .collect::<HashMap<_, _>>(),
+        }),
+    ];
 
     let mut out = vec![];
-    for lsp_diag in lsp_diags.sequence_values::<LuaTable>().flatten() {
-        if related_info_filter.keep(&buf_path, &lsp_diag)? {
-            out.push(lsp_diag);
+    // Using [`.pairs`] and [`LuaValue`] to get a & to the LSP diagnostic [`LuaTable`] and avoid
+    // cloning it when passing it to the filters.
+    for (_, lua_value) in lsp_diags.pairs::<usize, LuaValue>().flatten() {
+        let lsp_diag = lua_value.as_table().ok_or_else(|| {
+            mlua::Error::RuntimeError(format!("cannot get LuaTable from LuaValue {lua_value:?}"))
+        })?;
+        for filter in &filters {
+            if filter.keep_diagnostic(&buf_path, lsp_diag)? {
+                out.push(lsp_diag.clone());
+            }
         }
     }
 

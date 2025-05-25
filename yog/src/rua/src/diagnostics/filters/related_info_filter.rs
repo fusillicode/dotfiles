@@ -38,7 +38,7 @@ impl RelatedInfoFilter {
 }
 
 impl DiagnosticsFilter for RelatedInfoFilter {
-    fn keep(&self, _buf_path: &str, lsp_diag: &LuaTable) -> LuaResult<bool> {
+    fn keep_diagnostic(&self, _buf_path: &str, lsp_diag: &LuaTable) -> LuaResult<bool> {
         if self.rel_infos.is_empty() {
             return Ok(false);
         }
