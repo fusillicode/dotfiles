@@ -1,7 +1,7 @@
 use mlua::prelude::*;
 
 use crate::diagnostics::filters::buffers::skip_diagnostics_for_buf_path;
-use crate::diagnostics::filters::lsps_related_info::RelatedInfoFilter;
+use crate::diagnostics::filters::related_info::RelatedInfoFilter;
 
 /// Filters out the LSP diagnostics based on the coded filters.
 pub fn filter_diagnostics(
@@ -15,7 +15,7 @@ pub fn filter_diagnostics(
 
     // Order of filters is IMPORTANT.
     // The first filter that returns true keeps the LSP diagnostic and skips all subsequent filters.
-    let mut filters = crate::diagnostics::filters::lsps_msgs_blacklist::configured_filters();
+    let mut filters = crate::diagnostics::filters::msgs_blacklist::configured_filters();
     filters.push(Box::new(RelatedInfoFilter::new(&lsp_diags)?));
 
     let mut out = vec![];
@@ -29,7 +29,7 @@ pub fn filter_diagnostics(
         for filter in &filters {
             if filter.keep_diagnostic(&buf_path, lsp_diag)? {
                 out.push(lsp_diag.clone());
-                break;
+                continue;
             }
         }
     }

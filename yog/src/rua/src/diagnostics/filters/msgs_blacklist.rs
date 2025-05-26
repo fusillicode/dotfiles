@@ -5,12 +5,12 @@ use mlua::prelude::*;
 use crate::diagnostics::filters::DiagnosticsFilter;
 
 /// Filters out diagnostics related to buffers containing the supplied path, lsp source and unwanted messages.
-pub struct LspsMsgsBlacklistFilter {
+pub struct MsgsBlacklistFilter {
     pub buf_path: String,
     pub blacklist: HashMap<String, Vec<String>>,
 }
 
-impl DiagnosticsFilter for LspsMsgsBlacklistFilter {
+impl DiagnosticsFilter for MsgsBlacklistFilter {
     fn keep_diagnostic(&self, buf_path: &str, lsp_diag: &LuaTable) -> LuaResult<bool> {
         if !buf_path.contains(&self.buf_path) {
             return Ok(true);
@@ -40,11 +40,11 @@ pub fn configured_filters() -> Vec<Box<dyn DiagnosticsFilter>> {
     .collect::<HashMap<_, _>>();
 
     vec![
-        Box::new(LspsMsgsBlacklistFilter {
+        Box::new(MsgsBlacklistFilter {
             buf_path: "es-be".into(),
             blacklist: common_blacklist.clone(),
         }),
-        Box::new(LspsMsgsBlacklistFilter {
+        Box::new(MsgsBlacklistFilter {
             buf_path: "yog".into(),
             blacklist: common_blacklist.clone(),
         }),
