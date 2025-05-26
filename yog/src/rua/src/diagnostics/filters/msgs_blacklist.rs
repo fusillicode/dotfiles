@@ -18,8 +18,8 @@ impl DiagnosticsFilter for MsgsBlacklistFilter {
         let Some(blacklist) = self.blacklist.get(&lsp_diag.get::<String>("source")?) else {
             return Ok(true);
         };
-        let msg: String = lsp_diag.get("message")?;
-        if blacklist.iter().any(|b| msg.to_lowercase().contains(b)) {
+        let msg = lsp_diag.get::<String>("message")?.to_lowercase();
+        if blacklist.iter().any(|b| msg.contains(b)) {
             return Ok(false);
         }
         Ok(true)
@@ -41,12 +41,12 @@ pub fn configured_filters() -> Vec<Box<dyn DiagnosticsFilter>> {
 
     vec![
         Box::new(MsgsBlacklistFilter {
-            buf_path: "es-be".into(),
+            buf_path: "/es-be/".into(),
             blacklist: common_blacklist.clone(),
         }),
         Box::new(MsgsBlacklistFilter {
-            buf_path: "yog".into(),
-            blacklist: common_blacklist.clone(),
+            buf_path: "/yog/".into(),
+            blacklist: common_blacklist,
         }),
     ]
 }
