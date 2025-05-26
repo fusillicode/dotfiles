@@ -10,6 +10,8 @@ pub fn filter_diagnostics(
     (buf_path, lsp_diags): (LuaString, LuaTable),
 ) -> LuaResult<LuaTable> {
     let buf_path = buf_path.to_string_lossy();
+    // Keeping this as a separate filter because it kind short circuits the whole filtering and
+    // doesn't require any LSP diagnostics to apply its logic.
     if BufferFilter::new().skip_diagnostic(&buf_path, None)? {
         return lua.create_sequence_from::<LuaTable>(vec![]);
     };

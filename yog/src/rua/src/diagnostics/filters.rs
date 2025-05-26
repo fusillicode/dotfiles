@@ -14,7 +14,7 @@ pub trait DiagnosticsFilter {
 pub struct DiagnosticsFilters(Vec<Box<dyn DiagnosticsFilter>>);
 
 impl DiagnosticsFilters {
-    // Order of filters is IMPORTANT.
+    // The order of filters is IMPORTANT.
     pub fn all(lsp_diags: &LuaTable) -> LuaResult<Self> {
         let mut tmp = MsgBlacklistFilter::all();
         tmp.push(Box::new(RelatedInfoFilter::new(lsp_diags)?));
