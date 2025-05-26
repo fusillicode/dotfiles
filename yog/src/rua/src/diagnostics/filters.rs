@@ -15,17 +15,20 @@ pub struct DiagnosticsFilters(Vec<Box<dyn DiagnosticsFilter>>);
 
 impl DiagnosticsFilters {
     // Order of filters is IMPORTANT.
-    // The first filter that returns false skips the LSP diagnostic.
     pub fn all(lsp_diags: &LuaTable) -> LuaResult<Self> {
         let mut tmp = MsgBlacklistFilter::all();
         tmp.push(Box::new(RelatedInfoFilter::new(lsp_diags)?));
         Ok(DiagnosticsFilters(tmp))
     }
+}
 
-    pub fn skip_diagnostic(&self, buf_path: &str, lsp_diag: &LuaTable) -> LuaResult<bool> {
+impl DiagnosticsFilter for DiagnosticsFilters {
+    fn skip_diagnostic(&self, buf_path: &str, lsp_diag: Option<&LuaTable>) -> LuaResult<bool> {
+        // The first filter that returns true skips the LSP diagnostic and all subsequent filters
+        // evaluation.
         let mut skip_diagnostic = false;
         for filter in &self.0 {
-            if filter.skip_diagnostic(buf_path, Some(lsp_diag))? {
+            if filter.skip_diagnostic(buf_path, lsp_diag)? {
                 skip_diagnostic = true;
                 break;
             }

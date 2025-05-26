@@ -23,7 +23,7 @@ pub fn filter_diagnostics(
         let lsp_diag = lua_value.as_table().ok_or_else(|| {
             mlua::Error::RuntimeError(format!("cannot get LuaTable from LuaValue {lua_value:?}"))
         })?;
-        if filters.skip_diagnostic(&buf_path, lsp_diag)? {
+        if filters.skip_diagnostic(&buf_path, Some(lsp_diag))? {
             continue;
         }
         out.push(lsp_diag.clone());
