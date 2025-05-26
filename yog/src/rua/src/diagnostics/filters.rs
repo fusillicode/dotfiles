@@ -26,13 +26,11 @@ impl DiagnosticsFilter for DiagnosticsFilters {
     fn skip_diagnostic(&self, buf_path: &str, lsp_diag: Option<&LuaTable>) -> LuaResult<bool> {
         // The first filter that returns true skips the LSP diagnostic and all subsequent filters
         // evaluation.
-        let mut skip_diagnostic = false;
         for filter in &self.0 {
             if filter.skip_diagnostic(buf_path, lsp_diag)? {
-                skip_diagnostic = true;
-                break;
+                return Ok(true);
             }
         }
-        Ok(skip_diagnostic)
+        Ok(false)
     }
 }
