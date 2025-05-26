@@ -29,7 +29,7 @@ impl DiagnosticsFilter for MsgBlacklistFilter {
     }
 }
 
-pub fn configured_filters() -> Vec<Box<dyn DiagnosticsFilter>> {
+pub fn filters() -> Vec<Box<dyn DiagnosticsFilter>> {
     let common_blacklist = vec![(
         "typos".into(),
         vec![
