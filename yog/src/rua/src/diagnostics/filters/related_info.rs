@@ -38,7 +38,10 @@ impl RelatedInfoFilter {
 }
 
 impl DiagnosticsFilter for RelatedInfoFilter {
-    fn skip_diagnostic(&self, _buf_path: &str, lsp_diag: &LuaTable) -> LuaResult<bool> {
+    fn skip_diagnostic(&self, _buf_path: &str, lsp_diag: Option<&LuaTable>) -> LuaResult<bool> {
+        let Some(lsp_diag) = lsp_diag else {
+            return Ok(false);
+        };
         if self.rel_infos.is_empty() {
             return Ok(false);
         }

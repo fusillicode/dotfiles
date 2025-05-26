@@ -1,7 +1,8 @@
 use mlua::prelude::*;
 
-use crate::diagnostics::filters::buffers::skip_diagnostics_for_buf_path;
+use crate::diagnostics::filters::buffer::BufferFilter;
 use crate::diagnostics::filters::related_info::RelatedInfoFilter;
+use crate::diagnostics::filters::DiagnosticsFilter;
 
 /// Filters out the LSP diagnostics based on the coded filters.
 pub fn filter_diagnostics(
@@ -9,9 +10,9 @@ pub fn filter_diagnostics(
     (buf_path, lsp_diags): (LuaString, LuaTable),
 ) -> LuaResult<LuaTable> {
     let buf_path = buf_path.to_string_lossy();
-    if skip_diagnostics_for_buf_path(&buf_path) {
+    if BufferFilter::new().skip_diagnostic(&buf_path, None)? {
         return lua.create_sequence_from::<LuaTable>(vec![]);
-    }
+    };
 
     // Order of filters is IMPORTANT.
     // The first filter that returns false skips the LSP diagnostic.
@@ -28,7 +29,7 @@ pub fn filter_diagnostics(
 
         let mut skip_diagnostic = false;
         for filter in &filters {
-            if filter.skip_diagnostic(&buf_path, lsp_diag)? {
+            if filter.skip_diagnostic(&buf_path, Some(lsp_diag))? {
                 skip_diagnostic = true;
                 break;
             }

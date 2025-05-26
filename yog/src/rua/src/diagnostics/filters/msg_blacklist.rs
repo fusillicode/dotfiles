@@ -11,7 +11,10 @@ pub struct MsgBlacklistFilter {
 }
 
 impl DiagnosticsFilter for MsgBlacklistFilter {
-    fn skip_diagnostic(&self, buf_path: &str, lsp_diag: &LuaTable) -> LuaResult<bool> {
+    fn skip_diagnostic(&self, buf_path: &str, lsp_diag: Option<&LuaTable>) -> LuaResult<bool> {
+        let Some(lsp_diag) = lsp_diag else {
+            return Ok(false);
+        };
         if !buf_path.contains(&self.buf_path) {
             return Ok(false);
         }
