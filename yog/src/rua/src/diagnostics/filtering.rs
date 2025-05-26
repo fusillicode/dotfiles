@@ -1,7 +1,6 @@
 use mlua::prelude::*;
 
 use crate::diagnostics::filters::buffer::BufferFilter;
-use crate::diagnostics::filters::related_info::RelatedInfoFilter;
 use crate::diagnostics::filters::DiagnosticsFilter;
 use crate::diagnostics::filters::DiagnosticsFilters;
 
@@ -15,13 +14,7 @@ pub fn filter_diagnostics(
         return lua.create_sequence_from::<LuaTable>(vec![]);
     };
 
-    // Order of filters is IMPORTANT.
-    // The first filter that returns false skips the LSP diagnostic.
-    let filters = {
-        let mut tmp = crate::diagnostics::filters::msg_blacklist::filters();
-        tmp.push(Box::new(RelatedInfoFilter::new(&lsp_diags)?));
-        DiagnosticsFilters::new(tmp)
-    };
+    let filters = DiagnosticsFilters::all(&lsp_diags)?;
 
     let mut out = vec![];
     // Using [`.pairs`] and [`LuaValue`] to get a & to the LSP diagnostic [`LuaTable`] and avoid

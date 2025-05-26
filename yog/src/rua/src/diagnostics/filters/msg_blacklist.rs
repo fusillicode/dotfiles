@@ -10,6 +10,33 @@ pub struct MsgBlacklistFilter {
     pub blacklist: HashMap<String, Vec<String>>,
 }
 
+impl MsgBlacklistFilter {
+    pub fn all() -> Vec<Box<dyn DiagnosticsFilter>> {
+        let common_blacklist = vec![(
+            "typos".into(),
+            vec![
+                "`calle` should be".into(),
+                "`producto` should be".into(),
+                "`emision` should be".into(),
+                "`clase` should be".into(),
+            ],
+        )]
+        .into_iter()
+        .collect::<HashMap<_, _>>();
+
+        vec![
+            Box::new(MsgBlacklistFilter {
+                buf_path: "/es-be/".into(),
+                blacklist: common_blacklist.clone(),
+            }),
+            Box::new(MsgBlacklistFilter {
+                buf_path: "/yog/".into(),
+                blacklist: common_blacklist,
+            }),
+        ]
+    }
+}
+
 impl DiagnosticsFilter for MsgBlacklistFilter {
     fn skip_diagnostic(&self, buf_path: &str, lsp_diag: Option<&LuaTable>) -> LuaResult<bool> {
         let Some(lsp_diag) = lsp_diag else {
@@ -27,29 +54,4 @@ impl DiagnosticsFilter for MsgBlacklistFilter {
         }
         Ok(false)
     }
-}
-
-pub fn filters() -> Vec<Box<dyn DiagnosticsFilter>> {
-    let common_blacklist = vec![(
-        "typos".into(),
-        vec![
-            "`calle` should be".into(),
-            "`producto` should be".into(),
-            "`emision` should be".into(),
-            "`clase` should be".into(),
-        ],
-    )]
-    .into_iter()
-    .collect::<HashMap<_, _>>();
-
-    vec![
-        Box::new(MsgBlacklistFilter {
-            buf_path: "/es-be/".into(),
-            blacklist: common_blacklist.clone(),
-        }),
-        Box::new(MsgBlacklistFilter {
-            buf_path: "/yog/".into(),
-            blacklist: common_blacklist,
-        }),
-    ]
 }
