@@ -14,8 +14,8 @@ pub fn filter_diagnostics(
     }
 
     // Order of filters is IMPORTANT.
-    // The first filter that returns true keeps the LSP diagnostic and skips all subsequent filters.
-    let mut filters = crate::diagnostics::filters::msgs_blacklist::configured_filters();
+    // The first filter that returns false skips the LSP diagnostic.
+    let mut filters = crate::diagnostics::filters::msg_blacklist::configured_filters();
     filters.push(Box::new(RelatedInfoFilter::new(&lsp_diags)?));
 
     let mut out = vec![];
@@ -26,12 +26,17 @@ pub fn filter_diagnostics(
             mlua::Error::RuntimeError(format!("cannot get LuaTable from LuaValue {lua_value:?}"))
         })?;
 
+        let mut skip_diagnostic = false;
         for filter in &filters {
-            if filter.keep_diagnostic(&buf_path, lsp_diag)? {
-                out.push(lsp_diag.clone());
-                continue;
+            if filter.skip_diagnostic(&buf_path, lsp_diag)? {
+                skip_diagnostic = true;
+                break;
             }
         }
+        if skip_diagnostic {
+            continue;
+        }
+        out.push(lsp_diag.clone());
     }
 
     lua.create_sequence_from(out)

@@ -5,24 +5,24 @@ use mlua::prelude::*;
 use crate::diagnostics::filters::DiagnosticsFilter;
 
 /// Filters out diagnostics related to buffers containing the supplied path, lsp source and unwanted messages.
-pub struct MsgsBlacklistFilter {
+pub struct MsgBlacklistFilter {
     pub buf_path: String,
     pub blacklist: HashMap<String, Vec<String>>,
 }
 
-impl DiagnosticsFilter for MsgsBlacklistFilter {
-    fn keep_diagnostic(&self, buf_path: &str, lsp_diag: &LuaTable) -> LuaResult<bool> {
+impl DiagnosticsFilter for MsgBlacklistFilter {
+    fn skip_diagnostic(&self, buf_path: &str, lsp_diag: &LuaTable) -> LuaResult<bool> {
         if !buf_path.contains(&self.buf_path) {
-            return Ok(true);
+            return Ok(false);
         }
         let Some(blacklist) = self.blacklist.get(&lsp_diag.get::<String>("source")?) else {
-            return Ok(true);
+            return Ok(false);
         };
         let msg = lsp_diag.get::<String>("message")?.to_lowercase();
         if blacklist.iter().any(|b| msg.contains(b)) {
-            return Ok(false);
+            return Ok(true);
         }
-        Ok(true)
+        Ok(false)
     }
 }
 
@@ -40,11 +40,11 @@ pub fn configured_filters() -> Vec<Box<dyn DiagnosticsFilter>> {
     .collect::<HashMap<_, _>>();
 
     vec![
-        Box::new(MsgsBlacklistFilter {
+        Box::new(MsgBlacklistFilter {
             buf_path: "/es-be/".into(),
             blacklist: common_blacklist.clone(),
         }),
-        Box::new(MsgsBlacklistFilter {
+        Box::new(MsgBlacklistFilter {
             buf_path: "/yog/".into(),
             blacklist: common_blacklist,
         }),

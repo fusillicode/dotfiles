@@ -38,16 +38,16 @@ impl RelatedInfoFilter {
 }
 
 impl DiagnosticsFilter for RelatedInfoFilter {
-    fn keep_diagnostic(&self, _buf_path: &str, lsp_diag: &LuaTable) -> LuaResult<bool> {
+    fn skip_diagnostic(&self, _buf_path: &str, lsp_diag: &LuaTable) -> LuaResult<bool> {
         if self.rel_infos.is_empty() {
             return Ok(false);
         }
         // All LSPs diagnostics should be deserializable into [`RelatedInfo`]
         let rel_info = RelatedInfo::from_lsp_diagnostic(lsp_diag)?;
         if self.rel_infos.contains(&rel_info) {
-            return Ok(false);
+            return Ok(true);
         }
-        Ok(true)
+        Ok(false)
     }
 }
 
