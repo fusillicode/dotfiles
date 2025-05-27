@@ -1,108 +1,35 @@
 use mlua::prelude::*;
 
-/// Filters out the LSP diagnostics.
-///
-/// The filtered diagnostics are the ones:
-/// - already represented by other ones (e.g. HINTs pointing to a location already
-///   mentioned by other ERROR's rendered message)
-/// - related to the `unwanted_paths`
-///
-/// The function uses a [`LuaTable`] rather than a user defined type that implements the [`FromLua`]
-/// trait because the deserialization logic is incremental.
+use crate::diagnostics::filters::buffer::BufferFilter;
+use crate::diagnostics::filters::DiagnosticsFilter;
+use crate::diagnostics::filters::DiagnosticsFilters;
+
+/// Filters out the LSP diagnostics based on the coded filters.
 pub fn filter_diagnostics(
     lua: &Lua,
     (buf_path, lsp_diags): (LuaString, LuaTable),
 ) -> LuaResult<LuaTable> {
     let buf_path = buf_path.to_string_lossy();
-    if unwanted_paths().iter().any(|up| buf_path.contains(up)) {
+    // Keeping this as a separate filter because it kind short circuits the whole filtering and
+    // doesn't require any LSP diagnostics to apply its logic.
+    if BufferFilter::new().skip_diagnostic(&buf_path, None)? {
         return lua.create_sequence_from::<LuaTable>(vec![]);
-    }
+    };
+
+    let filters = DiagnosticsFilters::all(&lsp_diags)?;
 
     let mut out = vec![];
-
-    let rel_infos = get_related_infos(&lsp_diags)?;
-    if rel_infos.is_empty() {
-        return Ok(lsp_diags);
-    }
-
-    for table in lsp_diags.sequence_values::<LuaTable>().flatten() {
-        // All LSPs diagnostics should be deserializable into [`RelatedInfo`]
-        let rel_info = RelatedInfo::from_lsp_diagnostic(&table)?;
-        if !rel_infos.contains(&rel_info) {
-            out.push(table);
+    // Using [`.pairs`] and [`LuaValue`] to get a & to the LSP diagnostic [`LuaTable`] and avoid
+    // cloning it when calling the [`DiagnosticsFilter::apply`].
+    for (_, lua_value) in lsp_diags.pairs::<usize, LuaValue>().flatten() {
+        let lsp_diag = lua_value.as_table().ok_or_else(|| {
+            mlua::Error::RuntimeError(format!("cannot get LuaTable from LuaValue {lua_value:?}"))
+        })?;
+        if filters.skip_diagnostic(&buf_path, Some(lsp_diag))? {
+            continue;
         }
+        out.push(lsp_diag.clone());
     }
 
     lua.create_sequence_from(out)
-}
-
-/// List of paths for which I don't want to report any diagnostic.
-fn unwanted_paths() -> [String; 1] {
-    let home_path = std::env::var("HOME").unwrap_or_default();
-    [home_path + "/.cargo"]
-}
-
-/// Get the [`RelatedInfo`]s of an LSP diagnostic represented by a [`LuaTable`].
-fn get_related_infos(lsp_diags: &LuaTable) -> LuaResult<Vec<RelatedInfo>> {
-    let mut out = vec![];
-    for lsp_diag in lsp_diags.sequence_values::<LuaTable>().flatten() {
-        // Not all LSPs have "user_data.lsp.relatedInformation", skip those which does't
-        let Ok(rel_infos) = lsp_diag
-            .get::<LuaTable>("user_data")
-            .and_then(|x| x.get::<LuaTable>("lsp"))
-            .and_then(|x| x.get::<LuaTable>("relatedInformation"))
-        else {
-            continue;
-        };
-
-        for table in rel_infos.sequence_values::<LuaTable>().flatten() {
-            // All LSPs "user_data.lsp.relatedInformation" should be deserializable into [`RelatedInfo`]
-            out.push(RelatedInfo::from_related_info(&table)?);
-        }
-    }
-    Ok(out)
-}
-
-/// Common shape of a root LSP diagnostic and the elements of its "user_data.lsp.relatedInformation".
-#[derive(PartialEq)]
-struct RelatedInfo {
-    message: String,
-    lnum: usize,
-    col: usize,
-    end_lnum: usize,
-    end_col: usize,
-}
-
-impl RelatedInfo {
-    /// Create a [`RelatedInfo`] from a root LSP diagnostic.
-    fn from_lsp_diagnostic(table: &LuaTable) -> LuaResult<Self> {
-        Ok(Self {
-            message: table.get("message")?,
-            lnum: table.get("lnum")?,
-            col: table.get("col")?,
-            end_lnum: table.get("end_lnum")?,
-            end_col: table.get("end_col")?,
-        })
-    }
-
-    /// Create a [`RelatedInfo`] from an element of an LSP diagnostic "user_data.lsp.relatedInformation" section.
-    fn from_related_info(table: &LuaTable) -> LuaResult<Self> {
-        let (start, end) = {
-            let range = table
-                .get::<LuaTable>("location")
-                .and_then(|x| x.get::<LuaTable>("range"))?;
-            (
-                range.get::<LuaTable>("start")?,
-                range.get::<LuaTable>("end")?,
-            )
-        };
-
-        Ok(Self {
-            message: table.get("message")?,
-            lnum: start.get("line")?,
-            col: start.get("character")?,
-            end_lnum: end.get("line")?,
-            end_col: end.get("character")?,
-        })
-    }
 }
