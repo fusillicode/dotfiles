@@ -1,4 +1,5 @@
 use mlua::prelude::*;
+use mlua::Error;
 
 use crate::diagnostics::filters::buffer::BufferFilter;
 use crate::diagnostics::filters::DiagnosticsFilter;
@@ -20,10 +21,10 @@ pub fn filter_diagnostics(
 
     let mut out = vec![];
     // Using [`.pairs`] and [`LuaValue`] to get a & to the LSP diagnostic [`LuaTable`] and avoid
-    // cloning it when calling the [`DiagnosticsFilter::apply`].
+    // cloning it when passing it to the filter.
     for (_, lua_value) in lsp_diags.pairs::<usize, LuaValue>().flatten() {
         let lsp_diag = lua_value.as_table().ok_or_else(|| {
-            mlua::Error::RuntimeError(format!("cannot get LuaTable from LuaValue {lua_value:?}"))
+            Error::RuntimeError(format!("cannot get LuaTable from LuaValue {lua_value:?}"))
         })?;
         if filters.skip_diagnostic(&buf_path, Some(lsp_diag))? {
             continue;
