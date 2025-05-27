@@ -12,7 +12,11 @@ pub struct MsgBlacklistFilter {
 
 impl MsgBlacklistFilter {
     pub fn all() -> Vec<Box<dyn DiagnosticsFilter>> {
-        let common_blacklist = vec![(
+        Self::typos_lsp_msg_filters()
+    }
+
+    fn typos_lsp_msg_filters() -> Vec<Box<dyn DiagnosticsFilter>> {
+        let typos_common_blacklist = vec![(
             "typos".into(),
             [
                 "anual",
@@ -38,11 +42,11 @@ impl MsgBlacklistFilter {
         vec![
             Box::new(MsgBlacklistFilter {
                 buf_path: "/es-be/".into(),
-                blacklist: common_blacklist.clone(),
+                blacklist: typos_common_blacklist.clone(),
             }),
             Box::new(MsgBlacklistFilter {
                 buf_path: "/yog/".into(),
-                blacklist: common_blacklist,
+                blacklist: typos_common_blacklist,
             }),
         ]
     }
