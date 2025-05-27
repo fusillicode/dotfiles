@@ -1,6 +1,6 @@
 {
   "attempt.nvim": { "branch": "main", "commit": "ab5137f6a511ee7d4d932cf9e16619656233997e" },
-  "blink.cmp": { "branch": "main", "commit": "196711b89a97c953877d6c257c62f18920a970f3" },
+  "blink.cmp": { "branch": "main", "commit": "72a3de8eb3abefd764062cf5dee63425c312ca2c" },
   "close-buffers.nvim": { "branch": "master", "commit": "3acbcad1211572342632a6c0151f839e7dead27f" },
   "conform.nvim": { "branch": "master", "commit": "6feb2f28f9a9385e401857b21eeac3c1b66dd628" },
   "crates.nvim": { "branch": "main", "commit": "25f31372ab6f504d4fd7cfee836ad459caed8e68" },
