@@ -14,20 +14,23 @@ impl MsgBlacklistFilter {
     pub fn all() -> Vec<Box<dyn DiagnosticsFilter>> {
         let common_blacklist = vec![(
             "typos".into(),
-            vec![
-                "`calle` should be".into(),
-                "`producto` should be".into(),
-                "`emision` should be".into(),
-                "`clase` should be".into(),
-                "`cliente` should be".into(),
-                "`informativo` should be".into(),
-                "`momento` should be".into(),
-                "`constituye` should be".into(),
-                "`anual` should be".into(),
-                "`importante` should be".into(),
-                "`foto` should be".into(),
-                "`clea` should be".into(),
-            ],
+            [
+                "anual",
+                "calle",
+                "clase",
+                "clea",
+                "cliente",
+                "constituye",
+                "emision",
+                "foto",
+                "importante",
+                "informativo",
+                "momento",
+                "producto",
+            ]
+            .iter()
+            .map(|term| format!("`{term}` should be"))
+            .collect(),
         )]
         .into_iter()
         .collect::<HashMap<_, _>>();
