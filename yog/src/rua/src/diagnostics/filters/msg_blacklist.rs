@@ -19,6 +19,14 @@ impl MsgBlacklistFilter {
                 "`producto` should be".into(),
                 "`emision` should be".into(),
                 "`clase` should be".into(),
+                "`cliente` should be".into(),
+                "`informativo` should be".into(),
+                "`momento` should be".into(),
+                "`constituye` should be".into(),
+                "`anual` should be".into(),
+                "`importante` should be".into(),
+                "`foto` should be".into(),
+                "`clea` should be".into(),
             ],
         )]
         .into_iter()
