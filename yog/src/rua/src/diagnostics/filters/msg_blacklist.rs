@@ -19,6 +19,7 @@ impl MsgBlacklistFilter {
         let typos_common_blacklist = vec![(
             "typos".into(),
             [
+                "accidentes",
                 "anual",
                 "calle",
                 "clase",
