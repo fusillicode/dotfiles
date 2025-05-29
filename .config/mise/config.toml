@@ -4,6 +4,7 @@ helm = "3.12.0"
 kubectl = "1.23.7"
 node = "lts"
 poetry = "latest"
+postgres = "13"
 protoc = "25.0"
 python = "latest"
 
