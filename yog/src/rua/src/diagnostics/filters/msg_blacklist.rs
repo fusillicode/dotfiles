@@ -57,6 +57,7 @@ impl MsgBlacklistFilter {
                 "ser",
                 "ue",
                 "utiliza",
+                "nd",
             ]
             .iter()
             .map(|term| format!("`{term}` should be"))
