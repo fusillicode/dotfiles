@@ -4,6 +4,7 @@ return {
   'saghen/blink.cmp',
   event = 'InsertEnter',
   build = 'cargo build --release',
+  dependencies = { 'archie-judd/blink-cmp-words', },
   opts = {
     appearance = {
       use_nvim_cmp_as_default = true,
@@ -37,6 +38,7 @@ return {
     },
     signature = { window = colorscheme.window, },
     sources = {
+      default = { 'lsp', 'snippets', 'buffer', 'path', 'cmdline', 'dictionary', 'thesaurus', },
       providers = {
         snippets = {
           opts = {
@@ -44,6 +46,14 @@ return {
               vim.fn.expand('~') .. '/data/dev/dotfiles/dotfiles/vscode/snippets',
             },
           },
+        },
+        thesaurus = {
+          name = 'blink-cmp-words',
+          module = 'blink-cmp-words.thesaurus',
+        },
+        dictionary = {
+          name = 'blink-cmp-words',
+          module = 'blink-cmp-words.dictionary',
         },
       },
     },
