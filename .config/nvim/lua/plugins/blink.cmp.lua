@@ -38,7 +38,7 @@ return {
     },
     signature = { window = colorscheme.window, },
     sources = {
-      default = { 'lsp', 'snippets', 'buffer', 'path', 'cmdline', 'dictionary', 'thesaurus', },
+      default = { 'lsp', 'snippets', 'buffer', 'path', 'cmdline', },
       providers = {
         snippets = {
           opts = {
