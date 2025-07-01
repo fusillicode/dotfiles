@@ -1,5 +1,20 @@
 local colorscheme = require('colorscheme')
 
+local default_sources = {
+  'lsp',
+  'snippets',
+  'buffer',
+  'path',
+  'cmdline',
+  'dictionary',
+  'thesaurus',
+}
+
+local default_sources_idx = {}
+for idx, source in ipairs(default_sources) do
+  default_sources_idx[source] = idx
+end
+
 return {
   'saghen/blink.cmp',
   event = 'InsertEnter',
@@ -38,7 +53,7 @@ return {
     },
     signature = { window = colorscheme.window, },
     sources = {
-      default = { 'lsp', 'snippets', 'buffer', 'path', 'cmdline', },
+      default = default_sources,
       providers = {
         snippets = {
           opts = {
@@ -55,6 +70,15 @@ return {
           name = 'blink-cmp-words',
           module = 'blink-cmp-words.dictionary',
         },
+      },
+    },
+    fuzzy = {
+      sorts = {
+        function(a, b)
+          return (default_sources_idx[b.source_id] or 0) > (default_sources_idx[a.source_id] or 0)
+        end,
+        'score',
+        'sort_text',
       },
     },
   },
