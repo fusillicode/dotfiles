@@ -1,4 +1,5 @@
 local colorscheme = require('colorscheme')
+local get_item_idx = require('utils').item_idx
 
 local default_sources = {
   'lsp',
@@ -9,11 +10,6 @@ local default_sources = {
   'dictionary',
   'thesaurus',
 }
-
-local default_sources_idx = {}
-for idx, source in ipairs(default_sources) do
-  default_sources_idx[source] = idx
-end
 
 return {
   'saghen/blink.cmp',
@@ -75,7 +71,9 @@ return {
     fuzzy = {
       sorts = {
         function(a, b)
-          return (default_sources_idx[b.source_id] or 0) > (default_sources_idx[a.source_id] or 0)
+          return
+              (get_item_idx(default_sources, b.source_id) or 0) >
+              (get_item_idx(default_sources, a.source_id) or 0)
         end,
         'score',
         'sort_text',
