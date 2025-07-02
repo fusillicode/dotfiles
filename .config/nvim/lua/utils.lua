@@ -5,18 +5,6 @@ function M.dbg(debug_value)
   return debug_value
 end
 
-function M.set_diff(s1, s2)
-  local diff = {}
-  for k, v in pairs(s1) do if s2[k] == nil then diff[k] = v end end
-  return diff
-end
-
-function M.new_set(table)
-  local set = {}
-  for _, v in ipairs(table) do set[v] = true end
-  return set
-end
-
 M.normal_esc = ':noh<cr>:echo""<cr>'
 
 function M.visual_esc()
@@ -57,6 +45,12 @@ function M.log(value)
     return
   end
   vim.api.nvim_err_writeln('Failed to open log file ' .. log_path)
+end
+
+function M.item_idx(list, item)
+  for idx, i in ipairs(list) do
+    if i == item then return idx end
+  end
 end
 
 return M
