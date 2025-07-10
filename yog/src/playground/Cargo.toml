@@ -1,0 +1,8 @@
+[package]
+name = "playground"
+version = "0.1.0"
+authors = ["Gian Lu"]
+edition = "2021"
+
+[dependencies]
+mockall = { version = "0.13" }
