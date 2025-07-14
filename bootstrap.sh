@@ -9,6 +9,7 @@ ln -s "$dotfiles_dir/.config/gitui/" "$HOME/.config/gitui"
 ln -s "$dotfiles_dir/.config/helix/" "$HOME/.config/helix"
 ln -s "$dotfiles_dir/.config/mise/" "$HOME/.config/mise"
 ln -s "$dotfiles_dir/.config/nvim/" "$HOME/.config/nvim"
+ln -s "$dotfiles_dir/.config/pgcli/" "$HOME/.config/pgcli"
 
 cp "$dotfiles_dir/.gitconfig" "$HOME"
 ln -s "$dotfiles_dir/.gitignore" "$HOME"
@@ -70,6 +71,7 @@ brew install \
   libpq \
   librdkafka \
   mycli \
+  pgcli \
   stern \
   txn2/tap/kubefwd \
   vegeta \
