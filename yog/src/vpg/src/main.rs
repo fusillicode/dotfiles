@@ -13,7 +13,7 @@ use color_eyre::eyre::bail;
 use color_eyre::eyre::WrapErr;
 use serde::Deserialize;
 
-/// Copy to the system clipboard the psql cmd to connect to the DB matching the selected alias with
+/// Copy to the system clipboard the pgcli cmd to connect to the DB matching the selected alias with
 /// refreshed Vault credentials.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
@@ -55,7 +55,7 @@ fn main() -> color_eyre::Result<()> {
     let db_url = conn.db_url();
     println!("\nConnecting to {} @\n\n{db_url}\n", metadata.alias);
 
-    if let Some(psql_exit_code) = Command::new("psql")
+    if let Some(psql_exit_code) = Command::new("pgcli")
         .arg(&db_url)
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
@@ -67,7 +67,7 @@ fn main() -> color_eyre::Result<()> {
         std::process::exit(psql_exit_code);
     }
 
-    eprintln!("psql {db_url} terminated by signal.");
+    eprintln!("pgcli {db_url} terminated by signal.");
     std::process::exit(1);
 }
 
