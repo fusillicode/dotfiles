@@ -15,7 +15,7 @@ pub struct GitBranchesAutocomplete {
 impl GitBranchesAutocomplete {
     pub fn new() -> color_eyre::Result<Self> {
         Ok(Self {
-            branches: dedup_remotes(&get_all_branches()?),
+            branches: dedup_remotes(&get_all_local_branches()?),
         })
     }
 }
@@ -45,10 +45,8 @@ impl Autocomplete for GitBranchesAutocomplete {
     }
 }
 
-/// Fetch all remotes and get all local and remote branches sorted by latest to oldest modified.
-fn get_all_branches() -> color_eyre::Result<Vec<String>> {
-    fetch_all_branches()?;
-
+/// Get all local branches sorted by latest to oldest modified.
+fn get_all_local_branches() -> color_eyre::Result<Vec<String>> {
     let output = Command::new("git")
         .args([
             "for-each-ref",
@@ -64,20 +62,6 @@ fn get_all_branches() -> color_eyre::Result<Vec<String>> {
         .split('\n')
         .map(str::to_string)
         .collect())
-}
-
-fn fetch_all_branches() -> color_eyre::Result<()> {
-    Ok(Command::new("git")
-        .args([
-            "fetch",
-            "--all",
-            "--jobs=4",
-            "--no-tags",
-            "--prune",
-            "--quiet",
-        ])
-        .exec()
-        .map(|_| ())?)
 }
 
 /// Removes all "origin" prefixes from branches, the "origin" branch and deduplicates the remotes
