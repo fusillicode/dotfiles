@@ -50,7 +50,7 @@ fn autocomplete_git_branches() -> color_eyre::Result<()> {
 fn switch_branch_or_create_if_missing(arg: &str) -> color_eyre::Result<()> {
     if let Ok(url) = Url::parse(arg) {
         utils::github::log_into_github()?;
-        let branch_name = utils::github::get_branch_name_from_pr_url(&url)?;
+        let branch_name = utils::github::get_branch_name_from_url(&url)?;
         return switch_branch(&branch_name);
     }
     create_branch_if_missing(&build_branch_name(&[arg.to_string()])?)
