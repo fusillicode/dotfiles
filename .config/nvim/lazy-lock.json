@@ -1,7 +1,7 @@
 {
   "attempt.nvim": { "branch": "main", "commit": "ab5137f6a511ee7d4d932cf9e16619656233997e" },
   "blink-cmp-words": { "branch": "main", "commit": "81224ec2eb72115c84bb19ae566ef25083dbfed2" },
-  "blink.cmp": { "branch": "main", "commit": "bbdc39953ff2dc336129de162fae0833a816bf4b" },
+  "blink.cmp": { "branch": "main", "commit": "cdceeef5b89fd0cc8f9c0ead99c52d4bec64dbbe" },
   "close-buffers.nvim": { "branch": "master", "commit": "3acbcad1211572342632a6c0151f839e7dead27f" },
   "conform.nvim": { "branch": "master", "commit": "973f3cb73887d510321653044791d7937c7ec0fa" },
   "crates.nvim": { "branch": "main", "commit": "c915ab5334a46178f64ce17ab606a79454bcd14f" },
@@ -22,7 +22,7 @@
   "oil.nvim": { "branch": "master", "commit": "bbad9a76b2617ce1221d49619e4e4b659b3c61fc" },
   "peek.nvim": { "branch": "master", "commit": "5820d937d5414baea5f586dc2a3d912a74636e5b" },
   "plenary.nvim": { "branch": "master", "commit": "857c5ac632080dba10aae49dba902ce3abf91b35" },
-  "schemastore.nvim": { "branch": "main", "commit": "c957914d75b4a008ce09f4116e57e59fe6e3fae1" },
+  "schemastore.nvim": { "branch": "main", "commit": "241f1265614a90fe0d7fc5c7b06197f542b5c151" },
   "scrollofffraction.nvim": { "branch": "master", "commit": "0618a3e3e1a4e13a04edf6fd35bfcee4bd5afe38" },
   "telescope-fzf-native.nvim": { "branch": "main", "commit": "1f08ed60cafc8f6168b72b80be2b2ea149813e55" },
   "telescope-live-grep-args.nvim": { "branch": "master", "commit": "b80ec2c70ec4f32571478b501218c8979fab5201" },
