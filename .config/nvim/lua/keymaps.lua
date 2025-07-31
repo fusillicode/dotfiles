@@ -134,13 +134,38 @@ function M.telescope(telescope_builtin, defaults)
       })
   end)
   keymap_set({ 'n', 'v', }, 'ga', function()
-    telescope_builtin.buffers({
-      previewer = false,
-      layout_config = { width = 0.0, height = 0.0, },
-      on_complete = {
-        function() vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<cr>', true, true, true), 'i', {}) end,
-      },
-    })
+    local alt = vim.fn.bufnr('#')
+
+    -- Check if alternate buffer is valid and loaded
+    if alt ~= -1 and vim.api.nvim_buf_is_loaded(alt) and vim.fn.buflisted(alt) == 1 then
+      vim.api.nvim_set_current_buf(alt)
+      return
+    end
+
+    -- Alternate buffer invalid, fallback: switch to last used listed buffer in buffer list
+    local bufs = vim.fn.getbufinfo({ bufloaded = true, listed = true, })
+    if #bufs == 0 then
+      print('No other open buffers available')
+      return
+    end
+
+    -- Find last buffer in list that is not current buffer
+    local current = vim.api.nvim_get_current_buf()
+    local fallback_buf = nil
+
+    for i = #bufs, 1, -1 do
+      local b = bufs[i].bufnr
+      if b ~= current then
+        fallback_buf = b
+        break
+      end
+    end
+
+    if fallback_buf then
+      vim.api.nvim_set_current_buf(fallback_buf)
+    else
+      print('No alternative buffer found')
+    end
   end)
 end
 
