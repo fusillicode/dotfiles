@@ -99,7 +99,7 @@ function M.fzf_lua(fzf_lua)
   keymap_set({ 'n', 'v', }, '<leader>s', function() fzf_lua.lsp_document_symbols({ prompt = 'LSP syms: ', }) end)
   keymap_set({ 'n', 'v', }, '<leader>S', function() fzf_lua.lsp_workspace_symbols({ prompt = '*LSP syms: ', }) end)
 
-  keymap_set({ 'n', 'v', }, '<leader>f', function() fzf_lua.files({ prompt = 'Files: ', }) end)
+  keymap_set({ 'n', 'v', }, '<leader>f', function() fzf_lua.files({ prompt = 'Files: ', line_query = true, }) end)
   keymap_set({ 'n', 'v', }, '<leader>b', function() fzf_lua.buffers({ prompt = 'Buffers: ', }) end)
   keymap_set({ 'n', 'v', }, '<leader>gs', function() fzf_lua.git_status({ prompt = 'gs: ', }) end)
   keymap_set({ 'n', 'v', }, '<leader>c', function() fzf_lua.commands({ prompt = 'Cmds: ', }) end)
