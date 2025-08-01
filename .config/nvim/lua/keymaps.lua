@@ -83,66 +83,58 @@ function M.core()
   keymap_set('v', '<leader>gx', require('opener').open_selection)
 end
 
-function M.telescope(telescope_builtin, defaults)
-  local function with_defaults(picker, opts)
-    return function()
-      telescope_builtin[picker](vim.tbl_extend('force', defaults, opts or {}))
-    end
-  end
+function M.fzf_lua(fzf_lua)
+  local lsp_cfg = { ignore_current_line = true, jump1 = true, includeDeclaration = false, }
 
-  keymap_set({ 'n', 'v', }, 'gd', with_defaults('lsp_definitions', { prompt_prefix = 'LSP Defs: ', }))
-  keymap_set({ 'n', 'v', }, 'gr', with_defaults('lsp_references', { prompt_prefix = 'LSP Refs: ', }))
-  keymap_set({ 'n', 'v', }, 'gi', with_defaults('lsp_implementations', { prompt_prefix = 'LSP Impls: ', }))
-  keymap_set({ 'n', 'v', }, '<leader>s', with_defaults('lsp_document_symbols', { prompt_prefix = 'LSP Syms: ', }))
-  keymap_set({ 'n', 'v', }, '<leader>S',
-    with_defaults('lsp_dynamic_workspace_symbols', { prompt_prefix = 'LSP Syms*: ', }))
-  keymap_set({ 'n', 'v', }, '<leader>f', with_defaults('find_files', { prompt_prefix = 'Files: ', }))
-  keymap_set({ 'n', 'v', }, '<leader>b', with_defaults('buffers', { prompt_prefix = 'Bufs: ', }))
-
-  keymap_set('n', '<leader>w', function()
-    require('telescope').extensions.live_grep_args.live_grep_args(
-      { prompt_title = false, prompt_prefix = 'rg: ', }
-    )
+  keymap_set({ 'n', 'v', }, 'gd', function()
+    fzf_lua.lsp_definitions(vim.tbl_extend('error', { prompt = 'LSP defs: ', }, lsp_cfg))
   end)
+  keymap_set({ 'n', 'v', }, 'gr', function()
+    fzf_lua.lsp_references(vim.tbl_extend('error', { prompt = 'LSP refs: ', }, lsp_cfg))
+  end)
+  keymap_set({ 'n', 'v', }, 'gi', function()
+    fzf_lua.lsp_implementations(vim.tbl_extend('error', { prompt = 'LSP impls: ', }, lsp_cfg))
+  end)
+  keymap_set({ 'n', 'v', }, '<leader>a', function() fzf_lua.lsp_code_actions({ prompt = 'LSP actions: ', }) end)
+  keymap_set({ 'n', 'v', }, '<leader>s', function() fzf_lua.lsp_document_symbols({ prompt = 'LSP syms: ', }) end)
+  keymap_set({ 'n', 'v', }, '<leader>S', function() fzf_lua.lsp_workspace_symbols({ prompt = '*LSP syms: ', }) end)
+
+  keymap_set({ 'n', 'v', }, '<leader>f', function() fzf_lua.files({ prompt = 'Files: ', }) end)
+  keymap_set({ 'n', 'v', }, '<leader>b', function() fzf_lua.buffers({ prompt = 'Buffers: ', }) end)
+  keymap_set({ 'n', 'v', }, '<leader>gs', function() fzf_lua.git_status({ prompt = 'gs: ', }) end)
+  keymap_set({ 'n', 'v', }, '<leader>c', function() fzf_lua.commands({ prompt = 'Cmds: ', }) end)
+  keymap_set({ 'n', 'v', }, '<leader>d', function() fzf_lua.diagnostics_document({ prompt = 'Diags: ', }) end)
+  keymap_set({ 'n', 'v', }, '<leader>D', function() fzf_lua.diagnostics_workspace({ prompt = '*Diags: ', }) end)
+
+  keymap_set('n', '<leader>w', function() fzf_lua.live_grep({ prompt = 'rg: ', }) end)
   keymap_set('v', '<leader>w', function()
-    require('telescope-live-grep-args.shortcuts').grep_visual_selection(
-      { prompt_title = false, prompt_prefix = 'rg: ', }
-    )
-  end)
-  keymap_set('n', '<leader>/', with_defaults('current_buffer_fuzzy_find', { prompt_prefix = 'rg: ', }))
-  keymap_set('v', '<leader>/', function()
-    local utils = require('utils')
-    local selection = utils.escape_regex(utils.get_visual_selection())
-    with_defaults('current_buffer_fuzzy_find', { prompt_prefix = 'rg: ', default_text = selection, })()
-  end)
-
-  keymap_set({ 'n', 'v', }, '<leader>gc', with_defaults('git_commits', { prompt_prefix = 'gc*: ', }))
-  keymap_set({ 'n', 'v', }, '<leader>gcb', with_defaults('git_bcommits', { prompt_prefix = 'gc: ', bufnr = 0, }))
-  keymap_set({ 'n', 'v', }, '<leader>gb', with_defaults('git_branches', { prompt_prefix = 'gb: ', }))
-  keymap_set({ 'n', 'v', }, '<leader>gs', with_defaults('git_status', { prompt_prefix = 'gst: ', }))
-  keymap_set({ 'n', 'v', }, '<leader>d',
-    with_defaults('diagnostics', { prompt_prefix = 'Diagn: ', bufnr = 0, sort_by = 'severity', }))
-  keymap_set({ 'n', 'v', }, '<leader>D',
-    with_defaults('diagnostics', { prompt_prefix = 'Diagn*: ', sort_by = 'severity', }))
-  keymap_set({ 'n', 'v', }, '<leader>c', with_defaults('commands', { prompt_prefix = 'Cmds: ', }))
-  keymap_set({ 'n', 'v', }, '<leader>T', function()
-    require('telescope').extensions.live_grep_args.live_grep_args(
-      {
-        prompt_title = false,
-        default_text =
-        'FIX:|FIXME:|BUG:|FIXIT:|ISSUE:|TODO:|HACK:|WARN:|WARNING:|PERF:|OPTIM:|PERFORMANCE:|OPTIMIZE:|NOTE|:INFO',
-      })
-  end)
-  keymap_set({ 'n', 'v', }, 'ga', function()
-    telescope_builtin.buffers({
-      previewer = false,
-      layout_config = { width = 0.0, height = 0.0, },
-      on_complete = {
-        function() vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<cr>', true, true, true), 'i', {}) end,
-      },
-    })
+    fzf_lua.live_grep({ prompt = 'rg: ', search = require('utils').get_visual_selection(), })
   end)
 end
+
+-- Thanks perplexity 🥲
+keymap_set({ 'n', 'v', }, 'ga', function()
+  local alt_buf = vim.fn.bufnr('#')
+  local current_buf = vim.api.nvim_get_current_buf()
+
+  -- If alternate buffer valid, loaded, and listed, switch to it
+  if alt_buf ~= -1 and vim.api.nvim_buf_is_loaded(alt_buf) and vim.fn.buflisted(alt_buf) == 1 then
+    vim.api.nvim_set_current_buf(alt_buf)
+    return
+  end
+
+  -- Otherwise, get list of loaded & listed buffers
+  local bufs = vim.fn.getbufinfo({ bufloaded = true, listed = true, })
+  if #bufs == 0 then return end
+  -- Find the last buffer in the list that's not the current one
+  for i = #bufs, 1, -1 do
+    local bufnr = bufs[i].bufnr
+    if bufnr ~= current_buf then
+      vim.api.nvim_set_current_buf(bufnr)
+      return
+    end
+  end
+end)
 
 function M.oil()
   keymap_set('n', '<leader>F', ':Oil --float<cr>')
@@ -193,7 +185,6 @@ end
 function M.lspconfig(bufnr)
   keymap_set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr, })
   keymap_set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, })
-  keymap_set('n', '<leader>a', vim.lsp.buf.code_action, { buffer = bufnr, })
 end
 
 function M.grug_far(grug_far, opts)
