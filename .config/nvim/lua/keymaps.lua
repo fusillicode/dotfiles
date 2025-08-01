@@ -109,40 +109,38 @@ function M.telescope(telescope_builtin, defaults)
       { prompt_title = false, prompt_prefix = 'rg: ', }
     )
   end)
-  keymap_set('n', '<leader>/', with_defaults('current_buffer_fuzzy_find', { prompt_prefix = 'rg: ', }))
-  keymap_set('v', '<leader>/', function()
-    local utils = require('utils')
-    local selection = utils.escape_regex(utils.get_visual_selection())
-    with_defaults('current_buffer_fuzzy_find', { prompt_prefix = 'rg: ', default_text = selection, })()
-  end)
 
-  keymap_set({ 'n', 'v', }, '<leader>gc', with_defaults('git_commits', { prompt_prefix = 'gc*: ', }))
-  keymap_set({ 'n', 'v', }, '<leader>gcb', with_defaults('git_bcommits', { prompt_prefix = 'gc: ', bufnr = 0, }))
-  keymap_set({ 'n', 'v', }, '<leader>gb', with_defaults('git_branches', { prompt_prefix = 'gb: ', }))
   keymap_set({ 'n', 'v', }, '<leader>gs', with_defaults('git_status', { prompt_prefix = 'gst: ', }))
   keymap_set({ 'n', 'v', }, '<leader>d',
     with_defaults('diagnostics', { prompt_prefix = 'Diagn: ', bufnr = 0, sort_by = 'severity', }))
   keymap_set({ 'n', 'v', }, '<leader>D',
     with_defaults('diagnostics', { prompt_prefix = 'Diagn*: ', sort_by = 'severity', }))
   keymap_set({ 'n', 'v', }, '<leader>c', with_defaults('commands', { prompt_prefix = 'Cmds: ', }))
-  keymap_set({ 'n', 'v', }, '<leader>T', function()
-    require('telescope').extensions.live_grep_args.live_grep_args(
-      {
-        prompt_title = false,
-        default_text =
-        'FIX:|FIXME:|BUG:|FIXIT:|ISSUE:|TODO:|HACK:|WARN:|WARNING:|PERF:|OPTIM:|PERFORMANCE:|OPTIMIZE:|NOTE|:INFO',
-      })
-  end)
-  keymap_set({ 'n', 'v', }, 'ga', function()
-    telescope_builtin.buffers({
-      previewer = false,
-      layout_config = { width = 0.0, height = 0.0, },
-      on_complete = {
-        function() vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<cr>', true, true, true), 'i', {}) end,
-      },
-    })
-  end)
 end
+
+-- Thanks perplexity 🥲
+keymap_set({ 'n', 'v', }, 'ga', function()
+  local alt_buf = vim.fn.bufnr('#')
+  local current_buf = vim.api.nvim_get_current_buf()
+
+  -- If alternate buffer valid, loaded, and listed, switch to it
+  if alt_buf ~= -1 and vim.api.nvim_buf_is_loaded(alt_buf) and vim.fn.buflisted(alt_buf) == 1 then
+    vim.api.nvim_set_current_buf(alt_buf)
+    return
+  end
+
+  -- Otherwise, get list of loaded & listed buffers
+  local bufs = vim.fn.getbufinfo({ bufloaded = true, listed = true, })
+  if #bufs == 0 then return end
+  -- Find the last buffer in the list that's not the current one
+  for i = #bufs, 1, -1 do
+    local bufnr = bufs[i].bufnr
+    if bufnr ~= current_buf then
+      vim.api.nvim_set_current_buf(bufnr)
+      return
+    end
+  end
+end)
 
 function M.oil()
   keymap_set('n', '<leader>F', ':Oil --float<cr>')
