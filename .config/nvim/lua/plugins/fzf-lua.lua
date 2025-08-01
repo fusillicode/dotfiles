@@ -43,9 +43,12 @@ return {
       },
       defaults = {
         cwd_prompt = false,
-        no_header = true,
+        no_header = false,
+        no_header_i = false,
       },
       winopts = {
+        title    = '',
+        height   = 0.90,
         backdrop = 100,
         preview  = {
           default = 'builtin',
@@ -64,15 +67,18 @@ return {
         },
       },
       files = {
+        winopts = { title = '', },
         git_icons = true,
       },
       buffers = {
+        winopts = { title = '', },
         actions = {
           ['ctrl-x'] = false,
         },
       },
       git = {
         status = {
+          winopts = { title = '', },
           actions = {
             ['right']  = false,
             ['left']   = false,

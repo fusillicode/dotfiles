@@ -85,18 +85,21 @@ end
 
 function M.fzf_lua(fzf_lua)
   local lsp_cfg = { ignore_current_line = true, }
-  keymap_set({ 'n', 'v', }, '<leader>f', function() fzf_lua.files() end)
-  keymap_set({ 'n', 'v', }, '<leader>b', function() fzf_lua.buffers() end)
-  keymap_set({ 'n', 'v', }, '<leader>gs', function() fzf_lua.git_status(lsp_cfg) end)
-  keymap_set({ 'n', 'v', }, '<leader>c', function() fzf_lua.commands() end)
-  keymap_set({ 'n', 'v', }, 'gd', function() fzf_lua.lsp_definitions(lsp_cfg) end)
-  keymap_set({ 'n', 'v', }, 'gr', function() fzf_lua.lsp_references(lsp_cfg) end)
-  keymap_set({ 'n', 'v', }, 'gi', function() fzf_lua.lsp_implementations(lsp_cfg) end)
-  keymap_set({ 'n', 'v', }, '<leader>s', function() fzf_lua.lsp_document_symbols(lsp_cfg) end)
-  keymap_set({ 'n', 'v', }, '<leader>S', function() fzf_lua.lsp_workspace_symbols(lsp_cfg) end)
-  keymap_set({ 'n', 'v', }, '<leader>a', function() fzf_lua.lsp_code_actions() end)
-  keymap_set({ 'n', 'v', }, '<leader>d', function() fzf_lua.diagnostics_document() end)
-  keymap_set({ 'n', 'v', }, '<leader>D', function() fzf_lua.diagnostics_workspace() end)
+  keymap_set({ 'n', 'v', }, '<leader>f', function() fzf_lua.files({ prompt = 'Files: ', }) end)
+  keymap_set({ 'n', 'v', }, '<leader>b', function() fzf_lua.buffers({ prompt = 'Buffers: ', }) end)
+  keymap_set({ 'n', 'v', }, '<leader>gs', function() fzf_lua.git_status({ prompt = 'gs: ', }) end)
+  keymap_set({ 'n', 'v', }, '<leader>c', function() fzf_lua.commands({ prompt = 'Cmds: ', }) end)
+  keymap_set({ 'n', 'v', }, 'gd',
+    function() fzf_lua.lsp_definitions(vim.tbl_extend('error', { prompt = 'LSP defs: ', }, lsp_cfg)) end)
+  keymap_set({ 'n', 'v', }, 'gr',
+    function() fzf_lua.lsp_references(vim.tbl_extend('error', { prompt = 'LSP refs: ', }, lsp_cfg)) end)
+  keymap_set({ 'n', 'v', }, 'gi',
+    function() fzf_lua.lsp_implementations(vim.tbl_extend('error', { prompt = 'LSP impls: ', }, lsp_cfg)) end)
+  keymap_set({ 'n', 'v', }, '<leader>a', function() fzf_lua.lsp_code_actions({ prompt = 'LSP actions: ', }) end)
+  keymap_set({ 'n', 'v', }, '<leader>s', function() fzf_lua.lsp_document_symbols({ prompt = 'LSP syms: ', }) end)
+  keymap_set({ 'n', 'v', }, '<leader>S', function() fzf_lua.lsp_workspace_symbols({ prompt = '*LSP syms: ', }) end)
+  keymap_set({ 'n', 'v', }, '<leader>d', function() fzf_lua.diagnostics_document({ prompt = 'Diags: ', }) end)
+  keymap_set({ 'n', 'v', }, '<leader>D', function() fzf_lua.diagnostics_workspace({ prompt = '*Diags: ', }) end)
   -- keymap_set('n', '<leader>w', function()
   --   require('telescope').extensions.live_grep_args.live_grep_args(
   --     { prompt_title = false, prompt_prefix = 'rg: ', }
