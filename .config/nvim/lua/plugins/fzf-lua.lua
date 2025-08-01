@@ -36,6 +36,7 @@ return {
   dependencies = { { 'junegunn/fzf', build = './install --bin', }, },
   config = function()
     local fzf_lua = require('fzf-lua')
+    local no_title = { title = '', }
 
     fzf_lua.setup({
       'max-perf',
@@ -70,19 +71,19 @@ return {
         },
       },
       files    = {
-        winopts   = { title = '', },
+        winopts   = no_title,
         fzf_opts  = { ['--ansi'] = true, },
         fd_opts   = table.concat(fd_opts, ' '),
         git_icons = true,
       },
       buffers  = {
-        winopts = { title = '', },
+        winopts = no_title,
         actions = {
           ['ctrl-x'] = false,
         },
       },
       grep     = {
-        winopts        = { title = '', },
+        winopts        = no_title,
         rg_glob        = true,
         rg_opts        = table.concat(rg_opts, ' '),
         hidden         = true,
@@ -91,7 +92,7 @@ return {
       },
       git      = {
         status = {
-          winopts = { title = '', },
+          winopts = no_title,
           actions = {
             ['right']  = false,
             ['left']   = false,
