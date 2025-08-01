@@ -71,6 +71,7 @@ return {
       },
       files    = {
         winopts   = { title = '', },
+        fzf_opts  = { ['--ansi'] = true, },
         fd_opts   = table.concat(fd_opts, ' '),
         git_icons = true,
       },
