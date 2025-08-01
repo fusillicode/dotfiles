@@ -1,4 +1,4 @@
-local GLOB_EXCLUSIONS = {
+local glob_exclusions = {
   '**/.git/*',
   '**/target/*',
   '**/_build/*',
@@ -15,7 +15,7 @@ local fd_opts = vim.list_extend(
     '--no-ignore-vcs',
     '--type f',
   },
-  vim.tbl_map(function(glob) return '--exclude ' .. glob end, GLOB_EXCLUSIONS)
+  vim.tbl_map(function(glob) return '--exclude ' .. "'" .. glob .. "'" end, glob_exclusions)
 )
 
 local rg_opts = vim.list_extend(
@@ -28,7 +28,7 @@ local rg_opts = vim.list_extend(
     '--smart-case',
     '--with-filename',
   },
-  vim.tbl_map(function(glob) return '--glob !' .. glob end, GLOB_EXCLUSIONS)
+  vim.tbl_map(function(glob) return '--glob !' .. "'" .. glob .. "'" end, glob_exclusions)
 )
 
 return {
@@ -71,7 +71,6 @@ return {
       },
       files    = {
         winopts   = { title = '', },
-        cmd       = 'fd',
         fd_opts   = table.concat(fd_opts, ' '),
         git_icons = true,
       },
@@ -84,7 +83,7 @@ return {
       grep     = {
         winopts        = { title = '', },
         rg_glob        = true,
-        fd_opts        = table.concat(rg_opts, ' '),
+        rg_opts        = table.concat(rg_opts, ' '),
         hidden         = true,
         glob_flag      = '--iglob',
         glob_separator = '%s%-%-',
