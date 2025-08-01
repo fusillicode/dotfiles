@@ -1,9 +1,9 @@
 return {
   'chenasraf/text-transform.nvim',
-  dependencies = { 'nvim-telescope/telescope.nvim', },
   keys = { { '<leader>u', mode = { 'n', 'v', }, }, },
   config = function()
     require('text-transform').setup({
+      popup_type = 'select',
       keymap = {
         telescope_popup = {
           ['n'] = '<leader>u',
