@@ -38,7 +38,7 @@ return {
     fzf_lua.setup({
       'max-perf',
       fzf_opts = {
-        ['--info'] = 'inline-right',
+        ['--info'] = 'inline',
         ['--cycle'] = true,
       },
       defaults = {
@@ -46,7 +46,7 @@ return {
         no_header = false,
         no_header_i = false,
       },
-      winopts = {
+      winopts  = {
         title    = '',
         height   = 0.90,
         backdrop = 100,
@@ -56,7 +56,7 @@ return {
           vertical = 'down:60%',
         },
       },
-      keymap = {
+      keymap   = {
         builtin = {
           ['<c-d>'] = 'preview-page-down',
           ['<c-u>'] = 'preview-page-up',
@@ -66,17 +66,23 @@ return {
           ['ctrl-u'] = 'preview-page-up',
         },
       },
-      files = {
+      files    = {
         winopts = { title = '', },
         git_icons = true,
       },
-      buffers = {
+      buffers  = {
         winopts = { title = '', },
         actions = {
           ['ctrl-x'] = false,
         },
       },
-      git = {
+      grep     = {
+        winopts        = { title = '', },
+        rg_glob        = true,
+        glob_flag      = '--iglob',
+        glob_separator = '%s%-%-',
+      },
+      git      = {
         status = {
           winopts = { title = '', },
           actions = {
@@ -88,6 +94,8 @@ return {
         },
       },
     })
+
+    fzf_lua.register_ui_select()
 
     require('keymaps').fzf_lua(fzf_lua)
   end,

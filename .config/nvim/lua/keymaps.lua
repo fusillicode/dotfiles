@@ -100,16 +100,9 @@ function M.fzf_lua(fzf_lua)
   keymap_set({ 'n', 'v', }, '<leader>S', function() fzf_lua.lsp_workspace_symbols({ prompt = '*LSP syms: ', }) end)
   keymap_set({ 'n', 'v', }, '<leader>d', function() fzf_lua.diagnostics_document({ prompt = 'Diags: ', }) end)
   keymap_set({ 'n', 'v', }, '<leader>D', function() fzf_lua.diagnostics_workspace({ prompt = '*Diags: ', }) end)
-  -- keymap_set('n', '<leader>w', function()
-  --   require('telescope').extensions.live_grep_args.live_grep_args(
-  --     { prompt_title = false, prompt_prefix = 'rg: ', }
-  --   )
-  -- end)
-  -- keymap_set('v', '<leader>w', function()
-  --   require('telescope-live-grep-args.shortcuts').grep_visual_selection(
-  --     { prompt_title = false, prompt_prefix = 'rg: ', }
-  --   )
-  -- end)
+  keymap_set('n', '<leader>w', function() fzf_lua.live_grep({ prompt = 'rg: ', }) end)
+  keymap_set('v', '<leader>w',
+    function() fzf_lua.live_grep({ prompt = 'rg: ', search = require('utils').get_visual_selection(), }) end)
 end
 
 -- Thanks perplexity 🥲
@@ -185,7 +178,6 @@ end
 function M.lspconfig(bufnr)
   keymap_set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr, })
   keymap_set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, })
-  keymap_set('n', '<leader>a', vim.lsp.buf.code_action, { buffer = bufnr, })
 end
 
 function M.grug_far(grug_far, opts)
