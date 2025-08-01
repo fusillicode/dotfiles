@@ -10,11 +10,11 @@ cargo install --force \
   difftastic \
   drill \
   fd-find \
+  mise \
   pv \
   ripgrep \
-  mise \
-  tailspin \
-  typos-cli \
   sd \
   sqlx-cli \
-  watchexec-cli \
+  tailspin \
+  typos-cli \
+  watchexec-cli

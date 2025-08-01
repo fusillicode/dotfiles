@@ -83,39 +83,30 @@ function M.core()
   keymap_set('v', '<leader>gx', require('opener').open_selection)
 end
 
-function M.telescope(telescope_builtin, defaults)
-  local function with_defaults(picker, opts)
-    return function()
-      telescope_builtin[picker](vim.tbl_extend('force', defaults, opts or {}))
-    end
-  end
-
-  keymap_set({ 'n', 'v', }, 'gd', with_defaults('lsp_definitions', { prompt_prefix = 'LSP Defs: ', }))
-  keymap_set({ 'n', 'v', }, 'gr', with_defaults('lsp_references', { prompt_prefix = 'LSP Refs: ', }))
-  keymap_set({ 'n', 'v', }, 'gi', with_defaults('lsp_implementations', { prompt_prefix = 'LSP Impls: ', }))
-  keymap_set({ 'n', 'v', }, '<leader>s', with_defaults('lsp_document_symbols', { prompt_prefix = 'LSP Syms: ', }))
-  keymap_set({ 'n', 'v', }, '<leader>S',
-    with_defaults('lsp_dynamic_workspace_symbols', { prompt_prefix = 'LSP Syms*: ', }))
-  keymap_set({ 'n', 'v', }, '<leader>f', with_defaults('find_files', { prompt_prefix = 'Files: ', }))
-  keymap_set({ 'n', 'v', }, '<leader>b', with_defaults('buffers', { prompt_prefix = 'Bufs: ', }))
-
-  keymap_set('n', '<leader>w', function()
-    require('telescope').extensions.live_grep_args.live_grep_args(
-      { prompt_title = false, prompt_prefix = 'rg: ', }
-    )
-  end)
-  keymap_set('v', '<leader>w', function()
-    require('telescope-live-grep-args.shortcuts').grep_visual_selection(
-      { prompt_title = false, prompt_prefix = 'rg: ', }
-    )
-  end)
-
-  keymap_set({ 'n', 'v', }, '<leader>gs', with_defaults('git_status', { prompt_prefix = 'gst: ', }))
-  keymap_set({ 'n', 'v', }, '<leader>d',
-    with_defaults('diagnostics', { prompt_prefix = 'Diagn: ', bufnr = 0, sort_by = 'severity', }))
-  keymap_set({ 'n', 'v', }, '<leader>D',
-    with_defaults('diagnostics', { prompt_prefix = 'Diagn*: ', sort_by = 'severity', }))
-  keymap_set({ 'n', 'v', }, '<leader>c', with_defaults('commands', { prompt_prefix = 'Cmds: ', }))
+function M.fzf_lua(fzf_lua)
+  local lsp_cfg = { ignore_current_line = true, }
+  keymap_set({ 'n', 'v', }, '<leader>f', function() fzf_lua.files() end)
+  keymap_set({ 'n', 'v', }, '<leader>b', function() fzf_lua.buffers() end)
+  keymap_set({ 'n', 'v', }, '<leader>gs', function() fzf_lua.git_status(lsp_cfg) end)
+  keymap_set({ 'n', 'v', }, '<leader>c', function() fzf_lua.commands() end)
+  keymap_set({ 'n', 'v', }, 'gd', function() fzf_lua.lsp_definitions(lsp_cfg) end)
+  keymap_set({ 'n', 'v', }, 'gr', function() fzf_lua.lsp_references(lsp_cfg) end)
+  keymap_set({ 'n', 'v', }, 'gi', function() fzf_lua.lsp_implementations(lsp_cfg) end)
+  keymap_set({ 'n', 'v', }, '<leader>s', function() fzf_lua.lsp_document_symbols(lsp_cfg) end)
+  keymap_set({ 'n', 'v', }, '<leader>S', function() fzf_lua.lsp_workspace_symbols(lsp_cfg) end)
+  keymap_set({ 'n', 'v', }, '<leader>a', function() fzf_lua.lsp_code_actions() end)
+  keymap_set({ 'n', 'v', }, '<leader>d', function() fzf_lua.diagnostics_document() end)
+  keymap_set({ 'n', 'v', }, '<leader>D', function() fzf_lua.diagnostics_workspace() end)
+  -- keymap_set('n', '<leader>w', function()
+  --   require('telescope').extensions.live_grep_args.live_grep_args(
+  --     { prompt_title = false, prompt_prefix = 'rg: ', }
+  --   )
+  -- end)
+  -- keymap_set('v', '<leader>w', function()
+  --   require('telescope-live-grep-args.shortcuts').grep_visual_selection(
+  --     { prompt_title = false, prompt_prefix = 'rg: ', }
+  --   )
+  -- end)
 end
 
 -- Thanks perplexity 🥲
