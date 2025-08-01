@@ -1,37 +1,39 @@
--- local GLOB_EXCLUSIONS = {
---   '**/.git/*',
---   '**/target/*',
---   '**/_build/*',
---   '**/deps/*',
---   '**/.elixir_ls/*',
---   '**/node_modules/*',
--- }
--- local find_command = vim.list_extend(
---   {
---     'fd',
---     '--color=never',
---     '--type=f',
---     '--follow',
---     '--no-ignore-vcs',
---     '--hidden',
---   },
---   vim.tbl_map(function(glob) return '--exclude=' .. glob end, GLOB_EXCLUSIONS))
--- local vimgrep_arguments = vim.list_extend(
---   {
---     'rg',
---     '--color=never',
---     '--no-heading',
---     '--with-filename',
---     '--line-number',
---     '--column',
---     '--smart-case',
---     '--hidden',
---   },
---   vim.tbl_map(function(glob) return '--glob=!' .. glob end, GLOB_EXCLUSIONS)
--- )
+local GLOB_EXCLUSIONS = {
+  '**/.git/*',
+  '**/target/*',
+  '**/_build/*',
+  '**/deps/*',
+  '**/.elixir_ls/*',
+  '**/node_modules/*',
+}
+
+local fd_opts = vim.list_extend(
+  {
+    '--color never',
+    '--follow',
+    '--hidden',
+    '--no-ignore-vcs',
+    '--type f',
+  },
+  vim.tbl_map(function(glob) return '--exclude ' .. glob end, GLOB_EXCLUSIONS)
+)
+
+local rg_opts = vim.list_extend(
+  {
+    '--color never',
+    '--column',
+    '--hidden',
+    '--line-number',
+    '--no-heading',
+    '--smart-case',
+    '--with-filename',
+  },
+  vim.tbl_map(function(glob) return '--glob !' .. glob end, GLOB_EXCLUSIONS)
+)
 
 return {
   'ibhagwan/fzf-lua',
+  dependencies = { { 'junegunn/fzf', build = './install --bin', }, },
   config = function()
     local fzf_lua = require('fzf-lua')
 
@@ -68,7 +70,9 @@ return {
         },
       },
       files    = {
-        winopts = { title = '', },
+        winopts   = { title = '', },
+        cmd       = 'fd',
+        fd_opts   = table.concat(fd_opts, ' '),
         git_icons = true,
       },
       buffers  = {
@@ -80,6 +84,8 @@ return {
       grep     = {
         winopts        = { title = '', },
         rg_glob        = true,
+        fd_opts        = table.concat(rg_opts, ' '),
+        hidden         = true,
         glob_flag      = '--iglob',
         glob_separator = '%s%-%-',
       },
