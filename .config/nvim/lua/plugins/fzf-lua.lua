@@ -40,26 +40,30 @@ return {
 
     fzf_lua.setup({
       'max-perf',
-      fzf_opts = {
+      fzf_opts   = {
         ['--info'] = 'inline',
         ['--cycle'] = true,
       },
-      defaults = {
-        cwd_prompt = false,
-        no_header = false,
-        no_header_i = false,
+      fzf_colors = {
+        ['gutter'] = '-1',
       },
-      winopts  = {
-        title    = '',
-        height   = 0.90,
-        backdrop = 100,
-        preview  = {
+      defaults   = {
+        cwd_prompt = false,
+        no_header = true,
+        no_header_i = true,
+      },
+      winopts    = {
+        title       = '',
+        title_flags = false,
+        height      = 0.90,
+        backdrop    = 100,
+        preview     = {
           default = 'builtin',
           layout = 'vertical',
           vertical = 'down:60%',
         },
       },
-      keymap   = {
+      keymap     = {
         builtin = {
           ['<c-d>'] = 'preview-page-down',
           ['<c-u>'] = 'preview-page-up',
@@ -70,19 +74,19 @@ return {
           ['ctrl-q'] = 'select-all+accept',
         },
       },
-      files    = {
+      files      = {
         winopts   = no_title,
         fzf_opts  = { ['--ansi'] = true, },
         fd_opts   = table.concat(fd_opts, ' '),
         git_icons = true,
       },
-      buffers  = {
+      buffers    = {
         winopts = no_title,
         actions = {
           ['ctrl-x'] = false,
         },
       },
-      grep     = {
+      grep       = {
         winopts        = no_title,
         rg_glob        = true,
         rg_opts        = table.concat(rg_opts, ' '),
@@ -93,7 +97,7 @@ return {
           ['ctrl-g'] = false,
         },
       },
-      git      = {
+      git        = {
         status = {
           winopts = no_title,
           actions = {
