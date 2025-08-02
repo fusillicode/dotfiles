@@ -3,7 +3,7 @@ use crate::cli::Flags;
 pub struct CliFlagsImpl;
 
 impl Flags for CliFlagsImpl {
-    fn base_flags(&self) -> Vec<&str> {
+    fn base_flags() -> Vec<&'static str> {
         vec![
             "--color never",
             "--column",
@@ -15,7 +15,7 @@ impl Flags for CliFlagsImpl {
         ]
     }
 
-    fn format_glob(&self, glob: &str) -> String {
+    fn glob_flag(glob: &str) -> String {
         format!("--glob !'{glob}'")
     }
 }
