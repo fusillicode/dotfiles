@@ -1,8 +1,8 @@
 use crate::cli::Flags;
 
-pub struct CliFlagsImpl;
+pub struct CliFlags;
 
-impl Flags for CliFlagsImpl {
+impl Flags for CliFlags {
     fn base_flags() -> Vec<&'static str> {
         vec![
             "--color never",
