@@ -67,9 +67,6 @@ return {
         hidden         = true,
         glob_flag      = '--iglob',
         glob_separator = '%s%-%-',
-        actions        = {
-          ['ctrl-g'] = false,
-        },
       },
       git        = {
         status = {
