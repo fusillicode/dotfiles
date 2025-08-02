@@ -6,7 +6,7 @@
   "conform.nvim": { "branch": "master", "commit": "973f3cb73887d510321653044791d7937c7ec0fa" },
   "crates.nvim": { "branch": "main", "commit": "92bb44e32ff52f0251473101ae1ac0e18236427f" },
   "fidget.nvim": { "branch": "main", "commit": "4ec7bed6c86b671ddde03ca1b227343cfa3e65fa" },
-  "fzf": { "branch": "master", "commit": "04c4269db3f8058d2afc301dfba49d497249eb5c" },
+  "fzf": { "branch": "master", "commit": "da3d9957098d4742bf9d0174ad5d67e656079816" },
   "fzf-lua": { "branch": "main", "commit": "3e644b863718980da1f50c96620b18d2fb36499c" },
   "gitlinker.nvim": { "branch": "master", "commit": "23982c86f50a9c3f4bc531d41b7a4a68ddd12355" },
   "gitsigns.nvim": { "branch": "main", "commit": "8270378ab83540b03d09c0194ba3e208f9d0cb72" },

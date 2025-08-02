@@ -15,7 +15,7 @@ use utils::tui::ClosablePromptError;
 /// Create or switch to the GitHub branch built by parameterizing the supplied args.
 /// Existence of branch is checked only against local ones (to avoid fetching them remotely).
 /// If a PR URL is supplied as arg, switches to the related branch.
-/// If no args are supplied, fetches all the available branches and presents a TUI to select one.
+/// If no args are supplied, fetches local branches and presents a TUI to select one.
 /// If "-b" is supplied it defaults to "git checkout -b".
 /// If the first arg is a valid path it tries to checkout it and all the other supplied path
 /// from the branch supplied as last arg.
