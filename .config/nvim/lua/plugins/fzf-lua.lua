@@ -1,36 +1,3 @@
-local glob_exclusions = {
-  '**/.git/*',
-  '**/target/*',
-  '**/_build/*',
-  '**/deps/*',
-  '**/.elixir_ls/*',
-  '**/node_modules/*',
-}
-
-local fd_opts = vim.list_extend(
-  {
-    '--color never',
-    '--follow',
-    '--hidden',
-    '--no-ignore-vcs',
-    '--type f',
-  },
-  vim.tbl_map(function(glob) return '--exclude ' .. "'" .. glob .. "'" end, glob_exclusions)
-)
-
-local rg_opts = vim.list_extend(
-  {
-    '--color never',
-    '--column',
-    '--hidden',
-    '--line-number',
-    '--no-heading',
-    '--smart-case',
-    '--with-filename',
-  },
-  vim.tbl_map(function(glob) return '--glob !' .. "'" .. glob .. "'" end, glob_exclusions)
-)
-
 return {
   'ibhagwan/fzf-lua',
   dependencies = { { 'junegunn/fzf', build = './install --bin', }, },
@@ -51,7 +18,7 @@ return {
         ['hl']        = { 'fg', 'Special', },
         ['hl+']       = { 'fg', 'Special', },
         ['pointer']   = { 'bg', 'Normal', },
-        ['scrollbar'] = { 'fg', 'Normal', 'bold', },
+        ['scrollbar'] = { 'fg', 'Normal', },
         ['gutter']    = '-1',
       },
       defaults   = {
@@ -84,7 +51,7 @@ return {
       files      = {
         winopts   = no_title,
         fzf_opts  = { ['--ansi'] = true, },
-        fd_opts   = table.concat(fd_opts, ' '),
+        fd_opts   = table.concat(require('rua').get_fd_cli_flags(), ' '),
         git_icons = true,
       },
       buffers    = {
@@ -96,7 +63,7 @@ return {
       grep       = {
         winopts        = no_title,
         rg_glob        = true,
-        rg_opts        = table.concat(rg_opts, ' '),
+        fd_opts        = table.concat(require('rua').get_rg_cli_flags(), ' '),
         hidden         = true,
         glob_flag      = '--iglob',
         glob_separator = '%s%-%-',
