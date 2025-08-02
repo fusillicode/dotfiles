@@ -1,7 +1,10 @@
 use mlua::prelude::*;
 
 mod diagnostics;
+mod fd_cli_flags;
 mod fkr_generator;
+mod globs;
+mod rg_cli_flags;
 mod statuscolumn;
 mod statusline;
 mod utils;
@@ -31,5 +34,7 @@ fn rua(lua: &Lua) -> LuaResult<LuaTable> {
         "gen_fkr_value",
         lua.create_function(fkr_generator::gen_value)?,
     )?;
+    exports.set("get_fd_cli_flags", lua.create_function(fd_cli_flags::get)?)?;
+    exports.set("get_rg_cli_flags", lua.create_function(rg_cli_flags::get)?)?;
     Ok(exports)
 }
