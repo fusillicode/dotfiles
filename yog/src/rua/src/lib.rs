@@ -38,13 +38,7 @@ fn rua(lua: &Lua) -> LuaResult<LuaTable> {
         "gen_fkr_value",
         lua.create_function(fkr_generator::gen_value)?,
     )?;
-    exports.set(
-        "get_fd_cli_flags",
-        lua.create_function(fd::CliFlagsImpl.get())?,
-    )?;
-    exports.set(
-        "get_rg_cli_flags",
-        lua.create_function(rg::CliFlagsImpl.get())?,
-    )?;
+    exports.set("get_fd_cli_flags", lua.create_function(fd::CliFlags.get())?)?;
+    exports.set("get_rg_cli_flags", lua.create_function(rg::CliFlags.get())?)?;
     Ok(exports)
 }
