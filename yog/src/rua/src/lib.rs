@@ -11,7 +11,7 @@ mod statuscolumn;
 mod statusline;
 mod utils;
 
-type LuaFunction<'a> = Box<dyn Fn(&Lua, Option<LuaString>) -> LuaResult<LuaTable> + 'a>;
+type ArityOneLuaFunction<'a, O> = Box<dyn Fn(&Lua, Option<LuaString>) -> LuaResult<O> + 'a>;
 
 /// Entrypoint of Rust exported fns.
 #[mlua::lua_module]
