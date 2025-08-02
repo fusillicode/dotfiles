@@ -16,7 +16,6 @@ function M.setup(colorscheme)
     CursorLine = { fg = 'none', },
     MsgArea = status_line_hl,
     StatusLine = status_line_hl,
-    TelescopePreviewTitle = status_line_hl,
   }) do set_hl(0, hl, value) end
 
   for _, lvl in ipairs({ 'Error', 'Warn', 'Info', 'Hint', 'Ok', }) do

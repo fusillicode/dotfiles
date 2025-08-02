@@ -45,7 +45,14 @@ return {
         ['--cycle'] = true,
       },
       fzf_colors = {
-        ['gutter'] = '-1',
+        ['prompt']    = { 'fg', 'Special', },
+        ['info']      = { 'fg', 'Special', },
+        ['fg']        = { 'fg', 'Comment', },
+        ['hl']        = { 'fg', 'Special', },
+        ['hl+']       = { 'fg', 'Special', },
+        ['pointer']   = { 'bg', 'Normal', },
+        ['scrollbar'] = { 'fg', 'Normal', 'bold', },
+        ['gutter']    = '-1',
       },
       defaults   = {
         cwd_prompt = false,
