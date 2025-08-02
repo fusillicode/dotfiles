@@ -38,6 +38,13 @@ return {
           vertical = 'down:60%',
         },
       },
+      previewers = {
+        builtin = {
+          title_fnamemodify = function(s)
+            return vim.fn.fnamemodify(s, ':.')
+          end,
+        },
+      },
       keymap     = {
         builtin = {
           ['<c-d>'] = 'preview-page-down',
@@ -52,7 +59,10 @@ return {
       files      = {
         winopts   = no_title,
         fzf_opts  = { ['--ansi'] = true, },
-        fd_opts   = table.concat(require('rua').get_fd_cli_flags(), ' '),
+        fd_opts   = table.concat(
+          require('rua').get_fd_cli_flags(),
+          ' '
+        ),
         git_icons = true,
       },
       buffers    = {
@@ -64,7 +74,10 @@ return {
       grep       = {
         winopts        = no_title,
         rg_glob        = true,
-        fd_opts        = table.concat(require('rua').get_rg_cli_flags(), ' '),
+        fd_opts        = table.concat(
+          require('rua').get_rg_cli_flags(),
+          ' '
+        ),
         hidden         = true,
         glob_flag      = '--iglob',
         glob_separator = '%s%-%-',
