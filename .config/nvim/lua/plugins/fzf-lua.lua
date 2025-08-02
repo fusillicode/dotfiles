@@ -1,5 +1,6 @@
 return {
   'ibhagwan/fzf-lua',
+  keys = { '<leader>', 'gd', 'gr', 'gi', 'ga', },
   dependencies = { { 'junegunn/fzf', build = './install --bin', }, },
   config = function()
     local fzf_lua = require('fzf-lua')
