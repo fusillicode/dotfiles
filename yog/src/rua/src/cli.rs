@@ -1,6 +1,6 @@
 use mlua::prelude::*;
 
-use crate::LuaFunction;
+use crate::ArityOneLuaFunction;
 
 pub const GLOB_BLACKLIST: [&str; 6] = [
     "**/.git/*",
@@ -16,7 +16,7 @@ pub trait Flags {
 
     fn glob_flag(glob: &str) -> String;
 
-    fn get(&self) -> LuaFunction<'_> {
+    fn get(&self) -> ArityOneLuaFunction<'_, LuaTable> {
         Box::new(|lua: &Lua, _: Option<LuaString>| {
             lua.create_sequence_from(
                 Self::base_flags()
