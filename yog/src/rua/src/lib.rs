@@ -1,13 +1,17 @@
 use mlua::prelude::*;
 
+use crate::cli::Flags;
+
+mod cli;
 mod diagnostics;
-mod fd_cli_flags;
+mod fd;
 mod fkr_generator;
-mod globs;
-mod rg_cli_flags;
+mod rg;
 mod statuscolumn;
 mod statusline;
 mod utils;
+
+type LuaFunction<'a> = Box<dyn Fn(&Lua, Option<LuaString>) -> LuaResult<LuaTable> + 'a>;
 
 /// Entrypoint of Rust exported fns.
 #[mlua::lua_module]
@@ -34,7 +38,13 @@ fn rua(lua: &Lua) -> LuaResult<LuaTable> {
         "gen_fkr_value",
         lua.create_function(fkr_generator::gen_value)?,
     )?;
-    exports.set("get_fd_cli_flags", lua.create_function(fd_cli_flags::get)?)?;
-    exports.set("get_rg_cli_flags", lua.create_function(rg_cli_flags::get)?)?;
+    exports.set(
+        "get_fd_cli_flags",
+        lua.create_function(fd::CliFlagsImpl.get())?,
+    )?;
+    exports.set(
+        "get_rg_cli_flags",
+        lua.create_function(rg::CliFlagsImpl.get())?,
+    )?;
     Ok(exports)
 }
