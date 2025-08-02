@@ -1,5 +1,5 @@
 [package]
-name = "playground"
+name = "miskatonic"
 version = "0.1.0"
 authors = ["Gian Lu"]
 edition = "2021"
