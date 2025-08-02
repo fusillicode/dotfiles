@@ -1,7 +1,7 @@
 return {
   'm-demare/attempt.nvim',
   keys = { '<leader>n', },
-  dependencies = { 'nvim-lua/plenary.nvim', 'nvim-telescope/telescope-ui-select.nvim', },
+  dependencies = { 'nvim-lua/plenary.nvim', },
   config = function()
     local attempt = require('attempt')
     require('keymaps').attempt(attempt)
