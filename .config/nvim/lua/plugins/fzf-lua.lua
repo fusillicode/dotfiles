@@ -74,7 +74,7 @@ return {
       grep       = {
         winopts        = no_title,
         rg_glob        = true,
-        fd_opts        = table.concat(
+        rg_opts        = table.concat(
           require('rua').get_rg_cli_flags(),
           ' '
         ),
