@@ -49,11 +49,13 @@ return {
         builtin = {
           ['<c-d>'] = 'preview-page-down',
           ['<c-u>'] = 'preview-page-up',
+          ['<c-k>'] = 'kill-line',
         },
         fzf = {
           ['ctrl-d'] = 'preview-page-down',
           ['ctrl-u'] = 'preview-page-up',
           ['ctrl-q'] = 'select-all+accept',
+          ['ctrl-k'] = 'kill-line',
         },
       },
       files      = {
