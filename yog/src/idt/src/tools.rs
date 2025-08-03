@@ -11,7 +11,6 @@ pub mod helm_ls;
 pub mod lua_ls;
 pub mod marksman;
 pub mod nvim;
-pub mod ollama;
 pub mod prettierd;
 pub mod quicktype;
 pub mod ruff_lsp;
