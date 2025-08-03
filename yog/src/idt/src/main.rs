@@ -16,7 +16,6 @@ use crate::tools::helm_ls::HelmLs;
 use crate::tools::lua_ls::LuaLanguageServer;
 use crate::tools::marksman::Marksman;
 use crate::tools::nvim::Nvim;
-use crate::tools::ollama::Ollama;
 use crate::tools::prettierd::PrettierD;
 use crate::tools::quicktype::Quicktype;
 use crate::tools::ruff_lsp::RuffLsp;
@@ -156,9 +155,6 @@ fn main() -> color_eyre::Result<()> {
         }),
         Box::new(YamlLanguageServer {
             dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
-        }),
-        Box::new(Ollama {
             bin_dir: bin_dir.into(),
         }),
     ];
