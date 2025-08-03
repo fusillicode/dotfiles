@@ -61,7 +61,7 @@ fn main() -> color_eyre::Result<()> {
 }
 
 // Needed because calling oe from wezterm open-uri handler doesn't retain the PATH
-pub fn load_additional_paths() -> color_eyre::Result<()> {
+fn load_additional_paths() -> color_eyre::Result<()> {
     let home = std::env::var("HOME")?;
 
     let new_path = [
