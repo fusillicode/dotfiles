@@ -4,21 +4,26 @@ return {
   dependencies = { { 'nvim-lua/plenary.nvim', branch = 'master', }, },
   build = 'make tiktoken',
   config = function()
-    local copilot_chat = require('CopilotChat')
+    local co_chat = require('CopilotChat')
+    local co_chat_select = require('CopilotChat.select')
 
-    copilot_chat.setup({
+    co_chat.setup({
       auto_follow_cursor = false,
-      highlight_headers = false,
       insert_at_end = true,
-      separator = '---',
-      error_header = '> [!ERROR] Error',
+      error_header = '> [!ERROR] ❌',
+      headers = {
+        user = '🤓 You: ',
+        assistant = '🤖 AI Assistant: ',
+        tool = '🔧 Tool: ',
+      },
+      show_folds = false,
+      show_help = false,
       selection = function(source)
-        return require('CopilotChat.select').visual(source) or
-            require('CopilotChat.select').buffer(source)
+        return co_chat_select.visual(source) or co_chat_select.buffer(source)
       end,
     })
 
-    require('keymaps').copilot_chat(copilot_chat)
+    require('keymaps').copilot_chat(co_chat)
 
     vim.api.nvim_create_autocmd('BufEnter', {
       pattern = 'copilot-*',
