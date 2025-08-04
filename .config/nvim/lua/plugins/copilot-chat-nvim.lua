@@ -9,8 +9,9 @@ return {
 
     copilot_chat.setup({
       auto_follow_cursor = false,
+      highlight_selection = false,
       question_header = '> [!QUESTION] ❔',
-      answer_header = '> [!HINT] ❕',
+      answer_header = '> [!HINT] ✅',
       error_header = '> [!ERROR] ❌',
       headers = {
         user = '🥲 ',
