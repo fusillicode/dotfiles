@@ -1,6 +1,6 @@
 return {
   'CopilotC-Nvim/CopilotChat.nvim',
-  keys = { { '<leader>co', mode = { 'n', 'v', }, }, },
+  keys = { { '<leader>go', mode = { 'n', 'v', }, }, },
   dependencies = { { 'nvim-lua/plenary.nvim', branch = 'master', }, },
   build = 'make tiktoken',
   config = function()
