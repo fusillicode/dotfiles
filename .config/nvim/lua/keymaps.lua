@@ -81,6 +81,31 @@ function M.core()
 
   keymap_set('n', '<leader>gx', require('opener').open_under_cursor)
   keymap_set('v', '<leader>gx', require('opener').open_selection)
+
+  -- Thanks perplexity 🥲
+  keymap_set({ 'n', 'v', }, 'ga', function()
+    local alt_buf = vim.fn.bufnr('#')
+    -- If alternate buffer valid, loaded, and listed, switch to it
+    if alt_buf ~= -1 and vim.api.nvim_buf_is_loaded(alt_buf) and vim.fn.buflisted(alt_buf) == 1 then
+      vim.api.nvim_set_current_buf(alt_buf)
+      return
+    end
+
+    -- Otherwise, get list of loaded & listed buffers
+    local bufs = vim.fn.getbufinfo({ bufloaded = true, listed = true, })
+    local current_buf = vim.api.nvim_get_current_buf()
+    if #bufs == 0 then return end
+    -- Find the last buffer in the list that's not the current one
+    for i = #bufs, 1, -1 do
+      local bufnr = bufs[i].bufnr
+      local buftype = vim.api.nvim_buf_get_option(bufnr, 'buftype')
+      local bufname = vim.api.nvim_buf_get_name(bufnr)
+      if bufnr ~= current_buf and buftype == '' and bufname ~= '' then
+        vim.api.nvim_set_current_buf(bufnr)
+        return
+      end
+    end
+  end)
 end
 
 function M.fzf_lua(fzf_lua)
@@ -115,31 +140,6 @@ end
 function M.copilot_chat(copilot_chat)
   keymap_set({ 'n', 'v', }, '<leader>co', function() copilot_chat.toggle() end)
 end
-
--- Thanks perplexity 🥲
-keymap_set({ 'n', 'v', }, 'ga', function()
-  local alt_buf = vim.fn.bufnr('#')
-  -- If alternate buffer valid, loaded, and listed, switch to it
-  if alt_buf ~= -1 and vim.api.nvim_buf_is_loaded(alt_buf) and vim.fn.buflisted(alt_buf) == 1 then
-    vim.api.nvim_set_current_buf(alt_buf)
-    return
-  end
-
-  -- Otherwise, get list of loaded & listed buffers
-  local bufs = vim.fn.getbufinfo({ bufloaded = true, listed = true, })
-  local current_buf = vim.api.nvim_get_current_buf()
-  if #bufs == 0 then return end
-  -- Find the last buffer in the list that's not the current one
-  for i = #bufs, 1, -1 do
-    local bufnr = bufs[i].bufnr
-    local buftype = vim.api.nvim_buf_get_option(bufnr, 'buftype')
-    local bufname = vim.api.nvim_buf_get_name(bufnr)
-    if bufnr ~= current_buf and buftype == '' and bufname ~= '' then
-      vim.api.nvim_set_current_buf(bufnr)
-      return
-    end
-  end
-end)
 
 function M.oil()
   keymap_set('n', '<leader>F', ':Oil --float<cr>')
