@@ -1,9 +1,7 @@
 return {
   'CopilotC-Nvim/CopilotChat.nvim',
-  dependencies = {
-    { 'nvim-lua/plenary.nvim',                     branch = 'master', },
-    { 'MeanderingProgrammer/render-markdown.nvim', dependencies = { 'nvim-treesitter/nvim-treesitter', }, },
-  },
+  keys = { '<leader>co', },
+  dependencies = { { 'nvim-lua/plenary.nvim', branch = 'master', }, },
   build = 'make tiktoken',
   config = function()
     local copilot_chat = require('CopilotChat')
@@ -29,13 +27,6 @@ return {
         vim.opt_local.number = false
         vim.opt_local.conceallevel = 0
       end,
-    })
-
-    require('render-markdown').setup({
-      completions = {
-        blink = { enabled = true, },
-        lsp = { enabled = true, },
-      },
     })
   end,
 }
