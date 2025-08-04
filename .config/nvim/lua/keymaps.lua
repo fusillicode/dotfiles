@@ -127,7 +127,7 @@ function M.fzf_lua(fzf_lua)
   keymap_set({ 'n', 'v', }, '<leader>f', function() fzf_lua.files({ prompt = 'Files: ', line_query = true, }) end)
   keymap_set({ 'n', 'v', }, '<leader>b', function() fzf_lua.buffers({ prompt = 'Buffers: ', }) end)
   keymap_set({ 'n', 'v', }, '<leader>gs', function() fzf_lua.git_status({ prompt = 'gs: ', }) end)
-  keymap_set({ 'n', 'v', }, '<leader>cu', function() fzf_lua.commands({ prompt = 'Cmds: ', }) end)
+  keymap_set({ 'n', 'v', }, '<leader>c', function() fzf_lua.commands({ prompt = 'Cmds: ', }) end)
   keymap_set({ 'n', 'v', }, '<leader>d', function() fzf_lua.diagnostics_document({ prompt = 'Diags: ', }) end)
   keymap_set({ 'n', 'v', }, '<leader>D', function() fzf_lua.diagnostics_workspace({ prompt = '*Diags: ', }) end)
 
@@ -138,7 +138,7 @@ function M.fzf_lua(fzf_lua)
 end
 
 function M.copilot_chat(copilot_chat)
-  keymap_set({ 'n', 'v', }, '<leader>co', function() copilot_chat.toggle() end)
+  keymap_set({ 'n', 'v', }, '<leader>go', function() copilot_chat.toggle() end)
 end
 
 function M.oil()
