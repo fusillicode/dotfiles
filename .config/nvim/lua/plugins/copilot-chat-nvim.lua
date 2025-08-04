@@ -9,11 +9,13 @@ return {
 
     copilot_chat.setup({
       auto_follow_cursor = false,
+      question_header = '> [!QUESTION] ❔',
+      answer_header = '> [!HINT] ❕',
       error_header = '> [!ERROR] ❌',
       headers = {
-        user = '🤓 You: ',
-        assistant = '🤖 AI Assistant: ',
-        tool = '🔧 Tool: ',
+        user = '🥲 ',
+        assistant = '🤖 ',
+        tool = '🔧 ',
       },
       show_folds = false,
       show_help = false,
