@@ -1,6 +1,6 @@
 return {
   'CopilotC-Nvim/CopilotChat.nvim',
-  keys = { '<leader>co', },
+  keys = { { '<leader>co', mode = { 'n', 'v', }, }, },
   dependencies = { { 'nvim-lua/plenary.nvim', branch = 'master', }, },
   build = 'make tiktoken',
   config = function()
@@ -9,7 +9,6 @@ return {
 
     copilot_chat.setup({
       auto_follow_cursor = false,
-      insert_at_end = true,
       error_header = '> [!ERROR] ❌',
       headers = {
         user = '🤓 You: ',
