@@ -30,7 +30,7 @@ return {
       winopts    = {
         title       = '',
         title_flags = false,
-        height      = 0.90,
+        height      = 0.95,
         backdrop    = 100,
         preview     = {
           default = 'builtin',
