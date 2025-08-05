@@ -26,14 +26,5 @@ return {
     })
 
     require('keymaps').copilot_chat(copilot_chat)
-
-    vim.api.nvim_create_autocmd('BufEnter', {
-      pattern = 'copilot-*',
-      callback = function()
-        vim.opt_local.relativenumber = false
-        vim.opt_local.number = false
-        vim.opt_local.conceallevel = 0
-      end,
-    })
   end,
 }
