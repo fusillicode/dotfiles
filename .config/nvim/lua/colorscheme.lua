@@ -22,6 +22,10 @@ function M.setup(colorscheme)
     local diagn_hl = get_hl(0, { name = 'Diagnostic' .. lvl, })
     diagn_hl.bg = status_line_hl.bg
     set_hl(0, 'DiagnosticStatusLine' .. lvl, diagn_hl)
+
+    local diagn_underline_hl = get_hl(0, { name = 'DiagnosticUnderline' .. lvl, })
+    diagn_underline_hl.undercurl = true
+    set_hl(0, 'DiagnosticUnderline' .. lvl, diagn_underline_hl)
   end
 end
 
