@@ -8,13 +8,24 @@ local function get_enclosing_fn_or_method_name()
   local node = require('nvim-treesitter.ts_utils').get_node_at_cursor()
   if not node then return end
 
+  local fn_node_types = {
+    'function_definition',
+    'method_definition',
+    'function_declaration',
+    'method_declaration',
+    'function',
+    'method',
+    'function_item',
+  }
+
+  local cur_buf = vim.api.nvim_get_current_buf()
   while node do
-    local node_type = node:type()
-    if node_type == 'function_definition' or node_type == 'method_definition' or
-        node_type == 'function_declaration' or node_type == 'method_declaration' or
-        node_type == 'function' or node_type == 'method' or node_type == 'function_item' then
-      local name_node = node:field('name')[1]
-      if name_node then return vim.treesitter.get_node_text(name_node, 0) end
+    if vim.tbl_contains(fn_node_types, node:type()) then
+      local name_node = node:field('name')[1] or node:field('identifier')[1]
+      if name_node then
+        local name = vim.treesitter.get_node_text(name_node, cur_buf)
+        if name and name ~= '' then return name end
+      end
     end
     node = node:parent()
   end
