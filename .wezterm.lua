@@ -34,8 +34,8 @@ config.colors = {
     inactive_tab = { bg_color = background, fg_color = 'grey', },
   },
 }
-config.font_size = 16.5
-config.font = wezterm.font('Cascadia Code')
+config.font_size = 18
+config.font = wezterm.font('Consolas')
 -- No ligatures thanks
 config.harfbuzz_features = { 'calt=0', 'clig=0', 'liga=0', }
 config.line_height = 1.3
