@@ -79,9 +79,15 @@ impl FromLua for EditorPosition {
     fn from_lua(value: mlua::Value, _lua: &mlua::Lua) -> mlua::Result<Self> {
         if let LuaValue::Table(table) = value {
             let out = Self {
-                file_path: table.get("path")?,
-                row: table.get("row")?,
-                col: table.get("col")?,
+                file_path: table
+                    .get("path")
+                    .with_context(|_| format!("missing path in LuaTable {table:?}"))?,
+                row: table
+                    .get("row")
+                    .with_context(|_| format!("missing row in LuaTable {table:?}"))?,
+                col: table
+                    .get("col")
+                    .with_context(|_| format!("missing col in LuaTable {table:?}"))?,
             };
             return Ok(out);
         }
