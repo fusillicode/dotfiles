@@ -69,10 +69,9 @@ pub struct EditorPosition {
 
 impl From<EditorPosition> for Point {
     fn from(value: EditorPosition) -> Self {
-        Self {
-            row: value.row,
-            column: value.col,
-        }
+        let row = value.row.checked_sub(1).unwrap_or_default();
+        let column = value.col.checked_sub(1).unwrap_or_default();
+        Self { row, column }
     }
 }
 
@@ -105,7 +104,7 @@ fn get_enclosing_fn_node_name(root: Node, src: &[u8], position: Point) -> Option
         "method_definition",
         "method_item",
     ];
-    let mut node = root.named_descendant_for_point_range(position, position);
+    let mut node = root.descendant_for_point_range(position, position);
     while let Some(current_node) = node {
         if FN_NODE_KINDS.contains(&current_node.kind()) {
             if let Some(fn_node_name) = current_node
