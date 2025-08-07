@@ -7,16 +7,25 @@ use tree_sitter::Node;
 use tree_sitter::Parser;
 use tree_sitter::Point;
 
-pub fn run_test(_lua: &Lua, editor_position: EditorPosition) -> LuaResult<()> {
+/// Runs the function enclosing the supplied [`CursorPosition`] as a Rust test in the first Wezterm
+/// pane that matches the tab and the current working directory of the pane of the supplied
+/// [`CursorPosition`].
+///
+/// Returns an error in case of:
+/// - the file referenced by [`CursorPosition`] is not a Rust file
+/// - no enclosing function can be found for the supplied [`CursorPosition`]
+/// - any external error related to interacting with Wezterm and the external test runner app
+///   (i.e. cargo make)
+pub fn run_test(_lua: &Lua, cursor_position: CursorPosition) -> LuaResult<()> {
     let test_name = get_enclosing_fn_name_of_position(
-        editor_position.file_path.as_path(),
-        Point::from(&editor_position),
+        cursor_position.path.as_path(),
+        Point::from(&cursor_position),
     )?
     .ok_or(anyhow::anyhow!(
-        "no enclosing fn found for {editor_position:?}"
+        "no enclosing fn found for {cursor_position:?}"
     ))?;
 
-    let nvim_pane_id = utils::wezterm::get_current_pane_id()
+    let cur_pane_id = utils::wezterm::get_current_pane_id()
         .map_err(|e| anyhow::anyhow!(e))
         .with_context(|| "cannot get current Wezterm pane id")?;
 
@@ -24,20 +33,20 @@ pub fn run_test(_lua: &Lua, editor_position: EditorPosition) -> LuaResult<()> {
         .map_err(|e| anyhow::anyhow!(e))
         .with_context(|| "cannot get Wezterm panes")?;
 
-    let nvim_pane = wez_panes
+    let cur_pane = wez_panes
         .iter()
-        .find(|p| p.pane_id == nvim_pane_id)
+        .find(|p| p.pane_id == cur_pane_id)
         .ok_or(anyhow::anyhow!(
-            "Neovim pane not found in Wezterm panes {wez_panes:?}"
+            "current pane not found among Wezterm panes {wez_panes:?}"
         ))?;
 
     let test_runner_pane = wez_panes
         .iter()
         .find(|p| {
-            p.pane_id != nvim_pane.pane_id && p.tab_id == nvim_pane.tab_id && p.cwd == nvim_pane.cwd
+            p.pane_id != cur_pane.pane_id && p.tab_id == cur_pane.tab_id && p.cwd == cur_pane.cwd
         })
         .ok_or(anyhow::anyhow!(
-            "test runner pane not found for Neovim pane {nvim_pane:#?} in Wezterm panes {wez_panes:#?}"
+            "cannot find a pane sibling to the current one {cur_pane:#?} where to run the test {test_name} among Wezterm panes {wez_panes:#?}"
         ))?;
 
     utils::cmd::silent_cmd("sh")
@@ -59,26 +68,28 @@ pub fn run_test(_lua: &Lua, editor_position: EditorPosition) -> LuaResult<()> {
     Ok(())
 }
 
+/// Represents the position of the cursor inside a terminal editor opened on an existing file
+/// inside a Wezterm pane.
 #[derive(Debug)]
-pub struct EditorPosition {
-    pub file_path: PathBuf,
+pub struct CursorPosition {
+    pub path: PathBuf,
     pub row: usize,
     pub col: usize,
 }
 
-impl From<&EditorPosition> for Point {
-    fn from(value: &EditorPosition) -> Self {
+impl From<&CursorPosition> for Point {
+    fn from(value: &CursorPosition) -> Self {
         let row = value.row.checked_sub(1).unwrap_or_default();
         let column = value.col.checked_sub(1).unwrap_or_default();
         Self { row, column }
     }
 }
 
-impl FromLua for EditorPosition {
+impl FromLua for CursorPosition {
     fn from_lua(value: mlua::Value, _lua: &mlua::Lua) -> mlua::Result<Self> {
         if let LuaValue::Table(table) = value {
             let out = Self {
-                file_path: PathBuf::from(LuaErrorContext::with_context(
+                path: PathBuf::from(LuaErrorContext::with_context(
                     table.get::<String>("path"),
                     |_| format!("missing path in LuaTable {table:?}",),
                 )?),
@@ -104,7 +115,7 @@ fn get_enclosing_fn_name_of_position(
     position: Point,
 ) -> anyhow::Result<Option<String>> {
     if file_path.extension().is_some_and(|ext| ext != "rs") {
-        anyhow::bail!("{file_path:?} not a Rust file");
+        anyhow::bail!("{file_path:?} is not a Rust file");
     }
     let src = std::fs::read(file_path).with_context(|| format!("Error reading {file_path:?}"))?;
 
