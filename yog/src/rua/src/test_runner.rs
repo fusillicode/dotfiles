@@ -2,7 +2,6 @@ use mlua::prelude::*;
 use tree_sitter::Node;
 use tree_sitter::Parser;
 use tree_sitter::Point;
-// use tree_sitter_rust;
 
 pub fn run(_lua: &Lua, editor_position: EditorPosition) -> LuaResult<String> {
     let Ok(src) = std::fs::read(&editor_position.file_path) else {
@@ -20,13 +19,10 @@ pub fn run(_lua: &Lua, editor_position: EditorPosition) -> LuaResult<String> {
         return Ok("Failed to parse code".into());
     };
 
-    let Some(fn_node) = get_enclosing_fn_node(parsed_src.root_node(), Point::from(editor_position))
+    let Some(test_name) =
+        get_enclosing_fn_node_name(parsed_src.root_node(), &src, Point::from(editor_position))
     else {
         return Ok("No enclosing fn node found".into());
-    };
-
-    let Ok(test_name) = fn_node.utf8_text(&src) else {
-        return Ok("Cannot get fn node name".into());
     };
 
     let Ok(nvim_pane_id) = utils::wezterm::get_current_pane_id() else {
@@ -98,7 +94,7 @@ impl FromLua for EditorPosition {
     }
 }
 
-fn get_enclosing_fn_node(root: Node, position: Point) -> Option<Node> {
+fn get_enclosing_fn_node_name(root: Node, src: &[u8], position: Point) -> Option<String> {
     const FN_NODE_KINDS: &[&str] = &[
         "function",
         "function_declaration",
@@ -107,16 +103,23 @@ fn get_enclosing_fn_node(root: Node, position: Point) -> Option<Node> {
         "method",
         "method_declaration",
         "method_definition",
+        "method_item",
     ];
-    let mut node = root.named_descendant_for_point_range(position, position)?;
-    loop {
-        if FN_NODE_KINDS.contains(&node.kind()) {
-            return node.child_by_field_name("name");
+    let mut node = root.named_descendant_for_point_range(position, position);
+    while let Some(current_node) = node {
+        if FN_NODE_KINDS.contains(&current_node.kind()) {
+            if let Some(fn_node_name) = current_node
+                .child_by_field_name("name")
+                .or_else(|| current_node.child_by_field_name("identifier"))
+            {
+                if let Ok(name_text) = fn_node_name.utf8_text(src) {
+                    if !name_text.is_empty() {
+                        return Some(name_text.to_string());
+                    }
+                }
+            };
         }
-        if let Some(parent) = node.parent() {
-            node = parent;
-            continue;
-        }
-        return None;
+        node = current_node.parent();
     }
+    None
 }
