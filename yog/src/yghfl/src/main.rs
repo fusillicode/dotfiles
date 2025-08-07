@@ -14,7 +14,7 @@ use utils::editor::Editor;
 use utils::hx::HxCursorPosition;
 use utils::hx::HxStatusLine;
 use utils::wezterm::get_sibling_pane_with_titles;
-use utils::wezterm::WezTermPane;
+use utils::wezterm::WeztermPane;
 
 /// Yank link to GitHub of the file displayed in the status line of the first Helix instance found running alongside
 /// the Wezterm pane from where the cmd has been invoked.
@@ -23,7 +23,7 @@ fn main() -> color_eyre::Result<()> {
 
     let hx_pane = get_sibling_pane_with_titles(
         &utils::wezterm::get_all_panes()?,
-        std::env::var("WEZTERM_PANE")?.parse()?,
+        utils::wezterm::get_current_pane_id()?,
         Editor::Hx.pane_titles(),
     )?;
 
@@ -119,7 +119,7 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> color_eyre::Res
 
 fn build_hx_cursor_absolute_file_path(
     hx_cursor_file_path: &Path,
-    hx_pane: &WezTermPane,
+    hx_pane: &WeztermPane,
 ) -> color_eyre::Result<PathBuf> {
     if let Ok(hx_cursor_file_path) = hx_cursor_file_path.strip_prefix("~") {
         let mut home_absolute_path = Path::new(&std::env::var("HOME")?).to_path_buf();
@@ -183,7 +183,7 @@ mod tests {
                 file_path: Path::new("~/src/bar/baz.rs").into(),
                 ..Faker.fake()
             };
-            let hx_pane = WezTermPane {
+            let hx_pane = WeztermPane {
                 cwd: Path::new("file://hostname/Users/Foo/dev").into(),
                 ..Faker.fake()
             };
@@ -205,7 +205,7 @@ mod tests {
             file_path: Path::new("src/bar/baz.rs").into(),
             ..Faker.fake()
         };
-        let hx_pane = WezTermPane {
+        let hx_pane = WeztermPane {
             cwd: Path::new("file://hostname/Users/Foo/dev").into(),
             ..Faker.fake()
         };
@@ -226,7 +226,7 @@ mod tests {
             file_path: Path::new("/Users/Foo/dev/src/bar/baz.rs").into(),
             ..Faker.fake()
         };
-        let hx_pane = WezTermPane {
+        let hx_pane = WeztermPane {
             cwd: Path::new("file://hostname/Users/Foo/dev").into(),
             ..Faker.fake()
         };

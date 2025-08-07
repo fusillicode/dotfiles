@@ -4,7 +4,11 @@ use std::process::Command;
 use color_eyre::eyre::eyre;
 use serde::Deserialize;
 
-pub fn get_all_panes() -> color_eyre::Result<Vec<WezTermPane>> {
+pub fn get_current_pane_id() -> color_eyre::Result<i64> {
+    Ok(std::env::var("WEZTERM_PANE")?.parse()?)
+}
+
+pub fn get_all_panes() -> color_eyre::Result<Vec<WeztermPane>> {
     Ok(serde_json::from_slice(
         &Command::new("wezterm")
             .args(["cli", "list", "--format", "json"])
@@ -14,10 +18,10 @@ pub fn get_all_panes() -> color_eyre::Result<Vec<WezTermPane>> {
 }
 
 pub fn get_sibling_pane_with_titles(
-    panes: &[WezTermPane],
+    panes: &[WeztermPane],
     current_pane_id: i64,
     pane_titles: &[&str],
-) -> color_eyre::Result<WezTermPane> {
+) -> color_eyre::Result<WeztermPane> {
     let current_pane_tab_id = panes
         .iter()
         .find(|w| w.pane_id == current_pane_id)
@@ -38,12 +42,12 @@ pub fn get_sibling_pane_with_titles(
 #[derive(Debug, Deserialize, Clone)]
 #[cfg_attr(any(test, feature = "fake"), derive(fake::Dummy))]
 #[allow(dead_code)]
-pub struct WezTermPane {
+pub struct WeztermPane {
     pub window_id: i64,
     pub tab_id: i64,
     pub pane_id: i64,
     pub workspace: String,
-    pub size: WezTermPaneSize,
+    pub size: WeztermPaneSize,
     pub title: String,
     pub cwd: PathBuf,
     pub cursor_x: i64,
@@ -59,7 +63,7 @@ pub struct WezTermPane {
     pub tty_name: String,
 }
 
-impl WezTermPane {
+impl WeztermPane {
     pub fn absolute_cwd(&self) -> PathBuf {
         let mut path_parts = self.cwd.components();
         path_parts.next(); // Skip `file://`
@@ -74,7 +78,7 @@ impl WezTermPane {
 #[derive(Debug, Deserialize, Clone)]
 #[cfg_attr(any(test, feature = "fake"), derive(fake::Dummy))]
 #[allow(dead_code)]
-pub struct WezTermPaneSize {
+pub struct WeztermPaneSize {
     pub rows: i64,
     pub cols: i64,
     pub pixel_width: i64,

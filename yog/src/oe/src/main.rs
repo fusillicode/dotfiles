@@ -26,10 +26,9 @@ fn main() -> color_eyre::Result<()> {
     };
 
     let pane_id = match args.get(2) {
-        Some(x) => x.into(),
-        None => std::env::var("WEZTERM_PANE")?,
-    }
-    .parse()?;
+        Some(x) => x.parse()?,
+        None => utils::wezterm::get_current_pane_id()?,
+    };
 
     let panes = utils::wezterm::get_all_panes()?;
 
@@ -45,7 +44,7 @@ fn main() -> color_eyre::Result<()> {
         .args([
             "-c",
             &format!(
-                // `wezterm cli send-text $'\e'` sends the "ESC" to WezTerm to exit from insert mode
+                // `wezterm cli send-text $'\e'` sends the "ESC" to Wezterm to exit from insert mode
                 // https://github.com/wez/wezterm/discussions/3945
                 r#"
                     wezterm cli send-text $'\e' --pane-id '{editor_pane_id}' --no-paste && \

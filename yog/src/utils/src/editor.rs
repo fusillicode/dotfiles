@@ -5,7 +5,7 @@ use color_eyre::eyre;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 
-use crate::wezterm::WezTermPane;
+use crate::wezterm::WeztermPane;
 
 pub enum Editor {
     Hx,
@@ -51,11 +51,11 @@ pub struct FileToOpen {
     column: i64,
 }
 
-impl TryFrom<(&str, i64, &[WezTermPane])> for FileToOpen {
+impl TryFrom<(&str, i64, &[WeztermPane])> for FileToOpen {
     type Error = eyre::Error;
 
     fn try_from(
-        (file_to_open, pane_id, panes): (&str, i64, &[WezTermPane]),
+        (file_to_open, pane_id, panes): (&str, i64, &[WeztermPane]),
     ) -> Result<Self, Self::Error> {
         if Path::new(file_to_open).is_absolute() {
             return Self::from_str(file_to_open);
