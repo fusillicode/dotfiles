@@ -118,11 +118,11 @@ function M.core()
     end
   end)
 
-  keymap_set({ 'n', 'v', }, 't', function()
-    local row, col = require('utils').unpack(require('utils').dbg(vim.api.nvim_win_get_cursor(0)))
-    require('utils').dbg(
+  keymap_set({ 'n', 'v', }, '<leader>t', function()
+    local row, col = require('utils').unpack(vim.api.nvim_win_get_cursor(0))
+    pcall(function()
       require('rua').run_test({ path = vim.api.nvim_buf_get_name(0), row = row, col = col, })
-    )
+    end)
   end)
 end
 

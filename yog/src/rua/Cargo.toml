@@ -8,7 +8,7 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
-# Couldn't be able to use color-eyre...
+# Couldn't be able to use color-eyre...fallingback to anyhow
 anyhow = { version = "1.0" }
 fkr = { path = "../fkr" }
 mlua = { version = "0.11", features = ["anyhow", "macros", "module", "luajit"] }

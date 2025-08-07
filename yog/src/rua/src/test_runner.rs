@@ -7,32 +7,40 @@ use tree_sitter::Node;
 use tree_sitter::Parser;
 use tree_sitter::Point;
 
-pub fn run(_lua: &Lua, editor_position: EditorPosition) -> LuaResult<String> {
-    let Ok(Some(test_name)) = get_enclosing_fn_name_of_position(
-        editor_position.file_path.clone().as_path(),
-        Point::from(editor_position),
-    ) else {
-        return Ok("No enclosing fn node found".into());
-    };
+pub fn run_test(_lua: &Lua, editor_position: EditorPosition) -> LuaResult<()> {
+    let test_name = get_enclosing_fn_name_of_position(
+        editor_position.file_path.as_path(),
+        Point::from(&editor_position),
+    )?
+    .ok_or(anyhow::anyhow!(
+        "no enclosing fn found for {editor_position:?}"
+    ))?;
 
-    let Ok(nvim_pane_id) = utils::wezterm::get_current_pane_id() else {
-        return Ok("Cannot get current pane id".into());
-    };
-    let Ok(all_panes) = utils::wezterm::get_all_panes() else {
-        return Ok("Cannot get all Wezterm panes".into());
-    };
-    let Some(nvim_pane) = all_panes.iter().find(|p| p.pane_id == nvim_pane_id) else {
-        return Ok("No neovim pane found".into());
-    };
-    let Some(test_runner_pane) = all_panes.iter().find(|p| {
-        p.pane_id != nvim_pane.pane_id && p.tab_id == nvim_pane.tab_id && p.cwd == nvim_pane.cwd
-    }) else {
-        return Ok(format!(
-            "No test runner pane found, nvim_pane {nvim_pane:#?}, all panes {all_panes:#?}"
-        ));
-    };
+    let nvim_pane_id = utils::wezterm::get_current_pane_id()
+        .map_err(|e| anyhow::anyhow!(e))
+        .with_context(|| "cannot get current Wezterm pane id")?;
 
-    let Ok(_) = utils::cmd::silent_cmd("sh")
+    let wez_panes = utils::wezterm::get_all_panes()
+        .map_err(|e| anyhow::anyhow!(e))
+        .with_context(|| "cannot get Wezterm panes")?;
+
+    let nvim_pane = wez_panes
+        .iter()
+        .find(|p| p.pane_id == nvim_pane_id)
+        .ok_or(anyhow::anyhow!(
+            "Neovim pane not found in Wezterm panes {wez_panes:?}"
+        ))?;
+
+    let test_runner_pane = wez_panes
+        .iter()
+        .find(|p| {
+            p.pane_id != nvim_pane.pane_id && p.tab_id == nvim_pane.tab_id && p.cwd == nvim_pane.cwd
+        })
+        .ok_or(anyhow::anyhow!(
+            "test runner pane not found for Neovim pane {nvim_pane:#?} in Wezterm panes {wez_panes:#?}"
+        ))?;
+
+    utils::cmd::silent_cmd("sh")
         .args([
             "-c",
             &format!(
@@ -43,11 +51,12 @@ pub fn run(_lua: &Lua, editor_position: EditorPosition) -> LuaResult<String> {
                 "#,
                 test_runner_pane.pane_id
             ),
-        ]).spawn() else {
-        return Ok("Error interacting with Wezterm".into());
-    };
+        ])
+        .spawn()
+        .with_context(|| format!("error executing test {test_name} in Wezterm pane {test_runner_pane:?}"))
+        .map_err(|e| anyhow::anyhow!(e))?;
 
-    Ok(format!("{test_name}, {}", test_runner_pane.pane_id))
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -57,8 +66,8 @@ pub struct EditorPosition {
     pub col: usize,
 }
 
-impl From<EditorPosition> for Point {
-    fn from(value: EditorPosition) -> Self {
+impl From<&EditorPosition> for Point {
+    fn from(value: &EditorPosition) -> Self {
         let row = value.row.checked_sub(1).unwrap_or_default();
         let column = value.col.checked_sub(1).unwrap_or_default();
         Self { row, column }

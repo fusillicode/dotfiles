@@ -41,6 +41,6 @@ fn rua(lua: &Lua) -> LuaResult<LuaTable> {
     )?;
     exports.set("get_fd_cli_flags", lua.create_function(fd::CliFlags.get())?)?;
     exports.set("get_rg_cli_flags", lua.create_function(rg::CliFlags.get())?)?;
-    exports.set("run_test", lua.create_function(test_runner::run)?)?;
+    exports.set("run_test", lua.create_function(test_runner::run_test)?)?;
     Ok(exports)
 }
