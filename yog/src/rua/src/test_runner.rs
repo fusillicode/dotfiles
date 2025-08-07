@@ -79,9 +79,9 @@ impl FromLua for EditorPosition {
     fn from_lua(value: mlua::Value, _lua: &mlua::Lua) -> mlua::Result<Self> {
         if let LuaValue::Table(table) = value {
             let out = Self {
-                file_path: table.get("path").unwrap(),
-                row: table.get("row").unwrap(),
-                col: table.get("col").unwrap(),
+                file_path: table.get("path")?,
+                row: table.get("row")?,
+                col: table.get("col")?,
             };
             return Ok(out);
         }
