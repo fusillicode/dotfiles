@@ -106,17 +106,14 @@ fn get_enclosing_fn_node_name(root: Node, src: &[u8], position: Point) -> Option
     ];
     let mut node = root.descendant_for_point_range(position, position);
     while let Some(current_node) = node {
-        if FN_NODE_KINDS.contains(&current_node.kind()) {
-            if let Some(fn_node_name) = current_node
+        if FN_NODE_KINDS.contains(&current_node.kind())
+            && let Some(fn_node_name) = current_node
                 .child_by_field_name("name")
                 .or_else(|| current_node.child_by_field_name("identifier"))
-            {
-                if let Ok(name_text) = fn_node_name.utf8_text(src) {
-                    if !name_text.is_empty() {
-                        return Some(name_text.to_string());
-                    }
-                }
-            };
+            && let Ok(fn_name) = fn_node_name.utf8_text(src)
+            && !fn_name.is_empty()
+        {
+            return Some(fn_name.to_string());
         }
         node = current_node.parent();
     }

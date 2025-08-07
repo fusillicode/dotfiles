@@ -7,8 +7,8 @@ use std::time::Duration;
 use std::time::Instant;
 
 use color_eyre::eyre;
-use color_eyre::eyre::bail;
 use color_eyre::eyre::WrapErr;
+use color_eyre::eyre::bail;
 
 /// Executes the supplied command till it returns an ok status code.
 fn main() -> color_eyre::Result<()> {

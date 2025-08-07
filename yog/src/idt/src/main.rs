@@ -3,6 +3,7 @@
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 
+use crate::tools::Installer;
 use crate::tools::bash_language_server::BashLanguageServer;
 use crate::tools::commitlint::Commitlint;
 use crate::tools::deno::Deno;
@@ -30,7 +31,6 @@ use crate::tools::typos_lsp::TyposLsp;
 use crate::tools::vale::Vale;
 use crate::tools::vscode_langservers::VsCodeLangServers;
 use crate::tools::yaml_language_server::YamlLanguageServer;
-use crate::tools::Installer;
 
 mod installers;
 mod tools;

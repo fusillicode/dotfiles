@@ -1,7 +1,7 @@
 use std::process::Command;
 
-use crate::installers::curl_install::OutputOption;
 use crate::Installer;
+use crate::installers::curl_install::OutputOption;
 
 pub struct LuaLanguageServer {
     pub dev_tools_dir: String,
@@ -21,7 +21,10 @@ impl Installer for LuaLanguageServer {
         std::fs::create_dir_all(&dev_tools_repo_dir)?;
 
         crate::installers::curl_install::run(
-           &format!("https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}-darwin-arm64.tar.gz", self.bin_name()),
+            &format!(
+                "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}-darwin-arm64.tar.gz",
+                self.bin_name()
+            ),
             OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &dev_tools_repo_dir])),
         )
     }

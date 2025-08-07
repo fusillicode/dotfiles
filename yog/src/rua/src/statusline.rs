@@ -186,7 +186,7 @@ mod tests {
             workspace_diags: [(Severity::Info, 0)].into_iter().collect(),
         };
         assert_eq!(
-            "%#DiagnosticStatusLineError#E:3 %#DiagnosticStatusLineInfo#I:1 %#StatusLine#foo %m %r%=", 
+            "%#DiagnosticStatusLineError#E:3 %#DiagnosticStatusLineInfo#I:1 %#StatusLine#foo %m %r%=",
             &statusline.draw()
         );
 
@@ -198,7 +198,7 @@ mod tests {
                 .collect(),
         };
         assert_eq!(
-            "%#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#E:3 %#DiagnosticStatusLineInfo#I:1", 
+            "%#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#E:3 %#DiagnosticStatusLineInfo#I:1",
             &statusline.draw()
         );
 
@@ -212,7 +212,7 @@ mod tests {
                 .collect(),
         };
         assert_eq!(
-            "%#DiagnosticStatusLineWarn#W:2 %#DiagnosticStatusLineHint#H:3 %#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#E:3 %#DiagnosticStatusLineInfo#I:1", 
+            "%#DiagnosticStatusLineWarn#W:2 %#DiagnosticStatusLineHint#H:3 %#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#E:3 %#DiagnosticStatusLineInfo#I:1",
             &statusline.draw()
         );
     }

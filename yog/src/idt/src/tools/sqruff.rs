@@ -1,7 +1,7 @@
 use std::process::Command;
 
-use crate::installers::curl_install::OutputOption;
 use crate::Installer;
+use crate::installers::curl_install::OutputOption;
 
 pub struct Sqruff {
     pub bin_dir: String,

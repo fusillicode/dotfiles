@@ -155,8 +155,8 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_pr_id_form_url_returns_the_expected_error_when_url_doenst_have_the_expected_pr_id_prefix(
-    ) {
+    fn test_extract_pr_id_form_url_returns_the_expected_error_when_url_doenst_have_the_expected_pr_id_prefix()
+     {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/foo")).unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_url(&url));
         assert_eq!(
@@ -177,29 +177,29 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_that_ends_with_the_pr_id(
-    ) {
+    fn test_extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_that_ends_with_the_pr_id()
+     {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/pull/42")).unwrap();
         assert_eq!("42", extract_pr_id_form_url(&url).unwrap())
     }
 
     #[test]
-    fn test_extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_that_does_not_end_with_the_pr_id(
-    ) {
+    fn test_extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_that_does_not_end_with_the_pr_id()
+     {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/pull/42/foo")).unwrap();
         assert_eq!("42", extract_pr_id_form_url(&url).unwrap())
     }
 
     #[test]
-    fn test_extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_if_pr_id_prefix_is_not_1st_path_segment(
-    ) {
+    fn test_extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_if_pr_id_prefix_is_not_1st_path_segment()
+     {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/foo/pull/42/foo")).unwrap();
         assert_eq!("42", extract_pr_id_form_url(&url).unwrap())
     }
 
     #[test]
-    fn test_extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_if_pr_is_in_query_string(
-    ) {
+    fn test_extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_if_pr_is_in_query_string()
+     {
         let url = Url::parse(&format!(
             "https://{GITHUB_HOST}/<OWNER>/<REPO>/actions/runs/<RUN_ID>?pr=42"
         ))

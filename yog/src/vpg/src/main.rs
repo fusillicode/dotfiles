@@ -9,8 +9,8 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
 
-use color_eyre::eyre::bail;
 use color_eyre::eyre::WrapErr;
+use color_eyre::eyre::bail;
 use serde::Deserialize;
 
 /// Copy to the system clipboard the pgcli cmd to connect to the DB matching the selected alias with
@@ -109,7 +109,9 @@ impl<'a> PgpassFile<'a> {
 
                     continue;
                 }
-                bail!("missing expected conn line after metadata line {metadata:?} obtained from idx_line {idx_line:?}")
+                bail!(
+                    "missing expected conn line after metadata line {metadata:?} obtained from idx_line {idx_line:?}"
+                )
             }
         }
 

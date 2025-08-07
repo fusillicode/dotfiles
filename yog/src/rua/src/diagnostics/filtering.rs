@@ -1,9 +1,9 @@
-use mlua::prelude::*;
 use mlua::Error;
+use mlua::prelude::*;
 
-use crate::diagnostics::filters::buffer::BufferFilter;
 use crate::diagnostics::filters::DiagnosticsFilter;
 use crate::diagnostics::filters::DiagnosticsFilters;
+use crate::diagnostics::filters::buffer::BufferFilter;
 
 /// Filters out the LSP diagnostics based on the coded filters.
 pub fn filter_diagnostics(

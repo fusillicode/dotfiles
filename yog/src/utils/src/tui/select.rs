@@ -2,9 +2,9 @@ use color_eyre::eyre::eyre;
 use inquire::InquireError;
 use inquire::Select;
 
-use crate::tui::minimal_render_config;
 use crate::tui::ClosablePrompt;
 use crate::tui::ClosablePromptError;
+use crate::tui::minimal_render_config;
 
 pub fn minimal<'a, T: std::fmt::Display>(options: Vec<T>) -> Select<'a, T> {
     Select::new("", options)

@@ -69,6 +69,8 @@ fn load_additional_paths() -> color_eyre::Result<()> {
     ]
     .join(":");
 
-    std::env::set_var("PATH", &new_path);
+    unsafe {
+        std::env::set_var("PATH", &new_path);
+    }
     Ok(())
 }

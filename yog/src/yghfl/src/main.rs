@@ -13,8 +13,8 @@ use url::Url;
 use utils::editor::Editor;
 use utils::hx::HxCursorPosition;
 use utils::hx::HxStatusLine;
-use utils::wezterm::get_sibling_pane_with_titles;
 use utils::wezterm::WeztermPane;
+use utils::wezterm::get_sibling_pane_with_titles;
 
 /// Yank link to GitHub of the file displayed in the status line of the first Helix instance found running alongside
 /// the Wezterm pane from where the cmd has been invoked.
@@ -175,8 +175,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_relative_to_home_dir(
-    ) {
+    fn test_build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_relative_to_home_dir()
+     {
         // Arrange
         temp_env::with_vars([("HOME", Some("/Users/Foo"))], || {
             let hx_status_line = HxStatusLine {
@@ -198,8 +198,8 @@ mod tests {
     }
 
     #[test]
-    fn test_build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_relative_to_hx_root(
-    ) {
+    fn test_build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_relative_to_hx_root()
+     {
         // Arrange
         let hx_status_line = HxStatusLine {
             file_path: Path::new("src/bar/baz.rs").into(),

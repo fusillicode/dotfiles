@@ -2,9 +2,9 @@ use inquire::Autocomplete;
 use inquire::InquireError;
 use inquire::Text;
 
-use crate::tui::minimal_render_config;
 use crate::tui::ClosablePrompt;
 use crate::tui::ClosablePromptError;
+use crate::tui::minimal_render_config;
 
 pub fn minimal<'a, T: std::fmt::Display>(ac: Option<Box<dyn Autocomplete>>) -> Text<'a> {
     let mut text = Text::new("")
