@@ -8,8 +8,10 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
+# Couldn't be able to use color-eyre...
+anyhow = { version = "1.0" }
 fkr = { path = "../fkr" }
-mlua = { version = "0.11", features = ["macros", "module", "luajit"] }
+mlua = { version = "0.11", features = ["anyhow", "macros", "module", "luajit"] }
 strum = { workspace = true }
 tree-sitter = { version = "0.25" }
 tree-sitter-rust = { version = "0.24" }

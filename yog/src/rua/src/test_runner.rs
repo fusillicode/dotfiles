@@ -1,27 +1,17 @@
+use std::path::Path;
+use std::path::PathBuf;
+
+use anyhow::Context;
 use mlua::prelude::*;
 use tree_sitter::Node;
 use tree_sitter::Parser;
 use tree_sitter::Point;
 
 pub fn run(_lua: &Lua, editor_position: EditorPosition) -> LuaResult<String> {
-    let Ok(src) = std::fs::read(&editor_position.file_path) else {
-        return Ok(format!(
-            "Failed to read path of editor position {editor_position:?}"
-        ));
-    };
-
-    let mut parser = Parser::new();
-    let Ok(_) = parser.set_language(&tree_sitter_rust::LANGUAGE.into()) else {
-        return Ok("Failed to set parser language".into());
-    };
-
-    let Some(parsed_src) = parser.parse(&src, None) else {
-        return Ok("Failed to parse code".into());
-    };
-
-    let Some(test_name) =
-        get_enclosing_fn_node_name(parsed_src.root_node(), &src, Point::from(editor_position))
-    else {
+    let Ok(Some(test_name)) = get_enclosing_fn_name_of_position(
+        editor_position.file_path.clone().as_path(),
+        Point::from(editor_position),
+    ) else {
         return Ok("No enclosing fn node found".into());
     };
 
@@ -62,7 +52,7 @@ pub fn run(_lua: &Lua, editor_position: EditorPosition) -> LuaResult<String> {
 
 #[derive(Debug)]
 pub struct EditorPosition {
-    pub file_path: String,
+    pub file_path: PathBuf,
     pub row: usize,
     pub col: usize,
 }
@@ -79,15 +69,16 @@ impl FromLua for EditorPosition {
     fn from_lua(value: mlua::Value, _lua: &mlua::Lua) -> mlua::Result<Self> {
         if let LuaValue::Table(table) = value {
             let out = Self {
-                file_path: table
-                    .get("path")
-                    .with_context(|_| format!("missing path in LuaTable {table:?}"))?,
-                row: table
-                    .get("row")
-                    .with_context(|_| format!("missing row in LuaTable {table:?}"))?,
-                col: table
-                    .get("col")
-                    .with_context(|_| format!("missing col in LuaTable {table:?}"))?,
+                file_path: PathBuf::from(LuaErrorContext::with_context(
+                    table.get::<String>("path"),
+                    |_| format!("missing path in LuaTable {table:?}",),
+                )?),
+                row: LuaErrorContext::with_context(table.get("row"), |_| {
+                    format!("missing row in LuaTable {table:?}")
+                })?,
+                col: LuaErrorContext::with_context(table.get("col"), |_| {
+                    format!("missing col in LuaTable {table:?}")
+                })?,
             };
             return Ok(out);
         }
@@ -99,7 +90,32 @@ impl FromLua for EditorPosition {
     }
 }
 
-fn get_enclosing_fn_node_name(root: Node, src: &[u8], position: Point) -> Option<String> {
+fn get_enclosing_fn_name_of_position(
+    file_path: &Path,
+    position: Point,
+) -> anyhow::Result<Option<String>> {
+    if file_path.extension().is_some_and(|ext| ext != "rs") {
+        anyhow::bail!("{file_path:?} not a Rust file");
+    }
+    let src = std::fs::read(file_path).with_context(|| format!("Error reading {file_path:?}"))?;
+
+    let mut parser = Parser::new();
+    parser
+        .set_language(&tree_sitter_rust::LANGUAGE.into())
+        .with_context(|| "error setting parser language")?;
+
+    let src_tree = parser
+        .parse(&src, None)
+        .ok_or(anyhow::anyhow!("error parsing src {file_path:?} as Rust"))?;
+
+    let node_at_position = src_tree
+        .root_node()
+        .descendant_for_point_range(position, position);
+
+    Ok(get_enclosing_fn_name_of_node(&src, node_at_position))
+}
+
+fn get_enclosing_fn_name_of_node(src: &[u8], node: Option<Node>) -> Option<String> {
     const FN_NODE_KINDS: &[&str] = &[
         "function",
         "function_declaration",
@@ -110,18 +126,18 @@ fn get_enclosing_fn_node_name(root: Node, src: &[u8], position: Point) -> Option
         "method_definition",
         "method_item",
     ];
-    let mut node = root.descendant_for_point_range(position, position);
-    while let Some(current_node) = node {
-        if FN_NODE_KINDS.contains(&current_node.kind())
-            && let Some(fn_node_name) = current_node
+    let mut current_node = node;
+    while let Some(node) = current_node {
+        if FN_NODE_KINDS.contains(&node.kind())
+            && let Some(fn_node_name) = node
                 .child_by_field_name("name")
-                .or_else(|| current_node.child_by_field_name("identifier"))
+                .or_else(|| node.child_by_field_name("identifier"))
             && let Ok(fn_name) = fn_node_name.utf8_text(src)
             && !fn_name.is_empty()
         {
             return Some(fn_name.to_string());
         }
-        node = current_node.parent();
+        current_node = node.parent();
     }
     None
 }
