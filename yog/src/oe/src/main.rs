@@ -4,7 +4,6 @@ use std::str::FromStr;
 
 use color_eyre::eyre::bail;
 
-use utils::cmd::silent_cmd;
 use utils::editor::Editor;
 use utils::editor::FileToOpen;
 
@@ -40,7 +39,7 @@ fn main() -> color_eyre::Result<()> {
 
     let open_file_cmd = editor.open_file_cmd(&file_to_open);
 
-    silent_cmd("sh")
+    utils::cmd::silent_cmd("sh")
         .args([
             "-c",
             &format!(
