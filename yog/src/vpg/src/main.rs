@@ -13,8 +13,7 @@ use color_eyre::eyre::WrapErr;
 use color_eyre::eyre::bail;
 use serde::Deserialize;
 
-/// Copy to the system clipboard the pgcli cmd to connect to the DB matching the selected alias with
-/// refreshed Vault credentials.
+/// Connects via pgcli to the DB matching the selected alias with refreshed Vault credentials.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

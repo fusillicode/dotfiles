@@ -74,8 +74,11 @@ pub fn run_test(_lua: &Lua, cursor_position: CursorPosition) -> LuaResult<()> {
 /// inside a Wezterm pane.
 #[derive(Debug)]
 pub struct CursorPosition {
+    /// Path to an existing file opened in a terminal editor
     pub path: PathBuf,
+    /// Row where the cursor is placed inside the opened file
     pub row: usize,
+    /// Column where the cursor is placed inside the opened file
     pub col: usize,
 }
 

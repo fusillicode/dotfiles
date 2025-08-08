@@ -66,14 +66,23 @@ fn get_enriched_path_env() -> color_eyre::Result<Env> {
         &format!("{}/.local/bin", std::env::var("HOME")?),
     ]
     .join(":");
-    Ok(Env("PATH".into(), enriched_path))
+
+    Ok(Env {
+        name: "PATH",
+        value: enriched_path,
+    })
 }
 
-/// New type to get a [`(&str, &str)`] from a [`(String, String)`].
-struct Env(String, String);
+/// New type to get a `(&str, &str)` from a `(&'static str, String)`.
+struct Env {
+    /// Name of the ENV var
+    name: &'static str,
+    /// Value of the ENV var
+    value: String,
+}
 
 impl Env {
-    pub fn by_ref(&self) -> (&str, &str) {
-        (&self.0, &self.1)
+    pub fn by_ref(&self) -> (&'static str, &str) {
+        (self.name, &self.value)
     }
 }
