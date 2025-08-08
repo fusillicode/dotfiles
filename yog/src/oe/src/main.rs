@@ -13,7 +13,7 @@ use utils::editor::FileToOpen;
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let enriched_path_env_var = get_enriched_path_env_var()?;
+    let enriched_path_env = get_enriched_path_env()?;
     let args = utils::system::get_args();
 
     let Some(editor) = args.first().map(|x| Editor::from_str(x)).transpose()? else {
@@ -29,7 +29,7 @@ fn main() -> color_eyre::Result<()> {
         None => utils::wezterm::get_current_pane_id()?,
     };
 
-    let panes = utils::wezterm::get_all_panes(&[("PATH", &enriched_path_env_var)])?;
+    let panes = utils::wezterm::get_all_panes(&[enriched_path_env.by_ref()])?;
 
     let file_to_open = FileToOpen::try_from((file_to_open.as_str(), pane_id, panes.as_slice()))?;
 
@@ -52,18 +52,28 @@ fn main() -> color_eyre::Result<()> {
                 utils::wezterm::activate_pane(editor_pane_id),
             ),
         ])
-        .env("PATH", enriched_path_env_var)
+        .envs([enriched_path_env.by_ref()].iter().copied())
         .spawn()?;
 
     Ok(())
 }
 
-// Needed because calling oe from Wezterm open-uri handler doesn't retain the PATH
-fn get_enriched_path_env_var() -> color_eyre::Result<String> {
-    Ok([
+// Needed because calling `oe` from Wezterm open-uri handler doesn't retain the PATH
+fn get_enriched_path_env() -> color_eyre::Result<Env> {
+    let enriched = [
         &std::env::var("PATH").unwrap_or_else(|_| String::new()),
         "/opt/homebrew/bin",
         &format!("{}/.local/bin", std::env::var("HOME")?),
     ]
-    .join(":"))
+    .join(":");
+    Ok(Env("PATH".into(), enriched))
+}
+
+/// New type to get a [`(&str, &str)`] from a [`(String, String)`].
+struct Env(String, String);
+
+impl Env {
+    pub fn by_ref(&self) -> (&str, &str) {
+        (&self.0, &self.1)
+    }
 }
