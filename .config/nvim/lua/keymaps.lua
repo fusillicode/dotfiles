@@ -119,6 +119,8 @@ function M.fzf_lua(fzf_lua)
   keymap_set('v', '<leader>w', function()
     fzf_lua.live_grep({ prompt = 'rg: ', search = require('utils').get_visual_selection(), })
   end)
+
+  keymap_set('n', '<leader>h', function() fzf_lua.resume({}) end)
 end
 
 function M.fzf_lua_frecency(fzf_lua_frecency)

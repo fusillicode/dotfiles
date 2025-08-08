@@ -10,7 +10,7 @@ return {
     local no_title = { title = '', }
 
     fzf_lua.setup({
-      'max-perf',
+      'hide',
       fzf_opts   = {
         ['--info'] = 'inline',
         ['--cycle'] = true,
@@ -27,6 +27,7 @@ return {
       },
       defaults   = {
         cwd_prompt = false,
+        file_icons = false,
         no_header = true,
         no_header_i = true,
       },
