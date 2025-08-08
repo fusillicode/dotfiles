@@ -1,3 +1,3 @@
-pub mod filtering;
+pub mod filter;
 pub mod filters;
-pub mod formatting;
+pub mod formatter;
