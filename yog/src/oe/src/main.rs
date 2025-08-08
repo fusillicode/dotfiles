@@ -13,7 +13,7 @@ use utils::editor::FileToOpen;
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    load_additional_paths()?;
+    let enriched_path_env_var = get_enriched_path_env_var()?;
     let args = utils::system::get_args();
 
     let Some(editor) = args.first().map(|x| Editor::from_str(x)).transpose()? else {
@@ -52,24 +52,18 @@ fn main() -> color_eyre::Result<()> {
                 utils::wezterm::activate_pane(editor_pane_id),
             ),
         ])
+        .env("PATH", enriched_path_env_var)
         .spawn()?;
 
     Ok(())
 }
 
-// Needed because calling oe from wezterm open-uri handler doesn't retain the PATH
-fn load_additional_paths() -> color_eyre::Result<()> {
-    let home = std::env::var("HOME")?;
-
-    let new_path = [
+// Needed because calling oe from Wezterm open-uri handler doesn't retain the PATH
+fn get_enriched_path_env_var() -> color_eyre::Result<String> {
+    Ok([
         &std::env::var("PATH").unwrap_or_else(|_| String::new()),
         "/opt/homebrew/bin",
-        &format!("{home}/.local/bin"),
+        &format!("{}/.local/bin", std::env::var("HOME")?),
     ]
-    .join(":");
-
-    unsafe {
-        std::env::set_var("PATH", &new_path);
-    }
-    Ok(())
+    .join(":"))
 }
