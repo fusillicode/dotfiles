@@ -39,7 +39,7 @@ pub enum CmdError {
         #[backtrace]
         source: std::io::Error,
     },
-    #[error("stderr {output:?} - {cmd_details}")]
+    #[error("stderr {output:#?} - {cmd_details}")]
     Stderr {
         cmd_details: CmdDetails,
         output: Box<Output>,
@@ -70,7 +70,7 @@ impl std::fmt::Display for CmdDetails {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "cmd {} - args {:?} - dir {:?}",
+            "cmd {} - args {:#?} - dir {:#?}",
             self.name, self.args, self.cur_dir
         )
     }

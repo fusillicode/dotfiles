@@ -4,7 +4,6 @@ use std::str::FromStr;
 
 use color_eyre::eyre::bail;
 
-use utils::cmd::silent_cmd;
 use utils::editor::Editor;
 use utils::editor::FileToOpen;
 
@@ -14,22 +13,21 @@ use utils::editor::FileToOpen;
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    load_additional_paths()?;
+    let enriched_path_env_var = get_enriched_path_env_var()?;
     let args = utils::system::get_args();
 
     let Some(editor) = args.first().map(|x| Editor::from_str(x)).transpose()? else {
-        bail!("no editor specified {args:?}");
+        bail!("no editor specified {args:#?}");
     };
 
     let Some(file_to_open) = args.get(1) else {
-        bail!("no input file specified {args:?}");
+        bail!("no input file specified {args:#?}");
     };
 
     let pane_id = match args.get(2) {
-        Some(x) => x.into(),
-        None => std::env::var("WEZTERM_PANE")?,
-    }
-    .parse()?;
+        Some(x) => x.parse()?,
+        None => utils::wezterm::get_current_pane_id()?,
+    };
 
     let panes = utils::wezterm::get_all_panes()?;
 
@@ -41,36 +39,31 @@ fn main() -> color_eyre::Result<()> {
 
     let open_file_cmd = editor.open_file_cmd(&file_to_open);
 
-    silent_cmd("sh")
+    utils::cmd::silent_cmd("sh")
         .args([
             "-c",
             &format!(
-                // `wezterm cli send-text $'\e'` sends the "ESC" to WezTerm to exit from insert mode
+                "{} && {} && {} && {}",
+                // `wezterm cli send-text $'\e'` sends the "ESC" to Wezterm to exit from insert mode
                 // https://github.com/wez/wezterm/discussions/3945
-                r#"
-                    wezterm cli send-text $'\e' --pane-id '{editor_pane_id}' --no-paste && \
-                        wezterm cli send-text '{open_file_cmd}' --pane-id '{editor_pane_id}' --no-paste && \
-                        printf "\r" | wezterm cli send-text --pane-id '{editor_pane_id}' --no-paste && \
-                        wezterm cli activate-pane --pane-id '{editor_pane_id}'
-                "#,
+                utils::wezterm::send_text_to_pane(r#"$'\e'"#, editor_pane_id),
+                utils::wezterm::send_text_to_pane(&format!("'{open_file_cmd}'"), editor_pane_id),
+                utils::wezterm::submit_pane(editor_pane_id),
+                utils::wezterm::activate_pane(editor_pane_id),
             ),
         ])
+        .env("PATH", enriched_path_env_var)
         .spawn()?;
 
     Ok(())
 }
 
-// Needed because calling oe from wezterm open-uri handler doesn't retain the PATH
-fn load_additional_paths() -> color_eyre::Result<()> {
-    let home = std::env::var("HOME")?;
-
-    let new_path = [
+// Needed because calling oe from Wezterm open-uri handler doesn't retain the PATH
+fn get_enriched_path_env_var() -> color_eyre::Result<String> {
+    Ok([
         &std::env::var("PATH").unwrap_or_else(|_| String::new()),
         "/opt/homebrew/bin",
-        &format!("{home}/.local/bin"),
+        &format!("{}/.local/bin", std::env::var("HOME")?),
     ]
-    .join(":");
-
-    std::env::set_var("PATH", &new_path);
-    Ok(())
+    .join(":"))
 }

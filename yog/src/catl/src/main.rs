@@ -12,7 +12,7 @@ fn main() -> color_eyre::Result<()> {
 
     let path = args
         .first()
-        .ok_or_else(|| eyre!("missing path arg from {args:?}"))?;
+        .ok_or_else(|| eyre!("missing path arg from {args:#?}"))?;
 
     let metadata = std::fs::metadata(path)?;
 

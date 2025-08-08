@@ -15,7 +15,7 @@ fn main() -> color_eyre::Result<()> {
 
     let hx_pane_id = utils::wezterm::get_sibling_pane_with_titles(
         &utils::wezterm::get_all_panes()?,
-        std::env::var("WEZTERM_PANE")?.parse()?,
+        utils::wezterm::get_current_pane_id()?,
         Editor::Hx.pane_titles(),
     )?
     .pane_id;
@@ -28,7 +28,7 @@ fn main() -> color_eyre::Result<()> {
     )?;
 
     let hx_status_line = wezterm_pane_text.lines().nth_back(1).ok_or_else(|| {
-        eyre!("no hx status line in pane '{hx_pane_id}' text {wezterm_pane_text:?}")
+        eyre!("no hx status line in pane '{hx_pane_id}' text {wezterm_pane_text:#?}")
     })?;
 
     let hx_status_line = HxStatusLine::from_str(hx_status_line)?;
@@ -41,7 +41,7 @@ fn main() -> color_eyre::Result<()> {
 fn format_hx_status_line(hx_status_line: &HxStatusLine) -> color_eyre::Result<String> {
     let file_path = hx_status_line.file_path.to_str().ok_or_else(|| {
         eyre!(
-            "cannot convert PathBuf {:?} to str",
+            "cannot convert PathBuf {:#?} to str",
             hx_status_line.file_path
         )
     })?;

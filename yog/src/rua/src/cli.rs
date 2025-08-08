@@ -1,6 +1,9 @@
 use mlua::prelude::*;
 
-use crate::ArityOneLuaFunction;
+pub mod fd;
+pub mod rg;
+
+type ArityOneLuaFunction<'a, O> = Box<dyn Fn(&Lua, Option<LuaString>) -> LuaResult<O> + 'a>;
 
 pub const GLOB_BLACKLIST: [&str; 6] = [
     "**/.git/*",
