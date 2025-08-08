@@ -20,13 +20,13 @@ pub fn get_current_pane_id() -> color_eyre::Result<i64> {
     Ok(std::env::var("WEZTERM_PANE")?.parse()?)
 }
 
-pub fn get_all_panes() -> color_eyre::Result<Vec<WeztermPane>> {
-    Ok(serde_json::from_slice(
-        &Command::new("wezterm")
-            .args(["cli", "list", "--format", "json"])
-            .output()?
-            .stdout,
-    )?)
+// [`envs`] is required because Wezterm is not found when called by `oe` CLI when a file path is
+// clicked in Wezterm itself.
+pub fn get_all_panes(envs: &[(&str, &str)]) -> color_eyre::Result<Vec<WeztermPane>> {
+    let mut cmd = Command::new("wezterm");
+    cmd.args(["cli", "list", "--format", "json"]);
+    cmd.envs(envs.iter().copied());
+    Ok(serde_json::from_slice(&cmd.output()?.stdout)?)
 }
 
 pub fn get_sibling_pane_with_titles(

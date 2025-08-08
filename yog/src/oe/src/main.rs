@@ -29,7 +29,7 @@ fn main() -> color_eyre::Result<()> {
         None => utils::wezterm::get_current_pane_id()?,
     };
 
-    let panes = utils::wezterm::get_all_panes()?;
+    let panes = utils::wezterm::get_all_panes(&[("PATH", &enriched_path_env_var)])?;
 
     let file_to_open = FileToOpen::try_from((file_to_open.as_str(), pane_id, panes.as_slice()))?;
 

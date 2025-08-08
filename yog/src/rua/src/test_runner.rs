@@ -28,7 +28,7 @@ pub fn run_test(_lua: &Lua, cursor_position: CursorPosition) -> LuaResult<()> {
         .map_err(|e| anyhow!(e))
         .with_context(|| "cannot get current Wezterm pane id")?;
 
-    let wez_panes = utils::wezterm::get_all_panes()
+    let wez_panes = utils::wezterm::get_all_panes(&[])
         .map_err(|e| anyhow!(e))
         .with_context(|| "cannot get Wezterm panes")?;
 
