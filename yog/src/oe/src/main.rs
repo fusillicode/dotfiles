@@ -60,13 +60,13 @@ fn main() -> color_eyre::Result<()> {
 
 // Needed because calling `oe` from Wezterm open-uri handler doesn't retain the PATH
 fn get_enriched_path_env() -> color_eyre::Result<Env> {
-    let enriched = [
+    let enriched_path = [
         &std::env::var("PATH").unwrap_or_else(|_| String::new()),
         "/opt/homebrew/bin",
         &format!("{}/.local/bin", std::env::var("HOME")?),
     ]
     .join(":");
-    Ok(Env("PATH".into(), enriched))
+    Ok(Env("PATH".into(), enriched_path))
 }
 
 /// New type to get a [`(&str, &str)`] from a [`(String, String)`].
