@@ -75,6 +75,16 @@ pub struct WeztermPane {
 }
 
 impl WeztermPane {
+    /// Given two [`WeztermPane`] checks if they are in the same tab and if the first
+    /// has a current working directory that is the same or a child of the second one.
+    pub fn is_sibling_terminal_pane_of(&self, other: &WeztermPane) -> bool {
+        self.pane_id != other.pane_id
+            && self.tab_id == other.tab_id
+            && self.cwd.starts_with(&other.cwd)
+    }
+}
+
+impl WeztermPane {
     pub fn absolute_cwd(&self) -> PathBuf {
         let mut path_parts = self.cwd.components();
         path_parts.next(); // Skip `file://`

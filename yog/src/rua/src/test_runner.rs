@@ -6,7 +6,6 @@ use mlua::prelude::*;
 use tree_sitter::Node;
 use tree_sitter::Parser;
 use tree_sitter::Point;
-use utils::wezterm::WeztermPane;
 
 /// Runs the function enclosing the supplied [`CursorPosition`] as a Rust test in the first Wezterm
 /// pane that matches the tab and the current working directory of the pane of the supplied
@@ -43,9 +42,9 @@ pub fn run_test(_lua: &Lua, cursor_position: CursorPosition) -> LuaResult<()> {
 
     let test_runner_pane = wez_panes
         .iter()
-        .find(|p| { is_sibling_terminal_pane(p, cur_pane) })
+        .find(|p| { p.is_sibling_terminal_pane_of(cur_pane) })
         .ok_or(anyhow::anyhow!(
-            "cannot find a pane sibling to the current one {cur_pane:#?} where to run the test {test_name} among Wezterm panes {wez_panes:#?}"
+            "cannot find a pane sibling to {cur_pane:#?} among Wezterm panes {wez_panes:#?} where to run the test {test_name}"
         ))?;
 
     utils::cmd::silent_cmd("sh")
@@ -162,8 +161,4 @@ fn get_enclosing_fn_name_of_node(src: &[u8], node: Option<Node>) -> Option<Strin
         current_node = node.parent();
     }
     None
-}
-
-fn is_sibling_terminal_pane(p1: &WeztermPane, p2: &WeztermPane) -> bool {
-    p1.pane_id != p2.pane_id && p1.tab_id == p2.tab_id && p1.cwd == p2.cwd
 }
