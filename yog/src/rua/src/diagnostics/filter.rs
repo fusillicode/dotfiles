@@ -6,10 +6,7 @@ use crate::diagnostics::filters::DiagnosticsFilters;
 use crate::diagnostics::filters::buffer::BufferFilter;
 
 /// Filters out the LSP diagnostics based on the coded filters.
-pub fn filter_diagnostics(
-    lua: &Lua,
-    (buf_path, lsp_diags): (LuaString, LuaTable),
-) -> LuaResult<LuaTable> {
+pub fn filter(lua: &Lua, (buf_path, lsp_diags): (LuaString, LuaTable)) -> LuaResult<LuaTable> {
     let buf_path = buf_path.to_string_lossy();
     // Keeping this as a separate filter because it kind short circuits the whole filtering and
     // doesn't require any LSP diagnostics to apply its logic.

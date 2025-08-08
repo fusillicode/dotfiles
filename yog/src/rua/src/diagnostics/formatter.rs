@@ -1,7 +1,7 @@
 use mlua::prelude::*;
 
 /// Returns the formatted [`String`] representation of an LSP diagnostic.
-pub fn format_diagnostic(_lua: &Lua, diag: Diagnostic) -> LuaResult<String> {
+pub fn format(_lua: &Lua, diag: Diagnostic) -> LuaResult<String> {
     let msg = get_msg(&diag).map_or_else(
         || format!("no message in {diag:#?}"),
         |s| s.trim_end_matches('.').to_string(),
