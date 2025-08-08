@@ -1,5 +1,5 @@
 {
-  "CopilotChat.nvim": { "branch": "main", "commit": "6eb4d810bc9f2163ed85922df9f78fea49cd4989" },
+  "CopilotChat.nvim": { "branch": "main", "commit": "b1d2b4f3c7cd3fc1e89605ecd070c2670be35a68" },
   "attempt.nvim": { "branch": "main", "commit": "ab5137f6a511ee7d4d932cf9e16619656233997e" },
   "blink-cmp-words": { "branch": "main", "commit": "d6a56f532a1826b4f3aeed4d5e2fe7b8743a9244" },
   "blink.cmp": { "branch": "main", "commit": "ce26f9fbaa4560440dd981cad1d2e47ae82dd3a6" },
