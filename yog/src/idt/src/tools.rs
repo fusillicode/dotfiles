@@ -22,7 +22,6 @@ pub mod taplo;
 pub mod terraform_ls;
 pub mod typescript_language_server;
 pub mod typos_lsp;
-pub mod vale;
 pub mod vscode_langservers;
 pub mod yaml_language_server;
 
