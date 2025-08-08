@@ -9,8 +9,8 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
 
-use color_eyre::eyre::bail;
 use color_eyre::eyre::WrapErr;
+use color_eyre::eyre::bail;
 use serde::Deserialize;
 
 /// Copy to the system clipboard the pgcli cmd to connect to the DB matching the selected alias with
@@ -109,7 +109,9 @@ impl<'a> PgpassFile<'a> {
 
                     continue;
                 }
-                bail!("missing expected conn line after metadata line {metadata:?} obtained from idx_line {idx_line:?}")
+                bail!(
+                    "missing expected conn line after metadata line {metadata:#?} obtained from idx_line {idx_line:#?}"
+                )
             }
         }
 
@@ -195,7 +197,7 @@ impl<'a> TryFrom<(usize, &'a str)> for Conn<'a> {
                 pwd,
             });
         }
-        bail!("cannot build CredsLine from idx_line {idx_line:?}")
+        bail!("cannot build CredsLine from idx_line {idx_line:#?}")
     }
 }
 
@@ -330,17 +332,20 @@ mod tests {
 
     #[test]
     fn test_creds_try_from_returns_an_error_if_port_is_not_a_number() {
-        let res = Conn::try_from((42, "host:foo:db:user:pwd"));
+        let res = format!("{:#?}", Conn::try_from((42, "host:foo:db:user:pwd")));
         assert!(
-            format!("{res:?}").contains("Err(unexpected port value foo\n\nCaused by:\n    invalid digit found in string\n\nLocation:\n    src/vpg/src/main.rs:")
+            res.contains("Err(\n    Error {\n        msg: \"unexpected port value foo\",\n        source: ParseIntError {\n            kind: InvalidDigit,\n        },\n    },\n)"),
+            "unexpected {res}"
         )
     }
 
     #[test]
     fn test_creds_try_from_returns_an_error_if_str_is_malformed() {
-        let res = Conn::try_from((42, "host:5432:db:user"));
-        assert!(format!("{res:?}")
-            .contains("Err(cannot build CredsLine from idx_line (42, \"host:5432:db:user\")\n\nLocation:\n    src/vpg/src/main.rs:"))
+        let res = format!("{:#?}", Conn::try_from((42, "host:5432:db:user")));
+        assert!(
+            res.contains("Err(\n    \"cannot build CredsLine from idx_line (\\n    42,\\n    \\\"host:5432:db:user\\\",\\n)\",\n)"),
+            "unexpected {res}"
+        )
     }
 
     #[test]

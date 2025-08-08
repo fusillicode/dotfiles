@@ -5,7 +5,7 @@ use color_eyre::eyre;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 
-use crate::wezterm::WezTermPane;
+use crate::wezterm::WeztermPane;
 
 pub enum Editor {
     Hx,
@@ -51,11 +51,11 @@ pub struct FileToOpen {
     column: i64,
 }
 
-impl TryFrom<(&str, i64, &[WezTermPane])> for FileToOpen {
+impl TryFrom<(&str, i64, &[WeztermPane])> for FileToOpen {
     type Error = eyre::Error;
 
     fn try_from(
-        (file_to_open, pane_id, panes): (&str, i64, &[WezTermPane]),
+        (file_to_open, pane_id, panes): (&str, i64, &[WeztermPane]),
     ) -> Result<Self, Self::Error> {
         if Path::new(file_to_open).is_absolute() {
             return Self::from_str(file_to_open);
@@ -64,14 +64,14 @@ impl TryFrom<(&str, i64, &[WezTermPane])> for FileToOpen {
         let mut source_pane_absolute_cwd = panes
             .iter()
             .find(|p| p.pane_id == pane_id)
-            .ok_or_else(|| eyre!("no panes with id {pane_id} in {panes:?}"))?
+            .ok_or_else(|| eyre!("no panes with id {pane_id} in {panes:#?}"))?
             .absolute_cwd();
 
         source_pane_absolute_cwd.push(file_to_open);
 
         Self::from_str(
             source_pane_absolute_cwd.to_str().ok_or_else(|| {
-                eyre!("cannot get &str from PathBuf {source_pane_absolute_cwd:?}")
+                eyre!("cannot get &str from PathBuf {source_pane_absolute_cwd:#?}")
             })?,
         )
     }

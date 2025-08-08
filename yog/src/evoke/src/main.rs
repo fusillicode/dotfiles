@@ -2,8 +2,6 @@
 
 use std::path::PathBuf;
 
-use utils::cmd::silent_cmd;
-
 const BINS: &[&str] = &[
     "idt", "yghfl", "yhfp", "oe", "catl", "gcu", "vpg", "try", "fkr",
 ];
@@ -38,8 +36,11 @@ fn main() -> color_eyre::Result<()> {
     target_path.push('/');
     target_path.push_str(target_location);
 
-    silent_cmd("cargo").args(["fmt"]).status()?.exit_ok()?;
-    silent_cmd("cargo")
+    utils::cmd::silent_cmd("cargo")
+        .args(["fmt"])
+        .status()?
+        .exit_ok()?;
+    utils::cmd::silent_cmd("cargo")
         .args([
             "clippy",
             "--all-targets",
@@ -50,7 +51,7 @@ fn main() -> color_eyre::Result<()> {
         ])
         .status()?
         .exit_ok()?;
-    silent_cmd("cargo")
+    utils::cmd::silent_cmd("cargo")
         .args([Some("build"), build_profile].into_iter().flatten())
         .status()?
         .exit_ok()?;

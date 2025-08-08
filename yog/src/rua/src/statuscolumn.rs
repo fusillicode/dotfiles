@@ -26,7 +26,7 @@ impl FromLua for Signs {
         Err(mlua::Error::FromLuaConversionError {
             from: value.type_name(),
             to: "Signs".into(),
-            message: Some(format!("expected a table got {value:?}")),
+            message: Some(format!("expected a table got {value:#?}")),
         })
     }
 }
@@ -49,7 +49,7 @@ impl FromLua for Sign {
         Err(mlua::Error::FromLuaConversionError {
             from: value.type_name(),
             to: "Sign".into(),
-            message: Some(format!("expected a table got {value:?}")),
+            message: Some(format!("expected a table got {value:#?}")),
         })
     }
 }

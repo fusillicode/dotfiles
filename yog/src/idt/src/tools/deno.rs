@@ -1,7 +1,7 @@
 use std::process::Command;
 
-use crate::installers::curl_install::OutputOption;
 use crate::Installer;
+use crate::installers::curl_install::OutputOption;
 
 // For Markdown preview with peek.nvim
 pub struct Deno {

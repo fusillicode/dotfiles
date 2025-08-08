@@ -1,7 +1,7 @@
 use std::process::Command;
 
-use crate::installers::curl_install::OutputOption;
 use crate::Installer;
+use crate::installers::curl_install::OutputOption;
 
 pub struct Shellcheck {
     pub bin_dir: String,
@@ -17,7 +17,10 @@ impl Installer for Shellcheck {
         let latest_release = utils::github::get_latest_release(&repo)?;
 
         crate::installers::curl_install::run(
-            &format!("https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}.darwin.x86_64.tar.xz", self.bin_name()),
+            &format!(
+                "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}.darwin.x86_64.tar.xz",
+                self.bin_name()
+            ),
             OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", "/tmp"])),
         )?;
 

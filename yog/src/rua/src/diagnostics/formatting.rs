@@ -3,10 +3,10 @@ use mlua::prelude::*;
 /// Returns the formatted [`String`] representation of an LSP diagnostic.
 pub fn format_diagnostic(_lua: &Lua, diag: Diagnostic) -> LuaResult<String> {
     let msg = get_msg(&diag).map_or_else(
-        || format!("no message in {diag:?}"),
+        || format!("no message in {diag:#?}"),
         |s| s.trim_end_matches('.').to_string(),
     );
-    let src = get_src(&diag).map_or_else(|| format!("no source in {diag:?}"), str::to_string);
+    let src = get_src(&diag).map_or_else(|| format!("no source in {diag:#?}"), str::to_string);
     let code = get_code(&diag);
     let src_and_code = code.map_or_else(|| src.clone(), |c| format!("{src}: {c}"));
 
@@ -70,7 +70,7 @@ impl FromLua for Diagnostic {
         Err(mlua::Error::FromLuaConversionError {
             from: value.type_name(),
             to: "Diagnostic".into(),
-            message: Some(format!("expected a table got {value:?}")),
+            message: Some(format!("expected a table got {value:#?}")),
         })
     }
 }
@@ -91,7 +91,7 @@ impl FromLua for UserData {
         Err(mlua::Error::FromLuaConversionError {
             from: value.type_name(),
             to: "UserData".into(),
-            message: Some(format!("expected a table got {value:?}")),
+            message: Some(format!("expected a table got {value:#?}")),
         })
     }
 }
@@ -118,7 +118,7 @@ impl FromLua for Lsp {
         Err(mlua::Error::FromLuaConversionError {
             from: value.type_name(),
             to: "Lsp".into(),
-            message: Some(format!("expected a table got {value:?}")),
+            message: Some(format!("expected a table got {value:#?}")),
         })
     }
 }
@@ -139,7 +139,7 @@ impl FromLua for LspData {
         Err(mlua::Error::FromLuaConversionError {
             from: value.type_name(),
             to: "LspData".into(),
-            message: Some(format!("expected a table got {value:?}")),
+            message: Some(format!("expected a table got {value:#?}")),
         })
     }
 }

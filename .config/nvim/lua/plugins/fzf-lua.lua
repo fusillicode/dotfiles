@@ -10,7 +10,7 @@ return {
     local no_title = { title = '', }
 
     fzf_lua.setup({
-      'max-perf',
+      'hide',
       fzf_opts   = {
         ['--info'] = 'inline',
         ['--cycle'] = true,
@@ -27,13 +27,14 @@ return {
       },
       defaults   = {
         cwd_prompt = false,
+        file_icons = false,
         no_header = true,
         no_header_i = true,
       },
       winopts    = {
         title       = '',
         title_flags = false,
-        height      = 0.95,
+        height      = 0.90,
         backdrop    = 100,
         preview     = {
           default = 'builtin',
@@ -91,10 +92,9 @@ return {
         status = {
           winopts = no_title,
           actions = {
-            ['right']  = false,
-            ['left']   = false,
-            ['ctrl-x'] = false,
-            ['ctrl-s'] = false,
+            ['ctrl-h'] = { fn = fzf_lua.actions.git_stage, reload = true, },
+            ['ctrl-l'] = { fn = fzf_lua.actions.git_unstage, reload = true, },
+            ['ctrl-x'] = { fn = fzf_lua.actions.git_reset, reload = true, },
           },
         },
       },

@@ -20,4 +20,5 @@ debug = false
 strip = true
 lto = true
 codegen-units = 1
-panic = "abort"
+# This is required to avoid "rua" exposed functions to explode Lua
+panic = "unwind"

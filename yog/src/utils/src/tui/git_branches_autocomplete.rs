@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 use std::process::Command;
 
-use inquire::autocompletion::Replacement;
 use inquire::Autocomplete;
 use inquire::CustomUserError;
+use inquire::autocompletion::Replacement;
 
 use crate::cmd::CmdExt;
 

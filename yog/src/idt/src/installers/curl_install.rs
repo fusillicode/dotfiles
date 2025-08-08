@@ -22,7 +22,7 @@ pub fn run(url: &str, output_option: OutputOption) -> color_eyre::Result<()> {
                 .stdout(Stdio::piped())
                 .spawn()?
                 .stdout
-                .ok_or_else(|| eyre!("missing stdout from cmd {curl_cmd:?}"))?;
+                .ok_or_else(|| eyre!("missing stdout from cmd {curl_cmd:#?}"))?;
             let output = cmd.stdin(Stdio::from(curl_stdout)).output()?;
             output.status.exit_ok()?;
 
@@ -34,7 +34,7 @@ pub fn run(url: &str, output_option: OutputOption) -> color_eyre::Result<()> {
                 .stdout(Stdio::piped())
                 .spawn()?
                 .stdout
-                .ok_or_else(|| eyre!("missing stdout from cmd {curl_cmd:?}"))?;
+                .ok_or_else(|| eyre!("missing stdout from cmd {curl_cmd:#?}"))?;
 
             Ok(cmd.stdin(Stdio::from(curl_stdout)).status()?.exit_ok()?)
         }

@@ -8,9 +8,9 @@ use url::Url;
 
 use utils::cmd::CmdError;
 use utils::cmd::CmdExt;
-use utils::tui::git_branches_autocomplete::GitBranchesAutocomplete;
 use utils::tui::ClosablePrompt;
 use utils::tui::ClosablePromptError;
+use utils::tui::git_branches_autocomplete::GitBranchesAutocomplete;
 
 /// Create or switch to the GitHub branch built by parameterizing the supplied args.
 /// Existence of branch is checked only against local ones (to avoid fetching them remotely).
@@ -72,10 +72,10 @@ fn checkout_files_or_create_branch_if_missing(args: &[String]) -> color_eyre::Re
 fn get_branch_and_files_to_checkout(
     args: &[String],
 ) -> color_eyre::Result<Option<(&String, &[String])>> {
-    if let Some((branch, files)) = args.split_last() {
-        if local_branch_exists(branch)? {
-            return Ok(Some((branch, files)));
-        }
+    if let Some((branch, files)) = args.split_last()
+        && local_branch_exists(branch)?
+    {
+        return Ok(Some((branch, files)));
     }
     Ok(None)
 }
@@ -190,7 +190,7 @@ fn build_branch_name(args: &[String]) -> color_eyre::Result<String> {
         .join("-");
 
     if branch_name.is_empty() {
-        bail!("parameterizing {args:?} resulted in empty String")
+        bail!("parameterizing {args:#?} resulted in empty String")
     }
 
     Ok(branch_name)
@@ -207,13 +207,21 @@ mod tests {
 
     #[test]
     fn test_build_branch_name_works_as_expected() {
-        let res = build_branch_name(&["".into()]);
-        assert!(format!("{res:?}")
-            .contains("Err(parameterizing [\"\"] resulted in empty String\n\nLocation:\n    src/gcu/src/main.rs:"));
+        let res = format!("{:#?}", build_branch_name(&["".into()]));
+        assert!(
+            res.contains(
+                "Err(\n    \"parameterizing [\\n    \\\"\\\",\\n] resulted in empty String\",\n)"
+            ),
+            "unexpected {res}"
+        );
 
-        let res = build_branch_name(&["❌".into()]);
-        assert!(format!("{res:?}")
-            .contains("Err(parameterizing [\"❌\"] resulted in empty String\n\nLocation:\n    src/gcu/src/main.rs:"));
+        let res = format!("{:#?}", build_branch_name(&["❌".into()]));
+        assert!(
+            res.contains(
+                "Err(\n    \"parameterizing [\\n    \\\"❌\\\",\\n] resulted in empty String\",\n)"
+            ),
+            "unexpected {res}"
+        );
 
         assert_eq!(
             "helloworld",
