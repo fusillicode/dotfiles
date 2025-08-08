@@ -4,38 +4,6 @@ local function keymap_set(modes, lhs, rhs, opts)
   vim.keymap.set(modes, lhs, rhs, vim.tbl_extend('force', { silent = true, }, opts or {}))
 end
 
-local function get_enclosing_fn_or_method_name()
-  local node = require('nvim-treesitter.ts_utils').get_node_at_cursor()
-  if not node then return end
-
-  local fn_node_types = {
-    'function_definition',
-    'method_definition',
-    'function_declaration',
-    'method_declaration',
-    'function',
-    'method',
-    'function_item',
-  }
-
-  local cur_buf = vim.api.nvim_get_current_buf()
-  while node do
-    if vim.tbl_contains(fn_node_types, node:type()) then
-      local name_node = node:field('name')[1] or node:field('identifier')[1]
-      if name_node then
-        local name = vim.treesitter.get_node_text(name_node, cur_buf)
-        if name and name ~= '' then return name end
-      end
-    end
-    node = node:parent()
-  end
-end
-
-local function yank_enclosing_fn_or_method_name()
-  local name = get_enclosing_fn_or_method_name()
-  if name then vim.fn.setreg('+', name) end
-end
-
 function M.core()
   vim.g.mapleader = ' '
   vim.g.maplocalleader = ' '
@@ -65,7 +33,6 @@ function M.core()
   keymap_set({ 'n', 'v', }, 'X', '"_X')
 
   keymap_set({ 'n', 'v', }, '<leader>yf', ':let @+ = expand("%") . ":" . line(".")<cr>')
-  keymap_set({ 'n', 'v', }, '<leader>yc', yank_enclosing_fn_or_method_name)
   keymap_set('v', 'y', 'ygv<esc>')
   keymap_set('v', 'p', '"_dP')
 
