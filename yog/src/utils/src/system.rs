@@ -33,10 +33,10 @@ pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
     Ok(())
 }
 
-// Yes, `dir` is a `&str` and it's not sanitized but...I'm the alpha & the omega here!
-pub fn chmod_x(dir: &str) -> color_eyre::Result<()> {
+// Yes, `path` is a `&str` and it's not sanitized but...I'm the alpha & the omega here!
+pub fn chmod_x(path: &str) -> color_eyre::Result<()> {
     Ok(crate::cmd::silent_cmd("sh")
-        .args(["-c", &format!("chmod +x {dir}")])
+        .args(["-c", &format!("chmod +x {path}")])
         .status()?
         .exit_ok()?)
 }

@@ -31,10 +31,10 @@ pub trait Installer: Sync + Send {
 }
 
 pub fn report_install(
-    tool: &str,
+    bin_name: &str,
     install_result: color_eyre::Result<()>,
 ) -> color_eyre::Result<()> {
     install_result
-        .inspect(|_| println!("🎉 {tool} installed"))
-        .inspect_err(|e| eprintln!("❌ error installing {tool}: {e:#?}"))
+        .inspect(|_| println!("🎉 {bin_name} installed"))
+        .inspect_err(|e| eprintln!("❌ error installing {bin_name}: {e:#?}"))
 }
