@@ -46,13 +46,15 @@ pub fn run_test(_lua: &Lua, cursor_position: CursorPosition) -> LuaResult<()> {
             "cannot find a pane sibling to {cur_pane:#?} among Wezterm panes {wez_panes:#?} where to run the test {test_name}"
         ))?;
 
+    let test_runner_app = get_test_runner_app(&cursor_position)?;
+
     utils::cmd::silent_cmd("sh")
         .args([
             "-c",
             &format!(
                 "{} && {} && {}",
                 utils::wezterm::send_text_to_pane(
-                    &format!("'cargo make test {test_name}'"),
+                    &format!("'{test_runner_app} {test_name}'"),
                     test_runner_pane.pane_id
                 ),
                 utils::wezterm::submit_pane(test_runner_pane.pane_id),
@@ -160,4 +162,28 @@ fn get_enclosing_fn_name_of_node(src: &[u8], node: Option<Node>) -> Option<Strin
         current_node = node.parent();
     }
     None
+}
+
+/// Get the application to use to run the tests based on the presence of the Makefile.toml file in
+/// the root of a git repository.
+///
+/// If the file is found "cargo make test" is used to run the tests.
+/// "cargo test" is used otherwise.
+///
+/// Assumptions:
+/// 1. we're always working in a git repository
+/// 2. no custom config file for cargo-make
+fn get_test_runner_app(cursor_position: &CursorPosition) -> anyhow::Result<&'static str> {
+    let git_repo_root =
+        utils::git::get_git_repo_root(Some(&cursor_position.path)).map_err(|e| anyhow!(e))?;
+
+    if std::fs::read_dir(git_repo_root)?.any(|res| {
+        res.as_ref()
+            .map(|de| de.file_name() == "Makefile.toml")
+            .unwrap_or(false)
+    }) {
+        return Ok("cargo make test");
+    }
+
+    Ok("cargo test")
 }

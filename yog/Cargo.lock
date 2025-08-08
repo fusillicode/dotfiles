@@ -692,6 +692,9 @@ dependencies = [
 [[package]]
 name = "miskatonic"
 version = "0.1.0"
+dependencies = [
+ "utils",
+]
 
 [[package]]
 name = "mlua"
