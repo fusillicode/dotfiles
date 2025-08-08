@@ -22,7 +22,7 @@ pub fn run_test(_lua: &Lua, cursor_position: CursorPosition) -> LuaResult<()> {
         Point::from(&cursor_position),
     )?
     .ok_or(anyhow::anyhow!(
-        "no enclosing fn found for {cursor_position:?}"
+        "no enclosing fn found for {cursor_position:#?}"
     ))?;
 
     let cur_pane_id = utils::wezterm::get_current_pane_id()
@@ -37,7 +37,7 @@ pub fn run_test(_lua: &Lua, cursor_position: CursorPosition) -> LuaResult<()> {
         .iter()
         .find(|p| p.pane_id == cur_pane_id)
         .ok_or(anyhow::anyhow!(
-            "current pane not found among Wezterm panes {wez_panes:?}"
+            "current pane not found among Wezterm panes {wez_panes:#?}"
         ))?;
 
     let test_runner_pane = wez_panes
@@ -62,7 +62,7 @@ pub fn run_test(_lua: &Lua, cursor_position: CursorPosition) -> LuaResult<()> {
         ])
         .spawn()
         .with_context(|| {
-            format!("error executing test {test_name} in Wezterm pane {test_runner_pane:?}")
+            format!("error executing test {test_name} in Wezterm pane {test_runner_pane:#?}")
         })
         .map_err(|e| anyhow::anyhow!(e))?;
 
@@ -92,13 +92,13 @@ impl FromLua for CursorPosition {
             let out = Self {
                 path: PathBuf::from(LuaErrorContext::with_context(
                     table.get::<String>("path"),
-                    |_| format!("missing path in LuaTable {table:?}",),
+                    |_| format!("missing path in LuaTable {table:#?}",),
                 )?),
                 row: LuaErrorContext::with_context(table.get("row"), |_| {
-                    format!("missing row in LuaTable {table:?}")
+                    format!("missing row in LuaTable {table:#?}")
                 })?,
                 col: LuaErrorContext::with_context(table.get("col"), |_| {
-                    format!("missing col in LuaTable {table:?}")
+                    format!("missing col in LuaTable {table:#?}")
                 })?,
             };
             return Ok(out);
@@ -106,7 +106,7 @@ impl FromLua for CursorPosition {
         Err(mlua::Error::FromLuaConversionError {
             from: value.type_name(),
             to: "CurrentPosition".into(),
-            message: Some(format!("expected a table got {value:?}")),
+            message: Some(format!("expected a table got {value:#?}")),
         })
     }
 }
@@ -116,9 +116,9 @@ fn get_enclosing_fn_name_of_position(
     position: Point,
 ) -> anyhow::Result<Option<String>> {
     if file_path.extension().is_some_and(|ext| ext != "rs") {
-        anyhow::bail!("{file_path:?} is not a Rust file");
+        anyhow::bail!("{file_path:#?} is not a Rust file");
     }
-    let src = std::fs::read(file_path).with_context(|| format!("Error reading {file_path:?}"))?;
+    let src = std::fs::read(file_path).with_context(|| format!("Error reading {file_path:#?}"))?;
 
     let mut parser = Parser::new();
     parser
@@ -127,7 +127,7 @@ fn get_enclosing_fn_name_of_position(
 
     let src_tree = parser
         .parse(&src, None)
-        .ok_or(anyhow::anyhow!("error parsing src {file_path:?} as Rust"))?;
+        .ok_or(anyhow::anyhow!("error parsing src {file_path:#?} as Rust"))?;
 
     let node_at_position = src_tree
         .root_node()

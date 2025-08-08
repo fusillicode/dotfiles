@@ -37,7 +37,7 @@ impl FromLua for Diagnostics {
         Err(mlua::Error::FromLuaConversionError {
             from: value.type_name(),
             to: "Diagnostics".into(),
-            message: Some(format!("expected a table got {value:?}")),
+            message: Some(format!("expected a table got {value:#?}")),
         })
     }
 }
@@ -58,7 +58,7 @@ impl FromLua for Diagnostic {
         Err(mlua::Error::FromLuaConversionError {
             from: value.type_name(),
             to: "Diagnostic".into(),
-            message: Some(format!("expected a table got {value:?}")),
+            message: Some(format!("expected a table got {value:#?}")),
         })
     }
 }
@@ -89,7 +89,7 @@ impl FromLua for Severity {
         Err(mlua::Error::FromLuaConversionError {
             from: value.type_name(),
             to: "Severity".into(),
-            message: Some(format!("expected an integer got {value:?}")),
+            message: Some(format!("expected an integer got {value:#?}")),
         })
     }
 }
@@ -174,7 +174,7 @@ mod tests {
             let res = statusline.draw();
             assert_eq!(
                 "%#StatusLine#foo %m %r%=", &res,
-                "unexpected not empty diagnosticts drawn, res {res}, statusline {statusline:?}"
+                "unexpected not empty diagnosticts drawn, res {res}, statusline {statusline:#?}"
             );
         }
 

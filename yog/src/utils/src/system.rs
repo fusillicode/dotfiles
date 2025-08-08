@@ -13,7 +13,7 @@ pub fn get_args() -> Vec<String> {
 }
 
 pub fn join<T>(join_handle: JoinHandle<color_eyre::Result<T>>) -> Result<T, eyre::Error> {
-    join_handle.join().map_err(|e| eyre!("join error {e:?}"))?
+    join_handle.join().map_err(|e| eyre!("join error {e:#?}"))?
 }
 
 pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
@@ -28,7 +28,7 @@ pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
             .ok_or_else(|| eyre!("cannot get child stdin as mut"))?,
     )?;
     if !pbcopy_child.wait()?.success() {
-        bail!("error copy content to system clipboard, content {content:?}");
+        bail!("error copy content to system clipboard, content {content:#?}");
     }
     Ok(())
 }
@@ -48,7 +48,7 @@ pub fn rm_dead_symlinks(dir: &str) -> color_eyre::Result<()> {
 
         let metadata = std::fs::symlink_metadata(&path)?;
         if metadata.file_type().is_symlink() && std::fs::metadata(&path).is_err() {
-            println!("🗑️ Removing dead symlink: {path:?}");
+            println!("🗑️ Removing dead symlink: {path:#?}");
             std::fs::remove_file(&path)?;
         }
     }

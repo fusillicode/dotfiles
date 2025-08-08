@@ -24,7 +24,7 @@ pub fn filter_diagnostics(
     // cloning it when passing it to the filter.
     for (_, lua_value) in lsp_diags.pairs::<usize, LuaValue>().flatten() {
         let lsp_diag = lua_value.as_table().ok_or_else(|| {
-            Error::RuntimeError(format!("cannot get LuaTable from LuaValue {lua_value:?}"))
+            Error::RuntimeError(format!("cannot get LuaTable from LuaValue {lua_value:#?}"))
         })?;
         if filters.skip_diagnostic(&buf_path, Some(lsp_diag))? {
             continue;

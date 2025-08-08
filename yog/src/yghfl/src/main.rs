@@ -37,7 +37,7 @@ fn main() -> color_eyre::Result<()> {
     let hx_status_line =
         HxStatusLine::from_str(wezterm_pane_text.lines().nth_back(1).ok_or_else(|| {
             eyre!(
-                "no hx status line in pane '{}' text {wezterm_pane_text:?}",
+                "no hx status line in pane '{}' text {wezterm_pane_text:#?}",
                 hx_pane.pane_id
             )
         })?)?;
@@ -149,7 +149,7 @@ fn build_github_link<'a>(
             component
                 .as_os_str()
                 .to_str()
-                .ok_or_else(|| eyre!("cannot get str from path component {component:?}"))?,
+                .ok_or_else(|| eyre!("cannot get str from path component {component:#?}"))?,
         );
     }
 
@@ -157,7 +157,7 @@ fn build_github_link<'a>(
     let mut github_link = github_repo_url.clone();
     github_link
         .path_segments_mut()
-        .map_err(|_| eyre!("cannot extend URL '{github_repo_url}' with segments {segments:?}"))?
+        .map_err(|_| eyre!("cannot extend URL '{github_repo_url}' with segments {segments:#?}"))?
         .extend(&segments);
     github_link.set_fragment(Some(&format!(
         "L{}C{}",

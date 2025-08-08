@@ -38,7 +38,7 @@ pub fn get_sibling_pane_with_titles(
         .iter()
         .find(|w| w.pane_id == current_pane_id)
         .ok_or_else(|| {
-            eyre!("current pane id '{current_pane_id}' not found among panes {panes:?}")
+            eyre!("current pane id '{current_pane_id}' not found among panes {panes:#?}")
         })?
         .tab_id;
 
@@ -46,7 +46,7 @@ pub fn get_sibling_pane_with_titles(
         .iter()
         .find(|w| w.tab_id == current_pane_tab_id && pane_titles.contains(&w.title.as_str()))
         .ok_or({
-            eyre!("pane with title '{pane_titles:?}' not found in tab '{current_pane_tab_id}'")
+            eyre!("pane with title '{pane_titles:#?}' not found in tab '{current_pane_tab_id}'")
         })?
         .clone())
 }

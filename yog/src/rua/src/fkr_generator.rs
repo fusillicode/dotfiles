@@ -64,7 +64,7 @@ impl FromLua for FkrArg {
                     from: value.type_name(),
                     to: "FkrArg".into(),
                     message: Some(format!(
-                        "error parsing string {lua_string:?} - error: {e:?}"
+                        "error parsing string {lua_string:#?} - error: {e:#?}"
                     )),
                 }
             });
@@ -72,7 +72,7 @@ impl FromLua for FkrArg {
         Err(mlua::Error::FromLuaConversionError {
             from: value.type_name(),
             to: "FkrArg".into(),
-            message: Some(format!("expected a string got {value:?}")),
+            message: Some(format!("expected a string got {value:#?}")),
         })
     }
 }

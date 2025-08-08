@@ -46,7 +46,7 @@ where
             otps.iter()
                 .find(|x| opt_find(*x))
                 .cloned()
-                .ok_or_else(|| eyre!("no opt matches CLI arg {cli_arg} in opts {otps:?}"))?,
+                .ok_or_else(|| eyre!("no opt matches CLI arg {cli_arg} in opts {otps:#?}"))?,
         ));
     }
     match minimal::<O>(otps).closable_prompt() {

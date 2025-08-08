@@ -23,22 +23,22 @@ impl FromStr for HxStatusLine {
         let path_left_separator_idx = elements
             .iter()
             .position(|x| x == &"`")
-            .ok_or_else(|| eyre!("no left path separator in status line elements {elements:?}"))?;
-        let path_right_separator_idx = elements
-            .iter()
-            .rposition(|x| x == &"`")
-            .ok_or_else(|| eyre!("no right path separator in status line elements {elements:?}"))?;
+            .ok_or_else(|| eyre!("no left path separator in status line elements {elements:#?}"))?;
+        let path_right_separator_idx =
+            elements.iter().rposition(|x| x == &"`").ok_or_else(|| {
+                eyre!("no right path separator in status line elements {elements:#?}")
+            })?;
 
         let &["`", path] = &elements[path_left_separator_idx..path_right_separator_idx] else {
-            bail!("no path in status line elements {elements:?}");
+            bail!("no path in status line elements {elements:#?}");
         };
 
         Ok(Self {
             file_path: path.into(),
             position: HxCursorPosition::from_str(
-                elements
-                    .last()
-                    .ok_or_else(|| eyre!("no last element in status line elements {elements:?}"))?,
+                elements.last().ok_or_else(|| {
+                    eyre!("no last element in status line elements {elements:#?}")
+                })?,
             )?,
         })
     }
