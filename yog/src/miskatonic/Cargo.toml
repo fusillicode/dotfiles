@@ -3,3 +3,6 @@ name = "miskatonic"
 version = "0.1.0"
 authors = ["Gian Lu"]
 edition = "2024"
+
+[dependencies]
+utils = { path = "../utils" }
