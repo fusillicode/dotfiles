@@ -15,6 +15,5 @@ cargo install --force \
   ripgrep \
   sd \
   sqlx-cli \
-  tailspin \
   typos-cli \
   watchexec-cli
