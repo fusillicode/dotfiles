@@ -164,8 +164,8 @@ fn get_enclosing_fn_name_of_node(src: &[u8], node: Option<Node>) -> Option<Strin
     None
 }
 
-/// Get the application to use to run the tests based on the presence of the Makefile.toml file in
-/// the root of a git repository.
+/// Get the application to use to run the tests based on the presence of a `Makefile.toml`
+/// in the root of a git repository where the supplied [`Path`] resides.
 ///
 /// If the file is found "cargo make test" is used to run the tests.
 /// "cargo test" is used otherwise.
