@@ -22,7 +22,7 @@ fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
     let hx_pane = get_sibling_pane_with_titles(
-        &utils::wezterm::get_all_panes()?,
+        &utils::wezterm::get_all_panes(&[])?,
         utils::wezterm::get_current_pane_id()?,
         Editor::Hx.pane_titles(),
     )?;
