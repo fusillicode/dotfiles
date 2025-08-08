@@ -2,12 +2,17 @@
 name = "rua"
 version = "0.1.0"
 authors = ["Gian Lu"]
-edition = "2021"
+edition = "2024"
 
 [lib]
 crate-type = ["cdylib"]
 
 [dependencies]
+# Couldn't be able to use color-eyre...falling back to anyhow
+anyhow = { version = "1.0" }
 fkr = { path = "../fkr" }
-mlua = { version = "0.11", features = ["macros", "module", "luajit"] }
+mlua = { version = "0.11", features = ["anyhow", "macros", "module", "luajit"] }
 strum = { workspace = true }
+tree-sitter = { version = "0.25" }
+tree-sitter-rust = { version = "0.24" }
+utils = { path = "../utils" }

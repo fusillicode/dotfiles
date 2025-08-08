@@ -3,6 +3,7 @@
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 
+use crate::tools::Installer;
 use crate::tools::bash_language_server::BashLanguageServer;
 use crate::tools::commitlint::Commitlint;
 use crate::tools::deno::Deno;
@@ -30,7 +31,6 @@ use crate::tools::typos_lsp::TyposLsp;
 use crate::tools::vale::Vale;
 use crate::tools::vscode_langservers::VsCodeLangServers;
 use crate::tools::yaml_language_server::YamlLanguageServer;
-use crate::tools::Installer;
 
 mod installers;
 mod tools;
@@ -41,17 +41,17 @@ fn main() -> color_eyre::Result<()> {
 
     let args = utils::system::get_args();
     println!(
-        "🚀 Starting {:?} with args: {args:#?}",
+        "🚀 Starting {:#?} with args: {args:#?}",
         std::env::current_exe()?
     );
 
     let dev_tools_dir = args
         .first()
-        .ok_or_else(|| eyre!("missing dev_tools_dir arg from {args:?}"))?
+        .ok_or_else(|| eyre!("missing dev_tools_dir arg from {args:#?}"))?
         .trim_end_matches('/');
     let bin_dir = args
         .get(1)
-        .ok_or_else(|| eyre!("missing bin_dir arg from {args:?}"))?
+        .ok_or_else(|| eyre!("missing bin_dir arg from {args:#?}"))?
         .trim_end_matches('/');
     let tools_whitelist: Vec<&str> = args.iter().skip(2).map(AsRef::as_ref).collect();
 
@@ -186,7 +186,7 @@ fn main() -> color_eyre::Result<()> {
             .into_iter()
             .fold(vec![], |mut acc, (tool, handle)| {
                 if let Err(error) = handle.join() {
-                    eprintln!("❌ {tool} installer 🧵 panicked - error {error:?}");
+                    eprintln!("❌ {tool} installer 🧵 panicked - error {error:#?}");
                     acc.push((tool, error));
                 }
                 acc

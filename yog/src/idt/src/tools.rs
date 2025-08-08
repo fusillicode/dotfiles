@@ -37,5 +37,5 @@ pub fn report_install(
 ) -> color_eyre::Result<()> {
     install_result
         .inspect(|_| println!("🎉 {tool} installed"))
-        .inspect_err(|e| eprintln!("❌ error installing {tool}: {e:?}"))
+        .inspect_err(|e| eprintln!("❌ error installing {tool}: {e:#?}"))
 }

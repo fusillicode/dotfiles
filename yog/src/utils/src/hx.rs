@@ -23,22 +23,22 @@ impl FromStr for HxStatusLine {
         let path_left_separator_idx = elements
             .iter()
             .position(|x| x == &"`")
-            .ok_or_else(|| eyre!("no left path separator in status line elements {elements:?}"))?;
-        let path_right_separator_idx = elements
-            .iter()
-            .rposition(|x| x == &"`")
-            .ok_or_else(|| eyre!("no right path separator in status line elements {elements:?}"))?;
+            .ok_or_else(|| eyre!("no left path separator in status line elements {elements:#?}"))?;
+        let path_right_separator_idx =
+            elements.iter().rposition(|x| x == &"`").ok_or_else(|| {
+                eyre!("no right path separator in status line elements {elements:#?}")
+            })?;
 
         let &["`", path] = &elements[path_left_separator_idx..path_right_separator_idx] else {
-            bail!("no path in status line elements {elements:?}");
+            bail!("no path in status line elements {elements:#?}");
         };
 
         Ok(Self {
             file_path: path.into(),
             position: HxCursorPosition::from_str(
-                elements
-                    .last()
-                    .ok_or_else(|| eyre!("no last element in status line elements {elements:?}"))?,
+                elements.last().ok_or_else(|| {
+                    eyre!("no last element in status line elements {elements:#?}")
+                })?,
             )?,
         })
     }
@@ -71,9 +71,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_hx_cursor_from_str_works_as_expected_with_a_file_path_pointing_to_an_existent_file_in_normal_mode(
-    ) {
-        let result = HxStatusLine::from_str("      ● 1 ` src/utils.rs `                                                                  1 sel  1 char  W ● 1  42:33 ");
+    fn test_hx_cursor_from_str_works_as_expected_with_a_file_path_pointing_to_an_existent_file_in_normal_mode()
+     {
+        let result = HxStatusLine::from_str(
+            "      ● 1 ` src/utils.rs `                                                                  1 sel  1 char  W ● 1  42:33 ",
+        );
         let expected = HxStatusLine {
             file_path: "src/utils.rs".into(),
             position: HxCursorPosition {
@@ -86,9 +88,11 @@ mod tests {
     }
 
     #[test]
-    fn test_hx_cursor_from_str_works_as_expected_with_a_file_path_pointing_to_an_existent_file_and_a_spinner(
-    ) {
-        let result = HxStatusLine::from_str("⣷      ` src/utils.rs `                                                                  1 sel  1 char  W ● 1  33:42 ");
+    fn test_hx_cursor_from_str_works_as_expected_with_a_file_path_pointing_to_an_existent_file_and_a_spinner()
+     {
+        let result = HxStatusLine::from_str(
+            "⣷      ` src/utils.rs `                                                                  1 sel  1 char  W ● 1  33:42 ",
+        );
         let expected = HxStatusLine {
             file_path: "src/utils.rs".into(),
             position: HxCursorPosition {

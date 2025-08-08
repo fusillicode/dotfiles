@@ -4,14 +4,11 @@ use crate::cli::Flags;
 
 mod cli;
 mod diagnostics;
-mod fd;
 mod fkr_generator;
-mod rg;
 mod statuscolumn;
 mod statusline;
+mod test_runner;
 mod utils;
-
-type ArityOneLuaFunction<'a, O> = Box<dyn Fn(&Lua, Option<LuaString>) -> LuaResult<O> + 'a>;
 
 /// Entrypoint of Rust exported fns.
 #[mlua::lua_module]
@@ -38,7 +35,14 @@ fn rua(lua: &Lua) -> LuaResult<LuaTable> {
         "gen_fkr_value",
         lua.create_function(fkr_generator::gen_value)?,
     )?;
-    exports.set("get_fd_cli_flags", lua.create_function(fd::CliFlags.get())?)?;
-    exports.set("get_rg_cli_flags", lua.create_function(rg::CliFlags.get())?)?;
+    exports.set(
+        "get_fd_cli_flags",
+        lua.create_function(cli::fd::CliFlags.get())?,
+    )?;
+    exports.set(
+        "get_rg_cli_flags",
+        lua.create_function(cli::rg::CliFlags.get())?,
+    )?;
+    exports.set("run_test", lua.create_function(test_runner::run_test)?)?;
     Ok(exports)
 }

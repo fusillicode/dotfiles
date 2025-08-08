@@ -7,8 +7,8 @@ use std::time::Duration;
 use std::time::Instant;
 
 use color_eyre::eyre;
-use color_eyre::eyre::bail;
 use color_eyre::eyre::WrapErr;
+use color_eyre::eyre::bail;
 
 /// Executes the supplied command till it returns an ok status code.
 fn main() -> color_eyre::Result<()> {
@@ -17,7 +17,7 @@ fn main() -> color_eyre::Result<()> {
     let args = utils::system::get_args();
 
     let Some((cooldown_secs, args)) = args.split_first() else {
-        bail!("no cooldown supplied in {args:?}");
+        bail!("no cooldown supplied in {args:#?}");
     };
     let cooldown = Duration::from_secs(
         cooldown_secs
@@ -26,10 +26,10 @@ fn main() -> color_eyre::Result<()> {
     );
 
     let Some((exit_cond, args)) = args.split_first() else {
-        bail!("no exit condition supplied in {args:?}");
+        bail!("no exit condition supplied in {args:#?}");
     };
     let exit_cond =
-        ExitCond::from_str(exit_cond).with_context(|| format!("in supplied args {args:?}"))?;
+        ExitCond::from_str(exit_cond).with_context(|| format!("in supplied args {args:#?}"))?;
 
     let cmd = args.join(" ");
 
@@ -59,7 +59,7 @@ fn main() -> color_eyre::Result<()> {
     let tries_count =
         u32::try_from(tries.len()).with_context(|| format!("converting {} to u32", tries.len()))?;
     let avg_runs_time = tries.iter().fold(Duration::ZERO, |acc, &d| acc + d) / tries_count;
-    println!("Summary:\n - tries {tries_count}\n - avg time {avg_runs_time:?}");
+    println!("Summary:\n - tries {tries_count}\n - avg time {avg_runs_time:#?}");
 
     Ok(())
 }

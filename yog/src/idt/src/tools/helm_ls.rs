@@ -1,5 +1,5 @@
-use crate::installers::curl_install::OutputOption;
 use crate::Installer;
+use crate::installers::curl_install::OutputOption;
 
 pub struct HelmLs {
     pub bin_dir: String,

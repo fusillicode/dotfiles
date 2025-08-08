@@ -13,8 +13,8 @@ use url::Url;
 use utils::editor::Editor;
 use utils::hx::HxCursorPosition;
 use utils::hx::HxStatusLine;
+use utils::wezterm::WeztermPane;
 use utils::wezterm::get_sibling_pane_with_titles;
-use utils::wezterm::WezTermPane;
 
 /// Yank link to GitHub of the file displayed in the status line of the first Helix instance found running alongside
 /// the Wezterm pane from where the cmd has been invoked.
@@ -23,7 +23,7 @@ fn main() -> color_eyre::Result<()> {
 
     let hx_pane = get_sibling_pane_with_titles(
         &utils::wezterm::get_all_panes()?,
-        std::env::var("WEZTERM_PANE")?.parse()?,
+        utils::wezterm::get_current_pane_id()?,
         Editor::Hx.pane_titles(),
     )?;
 
@@ -37,7 +37,7 @@ fn main() -> color_eyre::Result<()> {
     let hx_status_line =
         HxStatusLine::from_str(wezterm_pane_text.lines().nth_back(1).ok_or_else(|| {
             eyre!(
-                "no hx status line in pane '{}' text {wezterm_pane_text:?}",
+                "no hx status line in pane '{}' text {wezterm_pane_text:#?}",
                 hx_pane.pane_id
             )
         })?)?;
@@ -119,7 +119,7 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> color_eyre::Res
 
 fn build_hx_cursor_absolute_file_path(
     hx_cursor_file_path: &Path,
-    hx_pane: &WezTermPane,
+    hx_pane: &WeztermPane,
 ) -> color_eyre::Result<PathBuf> {
     if let Ok(hx_cursor_file_path) = hx_cursor_file_path.strip_prefix("~") {
         let mut home_absolute_path = Path::new(&std::env::var("HOME")?).to_path_buf();
@@ -149,7 +149,7 @@ fn build_github_link<'a>(
             component
                 .as_os_str()
                 .to_str()
-                .ok_or_else(|| eyre!("cannot get str from path component {component:?}"))?,
+                .ok_or_else(|| eyre!("cannot get str from path component {component:#?}"))?,
         );
     }
 
@@ -157,7 +157,7 @@ fn build_github_link<'a>(
     let mut github_link = github_repo_url.clone();
     github_link
         .path_segments_mut()
-        .map_err(|_| eyre!("cannot extend URL '{github_repo_url}' with segments {segments:?}"))?
+        .map_err(|_| eyre!("cannot extend URL '{github_repo_url}' with segments {segments:#?}"))?
         .extend(&segments);
     github_link.set_fragment(Some(&format!(
         "L{}C{}",
@@ -175,15 +175,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_relative_to_home_dir(
-    ) {
+    fn test_build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_relative_to_home_dir()
+     {
         // Arrange
         temp_env::with_vars([("HOME", Some("/Users/Foo"))], || {
             let hx_status_line = HxStatusLine {
                 file_path: Path::new("~/src/bar/baz.rs").into(),
                 ..Faker.fake()
             };
-            let hx_pane = WezTermPane {
+            let hx_pane = WeztermPane {
                 cwd: Path::new("file://hostname/Users/Foo/dev").into(),
                 ..Faker.fake()
             };
@@ -198,14 +198,14 @@ mod tests {
     }
 
     #[test]
-    fn test_build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_relative_to_hx_root(
-    ) {
+    fn test_build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_relative_to_hx_root()
+     {
         // Arrange
         let hx_status_line = HxStatusLine {
             file_path: Path::new("src/bar/baz.rs").into(),
             ..Faker.fake()
         };
-        let hx_pane = WezTermPane {
+        let hx_pane = WeztermPane {
             cwd: Path::new("file://hostname/Users/Foo/dev").into(),
             ..Faker.fake()
         };
@@ -226,7 +226,7 @@ mod tests {
             file_path: Path::new("/Users/Foo/dev/src/bar/baz.rs").into(),
             ..Faker.fake()
         };
-        let hx_pane = WezTermPane {
+        let hx_pane = WeztermPane {
             cwd: Path::new("file://hostname/Users/Foo/dev").into(),
             ..Faker.fake()
         };
