@@ -2,6 +2,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use anyhow::Context;
+use anyhow::anyhow;
 use mlua::prelude::*;
 use tree_sitter::Node;
 use tree_sitter::Parser;
@@ -21,29 +22,27 @@ pub fn run_test(_lua: &Lua, cursor_position: CursorPosition) -> LuaResult<()> {
         cursor_position.path.as_path(),
         Point::from(&cursor_position),
     )?
-    .ok_or(anyhow::anyhow!(
-        "no enclosing fn found for {cursor_position:#?}"
-    ))?;
+    .ok_or(anyhow!("no enclosing fn found for {cursor_position:#?}"))?;
 
     let cur_pane_id = utils::wezterm::get_current_pane_id()
-        .map_err(|e| anyhow::anyhow!(e))
+        .map_err(|e| anyhow!(e))
         .with_context(|| "cannot get current Wezterm pane id")?;
 
     let wez_panes = utils::wezterm::get_all_panes()
-        .map_err(|e| anyhow::anyhow!(e))
+        .map_err(|e| anyhow!(e))
         .with_context(|| "cannot get Wezterm panes")?;
 
     let cur_pane = wez_panes
         .iter()
         .find(|p| p.pane_id == cur_pane_id)
-        .ok_or(anyhow::anyhow!(
+        .ok_or(anyhow!(
             "current pane not found among Wezterm panes {wez_panes:#?}"
         ))?;
 
     let test_runner_pane = wez_panes
         .iter()
         .find(|p| { p.is_sibling_terminal_pane_of(cur_pane) })
-        .ok_or(anyhow::anyhow!(
+        .ok_or(anyhow!(
             "cannot find a pane sibling to {cur_pane:#?} among Wezterm panes {wez_panes:#?} where to run the test {test_name}"
         ))?;
 
@@ -64,7 +63,7 @@ pub fn run_test(_lua: &Lua, cursor_position: CursorPosition) -> LuaResult<()> {
         .with_context(|| {
             format!("error executing test {test_name} in Wezterm pane {test_runner_pane:#?}")
         })
-        .map_err(|e| anyhow::anyhow!(e))?;
+        .map_err(|e| anyhow!(e))?;
 
     Ok(())
 }
@@ -127,7 +126,7 @@ fn get_enclosing_fn_name_of_position(
 
     let src_tree = parser
         .parse(&src, None)
-        .ok_or(anyhow::anyhow!("error parsing src {file_path:#?} as Rust"))?;
+        .ok_or(anyhow!("error parsing src {file_path:#?} as Rust"))?;
 
     let node_at_position = src_tree
         .root_node()
