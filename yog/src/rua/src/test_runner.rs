@@ -6,6 +6,7 @@ use mlua::prelude::*;
 use tree_sitter::Node;
 use tree_sitter::Parser;
 use tree_sitter::Point;
+use utils::wezterm::WeztermPane;
 
 /// Runs the function enclosing the supplied [`CursorPosition`] as a Rust test in the first Wezterm
 /// pane that matches the tab and the current working directory of the pane of the supplied
@@ -42,9 +43,7 @@ pub fn run_test(_lua: &Lua, cursor_position: CursorPosition) -> LuaResult<()> {
 
     let test_runner_pane = wez_panes
         .iter()
-        .find(|p| {
-            p.pane_id != cur_pane.pane_id && p.tab_id == cur_pane.tab_id && p.cwd == cur_pane.cwd
-        })
+        .find(|p| { is_sibling_terminal_pane(p, cur_pane) })
         .ok_or(anyhow::anyhow!(
             "cannot find a pane sibling to the current one {cur_pane:#?} where to run the test {test_name} among Wezterm panes {wez_panes:#?}"
         ))?;
@@ -53,16 +52,19 @@ pub fn run_test(_lua: &Lua, cursor_position: CursorPosition) -> LuaResult<()> {
         .args([
             "-c",
             &format!(
-                r#"
-                    wezterm cli send-text 'cargo make test {test_name}' --pane-id '{0}' --no-paste && \
-                        printf "\r" | wezterm cli send-text --pane-id '{0}' --no-paste &&
-                        wezterm cli activate-pane --pane-id '{0}'
-                "#,
-                test_runner_pane.pane_id
+                "{} && {} && {}",
+                utils::wezterm::send_text_to_pane(
+                    &format!("'cargo make test {test_name}'"),
+                    test_runner_pane.pane_id
+                ),
+                utils::wezterm::submit_pane(test_runner_pane.pane_id),
+                utils::wezterm::activate_pane(test_runner_pane.pane_id)
             ),
         ])
         .spawn()
-        .with_context(|| format!("error executing test {test_name} in Wezterm pane {test_runner_pane:?}"))
+        .with_context(|| {
+            format!("error executing test {test_name} in Wezterm pane {test_runner_pane:?}")
+        })
         .map_err(|e| anyhow::anyhow!(e))?;
 
     Ok(())
@@ -160,4 +162,8 @@ fn get_enclosing_fn_name_of_node(src: &[u8], node: Option<Node>) -> Option<Strin
         current_node = node.parent();
     }
     None
+}
+
+fn is_sibling_terminal_pane(p1: &WeztermPane, p2: &WeztermPane) -> bool {
+    p1.pane_id != p2.pane_id && p1.tab_id == p2.tab_id && p1.cwd == p2.cwd
 }

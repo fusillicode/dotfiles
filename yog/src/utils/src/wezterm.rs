@@ -4,6 +4,18 @@ use std::process::Command;
 use color_eyre::eyre::eyre;
 use serde::Deserialize;
 
+pub fn send_text_to_pane(text: &str, pane_id: i64) -> String {
+    format!("wezterm cli send-text {text} --pane-id '{pane_id}' --no-paste")
+}
+
+pub fn submit_pane(pane_id: i64) -> String {
+    format!(r#"printf "\r" | wezterm cli send-text --pane-id '{pane_id}' --no-paste"#)
+}
+
+pub fn activate_pane(pane_id: i64) -> String {
+    format!(r#"wezterm cli activate-pane --pane-id '{pane_id}'"#)
+}
+
 pub fn get_current_pane_id() -> color_eyre::Result<i64> {
     Ok(std::env::var("WEZTERM_PANE")?.parse()?)
 }
@@ -41,7 +53,6 @@ pub fn get_sibling_pane_with_titles(
 
 #[derive(Debug, Deserialize, Clone)]
 #[cfg_attr(any(test, feature = "fake"), derive(fake::Dummy))]
-#[allow(dead_code)]
 pub struct WeztermPane {
     pub window_id: i64,
     pub tab_id: i64,
