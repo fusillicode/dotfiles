@@ -14,7 +14,7 @@ impl ToolInstaller for ElixirLs {
         "elixir-ls"
     }
 
-    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
+    fn download(&self) -> color_eyre::Result<NeedSymlink> {
         let repo = format!("elixir-lsp/{}", self.bin_name());
         let dev_tools_repo_dir = format!("{}/{}", self.dev_tools_dir, self.bin_name());
         let latest_release = utils::github::get_latest_release(&repo)?;
@@ -31,9 +31,9 @@ impl ToolInstaller for ElixirLs {
             ),
         )?;
 
-        Ok(Some(NeedSymlink {
+        Ok(NeedSymlink::Yes {
             src: format!("{dev_tools_repo_dir}/language_server.sh").into(),
             dest: format!("{}/{}", self.bin_dest_dir, self.bin_name()).into(),
-        }))
+        })
     }
 }

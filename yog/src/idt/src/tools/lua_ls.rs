@@ -13,7 +13,7 @@ impl ToolInstaller for LuaLanguageServer {
         "lua-language-server"
     }
 
-    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
+    fn download(&self) -> color_eyre::Result<NeedSymlink> {
         // No `bin` link as it requires some local stuff so, leave the garbage in `dev-tools` and configure the LSP to point to
         // the `bin` there.
         let repo = format!("LuaLS/{}", self.bin_name());
@@ -21,7 +21,7 @@ impl ToolInstaller for LuaLanguageServer {
         let latest_release = utils::github::get_latest_release(&repo)?;
         std::fs::create_dir_all(&dev_tools_repo_dir)?;
 
-        crate::downloaders::curl::run(
+        let bin_src = crate::downloaders::curl::run(
             &format!(
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}-darwin-arm64.tar.gz",
                 self.bin_name()
@@ -32,6 +32,8 @@ impl ToolInstaller for LuaLanguageServer {
             ),
         )?;
 
-        Ok(None)
+        Ok(NeedSymlink::No {
+            src: bin_src.into(),
+        })
     }
 }

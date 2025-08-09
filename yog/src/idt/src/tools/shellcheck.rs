@@ -13,11 +13,11 @@ impl ToolInstaller for Shellcheck {
         "shellcheck"
     }
 
-    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
+    fn download(&self) -> color_eyre::Result<NeedSymlink> {
         let repo = format!("koalaman/{}", self.bin_name());
         let latest_release = utils::github::get_latest_release(&repo)?;
 
-        crate::downloaders::curl::run(
+        let bin_src = crate::downloaders::curl::run(
             &format!(
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}.darwin.x86_64.tar.xz",
                 self.bin_name()
@@ -33,6 +33,8 @@ impl ToolInstaller for Shellcheck {
             .status()?
             .exit_ok()?;
 
-        Ok(None)
+        Ok(NeedSymlink::No {
+            src: bin_src.into(),
+        })
     }
 }

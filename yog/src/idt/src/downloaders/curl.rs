@@ -16,7 +16,7 @@ pub fn run(url: &str, output_option: OutputOption) -> color_eyre::Result<String>
     let silent_flag = cfg!(debug_assertions).then(|| "S").unwrap_or("");
     curl_cmd.args([&format!("-L{silent_flag}"), url]);
 
-    match output_option {
+    Ok(match output_option {
         OutputOption::UnpackVia(mut cmd, bin_dest_dir) => {
             let curl_stdout = curl_cmd
                 .stdout(Stdio::piped())
@@ -27,7 +27,7 @@ pub fn run(url: &str, output_option: OutputOption) -> color_eyre::Result<String>
             output.status.exit_ok()?;
             let mut file = File::create(bin_dest_dir)?;
             file.write_all(&output.stdout)?;
-            Ok(bin_dest_dir.to_string())
+            bin_dest_dir.into()
         }
         OutputOption::PipeInto(cmd, bin_dest_dir) => {
             let curl_stdout = curl_cmd
@@ -37,13 +37,13 @@ pub fn run(url: &str, output_option: OutputOption) -> color_eyre::Result<String>
                 .stdout
                 .ok_or_else(|| eyre!("missing stdout from cmd {curl_cmd:#?}"))?;
             cmd.stdin(Stdio::from(curl_stdout)).status()?.exit_ok()?;
-            Ok(bin_dest_dir)
+            bin_dest_dir
         }
         OutputOption::WriteTo(bin_dest_dir) => {
             curl_cmd.arg("--output");
             curl_cmd.arg(bin_dest_dir);
             curl_cmd.status()?.exit_ok()?;
-            Ok(bin_dest_dir.to_string())
+            bin_dest_dir.into()
         }
-    }
+    })
 }

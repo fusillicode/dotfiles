@@ -11,7 +11,7 @@ impl ToolInstaller for Nvim {
         "nvim"
     }
 
-    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
+    fn download(&self) -> color_eyre::Result<NeedSymlink> {
         // Compiling from sources because I can checkout specific refs in case of broken nightly builds.
         // Moreover...it's pretty badass 😎
         let nvim_source_dir = format!("{}/{}/source", self.dev_tools_dir, self.bin_name());
@@ -36,9 +36,9 @@ impl ToolInstaller for Nvim {
         .status()?
         .exit_ok()?;
 
-        Ok(Some(NeedSymlink {
+        Ok(NeedSymlink::Yes {
             src: format!("{nvim_release_dir}/bin/{}", self.bin_name()).into(),
             dest: self.bin_dest_dir.clone().into(),
-        }))
+        })
     }
 }

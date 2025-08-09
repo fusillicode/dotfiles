@@ -11,16 +11,16 @@ impl ToolInstaller for DockerLangServer {
         "docker-langserver"
     }
 
-    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
+    fn download(&self) -> color_eyre::Result<NeedSymlink> {
         let bin_src_dir = crate::downloaders::npm::run(
             &self.dev_tools_dir,
             "dockerfile-language-server-nodejs",
             &["dockerfile-language-server-nodejs"],
         )?;
 
-        Ok(Some(NeedSymlink {
+        Ok(NeedSymlink::Yes {
             src: format!("{bin_src_dir}/{}", self.bin_name()).into(),
             dest: self.bin_dest_dir.clone().into(),
-        }))
+        })
     }
 }

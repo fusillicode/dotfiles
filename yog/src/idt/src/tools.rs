@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::path::PathBuf;
 
 pub mod bash_language_server;
@@ -30,12 +31,14 @@ pub mod yaml_language_server;
 pub trait ToolInstaller: Sync + Send {
     fn bin_name(&self) -> &'static str;
 
-    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>>;
+    fn download(&self) -> color_eyre::Result<NeedSymlink>;
 
     fn install(&self) -> color_eyre::Result<()> {
-        if let Some(NeedSymlink { src, dest }) = self.download()? {
-            utils::system::ln_sf(&src, &dest)?;
-        }
+        let download_res = self.download()?;
+        if let NeedSymlink::Yes { src, dest } = &download_res {
+            utils::system::ln_sf(src, dest)?;
+        };
+        println!("{:?}", download_res.src());
         Ok(())
     }
 
@@ -46,7 +49,16 @@ pub trait ToolInstaller: Sync + Send {
     }
 }
 
-pub struct NeedSymlink {
-    pub src: PathBuf,
-    pub dest: PathBuf,
+pub enum NeedSymlink {
+    Yes { src: PathBuf, dest: PathBuf },
+    No { src: PathBuf },
+}
+
+impl NeedSymlink {
+    pub fn src(&self) -> &Path {
+        match self {
+            NeedSymlink::Yes { src, .. } => src,
+            NeedSymlink::No { src } => src,
+        }
+    }
 }

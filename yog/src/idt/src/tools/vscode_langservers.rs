@@ -11,14 +11,14 @@ impl ToolInstaller for VsCodeLangServers {
         "vscode-langservers-extracted"
     }
 
-    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
+    fn download(&self) -> color_eyre::Result<NeedSymlink> {
         let bin_src_dir =
             crate::downloaders::npm::run(&self.dev_tools_dir, self.bin_name(), &[self.bin_name()])?;
 
-        Ok(Some(NeedSymlink {
+        Ok(NeedSymlink::Yes {
             // TODO: HOW TO HANDLE THIS EFFIN' CASE?!
             src: format!("{bin_src_dir}/*").into(),
             dest: self.bin_dest_dir.clone().into(),
-        }))
+        })
     }
 }

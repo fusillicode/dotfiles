@@ -11,16 +11,16 @@ impl ToolInstaller for PrettierD {
         "prettierd"
     }
 
-    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
+    fn download(&self) -> color_eyre::Result<NeedSymlink> {
         let bin_src_dir = crate::downloaders::npm::run(
             &self.dev_tools_dir,
             self.bin_name(),
             &[&format!("@fsouza/{}", self.bin_name())],
         )?;
 
-        Ok(Some(NeedSymlink {
+        Ok(NeedSymlink::Yes {
             src: format!("{bin_src_dir}/{}", self.bin_name()).into(),
             dest: self.bin_dest_dir.clone().into(),
-        }))
+        })
     }
 }

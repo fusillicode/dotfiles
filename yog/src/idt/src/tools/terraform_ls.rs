@@ -13,11 +13,11 @@ impl ToolInstaller for TerraformLs {
         "terraform-ls"
     }
 
-    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
+    fn download(&self) -> color_eyre::Result<NeedSymlink> {
         let repo = format!("hashicorp/{}", self.bin_name());
         let latest_release = &utils::github::get_latest_release(&repo)?[1..];
 
-        crate::downloaders::curl::run(
+        let bin_src = crate::downloaders::curl::run(
             &format!(
                 "https://releases.hashicorp.com/{0}/{latest_release}/{0}_{latest_release}_darwin_arm64.zip",
                 self.bin_name()
@@ -28,6 +28,8 @@ impl ToolInstaller for TerraformLs {
             ),
         )?;
 
-        Ok(None)
+        Ok(NeedSymlink::No {
+            src: bin_src.into(),
+        })
     }
 }

@@ -13,8 +13,8 @@ impl ToolInstaller for Sqruff {
         "sqruff"
     }
 
-    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
-        crate::downloaders::curl::run(
+    fn download(&self) -> color_eyre::Result<NeedSymlink> {
+        let bin_src = crate::downloaders::curl::run(
             &format!(
                 "https://github.com/quarylabs/{0}/releases/latest/download/{0}-darwin-aarch64.tar.gz",
                 self.bin_name()
@@ -25,6 +25,8 @@ impl ToolInstaller for Sqruff {
             ),
         )?;
 
-        Ok(None)
+        Ok(NeedSymlink::No {
+            src: bin_src.into(),
+        })
     }
 }

@@ -14,11 +14,11 @@ impl ToolInstaller for Deno {
         "deno"
     }
 
-    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
+    fn download(&self) -> color_eyre::Result<NeedSymlink> {
         let repo = format!("{0}land/{0}", self.bin_name());
         let latest_release = utils::github::get_latest_release(&repo)?;
 
-        crate::downloaders::curl::run(
+        let bin_src = crate::downloaders::curl::run(
             &format!(
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-aarch64-apple-darwin.zip",
                 self.bin_name()
@@ -29,6 +29,8 @@ impl ToolInstaller for Deno {
             ),
         )?;
 
-        Ok(None)
+        Ok(NeedSymlink::No {
+            src: bin_src.into(),
+        })
     }
 }

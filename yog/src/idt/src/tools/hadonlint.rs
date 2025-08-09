@@ -11,8 +11,8 @@ impl ToolInstaller for Hadolint {
         "hadolint"
     }
 
-    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
-        crate::downloaders::curl::run(
+    fn download(&self) -> color_eyre::Result<NeedSymlink> {
+        let bin_src = crate::downloaders::curl::run(
             &format!(
                 "https://github.com/{0}/{0}/releases/latest/download/{0}-Darwin-x86_64",
                 self.bin_name()
@@ -20,6 +20,8 @@ impl ToolInstaller for Hadolint {
             OutputOption::WriteTo(&format!("{}/{}", self.bin_dest_dir, self.bin_name())),
         )?;
 
-        Ok(None)
+        Ok(NeedSymlink::No {
+            src: bin_src.into(),
+        })
     }
 }

@@ -10,7 +10,7 @@ impl ToolInstaller for Taplo {
         "taplo"
     }
 
-    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
+    fn download(&self) -> color_eyre::Result<NeedSymlink> {
         // Installing with `cargo` because of:
         // 1. no particular requirements
         // 2. https://github.com/tamasfe/taplo/issues/542
@@ -26,6 +26,13 @@ impl ToolInstaller for Taplo {
             ])
             .status()?;
 
-        Ok(None)
+        Ok(NeedSymlink::No {
+            src: format!(
+                "{}/{}",
+                self.bin_dest_dir.trim_end_matches("bin"),
+                self.bin_name()
+            )
+            .into(),
+        })
     }
 }

@@ -11,16 +11,16 @@ impl ToolInstaller for GraphQlLsp {
         "graphql-lsp"
     }
 
-    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
+    fn download(&self) -> color_eyre::Result<NeedSymlink> {
         let bin_src_dir = crate::downloaders::npm::run(
             &self.dev_tools_dir,
             "graphql-language-service-cli",
             &["graphql-language-service-cli"],
         )?;
 
-        Ok(Some(NeedSymlink {
+        Ok(NeedSymlink::Yes {
             src: format!("{bin_src_dir}/{}", self.bin_name()).into(),
             dest: self.bin_dest_dir.clone().into(),
-        }))
+        })
     }
 }

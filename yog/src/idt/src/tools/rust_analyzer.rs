@@ -13,8 +13,8 @@ impl ToolInstaller for RustAnalyzer {
         "rust-analyzer"
     }
 
-    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
-        crate::downloaders::curl::run(
+    fn download(&self) -> color_eyre::Result<NeedSymlink> {
+        let bin_src = crate::downloaders::curl::run(
             &format!(
                 "https://github.com/rust-lang/{0}/releases/download/nightly/{0}-aarch64-apple-darwin.gz",
                 self.bin_name()
@@ -25,6 +25,8 @@ impl ToolInstaller for RustAnalyzer {
             ),
         )?;
 
-        Ok(None)
+        Ok(NeedSymlink::No {
+            src: bin_src.into(),
+        })
     }
 }

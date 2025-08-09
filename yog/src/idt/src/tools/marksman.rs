@@ -11,8 +11,8 @@ impl ToolInstaller for Marksman {
         "marksman"
     }
 
-    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
-        crate::downloaders::curl::run(
+    fn download(&self) -> color_eyre::Result<NeedSymlink> {
+        let bin_src = crate::downloaders::curl::run(
             &format!(
                 "https://github.com/artempyanykh/{0}/releases/latest/download/{0}-macos",
                 self.bin_name()
@@ -20,6 +20,8 @@ impl ToolInstaller for Marksman {
             OutputOption::WriteTo(&format!("{}/{}", self.bin_dest_dir, self.bin_name())),
         )?;
 
-        Ok(None)
+        Ok(NeedSymlink::No {
+            src: bin_src.into(),
+        })
     }
 }
