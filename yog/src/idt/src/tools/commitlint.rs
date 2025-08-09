@@ -12,18 +12,17 @@ impl ToolInstaller for Commitlint {
     }
 
     fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
-        let bin_src = crate::downloaders::npm::run(
+        let bin_src_dir = crate::downloaders::npm::run(
             &self.dev_tools_dir,
             self.bin_name(),
             &[
                 &format!("@{}/cli", self.bin_name()),
                 &format!("@{}/config-conventional", self.bin_name()),
             ],
-            self.bin_name(),
         )?;
 
         Ok(Some(NeedSymlink {
-            src: bin_src.into(),
+            src: format!("{bin_src_dir}/{}", self.bin_name()).into(),
             dest: self.bin_dest_dir.clone().into(),
         }))
     }

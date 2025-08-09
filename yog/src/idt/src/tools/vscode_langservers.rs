@@ -12,15 +12,12 @@ impl ToolInstaller for VsCodeLangServers {
     }
 
     fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
-        let bin_src = crate::downloaders::npm::run(
-            &self.dev_tools_dir,
-            self.bin_name(),
-            &[self.bin_name()],
-            "*",
-        )?;
+        let bin_src_dir =
+            crate::downloaders::npm::run(&self.dev_tools_dir, self.bin_name(), &[self.bin_name()])?;
 
         Ok(Some(NeedSymlink {
-            src: bin_src.into(),
+            // TODO: HOW TO HANDLE THIS EFFIN' CASE?!
+            src: format!("{bin_src_dir}/*").into(),
             dest: self.bin_dest_dir.clone().into(),
         }))
     }

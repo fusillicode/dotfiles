@@ -12,15 +12,11 @@ impl ToolInstaller for YamlLanguageServer {
     }
 
     fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
-        let bin_src = crate::downloaders::npm::run(
-            &self.dev_tools_dir,
-            self.bin_name(),
-            &[self.bin_name()],
-            self.bin_name(),
-        )?;
+        let bin_src_dir =
+            crate::downloaders::npm::run(&self.dev_tools_dir, self.bin_name(), &[self.bin_name()])?;
 
         Ok(Some(NeedSymlink {
-            src: bin_src.into(),
+            src: format!("{bin_src_dir}/{}", self.bin_name()).into(),
             dest: self.bin_dest_dir.clone().into(),
         }))
     }
