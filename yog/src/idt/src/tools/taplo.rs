@@ -1,4 +1,5 @@
 use crate::ToolInstaller;
+use crate::tools::NeedSymlink;
 
 pub struct Taplo {
     pub bin_dest_dir: String,
@@ -9,7 +10,7 @@ impl ToolInstaller for Taplo {
         "taplo"
     }
 
-    fn download(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
         // Installing with `cargo` because of:
         // 1. no particular requirements
         // 2. https://github.com/tamasfe/taplo/issues/542
@@ -25,6 +26,6 @@ impl ToolInstaller for Taplo {
             ])
             .status()?;
 
-        Ok(())
+        Ok(None)
     }
 }

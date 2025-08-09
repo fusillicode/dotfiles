@@ -1,4 +1,5 @@
 use crate::ToolInstaller;
+use crate::tools::NeedSymlink;
 
 pub struct GraphQlLsp {
     pub dev_tools_dir: String,
@@ -10,15 +11,17 @@ impl ToolInstaller for GraphQlLsp {
         "graphql-lsp"
     }
 
-    fn download(&self) -> color_eyre::Result<()> {
-        crate::downloaders::npm::run(
+    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
+        let bin_src = crate::downloaders::npm::run(
             &self.dev_tools_dir,
             "graphql-language-service-cli",
             &["graphql-language-service-cli"],
-            &self.bin_dest_dir,
             self.bin_name(),
         )?;
 
-        Ok(())
+        Ok(Some(NeedSymlink {
+            src: bin_src.into(),
+            dest: self.bin_dest_dir.clone().into(),
+        }))
     }
 }

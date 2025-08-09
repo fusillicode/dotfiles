@@ -2,6 +2,7 @@ use std::process::Command;
 
 use crate::ToolInstaller;
 use crate::downloaders::curl::OutputOption;
+use crate::tools::NeedSymlink;
 
 pub struct Shellcheck {
     pub bin_dest_dir: String,
@@ -12,7 +13,7 @@ impl ToolInstaller for Shellcheck {
         "shellcheck"
     }
 
-    fn download(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
         let repo = format!("koalaman/{}", self.bin_name());
         let latest_release = utils::github::get_latest_release(&repo)?;
 
@@ -32,6 +33,6 @@ impl ToolInstaller for Shellcheck {
             .status()?
             .exit_ok()?;
 
-        Ok(())
+        Ok(None)
     }
 }

@@ -1,5 +1,6 @@
 use crate::ToolInstaller;
 use crate::downloaders::curl::OutputOption;
+use crate::tools::NeedSymlink;
 
 pub struct HelmLs {
     pub bin_dest_dir: String,
@@ -10,7 +11,7 @@ impl ToolInstaller for HelmLs {
         "helm_ls"
     }
 
-    fn download(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
         crate::downloaders::curl::run(
             &format!(
                 "https://github.com/mrjosh/helm-ls/releases/latest/download/{}_darwin_amd64",
@@ -19,6 +20,6 @@ impl ToolInstaller for HelmLs {
             OutputOption::WriteTo(&format!("{}/{}", self.bin_dest_dir, self.bin_name())),
         )?;
 
-        Ok(())
+        Ok(None)
     }
 }

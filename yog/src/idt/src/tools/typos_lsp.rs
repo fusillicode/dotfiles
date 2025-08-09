@@ -2,6 +2,7 @@ use std::process::Command;
 
 use crate::ToolInstaller;
 use crate::downloaders::curl::OutputOption;
+use crate::tools::NeedSymlink;
 
 pub struct TyposLsp {
     pub bin_dest_dir: String,
@@ -12,7 +13,7 @@ impl ToolInstaller for TyposLsp {
         "typos-lsp"
     }
 
-    fn download(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
         let repo = "tekumara/typos-vscode";
         let latest_release = utils::github::get_latest_release(repo)?;
 
@@ -27,6 +28,6 @@ impl ToolInstaller for TyposLsp {
             ),
         )?;
 
-        Ok(())
+        Ok(None)
     }
 }

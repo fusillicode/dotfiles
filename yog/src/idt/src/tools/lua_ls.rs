@@ -2,6 +2,7 @@ use std::process::Command;
 
 use crate::ToolInstaller;
 use crate::downloaders::curl::OutputOption;
+use crate::tools::NeedSymlink;
 
 pub struct LuaLanguageServer {
     pub dev_tools_dir: String,
@@ -12,7 +13,7 @@ impl ToolInstaller for LuaLanguageServer {
         "lua-language-server"
     }
 
-    fn download(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
         // No `bin` link as it requires some local stuff so, leave the garbage in `dev-tools` and configure the LSP to point to
         // the `bin` there.
         let repo = format!("LuaLS/{}", self.bin_name());
@@ -31,6 +32,6 @@ impl ToolInstaller for LuaLanguageServer {
             ),
         )?;
 
-        Ok(())
+        Ok(None)
     }
 }

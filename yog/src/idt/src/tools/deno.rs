@@ -2,6 +2,7 @@ use std::process::Command;
 
 use crate::ToolInstaller;
 use crate::downloaders::curl::OutputOption;
+use crate::tools::NeedSymlink;
 
 // For Markdown preview with peek.nvim
 pub struct Deno {
@@ -13,7 +14,7 @@ impl ToolInstaller for Deno {
         "deno"
     }
 
-    fn download(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
         let repo = format!("{0}land/{0}", self.bin_name());
         let latest_release = utils::github::get_latest_release(&repo)?;
 
@@ -28,6 +29,6 @@ impl ToolInstaller for Deno {
             ),
         )?;
 
-        Ok(())
+        Ok(None)
     }
 }

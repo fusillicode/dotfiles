@@ -2,6 +2,7 @@ use std::process::Command;
 
 use crate::ToolInstaller;
 use crate::downloaders::curl::OutputOption;
+use crate::tools::NeedSymlink;
 
 pub struct TerraformLs {
     pub bin_dest_dir: String,
@@ -12,7 +13,7 @@ impl ToolInstaller for TerraformLs {
         "terraform-ls"
     }
 
-    fn download(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
         let repo = format!("hashicorp/{}", self.bin_name());
         let latest_release = &utils::github::get_latest_release(&repo)?[1..];
 
@@ -27,6 +28,6 @@ impl ToolInstaller for TerraformLs {
             ),
         )?;
 
-        Ok(())
+        Ok(None)
     }
 }

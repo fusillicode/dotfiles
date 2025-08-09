@@ -1,5 +1,6 @@
 use crate::ToolInstaller;
 use crate::downloaders::curl::OutputOption;
+use crate::tools::NeedSymlink;
 
 pub struct Hadolint {
     pub bin_dest_dir: String,
@@ -10,7 +11,7 @@ impl ToolInstaller for Hadolint {
         "hadolint"
     }
 
-    fn download(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
         crate::downloaders::curl::run(
             &format!(
                 "https://github.com/{0}/{0}/releases/latest/download/{0}-Darwin-x86_64",
@@ -19,6 +20,6 @@ impl ToolInstaller for Hadolint {
             OutputOption::WriteTo(&format!("{}/{}", self.bin_dest_dir, self.bin_name())),
         )?;
 
-        Ok(())
+        Ok(None)
     }
 }

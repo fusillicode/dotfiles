@@ -1,4 +1,5 @@
 use crate::ToolInstaller;
+use crate::tools::NeedSymlink;
 
 pub struct DockerLangServer {
     pub dev_tools_dir: String,
@@ -10,15 +11,17 @@ impl ToolInstaller for DockerLangServer {
         "docker-langserver"
     }
 
-    fn download(&self) -> color_eyre::Result<()> {
-        crate::downloaders::npm::run(
+    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
+        let bin_src = crate::downloaders::npm::run(
             &self.dev_tools_dir,
             "dockerfile-language-server-nodejs",
             &["dockerfile-language-server-nodejs"],
-            &self.bin_dest_dir,
             self.bin_name(),
         )?;
 
-        Ok(())
+        Ok(Some(NeedSymlink {
+            src: bin_src.into(),
+            dest: self.bin_dest_dir.clone().into(),
+        }))
     }
 }

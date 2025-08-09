@@ -2,6 +2,7 @@ use std::process::Command;
 
 use crate::ToolInstaller;
 use crate::downloaders::curl::OutputOption;
+use crate::tools::NeedSymlink;
 
 pub struct ElixirLs {
     pub dev_tools_dir: String,
@@ -13,7 +14,7 @@ impl ToolInstaller for ElixirLs {
         "elixir-ls"
     }
 
-    fn download(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
         let repo = format!("elixir-lsp/{}", self.bin_name());
         let dev_tools_repo_dir = format!("{}/{}", self.dev_tools_dir, self.bin_name());
         let latest_release = utils::github::get_latest_release(&repo)?;
@@ -29,16 +30,10 @@ impl ToolInstaller for ElixirLs {
                 dev_tools_repo_dir.clone(),
             ),
         )?;
-        utils::system::chmod_x(&format!("{dev_tools_repo_dir}/*"))?;
-        utils::cmd::silent_cmd("ln")
-            .args([
-                "-sf",
-                &format!("{dev_tools_repo_dir}/language_server.sh"),
-                &format!("{}/{}", self.bin_dest_dir, self.bin_name()),
-            ])
-            .status()?
-            .exit_ok()?;
 
-        Ok(())
+        Ok(Some(NeedSymlink {
+            src: format!("{dev_tools_repo_dir}/language_server.sh").into(),
+            dest: format!("{}/{}", self.bin_dest_dir, self.bin_name()).into(),
+        }))
     }
 }

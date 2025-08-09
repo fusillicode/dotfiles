@@ -2,6 +2,7 @@ use std::process::Command;
 
 use crate::ToolInstaller;
 use crate::downloaders::curl::OutputOption;
+use crate::tools::NeedSymlink;
 
 pub struct RustAnalyzer {
     pub bin_dest_dir: String,
@@ -12,7 +13,7 @@ impl ToolInstaller for RustAnalyzer {
         "rust-analyzer"
     }
 
-    fn download(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
         crate::downloaders::curl::run(
             &format!(
                 "https://github.com/rust-lang/{0}/releases/download/nightly/{0}-aarch64-apple-darwin.gz",
@@ -24,6 +25,6 @@ impl ToolInstaller for RustAnalyzer {
             ),
         )?;
 
-        Ok(())
+        Ok(None)
     }
 }

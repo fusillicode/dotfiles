@@ -1,4 +1,5 @@
 use crate::ToolInstaller;
+use crate::tools::NeedSymlink;
 
 pub struct Commitlint {
     pub dev_tools_dir: String,
@@ -10,18 +11,20 @@ impl ToolInstaller for Commitlint {
         "commitlint"
     }
 
-    fn download(&self) -> color_eyre::Result<()> {
-        crate::downloaders::npm::run(
+    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
+        let bin_src = crate::downloaders::npm::run(
             &self.dev_tools_dir,
             self.bin_name(),
             &[
                 &format!("@{}/cli", self.bin_name()),
                 &format!("@{}/config-conventional", self.bin_name()),
             ],
-            &self.bin_dest_dir,
             self.bin_name(),
         )?;
 
-        Ok(())
+        Ok(Some(NeedSymlink {
+            src: bin_src.into(),
+            dest: self.bin_dest_dir.clone().into(),
+        }))
     }
 }

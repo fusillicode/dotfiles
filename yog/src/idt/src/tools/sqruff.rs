@@ -2,6 +2,7 @@ use std::process::Command;
 
 use crate::ToolInstaller;
 use crate::downloaders::curl::OutputOption;
+use crate::tools::NeedSymlink;
 
 pub struct Sqruff {
     pub bin_dest_dir: String,
@@ -12,7 +13,7 @@ impl ToolInstaller for Sqruff {
         "sqruff"
     }
 
-    fn download(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
         crate::downloaders::curl::run(
             &format!(
                 "https://github.com/quarylabs/{0}/releases/latest/download/{0}-darwin-aarch64.tar.gz",
@@ -24,6 +25,6 @@ impl ToolInstaller for Sqruff {
             ),
         )?;
 
-        Ok(())
+        Ok(None)
     }
 }
