@@ -167,12 +167,13 @@ fn main() -> color_eyre::Result<()> {
     let tools_errors = std::thread::scope(|scope| {
         let tools_handles = whitelisted_tools
             .iter()
-            .map(|installer| {
-                let bin_name = installer.bin_name();
+            .map(|tool_installer| {
+                let bin_name = tool_installer.bin_name();
                 let handle = scope.spawn(move || {
+                    let tool_installer_res = tool_installer.install();
                     // Reporting is done here (not afterwards using `errors`) to receive results as soon
                     // as possible.
-                    tools::report_install(bin_name, installer.install())
+                    tool_installer.report_install_res(tool_installer_res)
                 });
                 (bin_name, handle)
             })

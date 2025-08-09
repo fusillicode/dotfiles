@@ -23,7 +23,7 @@ pub fn run(
                 r#"
                     source {dev_tools_repo_dir}/.venv/bin/activate && \
                     pip install pip {packages} --upgrade && \
-                    ln -sf {dev_tools_repo_dir}/.venv/bin/{bin_name} {bin_dest_dir}
+                    ln -sf {bin_src} {bin_dest_dir}
                 "#,
                 packages = packages.join(" "),
             ),

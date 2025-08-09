@@ -34,13 +34,10 @@ pub trait ToolInstaller: Sync + Send {
         self.download()?;
         Ok(())
     }
-}
 
-pub fn report_install(
-    bin_name: &str,
-    install_result: color_eyre::Result<()>,
-) -> color_eyre::Result<()> {
-    install_result
-        .inspect(|_| println!("🎉 {bin_name} installed"))
-        .inspect_err(|e| eprintln!("❌ error installing {bin_name}: {e:#?}"))
+    fn report_install_res(&self, install_res: color_eyre::Result<()>) -> color_eyre::Result<()> {
+        install_res
+            .inspect(|_| println!("🎉 {} installed", self.bin_name()))
+            .inspect_err(|e| eprintln!("❌ error installing {}: {e:#?}", self.bin_name()))
+    }
 }
