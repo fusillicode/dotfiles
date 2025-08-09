@@ -1,6 +1,6 @@
 use std::process::Command;
 
-use crate::Installer;
+use crate::ToolInstaller;
 use crate::installers::curl_install::OutputOption;
 
 // For Markdown preview with peek.nvim
@@ -8,7 +8,7 @@ pub struct Deno {
     pub bin_target_dir: String,
 }
 
-impl Installer for Deno {
+impl ToolInstaller for Deno {
     fn bin_name(&self) -> &'static str {
         "deno"
     }

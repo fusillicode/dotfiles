@@ -1,11 +1,11 @@
-use crate::Installer;
+use crate::ToolInstaller;
 
 pub struct BashLanguageServer {
     pub dev_tools_dir: String,
     pub bin_target_dir: String,
 }
 
-impl Installer for BashLanguageServer {
+impl ToolInstaller for BashLanguageServer {
     fn bin_name(&self) -> &'static str {
         "bash-language-server"
     }

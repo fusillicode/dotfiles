@@ -3,7 +3,7 @@
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 
-use crate::tools::Installer;
+use crate::tools::ToolInstaller;
 use crate::tools::bash_language_server::BashLanguageServer;
 use crate::tools::commitlint::Commitlint;
 use crate::tools::deno::Deno;
@@ -59,7 +59,7 @@ fn main() -> color_eyre::Result<()> {
 
     utils::github::log_into_github()?;
 
-    let tools: Vec<Box<dyn Installer>> = vec![
+    let tools: Vec<Box<dyn ToolInstaller>> = vec![
         Box::new(BashLanguageServer {
             dev_tools_dir: dev_tools_dir.into(),
             bin_target_dir: bin_target_dir.into(),

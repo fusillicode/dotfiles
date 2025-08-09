@@ -1,11 +1,11 @@
-use crate::Installer;
+use crate::ToolInstaller;
 
 pub struct SqlLanguageServer {
     pub dev_tools_dir: String,
     pub bin_target_dir: String,
 }
 
-impl Installer for SqlLanguageServer {
+impl ToolInstaller for SqlLanguageServer {
     fn bin_name(&self) -> &'static str {
         "sql-language-server"
     }

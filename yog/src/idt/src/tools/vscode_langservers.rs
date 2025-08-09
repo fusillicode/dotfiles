@@ -1,11 +1,11 @@
-use crate::Installer;
+use crate::ToolInstaller;
 
 pub struct VsCodeLangServers {
     pub dev_tools_dir: String,
     pub bin_target_dir: String,
 }
 
-impl Installer for VsCodeLangServers {
+impl ToolInstaller for VsCodeLangServers {
     fn bin_name(&self) -> &'static str {
         "vscode-langservers-extracted"
     }

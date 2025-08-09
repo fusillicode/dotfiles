@@ -1,4 +1,4 @@
-use crate::Installer;
+use crate::ToolInstaller;
 use utils::cmd::silent_cmd;
 
 pub struct Nvim {
@@ -6,7 +6,7 @@ pub struct Nvim {
     pub bin_target_dir: String,
 }
 
-impl Installer for Nvim {
+impl ToolInstaller for Nvim {
     fn bin_name(&self) -> &'static str {
         "nvim"
     }

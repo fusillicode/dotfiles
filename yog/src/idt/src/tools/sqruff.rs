@@ -1,13 +1,13 @@
 use std::process::Command;
 
-use crate::Installer;
+use crate::ToolInstaller;
 use crate::installers::curl_install::OutputOption;
 
 pub struct Sqruff {
     pub bin_target_dir: String,
 }
 
-impl Installer for Sqruff {
+impl ToolInstaller for Sqruff {
     fn bin_name(&self) -> &'static str {
         "sqruff"
     }

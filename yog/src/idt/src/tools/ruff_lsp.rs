@@ -1,11 +1,11 @@
-use crate::Installer;
+use crate::ToolInstaller;
 
 pub struct RuffLsp {
     pub dev_tools_dir: String,
     pub bin_target_dir: String,
 }
 
-impl Installer for RuffLsp {
+impl ToolInstaller for RuffLsp {
     fn bin_name(&self) -> &'static str {
         "ruff-lsp"
     }

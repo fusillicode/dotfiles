@@ -1,11 +1,11 @@
-use crate::Installer;
+use crate::ToolInstaller;
 use crate::installers::curl_install::OutputOption;
 
 pub struct Hadolint {
     pub bin_target_dir: String,
 }
 
-impl Installer for Hadolint {
+impl ToolInstaller for Hadolint {
     fn bin_name(&self) -> &'static str {
         "hadolint"
     }

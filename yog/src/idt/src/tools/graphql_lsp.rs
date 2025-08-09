@@ -1,11 +1,11 @@
-use crate::Installer;
+use crate::ToolInstaller;
 
 pub struct GraphQlLsp {
     pub dev_tools_dir: String,
     pub bin_target_dir: String,
 }
 
-impl Installer for GraphQlLsp {
+impl ToolInstaller for GraphQlLsp {
     fn bin_name(&self) -> &'static str {
         "graphql-lsp"
     }

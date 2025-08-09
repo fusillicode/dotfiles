@@ -1,11 +1,11 @@
-use crate::Installer;
+use crate::ToolInstaller;
 
 pub struct Quicktype {
     pub dev_tools_dir: String,
     pub bin_target_dir: String,
 }
 
-impl Installer for Quicktype {
+impl ToolInstaller for Quicktype {
     fn bin_name(&self) -> &'static str {
         "quicktype"
     }

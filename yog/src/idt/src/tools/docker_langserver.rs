@@ -1,11 +1,11 @@
-use crate::Installer;
+use crate::ToolInstaller;
 
 pub struct DockerLangServer {
     pub dev_tools_dir: String,
     pub bin_target_dir: String,
 }
 
-impl Installer for DockerLangServer {
+impl ToolInstaller for DockerLangServer {
     fn bin_name(&self) -> &'static str {
         "docker-langserver"
     }

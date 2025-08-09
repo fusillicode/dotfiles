@@ -1,13 +1,13 @@
 use std::process::Command;
 
-use crate::Installer;
+use crate::ToolInstaller;
 use crate::installers::curl_install::OutputOption;
 
 pub struct LuaLanguageServer {
     pub dev_tools_dir: String,
 }
 
-impl Installer for LuaLanguageServer {
+impl ToolInstaller for LuaLanguageServer {
     fn bin_name(&self) -> &'static str {
         "lua-language-server"
     }

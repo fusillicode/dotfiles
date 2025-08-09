@@ -1,11 +1,11 @@
-use crate::Installer;
+use crate::ToolInstaller;
 
 pub struct EslintD {
     pub dev_tools_dir: String,
     pub bin_target_dir: String,
 }
 
-impl Installer for EslintD {
+impl ToolInstaller for EslintD {
     fn bin_name(&self) -> &'static str {
         "eslint_d"
     }

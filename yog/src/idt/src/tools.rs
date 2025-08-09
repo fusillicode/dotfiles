@@ -25,7 +25,7 @@ pub mod typos_lsp;
 pub mod vscode_langservers;
 pub mod yaml_language_server;
 
-pub trait Installer: Sync + Send {
+pub trait ToolInstaller: Sync + Send {
     fn bin_name(&self) -> &'static str;
 
     fn download(&self) -> color_eyre::Result<()>;

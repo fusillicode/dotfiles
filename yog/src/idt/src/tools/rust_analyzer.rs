@@ -1,13 +1,13 @@
 use std::process::Command;
 
-use crate::Installer;
+use crate::ToolInstaller;
 use crate::installers::curl_install::OutputOption;
 
 pub struct RustAnalyzer {
     pub bin_target_dir: String,
 }
 
-impl Installer for RustAnalyzer {
+impl ToolInstaller for RustAnalyzer {
     fn bin_name(&self) -> &'static str {
         "rust-analyzer"
     }

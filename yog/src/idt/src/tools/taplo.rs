@@ -1,10 +1,10 @@
-use crate::Installer;
+use crate::ToolInstaller;
 
 pub struct Taplo {
     pub bin_target_dir: String,
 }
 
-impl Installer for Taplo {
+impl ToolInstaller for Taplo {
     fn bin_name(&self) -> &'static str {
         "taplo"
     }
