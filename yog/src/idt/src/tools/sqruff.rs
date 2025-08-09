@@ -18,7 +18,12 @@ impl ToolInstaller for Sqruff {
                 "https://github.com/quarylabs/{0}/releases/latest/download/{0}-darwin-aarch64.tar.gz",
                 self.bin_name()
             ),
-            OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &self.bin_dest_dir])),
-        )
+            OutputOption::PipeInto(
+                Command::new("tar").args(["-xz", "-C"]),
+                self.bin_dest_dir.clone(),
+            ),
+        )?;
+
+        Ok(())
     }
 }

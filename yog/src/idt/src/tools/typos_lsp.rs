@@ -21,7 +21,12 @@ impl ToolInstaller for TyposLsp {
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}-aarch64-apple-darwin.tar.gz",
                 self.bin_name()
             ),
-            OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &self.bin_dest_dir])),
-        )
+            OutputOption::PipeInto(
+                Command::new("tar").args(["-xz", "-C"]),
+                self.bin_dest_dir.clone(),
+            ),
+        )?;
+
+        Ok(())
     }
 }

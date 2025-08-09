@@ -22,6 +22,8 @@ impl ToolInstaller for RustAnalyzer {
                 Box::new(Command::new("zcat")),
                 &format!("{}/{}", self.bin_dest_dir, self.bin_name()),
             ),
-        )
+        )?;
+
+        Ok(())
     }
 }

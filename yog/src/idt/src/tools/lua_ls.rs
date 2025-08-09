@@ -25,7 +25,12 @@ impl ToolInstaller for LuaLanguageServer {
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}-darwin-arm64.tar.gz",
                 self.bin_name()
             ),
-            OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &dev_tools_repo_dir])),
-        )
+            OutputOption::PipeInto(
+                Command::new("tar").args(["-xz", "-C"]),
+                dev_tools_repo_dir.clone(),
+            ),
+        )?;
+
+        Ok(())
     }
 }

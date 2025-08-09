@@ -21,7 +21,12 @@ impl ToolInstaller for TerraformLs {
                 "https://releases.hashicorp.com/{0}/{latest_release}/{0}_{latest_release}_darwin_arm64.zip",
                 self.bin_name()
             ),
-            OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &self.bin_dest_dir])),
-        )
+            OutputOption::PipeInto(
+                Command::new("tar").args(["-xz", "-C"]),
+                self.bin_dest_dir.clone(),
+            ),
+        )?;
+
+        Ok(())
     }
 }

@@ -21,7 +21,7 @@ impl ToolInstaller for Shellcheck {
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}.darwin.x86_64.tar.xz",
                 self.bin_name()
             ),
-            OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", "/tmp"])),
+            OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C"]), "/tmp".into()),
         )?;
 
         utils::cmd::silent_cmd("mv")

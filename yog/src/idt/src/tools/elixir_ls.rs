@@ -24,7 +24,10 @@ impl ToolInstaller for ElixirLs {
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}.zip",
                 self.bin_name()
             ),
-            OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &dev_tools_repo_dir])),
+            OutputOption::PipeInto(
+                Command::new("tar").args(["-xz", "-C"]),
+                dev_tools_repo_dir.clone(),
+            ),
         )?;
         utils::system::chmod_x(&format!("{dev_tools_repo_dir}/*"))?;
         utils::cmd::silent_cmd("ln")

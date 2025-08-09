@@ -17,6 +17,8 @@ impl ToolInstaller for Marksman {
                 self.bin_name()
             ),
             OutputOption::WriteTo(&format!("{}/{}", self.bin_dest_dir, self.bin_name())),
-        )
+        )?;
+
+        Ok(())
     }
 }
