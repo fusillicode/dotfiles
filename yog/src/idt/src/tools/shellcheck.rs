@@ -4,7 +4,7 @@ use crate::Installer;
 use crate::installers::curl_install::OutputOption;
 
 pub struct Shellcheck {
-    pub bin_dir: String,
+    pub bin_target_dir: String
 }
 
 impl Installer for Shellcheck {
@@ -27,7 +27,7 @@ impl Installer for Shellcheck {
         utils::cmd::silent_cmd("mv")
             .args([
                 &format!("/tmp/{0}-{latest_release}/{0}", self.bin_name()),
-                &self.bin_dir,
+                &self.bin_target_dir,
             ])
             .status()?
             .exit_ok()?;

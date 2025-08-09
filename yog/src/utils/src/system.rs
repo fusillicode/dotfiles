@@ -1,3 +1,4 @@
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Stdio;
 use std::thread::JoinHandle;
@@ -33,12 +34,20 @@ pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
     Ok(())
 }
 
-// Yes, `path` is a `&str` and it's not sanitized but...I'm the alpha & the omega here!
 pub fn chmod_x(path: &str) -> color_eyre::Result<()> {
-    Ok(crate::cmd::silent_cmd("sh")
-        .args(["-c", &format!("chmod +x {path}")])
-        .status()?
-        .exit_ok()?)
+    let mut perms = std::fs::metadata(&path)?.permissions();
+    perms.set_mode(0o755);
+    std::fs::set_permissions(&path, perms)?;
+    Ok(())
+}
+
+pub fn ln_sf(src: &str, target: &str) -> color_eyre::Result<()> {
+    let target_path = Path::new(target);
+    if target_path.exists() || target_path.is_symlink() {
+        std::fs::remove_file(target_path)?;
+    }
+    std::os::unix::fs::symlink(src, target_path)?;
+    Ok(())
 }
 
 pub fn rm_dead_symlinks(dir: &str) -> color_eyre::Result<()> {

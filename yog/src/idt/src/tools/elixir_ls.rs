@@ -5,7 +5,7 @@ use crate::installers::curl_install::OutputOption;
 
 pub struct ElixirLs {
     pub dev_tools_dir: String,
-    pub bin_dir: String,
+    pub bin_target_dir: String,
 }
 
 impl Installer for ElixirLs {
@@ -31,7 +31,7 @@ impl Installer for ElixirLs {
             .args([
                 "-sf",
                 &format!("{dev_tools_repo_dir}/language_server.sh"),
-                &format!("{}/{}", self.bin_dir, self.bin_name()),
+                &format!("{}/{}", self.bin_target_dir, self.bin_name()),
             ])
             .status()?
             .exit_ok()?;

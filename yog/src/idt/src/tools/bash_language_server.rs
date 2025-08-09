@@ -2,7 +2,7 @@ use crate::Installer;
 
 pub struct BashLanguageServer {
     pub dev_tools_dir: String,
-    pub bin_dir: String,
+    pub bin_target_dir: String,
 }
 
 impl Installer for BashLanguageServer {
@@ -15,7 +15,7 @@ impl Installer for BashLanguageServer {
             &self.dev_tools_dir,
             self.bin_name(),
             &[self.bin_name()],
-            &self.bin_dir,
+            &self.bin_target_dir,
             self.bin_name(),
         )
     }
