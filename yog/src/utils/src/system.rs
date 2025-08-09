@@ -34,7 +34,14 @@ pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
     Ok(())
 }
 
-pub fn chmod_x(path: &str) -> color_eyre::Result<()> {
+pub fn chmod_x(dir: &str) -> color_eyre::Result<()> {
+    Ok(crate::cmd::silent_cmd("sh")
+        .args(["-c", &format!("chmod +x {dir}")])
+        .status()?
+        .exit_ok()?)
+}
+
+pub fn chmod_x_v2(path: &str) -> color_eyre::Result<()> {
     let mut perms = std::fs::metadata(path)?.permissions();
     perms.set_mode(0o755);
     std::fs::set_permissions(path, perms)?;
