@@ -17,6 +17,8 @@ impl ToolInstaller for YamlLanguageServer {
             &[self.bin_name()],
             &self.bin_dest_dir,
             self.bin_name(),
-        )
+        )?;
+
+        Ok(())
     }
 }

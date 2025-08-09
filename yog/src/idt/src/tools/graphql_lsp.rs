@@ -17,6 +17,8 @@ impl ToolInstaller for GraphQlLsp {
             &["graphql-language-service-cli"],
             &self.bin_dest_dir,
             self.bin_name(),
-        )
+        )?;
+
+        Ok(())
     }
 }

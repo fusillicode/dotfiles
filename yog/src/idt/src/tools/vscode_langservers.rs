@@ -17,6 +17,8 @@ impl ToolInstaller for VsCodeLangServers {
             &[self.bin_name()],
             &self.bin_dest_dir,
             "*",
-        )
+        )?;
+
+        Ok(())
     }
 }

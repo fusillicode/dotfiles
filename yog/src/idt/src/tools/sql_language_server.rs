@@ -17,6 +17,8 @@ impl ToolInstaller for SqlLanguageServer {
             &[self.bin_name()],
             &self.bin_dest_dir,
             self.bin_name(),
-        )
+        )?;
+
+        Ok(())
     }
 }

@@ -20,6 +20,8 @@ impl ToolInstaller for Commitlint {
             ],
             &self.bin_dest_dir,
             self.bin_name(),
-        )
+        )?;
+
+        Ok(())
     }
 }

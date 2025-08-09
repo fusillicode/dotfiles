@@ -17,6 +17,8 @@ impl ToolInstaller for TypescriptLanguageServer {
             &[self.bin_name(), "typescript"],
             &self.bin_dest_dir,
             self.bin_name(),
-        )
+        )?;
+
+        Ok(())
     }
 }

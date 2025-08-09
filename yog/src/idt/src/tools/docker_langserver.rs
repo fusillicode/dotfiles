@@ -17,6 +17,8 @@ impl ToolInstaller for DockerLangServer {
             &["dockerfile-language-server-nodejs"],
             &self.bin_dest_dir,
             self.bin_name(),
-        )
+        )?;
+
+        Ok(())
     }
 }

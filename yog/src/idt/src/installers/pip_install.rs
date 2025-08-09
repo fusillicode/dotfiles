@@ -4,7 +4,7 @@ pub fn run(
     packages: &[&str],
     bin_dest_dir: &str,
     bin_name: &str,
-) -> color_eyre::Result<()> {
+) -> color_eyre::Result<String> {
     let dev_tools_repo_dir = format!("{dev_tools_dir}/{tool}");
 
     std::fs::create_dir_all(&dev_tools_repo_dir)?;
@@ -14,7 +14,9 @@ pub fn run(
         .status()?
         .exit_ok()?;
 
-    Ok(utils::cmd::silent_cmd("sh")
+    let bin_src = format!("{dev_tools_repo_dir}/.venv/bin/{bin_name}");
+
+    utils::cmd::silent_cmd("sh")
         .args([
             "-c",
             &format!(
@@ -27,5 +29,7 @@ pub fn run(
             ),
         ])
         .status()?
-        .exit_ok()?)
+        .exit_ok()?;
+
+    Ok(bin_src)
 }
