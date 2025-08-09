@@ -28,7 +28,6 @@ use crate::tools::taplo::Taplo;
 use crate::tools::terraform_ls::TerraformLs;
 use crate::tools::typescript_language_server::TypescriptLanguageServer;
 use crate::tools::typos_lsp::TyposLsp;
-use crate::tools::vscode_langservers::VsCodeLangServers;
 use crate::tools::yaml_language_server::YamlLanguageServer;
 
 mod installers;
@@ -143,10 +142,6 @@ fn main() -> color_eyre::Result<()> {
             bin_target_dir: bin_target_dir.into(),
         }),
         Box::new(TyposLsp {
-            bin_target_dir: bin_target_dir.into(),
-        }),
-        Box::new(VsCodeLangServers {
-            dev_tools_dir: dev_tools_dir.into(),
             bin_target_dir: bin_target_dir.into(),
         }),
         Box::new(YamlLanguageServer {
