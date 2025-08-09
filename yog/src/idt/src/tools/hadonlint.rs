@@ -2,7 +2,7 @@ use crate::Installer;
 use crate::installers::curl_install::OutputOption;
 
 pub struct Hadolint {
-    pub bin_target_dir: String
+    pub bin_target_dir: String,
 }
 
 impl Installer for Hadolint {
@@ -10,7 +10,7 @@ impl Installer for Hadolint {
         "hadolint"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<()> {
         crate::installers::curl_install::run(
             &format!(
                 "https://github.com/{0}/{0}/releases/latest/download/{0}-Darwin-x86_64",

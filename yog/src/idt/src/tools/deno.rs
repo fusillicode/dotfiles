@@ -5,7 +5,7 @@ use crate::installers::curl_install::OutputOption;
 
 // For Markdown preview with peek.nvim
 pub struct Deno {
-    pub bin_target_dir: String
+    pub bin_target_dir: String,
 }
 
 impl Installer for Deno {
@@ -13,7 +13,7 @@ impl Installer for Deno {
         "deno"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<()> {
         let repo = format!("{0}land/{0}", self.bin_name());
         let latest_release = utils::github::get_latest_release(&repo)?;
 

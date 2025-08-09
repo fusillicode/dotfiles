@@ -2,7 +2,7 @@ use crate::Installer;
 use crate::installers::curl_install::OutputOption;
 
 pub struct Marksman {
-    pub bin_target_dir: String
+    pub bin_target_dir: String,
 }
 
 impl Installer for Marksman {
@@ -10,7 +10,7 @@ impl Installer for Marksman {
         "marksman"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<()> {
         crate::installers::curl_install::run(
             &format!(
                 "https://github.com/artempyanykh/{0}/releases/latest/download/{0}-macos",

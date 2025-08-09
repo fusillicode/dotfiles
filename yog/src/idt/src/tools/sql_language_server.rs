@@ -2,7 +2,7 @@ use crate::Installer;
 
 pub struct SqlLanguageServer {
     pub dev_tools_dir: String,
-    pub bin_target_dir: String
+    pub bin_target_dir: String,
 }
 
 impl Installer for SqlLanguageServer {
@@ -10,7 +10,7 @@ impl Installer for SqlLanguageServer {
         "sql-language-server"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<()> {
         crate::installers::npm_install::run(
             &self.dev_tools_dir,
             self.bin_name(),

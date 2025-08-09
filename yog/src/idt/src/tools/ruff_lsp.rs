@@ -2,7 +2,7 @@ use crate::Installer;
 
 pub struct RuffLsp {
     pub dev_tools_dir: String,
-    pub bin_target_dir: String
+    pub bin_target_dir: String,
 }
 
 impl Installer for RuffLsp {
@@ -10,7 +10,7 @@ impl Installer for RuffLsp {
         "ruff-lsp"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<()> {
         crate::installers::pip_install::run(
             &self.dev_tools_dir,
             self.bin_name(),

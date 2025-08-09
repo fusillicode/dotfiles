@@ -27,7 +27,13 @@ pub mod yaml_language_server;
 
 pub trait Installer: Sync + Send {
     fn bin_name(&self) -> &'static str;
-    fn install(&self) -> color_eyre::Result<()>;
+
+    fn download(&self) -> color_eyre::Result<()>;
+
+    fn install(&self) -> color_eyre::Result<()> {
+        self.download()?;
+        Ok(())
+    }
 }
 
 pub fn report_install(

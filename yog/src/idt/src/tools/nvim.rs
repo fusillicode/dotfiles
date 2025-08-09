@@ -3,7 +3,7 @@ use utils::cmd::silent_cmd;
 
 pub struct Nvim {
     pub dev_tools_dir: String,
-    pub bin_target_dir: String
+    pub bin_target_dir: String,
 }
 
 impl Installer for Nvim {
@@ -11,7 +11,7 @@ impl Installer for Nvim {
         "nvim"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<()> {
         // Compiling from sources because I can checkout specific refs in case of broken nightly builds.
         // Moreover...it's pretty badass 😎
         let nvim_source_dir = format!("{}/{}/source", self.dev_tools_dir, self.bin_name());

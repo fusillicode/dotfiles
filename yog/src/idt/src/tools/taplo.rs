@@ -1,7 +1,7 @@
 use crate::Installer;
 
 pub struct Taplo {
-    pub bin_target_dir: String
+    pub bin_target_dir: String,
 }
 
 impl Installer for Taplo {
@@ -9,7 +9,7 @@ impl Installer for Taplo {
         "taplo"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<()> {
         // Installing with `cargo` because of:
         // 1. no particular requirements
         // 2. https://github.com/tamasfe/taplo/issues/542

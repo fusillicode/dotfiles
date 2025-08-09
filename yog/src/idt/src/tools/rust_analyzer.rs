@@ -4,7 +4,7 @@ use crate::Installer;
 use crate::installers::curl_install::OutputOption;
 
 pub struct RustAnalyzer {
-    pub bin_target_dir: String
+    pub bin_target_dir: String,
 }
 
 impl Installer for RustAnalyzer {
@@ -12,7 +12,7 @@ impl Installer for RustAnalyzer {
         "rust-analyzer"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<()> {
         crate::installers::curl_install::run(
             &format!(
                 "https://github.com/rust-lang/{0}/releases/download/nightly/{0}-aarch64-apple-darwin.gz",

@@ -4,7 +4,7 @@ use crate::Installer;
 use crate::installers::curl_install::OutputOption;
 
 pub struct TerraformLs {
-    pub bin_target_dir: String
+    pub bin_target_dir: String,
 }
 
 impl Installer for TerraformLs {
@@ -12,7 +12,7 @@ impl Installer for TerraformLs {
         "terraform-ls"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<()> {
         let repo = format!("hashicorp/{}", self.bin_name());
         let latest_release = &utils::github::get_latest_release(&repo)?[1..];
 
