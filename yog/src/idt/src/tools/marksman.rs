@@ -1,5 +1,5 @@
 use crate::ToolInstaller;
-use crate::installers::curl_install::OutputOption;
+use crate::downloaders::curl::OutputOption;
 
 pub struct Marksman {
     pub bin_dest_dir: String,
@@ -11,7 +11,7 @@ impl ToolInstaller for Marksman {
     }
 
     fn download(&self) -> color_eyre::Result<()> {
-        crate::installers::curl_install::run(
+        crate::downloaders::curl::run(
             &format!(
                 "https://github.com/artempyanykh/{0}/releases/latest/download/{0}-macos",
                 self.bin_name()

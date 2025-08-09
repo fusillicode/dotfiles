@@ -1,7 +1,7 @@
 use std::process::Command;
 
 use crate::ToolInstaller;
-use crate::installers::curl_install::OutputOption;
+use crate::downloaders::curl::OutputOption;
 
 pub struct RustAnalyzer {
     pub bin_dest_dir: String,
@@ -13,7 +13,7 @@ impl ToolInstaller for RustAnalyzer {
     }
 
     fn download(&self) -> color_eyre::Result<()> {
-        crate::installers::curl_install::run(
+        crate::downloaders::curl::run(
             &format!(
                 "https://github.com/rust-lang/{0}/releases/download/nightly/{0}-aarch64-apple-darwin.gz",
                 self.bin_name()

@@ -1,7 +1,7 @@
 use std::process::Command;
 
 use crate::ToolInstaller;
-use crate::installers::curl_install::OutputOption;
+use crate::downloaders::curl::OutputOption;
 
 pub struct Shellcheck {
     pub bin_dest_dir: String,
@@ -16,7 +16,7 @@ impl ToolInstaller for Shellcheck {
         let repo = format!("koalaman/{}", self.bin_name());
         let latest_release = utils::github::get_latest_release(&repo)?;
 
-        crate::installers::curl_install::run(
+        crate::downloaders::curl::run(
             &format!(
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}.darwin.x86_64.tar.xz",
                 self.bin_name()
