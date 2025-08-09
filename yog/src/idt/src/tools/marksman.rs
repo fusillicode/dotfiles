@@ -2,7 +2,7 @@ use crate::ToolInstaller;
 use crate::installers::curl_install::OutputOption;
 
 pub struct Marksman {
-    pub bin_target_dir: String,
+    pub bin_dest_dir: String,
 }
 
 impl ToolInstaller for Marksman {
@@ -16,7 +16,7 @@ impl ToolInstaller for Marksman {
                 "https://github.com/artempyanykh/{0}/releases/latest/download/{0}-macos",
                 self.bin_name()
             ),
-            OutputOption::WriteTo(&format!("{}/{}", self.bin_target_dir, self.bin_name())),
+            OutputOption::WriteTo(&format!("{}/{}", self.bin_dest_dir, self.bin_name())),
         )
     }
 }

@@ -2,7 +2,7 @@ pub fn run(
     dev_tools_dir: &str,
     tool: &str,
     packages: &[&str],
-    bin_target_dir: &str,
+    bin_dest_dir: &str,
     bin: &str,
 ) -> color_eyre::Result<()> {
     let dev_tools_repo_dir = format!("{dev_tools_dir}/{tool}");
@@ -21,7 +21,7 @@ pub fn run(
                 r#"
                     source {dev_tools_repo_dir}/.venv/bin/activate && \
                     pip install pip {packages} --upgrade && \
-                    ln -sf {dev_tools_repo_dir}/.venv/bin/{bin} {bin_target_dir}
+                    ln -sf {dev_tools_repo_dir}/.venv/bin/{bin} {bin_dest_dir}
                 "#,
                 packages = packages.join(" "),
             ),

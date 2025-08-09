@@ -2,7 +2,7 @@ use crate::ToolInstaller;
 
 pub struct VsCodeLangServers {
     pub dev_tools_dir: String,
-    pub bin_target_dir: String,
+    pub bin_dest_dir: String,
 }
 
 impl ToolInstaller for VsCodeLangServers {
@@ -15,7 +15,7 @@ impl ToolInstaller for VsCodeLangServers {
             &self.dev_tools_dir,
             self.bin_name(),
             &[self.bin_name()],
-            &self.bin_target_dir,
+            &self.bin_dest_dir,
             "*",
         )
     }

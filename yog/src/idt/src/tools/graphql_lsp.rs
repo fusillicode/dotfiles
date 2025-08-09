@@ -2,7 +2,7 @@ use crate::ToolInstaller;
 
 pub struct GraphQlLsp {
     pub dev_tools_dir: String,
-    pub bin_target_dir: String,
+    pub bin_dest_dir: String,
 }
 
 impl ToolInstaller for GraphQlLsp {
@@ -15,7 +15,7 @@ impl ToolInstaller for GraphQlLsp {
             &self.dev_tools_dir,
             "graphql-language-service-cli",
             &["graphql-language-service-cli"],
-            &self.bin_target_dir,
+            &self.bin_dest_dir,
             self.bin_name(),
         )
     }

@@ -5,7 +5,7 @@ use crate::installers::curl_install::OutputOption;
 
 // For Markdown preview with peek.nvim
 pub struct Deno {
-    pub bin_target_dir: String,
+    pub bin_dest_dir: String,
 }
 
 impl ToolInstaller for Deno {
@@ -22,7 +22,7 @@ impl ToolInstaller for Deno {
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-aarch64-apple-darwin.zip",
                 self.bin_name()
             ),
-            OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &self.bin_target_dir])),
+            OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &self.bin_dest_dir])),
         )
     }
 }

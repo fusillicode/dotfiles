@@ -48,12 +48,12 @@ pub fn chmod_x_v2(path: &str) -> color_eyre::Result<()> {
     Ok(())
 }
 
-pub fn ln_sf(src: &str, target: &str) -> color_eyre::Result<()> {
-    let target_path = Path::new(target);
-    if target_path.exists() || target_path.is_symlink() {
-        std::fs::remove_file(target_path)?;
+pub fn ln_sf(src: &str, dest: &str) -> color_eyre::Result<()> {
+    let dest_path = Path::new(dest);
+    if dest_path.exists() || dest_path.is_symlink() {
+        std::fs::remove_file(dest_path)?;
     }
-    std::os::unix::fs::symlink(src, target_path)?;
+    std::os::unix::fs::symlink(src, dest_path)?;
     Ok(())
 }
 

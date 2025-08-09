@@ -4,7 +4,7 @@ use crate::ToolInstaller;
 use crate::installers::curl_install::OutputOption;
 
 pub struct TerraformLs {
-    pub bin_target_dir: String,
+    pub bin_dest_dir: String,
 }
 
 impl ToolInstaller for TerraformLs {
@@ -21,7 +21,7 @@ impl ToolInstaller for TerraformLs {
                 "https://releases.hashicorp.com/{0}/{latest_release}/{0}_{latest_release}_darwin_arm64.zip",
                 self.bin_name()
             ),
-            OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &self.bin_target_dir])),
+            OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &self.bin_dest_dir])),
         )
     }
 }

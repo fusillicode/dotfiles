@@ -2,7 +2,7 @@ use crate::ToolInstaller;
 
 pub struct TypescriptLanguageServer {
     pub dev_tools_dir: String,
-    pub bin_target_dir: String,
+    pub bin_dest_dir: String,
 }
 
 impl ToolInstaller for TypescriptLanguageServer {
@@ -15,7 +15,7 @@ impl ToolInstaller for TypescriptLanguageServer {
             &self.dev_tools_dir,
             self.bin_name(),
             &[self.bin_name(), "typescript"],
-            &self.bin_target_dir,
+            &self.bin_dest_dir,
             self.bin_name(),
         )
     }

@@ -2,7 +2,7 @@ use crate::ToolInstaller;
 use crate::installers::curl_install::OutputOption;
 
 pub struct HelmLs {
-    pub bin_target_dir: String,
+    pub bin_dest_dir: String,
 }
 
 impl ToolInstaller for HelmLs {
@@ -16,7 +16,7 @@ impl ToolInstaller for HelmLs {
                 "https://github.com/mrjosh/helm-ls/releases/latest/download/{}_darwin_amd64",
                 self.bin_name()
             ),
-            OutputOption::WriteTo(&format!("{}/{}", self.bin_target_dir, self.bin_name())),
+            OutputOption::WriteTo(&format!("{}/{}", self.bin_dest_dir, self.bin_name())),
         )
     }
 }

@@ -4,7 +4,7 @@ use crate::ToolInstaller;
 use crate::installers::curl_install::OutputOption;
 
 pub struct RustAnalyzer {
-    pub bin_target_dir: String,
+    pub bin_dest_dir: String,
 }
 
 impl ToolInstaller for RustAnalyzer {
@@ -20,7 +20,7 @@ impl ToolInstaller for RustAnalyzer {
             ),
             OutputOption::UnpackVia(
                 Box::new(Command::new("zcat")),
-                &format!("{}/{}", self.bin_target_dir, self.bin_name()),
+                &format!("{}/{}", self.bin_dest_dir, self.bin_name()),
             ),
         )
     }

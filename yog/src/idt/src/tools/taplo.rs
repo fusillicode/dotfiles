@@ -1,7 +1,7 @@
 use crate::ToolInstaller;
 
 pub struct Taplo {
-    pub bin_target_dir: String,
+    pub bin_dest_dir: String,
 }
 
 impl ToolInstaller for Taplo {
@@ -21,7 +21,7 @@ impl ToolInstaller for Taplo {
                 "--all-features",
                 "--root",
                 // `--root` automatically append `bin` 🥲
-                self.bin_target_dir.trim_end_matches("bin"),
+                self.bin_dest_dir.trim_end_matches("bin"),
             ])
             .status()?;
 
