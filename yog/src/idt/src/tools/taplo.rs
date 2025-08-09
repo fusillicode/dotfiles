@@ -1,15 +1,16 @@
-use crate::Installer;
+use crate::ToolInstaller;
+use crate::tools::NeedSymlink;
 
 pub struct Taplo {
-    pub bin_dir: String,
+    pub bin_dest_dir: String,
 }
 
-impl Installer for Taplo {
+impl ToolInstaller for Taplo {
     fn bin_name(&self) -> &'static str {
         "taplo"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
         // Installing with `cargo` because of:
         // 1. no particular requirements
         // 2. https://github.com/tamasfe/taplo/issues/542
@@ -21,10 +22,10 @@ impl Installer for Taplo {
                 "--all-features",
                 "--root",
                 // `--root` automatically append `bin` 🥲
-                self.bin_dir.trim_end_matches("bin"),
+                self.bin_dest_dir.trim_end_matches("bin"),
             ])
             .status()?;
 
-        Ok(())
+        Ok(None)
     }
 }

@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 pub mod bash_language_server;
 pub mod commitlint;
 pub mod deno;
@@ -25,16 +27,26 @@ pub mod typos_lsp;
 pub mod vscode_langservers;
 pub mod yaml_language_server;
 
-pub trait Installer: Sync + Send {
+pub trait ToolInstaller: Sync + Send {
     fn bin_name(&self) -> &'static str;
-    fn install(&self) -> color_eyre::Result<()>;
+
+    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>>;
+
+    fn install(&self) -> color_eyre::Result<()> {
+        if let Some(NeedSymlink { src, dest }) = self.download()? {
+            utils::system::ln_sf(&src, &dest)?;
+        }
+        Ok(())
+    }
+
+    fn report_install_res(&self, install_res: color_eyre::Result<()>) -> color_eyre::Result<()> {
+        install_res
+            .inspect(|_| println!("🎉 {} installed", self.bin_name()))
+            .inspect_err(|e| eprintln!("❌ error installing {}: {e:#?}", self.bin_name()))
+    }
 }
 
-pub fn report_install(
-    tool: &str,
-    install_result: color_eyre::Result<()>,
-) -> color_eyre::Result<()> {
-    install_result
-        .inspect(|_| println!("🎉 {tool} installed"))
-        .inspect_err(|e| eprintln!("❌ error installing {tool}: {e:#?}"))
+pub struct NeedSymlink {
+    pub src: PathBuf,
+    pub dest: PathBuf,
 }

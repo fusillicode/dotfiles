@@ -1,22 +1,26 @@
-use crate::Installer;
+use crate::ToolInstaller;
+use crate::tools::NeedSymlink;
 
 pub struct RuffLsp {
     pub dev_tools_dir: String,
-    pub bin_dir: String,
+    pub bin_dest_dir: String,
 }
 
-impl Installer for RuffLsp {
+impl ToolInstaller for RuffLsp {
     fn bin_name(&self) -> &'static str {
         "ruff-lsp"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
-        crate::installers::pip_install::run(
+    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
+        let bin_src_dir = crate::downloaders::pip::run(
             &self.dev_tools_dir,
             self.bin_name(),
             &[self.bin_name()],
-            &self.bin_dir,
-            self.bin_name(),
-        )
+        )?;
+
+        Ok(Some(NeedSymlink {
+            src: format!("{bin_src_dir}/{}", self.bin_name()).into(),
+            dest: self.bin_dest_dir.clone().into(),
+        }))
     }
 }

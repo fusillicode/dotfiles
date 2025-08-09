@@ -1,27 +1,33 @@
 use std::process::Command;
 
-use crate::Installer;
-use crate::installers::curl_install::OutputOption;
+use crate::ToolInstaller;
+use crate::downloaders::curl::OutputOption;
+use crate::tools::NeedSymlink;
 
 pub struct TyposLsp {
-    pub bin_dir: String,
+    pub bin_dest_dir: String,
 }
 
-impl Installer for TyposLsp {
+impl ToolInstaller for TyposLsp {
     fn bin_name(&self) -> &'static str {
         "typos-lsp"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
         let repo = "tekumara/typos-vscode";
         let latest_release = utils::github::get_latest_release(repo)?;
 
-        crate::installers::curl_install::run(
+        crate::downloaders::curl::run(
             &format!(
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}-aarch64-apple-darwin.tar.gz",
                 self.bin_name()
             ),
-            OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &self.bin_dir])),
-        )
+            OutputOption::PipeInto(
+                Command::new("tar").args(["-xz", "-C"]),
+                self.bin_dest_dir.clone(),
+            ),
+        )?;
+
+        Ok(None)
     }
 }

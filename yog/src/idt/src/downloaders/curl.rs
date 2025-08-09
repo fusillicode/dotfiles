@@ -7,17 +7,17 @@ use color_eyre::eyre::eyre;
 
 pub enum OutputOption<'a> {
     UnpackVia(Box<Command>, &'a str),
-    PipeInto(&'a mut Command),
+    PipeInto(&'a mut Command, String),
     WriteTo(&'a str),
 }
 
-pub fn run(url: &str, output_option: OutputOption) -> color_eyre::Result<()> {
+pub fn run(url: &str, output_option: OutputOption) -> color_eyre::Result<String> {
     let mut curl_cmd = utils::cmd::silent_cmd("curl");
     let silent_flag = cfg!(debug_assertions).then(|| "S").unwrap_or("");
     curl_cmd.args([&format!("-L{silent_flag}"), url]);
 
     match output_option {
-        OutputOption::UnpackVia(mut cmd, output_path) => {
+        OutputOption::UnpackVia(mut cmd, bin_dest_dir) => {
             let curl_stdout = curl_cmd
                 .stdout(Stdio::piped())
                 .spawn()?
@@ -25,24 +25,25 @@ pub fn run(url: &str, output_option: OutputOption) -> color_eyre::Result<()> {
                 .ok_or_else(|| eyre!("missing stdout from cmd {curl_cmd:#?}"))?;
             let output = cmd.stdin(Stdio::from(curl_stdout)).output()?;
             output.status.exit_ok()?;
-
-            let mut file = File::create(output_path)?;
-            Ok(file.write_all(&output.stdout)?)
+            let mut file = File::create(bin_dest_dir)?;
+            file.write_all(&output.stdout)?;
+            Ok(bin_dest_dir.to_string())
         }
-        OutputOption::PipeInto(cmd) => {
+        OutputOption::PipeInto(cmd, bin_dest_dir) => {
             let curl_stdout = curl_cmd
+                .arg(&bin_dest_dir)
                 .stdout(Stdio::piped())
                 .spawn()?
                 .stdout
                 .ok_or_else(|| eyre!("missing stdout from cmd {curl_cmd:#?}"))?;
-
-            Ok(cmd.stdin(Stdio::from(curl_stdout)).status()?.exit_ok()?)
+            cmd.stdin(Stdio::from(curl_stdout)).status()?.exit_ok()?;
+            Ok(bin_dest_dir)
         }
-        OutputOption::WriteTo(output_path) => {
+        OutputOption::WriteTo(bin_dest_dir) => {
             curl_cmd.arg("--output");
-            curl_cmd.arg(output_path);
-
-            Ok(curl_cmd.status()?.exit_ok()?)
+            curl_cmd.arg(bin_dest_dir);
+            curl_cmd.status()?.exit_ok()?;
+            Ok(bin_dest_dir.to_string())
         }
     }
 }

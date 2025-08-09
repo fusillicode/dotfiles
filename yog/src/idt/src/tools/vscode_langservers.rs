@@ -1,22 +1,24 @@
-use crate::Installer;
+use crate::ToolInstaller;
+use crate::tools::NeedSymlink;
 
 pub struct VsCodeLangServers {
     pub dev_tools_dir: String,
-    pub bin_dir: String,
+    pub bin_dest_dir: String,
 }
 
-impl Installer for VsCodeLangServers {
+impl ToolInstaller for VsCodeLangServers {
     fn bin_name(&self) -> &'static str {
         "vscode-langservers-extracted"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
-        crate::installers::npm_install::run(
-            &self.dev_tools_dir,
-            self.bin_name(),
-            &[self.bin_name()],
-            &self.bin_dir,
-            "*",
-        )
+    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
+        let bin_src_dir =
+            crate::downloaders::npm::run(&self.dev_tools_dir, self.bin_name(), &[self.bin_name()])?;
+
+        Ok(Some(NeedSymlink {
+            // TODO: HOW TO HANDLE THIS EFFIN' CASE?!
+            src: format!("{bin_src_dir}/*").into(),
+            dest: self.bin_dest_dir.clone().into(),
+        }))
     }
 }

@@ -1,22 +1,25 @@
-use crate::Installer;
-use crate::installers::curl_install::OutputOption;
+use crate::ToolInstaller;
+use crate::downloaders::curl::OutputOption;
+use crate::tools::NeedSymlink;
 
 pub struct Marksman {
-    pub bin_dir: String,
+    pub bin_dest_dir: String,
 }
 
-impl Installer for Marksman {
+impl ToolInstaller for Marksman {
     fn bin_name(&self) -> &'static str {
         "marksman"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
-        crate::installers::curl_install::run(
+    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
+        crate::downloaders::curl::run(
             &format!(
                 "https://github.com/artempyanykh/{0}/releases/latest/download/{0}-macos",
                 self.bin_name()
             ),
-            OutputOption::WriteTo(&format!("{}/{}", self.bin_dir, self.bin_name())),
-        )
+            OutputOption::WriteTo(&format!("{}/{}", self.bin_dest_dir, self.bin_name())),
+        )?;
+
+        Ok(None)
     }
 }

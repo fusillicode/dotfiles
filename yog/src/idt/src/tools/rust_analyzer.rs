@@ -1,27 +1,30 @@
 use std::process::Command;
 
-use crate::Installer;
-use crate::installers::curl_install::OutputOption;
+use crate::ToolInstaller;
+use crate::downloaders::curl::OutputOption;
+use crate::tools::NeedSymlink;
 
 pub struct RustAnalyzer {
-    pub bin_dir: String,
+    pub bin_dest_dir: String,
 }
 
-impl Installer for RustAnalyzer {
+impl ToolInstaller for RustAnalyzer {
     fn bin_name(&self) -> &'static str {
         "rust-analyzer"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
-        crate::installers::curl_install::run(
+    fn download(&self) -> color_eyre::Result<Option<NeedSymlink>> {
+        crate::downloaders::curl::run(
             &format!(
                 "https://github.com/rust-lang/{0}/releases/download/nightly/{0}-aarch64-apple-darwin.gz",
                 self.bin_name()
             ),
             OutputOption::UnpackVia(
                 Box::new(Command::new("zcat")),
-                &format!("{}/{}", self.bin_dir, self.bin_name()),
+                &format!("{}/{}", self.bin_dest_dir, self.bin_name()),
             ),
-        )
+        )?;
+
+        Ok(None)
     }
 }
