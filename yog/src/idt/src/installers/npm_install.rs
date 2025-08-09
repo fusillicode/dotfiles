@@ -3,7 +3,7 @@ pub fn run(
     tool: &str,
     packages: &[&str],
     bin_dest_dir: &str,
-    bin: &str,
+    bin_name: &str,
 ) -> color_eyre::Result<()> {
     let dev_tools_repo_dir = format!("{dev_tools_dir}/{tool}");
 
@@ -24,7 +24,7 @@ pub fn run(
     Ok(utils::cmd::silent_cmd("sh")
         .args([
             "-c",
-            &format!("ln -sf {dev_tools_repo_dir}/node_modules/.bin/{bin} {bin_dest_dir}"),
+            &format!("ln -sf {dev_tools_repo_dir}/node_modules/.bin/{bin_name} {bin_dest_dir}"),
         ])
         .status()?
         .exit_ok()?)
