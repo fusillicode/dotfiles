@@ -1,5 +1,5 @@
 use crate::Installer;
-use crate::installers::curl_install::InstallOption;
+use crate::downloaders::curl::InstallOption;
 
 pub struct HelmLs {
     pub bin_dir: String,
@@ -11,7 +11,7 @@ impl Installer for HelmLs {
     }
 
     fn install(&self) -> color_eyre::Result<()> {
-        crate::installers::curl_install::run(
+        crate::downloaders::curl::run(
             &format!(
                 "https://github.com/mrjosh/helm-ls/releases/latest/download/{}_darwin_amd64",
                 self.bin_name()

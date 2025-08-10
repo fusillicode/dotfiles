@@ -1,5 +1,5 @@
 use crate::Installer;
-use crate::installers::curl_install::InstallOption;
+use crate::downloaders::curl::InstallOption;
 
 pub struct TyposLsp {
     pub bin_dir: String,
@@ -14,7 +14,7 @@ impl Installer for TyposLsp {
         let repo = "tekumara/typos-vscode";
         let latest_release = utils::github::get_latest_release(repo)?;
 
-        crate::installers::curl_install::run(
+        crate::downloaders::curl::run(
             &format!(
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}-aarch64-apple-darwin.tar.gz",
                 self.bin_name()

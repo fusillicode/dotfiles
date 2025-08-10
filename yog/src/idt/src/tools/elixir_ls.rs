@@ -1,5 +1,5 @@
 use crate::Installer;
-use crate::installers::curl_install::InstallOption;
+use crate::downloaders::curl::InstallOption;
 
 pub struct ElixirLs {
     pub dev_tools_dir: String,
@@ -17,7 +17,7 @@ impl Installer for ElixirLs {
         let latest_release = utils::github::get_latest_release(&repo)?;
         std::fs::create_dir_all(&dev_tools_repo_dir)?;
 
-        crate::installers::curl_install::run(
+        crate::downloaders::curl::run(
             &format!(
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}.zip",
                 self.bin_name()

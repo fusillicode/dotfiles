@@ -1,5 +1,5 @@
 use crate::Installer;
-use crate::installers::curl_install::InstallOption;
+use crate::downloaders::curl::InstallOption;
 
 // For Markdown preview with peek.nvim
 pub struct Deno {
@@ -15,7 +15,7 @@ impl Installer for Deno {
         let repo = format!("{0}land/{0}", self.bin_name());
         let latest_release = utils::github::get_latest_release(&repo)?;
 
-        crate::installers::curl_install::run(
+        crate::downloaders::curl::run(
             &format!(
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-aarch64-apple-darwin.zip",
                 self.bin_name()

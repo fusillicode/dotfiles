@@ -11,7 +11,7 @@ impl Installer for RuffLsp {
     }
 
     fn install(&self) -> color_eyre::Result<()> {
-        crate::installers::pip_install::run(
+        crate::downloaders::pip::run(
             &self.dev_tools_dir,
             self.bin_name(),
             &[self.bin_name()],

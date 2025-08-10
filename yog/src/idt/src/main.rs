@@ -31,7 +31,7 @@ use crate::tools::typos_lsp::TyposLsp;
 use crate::tools::vscode_langservers::VsCodeLangServers;
 use crate::tools::yaml_language_server::YamlLanguageServer;
 
-mod installers;
+mod downloaders;
 mod tools;
 
 /// Install "Dev Tools"

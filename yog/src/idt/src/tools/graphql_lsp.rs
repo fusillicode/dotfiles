@@ -11,7 +11,7 @@ impl Installer for GraphQlLsp {
     }
 
     fn install(&self) -> color_eyre::Result<()> {
-        crate::installers::npm_install::run(
+        crate::downloaders::npm::run(
             &self.dev_tools_dir,
             "graphql-language-service-cli",
             &["graphql-language-service-cli"],

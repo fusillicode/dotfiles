@@ -11,7 +11,7 @@ impl Installer for DockerLangServer {
     }
 
     fn install(&self) -> color_eyre::Result<()> {
-        crate::installers::npm_install::run(
+        crate::downloaders::npm::run(
             &self.dev_tools_dir,
             "dockerfile-language-server-nodejs",
             &["dockerfile-language-server-nodejs"],
