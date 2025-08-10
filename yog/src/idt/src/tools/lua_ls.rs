@@ -1,5 +1,5 @@
 use crate::Installer;
-use crate::installers::curl_install::OutputOption;
+use crate::installers::curl_install::InstallOption;
 
 pub struct LuaLanguageServer {
     pub dev_tools_dir: String,
@@ -23,7 +23,7 @@ impl Installer for LuaLanguageServer {
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}-darwin-arm64.tar.gz",
                 self.bin_name()
             ),
-            OutputOption::PipeToTar {
+            InstallOption::PipeToTar {
                 dest_dir: &dev_tools_repo_dir,
                 dest_name: self.bin_name(),
             },

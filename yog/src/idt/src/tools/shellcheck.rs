@@ -1,5 +1,5 @@
 use crate::Installer;
-use crate::installers::curl_install::OutputOption;
+use crate::installers::curl_install::InstallOption;
 
 pub struct Shellcheck {
     pub bin_dir: String,
@@ -19,7 +19,7 @@ impl Installer for Shellcheck {
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}.darwin.x86_64.tar.xz",
                 self.bin_name()
             ),
-            OutputOption::PipeToTar {
+            InstallOption::PipeToTar {
                 dest_dir: "/tmp",
                 dest_name: self.bin_name(),
             },

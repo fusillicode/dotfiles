@@ -1,5 +1,5 @@
 use crate::Installer;
-use crate::installers::curl_install::OutputOption;
+use crate::installers::curl_install::InstallOption;
 
 pub struct TerraformLs {
     pub bin_dir: String,
@@ -19,7 +19,7 @@ impl Installer for TerraformLs {
                 "https://releases.hashicorp.com/{0}/{latest_release}/{0}_{latest_release}_darwin_arm64.zip",
                 self.bin_name()
             ),
-            OutputOption::PipeToTar {
+            InstallOption::PipeToTar {
                 dest_dir: &self.bin_dir,
                 dest_name: self.bin_name(),
             },

@@ -1,5 +1,5 @@
 use crate::Installer;
-use crate::installers::curl_install::OutputOption;
+use crate::installers::curl_install::InstallOption;
 
 pub struct TyposLsp {
     pub bin_dir: String,
@@ -19,7 +19,7 @@ impl Installer for TyposLsp {
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}-aarch64-apple-darwin.tar.gz",
                 self.bin_name()
             ),
-            OutputOption::PipeToTar {
+            InstallOption::PipeToTar {
                 dest_dir: &self.bin_dir,
                 dest_name: self.bin_name(),
             },

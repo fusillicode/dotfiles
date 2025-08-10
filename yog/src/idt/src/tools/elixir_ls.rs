@@ -1,5 +1,5 @@
 use crate::Installer;
-use crate::installers::curl_install::OutputOption;
+use crate::installers::curl_install::InstallOption;
 
 pub struct ElixirLs {
     pub dev_tools_dir: String,
@@ -22,7 +22,7 @@ impl Installer for ElixirLs {
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}.zip",
                 self.bin_name()
             ),
-            OutputOption::PipeToTar {
+            InstallOption::PipeToTar {
                 dest_dir: &dev_tools_repo_dir,
                 dest_name: self.bin_name(),
             },
