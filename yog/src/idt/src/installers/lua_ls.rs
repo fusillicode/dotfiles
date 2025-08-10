@@ -25,7 +25,7 @@ impl Installer for LuaLanguageServer {
             ),
             InstallOption::PipeIntoTar {
                 dest_dir: &dev_tools_repo_dir,
-                dest_name: self.bin_name(),
+                dest_name: None,
             },
         )
     }

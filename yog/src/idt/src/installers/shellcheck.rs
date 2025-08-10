@@ -21,7 +21,7 @@ impl Installer for Shellcheck {
             ),
             InstallOption::PipeIntoTar {
                 dest_dir: "/tmp",
-                dest_name: self.bin_name(),
+                dest_name: None,
             },
         )?;
 

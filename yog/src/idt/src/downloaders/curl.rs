@@ -12,7 +12,10 @@ pub enum InstallOption<'a> {
     },
     PipeIntoTar {
         dest_dir: &'a str,
-        dest_name: &'a str,
+        // Option because not all the downloaded archives have a:
+        // - stable name (i.e. shellcheck)
+        // - an usable binary outside the archive (i.e. elixir_ls or lua_ls)
+        dest_name: Option<&'a str>,
     },
     WriteTo {
         dest_path: &'a str,
@@ -44,8 +47,12 @@ pub fn run(url: &str, opt: InstallOption) -> color_eyre::Result<()> {
         } => {
             let curl_stdout = get_stdout_from_cmd(&mut curl_cmd)?;
 
-            Command::new("tar")
-                .args(["-xz", "-C", dest_dir, dest_name])
+            let mut tar_cmd = Command::new("tar");
+            tar_cmd.args(["-xz", "-C", dest_dir]);
+            if let Some(dest_name) = dest_name {
+                tar_cmd.arg(dest_name);
+            }
+            tar_cmd
                 .stdin(Stdio::from(curl_stdout))
                 .status()?
                 .exit_ok()?;

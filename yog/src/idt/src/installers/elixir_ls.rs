@@ -24,7 +24,7 @@ impl Installer for ElixirLs {
             ),
             InstallOption::PipeIntoTar {
                 dest_dir: &dev_tools_repo_dir,
-                dest_name: self.bin_name(),
+                dest_name: None,
             },
         )?;
         utils::system::chmod_x(&format!("{dev_tools_repo_dir}/*"))?;

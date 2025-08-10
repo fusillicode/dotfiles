@@ -18,7 +18,7 @@ impl Installer for Sqruff {
             ),
             InstallOption::PipeIntoTar {
                 dest_dir: &self.bin_dir,
-                dest_name: self.bin_name(),
+                dest_name: Some(self.bin_name()),
             },
         )
     }
