@@ -15,6 +15,7 @@ pub enum CurlDownloaderOption<'a> {
         // Option because not all the downloaded archives have a:
         // - stable name (i.e. shellcheck)
         // - an usable binary outside the archive (i.e. elixir_ls or lua_ls)
+        // In these cases `dest_name` is set to None
         dest_name: Option<&'a str>,
     },
     WriteTo {

@@ -25,13 +25,10 @@ impl Installer for Shellcheck {
             },
         )?;
 
-        utils::cmd::silent_cmd("mv")
-            .args([
-                &format!("/tmp/{0}-{latest_release}/{0}", self.bin_name()),
-                &self.bin_dir,
-            ])
-            .status()?
-            .exit_ok()?;
+        std::fs::rename(
+            format!("/tmp/{0}-{latest_release}/{0}", self.bin_name()),
+            format!("{}/{}", self.bin_dir, self.bin_name()),
+        )?;
 
         Ok(())
     }
