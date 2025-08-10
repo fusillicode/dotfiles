@@ -41,7 +41,7 @@ pub fn chmod_x(dir: &str) -> color_eyre::Result<()> {
         .exit_ok()?)
 }
 
-pub fn chmod_x_v2(path: &str) -> color_eyre::Result<()> {
+pub fn chmod_x_v2<P: AsRef<Path>>(path: &Path) -> color_eyre::Result<()> {
     let mut perms = std::fs::metadata(path)?.permissions();
     perms.set_mode(0o755);
     std::fs::set_permissions(path, perms)?;
