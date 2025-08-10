@@ -1,5 +1,3 @@
-use std::process::Command;
-
 use crate::Installer;
 use crate::installers::curl_install::OutputOption;
 
@@ -25,7 +23,10 @@ impl Installer for LuaLanguageServer {
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}-darwin-arm64.tar.gz",
                 self.bin_name()
             ),
-            OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &dev_tools_repo_dir])),
+            OutputOption::PipeToTar {
+                dest_dir: &dev_tools_repo_dir,
+                dest_name: self.bin_name(),
+            },
         )
     }
 }

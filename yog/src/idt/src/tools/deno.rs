@@ -1,5 +1,3 @@
-use std::process::Command;
-
 use crate::Installer;
 use crate::installers::curl_install::OutputOption;
 
@@ -22,7 +20,10 @@ impl Installer for Deno {
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-aarch64-apple-darwin.zip",
                 self.bin_name()
             ),
-            OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &self.bin_dir])),
+            OutputOption::PipeToTar {
+                dest_dir: &self.bin_dir,
+                dest_name: self.bin_name(),
+            },
         )
     }
 }

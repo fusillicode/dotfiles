@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::Write;
+use std::process::ChildStdout;
 use std::process::Command;
 use std::process::Stdio;
 
@@ -7,7 +8,10 @@ use color_eyre::eyre::eyre;
 
 pub enum OutputOption<'a> {
     UnpackVia(Box<Command>, &'a str),
-    PipeInto(&'a mut Command),
+    PipeToTar {
+        dest_dir: &'a str,
+        dest_name: &'a str,
+    },
     WriteTo(&'a str),
 }
 
@@ -18,31 +22,46 @@ pub fn run(url: &str, output_option: OutputOption) -> color_eyre::Result<()> {
 
     match output_option {
         OutputOption::UnpackVia(mut cmd, output_path) => {
-            let curl_stdout = curl_cmd
-                .stdout(Stdio::piped())
-                .spawn()?
-                .stdout
-                .ok_or_else(|| eyre!("missing stdout from cmd {curl_cmd:#?}"))?;
+            let curl_stdout = get_stdout_from_cmd(&mut curl_cmd)?;
+
             let output = cmd.stdin(Stdio::from(curl_stdout)).output()?;
             output.status.exit_ok()?;
 
             let mut file = File::create(output_path)?;
-            Ok(file.write_all(&output.stdout)?)
-        }
-        OutputOption::PipeInto(cmd) => {
-            let curl_stdout = curl_cmd
-                .stdout(Stdio::piped())
-                .spawn()?
-                .stdout
-                .ok_or_else(|| eyre!("missing stdout from cmd {curl_cmd:#?}"))?;
+            file.write_all(&output.stdout)?;
 
-            Ok(cmd.stdin(Stdio::from(curl_stdout)).status()?.exit_ok()?)
+            Ok(())
+        }
+        OutputOption::PipeToTar {
+            dest_dir,
+            dest_name,
+        } => {
+            let curl_stdout = get_stdout_from_cmd(&mut curl_cmd)?;
+
+            Command::new("tar")
+                .args(["-xz", "-C", dest_dir, dest_name])
+                .stdin(Stdio::from(curl_stdout))
+                .status()?
+                .exit_ok()?;
+
+            Ok(())
         }
         OutputOption::WriteTo(output_path) => {
             curl_cmd.arg("--output");
             curl_cmd.arg(output_path);
+            curl_cmd.status()?.exit_ok()?;
 
-            Ok(curl_cmd.status()?.exit_ok()?)
+            Ok(())
         }
     }
+}
+
+fn get_stdout_from_cmd(cmd: &mut Command) -> color_eyre::Result<ChildStdout> {
+    let stdout = cmd
+        .stdout(Stdio::piped())
+        .spawn()?
+        .stdout
+        .ok_or_else(|| eyre!("missing stdout from cmd {cmd:#?}"))?;
+
+    Ok(stdout)
 }

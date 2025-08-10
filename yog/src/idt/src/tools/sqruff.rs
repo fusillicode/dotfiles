@@ -1,5 +1,3 @@
-use std::process::Command;
-
 use crate::Installer;
 use crate::installers::curl_install::OutputOption;
 
@@ -18,7 +16,10 @@ impl Installer for Sqruff {
                 "https://github.com/quarylabs/{0}/releases/latest/download/{0}-darwin-aarch64.tar.gz",
                 self.bin_name()
             ),
-            OutputOption::PipeInto(Command::new("tar").args(["-xz", "-C", &self.bin_dir])),
+            OutputOption::PipeToTar {
+                dest_dir: &self.bin_dir,
+                dest_name: self.bin_name(),
+            },
         )
     }
 }
