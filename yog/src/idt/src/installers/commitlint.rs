@@ -2,7 +2,7 @@ use crate::Installer;
 
 pub struct Commitlint {
     pub dev_tools_dir: String,
-    pub bins_dir: String,
+    pub bin_dir: String,
 }
 
 impl Installer for Commitlint {
@@ -18,7 +18,7 @@ impl Installer for Commitlint {
                 &format!("@{}/cli", self.bin_name()),
                 &format!("@{}/config-conventional", self.bin_name()),
             ],
-            &self.bins_dir,
+            &self.bin_dir,
             self.bin_name(),
         )
     }

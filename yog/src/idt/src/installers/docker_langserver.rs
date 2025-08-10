@@ -2,7 +2,7 @@ use crate::Installer;
 
 pub struct DockerLangServer {
     pub dev_tools_dir: String,
-    pub bins_dir: String,
+    pub bin_dir: String,
 }
 
 impl Installer for DockerLangServer {
@@ -15,7 +15,7 @@ impl Installer for DockerLangServer {
             &self.dev_tools_dir,
             "dockerfile-language-server-nodejs",
             &["dockerfile-language-server-nodejs"],
-            &self.bins_dir,
+            &self.bin_dir,
             self.bin_name(),
         )
     }

@@ -48,110 +48,110 @@ fn main() -> color_eyre::Result<()> {
         .first()
         .ok_or_else(|| eyre!("missing dev_tools_dir arg from {args:#?}"))?
         .trim_end_matches('/');
-    let bins_dir = args
+    let bin_dir = args
         .get(1)
-        .ok_or_else(|| eyre!("missing bins_dir arg from {args:#?}"))?
+        .ok_or_else(|| eyre!("missing bin_dir arg from {args:#?}"))?
         .trim_end_matches('/');
     let installers_whitelist: Vec<&str> = args.iter().skip(2).map(AsRef::as_ref).collect();
 
     std::fs::create_dir_all(dev_tools_dir)?;
-    std::fs::create_dir_all(bins_dir)?;
+    std::fs::create_dir_all(bin_dir)?;
 
     utils::github::log_into_github()?;
 
     let installers: Vec<Box<dyn Installer>> = vec![
         Box::new(BashLanguageServer {
             dev_tools_dir: dev_tools_dir.into(),
-            bins_dir: bins_dir.into(),
+            bin_dir: bin_dir.into(),
         }),
         Box::new(Commitlint {
             dev_tools_dir: dev_tools_dir.into(),
-            bins_dir: bins_dir.into(),
+            bin_dir: bin_dir.into(),
         }),
         Box::new(Deno {
-            bins_dir: bins_dir.into(),
+            bin_dir: bin_dir.into(),
         }),
         Box::new(DockerLangServer {
             dev_tools_dir: dev_tools_dir.into(),
-            bins_dir: bins_dir.into(),
+            bin_dir: bin_dir.into(),
         }),
         Box::new(ElixirLs {
             dev_tools_dir: dev_tools_dir.into(),
-            bins_dir: bins_dir.into(),
+            bin_dir: bin_dir.into(),
         }),
         Box::new(ElmLanguageServer {
             dev_tools_dir: dev_tools_dir.into(),
-            bins_dir: bins_dir.into(),
+            bin_dir: bin_dir.into(),
         }),
         Box::new(EslintD {
             dev_tools_dir: dev_tools_dir.into(),
-            bins_dir: bins_dir.into(),
+            bin_dir: bin_dir.into(),
         }),
         Box::new(GraphQlLsp {
             dev_tools_dir: dev_tools_dir.into(),
-            bins_dir: bins_dir.into(),
+            bin_dir: bin_dir.into(),
         }),
         Box::new(Hadolint {
-            bins_dir: bins_dir.into(),
+            bin_dir: bin_dir.into(),
         }),
         Box::new(HelmLs {
-            bins_dir: bins_dir.into(),
+            bin_dir: bin_dir.into(),
         }),
         Box::new(LuaLanguageServer {
             dev_tools_dir: dev_tools_dir.into(),
         }),
         Box::new(Marksman {
-            bins_dir: bins_dir.into(),
+            bin_dir: bin_dir.into(),
         }),
         Box::new(Nvim {
             dev_tools_dir: dev_tools_dir.into(),
-            bins_dir: bins_dir.into(),
+            bin_dir: bin_dir.into(),
         }),
         Box::new(PrettierD {
             dev_tools_dir: dev_tools_dir.into(),
-            bins_dir: bins_dir.into(),
+            bin_dir: bin_dir.into(),
         }),
         Box::new(Quicktype {
             dev_tools_dir: dev_tools_dir.into(),
-            bins_dir: bins_dir.into(),
+            bin_dir: bin_dir.into(),
         }),
         Box::new(RuffLsp {
             dev_tools_dir: dev_tools_dir.into(),
-            bins_dir: bins_dir.into(),
+            bin_dir: bin_dir.into(),
         }),
         Box::new(RustAnalyzer {
-            bins_dir: bins_dir.into(),
+            bin_dir: bin_dir.into(),
         }),
         Box::new(Shellcheck {
-            bins_dir: bins_dir.into(),
+            bin_dir: bin_dir.into(),
         }),
         Box::new(Sqruff {
-            bins_dir: bins_dir.into(),
+            bin_dir: bin_dir.into(),
         }),
         Box::new(SqlLanguageServer {
             dev_tools_dir: dev_tools_dir.into(),
-            bins_dir: bins_dir.into(),
+            bin_dir: bin_dir.into(),
         }),
         Box::new(Taplo {
-            bins_dir: bins_dir.into(),
+            bin_dir: bin_dir.into(),
         }),
         Box::new(TerraformLs {
-            bins_dir: bins_dir.into(),
+            bin_dir: bin_dir.into(),
         }),
         Box::new(TypescriptLanguageServer {
             dev_tools_dir: dev_tools_dir.into(),
-            bins_dir: bins_dir.into(),
+            bin_dir: bin_dir.into(),
         }),
         Box::new(TyposLsp {
-            bins_dir: bins_dir.into(),
+            bin_dir: bin_dir.into(),
         }),
         Box::new(VsCodeLangServers {
             dev_tools_dir: dev_tools_dir.into(),
-            bins_dir: bins_dir.into(),
+            bin_dir: bin_dir.into(),
         }),
         Box::new(YamlLanguageServer {
             dev_tools_dir: dev_tools_dir.into(),
-            bins_dir: bins_dir.into(),
+            bin_dir: bin_dir.into(),
         }),
     ];
 
@@ -189,8 +189,8 @@ fn main() -> color_eyre::Result<()> {
             })
     });
 
-    utils::system::rm_dead_symlinks(bins_dir)?;
-    utils::system::chmod_x(&format!("{bins_dir}/*"))?;
+    utils::system::rm_dead_symlinks(bin_dir)?;
+    utils::system::chmod_x(&format!("{bin_dir}/*"))?;
 
     let (errors_count, bin_names) =
         installers_errors

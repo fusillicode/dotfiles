@@ -2,7 +2,7 @@ use crate::Installer;
 
 pub struct TypescriptLanguageServer {
     pub dev_tools_dir: String,
-    pub bins_dir: String,
+    pub bin_dir: String,
 }
 
 impl Installer for TypescriptLanguageServer {
@@ -15,7 +15,7 @@ impl Installer for TypescriptLanguageServer {
             &self.dev_tools_dir,
             self.bin_name(),
             &[self.bin_name(), "typescript"],
-            &self.bins_dir,
+            &self.bin_dir,
             self.bin_name(),
         )
     }

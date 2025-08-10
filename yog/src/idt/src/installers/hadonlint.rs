@@ -2,7 +2,7 @@ use crate::Installer;
 use crate::downloaders::curl::InstallOption;
 
 pub struct Hadolint {
-    pub bins_dir: String,
+    pub bin_dir: String,
 }
 
 impl Installer for Hadolint {
@@ -17,7 +17,7 @@ impl Installer for Hadolint {
                 self.bin_name()
             ),
             InstallOption::WriteTo {
-                dest_path: &format!("{}/{}", self.bins_dir, self.bin_name()),
+                dest_path: &format!("{}/{}", self.bin_dir, self.bin_name()),
             },
         )
     }

@@ -2,7 +2,7 @@ use crate::Installer;
 
 pub struct ElmLanguageServer {
     pub dev_tools_dir: String,
-    pub bins_dir: String,
+    pub bin_dir: String,
 }
 
 impl Installer for ElmLanguageServer {
@@ -15,7 +15,7 @@ impl Installer for ElmLanguageServer {
             &self.dev_tools_dir,
             self.bin_name(),
             &[&format!("@elm-tooling/{}", self.bin_name())],
-            &self.bins_dir,
+            &self.bin_dir,
             self.bin_name(),
         )
     }
