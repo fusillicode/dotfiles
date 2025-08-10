@@ -6,7 +6,7 @@ use std::process::Stdio;
 
 use color_eyre::eyre::eyre;
 
-pub enum InstallOption<'a> {
+pub enum CurlDownloaderOption<'a> {
     UnpackViaZcat {
         dest_path: &'a str,
     },
@@ -22,13 +22,13 @@ pub enum InstallOption<'a> {
     },
 }
 
-pub fn run(url: &str, opt: InstallOption) -> color_eyre::Result<()> {
+pub fn run(url: &str, opt: CurlDownloaderOption) -> color_eyre::Result<()> {
     let mut curl_cmd = utils::cmd::silent_cmd("curl");
     let silent_flag = cfg!(debug_assertions).then(|| "S").unwrap_or("");
     curl_cmd.args([&format!("-L{silent_flag}"), url]);
 
     match opt {
-        InstallOption::UnpackViaZcat { dest_path } => {
+        CurlDownloaderOption::UnpackViaZcat { dest_path } => {
             let curl_stdout = get_stdout_from_cmd(&mut curl_cmd)?;
 
             let output = Command::new("zcat")
@@ -41,7 +41,7 @@ pub fn run(url: &str, opt: InstallOption) -> color_eyre::Result<()> {
 
             Ok(())
         }
-        InstallOption::PipeIntoTar {
+        CurlDownloaderOption::PipeIntoTar {
             dest_dir,
             dest_name,
         } => {
@@ -59,7 +59,7 @@ pub fn run(url: &str, opt: InstallOption) -> color_eyre::Result<()> {
 
             Ok(())
         }
-        InstallOption::WriteTo { dest_path } => {
+        CurlDownloaderOption::WriteTo { dest_path } => {
             curl_cmd.arg("--output");
             curl_cmd.arg(dest_path);
             curl_cmd.status()?.exit_ok()?;

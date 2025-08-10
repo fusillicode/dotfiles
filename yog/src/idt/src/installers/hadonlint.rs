@@ -1,5 +1,5 @@
 use crate::Installer;
-use crate::downloaders::curl::InstallOption;
+use crate::downloaders::curl::CurlDownloaderOption;
 
 pub struct Hadolint {
     pub bin_dir: String,
@@ -16,7 +16,7 @@ impl Installer for Hadolint {
                 "https://github.com/{0}/{0}/releases/latest/download/{0}-Darwin-x86_64",
                 self.bin_name()
             ),
-            InstallOption::WriteTo {
+            CurlDownloaderOption::WriteTo {
                 dest_path: &format!("{}/{}", self.bin_dir, self.bin_name()),
             },
         )

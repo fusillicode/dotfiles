@@ -1,5 +1,5 @@
 use crate::Installer;
-use crate::downloaders::curl::InstallOption;
+use crate::downloaders::curl::CurlDownloaderOption;
 
 pub struct Marksman {
     pub bin_dir: String,
@@ -16,7 +16,7 @@ impl Installer for Marksman {
                 "https://github.com/artempyanykh/{0}/releases/latest/download/{0}-macos",
                 self.bin_name()
             ),
-            InstallOption::WriteTo {
+            CurlDownloaderOption::WriteTo {
                 dest_path: &format!("{}/{}", self.bin_dir, self.bin_name()),
             },
         )

@@ -1,5 +1,5 @@
 use crate::Installer;
-use crate::downloaders::curl::InstallOption;
+use crate::downloaders::curl::CurlDownloaderOption;
 
 pub struct Sqruff {
     pub bin_dir: String,
@@ -16,7 +16,7 @@ impl Installer for Sqruff {
                 "https://github.com/quarylabs/{0}/releases/latest/download/{0}-darwin-aarch64.tar.gz",
                 self.bin_name()
             ),
-            InstallOption::PipeIntoTar {
+            CurlDownloaderOption::PipeIntoTar {
                 dest_dir: &self.bin_dir,
                 dest_name: Some(self.bin_name()),
             },

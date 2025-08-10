@@ -1,5 +1,5 @@
 use crate::Installer;
-use crate::downloaders::curl::InstallOption;
+use crate::downloaders::curl::CurlDownloaderOption;
 
 pub struct RustAnalyzer {
     pub bin_dir: String,
@@ -16,7 +16,7 @@ impl Installer for RustAnalyzer {
                 "https://github.com/rust-lang/{0}/releases/download/nightly/{0}-aarch64-apple-darwin.gz",
                 self.bin_name()
             ),
-            InstallOption::UnpackViaZcat {
+            CurlDownloaderOption::UnpackViaZcat {
                 dest_path: &format!("{}/{}", self.bin_dir, self.bin_name()),
             },
         )

@@ -1,5 +1,5 @@
 use crate::Installer;
-use crate::downloaders::curl::InstallOption;
+use crate::downloaders::curl::CurlDownloaderOption;
 
 pub struct HelmLs {
     pub bin_dir: String,
@@ -16,7 +16,7 @@ impl Installer for HelmLs {
                 "https://github.com/mrjosh/helm-ls/releases/latest/download/{}_darwin_amd64",
                 self.bin_name()
             ),
-            InstallOption::WriteTo {
+            CurlDownloaderOption::WriteTo {
                 dest_path: &format!("{}/{}", self.bin_dir, self.bin_name()),
             },
         )
