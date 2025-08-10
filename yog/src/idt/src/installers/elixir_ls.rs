@@ -22,7 +22,7 @@ impl Installer for ElixirLs {
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}.zip",
                 self.bin_name()
             ),
-            InstallOption::PipeToTar {
+            InstallOption::PipeIntoTar {
                 dest_dir: &dev_tools_repo_dir,
                 dest_name: self.bin_name(),
             },

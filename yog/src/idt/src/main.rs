@@ -171,8 +171,8 @@ fn main() -> color_eyre::Result<()> {
                 let bin_name = installer.bin_name();
                 let handle = scope.spawn(move || {
                     let install_result = installer.install();
-                    // Reporting is done here instead afterwards using `errors` to receive results as soon
-                    // as possible.
+                    // Reporting is done here, rather than after via `installers_errors`, to report
+                    // results as soon as possible.
                     installer.report_install(install_result)
                 });
                 (bin_name, handle)

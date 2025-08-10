@@ -19,7 +19,7 @@ impl Installer for Shellcheck {
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}.darwin.x86_64.tar.xz",
                 self.bin_name()
             ),
-            InstallOption::PipeToTar {
+            InstallOption::PipeIntoTar {
                 dest_dir: "/tmp",
                 dest_name: self.bin_name(),
             },

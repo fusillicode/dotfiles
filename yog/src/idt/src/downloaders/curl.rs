@@ -10,7 +10,7 @@ pub enum InstallOption<'a> {
     UnpackViaZcat {
         dest_path: &'a str,
     },
-    PipeToTar {
+    PipeIntoTar {
         dest_dir: &'a str,
         dest_name: &'a str,
     },
@@ -38,7 +38,7 @@ pub fn run(url: &str, opt: InstallOption) -> color_eyre::Result<()> {
 
             Ok(())
         }
-        InstallOption::PipeToTar {
+        InstallOption::PipeIntoTar {
             dest_dir,
             dest_name,
         } => {

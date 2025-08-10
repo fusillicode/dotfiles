@@ -19,7 +19,7 @@ impl Installer for TyposLsp {
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}-aarch64-apple-darwin.tar.gz",
                 self.bin_name()
             ),
-            InstallOption::PipeToTar {
+            InstallOption::PipeIntoTar {
                 dest_dir: &self.bins_dir,
                 dest_name: self.bin_name(),
             },
