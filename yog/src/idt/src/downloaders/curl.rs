@@ -17,7 +17,7 @@ pub fn run(url: &str, output_option: OutputOption) -> color_eyre::Result<String>
     curl_cmd.args([&format!("-L{silent_flag}"), url]);
 
     Ok(match output_option {
-        OutputOption::UnpackVia(mut cmd, bin_dest_dir) => {
+        OutputOption::UnpackVia(mut cmd, bin_dest) => {
             let curl_stdout = curl_cmd
                 .stdout(Stdio::piped())
                 .spawn()?
@@ -25,25 +25,25 @@ pub fn run(url: &str, output_option: OutputOption) -> color_eyre::Result<String>
                 .ok_or_else(|| eyre!("missing stdout from cmd {curl_cmd:#?}"))?;
             let output = cmd.stdin(Stdio::from(curl_stdout)).output()?;
             output.status.exit_ok()?;
-            let mut file = File::create(bin_dest_dir)?;
+            let mut file = File::create(bin_dest)?;
             file.write_all(&output.stdout)?;
-            bin_dest_dir.into()
+            bin_dest.into()
         }
-        OutputOption::PipeInto(cmd, bin_dest_dir) => {
+        OutputOption::PipeInto(cmd, bin_dest) => {
             let curl_stdout = curl_cmd
-                .arg(&bin_dest_dir)
+                .arg(&bin_dest)
                 .stdout(Stdio::piped())
                 .spawn()?
                 .stdout
                 .ok_or_else(|| eyre!("missing stdout from cmd {curl_cmd:#?}"))?;
             cmd.stdin(Stdio::from(curl_stdout)).status()?.exit_ok()?;
-            bin_dest_dir
+            bin_dest
         }
-        OutputOption::WriteTo(bin_dest_dir) => {
+        OutputOption::WriteTo(bin_dest) => {
             curl_cmd.arg("--output");
-            curl_cmd.arg(bin_dest_dir);
+            curl_cmd.arg(bin_dest);
             curl_cmd.status()?.exit_ok()?;
-            bin_dest_dir.into()
+            bin_dest.into()
         }
     })
 }

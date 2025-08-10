@@ -191,7 +191,6 @@ fn main() -> color_eyre::Result<()> {
     });
 
     utils::system::rm_dead_symlinks(bin_dest_dir)?;
-    utils::system::chmod_x(&format!("{bin_dest_dir}/*"))?;
 
     let (errors_count, tools) = tools_errors.iter().fold((0, vec![]), |mut acc, (tool, _)| {
         acc.0 += 1;

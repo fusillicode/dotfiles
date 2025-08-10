@@ -1,5 +1,6 @@
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::thread::JoinHandle;
 
@@ -34,21 +35,34 @@ pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
     Ok(())
 }
 
-pub fn chmod_x(dir: &str) -> color_eyre::Result<()> {
-    Ok(crate::cmd::silent_cmd("sh")
-        .args(["-c", &format!("chmod +x {dir}")])
-        .status()?
-        .exit_ok()?)
-}
-
-pub fn chmod_x_v2<P: AsRef<Path>>(path: &Path) -> color_eyre::Result<()> {
-    let mut perms = std::fs::metadata(path)?.permissions();
+pub fn chmod_x<P: AsRef<Path>>(path: P) -> color_eyre::Result<()> {
+    let mut perms = std::fs::metadata(&path)?.permissions();
     perms.set_mode(0o755);
-    std::fs::set_permissions(path, perms)?;
+    std::fs::set_permissions(&path, perms)?;
     Ok(())
 }
 
+/// Unix-only function to mimic `ln -sf` with simple glob support (only '*' at the end)
 pub fn ln_sf(src: &Path, dest: &Path) -> color_eyre::Result<()> {
+    fn get_path_entries(path: &Path) -> color_eyre::Result<Vec<PathBuf>> {
+        if path.file_name().is_some_and(|p| p == "*")
+            && let Some(parent) = path.parent()
+        {
+            let mut entries = Vec::new();
+            for entry in std::fs::read_dir(parent)? {
+                let entry = entry?;
+                entries.push(entry.path());
+            }
+            return Ok(entries);
+        }
+        if !path.exists() {
+            bail!("Path {path:?} does not exists")
+        }
+        Ok(vec![path.to_path_buf()])
+    }
+
+    let _src_entries = get_path_entries(src)?;
+
     if dest.exists() || dest.is_symlink() {
         std::fs::remove_file(dest)?;
     }

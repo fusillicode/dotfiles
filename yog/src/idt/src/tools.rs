@@ -38,7 +38,7 @@ pub trait ToolInstaller: Sync + Send {
         if let NeedSymlink::Yes { src, dest } = &download_res {
             utils::system::ln_sf(src, dest)?;
         };
-        println!("{:?}", download_res.src());
+        utils::system::chmod_x(download_res.src())?;
         Ok(())
     }
 
