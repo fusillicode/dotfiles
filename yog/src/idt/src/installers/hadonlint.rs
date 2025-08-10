@@ -1,23 +1,23 @@
 use crate::Installer;
 use crate::downloaders::curl::InstallOption;
 
-pub struct HelmLs {
-    pub bin_dir: String,
+pub struct Hadolint {
+    pub bins_dir: String,
 }
 
-impl Installer for HelmLs {
+impl Installer for Hadolint {
     fn bin_name(&self) -> &'static str {
-        "helm_ls"
+        "hadolint"
     }
 
     fn install(&self) -> color_eyre::Result<()> {
         crate::downloaders::curl::run(
             &format!(
-                "https://github.com/mrjosh/helm-ls/releases/latest/download/{}_darwin_amd64",
+                "https://github.com/{0}/{0}/releases/latest/download/{0}-Darwin-x86_64",
                 self.bin_name()
             ),
             InstallOption::WriteTo {
-                dest_path: &format!("{}/{}", self.bin_dir, self.bin_name()),
+                dest_path: &format!("{}/{}", self.bins_dir, self.bin_name()),
             },
         )
     }

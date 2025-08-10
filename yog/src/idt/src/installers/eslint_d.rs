@@ -1,13 +1,13 @@
 use crate::Installer;
 
-pub struct YamlLanguageServer {
+pub struct EslintD {
     pub dev_tools_dir: String,
-    pub bin_dir: String,
+    pub bins_dir: String,
 }
 
-impl Installer for YamlLanguageServer {
+impl Installer for EslintD {
     fn bin_name(&self) -> &'static str {
-        "yaml-language-server"
+        "eslint_d"
     }
 
     fn install(&self) -> color_eyre::Result<()> {
@@ -15,7 +15,7 @@ impl Installer for YamlLanguageServer {
             &self.dev_tools_dir,
             self.bin_name(),
             &[self.bin_name()],
-            &self.bin_dir,
+            &self.bins_dir,
             self.bin_name(),
         )
     }

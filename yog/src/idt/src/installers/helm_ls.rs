@@ -1,23 +1,23 @@
 use crate::Installer;
 use crate::downloaders::curl::InstallOption;
 
-pub struct Marksman {
-    pub bin_dir: String,
+pub struct HelmLs {
+    pub bins_dir: String,
 }
 
-impl Installer for Marksman {
+impl Installer for HelmLs {
     fn bin_name(&self) -> &'static str {
-        "marksman"
+        "helm_ls"
     }
 
     fn install(&self) -> color_eyre::Result<()> {
         crate::downloaders::curl::run(
             &format!(
-                "https://github.com/artempyanykh/{0}/releases/latest/download/{0}-macos",
+                "https://github.com/mrjosh/helm-ls/releases/latest/download/{}_darwin_amd64",
                 self.bin_name()
             ),
             InstallOption::WriteTo {
-                dest_path: &format!("{}/{}", self.bin_dir, self.bin_name()),
+                dest_path: &format!("{}/{}", self.bins_dir, self.bin_name()),
             },
         )
     }

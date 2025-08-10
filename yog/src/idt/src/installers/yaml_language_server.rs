@@ -1,13 +1,13 @@
 use crate::Installer;
 
-pub struct SqlLanguageServer {
+pub struct YamlLanguageServer {
     pub dev_tools_dir: String,
-    pub bin_dir: String,
+    pub bins_dir: String,
 }
 
-impl Installer for SqlLanguageServer {
+impl Installer for YamlLanguageServer {
     fn bin_name(&self) -> &'static str {
-        "sql-language-server"
+        "yaml-language-server"
     }
 
     fn install(&self) -> color_eyre::Result<()> {
@@ -15,7 +15,7 @@ impl Installer for SqlLanguageServer {
             &self.dev_tools_dir,
             self.bin_name(),
             &[self.bin_name()],
-            &self.bin_dir,
+            &self.bins_dir,
             self.bin_name(),
         )
     }

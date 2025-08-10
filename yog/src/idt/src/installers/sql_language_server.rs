@@ -1,21 +1,21 @@
 use crate::Installer;
 
-pub struct DockerLangServer {
+pub struct SqlLanguageServer {
     pub dev_tools_dir: String,
-    pub bin_dir: String,
+    pub bins_dir: String,
 }
 
-impl Installer for DockerLangServer {
+impl Installer for SqlLanguageServer {
     fn bin_name(&self) -> &'static str {
-        "docker-langserver"
+        "sql-language-server"
     }
 
     fn install(&self) -> color_eyre::Result<()> {
         crate::downloaders::npm::run(
             &self.dev_tools_dir,
-            "dockerfile-language-server-nodejs",
-            &["dockerfile-language-server-nodejs"],
-            &self.bin_dir,
+            self.bin_name(),
+            &[self.bin_name()],
+            &self.bins_dir,
             self.bin_name(),
         )
     }

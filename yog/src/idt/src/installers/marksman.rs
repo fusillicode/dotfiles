@@ -1,23 +1,23 @@
 use crate::Installer;
 use crate::downloaders::curl::InstallOption;
 
-pub struct Hadolint {
-    pub bin_dir: String,
+pub struct Marksman {
+    pub bins_dir: String,
 }
 
-impl Installer for Hadolint {
+impl Installer for Marksman {
     fn bin_name(&self) -> &'static str {
-        "hadolint"
+        "marksman"
     }
 
     fn install(&self) -> color_eyre::Result<()> {
         crate::downloaders::curl::run(
             &format!(
-                "https://github.com/{0}/{0}/releases/latest/download/{0}-Darwin-x86_64",
+                "https://github.com/artempyanykh/{0}/releases/latest/download/{0}-macos",
                 self.bin_name()
             ),
             InstallOption::WriteTo {
-                dest_path: &format!("{}/{}", self.bin_dir, self.bin_name()),
+                dest_path: &format!("{}/{}", self.bins_dir, self.bin_name()),
             },
         )
     }

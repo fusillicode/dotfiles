@@ -2,7 +2,7 @@ use crate::Installer;
 use crate::downloaders::curl::InstallOption;
 
 pub struct TerraformLs {
-    pub bin_dir: String,
+    pub bins_dir: String,
 }
 
 impl Installer for TerraformLs {
@@ -20,7 +20,7 @@ impl Installer for TerraformLs {
                 self.bin_name()
             ),
             InstallOption::PipeToTar {
-                dest_dir: &self.bin_dir,
+                dest_dir: &self.bins_dir,
                 dest_name: self.bin_name(),
             },
         )

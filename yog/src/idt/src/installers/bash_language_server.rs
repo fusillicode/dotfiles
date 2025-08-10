@@ -1,21 +1,21 @@
 use crate::Installer;
 
-pub struct TypescriptLanguageServer {
+pub struct BashLanguageServer {
     pub dev_tools_dir: String,
-    pub bin_dir: String,
+    pub bins_dir: String,
 }
 
-impl Installer for TypescriptLanguageServer {
+impl Installer for BashLanguageServer {
     fn bin_name(&self) -> &'static str {
-        "typescript-language-server"
+        "bash-language-server"
     }
 
     fn install(&self) -> color_eyre::Result<()> {
         crate::downloaders::npm::run(
             &self.dev_tools_dir,
             self.bin_name(),
-            &[self.bin_name(), "typescript"],
-            &self.bin_dir,
+            &[self.bin_name()],
+            &self.bins_dir,
             self.bin_name(),
         )
     }

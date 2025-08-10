@@ -3,7 +3,7 @@ use crate::downloaders::curl::InstallOption;
 
 // For Markdown preview with peek.nvim
 pub struct Deno {
-    pub bin_dir: String,
+    pub bins_dir: String,
 }
 
 impl Installer for Deno {
@@ -21,7 +21,7 @@ impl Installer for Deno {
                 self.bin_name()
             ),
             InstallOption::PipeToTar {
-                dest_dir: &self.bin_dir,
+                dest_dir: &self.bins_dir,
                 dest_name: self.bin_name(),
             },
         )

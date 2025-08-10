@@ -1,22 +1,22 @@
 use crate::Installer;
 
-pub struct GraphQlLsp {
+pub struct VsCodeLangServers {
     pub dev_tools_dir: String,
-    pub bin_dir: String,
+    pub bins_dir: String,
 }
 
-impl Installer for GraphQlLsp {
+impl Installer for VsCodeLangServers {
     fn bin_name(&self) -> &'static str {
-        "graphql-lsp"
+        "vscode-langservers-extracted"
     }
 
     fn install(&self) -> color_eyre::Result<()> {
         crate::downloaders::npm::run(
             &self.dev_tools_dir,
-            "graphql-language-service-cli",
-            &["graphql-language-service-cli"],
-            &self.bin_dir,
             self.bin_name(),
+            &[self.bin_name()],
+            &self.bins_dir,
+            "*",
         )
     }
 }

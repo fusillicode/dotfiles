@@ -1,21 +1,24 @@
 use crate::Installer;
 
-pub struct ElmLanguageServer {
+pub struct Commitlint {
     pub dev_tools_dir: String,
-    pub bin_dir: String,
+    pub bins_dir: String,
 }
 
-impl Installer for ElmLanguageServer {
+impl Installer for Commitlint {
     fn bin_name(&self) -> &'static str {
-        "elm-language-server"
+        "commitlint"
     }
 
     fn install(&self) -> color_eyre::Result<()> {
         crate::downloaders::npm::run(
             &self.dev_tools_dir,
             self.bin_name(),
-            &[&format!("@elm-tooling/{}", self.bin_name())],
-            &self.bin_dir,
+            &[
+                &format!("@{}/cli", self.bin_name()),
+                &format!("@{}/config-conventional", self.bin_name()),
+            ],
+            &self.bins_dir,
             self.bin_name(),
         )
     }

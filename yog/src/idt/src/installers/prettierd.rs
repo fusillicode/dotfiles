@@ -1,21 +1,21 @@
 use crate::Installer;
 
-pub struct BashLanguageServer {
+pub struct PrettierD {
     pub dev_tools_dir: String,
-    pub bin_dir: String,
+    pub bins_dir: String,
 }
 
-impl Installer for BashLanguageServer {
+impl Installer for PrettierD {
     fn bin_name(&self) -> &'static str {
-        "bash-language-server"
+        "prettierd"
     }
 
     fn install(&self) -> color_eyre::Result<()> {
         crate::downloaders::npm::run(
             &self.dev_tools_dir,
             self.bin_name(),
-            &[self.bin_name()],
-            &self.bin_dir,
+            &[&format!("@fsouza/{}", self.bin_name())],
+            &self.bins_dir,
             self.bin_name(),
         )
     }

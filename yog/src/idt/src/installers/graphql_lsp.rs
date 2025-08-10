@@ -1,21 +1,21 @@
 use crate::Installer;
 
-pub struct Quicktype {
+pub struct GraphQlLsp {
     pub dev_tools_dir: String,
-    pub bin_dir: String,
+    pub bins_dir: String,
 }
 
-impl Installer for Quicktype {
+impl Installer for GraphQlLsp {
     fn bin_name(&self) -> &'static str {
-        "quicktype"
+        "graphql-lsp"
     }
 
     fn install(&self) -> color_eyre::Result<()> {
         crate::downloaders::npm::run(
             &self.dev_tools_dir,
-            self.bin_name(),
-            &[self.bin_name()],
-            &self.bin_dir,
+            "graphql-language-service-cli",
+            &["graphql-language-service-cli"],
+            &self.bins_dir,
             self.bin_name(),
         )
     }

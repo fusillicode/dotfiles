@@ -3,7 +3,7 @@ use utils::cmd::silent_cmd;
 
 pub struct Nvim {
     pub dev_tools_dir: String,
-    pub bin_dir: String,
+    pub bins_dir: String,
 }
 
 impl Installer for Nvim {
@@ -33,7 +33,7 @@ impl Installer for Nvim {
                     ln -sf {nvim_release_dir}/bin/{} {}
                 "#,
                 self.bin_name(),
-                self.bin_dir
+                self.bins_dir
             ),
         ])
         .status()?

@@ -2,7 +2,7 @@ use crate::Installer;
 
 pub struct RuffLsp {
     pub dev_tools_dir: String,
-    pub bin_dir: String,
+    pub bins_dir: String,
 }
 
 impl Installer for RuffLsp {
@@ -15,7 +15,7 @@ impl Installer for RuffLsp {
             &self.dev_tools_dir,
             self.bin_name(),
             &[self.bin_name()],
-            &self.bin_dir,
+            &self.bins_dir,
             self.bin_name(),
         )
     }

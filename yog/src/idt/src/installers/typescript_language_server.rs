@@ -1,21 +1,21 @@
 use crate::Installer;
 
-pub struct PrettierD {
+pub struct TypescriptLanguageServer {
     pub dev_tools_dir: String,
-    pub bin_dir: String,
+    pub bins_dir: String,
 }
 
-impl Installer for PrettierD {
+impl Installer for TypescriptLanguageServer {
     fn bin_name(&self) -> &'static str {
-        "prettierd"
+        "typescript-language-server"
     }
 
     fn install(&self) -> color_eyre::Result<()> {
         crate::downloaders::npm::run(
             &self.dev_tools_dir,
             self.bin_name(),
-            &[&format!("@fsouza/{}", self.bin_name())],
-            &self.bin_dir,
+            &[self.bin_name(), "typescript"],
+            &self.bins_dir,
             self.bin_name(),
         )
     }

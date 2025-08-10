@@ -1,13 +1,13 @@
 use crate::Installer;
 
-pub struct VsCodeLangServers {
+pub struct Quicktype {
     pub dev_tools_dir: String,
-    pub bin_dir: String,
+    pub bins_dir: String,
 }
 
-impl Installer for VsCodeLangServers {
+impl Installer for Quicktype {
     fn bin_name(&self) -> &'static str {
-        "vscode-langservers-extracted"
+        "quicktype"
     }
 
     fn install(&self) -> color_eyre::Result<()> {
@@ -15,8 +15,8 @@ impl Installer for VsCodeLangServers {
             &self.dev_tools_dir,
             self.bin_name(),
             &[self.bin_name()],
-            &self.bin_dir,
-            "*",
+            &self.bins_dir,
+            self.bin_name(),
         )
     }
 }
