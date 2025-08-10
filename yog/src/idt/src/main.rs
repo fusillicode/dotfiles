@@ -168,14 +168,13 @@ fn main() -> color_eyre::Result<()> {
         let installers_handles = whitelisted_installers
             .iter()
             .map(|installer| {
-                let bin_name = installer.bin_name();
                 let handle = scope.spawn(move || {
                     let install_result = installer.install();
                     // Reporting is done here, rather than after via `installers_errors`, to report
                     // results as soon as possible.
                     installer.report_install(install_result)
                 });
-                (bin_name, handle)
+                (installer.bin_name(), handle)
             })
             .collect::<Vec<_>>();
 
