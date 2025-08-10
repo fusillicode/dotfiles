@@ -7,7 +7,9 @@ use std::process::Stdio;
 use color_eyre::eyre::eyre;
 
 pub enum OutputOption<'a> {
-    UnpackVia(Box<Command>, &'a str),
+    UnpackViaZcat {
+        dest_path: &'a str,
+    },
     PipeToTar {
         dest_dir: &'a str,
         dest_name: &'a str,
@@ -21,13 +23,15 @@ pub fn run(url: &str, output_option: OutputOption) -> color_eyre::Result<()> {
     curl_cmd.args([&format!("-L{silent_flag}"), url]);
 
     match output_option {
-        OutputOption::UnpackVia(mut cmd, output_path) => {
+        OutputOption::UnpackViaZcat { dest_path } => {
             let curl_stdout = get_stdout_from_cmd(&mut curl_cmd)?;
 
-            let output = cmd.stdin(Stdio::from(curl_stdout)).output()?;
+            let output = Command::new("zcat")
+                .stdin(Stdio::from(curl_stdout))
+                .output()?;
             output.status.exit_ok()?;
 
-            let mut file = File::create(output_path)?;
+            let mut file = File::create(dest_path)?;
             file.write_all(&output.stdout)?;
 
             Ok(())

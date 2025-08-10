@@ -1,5 +1,3 @@
-use std::process::Command;
-
 use crate::Installer;
 use crate::installers::curl_install::OutputOption;
 
@@ -18,10 +16,9 @@ impl Installer for RustAnalyzer {
                 "https://github.com/rust-lang/{0}/releases/download/nightly/{0}-aarch64-apple-darwin.gz",
                 self.bin_name()
             ),
-            OutputOption::UnpackVia(
-                Box::new(Command::new("zcat")),
-                &format!("{}/{}", self.bin_dir, self.bin_name()),
-            ),
+            OutputOption::UnpackViaZcat {
+                dest_path: &format!("{}/{}", self.bin_dir, self.bin_name()),
+            },
         )
     }
 }
