@@ -13,7 +13,7 @@ impl Installer for RustAnalyzer {
     fn install(&self) -> color_eyre::Result<()> {
         crate::downloaders::curl::run(
             &format!(
-                "https://github.com/rust-lang/{0}/releases/download/nightly/{0}-aarch64-apple-darwin.gz",
+                "https://github.com/rust-lang/{0}/releases/download/2025-08-11/{0}-aarch64-apple-darwin.gz",
                 self.bin_name()
             ),
             CurlDownloaderOption::UnpackViaZcat {
