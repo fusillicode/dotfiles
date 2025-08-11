@@ -17,6 +17,8 @@ impl Installer for ElmLanguageServer {
             &[&format!("@elm-tooling/{}", self.bin_name())],
             &self.bin_dir,
             self.bin_name(),
-        )
+        )?;
+
+        Ok(())
     }
 }

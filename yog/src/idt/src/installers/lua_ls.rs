@@ -27,6 +27,8 @@ impl Installer for LuaLanguageServer {
                 dest_dir: &dev_tools_repo_dir,
                 dest_name: None,
             },
-        )
+        )?;
+
+        Ok(())
     }
 }

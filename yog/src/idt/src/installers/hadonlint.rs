@@ -19,6 +19,8 @@ impl Installer for Hadolint {
             CurlDownloaderOption::WriteTo {
                 dest_path: &format!("{}/{}", self.bin_dir, self.bin_name()),
             },
-        )
+        )?;
+
+        Ok(())
     }
 }

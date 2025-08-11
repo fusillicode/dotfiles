@@ -24,6 +24,8 @@ impl Installer for Deno {
                 dest_dir: &self.bin_dir,
                 dest_name: Some(self.bin_name()),
             },
-        )
+        )?;
+
+        Ok(())
     }
 }

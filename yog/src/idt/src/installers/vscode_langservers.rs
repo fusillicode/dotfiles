@@ -17,6 +17,8 @@ impl Installer for VsCodeLangServers {
             &[self.bin_name()],
             &self.bin_dir,
             "*",
-        )
+        )?;
+
+        Ok(())
     }
 }

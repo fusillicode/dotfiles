@@ -23,6 +23,8 @@ impl Installer for TyposLsp {
                 dest_dir: &self.bin_dir,
                 dest_name: Some(self.bin_name()),
             },
-        )
+        )?;
+
+        Ok(())
     }
 }

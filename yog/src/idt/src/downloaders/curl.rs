@@ -22,7 +22,7 @@ pub enum CurlDownloaderOption<'a> {
     },
 }
 
-pub fn run(url: &str, opt: CurlDownloaderOption) -> color_eyre::Result<()> {
+pub fn run(url: &str, opt: CurlDownloaderOption) -> color_eyre::Result<String> {
     let mut curl_cmd = utils::cmd::silent_cmd("curl");
     let silent_flag = cfg!(debug_assertions).then(|| "S").unwrap_or("");
     curl_cmd.args([&format!("-L{silent_flag}"), url]);
@@ -37,7 +37,7 @@ pub fn run(url: &str, opt: CurlDownloaderOption) -> color_eyre::Result<()> {
             let mut file = File::create(dest_path)?;
             file.write_all(&output.stdout)?;
 
-            Ok(())
+            Ok(dest_path.into())
         }
         CurlDownloaderOption::PipeIntoTar {
             dest_dir,
@@ -52,14 +52,16 @@ pub fn run(url: &str, opt: CurlDownloaderOption) -> color_eyre::Result<()> {
             }
             tar_cmd.stdin(curl_stdout).status()?.exit_ok()?;
 
-            Ok(())
+            Ok(dest_name
+                .map(|dn| format!("{dest_dir}/{dn}"))
+                .unwrap_or_else(|| dest_dir.into()))
         }
         CurlDownloaderOption::WriteTo { dest_path } => {
             curl_cmd.arg("--output");
             curl_cmd.arg(dest_path);
             curl_cmd.status()?.exit_ok()?;
 
-            Ok(())
+            Ok(dest_path.into())
         }
     }
 }

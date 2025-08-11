@@ -20,6 +20,8 @@ impl Installer for Commitlint {
             ],
             &self.bin_dir,
             self.bin_name(),
-        )
+        )?;
+
+        Ok(())
     }
 }

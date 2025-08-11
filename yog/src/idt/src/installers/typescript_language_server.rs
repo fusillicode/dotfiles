@@ -17,6 +17,8 @@ impl Installer for TypescriptLanguageServer {
             &[self.bin_name(), "typescript"],
             &self.bin_dir,
             self.bin_name(),
-        )
+        )?;
+
+        Ok(())
     }
 }
