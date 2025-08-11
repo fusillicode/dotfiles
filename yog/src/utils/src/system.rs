@@ -44,6 +44,31 @@ pub fn chmod_x(dir: &str) -> color_eyre::Result<()> {
 
 pub trait LnSf {
     fn exec(&self) -> color_eyre::Result<()>;
+
+    fn into_path_buf_if_dir(field: &str, path: &str) -> color_eyre::Result<PathBuf> {
+        path.ends_with("/")
+            .then_some(path)
+            .ok_or_else(|| eyre!("{field}, {path} is not a directory"))
+            .map(PathBuf::from)
+    }
+
+    fn into_path_buf_if_not_dir(field: &str, path: &str) -> color_eyre::Result<PathBuf> {
+        (!path.ends_with("/"))
+            .then_some(path)
+            .ok_or_else(|| eyre!("{field} {path} is a directory, expected a file"))
+            .map(PathBuf::from)
+    }
+
+    fn into_path_buf_if_file_and_exists(field: &str, path: &str) -> color_eyre::Result<PathBuf> {
+        let path = PathBuf::from(path);
+        if path.exists() {
+            bail!("{field} {path:?} does not exists");
+        }
+        if !path.is_file() {
+            bail!("{field} {path:?} is not a file");
+        }
+        Ok(path)
+    }
 }
 
 pub struct LnSfFile {
@@ -53,18 +78,10 @@ pub struct LnSfFile {
 
 impl LnSfFile {
     pub fn new(target: &str, link: &str) -> color_eyre::Result<Self> {
-        let target = PathBuf::from(target);
-        if target.exists() {
-            bail!("target {target:?} does not exists");
-        }
-        if !target.is_file() {
-            bail!("target {target:?} is not a file");
-        }
-        if link.ends_with("/") {
-            bail!("link {link} is a directory, expected a file");
-        }
-        let link = PathBuf::from(link);
-        Ok(Self { target, link })
+        Ok(Self {
+            target: Self::into_path_buf_if_file_and_exists("target", target)?,
+            link: Self::into_path_buf_if_not_dir("link", link)?,
+        })
     }
 }
 
@@ -86,18 +103,10 @@ pub struct LnSfFileIntoDir {
 
 impl LnSfFileIntoDir {
     pub fn new(target: &str, link_dir: &str) -> color_eyre::Result<Self> {
-        let target = PathBuf::from(target);
-        if target.exists() {
-            bail!("target {target:?} does not exists");
-        }
-        if !target.is_file() {
-            bail!("target {target:?} is not a file");
-        }
-        if !link_dir.ends_with("/") {
-            bail!("link_dir {link_dir} is not a directory");
-        }
-        let link_dir = PathBuf::from(link_dir);
-        Ok(Self { target, link_dir })
+        Ok(Self {
+            target: Self::into_path_buf_if_file_and_exists("target", target)?,
+            link_dir: Self::into_path_buf_if_dir("link_dir", link_dir)?,
+        })
     }
 }
 
@@ -106,7 +115,7 @@ impl LnSf for LnSfFileIntoDir {
         let target_file_name = self
             .target
             .file_name()
-            .ok_or_else(|| eyre!("target has no filename"))?;
+            .ok_or_else(|| eyre!("target {:?} has no filename", self.target))?;
         let link_path = Path::new(&self.link_dir).join(target_file_name);
         if link_path.exists() {
             std::fs::remove_file(&link_path)?;
@@ -123,17 +132,13 @@ pub struct LnSfFilesIntoDir {
 
 impl LnSfFilesIntoDir {
     pub fn new(target_dir: &str, link_dir: &str) -> color_eyre::Result<Self> {
-        if !target_dir.ends_with("/*") {
-            bail!("target_dir {target_dir} without glob pattern *");
-        }
-        let target_dir = PathBuf::from(target_dir);
-        if !link_dir.ends_with("/") {
-            bail!("link_dir {link_dir} is not a directory");
-        }
-        let link_dir = PathBuf::from(link_dir);
         Ok(Self {
-            target_dir,
-            link_dir,
+            target_dir: target_dir
+                .ends_with("/*")
+                .then_some(target_dir)
+                .ok_or_else(|| eyre!("target_dir {target_dir} is not a glob pattern *"))
+                .map(PathBuf::from)?,
+            link_dir: Self::into_path_buf_if_dir("link_dir", link_dir)?,
         })
     }
 }
@@ -146,7 +151,7 @@ impl LnSf for LnSfFilesIntoDir {
             if path.is_file() {
                 let file_name = path
                     .file_name()
-                    .ok_or_else(|| eyre!("File has no filename"))?;
+                    .ok_or_else(|| eyre!("file {:?} has no filename", path))?;
                 let link_path = Path::new(&self.target_dir).join(file_name);
                 if link_path.exists() {
                     std::fs::remove_file(&link_path)?;
