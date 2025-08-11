@@ -6,12 +6,12 @@ use std::process::Stdio;
 use color_eyre::eyre::eyre;
 
 pub enum CurlDownloaderOption<'a> {
-    UnpackViaZcat {
+    PipeIntoZcat {
         dest_path: &'a str,
     },
     PipeIntoTar {
         dest_dir: &'a str,
-        // Option because not all the downloaded archives have a:
+        // Option because not all the downloaded archives has a:
         // - stable name (i.e. shellcheck)
         // - an usable binary outside the archive (i.e. elixir_ls or lua_ls)
         // In these cases `dest_name` is set to None
@@ -28,7 +28,7 @@ pub fn run(url: &str, opt: CurlDownloaderOption) -> color_eyre::Result<String> {
     curl_cmd.args([&format!("-L{silent_flag}"), url]);
 
     match opt {
-        CurlDownloaderOption::UnpackViaZcat { dest_path } => {
+        CurlDownloaderOption::PipeIntoZcat { dest_path } => {
             let curl_stdout = get_cmd_stdout(&mut curl_cmd)?;
 
             let output = Command::new("zcat").stdin(curl_stdout).output()?;
