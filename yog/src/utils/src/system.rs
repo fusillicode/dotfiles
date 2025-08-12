@@ -42,54 +42,58 @@ pub fn chmod_x(dir: &str) -> color_eyre::Result<()> {
         .exit_ok()?)
 }
 
-pub trait LnSf {
+pub trait LnSf: std::any::Any {
     fn exec(&self) -> color_eyre::Result<()>;
-
     fn targets(&self) -> Vec<&Path>;
+    fn as_any(&self) -> &dyn std::any::Any;
+}
 
-    fn into_path_buf_if_existing_dir(path: &str) -> color_eyre::Result<PathBuf> {
-        let path = PathBuf::from(path);
-        if !path.is_dir() {
-            bail!("{path:?} is not an existing directory");
+pub fn build_ls_sf_behavior<'a>(
+    target: &'a str,
+    link: Option<&'a str>,
+) -> color_eyre::Result<Box<dyn LnSf>> {
+    let Some(link) = link else {
+        let target = PathBuf::from(target);
+        if !target.is_file() {
+            bail!("target {target:?} is not an existing file")
         }
-        Ok(path)
+        return Ok(Box::new(LnSfNoOp { target }));
+    };
+
+    let target = PathBuf::from(target);
+    if target.ends_with("/*") {
+        let link = PathBuf::from(link);
+        if !link.is_dir() {
+            bail!("link {link:?} expected to point to an existing directory for LnSfFilesIntoDir")
+        }
+        let mut targets = vec![];
+        for entry in std::fs::read_dir(target)? {
+            targets.push(entry?.path());
+        }
+        return Ok(Box::new(LnSfFilesIntoDir {
+            targets,
+            link_dir: link,
+        }));
     }
 
-    fn into_path_buf_if_file_in_existing_dir(path: &str) -> color_eyre::Result<PathBuf> {
-        let path = PathBuf::from(path);
-        if path.is_dir() {
-            bail!("{path:?} is an existing directory, expected a file path");
-        }
-        if path
-            .parent()
-            .is_some_and(|p| p.is_dir() || p.as_os_str().is_empty())
-        {
-            return Ok(path);
-        }
-        bail!("{path:?} does not exists")
+    if !target.is_file() {
+        bail!("target {target:?} expected to point to an existing file");
     }
 
-    fn into_path_buf_if_existing_file(path: &str) -> color_eyre::Result<PathBuf> {
-        let path = PathBuf::from(path);
-        if !path.is_file() {
-            bail!("{path:?} is not an existing file");
-        }
-        Ok(path)
+    let link = PathBuf::from(link);
+    if link.is_dir() {
+        return Ok(Box::new(LnSfFileIntoDir {
+            target,
+            link_dir: link,
+        }));
     }
+
+    Ok(Box::new(LnSfFile { target, link }))
 }
 
 pub struct LnSfFile {
     target: PathBuf,
     link: PathBuf,
-}
-
-impl LnSfFile {
-    pub fn new(target: &str, link: &str) -> color_eyre::Result<Self> {
-        Ok(Self {
-            target: Self::into_path_buf_if_existing_file(target)?,
-            link: Self::into_path_buf_if_file_in_existing_dir(link)?,
-        })
-    }
 }
 
 impl LnSf for LnSfFile {
@@ -105,20 +109,15 @@ impl LnSf for LnSfFile {
     fn targets(&self) -> Vec<&Path> {
         vec![&self.target]
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 pub struct LnSfFileIntoDir {
     target: PathBuf,
     link_dir: PathBuf,
-}
-
-impl LnSfFileIntoDir {
-    pub fn new(target: &str, link_dir: &str) -> color_eyre::Result<Self> {
-        Ok(Self {
-            target: Self::into_path_buf_if_existing_file(target)?,
-            link_dir: Self::into_path_buf_if_existing_dir(link_dir)?,
-        })
-    }
 }
 
 impl LnSf for LnSfFileIntoDir {
@@ -138,30 +137,15 @@ impl LnSf for LnSfFileIntoDir {
     fn targets(&self) -> Vec<&Path> {
         vec![&self.target]
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 pub struct LnSfFilesIntoDir {
     targets: Vec<PathBuf>,
     link_dir: PathBuf,
-}
-
-impl LnSfFilesIntoDir {
-    pub fn new(target_dir: &str, link_dir: &str) -> color_eyre::Result<Self> {
-        let target_dir = target_dir
-            .ends_with("/*")
-            .then_some(target_dir)
-            .ok_or_else(|| eyre!("target_dir {target_dir} is not a glob pattern *"))
-            .map(PathBuf::from)?;
-        let mut targets = vec![];
-        for target in std::fs::read_dir(target_dir)? {
-            targets.push(target?.path());
-        }
-
-        Ok(Self {
-            targets,
-            link_dir: Self::into_path_buf_if_existing_dir(link_dir)?,
-        })
-    }
 }
 
 impl LnSf for LnSfFilesIntoDir {
@@ -184,8 +168,13 @@ impl LnSf for LnSfFilesIntoDir {
     fn targets(&self) -> Vec<&Path> {
         self.targets.iter().map(AsRef::as_ref).collect()
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
+#[cfg_attr(test, derive(PartialEq, Debug))]
 pub struct LnSfNoOp {
     target: PathBuf,
 }
@@ -197,6 +186,10 @@ impl LnSf for LnSfNoOp {
 
     fn targets(&self) -> Vec<&Path> {
         vec![&self.target]
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
@@ -225,12 +218,24 @@ pub fn rm_f<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn test_ln_sf_file_new_works_as_expected() {}
+    use super::*;
 
     #[test]
-    fn test_ln_sf_file_into_dir_new_works_as_expected() {}
+    fn test_build_ls_sf_behavior_works_as_expected() {
+        let res = build_ls_sf_behavior("not_existing_file", None);
+        assert2::let_assert!(Err(error) = res);
+        pretty_assertions::assert_eq!(
+            r#"target "not_existing_file" is not an existing file"#,
+            error.to_string()
+        );
 
-    #[test]
-    fn test_ln_sf_files_into_dir_new_works_as_expected() {}
+        let res = build_ls_sf_behavior("not_existing_file", None);
+        assert2::let_assert!(Ok(ls_sf_op) = res);
+        pretty_assertions::assert_eq!(
+            Some(&LnSfNoOp {
+                target: PathBuf::from("whatever")
+            }),
+            ls_sf_op.as_any().downcast_ref::<LnSfNoOp>()
+        );
+    }
 }
