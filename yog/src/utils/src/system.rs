@@ -217,3 +217,15 @@ pub fn rm_f<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
         Err(error)
     })
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_ln_sf_file_new_works_as_expected() {}
+
+    #[test]
+    fn test_ln_sf_file_into_dir_new_works_as_expected() {}
+
+    #[test]
+    fn test_ln_sf_files_into_dir_new_works_as_expected() {}
+}
