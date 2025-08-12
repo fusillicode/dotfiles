@@ -47,27 +47,32 @@ pub trait LnSf {
 
     fn targets(&self) -> Vec<&Path>;
 
-    fn into_path_buf_if_not_dir(field: &str, path: &str) -> color_eyre::Result<PathBuf> {
-        (!path.ends_with("/"))
-            .then_some(path)
-            .ok_or_else(|| eyre!("{field} {path} is a directory, expected a file"))
-            .map(PathBuf::from)
-    }
-
-    fn into_path_buf_if_dir(field: &str, path: &str) -> color_eyre::Result<PathBuf> {
-        path.ends_with("/")
-            .then_some(path)
-            .ok_or_else(|| eyre!("{field} {path} is not a directory"))
-            .map(PathBuf::from)
-    }
-
-    fn into_path_buf_if_file_and_exists(field: &str, path: &str) -> color_eyre::Result<PathBuf> {
+    fn into_path_buf_if_existing_dir(path: &str) -> color_eyre::Result<PathBuf> {
         let path = PathBuf::from(path);
-        if path.exists() {
-            bail!("{field} {path:?} does not exists");
+        if !path.is_dir() {
+            bail!("{path:?} is not an existing directory");
         }
+        Ok(path)
+    }
+
+    fn into_path_buf_if_file_in_existing_dir(path: &str) -> color_eyre::Result<PathBuf> {
+        let path = PathBuf::from(path);
+        if path.is_dir() {
+            bail!("{path:?} is an existing directory, expected a file path");
+        }
+        if path
+            .parent()
+            .is_some_and(|p| p.is_dir() || p.as_os_str().is_empty())
+        {
+            return Ok(path);
+        }
+        bail!("{path:?} does not exists")
+    }
+
+    fn into_path_buf_if_existing_file(path: &str) -> color_eyre::Result<PathBuf> {
+        let path = PathBuf::from(path);
         if !path.is_file() {
-            bail!("{field} {path:?} is not a file");
+            bail!("{path:?} is not an existing file");
         }
         Ok(path)
     }
@@ -81,8 +86,8 @@ pub struct LnSfFile {
 impl LnSfFile {
     pub fn new(target: &str, link: &str) -> color_eyre::Result<Self> {
         Ok(Self {
-            target: Self::into_path_buf_if_file_and_exists("target", target)?,
-            link: Self::into_path_buf_if_not_dir("link", link)?,
+            target: Self::into_path_buf_if_existing_file(target)?,
+            link: Self::into_path_buf_if_file_in_existing_dir(link)?,
         })
     }
 }
@@ -110,8 +115,8 @@ pub struct LnSfFileIntoDir {
 impl LnSfFileIntoDir {
     pub fn new(target: &str, link_dir: &str) -> color_eyre::Result<Self> {
         Ok(Self {
-            target: Self::into_path_buf_if_file_and_exists("target", target)?,
-            link_dir: Self::into_path_buf_if_dir("link_dir", link_dir)?,
+            target: Self::into_path_buf_if_existing_file(target)?,
+            link_dir: Self::into_path_buf_if_existing_dir(link_dir)?,
         })
     }
 }
@@ -154,7 +159,7 @@ impl LnSfFilesIntoDir {
 
         Ok(Self {
             targets,
-            link_dir: Self::into_path_buf_if_dir("link_dir", link_dir)?,
+            link_dir: Self::into_path_buf_if_existing_dir(link_dir)?,
         })
     }
 }
