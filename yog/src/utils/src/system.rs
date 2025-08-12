@@ -47,17 +47,17 @@ pub trait LnSf {
 
     fn targets(&self) -> Vec<&Path>;
 
-    fn into_path_buf_if_dir(field: &str, path: &str) -> color_eyre::Result<PathBuf> {
-        path.ends_with("/")
-            .then_some(path)
-            .ok_or_else(|| eyre!("{field}, {path} is not a directory"))
-            .map(PathBuf::from)
-    }
-
     fn into_path_buf_if_not_dir(field: &str, path: &str) -> color_eyre::Result<PathBuf> {
         (!path.ends_with("/"))
             .then_some(path)
             .ok_or_else(|| eyre!("{field} {path} is a directory, expected a file"))
+            .map(PathBuf::from)
+    }
+
+    fn into_path_buf_if_dir(field: &str, path: &str) -> color_eyre::Result<PathBuf> {
+        path.ends_with("/")
+            .then_some(path)
+            .ok_or_else(|| eyre!("{field} {path} is not a directory"))
             .map(PathBuf::from)
     }
 
@@ -118,11 +118,11 @@ impl LnSfFileIntoDir {
 
 impl LnSf for LnSfFileIntoDir {
     fn exec(&self) -> color_eyre::Result<()> {
-        let target_file_name = self
+        let target_name = self
             .target
             .file_name()
             .ok_or_else(|| eyre!("target {:?} has no filename", self.target))?;
-        let link_path = Path::new(&self.link_dir).join(target_file_name);
+        let link_path = Path::new(&self.link_dir).join(target_name);
         if link_path.exists() {
             std::fs::remove_file(&link_path)?;
         }
@@ -170,7 +170,7 @@ impl LnSf for LnSfFilesIntoDir {
                 if link_path.exists() {
                     std::fs::remove_file(&link_path)?;
                 }
-                std::os::unix::fs::symlink(&target, &link_path)?;
+                std::os::unix::fs::symlink(target, &link_path)?;
             }
         }
         Ok(())
@@ -178,6 +178,20 @@ impl LnSf for LnSfFilesIntoDir {
 
     fn targets(&self) -> Vec<&Path> {
         self.targets.iter().map(AsRef::as_ref).collect()
+    }
+}
+
+pub struct LnSfNoOp {
+    target: PathBuf,
+}
+
+impl LnSf for LnSfNoOp {
+    fn exec(&self) -> color_eyre::Result<()> {
+        Ok(())
+    }
+
+    fn targets(&self) -> Vec<&Path> {
+        vec![&self.target]
     }
 }
 
