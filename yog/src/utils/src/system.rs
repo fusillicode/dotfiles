@@ -45,6 +45,8 @@ pub fn chmod_x(dir: &str) -> color_eyre::Result<()> {
 pub trait LnSf {
     fn exec(&self) -> color_eyre::Result<()>;
 
+    fn targets(&self) -> Vec<&Path>;
+
     fn into_path_buf_if_dir(field: &str, path: &str) -> color_eyre::Result<PathBuf> {
         path.ends_with("/")
             .then_some(path)
@@ -94,6 +96,10 @@ impl LnSf for LnSfFile {
         std::os::unix::fs::symlink(&self.target, &self.link)?;
         Ok(())
     }
+
+    fn targets(&self) -> Vec<&Path> {
+        vec![&self.target]
+    }
 }
 
 pub struct LnSfFileIntoDir {
@@ -123,21 +129,31 @@ impl LnSf for LnSfFileIntoDir {
         std::os::unix::fs::symlink(&self.target, &link_path)?;
         Ok(())
     }
+
+    fn targets(&self) -> Vec<&Path> {
+        vec![&self.target]
+    }
 }
 
 pub struct LnSfFilesIntoDir {
-    target_dir: PathBuf,
+    targets: Vec<PathBuf>,
     link_dir: PathBuf,
 }
 
 impl LnSfFilesIntoDir {
     pub fn new(target_dir: &str, link_dir: &str) -> color_eyre::Result<Self> {
+        let target_dir = target_dir
+            .ends_with("/*")
+            .then_some(target_dir)
+            .ok_or_else(|| eyre!("target_dir {target_dir} is not a glob pattern *"))
+            .map(PathBuf::from)?;
+        let mut targets = vec![];
+        for target in std::fs::read_dir(target_dir)? {
+            targets.push(target?.path());
+        }
+
         Ok(Self {
-            target_dir: target_dir
-                .ends_with("/*")
-                .then_some(target_dir)
-                .ok_or_else(|| eyre!("target_dir {target_dir} is not a glob pattern *"))
-                .map(PathBuf::from)?,
+            targets,
             link_dir: Self::into_path_buf_if_dir("link_dir", link_dir)?,
         })
     }
@@ -145,21 +161,23 @@ impl LnSfFilesIntoDir {
 
 impl LnSf for LnSfFilesIntoDir {
     fn exec(&self) -> color_eyre::Result<()> {
-        for entry_result in std::fs::read_dir(&self.link_dir)? {
-            let entry = entry_result?;
-            let path = entry.path();
-            if path.is_file() {
-                let file_name = path
+        for target in self.targets.iter() {
+            if target.is_file() {
+                let target_name = target
                     .file_name()
-                    .ok_or_else(|| eyre!("file {:?} has no filename", path))?;
-                let link_path = Path::new(&self.target_dir).join(file_name);
+                    .ok_or_else(|| eyre!("target {target:?} has no filename"))?;
+                let link_path = Path::new(&self.link_dir).join(target_name);
                 if link_path.exists() {
                     std::fs::remove_file(&link_path)?;
                 }
-                std::os::unix::fs::symlink(&path, &link_path)?;
+                std::os::unix::fs::symlink(&target, &link_path)?;
             }
         }
         Ok(())
+    }
+
+    fn targets(&self) -> Vec<&Path> {
+        self.targets.iter().map(AsRef::as_ref).collect()
     }
 }
 
