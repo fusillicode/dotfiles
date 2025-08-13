@@ -5,7 +5,7 @@ use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 
 #[cfg(not(test))]
-pub trait Symlink {
+pub trait Symlink: std::fmt::Debug {
     fn exec(&self) -> color_eyre::Result<()>;
     fn targets(&self) -> Vec<&Path>;
 }
@@ -63,7 +63,8 @@ pub fn build<'a>(target: &'a str, link: Option<&'a str>) -> color_eyre::Result<B
     Ok(Box::new(SymlinkFile { target, link }))
 }
 
-#[cfg_attr(test, derive(PartialEq, Debug))]
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct SymlinkNoOp {
     target: PathBuf,
 }
@@ -83,7 +84,8 @@ impl Symlink for SymlinkNoOp {
     }
 }
 
-#[cfg_attr(test, derive(PartialEq, Debug))]
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct SymlinkFile {
     target: PathBuf,
     link: PathBuf,
@@ -109,7 +111,8 @@ impl Symlink for SymlinkFile {
     }
 }
 
-#[cfg_attr(test, derive(PartialEq, Debug))]
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct SymlinkFileIntoDir {
     target: PathBuf,
     link_dir: PathBuf,
@@ -139,7 +142,7 @@ impl Symlink for SymlinkFileIntoDir {
     }
 }
 
-#[cfg_attr(test, derive(Debug))]
+#[derive(Debug)]
 pub struct SymlinkFilesIntoDir {
     targets: Vec<PathBuf>,
     link_dir: PathBuf,

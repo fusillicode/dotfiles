@@ -33,7 +33,8 @@ pub trait Installer: Sync + Send {
     fn download(&self) -> color_eyre::Result<Box<dyn Symlink>>;
 
     fn install(&self) -> color_eyre::Result<()> {
-        self.download()?;
+        let symlink = self.download()?;
+        symlink.exec()?;
         Ok(())
     }
 
