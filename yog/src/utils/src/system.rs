@@ -62,7 +62,7 @@ pub fn build_ls_sf_behavior<'a>(
     let Some(link) = link else {
         let target = PathBuf::from(target);
         if !target.is_file() {
-            bail!("target {target:?} is not an existing file")
+            bail!("target {target:?} must be an existing file")
         }
         return Ok(Box::new(LnSfNoOp { target }));
     };
@@ -177,10 +177,25 @@ impl LnSf for LnSfFileIntoDir {
     }
 }
 
-#[cfg_attr(test, derive(PartialEq, Debug))]
+#[cfg_attr(test, derive(Debug))]
 pub struct LnSfFilesIntoDir {
     targets: Vec<PathBuf>,
     link_dir: PathBuf,
+}
+
+// Just for testing purposes
+impl PartialEq for LnSfFilesIntoDir {
+    fn eq(&self, other: &Self) -> bool {
+        // Optimized impl to avoid unneeded cloning and sorting
+        if self.link_dir == other.link_dir {
+            let mut self_targets = self.targets.clone();
+            self_targets.sort_unstable();
+            let mut other_targets = other.targets.clone();
+            other_targets.sort_unstable();
+            return self_targets == other_targets;
+        }
+        false
+    }
 }
 
 impl LnSf for LnSfFilesIntoDir {
@@ -244,7 +259,7 @@ mod tests {
         let res = build_ls_sf_behavior("not_existing_file", None);
         assert2::let_assert!(Err(error) = res);
         pretty_assertions::assert_eq!(
-            r#"target "not_existing_file" is not an existing file"#,
+            r#"target "not_existing_file" must be an existing file"#,
             error.to_string()
         );
 
@@ -254,7 +269,7 @@ mod tests {
         assert2::let_assert!(Ok(ls_sf_op) = res);
         pretty_assertions::assert_eq!(
             Some(&LnSfNoOp {
-                target: PathBuf::from(target_path.to_string_lossy().into_owned())
+                target: target_path.to_path_buf()
             }),
             ls_sf_op.as_any().downcast_ref::<LnSfNoOp>()
         );
@@ -284,6 +299,37 @@ mod tests {
         pretty_assertions::assert_eq!(
             format!("target {target:?} expected to point to an existing file"),
             error.to_string()
+        );
+
+        let target = NamedTempFile::new().unwrap();
+        let target_path = target.into_temp_path();
+        let link_dir = tempfile::tempdir().unwrap();
+        let link_dir_path = link_dir.path();
+        let res = build_ls_sf_behavior(
+            target_path.to_str().unwrap(),
+            Some(link_dir_path.to_str().unwrap()),
+        );
+        assert2::let_assert!(Ok(ls_sf_op) = res);
+        pretty_assertions::assert_eq!(
+            Some(&LnSfFileIntoDir {
+                target: target_path.to_path_buf(),
+                link_dir: link_dir_path.into()
+            }),
+            ls_sf_op.as_any().downcast_ref::<LnSfFileIntoDir>()
+        );
+
+        let target = NamedTempFile::new().unwrap();
+        let target_path = target.into_temp_path();
+        let link_dir = tempfile::tempdir().unwrap();
+        let link = link_dir.path().join("i_am_the_link");
+        let res = build_ls_sf_behavior(target_path.to_str().unwrap(), Some(link.to_str().unwrap()));
+        assert2::let_assert!(Ok(ls_sf_op) = res);
+        pretty_assertions::assert_eq!(
+            Some(&LnSfFile {
+                target: target_path.to_path_buf(),
+                link
+            }),
+            ls_sf_op.as_any().downcast_ref::<LnSfFile>()
         );
     }
 }
