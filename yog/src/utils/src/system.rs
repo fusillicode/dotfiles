@@ -6,7 +6,7 @@ use color_eyre::eyre;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 
-pub mod ls_sf;
+pub mod symlink;
 
 pub fn get_args() -> Vec<String> {
     let mut args = std::env::args();

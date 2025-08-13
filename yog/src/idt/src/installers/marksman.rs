@@ -1,3 +1,5 @@
+use utils::system::symlink::Symlink;
+
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
 
@@ -10,8 +12,8 @@ impl Installer for Marksman {
         "marksman"
     }
 
-    fn download(&self) -> color_eyre::Result<()> {
-        crate::downloaders::curl::run(
+    fn download(&self) -> color_eyre::Result<Box<dyn Symlink>> {
+        let target = crate::downloaders::curl::run(
             &format!(
                 "https://github.com/artempyanykh/{0}/releases/latest/download/{0}-macos",
                 self.bin_name()
@@ -21,6 +23,8 @@ impl Installer for Marksman {
             },
         )?;
 
-        Ok(())
+        let ln_sf_op = utils::system::symlink::build(&target, None)?;
+
+        Ok(ln_sf_op)
     }
 }

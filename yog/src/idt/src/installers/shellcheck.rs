@@ -1,3 +1,5 @@
+use utils::system::symlink::Symlink;
+
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
 
@@ -10,7 +12,7 @@ impl Installer for Shellcheck {
         "shellcheck"
     }
 
-    fn download(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<Box<dyn Symlink>> {
         let repo = format!("koalaman/{}", self.bin_name());
         let latest_release = utils::github::get_latest_release(&repo)?;
 
@@ -25,11 +27,15 @@ impl Installer for Shellcheck {
             },
         )?;
 
+        let target = format!("{}/{}", self.bin_dir, self.bin_name());
+
         std::fs::rename(
             format!("/tmp/{0}-{latest_release}/{0}", self.bin_name()),
-            format!("{}/{}", self.bin_dir, self.bin_name()),
+            &target,
         )?;
 
-        Ok(())
+        let symlink = utils::system::symlink::build(&target, None)?;
+
+        Ok(symlink)
     }
 }

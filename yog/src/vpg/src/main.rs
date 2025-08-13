@@ -24,7 +24,7 @@ fn main() -> color_eyre::Result<()> {
 
     let args = utils::system::get_args();
     let Some(PgpassEntry { metadata, mut conn }) =
-        utils::tui::select::get_opt_from_cli_args_or_tui_select(
+        utils::tui::select::buildt_from_cli_args_or_tui_select(
             &args,
             |(idx, _)| *idx == 0,
             pgpass_file.entries,

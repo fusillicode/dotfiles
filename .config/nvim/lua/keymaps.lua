@@ -76,7 +76,7 @@ function M.core()
     -- Find the last buffer in the list that's not the current one
     for i = #bufs, 1, -1 do
       local bufnr = bufs[i].bufnr
-      local buftype = vim.api.nvim_buf_get_option(bufnr, 'buftype')
+      local buftype = vim.api.nvim_buf_buildtion(bufnr, 'buftype')
       local bufname = vim.api.nvim_buf_get_name(bufnr)
       if bufnr ~= current_buf and buftype == '' and bufname ~= '' then
         vim.api.nvim_set_current_buf(bufnr)

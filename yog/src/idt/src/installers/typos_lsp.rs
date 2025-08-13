@@ -1,3 +1,5 @@
+use utils::system::symlink::Symlink;
+
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
 
@@ -10,11 +12,11 @@ impl Installer for TyposLsp {
         "typos-lsp"
     }
 
-    fn download(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<Box<dyn Symlink>> {
         let repo = "tekumara/typos-vscode";
         let latest_release = utils::github::get_latest_release(repo)?;
 
-        crate::downloaders::curl::run(
+        let target = crate::downloaders::curl::run(
             &format!(
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}-aarch64-apple-darwin.tar.gz",
                 self.bin_name()
@@ -25,6 +27,8 @@ impl Installer for TyposLsp {
             },
         )?;
 
-        Ok(())
+        let symlink = utils::system::symlink::build(&target, None)?;
+
+        Ok(symlink)
     }
 }

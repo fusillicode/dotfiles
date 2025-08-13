@@ -1,3 +1,5 @@
+use utils::system::symlink::Symlink;
+
 use crate::Installer;
 
 pub struct VsCodeLangServers {
@@ -10,15 +12,13 @@ impl Installer for VsCodeLangServers {
         "vscode-langservers-extracted"
     }
 
-    fn download(&self) -> color_eyre::Result<()> {
-        crate::downloaders::npm::run(
-            &self.dev_tools_dir,
-            self.bin_name(),
-            &[self.bin_name()],
-            &self.bin_dir,
-            "*",
-        )?;
+    fn download(&self) -> color_eyre::Result<Box<dyn Symlink>> {
+        let target_dir =
+            crate::downloaders::npm::run(&self.dev_tools_dir, self.bin_name(), &[self.bin_name()])?;
 
-        Ok(())
+        let symlink =
+            utils::system::symlink::build(&format!("{target_dir}/*"), Some(&self.bin_dir))?;
+
+        Ok(symlink)
     }
 }

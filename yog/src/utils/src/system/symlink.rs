@@ -5,36 +5,33 @@ use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 
 #[cfg(not(test))]
-pub trait LnSfOp {
+pub trait Symlink {
     fn exec(&self) -> color_eyre::Result<()>;
     fn targets(&self) -> Vec<&Path>;
 }
 
 // std::any::Any bound is required only for test purposes
 #[cfg(test)]
-pub trait LnSfOp: std::any::Any + std::fmt::Debug {
+pub trait Symlink: std::any::Any + std::fmt::Debug {
     fn exec(&self) -> color_eyre::Result<()>;
     fn targets(&self) -> Vec<&Path>;
     fn as_any(&self) -> &dyn std::any::Any;
 }
 
-pub fn build_ls_sf_op<'a>(
-    target: &'a str,
-    link: Option<&'a str>,
-) -> color_eyre::Result<Box<dyn LnSfOp>> {
+pub fn build<'a>(target: &'a str, link: Option<&'a str>) -> color_eyre::Result<Box<dyn Symlink>> {
     let Some(link) = link else {
         let target = PathBuf::from(target);
         if !target.is_file() {
-            bail!("target {target:?} must be an existing file")
+            bail!("target {target:?} must be an existing file for SymlinkNoOp")
         }
-        return Ok(Box::new(LnSfNoOp { target }));
+        return Ok(Box::new(SymlinkNoOp { target }));
     };
 
     let target = PathBuf::from(target);
     if target.ends_with("*") {
         let link = PathBuf::from(link);
         if !link.is_dir() {
-            bail!("link {link:?} expected to point to an existing directory for LnSfFilesIntoDir")
+            bail!("link {link:?} must be an existing directory for SymlinkFilesIntoDir")
         }
         let mut targets = vec![];
         let parent = target
@@ -43,33 +40,35 @@ pub fn build_ls_sf_op<'a>(
         for entry in std::fs::read_dir(parent)? {
             targets.push(entry?.path());
         }
-        return Ok(Box::new(LnSfFilesIntoDir {
+        return Ok(Box::new(SymlinkFilesIntoDir {
             targets,
             link_dir: link,
         }));
     }
 
     if !target.is_file() {
-        bail!("target {target:?} expected to point to an existing file");
+        bail!(
+            "target {target:?} must be an existing file for either SymlinkFileIntoDir or SymlinkFile"
+        );
     }
 
     let link = PathBuf::from(link);
     if link.is_dir() {
-        return Ok(Box::new(LnSfFileIntoDir {
+        return Ok(Box::new(SymlinkFileIntoDir {
             target,
             link_dir: link,
         }));
     }
 
-    Ok(Box::new(LnSfFile { target, link }))
+    Ok(Box::new(SymlinkFile { target, link }))
 }
 
 #[cfg_attr(test, derive(PartialEq, Debug))]
-pub struct LnSfNoOp {
+pub struct SymlinkNoOp {
     target: PathBuf,
 }
 
-impl LnSfOp for LnSfNoOp {
+impl Symlink for SymlinkNoOp {
     fn exec(&self) -> color_eyre::Result<()> {
         Ok(())
     }
@@ -85,12 +84,12 @@ impl LnSfOp for LnSfNoOp {
 }
 
 #[cfg_attr(test, derive(PartialEq, Debug))]
-pub struct LnSfFile {
+pub struct SymlinkFile {
     target: PathBuf,
     link: PathBuf,
 }
 
-impl LnSfOp for LnSfFile {
+impl Symlink for SymlinkFile {
     fn exec(&self) -> color_eyre::Result<()> {
         // Remove existing link/file if exists
         if self.link.exists() {
@@ -111,12 +110,12 @@ impl LnSfOp for LnSfFile {
 }
 
 #[cfg_attr(test, derive(PartialEq, Debug))]
-pub struct LnSfFileIntoDir {
+pub struct SymlinkFileIntoDir {
     target: PathBuf,
     link_dir: PathBuf,
 }
 
-impl LnSfOp for LnSfFileIntoDir {
+impl Symlink for SymlinkFileIntoDir {
     fn exec(&self) -> color_eyre::Result<()> {
         let target_name = self
             .target
@@ -141,13 +140,13 @@ impl LnSfOp for LnSfFileIntoDir {
 }
 
 #[cfg_attr(test, derive(Debug))]
-pub struct LnSfFilesIntoDir {
+pub struct SymlinkFilesIntoDir {
     targets: Vec<PathBuf>,
     link_dir: PathBuf,
 }
 
 // Just for testing purposes
-impl PartialEq for LnSfFilesIntoDir {
+impl PartialEq for SymlinkFilesIntoDir {
     fn eq(&self, other: &Self) -> bool {
         // Optimized impl to avoid unneeded cloning and sorting
         if self.link_dir == other.link_dir {
@@ -161,7 +160,7 @@ impl PartialEq for LnSfFilesIntoDir {
     }
 }
 
-impl LnSfOp for LnSfFilesIntoDir {
+impl Symlink for SymlinkFilesIntoDir {
     fn exec(&self) -> color_eyre::Result<()> {
         for target in self.targets.iter() {
             if target.is_file() {
@@ -195,35 +194,35 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_build_ls_sf_op_fails_if_target_is_not_an_existing_file_and_link_is_none() {
-        let res = build_ls_sf_op("not_existing_file", None);
+    fn test_build_fails_if_target_is_not_an_existing_file_and_link_is_none() {
+        let res = build("not_existing_file", None);
 
         assert2::let_assert!(Err(error) = res);
 
         pretty_assertions::assert_eq!(
-            r#"target "not_existing_file" must be an existing file"#,
+            r#"target "not_existing_file" must be an existing file for SymlinkNoOp"#,
             error.to_string()
         );
     }
 
     #[test]
-    fn test_build_ls_sf_op_builds_the_expected_ls_sf_no_op() {
+    fn test_build_builds_the_expected_symlink_no_op() {
         let target = NamedTempFile::new().unwrap();
         let target_path = target.into_temp_path();
 
-        let res = build_ls_sf_op(target_path.to_str().unwrap(), None);
+        let res = build(target_path.to_str().unwrap(), None);
 
-        assert2::let_assert!(Ok(ls_sf_op) = res);
+        assert2::let_assert!(Ok(symlink) = res);
         pretty_assertions::assert_eq!(
-            Some(&LnSfNoOp {
+            Some(&SymlinkNoOp {
                 target: target_path.to_path_buf()
             }),
-            ls_sf_op.as_any().downcast_ref::<LnSfNoOp>()
+            symlink.as_any().downcast_ref::<SymlinkNoOp>()
         );
     }
 
     #[test]
-    fn test_build_ls_sf_op_builds_the_expected_ls_sf_files_into_dir() {
+    fn test_build_builds_the_expected_symlink_files_into_dir() {
         let tmp_dir = tempfile::tempdir().unwrap();
         let target = tmp_dir.path().join("*");
         let actual_targets = {
@@ -234,69 +233,71 @@ mod tests {
         let tmp_dir = tempfile::tempdir().unwrap();
         let link = tmp_dir.path().to_string_lossy();
 
-        let res = build_ls_sf_op(target.to_str().unwrap(), Some(&link));
+        let res = build(target.to_str().unwrap(), Some(&link));
 
-        assert2::let_assert!(Ok(ls_sf_op) = res);
+        assert2::let_assert!(Ok(symlink) = res);
         pretty_assertions::assert_eq!(
-            Some(&LnSfFilesIntoDir {
+            Some(&SymlinkFilesIntoDir {
                 targets: actual_targets.iter().map(|f| f.path().to_owned()).collect(),
                 link_dir: link.into_owned().into()
             }),
-            ls_sf_op.as_any().downcast_ref::<LnSfFilesIntoDir>()
+            symlink.as_any().downcast_ref::<SymlinkFilesIntoDir>()
         );
     }
 
     #[test]
-    fn test_build_ls_sf_op_fails_if_target_is_not_an_existing_file_and_link_is_suppiled() {
+    fn test_build_fails_if_target_is_not_an_existing_file_and_link_is_suppiled() {
         let target = "inexistent_file";
 
-        let res = build_ls_sf_op(target, Some("whatever"));
+        let res = build(target, Some("whatever"));
 
         assert2::let_assert!(Err(error) = res);
         pretty_assertions::assert_eq!(
-            format!("target {target:?} expected to point to an existing file"),
+            format!(
+                "target {target:?} must be an existing file for either SymlinkFileIntoDir or SymlinkFile"
+            ),
             error.to_string()
         );
     }
 
     #[test]
-    fn test_build_ls_sf_op_builds_the_expected_ls_sf_file_into_dir() {
+    fn test_build_builds_the_expected_symlink_file_into_dir() {
         let target = NamedTempFile::new().unwrap();
         let target_path = target.into_temp_path();
         let link_dir = tempfile::tempdir().unwrap();
         let link_dir_path = link_dir.path();
 
-        let res = build_ls_sf_op(
+        let res = build(
             target_path.to_str().unwrap(),
             Some(link_dir_path.to_str().unwrap()),
         );
 
-        assert2::let_assert!(Ok(ls_sf_op) = res);
+        assert2::let_assert!(Ok(symlink) = res);
         pretty_assertions::assert_eq!(
-            Some(&LnSfFileIntoDir {
+            Some(&SymlinkFileIntoDir {
                 target: target_path.to_path_buf(),
                 link_dir: link_dir_path.into()
             }),
-            ls_sf_op.as_any().downcast_ref::<LnSfFileIntoDir>()
+            symlink.as_any().downcast_ref::<SymlinkFileIntoDir>()
         );
     }
 
     #[test]
-    fn test_build_ls_sf_op_builds_the_expected_ls_sf_file() {
+    fn test_build_builds_the_expected_symlink_file() {
         let target = NamedTempFile::new().unwrap();
         let target_path = target.into_temp_path();
         let link_dir = tempfile::tempdir().unwrap();
         let link = link_dir.path().join("i_am_the_link");
 
-        let res = build_ls_sf_op(target_path.to_str().unwrap(), Some(link.to_str().unwrap()));
+        let res = build(target_path.to_str().unwrap(), Some(link.to_str().unwrap()));
 
-        assert2::let_assert!(Ok(ls_sf_op) = res);
+        assert2::let_assert!(Ok(symlink) = res);
         pretty_assertions::assert_eq!(
-            Some(&LnSfFile {
+            Some(&SymlinkFile {
                 target: target_path.to_path_buf(),
                 link
             }),
-            ls_sf_op.as_any().downcast_ref::<LnSfFile>()
+            symlink.as_any().downcast_ref::<SymlinkFile>()
         );
     }
 }

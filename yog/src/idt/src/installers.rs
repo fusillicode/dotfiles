@@ -1,3 +1,5 @@
+use utils::system::symlink::Symlink;
+
 pub mod bash_language_server;
 pub mod commitlint;
 pub mod deno;
@@ -28,7 +30,7 @@ pub mod yaml_language_server;
 pub trait Installer: Sync + Send {
     fn bin_name(&self) -> &'static str;
 
-    fn download(&self) -> color_eyre::Result<()>;
+    fn download(&self) -> color_eyre::Result<Box<dyn Symlink>>;
 
     fn install(&self) -> color_eyre::Result<()> {
         self.download()?;

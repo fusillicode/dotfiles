@@ -1,3 +1,5 @@
+use utils::system::symlink::Symlink;
+
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
 
@@ -10,8 +12,8 @@ impl Installer for HelmLs {
         "helm_ls"
     }
 
-    fn download(&self) -> color_eyre::Result<()> {
-        crate::downloaders::curl::run(
+    fn download(&self) -> color_eyre::Result<Box<dyn Symlink>> {
+        let target = crate::downloaders::curl::run(
             &format!(
                 "https://github.com/mrjosh/helm-ls/releases/latest/download/{}_darwin_amd64",
                 self.bin_name()
@@ -21,6 +23,8 @@ impl Installer for HelmLs {
             },
         )?;
 
-        Ok(())
+        let symlink = utils::system::symlink::build(&target, None)?;
+
+        Ok(symlink)
     }
 }

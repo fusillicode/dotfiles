@@ -28,7 +28,7 @@ pub fn minimal<'a, T: std::fmt::Display>(options: Vec<T>) -> Select<'a, T> {
 /// - `Ok(Some(option))` if an option is found by CLI argument or TUI selection
 /// - `Ok(None)` if the user closes the TUI selection
 /// - `Err` if no option if found by CLI argument or if TUI lookup fails
-pub fn get_opt_from_cli_args_or_tui_select<'a, CAS, O, OBA, OF>(
+pub fn buildt_from_cli_args_or_tui_select<'a, CAS, O, OBA, OF>(
     cli_args: &'a [String],
     mut cli_arg_selector: CAS,
     otps: Vec<O>,
