@@ -16,8 +16,8 @@ impl Installer for EslintD {
         let target_dir =
             crate::downloaders::npm::run(&self.dev_tools_dir, self.bin_name(), &[self.bin_name()])?;
 
-        let link = format!("{}/{}", self.bin_dir, self.bin_name());
-        let symlink = utils::system::symlink::build(&target_dir, Some(&link))?;
+        let target = format!("{target_dir}/{}", self.bin_name());
+        let symlink = utils::system::symlink::build(&target, Some(&self.bin_dir))?;
 
         Ok(symlink)
     }

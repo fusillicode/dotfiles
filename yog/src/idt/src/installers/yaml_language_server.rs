@@ -16,7 +16,8 @@ impl Installer for YamlLanguageServer {
         let target_dir =
             crate::downloaders::npm::run(&self.dev_tools_dir, self.bin_name(), &[self.bin_name()])?;
 
-        let symlink = utils::system::symlink::build(&target_dir, Some(&self.bin_dir))?;
+        let target = format!("{target_dir}/{}", self.bin_name());
+        let symlink = utils::system::symlink::build(&target, Some(&self.bin_dir))?;
 
         Ok(symlink)
     }
