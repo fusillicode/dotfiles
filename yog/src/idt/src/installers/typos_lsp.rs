@@ -10,7 +10,7 @@ impl Installer for TyposLsp {
         "typos-lsp"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<()> {
         let repo = "tekumara/typos-vscode";
         let latest_release = utils::github::get_latest_release(repo)?;
 

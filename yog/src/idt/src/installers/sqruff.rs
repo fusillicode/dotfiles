@@ -10,7 +10,7 @@ impl Installer for Sqruff {
         "sqruff"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<()> {
         crate::downloaders::curl::run(
             &format!(
                 "https://github.com/quarylabs/{0}/releases/latest/download/{0}-darwin-aarch64.tar.gz",

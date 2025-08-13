@@ -10,7 +10,7 @@ impl Installer for RuffLsp {
         "ruff-lsp"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<()> {
         crate::downloaders::pip::run(
             &self.dev_tools_dir,
             self.bin_name(),

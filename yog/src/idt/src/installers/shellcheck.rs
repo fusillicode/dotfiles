@@ -10,7 +10,7 @@ impl Installer for Shellcheck {
         "shellcheck"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<()> {
         let repo = format!("koalaman/{}", self.bin_name());
         let latest_release = utils::github::get_latest_release(&repo)?;
 

@@ -10,7 +10,7 @@ impl Installer for LuaLanguageServer {
         "lua-language-server"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn download(&self) -> color_eyre::Result<()> {
         // No `bin` link as it requires some local stuff so, leave the garbage in `dev-tools` and configure the LSP to point to
         // the `bin` there.
         let repo = format!("LuaLS/{}", self.bin_name());
