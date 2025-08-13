@@ -261,16 +261,29 @@ mod tests {
 
         let tmp_dir = tempfile::tempdir().unwrap();
         let target = tmp_dir.path().join("*");
+        let actual_targets = {
+            let one = NamedTempFile::new_in(&tmp_dir).unwrap();
+            let two = NamedTempFile::new_in(&tmp_dir).unwrap();
+            vec![one, two]
+        };
         let tmp_dir = tempfile::tempdir().unwrap();
         let link = tmp_dir.path().to_string_lossy();
         let res = build_ls_sf_behavior(target.to_str().unwrap(), Some(&link));
         assert2::let_assert!(Ok(ls_sf_op) = res);
         pretty_assertions::assert_eq!(
             Some(&LnSfFilesIntoDir {
-                targets: vec![],
+                targets: actual_targets.iter().map(|f| f.path().to_owned()).collect(),
                 link_dir: link.into_owned().into()
             }),
             ls_sf_op.as_any().downcast_ref::<LnSfFilesIntoDir>()
+        );
+
+        let target = "inexistent_file";
+        let res = build_ls_sf_behavior(target, Some("whatever"));
+        assert2::let_assert!(Err(error) = res);
+        pretty_assertions::assert_eq!(
+            format!("target {target:?} expected to point to an existing file"),
+            error.to_string()
         );
     }
 }
