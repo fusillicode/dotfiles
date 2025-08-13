@@ -42,10 +42,17 @@ pub fn chmod_x(dir: &str) -> color_eyre::Result<()> {
         .exit_ok()?)
 }
 
-pub trait LnSf: std::any::Any {
+#[cfg(test)]
+pub trait LnSf: std::any::Any + std::fmt::Debug {
     fn exec(&self) -> color_eyre::Result<()>;
     fn targets(&self) -> Vec<&Path>;
     fn as_any(&self) -> &dyn std::any::Any;
+}
+
+#[cfg(not(test))]
+pub trait LnSf {
+    fn exec(&self) -> color_eyre::Result<()>;
+    fn targets(&self) -> Vec<&Path>;
 }
 
 pub fn build_ls_sf_behavior<'a>(
@@ -61,13 +68,16 @@ pub fn build_ls_sf_behavior<'a>(
     };
 
     let target = PathBuf::from(target);
-    if target.ends_with("/*") {
+    if target.ends_with("*") {
         let link = PathBuf::from(link);
         if !link.is_dir() {
             bail!("link {link:?} expected to point to an existing directory for LnSfFilesIntoDir")
         }
         let mut targets = vec![];
-        for entry in std::fs::read_dir(target)? {
+        let parent = target
+            .parent()
+            .ok_or(eyre!("target {target:?} without parent"))?;
+        for entry in std::fs::read_dir(parent)? {
             targets.push(entry?.path());
         }
         return Ok(Box::new(LnSfFilesIntoDir {
@@ -91,6 +101,27 @@ pub fn build_ls_sf_behavior<'a>(
     Ok(Box::new(LnSfFile { target, link }))
 }
 
+#[cfg_attr(test, derive(PartialEq, Debug))]
+pub struct LnSfNoOp {
+    target: PathBuf,
+}
+
+impl LnSf for LnSfNoOp {
+    fn exec(&self) -> color_eyre::Result<()> {
+        Ok(())
+    }
+
+    fn targets(&self) -> Vec<&Path> {
+        vec![&self.target]
+    }
+
+    #[cfg(test)]
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+#[cfg_attr(test, derive(PartialEq, Debug))]
 pub struct LnSfFile {
     target: PathBuf,
     link: PathBuf,
@@ -110,11 +141,13 @@ impl LnSf for LnSfFile {
         vec![&self.target]
     }
 
+    #[cfg(test)]
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 }
 
+#[cfg_attr(test, derive(PartialEq, Debug))]
 pub struct LnSfFileIntoDir {
     target: PathBuf,
     link_dir: PathBuf,
@@ -138,11 +171,13 @@ impl LnSf for LnSfFileIntoDir {
         vec![&self.target]
     }
 
+    #[cfg(test)]
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 }
 
+#[cfg_attr(test, derive(PartialEq, Debug))]
 pub struct LnSfFilesIntoDir {
     targets: Vec<PathBuf>,
     link_dir: PathBuf,
@@ -169,25 +204,7 @@ impl LnSf for LnSfFilesIntoDir {
         self.targets.iter().map(AsRef::as_ref).collect()
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
-
-#[cfg_attr(test, derive(PartialEq, Debug))]
-pub struct LnSfNoOp {
-    target: PathBuf,
-}
-
-impl LnSf for LnSfNoOp {
-    fn exec(&self) -> color_eyre::Result<()> {
-        Ok(())
-    }
-
-    fn targets(&self) -> Vec<&Path> {
-        vec![&self.target]
-    }
-
+    #[cfg(test)]
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -218,6 +235,8 @@ pub fn rm_f<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use tempfile::NamedTempFile;
+
     use super::*;
 
     #[test]
@@ -229,13 +248,29 @@ mod tests {
             error.to_string()
         );
 
-        let res = build_ls_sf_behavior("not_existing_file", None);
+        let target = NamedTempFile::new().unwrap();
+        let target_path = target.into_temp_path();
+        let res = build_ls_sf_behavior(target_path.to_str().unwrap(), None);
         assert2::let_assert!(Ok(ls_sf_op) = res);
         pretty_assertions::assert_eq!(
             Some(&LnSfNoOp {
-                target: PathBuf::from("whatever")
+                target: PathBuf::from(target_path.to_string_lossy().into_owned())
             }),
             ls_sf_op.as_any().downcast_ref::<LnSfNoOp>()
+        );
+
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let target = tmp_dir.path().join("*");
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let link = tmp_dir.path().to_string_lossy();
+        let res = build_ls_sf_behavior(target.to_str().unwrap(), Some(&link));
+        assert2::let_assert!(Ok(ls_sf_op) = res);
+        pretty_assertions::assert_eq!(
+            Some(&LnSfFilesIntoDir {
+                targets: vec![],
+                link_dir: link.into_owned().into()
+            }),
+            ls_sf_op.as_any().downcast_ref::<LnSfFilesIntoDir>()
         );
     }
 }
