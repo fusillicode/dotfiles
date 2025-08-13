@@ -20,7 +20,7 @@ impl Installer for LuaLanguageServer {
         let latest_release = utils::github::get_latest_release(&repo)?;
         std::fs::create_dir_all(&dev_tools_repo_dir)?;
 
-        crate::downloaders::curl::run(
+        let target_dir = crate::downloaders::curl::run(
             &format!(
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}-darwin-arm64.tar.gz",
                 self.bin_name()
@@ -31,7 +31,8 @@ impl Installer for LuaLanguageServer {
             },
         )?;
 
-        let symlink = utils::system::symlink::build(&dev_tools_repo_dir, None)?;
+        let target = format!("{target_dir}/bin/{}", self.bin_name());
+        let symlink = utils::system::symlink::build(&target, None)?;
 
         Ok(symlink)
     }
