@@ -1,4 +1,5 @@
 use utils::system::symlink::Symlink;
+use utils::system::symlink::SymlinkNoOp;
 
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
@@ -23,8 +24,7 @@ impl Installer for RustAnalyzer {
             },
         )?;
 
-        let symlink = utils::system::symlink::build(&target, Some(self.bin_name()))?;
-
-        Ok(symlink)
+        let symlink = SymlinkNoOp::new(&target)?;
+        Ok(Box::new(symlink))
     }
 }

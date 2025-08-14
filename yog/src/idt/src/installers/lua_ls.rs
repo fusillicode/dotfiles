@@ -1,4 +1,5 @@
 use utils::system::symlink::Symlink;
+use utils::system::symlink::SymlinkNoOp;
 
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
@@ -31,9 +32,7 @@ impl Installer for LuaLanguageServer {
             },
         )?;
 
-        let target = format!("{target_dir}/bin/{}", self.bin_name());
-        let symlink = utils::system::symlink::build(&target, None)?;
-
-        Ok(symlink)
+        let symlink = SymlinkNoOp::new(&format!("{target_dir}/bin/{}", self.bin_name()))?;
+        Ok(Box::new(symlink))
     }
 }

@@ -1,6 +1,8 @@
-use crate::Installer;
 use utils::cmd::silent_cmd;
 use utils::system::symlink::Symlink;
+use utils::system::symlink::SymlinkFile;
+
+use crate::Installer;
 
 pub struct Nvim {
     pub dev_tools_dir: String,
@@ -37,12 +39,10 @@ impl Installer for Nvim {
         .status()?
         .exit_ok()?;
 
-        let link = format!("{}/{}", self.bin_dir, self.bin_name());
-        let symlink = utils::system::symlink::build(
+        let symlink = SymlinkFile::new(
             &format!("{nvim_release_dir}/bin/{}", self.bin_name()),
-            Some(&link),
+            &format!("{}/{}", self.bin_dir, self.bin_name()),
         )?;
-
-        Ok(symlink)
+        Ok(Box::new(symlink))
     }
 }

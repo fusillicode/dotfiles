@@ -1,4 +1,5 @@
 use utils::system::symlink::Symlink;
+use utils::system::symlink::SymlinkFilesIntoDir;
 
 use crate::Installer;
 
@@ -16,9 +17,7 @@ impl Installer for VsCodeLangServers {
         let target_dir =
             crate::downloaders::npm::run(&self.dev_tools_dir, self.bin_name(), &[self.bin_name()])?;
 
-        let target = format!("{target_dir}/*");
-        let symlink = utils::system::symlink::build(&target, Some(&self.bin_dir))?;
-
-        Ok(symlink)
+        let symlink = SymlinkFilesIntoDir::new(&format!("{target_dir}/*"), &self.bin_dir)?;
+        Ok(Box::new(symlink))
     }
 }

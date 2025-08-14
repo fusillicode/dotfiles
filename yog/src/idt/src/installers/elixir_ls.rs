@@ -1,4 +1,5 @@
 use utils::system::symlink::Symlink;
+use utils::system::symlink::SymlinkFile;
 
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
@@ -30,12 +31,10 @@ impl Installer for ElixirLs {
             },
         )?;
 
-        let link = format!("{}/{}", self.bin_dir, self.bin_name());
-        let symlink = utils::system::symlink::build(
+        let symlink = SymlinkFile::new(
             &format!("{dev_tools_repo_dir}/language_server.sh"),
-            Some(&link),
+            &format!("{}/{}", self.bin_dir, self.bin_name()),
         )?;
-
-        Ok(symlink)
+        Ok(Box::new(symlink))
     }
 }

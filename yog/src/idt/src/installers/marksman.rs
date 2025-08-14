@@ -1,4 +1,5 @@
 use utils::system::symlink::Symlink;
+use utils::system::symlink::SymlinkNoOp;
 
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
@@ -23,8 +24,7 @@ impl Installer for Marksman {
             },
         )?;
 
-        let ln_sf_op = utils::system::symlink::build(&target, None)?;
-
-        Ok(ln_sf_op)
+        let symlink = SymlinkNoOp::new(&target)?;
+        Ok(Box::new(symlink))
     }
 }

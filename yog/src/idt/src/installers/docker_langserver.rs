@@ -1,4 +1,5 @@
 use utils::system::symlink::Symlink;
+use utils::system::symlink::SymlinkFile;
 
 use crate::Installer;
 
@@ -19,9 +20,10 @@ impl Installer for DockerLangServer {
             &["dockerfile-language-server-nodejs"],
         )?;
 
-        let target = format!("{target_dir}/{}", self.bin_name());
-        let symlink = utils::system::symlink::build(&target, Some(&self.bin_dir))?;
-
-        Ok(symlink)
+        let symlink = SymlinkFile::new(
+            &format!("{target_dir}/{}", self.bin_name()),
+            &format!("{}/{}", self.bin_dir, self.bin_name()),
+        )?;
+        Ok(Box::new(symlink))
     }
 }

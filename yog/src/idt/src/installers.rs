@@ -1,6 +1,3 @@
-use std::path::Path;
-use std::path::PathBuf;
-
 use utils::system::symlink::Symlink;
 
 pub mod bash_language_server;
@@ -29,27 +26,6 @@ pub mod typescript_language_server;
 pub mod typos_lsp;
 pub mod vscode_langservers;
 pub mod yaml_language_server;
-
-pub enum DownloadOutput {
-    NoOp { bin_path: PathBuf },
-    SymlinkingRequired(Box<dyn Symlink>),
-}
-
-impl DownloadOutput {
-    pub fn symlink(&self) -> color_eyre::Result<()> {
-        match self {
-            DownloadOutput::NoOp { bin_path } => Ok(()),
-            DownloadOutput::SymlinkingRequired(symlink) => symlink.exec(),
-        }
-    }
-
-    pub fn targets(&self) -> Vec<&Path> {
-        match self {
-            DownloadOutput::NoOp { bin_path } => vec![bin_path.as_path()],
-            DownloadOutput::SymlinkingRequired(symlink) => symlink.targets(),
-        }
-    }
-}
 
 pub trait Installer: Sync + Send {
     fn bin_name(&self) -> &'static str;

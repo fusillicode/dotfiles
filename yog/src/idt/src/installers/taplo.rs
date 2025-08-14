@@ -1,4 +1,5 @@
 use utils::system::symlink::Symlink;
+use utils::system::symlink::SymlinkNoOp;
 
 use crate::Installer;
 
@@ -27,9 +28,7 @@ impl Installer for Taplo {
             ])
             .status()?;
 
-        let target = format!("{}/{}", self.bin_dir, self.bin_name());
-        let symlink = utils::system::symlink::build(&target, None)?;
-
-        Ok(symlink)
+        let symlink = SymlinkNoOp::new(&format!("{}/{}", self.bin_dir, self.bin_name()))?;
+        Ok(Box::new(symlink))
     }
 }

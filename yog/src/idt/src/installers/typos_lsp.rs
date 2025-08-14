@@ -1,4 +1,5 @@
 use utils::system::symlink::Symlink;
+use utils::system::symlink::SymlinkNoOp;
 
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
@@ -27,8 +28,7 @@ impl Installer for TyposLsp {
             },
         )?;
 
-        let symlink = utils::system::symlink::build(&target, None)?;
-
-        Ok(symlink)
+        let symlink = SymlinkNoOp::new(&target)?;
+        Ok(Box::new(symlink))
     }
 }
