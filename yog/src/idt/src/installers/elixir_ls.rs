@@ -33,7 +33,6 @@ impl Installer for ElixirLs {
             &format!("{}/{}", self.bin_dir, self.bin_name()),
         )?;
 
-        // FIXME chmod +x all files in dev_tools_repo_dir
         for target in std::fs::read_dir(dev_tools_repo_dir)? {
             utils::system::chmod_x(target?.path())?;
         }

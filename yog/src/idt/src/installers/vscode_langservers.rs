@@ -18,7 +18,6 @@ impl Installer for VsCodeLangServers {
         let target_dir =
             crate::downloaders::npm::run(&self.dev_tools_dir, self.bin_name(), &[self.bin_name()])?;
 
-        // FIXME: link and chmod glob
         let link_dir = PathBuf::from(&self.bin_dir);
         for target in std::fs::read_dir(target_dir)? {
             let target = target?.path();
