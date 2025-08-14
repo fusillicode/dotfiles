@@ -35,6 +35,8 @@ pub trait Installer: Sync + Send {
     fn install(&self) -> color_eyre::Result<()> {
         let symlink_op = self.download()?;
 
+        cfg!(debug_assertions).then(|| dbg!(&symlink_op));
+
         symlink_op.exec()?;
 
         for target in symlink_op.targets() {
