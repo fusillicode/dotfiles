@@ -33,9 +33,7 @@ impl Installer for ElixirLs {
             &format!("{}/{}", self.bin_dir, self.bin_name()),
         )?;
 
-        for target in std::fs::read_dir(dev_tools_repo_dir)? {
-            utils::system::chmod_x(target?.path())?;
-        }
+        utils::system::chmod_x_files_in_dir(&dev_tools_repo_dir)?;
 
         Ok(())
     }

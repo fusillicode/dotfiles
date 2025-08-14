@@ -1,7 +1,3 @@
-use std::path::PathBuf;
-
-use color_eyre::eyre::eyre;
-
 use crate::Installer;
 
 pub struct VsCodeLangServers {
@@ -18,21 +14,8 @@ impl Installer for VsCodeLangServers {
         let target_dir =
             crate::downloaders::npm::run(&self.dev_tools_dir, self.bin_name(), &[self.bin_name()])?;
 
-        let link_dir = PathBuf::from(&self.bin_dir);
-        for target in std::fs::read_dir(target_dir)? {
-            let target = target?.path();
-            if target.is_file() {
-                let target_name = target
-                    .file_name()
-                    .ok_or_else(|| eyre!("target {target:?} without filename"))?;
-                let link_path = link_dir.join(target_name);
-                if link_path.exists() {
-                    std::fs::remove_file(&link_path)?;
-                }
-                std::os::unix::fs::symlink(&target, &link_path)?;
-                utils::system::chmod_x(&target)?;
-            }
-        }
+        utils::system::ln_sf_files_in_dir(target_dir, (&self.bin_dir).into())?;
+        utils::system::chmod_x_files_in_dir(&self.bin_dir)?;
 
         Ok(())
     }

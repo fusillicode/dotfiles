@@ -41,11 +41,38 @@ pub fn chmod_x<P: AsRef<Path>>(path: P) -> color_eyre::Result<()> {
     Ok(())
 }
 
+pub fn chmod_x_files_in_dir<P: AsRef<Path>>(dir: P) -> color_eyre::Result<()> {
+    for target in std::fs::read_dir(dir)? {
+        let target = target?.path();
+        if target.is_file() {
+            chmod_x(&target)?;
+        }
+    }
+    Ok(())
+}
+
 pub fn ln_sf<P: AsRef<Path>>(target: P, link: P) -> color_eyre::Result<()> {
     if link.as_ref().try_exists()? {
         std::fs::remove_file(&link)?;
     }
     std::os::unix::fs::symlink(target, &link)?;
+    Ok(())
+}
+
+pub fn ln_sf_files_in_dir<P: AsRef<std::path::Path>>(
+    target_dir: P,
+    link_dir: P,
+) -> color_eyre::Result<()> {
+    for target in std::fs::read_dir(target_dir)? {
+        let target = target?.path();
+        if target.is_file() {
+            let target_name = target
+                .file_name()
+                .ok_or_else(|| eyre!("target {target:?} without filename"))?;
+            let link = link_dir.as_ref().join(target_name);
+            ln_sf(target, link)?;
+        }
+    }
     Ok(())
 }
 
