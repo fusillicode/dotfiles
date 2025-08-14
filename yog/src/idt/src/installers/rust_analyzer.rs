@@ -1,5 +1,5 @@
-use utils::system::symlink::Symlink;
 use utils::system::symlink::SymlinkNoOp;
+use utils::system::symlink::SymlinkOp;
 
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
@@ -13,7 +13,7 @@ impl Installer for RustAnalyzer {
         "rust-analyzer"
     }
 
-    fn download(&self) -> color_eyre::Result<Box<dyn Symlink>> {
+    fn download(&self) -> color_eyre::Result<Box<dyn SymlinkOp>> {
         let target = crate::downloaders::curl::run(
             &format!(
                 "https://github.com/rust-lang/{0}/releases/download/nightly/{0}-aarch64-apple-darwin.gz",

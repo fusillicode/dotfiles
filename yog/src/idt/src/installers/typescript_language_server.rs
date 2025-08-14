@@ -1,5 +1,5 @@
-use utils::system::symlink::Symlink;
 use utils::system::symlink::SymlinkFile;
+use utils::system::symlink::SymlinkOp;
 
 use crate::Installer;
 
@@ -13,7 +13,7 @@ impl Installer for TypescriptLanguageServer {
         "typescript-language-server"
     }
 
-    fn download(&self) -> color_eyre::Result<Box<dyn Symlink>> {
+    fn download(&self) -> color_eyre::Result<Box<dyn SymlinkOp>> {
         let target_dir = crate::downloaders::npm::run(
             &self.dev_tools_dir,
             self.bin_name(),

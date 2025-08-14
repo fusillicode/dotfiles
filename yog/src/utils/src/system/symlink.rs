@@ -5,14 +5,14 @@ use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 
 #[cfg(not(test))]
-pub trait Symlink: std::fmt::Debug {
+pub trait SymlinkOp: std::fmt::Debug {
     fn exec(&self) -> color_eyre::Result<()>;
     fn targets(&self) -> Vec<&Path>;
 }
 
 // std::any::Any bound is required only for test purposes
 #[cfg(test)]
-pub trait Symlink: std::any::Any + std::fmt::Debug {
+pub trait SymlinkOp: std::any::Any + std::fmt::Debug {
     fn exec(&self) -> color_eyre::Result<()>;
     fn targets(&self) -> Vec<&Path>;
     fn as_any(&self) -> &dyn std::any::Any;
@@ -32,7 +32,7 @@ impl SymlinkNoOp {
     }
 }
 
-impl Symlink for SymlinkNoOp {
+impl SymlinkOp for SymlinkNoOp {
     fn exec(&self) -> color_eyre::Result<()> {
         Ok(())
     }
@@ -76,7 +76,7 @@ impl SymlinkFile {
     }
 }
 
-impl Symlink for SymlinkFile {
+impl SymlinkOp for SymlinkFile {
     fn exec(&self) -> color_eyre::Result<()> {
         if self.link.exists() {
             std::fs::remove_file(&self.link)?;
@@ -128,7 +128,7 @@ impl SymlinkFilesIntoDir {
     }
 }
 
-impl Symlink for SymlinkFilesIntoDir {
+impl SymlinkOp for SymlinkFilesIntoDir {
     fn exec(&self) -> color_eyre::Result<()> {
         for target in self.targets.iter() {
             if target.is_file() {

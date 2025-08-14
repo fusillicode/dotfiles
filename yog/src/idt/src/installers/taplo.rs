@@ -1,5 +1,5 @@
-use utils::system::symlink::Symlink;
 use utils::system::symlink::SymlinkNoOp;
+use utils::system::symlink::SymlinkOp;
 
 use crate::Installer;
 
@@ -12,7 +12,7 @@ impl Installer for Taplo {
         "taplo"
     }
 
-    fn download(&self) -> color_eyre::Result<Box<dyn Symlink>> {
+    fn download(&self) -> color_eyre::Result<Box<dyn SymlinkOp>> {
         // Installing with `cargo` because of:
         // 1. no particular requirements
         // 2. https://github.com/tamasfe/taplo/issues/542
