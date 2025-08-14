@@ -8,7 +8,7 @@ pub mod elixir_ls;
 pub mod elm_language_server;
 pub mod eslint_d;
 pub mod graphql_lsp;
-pub mod hadonlint;
+pub mod hadolint;
 pub mod helm_ls;
 pub mod lua_ls;
 pub mod marksman;

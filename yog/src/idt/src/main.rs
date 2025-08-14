@@ -12,7 +12,7 @@ use crate::installers::elixir_ls::ElixirLs;
 use crate::installers::elm_language_server::ElmLanguageServer;
 use crate::installers::eslint_d::EslintD;
 use crate::installers::graphql_lsp::GraphQlLsp;
-use crate::installers::hadonlint::Hadolint;
+use crate::installers::hadolint::Hadolint;
 use crate::installers::helm_ls::HelmLs;
 use crate::installers::lua_ls::LuaLanguageServer;
 use crate::installers::marksman::Marksman;
