@@ -34,7 +34,12 @@ pub trait Installer: Sync + Send {
 
     fn install(&self) -> color_eyre::Result<()> {
         let symlink_op = self.download()?;
+
         symlink_op.exec()?;
+
+        for target in symlink_op.targets() {
+            utils::system::chmod_x(target)?
+        }
         Ok(())
     }
 

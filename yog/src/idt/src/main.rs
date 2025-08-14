@@ -190,7 +190,6 @@ fn main() -> color_eyre::Result<()> {
     });
 
     utils::system::rm_dead_symlinks(bin_dir)?;
-    utils::system::chmod_x(&format!("{bin_dir}/*"))?;
 
     let (errors_count, bin_names) =
         installers_errors
