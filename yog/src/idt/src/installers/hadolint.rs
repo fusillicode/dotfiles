@@ -1,6 +1,3 @@
-use utils::system::symlink::SymlinkNoOp;
-use utils::system::symlink::SymlinkOp;
-
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
 
@@ -13,7 +10,7 @@ impl Installer for Hadolint {
         "hadolint"
     }
 
-    fn download(&self) -> color_eyre::Result<Box<dyn SymlinkOp>> {
+    fn install(&self) -> color_eyre::Result<()> {
         let target = crate::downloaders::curl::run(
             &format!(
                 "https://github.com/{0}/{0}/releases/latest/download/{0}-Darwin-x86_64",
@@ -24,7 +21,8 @@ impl Installer for Hadolint {
             },
         )?;
 
-        let symlink = SymlinkNoOp::new(&target)?;
-        Ok(Box::new(symlink))
+        utils::system::chmod_x(&target)?;
+
+        Ok(())
     }
 }

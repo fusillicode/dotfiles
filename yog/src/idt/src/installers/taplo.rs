@@ -1,6 +1,3 @@
-use utils::system::symlink::SymlinkNoOp;
-use utils::system::symlink::SymlinkOp;
-
 use crate::Installer;
 
 pub struct Taplo {
@@ -12,7 +9,7 @@ impl Installer for Taplo {
         "taplo"
     }
 
-    fn download(&self) -> color_eyre::Result<Box<dyn SymlinkOp>> {
+    fn install(&self) -> color_eyre::Result<()> {
         // Installing with `cargo` because of:
         // 1. no particular requirements
         // 2. https://github.com/tamasfe/taplo/issues/542
@@ -28,7 +25,8 @@ impl Installer for Taplo {
             ])
             .status()?;
 
-        let symlink = SymlinkNoOp::new(&format!("{}/{}", self.bin_dir, self.bin_name()))?;
-        Ok(Box::new(symlink))
+        utils::system::chmod_x(format!("{}/{}", self.bin_dir, self.bin_name()))?;
+
+        Ok(())
     }
 }

@@ -1,6 +1,3 @@
-use utils::system::symlink::SymlinkNoOp;
-use utils::system::symlink::SymlinkOp;
-
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
 
@@ -13,7 +10,7 @@ impl Installer for LuaLanguageServer {
         "lua-language-server"
     }
 
-    fn download(&self) -> color_eyre::Result<Box<dyn SymlinkOp>> {
+    fn install(&self) -> color_eyre::Result<()> {
         // No `bin` link as it requires some local stuff so, leave the garbage in `dev-tools` and configure the LSP to point to
         // the `bin` there.
         let repo = format!("LuaLS/{}", self.bin_name());
@@ -32,7 +29,8 @@ impl Installer for LuaLanguageServer {
             },
         )?;
 
-        let symlink = SymlinkNoOp::new(&format!("{target_dir}/bin/{}", self.bin_name()))?;
-        Ok(Box::new(symlink))
+        utils::system::chmod_x(format!("{target_dir}/bin/{}", self.bin_name()))?;
+
+        Ok(())
     }
 }

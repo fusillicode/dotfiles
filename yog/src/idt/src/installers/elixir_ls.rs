@@ -1,6 +1,3 @@
-use utils::system::symlink::SymlinkFile;
-use utils::system::symlink::SymlinkOp;
-
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
 
@@ -14,7 +11,7 @@ impl Installer for ElixirLs {
         "elixir-ls"
     }
 
-    fn download(&self) -> color_eyre::Result<Box<dyn SymlinkOp>> {
+    fn install(&self) -> color_eyre::Result<()> {
         let repo = format!("elixir-lsp/{}", self.bin_name());
         let dev_tools_repo_dir = format!("{}/{}", self.dev_tools_dir, self.bin_name());
         let latest_release = utils::github::get_latest_release(&repo)?;
@@ -31,10 +28,16 @@ impl Installer for ElixirLs {
             },
         )?;
 
-        let symlink = SymlinkFile::new(
+        utils::system::ln_sf(
             &format!("{dev_tools_repo_dir}/language_server.sh"),
             &format!("{}/{}", self.bin_dir, self.bin_name()),
         )?;
-        Ok(Box::new(symlink))
+
+        // FIXME chmod +x all files in dev_tools_repo_dir
+        for target in std::fs::read_dir(dev_tools_repo_dir)? {
+            utils::system::chmod_x(target?.path())?;
+        }
+
+        Ok(())
     }
 }

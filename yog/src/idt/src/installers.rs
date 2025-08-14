@@ -1,5 +1,3 @@
-use utils::system::symlink::SymlinkOp;
-
 pub mod bash_language_server;
 pub mod commitlint;
 pub mod deno;
@@ -30,20 +28,7 @@ pub mod yaml_language_server;
 pub trait Installer: Sync + Send {
     fn bin_name(&self) -> &'static str;
 
-    fn download(&self) -> color_eyre::Result<Box<dyn SymlinkOp>>;
-
-    fn install(&self) -> color_eyre::Result<()> {
-        let symlink_op = self.download()?;
-
-        cfg!(debug_assertions).then(|| dbg!(&symlink_op));
-
-        symlink_op.exec()?;
-
-        for target in symlink_op.targets() {
-            utils::system::chmod_x(target)?
-        }
-        Ok(())
-    }
+    fn install(&self) -> color_eyre::Result<()>;
 
     fn report_install(&self, install_result: color_eyre::Result<()>) -> color_eyre::Result<()> {
         install_result

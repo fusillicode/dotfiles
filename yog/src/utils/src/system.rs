@@ -7,8 +7,6 @@ use color_eyre::eyre;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 
-pub mod symlink;
-
 pub fn get_args() -> Vec<String> {
     let mut args = std::env::args();
     args.next();
@@ -40,6 +38,14 @@ pub fn chmod_x<P: AsRef<Path>>(path: P) -> color_eyre::Result<()> {
     let mut perms = std::fs::metadata(&path)?.permissions();
     perms.set_mode(0o755);
     std::fs::set_permissions(&path, perms)?;
+    Ok(())
+}
+
+pub fn ln_sf<P: AsRef<Path>>(target: P, link: P) -> color_eyre::Result<()> {
+    if link.as_ref().try_exists()? {
+        std::fs::remove_file(&link)?;
+    }
+    std::os::unix::fs::symlink(target, &link)?;
     Ok(())
 }
 

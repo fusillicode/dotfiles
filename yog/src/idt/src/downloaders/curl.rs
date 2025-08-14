@@ -27,7 +27,7 @@ pub fn run(url: &str, opt: CurlDownloaderOption) -> color_eyre::Result<String> {
     let silent_flag = cfg!(debug_assertions).then(|| "S").unwrap_or("");
     curl_cmd.args([&format!("-L{silent_flag}"), url]);
 
-    match opt {
+    let target = match opt {
         CurlDownloaderOption::PipeIntoZcat { dest_path } => {
             let curl_stdout = get_cmd_stdout(&mut curl_cmd)?;
 
@@ -37,7 +37,7 @@ pub fn run(url: &str, opt: CurlDownloaderOption) -> color_eyre::Result<String> {
             let mut file = File::create(dest_path)?;
             file.write_all(&output.stdout)?;
 
-            Ok(dest_path.into())
+            dest_path.into()
         }
         CurlDownloaderOption::PipeIntoTar {
             dest_dir,
@@ -52,18 +52,20 @@ pub fn run(url: &str, opt: CurlDownloaderOption) -> color_eyre::Result<String> {
             }
             tar_cmd.stdin(curl_stdout).status()?.exit_ok()?;
 
-            Ok(dest_name
+            dest_name
                 .map(|dn| format!("{dest_dir}/{dn}"))
-                .unwrap_or_else(|| dest_dir.into()))
+                .unwrap_or_else(|| dest_dir.into())
         }
         CurlDownloaderOption::WriteTo { dest_path } => {
             curl_cmd.arg("--output");
             curl_cmd.arg(dest_path);
             curl_cmd.status()?.exit_ok()?;
 
-            Ok(dest_path.into())
+            dest_path.into()
         }
-    }
+    };
+
+    Ok(target)
 }
 
 fn get_cmd_stdout(cmd: &mut Command) -> color_eyre::Result<Stdio> {

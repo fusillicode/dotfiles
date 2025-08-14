@@ -1,6 +1,3 @@
-use utils::system::symlink::SymlinkNoOp;
-use utils::system::symlink::SymlinkOp;
-
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
 
@@ -13,7 +10,7 @@ impl Installer for TerraformLs {
         "terraform-ls"
     }
 
-    fn download(&self) -> color_eyre::Result<Box<dyn SymlinkOp>> {
+    fn install(&self) -> color_eyre::Result<()> {
         let repo = format!("hashicorp/{}", self.bin_name());
         let latest_release = &utils::github::get_latest_release(&repo)?[1..];
 
@@ -28,7 +25,8 @@ impl Installer for TerraformLs {
             },
         )?;
 
-        let symlink = SymlinkNoOp::new(&target)?;
-        Ok(Box::new(symlink))
+        utils::system::chmod_x(target)?;
+
+        Ok(())
     }
 }

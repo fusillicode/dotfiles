@@ -1,6 +1,4 @@
 use utils::cmd::silent_cmd;
-use utils::system::symlink::SymlinkFile;
-use utils::system::symlink::SymlinkOp;
 
 use crate::Installer;
 
@@ -14,7 +12,7 @@ impl Installer for Nvim {
         "nvim"
     }
 
-    fn download(&self) -> color_eyre::Result<Box<dyn SymlinkOp>> {
+    fn install(&self) -> color_eyre::Result<()> {
         // Compiling from sources because I can checkout specific refs in case of broken nightly builds.
         // Moreover...it's pretty badass 😎
         let nvim_source_dir = format!("{}/{}/source", self.dev_tools_dir, self.bin_name());
@@ -39,10 +37,10 @@ impl Installer for Nvim {
         .status()?
         .exit_ok()?;
 
-        let symlink = SymlinkFile::new(
-            &format!("{nvim_release_dir}/bin/{}", self.bin_name()),
-            &format!("{}/{}", self.bin_dir, self.bin_name()),
-        )?;
-        Ok(Box::new(symlink))
+        let target = format!("{nvim_release_dir}/bin/{}", self.bin_name());
+        utils::system::ln_sf(&target, &format!("{}/{}", self.bin_dir, self.bin_name()))?;
+        utils::system::chmod_x(&target)?;
+
+        Ok(())
     }
 }

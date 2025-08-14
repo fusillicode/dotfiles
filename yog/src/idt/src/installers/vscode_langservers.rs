@@ -1,5 +1,6 @@
-use utils::system::symlink::SymlinkFilesIntoDir;
-use utils::system::symlink::SymlinkOp;
+use std::path::PathBuf;
+
+use color_eyre::eyre::eyre;
 
 use crate::Installer;
 
@@ -13,11 +14,27 @@ impl Installer for VsCodeLangServers {
         "vscode-langservers-extracted"
     }
 
-    fn download(&self) -> color_eyre::Result<Box<dyn SymlinkOp>> {
+    fn install(&self) -> color_eyre::Result<()> {
         let target_dir =
             crate::downloaders::npm::run(&self.dev_tools_dir, self.bin_name(), &[self.bin_name()])?;
 
-        let symlink = SymlinkFilesIntoDir::new(&format!("{target_dir}/*"), &self.bin_dir)?;
-        Ok(Box::new(symlink))
+        // FIXME: link and chmod glob
+        let link_dir = PathBuf::from(&self.bin_dir);
+        for target in std::fs::read_dir(target_dir)? {
+            let target = target?.path();
+            if target.is_file() {
+                let target_name = target
+                    .file_name()
+                    .ok_or_else(|| eyre!("target {target:?} without filename"))?;
+                let link_path = link_dir.join(target_name);
+                if link_path.exists() {
+                    std::fs::remove_file(&link_path)?;
+                }
+                std::os::unix::fs::symlink(&target, &link_path)?;
+                utils::system::chmod_x(&target)?;
+            }
+        }
+
+        Ok(())
     }
 }

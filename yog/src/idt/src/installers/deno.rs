@@ -1,6 +1,3 @@
-use utils::system::symlink::SymlinkNoOp;
-use utils::system::symlink::SymlinkOp;
-
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
 
@@ -14,7 +11,7 @@ impl Installer for Deno {
         "deno"
     }
 
-    fn download(&self) -> color_eyre::Result<Box<dyn SymlinkOp>> {
+    fn install(&self) -> color_eyre::Result<()> {
         let repo = format!("{0}land/{0}", self.bin_name());
         let latest_release = utils::github::get_latest_release(&repo)?;
 
@@ -29,7 +26,8 @@ impl Installer for Deno {
             },
         )?;
 
-        let symlink = SymlinkNoOp::new(&target)?;
-        Ok(Box::new(symlink))
+        utils::system::chmod_x(&target)?;
+
+        Ok(())
     }
 }
