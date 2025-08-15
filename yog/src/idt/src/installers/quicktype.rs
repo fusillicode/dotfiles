@@ -20,8 +20,4 @@ impl Installer for Quicktype {
 
         Ok(())
     }
-
-    fn check_args(&self) -> Option<&[&str]> {
-        Some(&["--version"])
-    }
 }

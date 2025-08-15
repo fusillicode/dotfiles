@@ -23,8 +23,4 @@ impl Installer for ElmLanguageServer {
 
         Ok(())
     }
-
-    fn check_args(&self) -> Option<&[&str]> {
-        Some(&["--version"])
-    }
 }

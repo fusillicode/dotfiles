@@ -89,6 +89,6 @@ pub trait Installer: Sync + Send {
     }
 
     fn check_args(&self) -> Option<&[&str]> {
-        None
+        Some(&["--version"])
     }
 }

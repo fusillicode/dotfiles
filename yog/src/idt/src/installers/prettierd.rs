@@ -23,8 +23,4 @@ impl Installer for PrettierD {
 
         Ok(())
     }
-
-    fn check_args(&self) -> Option<&[&str]> {
-        Some(&["--version"])
-    }
 }
