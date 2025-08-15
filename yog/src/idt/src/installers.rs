@@ -1,7 +1,5 @@
 use std::process::Command;
 
-use color_eyre::eyre::eyre;
-
 use utils::cmd::CmdDetails;
 use utils::cmd::CmdError;
 use utils::cmd::CmdExt;
@@ -38,14 +36,16 @@ pub trait Installer: Sync + Send {
 
     fn install(&self) -> color_eyre::Result<()>;
 
-    fn check(&self) -> color_eyre::Result<String> {
-        let check_args = self
-            .check_args()
-            .ok_or_else(|| eyre!("⚠️ {} check skipped", self.bin_name()))?;
+    fn check(&self) -> Option<color_eyre::Result<String>> {
+        let Some(check_args) = self.check_args() else {
+            return None;
+        };
 
         let mut cmd = Command::new(self.bin_name());
         cmd.args(check_args);
-        cmd.exec()
+
+        let check_res = cmd
+            .exec()
             .and_then(|output| {
                 std::str::from_utf8(&output.stdout)
                     .map(ToOwned::to_owned)
@@ -54,22 +54,39 @@ pub trait Installer: Sync + Send {
                         source: error,
                     })
             })
-            .map_err(From::from)
+            .map_err(From::from);
+
+        Some(check_res)
     }
 
+    // Reporting is done here, rather than after via `installers_errors`, to report
+    // results as soon as possible.
     fn run(&self) -> color_eyre::Result<()> {
-        self.install()?;
-        self.check()?;
+        self.install()
+            .inspect(|_| println!("🎉 {} installed", self.bin_name()))
+            .inspect_err(|error| {
+                eprintln!(
+                    "❌ {} installation failed, error {error:#?}",
+                    self.bin_name()
+                )
+            })
+            .and_then(|_| {
+                self.check()
+                    .transpose()
+                    .inspect(|x| {
+                        x.as_ref().inspect(|check_output| {
+                            println!("✅ {} checked, {check_output}", self.bin_name())
+                        });
+                    })
+                    .inspect_err(|error| {
+                        eprintln!("❌ {} check failed, error {error:#?}", self.bin_name())
+                    })
+            })?;
+
         Ok(())
     }
 
     fn check_args(&self) -> Option<&[&str]> {
         None
-    }
-
-    fn report_install(&self, install_result: color_eyre::Result<()>) -> color_eyre::Result<()> {
-        install_result
-            .inspect(|_| println!("🎉 {} installed", self.bin_name()))
-            .inspect_err(|e| eprintln!("❌ error installing {}: {e:#?}", self.bin_name()))
     }
 }

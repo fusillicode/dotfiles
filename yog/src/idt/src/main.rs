@@ -167,15 +167,7 @@ fn main() -> color_eyre::Result<()> {
     let installers_errors = std::thread::scope(|scope| {
         let installers_handles = whitelisted_installers
             .iter()
-            .map(|installer| {
-                let handle = scope.spawn(move || {
-                    let install_result = installer.run();
-                    // Reporting is done here, rather than after via `installers_errors`, to report
-                    // results as soon as possible.
-                    installer.report_install(install_result)
-                });
-                (installer.bin_name(), handle)
-            })
+            .map(|installer| (installer.bin_name(), scope.spawn(move || installer.run())))
             .collect::<Vec<_>>();
 
         installers_handles
