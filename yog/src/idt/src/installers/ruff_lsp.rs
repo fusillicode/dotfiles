@@ -20,4 +20,8 @@ impl Installer for RuffLsp {
 
         Ok(())
     }
+
+    fn check_args(&self) -> Option<&[&str]> {
+        Some(&["--version"])
+    }
 }

@@ -30,4 +30,8 @@ impl Installer for Deno {
 
         Ok(())
     }
+
+    fn check_args(&self) -> Option<&[&str]> {
+        Some(&["--version"])
+    }
 }

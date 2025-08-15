@@ -29,4 +29,8 @@ impl Installer for Taplo {
 
         Ok(())
     }
+
+    fn check_args(&self) -> Option<&[&str]> {
+        Some(&["--version"])
+    }
 }

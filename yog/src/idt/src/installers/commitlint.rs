@@ -26,4 +26,8 @@ impl Installer for Commitlint {
 
         Ok(())
     }
+
+    fn check_args(&self) -> Option<&[&str]> {
+        Some(&["--version"])
+    }
 }
