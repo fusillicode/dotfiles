@@ -20,4 +20,8 @@ impl Installer for BashLanguageServer {
 
         Ok(())
     }
+
+    fn check_args(&self) -> &[&str] {
+        &["--version"]
+    }
 }

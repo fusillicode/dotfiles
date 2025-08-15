@@ -1,3 +1,9 @@
+use std::process::Command;
+
+use utils::cmd::CmdDetails;
+use utils::cmd::CmdError;
+use utils::cmd::CmdExt;
+
 pub mod bash_language_server;
 pub mod commitlint;
 pub mod deno;
@@ -29,6 +35,23 @@ pub trait Installer: Sync + Send {
     fn bin_name(&self) -> &'static str;
 
     fn install(&self) -> color_eyre::Result<()>;
+
+    fn check(&self) -> Result<String, CmdError> {
+        let mut cmd = Command::new(self.bin_name());
+        cmd.args(self.check_args());
+        cmd.exec().and_then(|output| {
+            std::str::from_utf8(&output.stdout)
+                .map(ToOwned::to_owned)
+                .map_err(|error| CmdError::Utf8 {
+                    cmd_details: CmdDetails::from(&cmd),
+                    source: error,
+                })
+        })
+    }
+
+    fn check_args(&self) -> &[&str] {
+        todo!()
+    }
 
     fn report_install(&self, install_result: color_eyre::Result<()>) -> color_eyre::Result<()> {
         install_result
