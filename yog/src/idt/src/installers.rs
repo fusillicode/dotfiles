@@ -37,10 +37,7 @@ pub trait Installer: Sync + Send {
     fn install(&self) -> color_eyre::Result<()>;
 
     fn check(&self) -> Option<color_eyre::Result<String>> {
-        let Some(check_args) = self.check_args() else {
-            return None;
-        };
-
+        let check_args = self.check_args()?;
         let mut cmd = Command::new(self.bin_name());
         cmd.args(check_args);
 
