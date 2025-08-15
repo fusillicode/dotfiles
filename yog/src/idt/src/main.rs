@@ -3,36 +3,36 @@
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 
-use crate::tools::Installer;
-use crate::tools::bash_language_server::BashLanguageServer;
-use crate::tools::commitlint::Commitlint;
-use crate::tools::deno::Deno;
-use crate::tools::docker_langserver::DockerLangServer;
-use crate::tools::elixir_ls::ElixirLs;
-use crate::tools::elm_language_server::ElmLanguageServer;
-use crate::tools::eslint_d::EslintD;
-use crate::tools::graphql_lsp::GraphQlLsp;
-use crate::tools::hadonlint::Hadolint;
-use crate::tools::helm_ls::HelmLs;
-use crate::tools::lua_ls::LuaLanguageServer;
-use crate::tools::marksman::Marksman;
-use crate::tools::nvim::Nvim;
-use crate::tools::prettierd::PrettierD;
-use crate::tools::quicktype::Quicktype;
-use crate::tools::ruff_lsp::RuffLsp;
-use crate::tools::rust_analyzer::RustAnalyzer;
-use crate::tools::shellcheck::Shellcheck;
-use crate::tools::sql_language_server::SqlLanguageServer;
-use crate::tools::sqruff::Sqruff;
-use crate::tools::taplo::Taplo;
-use crate::tools::terraform_ls::TerraformLs;
-use crate::tools::typescript_language_server::TypescriptLanguageServer;
-use crate::tools::typos_lsp::TyposLsp;
-use crate::tools::vscode_langservers::VsCodeLangServers;
-use crate::tools::yaml_language_server::YamlLanguageServer;
+use crate::installers::Installer;
+use crate::installers::bash_language_server::BashLanguageServer;
+use crate::installers::commitlint::Commitlint;
+use crate::installers::deno::Deno;
+use crate::installers::docker_langserver::DockerLangServer;
+use crate::installers::elixir_ls::ElixirLs;
+use crate::installers::elm_language_server::ElmLanguageServer;
+use crate::installers::eslint_d::EslintD;
+use crate::installers::graphql_lsp::GraphQlLsp;
+use crate::installers::hadolint::Hadolint;
+use crate::installers::helm_ls::HelmLs;
+use crate::installers::lua_ls::LuaLanguageServer;
+use crate::installers::marksman::Marksman;
+use crate::installers::nvim::Nvim;
+use crate::installers::prettierd::PrettierD;
+use crate::installers::quicktype::Quicktype;
+use crate::installers::ruff_lsp::RuffLsp;
+use crate::installers::rust_analyzer::RustAnalyzer;
+use crate::installers::shellcheck::Shellcheck;
+use crate::installers::sql_language_server::SqlLanguageServer;
+use crate::installers::sqruff::Sqruff;
+use crate::installers::taplo::Taplo;
+use crate::installers::terraform_ls::TerraformLs;
+use crate::installers::typescript_language_server::TypescriptLanguageServer;
+use crate::installers::typos_lsp::TyposLsp;
+use crate::installers::vscode_langservers::VsCodeLangServers;
+use crate::installers::yaml_language_server::YamlLanguageServer;
 
+mod downloaders;
 mod installers;
-mod tools;
 
 /// Install "Dev Tools"
 fn main() -> color_eyre::Result<()> {
@@ -52,14 +52,14 @@ fn main() -> color_eyre::Result<()> {
         .get(1)
         .ok_or_else(|| eyre!("missing bin_dir arg from {args:#?}"))?
         .trim_end_matches('/');
-    let tools_whitelist: Vec<&str> = args.iter().skip(2).map(AsRef::as_ref).collect();
+    let installers_whitelist: Vec<&str> = args.iter().skip(2).map(AsRef::as_ref).collect();
 
     std::fs::create_dir_all(dev_tools_dir)?;
     std::fs::create_dir_all(bin_dir)?;
 
     utils::github::log_into_github()?;
 
-    let tools: Vec<Box<dyn Installer>> = vec![
+    let installers: Vec<Box<dyn Installer>> = vec![
         Box::new(BashLanguageServer {
             dev_tools_dir: dev_tools_dir.into(),
             bin_dir: bin_dir.into(),
@@ -155,52 +155,47 @@ fn main() -> color_eyre::Result<()> {
         }),
     ];
 
-    let whitelisted_tools: Vec<_> = if tools_whitelist.is_empty() {
-        tools.iter().collect()
+    let whitelisted_installers: Vec<_> = if installers_whitelist.is_empty() {
+        installers.iter().collect()
     } else {
-        tools
+        installers
             .iter()
-            .filter(|x| tools_whitelist.contains(&x.bin_name()))
+            .filter(|x| installers_whitelist.contains(&x.bin_name()))
             .collect()
     };
 
-    let tools_errors = std::thread::scope(|scope| {
-        let tools_handles = whitelisted_tools
+    let installers_errors = std::thread::scope(|scope| {
+        let installers_handles = whitelisted_installers
             .iter()
-            .map(|installer| {
-                let tool = installer.bin_name();
-                let handle = scope.spawn(move || {
-                    // Reporting is done here instead afterwards using `errors` to receive results as soon
-                    // as possible.
-                    tools::report_install(tool, installer.install())
-                });
-                (tool, handle)
-            })
+            .map(|installer| (installer.bin_name(), scope.spawn(move || installer.run())))
             .collect::<Vec<_>>();
 
-        tools_handles
+        installers_handles
             .into_iter()
-            .fold(vec![], |mut acc, (tool, handle)| {
+            .fold(vec![], |mut acc, (bin_name, handle)| {
                 if let Err(error) = handle.join() {
-                    eprintln!("❌ {tool} installer 🧵 panicked - error {error:#?}");
-                    acc.push((tool, error));
+                    eprintln!("❌ {bin_name} installer 🧵 panicked - error {error:#?}");
+                    acc.push((bin_name, error));
                 }
                 acc
             })
     });
 
     utils::system::rm_dead_symlinks(bin_dir)?;
-    utils::system::chmod_x(&format!("{bin_dir}/*"))?;
 
-    let (errors_count, tools) = tools_errors.iter().fold((0, vec![]), |mut acc, (tool, _)| {
-        acc.0 += 1;
-        acc.1.push(tool);
-        acc
-    });
+    let (errors_count, bin_names) =
+        installers_errors
+            .iter()
+            .fold((0, vec![]), |mut acc, (bin_name, _)| {
+                acc.0 += 1;
+                acc.1.push(bin_name);
+                acc
+            });
+
     if errors_count != 0 {
         // This is a general report about the installation process.
         // The single installation errors are reported directly via [`tools::report_install`].
-        bail!("❌ {errors_count} tools failed to install, namely: {tools:#?}",)
+        bail!("❌ {errors_count} bins failed to install, namely: {bin_names:#?}",)
     }
 
     Ok(())

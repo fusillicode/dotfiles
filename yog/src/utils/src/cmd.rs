@@ -44,6 +44,12 @@ pub enum CmdError {
         cmd_details: CmdDetails,
         output: Box<Output>,
     },
+    #[error("utf8 error {source} - {cmd_details}")]
+    Utf8 {
+        cmd_details: CmdDetails,
+        #[backtrace]
+        source: std::str::Utf8Error,
+    },
 }
 
 #[derive(Debug)]
@@ -55,6 +61,19 @@ pub struct CmdDetails {
 
 impl From<&Command> for CmdDetails {
     fn from(value: &Command) -> Self {
+        Self {
+            name: value.get_program().to_string_lossy().to_string(),
+            args: value
+                .get_args()
+                .map(|x| x.to_string_lossy().to_string())
+                .collect(),
+            cur_dir: value.get_current_dir().map(|x| x.to_path_buf()),
+        }
+    }
+}
+
+impl From<&mut Command> for CmdDetails {
+    fn from(value: &mut Command) -> Self {
         Self {
             name: value.get_program().to_string_lossy().to_string(),
             args: value

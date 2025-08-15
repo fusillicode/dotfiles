@@ -10,7 +10,7 @@ return {
     local no_title = { title = '', }
 
     fzf_lua.setup({
-      'hide',
+      'max-perf',
       fzf_opts   = {
         ['--info'] = 'inline',
         ['--cycle'] = true,
@@ -73,6 +73,7 @@ return {
       },
       buffers    = {
         winopts = no_title,
+        ignore_current_buffer = true,
         actions = {
           ['ctrl-x'] = false,
         },

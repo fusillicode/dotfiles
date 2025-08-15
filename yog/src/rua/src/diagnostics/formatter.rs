@@ -60,10 +60,10 @@ impl FromLua for Diagnostic {
     fn from_lua(value: mlua::Value, _lua: &mlua::Lua) -> mlua::Result<Self> {
         if let LuaValue::Table(table) = value {
             let out = Self {
-                code: get_optional_value(&table, "code")?,
-                message: get_optional_value(&table, "message")?,
-                source: get_optional_value(&table, "source")?,
-                user_data: get_optional_value(&table, "user_data")?,
+                code: buildtional_value(&table, "code")?,
+                message: buildtional_value(&table, "message")?,
+                source: buildtional_value(&table, "source")?,
+                user_data: buildtional_value(&table, "user_data")?,
             };
             return Ok(out);
         }
@@ -84,7 +84,7 @@ impl FromLua for UserData {
     fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
         if let LuaValue::Table(table) = value {
             let out = UserData {
-                lsp: get_optional_value(&table, "lsp")?,
+                lsp: buildtional_value(&table, "lsp")?,
             };
             return Ok(out);
         }
@@ -108,10 +108,10 @@ impl FromLua for Lsp {
     fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
         if let LuaValue::Table(table) = value {
             let out = Lsp {
-                code: get_optional_value(&table, "code")?,
-                data: get_optional_value(&table, "data")?,
-                message: get_optional_value(&table, "message")?,
-                source: get_optional_value(&table, "source")?,
+                code: buildtional_value(&table, "code")?,
+                data: buildtional_value(&table, "data")?,
+                message: buildtional_value(&table, "message")?,
+                source: buildtional_value(&table, "source")?,
             };
             return Ok(out);
         }
@@ -132,7 +132,7 @@ impl FromLua for LspData {
     fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
         if let LuaValue::Table(table) = value {
             let out = LspData {
-                rendered: get_optional_value(&table, "rendered")?,
+                rendered: buildtional_value(&table, "rendered")?,
             };
             return Ok(out);
         }
@@ -144,7 +144,7 @@ impl FromLua for LspData {
     }
 }
 
-fn get_optional_value<T: FromLua>(table: &LuaTable, field: &str) -> mlua::Result<Option<T>> {
+fn buildtional_value<T: FromLua>(table: &LuaTable, field: &str) -> mlua::Result<Option<T>> {
     match table.get::<Option<T>>(field) {
         Ok(out) => Ok(out),
         Err(LuaError::FromLuaConversionError { .. }) => Ok(None),

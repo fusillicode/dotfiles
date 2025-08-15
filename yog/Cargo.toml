@@ -10,6 +10,9 @@ serde_json = { version = "1.0" }
 strum = { version = "0.27", features = ["derive"] }
 url = { version = "2.5", features = ["serde"] }
 utils = { path = "./src/utils" }
+#[dev-dependencies]
+assert2 = { version = "0.3" }
+pretty_assertions = { version = "1.4" }
 
 [profile.test]
 # Reduces the size of the target directory
