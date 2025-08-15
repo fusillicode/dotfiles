@@ -60,7 +60,6 @@ pub trait Installer: Sync + Send {
     // results as soon as possible.
     fn run(&self) -> color_eyre::Result<()> {
         self.install()
-            .inspect(|_| println!("🎉 {} installed", self.bin_name()))
             .inspect_err(|error| {
                 eprintln!(
                     "❌ {} installation failed, error {error:#?}",
@@ -70,10 +69,16 @@ pub trait Installer: Sync + Send {
             .and_then(|_| {
                 self.check()
                     .transpose()
-                    .inspect(|x| {
-                        x.as_ref().inspect(|check_output| {
-                            println!("✅ {} checked, {check_output}", self.bin_name())
-                        });
+                    .inspect(|check_output| {
+                        if let Some(check_output) = check_output {
+                            println!(
+                                "✅ {} installed, check output: {}",
+                                self.bin_name(),
+                                check_output.trim_matches(|c| c == '\n' || c == '\r')
+                            );
+                        } else {
+                            println!("🎲 {} installed, check skipped", self.bin_name());
+                        };
                     })
                     .inspect_err(|error| {
                         eprintln!("❌ {} check failed, error {error:#?}", self.bin_name())
