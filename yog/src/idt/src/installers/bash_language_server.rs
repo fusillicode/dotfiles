@@ -21,7 +21,7 @@ impl Installer for BashLanguageServer {
         Ok(())
     }
 
-    fn check_args(&self) -> &[&str] {
-        &["--version"]
+    fn check_args(&self) -> Option<&[&str]> {
+        Some(&["--version"])
     }
 }

@@ -1,5 +1,7 @@
 use std::process::Command;
 
+use color_eyre::eyre::eyre;
+
 use utils::cmd::CmdDetails;
 use utils::cmd::CmdError;
 use utils::cmd::CmdExt;
@@ -36,21 +38,33 @@ pub trait Installer: Sync + Send {
 
     fn install(&self) -> color_eyre::Result<()>;
 
-    fn check(&self) -> Result<String, CmdError> {
+    fn check(&self) -> color_eyre::Result<String> {
+        let check_args = self
+            .check_args()
+            .ok_or_else(|| eyre!("⚠️ {} check skipped", self.bin_name()))?;
+
         let mut cmd = Command::new(self.bin_name());
-        cmd.args(self.check_args());
-        cmd.exec().and_then(|output| {
-            std::str::from_utf8(&output.stdout)
-                .map(ToOwned::to_owned)
-                .map_err(|error| CmdError::Utf8 {
-                    cmd_details: CmdDetails::from(&cmd),
-                    source: error,
-                })
-        })
+        cmd.args(check_args);
+        cmd.exec()
+            .and_then(|output| {
+                std::str::from_utf8(&output.stdout)
+                    .map(ToOwned::to_owned)
+                    .map_err(|error| CmdError::Utf8 {
+                        cmd_details: CmdDetails::from(&cmd),
+                        source: error,
+                    })
+            })
+            .map_err(From::from)
     }
 
-    fn check_args(&self) -> &[&str] {
-        todo!()
+    fn run(&self) -> color_eyre::Result<()> {
+        self.install()?;
+        self.check()?;
+        Ok(())
+    }
+
+    fn check_args(&self) -> Option<&[&str]> {
+        None
     }
 
     fn report_install(&self, install_result: color_eyre::Result<()>) -> color_eyre::Result<()> {
