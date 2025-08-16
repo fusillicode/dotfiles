@@ -41,7 +41,7 @@ fn autocomplete_git_branches() -> color_eyre::Result<()> {
         .closable_prompt()
     {
         Ok(hd) if hd == "-" || hd.is_empty() => switch_branch("-"),
-        Ok(other) => switch_branch(&other),
+        Ok(_) => Ok(()),
         Err(ClosablePromptError::Closed) => Ok(()),
         Err(error) => Err(error.into()),
     }
