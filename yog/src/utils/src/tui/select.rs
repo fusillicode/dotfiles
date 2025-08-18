@@ -10,19 +10,19 @@ use crate::tui::ClosablePromptError;
 use crate::tui::minimal_render_config;
 
 pub fn get_items_via_sk<T: SkimItem + Clone>(items: Vec<T>) -> color_eyre::Result<Vec<T>> {
-    let opts = base_skim_opts_builder(&mut SkimOptionsBuilder::default()).final_build()?;
-    let source = build_skim_source_from_items(items)?;
+    let sk_opts = base_sk_opts_builder(&mut SkimOptionsBuilder::default()).final_build()?;
+    let sk_source = build_sk_source_from_items(items)?;
 
-    let Some(output) = Skim::run_with(&opts, Some(source)) else {
+    let Some(sk_output) = Skim::run_with(&sk_opts, Some(sk_source)) else {
         return Ok(vec![]);
     };
 
-    if output.is_abort {
+    if sk_output.is_abort {
         return Ok(vec![]);
     }
 
     let mut out = vec![];
-    for item in output.selected_items {
+    for item in sk_output.selected_items {
         out.push(
             item.as_any()
                 .downcast_ref::<T>()
@@ -33,9 +33,7 @@ pub fn get_items_via_sk<T: SkimItem + Clone>(items: Vec<T>) -> color_eyre::Resul
     Ok(out)
 }
 
-fn build_skim_source_from_items<T: SkimItem>(
-    items: Vec<T>,
-) -> color_eyre::Result<SkimItemReceiver> {
+fn build_sk_source_from_items<T: SkimItem>(items: Vec<T>) -> color_eyre::Result<SkimItemReceiver> {
     let (tx, rx): (SkimItemSender, SkimItemReceiver) = unbounded();
     for item in items {
         tx.send(Arc::new(item))?;
@@ -43,7 +41,7 @@ fn build_skim_source_from_items<T: SkimItem>(
     Ok(rx)
 }
 
-fn base_skim_opts_builder(opts_builder: &mut SkimOptionsBuilder) -> &mut SkimOptionsBuilder {
+fn base_sk_opts_builder(opts_builder: &mut SkimOptionsBuilder) -> &mut SkimOptionsBuilder {
     opts_builder
         .height(String::from("12"))
         .no_multi(true)
