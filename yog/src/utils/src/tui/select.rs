@@ -1,10 +1,42 @@
 use color_eyre::eyre::eyre;
 use inquire::InquireError;
 use inquire::Select;
+use skim::prelude::*;
 
 use crate::tui::ClosablePrompt;
 use crate::tui::ClosablePromptError;
 use crate::tui::minimal_render_config;
+
+pub fn build_skim_source_from_items<T: skim::SkimItem>(
+    items: Vec<T>,
+) -> color_eyre::Result<skim::SkimItemReceiver> {
+    use skim::prelude::*;
+    let (tx, rx): (SkimItemSender, SkimItemReceiver) = unbounded();
+    for item in items {
+        tx.send(Arc::new(item))?;
+    }
+    Ok(rx)
+}
+
+pub fn get_skim_items<T: skim::SkimItem>(
+    items: Vec<T>,
+) -> color_eyre::Result<Vec<std::sync::Arc<dyn skim::SkimItem>>> {
+    Ok(Skim::run_with(
+        &base_skim_opts_builder(&mut SkimOptionsBuilder::default()).final_build()?,
+        Some(build_skim_source_from_items(items)?),
+    )
+    .map(|out| out.selected_items)
+    .unwrap_or_default())
+}
+
+pub fn base_skim_opts_builder(opts_builder: &mut SkimOptionsBuilder) -> &mut SkimOptionsBuilder {
+    opts_builder
+        .height(String::from("12"))
+        .no_multi(true)
+        .inline_info(true)
+        .layout("reverse-list".into())
+        .cycle(true)
+}
 
 pub fn minimal<'a, T: std::fmt::Display>(options: Vec<T>) -> Select<'a, T> {
     Select::new("", options)

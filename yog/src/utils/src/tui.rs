@@ -1,6 +1,5 @@
 use inquire::ui::RenderConfig;
 
-pub mod git_branches_autocomplete;
 pub mod select;
 pub mod text;
 

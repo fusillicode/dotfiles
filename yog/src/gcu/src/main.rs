@@ -6,6 +6,7 @@ use std::process::Command;
 use color_eyre::eyre::bail;
 use url::Url;
 
+use utils::SkimItem;
 use utils::cmd::CmdError;
 use utils::cmd::CmdExt;
 
@@ -33,35 +34,11 @@ fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
-// TODO: this will be moved in utils at some point...
-fn build_skim_source_from_items<T: skim::SkimItem>(
-    items: Vec<T>,
-) -> color_eyre::Result<skim::SkimItemReceiver> {
-    use skim::prelude::*;
-    let (tx, rx): (SkimItemSender, SkimItemReceiver) = unbounded();
-    for item in items {
-        tx.send(Arc::new(item))?;
-    }
-    Ok(rx)
-}
-
 fn autocomplete_git_branches() -> color_eyre::Result<()> {
-    use skim::prelude::*;
-
     let mut git_refs = get_all_fetched_branches()?;
     dedup_git_refs(&mut git_refs);
 
-    let options = SkimOptionsBuilder::default()
-        .height(String::from("12"))
-        .no_multi(true)
-        .reverse(true)
-        .cycle(true)
-        .build()
-        .unwrap();
-
-    let selected_item = Skim::run_with(&options, Some(build_skim_source_from_items(git_refs)?))
-        .map(|out| out.selected_items)
-        .unwrap_or_default();
+    let selected_item = utils::tui::select::get_skim_items(git_refs)?;
 
     match &selected_item.as_slice() {
         [hd] if hd.text() == "-" || hd.text().is_empty() => switch_branch("-"),
@@ -88,6 +65,7 @@ fn get_all_fetched_branches() -> color_eyre::Result<Vec<GitRef>> {
     for line in std::str::from_utf8(&output.stdout)?.trim().split('\n') {
         res.push(<GitRef as std::str::FromStr>::from_str(line)?);
     }
+
     Ok(res)
 }
 
@@ -128,7 +106,7 @@ impl GitRef {
     }
 }
 
-impl skim::SkimItem for GitRef {
+impl SkimItem for GitRef {
     fn text(&self) -> std::borrow::Cow<'_, str> {
         std::borrow::Cow::from(self.name.clone())
     }

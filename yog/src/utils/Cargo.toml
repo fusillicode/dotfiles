@@ -13,6 +13,7 @@ fake = { workspace = true, optional = true }
 inquire = { version = "0.7" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+skim = { version = "0.20" }
 thiserror = { version = "2.0" }
 url = { workspace = true }
 

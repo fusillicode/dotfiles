@@ -9,3 +9,5 @@ pub mod hx;
 pub mod system;
 pub mod tui;
 pub mod wezterm;
+
+pub use skim::SkimItem;

@@ -729,7 +729,6 @@ name = "gcu"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
- "skim",
  "url",
  "utils",
 ]
@@ -2026,6 +2025,7 @@ dependencies = [
  "pretty_assertions",
  "serde",
  "serde_json",
+ "skim",
  "tempfile",
  "thiserror 2.0.14",
  "url",
