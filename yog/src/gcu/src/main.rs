@@ -4,6 +4,7 @@ use std::io::Write;
 use std::process::Command;
 
 use color_eyre::eyre::bail;
+use color_eyre::eyre::eyre;
 use url::Url;
 
 use utils::SkimItem;
@@ -35,8 +36,8 @@ fn main() -> color_eyre::Result<()> {
 }
 
 fn autocomplete_git_branches() -> color_eyre::Result<()> {
-    let mut git_refs = get_all_fetched_branches()?;
-    dedup_git_refs(&mut git_refs);
+    let mut git_refs = get_git_local_and_remote_refs()?;
+    keep_local_and_untracked_refs(&mut git_refs);
 
     let selected_items = utils::tui::select::get_skim_items(git_refs)?;
 
@@ -47,10 +48,10 @@ fn autocomplete_git_branches() -> color_eyre::Result<()> {
     }
 }
 
-/// Get all branches that are fetched when the command is invoked sorted by latest to oldest modified.
+/// Get all local and remote git refs sorted by latest to oldest modified.
 ///
-/// Returns an error as soon as 1 single result cannot be converted to the output type [`GitRef`].
-fn get_all_fetched_branches() -> color_eyre::Result<Vec<GitRef>> {
+/// Returns an error as soon as 1 single item cannot be converted to a [`GitRef`].
+fn get_git_local_and_remote_refs() -> color_eyre::Result<Vec<GitRef>> {
     let output = Command::new("git")
         .args([
             "for-each-ref",
@@ -69,27 +70,25 @@ fn get_all_fetched_branches() -> color_eyre::Result<Vec<GitRef>> {
     Ok(res)
 }
 
-/// Removes the "origin" branch and the "origin" prefix from all the remote branches
-/// and then deduplicates what remains.
-fn dedup_git_refs(git_refs: &mut Vec<GitRef>) {
-    const DEFAULT_REMOTE: &str = "origin/";
+/// Deduplicates local and remote git refs.
+fn keep_local_and_untracked_refs(git_refs: &mut Vec<GitRef>) {
+    let mut local_names = std::collections::HashSet::new();
 
-    // Strip prefix inplace
-    for git_ref in git_refs.iter_mut() {
-        if let Some(stripped) = git_ref.name.strip_prefix(DEFAULT_REMOTE) {
-            git_ref.name = stripped.to_string();
+    git_refs.retain(|x| {
+        if x.remote.is_none() {
+            local_names.insert(x.name.clone());
+            true
+        } else {
+            !local_names.contains(&x.name)
         }
-    }
-
-    // Deduplicate, but keep only first occurrence of each stripped ref
-    let mut seen = std::collections::HashSet::new();
-    git_refs.retain(|git_ref| seen.insert(git_ref.name.clone()));
+    });
 }
 
 #[allow(dead_code)]
 #[derive(Clone)]
 struct GitRef {
     name: String,
+    remote: Option<String>,
     committer_email: String,
     committer_date_iso8601: String,
     subject: String,
@@ -100,7 +99,7 @@ impl GitRef {
 
     pub fn format() -> String {
         format!(
-            "%(refname:short){0}%(committeremail){0}%(committerdate:iso8601){0}%(subject)",
+            "%(refname){0}%(committeremail){0}%(committerdate:iso8601){0}%(subject)",
             Self::SEPARATOR
         )
     }
@@ -118,26 +117,34 @@ impl std::str::FromStr for GitRef {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut parts = s.split('|');
 
+        let refname: String = parts
+            .next()
+            .ok_or_else(|| eyre!("missing refname in git for-each-ref output {s}"))?
+            .into();
+
+        let (name, remote) = if let Some(remote) = refname.strip_prefix("refs/remotes/") {
+            remote
+                .split_once('/')
+                .map(|(refname, remote_name)| (remote_name, Some(refname)))
+                .ok_or_else(|| eyre!("unexpected refs/remotes structure {refname}"))?
+        } else {
+            (refname.trim_start_matches("refs/heads/"), None)
+        };
+
         Ok(GitRef {
-            name: parts
-                .next()
-                .ok_or_else(|| color_eyre::eyre::eyre!("missing refname in parts {parts:#?}"))?
-                .into(),
+            name: name.to_string(),
+            remote: remote.map(str::to_string),
             committer_email: parts
                 .next()
-                .ok_or_else(|| {
-                    color_eyre::eyre::eyre!("missing committeremail in parts {parts:#?}")
-                })?
+                .ok_or_else(|| eyre!("missing committeremail in git for-each-ref output {s}"))?
                 .to_string(),
             committer_date_iso8601: parts
                 .next()
-                .ok_or_else(|| {
-                    color_eyre::eyre::eyre!("missing committerdate in parts {parts:#?}")
-                })?
+                .ok_or_else(|| eyre!("missing committerdate in git for-each-ref output {s}"))?
                 .to_string(),
             subject: parts
                 .next()
-                .ok_or_else(|| color_eyre::eyre::eyre!("missing subject in parts {parts:#?}"))?
+                .ok_or_else(|| eyre!("missing subject in git for-each-ref output {s}"))?
                 .to_string(),
         })
     }
