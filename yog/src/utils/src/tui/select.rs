@@ -30,7 +30,7 @@ pub fn base_skim_opts_builder(opts_builder: &mut SkimOptionsBuilder) -> &mut Ski
         .height(String::from("12"))
         .no_multi(true)
         .inline_info(true)
-        .layout("reverse-list".into())
+        .layout("reverse".into())
         .cycle(true)
 }
 
