@@ -39,7 +39,7 @@ fn autocomplete_git_branches() -> color_eyre::Result<()> {
     let mut git_refs = get_git_local_and_remote_refs()?;
     keep_local_and_untracked_refs(&mut git_refs);
 
-    let selected_items = utils::tui::select::get_skim_items(git_refs)?;
+    let selected_items = utils::tui::select::get_items_via_sk(git_refs)?;
 
     match &selected_items.as_slice() {
         [hd] if hd.text() == "-" || hd.text().is_empty() => switch_branch("-"),

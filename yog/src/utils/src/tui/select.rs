@@ -9,10 +9,7 @@ use crate::tui::ClosablePrompt;
 use crate::tui::ClosablePromptError;
 use crate::tui::minimal_render_config;
 
-
-pub fn get_skim_items<T: SkimItem>(
-    items: Vec<T>,
-) -> color_eyre::Result<Vec<std::sync::Arc<dyn SkimItem>>> {
+pub fn get_items_via_sk<T: SkimItem + Clone>(items: Vec<T>) -> color_eyre::Result<Vec<T>> {
     let opts = base_skim_opts_builder(&mut SkimOptionsBuilder::default()).final_build()?;
     let source = build_skim_source_from_items(items)?;
 
@@ -24,7 +21,16 @@ pub fn get_skim_items<T: SkimItem>(
         return Ok(vec![]);
     }
 
-    Ok(output.selected_items)
+    let mut out = vec![];
+    for item in output.selected_items {
+        out.push(
+            item.as_any()
+                .downcast_ref::<T>()
+                .cloned()
+                .ok_or_else(|| eyre!("cannot downcast SkimItem to T"))?,
+        );
+    }
+    Ok(out)
 }
 
 fn build_skim_source_from_items<T: SkimItem>(
