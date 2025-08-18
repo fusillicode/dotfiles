@@ -38,7 +38,8 @@ fn get_items_via_sk<T: SkimItem + Clone + std::fmt::Debug>(
     let mut out = vec![];
     for item in sk_output.selected_items {
         out.push(
-            item.as_any()
+            (*item)
+                .as_any()
                 .downcast_ref::<T>()
                 .cloned()
                 .ok_or_else(|| eyre!("cannot downcast SkimItem to T"))?,
