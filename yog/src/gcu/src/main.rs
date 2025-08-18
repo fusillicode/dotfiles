@@ -8,9 +8,6 @@ use url::Url;
 
 use utils::cmd::CmdError;
 use utils::cmd::CmdExt;
-// use utils::tui::ClosablePrompt;
-// use utils::tui::ClosablePromptError;
-// use utils::tui::git_branches_autocomplete::GitBranchesAutocomplete;
 
 /// Create or switch to the GitHub branch built by parameterizing the supplied args.
 /// Existence of branch is checked only against local ones (to avoid fetching them remotely).
@@ -36,16 +33,23 @@ fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
+// TODO: this will be moved in utils at some point...
+fn build_skim_source_from_items<T: skim::SkimItem>(
+    items: Vec<T>,
+) -> color_eyre::Result<skim::SkimItemReceiver> {
+    use skim::prelude::*;
+    let (tx, rx): (SkimItemSender, SkimItemReceiver) = unbounded();
+    for item in items {
+        tx.send(Arc::new(item))?;
+    }
+    Ok(rx)
+}
+
 fn autocomplete_git_branches() -> color_eyre::Result<()> {
     use skim::prelude::*;
 
     let mut git_refs = get_all_fetched_branches()?;
-    dedup_remotes(&mut git_refs);
-    let (tx, rx): (SkimItemSender, SkimItemReceiver) = unbounded();
-    for git_ref in git_refs {
-        tx.send(Arc::new(git_ref))?;
-    }
-    drop(tx);
+    dedup_git_refs(&mut git_refs);
 
     let options = SkimOptionsBuilder::default()
         .no_multi(true)
@@ -54,7 +58,7 @@ fn autocomplete_git_branches() -> color_eyre::Result<()> {
         .build()
         .unwrap();
 
-    let selected_item = Skim::run_with(&options, Some(rx))
+    let selected_item = Skim::run_with(&options, Some(build_skim_source_from_items(git_refs)?))
         .map(|out| out.selected_items)
         .unwrap_or_default();
 
@@ -74,7 +78,7 @@ fn get_all_fetched_branches() -> color_eyre::Result<Vec<GitRef>> {
             "--sort=-creatordate",
             "refs/heads/",
             "refs/remotes/",
-            &format!("--format={}", GitRef::FORMAT),
+            &format!("--format={}", GitRef::format()),
         ])
         .exec()?;
 
@@ -85,8 +89,9 @@ fn get_all_fetched_branches() -> color_eyre::Result<Vec<GitRef>> {
     Ok(res)
 }
 
-// Removes the "origin" branch and the "origin" prefix from all the remote branches keeping local and
-fn dedup_remotes(git_refs: &mut Vec<GitRef>) {
+/// Removes the "origin" branch and the "origin" prefix from all the remote branches
+/// and then deduplicates what remains.
+fn dedup_git_refs(git_refs: &mut Vec<GitRef>) {
     const DEFAULT_REMOTE: &str = "origin/";
 
     // Strip prefix inplace
@@ -101,6 +106,7 @@ fn dedup_remotes(git_refs: &mut Vec<GitRef>) {
     git_refs.retain(|git_ref| seen.insert(git_ref.name.clone()));
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 struct GitRef {
     name: String,
@@ -110,22 +116,19 @@ struct GitRef {
 }
 
 impl GitRef {
-    const FORMAT: &str = "%(refname:short)|%(committeremail)|%(committerdate:iso8601)|%(subject)";
+    const SEPARATOR: char = '|';
+
+    pub fn format() -> String {
+        format!(
+            "%(refname:short){0}%(committeremail){0}%(committerdate:iso8601){0}%(subject)",
+            Self::SEPARATOR
+        )
+    }
 }
 
 impl skim::SkimItem for GitRef {
     fn text(&self) -> std::borrow::Cow<'_, str> {
         std::borrow::Cow::from(self.name.clone())
-    }
-}
-
-impl std::fmt::Display for GitRef {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}\n{} {}\n{}",
-            self.name, self.committer_date_iso8601, self.committer_email, self.subject
-        )
     }
 }
 
