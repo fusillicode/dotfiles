@@ -52,6 +52,7 @@ fn autocomplete_git_branches() -> color_eyre::Result<()> {
     dedup_git_refs(&mut git_refs);
 
     let options = SkimOptionsBuilder::default()
+        .height(String::from("12"))
         .no_multi(true)
         .reverse(true)
         .cycle(true)
@@ -63,7 +64,8 @@ fn autocomplete_git_branches() -> color_eyre::Result<()> {
         .unwrap_or_default();
 
     match &selected_item.as_slice() {
-        &[hd] if hd.text() == "-" || hd.text().is_empty() => switch_branch("-"),
+        [hd] if hd.text() == "-" || hd.text().is_empty() => switch_branch("-"),
+        [other] => switch_branch(&other.text()),
         _ => Ok(()),
     }
 }
