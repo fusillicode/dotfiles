@@ -1,9 +1,12 @@
+use std::borrow::Cow;
+
 use fake::Fake;
 use strum::Display;
 use strum::EnumIter;
 use strum::IntoEnumIterator;
+use utils::SkimItem;
 
-#[derive(EnumIter, Display, Clone, Copy)]
+#[derive(EnumIter, Display, Clone, Copy, Debug)]
 pub enum FkrOption {
     Uuidv4,
     Uuidv7,
@@ -12,6 +15,12 @@ pub enum FkrOption {
     IPv4,
     IPv6,
     MACAddress,
+}
+
+impl SkimItem for FkrOption {
+    fn text(&self) -> std::borrow::Cow<'_, str> {
+        Cow::from(self.to_string())
+    }
 }
 
 impl FkrOption {

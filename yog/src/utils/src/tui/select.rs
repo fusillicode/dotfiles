@@ -9,7 +9,21 @@ use crate::tui::ClosablePrompt;
 use crate::tui::ClosablePromptError;
 use crate::tui::minimal_render_config;
 
-pub fn get_items_via_sk<T: SkimItem + Clone>(items: Vec<T>) -> color_eyre::Result<Vec<T>> {
+pub fn get_item_via_sk<T: SkimItem + Clone + std::fmt::Debug>(
+    items: Vec<T>,
+) -> color_eyre::Result<Option<T>> {
+    match &get_items_via_sk(items)?.as_slice() {
+        &[item] => Ok(Some(item.clone())),
+        [] => Ok(None),
+        multiple_items => Err(eyre!(
+            "unexpected multiple selected items {multiple_items:#?}"
+        )),
+    }
+}
+
+fn get_items_via_sk<T: SkimItem + Clone + std::fmt::Debug>(
+    items: Vec<T>,
+) -> color_eyre::Result<Vec<T>> {
     let sk_opts = base_sk_opts_builder(&mut SkimOptionsBuilder::default()).final_build()?;
     let sk_source = build_sk_source_from_items(items)?;
 
