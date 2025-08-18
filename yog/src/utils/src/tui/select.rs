@@ -9,15 +9,6 @@ use crate::tui::ClosablePrompt;
 use crate::tui::ClosablePromptError;
 use crate::tui::minimal_render_config;
 
-pub fn build_skim_source_from_items<T: SkimItem>(
-    items: Vec<T>,
-) -> color_eyre::Result<SkimItemReceiver> {
-    let (tx, rx): (SkimItemSender, SkimItemReceiver) = unbounded();
-    for item in items {
-        tx.send(Arc::new(item))?;
-    }
-    Ok(rx)
-}
 
 pub fn get_skim_items<T: SkimItem>(
     items: Vec<T>,
@@ -36,7 +27,17 @@ pub fn get_skim_items<T: SkimItem>(
     Ok(output.selected_items)
 }
 
-pub fn base_skim_opts_builder(opts_builder: &mut SkimOptionsBuilder) -> &mut SkimOptionsBuilder {
+fn build_skim_source_from_items<T: SkimItem>(
+    items: Vec<T>,
+) -> color_eyre::Result<SkimItemReceiver> {
+    let (tx, rx): (SkimItemSender, SkimItemReceiver) = unbounded();
+    for item in items {
+        tx.send(Arc::new(item))?;
+    }
+    Ok(rx)
+}
+
+fn base_skim_opts_builder(opts_builder: &mut SkimOptionsBuilder) -> &mut SkimOptionsBuilder {
     opts_builder
         .height(String::from("12"))
         .no_multi(true)
