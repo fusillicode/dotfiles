@@ -1,8 +1,6 @@
 use color_eyre::eyre::eyre;
 use inquire::InquireError;
 use inquire::Select;
-use skim::SkimItem;
-use skim::SkimItemReceiver;
 use skim::prelude::*;
 
 use crate::tui::ClosablePrompt;
@@ -24,7 +22,7 @@ pub fn get_item_via_sk<T: SkimItem + Clone + std::fmt::Debug>(
 fn get_items_via_sk<T: SkimItem + Clone + std::fmt::Debug>(
     items: Vec<T>,
 ) -> color_eyre::Result<Vec<T>> {
-    let sk_opts = base_sk_opts_builder(&mut SkimOptionsBuilder::default()).final_build()?;
+    let sk_opts = common_sk_opts(&mut SkimOptionsBuilder::default()).final_build()?;
     let sk_source = build_sk_source_from_items(items)?;
 
     let Some(sk_output) = Skim::run_with(&sk_opts, Some(sk_source)) else {
@@ -56,7 +54,7 @@ fn build_sk_source_from_items<T: SkimItem>(items: Vec<T>) -> color_eyre::Result<
     Ok(rx)
 }
 
-fn base_sk_opts_builder(opts_builder: &mut SkimOptionsBuilder) -> &mut SkimOptionsBuilder {
+fn common_sk_opts(opts_builder: &mut SkimOptionsBuilder) -> &mut SkimOptionsBuilder {
     opts_builder
         .height(String::from("12"))
         .no_multi(true)
