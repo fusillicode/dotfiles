@@ -6,5 +6,6 @@ edition = "2024"
 
 [dependencies]
 color-eyre = { workspace = true }
+skim = { version = "0.20" }
 url = { workspace = true }
 utils = { workspace = true }

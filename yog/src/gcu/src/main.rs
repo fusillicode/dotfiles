@@ -8,9 +8,9 @@ use url::Url;
 
 use utils::cmd::CmdError;
 use utils::cmd::CmdExt;
-use utils::tui::ClosablePrompt;
-use utils::tui::ClosablePromptError;
-use utils::tui::git_branches_autocomplete::GitBranchesAutocomplete;
+// use utils::tui::ClosablePrompt;
+// use utils::tui::ClosablePromptError;
+// use utils::tui::git_branches_autocomplete::GitBranchesAutocomplete;
 
 /// Create or switch to the GitHub branch built by parameterizing the supplied args.
 /// Existence of branch is checked only against local ones (to avoid fetching them remotely).
@@ -37,13 +37,126 @@ fn main() -> color_eyre::Result<()> {
 }
 
 fn autocomplete_git_branches() -> color_eyre::Result<()> {
-    match utils::tui::text::minimal::<String>(Some(Box::new(GitBranchesAutocomplete::new()?)))
-        .closable_prompt()
-    {
-        Ok(hd) if hd == "-" || hd.is_empty() => switch_branch("-"),
-        Ok(_) => Ok(()),
-        Err(ClosablePromptError::Closed) => Ok(()),
-        Err(error) => Err(error.into()),
+    use skim::prelude::*;
+
+    let mut git_refs = get_all_fetched_branches()?;
+    dedup_remotes(&mut git_refs);
+    let (tx, rx): (SkimItemSender, SkimItemReceiver) = unbounded();
+    for git_ref in git_refs {
+        tx.send(Arc::new(git_ref))?;
+    }
+    drop(tx);
+
+    let options = SkimOptionsBuilder::default()
+        .no_multi(true)
+        .reverse(true)
+        .cycle(true)
+        .build()
+        .unwrap();
+
+    let selected_item = Skim::run_with(&options, Some(rx))
+        .map(|out| out.selected_items)
+        .unwrap_or_default();
+
+    match &selected_item.as_slice() {
+        &[hd] if hd.text() == "-" || hd.text().is_empty() => switch_branch("-"),
+        _ => Ok(()),
+    }
+}
+
+/// Get all branches that are fetched when the command is invoked sorted by latest to oldest modified.
+///
+/// Returns an error as soon as 1 single result cannot be converted to the output type [`GitRef`].
+fn get_all_fetched_branches() -> color_eyre::Result<Vec<GitRef>> {
+    let output = Command::new("git")
+        .args([
+            "for-each-ref",
+            "--sort=-creatordate",
+            "refs/heads/",
+            "refs/remotes/",
+            &format!("--format={}", GitRef::FORMAT),
+        ])
+        .exec()?;
+
+    let mut res = vec![];
+    for line in std::str::from_utf8(&output.stdout)?.trim().split('\n') {
+        res.push(<GitRef as std::str::FromStr>::from_str(line)?);
+    }
+    Ok(res)
+}
+
+// Removes the "origin" branch and the "origin" prefix from all the remote branches keeping local and
+fn dedup_remotes(git_refs: &mut Vec<GitRef>) {
+    const DEFAULT_REMOTE: &str = "origin/";
+
+    // Strip prefix inplace
+    for git_ref in git_refs.iter_mut() {
+        if let Some(stripped) = git_ref.name.strip_prefix(DEFAULT_REMOTE) {
+            git_ref.name = stripped.to_string();
+        }
+    }
+
+    // Deduplicate, but keep only first occurrence of each stripped ref
+    let mut seen = std::collections::HashSet::new();
+    git_refs.retain(|git_ref| seen.insert(git_ref.name.clone()));
+}
+
+#[derive(Clone)]
+struct GitRef {
+    name: String,
+    committer_email: String,
+    committer_date_iso8601: String,
+    subject: String,
+}
+
+impl GitRef {
+    const FORMAT: &str = "%(refname:short)|%(committeremail)|%(committerdate:iso8601)|%(subject)";
+}
+
+impl skim::SkimItem for GitRef {
+    fn text(&self) -> std::borrow::Cow<'_, str> {
+        std::borrow::Cow::from(self.name.clone())
+    }
+}
+
+impl std::fmt::Display for GitRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}\n{} {}\n{}",
+            self.name, self.committer_date_iso8601, self.committer_email, self.subject
+        )
+    }
+}
+
+impl std::str::FromStr for GitRef {
+    type Err = color_eyre::eyre::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut parts = s.split('|');
+
+        Ok(GitRef {
+            name: parts
+                .next()
+                .ok_or_else(|| color_eyre::eyre::eyre!("missing refname in parts {parts:#?}"))?
+                .into(),
+            committer_email: parts
+                .next()
+                .ok_or_else(|| {
+                    color_eyre::eyre::eyre!("missing committeremail in parts {parts:#?}")
+                })?
+                .to_string(),
+            committer_date_iso8601: parts
+                .next()
+                .ok_or_else(|| {
+                    color_eyre::eyre::eyre!("missing committerdate in parts {parts:#?}")
+                })?
+                .to_string(),
+            subject: parts
+                .next()
+                .ok_or_else(|| color_eyre::eyre::eyre!("missing subject in parts {parts:#?}"))?
+                .to_string(),
+        })
     }
 }
 
