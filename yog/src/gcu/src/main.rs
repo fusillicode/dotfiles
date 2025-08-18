@@ -38,9 +38,15 @@ fn autocomplete_git_branches() -> color_eyre::Result<()> {
     let mut git_refs = get_all_fetched_branches()?;
     dedup_git_refs(&mut git_refs);
 
-    let selected_item = utils::tui::select::get_skim_items(git_refs)?;
+    let Some(output) = utils::tui::select::get_skim_output(git_refs)? else {
+        return Ok(());
+    };
 
-    match &selected_item.as_slice() {
+    if output.is_abort {
+        return Ok(());
+    }
+
+    match &output.selected_items.as_slice() {
         [hd] if hd.text() == "-" || hd.text().is_empty() => switch_branch("-"),
         [other] => switch_branch(&other.text()),
         _ => Ok(()),

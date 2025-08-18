@@ -1,16 +1,17 @@
 use color_eyre::eyre::eyre;
 use inquire::InquireError;
 use inquire::Select;
+use skim::SkimItem;
+use skim::SkimItemReceiver;
 use skim::prelude::*;
 
 use crate::tui::ClosablePrompt;
 use crate::tui::ClosablePromptError;
 use crate::tui::minimal_render_config;
 
-pub fn build_skim_source_from_items<T: skim::SkimItem>(
+pub fn build_skim_source_from_items<T: SkimItem>(
     items: Vec<T>,
-) -> color_eyre::Result<skim::SkimItemReceiver> {
-    use skim::prelude::*;
+) -> color_eyre::Result<SkimItemReceiver> {
     let (tx, rx): (SkimItemSender, SkimItemReceiver) = unbounded();
     for item in items {
         tx.send(Arc::new(item))?;
@@ -18,15 +19,10 @@ pub fn build_skim_source_from_items<T: skim::SkimItem>(
     Ok(rx)
 }
 
-pub fn get_skim_items<T: skim::SkimItem>(
-    items: Vec<T>,
-) -> color_eyre::Result<Vec<std::sync::Arc<dyn skim::SkimItem>>> {
-    Ok(Skim::run_with(
-        &base_skim_opts_builder(&mut SkimOptionsBuilder::default()).final_build()?,
-        Some(build_skim_source_from_items(items)?),
-    )
-    .map(|out| out.selected_items)
-    .unwrap_or_default())
+pub fn get_skim_output<T: SkimItem>(items: Vec<T>) -> color_eyre::Result<Option<SkimOutput>> {
+    let opts = base_skim_opts_builder(&mut SkimOptionsBuilder::default()).final_build()?;
+    let source = build_skim_source_from_items(items)?;
+    Ok(Skim::run_with(&opts, Some(source)))
 }
 
 pub fn base_skim_opts_builder(opts_builder: &mut SkimOptionsBuilder) -> &mut SkimOptionsBuilder {
