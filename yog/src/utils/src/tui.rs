@@ -1,7 +1,6 @@
 use inquire::ui::RenderConfig;
 
 pub mod select;
-pub mod text;
 
 pub use inquire;
 use inquire::InquireError;
