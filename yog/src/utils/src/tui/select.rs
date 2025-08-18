@@ -19,10 +19,21 @@ pub fn build_skim_source_from_items<T: SkimItem>(
     Ok(rx)
 }
 
-pub fn get_skim_output<T: SkimItem>(items: Vec<T>) -> color_eyre::Result<Option<SkimOutput>> {
+pub fn get_skim_items<T: SkimItem>(
+    items: Vec<T>,
+) -> color_eyre::Result<Vec<std::sync::Arc<dyn SkimItem>>> {
     let opts = base_skim_opts_builder(&mut SkimOptionsBuilder::default()).final_build()?;
     let source = build_skim_source_from_items(items)?;
-    Ok(Skim::run_with(&opts, Some(source)))
+
+    let Some(output) = Skim::run_with(&opts, Some(source)) else {
+        return Ok(vec![]);
+    };
+
+    if output.is_abort {
+        return Ok(vec![]);
+    }
+
+    Ok(output.selected_items)
 }
 
 pub fn base_skim_opts_builder(opts_builder: &mut SkimOptionsBuilder) -> &mut SkimOptionsBuilder {
