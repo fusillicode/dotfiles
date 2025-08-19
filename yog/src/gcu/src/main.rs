@@ -90,6 +90,8 @@ fn keep_local_and_untracked_refs(git_refs: &mut Vec<GitRef>) {
 struct GitRef {
     name: String,
     remote: Option<String>,
+    short_sha: String,
+    kind: String,
     committer_email: String,
     committer_date_iso8601: String,
     subject: String,
@@ -100,7 +102,7 @@ impl GitRef {
 
     pub fn format() -> String {
         format!(
-            "%(refname){0}%(committeremail){0}%(committerdate:iso8601){0}%(subject)",
+            "%(refname){0}%(objectname:short){0}%(objecttype){0}%(committeremail){0}%(committerdate:iso8601){0}%(subject)",
             Self::SEPARATOR
         )
     }
@@ -112,9 +114,11 @@ impl SkimItem for GitRef {
     }
 
     fn preview(&self, _context: SkimPreviewContext) -> SkimItemPreview {
-        SkimItemPreview::Text(format!(
-            "[{}]\n{}\n{}\n{}\n",
+        SkimItemPreview::AnsiText(format!(
+            "\x1b[31m{} {} {}\x1b[0m\n{}\n\x1b[32m{}\x1b[0m \x1b[34;1m{}\x1b[0m\n",
             self.remote.as_deref().unwrap_or("local"),
+            self.kind,
+            self.short_sha,
             self.subject,
             self.committer_date_iso8601,
             self.committer_email,
@@ -145,6 +149,14 @@ impl std::str::FromStr for GitRef {
         Ok(GitRef {
             name: name.to_string(),
             remote: remote.map(str::to_string),
+            short_sha: parts
+                .next()
+                .ok_or_else(|| eyre!("missing objectname:short in git for-each-ref output {s}"))?
+                .to_string(),
+            kind: parts
+                .next()
+                .ok_or_else(|| eyre!("missing objecttype in git for-each-ref output {s}"))?
+                .to_string(),
             committer_email: parts
                 .next()
                 .ok_or_else(|| eyre!("missing committeremail in git for-each-ref output {s}"))?

@@ -25,7 +25,7 @@ impl SkimItem for FkrOption {
     }
 
     fn preview(&self, _context: SkimPreviewContext) -> SkimItemPreview {
-        SkimItemPreview::Text(format!("Generate a fake {}", self))
+        SkimItemPreview::AnsiText(format!("Generate a fake {}", self))
     }
 }
 
