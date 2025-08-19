@@ -3,7 +3,6 @@
 use std::str::FromStr;
 
 use color_eyre::eyre::bail;
-
 use utils::editor::Editor;
 use utils::editor::FileToOpen;
 
@@ -34,8 +33,7 @@ fn main() -> color_eyre::Result<()> {
     let file_to_open = FileToOpen::try_from((file_to_open.as_str(), pane_id, panes.as_slice()))?;
 
     let editor_pane_id =
-        utils::wezterm::get_sibling_pane_with_titles(&panes, pane_id, editor.pane_titles())
-            .map(|x| x.pane_id)?;
+        utils::wezterm::get_sibling_pane_with_titles(&panes, pane_id, editor.pane_titles()).map(|x| x.pane_id)?;
 
     let open_file_cmd = editor.open_file_cmd(&file_to_open);
 

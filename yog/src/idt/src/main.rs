@@ -39,10 +39,7 @@ fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
     let args = utils::system::get_args();
-    println!(
-        "🚀 Starting {:#?} with args: {args:#?}",
-        std::env::current_exe()?
-    );
+    println!("🚀 Starting {:#?} with args: {args:#?}", std::env::current_exe()?);
 
     let dev_tools_dir = args
         .first()
@@ -183,14 +180,11 @@ fn main() -> color_eyre::Result<()> {
 
     utils::system::rm_dead_symlinks(bin_dir)?;
 
-    let (errors_count, bin_names) =
-        installers_errors
-            .iter()
-            .fold((0, vec![]), |mut acc, (bin_name, _)| {
-                acc.0 += 1;
-                acc.1.push(bin_name);
-                acc
-            });
+    let (errors_count, bin_names) = installers_errors.iter().fold((0, vec![]), |mut acc, (bin_name, _)| {
+        acc.0 += 1;
+        acc.1.push(bin_name);
+        acc
+    });
 
     if errors_count != 0 {
         // This is a general report about the installation process.

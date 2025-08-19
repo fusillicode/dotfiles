@@ -37,17 +37,15 @@ pub fn get_sibling_pane_with_titles(
     let current_pane_tab_id = panes
         .iter()
         .find(|w| w.pane_id == current_pane_id)
-        .ok_or_else(|| {
-            eyre!("current pane id '{current_pane_id}' not found among panes {panes:#?}")
-        })?
+        .ok_or_else(|| eyre!("current pane id '{current_pane_id}' not found among panes {panes:#?}"))?
         .tab_id;
 
     Ok(panes
         .iter()
         .find(|w| w.tab_id == current_pane_tab_id && pane_titles.contains(&w.title.as_str()))
-        .ok_or({
-            eyre!("pane with title '{pane_titles:#?}' not found in tab '{current_pane_tab_id}'")
-        })?
+        .ok_or(eyre!(
+            "pane with title '{pane_titles:#?}' not found in tab '{current_pane_tab_id}'"
+        ))?
         .clone())
 }
 
@@ -78,9 +76,7 @@ impl WeztermPane {
     /// Given two [`WeztermPane`] checks if they are in the same tab and if the first
     /// has a current working directory that is the same or a child of the second one.
     pub fn is_sibling_terminal_pane_of(&self, other: &WeztermPane) -> bool {
-        self.pane_id != other.pane_id
-            && self.tab_id == other.tab_id
-            && self.cwd.starts_with(&other.cwd)
+        self.pane_id != other.pane_id && self.tab_id == other.tab_id && self.cwd.starts_with(&other.cwd)
     }
 }
 

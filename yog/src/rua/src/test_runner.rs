@@ -15,14 +15,10 @@ use tree_sitter::Point;
 /// Returns an error in case of:
 /// - the file referenced by [`CursorPosition`] is not a Rust file
 /// - no enclosing function can be found for the supplied [`CursorPosition`]
-/// - any external error related to interacting with Wezterm and the external test runner app
-///   (i.e. cargo make)
+/// - any external error related to interacting with Wezterm and the external test runner app (i.e. cargo make)
 pub fn run_test(_lua: &Lua, cursor_position: CursorPosition) -> LuaResult<()> {
-    let test_name = get_enclosing_fn_name_of_position(
-        cursor_position.path.as_path(),
-        Point::from(&cursor_position),
-    )?
-    .ok_or(anyhow!("no enclosing fn found for {cursor_position:#?}"))?;
+    let test_name = get_enclosing_fn_name_of_position(cursor_position.path.as_path(), Point::from(&cursor_position))?
+        .ok_or(anyhow!("no enclosing fn found for {cursor_position:#?}"))?;
 
     let cur_pane_id = utils::wezterm::get_current_pane_id()
         .map_err(|e| anyhow!(e))
@@ -35,9 +31,7 @@ pub fn run_test(_lua: &Lua, cursor_position: CursorPosition) -> LuaResult<()> {
     let cur_pane = wez_panes
         .iter()
         .find(|p| p.pane_id == cur_pane_id)
-        .ok_or(anyhow!(
-            "current pane not found among Wezterm panes {wez_panes:#?}"
-        ))?;
+        .ok_or(anyhow!("current pane not found among Wezterm panes {wez_panes:#?}"))?;
 
     let test_runner_pane = wez_panes
         .iter()
@@ -62,9 +56,7 @@ pub fn run_test(_lua: &Lua, cursor_position: CursorPosition) -> LuaResult<()> {
             ),
         ])
         .spawn()
-        .with_context(|| {
-            format!("error executing test {test_name} in Wezterm pane {test_runner_pane:#?}")
-        })
+        .with_context(|| format!("error executing test {test_name} in Wezterm pane {test_runner_pane:#?}"))
         .map_err(|e| anyhow!(e))?;
 
     Ok(())
@@ -94,10 +86,9 @@ impl FromLua for CursorPosition {
     fn from_lua(value: mlua::Value, _lua: &mlua::Lua) -> mlua::Result<Self> {
         if let LuaValue::Table(table) = value {
             let out = Self {
-                path: PathBuf::from(LuaErrorContext::with_context(
-                    table.get::<String>("path"),
-                    |_| format!("missing path in LuaTable {table:#?}",),
-                )?),
+                path: PathBuf::from(LuaErrorContext::with_context(table.get::<String>("path"), |_| {
+                    format!("missing path in LuaTable {table:#?}",)
+                })?),
                 row: LuaErrorContext::with_context(table.get("row"), |_| {
                     format!("missing row in LuaTable {table:#?}")
                 })?,
@@ -115,10 +106,7 @@ impl FromLua for CursorPosition {
     }
 }
 
-fn get_enclosing_fn_name_of_position(
-    file_path: &Path,
-    position: Point,
-) -> anyhow::Result<Option<String>> {
+fn get_enclosing_fn_name_of_position(file_path: &Path, position: Point) -> anyhow::Result<Option<String>> {
     if file_path.extension().is_some_and(|ext| ext != "rs") {
         anyhow::bail!("{file_path:#?} is not a Rust file");
     }
@@ -133,9 +121,7 @@ fn get_enclosing_fn_name_of_position(
         .parse(&src, None)
         .ok_or(anyhow!("error parsing src {file_path:#?} as Rust"))?;
 
-    let node_at_position = src_tree
-        .root_node()
-        .descendant_for_point_range(position, position);
+    let node_at_position = src_tree.root_node().descendant_for_point_range(position, position);
 
     Ok(get_enclosing_fn_name_of_node(&src, node_at_position))
 }

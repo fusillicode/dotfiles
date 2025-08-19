@@ -1,16 +1,19 @@
 #![feature(exit_status_error)]
 
+use std::borrow::Cow;
 use std::io::Write;
 use std::process::Command;
 
+use chrono::DateTime;
+use chrono::FixedOffset;
 use color_eyre::eyre::bail;
+use color_eyre::eyre::eyre;
 use url::Url;
-
 use utils::cmd::CmdError;
 use utils::cmd::CmdExt;
-use utils::tui::ClosablePrompt;
-use utils::tui::ClosablePromptError;
-use utils::tui::git_branches_autocomplete::GitBranchesAutocomplete;
+use utils::sk::SkimItem;
+use utils::sk::SkimItemPreview;
+use utils::sk::SkimPreviewContext;
 
 /// Create or switch to the GitHub branch built by parameterizing the supplied args.
 /// Existence of branch is checked only against local ones (to avoid fetching them remotely).
@@ -37,13 +40,138 @@ fn main() -> color_eyre::Result<()> {
 }
 
 fn autocomplete_git_branches() -> color_eyre::Result<()> {
-    match utils::tui::text::minimal::<String>(Some(Box::new(GitBranchesAutocomplete::new()?)))
-        .closable_prompt()
-    {
-        Ok(hd) if hd == "-" || hd.is_empty() => switch_branch("-"),
-        Ok(other) => switch_branch(&other),
-        Err(ClosablePromptError::Closed) => Ok(()),
-        Err(error) => Err(error.into()),
+    let mut git_refs = get_git_local_and_remote_refs()?;
+    keep_local_and_untracked_refs(&mut git_refs);
+
+    match utils::sk::get_item(git_refs, Default::default())? {
+        Some(hd) if hd.text() == "-" || hd.text().is_empty() => switch_branch("-"),
+        Some(other) => switch_branch(&other.text()),
+        None => Ok(()),
+    }
+}
+
+/// Get all local and remote git refs sorted by latest to oldest modified.
+///
+/// Returns an error as soon as 1 single item cannot be converted to a [`GitRef`].
+fn get_git_local_and_remote_refs() -> color_eyre::Result<Vec<GitRef>> {
+    let output = Command::new("git")
+        .args([
+            "for-each-ref",
+            "--sort=-creatordate",
+            "refs/heads/",
+            "refs/remotes/",
+            &format!("--format={}", GitRef::format()),
+        ])
+        .exec()?;
+
+    let mut res = vec![];
+    for line in std::str::from_utf8(&output.stdout)?.trim().split('\n') {
+        res.push(<GitRef as std::str::FromStr>::from_str(line)?);
+    }
+
+    Ok(res)
+}
+
+/// Deduplicates local and remote git refs.
+fn keep_local_and_untracked_refs(git_refs: &mut Vec<GitRef>) {
+    let mut local_names = std::collections::HashSet::new();
+
+    git_refs.retain(|x| {
+        if x.remote.is_none() {
+            local_names.insert(x.name.clone());
+            true
+        } else {
+            !local_names.contains(&x.name)
+        }
+    });
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Debug)]
+struct GitRef {
+    name: String,
+    remote: Option<String>,
+    object_name: String,
+    object_type: String,
+    committer_email: String,
+    committer_date_time: DateTime<FixedOffset>,
+    subject: String,
+}
+
+impl GitRef {
+    const SEPARATOR: char = '|';
+
+    pub fn format() -> String {
+        format!(
+            "%(refname){0}%(objectname:short){0}%(objecttype){0}%(committeremail){0}%(committerdate:rfc2822){0}%(subject)",
+            Self::SEPARATOR
+        )
+    }
+}
+
+impl SkimItem for GitRef {
+    fn text(&self) -> Cow<'_, str> {
+        Cow::from(self.name.clone())
+    }
+
+    fn preview(&self, _context: SkimPreviewContext) -> SkimItemPreview {
+        SkimItemPreview::AnsiText(format!(
+            "\x1b[31m{} {} {}\x1b[0m\n{}\n\x1b[32m{}\x1b[0m \x1b[34;1m{}\x1b[0m\n",
+            self.remote.as_deref().unwrap_or("local"),
+            self.object_type,
+            self.object_name,
+            self.subject,
+            self.committer_date_time,
+            self.committer_email,
+        ))
+    }
+}
+
+impl std::str::FromStr for GitRef {
+    type Err = color_eyre::eyre::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut parts = s.split('|');
+
+        let refname: String = parts
+            .next()
+            .ok_or_else(|| eyre!("missing refname in git for-each-ref output {s}"))?
+            .into();
+
+        let (name, remote) = if let Some(remote) = refname.strip_prefix("refs/remotes/") {
+            remote
+                .split_once('/')
+                .map(|(refname, remote_name)| (remote_name, Some(refname)))
+                .ok_or_else(|| eyre!("unexpected refs/remotes structure {refname}"))?
+        } else {
+            (refname.trim_start_matches("refs/heads/"), None)
+        };
+
+        Ok(GitRef {
+            name: name.to_string(),
+            remote: remote.map(str::to_string),
+            object_name: parts
+                .next()
+                .ok_or_else(|| eyre!("missing objectname:short in git for-each-ref output {s}"))?
+                .to_string(),
+            object_type: parts
+                .next()
+                .ok_or_else(|| eyre!("missing objecttype in git for-each-ref output {s}"))?
+                .to_string(),
+            committer_email: parts
+                .next()
+                .ok_or_else(|| eyre!("missing committeremail in git for-each-ref output {s}"))?
+                .to_string(),
+            committer_date_time: parts
+                .next()
+                .map(DateTime::parse_from_rfc2822)
+                .transpose()?
+                .ok_or_else(|| eyre!("missing committerdate in git for-each-ref output {s}"))?,
+            subject: parts
+                .next()
+                .ok_or_else(|| eyre!("missing subject in git for-each-ref output {s}"))?
+                .to_string(),
+        })
     }
 }
 
@@ -61,17 +189,12 @@ fn switch_branch_or_create_if_missing(arg: &str) -> color_eyre::Result<()> {
 // - if the last arg is NOT an existing local branch try to create a branch
 fn checkout_files_or_create_branch_if_missing(args: &[String]) -> color_eyre::Result<()> {
     if let Some((branch, files)) = get_branch_and_files_to_checkout(args)? {
-        return checkout_files(
-            &files.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
-            branch,
-        );
+        return checkout_files(&files.iter().map(|x| x.as_str()).collect::<Vec<_>>(), branch);
     }
     create_branch_if_missing(&build_branch_name(args)?)
 }
 
-fn get_branch_and_files_to_checkout(
-    args: &[String],
-) -> color_eyre::Result<Option<(&String, &[String])>> {
+fn get_branch_and_files_to_checkout(args: &[String]) -> color_eyre::Result<Option<(&String, &[String])>> {
     if let Some((branch, files)) = args.split_last()
         && local_branch_exists(branch)?
     {
@@ -81,10 +204,7 @@ fn get_branch_and_files_to_checkout(
 }
 
 fn local_branch_exists(branch: &str) -> color_eyre::Result<bool> {
-    match Command::new("git")
-        .args(["rev-parse", "--verify", branch])
-        .exec()
-    {
+    match Command::new("git").args(["rev-parse", "--verify", branch]).exec() {
         Ok(_) => Ok(true),
         Err(CmdError::Stderr { .. }) => Ok(false),
         Err(error) => Err(error.into()),
@@ -109,16 +229,13 @@ fn create_branch(branch: &str) -> color_eyre::Result<()> {
     if !should_create_new_branch(branch)? {
         return Ok(());
     }
-    Command::new("git")
-        .args(["checkout", "-b", branch])
-        .exec()?;
+    Command::new("git").args(["checkout", "-b", branch]).exec()?;
     println!("🌱 {branch}");
     Ok(())
 }
 
 // Create the supplied branch without asking only if:
-// - the passed branch is the default one (it will not be created because already there and I'll be
-//   switched to it)
+// - the passed branch is the default one (it will not be created because already there and I'll be switched to it)
 // - the current branch is the default one
 // This logic helps me to avoid inadvertently branching from branches different from the default
 // one as it doesn't happen often.
@@ -209,36 +326,23 @@ mod tests {
     fn test_build_branch_name_works_as_expected() {
         let res = format!("{:#?}", build_branch_name(&["".into()]));
         assert!(
-            res.contains(
-                "Err(\n    \"parameterizing [\\n    \\\"\\\",\\n] resulted in empty String\",\n)"
-            ),
+            res.contains("Err(\n    \"parameterizing [\\n    \\\"\\\",\\n] resulted in empty String\",\n)"),
             "unexpected {res}"
         );
 
         let res = format!("{:#?}", build_branch_name(&["❌".into()]));
         assert!(
-            res.contains(
-                "Err(\n    \"parameterizing [\\n    \\\"❌\\\",\\n] resulted in empty String\",\n)"
-            ),
+            res.contains("Err(\n    \"parameterizing [\\n    \\\"❌\\\",\\n] resulted in empty String\",\n)"),
             "unexpected {res}"
         );
 
-        assert_eq!(
-            "helloworld",
-            build_branch_name(&["HelloWorld".into()]).unwrap()
-        );
-        assert_eq!(
-            "hello-world",
-            build_branch_name(&["Hello World".into()]).unwrap()
-        );
+        assert_eq!("helloworld", build_branch_name(&["HelloWorld".into()]).unwrap());
+        assert_eq!("hello-world", build_branch_name(&["Hello World".into()]).unwrap());
         assert_eq!(
             "feature-implement-user-login",
             build_branch_name(&["Feature: Implement User Login!".into()]).unwrap()
         );
-        assert_eq!(
-            "version-2.0",
-            build_branch_name(&["Version 2.0".into()]).unwrap()
-        );
+        assert_eq!("version-2.0", build_branch_name(&["Version 2.0".into()]).unwrap());
         assert_eq!(
             "this-is...a_test",
             build_branch_name(&["This---is...a_test".into()]).unwrap()
@@ -247,14 +351,8 @@ mod tests {
             "leading-and-trailing",
             build_branch_name(&["  Leading and trailing   ".into()]).unwrap()
         );
-        assert_eq!(
-            "hello-world",
-            build_branch_name(&["Hello 🌎 World".into()]).unwrap()
-        );
-        assert_eq!(
-            "launch-day",
-            build_branch_name(&["🚀Launch🚀Day".into()]).unwrap()
-        );
+        assert_eq!("hello-world", build_branch_name(&["Hello 🌎 World".into()]).unwrap());
+        assert_eq!("launch-day", build_branch_name(&["🚀Launch🚀Day".into()]).unwrap());
         assert_eq!(
             "smile-and-code",
             build_branch_name(&["Smile 😊 and 🤖 code".into()]).unwrap()
