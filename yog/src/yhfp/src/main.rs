@@ -4,7 +4,6 @@ use std::process::Command;
 use std::str::FromStr;
 
 use color_eyre::eyre::eyre;
-
 use utils::editor::Editor;
 use utils::hx::HxStatusLine;
 
@@ -27,9 +26,10 @@ fn main() -> color_eyre::Result<()> {
             .stdout,
     )?;
 
-    let hx_status_line = wezterm_pane_text.lines().nth_back(1).ok_or_else(|| {
-        eyre!("no hx status line in pane '{hx_pane_id}' text {wezterm_pane_text:#?}")
-    })?;
+    let hx_status_line = wezterm_pane_text
+        .lines()
+        .nth_back(1)
+        .ok_or_else(|| eyre!("no hx status line in pane '{hx_pane_id}' text {wezterm_pane_text:#?}"))?;
 
     let hx_status_line = HxStatusLine::from_str(hx_status_line)?;
 
@@ -39,12 +39,10 @@ fn main() -> color_eyre::Result<()> {
 }
 
 fn format_hx_status_line(hx_status_line: &HxStatusLine) -> color_eyre::Result<String> {
-    let file_path = hx_status_line.file_path.to_str().ok_or_else(|| {
-        eyre!(
-            "cannot convert PathBuf {:#?} to str",
-            hx_status_line.file_path
-        )
-    })?;
+    let file_path = hx_status_line
+        .file_path
+        .to_str()
+        .ok_or_else(|| eyre!("cannot convert PathBuf {:#?} to str", hx_status_line.file_path))?;
 
     Ok(format!("{}:{}", file_path, hx_status_line.position.line))
 }

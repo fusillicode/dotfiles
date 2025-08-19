@@ -1,9 +1,8 @@
 use color_eyre::eyre::eyre;
-use skim::prelude::*;
-
 pub use skim::ItemPreview as SkimItemPreview;
 pub use skim::PreviewContext as SkimPreviewContext;
 pub use skim::SkimItem;
+use skim::prelude::*;
 
 /// Get the selected item among the supplied ones with sk configured with either:
 /// - the supplied [`SkimOptionsBuilder`] or
@@ -15,9 +14,7 @@ pub fn get_item<T: SkimItem + Clone + std::fmt::Debug>(
     match &get_items(items, sk_opts)?.as_slice() {
         &[item] => Ok(Some(item.clone())),
         [] => Ok(None),
-        multiple_items => Err(eyre!(
-            "unexpected multiple selected items {multiple_items:#?}"
-        )),
+        multiple_items => Err(eyre!("unexpected multiple selected items {multiple_items:#?}")),
     }
 }
 
@@ -52,13 +49,9 @@ where
 {
     if let Some((_, cli_arg)) = cli_args.iter().enumerate().find(|x| cli_arg_selector(x)) {
         let mut item_find = item_find_by_arg(cli_arg);
-        return Ok(Some(
-            items
-                .iter()
-                .find(|x| item_find(*x))
-                .cloned()
-                .ok_or_else(|| eyre!("no item matches CLI arg {cli_arg} in opts {items:#?}"))?,
-        ));
+        return Ok(Some(items.iter().find(|x| item_find(*x)).cloned().ok_or_else(
+            || eyre!("no item matches CLI arg {cli_arg} in opts {items:#?}"),
+        )?));
     }
     get_item(items, sk_opts)
 }
@@ -91,12 +84,7 @@ fn get_items<T: SkimItem + Clone + std::fmt::Debug>(
                 .as_any()
                 .downcast_ref::<T>()
                 .cloned()
-                .ok_or_else(|| {
-                    eyre!(
-                        "cannot downcast SkimItem to type {}",
-                        std::any::type_name::<T>()
-                    )
-                })?,
+                .ok_or_else(|| eyre!("cannot downcast SkimItem to type {}", std::any::type_name::<T>()))?,
         );
     }
     Ok(out)

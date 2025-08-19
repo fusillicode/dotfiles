@@ -10,17 +10,12 @@ fn main() -> color_eyre::Result<()> {
 
     let args = utils::system::get_args();
 
-    let path = args
-        .first()
-        .ok_or_else(|| eyre!("missing path arg from {args:#?}"))?;
+    let path = args.first().ok_or_else(|| eyre!("missing path arg from {args:#?}"))?;
 
     let metadata = std::fs::metadata(path)?;
 
     if metadata.is_dir() {
-        return Ok(Command::new("ls")
-            .args(["-llAtrh", path])
-            .status()?
-            .exit_ok()?);
+        return Ok(Command::new("ls").args(["-llAtrh", path]).status()?.exit_ok()?);
     }
 
     if metadata.is_file() || metadata.is_symlink() {

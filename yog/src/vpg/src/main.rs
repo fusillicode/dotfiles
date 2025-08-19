@@ -31,9 +31,7 @@ fn main() -> color_eyre::Result<()> {
         &args,
         |(idx, _)| *idx == 0,
         pgpass_file.entries,
-        |alias: &str| {
-            Box::new(move |pgpass_entry: &PgpassEntry| pgpass_entry.metadata.alias == alias)
-        },
+        |alias: &str| Box::new(move |pgpass_entry: &PgpassEntry| pgpass_entry.metadata.alias == alias),
         Default::default(),
     )?
     else {
@@ -99,9 +97,7 @@ impl<'a> PgpassFile<'a> {
                 continue;
             }
 
-            if let Some((alias, vault_path)) =
-                line.strip_prefix('#').and_then(|s| s.split_once(' '))
-            {
+            if let Some((alias, vault_path)) = line.strip_prefix('#').and_then(|s| s.split_once(' ')) {
                 let metadata = Metadata {
                     alias: alias.to_string(),
                     vault_path: vault_path.to_string(),
@@ -187,10 +183,7 @@ struct Conn {
 
 impl Conn {
     pub fn db_url(&self) -> String {
-        format!(
-            "postgres://{}@{}:{}/{}",
-            self.user, self.host, self.port, self.db
-        )
+        format!("postgres://{}@{}:{}/{}", self.user, self.host, self.port, self.db)
     }
 
     pub fn update(&mut self, conn: &VaultCreds) {
@@ -204,9 +197,7 @@ impl TryFrom<(usize, &str)> for Conn {
 
     fn try_from(idx_line @ (idx, line): (usize, &str)) -> Result<Self, Self::Error> {
         if let [host, port, db, user, pwd] = line.split(':').collect::<Vec<_>>().as_slice() {
-            let port = port
-                .parse()
-                .context(format!("unexpected port value {port}"))?;
+            let port = port.parse().context(format!("unexpected port value {port}"))?;
             return Ok(Conn {
                 idx,
                 host: host.to_string(),
@@ -222,11 +213,7 @@ impl TryFrom<(usize, &str)> for Conn {
 
 impl std::fmt::Display for Conn {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}:{}:{}:{}:{}",
-            self.host, self.port, self.db, self.user, self.pwd
-        )
+        write!(f, "{}:{}:{}:{}:{}", self.host, self.port, self.db, self.user, self.pwd)
     }
 }
 

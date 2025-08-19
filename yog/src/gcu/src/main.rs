@@ -9,7 +9,6 @@ use chrono::FixedOffset;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 use url::Url;
-
 use utils::cmd::CmdError;
 use utils::cmd::CmdExt;
 use utils::sk::SkimItem;
@@ -190,17 +189,12 @@ fn switch_branch_or_create_if_missing(arg: &str) -> color_eyre::Result<()> {
 // - if the last arg is NOT an existing local branch try to create a branch
 fn checkout_files_or_create_branch_if_missing(args: &[String]) -> color_eyre::Result<()> {
     if let Some((branch, files)) = get_branch_and_files_to_checkout(args)? {
-        return checkout_files(
-            &files.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
-            branch,
-        );
+        return checkout_files(&files.iter().map(|x| x.as_str()).collect::<Vec<_>>(), branch);
     }
     create_branch_if_missing(&build_branch_name(args)?)
 }
 
-fn get_branch_and_files_to_checkout(
-    args: &[String],
-) -> color_eyre::Result<Option<(&String, &[String])>> {
+fn get_branch_and_files_to_checkout(args: &[String]) -> color_eyre::Result<Option<(&String, &[String])>> {
     if let Some((branch, files)) = args.split_last()
         && local_branch_exists(branch)?
     {
@@ -210,10 +204,7 @@ fn get_branch_and_files_to_checkout(
 }
 
 fn local_branch_exists(branch: &str) -> color_eyre::Result<bool> {
-    match Command::new("git")
-        .args(["rev-parse", "--verify", branch])
-        .exec()
-    {
+    match Command::new("git").args(["rev-parse", "--verify", branch]).exec() {
         Ok(_) => Ok(true),
         Err(CmdError::Stderr { .. }) => Ok(false),
         Err(error) => Err(error.into()),
@@ -238,16 +229,13 @@ fn create_branch(branch: &str) -> color_eyre::Result<()> {
     if !should_create_new_branch(branch)? {
         return Ok(());
     }
-    Command::new("git")
-        .args(["checkout", "-b", branch])
-        .exec()?;
+    Command::new("git").args(["checkout", "-b", branch]).exec()?;
     println!("🌱 {branch}");
     Ok(())
 }
 
 // Create the supplied branch without asking only if:
-// - the passed branch is the default one (it will not be created because already there and I'll be
-//   switched to it)
+// - the passed branch is the default one (it will not be created because already there and I'll be switched to it)
 // - the current branch is the default one
 // This logic helps me to avoid inadvertently branching from branches different from the default
 // one as it doesn't happen often.
@@ -338,36 +326,23 @@ mod tests {
     fn test_build_branch_name_works_as_expected() {
         let res = format!("{:#?}", build_branch_name(&["".into()]));
         assert!(
-            res.contains(
-                "Err(\n    \"parameterizing [\\n    \\\"\\\",\\n] resulted in empty String\",\n)"
-            ),
+            res.contains("Err(\n    \"parameterizing [\\n    \\\"\\\",\\n] resulted in empty String\",\n)"),
             "unexpected {res}"
         );
 
         let res = format!("{:#?}", build_branch_name(&["❌".into()]));
         assert!(
-            res.contains(
-                "Err(\n    \"parameterizing [\\n    \\\"❌\\\",\\n] resulted in empty String\",\n)"
-            ),
+            res.contains("Err(\n    \"parameterizing [\\n    \\\"❌\\\",\\n] resulted in empty String\",\n)"),
             "unexpected {res}"
         );
 
-        assert_eq!(
-            "helloworld",
-            build_branch_name(&["HelloWorld".into()]).unwrap()
-        );
-        assert_eq!(
-            "hello-world",
-            build_branch_name(&["Hello World".into()]).unwrap()
-        );
+        assert_eq!("helloworld", build_branch_name(&["HelloWorld".into()]).unwrap());
+        assert_eq!("hello-world", build_branch_name(&["Hello World".into()]).unwrap());
         assert_eq!(
             "feature-implement-user-login",
             build_branch_name(&["Feature: Implement User Login!".into()]).unwrap()
         );
-        assert_eq!(
-            "version-2.0",
-            build_branch_name(&["Version 2.0".into()]).unwrap()
-        );
+        assert_eq!("version-2.0", build_branch_name(&["Version 2.0".into()]).unwrap());
         assert_eq!(
             "this-is...a_test",
             build_branch_name(&["This---is...a_test".into()]).unwrap()
@@ -376,14 +351,8 @@ mod tests {
             "leading-and-trailing",
             build_branch_name(&["  Leading and trailing   ".into()]).unwrap()
         );
-        assert_eq!(
-            "hello-world",
-            build_branch_name(&["Hello 🌎 World".into()]).unwrap()
-        );
-        assert_eq!(
-            "launch-day",
-            build_branch_name(&["🚀Launch🚀Day".into()]).unwrap()
-        );
+        assert_eq!("hello-world", build_branch_name(&["Hello 🌎 World".into()]).unwrap());
+        assert_eq!("launch-day", build_branch_name(&["🚀Launch🚀Day".into()]).unwrap());
         assert_eq!(
             "smile-and-code",
             build_branch_name(&["Smile 😊 and 🤖 code".into()]).unwrap()

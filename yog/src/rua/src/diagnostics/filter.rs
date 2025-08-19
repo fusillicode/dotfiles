@@ -20,9 +20,9 @@ pub fn filter(lua: &Lua, (buf_path, lsp_diags): (LuaString, LuaTable)) -> LuaRes
     // Using [`.pairs`] and [`LuaValue`] to get a & to the LSP diagnostic [`LuaTable`] and avoid
     // cloning it when passing it to the filter.
     for (_, lua_value) in lsp_diags.pairs::<usize, LuaValue>().flatten() {
-        let lsp_diag = lua_value.as_table().ok_or_else(|| {
-            Error::RuntimeError(format!("cannot get LuaTable from LuaValue {lua_value:#?}"))
-        })?;
+        let lsp_diag = lua_value
+            .as_table()
+            .ok_or_else(|| Error::RuntimeError(format!("cannot get LuaTable from LuaValue {lua_value:#?}")))?;
         if filters.skip_diagnostic(&buf_path, Some(lsp_diag))? {
             continue;
         }
