@@ -143,8 +143,9 @@ impl SkimItem for PgpassEntry {
 
     fn preview(&self, _context: SkimPreviewContext) -> SkimItemPreview {
         SkimItemPreview::AnsiText(format!(
-            "{}/{}:{}\n{}\n",
+            "{}\n{}\n{}:{}\n{}\n",
             self.connection_params.host,
+            self.connection_params.user,
             self.connection_params.db,
             self.connection_params.port,
             self.metadata.vault_path,
