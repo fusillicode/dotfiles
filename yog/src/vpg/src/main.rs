@@ -27,7 +27,10 @@ fn main() -> color_eyre::Result<()> {
     let pgpass_file = PgpassFile::parse(pgpass_content.as_str())?;
 
     let args = utils::system::get_args();
-    let Some(PgpassEntry { metadata, mut conn }) = utils::sk::get_item_from_cli_args_or_sk_select(
+    let Some(PgpassEntry {
+        metadata,
+        connection_params: mut conn,
+    }) = utils::sk::get_item_from_cli_args_or_sk_select(
         &args,
         |(idx, _)| *idx == 0,
         pgpass_file.entries,
@@ -106,8 +109,11 @@ impl<'a> PgpassFile<'a> {
                 if let Some(idx_line) = file_lines.next() {
                     idx_lines.push(idx_line);
 
-                    let conn = Conn::try_from(idx_line)?;
-                    entries.push(PgpassEntry { metadata, conn });
+                    let conn = ConnectionParams::try_from(idx_line)?;
+                    entries.push(PgpassEntry {
+                        metadata,
+                        connection_params: conn,
+                    });
 
                     continue;
                 }
@@ -127,7 +133,7 @@ struct PgpassEntry {
     /// Metadata from preceding comment lines (alias/vault references).
     pub metadata: Metadata,
     /// Parsed connection parameters from a valid `.pgpass` line.
-    pub conn: Conn,
+    pub connection_params: ConnectionParams,
 }
 
 impl SkimItem for PgpassEntry {
@@ -138,7 +144,10 @@ impl SkimItem for PgpassEntry {
     fn preview(&self, _context: SkimPreviewContext) -> SkimItemPreview {
         SkimItemPreview::AnsiText(format!(
             "{}/{}:{}\n{}\n",
-            self.conn.host, self.conn.db, self.conn.port, self.metadata.vault_path,
+            self.connection_params.host,
+            self.connection_params.db,
+            self.connection_params.port,
+            self.metadata.vault_path,
         ))
     }
 }
@@ -166,7 +175,7 @@ impl std::fmt::Display for Metadata {
 
 /// Connection parameters parsed from a `.pgpass` line.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Conn {
+struct ConnectionParams {
     /// 0-based index referencing the original line in `PgpassFile.idx_lines`.
     pub idx: usize,
     /// Hostname.
@@ -181,7 +190,7 @@ struct Conn {
     pub pwd: String,
 }
 
-impl Conn {
+impl ConnectionParams {
     pub fn db_url(&self) -> String {
         format!("postgres://{}@{}:{}/{}", self.user, self.host, self.port, self.db)
     }
@@ -192,13 +201,13 @@ impl Conn {
     }
 }
 
-impl TryFrom<(usize, &str)> for Conn {
+impl TryFrom<(usize, &str)> for ConnectionParams {
     type Error = color_eyre::eyre::Error;
 
     fn try_from(idx_line @ (idx, line): (usize, &str)) -> Result<Self, Self::Error> {
         if let [host, port, db, user, pwd] = line.split(':').collect::<Vec<_>>().as_slice() {
             let port = port.parse().context(format!("unexpected port value {port}"))?;
-            return Ok(Conn {
+            return Ok(ConnectionParams {
                 idx,
                 host: host.to_string(),
                 port,
@@ -211,7 +220,7 @@ impl TryFrom<(usize, &str)> for Conn {
     }
 }
 
-impl std::fmt::Display for Conn {
+impl std::fmt::Display for ConnectionParams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}:{}:{}:{}:{}", self.host, self.port, self.db, self.user, self.pwd)
     }
@@ -291,7 +300,7 @@ fn log_into_vault_if_required() -> color_eyre::Result<()> {
 /// 4. Sets strict permissions (600) to match .pgpass security requirements.
 fn save_new_pgpass_file(
     pgpass_idx_lines: Vec<(usize, &str)>,
-    updated_creds: &Conn,
+    updated_creds: &ConnectionParams,
     pgpass_path: &Path,
 ) -> color_eyre::Result<()> {
     let mut tmp_path = PathBuf::from(pgpass_path);
@@ -324,7 +333,7 @@ mod tests {
     #[test]
     fn test_creds_try_from_returns_the_expected_creds() {
         assert_eq!(
-            Conn {
+            ConnectionParams {
                 idx: 42,
                 host: "host".into(),
                 port: 5432,
@@ -332,13 +341,13 @@ mod tests {
                 user: "user".into(),
                 pwd: "pwd".into(),
             },
-            Conn::try_from((42, "host:5432:db:user:pwd")).unwrap()
+            ConnectionParams::try_from((42, "host:5432:db:user:pwd")).unwrap()
         )
     }
 
     #[test]
     fn test_creds_try_from_returns_an_error_if_port_is_not_a_number() {
-        let res = format!("{:#?}", Conn::try_from((42, "host:foo:db:user:pwd")));
+        let res = format!("{:#?}", ConnectionParams::try_from((42, "host:foo:db:user:pwd")));
         assert!(
             res.contains("Err(\n    Error {\n        msg: \"unexpected port value foo\",\n        source: ParseIntError {\n            kind: InvalidDigit,\n        },\n    },\n)"),
             "unexpected {res}"
@@ -347,7 +356,7 @@ mod tests {
 
     #[test]
     fn test_creds_try_from_returns_an_error_if_str_is_malformed() {
-        let res = format!("{:#?}", Conn::try_from((42, "host:5432:db:user")));
+        let res = format!("{:#?}", ConnectionParams::try_from((42, "host:5432:db:user")));
         assert!(
             res.contains("Err(\n    \"cannot build CredsLine from idx_line (\\n    42,\\n    \\\"host:5432:db:user\\\",\\n)\",\n)"),
             "unexpected {res}"
@@ -358,7 +367,7 @@ mod tests {
     fn test_creds_db_url_returns_the_expected_output() {
         assert_eq!(
             "postgres://user@host:5432/db".to_string(),
-            Conn {
+            ConnectionParams {
                 idx: 42,
                 host: "host".into(),
                 port: 5432,
