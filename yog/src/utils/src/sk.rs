@@ -74,7 +74,12 @@ fn get_items<T: SkimItem + Clone + std::fmt::Debug>(items: Vec<T>) -> color_eyre
                 .as_any()
                 .downcast_ref::<T>()
                 .cloned()
-                .ok_or_else(|| eyre!("cannot downcast SkimItem to T"))?,
+                .ok_or_else(|| {
+                    eyre!(
+                        "cannot downcast SkimItem to type {}",
+                        std::any::type_name::<T>()
+                    )
+                })?,
         );
     }
     Ok(out)
