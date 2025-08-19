@@ -11,6 +11,8 @@ use url::Url;
 use utils::cmd::CmdError;
 use utils::cmd::CmdExt;
 use utils::sk::SkimItem;
+use utils::sk::SkimItemPreview;
+use utils::sk::SkimPreviewContext;
 
 /// Create or switch to the GitHub branch built by parameterizing the supplied args.
 /// Existence of branch is checked only against local ones (to avoid fetching them remotely).
@@ -107,6 +109,16 @@ impl GitRef {
 impl SkimItem for GitRef {
     fn text(&self) -> Cow<'_, str> {
         Cow::from(self.name.clone())
+    }
+
+    fn preview(&self, _context: SkimPreviewContext) -> SkimItemPreview {
+        SkimItemPreview::Text(format!(
+            "[{}]\n{}\n{}\n{}\n",
+            self.remote.as_deref().unwrap_or("local"),
+            self.subject,
+            self.committer_date_iso8601,
+            self.committer_email,
+        ))
     }
 }
 

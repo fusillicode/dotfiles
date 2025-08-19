@@ -1,9 +1,13 @@
 use color_eyre::eyre::eyre;
 use skim::prelude::*;
 
+pub use skim::ItemPreview as SkimItemPreview;
+pub use skim::PreviewContext as SkimPreviewContext;
 pub use skim::SkimItem;
 
-/// Get the selected item among the supplied ones via a commonly configured skim.
+/// Get the selected item among the supplied ones with sk configured with either:
+/// - the supplied [`SkimOptionsBuilder`] or
+/// - the base one [`base_sk_opts`]
 pub fn get_item<T: SkimItem + Clone + std::fmt::Debug>(
     items: Vec<T>,
     sk_opts: Option<SkimOptionsBuilder>,
@@ -66,7 +70,7 @@ fn get_items<T: SkimItem + Clone + std::fmt::Debug>(
     let sk_opts = sk_opts
         .unwrap_or_else(|| {
             let mut sk_opts = SkimOptionsBuilder::default();
-            common_sk_opts(&mut sk_opts);
+            base_sk_opts(&mut sk_opts);
             sk_opts
         })
         .final_build()?;
@@ -106,11 +110,13 @@ fn build_sk_source_from_items<T: SkimItem>(items: Vec<T>) -> color_eyre::Result<
     Ok(rx)
 }
 
-fn common_sk_opts(opts_builder: &mut SkimOptionsBuilder) -> &mut SkimOptionsBuilder {
+fn base_sk_opts(opts_builder: &mut SkimOptionsBuilder) -> &mut SkimOptionsBuilder {
     opts_builder
-        .height(String::from("12"))
+        .height(String::from("21"))
         .no_multi(true)
         .inline_info(true)
         .layout("reverse".into())
+        .preview(Some("".into()))
+        .preview_window("down:50%".into())
         .cycle(true)
 }
