@@ -5,6 +5,8 @@ use strum::Display;
 use strum::EnumIter;
 use strum::IntoEnumIterator;
 use utils::sk::SkimItem;
+use utils::sk::SkimItemPreview;
+use utils::sk::SkimPreviewContext;
 
 #[derive(EnumIter, Display, Clone, Copy, Debug)]
 pub enum FkrOption {
@@ -20,6 +22,10 @@ pub enum FkrOption {
 impl SkimItem for FkrOption {
     fn text(&self) -> std::borrow::Cow<'_, str> {
         Cow::from(self.to_string())
+    }
+
+    fn preview(&self, _context: SkimPreviewContext) -> SkimItemPreview {
+        SkimItemPreview::Text(format!("Generate a fake {}", self))
     }
 }
 

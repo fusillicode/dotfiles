@@ -14,6 +14,8 @@ use color_eyre::eyre::WrapErr;
 use color_eyre::eyre::bail;
 use serde::Deserialize;
 use utils::sk::SkimItem;
+use utils::sk::SkimItemPreview;
+use utils::sk::SkimPreviewContext;
 
 /// Connects via pgcli to the DB matching the selected alias with refreshed Vault credentials.
 fn main() -> color_eyre::Result<()> {
@@ -135,6 +137,13 @@ struct PgpassEntry {
 impl SkimItem for PgpassEntry {
     fn text(&self) -> std::borrow::Cow<'_, str> {
         Cow::from(self.to_string())
+    }
+
+    fn preview(&self, _context: SkimPreviewContext) -> SkimItemPreview {
+        SkimItemPreview::Text(format!(
+            "{}\n{}/{}:{}\n",
+            self.conn.host, self.conn.db, self.conn.port, self.metadata.vault_path,
+        ))
     }
 }
 
