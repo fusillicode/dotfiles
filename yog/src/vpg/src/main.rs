@@ -1,5 +1,6 @@
 #![feature(exit_status_error)]
 
+use std::borrow::Cow;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -12,6 +13,7 @@ use std::process::Stdio;
 use color_eyre::eyre::WrapErr;
 use color_eyre::eyre::bail;
 use serde::Deserialize;
+use utils::SkimItem;
 
 /// Connects via pgcli to the DB matching the selected alias with refreshed Vault credentials.
 fn main() -> color_eyre::Result<()> {
@@ -23,15 +25,14 @@ fn main() -> color_eyre::Result<()> {
     let pgpass_file = PgpassFile::parse(pgpass_content.as_str())?;
 
     let args = utils::system::get_args();
-    let Some(PgpassEntry { metadata, mut conn }) =
-        utils::tui::select::get_opt_from_cli_args_or_tui_select(
-            &args,
-            |(idx, _)| *idx == 0,
-            pgpass_file.entries,
-            |alias: &str| {
-                Box::new(move |pgpass_entry: &PgpassEntry<'_>| pgpass_entry.metadata.alias == alias)
-            },
-        )?
+    let Some(PgpassEntry { metadata, mut conn }) = utils::sk::get_item_from_cli_args_or_tui_select(
+        &args,
+        |(idx, _)| *idx == 0,
+        pgpass_file.entries,
+        |alias: &str| {
+            Box::new(move |pgpass_entry: &PgpassEntry| pgpass_entry.metadata.alias == alias)
+        },
+    )?
     else {
         return Ok(());
     };
@@ -43,7 +44,7 @@ fn main() -> color_eyre::Result<()> {
     log_into_vault_if_required()?;
     let vault_read_output: VaultReadOutput = serde_json::from_slice(
         &Command::new("vault")
-            .args(["read", metadata.vault_path, "--format=json"])
+            .args(["read", &metadata.vault_path, "--format=json"])
             .output()?
             .stdout,
     )?;
@@ -79,7 +80,7 @@ struct PgpassFile<'a> {
     /// Original file lines with their 0-based indices, preserving comments and metadata.
     pub idx_lines: Vec<(usize, &'a str)>,
     /// Validated connection entries parsed from non-comment lines.
-    pub entries: Vec<PgpassEntry<'a>>,
+    pub entries: Vec<PgpassEntry>,
 }
 
 impl<'a> PgpassFile<'a> {
@@ -98,7 +99,10 @@ impl<'a> PgpassFile<'a> {
             if let Some((alias, vault_path)) =
                 line.strip_prefix('#').and_then(|s| s.split_once(' '))
             {
-                let metadata = Metadata { alias, vault_path };
+                let metadata = Metadata {
+                    alias: alias.to_string(),
+                    vault_path: vault_path.to_string(),
+                };
 
                 if let Some(idx_line) = file_lines.next() {
                     idx_lines.push(idx_line);
@@ -120,14 +124,20 @@ impl<'a> PgpassFile<'a> {
 
 /// A validated `.pgpass` entry with associated metadata and connection parameters.
 #[derive(Debug, Clone)]
-struct PgpassEntry<'a> {
+struct PgpassEntry {
     /// Metadata from preceding comment lines (alias/vault references).
-    pub metadata: Metadata<'a>,
+    pub metadata: Metadata,
     /// Parsed connection parameters from a valid `.pgpass` line.
-    pub conn: Conn<'a>,
+    pub conn: Conn,
 }
 
-impl<'a> std::fmt::Display for PgpassEntry<'a> {
+impl SkimItem for PgpassEntry {
+    fn text(&self) -> std::borrow::Cow<'_, str> {
+        Cow::from(self.to_string())
+    }
+}
+
+impl std::fmt::Display for PgpassEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.metadata.alias)
     }
@@ -135,14 +145,14 @@ impl<'a> std::fmt::Display for PgpassEntry<'a> {
 
 /// Metadata extracted from comment lines preceding a `.pgpass` entry.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Metadata<'a> {
+struct Metadata {
     /// Human-readable identifier for the connection (from comments).
-    pub alias: &'a str,
+    pub alias: String,
     /// Vault path reference for secure password management (from comments).
-    pub vault_path: &'a str,
+    pub vault_path: String,
 }
 
-impl<'a> std::fmt::Display for Metadata<'a> {
+impl std::fmt::Display for Metadata {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.alias)
     }
@@ -150,22 +160,22 @@ impl<'a> std::fmt::Display for Metadata<'a> {
 
 /// Connection parameters parsed from a `.pgpass` line.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Conn<'a> {
+struct Conn {
     /// 0-based index referencing the original line in `PgpassFile.idx_lines`.
     pub idx: usize,
     /// Hostname.
-    pub host: &'a str,
+    pub host: String,
     /// TCP port number.
     pub port: u16,
     /// Database name.
-    pub db: &'a str,
+    pub db: String,
     /// Username.
-    pub user: &'a str,
+    pub user: String,
     /// Password.
-    pub pwd: &'a str,
+    pub pwd: String,
 }
 
-impl<'a> Conn<'a> {
+impl Conn {
     pub fn db_url(&self) -> String {
         format!(
             "postgres://{}@{}:{}/{}",
@@ -173,34 +183,34 @@ impl<'a> Conn<'a> {
         )
     }
 
-    pub fn update(&mut self, conn: &'a VaultCreds) {
-        self.user = conn.username.as_str();
-        self.pwd = conn.password.as_str();
+    pub fn update(&mut self, conn: &VaultCreds) {
+        self.user = conn.username.to_string();
+        self.pwd = conn.password.to_string();
     }
 }
 
-impl<'a> TryFrom<(usize, &'a str)> for Conn<'a> {
+impl TryFrom<(usize, &str)> for Conn {
     type Error = color_eyre::eyre::Error;
 
-    fn try_from(idx_line @ (idx, line): (usize, &'a str)) -> Result<Self, Self::Error> {
+    fn try_from(idx_line @ (idx, line): (usize, &str)) -> Result<Self, Self::Error> {
         if let [host, port, db, user, pwd] = line.split(':').collect::<Vec<_>>().as_slice() {
             let port = port
                 .parse()
                 .context(format!("unexpected port value {port}"))?;
             return Ok(Conn {
                 idx,
-                host,
+                host: host.to_string(),
                 port,
-                db,
-                user,
-                pwd,
+                db: db.to_string(),
+                user: user.to_string(),
+                pwd: pwd.to_string(),
             });
         }
         bail!("cannot build CredsLine from idx_line {idx_line:#?}")
     }
 }
 
-impl<'a> std::fmt::Display for Conn<'a> {
+impl std::fmt::Display for Conn {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -319,11 +329,11 @@ mod tests {
         assert_eq!(
             Conn {
                 idx: 42,
-                host: "host",
+                host: "host".into(),
                 port: 5432,
-                db: "db",
-                user: "user",
-                pwd: "pwd",
+                db: "db".into(),
+                user: "user".into(),
+                pwd: "pwd".into(),
             },
             Conn::try_from((42, "host:5432:db:user:pwd")).unwrap()
         )
@@ -353,11 +363,11 @@ mod tests {
             "postgres://user@host:5432/db".to_string(),
             Conn {
                 idx: 42,
-                host: "host",
+                host: "host".into(),
                 port: 5432,
-                db: "db",
-                user: "user",
-                pwd: "whatever"
+                db: "db".into(),
+                user: "user".into(),
+                pwd: "whatever".into()
             }
             .db_url()
         )
