@@ -9,7 +9,7 @@ use fkr::FkrOption;
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let generated_value = match utils::sk::get_item(FkrOption::to_vec())? {
+    let generated_value = match utils::sk::get_item(FkrOption::to_vec(), Default::default())? {
         Some(fkr_option) => fkr_option.gen_string(),
         None => return Ok(()),
     };

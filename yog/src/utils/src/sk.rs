@@ -6,8 +6,9 @@ pub use skim::SkimItem;
 /// Get the selected item among the supplied ones via a commonly configured skim.
 pub fn get_item<T: SkimItem + Clone + std::fmt::Debug>(
     items: Vec<T>,
+    sk_opts: Option<SkimOptionsBuilder>,
 ) -> color_eyre::Result<Option<T>> {
-    match &get_items(items)?.as_slice() {
+    match &get_items(items, sk_opts)?.as_slice() {
         &[item] => Ok(Some(item.clone())),
         [] => Ok(None),
         multiple_items => Err(eyre!(
@@ -17,26 +18,27 @@ pub fn get_item<T: SkimItem + Clone + std::fmt::Debug>(
 }
 
 /// Get the item matching a specific CLI argument or the one selected via an interactive
-/// TUI selection.
+/// sk selection.
 ///
 /// # Behavior
 /// 1. CLI arguments flow:
 ///    - uses `cli_arg_selector` to find a specific CLI argument
 ///    - returns first matching option or error if none found
 ///
-/// 2. Interactive TUI flow:
-///    - falls back to TUI selection if no CLI argument matches
+/// 2. Interactive sk flow:
+///    - falls back to sk selection if no CLI argument matches
 ///    - returns user selection or None if dialog closed
 ///
 /// # Returns
-/// - `Ok(Some(option))` if an item is found by CLI argument or TUI selection
-/// - `Ok(None)` if the user closes the TUI selection
-/// - `Err` if no item if found by CLI argument or if TUI lookup fails
-pub fn get_item_from_cli_args_or_tui_select<'a, CAS, O, OBA, OF>(
+/// - `Ok(Some(option))` if an item is found by CLI argument or sk selection
+/// - `Ok(None)` if the user closes the sk selection
+/// - `Err` if no item if found by CLI argument or if sk lookup fails
+pub fn get_item_from_cli_args_or_sk_select<'a, CAS, O, OBA, OF>(
     cli_args: &'a [String],
     mut cli_arg_selector: CAS,
     items: Vec<O>,
     item_find_by_arg: OBA,
+    sk_opts: Option<SkimOptionsBuilder>,
 ) -> color_eyre::Result<Option<O>>
 where
     O: SkimItem + Clone + std::fmt::Debug + std::fmt::Display,
@@ -54,11 +56,20 @@ where
                 .ok_or_else(|| eyre!("no item matches CLI arg {cli_arg} in opts {items:#?}"))?,
         ));
     }
-    get_item(items)
+    get_item(items, sk_opts)
 }
 
-fn get_items<T: SkimItem + Clone + std::fmt::Debug>(items: Vec<T>) -> color_eyre::Result<Vec<T>> {
-    let sk_opts = common_sk_opts(&mut SkimOptionsBuilder::default()).final_build()?;
+fn get_items<T: SkimItem + Clone + std::fmt::Debug>(
+    items: Vec<T>,
+    sk_opts: Option<SkimOptionsBuilder>,
+) -> color_eyre::Result<Vec<T>> {
+    let sk_opts = sk_opts
+        .unwrap_or_else(|| {
+            let mut sk_opts = SkimOptionsBuilder::default();
+            common_sk_opts(&mut sk_opts);
+            sk_opts
+        })
+        .final_build()?;
     let sk_source = build_sk_source_from_items(items)?;
 
     let Some(sk_output) = Skim::run_with(&sk_opts, Some(sk_source)) else {
