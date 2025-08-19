@@ -26,10 +26,7 @@ impl Installer for Shellcheck {
         )?;
 
         let target = format!("{}/{}", self.bin_dir, self.bin_name());
-        std::fs::rename(
-            format!("/tmp/{0}-{latest_release}/{0}", self.bin_name()),
-            &target,
-        )?;
+        std::fs::rename(format!("/tmp/{0}-{latest_release}/{0}", self.bin_name()), &target)?;
         utils::system::chmod_x(target)?;
 
         Ok(())

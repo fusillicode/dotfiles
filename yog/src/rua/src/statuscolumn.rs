@@ -1,10 +1,7 @@
 use mlua::prelude::*;
 
 /// Returns the formatted [`String`] representation of the statuscolumn.
-pub fn draw(
-    _lua: &Lua,
-    (cur_buf_type, cur_lnum, signs): (LuaString, LuaString, Signs),
-) -> LuaResult<String> {
+pub fn draw(_lua: &Lua, (cur_buf_type, cur_lnum, signs): (LuaString, LuaString, Signs)) -> LuaResult<String> {
     Ok(Statuscolumn::draw(
         cur_buf_type.to_string_lossy().as_str(),
         cur_lnum.to_string_lossy(),
@@ -17,9 +14,7 @@ pub struct Signs(Vec<Sign>);
 impl FromLua for Signs {
     fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
         if let LuaValue::Table(table) = value {
-            let signs = table
-                .sequence_values::<Sign>()
-                .collect::<Result<Vec<Sign>, _>>()?;
+            let signs = table.sequence_values::<Sign>().collect::<Result<Vec<Sign>, _>>()?;
 
             return Ok(Signs(signs));
         }
@@ -112,11 +107,7 @@ impl std::fmt::Display for Statuscolumn {
             .find_map(|s| s.as_ref().map(Sign::draw))
             .unwrap_or_else(|| " ".into());
 
-        let git_sign = self
-            .git
-            .as_ref()
-            .map(Sign::draw)
-            .unwrap_or_else(|| " ".into());
+        let git_sign = self.git.as_ref().map(Sign::draw).unwrap_or_else(|| " ".into());
 
         write!(f, "{}{}%=% {} ", diag_sign, git_sign, self.cur_lnum)
     }

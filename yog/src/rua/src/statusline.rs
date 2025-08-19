@@ -3,10 +3,7 @@ use std::collections::HashMap;
 use mlua::prelude::*;
 
 /// Returns the formatted [`String`] representation of the statusline.
-pub fn draw(
-    _lua: &Lua,
-    (cur_buf_nr, cur_buf_path, diags): (LuaInteger, LuaString, Diagnostics),
-) -> LuaResult<String> {
+pub fn draw(_lua: &Lua, (cur_buf_nr, cur_buf_path, diags): (LuaInteger, LuaString, Diagnostics)) -> LuaResult<String> {
     let mut statusline = Statusline {
         cur_buf_path: cur_buf_path.to_string_lossy(),
         cur_buf_diags: HashMap::new(),
@@ -180,9 +177,7 @@ mod tests {
 
         let statusline = Statusline {
             cur_buf_path: "foo".into(),
-            cur_buf_diags: [(Severity::Info, 1), (Severity::Error, 3)]
-                .into_iter()
-                .collect(),
+            cur_buf_diags: [(Severity::Info, 1), (Severity::Error, 3)].into_iter().collect(),
             workspace_diags: [(Severity::Info, 0)].into_iter().collect(),
         };
         assert_eq!(
@@ -193,9 +188,7 @@ mod tests {
         let statusline = Statusline {
             cur_buf_path: "foo".into(),
             cur_buf_diags: [(Severity::Info, 0)].into_iter().collect(),
-            workspace_diags: [(Severity::Info, 1), (Severity::Error, 3)]
-                .into_iter()
-                .collect(),
+            workspace_diags: [(Severity::Info, 1), (Severity::Error, 3)].into_iter().collect(),
         };
         assert_eq!(
             "%#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#E:3 %#DiagnosticStatusLineInfo#I:1",
@@ -204,12 +197,8 @@ mod tests {
 
         let statusline = Statusline {
             cur_buf_path: "foo".into(),
-            cur_buf_diags: [(Severity::Hint, 3), (Severity::Warn, 2)]
-                .into_iter()
-                .collect(),
-            workspace_diags: [(Severity::Info, 1), (Severity::Error, 3)]
-                .into_iter()
-                .collect(),
+            cur_buf_diags: [(Severity::Hint, 3), (Severity::Warn, 2)].into_iter().collect(),
+            workspace_diags: [(Severity::Info, 1), (Severity::Error, 3)].into_iter().collect(),
         };
         assert_eq!(
             "%#DiagnosticStatusLineWarn#W:2 %#DiagnosticStatusLineHint#H:3 %#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#E:3 %#DiagnosticStatusLineInfo#I:1",

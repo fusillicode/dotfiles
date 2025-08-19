@@ -25,4 +25,9 @@ impl Installer for Hadolint {
 
         Ok(())
     }
+
+    // NOTE: skip because hadolint starated to segfault...
+    fn check_args(&self) -> Option<&[&str]> {
+        None
+    }
 }

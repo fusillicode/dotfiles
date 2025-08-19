@@ -54,9 +54,7 @@ pub struct FileToOpen {
 impl TryFrom<(&str, i64, &[WeztermPane])> for FileToOpen {
     type Error = eyre::Error;
 
-    fn try_from(
-        (file_to_open, pane_id, panes): (&str, i64, &[WeztermPane]),
-    ) -> Result<Self, Self::Error> {
+    fn try_from((file_to_open, pane_id, panes): (&str, i64, &[WeztermPane])) -> Result<Self, Self::Error> {
         if Path::new(file_to_open).is_absolute() {
             return Self::from_str(file_to_open);
         }
@@ -70,9 +68,9 @@ impl TryFrom<(&str, i64, &[WeztermPane])> for FileToOpen {
         source_pane_absolute_cwd.push(file_to_open);
 
         Self::from_str(
-            source_pane_absolute_cwd.to_str().ok_or_else(|| {
-                eyre!("cannot get &str from PathBuf {source_pane_absolute_cwd:#?}")
-            })?,
+            source_pane_absolute_cwd
+                .to_str()
+                .ok_or_else(|| eyre!("cannot get &str from PathBuf {source_pane_absolute_cwd:#?}"))?,
         )
     }
 }
@@ -82,19 +80,9 @@ impl FromStr for FileToOpen {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut parts = s.split(':');
-        let path = parts
-            .next()
-            .ok_or_else(|| eyre!("no file path found in {s}"))?;
-        let line_nbr = parts
-            .next()
-            .map(str::parse::<i64>)
-            .transpose()?
-            .unwrap_or_default();
-        let column = parts
-            .next()
-            .map(str::parse::<i64>)
-            .transpose()?
-            .unwrap_or_default();
+        let path = parts.next().ok_or_else(|| eyre!("no file path found in {s}"))?;
+        let line_nbr = parts.next().map(str::parse::<i64>).transpose()?.unwrap_or_default();
+        let column = parts.next().map(str::parse::<i64>).transpose()?.unwrap_or_default();
         if !Path::new(path).exists() {
             bail!("file {path} doesn't exists")
         }

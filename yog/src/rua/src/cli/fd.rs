@@ -4,13 +4,7 @@ pub struct CliFlags;
 
 impl Flags for CliFlags {
     fn base_flags() -> Vec<&'static str> {
-        vec![
-            "--color never",
-            "--follow",
-            "--hidden",
-            "--no-ignore-vcs",
-            "--type f",
-        ]
+        vec!["--color never", "--follow", "--hidden", "--no-ignore-vcs", "--type f"]
     }
 
     fn glob_flag(glob: &str) -> String {

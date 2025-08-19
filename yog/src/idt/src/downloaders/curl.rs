@@ -39,10 +39,7 @@ pub fn run(url: &str, opt: CurlDownloaderOption) -> color_eyre::Result<String> {
 
             dest_path.into()
         }
-        CurlDownloaderOption::PipeIntoTar {
-            dest_dir,
-            dest_name,
-        } => {
+        CurlDownloaderOption::PipeIntoTar { dest_dir, dest_name } => {
             let curl_stdout = get_cmd_stdout(&mut curl_cmd)?;
 
             let mut tar_cmd = Command::new("tar");

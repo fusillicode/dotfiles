@@ -10,10 +10,7 @@ pub fn run(dev_tools_dir: &str, tool: &str, packages: &[&str]) -> color_eyre::Re
     cmd_args.extend_from_slice(&["--prefix", &dev_tools_repo_dir]);
     cmd_args.extend_from_slice(packages);
 
-    utils::cmd::silent_cmd("npm")
-        .args(cmd_args)
-        .status()?
-        .exit_ok()?;
+    utils::cmd::silent_cmd("npm").args(cmd_args).status()?.exit_ok()?;
 
     Ok(format!("{dev_tools_repo_dir}/node_modules/.bin"))
 }
