@@ -19,4 +19,9 @@ impl Installer for VsCodeLangServers {
 
         Ok(())
     }
+
+    // NOTE: skip because it's a shitshow...
+    fn check_args(&self) -> Option<&[&str]> {
+        None
+    }
 }

@@ -33,4 +33,9 @@ impl Installer for LuaLanguageServer {
 
         Ok(())
     }
+
+    // NOTE: skip because it's a shitshow...
+    fn check_args(&self) -> Option<&[&str]> {
+        None
+    }
 }

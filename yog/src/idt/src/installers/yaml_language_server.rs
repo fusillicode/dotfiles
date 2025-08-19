@@ -20,4 +20,9 @@ impl Installer for YamlLanguageServer {
 
         Ok(())
     }
+
+    // NOTE: skip because JS is a shitshow...
+    fn check_args(&self) -> Option<&[&str]> {
+        None
+    }
 }
