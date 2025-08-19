@@ -1690,7 +1690,7 @@ version = "2.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "80d76d3f064b981389ecb4b6b7f45a0bf9fdac1d5b9204c7bd6714fecc302850"
 dependencies = [
- "thiserror-impl 2.0.14",
+ "thiserror-impl 2.0.15",
 ]
 
 [[package]]
@@ -1901,7 +1901,7 @@ dependencies = [
  "serde_json",
  "skim",
  "tempfile",
- "thiserror 2.0.14",
+ "thiserror 2.0.15",
  "url",
 ]
 
