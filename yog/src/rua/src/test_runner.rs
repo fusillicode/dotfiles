@@ -41,22 +41,19 @@ pub fn run_test(_lua: &Lua, cursor_position: CursorPosition) -> LuaResult<()> {
         ))?;
 
     let test_runner_app = get_test_runner_app_for_path(&cursor_position.path)?;
+    let test_run_cmd = format!("'{test_runner_app} {test_name}'");
+
+    let send_text_to_pane_cmd = utils::wezterm::send_text_to_pane_cmd(&test_run_cmd, test_runner_pane.pane_id);
+    let submit_pane_cmd = utils::wezterm::submit_pane_cmd(test_runner_pane.pane_id);
+    let activate_pane_cmd = utils::wezterm::activate_pane_cmd(test_runner_pane.pane_id);
 
     utils::cmd::silent_cmd("sh")
         .args([
             "-c",
-            &format!(
-                "{} && {} && {}",
-                utils::wezterm::send_text_to_pane(
-                    &format!("'{test_runner_app} {test_name}'"),
-                    test_runner_pane.pane_id
-                ),
-                utils::wezterm::submit_pane(test_runner_pane.pane_id),
-                utils::wezterm::activate_pane(test_runner_pane.pane_id)
-            ),
+            &format!("{send_text_to_pane_cmd} && {submit_pane_cmd} && {activate_pane_cmd}"),
         ])
         .spawn()
-        .with_context(|| format!("error executing test {test_name} in Wezterm pane {test_runner_pane:#?}"))
+        .with_context(|| format!("error executing {test_run_cmd:#?} in Wezterm pane {test_runner_pane:#?}"))
         .map_err(|e| anyhow!(e))?;
 
     Ok(())
