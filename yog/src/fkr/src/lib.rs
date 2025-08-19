@@ -20,7 +20,7 @@ pub enum FkrOption {
 }
 
 impl SkimItem for FkrOption {
-    fn text(&self) -> std::borrow::Cow<'_, str> {
+    fn text(&self) -> Cow<'_, str> {
         Cow::from(self.to_string())
     }
 
