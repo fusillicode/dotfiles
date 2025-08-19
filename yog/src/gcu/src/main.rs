@@ -4,6 +4,8 @@ use std::borrow::Cow;
 use std::io::Write;
 use std::process::Command;
 
+use chrono::DateTime;
+use chrono::FixedOffset;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 use url::Url;
@@ -90,10 +92,10 @@ fn keep_local_and_untracked_refs(git_refs: &mut Vec<GitRef>) {
 struct GitRef {
     name: String,
     remote: Option<String>,
-    short_sha: String,
-    kind: String,
+    object_name: String,
+    object_type: String,
     committer_email: String,
-    committer_date_iso8601: String,
+    committer_date_time: DateTime<FixedOffset>,
     subject: String,
 }
 
@@ -102,7 +104,7 @@ impl GitRef {
 
     pub fn format() -> String {
         format!(
-            "%(refname){0}%(objectname:short){0}%(objecttype){0}%(committeremail){0}%(committerdate:iso8601){0}%(subject)",
+            "%(refname){0}%(objectname:short){0}%(objecttype){0}%(committeremail){0}%(committerdate:rfc2822){0}%(subject)",
             Self::SEPARATOR
         )
     }
@@ -117,10 +119,10 @@ impl SkimItem for GitRef {
         SkimItemPreview::AnsiText(format!(
             "\x1b[31m{} {} {}\x1b[0m\n{}\n\x1b[32m{}\x1b[0m \x1b[34;1m{}\x1b[0m\n",
             self.remote.as_deref().unwrap_or("local"),
-            self.kind,
-            self.short_sha,
+            self.object_type,
+            self.object_name,
             self.subject,
-            self.committer_date_iso8601,
+            self.committer_date_time,
             self.committer_email,
         ))
     }
@@ -149,11 +151,11 @@ impl std::str::FromStr for GitRef {
         Ok(GitRef {
             name: name.to_string(),
             remote: remote.map(str::to_string),
-            short_sha: parts
+            object_name: parts
                 .next()
                 .ok_or_else(|| eyre!("missing objectname:short in git for-each-ref output {s}"))?
                 .to_string(),
-            kind: parts
+            object_type: parts
                 .next()
                 .ok_or_else(|| eyre!("missing objecttype in git for-each-ref output {s}"))?
                 .to_string(),
@@ -161,10 +163,11 @@ impl std::str::FromStr for GitRef {
                 .next()
                 .ok_or_else(|| eyre!("missing committeremail in git for-each-ref output {s}"))?
                 .to_string(),
-            committer_date_iso8601: parts
+            committer_date_time: parts
                 .next()
-                .ok_or_else(|| eyre!("missing committerdate in git for-each-ref output {s}"))?
-                .to_string(),
+                .map(DateTime::parse_from_rfc2822)
+                .transpose()?
+                .ok_or_else(|| eyre!("missing committerdate in git for-each-ref output {s}"))?,
             subject: parts
                 .next()
                 .ok_or_else(|| eyre!("missing subject in git for-each-ref output {s}"))?
