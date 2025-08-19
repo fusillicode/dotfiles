@@ -137,7 +137,7 @@ struct PgpassEntry {
 }
 
 impl SkimItem for PgpassEntry {
-    fn text(&self) -> std::borrow::Cow<'_, str> {
+    fn text(&self) -> Cow<'_, str> {
         Cow::from(self.to_string())
     }
 
