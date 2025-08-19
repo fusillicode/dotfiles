@@ -103,9 +103,10 @@ fi
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 . "$HOME/.zshenv"
 
-
 # Atuin 🐢
 eval "$(atuin init zsh)"
+zle -N _atuin_search
+bindkey '^P' _atuin_search
 
 # Mise 😎
 eval "$(mise activate zsh)"
