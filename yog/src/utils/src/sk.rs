@@ -118,5 +118,6 @@ fn base_sk_opts(opts_builder: &mut SkimOptionsBuilder) -> &mut SkimOptionsBuilde
         .layout("reverse".into())
         .preview(Some("".into()))
         .preview_window("down:50%".into())
+        .color(Some("16".into()))
         .cycle(true)
 }
