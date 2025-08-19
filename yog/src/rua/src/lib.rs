@@ -21,6 +21,7 @@ fn rua(lua: &Lua) -> LuaResult<LuaTable> {
             lua.create_function(diagnostics::formatter::format)?,
         ),
         ("filter_diagnostics", lua.create_function(diagnostics::filter::filter)?),
+        ("sort_diagnostics", lua.create_function(diagnostics::sorter::sort)?),
         ("draw_statusline", lua.create_function(statusline::draw)?),
         ("draw_statuscolumn", lua.create_function(statuscolumn::draw)?),
         ("get_fkr_cmds", lua.create_function(fkr_gen::get_cmds)?),
