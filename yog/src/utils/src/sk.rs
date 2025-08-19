@@ -1,6 +1,8 @@
 use color_eyre::eyre::eyre;
 use skim::prelude::*;
 
+pub use skim::SkimItem;
+
 /// Get the selected item among the supplied ones via a commonly configured skim.
 pub fn get_item<T: SkimItem + Clone + std::fmt::Debug>(
     items: Vec<T>,

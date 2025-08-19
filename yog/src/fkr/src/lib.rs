@@ -4,7 +4,7 @@ use fake::Fake;
 use strum::Display;
 use strum::EnumIter;
 use strum::IntoEnumIterator;
-use utils::SkimItem;
+use utils::sk::SkimItem;
 
 #[derive(EnumIter, Display, Clone, Copy, Debug)]
 pub enum FkrOption {

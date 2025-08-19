@@ -1,5 +1,6 @@
 #![feature(exit_status_error)]
 
+use std::borrow::Cow;
 use std::io::Write;
 use std::process::Command;
 
@@ -7,9 +8,9 @@ use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 use url::Url;
 
-use utils::SkimItem;
 use utils::cmd::CmdError;
 use utils::cmd::CmdExt;
+use utils::sk::SkimItem;
 
 /// Create or switch to the GitHub branch built by parameterizing the supplied args.
 /// Existence of branch is checked only against local ones (to avoid fetching them remotely).
@@ -104,8 +105,8 @@ impl GitRef {
 }
 
 impl SkimItem for GitRef {
-    fn text(&self) -> std::borrow::Cow<'_, str> {
-        std::borrow::Cow::from(self.name.clone())
+    fn text(&self) -> Cow<'_, str> {
+        Cow::from(self.name.clone())
     }
 }
 

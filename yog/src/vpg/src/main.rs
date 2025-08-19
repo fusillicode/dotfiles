@@ -13,7 +13,7 @@ use std::process::Stdio;
 use color_eyre::eyre::WrapErr;
 use color_eyre::eyre::bail;
 use serde::Deserialize;
-use utils::SkimItem;
+use utils::sk::SkimItem;
 
 /// Connects via pgcli to the DB matching the selected alias with refreshed Vault credentials.
 fn main() -> color_eyre::Result<()> {
