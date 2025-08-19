@@ -44,10 +44,10 @@ fn main() -> color_eyre::Result<()> {
                 "{} && {} && {} && {}",
                 // `wezterm cli send-text $'\e'` sends the "ESC" to Wezterm to exit from insert mode
                 // https://github.com/wez/wezterm/discussions/3945
-                utils::wezterm::send_text_to_pane(r#"$'\e'"#, editor_pane_id),
-                utils::wezterm::send_text_to_pane(&format!("'{open_file_cmd}'"), editor_pane_id),
-                utils::wezterm::submit_pane(editor_pane_id),
-                utils::wezterm::activate_pane(editor_pane_id),
+                utils::wezterm::send_text_to_pane_cmd(r#"$'\e'"#, editor_pane_id),
+                utils::wezterm::send_text_to_pane_cmd(&format!("'{open_file_cmd}'"), editor_pane_id),
+                utils::wezterm::submit_pane_cmd(editor_pane_id),
+                utils::wezterm::activate_pane_cmd(editor_pane_id),
             ),
         ])
         .envs([enriched_path_env.by_ref()].iter().copied())

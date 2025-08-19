@@ -4,15 +4,15 @@ use std::process::Command;
 use color_eyre::eyre::eyre;
 use serde::Deserialize;
 
-pub fn send_text_to_pane(text: &str, pane_id: i64) -> String {
+pub fn send_text_to_pane_cmd(text: &str, pane_id: i64) -> String {
     format!("wezterm cli send-text {text} --pane-id '{pane_id}' --no-paste")
 }
 
-pub fn submit_pane(pane_id: i64) -> String {
+pub fn submit_pane_cmd(pane_id: i64) -> String {
     format!(r#"printf "\r" | wezterm cli send-text --pane-id '{pane_id}' --no-paste"#)
 }
 
-pub fn activate_pane(pane_id: i64) -> String {
+pub fn activate_pane_cmd(pane_id: i64) -> String {
     format!(r#"wezterm cli activate-pane --pane-id '{pane_id}'"#)
 }
 
