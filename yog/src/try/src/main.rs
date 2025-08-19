@@ -28,8 +28,7 @@ fn main() -> color_eyre::Result<()> {
     let Some((exit_cond, args)) = args.split_first() else {
         bail!("no exit condition supplied in {args:#?}");
     };
-    let exit_cond =
-        ExitCond::from_str(exit_cond).with_context(|| format!("in supplied args {args:#?}"))?;
+    let exit_cond = ExitCond::from_str(exit_cond).with_context(|| format!("in supplied args {args:#?}"))?;
 
     let cmd = args.join(" ");
 
@@ -56,8 +55,7 @@ fn main() -> color_eyre::Result<()> {
         std::thread::sleep(cooldown);
     }
 
-    let tries_count =
-        u32::try_from(tries.len()).with_context(|| format!("converting {} to u32", tries.len()))?;
+    let tries_count = u32::try_from(tries.len()).with_context(|| format!("converting {} to u32", tries.len()))?;
     let avg_runs_time = tries.iter().fold(Duration::ZERO, |acc, &d| acc + d) / tries_count;
     println!("Summary:\n - tries {tries_count}\n - avg time {avg_runs_time:#?}");
 

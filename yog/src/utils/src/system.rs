@@ -18,9 +18,7 @@ pub fn join<T>(join_handle: JoinHandle<color_eyre::Result<T>>) -> Result<T, eyre
 }
 
 pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
-    let mut pbcopy_child = crate::cmd::silent_cmd("pbcopy")
-        .stdin(Stdio::piped())
-        .spawn()?;
+    let mut pbcopy_child = crate::cmd::silent_cmd("pbcopy").stdin(Stdio::piped()).spawn()?;
     std::io::copy(
         content,
         pbcopy_child
@@ -59,10 +57,7 @@ pub fn ln_sf<P: AsRef<Path>>(target: P, link: P) -> color_eyre::Result<()> {
     Ok(())
 }
 
-pub fn ln_sf_files_in_dir<P: AsRef<std::path::Path>>(
-    target_dir: P,
-    link_dir: P,
-) -> color_eyre::Result<()> {
+pub fn ln_sf_files_in_dir<P: AsRef<std::path::Path>>(target_dir: P, link_dir: P) -> color_eyre::Result<()> {
     for target in std::fs::read_dir(target_dir)? {
         let target = target?.path();
         if target.is_file() {

@@ -37,4 +37,9 @@ impl Installer for ElixirLs {
 
         Ok(())
     }
+
+    // NOTE: skip because hopefully soon I'll not need this anymore...
+    fn check_args(&self) -> Option<&[&str]> {
+        None
+    }
 }

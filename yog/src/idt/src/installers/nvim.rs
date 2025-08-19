@@ -19,10 +19,10 @@ impl Installer for Nvim {
         let nvim_release_dir = format!("{}/{}/release", self.dev_tools_dir, self.bin_name());
 
         silent_cmd("sh")
-        .args([
-            "-c",
-            &format!(
-                r#"
+            .args([
+                "-c",
+                &format!(
+                    r#"
                     ([ ! -d "{nvim_source_dir}" ] && \
                         git clone https://github.com/neovim/neovim {nvim_source_dir} || true) && \
                     cd {nvim_source_dir} && \
@@ -32,10 +32,10 @@ impl Installer for Nvim {
                     make CMAKE_BUILD_TYPE=Release CMAKE_EXTRA_FLAGS="-DCMAKE_INSTALL_PREFIX={nvim_release_dir}" && \
                     make install
                 "#,
-            ),
-        ])
-        .status()?
-        .exit_ok()?;
+                ),
+            ])
+            .status()?
+            .exit_ok()?;
 
         let target = format!("{nvim_release_dir}/bin/{}", self.bin_name());
         utils::system::ln_sf(&target, &format!("{}/{}", self.bin_dir, self.bin_name()))?;

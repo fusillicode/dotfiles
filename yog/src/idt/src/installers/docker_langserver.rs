@@ -23,4 +23,9 @@ impl Installer for DockerLangServer {
 
         Ok(())
     }
+
+    // NOTE: skip because JS is a shitshow...
+    fn check_args(&self) -> Option<&[&str]> {
+        None
+    }
 }

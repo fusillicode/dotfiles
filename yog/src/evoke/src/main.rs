@@ -2,9 +2,7 @@
 
 use std::path::PathBuf;
 
-const BINS: &[&str] = &[
-    "idt", "yghfl", "yhfp", "oe", "catl", "gcu", "vpg", "try", "fkr",
-];
+const BINS: &[&str] = &["idt", "yghfl", "yhfp", "oe", "catl", "gcu", "vpg", "try", "fkr"];
 
 /// Evoke yog 🍝 👀
 ///
@@ -21,9 +19,8 @@ fn main() -> color_eyre::Result<()> {
     )?;
     let mut target_path = args.get(1).cloned().map_or_else(
         || {
-            std::env::var("CARGO_MANIFEST_DIR").map(|cargo_manifest_dir| {
-                format!("{}/target", remove_last_n_dirs(&cargo_manifest_dir, 2))
-            })
+            std::env::var("CARGO_MANIFEST_DIR")
+                .map(|cargo_manifest_dir| format!("{}/target", remove_last_n_dirs(&cargo_manifest_dir, 2)))
         },
         Result::Ok,
     )?;
@@ -36,19 +33,9 @@ fn main() -> color_eyre::Result<()> {
     target_path.push('/');
     target_path.push_str(target_location);
 
+    utils::cmd::silent_cmd("cargo").args(["fmt"]).status()?.exit_ok()?;
     utils::cmd::silent_cmd("cargo")
-        .args(["fmt"])
-        .status()?
-        .exit_ok()?;
-    utils::cmd::silent_cmd("cargo")
-        .args([
-            "clippy",
-            "--all-targets",
-            "--all-features",
-            "--",
-            "-D",
-            "warnings",
-        ])
+        .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
         .status()?
         .exit_ok()?;
     utils::cmd::silent_cmd("cargo")
@@ -59,10 +46,7 @@ fn main() -> color_eyre::Result<()> {
     for bin in BINS {
         install_bin(&bins_path, bin, &target_path)?;
     }
-    std::fs::rename(
-        format!("{target_path}/librua.dylib"),
-        format!("{target_path}/rua.so"),
-    )?;
+    std::fs::rename(format!("{target_path}/librua.dylib"), format!("{target_path}/rua.so"))?;
 
     Ok(())
 }

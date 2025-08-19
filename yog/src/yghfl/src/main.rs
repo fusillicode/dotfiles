@@ -9,7 +9,6 @@ use std::sync::Arc;
 
 use color_eyre::eyre::eyre;
 use url::Url;
-
 use utils::editor::Editor;
 use utils::hx::HxCursorPosition;
 use utils::hx::HxStatusLine;
@@ -34,17 +33,14 @@ fn main() -> color_eyre::Result<()> {
             .stdout,
     )?;
 
-    let hx_status_line =
-        HxStatusLine::from_str(wezterm_pane_text.lines().nth_back(1).ok_or_else(|| {
-            eyre!(
-                "no hx status line in pane '{}' text {wezterm_pane_text:#?}",
-                hx_pane.pane_id
-            )
-        })?)?;
+    let hx_status_line = HxStatusLine::from_str(wezterm_pane_text.lines().nth_back(1).ok_or_else(|| {
+        eyre!(
+            "no hx status line in pane '{}' text {wezterm_pane_text:#?}",
+            hx_pane.pane_id
+        )
+    })?)?;
 
-    let git_repo_root = Arc::new(utils::git::get_git_repo_root(Some(
-        &hx_status_line.file_path,
-    ))?);
+    let git_repo_root = Arc::new(utils::git::get_git_repo_root(Some(&hx_status_line.file_path))?);
 
     let git_repo_root_clone = git_repo_root.clone();
     let get_git_current_branch = std::thread::spawn(move || -> color_eyre::Result<String> {
@@ -70,8 +66,7 @@ fn main() -> color_eyre::Result<()> {
 
     // `build_file_path_relative_to_git_repo_root` are called before the 🧵s `join` to let them work in the background
     // as much as possible
-    let hx_cursor_absolute_file_path =
-        build_hx_cursor_absolute_file_path(&hx_status_line.file_path, &hx_pane)?;
+    let hx_cursor_absolute_file_path = build_hx_cursor_absolute_file_path(&hx_status_line.file_path, &hx_pane)?;
 
     let github_link = build_github_link(
         &utils::system::join(get_github_repo_url)?,
@@ -175,8 +170,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_relative_to_home_dir()
-     {
+    fn test_build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_relative_to_home_dir() {
         // Arrange
         temp_env::with_vars([("HOME", Some("/Users/Foo"))], || {
             let hx_status_line = HxStatusLine {
@@ -198,8 +192,7 @@ mod tests {
     }
 
     #[test]
-    fn test_build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_relative_to_hx_root()
-     {
+    fn test_build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_relative_to_hx_root() {
         // Arrange
         let hx_status_line = HxStatusLine {
             file_path: Path::new("src/bar/baz.rs").into(),
@@ -211,8 +204,7 @@ mod tests {
         };
 
         // Act
-        let result =
-            build_hx_cursor_absolute_file_path(&hx_status_line.file_path, &hx_pane).unwrap();
+        let result = build_hx_cursor_absolute_file_path(&hx_status_line.file_path, &hx_pane).unwrap();
 
         // Assert
         let expected = Path::new("/Users/Foo/dev/src/bar/baz.rs").to_path_buf();
@@ -232,8 +224,7 @@ mod tests {
         };
 
         // Act
-        let result =
-            build_hx_cursor_absolute_file_path(&hx_status_line.file_path, &hx_pane).unwrap();
+        let result = build_hx_cursor_absolute_file_path(&hx_status_line.file_path, &hx_pane).unwrap();
 
         // Assert
         let expected = Path::new("/Users/Foo/dev/src/bar/baz.rs").to_path_buf();

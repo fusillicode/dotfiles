@@ -82,10 +82,7 @@ impl RelatedInfo {
             let range = table
                 .get::<LuaTable>("location")
                 .and_then(|x| x.get::<LuaTable>("range"))?;
-            (
-                range.get::<LuaTable>("start")?,
-                range.get::<LuaTable>("end")?,
-            )
+            (range.get::<LuaTable>("start")?, range.get::<LuaTable>("end")?)
         };
 
         Ok(Self {
