@@ -12,6 +12,7 @@ use std::process::Stdio;
 
 use color_eyre::eyre::WrapErr;
 use color_eyre::eyre::bail;
+use color_eyre::owo_colors::OwoColorize;
 use serde::Deserialize;
 use utils::sk::SkimItem;
 use utils::sk::SkimItemPreview;
@@ -143,12 +144,12 @@ impl SkimItem for PgpassEntry {
 
     fn preview(&self, _context: SkimPreviewContext) -> SkimItemPreview {
         SkimItemPreview::AnsiText(format!(
-            "{}\n{}\n{}:{}\n{}\n",
-            self.connection_params.host,
-            self.connection_params.user,
-            self.connection_params.db,
-            self.connection_params.port,
-            self.metadata.vault_path,
+            "Host: {}\nUser: {}\nDb: {}\nPort: {}\nVault: {}\n",
+            self.connection_params.host.bold(),
+            self.connection_params.user.bold(),
+            self.connection_params.db.bold(),
+            self.connection_params.port.bold(),
+            self.metadata.vault_path.bold(),
         ))
     }
 }

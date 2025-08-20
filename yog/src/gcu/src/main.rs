@@ -8,6 +8,7 @@ use chrono::DateTime;
 use chrono::FixedOffset;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
+use color_eyre::owo_colors::OwoColorize;
 use url::Url;
 use utils::cmd::CmdError;
 use utils::cmd::CmdExt;
@@ -116,13 +117,13 @@ impl SkimItem for GitRef {
 
     fn preview(&self, _context: SkimPreviewContext) -> SkimItemPreview {
         SkimItemPreview::AnsiText(format!(
-            "\x1b[31m{} {} {}\x1b[0m\n{}\n\x1b[32m{}\x1b[0m \x1b[34;1m{}\x1b[0m\n",
-            self.remote.as_deref().unwrap_or("local"),
-            self.object_type,
-            self.object_name,
-            self.subject,
-            self.committer_date_time,
-            self.committer_email,
+            "{}\n{} {} {}\n{} {}\n",
+            self.subject.bold(),
+            self.remote.as_deref().unwrap_or("local").red(),
+            self.object_type.red(),
+            self.object_name.red(),
+            self.committer_date_time.green(),
+            self.committer_email.blue().bold(),
         ))
     }
 }
