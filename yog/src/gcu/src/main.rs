@@ -100,13 +100,18 @@ struct GitRef {
 }
 
 impl GitRef {
-    const SEPARATOR: char = '|';
+    const SEPARATOR: &str = "|";
 
     pub fn format() -> String {
-        format!(
-            "%(refname){0}%(objectname:short){0}%(objecttype){0}%(committeremail){0}%(committerdate:rfc2822){0}%(subject)",
-            Self::SEPARATOR
-        )
+        [
+            "%(refname)",
+            "%(objectname:short)",
+            "%(objecttype)",
+            "%(committeremail)",
+            "%(committerdate:rfc2822)",
+            "%(subject)",
+        ]
+        .join(Self::SEPARATOR)
     }
 }
 
