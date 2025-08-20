@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+use color_eyre::owo_colors::OwoColorize;
 use fake::Fake;
 use strum::Display;
 use strum::EnumIter;
@@ -25,7 +26,7 @@ impl SkimItem for FkrOption {
     }
 
     fn preview(&self, _context: SkimPreviewContext) -> SkimItemPreview {
-        SkimItemPreview::AnsiText(format!("Generate a fake {}", self))
+        SkimItemPreview::AnsiText(format!("Generate a fake {self}").bold().to_string())
     }
 }
 
