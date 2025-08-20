@@ -13,6 +13,7 @@ use crate::installers::elm_language_server::ElmLanguageServer;
 use crate::installers::eslint_d::EslintD;
 use crate::installers::graphql_lsp::GraphQlLsp;
 use crate::installers::hadolint::Hadolint;
+use crate::installers::harper_ls::HarperLs;
 use crate::installers::helm_ls::HelmLs;
 use crate::installers::lua_ls::LuaLanguageServer;
 use crate::installers::marksman::Marksman;
@@ -89,6 +90,9 @@ fn main() -> color_eyre::Result<()> {
             bin_dir: bin_dir.into(),
         }),
         Box::new(Hadolint {
+            bin_dir: bin_dir.into(),
+        }),
+        Box::new(HarperLs {
             bin_dir: bin_dir.into(),
         }),
         Box::new(HelmLs {
