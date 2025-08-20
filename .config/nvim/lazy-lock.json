@@ -6,7 +6,7 @@
   "close-buffers.nvim": { "branch": "master", "commit": "3acbcad1211572342632a6c0151f839e7dead27f" },
   "conform.nvim": { "branch": "master", "commit": "04bfa5f35706410376bf7618a01fcf44e3f35b59" },
   "crates.nvim": { "branch": "main", "commit": "a49df0f70171adc77704eac70dd2c0d179065933" },
-  "fidget.nvim": { "branch": "main", "commit": "2cb5edb2dd6700a958a446b20bb2be04d318da9d" },
+  "fidget.nvim": { "branch": "main", "commit": "a837f0653ab0f07b9efb1870372a60a031208ac1" },
   "fzf": { "branch": "master", "commit": "f9d7877d8b01e58c53c5b7f746f02c8ab81b17d6" },
   "fzf-lua": { "branch": "main", "commit": "15a6d0d8b8c13f703053be9a7d6e2f5dab581749" },
   "fzf-lua-frecency.nvim": { "branch": "master", "commit": "e2b398fe071b7ea1b48e0f9628d63f3ad9d4f158" },
