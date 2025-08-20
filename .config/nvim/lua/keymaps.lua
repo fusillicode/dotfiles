@@ -1,5 +1,7 @@
 local M = {}
 
+local rua = require('rua')
+
 local function keymap_set(modes, lhs, rhs, opts)
   vim.keymap.set(modes, lhs, rhs, vim.tbl_extend('force', { silent = true, }, opts or {}))
 end
@@ -87,9 +89,7 @@ function M.core()
 
   keymap_set({ 'n', 'v', }, '<leader>t', function()
     local row, col = require('utils').unpack(vim.api.nvim_win_get_cursor(0))
-    pcall(function()
-      require('rua').run_test({ path = vim.api.nvim_buf_get_name(0), row = row, col = col, })
-    end)
+    pcall(function() rua.run_test({ path = vim.api.nvim_buf_get_name(0), row = row, col = col, }) end)
   end)
 end
 
@@ -113,7 +113,9 @@ function M.fzf_lua(fzf_lua)
   keymap_set({ 'n', 'v', }, '<leader>gs', function() fzf_lua.git_status({ prompt = 'gs: ', }) end)
   keymap_set({ 'n', 'v', }, '<leader>c', function() fzf_lua.commands({ prompt = 'Cmds: ', }) end)
   keymap_set({ 'n', 'v', }, '<leader>d', function() fzf_lua.diagnostics_document({ prompt = 'Diags: ', }) end)
-  keymap_set({ 'n', 'v', }, '<leader>D', function() fzf_lua.diagnostics_workspace({ prompt = '*Diags: ', }) end)
+  -- Sorting of all workspace diagnostic is done with fzf-lua rather than with `rua` sorter because the sorter works
+  -- at the buffer level
+  keymap_set({ 'n', 'v', }, '<leader>D', function() fzf_lua.diagnostics_workspace({ prompt = '*Diags: ', sort = 0, }) end)
 
   keymap_set('n', '<leader>w', function() fzf_lua.live_grep({ prompt = 'rg: ', }) end)
   keymap_set('v', '<leader>w', function()
