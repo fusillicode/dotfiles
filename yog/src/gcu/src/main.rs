@@ -133,10 +133,10 @@ impl std::str::FromStr for GitRef {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut parts = s.split('|');
 
-        let refname: String = parts
+        let refname = parts
             .next()
             .ok_or_else(|| eyre!("missing refname in git for-each-ref output {s}"))?
-            .into();
+            .to_string();
 
         let (name, remote) = if let Some(remote) = refname.strip_prefix("refs/remotes/") {
             remote
