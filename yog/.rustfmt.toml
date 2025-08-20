@@ -7,4 +7,6 @@ max_width = 120
 reorder_impl_items = true          # supported in nightly :)
 reorder_imports = true
 reorder_modules = true
+use_field_init_shorthand = true
+use_try_shorthand = true
 wrap_comments = true               # supported in nightly :)
