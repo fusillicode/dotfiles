@@ -16,7 +16,13 @@ local function get_lsps_configs()
     elmls = {},
     graphql = {},
     harper_ls = {
-      ['harper-ls'] = {},
+      settings = {
+        ['harper-ls'] = {
+          linters = {
+            LongSentences = false,
+          },
+        },
+      },
     },
     html = {
       filetypes = { 'html', 'htmldjango', },
