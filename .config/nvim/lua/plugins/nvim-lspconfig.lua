@@ -15,6 +15,9 @@ local function get_lsps_configs()
     },
     elmls = {},
     graphql = {},
+    harper_ls = {
+      ['harper-ls'] = {},
+    },
     html = {
       filetypes = { 'html', 'htmldjango', },
       on_attach = function(client, _)
