@@ -14,8 +14,8 @@ mod vault;
 /// Gets new Vault credentials for the supplied alias and writes them inside .pgpass and
 /// Neovim DBee's connections file.
 ///
-/// If an additional CLI arg is supplied it stops.
-/// If no additional arg is supplied it connects via pgcli to the DB matching the supplied alias.
+/// If an additional CLI arg is supplied (no matter the value) it also runs pgcli connecting to the DB matching the
+/// supplied alias.
 ///
 /// Requires VAULT_ADDR env var to be defined.
 fn main() -> color_eyre::Result<()> {
@@ -55,33 +55,33 @@ fn main() -> color_eyre::Result<()> {
     let nvim_dbee_conns_path = nvim_dbee::get_conns_file_path()?;
     nvim_dbee::save_new_nvim_dbee_conns_file(&pgpass_entry, &nvim_dbee_conns_path)?;
 
+    println!(
+        "✅ {} credentials updated in {pgpass_path:?}",
+        pgpass_entry.metadata.alias
+    );
+    println!(
+        "✅ {} credentials updated in {nvim_dbee_conns_path:?}",
+        pgpass_entry.metadata.alias
+    );
+
     if args.get(1).is_some() {
-        println!(
-            "✅ {} credentials updated in {pgpass_path:?}",
-            pgpass_entry.metadata.alias
-        );
-        println!(
-            "✅ {} credentials updated in {nvim_dbee_conns_path:?}",
-            pgpass_entry.metadata.alias
-        );
-        return Ok(());
+        let db_url = pgpass_entry.connection_params.db_url();
+        println!("Connecting to {} @\n\n{db_url}\n", pgpass_entry.metadata.alias);
+
+        if let Some(psql_exit_code) = Command::new("pgcli")
+            .arg(&db_url)
+            .stdin(Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .spawn()?
+            .wait()?
+            .code()
+        {
+            std::process::exit(psql_exit_code);
+        }
+
+        eprintln!("pgcli {db_url} terminated by signal.");
+        std::process::exit(1);
     }
-
-    let db_url = pgpass_entry.connection_params.db_url();
-    println!("Connecting to {} @\n\n{db_url}\n", pgpass_entry.metadata.alias);
-
-    if let Some(psql_exit_code) = Command::new("pgcli")
-        .arg(&db_url)
-        .stdin(Stdio::inherit())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .spawn()?
-        .wait()?
-        .code()
-    {
-        std::process::exit(psql_exit_code);
-    }
-
-    eprintln!("pgcli {db_url} terminated by signal.");
-    std::process::exit(1);
+    Ok(())
 }
