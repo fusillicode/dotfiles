@@ -40,7 +40,7 @@ fn main() -> color_eyre::Result<()> {
         )
     })?)?;
 
-    let git_repo_root = Arc::new(utils::git::get_git_repo_root(Some(&hx_status_line.file_path))?);
+    let git_repo_root = Arc::new(utils::git::get_repo_root(Some(&hx_status_line.file_path))?);
 
     let git_repo_root_clone = git_repo_root.clone();
     let get_git_current_branch = std::thread::spawn(move || -> color_eyre::Result<String> {

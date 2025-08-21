@@ -4,7 +4,9 @@ use std::process::Command;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 
-pub fn get_git_repo_root(file_path: Option<&Path>) -> color_eyre::Result<String> {
+use crate::cmd::CmdExt;
+
+pub fn get_repo_root(file_path: Option<&Path>) -> color_eyre::Result<String> {
     let cmd = if let Some(file_path) = file_path {
         let file_parent_dir = file_path
             .parent()
@@ -27,4 +29,15 @@ pub fn get_git_repo_root(file_path: Option<&Path>) -> color_eyre::Result<String>
     }
 
     Ok(String::from_utf8(git_repo_root)?.trim().to_owned())
+}
+
+pub fn get_current_branch() -> color_eyre::Result<String> {
+    Ok(std::str::from_utf8(
+        &Command::new("git")
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .exec()?
+            .stdout,
+    )?
+    .trim()
+    .to_string())
 }
