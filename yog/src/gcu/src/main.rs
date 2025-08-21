@@ -1,20 +1,15 @@
 #![feature(exit_status_error)]
 
-use std::borrow::Cow;
 use std::io::Write;
 use std::process::Command;
 
-use chrono::DateTime;
-use chrono::FixedOffset;
 use color_eyre::eyre::bail;
-use color_eyre::eyre::eyre;
-use color_eyre::owo_colors::OwoColorize;
 use url::Url;
 use utils::cmd::CmdError;
 use utils::cmd::CmdExt;
 use utils::sk::SkimItem;
-use utils::sk::SkimItemPreview;
-use utils::sk::SkimPreviewContext;
+
+mod git;
 
 /// Create or switch to the GitHub branch built by parameterizing the supplied args.
 /// Existence of branch is checked only against local ones (to avoid fetching them remotely).
@@ -41,143 +36,13 @@ fn main() -> color_eyre::Result<()> {
 }
 
 fn autocomplete_git_branches() -> color_eyre::Result<()> {
-    let mut git_refs = get_git_local_and_remote_refs()?;
-    keep_local_and_untracked_refs(&mut git_refs);
+    let mut git_refs = git::get_local_and_remote_refs()?;
+    git::keep_local_and_untracked_refs(&mut git_refs);
 
     match utils::sk::get_item(git_refs, Default::default())? {
         Some(hd) if hd.text() == "-" || hd.text().is_empty() => switch_branch("-"),
         Some(other) => switch_branch(&other.text()),
         None => Ok(()),
-    }
-}
-
-/// Get all local and remote git refs sorted by latest to oldest modified.
-///
-/// Returns an error as soon as 1 single item cannot be converted to a [`GitRef`].
-fn get_git_local_and_remote_refs() -> color_eyre::Result<Vec<GitRef>> {
-    let output = Command::new("git")
-        .args([
-            "for-each-ref",
-            "--sort=-creatordate",
-            "refs/heads/",
-            "refs/remotes/",
-            &format!("--format={}", GitRef::format()),
-        ])
-        .exec()?;
-
-    let mut res = vec![];
-    for line in std::str::from_utf8(&output.stdout)?.trim().split('\n') {
-        res.push(<GitRef as std::str::FromStr>::from_str(line)?);
-    }
-
-    Ok(res)
-}
-
-/// Deduplicates local and remote git refs.
-fn keep_local_and_untracked_refs(git_refs: &mut Vec<GitRef>) {
-    let mut local_names = std::collections::HashSet::new();
-
-    git_refs.retain(|x| {
-        if x.remote.is_none() {
-            local_names.insert(x.name.clone());
-            true
-        } else {
-            !local_names.contains(&x.name)
-        }
-    });
-}
-
-#[allow(dead_code)]
-#[derive(Clone, Debug)]
-struct GitRef {
-    name: String,
-    remote: Option<String>,
-    object_name: String,
-    object_type: String,
-    committer_email: String,
-    committer_date_time: DateTime<FixedOffset>,
-    subject: String,
-}
-
-impl GitRef {
-    const SEPARATOR: &str = "|";
-
-    pub fn format() -> String {
-        [
-            "%(refname)",
-            "%(objectname:short)",
-            "%(objecttype)",
-            "%(committeremail)",
-            "%(committerdate:rfc2822)",
-            "%(subject)",
-        ]
-        .join(Self::SEPARATOR)
-    }
-}
-
-impl SkimItem for GitRef {
-    fn text(&self) -> Cow<'_, str> {
-        Cow::from(self.name.clone())
-    }
-
-    fn preview(&self, _context: SkimPreviewContext) -> SkimItemPreview {
-        SkimItemPreview::AnsiText(format!(
-            "{}\n{} {} {}\n{} {}\n",
-            self.subject.bold(),
-            self.remote.as_deref().unwrap_or("local").red(),
-            self.object_type.red(),
-            self.object_name.red(),
-            self.committer_date_time.green(),
-            self.committer_email.blue().bold(),
-        ))
-    }
-}
-
-impl std::str::FromStr for GitRef {
-    type Err = color_eyre::eyre::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut parts = s.split('|');
-
-        let refname = parts
-            .next()
-            .ok_or_else(|| eyre!("missing refname in git for-each-ref output {s}"))?
-            .to_string();
-
-        let (name, remote) = if let Some(remote) = refname.strip_prefix("refs/remotes/") {
-            remote
-                .split_once('/')
-                .map(|(refname, remote_name)| (remote_name, Some(refname)))
-                .ok_or_else(|| eyre!("unexpected refs/remotes structure {refname}"))?
-        } else {
-            (refname.trim_start_matches("refs/heads/"), None)
-        };
-
-        Ok(GitRef {
-            name: name.to_string(),
-            remote: remote.map(str::to_string),
-            object_name: parts
-                .next()
-                .ok_or_else(|| eyre!("missing objectname:short in git for-each-ref output {s}"))?
-                .to_string(),
-            object_type: parts
-                .next()
-                .ok_or_else(|| eyre!("missing objecttype in git for-each-ref output {s}"))?
-                .to_string(),
-            committer_email: parts
-                .next()
-                .ok_or_else(|| eyre!("missing committeremail in git for-each-ref output {s}"))?
-                .to_string(),
-            committer_date_time: parts
-                .next()
-                .map(DateTime::parse_from_rfc2822)
-                .transpose()?
-                .ok_or_else(|| eyre!("missing committerdate in git for-each-ref output {s}"))?,
-            subject: parts
-                .next()
-                .ok_or_else(|| eyre!("missing subject in git for-each-ref output {s}"))?
-                .to_string(),
-        })
     }
 }
 
@@ -241,15 +106,17 @@ fn create_branch(branch: &str) -> color_eyre::Result<()> {
 }
 
 // Create the supplied branch without asking only if:
+//
 // - the passed branch is the default one (it will not be created because already there and I'll be switched to it)
 // - the current branch is the default one
+//
 // This logic helps me to avoid inadvertently branching from branches different from the default
 // one as it doesn't happen often.
 fn should_create_new_branch(branch: &str) -> color_eyre::Result<bool> {
     if is_default_branch(branch) {
         return Ok(true);
     }
-    let curr_branch = get_current_branch()?;
+    let curr_branch = utils::git::get_current_branch()?;
     if is_default_branch(&curr_branch) {
         return Ok(true);
     }
@@ -268,17 +135,6 @@ fn is_default_branch(branch: &str) -> bool {
     branch == "main" || branch == "master"
 }
 
-fn get_current_branch() -> color_eyre::Result<String> {
-    Ok(std::str::from_utf8(
-        &Command::new("git")
-            .args(["rev-parse", "--abbrev-ref", "HEAD"])
-            .exec()?
-            .stdout,
-    )?
-    .trim()
-    .to_string())
-}
-
 fn create_branch_if_missing(branch: &str) -> color_eyre::Result<()> {
     if let Err(error) = create_branch(branch) {
         if error.to_string().contains("already exists") {
@@ -291,6 +147,11 @@ fn create_branch_if_missing(branch: &str) -> color_eyre::Result<()> {
 }
 
 fn build_branch_name(args: &[String]) -> color_eyre::Result<String> {
+    fn is_permitted(c: char) -> bool {
+        const PERMITTED_CHARS: [char; 3] = ['.', '/', '_'];
+        c.is_alphanumeric() || PERMITTED_CHARS.contains(&c)
+    }
+
     let branch_name = args
         .iter()
         .flat_map(|x| {
@@ -317,11 +178,6 @@ fn build_branch_name(args: &[String]) -> color_eyre::Result<String> {
     }
 
     Ok(branch_name)
-}
-
-fn is_permitted(c: char) -> bool {
-    const PERMITTED_CHARS: [char; 3] = ['.', '/', '_'];
-    c.is_alphanumeric() || PERMITTED_CHARS.contains(&c)
 }
 
 #[cfg(test)]
