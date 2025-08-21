@@ -28,14 +28,11 @@ fn main() -> color_eyre::Result<()> {
     let pgpass_file = PgpassFile::parse(pgpass_content.as_str())?;
 
     let args = utils::system::get_args();
-    let Some(PgpassEntry {
-        metadata,
-        connection_params: mut conn,
-    }) = utils::sk::get_item_from_cli_args_or_sk_select(
+    let Some(mut pgpass_entry) = utils::sk::get_item_from_cli_args_or_sk_select(
         &args,
         |(idx, _)| *idx == 0,
         pgpass_file.entries,
-        |alias: &str| Box::new(move |pgpass_entry: &PgpassEntry| pgpass_entry.metadata.alias == alias),
+        |alias: &str| Box::new(move |entry: &PgpassEntry| entry.metadata.alias == alias),
         Default::default(),
     )?
     else {
@@ -49,16 +46,16 @@ fn main() -> color_eyre::Result<()> {
     log_into_vault_if_required()?;
     let vault_read_output: VaultReadOutput = serde_json::from_slice(
         &Command::new("vault")
-            .args(["read", &metadata.vault_path, "--format=json"])
+            .args(["read", &pgpass_entry.metadata.vault_path, "--format=json"])
             .output()?
             .stdout,
     )?;
 
-    conn.update(&vault_read_output.data);
-    save_new_pgpass_file(pgpass_file.idx_lines, &conn, &pgpass_path)?;
+    pgpass_entry.connection_params.update(&vault_read_output.data);
+    save_new_pgpass_file(pgpass_file.idx_lines, &pgpass_entry.connection_params, &pgpass_path)?;
 
-    let db_url = conn.db_url();
-    println!("\nConnecting to {} @\n\n{db_url}\n", metadata.alias);
+    let db_url = pgpass_entry.connection_params.db_url();
+    println!("\nConnecting to {} @\n\n{db_url}\n", pgpass_entry.metadata.alias);
 
     if let Some(psql_exit_code) = Command::new("pgcli")
         .arg(&db_url)
@@ -234,7 +231,7 @@ impl std::fmt::Display for ConnectionParams {
 struct VaultReadOutput {
     /// Unique request identifier for tracing.
     pub request_id: String,
-    /// Lease identifier for secret lifecycle management.
+    /// Lease identifier for secret life cycle management.
     pub lease_id: String,
     /// Time-to-live duration in seconds for secret.
     pub lease_duration: i32,
@@ -292,7 +289,7 @@ fn log_into_vault_if_required() -> color_eyre::Result<()> {
 ///
 /// # Arguments
 /// * `pgpass_idx_lines` - Original file lines with their indices (to identify line needing update).
-/// * `updated_creds` - New connection credentials (must implement `ToString`).
+/// * `updated_conn_params` - New connection credentials (must implement `ToString`).
 /// * `pgpass_path` - Path to the original .pgpass file.
 ///
 /// # Workflow
@@ -302,7 +299,7 @@ fn log_into_vault_if_required() -> color_eyre::Result<()> {
 /// 4. Sets strict permissions (600) to match .pgpass security requirements.
 fn save_new_pgpass_file(
     pgpass_idx_lines: Vec<(usize, &str)>,
-    updated_creds: &ConnectionParams,
+    updated_conn_params: &ConnectionParams,
     pgpass_path: &Path,
 ) -> color_eyre::Result<()> {
     let mut tmp_path = PathBuf::from(pgpass_path);
@@ -310,8 +307,8 @@ fn save_new_pgpass_file(
     let mut tmp_file = File::create(&tmp_path)?;
 
     for (idx, pgpass_line) in pgpass_idx_lines {
-        let file_line_content = if idx == updated_creds.idx {
-            updated_creds.to_string()
+        let file_line_content = if idx == updated_conn_params.idx {
+            updated_conn_params.to_string()
         } else {
             pgpass_line.to_string()
         };
