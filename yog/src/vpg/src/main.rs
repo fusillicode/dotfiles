@@ -1,9 +1,7 @@
 #![feature(exit_status_error)]
 
-use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
-use std::str::FromStr;
 
 use crate::pgpass::PgpassEntry;
 use crate::pgpass::PgpassFile;
@@ -13,12 +11,17 @@ mod nvim_dbee;
 mod pgpass;
 mod vault;
 
-/// Connects via pgcli to the DB matching the selected alias with refreshed Vault credentials.
+/// Gets new Vault credentials for the supplied alias and writes them inside .pgpass and
+/// Neovim DBee's connections file.
+///
+/// If an additional CLI arg is supplied it stops.
+/// If no additional arg is supplied it connects via pgcli to the DB matching the supplied alias.
+///
+/// Requires VAULT_ADDR env var to be defined.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let mut pgpass_path = PathBuf::from(std::env::var("HOME")?);
-    pgpass_path.push(".pgpass");
+    let pgpass_path = pgpass::get_file_path()?;
     let pgpass_content = std::fs::read_to_string(&pgpass_path)?;
     let pgpass_file = PgpassFile::parse(pgpass_content.as_str())?;
 
@@ -35,7 +38,7 @@ fn main() -> color_eyre::Result<()> {
     };
 
     println!(
-        "\nLogging into Vault @ {}\n(be sure to have the VPN on!)",
+        "\nLogging into Vault @ {}\n(be sure to have the VPN on!)\n",
         std::env::var("VAULT_ADDR")?
     );
     vault::log_into_vault_if_required()?;
@@ -49,11 +52,23 @@ fn main() -> color_eyre::Result<()> {
     pgpass_entry.connection_params.update(&vault_read_output.data);
     pgpass::save_new_pgpass_file(pgpass_file.idx_lines, &pgpass_entry.connection_params, &pgpass_path)?;
 
-    let nvim_dbee_conns_path = PathBuf::from_str(&std::env::var("HOME")?)?.join(".local/state/nvim/dbee/conns.json");
+    let nvim_dbee_conns_path = nvim_dbee::get_conns_file_path()?;
     nvim_dbee::save_new_nvim_dbee_conns_file(&pgpass_entry, &nvim_dbee_conns_path)?;
 
+    if args.get(1).is_some() {
+        println!(
+            "✅ {} credentials updated in {pgpass_path:?}",
+            pgpass_entry.metadata.alias
+        );
+        println!(
+            "✅ {} credentials updated in {nvim_dbee_conns_path:?}",
+            pgpass_entry.metadata.alias
+        );
+        return Ok(());
+    }
+
     let db_url = pgpass_entry.connection_params.db_url();
-    println!("\nConnecting to {} @\n\n{db_url}\n", pgpass_entry.metadata.alias);
+    println!("Connecting to {} @\n\n{db_url}\n", pgpass_entry.metadata.alias);
 
     if let Some(psql_exit_code) = Command::new("pgcli")
         .arg(&db_url)
