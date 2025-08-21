@@ -160,7 +160,7 @@ fn get_enclosing_fn_name_of_node(src: &[u8], node: Option<Node>) -> Option<Strin
 /// 1. we're always working in a git repository
 /// 2. no custom config file for cargo-make
 fn get_test_runner_app_for_path(path: &Path) -> anyhow::Result<&'static str> {
-    let git_repo_root = utils::git::get_git_repo_root(Some(path)).map_err(|e| anyhow!(e))?;
+    let git_repo_root = utils::git::get_repo_root(Some(path)).map_err(|e| anyhow!(e))?;
 
     if std::fs::read_dir(git_repo_root)?.any(|res| {
         res.as_ref()
