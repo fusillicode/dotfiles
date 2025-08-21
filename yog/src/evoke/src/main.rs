@@ -6,7 +6,7 @@ const BINS: &[&str] = &["idt", "yghfl", "yhfp", "oe", "catl", "gcu", "vpg", "try
 
 /// Evoke yog 🍝 👀
 ///
-/// Formats, lints, builds and links yog bins.
+/// Formats, lints, builds, and links yog bins.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
@@ -14,7 +14,7 @@ fn main() -> color_eyre::Result<()> {
 
     let is_debug = drop_element(&mut args, "--debug");
     let bins_path = args.first().cloned().map_or_else(
-        || std::env::var("HOME").map(|home| format!("{home}/.local/bin")),
+        || utils::system::home_path(".local/bin").map(|x| x.to_string_lossy().to_string()),
         Result::Ok,
     )?;
     let mut target_path = args.get(1).cloned().map_or_else(

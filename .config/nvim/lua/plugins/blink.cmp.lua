@@ -51,7 +51,7 @@ return {
     },
     keymap = {
       preset = 'enter',
-      -- For some reason <c-space> does't work...
+      -- For some reason <c-space> doesn't work...
       ['<c-x>'] = { 'show', 'show_documentation', 'hide_documentation', },
       ['<c-u>'] = { 'scroll_documentation_up', 'fallback', },
       ['<c-d>'] = { 'scroll_documentation_down', 'fallback', },
