@@ -83,7 +83,7 @@ impl FromStr for FileToOpen {
         let path = parts.next().ok_or_else(|| eyre!("no file path found in {s}"))?;
         let line_nbr = parts.next().map(str::parse::<i64>).transpose()?.unwrap_or_default();
         let column = parts.next().map(str::parse::<i64>).transpose()?.unwrap_or_default();
-        if !Path::new(path).exists() {
+        if !Path::new(path).try_exists()? {
             bail!("file {path} doesn't exists")
         }
 
