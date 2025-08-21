@@ -9,11 +9,13 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
+use std::str::FromStr;
 
 use color_eyre::eyre::WrapErr;
 use color_eyre::eyre::bail;
 use color_eyre::owo_colors::OwoColorize;
 use serde::Deserialize;
+use serde::Serialize;
 use utils::sk::SkimItem;
 use utils::sk::SkimItemPreview;
 use utils::sk::SkimPreviewContext;
@@ -53,6 +55,8 @@ fn main() -> color_eyre::Result<()> {
 
     pgpass_entry.connection_params.update(&vault_read_output.data);
     save_new_pgpass_file(pgpass_file.idx_lines, &pgpass_entry.connection_params, &pgpass_path)?;
+    let nvim_dbee_conns_path = PathBuf::from_str(&std::env::var("HOME")?)?.join(".local/state/nvim/dbee/conns.json");
+    save_new_nvim_dbee_conns_file(&pgpass_entry, &nvim_dbee_conns_path)?;
 
     let db_url = pgpass_entry.connection_params.db_url();
     println!("\nConnecting to {} @\n\n{db_url}\n", pgpass_entry.metadata.alias);
@@ -80,9 +84,9 @@ fn main() -> color_eyre::Result<()> {
 #[derive(Debug)]
 struct PgpassFile<'a> {
     /// Original file lines with their 0-based indices, preserving comments and metadata.
-    pub idx_lines: Vec<(usize, &'a str)>,
+    idx_lines: Vec<(usize, &'a str)>,
     /// Validated connection entries parsed from non-comment lines.
-    pub entries: Vec<PgpassEntry>,
+    entries: Vec<PgpassEntry>,
 }
 
 impl<'a> PgpassFile<'a> {
@@ -161,9 +165,9 @@ impl std::fmt::Display for PgpassEntry {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Metadata {
     /// Human-readable identifier for the connection (from comments).
-    pub alias: String,
+    alias: String,
     /// Vault path reference for secure password management (from comments).
-    pub vault_path: String,
+    vault_path: String,
 }
 
 impl std::fmt::Display for Metadata {
@@ -176,17 +180,17 @@ impl std::fmt::Display for Metadata {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ConnectionParams {
     /// 0-based index referencing the original line in `PgpassFile.idx_lines`.
-    pub idx: usize,
+    idx: usize,
     /// Hostname.
-    pub host: String,
+    host: String,
     /// TCP port number.
-    pub port: u16,
+    port: u16,
     /// Database name.
-    pub db: String,
+    db: String,
     /// Username.
-    pub user: String,
+    user: String,
     /// Password.
-    pub pwd: String,
+    pwd: String,
 }
 
 impl ConnectionParams {
@@ -230,26 +234,26 @@ impl std::fmt::Display for ConnectionParams {
 #[derive(Deserialize, Debug)]
 struct VaultReadOutput {
     /// Unique request identifier for tracing.
-    pub request_id: String,
+    request_id: String,
     /// Lease identifier for secret life cycle management.
-    pub lease_id: String,
+    lease_id: String,
     /// Time-to-live duration in seconds for secret.
-    pub lease_duration: i32,
+    lease_duration: i32,
     /// Indicates if lease can be renewed.
-    pub renewable: bool,
+    renewable: bool,
     /// Contains actual secret credentials.
-    pub data: VaultCreds,
+    data: VaultCreds,
     /// Non-critical operational warnings.
-    pub warnings: Vec<String>,
+    warnings: Vec<String>,
 }
 
 /// Database credentials stored in Vault.
 #[derive(Deserialize, Debug)]
 struct VaultCreds {
     /// Database password.
-    pub password: String,
+    password: String,
     /// Database username.
-    pub username: String,
+    username: String,
 }
 
 /// Checks and renews Vault authentication using OIDC/Okta if token is invalid.
@@ -285,16 +289,16 @@ fn log_into_vault_if_required() -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Saves updated PostgreSQL .pgpass credentials to a temporary file, replaces the original, and sets permissions.
+/// Saves updated PostgreSQL .pgpass to a temporary file, replaces the original, and sets permissions.
 ///
 /// # Arguments
 /// * `pgpass_idx_lines` - Original file lines with their indices (to identify line needing update).
-/// * `updated_conn_params` - New connection credentials (must implement `ToString`).
+/// * `updated_conn_params` - New connection parameters (must implement `ToString`).
 /// * `pgpass_path` - Path to the original .pgpass file.
 ///
 /// # Workflow
 /// 1. Creates temporary file `.pgpass.tmp` in same directory.
-/// 2. Writes all lines, replacing the specified index with updated credentials.
+/// 2. Writes all lines, replacing the specified index with updated connection parameters.
 /// 3. Atomically replaces original file via rename.
 /// 4. Sets strict permissions (600) to match .pgpass security requirements.
 fn save_new_pgpass_file(
@@ -307,12 +311,12 @@ fn save_new_pgpass_file(
     let mut tmp_file = File::create(&tmp_path)?;
 
     for (idx, pgpass_line) in pgpass_idx_lines {
-        let file_line_content = if idx == updated_conn_params.idx {
+        let file_line = if idx == updated_conn_params.idx {
             updated_conn_params.to_string()
         } else {
             pgpass_line.to_string()
         };
-        writeln!(tmp_file, "{file_line_content}")?;
+        writeln!(tmp_file, "{file_line}")?;
     }
 
     std::fs::rename(&tmp_path, pgpass_path)?;
@@ -323,6 +327,65 @@ fn save_new_pgpass_file(
     file.set_permissions(permissions)?;
 
     Ok(())
+}
+
+fn save_new_nvim_dbee_conns_file(updated_pg_pass_entry: &PgpassEntry, conns_path: &Path) -> color_eyre::Result<()> {
+    let conns = if !conns_path.exists() {
+        vec![NvimDbeeConn {
+            id: updated_pg_pass_entry.metadata.alias.clone(),
+            name: updated_pg_pass_entry.metadata.alias.clone(),
+            url: updated_pg_pass_entry.connection_params.db_url(),
+            r#type: "postgres".into(),
+        }]
+    } else {
+        let conns_file_content = std::fs::read_to_string(conns_path)?;
+        if conns_file_content.is_empty() {
+            vec![NvimDbeeConn {
+                id: updated_pg_pass_entry.metadata.alias.clone(),
+                name: updated_pg_pass_entry.metadata.alias.clone(),
+                url: updated_pg_pass_entry.connection_params.db_url(),
+                r#type: "postgres".into(),
+            }]
+        } else {
+            let conns: Vec<NvimDbeeConn> = serde_json::from_str(&conns_file_content)?;
+            let mut conns = if conns.is_empty() {
+                vec![NvimDbeeConn {
+                    id: updated_pg_pass_entry.metadata.alias.clone(),
+                    name: updated_pg_pass_entry.metadata.alias.clone(),
+                    url: updated_pg_pass_entry.connection_params.db_url(),
+                    r#type: "postgres".into(),
+                }]
+            } else {
+                conns
+            };
+            for conn in conns.iter_mut() {
+                if conn.name == updated_pg_pass_entry.metadata.alias {
+                    conn.url = updated_pg_pass_entry.connection_params.db_url();
+                }
+            }
+            conns
+        }
+    };
+
+    let mut tmp_path = PathBuf::from(conns_path);
+    tmp_path.set_file_name("conns.json.tmp");
+    std::fs::write(&tmp_path, serde_json::to_string(&conns)?)?;
+    std::fs::rename(&tmp_path, conns_path)?;
+
+    let file = OpenOptions::new().read(true).open(conns_path)?;
+    let mut permissions = file.metadata()?.permissions();
+    permissions.set_mode(0o600);
+    file.set_permissions(permissions)?;
+
+    Ok(())
+}
+
+#[derive(Deserialize, Serialize)]
+struct NvimDbeeConn {
+    id: String,
+    name: String,
+    url: String,
+    r#type: String,
 }
 
 #[cfg(test)]
