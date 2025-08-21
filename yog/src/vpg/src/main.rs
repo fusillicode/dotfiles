@@ -48,6 +48,7 @@ fn main() -> color_eyre::Result<()> {
 
     pgpass_entry.connection_params.update(&vault_read_output.data);
     pgpass::save_new_pgpass_file(pgpass_file.idx_lines, &pgpass_entry.connection_params, &pgpass_path)?;
+
     let nvim_dbee_conns_path = PathBuf::from_str(&std::env::var("HOME")?)?.join(".local/state/nvim/dbee/conns.json");
     nvim_dbee::save_new_nvim_dbee_conns_file(&pgpass_entry, &nvim_dbee_conns_path)?;
 
