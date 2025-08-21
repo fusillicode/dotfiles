@@ -117,9 +117,7 @@ fn build_hx_cursor_absolute_file_path(
     hx_pane: &WeztermPane,
 ) -> color_eyre::Result<PathBuf> {
     if let Ok(hx_cursor_file_path) = hx_cursor_file_path.strip_prefix("~") {
-        let mut home_absolute_path = Path::new(&std::env::var("HOME")?).to_path_buf();
-        home_absolute_path.push(hx_cursor_file_path);
-        return Ok(home_absolute_path);
+        return utils::system::home_path(hx_cursor_file_path);
     }
 
     let mut components = hx_pane.cwd.components();

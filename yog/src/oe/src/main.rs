@@ -6,7 +6,7 @@ use color_eyre::eyre::bail;
 use utils::editor::Editor;
 use utils::editor::FileToOpen;
 
-/// Open the supplied file path in a running editor (Neovim or Helix) instance alongside the
+/// Open the supplied filepath in a running editor (Neovim or Helix) instance alongside the
 /// Wezterm pane from where the cmd has been invoked.
 /// Used both as a CLI and from Wezterm `open-uri` handler.
 fn main() -> color_eyre::Result<()> {
@@ -61,7 +61,7 @@ fn get_enriched_path_env() -> color_eyre::Result<Env> {
     let enriched_path = [
         &std::env::var("PATH").unwrap_or_else(|_| String::new()),
         "/opt/homebrew/bin",
-        &format!("{}/.local/bin", std::env::var("HOME")?),
+        &utils::system::home_path("/.local/bin")?.to_string_lossy(),
     ]
     .join(":");
 
