@@ -11,8 +11,7 @@ mod nvim_dbee;
 mod pgpass;
 mod vault;
 
-/// Gets new Vault credentials for the supplied alias and writes them inside .pgpass and
-/// Neovim DBee's connections file.
+/// Gets new Vault credentials for the supplied alias and updates .pgpass and Neovim DBee's connections file.
 ///
 /// If an additional CLI arg is supplied (no matter the value) it also runs pgcli connecting to the DB matching the
 /// supplied alias.
