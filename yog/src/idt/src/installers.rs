@@ -59,7 +59,6 @@ pub trait Installer: Sync + Send {
 
     // Printing and reporting is done here, rather than after to give feedback as soon as possible.
     fn run(&self) -> color_eyre::Result<()> {
-        println!("🏁 {} start installation...", self.bin_name());
         self.install()
             .inspect_err(|error| eprintln!("❌ {} installation failed, error {error:#?}", self.bin_name()))
             .and_then(|_| {
