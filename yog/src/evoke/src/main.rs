@@ -1,5 +1,6 @@
 #![feature(exit_status_error)]
 
+use std::path::Path;
 use std::path::PathBuf;
 
 const BINS: &[&str] = &["idt", "yghfl", "yhfp", "oe", "catl", "gcu", "vpg", "try", "fkr"];
@@ -14,8 +15,8 @@ fn main() -> color_eyre::Result<()> {
 
     let is_debug = drop_element(&mut args, "--debug");
     let bins_path = args.first().cloned().map_or_else(
-        || utils::system::home_path(".local/bin").map(|x| x.to_string_lossy().to_string()),
-        Result::Ok,
+        || utils::system::home_path(".local/bin"),
+        |supplied_bins_path| Ok(PathBuf::from(supplied_bins_path)),
     )?;
     let mut target_path = args.get(1).cloned().map_or_else(
         || {
@@ -72,8 +73,8 @@ where
     false
 }
 
-fn install_bin(bins_path: &str, bin: &str, target_path: &str) -> color_eyre::Result<()> {
-    let bin_path = format!("{bins_path}/{bin}");
+fn install_bin(bins_path: &Path, bin: &str, target_path: &str) -> color_eyre::Result<()> {
+    let bin_path = bins_path.join(bin);
     utils::system::rm_f(&bin_path)?;
     std::os::unix::fs::symlink(format!("{target_path}/{bin}"), &bin_path)?;
     Ok(())
