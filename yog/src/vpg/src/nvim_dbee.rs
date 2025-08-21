@@ -2,11 +2,16 @@ use std::fs::OpenOptions;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::pgpass::PgpassEntry;
+
+pub fn get_conns_file_path() -> color_eyre::Result<PathBuf> {
+    Ok(PathBuf::from_str(&std::env::var("HOME")?)?.join(".local/state/nvim/dbee/conns.json"))
+}
 
 pub fn save_new_nvim_dbee_conns_file(updated_pg_pass_entry: &PgpassEntry, conns_path: &Path) -> color_eyre::Result<()> {
     let conns = get_updated_conns(updated_pg_pass_entry, conns_path)?;
