@@ -15,10 +15,6 @@ use utils::sk::SkimPreviewContext;
 
 use crate::vault::VaultCreds;
 
-pub fn get_file_path() -> color_eyre::Result<PathBuf> {
-    Ok(PathBuf::from(std::env::var("HOME")?).join(".pgpass"))
-}
-
 /// A parsed `.pgpass` file with line references and connection entries.
 ///
 /// Stores both raw lines (preserving comments and formatting) and validated connection entries.

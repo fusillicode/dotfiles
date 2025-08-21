@@ -1,6 +1,8 @@
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use std::path::PathBuf;
 use std::process::Stdio;
+use std::str::FromStr;
 use std::thread::JoinHandle;
 
 use color_eyre::eyre;
@@ -15,6 +17,10 @@ pub fn get_args() -> Vec<String> {
 
 pub fn join<T>(join_handle: JoinHandle<color_eyre::Result<T>>) -> Result<T, eyre::Error> {
     join_handle.join().map_err(|e| eyre!("join error {e:#?}"))?
+}
+
+pub fn home_path<P: AsRef<Path>>(path: P) -> color_eyre::Result<PathBuf> {
+    Ok(PathBuf::from_str(&std::env::var("HOME")?)?.join(path))
 }
 
 pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
