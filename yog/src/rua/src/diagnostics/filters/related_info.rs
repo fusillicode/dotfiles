@@ -15,7 +15,7 @@ impl RelatedInfoFilter {
         })
     }
 
-    /// Get the [`RelatedInfo`]s of an LSP diagnostic represented by a [`LuaTable`].
+    /// Get the [RelatedInfo]s of an LSP diagnostic represented by a [LuaTable].
     fn get_related_infos(lsp_diags: &LuaTable) -> LuaResult<Vec<RelatedInfo>> {
         let mut out = vec![];
         for lsp_diag in lsp_diags.sequence_values::<LuaTable>().flatten() {
@@ -29,7 +29,7 @@ impl RelatedInfoFilter {
             };
 
             for table in rel_infos.sequence_values::<LuaTable>().flatten() {
-                // All LSPs "user_data.lsp.relatedInformation" should be deserializable into [`RelatedInfo`]
+                // All LSPs "user_data.lsp.relatedInformation" should be deserializable into [RelatedInfo]
                 out.push(RelatedInfo::from_related_info(&table)?);
             }
         }
@@ -45,7 +45,7 @@ impl DiagnosticsFilter for RelatedInfoFilter {
         if self.rel_infos.is_empty() {
             return Ok(false);
         }
-        // All LSPs diagnostics should be deserializable into [`RelatedInfo`]
+        // All LSPs diagnostics should be deserializable into [RelatedInfo]
         let rel_info = RelatedInfo::from_lsp_diagnostic(lsp_diag)?;
         if self.rel_infos.contains(&rel_info) {
             return Ok(true);
@@ -65,7 +65,7 @@ struct RelatedInfo {
 }
 
 impl RelatedInfo {
-    /// Create a [`RelatedInfo`] from a root LSP diagnostic.
+    /// Create a [RelatedInfo] from a root LSP diagnostic.
     fn from_lsp_diagnostic(table: &LuaTable) -> LuaResult<Self> {
         Ok(Self {
             message: table.get("message")?,
@@ -76,7 +76,7 @@ impl RelatedInfo {
         })
     }
 
-    /// Create a [`RelatedInfo`] from an element of an LSP diagnostic "user_data.lsp.relatedInformation" section.
+    /// Create a [RelatedInfo] from an element of an LSP diagnostic "user_data.lsp.relatedInformation" section.
     fn from_related_info(table: &LuaTable) -> LuaResult<Self> {
         let (start, end) = {
             let range = table

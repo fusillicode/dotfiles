@@ -1,6 +1,6 @@
 use mlua::prelude::*;
 
-/// Returns the formatted [`String`] representation of an LSP diagnostic.
+/// Returns the formatted [String] representation of an LSP diagnostic.
 pub fn format(_lua: &Lua, diag: Diagnostic) -> LuaResult<String> {
     let msg = get_msg(&diag).map_or_else(
         || format!("no message in {diag:#?}"),
@@ -13,7 +13,7 @@ pub fn format(_lua: &Lua, diag: Diagnostic) -> LuaResult<String> {
     Ok(format!("▶ {msg} [{src_and_code}]"))
 }
 
-/// Extracts LSP diagnostic message from [`LspData::rendered`] or directly from the supplied [`Diagnostic`].
+/// Extracts LSP diagnostic message from [LspData::rendered] or directly from the supplied [Diagnostic].
 fn get_msg(diag: &Diagnostic) -> Option<&str> {
     diag.user_data
         .as_ref()
@@ -32,7 +32,7 @@ fn get_msg(diag: &Diagnostic) -> Option<&str> {
         .or(diag.message.as_deref())
 }
 
-/// Extracts the "source" from [`Diagnostic::user_data`] or [`Diagnostic::source`].
+/// Extracts the "source" from [Diagnostic::user_data] or [Diagnostic::source].
 fn get_src(diag: &Diagnostic) -> Option<&str> {
     diag.user_data
         .as_ref()
@@ -40,7 +40,7 @@ fn get_src(diag: &Diagnostic) -> Option<&str> {
         .or(diag.source.as_deref())
 }
 
-/// Extracts the "code" from [`Diagnostic::user_data`] or [`Diagnostic::code`].
+/// Extracts the "code" from [Diagnostic::user_data] or [Diagnostic::code].
 fn get_code(diag: &Diagnostic) -> Option<&str> {
     diag.user_data
         .as_ref()

@@ -1,6 +1,6 @@
 use mlua::prelude::*;
 
-/// Returns the formatted [`String`] representation of the statuscolumn.
+/// Returns the formatted [String] representation of the statuscolumn.
 pub fn draw(_lua: &Lua, (cur_buf_type, cur_lnum, signs): (LuaString, LuaString, Signs)) -> LuaResult<String> {
     Ok(Statuscolumn::draw(
         cur_buf_type.to_string_lossy().as_str(),

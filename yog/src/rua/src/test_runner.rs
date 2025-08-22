@@ -8,13 +8,13 @@ use tree_sitter::Node;
 use tree_sitter::Parser;
 use tree_sitter::Point;
 
-/// Runs the function enclosing the supplied [`CursorPosition`] as a Rust test in the first Wezterm
+/// Runs the function enclosing the supplied [CursorPosition] as a Rust test in the first Wezterm
 /// pane that matches the tab and the current working directory of the pane of the supplied
-/// [`CursorPosition`].
+/// [CursorPosition].
 ///
 /// Returns an error in case of:
-/// - the file referenced by [`CursorPosition`] is not a Rust file
-/// - no enclosing function can be found for the supplied [`CursorPosition`]
+/// - the file referenced by [CursorPosition] is not a Rust file
+/// - no enclosing function can be found for the supplied [CursorPosition]
 /// - any external error related to interacting with Wezterm and the external test runner app (i.e. cargo make)
 pub fn run_test(_lua: &Lua, cursor_position: CursorPosition) -> LuaResult<()> {
     let test_name = get_enclosing_fn_name_of_position(cursor_position.path.as_path(), Point::from(&cursor_position))?
@@ -152,7 +152,7 @@ fn get_enclosing_fn_name_of_node(src: &[u8], node: Option<Node>) -> Option<Strin
 }
 
 /// Get the application to use to run the tests based on the presence of a `Makefile.toml`
-/// in the root of a git repository where the supplied [`Path`] resides.
+/// in the root of a git repository where the supplied [Path] resides.
 ///
 /// If the file is found "cargo make test" is used to run the tests.
 /// "cargo test" is used otherwise.
