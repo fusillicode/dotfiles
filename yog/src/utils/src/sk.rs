@@ -5,8 +5,8 @@ pub use skim::SkimItem;
 use skim::prelude::*;
 
 /// Get the selected item among the supplied ones with sk configured with either:
-/// - the supplied [`SkimOptionsBuilder`] or
-/// - the base one [`base_sk_opts`]
+/// - the supplied [SkimOptionsBuilder] or
+/// - the base one [base_sk_opts]
 pub fn get_item<T: SkimItem + Clone + std::fmt::Debug>(
     items: Vec<T>,
     sk_opts: Option<SkimOptionsBuilder>,

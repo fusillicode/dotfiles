@@ -12,7 +12,7 @@ use utils::sk::SkimPreviewContext;
 
 /// Get all local and remote git refs sorted by latest to oldest modified.
 ///
-/// Returns an error as soon as 1 single item cannot be converted to a [`GitRef`].
+/// Returns an error as soon as 1 single item cannot be converted to a [GitRef].
 pub fn get_local_and_remote_refs() -> color_eyre::Result<Vec<GitRef>> {
     let output = Command::new("git")
         .args([

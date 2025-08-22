@@ -17,7 +17,7 @@ pub fn filter(lua: &Lua, (buf_path, lsp_diags): (LuaString, LuaTable)) -> LuaRes
     let filters = DiagnosticsFilters::all(&lsp_diags)?;
 
     let mut out = vec![];
-    // Using [`.pairs`] and [`LuaValue`] to get a & to the LSP diagnostic [`LuaTable`] and avoid
+    // Using [.pairs] and [LuaValue] to get a & to the LSP diagnostic [LuaTable] and avoid
     // cloning it when passing it to the filter.
     for (_, lua_value) in lsp_diags.pairs::<usize, LuaValue>().flatten() {
         let lsp_diag = lua_value
