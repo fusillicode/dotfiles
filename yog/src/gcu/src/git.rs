@@ -46,8 +46,8 @@ pub fn keep_local_and_untracked_refs(git_refs: &mut Vec<GitRef>) {
     });
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct GitRef {
     name: String,
     remote: Option<String>,
@@ -137,5 +137,35 @@ impl std::str::FromStr for GitRef {
                 .ok_or_else(|| eyre!("missing subject in git for-each-ref output {s}"))?
                 .to_string(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use chrono::TimeZone;
+
+    use super::*;
+
+    #[test]
+    fn test_git_ref_from_str_works_as_expected() {
+        let input = "refname|object_name|object_type|committer_email|Fri, 22 Aug 2025 13:55:07 +0200|subject";
+        assert2::let_assert!(Ok(actual_git_ref) = GitRef::from_str(input));
+        pretty_assertions::assert_eq!(
+            GitRef {
+                name: "refname".into(),
+                remote: None,
+                object_name: "object_name".into(),
+                object_type: "object_type".into(),
+                committer_email: "committer_email".into(),
+                committer_date_time: FixedOffset::east_opt(2 * 3600)
+                    .unwrap()
+                    .with_ymd_and_hms(2025, 8, 22, 13, 55, 7)
+                    .unwrap(),
+                subject: "subject".into()
+            },
+            actual_git_ref
+        );
     }
 }

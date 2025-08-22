@@ -9,3 +9,7 @@ chrono = { version = "0.4" }
 color-eyre = { workspace = true }
 url = { workspace = true }
 utils = { workspace = true }
+
+[dev-dependencies]
+assert2 = { workspace = true }
+pretty_assertions = { workspace = true }
