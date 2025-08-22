@@ -111,7 +111,8 @@ function M.fzf_lua(fzf_lua)
 
   keymap_set({ 'n', 'v', }, '<leader>f', function() fzf_lua.files({ prompt = 'Files: ', }) end)
   keymap_set({ 'n', 'v', }, '<leader>b', function() fzf_lua.buffers({ prompt = 'Buffers: ', }) end)
-  keymap_set({ 'n', 'v', }, '<leader>gs', function() fzf_lua.git_status({ prompt = 'gs: ', }) end)
+  keymap_set({ 'n', 'v', }, '<leader>gs', function() fzf_lua.git_status({ prompt = 'Git status: ', }) end)
+  keymap_set({ 'n', 'v', }, '<leader>gc', function() fzf_lua.git_commits({ prompt = 'Git commits: ', }) end)
   keymap_set({ 'n', 'v', }, '<leader>c', function() fzf_lua.commands({ prompt = 'Cmds: ', }) end)
   keymap_set({ 'n', 'v', }, '<leader>d', function() fzf_lua.diagnostics_document({ prompt = 'Diags: ', }) end)
   -- Sorting of all workspace diagnostic is done with fzf-lua rather than with `rua` sorter because the sorter works
