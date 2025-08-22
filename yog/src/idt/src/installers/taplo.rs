@@ -1,10 +1,12 @@
+use std::path::Path;
+
 use crate::Installer;
 
-pub struct Taplo {
-    pub bin_dir: String,
+pub struct Taplo<'a> {
+    pub bin_dir: &'a Path,
 }
 
-impl Installer for Taplo {
+impl<'a> Installer for Taplo<'a> {
     fn bin_name(&self) -> &'static str {
         "taplo"
     }
@@ -21,11 +23,11 @@ impl Installer for Taplo {
                 "--all-features",
                 "--root",
                 // `--root` automatically append `bin` 🥲
-                self.bin_dir.trim_end_matches("bin"),
+                self.bin_dir.to_string_lossy().trim_end_matches("bin"),
             ])
             .status()?;
 
-        utils::system::chmod_x(format!("{}/{}", self.bin_dir, self.bin_name()))?;
+        utils::system::chmod_x(self.bin_dir.join(self.bin_name()))?;
 
         Ok(())
     }

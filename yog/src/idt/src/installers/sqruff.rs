@@ -1,13 +1,13 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
 
-pub struct Sqruff {
-    pub bin_dir: PathBuf,
+pub struct Sqruff<'a> {
+    pub bin_dir: &'a Path,
 }
 
-impl Installer for Sqruff {
+impl<'a> Installer for Sqruff<'a> {
     fn bin_name(&self) -> &'static str {
         "sqruff"
     }
@@ -19,7 +19,7 @@ impl Installer for Sqruff {
                 self.bin_name()
             ),
             CurlDownloaderOption::PipeIntoTar {
-                dest_dir: &self.bin_dir,
+                dest_dir: self.bin_dir,
                 dest_name: Some(self.bin_name()),
             },
         )?;

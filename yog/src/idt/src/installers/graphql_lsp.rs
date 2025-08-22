@@ -1,20 +1,20 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 use crate::Installer;
 
-pub struct GraphQlLsp {
-    pub dev_tools_dir: PathBuf,
-    pub bin_dir: PathBuf,
+pub struct GraphQlLsp<'a> {
+    pub dev_tools_dir: &'a Path,
+    pub bin_dir: &'a Path,
 }
 
-impl Installer for GraphQlLsp {
+impl<'a> Installer for GraphQlLsp<'a> {
     fn bin_name(&self) -> &'static str {
         "graphql-lsp"
     }
 
     fn install(&self) -> color_eyre::Result<()> {
         let target_dir = crate::downloaders::npm::run(
-            &self.dev_tools_dir,
+            self.dev_tools_dir,
             "graphql-language-service-cli",
             &["graphql-language-service-cli"],
         )?;

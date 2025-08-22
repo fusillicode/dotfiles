@@ -1,13 +1,13 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
 
-pub struct HelmLs {
-    pub bin_dir: PathBuf,
+pub struct HelmLs<'a> {
+    pub bin_dir: &'a Path,
 }
 
-impl Installer for HelmLs {
+impl<'a> Installer for HelmLs<'a> {
     fn bin_name(&self) -> &'static str {
         "helm_ls"
     }

@@ -1,13 +1,13 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
 
-pub struct Hadolint {
-    pub bin_dir: PathBuf,
+pub struct Hadolint<'a> {
+    pub bin_dir: &'a Path,
 }
 
-impl Installer for Hadolint {
+impl<'a> Installer for Hadolint<'a> {
     fn bin_name(&self) -> &'static str {
         "hadolint"
     }

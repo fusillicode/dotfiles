@@ -1,15 +1,15 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 use utils::cmd::silent_cmd;
 
 use crate::Installer;
 
-pub struct Nvim {
-    pub dev_tools_dir: PathBuf,
-    pub bin_dir: PathBuf,
+pub struct Nvim<'a> {
+    pub dev_tools_dir: &'a Path,
+    pub bin_dir: &'a Path,
 }
 
-impl Installer for Nvim {
+impl<'a> Installer for Nvim<'a> {
     fn bin_name(&self) -> &'static str {
         "nvim"
     }

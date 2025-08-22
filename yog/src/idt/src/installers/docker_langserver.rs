@@ -1,20 +1,20 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 use crate::Installer;
 
-pub struct DockerLangServer {
-    pub dev_tools_dir: PathBuf,
-    pub bin_dir: PathBuf,
+pub struct DockerLangServer<'a> {
+    pub dev_tools_dir: &'a Path,
+    pub bin_dir: &'a Path,
 }
 
-impl Installer for DockerLangServer {
+impl<'a> Installer for DockerLangServer<'a> {
     fn bin_name(&self) -> &'static str {
         "docker-langserver"
     }
 
     fn install(&self) -> color_eyre::Result<()> {
         let target_dir = crate::downloaders::npm::run(
-            &self.dev_tools_dir,
+            self.dev_tools_dir,
             "dockerfile-language-server-nodejs",
             &["dockerfile-language-server-nodejs"],
         )?;

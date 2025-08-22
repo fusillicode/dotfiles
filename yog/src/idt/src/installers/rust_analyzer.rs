@@ -1,13 +1,13 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
 
-pub struct RustAnalyzer {
-    pub bin_dir: PathBuf,
+pub struct RustAnalyzer<'a> {
+    pub bin_dir: &'a Path,
 }
 
-impl Installer for RustAnalyzer {
+impl<'a> Installer for RustAnalyzer<'a> {
     fn bin_name(&self) -> &'static str {
         "rust-analyzer"
     }

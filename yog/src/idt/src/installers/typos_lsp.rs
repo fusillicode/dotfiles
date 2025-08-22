@@ -1,13 +1,13 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
 
-pub struct TyposLsp {
-    pub bin_dir: PathBuf,
+pub struct TyposLsp<'a> {
+    pub bin_dir: &'a Path,
 }
 
-impl Installer for TyposLsp {
+impl<'a> Installer for TyposLsp<'a> {
     fn bin_name(&self) -> &'static str {
         "typos-lsp"
     }
@@ -22,7 +22,7 @@ impl Installer for TyposLsp {
                 self.bin_name()
             ),
             CurlDownloaderOption::PipeIntoTar {
-                dest_dir: &self.bin_dir,
+                dest_dir: self.bin_dir,
                 dest_name: Some(self.bin_name()),
             },
         )?;
