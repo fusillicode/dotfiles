@@ -20,7 +20,7 @@ pub fn get_current_pane_id() -> color_eyre::Result<i64> {
     Ok(std::env::var("WEZTERM_PANE")?.parse()?)
 }
 
-// [`envs`] is required because Wezterm is not found when called by `oe` CLI when a file path is
+// envs is required because Wezterm is not found when called by `oe` CLI when a file path is
 // clicked in Wezterm itself.
 pub fn get_all_panes(envs: &[(&str, &str)]) -> color_eyre::Result<Vec<WeztermPane>> {
     let mut cmd = Command::new("wezterm");
@@ -73,7 +73,7 @@ pub struct WeztermPane {
 }
 
 impl WeztermPane {
-    /// Given two [`WeztermPane`] checks if they are in the same tab and if the first
+    /// Given two [WeztermPane] checks if they are in the same tab and if the first
     /// has a current working directory that is the same or a child of the second one.
     pub fn is_sibling_terminal_pane_of(&self, other: &WeztermPane) -> bool {
         self.pane_id != other.pane_id && self.tab_id == other.tab_id && self.cwd.starts_with(&other.cwd)

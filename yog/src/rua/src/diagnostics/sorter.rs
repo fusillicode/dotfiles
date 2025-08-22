@@ -1,8 +1,8 @@
 use mlua::prelude::*;
 
 /// Sort LSP diagnostics based on their severity.
-/// If the severity cannot be found in the [`LuaTable`] representing the LSP diagnostic uses the
-/// position of the diagnostic in the input [`LuaTable`] as key for sorting.
+/// If the severity cannot be found in the [LuaTable] representing the LSP diagnostic uses the
+/// position of the diagnostic in the input [LuaTable] as key for sorting.
 pub fn sort(lua: &Lua, lsp_diags: LuaTable) -> LuaResult<LuaTable> {
     let mut lsp_diags_by_severity = lsp_diags
         .sequence_values::<LuaTable>()
