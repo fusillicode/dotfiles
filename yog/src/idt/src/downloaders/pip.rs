@@ -1,10 +1,13 @@
-pub fn run(dev_tools_dir: &str, tool: &str, packages: &[&str]) -> color_eyre::Result<String> {
-    let dev_tools_repo_dir = format!("{dev_tools_dir}/{tool}");
+use std::path::Path;
+use std::path::PathBuf;
+
+pub fn run(dev_tools_dir: &Path, tool: &str, packages: &[&str]) -> color_eyre::Result<PathBuf> {
+    let dev_tools_repo_dir = dev_tools_dir.join(tool);
 
     std::fs::create_dir_all(&dev_tools_repo_dir)?;
 
     utils::cmd::silent_cmd("python3")
-        .args(["-m", "venv", &format!("{dev_tools_repo_dir}/.venv")])
+        .args(["-m", "venv", &dev_tools_repo_dir.join(".venv").to_string_lossy()])
         .status()?
         .exit_ok()?;
 
@@ -13,14 +16,15 @@ pub fn run(dev_tools_dir: &str, tool: &str, packages: &[&str]) -> color_eyre::Re
             "-c",
             &format!(
                 r#"
-                    source {dev_tools_repo_dir}/.venv/bin/activate && \
+                    source {}/.venv/bin/activate && \
                     pip install pip {packages} --upgrade
                 "#,
+                dev_tools_repo_dir.display(),
                 packages = packages.join(" "),
             ),
         ])
         .status()?
         .exit_ok()?;
 
-    Ok(format!("{dev_tools_repo_dir}/.venv/bin"))
+    Ok(dev_tools_repo_dir.join(".venv").join("bin"))
 }

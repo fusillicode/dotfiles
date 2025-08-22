@@ -1,8 +1,10 @@
+use std::path::PathBuf;
+
 use crate::Installer;
 
 pub struct VsCodeLangServers {
-    pub dev_tools_dir: String,
-    pub bin_dir: String,
+    pub dev_tools_dir: PathBuf,
+    pub bin_dir: PathBuf,
 }
 
 impl Installer for VsCodeLangServers {
