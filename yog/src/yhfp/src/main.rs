@@ -44,5 +44,5 @@ fn format_hx_status_line(hx_status_line: &HxStatusLine) -> color_eyre::Result<St
         .to_str()
         .ok_or_else(|| eyre!("cannot convert PathBuf {:#?} to str", hx_status_line.file_path))?;
 
-    Ok(format!("{}:{}", file_path, hx_status_line.position.line))
+    Ok(format!("{file_path}:{}", hx_status_line.position.line))
 }

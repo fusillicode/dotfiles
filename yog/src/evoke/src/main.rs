@@ -18,12 +18,15 @@ fn main() -> color_eyre::Result<()> {
         || utils::system::home_path(".local/bin"),
         |supplied_bins_path| Ok(PathBuf::from(supplied_bins_path)),
     )?;
-    let mut target_path = args.get(1).cloned().map_or_else(
+    let target_path = args.get(1).cloned().map_or_else(
         || {
-            std::env::var("CARGO_MANIFEST_DIR")
-                .map(|cargo_manifest_dir| format!("{}/target", remove_last_n_dirs(&cargo_manifest_dir, 2)))
+            std::env::var("CARGO_MANIFEST_DIR").map(|cargo_manifest_dir| {
+                let mut x = PathBuf::from(cargo_manifest_dir);
+                remove_last_n_dirs(&mut x, 2);
+                x.join("target")
+            })
         },
-        Result::Ok,
+        |x| Ok(PathBuf::from(x)),
     )?;
 
     let (target_location, build_profile) = if is_debug {
@@ -31,8 +34,7 @@ fn main() -> color_eyre::Result<()> {
     } else {
         ("release", Some("--release"))
     };
-    target_path.push('/');
-    target_path.push_str(target_location);
+    let target_path = target_path.join(target_location);
 
     utils::cmd::silent_cmd("cargo").args(["fmt"]).status()?.exit_ok()?;
     utils::cmd::silent_cmd("cargo")
@@ -47,19 +49,17 @@ fn main() -> color_eyre::Result<()> {
     for bin in BINS {
         install_bin(&bins_path, bin, &target_path)?;
     }
-    std::fs::rename(format!("{target_path}/librua.dylib"), format!("{target_path}/rua.so"))?;
+    std::fs::rename(target_path.join("librua.dylib"), target_path.join("rua.so"))?;
 
     Ok(())
 }
 
-fn remove_last_n_dirs(path: &str, n: usize) -> String {
-    let mut path = PathBuf::from(path);
+fn remove_last_n_dirs(path: &mut PathBuf, n: usize) {
     for _ in 0..n {
         if !path.pop() {
-            return path.to_string_lossy().to_string();
+            return;
         }
     }
-    path.to_string_lossy().to_string()
 }
 
 fn drop_element<T, U: ?Sized>(vec: &mut Vec<T>, target: &U) -> bool
@@ -73,10 +73,10 @@ where
     false
 }
 
-fn install_bin(bins_path: &Path, bin: &str, target_path: &str) -> color_eyre::Result<()> {
+fn install_bin(bins_path: &Path, bin: &str, target_path: &Path) -> color_eyre::Result<()> {
     let bin_path = bins_path.join(bin);
     utils::system::rm_f(&bin_path)?;
-    std::os::unix::fs::symlink(format!("{target_path}/{bin}"), &bin_path)?;
+    std::os::unix::fs::symlink(target_path.join(bin), &bin_path)?;
     Ok(())
 }
 
