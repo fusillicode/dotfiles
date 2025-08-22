@@ -16,7 +16,7 @@ fn main() -> color_eyre::Result<()> {
 
     let is_debug = drop_element(&mut args, "--debug");
     let bins_path = args.first().cloned().map_or_else(
-        || utils::system::home_path(".local/bin"),
+        || utils::system::build_home_path(&[".local", "bin"]),
         |supplied_bins_path| Ok(PathBuf::from(supplied_bins_path)),
     )?;
     let target_path = args.get(1).cloned().map_or_else(

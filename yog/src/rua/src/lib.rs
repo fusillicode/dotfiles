@@ -66,7 +66,7 @@ where
 }
 
 fn write_to_log_file<R: std::fmt::Debug>(res: &R) -> anyhow::Result<()> {
-    let log_path = ::utils::system::home_path(".local/state/nvim/rua.log").map_err(|e| anyhow!(e))?;
+    let log_path = ::utils::system::build_home_path(&[".local", "state", "nvim", "rua.log"]).map_err(|e| anyhow!(e))?;
     let mut log_file = OpenOptions::new().append(true).create(true).open(log_path)?;
     writeln!(log_file, "{:#?}", res)?;
     Ok(())

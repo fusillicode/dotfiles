@@ -19,8 +19,12 @@ pub fn join<T>(join_handle: JoinHandle<color_eyre::Result<T>>) -> Result<T, eyre
     join_handle.join().map_err(|e| eyre!("join error {e:#?}"))?
 }
 
-pub fn home_path<P: AsRef<Path>>(path: P) -> color_eyre::Result<PathBuf> {
-    Ok(std::env::home_dir().ok_or_eyre("missing home dir")?.join(path))
+pub fn build_home_path<P: AsRef<Path>>(parts: &[P]) -> color_eyre::Result<PathBuf> {
+    let mut home_path = std::env::home_dir().ok_or_eyre("missing home dir")?;
+    for part in parts {
+        home_path.push(part);
+    }
+    Ok(dbg!(home_path))
 }
 
 pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
