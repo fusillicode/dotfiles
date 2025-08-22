@@ -1,8 +1,10 @@
+use std::path::PathBuf;
+
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
 
 pub struct TyposLsp {
-    pub bin_dir: String,
+    pub bin_dir: PathBuf,
 }
 
 impl Installer for TyposLsp {

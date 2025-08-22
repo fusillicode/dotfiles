@@ -1,9 +1,11 @@
+use std::path::PathBuf;
+
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
 
 // For Markdown preview with peek.nvim
 pub struct Deno {
-    pub bin_dir: String,
+    pub bin_dir: PathBuf,
 }
 
 impl Installer for Deno {

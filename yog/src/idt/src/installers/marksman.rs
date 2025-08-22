@@ -1,8 +1,10 @@
+use std::path::PathBuf;
+
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
 
 pub struct Marksman {
-    pub bin_dir: String,
+    pub bin_dir: PathBuf,
 }
 
 impl Installer for Marksman {
@@ -17,7 +19,7 @@ impl Installer for Marksman {
                 self.bin_name()
             ),
             CurlDownloaderOption::WriteTo {
-                dest_path: &format!("{}/{}", self.bin_dir, self.bin_name()),
+                dest_path: &self.bin_dir.join(self.bin_name()),
             },
         )?;
 

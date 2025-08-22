@@ -1,9 +1,11 @@
+use std::path::PathBuf;
+
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
 
 pub struct ElixirLs {
-    pub dev_tools_dir: String,
-    pub bin_dir: String,
+    pub dev_tools_dir: PathBuf,
+    pub bin_dir: PathBuf,
 }
 
 impl Installer for ElixirLs {
@@ -13,7 +15,7 @@ impl Installer for ElixirLs {
 
     fn install(&self) -> color_eyre::Result<()> {
         let repo = format!("elixir-lsp/{}", self.bin_name());
-        let dev_tools_repo_dir = format!("{}/{}", self.dev_tools_dir, self.bin_name());
+        let dev_tools_repo_dir = self.dev_tools_dir.join(self.bin_name());
         let latest_release = utils::github::get_latest_release(&repo)?;
         std::fs::create_dir_all(&dev_tools_repo_dir)?;
 
@@ -29,8 +31,8 @@ impl Installer for ElixirLs {
         )?;
 
         utils::system::ln_sf(
-            &format!("{dev_tools_repo_dir}/language_server.sh"),
-            &format!("{}/{}", self.bin_dir, self.bin_name()),
+            &dev_tools_repo_dir.join("language_server.sh"),
+            &self.bin_dir.join(self.bin_name()),
         )?;
 
         utils::system::chmod_x_files_in_dir(&dev_tools_repo_dir)?;
