@@ -5,6 +5,7 @@ use std::process::Stdio;
 use std::thread::JoinHandle;
 
 use color_eyre::eyre;
+use color_eyre::eyre::OptionExt;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 
@@ -19,7 +20,7 @@ pub fn join<T>(join_handle: JoinHandle<color_eyre::Result<T>>) -> Result<T, eyre
 }
 
 pub fn home_path<P: AsRef<Path>>(path: P) -> color_eyre::Result<PathBuf> {
-    Ok(PathBuf::from(&std::env::var("HOME")?).join(path))
+    Ok(std::env::home_dir().ok_or_eyre("missing home dir")?.join(path))
 }
 
 pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
