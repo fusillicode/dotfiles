@@ -3,7 +3,6 @@ return {
   keys = { '<leader>', 'gd', 'gr', 'gi', },
   dependencies = {
     { 'junegunn/fzf', build = './install --bin', },
-    'elanmed/fzf-lua-frecency.nvim',
   },
   config = function()
     local fzf_lua = require('fzf-lua')
@@ -102,9 +101,5 @@ return {
     })
     fzf_lua.register_ui_select()
     require('keymaps').fzf_lua(fzf_lua)
-
-    local fzf_lua_frecency = require('fzf-lua-frecency')
-    fzf_lua_frecency.setup()
-    require('keymaps').fzf_lua_frecency(fzf_lua_frecency)
   end,
 }
