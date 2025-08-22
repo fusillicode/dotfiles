@@ -24,7 +24,7 @@ pub fn build_home_path<P: AsRef<Path>>(parts: &[P]) -> color_eyre::Result<PathBu
     for part in parts {
         home_path.push(part);
     }
-    Ok(dbg!(home_path))
+    Ok(home_path)
 }
 
 pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
