@@ -1,5 +1,8 @@
-pub fn run(dev_tools_dir: &str, tool: &str, packages: &[&str]) -> color_eyre::Result<String> {
-    let dev_tools_repo_dir = format!("{dev_tools_dir}/{tool}");
+use std::path::Path;
+use std::path::PathBuf;
+
+pub fn run(dev_tools_dir: &Path, tool: &str, packages: &[&str]) -> color_eyre::Result<PathBuf> {
+    let dev_tools_repo_dir = dev_tools_dir.join(tool);
 
     std::fs::create_dir_all(&dev_tools_repo_dir)?;
 
@@ -7,10 +10,11 @@ pub fn run(dev_tools_dir: &str, tool: &str, packages: &[&str]) -> color_eyre::Re
     if cfg!(debug_assertions) {
         cmd_args.push("--silent");
     }
-    cmd_args.extend_from_slice(&["--prefix", &dev_tools_repo_dir]);
+    let dev_tools_repo_dir_bind = dev_tools_repo_dir.to_string_lossy();
+    cmd_args.extend_from_slice(&["--prefix", &dev_tools_repo_dir_bind]);
     cmd_args.extend_from_slice(packages);
 
     utils::cmd::silent_cmd("npm").args(cmd_args).status()?.exit_ok()?;
 
-    Ok(format!("{dev_tools_repo_dir}/node_modules/.bin"))
+    Ok(dev_tools_repo_dir.join("node_modules").join(".bin"))
 }

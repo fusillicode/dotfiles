@@ -30,7 +30,9 @@ impl Installer for Shellcheck {
 
         let target = self.bin_dir.join(self.bin_name());
         std::fs::rename(
-            dest_dir.join(format!("{0}-{latest_release}/{0}", self.bin_name())),
+            dest_dir
+                .join(format!("{0}-{latest_release}", self.bin_name()))
+                .join(self.bin_name()),
             &target,
         )?;
         utils::system::chmod_x(target)?;
