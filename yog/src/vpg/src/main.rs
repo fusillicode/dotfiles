@@ -20,7 +20,7 @@ mod vault;
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let pgpass_path = utils::system::home_path(".pgpass")?;
+    let pgpass_path = utils::system::build_home_path(&[".pgpass"])?;
     let pgpass_content = std::fs::read_to_string(&pgpass_path)?;
     let pgpass_file = PgpassFile::parse(pgpass_content.as_str())?;
 
@@ -51,7 +51,7 @@ fn main() -> color_eyre::Result<()> {
     pgpass_entry.connection_params.update(&vault_read_output.data);
     pgpass::save_new_pgpass_file(pgpass_file.idx_lines, &pgpass_entry.connection_params, &pgpass_path)?;
 
-    let nvim_dbee_conns_path = utils::system::home_path(".local/state/nvim/dbee/conns.json")?;
+    let nvim_dbee_conns_path = utils::system::build_home_path(&[".local", "state", "nvim", "dbee", "conns.json"])?;
     nvim_dbee::save_new_nvim_dbee_conns_file(&pgpass_entry, &nvim_dbee_conns_path)?;
 
     println!(
