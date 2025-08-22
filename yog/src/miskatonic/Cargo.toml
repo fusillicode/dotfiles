@@ -5,4 +5,5 @@ authors = ["Gian Lu"]
 edition = "2024"
 
 [dependencies]
+color-eyre = { workspace = true }
 utils = { path = "../utils" }
