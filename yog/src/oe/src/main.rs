@@ -61,7 +61,7 @@ fn get_enriched_path_env() -> color_eyre::Result<Env> {
     let enriched_path = [
         &std::env::var("PATH").unwrap_or_else(|_| String::new()),
         "/opt/homebrew/bin",
-        &utils::system::home_path("/.local/bin")?.to_string_lossy(),
+        &utils::system::build_home_path(&[".local", "bin"])?.to_string_lossy(),
     ]
     .join(":");
 

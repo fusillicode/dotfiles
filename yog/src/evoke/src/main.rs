@@ -4,6 +4,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 const BINS: &[&str] = &["idt", "yghfl", "yhfp", "oe", "catl", "gcu", "vpg", "try", "fkr"];
+const LIBS: &[(&str, &str)] = &[("librua.dylib", "rua.so")];
 
 /// Evoke yog 🍝 👀
 ///
@@ -15,7 +16,7 @@ fn main() -> color_eyre::Result<()> {
 
     let is_debug = drop_element(&mut args, "--debug");
     let bins_path = args.first().cloned().map_or_else(
-        || utils::system::home_path(".local/bin"),
+        || utils::system::build_home_path(&[".local", "bin"]),
         |supplied_bins_path| Ok(PathBuf::from(supplied_bins_path)),
     )?;
     let target_path = args.get(1).cloned().map_or_else(
@@ -37,19 +38,27 @@ fn main() -> color_eyre::Result<()> {
     let target_path = target_path.join(target_location);
 
     utils::cmd::silent_cmd("cargo").args(["fmt"]).status()?.exit_ok()?;
-    utils::cmd::silent_cmd("cargo")
-        .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
-        .status()?
-        .exit_ok()?;
+
+    // Skip clippy if debugging
+    if !is_debug {
+        utils::cmd::silent_cmd("cargo")
+            .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
+            .status()?
+            .exit_ok()?;
+    }
+
     utils::cmd::silent_cmd("cargo")
         .args([Some("build"), build_profile].into_iter().flatten())
         .status()?
         .exit_ok()?;
 
     for bin in BINS {
-        install_bin(&bins_path, bin, &target_path)?;
+        symlink_bin(&bins_path, bin, &target_path)?;
     }
-    std::fs::rename(target_path.join("librua.dylib"), target_path.join("rua.so"))?;
+
+    for (source_name, target_name) in LIBS {
+        rename_lib(&target_path, source_name, target_name)?
+    }
 
     Ok(())
 }
@@ -73,10 +82,20 @@ where
     false
 }
 
-fn install_bin(bins_path: &Path, bin: &str, target_path: &Path) -> color_eyre::Result<()> {
+fn symlink_bin(bins_path: &Path, bin: &str, target_path: &Path) -> color_eyre::Result<()> {
     let bin_path = bins_path.join(bin);
     utils::system::rm_f(&bin_path)?;
-    std::os::unix::fs::symlink(target_path.join(bin), &bin_path)?;
+    let target_bin_path = target_path.join(bin);
+    std::os::unix::fs::symlink(&target_bin_path, &bin_path)?;
+    println!("✅ Symlinked bin {target_bin_path:?} to {bin_path:?}");
+    Ok(())
+}
+
+fn rename_lib(target_path: &Path, source_name: &str, target_name: &str) -> color_eyre::Result<()> {
+    let source_lib_path = target_path.join(source_name);
+    let target_lib_path = target_path.join(target_name);
+    std::fs::rename(&source_lib_path, &target_lib_path)?;
+    println!("✅ Renamed lib {source_lib_path:?} to {target_lib_path:?}");
     Ok(())
 }
 

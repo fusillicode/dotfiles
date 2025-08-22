@@ -1,8 +1,13 @@
 vim.loader.enable()
 
-package.cpath =
-    package.cpath .. ';'
-    .. os.getenv('HOME') .. '/data/dev/dotfiles/dotfiles/yog/target/release/?.so'
+local function rua_lib()
+  return os.getenv('HOME') ..
+      '/data/dev/dotfiles/dotfiles/yog/target/' ..
+      (vim.env.DEBUG_RUA and 'debug' or 'release') ..
+      '/?.so'
+end
+
+package.cpath = package.cpath .. ';' .. rua_lib()
 
 require('commands')
 require('diagnostics')

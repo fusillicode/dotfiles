@@ -1,5 +1,5 @@
 use mlua::prelude::*;
-use utils::system::home_path;
+use utils::system::build_home_path;
 
 use crate::diagnostics::filters::DiagnosticsFilter;
 
@@ -17,7 +17,10 @@ impl BufferFilter {
 
     /// List of paths for which I don't want to report any diagnostic.
     fn paths_blacklist() -> [String; 1] {
-        [home_path(".cargo").unwrap_or_default().to_string_lossy().to_string()]
+        [build_home_path(&[".cargo"])
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string()]
     }
 }
 
