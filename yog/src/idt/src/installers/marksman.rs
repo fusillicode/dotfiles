@@ -1,13 +1,13 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
 
-pub struct Marksman {
-    pub bin_dir: PathBuf,
+pub struct Marksman<'a> {
+    pub bin_dir: &'a Path,
 }
 
-impl Installer for Marksman {
+impl<'a> Installer for Marksman<'a> {
     fn bin_name(&self) -> &'static str {
         "marksman"
     }

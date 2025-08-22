@@ -1,14 +1,14 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
 
 // For Markdown preview with peek.nvim
-pub struct Deno {
-    pub bin_dir: PathBuf,
+pub struct Deno<'a> {
+    pub bin_dir: &'a Path,
 }
 
-impl Installer for Deno {
+impl<'a> Installer for Deno<'a> {
     fn bin_name(&self) -> &'static str {
         "deno"
     }
@@ -23,7 +23,7 @@ impl Installer for Deno {
                 self.bin_name()
             ),
             CurlDownloaderOption::PipeIntoTar {
-                dest_dir: &self.bin_dir,
+                dest_dir: self.bin_dir,
                 dest_name: Some(self.bin_name()),
             },
         )?;
