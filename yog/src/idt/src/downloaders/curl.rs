@@ -1,5 +1,7 @@
 use std::fs::File;
 use std::io::Write;
+use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
 
@@ -7,22 +9,22 @@ use color_eyre::eyre::eyre;
 
 pub enum CurlDownloaderOption<'a> {
     PipeIntoZcat {
-        dest_path: &'a str,
+        dest_path: &'a Path,
     },
     PipeIntoTar {
-        dest_dir: &'a str,
+        dest_dir: &'a Path,
         // Option because not all the downloaded archives has a:
         // - stable name (i.e. shellcheck)
-        // - an usable binary outside the archive (i.e. elixir_ls or lua_ls)
+        // - a usable binary outside the archive (i.e. elixir_ls or lua_ls)
         // In these cases `dest_name` is set to None
         dest_name: Option<&'a str>,
     },
     WriteTo {
-        dest_path: &'a str,
+        dest_path: &'a Path,
     },
 }
 
-pub fn run(url: &str, opt: CurlDownloaderOption) -> color_eyre::Result<String> {
+pub fn run(url: &str, opt: CurlDownloaderOption) -> color_eyre::Result<PathBuf> {
     let mut curl_cmd = utils::cmd::silent_cmd("curl");
     let silent_flag = cfg!(debug_assertions).then(|| "S").unwrap_or("");
     curl_cmd.args([&format!("-L{silent_flag}"), url]);
@@ -43,15 +45,13 @@ pub fn run(url: &str, opt: CurlDownloaderOption) -> color_eyre::Result<String> {
             let curl_stdout = get_cmd_stdout(&mut curl_cmd)?;
 
             let mut tar_cmd = Command::new("tar");
-            tar_cmd.args(["-xz", "-C", dest_dir]);
+            tar_cmd.args(["-xz", "-C", &dest_dir.to_string_lossy()]);
             if let Some(dest_name) = dest_name {
                 tar_cmd.arg(dest_name);
             }
             tar_cmd.stdin(curl_stdout).status()?.exit_ok()?;
 
-            dest_name
-                .map(|dn| format!("{dest_dir}/{dn}"))
-                .unwrap_or_else(|| dest_dir.into())
+            dest_name.map(|dn| dest_dir.join(dn)).unwrap_or_else(|| dest_dir.into())
         }
         CurlDownloaderOption::WriteTo { dest_path } => {
             curl_cmd.arg("--output");
