@@ -45,7 +45,7 @@ pub fn run_test(_lua: &Lua, cursor_position: CursorPosition) -> LuaResult<()> {
 
     let send_text_to_pane_cmd = utils::wezterm::send_text_to_pane_cmd(&test_run_cmd, test_runner_pane.pane_id);
     let submit_pane_cmd = utils::wezterm::submit_pane_cmd(test_runner_pane.pane_id);
-    let activate_pane_cmd = utils::wezterm::activate_pane_cmd(test_runner_pane.pane_id);
+    let activate_pane_cmd = utils::wezterm::activate_pane_cmd(cur_pane_id);
 
     utils::cmd::silent_cmd("sh")
         .args([
