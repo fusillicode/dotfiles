@@ -104,9 +104,10 @@ impl FromLua for CursorPosition {
 }
 
 fn get_enclosing_fn_name_of_position(file_path: &Path, position: Point) -> anyhow::Result<Option<String>> {
-    if file_path.extension().is_some_and(|ext| ext != "rs") {
-        anyhow::bail!("{file_path:#?} is not a Rust file");
-    }
+    anyhow::ensure!(
+        file_path.extension().is_some_and(|ext| ext != "rs"),
+        "{file_path:#?} is not a Rust file"
+    );
     let src = std::fs::read(file_path).with_context(|| format!("Error reading {file_path:#?}"))?;
 
     let mut parser = Parser::new();
