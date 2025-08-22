@@ -23,5 +23,5 @@ pub fn run(dev_tools_dir: &Path, tool: &str, packages: &[&str]) -> color_eyre::R
         .status()?
         .exit_ok()?;
 
-    Ok(dev_tools_repo_dir.join("vendor/bin"))
+    Ok(dev_tools_repo_dir.join("vendor").join("bin"))
 }
