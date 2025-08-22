@@ -1,10 +1,12 @@
+use std::path::Path;
+
 use crate::Installer;
 
-pub struct HarperLs {
-    pub bin_dir: String,
+pub struct HarperLs<'a> {
+    pub bin_dir: &'a Path,
 }
 
-impl Installer for HarperLs {
+impl<'a> Installer for HarperLs<'a> {
     fn bin_name(&self) -> &'static str {
         "harper-ls"
     }
@@ -18,11 +20,11 @@ impl Installer for HarperLs {
                 "--force",
                 "--root",
                 // `--root` automatically append `bin` 🥲
-                self.bin_dir.trim_end_matches("bin"),
+                self.bin_dir.to_string_lossy().trim_end_matches("bin"),
             ])
             .status()?;
 
-        utils::system::chmod_x(format!("{}/{}", self.bin_dir, self.bin_name()))?;
+        utils::system::chmod_x(self.bin_dir.join(self.bin_name()))?;
 
         Ok(())
     }

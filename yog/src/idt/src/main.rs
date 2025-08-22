@@ -1,5 +1,7 @@
 #![feature(exit_status_error)]
 
+use std::path::Path;
+
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 
@@ -59,100 +61,100 @@ fn main() -> color_eyre::Result<()> {
 
     let installers: Vec<Box<dyn Installer>> = vec![
         Box::new(BashLanguageServer {
-            dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
+            dev_tools_dir: Path::new(dev_tools_dir),
+            bin_dir: Path::new(bin_dir),
         }),
         Box::new(Commitlint {
-            dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
+            dev_tools_dir: Path::new(dev_tools_dir),
+            bin_dir: Path::new(bin_dir),
         }),
         Box::new(Deno {
-            bin_dir: bin_dir.into(),
+            bin_dir: Path::new(bin_dir),
         }),
         Box::new(DockerLangServer {
-            dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
+            dev_tools_dir: Path::new(dev_tools_dir),
+            bin_dir: Path::new(bin_dir),
         }),
         Box::new(ElixirLs {
-            dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
+            dev_tools_dir: Path::new(dev_tools_dir),
+            bin_dir: Path::new(bin_dir),
         }),
         Box::new(ElmLanguageServer {
-            dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
+            dev_tools_dir: Path::new(dev_tools_dir),
+            bin_dir: Path::new(bin_dir),
         }),
         Box::new(EslintD {
-            dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
+            dev_tools_dir: Path::new(dev_tools_dir),
+            bin_dir: Path::new(bin_dir),
         }),
         Box::new(GraphQlLsp {
-            dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
+            dev_tools_dir: Path::new(dev_tools_dir),
+            bin_dir: Path::new(bin_dir),
         }),
         Box::new(Hadolint {
-            bin_dir: bin_dir.into(),
+            bin_dir: Path::new(bin_dir),
         }),
         Box::new(HarperLs {
-            bin_dir: bin_dir.into(),
+            bin_dir: Path::new(bin_dir),
         }),
         Box::new(HelmLs {
-            bin_dir: bin_dir.into(),
+            bin_dir: Path::new(bin_dir),
         }),
         Box::new(LuaLanguageServer {
-            dev_tools_dir: dev_tools_dir.into(),
+            dev_tools_dir: Path::new(dev_tools_dir),
         }),
         Box::new(Marksman {
-            bin_dir: bin_dir.into(),
+            bin_dir: Path::new(bin_dir),
         }),
         Box::new(Nvim {
-            dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
+            dev_tools_dir: Path::new(dev_tools_dir),
+            bin_dir: Path::new(bin_dir),
         }),
         Box::new(PrettierD {
-            dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
+            dev_tools_dir: Path::new(dev_tools_dir),
+            bin_dir: Path::new(bin_dir),
         }),
         Box::new(Quicktype {
-            dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
+            dev_tools_dir: Path::new(dev_tools_dir),
+            bin_dir: Path::new(bin_dir),
         }),
         Box::new(RuffLsp {
-            dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
+            dev_tools_dir: Path::new(dev_tools_dir),
+            bin_dir: Path::new(bin_dir),
         }),
         Box::new(RustAnalyzer {
-            bin_dir: bin_dir.into(),
+            bin_dir: Path::new(bin_dir),
         }),
         Box::new(Shellcheck {
-            bin_dir: bin_dir.into(),
+            bin_dir: Path::new(bin_dir),
         }),
         Box::new(Sqruff {
-            bin_dir: bin_dir.into(),
+            bin_dir: Path::new(bin_dir),
         }),
         Box::new(SqlLanguageServer {
-            dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
+            dev_tools_dir: Path::new(dev_tools_dir),
+            bin_dir: Path::new(bin_dir),
         }),
         Box::new(Taplo {
-            bin_dir: bin_dir.into(),
+            bin_dir: Path::new(bin_dir),
         }),
         Box::new(TerraformLs {
-            bin_dir: bin_dir.into(),
+            bin_dir: Path::new(bin_dir),
         }),
         Box::new(TypescriptLanguageServer {
-            dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
+            dev_tools_dir: Path::new(dev_tools_dir),
+            bin_dir: Path::new(bin_dir),
         }),
         Box::new(TyposLsp {
-            bin_dir: bin_dir.into(),
+            bin_dir: Path::new(bin_dir),
         }),
         Box::new(VsCodeLangServers {
-            dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
+            dev_tools_dir: Path::new(dev_tools_dir),
+            bin_dir: Path::new(bin_dir),
         }),
         Box::new(YamlLanguageServer {
-            dev_tools_dir: dev_tools_dir.into(),
-            bin_dir: bin_dir.into(),
+            dev_tools_dir: Path::new(dev_tools_dir),
+            bin_dir: Path::new(bin_dir),
         }),
     ];
 

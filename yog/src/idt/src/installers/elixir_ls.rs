@@ -1,14 +1,14 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
 
-pub struct ElixirLs {
-    pub dev_tools_dir: PathBuf,
-    pub bin_dir: PathBuf,
+pub struct ElixirLs<'a> {
+    pub dev_tools_dir: &'a Path,
+    pub bin_dir: &'a Path,
 }
 
-impl Installer for ElixirLs {
+impl<'a> Installer for ElixirLs<'a> {
     fn bin_name(&self) -> &'static str {
         "elixir-ls"
     }

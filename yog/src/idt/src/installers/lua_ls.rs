@@ -1,13 +1,13 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
 
-pub struct LuaLanguageServer {
-    pub dev_tools_dir: PathBuf,
+pub struct LuaLanguageServer<'a> {
+    pub dev_tools_dir: &'a Path,
 }
 
-impl Installer for LuaLanguageServer {
+impl<'a> Installer for LuaLanguageServer<'a> {
     fn bin_name(&self) -> &'static str {
         "lua-language-server"
     }

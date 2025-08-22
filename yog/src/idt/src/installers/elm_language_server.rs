@@ -1,20 +1,20 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 use crate::Installer;
 
-pub struct ElmLanguageServer {
-    pub dev_tools_dir: PathBuf,
-    pub bin_dir: PathBuf,
+pub struct ElmLanguageServer<'a> {
+    pub dev_tools_dir: &'a Path,
+    pub bin_dir: &'a Path,
 }
 
-impl Installer for ElmLanguageServer {
+impl<'a> Installer for ElmLanguageServer<'a> {
     fn bin_name(&self) -> &'static str {
         "elm-language-server"
     }
 
     fn install(&self) -> color_eyre::Result<()> {
         let target_dir = crate::downloaders::npm::run(
-            &self.dev_tools_dir,
+            self.dev_tools_dir,
             self.bin_name(),
             &[&format!("@elm-tooling/{}", self.bin_name())],
         )?;

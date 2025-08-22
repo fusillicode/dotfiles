@@ -1,20 +1,20 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 use crate::Installer;
 
-pub struct PrettierD {
-    pub dev_tools_dir: PathBuf,
-    pub bin_dir: PathBuf,
+pub struct PrettierD<'a> {
+    pub dev_tools_dir: &'a Path,
+    pub bin_dir: &'a Path,
 }
 
-impl Installer for PrettierD {
+impl<'a> Installer for PrettierD<'a> {
     fn bin_name(&self) -> &'static str {
         "prettierd"
     }
 
     fn install(&self) -> color_eyre::Result<()> {
         let target_dir = crate::downloaders::npm::run(
-            &self.dev_tools_dir,
+            self.dev_tools_dir,
             self.bin_name(),
             &[&format!("@fsouza/{}", self.bin_name())],
         )?;
