@@ -52,14 +52,14 @@ fn main() -> color_eyre::Result<()> {
         .get(1)
         .ok_or_else(|| eyre!("missing bin_dir arg from {args:#?}"))?
         .trim_end_matches('/');
-    let installers_whitelist: Vec<&str> = args.iter().skip(2).map(AsRef::as_ref).collect();
+    let supplied_bin_names: Vec<&str> = args.iter().skip(2).map(AsRef::as_ref).collect();
 
     std::fs::create_dir_all(dev_tools_dir)?;
     std::fs::create_dir_all(bin_dir)?;
 
     utils::github::log_into_github()?;
 
-    let installers: Vec<Box<dyn Installer>> = vec![
+    let all_installers: Vec<Box<dyn Installer>> = vec![
         Box::new(BashLanguageServer {
             dev_tools_dir: Path::new(dev_tools_dir),
             bin_dir: Path::new(bin_dir),
@@ -158,17 +158,27 @@ fn main() -> color_eyre::Result<()> {
         }),
     ];
 
-    let whitelisted_installers: Vec<_> = if installers_whitelist.is_empty() {
-        installers.iter().collect()
+    let (selected_installers, unknown_bin_names): (Vec<_>, Vec<_>) = if supplied_bin_names.is_empty() {
+        (all_installers.iter().collect(), vec![])
     } else {
-        installers
-            .iter()
-            .filter(|x| installers_whitelist.contains(&x.bin_name()))
-            .collect()
+        let mut selected_installers = vec![];
+        let mut unknown_installers = vec![];
+        for chosen_bin in supplied_bin_names {
+            if let Some(i) = all_installers.iter().find(|i| chosen_bin == i.bin_name()) {
+                selected_installers.push(i)
+            } else {
+                unknown_installers.push(chosen_bin)
+            }
+        }
+        (selected_installers, unknown_installers)
     };
 
+    if !unknown_bin_names.is_empty() {
+        eprintln!("⛔️ no installers matches the following bin names {unknown_bin_names:#?}");
+    }
+
     let installers_errors = std::thread::scope(|scope| {
-        let installers_handles = whitelisted_installers
+        let installers_handles = selected_installers
             .iter()
             .map(|installer| (installer.bin_name(), scope.spawn(move || installer.run())))
             .collect::<Vec<_>>();
@@ -194,7 +204,7 @@ fn main() -> color_eyre::Result<()> {
 
     if errors_count != 0 {
         // This is a general report about the installation process.
-        // The single installation errors are reported directly via [`tools::report_install`].
+        // The single installation errors are reported directly in each [`Installer`].
         bail!("❌ {errors_count} bins failed to install, namely: {bin_names:#?}",)
     }
 
