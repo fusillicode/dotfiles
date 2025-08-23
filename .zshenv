@@ -33,6 +33,9 @@ alias cmdp='cargo make db-prepare'
 alias cmdm='cargo make db-migrate'
 alias cmf='cargo make format'
 alias cmr='cargo make run'
+alias cc='cargo clippy'
+alias cb='cargo clippy'
+alias ct='f() { cargo test "$*" }; f'
 
 ksecdec () {
   kubectl get secrets -oname ${3:+--namespace=$3} | \
