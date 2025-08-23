@@ -61,7 +61,7 @@ fn switch_branch_or_create_if_missing(arg: &str) -> color_eyre::Result<()> {
 // - if the last arg is NOT an existing local branch try to create a branch
 fn checkout_files_or_create_branch_if_missing(args: &[&str]) -> color_eyre::Result<()> {
     if let Some((branch, files)) = get_branch_and_files_to_checkout(args)? {
-        return checkout_files(&files, branch);
+        return checkout_files(files, branch);
     }
     create_branch_if_missing(&build_branch_name(args)?)
 }
@@ -197,7 +197,7 @@ mod tests {
         "Err(\n    \"parameterizing [\\n    \\\"❌\\\",\\n] resulted in empty String\",\n)"
     )]
     fn test_build_branch_name_fails_as_expected(#[case] input: &str, #[case] expected_content: &str) {
-        let res = format!("{:#?}", build_branch_name(&[input.into()]));
+        let res = format!("{:#?}", build_branch_name(&[input]));
         assert!(res.contains(expected_content), "unexpected {res}");
     }
 
@@ -211,11 +211,11 @@ mod tests {
     #[case(&["Hello 🌎 World"], "hello-world")]
     #[case(&["🚀Launch🚀Day"], "launch-day")]
     #[case(&["Smile 😊 and 🤖 code"], "smile-and-code")]
-    #[case(&["Hello".into(), "World".into()], "hello-world")]
-    #[case(&["Hello World".into(), "World".into()], "hello-world-world")]
-    #[case(&["Hello World".into(), "🌎".into(), "42".into()], "hello-world-42")]
-    #[case(&["This".into(), "---is.".into(), "..a_test".into()], "this-is.-..a_test")]
-    #[case(&["dependabot/cargo/opentelemetry-0.27.1".into()], "dependabot/cargo/opentelemetry-0.27.1")]
+    #[case(&["Hello", "World"], "hello-world")]
+    #[case(&["Hello World", "World"], "hello-world-world")]
+    #[case(&["Hello World", "🌎", "42"], "hello-world-42")]
+    #[case(&["This", "---is.", "..a_test"], "this-is.-..a_test")]
+    #[case(&["dependabot/cargo/opentelemetry-0.27.1"], "dependabot/cargo/opentelemetry-0.27.1")]
     fn test_build_branch_name_succeeds_as_expected(#[case] input: &[&str], #[case] expected_output: &str) {
         assert_eq!(expected_output, build_branch_name(input).unwrap());
     }
