@@ -248,6 +248,7 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
+ "serde",
  "wasm-bindgen",
  "windows-link",
 ]
@@ -689,6 +690,8 @@ dependencies = [
  "chrono",
  "color-eyre",
  "pretty_assertions",
+ "serde",
+ "serde_json",
  "url",
  "utils",
 ]

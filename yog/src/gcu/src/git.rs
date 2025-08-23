@@ -3,14 +3,15 @@ use std::process::Command;
 
 use chrono::DateTime;
 use chrono::FixedOffset;
-use color_eyre::eyre::eyre;
 use color_eyre::owo_colors::OwoColorize;
+use serde::Deserialize;
+use serde::Deserializer;
 use utils::cmd::CmdExt;
 use utils::sk::SkimItem;
 use utils::sk::SkimItemPreview;
 use utils::sk::SkimPreviewContext;
 
-/// Get all local and remote git refs sorted by latest to oldest modified.
+/// Get all local and remote [GitRef]'s sorted by latest to oldest modified.
 ///
 /// Returns an error as soon as 1 single item cannot be converted to a [GitRef].
 pub fn get_local_and_remote_refs() -> color_eyre::Result<Vec<GitRef>> {
@@ -20,19 +21,19 @@ pub fn get_local_and_remote_refs() -> color_eyre::Result<Vec<GitRef>> {
             "--sort=-creatordate",
             "refs/heads/",
             "refs/remotes/",
-            &format!("--format={}", GitRef::format()),
+            &format!("--format={}", GitRefJson::to_format()),
         ])
         .exec()?;
 
     let mut res = vec![];
     for line in std::str::from_utf8(&output.stdout)?.trim().split('\n') {
-        res.push(<GitRef as std::str::FromStr>::from_str(line)?);
+        res.push(serde_json::from_str(line)?);
     }
 
     Ok(res)
 }
 
-/// Deduplicates local and remote git refs.
+/// Deduplicates local and remote [GitRef]s.
 pub fn keep_local_and_untracked_refs(git_refs: &mut Vec<GitRef>) {
     let mut local_names = std::collections::HashSet::new();
 
@@ -58,22 +59,6 @@ pub struct GitRef {
     subject: String,
 }
 
-impl GitRef {
-    const SEPARATOR: &str = "|";
-
-    pub fn format() -> String {
-        [
-            "%(refname)",
-            "%(objectname:short)",
-            "%(objecttype)",
-            "%(committeremail)",
-            "%(committerdate:rfc2822)",
-            "%(subject)",
-        ]
-        .join(Self::SEPARATOR)
-    }
-}
-
 impl SkimItem for GitRef {
     fn text(&self) -> Cow<'_, str> {
         Cow::from(self.name.clone())
@@ -92,66 +77,88 @@ impl SkimItem for GitRef {
     }
 }
 
-impl std::str::FromStr for GitRef {
-    type Err = color_eyre::eyre::Error;
+#[derive(Deserialize)]
+struct GitRefJson {
+    ref_name: String,
+    object_name: String,
+    object_type: String,
+    committer_email: String,
+    #[serde(deserialize_with = "deserialize_from_rfc2822")]
+    committer_date_time: DateTime<FixedOffset>,
+    subject: String,
+}
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut parts = s.split('|');
+fn deserialize_from_rfc2822<'de, D>(deserializer: D) -> Result<DateTime<FixedOffset>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    DateTime::parse_from_str(&s, "%a, %d %b %Y %H:%M:%S %z").map_err(serde::de::Error::custom)
+}
 
-        let refname = parts
-            .next()
-            .ok_or_else(|| eyre!("missing refname in git for-each-ref output {s}"))?
-            .to_string();
+impl GitRefJson {
+    pub fn to_format() -> serde_json::Value {
+        serde_json::json!({
+            "ref_name": "%(refname)",
+            "object_name": "%(objectname:short)",
+            "object_type": "%(objecttype)",
+            "committer_email": "%(committeremail)",
+            "committer_date_time": "%(committerdate:rfc2822)",
+            "subject": "%(subject:sanitize)",
+        })
+    }
+}
 
-        let (name, remote) = if let Some(remote) = refname.strip_prefix("refs/remotes/") {
+impl<'de> Deserialize<'de> for GitRef {
+    fn deserialize<D>(deserializer: D) -> Result<GitRef, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let git_ref_json = GitRefJson::deserialize(deserializer)?;
+
+        let ref_name = git_ref_json.ref_name;
+        let (name, remote) = if let Some(remote) = ref_name.strip_prefix("refs/remotes/") {
             remote
                 .split_once('/')
                 .map(|(refname, remote_name)| (remote_name, Some(refname)))
-                .ok_or_else(|| eyre!("unexpected refs/remotes structure {refname}"))?
+                .ok_or_else(|| serde::de::Error::custom(format!("unexpected refs/remotes structure {ref_name}")))?
         } else {
-            (refname.trim_start_matches("refs/heads/"), None)
+            (ref_name.trim_start_matches("refs/heads/"), None)
         };
 
         Ok(GitRef {
             name: name.to_string(),
-            remote: remote.map(str::to_string),
-            object_name: parts
-                .next()
-                .ok_or_else(|| eyre!("missing objectname:short in git for-each-ref output {s}"))?
-                .to_string(),
-            object_type: parts
-                .next()
-                .ok_or_else(|| eyre!("missing objecttype in git for-each-ref output {s}"))?
-                .to_string(),
-            committer_email: parts
-                .next()
-                .ok_or_else(|| eyre!("missing committeremail in git for-each-ref output {s}"))?
-                .to_string(),
-            committer_date_time: parts
-                .next()
-                .map(DateTime::parse_from_rfc2822)
-                .transpose()?
-                .ok_or_else(|| eyre!("missing committerdate in git for-each-ref output {s}"))?,
-            subject: parts
-                .next()
-                .ok_or_else(|| eyre!("missing subject in git for-each-ref output {s}"))?
-                .to_string(),
+            remote: remote.map(ToOwned::to_owned),
+            object_name: git_ref_json.object_name,
+            object_type: git_ref_json.object_type,
+            committer_email: git_ref_json.committer_email,
+            committer_date_time: git_ref_json.committer_date_time,
+            subject: git_ref_json.subject,
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
     use chrono::TimeZone;
 
     use super::*;
 
     #[test]
-    fn test_git_ref_from_str_works_as_expected() {
-        let input = "refname|object_name|object_type|committer_email|Fri, 22 Aug 2025 13:55:07 +0200|subject";
-        assert2::let_assert!(Ok(actual_git_ref) = GitRef::from_str(input));
+    fn test_git_ref_deserialization_succeeds() {
+        let input = serde_json::json!({
+            "ref_name": "refname",
+            "object_name": "object_name",
+            "object_type": "object_type",
+            "committer_email": "committer_email",
+            "committer_date_time": "Fri, 22 Aug 2025 13:55:07 +0200",
+            "subject": "subject",
+        })
+        .to_string();
+
+        let res = serde_json::from_str(&input);
+
+        assert2::let_assert!(Ok(actual_git_ref) = res);
         pretty_assertions::assert_eq!(
             GitRef {
                 name: "refname".into(),
