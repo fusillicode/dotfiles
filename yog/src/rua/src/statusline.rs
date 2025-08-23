@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use mlua::prelude::*;
 
 /// Returns the formatted [String] representation of the statusline.
-pub fn draw(_lua: &Lua, (cur_buf_nr, cur_buf_path, diags): (LuaInteger, LuaString, Diagnostics)) -> LuaResult<String> {
+pub fn draw(
+    _lua: &Lua,
+    (cur_buf_nr, cur_buf_path, diags): (LuaInteger, LuaString, Diagnostics),
+) -> anyhow::Result<String> {
     let mut statusline = Statusline {
         cur_buf_path: cur_buf_path.to_string_lossy(),
         cur_buf_diags: HashMap::new(),
