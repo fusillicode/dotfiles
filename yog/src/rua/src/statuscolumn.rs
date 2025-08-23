@@ -1,7 +1,7 @@
 use mlua::prelude::*;
 
 /// Returns the formatted [String] representation of the statuscolumn.
-pub fn draw(_lua: &Lua, (cur_buf_type, cur_lnum, signs): (LuaString, LuaString, Signs)) -> LuaResult<String> {
+pub fn draw(_lua: &Lua, (cur_buf_type, cur_lnum, signs): (LuaString, LuaString, Signs)) -> anyhow::Result<String> {
     Ok(Statuscolumn::draw(
         cur_buf_type.to_string_lossy().as_str(),
         cur_lnum.to_string_lossy(),

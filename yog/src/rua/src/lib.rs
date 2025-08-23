@@ -50,7 +50,7 @@ fn rua(lua: &Lua) -> LuaResult<LuaTable> {
 // debug builds.
 fn create_debuggable_fn<'a, F, A, R>(lua: &'a Lua, func: F) -> Result<LuaFunction, mlua::Error>
 where
-    F: Fn(&Lua, A) -> Result<R, mlua::Error> + 'a + 'static,
+    F: Fn(&Lua, A) -> Result<R, anyhow::Error> + 'a + 'static,
     A: FromLuaMulti,
     R: IntoLuaMulti + std::fmt::Debug,
 {
@@ -59,15 +59,21 @@ where
         if cfg!(debug_assertions)
             && let Err(ref error) = res
         {
-            write_to_log_file(error)?;
+            log_error(error)?;
         }
-        res
+        res.map_err(mlua::Error::from)
     })
 }
 
-fn write_to_log_file<R: std::fmt::Debug>(res: &R) -> anyhow::Result<()> {
+fn log_error(error: &anyhow::Error) -> anyhow::Result<()> {
     let log_path = ::utils::system::build_home_path(&[".local", "state", "nvim", "rua.log"]).map_err(|e| anyhow!(e))?;
     let mut log_file = OpenOptions::new().append(true).create(true).open(log_path)?;
-    writeln!(log_file, "{:#?}", res)?;
+    writeln!(
+        log_file,
+        "error: {:#?} \nsoure: {:#?} \nbacktrace: {:#?} =================",
+        error,
+        error.source(),
+        error.backtrace()
+    )?;
     Ok(())
 }

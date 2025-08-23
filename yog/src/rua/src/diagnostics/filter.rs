@@ -6,12 +6,12 @@ use crate::diagnostics::filters::DiagnosticsFilters;
 use crate::diagnostics::filters::buffer::BufferFilter;
 
 /// Filters out the LSP diagnostics based on the coded filters.
-pub fn filter(lua: &Lua, (buf_path, lsp_diags): (LuaString, LuaTable)) -> LuaResult<LuaTable> {
+pub fn filter(lua: &Lua, (buf_path, lsp_diags): (LuaString, LuaTable)) -> anyhow::Result<LuaTable> {
     let buf_path = buf_path.to_string_lossy();
     // Keeping this as a separate filter because it kind short circuits the whole filtering and
     // doesn't require any LSP diagnostics to apply its logic.
     if BufferFilter::new().skip_diagnostic(&buf_path, None)? {
-        return lua.create_sequence_from::<LuaTable>(vec![]);
+        return Ok(lua.create_sequence_from::<LuaTable>(vec![])?);
     };
 
     let filters = DiagnosticsFilters::all(&lsp_diags)?;
@@ -29,5 +29,5 @@ pub fn filter(lua: &Lua, (buf_path, lsp_diags): (LuaString, LuaTable)) -> LuaRes
         out.push(lsp_diag.clone());
     }
 
-    lua.create_sequence_from(out)
+    Ok(lua.create_sequence_from(out)?)
 }
