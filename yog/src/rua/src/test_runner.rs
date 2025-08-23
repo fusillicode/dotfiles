@@ -16,7 +16,7 @@ use tree_sitter::Point;
 /// - the file referenced by [CursorPosition] is not a Rust file
 /// - no enclosing function can be found for the supplied [CursorPosition]
 /// - any external error related to interacting with Wezterm and the external test runner app (i.e. cargo make)
-pub fn run_test(_lua: &Lua, cursor_position: CursorPosition) -> LuaResult<()> {
+pub fn run_test(_lua: &Lua, cursor_position: CursorPosition) -> anyhow::Result<()> {
     let test_name = get_enclosing_fn_name_of_position(cursor_position.path.as_path(), Point::from(&cursor_position))?
         .ok_or(anyhow!("no enclosing fn found for {cursor_position:#?}"))?;
 

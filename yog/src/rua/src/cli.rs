@@ -3,7 +3,7 @@ use mlua::prelude::*;
 pub mod fd;
 pub mod rg;
 
-type ArityOneLuaFunction<'a, O> = Box<dyn Fn(&Lua, Option<LuaString>) -> LuaResult<O> + 'a>;
+type ArityOneLuaFunction<'a, O> = Box<dyn Fn(&Lua, Option<LuaString>) -> anyhow::Result<O> + 'a>;
 
 pub const GLOB_BLACKLIST: [&str; 6] = [
     "**/.git/*",
@@ -21,12 +21,12 @@ pub trait Flags {
 
     fn get(&self) -> ArityOneLuaFunction<'_, LuaTable> {
         Box::new(|lua: &Lua, _: Option<LuaString>| {
-            lua.create_sequence_from(
+            Ok(lua.create_sequence_from(
                 Self::base_flags()
                     .into_iter()
                     .map(Into::into)
                     .chain(GLOB_BLACKLIST.into_iter().map(Self::glob_flag)),
-            )
+            )?)
         })
     }
 }
