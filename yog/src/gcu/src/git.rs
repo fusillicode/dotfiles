@@ -142,13 +142,20 @@ impl<'de> Deserialize<'de> for GitRef {
 #[cfg(test)]
 mod tests {
     use chrono::TimeZone;
+    use rstest::rstest;
 
     use super::*;
 
-    #[test]
-    fn test_git_ref_deserialization_succeeds() {
-        let input = serde_json::json!({
-            "ref_name": "refname",
+    #[rstest]
+    #[case("foo", "foo", None)]
+    #[case("refs/remotes/bar/baz", "baz", Some("bar"))]
+    fn test_git_ref_deserialization_succeeds(
+        #[case] json_refname: &str,
+        #[case] expected_ref_name: &str,
+        #[case] expected_remote: Option<&str>,
+    ) {
+        let json_input = serde_json::json!({
+            "ref_name": json_refname,
             "object_name": "object_name",
             "object_type": "object_type",
             "committer_email": "committer_email",
@@ -157,13 +164,13 @@ mod tests {
         })
         .to_string();
 
-        let res = serde_json::from_str(&input);
+        let res = serde_json::from_str(&json_input);
 
         assert2::let_assert!(Ok(actual_git_ref) = res);
         pretty_assertions::assert_eq!(
             GitRef {
-                name: "refname".into(),
-                remote: None,
+                name: expected_ref_name.into(),
+                remote: expected_remote.map(ToOwned::to_owned),
                 object_name: "object_name".into(),
                 object_type: "object_type".into(),
                 committer_email: "committer_email".into(),

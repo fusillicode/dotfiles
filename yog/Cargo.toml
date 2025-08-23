@@ -13,6 +13,7 @@ utils = { path = "./src/utils" }
 
 #[dev-dependencies]
 assert2 = { version = "0.3" }
+rstest = { version = "0.26" }
 pretty_assertions = { version = "1.4" }
 
 [profile.test]
