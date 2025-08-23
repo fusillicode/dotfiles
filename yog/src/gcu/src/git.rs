@@ -133,7 +133,8 @@ impl<'de> Deserialize<'de> for GitRef {
             object_type: git_ref_json.object_type,
             committer_email: git_ref_json.committer_email,
             committer_date_time: git_ref_json.committer_date_time,
-            subject: git_ref_json.subject,
+            // To kinda work around %(subject:sanitize) that is required to avoid broken JSONs...
+            subject: git_ref_json.subject.replace("-", " "),
         })
     }
 }
@@ -152,7 +153,7 @@ mod tests {
             "object_type": "object_type",
             "committer_email": "committer_email",
             "committer_date_time": "Fri, 22 Aug 2025 13:55:07 +0200",
-            "subject": "subject",
+            "subject": "subject-foo",
         })
         .to_string();
 
@@ -170,7 +171,7 @@ mod tests {
                     .unwrap()
                     .with_ymd_and_hms(2025, 8, 22, 13, 55, 7)
                     .unwrap(),
-                subject: "subject".into()
+                subject: "subject foo".into()
             },
             actual_git_ref
         );
