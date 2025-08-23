@@ -22,12 +22,13 @@ fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
     let args = utils::system::get_args();
+    let args: Vec<_> = args.iter().map(|s| s.as_str()).collect();
 
     match args.split_first() {
         None => autocomplete_git_branches(),
         // Assumption: cannot create a branch with a name that starts with -
-        Some((hd, _)) if hd == "-" => switch_branch(hd),
-        Some((hd, tail)) if hd == "-b" => create_branch(&build_branch_name(tail)?),
+        Some((hd, _)) if *hd == "-" => switch_branch(hd),
+        Some((hd, tail)) if *hd == "-b" => create_branch(&build_branch_name(tail)?),
         Some((hd, &[])) => switch_branch_or_create_if_missing(hd),
         _ => checkout_files_or_create_branch_if_missing(&args),
     }?;
@@ -52,20 +53,20 @@ fn switch_branch_or_create_if_missing(arg: &str) -> color_eyre::Result<()> {
         let branch_name = utils::github::get_branch_name_from_url(&url)?;
         return switch_branch(&branch_name);
     }
-    create_branch_if_missing(&build_branch_name(&[arg.to_string()])?)
+    create_branch_if_missing(&build_branch_name(&[arg])?)
 }
 
 // Assumptions:
 // - if the last arg is an existent local branch try to reset the files represented by the previous args
 // - if the last arg is NOT an existing local branch try to create a branch
-fn checkout_files_or_create_branch_if_missing(args: &[String]) -> color_eyre::Result<()> {
+fn checkout_files_or_create_branch_if_missing(args: &[&str]) -> color_eyre::Result<()> {
     if let Some((branch, files)) = get_branch_and_files_to_checkout(args)? {
-        return checkout_files(&files.iter().map(|x| x.as_str()).collect::<Vec<_>>(), branch);
+        return checkout_files(&files, branch);
     }
     create_branch_if_missing(&build_branch_name(args)?)
 }
 
-fn get_branch_and_files_to_checkout(args: &[String]) -> color_eyre::Result<Option<(&String, &[String])>> {
+fn get_branch_and_files_to_checkout<'a>(args: &'a [&'a str]) -> color_eyre::Result<Option<(&'a str, &'a [&'a str])>> {
     if let Some((branch, files)) = args.split_last()
         && local_branch_exists(branch)?
     {
@@ -146,7 +147,7 @@ fn create_branch_if_missing(branch: &str) -> color_eyre::Result<()> {
     Ok(())
 }
 
-fn build_branch_name(args: &[String]) -> color_eyre::Result<String> {
+fn build_branch_name(args: &[&str]) -> color_eyre::Result<String> {
     fn is_permitted(c: char) -> bool {
         const PERMITTED_CHARS: [char; 3] = ['.', '/', '_'];
         c.is_alphanumeric() || PERMITTED_CHARS.contains(&c)
@@ -182,62 +183,40 @@ fn build_branch_name(args: &[String]) -> color_eyre::Result<String> {
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
     use super::*;
 
-    #[test]
-    fn test_build_branch_name_works_as_expected() {
-        let res = format!("{:#?}", build_branch_name(&["".into()]));
-        assert!(
-            res.contains("Err(\n    \"parameterizing [\\n    \\\"\\\",\\n] resulted in empty String\",\n)"),
-            "unexpected {res}"
-        );
+    #[rstest]
+    #[case(
+        "",
+        "Err(\n    \"parameterizing [\\n    \\\"\\\",\\n] resulted in empty String\",\n)"
+    )]
+    #[case(
+        "❌",
+        "Err(\n    \"parameterizing [\\n    \\\"❌\\\",\\n] resulted in empty String\",\n)"
+    )]
+    fn test_build_branch_name_fails_as_expected(#[case] input: &str, #[case] expected_content: &str) {
+        let res = format!("{:#?}", build_branch_name(&[input.into()]));
+        assert!(res.contains(expected_content), "unexpected {res}");
+    }
 
-        let res = format!("{:#?}", build_branch_name(&["❌".into()]));
-        assert!(
-            res.contains("Err(\n    \"parameterizing [\\n    \\\"❌\\\",\\n] resulted in empty String\",\n)"),
-            "unexpected {res}"
-        );
-
-        assert_eq!("helloworld", build_branch_name(&["HelloWorld".into()]).unwrap());
-        assert_eq!("hello-world", build_branch_name(&["Hello World".into()]).unwrap());
-        assert_eq!(
-            "feature-implement-user-login",
-            build_branch_name(&["Feature: Implement User Login!".into()]).unwrap()
-        );
-        assert_eq!("version-2.0", build_branch_name(&["Version 2.0".into()]).unwrap());
-        assert_eq!(
-            "this-is...a_test",
-            build_branch_name(&["This---is...a_test".into()]).unwrap()
-        );
-        assert_eq!(
-            "leading-and-trailing",
-            build_branch_name(&["  Leading and trailing   ".into()]).unwrap()
-        );
-        assert_eq!("hello-world", build_branch_name(&["Hello 🌎 World".into()]).unwrap());
-        assert_eq!("launch-day", build_branch_name(&["🚀Launch🚀Day".into()]).unwrap());
-        assert_eq!(
-            "smile-and-code",
-            build_branch_name(&["Smile 😊 and 🤖 code".into()]).unwrap()
-        );
-        assert_eq!(
-            "hello-world",
-            build_branch_name(&["Hello".into(), "World".into()]).unwrap()
-        );
-        assert_eq!(
-            "hello-world-world",
-            build_branch_name(&["Hello World".into(), "World".into()]).unwrap()
-        );
-        assert_eq!(
-            "hello-world-42",
-            build_branch_name(&["Hello World".into(), "🌎".into(), "42".into()]).unwrap()
-        );
-        assert_eq!(
-            "this-is.-..a_test",
-            build_branch_name(&["This".into(), "---is.".into(), "..a_test".into()]).unwrap()
-        );
-        assert_eq!(
-            "dependabot/cargo/opentelemetry-0.27.1",
-            build_branch_name(&["dependabot/cargo/opentelemetry-0.27.1".into()]).unwrap()
-        );
+    #[rstest]
+    #[case(&["HelloWorld"], "helloworld")]
+    #[case(&["Hello World"], "hello-world")]
+    #[case(&["Feature: Implement User Login!"], "feature-implement-user-login")]
+    #[case(&["Version 2.0"], "version-2.0")]
+    #[case(&["This---is...a_test"], "this-is...a_test")]
+    #[case(&["  Leading and trailing   "], "leading-and-trailing")]
+    #[case(&["Hello 🌎 World"], "hello-world")]
+    #[case(&["🚀Launch🚀Day"], "launch-day")]
+    #[case(&["Smile 😊 and 🤖 code"], "smile-and-code")]
+    #[case(&["Hello".into(), "World".into()], "hello-world")]
+    #[case(&["Hello World".into(), "World".into()], "hello-world-world")]
+    #[case(&["Hello World".into(), "🌎".into(), "42".into()], "hello-world-42")]
+    #[case(&["This".into(), "---is.".into(), "..a_test".into()], "this-is.-..a_test")]
+    #[case(&["dependabot/cargo/opentelemetry-0.27.1".into()], "dependabot/cargo/opentelemetry-0.27.1")]
+    fn test_build_branch_name_succeeds_as_expected(#[case] input: &[&str], #[case] expected_output: &str) {
+        assert_eq!(expected_output, build_branch_name(input).unwrap());
     }
 }
