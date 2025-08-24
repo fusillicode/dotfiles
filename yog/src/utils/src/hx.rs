@@ -5,13 +5,17 @@ use color_eyre::eyre;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 
+/// Represents the parsed status line from Helix editor, containing file path and cursor position.
 #[derive(Debug, PartialEq)]
 #[cfg_attr(any(test, feature = "fake"), derive(fake::Dummy))]
 pub struct HxStatusLine {
+    /// The file path currently open in the editor.
     pub file_path: PathBuf,
+    /// The current cursor position in the file.
     pub position: HxCursorPosition,
 }
 
+/// Parses a [HxStatusLine] from a Helix editor status line string.
 impl FromStr for HxStatusLine {
     type Err = eyre::Error;
 
@@ -44,13 +48,17 @@ impl FromStr for HxStatusLine {
     }
 }
 
+/// Represents a cursor position in a text file with line and column coordinates.
 #[derive(Debug, PartialEq)]
 #[cfg_attr(any(test, feature = "fake"), derive(fake::Dummy))]
 pub struct HxCursorPosition {
+    /// The line number (1-based).
     pub line: usize,
+    /// The column number (1-based).
     pub column: usize,
 }
 
+/// Parses a [HxCursorPosition] from a string in the format "line:column".
 impl FromStr for HxCursorPosition {
     type Err = eyre::Error;
 

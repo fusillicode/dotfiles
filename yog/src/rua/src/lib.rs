@@ -10,7 +10,44 @@ mod statusline;
 mod test_runner;
 mod utils;
 
-/// Entrypoint of Rust exported functions.
+/// Neovim Lua module providing Rust utilities for enhanced editor functionality.
+///
+/// This module exports various functions that can be called from Lua scripts in Neovim,
+/// providing access to Rust implementations of common editor operations and utilities.
+/// The functions are designed to be fast, reliable, and integrate seamlessly with
+/// Neovim's Lua API.
+///
+/// # Available Functions
+///
+/// - `format_diagnostic`: Formats diagnostic messages for display
+/// - `filter_diagnostics`: Filters diagnostic messages based on criteria
+/// - `sort_diagnostics`: Sorts diagnostic messages by priority/severity
+/// - `draw_statusline`: Renders custom statusline components
+/// - `draw_statuscolumn`: Renders custom statuscolumn components
+/// - `get_fkr_cmds`: Provides fake data generation commands
+/// - `gen_fkr_value`: Generates fake data values
+/// - `get_fd_cli_flags`: Gets file descriptor CLI flags
+/// - `get_rg_cli_flags`: Gets ripgrep CLI flags
+/// - `run_test`: Executes tests and returns results
+///
+/// # Error Handling
+///
+/// Functions include built-in error handling with logging to a debug file when
+/// compiled in debug mode. Errors are converted to Lua errors and can be caught
+/// in Lua scripts.
+///
+/// # Examples
+///
+/// Loading the module in Lua:
+/// ```lua
+/// local rua = require('rua')
+/// local result = rua.format_diagnostic(diagnostic)
+/// ```
+///
+/// # Performance
+///
+/// All functions are optimized for performance and use efficient data structures.
+/// Some operations run in parallel when possible to minimize blocking.
 #[mlua::lua_module]
 fn rua(lua: &Lua) -> LuaResult<LuaTable> {
     let exports = lua.create_table()?;
@@ -42,8 +79,29 @@ fn rua(lua: &Lua) -> LuaResult<LuaTable> {
     Ok(exports)
 }
 
-// Wrapper function for creating Lua functions that logs to a fixed logfile in case of error and
-// debug builds.
+/// Creates a debuggable Lua function that logs errors and results in debug builds.
+///
+/// This function wraps Rust functions to make them callable from Lua while adding
+/// comprehensive error logging and debugging capabilities. In debug builds, all
+/// function calls and their results are logged to a file for troubleshooting.
+///
+/// The wrapper handles the conversion between Lua and Rust types, error propagation,
+/// and provides detailed logging including timestamps, error sources, and backtraces.
+///
+/// # Type Parameters
+///
+/// * `F`: The Rust function type to wrap
+/// * `A`: The argument types that can be converted from Lua
+/// * `R`: The return types that can be converted to Lua
+///
+/// # Arguments
+///
+/// * `lua`: Reference to the Lua state
+/// * `func`: The Rust function to wrap
+///
+/// # Returns
+///
+/// Returns a [LuaFunction] that can be called from Lua scripts.
 fn create_debuggable_fn<'a, F, A, R>(lua: &'a Lua, func: F) -> Result<LuaFunction, mlua::Error>
 where
     F: Fn(&Lua, A) -> Result<R, anyhow::Error> + 'a + 'static,
@@ -58,6 +116,23 @@ where
     })
 }
 
+/// Logs function results and errors to a debug log file in debug builds.
+///
+/// This function is only compiled in debug builds and provides comprehensive
+/// logging of all Lua function calls made through the rua module. It logs both
+/// successful results and errors with detailed information including timestamps,
+/// error sources, and backtraces.
+///
+/// The log file is located at `~/.local/state/nvim/rua.log` and contains
+/// structured JSON entries for each function call.
+///
+/// # Arguments
+///
+/// * `res`: The result of the function call to log
+///
+/// # Returns
+///
+/// Returns `Ok(())` if logging succeeds, or an error if file operations fail.
 #[cfg(debug_assertions)]
 fn log_result<R: IntoLuaMulti + std::fmt::Debug>(res: &Result<R, anyhow::Error>) -> anyhow::Result<()> {
     use std::fs::OpenOptions;

@@ -1,8 +1,14 @@
 [package]
 name = "fkr"
-version = "0.1.0"
-authors = ["Gian Lu"]
-edition = "2024"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Interactive fake data generator for testing and development with support for UUIDs, emails, IPs, and more"
+keywords = ["cli", "fake", "data", "generator", "testing", "development"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 color-eyre = { workspace = true }

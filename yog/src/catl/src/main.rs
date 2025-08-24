@@ -4,7 +4,28 @@ use std::process::Command;
 
 use color_eyre::eyre::eyre;
 
-/// `cat` or `ls` based on what's supplied, i.e. a file or a directory.
+/// A utility that displays file contents or directory listings based on the input path.
+///
+/// This tool automatically determines whether the provided path is a file or directory:
+/// - For files: displays the content using `cat`
+/// - For directories: lists contents using `ls -llAtrh`
+/// - For symlinks: treats as files and displays content using `cat`
+///
+/// # Arguments
+///
+/// * `path` - The file or directory path to display
+///
+/// # Examples
+///
+/// Display a file:
+/// ```bash
+/// catl /path/to/file.txt
+/// ```
+///
+/// List a directory:
+/// ```bash
+/// catl /path/to/directory
+/// ```
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

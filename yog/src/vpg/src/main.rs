@@ -11,12 +11,59 @@ mod nvim_dbee;
 mod pgpass;
 mod vault;
 
-/// Gets new Vault credentials for the supplied alias and updates .pgpass and Neovim DBee's connections file.
+/// Manages PostgreSQL credentials from HashiCorp Vault and updates connection files.
 ///
-/// If an additional CLI arg is supplied (no matter the value) it also runs pgcli connecting to the DB matching the
-/// supplied alias.
+/// This tool integrates with HashiCorp Vault to retrieve database credentials and
+/// automatically updates both the `.pgpass` file and Neovim's DBee connections file.
+/// It can optionally launch `pgcli` to connect to the database immediately.
 ///
-/// Requires VAULT_ADDR env var to be defined.
+/// # Prerequisites
+///
+/// - `VAULT_ADDR` environment variable must be set
+/// - Vault authentication must be configured
+/// - VPN connection may be required depending on Vault setup
+/// - `pgcli` must be installed for database connections
+///
+/// # Arguments
+///
+/// * `alias` - Database alias to retrieve credentials for (optional, interactive selection if not provided)
+/// * `connect` - Optional second argument to immediately connect via pgcli
+///
+/// # Files Updated
+///
+/// 1. `~/.pgpass` - PostgreSQL password file with connection credentials
+/// 2. `~/.local/state/nvim/dbee/conns.json` - Neovim DBee connections file
+///
+/// # Workflow
+///
+/// 1. Authenticates with Vault (if not already authenticated)
+/// 2. Retrieves database credentials from Vault
+/// 3. Updates `.pgpass` file with new credentials
+/// 4. Updates Neovim DBee connections file
+/// 5. Optionally launches `pgcli` for immediate database access
+///
+/// # Examples
+///
+/// Interactive database selection:
+/// ```bash
+/// vpg
+/// ```
+///
+/// Update specific database and connect:
+/// ```bash
+/// vpg mydb connect
+/// ```
+///
+/// Update specific database without connecting:
+/// ```bash
+/// vpg mydb
+/// ```
+///
+/// # Security Notes
+///
+/// - Credentials are stored in `.pgpass` with appropriate file permissions
+/// - Vault authentication is handled securely
+/// - No sensitive data is logged or exposed in error messages
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

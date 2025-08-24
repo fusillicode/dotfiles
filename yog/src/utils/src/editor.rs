@@ -7,8 +7,11 @@ use color_eyre::eyre::eyre;
 
 use crate::wezterm::WeztermPane;
 
+/// Supported text editors for file operations.
 pub enum Editor {
+    /// Helix editor.
     Hx,
+    /// Neovim editor.
     Nvim,
 }
 
@@ -34,6 +37,7 @@ impl Editor {
     }
 }
 
+/// Parses an [Editor] from a string representation.
 impl FromStr for Editor {
     type Err = eyre::Error;
 
@@ -46,13 +50,18 @@ impl FromStr for Editor {
     }
 }
 
+/// Represents a file to be opened in an editor with optional line and column positioning.
 #[derive(Debug, PartialEq)]
 pub struct FileToOpen {
+    /// The file system path to the file.
     path: String,
+    /// The line number to position the cursor (0-based, defaults to 0).
     line_nbr: i64,
+    /// The column number to position the cursor (0-based, defaults to 0).
     column: i64,
 }
 
+/// Attempts to create a [FileToOpen] from a file path, pane ID, and list of panes.
 impl TryFrom<(&str, i64, &[WeztermPane])> for FileToOpen {
     type Error = eyre::Error;
 
@@ -77,6 +86,7 @@ impl TryFrom<(&str, i64, &[WeztermPane])> for FileToOpen {
     }
 }
 
+/// Parses a [FileToOpen] from a string in the format "path:line:column".
 impl FromStr for FileToOpen {
     type Err = eyre::Error;
 
