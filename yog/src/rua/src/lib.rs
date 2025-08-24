@@ -65,10 +65,12 @@ where
     })
 }
 
+#[cfg(debug_assertions)]
 fn log_error(error: &anyhow::Error) -> anyhow::Result<()> {
     let log_path = ::utils::system::build_home_path(&[".local", "state", "nvim", "rua.log"]).map_err(|e| anyhow!(e))?;
     let mut log_file = OpenOptions::new().append(true).create(true).open(log_path)?;
     let log_msg = serde_json::json!({
+        "timestamp": chrono::Utc::now(),
         "error": format!("{error:#?}"),
         "source": format!("{:#?}", error.source()),
         "backtrace": format!("{:#?}", error.backtrace())
