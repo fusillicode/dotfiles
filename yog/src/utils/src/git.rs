@@ -6,7 +6,8 @@ use color_eyre::eyre::eyre;
 
 use crate::cmd::CmdExt;
 
-/// Finds the root directory of the Git repository containing the given file path, or the current directory if none provided.
+/// Finds the root directory of the Git repository containing the given file path, or the current directory if none
+/// provided.
 pub fn get_repo_root(file_path: Option<&Path>) -> color_eyre::Result<String> {
     let cmd = if let Some(file_path) = file_path {
         let file_parent_dir = file_path

@@ -68,12 +68,11 @@ where
 fn log_error(error: &anyhow::Error) -> anyhow::Result<()> {
     let log_path = ::utils::system::build_home_path(&[".local", "state", "nvim", "rua.log"]).map_err(|e| anyhow!(e))?;
     let mut log_file = OpenOptions::new().append(true).create(true).open(log_path)?;
-    writeln!(
-        log_file,
-        "error: {:#?} \nsoure: {:#?} \nbacktrace: {:#?} =================",
-        error,
-        error.source(),
-        error.backtrace()
-    )?;
+    let log_msg = serde_json::json!({
+        "error": format!("{error:#?}"),
+        "source": format!("{:#?}", error.source()),
+        "backtrace": format!("{:#?}", error.backtrace())
+    });
+    writeln!(log_file, "{log_msg}")?;
     Ok(())
 }
