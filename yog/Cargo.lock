@@ -1503,6 +1503,7 @@ dependencies = [
  "anyhow",
  "fkr",
  "mlua",
+ "serde_json",
  "strum",
  "tree-sitter",
  "tree-sitter-rust",
