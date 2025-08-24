@@ -3,12 +3,42 @@
 use std::path::Path;
 use std::path::PathBuf;
 
+/// List of binary names that should be symlinked after building.
 const BINS: &[&str] = &["idt", "yghfl", "yhfp", "oe", "catl", "gcu", "vpg", "try", "fkr"];
+/// List of library files that need to be renamed after building, mapping (source_name, target_name).
 const LIBS: &[(&str, &str)] = &[("librua.dylib", "rua.so")];
 
-/// Evoke yog 🍝 👀
+/// A build and deployment tool for the yog project.
 ///
-/// Formats, lints, builds, and links yog bins.
+/// This tool automates the development workflow by performing the following steps:
+/// 1. Formats code using `cargo fmt`
+/// 2. Runs linting with `cargo clippy` (skipped in debug mode)
+/// 3. Builds the project with `cargo build`
+/// 4. Creates symlinks for all binary tools in the specified bin directory
+/// 5. Renames library files as needed
+///
+/// # Arguments
+///
+/// * `--debug` - Optional flag to build in debug mode and skip clippy
+/// * `bins_path` - Optional path to the directory where binaries should be symlinked (defaults to ~/.local/bin)
+/// * `target_path` - Optional path to the cargo target directory (defaults to project root target/)
+///
+/// # Examples
+///
+/// Build and link in release mode:
+/// ```bash
+/// evoke
+/// ```
+///
+/// Build in debug mode:
+/// ```bash
+/// evoke --debug
+/// ```
+///
+/// Build with custom bin directory:
+/// ```bash
+/// evoke /custom/bin/path
+/// ```
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
@@ -63,6 +93,15 @@ fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
+/// Removes the last `n` directories from a [PathBuf].
+///
+/// This function modifies the path in place, popping directories from the end
+/// until either `n` directories have been removed or the path is empty.
+///
+/// # Arguments
+///
+/// * `path` - The path to modify
+/// * `n` - The number of directories to remove from the end
 fn remove_last_n_dirs(path: &mut PathBuf, n: usize) {
     for _ in 0..n {
         if !path.pop() {
@@ -71,6 +110,20 @@ fn remove_last_n_dirs(path: &mut PathBuf, n: usize) {
     }
 }
 
+/// Removes the first occurrence of an element from a vector and returns whether it was found.
+///
+/// This function searches for the target element in the vector and removes it if found,
+/// using swap_remove for efficiency. Returns `true` if the element was found and removed,
+/// `false` otherwise.
+///
+/// # Arguments
+///
+/// * `vec` - The vector to modify
+/// * `target` - The element to remove
+///
+/// # Returns
+///
+/// `true` if the element was found and removed, `false` otherwise
 fn drop_element<T, U: ?Sized>(vec: &mut Vec<T>, target: &U) -> bool
 where
     T: PartialEq<U>,
@@ -82,6 +135,16 @@ where
     false
 }
 
+/// Creates a symlink for a binary in the specified bin directory.
+///
+/// This function removes any existing file at the target location, then creates
+/// a symlink from the built binary to the bin directory.
+///
+/// # Arguments
+///
+/// * `bins_path` - The directory where the symlink should be created
+/// * `bin` - The name of the binary to symlink
+/// * `target_path` - The directory containing the built binaries
 fn symlink_bin(bins_path: &Path, bin: &str, target_path: &Path) -> color_eyre::Result<()> {
     let bin_path = bins_path.join(bin);
     utils::system::rm_f(&bin_path)?;
@@ -91,6 +154,16 @@ fn symlink_bin(bins_path: &Path, bin: &str, target_path: &Path) -> color_eyre::R
     Ok(())
 }
 
+/// Renames a library file from its build name to its final name.
+///
+/// This function is used to rename dynamically linked libraries from their
+/// build-time names (e.g., `librua.dylib`) to their runtime names (e.g., `rua.so`).
+///
+/// # Arguments
+///
+/// * `target_path` - The directory containing the built libraries
+/// * `source_name` - The current name of the library file
+/// * `target_name` - The desired name for the library file
 fn rename_lib(target_path: &Path, source_name: &str, target_name: &str) -> color_eyre::Result<()> {
     let source_lib_path = target_path.join(source_name);
     let target_lib_path = target_path.join(target_name);

@@ -1,8 +1,14 @@
 [package]
 name = "try"
-version = "0.1.0"
-authors = ["Gian Lu"]
-edition = "2024"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Command retry utility that executes commands until specified exit conditions are met"
+keywords = ["cli", "retry", "command", "automation", "testing"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 color-eyre = { workspace = true }
