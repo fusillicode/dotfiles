@@ -45,13 +45,9 @@ pub fn run_test(_lua: &Lua, cursor_position: CursorPosition) -> anyhow::Result<(
 
     let send_text_to_pane_cmd = utils::wezterm::send_text_to_pane_cmd(&test_run_cmd, test_runner_pane.pane_id);
     let submit_pane_cmd = utils::wezterm::submit_pane_cmd(test_runner_pane.pane_id);
-    let activate_pane_cmd = utils::wezterm::activate_pane_cmd(cur_pane_id);
 
     utils::cmd::silent_cmd("sh")
-        .args([
-            "-c",
-            &format!("{send_text_to_pane_cmd} && {submit_pane_cmd} && {activate_pane_cmd}"),
-        ])
+        .args(["-c", &format!("{send_text_to_pane_cmd} && {submit_pane_cmd}")])
         .spawn()
         .with_context(|| format!("error executing {test_run_cmd:#?} in Wezterm pane {test_runner_pane:#?}"))
         .map_err(|e| anyhow!(e))?;
@@ -105,8 +101,8 @@ impl FromLua for CursorPosition {
 
 fn get_enclosing_fn_name_of_position(file_path: &Path, position: Point) -> anyhow::Result<Option<String>> {
     anyhow::ensure!(
-        file_path.extension().is_some_and(|ext| ext != "rs"),
-        "{file_path:#?} is not a Rust file"
+        file_path.extension().is_some_and(|ext| ext == "rs"),
+        "{file_path:#?} must be Rust file"
     );
     let src = std::fs::read(file_path).with_context(|| format!("Error reading {file_path:#?}"))?;
 
