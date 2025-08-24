@@ -80,6 +80,7 @@ struct Env {
 }
 
 impl Env {
+    /// Returns a reference to the environment variable as a tuple of name and value.
     pub fn by_ref(&self) -> (&'static str, &str) {
         (self.name, &self.value)
     }

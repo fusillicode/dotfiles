@@ -68,6 +68,7 @@ enum ExitCond {
 }
 
 impl ExitCond {
+    /// Determines if the loop should break based on the command result and the exit condition.
     pub fn should_break(&self, cmd_res: &Result<(), ExitStatusError>) -> bool {
         self.is_ok() && cmd_res.is_ok() || !self.is_ok() && !cmd_res.is_ok()
     }

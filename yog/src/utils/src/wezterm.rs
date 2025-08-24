@@ -4,18 +4,22 @@ use std::process::Command;
 use color_eyre::eyre::eyre;
 use serde::Deserialize;
 
+/// Generates a command string to send text to a specific [WeztermPane] using the Wezterm CLI.
 pub fn send_text_to_pane_cmd(text: &str, pane_id: i64) -> String {
     format!("wezterm cli send-text {text} --pane-id '{pane_id}' --no-paste")
 }
 
+/// Generates a command string to submit (send a carriage return) to a specific [WeztermPane].
 pub fn submit_pane_cmd(pane_id: i64) -> String {
     format!(r#"printf "\r" | wezterm cli send-text --pane-id '{pane_id}' --no-paste"#)
 }
 
+/// Generates a command string to activate a specific [WeztermPane] using the Wezterm CLI.
 pub fn activate_pane_cmd(pane_id: i64) -> String {
     format!(r#"wezterm cli activate-pane --pane-id '{pane_id}'"#)
 }
 
+/// Retrieves the current pane ID from the WEZTERM_PANE environment variable.
 pub fn get_current_pane_id() -> color_eyre::Result<i64> {
     Ok(std::env::var("WEZTERM_PANE")?.parse()?)
 }
@@ -29,6 +33,7 @@ pub fn get_all_panes(envs: &[(&str, &str)]) -> color_eyre::Result<Vec<WeztermPan
     Ok(serde_json::from_slice(&cmd.output()?.stdout)?)
 }
 
+/// Finds a sibling [WeztermPane] in the same tab that matches one of the given titles.
 pub fn get_sibling_pane_with_titles(
     panes: &[WeztermPane],
     current_pane_id: i64,
@@ -81,6 +86,7 @@ impl WeztermPane {
 }
 
 impl WeztermPane {
+    /// Converts the current working directory from a file URI to an absolute [PathBuf].
     pub fn absolute_cwd(&self) -> PathBuf {
         let mut path_parts = self.cwd.components();
         path_parts.next(); // Skip `file://`

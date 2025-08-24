@@ -8,6 +8,7 @@ use serde::Serialize;
 
 use crate::pgpass::PgpassEntry;
 
+/// Saves or updates the nvim-dbee connections file with the provided [PgpassEntry], setting secure permissions.
 pub fn save_new_nvim_dbee_conns_file(updated_pg_pass_entry: &PgpassEntry, conns_path: &Path) -> color_eyre::Result<()> {
     let conns = get_updated_conns(updated_pg_pass_entry, conns_path)?;
 

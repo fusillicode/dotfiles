@@ -24,6 +24,7 @@ pub enum CurlDownloaderOption<'a> {
     },
 }
 
+/// Downloads a file from the given URL using curl with the specified [CurlDownloaderOption].
 pub fn run(url: &str, opt: CurlDownloaderOption) -> color_eyre::Result<PathBuf> {
     let mut curl_cmd = utils::cmd::silent_cmd("curl");
     let silent_flag = cfg!(debug_assertions).then(|| "S").unwrap_or("");
