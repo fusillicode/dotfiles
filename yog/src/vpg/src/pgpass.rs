@@ -132,10 +132,12 @@ pub struct ConnectionParams {
 }
 
 impl ConnectionParams {
+    /// Generates a PostgreSQL connection [String] URL from the connection parameters.
     pub fn db_url(&self) -> String {
         format!("postgres://{}@{}:{}/{}", self.user, self.host, self.port, self.db)
     }
 
+    /// Updates the user and password fields with the provided [VaultCreds].
     pub fn update(&mut self, creds: &VaultCreds) {
         self.user = creds.username.to_string();
         self.pwd = creds.password.to_string();

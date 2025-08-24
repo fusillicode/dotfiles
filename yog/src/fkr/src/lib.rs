@@ -31,6 +31,7 @@ impl SkimItem for FkrOption {
 }
 
 impl FkrOption {
+    /// Generates a fake string based on the [FkrOption] variant.
     pub fn gen_string(&self) -> String {
         match self {
             FkrOption::Uuidv4 => fake::uuid::UUIDv4.fake::<String>(),
@@ -43,6 +44,7 @@ impl FkrOption {
         }
     }
 
+    /// Returns a [Vec] of all [FkrOption] variants.
     pub fn to_vec() -> Vec<Self> {
         FkrOption::iter().collect()
     }
