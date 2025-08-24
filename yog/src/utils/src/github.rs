@@ -5,8 +5,11 @@ use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 use url::Url;
 
+/// The GitHub host domain.
 const GITHUB_HOST: &str = "github.com";
+/// The URL path segment prefix for pull requests.
 const GITHUB_PR_ID_PREFIX: &str = "pull";
+/// The query parameter key used for pull request IDs in GitHub Actions URLs.
 const GITHUB_PR_ID_QUERY_KEY: &str = "pr";
 
 /// Logs into GitHub using the GitHub CLI if not already authenticated.
@@ -45,11 +48,17 @@ pub fn get_branch_name_from_url(url: &Url) -> color_eyre::Result<String> {
     extract_success_output(output)
 }
 
+/// Extracts and validates successful command output, converting it to a trimmed string.
 fn extract_success_output(output: Output) -> color_eyre::Result<String> {
     output.status.exit_ok()?;
     Ok(std::str::from_utf8(&output.stdout)?.trim().into())
 }
 
+/// Extracts the pull request ID from a GitHub URL.
+///
+/// Supports various GitHub URL formats:
+/// - Direct PR URLs: `https://github.com/owner/repo/pull/123`
+/// - GitHub Actions URLs with pr query parameter: `https://github.com/owner/repo/actions/runs/123?pr=456`
 fn extract_pr_id_form_url(url: &Url) -> color_eyre::Result<String> {
     let host = url.host_str().ok_or_else(|| eyre!("cannot extract host from {url}"))?;
     if host != GITHUB_HOST {

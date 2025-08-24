@@ -24,8 +24,10 @@ pub fn get_current_pane_id() -> color_eyre::Result<i64> {
     Ok(std::env::var("WEZTERM_PANE")?.parse()?)
 }
 
-// envs is required because Wezterm is not found when called by `oe` CLI when a file path is
-// clicked in Wezterm itself.
+/// Retrieves all Wezterm panes using the Wezterm CLI.
+///
+/// The `envs` parameter is required because Wezterm may not be found in the PATH
+/// when called by the `oe` CLI when a file path is clicked in Wezterm itself.
 pub fn get_all_panes(envs: &[(&str, &str)]) -> color_eyre::Result<Vec<WeztermPane>> {
     let mut cmd = Command::new("wezterm");
     cmd.args(["cli", "list", "--format", "json"]);
@@ -54,26 +56,45 @@ pub fn get_sibling_pane_with_titles(
         .clone())
 }
 
+/// Represents a Wezterm pane with all its properties and state information.
 #[derive(Debug, Deserialize, Clone)]
 #[cfg_attr(any(test, feature = "fake"), derive(fake::Dummy))]
 pub struct WeztermPane {
+    /// The ID of the window containing this pane.
     pub window_id: i64,
+    /// The ID of the tab containing this pane.
     pub tab_id: i64,
+    /// The unique ID of this pane.
     pub pane_id: i64,
+    /// The workspace name.
     pub workspace: String,
+    /// The size dimensions of the pane.
     pub size: WeztermPaneSize,
+    /// The title of the pane.
     pub title: String,
+    /// The current working directory as a file URI.
     pub cwd: PathBuf,
+    /// The X coordinate of the cursor.
     pub cursor_x: i64,
+    /// The Y coordinate of the cursor.
     pub cursor_y: i64,
+    /// The shape of the cursor.
     pub cursor_shape: String,
+    /// The visibility state of the cursor.
     pub cursor_visibility: String,
+    /// The left column position of the pane.
     pub left_col: i64,
+    /// The top row position of the pane.
     pub top_row: i64,
+    /// The title of the tab containing this pane.
     pub tab_title: String,
+    /// The title of the window containing this pane.
     pub window_title: String,
+    /// Whether this pane is currently active.
     pub is_active: bool,
+    /// Whether this pane is zoomed (maximized).
     pub is_zoomed: bool,
+    /// The TTY device name associated with this pane.
     pub tty_name: String,
 }
 
@@ -98,13 +119,19 @@ impl WeztermPane {
     }
 }
 
+/// Represents the size and dimensions of a Wezterm pane.
 #[derive(Debug, Deserialize, Clone)]
 #[cfg_attr(any(test, feature = "fake"), derive(fake::Dummy))]
 #[allow(dead_code)]
 pub struct WeztermPaneSize {
+    /// Number of character rows in the pane.
     pub rows: i64,
+    /// Number of character columns in the pane.
     pub cols: i64,
+    /// Width of the pane in pixels.
     pub pixel_width: i64,
+    /// Height of the pane in pixels.
     pub pixel_height: i64,
+    /// Dots per inch (DPI) of the display.
     pub dpi: i64,
 }

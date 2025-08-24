@@ -32,14 +32,44 @@ pub mod typos_lsp;
 pub mod vscode_langservers;
 pub mod yaml_language_server;
 
+/// Trait for installing development tools and language servers.
+///
+/// This trait defines the interface that all installers must implement.
+/// It provides a standardized way to install tools, check their installation,
+/// and report results. All installers must be thread-safe (Sync + Send).
 pub trait Installer: Sync + Send {
     /// Returns the binary name of the tool to install.
+    ///
+    /// This is the name that will be used to invoke the tool after installation
+    /// and for creating symlinks in the bin directory.
+    ///
+    /// # Returns
+    ///
+    /// The binary name as a static string slice.
     fn bin_name(&self) -> &'static str;
 
-    /// Installs the tool.
+    /// Installs the tool to the configured location.
+    ///
+    /// This method handles the complete installation process for the tool,
+    /// including downloading, extracting, and setting up the necessary files.
+    /// The installation should be idempotent - running it multiple times
+    /// should not cause issues.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` if installation succeeds, or an error if it fails.
     fn install(&self) -> color_eyre::Result<()>;
 
     /// Checks if the tool is installed correctly by running a version check.
+    ///
+    /// This method runs a command to verify that the tool was installed correctly.
+    /// By default, it runs `{bin_name} --version` and captures the output.
+    /// Implementors can override this behavior by providing custom check logic.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Some(Ok(version_string))` if the check passes and version info is available,
+    /// `Some(Err(error))` if the check fails, or `None` if no check should be performed.
     fn check(&self) -> Option<color_eyre::Result<String>> {
         let check_args = self.check_args()?;
         let mut cmd = Command::new(self.bin_name());
@@ -60,8 +90,19 @@ pub trait Installer: Sync + Send {
         Some(check_res)
     }
 
-    /// Runs the installer and runs the checks for the installed tool.
-    /// Printing and reporting is done here, rather than after to give feedback as soon as possible.
+    /// Runs the installer and performs post-installation checks.
+    ///
+    /// This method orchestrates the complete installation and verification process:
+    /// 1. Calls `install()` to install the tool
+    /// 2. Calls `check()` to verify the installation
+    /// 3. Reports results with appropriate success/error messages
+    ///
+    /// The method provides immediate feedback during installation rather than
+    /// waiting for all tools to complete.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` if both installation and checks succeed, or an error if either fails.
     fn run(&self) -> color_eyre::Result<()> {
         self.install()
             .inspect_err(|error| eprintln!("❌ {} installation failed, error {error:#?}", self.bin_name()))
@@ -86,6 +127,14 @@ pub trait Installer: Sync + Send {
     }
 
     /// Returns the arguments to use for the version check command.
+    ///
+    /// This method provides the command-line arguments that will be passed
+    /// to the tool to check its version. By default, it returns `["--version"]`,
+    /// but implementors can override this for tools that use different flags.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Some(args)` with the check arguments, or `None` if no check should be performed.
     fn check_args(&self) -> Option<&[&str]> {
         Some(&["--version"])
     }

@@ -1,8 +1,14 @@
 [package]
 name = "yhfp"
-version = "0.1.0"
-authors = ["Gian Lu"]
-edition = "2024"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Copies file paths from Helix editor to clipboard with line numbers"
+keywords = ["cli", "helix", "editor", "clipboard", "file-path"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 color-eyre = { workspace = true }

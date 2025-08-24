@@ -10,7 +10,54 @@ use color_eyre::eyre;
 use color_eyre::eyre::WrapErr;
 use color_eyre::eyre::bail;
 
-/// Executes the supplied command till it returns an ok status code.
+/// Repeatedly executes a command until it meets the specified exit condition.
+///
+/// This tool is designed for scenarios where you need to wait for a command to succeed
+/// or fail, such as waiting for a service to start, a file to become available, or
+/// a network connection to be established. It will keep running the command with
+/// a configurable cooldown period until the exit condition is met.
+///
+/// # Arguments
+///
+/// * `cooldown_secs` - Number of seconds to wait between command executions
+/// * `exit_condition` - Either "ok" (stop on success) or "ko" (stop on failure)
+/// * `command` - The command to execute (can include arguments and shell features)
+///
+/// # Exit Conditions
+///
+/// - "ok": Stop when the command returns success (exit code 0)
+/// - "ko": Stop when the command returns failure (non-zero exit code)
+///
+/// # Output
+///
+/// - Successful command output is printed to stdout
+/// - Failed command output is printed to stderr
+/// - Final summary shows total tries and average execution time
+///
+/// # Examples
+///
+/// Wait for a service to start (stop on success):
+/// ```bash
+/// try 5 ok "curl -f http://localhost:3000/health"
+/// ```
+///
+/// Wait for a process to fail (stop on failure):
+/// ```bash
+/// try 2 ko "pg_isready -h localhost -p 5432"
+/// ```
+///
+/// Retry a flaky command:
+/// ```bash
+/// try 1 ok "npm test -- --watchAll=false"
+/// ```
+///
+/// # Use Cases
+///
+/// - Waiting for services to be ready during deployment
+/// - Polling for file availability
+/// - Testing network connectivity
+/// - Retrying flaky operations
+/// - Monitoring process health
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
@@ -62,8 +109,15 @@ fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
+/// Represents the condition under which the retry loop should exit.
+///
+/// This enum defines the two possible exit conditions for the retry mechanism:
+/// - `Ok`: Exit when the command succeeds (returns exit code 0)
+/// - `Ko`: Exit when the command fails (returns non-zero exit code)
 enum ExitCond {
+    /// Exit when the command succeeds.
     Ok,
+    /// Exit when the command fails.
     Ko,
 }
 
@@ -73,6 +127,12 @@ impl ExitCond {
         self.is_ok() && cmd_res.is_ok() || !self.is_ok() && !cmd_res.is_ok()
     }
 
+    /// Checks if this exit condition represents success.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` if this is the `Ok` variant (exit on success),
+    /// `false` if this is the `Ko` variant (exit on failure).
     fn is_ok(&self) -> bool {
         match self {
             ExitCond::Ok => true,
@@ -81,6 +141,7 @@ impl ExitCond {
     }
 }
 
+/// Parses an [ExitCond] from a string representation.
 impl FromStr for ExitCond {
     type Err = eyre::Error;
 

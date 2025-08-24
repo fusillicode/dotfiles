@@ -33,7 +33,15 @@ pub fn get_local_and_remote_refs() -> color_eyre::Result<Vec<GitRef>> {
     Ok(res)
 }
 
-/// Deduplicates local and remote [GitRef]s.
+/// Deduplicates local and remote [GitRef]s, preferring local branches over remote ones.
+///
+/// This function removes remote branches that have corresponding local branches,
+/// keeping only the local version. This prevents showing duplicate entries in
+/// the branch selection interface.
+///
+/// # Arguments
+///
+/// * `git_refs` - Mutable vector of GitRef instances to deduplicate in place
 pub fn keep_local_and_untracked_refs(git_refs: &mut Vec<GitRef>) {
     let mut local_names = std::collections::HashSet::new();
 
@@ -47,15 +55,27 @@ pub fn keep_local_and_untracked_refs(git_refs: &mut Vec<GitRef>) {
     });
 }
 
+/// Represents a Git reference (branch or remote branch) with metadata.
+///
+/// This struct contains information about a Git branch or remote branch,
+/// including its name, remote (if applicable), and commit information.
+/// It's used for displaying branches in the interactive selection interface.
 #[derive(Clone, Debug)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct GitRef {
+    /// The name of the branch (without refs/heads/ or refs/remotes/ prefix).
     name: String,
+    /// The remote name if this is a remote branch, None for local branches.
     remote: Option<String>,
+    /// The shortened SHA hash of the commit this branch points to.
     object_name: String,
+    /// The type of Git object (usually "commit").
     object_type: String,
+    /// The email address of the person who made the last commit.
     committer_email: String,
+    /// The date and time when the last commit was made.
     committer_date_time: DateTime<FixedOffset>,
+    /// The subject line of the last commit message.
     subject: String,
 }
 
@@ -77,17 +97,40 @@ impl SkimItem for GitRef {
     }
 }
 
+/// Intermediate structure for deserializing Git reference data from JSON.
+///
+/// This struct represents the raw JSON output from the `git for-each-ref` command
+/// before it's processed into a more user-friendly [GitRef] format.
 #[derive(Deserialize)]
 struct GitRefJson {
+    /// The full reference name (e.g., "refs/heads/main" or "refs/remotes/origin/main").
     ref_name: String,
+    /// The SHA hash of the object this reference points to.
     object_name: String,
+    /// The type of Git object (usually "commit").
     object_type: String,
+    /// The email address of the committer.
     committer_email: String,
+    /// The commit date and time, deserialized from RFC2822 format.
     #[serde(deserialize_with = "deserialize_from_rfc2822")]
     committer_date_time: DateTime<FixedOffset>,
+    /// The commit subject line.
     subject: String,
 }
 
+/// Deserializes a date string from RFC2822 format into a [DateTime<FixedOffset>].
+///
+/// This function is used as a custom deserializer for the `committer_date_time` field
+/// in [GitRefJson]. It parses dates in the format used by Git's `%(committerdate:rfc2822)`
+/// format specifier.
+///
+/// # Arguments
+///
+/// * `deserializer` - The serde deserializer
+///
+/// # Returns
+///
+/// Returns a [DateTime<FixedOffset>] if parsing succeeds, or a deserialization error if it fails.
 fn deserialize_from_rfc2822<'de, D>(deserializer: D) -> Result<DateTime<FixedOffset>, D::Error>
 where
     D: Deserializer<'de>,
@@ -96,6 +139,15 @@ where
     DateTime::parse_from_str(&s, "%a, %d %b %Y %H:%M:%S %z").map_err(serde::de::Error::custom)
 }
 
+/// Creates the format string for the `git for-each-ref` command.
+///
+/// This method returns a JSON object that defines the format specifiers
+/// used by the `git for-each-ref` command to output Git reference information
+/// in a structured JSON format that can be deserialized into [GitRefJson].
+///
+/// # Returns
+///
+/// A [serde_json::Value] containing the format mapping for Git's for-each-ref command.
 impl GitRefJson {
     pub fn to_format() -> serde_json::Value {
         serde_json::json!({
@@ -109,6 +161,21 @@ impl GitRefJson {
     }
 }
 
+/// Deserializes a [GitRef] from a [GitRefJson] instance.
+///
+/// This implementation converts the raw Git reference data from [GitRefJson]
+/// into a more user-friendly [GitRef] format by:
+/// - Extracting the branch name from the full reference path
+/// - Identifying remote branches and extracting the remote name
+/// - Cleaning up the commit subject by replacing hyphens with spaces
+///
+/// # Arguments
+///
+/// * `deserializer` - The serde deserializer
+///
+/// # Returns
+///
+/// Returns a [GitRef] if deserialization succeeds, or a deserialization error if it fails.
 impl<'de> Deserialize<'de> for GitRef {
     fn deserialize<D>(deserializer: D) -> Result<GitRef, D::Error>
     where

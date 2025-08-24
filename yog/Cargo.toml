@@ -2,6 +2,16 @@
 resolver = "2"
 members = ["src/*"]
 
+[workspace.package]
+version = "0.1.0"
+authors = ["Gian Lu"]
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/fusillicode/dotfiles"
+readme = "README.md"
+keywords = ["cli", "tools", "development", "productivity"]
+categories = ["command-line-utilities", "development-tools"]
+
 [workspace.dependencies]
 color-eyre = { version = "0.6" }
 chrono = { version = "0.4", features = ["serde"] }

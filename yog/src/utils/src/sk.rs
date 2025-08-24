@@ -56,6 +56,7 @@ where
     get_item(items, sk_opts)
 }
 
+/// Runs the skim fuzzy finder with the provided items and returns the selected items.
 fn get_items<T: SkimItem + Clone + std::fmt::Debug>(
     items: Vec<T>,
     sk_opts: Option<SkimOptionsBuilder>,
@@ -90,6 +91,7 @@ fn get_items<T: SkimItem + Clone + std::fmt::Debug>(
     Ok(out)
 }
 
+/// Creates a skim item receiver from a vector of items for use with the fuzzy finder.
 fn build_sk_source_from_items<T: SkimItem>(items: Vec<T>) -> color_eyre::Result<SkimItemReceiver> {
     let (tx, rx): (SkimItemSender, SkimItemReceiver) = unbounded();
     for item in items {
@@ -98,6 +100,7 @@ fn build_sk_source_from_items<T: SkimItem>(items: Vec<T>) -> color_eyre::Result<
     Ok(rx)
 }
 
+/// Configures the base skim options with common settings for a consistent user experience.
 fn base_sk_opts(opts_builder: &mut SkimOptionsBuilder) -> &mut SkimOptionsBuilder {
     opts_builder
         .height(String::from("21"))
