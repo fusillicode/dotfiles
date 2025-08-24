@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::path::PathBuf;
 
+/// Downloads and installs Python packages using pip in a virtual environment.
 pub fn run(dev_tools_dir: &Path, tool: &str, packages: &[&str]) -> color_eyre::Result<PathBuf> {
     let dev_tools_repo_dir = dev_tools_dir.join(tool);
 

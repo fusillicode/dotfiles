@@ -43,6 +43,7 @@ pub enum FkrArg {
 }
 
 impl FkrArg {
+    /// Returns the command name associated with the [FkrArg] variant.
     pub fn cmd_name(&self) -> &str {
         match self {
             FkrArg::Uuidv4 => "FkrUuidv4",

@@ -6,6 +6,7 @@ use color_eyre::eyre::eyre;
 
 use crate::cmd::CmdExt;
 
+/// Finds the root directory of the Git repository containing the given file path, or the current directory if none provided.
 pub fn get_repo_root(file_path: Option<&Path>) -> color_eyre::Result<String> {
     let cmd = if let Some(file_path) = file_path {
         let file_parent_dir = file_path
@@ -31,6 +32,7 @@ pub fn get_repo_root(file_path: Option<&Path>) -> color_eyre::Result<String> {
     Ok(String::from_utf8(git_repo_root)?.trim().to_owned())
 }
 
+/// Retrieves the name of the current Git branch.
 pub fn get_current_branch() -> color_eyre::Result<String> {
     Ok(std::str::from_utf8(
         &Command::new("git")

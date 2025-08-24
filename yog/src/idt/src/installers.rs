@@ -33,10 +33,13 @@ pub mod vscode_langservers;
 pub mod yaml_language_server;
 
 pub trait Installer: Sync + Send {
+    /// Returns the binary name of the tool to install.
     fn bin_name(&self) -> &'static str;
 
+    /// Installs the tool.
     fn install(&self) -> color_eyre::Result<()>;
 
+    /// Checks if the tool is installed correctly by running a version check.
     fn check(&self) -> Option<color_eyre::Result<String>> {
         let check_args = self.check_args()?;
         let mut cmd = Command::new(self.bin_name());
@@ -57,7 +60,8 @@ pub trait Installer: Sync + Send {
         Some(check_res)
     }
 
-    // Printing and reporting is done here, rather than after to give feedback as soon as possible.
+    /// Runs the installer and runs the checks for the installed tool.
+    /// Printing and reporting is done here, rather than after to give feedback as soon as possible.
     fn run(&self) -> color_eyre::Result<()> {
         self.install()
             .inspect_err(|error| eprintln!("❌ {} installation failed, error {error:#?}", self.bin_name()))
@@ -81,6 +85,7 @@ pub trait Installer: Sync + Send {
         Ok(())
     }
 
+    /// Returns the arguments to use for the version check command.
     fn check_args(&self) -> Option<&[&str]> {
         Some(&["--version"])
     }
