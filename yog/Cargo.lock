@@ -1581,6 +1581,7 @@ dependencies = [
  "nvim-oxi",
  "serde",
  "serde_json",
+ "serde_repr",
  "strum",
  "tree-sitter",
  "tree-sitter-rust",
