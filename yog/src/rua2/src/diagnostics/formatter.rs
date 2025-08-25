@@ -1,14 +1,10 @@
 use nvim_oxi::Function;
 use nvim_oxi::Object;
 use nvim_oxi::conversion::FromObject;
-use nvim_oxi::conversion::ToObject;
 use nvim_oxi::lua::Poppable;
-use nvim_oxi::lua::Pushable;
 use nvim_oxi::lua::ffi::State;
 use nvim_oxi::serde::Deserializer;
-use nvim_oxi::serde::Serializer;
 use serde::Deserialize;
-use serde::Serialize;
 
 pub fn format() -> Object {
     Object::from(Function::<Diagnostic, nvim_oxi::Result<_>>::from_fn(format_core))
@@ -61,7 +57,7 @@ fn get_code(diag: &Diagnostic) -> Option<&str> {
         .or(diag.code.as_deref())
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct Diagnostic {
     code: Option<String>,
     message: Option<String>,
@@ -75,12 +71,6 @@ impl FromObject for Diagnostic {
     }
 }
 
-impl ToObject for Diagnostic {
-    fn to_object(self) -> Result<Object, nvim_oxi::conversion::Error> {
-        self.serialize(Serializer::new()).map_err(Into::into)
-    }
-}
-
 impl Poppable for Diagnostic {
     unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
         unsafe {
@@ -90,22 +80,12 @@ impl Poppable for Diagnostic {
     }
 }
 
-impl Pushable for Diagnostic {
-    unsafe fn push(self, lstate: *mut State) -> Result<std::ffi::c_int, nvim_oxi::lua::Error> {
-        unsafe {
-            self.to_object()
-                .map_err(nvim_oxi::lua::Error::push_error_from_err::<Self, _>)?
-                .push(lstate)
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct UserData {
     lsp: Option<Lsp>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct Lsp {
     code: Option<String>,
     data: Option<LspData>,
@@ -113,7 +93,7 @@ pub struct Lsp {
     source: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct LspData {
     rendered: Option<String>,
 }
