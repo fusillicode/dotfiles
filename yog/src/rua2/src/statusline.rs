@@ -7,12 +7,13 @@ use nvim_oxi::conversion::FromObject;
 use nvim_oxi::lua::ffi::State;
 use nvim_oxi::serde::Deserializer;
 use serde::Deserialize;
+use serde_repr::Deserialize_repr;
 
 pub fn draw() -> Object {
-    Object::from(Function::<Diagnostics, nvim_oxi::Result<_>>::from_fn(draw_core))
+    Object::from(Function::<Vec<Diagnostic>, nvim_oxi::Result<_>>::from_fn(draw_core))
 }
 
-fn draw_core(diagnostics: Diagnostics) -> nvim_oxi::Result<String> {
+fn draw_core(diagnostics: Vec<Diagnostic>) -> nvim_oxi::Result<String> {
     let cur_buf = nvim_oxi::api::get_current_buf();
     let cur_buf_path = cur_buf.get_name()?;
     let cur_buf_nr = cur_buf.handle();
@@ -23,7 +24,7 @@ fn draw_core(diagnostics: Diagnostics) -> nvim_oxi::Result<String> {
         workspace_diags: HashMap::new(),
     };
 
-    for diagnostic in diagnostics.0 {
+    for diagnostic in diagnostics {
         if cur_buf_nr == diagnostic.bufnr {
             *statusline.cur_buf_diags.entry(diagnostic.severity).or_insert(0) += 1;
         }
@@ -31,24 +32,6 @@ fn draw_core(diagnostics: Diagnostics) -> nvim_oxi::Result<String> {
     }
 
     Ok(statusline.draw())
-}
-
-#[derive(Deserialize)]
-pub struct Diagnostics(Vec<Diagnostic>);
-
-impl FromObject for Diagnostics {
-    fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
-        Self::deserialize(Deserializer::new(obj)).map_err(Into::into)
-    }
-}
-
-impl nvim_oxi::lua::Poppable for Diagnostics {
-    unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
-        unsafe {
-            let obj = Object::pop(lstate)?;
-            Self::from_object(obj).map_err(nvim_oxi::lua::Error::pop_error_from_err::<Self, _>)
-        }
-    }
 }
 
 #[derive(Deserialize)]
@@ -72,12 +55,13 @@ impl nvim_oxi::lua::Poppable for Diagnostic {
     }
 }
 
-#[derive(Debug, Deserialize, Hash, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, Deserialize_repr, Hash, PartialEq, Eq, Copy, Clone)]
+#[repr(u8)]
 pub enum Severity {
-    Error,
-    Warn,
-    Info,
-    Hint,
+    Error = 1,
+    Warn = 2,
+    Info = 3,
+    Hint = 4,
 }
 
 impl Severity {
