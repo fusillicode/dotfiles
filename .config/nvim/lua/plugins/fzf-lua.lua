@@ -73,9 +73,6 @@ return {
       buffers    = {
         winopts = no_title,
         ignore_current_buffer = true,
-        actions = {
-          ['ctrl-x'] = false,
-        },
       },
       grep       = {
         winopts        = no_title,
