@@ -1,5 +1,5 @@
 [package]
-name = "rua"
+name = "rua2"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -18,7 +18,8 @@ crate-type = ["cdylib"]
 anyhow = { version = "1.0", features = ["backtrace"] }
 chrono = { workspace = true }
 fkr = { path = "../fkr" }
-mlua = { version = "0.10", features = ["anyhow", "macros", "module", "luajit"] }
+nvim-oxi = { version = "0.6", features = ["neovim-nightly", "mlua"] }
+serde = { version = "1.0" }
 serde_json = { workspace = true }
 strum = { workspace = true }
 tree-sitter = { version = "0.25" }
