@@ -1,11 +1,12 @@
 local rua = require('rua')
+local rua2 = require('rua2')
 
 vim.diagnostic.config({
   float = {
     anchor_bias = 'above',
     border = require('colorscheme').window.border,
     focusable = true,
-    format = rua.format_diagnostic,
+    format = rua2.format_diagnostic,
     header = '',
     prefix = '',
     source = false,
