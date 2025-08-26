@@ -19,7 +19,7 @@ fn run_test_core(_: ()) -> anyhow::Result<()> {
     let cur_buf = Buffer::current();
     let cur_win = Window::current();
 
-    let position = cur_win.get_position().map(|(row, column)| Point { row, column })?;
+    let position = cur_win.get_cursor().map(|(row, column)| Point { row, column })?;
     let file_path = PathBuf::from(cur_buf.get_name()?.to_string_lossy().to_string());
 
     let test_name = get_enclosing_fn_name_of_position(&file_path, position)?
