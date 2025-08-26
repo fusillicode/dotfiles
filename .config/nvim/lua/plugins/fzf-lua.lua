@@ -1,3 +1,5 @@
+local rua = require('rua2')
+
 return {
   'ibhagwan/fzf-lua',
   keys = { '<leader>', 'gd', 'gr', 'gi', },
@@ -65,7 +67,7 @@ return {
         winopts   = no_title,
         fzf_opts  = { ['--ansi'] = true, },
         fd_opts   = table.concat(
-          require('rua').get_fd_cli_flags(),
+          rua.get_fd_cli_flags(),
           ' '
         ),
         git_icons = true,
@@ -78,7 +80,7 @@ return {
         winopts        = no_title,
         rg_glob        = true,
         rg_opts        = table.concat(
-          require('rua').get_rg_cli_flags(),
+          rua.get_rg_cli_flags(),
           ' '
         ),
         hidden         = true,
