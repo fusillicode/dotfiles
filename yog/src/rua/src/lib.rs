@@ -1,12 +1,6 @@
 use mlua::prelude::*;
 
-use crate::cli::Flags;
-
-mod cli;
 mod diagnostics;
-mod fkr_gen;
-mod statuscolumn;
-mod statusline;
 mod test_runner;
 mod utils;
 
@@ -54,23 +48,9 @@ fn rua(lua: &Lua) -> LuaResult<LuaTable> {
 
     for (lua_fn_name, rust_fn) in [
         (
-            "format_diagnostic",
-            create_debuggable_fn(lua, diagnostics::formatter::format)?,
-        ),
-        (
             "filter_diagnostics",
             create_debuggable_fn(lua, diagnostics::filter::filter)?,
         ),
-        (
-            "sort_diagnostics",
-            create_debuggable_fn(lua, diagnostics::sorter::sort)?,
-        ),
-        ("draw_statusline", create_debuggable_fn(lua, statusline::draw)?),
-        ("draw_statuscolumn", create_debuggable_fn(lua, statuscolumn::draw)?),
-        ("get_fkr_cmds", create_debuggable_fn(lua, fkr_gen::get_cmds)?),
-        ("gen_fkr_value", create_debuggable_fn(lua, fkr_gen::gen_value)?),
-        ("get_fd_cli_flags", create_debuggable_fn(lua, cli::fd::CliFlags.get())?),
-        ("get_rg_cli_flags", create_debuggable_fn(lua, cli::rg::CliFlags.get())?),
         ("run_test", create_debuggable_fn(lua, test_runner::run_test)?),
     ] {
         exports.set(lua_fn_name, rust_fn)?;
