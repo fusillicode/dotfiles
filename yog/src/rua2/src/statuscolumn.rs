@@ -1,0 +1,195 @@
+use nvim_oxi::Function;
+use nvim_oxi::Object;
+use nvim_oxi::api::Buffer;
+use nvim_oxi::api::opts::OptionOptsBuilder;
+use nvim_oxi::conversion::FromObject;
+use nvim_oxi::lua::Poppable;
+use nvim_oxi::lua::ffi::State;
+use nvim_oxi::serde::Deserializer;
+use serde::Deserialize;
+
+pub fn draw() -> Object {
+    Object::from(Function::<(String, Vec<Extmark>), nvim_oxi::Result<_>>::from_fn(
+        draw_core,
+    ))
+}
+
+fn draw_core((cur_lnum, extmarks): (String, Vec<Extmark>)) -> nvim_oxi::Result<String> {
+    let cur_buf = Buffer::current();
+    let opts = OptionOptsBuilder::default().buf(cur_buf).build();
+    let cur_buf_type = nvim_oxi::api::get_option_value::<String>("buftype", &opts)?;
+
+    Ok(Statuscolumn::draw(
+        &cur_buf_type,
+        cur_lnum,
+        extmarks.iter().filter_map(|e| e.meta().cloned()).collect(),
+    ))
+}
+
+#[derive(Deserialize)]
+#[allow(dead_code)]
+struct Extmark(u32, usize, usize, Option<ExtmarkMeta>);
+
+impl Extmark {
+    pub fn meta(&self) -> Option<&ExtmarkMeta> {
+        self.3.as_ref()
+    }
+}
+
+#[derive(Deserialize, Clone)]
+struct ExtmarkMeta {
+    sign_hl_group: String,
+    // Option due to grug-far buffers
+    sign_text: Option<String>,
+}
+
+impl ExtmarkMeta {
+    fn draw(&self) -> String {
+        format!(
+            "%#{}#{}%*",
+            self.sign_hl_group,
+            self.sign_text.as_ref().map(|x| x.trim()).unwrap_or("")
+        )
+    }
+}
+
+impl FromObject for Extmark {
+    fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
+        Self::deserialize(Deserializer::new(obj)).map_err(Into::into)
+    }
+}
+
+impl Poppable for Extmark {
+    unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
+        unsafe {
+            let obj = Object::pop(lstate)?;
+            Self::from_object(obj).map_err(nvim_oxi::lua::Error::pop_error_from_err::<Self, _>)
+        }
+    }
+}
+
+#[derive(Default)]
+struct Statuscolumn {
+    error: Option<ExtmarkMeta>,
+    warn: Option<ExtmarkMeta>,
+    info: Option<ExtmarkMeta>,
+    hint: Option<ExtmarkMeta>,
+    ok: Option<ExtmarkMeta>,
+    git: Option<ExtmarkMeta>,
+    cur_lnum: String,
+}
+
+impl Statuscolumn {
+    fn draw(cur_buf_type: &str, cur_lnum: String, extmarks: Vec<ExtmarkMeta>) -> String {
+        match cur_buf_type {
+            "grug-far" => " ".into(),
+            _ => Self::new(cur_lnum, extmarks).to_string(),
+        }
+    }
+
+    fn new(cur_lnum: String, extmarks: Vec<ExtmarkMeta>) -> Self {
+        let mut statuscolumn = Self {
+            cur_lnum,
+            ..Default::default()
+        };
+
+        for extmark in extmarks {
+            match extmark.sign_hl_group.as_str() {
+                "DiagnosticSignError" => statuscolumn.error = Some(extmark),
+                "DiagnosticSignWarn" => statuscolumn.warn = Some(extmark),
+                "DiagnosticSignInfo" => statuscolumn.info = Some(extmark),
+                "DiagnosticSignHint" => statuscolumn.hint = Some(extmark),
+                "DiagnosticSignOk" => statuscolumn.ok = Some(extmark),
+                git if git.contains("GitSigns") => statuscolumn.git = Some(extmark),
+                _ => (),
+            };
+        }
+
+        statuscolumn
+    }
+}
+
+impl std::fmt::Display for Statuscolumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let diag_sign = [&self.error, &self.warn, &self.info, &self.hint, &self.ok]
+            .iter()
+            .find_map(|s| s.as_ref().map(ExtmarkMeta::draw))
+            .unwrap_or_else(|| " ".into());
+
+        let git_sign = self.git.as_ref().map(ExtmarkMeta::draw).unwrap_or_else(|| " ".into());
+
+        write!(f, "{}{}%=% {} ", diag_sign, git_sign, self.cur_lnum)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_statuscolumn_draw_works_as_expected() {
+        // No extmarks
+        let out = Statuscolumn::draw("foo", "42".into(), vec![]);
+        assert_eq!("  %=% 42 ", &out);
+
+        // 1 diagnostic sign
+        let out = Statuscolumn::draw(
+            "foo",
+            "42".into(),
+            vec![ExtmarkMeta {
+                sign_hl_group: "DiagnosticSignError".into(),
+                sign_text: Some("E".into()),
+            }],
+        );
+        assert_eq!("%#DiagnosticSignError#E%* %=% 42 ", &out);
+
+        // Multiple diagnostics extmarks and only the higher severity sign is displayed
+        let out = Statuscolumn::draw(
+            "foo",
+            "42".into(),
+            vec![
+                ExtmarkMeta {
+                    sign_hl_group: "DiagnosticSignError".into(),
+                    sign_text: Some("E".into()),
+                },
+                ExtmarkMeta {
+                    sign_hl_group: "DiagnosticSignWarn".into(),
+                    sign_text: Some("W".into()),
+                },
+            ],
+        );
+        assert_eq!("%#DiagnosticSignError#E%* %=% 42 ", &out);
+
+        // git sign
+        let out = Statuscolumn::draw(
+            "foo",
+            "42".into(),
+            vec![ExtmarkMeta {
+                sign_hl_group: "GitSignsFoo".into(),
+                sign_text: Some("|".into()),
+            }],
+        );
+        assert_eq!(" %#GitSignsFoo#|%*%=% 42 ", &out);
+
+        // Multiple diagnostics extmarks and a git sign
+        let out = Statuscolumn::draw(
+            "foo",
+            "42".into(),
+            vec![
+                ExtmarkMeta {
+                    sign_hl_group: "DiagnosticSignError".into(),
+                    sign_text: Some("E".into()),
+                },
+                ExtmarkMeta {
+                    sign_hl_group: "DiagnosticSignWarn".into(),
+                    sign_text: Some("W".into()),
+                },
+                ExtmarkMeta {
+                    sign_hl_group: "GitSignsFoo".into(),
+                    sign_text: Some("|".into()),
+                },
+            ],
+        );
+        assert_eq!("%#DiagnosticSignError#E%*%#GitSignsFoo#|%*%=% 42 ", &out);
+    }
+}

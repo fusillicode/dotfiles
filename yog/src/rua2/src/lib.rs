@@ -1,6 +1,7 @@
 use nvim_oxi::Dictionary;
 
 mod diagnostics;
+mod statuscolumn;
 mod statusline;
 
 #[nvim_oxi::plugin]
@@ -9,5 +10,6 @@ fn rua2() -> Dictionary {
         ("format_diagnostic", diagnostics::formatter::format()),
         ("sort_diagnostics", diagnostics::sorter::sort()),
         ("draw_statusline", statusline::draw()),
+        ("draw_statuscolumn", statuscolumn::draw()),
     ])
 }

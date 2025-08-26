@@ -15,10 +15,13 @@ crate-type = ["cdylib"]
 
 [dependencies]
 # Couldn't be able to use color-eyre...falling back to anyhow
+nvim-oxi = { git = "https://github.com/noib3/nvim-oxi", rev = "b1278b123dbac3908f2686ebed6fdadbfef15be1", features = [
+  "neovim-nightly",
+  "mlua",
+] }
 anyhow = { version = "1.0", features = ["backtrace"] }
 chrono = { workspace = true }
 fkr = { path = "../fkr" }
-nvim-oxi = { version = "0.6", features = ["neovim-nightly", "mlua"] }
 serde = { version = "1.0" }
 serde_json = { workspace = true }
 serde_repr = { version = "0.1" }
