@@ -7,10 +7,10 @@ use nvim_oxi::api::opts::CreateCommandOptsBuilder;
 use strum::IntoEnumIterator;
 
 pub fn create_cmds() -> Object {
-    Object::from(Function::<(), nvim_oxi::Result<_>>::from_fn(create_cmds_core))
+    Object::from(Function::<(), anyhow::Result<_>>::from_fn(create_cmds_core))
 }
 
-fn create_cmds_core(_: ()) -> nvim_oxi::Result<()> {
+fn create_cmds_core(_: ()) -> anyhow::Result<()> {
     for fkr_opt in FkrOption::iter() {
         nvim_oxi::api::create_user_command(
             cmd_name(&fkr_opt),

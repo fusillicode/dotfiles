@@ -11,10 +11,10 @@ use serde::Deserialize;
 use serde_repr::Deserialize_repr;
 
 pub fn draw() -> Object {
-    Object::from(Function::<Vec<Diagnostic>, nvim_oxi::Result<_>>::from_fn(draw_core))
+    Object::from(Function::<Vec<Diagnostic>, anyhow::Result<_>>::from_fn(draw_core))
 }
 
-fn draw_core(diagnostics: Vec<Diagnostic>) -> nvim_oxi::Result<String> {
+fn draw_core(diagnostics: Vec<Diagnostic>) -> anyhow::Result<String> {
     let cur_buf = nvim_oxi::api::get_current_buf();
     let cur_buf_path = cur_buf.get_name()?;
     let cwd = nvim_oxi::api::call_function::<Array, String>("getcwd", Array::new())?;

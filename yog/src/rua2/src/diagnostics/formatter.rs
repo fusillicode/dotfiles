@@ -7,10 +7,10 @@ use nvim_oxi::serde::Deserializer;
 use serde::Deserialize;
 
 pub fn format() -> Object {
-    Object::from(Function::<Diagnostic, nvim_oxi::Result<_>>::from_fn(format_core))
+    Object::from(Function::<Diagnostic, anyhow::Result<_>>::from_fn(format_core))
 }
 
-fn format_core(diagnostic: Diagnostic) -> nvim_oxi::Result<String> {
+fn format_core(diagnostic: Diagnostic) -> anyhow::Result<String> {
     let msg = get_msg(&diagnostic).map_or_else(
         || format!("no message in {diagnostic:#?}"),
         |s| s.trim_end_matches('.').to_string(),

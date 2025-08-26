@@ -9,12 +9,12 @@ use nvim_oxi::serde::Deserializer;
 use serde::Deserialize;
 
 pub fn draw() -> Object {
-    Object::from(Function::<(String, Vec<Extmark>), nvim_oxi::Result<_>>::from_fn(
+    Object::from(Function::<(String, Vec<Extmark>), anyhow::Result<_>>::from_fn(
         draw_core,
     ))
 }
 
-fn draw_core((cur_lnum, extmarks): (String, Vec<Extmark>)) -> nvim_oxi::Result<String> {
+fn draw_core((cur_lnum, extmarks): (String, Vec<Extmark>)) -> anyhow::Result<String> {
     let cur_buf = Buffer::current();
     let opts = OptionOptsBuilder::default().buf(cur_buf).build();
     let cur_buf_type = nvim_oxi::api::get_option_value::<String>("buftype", &opts)?;
