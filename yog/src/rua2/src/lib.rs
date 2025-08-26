@@ -7,6 +7,7 @@ mod diagnostics;
 mod fkr;
 mod statuscolumn;
 mod statusline;
+mod test_runner;
 
 #[nvim_oxi::plugin]
 fn rua2() -> Dictionary {
@@ -18,5 +19,6 @@ fn rua2() -> Dictionary {
         ("create_fkr_cmds", fkr::create_cmds()),
         ("get_fd_cli_flags", cli_flags::fd::FdCliFlags.get()),
         ("get_rg_cli_flags", cli_flags::rg::RgCliFlags.get()),
+        ("run_test", test_runner::run_test()),
     ])
 }
