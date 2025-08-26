@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
+use nvim_oxi::Array;
 use nvim_oxi::Function;
 use nvim_oxi::Object;
 use nvim_oxi::conversion::FromObject;
@@ -16,14 +17,15 @@ pub fn draw() -> Object {
 fn draw_core(diagnostics: Vec<Diagnostic>) -> nvim_oxi::Result<String> {
     let cur_buf = nvim_oxi::api::get_current_buf();
     let cur_buf_path = cur_buf.get_name()?;
-    let cur_buf_nr = cur_buf.handle();
+    let cwd = nvim_oxi::api::call_function::<Array, String>("getcwd", Array::new())?;
+    let cur_buf_path = cur_buf_path.to_string_lossy();
 
+    let cur_buf_nr = cur_buf.handle();
     let mut statusline = Statusline {
-        cur_buf_path: cur_buf_path.to_string_lossy(),
+        cur_buf_path: Cow::Borrowed(cur_buf_path.trim_start_matches(&cwd)),
         cur_buf_diags: HashMap::new(),
         workspace_diags: HashMap::new(),
     };
-
     for diagnostic in diagnostics {
         if cur_buf_nr == diagnostic.bufnr {
             *statusline.cur_buf_diags.entry(diagnostic.severity).or_insert(0) += 1;
