@@ -30,9 +30,9 @@ fn create_cmds_core(_: ()) {
 
                 let mut cur_buf = Buffer::current();
                 if let Err(e) = cur_buf.set_text(line_range.clone(), start_col, end_col, vec![repl.clone()]) {
-                    nvim_oxi::print!(
+                    crate::log_error(&format!(
                         "error setting text {repl:?} on buffer {cur_buf:?}, line_range {line_range:?}, start_col {start_col:?}, end_col {end_col:?}, error {e:?}"
-                    )
+                    ))
                 }
             },
             &CreateCommandOptsBuilder::default().build(),
