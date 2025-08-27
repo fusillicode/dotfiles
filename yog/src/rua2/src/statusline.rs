@@ -10,14 +10,25 @@ use nvim_oxi::serde::Deserializer;
 use serde::Deserialize;
 use serde_repr::Deserialize_repr;
 
+use crate::log_error;
+
 pub fn draw() -> Object {
-    Object::from(Function::<Vec<Diagnostic>, anyhow::Result<_>>::from_fn(draw_core))
+    Object::from(Function::<Vec<Diagnostic>, _>::from_fn(draw_core))
 }
 
-fn draw_core(diagnostics: Vec<Diagnostic>) -> anyhow::Result<String> {
+fn draw_core(diagnostics: Vec<Diagnostic>) -> Option<String> {
     let cur_buf = nvim_oxi::api::get_current_buf();
-    let cur_buf_path = cur_buf.get_name()?;
-    let cwd = nvim_oxi::api::call_function::<Array, String>("getcwd", Array::new())?;
+    let cur_buf_path = cur_buf
+        .get_name()
+        .inspect_err(|error| {
+            log_error(&format!("fail to get name of current buffer error, {error:#?}"));
+        })
+        .ok()?;
+    let cwd = nvim_oxi::api::call_function::<Array, String>("getcwd", Array::new())
+        .inspect_err(|error| {
+            log_error(&format!("fail to get cwd error, {error:#?}"));
+        })
+        .ok()?;
     let cur_buf_path = cur_buf_path.to_string_lossy();
 
     let cur_buf_nr = cur_buf.handle();
@@ -33,7 +44,7 @@ fn draw_core(diagnostics: Vec<Diagnostic>) -> anyhow::Result<String> {
         *statusline.workspace_diags.entry(diagnostic.severity).or_insert(0) += 1;
     }
 
-    Ok(statusline.draw())
+    Some(statusline.draw())
 }
 
 #[derive(Deserialize)]
