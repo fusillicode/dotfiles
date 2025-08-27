@@ -12,12 +12,12 @@ pub fn format() -> Object {
 
 fn format_core(diagnostic: Diagnostic) -> Option<String> {
     let Some(msg) = get_msg(&diagnostic).map(|s| s.trim_end_matches('.').to_string()) else {
-        crate::notify_error(&format!("no message in {diagnostic:#?}"));
+        crate::oxi_utils::notify_error(&format!("no message in {diagnostic:#?}"));
         return None;
     };
 
     let Some(src) = get_src(&diagnostic).map(str::to_string) else {
-        crate::notify_error(&format!("no source in {diagnostic:#?}"));
+        crate::oxi_utils::notify_error(&format!("no source in {diagnostic:#?}"));
         return None;
     };
 

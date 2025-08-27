@@ -4,8 +4,8 @@ use nvim_oxi::Dictionary;
 use nvim_oxi::ObjectKind;
 use nvim_oxi::conversion::FromObject;
 
-use crate::DictionaryExt;
 use crate::diagnostics::filters::DiagnosticsFilter;
+use crate::oxi_ext::DictionaryExt;
 
 /// Filters out diagnostics already represented by other ones
 /// (e.g. HINTs pointing to a location already mentioned by other ERROR's rendered message)
@@ -33,8 +33,9 @@ impl RelatedInfoFilter {
                 continue;
             };
 
-            let rel_infos = Array::from_object(rel_infos.clone())
-                .with_context(|| crate::unexpected_kind_error_msg(rel_infos, rel_infos_key, &lsp, ObjectKind::Array))?;
+            let rel_infos = Array::from_object(rel_infos.clone()).with_context(|| {
+                crate::oxi_ext::unexpected_kind_error_msg(rel_infos, rel_infos_key, &lsp, ObjectKind::Array)
+            })?;
             for rel_info in rel_infos {
                 let rel_info = Dictionary::try_from(rel_info)?;
                 out.push(RelatedInfo::from_related_info(&rel_info)?);
@@ -89,17 +90,17 @@ impl RelatedInfo {
             let range_query = ["location", "range"];
             let range = rel_info
                 .get_dict(&range_query)?
-                .ok_or_else(|| crate::no_value_matching(&range_query, rel_info))?;
+                .ok_or_else(|| crate::oxi_ext::no_value_matching(&range_query, rel_info))?;
 
             let start_query = ["start"];
             let end_query = ["end"];
             (
                 range
                     .get_dict(&start_query)?
-                    .ok_or_else(|| crate::no_value_matching(&start_query, &range))?,
+                    .ok_or_else(|| crate::oxi_ext::no_value_matching(&start_query, &range))?,
                 range
                     .get_dict(&end_query)?
-                    .ok_or_else(|| crate::no_value_matching(&end_query, &range))?,
+                    .ok_or_else(|| crate::oxi_ext::no_value_matching(&end_query, &range))?,
             )
         };
 
