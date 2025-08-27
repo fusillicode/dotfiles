@@ -15,6 +15,7 @@ fn rua2() -> Dictionary {
     Dictionary::from_iter([
         ("format_diagnostic", diagnostics::formatter::format()),
         ("sort_diagnostics", diagnostics::sorter::sort()),
+        ("filter_diagnostics", diagnostics::filter::filter()),
         ("draw_statusline", statusline::draw()),
         ("draw_statuscolumn", statuscolumn::draw()),
         ("create_fkr_cmds", fkr::create_cmds()),
