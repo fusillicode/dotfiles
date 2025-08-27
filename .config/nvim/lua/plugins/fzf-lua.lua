@@ -1,4 +1,4 @@
-local rua = require('rua2')
+local rua = require('rua')
 
 return {
   'ibhagwan/fzf-lua',

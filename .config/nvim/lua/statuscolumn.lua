@@ -1,6 +1,6 @@
 local M = {}
 
-M.draw_statuscolumn = require('rua2').draw_statuscolumn
+M.draw_statuscolumn = require('rua').draw_statuscolumn
 
 function M.draw(cur_lnum)
   local line_signs = vim.api.nvim_buf_get_extmarks(

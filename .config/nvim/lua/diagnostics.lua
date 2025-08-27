@@ -1,12 +1,11 @@
 local rua = require('rua')
-local rua2 = require('rua2')
 
 vim.diagnostic.config({
   float = {
     anchor_bias = 'above',
     border = require('colorscheme').window.border,
     focusable = true,
-    format = rua2.format_diagnostic,
+    format = rua.format_diagnostic,
     header = '',
     prefix = '',
     source = false,
@@ -28,8 +27,8 @@ vim.diagnostic.set = function(namespace, bufnr, diagnostics, opts)
   diag_set(
     namespace,
     bufnr,
-    rua2.sort_diagnostics(
-      rua2.filter_diagnostics(vim.api.nvim_buf_get_name(bufnr), diagnostics)
+    rua.sort_diagnostics(
+      rua.filter_diagnostics(vim.api.nvim_buf_get_name(bufnr), diagnostics)
     ),
     opts
   )

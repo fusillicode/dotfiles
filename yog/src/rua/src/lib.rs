@@ -1,146 +1,132 @@
-use mlua::prelude::*;
+use color_eyre::eyre::Context;
+use color_eyre::eyre::eyre;
+use nvim_oxi::Dictionary;
+use nvim_oxi::Object;
+use nvim_oxi::ObjectKind;
+use nvim_oxi::api::types::LogLevel;
 
+use crate::cli_flags::CliFlags;
+
+mod cli_flags;
 mod diagnostics;
+mod fkr;
+mod statuscolumn;
+mod statusline;
 mod test_runner;
-mod utils;
 
-/// Neovim Lua module providing Rust utilities for enhanced editor functionality.
-///
-/// This module exports various functions that can be called from Lua scripts in Neovim,
-/// providing access to Rust implementations of common editor operations and utilities.
-/// The functions are designed to be fast, reliable, and integrate seamlessly with
-/// Neovim's Lua API.
-///
-/// # Available Functions
-///
-/// - `format_diagnostic`: Formats diagnostic messages for display
-/// - `filter_diagnostics`: Filters diagnostic messages based on criteria
-/// - `sort_diagnostics`: Sorts diagnostic messages by priority/severity
-/// - `draw_statusline`: Renders custom statusline components
-/// - `draw_statuscolumn`: Renders custom statuscolumn components
-/// - `get_fkr_cmds`: Provides fake data generation commands
-/// - `gen_fkr_value`: Generates fake data values
-/// - `get_fd_cli_flags`: Gets file descriptor CLI flags
-/// - `get_rg_cli_flags`: Gets ripgrep CLI flags
-/// - `run_test`: Executes tests and returns results
-///
-/// # Error Handling
-///
-/// Functions include built-in error handling with logging to a debug file when
-/// compiled in debug mode. Errors are converted to Lua errors and can be caught
-/// in Lua scripts.
-///
-/// # Examples
-///
-/// Loading the module in Lua:
-/// ```lua
-/// local rua = require('rua')
-/// local result = rua.format_diagnostic(diagnostic)
-/// ```
-///
-/// # Performance
-///
-/// All functions are optimized for performance and use efficient data structures.
-/// Some operations run in parallel when possible to minimize blocking.
-#[mlua::lua_module]
-fn rua(lua: &Lua) -> LuaResult<LuaTable> {
-    let exports = lua.create_table()?;
+#[nvim_oxi::plugin]
+fn rua() -> Dictionary {
+    Dictionary::from_iter([
+        ("format_diagnostic", diagnostics::formatter::format()),
+        ("sort_diagnostics", diagnostics::sorter::sort()),
+        ("filter_diagnostics", diagnostics::filter::filter()),
+        ("draw_statusline", statusline::draw()),
+        ("draw_statuscolumn", statuscolumn::draw()),
+        ("create_fkr_cmds", fkr::create_cmds()),
+        ("get_fd_cli_flags", cli_flags::fd::FdCliFlags.get()),
+        ("get_rg_cli_flags", cli_flags::rg::RgCliFlags.get()),
+        ("run_test", test_runner::run_test()),
+    ])
+}
 
-    for (lua_fn_name, rust_fn) in [
-        (
-            "filter_diagnostics",
-            create_debuggable_fn(lua, diagnostics::filter::filter)?,
-        ),
-        ("run_test", create_debuggable_fn(lua, test_runner::run_test)?),
-    ] {
-        exports.set(lua_fn_name, rust_fn)?;
+pub fn notify_error(msg: &str) {
+    if let Err(error) = nvim_oxi::api::notify(msg, LogLevel::Error, &Default::default()) {
+        nvim_oxi::dbg!(format!("can't notify error {msg:?}, error {error:#?}"));
+    }
+}
+
+pub fn notify_warn(msg: &str) {
+    if let Err(error) = nvim_oxi::api::notify(msg, LogLevel::Warn, &Default::default()) {
+        nvim_oxi::dbg!(format!("can't notify warning {msg:?}, error {error:#?}"));
+    }
+}
+
+#[allow(dead_code)]
+trait DictionaryExt {
+    fn get_string(&self, key: &str) -> color_eyre::Result<String>;
+    fn get_i64(&self, key: &str) -> color_eyre::Result<i64>;
+    fn get_dict(&self, keys: &[&str]) -> color_eyre::Result<Option<Dictionary>>;
+}
+
+impl DictionaryExt for Dictionary {
+    fn get_string(&self, key: &str) -> color_eyre::Result<String> {
+        let obj = self.get(key).ok_or_else(|| no_value_matching(&[key], self))?;
+
+        let out = nvim_oxi::String::try_from(obj.clone())
+            .with_context(|| unexpected_kind_error_msg(obj, key, self, ObjectKind::String))?;
+
+        Ok(out.to_string())
     }
 
-    Ok(exports)
+    fn get_i64(&self, key: &str) -> color_eyre::Result<i64> {
+        let obj = self.get(key).ok_or_else(|| no_value_matching(&[key], self))?;
+
+        let out = nvim_oxi::Integer::try_from(obj.clone())
+            .with_context(|| unexpected_kind_error_msg(obj, key, self, ObjectKind::Integer))?;
+
+        Ok(out)
+    }
+
+    fn get_dict(&self, keys: &[&str]) -> color_eyre::Result<Option<Dictionary>> {
+        let mut current = self.clone();
+
+        for key in keys {
+            let Some(obj) = current.get(key) else { return Ok(None) };
+            current = Dictionary::try_from(obj.clone())
+                .with_context(|| unexpected_kind_error_msg(obj, key, &current, ObjectKind::Dictionary))?;
+        }
+
+        Ok(Some(current.clone()))
+    }
 }
 
-/// Creates a debuggable Lua function that logs errors and results in debug builds.
-///
-/// This function wraps Rust functions to make them callable from Lua while adding
-/// comprehensive error logging and debugging capabilities. In debug builds, all
-/// function calls and their results are logged to a file for troubleshooting.
-///
-/// The wrapper handles the conversion between Lua and Rust types, error propagation,
-/// and provides detailed logging including timestamps, error sources, and backtraces.
-///
-/// # Type Parameters
-///
-/// * `F`: The Rust function type to wrap
-/// * `A`: The argument types that can be converted from Lua
-/// * `R`: The return types that can be converted to Lua
-///
-/// # Arguments
-///
-/// * `lua`: Reference to the Lua state
-/// * `func`: The Rust function to wrap
-///
-/// # Returns
-///
-/// Returns a [LuaFunction] that can be called from Lua scripts.
-fn create_debuggable_fn<'a, F, A, R>(lua: &'a Lua, func: F) -> Result<LuaFunction, mlua::Error>
-where
-    F: Fn(&Lua, A) -> Result<R, anyhow::Error> + 'a + 'static,
-    A: FromLuaMulti,
-    R: IntoLuaMulti + std::fmt::Debug,
-{
-    lua.create_function(move |lua, args: A| {
-        let res = func(lua, args);
-        #[cfg(debug_assertions)]
-        log_result(&res)?;
-        res.map_err(mlua::Error::from)
-    })
+#[allow(dead_code)]
+fn unexpected_kind_error_msg(obj: &Object, key: &str, dict: &Dictionary, expected_kind: ObjectKind) -> String {
+    format!(
+        "value {obj:#?} of key {key:?} in dict {dict:#?} is {0:#?} but {expected_kind:?} was expected",
+        obj.kind()
+    )
 }
 
-/// Logs function results and errors to a debug log file in debug builds.
-///
-/// This function is only compiled in debug builds and provides comprehensive
-/// logging of all Lua function calls made through the rua module. It logs both
-/// successful results and errors with detailed information including timestamps,
-/// error sources, and backtraces.
-///
-/// The log file is located at `~/.local/state/nvim/rua.log` and contains
-/// structured JSON entries for each function call.
-///
-/// # Arguments
-///
-/// * `res`: The result of the function call to log
-///
-/// # Returns
-///
-/// Returns `Ok(())` if logging succeeds, or an error if file operations fail.
-#[cfg(debug_assertions)]
-fn log_result<R: IntoLuaMulti + std::fmt::Debug>(res: &Result<R, anyhow::Error>) -> anyhow::Result<()> {
-    use std::fs::OpenOptions;
-    use std::io::Write;
+pub fn no_value_matching(query: &[&str], dict: &Dictionary) -> color_eyre::eyre::Error {
+    eyre!("no value matching query {query:?} in dict {dict:#?}")
+}
 
-    use anyhow::anyhow;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let log_path = ::utils::system::build_home_path(&[".local", "state", "nvim", "rua.log"]).map_err(|e| anyhow!(e))?;
-    let mut log_file = OpenOptions::new().append(true).create(true).open(log_path)?;
+    #[test]
+    fn test_dictionary_ext_get_string_works_as_expected() {
+        let dict = Dictionary::from_iter([("foo", "42")]);
+        assert_eq!(
+            r#"no value matching query ["bar"] in dict { foo: "42" }"#,
+            dict.get_string("bar").unwrap_err().to_string()
+        );
 
-    let now = chrono::Utc::now();
-    let log_msg = res.as_ref().map_or_else(
-        |error| {
-            serde_json::json!({
-                "timestamp": now,
-                "error": format!("{error:#?}"),
-                "source": format!("{:#?}", error.source()),
-                "backtrace": format!("{:#?}", error.backtrace())
-            })
-        },
-        |r| {
-            serde_json::json!({
-                "timestamp": now,
-                "result": format!("{r:#?}"),
-            })
-        },
-    );
-    writeln!(log_file, "{log_msg}")?;
+        let dict = Dictionary::from_iter([("foo", 42)]);
+        assert_eq!(
+            r#"value 42 of key "foo" in dict { foo: 42 } is Integer but String was expected"#,
+            dict.get_string("foo").unwrap_err().to_string()
+        );
 
-    Ok(())
+        let dict = Dictionary::from_iter([("foo", "42")]);
+        assert_eq!("42", dict.get_string("foo").unwrap());
+    }
+
+    #[test]
+    fn test_dictionary_ext_get_dict_works_as_expected() {
+        let dict = Dictionary::from_iter([("foo", "42")]);
+        assert_eq!(None, dict.get_dict(&["bar"]).unwrap());
+
+        let dict = Dictionary::from_iter([("foo", 42)]);
+        assert_eq!(
+            r#"value 42 of key "foo" in dict { foo: 42 } is Integer but Dictionary was expected"#,
+            dict.get_dict(&["foo"]).unwrap_err().to_string()
+        );
+
+        let expected = Dictionary::from_iter([("bar", "42")]);
+        let dict = Dictionary::from_iter([("foo", expected.clone())]);
+        assert_eq!(Some(expected), dict.get_dict(&["foo"]).unwrap());
+    }
 }

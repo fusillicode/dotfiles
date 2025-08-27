@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
-use mlua::prelude::*;
+use nvim_oxi::Dictionary;
 
+use crate::DictionaryExt;
 use crate::diagnostics::filters::DiagnosticsFilter;
 
 /// Filters out diagnostics related to buffers containing the supplied path, lsp source and unwanted messages.
@@ -82,17 +83,17 @@ impl MsgBlacklistFilter {
 }
 
 impl DiagnosticsFilter for MsgBlacklistFilter {
-    fn skip_diagnostic(&self, buf_path: &str, lsp_diag: Option<&LuaTable>) -> LuaResult<bool> {
+    fn skip_diagnostic(&self, buf_path: &str, lsp_diag: Option<&Dictionary>) -> color_eyre::Result<bool> {
         let Some(lsp_diag) = lsp_diag else {
             return Ok(false);
         };
         if !buf_path.contains(&self.buf_path) {
             return Ok(false);
         }
-        let Some(blacklist) = self.blacklist.get(&lsp_diag.get::<String>("source")?) else {
+        let Some(blacklist) = self.blacklist.get(&lsp_diag.get_string("source")?) else {
             return Ok(false);
         };
-        let msg = lsp_diag.get::<String>("message")?.to_lowercase();
+        let msg = lsp_diag.get_string("message")?.to_lowercase();
         if blacklist.iter().any(|b| msg.contains(b)) {
             return Ok(true);
         }

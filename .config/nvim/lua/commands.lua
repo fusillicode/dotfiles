@@ -5,7 +5,7 @@ vim.api.nvim_create_user_command('LazyUpdate', ':Lazy update', {})
 vim.api.nvim_create_user_command('SelectAll', 'normal! ggVG', {})
 vim.api.nvim_create_user_command('Messages', ':Messages', {})
 
-require('rua2').create_fkr_cmds()
+require('rua').create_fkr_cmds()
 
 vim.api.nvim_create_autocmd('TextYankPost', {
   group = vim.api.nvim_create_augroup('YankHighlight', { clear = true, }),

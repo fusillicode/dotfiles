@@ -6,7 +6,7 @@ use std::path::PathBuf;
 /// List of binary names that should be symlinked after building.
 const BINS: &[&str] = &["idt", "yghfl", "yhfp", "oe", "catl", "gcu", "vpg", "try", "fkr"];
 /// List of library files that need to be renamed after building, mapping (source_name, target_name).
-const LIBS: &[(&str, &str)] = &[("librua.dylib", "rua.so"), ("librua2.dylib", "rua2.so")];
+const LIBS: &[(&str, &str)] = &[("librua.dylib", "rua.so")];
 
 /// A build and deployment tool for the yog project.
 ///

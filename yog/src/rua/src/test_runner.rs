@@ -1,106 +1,113 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use anyhow::Context;
-use anyhow::anyhow;
-use mlua::prelude::*;
+use color_eyre::eyre;
+use color_eyre::eyre::Context;
+use color_eyre::eyre::eyre;
+use nvim_oxi::Function;
+use nvim_oxi::Object;
+use nvim_oxi::api::Buffer;
+use nvim_oxi::api::Window;
 use tree_sitter::Node;
 use tree_sitter::Parser;
 use tree_sitter::Point;
 
-/// Runs the function enclosing the supplied [CursorPosition] as a Rust test in the first Wezterm
-/// pane that matches the tab and the current working directory of the pane of the supplied
-/// [CursorPosition].
-///
-/// Returns an error in case of:
-/// - the file referenced by [CursorPosition] is not a Rust file
-/// - no enclosing function can be found for the supplied [CursorPosition]
-/// - any external error related to interacting with Wezterm and the external test runner app (i.e. cargo make)
-pub fn run_test(_lua: &Lua, cursor_position: CursorPosition) -> anyhow::Result<()> {
-    let test_name = get_enclosing_fn_name_of_position(cursor_position.path.as_path(), Point::from(&cursor_position))?
-        .ok_or(anyhow!("no enclosing fn found for {cursor_position:#?}"))?;
+pub fn run_test() -> Object {
+    Object::from(Function::<(), _>::from_fn(run_test_core))
+}
 
-    let cur_pane_id = utils::wezterm::get_current_pane_id()
-        .map_err(|e| anyhow!(e))
-        .with_context(|| "cannot get current Wezterm pane id")?;
+fn run_test_core(_: ()) {
+    let cur_buf = Buffer::current();
+    let cur_win = Window::current();
 
-    let wez_panes = utils::wezterm::get_all_panes(&[])
-        .map_err(|e| anyhow!(e))
-        .with_context(|| "cannot get Wezterm panes")?;
+    let Ok(position) = cur_win
+        .get_cursor()
+        .map(|(row, column)| Point { row, column })
+        .inspect_err(|error| {
+            crate::notify_error(&format!(
+                "can't get cursor from current window {cur_win:#?}, error {error:#?}"
+            ));
+        })
+    else {
+        return;
+    };
 
-    let cur_pane = wez_panes
-        .iter()
-        .find(|p| p.pane_id == cur_pane_id)
-        .ok_or(anyhow!("current pane not found among Wezterm panes {wez_panes:#?}"))?;
+    let Ok(file_path) = cur_buf
+        .get_name()
+        .map(|s| PathBuf::from(s.to_string_lossy().to_string()))
+        .inspect_err(|error| {
+            crate::notify_error(&format!(
+                "can't get buffer name of buffer #{cur_buf:#?}, error {error:#?}"
+            ));
+        })
+    else {
+        return;
+    };
 
-    let test_runner_pane = wez_panes
-        .iter()
-        .find(|p| { p.is_sibling_terminal_pane_of(cur_pane) })
-        .ok_or(anyhow!(
-            "cannot find a pane sibling to {cur_pane:#?} among Wezterm panes {wez_panes:#?} where to run the test {test_name}"
-        ))?;
+    let Some(test_name) = get_enclosing_fn_name_of_position(&file_path, position)
+        .inspect_err(|error| {
+            crate::notify_error(&format!("can't get enclosing fn for {position:#?}, error {error:#?}"));
+        })
+        .ok()
+        .flatten()
+    else {
+        crate::notify_error(&format!("no enclosing fn found for {position:#?}"));
+        return;
+    };
 
-    let test_runner_app = get_test_runner_app_for_path(&cursor_position.path)?;
+    let Ok(cur_pane_id) = utils::wezterm::get_current_pane_id().inspect_err(|error| {
+        crate::notify_error(&format!("can't get current Wezterm pane id, error {error:#?}"));
+    }) else {
+        return;
+    };
+
+    let Ok(wez_panes) = utils::wezterm::get_all_panes(&[]).inspect_err(|error| {
+        crate::notify_error(&format!("can't get Wezterm panes, error {error:#?}"));
+    }) else {
+        return;
+    };
+
+    let Some(cur_pane) = wez_panes.iter().find(|p| p.pane_id == cur_pane_id) else {
+        crate::notify_error(&format!(
+            "Wezterm pane with {cur_pane_id:#?} not found among panes {wez_panes:#?}"
+        ));
+        return;
+    };
+
+    let Some(test_runner_pane) = wez_panes.iter().find(|p| p.is_sibling_terminal_pane_of(cur_pane)) else {
+        crate::notify_error(&format!(
+            "can't find a pane sibling to {cur_pane:#?} among Wezterm panes {wez_panes:#?} where to run the test {test_name}"
+        ));
+        return;
+    };
+
+    let Ok(test_runner_app) = get_test_runner_app_for_path(&file_path).inspect_err(|error| {
+        crate::notify_error(&format!(
+            "can't get test runner app for file {file_path:#?}, error {error:#?}"
+        ));
+    }) else {
+        return;
+    };
+
     let test_run_cmd = format!("'{test_runner_app} {test_name}'");
-
     let send_text_to_pane_cmd = utils::wezterm::send_text_to_pane_cmd(&test_run_cmd, test_runner_pane.pane_id);
     let submit_pane_cmd = utils::wezterm::submit_pane_cmd(test_runner_pane.pane_id);
 
-    utils::cmd::silent_cmd("sh")
+    let Ok(_) = utils::cmd::silent_cmd("sh")
         .args(["-c", &format!("{send_text_to_pane_cmd} && {submit_pane_cmd}")])
         .spawn()
-        .with_context(|| format!("error executing {test_run_cmd:#?} in Wezterm pane {test_runner_pane:#?}"))
-        .map_err(|e| anyhow!(e))?;
-
-    Ok(())
-}
-
-/// Represents the position of the cursor inside a terminal editor opened on an existing file
-/// inside a Wezterm pane.
-#[derive(Debug)]
-pub struct CursorPosition {
-    /// Path to an existing file opened in a terminal editor
-    pub path: PathBuf,
-    /// Row where the cursor is placed inside the opened file
-    pub row: usize,
-    /// Column where the cursor is placed inside the opened file
-    pub col: usize,
-}
-
-impl From<&CursorPosition> for Point {
-    fn from(value: &CursorPosition) -> Self {
-        let row = value.row.checked_sub(1).unwrap_or_default();
-        let column = value.col.checked_sub(1).unwrap_or_default();
-        Self { row, column }
-    }
-}
-
-impl FromLua for CursorPosition {
-    fn from_lua(value: mlua::Value, _lua: &mlua::Lua) -> mlua::Result<Self> {
-        if let LuaValue::Table(table) = value {
-            let out = Self {
-                path: PathBuf::from(LuaErrorContext::with_context(table.get::<String>("path"), |_| {
-                    format!("missing path in LuaTable {table:#?}",)
-                })?),
-                row: LuaErrorContext::with_context(table.get("row"), |_| {
-                    format!("missing row in LuaTable {table:#?}")
-                })?,
-                col: LuaErrorContext::with_context(table.get("col"), |_| {
-                    format!("missing col in LuaTable {table:#?}")
-                })?,
-            };
-            return Ok(out);
-        }
-        Err(mlua::Error::FromLuaConversionError {
-            from: value.type_name(),
-            to: "CurrentPosition".into(),
-            message: Some(format!("expected a table got {value:#?}")),
+        .inspect_err(|error| {
+            crate::notify_error(&format!(
+                "error executing {test_run_cmd:#?} in Wezterm pane {test_runner_pane:#?}, error {error:#?}"
+            ));
         })
-    }
+    else {
+        return;
+    };
 }
 
-fn get_enclosing_fn_name_of_position(file_path: &Path, position: Point) -> anyhow::Result<Option<String>> {
-    anyhow::ensure!(
+fn get_enclosing_fn_name_of_position(file_path: &Path, position: Point) -> color_eyre::Result<Option<String>> {
+    eyre::ensure!(
         file_path.extension().is_some_and(|ext| ext == "rs"),
         "{file_path:#?} must be Rust file"
     );
@@ -113,7 +120,7 @@ fn get_enclosing_fn_name_of_position(file_path: &Path, position: Point) -> anyho
 
     let src_tree = parser
         .parse(&src, None)
-        .ok_or(anyhow!("error parsing src {file_path:#?} as Rust"))?;
+        .ok_or(eyre!("error parsing src {file_path:#?} as Rust"))?;
 
     let node_at_position = src_tree.root_node().descendant_for_point_range(position, position);
 
@@ -154,10 +161,10 @@ fn get_enclosing_fn_name_of_node(src: &[u8], node: Option<Node>) -> Option<Strin
 /// "cargo test" is used otherwise.
 ///
 /// Assumptions:
-/// 1. we're always working in a git repository
+/// 1. We're always working in a git repository
 /// 2. no custom config file for cargo-make
-fn get_test_runner_app_for_path(path: &Path) -> anyhow::Result<&'static str> {
-    let git_repo_root = utils::git::get_repo_root(Some(path)).map_err(|e| anyhow!(e))?;
+fn get_test_runner_app_for_path(path: &Path) -> color_eyre::Result<&'static str> {
+    let git_repo_root = utils::git::get_repo_root(Some(path))?;
 
     if std::fs::read_dir(git_repo_root)?.any(|res| {
         res.as_ref()

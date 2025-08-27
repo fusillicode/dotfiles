@@ -1,6 +1,6 @@
 local M = {}
 
-local rua = require('rua2')
+local rua = require('rua')
 
 local function keymap_set(modes, lhs, rhs, opts)
   vim.keymap.set(modes, lhs, rhs, vim.tbl_extend('force', { silent = true, }, opts or {}))

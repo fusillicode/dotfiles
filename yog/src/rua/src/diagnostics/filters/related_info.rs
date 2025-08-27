@@ -1,5 +1,10 @@
-use mlua::prelude::*;
+use color_eyre::eyre::Context;
+use nvim_oxi::Array;
+use nvim_oxi::Dictionary;
+use nvim_oxi::ObjectKind;
+use nvim_oxi::conversion::FromObject;
 
+use crate::DictionaryExt;
 use crate::diagnostics::filters::DiagnosticsFilter;
 
 /// Filters out diagnostics already represented by other ones
@@ -9,28 +14,31 @@ pub struct RelatedInfoFilter {
 }
 
 impl RelatedInfoFilter {
-    pub fn new(lsp_diags: &LuaTable) -> LuaResult<Self> {
+    pub fn new(lsp_diags: &[Dictionary]) -> color_eyre::Result<Self> {
         Ok(Self {
             rel_infos: Self::get_related_infos(lsp_diags)?,
         })
     }
 
-    /// Get the [RelatedInfo]s of an LSP diagnostic represented by a [LuaTable].
-    fn get_related_infos(lsp_diags: &LuaTable) -> LuaResult<Vec<RelatedInfo>> {
+    /// Get the [RelatedInfo]s of an LSP diagnostic represented by a [Dictionary].
+    fn get_related_infos(lsp_diags: &[Dictionary]) -> color_eyre::Result<Vec<RelatedInfo>> {
         let mut out = vec![];
-        for lsp_diag in lsp_diags.sequence_values::<LuaTable>().flatten() {
-            // Not all LSPs have "user_data.lsp.relatedInformation", skip those which does't
-            let Ok(rel_infos) = lsp_diag
-                .get::<LuaTable>("user_data")
-                .and_then(|x| x.get::<LuaTable>("lsp"))
-                .and_then(|x| x.get::<LuaTable>("relatedInformation"))
-            else {
+        for lsp_diag in lsp_diags {
+            // Not all LSPs have "user_data.lsp.relatedInformation", skip those which doesn't
+            let Some(lsp) = lsp_diag.get_dict(&["user_data", "lsp"])? else {
                 continue;
             };
+            let rel_infos_key = "relatedInformation";
+            let Some(rel_infos) = lsp.get(rel_infos_key) else {
+                continue;
+            };
+            let rel_infos = Array::from_object(rel_infos.clone())
+                .with_context(|| crate::unexpected_kind_error_msg(rel_infos, rel_infos_key, &lsp, ObjectKind::Array))?;
 
-            for table in rel_infos.sequence_values::<LuaTable>().flatten() {
+            for rel_info in rel_infos {
                 // All LSPs "user_data.lsp.relatedInformation" should be deserializable into [RelatedInfo]
-                out.push(RelatedInfo::from_related_info(&table)?);
+                let dict = Dictionary::try_from(rel_info)?;
+                out.push(RelatedInfo::from_related_info(&dict)?);
             }
         }
         Ok(out)
@@ -38,7 +46,7 @@ impl RelatedInfoFilter {
 }
 
 impl DiagnosticsFilter for RelatedInfoFilter {
-    fn skip_diagnostic(&self, _buf_path: &str, lsp_diag: Option<&LuaTable>) -> LuaResult<bool> {
+    fn skip_diagnostic(&self, _buf_path: &str, lsp_diag: Option<&Dictionary>) -> color_eyre::Result<bool> {
         let Some(lsp_diag) = lsp_diag else {
             return Ok(false);
         };
@@ -58,39 +66,50 @@ impl DiagnosticsFilter for RelatedInfoFilter {
 #[derive(PartialEq)]
 struct RelatedInfo {
     message: String,
-    lnum: usize,
-    col: usize,
-    end_lnum: usize,
-    end_col: usize,
+    lnum: i64,
+    col: i64,
+    end_lnum: i64,
+    end_col: i64,
 }
 
 impl RelatedInfo {
     /// Create a [RelatedInfo] from a root LSP diagnostic.
-    fn from_lsp_diagnostic(table: &LuaTable) -> LuaResult<Self> {
+    fn from_lsp_diagnostic(dict: &Dictionary) -> color_eyre::Result<Self> {
         Ok(Self {
-            message: table.get("message")?,
-            lnum: table.get("lnum")?,
-            col: table.get("col")?,
-            end_lnum: table.get("end_lnum")?,
-            end_col: table.get("end_col")?,
+            message: dict.get_string("message")?,
+            lnum: dict.get_i64("lnum")?,
+            col: dict.get_i64("col")?,
+            end_lnum: dict.get_i64("end_lnum")?,
+            end_col: dict.get_i64("end_col")?,
         })
     }
 
     /// Create a [RelatedInfo] from an element of an LSP diagnostic "user_data.lsp.relatedInformation" section.
-    fn from_related_info(table: &LuaTable) -> LuaResult<Self> {
+    fn from_related_info(dict: &Dictionary) -> color_eyre::Result<Self> {
         let (start, end) = {
-            let range = table
-                .get::<LuaTable>("location")
-                .and_then(|x| x.get::<LuaTable>("range"))?;
-            (range.get::<LuaTable>("start")?, range.get::<LuaTable>("end")?)
+            let range_query = ["location", "range"];
+            let range = dict
+                .get_dict(&range_query)?
+                .ok_or_else(|| crate::no_value_matching(&range_query, dict))?;
+
+            let start_query = ["start"];
+            let end_query = ["end"];
+            (
+                range
+                    .get_dict(&start_query)?
+                    .ok_or_else(|| crate::no_value_matching(&start_query, dict))?,
+                range
+                    .get_dict(&end_query)?
+                    .ok_or_else(|| crate::no_value_matching(&end_query, dict))?,
+            )
         };
 
         Ok(Self {
-            message: table.get("message")?,
-            lnum: start.get("line")?,
-            col: start.get("character")?,
-            end_lnum: end.get("line")?,
-            end_col: end.get("character")?,
+            message: dict.get_string("message")?,
+            lnum: start.get_i64("line")?,
+            col: start.get_i64("character")?,
+            end_lnum: end.get_i64("line")?,
+            end_col: end.get_i64("character")?,
         })
     }
 }
