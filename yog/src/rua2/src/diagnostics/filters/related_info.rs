@@ -66,27 +66,40 @@ impl RelatedInfo {
     /// Create a [RelatedInfo] from a root LSP diagnostic.
     fn from_lsp_diagnostic(dict: &Dictionary) -> color_eyre::Result<Self> {
         Ok(Self {
-            message: dict.get_string("message")?.unwrap(),
-            lnum: dict.get_string("lnum")?.unwrap().parse()?,
-            col: dict.get_string("col")?.unwrap().parse()?,
-            end_lnum: dict.get_string("end_lnum")?.unwrap().parse()?,
-            end_col: dict.get_string("end_col")?.unwrap().parse()?,
+            message: dict.get_string("message")?,
+            lnum: dict.get_string("lnum")?.parse()?,
+            col: dict.get_string("col")?.parse()?,
+            end_lnum: dict.get_string("end_lnum")?.parse()?,
+            end_col: dict.get_string("end_col")?.parse()?,
         })
     }
 
     /// Create a [RelatedInfo] from an element of an LSP diagnostic "user_data.lsp.relatedInformation" section.
     fn from_related_info(dict: &Dictionary) -> color_eyre::Result<Self> {
         let (start, end) = {
-            let range = dict.get_dict(&["location", "range"])?.unwrap();
-            (range.get_dict(&["start"])?.unwrap(), range.get_dict(&["end"])?.unwrap())
+            let range_query = ["location", "range"];
+            let range = dict
+                .get_dict(&range_query)?
+                .ok_or_else(|| crate::no_value_matching(&range_query, dict))?;
+
+            let start_query = ["start"];
+            let end_query = ["end"];
+            (
+                range
+                    .get_dict(&start_query)?
+                    .ok_or_else(|| crate::no_value_matching(&start_query, dict))?,
+                range
+                    .get_dict(&end_query)?
+                    .ok_or_else(|| crate::no_value_matching(&end_query, dict))?,
+            )
         };
 
         Ok(Self {
-            message: dict.get_string("message")?.unwrap(),
-            lnum: start.get_string("line")?.unwrap().parse()?,
-            col: start.get_string("character")?.unwrap().parse()?,
-            end_lnum: end.get_string("line")?.unwrap().parse()?,
-            end_col: end.get_string("character")?.unwrap().parse()?,
+            message: dict.get_string("message")?,
+            lnum: start.get_string("line")?.parse()?,
+            col: start.get_string("character")?.parse()?,
+            end_lnum: end.get_string("line")?.parse()?,
+            end_col: end.get_string("character")?.parse()?,
         })
     }
 }

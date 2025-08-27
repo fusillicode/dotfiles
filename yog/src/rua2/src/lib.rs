@@ -44,12 +44,12 @@ pub fn notify_warn(msg: &str) {
 #[allow(dead_code)]
 trait DictionaryExt {
     fn get_string(&self, key: &str) -> color_eyre::Result<String>;
-    fn get_dict(&self, key: &[&str]) -> color_eyre::Result<Dictionary>;
+    fn get_dict(&self, keys: &[&str]) -> color_eyre::Result<Option<Dictionary>>;
 }
 
 impl DictionaryExt for Dictionary {
     fn get_string(&self, key: &str) -> color_eyre::Result<String> {
-        let obj = self.get(key).ok_or_else(|| eyre!("no key {key:?} in dict {self:#?}"))?;
+        let obj = self.get(key).ok_or_else(|| no_value_matching(&[key], self))?;
 
         let out = nvim_oxi::String::try_from(obj.clone())
             .with_context(|| unexpected_kind_error_msg(obj, key, self, ObjectKind::String))?;
@@ -57,19 +57,16 @@ impl DictionaryExt for Dictionary {
         Ok(out.to_string())
     }
 
-    fn get_dict(&self, keys: &[&str]) -> color_eyre::Result<Dictionary> {
+    fn get_dict(&self, keys: &[&str]) -> color_eyre::Result<Option<Dictionary>> {
         let mut current = self.clone();
 
         for key in keys {
-            let obj = current
-                .get(key)
-                .ok_or_else(|| eyre!("no key {key:?} in dict {current:#?}"))?;
-
+            let Some(obj) = current.get(key) else { return Ok(None) };
             current = Dictionary::try_from(obj.clone())
                 .with_context(|| unexpected_kind_error_msg(obj, key, &current, ObjectKind::Dictionary))?;
         }
 
-        Ok(current.clone())
+        Ok(Some(current.clone()))
     }
 }
 
@@ -81,6 +78,10 @@ fn unexpected_kind_error_msg(obj: &Object, key: &str, dict: &Dictionary, expecte
     )
 }
 
+pub fn no_value_matching(query: &[&str], dict: &Dictionary) -> color_eyre::eyre::Error {
+    eyre!("no value matching query {query:?} in dict {dict:#?}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -89,7 +90,7 @@ mod tests {
     fn test_dictionary_ext_get_string_works_as_expected() {
         let dict = Dictionary::from_iter([("foo", "42")]);
         assert_eq!(
-            r#"no key "bar" in dict { foo: "42" }"#,
+            r#"no value matching query ["bar"] in dict { foo: "42" }"#,
             dict.get_string("bar").unwrap_err().to_string()
         );
 
@@ -106,10 +107,7 @@ mod tests {
     #[test]
     fn test_dictionary_ext_get_dict_works_as_expected() {
         let dict = Dictionary::from_iter([("foo", "42")]);
-        assert_eq!(
-            r#"no key "bar" in dict { foo: "42" }"#,
-            dict.get_dict(&["bar"]).unwrap_err().to_string()
-        );
+        assert_eq!(None, dict.get_dict(&["bar"]).unwrap());
 
         let dict = Dictionary::from_iter([("foo", 42)]);
         assert_eq!(
@@ -119,6 +117,6 @@ mod tests {
 
         let expected = Dictionary::from_iter([("bar", "42")]);
         let dict = Dictionary::from_iter([("foo", expected.clone())]);
-        assert_eq!(expected, dict.get_dict(&["foo"]).unwrap());
+        assert_eq!(Some(expected), dict.get_dict(&["foo"]).unwrap());
     }
 }

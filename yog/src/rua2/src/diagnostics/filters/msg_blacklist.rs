@@ -90,10 +90,10 @@ impl DiagnosticsFilter for MsgBlacklistFilter {
         if !buf_path.contains(&self.buf_path) {
             return Ok(false);
         }
-        let Some(blacklist) = self.blacklist.get(&lsp_diag.get_string("source")?.unwrap()) else {
+        let Some(blacklist) = self.blacklist.get(&lsp_diag.get_string("source")?) else {
             return Ok(false);
         };
-        let msg = lsp_diag.get_string(&"message")?.map(|x| x.to_lowercase()).unwrap();
+        let msg = lsp_diag.get_string("message")?.to_lowercase();
         if blacklist.iter().any(|b| msg.contains(b)) {
             return Ok(true);
         }
