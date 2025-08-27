@@ -32,13 +32,12 @@ impl RelatedInfoFilter {
             let Some(rel_infos) = lsp.get(rel_infos_key) else {
                 continue;
             };
+
             let rel_infos = Array::from_object(rel_infos.clone())
                 .with_context(|| crate::unexpected_kind_error_msg(rel_infos, rel_infos_key, &lsp, ObjectKind::Array))?;
-
             for rel_info in rel_infos {
-                // All LSPs "user_data.lsp.relatedInformation" should be deserializable into [RelatedInfo]
-                let dict = Dictionary::try_from(rel_info)?;
-                out.push(RelatedInfo::from_related_info(&dict)?);
+                let rel_info = Dictionary::try_from(rel_info)?;
+                out.push(RelatedInfo::from_related_info(&rel_info)?);
             }
         }
         Ok(out)
@@ -74,38 +73,38 @@ struct RelatedInfo {
 
 impl RelatedInfo {
     /// Create a [RelatedInfo] from a root LSP diagnostic.
-    fn from_lsp_diagnostic(dict: &Dictionary) -> color_eyre::Result<Self> {
+    fn from_lsp_diagnostic(lsp_diagnostic: &Dictionary) -> color_eyre::Result<Self> {
         Ok(Self {
-            message: dict.get_string("message")?,
-            lnum: dict.get_i64("lnum")?,
-            col: dict.get_i64("col")?,
-            end_lnum: dict.get_i64("end_lnum")?,
-            end_col: dict.get_i64("end_col")?,
+            message: lsp_diagnostic.get_string("message")?,
+            lnum: lsp_diagnostic.get_i64("lnum")?,
+            col: lsp_diagnostic.get_i64("col")?,
+            end_lnum: lsp_diagnostic.get_i64("end_lnum")?,
+            end_col: lsp_diagnostic.get_i64("end_col")?,
         })
     }
 
     /// Create a [RelatedInfo] from an element of an LSP diagnostic "user_data.lsp.relatedInformation" section.
-    fn from_related_info(dict: &Dictionary) -> color_eyre::Result<Self> {
+    fn from_related_info(rel_info: &Dictionary) -> color_eyre::Result<Self> {
         let (start, end) = {
             let range_query = ["location", "range"];
-            let range = dict
+            let range = rel_info
                 .get_dict(&range_query)?
-                .ok_or_else(|| crate::no_value_matching(&range_query, dict))?;
+                .ok_or_else(|| crate::no_value_matching(&range_query, rel_info))?;
 
             let start_query = ["start"];
             let end_query = ["end"];
             (
                 range
                     .get_dict(&start_query)?
-                    .ok_or_else(|| crate::no_value_matching(&start_query, dict))?,
+                    .ok_or_else(|| crate::no_value_matching(&start_query, &range))?,
                 range
                     .get_dict(&end_query)?
-                    .ok_or_else(|| crate::no_value_matching(&end_query, dict))?,
+                    .ok_or_else(|| crate::no_value_matching(&end_query, &range))?,
             )
         };
 
         Ok(Self {
-            message: dict.get_string("message")?,
+            message: rel_info.get_string("message")?,
             lnum: start.get_i64("line")?,
             col: start.get_i64("character")?,
             end_lnum: end.get_i64("line")?,
