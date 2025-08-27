@@ -19,12 +19,12 @@ fn draw_core(diagnostics: Vec<Diagnostic>) -> Option<String> {
     let cur_buf_path = cur_buf
         .get_name()
         .inspect_err(|error| {
-            crate::log_error(&format!("fail to get name of current buffer error, {error:#?}"));
+            crate::notify_error(&format!("fail to get name of current buffer error, {error:#?}"));
         })
         .ok()?;
     let cwd = nvim_oxi::api::call_function::<Array, String>("getcwd", Array::new())
         .inspect_err(|error| {
-            crate::log_error(&format!("fail to get cwd error, {error:#?}"));
+            crate::notify_error(&format!("fail to get cwd error, {error:#?}"));
         })
         .ok()?;
     let cur_buf_path = cur_buf_path.to_string_lossy();

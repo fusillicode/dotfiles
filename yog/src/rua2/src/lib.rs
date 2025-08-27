@@ -24,13 +24,13 @@ fn rua2() -> Dictionary {
     ])
 }
 
-pub fn log_error(msg: &str) {
+pub fn notify_error(msg: &str) {
     if let Err(error) = nvim_oxi::api::notify(msg, LogLevel::Error, &Default::default()) {
         nvim_oxi::dbg!(format!("fail to notify error {msg:?}, error {error:#?}"));
     }
 }
 
-pub fn log_warn(msg: &str) {
+pub fn notify_warn(msg: &str) {
     if let Err(error) = nvim_oxi::api::notify(msg, LogLevel::Warn, &Default::default()) {
         nvim_oxi::dbg!(format!("fail to notify warning {msg:?}, error {error:#?}"));
     }

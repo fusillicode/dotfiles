@@ -17,7 +17,7 @@ fn draw_core((cur_lnum, extmarks): (String, Vec<Extmark>)) -> Option<String> {
     let opts = OptionOptsBuilder::default().buf(cur_buf).build();
     let cur_buf_type = nvim_oxi::api::get_option_value::<String>("buftype", &opts)
         .inspect_err(|error| {
-            crate::log_error(&format!("fail to get buftype of current buffer error, {error:#?}"));
+            crate::notify_error(&format!("fail to get buftype of current buffer error, {error:#?}"));
         })
         .ok()?;
 

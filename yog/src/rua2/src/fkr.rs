@@ -17,7 +17,7 @@ fn create_cmds_core(_: ()) {
             move |_| {
                 let cur_win = Window::current();
                 let Ok((row, col)) = cur_win.get_cursor().inspect_err(|error| {
-                    crate::log_error(&format!("fail to get cursor from window {cur_win:?}, error {error:?}"))
+                    crate::notify_error(&format!("fail to get cursor from window {cur_win:?}, error {error:?}"))
                 }) else {
                     return;
                 };
@@ -30,14 +30,14 @@ fn create_cmds_core(_: ()) {
 
                 let mut cur_buf = Buffer::current();
                 if let Err(e) = cur_buf.set_text(line_range.clone(), start_col, end_col, vec![repl.clone()]) {
-                    crate::log_error(&format!(
+                    crate::notify_error(&format!(
                         "error setting text {repl:?} on buffer {cur_buf:?}, line_range {line_range:?}, start_col {start_col:?}, end_col {end_col:?}, error {e:?}"
                     ))
                 }
             },
             &CreateCommandOptsBuilder::default().build(),
         ) {
-            crate::log_error(&format!("fail to create user cmd, error {error:#?}"));
+            crate::notify_error(&format!("fail to create user cmd, error {error:#?}"));
         };
     }
 }

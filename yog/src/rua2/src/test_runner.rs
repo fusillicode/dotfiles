@@ -12,85 +12,91 @@ use tree_sitter::Parser;
 use tree_sitter::Point;
 
 pub fn run_test() -> Object {
-    Object::from(Function::<(), Option<_>>::from_fn(run_test_core))
+    Object::from(Function::<(), _>::from_fn(run_test_core))
 }
 
-fn run_test_core(_: ()) -> Option<()> {
+fn run_test_core(_: ()) {
     let cur_buf = Buffer::current();
     let cur_win = Window::current();
 
-    let position = cur_win.get_cursor().map_or_else(
-        |error| {
-            crate::log_error(&format!(
+    let Ok(position) = cur_win
+        .get_cursor()
+        .map(|(row, column)| Point { row, column })
+        .inspect_err(|error| {
+            crate::notify_error(&format!(
                 "fail to get cursor from current window {cur_win:#?}, error {error:#?}"
             ));
-            None
-        },
-        |(row, column)| Some(Point { row, column }),
-    )?;
-    let file_path = cur_buf.get_name().map_or_else(
-        |error| {
-            crate::log_error(&format!("fail to get buffer name, error {error:#?}"));
-            None
-        },
-        |x| Some(PathBuf::from(x.to_string_lossy().to_string())),
-    )?;
+        })
+    else {
+        return;
+    };
+
+    let Ok(file_path) = cur_buf
+        .get_name()
+        .map(|s| PathBuf::from(s.to_string_lossy().to_string()))
+        .inspect_err(|error| {
+            crate::notify_error(&format!("fail to get buffer name, error {error:#?}"));
+        })
+    else {
+        return;
+    };
 
     let Some(test_name) = get_enclosing_fn_name_of_position(&file_path, position)
         .inspect_err(|error| {
-            crate::log_error(&format!("fail to get enclosing fn for {position:#?}, error {error:#?}"));
+            crate::notify_error(&format!("fail to get enclosing fn for {position:#?}, error {error:#?}"));
         })
-        .ok()?
+        .ok()
+        .flatten()
     else {
-        crate::log_error(&format!("no enclosing fn found for {position:#?}"));
-        return None;
+        crate::notify_error(&format!("no enclosing fn found for {position:#?}"));
+        return;
     };
 
-    let cur_pane_id = utils::wezterm::get_current_pane_id()
-        .inspect_err(|error| {
-            crate::log_error(&format!("cannot get current Wezterm pane id, error {error:#?}"));
-        })
-        .ok()?;
+    let Ok(cur_pane_id) = utils::wezterm::get_current_pane_id().inspect_err(|error| {
+        crate::notify_error(&format!("cannot get current Wezterm pane id, error {error:#?}"));
+    }) else {
+        return;
+    };
 
-    let wez_panes = utils::wezterm::get_all_panes(&[])
-        .inspect_err(|error| {
-            crate::log_error(&format!("cannot get Wezterm panes, error {error:#?}"));
-        })
-        .ok()?;
+    let Ok(wez_panes) = utils::wezterm::get_all_panes(&[]).inspect_err(|error| {
+        crate::notify_error(&format!("cannot get Wezterm panes, error {error:#?}"));
+    }) else {
+        return;
+    };
 
     let Some(cur_pane) = wez_panes.iter().find(|p| p.pane_id == cur_pane_id) else {
-        crate::log_error(&format!("current pane not found among Wezterm panes {wez_panes:#?}"));
-        return None;
+        crate::notify_error(&format!("current pane not found among Wezterm panes {wez_panes:#?}"));
+        return;
     };
 
     let Some(test_runner_pane) = wez_panes.iter().find(|p| p.is_sibling_terminal_pane_of(cur_pane)) else {
-        crate::log_error(&format!(
+        crate::notify_error(&format!(
             "cannot find a pane sibling to {cur_pane:#?} among Wezterm panes {wez_panes:#?} where to run the test {test_name}"
         ));
-        return None;
+        return;
     };
 
-    let test_runner_app = get_test_runner_app_for_path(&file_path)
-        .inspect_err(|error| {
-            crate::log_error(&format!("fail to get test runner app, error {error:#?}"));
-        })
-        .ok()?;
+    let Ok(test_runner_app) = get_test_runner_app_for_path(&file_path).inspect_err(|error| {
+        crate::notify_error(&format!("fail to get test runner app, error {error:#?}"));
+    }) else {
+        return;
+    };
 
     let test_run_cmd = format!("'{test_runner_app} {test_name}'");
     let send_text_to_pane_cmd = utils::wezterm::send_text_to_pane_cmd(&test_run_cmd, test_runner_pane.pane_id);
     let submit_pane_cmd = utils::wezterm::submit_pane_cmd(test_runner_pane.pane_id);
 
-    utils::cmd::silent_cmd("sh")
+    let Ok(_) = utils::cmd::silent_cmd("sh")
         .args(["-c", &format!("{send_text_to_pane_cmd} && {submit_pane_cmd}")])
         .spawn()
         .inspect_err(|error| {
-            crate::log_error(&format!(
+            crate::notify_error(&format!(
                 "error executing {test_run_cmd:#?} in Wezterm pane {test_runner_pane:#?}, error {error:#?}"
             ));
         })
-        .ok()?;
-
-    Some(())
+    else {
+        return;
+    };
 }
 
 fn get_enclosing_fn_name_of_position(file_path: &Path, position: Point) -> anyhow::Result<Option<String>> {
