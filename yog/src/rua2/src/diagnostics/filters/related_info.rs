@@ -10,14 +10,14 @@ pub struct RelatedInfoFilter {
 }
 
 impl RelatedInfoFilter {
-    pub fn new(lsp_diags: &[&Dictionary]) -> color_eyre::Result<Self> {
+    pub fn new(lsp_diags: &[Dictionary]) -> color_eyre::Result<Self> {
         Ok(Self {
             rel_infos: Self::get_related_infos(lsp_diags)?,
         })
     }
 
     /// Get the [RelatedInfo]s of an LSP diagnostic represented by a [Dictionary].
-    fn get_related_infos(lsp_diags: &[&Dictionary]) -> color_eyre::Result<Vec<RelatedInfo>> {
+    fn get_related_infos(lsp_diags: &[Dictionary]) -> color_eyre::Result<Vec<RelatedInfo>> {
         let mut out = vec![];
         for lsp_diag in lsp_diags {
             // Not all LSPs have "user_data.lsp.relatedInformation", skip those which doesn't

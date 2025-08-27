@@ -15,7 +15,7 @@ pub struct DiagnosticsFilters(Vec<Box<dyn DiagnosticsFilter>>);
 
 impl DiagnosticsFilters {
     // The order of filters is IMPORTANT.
-    pub fn all(lsp_diags: &[&Dictionary]) -> color_eyre::Result<Self> {
+    pub fn all(lsp_diags: &[Dictionary]) -> color_eyre::Result<Self> {
         let mut tmp = MsgBlacklistFilter::all();
         tmp.push(Box::new(RelatedInfoFilter::new(lsp_diags)?));
         Ok(DiagnosticsFilters(tmp))

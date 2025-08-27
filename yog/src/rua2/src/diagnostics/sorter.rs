@@ -7,7 +7,7 @@ pub fn sort() -> Object {
     Object::from(Function::<Vec<Dictionary>, _>::from_fn(sort_core))
 }
 
-pub fn sort_core(mut lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
+fn sort_core(mut lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
     lsp_diags.sort_by_key(get_severity_or_default);
     lsp_diags
 }
