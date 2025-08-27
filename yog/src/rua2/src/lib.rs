@@ -1,4 +1,8 @@
+use color_eyre::eyre::Context;
+use color_eyre::eyre::eyre;
 use nvim_oxi::Dictionary;
+use nvim_oxi::Object;
+use nvim_oxi::ObjectKind;
 use nvim_oxi::api::types::LogLevel;
 
 use crate::cli_flags::CliFlags;
@@ -39,27 +43,42 @@ pub fn notify_warn(msg: &str) {
 
 #[allow(dead_code)]
 trait DictionaryExt {
-    fn get_dict(&self, key: &[&str]) -> color_eyre::Result<Option<Dictionary>>;
-    fn get_string(&self, key: &str) -> color_eyre::Result<Option<String>>;
+    fn get_string(&self, key: &str) -> color_eyre::Result<String>;
+    fn get_dict(&self, key: &[&str]) -> color_eyre::Result<Dictionary>;
 }
 
 impl DictionaryExt for Dictionary {
-    fn get_dict(&self, keys: &[&str]) -> color_eyre::Result<Option<Dictionary>> {
-        let mut current = self.clone();
-        for key in keys {
-            let Some(obj) = current.get(key) else {
-                return Ok(None);
-            };
-            current = Dictionary::try_from(obj.clone())?;
-        }
-        Ok(Some(current.clone()))
+    fn get_string(&self, key: &str) -> color_eyre::Result<String> {
+        let obj = self.get(key).ok_or_else(|| eyre!("no key {key:?} in dict {self:#?}"))?;
+
+        let out = nvim_oxi::String::try_from(obj.clone())
+            .with_context(|| unexpected_kind_error_msg(obj, key, self, ObjectKind::String))?;
+
+        Ok(out.to_string())
     }
 
-    fn get_string(&self, key: &str) -> color_eyre::Result<Option<String>> {
-        let Some(obj) = self.get(key) else { return Ok(None) };
-        let out = nvim_oxi::String::try_from(obj.clone())?;
-        Ok(Some(out.to_string()))
+    fn get_dict(&self, keys: &[&str]) -> color_eyre::Result<Dictionary> {
+        let mut current = self.clone();
+
+        for key in keys {
+            let obj = current
+                .get(key)
+                .ok_or_else(|| eyre!("no key {key:?} in dict {current:#?}"))?;
+
+            current = Dictionary::try_from(obj.clone())
+                .with_context(|| unexpected_kind_error_msg(obj, key, &current, ObjectKind::Dictionary))?;
+        }
+
+        Ok(current.clone())
     }
+}
+
+#[allow(dead_code)]
+fn unexpected_kind_error_msg(obj: &Object, key: &str, dict: &Dictionary, expected_kind: ObjectKind) -> String {
+    format!(
+        "value {obj:#?} of key {key:?} in dict {dict:#?} is {0:#?} but {expected_kind:?} was expected",
+        obj.kind()
+    )
 }
 
 #[cfg(test)]
@@ -69,25 +88,37 @@ mod tests {
     #[test]
     fn test_dictionary_ext_get_string_works_as_expected() {
         let dict = Dictionary::from_iter([("foo", "42")]);
-        assert_eq!(None, dict.get_string("bar").unwrap());
+        assert_eq!(
+            r#"no key "bar" in dict { foo: "42" }"#,
+            dict.get_string("bar").unwrap_err().to_string()
+        );
 
         let dict = Dictionary::from_iter([("foo", 42)]);
-        assert!(dict.get_string("foo").is_err());
+        assert_eq!(
+            r#"value 42 of key "foo" in dict { foo: 42 } is Integer but String was expected"#,
+            dict.get_string("foo").unwrap_err().to_string()
+        );
 
         let dict = Dictionary::from_iter([("foo", "42")]);
-        assert_eq!(Some("42".into()), dict.get_string("foo").unwrap());
+        assert_eq!("42", dict.get_string("foo").unwrap());
     }
 
     #[test]
     fn test_dictionary_ext_get_dict_works_as_expected() {
         let dict = Dictionary::from_iter([("foo", "42")]);
-        assert_eq!(None, dict.get_dict(&["bar"]).unwrap());
+        assert_eq!(
+            r#"no key "bar" in dict { foo: "42" }"#,
+            dict.get_dict(&["bar"]).unwrap_err().to_string()
+        );
 
         let dict = Dictionary::from_iter([("foo", 42)]);
-        assert!(dict.get_dict(&["foo"]).is_err());
+        assert_eq!(
+            r#"value 42 of key "foo" in dict { foo: 42 } is Integer but Dictionary was expected"#,
+            dict.get_dict(&["foo"]).unwrap_err().to_string()
+        );
 
         let expected = Dictionary::from_iter([("bar", "42")]);
         let dict = Dictionary::from_iter([("foo", expected.clone())]);
-        assert_eq!(Some(expected), dict.get_dict(&["foo"]).unwrap());
+        assert_eq!(expected, dict.get_dict(&["foo"]).unwrap());
     }
 }
