@@ -16,6 +16,7 @@ function M.setup(colorscheme)
     CursorLine = { fg = 'none', },
     MsgArea = status_line_hl,
     Normal = { bg = '#001000', },
+    NormalFloat = { bg = '#001000', },
     StatusLine = status_line_hl,
   }) do set_hl(0, hl, value) end
 
