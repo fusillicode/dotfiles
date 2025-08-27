@@ -4,12 +4,12 @@ use nvim_oxi::Integer;
 use nvim_oxi::Object;
 
 pub fn sort() -> Object {
-    Object::from(Function::<Vec<Dictionary>, anyhow::Result<_>>::from_fn(sort_core))
+    Object::from(Function::<Vec<Dictionary>, _>::from_fn(sort_core))
 }
 
-pub fn sort_core(mut lsp_diags: Vec<Dictionary>) -> anyhow::Result<Vec<Dictionary>> {
+pub fn sort_core(mut lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
     lsp_diags.sort_by_key(get_severity_or_default);
-    Ok(lsp_diags)
+    lsp_diags
 }
 
 fn get_severity_or_default(dict: &Dictionary) -> Integer {
