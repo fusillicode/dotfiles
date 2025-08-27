@@ -29,7 +29,7 @@ vim.diagnostic.set = function(namespace, bufnr, diagnostics, opts)
     namespace,
     bufnr,
     rua2.sort_diagnostics(
-      rua.filter_diagnostics(vim.api.nvim_buf_get_name(bufnr), diagnostics)
+      rua2.filter_diagnostics(vim.api.nvim_buf_get_name(bufnr), diagnostics)
     ),
     opts
   )
