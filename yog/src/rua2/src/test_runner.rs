@@ -1,8 +1,9 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use anyhow::Context;
-use anyhow::anyhow;
+use color_eyre::eyre;
+use color_eyre::eyre::Context;
+use color_eyre::eyre::eyre;
 use nvim_oxi::Function;
 use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;
@@ -99,8 +100,8 @@ fn run_test_core(_: ()) {
     };
 }
 
-fn get_enclosing_fn_name_of_position(file_path: &Path, position: Point) -> anyhow::Result<Option<String>> {
-    anyhow::ensure!(
+fn get_enclosing_fn_name_of_position(file_path: &Path, position: Point) -> color_eyre::Result<Option<String>> {
+    eyre::ensure!(
         file_path.extension().is_some_and(|ext| ext == "rs"),
         "{file_path:#?} must be Rust file"
     );
@@ -113,7 +114,7 @@ fn get_enclosing_fn_name_of_position(file_path: &Path, position: Point) -> anyho
 
     let src_tree = parser
         .parse(&src, None)
-        .ok_or(anyhow!("error parsing src {file_path:#?} as Rust"))?;
+        .ok_or(eyre!("error parsing src {file_path:#?} as Rust"))?;
 
     let node_at_position = src_tree.root_node().descendant_for_point_range(position, position);
 
@@ -156,8 +157,8 @@ fn get_enclosing_fn_name_of_node(src: &[u8], node: Option<Node>) -> Option<Strin
 /// Assumptions:
 /// 1. We're always working in a git repository
 /// 2. no custom config file for cargo-make
-fn get_test_runner_app_for_path(path: &Path) -> anyhow::Result<&'static str> {
-    let git_repo_root = utils::git::get_repo_root(Some(path)).map_err(|e| anyhow!(e))?;
+fn get_test_runner_app_for_path(path: &Path) -> color_eyre::Result<&'static str> {
+    let git_repo_root = utils::git::get_repo_root(Some(path))?;
 
     if std::fs::read_dir(git_repo_root)?.any(|res| {
         res.as_ref()

@@ -1570,8 +1570,8 @@ dependencies = [
 name = "rua2"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "chrono",
+ "color-eyre",
  "fkr",
  "nvim-oxi",
  "serde",
