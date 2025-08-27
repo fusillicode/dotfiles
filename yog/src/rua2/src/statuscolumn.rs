@@ -14,10 +14,12 @@ pub fn draw() -> Object {
 
 fn draw_core((cur_lnum, extmarks): (String, Vec<Extmark>)) -> Option<String> {
     let cur_buf = Buffer::current();
-    let opts = OptionOptsBuilder::default().buf(cur_buf).build();
+    let opts = OptionOptsBuilder::default().buf(cur_buf.clone()).build();
     let cur_buf_type = nvim_oxi::api::get_option_value::<String>("buftype", &opts)
         .inspect_err(|error| {
-            crate::notify_error(&format!("fail to get buftype of current buffer error, {error:#?}"));
+            crate::notify_error(&format!(
+                "can't get buftype of current buffer #{cur_buf:#?}, error {error:#?}"
+            ));
         })
         .ok()?;
 

@@ -17,7 +17,7 @@ fn create_cmds_core(_: ()) {
             move |_| {
                 let cur_win = Window::current();
                 let Ok((row, col)) = cur_win.get_cursor().inspect_err(|error| {
-                    crate::notify_error(&format!("fail to get cursor from window {cur_win:?}, error {error:?}"))
+                    crate::notify_error(&format!("can't get cursor from window {cur_win:?}, error {error:?}"))
                 }) else {
                     return;
                 };
@@ -26,18 +26,18 @@ fn create_cmds_core(_: ()) {
                 let line_range = row..row;
                 let start_col = col;
                 let end_col = col;
-                let repl = fkr_opt.gen_string();
+                let text = vec![fkr_opt.gen_string()];
 
                 let mut cur_buf = Buffer::current();
-                if let Err(e) = cur_buf.set_text(line_range.clone(), start_col, end_col, vec![repl.clone()]) {
+                if let Err(e) = cur_buf.set_text(line_range.clone(), start_col, end_col, text.clone()) {
                     crate::notify_error(&format!(
-                        "error setting text {repl:?} on buffer {cur_buf:?}, line_range {line_range:?}, start_col {start_col:?}, end_col {end_col:?}, error {e:?}"
+                        "can't set text {text:?} in buffer {cur_buf:?}, line_range {line_range:?}, start_col {start_col:?}, end_col {end_col:?}, error {e:?}"
                     ))
                 }
             },
             &CreateCommandOptsBuilder::default().build(),
         ) {
-            crate::notify_error(&format!("fail to create user cmd, error {error:#?}"));
+            crate::notify_error(&format!("can't create user cmd, error {error:#?}"));
         };
     }
 }
