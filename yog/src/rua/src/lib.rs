@@ -41,7 +41,6 @@ pub fn notify_warn(msg: &str) {
     }
 }
 
-#[allow(dead_code)]
 trait DictionaryExt {
     fn get_string(&self, key: &str) -> color_eyre::Result<String>;
     fn get_i64(&self, key: &str) -> color_eyre::Result<i64>;
