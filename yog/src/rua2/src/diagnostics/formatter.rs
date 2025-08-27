@@ -7,19 +7,23 @@ use nvim_oxi::serde::Deserializer;
 use serde::Deserialize;
 
 pub fn format() -> Object {
-    Object::from(Function::<Diagnostic, anyhow::Result<_>>::from_fn(format_core))
+    Object::from(Function::<Diagnostic, Option<_>>::from_fn(format_core))
 }
 
-fn format_core(diagnostic: Diagnostic) -> anyhow::Result<String> {
-    let msg = get_msg(&diagnostic).map_or_else(
-        || format!("no message in {diagnostic:#?}"),
-        |s| s.trim_end_matches('.').to_string(),
-    );
-    let src = get_src(&diagnostic).map_or_else(|| format!("no source in {diagnostic:#?}"), str::to_string);
-    let code = get_code(&diagnostic);
-    let src_and_code = code.map_or_else(|| src.clone(), |c| format!("{src}: {c}"));
+fn format_core(diagnostic: Diagnostic) -> Option<String> {
+    let Some(msg) = get_msg(&diagnostic).map(|s| s.trim_end_matches('.').to_string()) else {
+        crate::log_error(&format!("no message in {diagnostic:#?}"));
+        return None;
+    };
 
-    Ok(format!("▶ {msg} [{src_and_code}]"))
+    let Some(src) = get_src(&diagnostic).map(str::to_string) else {
+        crate::log_error(&format!("no source in {diagnostic:#?}"));
+        return None;
+    };
+
+    let src_and_code = get_code(&diagnostic).map_or_else(|| src.clone(), |c| format!("{src}: {c}"));
+
+    Some(format!("▶ {msg} [{src_and_code}]"))
 }
 
 /// Extracts LSP diagnostic message from [LspData::rendered] or directly from the supplied [Diagnostic].

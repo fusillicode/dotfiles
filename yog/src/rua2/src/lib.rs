@@ -1,4 +1,5 @@
 use nvim_oxi::Dictionary;
+use nvim_oxi::api::types::LogLevel;
 
 use crate::cli_flags::CliFlags;
 
@@ -21,4 +22,16 @@ fn rua2() -> Dictionary {
         ("get_rg_cli_flags", cli_flags::rg::RgCliFlags.get()),
         ("run_test", test_runner::run_test()),
     ])
+}
+
+pub fn log_error(msg: &str) {
+    if let Err(error) = nvim_oxi::api::notify(msg, LogLevel::Error, &Default::default()) {
+        nvim_oxi::dbg!(format!("fail to notify error {msg:?}, error {error:#?}"));
+    }
+}
+
+pub fn log_warn(msg: &str) {
+    if let Err(error) = nvim_oxi::api::notify(msg, LogLevel::Warn, &Default::default()) {
+        nvim_oxi::dbg!(format!("fail to notify warning {msg:?}, error {error:#?}"));
+    }
 }
