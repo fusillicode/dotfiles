@@ -87,9 +87,7 @@ function M.core()
     end
   end)
 
-  keymap_set({ 'n', 'v', }, '<leader>t', function()
-    pcall(function() rua.run_test() end)
-  end)
+  keymap_set({ 'n', 'v', }, '<leader>t', rua.run_test)
 end
 
 function M.fzf_lua(fzf_lua)
