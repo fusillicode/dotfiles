@@ -25,9 +25,9 @@ impl RelatedInfoFilter {
                 continue;
             };
 
-            for table in rel_infos.as_slice() {
+            for rel_info in rel_infos.as_slice() {
                 // All LSPs "user_data.lsp.relatedInformation" should be deserializable into [RelatedInfo]
-                let dict = Dictionary::try_from(table.clone().into_value())?;
+                let dict = Dictionary::try_from(rel_info.clone().into_value())?;
                 out.push(RelatedInfo::from_related_info(&dict)?);
             }
         }

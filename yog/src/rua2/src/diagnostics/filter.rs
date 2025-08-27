@@ -27,7 +27,7 @@ fn filter_core(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
         return vec![];
     };
 
-    // Keeping this as a separate filter because it kind short circuits the whole filtering and
+    // Keeping this as a separate filter because it short circuits the whole filtering and
     // doesn't require any LSP diagnostics to apply its logic.
     if BufferFilter::new()
         .skip_diagnostic(&buf_path, None)
