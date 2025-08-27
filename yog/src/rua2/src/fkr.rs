@@ -7,20 +7,19 @@ use nvim_oxi::api::opts::CreateCommandOptsBuilder;
 use strum::IntoEnumIterator;
 
 pub fn create_cmds() -> Object {
-    Object::from(Function::<(), anyhow::Result<_>>::from_fn(create_cmds_core))
+    Object::from(Function::<(), _>::from_fn(create_cmds_core))
 }
 
-fn create_cmds_core(_: ()) -> anyhow::Result<()> {
+fn create_cmds_core(_: ()) {
     for fkr_opt in FkrOption::iter() {
-        nvim_oxi::api::create_user_command(
+        if let Err(error) = nvim_oxi::api::create_user_command(
             cmd_name(&fkr_opt),
-            move |_| -> nvim_oxi::Result<()> {
+            move |_| {
                 let cur_win = Window::current();
-                let Ok((row, col)) = cur_win
-                    .get_cursor()
-                    .inspect_err(|e| nvim_oxi::print!("error getting cursor from window {cur_win:?}, error {e:?}"))
-                else {
-                    return Ok(());
+                let Ok((row, col)) = cur_win.get_cursor().inspect_err(|error| {
+                    crate::log_error(&format!("fail to get cursor from window {cur_win:?}, error {error:?}"))
+                }) else {
+                    return;
                 };
 
                 let row = row.saturating_sub(1);
@@ -35,13 +34,12 @@ fn create_cmds_core(_: ()) -> anyhow::Result<()> {
                         "error setting text {repl:?} on buffer {cur_buf:?}, line_range {line_range:?}, start_col {start_col:?}, end_col {end_col:?}, error {e:?}"
                     )
                 }
-
-                Ok(())
             },
             &CreateCommandOptsBuilder::default().build(),
-        )?;
+        ) {
+            crate::log_error(&format!("fail to create user cmd, error {error:#?}"));
+        };
     }
-    Ok(())
 }
 
 fn cmd_name(fkr_opt: &FkrOption) -> &str {
