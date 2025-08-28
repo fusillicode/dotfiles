@@ -1,55 +1,53 @@
-use mlua::prelude::*;
+use nvim_oxi::Function;
+use nvim_oxi::Object;
+use nvim_oxi::api::Buffer;
+use nvim_oxi::api::opts::OptionOptsBuilder;
+use nvim_oxi::conversion::FromObject;
+use nvim_oxi::lua::Poppable;
+use nvim_oxi::lua::ffi::State;
+use nvim_oxi::serde::Deserializer;
+use serde::Deserialize;
 
-/// Returns the formatted [String] representation of the statuscolumn.
-pub fn draw(_lua: &Lua, (cur_buf_type, cur_lnum, signs): (LuaString, LuaString, Signs)) -> anyhow::Result<String> {
-    Ok(Statuscolumn::draw(
-        cur_buf_type.to_string_lossy().as_str(),
-        cur_lnum.to_string_lossy(),
-        signs.0,
+pub fn draw() -> Object {
+    Object::from(Function::<(String, Vec<Extmark>), Option<_>>::from_fn(draw_core))
+}
+
+fn draw_core((cur_lnum, extmarks): (String, Vec<Extmark>)) -> Option<String> {
+    let cur_buf = Buffer::current();
+    let opts = OptionOptsBuilder::default().buf(cur_buf.clone()).build();
+    let cur_buf_type = nvim_oxi::api::get_option_value::<String>("buftype", &opts)
+        .inspect_err(|error| {
+            crate::oxi_utils::notify_error(&format!(
+                "can't get buftype of current buffer #{cur_buf:#?}, error {error:#?}"
+            ));
+        })
+        .ok()?;
+
+    Some(Statuscolumn::draw(
+        &cur_buf_type,
+        cur_lnum,
+        extmarks.iter().filter_map(|e| e.meta().cloned()).collect(),
     ))
 }
 
-pub struct Signs(Vec<Sign>);
+#[derive(Deserialize)]
+#[allow(dead_code)]
+struct Extmark(u32, usize, usize, Option<ExtmarkMeta>);
 
-impl FromLua for Signs {
-    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
-        if let LuaValue::Table(table) = value {
-            let signs = table.sequence_values::<Sign>().collect::<Result<Vec<Sign>, _>>()?;
-
-            return Ok(Signs(signs));
-        }
-        Err(mlua::Error::FromLuaConversionError {
-            from: value.type_name(),
-            to: "Signs".into(),
-            message: Some(format!("expected a table got {value:#?}")),
-        })
+impl Extmark {
+    pub fn meta(&self) -> Option<&ExtmarkMeta> {
+        self.3.as_ref()
     }
 }
 
-pub struct Sign {
+#[derive(Deserialize, Clone)]
+struct ExtmarkMeta {
     sign_hl_group: String,
     // Option due to grug-far buffers
     sign_text: Option<String>,
 }
 
-impl FromLua for Sign {
-    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
-        if let LuaValue::Table(table) = value {
-            let sign = table.get::<LuaTable>(4)?;
-            return Ok(Sign {
-                sign_hl_group: sign.get("sign_hl_group")?,
-                sign_text: sign.get("sign_text")?,
-            });
-        }
-        Err(mlua::Error::FromLuaConversionError {
-            from: value.type_name(),
-            to: "Sign".into(),
-            message: Some(format!("expected a table got {value:#?}")),
-        })
-    }
-}
-
-impl Sign {
+impl ExtmarkMeta {
     fn draw(&self) -> String {
         format!(
             "%#{}#{}%*",
@@ -59,39 +57,54 @@ impl Sign {
     }
 }
 
+impl FromObject for Extmark {
+    fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
+        Self::deserialize(Deserializer::new(obj)).map_err(Into::into)
+    }
+}
+
+impl Poppable for Extmark {
+    unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
+        unsafe {
+            let obj = Object::pop(lstate)?;
+            Self::from_object(obj).map_err(nvim_oxi::lua::Error::pop_error_from_err::<Self, _>)
+        }
+    }
+}
+
 #[derive(Default)]
 struct Statuscolumn {
-    error: Option<Sign>,
-    warn: Option<Sign>,
-    info: Option<Sign>,
-    hint: Option<Sign>,
-    ok: Option<Sign>,
-    git: Option<Sign>,
+    error: Option<ExtmarkMeta>,
+    warn: Option<ExtmarkMeta>,
+    info: Option<ExtmarkMeta>,
+    hint: Option<ExtmarkMeta>,
+    ok: Option<ExtmarkMeta>,
+    git: Option<ExtmarkMeta>,
     cur_lnum: String,
 }
 
 impl Statuscolumn {
-    fn draw(cur_buf_type: &str, cur_lnum: String, signs: Vec<Sign>) -> String {
+    fn draw(cur_buf_type: &str, cur_lnum: String, extmarks: Vec<ExtmarkMeta>) -> String {
         match cur_buf_type {
             "grug-far" => " ".into(),
-            _ => Self::new(cur_lnum, signs).to_string(),
+            _ => Self::new(cur_lnum, extmarks).to_string(),
         }
     }
 
-    fn new(cur_lnum: String, signs: Vec<Sign>) -> Self {
+    fn new(cur_lnum: String, extmarks: Vec<ExtmarkMeta>) -> Self {
         let mut statuscolumn = Self {
             cur_lnum,
             ..Default::default()
         };
 
-        for sign in signs {
-            match sign.sign_hl_group.as_str() {
-                "DiagnosticSignError" => statuscolumn.error = Some(sign),
-                "DiagnosticSignWarn" => statuscolumn.warn = Some(sign),
-                "DiagnosticSignInfo" => statuscolumn.info = Some(sign),
-                "DiagnosticSignHint" => statuscolumn.hint = Some(sign),
-                "DiagnosticSignOk" => statuscolumn.ok = Some(sign),
-                git if git.contains("GitSigns") => statuscolumn.git = Some(sign),
+        for extmark in extmarks {
+            match extmark.sign_hl_group.as_str() {
+                "DiagnosticSignError" => statuscolumn.error = Some(extmark),
+                "DiagnosticSignWarn" => statuscolumn.warn = Some(extmark),
+                "DiagnosticSignInfo" => statuscolumn.info = Some(extmark),
+                "DiagnosticSignHint" => statuscolumn.hint = Some(extmark),
+                "DiagnosticSignOk" => statuscolumn.ok = Some(extmark),
+                git if git.contains("GitSigns") => statuscolumn.git = Some(extmark),
                 _ => (),
             };
         }
@@ -104,10 +117,10 @@ impl std::fmt::Display for Statuscolumn {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let diag_sign = [&self.error, &self.warn, &self.info, &self.hint, &self.ok]
             .iter()
-            .find_map(|s| s.as_ref().map(Sign::draw))
+            .find_map(|s| s.as_ref().map(ExtmarkMeta::draw))
             .unwrap_or_else(|| " ".into());
 
-        let git_sign = self.git.as_ref().map(Sign::draw).unwrap_or_else(|| " ".into());
+        let git_sign = self.git.as_ref().map(ExtmarkMeta::draw).unwrap_or_else(|| " ".into());
 
         write!(f, "{}{}%=% {} ", diag_sign, git_sign, self.cur_lnum)
     }
@@ -119,7 +132,7 @@ mod tests {
 
     #[test]
     fn test_statuscolumn_draw_works_as_expected() {
-        // No signs
+        // No extmarks
         let out = Statuscolumn::draw("foo", "42".into(), vec![]);
         assert_eq!("  %=% 42 ", &out);
 
@@ -127,23 +140,23 @@ mod tests {
         let out = Statuscolumn::draw(
             "foo",
             "42".into(),
-            vec![Sign {
+            vec![ExtmarkMeta {
                 sign_hl_group: "DiagnosticSignError".into(),
                 sign_text: Some("E".into()),
             }],
         );
         assert_eq!("%#DiagnosticSignError#E%* %=% 42 ", &out);
 
-        // Multiple diagnostics signs and only the higher severity sign is displayed
+        // Multiple diagnostics extmarks and only the higher severity sign is displayed
         let out = Statuscolumn::draw(
             "foo",
             "42".into(),
             vec![
-                Sign {
+                ExtmarkMeta {
                     sign_hl_group: "DiagnosticSignError".into(),
                     sign_text: Some("E".into()),
                 },
-                Sign {
+                ExtmarkMeta {
                     sign_hl_group: "DiagnosticSignWarn".into(),
                     sign_text: Some("W".into()),
                 },
@@ -155,27 +168,27 @@ mod tests {
         let out = Statuscolumn::draw(
             "foo",
             "42".into(),
-            vec![Sign {
+            vec![ExtmarkMeta {
                 sign_hl_group: "GitSignsFoo".into(),
                 sign_text: Some("|".into()),
             }],
         );
         assert_eq!(" %#GitSignsFoo#|%*%=% 42 ", &out);
 
-        // Multiple diagnostics signs and a git sign
+        // Multiple diagnostics extmarks and a git sign
         let out = Statuscolumn::draw(
             "foo",
             "42".into(),
             vec![
-                Sign {
+                ExtmarkMeta {
                     sign_hl_group: "DiagnosticSignError".into(),
                     sign_text: Some("E".into()),
                 },
-                Sign {
+                ExtmarkMeta {
                     sign_hl_group: "DiagnosticSignWarn".into(),
                     sign_text: Some("W".into()),
                 },
-                Sign {
+                ExtmarkMeta {
                     sign_hl_group: "GitSignsFoo".into(),
                     sign_text: Some("|".into()),
                 },

@@ -1,97 +1,80 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 
-use mlua::prelude::*;
+use nvim_oxi::Array;
+use nvim_oxi::Function;
+use nvim_oxi::Object;
+use nvim_oxi::conversion::FromObject;
+use nvim_oxi::lua::ffi::State;
+use nvim_oxi::serde::Deserializer;
+use serde::Deserialize;
+use serde_repr::Deserialize_repr;
 
-/// Returns the formatted [String] representation of the statusline.
-pub fn draw(
-    _lua: &Lua,
-    (cur_buf_nr, cur_buf_path, diags): (LuaInteger, LuaString, Diagnostics),
-) -> anyhow::Result<String> {
+pub fn draw() -> Object {
+    Object::from(Function::<Vec<Diagnostic>, _>::from_fn(draw_core))
+}
+
+fn draw_core(diagnostics: Vec<Diagnostic>) -> Option<String> {
+    let cur_buf = nvim_oxi::api::get_current_buf();
+    let cur_buf_path = cur_buf
+        .get_name()
+        .inspect_err(|error| {
+            crate::oxi_utils::notify_error(&format!(
+                "can't get name of current buffer {cur_buf:#?}, error {error:#?}"
+            ));
+        })
+        .ok()?;
+    let cwd = nvim_oxi::api::call_function::<Array, String>("getcwd", Array::new())
+        .inspect_err(|error| {
+            crate::oxi_utils::notify_error(&format!("can't get cwd, error {error:#?}"));
+        })
+        .ok()?;
+    let cur_buf_path = cur_buf_path.to_string_lossy();
+
+    let cur_buf_nr = cur_buf.handle();
     let mut statusline = Statusline {
-        cur_buf_path: cur_buf_path.to_string_lossy(),
+        cur_buf_path: Cow::Borrowed(cur_buf_path.trim_start_matches(&cwd)),
         cur_buf_diags: HashMap::new(),
         workspace_diags: HashMap::new(),
     };
-
-    for diag in diags.0 {
-        if cur_buf_nr == diag.bufnr {
-            *statusline.cur_buf_diags.entry(diag.severity).or_insert(0) += 1;
+    for diagnostic in diagnostics {
+        if cur_buf_nr == diagnostic.bufnr {
+            *statusline.cur_buf_diags.entry(diagnostic.severity).or_insert(0) += 1;
         }
-        *statusline.workspace_diags.entry(diag.severity).or_insert(0) += 1;
+        *statusline.workspace_diags.entry(diagnostic.severity).or_insert(0) += 1;
     }
 
-    Ok(statusline.draw())
+    Some(statusline.draw())
 }
 
-pub struct Diagnostics(Vec<Diagnostic>);
-
-impl FromLua for Diagnostics {
-    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
-        if let LuaValue::Table(table) = value {
-            let diagnostics = table
-                .sequence_values::<Diagnostic>()
-                .collect::<Result<Vec<Diagnostic>, _>>()?;
-
-            return Ok(Diagnostics(diagnostics));
-        }
-        Err(mlua::Error::FromLuaConversionError {
-            from: value.type_name(),
-            to: "Diagnostics".into(),
-            message: Some(format!("expected a table got {value:#?}")),
-        })
-    }
-}
-
+#[derive(Deserialize)]
 pub struct Diagnostic {
-    bufnr: i64,
+    bufnr: i32,
     severity: Severity,
 }
 
-impl FromLua for Diagnostic {
-    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
-        if let LuaValue::Table(table) = value {
-            return Ok(Diagnostic {
-                bufnr: table.get("bufnr")?,
-                severity: table.get("severity")?,
-            });
-        }
-        Err(mlua::Error::FromLuaConversionError {
-            from: value.type_name(),
-            to: "Diagnostic".into(),
-            message: Some(format!("expected a table got {value:#?}")),
-        })
+impl FromObject for Diagnostic {
+    fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
+        Self::deserialize(Deserializer::new(obj)).map_err(Into::into)
     }
 }
 
-#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone)]
+impl nvim_oxi::lua::Poppable for Diagnostic {
+    unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
+        unsafe {
+            let obj = Object::pop(lstate)?;
+            Self::from_object(obj).map_err(nvim_oxi::lua::Error::pop_error_from_err::<Self, _>)
+        }
+    }
+}
+
+#[derive(Debug, Deserialize_repr, Hash, PartialEq, Eq, Copy, Clone)]
+#[repr(u8)]
 pub enum Severity {
-    Error,
-    Warn,
-    Info,
-    Hint,
-}
-
-impl FromLua for Severity {
-    fn from_lua(value: LuaValue, _: &Lua) -> LuaResult<Self> {
-        if let LuaValue::Integer(int) = value {
-            return match int {
-                1 => Ok(Self::Error),
-                2 => Ok(Self::Warn),
-                3 => Ok(Self::Info),
-                4 => Ok(Self::Hint),
-                _ => Err(mlua::Error::FromLuaConversionError {
-                    from: value.type_name(),
-                    to: "Severity".into(),
-                    message: Some(format!("unexpected int {int}")),
-                }),
-            };
-        }
-        Err(mlua::Error::FromLuaConversionError {
-            from: value.type_name(),
-            to: "Severity".into(),
-            message: Some(format!("expected an integer got {value:#?}")),
-        })
-    }
+    Error = 1,
+    Warn = 2,
+    Info = 3,
+    Hint = 4,
 }
 
 impl Severity {
@@ -112,13 +95,13 @@ impl Severity {
 }
 
 #[derive(Debug)]
-struct Statusline {
-    cur_buf_path: String,
+struct Statusline<'a> {
+    cur_buf_path: Cow<'a, str>,
     cur_buf_diags: HashMap<Severity, i32>,
     workspace_diags: HashMap<Severity, i32>,
 }
 
-impl Statusline {
+impl<'a> Statusline<'a> {
     fn draw(&self) -> String {
         let mut cur_buf_diags = Severity::ORDER
             .iter()
