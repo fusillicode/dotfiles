@@ -4,7 +4,7 @@
 > allied to the ultimate animating essence of existence's whole unbounded sweep—the last, utter sweep which has no
 > confines and which outreaches fancy and mathematics alike. (cit. Wikipedia)
 
-Bunch of _personal_ command-line utilities built in [Rust](https://www.rust-lang.org/) because I want to be happy.
+Bunch of _personal_ command-line utilities built-in [Rust](https://www.rust-lang.org/) because I want to be happy.
 
 > [!IMPORTANT]
 > Requirements:

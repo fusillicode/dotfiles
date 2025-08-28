@@ -1,8 +1,8 @@
-use crate::cli::Flags;
+use crate::cli_flags::CliFlags;
 
-pub struct CliFlags;
+pub struct RgCliFlags;
 
-impl Flags for CliFlags {
+impl CliFlags for RgCliFlags {
     /// Returns the base flags for the ripgrep command.
     fn base_flags() -> Vec<&'static str> {
         vec![

@@ -1,16 +1,29 @@
-use mlua::prelude::*;
+use nvim_oxi::Function;
+use nvim_oxi::Object;
+use nvim_oxi::conversion::FromObject;
+use nvim_oxi::lua::Poppable;
+use nvim_oxi::lua::ffi::State;
+use nvim_oxi::serde::Deserializer;
+use serde::Deserialize;
 
-/// Returns the formatted [String] representation of an LSP diagnostic.
-pub fn format(_lua: &Lua, diag: Diagnostic) -> anyhow::Result<String> {
-    let msg = get_msg(&diag).map_or_else(
-        || format!("no message in {diag:#?}"),
-        |s| s.trim_end_matches('.').to_string(),
-    );
-    let src = get_src(&diag).map_or_else(|| format!("no source in {diag:#?}"), str::to_string);
-    let code = get_code(&diag);
-    let src_and_code = code.map_or_else(|| src.clone(), |c| format!("{src}: {c}"));
+pub fn format() -> Object {
+    Object::from(Function::<Diagnostic, Option<_>>::from_fn(format_core))
+}
 
-    Ok(format!("▶ {msg} [{src_and_code}]"))
+fn format_core(diagnostic: Diagnostic) -> Option<String> {
+    let Some(msg) = get_msg(&diagnostic).map(|s| s.trim_end_matches('.').to_string()) else {
+        crate::oxi_utils::notify_error(&format!("no message in {diagnostic:#?}"));
+        return None;
+    };
+
+    let Some(src) = get_src(&diagnostic).map(str::to_string) else {
+        crate::oxi_utils::notify_error(&format!("no source in {diagnostic:#?}"));
+        return None;
+    };
+
+    let src_and_code = get_code(&diagnostic).map_or_else(|| src.clone(), |c| format!("{src}: {c}"));
+
+    Some(format!("▶ {msg} [{src_and_code}]"))
 }
 
 /// Extracts LSP diagnostic message from [LspData::rendered] or directly from the supplied [Diagnostic].
@@ -48,7 +61,7 @@ fn get_code(diag: &Diagnostic) -> Option<&str> {
         .or(diag.code.as_deref())
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct Diagnostic {
     code: Option<String>,
     message: Option<String>,
@@ -56,47 +69,27 @@ pub struct Diagnostic {
     user_data: Option<UserData>,
 }
 
-impl FromLua for Diagnostic {
-    fn from_lua(value: mlua::Value, _lua: &mlua::Lua) -> mlua::Result<Self> {
-        if let LuaValue::Table(table) = value {
-            let out = Self {
-                code: buildtional_value(&table, "code")?,
-                message: buildtional_value(&table, "message")?,
-                source: buildtional_value(&table, "source")?,
-                user_data: buildtional_value(&table, "user_data")?,
-            };
-            return Ok(out);
-        }
-        Err(mlua::Error::FromLuaConversionError {
-            from: value.type_name(),
-            to: "Diagnostic".into(),
-            message: Some(format!("expected a table got {value:#?}")),
-        })
+impl FromObject for Diagnostic {
+    fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
+        Self::deserialize(Deserializer::new(obj)).map_err(Into::into)
     }
 }
 
-#[derive(Debug)]
+impl Poppable for Diagnostic {
+    unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
+        unsafe {
+            let obj = Object::pop(lstate)?;
+            Self::from_object(obj).map_err(nvim_oxi::lua::Error::pop_error_from_err::<Self, _>)
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
 pub struct UserData {
     lsp: Option<Lsp>,
 }
 
-impl FromLua for UserData {
-    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
-        if let LuaValue::Table(table) = value {
-            let out = UserData {
-                lsp: buildtional_value(&table, "lsp")?,
-            };
-            return Ok(out);
-        }
-        Err(mlua::Error::FromLuaConversionError {
-            from: value.type_name(),
-            to: "UserData".into(),
-            message: Some(format!("expected a table got {value:#?}")),
-        })
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct Lsp {
     code: Option<String>,
     data: Option<LspData>,
@@ -104,50 +97,7 @@ pub struct Lsp {
     source: Option<String>,
 }
 
-impl FromLua for Lsp {
-    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
-        if let LuaValue::Table(table) = value {
-            let out = Lsp {
-                code: buildtional_value(&table, "code")?,
-                data: buildtional_value(&table, "data")?,
-                message: buildtional_value(&table, "message")?,
-                source: buildtional_value(&table, "source")?,
-            };
-            return Ok(out);
-        }
-        Err(mlua::Error::FromLuaConversionError {
-            from: value.type_name(),
-            to: "Lsp".into(),
-            message: Some(format!("expected a table got {value:#?}")),
-        })
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct LspData {
     rendered: Option<String>,
-}
-
-impl FromLua for LspData {
-    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
-        if let LuaValue::Table(table) = value {
-            let out = LspData {
-                rendered: buildtional_value(&table, "rendered")?,
-            };
-            return Ok(out);
-        }
-        Err(mlua::Error::FromLuaConversionError {
-            from: value.type_name(),
-            to: "LspData".into(),
-            message: Some(format!("expected a table got {value:#?}")),
-        })
-    }
-}
-
-fn buildtional_value<T: FromLua>(table: &LuaTable, field: &str) -> mlua::Result<Option<T>> {
-    match table.get::<Option<T>>(field) {
-        Ok(out) => Ok(out),
-        Err(LuaError::FromLuaConversionError { .. }) => Ok(None),
-        e => e,
-    }
 }

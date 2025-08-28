@@ -87,10 +87,7 @@ function M.core()
     end
   end)
 
-  keymap_set({ 'n', 'v', }, '<leader>t', function()
-    local row, col = require('utils').unpack(vim.api.nvim_win_get_cursor(0))
-    pcall(function() rua.run_test({ path = vim.api.nvim_buf_get_name(0), row = row, col = col, }) end)
-  end)
+  keymap_set({ 'n', 'v', }, '<leader>t', rua.run_test)
 end
 
 function M.fzf_lua(fzf_lua)
