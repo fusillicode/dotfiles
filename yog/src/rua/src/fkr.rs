@@ -17,7 +17,9 @@ fn create_cmds_core(_: ()) {
             move |_| {
                 let cur_win = Window::current();
                 let Ok((row, col)) = cur_win.get_cursor().inspect_err(|error| {
-                    crate::oxi_utils::notify_error(&format!("can't get cursor from window {cur_win:?}, error {error:?}"))
+                    crate::oxi_utils::notify_error(&format!(
+                        "can't get cursor from window {cur_win:?}, error {error:?}"
+                    ))
                 }) else {
                     return;
                 };

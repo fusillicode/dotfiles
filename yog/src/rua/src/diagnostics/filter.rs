@@ -31,15 +31,17 @@ fn filter_core(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
     // doesn't require any LSP diagnostics to apply its logic.
     if BufferFilter::new()
         .skip_diagnostic(&buf_path, None)
-        .inspect_err(|error| crate::oxi_utils::notify_error(&format!("error filtering by buffer {buf_path:#?}, error {error:#?}")))
+        .inspect_err(|error| {
+            crate::oxi_utils::notify_error(&format!("error filtering by buffer {buf_path:#?}, error {error:#?}"))
+        })
         .is_ok_and(identity)
     {
         return vec![];
     };
 
-    let Ok(filters) = DiagnosticsFilters::all(&lsp_diags)
-        .inspect_err(|error| crate::oxi_utils::notify_error(&format!("can't get diangnostics filters, error {error:#?}")))
-    else {
+    let Ok(filters) = DiagnosticsFilters::all(&lsp_diags).inspect_err(|error| {
+        crate::oxi_utils::notify_error(&format!("can't get diangnostics filters, error {error:#?}"))
+    }) else {
         return vec![];
     };
 

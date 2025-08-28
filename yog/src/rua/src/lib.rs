@@ -25,4 +25,3 @@ fn rua() -> Dictionary {
         ("run_test", test_runner::run_test()),
     ])
 }
-
