@@ -4,6 +4,7 @@ use std::path::Path;
 
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
+use color_eyre::owo_colors::OwoColorize;
 
 use crate::installers::Installer;
 use crate::installers::bash_language_server::BashLanguageServer;
@@ -55,7 +56,12 @@ fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
     let args = utils::system::get_args();
-    println!("🚀 Starting {:#?} with args: {args:#?}", std::env::current_exe()?);
+    println!(
+        "{}",
+        format!("Started {:#?} with args: {args:#?}", std::env::current_exe()?)
+            .bold()
+            .cyan()
+    );
 
     let dev_tools_dir = args
         .first()
@@ -187,7 +193,12 @@ fn main() -> color_eyre::Result<()> {
     };
 
     if !unknown_bin_names.is_empty() {
-        eprintln!("⛔️ no installers matches the following bin names {unknown_bin_names:#?}");
+        eprintln!(
+            "{}",
+            format!("no installers matches the following bins {unknown_bin_names:#?}")
+                .bold()
+                .yellow()
+        );
     }
 
     let installers_errors = std::thread::scope(|scope| {
@@ -200,7 +211,12 @@ fn main() -> color_eyre::Result<()> {
             .into_iter()
             .fold(vec![], |mut acc, (bin_name, handle)| {
                 if let Err(error) = handle.join() {
-                    eprintln!("❌ {bin_name} installer 🧵 panicked - error {error:#?}");
+                    eprintln!(
+                        "{}",
+                        format!("{bin_name} installer thread panicked, error {error:#?}")
+                            .red()
+                            .bold()
+                    );
                     acc.push((bin_name, error));
                 }
                 acc
@@ -218,7 +234,7 @@ fn main() -> color_eyre::Result<()> {
     if errors_count != 0 {
         // This is a general report about the installation process.
         // The single installation errors are reported directly in each [Installer].
-        bail!("❌ {errors_count} bins failed to install, namely: {bin_names:#?}")
+        bail!("{errors_count} bins failed to install, namely: {bin_names:#?}")
     }
 
     Ok(())

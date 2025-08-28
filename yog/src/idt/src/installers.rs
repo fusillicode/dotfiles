@@ -1,5 +1,6 @@
 use std::process::Command;
 
+use color_eyre::owo_colors::OwoColorize;
 use utils::cmd::CmdDetails;
 use utils::cmd::CmdError;
 use utils::cmd::CmdExt;
@@ -64,22 +65,44 @@ pub trait Installer: Sync + Send {
     /// Runs the installer and checks installation.
     fn run(&self) -> color_eyre::Result<()> {
         self.install()
-            .inspect_err(|error| eprintln!("❌ {} installation failed, error {error:#?}", self.bin_name()))
+            .inspect_err(|error| {
+                eprintln!(
+                    "{}",
+                    format!("{} installation failed, error {error:#?}", self.bin_name())
+                        .red()
+                        .bold()
+                )
+            })
             .and_then(|_| {
                 self.check()
                     .transpose()
                     .inspect(|check_output| {
                         if let Some(check_output) = check_output {
                             println!(
-                                "✅ {} installed, check output: {}",
-                                self.bin_name(),
-                                check_output.trim_matches(|c| c == '\n' || c == '\r')
+                                "{}",
+                                format!(
+                                    "{} installed, check output: {}",
+                                    self.bin_name(),
+                                    check_output.trim_matches(|c| c == '\n' || c == '\r')
+                                )
+                                .green()
+                                .bold()
                             );
                         } else {
-                            println!("🎲 {} installed, check skipped", self.bin_name());
+                            println!(
+                                "{}",
+                                format!("{} installed, check skipped", self.bin_name()).yellow().bold()
+                            );
                         };
                     })
-                    .inspect_err(|error| eprintln!("❌ {} check failed, error {error:#?}", self.bin_name()))
+                    .inspect_err(|error| {
+                        eprintln!(
+                            "{}",
+                            format!("{} check failed, error {error:#?}", self.bin_name())
+                                .red()
+                                .bold()
+                        )
+                    })
             })?;
 
         Ok(())
