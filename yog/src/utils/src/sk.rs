@@ -9,7 +9,7 @@ use skim::prelude::*;
 /// - the base one [base_sk_opts]
 pub fn get_item<T: SkimItem + Clone + std::fmt::Debug>(
     items: Vec<T>,
-    sk_opts: Option<SkimOptionsBuilder>,
+    sk_opts: Option<SkimOptions>,
 ) -> color_eyre::Result<Option<T>> {
     match &get_items(items, sk_opts)?.as_slice() {
         &[item] => Ok(Some(item.clone())),
@@ -39,7 +39,7 @@ pub fn get_item_from_cli_args_or_sk_select<'a, CAS, O, OBA, OF>(
     mut cli_arg_selector: CAS,
     items: Vec<O>,
     item_find_by_arg: OBA,
-    sk_opts: Option<SkimOptionsBuilder>,
+    sk_opts: Option<SkimOptions>,
 ) -> color_eyre::Result<Option<O>>
 where
     O: SkimItem + Clone + std::fmt::Debug + std::fmt::Display,
@@ -59,15 +59,16 @@ where
 /// Runs the skim fuzzy finder with the provided items and returns the selected items.
 fn get_items<T: SkimItem + Clone + std::fmt::Debug>(
     items: Vec<T>,
-    sk_opts: Option<SkimOptionsBuilder>,
+    sk_opts: Option<SkimOptions>,
 ) -> color_eyre::Result<Vec<T>> {
-    let sk_opts = sk_opts
-        .unwrap_or_else(|| {
+    let sk_opts = match sk_opts {
+        Some(opts) => opts,
+        None => {
             let mut sk_opts = SkimOptionsBuilder::default();
             base_sk_opts(&mut sk_opts);
-            sk_opts
-        })
-        .final_build()?;
+            sk_opts.final_build()?
+        }
+    };
     let sk_source = build_sk_source_from_items(items)?;
 
     let Some(sk_output) = Skim::run_with(&sk_opts, Some(sk_source)) else {
@@ -101,7 +102,7 @@ fn build_sk_source_from_items<T: SkimItem>(items: Vec<T>) -> color_eyre::Result<
 }
 
 /// Configures the base skim options with common settings for a consistent user experience.
-fn base_sk_opts(opts_builder: &mut SkimOptionsBuilder) -> &mut SkimOptionsBuilder {
+pub fn base_sk_opts(opts_builder: &mut SkimOptionsBuilder) -> &mut SkimOptionsBuilder {
     opts_builder
         .height(String::from("21"))
         .no_multi(true)
@@ -109,6 +110,6 @@ fn base_sk_opts(opts_builder: &mut SkimOptionsBuilder) -> &mut SkimOptionsBuilde
         .layout("reverse".into())
         .preview(Some("".into()))
         .preview_window("down:50%".into())
-        .color(Some("16".into()))
+        .color(Some("16,prompt:#ffffff".into()))
         .cycle(true)
 }
