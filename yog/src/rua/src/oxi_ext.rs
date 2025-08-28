@@ -8,17 +8,17 @@ use nvim_oxi::ObjectKind;
 pub trait OxiExtract {
     type Out;
 
-    /// Extracts a typed value from a Neovim Object with error context.
-    fn extract(obj: &Object, key: &str, dict: &Dictionary) -> color_eyre::Result<Self::Out>;
+    /// Extracts a typed value from a Neovim [Object] by key from a [Dictionary] with error context.
+    fn extract_from_dict(key: &str, value: &Object, dict: &Dictionary) -> color_eyre::Result<Self::Out>;
 }
 
-/// Implementation for extracting String values from Neovim objects.
+/// Implementation for extracting [String] values from Neovim objects.
 impl OxiExtract for nvim_oxi::String {
     type Out = String;
 
-    fn extract(obj: &Object, key: &str, dict: &Dictionary) -> color_eyre::Result<Self::Out> {
-        let out = Self::try_from(obj.clone())
-            .with_context(|| unexpected_kind_error_msg(obj, key, dict, ObjectKind::String))?;
+    fn extract_from_dict(key: &str, value: &Object, dict: &Dictionary) -> color_eyre::Result<Self::Out> {
+        let out = Self::try_from(value.clone())
+            .with_context(|| unexpected_kind_error_msg(value, key, dict, ObjectKind::String))?;
         Ok(out.to_string())
     }
 }
@@ -27,27 +27,27 @@ impl OxiExtract for nvim_oxi::String {
 impl OxiExtract for nvim_oxi::Integer {
     type Out = i64;
 
-    fn extract(obj: &Object, key: &str, dict: &Dictionary) -> color_eyre::Result<Self::Out> {
-        let out = Self::try_from(obj.clone())
-            .with_context(|| unexpected_kind_error_msg(obj, key, dict, ObjectKind::Integer))?;
+    fn extract_from_dict(key: &str, value: &Object, dict: &Dictionary) -> color_eyre::Result<Self::Out> {
+        let out = Self::try_from(value.clone())
+            .with_context(|| unexpected_kind_error_msg(value, key, dict, ObjectKind::Integer))?;
         Ok(out)
     }
 }
 
 /// Extension trait for [Dictionary] to provide typed getters.
 pub trait DictionaryExt {
-    /// Gets a typed value from the dictionary using the OxiExtract trait.
+    /// Gets a typed value from the dictionary using the [OxiExtract] trait.
     fn get_t<T: OxiExtract>(&self, key: &str) -> color_eyre::Result<T::Out>;
 
     /// Gets a nested [Dictionary] from the [Dictionary] by a sequence of keys.
     fn get_dict(&self, keys: &[&str]) -> color_eyre::Result<Option<Dictionary>>;
 }
 
-/// Implementation of DictionaryExt for Dictionary providing typed getters.
+/// Implementation of [DictionaryExt] for [Dictionary] providing typed getters.
 impl DictionaryExt for Dictionary {
     fn get_t<T: OxiExtract>(&self, key: &str) -> color_eyre::Result<T::Out> {
-        let obj = self.get(key).ok_or_else(|| no_value_matching(&[key], self))?;
-        T::extract(obj, key, self)
+        let value = self.get(key).ok_or_else(|| no_value_matching(&[key], self))?;
+        T::extract_from_dict(key, value, self)
     }
 
     fn get_dict(&self, keys: &[&str]) -> color_eyre::Result<Option<Dictionary>> {
