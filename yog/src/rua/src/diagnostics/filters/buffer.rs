@@ -1,4 +1,4 @@
-use mlua::prelude::*;
+use nvim_oxi::Dictionary;
 use utils::system::build_home_path;
 
 use crate::diagnostics::filters::DiagnosticsFilter;
@@ -25,7 +25,7 @@ impl BufferFilter {
 }
 
 impl DiagnosticsFilter for BufferFilter {
-    fn skip_diagnostic(&self, buf_path: &str, _lsp_diag: Option<&LuaTable>) -> LuaResult<bool> {
+    fn skip_diagnostic(&self, buf_path: &str, _lsp_diag: Option<&Dictionary>) -> color_eyre::Result<bool> {
         Ok(self.blacklist.iter().any(|up| buf_path.contains(up)))
     }
 }

@@ -1,17 +1,20 @@
-use mlua::prelude::*;
+use nvim_oxi::Dictionary;
+use nvim_oxi::Function;
+use nvim_oxi::Integer;
+use nvim_oxi::Object;
 
-/// Sort LSP diagnostics based on their severity.
-/// If the severity cannot be found in the [LuaTable] representing the LSP diagnostic uses the
-/// position of the diagnostic in the input [LuaTable] as key for sorting.
-pub fn sort(lua: &Lua, lsp_diags: LuaTable) -> anyhow::Result<LuaTable> {
-    let mut lsp_diags_by_severity = lsp_diags
-        .sequence_values::<LuaTable>()
-        .flatten()
-        .enumerate()
-        .map(|(idx, lsp_diag)| (lsp_diag.get::<usize>("severity").unwrap_or(idx), lsp_diag))
-        .collect::<Vec<_>>();
+pub fn sort() -> Object {
+    Object::from(Function::<Vec<Dictionary>, _>::from_fn(sort_core))
+}
 
-    lsp_diags_by_severity.sort_by(|(sev_a, _), (sev_b, _)| sev_a.cmp(sev_b));
+fn sort_core(mut lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
+    lsp_diags.sort_by_key(get_severity_or_default);
+    lsp_diags
+}
 
-    Ok(lua.create_sequence_from(lsp_diags_by_severity.iter().map(|(_, lsp_diag)| lsp_diag))?)
+fn get_severity_or_default(dict: &Dictionary) -> Integer {
+    dict.get("severity")
+        .map(|o| Integer::try_from(o.clone()))
+        .unwrap_or(Ok(Integer::MIN))
+        .unwrap_or(Integer::MIN)
 }

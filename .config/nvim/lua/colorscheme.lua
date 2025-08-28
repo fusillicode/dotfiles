@@ -13,9 +13,11 @@ function M.setup(colorscheme)
 
   for hl, value in pairs({
     ColorColumn = { bg = 'NvimDarkGrey3', },
+    Cursor = { fg = 'black', bg = 'white', },
     CursorLine = { fg = 'none', },
     MsgArea = status_line_hl,
-    Normal = { bg = '#0b0e0a', },
+    Normal = { bg = '#001000', },
+    NormalFloat = { bg = '#001000', },
     StatusLine = status_line_hl,
   }) do set_hl(0, hl, value) end
 
