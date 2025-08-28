@@ -4,6 +4,7 @@ use nvim_oxi::api::Window;
 use nvim_oxi::api::opts::CreateCommandOptsBuilder;
 use strum::IntoEnumIterator;
 
+/// Creates Neovim user commands for generating fake data using FKR.
 pub fn create_cmds(_: ()) {
     for fkr_opt in FkrOption::iter() {
         if let Err(error) = nvim_oxi::api::create_user_command(
@@ -38,6 +39,7 @@ pub fn create_cmds(_: ()) {
     }
 }
 
+/// Returns the Neovim command name for a given [FkrOption].
 fn cmd_name(fkr_opt: &FkrOption) -> &str {
     match fkr_opt {
         FkrOption::Uuidv4 => "FkrUuidv4",

@@ -1,5 +1,6 @@
 use crate::cli_flags::CliFlags;
 
+/// CLI flags for the fd command.
 pub struct FdCliFlags;
 
 impl CliFlags for FdCliFlags {

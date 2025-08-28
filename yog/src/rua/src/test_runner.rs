@@ -10,6 +10,7 @@ use tree_sitter::Node;
 use tree_sitter::Parser;
 use tree_sitter::Point;
 
+/// Runs the test function at the current cursor position in a Wezterm pane.
 pub fn run_test(_: ()) {
     let cur_buf = Buffer::current();
     let cur_win = Window::current();
@@ -100,6 +101,7 @@ pub fn run_test(_: ()) {
     };
 }
 
+/// Gets the name of the function enclosing the given [Point] in a Rust file.
 fn get_enclosing_fn_name_of_position(file_path: &Path, position: Point) -> color_eyre::Result<Option<String>> {
     eyre::ensure!(
         file_path.extension().is_some_and(|ext| ext == "rs"),
@@ -121,6 +123,7 @@ fn get_enclosing_fn_name_of_position(file_path: &Path, position: Point) -> color
     Ok(get_enclosing_fn_name_of_node(&src, node_at_position))
 }
 
+/// Gets the name of the function enclosing the given [Node].
 fn get_enclosing_fn_name_of_node(src: &[u8], node: Option<Node>) -> Option<String> {
     const FN_NODE_KINDS: &[&str] = &[
         "function",

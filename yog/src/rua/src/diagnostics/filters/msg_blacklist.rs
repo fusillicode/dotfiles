@@ -7,15 +7,19 @@ use crate::oxi_ext::DictionaryExt;
 
 /// Filters out diagnostics related to buffers containing the supplied path, lsp source and unwanted messages.
 pub struct MsgBlacklistFilter {
+    /// The buffer path pattern to match.
     pub buf_path: String,
+    /// Blacklist of messages per source.
     pub blacklist: HashMap<String, Vec<String>>,
 }
 
 impl MsgBlacklistFilter {
+    /// Returns all message blacklist filters.
     pub fn all() -> Vec<Box<dyn DiagnosticsFilter>> {
         Self::typos_lsp_msg_filters()
     }
 
+    /// Creates filters for typos LSP messages.
     fn typos_lsp_msg_filters() -> Vec<Box<dyn DiagnosticsFilter>> {
         let typos_common_blacklist = vec![(
             "typos".into(),
@@ -83,6 +87,7 @@ impl MsgBlacklistFilter {
 }
 
 impl DiagnosticsFilter for MsgBlacklistFilter {
+    /// Returns true if the diagnostic message is blacklisted.
     fn skip_diagnostic(&self, buf_path: &str, lsp_diag: Option<&Dictionary>) -> color_eyre::Result<bool> {
         let Some(lsp_diag) = lsp_diag else {
             return Ok(false);
