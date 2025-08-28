@@ -8,8 +8,10 @@ use nvim_oxi::ObjectKind;
 pub trait DictionaryExt {
     /// Gets a string value from the dictionary by key.
     fn get_string(&self, key: &str) -> color_eyre::Result<String>;
+
     /// Gets an i64 value from the dictionary by key.
     fn get_i64(&self, key: &str) -> color_eyre::Result<i64>;
+
     /// Gets a nested [Dictionary] from the [Dictionary] by a sequence of keys.
     fn get_dict(&self, keys: &[&str]) -> color_eyre::Result<Option<Dictionary>>;
 }

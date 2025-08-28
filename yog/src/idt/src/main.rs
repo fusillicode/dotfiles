@@ -218,7 +218,7 @@ fn main() -> color_eyre::Result<()> {
     if errors_count != 0 {
         // This is a general report about the installation process.
         // The single installation errors are reported directly in each [Installer].
-        bail!("❌ {errors_count} bins failed to install, namely: {bin_names:#?}",)
+        bail!("❌ {errors_count} bins failed to install, namely: {bin_names:#?}")
     }
 
     Ok(())
