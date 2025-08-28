@@ -13,6 +13,7 @@ function M.setup(colorscheme)
 
   for hl, value in pairs({
     ColorColumn = { bg = 'NvimDarkGrey3', },
+    Cursor = { fg = 'black', bg = 'white', },
     CursorLine = { fg = 'none', },
     MsgArea = status_line_hl,
     Normal = { bg = '#001000', },
