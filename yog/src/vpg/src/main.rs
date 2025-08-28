@@ -3,6 +3,8 @@
 use std::process::Command;
 use std::process::Stdio;
 
+use color_eyre::owo_colors::OwoColorize;
+
 use crate::pgpass::PgpassEntry;
 use crate::pgpass::PgpassFile;
 use crate::vault::VaultReadOutput;
@@ -44,8 +46,9 @@ fn main() -> color_eyre::Result<()> {
     };
 
     println!(
-        "\nLogging into Vault @ {}\n(be sure to have the VPN on!)\n",
-        std::env::var("VAULT_ADDR")?
+        "\nLogging into Vault @ {}\n{}\n",
+        std::env::var("VAULT_ADDR")?.bold(),
+        "(be sure to have the VPN on!)".bold()
     );
     vault::log_into_vault_if_required()?;
     let vault_read_output: VaultReadOutput = serde_json::from_slice(
@@ -61,15 +64,22 @@ fn main() -> color_eyre::Result<()> {
     let nvim_dbee_conns_path = utils::system::build_home_path(&[".local", "state", "nvim", "dbee", "conns.json"])?;
     nvim_dbee::save_new_nvim_dbee_conns_file(&pgpass_entry, &nvim_dbee_conns_path)?;
 
-    println!("{} credentials updated in {pgpass_path:?}", pgpass_entry.metadata.alias);
+    println!(
+        "{} credentials updated in {pgpass_path:?}",
+        pgpass_entry.metadata.alias.green().bold()
+    );
     println!(
         "{} credentials updated in {nvim_dbee_conns_path:?}",
-        pgpass_entry.metadata.alias
+        pgpass_entry.metadata.alias.green().bold()
     );
 
     if args.get(1).is_some() {
         let db_url = pgpass_entry.connection_params.db_url();
-        println!("Connecting to {} @\n\n{db_url}\n", pgpass_entry.metadata.alias);
+        println!(
+            "\nConnecting to {} @\n\n{}\n",
+            pgpass_entry.metadata.alias.bold(),
+            db_url.bold()
+        );
 
         if let Some(psql_exit_code) = Command::new("pgcli")
             .arg(&db_url)
@@ -83,7 +93,7 @@ fn main() -> color_eyre::Result<()> {
             std::process::exit(psql_exit_code);
         }
 
-        eprintln!("pgcli {db_url} terminated by signal.");
+        eprintln!("{}", format!("pgcli {db_url} terminated by signal.").red().bold());
         std::process::exit(1);
     }
     Ok(())
