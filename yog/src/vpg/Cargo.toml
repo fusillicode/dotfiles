@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "PostgreSQL credential manager that integrates with HashiCorp Vault"
+description = "PostgreSQL credential manager with Vault integration"
 keywords = ["cli", "postgresql", "vault", "credentials", "database"]
 categories = ["command-line-utilities", "database", "authentication"]
 

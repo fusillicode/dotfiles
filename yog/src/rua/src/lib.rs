@@ -1,3 +1,5 @@
+//! Neovim Lua module with Rust utilities.
+
 use nvim_oxi::Dictionary;
 
 use crate::cli_flags::CliFlags;
