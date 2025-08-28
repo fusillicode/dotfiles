@@ -1,6 +1,3 @@
-use nvim_oxi::Function;
-use nvim_oxi::Object;
-
 pub mod fd;
 pub mod rg;
 
@@ -18,13 +15,13 @@ pub trait CliFlags {
 
     fn glob_flag(glob: &str) -> String;
 
-    fn get(&self) -> Object {
-        Object::from(Function::<(), _>::from_fn(|_| {
+    fn get(&self) -> Box<dyn Fn(()) -> Vec<String>> {
+        Box::new(|_| {
             Self::base_flags()
                 .into_iter()
                 .map(Into::into)
                 .chain(GLOB_BLACKLIST.into_iter().map(Self::glob_flag))
                 .collect::<Vec<_>>()
-        }))
+        })
     }
 }

@@ -1,4 +1,3 @@
-use nvim_oxi::Function;
 use nvim_oxi::Object;
 use nvim_oxi::conversion::FromObject;
 use nvim_oxi::lua::Poppable;
@@ -6,11 +5,7 @@ use nvim_oxi::lua::ffi::State;
 use nvim_oxi::serde::Deserializer;
 use serde::Deserialize;
 
-pub fn format() -> Object {
-    Object::from(Function::<Diagnostic, Option<_>>::from_fn(format_core))
-}
-
-fn format_core(diagnostic: Diagnostic) -> Option<String> {
+pub fn format(diagnostic: Diagnostic) -> Option<String> {
     let Some(msg) = get_msg(&diagnostic).map(|s| s.trim_end_matches('.').to_string()) else {
         crate::oxi_utils::notify_error(&format!("no message in {diagnostic:#?}"));
         return None;

@@ -2,7 +2,6 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 
 use nvim_oxi::Array;
-use nvim_oxi::Function;
 use nvim_oxi::Object;
 use nvim_oxi::conversion::FromObject;
 use nvim_oxi::lua::ffi::State;
@@ -10,11 +9,7 @@ use nvim_oxi::serde::Deserializer;
 use serde::Deserialize;
 use serde_repr::Deserialize_repr;
 
-pub fn draw() -> Object {
-    Object::from(Function::<Vec<Diagnostic>, _>::from_fn(draw_core))
-}
-
-fn draw_core(diagnostics: Vec<Diagnostic>) -> Option<String> {
+pub fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
     let cur_buf = nvim_oxi::api::get_current_buf();
     let cur_buf_path = cur_buf
         .get_name()

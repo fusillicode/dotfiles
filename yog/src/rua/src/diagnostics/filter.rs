@@ -1,19 +1,13 @@
 use std::convert::identity;
 
 use nvim_oxi::Dictionary;
-use nvim_oxi::Function;
-use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;
 
 use crate::diagnostics::filters::DiagnosticsFilter;
 use crate::diagnostics::filters::DiagnosticsFilters;
 use crate::diagnostics::filters::buffer::BufferFilter;
 
-pub fn filter() -> Object {
-    Object::from(Function::<Vec<Dictionary>, _>::from_fn(filter_core))
-}
-
-fn filter_core(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
+pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
     let cur_buf = Buffer::current();
     let Ok(buf_path) = cur_buf
         .get_name()

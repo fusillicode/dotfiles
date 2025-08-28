@@ -4,19 +4,13 @@ use std::path::PathBuf;
 use color_eyre::eyre;
 use color_eyre::eyre::Context;
 use color_eyre::eyre::eyre;
-use nvim_oxi::Function;
-use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::Window;
 use tree_sitter::Node;
 use tree_sitter::Parser;
 use tree_sitter::Point;
 
-pub fn run_test() -> Object {
-    Object::from(Function::<(), _>::from_fn(run_test_core))
-}
-
-fn run_test_core(_: ()) {
+pub fn run_test(_: ()) {
     let cur_buf = Buffer::current();
     let cur_win = Window::current();
 

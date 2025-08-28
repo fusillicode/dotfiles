@@ -1,6 +1,8 @@
 //! Neovim Lua module with Rust utilities.
 
 use nvim_oxi::Dictionary;
+use nvim_oxi::Function;
+use nvim_oxi::Object;
 
 use crate::cli_flags::CliFlags;
 
@@ -16,14 +18,29 @@ mod test_runner;
 #[nvim_oxi::plugin]
 fn rua() -> Dictionary {
     Dictionary::from_iter([
-        ("format_diagnostic", diagnostics::formatter::format()),
-        ("sort_diagnostics", diagnostics::sorter::sort()),
-        ("filter_diagnostics", diagnostics::filter::filter()),
-        ("draw_statusline", statusline::draw()),
-        ("draw_statuscolumn", statuscolumn::draw()),
-        ("create_fkr_cmds", fkr::create_cmds()),
-        ("get_fd_cli_flags", cli_flags::fd::FdCliFlags.get()),
-        ("get_rg_cli_flags", cli_flags::rg::RgCliFlags.get()),
-        ("run_test", test_runner::run_test()),
+        (
+            "format_diagnostic",
+            Object::from(Function::from_fn(diagnostics::formatter::format)),
+        ),
+        (
+            "sort_diagnostics",
+            Object::from(Function::from_fn(diagnostics::sorter::sort)),
+        ),
+        (
+            "filter_diagnostics",
+            Object::from(Function::from_fn(diagnostics::filter::filter)),
+        ),
+        ("draw_statusline", Object::from(Function::from_fn(statusline::draw))),
+        ("draw_statuscolumn", Object::from(Function::from_fn(statuscolumn::draw))),
+        ("create_fkr_cmds", Object::from(Function::from_fn(fkr::create_cmds))),
+        (
+            "get_fd_cli_flags",
+            Object::from(Function::from_fn(cli_flags::fd::FdCliFlags.get())),
+        ),
+        (
+            "get_rg_cli_flags",
+            Object::from(Function::from_fn(cli_flags::rg::RgCliFlags.get())),
+        ),
+        ("run_test", Object::from(Function::from_fn(test_runner::run_test))),
     ])
 }
