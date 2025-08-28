@@ -67,10 +67,9 @@ pub trait Installer: Sync + Send {
         self.install()
             .inspect_err(|error| {
                 eprintln!(
-                    "{}",
-                    format!("{} installation failed, error {error:#?}", self.bin_name())
-                        .red()
-                        .bold()
+                    "{} installation failed, {}",
+                    self.bin_name().red().bold(),
+                    format!("error {error:#?}").red().bold()
                 )
             })
             .and_then(|_| {
@@ -79,28 +78,19 @@ pub trait Installer: Sync + Send {
                     .inspect(|check_output| {
                         if let Some(check_output) = check_output {
                             println!(
-                                "{}",
-                                format!(
-                                    "{} installed, check output: {}",
-                                    self.bin_name(),
-                                    check_output.trim_matches(|c| c == '\n' || c == '\r')
-                                )
-                                .green()
-                                .bold()
+                                "{} installed & checked: {}",
+                                self.bin_name().green().bold(),
+                                check_output.trim_matches(|c| c == '\n' || c == '\r').bold()
                             );
                         } else {
-                            println!(
-                                "{}",
-                                format!("{} installed, check skipped", self.bin_name()).yellow().bold()
-                            );
+                            println!("{} installed but not checked", self.bin_name().yellow().bold());
                         };
                     })
                     .inspect_err(|error| {
                         eprintln!(
-                            "{}",
-                            format!("{} check failed, error {error:#?}", self.bin_name())
-                                .red()
-                                .bold()
+                            "{} check failed, {}",
+                            self.bin_name().red().bold(),
+                            format!("error {error:#?}").red().bold()
                         )
                     })
             })?;
