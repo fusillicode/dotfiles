@@ -1,5 +1,6 @@
 use crate::cli_flags::CliFlags;
 
+/// CLI flags for the ripgrep command.
 pub struct RgCliFlags;
 
 impl CliFlags for RgCliFlags {

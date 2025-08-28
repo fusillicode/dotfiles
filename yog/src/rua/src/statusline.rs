@@ -9,6 +9,7 @@ use nvim_oxi::serde::Deserializer;
 use serde::Deserialize;
 use serde_repr::Deserialize_repr;
 
+/// Draws the status line with diagnostic information.
 pub fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
     let cur_buf = nvim_oxi::api::get_current_buf();
     let cur_buf_path = cur_buf
@@ -42,18 +43,23 @@ pub fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
     Some(statusline.draw())
 }
 
+/// Represents a diagnostic from Neovim.
 #[derive(Deserialize)]
 pub struct Diagnostic {
+    /// The buffer number.
     bufnr: i32,
+    /// The severity of the diagnostic.
     severity: Severity,
 }
 
+/// Implementation of [FromObject] for [Diagnostic].
 impl FromObject for Diagnostic {
     fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
         Self::deserialize(Deserializer::new(obj)).map_err(Into::into)
     }
 }
 
+/// Implementation of [nvim_oxi::lua::Poppable] for [Diagnostic].
 impl nvim_oxi::lua::Poppable for Diagnostic {
     unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
         unsafe {
@@ -63,18 +69,25 @@ impl nvim_oxi::lua::Poppable for Diagnostic {
     }
 }
 
+/// Diagnostic severity levels.
 #[derive(Debug, Deserialize_repr, Hash, PartialEq, Eq, Copy, Clone)]
 #[repr(u8)]
 pub enum Severity {
+    /// Error severity.
     Error = 1,
+    /// Warning severity.
     Warn = 2,
+    /// Info severity.
     Info = 3,
+    /// Hint severity.
     Hint = 4,
 }
 
 impl Severity {
+    /// The order of severity levels for display.
     const ORDER: &'static [Self] = &[Self::Error, Self::Warn, Self::Info, Self::Hint];
 
+    /// Draws the diagnostic count for this severity.
     fn draw_diagnostics(&self, diags_count: i32) -> String {
         if diags_count == 0 {
             return "".into();
@@ -89,14 +102,19 @@ impl Severity {
     }
 }
 
+/// Represents the status line with buffer path and diagnostics.
 #[derive(Debug)]
 struct Statusline<'a> {
+    /// The current buffer path.
     cur_buf_path: Cow<'a, str>,
+    /// Diagnostics for the current buffer.
     cur_buf_diags: HashMap<Severity, i32>,
+    /// Diagnostics for the workspace.
     workspace_diags: HashMap<Severity, i32>,
 }
 
 impl<'a> Statusline<'a> {
+    /// Draws the status line as a formatted string.
     fn draw(&self) -> String {
         let mut cur_buf_diags = Severity::ORDER
             .iter()
