@@ -1,5 +1,6 @@
 local M = {}
 
+local bg = '#001000'
 local set_hl = vim.api.nvim_set_hl
 local get_hl = vim.api.nvim_get_hl
 
@@ -16,8 +17,8 @@ function M.setup(colorscheme)
     Cursor = { fg = 'black', bg = 'white', },
     CursorLine = { fg = 'none', },
     MsgArea = status_line_hl,
-    Normal = { bg = '#001000', },
-    NormalFloat = { bg = '#001000', },
+    Normal = { bg = bg, },
+    NormalFloat = { bg = bg, },
     StatusLine = status_line_hl,
   }) do set_hl(0, hl, value) end
 
