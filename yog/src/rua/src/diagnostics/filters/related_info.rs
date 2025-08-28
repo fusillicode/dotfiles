@@ -84,11 +84,11 @@ impl RelatedInfo {
     /// Create a [RelatedInfo] from a root LSP diagnostic.
     fn from_lsp_diagnostic(lsp_diagnostic: &Dictionary) -> color_eyre::Result<Self> {
         Ok(Self {
-            message: lsp_diagnostic.get_string("message")?,
-            lnum: lsp_diagnostic.get_i64("lnum")?,
-            col: lsp_diagnostic.get_i64("col")?,
-            end_lnum: lsp_diagnostic.get_i64("end_lnum")?,
-            end_col: lsp_diagnostic.get_i64("end_col")?,
+            message: lsp_diagnostic.get_t::<nvim_oxi::String>("message")?,
+            lnum: lsp_diagnostic.get_t::<nvim_oxi::Integer>("lnum")?,
+            col: lsp_diagnostic.get_t::<nvim_oxi::Integer>("col")?,
+            end_lnum: lsp_diagnostic.get_t::<nvim_oxi::Integer>("end_lnum")?,
+            end_col: lsp_diagnostic.get_t::<nvim_oxi::Integer>("end_col")?,
         })
     }
 
@@ -113,11 +113,11 @@ impl RelatedInfo {
         };
 
         Ok(Self {
-            message: rel_info.get_string("message")?,
-            lnum: start.get_i64("line")?,
-            col: start.get_i64("character")?,
-            end_lnum: end.get_i64("line")?,
-            end_col: end.get_i64("character")?,
+            message: rel_info.get_t::<nvim_oxi::String>("message")?,
+            lnum: start.get_t::<nvim_oxi::Integer>("line")?,
+            col: start.get_t::<nvim_oxi::Integer>("character")?,
+            end_lnum: end.get_t::<nvim_oxi::Integer>("line")?,
+            end_col: end.get_t::<nvim_oxi::Integer>("character")?,
         })
     }
 }
