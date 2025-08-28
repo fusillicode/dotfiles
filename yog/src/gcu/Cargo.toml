@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "Git branch management tool with GitHub integration, PR URL handling, and smart branch naming"
+description = "Git branch management tool with GitHub integration"
 keywords = ["cli", "git", "github", "branch", "management"]
 categories = ["command-line-utilities", "development-tools"]
 

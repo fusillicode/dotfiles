@@ -6,47 +6,21 @@ use color_eyre::eyre::bail;
 use utils::editor::Editor;
 use utils::editor::FileToOpen;
 
-/// Opens files in a running editor instance (Neovim or Helix) from Wezterm.
-///
-/// This tool integrates with Wezterm terminal multiplexer to open files in an existing
-/// editor instance running in a sibling pane. It supports both Neovim and Helix editors
-/// and can be used both as a command-line tool and as a Wezterm open-uri handler.
+/// Opens files in running editor instance from Wezterm.
 ///
 /// # Arguments
 ///
-/// * `editor` - The editor to use ("nvim" for Neovim, "hx" for Helix)
-/// * `file_path` - Path to the file to open
-/// * `pane_id` - Optional Wezterm pane ID (auto-detected if not provided)
-///
-/// # How it Works
-///
-/// 1. Detects the current Wezterm pane
-/// 2. Finds a sibling pane running the specified editor
-/// 3. Sends commands to the editor pane to open the file
-/// 4. Activates the editor pane for user interaction
+/// * `editor` - Editor to use ("nvim" or "hx")
+/// * `file_path` - Path to file to open
+/// * `pane_id` - Optional Wezterm pane ID
 ///
 /// # Examples
 ///
-/// Open file in Neovim:
 /// ```bash
 /// oe nvim /path/to/file.rs
-/// ```
-///
-/// Open file in Helix:
-/// ```bash
 /// oe hx /path/to/file.rs
-/// ```
-///
-/// Open file in Neovim with specific pane:
-/// ```bash
 /// oe nvim /path/to/file.rs 5
 /// ```
-///
-/// # Integration
-///
-/// This tool is designed to work with Wezterm's open-uri handler for seamless
-/// file opening from various sources including terminals, file managers, and
-/// other applications.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
@@ -94,21 +68,7 @@ fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Creates an enriched PATH environment variable for Wezterm integration.
-///
-/// When called from Wezterm's open-uri handler, the PATH environment variable
-/// may not include all necessary directories. This function creates an enriched
-/// PATH that includes:
-/// - The existing PATH (if any)
-/// - Homebrew's bin directory (/opt/homebrew/bin)
-/// - The user's local bin directory (~/.local/bin)
-///
-/// This ensures that all necessary tools are available when opening files
-/// through the Wezterm integration.
-///
-/// # Returns
-///
-/// Returns an [Env] containing the enriched PATH variable.
+/// Creates enriched PATH for Wezterm integration.
 fn get_enriched_path_env() -> color_eyre::Result<Env> {
     let enriched_path = [
         &std::env::var("PATH").unwrap_or_else(|_| String::new()),
@@ -123,11 +83,7 @@ fn get_enriched_path_env() -> color_eyre::Result<Env> {
     })
 }
 
-/// A wrapper type for environment variables that provides convenient access methods.
-///
-/// This struct represents an environment variable with a static name and a dynamic value.
-/// It's designed to work with APIs that require `(&str, &str)` tuples for environment
-/// variables while allowing the value to be dynamically constructed.
+/// Wrapper for environment variables.
 struct Env {
     /// The name of the environment variable (static string).
     name: &'static str,
@@ -136,15 +92,7 @@ struct Env {
 }
 
 impl Env {
-    /// Returns a reference to the environment variable as a tuple of name and value.
-    ///
-    /// This method provides a convenient way to get the environment variable in the
-    /// format expected by APIs like `std::process::Command::envs()` which require
-    /// `(&str, &str)` tuples.
-    ///
-    /// # Returns
-    ///
-    /// A tuple containing the environment variable name and value as string references.
+    /// Returns environment variable as tuple.
     pub fn by_ref(&self) -> (&'static str, &str) {
         (self.name, &self.value)
     }

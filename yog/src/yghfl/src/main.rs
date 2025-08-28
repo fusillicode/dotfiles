@@ -15,51 +15,13 @@ use utils::hx::HxStatusLine;
 use utils::wezterm::WeztermPane;
 use utils::wezterm::get_sibling_pane_with_titles;
 
-/// Generates and copies GitHub links for files currently open in Helix editor.
-///
-/// This tool integrates with Wezterm and Helix to create GitHub links pointing to
-/// the current file and cursor position in the Helix editor. The generated link
-/// includes line and column information for precise navigation.
-///
-/// # How it Works
-///
-/// 1. Detects the current Wezterm pane
-/// 2. Finds a sibling pane running Helix
-/// 3. Extracts the current file path and cursor position from Helix status line
-/// 4. Determines the Git repository root and current branch
-/// 5. Parses the Git remote URL to construct the GitHub URL
-/// 6. Builds a GitHub link with file path and cursor position
-/// 7. Copies the link to the system clipboard
-///
-/// # Supported Git Hosts
-///
-/// - GitHub (github.com)
-/// - GitHub Enterprise instances
-/// - SSH and HTTPS Git URLs
-///
-/// # Link Format
-///
-/// The generated link follows this format:
-/// `https://github.com/user/repo/blob/branch/path/to/file#LlineCcolumn`
+/// Generates GitHub links for files open in Helix editor.
 ///
 /// # Examples
 ///
-/// Generate GitHub link for current file:
 /// ```bash
 /// yghfl
 /// ```
-///
-/// # Requirements
-///
-/// - Helix editor must be running in a Wezterm pane
-/// - Current directory must be within a Git repository
-/// - Git remote must point to a GitHub repository
-/// - Wezterm must be the terminal emulator
-///
-/// # Integration
-///
-/// This tool is designed to work seamlessly with Wezterm's pane management
-/// and Helix's status line format for accurate file and position detection.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
@@ -123,24 +85,7 @@ fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Extracts the GitHub repository URL from Git remote output.
-///
-/// This function parses the output of `git remote -v` to find the fetch URL
-/// and converts it to a proper GitHub HTTPS URL.
-///
-/// # Arguments
-///
-/// * `git_remote_output` - The output from `git remote -v` command
-///
-/// # Returns
-///
-/// Returns a [Url] pointing to the GitHub repository.
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - No fetch remote is found in the output
-/// - The remote URL cannot be parsed
+/// Extracts GitHub repository URL from Git remote output.
 fn get_github_url_from_git_remote_output(git_remote_output: &str) -> color_eyre::Result<Url> {
     let git_remote_fetch_line = git_remote_output
         .trim()
@@ -156,24 +101,7 @@ fn get_github_url_from_git_remote_output(git_remote_output: &str) -> color_eyre:
     parse_github_url_from_git_remote_url(git_remote_url)
 }
 
-/// Converts a Git remote URL to a GitHub HTTPS URL.
-///
-/// This function handles both HTTPS and SSH Git remote URLs, converting them
-/// to the corresponding GitHub HTTPS URL. It also removes the `.git` suffix
-/// from the path.
-///
-/// # Arguments
-///
-/// * `git_remote_url` - The Git remote URL (HTTPS or SSH format)
-///
-/// # Returns
-///
-/// Returns a [Url] pointing to the GitHub repository in HTTPS format.
-///
-/// # Examples
-///
-/// - `git@github.com:user/repo.git` → `https://github.com/user/repo`
-/// - `https://github.com/user/repo.git` → `https://github.com/user/repo`
+/// Converts Git remote URL to GitHub HTTPS URL.
 fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> color_eyre::Result<Url> {
     if let Ok(mut url) = Url::parse(git_remote_url) {
         url.set_path(url.clone().path().trim_end_matches(".git"));
@@ -191,22 +119,7 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> color_eyre::Res
     Ok(url)
 }
 
-/// Builds the absolute file path for the Helix cursor position.
-///
-/// This function converts a potentially relative file path from Helix's status line
-/// into an absolute path. It handles different path formats:
-/// - Paths starting with `~` are resolved relative to the home directory
-/// - Relative paths are resolved relative to the pane's current working directory
-/// - Absolute paths are returned as-is
-///
-/// # Arguments
-///
-/// * `hx_cursor_file_path` - The file path from Helix status line
-/// * `hx_pane` - The Wezterm pane information containing the current working directory
-///
-/// # Returns
-///
-/// Returns a [PathBuf] containing the absolute file path.
+/// Builds absolute file path for Helix cursor position.
 fn build_hx_cursor_absolute_file_path(
     hx_cursor_file_path: &Path,
     hx_pane: &WeztermPane,
@@ -225,28 +138,7 @@ fn build_hx_cursor_absolute_file_path(
         .collect())
 }
 
-/// Builds a GitHub link pointing to a specific file and line in the repository.
-///
-/// This function constructs a GitHub URL that points to a specific file at a specific
-/// line and column position in the repository. The URL format follows GitHub's
-/// standard for linking to source code locations.
-///
-/// # Arguments
-///
-/// * `github_repo_url` - The base GitHub repository URL
-/// * `git_current_branch` - The current Git branch name
-/// * `file_path` - The relative path to the file within the repository
-/// * `hx_cursor_position` - The cursor position (line and column) in the file
-///
-/// # Returns
-///
-/// Returns a [Url] that links directly to the specified file and position on GitHub.
-///
-/// # Example
-///
-/// For a file `src/main.rs` at line 42, column 15 on branch `main` in repository
-/// `https://github.com/user/repo`, this would generate:
-/// `https://github.com/user/repo/blob/main/src/main.rs#L42C15`
+/// Builds GitHub link pointing to specific file and line.
 fn build_github_link<'a>(
     github_repo_url: &'a Url,
     git_current_branch: &'a str,
