@@ -4,35 +4,44 @@ use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
 use nvim_oxi::ObjectKind;
 
+pub trait OxiExtract {
+    type Out;
+
+    fn extract(obj: &Object, key: &str, dict: &Dictionary) -> color_eyre::Result<Self::Out>;
+}
+
+impl OxiExtract for nvim_oxi::String {
+    type Out = String;
+
+    fn extract(obj: &Object, key: &str, dict: &Dictionary) -> color_eyre::Result<Self::Out> {
+        let out = Self::try_from(obj.clone())
+            .with_context(|| unexpected_kind_error_msg(obj, key, dict, ObjectKind::String))?;
+        Ok(out.to_string())
+    }
+}
+
+impl OxiExtract for nvim_oxi::Integer {
+    type Out = i64;
+
+    fn extract(obj: &Object, key: &str, dict: &Dictionary) -> color_eyre::Result<Self::Out> {
+        let out = Self::try_from(obj.clone())
+            .with_context(|| unexpected_kind_error_msg(obj, key, dict, ObjectKind::Integer))?;
+        Ok(out)
+    }
+}
+
 /// Extension trait for [Dictionary] to provide typed getters.
 pub trait DictionaryExt {
-    /// Gets a string value from the dictionary by key.
-    fn get_string(&self, key: &str) -> color_eyre::Result<String>;
-
-    /// Gets an i64 value from the dictionary by key.
-    fn get_i64(&self, key: &str) -> color_eyre::Result<i64>;
+    fn get_t<T: OxiExtract>(&self, key: &str) -> color_eyre::Result<T::Out>;
 
     /// Gets a nested [Dictionary] from the [Dictionary] by a sequence of keys.
     fn get_dict(&self, keys: &[&str]) -> color_eyre::Result<Option<Dictionary>>;
 }
 
 impl DictionaryExt for Dictionary {
-    fn get_string(&self, key: &str) -> color_eyre::Result<String> {
+    fn get_t<T: OxiExtract>(&self, key: &str) -> color_eyre::Result<T::Out> {
         let obj = self.get(key).ok_or_else(|| no_value_matching(&[key], self))?;
-
-        let out = nvim_oxi::String::try_from(obj.clone())
-            .with_context(|| unexpected_kind_error_msg(obj, key, self, ObjectKind::String))?;
-
-        Ok(out.to_string())
-    }
-
-    fn get_i64(&self, key: &str) -> color_eyre::Result<i64> {
-        let obj = self.get(key).ok_or_else(|| no_value_matching(&[key], self))?;
-
-        let out = nvim_oxi::Integer::try_from(obj.clone())
-            .with_context(|| unexpected_kind_error_msg(obj, key, self, ObjectKind::Integer))?;
-
-        Ok(out)
+        T::extract(obj, key, self)
     }
 
     fn get_dict(&self, keys: &[&str]) -> color_eyre::Result<Option<Dictionary>> {
@@ -66,21 +75,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_dictionary_ext_get_string_works_as_expected() {
+    fn test_dictionary_ext_get_t_works_as_expected() {
         let dict = Dictionary::from_iter([("foo", "42")]);
         assert_eq!(
             r#"no value matching query ["bar"] in dict { foo: "42" }"#,
-            dict.get_string("bar").unwrap_err().to_string()
+            dict.get_t::<nvim_oxi::String>("bar").unwrap_err().to_string()
         );
 
         let dict = Dictionary::from_iter([("foo", 42)]);
         assert_eq!(
             r#"value 42 of key "foo" in dict { foo: 42 } is Integer but String was expected"#,
-            dict.get_string("foo").unwrap_err().to_string()
+            dict.get_t::<nvim_oxi::String>("foo").unwrap_err().to_string()
         );
 
         let dict = Dictionary::from_iter([("foo", "42")]);
-        assert_eq!("42", dict.get_string("foo").unwrap());
+        assert_eq!("42", dict.get_t::<nvim_oxi::String>("foo").unwrap());
     }
 
     #[test]
