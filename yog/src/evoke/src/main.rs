@@ -105,7 +105,7 @@ fn symlink_bin(bins_path: &Path, bin: &str, target_path: &Path) -> color_eyre::R
     utils::system::rm_f(&bin_path)?;
     let target_bin_path = target_path.join(bin);
     std::os::unix::fs::symlink(&target_bin_path, &bin_path)?;
-    println!("✅ Symlinked bin {target_bin_path:?} to {bin_path:?}");
+    println!("Symlinked {target_bin_path:?} to {bin_path:?}");
     Ok(())
 }
 
@@ -114,7 +114,7 @@ fn rename_lib(target_path: &Path, source_name: &str, target_name: &str) -> color
     let source_lib_path = target_path.join(source_name);
     let target_lib_path = target_path.join(target_name);
     std::fs::rename(&source_lib_path, &target_lib_path)?;
-    println!("✅ Renamed lib {source_lib_path:?} to {target_lib_path:?}");
+    println!("Renamed {source_lib_path:?} to {target_lib_path:?}");
     Ok(())
 }
 

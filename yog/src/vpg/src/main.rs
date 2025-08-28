@@ -61,12 +61,9 @@ fn main() -> color_eyre::Result<()> {
     let nvim_dbee_conns_path = utils::system::build_home_path(&[".local", "state", "nvim", "dbee", "conns.json"])?;
     nvim_dbee::save_new_nvim_dbee_conns_file(&pgpass_entry, &nvim_dbee_conns_path)?;
 
+    println!("{} credentials updated in {pgpass_path:?}", pgpass_entry.metadata.alias);
     println!(
-        "✅ {} credentials updated in {pgpass_path:?}",
-        pgpass_entry.metadata.alias
-    );
-    println!(
-        "✅ {} credentials updated in {nvim_dbee_conns_path:?}",
+        "{} credentials updated in {nvim_dbee_conns_path:?}",
         pgpass_entry.metadata.alias
     );
 

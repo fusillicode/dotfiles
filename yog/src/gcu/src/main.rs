@@ -94,14 +94,14 @@ fn checkout_files(files: &[&str], branch: &str) -> color_eyre::Result<()> {
     let mut args = vec!["checkout", branch];
     args.extend_from_slice(files);
     Command::new("git").args(args).exec()?;
-    files.iter().for_each(|f| println!("🍁 {f} from {branch}"));
+    files.iter().for_each(|f| println!("< {f} from {branch}"));
     Ok(())
 }
 
 /// Switches to the specified Git branch.
 fn switch_branch(branch: &str) -> color_eyre::Result<()> {
     Command::new("git").args(["switch", branch]).exec()?;
-    println!("🪵 {branch}");
+    println!("> {branch}");
     Ok(())
 }
 
@@ -111,7 +111,7 @@ fn create_branch(branch: &str) -> color_eyre::Result<()> {
         return Ok(());
     }
     Command::new("git").args(["checkout", "-b", branch]).exec()?;
-    println!("🌱 {branch}");
+    println!("+ {branch}");
     Ok(())
 }
 
@@ -124,12 +124,12 @@ fn should_create_new_branch(branch: &str) -> color_eyre::Result<bool> {
     if is_default_branch(&curr_branch) {
         return Ok(true);
     }
-    print!("🪚 {curr_branch} -> {branch} ");
+    print!("* {branch} from {curr_branch}");
     std::io::stdout().flush()?;
     let mut input = String::new();
     std::io::stdin().read_line(&mut input)?;
     if !input.trim().is_empty() {
-        print!("🪨 {branch} not created");
+        print!("x {branch} not created");
         return Ok(false);
     }
     Ok(true)
@@ -144,7 +144,7 @@ fn is_default_branch(branch: &str) -> bool {
 fn create_branch_if_missing(branch: &str) -> color_eyre::Result<()> {
     if let Err(error) = create_branch(branch) {
         if error.to_string().contains("already exists") {
-            println!("🌳 {branch}");
+            println!("@ {branch}");
             return switch_branch(branch);
         }
         return Err(error);
