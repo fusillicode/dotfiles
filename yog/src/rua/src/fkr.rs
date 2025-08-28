@@ -1,16 +1,10 @@
 use fkr::FkrOption;
-use nvim_oxi::Function;
-use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::Window;
 use nvim_oxi::api::opts::CreateCommandOptsBuilder;
 use strum::IntoEnumIterator;
 
-pub fn create_cmds() -> Object {
-    Object::from(Function::<(), _>::from_fn(create_cmds_core))
-}
-
-fn create_cmds_core(_: ()) {
+pub fn create_cmds(_: ()) {
     for fkr_opt in FkrOption::iter() {
         if let Err(error) = nvim_oxi::api::create_user_command(
             cmd_name(&fkr_opt),
