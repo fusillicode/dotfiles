@@ -4,6 +4,7 @@ use std::io::Write;
 use std::process::Command;
 
 use color_eyre::eyre::bail;
+use color_eyre::owo_colors::OwoColorize;
 use url::Url;
 use utils::cmd::CmdError;
 use utils::cmd::CmdExt;
@@ -94,14 +95,16 @@ fn checkout_files(files: &[&str], branch: &str) -> color_eyre::Result<()> {
     let mut args = vec!["checkout", branch];
     args.extend_from_slice(files);
     Command::new("git").args(args).exec()?;
-    files.iter().for_each(|f| println!("< {f} from {branch}"));
+    files
+        .iter()
+        .for_each(|f| println!("{} {} from {}", "<".yellow().bold(), f.bold(), branch.bold()));
     Ok(())
 }
 
 /// Switches to the specified Git branch.
 fn switch_branch(branch: &str) -> color_eyre::Result<()> {
     Command::new("git").args(["switch", branch]).exec()?;
-    println!("> {branch}");
+    println!("{} {}", ">".magenta().bold(), branch.bold());
     Ok(())
 }
 
@@ -111,7 +114,7 @@ fn create_branch(branch: &str) -> color_eyre::Result<()> {
         return Ok(());
     }
     Command::new("git").args(["checkout", "-b", branch]).exec()?;
-    println!("+ {branch}");
+    println!("{} {}", "+".green().bold(), branch.bold());
     Ok(())
 }
 
@@ -124,7 +127,7 @@ fn should_create_new_branch(branch: &str) -> color_eyre::Result<bool> {
     if is_default_branch(&curr_branch) {
         return Ok(true);
     }
-    print!("* {branch} from {curr_branch}");
+    print!("{} {} from {}", "*".cyan(), branch.bold(), curr_branch.bold());
     std::io::stdout().flush()?;
     let mut input = String::new();
     std::io::stdin().read_line(&mut input)?;
@@ -144,7 +147,7 @@ fn is_default_branch(branch: &str) -> bool {
 fn create_branch_if_missing(branch: &str) -> color_eyre::Result<()> {
     if let Err(error) = create_branch(branch) {
         if error.to_string().contains("already exists") {
-            println!("@ {branch}");
+            println!("{} {}", "@".blue().bold(), branch.bold());
             return switch_branch(branch);
         }
         return Err(error);
