@@ -7,6 +7,7 @@ use crate::diagnostics::filters::DiagnosticsFilter;
 use crate::diagnostics::filters::DiagnosticsFilters;
 use crate::diagnostics::filters::buffer::BufferFilter;
 
+/// Filters LSP diagnostics based on configured filters.
 pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
     let cur_buf = Buffer::current();
     let Ok(buf_path) = cur_buf

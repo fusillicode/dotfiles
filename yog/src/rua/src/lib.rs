@@ -15,6 +15,7 @@ mod statuscolumn;
 mod statusline;
 mod test_runner;
 
+/// The main plugin function that returns a [Dictionary] of Lua functions exposed to Neovim.
 #[nvim_oxi::plugin]
 fn rua() -> Dictionary {
     Dictionary::from_iter([

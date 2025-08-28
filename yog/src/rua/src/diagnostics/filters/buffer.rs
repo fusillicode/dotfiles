@@ -9,6 +9,7 @@ pub struct BufferFilter {
 }
 
 impl BufferFilter {
+    /// Creates a new [BufferFilter] with the default blacklist.
     pub fn new() -> Self {
         Self {
             blacklist: Self::paths_blacklist().to_vec(),
@@ -25,6 +26,7 @@ impl BufferFilter {
 }
 
 impl DiagnosticsFilter for BufferFilter {
+    /// Returns true if the buffer path is in the blacklist.
     fn skip_diagnostic(&self, buf_path: &str, _lsp_diag: Option<&Dictionary>) -> color_eyre::Result<bool> {
         Ok(self.blacklist.iter().any(|up| buf_path.contains(up)))
     }

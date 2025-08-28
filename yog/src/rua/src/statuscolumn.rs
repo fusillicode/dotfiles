@@ -7,6 +7,7 @@ use nvim_oxi::lua::ffi::State;
 use nvim_oxi::serde::Deserializer;
 use serde::Deserialize;
 
+/// Draws the status column for the current buffer.
 pub fn draw((cur_lnum, extmarks): (String, Vec<Extmark>)) -> Option<String> {
     let cur_buf = Buffer::current();
     let opts = OptionOptsBuilder::default().buf(cur_buf.clone()).build();
@@ -25,24 +26,29 @@ pub fn draw((cur_lnum, extmarks): (String, Vec<Extmark>)) -> Option<String> {
     ))
 }
 
+/// Represents an extmark in Neovim.
 #[derive(Deserialize)]
 #[allow(dead_code)]
 pub struct Extmark(u32, usize, usize, Option<ExtmarkMeta>);
 
 impl Extmark {
+    /// Returns the [ExtmarkMeta] of the extmark if present.
     pub fn meta(&self) -> Option<&ExtmarkMeta> {
         self.3.as_ref()
     }
 }
 
+/// Metadata associated with an extmark.
 #[derive(Deserialize, Clone)]
 pub struct ExtmarkMeta {
+    /// The highlight group for the sign.
     sign_hl_group: String,
-    // Option due to grug-far buffers
+    /// The text of the sign, optional due to grug-far buffers.
     sign_text: Option<String>,
 }
 
 impl ExtmarkMeta {
+    /// Draws the extmark metadata as a formatted string.
     fn draw(&self) -> String {
         format!(
             "%#{}#{}%*",
@@ -52,12 +58,14 @@ impl ExtmarkMeta {
     }
 }
 
+/// Implementation of [FromObject] for [Extmark].
 impl FromObject for Extmark {
     fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
         Self::deserialize(Deserializer::new(obj)).map_err(Into::into)
     }
 }
 
+/// Implementation of [Poppable] for [Extmark].
 impl Poppable for Extmark {
     unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
         unsafe {
@@ -67,18 +75,27 @@ impl Poppable for Extmark {
     }
 }
 
+/// Represents the status column with various signs and line number.
 #[derive(Default)]
 struct Statuscolumn {
+    /// Error diagnostic sign.
     error: Option<ExtmarkMeta>,
+    /// Warning diagnostic sign.
     warn: Option<ExtmarkMeta>,
+    /// Info diagnostic sign.
     info: Option<ExtmarkMeta>,
+    /// Hint diagnostic sign.
     hint: Option<ExtmarkMeta>,
+    /// Ok diagnostic sign.
     ok: Option<ExtmarkMeta>,
+    /// Git sign.
     git: Option<ExtmarkMeta>,
+    /// Current line number.
     cur_lnum: String,
 }
 
 impl Statuscolumn {
+    /// Draws the status column based on buffer type and [ExtmarkMeta]s.
     fn draw(cur_buf_type: &str, cur_lnum: String, extmarks: Vec<ExtmarkMeta>) -> String {
         match cur_buf_type {
             "grug-far" => " ".into(),
@@ -86,6 +103,7 @@ impl Statuscolumn {
         }
     }
 
+    /// Creates a new [Statuscolumn] from line number and [ExtmarkMeta]s.
     fn new(cur_lnum: String, extmarks: Vec<ExtmarkMeta>) -> Self {
         let mut statuscolumn = Self {
             cur_lnum,
@@ -108,6 +126,7 @@ impl Statuscolumn {
     }
 }
 
+/// Implementation of [Display] for [Statuscolumn].
 impl std::fmt::Display for Statuscolumn {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let diag_sign = [&self.error, &self.warn, &self.info, &self.hint, &self.ok]

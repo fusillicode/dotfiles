@@ -5,6 +5,7 @@ use nvim_oxi::lua::ffi::State;
 use nvim_oxi::serde::Deserializer;
 use serde::Deserialize;
 
+/// Formats a diagnostic into a human-readable string.
 pub fn format(diagnostic: Diagnostic) -> Option<String> {
     let Some(msg) = get_msg(&diagnostic).map(|s| s.trim_end_matches('.').to_string()) else {
         crate::oxi_utils::notify_error(&format!("no message in {diagnostic:#?}"));
@@ -56,20 +57,27 @@ fn get_code(diag: &Diagnostic) -> Option<&str> {
         .or(diag.code.as_deref())
 }
 
+/// Represents a diagnostic from Neovim.
 #[derive(Debug, Deserialize)]
 pub struct Diagnostic {
+    /// The diagnostic code.
     code: Option<String>,
+    /// The diagnostic message.
     message: Option<String>,
+    /// The source of the diagnostic.
     source: Option<String>,
+    /// Additional user data.
     user_data: Option<UserData>,
 }
 
+/// Implementation of [FromObject] for [Diagnostic].
 impl FromObject for Diagnostic {
     fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
         Self::deserialize(Deserializer::new(obj)).map_err(Into::into)
     }
 }
 
+/// Implementation of [Poppable] for [Diagnostic].
 impl Poppable for Diagnostic {
     unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
         unsafe {
@@ -79,20 +87,29 @@ impl Poppable for Diagnostic {
     }
 }
 
+/// User data associated with a diagnostic.
 #[derive(Debug, Deserialize)]
 pub struct UserData {
+    /// LSP-specific data.
     lsp: Option<Lsp>,
 }
 
+/// LSP data within user data.
 #[derive(Debug, Deserialize)]
 pub struct Lsp {
+    /// The diagnostic code.
     code: Option<String>,
+    /// Additional LSP data.
     data: Option<LspData>,
+    /// The diagnostic message.
     message: Option<String>,
+    /// The source of the diagnostic.
     source: Option<String>,
 }
 
+/// Additional LSP data.
 #[derive(Debug, Deserialize)]
 pub struct LspData {
+    /// The rendered diagnostic message.
     rendered: Option<String>,
 }

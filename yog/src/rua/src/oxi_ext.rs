@@ -4,9 +4,13 @@ use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
 use nvim_oxi::ObjectKind;
 
+/// Extension trait for [Dictionary] to provide typed getters.
 pub trait DictionaryExt {
+    /// Gets a string value from the dictionary by key.
     fn get_string(&self, key: &str) -> color_eyre::Result<String>;
+    /// Gets an i64 value from the dictionary by key.
     fn get_i64(&self, key: &str) -> color_eyre::Result<i64>;
+    /// Gets a nested [Dictionary] from the [Dictionary] by a sequence of keys.
     fn get_dict(&self, keys: &[&str]) -> color_eyre::Result<Option<Dictionary>>;
 }
 
@@ -42,6 +46,7 @@ impl DictionaryExt for Dictionary {
     }
 }
 
+/// Generates an error message for unexpected [Object] kind.
 pub fn unexpected_kind_error_msg(obj: &Object, key: &str, dict: &Dictionary, expected_kind: ObjectKind) -> String {
     format!(
         "value {obj:#?} of key {key:?} in dict {dict:#?} is {0:#?} but {expected_kind:?} was expected",
@@ -49,6 +54,7 @@ pub fn unexpected_kind_error_msg(obj: &Object, key: &str, dict: &Dictionary, exp
     )
 }
 
+/// Creates an error for missing value in [Dictionary].
 pub fn no_value_matching(query: &[&str], dict: &Dictionary) -> color_eyre::eyre::Error {
     eyre!("no value matching query {query:?} in dict {dict:#?}")
 }

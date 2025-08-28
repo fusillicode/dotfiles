@@ -10,10 +10,12 @@ use crate::oxi_ext::DictionaryExt;
 /// Filters out diagnostics already represented by other ones
 /// (e.g. HINTs pointing to a location already mentioned by other ERROR's rendered message)
 pub struct RelatedInfoFilter {
+    /// List of related information entries.
     rel_infos: Vec<RelatedInfo>,
 }
 
 impl RelatedInfoFilter {
+    /// Creates a new [RelatedInfoFilter] from LSP diagnostics.
     pub fn new(lsp_diags: &[Dictionary]) -> color_eyre::Result<Self> {
         Ok(Self {
             rel_infos: Self::get_related_infos(lsp_diags)?,
@@ -46,6 +48,7 @@ impl RelatedInfoFilter {
 }
 
 impl DiagnosticsFilter for RelatedInfoFilter {
+    /// Returns true if the diagnostic is related information already covered.
     fn skip_diagnostic(&self, _buf_path: &str, lsp_diag: Option<&Dictionary>) -> color_eyre::Result<bool> {
         let Some(lsp_diag) = lsp_diag else {
             return Ok(false);
@@ -65,10 +68,15 @@ impl DiagnosticsFilter for RelatedInfoFilter {
 /// Common shape of a root LSP diagnostic and the elements of its "user_data.lsp.relatedInformation".
 #[derive(PartialEq)]
 struct RelatedInfo {
+    /// The diagnostic message.
     message: String,
+    /// The starting line number.
     lnum: i64,
+    /// The starting column number.
     col: i64,
+    /// The ending line number.
     end_lnum: i64,
+    /// The ending column number.
     end_col: i64,
 }
 
