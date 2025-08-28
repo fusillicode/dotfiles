@@ -1,4 +1,3 @@
-use nvim_oxi::Function;
 use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::opts::OptionOptsBuilder;
@@ -8,11 +7,7 @@ use nvim_oxi::lua::ffi::State;
 use nvim_oxi::serde::Deserializer;
 use serde::Deserialize;
 
-pub fn draw() -> Object {
-    Object::from(Function::<(String, Vec<Extmark>), Option<_>>::from_fn(draw_core))
-}
-
-fn draw_core((cur_lnum, extmarks): (String, Vec<Extmark>)) -> Option<String> {
+pub fn draw((cur_lnum, extmarks): (String, Vec<Extmark>)) -> Option<String> {
     let cur_buf = Buffer::current();
     let opts = OptionOptsBuilder::default().buf(cur_buf.clone()).build();
     let cur_buf_type = nvim_oxi::api::get_option_value::<String>("buftype", &opts)
@@ -32,7 +27,7 @@ fn draw_core((cur_lnum, extmarks): (String, Vec<Extmark>)) -> Option<String> {
 
 #[derive(Deserialize)]
 #[allow(dead_code)]
-struct Extmark(u32, usize, usize, Option<ExtmarkMeta>);
+pub struct Extmark(u32, usize, usize, Option<ExtmarkMeta>);
 
 impl Extmark {
     pub fn meta(&self) -> Option<&ExtmarkMeta> {
@@ -41,7 +36,7 @@ impl Extmark {
 }
 
 #[derive(Deserialize, Clone)]
-struct ExtmarkMeta {
+pub struct ExtmarkMeta {
     sign_hl_group: String,
     // Option due to grug-far buffers
     sign_text: Option<String>,
