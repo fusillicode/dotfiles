@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "Command retry utility that executes commands until specified exit conditions are met"
+description = "Command retry utility"
 keywords = ["cli", "retry", "command", "automation", "testing"]
 categories = ["command-line-utilities", "development-tools"]
 

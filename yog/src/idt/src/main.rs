@@ -37,70 +37,20 @@ use crate::installers::yaml_language_server::YamlLanguageServer;
 mod downloaders;
 mod installers;
 
-/// A development tools installer that manages language servers and development utilities.
-///
-/// This tool installs and manages various development tools including language servers,
-/// linters, formatters, and other development utilities. It supports parallel installation
-/// and can install specific tools or all available tools.
+/// Installs development tools including language servers and utilities.
 ///
 /// # Arguments
 ///
-/// * `dev_tools_dir` - Directory where development tools will be installed
-/// * `bin_dir` - Directory where tool binaries will be linked
-/// * `tool_names` - Optional list of specific tools to install (installs all if omitted)
-///
-/// # Supported Tools
-///
-/// Language Servers:
-/// - bash-language-server
-/// - docker-langserver
-/// - elixir-ls
-/// - elm-language-server
-/// - graphql-lsp
-/// - helm-ls
-/// - lua-language-server
-/// - marksman
-/// - rust-analyzer
-/// - sql-language-server
-/// - terraform-ls
-/// - typescript-language-server
-/// - typos-lsp
-/// - vscode-langservers
-/// - yaml-language-server
-///
-/// Development Tools:
-/// - commitlint
-/// - deno
-/// - eslint_d
-/// - hadolint
-/// - harper-ls
-/// - nvim
-/// - prettierd
-/// - quicktype
-/// - ruff-lsp
-/// - shellcheck
-/// - sqruff
-/// - taplo
+/// * `dev_tools_dir` - Directory for tool installation
+/// * `bin_dir` - Directory for binary symlinks
+/// * `tool_names` - Optional specific tools to install
 ///
 /// # Examples
 ///
-/// Install all development tools:
 /// ```bash
 /// idt ~/.dev-tools ~/.local/bin
-/// ```
-///
-/// Install specific tools:
-/// ```bash
 /// idt ~/.dev-tools ~/.local/bin rust-analyzer typescript-language-server
 /// ```
-///
-/// # Installation Process
-///
-/// 1. Downloads tools from their respective sources
-/// 2. Installs them to the specified dev_tools_dir
-/// 3. Creates symlinks in bin_dir for executable access
-/// 4. Removes dead symlinks from previous installations
-/// 5. Reports installation results with success/error counts
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

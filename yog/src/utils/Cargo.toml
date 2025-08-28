@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "Shared utility library providing common functionality across all yog tools"
+description = "Shared utility library for yog tools"
 keywords = ["library", "utilities", "common", "shared", "tools"]
 categories = ["development-tools", "rust-patterns"]
 
