@@ -57,10 +57,9 @@ fn main() -> color_eyre::Result<()> {
 
     let args = utils::system::get_args();
     println!(
-        "{}",
-        format!("Started {:#?} with args: {args:#?}", std::env::current_exe()?)
-            .bold()
-            .cyan()
+        "{:#?} started with args {}",
+        std::env::current_exe()?.bold().cyan(),
+        format!("{args:#?}").bold()
     );
 
     let dev_tools_dir = args
@@ -194,10 +193,8 @@ fn main() -> color_eyre::Result<()> {
 
     if !unknown_bin_names.is_empty() {
         eprintln!(
-            "{}",
-            format!("no installers matches the following bins {unknown_bin_names:#?}")
-                .bold()
-                .yellow()
+            "{} bins without matching installers",
+            format!("{unknown_bin_names:#?}").yellow().bold()
         );
     }
 
@@ -212,10 +209,9 @@ fn main() -> color_eyre::Result<()> {
             .fold(vec![], |mut acc, (bin_name, handle)| {
                 if let Err(error) = handle.join() {
                     eprintln!(
-                        "{}",
-                        format!("{bin_name} installer thread panicked, error {error:#?}")
-                            .red()
-                            .bold()
+                        "{} installer thread panicked, {}",
+                        bin_name.bold().red(),
+                        format!("error {error:#?}").red().bold()
                     );
                     acc.push((bin_name, error));
                 }
