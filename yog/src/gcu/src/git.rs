@@ -3,7 +3,7 @@ use std::process::Command;
 
 use chrono::DateTime;
 use chrono::FixedOffset;
-use color_eyre::owo_colors::OwoColorize;
+use color_eyre::owo_colors::OwoColorize as _;
 use serde::Deserialize;
 use serde::Deserializer;
 use utils::cmd::CmdExt;

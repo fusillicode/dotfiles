@@ -4,7 +4,7 @@ use std::io::Write;
 use std::process::Command;
 
 use color_eyre::eyre::bail;
-use color_eyre::owo_colors::OwoColorize;
+use color_eyre::owo_colors::OwoColorize as _;
 use url::Url;
 use utils::cmd::CmdError;
 use utils::cmd::CmdExt;

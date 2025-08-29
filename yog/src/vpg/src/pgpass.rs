@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 use color_eyre::eyre::WrapErr;
 use color_eyre::eyre::bail;
-use color_eyre::owo_colors::OwoColorize;
+use color_eyre::owo_colors::OwoColorize as _;
 use utils::sk::SkimItem;
 use utils::sk::SkimItemPreview;
 use utils::sk::SkimPreviewContext;

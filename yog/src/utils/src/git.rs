@@ -4,7 +4,7 @@ use std::process::Command;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 
-use crate::cmd::CmdExt;
+use crate::cmd::CmdExt as _;
 
 /// Finds the root directory of the Git repository containing the given file path, or the current directory if none
 /// provided.
