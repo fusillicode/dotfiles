@@ -1,8 +1,42 @@
 [build]
-rustflags = ["-Ctarget-cpu=native"]
+rustflags = [
+  "-Ctarget-cpu=native",
+  "-Dclippy::all",
+  "-Dclippy::cargo",
+  "-Dclippy::complexity",
+  "-Dclippy::correctness",
+  "-Dclippy::nursery",
+  "-Dclippy::pedantic",
+  "-Dclippy::perf",
+  "-Dclippy::print_stdout",
+  "-Dclippy::print_stderr",
+  "-Dclippy::dbg_macro",
+  "-Dclippy::unimplemented",
+  "-Dclippy::todo",
+  "-Dclippy::unreachable",
+  "-Dclippy::panic",
+  "-Dclippy::unwrap_used",
+  "-Dclippy::expect_used",
+  "-Dclippy::indexing_slicing",
+  "-Dclippy::arithmetic_side_effects",
+  "-Dclippy::float_arithmetic",
+  "-Dclippy::implicit_return",
+  "-Dclippy::question_mark_used",
+  "-Dclippy::implicit_clone",
+  "-Dclippy::redundant_else",
+  "-Dclippy::single_match",
+  "-Dclippy::wildcard_enum_match_arm",
+  "-Dclippy::rc_buffer",
+  "-Dclippy::vec_init_then_push",
+  "-Dclippy::style",
+  "-Dclippy::suspicious",
+]
 
 [target.x86_64-apple-darwin]
 rustflags = ["-C", "link-arg=-undefined", "-C", "link-arg=dynamic_lookup"]
 
 [target.aarch64-apple-darwin]
 rustflags = ["-C", "link-arg=-undefined", "-C", "link-arg=dynamic_lookup"]
+
+[alias]
+lint-all = "clippy -- -D clippy::all -D clippy::correctness -D clippy::suspicious -D clippy::style -D clippy::complexity -D clippy::perf -D clippy::pedantic -D clippy::print_stdout -D clippy::print_stderr -D clippy::dbg_macro -D clippy::unimplemented -D clippy::todo -D clippy::unreachable -D clippy::panic -D clippy::unwrap_used -D clippy::expect_used -D clippy::indexing_slicing -D clippy::arithmetic_side_effects -D clippy::float_arithmetic -D clippy::implicit_return -D clippy::question_mark_used -D clippy::implicit_clone -D clippy::redundant_else -D clippy::single_match -D clippy::wildcard_enum_match_arm -D clippy::rc_buffer -D clippy::vec_init_then_push -D clippy::nursery -D clippy::cargo"
