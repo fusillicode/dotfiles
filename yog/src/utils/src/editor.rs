@@ -29,7 +29,7 @@ impl Editor {
     }
 
     /// Returns the pane titles associated with the [`Editor`] variant.
-    pub fn pane_titles(&self) -> &[&str] {
+    pub const fn pane_titles(&self) -> &[&str] {
         match self {
             Self::Hx => &["hx"],
             Self::Nvim => &["nvim", "nv"],
