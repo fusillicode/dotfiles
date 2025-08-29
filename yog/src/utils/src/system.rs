@@ -1,14 +1,14 @@
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::thread::JoinHandle;
 
 use color_eyre::eyre;
-use color_eyre::eyre::OptionExt;
+use color_eyre::eyre::OptionExt as _;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
-use color_eyre::owo_colors::OwoColorize;
+use color_eyre::owo_colors::OwoColorize as _;
 
 /// Retrieves command-line arguments excluding the program name, returning them as a [`Vec`] of [`String`].
 pub fn get_args() -> Vec<String> {

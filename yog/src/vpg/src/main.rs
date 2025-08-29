@@ -3,7 +3,7 @@
 use std::process::Command;
 use std::process::Stdio;
 
-use color_eyre::owo_colors::OwoColorize;
+use color_eyre::owo_colors::OwoColorize as _;
 
 use crate::pgpass::PgpassEntry;
 use crate::pgpass::PgpassFile;

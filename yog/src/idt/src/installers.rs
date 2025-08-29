@@ -1,6 +1,6 @@
 use std::process::Command;
 
-use color_eyre::owo_colors::OwoColorize;
+use color_eyre::owo_colors::OwoColorize as _;
 use utils::cmd::CmdDetails;
 use utils::cmd::CmdError;
 use utils::cmd::CmdExt;

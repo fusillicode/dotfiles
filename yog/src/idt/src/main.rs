@@ -4,7 +4,7 @@ use std::path::Path;
 
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
-use color_eyre::owo_colors::OwoColorize;
+use color_eyre::owo_colors::OwoColorize as _;
 
 use crate::installers::Installer;
 use crate::installers::bash_language_server::BashLanguageServer;

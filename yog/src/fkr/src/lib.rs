@@ -3,7 +3,7 @@
 
 use std::borrow::Cow;
 
-use color_eyre::owo_colors::OwoColorize;
+use color_eyre::owo_colors::OwoColorize as _;
 use fake::Fake;
 use strum::Display;
 use strum::EnumIter;
