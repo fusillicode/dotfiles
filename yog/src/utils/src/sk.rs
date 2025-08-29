@@ -4,8 +4,11 @@ pub use skim::PreviewContext as SkimPreviewContext;
 pub use skim::SkimItem;
 use skim::prelude::*;
 
-/// Prompts the user to select either [`YesNo::Yes`] or [`YesNo::No`] using the skim fuzzy finder.
-/// Returns [`Option::Some`][YesNo] if an option is selected, or [`Option::None`] if the selection is canceled.
+/// Prompts the user to select either [`YesNo::Yes`] or [`YesNo::No`]
+/// using the skim fuzzy finder.
+///
+/// Returns [`Option::Some`][YesNo] if an option is selected,
+/// or [`Option::None`] if the selection is canceled.
 ///
 /// # Errors
 ///
