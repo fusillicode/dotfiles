@@ -95,7 +95,7 @@ fn extract_pr_id_form_url(url: &Url) -> color_eyre::Result<String> {
                 if pr_id.is_empty() {
                     return Err(eyre!("empty PR id in {url} path segments {path_segments:#?}"));
                 }
-                Ok(pr_id.to_string())
+                Ok((*pr_id).to_string())
             })?),
         [] => Err(eyre!(
             "missing PR id prefix {GITHUB_PR_ID_PREFIX:#?} in {url} path segments {path_segments:#?}"

@@ -42,5 +42,5 @@ pub fn get_current_branch() -> color_eyre::Result<String> {
             .stdout,
     )?
     .trim()
-    .to_string())
+    .to_owned())
 }

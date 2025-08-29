@@ -16,7 +16,7 @@ pub fn submit_pane_cmd(pane_id: i64) -> String {
 
 /// Generates a command string to activate a specific [`WeztermPane`] using the Wezterm CLI.
 pub fn activate_pane_cmd(pane_id: i64) -> String {
-    format!(r#"wezterm cli activate-pane --pane-id '{pane_id}'"#)
+    format!("wezterm cli activate-pane --pane-id '{pane_id}'")
 }
 
 /// Retrieves the current pane ID from the WEZTERM_PANE environment variable.
@@ -50,9 +50,7 @@ pub fn get_sibling_pane_with_titles(
     Ok(panes
         .iter()
         .find(|w| w.tab_id == current_pane_tab_id && pane_titles.contains(&w.title.as_str()))
-        .ok_or(eyre!(
-            "pane with title '{pane_titles:#?}' not found in tab '{current_pane_tab_id}'"
-        ))?
+        .ok_or_else(|| eyre!("pane with title '{pane_titles:#?}' not found in tab '{current_pane_tab_id}'"))?
         .clone())
 }
 
@@ -110,10 +108,7 @@ impl WeztermPane {
         let mut path_parts = self.cwd.components();
         path_parts.next(); // Skip `file://`
         path_parts.next(); // Skip hostname
-
-        let mut res = PathBuf::from("/");
-        res.push(path_parts.collect::<PathBuf>());
-        res
+        PathBuf::from("/").join(path_parts.collect::<PathBuf>())
     }
 }
 

@@ -123,7 +123,7 @@ fn get_items<T: SkimItem + Clone + core::fmt::Debug>(
                 .as_any()
                 .downcast_ref::<T>()
                 .cloned()
-                .ok_or_else(|| eyre!("cannot downcast SkimItem to type {}", std::any::type_name::<T>()))?,
+                .ok_or_else(|| eyre!("cannot downcast SkimItem to type {}", core::any::type_name::<T>()))?,
         );
     }
     Ok(out)
