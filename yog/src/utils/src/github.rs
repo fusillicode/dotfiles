@@ -71,7 +71,8 @@ fn extract_success_output(output: Output) -> color_eyre::Result<String> {
 ///
 /// Supports various GitHub URL formats:
 /// - Direct PR URLs: `https://github.com/owner/repo/pull/123`
-/// - GitHub Actions URLs with pr query parameter: `https://github.com/owner/repo/actions/runs/123?pr=456`
+/// - GitHub Actions URLs with `pr` query parameter:
+///   `https://github.com/owner/repo/actions/runs/123?pr=456`
 fn extract_pr_id_form_url(url: &Url) -> color_eyre::Result<String> {
     let host = url.host_str().ok_or_else(|| eyre!("cannot extract host from {url}"))?;
     if host != GITHUB_HOST {

@@ -18,7 +18,7 @@ pub fn get_args() -> Vec<String> {
 }
 
 /// Joins a thread handle and returns the result, handling join errors as [`eyre::Error`].
-/// Awaits a JoinHandle and unwraps the inner Result.
+/// Awaits a `JoinHandle` and unwraps the inner `Result`.
 ///
 /// # Errors
 ///
