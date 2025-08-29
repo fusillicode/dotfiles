@@ -51,7 +51,7 @@ impl FromStr for Editor {
 }
 
 /// Represents a file to be opened in an editor with optional line and column positioning.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct FileToOpen {
     /// The column number to position the cursor (0-based, defaults to 0).
     column: i64,
