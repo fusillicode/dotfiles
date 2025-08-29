@@ -1,10 +1,10 @@
 #![feature(exit_status_error)]
 
+use core::str::FromStr;
 use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
-use core::str::FromStr;
 use std::sync::Arc;
 
 use color_eyre::eyre::eyre;

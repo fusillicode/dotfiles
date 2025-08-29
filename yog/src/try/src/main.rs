@@ -1,8 +1,8 @@
 #![feature(exit_status_error)]
 
+use core::str::FromStr;
 use std::process::Command;
 use std::process::ExitStatusError;
-use core::str::FromStr;
 use std::time::Duration;
 use std::time::Instant;
 
