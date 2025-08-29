@@ -90,7 +90,7 @@ impl Severity {
     /// Draws the diagnostic count for this severity.
     fn draw_diagnostics(&self, diags_count: i32) -> String {
         if diags_count == 0 {
-            return "".into();
+            return String::new();
         }
         let (hg_group, sym) = match self {
             Severity::Error => ("DiagnosticStatusLineError", "E"),
