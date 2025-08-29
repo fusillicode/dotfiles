@@ -144,7 +144,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_status_line_draw_works_as_expected() {
+    fn status_line_draw_works_as_expected() {
         for statusline in [
             Statusline {
                 cur_buf_path: "foo".into(),

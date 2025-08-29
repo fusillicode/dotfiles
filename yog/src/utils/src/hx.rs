@@ -79,7 +79,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_hx_cursor_from_str_works_as_expected_with_a_file_path_pointing_to_an_existent_file_in_normal_mode() {
+    fn hx_cursor_from_str_works_as_expected_with_a_file_path_pointing_to_an_existent_file_in_normal_mode() {
         let result = HxStatusLine::from_str(
             "      ● 1 ` src/utils.rs `                                                                  1 sel  1 char  W ● 1  42:33 ",
         );
@@ -92,7 +92,7 @@ mod tests {
     }
 
     #[test]
-    fn test_hx_cursor_from_str_works_as_expected_with_a_file_path_pointing_to_an_existent_file_and_a_spinner() {
+    fn hx_cursor_from_str_works_as_expected_with_a_file_path_pointing_to_an_existent_file_and_a_spinner() {
         let result = HxStatusLine::from_str(
             "⣷      ` src/utils.rs `                                                                  1 sel  1 char  W ● 1  33:42 ",
         );

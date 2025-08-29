@@ -112,7 +112,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_file_to_open_is_properly_constructed_from_expected_str() {
+    fn file_to_open_is_properly_constructed_from_expected_str() {
         let root_dir = std::env::current_dir().unwrap();
         // We should always have a Cargo.toml...
         let dummy_path = root_dir.join("Cargo.toml").to_string_lossy().to_string();

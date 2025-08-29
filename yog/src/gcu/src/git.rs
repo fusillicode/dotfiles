@@ -165,7 +165,7 @@ mod tests {
     #[rstest]
     #[case("foo", "foo", None)]
     #[case("refs/remotes/bar/baz", "baz", Some("bar"))]
-    fn test_git_ref_deserialization_succeeds(
+    fn git_ref_deserialization_succeeds(
         #[case] json_refname: &str,
         #[case] expected_ref_name: &str,
         #[case] expected_remote: Option<&str>,

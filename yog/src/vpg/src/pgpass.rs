@@ -214,7 +214,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_creds_try_from_returns_the_expected_creds() {
+    fn creds_try_from_returns_the_expected_creds() {
         assert_eq!(
             ConnectionParams {
                 idx: 42,
@@ -229,7 +229,7 @@ mod tests {
     }
 
     #[test]
-    fn test_creds_try_from_returns_an_error_if_port_is_not_a_number() {
+    fn creds_try_from_returns_an_error_if_port_is_not_a_number() {
         let res = format!("{:#?}", ConnectionParams::try_from((42, "host:foo:db:user:pwd")));
         assert!(
             res.contains("Err(\n    Error {\n        msg: \"unexpected port value foo\",\n        source: ParseIntError {\n            kind: InvalidDigit,\n        },\n    },\n)"),
@@ -238,7 +238,7 @@ mod tests {
     }
 
     #[test]
-    fn test_creds_try_from_returns_an_error_if_str_is_malformed() {
+    fn creds_try_from_returns_an_error_if_str_is_malformed() {
         let res = format!("{:#?}", ConnectionParams::try_from((42, "host:5432:db:user")));
         assert!(
             res.contains("Err(\n    \"cannot build CredsLine from idx_line (\\n    42,\\n    \\\"host:5432:db:user\\\",\\n)\",\n)"),
@@ -247,7 +247,7 @@ mod tests {
     }
 
     #[test]
-    fn test_creds_db_url_returns_the_expected_output() {
+    fn creds_db_url_returns_the_expected_output() {
         assert_eq!(
             "postgres://user@host:5432/db".to_string(),
             ConnectionParams {

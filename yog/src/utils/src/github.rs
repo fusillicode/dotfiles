@@ -111,14 +111,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_extract_pr_id_form_url_returns_the_expected_error_when_host_cannot_be_extracted() {
+    fn extract_pr_id_form_url_returns_the_expected_error_when_host_cannot_be_extracted() {
         let url = Url::parse("mailto:foo@bar.com").unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_url(&url));
         assert_eq!("cannot extract host from mailto:foo@bar.com", error.to_string())
     }
 
     #[test]
-    fn test_extract_pr_id_form_url_returns_the_expected_error_when_url_is_not_from_github() {
+    fn extract_pr_id_form_url_returns_the_expected_error_when_url_is_not_from_github() {
         let url = Url::parse("https://foo.bar").unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_url(&url));
         assert_eq!(
@@ -128,7 +128,7 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_pr_id_form_url_returns_the_expected_error_when_url_doesnt_have_path_segments() {
+    fn extract_pr_id_form_url_returns_the_expected_error_when_url_doesnt_have_path_segments() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}")).unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_url(&url));
         assert_eq!(
@@ -138,7 +138,7 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_pr_id_form_url_returns_the_expected_error_when_url_doesnt_have_pr_id() {
+    fn extract_pr_id_form_url_returns_the_expected_error_when_url_doesnt_have_pr_id() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/pull")).unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_url(&url));
         assert_eq!(
@@ -148,7 +148,7 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_pr_id_form_url_returns_the_expected_error_when_url_doenst_have_the_expected_pr_id_prefix() {
+    fn extract_pr_id_form_url_returns_the_expected_error_when_url_doenst_have_the_expected_pr_id_prefix() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/foo")).unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_url(&url));
         assert_eq!(
@@ -158,7 +158,7 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_pr_id_form_url_returns_the_expected_error_when_url_has_multiple_pr_id_prefixes() {
+    fn extract_pr_id_form_url_returns_the_expected_error_when_url_has_multiple_pr_id_prefixes() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/pull/42/pull/43")).unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_url(&url));
         assert_eq!(
@@ -168,26 +168,26 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_that_ends_with_the_pr_id() {
+    fn extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_that_ends_with_the_pr_id() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/pull/42")).unwrap();
         assert_eq!("42", extract_pr_id_form_url(&url).unwrap())
     }
 
     #[test]
-    fn test_extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_that_does_not_end_with_the_pr_id() {
+    fn extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_that_does_not_end_with_the_pr_id() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/pull/42/foo")).unwrap();
         assert_eq!("42", extract_pr_id_form_url(&url).unwrap())
     }
 
     #[test]
-    fn test_extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_if_pr_id_prefix_is_not_1st_path_segment()
+    fn extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_if_pr_id_prefix_is_not_1st_path_segment()
      {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/foo/pull/42/foo")).unwrap();
         assert_eq!("42", extract_pr_id_form_url(&url).unwrap())
     }
 
     #[test]
-    fn test_extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_if_pr_is_in_query_string() {
+    fn extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_if_pr_is_in_query_string() {
         let url = Url::parse(&format!(
             "https://{GITHUB_HOST}/<OWNER>/<REPO>/actions/runs/<RUN_ID>?pr=42"
         ))
