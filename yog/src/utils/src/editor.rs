@@ -41,11 +41,11 @@ impl Editor {
 impl FromStr for Editor {
     type Err = eyre::Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
             "hx" => Ok(Self::Hx),
             "nvim" | "nv" => Ok(Self::Nvim),
-            s => Err(eyre!("unknown editor {s}")),
+            value => Err(eyre!("unknown editor {value}")),
         }
     }
 }
@@ -72,7 +72,7 @@ impl TryFrom<(&str, i64, &[WeztermPane])> for FileToOpen {
 
         let mut source_pane_absolute_cwd = panes
             .iter()
-            .find(|p| p.pane_id == pane_id)
+            .find(|pane| pane.pane_id == pane_id)
             .ok_or_else(|| eyre!("missing panes with id {pane_id} in {panes:#?}"))?
             .absolute_cwd();
 

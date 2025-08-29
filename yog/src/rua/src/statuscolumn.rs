@@ -22,7 +22,7 @@ pub fn draw((cur_lnum, extmarks): (String, Vec<Extmark>)) -> Option<String> {
     Some(Statuscolumn::draw(
         &cur_buf_type,
         cur_lnum,
-        extmarks.iter().filter_map(|e| e.meta().cloned()).collect(),
+        extmarks.iter().filter_map(|extmark| extmark.meta().cloned()).collect(),
     ))
 }
 
