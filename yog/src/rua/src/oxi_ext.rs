@@ -81,7 +81,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_dictionary_ext_get_t_works_as_expected() {
+    fn dictionary_ext_get_t_works_as_expected() {
         let dict = Dictionary::from_iter([("foo", "42")]);
         assert_eq!(
             r#"missing value matching query ["bar"] in dict { foo: "42" }"#,
@@ -99,7 +99,7 @@ mod tests {
     }
 
     #[test]
-    fn test_dictionary_ext_get_dict_works_as_expected() {
+    fn dictionary_ext_get_dict_works_as_expected() {
         let dict = Dictionary::from_iter([("foo", "42")]);
         assert_eq!(None, dict.get_dict(&["bar"]).unwrap());
 
