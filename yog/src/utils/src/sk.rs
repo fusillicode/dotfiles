@@ -146,7 +146,7 @@ fn base_sk_opts(opts_builder: &mut SkimOptionsBuilder) -> &mut SkimOptionsBuilde
         .no_multi(true)
         .inline_info(true)
         .layout("reverse".into())
-        .preview(Some("".into()))
+        .preview(Some(String::new()))
         .preview_window("down:50%".into())
         .color(Some("16,prompt:#ffffff".into()))
         .cycle(true)
