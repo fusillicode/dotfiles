@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use std::str::FromStr;
+use core::str::FromStr;
 
 use color_eyre::eyre;
 use color_eyre::eyre::bail;

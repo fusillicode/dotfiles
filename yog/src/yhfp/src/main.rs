@@ -1,7 +1,7 @@
 #![feature(exit_status_error)]
 
 use std::process::Command;
-use std::str::FromStr;
+use core::str::FromStr;
 
 use color_eyre::eyre::eyre;
 use utils::editor::Editor;
