@@ -1,12 +1,12 @@
-use std::path::PathBuf;
 use core::str::FromStr;
+use std::path::PathBuf;
 
 use color_eyre::eyre;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 
 /// Represents the parsed status line from Helix editor, containing file path and cursor position.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 #[cfg_attr(any(test, feature = "fake"), derive(fake::Dummy))]
 pub struct HxStatusLine {
     /// The file path currently open in the editor.
@@ -49,7 +49,7 @@ impl FromStr for HxStatusLine {
 }
 
 /// Represents a cursor position in a text file with line and column coordinates.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 #[cfg_attr(any(test, feature = "fake"), derive(fake::Dummy))]
 pub struct HxCursorPosition {
     /// The column number (1-based).
