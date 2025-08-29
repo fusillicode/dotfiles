@@ -17,7 +17,7 @@ pub fn get_repo_root(file_path: Option<&Path>) -> color_eyre::Result<String> {
             .ok_or_else(|| eyre!("cannot get str from Path {file_path:#?}"))?;
         format!("-C {file_parent_dir}")
     } else {
-        "".into()
+        String::new()
     };
 
     // Without spawning an additional `sh` shell I get an empty `Command` output 🥲
