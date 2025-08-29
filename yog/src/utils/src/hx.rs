@@ -33,7 +33,11 @@ impl FromStr for HxStatusLine {
             .rposition(|x| x == &"`")
             .ok_or_else(|| eyre!("missing right path separator in status line elements {elements:#?}"))?;
 
-        let &["`", path] = &elements[path_left_separator_idx..path_right_separator_idx] else {
+        let path_slice_range = path_left_separator_idx..path_right_separator_idx;
+        let path_slice = elements
+            .get(path_slice_range.clone())
+            .ok_or_else(|| eyre!("invalid path slice indices {path_slice_range:#?}"))?;
+        let ["`", path] = path_slice else {
             bail!("missing path in status line elements {elements:#?}");
         };
 
