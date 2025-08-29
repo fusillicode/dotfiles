@@ -30,7 +30,7 @@ fn main() -> color_eyre::Result<()> {
     let args = utils::system::get_args();
 
     let Some((cooldown_secs, args)) = args.split_first() else {
-        bail!("no cooldown supplied in {args:#?}");
+        bail!("missing cooldown supplied in {args:#?}");
     };
     let cooldown = Duration::from_secs(
         cooldown_secs
@@ -39,7 +39,7 @@ fn main() -> color_eyre::Result<()> {
     );
 
     let Some((exit_cond, args)) = args.split_first() else {
-        bail!("no exit condition supplied in {args:#?}");
+        bail!("missing exit condition supplied in {args:#?}");
     };
     let exit_cond = ExitCond::from_str(exit_cond).with_context(|| format!("in supplied args {args:#?}"))?;
 
