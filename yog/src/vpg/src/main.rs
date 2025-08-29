@@ -1,11 +1,9 @@
 #![feature(exit_status_error)]
 
-use std::borrow::Cow;
 use std::process::Command;
 use std::process::Stdio;
 
 use color_eyre::owo_colors::OwoColorize;
-use utils::sk::SkimItem;
 
 use crate::pgpass::PgpassEntry;
 use crate::pgpass::PgpassFile;
@@ -78,12 +76,7 @@ fn main() -> color_eyre::Result<()> {
     // Cosmetic space in prompt.
     println!();
 
-    let sk_opts = utils::sk::base_sk_opts(&mut Default::default())
-        .prompt(format!("Connect to {}: ", pgpass_entry.metadata.alias))
-        .preview(None)
-        .no_clear_start(true)
-        .final_build()?;
-    if let Some(Answer::Yes) = utils::sk::get_item(vec![Answer::Yes, Answer::No], Some(sk_opts))? {
+    if utils::sk::select_yes_or_no(format!("Connect to {}? ", pgpass_entry.metadata.alias))?.is_some_and(From::from) {
         let db_url = pgpass_entry.connection_params.db_url();
         println!(
             "\nConnecting to {} @\n\n{}\n",
@@ -108,19 +101,4 @@ fn main() -> color_eyre::Result<()> {
     }
 
     Ok(())
-}
-
-#[derive(Clone, Copy, Debug)]
-enum Answer {
-    Yes,
-    No,
-}
-
-impl SkimItem for Answer {
-    fn text(&self) -> std::borrow::Cow<'_, str> {
-        Cow::from(match self {
-            Answer::Yes => "Yes",
-            Answer::No => "No",
-        })
-    }
 }
