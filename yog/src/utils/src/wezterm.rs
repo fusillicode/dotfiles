@@ -19,7 +19,7 @@ pub fn activate_pane_cmd(pane_id: i64) -> String {
     format!("wezterm cli activate-pane --pane-id '{pane_id}'")
 }
 
-/// Retrieves the current pane ID from the WEZTERM_PANE environment variable.
+/// Retrieves the current pane ID from the `WEZTERM_PANE` environment variable.
 pub fn get_current_pane_id() -> color_eyre::Result<i64> {
     Ok(std::env::var("WEZTERM_PANE")?.parse()?)
 }
