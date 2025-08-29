@@ -104,9 +104,7 @@ impl WeztermPane {
     pub fn is_sibling_terminal_pane_of(&self, other: &WeztermPane) -> bool {
         self.pane_id != other.pane_id && self.tab_id == other.tab_id && self.cwd.starts_with(&other.cwd)
     }
-}
 
-impl WeztermPane {
     /// Converts the current working directory from a file URI to an absolute [PathBuf].
     pub fn absolute_cwd(&self) -> PathBuf {
         let mut path_parts = self.cwd.components();

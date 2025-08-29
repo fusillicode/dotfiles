@@ -212,7 +212,7 @@ mod tests {
         "❌",
         "Err(\n    \"parameterizing [\\n    \\\"❌\\\",\\n] resulted in empty String\",\n)"
     )]
-    fn test_build_branch_name_fails_as_expected(#[case] input: &str, #[case] expected_content: &str) {
+    fn build_branch_name_fails_as_expected(#[case] input: &str, #[case] expected_content: &str) {
         let res = format!("{:#?}", build_branch_name(&[input]));
         assert!(res.contains(expected_content), "unexpected {res}");
     }
@@ -232,7 +232,7 @@ mod tests {
     #[case(&["Hello World", "🌎", "42"], "hello-world-42")]
     #[case(&["This", "---is.", "..a_test"], "this-is.-..a_test")]
     #[case(&["dependabot/cargo/opentelemetry-0.27.1"], "dependabot/cargo/opentelemetry-0.27.1")]
-    fn test_build_branch_name_succeeds_as_expected(#[case] input: &[&str], #[case] expected_output: &str) {
+    fn build_branch_name_succeeds_as_expected(#[case] input: &[&str], #[case] expected_output: &str) {
         assert_eq!(expected_output, build_branch_name(input).unwrap());
     }
 }

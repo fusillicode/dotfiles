@@ -145,7 +145,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_statuscolumn_draw_works_as_expected() {
+    fn statuscolumn_draw_works_as_expected() {
         // No extmarks
         let out = Statuscolumn::draw("foo", "42".into(), vec![]);
         assert_eq!("  %=% 42 ", &out);
