@@ -7,7 +7,7 @@ use skim::prelude::*;
 /// Prompts the user to select either [`YesNo::Yes`] or [`YesNo::No`] using the skim fuzzy finder.
 /// Returns [`Option::Some`][YesNo] if an option is selected, or [`Option::None`] if the selection is canceled.
 pub fn select_yes_or_no(prompt: String) -> color_eyre::Result<Option<YesNo>> {
-    let sk_opts = base_sk_opts(&mut Default::default())
+    let sk_opts = base_sk_opts(&mut SkimOptionsBuilder::default())
         .prompt(prompt)
         .preview(None)
         .no_clear_start(true)
@@ -98,8 +98,8 @@ fn get_items<T: SkimItem + Clone + core::fmt::Debug>(
     items: Vec<T>,
     sk_opts: Option<SkimOptions>,
 ) -> color_eyre::Result<Vec<T>> {
-    let sk_opts = if let Some(sk_opts) = sk_opts {
-        sk_opts
+    let sk_opts = if let Some(opts) = sk_opts {
+        opts
     } else {
         let mut builder = SkimOptionsBuilder::default();
         base_sk_opts(&mut builder);

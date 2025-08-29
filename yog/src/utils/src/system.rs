@@ -57,8 +57,8 @@ pub fn chmod_x<P: AsRef<Path>>(path: P) -> color_eyre::Result<()> {
 
 /// Sets executable permissions on all files in the specified directory.
 pub fn chmod_x_files_in_dir<P: AsRef<Path>>(dir: P) -> color_eyre::Result<()> {
-    for target in std::fs::read_dir(dir)? {
-        let target = target?.path();
+    for target_res in std::fs::read_dir(dir)? {
+        let target = target_res?.path();
         if target.is_file() {
             chmod_x(&target)?;
         }
