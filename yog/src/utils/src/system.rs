@@ -19,7 +19,7 @@ pub fn get_args() -> Vec<String> {
 
 /// Joins a thread handle and returns the result, handling join errors as [`eyre::Error`].
 pub fn join<T>(join_handle: JoinHandle<color_eyre::Result<T>>) -> Result<T, eyre::Error> {
-    join_handle.join().map_err(|e| eyre!("join error {e:#?}"))?
+    join_handle.join().map_err(|error| eyre!("join error {error:#?}"))?
 }
 
 /// Builds a path starting from the home directory by appending the given parts, returning a [`PathBuf`].
