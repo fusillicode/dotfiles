@@ -41,8 +41,8 @@ impl From<YesNo> for bool {
 impl SkimItem for YesNo {
     fn text(&self) -> Cow<'_, str> {
         Cow::from(match self {
-            YesNo::Yes => "Yes",
-            YesNo::No => "No",
+            Self::Yes => "Yes",
+            Self::No => "No",
         })
     }
 }
