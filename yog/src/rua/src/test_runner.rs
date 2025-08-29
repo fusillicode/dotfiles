@@ -29,7 +29,7 @@ pub fn run_test(_: ()) {
 
     let Ok(file_path) = cur_buf
         .get_name()
-        .map(|s| PathBuf::from(s.to_string_lossy().to_string()))
+        .map(|s| PathBuf::from(s.to_string_lossy().as_ref()))
         .inspect_err(|error| {
             crate::oxi_utils::notify_error(&format!(
                 "cannot get buffer name of buffer #{cur_buf:#?}, error {error:#?}"

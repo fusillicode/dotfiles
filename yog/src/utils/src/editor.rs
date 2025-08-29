@@ -45,7 +45,7 @@ impl FromStr for Editor {
         match value {
             "hx" => Ok(Self::Hx),
             "nvim" | "nv" => Ok(Self::Nvim),
-            value => Err(eyre!("unknown editor {value}")),
+            unknown => Err(eyre!("unknown editor {unknown}")),
         }
     }
 }
