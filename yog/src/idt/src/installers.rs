@@ -67,9 +67,9 @@ pub trait Installer: Sync + Send {
         self.install()
             .inspect_err(|error| {
                 eprintln!(
-                    "{} installation failed, {}",
+                    "{} installation failed, error {}",
                     self.bin_name().red().bold(),
-                    format!("error {error:#?}").red().bold()
+                    format!("{error:#?}").red().bold()
                 )
             })
             .and_then(|_| {
@@ -88,9 +88,9 @@ pub trait Installer: Sync + Send {
                     })
                     .inspect_err(|error| {
                         eprintln!(
-                            "{} check failed, {}",
+                            "{} installed but check failed, error {}",
                             self.bin_name().red().bold(),
-                            format!("error {error:#?}").red().bold()
+                            format!("{error:#?}").red().bold()
                         )
                     })
             })?;
