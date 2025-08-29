@@ -13,6 +13,11 @@ const GITHUB_PR_ID_PREFIX: &str = "pull";
 const GITHUB_PR_ID_QUERY_KEY: &str = "pr";
 
 /// Logs into GitHub using the GitHub CLI if not already authenticated.
+/// Logs into GitHub using the GitHub CLI if not already authenticated.
+///
+/// # Errors
+///
+/// Returns an error if invoking `gh` fails or if authentication cannot be completed.
 pub fn log_into_github() -> color_eyre::Result<()> {
     if crate::cmd::silent_cmd("gh")
         .args(["auth", "status"])
@@ -29,6 +34,10 @@ pub fn log_into_github() -> color_eyre::Result<()> {
 }
 
 /// Retrieves the latest release tag name for the specified GitHub repository.
+///
+/// # Errors
+///
+/// Returns an error if the `gh` command fails or the output cannot be parsed into a string.
 pub fn get_latest_release(repo: &str) -> color_eyre::Result<String> {
     let output = Command::new("gh")
         .args(["api", &format!("repos/{repo}/releases/latest"), "--jq=.tag_name"])
@@ -38,6 +47,10 @@ pub fn get_latest_release(repo: &str) -> color_eyre::Result<String> {
 }
 
 /// Extracts the branch name from a GitHub pull request [`Url`].
+///
+/// # Errors
+///
+/// Returns an error if the `gh` command fails for the given PR, or if the output cannot be parsed.
 pub fn get_branch_name_from_url(url: &Url) -> color_eyre::Result<String> {
     let pr_id = extract_pr_id_form_url(url)?;
 
