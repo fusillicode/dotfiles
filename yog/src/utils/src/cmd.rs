@@ -60,7 +60,7 @@ pub enum CmdError {
         cmd_details: CmdDetails,
         /// The underlying UTF-8 error.
         #[backtrace]
-        source: std::str::Utf8Error,
+        source: core::str::Utf8Error,
     },
 }
 
@@ -98,8 +98,8 @@ impl From<&mut Command> for CmdDetails {
 }
 
 /// Formats [`CmdDetails`] for display, showing command name, arguments, and working directory.
-impl std::fmt::Display for CmdDetails {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for CmdDetails {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "cmd {} - args {:#?} - dir {:#?}", self.name, self.args, self.cur_dir)
     }
 }

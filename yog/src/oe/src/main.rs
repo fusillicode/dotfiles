@@ -1,6 +1,6 @@
 #![feature(exit_status_error)]
 
-use std::str::FromStr;
+use core::str::FromStr;
 
 use color_eyre::eyre::bail;
 use utils::editor::Editor;

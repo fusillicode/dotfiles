@@ -4,7 +4,7 @@ use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
-use std::str::FromStr;
+use core::str::FromStr;
 use std::sync::Arc;
 
 use color_eyre::eyre::eyre;
