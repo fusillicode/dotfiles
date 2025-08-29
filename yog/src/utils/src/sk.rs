@@ -140,7 +140,7 @@ fn build_sk_source_from_items<T: SkimItem>(items: Vec<T>) -> color_eyre::Result<
 }
 
 /// Configures the base skim options with common settings for a consistent user experience.
-pub fn base_sk_opts(opts_builder: &mut SkimOptionsBuilder) -> &mut SkimOptionsBuilder {
+fn base_sk_opts(opts_builder: &mut SkimOptionsBuilder) -> &mut SkimOptionsBuilder {
     opts_builder
         .height(String::from("21"))
         .no_multi(true)
