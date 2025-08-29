@@ -43,7 +43,7 @@ pub fn get_latest_release(repo: &str) -> color_eyre::Result<String> {
         .args(["api", &format!("repos/{repo}/releases/latest"), "--jq=.tag_name"])
         .output()?;
 
-    extract_success_output(output)
+    extract_success_output(&output)
 }
 
 /// Extracts the branch name from a GitHub pull request [`Url`].
@@ -58,11 +58,11 @@ pub fn get_branch_name_from_url(url: &Url) -> color_eyre::Result<String> {
         .args(["pr", "view", &pr_id, "--json", "headRefName", "--jq", ".headRefName"])
         .output()?;
 
-    extract_success_output(output)
+    extract_success_output(&output)
 }
 
 /// Extracts and validates successful command output, converting it to a trimmed string.
-fn extract_success_output(output: Output) -> color_eyre::Result<String> {
+fn extract_success_output(output: &Output) -> color_eyre::Result<String> {
     output.status.exit_ok()?;
     Ok(std::str::from_utf8(&output.stdout)?.trim().into())
 }
