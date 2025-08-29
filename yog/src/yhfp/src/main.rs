@@ -34,7 +34,7 @@ fn main() -> color_eyre::Result<()> {
     let hx_status_line = wezterm_pane_text
         .lines()
         .nth_back(1)
-        .ok_or_else(|| eyre!("no hx status line in pane '{hx_pane_id}' text {wezterm_pane_text:#?}"))?;
+        .ok_or_else(|| eyre!("missing hx status line in pane '{hx_pane_id}' text {wezterm_pane_text:#?}"))?;
 
     let hx_status_line = HxStatusLine::from_str(hx_status_line)?;
 

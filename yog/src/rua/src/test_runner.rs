@@ -20,7 +20,7 @@ pub fn run_test(_: ()) {
         .map(|(row, column)| Point { row, column })
         .inspect_err(|error| {
             crate::oxi_utils::notify_error(&format!(
-                "can't get cursor from current window {cur_win:#?}, error {error:#?}"
+                "cannot get cursor from current window {cur_win:#?}, error {error:#?}"
             ));
         })
     else {
@@ -32,7 +32,7 @@ pub fn run_test(_: ()) {
         .map(|s| PathBuf::from(s.to_string_lossy().to_string()))
         .inspect_err(|error| {
             crate::oxi_utils::notify_error(&format!(
-                "can't get buffer name of buffer #{cur_buf:#?}, error {error:#?}"
+                "cannot get buffer name of buffer #{cur_buf:#?}, error {error:#?}"
             ));
         })
     else {
@@ -41,23 +41,23 @@ pub fn run_test(_: ()) {
 
     let Some(test_name) = get_enclosing_fn_name_of_position(&file_path, position)
         .inspect_err(|error| {
-            crate::oxi_utils::notify_error(&format!("can't get enclosing fn for {position:#?}, error {error:#?}"));
+            crate::oxi_utils::notify_error(&format!("cannot get enclosing fn for {position:#?}, error {error:#?}"));
         })
         .ok()
         .flatten()
     else {
-        crate::oxi_utils::notify_error(&format!("no enclosing fn found for {position:#?}"));
+        crate::oxi_utils::notify_error(&format!("missing enclosing fn found for {position:#?}"));
         return;
     };
 
     let Ok(cur_pane_id) = utils::wezterm::get_current_pane_id().inspect_err(|error| {
-        crate::oxi_utils::notify_error(&format!("can't get current Wezterm pane id, error {error:#?}"));
+        crate::oxi_utils::notify_error(&format!("cannot get current Wezterm pane id, error {error:#?}"));
     }) else {
         return;
     };
 
     let Ok(wez_panes) = utils::wezterm::get_all_panes(&[]).inspect_err(|error| {
-        crate::oxi_utils::notify_error(&format!("can't get Wezterm panes, error {error:#?}"));
+        crate::oxi_utils::notify_error(&format!("cannot get Wezterm panes, error {error:#?}"));
     }) else {
         return;
     };
@@ -71,14 +71,14 @@ pub fn run_test(_: ()) {
 
     let Some(test_runner_pane) = wez_panes.iter().find(|p| p.is_sibling_terminal_pane_of(cur_pane)) else {
         crate::oxi_utils::notify_error(&format!(
-            "can't find a pane sibling to {cur_pane:#?} among Wezterm panes {wez_panes:#?} where to run the test {test_name}"
+            "cannot find a pane sibling to {cur_pane:#?} among Wezterm panes {wez_panes:#?} where to run the test {test_name}"
         ));
         return;
     };
 
     let Ok(test_runner_app) = get_test_runner_app_for_path(&file_path).inspect_err(|error| {
         crate::oxi_utils::notify_error(&format!(
-            "can't get test runner app for file {file_path:#?}, error {error:#?}"
+            "cannot get test runner app for file {file_path:#?}, error {error:#?}"
         ));
     }) else {
         return;
