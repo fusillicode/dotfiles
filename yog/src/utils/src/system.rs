@@ -132,7 +132,7 @@ pub fn rm_dead_symlinks(dir: &str) -> color_eyre::Result<()> {
         let metadata = std::fs::symlink_metadata(&path)?;
         if metadata.file_type().is_symlink() && std::fs::metadata(&path).is_err() {
             std::fs::remove_file(&path)?;
-            println!("{} {path:#?}", "Deleted dead symlink".cyan().bold());
+            println!("{} {}", "Deleted dead symlink".cyan().bold(), path.display());
         }
     }
     Ok(())
