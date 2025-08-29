@@ -43,7 +43,7 @@ impl SkimItem for YesNo {
 /// Get the selected item among the supplied ones with sk configured with either:
 /// - the supplied [SkimOptionsBuilder] or
 /// - the base one [base_sk_opts]
-pub fn get_item<T: SkimItem + Clone + std::fmt::Debug>(
+pub fn get_item<T: SkimItem + Clone + core::fmt::Debug>(
     items: Vec<T>,
     sk_opts: Option<SkimOptions>,
 ) -> color_eyre::Result<Option<T>> {
@@ -78,7 +78,7 @@ pub fn get_item_from_cli_args_or_sk_select<'a, CAS, O, OBA, OF>(
     sk_opts: Option<SkimOptions>,
 ) -> color_eyre::Result<Option<O>>
 where
-    O: SkimItem + Clone + std::fmt::Debug + std::fmt::Display,
+    O: SkimItem + Clone + core::fmt::Debug + core::fmt::Display,
     CAS: FnMut(&(usize, &String)) -> bool,
     OBA: Fn(&'a str) -> OF,
     OF: FnMut(&O) -> bool + 'a,
@@ -94,7 +94,7 @@ where
 
 /// Runs the skim fuzzy finder with the provided items and returns the selected items.
 /// Returns an empty vector if the selection is aborted or cancelled.
-fn get_items<T: SkimItem + Clone + std::fmt::Debug>(
+fn get_items<T: SkimItem + Clone + core::fmt::Debug>(
     items: Vec<T>,
     sk_opts: Option<SkimOptions>,
 ) -> color_eyre::Result<Vec<T>> {

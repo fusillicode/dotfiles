@@ -2,7 +2,7 @@
 
 use std::process::Command;
 use std::process::ExitStatusError;
-use std::str::FromStr;
+use core::str::FromStr;
 use std::time::Duration;
 use std::time::Instant;
 

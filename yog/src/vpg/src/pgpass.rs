@@ -93,8 +93,8 @@ impl SkimItem for PgpassEntry {
     }
 }
 
-impl std::fmt::Display for PgpassEntry {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for PgpassEntry {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.metadata.alias)
     }
 }
@@ -108,8 +108,8 @@ pub struct Metadata {
     pub vault_path: String,
 }
 
-impl std::fmt::Display for Metadata {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Metadata {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.alias)
     }
 }
@@ -163,8 +163,8 @@ impl TryFrom<(usize, &str)> for ConnectionParams {
     }
 }
 
-impl std::fmt::Display for ConnectionParams {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for ConnectionParams {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}:{}:{}:{}:{}", self.host, self.port, self.db, self.user, self.pwd)
     }
 }

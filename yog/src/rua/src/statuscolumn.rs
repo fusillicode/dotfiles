@@ -127,8 +127,8 @@ impl Statuscolumn {
 }
 
 /// Implementation of [`Display`] for [`Statuscolumn`].
-impl std::fmt::Display for Statuscolumn {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Statuscolumn {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let diag_sign = [&self.error, &self.warn, &self.info, &self.hint, &self.ok]
             .iter()
             .find_map(|s| s.as_ref().map(ExtmarkMeta::draw))
