@@ -74,7 +74,7 @@ fn extract_pr_id_form_url(url: &Url) -> color_eyre::Result<String> {
         .map(|(_, pr_id)| pr_id.to_string())
     {
         return Ok(pr_id);
-    };
+    }
 
     let path_segments = url
         .path_segments()
