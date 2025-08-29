@@ -28,7 +28,7 @@ pub fn draw((cur_lnum, extmarks): (String, Vec<Extmark>)) -> Option<String> {
 
 /// Represents an extmark in Neovim.
 #[derive(Deserialize)]
-#[allow(dead_code)]
+#[expect(dead_code, reason = "Unused fields are kept for completeness")]
 pub struct Extmark(u32, usize, usize, Option<ExtmarkMeta>);
 
 impl Extmark {

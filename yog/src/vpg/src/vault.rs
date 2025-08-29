@@ -4,8 +4,8 @@ use color_eyre::eyre::bail;
 use serde::Deserialize;
 
 /// Response structure from Vault's secret read operations.
-#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
+#[expect(dead_code, reason = "Unused fields are kept for completeness")]
 pub struct VaultReadOutput {
     /// Contains actual secret credentials.
     pub data: VaultCreds,

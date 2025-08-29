@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-#[allow(dead_code)]
+#[expect(dead_code, reason = "Kept for memories")]
 /// Downloads and installs PHP packages using Composer.
 pub fn run(dev_tools_dir: &Path, tool: &str, packages: &[&str]) -> color_eyre::Result<PathBuf> {
     let dev_tools_repo_dir = dev_tools_dir.join(tool);
