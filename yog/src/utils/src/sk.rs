@@ -98,13 +98,12 @@ fn get_items<T: SkimItem + Clone + core::fmt::Debug>(
     items: Vec<T>,
     sk_opts: Option<SkimOptions>,
 ) -> color_eyre::Result<Vec<T>> {
-    let sk_opts = match sk_opts {
-        Some(opts) => opts,
-        None => {
-            let mut sk_opts = SkimOptionsBuilder::default();
-            base_sk_opts(&mut sk_opts);
-            sk_opts.final_build()?
-        }
+    let sk_opts = if let Some(sk_opts) = sk_opts {
+        sk_opts
+    } else {
+        let mut builder = SkimOptionsBuilder::default();
+        base_sk_opts(&mut builder);
+        builder.final_build()?
     };
     let sk_source = build_sk_source_from_items(items)?;
 
