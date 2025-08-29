@@ -86,7 +86,7 @@ where
     if let Some((_, cli_arg)) = cli_args.iter().enumerate().find(|x| cli_arg_selector(x)) {
         let mut item_find = item_find_by_arg(cli_arg);
         return Ok(Some(items.iter().find(|x| item_find(*x)).cloned().ok_or_else(
-            || eyre!("no item matches CLI arg {cli_arg} in opts {items:#?}"),
+            || eyre!("missing item matches CLI arg {cli_arg} in opts {items:#?}"),
         )?));
     }
     get_item(items, sk_opts)

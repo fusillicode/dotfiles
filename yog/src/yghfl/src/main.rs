@@ -40,7 +40,7 @@ fn main() -> color_eyre::Result<()> {
 
     let hx_status_line = HxStatusLine::from_str(wezterm_pane_text.lines().nth_back(1).ok_or_else(|| {
         eyre!(
-            "no hx status line in pane '{}' text {wezterm_pane_text:#?}",
+            "missing hx status line in pane '{}' text {wezterm_pane_text:#?}",
             hx_pane.pane_id
         )
     })?)?;
@@ -91,12 +91,12 @@ fn get_github_url_from_git_remote_output(git_remote_output: &str) -> color_eyre:
         .trim()
         .lines()
         .find(|l| l.ends_with("(fetch)"))
-        .ok_or_else(|| eyre!("no '(fetch)' line in git remote output '{git_remote_output}'"))?;
+        .ok_or_else(|| eyre!("missing '(fetch)' line in git remote output '{git_remote_output}'"))?;
 
     let git_remote_url = git_remote_fetch_line
         .split_whitespace()
         .nth(1)
-        .ok_or_else(|| eyre!("no git remote url in '(fetch)' line '{git_remote_fetch_line}'"))?;
+        .ok_or_else(|| eyre!("missing git remote url in '(fetch)' line '{git_remote_fetch_line}'"))?;
 
     parse_github_url_from_git_remote_url(git_remote_url)
 }

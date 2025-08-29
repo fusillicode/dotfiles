@@ -73,7 +73,7 @@ pub fn unexpected_kind_error_msg(obj: &Object, key: &str, dict: &Dictionary, exp
 
 /// Creates an error for missing value in [Dictionary].
 pub fn no_value_matching(query: &[&str], dict: &Dictionary) -> color_eyre::eyre::Error {
-    eyre!("no value matching query {query:?} in dict {dict:#?}")
+    eyre!("missing value matching query {query:?} in dict {dict:#?}")
 }
 
 #[cfg(test)]
@@ -84,7 +84,7 @@ mod tests {
     fn test_dictionary_ext_get_t_works_as_expected() {
         let dict = Dictionary::from_iter([("foo", "42")]);
         assert_eq!(
-            r#"no value matching query ["bar"] in dict { foo: "42" }"#,
+            r#"missing value matching query ["bar"] in dict { foo: "42" }"#,
             dict.get_t::<nvim_oxi::String>("bar").unwrap_err().to_string()
         );
 

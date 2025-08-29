@@ -15,7 +15,7 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
         .map(|s| s.to_string_lossy().to_string())
         .inspect_err(|error| {
             crate::oxi_utils::notify_error(&format!(
-                "can't get buffer name of buffer #{cur_buf:#?}, error {error:#?}"
+                "cannot get buffer name of buffer #{cur_buf:#?}, error {error:#?}"
             ));
         })
     else {
@@ -35,7 +35,7 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
     };
 
     let Ok(filters) = DiagnosticsFilters::all(&lsp_diags).inspect_err(|error| {
-        crate::oxi_utils::notify_error(&format!("can't get diangnostics filters, error {error:#?}"))
+        crate::oxi_utils::notify_error(&format!("cannot get diangnostics filters, error {error:#?}"))
     }) else {
         return vec![];
     };
