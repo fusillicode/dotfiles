@@ -181,7 +181,7 @@ mod tests {
 
     #[test]
     fn extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_if_pr_id_prefix_is_not_1st_path_segment()
-     {
+    {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/foo/pull/42/foo")).unwrap();
         assert_eq!("42", extract_pr_id_form_url(&url).unwrap())
     }

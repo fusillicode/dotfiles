@@ -78,20 +78,20 @@ impl Poppable for Extmark {
 /// Represents the status column with various signs and line number.
 #[derive(Default)]
 struct Statuscolumn {
-    /// Error diagnostic sign.
-    error: Option<ExtmarkMeta>,
-    /// Warning diagnostic sign.
-    warn: Option<ExtmarkMeta>,
-    /// Info diagnostic sign.
-    info: Option<ExtmarkMeta>,
-    /// Hint diagnostic sign.
-    hint: Option<ExtmarkMeta>,
-    /// Ok diagnostic sign.
-    ok: Option<ExtmarkMeta>,
-    /// Git sign.
-    git: Option<ExtmarkMeta>,
     /// Current line number.
     cur_lnum: String,
+    /// Error diagnostic sign.
+    error: Option<ExtmarkMeta>,
+    /// Git sign.
+    git: Option<ExtmarkMeta>,
+    /// Hint diagnostic sign.
+    hint: Option<ExtmarkMeta>,
+    /// Info diagnostic sign.
+    info: Option<ExtmarkMeta>,
+    /// Ok diagnostic sign.
+    ok: Option<ExtmarkMeta>,
+    /// Warning diagnostic sign.
+    warn: Option<ExtmarkMeta>,
 }
 
 impl Statuscolumn {

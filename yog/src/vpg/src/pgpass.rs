@@ -70,10 +70,10 @@ impl<'a> PgpassFile<'a> {
 /// A validated `.pgpass` entry with associated metadata and connection parameters.
 #[derive(Debug, Clone)]
 pub struct PgpassEntry {
-    /// Metadata from preceding comment lines (alias/vault references).
-    pub metadata: Metadata,
     /// Parsed connection parameters from a valid `.pgpass` line.
     pub connection_params: ConnectionParams,
+    /// Metadata from preceding comment lines (alias/vault references).
+    pub metadata: Metadata,
 }
 
 impl SkimItem for PgpassEntry {
@@ -117,18 +117,18 @@ impl std::fmt::Display for Metadata {
 /// Connection parameters parsed from a `.pgpass` line.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConnectionParams {
-    /// 0-based index referencing the original line in `PgpassFile.idx_lines`.
-    idx: usize,
-    /// Hostname.
-    host: String,
-    /// TCP port number.
-    port: u16,
     /// Database name.
     db: String,
-    /// Username.
-    user: String,
+    /// Hostname.
+    host: String,
+    /// 0-based index referencing the original line in `PgpassFile.idx_lines`.
+    idx: usize,
+    /// TCP port number.
+    port: u16,
     /// Password.
     pwd: String,
+    /// Username.
+    user: String,
 }
 
 impl ConnectionParams {
