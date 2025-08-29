@@ -52,10 +52,10 @@ impl FromStr for HxStatusLine {
 #[derive(Debug, PartialEq)]
 #[cfg_attr(any(test, feature = "fake"), derive(fake::Dummy))]
 pub struct HxCursorPosition {
-    /// The line number (1-based).
-    pub line: usize,
     /// The column number (1-based).
     pub column: usize,
+    /// The line number (1-based).
+    pub line: usize,
 }
 
 /// Parses a [HxCursorPosition] from a string in the format "line:column".

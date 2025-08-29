@@ -7,16 +7,16 @@ use serde::Deserialize;
 #[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 pub struct VaultReadOutput {
-    /// Unique request identifier for tracing.
-    request_id: String,
-    /// Lease identifier for secret life cycle management.
-    lease_id: String,
-    /// Time-to-live duration in seconds for secret.
-    lease_duration: i32,
-    /// Indicates if lease can be renewed.
-    renewable: bool,
     /// Contains actual secret credentials.
     pub data: VaultCreds,
+    /// Time-to-live duration in seconds for secret.
+    lease_duration: i32,
+    /// Lease identifier for secret life cycle management.
+    lease_id: String,
+    /// Indicates if lease can be renewed.
+    renewable: bool,
+    /// Unique request identifier for tracing.
+    request_id: String,
     /// Non-critical operational warnings.
     warnings: Vec<String>,
 }

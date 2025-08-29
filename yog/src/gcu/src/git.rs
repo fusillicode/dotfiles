@@ -49,18 +49,18 @@ pub fn keep_local_and_untracked_refs(git_refs: &mut Vec<GitRef>) {
 #[derive(Clone, Debug)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct GitRef {
+    /// The date and time when the last commit was made.
+    committer_date_time: DateTime<FixedOffset>,
+    /// The email address of the person who made the last commit.
+    committer_email: String,
     /// The name of the branch (without refs/heads/ or refs/remotes/ prefix).
     name: String,
-    /// The remote name if this is a remote branch, None for local branches.
-    remote: Option<String>,
     /// The shortened SHA hash of the commit this branch points to.
     object_name: String,
     /// The type of Git object (usually "commit").
     object_type: String,
-    /// The email address of the person who made the last commit.
-    committer_email: String,
-    /// The date and time when the last commit was made.
-    committer_date_time: DateTime<FixedOffset>,
+    /// The remote name if this is a remote branch, None for local branches.
+    remote: Option<String>,
     /// The subject line of the last commit message.
     subject: String,
 }
@@ -86,17 +86,17 @@ impl SkimItem for GitRef {
 /// Intermediate structure for deserializing Git reference data from JSON.
 #[derive(Deserialize)]
 struct GitRefJson {
-    /// The full reference name (e.g., "refs/heads/main" or "refs/remotes/origin/main").
-    ref_name: String,
+    /// The commit date and time, deserialized from RFC2822 format.
+    #[serde(deserialize_with = "deserialize_from_rfc2822")]
+    committer_date_time: DateTime<FixedOffset>,
+    /// The email address of the committer.
+    committer_email: String,
     /// The SHA hash of the object this reference points to.
     object_name: String,
     /// The type of Git object (usually "commit").
     object_type: String,
-    /// The email address of the committer.
-    committer_email: String,
-    /// The commit date and time, deserialized from RFC2822 format.
-    #[serde(deserialize_with = "deserialize_from_rfc2822")]
-    committer_date_time: DateTime<FixedOffset>,
+    /// The full reference name (e.g., "refs/heads/main" or "refs/remotes/origin/main").
+    ref_name: String,
     /// The commit subject line.
     subject: String,
 }

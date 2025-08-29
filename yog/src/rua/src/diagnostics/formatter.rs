@@ -90,7 +90,7 @@ impl Poppable for Diagnostic {
 /// User data associated with a diagnostic.
 #[derive(Debug, Deserialize)]
 pub struct UserData {
-    /// LSP-specific data.
+    /// LSP-specific diagnostic payload injected by Neovim
     lsp: Option<Lsp>,
 }
 
@@ -110,6 +110,5 @@ pub struct Lsp {
 /// Additional LSP data.
 #[derive(Debug, Deserialize)]
 pub struct LspData {
-    /// The rendered diagnostic message.
     rendered: Option<String>,
 }

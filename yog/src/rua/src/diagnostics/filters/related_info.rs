@@ -10,7 +10,8 @@ use crate::oxi_ext::DictionaryExt;
 /// Filters out diagnostics already represented by other ones
 /// (e.g. HINTs pointing to a location already mentioned by other ERROR's rendered message)
 pub struct RelatedInfoFilter {
-    /// List of related information entries.
+    /// The set of already-seen related infos extracted from LSP diagnostics.
+    /// Used to skip duplicate root diagnostics that only repeat information.
     rel_infos: Vec<RelatedInfo>,
 }
 
@@ -68,16 +69,16 @@ impl DiagnosticsFilter for RelatedInfoFilter {
 /// Common shape of a root LSP diagnostic and the elements of its "user_data.lsp.relatedInformation".
 #[derive(PartialEq)]
 struct RelatedInfo {
-    /// The diagnostic message.
-    message: String,
-    /// The starting line number.
-    lnum: i64,
     /// The starting column number.
     col: i64,
-    /// The ending line number.
-    end_lnum: i64,
     /// The ending column number.
     end_col: i64,
+    /// The ending line number.
+    end_lnum: i64,
+    /// The starting line number.
+    lnum: i64,
+    /// The diagnostic message.
+    message: String,
 }
 
 impl RelatedInfo {

@@ -53,12 +53,12 @@ impl FromStr for Editor {
 /// Represents a file to be opened in an editor with optional line and column positioning.
 #[derive(Debug, PartialEq)]
 pub struct FileToOpen {
-    /// The file system path to the file.
-    path: String,
-    /// The line number to position the cursor (0-based, defaults to 0).
-    line_nbr: i64,
     /// The column number to position the cursor (0-based, defaults to 0).
     column: i64,
+    /// The line number to position the cursor (0-based, defaults to 0).
+    line_nbr: i64,
+    /// The file system path to the file.
+    path: String,
 }
 
 /// Attempts to create a [FileToOpen] from a file path, pane ID, and list of panes.
