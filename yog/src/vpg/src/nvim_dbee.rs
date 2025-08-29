@@ -58,8 +58,8 @@ fn get_updated_conns(updated_pg_pass_entry: &PgpassEntry, conns_path: &Path) -> 
 struct NvimDbeeConn {
     id: String,
     name: String,
-    url: String,
     r#type: String,
+    url: String,
 }
 
 impl From<&PgpassEntry> for NvimDbeeConn {

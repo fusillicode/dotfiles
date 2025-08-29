@@ -7,10 +7,10 @@ use crate::oxi_ext::DictionaryExt;
 
 /// Filters out diagnostics related to buffers containing the supplied path, lsp source and unwanted messages.
 pub struct MsgBlacklistFilter {
-    /// The buffer path pattern to match.
-    pub buf_path: String,
     /// Blacklist of messages per source.
     pub blacklist: HashMap<String, Vec<String>>,
+    /// The buffer path pattern to match.
+    pub buf_path: String,
 }
 
 impl MsgBlacklistFilter {

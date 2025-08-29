@@ -67,12 +67,12 @@ pub enum CmdError {
 /// Details about a command execution, used for error reporting and debugging.
 #[derive(Debug)]
 pub struct CmdDetails {
-    /// The name of the command being executed.
-    name: String,
     /// The arguments passed to the command.
     args: Vec<String>,
     /// The current working directory for the command, if specified.
     cur_dir: Option<PathBuf>,
+    /// The name of the command being executed.
+    name: String,
 }
 
 /// Converts a [Command] reference to [CmdDetails] for error reporting.
