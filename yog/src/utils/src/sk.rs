@@ -6,6 +6,10 @@ use skim::prelude::*;
 
 /// Prompts the user to select either [`YesNo::Yes`] or [`YesNo::No`] using the skim fuzzy finder.
 /// Returns [`Option::Some`][YesNo] if an option is selected, or [`Option::None`] if the selection is canceled.
+///
+/// # Errors
+///
+/// Returns an error if the skim process fails to start, run, or its output cannot be read.
 pub fn select_yes_or_no(prompt: String) -> color_eyre::Result<Option<YesNo>> {
     let sk_opts = base_sk_opts(&mut SkimOptionsBuilder::default())
         .prompt(prompt)
@@ -43,6 +47,10 @@ impl SkimItem for YesNo {
 /// Get the selected item among the supplied ones with sk configured with either:
 /// - the supplied [`SkimOptionsBuilder`] or
 /// - the base one [`base_sk_opts`]
+///
+/// # Errors
+///
+/// Returns an error if skim options cannot be built or if running skim fails.
 pub fn get_item<T: SkimItem + Clone + core::fmt::Debug>(
     items: Vec<T>,
     sk_opts: Option<SkimOptions>,
@@ -70,6 +78,10 @@ pub fn get_item<T: SkimItem + Clone + core::fmt::Debug>(
 /// - `Ok(Some(option))` if an item is found by CLI argument or sk selection
 /// - `Ok(None)` if the user closes the sk selection
 /// - `Err` if no item if found by CLI argument or if sk lookup fails
+///
+/// # Errors
+///
+/// Returns an error if skim fails to run, or if input parsing fails during selection.
 pub fn get_item_from_cli_args_or_sk_select<'a, CAS, O, OBA, OF>(
     cli_args: &'a [String],
     mut cli_arg_selector: CAS,

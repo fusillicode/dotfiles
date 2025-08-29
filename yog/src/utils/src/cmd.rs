@@ -6,6 +6,11 @@ use std::process::Stdio;
 
 /// Extension trait for [`Command`] to execute and handle errors.
 pub trait CmdExt {
+    /// Executes the command and returns the output.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`CmdError`] if the command fails to execute or if there's an I/O error.
     fn exec(&mut self) -> color_eyre::Result<Output, CmdError>;
 }
 

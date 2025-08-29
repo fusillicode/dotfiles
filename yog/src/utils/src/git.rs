@@ -8,6 +8,13 @@ use crate::cmd::CmdExt as _;
 
 /// Finds the root directory of the Git repository containing the given file path, or the current directory if none
 /// provided.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - the given path is not inside a git repository,
+/// - running `git rev-parse --show-toplevel` fails,
+/// - or the output cannot be decoded as UTF-8.
 pub fn get_repo_root(file_path: Option<&Path>) -> color_eyre::Result<String> {
     let cmd = if let Some(file_path) = file_path {
         let file_parent_dir = file_path
@@ -34,6 +41,10 @@ pub fn get_repo_root(file_path: Option<&Path>) -> color_eyre::Result<String> {
 }
 
 /// Retrieves the name of the current Git branch.
+///
+/// # Errors
+///
+/// Returns an error if the `git` command fails or the output cannot be parsed as UTF-8.
 pub fn get_current_branch() -> color_eyre::Result<String> {
     Ok(std::str::from_utf8(
         &Command::new("git")

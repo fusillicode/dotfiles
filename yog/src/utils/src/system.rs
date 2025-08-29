@@ -18,11 +18,20 @@ pub fn get_args() -> Vec<String> {
 }
 
 /// Joins a thread handle and returns the result, handling join errors as [`eyre::Error`].
+/// Awaits a JoinHandle and unwraps the inner Result.
+///
+/// # Errors
+///
+/// Returns an error if the task panicked or if the task returned an error.
 pub fn join<T>(join_handle: JoinHandle<color_eyre::Result<T>>) -> Result<T, eyre::Error> {
     join_handle.join().map_err(|error| eyre!("join error {error:#?}"))?
 }
 
 /// Builds a path starting from the home directory by appending the given parts, returning a [`PathBuf`].
+///
+/// # Errors
+///
+/// Returns an error if the home directory cannot be determined.
 pub fn build_home_path<P: AsRef<Path>>(parts: &[P]) -> color_eyre::Result<PathBuf> {
     let mut home_path = std::env::home_dir().ok_or_eyre("missing home dir")?;
     for part in parts {
@@ -32,6 +41,10 @@ pub fn build_home_path<P: AsRef<Path>>(parts: &[P]) -> color_eyre::Result<PathBu
 }
 
 /// Copies the given content to the system clipboard using the `pbcopy` command.
+///
+/// # Errors
+///
+/// Returns an error if the clipboard program cannot be invoked or fails.
 pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
     let mut pbcopy_child = crate::cmd::silent_cmd("pbcopy").stdin(Stdio::piped()).spawn()?;
     std::io::copy(
@@ -48,6 +61,10 @@ pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
 }
 
 /// Sets executable permissions (755) on the specified file path.
+///
+/// # Errors
+///
+/// Returns an error if metadata or permission changes fail.
 pub fn chmod_x<P: AsRef<Path>>(path: P) -> color_eyre::Result<()> {
     let mut perms = std::fs::metadata(&path)?.permissions();
     perms.set_mode(0o755);
@@ -56,6 +73,10 @@ pub fn chmod_x<P: AsRef<Path>>(path: P) -> color_eyre::Result<()> {
 }
 
 /// Sets executable permissions on all files in the specified directory.
+///
+/// # Errors
+///
+/// Returns an error if directory traversal or chmod operations fail.
 pub fn chmod_x_files_in_dir<P: AsRef<Path>>(dir: P) -> color_eyre::Result<()> {
     for target_res in std::fs::read_dir(dir)? {
         let target = target_res?.path();
@@ -67,6 +88,10 @@ pub fn chmod_x_files_in_dir<P: AsRef<Path>>(dir: P) -> color_eyre::Result<()> {
 }
 
 /// Creates a symbolic link from the target to the link path, removing any existing file at the link location.
+///
+/// # Errors
+///
+/// Returns an error if creating or replacing the symlink fails.
 pub fn ln_sf<P: AsRef<Path>>(target: P, link: P) -> color_eyre::Result<()> {
     if link.as_ref().try_exists()? {
         std::fs::remove_file(&link)?;
@@ -76,6 +101,10 @@ pub fn ln_sf<P: AsRef<Path>>(target: P, link: P) -> color_eyre::Result<()> {
 }
 
 /// Creates symbolic links for all files in the target directory to the link directory.
+///
+/// # Errors
+///
+/// Returns an error if traversal or link creation fails.
 pub fn ln_sf_files_in_dir<P: AsRef<std::path::Path>>(target_dir: P, link_dir: P) -> color_eyre::Result<()> {
     for target in std::fs::read_dir(target_dir)? {
         let target = target?.path();
@@ -91,6 +120,10 @@ pub fn ln_sf_files_in_dir<P: AsRef<std::path::Path>>(target_dir: P, link_dir: P)
 }
 
 /// Removes dead symbolic links from the specified directory.
+///
+/// # Errors
+///
+/// Returns an error if directory traversal fails or file removal fails.
 pub fn rm_dead_symlinks(dir: &str) -> color_eyre::Result<()> {
     for entry_res in std::fs::read_dir(dir)? {
         let entry = entry_res?;
@@ -106,6 +139,10 @@ pub fn rm_dead_symlinks(dir: &str) -> color_eyre::Result<()> {
 }
 
 /// Removes the file at the specified path, ignoring if the file does not exist.
+///
+/// # Errors
+///
+/// Returns an error only if an unexpected I/O failure occurs during removal.
 pub fn rm_f<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
     std::fs::remove_file(path).or_else(|error| {
         if std::io::ErrorKind::NotFound == error.kind() {

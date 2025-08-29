@@ -20,6 +20,10 @@ pub fn activate_pane_cmd(pane_id: i64) -> String {
 }
 
 /// Retrieves the current pane ID from the `WEZTERM_PANE` environment variable.
+///
+/// # Errors
+///
+/// Returns an error if the environment variable is missing or not an integer.
 pub fn get_current_pane_id() -> color_eyre::Result<i64> {
     Ok(std::env::var("WEZTERM_PANE")?.parse()?)
 }
@@ -28,6 +32,10 @@ pub fn get_current_pane_id() -> color_eyre::Result<i64> {
 ///
 /// The `envs` parameter is required because Wezterm may not be found in the PATH
 /// when called by the `oe` CLI when a file path is clicked in Wezterm itself.
+///
+/// # Errors
+///
+/// Returns an error if invoking `wezterm` fails or the JSON cannot be parsed.
 pub fn get_all_panes(envs: &[(&str, &str)]) -> color_eyre::Result<Vec<WeztermPane>> {
     let mut cmd = Command::new("wezterm");
     cmd.args(["cli", "list", "--format", "json"]);
@@ -36,6 +44,10 @@ pub fn get_all_panes(envs: &[(&str, &str)]) -> color_eyre::Result<Vec<WeztermPan
 }
 
 /// Finds a sibling [`WeztermPane`] in the same tab that matches one of the given titles.
+///
+/// # Errors
+///
+/// Returns an error if the current pane ID is not found, or if no matching pane exists in the tab.
 pub fn get_sibling_pane_with_titles(
     panes: &[WeztermPane],
     current_pane_id: i64,
