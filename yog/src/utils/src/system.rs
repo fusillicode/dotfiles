@@ -92,8 +92,8 @@ pub fn ln_sf_files_in_dir<P: AsRef<std::path::Path>>(target_dir: P, link_dir: P)
 
 /// Removes dead symbolic links from the specified directory.
 pub fn rm_dead_symlinks(dir: &str) -> color_eyre::Result<()> {
-    for entry in std::fs::read_dir(dir)? {
-        let entry = entry?;
+    for entry_res in std::fs::read_dir(dir)? {
+        let entry = entry_res?;
         let path = entry.path();
 
         let metadata = std::fs::symlink_metadata(&path)?;
