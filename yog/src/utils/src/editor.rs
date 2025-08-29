@@ -1,5 +1,5 @@
-use std::path::Path;
 use core::str::FromStr;
+use std::path::Path;
 
 use color_eyre::eyre;
 use color_eyre::eyre::bail;
@@ -16,14 +16,6 @@ pub enum Editor {
 }
 
 impl Editor {
-    /// Returns the pane titles associated with the [`Editor`] variant.
-    pub fn pane_titles(&self) -> &[&str] {
-        match self {
-            Self::Hx => &["hx"],
-            Self::Nvim => &["nvim", "nv"],
-        }
-    }
-
     /// Generates a command string to open the specified [`FileToOpen`] in the [`Editor`].
     pub fn open_file_cmd(&self, file_to_open: &FileToOpen) -> String {
         let path = file_to_open.path.as_str();
@@ -33,6 +25,14 @@ impl Editor {
         match self {
             Self::Hx => format!("':o {path}:{line_nbr}'"),
             Self::Nvim => format!(":e {path} | :call cursor({line_nbr}, {column})"),
+        }
+    }
+
+    /// Returns the pane titles associated with the [`Editor`] variant.
+    pub fn pane_titles(&self) -> &[&str] {
+        match self {
+            Self::Hx => &["hx"],
+            Self::Nvim => &["nvim", "nv"],
         }
     }
 }

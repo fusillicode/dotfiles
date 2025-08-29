@@ -1,16 +1,8 @@
+use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::process::Output;
 use std::process::Stdio;
-
-/// Creates a [`Command`] for the given program with silenced stdout and stderr in release mode.
-pub fn silent_cmd(program: &str) -> Command {
-    let mut cmd = Command::new(program);
-    if !cfg!(debug_assertions) {
-        cmd.stdout(Stdio::null()).stderr(Stdio::null());
-    }
-    cmd
-}
 
 /// Extension trait for [`Command`] to execute and handle errors.
 pub trait CmdExt {
@@ -102,4 +94,13 @@ impl core::fmt::Display for CmdDetails {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "cmd {} - args {:#?} - dir {:#?}", self.name, self.args, self.cur_dir)
     }
+}
+
+/// Creates a [`Command`] for the given program with silenced stdout and stderr in release mode.
+pub fn silent_cmd(program: &str) -> Command {
+    let mut cmd = Command::new(program);
+    if !cfg!(debug_assertions) {
+        cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+    cmd
 }
