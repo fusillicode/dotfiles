@@ -16,14 +16,14 @@ pub struct RelatedInfoFilter {
 }
 
 impl RelatedInfoFilter {
-    /// Creates a new [RelatedInfoFilter] from LSP diagnostics.
+    /// Creates a new [`RelatedInfoFilter`] from LSP diagnostics.
     pub fn new(lsp_diags: &[Dictionary]) -> color_eyre::Result<Self> {
         Ok(Self {
             rel_infos: Self::get_related_infos(lsp_diags)?,
         })
     }
 
-    /// Get the [RelatedInfo]s of an LSP diagnostic represented by a [Dictionary].
+    /// Get the [`RelatedInfo`]s of an LSP diagnostic represented by a [`Dictionary`].
     fn get_related_infos(lsp_diags: &[Dictionary]) -> color_eyre::Result<Vec<RelatedInfo>> {
         let mut out = vec![];
         for lsp_diag in lsp_diags {
@@ -57,7 +57,7 @@ impl DiagnosticsFilter for RelatedInfoFilter {
         if self.rel_infos.is_empty() {
             return Ok(false);
         }
-        // All LSPs diagnostics should be deserializable into [RelatedInfo]
+        // All LSPs diagnostics should be deserializable into [`RelatedInfo`]
         let rel_info = RelatedInfo::from_lsp_diagnostic(lsp_diag)?;
         if self.rel_infos.contains(&rel_info) {
             return Ok(true);
@@ -82,7 +82,7 @@ struct RelatedInfo {
 }
 
 impl RelatedInfo {
-    /// Create a [RelatedInfo] from a root LSP diagnostic.
+    /// Create a [`RelatedInfo`] from a root LSP diagnostic.
     fn from_lsp_diagnostic(lsp_diagnostic: &Dictionary) -> color_eyre::Result<Self> {
         Ok(Self {
             message: lsp_diagnostic.get_t::<nvim_oxi::String>("message")?,
@@ -93,7 +93,7 @@ impl RelatedInfo {
         })
     }
 
-    /// Create a [RelatedInfo] from an element of an LSP diagnostic "user_data.lsp.relatedInformation" section.
+    /// Create a [`RelatedInfo`] from an element of an LSP diagnostic "user_data.lsp.relatedInformation" section.
     fn from_related_info(rel_info: &Dictionary) -> color_eyre::Result<Self> {
         let (start, end) = {
             let range_query = ["location", "range"];

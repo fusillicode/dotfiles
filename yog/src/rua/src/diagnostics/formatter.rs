@@ -22,7 +22,7 @@ pub fn format(diagnostic: Diagnostic) -> Option<String> {
     Some(format!("▶ {msg} [{src_and_code}]"))
 }
 
-/// Extracts LSP diagnostic message from [LspData::rendered] or directly from the supplied [Diagnostic].
+/// Extracts LSP diagnostic message from [`LspData::rendered`] or directly from the supplied [`Diagnostic`].
 fn get_msg(diag: &Diagnostic) -> Option<&str> {
     diag.user_data
         .as_ref()
@@ -41,7 +41,7 @@ fn get_msg(diag: &Diagnostic) -> Option<&str> {
         .or(diag.message.as_deref())
 }
 
-/// Extracts the "source" from [Diagnostic::user_data] or [Diagnostic::source].
+/// Extracts the "source" from [`Diagnostic::user_data`] or [`Diagnostic::source`].
 fn get_src(diag: &Diagnostic) -> Option<&str> {
     diag.user_data
         .as_ref()
@@ -49,7 +49,7 @@ fn get_src(diag: &Diagnostic) -> Option<&str> {
         .or(diag.source.as_deref())
 }
 
-/// Extracts the "code" from [Diagnostic::user_data] or [Diagnostic::code].
+/// Extracts the "code" from [`Diagnostic::user_data`] or [`Diagnostic::code`].
 fn get_code(diag: &Diagnostic) -> Option<&str> {
     diag.user_data
         .as_ref()
@@ -70,14 +70,14 @@ pub struct Diagnostic {
     user_data: Option<UserData>,
 }
 
-/// Implementation of [FromObject] for [Diagnostic].
+/// Implementation of [`FromObject`] for [`Diagnostic`].
 impl FromObject for Diagnostic {
     fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
         Self::deserialize(Deserializer::new(obj)).map_err(Into::into)
     }
 }
 
-/// Implementation of [Poppable] for [Diagnostic].
+/// Implementation of [`Poppable`] for [`Diagnostic`].
 impl Poppable for Diagnostic {
     unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
         unsafe {

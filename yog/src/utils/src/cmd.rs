@@ -3,7 +3,7 @@ use std::process::Command;
 use std::process::Output;
 use std::process::Stdio;
 
-/// Creates a [Command] for the given program with silenced stdout and stderr in release mode.
+/// Creates a [`Command`] for the given program with silenced stdout and stderr in release mode.
 pub fn silent_cmd(program: &str) -> Command {
     let mut cmd = Command::new(program);
     if !cfg!(debug_assertions) {
@@ -12,7 +12,7 @@ pub fn silent_cmd(program: &str) -> Command {
     cmd
 }
 
-/// Extension trait for [Command] to execute and handle errors.
+/// Extension trait for [`Command`] to execute and handle errors.
 pub trait CmdExt {
     fn exec(&mut self) -> color_eyre::Result<Output, CmdError>;
 }
@@ -75,7 +75,7 @@ pub struct CmdDetails {
     name: String,
 }
 
-/// Converts a [Command] reference to [CmdDetails] for error reporting.
+/// Converts a [`Command`] reference to [`CmdDetails`] for error reporting.
 impl From<&Command> for CmdDetails {
     fn from(value: &Command) -> Self {
         Self {
@@ -86,7 +86,7 @@ impl From<&Command> for CmdDetails {
     }
 }
 
-/// Converts a mutable [Command] reference to [CmdDetails] for error reporting.
+/// Converts a mutable [`Command`] reference to [`CmdDetails`] for error reporting.
 impl From<&mut Command> for CmdDetails {
     fn from(value: &mut Command) -> Self {
         Self {
@@ -97,7 +97,7 @@ impl From<&mut Command> for CmdDetails {
     }
 }
 
-/// Formats [CmdDetails] for display, showing command name, arguments, and working directory.
+/// Formats [`CmdDetails`] for display, showing command name, arguments, and working directory.
 impl std::fmt::Display for CmdDetails {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "cmd {} - args {:#?} - dir {:#?}", self.name, self.args, self.cur_dir)

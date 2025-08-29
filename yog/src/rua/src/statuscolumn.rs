@@ -32,7 +32,7 @@ pub fn draw((cur_lnum, extmarks): (String, Vec<Extmark>)) -> Option<String> {
 pub struct Extmark(u32, usize, usize, Option<ExtmarkMeta>);
 
 impl Extmark {
-    /// Returns the [ExtmarkMeta] of the extmark if present.
+    /// Returns the [`ExtmarkMeta`] of the extmark if present.
     pub fn meta(&self) -> Option<&ExtmarkMeta> {
         self.3.as_ref()
     }
@@ -58,14 +58,14 @@ impl ExtmarkMeta {
     }
 }
 
-/// Implementation of [FromObject] for [Extmark].
+/// Implementation of [`FromObject`] for [`Extmark`].
 impl FromObject for Extmark {
     fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
         Self::deserialize(Deserializer::new(obj)).map_err(Into::into)
     }
 }
 
-/// Implementation of [Poppable] for [Extmark].
+/// Implementation of [`Poppable`] for [`Extmark`].
 impl Poppable for Extmark {
     unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
         unsafe {
@@ -95,7 +95,7 @@ struct Statuscolumn {
 }
 
 impl Statuscolumn {
-    /// Draws the status column based on buffer type and [ExtmarkMeta]s.
+    /// Draws the status column based on buffer type and [`ExtmarkMeta`]s.
     fn draw(cur_buf_type: &str, cur_lnum: String, extmarks: Vec<ExtmarkMeta>) -> String {
         match cur_buf_type {
             "grug-far" => " ".into(),
@@ -103,7 +103,7 @@ impl Statuscolumn {
         }
     }
 
-    /// Creates a new [Statuscolumn] from line number and [ExtmarkMeta]s.
+    /// Creates a new [`Statuscolumn`] from line number and [`ExtmarkMeta`]s.
     fn new(cur_lnum: String, extmarks: Vec<ExtmarkMeta>) -> Self {
         let mut statuscolumn = Self {
             cur_lnum,
@@ -126,7 +126,7 @@ impl Statuscolumn {
     }
 }
 
-/// Implementation of [Display] for [Statuscolumn].
+/// Implementation of [`Display`] for [`Statuscolumn`].
 impl std::fmt::Display for Statuscolumn {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let diag_sign = [&self.error, &self.warn, &self.info, &self.hint, &self.ok]
