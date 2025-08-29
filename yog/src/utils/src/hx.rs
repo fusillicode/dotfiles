@@ -15,7 +15,7 @@ pub struct HxStatusLine {
     pub position: HxCursorPosition,
 }
 
-/// Parses a [HxStatusLine] from a Helix editor status line string.
+/// Parses a [`HxStatusLine`] from a Helix editor status line string.
 impl FromStr for HxStatusLine {
     type Err = eyre::Error;
 
@@ -58,7 +58,7 @@ pub struct HxCursorPosition {
     pub line: usize,
 }
 
-/// Parses a [HxCursorPosition] from a string in the format "line:column".
+/// Parses a [`HxCursorPosition`] from a string in the format "line:column".
 impl FromStr for HxCursorPosition {
     type Err = eyre::Error;
 

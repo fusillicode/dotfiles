@@ -79,7 +79,7 @@ fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Removes the last `n` directories from a [PathBuf].
+/// Removes the last `n` directories from a [`PathBuf`].
 fn remove_last_n_dirs(path: &mut PathBuf, n: usize) {
     for _ in 0..n {
         if !path.pop() {

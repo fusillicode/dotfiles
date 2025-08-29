@@ -16,7 +16,7 @@ pub enum Editor {
 }
 
 impl Editor {
-    /// Returns the pane titles associated with the [Editor] variant.
+    /// Returns the pane titles associated with the [`Editor`] variant.
     pub fn pane_titles(&self) -> &[&str] {
         match self {
             Self::Hx => &["hx"],
@@ -24,7 +24,7 @@ impl Editor {
         }
     }
 
-    /// Generates a command string to open the specified [FileToOpen] in the [Editor].
+    /// Generates a command string to open the specified [`FileToOpen`] in the [`Editor`].
     pub fn open_file_cmd(&self, file_to_open: &FileToOpen) -> String {
         let path = file_to_open.path.as_str();
         let line_nbr = file_to_open.line_nbr;
@@ -37,7 +37,7 @@ impl Editor {
     }
 }
 
-/// Parses an [Editor] from a string representation.
+/// Parses an [`Editor`] from a string representation.
 impl FromStr for Editor {
     type Err = eyre::Error;
 
@@ -61,7 +61,7 @@ pub struct FileToOpen {
     path: String,
 }
 
-/// Attempts to create a [FileToOpen] from a file path, pane ID, and list of panes.
+/// Attempts to create a [`FileToOpen`] from a file path, pane ID, and list of panes.
 impl TryFrom<(&str, i64, &[WeztermPane])> for FileToOpen {
     type Error = eyre::Error;
 
@@ -86,7 +86,7 @@ impl TryFrom<(&str, i64, &[WeztermPane])> for FileToOpen {
     }
 }
 
-/// Parses a [FileToOpen] from a string in the format "path:line:column".
+/// Parses a [`FileToOpen`] from a string in the format "path:line:column".
 impl FromStr for FileToOpen {
     type Err = eyre::Error;
 

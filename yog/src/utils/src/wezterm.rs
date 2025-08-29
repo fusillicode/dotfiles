@@ -4,17 +4,17 @@ use std::process::Command;
 use color_eyre::eyre::eyre;
 use serde::Deserialize;
 
-/// Generates a command string to send text to a specific [WeztermPane] using the Wezterm CLI.
+/// Generates a command string to send text to a specific [`WeztermPane`] using the Wezterm CLI.
 pub fn send_text_to_pane_cmd(text: &str, pane_id: i64) -> String {
     format!("wezterm cli send-text {text} --pane-id '{pane_id}' --no-paste")
 }
 
-/// Generates a command string to submit (send a carriage return) to a specific [WeztermPane].
+/// Generates a command string to submit (send a carriage return) to a specific [`WeztermPane`].
 pub fn submit_pane_cmd(pane_id: i64) -> String {
     format!(r#"printf "\r" | wezterm cli send-text --pane-id '{pane_id}' --no-paste"#)
 }
 
-/// Generates a command string to activate a specific [WeztermPane] using the Wezterm CLI.
+/// Generates a command string to activate a specific [`WeztermPane`] using the Wezterm CLI.
 pub fn activate_pane_cmd(pane_id: i64) -> String {
     format!(r#"wezterm cli activate-pane --pane-id '{pane_id}'"#)
 }
@@ -35,7 +35,7 @@ pub fn get_all_panes(envs: &[(&str, &str)]) -> color_eyre::Result<Vec<WeztermPan
     Ok(serde_json::from_slice(&cmd.output()?.stdout)?)
 }
 
-/// Finds a sibling [WeztermPane] in the same tab that matches one of the given titles.
+/// Finds a sibling [`WeztermPane`] in the same tab that matches one of the given titles.
 pub fn get_sibling_pane_with_titles(
     panes: &[WeztermPane],
     current_pane_id: i64,
@@ -99,13 +99,13 @@ pub struct WeztermPane {
 }
 
 impl WeztermPane {
-    /// Given two [WeztermPane] checks if they are in the same tab and if the first
+    /// Given two [`WeztermPane`] checks if they are in the same tab and if the first
     /// has a current working directory that is the same or a child of the second one.
     pub fn is_sibling_terminal_pane_of(&self, other: &WeztermPane) -> bool {
         self.pane_id != other.pane_id && self.tab_id == other.tab_id && self.cwd.starts_with(&other.cwd)
     }
 
-    /// Converts the current working directory from a file URI to an absolute [PathBuf].
+    /// Converts the current working directory from a file URI to an absolute [`PathBuf`].
     pub fn absolute_cwd(&self) -> PathBuf {
         let mut path_parts = self.cwd.components();
         path_parts.next(); // Skip `file://`
