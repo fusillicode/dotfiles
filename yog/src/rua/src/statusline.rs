@@ -52,14 +52,14 @@ pub struct Diagnostic {
     severity: Severity,
 }
 
-/// Implementation of [FromObject] for [Diagnostic].
+/// Implementation of [`FromObject`] for [`Diagnostic`].
 impl FromObject for Diagnostic {
     fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
         Self::deserialize(Deserializer::new(obj)).map_err(Into::into)
     }
 }
 
-/// Implementation of [nvim_oxi::lua::Poppable] for [Diagnostic].
+/// Implementation of [`nvim_oxi::lua::Poppable`] for [`Diagnostic`].
 impl nvim_oxi::lua::Poppable for Diagnostic {
     unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
         unsafe {

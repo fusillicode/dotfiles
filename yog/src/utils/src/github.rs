@@ -37,7 +37,7 @@ pub fn get_latest_release(repo: &str) -> color_eyre::Result<String> {
     extract_success_output(output)
 }
 
-/// Extracts the branch name from a GitHub pull request [Url].
+/// Extracts the branch name from a GitHub pull request [`Url`].
 pub fn get_branch_name_from_url(url: &Url) -> color_eyre::Result<String> {
     let pr_id = extract_pr_id_form_url(url)?;
 

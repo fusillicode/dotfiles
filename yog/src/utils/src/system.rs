@@ -10,19 +10,19 @@ use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 use color_eyre::owo_colors::OwoColorize;
 
-/// Retrieves command-line arguments excluding the program name, returning them as a [Vec] of [String].
+/// Retrieves command-line arguments excluding the program name, returning them as a [`Vec`] of [`String`].
 pub fn get_args() -> Vec<String> {
     let mut args = std::env::args();
     args.next();
     args.collect::<Vec<String>>()
 }
 
-/// Joins a thread handle and returns the result, handling join errors as [eyre::Error].
+/// Joins a thread handle and returns the result, handling join errors as [`eyre::Error`].
 pub fn join<T>(join_handle: JoinHandle<color_eyre::Result<T>>) -> Result<T, eyre::Error> {
     join_handle.join().map_err(|e| eyre!("join error {e:#?}"))?
 }
 
-/// Builds a path starting from the home directory by appending the given parts, returning a [PathBuf].
+/// Builds a path starting from the home directory by appending the given parts, returning a [`PathBuf`].
 pub fn build_home_path<P: AsRef<Path>>(parts: &[P]) -> color_eyre::Result<PathBuf> {
     let mut home_path = std::env::home_dir().ok_or_eyre("missing home dir")?;
     for part in parts {

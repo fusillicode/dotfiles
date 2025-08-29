@@ -4,8 +4,8 @@ pub use skim::PreviewContext as SkimPreviewContext;
 pub use skim::SkimItem;
 use skim::prelude::*;
 
-/// Prompts the user to select either [YesNo::Yes] or [YesNo::No] using the skim fuzzy finder.
-/// Returns [Option::Some][YesNo] if an option is selected, or [Option::None] if the selection is canceled.
+/// Prompts the user to select either [`YesNo::Yes`] or [`YesNo::No`] using the skim fuzzy finder.
+/// Returns [`Option::Some`][YesNo] if an option is selected, or [`Option::None`] if the selection is canceled.
 pub fn select_yes_or_no(prompt: String) -> color_eyre::Result<Option<YesNo>> {
     let sk_opts = base_sk_opts(&mut Default::default())
         .prompt(prompt)

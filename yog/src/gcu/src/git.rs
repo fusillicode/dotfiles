@@ -11,7 +11,7 @@ use utils::sk::SkimItem;
 use utils::sk::SkimItemPreview;
 use utils::sk::SkimPreviewContext;
 
-/// Gets all local and remote [GitRef]s sorted by modification date.
+/// Gets all local and remote [`GitRef`]s sorted by modification date.
 pub fn get_local_and_remote_refs() -> color_eyre::Result<Vec<GitRef>> {
     let output = Command::new("git")
         .args([
@@ -31,7 +31,7 @@ pub fn get_local_and_remote_refs() -> color_eyre::Result<Vec<GitRef>> {
     Ok(res)
 }
 
-/// Deduplicates local and remote [GitRef]s, preferring local branches.
+/// Deduplicates local and remote [`GitRef`]s, preferring local branches.
 pub fn keep_local_and_untracked_refs(git_refs: &mut Vec<GitRef>) {
     let mut local_names = std::collections::HashSet::new();
 
@@ -124,7 +124,7 @@ impl GitRefJson {
     }
 }
 
-/// Deserializes a [GitRef] from [GitRefJson].
+/// Deserializes a [`GitRef`] from [`GitRefJson`].
 impl<'de> Deserialize<'de> for GitRef {
     fn deserialize<D>(deserializer: D) -> Result<GitRef, D::Error>
     where
