@@ -4,6 +4,39 @@ pub use skim::PreviewContext as SkimPreviewContext;
 pub use skim::SkimItem;
 use skim::prelude::*;
 
+pub fn select_yes_or_no(prompt: String) -> color_eyre::Result<Option<YesNo>> {
+    let sk_opts = base_sk_opts(&mut Default::default())
+        .prompt(prompt)
+        .preview(None)
+        .no_clear_start(true)
+        .final_build()?;
+    get_item(vec![YesNo::Yes, YesNo::No], Some(sk_opts))
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum YesNo {
+    Yes,
+    No,
+}
+
+impl From<YesNo> for bool {
+    fn from(value: YesNo) -> Self {
+        match value {
+            YesNo::Yes => true,
+            YesNo::No => false,
+        }
+    }
+}
+
+impl SkimItem for YesNo {
+    fn text(&self) -> std::borrow::Cow<'_, str> {
+        Cow::from(match self {
+            YesNo::Yes => "Yes",
+            YesNo::No => "No",
+        })
+    }
+}
+
 /// Get the selected item among the supplied ones with sk configured with either:
 /// - the supplied [SkimOptionsBuilder] or
 /// - the base one [base_sk_opts]
