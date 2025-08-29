@@ -81,7 +81,7 @@ impl From<&Command> for CmdDetails {
         Self {
             name: value.get_program().to_string_lossy().to_string(),
             args: value.get_args().map(|x| x.to_string_lossy().to_string()).collect(),
-            cur_dir: value.get_current_dir().map(|x| x.to_path_buf()),
+            cur_dir: value.get_current_dir().map(Path::to_path_buf),
         }
     }
 }
@@ -92,7 +92,7 @@ impl From<&mut Command> for CmdDetails {
         Self {
             name: value.get_program().to_string_lossy().to_string(),
             args: value.get_args().map(|x| x.to_string_lossy().to_string()).collect(),
-            cur_dir: value.get_current_dir().map(|x| x.to_path_buf()),
+            cur_dir: value.get_current_dir().map(Path::to_path_buf),
         }
     }
 }
