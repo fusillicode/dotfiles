@@ -8,6 +8,7 @@ use color_eyre::eyre;
 use color_eyre::eyre::OptionExt;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
+use color_eyre::owo_colors::OwoColorize;
 
 /// Retrieves command-line arguments excluding the program name, returning them as a [Vec] of [String].
 pub fn get_args() -> Vec<String> {
@@ -97,8 +98,8 @@ pub fn rm_dead_symlinks(dir: &str) -> color_eyre::Result<()> {
 
         let metadata = std::fs::symlink_metadata(&path)?;
         if metadata.file_type().is_symlink() && std::fs::metadata(&path).is_err() {
-            println!("🗑️ Removing dead symlink: {path:#?}");
             std::fs::remove_file(&path)?;
+            println!("{} {path:#?}", "Deleted dead symlink".cyan().bold());
         }
     }
     Ok(())
