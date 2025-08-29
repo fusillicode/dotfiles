@@ -115,7 +115,6 @@ impl WeztermPane {
 /// Represents the size and dimensions of a Wezterm pane.
 #[derive(Debug, Deserialize, Clone)]
 #[cfg_attr(any(test, feature = "fake"), derive(fake::Dummy))]
-#[allow(dead_code)]
 pub struct WeztermPaneSize {
     /// Number of character columns in the pane.
     pub cols: i64,

@@ -8,7 +8,7 @@ pub fn notify_error(msg: &str) {
 }
 
 /// Notifies the user of a warning message in Neovim.
-#[allow(dead_code)]
+#[expect(dead_code, reason = "Kept for future use")]
 pub fn notify_warn(msg: &str) {
     if let Err(error) = nvim_oxi::api::notify(msg, LogLevel::Warn, &Default::default()) {
         nvim_oxi::dbg!(format!("cannot notify warning {msg:?}, error {error:#?}"));
