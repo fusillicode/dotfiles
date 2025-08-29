@@ -4,6 +4,8 @@ pub use skim::PreviewContext as SkimPreviewContext;
 pub use skim::SkimItem;
 use skim::prelude::*;
 
+/// Prompts the user to select either [YesNo::Yes] or [YesNo::No] using the skim fuzzy finder.
+/// Returns [Option::Some][YesNo] if an option is selected, or [Option::None] if the selection is canceled.
 pub fn select_yes_or_no(prompt: String) -> color_eyre::Result<Option<YesNo>> {
     let sk_opts = base_sk_opts(&mut Default::default())
         .prompt(prompt)
@@ -13,6 +15,7 @@ pub fn select_yes_or_no(prompt: String) -> color_eyre::Result<Option<YesNo>> {
     get_item(vec![YesNo::Yes, YesNo::No], Some(sk_opts))
 }
 
+/// Represents a yes or no choice for user selection.
 #[derive(Clone, Copy, Debug)]
 pub enum YesNo {
     Yes,
@@ -90,6 +93,7 @@ where
 }
 
 /// Runs the skim fuzzy finder with the provided items and returns the selected items.
+/// Returns an empty vector if the selection is aborted or cancelled.
 fn get_items<T: SkimItem + Clone + std::fmt::Debug>(
     items: Vec<T>,
     sk_opts: Option<SkimOptions>,
@@ -126,6 +130,7 @@ fn get_items<T: SkimItem + Clone + std::fmt::Debug>(
 }
 
 /// Creates a skim item receiver from a vector of items for use with the fuzzy finder.
+/// The receiver can be used as a source for the skim fuzzy finder.
 fn build_sk_source_from_items<T: SkimItem>(items: Vec<T>) -> color_eyre::Result<SkimItemReceiver> {
     let (tx, rx): (SkimItemSender, SkimItemReceiver) = unbounded();
     for item in items {
