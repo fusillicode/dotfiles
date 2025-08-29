@@ -17,16 +17,17 @@ mod vault;
 
 /// Manages PostgreSQL credentials from Vault and updates connection files.
 ///
+/// After updating credentials, interactively prompts for confirmation before connecting via pgcli.
+///
 /// # Arguments
 ///
-/// * `alias` - Database alias (optional, interactive if not provided)
-/// * `connect` - Optional flag to connect via pgcli
+/// * `alias` - Database alias (optional, interactive selection if not provided)
 ///
 /// # Examples
 ///
 /// ```bash
 /// vpg
-/// vpg mydb connect
+/// vpg mydb
 /// ```
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
