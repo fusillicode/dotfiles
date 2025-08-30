@@ -7,7 +7,7 @@ pub struct Hadolint<'a> {
     pub bin_dir: &'a Path,
 }
 
-impl<'a> Installer for Hadolint<'a> {
+impl Installer for Hadolint<'_> {
     fn bin_name(&self) -> &'static str {
         "hadolint"
     }

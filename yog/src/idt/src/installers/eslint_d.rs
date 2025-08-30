@@ -7,7 +7,7 @@ pub struct EslintD<'a> {
     pub bin_dir: &'a Path,
 }
 
-impl<'a> Installer for EslintD<'a> {
+impl Installer for EslintD<'_> {
     fn bin_name(&self) -> &'static str {
         "eslint_d"
     }

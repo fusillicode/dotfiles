@@ -16,7 +16,7 @@ pub struct Deno<'a> {
     pub bin_dir: &'a Path,
 }
 
-impl<'a> Installer for Deno<'a> {
+impl Installer for Deno<'_> {
     fn bin_name(&self) -> &'static str {
         "deno"
     }

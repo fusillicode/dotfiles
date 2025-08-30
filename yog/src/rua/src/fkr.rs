@@ -9,7 +9,7 @@ pub fn create_cmds(_: ()) {
     for fkr_opt in FkrOption::iter() {
         if let Err(error) = nvim_oxi::api::create_user_command(
             cmd_name(&fkr_opt),
-            move |_| {
+            move |()| {
                 let cur_win = Window::current();
                 let Ok((row, col)) = cur_win.get_cursor().inspect_err(|error| {
                     crate::oxi_utils::notify_error(&format!(

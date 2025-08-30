@@ -66,12 +66,14 @@ fn main() -> color_eyre::Result<()> {
     nvim_dbee::save_new_nvim_dbee_conns_file(&pgpass_entry, &nvim_dbee_conns_path)?;
 
     println!(
-        "{} credentials updated in {pgpass_path:?}",
-        pgpass_entry.metadata.alias.green().bold()
+        "{} credentials updated in {}",
+        pgpass_entry.metadata.alias.green().bold(),
+        pgpass_path.display()
     );
     println!(
-        "{} credentials updated in {nvim_dbee_conns_path:?}",
-        pgpass_entry.metadata.alias.green().bold()
+        "{} credentials updated in {}",
+        pgpass_entry.metadata.alias.green().bold(),
+        nvim_dbee_conns_path.display()
     );
     // Cosmetic space in prompt.
     println!();

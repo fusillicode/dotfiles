@@ -7,7 +7,7 @@ pub struct DockerLangServer<'a> {
     pub bin_dir: &'a Path,
 }
 
-impl<'a> Installer for DockerLangServer<'a> {
+impl Installer for DockerLangServer<'_> {
     fn bin_name(&self) -> &'static str {
         "docker-langserver"
     }

@@ -6,7 +6,7 @@ pub struct Taplo<'a> {
     pub bin_dir: &'a Path,
 }
 
-impl<'a> Installer for Taplo<'a> {
+impl Installer for Taplo<'_> {
     fn bin_name(&self) -> &'static str {
         "taplo"
     }

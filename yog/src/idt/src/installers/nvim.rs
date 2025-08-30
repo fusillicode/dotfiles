@@ -9,7 +9,7 @@ pub struct Nvim<'a> {
     pub bin_dir: &'a Path,
 }
 
-impl<'a> Installer for Nvim<'a> {
+impl Installer for Nvim<'_> {
     fn bin_name(&self) -> &'static str {
         "nvim"
     }

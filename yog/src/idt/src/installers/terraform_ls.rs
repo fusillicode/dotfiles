@@ -7,7 +7,7 @@ pub struct TerraformLs<'a> {
     pub bin_dir: &'a Path,
 }
 
-impl<'a> Installer for TerraformLs<'a> {
+impl Installer for TerraformLs<'_> {
     fn bin_name(&self) -> &'static str {
         "terraform-ls"
     }

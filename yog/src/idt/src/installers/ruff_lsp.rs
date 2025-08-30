@@ -7,7 +7,7 @@ pub struct RuffLsp<'a> {
     pub bin_dir: &'a Path,
 }
 
-impl<'a> Installer for RuffLsp<'a> {
+impl Installer for RuffLsp<'_> {
     fn bin_name(&self) -> &'static str {
         "ruff-lsp"
     }

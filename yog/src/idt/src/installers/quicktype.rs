@@ -7,7 +7,7 @@ pub struct Quicktype<'a> {
     pub bin_dir: &'a Path,
 }
 
-impl<'a> Installer for Quicktype<'a> {
+impl Installer for Quicktype<'_> {
     fn bin_name(&self) -> &'static str {
         "quicktype"
     }

@@ -7,7 +7,7 @@ pub struct HelmLs<'a> {
     pub bin_dir: &'a Path,
 }
 
-impl<'a> Installer for HelmLs<'a> {
+impl Installer for HelmLs<'_> {
     fn bin_name(&self) -> &'static str {
         "helm_ls"
     }

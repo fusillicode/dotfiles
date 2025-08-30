@@ -21,7 +21,7 @@ pub trait CliFlags {
 
     /// Returns a closure that generates the complete list of CLI flags.
     fn get(&self) -> Box<dyn Fn(()) -> Vec<String>> {
-        Box::new(|_| {
+        Box::new(|()| {
             Self::base_flags()
                 .into_iter()
                 .map(Into::into)

@@ -7,7 +7,7 @@ pub struct Commitlint<'a> {
     pub bin_dir: &'a Path,
 }
 
-impl<'a> Installer for Commitlint<'a> {
+impl Installer for Commitlint<'_> {
     fn bin_name(&self) -> &'static str {
         "commitlint"
     }

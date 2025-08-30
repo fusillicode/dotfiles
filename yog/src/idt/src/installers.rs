@@ -72,7 +72,7 @@ pub trait Installer: Sync + Send {
                     format!("{error:#?}").red().bold()
                 )
             })
-            .and_then(|_| {
+            .and_then(|()| {
                 self.check()
                     .transpose()
                     .inspect(|check_output| {
