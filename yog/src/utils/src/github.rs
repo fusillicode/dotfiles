@@ -127,7 +127,7 @@ mod tests {
     fn extract_pr_id_form_url_returns_the_expected_error_when_host_cannot_be_extracted() {
         let url = Url::parse("mailto:foo@bar.com").unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_url(&url));
-        assert_eq!("cannot extract host from mailto:foo@bar.com", error.to_string())
+        assert_eq!("cannot extract host from mailto:foo@bar.com", error.to_string());
     }
 
     #[test]
@@ -137,7 +137,7 @@ mod tests {
         assert_eq!(
             r#"host "foo.bar" in https://foo.bar/ doesn't match "github.com""#,
             error.to_string()
-        )
+        );
     }
 
     #[test]
@@ -147,7 +147,7 @@ mod tests {
         assert_eq!(
             "missing PR id prefix \"pull\" in https://github.com/ path segments [\n    (\n        0,\n        \"\",\n    ),\n]",
             error.to_string()
-        )
+        );
     }
 
     #[test]
@@ -157,7 +157,7 @@ mod tests {
         assert_eq!(
             "missing PR id in https://github.com/pull path segments [\n    (\n        0,\n        \"pull\",\n    ),\n]",
             error.to_string()
-        )
+        );
     }
 
     #[test]
@@ -167,7 +167,7 @@ mod tests {
         assert_eq!(
             "missing PR id prefix \"pull\" in https://github.com/foo path segments [\n    (\n        0,\n        \"foo\",\n    ),\n]",
             error.to_string()
-        )
+        );
     }
 
     #[test]
@@ -177,26 +177,26 @@ mod tests {
         assert_eq!(
             "multiple \"pull\" found in https://github.com/pull/42/pull/43 path segments [\n    (\n        0,\n        \"pull\",\n    ),\n    (\n        1,\n        \"42\",\n    ),\n    (\n        2,\n        \"pull\",\n    ),\n    (\n        3,\n        \"43\",\n    ),\n]",
             error.to_string()
-        )
+        );
     }
 
     #[test]
     fn extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_that_ends_with_the_pr_id() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/pull/42")).unwrap();
-        assert_eq!("42", extract_pr_id_form_url(&url).unwrap())
+        assert_eq!("42", extract_pr_id_form_url(&url).unwrap());
     }
 
     #[test]
     fn extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_that_does_not_end_with_the_pr_id() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/pull/42/foo")).unwrap();
-        assert_eq!("42", extract_pr_id_form_url(&url).unwrap())
+        assert_eq!("42", extract_pr_id_form_url(&url).unwrap());
     }
 
     #[test]
     fn extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_if_pr_id_prefix_is_not_1st_path_segment()
     {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/foo/pull/42/foo")).unwrap();
-        assert_eq!("42", extract_pr_id_form_url(&url).unwrap())
+        assert_eq!("42", extract_pr_id_form_url(&url).unwrap());
     }
 
     #[test]
@@ -211,6 +211,6 @@ mod tests {
             "https://{GITHUB_HOST}/<OWNER>/<REPO>/actions/runs/<RUN_ID>/job/<JOB_ID>?pr=42"
         ))
         .unwrap();
-        assert_eq!("42", extract_pr_id_form_url(&url).unwrap())
+        assert_eq!("42", extract_pr_id_form_url(&url).unwrap());
     }
 }

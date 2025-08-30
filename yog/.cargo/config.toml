@@ -34,6 +34,3 @@ rustflags = ["-C", "link-arg=-undefined", "-C", "link-arg=dynamic_lookup"]
 
 [target.aarch64-apple-darwin]
 rustflags = ["-C", "link-arg=-undefined", "-C", "link-arg=dynamic_lookup"]
-
-[alias]
-lint-all = "clippy -- -D clippy::all -D clippy::correctness -D clippy::suspicious -D clippy::style -D clippy::complexity -D clippy::perf -D clippy::pedantic -D clippy::dbg_macro -D clippy::unimplemented -D clippy::todo -D clippy::unreachable -D clippy::panic -D clippy::unwrap_used -D clippy::expect_used -D clippy::indexing_slicing -D clippy::arithmetic_side_effects -D clippy::float_arithmetic -D clippy::implicit_clone -D clippy::redundant_else -D clippy::single_match -D clippy::wildcard_enum_match_arm -D clippy::rc_buffer -D clippy::vec_init_then_push -D clippy::nursery -D clippy::cargo -A clippy::must-use-candidate"

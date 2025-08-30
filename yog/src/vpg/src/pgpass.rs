@@ -225,7 +225,7 @@ mod tests {
                 pwd: "pwd".into(),
             },
             ConnectionParams::try_from((42, "host:5432:db:user:pwd")).unwrap()
-        )
+        );
     }
 
     #[test]
@@ -234,7 +234,7 @@ mod tests {
         assert!(
             res.contains("Err(\n    Error {\n        msg: \"unexpected port value foo\",\n        source: ParseIntError {\n            kind: InvalidDigit,\n        },\n    },\n)"),
             "unexpected {res}"
-        )
+        );
     }
 
     #[test]
@@ -243,7 +243,7 @@ mod tests {
         assert!(
             res.contains("Err(\n    \"cannot build CredsLine from idx_line (\\n    42,\\n    \\\"host:5432:db:user\\\",\\n)\",\n)"),
             "unexpected {res}"
-        )
+        );
     }
 
     #[test]
@@ -259,6 +259,6 @@ mod tests {
                 pwd: "whatever".into()
             }
             .db_url()
-        )
+        );
     }
 }
