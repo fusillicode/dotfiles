@@ -24,8 +24,8 @@ pub enum CurlDownloaderOption<'a> {
     },
 }
 
-/// Downloads a file from the given URL using curl with the specified [CurlDownloaderOption].
-pub fn run(url: &str, opt: CurlDownloaderOption) -> color_eyre::Result<PathBuf> {
+/// Downloads a file from the given URL using curl with the specified [`CurlDownloaderOption`].
+pub fn run(url: &str, opt: &CurlDownloaderOption) -> color_eyre::Result<PathBuf> {
     let mut curl_cmd = utils::cmd::silent_cmd("curl");
     let silent_flag = cfg!(debug_assertions).then(|| "S").unwrap_or("");
     curl_cmd.args([&format!("-L{silent_flag}"), url]);
@@ -52,7 +52,7 @@ pub fn run(url: &str, opt: CurlDownloaderOption) -> color_eyre::Result<PathBuf> 
             }
             tar_cmd.stdin(curl_stdout).status()?.exit_ok()?;
 
-            dest_name.map(|dn| dest_dir.join(dn)).unwrap_or_else(|| dest_dir.into())
+            dest_name.map_or_else(|| dest_dir.into(), |dn| dest_dir.join(dn))
         }
         CurlDownloaderOption::WriteTo { dest_path } => {
             curl_cmd.arg("--output");

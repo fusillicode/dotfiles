@@ -7,7 +7,7 @@ use color_eyre::owo_colors::OwoColorize as _;
 
 /// List of binary names that should be symlinked after building.
 const BINS: &[&str] = &["idt", "yghfl", "yhfp", "oe", "catl", "gcu", "vpg", "try", "fkr"];
-/// List of library files that need to be renamed after building, mapping (source_name, target_name).
+/// List of library files that need to be renamed after building, mapping (`source_name`, `target_name`).
 const LIBS: &[(&str, &str)] = &[("librua.dylib", "rua.so")];
 
 /// Automates build workflow: formats, lints, builds, and deploys yog binaries.
@@ -73,7 +73,7 @@ fn main() -> color_eyre::Result<()> {
     }
 
     for (source_name, target_name) in LIBS {
-        rename_lib(&target_path, source_name, target_name)?
+        rename_lib(&target_path, source_name, target_name)?;
     }
 
     Ok(())
@@ -107,7 +107,12 @@ fn symlink_bin(bins_path: &Path, bin: &str, target_path: &Path) -> color_eyre::R
     utils::system::rm_f(&bin_path)?;
     let target_bin_path = target_path.join(bin);
     std::os::unix::fs::symlink(&target_bin_path, &bin_path)?;
-    println!("{} {target_bin_path:?} to {bin_path:?}", "Symlinked".green().bold());
+    println!(
+        "{} {} to {}",
+        "Symlinked".green().bold(),
+        target_bin_path.display(),
+        bin_path.display()
+    );
     Ok(())
 }
 
@@ -117,7 +122,9 @@ fn rename_lib(target_path: &Path, source_name: &str, target_name: &str) -> color
     let target_lib_path = target_path.join(target_name);
     std::fs::rename(&source_lib_path, &target_lib_path)?;
     println!(
-        "{} {source_lib_path:?} to {target_lib_path:?}",
+        "{} {} to {}",
+        target_lib_path.display(),
+        source_lib_path.display(),
         "Renamed".green().bold()
     );
     Ok(())

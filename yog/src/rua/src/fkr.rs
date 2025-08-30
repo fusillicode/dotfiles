@@ -9,12 +9,12 @@ pub fn create_cmds(_: ()) {
     for fkr_opt in FkrOption::iter() {
         if let Err(error) = nvim_oxi::api::create_user_command(
             cmd_name(&fkr_opt),
-            move |()| {
+            move |_| {
                 let cur_win = Window::current();
                 let Ok((row, col)) = cur_win.get_cursor().inspect_err(|error| {
                     crate::oxi_utils::notify_error(&format!(
                         "cannot get cursor from window {cur_win:?}, error {error:?}"
-                    ))
+                    ));
                 }) else {
                     return;
                 };
@@ -29,18 +29,18 @@ pub fn create_cmds(_: ()) {
                 if let Err(e) = cur_buf.set_text(line_range.clone(), start_col, end_col, text.clone()) {
                     crate::oxi_utils::notify_error(&format!(
                         "cannot set text {text:?} in buffer {cur_buf:?}, line_range {line_range:?}, start_col {start_col:?}, end_col {end_col:?}, error {e:?}"
-                    ))
+                    ));
                 }
             },
             &CreateCommandOptsBuilder::default().build(),
         ) {
             crate::oxi_utils::notify_error(&format!("cannot create user cmd, error {error:#?}"));
-        };
+        }
     }
 }
 
-/// Returns the Neovim command name for a given [FkrOption].
-fn cmd_name(fkr_opt: &FkrOption) -> &str {
+/// Returns the Neovim command name for a given [`FkrOption`].
+const fn cmd_name(fkr_opt: &FkrOption) -> &str {
     match fkr_opt {
         FkrOption::Uuidv4 => "FkrUuidv4",
         FkrOption::Uuidv7 => "FkrUuidv7",

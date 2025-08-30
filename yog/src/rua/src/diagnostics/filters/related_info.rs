@@ -66,7 +66,7 @@ impl DiagnosticsFilter for RelatedInfoFilter {
     }
 }
 
-/// Common shape of a root LSP diagnostic and the elements of its "user_data.lsp.relatedInformation".
+/// Common shape of a root LSP diagnostic and the elements of its "`user_data.lsp.relatedInformation`".
 #[derive(PartialEq)]
 struct RelatedInfo {
     /// The starting column number.
@@ -93,7 +93,7 @@ impl RelatedInfo {
         })
     }
 
-    /// Create a [`RelatedInfo`] from an element of an LSP diagnostic "user_data.lsp.relatedInformation" section.
+    /// Create a [`RelatedInfo`] from an element of an LSP diagnostic "`user_data.lsp.relatedInformation`" section.
     fn from_related_info(rel_info: &Dictionary) -> color_eyre::Result<Self> {
         let (start, end) = {
             let range_query = ["location", "range"];

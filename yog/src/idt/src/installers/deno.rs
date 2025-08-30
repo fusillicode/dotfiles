@@ -41,7 +41,7 @@ impl Installer for Deno<'_> {
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-aarch64-apple-darwin.zip",
                 self.bin_name()
             ),
-            CurlDownloaderOption::PipeIntoTar {
+            &CurlDownloaderOption::PipeIntoTar {
                 dest_dir: self.bin_dir,
                 dest_name: Some(self.bin_name()),
             },

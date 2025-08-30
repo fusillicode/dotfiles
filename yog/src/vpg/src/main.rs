@@ -13,7 +13,7 @@ mod nvim_dbee;
 mod pgpass;
 mod vault;
 
-/// Manages PostgreSQL credentials from Vault and updates connection files.
+/// Manages `PostgreSQL` credentials from Vault and updates connection files.
 ///
 /// After updating credentials, interactively prompts for confirmation before connecting via pgcli.
 ///
@@ -40,7 +40,7 @@ fn main() -> color_eyre::Result<()> {
         |(idx, _)| *idx == 0,
         pgpass_file.entries,
         |alias: &str| Box::new(move |entry: &PgpassEntry| entry.metadata.alias == alias),
-        Default::default(),
+        Option::default(),
     )?
     else {
         return Ok(());
