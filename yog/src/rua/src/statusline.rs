@@ -35,11 +35,15 @@ pub fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
     };
     for diagnostic in diagnostics {
         if cur_buf_nr == diagnostic.bufnr {
-            statusline.cur_buf_diags.entry(diagnostic.severity)
+            statusline
+                .cur_buf_diags
+                .entry(diagnostic.severity)
                 .and_modify(|count| *count = count.saturating_add(1))
                 .or_insert(1);
         }
-        statusline.workspace_diags.entry(diagnostic.severity)
+        statusline
+            .workspace_diags
+            .entry(diagnostic.severity)
             .and_modify(|count| *count = count.saturating_add(1))
             .or_insert(1);
     }
@@ -157,18 +161,18 @@ mod tests {
             },
             Statusline {
                 cur_buf_path: "foo".into(),
-                cur_buf_diags: [(Severity::Info, 0)].into_iter().collect(),
+                cur_buf_diags: std::iter::once((Severity::Info, 0)).collect(),
                 workspace_diags: HashMap::new(),
             },
             Statusline {
                 cur_buf_path: "foo".into(),
                 cur_buf_diags: HashMap::new(),
-                workspace_diags: [(Severity::Info, 0)].into_iter().collect(),
+                workspace_diags: std::iter::once((Severity::Info, 0)).collect(),
             },
             Statusline {
                 cur_buf_path: "foo".into(),
-                cur_buf_diags: [(Severity::Info, 0)].into_iter().collect(),
-                workspace_diags: [(Severity::Info, 0)].into_iter().collect(),
+                cur_buf_diags: std::iter::once((Severity::Info, 0)).collect(),
+                workspace_diags: std::iter::once((Severity::Info, 0)).collect(),
             },
         ] {
             let res = statusline.draw();
@@ -181,7 +185,7 @@ mod tests {
         let statusline = Statusline {
             cur_buf_path: "foo".into(),
             cur_buf_diags: [(Severity::Info, 1), (Severity::Error, 3)].into_iter().collect(),
-            workspace_diags: [(Severity::Info, 0)].into_iter().collect(),
+            workspace_diags: std::iter::once((Severity::Info, 0)).collect(),
         };
         assert_eq!(
             "%#DiagnosticStatusLineError#E:3 %#DiagnosticStatusLineInfo#I:1 %#StatusLine#foo %m %r%=",
@@ -190,7 +194,7 @@ mod tests {
 
         let statusline = Statusline {
             cur_buf_path: "foo".into(),
-            cur_buf_diags: [(Severity::Info, 0)].into_iter().collect(),
+            cur_buf_diags: std::iter::once((Severity::Info, 0)).collect(),
             workspace_diags: [(Severity::Info, 1), (Severity::Error, 3)].into_iter().collect(),
         };
         assert_eq!(
