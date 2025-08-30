@@ -195,7 +195,7 @@ mod tests {
             // Assert
             let expected = Path::new("/Users/Foo/src/bar/baz.rs").to_path_buf();
             assert_eq!(expected, result.unwrap());
-        })
+        });
     }
 
     #[test]
@@ -241,11 +241,11 @@ mod tests {
     #[test]
     fn get_github_url_from_git_remote_output_works_as_expected_with_ssh_remotes() {
         // Arrange
-        let input = r#"
+        let input = r"
             origin       git@github.com:fusillicode/dotfiles.git (fetch)
             origin  git@github.com:fusillicode/dotfiles.git (push)
 
-        "#;
+        ";
 
         // Act
         let result = get_github_url_from_git_remote_output(input).unwrap();
@@ -258,11 +258,11 @@ mod tests {
     #[test]
     fn get_github_url_from_git_remote_output_works_as_expected_with_https_remotes() {
         // Arrange
-        let input = r#"
+        let input = r"
             origin       https://github.com/fusillicode/dotfiles.git (fetch)
             origin  git@github.com:fusillicode/dotfiles.git (push)
 
-        "#;
+        ";
 
         // Act
         let result = get_github_url_from_git_remote_output(input).unwrap();

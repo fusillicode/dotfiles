@@ -47,7 +47,7 @@ pub fn keep_local_and_untracked_refs(git_refs: &mut Vec<GitRef>) {
 
 /// Represents a Git reference with metadata.
 #[derive(Clone, Debug)]
-#[cfg_attr(test, derive(PartialEq))]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 pub struct GitRef {
     /// The date and time when the last commit was made.
     committer_date_time: DateTime<FixedOffset>,
