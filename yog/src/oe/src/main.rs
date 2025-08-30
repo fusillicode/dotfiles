@@ -71,7 +71,7 @@ fn main() -> color_eyre::Result<()> {
 /// Creates enriched PATH for Wezterm integration.
 fn get_enriched_path_env() -> color_eyre::Result<Env> {
     let enriched_path = [
-        &std::env::var("PATH").unwrap_or_else(|_| String::new()),
+        &std::env::var("PATH").unwrap_or_else(|()| String::new()),
         "/opt/homebrew/bin",
         &utils::system::build_home_path(&[".local", "bin"])?.to_string_lossy(),
     ]

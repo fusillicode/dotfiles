@@ -7,7 +7,7 @@ pub struct LuaLanguageServer<'a> {
     pub dev_tools_dir: &'a Path,
 }
 
-impl<'a> Installer for LuaLanguageServer<'a> {
+impl Installer for LuaLanguageServer<'_> {
     fn bin_name(&self) -> &'static str {
         "lua-language-server"
     }

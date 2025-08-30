@@ -183,9 +183,9 @@ fn main() -> color_eyre::Result<()> {
         let mut unknown_installers = vec![];
         for chosen_bin in supplied_bin_names {
             if let Some(i) = all_installers.iter().find(|i| chosen_bin == i.bin_name()) {
-                selected_installers.push(i)
+                selected_installers.push(i);
             } else {
-                unknown_installers.push(chosen_bin)
+                unknown_installers.push(chosen_bin);
             }
         }
         (selected_installers, unknown_installers)
@@ -199,13 +199,9 @@ fn main() -> color_eyre::Result<()> {
     }
 
     let installers_errors = std::thread::scope(|scope| {
-        let installers_handles = selected_installers
+        selected_installers
             .iter()
             .map(|installer| (installer.bin_name(), scope.spawn(move || installer.run())))
-            .collect::<Vec<_>>();
-
-        installers_handles
-            .into_iter()
             .fold(vec![], |mut acc, (bin_name, handle)| {
                 if let Err(error) = handle.join() {
                     eprintln!(

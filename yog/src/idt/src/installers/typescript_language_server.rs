@@ -7,7 +7,7 @@ pub struct TypescriptLanguageServer<'a> {
     pub bin_dir: &'a Path,
 }
 
-impl<'a> Installer for TypescriptLanguageServer<'a> {
+impl Installer for TypescriptLanguageServer<'_> {
     fn bin_name(&self) -> &'static str {
         "typescript-language-server"
     }

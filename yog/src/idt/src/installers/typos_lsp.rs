@@ -7,7 +7,7 @@ pub struct TyposLsp<'a> {
     pub bin_dir: &'a Path,
 }
 
-impl<'a> Installer for TyposLsp<'a> {
+impl Installer for TyposLsp<'_> {
     fn bin_name(&self) -> &'static str {
         "typos-lsp"
     }

@@ -7,7 +7,7 @@ pub struct Sqruff<'a> {
     pub bin_dir: &'a Path,
 }
 
-impl<'a> Installer for Sqruff<'a> {
+impl Installer for Sqruff<'_> {
     fn bin_name(&self) -> &'static str {
         "sqruff"
     }

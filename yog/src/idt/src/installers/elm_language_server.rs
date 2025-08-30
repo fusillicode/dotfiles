@@ -7,7 +7,7 @@ pub struct ElmLanguageServer<'a> {
     pub bin_dir: &'a Path,
 }
 
-impl<'a> Installer for ElmLanguageServer<'a> {
+impl Installer for ElmLanguageServer<'_> {
     fn bin_name(&self) -> &'static str {
         "elm-language-server"
     }

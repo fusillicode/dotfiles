@@ -8,7 +8,7 @@ pub struct ElixirLs<'a> {
     pub bin_dir: &'a Path,
 }
 
-impl<'a> Installer for ElixirLs<'a> {
+impl Installer for ElixirLs<'_> {
     fn bin_name(&self) -> &'static str {
         "elixir-ls"
     }

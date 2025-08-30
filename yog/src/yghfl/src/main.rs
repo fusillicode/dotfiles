@@ -159,7 +159,7 @@ fn build_github_link<'a>(
     let mut github_link = github_repo_url.clone();
     github_link
         .path_segments_mut()
-        .map_err(|_| eyre!("cannot extend URL '{github_repo_url}' with segments {segments:#?}"))?
+        .map_err(|()| eyre!("cannot extend URL '{github_repo_url}' with segments {segments:#?}"))?
         .extend(&segments);
     github_link.set_fragment(Some(&format!(
         "L{}C{}",

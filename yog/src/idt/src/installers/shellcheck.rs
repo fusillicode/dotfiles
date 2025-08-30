@@ -7,7 +7,7 @@ pub struct Shellcheck<'a> {
     pub bin_dir: &'a Path,
 }
 
-impl<'a> Installer for Shellcheck<'a> {
+impl Installer for Shellcheck<'_> {
     fn bin_name(&self) -> &'static str {
         "shellcheck"
     }
