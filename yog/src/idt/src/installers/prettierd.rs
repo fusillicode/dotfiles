@@ -7,7 +7,7 @@ pub struct PrettierD<'a> {
     pub bin_dir: &'a Path,
 }
 
-impl<'a> Installer for PrettierD<'a> {
+impl Installer for PrettierD<'_> {
     fn bin_name(&self) -> &'static str {
         "prettierd"
     }

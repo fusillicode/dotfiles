@@ -7,7 +7,7 @@ pub struct Marksman<'a> {
     pub bin_dir: &'a Path,
 }
 
-impl<'a> Installer for Marksman<'a> {
+impl Installer for Marksman<'_> {
     fn bin_name(&self) -> &'static str {
         "marksman"
     }

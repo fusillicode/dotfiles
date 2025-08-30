@@ -55,18 +55,18 @@ impl FkrOption {
     /// ```
     pub fn gen_string(&self) -> String {
         match self {
-            FkrOption::Uuidv4 => fake::uuid::UUIDv4.fake::<String>(),
-            FkrOption::Uuidv7 => fake::uuid::UUIDv7.fake::<String>(),
-            FkrOption::Email => fake::faker::internet::en::SafeEmail().fake::<String>(),
-            FkrOption::UserAgent => fake::faker::internet::en::UserAgent().fake::<String>(),
-            FkrOption::MACAddress => fake::faker::internet::en::MACAddress().fake::<String>(),
-            FkrOption::IPv4 => fake::faker::internet::en::IPv4().fake::<String>(),
-            FkrOption::IPv6 => fake::faker::internet::en::IPv6().fake::<String>(),
+            Self::Uuidv4 => fake::uuid::UUIDv4.fake::<String>(),
+            Self::Uuidv7 => fake::uuid::UUIDv7.fake::<String>(),
+            Self::Email => fake::faker::internet::en::SafeEmail().fake::<String>(),
+            Self::UserAgent => fake::faker::internet::en::UserAgent().fake::<String>(),
+            Self::MACAddress => fake::faker::internet::en::MACAddress().fake::<String>(),
+            Self::IPv4 => fake::faker::internet::en::IPv4().fake::<String>(),
+            Self::IPv6 => fake::faker::internet::en::IPv6().fake::<String>(),
         }
     }
 
-    /// Returns a vector of all available [FkrOption] variants.
+    /// Returns a vector of all available [`FkrOption`] variants.
     pub fn to_vec() -> Vec<Self> {
-        FkrOption::iter().collect()
+        Self::iter().collect()
     }
 }

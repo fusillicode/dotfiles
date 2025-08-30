@@ -7,7 +7,7 @@ pub struct YamlLanguageServer<'a> {
     pub bin_dir: &'a Path,
 }
 
-impl<'a> Installer for YamlLanguageServer<'a> {
+impl Installer for YamlLanguageServer<'_> {
     fn bin_name(&self) -> &'static str {
         "yaml-language-server"
     }

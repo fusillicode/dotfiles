@@ -7,7 +7,7 @@ pub struct RustAnalyzer<'a> {
     pub bin_dir: &'a Path,
 }
 
-impl<'a> Installer for RustAnalyzer<'a> {
+impl Installer for RustAnalyzer<'_> {
     fn bin_name(&self) -> &'static str {
         "rust-analyzer"
     }

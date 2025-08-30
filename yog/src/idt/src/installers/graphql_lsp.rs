@@ -7,7 +7,7 @@ pub struct GraphQlLsp<'a> {
     pub bin_dir: &'a Path,
 }
 
-impl<'a> Installer for GraphQlLsp<'a> {
+impl Installer for GraphQlLsp<'_> {
     fn bin_name(&self) -> &'static str {
         "graphql-lsp"
     }

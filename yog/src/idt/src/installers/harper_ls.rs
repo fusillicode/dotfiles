@@ -6,7 +6,7 @@ pub struct HarperLs<'a> {
     pub bin_dir: &'a Path,
 }
 
-impl<'a> Installer for HarperLs<'a> {
+impl Installer for HarperLs<'_> {
     fn bin_name(&self) -> &'static str {
         "harper-ls"
     }

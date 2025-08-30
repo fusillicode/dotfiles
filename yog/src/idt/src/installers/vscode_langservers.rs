@@ -7,7 +7,7 @@ pub struct VsCodeLangServers<'a> {
     pub bin_dir: &'a Path,
 }
 
-impl<'a> Installer for VsCodeLangServers<'a> {
+impl Installer for VsCodeLangServers<'_> {
     fn bin_name(&self) -> &'static str {
         "vscode-langservers-extracted"
     }

@@ -7,7 +7,7 @@ pub struct BashLanguageServer<'a> {
     pub bin_dir: &'a Path,
 }
 
-impl<'a> Installer for BashLanguageServer<'a> {
+impl Installer for BashLanguageServer<'_> {
     fn bin_name(&self) -> &'static str {
         "bash-language-server"
     }

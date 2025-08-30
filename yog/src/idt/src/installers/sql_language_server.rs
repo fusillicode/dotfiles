@@ -7,7 +7,7 @@ pub struct SqlLanguageServer<'a> {
     pub bin_dir: &'a Path,
 }
 
-impl<'a> Installer for SqlLanguageServer<'a> {
+impl Installer for SqlLanguageServer<'_> {
     fn bin_name(&self) -> &'static str {
         "sql-language-server"
     }
