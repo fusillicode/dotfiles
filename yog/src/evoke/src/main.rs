@@ -123,9 +123,9 @@ fn rename_lib(target_path: &Path, source_name: &str, target_name: &str) -> color
     std::fs::rename(&source_lib_path, &target_lib_path)?;
     println!(
         "{} {} to {}",
-        target_lib_path.display(),
+        "Renamed".green().bold(),
         source_lib_path.display(),
-        "Renamed".green().bold()
+        target_lib_path.display(),
     );
     Ok(())
 }
