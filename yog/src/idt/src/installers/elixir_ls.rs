@@ -24,7 +24,7 @@ impl Installer for ElixirLs<'_> {
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}.zip",
                 self.bin_name()
             ),
-            CurlDownloaderOption::PipeIntoTar {
+            &CurlDownloaderOption::PipeIntoTar {
                 dest_dir: &dev_tools_repo_dir,
                 dest_name: None,
             },

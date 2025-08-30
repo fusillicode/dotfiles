@@ -56,13 +56,13 @@ fn main() -> color_eyre::Result<()> {
                 "{} && {} && {} && {}",
                 // `wezterm cli send-text $'\e'` sends the "ESC" to Wezterm to exit from insert mode
                 // https://github.com/wez/wezterm/discussions/3945
-                utils::wezterm::send_text_to_pane_cmd(r#"$'\e'"#, editor_pane_id),
+                utils::wezterm::send_text_to_pane_cmd(r"$'\e'", editor_pane_id),
                 utils::wezterm::send_text_to_pane_cmd(&format!("'{open_file_cmd}'"), editor_pane_id),
                 utils::wezterm::submit_pane_cmd(editor_pane_id),
                 utils::wezterm::activate_pane_cmd(editor_pane_id),
             ),
         ])
-        .envs([enriched_path_env.by_ref()].iter().copied())
+        .envs(std::iter::once(enriched_path_env.by_ref()))
         .spawn()?;
 
     Ok(())
@@ -71,7 +71,7 @@ fn main() -> color_eyre::Result<()> {
 /// Creates enriched PATH for Wezterm integration.
 fn get_enriched_path_env() -> color_eyre::Result<Env> {
     let enriched_path = [
-        &std::env::var("PATH").unwrap_or_else(|()| String::new()),
+        &std::env::var("PATH").unwrap_or_else(|_| String::new()),
         "/opt/homebrew/bin",
         &utils::system::build_home_path(&[".local", "bin"])?.to_string_lossy(),
     ]

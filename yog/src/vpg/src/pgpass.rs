@@ -18,7 +18,7 @@ use crate::vault::VaultCreds;
 /// A parsed `.pgpass` file with line references and connection entries.
 ///
 /// Stores both raw lines (preserving comments and formatting) and validated connection entries.
-/// Follows PostgreSQL's password file format: `host:port:db:user:pwd` with colon-separated fields.
+/// Follows `PostgreSQL`'s password file format: `host:port:db:user:pwd` with colon-separated fields.
 #[derive(Debug)]
 pub struct PgpassFile<'a> {
     /// Original file lines with their 0-based indices, preserving comments and metadata.
@@ -132,15 +132,15 @@ pub struct ConnectionParams {
 }
 
 impl ConnectionParams {
-    /// Generates a PostgreSQL connection [`String`] URL from the connection parameters.
+    /// Generates a `PostgreSQL` connection [`String`] URL from the connection parameters.
     pub fn db_url(&self) -> String {
         format!("postgres://{}@{}:{}/{}", self.user, self.host, self.port, self.db)
     }
 
     /// Updates the user and password fields with the provided [`VaultCreds`].
     pub fn update(&mut self, creds: &VaultCreds) {
-        self.user = creds.username.to_string();
-        self.pwd = creds.password.to_string();
+        self.user.clone_from(&creds.username);
+        self.pwd.clone_from(&creds.password);
     }
 }
 
@@ -150,13 +150,13 @@ impl TryFrom<(usize, &str)> for ConnectionParams {
     fn try_from(idx_line @ (idx, line): (usize, &str)) -> Result<Self, Self::Error> {
         if let [host, port, db, user, pwd] = line.split(':').collect::<Vec<_>>().as_slice() {
             let port = port.parse().context(format!("unexpected port value {port}"))?;
-            return Ok(ConnectionParams {
+            return Ok(Self {
                 idx,
-                host: host.to_string(),
+                host: (*host).to_string(),
                 port,
-                db: db.to_string(),
-                user: user.to_string(),
-                pwd: pwd.to_string(),
+                db: (*db).to_string(),
+                user: (*user).to_string(),
+                pwd: (*pwd).to_string(),
             });
         }
         bail!("cannot build CredsLine from idx_line {idx_line:#?}")
@@ -169,7 +169,7 @@ impl core::fmt::Display for ConnectionParams {
     }
 }
 
-/// Saves updated PostgreSQL .pgpass to a temporary file, replaces the original, and sets permissions.
+/// Saves updated `PostgreSQL` .pgpass to a temporary file, replaces the original, and sets permissions.
 ///
 /// # Arguments
 /// * `pgpass_idx_lines` - Original file lines with their indices (to identify line needing update).

@@ -25,7 +25,7 @@ impl Installer for LuaLanguageServer<'_> {
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}-darwin-arm64.tar.gz",
                 self.bin_name()
             ),
-            CurlDownloaderOption::PipeIntoTar {
+            &CurlDownloaderOption::PipeIntoTar {
                 dest_dir: &dev_tools_repo_dir,
                 dest_name: None,
             },

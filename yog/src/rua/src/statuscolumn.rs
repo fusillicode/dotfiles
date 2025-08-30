@@ -33,7 +33,7 @@ pub struct Extmark(u32, usize, usize, Option<ExtmarkMeta>);
 
 impl Extmark {
     /// Returns the [`ExtmarkMeta`] of the extmark if present.
-    pub fn meta(&self) -> Option<&ExtmarkMeta> {
+    pub const fn meta(&self) -> Option<&ExtmarkMeta> {
         self.3.as_ref()
     }
 }
@@ -53,7 +53,7 @@ impl ExtmarkMeta {
         format!(
             "%#{}#{}%*",
             self.sign_hl_group,
-            self.sign_text.as_ref().map(|x| x.trim()).unwrap_or("")
+            self.sign_text.as_ref().map_or("", |x| x.trim())
         )
     }
 }
@@ -119,7 +119,7 @@ impl Statuscolumn {
                 "DiagnosticSignOk" => statuscolumn.ok = Some(extmark),
                 git if git.contains("GitSigns") => statuscolumn.git = Some(extmark),
                 _ => (),
-            };
+            }
         }
 
         statuscolumn
@@ -134,7 +134,7 @@ impl core::fmt::Display for Statuscolumn {
             .find_map(|s| s.as_ref().map(ExtmarkMeta::draw))
             .unwrap_or_else(|| " ".into());
 
-        let git_sign = self.git.as_ref().map(ExtmarkMeta::draw).unwrap_or_else(|| " ".into());
+        let git_sign = self.git.as_ref().map_or_else(|| " ".into(), ExtmarkMeta::draw);
 
         write!(f, "{}{}%=% {} ", diag_sign, git_sign, self.cur_lnum)
     }

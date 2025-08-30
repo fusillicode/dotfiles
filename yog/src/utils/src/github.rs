@@ -102,10 +102,7 @@ fn extract_pr_id_form_url(url: &Url) -> color_eyre::Result<String> {
         .as_slice()
     {
         [(idx, _)] => Ok(path_segments
-            .get(
-                idx.checked_add(1)
-                    .ok_or_else(|| eyre!("overflow in accessing {idx} + 1 of {path_segments:#?}"))?,
-            )
+            .get(idx.saturating_add(1))
             .ok_or_else(|| eyre!("missing PR id in {url} path segments {path_segments:#?}"))
             .and_then(|(_, pr_id)| {
                 if pr_id.is_empty() {

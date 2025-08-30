@@ -24,7 +24,7 @@ pub fn get_local_and_remote_refs() -> color_eyre::Result<Vec<GitRef>> {
         .exec()?;
 
     let mut res = vec![];
-    for line in std::str::from_utf8(&output.stdout)?.trim().split('\n') {
+    for line in std::str::from_utf8(&output.stdout)?.lines() {
         res.push(serde_json::from_str(line)?);
     }
 
@@ -126,7 +126,7 @@ impl GitRefJson {
 
 /// Deserializes a [`GitRef`] from [`GitRefJson`].
 impl<'de> Deserialize<'de> for GitRef {
-    fn deserialize<D>(deserializer: D) -> Result<GitRef, D::Error>
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -142,7 +142,7 @@ impl<'de> Deserialize<'de> for GitRef {
             (ref_name.trim_start_matches("refs/heads/"), None)
         };
 
-        Ok(GitRef {
+        Ok(Self {
             name: name.to_string(),
             remote: remote.map(ToOwned::to_owned),
             object_name: git_ref_json.object_name,
@@ -150,7 +150,7 @@ impl<'de> Deserialize<'de> for GitRef {
             committer_email: git_ref_json.committer_email,
             committer_date_time: git_ref_json.committer_date_time,
             // To kinda work around %(subject:sanitize) that is required to avoid broken JSONs...
-            subject: git_ref_json.subject.replace("-", " "),
+            subject: git_ref_json.subject.replace('-', " "),
         })
     }
 }

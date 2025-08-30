@@ -9,7 +9,7 @@ pub struct BufferFilter {
 }
 
 impl BufferFilter {
-    /// Creates a new [BufferFilter] with the default blacklist.
+    /// Creates a new [`BufferFilter`] with the default blacklist.
     pub fn new() -> Self {
         Self {
             blacklist: Self::paths_blacklist().to_vec(),

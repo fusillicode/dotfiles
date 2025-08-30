@@ -22,7 +22,7 @@ impl Installer for Shellcheck<'_> {
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}.darwin.x86_64.tar.xz",
                 self.bin_name()
             ),
-            CurlDownloaderOption::PipeIntoTar {
+            &CurlDownloaderOption::PipeIntoTar {
                 dest_dir,
                 dest_name: None,
             },

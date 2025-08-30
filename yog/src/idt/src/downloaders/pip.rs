@@ -16,10 +16,10 @@ pub fn run(dev_tools_dir: &Path, tool: &str, packages: &[&str]) -> color_eyre::R
         .args([
             "-c",
             &format!(
-                r#"
+                r"
                     source {}/.venv/bin/activate && \
                     pip install pip {packages} --upgrade
-                "#,
+                ",
                 dev_tools_repo_dir.display(),
                 packages = packages.join(" "),
             ),

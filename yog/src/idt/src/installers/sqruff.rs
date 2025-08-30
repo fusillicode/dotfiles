@@ -18,7 +18,7 @@ impl Installer for Sqruff<'_> {
                 "https://github.com/quarylabs/{0}/releases/latest/download/{0}-darwin-aarch64.tar.gz",
                 self.bin_name()
             ),
-            CurlDownloaderOption::PipeIntoTar {
+            &CurlDownloaderOption::PipeIntoTar {
                 dest_dir: self.bin_dir,
                 dest_name: Some(self.bin_name()),
             },

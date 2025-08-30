@@ -27,15 +27,15 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
     if BufferFilter::new()
         .skip_diagnostic(&buf_path, None)
         .inspect_err(|error| {
-            crate::oxi_utils::notify_error(&format!("error filtering by buffer {buf_path:#?}, error {error:#?}"))
+            crate::oxi_utils::notify_error(&format!("error filtering by buffer {buf_path}, error {error:#?}"));
         })
         .is_ok_and(identity)
     {
         return vec![];
-    };
+    }
 
     let Ok(filters) = DiagnosticsFilters::all(&lsp_diags).inspect_err(|error| {
-        crate::oxi_utils::notify_error(&format!("cannot get diangnostics filters, error {error:#?}"))
+        crate::oxi_utils::notify_error(&format!("cannot get diangnostics filters, error {error:#?}"));
     }) else {
         return vec![];
     };
@@ -47,7 +47,7 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
             .inspect_err(|error| {
                 crate::oxi_utils::notify_error(&format!(
                     "error filtering dignostic {lsp_diag:#?} for buffer {buf_path:#?}, error {error:?}"
-                ))
+                ));
             })
             .is_ok_and(identity)
         {

@@ -35,9 +35,13 @@ pub fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
     };
     for diagnostic in diagnostics {
         if cur_buf_nr == diagnostic.bufnr {
-            *statusline.cur_buf_diags.entry(diagnostic.severity).or_insert(0) += 1;
+            statusline.cur_buf_diags.entry(diagnostic.severity)
+                .and_modify(|count| *count = count.saturating_add(1))
+                .or_insert(1);
         }
-        *statusline.workspace_diags.entry(diagnostic.severity).or_insert(0) += 1;
+        statusline.workspace_diags.entry(diagnostic.severity)
+            .and_modify(|count| *count = count.saturating_add(1))
+            .or_insert(1);
     }
 
     Some(statusline.draw())
@@ -88,15 +92,15 @@ impl Severity {
     const ORDER: &'static [Self] = &[Self::Error, Self::Warn, Self::Info, Self::Hint];
 
     /// Draws the diagnostic count for this severity.
-    fn draw_diagnostics(&self, diags_count: i32) -> String {
+    fn draw_diagnostics(self, diags_count: i32) -> String {
         if diags_count == 0 {
             return String::new();
         }
         let (hg_group, sym) = match self {
-            Severity::Error => ("DiagnosticStatusLineError", "E"),
-            Severity::Warn => ("DiagnosticStatusLineWarn", "W"),
-            Severity::Info => ("DiagnosticStatusLineInfo", "I"),
-            Severity::Hint => ("DiagnosticStatusLineHint", "H"),
+            Self::Error => ("DiagnosticStatusLineError", "E"),
+            Self::Warn => ("DiagnosticStatusLineWarn", "W"),
+            Self::Info => ("DiagnosticStatusLineInfo", "I"),
+            Self::Hint => ("DiagnosticStatusLineHint", "H"),
         };
         format!("%#{hg_group}#{sym}:{diags_count}")
     }
@@ -113,7 +117,7 @@ struct Statusline<'a> {
     workspace_diags: HashMap<Severity, i32>,
 }
 
-impl<'a> Statusline<'a> {
+impl Statusline<'_> {
     /// Draws the status line as a formatted string.
     fn draw(&self) -> String {
         let mut cur_buf_diags = Severity::ORDER

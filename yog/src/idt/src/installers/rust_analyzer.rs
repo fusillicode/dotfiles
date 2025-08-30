@@ -18,7 +18,7 @@ impl Installer for RustAnalyzer<'_> {
                 "https://github.com/rust-lang/{0}/releases/download/nightly/{0}-aarch64-apple-darwin.gz",
                 self.bin_name()
             ),
-            CurlDownloaderOption::PipeIntoZcat {
+            &CurlDownloaderOption::PipeIntoZcat {
                 dest_path: &self.bin_dir.join(self.bin_name()),
             },
         )?;

@@ -70,7 +70,7 @@ pub trait Installer: Sync + Send {
                     "{} installation failed, error {}",
                     self.bin_name().red().bold(),
                     format!("{error:#?}").red().bold()
-                )
+                );
             })
             .and_then(|()| {
                 self.check()
@@ -84,14 +84,14 @@ pub trait Installer: Sync + Send {
                             );
                         } else {
                             println!("{} installed but not checked", self.bin_name().yellow().bold());
-                        };
+                        }
                     })
                     .inspect_err(|error| {
                         eprintln!(
                             "{} installed but check failed, error {}",
                             self.bin_name().red().bold(),
                             format!("{error:#?}").red().bold()
-                        )
+                        );
                     })
             })?;
 
