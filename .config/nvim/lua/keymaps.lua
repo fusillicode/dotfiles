@@ -124,10 +124,6 @@ function M.fzf_lua(fzf_lua)
   keymap_set('n', '<leader>h', function() fzf_lua.resume({}) end)
 end
 
-function M.copilot_chat(copilot_chat)
-  keymap_set({ 'n', 'v', }, '<leader>go', function() copilot_chat.toggle() end)
-end
-
 function M.oil()
   keymap_set('n', '<leader>F', ':Oil --float<cr>')
 end
@@ -137,8 +133,8 @@ function M.attempt(attempt)
 end
 
 function M.close_buffers(close_buffers)
-  keymap_set('n', '<leader>o', function() close_buffers.wipe({ type = 'other', }) end)
-  keymap_set('n', '<leader>O', function() close_buffers.wipe({ type = 'other', force = true, }) end)
+  keymap_set('n', '<leader>e', function() close_buffers.wipe({ type = 'other', }) end)
+  keymap_set('n', '<leader>E', function() close_buffers.wipe({ type = 'other', force = true, }) end)
 end
 
 function M.gitlinker()
