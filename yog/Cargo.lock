@@ -1074,7 +1074,6 @@ dependencies = [
 name = "miskatonic"
 version = "0.1.0"
 dependencies = [
- "color-eyre",
  "utils",
 ]
 
@@ -1510,12 +1509,10 @@ dependencies = [
 name = "rua"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "color-eyre",
  "fkr",
  "nvim-oxi",
  "serde",
- "serde_json",
  "serde_repr",
  "strum",
  "tree-sitter",
@@ -2451,8 +2448,6 @@ version = "0.1.0"
 dependencies = [
  "color-eyre",
  "fake",
- "serde",
- "serde_json",
  "temp-env",
  "url",
  "utils",
