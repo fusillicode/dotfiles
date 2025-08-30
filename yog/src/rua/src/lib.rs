@@ -12,9 +12,9 @@ mod cli_flags;
 mod diagnostics;
 /// Creates Neovim commands to generate fake data via [fkr] lib.
 mod fkr;
-/// Extends [nvim_oxi] types with utilities getters.
+/// Extends [`nvim_oxi`] types with utilities getters.
 mod oxi_ext;
-/// [nvim_oxi] generic utilities.
+/// [`nvim_oxi`] generic utilities.
 mod oxi_utils;
 /// Draws status column with diagnostic and git signs.
 mod statuscolumn;
@@ -23,7 +23,7 @@ mod statusline;
 /// Runs tests at cursor position in an available Wezterm pane.
 mod test_runner;
 
-/// The main plugin function that returns a [Dictionary] of Lua functions exposed to Neovim.
+/// The main plugin function that returns a [`Dictionary`] of Lua functions exposed to Neovim.
 #[nvim_oxi::plugin]
 fn rua() -> Dictionary {
     Dictionary::from_iter([

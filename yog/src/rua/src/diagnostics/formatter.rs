@@ -6,6 +6,7 @@ use nvim_oxi::serde::Deserializer;
 use serde::Deserialize;
 
 /// Formats a diagnostic into a human-readable string.
+#[allow(clippy::needless_pass_by_value)]
 pub fn format(diagnostic: Diagnostic) -> Option<String> {
     let Some(msg) = get_msg(&diagnostic).map(|s| s.trim_end_matches('.').to_string()) else {
         crate::oxi_utils::notify_error(&format!("missing message in {diagnostic:#?}"));

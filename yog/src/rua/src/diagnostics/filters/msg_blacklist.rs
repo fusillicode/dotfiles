@@ -74,11 +74,11 @@ impl MsgBlacklistFilter {
         .collect::<HashMap<_, _>>();
 
         vec![
-            Box::new(MsgBlacklistFilter {
+            Box::new(Self {
                 buf_path: "/es-be/".into(),
                 blacklist: typos_common_blacklist.clone(),
             }),
-            Box::new(MsgBlacklistFilter {
+            Box::new(Self {
                 buf_path: "/yog/".into(),
                 blacklist: typos_common_blacklist,
             }),

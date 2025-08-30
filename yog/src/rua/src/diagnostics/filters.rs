@@ -21,11 +21,11 @@ impl DiagnosticsFilters {
     pub fn all(lsp_diags: &[Dictionary]) -> color_eyre::Result<Self> {
         let mut tmp = MsgBlacklistFilter::all();
         tmp.push(Box::new(RelatedInfoFilter::new(lsp_diags)?));
-        Ok(DiagnosticsFilters(tmp))
+        Ok(Self(tmp))
     }
 }
 
-/// Implementation of [DiagnosticsFilter] for [DiagnosticsFilters].
+/// Implementation of [`DiagnosticsFilter`] for [`DiagnosticsFilters`].
 impl DiagnosticsFilter for DiagnosticsFilters {
     /// Returns true if any filter skips the diagnostic.
     fn skip_diagnostic(&self, buf_path: &str, lsp_diag: Option<&Dictionary>) -> color_eyre::Result<bool> {

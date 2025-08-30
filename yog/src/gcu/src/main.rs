@@ -27,7 +27,7 @@ fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
     let args = utils::system::get_args();
-    let args: Vec<_> = args.iter().map(|s| s.as_str()).collect();
+    let args: Vec<_> = args.iter().map(String::as_str).collect();
 
     match args.split_first() {
         None => autocomplete_git_branches(),
@@ -46,7 +46,7 @@ fn autocomplete_git_branches() -> color_eyre::Result<()> {
     let mut git_refs = git::get_local_and_remote_refs()?;
     git::keep_local_and_untracked_refs(&mut git_refs);
 
-    match utils::sk::get_item(git_refs, Default::default())? {
+    match utils::sk::get_item(git_refs, Option::default())? {
         Some(hd) if hd.text() == "-" || hd.text().is_empty() => switch_branch("-"),
         Some(other) => switch_branch(&other.text()),
         None => Ok(()),
@@ -95,9 +95,9 @@ fn checkout_files(files: &[&str], branch: &str) -> color_eyre::Result<()> {
     let mut args = vec!["checkout", branch];
     args.extend_from_slice(files);
     Command::new("git").args(args).exec()?;
-    files
-        .iter()
-        .for_each(|f| println!("{} {} from {}", "<".yellow().bold(), f.bold(), branch.bold()));
+    for f in files {
+        println!("{} {} from {}", "<".yellow().bold(), f.bold(), branch.bold());
+    }
     Ok(())
 }
 

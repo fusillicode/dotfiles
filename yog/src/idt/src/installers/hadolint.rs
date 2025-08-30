@@ -18,7 +18,7 @@ impl Installer for Hadolint<'_> {
                 "https://github.com/{0}/{0}/releases/latest/download/{0}-Darwin-x86_64",
                 self.bin_name()
             ),
-            CurlDownloaderOption::WriteTo {
+            &CurlDownloaderOption::WriteTo {
                 dest_path: &self.bin_dir.join(self.bin_name()),
             },
         )?;

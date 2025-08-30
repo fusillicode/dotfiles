@@ -8,7 +8,7 @@ use nvim_oxi::ObjectKind;
 pub trait OxiExtract {
     type Out;
 
-    /// Extracts a typed value from a Neovim [Object] by key from a [Dictionary] with error context.
+    /// Extracts a typed value from a Neovim [Object] by key from a [`Dictionary`] with error context.
     fn extract_from_dict(key: &str, value: &Object, dict: &Dictionary) -> color_eyre::Result<Self::Out>;
 }
 
@@ -25,7 +25,7 @@ impl OxiExtract for nvim_oxi::String {
 
 /// Implementation for extracting i64 values from Neovim objects.
 impl OxiExtract for nvim_oxi::Integer {
-    type Out = i64;
+    type Out = Self;
 
     fn extract_from_dict(key: &str, value: &Object, dict: &Dictionary) -> color_eyre::Result<Self::Out> {
         let out = Self::try_from(value.clone())
@@ -34,16 +34,16 @@ impl OxiExtract for nvim_oxi::Integer {
     }
 }
 
-/// Extension trait for [Dictionary] to provide typed getters.
+/// Extension trait for [`Dictionary`] to provide typed getters.
 pub trait DictionaryExt {
-    /// Gets a typed value from the dictionary using the [OxiExtract] trait.
+    /// Gets a typed value from the dictionary using the [`OxiExtract`] trait.
     fn get_t<T: OxiExtract>(&self, key: &str) -> color_eyre::Result<T::Out>;
 
-    /// Gets a nested [Dictionary] from the [Dictionary] by a sequence of keys.
+    /// Gets a nested [`Dictionary`] from the [`Dictionary`] by a sequence of keys.
     fn get_dict(&self, keys: &[&str]) -> color_eyre::Result<Option<Dictionary>>;
 }
 
-/// Implementation of [DictionaryExt] for [Dictionary] providing typed getters.
+/// Implementation of [`DictionaryExt`] for [`Dictionary`] providing typed getters.
 impl DictionaryExt for Dictionary {
     fn get_t<T: OxiExtract>(&self, key: &str) -> color_eyre::Result<T::Out> {
         let value = self.get(key).ok_or_else(|| no_value_matching(&[key], self))?;
@@ -55,11 +55,11 @@ impl DictionaryExt for Dictionary {
 
         for key in keys {
             let Some(obj) = current.get(key) else { return Ok(None) };
-            current = Dictionary::try_from(obj.clone())
+            current = Self::try_from(obj.clone())
                 .with_context(|| unexpected_kind_error_msg(obj, key, &current, ObjectKind::Dictionary))?;
         }
 
-        Ok(Some(current.clone()))
+        Ok(Some(current))
     }
 }
 
@@ -71,7 +71,7 @@ pub fn unexpected_kind_error_msg(obj: &Object, key: &str, dict: &Dictionary, exp
     )
 }
 
-/// Creates an error for missing value in [Dictionary].
+/// Creates an error for missing value in [`Dictionary`].
 pub fn no_value_matching(query: &[&str], dict: &Dictionary) -> color_eyre::eyre::Error {
     eyre!("missing value matching query {query:?} in dict {dict:#?}")
 }

@@ -52,6 +52,7 @@ mod installers;
 /// idt ~/.dev-tools ~/.local/bin
 /// idt ~/.dev-tools ~/.local/bin rust-analyzer typescript-language-server
 /// ```
+#[allow(clippy::too_many_lines)]
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
@@ -217,11 +218,12 @@ fn main() -> color_eyre::Result<()> {
 
     utils::system::rm_dead_symlinks(bin_dir)?;
 
-    let (errors_count, bin_names) = installers_errors.iter().fold((0, vec![]), |mut acc, (bin_name, _)| {
-        acc.0 += 1;
-        acc.1.push(bin_name);
-        acc
-    });
+    let mut errors_count: usize = 0;
+    let mut bin_names = vec![];
+    for (bin_name, _) in &installers_errors {
+        errors_count = errors_count.saturating_add(1);
+        bin_names.push(bin_name);
+    }
 
     if errors_count != 0 {
         // This is a general report about the installation process.

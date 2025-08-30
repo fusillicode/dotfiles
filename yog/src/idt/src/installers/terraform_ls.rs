@@ -21,7 +21,7 @@ impl Installer for TerraformLs<'_> {
                 "https://releases.hashicorp.com/{0}/{latest_release}/{0}_{latest_release}_darwin_arm64.zip",
                 self.bin_name()
             ),
-            CurlDownloaderOption::PipeIntoTar {
+            &CurlDownloaderOption::PipeIntoTar {
                 dest_dir: self.bin_dir,
                 dest_name: Some(self.bin_name()),
             },

@@ -78,7 +78,8 @@ pub fn run_test(_: ()) {
 
     let Ok(test_runner_app) = get_test_runner_app_for_path(&file_path).inspect_err(|error| {
         crate::oxi_utils::notify_error(&format!(
-            "cannot get test runner app for file {file_path:#?}, error {error:#?}"
+            "cannot get test runner app for file {}, error {error:#?}",
+            file_path.display()
         ));
     }) else {
         return;
@@ -107,7 +108,7 @@ fn get_enclosing_fn_name_of_position(file_path: &Path, position: Point) -> color
         file_path.extension().is_some_and(|ext| ext == "rs"),
         "{file_path:#?} must be Rust file"
     );
-    let src = std::fs::read(file_path).with_context(|| format!("Error reading {file_path:#?}"))?;
+    let src = std::fs::read(file_path).with_context(|| format!("Error reading {}", file_path.display()))?;
 
     let mut parser = Parser::new();
     parser
@@ -116,7 +117,7 @@ fn get_enclosing_fn_name_of_position(file_path: &Path, position: Point) -> color
 
     let src_tree = parser
         .parse(&src, None)
-        .ok_or(eyre!("error parsing src {file_path:#?} as Rust"))?;
+        .ok_or_else(|| eyre!("error parsing src {} as Rust", file_path.display()))?;
 
     let node_at_position = src_tree.root_node().descendant_for_point_range(position, position);
 

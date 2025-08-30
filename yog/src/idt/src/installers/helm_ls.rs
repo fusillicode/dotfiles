@@ -18,7 +18,7 @@ impl Installer for HelmLs<'_> {
                 "https://github.com/mrjosh/helm-ls/releases/latest/download/{}_darwin_amd64",
                 self.bin_name()
             ),
-            CurlDownloaderOption::WriteTo {
+            &CurlDownloaderOption::WriteTo {
                 dest_path: &self.bin_dir.join(self.bin_name()),
             },
         )?;
