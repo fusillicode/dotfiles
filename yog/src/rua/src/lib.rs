@@ -10,12 +10,10 @@ use crate::cli_flags::CliFlags;
 mod cli_flags;
 /// Processes diagnostics for filtering, formatting, and sorting.
 mod diagnostics;
-/// Creates Neovim commands to generate fake data via [fkr] lib.
+/// Creates Neovim commands to generate fake data via [`fkr`] lib.
 mod fkr;
-/// Extends [`nvim_oxi`] types with utilities getters.
+/// Extends [`nvim_oxi`] with various utilities.
 mod oxi_ext;
-/// [`nvim_oxi`] generic utilities.
-mod oxi_utils;
 /// Draws status column with diagnostic and git signs.
 mod statuscolumn;
 /// Draws status line with diagnostic information.

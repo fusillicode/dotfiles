@@ -3,6 +3,7 @@ use color_eyre::eyre::eyre;
 use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
 use nvim_oxi::ObjectKind;
+use nvim_oxi::api::types::LogLevel;
 
 /// Trait for extracting typed values from Neovim objects.
 pub trait OxiExtract {
@@ -74,6 +75,21 @@ pub fn unexpected_kind_error_msg(obj: &Object, key: &str, dict: &Dictionary, exp
 /// Creates an error for missing value in [`Dictionary`].
 pub fn no_value_matching(query: &[&str], dict: &Dictionary) -> color_eyre::eyre::Error {
     eyre!("missing value matching query {query:?} in dict {dict:#?}")
+}
+
+/// Notifies the user of an error message in Neovim.
+pub fn notify_error(msg: &str) {
+    if let Err(error) = nvim_oxi::api::notify(msg, LogLevel::Error, &Dictionary::default()) {
+        nvim_oxi::dbg!(format!("cannot notify error {msg:?}, error {error:#?}"));
+    }
+}
+
+/// Notifies the user of a warning message in Neovim.
+#[expect(dead_code, reason = "Kept for future use")]
+pub fn notify_warn(msg: &str) {
+    if let Err(error) = nvim_oxi::api::notify(msg, LogLevel::Warn, &Dictionary::default()) {
+        nvim_oxi::dbg!(format!("cannot notify warning {msg:?}, error {error:#?}"));
+    }
 }
 
 #[cfg(test)]

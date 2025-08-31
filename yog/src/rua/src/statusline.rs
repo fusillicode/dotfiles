@@ -15,14 +15,14 @@ pub fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
     let cur_buf_path = cur_buf
         .get_name()
         .inspect_err(|error| {
-            crate::oxi_utils::notify_error(&format!(
+            crate::oxi_ext::notify_error(&format!(
                 "cannot get name of current buffer {cur_buf:#?}, error {error:#?}"
             ));
         })
         .ok()?;
     let cwd = nvim_oxi::api::call_function::<Array, String>("getcwd", Array::new())
         .inspect_err(|error| {
-            crate::oxi_utils::notify_error(&format!("cannot get cwd, error {error:#?}"));
+            crate::oxi_ext::notify_error(&format!("cannot get cwd, error {error:#?}"));
         })
         .ok()?;
     let cur_buf_path = cur_buf_path.to_string_lossy();
