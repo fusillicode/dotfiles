@@ -1,10 +1,9 @@
-//! Neovim Lua module with Rust utilities.
+//! Neovim Lua module exposing Rust utilities.
 
 use nvim_oxi::Dictionary;
 
 /// Generates CLI flags for fd and ripgrep.
 mod cli_flags;
-use crate::cli_flags::CliFlags;
 /// Processes diagnostics for filtering, formatting, and sorting.
 mod diagnostics;
 /// Creates Neovim commands to generate fake data via [`fkr`] lib.
@@ -18,7 +17,9 @@ mod statusline;
 /// Runs tests at cursor position in an available Wezterm pane.
 mod test_runner;
 
-/// The main plugin function that returns a [`Dictionary`] of Lua functions exposed to Neovim.
+use crate::cli_flags::CliFlags;
+
+/// The main plugin function that returns a [`Dictionary`] of [`Function`]s exposed to Neovim.
 #[nvim_oxi::plugin]
 fn rua() -> Dictionary {
     dict! {

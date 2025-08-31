@@ -5,9 +5,13 @@ use nvim_oxi::Object;
 use nvim_oxi::ObjectKind;
 use nvim_oxi::api::types::LogLevel;
 
-/// Construct a [`nvim_oxi::Dictionary`] from key-value pairs, supporting nested [`dict!`] usage.
+/// Construct a [`Dictionary`] from key-value pairs, supporting nested [`dict!`] usage.
 ///
-/// Keys can be string literals, identifiers (converted with stringify!), or expressions yielding String/&str.
+/// Keys can be:
+/// - string literals,
+/// - identifiers (converted with [`stringify!`]), or
+/// - expressions yielding [`String`] or [`&str`].
+///
 /// Values: any type that implements [`Into<nvim_oxi::Object>`]
 #[macro_export]
 macro_rules! dict {
@@ -42,7 +46,7 @@ macro_rules! __dict_key_to_cow {
     };
 }
 
-/// Helper macro to turn a Rust function into a [`nvim_oxi::Object`] [`nvim_oxi::Function`]
+/// Turns a Rust function into a [`nvim_oxi::Object`] [`nvim_oxi::Function`].
 #[macro_export]
 macro_rules! fn_from {
     // Plain function path
