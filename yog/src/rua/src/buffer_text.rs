@@ -1,4 +1,3 @@
-use color_eyre::eyre::eyre;
 use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::opts::GetTextOpts;
@@ -7,6 +6,8 @@ use nvim_oxi::lua::Poppable;
 use nvim_oxi::lua::ffi::State;
 use serde::Deserialize;
 use serde::Deserializer;
+
+use crate::oxi_ext::BufferExt;
 
 /// Return text from the current buffer between two positions.
 ///
@@ -17,7 +18,8 @@ pub fn get_current((pos1, pos2): (GetPosOutput, GetPosOutput)) -> Vec<nvim_oxi::
     let cur_buf = Buffer::current();
 
     let end_col = if start_pos == end_pos && nvim_oxi::api::get_mode().mode == "V" {
-        get_buffer_line(&cur_buf, start_pos.lnum)
+        cur_buf
+            .get_line(start_pos.lnum)
             .map(|line| line.len())
             .inspect_err(|error| {
                 crate::oxi_ext::notify_error(&format!(
@@ -108,14 +110,4 @@ impl Poppable for GetPosOutput {
             Self::from_object(obj).map_err(nvim_oxi::lua::Error::pop_error_from_err::<Self, _>)
         }
     }
-}
-
-/// Fetch a single line from a [`Buffer`] by 0-based index.
-///
-/// Returns a [`color_eyre::Result`] with the line as [`nvim_oxi::String`].
-/// Errors if the line does not exist at `idx`.
-fn get_buffer_line(buf: &Buffer, idx: usize) -> color_eyre::Result<nvim_oxi::String> {
-    buf.get_lines(idx..=idx, true)?
-        .next()
-        .ok_or_else(|| eyre!("no line found with idx {idx} for buffer {buf:#?}"))
 }

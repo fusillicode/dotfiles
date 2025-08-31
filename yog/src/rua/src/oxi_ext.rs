@@ -3,6 +3,7 @@ use color_eyre::eyre::eyre;
 use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
 use nvim_oxi::ObjectKind;
+use nvim_oxi::api::Buffer;
 use nvim_oxi::api::types::LogLevel;
 
 /// Construct a [`Dictionary`] from key-value pairs, supporting nested [`dict!`] usage.
@@ -115,6 +116,23 @@ impl DictionaryExt for Dictionary {
         }
 
         Ok(Some(current))
+    }
+}
+
+/// Extension trait for [`Buffer`] to provide extra functionalities.
+pub trait BufferExt {
+    /// Fetch a single line from a [`Buffer`] by 0-based index.
+    ///
+    /// Returns a [`color_eyre::Result`] with the line as [`nvim_oxi::String`].
+    /// Errors if the line does not exist at `idx`.
+    fn get_line(&self, idx: usize) -> color_eyre::Result<nvim_oxi::String>;
+}
+
+impl BufferExt for Buffer {
+    fn get_line(&self, idx: usize) -> color_eyre::Result<nvim_oxi::String> {
+        self.get_lines(idx..=idx, true)?
+            .next()
+            .ok_or_else(|| eyre!("no line found with idx {idx} for buffer {self:#?}"))
     }
 }
 
