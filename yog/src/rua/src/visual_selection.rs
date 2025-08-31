@@ -1,4 +1,3 @@
-use itertools::Itertools;
 use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::opts::GetTextOpts;
@@ -11,27 +10,24 @@ use serde::Deserializer;
 /// Get selected text between two [`GetPosOutput`] positions.
 ///
 /// Returns [`Some<String>`] on success, [`None`] on error.
-pub fn get((start_pos, end_pos): (GetPosOutput, GetPosOutput)) -> Option<String> {
+pub fn get((start_pos, end_pos): (GetPosOutput, GetPosOutput)) -> Vec<nvim_oxi::String> {
     let start_ln = core::cmp::min(start_pos.lnum, end_pos.lnum);
     let end_ln = core::cmp::max(start_pos.lnum, end_pos.lnum);
     let start_col = core::cmp::min(start_pos.col, end_pos.col);
     let end_col = core::cmp::max(start_pos.col, end_pos.col);
 
     let cur_buf = Buffer::current();
-    let selected_text = cur_buf
+    let Ok(selection) =  cur_buf
         .get_text(start_ln..end_ln, start_col, end_col, &GetTextOpts::default())
         .inspect_err(|error| {
             crate::oxi_ext::notify_error(&format!(
                 "cannot get selected text from buffer {cur_buf:#?}, start_pos {start_pos:#?}, end_pos {end_pos:#?} error {error:#?}"
             ));
-        })
-        .ok()?
-        // To avoid extra allocation via .to_string after .to_string_lossy
-        .format_with("\n", |oxi_string, fmt|
-            fmt(&oxi_string.to_string_lossy())
-        ).to_string();
+        }) else {
+            return vec![];
+        };
 
-    Some(selected_text)
+    selection.collect()
 }
 
 /// Normalized output of Neovim `getpos()` for visual selections.
