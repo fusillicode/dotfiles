@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
+use itertools::Itertools;
 use nvim_oxi::Array;
 use nvim_oxi::Object;
 use nvim_oxi::conversion::FromObject;
@@ -127,13 +128,11 @@ impl Statusline<'_> {
         let mut cur_buf_diags = Severity::ORDER
             .iter()
             .filter_map(|s| self.cur_buf_diags.get(s).map(|c| s.draw_diagnostics(*c)))
-            .collect::<Vec<_>>()
             .join(" ");
 
         let workspace_diags = Severity::ORDER
             .iter()
             .filter_map(|s| self.workspace_diags.get(s).map(|c| s.draw_diagnostics(*c)))
-            .collect::<Vec<_>>()
             .join(" ");
 
         if !cur_buf_diags.is_empty() {
