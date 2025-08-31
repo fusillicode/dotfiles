@@ -19,14 +19,12 @@ pub trait CliFlags {
     /// Converts a glob pattern to a CLI flag.
     fn glob_flag(glob: &str) -> String;
 
-    /// Returns a closure that generates the complete list of CLI flags.
-    fn get(&self) -> Box<dyn Fn(()) -> Vec<String>> {
-        Box::new(|()| {
-            Self::base_flags()
-                .into_iter()
-                .map(Into::into)
-                .chain(GLOB_BLACKLIST.into_iter().map(Self::glob_flag))
-                .collect::<Vec<_>>()
-        })
+    /// Generates the complete list of CLI flags.
+    fn get(_: ()) -> Vec<String> {
+        Self::base_flags()
+            .into_iter()
+            .map(Into::into)
+            .chain(GLOB_BLACKLIST.into_iter().map(Self::glob_flag))
+            .collect::<Vec<_>>()
     }
 }
