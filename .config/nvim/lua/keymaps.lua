@@ -47,7 +47,6 @@ function M.core()
   keymap_set({ 'n', 'v', }, '<leader><leader>', ':silent :w!<cr>')
   keymap_set({ 'n', 'v', }, '<leader>x', ':bd<cr>')
   keymap_set({ 'n', 'v', }, '<leader>X', ':bd!<cr>')
-  keymap_set({ 'n', 'v', }, '<leader>W', ':wa!<cr>')
   keymap_set({ 'n', 'v', }, '<leader>q', ':q<cr>')
   keymap_set({ 'n', 'v', }, '<leader>Q', ':q!<cr>')
 
@@ -60,7 +59,6 @@ function M.core()
   keymap_set('n', '<leader>e', vim.diagnostic.open_float)
 
   keymap_set('n', '<leader>gx', require('opener').open_under_cursor)
-  keymap_set('v', '<leader>gx', require('opener').open_selection)
 
   -- Thanks perplexity 🥲
   keymap_set({ 'n', 'v', }, 'ga', function()
@@ -118,7 +116,7 @@ function M.fzf_lua(fzf_lua)
 
   keymap_set('n', '<leader>w', function() fzf_lua.live_grep({ prompt = 'rg: ', }) end)
   keymap_set('v', '<leader>w', function()
-    fzf_lua.live_grep({ prompt = 'rg: ', search = require('utils').get_visual_selection(), })
+    fzf_lua.live_grep({ prompt = 'rg: ', search = rua.get_current_buffer_text(vim.fn.getpos('v'), vim.fn.getpos('.'))[1], })
   end)
 
   keymap_set('n', '<leader>h', function() fzf_lua.resume({}) end)
@@ -180,8 +178,9 @@ function M.grug_far(grug_far, opts)
     grug_far.open(vim.tbl_deep_extend('force', opts, {}))
   end)
   keymap_set('v', '<leader>l', function()
-    local utils = require('utils')
-    local selection = utils.escape_regex(utils.get_visual_selection())
+    local selection = require('utils').escape_regex(
+      rua.get_current_buffer_text(vim.fn.getpos('v'), vim.fn.getpos('.'))[1]
+    )
     grug_far.open(vim.tbl_deep_extend('force', opts, { prefills = { search = selection, }, }))
   end)
 end
