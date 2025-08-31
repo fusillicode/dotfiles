@@ -41,6 +41,19 @@ macro_rules! __dict_key_to_cow {
     };
 }
 
+/// Helper macro to turn a Rust function into a [`nvim_oxi::Object`] [`nvim_oxi::Function`]
+#[macro_export]
+macro_rules! fn_from {
+    // Plain function path
+    ($path:path) => {
+        ::nvim_oxi::Object::from(::nvim_oxi::Function::from_fn($path))
+    };
+    // Fallback: forward any tokens (supports calls like Type::method(()))
+    ($($tokens:tt)+) => {
+        ::nvim_oxi::Object::from(::nvim_oxi::Function::from_fn($($tokens)+))
+    };
+}
+
 /// Trait for extracting typed values from Neovim objects.
 pub trait OxiExtract {
     type Out;
