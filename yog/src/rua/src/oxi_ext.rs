@@ -6,6 +6,7 @@ use nvim_oxi::ObjectKind;
 use nvim_oxi::api::types::LogLevel;
 
 /// Construct a [`nvim_oxi::Dictionary`] from key-value pairs, supporting nested [`dict!`] usage.
+///
 /// Keys can be string literals, identifiers (converted with stringify!), or expressions yielding String/&str.
 /// Values: any type that implements [`Into<nvim_oxi::Object>`]
 #[macro_export]
@@ -167,7 +168,7 @@ mod tests {
         let k = String::from("alpha");
         let inner = dict! { inner_key: "value" };
         let actual = dict! { (k): 10i64, "beta": inner.clone() };
-        let expected = Dictionary::from_iter([("alpha", Object::from(10i64)), ("beta", Object::from(inner.clone()))]);
+        let expected = Dictionary::from_iter([("alpha", Object::from(10i64)), ("beta", Object::from(inner))]);
         assert_eq!(expected, actual);
     }
 
