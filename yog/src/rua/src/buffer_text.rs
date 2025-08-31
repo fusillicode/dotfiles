@@ -8,14 +8,10 @@ use nvim_oxi::lua::ffi::State;
 use serde::Deserialize;
 use serde::Deserializer;
 
-/// Get text in the current buffer between 2 positions.
+/// Return text from the current buffer between two positions.
 ///
-/// Returned as a [`Vec`] of [`nvim_oxi::String`] lines suitable for Lua consumption.
-/// On error, an empty [`Vec`] is returned and an error is notified.
-///
-/// Note: while porting this from Lua I discovered that multiple line visual selection cuts of
-/// some characters at the start. Fortunately the multiple line visual selection is not yet used by
-/// anyone. Only the single line selection is used to do live grep.
+/// Produces a [`Vec`] of [`nvim_oxi::String`] lines for Lua.
+/// On error, returns an empty [`Vec`] and emits a notification to Neovim.
 pub fn get_current((pos1, pos2): (GetPosOutput, GetPosOutput)) -> Vec<nvim_oxi::String> {
     let (start_pos, end_pos) = pos1.switch_if_needed(pos2);
     let cur_buf = Buffer::current();
@@ -45,12 +41,6 @@ pub fn get_current((pos1, pos2): (GetPosOutput, GetPosOutput)) -> Vec<nvim_oxi::
         };
 
     lines.collect()
-}
-
-fn get_buffer_line(buf: &Buffer, idx: usize) -> color_eyre::Result<nvim_oxi::String> {
-    buf.get_lines(idx..=idx, true)?
-        .next()
-        .ok_or_else(|| eyre!("no line found with idx {idx} for buffer {buf:#?}"))
 }
 
 /// Normalized, 0-based indexed output of Neovim `getpos()`.
@@ -117,4 +107,14 @@ impl Poppable for GetPosOutput {
             Self::from_object(obj).map_err(nvim_oxi::lua::Error::pop_error_from_err::<Self, _>)
         }
     }
+}
+
+/// Fetch a single line from a [`Buffer`] by 0-based index.
+///
+/// Returns a [`color_eyre::Result`] with the line as [`nvim_oxi::String`].
+/// Errors if the line does not exist at `idx`.
+fn get_buffer_line(buf: &Buffer, idx: usize) -> color_eyre::Result<nvim_oxi::String> {
+    buf.get_lines(idx..=idx, true)?
+        .next()
+        .ok_or_else(|| eyre!("no line found with idx {idx} for buffer {buf:#?}"))
 }
