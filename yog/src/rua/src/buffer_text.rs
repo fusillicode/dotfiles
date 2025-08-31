@@ -1,9 +1,7 @@
-use std::ops::Range;
-
+use color_eyre::eyre::eyre;
 use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::opts::GetTextOpts;
-use nvim_oxi::api::types::ModeStr;
 use nvim_oxi::conversion::FromObject;
 use nvim_oxi::lua::Poppable;
 use nvim_oxi::lua::ffi::State;
@@ -19,24 +17,42 @@ use serde::Deserializer;
 /// some characters at the start. Fortunately the multiple line visual selection is not yet used by
 /// anyone. Only the single line selection is used to do live grep.
 pub fn get_current((pos1, pos2): (GetPosOutput, GetPosOutput)) -> Vec<nvim_oxi::String> {
-    // nvim_oxi::dbg!(&pos1);
-    // nvim_oxi::dbg!(&pos2);
-    let (line_rng, col_rng) = pos1.ordered_line_and_col_ranges(&pos2, &nvim_oxi::api::get_mode().mode);
-    // nvim_oxi::dbg!(&line_rng);
-    // nvim_oxi::dbg!(&col_rng);
-
+    let (start_pos, end_pos) = pos1.switch_if_needed(pos2);
     let cur_buf = Buffer::current();
+
+    let col_range = if start_pos == end_pos && nvim_oxi::api::get_mode().mode == "V" {
+        let line_len = get_line(&cur_buf, start_pos.lnum)
+            .map(|ln_content| ln_content.len())
+            .inspect_err(|error| {
+                crate::oxi_ext::notify_error(&format!(
+                    "cannot get line with idx {} from buffer {cur_buf:#?}, error {error:#?}",
+                    start_pos.lnum
+                ));
+            })
+            .unwrap_or(start_pos.col);
+        start_pos.col..line_len
+    } else {
+        start_pos.col..end_pos.col
+    };
+    let line_range = start_pos.lnum..end_pos.lnum;
+
     let Ok(lines) =  cur_buf
-        .get_text(line_rng, col_rng.start, col_rng.end, &GetTextOpts::default())
+        .get_text(line_range, col_range.start, col_range.end, &GetTextOpts::default())
         .inspect_err(|error| {
             crate::oxi_ext::notify_error(&format!(
-                "cannot get text from buffer {cur_buf:#?} from start_pos {pos1:#?} to end_pos {pos2:#?}, error {error:#?}"
+                "cannot get text from buffer {cur_buf:#?} from start_pos {start_pos:#?} to end_pos {end_pos:#?}, error {error:#?}"
             ));
         }) else {
             return vec![];
         };
 
     lines.collect()
+}
+
+fn get_line(buf: &Buffer, idx: usize) -> color_eyre::Result<nvim_oxi::String> {
+    buf.get_lines(idx..=idx, true)?
+        .next()
+        .ok_or_else(|| eyre!("no line found with idx {idx} for buffer {buf:#?}"))
 }
 
 /// Normalized, 0-based indexed output of Neovim `getpos()`.
@@ -49,17 +65,12 @@ pub struct GetPosOutput {
 }
 
 impl GetPosOutput {
-    pub fn ordered_line_and_col_ranges(&self, other: &Self, mode: &ModeStr) -> (Range<usize>, Range<usize>) {
-        if self == other && mode == &"V" {
-            // FIXME: cannot use usize::MAX...
-            return (self.lnum..self.lnum, self.col..usize::MAX);
-        }
-        let (start, end) = if self.lnum > other.lnum || self.col > other.col {
+    pub const fn switch_if_needed(self, other: Self) -> (Self, Self) {
+        if self.lnum > other.lnum || self.col > other.col {
             (other, self)
         } else {
             (self, other)
-        };
-        ((start.lnum..end.lnum), (start.col..end.col))
+        }
     }
 }
 
