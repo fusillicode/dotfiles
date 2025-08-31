@@ -20,7 +20,7 @@ pub trait CliFlags {
     fn glob_flag(glob: &str) -> String;
 
     /// Generates the complete list of CLI flags.
-    fn get(_: ()) -> Vec<String> {
+    fn get((): ()) -> Vec<String> {
         Self::base_flags()
             .into_iter()
             .map(Into::into)
