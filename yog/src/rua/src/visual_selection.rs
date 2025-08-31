@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::opts::GetTextOpts;
@@ -25,9 +26,10 @@ pub fn get((start_pos, end_pos): (GetPosOutput, GetPosOutput)) -> Option<String>
             ));
         })
         .ok()?
-        .map(|oxi_string| oxi_string.to_string_lossy().to_string())
-        .collect::<Vec<_>>()
-        .join("\n");
+        // To avoid extra allocation via .to_string after .to_string_lossy
+        .format_with("\n", |oxi_string, fmt|
+            fmt(&oxi_string.to_string_lossy())
+        ).to_string();
 
     Some(selected_text)
 }
