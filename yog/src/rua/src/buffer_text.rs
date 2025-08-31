@@ -18,15 +18,19 @@ use serde::Deserializer;
 /// Note: while porting this from Lua I discovered that multiple line visual selection cuts of
 /// some characters at the start. Fortunately the multiple line visual selection is not yet used by
 /// anyone. Only the single line selection is used to do live grep.
-pub fn get_current((pos_1, pos_2): (GetPosOutput, GetPosOutput)) -> Vec<nvim_oxi::String> {
-    let (line_rng, col_rng) = pos_1.ordered_line_and_col_ranges(&pos_2, &nvim_oxi::api::get_mode().mode);
+pub fn get_current((pos1, pos2): (GetPosOutput, GetPosOutput)) -> Vec<nvim_oxi::String> {
+    // nvim_oxi::dbg!(&pos1);
+    // nvim_oxi::dbg!(&pos2);
+    let (line_rng, col_rng) = pos1.ordered_line_and_col_ranges(&pos2, &nvim_oxi::api::get_mode().mode);
+    // nvim_oxi::dbg!(&line_rng);
+    // nvim_oxi::dbg!(&col_rng);
 
     let cur_buf = Buffer::current();
     let Ok(lines) =  cur_buf
         .get_text(line_rng, col_rng.start, col_rng.end, &GetTextOpts::default())
         .inspect_err(|error| {
             crate::oxi_ext::notify_error(&format!(
-                "cannot get text from buffer {cur_buf:#?} from start_pos {pos_1:#?} to end_pos {pos_2:#?}, error {error:#?}"
+                "cannot get text from buffer {cur_buf:#?} from start_pos {pos1:#?} to end_pos {pos2:#?}, error {error:#?}"
             ));
         }) else {
             return vec![];
@@ -47,6 +51,7 @@ pub struct GetPosOutput {
 impl GetPosOutput {
     pub fn ordered_line_and_col_ranges(&self, other: &Self, mode: &ModeStr) -> (Range<usize>, Range<usize>) {
         if self == other && mode == &"V" {
+            // FIXME: cannot use usize::MAX...
             return (self.lnum..self.lnum, self.col..usize::MAX);
         }
         let (start, end) = if self.lnum > other.lnum || self.col > other.col {
