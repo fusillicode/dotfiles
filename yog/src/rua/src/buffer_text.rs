@@ -20,24 +20,22 @@ pub fn get_current((pos1, pos2): (GetPosOutput, GetPosOutput)) -> Vec<nvim_oxi::
     let (start_pos, end_pos) = pos1.switch_if_needed(pos2);
     let cur_buf = Buffer::current();
 
-    let col_range = if start_pos == end_pos && nvim_oxi::api::get_mode().mode == "V" {
-        let line_len = get_line(&cur_buf, start_pos.lnum)
-            .map(|ln_content| ln_content.len())
+    let end_col = if start_pos == end_pos && nvim_oxi::api::get_mode().mode == "V" {
+        get_buffer_line(&cur_buf, start_pos.lnum)
+            .map(|line| line.len())
             .inspect_err(|error| {
                 crate::oxi_ext::notify_error(&format!(
-                    "cannot get line with idx {} from buffer {cur_buf:#?}, error {error:#?}",
+                    "cannot get buffer line with idx {} from buffer {cur_buf:#?}, error {error:#?}",
                     start_pos.lnum
                 ));
             })
-            .unwrap_or(start_pos.col);
-        start_pos.col..line_len
+            .unwrap_or(start_pos.col)
     } else {
-        start_pos.col..end_pos.col
+        end_pos.col
     };
-    let line_range = start_pos.lnum..end_pos.lnum;
 
     let Ok(lines) =  cur_buf
-        .get_text(line_range, col_range.start, col_range.end, &GetTextOpts::default())
+        .get_text(start_pos.lnum..end_pos.lnum, start_pos.col, end_col, &GetTextOpts::default())
         .inspect_err(|error| {
             crate::oxi_ext::notify_error(&format!(
                 "cannot get text from buffer {cur_buf:#?} from start_pos {start_pos:#?} to end_pos {end_pos:#?}, error {error:#?}"
@@ -49,7 +47,7 @@ pub fn get_current((pos1, pos2): (GetPosOutput, GetPosOutput)) -> Vec<nvim_oxi::
     lines.collect()
 }
 
-fn get_line(buf: &Buffer, idx: usize) -> color_eyre::Result<nvim_oxi::String> {
+fn get_buffer_line(buf: &Buffer, idx: usize) -> color_eyre::Result<nvim_oxi::String> {
     buf.get_lines(idx..=idx, true)?
         .next()
         .ok_or_else(|| eyre!("no line found with idx {idx} for buffer {buf:#?}"))
