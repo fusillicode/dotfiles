@@ -24,5 +24,3 @@ url = { workspace = true }
 
 [dev-dependencies]
 assert2 = { workspace = true }
-pretty_assertions = { workspace = true }
-tempfile = { version = "3" }
