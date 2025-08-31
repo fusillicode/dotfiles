@@ -47,7 +47,6 @@ function M.core()
   keymap_set({ 'n', 'v', }, '<leader><leader>', ':silent :w!<cr>')
   keymap_set({ 'n', 'v', }, '<leader>x', ':bd<cr>')
   keymap_set({ 'n', 'v', }, '<leader>X', ':bd!<cr>')
-  keymap_set({ 'n', 'v', }, '<leader>W', ':wa!<cr>')
   keymap_set({ 'n', 'v', }, '<leader>q', ':q<cr>')
   keymap_set({ 'n', 'v', }, '<leader>Q', ':q!<cr>')
 
@@ -179,8 +178,9 @@ function M.grug_far(grug_far, opts)
     grug_far.open(vim.tbl_deep_extend('force', opts, {}))
   end)
   keymap_set('v', '<leader>l', function()
-    local utils = require('utils')
-    local selection = utils.escape_regex(utils.get_current_buffer_text())
+    local selection = require('utils').escape_regex(
+      rua.get_current_buffer_text(vim.fn.getpos('v'), vim.fn.getpos('.'))[1]
+    )
     grug_far.open(vim.tbl_deep_extend('force', opts, { prefills = { search = selection, }, }))
   end)
 end

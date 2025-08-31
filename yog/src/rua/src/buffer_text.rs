@@ -1,6 +1,9 @@
+use std::ops::Range;
+
 use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::opts::GetTextOpts;
+use nvim_oxi::api::types::ModeStr;
 use nvim_oxi::conversion::FromObject;
 use nvim_oxi::lua::Poppable;
 use nvim_oxi::lua::ffi::State;
@@ -15,18 +18,15 @@ use serde::Deserializer;
 /// Note: while porting this from Lua I discovered that multiple line visual selection cuts of
 /// some characters at the start. Fortunately the multiple line visual selection is not yet used by
 /// anyone. Only the single line selection is used to do live grep.
-pub fn get_current((start_pos, end_pos): (GetPosOutput, GetPosOutput)) -> Vec<nvim_oxi::String> {
-    let start_ln = core::cmp::min(start_pos.lnum, end_pos.lnum).saturating_sub(1);
-    let end_ln = core::cmp::max(start_pos.lnum, end_pos.lnum).saturating_sub(1);
-    let start_col = core::cmp::min(start_pos.col, end_pos.col).saturating_sub(1);
-    let end_col = core::cmp::max(start_pos.col, end_pos.col);
+pub fn get_current((pos_1, pos_2): (GetPosOutput, GetPosOutput)) -> Vec<nvim_oxi::String> {
+    let (line_rng, col_rng) = pos_1.ordered_line_and_col_ranges(&pos_2, &nvim_oxi::api::get_mode().mode);
 
     let cur_buf = Buffer::current();
     let Ok(lines) =  cur_buf
-        .get_text(start_ln..end_ln, start_col, end_col, &GetTextOpts::default())
+        .get_text(line_rng, col_rng.start, col_rng.end, &GetTextOpts::default())
         .inspect_err(|error| {
             crate::oxi_ext::notify_error(&format!(
-                "cannot get text from buffer {cur_buf:#?} from start_pos {start_pos:#?} to end_pos {end_pos:#?}, error {error:#?}"
+                "cannot get text from buffer {cur_buf:#?} from start_pos {pos_1:#?} to end_pos {pos_2:#?}, error {error:#?}"
             ));
         }) else {
             return vec![];
@@ -35,16 +35,27 @@ pub fn get_current((start_pos, end_pos): (GetPosOutput, GetPosOutput)) -> Vec<nv
     lines.collect()
 }
 
-/// Normalized output of Neovim `getpos()`.
+/// Normalized, 0-based indexed output of Neovim `getpos()`.
 ///
 /// Built from [`GetPosRaw`].
-#[derive(Debug, Clone, Copy)]
-#[expect(dead_code, reason = "Unused fields are kept for completeness")]
+#[derive(Debug, PartialEq, Eq)]
 pub struct GetPosOutput {
-    pub bufnum: i64,
     pub lnum: usize,
     pub col: usize,
-    pub off: i64,
+}
+
+impl GetPosOutput {
+    pub fn ordered_line_and_col_ranges(&self, other: &Self, mode: &ModeStr) -> (Range<usize>, Range<usize>) {
+        if self == other && mode == &"V" {
+            return (self.lnum..self.lnum, self.col..usize::MAX);
+        }
+        let (start, end) = if self.lnum > other.lnum || self.col > other.col {
+            (other, self)
+        } else {
+            (self, other)
+        };
+        ((start.lnum..end.lnum), (start.col..end.col))
+    }
 }
 
 /// Custom [`Deserialize`] from Lua tuple (see [`GetPosRaw`]).
@@ -58,20 +69,23 @@ impl<'de> Deserialize<'de> for GetPosOutput {
     }
 }
 
-/// Convert [`GetPosRaw`] to [`GetPosOutput`].
+/// Convert [`GetPosRaw`] to [`GetPosOutput`] by switching to 0-based indexing from Lua 1-based.
 impl From<GetPosRaw> for GetPosOutput {
     fn from(raw: GetPosRaw) -> Self {
+        fn to_0_based_usize(v: i64) -> usize {
+            usize::try_from(v.saturating_sub(1)).unwrap_or(usize::MIN)
+        }
+
         Self {
-            bufnum: raw.0,
-            lnum: usize::try_from(raw.1).unwrap_or_else(|_| usize::default()),
-            col: usize::try_from(raw.2).unwrap_or_else(|_| usize::default()),
-            off: raw.3,
+            lnum: to_0_based_usize(raw.1),
+            col: to_0_based_usize(raw.2),
         }
     }
 }
 
 /// Raw `getpos()` tuple: (`bufnum`, `lnum`, `col`, `off`).
 #[derive(Debug, Clone, Copy, Deserialize)]
+#[expect(dead_code, reason = "Unused fields are kept for completeness")]
 struct GetPosRaw(i64, i64, i64, i64);
 
 /// Implementation of [`FromObject`] for [`GetPosOutput`].
