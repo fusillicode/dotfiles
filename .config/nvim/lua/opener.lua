@@ -26,9 +26,4 @@ function M.open_under_cursor()
   open((before_match or '') .. (after_match or ''))
 end
 
--- https://github.com/neovim/neovim/pull/13896
-function M.open_selection()
-  open(require('utils').get_visual_selection())
-end
-
 return M

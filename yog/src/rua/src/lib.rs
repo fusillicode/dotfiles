@@ -1,7 +1,16 @@
-//! Neovim Lua module exposing Rust utilities.
+//! Neovim Lua module exposing Rust-powered helpers for my Neovim config.
+//!
+//! Exposes functions callable from Lua via nvim-oxi. High-level areas:
+//! - Diagnostics: filter/format/sort and render in statusline/statuscolumn
+//! - CLI flags: generate ripgrep/fd arguments with sane defaults and blacklist
+//! - Visual selections: get current buffer text for a visual range
+//! - Test runner: run Rust tests in a sibling Wezterm pane
+//! - Misc: fkr fake data commands and oxi extensions
 
 use nvim_oxi::Dictionary;
 
+/// Utilities for working with [`nvim_oxi::Buffer`] text.
+mod buffer_text;
 /// Generates CLI flags for fd and ripgrep.
 mod cli_flags;
 /// Processes diagnostics for filtering, formatting, and sorting.
@@ -32,5 +41,6 @@ fn rua() -> Dictionary {
         "get_fd_cli_flags": fn_from!(cli_flags::fd::FdCliFlags::get),
         "get_rg_cli_flags": fn_from!(cli_flags::rg::RgCliFlags::get),
         "run_test": fn_from!(test_runner::run_test),
+        "get_current_buffer_text": fn_from!(buffer_text::get_current),
     }
 }

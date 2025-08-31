@@ -9,6 +9,7 @@ use std::time::Instant;
 use color_eyre::eyre;
 use color_eyre::eyre::WrapErr;
 use color_eyre::eyre::bail;
+use itertools::Itertools;
 
 /// Repeatedly executes a command until exit condition is met.
 ///
@@ -43,7 +44,7 @@ fn main() -> color_eyre::Result<()> {
     };
     let exit_cond = ExitCond::from_str(exit_cond).with_context(|| format!("in supplied args {args:#?}"))?;
 
-    let cmd = args.join(" ");
+    let cmd = args.iter().join(" ");
 
     let mut tries = vec![];
     loop {
