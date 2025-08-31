@@ -12,7 +12,7 @@ pub fn create_cmds(_: ()) {
             move |_| {
                 let cur_win = Window::current();
                 let Ok((row, col)) = cur_win.get_cursor().inspect_err(|error| {
-                    crate::oxi_utils::notify_error(&format!(
+                    crate::oxi_ext::notify_error(&format!(
                         "cannot get cursor from window {cur_win:?}, error {error:?}"
                     ));
                 }) else {
@@ -27,14 +27,14 @@ pub fn create_cmds(_: ()) {
 
                 let mut cur_buf = Buffer::current();
                 if let Err(e) = cur_buf.set_text(line_range.clone(), start_col, end_col, text.clone()) {
-                    crate::oxi_utils::notify_error(&format!(
+                    crate::oxi_ext::notify_error(&format!(
                         "cannot set text {text:?} in buffer {cur_buf:?}, line_range {line_range:?}, start_col {start_col:?}, end_col {end_col:?}, error {e:?}"
                     ));
                 }
             },
             &CreateCommandOptsBuilder::default().build(),
         ) {
-            crate::oxi_utils::notify_error(&format!("cannot create user cmd, error {error:#?}"));
+            crate::oxi_ext::notify_error(&format!("cannot create user cmd, error {error:#?}"));
         }
     }
 }
