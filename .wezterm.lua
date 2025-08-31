@@ -22,7 +22,7 @@ end
 
 config.animation_fps = 1
 
-local background = '#001000'
+local background = '#001100'
 local foreground = 'white'
 config.colors = {
   background = background,
@@ -142,7 +142,7 @@ wezterm.on('open-uri', function(_, pane, uri)
 
   if err then
     -- Logging like this because I don't know how to print
-    -- a table in lua without building a custom helper or rely
+    -- a table in Lua without building a custom helper or rely
     -- on an external library...
     wezterm.log_error('Cmd')
     wezterm.log_error(cmd)
