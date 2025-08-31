@@ -27,7 +27,8 @@ pub fn get_current((pos1, pos2): (GetPosOutput, GetPosOutput)) -> Vec<nvim_oxi::
             })
             .unwrap_or(start_pos.col)
     } else {
-        end_pos.col
+        // To fix missing last char selection
+        end_pos.col.saturating_add(1)
     };
 
     let Ok(lines) =  cur_buf
