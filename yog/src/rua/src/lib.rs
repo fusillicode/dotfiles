@@ -16,6 +16,8 @@ mod statuscolumn;
 mod statusline;
 /// Runs tests at cursor position in an available Wezterm pane.
 mod test_runner;
+/// Utilities for working with visual selections.
+mod visual_selection;
 
 use crate::cli_flags::CliFlags;
 
@@ -32,5 +34,6 @@ fn rua() -> Dictionary {
         "get_fd_cli_flags": fn_from!(cli_flags::fd::FdCliFlags::get),
         "get_rg_cli_flags": fn_from!(cli_flags::rg::RgCliFlags::get),
         "run_test": fn_from!(test_runner::run_test),
+        "get_visual_selection": fn_from!(visual_selection::get),
     }
 }

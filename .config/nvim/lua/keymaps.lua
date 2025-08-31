@@ -118,6 +118,7 @@ function M.fzf_lua(fzf_lua)
 
   keymap_set('n', '<leader>w', function() fzf_lua.live_grep({ prompt = 'rg: ', }) end)
   keymap_set('v', '<leader>w', function()
+    print(require('rua').get_visual_selection(vim.fn.getpos('v'), vim.fn.getpos('.')))
     fzf_lua.live_grep({ prompt = 'rg: ', search = require('utils').get_visual_selection(), })
   end)
 
