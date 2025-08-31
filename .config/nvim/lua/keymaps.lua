@@ -133,8 +133,8 @@ function M.attempt(attempt)
 end
 
 function M.close_buffers(close_buffers)
-  keymap_set('n', '<leader>e', function() close_buffers.wipe({ type = 'other', }) end)
-  keymap_set('n', '<leader>E', function() close_buffers.wipe({ type = 'other', force = true, }) end)
+  keymap_set('n', '<leader>o', function() close_buffers.wipe({ type = 'other', }) end)
+  keymap_set('n', '<leader>O', function() close_buffers.wipe({ type = 'other', force = true, }) end)
 end
 
 function M.gitlinker()
