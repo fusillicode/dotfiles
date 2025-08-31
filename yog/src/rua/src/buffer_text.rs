@@ -7,30 +7,35 @@ use nvim_oxi::lua::ffi::State;
 use serde::Deserialize;
 use serde::Deserializer;
 
-/// Get selected text between two [`GetPosOutput`] positions.
+/// Get text in the current buffer between 2 positions.
 ///
-/// Returns [`Some<String>`] on success, [`None`] on error.
-pub fn get((start_pos, end_pos): (GetPosOutput, GetPosOutput)) -> Vec<nvim_oxi::String> {
-    let start_ln = core::cmp::min(start_pos.lnum, end_pos.lnum);
-    let end_ln = core::cmp::max(start_pos.lnum, end_pos.lnum);
-    let start_col = core::cmp::min(start_pos.col, end_pos.col);
+/// Returned as a [`Vec`] of [`nvim_oxi::String`] lines suitable for Lua consumption.
+/// On error, an empty [`Vec`] is returned and an error is notified.
+///
+/// Note: while porting this from Lua I discovered that multiple line visual selection cuts of
+/// some characters at the start. Fortunately the multiple line visual selection is not yet used by
+/// anyone. Only the single line selection is used to do live grep.
+pub fn get_current((start_pos, end_pos): (GetPosOutput, GetPosOutput)) -> Vec<nvim_oxi::String> {
+    let start_ln = core::cmp::min(start_pos.lnum, end_pos.lnum).saturating_sub(1);
+    let end_ln = core::cmp::max(start_pos.lnum, end_pos.lnum).saturating_sub(1);
+    let start_col = core::cmp::min(start_pos.col, end_pos.col).saturating_sub(1);
     let end_col = core::cmp::max(start_pos.col, end_pos.col);
 
     let cur_buf = Buffer::current();
-    let Ok(selection) =  cur_buf
+    let Ok(lines) =  cur_buf
         .get_text(start_ln..end_ln, start_col, end_col, &GetTextOpts::default())
         .inspect_err(|error| {
             crate::oxi_ext::notify_error(&format!(
-                "cannot get selected text from buffer {cur_buf:#?}, start_pos {start_pos:#?}, end_pos {end_pos:#?} error {error:#?}"
+                "cannot get text from buffer {cur_buf:#?} from start_pos {start_pos:#?} to end_pos {end_pos:#?}, error {error:#?}"
             ));
         }) else {
             return vec![];
         };
 
-    selection.collect()
+    lines.collect()
 }
 
-/// Normalized output of Neovim `getpos()` for visual selections.
+/// Normalized output of Neovim `getpos()`.
 ///
 /// Built from [`GetPosRaw`].
 #[derive(Debug, Clone, Copy)]
@@ -53,17 +58,13 @@ impl<'de> Deserialize<'de> for GetPosOutput {
     }
 }
 
-/// Convert [`GetPosRaw`] to [`GetPosOutput`], switching 1-based to 0-based indices.
+/// Convert [`GetPosRaw`] to [`GetPosOutput`].
 impl From<GetPosRaw> for GetPosOutput {
     fn from(raw: GetPosRaw) -> Self {
-        fn from_lua_idx_to_usize(v: i64) -> usize {
-            usize::try_from(v.saturating_sub(1)).unwrap_or_else(|_| usize::default())
-        }
-
         Self {
             bufnum: raw.0,
-            lnum: from_lua_idx_to_usize(raw.1),
-            col: from_lua_idx_to_usize(raw.2),
+            lnum: usize::try_from(raw.1).unwrap_or_else(|_| usize::default()),
+            col: usize::try_from(raw.2).unwrap_or_else(|_| usize::default()),
             off: raw.3,
         }
     }
