@@ -88,6 +88,18 @@ function M.core()
   keymap_set({ 'n', 'v', }, '<leader>t', rua.run_test)
 end
 
+function M.lspconfig(bufnr)
+  keymap_set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr, })
+  keymap_set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, })
+end
+
+function M.quickfix()
+  local opts = { noremap = true, buffer = true, }
+  keymap_set('n', '<c-n>', ':cn<cr>', opts)
+  keymap_set('n', '<c-p>', ':cp<cr>', opts)
+  keymap_set('n', '<c-x>', ':ccl<cr>', opts)
+end
+
 function M.fzf_lua(fzf_lua)
   local lsp_cfg = { ignore_current_line = true, jump1 = true, includeDeclaration = false, }
 
@@ -168,10 +180,6 @@ function M.gitsigns(gitsigns)
   keymap_set({ 'n', 'v', }, '<c-b>', function() gitsigns.blame_line({ full = true, }) end)
 end
 
-function M.lspconfig(bufnr)
-  keymap_set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr, })
-  keymap_set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, })
-end
 
 function M.grug_far(grug_far, opts)
   keymap_set('n', '<leader>l', function()
@@ -198,12 +206,6 @@ function M.multicursor(mc)
   keymap_set({ 'n', 'v', }, '<c-p>', function() mc.matchAddCursor(-1) end)
 end
 
-function M.quickfix()
-  local opts = { noremap = true, buffer = true, }
-  keymap_set('n', '<c-n>', ':cn<cr>', opts)
-  keymap_set('n', '<c-p>', ':cp<cr>', opts)
-  keymap_set('n', '<c-x>', ':ccl<cr>', opts)
-end
 
 function M.nvim_spider(spider)
   return {
