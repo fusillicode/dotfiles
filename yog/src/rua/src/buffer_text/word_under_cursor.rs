@@ -37,12 +37,11 @@ fn get_word_at_index(s: &str, idx: usize) -> Option<&str> {
     if idx > s.len() || (idx < s.len() && !s.is_char_boundary(idx)) {
         return None;
     }
-    let is_space = |c: char| c.is_whitespace();
 
     let in_word = if idx < s.len() {
-        s[idx..].chars().next().is_some_and(|c| !is_space(c))
+        s[idx..].chars().next().is_some_and(|c| !c.is_whitespace())
     } else {
-        s.chars().next_back().is_some_and(|c| !is_space(c))
+        s.chars().next_back().is_some_and(|c| !c.is_whitespace())
     };
     if !in_word {
         return None;
@@ -53,7 +52,7 @@ fn get_word_at_index(s: &str, idx: usize) -> Option<&str> {
         let Some((p, ch)) = s[..left].char_indices().next_back() else {
             break;
         };
-        if is_space(ch) {
+        if ch.is_whitespace() {
             break;
         }
         left = p;
@@ -62,7 +61,7 @@ fn get_word_at_index(s: &str, idx: usize) -> Option<&str> {
     let mut right = idx;
     while right < s.len() {
         if let Some((offset, ch)) = s[right..].char_indices().next() {
-            if is_space(ch) {
+            if ch.is_whitespace() {
                 break;
             }
             right = right.saturating_add(offset).saturating_add(ch.len_utf8());
