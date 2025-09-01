@@ -1,15 +1,13 @@
+local keymaps = require('keymaps')
+local plugin_keymaps = keymaps.multicursor
+
 return {
   'jake-stewart/multicursor.nvim',
-  keys = {
-    { '<c-j>', mode = { 'n', 'v', }, },
-    { '<c-k>', mode = { 'n', 'v', }, },
-    { '<c-n>', mode = { 'n', 'v', }, },
-    { '<c-p>', mode = { 'n', 'v', }, },
-  },
+  keys = plugin_keymaps(),
   config = function()
-    local mc = require('multicursor-nvim')
-    mc.setup()
+    local plugin = require('multicursor-nvim')
 
-    require('keymaps').multicursor(mc)
+    plugin.setup({})
+    keymaps.set(plugin_keymaps(plugin))
   end,
 }

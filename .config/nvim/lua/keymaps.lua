@@ -180,32 +180,52 @@ function M.gitsigns(gitsigns)
   keymap_set({ 'n', 'v', }, '<c-b>', function() gitsigns.blame_line({ full = true, }) end)
 end
 
+function M.multicursor(mc)
+  return {
+    {
+      '<esc>',
+      mode = { 'n', },
+      mc and {
+        cmd = function()
+          if not mc.cursorsEnabled() then return mc.enableCursors() end
+          if mc.hasCursors() then return mc.clearCursors() end
+          vim.api.nvim_command('noh | echo""')
+        end,
+        opts = {},
+      },
+    },
+    { '<c-j>', mode = { 'n', 'v', }, mc and { cmd = function() mc.addCursor('j') end, opts = {}, }, },
+    { '<c-k>', mode = { 'n', 'v', }, mc and { cmd = function() mc.addCursor('k') end, opts = {}, }, },
+    { '<c-n>', mode = { 'n', 'v', }, mc and { cmd = function() mc.matchAddCursor(1) end, opts = {}, }, },
+    { '<c-p>', mode = { 'n', 'v', }, mc and { cmd = function() mc.matchAddCursor(-1) end, opts = {}, }, },
+  }
+end
 
 function M.grug_far(grug_far, opts)
-  keymap_set('n', '<leader>l', function()
-    grug_far.open(vim.tbl_deep_extend('force', opts, {}))
-  end)
-  keymap_set('v', '<leader>l', function()
-    local selection = require('utils').escape_regex(
-      rua.get_current_buffer_text(vim.fn.getpos('v'), vim.fn.getpos('.'))[1]
-    )
-    grug_far.open(vim.tbl_deep_extend('force', opts, { prefills = { search = selection, }, }))
-  end)
+  return {
+    {
+      '<leader>l',
+      mode = { 'n', },
+      grug_far and {
+        cmd = function() grug_far.open(vim.tbl_deep_extend('force', opts, {})) end,
+        opts = {},
+      },
+    },
+    {
+      '<leader>l',
+      mode = { 'v', },
+      grug_far and {
+        cmd = function()
+          local selection = require('utils').escape_regex(
+            rua.get_current_buffer_text(vim.fn.getpos('v'), vim.fn.getpos('.'))[1]
+          )
+          grug_far.open(vim.tbl_deep_extend('force', opts, { prefills = { search = selection, }, }))
+        end,
+        opts = {},
+      },
+    },
+  }
 end
-
-function M.multicursor(mc)
-  keymap_set('n', '<esc>', function()
-    if not mc.cursorsEnabled() then return mc.enableCursors() end
-    if mc.hasCursors() then return mc.clearCursors() end
-    vim.api.nvim_command('noh | echo""')
-  end)
-
-  keymap_set({ 'n', 'v', }, '<c-j>', function() mc.addCursor('j') end)
-  keymap_set({ 'n', 'v', }, '<c-k>', function() mc.addCursor('k') end)
-  keymap_set({ 'n', 'v', }, '<c-n>', function() mc.matchAddCursor(1) end)
-  keymap_set({ 'n', 'v', }, '<c-p>', function() mc.matchAddCursor(-1) end)
-end
-
 
 function M.nvim_spider(spider)
   return {
