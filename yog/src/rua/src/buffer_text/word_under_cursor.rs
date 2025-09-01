@@ -15,15 +15,39 @@ pub fn get(_: ()) -> Option<String> {
     get_word_at_index(&cur_line, col).map(ToOwned::to_owned)
 }
 
-/// Finds the non-whitespace "word" in `s` containing byte index `idx`.
+/// Finds the non-whitespace "word" in the supplied [`str`] containing the supplied visual index `idx`.
 ///
-/// Returns [`Option::None`] if:
+/// Returns [`Option::None`] if `idx`:
 ///
-/// - `idx` is out of bounds
-/// - not on a char boundary
-/// - not on a whitespace
+/// - is out of bounds
+/// - doesn't point to a char boundary
+/// - doesn't point to a whitespace
 fn get_word_at_index(s: &str, idx: usize) -> Option<&str> {
-    // Convert visual (char) index to byte index; allow end-of-line.
+    let byte_idx = convert_visual_to_byte_idx(s, idx)?;
+
+    // If pointing to whitespace, no word.
+    if s[byte_idx..].chars().next().is_some_and(char::is_whitespace) {
+        return None;
+    }
+
+    // Scan split words and see which span contains `byte_idx`.
+    let mut pos = 0;
+    for word in s.split_ascii_whitespace() {
+        let start = s[pos..].find(word)?.saturating_add(pos);
+        let end = start.saturating_add(word.len());
+        if (start..=end).contains(&byte_idx) {
+            return Some(word);
+        }
+        pos = end;
+    }
+    None
+}
+
+/// Converts a visual (character) index into a byte index for the supplied [`str`].
+///
+/// - Returns [`Option::Some`] [`usize`] for valid positions, including `s.len()` for end-of-line.
+/// - Returns [`Option::None`] if `idx` is past the end (out of bounds).
+fn convert_visual_to_byte_idx(s: &str, idx: usize) -> Option<usize> {
     let mut chars_seen = 0usize;
     let mut byte_idx = None;
     for (b, _) in s.char_indices() {
@@ -31,28 +55,13 @@ fn get_word_at_index(s: &str, idx: usize) -> Option<&str> {
             byte_idx = Some(b);
             break;
         }
-        chars_seen += 1;
+        chars_seen = chars_seen.saturating_add(1);
     }
-    let idx = match byte_idx {
-        Some(b) => b,
-        None if idx == chars_seen => s.len(), // end-of-line
-        _ => return None,                     // out of bounds
-    };
-
-    // If pointing to whitespace, no word.
-    if s[idx..].chars().next().is_some_and(char::is_whitespace) {
-        return None;
+    if byte_idx.is_some() {
+        return byte_idx;
     }
-
-    // Scan split words and see which span contains idx.
-    let mut pos = 0;
-    for word in s.split_ascii_whitespace() {
-        let start = s[pos..].find(word)? + pos;
-        let end = start + word.len();
-        if (start..=end).contains(&idx) {
-            return Some(word);
-        }
-        pos = end;
+    if idx == chars_seen {
+        return Some(s.len());
     }
     None
 }
