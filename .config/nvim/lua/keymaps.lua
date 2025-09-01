@@ -213,16 +213,7 @@ function M.nvim_spider(spider)
   }
 end
 
-function M.build(keymaps_builder, module)
-  local keymaps = keymaps_builder(module)
-  if module then
-    M.apply(keymaps)
-    return
-  end
-  return keymaps
-end
-
-function M.apply(keymaps)
+function M.set(keymaps)
   for idx, keymap in ipairs(keymaps) do
     local lhs = keymap[1]
     if type(lhs) ~= 'string' then
