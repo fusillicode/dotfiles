@@ -38,7 +38,7 @@ config.font_size = 20
 config.font = wezterm.font('Inconsolata')
 -- No ligatures thanks
 config.harfbuzz_features = { 'calt=0', 'clig=0', 'liga=0', }
-config.line_height = 1.2
+config.line_height = 1.3
 
 config.keys = {
   { key = 'LeftArrow',  mods = 'OPT',         action = act.SendKey { key = 'b', mods = 'ALT', }, },
