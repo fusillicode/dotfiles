@@ -206,9 +206,47 @@ function M.quickfix()
 end
 
 function M.nvim_spider(spider)
-  keymap_set({ 'n', 'o', 'x', }, 'w', function() spider.motion('w') end)
-  keymap_set({ 'n', 'o', 'x', }, 'e', function() spider.motion('e') end)
-  keymap_set({ 'n', 'o', 'x', }, 'b', function() spider.motion('b') end)
+  return {
+    { 'w', mode = { 'n', 'o', 'x', }, spider and { cmd = function() spider.motion('w') end, opts = {}, }, },
+    { 'e', mode = { 'n', 'o', 'x', }, spider and { cmd = function() spider.motion('e') end, opts = {}, }, },
+    { 'b', mode = { 'n', 'o', 'x', }, spider and { cmd = function() spider.motion('b') end, opts = {}, }, },
+  }
+end
+
+function M.build(keymaps_builder, module)
+  local keymaps = keymaps_builder(module)
+  if module then
+    M.apply(keymaps)
+    return
+  end
+  return keymaps
+end
+
+function M.apply(keymaps)
+  for idx, keymap in ipairs(keymaps) do
+    local lhs = keymap[1]
+    if type(lhs) ~= 'string' then
+      error(('apply_keymaps[%d]: lhs must be a string'):format(idx))
+    end
+
+    local modes = keymap.mode
+    if type(modes) ~= 'table' or #modes == 0 then
+      error(('apply_keymaps[%d]: mode must be a non-empty list for lhs %q'):format(idx, lhs))
+    end
+
+    local payload = keymap[2] or keymap[#keymap]
+    if type(payload) ~= 'table' then
+      error(('apply_keymaps[%d]: payload must be a table for lhs %q'):format(idx, lhs))
+    end
+
+    local rhs = payload.cmd
+    if type(rhs) ~= 'function' then
+      error(('apply_keymaps[%d]: cmd must be a function for lhs %q'):format(idx, lhs))
+    end
+
+    local opts = payload.opts or {}
+    keymap_set(modes, lhs, rhs, opts)
+  end
 end
 
 return M
