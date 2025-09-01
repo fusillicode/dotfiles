@@ -41,6 +41,7 @@ fn rua() -> Dictionary {
         "get_fd_cli_flags": fn_from!(cli_flags::fd::FdCliFlags::get),
         "get_rg_cli_flags": fn_from!(cli_flags::rg::RgCliFlags::get),
         "run_test": fn_from!(test_runner::run_test),
-        "get_current_buffer_text": fn_from!(buffer_text::get_current),
+        "get_current_buffer_text": fn_from!(buffer_text::between_pos::get),
+        "get_word_under_cursor": fn_from!(buffer_text::word_under_cursor::get),
     }
 }
