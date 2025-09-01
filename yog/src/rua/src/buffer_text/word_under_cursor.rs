@@ -22,55 +22,39 @@ pub fn get(_: ()) -> Option<String> {
 /// - `idx` is out of bounds
 /// - not on a char boundary
 /// - not on a whitespace
-///
-/// # Examples
-/// ```
-/// let s = "open file.txt now";
-/// assert_eq!(Some("file.txt"), get_word_at_index(s, 7));
-/// assert_eq!(None, get_word_at_index(s, 5)); // space
-/// let s = "αβ γ";
-/// assert_eq!(Some("αβ"), get_word_at_index(s, 0));
-/// assert_eq!(None, get_word_at_index(s, 1)); // not a boundary
-/// assert_eq!(Some("γ"), get_word_at_index(s, 5));
-/// ```
 fn get_word_at_index(s: &str, idx: usize) -> Option<&str> {
-    if idx > s.len() || (idx < s.len() && !s.is_char_boundary(idx)) {
-        return None;
+    // Convert visual (char) index to byte index; allow end-of-line.
+    let mut chars_seen = 0usize;
+    let mut byte_idx = None;
+    for (b, _) in s.char_indices() {
+        if chars_seen == idx {
+            byte_idx = Some(b);
+            break;
+        }
+        chars_seen += 1;
     }
-
-    let in_word = if idx < s.len() {
-        s[idx..].chars().next().is_some_and(|c| !c.is_whitespace())
-    } else {
-        s.chars().next_back().is_some_and(|c| !c.is_whitespace())
+    let idx = match byte_idx {
+        Some(b) => b,
+        None if idx == chars_seen => s.len(), // end-of-line
+        _ => return None,                     // out of bounds
     };
-    if !in_word {
+
+    // If pointing to whitespace, no word.
+    if s[idx..].chars().next().is_some_and(char::is_whitespace) {
         return None;
     }
 
-    let mut left = idx;
-    while left > 0 {
-        let Some((p, ch)) = s[..left].char_indices().next_back() else {
-            break;
-        };
-        if ch.is_whitespace() {
-            break;
+    // Scan split words and see which span contains idx.
+    let mut pos = 0;
+    for word in s.split_ascii_whitespace() {
+        let start = s[pos..].find(word)? + pos;
+        let end = start + word.len();
+        if (start..=end).contains(&idx) {
+            return Some(word);
         }
-        left = p;
+        pos = end;
     }
-
-    let mut right = idx;
-    while right < s.len() {
-        if let Some((offset, ch)) = s[right..].char_indices().next() {
-            if ch.is_whitespace() {
-                break;
-            }
-            right = right.saturating_add(offset).saturating_add(ch.len_utf8());
-        } else {
-            break;
-        }
-    }
-
-    Some(&s[left..right])
+    None
 }
 
 #[cfg(test)]
@@ -118,9 +102,9 @@ mod tests {
     fn get_word_at_index_handles_utf8_boundaries_and_space() {
         let s = "αβ γ";
         assert_eq!(Some("αβ"), get_word_at_index(s, 0));
-        assert_eq!(None, get_word_at_index(s, 1));
-        assert_eq!(None, get_word_at_index(s, 4));
-        assert_eq!(Some("γ"), get_word_at_index(s, 5));
+        assert_eq!(Some("αβ"), get_word_at_index(s, 1));
+        assert_eq!(Some("γ"), get_word_at_index(s, 4));
+        assert_eq!(None, get_word_at_index(s, 5));
     }
 
     #[test]
