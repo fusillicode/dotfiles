@@ -1,29 +1,18 @@
+local rua = require('rua')
+
 local M = {}
 
-local function open(s)
-  local thing = vim.fn.expand(vim.fn.trim(s))
-  if thing == '' then return end
-  vim.fn.jobstart({ 'open', thing, }, {
+function M.open_under_cursor()
+  local word = vim.fn.expand(rua.get_word_under_cursor())
+  if word == nil or word == '' then return end
+  vim.fn.jobstart({ 'open', word, }, {
     detach = true,
     on_exit = function(_, code, _)
       if code ~= 0 then
-        print('Cannot open "' .. thing .. '" 🤖')
+        vim.notify('Cannot open ' .. word .. ', error code ' .. code, vim.log.levels.ERROR)
       end
     end,
   })
-end
-
-function M.open_under_cursor()
-  local cursor_col = vim.api.nvim_win_get_cursor(0)[2]
-  local line = vim.api.nvim_get_current_line()
-
-  local before = line:sub(1, cursor_col)
-  local after = line:sub(cursor_col + 1, #line)
-
-  local _, _, before_match = before:find('(%S+)$')
-  local _, _, after_match = after:find('^(%S+)')
-
-  open((before_match or '') .. (after_match or ''))
 end
 
 return M
