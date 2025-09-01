@@ -205,10 +205,10 @@ function M.quickfix()
   keymap_set('n', '<c-x>', ':ccl<cr>', opts)
 end
 
-function M.nvim_spider()
-  keymap_set({ 'n', 'o', 'x', }, 'w', "<cmd>lua require('spider').motion('w')<CR>")
-  keymap_set({ 'n', 'o', 'x', }, 'e', "<cmd>lua require('spider').motion('e')<CR>")
-  keymap_set({ 'n', 'o', 'x', }, 'b', "<cmd>lua require('spider').motion('b')<CR>")
+function M.nvim_spider(spider)
+  keymap_set({ 'n', 'o', 'x', }, 'w', function() spider.motion('w') end)
+  keymap_set({ 'n', 'o', 'x', }, 'e', function() spider.motion('e') end)
+  keymap_set({ 'n', 'o', 'x', }, 'b', function() spider.motion('b') end)
 end
 
 return M

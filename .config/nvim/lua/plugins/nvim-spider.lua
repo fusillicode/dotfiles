@@ -6,6 +6,8 @@ return {
     { 'b', mode = { 'n', 'o', 'x', }, },
   },
   config = function()
-    require('keymaps').nvim_spider()
+    local spider = require('spider')
+    require('keymaps').nvim_spider(spider)
+    spider.setup({})
   end,
 }
