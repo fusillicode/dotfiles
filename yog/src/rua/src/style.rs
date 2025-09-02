@@ -2,6 +2,8 @@ use color_eyre::eyre::eyre;
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::opts::GetHighlightOpts;
 use nvim_oxi::api::opts::GetHighlightOptsBuilder;
+use nvim_oxi::api::opts::OptionOptsBuilder;
+use nvim_oxi::api::opts::OptionScope;
 use nvim_oxi::api::opts::SetHighlightOpts;
 use nvim_oxi::api::opts::SetHighlightOptsBuilder;
 use nvim_oxi::api::types::GetHlInfos;
@@ -26,6 +28,10 @@ pub fn window(_: ()) -> Dictionary {
 
 /// Sets the desired Neovim highlight groups.
 pub fn set_highlights(_: ()) {
+    let opts = OptionOptsBuilder::default().scope(OptionScope::Global).build();
+    crate::opts::set_opt("background", "dark", &opts);
+    crate::opts::set_opt("termguicolors", true, &opts);
+
     let status_line_hl = set_opts().foreground("gray").background(STATUS_LINE_BG).build();
     let bg_hl = set_opts().background(BG).build();
 

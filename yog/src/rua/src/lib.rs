@@ -17,6 +17,8 @@ mod cli_flags;
 mod diagnostics;
 /// Creates Neovim commands to generate fake data via [`fkr`] lib.
 mod fkr;
+/// Sets vim.opts
+pub mod opts;
 /// Extends [`nvim_oxi`] with various utilities.
 mod oxi_ext;
 /// Draws status column with diagnostic and git signs.
@@ -47,5 +49,6 @@ fn rua() -> Dictionary {
         "get_word_under_cursor": fn_from!(buffer_text::word_under_cursor::get),
         "set_highlights": fn_from!(style::set_highlights),
         "style": fn_from!(style::window),
+        "set_vim_opts": fn_from!(opts::set),
     }
 }
