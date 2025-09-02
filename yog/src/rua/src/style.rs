@@ -29,8 +29,8 @@ pub fn window(_: ()) -> Dictionary {
 /// Sets the desired Neovim highlight groups.
 pub fn set_highlights(_: ()) {
     let opts = OptionOptsBuilder::default().scope(OptionScope::Global).build();
-    crate::opts::set_opt("background", "dark", &opts);
-    crate::opts::set_opt("termguicolors", true, &opts);
+    crate::vopts::set("background", "dark", &opts);
+    crate::vopts::set("termguicolors", true, &opts);
 
     let status_line_hl = set_opts().foreground("gray").background(STATUS_LINE_BG).build();
     let bg_hl = set_opts().background(BG).build();
