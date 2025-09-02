@@ -1,6 +1,6 @@
 local M = {}
 
-local bg = '#001100'
+local bg = '#001900'
 local set_hl = vim.api.nvim_set_hl
 local get_hl = vim.api.nvim_get_hl
 

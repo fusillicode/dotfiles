@@ -1,8 +1,11 @@
+local keymaps = require('keymaps')
+local plugin_keymaps = keymaps.grug_far
+
 return {
   'MagicDuck/grug-far.nvim',
-  keys = { { '<leader>l', mode = { 'n', 'v', }, }, },
+  keys = plugin_keymaps(),
   config = function()
-    local grug_far = require('grug-far')
+    local plugin = require('grug-far')
 
     local opts = {
       engines = {
@@ -41,8 +44,7 @@ return {
       },
     }
 
-    grug_far.setup(opts)
-
-    require('keymaps').grug_far(grug_far, opts)
+    plugin.setup(opts)
+    keymaps.set(plugin_keymaps(plugin, opts))
   end,
 }

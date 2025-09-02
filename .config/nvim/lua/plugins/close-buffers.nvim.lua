@@ -1,7 +1,12 @@
+local keymaps = require('keymaps')
+local plugin_keymaps = keymaps.close_buffers
+
 return {
   'kazhala/close-buffers.nvim',
-  event = 'BufReadPost',
+  keys = plugin_keymaps(),
   config = function()
-    require('keymaps').close_buffers(require('close_buffers'))
+    local plugin = require('close_buffers')
+    plugin.setup({})
+    keymaps.set(plugin_keymaps(plugin))
   end,
 }

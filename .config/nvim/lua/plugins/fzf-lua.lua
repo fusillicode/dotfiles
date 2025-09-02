@@ -1,16 +1,16 @@
 local rua = require('rua')
+local keymaps = require('keymaps')
+local plugin_keymaps = keymaps.fzf_lua
 
 return {
   'ibhagwan/fzf-lua',
-  keys = { '<leader>', 'gd', 'gr', 'gi', },
-  dependencies = {
-    { 'junegunn/fzf', build = './install --bin', },
-  },
+  keys = plugin_keymaps(),
+  dependencies = { { 'junegunn/fzf', build = './install --bin', }, },
   config = function()
-    local fzf_lua = require('fzf-lua')
+    local plugin = require('fzf-lua')
     local no_title = { title = '', }
 
-    fzf_lua.setup({
+    plugin.setup({
       'max-perf',
       fzf_opts   = {
         ['--info'] = 'inline',
@@ -91,14 +91,14 @@ return {
         status = {
           winopts = no_title,
           actions = {
-            ['ctrl-h'] = { fn = fzf_lua.actions.git_stage, reload = true, },
-            ['ctrl-l'] = { fn = fzf_lua.actions.git_unstage, reload = true, },
-            ['ctrl-x'] = { fn = fzf_lua.actions.git_reset, reload = true, },
+            ['ctrl-h'] = { fn = plugin.actions.git_stage, reload = true, },
+            ['ctrl-l'] = { fn = plugin.actions.git_unstage, reload = true, },
+            ['ctrl-x'] = { fn = plugin.actions.git_reset, reload = true, },
           },
         },
       },
     })
-    fzf_lua.register_ui_select()
-    require('keymaps').fzf_lua(fzf_lua)
+    plugin.register_ui_select()
+    keymaps.set(plugin_keymaps(plugin))
   end,
 }
