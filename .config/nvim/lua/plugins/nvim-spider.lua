@@ -1,11 +1,12 @@
+local keymaps = require('keymaps')
+local plugin_keymaps = keymaps.nvim_spider
+
 return {
   'chrisgrieser/nvim-spider',
-  keys = {
-    { 'w', mode = { 'n', 'o', 'x', }, },
-    { 'e', mode = { 'n', 'o', 'x', }, },
-    { 'b', mode = { 'n', 'o', 'x', }, },
-  },
+  keys = plugin_keymaps(),
   config = function()
-    require('keymaps').nvim_spider()
+    local plugin = require('spider')
+    plugin.setup({})
+    keymaps.set(plugin_keymaps(plugin))
   end,
 }
