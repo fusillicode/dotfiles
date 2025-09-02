@@ -55,7 +55,7 @@
       },
       "types": {
         "fontStyle": "bold"
-      },
+      }
     },
     "[Atom One Light]": {
       "comments": {
@@ -70,8 +70,8 @@
       },
       "types": {
         "fontStyle": "bold"
-      },
-    },
+      }
+    }
   },
   "editWithShell.processEntireTextIfNoneSelected": true,
   "elixirLinter.useStrict": true,
@@ -265,5 +265,5 @@
   },
   "workbench.activityBar.location": "hidden",
   "workbench.editor.tabActionCloseVisibility": false,
-  "update.showReleaseNotes": false,
+  "update.showReleaseNotes": false
 }
