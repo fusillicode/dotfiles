@@ -1,3 +1,5 @@
+use std::fmt::Write as _;
+
 use nvim_oxi::api::opts::OptionOpts;
 use nvim_oxi::api::opts::OptionOptsBuilder;
 use nvim_oxi::api::opts::OptionScope;
@@ -59,12 +61,16 @@ pub fn set_opt<Opt: ToObject + core::fmt::Debug + core::marker::Copy>(name: &str
 pub fn append_to_opt(name: &str, value: &str, opts: &OptionOpts) {
     let Ok(mut cur_value) = nvim_oxi::api::get_option_value::<String>(name, opts).inspect_err(|error| {
         crate::oxi_ext::notify_error(&format!(
-            "cannot get current value of opt {name:?} with {opts:#?} to append {value:#?} , error {error:#?}"
+            "cannot get current value of opt {name:?} with {opts:#?} to append {value:#?}, error {error:#?}"
         ));
     }) else {
         return;
     };
-    cur_value.push_str(&format!(",{value}"));
+    if let Err(error) = write!(cur_value, ",{value}") {
+        crate::oxi_ext::notify_error(&format!(
+            "cannot append value {value} to current value {cur_value} of opt {name:?} with {opts:#?}, error {error:#?}"
+        ));
+    }
     set_opt(name, value, opts);
 }
 
