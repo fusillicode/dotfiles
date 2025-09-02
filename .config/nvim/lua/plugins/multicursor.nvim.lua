@@ -6,7 +6,6 @@ return {
   keys = plugin_keymaps(),
   config = function()
     local plugin = require('multicursor-nvim')
-
     plugin.setup({})
     keymaps.set(plugin_keymaps(plugin))
   end,

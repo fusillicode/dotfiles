@@ -147,11 +147,13 @@ function M.close_buffers(close_buffers)
   keymap_set('n', '<leader>O', function() close_buffers.wipe({ type = 'other', force = true, }) end)
 end
 
-function M.gitlinker()
-  keymap_set({ 'n', 'v', }, '<leader>yl', ':GitLink<cr>')
-  keymap_set({ 'n', 'v', }, '<leader>yL', ':GitLink!<cr>')
-  keymap_set({ 'n', 'v', }, '<leader>yb', ':GitLink blame<cr>')
-  keymap_set({ 'n', 'v', }, '<leader>yB', ':GitLink! blame<cr>')
+function M.gitlinker(gs)
+  return {
+    { '<leader>yl', mode = { 'n', 'v', }, gs and { ':GitLink<cr>', }, },
+    { '<leader>yL', mode = { 'n', 'v', }, gs and { ':GitLink!<cr>', }, },
+    { '<leader>yb', mode = { 'n', 'v', }, gs and { ':GitLink blame<cr>', }, },
+    { '<leader>yB', mode = { 'n', 'v', }, gs and { ':GitLink! blame<cr>', }, },
+  }
 end
 
 function M.gitsigns(gs)
