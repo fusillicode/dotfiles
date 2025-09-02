@@ -2,8 +2,8 @@ local M = {}
 
 local rua = require('rua')
 
-local function keymap_set(modes, lhs, rhs, opts)
-  vim.keymap.set(modes, lhs, rhs, vim.tbl_extend('force', { silent = true, }, opts or {}))
+local function keymap_set(mode, lhs, rhs, opts)
+  vim.keymap.set(mode, lhs, rhs, vim.tbl_extend('force', { silent = true, }, opts or {}))
 end
 
 function M.core()
@@ -288,13 +288,13 @@ end
 function M.set(keymaps)
   for idx, keymap in ipairs(keymaps) do
     local lhs = keymap[1]
-    local modes = keymap.mode
+    local mode = keymap.mode
     local payload = keymap[2]
 
     if type(lhs) ~= 'string' then
       error(('apply_keymaps[%d]: lhs must be string'):format(idx))
     end
-    if type(modes) ~= 'table' or #modes == 0 then
+    if type(mode) ~= 'table' or #mode == 0 then
       error(('apply_keymaps[%d]: mode must be non-empty list for %q'):format(idx, lhs))
     end
     if type(payload) ~= 'table' then
@@ -311,7 +311,7 @@ function M.set(keymaps)
       error(('apply_keymaps[%d]: payload[2] must be table when present for %q'):format(idx, lhs))
     end
 
-    keymap_set(modes, lhs, rhs, opts or {})
+    keymap_set(mode, lhs, rhs, opts or {})
   end
 end
 
