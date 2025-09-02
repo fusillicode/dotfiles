@@ -1,16 +1,13 @@
+local keymaps = require('keymaps')
+local plugin_keymaps = keymaps.gitlinker
+
 return {
   'linrongbin16/gitlinker.nvim',
-  keys = {
-    { '<leader>yl', mode = { 'n', 'v', }, },
-    { '<leader>yL', mode = { 'n', 'v', }, },
-    { '<leader>yb', mode = { 'n', 'v', }, },
-    { '<leader>yB', mode = { 'n', 'v', }, },
-  },
+  keys = plugin_keymaps(),
   dependencies = { 'nvim-lua/plenary.nvim', },
   config = function()
-    require('keymaps').gitlinker()
-    require('gitlinker').setup({
-      message = false,
-    })
+    local plugin = require('gitlinker')
+    plugin.setup({ message = false, })
+    keymaps.set(plugin_keymaps(plugin))
   end,
 }

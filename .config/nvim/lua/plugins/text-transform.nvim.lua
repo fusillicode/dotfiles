@@ -1,8 +1,12 @@
+local keymaps = require('keymaps')
+local plugin_keymaps = keymaps.text_transform
+
 return {
   'chenasraf/text-transform.nvim',
-  keys = { { '<leader>u', mode = { 'n', 'v', }, }, },
+  keys = plugin_keymaps(),
   config = function()
-    require('text-transform').setup({
+    local plugin = require('text-transform')
+    plugin.setup({
       popup_type = 'select',
       keymap = {
         telescope_popup = {

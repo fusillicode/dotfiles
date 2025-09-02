@@ -1,10 +1,12 @@
+local keymaps = require('keymaps')
+local plugin_keymaps = keymaps.oil
+
 return {
   'stevearc/oil.nvim',
-  keys = '<leader>F',
+  keys = plugin_keymaps(),
   config = function()
-    require('keymaps').oil()
-
-    require('oil').setup({
+    local plugin = require('oil')
+    plugin.setup({
       buf_options = {
         buflisted = false,
         bufhidden = 'hide',
@@ -30,5 +32,6 @@ return {
       },
       experimental_watch_for_changes = true,
     })
+    keymaps.set(plugin_keymaps(plugin))
   end,
 }
