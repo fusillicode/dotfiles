@@ -1,0 +1,79 @@
+use std::fmt::Write as _;
+
+use nvim_oxi::api::opts::OptionOpts;
+use nvim_oxi::api::opts::OptionOptsBuilder;
+use nvim_oxi::api::opts::OptionScope;
+use nvim_oxi::conversion::ToObject;
+
+pub fn set_all(_: ()) {
+    let global_scope = global_scope();
+
+    set("autoindent", true, &global_scope);
+    set("backspace", "indent,eol,start", &global_scope);
+    set("breakindent", true, &global_scope);
+    set("completeopt", "menuone,noselect", &global_scope);
+    set("cursorline", true, &global_scope);
+    set("expandtab", true, &global_scope);
+    set("hlsearch", true, &global_scope);
+    set("ignorecase", true, &global_scope);
+    set("laststatus", 3, &global_scope);
+    set("list", true, &global_scope);
+    set("mouse", "a", &global_scope);
+    set("number", true, &global_scope);
+    set("shiftwidth", 2, &global_scope);
+    set("shortmess", "ascIF", &global_scope);
+    set("showmode", false, &global_scope);
+    set("showtabline", 0, &global_scope);
+    set("sidescroll", 1, &global_scope);
+    set("signcolumn", "no", &global_scope);
+    set("smartcase", true, &global_scope);
+    set("splitbelow", true, &global_scope);
+    set("splitright", true, &global_scope);
+    set(
+        "statuscolumn",
+        r#"%{%v:lua.require("statuscolumn").draw(v:lnum)%}"#,
+        &global_scope,
+    );
+    set(
+        "statusline",
+        r#"%{%v:lua.require("statusline").draw()%}"#,
+        &global_scope,
+    );
+    set("swapfile", false, &global_scope);
+    set("tabstop", 2, &global_scope);
+    set("undofile", true, &global_scope);
+    set("updatetime", 250, &global_scope);
+    set("wrap", false, &global_scope);
+
+    append("clipboard", "unnamedplus", &global_scope);
+    append("iskeyword", "-", &global_scope);
+    append("jumpoptions", "stack", &global_scope);
+}
+
+pub fn set<Opt: ToObject + core::fmt::Debug + core::marker::Copy>(name: &str, value: Opt, opts: &OptionOpts) {
+    if let Err(error) = nvim_oxi::api::set_option_value(name, value, opts) {
+        crate::oxi_ext::notify_error(&format!(
+            "cannot set opt {name:?} value {value:#?} with {opts:#?}, error {error:#?}"
+        ));
+    }
+}
+
+pub fn append(name: &str, value: &str, opts: &OptionOpts) {
+    let Ok(mut cur_value) = nvim_oxi::api::get_option_value::<String>(name, opts).inspect_err(|error| {
+        crate::oxi_ext::notify_error(&format!(
+            "cannot get current value of opt {name:?} with {opts:#?} to append {value:#?}, error {error:#?}"
+        ));
+    }) else {
+        return;
+    };
+    if let Err(error) = write!(cur_value, ",{value}") {
+        crate::oxi_ext::notify_error(&format!(
+            "cannot append value {value} to current value {cur_value} of opt {name:?} with {opts:#?}, error {error:#?}"
+        ));
+    }
+    set(name, value, opts);
+}
+
+pub fn global_scope() -> OptionOpts {
+    OptionOptsBuilder::default().scope(OptionScope::Global).build()
+}
