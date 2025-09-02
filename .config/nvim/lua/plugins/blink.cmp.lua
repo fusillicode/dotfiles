@@ -1,4 +1,4 @@
-local colorscheme = require('colorscheme')
+local style = require('rua').style()
 local get_item_idx = require('utils').item_idx
 
 local default_sources = {
@@ -33,10 +33,10 @@ return {
       documentation = {
         auto_show = true,
         auto_show_delay_ms = 0,
-        window = colorscheme.window,
+        window = style.window,
       },
       menu = {
-        border = colorscheme.window.border,
+        border = style.window.border,
         draw = {
           columns = {
             { 'source_name', gap = 1, 'label', },
@@ -56,7 +56,7 @@ return {
       ['<c-u>'] = { 'scroll_documentation_up', 'fallback', },
       ['<c-d>'] = { 'scroll_documentation_down', 'fallback', },
     },
-    signature = { window = colorscheme.window, },
+    signature = { window = style.window, },
     sources = {
       default = default_sources,
       providers = {
