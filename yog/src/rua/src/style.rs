@@ -1,4 +1,5 @@
 use color_eyre::eyre::eyre;
+use nvim_oxi::Dictionary;
 use nvim_oxi::api::opts::GetHighlightOpts;
 use nvim_oxi::api::opts::GetHighlightOptsBuilder;
 use nvim_oxi::api::opts::SetHighlightOpts;
@@ -6,12 +7,25 @@ use nvim_oxi::api::opts::SetHighlightOptsBuilder;
 use nvim_oxi::api::types::GetHlInfos;
 use nvim_oxi::api::types::HighlightInfos;
 
+use crate::dict;
+
 const BG: &str = "#001900";
 const DIAGNOSTIC_LVLS: [&str; 5] = ["Error", "Warn", "Info", "Hint", "Ok"];
 const STATUS_LINE_BG: &str = "none";
 
+/// Returns the desired UI window options as a Neovim [`Dictionary`].
+///
+/// Currently sets `window.border = "rounded"`.
+pub fn window(_: ()) -> Dictionary {
+    dict! {
+        "window": dict! {
+            "border": "rounded",
+        }
+    }
+}
+
 /// Sets the desired Neovim highlight groups.
-pub fn set(_: ()) {
+pub fn set_highlights(_: ()) {
     let status_line_hl = set_opts().foreground("gray").background(STATUS_LINE_BG).build();
     let bg_hl = set_opts().background(BG).build();
 
