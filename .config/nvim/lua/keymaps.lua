@@ -186,79 +186,79 @@ function M.multicursor(mc)
       '<esc>',
       mode = { 'n', },
       mc and {
-        cmd = function()
+        function()
           if not mc.cursorsEnabled() then return mc.enableCursors() end
           if mc.hasCursors() then return mc.clearCursors() end
           vim.api.nvim_command('noh | echo""')
         end,
-        opts = {},
       },
     },
-    { '<c-j>', mode = { 'n', 'v', }, mc and { cmd = function() mc.addCursor('j') end, opts = {}, }, },
-    { '<c-k>', mode = { 'n', 'v', }, mc and { cmd = function() mc.addCursor('k') end, opts = {}, }, },
-    { '<c-n>', mode = { 'n', 'v', }, mc and { cmd = function() mc.matchAddCursor(1) end, opts = {}, }, },
-    { '<c-p>', mode = { 'n', 'v', }, mc and { cmd = function() mc.matchAddCursor(-1) end, opts = {}, }, },
+    { '<c-j>', mode = { 'n', 'v', }, mc and { function() mc.addCursor('j') end, }, },
+    { '<c-k>', mode = { 'n', 'v', }, mc and { function() mc.addCursor('k') end, }, },
+    { '<c-n>', mode = { 'n', 'v', }, mc and { function() mc.matchAddCursor(1) end, }, },
+    { '<c-p>', mode = { 'n', 'v', }, mc and { function() mc.matchAddCursor(-1) end, }, },
   }
 end
 
-function M.grug_far(grug_far, opts)
+function M.grug_far(gf, opts)
   return {
     {
       '<leader>l',
       mode = { 'n', },
-      grug_far and {
-        cmd = function() grug_far.open(vim.tbl_deep_extend('force', opts, {})) end,
-        opts = {},
+      gf and {
+        function() gf.open(vim.tbl_deep_extend('force', opts, {})) end,
       },
     },
     {
       '<leader>l',
       mode = { 'v', },
-      grug_far and {
-        cmd = function()
+      gf and {
+        function()
           local selection = require('utils').escape_regex(
             rua.get_current_buffer_text(vim.fn.getpos('v'), vim.fn.getpos('.'))[1]
           )
-          grug_far.open(vim.tbl_deep_extend('force', opts, { prefills = { search = selection, }, }))
+          gf.open(vim.tbl_deep_extend('force', opts, { prefills = { search = selection, }, }))
         end,
-        opts = {},
       },
     },
   }
 end
 
-function M.nvim_spider(spider)
+function M.nvim_spider(sp)
   return {
-    { 'w', mode = { 'n', 'o', 'x', }, spider and { cmd = function() spider.motion('w') end, opts = {}, }, },
-    { 'e', mode = { 'n', 'o', 'x', }, spider and { cmd = function() spider.motion('e') end, opts = {}, }, },
-    { 'b', mode = { 'n', 'o', 'x', }, spider and { cmd = function() spider.motion('b') end, opts = {}, }, },
+    { 'w', mode = { 'n', 'o', 'x', }, sp and { function() sp.motion('w') end, }, },
+    { 'e', mode = { 'n', 'o', 'x', }, sp and { function() sp.motion('e') end, }, },
+    { 'b', mode = { 'n', 'o', 'x', }, sp and { function() sp.motion('b') end, }, },
   }
 end
 
 function M.set(keymaps)
-  for idx, keymap in ipairs(keymaps) do
-    local lhs = keymap[1]
+  for i, km in ipairs(keymaps) do
+    local lhs = km[1]
+    local modes = km.mode
+    local payload = km[2]
+
     if type(lhs) ~= 'string' then
-      error(('apply_keymaps[%d]: lhs must be a string'):format(idx))
+      error(('apply_keymaps[%d]: lhs must be string'):format(i))
     end
-
-    local modes = keymap.mode
     if type(modes) ~= 'table' or #modes == 0 then
-      error(('apply_keymaps[%d]: mode must be a non-empty list for lhs %q'):format(idx, lhs))
+      error(('apply_keymaps[%d]: mode must be non-empty list for %q'):format(i, lhs))
     end
-
-    local payload = keymap[2] or keymap[#keymap]
     if type(payload) ~= 'table' then
-      error(('apply_keymaps[%d]: payload must be a table for lhs %q'):format(idx, lhs))
+      error(('apply_keymaps[%d]: payload must be a table for %q'):format(i, lhs))
     end
 
-    local rhs = payload.cmd
-    if type(rhs) ~= 'function' then
-      error(('apply_keymaps[%d]: cmd must be a function for lhs %q'):format(idx, lhs))
+    local rhs = payload[1]
+    local opts = payload[2]
+
+    if not (type(rhs) == 'function' or type(rhs) == 'string') then
+      error(('apply_keymaps[%d]: payload[1] must be function|string for %q'):format(i, lhs))
+    end
+    if opts ~= nil and type(opts) ~= 'table' then
+      error(('apply_keymaps[%d]: payload[2] must be table when present for %q'):format(i, lhs))
     end
 
-    local opts = payload.opts or {}
-    keymap_set(modes, lhs, rhs, opts)
+    keymap_set(modes, lhs, rhs, opts or {})
   end
 end
 
