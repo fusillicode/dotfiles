@@ -134,17 +134,23 @@ function M.fzf_lua(fzf_lua)
   keymap_set('n', '<leader>h', function() fzf_lua.resume({}) end)
 end
 
-function M.oil()
-  keymap_set('n', '<leader>F', ':Oil --float<cr>')
+function M.oil(oil)
+  return {
+    { '<leader>F', mode = { 'n', }, oil and { ':Oil --float<cr>', }, },
+  }
 end
 
-function M.attempt(attempt)
-  keymap_set('n', '<leader>n', attempt.new_select)
+function M.attempt(att)
+  return {
+    { '<leader>n', mode = { 'n', }, att and { att.new_select, }, },
+  }
 end
 
-function M.close_buffers(close_buffers)
-  keymap_set('n', '<leader>o', function() close_buffers.wipe({ type = 'other', }) end)
-  keymap_set('n', '<leader>O', function() close_buffers.wipe({ type = 'other', force = true, }) end)
+function M.close_buffers(cb)
+  return {
+    { '<leader>o', mode = { 'n', }, cb and { function() cb.wipe({ type = 'other', }) end, }, },
+    { '<leader>O', mode = { 'n', }, cb and { function() cb.wipe({ type = 'other', force = true, }) end, }, },
+  }
 end
 
 function M.gitlinker(gs)
@@ -182,25 +188,13 @@ function M.gitsigns(gs)
         { expr = true, },
       },
     },
-    { '<leader>hd', mode = { 'n', }, gs and { gs.preview_hunk, }, },
-    { '<leader>hs', mode = { 'n', }, gs and { gs.stage_hunk, }, },
-    { '<leader>hr', mode = { 'n', }, gs and { gs.reset_hunk, }, },
-    {
-      '<leader>hs',
-      mode = { 'v', },
-      gs and { function() gs.stage_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end, },
-    },
-    {
-      '<leader>hr',
-      mode = { 'v', },
-      gs and { function() gs.reset_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end, },
-    },
-    { '<leader>hu', mode = { 'n', }, gs and { gs.undo_stage_hunk, }, },
-    {
-      '<c-b>',
-      mode = { 'n', 'v', },
-      gs and { function() gs.blame_line({ full = true, }) end, },
-    },
+    { '<leader>hd', mode = { 'n', },      gs and { gs.preview_hunk, }, },
+    { '<leader>hs', mode = { 'n', },      gs and { gs.stage_hunk, }, },
+    { '<leader>hr', mode = { 'n', },      gs and { gs.reset_hunk, }, },
+    { '<leader>hs', mode = { 'v', },      gs and { function() gs.stage_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end, }, },
+    { '<leader>hr', mode = { 'v', },      gs and { function() gs.reset_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end, }, },
+    { '<leader>hu', mode = { 'n', },      gs and { gs.undo_stage_hunk, }, },
+    { '<c-b>',      mode = { 'n', 'v', }, gs and { function() gs.blame_line({ full = true, }) end, }, },
   }
 end
 

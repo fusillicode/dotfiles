@@ -1,12 +1,13 @@
+local keymaps = require('keymaps')
+local plugin_keymaps = keymaps.attempt
+
 return {
   'm-demare/attempt.nvim',
-  keys = { '<leader>n', },
+  keys = plugin_keymaps(),
   dependencies = { 'nvim-lua/plenary.nvim', },
   config = function()
-    local attempt = require('attempt')
-    require('keymaps').attempt(attempt)
-
-    attempt.setup({
+    local plugin = require('attempt')
+    plugin.setup({
       autosave = true,
       list_buffers = true,
       initial_content = {
@@ -24,5 +25,6 @@ return {
         'sql',
       },
     })
+    keymaps.set(plugin_keymaps(plugin))
   end,
 }
