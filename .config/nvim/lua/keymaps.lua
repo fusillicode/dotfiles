@@ -132,35 +132,35 @@ function M.fzf_lua(fl)
     { '<leader>d',  mode = { 'n', 'v', }, fl and { function() fl.diagnostics_document({ prompt = 'Diags: ', }) end, }, },
     { '<leader>D',  mode = { 'n', 'v', }, fl and { function() fl.diagnostics_workspace({ prompt = '*Diags: ', sort = 0, }) end, }, },
 
-    { '<leader>w',  mode = { 'n', },      fl and { function() fl.live_grep({ prompt = 'rg: ', }) end, }, },
+    { '<leader>w',  mode = 'n',           fl and { function() fl.live_grep({ prompt = 'rg: ', }) end, }, },
     {
       '<leader>w',
-      mode = { 'v', },
+      mode = 'v',
       fl and { function()
         fl.live_grep({ prompt = 'rg: ', search = rua.get_current_buffer_text(vim.fn.getpos('v'), vim.fn.getpos('.'))[1], })
       end, },
     },
 
-    { '<leader>h', mode = { 'n', }, fl and { function() fl.resume({}) end, }, },
+    { '<leader>h', mode = 'n', fl and { function() fl.resume({}) end, }, },
   }
 end
 
 function M.oil(oil)
   return {
-    { '<leader>F', mode = { 'n', }, oil and { ':Oil --float<cr>', }, },
+    { '<leader>F', mode = 'n', oil and { ':Oil --float<cr>', }, },
   }
 end
 
 function M.attempt(att)
   return {
-    { '<leader>n', mode = { 'n', }, att and { att.new_select, }, },
+    { '<leader>n', mode = 'n', att and { att.new_select, }, },
   }
 end
 
 function M.close_buffers(cb)
   return {
-    { '<leader>o', mode = { 'n', }, cb and { function() cb.wipe({ type = 'other', }) end, }, },
-    { '<leader>O', mode = { 'n', }, cb and { function() cb.wipe({ type = 'other', force = true, }) end, }, },
+    { '<leader>o', mode = 'n', cb and { function() cb.wipe({ type = 'other', }) end, }, },
+    { '<leader>O', mode = 'n', cb and { function() cb.wipe({ type = 'other', force = true, }) end, }, },
   }
 end
 
@@ -177,7 +177,7 @@ function M.gitsigns(gs)
   return {
     {
       'cn',
-      mode = { 'n', },
+      mode = 'n',
       gs and {
         function()
           if vim.wo.diff then return 'cn' end
@@ -189,7 +189,7 @@ function M.gitsigns(gs)
     },
     {
       'cp',
-      mode = { 'n', },
+      mode = 'n',
       gs and {
         function()
           if vim.wo.diff then return 'cp' end
@@ -199,12 +199,12 @@ function M.gitsigns(gs)
         { expr = true, },
       },
     },
-    { '<leader>hd', mode = { 'n', },      gs and { gs.preview_hunk, }, },
-    { '<leader>hs', mode = { 'n', },      gs and { gs.stage_hunk, }, },
-    { '<leader>hr', mode = { 'n', },      gs and { gs.reset_hunk, }, },
-    { '<leader>hs', mode = { 'v', },      gs and { function() gs.stage_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end, }, },
-    { '<leader>hr', mode = { 'v', },      gs and { function() gs.reset_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end, }, },
-    { '<leader>hu', mode = { 'n', },      gs and { gs.undo_stage_hunk, }, },
+    { '<leader>hd', mode = 'n',           gs and { gs.preview_hunk, }, },
+    { '<leader>hs', mode = 'n',           gs and { gs.stage_hunk, }, },
+    { '<leader>hr', mode = 'n',           gs and { gs.reset_hunk, }, },
+    { '<leader>hs', mode = 'v',           gs and { function() gs.stage_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end, }, },
+    { '<leader>hr', mode = 'v',           gs and { function() gs.reset_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end, }, },
+    { '<leader>hu', mode = 'n',           gs and { gs.undo_stage_hunk, }, },
     { '<c-b>',      mode = { 'n', 'v', }, gs and { function() gs.blame_line({ full = true, }) end, }, },
   }
 end
@@ -213,7 +213,7 @@ function M.multicursor(mc)
   return {
     {
       '<esc>',
-      mode = { 'n', },
+      mode = 'n',
       mc and {
         function()
           if not mc.cursorsEnabled() then return mc.enableCursors() end
@@ -233,14 +233,14 @@ function M.grug_far(gf, opts)
   return {
     {
       '<leader>l',
-      mode = { 'n', },
+      mode = 'n',
       gf and {
         function() gf.open(vim.tbl_deep_extend('force', opts, {})) end,
       },
     },
     {
       '<leader>l',
-      mode = { 'v', },
+      mode = 'v',
       gf and {
         function()
           local selection = require('utils').escape_regex(
@@ -263,14 +263,14 @@ end
 
 function M.opencode(oc)
   return {
-    { '<leader>oA', mode = { 'n', },      oc and { function() require('opencode').ask() end, desc = 'Ask opencode', }, },
-    { '<leader>oa', mode = { 'v', },      oc and { function() require('opencode').ask('@selection: ') end, desc = 'Ask opencode about selection', }, },
-    { '<leader>on', mode = { 'n', },      oc and { function() require('opencode').command('session_new') end, desc = 'New session', }, },
-    { '<leader>oy', mode = { 'n', },      oc and { function() require('opencode').command('messages_copy') end, desc = 'Copy last message', }, },
+    { '<leader>oA', mode = 'n',           oc and { function() require('opencode').ask() end, desc = 'Ask opencode', }, },
+    { '<leader>oa', mode = 'v',           oc and { function() require('opencode').ask('@selection: ') end, desc = 'Ask opencode about selection', }, },
+    { '<leader>on', mode = 'n',           oc and { function() require('opencode').command('session_new') end, desc = 'New session', }, },
+    { '<leader>oy', mode = 'n',           oc and { function() require('opencode').command('messages_copy') end, desc = 'Copy last message', }, },
     { '<leader>op', mode = { 'n', 'v', }, oc and { function() require('opencode').select_prompt() end, desc = 'Select prompt', }, },
     {
       '<leader>oe',
-      mode = { 'n', },
+      mode = 'n',
       oc and {
         function() require('opencode').prompt('Explain @cursor and its context') end,
         desc = 'Explain code near cursor',
@@ -294,8 +294,9 @@ function M.set(keymaps)
     if type(lhs) ~= 'string' then
       error(('apply_keymaps[%d]: lhs must be string'):format(idx))
     end
-    if type(mode) ~= 'table' or #mode == 0 then
-      error(('apply_keymaps[%d]: mode must be non-empty list for %q'):format(idx, lhs))
+    local mode_t = type(mode)
+    if not (mode_t == 'table' or mode_t == 'string') then
+      error(('apply_keymaps[%d]: mode must be a list or a string for %q'):format(idx, lhs))
     end
     if type(payload) ~= 'table' then
       error(('apply_keymaps[%d]: payload must be a table for %q'):format(idx, lhs))
