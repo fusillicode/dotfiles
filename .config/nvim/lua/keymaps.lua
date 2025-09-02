@@ -286,29 +286,29 @@ function M.text_transform()
 end
 
 function M.set(keymaps)
-  for i, km in ipairs(keymaps) do
-    local lhs = km[1]
-    local modes = km.mode
-    local payload = km[2]
+  for idx, keymap in ipairs(keymaps) do
+    local lhs = keymap[1]
+    local modes = keymap.mode
+    local payload = keymap[2]
 
     if type(lhs) ~= 'string' then
-      error(('apply_keymaps[%d]: lhs must be string'):format(i))
+      error(('apply_keymaps[%d]: lhs must be string'):format(idx))
     end
     if type(modes) ~= 'table' or #modes == 0 then
-      error(('apply_keymaps[%d]: mode must be non-empty list for %q'):format(i, lhs))
+      error(('apply_keymaps[%d]: mode must be non-empty list for %q'):format(idx, lhs))
     end
     if type(payload) ~= 'table' then
-      error(('apply_keymaps[%d]: payload must be a table for %q'):format(i, lhs))
+      error(('apply_keymaps[%d]: payload must be a table for %q'):format(idx, lhs))
     end
 
     local rhs = payload[1]
     local opts = payload[2]
 
     if not (type(rhs) == 'function' or type(rhs) == 'string') then
-      error(('apply_keymaps[%d]: payload[1] must be function|string for %q'):format(i, lhs))
+      error(('apply_keymaps[%d]: payload[1] must be function|string for %q'):format(idx, lhs))
     end
     if opts ~= nil and type(opts) ~= 'table' then
-      error(('apply_keymaps[%d]: payload[2] must be table when present for %q'):format(i, lhs))
+      error(('apply_keymaps[%d]: payload[2] must be table when present for %q'):format(idx, lhs))
     end
 
     keymap_set(modes, lhs, rhs, opts or {})
