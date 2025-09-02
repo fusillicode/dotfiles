@@ -100,38 +100,49 @@ function M.quickfix()
   keymap_set('n', '<c-x>', ':ccl<cr>', opts)
 end
 
-function M.fzf_lua(fzf_lua)
+function M.fzf_lua(fl)
   local lsp_cfg = { ignore_current_line = true, jump1 = true, includeDeclaration = false, }
 
-  keymap_set({ 'n', 'v', }, 'gd', function()
-    fzf_lua.lsp_definitions(vim.tbl_extend('error', { prompt = 'LSP defs: ', }, lsp_cfg))
-  end)
-  keymap_set({ 'n', 'v', }, 'gr', function()
-    fzf_lua.lsp_references(vim.tbl_extend('error', { prompt = 'LSP refs: ', }, lsp_cfg))
-  end)
-  keymap_set({ 'n', 'v', }, 'gi', function()
-    fzf_lua.lsp_implementations(vim.tbl_extend('error', { prompt = 'LSP impls: ', }, lsp_cfg))
-  end)
-  keymap_set({ 'n', 'v', }, '<leader>a', function() fzf_lua.lsp_code_actions({ prompt = 'LSP actions: ', }) end)
-  keymap_set({ 'n', 'v', }, '<leader>s', function() fzf_lua.lsp_document_symbols({ prompt = 'LSP syms: ', }) end)
-  keymap_set({ 'n', 'v', }, '<leader>S', function() fzf_lua.lsp_workspace_symbols({ prompt = '*LSP syms: ', }) end)
+  return {
+    {
+      'gd',
+      mode = { 'n', 'v', },
+      fl and { function() fl.lsp_definitions(vim.tbl_extend('error', { prompt = 'LSP defs: ', }, lsp_cfg)) end, },
+    },
+    {
+      'gr',
+      mode = { 'n', 'v', },
+      fl and { function() fl.lsp_references(vim.tbl_extend('error', { prompt = 'LSP refs: ', }, lsp_cfg)) end, },
+    },
+    {
+      'gi',
+      mode = { 'n', 'v', },
+      fl and { function() fl.lsp_implementations(vim.tbl_extend('error', { prompt = 'LSP impls: ', }, lsp_cfg)) end, },
+    },
+    { '<leader>a',  mode = { 'n', 'v', }, fl and { function() fl.lsp_code_actions({ prompt = 'LSP actions: ', }) end, }, },
+    { '<leader>s',  mode = { 'n', 'v', }, fl and { function() fl.lsp_document_symbols({ prompt = 'LSP syms: ', }) end, }, },
+    { '<leader>S',  mode = { 'n', 'v', }, fl and { function() fl.lsp_workspace_symbols({ prompt = '*LSP syms: ', }) end, }, },
 
-  keymap_set({ 'n', 'v', }, '<leader>f', function() fzf_lua.files({ prompt = 'Files: ', }) end)
-  keymap_set({ 'n', 'v', }, '<leader>b', function() fzf_lua.buffers({ prompt = 'Buffers: ', }) end)
-  keymap_set({ 'n', 'v', }, '<leader>gs', function() fzf_lua.git_status({ prompt = 'Git status: ', }) end)
-  keymap_set({ 'n', 'v', }, '<leader>gc', function() fzf_lua.git_commits({ prompt = 'Git commits: ', }) end)
-  keymap_set({ 'n', 'v', }, '<leader>c', function() fzf_lua.commands({ prompt = 'Cmds: ', }) end)
-  keymap_set({ 'n', 'v', }, '<leader>d', function() fzf_lua.diagnostics_document({ prompt = 'Diags: ', }) end)
-  -- Sorting of all workspace diagnostic is done with fzf-lua rather than with `rua` sorter because the sorter works
-  -- at the buffer level
-  keymap_set({ 'n', 'v', }, '<leader>D', function() fzf_lua.diagnostics_workspace({ prompt = '*Diags: ', sort = 0, }) end)
+    { '<leader>f',  mode = { 'n', 'v', }, fl and { function() fl.files({ prompt = 'Files: ', }) end, }, },
+    { '<leader>b',  mode = { 'n', 'v', }, fl and { function() fl.buffers({ prompt = 'Buffers: ', }) end, }, },
+    { '<leader>gs', mode = { 'n', 'v', }, fl and { function() fl.git_status({ prompt = 'Git status: ', }) end, }, },
+    { '<leader>gc', mode = { 'n', 'v', }, fl and { function() fl.git_commits({ prompt = 'Git commits: ', }) end, }, },
+    { '<leader>c',  mode = { 'n', 'v', }, fl and { function() fl.commands({ prompt = 'Cmds: ', }) end, }, },
 
-  keymap_set('n', '<leader>w', function() fzf_lua.live_grep({ prompt = 'rg: ', }) end)
-  keymap_set('v', '<leader>w', function()
-    fzf_lua.live_grep({ prompt = 'rg: ', search = rua.get_current_buffer_text(vim.fn.getpos('v'), vim.fn.getpos('.'))[1], })
-  end)
+    { '<leader>d',  mode = { 'n', 'v', }, fl and { function() fl.diagnostics_document({ prompt = 'Diags: ', }) end, }, },
+    { '<leader>D',  mode = { 'n', 'v', }, fl and { function() fl.diagnostics_workspace({ prompt = '*Diags: ', sort = 0, }) end, }, },
 
-  keymap_set('n', '<leader>h', function() fzf_lua.resume({}) end)
+    { '<leader>w',  mode = { 'n', },      fl and { function() fl.live_grep({ prompt = 'rg: ', }) end, }, },
+    {
+      '<leader>w',
+      mode = { 'v', },
+      fl and { function()
+        fl.live_grep({ prompt = 'rg: ', search = rua.get_current_buffer_text(vim.fn.getpos('v'), vim.fn.getpos('.'))[1], })
+      end, },
+    },
+
+    { '<leader>h', mode = { 'n', }, fl and { function() fl.resume({}) end, }, },
+  }
 end
 
 function M.oil(oil)
