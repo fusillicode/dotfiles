@@ -34,15 +34,23 @@ pub fn set(_: ()) {
         let Ok(hl_infos) = get_hl(0, &get_opts.name(diagn_hl.clone()).build()) else {
             continue;
         };
-        let hl_opts = hl_opts_from_hl_infos(hl_infos).background(STATUS_LINE_HL_BG).build();
-        set_hl(0, &format!("DiagnosticStatusLine{lvl}{diagn_hl}"), &hl_opts);
+        let Ok(set_hl_opts) =
+            hl_opts_from_hl_infos(&hl_infos).map(|mut hl_opts| hl_opts.background(STATUS_LINE_HL_BG).build())
+        else {
+            continue;
+        };
+        set_hl(0, &format!("DiagnosticStatusLine{lvl}{diagn_hl}"), &set_hl_opts);
 
         let diagn_underline_hl = format!("DiagnosticUnderline{lvl}");
         let Ok(hl_infos) = get_hl(0, &get_opts.name(diagn_underline_hl.clone()).build()) else {
             continue;
         };
-        let hl_opts = hl_opts_from_hl_infos(hl_infos).undercurl(true).build();
-        set_hl(0, &diagn_underline_hl, &hl_opts);
+        let Ok(set_hl_opts) =
+            hl_opts_from_hl_infos(&hl_infos).map(|mut hl_opts| hl_opts.background(STATUS_LINE_HL_BG).build())
+        else {
+            continue;
+        };
+        set_hl(0, &diagn_underline_hl, &set_hl_opts);
     }
 }
 
@@ -63,11 +71,15 @@ fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &SetHighlightOpts) {
     }
 }
 
-/// Retrieves [`HighlightInfos`] for a single group or errors if multiple.
+/// Retrieves [`HighlightInfos`] for a single group.
+///
+/// Errors:
+/// - Propagates failures from [`nvim_oxi::api::get_hl`] while notifying them to Neovim.
+/// - Returns an error in case of multiple infos ([`GetHlInfos::Map`]) for the given `hl_opts` .
 fn get_hl(ns_id: u32, hl_opts: &GetHighlightOpts) -> color_eyre::Result<HighlightInfos> {
     nvim_oxi::api::get_hl(ns_id, hl_opts)
         .inspect_err(|error| {
-            crate::oxi_ext::notify_error(&format!("cannot get HighlightInfos by {hl_opts:#?}, error {error:#?}"))
+            crate::oxi_ext::notify_error(&format!("cannot get HighlightInfos by {hl_opts:#?}, error {error:#?}"));
         })
         .map_err(From::from)
         .and_then(|hl| match hl {
@@ -79,16 +91,27 @@ fn get_hl(ns_id: u32, hl_opts: &GetHighlightOpts) -> color_eyre::Result<Highligh
         })
 }
 
-/// Converts [`HighlightInfos`] into a [`SetHighlightOptsBuilder`].
-/// Only applies fields present in the source using [`Option::map`].
-fn hl_opts_from_hl_infos(hl_infos: HighlightInfos) -> SetHighlightOptsBuilder {
+/// Builds a [`SetHighlightOptsBuilder`] from [`HighlightInfos`], applying only present fields via [`Option::map`].
+///
+/// Returns a [`color_eyre::Result`]. Errors if `blend` (`u32`) cannot convert to `u8` and notifies it to Neovim.
+fn hl_opts_from_hl_infos(hl_infos: &HighlightInfos) -> color_eyre::Result<SetHighlightOptsBuilder> {
     let mut opts = set_opts();
     hl_infos.altfont.map(|value| opts.altfont(value));
     hl_infos
         .background
         .map(|value| opts.background(&decimal_to_hex_color(value)));
     hl_infos.bg_indexed.map(|value| opts.bg_indexed(value));
-    hl_infos.blend.map(|value| opts.blend(value as _));
+    hl_infos
+        .blend
+        .map(u8::try_from)
+        .transpose()
+        .inspect_err(|error| {
+            crate::oxi_ext::notify_error(&format!(
+                "cannot convert u32 value {:?} to u8, error: {error:#?}",
+                hl_infos.blend
+            ));
+        })?
+        .map(|value| opts.blend(value));
     hl_infos.bold.map(|value| opts.bold(value));
     hl_infos.fallback.map(|value| opts.fallback(value));
     hl_infos.fg_indexed.map(|value| opts.fg_indexed(value));
@@ -105,10 +128,10 @@ fn hl_opts_from_hl_infos(hl_infos: HighlightInfos) -> SetHighlightOptsBuilder {
     hl_infos.underdash.map(|value| opts.underdashed(value));
     hl_infos.underdot.map(|value| opts.underdotted(value));
     hl_infos.underline.map(|value| opts.underline(value));
-    opts
+    Ok(opts)
 }
 
 /// Formats an RGB integer as a `#RRGGBB` hex string.
 fn decimal_to_hex_color(decimal: u32) -> String {
-    format!("#{:06X}", decimal)
+    format!("#{decimal:06X}")
 }
