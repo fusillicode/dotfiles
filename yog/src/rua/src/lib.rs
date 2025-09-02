@@ -13,6 +13,8 @@ use nvim_oxi::Dictionary;
 mod buffer_text;
 /// Generates CLI flags for fd and ripgrep.
 mod cli_flags;
+/// Sets the coloroscheme.
+mod colorscheme;
 /// Processes diagnostics for filtering, formatting, and sorting.
 mod diagnostics;
 /// Creates Neovim commands to generate fake data via [`fkr`] lib.
@@ -43,5 +45,6 @@ fn rua() -> Dictionary {
         "run_test": fn_from!(test_runner::run_test),
         "get_current_buffer_text": fn_from!(buffer_text::between_pos::get),
         "get_word_under_cursor": fn_from!(buffer_text::word_under_cursor::get),
+        "set_colorscheme": fn_from!(colorscheme::set),
     }
 }
