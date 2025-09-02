@@ -8,11 +8,11 @@ use nvim_oxi::api::types::HighlightInfos;
 
 const BG: &str = "#001900";
 const DIAGNOSTIC_LVLS: [&str; 5] = ["Error", "Warn", "Info", "Hint", "Ok"];
-const STATUS_LINE_HL_BG: &str = "none";
+const STATUS_LINE_BG: &str = "none";
 
 /// Sets the desired Neovim highlight groups.
 pub fn set(_: ()) {
-    let status_line_hl = set_opts().foreground("gray").background(STATUS_LINE_HL_BG).build();
+    let status_line_hl = set_opts().foreground("gray").background(STATUS_LINE_BG).build();
     let bg_hl = set_opts().background(BG).build();
 
     let general_hls = [
@@ -30,23 +30,22 @@ pub fn set(_: ()) {
 
     let mut get_opts = get_opts();
     for lvl in DIAGNOSTIC_LVLS {
-        let diagn_hl = format!("Diagnostic{lvl}");
-        let Ok(hl_infos) = get_hl(0, &get_opts.name(diagn_hl.clone()).build()) else {
+        let Ok(hl_infos) = get_hl(0, &get_opts.name(format!("Diagnostic{lvl}")).build()) else {
             continue;
         };
         let Ok(set_hl_opts) =
-            hl_opts_from_hl_infos(&hl_infos).map(|mut hl_opts| hl_opts.background(STATUS_LINE_HL_BG).build())
+            hl_opts_from_hl_infos(&hl_infos).map(|mut hl_opts| hl_opts.background(STATUS_LINE_BG).build())
         else {
             continue;
         };
-        set_hl(0, &format!("DiagnosticStatusLine{lvl}{diagn_hl}"), &set_hl_opts);
+        set_hl(0, &format!("DiagnosticStatusLine{lvl}"), &set_hl_opts);
 
         let diagn_underline_hl = format!("DiagnosticUnderline{lvl}");
         let Ok(hl_infos) = get_hl(0, &get_opts.name(diagn_underline_hl.clone()).build()) else {
             continue;
         };
         let Ok(set_hl_opts) =
-            hl_opts_from_hl_infos(&hl_infos).map(|mut hl_opts| hl_opts.background(STATUS_LINE_HL_BG).build())
+            hl_opts_from_hl_infos(&hl_infos).map(|mut hl_opts| hl_opts.background(STATUS_LINE_BG).build())
         else {
             continue;
         };
@@ -107,7 +106,7 @@ fn hl_opts_from_hl_infos(hl_infos: &HighlightInfos) -> color_eyre::Result<SetHig
         .transpose()
         .inspect_err(|error| {
             crate::oxi_ext::notify_error(&format!(
-                "cannot convert u32 value {:?} to u8, error: {error:#?}",
+                "cannot convert u32 {:?} to u8, error: {error:#?}",
                 hl_infos.blend
             ));
         })?
