@@ -154,30 +154,52 @@ function M.gitlinker()
   keymap_set({ 'n', 'v', }, '<leader>yB', ':GitLink! blame<cr>')
 end
 
-function M.gitsigns(gitsigns)
-  keymap_set('n', 'cn', function()
-    if vim.wo.diff then return 'cn' end
-    vim.schedule(function()
-      gitsigns.next_hunk({ wrap = true, })
-    end)
-    return '<Ignore>'
-  end, { expr = true, })
-
-  keymap_set('n', 'cp', function()
-    if vim.wo.diff then return 'cp' end
-    vim.schedule(function()
-      gitsigns.prev_hunk({ wrap = true, })
-    end)
-    return '<Ignore>'
-  end, { expr = true, })
-
-  keymap_set('n', '<leader>hd', gitsigns.preview_hunk)
-  keymap_set('n', '<leader>hs', gitsigns.stage_hunk)
-  keymap_set('n', '<leader>hr', gitsigns.reset_hunk)
-  keymap_set('v', '<leader>hs', function() gitsigns.stage_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end)
-  keymap_set('v', '<leader>hr', function() gitsigns.reset_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end)
-  keymap_set('n', '<leader>hu', gitsigns.undo_stage_hunk)
-  keymap_set({ 'n', 'v', }, '<c-b>', function() gitsigns.blame_line({ full = true, }) end)
+function M.gitsigns(gs)
+  return {
+    {
+      'cn',
+      mode = { 'n', },
+      gs and {
+        function()
+          if vim.wo.diff then return 'cn' end
+          vim.schedule(function() gs.next_hunk({ wrap = true, }) end)
+          return '<Ignore>'
+        end,
+        { expr = true, },
+      },
+    },
+    {
+      'cp',
+      mode = { 'n', },
+      gs and {
+        function()
+          if vim.wo.diff then return 'cp' end
+          vim.schedule(function() gs.prev_hunk({ wrap = true, }) end)
+          return '<Ignore>'
+        end,
+        { expr = true, },
+      },
+    },
+    { '<leader>hd', mode = { 'n', }, gs and { gs.preview_hunk, }, },
+    { '<leader>hs', mode = { 'n', }, gs and { gs.stage_hunk, }, },
+    { '<leader>hr', mode = { 'n', }, gs and { gs.reset_hunk, }, },
+    {
+      '<leader>hs',
+      mode = { 'v', },
+      gs and { function() gs.stage_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end, },
+    },
+    {
+      '<leader>hr',
+      mode = { 'v', },
+      gs and { function() gs.reset_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end, },
+    },
+    { '<leader>hu', mode = { 'n', }, gs and { gs.undo_stage_hunk, }, },
+    {
+      '<c-b>',
+      mode = { 'n', 'v', },
+      gs and { function() gs.blame_line({ full = true, }) end, },
+    },
+  }
 end
 
 function M.multicursor(mc)
