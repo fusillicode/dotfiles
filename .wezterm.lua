@@ -36,6 +36,7 @@ config.colors = {
 }
 config.font_size = 19
 config.font = wezterm.font('Inconsolata')
+config.freetype_load_target = 'Light'
 -- No ligatures thanks
 config.harfbuzz_features = { 'calt=0', 'clig=0', 'liga=0', }
 config.line_height = 1.23
