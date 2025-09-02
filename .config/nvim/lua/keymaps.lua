@@ -279,6 +279,12 @@ function M.opencode(oc)
   }
 end
 
+function M.text_transform()
+  return {
+    { '<leader>u', mode = { 'n', 'v', }, },
+  }
+end
+
 function M.set(keymaps)
   for i, km in ipairs(keymaps) do
     local lhs = km[1]
