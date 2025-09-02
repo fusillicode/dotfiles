@@ -10,6 +10,7 @@ const BG: &str = "#001900";
 const DIAGNOSTIC_LVLS: [&str; 5] = ["Error", "Warn", "Info", "Hint", "Ok"];
 const STATUS_LINE_HL_BG: &str = "none";
 
+/// Sets the desired Neovim highlight groups.
 pub fn set(_: ()) {
     let status_line_hl = set_opts().foreground("gray").background(STATUS_LINE_HL_BG).build();
     let bg_hl = set_opts().background(BG).build();
@@ -45,20 +46,24 @@ pub fn set(_: ()) {
     }
 }
 
+/// Shorthand to start building [`SetHighlightOpts`].
 fn set_opts() -> SetHighlightOptsBuilder {
     SetHighlightOptsBuilder::default()
 }
 
+/// Shorthand to start building [`GetHighlightOpts`].
 fn get_opts() -> GetHighlightOptsBuilder {
     GetHighlightOptsBuilder::default()
 }
 
+/// Wrapper around `nvim_oxi::api::set_hl` with error notification.
 fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &SetHighlightOpts) {
     if let Err(error) = nvim_oxi::api::set_hl(ns_id, hl_name, hl_opts) {
         crate::oxi_ext::notify_error(&format!("foo, error {error:#?}"));
     }
 }
 
+/// Retrieves [`HighlightInfos`] for a single group or errors if multiple.
 fn get_hl(ns_id: u32, hl_opts: &GetHighlightOpts) -> color_eyre::Result<HighlightInfos> {
     nvim_oxi::api::get_hl(ns_id, hl_opts)
         .inspect_err(|error| {
@@ -74,68 +79,36 @@ fn get_hl(ns_id: u32, hl_opts: &GetHighlightOpts) -> color_eyre::Result<Highligh
         })
 }
 
+/// Converts [`HighlightInfos`] into a [`SetHighlightOptsBuilder`].
+/// Only applies fields present in the source using [`Option::map`].
 fn hl_opts_from_hl_infos(hl_infos: HighlightInfos) -> SetHighlightOptsBuilder {
     let mut opts = set_opts();
-    if let Some(value) = hl_infos.altfont {
-        opts.altfont(value);
-    }
-    if let Some(value) = hl_infos.background.map(decimal_to_hex_color) {
-        opts.background(&value);
-    }
-    if let Some(value) = hl_infos.bg_indexed {
-        opts.bg_indexed(value);
-    }
-    if let Some(value) = hl_infos.blend {
-        opts.blend(value as _);
-    }
-    if let Some(value) = hl_infos.bold {
-        opts.bold(value);
-    }
-    if let Some(value) = hl_infos.fallback {
-        opts.fallback(value);
-    }
-    if let Some(value) = hl_infos.fg_indexed {
-        opts.fg_indexed(value);
-    }
-    if let Some(value) = hl_infos.force {
-        opts.force(value);
-    }
-    if let Some(value) = hl_infos.foreground.map(decimal_to_hex_color) {
-        opts.foreground(&value);
-    }
-    if let Some(value) = hl_infos.italic {
-        opts.italic(value);
-    }
-    if let Some(value) = hl_infos.reverse {
-        opts.reverse(value);
-    }
-    if let Some(value) = hl_infos.special.map(decimal_to_hex_color) {
-        opts.special(&value);
-    }
-    if let Some(value) = hl_infos.standout {
-        opts.standout(value);
-    }
-    if let Some(value) = hl_infos.strikethrough {
-        opts.strikethrough(value);
-    }
-    if let Some(value) = hl_infos.undercurl {
-        opts.undercurl(value);
-    }
-    if let Some(value) = hl_infos.underdash {
-        opts.underdashed(value);
-    }
-    if let Some(value) = hl_infos.underdot {
-        opts.underdotted(value);
-    }
-    if let Some(value) = hl_infos.underline {
-        opts.underline(value);
-    }
-    if let Some(value) = hl_infos.underline {
-        opts.underline(value);
-    }
+    hl_infos.altfont.map(|value| opts.altfont(value));
+    hl_infos
+        .background
+        .map(|value| opts.background(&decimal_to_hex_color(value)));
+    hl_infos.bg_indexed.map(|value| opts.bg_indexed(value));
+    hl_infos.blend.map(|value| opts.blend(value as _));
+    hl_infos.bold.map(|value| opts.bold(value));
+    hl_infos.fallback.map(|value| opts.fallback(value));
+    hl_infos.fg_indexed.map(|value| opts.fg_indexed(value));
+    hl_infos.force.map(|value| opts.force(value));
+    hl_infos
+        .foreground
+        .map(|value| opts.foreground(&decimal_to_hex_color(value)));
+    hl_infos.italic.map(|value| opts.italic(value));
+    hl_infos.reverse.map(|value| opts.reverse(value));
+    hl_infos.special.map(|value| opts.special(&decimal_to_hex_color(value)));
+    hl_infos.standout.map(|value| opts.standout(value));
+    hl_infos.strikethrough.map(|value| opts.strikethrough(value));
+    hl_infos.undercurl.map(|value| opts.undercurl(value));
+    hl_infos.underdash.map(|value| opts.underdashed(value));
+    hl_infos.underdot.map(|value| opts.underdotted(value));
+    hl_infos.underline.map(|value| opts.underline(value));
     opts
 }
 
+/// Formats an RGB integer as a `#RRGGBB` hex string.
 fn decimal_to_hex_color(decimal: u32) -> String {
     format!("#{:06X}", decimal)
 }
