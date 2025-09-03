@@ -2,6 +2,8 @@ use nvim_oxi::api::opts::SetKeymapOpts;
 use nvim_oxi::api::opts::SetKeymapOptsBuilder;
 use nvim_oxi::api::types::Mode;
 
+const NORM_VIS_MODE: [Mode; 2] = [Mode::Normal, Mode::Visual];
+
 pub fn set_all(_: ()) {
     let empty_opts = SetKeymapOptsBuilder::default().build();
 
@@ -13,9 +15,9 @@ pub fn set_all(_: ()) {
 
     set(&[Mode::NormalVisualOperator], "gn", ":bn<cr>", &empty_opts);
     set(&[Mode::NormalVisualOperator], "gp", ":bp<cr>", &empty_opts);
-    set(&[Mode::Normal, Mode::Visual], "gh", "0", &empty_opts);
-    set(&[Mode::Normal, Mode::Visual], "gl", "$", &empty_opts);
-    set(&[Mode::Normal, Mode::Visual], "gs", "_", &empty_opts);
+    set(&NORM_VIS_MODE, "gh", "0", &empty_opts);
+    set(&NORM_VIS_MODE, "gl", "$", &empty_opts);
+    set(&NORM_VIS_MODE, "gs", "_", &empty_opts);
 
     // -- https://stackoverflow.com/a/3003636
     // keymap_set('n', 'i', function()
@@ -32,11 +34,11 @@ pub fn set_all(_: ()) {
     //   return (vim.api.nvim_get_current_line():match('^%s*$') and '"_dd' or 'dd')
     // end, { noremap = true, expr = true, })
 
-    set(&[Mode::Normal, Mode::Visual], "x", r#""_x"#, &empty_opts);
-    set(&[Mode::Normal, Mode::Visual], "X", r#""_X"#, &empty_opts);
+    set(&NORM_VIS_MODE, "x", r#""_x"#, &empty_opts);
+    set(&NORM_VIS_MODE, "X", r#""_X"#, &empty_opts);
 
     set(
-        &[Mode::Normal, Mode::Visual],
+        &NORM_VIS_MODE,
         "<leader>yf",
         r#":let @+ = expand("%") . ":" . line(".")<cr>"#,
         &empty_opts,
@@ -48,20 +50,15 @@ pub fn set_all(_: ()) {
     set(&[Mode::Visual], "<", "<gv", &empty_opts);
     set(&[Mode::Normal], ">", ">>", &empty_opts);
     set(&[Mode::Normal], "<", "<<", &empty_opts);
-    set(&[Mode::Normal, Mode::Visual], "U", "<c-r>", &empty_opts);
+    set(&NORM_VIS_MODE, "U", "<c-r>", &empty_opts);
 
-    set(
-        &[Mode::Normal, Mode::Visual],
-        "<leader><leader>",
-        ":silent :w!<cr>",
-        &empty_opts,
-    );
-    set(&[Mode::Normal, Mode::Visual], "<leader>x", ":bd<cr>", &empty_opts);
-    set(&[Mode::Normal, Mode::Visual], "<leader>X", ":bd!<cr>", &empty_opts);
-    set(&[Mode::Normal, Mode::Visual], "<leader>q", ":q<cr>", &empty_opts);
-    set(&[Mode::Normal, Mode::Visual], "<leader>Q", ":q!<cr>", &empty_opts);
+    set(&NORM_VIS_MODE, "<leader><leader>", ":silent :w!<cr>", &empty_opts);
+    set(&NORM_VIS_MODE, "<leader>x", ":bd<cr>", &empty_opts);
+    set(&NORM_VIS_MODE, "<leader>X", ":bd!<cr>", &empty_opts);
+    set(&NORM_VIS_MODE, "<leader>q", ":q<cr>", &empty_opts);
+    set(&NORM_VIS_MODE, "<leader>Q", ":q!<cr>", &empty_opts);
 
-    set(&[Mode::Normal, Mode::Visual], "<c-;>", ":set wrap!<cr>", &empty_opts);
+    set(&NORM_VIS_MODE, "<c-;>", ":set wrap!<cr>", &empty_opts);
     set(&[Mode::Normal], "<esc>", r#":noh<cr>:echo""<cr>"#, &empty_opts);
 
     // function M.visual_esc()
