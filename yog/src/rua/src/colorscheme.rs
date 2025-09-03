@@ -1,5 +1,4 @@
 use color_eyre::eyre::eyre;
-use nvim_oxi::Dictionary;
 use nvim_oxi::api::opts::CmdOpts;
 use nvim_oxi::api::opts::GetHighlightOpts;
 use nvim_oxi::api::opts::GetHighlightOptsBuilder;
@@ -9,26 +8,13 @@ use nvim_oxi::api::types::CmdInfosBuilder;
 use nvim_oxi::api::types::GetHlInfos;
 use nvim_oxi::api::types::HighlightInfos;
 
-use crate::dict;
-
 const BG: &str = "#001900";
 const DIAGNOSTIC_LVLS: [&str; 5] = ["Error", "Warn", "Info", "Hint", "Ok"];
 const STATUS_LINE_BG: &str = "none";
 
-/// Returns the desired UI window options as a Neovim [`Dictionary`].
-///
-/// Currently sets `window.border = "rounded"`.
-pub fn window(_: ()) -> Dictionary {
-    dict! {
-        "window": dict! {
-            "border": "rounded",
-        }
-    }
-}
-
-/// Sets the desired Neovim highlight groups.
+/// Sets the desired Neovim colorscheme and custom highlight groups.
 #[allow(clippy::needless_pass_by_value)]
-pub fn set_highlights(colorscheme: Option<String>) {
+pub fn set(colorscheme: Option<String>) {
     if let Err(error) = colorscheme
         .as_ref()
         .map(|cs| {
