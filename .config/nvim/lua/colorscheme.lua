@@ -7,6 +7,4 @@ function M.setup(colorscheme)
   require('rua').set_highlights()
 end
 
-M.window = { border = 'rounded', }
-
 return M
