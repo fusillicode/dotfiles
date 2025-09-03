@@ -1,11 +1,11 @@
 use color_eyre::eyre::eyre;
 use nvim_oxi::Dictionary;
+use nvim_oxi::api::opts::CmdOpts;
 use nvim_oxi::api::opts::GetHighlightOpts;
 use nvim_oxi::api::opts::GetHighlightOptsBuilder;
-use nvim_oxi::api::opts::OptionOptsBuilder;
-use nvim_oxi::api::opts::OptionScope;
 use nvim_oxi::api::opts::SetHighlightOpts;
 use nvim_oxi::api::opts::SetHighlightOptsBuilder;
+use nvim_oxi::api::types::CmdInfosBuilder;
 use nvim_oxi::api::types::GetHlInfos;
 use nvim_oxi::api::types::HighlightInfos;
 
@@ -27,8 +27,21 @@ pub fn window(_: ()) -> Dictionary {
 }
 
 /// Sets the desired Neovim highlight groups.
-pub fn set_highlights(_: ()) {
-    let opts = OptionOptsBuilder::default().scope(OptionScope::Global).build();
+pub fn set_highlights(colorscheme: Option<String>) {
+    if let Err(error) = colorscheme
+        .as_ref()
+        .map(|cs| {
+            nvim_oxi::api::cmd(
+                &CmdInfosBuilder::default().cmd("colorscheme").args([cs]).build(),
+                &CmdOpts::default(),
+            )
+        })
+        .transpose()
+    {
+        crate::oxi_ext::notify_error(&format!("cannot set colorscheme to {colorscheme:?}, error {error:#?}"));
+    }
+
+    let opts = crate::vopts::global_scope();
     crate::vopts::set("background", "dark", &opts);
     crate::vopts::set("termguicolors", true, &opts);
 
@@ -86,7 +99,9 @@ fn get_opts() -> GetHighlightOptsBuilder {
 /// Wrapper around `nvim_oxi::api::set_hl` with error notification.
 fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &SetHighlightOpts) {
     if let Err(error) = nvim_oxi::api::set_hl(ns_id, hl_name, hl_opts) {
-        crate::oxi_ext::notify_error(&format!("foo, error {error:#?}"));
+        crate::oxi_ext::notify_error(&format!(
+            "cannot set hl opts {hl_opts:#?} to {hl_name} on namespace {ns_id}, error {error:#?}"
+        ));
     }
 }
 
