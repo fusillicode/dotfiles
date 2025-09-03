@@ -13,10 +13,10 @@ use nvim_oxi::Dictionary;
 mod buffer_text;
 /// Generates CLI flags for fd and ripgrep.
 mod cli_flags;
+/// Creates Neovim commands.
+mod cmds;
 /// Processes diagnostics for filtering, formatting, and sorting.
 mod diagnostics;
-/// Creates Neovim commands to generate fake data via [`fkr`] lib.
-mod fkr;
 /// Extends [`nvim_oxi`] with various utilities.
 mod oxi_ext;
 /// Draws status column with diagnostic and git signs.
@@ -41,7 +41,7 @@ fn rua() -> Dictionary {
         "filter_diagnostics": fn_from!(diagnostics::filter::filter),
         "draw_statusline": fn_from!(statusline::draw),
         "draw_statuscolumn": fn_from!(statuscolumn::draw),
-        "create_fkr_cmds": fn_from!(fkr::create_cmds),
+        "create_cmds": fn_from!(cmds::create),
         "get_fd_cli_flags": fn_from!(cli_flags::fd::FdCliFlags::get),
         "get_rg_cli_flags": fn_from!(cli_flags::rg::RgCliFlags::get),
         "run_test": fn_from!(test_runner::run_test),

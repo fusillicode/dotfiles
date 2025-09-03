@@ -1,13 +1,12 @@
 use fkr::FkrOption;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::Window;
-use nvim_oxi::api::opts::CreateCommandOptsBuilder;
 use strum::IntoEnumIterator;
 
 /// Creates Neovim user commands for generating fake data using FKR.
-pub fn create_cmds(_: ()) {
+pub fn create_all(_: ()) {
     for fkr_opt in FkrOption::iter() {
-        if let Err(error) = nvim_oxi::api::create_user_command(
+        crate::cmds::create_user_cmd(
             cmd_name(&fkr_opt),
             move |_| {
                 let cur_win = Window::current();
@@ -32,10 +31,8 @@ pub fn create_cmds(_: ()) {
                     ));
                 }
             },
-            &CreateCommandOptsBuilder::default().build(),
-        ) {
-            crate::oxi_ext::notify_error(&format!("cannot create user cmd, error {error:#?}"));
-        }
+            &crate::cmds::default_opts(),
+        );
     }
 }
 
