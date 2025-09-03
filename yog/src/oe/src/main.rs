@@ -6,7 +6,7 @@ use color_eyre::eyre::bail;
 use utils::editor::Editor;
 use utils::editor::FileToOpen;
 
-/// Opens files in running editor instance from Wezterm.
+/// Opens files in a running editor instance from Wezterm.
 ///
 /// # Arguments
 ///

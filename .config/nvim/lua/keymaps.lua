@@ -54,9 +54,9 @@ function M.setup()
   keymap_set('n', '<esc>', require('utils').normal_esc)
   keymap_set('v', '<esc>', require('utils').visual_esc, { expr = true, })
 
-  local min_diag_level = { severity = { min = vim.diagnostic.severity.WARN, }, }
-  keymap_set('n', 'dn', function() vim.diagnostic.goto_next(min_diag_level) end)
-  keymap_set('n', 'dp', function() vim.diagnostic.goto_prev(min_diag_level) end)
+  local min_diag_level = vim.diagnostic.severity.WARN
+  keymap_set('n', 'dn', function() vim.diagnostic.jump({ count = 1, severity = min_diag_level, }) end)
+  keymap_set('n', 'dp', function() vim.diagnostic.jump({ count = -1, severity = min_diag_level, }) end)
   keymap_set('n', '<leader>e', vim.diagnostic.open_float)
 
   keymap_set('n', '<leader>gx', require('opener').open_under_cursor)
