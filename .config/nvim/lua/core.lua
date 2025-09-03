@@ -12,7 +12,7 @@ package.cpath = package.cpath .. ';' .. rua_lib()
 local rua = require('rua')
 
 rua.set_vim_opts()
-rua.set_highlights()
+rua.set_colorscheme()
 rua.create_cmds()
 
 require('diagnostics').setup(rua)

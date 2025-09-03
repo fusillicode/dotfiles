@@ -4,7 +4,7 @@ function M.setup(rua)
   vim.diagnostic.config({
     float = {
       anchor_bias = 'above',
-      border = rua.style().window.border,
+      border = rua.get_style_opts().window.border,
       focusable = true,
       format = rua.format_diagnostic,
       header = '',

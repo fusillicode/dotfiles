@@ -15,6 +15,8 @@ mod buffer_text;
 mod cli_flags;
 /// Creates Neovim commands.
 mod cmds;
+/// Sets the desired colorscheme to Neovim.
+mod colorscheme;
 /// Processes diagnostics for filtering, formatting, and sorting.
 mod diagnostics;
 /// Extends [`nvim_oxi`] with various utilities.
@@ -23,8 +25,8 @@ mod oxi_ext;
 mod statuscolumn;
 /// Draws status line with diagnostic information.
 mod statusline;
-/// Utilities to style Neovim.
-mod style;
+/// Get the desired style options for Neovim.
+mod style_opts;
 /// Runs tests at cursor position in an available Wezterm pane.
 mod test_runner;
 /// Utilities to work with `vim.opts`
@@ -47,8 +49,8 @@ fn rua() -> Dictionary {
         "run_test": fn_from!(test_runner::run_test),
         "get_current_buffer_text": fn_from!(buffer_text::between_pos::get),
         "get_word_under_cursor": fn_from!(buffer_text::word_under_cursor::get),
-        "set_highlights": fn_from!(style::set_highlights),
-        "style": fn_from!(style::window),
+        "set_colorscheme": fn_from!(colorscheme::set),
+        "get_style_opts": fn_from!(style_opts::get),
         "set_vim_opts": fn_from!(vopts::set_all),
     }
 }
