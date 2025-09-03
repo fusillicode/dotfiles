@@ -27,6 +27,7 @@ pub fn window(_: ()) -> Dictionary {
 }
 
 /// Sets the desired Neovim highlight groups.
+#[allow(clippy::needless_pass_by_value)]
 pub fn set_highlights(colorscheme: Option<String>) {
     if let Err(error) = colorscheme
         .as_ref()
