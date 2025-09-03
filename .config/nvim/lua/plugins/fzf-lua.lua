@@ -64,13 +64,15 @@ return {
         },
       },
       files      = {
-        winopts   = no_title,
-        fzf_opts  = { ['--ansi'] = true, },
-        fd_opts   = table.concat(
+        -- Jump to line! https://github.com/ibhagwan/fzf-lua/discussions/2032#discussioncomment-13046310
+        line_query = true,
+        winopts    = no_title,
+        fzf_opts   = { ['--ansi'] = true, },
+        fd_opts    = table.concat(
           rua.get_fd_cli_flags(),
           ' '
         ),
-        git_icons = true,
+        git_icons  = true,
       },
       buffers    = {
         winopts = no_title,
