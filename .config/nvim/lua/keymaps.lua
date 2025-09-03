@@ -94,13 +94,6 @@ function M.lspconfig(bufnr)
   keymap_set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, })
 end
 
-function M.quickfix()
-  local opts = { noremap = true, buffer = true, }
-  keymap_set('n', '<c-n>', ':cn<cr>', opts)
-  keymap_set('n', '<c-p>', ':cp<cr>', opts)
-  keymap_set('n', '<c-x>', ':ccl<cr>', opts)
-end
-
 function M.fzf_lua(fl)
   local lsp_cfg = { ignore_current_line = true, jump1 = true, includeDeclaration = false, }
 
