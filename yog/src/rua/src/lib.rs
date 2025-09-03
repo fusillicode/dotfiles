@@ -13,18 +13,20 @@ use nvim_oxi::Dictionary;
 mod buffer_text;
 /// Generates CLI flags for fd and ripgrep.
 mod cli_flags;
+/// Creates Neovim commands.
+mod cmds;
+/// Sets the desired colorscheme to Neovim.
+mod colorscheme;
 /// Processes diagnostics for filtering, formatting, and sorting.
 mod diagnostics;
-/// Creates Neovim commands to generate fake data via [`fkr`] lib.
-mod fkr;
 /// Extends [`nvim_oxi`] with various utilities.
 mod oxi_ext;
 /// Draws status column with diagnostic and git signs.
 mod statuscolumn;
 /// Draws status line with diagnostic information.
 mod statusline;
-/// Utilities to style Neovim.
-mod style;
+/// Get the desired style options for Neovim.
+mod style_opts;
 /// Runs tests at cursor position in an available Wezterm pane.
 mod test_runner;
 /// Utilities to work with `vim.opts`
@@ -41,14 +43,14 @@ fn rua() -> Dictionary {
         "filter_diagnostics": fn_from!(diagnostics::filter::filter),
         "draw_statusline": fn_from!(statusline::draw),
         "draw_statuscolumn": fn_from!(statuscolumn::draw),
-        "create_fkr_cmds": fn_from!(fkr::create_cmds),
+        "create_cmds": fn_from!(cmds::create),
         "get_fd_cli_flags": fn_from!(cli_flags::fd::FdCliFlags::get),
         "get_rg_cli_flags": fn_from!(cli_flags::rg::RgCliFlags::get),
         "run_test": fn_from!(test_runner::run_test),
         "get_current_buffer_text": fn_from!(buffer_text::between_pos::get),
         "get_word_under_cursor": fn_from!(buffer_text::word_under_cursor::get),
-        "set_highlights": fn_from!(style::set_highlights),
-        "style": fn_from!(style::window),
+        "set_colorscheme": fn_from!(colorscheme::set),
+        "get_style_opts": fn_from!(style_opts::get),
         "set_vim_opts": fn_from!(vopts::set_all),
     }
 }
