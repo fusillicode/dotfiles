@@ -19,6 +19,8 @@ mod cmds;
 mod colorscheme;
 /// Processes diagnostics for filtering, formatting, and sorting.
 mod diagnostics;
+/// Set Neovim core keymaps (no plugins).
+pub mod keymaps;
 /// Extends [`nvim_oxi`] with various utilities.
 mod oxi_ext;
 /// Draws status column with diagnostic and git signs.
