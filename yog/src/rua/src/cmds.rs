@@ -43,9 +43,9 @@ pub fn create(_: ()) {
         CreateAutocmdOptsBuilder::default().patterns(["qf"]).callback(|_| {
             let opts = SetKeymapOptsBuilder::default().noremap(true).build();
 
-            crate::keymaps::set_keymap(&[Mode::Normal], "<c-n>", ":cn<cr>", &opts);
-            crate::keymaps::set_keymap(&[Mode::Normal], "<c-p>", ":cp<cr>", &opts);
-            crate::keymaps::set_keymap(&[Mode::Normal], "<c-x>", ":ccl<cr>", &opts);
+            crate::keymaps::set(&[Mode::Normal], "<c-n>", ":cn<cr>", &opts);
+            crate::keymaps::set(&[Mode::Normal], "<c-p>", ":cp<cr>", &opts);
+            crate::keymaps::set(&[Mode::Normal], "<c-x>", ":ccl<cr>", &opts);
 
             true
         }),
