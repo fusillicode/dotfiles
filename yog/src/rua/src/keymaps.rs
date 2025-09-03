@@ -3,6 +3,7 @@ use nvim_oxi::api::opts::SetKeymapOptsBuilder;
 use nvim_oxi::api::types::Mode;
 
 const NORM_VIS_MODE: [Mode; 2] = [Mode::Normal, Mode::Visual];
+const NORM_VIS_OP_MODE: [Mode; 1] = [Mode::NormalVisualOperator];
 
 pub fn set_all(_: ()) {
     let empty_opts = SetKeymapOptsBuilder::default().build();
@@ -13,8 +14,8 @@ pub fn set_all(_: ()) {
     set(&[Mode::Insert], "<c-e>", "<end>", &empty_opts);
     set(&[Mode::Normal], "<c-e>", "$a", &empty_opts);
 
-    set(&[Mode::NormalVisualOperator], "gn", ":bn<cr>", &empty_opts);
-    set(&[Mode::NormalVisualOperator], "gp", ":bp<cr>", &empty_opts);
+    set(&NORM_VIS_OP_MODE, "gn", ":bn<cr>", &empty_opts);
+    set(&NORM_VIS_OP_MODE, "gp", ":bp<cr>", &empty_opts);
     set(&NORM_VIS_MODE, "gh", "0", &empty_opts);
     set(&NORM_VIS_MODE, "gl", "$", &empty_opts);
     set(&NORM_VIS_MODE, "gs", "_", &empty_opts);
