@@ -6,59 +6,14 @@ local function keymap_set(mode, lhs, rhs, opts)
   vim.keymap.set(mode, lhs, rhs, vim.tbl_extend('force', { silent = true, }, opts or {}))
 end
 
-function M.setup()
-  vim.g.mapleader = ' '
-  vim.g.maplocalleader = ' '
 
-  keymap_set('t', '<Esc>', '<c-\\><c-n>')
+local function set_complex_keymaps()
+  local base_opts = { expr = true, }
 
-  -- https://stackoverflow.com/a/3003636
-  keymap_set('n', 'i', function()
-    return (vim.fn.empty(vim.fn.getline('.')) == 1 and '\"_cc' or 'i')
-  end, { expr = true, })
-  keymap_set('i', '<c-a>', '<esc>^i')
-  keymap_set('n', '<c-a>', '^i')
-  keymap_set('i', '<c-e>', '<end>')
-  keymap_set('n', '<c-e>', '$a')
-
-  keymap_set('', 'gn', ':bn<cr>')
-  keymap_set('', 'gp', ':bp<cr>')
-  keymap_set({ 'n', 'v', }, 'gh', '0')
-  keymap_set({ 'n', 'v', }, 'gl', '$')
-  keymap_set({ 'n', 'v', }, 'gs', '_')
-
-  -- https://github.com/Abstract-IDE/abstract-autocmds/blob/main/lua/abstract-autocmds/mappings.lua#L8-L14
-  keymap_set('n', 'dd', function()
-    return (vim.api.nvim_get_current_line():match('^%s*$') and '"_dd' or 'dd')
-  end, { noremap = true, expr = true, })
-  keymap_set({ 'n', 'v', }, 'x', '"_x')
-  keymap_set({ 'n', 'v', }, 'X', '"_X')
-
-  keymap_set({ 'n', 'v', }, '<leader>yf', ':let @+ = expand("%") . ":" . line(".")<cr>')
-  keymap_set('v', 'y', 'ygv<esc>')
-  keymap_set('v', 'p', '"_dP')
-
-  keymap_set('v', '>', '>gv')
-  keymap_set('v', '<', '<gv')
-  keymap_set('n', '>', '>>')
-  keymap_set('n', '<', '<<')
-  keymap_set({ 'n', 'v', }, 'U', '<c-r>')
-
-  keymap_set({ 'n', 'v', }, '<leader><leader>', ':silent :w!<cr>')
-  keymap_set({ 'n', 'v', }, '<leader>x', ':bd<cr>')
-  keymap_set({ 'n', 'v', }, '<leader>X', ':bd!<cr>')
-  keymap_set({ 'n', 'v', }, '<leader>q', ':q<cr>')
-  keymap_set({ 'n', 'v', }, '<leader>Q', ':q!<cr>')
-
-  keymap_set({ 'n', 'v', }, '<c-;>', ':set wrap!<cr>')
-  keymap_set('n', '<esc>', require('utils').normal_esc)
-  keymap_set('v', '<esc>', require('utils').visual_esc, { expr = true, })
-
-  local min_diag_level = vim.diagnostic.severity.WARN
-  keymap_set('n', 'dn', function() vim.diagnostic.jump({ count = 1, severity = min_diag_level, }) end)
-  keymap_set('n', 'dp', function() vim.diagnostic.jump({ count = -1, severity = min_diag_level, }) end)
-  keymap_set('n', '<leader>e', vim.diagnostic.open_float)
-
+  keymap_set('n', 'i', rua.keymaps.smart_ident_on_blank_line, base_opts)
+  keymap_set('n', 'dd', rua.keymaps.smart_dd_no_yank_empty_line, base_opts)
+  keymap_set('v', '<esc>', rua.keymaps.visual_esc, base_opts)
+  keymap_set({ 'n', 'v', }, '<leader>t', rua.run_test)
   keymap_set('n', '<leader>gx', require('opener').open_under_cursor)
 
   -- Thanks perplexity 🥲
@@ -85,8 +40,20 @@ function M.setup()
       end
     end
   end)
+end
 
-  keymap_set({ 'n', 'v', }, '<leader>t', rua.run_test)
+local function set_diagnostic_keymaps()
+  local min_diag_level = vim.diagnostic.severity.WARN
+  keymap_set('n', 'dn', function() vim.diagnostic.jump({ count = 1, severity = min_diag_level, }) end)
+  keymap_set('n', 'dp', function() vim.diagnostic.jump({ count = -1, severity = min_diag_level, }) end)
+  keymap_set('n', '<leader>e', vim.diagnostic.open_float)
+end
+
+function M.set_all()
+  vim.g.mapleader = ' '
+  vim.g.maplocalleader = ' '
+  set_complex_keymaps()
+  set_diagnostic_keymaps()
 end
 
 function M.lspconfig(bufnr)

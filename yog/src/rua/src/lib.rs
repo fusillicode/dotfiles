@@ -19,6 +19,8 @@ mod cmds;
 mod colorscheme;
 /// Processes diagnostics for filtering, formatting, and sorting.
 mod diagnostics;
+/// Set Neovim core keymaps (no plugins).
+pub mod keymaps;
 /// Extends [`nvim_oxi`] with various utilities.
 mod oxi_ext;
 /// Draws status column with diagnostic and git signs.
@@ -52,5 +54,12 @@ fn rua() -> Dictionary {
         "set_colorscheme": fn_from!(colorscheme::set),
         "get_style_opts": fn_from!(style_opts::get),
         "set_vim_opts": fn_from!(vopts::set_all),
+        "keymaps": dict! {
+            "set_all": fn_from!(keymaps::set_all),
+            "smart_ident_on_blank_line": fn_from!(keymaps::smart_ident_on_blank_line),
+            "smart_dd_no_yank_empty_line": fn_from!(keymaps::smart_dd_no_yank_empty_line),
+            "normal_esc": crate::keymaps::NORMAL_ESC,
+            "visual_esc": fn_from!(keymaps::visual_esc),
+        },
     }
 }
