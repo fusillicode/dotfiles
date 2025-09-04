@@ -5,12 +5,6 @@ function M.dbg(debug_value)
   return debug_value
 end
 
-M.normal_esc = ':noh<cr>:echo""<cr>'
-
-function M.visual_esc()
-  return ":<c-u>'" .. (vim.fn.line('.') < vim.fn.line('v') and '<' or '>') .. '<cr>' .. M.normal_esc
-end
-
 function M.escape_regex(str)
   return vim.fn.escape(str, [[\.^$*+?()[]{}|]])
 end
