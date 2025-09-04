@@ -3,6 +3,7 @@ use std::collections::HashMap;
 
 use itertools::Itertools;
 use nvim_oxi::Array;
+use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
 use nvim_oxi::conversion::FromObject;
 use nvim_oxi::lua::ffi::State;
@@ -10,8 +11,18 @@ use nvim_oxi::serde::Deserializer;
 use serde::Deserialize;
 use serde_repr::Deserialize_repr;
 
+use crate::dict;
+use crate::fn_from;
+
+/// [`Dictionary`] exposing statusline draw helpers.
+pub fn dict() -> Dictionary {
+    dict! {
+        "draw": fn_from!(draw),
+    }
+}
+
 /// Draws the status line with diagnostic information.
-pub fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
+fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
     let cur_buf = nvim_oxi::api::get_current_buf();
     let cur_buf_path = cur_buf
         .get_name()

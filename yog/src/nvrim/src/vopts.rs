@@ -1,11 +1,22 @@
 use std::fmt::Write as _;
 
+use nvim_oxi::Dictionary;
 use nvim_oxi::api::opts::OptionOpts;
 use nvim_oxi::api::opts::OptionOptsBuilder;
 use nvim_oxi::api::opts::OptionScope;
 use nvim_oxi::conversion::ToObject;
 
-pub fn set_all(_: ()) {
+use crate::dict;
+use crate::fn_from;
+
+/// [`Dictionary`] of `vim.opts` helpers.
+pub fn dict() -> Dictionary {
+    dict! {
+        "set_all": fn_from!(set_all),
+    }
+}
+
+fn set_all(_: ()) {
     let global_scope = global_scope();
 
     set("autoindent", true, &global_scope);

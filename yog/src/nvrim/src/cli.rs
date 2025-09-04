@@ -16,6 +16,7 @@ pub const GLOB_BLACKLIST: [&str; 6] = [
     "**/node_modules/*",
 ];
 
+/// [`Dictionary`] of CLI flag generators.
 pub fn dict() -> Dictionary {
     dict! {
         "get_fd_flags": fn_from!(fd::FdCliFlags::get),

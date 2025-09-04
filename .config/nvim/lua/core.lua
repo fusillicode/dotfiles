@@ -13,9 +13,9 @@ local nvrim = require('nvrim')
 
 require('keymaps').set_all()
 nvrim.keymaps.set_all()
-nvrim.set_vim_opts()
-nvrim.set_colorscheme()
-nvrim.create_cmds()
+nvrim.vim_opts.set_all()
+nvrim.colorscheme.set()
+nvrim.cmds.create()
 
 require('diagnostics').setup(nvrim)
 
