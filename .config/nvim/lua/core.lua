@@ -1,23 +1,23 @@
 vim.loader.enable()
 
-local function rua_lib()
+local function nvrim_lib()
   return os.getenv('HOME') ..
       '/data/dev/dotfiles/dotfiles/yog/target/' ..
-      (vim.env.DEBUG_RUA and 'debug' or 'release') ..
+      (vim.env.NVRIM_DEBUG and 'debug' or 'release') ..
       '/?.so'
 end
 
-package.cpath = package.cpath .. ';' .. rua_lib()
+package.cpath = package.cpath .. ';' .. nvrim_lib()
 
-local rua = require('rua')
+local nvrim = require('nvrim')
 
 require('keymaps').set_all()
-rua.keymaps.set_all()
-rua.set_vim_opts()
-rua.set_colorscheme()
-rua.create_cmds()
+nvrim.keymaps.set_all()
+nvrim.set_vim_opts()
+nvrim.set_colorscheme()
+nvrim.create_cmds()
 
-require('diagnostics').setup(rua)
+require('diagnostics').setup(nvrim)
 
 for _, provider in ipairs { 'node', 'perl', 'python3', 'ruby', } do
   vim.g['loaded_' .. provider .. '_provider'] = 0
