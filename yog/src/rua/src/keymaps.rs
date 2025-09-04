@@ -4,8 +4,16 @@ use nvim_oxi::api::types::Mode;
 
 const NV_MODE: [Mode; 2] = [Mode::Normal, Mode::Visual];
 const NVOP_MODE: [Mode; 1] = [Mode::NormalVisualOperator];
+
+/// RHS used for the normal-mode `<Esc>` mapping (clear search + empty echo).
 pub const NORMAL_ESC: &str = r#":noh<cr>:echo""<cr>"#;
 
+/// Sets the core (non‑plugin) keymaps ported from the Lua `M.setup` function.
+///
+/// All mappings are set with the default non-recursive, silent options returned
+/// by [`default_opts`].
+///
+/// Failures are reported internally by the [`set`] helper via [`crate::oxi_ext::notify_error`].
 pub fn set_all(_: ()) {
     let default_opts = default_opts();
 
@@ -49,15 +57,21 @@ pub fn set_all(_: ()) {
     set(&[Mode::Normal], "<esc>", r#":noh<cr>:echo""<cr>"#, &default_opts);
 }
 
-// Vim: Smart indent when entering insert mode on blank line?
+/// Return the RHS for a smart normal-mode `i` mapping.
+///
+/// If the current line is blank, returns `"_cc` (replace line without yanking);
+/// otherwise returns `i`.
+///
+/// Intended to be used with an *expr* mapping and `.expr(true)` in [`SetKeymapOpts`].
 pub fn smart_ident_on_blank_line(_: ()) -> String {
     apply_on_current_line_or_unwrap(|line| if line.is_empty() { r#""_cc"# } else { "i" }, "i")
 }
 
-// Smart deletion, dd
-// It solves the issue, where you want to delete empty line, but dd will override your last yank.
-// Code below will check if you are deleting empty line, if so - use black hole register.
-// [src: https://www.reddit.com/r/neovim/comments/w0jzzv/comment/igfjx5y/?utm_source=share&utm_medium=web2x&context=3]
+/// Return the RHS for a smart `dd` mapping that skips yanking blank lines.
+///
+/// Produces `"_dd` when the current line is entirely whitespace; otherwise `dd`.
+///
+/// Intended for an *expr* mapping.
 pub fn smart_dd_no_yank_empty_line(_: ()) -> String {
     apply_on_current_line_or_unwrap(
         |line| {
@@ -71,6 +85,8 @@ pub fn smart_dd_no_yank_empty_line(_: ()) -> String {
     )
 }
 
+/// Return the RHS for a visual-mode `<Esc>` *expr* mapping that reselects the
+/// visual range (direction aware) and then applies [`NORMAL_ESC`].
 pub fn visual_esc(_: ()) -> String {
     let current_line: i64 = nvim_oxi::api::call_function("line", (".",))
         .inspect_err(|error| {
@@ -83,11 +99,15 @@ pub fn visual_esc(_: ()) -> String {
         })
         .unwrap_or(0);
     format!(
-        ":<c-u>'{}{NORMAL_ESC}",
-        if current_line < visual_line { "<" } else { ">" }
+        ":<c-u>'{}{}",
+        if current_line < visual_line { "<" } else { ">" },
+        NORMAL_ESC
     )
 }
 
+/// Set a keymap for each provided [`Mode`].
+///
+/// Errors are reported (not propagated) via [`crate::oxi_ext::notify_error`].
 pub fn set(modes: &[Mode], lhs: &str, rhs: &str, opts: &SetKeymapOpts) {
     for mode in modes {
         if let Err(error) = nvim_oxi::api::set_keymap(*mode, lhs, rhs, opts) {
@@ -98,6 +118,11 @@ pub fn set(modes: &[Mode], lhs: &str, rhs: &str, opts: &SetKeymapOpts) {
     }
 }
 
+/// Apply a closure to the current line or fall back to `default`.
+///
+/// Used by the smart *expr* mapping helpers.
+///
+/// Errors from [`nvim_oxi::api::get_current_line`] are reported and the `default` is returned.
 fn apply_on_current_line_or_unwrap<'a, F: FnOnce(String) -> &'a str>(fun: F, default: &'a str) -> String {
     nvim_oxi::api::get_current_line()
         .inspect_err(|error| {
@@ -108,9 +133,10 @@ fn apply_on_current_line_or_unwrap<'a, F: FnOnce(String) -> &'a str>(fun: F, def
         .to_string()
 }
 
-// Setting `noremap` is required.
-// In Lua/Nvim land vim.keymap.set defaults to noremap = true.
-// In Rust land it's false because bool default if false.
+/// Build the default [`SetKeymapOpts`]: silent + non-recursive.
+///
+/// Unlike Lua's [`vim.keymap.set`], the default for [`SetKeymapOpts`] does *not*
+/// enable `noremap` so we do it explicitly.
 fn default_opts() -> SetKeymapOpts {
     SetKeymapOptsBuilder::default().silent(true).noremap(true).build()
 }
