@@ -12,7 +12,7 @@ use nvim_oxi::Dictionary;
 /// Utilities for working with [`nvim_oxi::Buffer`] text.
 mod buffer_text;
 /// Generates CLI flags for fd and ripgrep.
-mod cli_flags;
+mod cli;
 /// Creates Neovim commands.
 mod cmds;
 /// Sets the desired colorscheme to Neovim.
@@ -34,32 +34,21 @@ mod test_runner;
 /// Utilities to work with `vim.opts`
 pub mod vopts;
 
-use crate::cli_flags::CliFlags;
-
 /// The main plugin function that returns a [`Dictionary`] of [`Function`]s exposed to Neovim.
 #[nvim_oxi::plugin]
 fn nvrim() -> Dictionary {
     dict! {
-        "format_diagnostic": fn_from!(diagnostics::formatter::format),
-        "sort_diagnostics": fn_from!(diagnostics::sorter::sort),
-        "filter_diagnostics": fn_from!(diagnostics::filter::filter),
+        "diagnostics": crate::diagnostics::dict(),
         "draw_statusline": fn_from!(statusline::draw),
         "draw_statuscolumn": fn_from!(statuscolumn::draw),
         "create_cmds": fn_from!(cmds::create),
-        "get_fd_cli_flags": fn_from!(cli_flags::fd::FdCliFlags::get),
-        "get_rg_cli_flags": fn_from!(cli_flags::rg::RgCliFlags::get),
+        "cli": cli::dict(),
         "run_test": fn_from!(test_runner::run_test),
         "get_current_buffer_text": fn_from!(buffer_text::between_pos::get),
         "get_word_under_cursor": fn_from!(buffer_text::word_under_cursor::get),
         "set_colorscheme": fn_from!(colorscheme::set),
         "get_style_opts": fn_from!(style_opts::get),
         "set_vim_opts": fn_from!(vopts::set_all),
-        "keymaps": dict! {
-            "set_all": fn_from!(keymaps::set_all),
-            "smart_ident_on_blank_line": fn_from!(keymaps::smart_ident_on_blank_line),
-            "smart_dd_no_yank_empty_line": fn_from!(keymaps::smart_dd_no_yank_empty_line),
-            "normal_esc": crate::keymaps::NORMAL_ESC,
-            "visual_esc": fn_from!(keymaps::visual_esc),
-        },
+        "keymaps": crate::keymaps::dict(),
     }
 }

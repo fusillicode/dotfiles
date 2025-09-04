@@ -1,6 +1,10 @@
+use nvim_oxi::Dictionary;
 use nvim_oxi::api::opts::SetKeymapOpts;
 use nvim_oxi::api::opts::SetKeymapOptsBuilder;
 use nvim_oxi::api::types::Mode;
+
+use crate::dict;
+use crate::fn_from;
 
 const NV_MODE: [Mode; 2] = [Mode::Normal, Mode::Visual];
 const NVOP_MODE: [Mode; 1] = [Mode::NormalVisualOperator];
@@ -8,13 +12,36 @@ const NVOP_MODE: [Mode; 1] = [Mode::NormalVisualOperator];
 /// RHS used for the normal-mode `<Esc>` mapping (clear search + empty echo).
 pub const NORMAL_ESC: &str = r#":noh<cr>:echo""<cr>"#;
 
+pub fn dict() -> Dictionary {
+    dict! {
+        "set_all": fn_from!(set_all),
+        "smart_ident_on_blank_line": fn_from!(smart_ident_on_blank_line),
+        "smart_dd_no_yank_empty_line": fn_from!(smart_dd_no_yank_empty_line),
+        "normal_esc": NORMAL_ESC,
+        "visual_esc": fn_from!(visual_esc),
+    }
+}
+
+/// Set a keymap for each provided [`Mode`].
+///
+/// Errors are reported (not propagated) via [`crate::oxi_ext::notify_error`].
+pub fn set(modes: &[Mode], lhs: &str, rhs: &str, opts: &SetKeymapOpts) {
+    for mode in modes {
+        if let Err(error) = nvim_oxi::api::set_keymap(*mode, lhs, rhs, opts) {
+            crate::oxi_ext::notify_error(&format!(
+                "cannot set keymap with mode {mode:#?}, lhs {lhs}, rhs {rhs} and opts {opts:#?}, error {error:#?}"
+            ));
+        }
+    }
+}
+
 /// Sets the core (non‑plugin) keymaps ported from the Lua `M.setup` function.
 ///
 /// All mappings are set with the default non-recursive, silent options returned
 /// by [`default_opts`].
 ///
 /// Failures are reported internally by the [`set`] helper via [`crate::oxi_ext::notify_error`].
-pub fn set_all(_: ()) {
+fn set_all(_: ()) {
     let default_opts = default_opts();
 
     set(&[Mode::Terminal], "<Esc>", "<c-\\><c-n>", &default_opts);
@@ -63,7 +90,7 @@ pub fn set_all(_: ()) {
 /// otherwise returns `i`.
 ///
 /// Intended to be used with an *expr* mapping and `.expr(true)` in [`SetKeymapOpts`].
-pub fn smart_ident_on_blank_line(_: ()) -> String {
+fn smart_ident_on_blank_line(_: ()) -> String {
     apply_on_current_line_or_unwrap(|line| if line.is_empty() { r#""_cc"# } else { "i" }, "i")
 }
 
@@ -72,7 +99,7 @@ pub fn smart_ident_on_blank_line(_: ()) -> String {
 /// Produces `"_dd` when the current line is entirely whitespace; otherwise `dd`.
 ///
 /// Intended for an *expr* mapping.
-pub fn smart_dd_no_yank_empty_line(_: ()) -> String {
+fn smart_dd_no_yank_empty_line(_: ()) -> String {
     apply_on_current_line_or_unwrap(
         |line| {
             if line.chars().all(char::is_whitespace) {
@@ -87,7 +114,7 @@ pub fn smart_dd_no_yank_empty_line(_: ()) -> String {
 
 /// Return the RHS for a visual-mode `<Esc>` *expr* mapping that reselects the
 /// visual range (direction aware) and then applies [`NORMAL_ESC`].
-pub fn visual_esc(_: ()) -> String {
+fn visual_esc(_: ()) -> String {
     let current_line: i64 = nvim_oxi::api::call_function("line", (".",))
         .inspect_err(|error| {
             crate::oxi_ext::notify_error(&format!("cannot get current line, error {error:#?}"));
@@ -103,19 +130,6 @@ pub fn visual_esc(_: ()) -> String {
         if current_line < visual_line { "<" } else { ">" },
         NORMAL_ESC
     )
-}
-
-/// Set a keymap for each provided [`Mode`].
-///
-/// Errors are reported (not propagated) via [`crate::oxi_ext::notify_error`].
-pub fn set(modes: &[Mode], lhs: &str, rhs: &str, opts: &SetKeymapOpts) {
-    for mode in modes {
-        if let Err(error) = nvim_oxi::api::set_keymap(*mode, lhs, rhs, opts) {
-            crate::oxi_ext::notify_error(&format!(
-                "cannot set keymap with mode {mode:#?}, lhs {lhs}, rhs {rhs} and opts {opts:#?}, error {error:#?}"
-            ));
-        }
-    }
 }
 
 /// Apply a closure to the current line or fall back to `default`.
