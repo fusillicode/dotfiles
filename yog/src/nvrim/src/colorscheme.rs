@@ -1,4 +1,5 @@
 use color_eyre::eyre::eyre;
+use nvim_oxi::Dictionary;
 use nvim_oxi::api::opts::CmdOpts;
 use nvim_oxi::api::opts::GetHighlightOpts;
 use nvim_oxi::api::opts::GetHighlightOptsBuilder;
@@ -8,9 +9,19 @@ use nvim_oxi::api::types::CmdInfosBuilder;
 use nvim_oxi::api::types::GetHlInfos;
 use nvim_oxi::api::types::HighlightInfos;
 
+use crate::dict;
+use crate::fn_from;
+
 const BG: &str = "#001900";
 const DIAGNOSTIC_LVLS: [&str; 5] = ["Error", "Warn", "Info", "Hint", "Ok"];
 const STATUS_LINE_BG: &str = "none";
+
+/// [`Dictionary`] with colorscheme and highlight helpers.
+pub fn dict() -> Dictionary {
+    dict! {
+        "set": fn_from!(set),
+    }
+}
 
 /// Sets the desired Neovim colorscheme and custom highlight groups.
 #[allow(clippy::needless_pass_by_value)]

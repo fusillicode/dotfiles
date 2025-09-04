@@ -98,7 +98,11 @@ function M.fzf_lua(fl)
       '<leader>w',
       mode = 'v',
       fl and { function()
-        fl.live_grep({ prompt = 'rg: ', search = nvrim.get_current_buffer_text(vim.fn.getpos('v'), vim.fn.getpos('.'))[1], })
+        fl.live_grep({
+          prompt = 'rg: ',
+          search = nvrim.buffer.get_text_between_pos(vim.fn.getpos('v'), vim.fn.getpos('.'))
+              [1],
+        })
       end, },
     },
 
@@ -205,7 +209,7 @@ function M.grug_far(gf, opts)
       gf and {
         function()
           local selection = require('utils').escape_regex(
-            nvrim.get_current_buffer_text(vim.fn.getpos('v'), vim.fn.getpos('.'))[1]
+            nvrim.buffer.get_text_between_pos(vim.fn.getpos('v'), vim.fn.getpos('.'))[1]
           )
           gf.open(vim.tbl_deep_extend('force', opts, { prefills = { search = selection, }, }))
         end,

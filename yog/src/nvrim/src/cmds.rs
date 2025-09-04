@@ -1,3 +1,4 @@
+use nvim_oxi::Dictionary;
 use nvim_oxi::api::StringOrFunction;
 use nvim_oxi::api::opts::CreateAugroupOptsBuilder;
 use nvim_oxi::api::opts::CreateAutocmdOptsBuilder;
@@ -7,7 +8,10 @@ use nvim_oxi::api::opts::SetKeymapOptsBuilder;
 use nvim_oxi::api::types::CommandArgs;
 use nvim_oxi::api::types::Mode;
 
-pub mod fkr;
+use crate::dict;
+use crate::fn_from;
+
+mod fkr;
 
 const USER_CMDS: [(&str, &str); 6] = [
     ("CopyAll", ":%y+"),
@@ -18,7 +22,14 @@ const USER_CMDS: [(&str, &str); 6] = [
     ("Messages", ":Messages"),
 ];
 
-pub fn create(_: ()) {
+/// [`Dictionary`] of user command helpers.
+pub fn dict() -> Dictionary {
+    dict! {
+        "create": fn_from!(create),
+    }
+}
+
+fn create(_: ()) {
     fkr::create_all(());
 
     for (cmd_name, cmd) in USER_CMDS {

@@ -4,7 +4,7 @@ function M.setup(nvrim)
   vim.diagnostic.config({
     float = {
       anchor_bias = 'above',
-      border = nvrim.get_style_opts().window.border,
+      border = nvrim.style_opts.window.border,
       focusable = true,
       format = nvrim.diagnostics.format,
       header = '',
