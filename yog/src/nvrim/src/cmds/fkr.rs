@@ -3,7 +3,7 @@ use nvim_oxi::api::Buffer;
 use nvim_oxi::api::Window;
 use strum::IntoEnumIterator;
 
-/// Creates Neovim user commands for generating fake data using FKR.
+/// Creates Nvim user commands for generating fake data using FKR.
 pub fn create_all(_: ()) {
     for fkr_opt in FkrOption::iter() {
         crate::cmds::create_user_cmd(
@@ -36,7 +36,7 @@ fn set_text_at_cursor_pos(text: &str) {
     }
 }
 
-/// Returns the Neovim command name for a given [`FkrOption`].
+/// Returns the Nvim command name for a given [`FkrOption`].
 const fn cmd_name(fkr_opt: &FkrOption) -> &str {
     match fkr_opt {
         FkrOption::Uuidv4 => "FkrUuidv4",

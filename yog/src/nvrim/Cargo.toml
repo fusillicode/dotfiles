@@ -6,8 +6,8 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "Neovim Lua module with Rust utilities"
-keywords = ["neovim", "lua", "plugin", "rust", "editor"]
+description = "Nvim Lua module with Rust utilities"
+keywords = ["neovim", "nvim", "lua", "plugin", "rust", "editor"]
 categories = ["development-tools", "api-bindings"]
 
 [lib]

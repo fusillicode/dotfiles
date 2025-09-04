@@ -58,7 +58,7 @@ fn get_code(diag: &Diagnostic) -> Option<&str> {
         .or(diag.code.as_deref())
 }
 
-/// Represents a diagnostic from Neovim.
+/// Represents a diagnostic from Nvim.
 #[derive(Debug, Deserialize)]
 pub struct Diagnostic {
     /// The diagnostic code.

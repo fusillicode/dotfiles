@@ -12,7 +12,7 @@ use crate::oxi_ext::BufferExt;
 /// Return text from the current buffer between two positions.
 ///
 /// Produces a [`Vec`] of [`nvim_oxi::String`] lines for Lua.
-/// On error, returns an empty [`Vec`] and emits a notification to Neovim.
+/// On error, returns an empty [`Vec`] and emits a notification to Nvim.
 pub fn get((pos1, pos2): (GetPosOutput, GetPosOutput)) -> Vec<nvim_oxi::String> {
     let (start_pos, end_pos) = pos1.switch_if_needed(pos2);
     let cur_buf = Buffer::current();
@@ -46,7 +46,7 @@ pub fn get((pos1, pos2): (GetPosOutput, GetPosOutput)) -> Vec<nvim_oxi::String> 
     lines.collect()
 }
 
-/// Normalized, 0-based indexed output of Neovim `getpos()`.
+/// Normalized, 0-based indexed output of Nvim `getpos()`.
 ///
 /// Built from [`GetPosRaw`].
 #[derive(Debug, PartialEq, Eq)]

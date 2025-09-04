@@ -37,7 +37,7 @@ fn draw((cur_lnum, extmarks): (String, Vec<Extmark>)) -> Option<String> {
     ))
 }
 
-/// Represents an extmark in Neovim.
+/// Represents an extmark in Nvim.
 #[derive(Deserialize)]
 #[expect(dead_code, reason = "Unused fields are kept for completeness")]
 pub struct Extmark(u32, usize, usize, Option<ExtmarkMeta>);
