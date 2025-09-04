@@ -14,6 +14,7 @@ local rua = require('rua')
 vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
 require('keymaps').setup()
+-- rua.keymaps.setup_core()
 rua.set_vim_opts()
 rua.set_colorscheme()
 rua.create_cmds()
