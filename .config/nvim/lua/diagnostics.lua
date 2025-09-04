@@ -6,7 +6,7 @@ function M.setup(nvrim)
       anchor_bias = 'above',
       border = nvrim.get_style_opts().window.border,
       focusable = true,
-      format = nvrim.format_diagnostic,
+      format = nvrim.diagnostics.format,
       header = '',
       prefix = '',
       source = false,
@@ -28,8 +28,8 @@ function M.setup(nvrim)
     diag_set(
       namespace,
       bufnr,
-      nvrim.sort_diagnostics(
-        nvrim.filter_diagnostics(vim.api.nvim_buf_get_name(bufnr), diagnostics)
+      nvrim.diagnostics.sort(
+        nvrim.diagnostics.filter(vim.api.nvim_buf_get_name(bufnr), diagnostics)
       ),
       opts
     )
