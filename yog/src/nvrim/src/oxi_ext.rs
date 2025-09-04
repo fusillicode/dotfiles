@@ -5,6 +5,7 @@ use nvim_oxi::Object;
 use nvim_oxi::ObjectKind;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::types::LogLevel;
+use nvim_oxi::conversion::ToObject;
 
 /// Construct a [`Dictionary`] from key-value pairs, supporting nested [`dict!`] usage.
 ///
@@ -142,6 +143,18 @@ pub fn unexpected_kind_error_msg(obj: &Object, key: &str, dict: &Dictionary, exp
         "value {obj:#?} of key {key:?} in dict {dict:#?} is {0:#?} but {expected_kind:?} was expected",
         obj.kind()
     )
+}
+
+/// Sets the value of a global Nvim variable `name` to `value`.
+///
+/// Wraps [`nvim_oxi::api::set_var`].
+///
+/// Errors are reported to Nvim via [`notify_error`].
+pub fn set_g_var<V: ToObject + core::fmt::Debug>(name: &str, value: V) {
+    let msg = format!("cannot set global var {name} value {value:#?}");
+    if let Err(error) = nvim_oxi::api::set_var(name, value) {
+        crate::oxi_ext::notify_error(&format!("{msg}, error {error:#?}"));
+    }
 }
 
 /// Creates an error for missing value in [`Dictionary`].
