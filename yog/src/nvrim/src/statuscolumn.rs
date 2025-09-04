@@ -1,3 +1,4 @@
+use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::opts::OptionOptsBuilder;
@@ -7,8 +8,18 @@ use nvim_oxi::lua::ffi::State;
 use nvim_oxi::serde::Deserializer;
 use serde::Deserialize;
 
+use crate::dict;
+use crate::fn_from;
+
+/// [`Dictionary`] exposing statuscolumn draw helpers.
+pub fn dict() -> Dictionary {
+    dict! {
+        "draw": fn_from!(draw),
+    }
+}
+
 /// Draws the status column for the current buffer.
-pub fn draw((cur_lnum, extmarks): (String, Vec<Extmark>)) -> Option<String> {
+fn draw((cur_lnum, extmarks): (String, Vec<Extmark>)) -> Option<String> {
     let cur_buf = Buffer::current();
     let opts = OptionOptsBuilder::default().buf(cur_buf.clone()).build();
     let cur_buf_type = nvim_oxi::api::get_option_value::<String>("buftype", &opts)

@@ -176,7 +176,7 @@ return {
     -- To show border with Shift-k (K)
     -- https://www.reddit.com/r/neovim/comments/1jbegzo/how_to_change_border_style_in_floating_windows/
     local orig_lsp_util_open_floating_preview = vim.lsp.util.open_floating_preview
-    local style_opts = require('nvrim').get_style_opts()
+    local style_opts = require('nvrim').style_opts
     function vim.lsp.util.open_floating_preview(contents, syntax, opts, ...)
       opts = opts or {}
       opts.border = opts.border or style_opts.window.border

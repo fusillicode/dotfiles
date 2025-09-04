@@ -3,7 +3,7 @@ local nvrim = require('nvrim')
 local M = {}
 
 function M.open_under_cursor()
-  local word = vim.fn.expand(nvrim.get_word_under_cursor())
+  local word = vim.fn.expand(nvrim.buffer.get_word_under_cursor())
   if word == nil or word == '' then return end
   vim.fn.jobstart({ 'open', word, }, {
     detach = true,

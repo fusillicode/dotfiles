@@ -13,6 +13,7 @@ mod filters;
 mod formatter;
 mod sorter;
 
+/// [`Dictionary`] of diagnostic processing helpers.
 pub fn dict() -> Dictionary {
     dict! {
         "format": fn_from!(formatter::format),

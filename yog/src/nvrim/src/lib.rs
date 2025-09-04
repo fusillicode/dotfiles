@@ -1,54 +1,54 @@
-//! Neovim Lua module exposing Rust-powered helpers for my Neovim config.
+//! Rust helpers for my Neovim config exposed to Lua via [`nvim_oxi`].
 //!
-//! Exposes functions callable from Lua via nvim-oxi. High-level areas:
-//! - Diagnostics: filter/format/sort and render in statusline/statuscolumn
-//! - CLI flags: generate ripgrep/fd arguments with sane defaults and blacklist
-//! - Visual selections: get current buffer text for a visual range
-//! - Test runner: run Rust tests in a sibling Wezterm pane
-//! - Misc: fkr fake data commands and oxi extensions
+//! Provides namespaced dictionaries for diagnostics, status UI (statusline /
+//! statuscolumn), CLI search flags, buffer text, keymaps, colorscheme & style
+//! options, test running, and misc commands/extensions.
 
 use nvim_oxi::Dictionary;
 
-/// Utilities for working with [`nvim_oxi::Buffer`] text.
-mod buffer_text;
-/// Generates CLI flags for fd and ripgrep.
+/// [`nvim_oxi::Buffer`] helpers.
+mod buffer;
+/// CLI flags for `fd` and `ripgrep`.
 mod cli;
-/// Creates Neovim commands.
+/// User commands.
 mod cmds;
-/// Sets the desired colorscheme to Neovim.
+/// Colorscheme setup.
 mod colorscheme;
-/// Processes diagnostics for filtering, formatting, and sorting.
+/// Diagnostics filtering / formatting / sorting.
 mod diagnostics;
-/// Set Neovim core keymaps (no plugins).
+/// Core (non‑plugin) keymaps.
 pub mod keymaps;
-/// Extends [`nvim_oxi`] with various utilities.
+/// [`nvim_oxi`] custom extensions.
 mod oxi_ext;
-/// Draws status column with diagnostic and git signs.
+/// Status column (diagnostics + git signs).
 mod statuscolumn;
-/// Draws status line with diagnostic information.
+/// Status line (diagnostics summary).
 mod statusline;
-/// Get the desired style options for Neovim.
+/// Style options.
 mod style_opts;
-/// Runs tests at cursor position in an available Wezterm pane.
+/// Test runner (cursor position).
 mod test_runner;
-/// Utilities to work with `vim.opts`
+/// `vim.opts` utilities.
 pub mod vopts;
 
-/// The main plugin function that returns a [`Dictionary`] of [`Function`]s exposed to Neovim.
+/// Plugin entry point.
+///
+/// Returns a namespaced [`Dictionary`] whose values are grouped
+/// sub‑dictionaries (diagnostics, UI, CLI flags, keymaps, etc.) plus a
+/// few standalone helpers.
 #[nvim_oxi::plugin]
 fn nvrim() -> Dictionary {
     dict! {
-        "diagnostics": crate::diagnostics::dict(),
-        "draw_statusline": fn_from!(statusline::draw),
-        "draw_statuscolumn": fn_from!(statuscolumn::draw),
-        "create_cmds": fn_from!(cmds::create),
+        "diagnostics": diagnostics::dict(),
+        "statusline": statusline::dict(),
+        "statuscolumn": statuscolumn::dict(),
+        "cmds": cmds::dict(),
         "cli": cli::dict(),
         "run_test": fn_from!(test_runner::run_test),
-        "get_current_buffer_text": fn_from!(buffer_text::between_pos::get),
-        "get_word_under_cursor": fn_from!(buffer_text::word_under_cursor::get),
-        "set_colorscheme": fn_from!(colorscheme::set),
-        "get_style_opts": fn_from!(style_opts::get),
-        "set_vim_opts": fn_from!(vopts::set_all),
-        "keymaps": crate::keymaps::dict(),
+        "buffer": buffer::dict(),
+        "colorscheme": colorscheme::dict(),
+        "style_opts": style_opts::dict(),
+        "vim_opts": vopts::dict(),
+        "keymaps": keymaps::dict(),
     }
 }

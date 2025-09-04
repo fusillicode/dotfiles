@@ -12,6 +12,7 @@ const NVOP_MODE: [Mode; 1] = [Mode::NormalVisualOperator];
 /// RHS used for the normal-mode `<Esc>` mapping (clear search + empty echo).
 pub const NORMAL_ESC: &str = r#":noh<cr>:echo""<cr>"#;
 
+/// [`Dictionary`] of keymap helpers and expr RHS generators.
 pub fn dict() -> Dictionary {
     dict! {
         "set_all": fn_from!(set_all),

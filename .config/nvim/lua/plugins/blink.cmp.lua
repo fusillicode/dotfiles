@@ -1,4 +1,4 @@
-local style_opts = require('nvrim').get_style_opts()
+local style_opts = require('nvrim').style_opts
 local get_item_idx = require('utils').item_idx
 
 local default_sources = {
