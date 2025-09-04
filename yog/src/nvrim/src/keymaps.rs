@@ -45,6 +45,9 @@ pub fn set(modes: &[Mode], lhs: &str, rhs: &str, opts: &SetKeymapOpts) {
 fn set_all(_: ()) {
     let default_opts = default_opts();
 
+    crate::oxi_ext::set_g_var("mapleader", " ");
+    crate::oxi_ext::set_g_var("maplocalleader", " ");
+
     set(&[Mode::Terminal], "<Esc>", "<c-\\><c-n>", &default_opts);
     set(&[Mode::Insert], "<c-a>", "<esc>^i", &default_opts);
     set(&[Mode::Normal], "<c-a>", "^i", &default_opts);

@@ -6,8 +6,7 @@ local function keymap_set(mode, lhs, rhs, opts)
   vim.keymap.set(mode, lhs, rhs, vim.tbl_extend('force', { silent = true, }, opts or {}))
 end
 
-
-local function set_complex_keymaps()
+function M.set_lua_implemented()
   local base_opts = { expr = true, }
 
   keymap_set('n', 'i', nvrim.keymaps.smart_ident_on_blank_line, base_opts)
@@ -40,20 +39,11 @@ local function set_complex_keymaps()
       end
     end
   end)
-end
 
-local function set_diagnostic_keymaps()
   local min_diag_level = vim.diagnostic.severity.WARN
   keymap_set('n', 'dn', function() vim.diagnostic.jump({ count = 1, severity = min_diag_level, }) end)
   keymap_set('n', 'dp', function() vim.diagnostic.jump({ count = -1, severity = min_diag_level, }) end)
   keymap_set('n', '<leader>e', vim.diagnostic.open_float)
-end
-
-function M.set_all()
-  vim.g.mapleader = ' '
-  vim.g.maplocalleader = ' '
-  set_complex_keymaps()
-  set_diagnostic_keymaps()
 end
 
 function M.lspconfig(bufnr)
