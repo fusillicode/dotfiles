@@ -127,12 +127,12 @@ fn should_create_new_branch(branch: &str) -> color_eyre::Result<bool> {
     if is_default_branch(&curr_branch) {
         return Ok(true);
     }
-    print!("{} {} from {}", "*".cyan(), branch.bold(), curr_branch.bold());
+    print!("{} {} from {}", "*".cyan().bold(), branch.bold(), curr_branch.bold());
     std::io::stdout().flush()?;
     let mut input = String::new();
     std::io::stdin().read_line(&mut input)?;
     if !input.trim().is_empty() {
-        print!("x {branch} not created");
+        print!("{} {} not created", "x".red().bold(), branch.bold());
         return Ok(false);
     }
     Ok(true)
