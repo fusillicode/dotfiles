@@ -1,10 +1,5 @@
 vim.loader.enable()
 
-package.cpath = package.cpath .. ';' .. (
-  os.getenv('HOME') .. '/data/dev/dotfiles/dotfiles/yog/target/' ..
-  (vim.env.NVRIM_DEBUG and 'debug' or 'release') .. '/?.so'
-)
-
 local nvrim = require('nvrim')
 nvrim.vim_opts.set_all()
 nvrim.colorscheme.set()
