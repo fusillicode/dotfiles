@@ -3,7 +3,6 @@ use nvim_oxi::api::opts::CreateAugroupOptsBuilder;
 use nvim_oxi::api::opts::CreateAutocmdOptsBuilder;
 use nvim_oxi::api::opts::CreateCommandOpts;
 use nvim_oxi::api::opts::CreateCommandOptsBuilder;
-use nvim_oxi::api::opts::SetKeymapOpts;
 use nvim_oxi::api::opts::SetKeymapOptsBuilder;
 use nvim_oxi::api::types::CommandArgs;
 use nvim_oxi::api::types::Mode;
@@ -44,9 +43,9 @@ pub fn create(_: ()) {
         CreateAutocmdOptsBuilder::default().patterns(["qf"]).callback(|_| {
             let opts = SetKeymapOptsBuilder::default().noremap(true).build();
 
-            set_keymap(Mode::Normal, "<c-n>", ":cn<cr>", &opts);
-            set_keymap(Mode::Normal, "<c-p>", ":cp<cr>", &opts);
-            set_keymap(Mode::Normal, "<c-x>", ":ccl<cr>", &opts);
+            crate::keymaps::set(&[Mode::Normal], "<c-n>", ":cn<cr>", &opts);
+            crate::keymaps::set(&[Mode::Normal], "<c-p>", ":cp<cr>", &opts);
+            crate::keymaps::set(&[Mode::Normal], "<c-x>", ":ccl<cr>", &opts);
 
             true
         }),
@@ -79,14 +78,6 @@ where
     {
         crate::oxi_ext::notify_error(&format!(
             "cannot create auto command for events {events:#?} and augroup {augroup_name}, error {error:#?}"
-        ));
-    }
-}
-
-fn set_keymap(mode: Mode, lhs: &str, rhs: &str, opts: &SetKeymapOpts) {
-    if let Err(error) = nvim_oxi::api::set_keymap(mode, lhs, rhs, opts) {
-        crate::oxi_ext::notify_error(&format!(
-            "cannot set keymap with mode {mode:#?}, lhs {lhs}, rhs {rhs} and opts {opts:#?}, error {error:#?}"
         ));
     }
 }
