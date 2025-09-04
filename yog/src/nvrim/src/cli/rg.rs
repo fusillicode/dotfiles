@@ -1,4 +1,4 @@
-use crate::cli_flags::CliFlags;
+use crate::cli::CliFlags;
 
 /// CLI flags for the ripgrep command.
 pub struct RgCliFlags;

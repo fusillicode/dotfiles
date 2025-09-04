@@ -1,5 +1,10 @@
-pub mod fd;
-pub mod rg;
+use nvim_oxi::Dictionary;
+
+use crate::dict;
+use crate::fn_from;
+
+mod fd;
+mod rg;
 
 /// A list of glob patterns to exclude from searches.
 pub const GLOB_BLACKLIST: [&str; 6] = [
@@ -10,6 +15,13 @@ pub const GLOB_BLACKLIST: [&str; 6] = [
     "**/.elixir_ls/*",
     "**/node_modules/*",
 ];
+
+pub fn dict() -> Dictionary {
+    dict! {
+        "get_fd_flags": fn_from!(fd::FdCliFlags::get),
+        "get_rg_flags": fn_from!(rg::RgCliFlags::get),
+    }
+}
 
 /// Trait for generating CLI flags for search tools.
 pub trait CliFlags {

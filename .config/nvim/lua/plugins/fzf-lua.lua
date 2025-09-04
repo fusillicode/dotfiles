@@ -68,10 +68,7 @@ return {
         line_query = true,
         winopts    = no_title,
         fzf_opts   = { ['--ansi'] = true, },
-        fd_opts    = table.concat(
-          nvrim.get_fd_cli_flags(),
-          ' '
-        ),
+        fd_opts    = table.concat(nvrim.cli.get_fd_flags(), ' '),
         git_icons  = true,
       },
       buffers    = {
@@ -81,10 +78,7 @@ return {
       grep       = {
         winopts        = no_title,
         rg_glob        = true,
-        rg_opts        = table.concat(
-          nvrim.get_rg_cli_flags(),
-          ' '
-        ),
+        rg_opts        = table.concat(nvrim.cli.get_rg_flags(), ' '),
         hidden         = true,
         glob_flag      = '--iglob',
         glob_separator = '%s%-%-',
