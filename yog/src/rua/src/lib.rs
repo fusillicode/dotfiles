@@ -55,7 +55,7 @@ fn rua() -> Dictionary {
         "get_style_opts": fn_from!(style_opts::get),
         "set_vim_opts": fn_from!(vopts::set_all),
         "keymaps": dict! {
-            "set_core": fn_from!(keymaps::set_core),
+            "set_all": fn_from!(keymaps::set_all),
             "smart_ident_on_blank_line": fn_from!(keymaps::smart_ident_on_blank_line),
             "smart_dd_no_yank_empty_line": fn_from!(keymaps::smart_dd_no_yank_empty_line),
             "normal_esc": crate::keymaps::NORMAL_ESC,

@@ -11,10 +11,8 @@ package.cpath = package.cpath .. ';' .. rua_lib()
 
 local rua = require('rua')
 
-vim.g.mapleader = ' '
-vim.g.maplocalleader = ' '
-require('keymaps').setup()
--- rua.keymaps.setup_core()
+require('keymaps').set_all()
+rua.keymaps.set_all()
 rua.set_vim_opts()
 rua.set_colorscheme()
 rua.create_cmds()

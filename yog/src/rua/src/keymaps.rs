@@ -6,7 +6,7 @@ const NV_MODE: [Mode; 2] = [Mode::Normal, Mode::Visual];
 const NVOP_MODE: [Mode; 1] = [Mode::NormalVisualOperator];
 pub const NORMAL_ESC: &str = r#":noh<cr>:echo""<cr>"#;
 
-pub fn set_core(_: ()) {
+pub fn set_all(_: ()) {
     let empty_opts = SetKeymapOptsBuilder::default().build();
 
     set(&[Mode::Terminal], "<Esc>", "<c-\\><c-n>", &empty_opts);
@@ -20,21 +20,6 @@ pub fn set_core(_: ()) {
     set(&NV_MODE, "gh", "0", &empty_opts);
     set(&NV_MODE, "gl", "$", &empty_opts);
     set(&NV_MODE, "gs", "_", &empty_opts);
-
-    // -- https://stackoverflow.com/a/3003636
-    // keymap_set('n', 'i', function()
-    //   return (vim.fn.empty(vim.fn.getline('.')) == 1 and '\"_cc' or 'i')
-    // end, { expr = true, })
-
-    set(&[Mode::Insert], "<c-a>", "<esc>^i", &empty_opts);
-    set(&[Mode::Normal], "<c-a>", "^i", &empty_opts);
-    set(&[Mode::Insert], "<c-e>", "<end>", &empty_opts);
-    set(&[Mode::Normal], "<c-e>", "$a", &empty_opts);
-
-    // -- https://github.com/Abstract-IDE/abstract-autocmds/blob/main/lua/abstract-autocmds/mappings.lua#L8-L14
-    // keymap_set('n', 'dd', function()
-    //   return (vim.api.nvim_get_current_line():match('^%s*$') and '"_dd' or 'dd')
-    // end, { noremap = true, expr = true, })
 
     set(&NV_MODE, "x", r#""_x"#, &empty_opts);
     set(&NV_MODE, "X", r#""_X"#, &empty_opts);
@@ -62,17 +47,6 @@ pub fn set_core(_: ()) {
 
     set(&NV_MODE, "<c-;>", ":set wrap!<cr>", &empty_opts);
     set(&[Mode::Normal], "<esc>", r#":noh<cr>:echo""<cr>"#, &empty_opts);
-
-    // M.normal_esc = ':noh<cr>:echo""<cr>'
-    // function M.visual_esc()
-    //   return ":<c-u>'" .. (vim.fn.line('.') < vim.fn.line('v') and '<' or '>') .. '<cr>' .. M.normal_esc
-    // end
-    // set_keymap(
-    //     &[Mode::Visual],
-    //     "<esc>",
-    //     "require('utils').visual_esc",
-    //     &empty_opts().expr(true).build(),
-    // )
 }
 
 // Vim: Smart indent when entering insert mode on blank line?
@@ -82,7 +56,7 @@ pub fn smart_ident_on_blank_line(_: ()) -> String {
 
 // Smart deletion, dd
 // It solves the issue, where you want to delete empty line, but dd will override your last yank.
-// Code below will check if u are deleting empty line, if so - use black hole register.
+// Code below will check if you are deleting empty line, if so - use black hole register.
 // [src: https://www.reddit.com/r/neovim/comments/w0jzzv/comment/igfjx5y/?utm_source=share&utm_medium=web2x&context=3]
 pub fn smart_dd_no_yank_empty_line(_: ()) -> String {
     apply_on_current_line_or_unwrap(
