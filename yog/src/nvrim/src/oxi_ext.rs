@@ -60,15 +60,15 @@ macro_rules! fn_from {
     };
 }
 
-/// Trait for extracting typed values from Neovim objects.
+/// Trait for extracting typed values from Nvim objects.
 pub trait OxiExtract {
     type Out;
 
-    /// Extracts a typed value from a Neovim [Object] by key from a [`Dictionary`] with error context.
+    /// Extracts a typed value from a Nvim [Object] by key from a [`Dictionary`] with error context.
     fn extract_from_dict(key: &str, value: &Object, dict: &Dictionary) -> color_eyre::Result<Self::Out>;
 }
 
-/// Implementation for extracting [String] values from Neovim objects.
+/// Implementation for extracting [String] values from Nvim objects.
 impl OxiExtract for nvim_oxi::String {
     type Out = String;
 
@@ -79,7 +79,7 @@ impl OxiExtract for nvim_oxi::String {
     }
 }
 
-/// Implementation for extracting i64 values from Neovim objects.
+/// Implementation for extracting i64 values from Nvim objects.
 impl OxiExtract for nvim_oxi::Integer {
     type Out = Self;
 
@@ -149,14 +149,14 @@ pub fn no_value_matching(query: &[&str], dict: &Dictionary) -> color_eyre::eyre:
     eyre!("missing value matching query {query:?} in dict {dict:#?}")
 }
 
-/// Notifies the user of an error message in Neovim.
+/// Notifies the user of an error message in Nvim.
 pub fn notify_error(msg: &str) {
     if let Err(error) = nvim_oxi::api::notify(msg, LogLevel::Error, &dict! {}) {
         nvim_oxi::dbg!(format!("cannot notify error {msg:?}, error {error:#?}"));
     }
 }
 
-/// Notifies the user of a warning message in Neovim.
+/// Notifies the user of a warning message in Nvim.
 #[expect(dead_code, reason = "Kept for future use")]
 pub fn notify_warn(msg: &str) {
     if let Err(error) = nvim_oxi::api::notify(msg, LogLevel::Warn, &dict! {}) {

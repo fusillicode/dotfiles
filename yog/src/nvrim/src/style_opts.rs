@@ -2,7 +2,7 @@ use nvim_oxi::Dictionary;
 
 use crate::dict;
 
-/// UI style options as a Neovim [`Dictionary`].
+/// UI style options as a Nvim [`Dictionary`].
 ///
 /// Currently only `window.border = "rounded"`.
 pub fn dict() -> Dictionary {
