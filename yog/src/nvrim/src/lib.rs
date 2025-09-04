@@ -29,7 +29,7 @@ mod style_opts;
 /// Rust tests utilities.
 mod truster;
 /// `vim.opts` utilities.
-pub mod vopts;
+pub mod vim_opts;
 
 /// Plugin entry point.
 ///
@@ -48,7 +48,7 @@ fn nvrim() -> Dictionary {
         "buffer": buffer::dict(),
         "colorscheme": colorscheme::dict(),
         "style_opts": style_opts::dict(),
-        "vim_opts": vopts::dict(),
+        "vim_opts": vim_opts::dict(),
         "keymaps": keymaps::dict(),
     }
 }

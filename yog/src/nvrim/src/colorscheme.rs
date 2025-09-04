@@ -28,9 +28,9 @@ pub fn dict() -> Dictionary {
 pub fn set(colorscheme: Option<String>) {
     colorscheme.as_deref().map(set_colorscheme);
 
-    let opts = crate::vopts::global_scope();
-    crate::vopts::set("background", "dark", &opts);
-    crate::vopts::set("termguicolors", true, &opts);
+    let opts = crate::vim_opts::global_scope();
+    crate::vim_opts::set("background", "dark", &opts);
+    crate::vim_opts::set("termguicolors", true, &opts);
 
     let status_line_hl = set_opts().foreground("gray").background(STATUS_LINE_BG).build();
     let bg_hl = set_opts().background(BG).build();
