@@ -1,6 +1,6 @@
 local M = {}
 
-M.draw_statusline = require('rua').draw_statusline
+M.draw_statusline = require('nvrim').draw_statusline
 
 function M.draw() return M.draw_statusline(vim.diagnostic.get()) end
 

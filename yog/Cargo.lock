@@ -1198,6 +1198,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "nvrim"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "fkr",
+ "itertools",
+ "nvim-oxi",
+ "serde",
+ "serde_repr",
+ "strum",
+ "tree-sitter",
+ "tree-sitter-rust",
+ "utils",
+]
+
+[[package]]
 name = "object"
 version = "0.36.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1503,22 +1519,6 @@ dependencies = [
  "rustc_version",
  "syn",
  "unicode-ident",
-]
-
-[[package]]
-name = "rua"
-version = "0.1.0"
-dependencies = [
- "color-eyre",
- "fkr",
- "itertools",
- "nvim-oxi",
- "serde",
- "serde_repr",
- "strum",
- "tree-sitter",
- "tree-sitter-rust",
- "utils",
 ]
 
 [[package]]

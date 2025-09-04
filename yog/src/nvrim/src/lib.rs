@@ -38,7 +38,7 @@ use crate::cli_flags::CliFlags;
 
 /// The main plugin function that returns a [`Dictionary`] of [`Function`]s exposed to Neovim.
 #[nvim_oxi::plugin]
-fn rua() -> Dictionary {
+fn nvrim() -> Dictionary {
     dict! {
         "format_diagnostic": fn_from!(diagnostics::formatter::format),
         "sort_diagnostics": fn_from!(diagnostics::sorter::sort),
