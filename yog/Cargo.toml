@@ -40,5 +40,5 @@ debug = false
 strip = true
 lto = true
 codegen-units = 1
-# This is required to avoid "rua" exposed functions to explode Lua
+# This is required to avoid "nvrim" exposed functions to explode Lua
 panic = "unwind"
