@@ -127,7 +127,7 @@ fn visual_esc(_: ()) -> String {
         })
         .unwrap_or(0);
     format!(
-        ":<c-u>'{}{}",
+        ":<c-u>'{}<cr>{}",
         if current_line < visual_line { "<" } else { ">" },
         NORMAL_ESC
     )
