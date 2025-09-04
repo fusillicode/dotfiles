@@ -1,4 +1,4 @@
-local nvrim = require('nvrim')
+local cli = require('nvrim').cli
 local keymaps = require('keymaps')
 local plugin_keymaps = keymaps.fzf_lua
 
@@ -68,7 +68,7 @@ return {
         line_query = true,
         winopts    = no_title,
         fzf_opts   = { ['--ansi'] = true, },
-        fd_opts    = table.concat(nvrim.cli.get_fd_flags(), ' '),
+        fd_opts    = table.concat(cli.get_fd_flags(), ' '),
         git_icons  = true,
       },
       buffers    = {
@@ -78,7 +78,7 @@ return {
       grep       = {
         winopts        = no_title,
         rg_glob        = true,
-        rg_opts        = table.concat(nvrim.cli.get_rg_flags(), ' '),
+        rg_opts        = table.concat(cli.get_rg_flags(), ' '),
         hidden         = true,
         glob_flag      = '--iglob',
         glob_separator = '%s%-%-',
