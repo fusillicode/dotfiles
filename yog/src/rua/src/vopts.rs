@@ -66,12 +66,14 @@ pub fn append(name: &str, value: &str, opts: &OptionOpts) {
     }) else {
         return;
     };
-    if let Err(error) = write!(cur_value, ",{value}") {
+    // This shenanigan with `comma` and `write!` is to avoid additional allocations
+    let comma = if cur_value.is_empty() { "" } else { "," };
+    if let Err(error) = write!(cur_value, "{comma}{value}") {
         crate::oxi_ext::notify_error(&format!(
             "cannot append value {value} to current value {cur_value} of opt {name:?} with {opts:#?}, error {error:#?}"
         ));
     }
-    set(name, value, opts);
+    set(name, &*cur_value, opts);
 }
 
 pub fn global_scope() -> OptionOpts {

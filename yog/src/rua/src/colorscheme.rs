@@ -15,18 +15,7 @@ const STATUS_LINE_BG: &str = "none";
 /// Sets the desired Neovim colorscheme and custom highlight groups.
 #[allow(clippy::needless_pass_by_value)]
 pub fn set(colorscheme: Option<String>) {
-    if let Err(error) = colorscheme
-        .as_ref()
-        .map(|cs| {
-            nvim_oxi::api::cmd(
-                &CmdInfosBuilder::default().cmd("colorscheme").args([cs]).build(),
-                &CmdOpts::default(),
-            )
-        })
-        .transpose()
-    {
-        crate::oxi_ext::notify_error(&format!("cannot set colorscheme to {colorscheme:?}, error {error:#?}"));
-    }
+    colorscheme.as_deref().map(set_colorscheme);
 
     let opts = crate::vopts::global_scope();
     crate::vopts::set("background", "dark", &opts);
@@ -155,4 +144,19 @@ fn hl_opts_from_hl_infos(hl_infos: &HighlightInfos) -> color_eyre::Result<SetHig
 /// Formats an RGB integer as a `#RRGGBB` hex string.
 fn decimal_to_hex_color(decimal: u32) -> String {
     format!("#{decimal:06X}")
+}
+
+/// Sets Neovim colorscheme.
+///
+/// In case of errors notifies Neovim.
+fn set_colorscheme(colorscheme: &str) {
+    if let Err(error) = nvim_oxi::api::cmd(
+        &CmdInfosBuilder::default()
+            .cmd("colorscheme")
+            .args([colorscheme])
+            .build(),
+        &CmdOpts::default(),
+    ) {
+        crate::oxi_ext::notify_error(&format!("cannot set colorscheme to {colorscheme:?}, error {error:#?}"));
+    }
 }
