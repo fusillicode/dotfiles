@@ -26,8 +26,8 @@ mod statuscolumn;
 mod statusline;
 /// Style options.
 mod style_opts;
-/// Test runner (cursor position).
-mod test_runner;
+/// Rust tests utilities.
+mod truster;
 /// `vim.opts` utilities.
 pub mod vopts;
 
@@ -44,7 +44,7 @@ fn nvrim() -> Dictionary {
         "statuscolumn": statuscolumn::dict(),
         "cmds": cmds::dict(),
         "cli": cli::dict(),
-        "run_test": fn_from!(test_runner::run_test),
+        "truster": truster::dict(),
         "buffer": buffer::dict(),
         "colorscheme": colorscheme::dict(),
         "style_opts": style_opts::dict(),

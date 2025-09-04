@@ -4,14 +4,25 @@ use std::path::PathBuf;
 use color_eyre::eyre;
 use color_eyre::eyre::Context;
 use color_eyre::eyre::eyre;
+use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::Window;
 use tree_sitter::Node;
 use tree_sitter::Parser;
 use tree_sitter::Point;
 
+use crate::dict;
+use crate::fn_from;
+
+/// [`Dictionary`] of Rust tests utilities.
+pub fn dict() -> Dictionary {
+    dict! {
+        "run_test": fn_from!(run_test),
+    }
+}
+
 /// Runs the test function at the current cursor position in a Wezterm pane.
-pub fn run_test(_: ()) {
+fn run_test(_: ()) {
     let cur_buf = Buffer::current();
     let cur_win = Window::current();
 
