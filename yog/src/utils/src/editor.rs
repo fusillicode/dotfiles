@@ -11,7 +11,7 @@ use crate::wezterm::WeztermPane;
 pub enum Editor {
     /// Helix editor.
     Hx,
-    /// Neovim editor.
+    /// Nvim editor.
     Nvim,
 }
 

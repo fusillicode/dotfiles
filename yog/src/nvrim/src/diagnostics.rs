@@ -1,7 +1,7 @@
 //! Diagnostic processing utilities for LSP diagnostics.
 //!
 //! This module provides functionality to filter, format, and sort LSP diagnostics
-//! received from language servers in Neovim.
+//! received from language servers in Nvim.
 
 use nvim_oxi::Dictionary;
 

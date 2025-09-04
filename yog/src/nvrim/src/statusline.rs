@@ -63,7 +63,7 @@ fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
     Some(statusline.draw())
 }
 
-/// Represents a diagnostic from Neovim.
+/// Represents a diagnostic from Nvim.
 #[derive(Deserialize)]
 pub struct Diagnostic {
     /// The buffer number.

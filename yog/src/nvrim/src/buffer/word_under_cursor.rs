@@ -1,7 +1,7 @@
 use nvim_oxi::api::Window;
 
 /// Gets the non-whitespace "word" under the cursor in the current window.
-/// On failure returns [`Option::None`] and notifies an error to Neovim.
+/// On failure returns [`Option::None`] and notifies an error to Nvim.
 /// If on a whitespace returns an [`Option::None`].
 pub fn get(_: ()) -> Option<String> {
     let cur_win = Window::current();

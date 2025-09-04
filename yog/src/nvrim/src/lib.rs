@@ -1,4 +1,4 @@
-//! Rust helpers for my Neovim config exposed to Lua via [`nvim_oxi`].
+//! Rust helpers for my Nvim config exposed to Lua via [`nvim_oxi`].
 //!
 //! Provides namespaced dictionaries for diagnostics, status UI (statusline /
 //! statuscolumn), CLI search flags, buffer text, keymaps, colorscheme & style
