@@ -8,7 +8,7 @@ use color_eyre::owo_colors::OwoColorize as _;
 /// List of binary names that should be symlinked after building.
 const BINS: &[&str] = &["idt", "yghfl", "yhfp", "oe", "catl", "gcu", "vpg", "try", "fkr"];
 /// List of library files that need to be renamed after building, mapping (`source_name`, `target_name`).
-const LIBS: &[(&str, &str)] = &[("librua.dylib", "rua.so")];
+const LIBS: &[(&str, &str)] = &[("libnvrim.dylib", "nvrim.so")];
 
 /// Automates build workflow: formats, lints, builds, and deploys yog binaries.
 ///

@@ -1,4 +1,4 @@
-local rua = require('rua')
+local nvrim = require('nvrim')
 local keymaps = require('keymaps')
 local plugin_keymaps = keymaps.fzf_lua
 
@@ -69,7 +69,7 @@ return {
         winopts    = no_title,
         fzf_opts   = { ['--ansi'] = true, },
         fd_opts    = table.concat(
-          rua.get_fd_cli_flags(),
+          nvrim.get_fd_cli_flags(),
           ' '
         ),
         git_icons  = true,
@@ -82,7 +82,7 @@ return {
         winopts        = no_title,
         rg_glob        = true,
         rg_opts        = table.concat(
-          rua.get_rg_cli_flags(),
+          nvrim.get_rg_cli_flags(),
           ' '
         ),
         hidden         = true,
