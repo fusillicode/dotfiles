@@ -10,23 +10,34 @@ use color_eyre::owo_colors::OwoColorize as _;
 const BINS: &[&str] = &["idt", "yghfl", "yhfp", "oe", "catl", "gcu", "vpg", "try", "fkr"];
 /// List of library files that need to be renamed after building, mapping (`source_name`, `target_name`).
 const LIBS: &[(&str, &str)] = &[("libnvrim.dylib", "nvrim.so")];
+/// Path segments for the default binaries install dir.
 const BINS_DEFAULT_PATH: &[&str] = &[".local", "bin"];
+/// Path segments for the Nvim libs install dir.
 const NVIM_LIBS_DEFAULT_PATH: &[&str] = &[".config", "nvim", "lua"];
 
-/// Automates build workflow: formats, lints, builds, and deploys yog binaries.
+/// Formats, lints, builds, and deploys yog binaries and its Neovim libs.
+///
+/// # Usage
+/// `evoke [--debug] [bins_path] [cargo_target_path] [nvim_libs_path]`
+///
+/// `--debug` may appear anywhere; it is removed before positional argument parsing.
 ///
 /// # Arguments
+/// * `--debug` – Use debug profile, skip clippy and copy from `target/debug`.
+/// * `bins_path` – Destination for binaries, defaulting to `$HOME/.local/bin`.
+/// * `cargo_target_path` – Cargo target root containing `debug/` & `release/`, defaulting to project root `target/`.
+/// * `nvim_libs_path` – Destination for renamed Neovim libs (e.g. `nvrim.so`), defaulting to `$HOME/.config/nvim/lua`.
 ///
-/// * `--debug` - Build in debug mode, skip clippy
-/// * `bins_path` - Bin directory for symlinks (default: ~/.local/bin)
-/// * `target_path` - Cargo target directory (default: project root target/)
+/// Omit trailing path arguments to accept defaults.
 ///
 /// # Examples
-///
 /// ```bash
 /// evoke
 /// evoke --debug
-/// evoke /custom/bin/path
+/// evoke ~/bin
+/// evoke ~/bin ~/dev/yog/target
+/// evoke ~/bin ~/dev/yog/target ~/.config/nvim/lua
+/// evoke --debug ~/bin ~/.config/nvim/lua
 /// ```
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
@@ -38,10 +49,6 @@ fn main() -> color_eyre::Result<()> {
         || utils::system::build_home_path(BINS_DEFAULT_PATH),
         |supplied_bins_path| Ok(PathBuf::from(supplied_bins_path)),
     )?;
-    let nvim_libs_path = args.get(2).cloned().map_or_else(
-        || utils::system::build_home_path(NVIM_LIBS_DEFAULT_PATH),
-        |supplied_nvim_libs_path| Ok(PathBuf::from(supplied_nvim_libs_path)),
-    )?;
     let cargo_target_path = args.get(1).cloned().map_or_else(
         || {
             std::env::var("CARGO_MANIFEST_DIR").map(|cargo_manifest_dir| {
@@ -51,6 +58,10 @@ fn main() -> color_eyre::Result<()> {
             })
         },
         |x| Ok(PathBuf::from(x)),
+    )?;
+    let nvim_libs_path = args.get(2).cloned().map_or_else(
+        || utils::system::build_home_path(NVIM_LIBS_DEFAULT_PATH),
+        |supplied_nvim_libs_path| Ok(PathBuf::from(supplied_nvim_libs_path)),
     )?;
 
     let (cargo_target_location, build_profile) = if is_debug {
@@ -110,7 +121,7 @@ where
     false
 }
 
-/// Copies the supplied path to the target and prints to stdout the desired message.
+/// Copies `from` to `to` and prints to standard output the desired message.
 fn cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
     std::fs::copy(from, to).with_context(|| format!("from {}, to {}", from.display(), to.display()))?;
     println!("{} {} to {}", "Copied".green().bold(), from.display(), to.display(),);
