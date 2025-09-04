@@ -7,46 +7,46 @@ const NVOP_MODE: [Mode; 1] = [Mode::NormalVisualOperator];
 pub const NORMAL_ESC: &str = r#":noh<cr>:echo""<cr>"#;
 
 pub fn set_all(_: ()) {
-    let empty_opts = SetKeymapOptsBuilder::default().build();
+    let default_opts = default_opts();
 
-    set(&[Mode::Terminal], "<Esc>", "<c-\\><c-n>", &empty_opts);
-    set(&[Mode::Insert], "<c-a>", "<esc>^i", &empty_opts);
-    set(&[Mode::Normal], "<c-a>", "^i", &empty_opts);
-    set(&[Mode::Insert], "<c-e>", "<end>", &empty_opts);
-    set(&[Mode::Normal], "<c-e>", "$a", &empty_opts);
+    set(&[Mode::Terminal], "<Esc>", "<c-\\><c-n>", &default_opts);
+    set(&[Mode::Insert], "<c-a>", "<esc>^i", &default_opts);
+    set(&[Mode::Normal], "<c-a>", "^i", &default_opts);
+    set(&[Mode::Insert], "<c-e>", "<end>", &default_opts);
+    set(&[Mode::Normal], "<c-e>", "$a", &default_opts);
 
-    set(&NVOP_MODE, "gn", ":bn<cr>", &empty_opts);
-    set(&NVOP_MODE, "gp", ":bp<cr>", &empty_opts);
-    set(&NV_MODE, "gh", "0", &empty_opts);
-    set(&NV_MODE, "gl", "$", &empty_opts);
-    set(&NV_MODE, "gs", "_", &empty_opts);
+    set(&NVOP_MODE, "gn", ":bn<cr>", &default_opts);
+    set(&NVOP_MODE, "gp", ":bp<cr>", &default_opts);
+    set(&NV_MODE, "gh", "0", &default_opts);
+    set(&NV_MODE, "gl", "$", &default_opts);
+    set(&NV_MODE, "gs", "_", &default_opts);
 
-    set(&NV_MODE, "x", r#""_x"#, &empty_opts);
-    set(&NV_MODE, "X", r#""_X"#, &empty_opts);
+    set(&NV_MODE, "x", r#""_x"#, &default_opts);
+    set(&NV_MODE, "X", r#""_X"#, &default_opts);
 
     set(
         &NV_MODE,
         "<leader>yf",
         r#":let @+ = expand("%") . ":" . line(".")<cr>"#,
-        &empty_opts,
+        &default_opts,
     );
-    set(&[Mode::Visual], "y", "ygv<esc>", &empty_opts);
-    set(&[Mode::Visual], "p", r#""_dP"#, &empty_opts);
+    set(&[Mode::Visual], "y", "ygv<esc>", &default_opts);
+    set(&[Mode::Visual], "p", r#""_dP"#, &default_opts);
 
-    set(&[Mode::Visual], ">", ">gv", &empty_opts);
-    set(&[Mode::Visual], "<", "<gv", &empty_opts);
-    set(&[Mode::Normal], ">", ">>", &empty_opts);
-    set(&[Mode::Normal], "<", "<<", &empty_opts);
-    set(&NV_MODE, "U", "<c-r>", &empty_opts);
+    set(&[Mode::Visual], ">", ">gv", &default_opts);
+    set(&[Mode::Visual], "<", "<gv", &default_opts);
+    set(&[Mode::Normal], ">", ">>", &default_opts);
+    set(&[Mode::Normal], "<", "<<", &default_opts);
+    set(&NV_MODE, "U", "<c-r>", &default_opts);
 
-    set(&NV_MODE, "<leader><leader>", ":silent :w!<cr>", &empty_opts);
-    set(&NV_MODE, "<leader>x", ":bd<cr>", &empty_opts);
-    set(&NV_MODE, "<leader>X", ":bd!<cr>", &empty_opts);
-    set(&NV_MODE, "<leader>q", ":q<cr>", &empty_opts);
-    set(&NV_MODE, "<leader>Q", ":q!<cr>", &empty_opts);
+    set(&NV_MODE, "<leader><leader>", ":silent :w!<cr>", &default_opts);
+    set(&NV_MODE, "<leader>x", ":bd<cr>", &default_opts);
+    set(&NV_MODE, "<leader>X", ":bd!<cr>", &default_opts);
+    set(&NV_MODE, "<leader>q", ":q<cr>", &default_opts);
+    set(&NV_MODE, "<leader>Q", ":q!<cr>", &default_opts);
 
-    set(&NV_MODE, "<c-;>", ":set wrap!<cr>", &empty_opts);
-    set(&[Mode::Normal], "<esc>", r#":noh<cr>:echo""<cr>"#, &empty_opts);
+    set(&NV_MODE, "<c-;>", ":set wrap!<cr>", &default_opts);
+    set(&[Mode::Normal], "<esc>", r#":noh<cr>:echo""<cr>"#, &default_opts);
 }
 
 // Vim: Smart indent when entering insert mode on blank line?
@@ -106,4 +106,11 @@ fn apply_on_current_line_or_unwrap<'a, F: FnOnce(String) -> &'a str>(fun: F, def
         .map(fun)
         .unwrap_or(default)
         .to_string()
+}
+
+// Setting `noremap` is required.
+// In Lua/Nvim land vim.keymap.set defaults to noremap = true.
+// In Rust land it's false because bool default if false.
+fn default_opts() -> SetKeymapOpts {
+    SetKeymapOptsBuilder::default().silent(true).noremap(true).build()
 }

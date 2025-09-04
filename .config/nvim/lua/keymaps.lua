@@ -8,9 +8,11 @@ end
 
 
 local function set_complex_keymaps()
-  keymap_set('n', 'i', rua.keymaps.smart_ident_on_blank_line, { expr = true, })
-  keymap_set('n', 'dd', rua.keymaps.smart_dd_no_yank_empty_line, { noremap = true, expr = true, })
-  keymap_set('v', '<esc>', rua.keymaps.visual_esc, { expr = true, })
+  local base_opts = { expr = true, }
+
+  keymap_set('n', 'i', rua.keymaps.smart_ident_on_blank_line, base_opts)
+  keymap_set('n', 'dd', rua.keymaps.smart_dd_no_yank_empty_line, base_opts)
+  keymap_set('v', '<esc>', rua.keymaps.visual_esc, base_opts)
   keymap_set({ 'n', 'v', }, '<leader>t', rua.run_test)
   keymap_set('n', '<leader>gx', require('opener').open_under_cursor)
 
