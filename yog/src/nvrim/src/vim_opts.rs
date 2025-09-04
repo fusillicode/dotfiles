@@ -16,6 +16,47 @@ pub fn dict() -> Dictionary {
     }
 }
 
+/// Sets a Vim option by `name` to `value` within the given [`OptionOpts`].
+///
+/// Errors are notified to Nvim via [`notify_error`].
+pub fn set<Opt: ToObject + core::fmt::Debug + core::marker::Copy>(name: &str, value: Opt, opts: &OptionOpts) {
+    if let Err(error) = nvim_oxi::api::set_option_value(name, value, opts) {
+        crate::oxi_ext::notify_error(&format!(
+            "cannot set opt {name:?} value {value:#?} with {opts:#?}, error {error:#?}"
+        ));
+    }
+}
+
+/// Appends to a var named `name` the supplied value `value`.
+///
+/// The current value is read as a [`String`] and modified by appending the supplied one with a
+/// comma.
+///
+/// Errors are notified to Nvim via [`notify_error`].
+pub fn append(name: &str, value: &str, opts: &OptionOpts) {
+    let Ok(mut cur_value) = nvim_oxi::api::get_option_value::<String>(name, opts).inspect_err(|error| {
+        crate::oxi_ext::notify_error(&format!(
+            "cannot get current value of opt {name:?} with {opts:#?} to append {value:#?}, error {error:#?}"
+        ));
+    }) else {
+        return;
+    };
+    // This shenanigan with `comma` and `write!` is to avoid additional allocations
+    let comma = if cur_value.is_empty() { "" } else { "," };
+    if let Err(error) = write!(cur_value, "{comma}{value}") {
+        crate::oxi_ext::notify_error(&format!(
+            "cannot append value {value} to current value {cur_value} of opt {name:?} with {opts:#?}, error {error:#?}"
+        ));
+    }
+    set(name, &*cur_value, opts);
+}
+
+/// Returns [`OptionOpts`] configured for the global scope.
+pub fn global_scope() -> OptionOpts {
+    OptionOptsBuilder::default().scope(OptionScope::Global).build()
+}
+
+/// Sets the desired Nvim options.
 fn set_all(_: ()) {
     let global_scope = global_scope();
 
@@ -59,34 +100,4 @@ fn set_all(_: ()) {
     append("clipboard", "unnamedplus", &global_scope);
     append("iskeyword", "-", &global_scope);
     append("jumpoptions", "stack", &global_scope);
-}
-
-pub fn set<Opt: ToObject + core::fmt::Debug + core::marker::Copy>(name: &str, value: Opt, opts: &OptionOpts) {
-    if let Err(error) = nvim_oxi::api::set_option_value(name, value, opts) {
-        crate::oxi_ext::notify_error(&format!(
-            "cannot set opt {name:?} value {value:#?} with {opts:#?}, error {error:#?}"
-        ));
-    }
-}
-
-pub fn append(name: &str, value: &str, opts: &OptionOpts) {
-    let Ok(mut cur_value) = nvim_oxi::api::get_option_value::<String>(name, opts).inspect_err(|error| {
-        crate::oxi_ext::notify_error(&format!(
-            "cannot get current value of opt {name:?} with {opts:#?} to append {value:#?}, error {error:#?}"
-        ));
-    }) else {
-        return;
-    };
-    // This shenanigan with `comma` and `write!` is to avoid additional allocations
-    let comma = if cur_value.is_empty() { "" } else { "," };
-    if let Err(error) = write!(cur_value, "{comma}{value}") {
-        crate::oxi_ext::notify_error(&format!(
-            "cannot append value {value} to current value {cur_value} of opt {name:?} with {opts:#?}, error {error:#?}"
-        ));
-    }
-    set(name, &*cur_value, opts);
-}
-
-pub fn global_scope() -> OptionOpts {
-    OptionOptsBuilder::default().scope(OptionScope::Global).build()
 }
