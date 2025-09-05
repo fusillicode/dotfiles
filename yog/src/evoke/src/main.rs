@@ -85,12 +85,10 @@ fn main() -> color_eyre::Result<()> {
         .status()?
         .exit_ok()?;
 
-    // Bins first
     for bin in BINS {
         cp(&cargo_target_location.join(bin), &bins_path.join(bin))?;
     }
 
-    // Libs second
     for (source_lib_name, target_lib_name) in LIBS {
         cp(
             &cargo_target_location.join(source_lib_name),
