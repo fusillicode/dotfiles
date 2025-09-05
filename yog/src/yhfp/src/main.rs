@@ -8,6 +8,12 @@ use utils::editor::Editor;
 use utils::hx::HxStatusLine;
 
 /// Copies file path from Helix editor to clipboard.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Executing `wezterm` fails or returns a non-zero exit status.
+/// - UTF-8 conversion fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
@@ -38,6 +44,11 @@ fn main() -> color_eyre::Result<()> {
 }
 
 /// Formats Helix status line into file path with line number.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - UTF-8 conversion fails.
 fn format_hx_status_line(hx_status_line: &HxStatusLine) -> color_eyre::Result<String> {
     let file_path = hx_status_line
         .file_path

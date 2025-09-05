@@ -45,7 +45,18 @@ mod installers;
 /// * `dev_tools_dir` - Directory for tool installation
 /// * `bin_dir` - Directory for binary symlinks
 /// * `tool_names` - Optional specific tools to install
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - An underlying IO, network, environment, parsing, or external command operation fails.
 #[allow(clippy::too_many_lines)]
+/// Main.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - A filesystem operation (open/read/write/remove) fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

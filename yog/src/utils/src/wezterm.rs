@@ -24,8 +24,9 @@ pub fn activate_pane_cmd(pane_id: i64) -> String {
 /// # Errors
 ///
 /// Returns an error if:
-/// - `WEZTERM_PANE` is unset.
+/// - A required environment variable is missing or invalid Unicode.
 /// - `WEZTERM_PANE` cannot be parsed as an integer.
+/// - `WEZTERM_PANE` is unset.
 pub fn get_current_pane_id() -> color_eyre::Result<i64> {
     Ok(std::env::var("WEZTERM_PANE")?.parse()?)
 }
@@ -38,6 +39,8 @@ pub fn get_current_pane_id() -> color_eyre::Result<i64> {
 /// # Errors
 ///
 /// Returns an error if:
+/// - Executing `wezterm` fails or returns a non-zero exit status.
+/// - JSON serialization or deserialization fails.
 /// - Invoking `wezterm` fails.
 /// - Output JSON cannot be parsed.
 pub fn get_all_panes(envs: &[(&str, &str)]) -> color_eyre::Result<Vec<WeztermPane>> {
@@ -52,8 +55,8 @@ pub fn get_all_panes(envs: &[(&str, &str)]) -> color_eyre::Result<Vec<WeztermPan
 /// # Errors
 ///
 /// Returns an error if:
-/// - The current pane ID is not present in `panes`.
 /// - No pane in the same tab matches any of `pane_titles`.
+/// - The current pane ID is not present in `panes`.
 pub fn get_sibling_pane_with_titles(
     panes: &[WeztermPane],
     current_pane_id: i64,

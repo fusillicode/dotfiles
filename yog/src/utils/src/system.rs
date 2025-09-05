@@ -72,6 +72,7 @@ pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
 /// # Errors
 ///
 /// Returns an error if:
+/// - A filesystem operation (open/read/write/remove) fails.
 /// - File metadata cannot be read.
 /// - Permissions cannot be updated.
 pub fn chmod_x<P: AsRef<Path>>(path: P) -> color_eyre::Result<()> {
@@ -86,8 +87,9 @@ pub fn chmod_x<P: AsRef<Path>>(path: P) -> color_eyre::Result<()> {
 /// # Errors
 ///
 /// Returns an error if:
-/// - Directory traversal fails.
+/// - A filesystem operation (open/read/write/remove) fails.
 /// - A chmod operation fails.
+/// - Directory traversal fails.
 pub fn chmod_x_files_in_dir<P: AsRef<Path>>(dir: P) -> color_eyre::Result<()> {
     for target_res in std::fs::read_dir(dir)? {
         let target = target_res?.path();
@@ -103,8 +105,9 @@ pub fn chmod_x_files_in_dir<P: AsRef<Path>>(dir: P) -> color_eyre::Result<()> {
 /// # Errors
 ///
 /// Returns an error if:
-/// - The existing link cannot be removed.
+/// - A filesystem operation (open/read/write/remove) fails.
 /// - Creating the symlink fails.
+/// - The existing link cannot be removed.
 pub fn ln_sf<P: AsRef<Path>>(target: P, link: P) -> color_eyre::Result<()> {
     if link.as_ref().try_exists()? {
         std::fs::remove_file(&link)?;
@@ -118,8 +121,9 @@ pub fn ln_sf<P: AsRef<Path>>(target: P, link: P) -> color_eyre::Result<()> {
 /// # Errors
 ///
 /// Returns an error if:
-/// - Traversing `target_dir` fails.
+/// - A filesystem operation (open/read/write/remove) fails.
 /// - Creating an individual symlink fails.
+/// - Traversing `target_dir` fails.
 pub fn ln_sf_files_in_dir<P: AsRef<std::path::Path>>(target_dir: P, link_dir: P) -> color_eyre::Result<()> {
     for target in std::fs::read_dir(target_dir)? {
         let target = target?.path();
@@ -139,6 +143,7 @@ pub fn ln_sf_files_in_dir<P: AsRef<std::path::Path>>(target_dir: P, link_dir: P)
 /// # Errors
 ///
 /// Returns an error if:
+/// - A filesystem operation (open/read/write/remove) fails.
 /// - Directory traversal fails.
 /// - Removing a dead symlink fails.
 pub fn rm_dead_symlinks(dir: &str) -> color_eyre::Result<()> {
@@ -159,7 +164,8 @@ pub fn rm_dead_symlinks(dir: &str) -> color_eyre::Result<()> {
 ///
 /// # Errors
 ///
-/// Returns an error only if:
+/// Returns an error if:
+/// - A filesystem operation (open/read/write/remove) fails.
 /// - An unexpected I/O failure (other than NotFound) occurs.
 pub fn rm_f<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
     std::fs::remove_file(path).or_else(|error| {
@@ -179,10 +185,11 @@ pub fn rm_f<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
 /// # Errors
 ///
 /// Returns an error if:
+/// - A filesystem operation (open/read/write/remove) fails.
 /// - [`from`] does not exist.
+/// - The atomic rename fails.
 /// - The destination's parent directory or file name cannot be resolved.
 /// - The temporary copy fails.
-/// - The atomic rename fails.
 pub fn atomic_cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
     if !from.exists() {
         return Err(eyre!("from {} does not exists", from.display()));

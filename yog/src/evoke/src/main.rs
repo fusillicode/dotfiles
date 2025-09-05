@@ -28,6 +28,11 @@ const NVIM_LIBS_DEFAULT_PATH: &[&str] = &[".config", "nvim", "lua"];
 /// * `nvim_libs_path` – Destination for renamed Neovim libs (e.g. `nvrim.so`), defaulting to `$HOME/.config/nvim/lua`.
 ///
 /// Omit trailing path arguments to accept defaults.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - A required environment variable is missing or invalid Unicode.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

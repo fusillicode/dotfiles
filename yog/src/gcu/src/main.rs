@@ -13,6 +13,11 @@ use utils::sk::SkimItem;
 mod git;
 
 /// Git branch management with interactive selection, creation, and PR URL handling.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - An underlying operation fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
@@ -32,6 +37,11 @@ fn main() -> color_eyre::Result<()> {
 }
 
 /// Interactive selection of Git branches to switch to.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - An underlying operation fails.
 fn autocomplete_git_branches() -> color_eyre::Result<()> {
     let mut git_refs = git::get_local_and_remote_refs()?;
     git::keep_local_and_untracked_refs(&mut git_refs);
@@ -44,6 +54,11 @@ fn autocomplete_git_branches() -> color_eyre::Result<()> {
 }
 
 /// Switches to branch or creates it if missing. Handles PR URLs.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - An underlying operation fails.
 fn switch_branch_or_create_if_missing(arg: &str) -> color_eyre::Result<()> {
     if let Ok(url) = Url::parse(arg) {
         utils::github::log_into_github()?;
@@ -54,6 +69,11 @@ fn switch_branch_or_create_if_missing(arg: &str) -> color_eyre::Result<()> {
 }
 
 /// Checks out files from branch or creates new branch.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - An underlying operation fails.
 fn checkout_files_or_create_branch_if_missing(args: &[&str]) -> color_eyre::Result<()> {
     if let Some((branch, files)) = get_branch_and_files_to_checkout(args)? {
         return checkout_files(files, branch);
@@ -62,6 +82,11 @@ fn checkout_files_or_create_branch_if_missing(args: &[&str]) -> color_eyre::Resu
 }
 
 /// Identifies branch and files from arguments.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - An underlying operation fails.
 fn get_branch_and_files_to_checkout<'a>(args: &'a [&'a str]) -> color_eyre::Result<Option<(&'a str, &'a [&'a str])>> {
     if let Some((branch, files)) = args.split_last()
         && local_branch_exists(branch)?
@@ -72,6 +97,11 @@ fn get_branch_and_files_to_checkout<'a>(args: &'a [&'a str]) -> color_eyre::Resu
 }
 
 /// Checks if a local Git branch exists.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Executing `git` fails or returns a non-zero exit status.
 fn local_branch_exists(branch: &str) -> color_eyre::Result<bool> {
     match Command::new("git").args(["rev-parse", "--verify", branch]).exec() {
         Ok(_) => Ok(true),
@@ -81,6 +111,11 @@ fn local_branch_exists(branch: &str) -> color_eyre::Result<bool> {
 }
 
 /// Checks out specific files from a branch.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Executing `git` fails or returns a non-zero exit status.
 fn checkout_files(files: &[&str], branch: &str) -> color_eyre::Result<()> {
     let mut args = vec!["checkout", branch];
     args.extend_from_slice(files);
@@ -92,6 +127,11 @@ fn checkout_files(files: &[&str], branch: &str) -> color_eyre::Result<()> {
 }
 
 /// Switches to the specified Git branch.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Executing `git` fails or returns a non-zero exit status.
 fn switch_branch(branch: &str) -> color_eyre::Result<()> {
     Command::new("git").args(["switch", branch]).exec()?;
     println!("{} {}", ">".magenta().bold(), branch.bold());
@@ -99,6 +139,11 @@ fn switch_branch(branch: &str) -> color_eyre::Result<()> {
 }
 
 /// Creates a new Git branch and switches to it.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Executing `git` fails or returns a non-zero exit status.
 fn create_branch(branch: &str) -> color_eyre::Result<()> {
     if !should_create_new_branch(branch)? {
         return Ok(());
@@ -109,6 +154,11 @@ fn create_branch(branch: &str) -> color_eyre::Result<()> {
 }
 
 /// Determines if a new branch should be created based on safety logic.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - An underlying operation fails.
 fn should_create_new_branch(branch: &str) -> color_eyre::Result<bool> {
     if is_default_branch(branch) {
         return Ok(true);
@@ -134,6 +184,11 @@ fn is_default_branch(branch: &str) -> bool {
 }
 
 /// Creates branch if missing, otherwise switches to it.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - An underlying operation fails.
 fn create_branch_if_missing(branch: &str) -> color_eyre::Result<()> {
     if let Err(error) = create_branch(branch) {
         if error.to_string().contains("already exists") {
@@ -146,6 +201,11 @@ fn create_branch_if_missing(branch: &str) -> color_eyre::Result<()> {
 }
 
 /// Builds a safe branch name from arguments.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - An underlying operation fails.
 fn build_branch_name(args: &[&str]) -> color_eyre::Result<String> {
     fn is_permitted(c: char) -> bool {
         const PERMITTED_CHARS: [char; 3] = ['.', '/', '_'];

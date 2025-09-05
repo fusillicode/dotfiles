@@ -28,7 +28,6 @@ pub fn get(_: ()) -> Option<WordUnderCursor> {
 
 #[derive(Serialize)]
 #[serde(tag = "kind", content = "value")]
-#[allow(dead_code)]
 pub enum WordUnderCursor {
     Url(String),
     BinaryFile(String),
@@ -48,6 +47,7 @@ impl nvim_oxi::lua::Pushable for WordUnderCursor {
 }
 
 impl ToObject for WordUnderCursor {
+    /// To object.
     fn to_object(self) -> Result<Object, nvim_oxi::conversion::Error> {
         self.serialize(Serializer::new()).map_err(Into::into)
     }
@@ -68,7 +68,13 @@ impl From<String> for WordUnderCursor {
     }
 }
 
-#[allow(dead_code)]
+/// Exec file cmd.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Executing `file` fails or returns a non-zero exit status.
+/// - UTF-8 conversion fails.
 fn exec_file_cmd(path: &str) -> color_eyre::Result<FileCmdOutput> {
     let output = std::str::from_utf8(&Command::new("file").args([path, "-I"]).exec()?.stdout)?.to_lowercase();
     if output.contains(" inode/directory;") {
@@ -86,7 +92,6 @@ fn exec_file_cmd(path: &str) -> color_eyre::Result<FileCmdOutput> {
     Ok(FileCmdOutput::Unknown(path.to_owned()))
 }
 
-#[allow(dead_code)]
 #[derive(Serialize)]
 pub enum FileCmdOutput {
     BinaryFile(String),

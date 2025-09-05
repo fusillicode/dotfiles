@@ -27,6 +27,11 @@ pub struct VaultCreds {
     /// Database password.
     pub password: String,
     /// Database username.
+    ///
+    ///
+    /// Returns an error if:
+    /// - Executing `vault` fails or returns non-zero exit status.
+    /// - UTF-8 conversion fails.
     pub username: String,
 }
 
@@ -41,8 +46,10 @@ pub struct VaultCreds {
 /// # Errors
 ///
 /// Returns an error if:
-/// - Token lookup fails for a reason other than permission denied.
+/// - Executing `vault` fails or returns a non-zero exit status.
+/// - UTF-8 conversion fails.
 /// - OIDC/Okta login fails.
+/// - Token lookup fails for a reason other than permission denied.
 pub fn log_into_vault_if_required() -> color_eyre::Result<()> {
     let token_lookup = Command::new("vault").args(["token", "lookup"]).output()?;
     if token_lookup.status.success() {

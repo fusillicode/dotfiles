@@ -18,6 +18,12 @@ use itertools::Itertools;
 /// * `cooldown_secs` - Seconds to wait between executions
 /// * `exit_condition` - "ok" (stop on success) or "ko" (stop on failure)
 /// * `command` - Command to execute
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Executing `sh` fails or returns a non-zero exit status.
+/// - UTF-8 conversion fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
@@ -84,6 +90,13 @@ enum ExitCond {
 
 impl ExitCond {
     /// Determines if the loop should break.
+    ///
+    ///
+    /// Returns an error if:
+    /// - An underlying IO, parsing, or environment operation fails.
+    ///
+    /// Returns an error if:
+    /// - An underlying IO, network, environment, parsing, or external command operation fails.
     #[allow(clippy::suspicious_operation_groupings)]
     pub const fn should_break(&self, cmd_res: Result<(), ExitStatusError>) -> bool {
         self.is_ok() && cmd_res.is_ok() || !self.is_ok() && cmd_res.is_err()

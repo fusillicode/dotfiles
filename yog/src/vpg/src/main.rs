@@ -20,6 +20,14 @@ mod vault;
 /// # Arguments
 ///
 /// * `alias` - Database alias (optional, interactive selection if not provided)
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Executing one of the external commands (pgcli, vault) fails or returns a non-zero exit status.
+/// - A filesystem operation (open/read/write/remove) fails.
+/// - JSON serialization or deserialization fails.
+/// - A required environment variable is missing or invalid Unicode.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

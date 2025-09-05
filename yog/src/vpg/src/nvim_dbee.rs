@@ -9,6 +9,12 @@ use serde::Serialize;
 use crate::pgpass::PgpassEntry;
 
 /// Saves or updates the nvim-dbee connections file with the provided [`PgpassEntry`], setting secure permissions.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - A filesystem operation (open/read/write/remove) fails.
+/// - JSON serialization or deserialization fails.
 pub fn save_new_nvim_dbee_conns_file(updated_pg_pass_entry: &PgpassEntry, conns_path: &Path) -> color_eyre::Result<()> {
     let conns = get_updated_conns(updated_pg_pass_entry, conns_path)?;
 
@@ -25,6 +31,13 @@ pub fn save_new_nvim_dbee_conns_file(updated_pg_pass_entry: &PgpassEntry, conns_
     Ok(())
 }
 
+/// Get updated conns.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - A filesystem operation (open/read/write/remove) fails.
+/// - JSON serialization or deserialization fails.
 fn get_updated_conns(updated_pg_pass_entry: &PgpassEntry, conns_path: &Path) -> color_eyre::Result<Vec<NvimDbeeConn>> {
     let updated_conn = NvimDbeeConn::from(updated_pg_pass_entry);
 

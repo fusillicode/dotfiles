@@ -8,6 +8,11 @@ use fkr::FkrOption;
 /// # Arguments
 ///
 /// * `cp` - Copy generated value to clipboard
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - An underlying operation fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
