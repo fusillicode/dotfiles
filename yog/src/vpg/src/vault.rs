@@ -39,7 +39,10 @@ pub struct VaultCreds {
 /// 4. Fails on unexpected lookup errors or login failures.
 ///
 /// # Errors
-/// Returns errors for non-permission-denied lookup failures or failed logins.
+///
+/// Returns an error if:
+/// - Token lookup fails for a reason other than permission denied.
+/// - OIDC/Okta login fails.
 pub fn log_into_vault_if_required() -> color_eyre::Result<()> {
     let token_lookup = Command::new("vault").args(["token", "lookup"]).output()?;
     if token_lookup.status.success() {

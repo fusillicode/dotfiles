@@ -125,8 +125,9 @@ where
 ///
 /// # Errors
 ///
-/// Propagates any error from [`utils::system::atomic_cp`]. Fails if the
-/// underlying atomic copy or final rename cannot be performed.
+/// Returns an error if:
+/// - [`utils::system::atomic_cp`] fails to copy.
+/// - The final rename or write cannot be performed.
 fn cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
     utils::system::atomic_cp(from, to)?;
     println!("{} {} to {}", "Installed".green().bold(), from.display(), to.display());

@@ -12,9 +12,9 @@ use crate::cmd::CmdExt as _;
 /// # Errors
 ///
 /// Returns an error if:
-/// - the given path is not inside a git repository,
-/// - running `git rev-parse --show-toplevel` fails,
-/// - or the output cannot be decoded as UTF-8.
+/// - The given path is not inside a Git repository.
+/// - Running `git rev-parse --show-toplevel` fails.
+/// - The output cannot be decoded as UTF-8.
 pub fn get_repo_root(file_path: Option<&Path>) -> color_eyre::Result<String> {
     let cmd = if let Some(file_path) = file_path {
         let file_parent_dir = file_path

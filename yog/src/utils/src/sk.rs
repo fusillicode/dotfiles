@@ -12,7 +12,10 @@ use skim::prelude::*;
 ///
 /// # Errors
 ///
-/// Returns an error if the skim process fails to start, run, or its output cannot be read.
+/// Returns an error if:
+/// - The skim process fails to start.
+/// - The process fails during execution.
+/// - Output cannot be read.
 pub fn select_yes_or_no(prompt: String) -> color_eyre::Result<Option<YesNo>> {
     let sk_opts = base_sk_opts(&mut SkimOptionsBuilder::default())
         .prompt(prompt)
@@ -53,7 +56,9 @@ impl SkimItem for YesNo {
 ///
 /// # Errors
 ///
-/// Returns an error if skim options cannot be built or if running skim fails.
+/// Returns an error if:
+/// - Skim options cannot be built.
+/// - Running skim fails.
 pub fn get_item<T: SkimItem + Clone + core::fmt::Debug>(
     items: Vec<T>,
     sk_opts: Option<SkimOptions>,
@@ -84,7 +89,9 @@ pub fn get_item<T: SkimItem + Clone + core::fmt::Debug>(
 ///
 /// # Errors
 ///
-/// Returns an error if skim fails to run, or if input parsing fails during selection.
+/// Returns an error if:
+/// - Skim fails to run.
+/// - Input parsing during selection fails.
 pub fn get_item_from_cli_args_or_sk_select<'a, CAS, O, OBA, OF>(
     cli_args: &'a [String],
     mut cli_arg_selector: CAS,

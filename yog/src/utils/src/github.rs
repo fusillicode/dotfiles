@@ -17,7 +17,9 @@ const GITHUB_PR_ID_QUERY_KEY: &str = "pr";
 ///
 /// # Errors
 ///
-/// Returns an error if invoking `gh` fails or if authentication cannot be completed.
+/// Returns an error if:
+/// - Invoking `gh auth status` fails.
+/// - Authentication via `gh auth login` fails.
 pub fn log_into_github() -> color_eyre::Result<()> {
     if crate::cmd::silent_cmd("gh")
         .args(["auth", "status"])
@@ -37,7 +39,9 @@ pub fn log_into_github() -> color_eyre::Result<()> {
 ///
 /// # Errors
 ///
-/// Returns an error if the `gh` command fails or the output cannot be parsed into a string.
+/// Returns an error if:
+/// - Invoking `gh api` fails.
+/// - Output cannot be parsed to UTF-8.
 pub fn get_latest_release(repo: &str) -> color_eyre::Result<String> {
     let output = Command::new("gh")
         .args(["api", &format!("repos/{repo}/releases/latest"), "--jq=.tag_name"])
@@ -50,7 +54,9 @@ pub fn get_latest_release(repo: &str) -> color_eyre::Result<String> {
 ///
 /// # Errors
 ///
-/// Returns an error if the `gh` command fails for the given PR, or if the output cannot be parsed.
+/// Returns an error if:
+/// - Invoking `gh pr view` fails.
+/// - Output cannot be parsed.
 pub fn get_branch_name_from_url(url: &Url) -> color_eyre::Result<String> {
     let pr_id = extract_pr_id_form_url(url)?;
 
