@@ -4,7 +4,9 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use std::thread::JoinHandle;
 
+use chrono::Utc;
 use color_eyre::eyre;
+use color_eyre::eyre::Context;
 use color_eyre::eyre::OptionExt as _;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
@@ -150,4 +152,42 @@ pub fn rm_f<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
         }
         Err(error)
     })
+}
+
+/// Atomically copies a file from [`from`] to [`to`].
+///
+/// The content is first written to a uniquely named temporary sibling (with
+/// PID and timestamp) and then moved into place with [`std::fs::rename`]. This
+/// minimizes the window where readers could observe a partially written file.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - [`from`] does not exist.
+/// - The destination's parent directory or file name cannot be resolved.
+/// - The temporary copy fails.
+/// - The atomic rename fails.
+pub fn atomic_cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
+    if !from.exists() {
+        return Err(eyre!("from {} does not exists", from.display()));
+    }
+
+    let tmp_name = format!(
+        "{}.tmp-{}-{}",
+        to.file_name()
+            .ok_or_else(|| eyre!("cannot get file name of {}", to.display()))?
+            .to_string_lossy(),
+        std::process::id(),
+        Utc::now().to_rfc3339()
+    );
+    let tmp_path = to
+        .parent()
+        .ok_or_else(|| eyre!("cannot get parent of {}", to.display()))?
+        .join(tmp_name);
+
+    std::fs::copy(from, &tmp_path)
+        .with_context(|| format!("copying {} to temp {}", from.display(), tmp_path.display()))?;
+    std::fs::rename(&tmp_path, to).with_context(|| format!("renaming {} to {}", tmp_path.display(), to.display()))?;
+
+    Ok(())
 }

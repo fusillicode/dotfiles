@@ -3,10 +3,7 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use chrono::Utc;
-use color_eyre::eyre::Context;
-use color_eyre::eyre::eyre;
-use color_eyre::owo_colors::OwoColorize as _;
+use color_eyre::owo_colors::OwoColorize;
 
 /// List of binary names that should be symlinked after building.
 const BINS: &[&str] = &["idt", "yghfl", "yhfp", "oe", "catl", "gcu", "vpg", "try", "fkr"];
@@ -88,11 +85,11 @@ fn main() -> color_eyre::Result<()> {
         .exit_ok()?;
 
     for bin in BINS {
-        atomic_cp(&cargo_target_location.join(bin), &bins_path.join(bin))?;
+        cp(&cargo_target_location.join(bin), &bins_path.join(bin))?;
     }
 
     for (source_lib_name, target_lib_name) in LIBS {
-        atomic_cp(
+        cp(
             &cargo_target_location.join(source_lib_name),
             &nvim_libs_path.join(target_lib_name),
         )?;
@@ -123,29 +120,15 @@ where
     false
 }
 
-/// Atomically copies a file by writing to a temp one and then renaming.
-fn atomic_cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
-    if !from.exists() {
-        return Err(eyre!("from {} does not exists", from.display()));
-    }
-
-    let tmp_name = format!(
-        "{}.tmp-{}-{}",
-        to.file_name()
-            .ok_or_else(|| eyre!("cannot get file name of {}", to.display()))?
-            .to_string_lossy(),
-        std::process::id(),
-        Utc::now().to_rfc3339()
-    );
-    let tmp_path = to
-        .parent()
-        .ok_or_else(|| eyre!("cannot get parent of {}", to.display()))?
-        .join(tmp_name);
-
-    std::fs::copy(from, &tmp_path)
-        .with_context(|| format!("copying {} to temp {}", from.display(), tmp_path.display()))?;
-    std::fs::rename(&tmp_path, to).with_context(|| format!("renaming {} to {}", tmp_path.display(), to.display()))?;
-
+/// Copies a built binary or library from [`from`] to [`to`] using
+/// [`utils::system::atomic_cp`] and prints an "Installed" status line.
+///
+/// # Errors
+///
+/// Propagates any error from [`utils::system::atomic_cp`]. Fails if the
+/// underlying atomic copy or final rename cannot be performed.
+fn cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
+    utils::system::atomic_cp(from, to)?;
     println!("{} {} to {}", "Installed".green().bold(), from.display(), to.display());
     Ok(())
 }
