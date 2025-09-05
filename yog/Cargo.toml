@@ -13,16 +13,16 @@ keywords = ["cli", "tools", "development", "productivity"]
 categories = ["command-line-utilities", "development-tools"]
 
 [workspace.dependencies]
-bitflags = { version = "2.9.4" }
+bitflags = { version = "2.9" }
 color-eyre = { version = "0.6" }
 chrono = { version = "0.4", features = ["serde"] }
 fake = { version = "4.4", features = ["derive"] }
-getrandom = { version = "0.3.3" }
+getrandom = { version = "0.3" }
 itertools = { version = "0.14" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 strum = { version = "0.27", features = ["derive"] }
-thiserror = { version = "2.0.16" }
+thiserror = { version = "2.0" }
 url = { version = "2.5", features = ["serde"] }
 utils = { path = "./src/utils" }
 
