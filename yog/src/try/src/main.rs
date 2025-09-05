@@ -91,9 +91,7 @@ enum ExitCond {
 impl ExitCond {
     /// Determines if the loop should break.
     ///
-    ///
-    /// Returns an error if:
-    /// - An underlying IO, parsing, or environment operation fails.
+    /// # Errors
     ///
     /// Returns an error if:
     /// - An underlying IO, network, environment, parsing, or external command operation fails.

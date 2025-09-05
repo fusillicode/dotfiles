@@ -71,7 +71,6 @@ impl ExtmarkMeta {
 
 /// Implementation of [`FromObject`] for [`Extmark`].
 impl FromObject for Extmark {
-    /// From object.
     fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
         Self::deserialize(Deserializer::new(obj)).map_err(Into::into)
     }
