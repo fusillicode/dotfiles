@@ -26,13 +26,28 @@ pub fn get(_: ()) -> Option<WordUnderCursor> {
         .map(WordUnderCursor::from)
 }
 
+/// Classified representation of the "word" found under the cursor.
+///
+/// Used to distinguish between:
+/// - URLs
+/// - existing binary files
+/// - existing text files
+/// - existing directories
+/// - plain tokens (fallback [`Word`]
+///
+/// Serialized to Lua as a tagged table (`{ kind = "...", value = "..." }`).
 #[derive(Serialize)]
 #[serde(tag = "kind", content = "value")]
 pub enum WordUnderCursor {
+    /// A string that successfully parsed as a [`Url`] via [`Url::parse`].
     Url(String),
+    /// A filesystem path identified as a binary file by [`exec_file_cmd`].
     BinaryFile(String),
+    /// A filesystem path identified as a (plain / csv) text file by [`exec_file_cmd`].
     TextFile(String),
+    /// A filesystem path identified as a directory by [`exec_file_cmd`].
     Directory(String),
+    /// A fallback plain token (word) when no more specific classification applied.
     Word(String),
 }
 
@@ -47,12 +62,16 @@ impl nvim_oxi::lua::Pushable for WordUnderCursor {
 }
 
 impl ToObject for WordUnderCursor {
-    /// To object.
     fn to_object(self) -> Result<Object, nvim_oxi::conversion::Error> {
         self.serialize(Serializer::new()).map_err(Into::into)
     }
 }
 
+/// Classify a [`String`] captured under the cursor into a [`WordUnderCursor`].
+///
+/// 1. If it parses as a URL with [`Url::parse`], returns [`WordUnderCursor::Url`].
+/// 2. Otherwise invokes [`exec_file_cmd`] to check filesystem type.
+/// 3. Falls back to [`WordUnderCursor::Word`] on errors or unknown kinds.
 impl From<String> for WordUnderCursor {
     fn from(value: String) -> Self {
         if Url::parse(&value).is_ok() {
@@ -68,13 +87,22 @@ impl From<String> for WordUnderCursor {
     }
 }
 
-/// Exec file cmd.
+/// Execute the system `file -I` command for `path` and classify the MIME output
+/// into a [`FileCmdOutput`].
+///
+/// Used to distinguish:
+/// - directories
+/// - text files
+/// - binary files
+/// - missing paths
+/// - unknown types
 ///
 /// # Errors
 ///
 /// Returns an error if:
-/// - Executing `file` fails or returns a non-zero exit status.
-/// - UTF-8 conversion fails.
+/// - launching or waiting on the `file` command fails
+/// - the command exits with non-success (see [`utils::cmd::CmdExt`])
+/// - stdout cannot be decoded as valid UTF-8
 fn exec_file_cmd(path: &str) -> color_eyre::Result<FileCmdOutput> {
     let output = std::str::from_utf8(&Command::new("file").args([path, "-I"]).exec()?.stdout)?.to_lowercase();
     if output.contains(" inode/directory;") {
@@ -92,6 +120,7 @@ fn exec_file_cmd(path: &str) -> color_eyre::Result<FileCmdOutput> {
     Ok(FileCmdOutput::Unknown(path.to_owned()))
 }
 
+/// Raw classification result returned by [`exec_file_cmd`].
 #[derive(Serialize)]
 pub enum FileCmdOutput {
     BinaryFile(String),
@@ -107,7 +136,7 @@ pub enum FileCmdOutput {
 ///
 /// - is out of bounds
 /// - doesn't point to a char boundary
-/// - doesn't point to a whitespace
+/// - points to a whitespace
 fn get_word_at_index(s: &str, idx: usize) -> Option<&str> {
     let byte_idx = convert_visual_to_byte_idx(s, idx)?;
 

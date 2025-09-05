@@ -166,7 +166,7 @@ pub fn rm_dead_symlinks(dir: &str) -> color_eyre::Result<()> {
 ///
 /// Returns an error if:
 /// - A filesystem operation (open/read/write/remove) fails.
-/// - An unexpected I/O failure (other than NotFound) occurs.
+/// - An unexpected I/O failure (other than [`std::io::ErrorKind::NotFound`]) occurs.
 pub fn rm_f<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
     std::fs::remove_file(path).or_else(|error| {
         if std::io::ErrorKind::NotFound == error.kind() {
