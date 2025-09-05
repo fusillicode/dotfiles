@@ -606,6 +606,7 @@ dependencies = [
 name = "evoke"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "color-eyre",
  "utils",
 ]

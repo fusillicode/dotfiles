@@ -3,7 +3,9 @@
 use std::path::Path;
 use std::path::PathBuf;
 
+use chrono::Utc;
 use color_eyre::eyre::Context;
+use color_eyre::eyre::eyre;
 use color_eyre::owo_colors::OwoColorize as _;
 
 /// List of binary names that should be symlinked after building.
@@ -86,11 +88,11 @@ fn main() -> color_eyre::Result<()> {
         .exit_ok()?;
 
     for bin in BINS {
-        cp(&cargo_target_location.join(bin), &bins_path.join(bin))?;
+        atomic_cp(&cargo_target_location.join(bin), &bins_path.join(bin))?;
     }
 
     for (source_lib_name, target_lib_name) in LIBS {
-        cp(
+        atomic_cp(
             &cargo_target_location.join(source_lib_name),
             &nvim_libs_path.join(target_lib_name),
         )?;
@@ -121,10 +123,30 @@ where
     false
 }
 
-/// Copies `from` to `to` and prints to standard output the desired message.
-fn cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
-    std::fs::copy(from, to).with_context(|| format!("from {}, to {}", from.display(), to.display()))?;
-    println!("{} {} to {}", "Copied".green().bold(), from.display(), to.display(),);
+/// Atomically copies a file by writing to a temp one and then renaming.
+fn atomic_cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
+    if !from.exists() {
+        return Err(eyre!("from {} does not exists", from.display()));
+    }
+
+    let tmp_name = format!(
+        "{}.tmp-{}-{}",
+        to.file_name()
+            .ok_or_else(|| eyre!("cannot get file name of {}", to.display()))?
+            .to_string_lossy(),
+        std::process::id(),
+        Utc::now().to_rfc3339()
+    );
+    let tmp_path = to
+        .parent()
+        .ok_or_else(|| eyre!("cannot get parent of {}", to.display()))?
+        .join(tmp_name);
+
+    std::fs::copy(from, &tmp_path)
+        .with_context(|| format!("copying {} to temp {}", from.display(), tmp_path.display()))?;
+    std::fs::rename(&tmp_path, to).with_context(|| format!("renaming {} to {}", tmp_path.display(), to.display()))?;
+
+    println!("{} {} to {}", "Installed".green().bold(), from.display(), to.display());
     Ok(())
 }
 

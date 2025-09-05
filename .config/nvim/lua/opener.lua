@@ -4,7 +4,6 @@ local buffer = require('nvrim').buffer
 
 function M.open_under_cursor()
   local word = buffer.get_word_under_cursor()
-  require('utils').dbg(word)
   -- Do not open binary files or "words". Only opens URLs, directories, and text files.
   if not word or word.kind == 'BinaryFile' or word.kind == 'Word' then return end
 
