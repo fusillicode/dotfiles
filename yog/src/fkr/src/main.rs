@@ -8,13 +8,6 @@ use fkr::FkrOption;
 /// # Arguments
 ///
 /// * `cp` - Copy generated value to clipboard
-///
-/// # Examples
-///
-/// ```bash
-/// fkr
-/// fkr cp
-/// ```
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

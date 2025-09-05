@@ -45,13 +45,6 @@ mod installers;
 /// * `dev_tools_dir` - Directory for tool installation
 /// * `bin_dir` - Directory for binary symlinks
 /// * `tool_names` - Optional specific tools to install
-///
-/// # Examples
-///
-/// ```bash
-/// idt ~/.dev-tools ~/.local/bin
-/// idt ~/.dev-tools ~/.local/bin rust-analyzer typescript-language-server
-/// ```
 #[allow(clippy::too_many_lines)]
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;

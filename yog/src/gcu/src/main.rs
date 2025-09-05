@@ -13,16 +13,6 @@ use utils::sk::SkimItem;
 mod git;
 
 /// Git branch management with interactive selection, creation, and PR URL handling.
-///
-/// # Examples
-///
-/// ```bash
-/// gcu
-/// gcu feature-branch
-/// gcu -b new-branch
-/// gcu https://github.com/user/repo/pull/123
-/// gcu file.txt main
-/// ```
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
@@ -156,13 +146,6 @@ fn create_branch_if_missing(branch: &str) -> color_eyre::Result<()> {
 }
 
 /// Builds a safe branch name from arguments.
-///
-/// # Examples
-///
-/// ```rust
-/// let name = build_branch_name(&["Feature", "User Login"])?;
-/// assert_eq!(name, "feature-user-login");
-/// ```
 fn build_branch_name(args: &[&str]) -> color_eyre::Result<String> {
     fn is_permitted(c: char) -> bool {
         const PERMITTED_CHARS: [char; 3] = ['.', '/', '_'];

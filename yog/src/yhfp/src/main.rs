@@ -8,12 +8,6 @@ use utils::editor::Editor;
 use utils::hx::HxStatusLine;
 
 /// Copies file path from Helix editor to clipboard.
-///
-/// # Examples
-///
-/// ```bash
-/// yhfp
-/// ```
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

@@ -16,12 +16,6 @@ use utils::wezterm::WeztermPane;
 use utils::wezterm::get_sibling_pane_with_titles;
 
 /// Generates GitHub links for files open in Helix editor.
-///
-/// # Examples
-///
-/// ```bash
-/// yghfl
-/// ```
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

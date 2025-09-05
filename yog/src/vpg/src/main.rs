@@ -20,13 +20,6 @@ mod vault;
 /// # Arguments
 ///
 /// * `alias` - Database alias (optional, interactive selection if not provided)
-///
-/// # Examples
-///
-/// ```bash
-/// vpg
-/// vpg mydb
-/// ```
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

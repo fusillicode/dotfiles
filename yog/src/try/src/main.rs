@@ -18,13 +18,6 @@ use itertools::Itertools;
 /// * `cooldown_secs` - Seconds to wait between executions
 /// * `exit_condition` - "ok" (stop on success) or "ko" (stop on failure)
 /// * `command` - Command to execute
-///
-/// # Examples
-///
-/// ```bash
-/// try 5 ok "curl -f http://localhost:3000/health"
-/// try 2 ko "pg_isready -h localhost -p 5432"
-/// ```
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

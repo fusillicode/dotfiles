@@ -6,13 +6,6 @@ use color_eyre::eyre::eyre;
 
 /// Displays file contents or directory listings based on input path.
 /// Uses `cat` for files/symlinks, `ls -llAtrh` for directories.
-///
-/// # Examples
-///
-/// ```bash
-/// catl /path/to/file.txt
-/// catl /path/to/directory
-/// ```
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

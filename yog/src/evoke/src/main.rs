@@ -28,16 +28,6 @@ const NVIM_LIBS_DEFAULT_PATH: &[&str] = &[".config", "nvim", "lua"];
 /// * `nvim_libs_path` – Destination for renamed Neovim libs (e.g. `nvrim.so`), defaulting to `$HOME/.config/nvim/lua`.
 ///
 /// Omit trailing path arguments to accept defaults.
-///
-/// # Examples
-/// ```bash
-/// evoke
-/// evoke --debug
-/// evoke ~/bin
-/// evoke ~/bin ~/dev/yog/target
-/// evoke ~/bin ~/dev/yog/target ~/.config/nvim/lua
-/// evoke --debug ~/bin ~/.config/nvim/lua
-/// ```
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

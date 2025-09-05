@@ -13,14 +13,6 @@ use utils::editor::FileToOpen;
 /// * `editor` - Editor to use ("nvim" or "hx")
 /// * `file_path` - Path to file to open
 /// * `pane_id` - Optional Wezterm pane ID
-///
-/// # Examples
-///
-/// ```bash
-/// oe nvim /path/to/file.rs
-/// oe hx /path/to/file.rs
-/// oe nvim /path/to/file.rs 5
-/// ```
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
