@@ -1,9 +1,18 @@
+use std::process::Command;
+
+use nvim_oxi::Object;
 use nvim_oxi::api::Window;
+use nvim_oxi::conversion::ToObject;
+use nvim_oxi::lua::ffi::State;
+use nvim_oxi::serde::Serializer;
+use serde::Serialize;
+use url::Url;
+use utils::cmd::CmdExt as _;
 
 /// Gets the non-whitespace "word" under the cursor in the current window.
 /// On failure returns [`Option::None`] and notifies an error to Nvim.
 /// If on a whitespace returns an [`Option::None`].
-pub fn get(_: ()) -> Option<String> {
+pub fn get(_: ()) -> Option<WordUnderCursor> {
     let cur_win = Window::current();
     let cur_line = nvim_oxi::api::get_current_line()
         .inspect_err(|e| crate::oxi_ext::notify_error(&format!("cannot get current line: {e:#?}")))
@@ -12,7 +21,79 @@ pub fn get(_: ()) -> Option<String> {
         .get_cursor()
         .inspect_err(|e| crate::oxi_ext::notify_error(&format!("cannot get cursor: {e:#?}")))
         .ok()?;
-    get_word_at_index(&cur_line, col).map(ToOwned::to_owned)
+    get_word_at_index(&cur_line, col)
+        .map(ToOwned::to_owned)
+        .map(WordUnderCursor::from)
+}
+
+#[derive(Serialize)]
+#[serde(tag = "kind", content = "value")]
+#[allow(dead_code)]
+pub enum WordUnderCursor {
+    Url(String),
+    BinaryFile(String),
+    TextFile(String),
+    Directory(String),
+    Word(String),
+}
+
+impl nvim_oxi::lua::Pushable for WordUnderCursor {
+    unsafe fn push(self, lstate: *mut State) -> Result<std::ffi::c_int, nvim_oxi::lua::Error> {
+        unsafe {
+            self.to_object()
+                .map_err(nvim_oxi::lua::Error::push_error_from_err::<Self, _>)?
+                .push(lstate)
+        }
+    }
+}
+
+impl ToObject for WordUnderCursor {
+    fn to_object(self) -> Result<Object, nvim_oxi::conversion::Error> {
+        self.serialize(Serializer::new()).map_err(Into::into)
+    }
+}
+
+impl From<String> for WordUnderCursor {
+    fn from(value: String) -> Self {
+        if Url::parse(&value).is_ok() {
+            return Self::Url(value);
+        }
+        match exec_file_cmd(&value) {
+            Ok(FileCmdOutput::BinaryFile(x)) => Self::BinaryFile(x),
+            Ok(FileCmdOutput::TextFile(x)) => Self::TextFile(x),
+            Ok(FileCmdOutput::Directory(x)) => Self::Directory(x),
+            Ok(FileCmdOutput::NotFound(path) | FileCmdOutput::Unknown(path)) => Self::Word(path),
+            Err(_) => Self::Word(value),
+        }
+    }
+}
+
+#[allow(dead_code)]
+fn exec_file_cmd(path: &str) -> color_eyre::Result<FileCmdOutput> {
+    let output = std::str::from_utf8(&Command::new("file").args([path, "-I"]).exec()?.stdout)?.to_lowercase();
+    if output.contains(" inode/directory;") {
+        return Ok(FileCmdOutput::Directory(path.to_owned()));
+    }
+    if output.contains(" text/plain;") || output.contains(" text/csv;") {
+        return Ok(FileCmdOutput::TextFile(path.to_owned()));
+    }
+    if output.contains(" text/binary;") {
+        return Ok(FileCmdOutput::BinaryFile(path.to_owned()));
+    }
+    if output.contains(" no such file or directory") {
+        return Ok(FileCmdOutput::NotFound(path.to_owned()));
+    }
+    Ok(FileCmdOutput::Unknown(path.to_owned()))
+}
+
+#[allow(dead_code)]
+#[derive(Serialize)]
+pub enum FileCmdOutput {
+    BinaryFile(String),
+    TextFile(String),
+    Directory(String),
+    NotFound(String),
+    Unknown(String),
 }
 
 /// Finds the non-whitespace "word" in the supplied [`str`] containing the supplied visual index `idx`.
