@@ -45,14 +45,6 @@ impl SkimItem for FkrOption {
 
 impl FkrOption {
     /// Generates a fake string value based on the selected variant.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use fkr::FkrOption;
-    ///
-    /// let email = FkrOption::Email.gen_string();
-    /// ```
     pub fn gen_string(&self) -> String {
         match self {
             Self::Uuidv4 => fake::uuid::UUIDv4.fake::<String>(),

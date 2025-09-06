@@ -7,12 +7,11 @@ use color_eyre::eyre::eyre;
 /// Displays file contents or directory listings based on input path.
 /// Uses `cat` for files/symlinks, `ls -llAtrh` for directories.
 ///
-/// # Examples
+/// # Errors
 ///
-/// ```bash
-/// catl /path/to/file.txt
-/// catl /path/to/directory
-/// ```
+/// Returns an error if:
+/// - Executing one of the external commands (cat, ls) fails or returns a non-zero exit status.
+/// - A filesystem operation (open/read/write/remove) fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

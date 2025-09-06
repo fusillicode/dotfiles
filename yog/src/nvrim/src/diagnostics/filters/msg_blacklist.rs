@@ -88,6 +88,11 @@ impl MsgBlacklistFilter {
 
 impl DiagnosticsFilter for MsgBlacklistFilter {
     /// Returns true if the diagnostic message is blacklisted.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - An underlying operation fails.
     fn skip_diagnostic(&self, buf_path: &str, lsp_diag: Option<&Dictionary>) -> color_eyre::Result<bool> {
         let Some(lsp_diag) = lsp_diag else {
             return Ok(false);

@@ -46,12 +46,10 @@ mod installers;
 /// * `bin_dir` - Directory for binary symlinks
 /// * `tool_names` - Optional specific tools to install
 ///
-/// # Examples
+/// # Errors
 ///
-/// ```bash
-/// idt ~/.dev-tools ~/.local/bin
-/// idt ~/.dev-tools ~/.local/bin rust-analyzer typescript-language-server
-/// ```
+/// Returns an error if:
+/// - An underlying IO, network, environment, parsing, or external command operation fails.
 #[allow(clippy::too_many_lines)]
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;

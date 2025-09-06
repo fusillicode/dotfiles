@@ -181,6 +181,11 @@ impl core::fmt::Display for ConnectionParams {
 /// 2. Writes all lines, replacing the specified index with updated connection parameters.
 /// 3. Atomically replaces original file via rename.
 /// 4. Sets strict permissions (600) to match .pgpass security requirements.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - A filesystem operation (open/read/write/remove) fails.
 pub fn save_new_pgpass_file(
     pgpass_idx_lines: Vec<(usize, &str)>,
     updated_conn_params: &ConnectionParams,

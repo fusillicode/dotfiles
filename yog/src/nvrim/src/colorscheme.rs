@@ -97,6 +97,11 @@ fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &SetHighlightOpts) {
 /// Errors:
 /// - Propagates failures from [`nvim_oxi::api::get_hl`] while notifying them to Neovim.
 /// - Returns an error in case of multiple infos ([`GetHlInfos::Map`]) for the given `hl_opts` .
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - An underlying operation fails.
 fn get_hl(ns_id: u32, hl_opts: &GetHighlightOpts) -> color_eyre::Result<HighlightInfos> {
     nvim_oxi::api::get_hl(ns_id, hl_opts)
         .inspect_err(|error| {
@@ -115,6 +120,11 @@ fn get_hl(ns_id: u32, hl_opts: &GetHighlightOpts) -> color_eyre::Result<Highligh
 /// Builds a [`SetHighlightOptsBuilder`] from [`HighlightInfos`], applying only present fields via [`Option::map`].
 ///
 /// Returns a [`color_eyre::Result`]. Errors if `blend` (`u32`) cannot convert to `u8` and notifies it to Neovim.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - An underlying operation fails.
 fn hl_opts_from_hl_infos(hl_infos: &HighlightInfos) -> color_eyre::Result<SetHighlightOptsBuilder> {
     let mut opts = set_opts();
     hl_infos.altfont.map(|value| opts.altfont(value));

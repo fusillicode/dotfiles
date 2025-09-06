@@ -3,8 +3,7 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use color_eyre::eyre::Context;
-use color_eyre::owo_colors::OwoColorize as _;
+use color_eyre::owo_colors::OwoColorize;
 
 /// List of binary names that should be symlinked after building.
 const BINS: &[&str] = &["idt", "yghfl", "yhfp", "oe", "catl", "gcu", "vpg", "try", "fkr"];
@@ -30,15 +29,10 @@ const NVIM_LIBS_DEFAULT_PATH: &[&str] = &[".config", "nvim", "lua"];
 ///
 /// Omit trailing path arguments to accept defaults.
 ///
-/// # Examples
-/// ```bash
-/// evoke
-/// evoke --debug
-/// evoke ~/bin
-/// evoke ~/bin ~/dev/yog/target
-/// evoke ~/bin ~/dev/yog/target ~/.config/nvim/lua
-/// evoke --debug ~/bin ~/.config/nvim/lua
-/// ```
+/// # Errors
+///
+/// Returns an error if:
+/// - A required environment variable is missing or invalid Unicode.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
@@ -121,10 +115,17 @@ where
     false
 }
 
-/// Copies `from` to `to` and prints to standard output the desired message.
+/// Copies a built binary or library from [`from`] to [`to`] using
+/// [`utils::system::atomic_cp`] and prints an "Installed" status line.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - [`utils::system::atomic_cp`] fails to copy.
+/// - The final rename or write cannot be performed.
 fn cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
-    std::fs::copy(from, to).with_context(|| format!("from {}, to {}", from.display(), to.display()))?;
-    println!("{} {} to {}", "Copied".green().bold(), from.display(), to.display(),);
+    utils::system::atomic_cp(from, to)?;
+    println!("{} {} to {}", "Installed".green().bold(), from.display(), to.display());
     Ok(())
 }
 
