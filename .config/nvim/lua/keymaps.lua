@@ -13,7 +13,7 @@ function M.set_lua_implemented()
   keymap_set('n', 'dd', nvrim.keymaps.smart_dd_no_yank_empty_line, base_opts)
   keymap_set('v', '<esc>', nvrim.keymaps.visual_esc, base_opts)
   keymap_set({ 'n', 'v', }, '<leader>t', nvrim.truster.run_test)
-  keymap_set('n', '<leader>gx', require('opener').open_under_cursor)
+  keymap_set('n', 'gx', require('opener').open_under_cursor)
 
   -- Thanks perplexity 🥲
   keymap_set({ 'n', 'v', }, 'ga', function()
