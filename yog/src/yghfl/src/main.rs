@@ -17,11 +17,11 @@ use utils::wezterm::get_sibling_pane_with_titles;
 
 /// Generates GitHub links for files open in Helix editor.
 ///
-/// # Examples
+/// # Errors
 ///
-/// ```bash
-/// yghfl
-/// ```
+/// Returns an error if:
+/// - Executing one of the external commands (git, wezterm) fails or returns a non-zero exit status.
+/// - UTF-8 conversion fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
@@ -86,6 +86,11 @@ fn main() -> color_eyre::Result<()> {
 }
 
 /// Extracts GitHub repository URL from Git remote output.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - An underlying operation fails.
 fn get_github_url_from_git_remote_output(git_remote_output: &str) -> color_eyre::Result<Url> {
     let git_remote_fetch_line = git_remote_output
         .trim()
@@ -102,6 +107,11 @@ fn get_github_url_from_git_remote_output(git_remote_output: &str) -> color_eyre:
 }
 
 /// Converts Git remote URL to GitHub HTTPS URL.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - An underlying operation fails.
 fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> color_eyre::Result<Url> {
     if let Ok(mut url) = Url::parse(git_remote_url) {
         url.set_path(url.clone().path().trim_end_matches(".git"));
@@ -120,6 +130,13 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> color_eyre::Res
 }
 
 /// Builds absolute file path for Helix cursor position.
+///
+///
+/// Returns an error if:
+/// - An underlying IO, parsing, or environment operation fails.
+///
+/// Returns an error if:
+/// - An underlying IO, network, environment, parsing, or external command operation fails.
 fn build_hx_cursor_absolute_file_path(
     hx_cursor_file_path: &Path,
     hx_pane: &WeztermPane,
@@ -139,6 +156,11 @@ fn build_hx_cursor_absolute_file_path(
 }
 
 /// Builds GitHub link pointing to specific file and line.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - UTF-8 conversion fails.
 fn build_github_link<'a>(
     github_repo_url: &'a Url,
     git_current_branch: &'a str,

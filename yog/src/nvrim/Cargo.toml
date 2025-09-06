@@ -25,4 +25,5 @@ serde_repr = { version = "0.1" }
 strum = { workspace = true }
 tree-sitter = { version = "0.25" }
 tree-sitter-rust = { version = "0.24" }
+url = { version = "2.5" }
 utils = { workspace = true }

@@ -14,13 +14,10 @@ use utils::editor::FileToOpen;
 /// * `file_path` - Path to file to open
 /// * `pane_id` - Optional Wezterm pane ID
 ///
-/// # Examples
+/// # Errors
 ///
-/// ```bash
-/// oe nvim /path/to/file.rs
-/// oe hx /path/to/file.rs
-/// oe nvim /path/to/file.rs 5
-/// ```
+/// Returns an error if:
+/// - An underlying operation fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
@@ -69,6 +66,11 @@ fn main() -> color_eyre::Result<()> {
 }
 
 /// Creates enriched PATH for Wezterm integration.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - A required environment variable is missing or invalid Unicode.
 fn get_enriched_path_env() -> color_eyre::Result<Env> {
     let enriched_path = [
         &std::env::var("PATH").unwrap_or_else(|_| String::new()),

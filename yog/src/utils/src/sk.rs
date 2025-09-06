@@ -12,7 +12,10 @@ use skim::prelude::*;
 ///
 /// # Errors
 ///
-/// Returns an error if the skim process fails to start, run, or its output cannot be read.
+/// Returns an error if:
+/// - Output cannot be read.
+/// - The process fails during execution.
+/// - The skim process fails to start.
 pub fn select_yes_or_no(prompt: String) -> color_eyre::Result<Option<YesNo>> {
     let sk_opts = base_sk_opts(&mut SkimOptionsBuilder::default())
         .prompt(prompt)
@@ -53,7 +56,9 @@ impl SkimItem for YesNo {
 ///
 /// # Errors
 ///
-/// Returns an error if skim options cannot be built or if running skim fails.
+/// Returns an error if:
+/// - Running skim fails.
+/// - Skim options cannot be built.
 pub fn get_item<T: SkimItem + Clone + core::fmt::Debug>(
     items: Vec<T>,
     sk_opts: Option<SkimOptions>,
@@ -84,7 +89,9 @@ pub fn get_item<T: SkimItem + Clone + core::fmt::Debug>(
 ///
 /// # Errors
 ///
-/// Returns an error if skim fails to run, or if input parsing fails during selection.
+/// Returns an error if:
+/// - Input parsing during selection fails.
+/// - Skim fails to run.
 pub fn get_item_from_cli_args_or_sk_select<'a, CAS, O, OBA, OF>(
     cli_args: &'a [String],
     mut cli_arg_selector: CAS,
@@ -109,6 +116,11 @@ where
 
 /// Runs the skim fuzzy finder with the provided items and returns the selected items.
 /// Returns an empty vector if the selection is aborted or cancelled.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - An underlying operation fails.
 fn get_items<T: SkimItem + Clone + core::fmt::Debug>(
     items: Vec<T>,
     sk_opts: Option<SkimOptions>,
@@ -145,6 +157,11 @@ fn get_items<T: SkimItem + Clone + core::fmt::Debug>(
 
 /// Creates a skim item receiver from a vector of items for use with the fuzzy finder.
 /// The receiver can be used as a source for the skim fuzzy finder.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - An underlying operation fails.
 fn build_sk_source_from_items<T: SkimItem>(items: Vec<T>) -> color_eyre::Result<SkimItemReceiver> {
     let (tx, rx): (SkimItemSender, SkimItemReceiver) = unbounded();
     for item in items {

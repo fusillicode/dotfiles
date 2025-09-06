@@ -12,6 +12,13 @@ use utils::sk::SkimItemPreview;
 use utils::sk::SkimPreviewContext;
 
 /// Gets all local and remote [`GitRef`]s sorted by modification date.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Executing `git` fails or returns a non-zero exit status.
+/// - JSON serialization or deserialization fails.
+/// - UTF-8 conversion fails.
 pub fn get_local_and_remote_refs() -> color_eyre::Result<Vec<GitRef>> {
     let output = Command::new("git")
         .args([
@@ -102,6 +109,11 @@ struct GitRefJson {
 }
 
 /// Deserializes date from RFC2822 format.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Date/time parsing fails.
 fn deserialize_from_rfc2822<'de, D>(deserializer: D) -> Result<DateTime<FixedOffset>, D::Error>
 where
     D: Deserializer<'de>,
