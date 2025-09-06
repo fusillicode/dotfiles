@@ -9,12 +9,10 @@ use fkr::FkrOption;
 ///
 /// * `cp` - Copy generated value to clipboard
 ///
-/// # Examples
+/// # Errors
 ///
-/// ```bash
-/// fkr
-/// fkr cp
-/// ```
+/// Returns an error if:
+/// - An underlying operation fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

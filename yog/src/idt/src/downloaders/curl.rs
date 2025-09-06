@@ -25,6 +25,12 @@ pub enum CurlDownloaderOption<'a> {
 }
 
 /// Downloads a file from the given URL using curl with the specified [`CurlDownloaderOption`].
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Executing one of the external commands (tar, zcat) fails or returns a non-zero exit status.
+/// - A filesystem operation (open/read/write/remove) fails.
 pub fn run(url: &str, opt: &CurlDownloaderOption) -> color_eyre::Result<PathBuf> {
     let mut curl_cmd = utils::cmd::silent_cmd("curl");
     let silent_flag = cfg!(debug_assertions).then(|| "S").unwrap_or("");
@@ -66,6 +72,7 @@ pub fn run(url: &str, opt: &CurlDownloaderOption) -> color_eyre::Result<PathBuf>
     Ok(target)
 }
 
+/// Get cmd stdout.
 fn get_cmd_stdout(cmd: &mut Command) -> color_eyre::Result<Stdio> {
     let stdout = cmd
         .stdout(Stdio::piped())

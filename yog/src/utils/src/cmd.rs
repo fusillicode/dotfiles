@@ -10,11 +10,13 @@ pub trait CmdExt {
     ///
     /// # Errors
     ///
-    /// Returns a [`CmdError`] if the command fails to execute or if there's an I/O error.
+    /// Returns an error if:
+    /// - An underlying operation fails.
     fn exec(&mut self) -> color_eyre::Result<Output, CmdError>;
 }
 
 impl CmdExt for Command {
+    /// Exec.
     fn exec(&mut self) -> color_eyre::Result<Output, CmdError> {
         let output = self.output().map_err(|source| CmdError::Io {
             cmd_details: CmdDetails::from(&*self),

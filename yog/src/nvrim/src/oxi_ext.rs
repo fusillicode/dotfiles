@@ -66,6 +66,11 @@ pub trait OxiExtract {
     type Out;
 
     /// Extracts a typed value from a Nvim [Object] by key from a [`Dictionary`] with error context.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - An underlying operation fails.
     fn extract_from_dict(key: &str, value: &Object, dict: &Dictionary) -> color_eyre::Result<Self::Out>;
 }
 
@@ -73,6 +78,7 @@ pub trait OxiExtract {
 impl OxiExtract for nvim_oxi::String {
     type Out = String;
 
+    /// Extract from dict.
     fn extract_from_dict(key: &str, value: &Object, dict: &Dictionary) -> color_eyre::Result<Self::Out> {
         let out = Self::try_from(value.clone())
             .with_context(|| unexpected_kind_error_msg(value, key, dict, ObjectKind::String))?;
@@ -84,6 +90,7 @@ impl OxiExtract for nvim_oxi::String {
 impl OxiExtract for nvim_oxi::Integer {
     type Out = Self;
 
+    /// Extract from dict.
     fn extract_from_dict(key: &str, value: &Object, dict: &Dictionary) -> color_eyre::Result<Self::Out> {
         let out = Self::try_from(value.clone())
             .with_context(|| unexpected_kind_error_msg(value, key, dict, ObjectKind::Integer))?;
@@ -94,19 +101,31 @@ impl OxiExtract for nvim_oxi::Integer {
 /// Extension trait for [`Dictionary`] to provide typed getters.
 pub trait DictionaryExt {
     /// Gets a typed value from the dictionary using the [`OxiExtract`] trait.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - An underlying operation fails.
     fn get_t<T: OxiExtract>(&self, key: &str) -> color_eyre::Result<T::Out>;
 
     /// Gets a nested [`Dictionary`] from the [`Dictionary`] by a sequence of keys.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - An underlying operation fails.
     fn get_dict(&self, keys: &[&str]) -> color_eyre::Result<Option<Dictionary>>;
 }
 
 /// Implementation of [`DictionaryExt`] for [`Dictionary`] providing typed getters.
 impl DictionaryExt for Dictionary {
+    /// Get t.
     fn get_t<T: OxiExtract>(&self, key: &str) -> color_eyre::Result<T::Out> {
         let value = self.get(key).ok_or_else(|| no_value_matching(&[key], self))?;
         T::extract_from_dict(key, value, self)
     }
 
+    /// Get dict.
     fn get_dict(&self, keys: &[&str]) -> color_eyre::Result<Option<Dictionary>> {
         let mut current = self.clone();
 
@@ -126,10 +145,16 @@ pub trait BufferExt {
     ///
     /// Returns a [`color_eyre::Result`] with the line as [`nvim_oxi::String`].
     /// Errors if the line does not exist at `idx`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - An underlying operation fails.
     fn get_line(&self, idx: usize) -> color_eyre::Result<nvim_oxi::String>;
 }
 
 impl BufferExt for Buffer {
+    /// Get line.
     fn get_line(&self, idx: usize) -> color_eyre::Result<nvim_oxi::String> {
         self.get_lines(idx..=idx, true)?
             .next()

@@ -17,6 +17,11 @@ pub struct RelatedInfoFilter {
 
 impl RelatedInfoFilter {
     /// Creates a new [`RelatedInfoFilter`] from LSP diagnostics.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - An underlying operation fails.
     pub fn new(lsp_diags: &[Dictionary]) -> color_eyre::Result<Self> {
         Ok(Self {
             rel_infos: Self::get_related_infos(lsp_diags)?,
@@ -24,6 +29,11 @@ impl RelatedInfoFilter {
     }
 
     /// Get the [`RelatedInfo`]s of an LSP diagnostic represented by a [`Dictionary`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - An underlying operation fails.
     fn get_related_infos(lsp_diags: &[Dictionary]) -> color_eyre::Result<Vec<RelatedInfo>> {
         let mut out = vec![];
         for lsp_diag in lsp_diags {
@@ -50,6 +60,11 @@ impl RelatedInfoFilter {
 
 impl DiagnosticsFilter for RelatedInfoFilter {
     /// Returns true if the diagnostic is related information already covered.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - An underlying operation fails.
     fn skip_diagnostic(&self, _buf_path: &str, lsp_diag: Option<&Dictionary>) -> color_eyre::Result<bool> {
         let Some(lsp_diag) = lsp_diag else {
             return Ok(false);
@@ -83,6 +98,11 @@ struct RelatedInfo {
 
 impl RelatedInfo {
     /// Create a [`RelatedInfo`] from a root LSP diagnostic.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - An underlying operation fails.
     fn from_lsp_diagnostic(lsp_diagnostic: &Dictionary) -> color_eyre::Result<Self> {
         Ok(Self {
             message: lsp_diagnostic.get_t::<nvim_oxi::String>("message")?,
@@ -94,6 +114,11 @@ impl RelatedInfo {
     }
 
     /// Create a [`RelatedInfo`] from an element of an LSP diagnostic "`user_data.lsp.relatedInformation`" section.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - An underlying operation fails.
     fn from_related_info(rel_info: &Dictionary) -> color_eyre::Result<Self> {
         let (start, end) = {
             let range_query = ["location", "range"];

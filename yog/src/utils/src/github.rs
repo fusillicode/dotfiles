@@ -17,7 +17,9 @@ const GITHUB_PR_ID_QUERY_KEY: &str = "pr";
 ///
 /// # Errors
 ///
-/// Returns an error if invoking `gh` fails or if authentication cannot be completed.
+/// Returns an error if:
+/// - Authentication via `gh auth login` fails.
+/// - Invoking `gh auth status` fails.
 pub fn log_into_github() -> color_eyre::Result<()> {
     if crate::cmd::silent_cmd("gh")
         .args(["auth", "status"])
@@ -37,7 +39,10 @@ pub fn log_into_github() -> color_eyre::Result<()> {
 ///
 /// # Errors
 ///
-/// Returns an error if the `gh` command fails or the output cannot be parsed into a string.
+/// Returns an error if:
+/// - Executing `gh` fails or returns a non-zero exit status.
+/// - UTF-8 conversion fails.
+/// - Invoking `gh api` fails.
 pub fn get_latest_release(repo: &str) -> color_eyre::Result<String> {
     let output = Command::new("gh")
         .args(["api", &format!("repos/{repo}/releases/latest"), "--jq=.tag_name"])
@@ -50,7 +55,10 @@ pub fn get_latest_release(repo: &str) -> color_eyre::Result<String> {
 ///
 /// # Errors
 ///
-/// Returns an error if the `gh` command fails for the given PR, or if the output cannot be parsed.
+/// Returns an error if:
+/// - Executing `gh` fails or returns a non-zero exit status.
+/// - Invoking `gh pr view` fails.
+/// - Output cannot be parsed.
 pub fn get_branch_name_from_url(url: &Url) -> color_eyre::Result<String> {
     let pr_id = extract_pr_id_form_url(url)?;
 
@@ -62,6 +70,11 @@ pub fn get_branch_name_from_url(url: &Url) -> color_eyre::Result<String> {
 }
 
 /// Extracts and validates successful command output, converting it to a trimmed string.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - UTF-8 conversion fails.
 fn extract_success_output(output: &Output) -> color_eyre::Result<String> {
     output.status.exit_ok()?;
     Ok(std::str::from_utf8(&output.stdout)?.trim().into())
@@ -72,6 +85,11 @@ fn extract_success_output(output: &Output) -> color_eyre::Result<String> {
 /// Supports various GitHub URL formats:
 /// - Direct PR URLs: `https://github.com/owner/repo/pull/123`
 /// - GitHub Actions URLs with `pr` query parameter: `https://github.com/owner/repo/actions/runs/123?pr=456`
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - An underlying operation fails.
 fn extract_pr_id_form_url(url: &Url) -> color_eyre::Result<String> {
     let host = url.host_str().ok_or_else(|| eyre!("cannot extract host from {url}"))?;
     if host != GITHUB_HOST {
