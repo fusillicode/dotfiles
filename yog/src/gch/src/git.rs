@@ -5,7 +5,10 @@ use std::process::Command;
 use std::str::FromStr;
 
 use color_eyre::eyre::bail;
+use color_eyre::owo_colors::OwoColorize as _;
 use utils::cmd::CmdExt;
+use utils::sk::SkimAnsiString;
+use utils::sk::SkimDisplayContext;
 use utils::sk::SkimItem;
 
 /// Returns a list of [`GitStatusEntry`] values parsed from
@@ -62,6 +65,19 @@ impl SkimItem for GitStatusEntry {
             Self::Renamed(path) => format!("R {}", path.display()),
             Self::Deleted(path) => format!("D {}", path.display()),
         })
+    }
+
+    fn display<'a>(&'a self, _context: SkimDisplayContext<'a>) -> SkimAnsiString<'a> {
+        // Colorize status code similarly to other tools in the workspace.
+        // Keep path unmodified to maximize fuzzy‑matching signal.
+        let (code, path) = match self {
+            Self::New(path) => ("??".green().bold().to_string(), path),
+            Self::Added(path) => ("A".green().bold().to_string(), path),
+            Self::Modified(path) => ("M".yellow().bold().to_string(), path),
+            Self::Renamed(path) => ("R".cyan().bold().to_string(), path),
+            Self::Deleted(path) => ("D".red().bold().to_string(), path),
+        };
+        SkimAnsiString::from(format!("{code} {}", path.display()))
     }
 }
 
