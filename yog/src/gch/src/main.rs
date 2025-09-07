@@ -18,6 +18,11 @@ fn main() -> color_eyre::Result<()> {
 
     let selected_entries = select_git_status_entries()?;
 
+    if selected_entries.is_empty() {
+        println!("{}", "no file changes".bold());
+        return Ok(());
+    }
+
     let selected_files_paths = &selected_entries
         .iter()
         .map(GitStatusEntry::file_path)
