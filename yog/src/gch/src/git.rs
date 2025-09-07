@@ -27,14 +27,12 @@ pub enum GitStatusEntry {
 }
 
 impl GitStatusEntry {
-    pub fn file_path(&self) -> String {
+    pub fn file_path(&self) -> &Path {
         match self {
             Self::New(path) | Self::Added(path) | Self::Modified(path) | Self::Renamed(path) | Self::Deleted(path) => {
                 path
             }
         }
-        .to_string_lossy()
-        .to_string()
     }
 }
 

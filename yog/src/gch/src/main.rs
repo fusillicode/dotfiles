@@ -1,5 +1,6 @@
 #![feature(exit_status_error)]
 
+use std::borrow::Cow;
 use std::process::Command;
 
 use color_eyre::owo_colors::OwoColorize as _;
@@ -14,24 +15,11 @@ fn main() -> color_eyre::Result<()> {
 
     let args = utils::system::get_args();
     let args: Vec<_> = args.iter().map(String::as_str).collect();
-    let branch = args.first().copied();
 
     let selected_entries = select_git_status_entries()?;
 
-    if selected_entries.is_empty() {
-        println!("{}", "no file changes".bold());
-        return Ok(());
-    }
-
-    let selected_files_paths = &selected_entries
-        .iter()
-        .map(GitStatusEntry::file_path)
-        .collect::<Vec<_>>();
-
-    restore_files(
-        &selected_files_paths.iter().map(String::as_str).collect::<Vec<_>>(),
-        branch,
-    )?;
+    let branch = args.first().copied();
+    restore_files(&selected_entries, branch)?;
 
     Ok(())
 }
@@ -47,19 +35,36 @@ fn select_git_status_entries() -> color_eyre::Result<Vec<GitStatusEntry>> {
         .collect::<Vec<_>>())
 }
 
-fn restore_files(files: &[&str], branch: Option<&str>) -> color_eyre::Result<()> {
-    if files.is_empty() {
+fn restore_files(entries: &[GitStatusEntry], branch: Option<&str>) -> color_eyre::Result<()> {
+    let (new_entries, changed_entries): (Vec<_>, Vec<_>) = entries.iter().partition(|entry| match entry {
+        GitStatusEntry::New(_) | GitStatusEntry::Added(_) => true,
+        GitStatusEntry::Modified(_) | GitStatusEntry::Renamed(_) | GitStatusEntry::Deleted(_) => false,
+    });
+
+    for new_entry in new_entries {
+        let file_path = new_entry.file_path();
+        std::fs::remove_file(file_path)?;
+        println!("{} deleted {}", "-".red().bold(), file_path.display().bold());
+    }
+
+    if changed_entries.is_empty() {
         return Ok(());
     }
-    let mut args = vec!["restore"];
+
+    let mut args = vec![Cow::Borrowed("restore")];
     if let Some(branch) = branch {
-        args.push(branch);
+        args.push(Cow::Borrowed(branch));
     }
-    args.extend_from_slice(files);
-    Command::new("git").args(args).exec()?;
-    for file in files {
+    let changed_entries_paths = changed_entries
+        .iter()
+        .map(|ce| ce.file_path().to_string_lossy())
+        .collect::<Vec<_>>();
+    args.extend_from_slice(&changed_entries_paths);
+    Command::new("git").args(args.iter().map(Cow::as_ref)).exec()?;
+
+    for file_path in changed_entries_paths {
         let from_branch = branch.map(|b| format!(" from {}", b.bold())).unwrap_or_default();
-        println!("{} {} {from_branch}", "<".yellow().bold(), file.bold());
+        println!("{} {} {from_branch}", "<".yellow().bold(), file_path.bold());
     }
     Ok(())
 }
