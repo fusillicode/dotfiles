@@ -9,7 +9,7 @@ use url::Url;
 use utils::cmd::CmdExt;
 use utils::sk::SkimItem;
 
-mod git;
+mod git_for_each_ref;
 
 /// Git branch management with interactive selection, creation, and PR URL handling.
 ///
@@ -42,8 +42,8 @@ fn main() -> color_eyre::Result<()> {
 /// Returns an error if:
 /// - An underlying operation fails.
 fn autocomplete_git_branches() -> color_eyre::Result<()> {
-    let mut git_refs = git::get_local_and_remote_refs()?;
-    git::keep_local_and_untracked_refs(&mut git_refs);
+    let mut git_refs = git_for_each_ref::get_locals_and_remotes()?;
+    git_for_each_ref::keep_local_and_untracked_refs(&mut git_refs);
 
     match utils::sk::get_item(git_refs, Option::default())? {
         Some(hd) if hd.text() == "-" || hd.text().is_empty() => switch_branch("-"),
