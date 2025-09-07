@@ -28,7 +28,9 @@ fn select_git_status_entries() -> color_eyre::Result<Vec<GitStatusEntry>> {
     let git_status_entries = crate::git::get_git_status_entries()?;
 
     let mut opts_builder = utils::sk::default_opts_builder();
-    let base_opts = utils::sk::base_sk_opts(&mut opts_builder).multi(true);
+    let base_opts = utils::sk::base_sk_opts(&mut opts_builder)
+        .multi(true)
+        .preview_window("hidden".to_string());
 
     Ok(utils::sk::get_items(git_status_entries, Some(base_opts.build()?))?
         .into_iter()
@@ -44,7 +46,7 @@ fn restore_files(entries: &[GitStatusEntry], branch: Option<&str>) -> color_eyre
     for new_entry in new_entries {
         let file_path = new_entry.file_path();
         std::fs::remove_file(file_path)?;
-        println!("{} deleted {}", "-".red().bold(), file_path.display().bold());
+        println!("{} {}", "- deleted".red().bold(), file_path.display().bold());
     }
 
     if changed_entries.is_empty() {
@@ -64,7 +66,11 @@ fn restore_files(entries: &[GitStatusEntry], branch: Option<&str>) -> color_eyre
 
     for file_path in changed_entries_paths {
         let from_branch = branch.map(|b| format!(" from {}", b.bold())).unwrap_or_default();
-        println!("{} {} {from_branch}", "<".yellow().bold(), file_path.bold());
+        println!(
+            "{} {} from {from_branch}",
+            "< restored".yellow().bold(),
+            file_path.bold()
+        );
     }
     Ok(())
 }
