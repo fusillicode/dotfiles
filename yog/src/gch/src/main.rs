@@ -85,14 +85,20 @@ fn restore_files(entries: &[GitStatusEntry], branch: Option<&str>) -> color_eyre
         GitStatusEntry::Modified(_) | GitStatusEntry::Renamed(_) | GitStatusEntry::Deleted(_) => false,
     });
 
-    for new_entry in new_entries {
+    for new_entry in &new_entries {
         let file_path = new_entry.file_path();
         std::fs::remove_file(file_path)?;
         println!("{} {}", "- deleted".red().bold(), file_path.display().bold());
     }
 
-    if changed_entries.is_empty() {
+    // Exit early with dedicated `println!` in case of no new entries and no changes at all.
+    if new_entries.is_empty() && changed_entries.is_empty() {
         println!("{}", "no changes".bold());
+        return Ok(());
+    }
+
+    // Exit early in case of no changes to avoid break `git restore` cmd.
+    if changed_entries.is_empty() {
         return Ok(());
     }
 
