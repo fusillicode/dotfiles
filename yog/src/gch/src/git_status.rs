@@ -18,7 +18,7 @@ use utils::sk::SkimItem;
 /// - The command exits with a non‑zero status (see [`utils::cmd::CmdExt`]).
 /// - The output cannot be decoded as valid UTF‑8.
 /// - Any individual line cannot be parsed into a [`GitStatusEntry`].
-pub fn get_git_status_entries() -> color_eyre::Result<Vec<GitStatusEntry>> {
+pub fn get() -> color_eyre::Result<Vec<GitStatusEntry>> {
     let stdout = Command::new("git").args(["status", "--porcelain", "-s"]).exec()?.stdout;
     let mut out = vec![];
     for entry in str::from_utf8(&stdout)?.lines() {

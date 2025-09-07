@@ -6,9 +6,9 @@ use std::process::Command;
 use color_eyre::owo_colors::OwoColorize as _;
 use utils::cmd::CmdExt;
 
-use crate::git::GitStatusEntry;
+use crate::git_status::GitStatusEntry;
 
-mod git;
+mod git_status;
 
 /// Interactive CLI tools to clean the working tree by:
 ///
@@ -56,7 +56,7 @@ fn main() -> color_eyre::Result<()> {
 /// - Building skim options fails.
 /// - Interactive selection via [`utils::sk::get_items`] fails.
 fn select_git_status_entries() -> color_eyre::Result<Vec<GitStatusEntry>> {
-    let git_status_entries = crate::git::get_git_status_entries()?;
+    let git_status_entries = crate::git_status::get()?;
 
     let mut opts_builder = utils::sk::default_opts_builder();
     let base_opts = utils::sk::base_sk_opts(&mut opts_builder)
