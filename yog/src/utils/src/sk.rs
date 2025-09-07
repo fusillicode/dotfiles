@@ -1,6 +1,4 @@
 use color_eyre::eyre::eyre;
-pub use skim::AnsiString as SkimAnsiString;
-pub use skim::DisplayContext as SkimDisplayContext;
 pub use skim::ItemPreview as SkimItemPreview;
 pub use skim::PreviewContext as SkimPreviewContext;
 pub use skim::SkimItem;
