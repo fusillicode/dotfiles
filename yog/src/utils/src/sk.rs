@@ -121,7 +121,7 @@ where
 ///
 /// Returns an error if:
 /// - An underlying operation fails.
-fn get_items<T: SkimItem + Clone + core::fmt::Debug>(
+pub fn get_items<T: SkimItem + Clone + core::fmt::Debug>(
     items: Vec<T>,
     sk_opts: Option<SkimOptions>,
 ) -> color_eyre::Result<Vec<T>> {
@@ -171,7 +171,7 @@ fn build_sk_source_from_items<T: SkimItem>(items: Vec<T>) -> color_eyre::Result<
 }
 
 /// Configures the base skim options with common settings for a consistent user experience.
-fn base_sk_opts(opts_builder: &mut SkimOptionsBuilder) -> &mut SkimOptionsBuilder {
+pub fn base_sk_opts(opts_builder: &mut SkimOptionsBuilder) -> &mut SkimOptionsBuilder {
     opts_builder
         .height(String::from("21"))
         .no_multi(true)
@@ -181,4 +181,8 @@ fn base_sk_opts(opts_builder: &mut SkimOptionsBuilder) -> &mut SkimOptionsBuilde
         .preview_window("down:50%".into())
         .color(Some("16,prompt:#ffffff".into()))
         .cycle(true)
+}
+
+pub fn default_opts_builder() -> SkimOptionsBuilder {
+    SkimOptionsBuilder::default()
 }

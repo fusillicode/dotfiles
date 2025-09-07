@@ -6,7 +6,6 @@ use std::process::Command;
 use color_eyre::eyre::bail;
 use color_eyre::owo_colors::OwoColorize as _;
 use url::Url;
-use utils::cmd::CmdError;
 use utils::cmd::CmdExt;
 use utils::sk::SkimItem;
 
@@ -30,7 +29,7 @@ fn main() -> color_eyre::Result<()> {
         Some((hd, _)) if *hd == "-" => switch_branch(hd),
         Some((hd, tail)) if *hd == "-b" => create_branch(&build_branch_name(tail)?),
         Some((hd, &[])) => switch_branch_or_create_if_missing(hd),
-        _ => checkout_files_or_create_branch_if_missing(&args),
+        unexpected_args => bail!("unexpected args {:#?}", unexpected_args),
     }?;
 
     Ok(())
@@ -66,64 +65,6 @@ fn switch_branch_or_create_if_missing(arg: &str) -> color_eyre::Result<()> {
         return switch_branch(&branch_name);
     }
     create_branch_if_missing(&build_branch_name(&[arg])?)
-}
-
-/// Checks out files from branch or creates new branch.
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - An underlying operation fails.
-fn checkout_files_or_create_branch_if_missing(args: &[&str]) -> color_eyre::Result<()> {
-    if let Some((branch, files)) = get_branch_and_files_to_checkout(args)? {
-        return checkout_files(files, branch);
-    }
-    create_branch_if_missing(&build_branch_name(args)?)
-}
-
-/// Identifies branch and files from arguments.
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - An underlying operation fails.
-fn get_branch_and_files_to_checkout<'a>(args: &'a [&'a str]) -> color_eyre::Result<Option<(&'a str, &'a [&'a str])>> {
-    if let Some((branch, files)) = args.split_last()
-        && local_branch_exists(branch)?
-    {
-        return Ok(Some((branch, files)));
-    }
-    Ok(None)
-}
-
-/// Checks if a local Git branch exists.
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - Executing `git` fails or returns a non-zero exit status.
-fn local_branch_exists(branch: &str) -> color_eyre::Result<bool> {
-    match Command::new("git").args(["rev-parse", "--verify", branch]).exec() {
-        Ok(_) => Ok(true),
-        Err(CmdError::Stderr { .. }) => Ok(false),
-        Err(error) => Err(error.into()),
-    }
-}
-
-/// Checks out specific files from a branch.
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - Executing `git` fails or returns a non-zero exit status.
-fn checkout_files(files: &[&str], branch: &str) -> color_eyre::Result<()> {
-    let mut args = vec!["checkout", branch];
-    args.extend_from_slice(files);
-    Command::new("git").args(args).exec()?;
-    for f in files {
-        println!("{} {} from {}", "<".yellow().bold(), f.bold(), branch.bold());
-    }
-    Ok(())
 }
 
 /// Switches to the specified Git branch.
