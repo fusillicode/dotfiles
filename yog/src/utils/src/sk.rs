@@ -115,7 +115,7 @@ where
 }
 
 /// Runs the skim fuzzy finder with the provided items and returns the selected items.
-/// Returns an empty vector if the selection is aborted or cancelled.
+/// Returns an empty vector if the selection is aborted or canceled.
 ///
 /// # Errors
 ///
@@ -125,6 +125,9 @@ pub fn get_items<T: SkimItem + Clone + core::fmt::Debug>(
     items: Vec<T>,
     sk_opts: Option<SkimOptions>,
 ) -> color_eyre::Result<Vec<T>> {
+    if items.is_empty() {
+        return Ok(items);
+    }
     let sk_opts = if let Some(opts) = sk_opts {
         opts
     } else {
