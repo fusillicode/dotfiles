@@ -8,6 +8,16 @@ use color_eyre::eyre::bail;
 use utils::cmd::CmdExt;
 use utils::sk::SkimItem;
 
+/// Returns a list of [`GitStatusEntry`] values parsed from
+/// `git status --porcelain -s`.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Running the `git status` command fails.
+/// - The command exits with a non‑zero status (see [`utils::cmd::CmdExt`]).
+/// - The output cannot be decoded as valid UTF‑8.
+/// - Any individual line cannot be parsed into a [`GitStatusEntry`].
 pub fn get_git_status_entries() -> color_eyre::Result<Vec<GitStatusEntry>> {
     let stdout = Command::new("git").args(["status", "--porcelain", "-s"]).exec()?.stdout;
     let mut out = vec![];
@@ -17,16 +27,23 @@ pub fn get_git_status_entries() -> color_eyre::Result<Vec<GitStatusEntry>> {
     Ok(out)
 }
 
+/// Simplified representation of a porcelain `git status` line.
 #[derive(Debug, Clone)]
 pub enum GitStatusEntry {
+    /// New / untracked file ("??").
     New(PathBuf),
+    /// Added to the index ("A").
     Added(PathBuf),
+    /// Modified file ("M").
     Modified(PathBuf),
+    /// Renamed file ("R").
     Renamed(PathBuf),
+    /// Deleted file ("D").
     Deleted(PathBuf),
 }
 
 impl GitStatusEntry {
+    /// The file path of the entry.
     pub fn file_path(&self) -> &Path {
         match self {
             Self::New(path) | Self::Added(path) | Self::Modified(path) | Self::Renamed(path) | Self::Deleted(path) => {
@@ -51,6 +68,11 @@ impl SkimItem for GitStatusEntry {
 impl FromStr for GitStatusEntry {
     type Err = color_eyre::Report;
 
+    /// Parses a single porcelain status line into a [`GitStatusEntry`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the line does not match an expected `<code> <path>` pattern.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.split_ascii_whitespace().collect::<Vec<_>>().as_slice() {
             &["??", path] => Ok(Self::New(Path::new(path).into())),
