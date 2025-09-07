@@ -32,7 +32,7 @@ fn main() -> color_eyre::Result<()> {
 }
 
 fn select_git_status_entries() -> color_eyre::Result<Vec<GitStatusEntry>> {
-    let git_status_entries = crate::git::git_status()?;
+    let git_status_entries = crate::git::get_git_status_entries()?;
 
     let mut opts_builder = utils::sk::default_opts_builder();
     let base_opts = utils::sk::base_sk_opts(&mut opts_builder).multi(true);

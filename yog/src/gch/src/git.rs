@@ -8,7 +8,7 @@ use color_eyre::eyre::bail;
 use utils::cmd::CmdExt;
 use utils::sk::SkimItem;
 
-pub fn git_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
+pub fn get_git_status_entries() -> color_eyre::Result<Vec<GitStatusEntry>> {
     let stdout = Command::new("git").args(["status", "--porcelain", "-s"]).exec()?.stdout;
     let mut out = vec![];
     for entry in str::from_utf8(&stdout)?.lines() {
