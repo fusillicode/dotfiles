@@ -1,12 +1,11 @@
-use std::borrow::Cow;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
 
 use color_eyre::eyre::bail;
+use color_eyre::owo_colors::OwoColorize as _;
 use utils::cmd::CmdExt;
-use utils::sk::SkimItem;
 
 /// Returns a list of [`GitStatusEntry`] values parsed from
 /// `git status --porcelain -s`.
@@ -42,29 +41,6 @@ pub enum GitStatusEntry {
     Deleted(PathBuf),
 }
 
-impl GitStatusEntry {
-    /// The file path of the entry.
-    pub fn file_path(&self) -> &Path {
-        match self {
-            Self::New(path) | Self::Added(path) | Self::Modified(path) | Self::Renamed(path) | Self::Deleted(path) => {
-                path
-            }
-        }
-    }
-}
-
-impl SkimItem for GitStatusEntry {
-    fn text(&self) -> std::borrow::Cow<'_, str> {
-        Cow::from(match self {
-            Self::New(path) => format!("?? {}", path.display()),
-            Self::Added(path) => format!("A {}", path.display()),
-            Self::Modified(path) => format!("M {}", path.display()),
-            Self::Renamed(path) => format!("R {}", path.display()),
-            Self::Deleted(path) => format!("D {}", path.display()),
-        })
-    }
-}
-
 impl FromStr for GitStatusEntry {
     type Err = color_eyre::Report;
 
@@ -86,6 +62,30 @@ impl FromStr for GitStatusEntry {
                 s,
                 unexpected
             ),
+        }
+    }
+}
+
+impl core::fmt::Display for GitStatusEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let symbol = match self {
+            Self::New(_) => "??".green().bold().to_string(),
+            Self::Added(_) => "A".green().bold().to_string(),
+            Self::Modified(_) => "M".yellow().bold().to_string(),
+            Self::Renamed(_) => "R".blue().bold().to_string(),
+            Self::Deleted(_) => "D".red().bold().to_string(),
+        };
+        write!(f, "{symbol} {}", self.file_path().display().bold())
+    }
+}
+
+impl GitStatusEntry {
+    /// The file path of the entry.
+    pub fn file_path(&self) -> &Path {
+        match self {
+            Self::New(path) | Self::Added(path) | Self::Modified(path) | Self::Renamed(path) | Self::Deleted(path) => {
+                path
+            }
         }
     }
 }

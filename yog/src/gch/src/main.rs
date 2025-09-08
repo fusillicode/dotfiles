@@ -4,6 +4,9 @@ use std::borrow::Cow;
 use std::process::Command;
 
 use color_eyre::owo_colors::OwoColorize as _;
+use inquire::InquireError;
+use inquire::MultiSelect;
+use inquire::ui::RenderConfig;
 use utils::cmd::CmdExt;
 
 use crate::git_status::GitStatusEntry;
@@ -37,35 +40,12 @@ fn main() -> color_eyre::Result<()> {
     let args = utils::system::get_args();
     let args: Vec<_> = args.iter().map(String::as_str).collect();
 
-    let selected_entries = select_git_status_entries()?;
+    let selected_entries = foo(minimal::<GitStatusEntry>(crate::git_status::get()?).prompt())?;
 
     let branch = args.first().copied();
     restore_files(&selected_entries, branch)?;
 
     Ok(())
-}
-
-/// Collects git status entries and lets the user multi‑select them.
-///
-/// Uses skim with multi‑selection and a hidden preview window.
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - Reading entries via [`git::get_git_status_entries`] fails.
-/// - Building skim options fails.
-/// - Interactive selection via [`utils::sk::get_items`] fails.
-fn select_git_status_entries() -> color_eyre::Result<Vec<GitStatusEntry>> {
-    let git_status_entries = crate::git_status::get()?;
-
-    let mut opts_builder = utils::sk::default_opts_builder();
-    let base_opts = utils::sk::base_sk_opts(&mut opts_builder)
-        .multi(true)
-        .preview_window("hidden".to_string());
-
-    Ok(utils::sk::get_items(git_status_entries, Some(base_opts.build()?))?
-        .into_iter()
-        .collect::<Vec<_>>())
 }
 
 /// Deletes new or added files and restores changed ones with `git restore`.
@@ -88,7 +68,7 @@ fn restore_files(entries: &[GitStatusEntry], branch: Option<&str>) -> color_eyre
     for new_entry in &new_entries {
         let file_path = new_entry.file_path();
         std::fs::remove_file(file_path)?;
-        println!("{} {}", "- deleted".red().bold(), file_path.display().bold());
+        println!("{} {}", "deleted".red().bold(), file_path.display().bold());
     }
 
     // Exit early with dedicated `println!` in case of no new entries and no changes at all.
@@ -115,11 +95,28 @@ fn restore_files(entries: &[GitStatusEntry], branch: Option<&str>) -> color_eyre
 
     for file_path in changed_entries_paths {
         let from_branch = branch.map(|b| format!(" from {}", b.bold())).unwrap_or_default();
-        println!(
-            "{} {} from {from_branch}",
-            "< restored".yellow().bold(),
-            file_path.bold()
-        );
+        println!("{} {} from {from_branch}", "restored".yellow().bold(), file_path.bold());
     }
     Ok(())
+}
+
+fn minimal_render_config<'a>() -> RenderConfig<'a> {
+    RenderConfig::default_colored()
+        .with_prompt_prefix("".into())
+        .with_canceled_prompt_indicator("".into())
+        .with_answered_prompt_prefix("".into())
+}
+
+fn foo<T: Default>(prompt_res: Result<T, InquireError>) -> Result<T, InquireError> {
+    match prompt_res {
+        Ok(res) => Ok(res),
+        Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => Ok(T::default()),
+        Err(error) => Err(error),
+    }
+}
+
+pub fn minimal<'a, T: std::fmt::Display>(options: Vec<T>) -> MultiSelect<'a, T> {
+    MultiSelect::new("", options)
+        .with_render_config(minimal_render_config())
+        .without_help_message()
 }
