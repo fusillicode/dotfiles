@@ -78,8 +78,7 @@ fn main() -> color_eyre::Result<()> {
     // Cosmetic space in prompt.
     println!();
 
-    if utils::inquire::yes_no_select(&format!("Connect to {}? ", pgpass_entry.metadata.alias))?.is_some_and(From::from)
-    {
+    if Some(true) == utils::inquire::yes_no_select(&format!("Connect to {}? ", pgpass_entry.metadata.alias))? {
         let db_url = pgpass_entry.connection_params.db_url();
         println!(
             "\nConnecting to {} @\n\n{}\n",

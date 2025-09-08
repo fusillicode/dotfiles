@@ -13,7 +13,6 @@ categories = ["command-line-utilities", "development-tools"]
 [dependencies]
 chrono = { workspace = true }
 color-eyre = { workspace = true }
-inquire = { version = "0.7", features = ["fuzzy-matcher"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 url = { workspace = true }

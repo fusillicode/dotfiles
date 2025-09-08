@@ -56,18 +56,19 @@ pub fn minimal_select<T: std::fmt::Display>(opts: Vec<T>) -> Result<Option<T>, I
 ///
 /// Returns an error if:
 /// - Rendering the prompt or terminal interaction inside [`inquire`] fails.
-pub fn yes_no_select(title: &str) -> Result<Option<YesNo>, InquireError> {
+pub fn yes_no_select(title: &str) -> Result<Option<bool>, InquireError> {
     closable_prompt(
         Select::new(title, YesNo::iter().collect())
             .with_render_config(minimal_render_config())
             .without_help_message()
-            .prompt(),
+            .prompt()
+            .map(From::from),
     )
 }
 
 /// Represents a yes or no choice for user selection.
 #[derive(Clone, Copy, Debug, EnumIter)]
-pub enum YesNo {
+enum YesNo {
     Yes,
     No,
 }

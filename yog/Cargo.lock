@@ -471,7 +471,6 @@ dependencies = [
  "assert2",
  "chrono",
  "color-eyre",
- "inquire",
  "pretty_assertions",
  "rstest",
  "serde",
