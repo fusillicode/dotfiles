@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["yog/*", "yog-utilo/*"]
+members = ["yog/*", "yog-utylo/*"]
 
 [workspace.package]
 version = "0.1.0"
