@@ -2184,6 +2184,7 @@ dependencies = [
  "chrono",
  "color-eyre",
  "fake",
+ "inquire",
  "serde",
  "serde_json",
  "skim",

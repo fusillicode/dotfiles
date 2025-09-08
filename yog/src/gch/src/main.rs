@@ -4,9 +4,6 @@ use std::borrow::Cow;
 use std::process::Command;
 
 use color_eyre::owo_colors::OwoColorize as _;
-use inquire::InquireError;
-use inquire::MultiSelect;
-use inquire::ui::RenderConfig;
 use utils::cmd::CmdExt;
 
 use crate::git_status::GitStatusEntry;
@@ -40,7 +37,9 @@ fn main() -> color_eyre::Result<()> {
     let args = utils::system::get_args();
     let args: Vec<_> = args.iter().map(String::as_str).collect();
 
-    let selected_entries = foo(minimal::<GitStatusEntry>(crate::git_status::get()?).prompt())?;
+    let selected_entries = utils::inquire::closable_prompt(
+        utils::inquire::minimal_multi_select::<GitStatusEntry>(crate::git_status::get()?).prompt(),
+    )?;
 
     let branch = args.first().copied();
     restore_files(&selected_entries, branch)?;
@@ -71,12 +70,6 @@ fn restore_files(entries: &[GitStatusEntry], branch: Option<&str>) -> color_eyre
         println!("{} {}", "deleted".red().bold(), file_path.display().bold());
     }
 
-    // Exit early with dedicated `println!` in case of no new entries and no changes at all.
-    if new_entries.is_empty() && changed_entries.is_empty() {
-        println!("{}", "no changes".bold());
-        return Ok(());
-    }
-
     // Exit early in case of no changes to avoid break `git restore` cmd.
     if changed_entries.is_empty() {
         return Ok(());
@@ -98,25 +91,4 @@ fn restore_files(entries: &[GitStatusEntry], branch: Option<&str>) -> color_eyre
         println!("{} {} from {from_branch}", "restored".yellow().bold(), file_path.bold());
     }
     Ok(())
-}
-
-fn minimal_render_config<'a>() -> RenderConfig<'a> {
-    RenderConfig::default_colored()
-        .with_prompt_prefix("".into())
-        .with_canceled_prompt_indicator("".into())
-        .with_answered_prompt_prefix("".into())
-}
-
-fn foo<T: Default>(prompt_res: Result<T, InquireError>) -> Result<T, InquireError> {
-    match prompt_res {
-        Ok(res) => Ok(res),
-        Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => Ok(T::default()),
-        Err(error) => Err(error),
-    }
-}
-
-pub fn minimal<'a, T: std::fmt::Display>(options: Vec<T>) -> MultiSelect<'a, T> {
-    MultiSelect::new("", options)
-        .with_render_config(minimal_render_config())
-        .without_help_message()
 }

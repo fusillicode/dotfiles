@@ -14,14 +14,15 @@ categories = ["development-tools", "rust-patterns"]
 fake = ["dep:fake"]
 
 [dependencies]
+chrono = { workspace = true }
 color-eyre = { workspace = true }
 fake = { workspace = true, optional = true }
+inquire = { version = "0.7", features = ["fuzzy-matcher"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 skim = { version = "0.20" }
 thiserror = { workspace = true }
 url = { workspace = true }
-chrono = { workspace = true }
 
 [dev-dependencies]
 assert2 = { workspace = true }

@@ -19,6 +19,7 @@ pub mod editor;
 pub mod git;
 pub mod github;
 pub mod hx;
+pub mod inquire;
 pub mod sk;
 pub mod system;
 pub mod wezterm;
