@@ -23,6 +23,16 @@ pub struct PgpassFile<'a> {
 }
 
 impl<'a> PgpassFile<'a> {
+    /// Parses the raw `.pgpass` content into a [`PgpassFile`].
+    ///
+    /// Expects alternating metadata comment lines (prefixed with `#`) and connection lines.
+    /// Non‑comment / non‑metadata lines are ignored except when part of a metadata+connection pair.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - A metadata line is not followed by a valid connection line.
+    /// - A connection line cannot be parsed into [`ConnectionParams`].
     pub fn parse(pgpass_content: &'a str) -> color_eyre::eyre::Result<Self> {
         let mut idx_lines = vec![];
         let mut entries = vec![];

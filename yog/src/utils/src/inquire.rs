@@ -6,6 +6,15 @@ use inquire::ui::RenderConfig;
 use strum::EnumIter;
 use strum::IntoEnumIterator;
 
+/// Minimal interactive multi-select returning [`None`] if `opts` is empty or the user cancels.
+///
+/// Wraps [`inquire::MultiSelect`] with a slim rendering (see [`minimal_render_config`]) and no help message.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Rendering the prompt or terminal interaction inside [`inquire`] fails.
+/// - Collecting the user selection fails for any reason reported by [`MultiSelect`].
 pub fn minimal_multi_select<T: std::fmt::Display>(opts: Vec<T>) -> Result<Option<Vec<T>>, InquireError> {
     if opts.is_empty() {
         return Ok(None);
@@ -18,6 +27,15 @@ pub fn minimal_multi_select<T: std::fmt::Display>(opts: Vec<T>) -> Result<Option
     )
 }
 
+/// Minimal interactive single-select returning [`None`] if `opts` is empty or the user cancels.
+///
+/// Wraps [`inquire::Select`] with a slim rendering (see [`minimal_render_config`]) and no help message.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Rendering the prompt or terminal interaction inside [`inquire`] fails.
+/// - Collecting the user selection fails for any reason reported by [`Select`].
 pub fn minimal_select<T: std::fmt::Display>(opts: Vec<T>) -> Result<Option<T>, InquireError> {
     if opts.is_empty() {
         return Ok(None);
@@ -30,6 +48,14 @@ pub fn minimal_select<T: std::fmt::Display>(opts: Vec<T>) -> Result<Option<T>, I
     )
 }
 
+/// Displays a yes/no selection prompt with a minimal UI.
+///
+/// Returns [`Ok(Some(YesNo))`] on selection, [`Ok(None)`] if canceled/interrupted.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Rendering the prompt or terminal interaction inside [`inquire`] fails.
 pub fn yes_no_select(title: &str) -> Result<Option<YesNo>, InquireError> {
     closable_prompt(
         Select::new(title, YesNo::iter().collect())
@@ -65,6 +91,24 @@ impl core::fmt::Display for YesNo {
     }
 }
 
+/// Returns an item derived from CLI args or asks the user to select one.
+///
+/// Priority order:
+/// 1. Tries to find the first CLI arg (by predicate) mapping to an existing item via `item_find_by_arg`.
+/// 2. Falls back to interactive selection (`minimal_select`).
+///
+/// Generic over a collection of displayable, cloneable items, so callers can pass any vector of choices.
+///
+/// # Type Parameters
+/// * `CAS` - Closure filtering `(index, &String)` CLI arguments.
+/// * `OBA` - Closure mapping an argument `&str` into a predicate over `&O`.
+/// * `OF` - Predicate produced by `OBA` used to match an item.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - A CLI argument matches predicate but no corresponding item is found.
+/// - The interactive selection fails (see [`minimal_select`]).
 pub fn get_item_from_cli_args_or_select<'a, CAS, O, OBA, OF>(
     cli_args: &'a [String],
     mut cli_arg_selector: CAS,
@@ -86,6 +130,9 @@ where
     Ok(minimal_select(items)?)
 }
 
+/// Converts an [`inquire`] prompt [`Result`] into an [`Option`]-wrapped [`Result`].
+///
+/// Treats [`InquireError::OperationCanceled`] / [`InquireError::OperationInterrupted`] as [`Ok(None)`].
 fn closable_prompt<T>(prompt_res: Result<T, InquireError>) -> Result<Option<T>, InquireError> {
     match prompt_res {
         Ok(res) => Ok(Some(res)),
@@ -94,6 +141,7 @@ fn closable_prompt<T>(prompt_res: Result<T, InquireError>) -> Result<Option<T>, 
     }
 }
 
+/// Returns a minimalist [`RenderConfig`] with cleared prompt/answered prefixes.
 fn minimal_render_config<'a>() -> RenderConfig<'a> {
     RenderConfig::default_colored()
         .with_prompt_prefix("".into())
