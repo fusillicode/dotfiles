@@ -1,0 +1,11 @@
+[package]
+name = "inquair"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+authors = ["Gian Lu"]
+
+[dependencies]
+color-eyre = "0.6"
+strum = { version = "0.27", features = ["derive"] }
+inquire = { version = "0.7", features = ["fuzzy-matcher"] }

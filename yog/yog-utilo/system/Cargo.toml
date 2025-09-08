@@ -1,0 +1,11 @@
+[package]
+name = "system"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+authors = ["Gian Lu"]
+
+[dependencies]
+cmd = { path = "../cmd" }
+color-eyre = "0.6"
+chrono = { version = "0.4" }

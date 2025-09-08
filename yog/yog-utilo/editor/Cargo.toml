@@ -1,0 +1,10 @@
+[package]
+name = "editor"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+authors = ["Gian Lu"]
+
+[dependencies]
+wezterm = { path = "../wezterm" }
+color-eyre = "0.6"
