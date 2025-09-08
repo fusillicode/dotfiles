@@ -20,7 +20,7 @@ fake = { workspace = true, optional = true }
 inquire = { version = "0.7", features = ["fuzzy-matcher"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
-skim = { version = "0.20" }
+strum = { workspace = true }
 thiserror = { workspace = true }
 url = { workspace = true }
 

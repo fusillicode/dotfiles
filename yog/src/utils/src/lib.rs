@@ -10,7 +10,6 @@
 //! - `git`: Git operations
 //! - `github`: GitHub API interactions
 //! - `hx`: Helix editor integration
-//! - `sk`: Fuzzy finder integration
 //! - `system`: System operations
 //! - `wezterm`: Wezterm integration
 
@@ -20,6 +19,5 @@ pub mod git;
 pub mod github;
 pub mod hx;
 pub mod inquire;
-pub mod sk;
 pub mod system;
 pub mod wezterm;
