@@ -43,6 +43,7 @@ pub fn set(colorscheme: Option<String>) {
         ("Normal", bg_hl.clone()),
         ("NormalFloat", bg_hl),
         ("StatusLine", status_line_hl),
+        ("TreesitterContext", set_opts().background("NvimDarkGrey3").build()),
     ];
     for (hl_name, hl_opts) in general_hls {
         set_hl(0, hl_name, &hl_opts);
