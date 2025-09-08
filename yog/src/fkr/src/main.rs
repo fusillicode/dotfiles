@@ -16,9 +16,10 @@ use fkr::FkrOption;
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let generated_value = match utils::sk::get_item(FkrOption::to_vec(), Option::default())? {
-        Some(fkr_option) => fkr_option.gen_string(),
-        None => return Ok(()),
+    let Some(generated_value) =
+        utils::inquire::minimal_select(FkrOption::to_vec())?.map(|fkr_opt| fkr_opt.gen_string())
+    else {
+        return Ok(());
     };
 
     println!("{generated_value}");

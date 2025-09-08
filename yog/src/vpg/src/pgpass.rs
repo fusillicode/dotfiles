@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -8,10 +7,6 @@ use std::path::PathBuf;
 
 use color_eyre::eyre::WrapErr;
 use color_eyre::eyre::bail;
-use color_eyre::owo_colors::OwoColorize as _;
-use utils::sk::SkimItem;
-use utils::sk::SkimItemPreview;
-use utils::sk::SkimPreviewContext;
 
 use crate::vault::VaultCreds;
 
@@ -28,6 +23,16 @@ pub struct PgpassFile<'a> {
 }
 
 impl<'a> PgpassFile<'a> {
+    /// Parses the raw `.pgpass` content into a [`PgpassFile`].
+    ///
+    /// Expects alternating metadata comment lines (prefixed with `#`) and connection lines.
+    /// Non‑comment / non‑metadata lines are ignored except when part of a metadata+connection pair.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - A metadata line is not followed by a valid connection line.
+    /// - A connection line cannot be parsed into [`ConnectionParams`].
     pub fn parse(pgpass_content: &'a str) -> color_eyre::eyre::Result<Self> {
         let mut idx_lines = vec![];
         let mut entries = vec![];
@@ -74,23 +79,6 @@ pub struct PgpassEntry {
     pub connection_params: ConnectionParams,
     /// Metadata from preceding comment lines (alias/vault references).
     pub metadata: Metadata,
-}
-
-impl SkimItem for PgpassEntry {
-    fn text(&self) -> Cow<'_, str> {
-        Cow::from(self.to_string())
-    }
-
-    fn preview(&self, _context: SkimPreviewContext) -> SkimItemPreview {
-        SkimItemPreview::AnsiText(format!(
-            "Host: {}\nUser: {}\nDb: {}\nPort: {}\nVault: {}\n",
-            self.connection_params.host.bold(),
-            self.connection_params.user.bold(),
-            self.connection_params.db.bold(),
-            self.connection_params.port.bold(),
-            self.metadata.vault_path.bold(),
-        ))
-    }
 }
 
 impl core::fmt::Display for PgpassEntry {
