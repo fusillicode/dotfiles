@@ -37,10 +37,11 @@ fn main() -> color_eyre::Result<()> {
     let args = utils::system::get_args();
     let args: Vec<_> = args.iter().map(String::as_str).collect();
 
-    let selected_entries = utils::inquire::minimal_multi_select::<GitStatusEntry>(crate::git_status::get()?)?;
-
-    let branch = args.first().copied();
-    restore_files(&selected_entries, branch)?;
+    let Some(selected_entries) = utils::inquire::minimal_multi_select::<GitStatusEntry>(crate::git_status::get()?)?
+    else {
+        return Ok(());
+    };
+    restore_files(&selected_entries, args.first().copied())?;
 
     Ok(())
 }

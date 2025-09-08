@@ -45,7 +45,7 @@ fn autocomplete_git_branches() -> color_eyre::Result<()> {
     let mut git_refs = git_for_each_ref::get_locals_and_remotes()?;
     git_for_each_ref::keep_local_and_untracked_refs(&mut git_refs);
 
-    match utils::sk::get_item(git_refs, Option::default())? {
+    match utils::inquire::minimal_select(git_refs)? {
         Some(hd) if hd.text() == "-" || hd.text().is_empty() => switch_branch("-"),
         Some(other) => switch_branch(&other.text()),
         None => Ok(()),

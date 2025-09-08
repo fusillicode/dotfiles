@@ -72,6 +72,12 @@ pub struct GitRef {
     subject: String,
 }
 
+impl core::fmt::Display for GitRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
 impl SkimItem for GitRef {
     fn text(&self) -> Cow<'_, str> {
         Cow::from(self.name.clone())
