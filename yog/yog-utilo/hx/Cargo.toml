@@ -9,8 +9,8 @@ authors = ["Gian Lu"]
 fake = ["dep:fake"]
 
 [dependencies]
-color-eyre = "0.6"
-fake = { version = "4.4", features = ["derive"], optional = true }
+color-eyre = { workspace = true }
+fake = { workspace = true, optional = true }
 
 [dev-dependencies]
-fake = { version = "4.4", features = ["derive"] }
+fake = { workspace = true }

@@ -7,4 +7,4 @@ authors = ["Gian Lu"]
 
 [dependencies]
 cmd = { path = "../cmd" }
-color-eyre = "0.6"
+color-eyre = { workspace = true }

@@ -6,5 +6,5 @@ license = "MIT"
 authors = ["Gian Lu"]
 
 [dependencies]
-color-eyre = "0.6"
-thiserror = "2.0"
+color-eyre = { workspace = true }
+thiserror = { workspace = true }
