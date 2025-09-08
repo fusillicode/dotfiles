@@ -19,7 +19,7 @@ use utils::sk::SkimPreviewContext;
 /// - Executing `git` fails or returns a non-zero exit status.
 /// - JSON serialization or deserialization fails.
 /// - UTF-8 conversion fails.
-pub fn get_local_and_remote_refs() -> color_eyre::Result<Vec<GitRef>> {
+pub fn get_locals_and_remotes() -> color_eyre::Result<Vec<GitRef>> {
     let output = Command::new("git")
         .args([
             "for-each-ref",
