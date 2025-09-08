@@ -36,12 +36,11 @@ fn main() -> color_eyre::Result<()> {
     let pgpass_file = PgpassFile::parse(pgpass_content.as_str())?;
 
     let args = utils::system::get_args();
-    let Some(mut pgpass_entry) = utils::sk::get_item_from_cli_args_or_sk_select(
+    let Some(mut pgpass_entry) = utils::inquire::get_item_from_cli_args_or_select(
         &args,
         |(idx, _)| *idx == 0,
         pgpass_file.entries,
         |alias: &str| Box::new(move |entry: &PgpassEntry| entry.metadata.alias == alias),
-        Option::default(),
     )?
     else {
         return Ok(());
@@ -79,7 +78,7 @@ fn main() -> color_eyre::Result<()> {
     // Cosmetic space in prompt.
     println!();
 
-    if utils::sk::select_yes_or_no(format!("Connect to {}? ", pgpass_entry.metadata.alias))?.is_some_and(From::from) {
+    if Some(true) == utils::inquire::yes_no_select(&format!("Connect to {}? ", pgpass_entry.metadata.alias))? {
         let db_url = pgpass_entry.connection_params.db_url();
         println!(
             "\nConnecting to {} @\n\n{}\n",
