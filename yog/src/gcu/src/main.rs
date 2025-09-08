@@ -7,7 +7,6 @@ use color_eyre::eyre::bail;
 use color_eyre::owo_colors::OwoColorize as _;
 use url::Url;
 use utils::cmd::CmdExt;
-use utils::sk::SkimItem;
 
 mod git_for_each_ref;
 
@@ -45,9 +44,9 @@ fn autocomplete_git_branches() -> color_eyre::Result<()> {
     let mut git_refs = git_for_each_ref::get_locals_and_remotes()?;
     git_for_each_ref::keep_local_and_untracked_refs(&mut git_refs);
 
-    match utils::sk::get_item(git_refs, Option::default())? {
-        Some(hd) if hd.text() == "-" || hd.text().is_empty() => switch_branch("-"),
-        Some(other) => switch_branch(&other.text()),
+    match utils::inquire::minimal_select(git_refs)? {
+        Some(hd) if hd.name() == "-" || hd.name().is_empty() => switch_branch("-"),
+        Some(other) => switch_branch(other.name()),
         None => Ok(()),
     }
 }

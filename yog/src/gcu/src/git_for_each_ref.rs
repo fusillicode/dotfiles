@@ -1,15 +1,10 @@
-use std::borrow::Cow;
 use std::process::Command;
 
 use chrono::DateTime;
 use chrono::FixedOffset;
-use color_eyre::owo_colors::OwoColorize as _;
 use serde::Deserialize;
 use serde::Deserializer;
 use utils::cmd::CmdExt;
-use utils::sk::SkimItem;
-use utils::sk::SkimItemPreview;
-use utils::sk::SkimPreviewContext;
 
 /// Gets all local and remote [`GitRef`]s sorted by modification date.
 ///
@@ -57,36 +52,35 @@ pub fn keep_local_and_untracked_refs(git_refs: &mut Vec<GitRef>) {
 #[cfg_attr(test, derive(PartialEq, Eq))]
 pub struct GitRef {
     /// The date and time when the last commit was made.
+    #[allow(dead_code)]
     committer_date_time: DateTime<FixedOffset>,
     /// The email address of the person who made the last commit.
+    #[allow(dead_code)]
     committer_email: String,
     /// The name of the branch (without refs/heads/ or refs/remotes/ prefix).
     name: String,
     /// The shortened SHA hash of the commit this branch points to.
+    #[allow(dead_code)]
     object_name: String,
     /// The type of Git object (usually "commit").
+    #[allow(dead_code)]
     object_type: String,
     /// The remote name if this is a remote branch, None for local branches.
     remote: Option<String>,
     /// The subject line of the last commit message.
+    #[allow(dead_code)]
     subject: String,
 }
 
-impl SkimItem for GitRef {
-    fn text(&self) -> Cow<'_, str> {
-        Cow::from(self.name.clone())
+impl GitRef {
+    pub fn name(&self) -> &str {
+        &self.name
     }
+}
 
-    fn preview(&self, _context: SkimPreviewContext) -> SkimItemPreview {
-        SkimItemPreview::AnsiText(format!(
-            "{}\n{} {} {}\n{} {}\n",
-            self.subject.bold(),
-            self.remote.as_deref().unwrap_or("local").red(),
-            self.object_type.red(),
-            self.object_name.red(),
-            self.committer_date_time.green(),
-            self.committer_email.blue().bold(),
-        ))
+impl core::fmt::Display for GitRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)
     }
 }
 

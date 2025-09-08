@@ -1,16 +1,10 @@
 //! Fake data generation library for the fkr tool.
 //! Provides an enum of fake data types using the `fake` crate.
 
-use std::borrow::Cow;
-
-use color_eyre::owo_colors::OwoColorize as _;
 use fake::Fake;
 use strum::Display;
 use strum::EnumIter;
 use strum::IntoEnumIterator;
-use utils::sk::SkimItem;
-use utils::sk::SkimItemPreview;
-use utils::sk::SkimPreviewContext;
 
 /// Available fake data types for generation.
 #[derive(EnumIter, Display, Clone, Copy, Debug)]
@@ -29,18 +23,6 @@ pub enum FkrOption {
     IPv6,
     /// Generates a MAC address
     MACAddress,
-}
-
-impl SkimItem for FkrOption {
-    /// Returns the display text for the skim selection interface.
-    fn text(&self) -> Cow<'_, str> {
-        Cow::from(self.to_string())
-    }
-
-    /// Returns a preview of what will be generated for this option.
-    fn preview(&self, _context: SkimPreviewContext) -> SkimItemPreview {
-        SkimItemPreview::AnsiText(format!("Generate a fake {self}").bold().to_string())
-    }
 }
 
 impl FkrOption {
