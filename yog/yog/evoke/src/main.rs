@@ -125,7 +125,7 @@ where
 /// - The final rename or write cannot be performed.
 fn cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
     system::atomic_cp(from, to)?;
-    println!("{} {} to {}", "Installed".green().bold(), from.display(), to.display());
+    println!("{} {} to {}", "Copied".green().bold(), from.display(), to.display());
     Ok(())
 }
 
