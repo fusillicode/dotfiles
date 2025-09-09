@@ -47,17 +47,8 @@ fn main() -> color_eyre::Result<()> {
 
     let git_repo_root = Arc::new(git::get_repo_root(&hx_status_line.file_path)?);
 
-    let git_repo_root_clone = git_repo_root.to_string_lossy().to_string();
-    let get_git_current_branch = std::thread::spawn(move || -> color_eyre::Result<String> {
-        Ok(String::from_utf8(
-            Command::new("git")
-                .args(["-C", &git_repo_root_clone, "branch", "--show-current"])
-                .output()?
-                .stdout,
-        )?
-        .trim()
-        .to_owned())
-    });
+    let get_git_current_branch =
+        std::thread::spawn(move || -> color_eyre::Result<String> { git::get_current_branch() });
 
     let git_repo_root_clone = git_repo_root.to_string_lossy().to_string();
     let get_github_repo_url = std::thread::spawn(move || -> color_eyre::Result<Url> {
@@ -69,8 +60,8 @@ fn main() -> color_eyre::Result<()> {
         )?)
     });
 
-    // `build_file_path_relative_to_git_repo_root` are called before the threads `join` to let them work in the background
-    // as much as possible
+    // `build_file_path_relative_to_git_repo_root` are called before the threads `join` to let them work in the
+    // background as much as possible
     let hx_cursor_absolute_file_path = build_hx_cursor_absolute_file_path(&hx_status_line.file_path, &hx_pane)?;
 
     let github_link = build_github_link(

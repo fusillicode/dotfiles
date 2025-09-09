@@ -93,3 +93,8 @@ pub fn switch_branch(branch_name: &str) -> color_eyre::Result<()> {
 
     Ok(())
 }
+
+pub fn get_remotes(repo_path: &Path) -> color_eyre::Result<Vec<String>> {
+    let repo = Repository::discover(repo_path)?;
+    Ok(repo.remotes()?.iter().flatten().map(str::to_owned).collect::<Vec<_>>())
+}
