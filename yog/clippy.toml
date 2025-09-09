@@ -6,6 +6,7 @@ allowed-duplicate-crates = [
   "thiserror-impl",
   "wasi",
   "windows-targets",
+  "windows-link",
   "windows_aarch64_gnullvm",
   "windows_aarch64_msvc",
   "windows_i686_gnu",
