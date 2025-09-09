@@ -1,9 +1,14 @@
 [package]
 name = "hx"
-version = "0.1.0"
-edition = "2024"
-license = "MIT"
-authors = ["Gian Lu"]
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Data types and helpers for interacting with the Helix editor state"
+keywords = ["helix", "editor", "cursor", "ui", "integration"]
+categories = ["development-tools", "command-line-utilities"]
 
 [features]
 fake = ["dep:fake"]

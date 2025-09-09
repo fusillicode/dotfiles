@@ -1,9 +1,14 @@
 [package]
 name = "wezterm"
-version = "0.1.0"
-edition = "2024"
-license = "MIT"
-authors = ["Gian Lu"]
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Types and helpers for querying and controlling WezTerm panes"
+keywords = ["wezterm", "terminal", "pane", "multiplexer", "integration"]
+categories = ["command-line-utilities", "development-tools"]
 
 [features]
 fake = ["dep:fake"]
