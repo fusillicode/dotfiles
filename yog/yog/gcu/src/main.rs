@@ -26,7 +26,7 @@ fn main() -> color_eyre::Result<()> {
         Some((hd, _)) if *hd == "-" => switch_branch(hd),
         Some((hd, tail)) if *hd == "-b" => create_branch(&build_branch_name(tail)?),
         Some((hd, &[])) => switch_branch_or_create_if_missing(hd),
-        unexpected_args => bail!("unexpected args {:#?}", unexpected_args),
+        _ => create_branch_if_missing(&build_branch_name(&args)?),
     }?;
 
     Ok(())
