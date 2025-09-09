@@ -11,6 +11,6 @@ keywords = ["git", "repository", "vcs", "status", "helpers"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-cmd = { path = "../cmd" }
+cmd = { workspace = true }
 color-eyre = { workspace = true }
-git2 = { version = "0.20" }
+git2 = { workspace = true }

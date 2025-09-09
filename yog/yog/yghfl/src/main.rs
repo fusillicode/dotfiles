@@ -16,12 +16,14 @@ use url::Url;
 use wezterm::WeztermPane;
 use wezterm::get_sibling_pane_with_titles;
 
-/// Generates GitHub links for files open in Helix editor.
+/// Generates a GitHub URL pointing to the current Helix buffer location.
 ///
 /// # Errors
 ///
 /// Returns an error if:
-/// - Executing one of the external commands (git, wezterm) fails or returns a non-zero exit status.
+/// - External command execution (wezterm) fails.
+/// - The Helix status line cannot be parsed.
+/// - The repository root or branch cannot be resolved.
 /// - UTF-8 conversion fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
@@ -56,7 +58,9 @@ fn main() -> color_eyre::Result<()> {
         match &github::get_repo_urls(&git_repo_root_path_clone)?.as_slice() {
             &[] => bail!("no GitHub URL found for repo path {git_repo_root_path_clone:#?}"),
             &[one] => Ok(one.clone()),
-            multi => bail!("multiple GitHub URLs found {multi:#?} for supplied repo path {git_repo_root_path_clone:#?}"),
+            multi => {
+                bail!("multiple GitHub URLs found {multi:#?} for supplied repo path {git_repo_root_path_clone:#?}")
+            }
         }
     });
 

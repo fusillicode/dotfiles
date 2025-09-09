@@ -7,6 +7,16 @@ use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 use git2::Repository;
 
+/// Returns the [`Repository`] containing `path`.
+///
+/// Starts discovery from `path` and walks up parent directories using
+/// [`git2::Repository::discover`].
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The repository cannot be discovered starting from `path`.
+/// - `path` is not inside a Git repository.
 pub fn get_repo(path: &Path) -> color_eyre::Result<Repository> {
     Ok(Repository::discover(path)?)
 }
