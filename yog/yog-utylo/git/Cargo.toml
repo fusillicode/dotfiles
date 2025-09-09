@@ -13,3 +13,4 @@ categories = ["command-line-utilities", "development-tools"]
 [dependencies]
 cmd = { path = "../cmd" }
 color-eyre = { workspace = true }
+git2 = { version = "0.20" }

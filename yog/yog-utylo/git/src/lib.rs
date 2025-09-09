@@ -4,6 +4,7 @@ use std::process::Command;
 use cmd::CmdExt as _;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
+use git2::Repository;
 
 /// Finds the root directory of the Git repository containing the given file path, or the current directory if none
 /// provided.
@@ -56,4 +57,33 @@ pub fn get_current_branch() -> color_eyre::Result<String> {
     )?
     .trim()
     .to_owned())
+}
+
+/// Switches to the specified Git branch.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Executing `git` fails or returns a non-zero exit status.
+pub fn switch_branch(branch_name: &str) -> color_eyre::Result<()> {
+    if branch_name == "-" {
+        Command::new("git").args(["switch", branch_name]).exec()?;
+        return Ok(());
+    }
+
+    let repo = Repository::discover(".")?;
+
+    // Find the branch reference
+    let (object, reference) = repo.revparse_ext(branch_name)?;
+
+    // Checkout the branch head
+    repo.checkout_tree(&object, None)?;
+
+    // Set HEAD to point to the new branch reference
+    match reference {
+        Some(reference) => repo.set_head(reference.name().ok_or_else(|| eyre!("reference name is not UTF-8"))?)?,
+        None => repo.set_head_detached(object.id())?,
+    }
+
+    Ok(())
 }

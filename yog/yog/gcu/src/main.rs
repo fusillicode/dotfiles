@@ -73,7 +73,7 @@ fn switch_branch_or_create_if_missing(arg: &str) -> color_eyre::Result<()> {
 /// Returns an error if:
 /// - Executing `git` fails or returns a non-zero exit status.
 fn switch_branch(branch: &str) -> color_eyre::Result<()> {
-    Command::new("git").args(["switch", branch]).exec()?;
+    git::switch_branch(branch)?;
     println!("{} {}", ">".magenta().bold(), branch.bold());
     Ok(())
 }
