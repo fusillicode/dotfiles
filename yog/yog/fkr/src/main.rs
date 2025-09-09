@@ -16,7 +16,7 @@ use fkr::FkrOption;
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let Some(generated_value) = inquire::minimal_select(FkrOption::to_vec())?.map(|fkr_opt| fkr_opt.gen_string())
+    let Some(generated_value) = tui::minimal_select(FkrOption::to_vec())?.map(|fkr_opt| fkr_opt.gen_string())
     else {
         return Ok(());
     };

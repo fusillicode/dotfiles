@@ -3,8 +3,8 @@
 use std::borrow::Cow;
 use std::process::Command;
 
-use color_eyre::owo_colors::OwoColorize as _;
 use cmd::CmdExt;
+use color_eyre::owo_colors::OwoColorize as _;
 
 use crate::git_status::GitStatusEntry;
 
@@ -37,7 +37,7 @@ fn main() -> color_eyre::Result<()> {
     let args = system::get_args();
     let args: Vec<_> = args.iter().map(String::as_str).collect();
 
-    let Some(selected_entries) = inquire::minimal_multi_select::<GitStatusEntry>(crate::git_status::get()?)? else {
+    let Some(selected_entries) = tui::minimal_multi_select::<GitStatusEntry>(crate::git_status::get()?)? else {
         return Ok(());
     };
     restore_files(&selected_entries, args.first().copied())?;

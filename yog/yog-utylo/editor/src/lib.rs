@@ -4,7 +4,6 @@ use std::path::Path;
 use color_eyre::eyre;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
-
 use wezterm::WeztermPane;
 
 /// Supported text editors for file operations.

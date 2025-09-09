@@ -1,5 +1,6 @@
 use std::process::Command;
 
+use cmd::CmdExt as _;
 use nvim_oxi::Object;
 use nvim_oxi::api::Window;
 use nvim_oxi::conversion::ToObject;
@@ -7,7 +8,6 @@ use nvim_oxi::lua::ffi::State;
 use nvim_oxi::serde::Serializer;
 use serde::Serialize;
 use url::Url;
-use cmd::CmdExt as _;
 
 /// Gets the non-whitespace "word" under the cursor in the current window.
 /// On failure returns [`Option::None`] and notifies an error to Nvim.

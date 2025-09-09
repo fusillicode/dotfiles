@@ -30,7 +30,7 @@ editor = { path = "./yog-utylo/editor" }
 git = { path = "./yog-utylo/git" }
 github = { path = "./yog-utylo/github" }
 hx = { path = "./yog-utylo/hx" }
-inquire = { path = "./yog-utylo/inquire" }
+tui = { path = "./yog-utylo/tui" }
 system = { path = "./yog-utylo/system" }
 wezterm = { path = "./yog-utylo/wezterm" }
 

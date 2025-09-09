@@ -36,7 +36,7 @@ fn main() -> color_eyre::Result<()> {
     let pgpass_file = PgpassFile::parse(pgpass_content.as_str())?;
 
     let args = system::get_args();
-    let Some(mut pgpass_entry) = inquire::get_item_from_cli_args_or_select(
+    let Some(mut pgpass_entry) = tui::get_item_from_cli_args_or_select(
         &args,
         |(idx, _)| *idx == 0,
         pgpass_file.entries,
@@ -78,7 +78,7 @@ fn main() -> color_eyre::Result<()> {
     // Cosmetic space in prompt.
     println!();
 
-    if Some(true) == inquire::yes_no_select(&format!("Connect to {}? ", pgpass_entry.metadata.alias))? {
+    if Some(true) == tui::yes_no_select(&format!("Connect to {}? ", pgpass_entry.metadata.alias))? {
         let db_url = pgpass_entry.connection_params.db_url();
         println!(
             "\nConnecting to {} @\n\n{}\n",

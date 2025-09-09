@@ -400,9 +400,9 @@ version = "0.1.0"
 dependencies = [
  "color-eyre",
  "fake",
- "inquire 0.1.0",
  "strum",
  "system",
+ "tui",
 ]
 
 [[package]]
@@ -488,10 +488,10 @@ dependencies = [
  "assert2",
  "cmd",
  "color-eyre",
- "inquire 0.1.0",
  "pretty_assertions",
  "rstest",
  "system",
+ "tui",
 ]
 
 [[package]]
@@ -504,12 +504,12 @@ dependencies = [
  "color-eyre",
  "git",
  "github",
- "inquire 0.1.0",
  "pretty_assertions",
  "rstest",
  "serde",
  "serde_json",
  "system",
+ "tui",
  "url",
 ]
 
@@ -746,15 +746,6 @@ checksum = "f2481980430f9f78649238835720ddccc57e52df14ffce1c6f37391d61b563e9"
 dependencies = [
  "equivalent",
  "hashbrown",
-]
-
-[[package]]
-name = "inquire"
-version = "0.1.0"
-dependencies = [
- "color-eyre",
- "inquire 0.7.5",
- "strum",
 ]
 
 [[package]]
@@ -1609,6 +1600,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tui"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "inquire",
+ "strum",
+]
+
+[[package]]
 name = "typenum"
 version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1681,10 +1681,10 @@ name = "vpg"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
- "inquire 0.1.0",
  "serde",
  "serde_json",
  "system",
+ "tui",
 ]
 
 [[package]]
