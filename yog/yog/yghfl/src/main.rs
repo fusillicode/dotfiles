@@ -45,9 +45,9 @@ fn main() -> color_eyre::Result<()> {
         )
     })?)?;
 
-    let git_repo_root = Arc::new(git::get_repo_root(Some(&hx_status_line.file_path))?);
+    let git_repo_root = Arc::new(git::get_repo_root(&hx_status_line.file_path)?);
 
-    let git_repo_root_clone = git_repo_root.clone();
+    let git_repo_root_clone = git_repo_root.clone().to_string_lossy().to_string();
     let get_git_current_branch = std::thread::spawn(move || -> color_eyre::Result<String> {
         Ok(String::from_utf8(
             Command::new("git")
@@ -59,7 +59,7 @@ fn main() -> color_eyre::Result<()> {
         .to_owned())
     });
 
-    let git_repo_root_clone = git_repo_root.clone();
+    let git_repo_root_clone = git_repo_root.clone().to_string_lossy().to_string();
     let get_github_repo_url = std::thread::spawn(move || -> color_eyre::Result<Url> {
         get_github_url_from_git_remote_output(&String::from_utf8(
             Command::new("git")
