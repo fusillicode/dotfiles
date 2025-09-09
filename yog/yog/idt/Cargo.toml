@@ -1,0 +1,17 @@
+[package]
+name = "idt"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Development tools installer for language servers and utilities"
+keywords = ["cli", "installer", "development", "tools", "language-server"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+cmd = { workspace = true }
+color-eyre = { workspace = true }
+github = { workspace = true }
+system = { workspace = true }

@@ -1,0 +1,23 @@
+[package]
+name = "wezterm"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Types and helpers for querying and controlling WezTerm panes"
+keywords = ["wezterm", "terminal", "pane", "multiplexer", "integration"]
+categories = ["command-line-utilities", "development-tools"]
+
+[features]
+fake = ["dep:fake"]
+
+[dependencies]
+color-eyre = { workspace = true }
+fake = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+fake = { workspace = true }

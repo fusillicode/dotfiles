@@ -1,0 +1,18 @@
+[package]
+name = "oe"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Editor file opener for Wezterm integration"
+keywords = ["cli", "editor", "wezterm", "neovim", "nvim", "helix"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+cmd = { workspace = true }
+color-eyre = { workspace = true }
+editor = { workspace = true }
+system = { workspace = true }
+wezterm = { workspace = true }

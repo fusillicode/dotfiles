@@ -1,0 +1,22 @@
+[package]
+name = "gch"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Interactive git working tree cleaner: delete new files and restore changes"
+keywords = ["cli", "git", "github", "branch", "management"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+cmd = { workspace = true }
+color-eyre = { workspace = true }
+tui = { workspace = true }
+system = { workspace = true }
+
+[dev-dependencies]
+assert2 = { workspace = true }
+pretty_assertions = { workspace = true }
+rstest = { workspace = true }
