@@ -37,9 +37,16 @@ fn main() -> color_eyre::Result<()> {
     let args = system::get_args();
     let args: Vec<_> = args.iter().map(String::as_str).collect();
 
-    let Some(selected_entries) = tui::minimal_multi_select::<GitStatusEntry>(crate::git_status::get()?)? else {
+    let git_status_entries = crate::git_status::get()?;
+    if git_status_entries.is_empty() {
+        println!("{}", "no changes".bold());
+        return Ok(());
+    }
+
+    let Some(selected_entries) = tui::minimal_multi_select::<GitStatusEntry>(git_status_entries)? else {
         return Ok(());
     };
+
     restore_entries(&selected_entries, args.first().copied())?;
 
     Ok(())
