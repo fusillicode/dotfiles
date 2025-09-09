@@ -10,15 +10,15 @@ use crate::git_status::GitStatusEntry;
 
 mod git_status;
 
-/// Interactive CLI tools to clean the working tree by:
+/// Interactive CLI tool to clean the working tree by:
 ///
-/// - Deleting newly created files
-/// - Restoring modified, renamed, or deleted ones via `git restore`
+/// - Deleting newly created or added entries (files or directories)
+/// - Restoring modified, renamed, or deleted entries via `git restore`
 ///
 /// Workflow:
-/// 1. Collect [`GitStatusEntry`] values via [`git::get_git_status_entries`].
-/// 2. Let the user multi‑select entries with skim (see [`utils::sk`]).
-/// 3. Delete new or added files and run `git restore` (optionally from a user‑supplied branch) for the remaining
+/// 1. Collect [`GitStatusEntry`] values via [`crate::git_status::get`].
+/// 2. Let the user multi‑select entries via the minimal TUI.
+/// 3. Delete new or added entries and run `git restore` (optionally from a user‑supplied branch) for the remaining
 ///    changed entries.
 ///
 /// The tool is intentionally minimal and suited for quick cleanup and branch‑switching
@@ -28,9 +28,9 @@ mod git_status;
 ///
 /// Returns an error if:
 /// - Initializing [`color_eyre`] fails.
-/// - Fetching entries via [`git::get_git_status_entries`] fails.
-/// - Building skim options or running [`utils::sk::get_items`] fails.
-/// - Deleting a file or executing the `git restore` command fails.
+/// - Fetching entries via [`crate::git_status::get`] fails.
+/// - Presenting the selection UI fails.
+/// - Deleting an entry or executing the `git restore` command fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
@@ -40,32 +40,36 @@ fn main() -> color_eyre::Result<()> {
     let Some(selected_entries) = tui::minimal_multi_select::<GitStatusEntry>(crate::git_status::get()?)? else {
         return Ok(());
     };
-    restore_files(&selected_entries, args.first().copied())?;
+    restore_entries(&selected_entries, args.first().copied())?;
 
     Ok(())
 }
 
-/// Deletes new or added files and restores changed ones with `git restore`.
+/// Deletes new or added entries (files or directories) and restores changed ones with `git restore`.
 ///
 /// If a `branch` is provided, it is passed immediately after `restore`, so the
-/// files are restored from that branch.
+/// entries are restored from that branch.
 ///
 /// # Errors
 ///
 /// Returns an error if:
-/// - Deleting a file fails.
+/// - Deleting an entry fails.
 /// - Building or executing the `git restore` command fails.
 /// - Any underlying I/O operation fails.
-fn restore_files(entries: &[GitStatusEntry], branch: Option<&str>) -> color_eyre::Result<()> {
+fn restore_entries(entries: &[GitStatusEntry], branch: Option<&str>) -> color_eyre::Result<()> {
     let (new_entries, changed_entries): (Vec<_>, Vec<_>) = entries.iter().partition(|entry| match entry {
         GitStatusEntry::New(_) | GitStatusEntry::Added(_) => true,
         GitStatusEntry::Modified(_) | GitStatusEntry::Renamed(_) | GitStatusEntry::Deleted(_) => false,
     });
 
     for new_entry in &new_entries {
-        let file_path = new_entry.file_path();
-        std::fs::remove_file(file_path)?;
-        println!("{} {}", "deleted".red().bold(), file_path.display().bold());
+        let entry_path = new_entry.path();
+        if entry_path.is_file() || entry_path.is_symlink() {
+            std::fs::remove_file(entry_path)?;
+        } else if entry_path.is_dir() {
+            std::fs::remove_dir_all(entry_path)?;
+        }
+        println!("{} {}", "deleted".red().bold(), entry_path.display().bold());
     }
 
     // Exit early in case of no changes to avoid break `git restore` cmd.
@@ -79,7 +83,7 @@ fn restore_files(entries: &[GitStatusEntry], branch: Option<&str>) -> color_eyre
     }
     let changed_entries_paths = changed_entries
         .iter()
-        .map(|ce| ce.file_path().to_string_lossy())
+        .map(|ce| ce.path().to_string_lossy())
         .collect::<Vec<_>>();
     args.extend_from_slice(&changed_entries_paths);
     Command::new("git").args(args.iter().map(Cow::as_ref)).exec()?;
