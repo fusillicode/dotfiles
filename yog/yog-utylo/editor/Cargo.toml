@@ -6,5 +6,5 @@ license = "MIT"
 authors = ["Gian Lu"]
 
 [dependencies]
-wezterm = { path = "../wezterm" }
 color-eyre = { workspace = true }
+wezterm = { path = "../wezterm" }

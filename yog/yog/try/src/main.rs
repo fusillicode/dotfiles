@@ -27,7 +27,7 @@ use itertools::Itertools;
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let args = utils::system::get_args();
+    let args = system::get_args();
 
     let Some((cooldown_secs, args)) = args.split_first() else {
         bail!("missing cooldown supplied in {args:#?}");

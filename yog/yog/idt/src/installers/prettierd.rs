@@ -20,8 +20,8 @@ impl Installer for PrettierD<'_> {
         )?;
 
         let target = target_dir.join(self.bin_name());
-        utils::system::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;
-        utils::system::chmod_x(target)?;
+        system::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;
+        system::chmod_x(target)?;
 
         Ok(())
     }

@@ -6,6 +6,6 @@ license = "MIT"
 authors = ["Gian Lu"]
 
 [dependencies]
+chrono = { workspace = true }
 cmd = { path = "../cmd" }
 color-eyre = { workspace = true }
-chrono = { workspace = true }

@@ -2,9 +2,9 @@ use std::process::Command;
 
 use chrono::DateTime;
 use chrono::FixedOffset;
+use cmd::CmdExt;
 use serde::Deserialize;
 use serde::Deserializer;
-use utils::cmd::CmdExt;
 
 /// Gets all local and remote [`GitRef`]s sorted by modification date.
 ///

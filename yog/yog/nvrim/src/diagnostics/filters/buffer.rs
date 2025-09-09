@@ -1,5 +1,5 @@
 use nvim_oxi::Dictionary;
-use utils::system::build_home_path;
+use system::build_home_path;
 
 use crate::diagnostics::filters::DiagnosticsFilter;
 

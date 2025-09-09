@@ -14,7 +14,7 @@ impl Installer for Shellcheck<'_> {
 
     fn install(&self) -> color_eyre::Result<()> {
         let repo = format!("koalaman/{}", self.bin_name());
-        let latest_release = utils::github::get_latest_release(&repo)?;
+        let latest_release = github::get_latest_release(&repo)?;
         let dest_dir = Path::new("/tmp");
 
         crate::downloaders::curl::run(
@@ -35,7 +35,7 @@ impl Installer for Shellcheck<'_> {
                 .join(self.bin_name()),
             &target,
         )?;
-        utils::system::chmod_x(target)?;
+        system::chmod_x(target)?;
 
         Ok(())
     }

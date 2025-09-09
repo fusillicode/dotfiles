@@ -24,7 +24,7 @@ impl Installer for Sqruff<'_> {
             },
         )?;
 
-        utils::system::chmod_x(target)?;
+        system::chmod_x(target)?;
 
         Ok(())
     }

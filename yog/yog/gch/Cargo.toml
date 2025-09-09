@@ -11,8 +11,10 @@ keywords = ["cli", "git", "github", "branch", "management"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
+cmd = { workspace = true }
 color-eyre = { workspace = true }
-utils = { workspace = true }
+inquire = { workspace = true }
+system = { workspace = true }
 
 [dev-dependencies]
 assert2 = { workspace = true }

@@ -3,10 +3,10 @@
 use std::io::Write;
 use std::process::Command;
 
+use cmd::CmdExt;
 use color_eyre::eyre::bail;
 use color_eyre::owo_colors::OwoColorize as _;
 use url::Url;
-use utils::cmd::CmdExt;
 
 mod git_for_each_ref;
 
@@ -19,7 +19,7 @@ mod git_for_each_ref;
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let args = utils::system::get_args();
+    let args = system::get_args();
     let args: Vec<_> = args.iter().map(String::as_str).collect();
 
     match args.split_first() {
@@ -44,7 +44,7 @@ fn autocomplete_git_branches() -> color_eyre::Result<()> {
     let mut git_refs = git_for_each_ref::get_locals_and_remotes()?;
     git_for_each_ref::keep_local_and_untracked_refs(&mut git_refs);
 
-    match utils::inquire::minimal_select(git_refs)? {
+    match inquire::minimal_select(git_refs)? {
         Some(hd) if hd.name() == "-" || hd.name().is_empty() => switch_branch("-"),
         Some(other) => switch_branch(other.name()),
         None => Ok(()),
@@ -59,8 +59,8 @@ fn autocomplete_git_branches() -> color_eyre::Result<()> {
 /// - An underlying operation fails.
 fn switch_branch_or_create_if_missing(arg: &str) -> color_eyre::Result<()> {
     if let Ok(url) = Url::parse(arg) {
-        utils::github::log_into_github()?;
-        let branch_name = utils::github::get_branch_name_from_url(&url)?;
+        github::log_into_github()?;
+        let branch_name = github::get_branch_name_from_url(&url)?;
         return switch_branch(&branch_name);
     }
     create_branch_if_missing(&build_branch_name(&[arg])?)
@@ -103,7 +103,7 @@ fn should_create_new_branch(branch: &str) -> color_eyre::Result<bool> {
     if is_default_branch(branch) {
         return Ok(true);
     }
-    let curr_branch = utils::git::get_current_branch()?;
+    let curr_branch = git::get_current_branch()?;
     if is_default_branch(&curr_branch) {
         return Ok(true);
     }

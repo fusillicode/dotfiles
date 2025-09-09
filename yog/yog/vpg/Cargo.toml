@@ -12,6 +12,7 @@ categories = ["command-line-utilities", "database", "authentication"]
 
 [dependencies]
 color-eyre = { workspace = true }
+inquire = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-utils = { workspace = true }
+system = { workspace = true }

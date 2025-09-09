@@ -148,7 +148,7 @@ name = "catl"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
- "utils",
+ "system",
 ]
 
 [[package]]
@@ -366,8 +366,9 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 name = "evoke"
 version = "0.1.0"
 dependencies = [
+ "cmd",
  "color-eyre",
- "utils",
+ "system",
 ]
 
 [[package]]
@@ -399,8 +400,9 @@ version = "0.1.0"
 dependencies = [
  "color-eyre",
  "fake",
+ "inquire 0.1.0",
  "strum",
- "utils",
+ "system",
 ]
 
 [[package]]
@@ -484,10 +486,12 @@ name = "gch"
 version = "0.1.0"
 dependencies = [
  "assert2",
+ "cmd",
  "color-eyre",
+ "inquire 0.1.0",
  "pretty_assertions",
  "rstest",
- "utils",
+ "system",
 ]
 
 [[package]]
@@ -496,13 +500,17 @@ version = "0.1.0"
 dependencies = [
  "assert2",
  "chrono",
+ "cmd",
  "color-eyre",
+ "git",
+ "github",
+ "inquire 0.1.0",
  "pretty_assertions",
  "rstest",
  "serde",
  "serde_json",
+ "system",
  "url",
- "utils",
 ]
 
 [[package]]
@@ -718,8 +726,10 @@ dependencies = [
 name = "idt"
 version = "0.1.0"
 dependencies = [
+ "cmd",
  "color-eyre",
- "utils",
+ "github",
+ "system",
 ]
 
 [[package]]
@@ -739,11 +749,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "inquair"
+name = "inquire"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
- "inquire",
+ "inquire 0.7.5",
  "strum",
 ]
 
@@ -979,17 +989,20 @@ dependencies = [
 name = "nvrim"
 version = "0.1.0"
 dependencies = [
+ "cmd",
  "color-eyre",
  "fkr",
+ "git",
  "itertools",
  "nvim-oxi",
  "serde",
  "serde_repr",
  "strum",
+ "system",
  "tree-sitter",
  "tree-sitter-rust",
  "url",
- "utils",
+ "wezterm",
 ]
 
 [[package]]
@@ -1005,8 +1018,11 @@ dependencies = [
 name = "oe"
 version = "0.1.0"
 dependencies = [
+ "cmd",
  "color-eyre",
- "utils",
+ "editor",
+ "system",
+ "wezterm",
 ]
 
 [[package]]
@@ -1589,7 +1605,7 @@ version = "0.1.0"
 dependencies = [
  "color-eyre",
  "itertools",
- "utils",
+ "system",
 ]
 
 [[package]]
@@ -1635,22 +1651,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
 
 [[package]]
-name = "utils"
-version = "0.1.0"
-dependencies = [
- "assert2",
- "chrono",
- "color-eyre",
- "fake",
- "inquire",
- "serde",
- "serde_json",
- "strum",
- "thiserror",
- "url",
-]
-
-[[package]]
 name = "uuid"
 version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1681,9 +1681,10 @@ name = "vpg"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
+ "inquire 0.1.0",
  "serde",
  "serde_json",
- "utils",
+ "system",
 ]
 
 [[package]]
@@ -2012,10 +2013,14 @@ name = "yghfl"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
+ "editor",
  "fake",
+ "git",
+ "hx",
+ "system",
  "temp-env",
  "url",
- "utils",
+ "wezterm",
 ]
 
 [[package]]
@@ -2023,7 +2028,10 @@ name = "yhfp"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
- "utils",
+ "editor",
+ "hx",
+ "system",
+ "wezterm",
 ]
 
 [[package]]

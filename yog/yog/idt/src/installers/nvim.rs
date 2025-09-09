@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use utils::cmd::silent_cmd;
+use cmd::silent_cmd;
 
 use crate::Installer;
 
@@ -42,8 +42,8 @@ impl Installer for Nvim<'_> {
             .exit_ok()?;
 
         let target = nvim_release_dir.join("bin").join(self.bin_name());
-        utils::system::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;
-        utils::system::chmod_x(&target)?;
+        system::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;
+        system::chmod_x(&target)?;
 
         Ok(())
     }

@@ -11,5 +11,7 @@ keywords = ["cli", "installer", "development", "tools", "language-server"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
+cmd = { workspace = true }
 color-eyre = { workspace = true }
-utils = { workspace = true }
+github = { workspace = true }
+system = { workspace = true }

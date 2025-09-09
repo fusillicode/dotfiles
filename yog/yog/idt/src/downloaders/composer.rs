@@ -13,7 +13,7 @@ pub fn run(dev_tools_dir: &Path, tool: &str, packages: &[&str]) -> color_eyre::R
 
     std::fs::create_dir_all(&dev_tools_repo_dir)?;
 
-    utils::cmd::silent_cmd("composer")
+    cmd::silent_cmd("composer")
         .args(
             [
                 &[

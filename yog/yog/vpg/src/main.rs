@@ -31,12 +31,12 @@ mod vault;
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let pgpass_path = utils::system::build_home_path(&[".pgpass"])?;
+    let pgpass_path = system::build_home_path(&[".pgpass"])?;
     let pgpass_content = std::fs::read_to_string(&pgpass_path)?;
     let pgpass_file = PgpassFile::parse(pgpass_content.as_str())?;
 
-    let args = utils::system::get_args();
-    let Some(mut pgpass_entry) = utils::inquire::get_item_from_cli_args_or_select(
+    let args = system::get_args();
+    let Some(mut pgpass_entry) = inquire::get_item_from_cli_args_or_select(
         &args,
         |(idx, _)| *idx == 0,
         pgpass_file.entries,
@@ -62,7 +62,7 @@ fn main() -> color_eyre::Result<()> {
     pgpass_entry.connection_params.update(&vault_read_output.data);
     pgpass::save_new_pgpass_file(pgpass_file.idx_lines, &pgpass_entry.connection_params, &pgpass_path)?;
 
-    let nvim_dbee_conns_path = utils::system::build_home_path(&[".local", "state", "nvim", "dbee", "conns.json"])?;
+    let nvim_dbee_conns_path = system::build_home_path(&[".local", "state", "nvim", "dbee", "conns.json"])?;
     nvim_dbee::save_new_nvim_dbee_conns_file(&pgpass_entry, &nvim_dbee_conns_path)?;
 
     println!(
@@ -78,7 +78,7 @@ fn main() -> color_eyre::Result<()> {
     // Cosmetic space in prompt.
     println!();
 
-    if Some(true) == utils::inquire::yes_no_select(&format!("Connect to {}? ", pgpass_entry.metadata.alias))? {
+    if Some(true) == inquire::yes_no_select(&format!("Connect to {}? ", pgpass_entry.metadata.alias))? {
         let db_url = pgpass_entry.connection_params.db_url();
         println!(
             "\nConnecting to {} @\n\n{}\n",

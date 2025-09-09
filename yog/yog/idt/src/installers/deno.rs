@@ -14,7 +14,7 @@ impl Installer for Deno<'_> {
 
     fn install(&self) -> color_eyre::Result<()> {
         let repo = format!("{0}land/{0}", self.bin_name());
-        let latest_release = utils::github::get_latest_release(&repo)?;
+        let latest_release = github::get_latest_release(&repo)?;
 
         let target = crate::downloaders::curl::run(
             &format!(
@@ -27,7 +27,7 @@ impl Installer for Deno<'_> {
             },
         )?;
 
-        utils::system::chmod_x(&target)?;
+        system::chmod_x(&target)?;
 
         Ok(())
     }

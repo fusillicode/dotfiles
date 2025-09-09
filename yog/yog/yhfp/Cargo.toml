@@ -12,4 +12,7 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 color-eyre = { workspace = true }
-utils = { workspace = true }
+editor = { workspace = true }
+hx = { workspace = true }
+system = { workspace = true }
+wezterm = { workspace = true }

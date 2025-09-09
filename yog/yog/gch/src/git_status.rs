@@ -3,9 +3,9 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
 
+use cmd::CmdExt;
 use color_eyre::eyre::bail;
 use color_eyre::owo_colors::OwoColorize as _;
-use utils::cmd::CmdExt;
 
 /// Returns a list of [`GitStatusEntry`] values parsed from
 /// `git status --porcelain -s`.

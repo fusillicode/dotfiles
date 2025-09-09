@@ -1,5 +1,5 @@
 [package]
-name = "inquair"
+name = "inquire"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
@@ -7,5 +7,5 @@ authors = ["Gian Lu"]
 
 [dependencies]
 color-eyre = { workspace = true }
-strum = { workspace = true }
 inquire = { version = "0.7", features = ["fuzzy-matcher"] }
+strum = { workspace = true }

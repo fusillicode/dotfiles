@@ -12,11 +12,15 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 chrono = { workspace = true }
+cmd = { workspace = true }
 color-eyre = { workspace = true }
+git = { workspace = true }
+github = { workspace = true }
+inquire = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+system = { workspace = true }
 url = { workspace = true }
-utils = { workspace = true }
 
 [dev-dependencies]
 assert2 = { workspace = true }

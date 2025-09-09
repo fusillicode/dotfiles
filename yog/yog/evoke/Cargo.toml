@@ -11,5 +11,6 @@ keywords = ["cli", "build", "automation", "deployment", "rust"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
+cmd = { workspace = true }
 color-eyre = { workspace = true }
-utils = { workspace = true }
+system = { workspace = true }

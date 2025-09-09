@@ -23,7 +23,7 @@ impl Installer for RustAnalyzer<'_> {
             },
         )?;
 
-        utils::system::chmod_x(target)?;
+        system::chmod_x(target)?;
 
         Ok(())
     }

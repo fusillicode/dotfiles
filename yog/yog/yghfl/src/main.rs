@@ -8,12 +8,12 @@ use std::process::Command;
 use std::sync::Arc;
 
 use color_eyre::eyre::eyre;
+use editor::Editor;
+use hx::HxCursorPosition;
+use hx::HxStatusLine;
 use url::Url;
-use utils::editor::Editor;
-use utils::hx::HxCursorPosition;
-use utils::hx::HxStatusLine;
-use utils::wezterm::WeztermPane;
-use utils::wezterm::get_sibling_pane_with_titles;
+use wezterm::WeztermPane;
+use wezterm::get_sibling_pane_with_titles;
 
 /// Generates GitHub links for files open in Helix editor.
 ///
@@ -26,8 +26,8 @@ fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
     let hx_pane = get_sibling_pane_with_titles(
-        &utils::wezterm::get_all_panes(&[])?,
-        utils::wezterm::get_current_pane_id()?,
+        &wezterm::get_all_panes(&[])?,
+        wezterm::get_current_pane_id()?,
         Editor::Hx.pane_titles(),
     )?;
 
@@ -45,7 +45,7 @@ fn main() -> color_eyre::Result<()> {
         )
     })?)?;
 
-    let git_repo_root = Arc::new(utils::git::get_repo_root(Some(&hx_status_line.file_path))?);
+    let git_repo_root = Arc::new(git::get_repo_root(Some(&hx_status_line.file_path))?);
 
     let git_repo_root_clone = git_repo_root.clone();
     let get_git_current_branch = std::thread::spawn(move || -> color_eyre::Result<String> {
@@ -74,13 +74,13 @@ fn main() -> color_eyre::Result<()> {
     let hx_cursor_absolute_file_path = build_hx_cursor_absolute_file_path(&hx_status_line.file_path, &hx_pane)?;
 
     let github_link = build_github_link(
-        &utils::system::join(get_github_repo_url)?,
-        &utils::system::join(get_git_current_branch)?,
+        &system::join(get_github_repo_url)?,
+        &system::join(get_git_current_branch)?,
         hx_cursor_absolute_file_path.strip_prefix(git_repo_root.as_ref())?,
         &hx_status_line.position,
     )?;
 
-    utils::system::cp_to_system_clipboard(&mut github_link.as_str().as_bytes())?;
+    system::cp_to_system_clipboard(&mut github_link.as_str().as_bytes())?;
 
     Ok(())
 }
@@ -142,7 +142,7 @@ fn build_hx_cursor_absolute_file_path(
     hx_pane: &WeztermPane,
 ) -> color_eyre::Result<PathBuf> {
     if let Ok(hx_cursor_file_path) = hx_cursor_file_path.strip_prefix("~") {
-        return utils::system::build_home_path(&[hx_cursor_file_path]);
+        return system::build_home_path(&[hx_cursor_file_path]);
     }
 
     let mut components = hx_pane.cwd.components();

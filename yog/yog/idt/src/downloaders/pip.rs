@@ -12,12 +12,12 @@ pub fn run(dev_tools_dir: &Path, tool: &str, packages: &[&str]) -> color_eyre::R
 
     std::fs::create_dir_all(&dev_tools_repo_dir)?;
 
-    utils::cmd::silent_cmd("python3")
+    cmd::silent_cmd("python3")
         .args(["-m", "venv", &dev_tools_repo_dir.join(".venv").to_string_lossy()])
         .status()?
         .exit_ok()?;
 
-    utils::cmd::silent_cmd("sh")
+    cmd::silent_cmd("sh")
         .args([
             "-c",
             &format!(

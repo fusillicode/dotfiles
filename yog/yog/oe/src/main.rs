@@ -3,8 +3,8 @@
 use core::str::FromStr;
 
 use color_eyre::eyre::bail;
-use utils::editor::Editor;
-use utils::editor::FileToOpen;
+use editor::Editor;
+use editor::FileToOpen;
 
 /// Opens files in a running editor instance from Wezterm.
 ///
@@ -22,7 +22,7 @@ fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
     let enriched_path_env = get_enriched_path_env()?;
-    let args = utils::system::get_args();
+    let args = system::get_args();
 
     let Some(editor) = args.first().map(|x| Editor::from_str(x)).transpose()? else {
         bail!("missing editor specified {args:#?}");
@@ -34,29 +34,29 @@ fn main() -> color_eyre::Result<()> {
 
     let pane_id = match args.get(2) {
         Some(x) => x.parse()?,
-        None => utils::wezterm::get_current_pane_id()?,
+        None => wezterm::get_current_pane_id()?,
     };
 
-    let panes = utils::wezterm::get_all_panes(&[enriched_path_env.by_ref()])?;
+    let panes = wezterm::get_all_panes(&[enriched_path_env.by_ref()])?;
 
     let file_to_open = FileToOpen::try_from((file_to_open.as_str(), pane_id, panes.as_slice()))?;
 
     let editor_pane_id =
-        utils::wezterm::get_sibling_pane_with_titles(&panes, pane_id, editor.pane_titles()).map(|x| x.pane_id)?;
+        wezterm::get_sibling_pane_with_titles(&panes, pane_id, editor.pane_titles()).map(|x| x.pane_id)?;
 
     let open_file_cmd = editor.open_file_cmd(&file_to_open);
 
-    utils::cmd::silent_cmd("sh")
+    cmd::silent_cmd("sh")
         .args([
             "-c",
             &format!(
                 "{} && {} && {} && {}",
                 // `wezterm cli send-text $'\e'` sends the "ESC" to Wezterm to exit from insert mode
                 // https://github.com/wez/wezterm/discussions/3945
-                utils::wezterm::send_text_to_pane_cmd(r"$'\e'", editor_pane_id),
-                utils::wezterm::send_text_to_pane_cmd(&format!("'{open_file_cmd}'"), editor_pane_id),
-                utils::wezterm::submit_pane_cmd(editor_pane_id),
-                utils::wezterm::activate_pane_cmd(editor_pane_id),
+                wezterm::send_text_to_pane_cmd(r"$'\e'", editor_pane_id),
+                wezterm::send_text_to_pane_cmd(&format!("'{open_file_cmd}'"), editor_pane_id),
+                wezterm::submit_pane_cmd(editor_pane_id),
+                wezterm::activate_pane_cmd(editor_pane_id),
             ),
         ])
         .envs(std::iter::once(enriched_path_env.by_ref()))
@@ -75,7 +75,7 @@ fn get_enriched_path_env() -> color_eyre::Result<Env> {
     let enriched_path = [
         &std::env::var("PATH").unwrap_or_else(|_| String::new()),
         "/opt/homebrew/bin",
-        &utils::system::build_home_path(&[".local", "bin"])?.to_string_lossy(),
+        &system::build_home_path(&[".local", "bin"])?.to_string_lossy(),
     ]
     .join(":");
 
