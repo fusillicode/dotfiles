@@ -29,15 +29,15 @@ pub fn get() -> color_eyre::Result<Vec<GitStatusEntry>> {
 /// Simplified representation of a porcelain `git status` line.
 #[derive(Debug, Clone)]
 pub enum GitStatusEntry {
-    /// New / untracked file ("??").
+    /// New / untracked entry, file or directory ("??").
     New(PathBuf),
     /// Added to the index ("A").
     Added(PathBuf),
-    /// Modified file ("M").
+    /// Modified entry, file or directory ("M").
     Modified(PathBuf),
-    /// Renamed file ("R").
+    /// Renamed entry, file or directory ("R").
     Renamed(PathBuf),
-    /// Deleted file ("D").
+    /// Deleted entry, file or directory ("D").
     Deleted(PathBuf),
 }
 
@@ -75,13 +75,13 @@ impl core::fmt::Display for GitStatusEntry {
             Self::Renamed(_) => "R".blue().bold().to_string(),
             Self::Deleted(_) => "D".red().bold().to_string(),
         };
-        write!(f, "{symbol} {}", self.file_path().display().bold())
+        write!(f, "{symbol} {}", self.path().display().bold())
     }
 }
 
 impl GitStatusEntry {
-    /// The file path of the entry.
-    pub fn file_path(&self) -> &Path {
+    /// The path of the entry.
+    pub fn path(&self) -> &Path {
         match self {
             Self::New(path) | Self::Added(path) | Self::Modified(path) | Self::Renamed(path) | Self::Deleted(path) => {
                 path
