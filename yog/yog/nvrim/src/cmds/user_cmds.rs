@@ -1,17 +1,47 @@
 use fkr::FkrOption;
 use nvim_oxi::api::Buffer;
+use nvim_oxi::api::StringOrFunction;
 use nvim_oxi::api::Window;
+use nvim_oxi::api::opts::CreateCommandOpts;
+use nvim_oxi::api::opts::CreateCommandOptsBuilder;
+use nvim_oxi::api::types::CommandArgs;
 use strum::IntoEnumIterator;
 
-/// Creates Nvim user commands for generating fake data using FKR.
-pub fn create_all(_: ()) {
+const USER_CMDS: [(&str, &str); 6] = [
+    ("CopyAll", ":%y+"),
+    ("Highlights", ":FzfLua highlights"),
+    ("LazyProfile", ":Lazy profile"),
+    ("LazyUpdate", ":Lazy update"),
+    ("SelectAll", "normal! ggVG"),
+    ("Messages", ":Messages"),
+];
+
+pub fn create() {
+    for (cmd_name, cmd) in USER_CMDS {
+        create_user_cmd(cmd_name, cmd, &default_opts());
+    }
     for fkr_opt in FkrOption::iter() {
-        crate::cmds::create_user_cmd(
+        create_user_cmd(
             cmd_name(&fkr_opt),
             move |_| set_text_at_cursor_pos(&fkr_opt.gen_string()),
-            &crate::cmds::default_opts(),
+            &default_opts(),
         );
     }
+}
+
+fn create_user_cmd<Cmd>(name: &str, command: Cmd, opts: &CreateCommandOpts)
+where
+    Cmd: StringOrFunction<CommandArgs, ()>,
+{
+    if let Err(error) = nvim_oxi::api::create_user_command(name, command, opts) {
+        crate::oxi_ext::notify_error(&format!(
+            "cannot create user command {name} with opts {opts:#?}, error {error:#?}"
+        ));
+    }
+}
+
+fn default_opts() -> CreateCommandOpts {
+    CreateCommandOptsBuilder::default().build()
 }
 
 fn set_text_at_cursor_pos(text: &str) {
