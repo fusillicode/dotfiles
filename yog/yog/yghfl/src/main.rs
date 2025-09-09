@@ -69,7 +69,7 @@ fn main() -> color_eyre::Result<()> {
         )?)
     });
 
-    // `build_file_path_relative_to_git_repo_root` are called before the 🧵s `join` to let them work in the background
+    // `build_file_path_relative_to_git_repo_root` are called before the threads `join` to let them work in the background
     // as much as possible
     let hx_cursor_absolute_file_path = build_hx_cursor_absolute_file_path(&hx_status_line.file_path, &hx_pane)?;
 
