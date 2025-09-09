@@ -39,7 +39,7 @@ fn main() -> color_eyre::Result<()> {
 
     let git_status_entries = crate::git_status::get()?;
     if git_status_entries.is_empty() {
-        println!("{}", "no changes".bold());
+        println!("{}", "working tree clean".bold());
         return Ok(());
     }
 
