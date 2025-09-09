@@ -1,0 +1,15 @@
+[package]
+name = "catl"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "File/directory viewer that chooses between cat and ls based on input type"
+keywords = ["cli", "file", "directory", "viewer", "cat", "ls"]
+categories = ["command-line-utilities", "filesystem"]
+
+[dependencies]
+color-eyre = { workspace = true }
+system = { workspace = true }

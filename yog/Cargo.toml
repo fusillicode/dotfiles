@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["src/*"]
+members = ["yog/*", "yog-utylo/*"]
 
 [workspace.package]
 version = "0.1.0"
@@ -14,8 +14,8 @@ categories = ["command-line-utilities", "development-tools"]
 
 [workspace.dependencies]
 bitflags = { version = "2.9" }
-color-eyre = { version = "0.6" }
 chrono = { version = "0.4", features = ["serde"] }
+color-eyre = { version = "0.6" }
 fake = { version = "4.4", features = ["derive"] }
 getrandom = { version = "0.3" }
 itertools = { version = "0.14" }
@@ -24,7 +24,15 @@ serde_json = { version = "1.0" }
 strum = { version = "0.27", features = ["derive"] }
 thiserror = { version = "2.0" }
 url = { version = "2.5", features = ["serde"] }
-utils = { path = "./src/utils" }
+
+cmd = { path = "./yog-utylo/cmd" }
+editor = { path = "./yog-utylo/editor" }
+git = { path = "./yog-utylo/git" }
+github = { path = "./yog-utylo/github" }
+hx = { path = "./yog-utylo/hx" }
+tui = { path = "./yog-utylo/tui" }
+system = { path = "./yog-utylo/system" }
+wezterm = { path = "./yog-utylo/wezterm" }
 
 #[dev-dependencies]
 assert2 = { version = "0.3" }
