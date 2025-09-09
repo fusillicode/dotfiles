@@ -21,7 +21,10 @@ pub fn get_repo(path: &Path) -> color_eyre::Result<Repository> {
     Ok(Repository::discover(path)?)
 }
 
-/// Returns the absolute path to the root directory of the Git repository containing `path`.
+/// Returns the absolute path to the repository working tree root that contains `path`.
+///
+/// Derives the path from [`Repository::commondir`] and removes any trailing `.git` component if present.
+/// For bare repositories (no working tree) this simply returns the repository directory itself.
 ///
 /// # Errors
 ///
@@ -29,7 +32,12 @@ pub fn get_repo(path: &Path) -> color_eyre::Result<Repository> {
 /// - The repository cannot be discovered starting from `path`.
 /// - `path` is not inside a Git repository.
 pub fn get_repo_root(path: &Path) -> color_eyre::Result<PathBuf> {
-    Ok(get_repo(path)?.commondir().to_path_buf())
+    let repo = get_repo(path)?;
+    Ok(repo
+        .commondir()
+        .components()
+        .filter(|c| c.as_os_str() != ".git")
+        .collect())
 }
 
 /// Returns the name of the current branch (e.g. `main`).
