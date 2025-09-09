@@ -7,6 +7,10 @@ use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 use git2::Repository;
 
+pub fn get_repo(path: &Path) -> color_eyre::Result<Repository> {
+    Ok(Repository::discover(path)?)
+}
+
 /// Returns the absolute path to the root directory of the Git repository containing `path`.
 ///
 /// # Errors
@@ -15,7 +19,7 @@ use git2::Repository;
 /// - The repository cannot be discovered starting from `path`.
 /// - `path` is not inside a Git repository.
 pub fn get_repo_root(path: &Path) -> color_eyre::Result<PathBuf> {
-    Ok(Repository::discover(path)?.commondir().to_path_buf())
+    Ok(get_repo(path)?.commondir().to_path_buf())
 }
 
 /// Returns the name of the current branch (e.g. `main`).
@@ -27,11 +31,11 @@ pub fn get_repo_root(path: &Path) -> color_eyre::Result<PathBuf> {
 /// - `HEAD` is detached.
 /// - The branch name is not valid UTF-8.
 pub fn get_current_branch() -> color_eyre::Result<String> {
-    let repo_path = ".";
-    let repo = Repository::discover(repo_path)?;
+    let repo_path = Path::new(".");
+    let repo = get_repo(repo_path)?;
 
     if repo.head_detached()? {
-        bail!("detached head for git {repo_path}")
+        bail!("detached head for git {}", repo_path.display())
     }
 
     repo.head()?
@@ -51,8 +55,8 @@ pub fn get_current_branch() -> color_eyre::Result<String> {
 /// - `HEAD` cannot be resolved to a commit.
 /// - The branch already exists.
 pub fn create_branch(branch_name: &str) -> color_eyre::Result<()> {
-    let repo_path = ".";
-    let repo = Repository::discover(repo_path)?;
+    let repo_path = Path::new(".");
+    let repo = get_repo(repo_path)?;
 
     let commit = repo.head()?.peel_to_commit()?;
     repo.branch(branch_name, &commit, false)?;
@@ -77,7 +81,7 @@ pub fn switch_branch(branch_name: &str) -> color_eyre::Result<()> {
         return Ok(());
     }
 
-    let repo = Repository::discover(".")?;
+    let repo = get_repo(Path::new("."))?;
 
     // Find the branch reference
     let (object, reference) = repo.revparse_ext(branch_name)?;
@@ -92,9 +96,4 @@ pub fn switch_branch(branch_name: &str) -> color_eyre::Result<()> {
     }
 
     Ok(())
-}
-
-pub fn get_remotes(repo_path: &Path) -> color_eyre::Result<Vec<String>> {
-    let repo = Repository::discover(repo_path)?;
-    Ok(repo.remotes()?.iter().flatten().map(str::to_owned).collect::<Vec<_>>())
 }

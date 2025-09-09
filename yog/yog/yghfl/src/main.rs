@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
 
+use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 use editor::Editor;
 use hx::HxCursorPosition;
@@ -45,19 +46,18 @@ fn main() -> color_eyre::Result<()> {
         )
     })?)?;
 
-    let git_repo_root = Arc::new(git::get_repo_root(&hx_status_line.file_path)?);
+    let git_repo_root_path = Arc::new(git::get_repo_root(&hx_status_line.file_path)?);
 
     let get_git_current_branch =
         std::thread::spawn(move || -> color_eyre::Result<String> { git::get_current_branch() });
 
-    let git_repo_root_clone = git_repo_root.to_string_lossy().to_string();
+    let git_repo_root_path_clone = git_repo_root_path.clone();
     let get_github_repo_url = std::thread::spawn(move || -> color_eyre::Result<Url> {
-        get_github_url_from_git_remote_output(&String::from_utf8(
-            Command::new("git")
-                .args(["-C", &git_repo_root_clone, "remote", "-v"])
-                .output()?
-                .stdout,
-        )?)
+        match &github::get_repo_urls(&git_repo_root_path_clone)?.as_slice() {
+            &[] => bail!("no GitHub URL found for repo path {git_repo_root_path_clone:#?}"),
+            &[one] => Ok(one.clone()),
+            multi => bail!("multiple GitHub URLs found {multi:#?} for supplied repo path {git_repo_root_path_clone:#?}"),
+        }
     });
 
     // `build_file_path_relative_to_git_repo_root` are called before the threads `join` to let them work in the
@@ -67,57 +67,13 @@ fn main() -> color_eyre::Result<()> {
     let github_link = build_github_link(
         &system::join(get_github_repo_url)?,
         &system::join(get_git_current_branch)?,
-        hx_cursor_absolute_file_path.strip_prefix(git_repo_root.as_ref())?,
+        hx_cursor_absolute_file_path.strip_prefix(git_repo_root_path.as_ref())?,
         &hx_status_line.position,
     )?;
 
     system::cp_to_system_clipboard(&mut github_link.as_str().as_bytes())?;
 
     Ok(())
-}
-
-/// Extracts GitHub repository URL from Git remote output.
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - An underlying operation fails.
-fn get_github_url_from_git_remote_output(git_remote_output: &str) -> color_eyre::Result<Url> {
-    let git_remote_fetch_line = git_remote_output
-        .trim()
-        .lines()
-        .find(|l| l.ends_with("(fetch)"))
-        .ok_or_else(|| eyre!("missing '(fetch)' line in git remote output '{git_remote_output}'"))?;
-
-    let git_remote_url = git_remote_fetch_line
-        .split_whitespace()
-        .nth(1)
-        .ok_or_else(|| eyre!("missing git remote url in '(fetch)' line '{git_remote_fetch_line}'"))?;
-
-    parse_github_url_from_git_remote_url(git_remote_url)
-}
-
-/// Converts Git remote URL to GitHub HTTPS URL.
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - An underlying operation fails.
-fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> color_eyre::Result<Url> {
-    if let Ok(mut url) = Url::parse(git_remote_url) {
-        url.set_path(url.clone().path().trim_end_matches(".git"));
-        return Ok(url);
-    }
-
-    let path = git_remote_url
-        .split_once(':')
-        .map(|(_, path)| path.trim_end_matches(".git"))
-        .ok_or_else(|| eyre!("cannot extract URL path from '{git_remote_url}'"))?;
-
-    let mut url = Url::parse("https://github.com")?;
-    url.set_path(path);
-
-    Ok(url)
 }
 
 /// Builds absolute file path for Helix cursor position.
@@ -248,40 +204,6 @@ mod tests {
 
         // Assert
         let expected = Path::new("/Users/Foo/dev/src/bar/baz.rs").to_path_buf();
-        assert_eq!(expected, result);
-    }
-
-    #[test]
-    fn get_github_url_from_git_remote_output_works_as_expected_with_ssh_remotes() {
-        // Arrange
-        let input = r"
-            origin       git@github.com:fusillicode/dotfiles.git (fetch)
-            origin  git@github.com:fusillicode/dotfiles.git (push)
-
-        ";
-
-        // Act
-        let result = get_github_url_from_git_remote_output(input).unwrap();
-
-        // Assert
-        let expected = Url::parse("https://github.com/fusillicode/dotfiles").unwrap();
-        assert_eq!(expected, result);
-    }
-
-    #[test]
-    fn get_github_url_from_git_remote_output_works_as_expected_with_https_remotes() {
-        // Arrange
-        let input = r"
-            origin       https://github.com/fusillicode/dotfiles.git (fetch)
-            origin  git@github.com:fusillicode/dotfiles.git (push)
-
-        ";
-
-        // Act
-        let result = get_github_url_from_git_remote_output(input).unwrap();
-
-        // Assert
-        let expected = Url::parse("https://github.com/fusillicode/dotfiles").unwrap();
         assert_eq!(expected, result);
     }
 }

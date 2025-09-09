@@ -1,4 +1,5 @@
 #![feature(exit_status_error)]
+use std::path::Path;
 use std::process::Command;
 use std::process::Output;
 
@@ -64,6 +65,43 @@ pub fn get_branch_name_from_url(url: &Url) -> color_eyre::Result<String> {
         .output()?;
 
     extract_success_output(&output)
+}
+
+pub fn get_repo_urls(repo_path: &Path) -> color_eyre::Result<Vec<Url>> {
+    let repo = git::get_repo(repo_path)?;
+    let mut repo_urls = vec![];
+    for remote_name in repo.remotes()?.iter().flatten() {
+        repo_urls.push(
+            repo.find_remote(remote_name)?
+                .url()
+                .map(parse_github_url_from_git_remote_url)
+                .ok_or_else(|| eyre!("remote url is invalid UTF-8"))??,
+        )
+    }
+    Ok(repo_urls)
+}
+
+/// Converts Git remote URL to GitHub HTTPS URL.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - An underlying operation fails.
+fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> color_eyre::Result<Url> {
+    if let Ok(mut url) = Url::parse(git_remote_url) {
+        url.set_path(url.clone().path().trim_end_matches(".git"));
+        return Ok(url);
+    }
+
+    let path = git_remote_url
+        .split_once(':')
+        .map(|(_, path)| path.trim_end_matches(".git"))
+        .ok_or_else(|| eyre!("cannot extract URL path from '{git_remote_url}'"))?;
+
+    let mut url = Url::parse("https://github.com")?;
+    url.set_path(path);
+
+    Ok(url)
 }
 
 /// Extracts and validates successful command output, converting it to a trimmed string.
@@ -136,6 +174,8 @@ fn extract_pr_id_form_url(url: &Url) -> color_eyre::Result<String> {
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
     use super::*;
 
     #[test]
@@ -227,5 +267,13 @@ mod tests {
         ))
         .unwrap();
         assert_eq!("42", extract_pr_id_form_url(&url).unwrap());
+    }
+
+    #[rstest]
+    #[case("git@github.com:fusillicode/dotfiles.git", Url::parse("https://github.com/fusillicode/dotfiles").unwrap())]
+    #[case("https://github.com/fusillicode/dotfiles", Url::parse("https://github.com/fusillicode/dotfiles").unwrap())]
+    fn parse_github_url_from_git_remote_url_works_as_expected(#[case] input: &str, #[case] expected: Url) {
+        let result = parse_github_url_from_git_remote_url(input).unwrap();
+        assert_eq!(expected, result);
     }
 }
