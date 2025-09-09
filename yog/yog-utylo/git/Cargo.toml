@@ -1,0 +1,15 @@
+[package]
+name = "git"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Lightweight helpers for parsing and manipulating Git repository state"
+keywords = ["git", "repository", "vcs", "status", "helpers"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+cmd = { path = "../cmd" }
+color-eyre = { workspace = true }
