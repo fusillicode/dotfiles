@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use cmd::CmdExt as _;
+use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 use git2::Repository;
 
@@ -17,8 +18,7 @@ use git2::Repository;
 /// - Running `git rev-parse --show-toplevel` fails.
 /// - The given path is not inside a Git repository.
 pub fn get_repo_root(path: &Path) -> color_eyre::Result<PathBuf> {
-    let repo = Repository::discover(path)?;
-    Ok(repo.commondir().to_path_buf())
+    Ok(Repository::discover(path)?.commondir().to_path_buf())
 }
 
 /// Retrieves the name of the current Git branch.
@@ -29,14 +29,17 @@ pub fn get_repo_root(path: &Path) -> color_eyre::Result<PathBuf> {
 /// - Executing `git` fails or returns a non-zero exit status.
 /// - UTF-8 conversion fails.
 pub fn get_current_branch() -> color_eyre::Result<String> {
-    Ok(std::str::from_utf8(
-        &Command::new("git")
-            .args(["rev-parse", "--abbrev-ref", "HEAD"])
-            .exec()?
-            .stdout,
-    )?
-    .trim()
-    .to_owned())
+    let repo_path = ".";
+    let repo = Repository::open(repo_path)?;
+
+    if repo.head_detached()? {
+        bail!("detached head for git {repo_path}")
+    }
+
+    repo.head()?
+        .shorthand()
+        .map(str::to_string)
+        .ok_or_else(|| eyre!("shorthand is not valid UTF-8"))
 }
 
 /// Switches to the specified Git branch.
@@ -46,6 +49,7 @@ pub fn get_current_branch() -> color_eyre::Result<String> {
 /// Returns an error if:
 /// - Executing `git` fails or returns a non-zero exit status.
 pub fn switch_branch(branch_name: &str) -> color_eyre::Result<()> {
+    // TODO: understand if there is a straightforward way with git2
     if branch_name == "-" {
         Command::new("git").args(["switch", branch_name]).exec()?;
         return Ok(());
