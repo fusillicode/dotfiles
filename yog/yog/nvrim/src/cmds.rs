@@ -57,6 +57,7 @@ fn create(_: ()) {
             crate::keymaps::set(&[Mode::Normal], "<c-n>", ":cn<cr>", &opts);
             crate::keymaps::set(&[Mode::Normal], "<c-p>", ":cp<cr>", &opts);
             crate::keymaps::set(&[Mode::Normal], "<c-x>", ":ccl<cr>", &opts);
+            crate::oxi_ext::exec_vim_cmd("resize", &["7".to_string()]);
 
             true
         }),
