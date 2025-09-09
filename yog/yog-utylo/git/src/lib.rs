@@ -7,27 +7,25 @@ use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 use git2::Repository;
 
-/// Finds the root directory of the Git repository containing the given file path, or the current directory if none
-/// provided.
+/// Returns the absolute path to the root directory of the Git repository containing `path`.
 ///
 /// # Errors
 ///
 /// Returns an error if:
-/// - Executing `sh` fails or returns a non-zero exit status.
-/// - UTF-8 conversion fails.
-/// - Running `git rev-parse --show-toplevel` fails.
-/// - The given path is not inside a Git repository.
+/// - The repository cannot be discovered starting from `path`.
+/// - `path` is not inside a Git repository.
 pub fn get_repo_root(path: &Path) -> color_eyre::Result<PathBuf> {
     Ok(Repository::discover(path)?.commondir().to_path_buf())
 }
 
-/// Retrieves the name of the current Git branch.
+/// Returns the name of the current branch (e.g. `main`).
 ///
 /// # Errors
 ///
 /// Returns an error if:
-/// - Executing `git` fails or returns a non-zero exit status.
-/// - UTF-8 conversion fails.
+/// - The repository cannot be discovered.
+/// - `HEAD` is detached.
+/// - The branch name is not valid UTF-8.
 pub fn get_current_branch() -> color_eyre::Result<String> {
     let repo_path = ".";
     let repo = Repository::discover(repo_path)?;
@@ -42,6 +40,16 @@ pub fn get_current_branch() -> color_eyre::Result<String> {
         .ok_or_else(|| eyre!("shorthand is not valid UTF-8"))
 }
 
+/// Creates a new local branch pointing to the current `HEAD` commit.
+///
+/// Does not switch to the new branch.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The repository cannot be discovered.
+/// - `HEAD` cannot be resolved to a commit.
+/// - The branch already exists.
 pub fn create_branch(branch_name: &str) -> color_eyre::Result<()> {
     let repo_path = ".";
     let repo = Repository::discover(repo_path)?;
@@ -52,12 +60,16 @@ pub fn create_branch(branch_name: &str) -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Switches to the specified Git branch.
+/// Switches `HEAD` to `branch_name` (or detaches if it resolves to a commit).
+///
+/// Special case: if `branch_name` is `-` it shell‑invokes `git switch -` to reuse Git's previous branch logic.
 ///
 /// # Errors
 ///
 /// Returns an error if:
-/// - Executing `git` fails or returns a non-zero exit status.
+/// - The repository cannot be discovered.
+/// - Name resolution fails.
+/// - Checkout fails.
 pub fn switch_branch(branch_name: &str) -> color_eyre::Result<()> {
     // TODO: understand if there is a straightforward way with git2
     if branch_name == "-" {

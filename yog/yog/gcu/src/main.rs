@@ -69,7 +69,7 @@ fn switch_branch_or_create_if_missing(arg: &str) -> color_eyre::Result<()> {
 /// # Errors
 ///
 /// Returns an error if:
-/// - Executing `git` fails or returns a non-zero exit status.
+/// - Branch lookup, checkout, or underlying repository operations fail.
 fn switch_branch(branch: &str) -> color_eyre::Result<()> {
     git::switch_branch(branch)?;
     println!("{} {}", ">".magenta().bold(), branch.bold());
@@ -81,7 +81,8 @@ fn switch_branch(branch: &str) -> color_eyre::Result<()> {
 /// # Errors
 ///
 /// Returns an error if:
-/// - Executing `git` fails or returns a non-zero exit status.
+/// - The branch already exists (and creation is attempted).
+/// - Branch creation or checkout fails.
 fn create_branch(branch: &str) -> color_eyre::Result<()> {
     if !should_create_new_branch(branch)? {
         return Ok(());
