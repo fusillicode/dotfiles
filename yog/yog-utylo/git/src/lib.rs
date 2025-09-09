@@ -30,7 +30,7 @@ pub fn get_repo_root(path: &Path) -> color_eyre::Result<PathBuf> {
 /// - UTF-8 conversion fails.
 pub fn get_current_branch() -> color_eyre::Result<String> {
     let repo_path = ".";
-    let repo = Repository::open(repo_path)?;
+    let repo = Repository::discover(repo_path)?;
 
     if repo.head_detached()? {
         bail!("detached head for git {repo_path}")
@@ -40,6 +40,16 @@ pub fn get_current_branch() -> color_eyre::Result<String> {
         .shorthand()
         .map(str::to_string)
         .ok_or_else(|| eyre!("shorthand is not valid UTF-8"))
+}
+
+pub fn create_branch(branch_name: &str) -> color_eyre::Result<()> {
+    let repo_path = ".";
+    let repo = Repository::discover(repo_path)?;
+
+    let commit = repo.head()?.peel_to_commit()?;
+    repo.branch(branch_name, &commit, false)?;
+
+    Ok(())
 }
 
 /// Switches to the specified Git branch.

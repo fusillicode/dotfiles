@@ -1,9 +1,7 @@
 #![feature(exit_status_error)]
 
 use std::io::Write;
-use std::process::Command;
 
-use cmd::CmdExt;
 use color_eyre::eyre::bail;
 use color_eyre::owo_colors::OwoColorize as _;
 use url::Url;
@@ -88,7 +86,7 @@ fn create_branch(branch: &str) -> color_eyre::Result<()> {
     if !should_create_new_branch(branch)? {
         return Ok(());
     }
-    Command::new("git").args(["checkout", "-b", branch]).exec()?;
+    git::create_branch(branch)?;
     println!("{} {}", "+".green().bold(), branch.bold());
     Ok(())
 }
