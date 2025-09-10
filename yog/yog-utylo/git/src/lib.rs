@@ -34,13 +34,11 @@ pub fn get_repo(path: &Path) -> color_eyre::Result<Repository> {
 /// Returns an error if:
 /// - The repository cannot be discovered starting from `path`.
 /// - `path` is not inside a Git repository.
-pub fn get_repo_root(path: &Path) -> color_eyre::Result<PathBuf> {
-    let repo = get_repo(path)?;
-    Ok(repo
-        .commondir()
+pub fn get_repo_root(repo: &Repository) -> PathBuf {
+    repo.commondir()
         .components()
         .filter(|c| c.as_os_str() != ".git")
-        .collect())
+        .collect()
 }
 
 /// Returns the name of the current branch (e.g. `main`).
