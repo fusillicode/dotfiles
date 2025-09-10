@@ -35,10 +35,9 @@ Goals:
 13. For functions returning `Result`, document error causes under `# Errors`.
 14. For potential panics (explicit `panic!`, `unwrap`, `expect`), add `# Panics` with concise conditions.
 15. For `unsafe fn` or functions requiring safety invariants, add `# Safety` describing caller guarantees.
-16. Provide a minimal `# Examples` section only when usage is non-trivial; single fenced Rust 2021 snippet.
-17. Do not restate obvious parameter names unless adding meaningful context.
-18. If nothing needs change, respond with a brief note.
-19. Output only doc comment modifications as patches (diff style) when tooling expects changes.
+16. Do not restate obvious parameter names unless adding meaningful context.
+17. If nothing needs change, respond with a brief note.
+18. Output only doc comment modifications as patches (diff style) when tooling expects changes.
 
 Style Reminders:
 
