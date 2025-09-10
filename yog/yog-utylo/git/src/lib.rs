@@ -135,12 +135,15 @@ pub fn switch_branch(branch_name: &str) -> color_eyre::Result<()> {
 /// - A status entry is missing a path (required to build a [`GitStatusEntry`]).
 pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
     let repo = get_repo(Path::new("."))?;
-    let mut out = Vec::new();
+    let repo_root = get_repo_root(&repo);
+
     let mut opts = StatusOptions::default();
     opts.include_untracked(true);
     opts.include_ignored(false);
+
+    let mut out = Vec::new();
     for status_entry in repo.statuses(Some(&mut opts))?.iter() {
-        out.push(GitStatusEntry::try_from(&status_entry)?);
+        out.push(GitStatusEntry::try_from((repo_root.clone(), &status_entry))?);
     }
     Ok(out)
 }
@@ -148,6 +151,7 @@ pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
 #[derive(Debug, Clone)]
 pub struct GitStatusEntry {
     pub path: PathBuf,
+    pub repo_root: PathBuf,
     pub conflicted: bool,
     pub ignored: bool,
     pub index_state: Option<IndexState>,
@@ -155,6 +159,10 @@ pub struct GitStatusEntry {
 }
 
 impl GitStatusEntry {
+    pub fn absolute_path(&self) -> PathBuf {
+        self.repo_root.join(&self.path)
+    }
+
     pub fn is_new(&self) -> bool {
         if self.index_state.as_ref().is_some_and(IndexState::is_new)
             || self.worktree_state.as_ref().is_some_and(WorktreeState::is_new)
@@ -165,10 +173,10 @@ impl GitStatusEntry {
     }
 }
 
-impl TryFrom<&StatusEntry<'_>> for GitStatusEntry {
+impl TryFrom<(PathBuf, &StatusEntry<'_>)> for GitStatusEntry {
     type Error = color_eyre::Report;
 
-    fn try_from(value: &StatusEntry<'_>) -> Result<Self, Self::Error> {
+    fn try_from((repo_root, value): (PathBuf, &StatusEntry<'_>)) -> Result<Self, Self::Error> {
         let status = value.status();
         let path = value
             .path()
@@ -177,6 +185,7 @@ impl TryFrom<&StatusEntry<'_>> for GitStatusEntry {
 
         Ok(Self {
             path,
+            repo_root,
             conflicted: status.contains(Status::CONFLICTED),
             ignored: status.contains(Status::IGNORED),
             index_state: IndexState::new(&status),

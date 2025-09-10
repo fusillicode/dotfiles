@@ -1,6 +1,5 @@
 #![feature(exit_status_error)]
 
-use std::borrow::Cow;
 use std::ops::Deref;
 use std::process::Command;
 
@@ -74,10 +73,11 @@ where
     let (new_entries, changed_entries): (Vec<_>, Vec<_>) = entries.partition(|entry| entry.is_new());
 
     for new_entry in &new_entries {
-        if new_entry.path.is_file() || new_entry.path.is_symlink() {
-            std::fs::remove_file(&new_entry.path)?;
-        } else if new_entry.path.is_dir() {
-            std::fs::remove_dir_all(&new_entry.path)?;
+        let absolute_path = new_entry.absolute_path();
+        if absolute_path.is_file() || absolute_path.is_symlink() {
+            std::fs::remove_file(&absolute_path)?;
+        } else if absolute_path.is_dir() {
+            std::fs::remove_dir_all(&absolute_path)?;
         }
         println!("{} {}", "deleted".red().bold(), new_entry.path.display().bold());
     }
@@ -87,20 +87,24 @@ where
         return Ok(());
     }
 
-    let mut args = vec![Cow::Borrowed("restore")];
+    let mut args = vec!["restore".to_string()];
     if let Some(branch) = branch {
-        args.push(Cow::Borrowed(branch));
+        args.push(branch.to_string());
     }
     let changed_entries_paths = changed_entries
         .iter()
-        .map(|ce| ce.path.to_string_lossy())
+        .map(|changed_entry| changed_entry.absolute_path().to_string_lossy().into_owned())
         .collect::<Vec<_>>();
     args.extend_from_slice(&changed_entries_paths);
-    Command::new("git").args(args.iter().map(Cow::as_ref)).exec()?;
+    Command::new("git").args(args.iter().map(String::as_str)).exec()?;
 
-    for file_path in changed_entries_paths {
+    for changed_entry in changed_entries {
         let from_branch = branch.map(|b| format!(" from {}", b.bold())).unwrap_or_default();
-        println!("{} {} from {from_branch}", "restored".yellow().bold(), file_path.bold());
+        println!(
+            "{} {}{from_branch}",
+            "restored".yellow().bold(),
+            changed_entry.path.display().bold()
+        );
     }
     Ok(())
 }
