@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -6,6 +7,8 @@ use cmd::CmdExt as _;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 use git2::Repository;
+use git2::Status;
+use git2::StatusEntry;
 
 /// Returns the [`Repository`] containing `path`.
 ///
@@ -114,4 +117,94 @@ pub fn switch_branch(branch_name: &str) -> color_eyre::Result<()> {
     }
 
     Ok(())
+}
+
+pub fn get_git_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
+    let repo = get_repo(Path::new("."))?;
+    let mut out = Vec::new();
+    for status_entry in repo.statuses(None)?.iter() {
+        out.push(GitStatusEntry::try_from(&status_entry)?);
+    }
+    Ok(out)
+}
+
+#[derive(Debug, Clone)]
+pub struct GitStatusEntry {
+    path: PathBuf,
+    conflicted: bool,
+    ignored: bool,
+    index: Option<IndexState>,
+    worktree: Option<WorktreeState>,
+}
+
+impl TryFrom<&StatusEntry<'_>> for GitStatusEntry {
+    type Error = color_eyre::Report;
+
+    fn try_from(value: &StatusEntry<'_>) -> Result<Self, Self::Error> {
+        let status = value.status();
+        let path = value
+            .path()
+            .map(PathBuf::from)
+            .ok_or_else(|| eyre!("cannot build GitStatusEntry, missing path in StatusEntry"))?;
+
+        Ok(Self {
+            path,
+            conflicted: status.contains(Status::CONFLICTED),
+            ignored: status.contains(Status::IGNORED),
+            index: IndexState::new(&status),
+            worktree: WorktreeState::new(&status),
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+enum IndexState {
+    New,
+    Modified,
+    Deleted,
+    Renamed,
+    Typechange,
+}
+
+impl IndexState {
+    pub fn new(status: &Status) -> Option<Self> {
+        [
+            (Status::INDEX_NEW, IndexState::New),
+            (Status::INDEX_MODIFIED, IndexState::Modified),
+            (Status::INDEX_DELETED, IndexState::Deleted),
+            (Status::INDEX_RENAMED, IndexState::Renamed),
+            (Status::INDEX_TYPECHANGE, IndexState::Typechange),
+        ]
+        .iter()
+        .find(|(flag, _)| status.contains(*flag))
+        .map(|(_, v)| v)
+        .cloned()
+    }
+}
+
+#[derive(Debug, Clone)]
+enum WorktreeState {
+    New,
+    Modified,
+    Deleted,
+    Renamed,
+    Typechange,
+    Unreadable,
+}
+
+impl WorktreeState {
+    pub fn new(status: &Status) -> Option<Self> {
+        [
+            (Status::WT_NEW, WorktreeState::New),
+            (Status::WT_MODIFIED, WorktreeState::Modified),
+            (Status::WT_DELETED, WorktreeState::Deleted),
+            (Status::WT_RENAMED, WorktreeState::Renamed),
+            (Status::WT_TYPECHANGE, WorktreeState::Typechange),
+            (Status::WT_UNREADABLE, WorktreeState::Unreadable),
+        ]
+        .iter()
+        .find(|(flag, _)| status.contains(*flag))
+        .map(|(_, v)| v)
+        .cloned()
+    }
 }
