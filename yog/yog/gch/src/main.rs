@@ -1,6 +1,7 @@
 #![feature(exit_status_error)]
 
 use std::borrow::Cow;
+use std::ops::Deref;
 use std::process::Command;
 
 use cmd::CmdExt;
@@ -40,13 +41,13 @@ fn main() -> color_eyre::Result<()> {
         return Ok(());
     }
 
-    let renderable_entities = git_status_entries.into_iter().map(RenederableGitStatusEntry).collect();
+    let renderable_entries = git_status_entries.into_iter().map(RenederableGitStatusEntry).collect();
 
-    let Some(selected_entries) = tui::minimal_multi_select::<RenederableGitStatusEntry>(renderable_entities)? else {
+    let Some(selected_entries) = tui::minimal_multi_select::<RenederableGitStatusEntry>(renderable_entries)? else {
         return Ok(());
     };
 
-    restore_entries(&selected_entries, args.first().copied())?;
+    restore_entries(selected_entries.iter().map(Deref::deref), args.first().copied())?;
 
     Ok(())
 }
@@ -62,9 +63,11 @@ fn main() -> color_eyre::Result<()> {
 /// - Deleting an entry fails.
 /// - Building or executing the `git restore` command fails.
 /// - Any underlying I/O operation fails.
-fn restore_entries(entries: &[RenederableGitStatusEntry], branch: Option<&str>) -> color_eyre::Result<()> {
-    let entries: Vec<_> = entries.iter().map(|renderable| renderable.0.clone()).collect();
-    let (new_entries, changed_entries): (Vec<_>, Vec<_>) = entries.iter().partition(|entry| entry.is_new());
+fn restore_entries<'a, I>(entries: I, branch: Option<&str>) -> color_eyre::Result<()>
+where
+    I: Iterator<Item = &'a GitStatusEntry>,
+{
+    let (new_entries, changed_entries): (Vec<_>, Vec<_>) = entries.partition(|entry| entry.is_new());
 
     for new_entry in &new_entries {
         if new_entry.path.is_file() || new_entry.path.is_symlink() {
@@ -100,7 +103,7 @@ fn restore_entries(entries: &[RenederableGitStatusEntry], branch: Option<&str>) 
 
 struct RenederableGitStatusEntry(GitStatusEntry);
 
-impl std::ops::Deref for RenederableGitStatusEntry {
+impl Deref for RenederableGitStatusEntry {
     type Target = GitStatusEntry;
 
     fn deref(&self) -> &Self::Target {
