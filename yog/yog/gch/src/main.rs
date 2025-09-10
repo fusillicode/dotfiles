@@ -50,6 +50,7 @@ fn main() -> color_eyre::Result<()> {
         return Ok(());
     };
 
+    println!();
     restore_entries(selected_entries.iter().map(Deref::deref), args.first().copied())?;
 
     Ok(())
@@ -99,7 +100,11 @@ where
 
     for file_path in changed_entries_paths {
         let from_branch = branch.map(|b| format!(" from {}", b.bold())).unwrap_or_default();
-        println!("{} {} from {from_branch}", "restored".yellow().bold(), file_path.bold());
+        println!(
+            "{} {} from {from_branch}",
+            "restored".yellow().bold(),
+            file_path.bold()
+        );
     }
     Ok(())
 }
