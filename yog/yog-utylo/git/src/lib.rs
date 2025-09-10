@@ -119,10 +119,27 @@ pub fn switch_branch(branch_name: &str) -> color_eyre::Result<()> {
     Ok(())
 }
 
-pub fn get_git_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
+/// Returns the working tree status as a list of [`GitStatusEntry`].
+///
+/// Both staged (index) and unstaged (worktree) states are captured when present,
+/// along with conflict and ignore information.
+///
+/// Untracked files are included.
+/// Ignored files are excluded.
+///
+/// The output preserves the order produced by `git2`.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The repository cannot be discovered.
+/// - Reading statuses fails.
+/// - A status entry is missing a path (required to build a [`GitStatusEntry`]).
+pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
     let repo = get_repo(Path::new("."))?;
     let mut out = Vec::new();
     let mut opts = StatusOptions::default();
+    opts.include_untracked(true);
     opts.include_ignored(false);
     for status_entry in repo.statuses(Some(&mut opts))?.iter() {
         out.push(GitStatusEntry::try_from(&status_entry)?);
@@ -182,11 +199,11 @@ pub enum IndexState {
 impl IndexState {
     pub fn new(status: &Status) -> Option<Self> {
         [
-            (Status::INDEX_NEW, IndexState::New),
-            (Status::INDEX_MODIFIED, IndexState::Modified),
-            (Status::INDEX_DELETED, IndexState::Deleted),
-            (Status::INDEX_RENAMED, IndexState::Renamed),
-            (Status::INDEX_TYPECHANGE, IndexState::Typechange),
+            (Status::INDEX_NEW, Self::New),
+            (Status::INDEX_MODIFIED, Self::Modified),
+            (Status::INDEX_DELETED, Self::Deleted),
+            (Status::INDEX_RENAMED, Self::Renamed),
+            (Status::INDEX_TYPECHANGE, Self::Typechange),
         ]
         .iter()
         .find(|(flag, _)| status.contains(*flag))
@@ -194,7 +211,7 @@ impl IndexState {
         .cloned()
     }
 
-    pub fn is_new(&self) -> bool {
+    pub const fn is_new(&self) -> bool {
         matches!(self, Self::New)
     }
 }
@@ -212,12 +229,12 @@ pub enum WorktreeState {
 impl WorktreeState {
     pub fn new(status: &Status) -> Option<Self> {
         [
-            (Status::WT_NEW, WorktreeState::New),
-            (Status::WT_MODIFIED, WorktreeState::Modified),
-            (Status::WT_DELETED, WorktreeState::Deleted),
-            (Status::WT_RENAMED, WorktreeState::Renamed),
-            (Status::WT_TYPECHANGE, WorktreeState::Typechange),
-            (Status::WT_UNREADABLE, WorktreeState::Unreadable),
+            (Status::WT_NEW, Self::New),
+            (Status::WT_MODIFIED, Self::Modified),
+            (Status::WT_DELETED, Self::Deleted),
+            (Status::WT_RENAMED, Self::Renamed),
+            (Status::WT_TYPECHANGE, Self::Typechange),
+            (Status::WT_UNREADABLE, Self::Unreadable),
         ]
         .iter()
         .find(|(flag, _)| status.contains(*flag))
@@ -225,7 +242,7 @@ impl WorktreeState {
         .cloned()
     }
 
-    pub fn is_new(&self) -> bool {
+    pub const fn is_new(&self) -> bool {
         matches!(self, Self::New)
     }
 }

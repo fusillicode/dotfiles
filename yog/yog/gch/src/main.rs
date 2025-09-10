@@ -37,7 +37,7 @@ fn main() -> color_eyre::Result<()> {
     let args = system::get_args();
     let args: Vec<_> = args.iter().map(String::as_str).collect();
 
-    let git_status_entries = git::get_git_status()?;
+    let git_status_entries = git::get_status()?;
     if git_status_entries.is_empty() {
         println!("{}", "working tree clean".bold());
         return Ok(());
@@ -120,30 +120,28 @@ impl core::fmt::Display for RenederableGitStatusEntry {
             return write!(f, "{} {}", "CC".red().bold(), self.path.display().bold());
         }
 
-        let index_symbol = self
-            .index_state
-            .as_ref()
-            .map(|s| match s {
+        let index_symbol = self.index_state.as_ref().map_or_else(
+            || "",
+            |s| match s {
                 IndexState::New => "A",
                 IndexState::Modified => "M",
                 IndexState::Deleted => "D",
                 IndexState::Renamed => "R",
                 IndexState::Typechange => "T",
-            })
-            .unwrap_or(" ");
+            },
+        );
 
-        let worktree_symbol = self
-            .worktree_state
-            .as_ref()
-            .map(|s| match s {
+        let worktree_symbol = self.worktree_state.as_ref().map_or_else(
+            || "",
+            |s| match s {
                 WorktreeState::New => "A",
                 WorktreeState::Modified => "M",
                 WorktreeState::Deleted => "D",
                 WorktreeState::Renamed => "R",
                 WorktreeState::Typechange => "T",
                 WorktreeState::Unreadable => "U",
-            })
-            .unwrap_or(" ");
+            },
+        );
 
         // Optional: mark ignored
         let (idx, wt) = if self.ignored {
@@ -173,9 +171,5 @@ fn style_symbol(symbol: &str, present: bool, is_index: bool) -> String {
         "U" => symbol.red().bold().to_string(),
         _ => symbol.white().to_string(),
     };
-    if is_index {
-        styled.bold().to_string()
-    } else {
-        styled.to_string()
-    }
+    if is_index { styled.bold().to_string() } else { styled }
 }
