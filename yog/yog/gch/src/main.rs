@@ -5,10 +5,7 @@ use std::process::Command;
 
 use cmd::CmdExt;
 use color_eyre::owo_colors::OwoColorize as _;
-
-use crate::git_status::GitStatusEntry;
-
-mod git_status;
+use git::GitStatusEntry;
 
 /// Interactive CLI tool to clean the working tree by:
 ///
@@ -37,13 +34,15 @@ fn main() -> color_eyre::Result<()> {
     let args = system::get_args();
     let args: Vec<_> = args.iter().map(String::as_str).collect();
 
-    let git_status_entries = crate::git_status::get()?;
+    let git_status_entries = git::get_git_status()?;
     if git_status_entries.is_empty() {
         println!("{}", "working tree clean".bold());
         return Ok(());
     }
 
-    let Some(selected_entries) = tui::minimal_multi_select::<GitStatusEntry>(git_status_entries)? else {
+    let renderable_entities = git_status_entries.into_iter().map(RenederableGitStatusEntry).collect();
+
+    let Some(selected_entries) = tui::minimal_multi_select::<RenederableGitStatusEntry>(renderable_entities)? else {
         return Ok(());
     };
 
@@ -63,20 +62,17 @@ fn main() -> color_eyre::Result<()> {
 /// - Deleting an entry fails.
 /// - Building or executing the `git restore` command fails.
 /// - Any underlying I/O operation fails.
-fn restore_entries(entries: &[GitStatusEntry], branch: Option<&str>) -> color_eyre::Result<()> {
-    let (new_entries, changed_entries): (Vec<_>, Vec<_>) = entries.iter().partition(|entry| match entry {
-        GitStatusEntry::New(_) | GitStatusEntry::Added(_) => true,
-        GitStatusEntry::Modified(_) | GitStatusEntry::Renamed(_) | GitStatusEntry::Deleted(_) => false,
-    });
+fn restore_entries(entries: &[RenederableGitStatusEntry], branch: Option<&str>) -> color_eyre::Result<()> {
+    let entries: Vec<_> = entries.iter().map(|renderable| renderable.0.clone()).collect();
+    let (new_entries, changed_entries): (Vec<_>, Vec<_>) = entries.iter().partition(|entry| entry.is_new());
 
     for new_entry in &new_entries {
-        let entry_path = new_entry.path();
-        if entry_path.is_file() || entry_path.is_symlink() {
-            std::fs::remove_file(entry_path)?;
-        } else if entry_path.is_dir() {
-            std::fs::remove_dir_all(entry_path)?;
+        if new_entry.path.is_file() || new_entry.path.is_symlink() {
+            std::fs::remove_file(&new_entry.path)?;
+        } else if new_entry.path.is_dir() {
+            std::fs::remove_dir_all(&new_entry.path)?;
         }
-        println!("{} {}", "deleted".red().bold(), entry_path.display().bold());
+        println!("{} {}", "deleted".red().bold(), new_entry.path.display().bold());
     }
 
     // Exit early in case of no changes to avoid break `git restore` cmd.
@@ -90,7 +86,7 @@ fn restore_entries(entries: &[GitStatusEntry], branch: Option<&str>) -> color_ey
     }
     let changed_entries_paths = changed_entries
         .iter()
-        .map(|ce| ce.path().to_string_lossy())
+        .map(|ce| ce.path.to_string_lossy())
         .collect::<Vec<_>>();
     args.extend_from_slice(&changed_entries_paths);
     Command::new("git").args(args.iter().map(Cow::as_ref)).exec()?;
@@ -100,4 +96,20 @@ fn restore_entries(entries: &[GitStatusEntry], branch: Option<&str>) -> color_ey
         println!("{} {} from {from_branch}", "restored".yellow().bold(), file_path.bold());
     }
     Ok(())
+}
+
+struct RenederableGitStatusEntry(GitStatusEntry);
+
+impl std::ops::Deref for RenederableGitStatusEntry {
+    type Target = GitStatusEntry;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl core::fmt::Display for RenederableGitStatusEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "foo")
+    }
 }

@@ -483,6 +483,7 @@ dependencies = [
  "assert2",
  "cmd",
  "color-eyre",
+ "git",
  "pretty_assertions",
  "rstest",
  "system",

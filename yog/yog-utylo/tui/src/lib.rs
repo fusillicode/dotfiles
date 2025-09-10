@@ -6,10 +6,6 @@ use inquire::ui::RenderConfig;
 use strum::EnumIter;
 use strum::IntoEnumIterator;
 
-pub trait Renderable {
-    fn render(&self) -> String;
-}
-
 /// Minimal interactive multi-select returning [`None`] if `opts` is empty or the user cancels.
 ///
 /// Wraps [`inquire::MultiSelect`] with a slim rendering (see [`minimal_render_config`]) and no help message.

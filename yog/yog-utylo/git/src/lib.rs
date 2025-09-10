@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -130,11 +129,22 @@ pub fn get_git_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
 
 #[derive(Debug, Clone)]
 pub struct GitStatusEntry {
-    path: PathBuf,
-    conflicted: bool,
-    ignored: bool,
-    index: Option<IndexState>,
-    worktree: Option<WorktreeState>,
+    pub path: PathBuf,
+    pub conflicted: bool,
+    pub ignored: bool,
+    pub index_state: Option<IndexState>,
+    pub worktree_state: Option<WorktreeState>,
+}
+
+impl GitStatusEntry {
+    pub fn is_new(&self) -> bool {
+        if self.index_state.as_ref().is_some_and(IndexState::is_new)
+            || self.worktree_state.as_ref().is_some_and(WorktreeState::is_new)
+        {
+            return true;
+        }
+        false
+    }
 }
 
 impl TryFrom<&StatusEntry<'_>> for GitStatusEntry {
@@ -151,14 +161,14 @@ impl TryFrom<&StatusEntry<'_>> for GitStatusEntry {
             path,
             conflicted: status.contains(Status::CONFLICTED),
             ignored: status.contains(Status::IGNORED),
-            index: IndexState::new(&status),
-            worktree: WorktreeState::new(&status),
+            index_state: IndexState::new(&status),
+            worktree_state: WorktreeState::new(&status),
         })
     }
 }
 
 #[derive(Debug, Clone)]
-enum IndexState {
+pub enum IndexState {
     New,
     Modified,
     Deleted,
@@ -180,10 +190,14 @@ impl IndexState {
         .map(|(_, v)| v)
         .cloned()
     }
+
+    pub fn is_new(&self) -> bool {
+        matches!(self, Self::New)
+    }
 }
 
 #[derive(Debug, Clone)]
-enum WorktreeState {
+pub enum WorktreeState {
     New,
     Modified,
     Deleted,
@@ -206,5 +220,9 @@ impl WorktreeState {
         .find(|(flag, _)| status.contains(*flag))
         .map(|(_, v)| v)
         .cloned()
+    }
+
+    pub fn is_new(&self) -> bool {
+        matches!(self, Self::New)
     }
 }
