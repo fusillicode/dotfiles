@@ -148,6 +148,18 @@ pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
     Ok(out)
 }
 
+// Using `git restore` because re-implementing its behavior manually would be a bit too much...
+// https://stackoverflow.com/a/73759110
+pub fn restore(paths: &[&str], branch: Option<&str>) -> color_eyre::Result<()> {
+    let mut args = vec!["restore"];
+    if let Some(branch) = branch {
+        args.push(branch);
+    }
+    args.extend_from_slice(paths);
+    Command::new("git").args(args).exec()?;
+    Ok(())
+}
+
 #[derive(Debug, Clone)]
 pub struct GitStatusEntry {
     pub path: PathBuf,

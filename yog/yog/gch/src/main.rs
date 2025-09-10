@@ -1,9 +1,7 @@
 #![feature(exit_status_error)]
 
 use std::ops::Deref;
-use std::process::Command;
 
-use cmd::CmdExt;
 use color_eyre::owo_colors::OwoColorize as _;
 use git::GitStatusEntry;
 use git::IndexState;
@@ -87,16 +85,15 @@ where
         return Ok(());
     }
 
-    let mut args = vec!["restore".to_string()];
-    if let Some(branch) = branch {
-        args.push(branch.to_string());
-    }
     let changed_entries_paths = changed_entries
         .iter()
         .map(|changed_entry| changed_entry.absolute_path().to_string_lossy().into_owned())
         .collect::<Vec<_>>();
-    args.extend_from_slice(&changed_entries_paths);
-    Command::new("git").args(args.iter().map(String::as_str)).exec()?;
+
+    git::restore(
+        &changed_entries_paths.iter().map(String::as_str).collect::<Vec<_>>(),
+        branch,
+    )?;
 
     for changed_entry in changed_entries {
         let from_branch = branch.map(|b| format!(" from {}", b.bold())).unwrap_or_default();
