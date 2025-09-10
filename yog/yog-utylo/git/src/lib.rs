@@ -8,6 +8,7 @@ use color_eyre::eyre::eyre;
 use git2::Repository;
 use git2::Status;
 use git2::StatusEntry;
+use git2::StatusOptions;
 
 /// Returns the [`Repository`] containing `path`.
 ///
@@ -121,7 +122,9 @@ pub fn switch_branch(branch_name: &str) -> color_eyre::Result<()> {
 pub fn get_git_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
     let repo = get_repo(Path::new("."))?;
     let mut out = Vec::new();
-    for status_entry in repo.statuses(None)?.iter() {
+    let mut opts = StatusOptions::default();
+    opts.include_ignored(false);
+    for status_entry in repo.statuses(Some(&mut opts))?.iter() {
         out.push(GitStatusEntry::try_from(&status_entry)?);
     }
     Ok(out)
