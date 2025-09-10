@@ -46,6 +46,7 @@ fn main() -> color_eyre::Result<()> {
     let renderable_entries = git_status_entries.into_iter().map(RenederableGitStatusEntry).collect();
 
     let Some(selected_entries) = tui::minimal_multi_select::<RenederableGitStatusEntry>(renderable_entries)? else {
+        println!("\n\n{}", "nothing done".bold());
         return Ok(());
     };
 
@@ -121,55 +122,35 @@ impl core::fmt::Display for RenederableGitStatusEntry {
         }
 
         let index_symbol = self.index_state.as_ref().map_or_else(
-            || "",
+            || " ".to_string(),
             |s| match s {
-                IndexState::New => "A",
-                IndexState::Modified => "M",
-                IndexState::Deleted => "D",
-                IndexState::Renamed => "R",
-                IndexState::Typechange => "T",
+                IndexState::New => "A".green().bold().to_string(),
+                IndexState::Modified => "M".yellow().bold().to_string(),
+                IndexState::Deleted => "D".red().bold().to_string(),
+                IndexState::Renamed => "R".cyan().bold().to_string(),
+                IndexState::Typechange => "T".magenta().bold().to_string(),
             },
         );
 
         let worktree_symbol = self.worktree_state.as_ref().map_or_else(
-            || "",
+            || " ".to_string(),
             |s| match s {
-                WorktreeState::New => "A",
-                WorktreeState::Modified => "M",
-                WorktreeState::Deleted => "D",
-                WorktreeState::Renamed => "R",
-                WorktreeState::Typechange => "T",
-                WorktreeState::Unreadable => "U",
+                WorktreeState::New => "A".green().bold().to_string(),
+                WorktreeState::Modified => "M".yellow().bold().to_string(),
+                WorktreeState::Deleted => "D".red().bold().to_string(),
+                WorktreeState::Renamed => "R".cyan().bold().to_string(),
+                WorktreeState::Typechange => "T".magenta().bold().to_string(),
+                WorktreeState::Unreadable => "U".red().bold().to_string(),
             },
         );
 
-        // Optional: mark ignored
-        let (idx, wt) = if self.ignored {
+        // Ignored marks as dimmed
+        let (index_symbol, worktree_symbol) = if self.ignored {
             (index_symbol.dimmed().to_string(), worktree_symbol.dimmed().to_string())
         } else {
-            (
-                style_symbol(index_symbol, self.index_state.is_some(), true),
-                style_symbol(worktree_symbol, self.worktree_state.is_some(), false),
-            )
+            (index_symbol, worktree_symbol)
         };
 
-        write!(f, "{}{} {}", idx, wt, self.path.display().to_string().bold())
+        write!(f, "{}{} {}", index_symbol, worktree_symbol, self.path.display())
     }
-}
-
-fn style_symbol(symbol: &str, present: bool, is_index: bool) -> String {
-    use color_eyre::owo_colors::OwoColorize;
-    if !present {
-        return " ".to_string();
-    }
-    let styled = match symbol {
-        "A" => symbol.green().to_string(),
-        "M" => symbol.yellow().to_string(),
-        "D" => symbol.red().to_string(),
-        "R" => symbol.cyan().to_string(),
-        "T" => symbol.magenta().to_string(),
-        "U" => symbol.red().bold().to_string(),
-        _ => symbol.white().to_string(),
-    };
-    if is_index { styled.bold().to_string() } else { styled }
 }
