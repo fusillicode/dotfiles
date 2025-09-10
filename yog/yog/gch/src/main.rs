@@ -7,6 +7,8 @@ use std::process::Command;
 use cmd::CmdExt;
 use color_eyre::owo_colors::OwoColorize as _;
 use git::GitStatusEntry;
+use git::IndexState;
+use git::WorktreeState;
 
 /// Interactive CLI tool to clean the working tree by:
 ///
@@ -113,6 +115,67 @@ impl Deref for RenederableGitStatusEntry {
 
 impl core::fmt::Display for RenederableGitStatusEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "foo")
+        // Conflict overrides everything
+        if self.conflicted {
+            return write!(f, "{} {}", "CC".red().bold(), self.path.display().bold());
+        }
+
+        let index_symbol = self
+            .index_state
+            .as_ref()
+            .map(|s| match s {
+                IndexState::New => "A",
+                IndexState::Modified => "M",
+                IndexState::Deleted => "D",
+                IndexState::Renamed => "R",
+                IndexState::Typechange => "T",
+            })
+            .unwrap_or(" ");
+
+        let worktree_symbol = self
+            .worktree_state
+            .as_ref()
+            .map(|s| match s {
+                WorktreeState::New => "A",
+                WorktreeState::Modified => "M",
+                WorktreeState::Deleted => "D",
+                WorktreeState::Renamed => "R",
+                WorktreeState::Typechange => "T",
+                WorktreeState::Unreadable => "U",
+            })
+            .unwrap_or(" ");
+
+        // Optional: mark ignored
+        let (idx, wt) = if self.ignored {
+            (index_symbol.dimmed().to_string(), worktree_symbol.dimmed().to_string())
+        } else {
+            (
+                style_symbol(index_symbol, self.index_state.is_some(), true),
+                style_symbol(worktree_symbol, self.worktree_state.is_some(), false),
+            )
+        };
+
+        write!(f, "{}{} {}", idx, wt, self.path.display().to_string().bold())
+    }
+}
+
+fn style_symbol(symbol: &str, present: bool, is_index: bool) -> String {
+    use color_eyre::owo_colors::OwoColorize;
+    if !present {
+        return " ".to_string();
+    }
+    let styled = match symbol {
+        "A" => symbol.green().to_string(),
+        "M" => symbol.yellow().to_string(),
+        "D" => symbol.red().to_string(),
+        "R" => symbol.cyan().to_string(),
+        "T" => symbol.magenta().to_string(),
+        "U" => symbol.red().bold().to_string(),
+        _ => symbol.white().to_string(),
+    };
+    if is_index {
+        styled.bold().to_string()
+    } else {
+        styled.to_string()
     }
 }
