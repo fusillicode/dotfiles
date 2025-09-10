@@ -3,6 +3,10 @@ use nvim_oxi::api::opts::CreateAutocmdOptsBuilder;
 use nvim_oxi::api::opts::SetKeymapOptsBuilder;
 use nvim_oxi::api::types::Mode;
 
+/// Creates Neovim autocommands and their augroups.
+///
+/// Includes yank highlight, autosave on focus loss / buffer leave, and quickfix
+/// specific key mappings & configuration.
 pub fn create() {
     create_autocmd(
         ["TextYankPost"],
@@ -32,6 +36,10 @@ pub fn create() {
     );
 }
 
+/// Creates an autocommand group and associated autocommands for `events`.
+///
+/// Errors are reported to Nvim (and swallowed) so that one failing definition
+/// does not abort the rest of the setup.
 pub fn create_autocmd<'a, I>(events: I, augroup_name: &str, opts_builder: &mut CreateAutocmdOptsBuilder)
 where
     I: IntoIterator<Item = &'a str> + core::fmt::Debug + core::marker::Copy,

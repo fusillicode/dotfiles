@@ -16,6 +16,7 @@ const USER_CMDS: [(&str, &str); 6] = [
     ("Messages", ":Messages"),
 ];
 
+/// Creates user commands and `Fkr*` snippet insertion commands.
 pub fn create() {
     for (cmd_name, cmd) in USER_CMDS {
         create_user_cmd(cmd_name, cmd, &default_opts());
@@ -29,6 +30,7 @@ pub fn create() {
     }
 }
 
+/// Registers a single user command with Neovim.
 fn create_user_cmd<Cmd>(name: &str, command: Cmd, opts: &CreateCommandOpts)
 where
     Cmd: StringOrFunction<CommandArgs, ()>,
@@ -40,10 +42,12 @@ where
     }
 }
 
+/// Returns default options for user commands.
 fn default_opts() -> CreateCommandOpts {
     CreateCommandOptsBuilder::default().build()
 }
 
+/// Inserts `text` at the current cursor position in the active buffer.
 fn set_text_at_cursor_pos(text: &str) {
     let cur_win = Window::current();
     let Ok((row, col)) = cur_win.get_cursor().inspect_err(|error| {

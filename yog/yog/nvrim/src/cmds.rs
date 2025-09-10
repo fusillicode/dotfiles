@@ -13,6 +13,7 @@ pub fn dict() -> Dictionary {
     }
 }
 
+/// Creates all configured autocommands and user commands.
 fn create(_: ()) {
     auto_cmds::create();
     user_cmds::create();

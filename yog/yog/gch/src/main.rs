@@ -106,6 +106,7 @@ where
     Ok(())
 }
 
+/// Wrapper newtype to implement `Display` for [`GitStatusEntry`].
 struct RenederableGitStatusEntry(GitStatusEntry);
 
 impl Deref for RenederableGitStatusEntry {

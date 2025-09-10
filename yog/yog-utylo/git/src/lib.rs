@@ -148,8 +148,16 @@ pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
     Ok(out)
 }
 
-// Using `git restore` because re-implementing its behavior manually would be a bit too much...
-// https://stackoverflow.com/a/73759110
+/// Restores one or more paths from the index or an optional `branch`.
+///
+/// Equivalent to invoking `git restore [<branch>] <paths...>`.
+/// Uses the system `git` binary instead of re‑implementing restore semantics <https://stackoverflow.com/a/73759110>.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Executing the underlying `git restore` command fails.
+/// - Any provided path cannot be processed by `git`.
 pub fn restore(paths: &[&str], branch: Option<&str>) -> color_eyre::Result<()> {
     let mut args = vec!["restore"];
     if let Some(branch) = branch {
@@ -160,6 +168,10 @@ pub fn restore(paths: &[&str], branch: Option<&str>) -> color_eyre::Result<()> {
     Ok(())
 }
 
+/// Single entry representing the status of a path in the working tree.
+///
+/// Combines both index (staged) and worktree (unstaged) information along with
+/// conflict / ignore state. Helper methods expose derived semantics.
 #[derive(Debug, Clone)]
 pub struct GitStatusEntry {
     pub path: PathBuf,
@@ -171,10 +183,12 @@ pub struct GitStatusEntry {
 }
 
 impl GitStatusEntry {
+    /// Returns the absolute path of the entry relative to the repository root.
     pub fn absolute_path(&self) -> PathBuf {
         self.repo_root.join(&self.path)
     }
 
+    /// Returns `true` if the entry is newly added (in index or worktree).
     pub fn is_new(&self) -> bool {
         if self.index_state.as_ref().is_some_and(IndexState::is_new)
             || self.worktree_state.as_ref().is_some_and(WorktreeState::is_new)
@@ -206,6 +220,7 @@ impl TryFrom<(PathBuf, &StatusEntry<'_>)> for GitStatusEntry {
     }
 }
 
+/// Staged (index) status for a path.
 #[derive(Debug, Clone)]
 pub enum IndexState {
     New,
@@ -216,6 +231,7 @@ pub enum IndexState {
 }
 
 impl IndexState {
+    /// Creates an [`IndexState`] from a combined status bit‑set.
     pub fn new(status: &Status) -> Option<Self> {
         [
             (Status::INDEX_NEW, Self::New),
@@ -230,11 +246,13 @@ impl IndexState {
         .cloned()
     }
 
+    /// Returns `true` if this represents a newly added path.
     pub const fn is_new(&self) -> bool {
         matches!(self, Self::New)
     }
 }
 
+/// Unstaged (worktree) status for a path.
 #[derive(Debug, Clone)]
 pub enum WorktreeState {
     New,
@@ -246,6 +264,7 @@ pub enum WorktreeState {
 }
 
 impl WorktreeState {
+    /// Creates a [`WorktreeState`] from a combined status bit‑set.
     pub fn new(status: &Status) -> Option<Self> {
         [
             (Status::WT_NEW, Self::New),
@@ -261,6 +280,7 @@ impl WorktreeState {
         .cloned()
     }
 
+    /// Returns `true` if this represents a newly added path.
     pub const fn is_new(&self) -> bool {
         matches!(self, Self::New)
     }
