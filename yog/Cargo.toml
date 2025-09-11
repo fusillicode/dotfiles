@@ -18,6 +18,7 @@ chrono = { version = "0.4", features = ["serde"] }
 color-eyre = { version = "0.6" }
 fake = { version = "4.4", features = ["derive"] }
 getrandom = { version = "0.3" }
+git2 = { version = "0.20" }
 itertools = { version = "0.14" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }

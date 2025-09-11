@@ -10,7 +10,7 @@ ln -s "$dotfiles_dir/.config/helix/" "$HOME/.config/helix"
 ln -s "$dotfiles_dir/.config/mise/" "$HOME/.config/mise"
 ln -s "$dotfiles_dir/.config/nvim/" "$HOME/.config/nvim"
 ln -s "$dotfiles_dir/.config/pgcli/config" "$HOME/.config/pgcli/config"
-ln -s "$dotfiles_dir/.config/opencode/opencode.json" "$HOME/.config/opencode/opencode.json"
+ln -s "$dotfiles_dir/.config/opencode" "$HOME/.config/opencode"
 
 cp "$dotfiles_dir/.gitconfig" "$HOME"
 ln -s "$dotfiles_dir/.gitignore" "$HOME"

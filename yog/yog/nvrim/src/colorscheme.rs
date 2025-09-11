@@ -1,11 +1,9 @@
 use color_eyre::eyre::eyre;
 use nvim_oxi::Dictionary;
-use nvim_oxi::api::opts::CmdOpts;
 use nvim_oxi::api::opts::GetHighlightOpts;
 use nvim_oxi::api::opts::GetHighlightOptsBuilder;
 use nvim_oxi::api::opts::SetHighlightOpts;
 use nvim_oxi::api::opts::SetHighlightOptsBuilder;
-use nvim_oxi::api::types::CmdInfosBuilder;
 use nvim_oxi::api::types::GetHlInfos;
 use nvim_oxi::api::types::HighlightInfos;
 
@@ -26,7 +24,9 @@ pub fn dict() -> Dictionary {
 /// Sets the desired Neovim colorscheme and custom highlight groups.
 #[allow(clippy::needless_pass_by_value)]
 pub fn set(colorscheme: Option<String>) {
-    colorscheme.as_deref().map(set_colorscheme);
+    if let Some(cs) = colorscheme {
+        crate::oxi_ext::exec_vim_cmd("colorscheme", &[cs]);
+    }
 
     let opts = crate::vim_opts::global_scope();
     crate::vim_opts::set("background", "dark", &opts);
@@ -166,19 +166,4 @@ fn hl_opts_from_hl_infos(hl_infos: &HighlightInfos) -> color_eyre::Result<SetHig
 /// Formats an RGB integer as a `#RRGGBB` hex string.
 fn decimal_to_hex_color(decimal: u32) -> String {
     format!("#{decimal:06X}")
-}
-
-/// Sets Neovim colorscheme.
-///
-/// In case of errors notifies Neovim.
-fn set_colorscheme(colorscheme: &str) {
-    if let Err(error) = nvim_oxi::api::cmd(
-        &CmdInfosBuilder::default()
-            .cmd("colorscheme")
-            .args([colorscheme])
-            .build(),
-        &CmdOpts::default(),
-    ) {
-        crate::oxi_ext::notify_error(&format!("cannot set colorscheme to {colorscheme:?}, error {error:#?}"));
-    }
 }

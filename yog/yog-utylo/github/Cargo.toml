@@ -11,9 +11,11 @@ keywords = ["github", "api", "repository", "refs", "cli"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-cmd = { path = "../cmd" }
+cmd = { workspace = true }
 color-eyre = { workspace = true }
+git = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
 assert2 = { workspace = true }
+rstest = { workspace = true }

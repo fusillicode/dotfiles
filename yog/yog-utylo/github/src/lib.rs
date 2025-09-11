@@ -1,4 +1,5 @@
 #![feature(exit_status_error)]
+use std::path::Path;
 use std::process::Command;
 use std::process::Output;
 
@@ -13,14 +14,15 @@ const GITHUB_PR_ID_PREFIX: &str = "pull";
 /// The query parameter key used for pull request IDs in GitHub Actions URLs.
 const GITHUB_PR_ID_QUERY_KEY: &str = "pr";
 
-/// Logs into GitHub using the GitHub CLI if not already authenticated.
-/// Logs into GitHub using the GitHub CLI if not already authenticated.
+/// Ensures the user is authenticated with the GitHub CLI.
+///
+/// Runs `gh auth status`; if not authenticated it invokes an interactive `gh auth login`.
 ///
 /// # Errors
 ///
 /// Returns an error if:
-/// - Authentication via `gh auth login` fails.
-/// - Invoking `gh auth status` fails.
+/// - Checking auth status fails.
+/// - The login command fails or exits with a non-zero status.
 pub fn log_into_github() -> color_eyre::Result<()> {
     if cmd::silent_cmd("gh").args(["auth", "status"]).status()?.success() {
         return Ok(());
@@ -66,6 +68,57 @@ pub fn get_branch_name_from_url(url: &Url) -> color_eyre::Result<String> {
     extract_success_output(&output)
 }
 
+/// Returns all GitHub remote URLs for the repository rooted at `repo_path`.
+///
+/// Filters remotes to those that parse as GitHub URLs.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The repository cannot be opened.
+/// - A remote cannot be resolved.
+/// - A remote URL is invalid UTF-8.
+pub fn get_repo_urls(repo_path: &Path) -> color_eyre::Result<Vec<Url>> {
+    let repo = git::get_repo(repo_path)?;
+    let mut repo_urls = vec![];
+    for remote_name in repo.remotes()?.iter().flatten() {
+        repo_urls.push(
+            repo.find_remote(remote_name)?
+                .url()
+                .map(parse_github_url_from_git_remote_url)
+                .ok_or_else(|| eyre!("remote url is invalid UTF-8"))??,
+        );
+    }
+    Ok(repo_urls)
+}
+
+/// Converts a Git remote URL (SSH or HTTPS) to a canonical GitHub HTTPS URL without the `.git` suffix.
+///
+/// Accepts formats like:
+/// - `git@github.com:owner/repo.git`
+/// - `https://github.com/owner/repo[.git]`
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The URL cannot be parsed or lacks a path component.
+fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> color_eyre::Result<Url> {
+    if let Ok(mut url) = Url::parse(git_remote_url) {
+        url.set_path(url.clone().path().trim_end_matches(".git"));
+        return Ok(url);
+    }
+
+    let path = git_remote_url
+        .split_once(':')
+        .map(|(_, path)| path.trim_end_matches(".git"))
+        .ok_or_else(|| eyre!("cannot extract URL path from '{git_remote_url}'"))?;
+
+    let mut url = Url::parse("https://github.com")?;
+    url.set_path(path);
+
+    Ok(url)
+}
+
 /// Extracts and validates successful command output, converting it to a trimmed string.
 ///
 /// # Errors
@@ -77,16 +130,17 @@ fn extract_success_output(output: &Output) -> color_eyre::Result<String> {
     Ok(std::str::from_utf8(&output.stdout)?.trim().into())
 }
 
-/// Extracts the pull request ID from a GitHub URL.
+/// Extracts the pull request numeric ID from a GitHub URL.
 ///
-/// Supports various GitHub URL formats:
-/// - Direct PR URLs: `https://github.com/owner/repo/pull/123`
-/// - GitHub Actions URLs with `pr` query parameter: `https://github.com/owner/repo/actions/runs/123?pr=456`
+/// Supported forms:
+/// - Direct PR path: `.../pull/<ID>` (ID may not be last segment).
+/// - Actions run URL with `?pr=<ID>` (also supports `/job/<JOB_ID>` variants).
 ///
 /// # Errors
 ///
 /// Returns an error if:
-/// - An underlying operation fails.
+/// - Host is not `github.com`.
+/// - The PR id segment or query parameter is missing, empty, duplicated, or malformed.
 fn extract_pr_id_form_url(url: &Url) -> color_eyre::Result<String> {
     let host = url.host_str().ok_or_else(|| eyre!("cannot extract host from {url}"))?;
     if host != GITHUB_HOST {
@@ -136,6 +190,8 @@ fn extract_pr_id_form_url(url: &Url) -> color_eyre::Result<String> {
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
     use super::*;
 
     #[test]
@@ -227,5 +283,13 @@ mod tests {
         ))
         .unwrap();
         assert_eq!("42", extract_pr_id_form_url(&url).unwrap());
+    }
+
+    #[rstest]
+    #[case("git@github.com:fusillicode/dotfiles.git", Url::parse("https://github.com/fusillicode/dotfiles").unwrap())]
+    #[case("https://github.com/fusillicode/dotfiles", Url::parse("https://github.com/fusillicode/dotfiles").unwrap())]
+    fn parse_github_url_from_git_remote_url_works_as_expected(#[case] input: &str, #[case] expected: Url) {
+        let result = parse_github_url_from_git_remote_url(input).unwrap();
+        assert_eq!(expected, result);
     }
 }

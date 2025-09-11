@@ -12,4 +12,4 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 color-eyre = { workspace = true }
-wezterm = { path = "../wezterm" }
+wezterm = { workspace = true }

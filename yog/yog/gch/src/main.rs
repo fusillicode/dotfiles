@@ -1,14 +1,11 @@
 #![feature(exit_status_error)]
 
-use std::borrow::Cow;
-use std::process::Command;
+use std::ops::Deref;
 
-use cmd::CmdExt;
 use color_eyre::owo_colors::OwoColorize as _;
-
-use crate::git_status::GitStatusEntry;
-
-mod git_status;
+use git::GitStatusEntry;
+use git::IndexState;
+use git::WorktreeState;
 
 /// Interactive CLI tool to clean the working tree by:
 ///
@@ -37,17 +34,21 @@ fn main() -> color_eyre::Result<()> {
     let args = system::get_args();
     let args: Vec<_> = args.iter().map(String::as_str).collect();
 
-    let git_status_entries = crate::git_status::get()?;
+    let git_status_entries = git::get_status()?;
     if git_status_entries.is_empty() {
         println!("{}", "working tree clean".bold());
         return Ok(());
     }
 
-    let Some(selected_entries) = tui::minimal_multi_select::<GitStatusEntry>(git_status_entries)? else {
+    let renderable_entries = git_status_entries.into_iter().map(RenederableGitStatusEntry).collect();
+
+    let Some(selected_entries) = tui::minimal_multi_select::<RenederableGitStatusEntry>(renderable_entries)? else {
+        println!("\n\n{}", "nothing done".bold());
         return Ok(());
     };
 
-    restore_entries(&selected_entries, args.first().copied())?;
+    println!();
+    restore_entries(selected_entries.iter().map(Deref::deref), args.first().copied())?;
 
     Ok(())
 }
@@ -63,20 +64,20 @@ fn main() -> color_eyre::Result<()> {
 /// - Deleting an entry fails.
 /// - Building or executing the `git restore` command fails.
 /// - Any underlying I/O operation fails.
-fn restore_entries(entries: &[GitStatusEntry], branch: Option<&str>) -> color_eyre::Result<()> {
-    let (new_entries, changed_entries): (Vec<_>, Vec<_>) = entries.iter().partition(|entry| match entry {
-        GitStatusEntry::New(_) | GitStatusEntry::Added(_) => true,
-        GitStatusEntry::Modified(_) | GitStatusEntry::Renamed(_) | GitStatusEntry::Deleted(_) => false,
-    });
+fn restore_entries<'a, I>(entries: I, branch: Option<&str>) -> color_eyre::Result<()>
+where
+    I: Iterator<Item = &'a GitStatusEntry>,
+{
+    let (new_entries, changed_entries): (Vec<_>, Vec<_>) = entries.partition(|entry| entry.is_new());
 
     for new_entry in &new_entries {
-        let entry_path = new_entry.path();
-        if entry_path.is_file() || entry_path.is_symlink() {
-            std::fs::remove_file(entry_path)?;
-        } else if entry_path.is_dir() {
-            std::fs::remove_dir_all(entry_path)?;
+        let absolute_path = new_entry.absolute_path();
+        if absolute_path.is_file() || absolute_path.is_symlink() {
+            std::fs::remove_file(&absolute_path)?;
+        } else if absolute_path.is_dir() {
+            std::fs::remove_dir_all(&absolute_path)?;
         }
-        println!("{} {}", "deleted".red().bold(), entry_path.display().bold());
+        println!("{} {}", "deleted".red().bold(), new_entry.path.display().bold());
     }
 
     // Exit early in case of no changes to avoid break `git restore` cmd.
@@ -84,20 +85,75 @@ fn restore_entries(entries: &[GitStatusEntry], branch: Option<&str>) -> color_ey
         return Ok(());
     }
 
-    let mut args = vec![Cow::Borrowed("restore")];
-    if let Some(branch) = branch {
-        args.push(Cow::Borrowed(branch));
-    }
     let changed_entries_paths = changed_entries
         .iter()
-        .map(|ce| ce.path().to_string_lossy())
+        .map(|changed_entry| changed_entry.absolute_path().to_string_lossy().into_owned())
         .collect::<Vec<_>>();
-    args.extend_from_slice(&changed_entries_paths);
-    Command::new("git").args(args.iter().map(Cow::as_ref)).exec()?;
 
-    for file_path in changed_entries_paths {
+    git::restore(
+        &changed_entries_paths.iter().map(String::as_str).collect::<Vec<_>>(),
+        branch,
+    )?;
+
+    for changed_entry in changed_entries {
         let from_branch = branch.map(|b| format!(" from {}", b.bold())).unwrap_or_default();
-        println!("{} {} from {from_branch}", "restored".yellow().bold(), file_path.bold());
+        println!(
+            "{} {}{from_branch}",
+            "restored".yellow().bold(),
+            changed_entry.path.display().bold()
+        );
     }
     Ok(())
+}
+
+/// Wrapper newtype to implement `Display` for [`GitStatusEntry`].
+struct RenederableGitStatusEntry(GitStatusEntry);
+
+impl Deref for RenederableGitStatusEntry {
+    type Target = GitStatusEntry;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl core::fmt::Display for RenederableGitStatusEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Conflict overrides everything
+        if self.conflicted {
+            return write!(f, "{} {}", "CC".red().bold(), self.path.display().bold());
+        }
+
+        let index_symbol = self.index_state.as_ref().map_or_else(
+            || " ".to_string(),
+            |s| match s {
+                IndexState::New => "A".green().bold().to_string(),
+                IndexState::Modified => "M".yellow().bold().to_string(),
+                IndexState::Deleted => "D".red().bold().to_string(),
+                IndexState::Renamed => "R".cyan().bold().to_string(),
+                IndexState::Typechange => "T".magenta().bold().to_string(),
+            },
+        );
+
+        let worktree_symbol = self.worktree_state.as_ref().map_or_else(
+            || " ".to_string(),
+            |s| match s {
+                WorktreeState::New => "A".green().bold().to_string(),
+                WorktreeState::Modified => "M".yellow().bold().to_string(),
+                WorktreeState::Deleted => "D".red().bold().to_string(),
+                WorktreeState::Renamed => "R".cyan().bold().to_string(),
+                WorktreeState::Typechange => "T".magenta().bold().to_string(),
+                WorktreeState::Unreadable => "U".red().bold().to_string(),
+            },
+        );
+
+        // Ignored marks as dimmed
+        let (index_symbol, worktree_symbol) = if self.ignored {
+            (index_symbol.dimmed().to_string(), worktree_symbol.dimmed().to_string())
+        } else {
+            (index_symbol, worktree_symbol)
+        };
+
+        write!(f, "{}{} {}", index_symbol, worktree_symbol, self.path.display())
+    }
 }

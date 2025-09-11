@@ -12,5 +12,5 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 chrono = { workspace = true }
-cmd = { path = "../cmd" }
+cmd = { workspace = true }
 color-eyre = { workspace = true }
