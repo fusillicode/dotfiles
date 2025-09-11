@@ -123,7 +123,11 @@ pub fn switch_branch(branch_name: &str) -> color_eyre::Result<()> {
 
     // Set HEAD to point to the new branch reference
     match reference {
-        Some(reference) => repo.set_head(reference.name().ok_or_else(|| eyre!("reference name is not UTF-8"))?)?,
+        Some(reference) => repo.set_head(
+            reference
+                .name()
+                .ok_or_else(|| eyre!("reference name is invalid UTF-8"))?,
+        )?,
         None => repo.set_head_detached(object.id())?,
     }
 

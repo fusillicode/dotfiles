@@ -3,7 +3,7 @@ local M = {}
 local nvrim = require('nvrim')
 
 local function keymap_set(mode, lhs, rhs, opts)
-  vim.keymap.set(mode, lhs, rhs, vim.tbl_extend('force', { silent = true, }, opts or {}))
+  vim.keymap.set(mode, lhs, rhs, vim.tbl_extend('error', { silent = true, }, opts or {}))
 end
 
 function M.set_lua_implemented()
