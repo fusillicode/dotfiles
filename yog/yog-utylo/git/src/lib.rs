@@ -2,11 +2,11 @@
 //!
 //! This module provides small wrappers around common read / write repository
 //! interactions used by the surrounding tooling:
-//! - Repository discovery and root path resolution (`[`get_repo`]`, [`get_repo_root`])
+//! - Repository discovery and root path resolution ([`get_repo`], [`get_repo_root`])
 //! - Current branch inspection and simple branch creation / switching
-//! - Working tree status collection as structured data (`[`get_status`]` returning [`GitStatusEntry`])
-//! - Branch enumeration with last commit timestamps (`[`get_branches`])
-//! - Convenience helpers such as filtering redundant remote branches (`[`remove_redundant_remotes`])
+//! - Working tree status collection as structured data ([`get_status`] returning [`GitStatusEntry`])
+//! - Branch enumeration with last commit timestamps ([`get_branches`])
+//! - Convenience helpers such as filtering redundant remote branches ([`remove_redundant_remotes`])
 //!
 //! Some commands (e.g. the special case in [`switch_branch`] for `-` and [`restore`])
 //! deliberately defer to the system `git` binary instead of re‑implementing more
@@ -241,7 +241,7 @@ pub fn remove_redundant_remotes(branches: &mut Vec<Branch>) {
     branches.retain(|b| match b {
         Branch::Local { .. } => true,
         Branch::Remote { name, .. } => {
-            let short = name.split_once('/').map(|(_, rest)| rest).unwrap_or(name.as_str());
+            let short = name.split_once('/').map_or(name.as_str(), |(_, rest)| rest);
             !local_names.contains(short)
         }
     });
@@ -271,18 +271,17 @@ impl Branch {
     /// Returns the branch name (no `refs/` prefix).
     pub fn name(&self) -> &str {
         match self {
-            Branch::Local { name, .. } => name,
-            Branch::Remote { name, .. } => name,
+            Self::Local { name, .. } | Self::Remote { name, .. } => name,
         }
     }
 
     /// Returns the timestamp of the last commit on this branch.
-    pub fn committer_date_time(&self) -> &DateTime<Utc> {
+    pub const fn committer_date_time(&self) -> &DateTime<Utc> {
         match self {
-            Branch::Local {
+            Self::Local {
                 committer_date_time, ..
-            } => committer_date_time,
-            Branch::Remote {
+            }
+            | Self::Remote {
                 committer_date_time, ..
             } => committer_date_time,
         }
