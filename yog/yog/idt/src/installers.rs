@@ -67,8 +67,9 @@ pub trait Installer: Sync + Send {
         self.install()
             .inspect_err(|error| {
                 eprintln!(
-                    "{} installation failed, error {}",
-                    self.bin_name().red().bold(),
+                    "{} {} with error: {}",
+                    "Installation failed".red().bold(),
+                    self.bin_name().bold(),
                     format!("{error:#?}").red().bold()
                 );
             })
@@ -78,18 +79,20 @@ pub trait Installer: Sync + Send {
                     .inspect(|check_output| {
                         if let Some(check_output) = check_output {
                             println!(
-                                "{} installed & checked: {}",
-                                self.bin_name().green().bold(),
+                                "{} {} with output: {}",
+                                "Installed & checked".green().bold(),
+                                self.bin_name().bold(),
                                 check_output.trim_matches(|c| c == '\n' || c == '\r').bold()
                             );
                         } else {
-                            println!("{} installed but not checked", self.bin_name().yellow().bold());
+                            println!("{} {}", "Installed not checked".yellow().bold(), self.bin_name().bold());
                         }
                     })
                     .inspect_err(|error| {
                         eprintln!(
-                            "{} installed but check failed, error {}",
-                            self.bin_name().red().bold(),
+                            "{} {} with error: {}",
+                            "Installed & check failed".red().bold(),
+                            self.bin_name().bold(),
                             format!("{error:#?}").red().bold()
                         );
                     })
