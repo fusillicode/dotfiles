@@ -13,8 +13,9 @@ categories = ["command-line-utilities", "development-tools"]
 [dependencies]
 cmd = { workspace = true }
 color-eyre = { workspace = true }
-tui = { workspace = true }
+git = { workspace = true }
 system = { workspace = true }
+tui = { workspace = true }
 
 [dev-dependencies]
 assert2 = { workspace = true }
