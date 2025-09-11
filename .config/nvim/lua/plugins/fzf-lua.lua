@@ -2,13 +2,25 @@ local cli = require('nvrim').cli
 local keymaps = require('keymaps')
 local plugin_keymaps = keymaps.fzf_lua
 
+local no_title = { title = '', }
+local with_previewer = {
+  previewer = 'builtin',
+  winopts   = vim.tbl_extend('error', no_title, {
+    height = 0.95,
+    preview = {
+      default = 'builtin',
+      layout = 'vertical',
+      vertical = 'down:60%',
+    },
+  }),
+}
+
 return {
   'ibhagwan/fzf-lua',
   keys = plugin_keymaps(),
   dependencies = { { 'junegunn/fzf', build = './install --bin', }, },
   config = function()
     local plugin = require('fzf-lua')
-    local no_title = { title = '', }
 
     plugin.setup({
       'max-perf',
@@ -36,7 +48,7 @@ return {
         title       = '',
         title_flags = false,
         width       = 0.70,
-        height      = 0.50,
+        height      = 0.40,
         row         = 0,
         backdrop    = 100,
         preview     = { default = 'hidden', },
@@ -73,23 +85,27 @@ return {
         winopts = no_title,
         ignore_current_buffer = true,
       },
-      grep       = {
-        winopts        = no_title,
-        rg_glob        = true,
-        rg_opts        = table.concat(cli.get_rg_flags(), ' '),
-        hidden         = true,
-        glob_flag      = '--iglob',
-        glob_separator = '%s%-%-',
-      },
-      git        = {
-        status = {
-          winopts = no_title,
-          actions = {
-            ['ctrl-h'] = { fn = plugin.actions.git_stage, reload = true, },
-            ['ctrl-l'] = { fn = plugin.actions.git_unstage, reload = true, },
-            ['ctrl-x'] = { fn = plugin.actions.git_reset, reload = true, },
-          },
+      grep       = vim.tbl_extend('error',
+        {
+          rg_glob        = true,
+          rg_opts        = table.concat(cli.get_rg_flags(), ' '),
+          hidden         = true,
+          glob_flag      = '--iglob',
+          glob_separator = '%s%-%-',
         },
+        with_previewer
+      ),
+      git        = {
+        status = vim.tbl_extend('error',
+          {
+            actions = {
+              ['ctrl-h'] = { fn = plugin.actions.git_stage, reload = true, },
+              ['ctrl-l'] = { fn = plugin.actions.git_unstage, reload = true, },
+              ['ctrl-x'] = { fn = plugin.actions.git_reset, reload = true, },
+            },
+          },
+          with_previewer
+        ),
       },
     })
     plugin.register_ui_select()
