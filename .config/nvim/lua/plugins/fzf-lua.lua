@@ -35,13 +35,11 @@ return {
       winopts    = {
         title       = '',
         title_flags = false,
-        height      = 0.95,
+        width       = 0.70,
+        height      = 0.50,
+        row         = 0,
         backdrop    = 100,
-        preview     = {
-          default = 'builtin',
-          layout = 'vertical',
-          vertical = 'down:60%',
-        },
+        preview     = { default = 'hidden', },
       },
       previewers = {
         builtin = {
