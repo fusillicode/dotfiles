@@ -1,3 +1,17 @@
+//! Lightweight Git helper utilities built on top of [`git2`].
+//!
+//! This module provides small wrappers around common read / write repository
+//! interactions used by the surrounding tooling:
+//! - Repository discovery and root path resolution (`[`get_repo`]`, [`get_repo_root`])
+//! - Current branch inspection and simple branch creation / switching
+//! - Working tree status collection as structured data (`[`get_status`]` returning [`GitStatusEntry`])
+//! - Branch enumeration with last commit timestamps (`[`get_branches`])
+//! - Convenience helpers such as filtering redundant remote branches (`[`remove_redundant_remotes`])
+//!
+//! Some commands (e.g. the special case in [`switch_branch`] for `-` and [`restore`])
+//! deliberately defer to the system `git` binary instead of re‑implementing more
+//! involved porcelain semantics.
+
 use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
@@ -20,23 +34,17 @@ use git2::StatusOptions;
 ///
 /// # Errors
 ///
-/// Returns an error if:
-/// - The repository cannot be discovered starting from `path`.
-/// - `path` is not inside a Git repository.
+/// Returns an error:
+/// - If the repository cannot be discovered starting from `path` (i.e. `path` is not inside a Git repository).
 pub fn get_repo(path: &Path) -> color_eyre::Result<Repository> {
     Ok(Repository::discover(path)?)
 }
 
-/// Returns the absolute path to the repository working tree root that contains `path`.
+/// Returns the absolute path to the working tree root of `repo`.
 ///
-/// Derives the path from [`Repository::commondir`] and removes any trailing `.git` component if present.
-/// For bare repositories (no working tree) this simply returns the repository directory itself.
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - The repository cannot be discovered starting from `path`.
-/// - `path` is not inside a Git repository.
+/// The path is derived from [`Repository::commondir`].
+/// Any trailing `.git` component (for non‑bare repositories) is removed.
+/// For bare repositories the returned path is the repository directory itself.
 pub fn get_repo_root(repo: &Repository) -> PathBuf {
     repo.commondir()
         .components()
@@ -88,7 +96,9 @@ pub fn create_branch(branch_name: &str) -> color_eyre::Result<()> {
 
 /// Switches `HEAD` to `branch_name` (or detaches if it resolves to a commit).
 ///
-/// Special case: if `branch_name` is `-` it shell‑invokes `git switch -` to reuse Git's previous branch logic.
+/// Special case: if `branch_name` is `-` the system `git` is invoked with
+/// `git switch -` to reuse Git's built‑in previous branch logic (not currently
+/// modeled directly in [`git2`]).
 ///
 /// # Errors
 ///
@@ -123,12 +133,9 @@ pub fn switch_branch(branch_name: &str) -> color_eyre::Result<()> {
 /// Returns the working tree status as a list of [`GitStatusEntry`].
 ///
 /// Both staged (index) and unstaged (worktree) states are captured when present,
-/// along with conflict and ignore information.
-///
-/// Untracked files are included.
-/// Ignored files are excluded.
-///
-/// The output preserves the order produced by `git2`.
+/// along with conflict and ignore information. Untracked files are included,
+/// ignored files are excluded. Order reflects the iteration order from
+/// [`git2`].
 ///
 /// # Errors
 ///
@@ -154,13 +161,13 @@ pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
 /// Restores one or more paths from the index or an optional `branch`.
 ///
 /// Equivalent to invoking `git restore [<branch>] <paths...>`.
-/// Uses the system `git` binary instead of re‑implementing restore semantics <https://stackoverflow.com/a/73759110>.
+/// The system `git` binary is used instead of re‑implementing restore semantics
+/// to avoid accidental complexity – see <https://stackoverflow.com/a/73759110>).
 ///
 /// # Errors
 ///
 /// Returns an error if:
 /// - Executing the underlying `git restore` command fails.
-/// - Any provided path cannot be processed by `git`.
 pub fn restore(paths: &[&str], branch: Option<&str>) -> color_eyre::Result<()> {
     let mut args = vec!["restore"];
     if let Some(branch) = branch {
@@ -171,14 +178,17 @@ pub fn restore(paths: &[&str], branch: Option<&str>) -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Gets all local and remote [`GitRef`]s sorted by modification date.
+/// Returns all local and remote [`Branch`]es sorted by last committer date
+/// (most recent first).
 ///
 /// # Errors
 ///
 /// Returns an error if:
-/// - Executing `git` fails or returns a non-zero exit status.
-/// - JSON serialization or deserialization fails.
-/// - UTF-8 conversion fails.
+/// - The repository cannot be discovered.
+/// - Enumerating branches fails.
+/// - A branch name is not valid UTF-8.
+/// - Resolving the branch tip commit fails.
+/// - Converting the committer timestamp into a [`DateTime`] fails.
 pub fn get_branches() -> color_eyre::Result<Vec<Branch>> {
     let repo = get_repo(Path::new("."))?;
     let mut out = vec![];
@@ -212,6 +222,14 @@ pub fn get_branches() -> color_eyre::Result<Vec<Branch>> {
     Ok(out)
 }
 
+/// Removes remote branches that have a corresponding local branch of the same
+/// shortened name.
+///
+/// A remote branch is considered redundant if its name after the first `/`
+/// (e.g. `origin/feature-x` -> `feature-x`) matches a local branch name.
+///
+/// After this function returns, each remaining [`Branch::Remote`] has no local
+/// counterpart with the same short name.
 pub fn remove_redundant_remotes(branches: &mut Vec<Branch>) {
     let mut local_names = HashSet::with_capacity(branches.len());
     for branch in branches.iter() {
@@ -229,16 +247,18 @@ pub fn remove_redundant_remotes(branches: &mut Vec<Branch>) {
     });
 }
 
-/// Represents a Git reference with metadata.
+/// Local or remote branch with metadata about the last commit.
 #[derive(Clone, Debug)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
 pub enum Branch {
+    /// Local branch (under `refs/heads/`).
     Local {
         /// The name of the branch (without refs/heads/ or refs/remotes/ prefix).
         name: String,
         /// The date and time when the last commit was made.
         committer_date_time: DateTime<Utc>,
     },
+    /// Remote tracking branch (under `refs/remotes/`).
     Remote {
         /// The name of the branch (without refs/heads/ or refs/remotes/ prefix).
         name: String,
@@ -248,6 +268,7 @@ pub enum Branch {
 }
 
 impl Branch {
+    /// Returns the branch name (no `refs/` prefix).
     pub fn name(&self) -> &str {
         match self {
             Branch::Local { name, .. } => name,
@@ -255,6 +276,7 @@ impl Branch {
         }
     }
 
+    /// Returns the timestamp of the last commit on this branch.
     pub fn committer_date_time(&self) -> &DateTime<Utc> {
         match self {
             Branch::Local {
@@ -273,11 +295,17 @@ impl Branch {
 /// conflict / ignore state. Helper methods expose derived semantics.
 #[derive(Debug, Clone)]
 pub struct GitStatusEntry {
+    /// Path relative to the repository root.
     pub path: PathBuf,
+    /// Absolute repository root path used to compute [`GitStatusEntry::absolute_path`].
     pub repo_root: PathBuf,
+    /// `true` if the path is in a conflict state.
     pub conflicted: bool,
+    /// `true` if the path is ignored.
     pub ignored: bool,
+    /// Staged (index) status, if any.
     pub index_state: Option<IndexState>,
+    /// Unstaged (worktree) status, if any.
     pub worktree_state: Option<WorktreeState>,
 }
 
@@ -322,10 +350,15 @@ impl TryFrom<(PathBuf, &StatusEntry<'_>)> for GitStatusEntry {
 /// Staged (index) status for a path.
 #[derive(Debug, Clone)]
 pub enum IndexState {
+    /// Path added to the index.
     New,
+    /// Path modified in the index.
     Modified,
+    /// Path deleted from the index.
     Deleted,
+    /// Path renamed in the index.
     Renamed,
+    /// File type changed in the index (e.g. regular file -> symlink).
     Typechange,
 }
 
@@ -354,11 +387,17 @@ impl IndexState {
 /// Unstaged (worktree) status for a path.
 #[derive(Debug, Clone)]
 pub enum WorktreeState {
+    /// Path newly created in worktree.
     New,
+    /// Path contents modified in worktree.
     Modified,
+    /// Path deleted in worktree.
     Deleted,
+    /// Path renamed in worktree.
     Renamed,
+    /// File type changed in worktree.
     Typechange,
+    /// Path unreadable (permissions or other I/O issues).
     Unreadable,
 }
 
