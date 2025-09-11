@@ -1,7 +1,10 @@
+use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
+use chrono::DateTime;
+use chrono::Utc;
 use cmd::CmdExt as _;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
@@ -141,7 +144,7 @@ pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
     opts.include_untracked(true);
     opts.include_ignored(false);
 
-    let mut out = Vec::new();
+    let mut out = vec![];
     for status_entry in repo.statuses(Some(&mut opts))?.iter() {
         out.push(GitStatusEntry::try_from((repo_root.clone(), &status_entry))?);
     }
@@ -166,6 +169,102 @@ pub fn restore(paths: &[&str], branch: Option<&str>) -> color_eyre::Result<()> {
     args.extend_from_slice(paths);
     Command::new("git").args(args).exec()?;
     Ok(())
+}
+
+/// Gets all local and remote [`GitRef`]s sorted by modification date.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Executing `git` fails or returns a non-zero exit status.
+/// - JSON serialization or deserialization fails.
+/// - UTF-8 conversion fails.
+pub fn get_branches() -> color_eyre::Result<Vec<Branch>> {
+    let repo = get_repo(Path::new("."))?;
+    let mut out = vec![];
+
+    for branch_res in repo.branches(None)? {
+        let (raw_branch, branch_type) = branch_res?;
+
+        let branch_name = raw_branch
+            .name()?
+            .ok_or_else(|| eyre!("branch name is not valid UTF-8"))?;
+        let commit_time = raw_branch.get().peel_to_commit()?.committer().when();
+        let committer_date_time = DateTime::from_timestamp(commit_time.seconds(), 0)
+            .ok_or_else(|| eyre!("cannot create DateTime<Utc> from seconds {}", commit_time.seconds()))?;
+
+        let branch = match branch_type {
+            git2::BranchType::Local => Branch::Local {
+                name: branch_name.to_string(),
+                committer_date_time,
+            },
+            git2::BranchType::Remote => Branch::Remote {
+                name: branch_name.to_string(),
+                committer_date_time,
+            },
+        };
+
+        out.push(branch);
+    }
+
+    out.sort_by(|a, b| b.committer_date_time().cmp(a.committer_date_time()));
+
+    Ok(out)
+}
+
+pub fn remove_redundant_remotes(branches: &mut Vec<Branch>) {
+    let mut local_names = HashSet::with_capacity(branches.len());
+    for branch in branches.iter() {
+        if let Branch::Local { name, .. } = branch {
+            local_names.insert(name.clone());
+        }
+    }
+
+    branches.retain(|b| match b {
+        Branch::Local { .. } => true,
+        Branch::Remote { name, .. } => {
+            let short = name.split_once('/').map(|(_, rest)| rest).unwrap_or(name.as_str());
+            !local_names.contains(short)
+        }
+    });
+}
+
+/// Represents a Git reference with metadata.
+#[derive(Clone, Debug)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
+pub enum Branch {
+    Local {
+        /// The name of the branch (without refs/heads/ or refs/remotes/ prefix).
+        name: String,
+        /// The date and time when the last commit was made.
+        committer_date_time: DateTime<Utc>,
+    },
+    Remote {
+        /// The name of the branch (without refs/heads/ or refs/remotes/ prefix).
+        name: String,
+        /// The date and time when the last commit was made.
+        committer_date_time: DateTime<Utc>,
+    },
+}
+
+impl Branch {
+    pub fn name(&self) -> &str {
+        match self {
+            Branch::Local { name, .. } => name,
+            Branch::Remote { name, .. } => name,
+        }
+    }
+
+    pub fn committer_date_time(&self) -> &DateTime<Utc> {
+        match self {
+            Branch::Local {
+                committer_date_time, ..
+            } => committer_date_time,
+            Branch::Remote {
+                committer_date_time, ..
+            } => committer_date_time,
+        }
+    }
 }
 
 /// Single entry representing the status of a path in the working tree.

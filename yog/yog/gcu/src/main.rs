@@ -1,12 +1,12 @@
 #![feature(exit_status_error)]
 
 use std::io::Write;
+use std::ops::Deref;
 
 use color_eyre::eyre::bail;
 use color_eyre::owo_colors::OwoColorize as _;
+use git::Branch;
 use url::Url;
-
-mod git_for_each_ref;
 
 /// CLI for Git branch management: interactive selection, safe creation, switching,
 /// and deriving branch names from GitHub PR URLs.
@@ -44,13 +44,30 @@ fn main() -> color_eyre::Result<()> {
 /// Returns an error if:
 /// - An underlying operation fails.
 fn autocomplete_git_branches() -> color_eyre::Result<()> {
-    let mut git_refs = git_for_each_ref::get_locals_and_remotes()?;
-    git_for_each_ref::keep_local_and_untracked_refs(&mut git_refs);
+    let mut branches = git::get_branches()?;
+    git::remove_redundant_remotes(&mut branches);
 
-    match tui::minimal_select(git_refs)? {
+    match tui::minimal_select(branches.into_iter().map(RenderableBranch).collect())? {
         Some(hd) if hd.name() == "-" || hd.name().is_empty() => switch_branch("-"),
         Some(other) => switch_branch(other.name()),
         None => Ok(()),
+    }
+}
+
+struct RenderableBranch(Branch);
+
+impl Deref for RenderableBranch {
+    type Target = Branch;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl core::fmt::Display for RenderableBranch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let styled_date_time = format!("({})", self.committer_date_time());
+        write!(f, "{} {}", self.name(), styled_date_time.blue())
     }
 }
 

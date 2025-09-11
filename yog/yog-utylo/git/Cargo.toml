@@ -12,5 +12,6 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 cmd = { workspace = true }
+chrono = { workspace = true }
 color-eyre = { workspace = true }
 git2 = { workspace = true }
