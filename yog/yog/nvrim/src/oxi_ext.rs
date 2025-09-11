@@ -4,6 +4,8 @@ use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
 use nvim_oxi::ObjectKind;
 use nvim_oxi::api::Buffer;
+use nvim_oxi::api::opts::CmdOpts;
+use nvim_oxi::api::types::CmdInfosBuilder;
 use nvim_oxi::api::types::LogLevel;
 use nvim_oxi::conversion::ToObject;
 
@@ -199,6 +201,21 @@ pub fn notify_error(msg: &str) {
 pub fn notify_warn(msg: &str) {
     if let Err(error) = nvim_oxi::api::notify(msg, LogLevel::Warn, &dict! {}) {
         nvim_oxi::dbg!(format!("cannot notify warning {msg:?}, error {error:#?}"));
+    }
+}
+
+pub fn exec_vim_cmd<S, I>(cmd: impl Into<String> + core::fmt::Debug + std::marker::Copy, args: I)
+where
+    S: Into<String>,
+    I: IntoIterator<Item = S> + core::fmt::Debug + std::marker::Copy,
+{
+    if let Err(error) = nvim_oxi::api::cmd(
+        &CmdInfosBuilder::default().cmd(cmd).args(args).build(),
+        &CmdOpts::default(),
+    ) {
+        crate::oxi_ext::notify_error(&format!(
+            "cannot execute cmd {cmd:?} with args {args:#?}, error {error:#?}"
+        ));
     }
 }
 
