@@ -1,19 +1,6 @@
-local cli = require('nvrim').cli
+local nvrim = require('nvrim')
 local keymaps = require('keymaps')
 local plugin_keymaps = keymaps.fzf_lua
-
-local no_title = { title = '', }
-local with_previewer = {
-  previewer = 'builtin',
-  winopts   = vim.tbl_extend('error', no_title, {
-    height = 0.95,
-    preview = {
-      default = 'builtin',
-      layout = 'vertical',
-      vertical = 'down:60%',
-    },
-  }),
-}
 
 return {
   'ibhagwan/fzf-lua',
@@ -76,24 +63,24 @@ return {
       files      = {
         -- Jump to line! https://github.com/ibhagwan/fzf-lua/discussions/2032#discussioncomment-13046310
         line_query = true,
-        winopts    = no_title,
+        winopts    = { title = '', },
         fzf_opts   = { ['--ansi'] = true, },
-        fd_opts    = table.concat(cli.get_fd_flags(), ' '),
+        fd_opts    = table.concat(nvrim.cli.get_fd_flags(), ' '),
         git_icons  = true,
       },
       buffers    = {
-        winopts = no_title,
+        winopts = { title = '', },
         ignore_current_buffer = true,
       },
       grep       = vim.tbl_extend('error',
         {
           rg_glob        = true,
-          rg_opts        = table.concat(cli.get_rg_flags(), ' '),
+          rg_opts        = table.concat(nvrim.cli.get_rg_flags(), ' '),
           hidden         = true,
           glob_flag      = '--iglob',
           glob_separator = '%s%-%-',
         },
-        with_previewer
+        nvrim.style_opts.fzf_lua_previewer
       ),
       git        = {
         status = vim.tbl_extend('error',
@@ -104,7 +91,7 @@ return {
               ['ctrl-x'] = { fn = plugin.actions.git_reset, reload = true, },
             },
           },
-          with_previewer
+          nvrim.style_opts.fzf_lua_previewer
         ),
       },
     })
