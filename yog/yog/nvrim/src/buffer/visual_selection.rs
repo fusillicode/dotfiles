@@ -10,10 +10,11 @@ use serde::Deserializer;
 
 use crate::oxi_ext::BufferExt;
 
-/// Return text from the current buffer between two positions.
+/// Return selected text lines from the current [`Buffer`] between the visual start mark and the cursor.
 ///
-/// Produces a [`Vec`] of [`nvim_oxi::String`] lines for Lua.
-/// On error, returns an empty [`Vec`] and emits a notification to Nvim.
+/// Produces a [`Vec`] of [`nvim_oxi::String`] (one entry per line) suitable for Lua.
+/// If any Nvim API call fails a notification is emitted and an empty [`Vec`] is returned.
+/// The end column is adjusted so the last character is included (inclusive selection).
 pub fn get(_: ()) -> Vec<nvim_oxi::String> {
     let Ok(visual_pos) = get_pos('v') else { return vec![] };
     let Ok(cursor_pos) = get_pos('.') else { return vec![] };
@@ -52,7 +53,7 @@ pub fn get(_: ()) -> Vec<nvim_oxi::String> {
 
 /// Normalized, 0-based indexed output of Nvim `getpos()`.
 ///
-/// Built from [`GetPosRaw`].
+/// Built from [`RawPos`].
 #[derive(Debug, PartialEq, Eq)]
 pub struct Pos {
     pub lnum: usize,
@@ -60,6 +61,8 @@ pub struct Pos {
 }
 
 impl Pos {
+    /// Return `(self, other)` ordered by position, swapping if needed so the first
+    /// has the lower (line, column) tuple.
     pub const fn switch_if_needed(self, other: Self) -> (Self, Self) {
         if self.lnum > other.lnum || self.col > other.col {
             (other, self)
@@ -69,7 +72,7 @@ impl Pos {
     }
 }
 
-/// Custom [`Deserialize`] from Lua tuple (see [`GetPosRaw`]).
+/// Custom [`Deserialize`] from Lua tuple (see [`RawPos`]).
 impl<'de> Deserialize<'de> for Pos {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -80,7 +83,7 @@ impl<'de> Deserialize<'de> for Pos {
     }
 }
 
-/// Convert [`GetPosRaw`] to [`GetPosOutput`] by switching to 0-based indexing from Lua 1-based.
+/// Convert [`RawPos`] to [`Pos`] by switching to 0-based indexing from Lua 1-based.
 impl From<RawPos> for Pos {
     fn from(raw: RawPos) -> Self {
         fn to_0_based_usize(v: i64) -> usize {
@@ -99,14 +102,14 @@ impl From<RawPos> for Pos {
 #[expect(dead_code, reason = "Unused fields are kept for completeness")]
 struct RawPos(i64, i64, i64, i64);
 
-/// Implementation of [`FromObject`] for [`GetPosOutput`].
+/// Implementation of [`FromObject`] for [`Pos`].
 impl FromObject for Pos {
     fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
         Self::deserialize(nvim_oxi::serde::Deserializer::new(obj)).map_err(Into::into)
     }
 }
 
-/// Implementation of [`Poppable`] for [`GetPosOutput`].
+/// Implementation of [`Poppable`] for [`Pos`].
 impl Poppable for Pos {
     unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
         unsafe {
@@ -116,10 +119,22 @@ impl Poppable for Pos {
     }
 }
 
+/// Call Nvim function `getpos()` for the supplied mark `pos` and return a normalized [`Pos`].
+///
+/// On success converts the raw 1-based tuple into 0-based [`Pos`]. On failure emits
+/// an error notification and returns the underlying error.
+///
+/// # Parameters
+///
+/// - `pos`: Mark character accepted by `getpos()` (e.g. `'v'` for start of visual selection, `'.'` for cursor).
+///
+/// # Errors
+///
+/// Returns an error if the underlying Nvim API call fails or deserialization into [`Pos`] fails.
 fn get_pos(pos: char) -> nvim_oxi::Result<Pos> {
     Ok(
         nvim_oxi::api::call_function::<_, Pos>("getpos", Array::from_iter([pos])).inspect_err(|error| {
-            crate::oxi_ext::notify_error(&format!("cannot get pos for {pos}, error {error:#?}"))
+            crate::oxi_ext::notify_error(&format!("cannot get pos for {pos}, error {error:#?}"));
         })?,
     )
 }
