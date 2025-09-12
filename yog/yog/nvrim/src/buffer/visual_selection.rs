@@ -124,7 +124,7 @@ impl SelectionBounds {
             bail!(
                 "cannot create SelectionWithBounds, mismatched buffer ids between start {start:#?} and end {end:#?} positions"
             )
-        };
+        }
 
         Ok(Self {
             buf_id: start.buf_id,
@@ -133,23 +133,23 @@ impl SelectionBounds {
         })
     }
 
-    pub fn line_range(&self) -> Range<usize> {
+    pub const fn line_range(&self) -> Range<usize> {
         self.start.lnum..self.end.lnum
     }
 
-    pub fn buf_id(&self) -> i32 {
+    pub const fn buf_id(&self) -> i32 {
         self.buf_id
     }
 
-    pub fn start(&self) -> &Bound {
+    pub const fn start(&self) -> &Bound {
         &self.start
     }
 
-    pub fn end(&self) -> &Bound {
+    pub const fn end(&self) -> &Bound {
         &self.end
     }
 
-    fn incr_end_col(&mut self) {
+    const fn incr_end_col(&mut self) {
         self.end.col = self.end.col.saturating_add(1);
     }
 }
@@ -170,15 +170,15 @@ impl From<Pos> for Bound {
 }
 
 impl Selection {
-    pub fn buf_id(&self) -> i32 {
+    pub const fn buf_id(&self) -> i32 {
         self.bounds.buf_id()
     }
 
-    pub fn start(&self) -> &Bound {
+    pub const fn start(&self) -> &Bound {
         self.bounds.start()
     }
 
-    pub fn end(&self) -> &Bound {
+    pub const fn end(&self) -> &Bound {
         self.bounds.end()
     }
 
@@ -186,7 +186,7 @@ impl Selection {
         &self.lines
     }
 
-    pub fn line_range(&self) -> Range<usize> {
+    pub const fn line_range(&self) -> Range<usize> {
         self.bounds.line_range()
     }
 }

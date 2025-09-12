@@ -21,7 +21,7 @@ pub fn transform_selection(_: ()) {
     let transformed_lines = selection
         .lines()
         .iter()
-        .map(|line| line.to_string().to_case(Case::Upper))
+        .map(|line| line.as_str().to_case(Case::Upper))
         .collect::<Vec<_>>();
 
     if let Err(error) = Buffer::from(selection.buf_id()).set_text(
@@ -34,6 +34,6 @@ pub fn transform_selection(_: ()) {
             "cannot set lines of buffer between {:#?} and {:#?}, error {error:#?}",
             selection.start(),
             selection.end()
-        ))
+        ));
     }
 }
