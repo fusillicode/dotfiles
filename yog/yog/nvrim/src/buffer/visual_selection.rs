@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use nvim_oxi::Array;
 use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;
@@ -33,52 +35,81 @@ use crate::oxi_ext::BufferExt;
 /// - Blockwise selections lose their column rectangle shape.
 /// - Returned columns for multi-byte UTF-8 characters depend on byte indices exposed by `getpos()`; no grapheme-aware
 ///   adjustment is performed.
-pub fn get(_: ()) -> Vec<nvim_oxi::String> {
-    let Ok(cursor_pos) = get_pos(".") else { return vec![] };
-    let Ok(visual_pos) = get_pos("v") else { return vec![] };
+pub fn get(_: ()) -> Vec<String> {
+    get_with_bounds(()).map_or_else(Vec::new, |f| f.lines)
+}
 
-    let (start_pos, mut end_pos) = cursor_pos.sort(visual_pos);
+pub fn get_with_bounds(_: ()) -> Option<SelectionWithBounds> {
+    let Ok(cursor_pos) = get_pos(".") else { return None };
+    let Ok(visual_pos) = get_pos("v") else { return None };
+
+    let (start, mut end) = cursor_pos.sort(visual_pos);
     let cur_buf = Buffer::current();
 
     // Handle linewise mode: grab full lines
     if nvim_oxi::api::get_mode().mode == "V" {
         // end.lnum inclusive for lines range
-        let Ok(lines) = cur_buf
-            .get_lines(start_pos.lnum..=end_pos.lnum, false)
-            .inspect_err(|error| {
-                crate::oxi_ext::notify_error(&format!("cannot get lines from buffer {cur_buf:#?}, error {error:#?}"));
-            })
-        else {
-            return vec![];
+        let Ok(lines) = cur_buf.get_lines(start.lnum..=end.lnum, false).inspect_err(|error| {
+            crate::oxi_ext::notify_error(&format!("cannot get lines from buffer {cur_buf:#?}, error {error:#?}"));
+        }) else {
+            return None;
         };
-        return lines.collect();
+        return Some(SelectionWithBounds {
+            start,
+            end,
+            lines: lines.into_iter().map(|line| line.to_string()).collect(),
+        });
     }
 
     // Charwise mode:
     // Clamp end.col to line length, then make exclusive by +1 (if not already at end).
-    if let Ok(line) = cur_buf.get_line(end_pos.lnum)
-        && end_pos.col < line.len()
+    if let Ok(line) = cur_buf.get_line(end.lnum)
+        && end.col < line.len()
     {
-        end_pos.col = end_pos.col.saturating_add(1); // make exclusive
+        end.col = end.col.saturating_add(1); // make exclusive
     }
 
     // For multi-line charwise selection rely on nvim_buf_get_text with an exclusive end.
     let Ok(lines) = cur_buf
-        .get_text(
-            start_pos.lnum..end_pos.lnum,
-            start_pos.col,
-            end_pos.col,
-            &GetTextOpts::default(),
-        )
+        .get_text(start.lnum..end.lnum, start.col, end.col, &GetTextOpts::default())
         .inspect_err(|error| {
             crate::oxi_ext::notify_error(&format!(
-                "cannot get text from buffer {cur_buf:#?} from {start_pos:#?} to {end_pos:#?}, error {error:#?}"
+                "cannot get text from buffer {cur_buf:#?} from {start:#?} to {end:#?}, error {error:#?}"
             ));
         })
     else {
-        return vec![];
+        return None;
     };
-    lines.collect()
+
+    Some(SelectionWithBounds {
+        start,
+        end,
+        lines: lines.into_iter().map(|line| line.to_string()).collect(),
+    })
+}
+
+pub struct SelectionWithBounds {
+    start: Pos,
+    end: Pos,
+    lines: Vec<String>,
+}
+
+impl SelectionWithBounds {
+    pub fn start(&self) -> &Pos {
+        &self.start
+    }
+
+    pub fn end(&self) -> &Pos {
+        &self.end
+    }
+
+    pub fn lines(&self) -> &[String] {
+        &self.lines
+    }
+
+    pub fn lines_range(&self) -> Range<usize> {
+        self.start.lnum..self.end.lnum
+    }
 }
 
 /// Normalized, 0-based indexed output of Nvim `getpos()`.
@@ -87,6 +118,7 @@ pub fn get(_: ()) -> Vec<nvim_oxi::String> {
 /// zero-based (line, column) indices.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Pos {
+    pub buf_id: i64,
     /// 0-based line index.
     pub lnum: usize,
     /// 0-based byte column within the line.
@@ -124,6 +156,7 @@ impl From<RawPos> for Pos {
         }
 
         Self {
+            buf_id: raw.0,
             lnum: to_0_based_usize(raw.1),
             col: to_0_based_usize(raw.2),
         }

@@ -52,6 +52,6 @@ fn nvrim() -> Dictionary {
         "style_opts": style_opts::dict(),
         "vim_opts": vim_opts::dict(),
         "keymaps": keymaps::dict(),
-        "transform_text": trex::dict(),
+        "trex": trex::dict(),
     }
 }
