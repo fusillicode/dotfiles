@@ -16,10 +16,10 @@ use crate::oxi_ext::BufferExt;
 /// If any Nvim API call fails a notification is emitted and an empty [`Vec`] is returned.
 /// The end column is adjusted so the last character is included (inclusive selection).
 pub fn get(_: ()) -> Vec<nvim_oxi::String> {
-    let Ok(visual_pos) = get_pos('v') else { return vec![] };
     let Ok(cursor_pos) = get_pos('.') else { return vec![] };
+    let Ok(visual_pos) = get_pos('v') else { return vec![] };
 
-    let (start_pos, end_pos) = visual_pos.switch_if_needed(cursor_pos);
+    let (start_pos, end_pos) = cursor_pos.switch_if_needed(visual_pos);
     let cur_buf = Buffer::current();
 
     let end_col = if start_pos == end_pos && nvim_oxi::api::get_mode().mode == "V" {
