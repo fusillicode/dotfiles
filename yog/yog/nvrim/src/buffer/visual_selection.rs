@@ -42,7 +42,11 @@ pub fn get_lines(_: ()) -> Vec<String> {
 }
 
 pub fn get(_: ()) -> Option<Selection> {
-    let mut bounds = SelectionBounds::new().unwrap();
+    let Ok(mut bounds) = SelectionBounds::new().inspect_err(|error| {
+        crate::oxi_ext::notify_error(&format!("cannot create SelectionBounds, error {error:#?}"));
+    }) else {
+        return None;
+    };
 
     let cur_buf = Buffer::from(bounds.buf_id());
 
