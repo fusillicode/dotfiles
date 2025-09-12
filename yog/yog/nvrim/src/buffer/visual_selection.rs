@@ -42,9 +42,9 @@ pub fn get(_: ()) -> Vec<nvim_oxi::String> {
 
     // Handle linewise mode: grab full lines
     if nvim_oxi::api::get_mode().mode == "V" {
-        // end.lnum inclusive: need +1 for lines range
+        // end.lnum inclusive for lines range
         let Ok(lines) = cur_buf
-            .get_lines(start_pos.lnum..end_pos.lnum + 1, false)
+            .get_lines(start_pos.lnum..=end_pos.lnum, false)
             .inspect_err(|error| {
                 crate::oxi_ext::notify_error(&format!("cannot get lines from buffer {cur_buf:#?}, error {error:#?}"));
             })
@@ -59,11 +59,11 @@ pub fn get(_: ()) -> Vec<nvim_oxi::String> {
     if let Ok(line) = cur_buf.get_line(end_pos.lnum)
         && end_pos.col < line.len()
     {
-        end_pos.col += 1; // make exclusive
+        end_pos.col = end_pos.col.saturating_add(1); // make exclusive
     }
 
     // For multi-line charwise selection rely on nvim_buf_get_text with an exclusive end.
-    let Ok(iter) = cur_buf
+    let Ok(lines) = cur_buf
         .get_text(
             start_pos.lnum..end_pos.lnum,
             start_pos.col,
@@ -73,12 +73,12 @@ pub fn get(_: ()) -> Vec<nvim_oxi::String> {
         .inspect_err(|error| {
             crate::oxi_ext::notify_error(&format!(
                 "cannot get text from buffer {cur_buf:#?} from {start_pos:#?} to {end_pos:#?}, error {error:#?}"
-            ))
+            ));
         })
     else {
         return vec![];
     };
-    nvim_oxi::dbg!(iter.collect())
+    lines.collect()
 }
 
 /// Normalized, 0-based indexed output of Nvim `getpos()`.

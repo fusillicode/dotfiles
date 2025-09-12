@@ -9,4 +9,4 @@ pub fn dict() -> Dictionary {
     }
 }
 
-pub fn transform(_: ()) {}
+pub const fn transform(_: ()) {}
