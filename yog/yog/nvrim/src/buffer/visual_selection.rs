@@ -10,11 +10,29 @@ use serde::Deserializer;
 
 use crate::oxi_ext::BufferExt;
 
-/// Return selected text lines from the current [`Buffer`] between the visual start mark and the cursor.
+/// Extract selected text lines from the current [`Buffer`] using the active Visual range.
 ///
-/// Produces a [`Vec`] of [`nvim_oxi::String`] (one entry per line) suitable for Lua.
-/// If any Nvim API call fails a notification is emitted and an empty [`Vec`] is returned.
-/// The end column is adjusted so the last character is included (inclusive selection).
+/// The range endpoints are derived from the current cursor position (`.`) and the Visual
+/// start mark (`'v`). This means the function is intended to be invoked while still in
+/// Visual mode; if Visual mode has already been exited the mark `'v` may refer to a
+/// previous selection and yield stale or unexpected text.
+///
+/// Mode handling:
+/// - Linewise (`V`): returns every full line covered by the selection (columns ignored).
+/// - Characterwise (`v`): returns a slice spanning from the start (inclusive) to the end (inclusive) by internally
+///   converting the end column to an exclusive bound.
+/// - Blockwise (CTRL-V): currently treated like a plain characterwise span; rectangular shape is not preserved.
+///
+/// On any Neovim API error (fetching marks, lines, or text) a notification is emitted and an
+/// empty [`Vec`] is returned. The resulting lines are also passed through [`nvim_oxi::dbg!`]
+/// (producing debug output) before being returned.
+///
+/// # Caveats
+///
+/// - Relies on the live Visual selection; does not fall back to `'<` / `'>` marks.
+/// - Blockwise selections lose their column rectangle shape.
+/// - Returned columns for multi-byte UTF-8 characters depend on byte indices exposed by `getpos()`; no grapheme-aware
+///   adjustment is performed.
 pub fn get(_: ()) -> Vec<nvim_oxi::String> {
     let Ok(cursor_pos) = get_pos(".") else { return vec![] };
     let Ok(visual_pos) = get_pos("v") else { return vec![] };
@@ -44,16 +62,20 @@ pub fn get(_: ()) -> Vec<nvim_oxi::String> {
         end_pos.col += 1; // make exclusive
     }
 
-    // For multi-line charwise selection we can rely on nvim_buf_get_text with exclusive end.
-    let Ok(iter) = cur_buf.get_text(
-        start_pos.lnum..end_pos.lnum,
-        start_pos.col,
-        end_pos.col,
-        &GetTextOpts::default(),
-    ) else {
-        crate::oxi_ext::notify_error(&format!(
-            "cannot get text from buffer {cur_buf:#?} from {start_pos:#?} to {end_pos:#?}, error {error:#?}"
-        ));
+    // For multi-line charwise selection rely on nvim_buf_get_text with an exclusive end.
+    let Ok(iter) = cur_buf
+        .get_text(
+            start_pos.lnum..end_pos.lnum,
+            start_pos.col,
+            end_pos.col,
+            &GetTextOpts::default(),
+        )
+        .inspect_err(|error| {
+            crate::oxi_ext::notify_error(&format!(
+                "cannot get text from buffer {cur_buf:#?} from {start_pos:#?} to {end_pos:#?}, error {error:#?}"
+            ))
+        })
+    else {
         return vec![];
     };
     nvim_oxi::dbg!(iter.collect())
@@ -61,16 +83,19 @@ pub fn get(_: ()) -> Vec<nvim_oxi::String> {
 
 /// Normalized, 0-based indexed output of Nvim `getpos()`.
 ///
-/// Built from [`RawPos`].
+/// Built from [`RawPos`]. Represents a single position inside a buffer using
+/// zero-based (line, column) indices.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Pos {
+    /// 0-based line index.
     pub lnum: usize,
+    /// 0-based byte column within the line.
     pub col: usize,
 }
 
 impl Pos {
     /// Return `(self, other)` sorted by position, swapping if needed so the first
-    /// has the lower (line, column) tuple.
+    /// has the lower (line, column) tuple (columns compared only when on the same line).
     pub const fn sort(self, other: Self) -> (Self, Self) {
         if self.lnum > other.lnum || (self.lnum == other.lnum && self.col > other.col) {
             (other, self)
@@ -127,14 +152,15 @@ impl Poppable for Pos {
     }
 }
 
-/// Call Nvim function `getpos()` for the supplied mark `pos` and return a normalized [`Pos`].
+/// Call Nvim function `getpos()` for the supplied mark identifier and return a normalized [`Pos`].
 ///
-/// On success converts the raw 1-based tuple into 0-based [`Pos`]. On failure emits
-/// an error notification and returns the underlying error.
+/// On success converts the raw 1-based tuple into 0-based [`Pos`].
+/// On failure emits an error notification and returns the underlying error.
 ///
 /// # Parameters
 ///
-/// - `pos`: Mark character accepted by `getpos()` (e.g. `'v'` for start of visual selection, `'.'` for cursor).
+/// - `mark`: Mark identifier accepted by `getpos()` (e.g. `"v"` for start of active Visual selection, `"."` for the
+///   cursor position).
 ///
 /// # Errors
 ///
