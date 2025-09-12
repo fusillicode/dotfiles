@@ -1,8 +1,10 @@
 use std::ops::Range;
 
+use color_eyre::eyre::bail;
 use nvim_oxi::Array;
 use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;
+use nvim_oxi::api::SuperIterator;
 use nvim_oxi::api::opts::GetTextOpts;
 use nvim_oxi::conversion::FromObject;
 use nvim_oxi::lua::Poppable;
@@ -54,11 +56,13 @@ pub fn get_with_bounds(_: ()) -> Option<SelectionWithBounds> {
         }) else {
             return None;
         };
-        return Some(SelectionWithBounds {
-            start,
-            end,
-            lines: lines.into_iter().map(|line| line.to_string()).collect(),
-        });
+        return SelectionWithBounds::new(start, end, lines)
+            .inspect_err(|error| {
+                crate::oxi_ext::notify_error(&format!(
+                    "cannot build SelectionWithBounds from start {start:#?} and end {end:#?}, error {error:#?}"
+                ));
+            })
+            .ok();
     }
 
     // Charwise mode:
@@ -81,25 +85,62 @@ pub fn get_with_bounds(_: ()) -> Option<SelectionWithBounds> {
         return None;
     };
 
-    Some(SelectionWithBounds {
-        start,
-        end,
-        lines: lines.into_iter().map(|line| line.to_string()).collect(),
-    })
+    SelectionWithBounds::new(start, end, lines)
+        .inspect_err(|error| {
+            crate::oxi_ext::notify_error(&format!(
+                "cannot build SelectionWithBounds from start {start:#?} and end {end:#?}, error {error:#?}"
+            ));
+        })
+        .ok()
 }
 
 pub struct SelectionWithBounds {
-    start: Pos,
-    end: Pos,
+    buf_id: i32,
+    start: Bound,
+    end: Bound,
     lines: Vec<String>,
 }
 
+#[derive(Debug, Copy, Clone)]
+pub struct Bound {
+    pub lnum: usize,
+    pub col: usize,
+}
+
+impl From<Pos> for Bound {
+    fn from(value: Pos) -> Self {
+        Self {
+            lnum: value.lnum,
+            col: value.col,
+        }
+    }
+}
+
 impl SelectionWithBounds {
-    pub fn start(&self) -> &Pos {
+    pub fn new(start: Pos, end: Pos, lines: impl SuperIterator<nvim_oxi::String>) -> color_eyre::Result<Self> {
+        if start.buf_id != end.buf_id {
+            bail!(
+                "cannot create SelectionWithBounds, mismatched buffer ids between start {start:#?} and end {end:#?} positions"
+            )
+        };
+
+        Ok(Self {
+            buf_id: start.buf_id,
+            start: Bound::from(start),
+            end: Bound::from(end),
+            lines: lines.into_iter().map(|line| line.to_string()).collect(),
+        })
+    }
+
+    pub fn buf_id(&self) -> i32 {
+        self.buf_id
+    }
+
+    pub fn start(&self) -> &Bound {
         &self.start
     }
 
-    pub fn end(&self) -> &Pos {
+    pub fn end(&self) -> &Bound {
         &self.end
     }
 
@@ -116,9 +157,9 @@ impl SelectionWithBounds {
 ///
 /// Built from [`RawPos`]. Represents a single position inside a buffer using
 /// zero-based (line, column) indices.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct Pos {
-    pub buf_id: i64,
+    pub buf_id: i32,
     /// 0-based line index.
     pub lnum: usize,
     /// 0-based byte column within the line.
@@ -166,7 +207,7 @@ impl From<RawPos> for Pos {
 /// Raw `getpos()` tuple: (`bufnum`, `lnum`, `col`, `off`).
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[expect(dead_code, reason = "Unused fields are kept for completeness")]
-struct RawPos(i64, i64, i64, i64);
+struct RawPos(i32, i64, i64, i64);
 
 /// Implementation of [`FromObject`] for [`Pos`].
 impl FromObject for Pos {

@@ -24,7 +24,7 @@ pub fn transform(_: ()) {
         .map(|line| line.to_string().to_case(Case::Upper))
         .collect::<Vec<_>>();
 
-    if let Err(error) = Buffer::current().set_text(
+    if let Err(error) = Buffer::from(selection_with_bounds.buf_id()).set_text(
         selection_with_bounds.lines_range(),
         selection_with_bounds.start().col,
         selection_with_bounds.end().col,
