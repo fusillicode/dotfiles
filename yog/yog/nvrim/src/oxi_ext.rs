@@ -1,5 +1,6 @@
 use color_eyre::eyre::Context;
 use color_eyre::eyre::eyre;
+use nvim_oxi::Array;
 use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
 use nvim_oxi::ObjectKind;
@@ -217,6 +218,19 @@ where
             "cannot execute cmd {cmd:?} with args {args:#?}, error {error:#?}"
         ));
     }
+}
+
+pub fn inputlist<'a, I: core::fmt::Display>(prompt: &'a str, items: &'a [I]) -> color_eyre::Result<&'a I> {
+    let mut prompt_with_items = Array::from_iter([prompt]);
+    for (idx, item) in items.iter().enumerate() {
+        prompt_with_items.push(format!("{}. {item}", idx + 1));
+    }
+    let item_idx = nvim_oxi::api::call_function::<_, i64>("inputlist", (prompt_with_items.clone(),))
+        .map_err(color_eyre::Report::from)
+        .and_then(|item_idx| usize::try_from(item_idx.saturating_sub(1)).map_err(color_eyre::Report::from))?;
+    items
+        .get(item_idx)
+        .ok_or_else(|| eyre!("cannot find item with id {item_idx}, in {prompt_with_items:#?}"))
 }
 
 #[cfg(test)]
