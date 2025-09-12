@@ -16,39 +16,44 @@ use crate::oxi_ext::BufferExt;
 /// If any Nvim API call fails a notification is emitted and an empty [`Vec`] is returned.
 /// The end column is adjusted so the last character is included (inclusive selection).
 pub fn get(_: ()) -> Vec<nvim_oxi::String> {
-    let Ok(cursor_pos) = get_pos('.') else { return vec![] };
-    let Ok(visual_pos) = get_pos('v') else { return vec![] };
+    let Ok(cursor_pos) = get_pos(".") else { return vec![] };
+    let Ok(visual_pos) = get_pos("v") else { return vec![] };
 
-    let (start_pos, end_pos) = cursor_pos.switch_if_needed(visual_pos);
+    let (start_pos, mut end_pos) = cursor_pos.sort(visual_pos);
     let cur_buf = Buffer::current();
 
-    let end_col = if start_pos == end_pos && nvim_oxi::api::get_mode().mode == "V" {
-        cur_buf
-            .get_line(start_pos.lnum)
-            .map(|line| line.len())
+    // Handle linewise mode: grab full lines
+    if nvim_oxi::api::get_mode().mode == "V" {
+        // end.lnum inclusive: need +1 for lines range
+        let Ok(lines) = cur_buf
+            .get_lines(start_pos.lnum..end_pos.lnum + 1, false)
             .inspect_err(|error| {
-                crate::oxi_ext::notify_error(&format!(
-                    "cannot get buffer line with idx {} from buffer {cur_buf:#?}, error {error:#?}",
-                    start_pos.lnum
-                ));
+                crate::oxi_ext::notify_error(&format!("cannot get lines from buffer {cur_buf:#?}, error {error:#?}"));
             })
-            .unwrap_or(start_pos.col)
-    } else {
-        // To fix missing last char selection
-        end_pos.col.saturating_add(1)
-    };
-
-    let Ok(lines) =  cur_buf
-        .get_text(start_pos.lnum..end_pos.lnum, start_pos.col, end_col, &GetTextOpts::default())
-        .inspect_err(|error| {
-            crate::oxi_ext::notify_error(&format!(
-                "cannot get text from buffer {cur_buf:#?} from start_pos {start_pos:#?} to end_pos {end_pos:#?}, error {error:#?}"
-            ));
-        }) else {
+        else {
             return vec![];
         };
+        return lines.collect();
+    }
 
-    lines.collect()
+    // Charwise mode:
+    // Clamp end.col to line length, then make exclusive by +1 (if not already at end).
+    if let Ok(line) = cur_buf.get_line(end_pos.lnum)
+        && end_pos.col < line.len()
+    {
+        end_pos.col += 1; // make exclusive
+    }
+
+    // For multi-line charwise selection we can rely on nvim_buf_get_text with exclusive end.
+    let Ok(iter) = cur_buf.get_text(
+        start_pos.lnum..end_pos.lnum,
+        start_pos.col,
+        end_pos.col,
+        &GetTextOpts::default(),
+    ) else {
+        return vec![];
+    };
+    nvim_oxi::dbg!(iter.collect())
 }
 
 /// Normalized, 0-based indexed output of Nvim `getpos()`.
@@ -61,10 +66,10 @@ pub struct Pos {
 }
 
 impl Pos {
-    /// Return `(self, other)` ordered by position, swapping if needed so the first
+    /// Return `(self, other)` sorted by position, swapping if needed so the first
     /// has the lower (line, column) tuple.
-    pub const fn switch_if_needed(self, other: Self) -> (Self, Self) {
-        if self.lnum > other.lnum || self.col > other.col {
+    pub const fn sort(self, other: Self) -> (Self, Self) {
+        if self.lnum > other.lnum || (self.lnum == other.lnum && self.col > other.col) {
             (other, self)
         } else {
             (self, other)
@@ -131,10 +136,10 @@ impl Poppable for Pos {
 /// # Errors
 ///
 /// Returns an error if the underlying Nvim API call fails or deserialization into [`Pos`] fails.
-fn get_pos(pos: char) -> nvim_oxi::Result<Pos> {
+fn get_pos(mark: &str) -> nvim_oxi::Result<Pos> {
     Ok(
-        nvim_oxi::api::call_function::<_, Pos>("getpos", Array::from_iter([pos])).inspect_err(|error| {
-            crate::oxi_ext::notify_error(&format!("cannot get pos for {pos}, error {error:#?}"));
+        nvim_oxi::api::call_function::<_, Pos>("getpos", Array::from_iter([mark])).inspect_err(|error| {
+            crate::oxi_ext::notify_error(&format!("cannot get pos for {mark}, error {error:#?}"));
         })?,
     )
 }
