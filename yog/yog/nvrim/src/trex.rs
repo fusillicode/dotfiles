@@ -22,8 +22,11 @@ pub fn transform_selection(_: ()) {
 
     let options: Vec<_> = Case::all_cases().iter().copied().map(CaseWrap).collect();
     let Ok(selected_option) = crate::oxi_ext::inputlist("Select option:", &options).inspect_err(|error| {
-        crate::oxi_ext::notify_error(&format!("cannot user input, error {error:#?}"));
+        crate::oxi_ext::notify_error(&format!("cannot get user input, error {error:#?}"));
     }) else {
+        return;
+    };
+    let Some(selected_option) = selected_option else {
         return;
     };
 

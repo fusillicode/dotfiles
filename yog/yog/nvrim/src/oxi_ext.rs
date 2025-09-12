@@ -220,17 +220,20 @@ where
     }
 }
 
-pub fn inputlist<'a, I: core::fmt::Display>(prompt: &'a str, items: &'a [I]) -> color_eyre::Result<&'a I> {
-    let mut prompt_with_items = Array::from_iter([prompt]);
-    for (idx, item) in items.iter().enumerate() {
-        prompt_with_items.push(format!("{}. {item}", idx + 1));
-    }
-    let item_idx = nvim_oxi::api::call_function::<_, i64>("inputlist", (prompt_with_items.clone(),))
-        .map_err(color_eyre::Report::from)
-        .and_then(|item_idx| usize::try_from(item_idx.saturating_sub(1)).map_err(color_eyre::Report::from))?;
-    items
-        .get(item_idx)
-        .ok_or_else(|| eyre!("cannot find item with id {item_idx}, in {prompt_with_items:#?}"))
+pub fn inputlist<'a, I: core::fmt::Display>(prompt: &'a str, items: &'a [I]) -> color_eyre::Result<Option<&'a I>> {
+    let displayable_items: Vec<_> = items
+        .iter()
+        .enumerate()
+        .map(|(idx, item)| format!("{}. {item}", idx + 1))
+        .collect();
+
+    let prompt_and_items = Array::from_iter(std::iter::once(prompt.to_string()).chain(displayable_items.clone()));
+
+    let idx = nvim_oxi::api::call_function::<_, i64>("inputlist", (prompt_and_items.clone(),))?;
+
+    Ok(usize::try_from(idx.saturating_sub(1))
+        .ok()
+        .and_then(|idx| items.get(idx)))
 }
 
 #[cfg(test)]
