@@ -37,68 +37,117 @@ use crate::oxi_ext::BufferExt;
 /// - Blockwise selections lose their column rectangle shape.
 /// - Returned columns for multi-byte UTF-8 characters depend on byte indices exposed by `getpos()`; no grapheme-aware
 ///   adjustment is performed.
-pub fn get(_: ()) -> Vec<String> {
-    get_with_bounds(()).map_or_else(Vec::new, |f| f.lines)
+pub fn get_lines(_: ()) -> Vec<String> {
+    get(()).map_or_else(Vec::new, |f| f.lines)
 }
 
-pub fn get_with_bounds(_: ()) -> Option<SelectionWithBounds> {
-    let Ok(cursor_pos) = get_pos(".") else { return None };
-    let Ok(visual_pos) = get_pos("v") else { return None };
+pub fn get(_: ()) -> Option<Selection> {
+    let mut bounds = SelectionBounds::new().unwrap();
 
-    let (start, mut end) = cursor_pos.sort(visual_pos);
-    let cur_buf = Buffer::current();
+    let cur_buf = Buffer::from(bounds.buf_id());
 
     // Handle linewise mode: grab full lines
     if nvim_oxi::api::get_mode().mode == "V" {
         // end.lnum inclusive for lines range
-        let Ok(lines) = cur_buf.get_lines(start.lnum..=end.lnum, false).inspect_err(|error| {
-            crate::oxi_ext::notify_error(&format!("cannot get lines from buffer {cur_buf:#?}, error {error:#?}"));
-        }) else {
+        let Ok(lines) = cur_buf
+            .get_lines(bounds.start().lnum..=bounds.end().lnum, false)
+            .inspect_err(|error| {
+                crate::oxi_ext::notify_error(&format!("cannot get lines from buffer {cur_buf:#?}, error {error:#?}"));
+            })
+        else {
             return None;
         };
-        return SelectionWithBounds::new(start, end, lines)
-            .inspect_err(|error| {
-                crate::oxi_ext::notify_error(&format!(
-                    "cannot build SelectionWithBounds from start {start:#?} and end {end:#?}, error {error:#?}"
-                ));
-            })
-            .ok();
+        return Some(Selection::new(bounds, lines));
     }
 
     // Charwise mode:
     // Clamp end.col to line length, then make exclusive by +1 (if not already at end).
-    if let Ok(line) = cur_buf.get_line(end.lnum)
-        && end.col < line.len()
+    if let Ok(line) = cur_buf.get_line(bounds.end().lnum)
+        && bounds.end().col < line.len()
     {
-        end.col = end.col.saturating_add(1); // make exclusive
+        bounds.incr_end_col(); // make exclusive
     }
 
     // For multi-line charwise selection rely on nvim_buf_get_text with an exclusive end.
     let Ok(lines) = cur_buf
-        .get_text(start.lnum..end.lnum, start.col, end.col, &GetTextOpts::default())
+        .get_text(
+            bounds.line_range(),
+            bounds.start().col,
+            bounds.end().col,
+            &GetTextOpts::default(),
+        )
         .inspect_err(|error| {
             crate::oxi_ext::notify_error(&format!(
-                "cannot get text from buffer {cur_buf:#?} from {start:#?} to {end:#?}, error {error:#?}"
+                "cannot get text from buffer {cur_buf:#?} from bounds {bounds:#?}, error {error:#?}"
             ));
         })
     else {
         return None;
     };
 
-    SelectionWithBounds::new(start, end, lines)
-        .inspect_err(|error| {
-            crate::oxi_ext::notify_error(&format!(
-                "cannot build SelectionWithBounds from start {start:#?} and end {end:#?}, error {error:#?}"
-            ));
-        })
-        .ok()
+    Some(Selection::new(bounds, lines))
 }
 
-pub struct SelectionWithBounds {
+pub struct Selection {
+    bounds: SelectionBounds,
+    lines: Vec<String>,
+}
+
+impl Selection {
+    pub fn new(bounds: SelectionBounds, lines: impl SuperIterator<nvim_oxi::String>) -> Self {
+        Self {
+            bounds,
+            lines: lines.into_iter().map(|line| line.to_string()).collect(),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct SelectionBounds {
     buf_id: i32,
     start: Bound,
     end: Bound,
-    lines: Vec<String>,
+}
+
+impl SelectionBounds {
+    pub fn new() -> color_eyre::Result<Self> {
+        let cursor_pos = get_pos(".")?;
+        let visual_pos = get_pos("v")?;
+
+        let (start, end) = cursor_pos.sort(visual_pos);
+
+        if start.buf_id != end.buf_id {
+            bail!(
+                "cannot create SelectionWithBounds, mismatched buffer ids between start {start:#?} and end {end:#?} positions"
+            )
+        };
+
+        Ok(Self {
+            buf_id: start.buf_id,
+            start: Bound::from(start),
+            end: Bound::from(end),
+        })
+    }
+
+    pub fn line_range(&self) -> Range<usize> {
+        self.start.lnum..self.end.lnum
+    }
+
+    pub fn buf_id(&self) -> i32 {
+        self.buf_id
+    }
+
+    pub fn start(&self) -> &Bound {
+        &self.start
+    }
+
+    pub fn end(&self) -> &Bound {
+        &self.end
+    }
+
+    fn incr_end_col(&mut self) {
+        self.end.col = self.end.col.saturating_add(1);
+    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -116,40 +165,25 @@ impl From<Pos> for Bound {
     }
 }
 
-impl SelectionWithBounds {
-    pub fn new(start: Pos, end: Pos, lines: impl SuperIterator<nvim_oxi::String>) -> color_eyre::Result<Self> {
-        if start.buf_id != end.buf_id {
-            bail!(
-                "cannot create SelectionWithBounds, mismatched buffer ids between start {start:#?} and end {end:#?} positions"
-            )
-        };
-
-        Ok(Self {
-            buf_id: start.buf_id,
-            start: Bound::from(start),
-            end: Bound::from(end),
-            lines: lines.into_iter().map(|line| line.to_string()).collect(),
-        })
-    }
-
+impl Selection {
     pub fn buf_id(&self) -> i32 {
-        self.buf_id
+        self.bounds.buf_id()
     }
 
     pub fn start(&self) -> &Bound {
-        &self.start
+        self.bounds.start()
     }
 
     pub fn end(&self) -> &Bound {
-        &self.end
+        self.bounds.end()
     }
 
     pub fn lines(&self) -> &[String] {
         &self.lines
     }
 
-    pub fn lines_range(&self) -> Range<usize> {
-        self.start.lnum..self.end.lnum
+    pub fn line_range(&self) -> Range<usize> {
+        self.bounds.line_range()
     }
 }
 
@@ -159,11 +193,11 @@ impl SelectionWithBounds {
 /// zero-based (line, column) indices.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct Pos {
-    pub buf_id: i32,
+    buf_id: i32,
     /// 0-based line index.
-    pub lnum: usize,
+    lnum: usize,
     /// 0-based byte column within the line.
-    pub col: usize,
+    col: usize,
 }
 
 impl Pos {

@@ -9,31 +9,31 @@ use crate::fn_from;
 
 pub fn dict() -> Dictionary {
     dict! {
-        "transform_text": fn_from!(transform),
+        "transform_selection": fn_from!(transform_selection),
     }
 }
 
-pub fn transform(_: ()) {
-    let Some(selection_with_bounds) = visual_selection::get_with_bounds(()) else {
+pub fn transform_selection(_: ()) {
+    let Some(selection) = visual_selection::get(()) else {
         return;
     };
 
-    let transformed_lines = selection_with_bounds
+    let transformed_lines = selection
         .lines()
         .iter()
         .map(|line| line.to_string().to_case(Case::Upper))
         .collect::<Vec<_>>();
 
-    if let Err(error) = Buffer::from(selection_with_bounds.buf_id()).set_text(
-        selection_with_bounds.lines_range(),
-        selection_with_bounds.start().col,
-        selection_with_bounds.end().col,
+    if let Err(error) = Buffer::from(selection.buf_id()).set_text(
+        selection.line_range(),
+        selection.start().col,
+        selection.end().col,
         transformed_lines,
     ) {
         crate::oxi_ext::notify_error(&format!(
             "cannot set lines of buffer between {:#?} and {:#?}, error {error:#?}",
-            selection_with_bounds.start(),
-            selection_with_bounds.end()
+            selection.start(),
+            selection.end()
         ))
     }
 }

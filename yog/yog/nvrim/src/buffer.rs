@@ -17,7 +17,7 @@ mod word_under_cursor;
 /// Intended for exposure to Lua.
 pub fn dict() -> Dictionary {
     dict! {
-        "get_visual_selection": fn_from!(visual_selection::get),
+        "get_visual_selection_lines": fn_from!(visual_selection::get_lines),
         "get_word_under_cursor": fn_from!(word_under_cursor::get),
     }
 }
