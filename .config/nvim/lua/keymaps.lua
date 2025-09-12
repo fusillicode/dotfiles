@@ -47,9 +47,6 @@ function M.set_lua_implemented()
 end
 
 function M.lspconfig(bufnr)
-  keymap_set({ 'n', 'v', }, 'z', function()
-    nvrim.buffer.foo()
-  end, { buffer = bufnr, })
   keymap_set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr, })
   keymap_set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, })
 end

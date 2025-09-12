@@ -51,6 +51,9 @@ pub fn get(_: ()) -> Vec<nvim_oxi::String> {
         end_pos.col,
         &GetTextOpts::default(),
     ) else {
+        crate::oxi_ext::notify_error(&format!(
+            "cannot get text from buffer {cur_buf:#?} from {start_pos:#?} to {end_pos:#?}, error {error:#?}"
+        ));
         return vec![];
     };
     nvim_oxi::dbg!(iter.collect())
