@@ -47,6 +47,9 @@ function M.set_lua_implemented()
 end
 
 function M.lspconfig(bufnr)
+  keymap_set({ 'n', 'v', }, 'z', function()
+    nvrim.buffer.foo()
+  end, { buffer = bufnr, })
   keymap_set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr, })
   keymap_set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, })
 end
@@ -87,13 +90,7 @@ function M.fzf_lua(fl)
     {
       '<leader>w',
       mode = 'v',
-      fl and { function()
-        fl.live_grep({
-          prompt = 'rg: ',
-          search = nvrim.buffer.get_text_between_pos(vim.fn.getpos('v'), vim.fn.getpos('.'))
-              [1],
-        })
-      end, },
+      fl and { function() fl.live_grep({ prompt = 'rg: ', search = nvrim.buffer.get_visual_selection()[1], }) end, },
     },
 
     { '<leader>h', mode = 'n', fl and { function() fl.resume({}) end, }, },
@@ -198,9 +195,7 @@ function M.grug_far(gf, opts)
       mode = 'v',
       gf and {
         function()
-          local selection = require('utils').escape_regex(
-            nvrim.buffer.get_text_between_pos(vim.fn.getpos('v'), vim.fn.getpos('.'))[1]
-          )
+          local selection = require('utils').escape_regex(nvrim.buffer.get_visual_selection()[1])
           gf.open(vim.tbl_deep_extend('force', opts, { prefills = { search = selection, }, }))
         end,
       },

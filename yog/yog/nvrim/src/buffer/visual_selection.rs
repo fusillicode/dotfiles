@@ -1,3 +1,4 @@
+use nvim_oxi::Array;
 use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::opts::GetTextOpts;
@@ -13,8 +14,11 @@ use crate::oxi_ext::BufferExt;
 ///
 /// Produces a [`Vec`] of [`nvim_oxi::String`] lines for Lua.
 /// On error, returns an empty [`Vec`] and emits a notification to Nvim.
-pub fn get((pos1, pos2): (GetPosOutput, GetPosOutput)) -> Vec<nvim_oxi::String> {
-    let (start_pos, end_pos) = pos1.switch_if_needed(pos2);
+pub fn get(_: ()) -> Vec<nvim_oxi::String> {
+    let Ok(visual_pos) = get_pos('v') else { return vec![] };
+    let Ok(cursor_pos) = get_pos('.') else { return vec![] };
+
+    let (start_pos, end_pos) = visual_pos.switch_if_needed(cursor_pos);
     let cur_buf = Buffer::current();
 
     let end_col = if start_pos == end_pos && nvim_oxi::api::get_mode().mode == "V" {
@@ -50,12 +54,12 @@ pub fn get((pos1, pos2): (GetPosOutput, GetPosOutput)) -> Vec<nvim_oxi::String> 
 ///
 /// Built from [`GetPosRaw`].
 #[derive(Debug, PartialEq, Eq)]
-pub struct GetPosOutput {
+pub struct Pos {
     pub lnum: usize,
     pub col: usize,
 }
 
-impl GetPosOutput {
+impl Pos {
     pub const fn switch_if_needed(self, other: Self) -> (Self, Self) {
         if self.lnum > other.lnum || self.col > other.col {
             (other, self)
@@ -66,19 +70,19 @@ impl GetPosOutput {
 }
 
 /// Custom [`Deserialize`] from Lua tuple (see [`GetPosRaw`]).
-impl<'de> Deserialize<'de> for GetPosOutput {
+impl<'de> Deserialize<'de> for Pos {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        let t = GetPosRaw::deserialize(deserializer)?;
+        let t = RawPos::deserialize(deserializer)?;
         Ok(Self::from(t))
     }
 }
 
 /// Convert [`GetPosRaw`] to [`GetPosOutput`] by switching to 0-based indexing from Lua 1-based.
-impl From<GetPosRaw> for GetPosOutput {
-    fn from(raw: GetPosRaw) -> Self {
+impl From<RawPos> for Pos {
+    fn from(raw: RawPos) -> Self {
         fn to_0_based_usize(v: i64) -> usize {
             usize::try_from(v.saturating_sub(1)).unwrap_or_default()
         }
@@ -93,21 +97,29 @@ impl From<GetPosRaw> for GetPosOutput {
 /// Raw `getpos()` tuple: (`bufnum`, `lnum`, `col`, `off`).
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[expect(dead_code, reason = "Unused fields are kept for completeness")]
-struct GetPosRaw(i64, i64, i64, i64);
+struct RawPos(i64, i64, i64, i64);
 
 /// Implementation of [`FromObject`] for [`GetPosOutput`].
-impl FromObject for GetPosOutput {
+impl FromObject for Pos {
     fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
         Self::deserialize(nvim_oxi::serde::Deserializer::new(obj)).map_err(Into::into)
     }
 }
 
 /// Implementation of [`Poppable`] for [`GetPosOutput`].
-impl Poppable for GetPosOutput {
+impl Poppable for Pos {
     unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
         unsafe {
             let obj = Object::pop(lstate)?;
             Self::from_object(obj).map_err(nvim_oxi::lua::Error::pop_error_from_err::<Self, _>)
         }
     }
+}
+
+fn get_pos(pos: char) -> nvim_oxi::Result<Pos> {
+    Ok(
+        nvim_oxi::api::call_function::<_, Pos>("getpos", Array::from_iter([pos])).inspect_err(|error| {
+            crate::oxi_ext::notify_error(&format!("cannot get pos for {pos}, error {error:#?}"))
+        })?,
+    )
 }
