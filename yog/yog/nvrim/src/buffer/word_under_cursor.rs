@@ -9,9 +9,11 @@ use nvim_oxi::serde::Serializer;
 use serde::Serialize;
 use url::Url;
 
-/// Gets the non-whitespace "word" under the cursor in the current window.
-/// On failure returns [`Option::None`] and notifies an error to Nvim.
-/// If on a whitespace returns an [`Option::None`].
+/// Retrieve and classify the non-whitespace token under the cursor in the current window.
+///
+/// Returns [`Option::None`] if the current line or cursor position cannot be obtained,
+/// or if the cursor is on whitespace. On errors a notification is emitted to Nvim.
+/// On success returns a classified [`WordUnderCursor`].
 pub fn get(_: ()) -> Option<WordUnderCursor> {
     let cur_win = Window::current();
     let cur_line = nvim_oxi::api::get_current_line()
@@ -26,14 +28,14 @@ pub fn get(_: ()) -> Option<WordUnderCursor> {
         .map(WordUnderCursor::from)
 }
 
-/// Classified representation of the "word" found under the cursor.
+/// Classified representation of the token found under the cursor.
 ///
 /// Used to distinguish between:
 /// - URLs
 /// - existing binary files
 /// - existing text files
 /// - existing directories
-/// - plain tokens (fallback [`Word`]
+/// - plain tokens (fallback [`WordUnderCursor::Word`])
 ///
 /// Serialized to Lua as a tagged table (`{ kind = "...", value = "..." }`).
 #[derive(Serialize)]
@@ -120,23 +122,27 @@ fn exec_file_cmd(path: &str) -> color_eyre::Result<FileCmdOutput> {
     Ok(FileCmdOutput::Unknown(path.to_owned()))
 }
 
-/// Raw classification result returned by [`exec_file_cmd`].
+/// Raw filesystem / MIME classification result returned by [`exec_file_cmd`].
 #[derive(Serialize)]
 pub enum FileCmdOutput {
+    /// Path identified as a binary file.
     BinaryFile(String),
+    /// Path identified as a text (plain / csv) file.
     TextFile(String),
+    /// Path identified as a directory.
     Directory(String),
+    /// Path that does not exist.
     NotFound(String),
+    /// Path whose type could not be determined.
     Unknown(String),
 }
 
-/// Finds the non-whitespace "word" in the supplied [`str`] containing the supplied visual index `idx`.
+/// Find the non-whitespace token in the supplied string `s` containing the visual index `idx`.
 ///
-/// Returns [`Option::None`] if `idx`:
-///
-/// - is out of bounds
-/// - doesn't point to a char boundary
-/// - points to a whitespace
+/// Returns [`Option::None`] if:
+/// - `idx` is out of bounds
+/// - `idx` does not point to a character boundary
+/// - the character at `idx` is whitespace
 fn get_word_at_index(s: &str, idx: usize) -> Option<&str> {
     let byte_idx = convert_visual_to_byte_idx(s, idx)?;
 
@@ -158,10 +164,11 @@ fn get_word_at_index(s: &str, idx: usize) -> Option<&str> {
     None
 }
 
-/// Converts a visual (character) index into a byte index for the supplied [`str`].
+/// Convert a visual (character) index into a byte index for the supplied string `s`.
 ///
-/// - Returns [`Option::Some`] [`usize`] for valid positions, including `s.len()` for end-of-line.
-/// - Returns [`Option::None`] if `idx` is past the end (out of bounds).
+/// Returns:
+/// - [`Option::Some`] with the corresponding byte index (including `s.len()` for end-of-line)
+/// - [`Option::None`] if `idx` is past the end
 fn convert_visual_to_byte_idx(s: &str, idx: usize) -> Option<usize> {
     let mut chars_seen = 0usize;
     let mut byte_idx = None;
