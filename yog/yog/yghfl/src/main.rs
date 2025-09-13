@@ -80,7 +80,7 @@ fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Builds absolute file path for Helix cursor position.
+/// Builds absolute filepath for Helix cursor position.
 ///
 ///
 /// Returns an error if:

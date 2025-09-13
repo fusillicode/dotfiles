@@ -97,7 +97,7 @@ pub fn create_branch(branch_name: &str) -> color_eyre::Result<()> {
 /// Switches `HEAD` to `branch_name` (or detaches if it resolves to a commit).
 ///
 /// Special case: if `branch_name` is `-` the system `git` is invoked with
-/// `git switch -` to reuse Git's built‑in previous branch logic (not currently
+/// `git switch -` to reuse `Git's` built‑in previous branch logic (not currently
 /// modeled directly in [`git2`]).
 ///
 /// # Errors
