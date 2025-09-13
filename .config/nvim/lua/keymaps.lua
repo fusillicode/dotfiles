@@ -13,6 +13,7 @@ function M.set_lua_implemented()
   keymap_set('n', 'dd', nvrim.keymaps.smart_dd_no_yank_empty_line, base_opts)
   keymap_set('v', '<esc>', nvrim.keymaps.visual_esc, base_opts)
   keymap_set({ 'n', 'v', }, '<leader>t', nvrim.truster.run_test)
+  keymap_set({ 'n', 'v', }, '<leader>u', nvrim.trex.transform_selection)
   keymap_set('n', 'gx', require('opener').open_under_cursor)
 
   -- Thanks perplexity 🥲
@@ -47,9 +48,6 @@ function M.set_lua_implemented()
 end
 
 function M.lspconfig(bufnr)
-  keymap_set({ 'n', 'v', }, 'z', function()
-    nvrim.buffer.foo()
-  end, { buffer = bufnr, })
   keymap_set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr, })
   keymap_set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, })
 end
@@ -90,7 +88,8 @@ function M.fzf_lua(fl)
     {
       '<leader>w',
       mode = 'v',
-      fl and { function() fl.live_grep({ prompt = 'rg: ', search = nvrim.buffer.get_visual_selection()[1], }) end, },
+      fl and
+      { function() fl.live_grep({ prompt = 'rg: ', search = nvrim.buffer.get_visual_selection_lines()[1], }) end, },
     },
 
     { '<leader>h', mode = 'n', fl and { function() fl.resume({}) end, }, },
@@ -195,7 +194,7 @@ function M.grug_far(gf, opts)
       mode = 'v',
       gf and {
         function()
-          local selection = require('utils').escape_regex(nvrim.buffer.get_visual_selection()[1])
+          local selection = require('utils').escape_regex(nvrim.buffer.get_visual_selection_lines()[1])
           gf.open(vim.tbl_deep_extend('force', opts, { prefills = { search = selection, }, }))
         end,
       },
