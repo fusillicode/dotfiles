@@ -1,0 +1,11 @@
+Blockwise
+CTRL
+Nvim
+OIDC
+Okta
+UTF
+characterwise
+charwise
+linewise
+pgcli
+pgpass
