@@ -80,7 +80,7 @@ return {
           glob_flag      = '--iglob',
           glob_separator = '%s%-%-',
         },
-        nvrim.style_opts.fzf_lua_previewer
+        nvrim.style_opts.fzf_lua_previewer()
       ),
       git        = {
         status = vim.tbl_extend('error',
@@ -91,7 +91,7 @@ return {
               ['ctrl-x'] = { fn = plugin.actions.git_reset, reload = true, },
             },
           },
-          nvrim.style_opts.fzf_lua_previewer
+          nvrim.style_opts.fzf_lua_previewer('git_diff')
         ),
       },
     })
