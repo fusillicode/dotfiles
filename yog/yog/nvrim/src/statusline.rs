@@ -32,7 +32,7 @@ fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
             ));
         })
         .ok()?;
-    let cwd = nvim_oxi::api::call_function::<Array, String>("getcwd", Array::new())
+    let cwd = nvim_oxi::api::call_function::<_, String>("getcwd", Array::new())
         .inspect_err(|error| {
             crate::oxi_ext::notify_error(&format!("cannot get cwd, error {error:#?}"));
         })

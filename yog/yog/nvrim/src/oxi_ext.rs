@@ -1,5 +1,6 @@
 use color_eyre::eyre::Context;
 use color_eyre::eyre::eyre;
+use nvim_oxi::Array;
 use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
 use nvim_oxi::ObjectKind;
@@ -204,6 +205,10 @@ pub fn notify_warn(msg: &str) {
     }
 }
 
+/// Execute an ex command with arguments.
+///
+/// Wraps [`nvim_oxi::api::cmd`], reporting failures through
+/// [`crate::oxi_ext::notify_error`].
 pub fn exec_vim_cmd<S, I>(cmd: impl Into<String> + core::fmt::Debug + std::marker::Copy, args: I)
 where
     S: Into<String>,
@@ -217,6 +222,37 @@ where
             "cannot execute cmd {cmd:?} with args {args:#?}, error {error:#?}"
         ));
     }
+}
+
+/// Prompt the user to select an item from a numbered list.
+///
+/// Displays `prompt` followed by numbered `items` via the Vimscript
+/// `inputlist()` function and returns the chosen element (1-based user
+/// index translated to 0-based). Returns [`None`] if the user cancels.
+///
+/// # Parameters
+/// - `prompt`: Heading line shown before the options.
+/// - `items`: Slice of displayable values listed sequentially.
+///
+/// # Errors
+/// - Fails if the underlying `inputlist()` call errors.
+/// - Fails if converting the returned index to `usize` overflows.
+pub fn inputlist<'a, I: core::fmt::Display>(prompt: &'a str, items: &'a [I]) -> color_eyre::Result<Option<&'a I>> {
+    let displayable_items: Vec<_> = items
+        .iter()
+        .enumerate()
+        .map(|(idx, item)| format!("{}. {item}", idx.saturating_add(1)))
+        .collect();
+
+    let prompt_and_items = std::iter::once(prompt.to_string())
+        .chain(displayable_items)
+        .collect::<Array>();
+
+    let idx = nvim_oxi::api::call_function::<_, i64>("inputlist", (prompt_and_items,))?;
+
+    Ok(usize::try_from(idx.saturating_sub(1))
+        .ok()
+        .and_then(|idx| items.get(idx)))
 }
 
 #[cfg(test)]

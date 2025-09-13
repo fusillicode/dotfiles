@@ -26,6 +26,8 @@ mod statuscolumn;
 mod statusline;
 /// Style options.
 mod style_opts;
+/// Text transform.
+mod trex;
 /// Rust tests utilities.
 mod truster;
 /// `vim.opts` utilities.
@@ -50,5 +52,6 @@ fn nvrim() -> Dictionary {
         "style_opts": style_opts::dict(),
         "vim_opts": vim_opts::dict(),
         "keymaps": keymaps::dict(),
+        "trex": trex::dict(),
     }
 }

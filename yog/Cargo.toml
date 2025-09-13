@@ -16,6 +16,7 @@ categories = ["command-line-utilities", "development-tools"]
 bitflags = { version = "2.9" }
 chrono = { version = "0.4", features = ["serde"] }
 color-eyre = { version = "0.6" }
+convert_case = { version = "0.8" }
 fake = { version = "4.4", features = ["derive"] }
 getrandom = { version = "0.3" }
 git2 = { version = "0.20" }

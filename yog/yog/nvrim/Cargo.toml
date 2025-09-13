@@ -16,6 +16,7 @@ crate-type = ["cdylib"]
 [dependencies]
 cmd = { workspace = true }
 color-eyre = { workspace = true }
+convert_case = { workspace = true }
 fkr = { path = "../fkr" }
 git = { workspace = true }
 itertools = { workspace = true }
