@@ -41,6 +41,9 @@ pub fn get_lines(_: ()) -> Vec<String> {
     get(()).map_or_else(Vec::new, |f| f.lines)
 }
 
+/// Return an owned [`Selection`] for the active Visual range.
+///
+/// Returns [`None`] if any prerequisite (positions, lines, text extraction) fails.
 pub fn get(_: ()) -> Option<Selection> {
     let Ok(mut bounds) = SelectionBounds::new().inspect_err(|error| {
         crate::oxi_ext::notify_error(&format!("cannot create SelectionBounds, error {error:#?}"));
@@ -92,12 +95,14 @@ pub fn get(_: ()) -> Option<Selection> {
     Some(Selection::new(bounds, lines))
 }
 
+/// Owned selection content plus bounds.
 pub struct Selection {
     bounds: SelectionBounds,
     lines: Vec<String>,
 }
 
 impl Selection {
+    /// Create a new [`Selection`] from bounds and raw line objects.
     pub fn new(bounds: SelectionBounds, lines: impl SuperIterator<nvim_oxi::String>) -> Self {
         Self {
             bounds,
@@ -107,6 +112,7 @@ impl Selection {
 }
 
 #[derive(Debug, Copy, Clone)]
+/// Start / end bounds plus owning buffer id for a Visual selection.
 pub struct SelectionBounds {
     buf_id: i32,
     start: Bound,
@@ -114,6 +120,11 @@ pub struct SelectionBounds {
 }
 
 impl SelectionBounds {
+    /// Build bounds from cursor (`.`) and visual start (`v`) marks.
+    ///
+    /// # Errors
+    /// - Fails if retrieving either mark fails.
+    /// - Fails if the two marks reference different buffers.
     pub fn new() -> color_eyre::Result<Self> {
         let cursor_pos = get_pos(".")?;
         let visual_pos = get_pos("v")?;
@@ -133,30 +144,38 @@ impl SelectionBounds {
         })
     }
 
+    /// Range of starting (inclusive) to ending (exclusive) line indices.
     pub const fn line_range(&self) -> Range<usize> {
         self.start.lnum..self.end.lnum
     }
 
+    /// Owning buffer id.
     pub const fn buf_id(&self) -> i32 {
         self.buf_id
     }
 
+    /// Start bound.
     pub const fn start(&self) -> &Bound {
         &self.start
     }
 
+    /// End bound (exclusive line, exclusive column for charwise mode after adjustment).
     pub const fn end(&self) -> &Bound {
         &self.end
     }
 
+    /// Increment end column (making it exclusive for charwise selections).
     const fn incr_end_col(&mut self) {
         self.end.col = self.end.col.saturating_add(1);
     }
 }
 
 #[derive(Debug, Copy, Clone)]
+/// Single position (line, column) inside a buffer.
 pub struct Bound {
+    /// 0-based line number.
     pub lnum: usize,
+    /// 0-based byte column.
     pub col: usize,
 }
 
@@ -170,22 +189,27 @@ impl From<Pos> for Bound {
 }
 
 impl Selection {
+    /// Buffer id containing the selection.
     pub const fn buf_id(&self) -> i32 {
         self.bounds.buf_id()
     }
 
+    /// Start bound of the selection.
     pub const fn start(&self) -> &Bound {
         self.bounds.start()
     }
 
+    /// End bound of the selection.
     pub const fn end(&self) -> &Bound {
         self.bounds.end()
     }
 
+    /// Collected selected lines.
     pub fn lines(&self) -> &[String] {
         &self.lines
     }
 
+    /// Range of starting (inclusive) to ending (exclusive) line indices.
     pub const fn line_range(&self) -> Range<usize> {
         self.bounds.line_range()
     }
