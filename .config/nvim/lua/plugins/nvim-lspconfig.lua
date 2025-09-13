@@ -1,5 +1,4 @@
 local function get_lsps_configs()
-  local home_dir    = os.getenv('HOME')
   local schemastore = require('schemastore')
 
   return {
@@ -7,7 +6,7 @@ local function get_lsps_configs()
     docker_compose_language_service = {},
     dockerls = {},
     elixirls = {
-      cmd = { home_dir .. '/.local/bin/elixir-ls', },
+      cmd = { vim.fn.expand('~/.local/bin/elixir-ls'), },
       elixirLS = {
         signatureAfterComplete = true,
         suggestSpecs = true,
@@ -21,6 +20,7 @@ local function get_lsps_configs()
           linters = {
             LongSentences = false,
           },
+          userDictPath = vim.fn.expand('~/.config/harper-ls/dictionary.txt'),
         },
       },
     },
@@ -44,7 +44,7 @@ local function get_lsps_configs()
       },
     },
     lua_ls = {
-      cmd = { home_dir .. '/.dev-tools/lua-language-server/bin/lua-language-server', },
+      cmd = { vim.fn.expand('~/.dev-tools/lua-language-server/bin/lua-language-server'), },
       settings = {
         Lua = {
           completion = {

@@ -11,6 +11,7 @@ ln -s "$dotfiles_dir/.config/mise/" "$HOME/.config/mise"
 ln -s "$dotfiles_dir/.config/nvim/" "$HOME/.config/nvim"
 ln -s "$dotfiles_dir/.config/pgcli/config" "$HOME/.config/pgcli/config"
 ln -s "$dotfiles_dir/.config/opencode" "$HOME/.config/opencode"
+ln -s "$dotfiles_dir/.config/harper-ls" "$HOME/.config/harper-ls"
 
 cp "$dotfiles_dir/.gitconfig" "$HOME"
 ln -s "$dotfiles_dir/.gitignore" "$HOME"
