@@ -14,9 +14,9 @@ use url::Url;
 /// Argument patterns:
 /// - No arguments: interactive branch selector (see [`autocomplete_git_branches`]).
 /// - "-": switch to the previous branch (delegates to `git switch -`).
-/// - "-b" <args..>: create a new branch (name built via [`build_branch_name`]) and switch.
-/// - Single arg: switch if it exists, otherwise create after confirmation and then switch.
-/// - Multiple args: build a branch name from all args ([`build_branch_name`]), then create & switch.
+/// - "-b" <arguments...>: create a new branch (name built via [`build_branch_name`]) and switch.
+/// - Single argument: switch if it exists, otherwise create after confirmation and then switch.
+/// - Multiple arguments: build a branch name from all arguments ([`build_branch_name`]), then create & switch.
 ///
 /// GitHub PR URL handling: if the (single) argument parses as a GitHub PR URL the tool logs in
 /// via [`github::log_into_github`] and derives a branch name with

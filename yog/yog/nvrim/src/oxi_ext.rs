@@ -58,7 +58,7 @@ macro_rules! fn_from {
     ($path:path) => {
         ::nvim_oxi::Object::from(::nvim_oxi::Function::from_fn($path))
     };
-    // Fallback: forward any tokens (supports calls like Type::method(()))
+    // Fallback: forward any tokens (supports calls like `Type::method(())`)
     ($($tokens:tt)+) => {
         ::nvim_oxi::Object::from(::nvim_oxi::Function::from_fn($($tokens)+))
     };
@@ -68,7 +68,7 @@ macro_rules! fn_from {
 pub trait OxiExtract {
     type Out;
 
-    /// Extracts a typed value from a Nvim [Object] by key from a [`Dictionary`] with error context.
+    /// Extracts a typed value from an Nvim [Object] by key from a [`Dictionary`] with error context.
     ///
     /// # Errors
     ///

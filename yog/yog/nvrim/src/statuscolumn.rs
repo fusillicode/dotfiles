@@ -106,7 +106,7 @@ struct Statuscolumn {
 }
 
 impl Statuscolumn {
-    /// Draws the status column based on buffer type and [`ExtmarkMeta`]s.
+    /// Draws the status column based on buffer type and [`ExtmarkMeta`].
     fn draw(cur_buf_type: &str, cur_lnum: String, extmarks: Vec<ExtmarkMeta>) -> String {
         match cur_buf_type {
             "grug-far" => " ".into(),
@@ -114,7 +114,7 @@ impl Statuscolumn {
         }
     }
 
-    /// Creates a new [`Statuscolumn`] from line number and [`ExtmarkMeta`]s.
+    /// Creates a new [`Statuscolumn`] from line number and [`ExtmarkMeta`].
     fn new(cur_lnum: String, extmarks: Vec<ExtmarkMeta>) -> Self {
         let mut statuscolumn = Self {
             cur_lnum,

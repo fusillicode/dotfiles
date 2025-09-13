@@ -26,7 +26,7 @@ impl<'a> PgpassFile<'a> {
     /// Parses the raw `.pgpass` content into a [`PgpassFile`].
     ///
     /// Expects alternating metadata comment lines (prefixed with `#`) and connection lines.
-    /// Non‑comment / non‑metadata lines are ignored except when part of a metadata+connection pair.
+    /// Non‑comment / non‑metadata lines are ignored except when part of metadata + connection pair.
     ///
     /// # Errors
     ///
@@ -157,18 +157,18 @@ impl core::fmt::Display for ConnectionParams {
     }
 }
 
-/// Saves updated `PostgreSQL` .pgpass to a temporary file, replaces the original, and sets permissions.
+/// Saves updated `PostgreSQL` `.pgpass` to a temporary file, replaces the original, and sets permissions.
 ///
 /// # Arguments
 /// * `pgpass_idx_lines` - Original file lines with their indices (to identify line needing update).
 /// * `updated_conn_params` - New connection parameters (must implement `ToString`).
-/// * `pgpass_path` - Path to the original .pgpass file.
+/// * `pgpass_path` - Path to the original `.pgpass` file.
 ///
 /// # Workflow
 /// 1. Creates temporary file `.pgpass.tmp` in same directory.
 /// 2. Writes all lines, replacing the specified index with updated connection parameters.
 /// 3. Atomically replaces original file via rename.
-/// 4. Sets strict permissions (600) to match .pgpass security requirements.
+/// 4. Sets strict permissions (600) to match `.pgpass` security requirements.
 ///
 /// # Errors
 ///

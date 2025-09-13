@@ -21,7 +21,7 @@ pub enum FkrOption {
     IPv4,
     /// Generates an IPv6 address
     IPv6,
-    /// Generates a MAC address
+    /// Generates an MAC address
     MACAddress,
 }
 
