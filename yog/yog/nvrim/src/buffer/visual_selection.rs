@@ -75,7 +75,7 @@ pub fn get(_: ()) -> Option<Selection> {
         bounds.incr_end_col(); // make exclusive
     }
 
-    // For multi-line charwise selection rely on nvim_buf_get_text with an exclusive end.
+    // For multi-line charwise selection rely on `nvim_buf_get_text` with an exclusive end.
     let Ok(lines) = cur_buf
         .get_text(
             bounds.line_range(),
