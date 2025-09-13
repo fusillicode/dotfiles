@@ -8,7 +8,7 @@ use serde::Serialize;
 
 use crate::pgpass::PgpassEntry;
 
-/// Saves or updates the nvim-dbee connections file with the provided [`PgpassEntry`], setting secure permissions.
+/// Saves or updates the `nvim-dbee` connections file with the provided [`PgpassEntry`], setting secure permissions.
 ///
 /// # Errors
 ///

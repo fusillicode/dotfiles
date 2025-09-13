@@ -56,11 +56,11 @@ pub struct FileToOpen {
     column: i64,
     /// The line number to position the cursor (0-based, defaults to 0).
     line_nbr: i64,
-    /// The file system path to the file.
+    /// The filesystem path to the file.
     path: String,
 }
 
-/// Attempts to create a [`FileToOpen`] from a file path, pane ID, and list of panes.
+/// Attempts to create a [`FileToOpen`] from a filepath, pane ID, and list of panes.
 impl TryFrom<(&str, i64, &[WeztermPane])> for FileToOpen {
     type Error = eyre::Error;
 
