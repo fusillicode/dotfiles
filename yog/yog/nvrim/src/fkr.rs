@@ -7,12 +7,26 @@ use crate::dict;
 use crate::fn_from;
 use crate::oxi_ext::buffer::BufferExt as _;
 
+/// [`Dictionary`] of random string generation helpers powered by [`fkr`].
+///
+/// Entries:
+/// - `"gen_string"`: wraps [`gen_value`] and inserts a generated value at the current cursor position (replacing any
+///   active selection via the underlying buffer helper).
 pub fn dict() -> Dictionary {
     dict! {
         "gen_string": fn_from!(gen_value),
     }
 }
 
+/// Prompt the user to select a [`fkr::FkrOption`] and insert its generated string.
+///
+/// The user is shown a numbered menu via [`crate::oxi_ext::api::inputlist`]; on
+/// selection the corresponding generated string is inserted at the cursor using
+/// [`crate::oxi_ext::buffer::BufferExt::set_text_at_cursor_pos`].
+///
+/// Behavior:
+/// - Returns early (no insertion) if fetching user input fails or is canceled.
+/// - Emits error notifications to Neovim for any underlying failures.
 pub fn gen_value(_: ()) {
     let options: Vec<_> = FkrOption::iter().collect();
 
@@ -23,6 +37,6 @@ pub fn gen_value(_: ()) {
     };
 
     if let Some(sel_opt) = selected_option {
-        Buffer::current().set_text_at_cursor_pos(&sel_opt.gen_string())
+        Buffer::current().set_text_at_cursor_pos(&sel_opt.gen_string());
     }
 }

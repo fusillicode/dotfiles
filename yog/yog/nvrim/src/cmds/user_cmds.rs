@@ -12,7 +12,7 @@ const USER_CMDS: [(&str, &str, &str); 6] = [
     ("Fkr", "Gen string with fkr", ":lua require('nvrim').fkr.gen_string()"),
 ];
 
-/// Creates user commands and `Fkr*` snippet insertion commands.
+/// Creates user commands (including `Fkr` for random string generation).
 pub fn create() {
     for (cmd_name, desc, cmd) in USER_CMDS {
         create_user_cmd(cmd_name, cmd, &CreateCommandOptsBuilder::default().desc(desc).build());
