@@ -16,6 +16,7 @@ mod cmds;
 mod colorscheme;
 /// Diagnostics filtering / formatting / sorting.
 mod diagnostics;
+mod fkr;
 /// Core (non‑plugin) keymaps.
 pub mod keymaps;
 /// [`nvim_oxi`] custom extensions.
@@ -53,5 +54,6 @@ fn nvrim() -> Dictionary {
         "vim_opts": vim_opts::dict(),
         "keymaps": keymaps::dict(),
         "trex": trex::dict(),
+        "fkr": fkr::dict(),
     }
 }

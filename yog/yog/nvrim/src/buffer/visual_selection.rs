@@ -59,7 +59,9 @@ pub fn get(_: ()) -> Option<Selection> {
         let Ok(lines) = cur_buf
             .get_lines(bounds.start().lnum..=bounds.end().lnum, false)
             .inspect_err(|error| {
-                crate::oxi_ext::api::notify_error(&format!("cannot get lines from buffer {cur_buf:#?}, error {error:#?}"));
+                crate::oxi_ext::api::notify_error(&format!(
+                    "cannot get lines from buffer {cur_buf:#?}, error {error:#?}"
+                ));
             })
         else {
             return None;
