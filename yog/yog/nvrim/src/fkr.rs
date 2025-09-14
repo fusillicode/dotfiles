@@ -10,11 +10,11 @@ use crate::oxi_ext::buffer::BufferExt as _;
 /// [`Dictionary`] of random string generation helpers powered by [`fkr`].
 ///
 /// Entries:
-/// - `"gen_string"`: wraps [`gen_value`] and inserts a generated value at the current cursor position (replacing any
+/// - `"insert_string"`: wraps [`gen_value`] and inserts a generated value at the current cursor position (replacing any
 ///   active selection via the underlying buffer helper).
 pub fn dict() -> Dictionary {
     dict! {
-        "gen_string": fn_from!(gen_string),
+        "insert_string": fn_from!(insert_string),
     }
 }
 
@@ -27,7 +27,7 @@ pub fn dict() -> Dictionary {
 /// Behavior:
 /// - Returns early (no insertion) if fetching user input fails or is canceled.
 /// - Emits error notifications to Neovim for any underlying failures.
-fn gen_string(_: ()) {
+fn insert_string(_: ()) {
     let options: Vec<_> = FkrOption::iter().collect();
 
     let Ok(selected_option) = crate::oxi_ext::api::inputlist("Select option:", &options).inspect_err(|error| {
