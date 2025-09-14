@@ -9,7 +9,11 @@ const USER_CMDS: [(&str, &str, &str); 6] = [
     ("LazyProfile", "Lazy profile", ":Lazy profile"),
     ("LazyUpdate", "Lazy update", ":Lazy update"),
     ("SelectAll", "Select all", "normal! ggVG"),
-    ("Fkr", "Gen string with fkr", ":lua require('nvrim').fkr.gen_string()"),
+    (
+        "Fkr",
+        "Gen string with fkr",
+        ":lua require('nvrim').fkr.insert_string()",
+    ),
 ];
 
 /// Creates user commands (including `Fkr` for random string generation).
