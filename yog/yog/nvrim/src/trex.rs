@@ -10,7 +10,6 @@ use convert_case::Casing as _;
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
 
-use crate::buffer::visual_selection;
 use crate::dict;
 use crate::fn_from;
 
@@ -38,7 +37,7 @@ pub fn dict() -> Dictionary {
 ///
 /// Blockwise selections are treated as a contiguous span (not a rectangle).
 pub fn transform_selection(_: ()) {
-    let Some(selection) = visual_selection::get(()) else {
+    let Some(selection) = crate::oxi_ext::visual_selection::get(()) else {
         return;
     };
 
