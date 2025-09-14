@@ -52,87 +52,88 @@ function M.lspconfig(bufnr)
   keymap_set('n', '<leader>r', vim.lsp.buf.rename, { buffer = bufnr, })
 end
 
-function M.fzf_lua(fl)
+function M.fzf_lua(plugin)
   local lsp_cfg = { ignore_current_line = true, jump1 = true, includeDeclaration = false, }
 
   return {
     {
       'gd',
       mode = { 'n', 'v', },
-      fl and { function() fl.lsp_definitions(vim.tbl_extend('error', { prompt = 'LSP defs: ', }, lsp_cfg)) end, },
+      plugin and { function() plugin.lsp_definitions(vim.tbl_extend('error', { prompt = 'LSP defs: ', }, lsp_cfg)) end, },
     },
     {
       'gr',
       mode = { 'n', 'v', },
-      fl and { function() fl.lsp_references(vim.tbl_extend('error', { prompt = 'LSP refs: ', }, lsp_cfg)) end, },
+      plugin and { function() plugin.lsp_references(vim.tbl_extend('error', { prompt = 'LSP refs: ', }, lsp_cfg)) end, },
     },
     {
       'gi',
       mode = { 'n', 'v', },
-      fl and { function() fl.lsp_implementations(vim.tbl_extend('error', { prompt = 'LSP impls: ', }, lsp_cfg)) end, },
+      plugin and
+      { function() plugin.lsp_implementations(vim.tbl_extend('error', { prompt = 'LSP impls: ', }, lsp_cfg)) end, },
     },
-    { '<leader>a',  mode = { 'n', 'v', }, fl and { function() fl.lsp_code_actions({ prompt = 'LSP actions: ', }) end, }, },
-    { '<leader>s',  mode = { 'n', 'v', }, fl and { function() fl.lsp_document_symbols({ prompt = 'LSP syms: ', }) end, }, },
-    { '<leader>S',  mode = { 'n', 'v', }, fl and { function() fl.lsp_workspace_symbols({ prompt = '*LSP syms: ', }) end, }, },
+    { '<leader>a',  mode = { 'n', 'v', }, plugin and { function() plugin.lsp_code_actions({ prompt = 'LSP actions: ', }) end, }, },
+    { '<leader>s',  mode = { 'n', 'v', }, plugin and { function() plugin.lsp_document_symbols({ prompt = 'LSP syms: ', }) end, }, },
+    { '<leader>S',  mode = { 'n', 'v', }, plugin and { function() plugin.lsp_workspace_symbols({ prompt = '*LSP syms: ', }) end, }, },
 
-    { '<leader>f',  mode = { 'n', 'v', }, fl and { function() fl.files({ prompt = 'Files: ', }) end, }, },
-    { '<leader>b',  mode = { 'n', 'v', }, fl and { function() fl.buffers({ prompt = 'Buffers: ', }) end, }, },
-    { '<leader>gs', mode = { 'n', 'v', }, fl and { function() fl.git_status({ prompt = 'Git status: ', }) end, }, },
-    { '<leader>gc', mode = { 'n', 'v', }, fl and { function() fl.git_commits({ prompt = 'Git commits: ', }) end, }, },
-    { '<leader>c',  mode = { 'n', 'v', }, fl and { function() fl.commands({ prompt = 'Cmds: ', }) end, }, },
+    { '<leader>f',  mode = { 'n', 'v', }, plugin and { function() plugin.files({ prompt = 'Files: ', }) end, }, },
+    { '<leader>b',  mode = { 'n', 'v', }, plugin and { function() plugin.buffers({ prompt = 'Buffers: ', }) end, }, },
+    { '<leader>gs', mode = { 'n', 'v', }, plugin and { function() plugin.git_status({ prompt = 'Git status: ', }) end, }, },
+    { '<leader>gc', mode = { 'n', 'v', }, plugin and { function() plugin.git_commits({ prompt = 'Git commits: ', }) end, }, },
+    { '<leader>c',  mode = { 'n', 'v', }, plugin and { function() plugin.commands({ prompt = 'Cmds: ', }) end, }, },
 
-    { '<leader>d',  mode = { 'n', 'v', }, fl and { function() fl.diagnostics_document({ prompt = 'Diags: ', }) end, }, },
-    { '<leader>D',  mode = { 'n', 'v', }, fl and { function() fl.diagnostics_workspace({ prompt = '*Diags: ', sort = 0, }) end, }, },
+    { '<leader>d',  mode = { 'n', 'v', }, plugin and { function() plugin.diagnostics_document({ prompt = 'Diags: ', }) end, }, },
+    { '<leader>D',  mode = { 'n', 'v', }, plugin and { function() plugin.diagnostics_workspace({ prompt = '*Diags: ', sort = 0, }) end, }, },
 
-    { '<leader>w',  mode = 'n',           fl and { function() fl.live_grep({ prompt = 'rg: ', }) end, }, },
+    { '<leader>w',  mode = 'n',           plugin and { function() plugin.live_grep({ prompt = 'rg: ', }) end, }, },
     {
       '<leader>w',
       mode = 'v',
-      fl and
-      { function() fl.live_grep({ prompt = 'rg: ', search = nvrim.buffer.get_visual_selection_lines()[1], }) end, },
+      plugin and
+      { function() plugin.live_grep({ prompt = 'rg: ', search = nvrim.buffer.get_visual_selection_lines()[1], }) end, },
     },
 
-    { '<leader>h', mode = 'n', fl and { function() fl.resume({}) end, }, },
+    { '<leader>h', mode = 'n', plugin and { function() plugin.resume({}) end, }, },
   }
 end
 
-function M.oil(oil)
+function M.oil(plugin)
   return {
-    { '<leader>F', mode = 'n', oil and { ':Oil --float<cr>', }, },
+    { '<leader>F', mode = 'n', plugin and { ':Oil --float<cr>', }, },
   }
 end
 
-function M.attempt(att)
+function M.attempt(plugin)
   return {
-    { '<leader>n', mode = 'n', att and { att.new_select, }, },
+    { '<leader>n', mode = 'n', plugin and { plugin.new_select, }, },
   }
 end
 
-function M.close_buffers(cb)
+function M.close_buffers(plugin)
   return {
-    { '<leader>o', mode = 'n', cb and { function() cb.wipe({ type = 'other', }) end, }, },
-    { '<leader>O', mode = 'n', cb and { function() cb.wipe({ type = 'other', force = true, }) end, }, },
+    { '<leader>o', mode = 'n', plugin and { function() plugin.wipe({ type = 'other', }) end, }, },
+    { '<leader>O', mode = 'n', plugin and { function() plugin.wipe({ type = 'other', force = true, }) end, }, },
   }
 end
 
-function M.gitlinker(gs)
+function M.gitlinker(plugin)
   return {
-    { '<leader>yl', mode = { 'n', 'v', }, gs and { ':GitLink<cr>', }, },
-    { '<leader>yL', mode = { 'n', 'v', }, gs and { ':GitLink!<cr>', }, },
-    { '<leader>yb', mode = { 'n', 'v', }, gs and { ':GitLink blame<cr>', }, },
-    { '<leader>yB', mode = { 'n', 'v', }, gs and { ':GitLink! blame<cr>', }, },
+    { '<leader>yl', mode = { 'n', 'v', }, plugin and { ':GitLink<cr>', }, },
+    { '<leader>yL', mode = { 'n', 'v', }, plugin and { ':GitLink!<cr>', }, },
+    { '<leader>yb', mode = { 'n', 'v', }, plugin and { ':GitLink blame<cr>', }, },
+    { '<leader>yB', mode = { 'n', 'v', }, plugin and { ':GitLink! blame<cr>', }, },
   }
 end
 
-function M.gitsigns(gs)
+function M.gitsigns(plugin)
   return {
     {
       'cn',
       mode = 'n',
-      gs and {
+      plugin and {
         function()
           if vim.wo.diff then return 'cn' end
-          vim.schedule(function() gs.next_hunk({ wrap = true, }) end)
+          vim.schedule(function() plugin.next_hunk({ wrap = true, }) end)
           return '<Ignore>'
         end,
         { expr = true, },
@@ -141,96 +142,90 @@ function M.gitsigns(gs)
     {
       'cp',
       mode = 'n',
-      gs and {
+      plugin and {
         function()
           if vim.wo.diff then return 'cp' end
-          vim.schedule(function() gs.prev_hunk({ wrap = true, }) end)
+          vim.schedule(function() plugin.prev_hunk({ wrap = true, }) end)
           return '<Ignore>'
         end,
         { expr = true, },
       },
     },
-    { '<leader>hd', mode = 'n',           gs and { gs.preview_hunk, }, },
-    { '<leader>hs', mode = 'n',           gs and { gs.stage_hunk, }, },
-    { '<leader>hr', mode = 'n',           gs and { gs.reset_hunk, }, },
-    { '<leader>hs', mode = 'v',           gs and { function() gs.stage_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end, }, },
-    { '<leader>hr', mode = 'v',           gs and { function() gs.reset_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end, }, },
-    { '<leader>hu', mode = 'n',           gs and { gs.undo_stage_hunk, }, },
-    { '<c-b>',      mode = { 'n', 'v', }, gs and { function() gs.blame_line({ full = true, }) end, }, },
+    { '<leader>hd', mode = 'n',           plugin and { plugin.preview_hunk, }, },
+    { '<leader>hs', mode = 'n',           plugin and { plugin.stage_hunk, }, },
+    { '<leader>hr', mode = 'n',           plugin and { plugin.reset_hunk, }, },
+    { '<leader>hs', mode = 'v',           plugin and { function() plugin.stage_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end, }, },
+    { '<leader>hr', mode = 'v',           plugin and { function() plugin.reset_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end, }, },
+    { '<leader>hu', mode = 'n',           plugin and { plugin.undo_stage_hunk, }, },
+    { '<c-b>',      mode = { 'n', 'v', }, plugin and { function() plugin.blame_line({ full = true, }) end, }, },
   }
 end
 
-function M.multicursor(mc)
+function M.multicursor(plugin)
   return {
     {
       '<esc>',
       mode = 'n',
-      mc and {
+      plugin and {
         function()
-          if not mc.cursorsEnabled() then return mc.enableCursors() end
-          if mc.hasCursors() then return mc.clearCursors() end
+          if not plugin.cursorsEnabled() then return plugin.enableCursors() end
+          if plugin.hasCursors() then return plugin.clearCursors() end
           vim.api.nvim_command('noh | echo""')
         end,
       },
     },
-    { '<c-j>', mode = { 'n', 'v', }, mc and { function() mc.addCursor('j') end, }, },
-    { '<c-k>', mode = { 'n', 'v', }, mc and { function() mc.addCursor('k') end, }, },
-    { '<c-n>', mode = { 'n', 'v', }, mc and { function() mc.matchAddCursor(1) end, }, },
-    { '<c-p>', mode = { 'n', 'v', }, mc and { function() mc.matchAddCursor(-1) end, }, },
+    { '<c-j>', mode = { 'n', 'v', }, plugin and { function() plugin.addCursor('j') end, }, },
+    { '<c-k>', mode = { 'n', 'v', }, plugin and { function() plugin.addCursor('k') end, }, },
+    { '<c-n>', mode = { 'n', 'v', }, plugin and { function() plugin.matchAddCursor(1) end, }, },
+    { '<c-p>', mode = { 'n', 'v', }, plugin and { function() plugin.matchAddCursor(-1) end, }, },
   }
 end
 
-function M.grug_far(gf, opts)
+function M.grug_far(plugin, opts)
   return {
     {
       '<leader>l',
       mode = 'n',
-      gf and {
-        function() gf.open(vim.tbl_deep_extend('force', opts, {})) end,
+      plugin and {
+        function() plugin.open(vim.tbl_deep_extend('force', opts, {})) end,
       },
     },
     {
       '<leader>l',
       mode = 'v',
-      gf and {
+      plugin and {
         function()
           local selection = require('utils').escape_regex(nvrim.buffer.get_visual_selection_lines()[1])
-          gf.open(vim.tbl_deep_extend('force', opts, { prefills = { search = selection, }, }))
+          plugin.open(vim.tbl_deep_extend('force', opts, { prefills = { search = selection, }, }))
         end,
       },
     },
   }
 end
 
-function M.nvim_spider(sp)
+function M.nvim_spider(plugin)
   return {
-    { 'w', mode = { 'n', 'o', 'x', }, sp and { function() sp.motion('w') end, }, },
-    { 'e', mode = { 'n', 'o', 'x', }, sp and { function() sp.motion('e') end, }, },
-    { 'b', mode = { 'n', 'o', 'x', }, sp and { function() sp.motion('b') end, }, },
+    { 'w', mode = { 'n', 'o', 'x', }, plugin and { function() plugin.motion('w') end, }, },
+    { 'e', mode = { 'n', 'o', 'x', }, plugin and { function() plugin.motion('e') end, }, },
+    { 'b', mode = { 'n', 'o', 'x', }, plugin and { function() plugin.motion('b') end, }, },
   }
 end
 
-function M.opencode(oc)
+function M.opencode(plugin)
   return {
-    { '<leader>oA', mode = 'n',           oc and { function() require('opencode').ask() end, desc = 'Ask opencode', }, },
-    { '<leader>oa', mode = 'v',           oc and { function() require('opencode').ask('@selection: ') end, desc = 'Ask opencode about selection', }, },
-    { '<leader>on', mode = 'n',           oc and { function() require('opencode').command('session_new') end, desc = 'New session', }, },
-    { '<leader>oy', mode = 'n',           oc and { function() require('opencode').command('messages_copy') end, desc = 'Copy last message', }, },
-    { '<leader>op', mode = { 'n', 'v', }, oc and { function() require('opencode').select_prompt() end, desc = 'Select prompt', }, },
+    { '<leader>oA', mode = 'n',           plugin and { function() require('opencode').ask() end, desc = 'Ask opencode', }, },
+    { '<leader>oa', mode = 'v',           plugin and { function() require('opencode').ask('@selection: ') end, desc = 'Ask opencode about selection', }, },
+    { '<leader>on', mode = 'n',           plugin and { function() require('opencode').command('session_new') end, desc = 'New session', }, },
+    { '<leader>oy', mode = 'n',           plugin and { function() require('opencode').command('messages_copy') end, desc = 'Copy last message', }, },
+    { '<leader>op', mode = { 'n', 'v', }, plugin and { function() require('opencode').select_prompt() end, desc = 'Select prompt', }, },
     {
       '<leader>oe',
       mode = 'n',
-      oc and {
+      plugin and {
         function() require('opencode').prompt('Explain @cursor and its context') end,
         desc = 'Explain code near cursor',
       },
     },
-  }
-end
-
-function M.text_transform()
-  return {
-    { '<leader>u', mode = { 'n', 'v', }, },
   }
 end
 

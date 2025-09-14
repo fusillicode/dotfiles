@@ -25,7 +25,7 @@ pub fn dict() -> Dictionary {
 #[allow(clippy::needless_pass_by_value)]
 pub fn set(colorscheme: Option<String>) {
     if let Some(cs) = colorscheme {
-        crate::oxi_ext::exec_vim_cmd("colorscheme", &[cs]);
+        crate::oxi_ext::api::exec_vim_cmd("colorscheme", &[cs]);
     }
 
     let opts = crate::vim_opts::global_scope();
@@ -87,7 +87,7 @@ fn get_opts() -> GetHighlightOptsBuilder {
 /// Wrapper around `nvim_oxi::api::set_hl` with error notification.
 fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &SetHighlightOpts) {
     if let Err(error) = nvim_oxi::api::set_hl(ns_id, hl_name, hl_opts) {
-        crate::oxi_ext::notify_error(&format!(
+        crate::oxi_ext::api::notify_error(&format!(
             "cannot set hl opts {hl_opts:#?} to {hl_name} on namespace {ns_id}, error {error:#?}"
         ));
     }
@@ -106,7 +106,7 @@ fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &SetHighlightOpts) {
 fn get_hl(ns_id: u32, hl_opts: &GetHighlightOpts) -> color_eyre::Result<HighlightInfos> {
     nvim_oxi::api::get_hl(ns_id, hl_opts)
         .inspect_err(|error| {
-            crate::oxi_ext::notify_error(&format!("cannot get HighlightInfos by {hl_opts:#?}, error {error:#?}"));
+            crate::oxi_ext::api::notify_error(&format!("cannot get HighlightInfos by {hl_opts:#?}, error {error:#?}"));
         })
         .map_err(From::from)
         .and_then(|hl| match hl {
@@ -138,7 +138,7 @@ fn hl_opts_from_hl_infos(hl_infos: &HighlightInfos) -> color_eyre::Result<SetHig
         .map(u8::try_from)
         .transpose()
         .inspect_err(|error| {
-            crate::oxi_ext::notify_error(&format!(
+            crate::oxi_ext::api::notify_error(&format!(
                 "cannot convert u32 {:?} to u8, error: {error:#?}",
                 hl_infos.blend
             ));

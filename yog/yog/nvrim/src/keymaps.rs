@@ -25,11 +25,11 @@ pub fn dict() -> Dictionary {
 
 /// Set a keymap for each provided [`Mode`].
 ///
-/// Errors are reported (not propagated) via [`crate::oxi_ext::notify_error`].
+/// Errors are reported (not propagated) via [`crate::oxi_ext::api::notify_error`].
 pub fn set(modes: &[Mode], lhs: &str, rhs: &str, opts: &SetKeymapOpts) {
     for mode in modes {
         if let Err(error) = nvim_oxi::api::set_keymap(*mode, lhs, rhs, opts) {
-            crate::oxi_ext::notify_error(&format!(
+            crate::oxi_ext::api::notify_error(&format!(
                 "cannot set keymap with mode {mode:#?}, lhs {lhs}, rhs {rhs} and opts {opts:#?}, error {error:#?}"
             ));
         }
@@ -41,12 +41,12 @@ pub fn set(modes: &[Mode], lhs: &str, rhs: &str, opts: &SetKeymapOpts) {
 /// All mappings are set with the default non-recursive, silent options returned
 /// by [`default_opts`].
 ///
-/// Failures are reported internally by the [`set`] helper via [`crate::oxi_ext::notify_error`].
+/// Failures are reported internally by the [`set`] helper via [`crate::oxi_ext::api::notify_error`].
 fn set_all(_: ()) {
     let default_opts = default_opts();
 
-    crate::oxi_ext::set_g_var("mapleader", " ");
-    crate::oxi_ext::set_g_var("maplocalleader", " ");
+    crate::oxi_ext::api::set_g_var("mapleader", " ");
+    crate::oxi_ext::api::set_g_var("maplocalleader", " ");
 
     set(&[Mode::Terminal], "<Esc>", "<c-\\><c-n>", &default_opts);
     set(&[Mode::Insert], "<c-a>", "<esc>^i", &default_opts);
@@ -121,12 +121,12 @@ fn smart_dd_no_yank_empty_line(_: ()) -> String {
 fn visual_esc(_: ()) -> String {
     let current_line: i64 = nvim_oxi::api::call_function("line", (".",))
         .inspect_err(|error| {
-            crate::oxi_ext::notify_error(&format!("cannot get current line, error {error:#?}"));
+            crate::oxi_ext::api::notify_error(&format!("cannot get current line, error {error:#?}"));
         })
         .unwrap_or(0);
     let visual_line: i64 = nvim_oxi::api::call_function("line", ("v",))
         .inspect_err(|error| {
-            crate::oxi_ext::notify_error(&format!("cannot get visual line, error {error:#?}"));
+            crate::oxi_ext::api::notify_error(&format!("cannot get visual line, error {error:#?}"));
         })
         .unwrap_or(0);
     format!(
@@ -144,7 +144,7 @@ fn visual_esc(_: ()) -> String {
 fn apply_on_current_line_or_unwrap<'a, F: FnOnce(String) -> &'a str>(fun: F, default: &'a str) -> String {
     nvim_oxi::api::get_current_line()
         .inspect_err(|error| {
-            crate::oxi_ext::notify_error(&format!("cannot get current line, error {error:#?}"));
+            crate::oxi_ext::api::notify_error(&format!("cannot get current line, error {error:#?}"));
         })
         .map(fun)
         .unwrap_or(default)

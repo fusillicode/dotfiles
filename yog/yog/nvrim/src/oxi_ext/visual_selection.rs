@@ -12,7 +12,7 @@ use nvim_oxi::lua::ffi::State;
 use serde::Deserialize;
 use serde::Deserializer;
 
-use crate::oxi_ext::BufferExt;
+use crate::oxi_ext::buffer::BufferExt;
 
 /// Extract selected text lines from the current [`Buffer`] using the active Visual range.
 ///
@@ -46,7 +46,7 @@ pub fn get_lines(_: ()) -> Vec<String> {
 /// Returns [`None`] if any prerequisite (positions, lines, text extraction) fails.
 pub fn get(_: ()) -> Option<Selection> {
     let Ok(mut bounds) = SelectionBounds::new().inspect_err(|error| {
-        crate::oxi_ext::notify_error(&format!("cannot create SelectionBounds, error {error:#?}"));
+        crate::oxi_ext::api::notify_error(&format!("cannot create SelectionBounds, error {error:#?}"));
     }) else {
         return None;
     };
@@ -59,7 +59,9 @@ pub fn get(_: ()) -> Option<Selection> {
         let Ok(lines) = cur_buf
             .get_lines(bounds.start().lnum..=bounds.end().lnum, false)
             .inspect_err(|error| {
-                crate::oxi_ext::notify_error(&format!("cannot get lines from buffer {cur_buf:#?}, error {error:#?}"));
+                crate::oxi_ext::api::notify_error(&format!(
+                    "cannot get lines from buffer {cur_buf:#?}, error {error:#?}"
+                ));
             })
         else {
             return None;
@@ -84,7 +86,7 @@ pub fn get(_: ()) -> Option<Selection> {
             &GetTextOpts::default(),
         )
         .inspect_err(|error| {
-            crate::oxi_ext::notify_error(&format!(
+            crate::oxi_ext::api::notify_error(&format!(
                 "cannot get text from buffer {cur_buf:#?} from bounds {bounds:#?}, error {error:#?}"
             ));
         })
@@ -304,7 +306,7 @@ impl Poppable for Pos {
 fn get_pos(mark: &str) -> nvim_oxi::Result<Pos> {
     Ok(
         nvim_oxi::api::call_function::<_, Pos>("getpos", Array::from_iter([mark])).inspect_err(|error| {
-            crate::oxi_ext::notify_error(&format!("cannot get pos for {mark}, error {error:#?}"));
+            crate::oxi_ext::api::notify_error(&format!("cannot get pos for {mark}, error {error:#?}"));
         })?,
     )
 }

@@ -9,12 +9,12 @@ use serde::Deserialize;
 #[allow(clippy::needless_pass_by_value)]
 pub fn format(diagnostic: Diagnostic) -> Option<String> {
     let Some(msg) = get_msg(&diagnostic).map(|s| s.trim_end_matches('.').to_string()) else {
-        crate::oxi_ext::notify_error(&format!("missing message in {diagnostic:#?}"));
+        crate::oxi_ext::api::notify_error(&format!("missing message in {diagnostic:#?}"));
         return None;
     };
 
     let Some(src) = get_src(&diagnostic).map(str::to_string) else {
-        crate::oxi_ext::notify_error(&format!("missing source in {diagnostic:#?}"));
+        crate::oxi_ext::api::notify_error(&format!("missing source in {diagnostic:#?}"));
         return None;
     };
 

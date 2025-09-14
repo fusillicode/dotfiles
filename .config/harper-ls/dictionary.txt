@@ -21,12 +21,16 @@ TODO
 UTF
 Vimscript
 asdf
+augroups
+autocommand
 autocommands
 characterwise
 charwise
 clippy
 cmd
+colorscheme
 dbee
+deserializable
 dir
 expr
 extmark
@@ -44,8 +48,10 @@ ok
 pgcli
 pgpass
 protoc
+quickfix
 reselects
 sqlx
+statuscolumn
 statusline
 stderr
 stdout

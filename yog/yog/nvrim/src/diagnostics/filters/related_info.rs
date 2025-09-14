@@ -5,7 +5,7 @@ use nvim_oxi::ObjectKind;
 use nvim_oxi::conversion::FromObject;
 
 use crate::diagnostics::filters::DiagnosticsFilter;
-use crate::oxi_ext::DictionaryExt;
+use crate::oxi_ext::dict::DictionaryExt;
 
 /// Filters out diagnostics already represented by other ones
 /// (e.g. HINTs pointing to a location already mentioned by other ERROR's rendered message)
@@ -28,7 +28,7 @@ impl RelatedInfoFilter {
         })
     }
 
-    /// Get the [`RelatedInfo`]s of an LSP diagnostic represented by a [`Dictionary`].
+    /// Get the [`RelatedInfo`] of an LSP diagnostic represented by a [`Dictionary`].
     ///
     /// # Errors
     ///
@@ -47,7 +47,7 @@ impl RelatedInfoFilter {
             };
 
             let rel_infos = Array::from_object(rel_infos.clone()).with_context(|| {
-                crate::oxi_ext::unexpected_kind_error_msg(rel_infos, rel_infos_key, &lsp, ObjectKind::Array)
+                crate::oxi_ext::extract::unexpected_kind_error_msg(rel_infos, rel_infos_key, &lsp, ObjectKind::Array)
             })?;
             for rel_info in rel_infos {
                 let rel_info = Dictionary::try_from(rel_info)?;
@@ -122,19 +122,13 @@ impl RelatedInfo {
     fn from_related_info(rel_info: &Dictionary) -> color_eyre::Result<Self> {
         let (start, end) = {
             let range_query = ["location", "range"];
-            let range = rel_info
-                .get_dict(&range_query)?
-                .ok_or_else(|| crate::oxi_ext::no_value_matching(&range_query, rel_info))?;
+            let range = rel_info.get_required_dict(&range_query)?;
 
             let start_query = ["start"];
             let end_query = ["end"];
             (
-                range
-                    .get_dict(&start_query)?
-                    .ok_or_else(|| crate::oxi_ext::no_value_matching(&start_query, &range))?,
-                range
-                    .get_dict(&end_query)?
-                    .ok_or_else(|| crate::oxi_ext::no_value_matching(&end_query, &range))?,
+                range.get_required_dict(&start_query)?,
+                range.get_required_dict(&end_query)?,
             )
         };
 

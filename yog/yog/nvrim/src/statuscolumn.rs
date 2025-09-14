@@ -24,7 +24,7 @@ fn draw((cur_lnum, extmarks): (String, Vec<Extmark>)) -> Option<String> {
     let opts = OptionOptsBuilder::default().buf(cur_buf.clone()).build();
     let cur_buf_type = nvim_oxi::api::get_option_value::<String>("buftype", &opts)
         .inspect_err(|error| {
-            crate::oxi_ext::notify_error(&format!(
+            crate::oxi_ext::api::notify_error(&format!(
                 "cannot get buftype of current buffer #{cur_buf:#?}, error {error:#?}"
             ));
         })
