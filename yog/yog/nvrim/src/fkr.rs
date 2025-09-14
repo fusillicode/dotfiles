@@ -14,7 +14,7 @@ use crate::oxi_ext::buffer::BufferExt as _;
 ///   active selection via the underlying buffer helper).
 pub fn dict() -> Dictionary {
     dict! {
-        "gen_string": fn_from!(gen_value),
+        "gen_string": fn_from!(gen_string),
     }
 }
 
@@ -27,7 +27,7 @@ pub fn dict() -> Dictionary {
 /// Behavior:
 /// - Returns early (no insertion) if fetching user input fails or is canceled.
 /// - Emits error notifications to Neovim for any underlying failures.
-pub fn gen_value(_: ()) {
+fn gen_string(_: ()) {
     let options: Vec<_> = FkrOption::iter().collect();
 
     let Ok(selected_option) = crate::oxi_ext::api::inputlist("Select option:", &options).inspect_err(|error| {
