@@ -29,7 +29,7 @@ pub fn create() {
             crate::keymaps::set(&[Mode::Normal], "<c-n>", ":cn<cr>", &opts);
             crate::keymaps::set(&[Mode::Normal], "<c-p>", ":cp<cr>", &opts);
             crate::keymaps::set(&[Mode::Normal], "<c-x>", ":ccl<cr>", &opts);
-            crate::oxi_ext::exec_vim_cmd("resize", &["7".to_string()]);
+            crate::oxi_ext::api::exec_vim_cmd("resize", &["7".to_string()]);
 
             true
         }),
@@ -47,13 +47,13 @@ where
     if let Err(error) =
         nvim_oxi::api::create_augroup(augroup_name, &CreateAugroupOptsBuilder::default().clear(true).build())
             .inspect_err(|error| {
-                crate::oxi_ext::notify_error(&format!(
+                crate::oxi_ext::api::notify_error(&format!(
                     "cannot create augroup with name {augroup_name:#?}, error {error:#?}"
                 ));
             })
             .and_then(|group| nvim_oxi::api::create_autocmd(events, &opts_builder.group(group).build()))
     {
-        crate::oxi_ext::notify_error(&format!(
+        crate::oxi_ext::api::notify_error(&format!(
             "cannot create auto command for events {events:#?} and augroup {augroup_name}, error {error:#?}"
         ));
     }

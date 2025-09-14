@@ -17,11 +17,11 @@ use url::Url;
 pub fn get(_: ()) -> Option<WordUnderCursor> {
     let cur_win = Window::current();
     let cur_line = nvim_oxi::api::get_current_line()
-        .inspect_err(|e| crate::oxi_ext::notify_error(&format!("cannot get current line: {e:#?}")))
+        .inspect_err(|e| crate::oxi_ext::api::notify_error(&format!("cannot get current line: {e:#?}")))
         .ok()?;
     let (_, col) = cur_win
         .get_cursor()
-        .inspect_err(|e| crate::oxi_ext::notify_error(&format!("cannot get cursor: {e:#?}")))
+        .inspect_err(|e| crate::oxi_ext::api::notify_error(&format!("cannot get cursor: {e:#?}")))
         .ok()?;
     get_word_at_index(&cur_line, col)
         .map(ToOwned::to_owned)
