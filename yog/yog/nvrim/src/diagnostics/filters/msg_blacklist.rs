@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use nvim_oxi::Dictionary;
 
 use crate::diagnostics::filters::DiagnosticsFilter;
-use crate::oxi_ext::DictionaryExt;
+use crate::oxi_ext::dict::DictionaryExt;
 
-/// Filters out diagnostics related to buffers containing the supplied path, lsp source and unwanted messages.
+/// Filters out diagnostics related to buffers containing the supplied path, LSP source and unwanted messages.
 pub struct MsgBlacklistFilter {
     /// Blacklist of messages per source.
     pub blacklist: HashMap<String, Vec<String>>,
