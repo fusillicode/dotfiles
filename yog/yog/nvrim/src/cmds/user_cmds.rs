@@ -36,7 +36,7 @@ where
     Cmd: StringOrFunction<CommandArgs, ()>,
 {
     if let Err(error) = nvim_oxi::api::create_user_command(name, command, opts) {
-        crate::oxi_ext::notify_error(&format!(
+        crate::oxi_ext::api::notify_error(&format!(
             "cannot create user command {name} with opts {opts:#?}, error {error:#?}"
         ));
     }
@@ -51,7 +51,7 @@ fn default_opts() -> CreateCommandOpts {
 fn set_text_at_cursor_pos(text: &str) {
     let cur_win = Window::current();
     let Ok((row, col)) = cur_win.get_cursor().inspect_err(|error| {
-        crate::oxi_ext::notify_error(&format!("cannot get cursor from window {cur_win:?}, error {error:?}"));
+        crate::oxi_ext::api::notify_error(&format!("cannot get cursor from window {cur_win:?}, error {error:?}"));
     }) else {
         return;
     };
@@ -64,7 +64,7 @@ fn set_text_at_cursor_pos(text: &str) {
 
     let mut cur_buf = Buffer::current();
     if let Err(e) = cur_buf.set_text(line_range.clone(), start_col, end_col, text.clone()) {
-        crate::oxi_ext::notify_error(&format!(
+        crate::oxi_ext::api::notify_error(&format!(
             "cannot set text {text:?} in buffer {cur_buf:?}, line_range {line_range:?}, start_col {start_col:?}, end_col {end_col:?}, error {e:?}"
         ));
     }
