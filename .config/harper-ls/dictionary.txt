@@ -28,6 +28,7 @@ characterwise
 charwise
 clippy
 cmd
+colorscheme
 dbee
 deserializable
 dir
@@ -50,6 +51,7 @@ protoc
 quickfix
 reselects
 sqlx
+statuscolumn
 statusline
 stderr
 stdout

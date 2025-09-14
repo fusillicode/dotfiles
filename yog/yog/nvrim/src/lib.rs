@@ -16,6 +16,7 @@ mod cmds;
 mod colorscheme;
 /// Diagnostics filtering / formatting / sorting.
 mod diagnostics;
+/// Fkr strings generation
 mod fkr;
 /// Core (non‑plugin) keymaps.
 pub mod keymaps;

@@ -15,15 +15,14 @@ pub fn dict() -> Dictionary {
 
 pub fn gen_value(_: ()) {
     let options: Vec<_> = FkrOption::iter().collect();
+
     let Ok(selected_option) = crate::oxi_ext::api::inputlist("Select option:", &options).inspect_err(|error| {
         crate::oxi_ext::api::notify_error(&format!("cannot get user input, error {error:#?}"));
     }) else {
         return;
     };
 
-    let Some(selected_option) = selected_option else {
-        return;
-    };
-
-    Buffer::current().set_text_at_cursor_pos(&selected_option.gen_string());
+    if let Some(sel_opt) = selected_option {
+        Buffer::current().set_text_at_cursor_pos(&sel_opt.gen_string())
+    }
 }
