@@ -45,7 +45,7 @@ pub enum WordUnderCursor {
     Url(String),
     /// A filesystem path identified as a binary file by [`exec_file_cmd`].
     BinaryFile(String),
-    /// A filesystem path identified as a (plain / csv) text file by [`exec_file_cmd`].
+    /// A filesystem path identified as a (plain / CSV) text file by [`exec_file_cmd`].
     TextFile(String),
     /// A filesystem path identified as a directory by [`exec_file_cmd`].
     Directory(String),
@@ -72,7 +72,7 @@ impl ToObject for WordUnderCursor {
 /// Classify a [`String`] captured under the cursor into a [`WordUnderCursor`].
 ///
 /// 1. If it parses as a URL with [`Url::parse`], returns [`WordUnderCursor::Url`].
-/// 2. Otherwise invokes [`exec_file_cmd`] to check filesystem type.
+/// 2. Otherwise, invokes [`exec_file_cmd`] to check filesystem type.
 /// 3. Falls back to [`WordUnderCursor::Word`] on errors or unknown kinds.
 impl From<String> for WordUnderCursor {
     fn from(value: String) -> Self {
@@ -104,7 +104,7 @@ impl From<String> for WordUnderCursor {
 /// Returns an error if:
 /// - launching or waiting on the `file` command fails
 /// - the command exits with non-success (see [`utils::cmd::CmdExt`])
-/// - stdout cannot be decoded as valid UTF-8
+/// - standard output cannot be decoded as valid UTF-8
 fn exec_file_cmd(path: &str) -> color_eyre::Result<FileCmdOutput> {
     let output = std::str::from_utf8(&Command::new("file").args([path, "-I"]).exec()?.stdout)?.to_lowercase();
     if output.contains(" inode/directory;") {
@@ -127,7 +127,7 @@ fn exec_file_cmd(path: &str) -> color_eyre::Result<FileCmdOutput> {
 pub enum FileCmdOutput {
     /// Path identified as a binary file.
     BinaryFile(String),
-    /// Path identified as a text (plain / csv) file.
+    /// Path identified as a text (plain / CSV) file.
     TextFile(String),
     /// Path identified as a directory.
     Directory(String),
