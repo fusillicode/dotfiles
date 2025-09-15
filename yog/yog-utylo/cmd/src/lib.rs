@@ -104,7 +104,7 @@ impl core::fmt::Display for CmdDetails {
     }
 }
 
-/// Creates a [`Command`] for the given program with silenced stdout and stderr in release mode.
+/// Creates a [`Command`] for the given program with silenced standard output and standard error in release mode.
 pub fn silent_cmd(program: &str) -> Command {
     let mut cmd = Command::new(program);
     if !cfg!(debug_assertions) {

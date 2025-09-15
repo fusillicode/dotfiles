@@ -72,7 +72,7 @@ pub fn run(url: &str, opt: &CurlDownloaderOption) -> color_eyre::Result<PathBuf>
     Ok(target)
 }
 
-/// Get cmd stdout.
+/// Get cmd standard output.
 fn get_cmd_stdout(cmd: &mut Command) -> color_eyre::Result<Stdio> {
     let stdout = cmd
         .stdout(Stdio::piped())
