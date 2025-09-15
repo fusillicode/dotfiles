@@ -18,6 +18,8 @@ PR
 RHS
 RabbitMQ
 Rastreator's
+SIGINT
+SIGTERM
 TODO
 UTF
 Vimscript
@@ -41,6 +43,7 @@ grug
 hx
 i64
 infos
+k8s
 ko
 libs
 linewise
@@ -49,6 +52,7 @@ nvim
 ok
 pgcli
 pgpass
+preselected
 protoc
 quickfix
 reselects
