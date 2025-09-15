@@ -8,8 +8,8 @@ mod word_under_cursor;
 /// [`Dictionary`] of buffer text helpers.
 ///
 /// Entries:
-/// - `"get_visual_selection"`: wraps [`crate::buffer::visual_selection::get`] and returns the current visual selection
-///   (inclusive) as lines.
+/// - `"get_visual_selection"`: wraps [`crate::oxi_ext::visual_selection::get_lines`] and returns the current visual
+///   selection (inclusive) as lines.
 /// - `"get_word_under_cursor"`: wraps [`crate::buffer::word_under_cursor::get`] and returns a classified token under
 ///   the cursor.
 ///
