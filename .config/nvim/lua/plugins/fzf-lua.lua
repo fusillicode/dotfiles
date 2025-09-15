@@ -94,6 +94,7 @@ return {
           nvrim.style_opts.fzf_lua_previewer('git_diff')
         ),
       },
+      lsp        = nvrim.style_opts.fzf_lua_previewer(),
     })
     plugin.register_ui_select()
     keymaps.set(plugin_keymaps(plugin))
