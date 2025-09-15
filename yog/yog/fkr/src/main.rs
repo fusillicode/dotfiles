@@ -3,7 +3,7 @@
 use fkr::FkrOption;
 
 /// Interactive fake data generator.
-/// Prints generated value to stdout, optionally copies to clipboard.
+/// Prints generated value to standard output, optionally copies to clipboard.
 ///
 /// # Arguments
 ///

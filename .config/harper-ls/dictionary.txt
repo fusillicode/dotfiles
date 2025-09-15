@@ -10,6 +10,7 @@ IO
 JFrog
 NodeJS
 OIDC
+OS
 Okta
 OpenAPI
 PCW
@@ -32,6 +33,7 @@ colorscheme
 dbee
 deserializable
 dir
+envar
 expr
 extmark
 fkr
