@@ -1,8 +1,10 @@
 AMPQ
+ApiKey
 Artifactory
 Blockwise
 CTRL
 Checkout
+DNI
 DTS
 ESC
 I/O
@@ -13,9 +15,9 @@ OIDC
 OS
 Okta
 OpenAPI
-PCW
 PR
 RHS
+RTR
 RabbitMQ
 Rastreator's
 SIGINT
@@ -50,6 +52,7 @@ linewise
 newtype
 nvim
 ok
+pcw
 pgcli
 pgpass
 preselected
