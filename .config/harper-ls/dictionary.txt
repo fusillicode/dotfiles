@@ -16,6 +16,7 @@ OS
 Okta
 OpenAPI
 PR
+Prima
 RHS
 RTR
 RabbitMQ
@@ -23,8 +24,11 @@ Rastreator's
 SIGINT
 SIGTERM
 TODO
+Terceros
+TodoRiesgo
 UTF
 Vimscript
+ampliado
 asdf
 augroups
 autocommand
@@ -41,6 +45,7 @@ envar
 expr
 extmark
 fkr
+franquicia
 grug
 hx
 i64
@@ -59,6 +64,7 @@ preselected
 protoc
 quickfix
 reselects
+riesgo
 sqlx
 statuscolumn
 statusline
