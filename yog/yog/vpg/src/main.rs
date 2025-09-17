@@ -3,6 +3,7 @@
 use std::process::Command;
 use std::process::Stdio;
 
+use color_eyre::eyre::Context;
 use color_eyre::owo_colors::OwoColorize as _;
 
 use crate::pgpass::PgpassEntry;
@@ -52,12 +53,7 @@ fn main() -> color_eyre::Result<()> {
         "(be sure to have the VPN on!)".bold()
     );
     vault::log_into_vault_if_required()?;
-    let vault_read_output: VaultReadOutput = serde_json::from_slice(
-        &Command::new("vault")
-            .args(["read", &pgpass_entry.metadata.vault_path, "--format=json"])
-            .output()?
-            .stdout,
-    )?;
+    let vault_read_output = exec_vault_read_cmd(&pgpass_entry.metadata.vault_path)?;
 
     pgpass_entry.connection_params.update(&vault_read_output.data);
     pgpass::save_new_pgpass_file(pgpass_file.idx_lines, &pgpass_entry.connection_params, &pgpass_path)?;
@@ -103,4 +99,33 @@ fn main() -> color_eyre::Result<()> {
     }
 
     Ok(())
+}
+
+/// Executes the `vault` CLI to read a secret as JSON and deserialize it.
+///
+/// Runs `vault read <vault_path> --format=json` using [`std::process::Command`] and
+/// deserializes the JSON standard output into a [`VaultReadOutput`].
+///
+/// # Arguments
+///
+/// * `vault_path` - Path of the secret to read from Vault.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Launching or running the [`vault`] process fails (I/O error from [`Command`]).
+/// - The command standard output cannot be deserialized into [`VaultReadOutput`] via [`serde_json`].
+/// - The standard output is not valid UTF-8 when constructing the contextual error message.
+fn exec_vault_read_cmd(vault_path: &str) -> color_eyre::Result<VaultReadOutput> {
+    let mut cmd = Command::new("vault");
+    cmd.args(["read", vault_path, "--format=json"]);
+
+    let cmd_stdout = &cmd.output()?.stdout;
+
+    serde_json::from_slice(cmd_stdout).with_context(|| {
+        str::from_utf8(cmd_stdout).map_or_else(
+            |error| format!("cmd {cmd:#?} stdout is invalid UTF-8, error {error:?}"),
+            |str_stdout| format!("cannot build VaultReadOutput from vault cmd {cmd:#?} stdout {str_stdout:?}"),
+        )
+    })
 }
