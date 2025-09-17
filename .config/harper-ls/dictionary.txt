@@ -54,6 +54,7 @@ k8s
 ko
 libs
 linewise
+mut
 newtype
 nvim
 ok
