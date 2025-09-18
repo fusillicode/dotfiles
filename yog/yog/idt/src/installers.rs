@@ -79,8 +79,8 @@ pub trait Installer: Sync + Send {
                     .inspect(|check_output| {
                         if let Some(check_output) = check_output {
                             println!(
-                                "{} {} with output: {}",
-                                "Installed & checked".green().bold(),
+                                "{} {} with check: {}",
+                                "Installed".green().bold(),
                                 self.bin_name().bold(),
                                 check_output.trim_matches(|c| c == '\n' || c == '\r').bold()
                             );
@@ -91,7 +91,7 @@ pub trait Installer: Sync + Send {
                     .inspect_err(|error| {
                         eprintln!(
                             "{} {} with error: {}",
-                            "Installed & check failed".red().bold(),
+                            "Check failed".red().bold(),
                             self.bin_name().bold(),
                             format!("{error:#?}").red().bold()
                         );
