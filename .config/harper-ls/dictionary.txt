@@ -28,7 +28,9 @@ TODO
 Terceros
 TodoRiesgo
 UTF
+V1
 Vimscript
+Wezterm
 ampliado
 asdf
 augroups

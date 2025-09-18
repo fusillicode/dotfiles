@@ -35,11 +35,11 @@ config.colors = {
   },
 }
 config.font_size = 19
-config.font = wezterm.font('Inconsolata')
+config.font = wezterm.font('PxPlus ToshibaSat 9x16')
 config.freetype_load_target = 'Light'
 -- No ligatures thanks
 config.harfbuzz_features = { 'calt=0', 'clig=0', 'liga=0', }
-config.line_height = 1.23
+config.line_height = 1.3
 
 config.keys = {
   { key = 'LeftArrow',  mods = 'OPT',         action = act.SendKey { key = 'b', mods = 'ALT', }, },
