@@ -1,12 +1,14 @@
 allow-unwrap-in-tests = true
 allowed-duplicate-crates = [
   "bitflags",
+  "convert_case",
   "getrandom",
   "thiserror",
   "thiserror-impl",
   "wasi",
-  "windows-targets",
   "windows-link",
+  "windows-sys",
+  "windows-targets",
   "windows_aarch64_gnullvm",
   "windows_aarch64_msvc",
   "windows_i686_gnu",
