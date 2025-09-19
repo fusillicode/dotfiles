@@ -67,10 +67,6 @@ local function get_lsps_configs()
       },
     },
     marksman = {},
-    phpactor = {},
-    psalm = {
-      root_dir = require('lspconfig.util').root_pattern({ 'psalm.xml', 'psalm.xml.dist', 'psalm-baseline.xml', }),
-    },
     ruff = {},
     rust_analyzer = {
       settings = {
