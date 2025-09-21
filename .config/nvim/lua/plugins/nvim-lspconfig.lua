@@ -7,9 +7,11 @@ local function get_lsps_configs()
     dockerls = {},
     elixirls = {
       cmd = { vim.fn.expand('~/.local/bin/elixir-ls'), },
-      elixirLS = {
-        signatureAfterComplete = true,
-        suggestSpecs = true,
+      settings = {
+        elixirLS = {
+          signatureAfterComplete = true,
+          suggestSpecs = true,
+        },
       },
     },
     elmls = {},
