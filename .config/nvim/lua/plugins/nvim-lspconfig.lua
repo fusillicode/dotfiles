@@ -146,7 +146,7 @@ local style_opts = require('nvrim').style_opts
 
 return {
   'neovim/nvim-lspconfig',
-  event = 'BufRead',
+  event = { 'BufReadPre', 'BufNewFile', },
   dependencies = {
     'saghen/blink.cmp',
     'b0o/schemastore.nvim',
