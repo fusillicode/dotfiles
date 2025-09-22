@@ -7,9 +7,11 @@ local function get_lsps_configs()
     dockerls = {},
     elixirls = {
       cmd = { vim.fn.expand('~/.local/bin/elixir-ls'), },
-      elixirLS = {
-        signatureAfterComplete = true,
-        suggestSpecs = true,
+      settings = {
+        elixirLS = {
+          signatureAfterComplete = true,
+          suggestSpecs = true,
+        },
       },
     },
     elmls = {},
@@ -67,10 +69,6 @@ local function get_lsps_configs()
       },
     },
     marksman = {},
-    phpactor = {},
-    psalm = {
-      root_dir = require('lspconfig.util').root_pattern({ 'psalm.xml', 'psalm.xml.dist', 'psalm-baseline.xml', }),
-    },
     ruff = {},
     rust_analyzer = {
       settings = {
@@ -154,7 +152,6 @@ return {
     'b0o/schemastore.nvim',
   },
   config = function()
-    local lspconfig = require('lspconfig')
     local blink_cmp = require('blink.cmp')
     local lspconfig_keymaps = require('keymaps').lspconfig
 
@@ -173,7 +170,8 @@ return {
       if config['root_dir'] then lsp_setup.root_dir = config['root_dir'] end
       if config['settings'] then lsp_setup.settings = config['settings'] end
       if config['handlers'] then lsp_setup.handlers = config['handlers'] end
-      lspconfig[lsp].setup(lsp_setup)
+      vim.lsp.config[lsp] = lsp_setup
+      vim.lsp.enable(lsp)
     end
 
     -- To show border with Shift-k (K)
