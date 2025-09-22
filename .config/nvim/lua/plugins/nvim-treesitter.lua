@@ -1,6 +1,6 @@
 return {
   'nvim-treesitter/nvim-treesitter',
-  event = 'BufReadPost',
+  event = { 'BufReadPre', 'BufNewFile', },
   dependencies = {
     'nvim-treesitter/nvim-treesitter-textobjects',
     'theHamsta/nvim-treesitter-pairs',
@@ -8,7 +8,7 @@ return {
   build = ':TSUpdate',
   config = function()
     require('nvim-treesitter.configs').setup({
-      auto_install = false,
+      auto_install = true,
       ensure_installed = {
         'bash',
         'comment',
