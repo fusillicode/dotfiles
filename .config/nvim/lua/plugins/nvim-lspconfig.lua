@@ -1,4 +1,4 @@
-local function get_lsps_configs()
+local function get_custom_lsps_configs()
   local schemastore = require('schemastore')
 
   return {
@@ -153,24 +153,16 @@ return {
   },
   config = function()
     local blink_cmp = require('blink.cmp')
-    local lspconfig_keymaps = require('keymaps').lspconfig
+    local keymaps = require('keymaps').lspconfig
 
-    for lsp, config in pairs(get_lsps_configs()) do
-      -- 🥲 https://neovim.discourse.group/t/cannot-serialize-function-type-not-supported/4542/3
-      local lsp_setup = {
-        capabilities = blink_cmp.get_lsp_capabilities(config.capabilities),
-        on_attach = function(client, bufnr)
-          lspconfig_keymaps(bufnr)
-          if config['on_attach'] then config['on_attach'](client, bufnr) end
-        end,
-      }
-      if config['cmd'] then lsp_setup.cmd = config['cmd'] end
-      if config['filetypes'] then lsp_setup.filetypes = config['filetypes'] end
-      if config['init_options'] then lsp_setup.init_options = config['init_options'] end
-      if config['root_dir'] then lsp_setup.root_dir = config['root_dir'] end
-      if config['settings'] then lsp_setup.settings = config['settings'] end
-      if config['handlers'] then lsp_setup.handlers = config['handlers'] end
-      vim.lsp.config[lsp] = lsp_setup
+    for lsp, custom_config in pairs(get_custom_lsps_configs()) do
+      custom_config.capabilities = blink_cmp.get_lsp_capabilities(custom_config.capabilities)
+      local custom_on_attach = custom_config['on_attach']
+      custom_config.on_attach = function(client, bufnr)
+        keymaps(bufnr)
+        if custom_on_attach then custom_on_attach(client, bufnr) end
+      end
+      vim.lsp.config[lsp] = custom_config
       vim.lsp.enable(lsp)
     end
 
