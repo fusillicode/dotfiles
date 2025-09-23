@@ -7,6 +7,7 @@
 //! - Working tree status collection as structured data ([`get_status`] returning [`GitStatusEntry`])
 //! - Branch enumeration with last commit timestamps ([`get_branches`])
 //! - Convenience helpers such as filtering redundant remote branches ([`remove_redundant_remotes`])
+//! - Selective branch fetching from origin ([`fetch_branches`])
 //!
 //! Some commands (e.g. the special case in [`switch_branch`] for `-` and [`restore`])
 //! deliberately defer to the system `git` binary instead of re‑implementing more
@@ -85,8 +86,7 @@ pub fn get_current_branch() -> color_eyre::Result<String> {
 /// - `HEAD` cannot be resolved to a commit.
 /// - The branch already exists.
 pub fn create_branch(branch_name: &str) -> color_eyre::Result<()> {
-    let repo_path = Path::new(".");
-    let repo = get_repo(repo_path)?;
+    let repo = get_repo(Path::new("."))?;
 
     let commit = repo.head()?.peel_to_commit()?;
     repo.branch(branch_name, &commit, false)?;
@@ -249,6 +249,23 @@ pub fn remove_redundant_remotes(branches: &mut Vec<Branch>) {
             !local_names.contains(short)
         }
     });
+}
+
+/// Fetches the specified branch names from the `origin` remote.
+///
+/// Used before switching to a branch that may only exist remotely
+/// (e.g. derived from a GitHub PR URL).
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The repository cannot be discovered.
+/// - The `origin` remote cannot be found.
+/// - The fetch operation fails.
+pub fn fetch_branches(branches: &[&str]) -> color_eyre::Result<()> {
+    let repo = get_repo(Path::new("."))?;
+    repo.find_remote("origin")?.fetch(branches, None, None)?;
+    Ok(())
 }
 
 /// Local or remote branch with metadata about the last commit.
