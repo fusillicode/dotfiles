@@ -93,7 +93,8 @@ impl core::fmt::Display for RenderableBranch {
 /// Also accepts a single GitHub PR URL and derives the associated branch name.
 ///
 /// Behaviour:
-/// - If `arg` parses as a GitHub PR URL, authenticate then derive the branch name and switch to it.
+/// - If `arg` parses as a GitHub PR URL, authenticate then derive the branch name, fetch it via [`git::fetch_branches`]
+///   and switch to it.
 /// - Otherwise, sanitise `arg` into a branch name ([`build_branch_name`]) and create, if missing (after confirmation),
 ///   then switch to it.
 ///
@@ -108,6 +109,7 @@ fn switch_branch_or_create_if_missing(arg: &str) -> color_eyre::Result<()> {
     if let Ok(url) = Url::parse(arg) {
         github::log_into_github()?;
         let branch_name = github::get_branch_name_from_url(&url)?;
+        git::fetch_branches(&[&branch_name])?;
         return switch_branch(&branch_name);
     }
     create_branch_and_switch(&build_branch_name(&[arg])?)
