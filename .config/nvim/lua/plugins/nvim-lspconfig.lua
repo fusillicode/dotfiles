@@ -152,8 +152,10 @@ return {
     'b0o/schemastore.nvim',
   },
   config = function()
+    local lspconfig = require('lspconfig')
     local blink_cmp = require('blink.cmp')
-    local keymaps = require('keymaps').lspconfig
+    local keymaps   = require('keymaps').lspconfig
+
 
     for lsp, custom_config in pairs(get_custom_lsps_configs()) do
       custom_config.capabilities = blink_cmp.get_lsp_capabilities(custom_config.capabilities)
@@ -162,7 +164,7 @@ return {
         keymaps(bufnr)
         if custom_on_attach then custom_on_attach(client, bufnr) end
       end
-      vim.lsp.config[lsp] = custom_config
+      vim.lsp.config[lsp] = vim.tbl_deep_extend('force', lspconfig[lsp] or {}, custom_config)
       vim.lsp.enable(lsp)
     end
 
