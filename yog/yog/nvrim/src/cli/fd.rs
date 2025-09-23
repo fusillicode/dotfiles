@@ -1,10 +1,10 @@
 use crate::cli::CliFlags;
 
-/// CLI flags for the fd command.
+/// CLI flags for the `fd` command.
 pub struct FdCliFlags;
 
 impl CliFlags for FdCliFlags {
-    /// Returns the base flags for the fd command.
+    /// Returns the base flags for the `fd` command.
     fn base_flags() -> Vec<&'static str> {
         vec!["--color never", "--follow", "--hidden", "--no-ignore-vcs", "--type f"]
     }

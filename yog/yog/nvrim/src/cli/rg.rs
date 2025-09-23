@@ -1,10 +1,10 @@
 use crate::cli::CliFlags;
 
-/// CLI flags for the ripgrep command.
+/// CLI flags for the `rg` command.
 pub struct RgCliFlags;
 
 impl CliFlags for RgCliFlags {
-    /// Returns the base flags for the ripgrep command.
+    /// Returns the base flags for the `rg` command.
     fn base_flags() -> Vec<&'static str> {
         vec![
             "--color never",

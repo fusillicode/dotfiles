@@ -92,9 +92,9 @@ impl core::fmt::Display for RenderableBranch {
 ///
 /// Also accepts a single GitHub PR URL and derives the associated branch name.
 ///
-/// Behavior:
+/// Behaviour:
 /// - If `arg` parses as a GitHub PR URL, authenticate then derive the branch name and switch to it.
-/// - Otherwise, sanitize `arg` into a branch name ([`build_branch_name`]) and create, if missing (after confirmation),
+/// - Otherwise, sanitise `arg` into a branch name ([`build_branch_name`]) and create, if missing (after confirmation),
 ///   then switch to it.
 ///
 /// # Errors
@@ -126,7 +126,7 @@ fn switch_branch(branch: &str) -> color_eyre::Result<()> {
 
 /// Creates a new local branch (if desired) and switches to it.
 ///
-/// Behavior:
+/// Behaviour:
 /// - if both the current branch and the target branch are non‑default (not `main` / `master`) user confirmation is
 ///   required.
 ///
@@ -152,9 +152,9 @@ fn create_branch_and_switch(branch: &str) -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Returns `true` if a new branch may be created following the desired behavior.
+/// Returns `true` if a new branch may be created following the desired behaviour.
 ///
-/// Behavior:
+/// Behaviour:
 /// - Always allowed when target is a default branch (`main`/`master`).
 /// - Always allowed when current branch is a default branch.
 /// - Otherwise, requires user confirmation via empty line input (non‑empty aborts).
@@ -188,7 +188,7 @@ fn is_default_branch(branch: &str) -> bool {
     branch == "main" || branch == "master"
 }
 
-/// Builds a sanitized, lowercased Git branch name from raw arguments.
+/// Builds a sanitised, lowercased Git branch name from raw arguments.
 ///
 /// Transformation:
 /// - Split each argument by ASCII whitespace into tokens.
@@ -200,7 +200,7 @@ fn is_default_branch(branch: &str) -> bool {
 /// # Errors
 ///
 /// Returns an error if:
-/// - sanitization produces an empty string.
+/// - sanitisation produces an empty string.
 fn build_branch_name(args: &[&str]) -> color_eyre::Result<String> {
     fn is_permitted(c: char) -> bool {
         const PERMITTED_CHARS: [char; 3] = ['.', '/', '_'];
