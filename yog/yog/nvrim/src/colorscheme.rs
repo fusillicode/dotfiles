@@ -10,7 +10,7 @@ use nvim_oxi::api::types::HighlightInfos;
 use crate::dict;
 use crate::fn_from;
 
-const BG: &str = "#001900";
+const BG: &str = "#002200";
 const DIAGNOSTIC_LVLS: [&str; 5] = ["Error", "Warn", "Info", "Hint", "Ok"];
 const STATUS_LINE_BG: &str = "none";
 
