@@ -1,7 +1,7 @@
 //! UI style options exposed as dictionaries for Lua consumption.
 //!
 //! Provides helper functions returning [`nvim_oxi::Dictionary`] values with
-//! editor UI style configuration (window borders, previewer behavior, etc.).
+//! editor UI style configuration (window borders, previewer behaviour, etc.).
 
 use nvim_oxi::Dictionary;
 

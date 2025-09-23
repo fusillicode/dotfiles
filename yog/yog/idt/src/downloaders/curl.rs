@@ -14,8 +14,8 @@ pub enum CurlDownloaderOption<'a> {
     PipeIntoTar {
         dest_dir: &'a Path,
         // Option because not all the downloaded archives has a:
-        // - stable name (i.e. shellcheck)
-        // - a usable binary outside the archive (i.e. elixir_ls or lua_ls)
+        // - stable name (i.e. `shellcheck`)
+        // - a usable binary outside the archive (i.e. `elixir_ls` or `lua_ls`)
         // In these cases `dest_name` is set to None
         dest_name: Option<&'a str>,
     },
@@ -29,7 +29,7 @@ pub enum CurlDownloaderOption<'a> {
 /// # Errors
 ///
 /// Returns an error if:
-/// - Executing one of the external commands (tar, zcat) fails or returns a non-zero exit status.
+/// - Executing one of the external commands (`tar`, `zcat`) fails or returns a non-zero exit status.
 /// - A filesystem operation (open/read/write/remove) fails.
 pub fn run(url: &str, opt: &CurlDownloaderOption) -> color_eyre::Result<PathBuf> {
     let mut curl_cmd = cmd::silent_cmd("curl");

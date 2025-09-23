@@ -18,7 +18,6 @@ OIDC
 OS
 Okta
 OpenAPI
-PR
 Prima
 RHS
 RTR
@@ -70,6 +69,7 @@ oks
 pcw
 pgcli
 pgpass
+pr
 preselected
 protoc
 quickfix
@@ -79,6 +79,7 @@ requoting
 reselects
 resolvers
 riesgo
+shellcheck
 sqlx
 statuscolumn
 statusline

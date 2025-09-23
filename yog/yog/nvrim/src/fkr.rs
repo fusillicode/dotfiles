@@ -24,7 +24,7 @@ pub fn dict() -> Dictionary {
 /// selection the corresponding generated string is inserted at the cursor using
 /// [`crate::oxi_ext::buffer::BufferExt::set_text_at_cursor_pos`].
 ///
-/// Behavior:
+/// Behaviour:
 /// - Returns early (no insertion) if fetching user input fails or is canceled.
 /// - Emits error notifications to Neovim for any underlying failures.
 fn insert_string(_: ()) {
