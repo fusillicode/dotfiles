@@ -10,6 +10,7 @@ DTS
 ESC
 FE
 GQL
+HashMap
 I/O
 IO
 JFrog
@@ -40,10 +41,12 @@ augroups
 autocommand
 autocommands
 characterwise
+chargeback
 charwise
 clippy
 cmd
 colorscheme
+dataflow
 dbee
 deserializable
 dir
@@ -55,6 +58,7 @@ franquicia
 grug
 hx
 i64
+impl
 infos
 k8s
 ko
@@ -80,6 +84,7 @@ reselects
 resolvers
 riesgo
 shellcheck
+spendability
 sqlx
 statuscolumn
 statusline
