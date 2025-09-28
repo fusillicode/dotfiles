@@ -94,6 +94,7 @@ statusline
 stderr
 stdout
 t.
+tokio
 toml
 u64
 unstaged
