@@ -8,7 +8,7 @@ repository.workspace = true
 readme.workspace = true
 description = "Nvim Lua module with Rust utilities"
 keywords = ["neovim", "nvim", "lua", "plugin", "rust", "editor"]
-categories = ["development-tools", "api-bindings"]
+categories = ["command-line-utilities", "development-tools"]
 
 [lib]
 crate-type = ["cdylib"]

@@ -7,8 +7,8 @@ license.workspace = true
 repository.workspace = true
 readme.workspace = true
 description = "Data types and helpers for interacting with the Helix editor state"
-keywords = ["helix", "editor", "cursor", "ui", "integration"]
-categories = ["development-tools", "command-line-utilities"]
+keywords = ["helix", "editor", "integration"]
+categories = ["command-line-utilities", "development-tools"]
 
 [features]
 fake = ["dep:fake"]

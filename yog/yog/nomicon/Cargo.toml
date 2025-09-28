@@ -7,6 +7,8 @@ license.workspace = true
 repository.workspace = true
 readme.workspace = true
 description = "Generates a consolidated, styled documentation index for the Yog workspace (Lovecraftian flair)."
+keywords = ["docs", "documentation", "html", "generator"]
+categories = ["command-line-utilities", "development-tools"]
 build = "build.rs"
 
 [dependencies]
