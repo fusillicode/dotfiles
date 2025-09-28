@@ -6,6 +6,9 @@ use chrono::Utc;
 use color_eyre::eyre::OptionExt;
 use color_eyre::eyre::bail;
 
+// Embed minified CSS produced at build time so runtime does not depend on OUT_DIR.
+const MINIFIED_STYLE_PATH: &str = include_str!(concat!(env!("OUT_DIR"), "/style.min.css"));
+
 fn main() -> color_eyre::eyre::Result<()> {
     color_eyre::install()?;
 
@@ -19,10 +22,8 @@ fn main() -> color_eyre::eyre::Result<()> {
         .collect();
     crates.sort();
 
-    // Copy minified CSS from build output into doc directory as external file.
-    let css_src = concat!(env!("OUT_DIR"), "/style.min.css");
     let css_dest = doc_dir.join("style.css");
-    std::fs::copy(css_src, &css_dest)?;
+    std::fs::write(&css_dest, MINIFIED_STYLE_PATH)?;
 
     let index = Index {
         title: "Yog Workspace Documentation",
@@ -60,7 +61,10 @@ fn get_existing_doc_dir() -> color_eyre::Result<PathBuf> {
 
     let doc_dir = workspace_root.join("target/doc");
     if !doc_dir.exists() {
-        bail!("foo")
+        bail!(
+            "documentation directory '{}' does not exist; run 'cargo doc --workspace' first",
+            doc_dir.display()
+        )
     }
     Ok(doc_dir)
 }
