@@ -5,8 +5,8 @@ runs:
   steps:
     - name: Set up Rust
       shell: bash
+      working-directory: yog
       run: |
-        cd yog
         rustup show
 
     - name: Cache Cargo registry
