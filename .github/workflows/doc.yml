@@ -37,12 +37,12 @@ jobs:
           cargo doc --all --no-deps --document-private-items
 
       - name: Clean stale root doc index
-        run: rm -f target/doc/index.html || true
+        run: rm -f yog/target/doc/index.html || true
 
-      - name: Add root redirect to crate docs
+      - name: Add Cargo root redirect to crate docs
         run: |
-          CRATE_NAME=$(grep -m1 '^name *= *"' Cargo.toml | sed -E 's/name *= *"([^"]+)".*/\1/')
-          echo "<meta http-equiv=\"refresh\" content=\"0;url=${CRATE_NAME}/index.html\">" > target/doc/index.html
+          CRATE_NAME=$(grep -h '^name *= *"' yog/yog/*/Cargo.toml yog/yog-utylo/*/Cargo.toml | head -n1 | sed -E 's/name *= *"([^"]+)".*/\1/')
+          echo "<meta http-equiv=\"refresh\" content=\"0;url=${CRATE_NAME}/index.html\">" > yog/target/doc/index.html
 
       - name: Upload Rust doc as artifact
         id: deployment
