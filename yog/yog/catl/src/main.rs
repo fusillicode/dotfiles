@@ -22,7 +22,10 @@ fn main() -> color_eyre::Result<()> {
     let metadata = std::fs::metadata(path)?;
 
     if metadata.is_dir() {
-        return Ok(Command::new("ls").args(["-llAtrh", path]).status()?.exit_ok()?);
+        return Ok(Command::new("ls")
+            .args(["-llAtrh", "--color=always", path])
+            .status()?
+            .exit_ok()?);
     }
 
     if metadata.is_file() || metadata.is_symlink() {
