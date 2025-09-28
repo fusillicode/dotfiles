@@ -1,0 +1,21 @@
+[package]
+name = "nomicon"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Generates a consolidated, styled documentation index for the Yog workspace (Lovecraftian flair)."
+build = "build.rs"
+
+[dependencies]
+askama = { version = "0.14" }
+color-eyre = { workspace = true }
+chrono = { workspace = true }
+
+[build-dependencies]
+color-eyre = { workspace = true }
+lightningcss = { version = "1.0.0-alpha.67", default-features = false, features = [
+  "browserslist",
+] }

@@ -1,0 +1,12 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>{{ title }}</title>
+<link rel="stylesheet" href="style.css" />
+<h1>{{ heading }}</h1>
+<p>Select a crate below to view its documentation.</p>
+<ul>
+{%- for c in crates %}
+  <li><a href="{{ c }}/index.html">{{ c }}</a></li>
+{%- endfor %}
+</ul>
+<footer>Generated on {{ generated }} • <a href="{{ repo_url }}">Repository</a></footer>

@@ -36,6 +36,10 @@ jobs:
         run: |
           cargo doc --all --no-deps --document-private-items
 
+      - name: Generate docs index
+        working-directory: yog
+        run: cargo run --package nomicon -- target/doc
+
       - name: Upload Rust doc as artifact
         id: deployment
         uses: actions/upload-pages-artifact@v3

@@ -4,6 +4,7 @@ ApiKey
 Artifactory
 Blockwise
 CTRL
+CWD
 Checkout
 DNI
 DTS
@@ -36,6 +37,7 @@ Vimscript
 Wezterm
 actix
 ampliado
+arg
 asdf
 augroups
 autocommand
@@ -50,6 +52,7 @@ dataflow
 dbee
 deserializable
 dir
+endfor
 envar
 expr
 extmark
