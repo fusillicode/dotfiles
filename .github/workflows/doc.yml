@@ -31,14 +31,10 @@ jobs:
       - name: Setup
         uses: ./.github/actions/setup
 
-      - name: Build Rust doc
+      - name: Build Rust doc with nomicon
         working-directory: yog
         run: |
-          cargo doc --all --no-deps --document-private-items
-
-      - name: Generate docs index
-        working-directory: yog
-        run: cargo run --package nomicon -- target/doc
+          cargo run --bin nomicon
 
       - name: Upload Rust doc as artifact
         id: deployment

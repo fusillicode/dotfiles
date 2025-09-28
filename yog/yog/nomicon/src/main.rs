@@ -7,7 +7,7 @@ use color_eyre::eyre::OptionExt;
 use color_eyre::eyre::bail;
 
 // Embed minified CSS produced at build time so runtime does not depend on OUT_DIR.
-const MINIFIED_STYLE_PATH: &str = include_str!(concat!(env!("OUT_DIR"), "/style.min.css"));
+const MINIFIED_STYLE_CSS: &str = include_str!(concat!(env!("OUT_DIR"), "/style.min.css"));
 
 fn main() -> color_eyre::eyre::Result<()> {
     color_eyre::install()?;
@@ -22,8 +22,8 @@ fn main() -> color_eyre::eyre::Result<()> {
         .collect();
     crates.sort();
 
-    let css_dest = doc_dir.join("style.css");
-    std::fs::write(&css_dest, MINIFIED_STYLE_PATH)?;
+    let css_dest_path = doc_dir.join("style.css");
+    std::fs::write(&css_dest_path, MINIFIED_STYLE_CSS)?;
 
     let index = Index {
         title: "Yog Workspace Documentation",

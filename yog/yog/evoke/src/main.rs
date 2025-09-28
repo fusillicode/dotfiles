@@ -115,7 +115,7 @@ where
     false
 }
 
-/// Copies a built binary or library from [`from`] to [`to`] using
+/// Copies a built binary or library from `from` to `to` using
 /// [`system::atomic_cp`] and prints an "Installed" status line.
 ///
 /// # Errors

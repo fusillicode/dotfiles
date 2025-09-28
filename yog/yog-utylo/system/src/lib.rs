@@ -176,7 +176,7 @@ pub fn rm_f<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
     })
 }
 
-/// Atomically copies a file from [`from`] to [`to`].
+/// Atomically copies a file from `from` to `to`.
 ///
 /// The content is first written to a uniquely named temporary sibling (with
 /// PID and timestamp) and then moved into place with [`std::fs::rename`]. This
@@ -186,7 +186,7 @@ pub fn rm_f<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
 ///
 /// Returns an error if:
 /// - A filesystem operation (open/read/write/remove) fails.
-/// - [`from`] does not exist.
+/// - `from` does not exist.
 /// - The atomic rename fails.
 /// - The destination's parent directory or file name cannot be resolved.
 /// - The temporary copy fails.

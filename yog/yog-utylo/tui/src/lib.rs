@@ -8,7 +8,7 @@ use strum::IntoEnumIterator;
 
 /// Minimal interactive multi-select returning [`None`] if `opts` is empty or the user cancels.
 ///
-/// Wraps [`inquire::MultiSelect`] with a slim rendering (see [`minimal_render_config`]) and no help message.
+/// Wraps [`inquire::MultiSelect`] with a slim rendering (see `minimal_render_config`) and no help message.
 ///
 /// # Errors
 ///
@@ -29,7 +29,7 @@ pub fn minimal_multi_select<T: std::fmt::Display>(opts: Vec<T>) -> Result<Option
 
 /// Minimal interactive single-select returning [`None`] if `opts` is empty or the user cancels.
 ///
-/// Wraps [`inquire::Select`] with a slim rendering (see [`minimal_render_config`]) and no help message.
+/// Wraps [`inquire::Select`] with a slim rendering (see `minimal_render_config`) and no help message.
 ///
 /// # Errors
 ///
@@ -50,7 +50,7 @@ pub fn minimal_select<T: std::fmt::Display>(opts: Vec<T>) -> Result<Option<T>, I
 
 /// Displays a yes/no selection prompt with a minimal UI.
 ///
-/// Returns [`Ok(Some(YesNo))`] on selection, [`Ok(None)`] if canceled/interrupted.
+/// Returns `Ok(Some(_))` on selection, `Ok(None)` if canceled/interrupted.
 ///
 /// # Errors
 ///

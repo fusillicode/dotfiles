@@ -13,7 +13,7 @@ use git::WorktreeState;
 /// - Restoring modified, renamed, or deleted entries via `git restore`
 ///
 /// Workflow:
-/// 1. Collect [`GitStatusEntry`] values via [`crate::git_status::get`].
+/// 1. Collect [`GitStatusEntry`] values via [`git::get_status`].
 /// 2. Let the user multi‑select entries via the minimal TUI.
 /// 3. Delete new or added entries and run `git restore` (optionally from a user‑supplied branch) for the remaining
 ///    changed entries.
@@ -25,7 +25,7 @@ use git::WorktreeState;
 ///
 /// Returns an error if:
 /// - Initializing [`color_eyre`] fails.
-/// - Fetching entries via [`crate::git_status::get`] fails.
+/// - Fetching entries via [`git::get_status`] fails.
 /// - Presenting the selection UI fails.
 /// - Deleting an entry or executing the `git restore` command fails.
 fn main() -> color_eyre::Result<()> {

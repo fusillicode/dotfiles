@@ -1276,6 +1276,7 @@ version = "0.1.0"
 dependencies = [
  "askama",
  "chrono",
+ "cmd",
  "color-eyre",
  "lightningcss",
 ]
