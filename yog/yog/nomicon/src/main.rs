@@ -12,7 +12,7 @@ fn main() -> color_eyre::eyre::Result<()> {
     let doc_dir = get_existing_doc_dir()?;
 
     let mut crates: Vec<String> = std::fs::read_dir(&doc_dir)?
-        .filter_map(|e| e.ok())
+        .filter_map(Result::ok)
         .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
         .map(|e| e.file_name().to_string_lossy().into_owned())
         .filter(|name| Path::new(&doc_dir).join(name).join("index.html").is_file())
