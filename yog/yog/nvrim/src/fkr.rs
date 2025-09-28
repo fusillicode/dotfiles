@@ -10,8 +10,8 @@ use crate::oxi_ext::buffer::BufferExt as _;
 /// [`Dictionary`] of random string generation helpers powered by [`fkr`].
 ///
 /// Entries:
-/// - `"insert_string"`: wraps [`gen_value`] and inserts a generated value at the current cursor position (replacing any
-///   active selection via the underlying buffer helper).
+/// - `"insert_string"`: inserts a generated value at the current cursor position replacing any active selection via the
+///   underlying buffer helper.
 pub fn dict() -> Dictionary {
     dict! {
         "insert_string": fn_from!(insert_string),

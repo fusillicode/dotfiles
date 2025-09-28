@@ -6,7 +6,7 @@
 
 use nvim_oxi::Dictionary;
 
-/// [`nvim_oxi::Buffer`] helpers.
+/// [`nvim_oxi::api::Buffer`] helpers.
 mod buffer;
 /// CLI flags for `fd` and `ripgrep`.
 mod cli;

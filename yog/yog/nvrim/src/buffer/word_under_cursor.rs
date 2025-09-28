@@ -103,7 +103,7 @@ impl From<String> for WordUnderCursor {
 ///
 /// Returns an error if:
 /// - launching or waiting on the `file` command fails
-/// - the command exits with non-success (see [`utils::cmd::CmdExt`])
+/// - the command exits with non-success
 /// - standard output cannot be decoded as valid UTF-8
 fn exec_file_cmd(path: &str) -> color_eyre::Result<FileCmdOutput> {
     let output = std::str::from_utf8(&Command::new("file").args([path, "-I"]).exec()?.stdout)?.to_lowercase();

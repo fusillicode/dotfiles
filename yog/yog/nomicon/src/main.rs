@@ -1,3 +1,5 @@
+#![feature(exit_status_error)]
+
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -12,6 +14,11 @@ const MINIFIED_STYLE_CSS: &str = include_str!(concat!(env!("OUT_DIR"), "/style.m
 fn main() -> color_eyre::eyre::Result<()> {
     color_eyre::install()?;
 
+    cmd::silent_cmd("cargo")
+        .args(["doc", "--all", "--no-deps", "--document-private-items"])
+        .status()?
+        .exit_ok()?;
+
     let doc_dir = get_existing_doc_dir()?;
 
     let mut crates: Vec<String> = std::fs::read_dir(&doc_dir)?
@@ -25,17 +32,14 @@ fn main() -> color_eyre::eyre::Result<()> {
     let css_dest_path = doc_dir.join("style.css");
     std::fs::write(&css_dest_path, MINIFIED_STYLE_CSS)?;
 
-    let index = Index {
-        title: "Yog Workspace Documentation",
-        heading: "Yog Workspace Crates",
+    let tpl = Index {
         crates: &crates,
         generated: Utc::now().to_rfc3339(),
-        repo_url: "https://github.com/fusillicode/dotfiles",
     };
-    let html = index.render()?;
+    let html = tpl.render()?;
 
     let index_path = doc_dir.join("index.html");
-    std::fs::create_dir_all(doc_dir)?;
+    std::fs::create_dir_all(&doc_dir)?;
     std::fs::write(&index_path, html)?;
 
     Ok(())
@@ -44,20 +48,17 @@ fn main() -> color_eyre::eyre::Result<()> {
 #[derive(Template)]
 #[template(path = "index.html")]
 struct Index<'a> {
-    title: &'a str,
-    heading: &'a str,
     crates: &'a [String],
     generated: String,
-    repo_url: &'a str,
 }
 
 fn get_existing_doc_dir() -> color_eyre::Result<PathBuf> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
 
-    let workspace_root = manifest_dir
-        .parent() // .../yog/yog
-        .and_then(|p| p.parent()) // .../yog
-        .ok_or_eyre(format!("cannot get workspace root from manifest_dir={}", manifest_dir.display()))?;
+    let workspace_root = manifest_dir.parent().and_then(|p| p.parent()).ok_or_eyre(format!(
+        "cannot get workspace root from manifest_dir={}",
+        manifest_dir.display()
+    ))?;
 
     let doc_dir = workspace_root.join("target/doc");
     if !doc_dir.exists() {

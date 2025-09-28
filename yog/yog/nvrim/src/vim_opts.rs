@@ -18,7 +18,7 @@ pub fn dict() -> Dictionary {
 
 /// Sets a Vim option by `name` to `value` within the given [`OptionOpts`].
 ///
-/// Errors are notified to Nvim via [`crate::oxi_ext::api::notify_error`].
+/// Errors are notified to Nvim via `crate::oxi_ext::api::notify_error`.
 pub fn set<Opt: ToObject + core::fmt::Debug + core::marker::Copy>(name: &str, value: Opt, opts: &OptionOpts) {
     if let Err(error) = nvim_oxi::api::set_option_value(name, value, opts) {
         crate::oxi_ext::api::notify_error(&format!(
@@ -32,7 +32,7 @@ pub fn set<Opt: ToObject + core::fmt::Debug + core::marker::Copy>(name: &str, va
 /// The current value is read as a [`String`] and modified by appending the supplied one with a
 /// comma.
 ///
-/// Errors are notified to Nvim via [`crate::oxi_ext::api::notify_error`].
+/// Errors are notified to Nvim via `crate::oxi_ext::api::notify_error`.
 pub fn append(name: &str, value: &str, opts: &OptionOpts) {
     let Ok(mut cur_value) = nvim_oxi::api::get_option_value::<String>(name, opts).inspect_err(|error| {
         crate::oxi_ext::api::notify_error(&format!(

@@ -133,7 +133,7 @@ where
 
 /// Converts an [`inquire`] prompt [`Result`] into an [`Option`]-wrapped [`Result`].
 ///
-/// Treats [`InquireError::OperationCanceled`] / [`InquireError::OperationInterrupted`] as [`Ok(None)`].
+/// Treats [`InquireError::OperationCanceled`] / [`InquireError::OperationInterrupted`] as `Ok(None)`.
 fn closable_prompt<T>(prompt_res: Result<T, InquireError>) -> Result<Option<T>, InquireError> {
     match prompt_res {
         Ok(res) => Ok(Some(res)),

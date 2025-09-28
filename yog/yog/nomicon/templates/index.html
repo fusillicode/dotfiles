@@ -1,12 +1,12 @@
 <!doctype html>
 <meta charset="utf-8" />
-<title>{{ title }}</title>
+<title>Yog Workspace Documentation</title>
 <link rel="stylesheet" href="style.css" />
-<h1>{{ heading }}</h1>
+<h1>Yog Workspace Crates</h1>
 <p>Select a crate below to view its documentation.</p>
 <ul>
 {%- for c in crates %}
   <li><a href="{{ c }}/index.html">{{ c }}</a></li>
 {%- endfor %}
 </ul>
-<footer>Generated on {{ generated }} • <a href="{{ repo_url }}">Repository</a></footer>
+<footer>Generated on {{ generated }} • <a href="https://github.com/fusillicode/dotfiles">Repository</a></footer>
