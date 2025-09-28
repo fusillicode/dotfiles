@@ -32,17 +32,18 @@ jobs:
         uses: ./.github/actions/setup
 
       - name: Build Rust doc
+        working-directory: yog
         run: |
-          cd yog
           cargo doc --all --no-deps --document-private-items
 
       - name: Clean stale root doc index
-        run: rm -f yog/target/doc/index.html || true
+        working-directory: yog
+        run: rm -f target/doc/index.html || true
 
       - name: Add Cargo root redirect to crate docs
+        working-directory: yog
         run: |
-          CRATE_NAME=$(grep -h '^name *= *"' yog/yog/*/Cargo.toml yog/yog-utylo/*/Cargo.toml | head -n1 | sed -E 's/name *= *"([^"]+)".*/\1/')
-          echo "<meta http-equiv=\"refresh\" content=\"0;url=${CRATE_NAME}/index.html\">" > yog/target/doc/index.html
+          echo "<meta http-equiv=\"refresh\" content=\"0;url=yog/index.html\">" > target/doc/index.html
 
       - name: Upload Rust doc as artifact
         id: deployment

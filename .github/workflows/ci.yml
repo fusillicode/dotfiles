@@ -31,8 +31,8 @@ jobs:
         uses: ./.github/actions/setup
 
       - name: Lint code
+        working-directory: yog
         run: |
-          cd yog
           cargo clippy --all-targets --all-features -- -D warnings
 
   test:
@@ -46,8 +46,8 @@ jobs:
         uses: ./.github/actions/setup
 
       - name: Test
+        working-directory: yog
         run: |
-          cd yog
           cargo test --workspace --all-features
 
   release:
@@ -61,6 +61,6 @@ jobs:
         uses: ./.github/actions/setup
 
       - name: Build
+        working-directory: yog
         run: |
-          cd yog
           cargo build --release
