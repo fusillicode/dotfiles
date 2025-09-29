@@ -5,13 +5,13 @@ mode: primary
 model: github/copilot-gpt-5
 temperature: 0.2
 permission:
-  edit: ask
+  edit: allow
   bash:
-    git commit: ask
-    git revert: ask
-    git reset: ask
-    git rebase: ask
-    git push: ask
+    git commit: deny
+    git revert: deny
+    git reset: deny
+    git rebase: deny
+    git push: deny
     "*": allow
   webfetch: allow
 tools:
