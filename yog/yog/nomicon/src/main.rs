@@ -1,5 +1,6 @@
 #![feature(exit_status_error)]
 
+use std::collections::VecDeque;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -15,27 +16,35 @@ const MINIFIED_STYLE_CSS: &str = include_str!(concat!(env!("OUT_DIR"), "/style.m
 fn main() -> color_eyre::eyre::Result<()> {
     color_eyre::install()?;
 
+    // Always (re)generate docs for all workspace crates (including private items) first.
     ytil_cmd::silent_cmd("cargo")
         .args(["doc", "--all", "--no-deps", "--document-private-items"])
         .status()?
         .exit_ok()?;
 
     let workspace_root = get_workspace_root()?;
-
     let doc_dir = get_existing_doc_dir(&workspace_root)?;
 
-    let mut crates = vec![];
-    for crate_name in std::fs::read_dir(&doc_dir)?
-        .filter_map(Result::ok)
-        .filter(|entry| entry.file_type().map(|file_type| file_type.is_dir()).unwrap_or(false))
-        .map(|entry| entry.file_name().to_string_lossy().into_owned())
-        .filter(|name| Path::new(&doc_dir).join(name).join("index.html").is_file())
-    {
-        crates.push(CrateMeta {
-            name: crate_name.clone(),
-            description: get_crate_description(&workspace_root, &crate_name)?,
-        })
+    let manifests = find_all_manifests(&workspace_root)?;
+    let mut crates = Vec::new();
+
+    for manifest in manifests {
+        // Skip the workspace root Cargo.toml if it lacks a [package] section.
+        let content = std::fs::read_to_string(&manifest)?;
+        if !content.lines().any(|l| l.trim_start().starts_with("[package]")) {
+            continue;
+        }
+
+        let name = get_cargo_toml_key_value(&content, "name")?;
+        let description = get_cargo_toml_key_value(&content, "description")?;
+
+        // Only include crates that actually have a generated index (documentation produced).
+        let index_html = doc_dir.join(&name).join("index.html");
+        if index_html.is_file() {
+            crates.push(CrateMeta { name, description });
+        }
     }
+
     crates.sort_by(|a, b| a.name.cmp(&b.name));
 
     let css_dest_path = doc_dir.join("style.css");
@@ -78,20 +87,52 @@ fn get_workspace_root() -> color_eyre::Result<PathBuf> {
         .to_path_buf())
 }
 
-fn get_crate_description(workspace_root: &Path, crate_name: &str) -> color_eyre::Result<String> {
-    let cargo_toml = dbg!(workspace_root.join("yog").join(crate_name).join("Cargo.toml"));
-    let content = std::fs::read_to_string(cargo_toml)?;
-    for line in content.lines() {
-        let trimmed = line.trim_start();
-        let Some(desc_line) = trimmed.strip_prefix("description") else {
-            continue;
-        };
-        let &[_, desc] = desc_line.split('=').collect::<Vec<_>>().as_slice() else {
-            bail!("description line does not have =, desc_line={desc_line}");
-        };
-        return Ok(desc.to_string());
+/// Recursively discover all Cargo.toml manifests under the workspace root.
+fn find_all_manifests(workspace_root: &Path) -> color_eyre::Result<Vec<PathBuf>> {
+    let mut manifests = Vec::new();
+    let mut queue = VecDeque::from([workspace_root.to_path_buf()]);
+
+    while let Some(dir) = queue.pop_front() {
+        for entry in std::fs::read_dir(&dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if entry.file_type()?.is_dir() {
+                let name = entry.file_name();
+                let name = name.to_string_lossy();
+                if name.starts_with('.') || name == "target" || name == "node_modules" {
+                    continue;
+                }
+                queue.push_back(path);
+            } else if path.file_name().is_some_and(|f| f == "Cargo.toml") {
+                manifests.push(path);
+            }
+        }
     }
-    bail!("no description line found in Cargo.toml for crate={crate_name}");
+
+    Ok(manifests)
+}
+
+/// Return the value for the first `key = value` line.
+///
+/// Errors if the key is missing or malformed.
+fn get_cargo_toml_key_value(content: &str, key: &str) -> color_eyre::Result<String> {
+    for line in content.lines() {
+        let trimmed_line = line.trim_start();
+        if let Some(rest) = trimmed_line.strip_prefix(key) {
+            let rest = rest.trim_start();
+            if let Some(after_eq) = rest.strip_prefix('=') {
+                return Ok(after_eq.trim().trim_matches('"').to_string());
+            }
+            bail!("malformed key line for '{key}': {line}");
+        }
+    }
+    bail!("required key '{key}' missing in manifest");
+}
+
+// Legacy helper kept (unused externally) for compatibility if referenced elsewhere.
+#[allow(dead_code)]
+fn get_crate_description(_workspace_root: &Path, crate_name: &str) -> color_eyre::Result<String> {
+    bail!("get_crate_description deprecated in favor of manifest scan (crate={crate_name})")
 }
 
 fn get_existing_doc_dir(workspace_root: &Path) -> color_eyre::Result<PathBuf> {
