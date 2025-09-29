@@ -57,6 +57,11 @@ li a:hover {
   background: var(--bg-alt);
   box-shadow: 0 0 0 1px var(--border);
 }
+.desc {
+  color: var(--fg-dim);
+  font-size: 0.75rem;
+  letter-spacing: 0.5px;
+}
 footer {
   margin-top: 3rem;
   font-size: 0.8rem;
