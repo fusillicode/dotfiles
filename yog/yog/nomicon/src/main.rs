@@ -12,6 +12,8 @@ use color_eyre::eyre::bail;
 
 // Embed minified CSS produced at build time so runtime does not depend on OUT_DIR.
 const MINIFIED_STYLE_CSS: &str = include_str!(concat!(env!("OUT_DIR"), "/style.min.css"));
+// Embed favicon so it is always written alongside index.html
+const FAVICON_SVG: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/templates/favicon.svg"));
 
 fn main() -> color_eyre::eyre::Result<()> {
     color_eyre::install()?;
@@ -59,6 +61,10 @@ fn main() -> color_eyre::eyre::Result<()> {
     let index_path = doc_dir.join("index.html");
     std::fs::create_dir_all(&doc_dir)?;
     std::fs::write(&index_path, html)?;
+
+    // Write favicon (svg) next to index if missing or outdated
+    let favicon_path = doc_dir.join("favicon.svg");
+    std::fs::write(&favicon_path, FAVICON_SVG)?;
 
     Ok(())
 }
