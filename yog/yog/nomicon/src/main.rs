@@ -10,10 +10,7 @@ use chrono::Utc;
 use color_eyre::eyre::OptionExt;
 use color_eyre::eyre::bail;
 
-// Embed minified CSS produced at build time so runtime does not depend on OUT_DIR.
-const MINIFIED_STYLE_CSS: &str = include_str!(concat!(env!("OUT_DIR"), "/style.min.css"));
-// Embed favicon so it is always written alongside index.html
-const FAVICON_SVG: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/templates/favicon.svg"));
+// Minified CSS is written to assets/style.min.css at build time; no embed needed.
 
 fn main() -> color_eyre::eyre::Result<()> {
     color_eyre::install()?;
@@ -27,13 +24,15 @@ fn main() -> color_eyre::eyre::Result<()> {
     let workspace_root = get_workspace_root()?;
     let doc_dir = get_existing_doc_dir(&workspace_root)?;
 
-    let manifests = find_all_manifests(&workspace_root)?;
     let mut crates = Vec::new();
-
-    for manifest in manifests {
+    for cargo_toml in find_all_cargo_tomls(&workspace_root)? {
         // Skip the workspace root Cargo.toml if it lacks a [package] section.
-        let content = std::fs::read_to_string(&manifest)?;
-        if !content.lines().any(|l| l.trim_start().starts_with("[package]")) {
+        let content = std::fs::read_to_string(&cargo_toml)?;
+        if !content
+            .lines()
+            .next()
+            .is_some_and(|l| l.trim_start().starts_with("[package]"))
+        {
             continue;
         }
 
@@ -46,32 +45,52 @@ fn main() -> color_eyre::eyre::Result<()> {
             crates.push(CrateMeta { name, description });
         }
     }
-
     crates.sort_by(|a, b| a.name.cmp(&b.name));
 
-    let css_dest_path = doc_dir.join("style.css");
-    std::fs::write(&css_dest_path, MINIFIED_STYLE_CSS)?;
-
-    let tpl = Index {
+    let index_page = IndexPage {
         crates: &crates,
         generated: Utc::now().to_rfc3339_opts(SecondsFormat::Secs, false),
     };
-    let html = tpl.render()?;
+    let html = index_page.render()?;
 
-    let index_path = doc_dir.join("index.html");
-    std::fs::create_dir_all(&doc_dir)?;
-    std::fs::write(&index_path, html)?;
+    let index_doc_path = doc_dir.join("index.html");
+    std::fs::write(&index_doc_path, html)?;
 
-    // Write favicon (svg) next to index if missing or outdated
-    let favicon_path = doc_dir.join("favicon.svg");
-    std::fs::write(&favicon_path, FAVICON_SVG)?;
+    // Copy all static assets (non-minified and originals) into doc root.
+    copy_assets(&doc_dir)?;
 
+    Ok(())
+}
+
+fn copy_assets(doc_dir: &Path) -> color_eyre::Result<()> {
+    let assets_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
+    if !assets_dir.is_dir() {
+        bail!("assets_dir {} not a directory", assets_dir.display());
+    }
+    let dest_dir = doc_dir.join("assets");
+    copy_recursive(&assets_dir, &dest_dir)?;
+    Ok(())
+}
+
+fn copy_recursive(src: &Path, dest: &Path) -> color_eyre::Result<()> {
+    std::fs::create_dir_all(dest)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let path = entry.path();
+        let file_name = entry.file_name();
+        let dest_path = dest.join(&file_name);
+        if path.is_dir() {
+            copy_recursive(&path, &dest_path)?;
+        } else if path.is_file() {
+            std::fs::copy(&path, &dest_path)?;
+        }
+    }
     Ok(())
 }
 
 #[derive(Template)]
 #[template(path = "index.html")]
-struct Index<'a> {
+struct IndexPage<'a> {
     crates: &'a [CrateMeta],
     generated: String,
 }
@@ -94,7 +113,7 @@ fn get_workspace_root() -> color_eyre::Result<PathBuf> {
 }
 
 /// Recursively discover all Cargo.toml manifests under the workspace root.
-fn find_all_manifests(workspace_root: &Path) -> color_eyre::Result<Vec<PathBuf>> {
+fn find_all_cargo_tomls(workspace_root: &Path) -> color_eyre::Result<Vec<PathBuf>> {
     let mut manifests = Vec::new();
     let mut queue = VecDeque::from([workspace_root.to_path_buf()]);
 

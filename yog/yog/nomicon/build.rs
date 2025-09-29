@@ -5,25 +5,25 @@ use lightningcss::stylesheet::ParserOptions;
 use lightningcss::stylesheet::PrinterOptions;
 use lightningcss::stylesheet::StyleSheet;
 
+const ASSETS_DIR: &str = "assets";
+
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
-
-    println!("cargo:rerun-if-changed=templates/style.css");
+    println!("cargo:rerun-if-changed=assets/style.css");
 
     let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
-    let css_input_path = manifest_dir.join("templates/style.css");
-    let css_code = std::fs::read_to_string(&css_input_path)?;
+    let css_raw_path = manifest_dir.join(ASSETS_DIR).join("style.css");
+    let css_raw = std::fs::read_to_string(&css_raw_path)?;
 
-    let out_dir = PathBuf::from(std::env::var("OUT_DIR")?);
-    let css_output_path = out_dir.join("style.min.css");
+    let css_minified_path = manifest_dir.join(ASSETS_DIR).join("style.min.css");
 
-    let minified = if std::env::var_os("NO_MINIFY").is_some() {
-        css_code
+    let css_minified = if std::env::var_os("NO_MINIFY").is_some() {
+        css_raw
     } else {
-        minify_css(&css_code)?
+        minify_css(&css_raw)?
     };
 
-    std::fs::write(&css_output_path, minified)?;
+    std::fs::write(&css_minified_path, css_minified)?;
     Ok(())
 }
 

@@ -1,11 +1,7 @@
-/* Font: PxPlus ToshibaSat 9x16 via local file with CDN fallback */
+/* Font: PxPlus ToshibaSat 9x16 (WOFF2 only) */
 @font-face {
   font-family: "PxPlus ToshibaSat 9x16";
-  src:
-    local("PxPlus ToshibaSat 9x16"),
-    url("https://cdn.jsdelivr.net/gh/fusillicode/dotfiles@main/PxPlus_ToshibaSat_9x16.ttf")
-      format("truetype"),
-    url("../../../../PxPlus_ToshibaSat_9x16.ttf") format("truetype");
+  src: url("font.woff2") format("woff2");
   font-display: swap;
 }
 :root {
