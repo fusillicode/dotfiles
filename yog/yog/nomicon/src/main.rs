@@ -129,12 +129,6 @@ fn get_cargo_toml_key_value(content: &str, key: &str) -> color_eyre::Result<Stri
     bail!("required key '{key}' missing in manifest");
 }
 
-// Legacy helper kept (unused externally) for compatibility if referenced elsewhere.
-#[allow(dead_code)]
-fn get_crate_description(_workspace_root: &Path, crate_name: &str) -> color_eyre::Result<String> {
-    bail!("get_crate_description deprecated in favor of manifest scan (crate={crate_name})")
-}
-
 fn get_existing_doc_dir(workspace_root: &Path) -> color_eyre::Result<PathBuf> {
     let doc_dir = workspace_root.join("target/doc");
     if !doc_dir.exists() {
