@@ -15,7 +15,7 @@ const MINIFIED_STYLE_CSS: &str = include_str!(concat!(env!("OUT_DIR"), "/style.m
 fn main() -> color_eyre::eyre::Result<()> {
     color_eyre::install()?;
 
-    cmd::silent_cmd("cargo")
+    ytil_cmd::silent_cmd("cargo")
         .args(["doc", "--all", "--no-deps", "--document-private-items"])
         .status()?
         .exit_ok()?;

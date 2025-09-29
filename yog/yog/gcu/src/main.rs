@@ -5,7 +5,7 @@ use std::ops::Deref;
 
 use color_eyre::eyre::bail;
 use color_eyre::owo_colors::OwoColorize as _;
-use git::Branch;
+use ytil_git::Branch;
 use url::Url;
 
 /// Git branch management CLI with interactive selection, branch creation with names
@@ -19,8 +19,8 @@ use url::Url;
 /// - Multiple arguments: build a branch name from all arguments ([`build_branch_name`]), then create & switch.
 ///
 /// GitHub PR URL handling: if the (single) argument parses as a GitHub PR URL the tool logs in
-/// via [`github::log_into_github`] and derives a branch name with
-/// [`github::get_branch_name_from_url`], switching to that branch.
+/// via [`ytil_github::log_into_github`] and derives a branch name with
+/// [`ytil_github::get_branch_name_from_url`], switching to that branch.
 ///
 /// # Errors
 ///
@@ -33,7 +33,7 @@ use url::Url;
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let args = system::get_args();
+    let args = ytil_system::get_args();
     let args: Vec<_> = args.iter().map(String::as_str).collect();
 
     match args.split_first() {
@@ -51,7 +51,7 @@ fn main() -> color_eyre::Result<()> {
 /// Interactive selection and switching of Git branches.
 ///
 /// Presents a minimal TUI listing recent local / remote branches (with redundant
-/// remotes removed via [`git::remove_redundant_remotes`]). Selecting an empty
+/// remotes removed via [`ytil_git::remove_redundant_remotes`]). Selecting an empty
 /// line or "-" triggers previous-branch switching.
 ///
 /// # Errors
@@ -61,10 +61,10 @@ fn main() -> color_eyre::Result<()> {
 /// - UI rendering fails.
 /// - Branch switching fails.
 fn autocomplete_git_branches() -> color_eyre::Result<()> {
-    let mut branches = git::get_branches()?;
-    git::remove_redundant_remotes(&mut branches);
+    let mut branches = ytil_git::get_branches()?;
+    ytil_git::remove_redundant_remotes(&mut branches);
 
-    match tui::minimal_select(branches.into_iter().map(RenderableBranch).collect())? {
+    match ytil_tui::minimal_select(branches.into_iter().map(RenderableBranch).collect())? {
         Some(hd) if hd.name() == "-" || hd.name().is_empty() => switch_branch("-"),
         Some(other) => switch_branch(other.name()),
         None => Ok(()),
@@ -93,7 +93,7 @@ impl core::fmt::Display for RenderableBranch {
 /// Also accepts a single GitHub PR URL and derives the associated branch name.
 ///
 /// Behaviour:
-/// - If `arg` parses as a GitHub PR URL, authenticate then derive the branch name, fetch it via [`git::fetch_branches`]
+/// - If `arg` parses as a GitHub PR URL, authenticate then derive the branch name, fetch it via [`ytil_git::fetch_branches`]
 ///   and switch to it.
 /// - Otherwise, sanitise `arg` into a branch name ([`build_branch_name`]) and create, if missing (after confirmation),
 ///   then switch to it.
@@ -107,21 +107,21 @@ impl core::fmt::Display for RenderableBranch {
 /// - Underlying Git or I/O operations fail.
 fn switch_branch_or_create_if_missing(arg: &str) -> color_eyre::Result<()> {
     if let Ok(url) = Url::parse(arg) {
-        github::log_into_github()?;
-        let branch_name = github::get_branch_name_from_url(&url)?;
-        git::fetch_branches(&[&branch_name])?;
+        ytil_github::log_into_github()?;
+        let branch_name = ytil_github::get_branch_name_from_url(&url)?;
+        ytil_git::fetch_branches(&[&branch_name])?;
         return switch_branch(&branch_name);
     }
     create_branch_and_switch(&build_branch_name(&[arg])?)
 }
 
-/// Switches to the specified Git branch (delegates to [`git::switch_branch`]).
+/// Switches to the specified Git branch (delegates to [`ytil_git::switch_branch`]).
 ///
 /// # Errors
 ///
 /// Returns an error if branch lookup, checkout, or underlying repository operations fail.
 fn switch_branch(branch: &str) -> color_eyre::Result<()> {
-    git::switch_branch(branch)?;
+    ytil_git::switch_branch(branch)?;
     println!("{} {}", ">".magenta().bold(), branch.bold());
     Ok(())
 }
@@ -142,14 +142,14 @@ fn create_branch_and_switch(branch: &str) -> color_eyre::Result<()> {
     if !should_create_new_branch(branch)? {
         return Ok(());
     }
-    if let Err(error) = git::create_branch(branch) {
+    if let Err(error) = ytil_git::create_branch(branch) {
         if error.to_string().contains("already exists") {
             println!("{} {}", "@".blue().bold(), branch.bold());
             return switch_branch(branch);
         }
         return Err(error);
     }
-    git::switch_branch(branch)?;
+    ytil_git::switch_branch(branch)?;
     println!("{} {}", "+".green().bold(), branch.bold());
     Ok(())
 }
@@ -170,7 +170,7 @@ fn should_create_new_branch(branch: &str) -> color_eyre::Result<bool> {
     if is_default_branch(branch) {
         return Ok(true);
     }
-    let curr_branch = git::get_current_branch()?;
+    let curr_branch = ytil_git::get_current_branch()?;
     if is_default_branch(&curr_branch) {
         return Ok(true);
     }

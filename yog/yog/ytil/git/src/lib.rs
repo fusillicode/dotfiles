@@ -20,7 +20,7 @@ use std::process::Command;
 
 use chrono::DateTime;
 use chrono::Utc;
-use cmd::CmdExt as _;
+use ytil_cmd::CmdExt as _;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 use git2::Repository;

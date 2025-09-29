@@ -212,7 +212,7 @@ name = "catl"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
- "system",
+ "ytil_system",
 ]
 
 [[package]]
@@ -245,14 +245,6 @@ dependencies = [
  "serde",
  "wasm-bindgen",
  "windows-link",
-]
-
-[[package]]
-name = "cmd"
-version = "0.1.0"
-dependencies = [
- "color-eyre",
- "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -541,14 +533,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
-name = "editor"
-version = "0.1.0"
-dependencies = [
- "color-eyre",
- "wezterm",
-]
-
-[[package]]
 name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -574,9 +558,9 @@ dependencies = [
 name = "evoke"
 version = "0.1.0"
 dependencies = [
- "cmd",
  "color-eyre",
- "system",
+ "ytil_cmd",
+ "ytil_system",
 ]
 
 [[package]]
@@ -615,8 +599,8 @@ dependencies = [
  "color-eyre",
  "fake",
  "strum",
- "system",
- "tui",
+ "ytil_system",
+ "ytil_tui",
 ]
 
 [[package]]
@@ -691,13 +675,13 @@ name = "gch"
 version = "0.1.0"
 dependencies = [
  "assert2",
- "cmd",
  "color-eyre",
- "git",
  "pretty_assertions",
  "rstest",
- "system",
- "tui",
+ "ytil_cmd",
+ "ytil_git",
+ "ytil_system",
+ "ytil_tui",
 ]
 
 [[package]]
@@ -706,17 +690,17 @@ version = "0.1.0"
 dependencies = [
  "assert2",
  "chrono",
- "cmd",
  "color-eyre",
- "git",
- "github",
  "pretty_assertions",
  "rstest",
  "serde",
  "serde_json",
- "system",
- "tui",
  "url",
+ "ytil_cmd",
+ "ytil_git",
+ "ytil_github",
+ "ytil_system",
+ "ytil_tui",
 ]
 
 [[package]]
@@ -759,16 +743,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f"
 
 [[package]]
-name = "git"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "cmd",
- "color-eyre",
- "git2",
-]
-
-[[package]]
 name = "git2"
 version = "0.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -780,18 +754,6 @@ dependencies = [
  "log",
  "openssl-probe",
  "openssl-sys",
- "url",
-]
-
-[[package]]
-name = "github"
-version = "0.1.0"
-dependencies = [
- "assert2",
- "cmd",
- "color-eyre",
- "git",
- "rstest",
  "url",
 ]
 
@@ -812,14 +774,6 @@ name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
-
-[[package]]
-name = "hx"
-version = "0.1.0"
-dependencies = [
- "color-eyre",
- "fake",
-]
 
 [[package]]
 name = "iana-time-zone"
@@ -962,10 +916,10 @@ dependencies = [
 name = "idt"
 version = "0.1.0"
 dependencies = [
- "cmd",
  "color-eyre",
- "github",
- "system",
+ "ytil_cmd",
+ "ytil_github",
+ "ytil_system",
 ]
 
 [[package]]
@@ -1276,9 +1230,9 @@ version = "0.1.0"
 dependencies = [
  "askama",
  "chrono",
- "cmd",
  "color-eyre",
  "lightningcss",
+ "ytil_cmd",
 ]
 
 [[package]]
@@ -1349,21 +1303,21 @@ dependencies = [
 name = "nvrim"
 version = "0.1.0"
 dependencies = [
- "cmd",
  "color-eyre",
  "convert_case 0.8.0",
  "fkr",
- "git",
  "itertools 0.14.0",
  "nvim-oxi",
  "serde",
  "serde_repr",
  "strum",
- "system",
  "tree-sitter",
  "tree-sitter-rust",
  "url",
- "wezterm",
+ "ytil_cmd",
+ "ytil_git",
+ "ytil_system",
+ "ytil_wezterm",
 ]
 
 [[package]]
@@ -1379,11 +1333,11 @@ dependencies = [
 name = "oe"
 version = "0.1.0"
 dependencies = [
- "cmd",
  "color-eyre",
- "editor",
- "system",
- "wezterm",
+ "ytil_cmd",
+ "ytil_editor",
+ "ytil_system",
+ "ytil_wezterm",
 ]
 
 [[package]]
@@ -1976,15 +1930,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "system"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "cmd",
- "color-eyre",
-]
-
-[[package]]
 name = "temp-env"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2159,16 +2104,7 @@ version = "0.1.0"
 dependencies = [
  "color-eyre",
  "itertools 0.14.0",
- "system",
-]
-
-[[package]]
-name = "tui"
-version = "0.1.0"
-dependencies = [
- "color-eyre",
- "inquire",
- "strum",
+ "ytil_system",
 ]
 
 [[package]]
@@ -2252,8 +2188,8 @@ dependencies = [
  "color-eyre",
  "serde",
  "serde_json",
- "system",
- "tui",
+ "ytil_system",
+ "ytil_tui",
 ]
 
 [[package]]
@@ -2337,16 +2273,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "293c37f4efa430ca14db3721dfbe48d8c33308096bd44d80ebaa775ab71ba1cf"
 dependencies = [
  "unicode-ident",
-]
-
-[[package]]
-name = "wezterm"
-version = "0.1.0"
-dependencies = [
- "color-eyre",
- "fake",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -2544,15 +2470,15 @@ name = "yghfl"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
- "editor",
  "fake",
- "git",
- "github",
- "hx",
- "system",
  "temp-env",
  "url",
- "wezterm",
+ "ytil_editor",
+ "ytil_git",
+ "ytil_github",
+ "ytil_hx",
+ "ytil_system",
+ "ytil_wezterm",
 ]
 
 [[package]]
@@ -2560,10 +2486,10 @@ name = "yhfp"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
- "editor",
- "hx",
- "system",
- "wezterm",
+ "ytil_editor",
+ "ytil_hx",
+ "ytil_system",
+ "ytil_wezterm",
 ]
 
 [[package]]
@@ -2588,6 +2514,80 @@ dependencies = [
  "quote",
  "syn 2.0.106",
  "synstructure",
+]
+
+[[package]]
+name = "ytil_cmd"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "thiserror 2.0.16",
+]
+
+[[package]]
+name = "ytil_editor"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "ytil_wezterm",
+]
+
+[[package]]
+name = "ytil_git"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "color-eyre",
+ "git2",
+ "ytil_cmd",
+]
+
+[[package]]
+name = "ytil_github"
+version = "0.1.0"
+dependencies = [
+ "assert2",
+ "color-eyre",
+ "rstest",
+ "url",
+ "ytil_cmd",
+ "ytil_git",
+]
+
+[[package]]
+name = "ytil_hx"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "fake",
+]
+
+[[package]]
+name = "ytil_system"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "color-eyre",
+ "ytil_cmd",
+]
+
+[[package]]
+name = "ytil_tui"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "inquire",
+ "strum",
+]
+
+[[package]]
+name = "ytil_wezterm"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "fake",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

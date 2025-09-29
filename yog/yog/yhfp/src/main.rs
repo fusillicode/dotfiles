@@ -4,8 +4,8 @@ use core::str::FromStr;
 use std::process::Command;
 
 use color_eyre::eyre::eyre;
-use editor::Editor;
-use hx::HxStatusLine;
+use ytil_editor::Editor;
+use ytil_hx::HxStatusLine;
 
 /// Copies file path from Helix editor to clipboard.
 ///
@@ -17,9 +17,9 @@ use hx::HxStatusLine;
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let hx_pane_id = wezterm::get_sibling_pane_with_titles(
-        &wezterm::get_all_panes(&[])?,
-        wezterm::get_current_pane_id()?,
+    let hx_pane_id = ytil_wezterm::get_sibling_pane_with_titles(
+        &ytil_wezterm::get_all_panes(&[])?,
+        ytil_wezterm::get_current_pane_id()?,
         Editor::Hx.pane_titles(),
     )?
     .pane_id;
@@ -38,7 +38,7 @@ fn main() -> color_eyre::Result<()> {
 
     let hx_status_line = HxStatusLine::from_str(hx_status_line_str)?;
 
-    system::cp_to_system_clipboard(&mut format_hx_status_line(&hx_status_line)?.as_bytes())?;
+    ytil_system::cp_to_system_clipboard(&mut format_hx_status_line(&hx_status_line)?.as_bytes())?;
 
     Ok(())
 }

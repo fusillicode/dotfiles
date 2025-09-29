@@ -1,5 +1,5 @@
 [package]
-name = "github"
+name = "ytil_github"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -11,9 +11,9 @@ keywords = ["github", "api", "repository", "refs", "cli"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-cmd = { workspace = true }
+ytil_cmd = { workspace = true }
 color-eyre = { workspace = true }
-git = { workspace = true }
+ytil_git = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]

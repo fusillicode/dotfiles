@@ -25,11 +25,11 @@ const GITHUB_PR_ID_QUERY_KEY: &str = "pr";
 /// - Checking auth status fails.
 /// - The login command fails or exits with a non-zero status.
 pub fn log_into_github() -> color_eyre::Result<()> {
-    if cmd::silent_cmd("gh").args(["auth", "status"]).status()?.success() {
+    if ytil_cmd::silent_cmd("gh").args(["auth", "status"]).status()?.success() {
         return Ok(());
     }
 
-    Ok(cmd::silent_cmd("sh")
+    Ok(ytil_cmd::silent_cmd("sh")
         .args(["-c", "gh auth login"])
         .status()?
         .exit_ok()?)
@@ -80,7 +80,7 @@ pub fn get_branch_name_from_url(url: &Url) -> color_eyre::Result<String> {
 /// - A remote cannot be resolved.
 /// - A remote URL is invalid UTF-8.
 pub fn get_repo_urls(repo_path: &Path) -> color_eyre::Result<Vec<Url>> {
-    let repo = git::get_repo(repo_path)?;
+    let repo = ytil_git::get_repo(repo_path)?;
     let mut repo_urls = vec![];
     for remote_name in repo.remotes()?.iter().flatten() {
         repo_urls.push(

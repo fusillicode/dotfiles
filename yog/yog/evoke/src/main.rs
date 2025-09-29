@@ -36,11 +36,11 @@ const NVIM_LIBS_DEFAULT_PATH: &[&str] = &[".config", "nvim", "lua"];
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let mut args = system::get_args();
+    let mut args = ytil_system::get_args();
 
     let is_debug = drop_element(&mut args, "--debug");
     let bins_path = args.first().cloned().map_or_else(
-        || system::build_home_path(BINS_DEFAULT_PATH),
+        || ytil_system::build_home_path(BINS_DEFAULT_PATH),
         |supplied_bins_path| Ok(PathBuf::from(supplied_bins_path)),
     )?;
     let cargo_target_path = args.get(1).cloned().map_or_else(
@@ -54,7 +54,7 @@ fn main() -> color_eyre::Result<()> {
         |x| Ok(PathBuf::from(x)),
     )?;
     let nvim_libs_path = args.get(2).cloned().map_or_else(
-        || system::build_home_path(NVIM_LIBS_DEFAULT_PATH),
+        || ytil_system::build_home_path(NVIM_LIBS_DEFAULT_PATH),
         |supplied_nvim_libs_path| Ok(PathBuf::from(supplied_nvim_libs_path)),
     )?;
 
@@ -64,17 +64,17 @@ fn main() -> color_eyre::Result<()> {
         (cargo_target_path.join("release"), Some("--release"))
     };
 
-    cmd::silent_cmd("cargo").args(["fmt"]).status()?.exit_ok()?;
+    ytil_cmd::silent_cmd("cargo").args(["fmt"]).status()?.exit_ok()?;
 
     // Skip clippy if debugging
     if !is_debug {
-        cmd::silent_cmd("cargo")
+        ytil_cmd::silent_cmd("cargo")
             .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
             .status()?
             .exit_ok()?;
     }
 
-    cmd::silent_cmd("cargo")
+    ytil_cmd::silent_cmd("cargo")
         .args([Some("build"), build_profile].into_iter().flatten())
         .status()?
         .exit_ok()?;
@@ -116,15 +116,15 @@ where
 }
 
 /// Copies a built binary or library from `from` to `to` using
-/// [`system::atomic_cp`] and prints an "Installed" status line.
+/// [`ytil_system::atomic_cp`] and prints an "Installed" status line.
 ///
 /// # Errors
 ///
 /// Returns an error if:
-/// - [`system::atomic_cp`] fails to copy.
+/// - [`ytil_system::atomic_cp`] fails to copy.
 /// - The final rename or write cannot be performed.
 fn cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
-    system::atomic_cp(from, to)?;
+    ytil_system::atomic_cp(from, to)?;
     println!("{} {} to {}", "Copied".green().bold(), from.display(), to.display());
     Ok(())
 }

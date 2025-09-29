@@ -14,11 +14,11 @@ categories = ["command-line-utilities", "development-tools"]
 crate-type = ["cdylib"]
 
 [dependencies]
-cmd = { workspace = true }
+ytil_cmd = { workspace = true }
 color-eyre = { workspace = true }
 convert_case = { workspace = true }
 fkr = { path = "../fkr" }
-git = { workspace = true }
+ytil_git = { workspace = true }
 itertools = { workspace = true }
 nvim-oxi = { git = "https://github.com/noib3/nvim-oxi", rev = "b1278b123dbac3908f2686ebed6fdadbfef15be1", features = [
   "neovim-nightly",
@@ -26,8 +26,8 @@ nvim-oxi = { git = "https://github.com/noib3/nvim-oxi", rev = "b1278b123dbac3908
 serde = { version = "1.0" }
 serde_repr = { version = "0.1" }
 strum = { workspace = true }
-system = { workspace = true }
+ytil_system = { workspace = true }
 tree-sitter = { version = "0.25" }
 tree-sitter-rust = { version = "0.24" }
 url = { version = "2.5" }
-wezterm = { workspace = true }
+ytil_wezterm = { workspace = true }

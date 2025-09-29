@@ -1,15 +1,21 @@
 [package]
-name = "cmd"
+name = "ytil_hx"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "Process and command execution utilities with ergonomic error handling"
-keywords = ["command", "process", "exec", "shell", "utilities"]
+description = "Data types and helpers for interacting with the Helix editor state"
+keywords = ["helix", "editor", "integration"]
 categories = ["command-line-utilities", "development-tools"]
+
+[features]
+fake = ["dep:fake"]
 
 [dependencies]
 color-eyre = { workspace = true }
-thiserror = { workspace = true }
+fake = { workspace = true, optional = true }
+
+[dev-dependencies]
+fake = { workspace = true }

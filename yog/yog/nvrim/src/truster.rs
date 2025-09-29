@@ -61,13 +61,13 @@ fn run_test(_: ()) {
         return;
     };
 
-    let Ok(cur_pane_id) = wezterm::get_current_pane_id().inspect_err(|error| {
+    let Ok(cur_pane_id) = ytil_wezterm::get_current_pane_id().inspect_err(|error| {
         crate::oxi_ext::api::notify_error(&format!("cannot get current Wezterm pane id, error {error:#?}"));
     }) else {
         return;
     };
 
-    let Ok(wez_panes) = wezterm::get_all_panes(&[]).inspect_err(|error| {
+    let Ok(wez_panes) = ytil_wezterm::get_all_panes(&[]).inspect_err(|error| {
         crate::oxi_ext::api::notify_error(&format!("cannot get Wezterm panes, error {error:#?}"));
     }) else {
         return;
@@ -97,10 +97,10 @@ fn run_test(_: ()) {
     };
 
     let test_run_cmd = format!("'{test_runner_app} {test_name}'");
-    let send_text_to_pane_cmd = wezterm::send_text_to_pane_cmd(&test_run_cmd, test_runner_pane.pane_id);
-    let submit_pane_cmd = wezterm::submit_pane_cmd(test_runner_pane.pane_id);
+    let send_text_to_pane_cmd = ytil_wezterm::send_text_to_pane_cmd(&test_run_cmd, test_runner_pane.pane_id);
+    let submit_pane_cmd = ytil_wezterm::submit_pane_cmd(test_runner_pane.pane_id);
 
-    let Ok(_) = cmd::silent_cmd("sh")
+    let Ok(_) = ytil_cmd::silent_cmd("sh")
         .args(["-c", &format!("{send_text_to_pane_cmd} && {submit_pane_cmd}")])
         .spawn()
         .inspect_err(|error| {
@@ -184,7 +184,7 @@ fn get_enclosing_fn_name_of_node(src: &[u8], node: Option<Node>) -> Option<Strin
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - The path is not inside a Git repository.
 fn get_test_runner_app_for_path(path: &Path) -> color_eyre::Result<&'static str> {
-    let git_repo_root = git::get_repo_root(&git::get_repo(path)?);
+    let git_repo_root = ytil_git::get_repo_root(&ytil_git::get_repo(path)?);
 
     if std::fs::read_dir(git_repo_root)?.any(|res| {
         res.as_ref()

@@ -1,16 +1,16 @@
 [package]
-name = "system"
+name = "ytil_tui"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "System environment helpers: time, paths, I/O, and platform info"
-keywords = ["system", "time", "io", "environment", "platform"]
+description = "Basic terminal UI building blocks and prompt helpers"
+keywords = ["tui", "terminal", "prompt", "widgets"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-chrono = { workspace = true }
-cmd = { workspace = true }
 color-eyre = { workspace = true }
+inquire = { version = "0.9", features = ["fuzzy-matcher"] }
+strum = { workspace = true }

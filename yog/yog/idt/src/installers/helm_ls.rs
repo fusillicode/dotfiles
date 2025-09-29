@@ -23,7 +23,7 @@ impl Installer for HelmLs<'_> {
             },
         )?;
 
-        system::chmod_x(&target)?;
+        ytil_system::chmod_x(&target)?;
 
         Ok(())
     }

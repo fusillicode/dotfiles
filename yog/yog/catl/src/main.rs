@@ -15,7 +15,7 @@ use color_eyre::eyre::eyre;
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let args = system::get_args();
+    let args = ytil_system::get_args();
 
     let path = args.first().ok_or_else(|| eyre!("missing path arg from {args:#?}"))?;
 

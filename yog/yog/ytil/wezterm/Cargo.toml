@@ -1,5 +1,5 @@
 [package]
-name = "wezterm"
+name = "ytil_wezterm"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

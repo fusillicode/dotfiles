@@ -1,6 +1,6 @@
 use std::process::Command;
 
-use cmd::CmdExt as _;
+use ytil_cmd::CmdExt as _;
 use nvim_oxi::Object;
 use nvim_oxi::api::Window;
 use nvim_oxi::conversion::ToObject;

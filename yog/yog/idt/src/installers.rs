@@ -1,8 +1,8 @@
 use std::process::Command;
 
-use cmd::CmdDetails;
-use cmd::CmdError;
-use cmd::CmdExt;
+use ytil_cmd::CmdDetails;
+use ytil_cmd::CmdError;
+use ytil_cmd::CmdExt;
 use color_eyre::owo_colors::OwoColorize as _;
 
 pub mod bash_language_server;

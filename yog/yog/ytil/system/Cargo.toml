@@ -1,21 +1,16 @@
 [package]
-name = "hx"
+name = "ytil_system"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "Data types and helpers for interacting with the Helix editor state"
-keywords = ["helix", "editor", "integration"]
+description = "System environment helpers: time, paths, I/O, and platform info"
+keywords = ["system", "time", "io", "environment", "platform"]
 categories = ["command-line-utilities", "development-tools"]
 
-[features]
-fake = ["dep:fake"]
-
 [dependencies]
+chrono = { workspace = true }
+ytil_cmd = { workspace = true }
 color-eyre = { workspace = true }
-fake = { workspace = true, optional = true }
-
-[dev-dependencies]
-fake = { workspace = true }

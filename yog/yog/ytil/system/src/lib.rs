@@ -53,7 +53,7 @@ pub fn build_home_path<P: AsRef<Path>>(parts: &[P]) -> color_eyre::Result<PathBu
 /// - The clipboard program cannot be spawned.
 /// - The clipboard program exits with failure.
 pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
-    let mut pbcopy_child = cmd::silent_cmd("pbcopy").stdin(Stdio::piped()).spawn()?;
+    let mut pbcopy_child = ytil_cmd::silent_cmd("pbcopy").stdin(Stdio::piped()).spawn()?;
     std::io::copy(
         content,
         pbcopy_child

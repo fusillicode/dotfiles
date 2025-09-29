@@ -20,7 +20,7 @@ pub fn run(dev_tools_dir: &Path, tool: &str, packages: &[&str]) -> color_eyre::R
     cmd_args.extend_from_slice(&["--prefix", &dev_tools_repo_dir_bind]);
     cmd_args.extend_from_slice(packages);
 
-    cmd::silent_cmd("npm").args(cmd_args).status()?.exit_ok()?;
+    ytil_cmd::silent_cmd("npm").args(cmd_args).status()?.exit_ok()?;
 
     Ok(dev_tools_repo_dir.join("node_modules").join(".bin"))
 }

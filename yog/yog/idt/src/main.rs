@@ -54,7 +54,7 @@ mod installers;
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let args = system::get_args();
+    let args = ytil_system::get_args();
     println!(
         "{:#?} started with args {}",
         std::env::current_exe()?.bold().cyan(),
@@ -74,7 +74,7 @@ fn main() -> color_eyre::Result<()> {
     std::fs::create_dir_all(dev_tools_dir)?;
     std::fs::create_dir_all(bin_dir)?;
 
-    github::log_into_github()?;
+    ytil_github::log_into_github()?;
 
     let all_installers: Vec<Box<dyn Installer>> = vec![
         Box::new(BashLanguageServer {
@@ -214,7 +214,7 @@ fn main() -> color_eyre::Result<()> {
             })
     });
 
-    system::rm_dead_symlinks(bin_dir)?;
+    ytil_system::rm_dead_symlinks(bin_dir)?;
 
     let mut errors_count: usize = 0;
     let mut bin_names = vec![];

@@ -9,12 +9,12 @@ use std::sync::Arc;
 
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
-use editor::Editor;
-use hx::HxCursorPosition;
-use hx::HxStatusLine;
+use ytil_editor::Editor;
+use ytil_hx::HxCursorPosition;
+use ytil_hx::HxStatusLine;
 use url::Url;
-use wezterm::WeztermPane;
-use wezterm::get_sibling_pane_with_titles;
+use ytil_wezterm::WeztermPane;
+use ytil_wezterm::get_sibling_pane_with_titles;
 
 /// Generates a GitHub URL pointing to the current Helix buffer location.
 ///
@@ -29,8 +29,8 @@ fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
     let hx_pane = get_sibling_pane_with_titles(
-        &wezterm::get_all_panes(&[])?,
-        wezterm::get_current_pane_id()?,
+        &ytil_wezterm::get_all_panes(&[])?,
+        ytil_wezterm::get_current_pane_id()?,
         Editor::Hx.pane_titles(),
     )?;
 
@@ -48,14 +48,14 @@ fn main() -> color_eyre::Result<()> {
         )
     })?)?;
 
-    let git_repo_root_path = Arc::new(git::get_repo_root(&git::get_repo(&hx_status_line.file_path)?));
+    let git_repo_root_path = Arc::new(ytil_git::get_repo_root(&ytil_git::get_repo(&hx_status_line.file_path)?));
 
     let get_git_current_branch =
-        std::thread::spawn(move || -> color_eyre::Result<String> { git::get_current_branch() });
+        std::thread::spawn(move || -> color_eyre::Result<String> { ytil_git::get_current_branch() });
 
     let git_repo_root_path_clone = git_repo_root_path.clone();
     let get_github_repo_url = std::thread::spawn(move || -> color_eyre::Result<Url> {
-        match &github::get_repo_urls(&git_repo_root_path_clone)?.as_slice() {
+        match &ytil_github::get_repo_urls(&git_repo_root_path_clone)?.as_slice() {
             &[] => bail!("no GitHub URL found for repo path {git_repo_root_path_clone:#?}"),
             &[one] => Ok(one.clone()),
             multi => {
@@ -69,13 +69,13 @@ fn main() -> color_eyre::Result<()> {
     let hx_cursor_absolute_file_path = build_hx_cursor_absolute_file_path(&hx_status_line.file_path, &hx_pane)?;
 
     let github_link = build_github_link(
-        &system::join(get_github_repo_url)?,
-        &system::join(get_git_current_branch)?,
+        &ytil_system::join(get_github_repo_url)?,
+        &ytil_system::join(get_git_current_branch)?,
         hx_cursor_absolute_file_path.strip_prefix(git_repo_root_path.as_ref())?,
         &hx_status_line.position,
     )?;
 
-    system::cp_to_system_clipboard(&mut github_link.as_str().as_bytes())?;
+    ytil_system::cp_to_system_clipboard(&mut github_link.as_str().as_bytes())?;
 
     Ok(())
 }
@@ -93,7 +93,7 @@ fn build_hx_cursor_absolute_file_path(
     hx_pane: &WeztermPane,
 ) -> color_eyre::Result<PathBuf> {
     if let Ok(hx_cursor_file_path) = hx_cursor_file_path.strip_prefix("~") {
-        return system::build_home_path(&[hx_cursor_file_path]);
+        return ytil_system::build_home_path(&[hx_cursor_file_path]);
     }
 
     let mut components = hx_pane.cwd.components();
