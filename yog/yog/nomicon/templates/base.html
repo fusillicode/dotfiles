@@ -1,0 +1,17 @@
+<!doctype html>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>{% block title %}Yog Docs{% endblock %}</title>
+<link rel="preload" href="assets/font.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/style.min.css" as="style">
+<link rel="stylesheet" href="assets/style.min.css" />
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+<header>
+  <h1>{% block header %}Yog Docs{% endblock %}</h1>
+</header>
+<main>
+{% block content %}{% endblock %}
+</main>
+<footer>
+  {% block footer %}<a class="repo-link" href="https://github.com/fusillicode/dotfiles" aria-label="GitHub Repository">GitHub Repo</a>{% endblock %}
+</footer>

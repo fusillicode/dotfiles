@@ -5,12 +5,10 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use askama::Template;
-use chrono::SecondsFormat;
+use chrono::DateTime;
 use chrono::Utc;
 use color_eyre::eyre::OptionExt;
 use color_eyre::eyre::bail;
-
-// Minified CSS is written to assets/style.min.css at build time; no embed needed.
 
 fn main() -> color_eyre::eyre::Result<()> {
     color_eyre::install()?;
@@ -47,19 +45,26 @@ fn main() -> color_eyre::eyre::Result<()> {
     }
     crates.sort_by(|a, b| a.name.cmp(&b.name));
 
+    let generated_at = Utc::now();
+
     let index_page = IndexPage {
         crates: &crates,
-        generated: Utc::now().to_rfc3339_opts(SecondsFormat::Secs, false),
+        generated_at,
     };
-    let html = index_page.render()?;
+    std::fs::write(doc_dir.join("index.html"), index_page.render()?)?;
 
-    let index_doc_path = doc_dir.join("index.html");
-    std::fs::write(&index_doc_path, html)?;
+    let not_found_page = NotFoundPage { generated_at }.render()?;
+    std::fs::write(doc_dir.join("404.html"), not_found_page)?;
 
-    // Copy all static assets (non-minified and originals) into doc root.
     copy_assets(&doc_dir)?;
 
     Ok(())
+}
+
+#[derive(Template)]
+#[template(path = "404.html")]
+struct NotFoundPage {
+    generated_at: DateTime<Utc>,
 }
 
 fn copy_assets(doc_dir: &Path) -> color_eyre::Result<()> {
@@ -92,7 +97,7 @@ fn copy_recursive(src: &Path, dest: &Path) -> color_eyre::Result<()> {
 #[template(path = "index.html")]
 struct IndexPage<'a> {
     crates: &'a [CrateMeta],
-    generated: String,
+    generated_at: DateTime<Utc>,
 }
 
 struct CrateMeta {

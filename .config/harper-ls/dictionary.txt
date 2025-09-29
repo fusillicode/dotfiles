@@ -52,6 +52,7 @@ dataflow
 dbee
 deserializable
 dir
+endblock
 endfor
 envar
 expr
