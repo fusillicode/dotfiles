@@ -12,6 +12,10 @@
   --accent: #55dd55;
   --accent-hover: #77ff77;
   --border: #044404;
+  color-scheme: dark;
+}
+html {
+  background: var(--bg);
 }
 body {
   font-family: "PxPlus ToshibaSat 9x16", monospace;
@@ -52,8 +56,9 @@ li a {
   display: inline-block;
 }
 li a:hover {
-  background: var(--bg-alt);
-  box-shadow: 0 0 0 1px var(--border);
+  background: var(--bg);
+  outline: 1px solid var(--accent);
+  box-shadow: none;
 }
 .desc {
   color: var(--fg-dim);

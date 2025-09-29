@@ -49,22 +49,19 @@ fn main() -> color_eyre::eyre::Result<()> {
 
     let index_page = IndexPage {
         crates: &crates,
-        generated_at,
+        footer: Footer { generated_at },
     };
     std::fs::write(doc_dir.join("index.html"), index_page.render()?)?;
 
-    let not_found_page = NotFoundPage { generated_at }.render()?;
+    let not_found_page = NotFoundPage {
+        footer: Footer { generated_at },
+    }
+    .render()?;
     std::fs::write(doc_dir.join("404.html"), not_found_page)?;
 
     copy_assets(&doc_dir)?;
 
     Ok(())
-}
-
-#[derive(Template)]
-#[template(path = "404.html")]
-struct NotFoundPage {
-    generated_at: DateTime<Utc>,
 }
 
 fn copy_assets(doc_dir: &Path) -> color_eyre::Result<()> {
@@ -97,6 +94,16 @@ fn copy_recursive(src: &Path, dest: &Path) -> color_eyre::Result<()> {
 #[template(path = "index.html")]
 struct IndexPage<'a> {
     crates: &'a [CrateMeta],
+    footer: Footer,
+}
+
+#[derive(Template)]
+#[template(path = "404.html")]
+struct NotFoundPage {
+    footer: Footer,
+}
+
+struct Footer {
     generated_at: DateTime<Utc>,
 }
 
