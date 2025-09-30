@@ -293,7 +293,7 @@ impl Poppable for Pos {
 /// Call Nvim function `getpos()` for the supplied mark identifier and return a normalized [`Pos`].
 ///
 /// On success converts the raw 1-based tuple into 0-based [`Pos`].
-/// On failure emits an error notification and returns the underlying error.
+/// On failure emits an error notification and returns the originating error unchanged.
 ///
 /// # Parameters
 ///
@@ -302,7 +302,9 @@ impl Poppable for Pos {
 ///
 /// # Errors
 ///
-/// Returns an error if the underlying Nvim API call fails or deserialization into [`Pos`] fails.
+/// Returns an error if:
+/// - Calling `getpos()` fails.
+/// - Deserializing the returned tuple into [`Pos`] fails.
 fn get_pos(mark: &str) -> nvim_oxi::Result<Pos> {
     Ok(
         nvim_oxi::api::call_function::<_, Pos>("getpos", Array::from_iter([mark])).inspect_err(|error| {

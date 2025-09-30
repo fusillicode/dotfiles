@@ -1,3 +1,7 @@
+//! Provide minimal TUI selection & prompt helpers built on `inquire`.
+//!
+//! Offer uniform, cancellable single / multi select prompts with stripped visual noise and helpers
+//! to derive a value from CLI args or fallback to an interactive selector.
 use color_eyre::eyre::eyre;
 use inquire::InquireError;
 use inquire::MultiSelect;

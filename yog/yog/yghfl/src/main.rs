@@ -9,21 +9,29 @@ use std::sync::Arc;
 
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
+use url::Url;
 use ytil_editor::Editor;
 use ytil_hx::HxCursorPosition;
 use ytil_hx::HxStatusLine;
-use url::Url;
 use ytil_wezterm::WeztermPane;
 use ytil_wezterm::get_sibling_pane_with_titles;
 
 /// Generates a GitHub URL pointing to the current Helix buffer location.
 ///
+/// # Usage
+///
+/// ```bash
+/// yghfl    # copies URL for current line/column to clipboard
+/// ```
+///
 /// # Errors
 ///
 /// Returns an error if:
-/// - External command execution (wezterm) fails.
-/// - The Helix status line cannot be parsed.
-/// - The repository root or branch cannot be resolved.
+/// - Executing `wezterm` fails or returns a non-zero exit status.
+/// - Status line extraction or parsing fails.
+/// - Repository root path resolution fails.
+/// - GitHub remote URL (unique) cannot be determined.
+/// - Current branch name lookup fails.
 /// - UTF-8 conversion fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
@@ -80,14 +88,12 @@ fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Builds absolute filepath for Helix cursor position.
+/// Builds absolute file path for Helix cursor position.
 ///
-///
-/// Returns an error if:
-/// - An underlying IO, parsing, or environment operation fails.
+/// # Errors
 ///
 /// Returns an error if:
-/// - An underlying IO, network, environment, parsing, or external command operation fails.
+/// - Expanding a home-relative path (starting with `~`) fails because the home directory cannot be determined.
 fn build_hx_cursor_absolute_file_path(
     hx_cursor_file_path: &Path,
     hx_pane: &WeztermPane,

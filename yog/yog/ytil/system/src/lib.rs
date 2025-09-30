@@ -1,3 +1,7 @@
+//! Provide cohesive system helpers: args, paths, symlinks, permissions, atomic copy, clipboard.
+//!
+//! Offer small utilities for CLI tools: joining thread handles, building home-relative paths,
+//! manipulating filesystem entries (chmod, symlinks, atomic copy) and clipboard integration.
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
 use std::path::PathBuf;

@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "Nvim Lua module with Rust utilities"
+description = "Expose Neovim Lua modules backed by Rust utilities."
 keywords = ["neovim", "nvim", "lua", "plugin", "rust", "editor"]
 categories = ["command-line-utilities", "development-tools"]
 

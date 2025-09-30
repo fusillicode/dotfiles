@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "Abstractions for launching and interacting with code editors (Helix, Neovim, WezTerm)"
+description = "Launch and interact with Helix, Neovim, and WezTerm."
 keywords = ["editor", "wezterm", "neovim", "helix", "integration"]
 categories = ["command-line-utilities", "development-tools"]
 

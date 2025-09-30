@@ -29,11 +29,10 @@ impl DiagnosticsFilter for BufferFilter {
     /// Returns true if the buffer path is in the blacklist.
     ///
     ///
-    /// Returns an error if:
-    /// - An underlying IO, parsing, or environment operation fails.
+    /// # Errors
     ///
     /// Returns an error if:
-    /// - An underlying IO, network, environment, parsing, or external command operation fails.
+    /// - Building the paths blacklist fails (home directory resolution).
     fn skip_diagnostic(&self, buf_path: &str, _lsp_diag: Option<&Dictionary>) -> color_eyre::Result<bool> {
         Ok(self.blacklist.iter().any(|up| buf_path.contains(up)))
     }

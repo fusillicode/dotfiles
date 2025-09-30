@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "Build automation tool that formats, lints, builds, and deploys yog binaries"
+description = "Format, lint, build, and deploy workspace binaries."
 keywords = ["cli", "build", "automation", "deployment", "rust"]
 categories = ["command-line-utilities", "development-tools"]
 

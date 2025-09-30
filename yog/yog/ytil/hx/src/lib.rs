@@ -1,3 +1,4 @@
+//! Parse Helix (hx) status line output into structured types: [`HxStatusLine`] and [`HxCursorPosition`].
 use core::str::FromStr;
 use std::path::PathBuf;
 

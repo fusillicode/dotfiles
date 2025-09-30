@@ -9,6 +9,12 @@ use ytil_hx::HxStatusLine;
 
 /// Copies file path from Helix editor to clipboard.
 ///
+/// # Usage
+///
+/// ```bash
+/// yhfp    # copies 'relative/path/to/file:LINE' to clipboard
+/// ```
+///
 /// # Errors
 ///
 /// Returns an error if:

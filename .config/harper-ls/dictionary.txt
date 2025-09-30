@@ -14,6 +14,7 @@ GQL
 HashMap
 I/O
 IO
+IPs
 JFrog
 NodeJS
 OIDC
@@ -34,7 +35,7 @@ TodoRiesgo
 UTF
 V1
 Vimscript
-Wezterm
+WezTerm
 actix
 ampliado
 arg
@@ -42,6 +43,7 @@ asdf
 augroups
 autocommand
 autocommands
+canonicalization
 characterwise
 chargeback
 charwise
@@ -57,6 +59,7 @@ endfor
 envar
 expr
 extmark
+façade
 fkr
 franquicia
 grug

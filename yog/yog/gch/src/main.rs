@@ -21,6 +21,17 @@ use ytil_git::WorktreeState;
 /// The tool is intentionally minimal and suited for quick cleanup and branch‑switching
 /// scenarios.
 ///
+/// # Usage
+///
+/// ```bash
+/// gch                  # interactive multi-select & clean
+/// gch main             # restore changed entries from branch 'main'
+/// ```
+///
+/// # Arguments
+///
+/// - `[branch]` Optional branch name; if provided changed entries are restored from it.
+///
 /// # Errors
 ///
 /// Returns an error if:
@@ -42,7 +53,8 @@ fn main() -> color_eyre::Result<()> {
 
     let renderable_entries = git_status_entries.into_iter().map(RenederableGitStatusEntry).collect();
 
-    let Some(selected_entries) = ytil_tui::minimal_multi_select::<RenederableGitStatusEntry>(renderable_entries)? else {
+    let Some(selected_entries) = ytil_tui::minimal_multi_select::<RenederableGitStatusEntry>(renderable_entries)?
+    else {
         println!("\n\n{}", "nothing done".bold());
         return Ok(());
     };
@@ -61,9 +73,8 @@ fn main() -> color_eyre::Result<()> {
 /// # Errors
 ///
 /// Returns an error if:
-/// - Deleting an entry fails.
+/// - Removing a file or directory for a new entry fails.
 /// - Building or executing the `git restore` command fails.
-/// - Any underlying I/O operation fails.
 fn restore_entries<'a, I>(entries: I, branch: Option<&str>) -> color_eyre::Result<()>
 where
     I: Iterator<Item = &'a GitStatusEntry>,

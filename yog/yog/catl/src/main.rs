@@ -7,6 +7,16 @@ use color_eyre::eyre::eyre;
 /// Displays file contents or directory listings based on input path.
 /// Uses `cat` for files/symlinks, `ls -llAtrh` for directories.
 ///
+/// # Usage
+///
+/// ```bash
+/// catl <path>     # file -> cat; directory -> coloured long listing
+/// ```
+///
+/// # Arguments
+///
+/// - `<path>` Path to file / directory / symlink to display.
+///
 /// # Errors
 ///
 /// Returns an error if:

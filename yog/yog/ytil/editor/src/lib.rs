@@ -1,3 +1,8 @@
+//! Parse `path:line[:column]` specs and build editor open commands for Helix / Neovim panes.
+//!
+//! Supports absolute or relative paths (resolved against a pane's cwd) and returns shell snippets
+//! to open a file and place the cursor at the requested position.
+
 use core::str::FromStr;
 use std::path::Path;
 
@@ -60,7 +65,7 @@ pub struct FileToOpen {
     path: String,
 }
 
-/// Attempts to create a [`FileToOpen`] from a filepath, pane ID, and list of panes.
+/// Attempts to create a [`FileToOpen`] from a file path, pane ID, and list of panes.
 impl TryFrom<(&str, i64, &[WeztermPane])> for FileToOpen {
     type Error = eyre::Error;
 

@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "Data types and helpers for interacting with the Helix editor state"
+description = "Parse and work with Helix editor status data."
 keywords = ["helix", "editor", "integration"]
 categories = ["command-line-utilities", "development-tools"]
 

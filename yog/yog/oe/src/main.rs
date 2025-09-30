@@ -6,18 +6,31 @@ use color_eyre::eyre::bail;
 use ytil_editor::Editor;
 use ytil_editor::FileToOpen;
 
-/// Opens files in a running editor instance from Wezterm.
+/// Opens files in a running editor instance from WezTerm.
+///
+/// # Usage
+///
+/// ```bash
+/// oe nvim path/to/file.rs            # open file in existing nvim pane
+/// oe hx path/to/file.rs:42:5         # open file at line 42 col 5 in helix
+/// oe nvim src/lib.rs 123456789       # explicitly pass pane id
+/// ```
 ///
 /// # Arguments
 ///
 /// * `editor` - Editor to use ("nvim" or "hx")
-/// * `file_path` - Path to file to open
-/// * `pane_id` - Optional Wezterm pane ID
+/// * `file_path` - Path to file to open (supports :line[:col] suffix)
+/// * `pane_id` - Optional WezTerm pane ID (auto-detected if omitted)
 ///
 /// # Errors
 ///
 /// Returns an error if:
-/// - An underlying operation fails.
+/// - Editor argument is missing.
+/// - File path argument is missing.
+/// - Pane id argument is invalid (parse failure) or current pane lookup fails.
+/// - WezTerm pane enumeration / sibling lookup fails.
+/// - File path parsing / validation for the target editor fails.
+/// - Spawning the shell command to drive WezTerm fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
@@ -51,7 +64,7 @@ fn main() -> color_eyre::Result<()> {
             "-c",
             &format!(
                 "{} && {} && {} && {}",
-                // `wezterm cli send-text $'\e'` sends the "ESC" to Wezterm to exit from insert mode
+                // `wezterm cli send-text $'\e'` sends the "ESC" to WezTerm to exit from insert mode
                 // https://github.com/wez/wezterm/discussions/3945
                 ytil_wezterm::send_text_to_pane_cmd(r"$'\e'", editor_pane_id),
                 ytil_wezterm::send_text_to_pane_cmd(&format!("'{open_file_cmd}'"), editor_pane_id),
@@ -65,7 +78,7 @@ fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Creates enriched PATH for Wezterm integration.
+/// Creates enriched PATH for WezTerm integration.
 ///
 /// # Errors
 ///

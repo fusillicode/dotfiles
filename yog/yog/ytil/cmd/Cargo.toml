@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "Process and command execution utilities with ergonomic error handling"
+description = "Execute system commands with structured error handling."
 keywords = ["command", "process", "exec", "shell", "utilities"]
 categories = ["command-line-utilities", "development-tools"]
 

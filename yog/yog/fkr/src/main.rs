@@ -5,18 +5,27 @@ use fkr::FkrOption;
 /// Interactive fake data generator.
 /// Prints generated value to standard output, optionally copies to clipboard.
 ///
+/// # Usage
+///
+/// ```bash
+/// fkr            # interactive choose + print
+/// fkr cp         # as above, additionally copy to system clipboard
+/// ```
+///
 /// # Arguments
 ///
-/// * `cp` - Copy generated value to clipboard
+/// * `cp` - Copy generated value to clipboard (optional)
 ///
 /// # Errors
 ///
 /// Returns an error if:
-/// - An underlying operation fails.
+/// - Interactive selection fails.
+/// - Writing the generated value to the clipboard fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let Some(generated_value) = ytil_tui::minimal_select(FkrOption::to_vec())?.map(|fkr_opt| fkr_opt.gen_string()) else {
+    let Some(generated_value) = ytil_tui::minimal_select(FkrOption::to_vec())?.map(|fkr_opt| fkr_opt.gen_string())
+    else {
         return Ok(());
     };
 

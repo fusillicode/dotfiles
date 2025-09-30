@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "Lightweight helpers for parsing and manipulating Git repository state"
+description = "Inspect and manipulate lightweight Git repository state."
 keywords = ["git", "repository", "vcs", "status", "helpers"]
 categories = ["command-line-utilities", "development-tools"]
 

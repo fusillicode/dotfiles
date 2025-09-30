@@ -18,6 +18,13 @@ mod vault;
 ///
 /// After updating credentials, interactively prompts for confirmation before connecting via pgcli.
 ///
+/// # Usage
+///
+/// ```bash
+/// vpg               # select alias interactively
+/// vpg analytics     # update creds for alias 'analytics'
+/// ```
+///
 /// # Arguments
 ///
 /// * `alias` - Database alias (optional, interactive selection if not provided)

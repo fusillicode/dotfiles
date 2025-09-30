@@ -10,6 +10,29 @@ use chrono::Utc;
 use color_eyre::eyre::OptionExt;
 use color_eyre::eyre::bail;
 
+/// Workspace documentation index & 404 generator orchestrating `cargo doc` (with private items) then
+/// producing a unified landing page plus static assets copy for all crates actually generating docs.
+///
+/// # Usage
+///
+/// ```bash
+/// # From any workspace directory
+/// nomicon
+/// # Afterwards open target/doc/index.html (or serve) for aggregated view
+/// ```
+///
+/// # Arguments
+///
+/// None.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - `cargo doc` invocation fails or exits non‑zero.
+/// - Workspace root or documentation directory cannot be resolved.
+/// - A crate manifest cannot be read or parsed for required keys.
+/// - A template (index / 404) fails to render.
+/// - Writing output files or copying assets fails.
 fn main() -> color_eyre::eyre::Result<()> {
     color_eyre::install()?;
 

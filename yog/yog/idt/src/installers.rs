@@ -1,9 +1,9 @@
 use std::process::Command;
 
+use color_eyre::owo_colors::OwoColorize as _;
 use ytil_cmd::CmdDetails;
 use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt;
-use color_eyre::owo_colors::OwoColorize as _;
 
 pub mod bash_language_server;
 pub mod commitlint;

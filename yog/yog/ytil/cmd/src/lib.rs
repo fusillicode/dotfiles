@@ -1,5 +1,11 @@
 #![feature(error_generic_member_access)]
 
+//! Execute system commands with structured errors and optional silenced output in release builds.
+//!
+//! Exposes an extension trait (`CmdExt`) with an `exec` method plus a helper `silent_cmd` that
+//! null-routes stdout/stderr outside debug mode. Errors capture the command name, args and working
+//! directory for concise diagnostics.
+
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -13,7 +19,9 @@ pub trait CmdExt {
     /// # Errors
     ///
     /// Returns an error if:
-    /// - An underlying operation fails.
+    /// - Spawning the command fails (I/O error).
+    /// - The command exits with a non-zero status (stderr captured).
+    /// - UTF-8 conversion of output is attempted and fails (see [`CmdError::Utf8`]).
     fn exec(&mut self) -> color_eyre::Result<Output, CmdError>;
 }
 
@@ -42,7 +50,7 @@ pub enum CmdError {
     Io {
         /// Details about the command that failed.
         cmd_details: CmdDetails,
-        /// The underlying I/O error.
+        /// Source I/O error.
         #[backtrace]
         source: std::io::Error,
     },
@@ -59,7 +67,7 @@ pub enum CmdError {
     Utf8 {
         /// Details about the command that failed.
         cmd_details: CmdDetails,
-        /// The underlying UTF-8 error.
+        /// Source UTF-8 conversion error.
         #[backtrace]
         source: core::str::Utf8Error,
     },

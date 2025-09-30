@@ -13,11 +13,18 @@ use itertools::Itertools;
 
 /// Repeatedly executes a command until exit condition is met.
 ///
+/// # Usage
+///
+/// ```bash
+/// try 2 ok cargo test            # run every 2s until success
+/// try 1 ko curl localhost:3000   # run until command FAILS (e.g. server down)
+/// ```
+///
 /// # Arguments
 ///
 /// * `cooldown_secs` - Seconds to wait between executions
 /// * `exit_condition` - "ok" (stop on success) or "ko" (stop on failure)
-/// * `command` - Command to execute
+/// * `command` - Command to execute (everything after exit_condition)
 ///
 /// # Errors
 ///
@@ -90,11 +97,6 @@ enum ExitCond {
 
 impl ExitCond {
     /// Determines if the loop should break.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - An underlying IO, network, environment, parsing, or external command operation fails.
     #[allow(clippy::suspicious_operation_groupings)]
     pub const fn should_break(&self, cmd_res: Result<(), ExitStatusError>) -> bool {
         self.is_ok() && cmd_res.is_ok() || !self.is_ok() && cmd_res.is_err()

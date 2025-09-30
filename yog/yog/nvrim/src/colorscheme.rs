@@ -102,7 +102,8 @@ fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &SetHighlightOpts) {
 /// # Errors
 ///
 /// Returns an error if:
-/// - An underlying operation fails.
+/// - Calling `nvim_get_hl` fails.
+/// - Multiple highlight groups are returned instead of a single one.
 fn get_hl(ns_id: u32, hl_opts: &GetHighlightOpts) -> color_eyre::Result<HighlightInfos> {
     nvim_oxi::api::get_hl(ns_id, hl_opts)
         .inspect_err(|error| {
@@ -125,7 +126,7 @@ fn get_hl(ns_id: u32, hl_opts: &GetHighlightOpts) -> color_eyre::Result<Highligh
 /// # Errors
 ///
 /// Returns an error if:
-/// - An underlying operation fails.
+/// - The `blend` value cannot fit into a `u8`.
 fn hl_opts_from_hl_infos(hl_infos: &HighlightInfos) -> color_eyre::Result<SetHighlightOptsBuilder> {
     let mut opts = set_opts();
     hl_infos.altfont.map(|value| opts.altfont(value));

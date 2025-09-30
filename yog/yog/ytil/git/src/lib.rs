@@ -1,17 +1,9 @@
-//! Lightweight Git helper utilities built on top of [`git2`].
+//! Provide lightweight Git helpers atop [`git2`] plus selective fallbacks to the system `git` binary.
 //!
-//! This module provides small wrappers around common read / write repository
-//! interactions used by the surrounding tooling:
-//! - Repository discovery and root path resolution ([`get_repo`], [`get_repo_root`])
-//! - Current branch inspection and simple branch creation / switching
-//! - Working tree status collection as structured data ([`get_status`] returning [`GitStatusEntry`])
-//! - Branch enumeration with last commit timestamps ([`get_branches`])
-//! - Convenience helpers such as filtering redundant remote branches ([`remove_redundant_remotes`])
-//! - Selective branch fetching from origin ([`fetch_branches`])
-//!
-//! Some commands (e.g. the special case in [`switch_branch`] for `-` and [`restore`])
-//! deliberately defer to the system `git` binary instead of re‑implementing more
-//! involved porcelain semantics.
+//! Wrap common operations (repo discovery, root resolution, status enumeration, branch listing,
+//! targeted fetch, branch switching, restore) in focused functions returning structured data
+//! (`GitStatusEntry`, `Branch`). Some semantics (previous branch with `switch -`, restore) defer to
+//! the porcelain CLI to avoid re‑implementing complex behavior.
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -20,13 +12,13 @@ use std::process::Command;
 
 use chrono::DateTime;
 use chrono::Utc;
-use ytil_cmd::CmdExt as _;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 use git2::Repository;
 use git2::Status;
 use git2::StatusEntry;
 use git2::StatusOptions;
+use ytil_cmd::CmdExt as _;
 
 /// Returns the [`Repository`] containing `path`.
 ///
@@ -35,8 +27,8 @@ use git2::StatusOptions;
 ///
 /// # Errors
 ///
-/// Returns an error:
-/// - If the repository cannot be discovered starting from `path` (i.e. `path` is not inside a Git repository).
+/// Returns an error if:
+/// - The repository cannot be discovered starting from `path` (i.e. `path` is not inside a Git repository).
 pub fn get_repo(path: &Path) -> color_eyre::Result<Repository> {
     Ok(Repository::discover(path)?)
 }
@@ -171,7 +163,7 @@ pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
 /// # Errors
 ///
 /// Returns an error if:
-/// - Executing the underlying `git restore` command fails.
+/// - Invoking the `git restore` command fails (process spawn or non-zero exit status).
 pub fn restore(paths: &[&str], branch: Option<&str>) -> color_eyre::Result<()> {
     let mut args = vec!["restore"];
     if let Some(branch) = branch {
@@ -261,7 +253,7 @@ pub fn remove_redundant_remotes(branches: &mut Vec<Branch>) {
 /// Returns an error if:
 /// - The repository cannot be discovered.
 /// - The `origin` remote cannot be found.
-/// - The fetch operation fails.
+/// - Performing `git fetch` for the requested branches fails.
 pub fn fetch_branches(branches: &[&str]) -> color_eyre::Result<()> {
     let repo = get_repo(Path::new("."))?;
     repo.find_remote("origin")?.fetch(branches, None, None)?;

@@ -32,7 +32,9 @@ const NVIM_LIBS_DEFAULT_PATH: &[&str] = &[".config", "nvim", "lua"];
 /// # Errors
 ///
 /// Returns an error if:
-/// - A required environment variable is missing or invalid Unicode.
+/// - Resolving a required environment variable fails or yields invalid Unicode.
+/// - Formatting, linting, or building (`cargo fmt`, `cargo clippy`, `cargo build`) fails or exits non-zero.
+/// - Copying a built binary or library fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

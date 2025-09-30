@@ -11,7 +11,7 @@ use crate::oxi_ext::buffer::BufferExt as _;
 ///
 /// Entries:
 /// - `"insert_string"`: inserts a generated value at the current cursor position replacing any active selection via the
-///   underlying buffer helper.
+///   buffer helper.
 pub fn dict() -> Dictionary {
     dict! {
         "insert_string": fn_from!(insert_string),
@@ -26,7 +26,7 @@ pub fn dict() -> Dictionary {
 ///
 /// Behaviour:
 /// - Returns early (no insertion) if fetching user input fails or is canceled.
-/// - Emits error notifications to Neovim for any underlying failures.
+/// - Emits error notifications to Neovim for selection prompt or buffer write failures.
 fn insert_string(_: ()) {
     let options: Vec<_> = FkrOption::iter().collect();
 

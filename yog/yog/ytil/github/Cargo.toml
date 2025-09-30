@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "Utilities for interacting with GitHub: refs, URLs, and repo metadata"
+description = "Query GitHub refs, URLs, and repository metadata."
 keywords = ["github", "api", "repository", "refs", "cli"]
 categories = ["command-line-utilities", "development-tools"]
 

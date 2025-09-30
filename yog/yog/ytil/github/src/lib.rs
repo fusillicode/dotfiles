@@ -1,3 +1,9 @@
+//! Integrate with the GitHub CLI: ensure login, derive PR branch names, fetch latest releases and normalize remote
+//! URLs.
+//!
+//! Provide focused wrappers around `gh` subcommands plus URL parsing helpers for PR IDs and remote
+//! canonicalization.
+
 #![feature(exit_status_error)]
 
 use std::path::Path;

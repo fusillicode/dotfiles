@@ -21,7 +21,7 @@ pub fn dict() -> Dictionary {
     }
 }
 
-/// Runs the test function at the current cursor position in a Wezterm pane.
+/// Runs the test function at the current cursor position in a WezTerm pane.
 fn run_test(_: ()) {
     let cur_buf = Buffer::current();
     let cur_win = Window::current();
@@ -62,27 +62,27 @@ fn run_test(_: ()) {
     };
 
     let Ok(cur_pane_id) = ytil_wezterm::get_current_pane_id().inspect_err(|error| {
-        crate::oxi_ext::api::notify_error(&format!("cannot get current Wezterm pane id, error {error:#?}"));
+        crate::oxi_ext::api::notify_error(&format!("cannot get current WezTerm pane id, error {error:#?}"));
     }) else {
         return;
     };
 
     let Ok(wez_panes) = ytil_wezterm::get_all_panes(&[]).inspect_err(|error| {
-        crate::oxi_ext::api::notify_error(&format!("cannot get Wezterm panes, error {error:#?}"));
+        crate::oxi_ext::api::notify_error(&format!("cannot get WezTerm panes, error {error:#?}"));
     }) else {
         return;
     };
 
     let Some(cur_pane) = wez_panes.iter().find(|p| p.pane_id == cur_pane_id) else {
         crate::oxi_ext::api::notify_error(&format!(
-            "Wezterm pane with {cur_pane_id:#?} not found among panes {wez_panes:#?}"
+            "WezTerm pane with {cur_pane_id:#?} not found among panes {wez_panes:#?}"
         ));
         return;
     };
 
     let Some(test_runner_pane) = wez_panes.iter().find(|p| p.is_sibling_terminal_pane_of(cur_pane)) else {
         crate::oxi_ext::api::notify_error(&format!(
-            "cannot find a pane sibling to {cur_pane:#?} among Wezterm panes {wez_panes:#?} where to run the test {test_name}"
+            "cannot find a pane sibling to {cur_pane:#?} among WezTerm panes {wez_panes:#?} where to run the test {test_name}"
         ));
         return;
     };
@@ -105,7 +105,7 @@ fn run_test(_: ()) {
         .spawn()
         .inspect_err(|error| {
             crate::oxi_ext::api::notify_error(&format!(
-                "error executing {test_run_cmd:#?} in Wezterm pane {test_runner_pane:#?}, error {error:#?}"
+                "error executing {test_run_cmd:#?} in WezTerm pane {test_runner_pane:#?}, error {error:#?}"
             ));
         })
     else {
