@@ -25,7 +25,7 @@ use itertools::Itertools;
 ///
 /// * `cooldown_secs` - Seconds to wait between executions
 /// * `exit_condition` - "ok" (stop on success) or "ko" (stop on failure)
-/// * `command` - Command to execute (everything after exit_condition)
+/// * `command` - Command to execute (everything after `exit_condition`)
 ///
 /// # Errors
 ///

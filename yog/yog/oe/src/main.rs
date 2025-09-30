@@ -7,7 +7,7 @@ use color_eyre::eyre::bail;
 use ytil_editor::Editor;
 use ytil_editor::FileToOpen;
 
-/// Open files in a running editor instance from WezTerm.
+/// Open files in a running editor instance from `WezTerm`.
 ///
 /// # Usage
 ///

@@ -57,12 +57,12 @@ mod installers;
 /// # Errors
 ///
 /// Returns an error if:
-/// - A required argument (dev_tools_dir or bin_dir) is missing.
+/// - A required argument (`dev_tools_dir` or `bin_dir`) is missing.
 /// - Creating a required directory fails.
 /// - Authenticating with the GitHub CLI fails.
 /// - An installer thread panics.
 /// - A tool installation fails (individual installer reports the specific cause).
-/// - Removing dead symlinks in bin_dir fails.
+/// - Removing dead symlinks in `bin_dir` fails.
 #[allow(clippy::too_many_lines)]
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
