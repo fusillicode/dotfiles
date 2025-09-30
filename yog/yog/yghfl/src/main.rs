@@ -17,7 +17,7 @@ use ytil_hx::HxStatusLine;
 use ytil_wezterm::WeztermPane;
 use ytil_wezterm::get_sibling_pane_with_titles;
 
-/// Generates a GitHub URL pointing to the current Helix buffer location.
+/// Generate a GitHub URL pointing to the current Helix buffer location.
 ///
 /// # Usage
 ///

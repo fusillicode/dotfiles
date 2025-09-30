@@ -15,7 +15,7 @@ mod nvim_dbee;
 mod pgpass;
 mod vault;
 
-/// Manages `PostgreSQL` credentials from Vault and updates connection files.
+/// Manage `PostgreSQL` credentials from Vault and update connection files.
 ///
 /// After updating credentials, interactively prompts for confirmation before connecting via pgcli.
 ///

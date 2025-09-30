@@ -8,7 +8,7 @@ use color_eyre::eyre::eyre;
 use ytil_editor::Editor;
 use ytil_hx::HxStatusLine;
 
-/// Copies file path from Helix editor to clipboard.
+/// Copy the current Helix file path and line number to the clipboard.
 ///
 /// # Usage
 ///

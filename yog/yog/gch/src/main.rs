@@ -8,7 +8,7 @@ use ytil_git::GitStatusEntry;
 use ytil_git::IndexState;
 use ytil_git::WorktreeState;
 
-/// Interactive CLI tool to clean the working tree by:
+/// Clean the working tree interactively by:
 ///
 /// - Deleting newly created or added entries (files or directories)
 /// - Restoring modified, renamed, or deleted entries via `git restore`

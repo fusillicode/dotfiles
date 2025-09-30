@@ -15,7 +15,7 @@ const BINS_DEFAULT_PATH: &[&str] = &[".local", "bin"];
 /// Path segments for the Nvim libs install dir.
 const NVIM_LIBS_DEFAULT_PATH: &[&str] = &[".config", "nvim", "lua"];
 
-/// Formats, lints, builds, and deploys yog binaries and its Neovim libs.
+/// Format, lint, build, and deploy yog binaries and its Neovim libs.
 ///
 /// # Usage
 /// `evoke [--debug] [bins_path] [cargo_target_path] [nvim_libs_path]`

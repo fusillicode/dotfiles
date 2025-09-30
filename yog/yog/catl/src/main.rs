@@ -5,7 +5,7 @@ use std::process::Command;
 
 use color_eyre::eyre::eyre;
 
-/// Displays file contents or directory listings based on input path.
+/// Display file contents or list a directory (long format).
 /// Uses `cat` for files/symlinks, `ls -llAtrh` for directories.
 ///
 /// # Usage

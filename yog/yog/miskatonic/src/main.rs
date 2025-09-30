@@ -1,7 +1,7 @@
 //! Run quick ad‑hoc experiments and throwaway tests.
 #![feature(exit_status_error)]
 
-/// Experimental playground binary for quick ad‑hoc code experiments and throwaway tests.
+/// Run ad‑hoc experimental code and throwaway tests.
 ///
 /// # Usage
 ///

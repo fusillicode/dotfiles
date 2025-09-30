@@ -12,7 +12,7 @@ use color_eyre::eyre::WrapErr;
 use color_eyre::eyre::bail;
 use itertools::Itertools;
 
-/// Repeatedly executes a command until exit condition is met.
+/// Re-run a command until an exit condition is met.
 ///
 /// # Usage
 ///

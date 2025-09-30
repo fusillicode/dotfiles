@@ -11,7 +11,7 @@ use chrono::Utc;
 use color_eyre::eyre::OptionExt;
 use color_eyre::eyre::bail;
 
-/// Workspace documentation index & 404 generator orchestrating `cargo doc` (with private items) then
+/// Generate a workspace documentation index & 404 page orchestrating `cargo doc` (with private items) then
 /// producing a unified landing page plus static assets copy for all crates actually generating docs.
 ///
 /// # Usage
@@ -21,10 +21,6 @@ use color_eyre::eyre::bail;
 /// nomicon
 /// # Afterwards open target/doc/index.html (or serve) for aggregated view
 /// ```
-///
-/// # Arguments
-///
-/// None.
 ///
 /// # Errors
 ///

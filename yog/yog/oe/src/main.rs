@@ -7,7 +7,7 @@ use color_eyre::eyre::bail;
 use ytil_editor::Editor;
 use ytil_editor::FileToOpen;
 
-/// Opens files in a running editor instance from WezTerm.
+/// Open files in a running editor instance from WezTerm.
 ///
 /// # Usage
 ///
@@ -20,7 +20,7 @@ use ytil_editor::FileToOpen;
 /// # Arguments
 ///
 /// * `editor` - Editor to use ("nvim" or "hx")
-/// * `file_path` - Path to file to open (supports :line[:col] suffix)
+/// * `file_path` - Path to file to open (supports :line:col suffix)
 /// * `pane_id` - Optional WezTerm pane ID (auto-detected if omitted)
 ///
 /// # Errors

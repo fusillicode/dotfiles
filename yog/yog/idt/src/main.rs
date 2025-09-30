@@ -39,7 +39,7 @@ use crate::installers::yaml_language_server::YamlLanguageServer;
 mod downloaders;
 mod installers;
 
-/// Installs development tools including language servers and utilities.
+/// Install development tools including language servers and utilities.
 ///
 /// # Usage
 ///

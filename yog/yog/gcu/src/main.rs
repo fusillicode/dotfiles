@@ -9,7 +9,7 @@ use color_eyre::owo_colors::OwoColorize as _;
 use url::Url;
 use ytil_git::Branch;
 
-/// Git branch management CLI with interactive selection, branch creation (from free‑form
+/// Manage Git branches with interactive selection, branch creation (from free‑form
 /// text or GitHub PR URLs), and branch switching (including previous-branch shorthand).
 ///
 /// # Usage
