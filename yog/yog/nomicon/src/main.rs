@@ -35,7 +35,8 @@ fn main() -> color_eyre::eyre::Result<()> {
 
     // Always (re)generate docs for all workspace crates (including private items) first.
     ytil_cmd::silent_cmd("cargo")
-        .args(["doc", "--all", "--no-deps", "--document-private-items"])
+        // Treat all warnings as errors and explode if there are any
+        .args(["doc", "--all", "--no-deps", "--document-private-items", "--", "-D", "warnings"])
         .status()?
         .exit_ok()?;
 

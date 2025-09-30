@@ -50,6 +50,7 @@ charwise
 clippy
 cmd
 colorscheme
+cooldown
 dataflow
 dbee
 deserializable
