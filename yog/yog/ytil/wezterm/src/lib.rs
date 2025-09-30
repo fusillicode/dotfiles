@@ -1,4 +1,4 @@
-//! Discover WezTerm panes and build command strings for sending text, submitting input or activating panes.
+//! Discover `WezTerm` panes and build command strings for sending text, submitting input or activating panes.
 //!
 //! Query panes (`wezterm cli list`) and generate shell‑safe strings for actions. Helpers locate sibling
 //! panes in the same tab by title and derive absolute working directories from file URIs.
@@ -8,7 +8,7 @@ use std::process::Command;
 use color_eyre::eyre::eyre;
 use serde::Deserialize;
 
-/// Generates a command string to send text to a specific [`WeztermPane`] using the WezTerm CLI.
+/// Generates a command string to send text to a specific [`WeztermPane`] using the `WezTerm` CLI.
 pub fn send_text_to_pane_cmd(text: &str, pane_id: i64) -> String {
     format!("wezterm cli send-text {text} --pane-id '{pane_id}' --no-paste")
 }
@@ -18,7 +18,7 @@ pub fn submit_pane_cmd(pane_id: i64) -> String {
     format!(r#"printf "\r" | wezterm cli send-text --pane-id '{pane_id}' --no-paste"#)
 }
 
-/// Generates a command string to activate a specific [`WeztermPane`] using the WezTerm CLI.
+/// Generates a command string to activate a specific [`WeztermPane`] using the `WezTerm` CLI.
 pub fn activate_pane_cmd(pane_id: i64) -> String {
     format!("wezterm cli activate-pane --pane-id '{pane_id}'")
 }
@@ -35,10 +35,10 @@ pub fn get_current_pane_id() -> color_eyre::Result<i64> {
     Ok(std::env::var("WEZTERM_PANE")?.parse()?)
 }
 
-/// Retrieves all WezTerm panes using the WezTerm CLI.
+/// Retrieves all `WezTerm` panes using the `WezTerm` CLI.
 ///
-/// The `envs` parameter is required because WezTerm may not be found in the PATH
-/// when called by the `oe` CLI when a file path is clicked in WezTerm itself.
+/// The `envs` parameter is required because `WezTerm` may not be found in the PATH
+/// when called by the `oe` CLI when a file path is clicked in `WezTerm` itself.
 ///
 /// # Errors
 ///
@@ -77,7 +77,7 @@ pub fn get_sibling_pane_with_titles(
         .clone())
 }
 
-/// Represents a WezTerm pane with all its properties and state information.
+/// Represents a `WezTerm` pane with all its properties and state information.
 #[derive(Debug, Deserialize, Clone)]
 #[cfg_attr(any(test, feature = "fake"), derive(fake::Dummy))]
 pub struct WeztermPane {
@@ -135,7 +135,7 @@ impl WeztermPane {
     }
 }
 
-/// Represents the size and dimensions of a WezTerm pane.
+/// Represents the size and dimensions of a `WezTerm` pane.
 #[derive(Debug, Deserialize, Clone)]
 #[cfg_attr(any(test, feature = "fake"), derive(fake::Dummy))]
 pub struct WeztermPaneSize {

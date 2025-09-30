@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "Query and control WezTerm panes and metadata."
+description = "Query and control `WezTerm` panes and metadata."
 keywords = ["wezterm", "terminal", "pane", "multiplexer", "integration"]
 categories = ["command-line-utilities", "development-tools"]
 

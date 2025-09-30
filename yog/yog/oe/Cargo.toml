@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "Open files in an editor from WezTerm context."
+description = "Open files in an editor from `WezTerm` context."
 keywords = ["cli", "editor", "wezterm", "neovim", "nvim", "helix"]
 categories = ["command-line-utilities", "development-tools"]
 
