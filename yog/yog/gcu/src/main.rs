@@ -1,3 +1,4 @@
+//! Switch or create Git branches (with PR URL parsing & selector).
 #![feature(exit_status_error)]
 
 use std::io::Write;

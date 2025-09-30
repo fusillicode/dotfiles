@@ -1,3 +1,4 @@
+//! Copy GitHub URL (file/line/col) for the current Helix buffer to clipboard.
 #![feature(exit_status_error)]
 
 use core::str::FromStr;

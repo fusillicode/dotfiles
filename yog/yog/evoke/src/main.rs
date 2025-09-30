@@ -1,3 +1,4 @@
+//! Format, lint, build, and deploy workspace binaries and Neovim libs.
 #![feature(exit_status_error)]
 
 use std::path::Path;

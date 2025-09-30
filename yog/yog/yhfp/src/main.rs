@@ -1,3 +1,4 @@
+//! Copy current Helix file path with line number to clipboard.
 #![feature(exit_status_error)]
 
 use core::str::FromStr;

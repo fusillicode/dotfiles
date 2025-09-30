@@ -1,3 +1,4 @@
+//! Install language servers, linters, formatters and helpers concurrently.
 #![feature(exit_status_error)]
 
 use std::path::Path;

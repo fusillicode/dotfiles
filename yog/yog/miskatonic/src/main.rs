@@ -1,3 +1,4 @@
+//! Run quick ad‑hoc experiments and throwaway tests.
 #![feature(exit_status_error)]
 
 /// Experimental playground binary for quick ad‑hoc code experiments and throwaway tests.
@@ -7,7 +8,6 @@
 /// ```bash
 /// miskatonic            # runs whatever temporary experiment lives in main
 /// ```
-///
 fn main() {
     println!("Hi :)");
 }

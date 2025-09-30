@@ -1,3 +1,4 @@
+//! Open files (optionally at line:col) in existing Neovim/Helix pane.
 #![feature(exit_status_error)]
 
 use core::str::FromStr;

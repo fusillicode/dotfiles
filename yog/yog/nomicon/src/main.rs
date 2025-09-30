@@ -1,3 +1,4 @@
+//! Generate a unified workspace docs index (after `cargo doc`) plus 404 & assets.
 #![feature(exit_status_error)]
 
 use std::collections::VecDeque;

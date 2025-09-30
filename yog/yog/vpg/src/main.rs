@@ -1,3 +1,4 @@
+//! Update Postgres creds from Vault, rewrite pgpass & nvim-dbee, optionally launch pgcli.
 #![feature(exit_status_error)]
 
 use std::process::Command;

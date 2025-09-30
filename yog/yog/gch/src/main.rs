@@ -1,3 +1,4 @@
+//! Interactively delete new entries or restore changes in the working tree.
 #![feature(exit_status_error)]
 
 use std::ops::Deref;

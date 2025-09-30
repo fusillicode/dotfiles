@@ -1,3 +1,4 @@
+//! Re-run a command until success (ok) or failure (ko) with cooldown.
 #![feature(exit_status_error)]
 
 use core::str::FromStr;

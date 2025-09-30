@@ -1,3 +1,4 @@
+//! Print a file with `cat` or long‑list a directory with `ls`.
 #![feature(exit_status_error)]
 
 use std::process::Command;
