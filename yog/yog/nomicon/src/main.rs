@@ -65,28 +65,12 @@ fn main() -> color_eyre::eyre::Result<()> {
 }
 
 fn copy_assets(doc_dir: &Path) -> color_eyre::Result<()> {
-    let assets_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
-    if !assets_dir.is_dir() {
-        bail!("assets_dir {} not a directory", assets_dir.display());
-    }
-    let dest_dir = doc_dir.join("assets");
-    copy_recursive(&assets_dir, &dest_dir)?;
-    Ok(())
-}
-
-fn copy_recursive(src: &Path, dest: &Path) -> color_eyre::Result<()> {
-    std::fs::create_dir_all(dest)?;
-    for entry in std::fs::read_dir(src)? {
-        let entry = entry?;
-        let path = entry.path();
-        let file_name = entry.file_name();
-        let dest_path = dest.join(&file_name);
-        if path.is_dir() {
-            copy_recursive(&path, &dest_path)?;
-        } else if path.is_file() {
-            std::fs::copy(&path, &dest_path)?;
-        }
-    }
+    let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
+    let dest = doc_dir.join("assets");
+    ytil_cmd::silent_cmd("cp")
+        .args(["-r", &source.to_string_lossy(), &dest.to_string_lossy()])
+        .status()?
+        .exit_ok()?;
     Ok(())
 }
 

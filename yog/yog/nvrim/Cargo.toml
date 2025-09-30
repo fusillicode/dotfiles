@@ -10,8 +10,10 @@ description = "Nvim Lua module with Rust utilities"
 keywords = ["neovim", "nvim", "lua", "plugin", "rust", "editor"]
 categories = ["command-line-utilities", "development-tools"]
 
-[lib]
-crate-type = ["cdylib"]
+# Removed explicit cdylib to avoid LuaJIT link failure during full workspace builds.
+# Add back or adjust when building Neovim plugin artifact.
+# [lib]
+# crate-type = ["cdylib"]
 
 [dependencies]
 ytil_cmd = { workspace = true }
