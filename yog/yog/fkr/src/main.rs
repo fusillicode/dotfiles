@@ -1,3 +1,4 @@
+//! Interactively generate fake data (optionally copy to clipboard).
 #![feature(exit_status_error)]
 
 use fkr::FkrOption;
