@@ -27,7 +27,7 @@ mod templates;
 /// ```
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - `cargo doc` invocation fails or exits non‑zero.
 /// - Workspace root or documentation directory cannot be resolved.
 /// - A crate manifest cannot be read or parsed for required keys.
@@ -106,7 +106,7 @@ fn main() -> color_eyre::eyre::Result<()> {
 /// Absolute docs directory path.
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - The directory is missing (suggest running `cargo doc --workspace`).
 fn get_existing_doc_dir(workspace_root: &Path) -> color_eyre::Result<PathBuf> {
     let doc_dir = workspace_root.join("target/doc");
@@ -131,7 +131,7 @@ fn get_existing_doc_dir(workspace_root: &Path) -> color_eyre::Result<PathBuf> {
 /// Ok on success.
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - Underlying `cp` command execution fails.
 /// - Destination directory cannot be written.
 fn copy_assets(doc_dir: &Path) -> color_eyre::Result<()> {
@@ -154,7 +154,7 @@ fn copy_assets(doc_dir: &Path) -> color_eyre::Result<()> {
 /// Value with surrounding quotes removed if present.
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - The matching line is malformed (missing '=' or value).
 /// - The key is not present.
 fn get_toml_value(content: &str, key: &str) -> color_eyre::Result<String> {

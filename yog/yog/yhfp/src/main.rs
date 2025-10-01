@@ -17,7 +17,7 @@ use ytil_hx::HxStatusLine;
 /// ```
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - Executing `wezterm` fails or returns a non-zero exit status.
 /// - UTF-8 conversion fails.
 fn main() -> color_eyre::Result<()> {
@@ -52,7 +52,7 @@ fn main() -> color_eyre::Result<()> {
 /// Formats Helix status line into file path with line number.
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - UTF-8 conversion fails.
 fn format_hx_status_line(hx_status_line: &HxStatusLine) -> color_eyre::Result<String> {
     let file_path = hx_status_line

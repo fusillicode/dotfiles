@@ -116,7 +116,7 @@ fn run_test(_: ()) {
 /// Gets the name of the function enclosing the given [Point] in a Rust file.
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - A filesystem operation (open/read/write/remove) fails.
 fn get_enclosing_fn_name_of_position(file_path: &Path, position: Point) -> color_eyre::Result<Option<String>> {
     eyre::ensure!(
@@ -178,7 +178,7 @@ fn get_enclosing_fn_name_of_node(src: &[u8], node: Option<Node>) -> Option<Strin
 /// 2. no custom config file for cargo-make
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - The path is not inside a Git repository.
 fn get_test_runner_app_for_path(path: &Path) -> color_eyre::Result<&'static str> {

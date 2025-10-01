@@ -32,7 +32,7 @@ use ytil_git::Branch;
 /// - (none)                     Launch interactive selector (see [`autocomplete_git_branches`]).
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - GitHub authentication or pull request branch name derivation fails.
 /// - Branch name construction fails or produces an empty string.
 /// - Branch switching or creation fails.
@@ -64,7 +64,7 @@ fn main() -> color_eyre::Result<()> {
 /// line or "-" triggers previous-branch switching.
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - Branch enumeration fails.
 /// - UI rendering fails.
 /// - Branch switching fails.
@@ -107,7 +107,7 @@ impl core::fmt::Display for RenderableBranch {
 ///   then switch to it.
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - GitHub authentication fails.
 /// - Pull request branch name derivation fails.
 /// - Fetching the remote branch (git fetch) fails.
@@ -144,7 +144,7 @@ fn switch_branch(branch: &str) -> color_eyre::Result<()> {
 ///   required.
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - Current branch discovery fails.
 /// - Branch creation or subsequent switching fails.
 /// - Reading user confirmation input fails.
@@ -172,7 +172,7 @@ fn create_branch_and_switch(branch: &str) -> color_eyre::Result<()> {
 /// - Otherwise, requires user confirmation via empty line input (non‑empty aborts).
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - Current branch discovery fails.
 /// - Reading user confirmation input fails.
 fn should_create_new_branch(branch: &str) -> color_eyre::Result<bool> {
@@ -209,7 +209,7 @@ fn is_default_branch(branch: &str) -> bool {
 /// - Join resulting tokens with `-`.
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - sanitisation produces an empty string.
 fn build_branch_name(args: &[&str]) -> color_eyre::Result<String> {
     fn is_permitted(c: char) -> bool {

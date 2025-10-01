@@ -29,7 +29,7 @@ pub fn get_args() -> Vec<String> {
 /// Awaits a `JoinHandle` and unwraps the inner `Result`.
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - The task panicked.
 /// - The task returned an error.
 pub fn join<T>(join_handle: JoinHandle<color_eyre::Result<T>>) -> Result<T, eyre::Error> {
@@ -39,7 +39,7 @@ pub fn join<T>(join_handle: JoinHandle<color_eyre::Result<T>>) -> Result<T, eyre
 /// Builds a path starting from the home directory by appending the given parts, returning a [`PathBuf`].
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - The home directory cannot be determined.
 pub fn build_home_path<P: AsRef<Path>>(parts: &[P]) -> color_eyre::Result<PathBuf> {
     let mut home_path = std::env::home_dir().ok_or_eyre("missing home dir")?;
@@ -52,7 +52,7 @@ pub fn build_home_path<P: AsRef<Path>>(parts: &[P]) -> color_eyre::Result<PathBu
 /// Copies the given content to the system clipboard using the `pbcopy` command.
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - The clipboard program cannot be spawned.
 /// - The clipboard program exits with failure.
 pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
@@ -73,7 +73,7 @@ pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
 /// Sets executable permissions (755) on the specified file path.
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - File metadata cannot be read.
 /// - Permissions cannot be updated.
@@ -87,7 +87,7 @@ pub fn chmod_x<P: AsRef<Path>>(path: P) -> color_eyre::Result<()> {
 /// Sets executable permissions on all files in the specified directory.
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - A chmod operation fails.
 /// - Directory traversal fails.
@@ -104,7 +104,7 @@ pub fn chmod_x_files_in_dir<P: AsRef<Path>>(dir: P) -> color_eyre::Result<()> {
 /// Creates a symbolic link from the target to the link path, removing any existing file at the link location.
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - Creating the symlink fails.
 /// - The existing link cannot be removed.
@@ -119,7 +119,7 @@ pub fn ln_sf<P: AsRef<Path>>(target: P, link: P) -> color_eyre::Result<()> {
 /// Creates symbolic links for all files in the target directory to the link directory.
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - Creating an individual symlink fails.
 /// - Traversing `target_dir` fails.
@@ -140,7 +140,7 @@ pub fn ln_sf_files_in_dir<P: AsRef<std::path::Path>>(target_dir: P, link_dir: P)
 /// Removes dead symbolic links from the specified directory.
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - Directory traversal fails.
 /// - Removing a dead symlink fails.
@@ -161,7 +161,7 @@ pub fn rm_dead_symlinks(dir: &str) -> color_eyre::Result<()> {
 /// Removes the file at the specified path, ignoring if the file does not exist.
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - An unexpected I/O failure (other than [`std::io::ErrorKind::NotFound`]) occurs.
 pub fn rm_f<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
@@ -180,7 +180,7 @@ pub fn rm_f<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
 /// minimizes the window where readers could observe a partially written file.
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - `from` does not exist.
 /// - The atomic rename fails.
@@ -219,7 +219,7 @@ pub fn atomic_cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
 /// Absolute path to workspace root containing top-level `Cargo.toml`.
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - Directory traversal fails (unexpected layout).
 pub fn get_workspace_root() -> color_eyre::Result<PathBuf> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -248,7 +248,7 @@ pub fn get_workspace_root() -> color_eyre::Result<PathBuf> {
 /// Vector of absolute file paths (discovery order unspecified; currently breadth-first).
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - A directory cannot be read.
 /// - File type metadata for an entry cannot be determined.
 /// - Any underlying filesystem I/O error occurs during traversal.
