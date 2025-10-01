@@ -1,15 +1,24 @@
 <!doctype html>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>{% block title %}Yog Docs{% endblock %}</title>
-<link rel="preload" href="assets/font.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="assets/style.min.css" as="style">
-<link rel="stylesheet" href="assets/style.min.css" />
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
-<header>
-  <h1>{% block header %}Yog Docs{% endblock %}</h1>
-</header>
-<main>
-{% block content %}{% endblock %}
-</main>
-{% include "components/_footer.html" %}
+<html lang="en" class="no-js">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="{% block meta_description %}Documentation for Yog crates{% endblock %}" />
+  <meta name="color-scheme" content="dark" />
+  <title>{% block title %}Yog Docs{% endblock %}</title>
+  <link rel="preload" href="assets/font.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/style.min.css" as="style">
+  <link rel="stylesheet" href="assets/style.min.css" />
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <script>document.documentElement.classList.replace('no-js','js');</script>
+</head>
+<body>
+  <header class="site-header" role="banner">
+    <h1>{% block header %}Yog Docs{% endblock %}</h1>
+  </header>
+  <main id="main" tabindex="-1">
+    {% block content %}{% endblock %}
+  </main>
+  {% include "components/_footer.html" %}
+</body>
+</html>
