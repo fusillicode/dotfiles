@@ -1,15 +1,19 @@
 //! Generate a unified workspace docs index (after `cargo doc`) plus 404 & assets.
 #![feature(exit_status_error)]
 
-use std::collections::VecDeque;
 use std::path::Path;
 use std::path::PathBuf;
 
 use askama::Template;
-use chrono::DateTime;
 use chrono::Utc;
-use color_eyre::eyre::OptionExt;
 use color_eyre::eyre::bail;
+
+use crate::templates::components::footer::Footer;
+use crate::templates::pages::index::CrateMeta;
+use crate::templates::pages::index::IndexPage;
+use crate::templates::pages::not_found::NotFoundPage;
+
+mod templates;
 
 /// Generate a workspace documentation index & 404 page orchestrating `cargo doc` (with private items) then
 /// producing a unified landing page plus static assets copy for all crates actually generating docs.
@@ -34,17 +38,27 @@ fn main() -> color_eyre::eyre::Result<()> {
     color_eyre::install()?;
 
     // Always (re)generate docs for all workspace crates (including private items) first.
+    // Use RUSTDOCFLAGS to enforce warnings-as-errors (portable across cargo versions).
     ytil_cmd::silent_cmd("cargo")
-        // Treat all warnings as errors and explode if there are any
-        .args(["doc", "--all", "--no-deps", "--document-private-items", "--", "-D", "warnings"])
+        .env("RUSTDOCFLAGS", "-Dwarnings")
+        .args(["doc", "--all", "--no-deps", "--document-private-items"])
         .status()?
         .exit_ok()?;
 
-    let workspace_root = get_workspace_root()?;
+    let workspace_root = ytil_system::get_workspace_root()?;
     let doc_dir = get_existing_doc_dir(&workspace_root)?;
+    let cargo_tomls = ytil_system::find_matching_files_recursively_in_dir(
+        &workspace_root,
+        |entry| entry.path().file_name().is_some_and(|f| f == "Cargo.toml"),
+        |entry| {
+            let dir_name = entry.file_name();
+            let dir_name = dir_name.to_string_lossy();
+            dir_name.starts_with('.') || dir_name == "target" || dir_name == "node_modules"
+        },
+    )?;
 
     let mut crates = Vec::new();
-    for cargo_toml in find_all_cargo_tomls(&workspace_root)? {
+    for cargo_toml in cargo_tomls {
         // Skip the workspace root Cargo.toml if it lacks a [package] section.
         let content = std::fs::read_to_string(&cargo_toml)?;
         if !content
@@ -67,17 +81,15 @@ fn main() -> color_eyre::eyre::Result<()> {
     crates.sort_by(|a, b| a.name.cmp(&b.name));
 
     let generated_at = Utc::now();
+    let footer = Footer { generated_at };
 
     let index_page = IndexPage {
         crates: &crates,
-        footer: Footer { generated_at },
+        footer: footer.clone(),
     };
     std::fs::write(doc_dir.join("index.html"), index_page.render()?)?;
 
-    let not_found_page = NotFoundPage {
-        footer: Footer { generated_at },
-    }
-    .render()?;
+    let not_found_page = NotFoundPage { footer }.render()?;
     std::fs::write(doc_dir.join("404.html"), not_found_page)?;
 
     copy_assets(&doc_dir)?;
@@ -85,6 +97,22 @@ fn main() -> color_eyre::eyre::Result<()> {
     Ok(())
 }
 
+/// Copy static assets into documentation output directory.
+///
+/// Copies all files under crate-local `assets/` (CSS, fonts, favicon) into
+/// `<workspace_root>/target/doc/assets` using a recursive `cp`.
+///
+/// # Arguments
+/// * `doc_dir` - Existing `<workspace>/target/doc` directory.
+///
+/// # Returns
+/// Ok on success.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Underlying `cp` command execution fails.
+/// - Destination directory cannot be written.
 fn copy_assets(doc_dir: &Path) -> color_eyre::Result<()> {
     let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
     let dest = doc_dir.join("assets");
@@ -95,68 +123,22 @@ fn copy_assets(doc_dir: &Path) -> color_eyre::Result<()> {
     Ok(())
 }
 
-#[derive(Template)]
-#[template(path = "index.html")]
-struct IndexPage<'a> {
-    crates: &'a [CrateMeta],
-    footer: Footer,
-}
-
-#[derive(Template)]
-#[template(path = "404.html")]
-struct NotFoundPage {
-    footer: Footer,
-}
-
-struct Footer {
-    generated_at: DateTime<Utc>,
-}
-
-struct CrateMeta {
-    name: String,
-    description: String,
-}
-
-fn get_workspace_root() -> color_eyre::Result<PathBuf> {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    Ok(manifest_dir
-        .parent()
-        .and_then(|p| p.parent())
-        .ok_or_eyre(format!(
-            "cannot get workspace root from manifest_dir={}",
-            manifest_dir.display()
-        ))?
-        .to_path_buf())
-}
-
-/// Recursively discover all Cargo.toml manifests under the workspace root.
-fn find_all_cargo_tomls(workspace_root: &Path) -> color_eyre::Result<Vec<PathBuf>> {
-    let mut manifests = Vec::new();
-    let mut queue = VecDeque::from([workspace_root.to_path_buf()]);
-
-    while let Some(dir) = queue.pop_front() {
-        for entry in std::fs::read_dir(&dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if entry.file_type()?.is_dir() {
-                let name = entry.file_name();
-                let name = name.to_string_lossy();
-                if name.starts_with('.') || name == "target" || name == "node_modules" {
-                    continue;
-                }
-                queue.push_back(path);
-            } else if path.file_name().is_some_and(|f| f == "Cargo.toml") {
-                manifests.push(path);
-            }
-        }
-    }
-
-    Ok(manifests)
-}
-
-/// Return the value for the first `key = value` line.
+/// Extract a simple `key = value` from manifest text.
 ///
-/// Errors if the key is missing or malformed.
+/// Scans lines for one beginning with `key`, then `=`, returning trimmed (unquoted) value.
+///
+/// # Arguments
+/// * `content` - Full Cargo.toml contents.
+/// * `key` - Key name to search (e.g. "name").
+///
+/// # Returns
+/// Value with surrounding quotes removed if present.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The matching line is malformed (missing '=' or value).
+/// - The key is not present.
 fn get_cargo_toml_key_value(content: &str, key: &str) -> color_eyre::Result<String> {
     for line in content.lines() {
         let trimmed_line = line.trim_start();
@@ -171,6 +153,20 @@ fn get_cargo_toml_key_value(content: &str, key: &str) -> color_eyre::Result<Stri
     bail!("required key '{key}' missing in manifest");
 }
 
+/// Get of existing documentation directory.
+///
+/// Checks `<workspace_root>/target/doc` exists.
+///
+/// # Arguments
+/// * `workspace_root` - Workspace root path.
+///
+/// # Returns
+/// Absolute docs directory path.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The directory is missing (suggest running `cargo doc --workspace`).
 fn get_existing_doc_dir(workspace_root: &Path) -> color_eyre::Result<PathBuf> {
     let doc_dir = workspace_root.join("target/doc");
     if !doc_dir.exists() {

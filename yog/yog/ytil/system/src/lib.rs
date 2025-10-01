@@ -2,6 +2,8 @@
 //!
 //! Offer small utilities for CLI tools: joining thread handles, building home-relative paths,
 //! manipulating filesystem entries (chmod, symlinks, atomic copy) and clipboard integration.
+use std::collections::VecDeque;
+use std::fs::DirEntry;
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
 use std::path::PathBuf;
@@ -217,4 +219,86 @@ pub fn atomic_cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
     std::fs::rename(&tmp_path, to).with_context(|| format!("renaming {} to {}", tmp_path.display(), to.display()))?;
 
     Ok(())
+}
+
+/// Resolve workspace root directory.
+///
+/// Ascends three levels from this crate's manifest.
+///
+/// # Returns
+/// Absolute path to workspace root containing top-level `Cargo.toml`.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Directory traversal fails (unexpected layout).
+pub fn get_workspace_root() -> color_eyre::Result<PathBuf> {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    Ok(manifest_dir
+        .parent()
+        .and_then(|p| p.parent())
+        .and_then(|p| p.parent())
+        .ok_or_eyre(format!(
+            "cannot get workspace root from manifest_dir={}",
+            manifest_dir.display()
+        ))?
+        .to_path_buf())
+}
+
+/// Recursively find files matching a predicate (breadth-first)
+///
+/// Performs a breadth-first traversal starting at [`dir`], skipping directories for which
+/// `skip_dir_fn` returns true, and collecting file paths for which `matching_file_fn` returns true.
+///
+/// # Arguments
+/// * `dir` - Root directory to start traversal.
+/// * `matching_file_fn` - Predicate applied to each file entry; include path when it returns true.
+/// * `skip_dir_fn` - Predicate applied to each directory entry; skip descent when it returns true.
+///
+/// # Returns
+/// Vector of absolute file paths (discovery order unspecified; currently breadth-first).
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - A directory cannot be read.
+/// - File type metadata for an entry cannot be determined.
+/// - Any underlying filesystem I/O error occurs during traversal.
+///
+/// # Performance
+/// Uses an in-memory queue (BFS). For extremely deep trees consider a streaming iterator variant;
+/// current implementation favours simplicity over incremental output.
+///
+/// # Future Work
+/// - Provide an iterator adapter (`impl Iterator<Item = PathBuf>`), avoiding collecting all results.
+/// - Optional parallel traversal behind a feature flag for large repositories.
+pub fn find_matching_files_recursively_in_dir(
+    dir: &Path,
+    matching_file_fn: impl Fn(&DirEntry) -> bool,
+    skip_dir_fn: impl Fn(&DirEntry) -> bool,
+) -> color_eyre::Result<Vec<PathBuf>> {
+    let mut manifests = Vec::new();
+    let mut queue = VecDeque::from([dir.to_path_buf()]);
+
+    while let Some(dir) = queue.pop_front() {
+        for entry in std::fs::read_dir(&dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            let file_type = entry.file_type()?;
+
+            if file_type.is_file() {
+                if matching_file_fn(&entry) {
+                    manifests.push(path);
+                }
+                continue;
+            }
+
+            if skip_dir_fn(&entry) {
+                continue;
+            }
+            queue.push_back(path);
+        }
+    }
+
+    Ok(manifests)
 }
