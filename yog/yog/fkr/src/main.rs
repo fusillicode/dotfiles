@@ -18,7 +18,7 @@ use fkr::FkrOption;
 /// * `cp` - Copy generated value to clipboard (optional)
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - Interactive selection fails.
 /// - Writing the generated value to the clipboard fails.
 fn main() -> color_eyre::Result<()> {
