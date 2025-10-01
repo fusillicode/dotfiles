@@ -10,11 +10,6 @@ description = "Expose Neovim Lua modules backed by Rust utilities."
 keywords = ["neovim", "nvim", "lua", "plugin", "rust", "editor"]
 categories = ["command-line-utilities", "development-tools"]
 
-# Removed explicit cdylib to avoid LuaJIT link failure during full workspace builds.
-# Add back or adjust when building Neovim plugin artifact.
-# [lib]
-# crate-type = ["cdylib"]
-
 [dependencies]
 ytil_cmd = { workspace = true }
 color-eyre = { workspace = true }
@@ -33,3 +28,6 @@ tree-sitter = { version = "0.25" }
 tree-sitter-rust = { version = "0.24" }
 url = { version = "2.5" }
 ytil_wezterm = { workspace = true }
+
+[lib]
+crate-type = ["cdylib"]
