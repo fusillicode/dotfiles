@@ -1,4 +1,4 @@
-//! Generate a unified workspace docs index (after `cargo doc`) plus 404 & assets.
+//! Generate a consolidated styled workspace documentation.
 #![feature(exit_status_error)]
 
 use std::path::Path;
@@ -15,8 +15,8 @@ use crate::templates::pages::not_found::NotFoundPage;
 
 mod templates;
 
-/// Generate a workspace documentation index & 404 page orchestrating `cargo doc` (with private items) then
-/// producing a unified landing page plus static assets copy for all crates actually generating docs.
+/// Generate a custom workspace documentation by wrapping `cargo doc` and
+/// producing a unified landing page linking to all crates generated docs.
 ///
 /// # Usage
 ///
@@ -31,7 +31,7 @@ mod templates;
 /// - `cargo doc` invocation fails or exits non‑zero.
 /// - Workspace root or documentation directory cannot be resolved.
 /// - A crate manifest cannot be read or parsed for required keys.
-/// - A template (index / 404) fails to render.
+/// - A template fails to render.
 /// - Writing output files or copying assets fails.
 fn main() -> color_eyre::eyre::Result<()> {
     color_eyre::install()?;
@@ -89,7 +89,7 @@ fn main() -> color_eyre::eyre::Result<()> {
     std::fs::write(doc_dir.join("index.html"), index_page.render()?)?;
 
     let not_found_page = NotFoundPage { footer }.render()?;
-    std::fs::write(doc_dir.join("404.html"), not_found_page)?;
+    std::fs::write(doc_dir.join("not_found.html"), not_found_page)?;
 
     copy_assets(&doc_dir)?;
 
