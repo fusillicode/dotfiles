@@ -1,0 +1,25 @@
+[package]
+name = "nomicon"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Generate a consolidated styled workspace documentation."
+keywords = ["docs", "documentation", "html", "generator"]
+categories = ["command-line-utilities", "development-tools"]
+build = "build.rs"
+
+[dependencies]
+askama = { version = "0.14" }
+chrono = { workspace = true }
+color-eyre = { workspace = true }
+ytil_cmd = { workspace = true }
+ytil_system = { workspace = true }
+
+[build-dependencies]
+color-eyre = { workspace = true }
+lightningcss = { version = "1.0.0-alpha.67", default-features = false, features = [
+  "browserslist",
+] }

@@ -4,9 +4,9 @@ use std::path::PathBuf;
 /// Downloads and installs Node.js packages using npm.
 ///
 /// # Errors
-///
-/// Returns an error if:
-/// - A filesystem operation (open/read/write/remove) fails.
+/// If:
+/// - Executing the `npm` command fails or returns a non-zero exit status.
+/// - A filesystem operation (create/read/write/remove) fails.
 pub fn run(dev_tools_dir: &Path, tool: &str, packages: &[&str]) -> color_eyre::Result<PathBuf> {
     let dev_tools_repo_dir = dev_tools_dir.join(tool);
 
@@ -20,7 +20,7 @@ pub fn run(dev_tools_dir: &Path, tool: &str, packages: &[&str]) -> color_eyre::R
     cmd_args.extend_from_slice(&["--prefix", &dev_tools_repo_dir_bind]);
     cmd_args.extend_from_slice(packages);
 
-    cmd::silent_cmd("npm").args(cmd_args).status()?.exit_ok()?;
+    ytil_cmd::silent_cmd("npm").args(cmd_args).status()?.exit_ok()?;
 
     Ok(dev_tools_repo_dir.join("node_modules").join(".bin"))
 }

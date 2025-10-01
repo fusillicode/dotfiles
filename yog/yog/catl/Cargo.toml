@@ -6,10 +6,10 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "File/directory viewer that chooses between cat and ls based on input type"
+description = "View a file with cat or list a directory with ls."
 keywords = ["cli", "file", "directory", "viewer", "cat", "ls"]
-categories = ["command-line-utilities", "filesystem"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 color-eyre = { workspace = true }
-system = { workspace = true }
+ytil_system = { workspace = true }

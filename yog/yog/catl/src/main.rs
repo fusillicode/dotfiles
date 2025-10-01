@@ -1,21 +1,31 @@
+//! Print a file with `cat` or long‑list a directory with `ls`.
 #![feature(exit_status_error)]
 
 use std::process::Command;
 
 use color_eyre::eyre::eyre;
 
-/// Displays file contents or directory listings based on input path.
+/// Display file contents or list a directory (long format).
 /// Uses `cat` for files/symlinks, `ls -llAtrh` for directories.
 ///
-/// # Errors
+/// # Usage
 ///
-/// Returns an error if:
+/// ```bash
+/// catl <path>     # file -> cat; directory -> coloured long listing
+/// ```
+///
+/// # Arguments
+///
+/// - `<path>` Path to file / directory / symlink to display.
+///
+/// # Errors
+/// If:
 /// - Executing one of the external commands (cat, ls) fails or returns a non-zero exit status.
 /// - A filesystem operation (open/read/write/remove) fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let args = system::get_args();
+    let args = ytil_system::get_args();
 
     let path = args.first().ok_or_else(|| eyre!("missing path arg from {args:#?}"))?;
 

@@ -15,7 +15,7 @@ impl Installer for Taplo<'_> {
         // Installing with `cargo` because of:
         // 1. no particular requirements
         // 2. https://github.com/tamasfe/taplo/issues/542
-        cmd::silent_cmd("cargo")
+        ytil_cmd::silent_cmd("cargo")
             .args([
                 "install",
                 &format!("{}-cli", self.bin_name()),
@@ -27,7 +27,7 @@ impl Installer for Taplo<'_> {
             ])
             .status()?;
 
-        system::chmod_x(self.bin_dir.join(self.bin_name()))?;
+        ytil_system::chmod_x(self.bin_dir.join(self.bin_name()))?;
 
         Ok(())
     }

@@ -63,8 +63,9 @@ where
 /// - `items`: Slice of displayable values listed sequentially.
 ///
 /// # Errors
-/// - Fails if the underlying `inputlist()` call errors.
-/// - Fails if converting the returned index to `usize` overflows.
+/// If:
+/// - Invoking `inputlist()` fails.
+/// - The returned index cannot be converted to `usize` (negative or overflow).
 pub fn inputlist<'a, I: core::fmt::Display>(prompt: &'a str, items: &'a [I]) -> color_eyre::Result<Option<&'a I>> {
     let displayable_items: Vec<_> = items
         .iter()
