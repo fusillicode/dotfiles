@@ -6,22 +6,22 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "Generates GitHub links for files open in Helix editor"
+description = "Generate GitHub links for files open in Helix."
 keywords = ["cli", "github", "helix", "editor", "links"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 color-eyre = { workspace = true }
-editor = { workspace = true }
-git = { workspace = true }
-github = { workspace = true }
-hx = { workspace = true }
-system = { workspace = true }
+ytil_editor = { workspace = true }
+ytil_git = { workspace = true }
+ytil_github = { workspace = true }
+ytil_hx = { workspace = true }
+ytil_system = { workspace = true }
 url = { workspace = true }
-wezterm = { workspace = true }
+ytil_wezterm = { workspace = true }
 
 [dev-dependencies]
 fake = { workspace = true }
-hx = { workspace = true, features = ["fake"] }
+ytil_hx = { workspace = true, features = ["fake"] }
 temp-env = { version = "0.3" }
-wezterm = { workspace = true, features = ["fake"] }
+ytil_wezterm = { workspace = true, features = ["fake"] }

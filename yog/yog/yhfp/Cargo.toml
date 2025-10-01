@@ -6,13 +6,13 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "Copies file paths from Helix editor to clipboard"
+description = "Copy Helix file paths to the system clipboard."
 keywords = ["cli", "helix", "editor", "clipboard", "file-path"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 color-eyre = { workspace = true }
-editor = { workspace = true }
-hx = { workspace = true }
-system = { workspace = true }
-wezterm = { workspace = true }
+ytil_editor = { workspace = true }
+ytil_hx = { workspace = true }
+ytil_system = { workspace = true }
+ytil_wezterm = { workspace = true }

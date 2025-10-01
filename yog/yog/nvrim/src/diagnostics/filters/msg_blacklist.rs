@@ -92,7 +92,7 @@ impl DiagnosticsFilter for MsgBlacklistFilter {
     /// # Errors
     ///
     /// Returns an error if:
-    /// - An underlying operation fails.
+    /// - Required `source` or `message` keys are missing or have unexpected types.
     fn skip_diagnostic(&self, buf_path: &str, lsp_diag: Option<&Dictionary>) -> color_eyre::Result<bool> {
         let Some(lsp_diag) = lsp_diag else {
             return Ok(false);

@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "Experimental playground for testing code and ideas"
+description = "Experiment with code snippets and ideas."
 keywords = ["cli", "experimental", "playground", "testing"]
 categories = ["command-line-utilities", "development-tools"]
 

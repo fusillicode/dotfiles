@@ -1,19 +1,20 @@
+//! Interactively delete new entries or restore changes in the working tree.
 #![feature(exit_status_error)]
 
 use std::ops::Deref;
 
 use color_eyre::owo_colors::OwoColorize as _;
-use git::GitStatusEntry;
-use git::IndexState;
-use git::WorktreeState;
+use ytil_git::GitStatusEntry;
+use ytil_git::IndexState;
+use ytil_git::WorktreeState;
 
-/// Interactive CLI tool to clean the working tree by:
+/// Clean the working tree interactively by:
 ///
 /// - Deleting newly created or added entries (files or directories)
 /// - Restoring modified, renamed, or deleted entries via `git restore`
 ///
 /// Workflow:
-/// 1. Collect [`GitStatusEntry`] values via [`crate::git_status::get`].
+/// 1. Collect [`GitStatusEntry`] values via [`ytil_git::get_status`].
 /// 2. Let the user multi‑select entries via the minimal TUI.
 /// 3. Delete new or added entries and run `git restore` (optionally from a user‑supplied branch) for the remaining
 ///    changed entries.
@@ -21,20 +22,30 @@ use git::WorktreeState;
 /// The tool is intentionally minimal and suited for quick cleanup and branch‑switching
 /// scenarios.
 ///
-/// # Errors
+/// # Usage
 ///
-/// Returns an error if:
+/// ```bash
+/// gch                  # interactive multi-select & clean
+/// gch main             # restore changed entries from branch 'main'
+/// ```
+///
+/// # Arguments
+///
+/// - `[branch]` Optional branch name; if provided changed entries are restored from it.
+///
+/// # Errors
+/// If:
 /// - Initializing [`color_eyre`] fails.
-/// - Fetching entries via [`crate::git_status::get`] fails.
+/// - Fetching entries via [`ytil_git::get_status`] fails.
 /// - Presenting the selection UI fails.
 /// - Deleting an entry or executing the `git restore` command fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let args = system::get_args();
+    let args = ytil_system::get_args();
     let args: Vec<_> = args.iter().map(String::as_str).collect();
 
-    let git_status_entries = git::get_status()?;
+    let git_status_entries = ytil_git::get_status()?;
     if git_status_entries.is_empty() {
         println!("{}", "working tree clean".bold());
         return Ok(());
@@ -42,7 +53,8 @@ fn main() -> color_eyre::Result<()> {
 
     let renderable_entries = git_status_entries.into_iter().map(RenederableGitStatusEntry).collect();
 
-    let Some(selected_entries) = tui::minimal_multi_select::<RenederableGitStatusEntry>(renderable_entries)? else {
+    let Some(selected_entries) = ytil_tui::minimal_multi_select::<RenederableGitStatusEntry>(renderable_entries)?
+    else {
         println!("\n\n{}", "nothing done".bold());
         return Ok(());
     };
@@ -59,11 +71,9 @@ fn main() -> color_eyre::Result<()> {
 /// entries are restored from that branch.
 ///
 /// # Errors
-///
-/// Returns an error if:
-/// - Deleting an entry fails.
+/// If:
+/// - Removing a file or directory for a new entry fails.
 /// - Building or executing the `git restore` command fails.
-/// - Any underlying I/O operation fails.
 fn restore_entries<'a, I>(entries: I, branch: Option<&str>) -> color_eyre::Result<()>
 where
     I: Iterator<Item = &'a GitStatusEntry>,
@@ -90,7 +100,7 @@ where
         .map(|changed_entry| changed_entry.absolute_path().to_string_lossy().into_owned())
         .collect::<Vec<_>>();
 
-    git::restore(
+    ytil_git::restore(
         &changed_entries_paths.iter().map(String::as_str).collect::<Vec<_>>(),
         branch,
     )?;

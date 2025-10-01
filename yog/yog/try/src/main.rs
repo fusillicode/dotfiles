@@ -1,3 +1,4 @@
+//! Re-run a command until success (ok) or failure (ko) with cooldown.
 #![feature(exit_status_error)]
 
 use core::str::FromStr;
@@ -11,23 +12,29 @@ use color_eyre::eyre::WrapErr;
 use color_eyre::eyre::bail;
 use itertools::Itertools;
 
-/// Repeatedly executes a command until exit condition is met.
+/// Re-run a command until an exit condition is met.
+///
+/// # Usage
+///
+/// ```bash
+/// try 2 ok cargo test            # run every 2s until success
+/// try 1 ko curl localhost:3000   # run until command FAILS (e.g. server down)
+/// ```
 ///
 /// # Arguments
 ///
 /// * `cooldown_secs` - Seconds to wait between executions
 /// * `exit_condition` - "ok" (stop on success) or "ko" (stop on failure)
-/// * `command` - Command to execute
+/// * `command` - Command to execute (everything after `exit_condition`)
 ///
 /// # Errors
-///
-/// Returns an error if:
+/// If:
 /// - Executing `sh` fails or returns a non-zero exit status.
 /// - UTF-8 conversion fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let args = system::get_args();
+    let args = ytil_system::get_args();
 
     let Some((cooldown_secs, args)) = args.split_first() else {
         bail!("missing cooldown supplied in {args:#?}");
@@ -90,11 +97,6 @@ enum ExitCond {
 
 impl ExitCond {
     /// Determines if the loop should break.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - An underlying IO, network, environment, parsing, or external command operation fails.
     #[allow(clippy::suspicious_operation_groupings)]
     pub const fn should_break(&self, cmd_res: Result<(), ExitStatusError>) -> bool {
         self.is_ok() && cmd_res.is_ok() || !self.is_ok() && cmd_res.is_err()

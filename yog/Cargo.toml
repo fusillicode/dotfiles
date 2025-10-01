@@ -1,6 +1,30 @@
 [workspace]
 resolver = "2"
-members = ["yog/*", "yog-utylo/*"]
+members = [
+  "yog/catl",
+  "yog/evoke",
+  "yog/fkr",
+  "yog/gch",
+  "yog/gcu",
+  "yog/idt",
+  "yog/miskatonic",
+  "yog/nomicon",
+  "yog/nvrim",
+  "yog/oe",
+  "yog/try",
+  "yog/vpg",
+  "yog/yghfl",
+  "yog/yhfp",
+  # Utility libraries (ytil)
+  "yog/ytil/cmd",
+  "yog/ytil/editor",
+  "yog/ytil/git",
+  "yog/ytil/github",
+  "yog/ytil/hx",
+  "yog/ytil/system",
+  "yog/ytil/tui",
+  "yog/ytil/wezterm",
+]
 
 [workspace.package]
 version = "0.1.0"
@@ -27,14 +51,14 @@ strum = { version = "0.27", features = ["derive"] }
 thiserror = { version = "2.0" }
 url = { version = "2.5", features = ["serde"] }
 
-cmd = { path = "./yog-utylo/cmd" }
-editor = { path = "./yog-utylo/editor" }
-git = { path = "./yog-utylo/git" }
-github = { path = "./yog-utylo/github" }
-hx = { path = "./yog-utylo/hx" }
-tui = { path = "./yog-utylo/tui" }
-system = { path = "./yog-utylo/system" }
-wezterm = { path = "./yog-utylo/wezterm" }
+ytil_cmd = { path = "./yog/ytil/cmd" }
+ytil_editor = { path = "./yog/ytil/editor" }
+ytil_git = { path = "./yog/ytil/git" }
+ytil_github = { path = "./yog/ytil/github" }
+ytil_hx = { path = "./yog/ytil/hx" }
+ytil_tui = { path = "./yog/ytil/tui" }
+ytil_system = { path = "./yog/ytil/system" }
+ytil_wezterm = { path = "./yog/ytil/wezterm" }
 
 #[dev-dependencies]
 assert2 = { version = "0.3" }
