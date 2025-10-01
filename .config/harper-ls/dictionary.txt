@@ -22,6 +22,7 @@ OIDC
 OS
 Okta
 OpenAPI
+PID
 Prima
 RHS
 RTR
@@ -40,6 +41,7 @@ WezTerm
 actix
 ampliado
 arg
+args
 asdf
 augroups
 autocommand
@@ -48,6 +50,7 @@ canonicalization
 characterwise
 chargeback
 charwise
+chmod
 clippy
 cmd
 colorscheme
@@ -63,6 +66,7 @@ envar
 expr
 extmark
 façade
+file path
 fkr
 franquicia
 grug

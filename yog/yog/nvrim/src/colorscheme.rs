@@ -100,7 +100,7 @@ fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &SetHighlightOpts) {
 /// - Returns an error in case of multiple infos ([`GetHlInfos::Map`]) for the given `hl_opts` .
 ///
 /// # Errors
-/// Returns an error if:
+/// If:
 /// - Calling `nvim_get_hl` fails.
 /// - Multiple highlight groups are returned instead of a single one.
 fn get_hl(ns_id: u32, hl_opts: &GetHighlightOpts) -> color_eyre::Result<HighlightInfos> {
@@ -123,7 +123,7 @@ fn get_hl(ns_id: u32, hl_opts: &GetHighlightOpts) -> color_eyre::Result<Highligh
 /// Returns a [`color_eyre::Result`]. Errors if `blend` (`u32`) cannot convert to `u8` and notifies it to Neovim.
 ///
 /// # Errors
-/// Returns an error if:
+/// If:
 /// - The `blend` value cannot fit into a `u8`.
 fn hl_opts_from_hl_infos(hl_infos: &HighlightInfos) -> color_eyre::Result<SetHighlightOptsBuilder> {
     let mut opts = set_opts();

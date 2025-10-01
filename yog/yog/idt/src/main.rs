@@ -55,7 +55,7 @@ mod installers;
 /// * `tool_names` - Optional specific tools to install (defaults to all)
 ///
 /// # Errors
-/// Returns an error if:
+/// If:
 /// - A required argument (`dev_tools_dir` or `bin_dir`) is missing.
 /// - Creating a required directory fails.
 /// - Authenticating with the GitHub CLI fails.

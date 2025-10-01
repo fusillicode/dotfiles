@@ -100,7 +100,7 @@ impl From<String> for WordUnderCursor {
 /// - unknown types
 ///
 /// # Errors
-/// Returns an error if:
+/// If:
 /// - launching or waiting on the `file` command fails
 /// - the command exits with non-success
 /// - standard output cannot be decoded as valid UTF-8

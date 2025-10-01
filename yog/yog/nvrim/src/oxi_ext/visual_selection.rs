@@ -301,7 +301,7 @@ impl Poppable for Pos {
 ///   cursor position).
 ///
 /// # Errors
-/// Returns an error if:
+/// If:
 /// - Calling `getpos()` fails.
 /// - Deserializing the returned tuple into [`Pos`] fails.
 fn get_pos(mark: &str) -> nvim_oxi::Result<Pos> {

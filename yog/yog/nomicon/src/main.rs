@@ -27,7 +27,7 @@ mod templates;
 /// ```
 ///
 /// # Errors
-/// Returns an error if:
+/// If:
 /// - `cargo doc` invocation fails or exits non‑zero.
 /// - Workspace root or documentation directory cannot be resolved.
 /// - A crate manifest cannot be read or parsed for required keys.
@@ -108,7 +108,7 @@ fn main() -> color_eyre::eyre::Result<()> {
 /// Ok on success.
 ///
 /// # Errors
-/// Returns an error if:
+/// If:
 /// - Underlying `cp` command execution fails.
 /// - Destination directory cannot be written.
 fn copy_assets(doc_dir: &Path) -> color_eyre::Result<()> {
@@ -121,9 +121,7 @@ fn copy_assets(doc_dir: &Path) -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Extract a simple `key = value` from manifest text.
-///
-/// Scans lines for one beginning with `key`, then `=`, returning trimmed (unquoted) value.
+/// Extract the value of the supplied `key` from the supplied manifest text `content`.
 ///
 /// # Arguments
 /// * `content` - Full Cargo.toml contents.
@@ -133,7 +131,7 @@ fn copy_assets(doc_dir: &Path) -> color_eyre::Result<()> {
 /// Value with surrounding quotes removed if present.
 ///
 /// # Errors
-/// Returns an error if:
+/// If:
 /// - The matching line is malformed (missing '=' or value).
 /// - The key is not present.
 fn get_cargo_toml_key_value(content: &str, key: &str) -> color_eyre::Result<String> {
@@ -150,9 +148,7 @@ fn get_cargo_toml_key_value(content: &str, key: &str) -> color_eyre::Result<Stri
     bail!("required key '{key}' missing in manifest");
 }
 
-/// Get of existing documentation directory.
-///
-/// Checks `<workspace_root>/target/doc` exists.
+/// Get existing documentation directory if exists.
 ///
 /// # Arguments
 /// * `workspace_root` - Workspace root path.
@@ -161,7 +157,7 @@ fn get_cargo_toml_key_value(content: &str, key: &str) -> color_eyre::Result<Stri
 /// Absolute docs directory path.
 ///
 /// # Errors
-/// Returns an error if:
+/// If:
 /// - The directory is missing (suggest running `cargo doc --workspace`).
 fn get_existing_doc_dir(workspace_root: &Path) -> color_eyre::Result<PathBuf> {
     let doc_dir = workspace_root.join("target/doc");

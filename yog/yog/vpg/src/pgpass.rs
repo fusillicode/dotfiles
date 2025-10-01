@@ -171,7 +171,7 @@ impl core::fmt::Display for ConnectionParams {
 /// 4. Sets strict permissions (600) to match `.pgpass` security requirements.
 ///
 /// # Errors
-/// Returns an error if:
+/// If:
 /// - A filesystem operation (open/read/write/remove) fails.
 pub fn save_new_pgpass_file(
     pgpass_idx_lines: Vec<(usize, &str)>,

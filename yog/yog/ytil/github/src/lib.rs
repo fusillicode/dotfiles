@@ -26,7 +26,7 @@ const GITHUB_PR_ID_QUERY_KEY: &str = "pr";
 /// Runs `gh auth status`; if not authenticated it invokes an interactive `gh auth login`.
 ///
 /// # Errors
-/// Returns an error if:
+/// If:
 /// - Checking auth status fails.
 /// - The login command fails or exits with a non-zero status.
 pub fn log_into_github() -> color_eyre::Result<()> {
@@ -43,7 +43,7 @@ pub fn log_into_github() -> color_eyre::Result<()> {
 /// Retrieves the latest release tag name for the specified GitHub repository.
 ///
 /// # Errors
-/// Returns an error if:
+/// If:
 /// - Executing `gh` fails or returns a non-zero exit status.
 /// - UTF-8 conversion fails.
 /// - Invoking `gh api` fails.
@@ -58,7 +58,7 @@ pub fn get_latest_release(repo: &str) -> color_eyre::Result<String> {
 /// Extracts the branch name from a GitHub pull request [`Url`].
 ///
 /// # Errors
-/// Returns an error if:
+/// If:
 /// - Executing `gh` fails or returns a non-zero exit status.
 /// - Invoking `gh pr view` fails.
 /// - Output cannot be parsed.
@@ -77,7 +77,7 @@ pub fn get_branch_name_from_url(url: &Url) -> color_eyre::Result<String> {
 /// Filters remotes to those that parse as GitHub URLs.
 ///
 /// # Errors
-/// Returns an error if:
+/// If:
 /// - The repository cannot be opened.
 /// - A remote cannot be resolved.
 /// - A remote URL is invalid UTF-8.
@@ -102,7 +102,7 @@ pub fn get_repo_urls(repo_path: &Path) -> color_eyre::Result<Vec<Url>> {
 /// - `https://github.com/owner/repo[.git]`
 ///
 /// # Errors
-/// Returns an error if:
+/// If:
 /// - The URL cannot be parsed or lacks a path component.
 fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> color_eyre::Result<Url> {
     if let Ok(mut url) = Url::parse(git_remote_url) {
@@ -124,7 +124,7 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> color_eyre::Res
 /// Extracts and validates successful command output, converting it to a trimmed string.
 ///
 /// # Errors
-/// Returns an error if:
+/// If:
 /// - UTF-8 conversion fails.
 fn extract_success_output(output: &Output) -> color_eyre::Result<String> {
     output.status.exit_ok()?;
@@ -138,7 +138,7 @@ fn extract_success_output(output: &Output) -> color_eyre::Result<String> {
 /// - Actions run URL with `?pr=<ID>` (also supports `/job/<JOB_ID>` variants).
 ///
 /// # Errors
-/// Returns an error if:
+/// If:
 /// - Host is not `github.com`.
 /// - The PR id segment or query parameter is missing, empty, duplicated, or malformed.
 fn extract_pr_id_form_url(url: &Url) -> color_eyre::Result<String> {

@@ -27,7 +27,7 @@ pub enum CurlDownloaderOption<'a> {
 /// Downloads a file from the given URL using curl with the specified [`CurlDownloaderOption`].
 ///
 /// # Errors
-/// Returns an error if:
+/// If:
 /// - Executing the `curl` command fails or returns a non-zero exit status.
 /// - Executing a decompression command (`zcat`, `tar`) fails or returns a non-zero exit status.
 /// - The spawned `curl` process does not expose a stdout pipe (missing piped handle).
