@@ -2,6 +2,7 @@ AMPQ
 Acierto
 ApiKey
 Artifactory
+Askama
 BFS
 Blockwise
 CTRL
@@ -24,6 +25,7 @@ Okta
 OpenAPI
 PID
 Prima
+RFC3339
 RHS
 RTR
 RabbitMQ
