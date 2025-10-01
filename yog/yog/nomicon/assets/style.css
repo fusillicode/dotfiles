@@ -15,17 +15,57 @@
   color-scheme: dark;
 }
 html {
-  background: var(--bg);
+  /* Animated forest background (GIF). Fallback solid color first. */
+  background: var(--bg) url("background.gif") center / cover fixed no-repeat;
+  background-blend-mode: normal;
+  position: relative;
+  min-height: 100%;
+}
+/* Overlay to ensure text contrast */
+html::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(rgba(0, 34, 0, 0.72), rgba(0, 34, 0, 0.78));
+  pointer-events: none;
+  z-index: -1;
 }
 body {
   font-family: "PxPlus ToshibaSat 9x16", monospace;
   font-size: 1.25rem;
   max-width: 960px;
-  margin: 40px auto;
-  padding: 0 1rem;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh; /* fallback */
+  min-height: 100dvh; /* dynamic viewport units */
+  padding-block: 40px; /* replaced margin-block to keep full-height flex context */
+  padding-inline: 1rem;
+  margin: 0; /* remove margins so flex height = viewport height */
+  margin-inline-start: 40px; /* maintain left inset */
+  margin-inline-end: auto; /* allow right side to expand */
   line-height: 1.4;
-  background: var(--bg);
+  background: transparent;
   color: var(--fg);
+  text-align: start;
+}
+
+main {
+  flex: 1 0 auto; /* occupies remaining vertical space */
+  padding-block-end: 4rem; /* reserve space so content not hidden behind fixed footer */
+}
+
+footer {
+  position: fixed;
+  inset-block-end: 0;
+  inset-inline: 0;
+  padding: 0.75rem 1rem 1rem;
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  font-size: calc(0.8rem + 6px);
+  color: var(--fg-dim);
+  background: linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0));
+  backdrop-filter: blur(2px);
 }
 a {
   color: var(--accent);
@@ -65,11 +105,7 @@ li a:hover {
   font-size: calc(0.75rem + 6px);
   letter-spacing: 0.5px;
 }
-footer {
-  margin-top: 3rem;
-  font-size: calc(0.8rem + 6px);
-  color: var(--fg-dim);
-}
+
 footer a {
   color: var(--accent);
 }
