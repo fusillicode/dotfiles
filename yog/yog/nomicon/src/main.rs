@@ -68,8 +68,8 @@ fn main() -> color_eyre::eyre::Result<()> {
             continue;
         }
 
-        let name = get_cargo_toml_key_value(&content, "name")?;
-        let description = get_cargo_toml_key_value(&content, "description")?;
+        let name = get_toml_value(&content, "name")?;
+        let description = get_toml_value(&content, "description")?;
 
         // Only include crates that actually have a generated index (documentation produced).
         let index_html = doc_dir.join(&name).join("index.html");
@@ -94,6 +94,28 @@ fn main() -> color_eyre::eyre::Result<()> {
     copy_assets(&doc_dir)?;
 
     Ok(())
+}
+
+/// Get existing documentation directory if exists.
+///
+/// # Arguments
+/// * `workspace_root` - Workspace root path.
+///
+/// # Returns
+/// Absolute docs directory path.
+///
+/// # Errors
+/// If:
+/// - The directory is missing (suggest running `cargo doc --workspace`).
+fn get_existing_doc_dir(workspace_root: &Path) -> color_eyre::Result<PathBuf> {
+    let doc_dir = workspace_root.join("target/doc");
+    if !doc_dir.exists() {
+        bail!(
+            "documentation directory '{}' does not exist; run 'cargo doc --workspace' first",
+            doc_dir.display()
+        )
+    }
+    Ok(doc_dir)
 }
 
 /// Copy static assets into documentation output directory.
@@ -124,7 +146,7 @@ fn copy_assets(doc_dir: &Path) -> color_eyre::Result<()> {
 /// Extract the value of the supplied `key` from the supplied manifest text `content`.
 ///
 /// # Arguments
-/// * `content` - Full Cargo.toml contents.
+/// * `content` - Toml file content.
 /// * `key` - Key name to search (e.g. "name").
 ///
 /// # Returns
@@ -134,7 +156,7 @@ fn copy_assets(doc_dir: &Path) -> color_eyre::Result<()> {
 /// If:
 /// - The matching line is malformed (missing '=' or value).
 /// - The key is not present.
-fn get_cargo_toml_key_value(content: &str, key: &str) -> color_eyre::Result<String> {
+fn get_toml_value(content: &str, key: &str) -> color_eyre::Result<String> {
     for line in content.lines() {
         let trimmed_line = line.trim_start();
         if let Some(rest) = trimmed_line.strip_prefix(key) {
@@ -146,26 +168,4 @@ fn get_cargo_toml_key_value(content: &str, key: &str) -> color_eyre::Result<Stri
         }
     }
     bail!("required key '{key}' missing in manifest");
-}
-
-/// Get existing documentation directory if exists.
-///
-/// # Arguments
-/// * `workspace_root` - Workspace root path.
-///
-/// # Returns
-/// Absolute docs directory path.
-///
-/// # Errors
-/// If:
-/// - The directory is missing (suggest running `cargo doc --workspace`).
-fn get_existing_doc_dir(workspace_root: &Path) -> color_eyre::Result<PathBuf> {
-    let doc_dir = workspace_root.join("target/doc");
-    if !doc_dir.exists() {
-        bail!(
-            "documentation directory '{}' does not exist; run 'cargo doc --workspace' first",
-            doc_dir.display()
-        )
-    }
-    Ok(doc_dir)
 }
