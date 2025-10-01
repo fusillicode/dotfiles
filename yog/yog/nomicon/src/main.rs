@@ -39,6 +39,7 @@ fn main() -> color_eyre::eyre::Result<()> {
     // Always (re)generate docs for all workspace crates (including private items) first.
     // Use RUSTDOCFLAGS to enforce warnings-as-errors (portable across cargo versions).
     ytil_cmd::silent_cmd("cargo")
+        // Using env because supplying `"--", "-D", "warnings"` doesn't seem to work.
         .env("RUSTDOCFLAGS", "-Dwarnings")
         .args(["doc", "--all", "--no-deps", "--document-private-items"])
         .status()?
