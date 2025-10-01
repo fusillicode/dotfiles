@@ -14,7 +14,8 @@ pub trait DiagnosticsFilter {
     /// # Errors
     ///
     /// Returns an error if:
-    /// - An underlying operation fails.
+    /// - Access to required diagnostic fields (dictionary keys) fails (missing key or wrong type).
+    /// - Filter-specific logic (e.g. related info extraction) fails.
     fn skip_diagnostic(&self, buf_path: &str, lsp_diag: Option<&Dictionary>) -> color_eyre::Result<bool>;
 }
 
@@ -27,7 +28,7 @@ impl DiagnosticsFilters {
     /// # Errors
     ///
     /// Returns an error if:
-    /// - An underlying operation fails.
+    /// - Constructing the related info filter fails (dictionary traversal or type mismatch).
     pub fn all(lsp_diags: &[Dictionary]) -> color_eyre::Result<Self> {
         let mut tmp = MsgBlacklistFilter::all();
         tmp.push(Box::new(RelatedInfoFilter::new(lsp_diags)?));
@@ -42,7 +43,7 @@ impl DiagnosticsFilter for DiagnosticsFilters {
     /// # Errors
     ///
     /// Returns an error if:
-    /// - An underlying operation fails.
+    /// - A filter implementation (invoked in sequence) returns an error; it is propagated unchanged.
     fn skip_diagnostic(&self, buf_path: &str, lsp_diag: Option<&Dictionary>) -> color_eyre::Result<bool> {
         // The first filter that returns true skips the LSP diagnostic and all subsequent filters
         // evaluation.

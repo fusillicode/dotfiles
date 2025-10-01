@@ -137,7 +137,7 @@ impl Statuscolumn {
     }
 }
 
-/// Implementation of [`Display`] for [`Statuscolumn`].
+/// Implementation of [`core::fmt::Display`] for [`Statuscolumn`].
 impl core::fmt::Display for Statuscolumn {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let diag_sign = [&self.error, &self.warn, &self.info, &self.hint, &self.ok]

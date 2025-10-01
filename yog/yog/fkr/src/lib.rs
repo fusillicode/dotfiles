@@ -1,5 +1,8 @@
-//! Fake data generation library for the fkr tool.
-//! Provides an enum of fake data types using the `fake` crate.
+//! Generate fake data strings from an enum façade over selected [`fake`] providers.
+//!
+//! Provides a single variant enum ([`FkrOption`]) with a uniform `gen_string` method for
+//! quick ad‑hoc values (UUIDs, emails, IPs, user agents) without pulling individual faker
+//! types into every caller.
 
 use fake::Fake;
 use strum::Display;

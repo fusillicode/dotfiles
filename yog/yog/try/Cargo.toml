@@ -6,11 +6,11 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "Command retry utility"
+description = "Retry a command with success/failure tracking."
 keywords = ["cli", "retry", "command", "automation", "testing"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 color-eyre = { workspace = true }
 itertools = { workspace = true }
-system = { workspace = true }
+ytil_system = { workspace = true }

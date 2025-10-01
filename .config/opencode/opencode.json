@@ -1,4 +1,81 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "theme": "system"
+  "theme": "system",
+  "command": {
+    "rust:doc": {
+      "agent": "krabby",
+      "description": "Generate idiomatic Rust docs for given code or module.",
+      "template": "Write documentation for the following Rust item(s). Ensure sections (# Arguments, # Returns, # Errors, etc.) as applicable.\n\n{{input}}"
+    },
+    "rust:review": {
+      "agent": "krabby",
+      "description": "Review Rust code for correctness, safety, ergonomics, and clarity.",
+      "template": "Review the following Rust code. Identify issues, suggest improvements, and provide corrected snippets only where needed.\n\n{{input}}"
+    },
+    "rust:tests": {
+      "agent": "krabby",
+      "description": "Suggest or generate focused unit tests for Rust code.",
+      "template": "Given the following Rust code, propose or generate focused unit tests (avoid redundancy).\n\n{{input}}"
+    },
+    "rust:refactor": {
+      "agent": "krabby",
+      "description": "Refactor Rust code for clarity and idiomatic style.",
+      "template": "Refactor the following Rust code for clarity, idiomatic patterns, and reduced duplication. Preserve behavior. Provide a concise summary of changes.\n\n{{input}}"
+    },
+    "rust:error-model": {
+      "agent": "krabby",
+      "description": "Design an error enum plus conversions.",
+      "template": "Design a robust error model (error enum with thiserror) for the described functionality. Show example usage.\n\n{{input}}"
+    },
+    "rust:api": {
+      "agent": "krabby",
+      "description": "Design or evaluate a Rust API surface.",
+      "template": "Design or evaluate the Rust API described. Provide module layout, key types, traits, and rationale.\n\n{{input}}"
+    },
+    "rust:bench": {
+      "agent": "krabby",
+      "description": "Suggest or refine Rust benchmarking strategy (criterion).",
+      "template": "Given the following code / performance concern, propose criterion benchmarks (or microbench harness) and potential metrics to watch.\n\n{{input}}"
+    },
+    "rust:unsafe-audit": {
+      "agent": "krabby",
+      "description": "Audit unsafe Rust code blocks for soundness.",
+      "template": "Audit the following unsafe Rust code. Enumerate invariants, potential UB risks, and safer alternatives.\n\n{{input}}"
+    },
+    "rust:optimize": {
+      "agent": "krabby",
+      "description": "Suggest performance optimizations (post-benchmark/profile).",
+      "template": "Given the profiling/benchmark context and code, list justified optimizations (separate low/medium/high impact). Provide revised snippets only when non-trivial.\n\n{{input}}"
+    },
+    "rust:migrate": {
+      "agent": "krabby",
+      "description": "Guide edition or dependency migration steps.",
+      "template": "Assist with migration described: outline ordered steps, risks, tests to add, and rollback strategy.\n\n{{input}}"
+    },
+    "krabby:plan": {
+      "agent": "krabby",
+      "description": "High-level implementation or refactor plan with risk & test strategy.",
+      "template": "Produce a concise actionable plan for the described Rust change. Include: goals, phased steps, risks, test strategy, rollback considerations. Ask for clarifications if scope ambiguous.\n\n{{input}}"
+    },
+    "krabby:dep-audit": {
+      "agent": "krabby",
+      "description": "Analyze dependency tree: security, license, bloat, update priority.",
+      "template": "Given the dependency context (Cargo.toml/lock excerpt or description), audit for: security concerns, outdated crates, feature pruning opportunities, duplicate transitive versions, heavy build-time offenders. Provide prioritized actions (high/med/low).\n\n{{input}}"
+    },
+    "krabby:security": {
+      "agent": "krabby",
+      "description": "Security scan: unsafe usage, supply chain, secrets, invariants.",
+      "template": "Perform a security-oriented review. Identify: unsafe blocks & required invariants; panics that could be externally triggered; potential integer/overflow or lifetime misuses; exposure of sensitive data; dependency supply chain red flags (yanked, unmaintained, vulnerable); missing fuzz/proptest avenues; secret handling issues. Provide prioritized remediation steps (critical/high/medium/low).\n\n{{input}}"
+    },
+    "krabby:threat-model": {
+      "agent": "krabby",
+      "description": "Structured threat model: assets, entry points, mitigations.",
+      "template": "Perform a concise threat modeling exercise for the described Rust component/system. Identify: assets to protect, trust boundaries, entry points, attacker goals, plausible abuse cases, privilege escalation vectors, data integrity & confidentiality risks. Provide a table-like textual summary (Asset | Threat | Impact | Mitigation). Prioritize mitigations (critical/high/medium/low) and list recommended testing (fuzzing, property tests, chaos, dependency verification).\n\n{{input}}"
+    },
+    "rust:changelog": {
+      "agent": "krabby",
+      "description": "Generate concise CHANGELOG entry for a Rust change set.",
+      "template": "Generate a KEEP A CHANGELOG compliant entry (Added/Changed/Fixed/Removed) for the described diff/context.\n\n{{input}}"
+    }
+  }
 }

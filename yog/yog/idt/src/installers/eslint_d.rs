@@ -16,8 +16,8 @@ impl Installer for EslintD<'_> {
         let target_dir = crate::downloaders::npm::run(self.dev_tools_dir, self.bin_name(), &[self.bin_name()])?;
 
         let target = target_dir.join(self.bin_name());
-        system::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;
-        system::chmod_x(target)?;
+        ytil_system::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;
+        ytil_system::chmod_x(target)?;
 
         Ok(())
     }

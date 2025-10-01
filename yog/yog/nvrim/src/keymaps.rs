@@ -25,7 +25,7 @@ pub fn dict() -> Dictionary {
 
 /// Set a keymap for each provided [`Mode`].
 ///
-/// Errors are reported (not propagated) via [`crate::oxi_ext::api::notify_error`].
+/// Errors are reported (not propagated) via `crate::oxi_ext::api::notify_error`.
 pub fn set(modes: &[Mode], lhs: &str, rhs: &str, opts: &SetKeymapOpts) {
     for mode in modes {
         if let Err(error) = nvim_oxi::api::set_keymap(*mode, lhs, rhs, opts) {
@@ -41,7 +41,7 @@ pub fn set(modes: &[Mode], lhs: &str, rhs: &str, opts: &SetKeymapOpts) {
 /// All mappings are set with the default non-recursive, silent options returned
 /// by [`default_opts`].
 ///
-/// Failures are reported internally by the [`set`] helper via [`crate::oxi_ext::api::notify_error`].
+/// Failures are reported internally by the [`set`] helper via `crate::oxi_ext::api::notify_error`.
 fn set_all(_: ()) {
     let default_opts = default_opts();
 
@@ -153,7 +153,7 @@ fn apply_on_current_line_or_unwrap<'a, F: FnOnce(String) -> &'a str>(fun: F, def
 
 /// Build the default [`SetKeymapOpts`]: silent + non-recursive.
 ///
-/// Unlike Lua's [`vim.keymap.set`], the default for [`SetKeymapOpts`] does *not*
+/// Unlike Lua's `vim.keymap.set`, the default for [`SetKeymapOpts`] does *not*
 /// enable `noremap` so we do it explicitly.
 fn default_opts() -> SetKeymapOpts {
     SetKeymapOptsBuilder::default().silent(true).noremap(true).build()

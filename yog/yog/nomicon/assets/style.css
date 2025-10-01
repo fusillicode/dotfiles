@@ -1,0 +1,85 @@
+/* Font: PxPlus ToshibaSat 9x16 (WOFF2 only) */
+@font-face {
+  font-family: "PxPlus ToshibaSat 9x16";
+  src: url("font.woff2") format("woff2");
+  font-display: swap;
+}
+:root {
+  --bg: #002200;
+  --bg-alt: #013001;
+  --fg: #ffffff;
+  --fg-dim: #a8d5a8;
+  --accent: #55dd55;
+  --accent-hover: #77ff77;
+  --border: #044404;
+  color-scheme: dark;
+}
+html {
+  background: var(--bg);
+}
+body {
+  font-family: "PxPlus ToshibaSat 9x16", monospace;
+  font-size: 1.25rem;
+  max-width: 960px;
+  margin: 40px auto;
+  padding: 0 1rem;
+  line-height: 1.4;
+  background: var(--bg);
+  color: var(--fg);
+}
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+h1 {
+  font-size: calc(2.1rem + 6px);
+  margin-bottom: 0.2rem;
+  color: var(--accent-hover);
+}
+ul {
+  columns: 1;
+  -webkit-columns: 1;
+  -moz-columns: 1;
+  list-style: none;
+  padding: 0;
+}
+li {
+  margin: 0.2rem 0;
+}
+li a {
+  padding: 0.05rem 0.25rem;
+  border-radius: 4px;
+  display: inline-block;
+}
+li a:hover {
+  background: var(--bg);
+  outline: 1px solid var(--accent);
+  box-shadow: none;
+}
+.desc {
+  color: var(--fg-dim);
+  font-size: calc(0.75rem + 6px);
+  letter-spacing: 0.5px;
+}
+footer {
+  margin-top: 3rem;
+  font-size: calc(0.8rem + 6px);
+  color: var(--fg-dim);
+}
+footer a {
+  color: var(--accent);
+}
+footer a:hover {
+  color: var(--accent-hover);
+}
+.repo-link .gh-icon {
+  width: 18px;
+  height: 18px;
+  margin-right: 6px;
+  fill: currentColor;
+  vertical-align: text-bottom;
+}

@@ -12,7 +12,8 @@ pub trait BufferExt {
     /// # Errors
     ///
     /// Returns an error if:
-    /// - An underlying operation fails.
+    /// - Fetching the line via `nvim_buf_get_lines` fails.
+    /// - The requested index is out of range (no line returned).
     fn get_line(&self, idx: usize) -> color_eyre::Result<nvim_oxi::String>;
 
     fn set_text_at_cursor_pos(&mut self, text: &str);

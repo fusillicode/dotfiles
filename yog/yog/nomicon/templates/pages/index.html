@@ -1,0 +1,13 @@
+{% extends "layouts/base.html" %}
+{% block title %}Yog index{% endblock %}
+{% block header %}Yog index{% endblock %}
+{% block content %}
+<ul>
+{%- for c in crates %}
+  <li>
+    <a href="./{{ c.name }}/index.html">{{ c.name }}</a>
+    <span class="desc"> — {{ c.description }}</span>
+  </li>
+{%- endfor %}
+</ul>
+{% endblock %}

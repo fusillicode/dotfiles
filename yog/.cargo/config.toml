@@ -28,6 +28,7 @@ rustflags = [
   "-Dclippy::suspicious",
   "-Aclippy::must-use-candidate",
 ]
+rustdocflags = ["-D", "warnings"]
 
 [target.x86_64-apple-darwin]
 rustflags = ["-C", "link-arg=-undefined", "-C", "link-arg=dynamic_lookup"]

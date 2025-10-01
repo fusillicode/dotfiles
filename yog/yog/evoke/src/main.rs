@@ -1,3 +1,4 @@
+//! Format, lint, build, and deploy workspace binaries and Neovim libs.
 #![feature(exit_status_error)]
 
 use std::path::Path;
@@ -14,7 +15,7 @@ const BINS_DEFAULT_PATH: &[&str] = &[".local", "bin"];
 /// Path segments for the Nvim libs install dir.
 const NVIM_LIBS_DEFAULT_PATH: &[&str] = &[".config", "nvim", "lua"];
 
-/// Formats, lints, builds, and deploys yog binaries and its Neovim libs.
+/// Format, lint, build, and deploy yog binaries and its Neovim libs.
 ///
 /// # Usage
 /// `evoke [--debug] [bins_path] [cargo_target_path] [nvim_libs_path]`
@@ -30,17 +31,18 @@ const NVIM_LIBS_DEFAULT_PATH: &[&str] = &[".config", "nvim", "lua"];
 /// Omit trailing path arguments to accept defaults.
 ///
 /// # Errors
-///
-/// Returns an error if:
-/// - A required environment variable is missing or invalid Unicode.
+/// If:
+/// - Resolving a required environment variable fails or yields invalid Unicode.
+/// - Formatting, linting, or building (`cargo fmt`, `cargo clippy`, `cargo build`) fails or exits non-zero.
+/// - Copying a built binary or library fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let mut args = system::get_args();
+    let mut args = ytil_system::get_args();
 
     let is_debug = drop_element(&mut args, "--debug");
     let bins_path = args.first().cloned().map_or_else(
-        || system::build_home_path(BINS_DEFAULT_PATH),
+        || ytil_system::build_home_path(BINS_DEFAULT_PATH),
         |supplied_bins_path| Ok(PathBuf::from(supplied_bins_path)),
     )?;
     let cargo_target_path = args.get(1).cloned().map_or_else(
@@ -54,7 +56,7 @@ fn main() -> color_eyre::Result<()> {
         |x| Ok(PathBuf::from(x)),
     )?;
     let nvim_libs_path = args.get(2).cloned().map_or_else(
-        || system::build_home_path(NVIM_LIBS_DEFAULT_PATH),
+        || ytil_system::build_home_path(NVIM_LIBS_DEFAULT_PATH),
         |supplied_nvim_libs_path| Ok(PathBuf::from(supplied_nvim_libs_path)),
     )?;
 
@@ -64,17 +66,17 @@ fn main() -> color_eyre::Result<()> {
         (cargo_target_path.join("release"), Some("--release"))
     };
 
-    cmd::silent_cmd("cargo").args(["fmt"]).status()?.exit_ok()?;
+    ytil_cmd::silent_cmd("cargo").args(["fmt"]).status()?.exit_ok()?;
 
     // Skip clippy if debugging
     if !is_debug {
-        cmd::silent_cmd("cargo")
+        ytil_cmd::silent_cmd("cargo")
             .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
             .status()?
             .exit_ok()?;
     }
 
-    cmd::silent_cmd("cargo")
+    ytil_cmd::silent_cmd("cargo")
         .args([Some("build"), build_profile].into_iter().flatten())
         .status()?
         .exit_ok()?;
@@ -115,16 +117,15 @@ where
     false
 }
 
-/// Copies a built binary or library from [`from`] to [`to`] using
-/// [`system::atomic_cp`] and prints an "Installed" status line.
+/// Copies a built binary or library from `from` to `to` using
+/// [`ytil_system::atomic_cp`] and prints an "Installed" status line.
 ///
 /// # Errors
-///
-/// Returns an error if:
-/// - [`system::atomic_cp`] fails to copy.
+/// If:
+/// - [`ytil_system::atomic_cp`] fails to copy.
 /// - The final rename or write cannot be performed.
 fn cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
-    system::atomic_cp(from, to)?;
+    ytil_system::atomic_cp(from, to)?;
     println!("{} {} to {}", "Copied".green().bold(), from.display(), to.display());
     Ok(())
 }

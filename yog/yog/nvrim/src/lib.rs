@@ -1,12 +1,15 @@
-//! Rust helpers for my Nvim config exposed to Lua via [`nvim_oxi`].
+//! Expose Rust helpers for my Nvim config to Lua via [`nvim_oxi`].
 //!
-//! Provides namespaced dictionaries for diagnostics, status UI (statusline /
-//! statuscolumn), CLI search flags, buffer text, keymaps, colorscheme & style
-//! options, test running, and misc commands/extensions.
+//! Provide namespaced dictionaries for diagnostics, status UI (statusline / statuscolumn), CLI search flags,
+//! buffer text, keymaps, colorscheme & style options, test running, and misc extensions.
+//!
+//! Each top‑level key is either:
+//! - a table of related functions / data (e.g. `diagnostics`, `statusline`, `cli`)
+//! - or a standalone function / value.
 
 use nvim_oxi::Dictionary;
 
-/// [`nvim_oxi::Buffer`] helpers.
+/// [`nvim_oxi::api::Buffer`] helpers.
 mod buffer;
 /// CLI flags for `fd` and `ripgrep`.
 mod cli;

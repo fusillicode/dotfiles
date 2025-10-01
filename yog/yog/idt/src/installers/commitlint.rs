@@ -23,8 +23,8 @@ impl Installer for Commitlint<'_> {
         )?;
 
         let target = target_dir.join(self.bin_name());
-        system::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;
-        system::chmod_x(target)?;
+        ytil_system::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;
+        ytil_system::chmod_x(target)?;
 
         Ok(())
     }

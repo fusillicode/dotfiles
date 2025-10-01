@@ -13,7 +13,7 @@ impl Installer for HarperLs<'_> {
 
     fn install(&self) -> color_eyre::Result<()> {
         // Installing with `cargo` because I like it this way
-        cmd::silent_cmd("cargo")
+        ytil_cmd::silent_cmd("cargo")
             .args([
                 "install",
                 self.bin_name(),
@@ -24,7 +24,7 @@ impl Installer for HarperLs<'_> {
             ])
             .status()?;
 
-        system::chmod_x(self.bin_dir.join(self.bin_name()))?;
+        ytil_system::chmod_x(self.bin_dir.join(self.bin_name()))?;
 
         Ok(())
     }

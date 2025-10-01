@@ -1,4 +1,4 @@
-/// Construct a [`Dictionary`] from key-value pairs, supporting nested [`dict!`] usage.
+/// Construct a [`nvim_oxi::Dictionary`] from key-value pairs, supporting nested `dict!` usage.
 ///
 /// Keys can be:
 /// - string literals,

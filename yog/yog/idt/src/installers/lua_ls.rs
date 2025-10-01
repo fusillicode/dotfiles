@@ -17,7 +17,7 @@ impl Installer for LuaLanguageServer<'_> {
         // point to the `bin` there.
         let repo = format!("LuaLS/{}", self.bin_name());
         let dev_tools_repo_dir = self.dev_tools_dir.join(self.bin_name());
-        let latest_release = github::get_latest_release(&repo)?;
+        let latest_release = ytil_github::get_latest_release(&repo)?;
         std::fs::create_dir_all(&dev_tools_repo_dir)?;
 
         let target_dir = crate::downloaders::curl::run(
@@ -31,7 +31,7 @@ impl Installer for LuaLanguageServer<'_> {
             },
         )?;
 
-        system::chmod_x(target_dir.join("bin").join(self.bin_name()))?;
+        ytil_system::chmod_x(target_dir.join("bin").join(self.bin_name()))?;
 
         Ok(())
     }

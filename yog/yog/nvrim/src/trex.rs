@@ -26,7 +26,7 @@ pub fn dict() -> Dictionary {
 
 /// Transform the current Visual selection to a user‑chosen [`Case`].
 ///
-/// Prompts (via [`crate::oxi_ext::inputlist`]) for a case variant, converts all
+/// Prompts (via [`crate::oxi_ext::api::inputlist`]) for a case variant, converts all
 /// selected lines in place, and replaces the selection text. Returns early if:
 /// - No active Visual selection is detected.
 /// - The user cancels the prompt.

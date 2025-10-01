@@ -1,3 +1,4 @@
+//! Install language servers, linters, formatters and helpers concurrently.
 #![feature(exit_status_error)]
 
 use std::path::Path;
@@ -38,23 +39,34 @@ use crate::installers::yaml_language_server::YamlLanguageServer;
 mod downloaders;
 mod installers;
 
-/// Installs development tools including language servers and utilities.
+/// Install development tools including language servers and utilities.
+///
+/// # Usage
+///
+/// ```bash
+/// idt <dev_tools_dir> <bin_dir>             # install ALL supported tools
+/// idt <dev_tools_dir> <bin_dir> deno ruff_lsp # install only listed tools
+/// ```
 ///
 /// # Arguments
 ///
-/// * `dev_tools_dir` - Directory for tool installation
-/// * `bin_dir` - Directory for binary symlinks
-/// * `tool_names` - Optional specific tools to install
+/// * `dev_tools_dir` - Directory for tool installation (created if missing)
+/// * `bin_dir` - Directory for binary symlinks (created if missing)
+/// * `tool_names` - Optional specific tools to install (defaults to all)
 ///
 /// # Errors
-///
-/// Returns an error if:
-/// - An underlying IO, network, environment, parsing, or external command operation fails.
+/// If:
+/// - A required argument (`dev_tools_dir` or `bin_dir`) is missing.
+/// - Creating a required directory fails.
+/// - Authenticating with the GitHub CLI fails.
+/// - An installer thread panics.
+/// - A tool installation fails (individual installer reports the specific cause).
+/// - Removing dead symlinks in `bin_dir` fails.
 #[allow(clippy::too_many_lines)]
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let args = system::get_args();
+    let args = ytil_system::get_args();
     println!(
         "{:#?} started with args {}",
         std::env::current_exe()?.bold().cyan(),
@@ -74,7 +86,7 @@ fn main() -> color_eyre::Result<()> {
     std::fs::create_dir_all(dev_tools_dir)?;
     std::fs::create_dir_all(bin_dir)?;
 
-    github::log_into_github()?;
+    ytil_github::log_into_github()?;
 
     let all_installers: Vec<Box<dyn Installer>> = vec![
         Box::new(BashLanguageServer {
@@ -214,7 +226,7 @@ fn main() -> color_eyre::Result<()> {
             })
     });
 
-    system::rm_dead_symlinks(bin_dir)?;
+    ytil_system::rm_dead_symlinks(bin_dir)?;
 
     let mut errors_count: usize = 0;
     let mut bin_names = vec![];

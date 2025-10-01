@@ -16,7 +16,7 @@ impl Installer for ElixirLs<'_> {
     fn install(&self) -> color_eyre::Result<()> {
         let dev_tools_repo_dir = self.dev_tools_dir.join(self.bin_name());
         let repo = format!("elixir-lsp/{}", self.bin_name());
-        let latest_release = github::get_latest_release(&repo)?;
+        let latest_release = ytil_github::get_latest_release(&repo)?;
         std::fs::create_dir_all(&dev_tools_repo_dir)?;
 
         crate::downloaders::curl::run(
@@ -30,12 +30,12 @@ impl Installer for ElixirLs<'_> {
             },
         )?;
 
-        system::ln_sf(
+        ytil_system::ln_sf(
             &dev_tools_repo_dir.join("language_server.sh"),
             &self.bin_dir.join(self.bin_name()),
         )?;
 
-        system::chmod_x_files_in_dir(&dev_tools_repo_dir)?;
+        ytil_system::chmod_x_files_in_dir(&dev_tools_repo_dir)?;
 
         Ok(())
     }

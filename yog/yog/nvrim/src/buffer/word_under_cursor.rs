@@ -1,6 +1,5 @@
 use std::process::Command;
 
-use cmd::CmdExt as _;
 use nvim_oxi::Object;
 use nvim_oxi::api::Window;
 use nvim_oxi::conversion::ToObject;
@@ -8,6 +7,7 @@ use nvim_oxi::lua::ffi::State;
 use nvim_oxi::serde::Serializer;
 use serde::Serialize;
 use url::Url;
+use ytil_cmd::CmdExt as _;
 
 /// Retrieve and classify the non-whitespace token under the cursor in the current window.
 ///
@@ -100,10 +100,9 @@ impl From<String> for WordUnderCursor {
 /// - unknown types
 ///
 /// # Errors
-///
-/// Returns an error if:
+/// If:
 /// - launching or waiting on the `file` command fails
-/// - the command exits with non-success (see [`utils::cmd::CmdExt`])
+/// - the command exits with non-success
 /// - standard output cannot be decoded as valid UTF-8
 fn exec_file_cmd(path: &str) -> color_eyre::Result<FileCmdOutput> {
     let output = std::str::from_utf8(&Command::new("file").args([path, "-I"]).exec()?.stdout)?.to_lowercase();

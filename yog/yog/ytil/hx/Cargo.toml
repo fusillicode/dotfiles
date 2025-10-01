@@ -1,0 +1,21 @@
+[package]
+name = "ytil_hx"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Parse and work with Helix editor status data."
+keywords = ["helix", "editor", "integration"]
+categories = ["command-line-utilities", "development-tools"]
+
+[features]
+fake = ["dep:fake"]
+
+[dependencies]
+color-eyre = { workspace = true }
+fake = { workspace = true, optional = true }
+
+[dev-dependencies]
+fake = { workspace = true }

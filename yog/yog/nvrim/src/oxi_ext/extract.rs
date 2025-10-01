@@ -12,7 +12,7 @@ pub trait OxiExtract {
     /// # Errors
     ///
     /// Returns an error if:
-    /// - An underlying operation fails.
+    /// - The value has a different kind than expected for the target type.
     fn extract_from_dict(key: &str, value: &Object, dict: &Dictionary) -> color_eyre::Result<Self::Out>;
 }
 

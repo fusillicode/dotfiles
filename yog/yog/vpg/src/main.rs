@@ -1,3 +1,4 @@
+//! Update Postgres creds from Vault, rewrite pgpass & nvim-dbee, optionally launch pgcli.
 #![feature(exit_status_error)]
 
 use std::process::Command;
@@ -14,17 +15,23 @@ mod nvim_dbee;
 mod pgpass;
 mod vault;
 
-/// Manages `PostgreSQL` credentials from Vault and updates connection files.
+/// Manage `PostgreSQL` credentials from Vault and update connection files.
 ///
 /// After updating credentials, interactively prompts for confirmation before connecting via pgcli.
+///
+/// # Usage
+///
+/// ```bash
+/// vpg               # select alias interactively
+/// vpg analytics     # update creds for alias 'analytics'
+/// ```
 ///
 /// # Arguments
 ///
 /// * `alias` - Database alias (optional, interactive selection if not provided)
 ///
 /// # Errors
-///
-/// Returns an error if:
+/// If:
 /// - Executing one of the external commands (pgcli, vault) fails or returns a non-zero exit status.
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - JSON serialization or deserialization fails.
@@ -32,12 +39,12 @@ mod vault;
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let pgpass_path = system::build_home_path(&[".pgpass"])?;
+    let pgpass_path = ytil_system::build_home_path(&[".pgpass"])?;
     let pgpass_content = std::fs::read_to_string(&pgpass_path)?;
     let pgpass_file = PgpassFile::parse(pgpass_content.as_str())?;
 
-    let args = system::get_args();
-    let Some(mut pgpass_entry) = tui::get_item_from_cli_args_or_select(
+    let args = ytil_system::get_args();
+    let Some(mut pgpass_entry) = ytil_tui::get_item_from_cli_args_or_select(
         &args,
         |(idx, _)| *idx == 0,
         pgpass_file.entries,
@@ -58,7 +65,7 @@ fn main() -> color_eyre::Result<()> {
     pgpass_entry.connection_params.update(&vault_read_output.data);
     pgpass::save_new_pgpass_file(pgpass_file.idx_lines, &pgpass_entry.connection_params, &pgpass_path)?;
 
-    let nvim_dbee_conns_path = system::build_home_path(&[".local", "state", "nvim", "dbee", "conns.json"])?;
+    let nvim_dbee_conns_path = ytil_system::build_home_path(&[".local", "state", "nvim", "dbee", "conns.json"])?;
     nvim_dbee::save_new_nvim_dbee_conns_file(&pgpass_entry, &nvim_dbee_conns_path)?;
 
     println!(
@@ -74,7 +81,7 @@ fn main() -> color_eyre::Result<()> {
     // Cosmetic space in prompt.
     println!();
 
-    if Some(true) == tui::yes_no_select(&format!("Connect to {}? ", pgpass_entry.metadata.alias))? {
+    if Some(true) == ytil_tui::yes_no_select(&format!("Connect to {}? ", pgpass_entry.metadata.alias))? {
         let db_url = pgpass_entry.connection_params.db_url();
         println!(
             "\nConnecting to {} @\n\n{}\n",
@@ -111,8 +118,7 @@ fn main() -> color_eyre::Result<()> {
 /// * `vault_path` - Path of the secret to read from Vault.
 ///
 /// # Errors
-///
-/// Returns an error if:
+/// If:
 /// - Launching or running the [`vault`] process fails (I/O error from [`Command`]).
 /// - The command standard output cannot be deserialized into [`VaultReadOutput`] via [`serde_json`].
 /// - The standard output is not valid UTF-8 when constructing the contextual error message.
