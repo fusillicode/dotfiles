@@ -15,7 +15,6 @@ use strum::IntoEnumIterator;
 /// Wraps [`inquire::MultiSelect`] with a slim rendering (see `minimal_render_config`) and no help message.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - Rendering the prompt or terminal interaction inside [`inquire`] fails.
 /// - Collecting the user selection fails for any reason reported by [`MultiSelect`].
@@ -36,7 +35,6 @@ pub fn minimal_multi_select<T: std::fmt::Display>(opts: Vec<T>) -> Result<Option
 /// Wraps [`inquire::Select`] with a slim rendering (see `minimal_render_config`) and no help message.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - Rendering the prompt or terminal interaction inside [`inquire`] fails.
 /// - Collecting the user selection fails for any reason reported by [`Select`].
@@ -57,7 +55,6 @@ pub fn minimal_select<T: std::fmt::Display>(opts: Vec<T>) -> Result<Option<T>, I
 /// Returns `Ok(Some(_))` on selection, `Ok(None)` if canceled/interrupted.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - Rendering the prompt or terminal interaction inside [`inquire`] fails.
 pub fn yes_no_select(title: &str) -> Result<Option<bool>, InquireError> {
@@ -110,7 +107,6 @@ impl core::fmt::Display for YesNo {
 /// * `OF` - Predicate produced by `OBA` used to match an item.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - A CLI argument matches predicate but no corresponding item is found.
 /// - The interactive selection fails (see [`minimal_select`]).

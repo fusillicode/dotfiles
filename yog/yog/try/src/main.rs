@@ -28,7 +28,6 @@ use itertools::Itertools;
 /// * `command` - Command to execute (everything after `exit_condition`)
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - Executing `sh` fails or returns a non-zero exit status.
 /// - UTF-8 conversion fails.

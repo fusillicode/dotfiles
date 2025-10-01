@@ -24,7 +24,6 @@ use ytil_editor::FileToOpen;
 /// * `pane_id` - Optional `WezTerm` pane ID (auto-detected if omitted)
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - Editor argument is missing.
 /// - File path argument is missing.
@@ -82,7 +81,6 @@ fn main() -> color_eyre::Result<()> {
 /// Creates enriched PATH for `WezTerm` integration.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - A required environment variable is missing or invalid Unicode.
 fn get_enriched_path_env() -> color_eyre::Result<Env> {

@@ -301,7 +301,6 @@ impl Poppable for Pos {
 ///   cursor position).
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - Calling `getpos()` fails.
 /// - Deserializing the returned tuple into [`Pos`] fails.

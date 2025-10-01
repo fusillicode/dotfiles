@@ -27,7 +27,6 @@ mod templates;
 /// ```
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - `cargo doc` invocation fails or exits non‑zero.
 /// - Workspace root or documentation directory cannot be resolved.
@@ -109,7 +108,6 @@ fn main() -> color_eyre::eyre::Result<()> {
 /// Ok on success.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - Underlying `cp` command execution fails.
 /// - Destination directory cannot be written.
@@ -135,7 +133,6 @@ fn copy_assets(doc_dir: &Path) -> color_eyre::Result<()> {
 /// Value with surrounding quotes removed if present.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - The matching line is malformed (missing '=' or value).
 /// - The key is not present.
@@ -164,7 +161,6 @@ fn get_cargo_toml_key_value(content: &str, key: &str) -> color_eyre::Result<Stri
 /// Absolute docs directory path.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - The directory is missing (suggest running `cargo doc --workspace`).
 fn get_existing_doc_dir(workspace_root: &Path) -> color_eyre::Result<PathBuf> {

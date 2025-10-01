@@ -18,7 +18,6 @@ use fkr::FkrOption;
 /// * `cp` - Copy generated value to clipboard (optional)
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - Interactive selection fails.
 /// - Writing the generated value to the clipboard fails.

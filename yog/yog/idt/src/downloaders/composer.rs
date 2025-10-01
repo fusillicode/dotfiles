@@ -5,7 +5,6 @@ use std::path::PathBuf;
 /// Downloads and installs PHP packages using Composer.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - Executing the `composer` command fails or returns a non-zero exit status.
 /// - A filesystem operation (create/read/write/remove) fails.

@@ -32,7 +32,6 @@ use ytil_git::Branch;
 /// - (none)                     Launch interactive selector (see [`autocomplete_git_branches`]).
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - GitHub authentication or pull request branch name derivation fails.
 /// - Branch name construction fails or produces an empty string.
@@ -65,7 +64,6 @@ fn main() -> color_eyre::Result<()> {
 /// line or "-" triggers previous-branch switching.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - Branch enumeration fails.
 /// - UI rendering fails.
@@ -109,7 +107,6 @@ impl core::fmt::Display for RenderableBranch {
 ///   then switch to it.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - GitHub authentication fails.
 /// - Pull request branch name derivation fails.
@@ -147,7 +144,6 @@ fn switch_branch(branch: &str) -> color_eyre::Result<()> {
 ///   required.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - Current branch discovery fails.
 /// - Branch creation or subsequent switching fails.
@@ -176,7 +172,6 @@ fn create_branch_and_switch(branch: &str) -> color_eyre::Result<()> {
 /// - Otherwise, requires user confirmation via empty line input (non‑empty aborts).
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - Current branch discovery fails.
 /// - Reading user confirmation input fails.
@@ -214,7 +209,6 @@ fn is_default_branch(branch: &str) -> bool {
 /// - Join resulting tokens with `-`.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - sanitisation produces an empty string.
 fn build_branch_name(args: &[&str]) -> color_eyre::Result<String> {

@@ -4,7 +4,6 @@ use std::path::PathBuf;
 /// Downloads and installs Node.js packages using npm.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - Executing the `npm` command fails or returns a non-zero exit status.
 /// - A filesystem operation (create/read/write/remove) fails.

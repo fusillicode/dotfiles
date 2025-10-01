@@ -31,7 +31,6 @@ const NVIM_LIBS_DEFAULT_PATH: &[&str] = &[".config", "nvim", "lua"];
 /// Omit trailing path arguments to accept defaults.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - Resolving a required environment variable fails or yields invalid Unicode.
 /// - Formatting, linting, or building (`cargo fmt`, `cargo clippy`, `cargo build`) fails or exits non-zero.
@@ -122,7 +121,6 @@ where
 /// [`ytil_system::atomic_cp`] and prints an "Installed" status line.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - [`ytil_system::atomic_cp`] fails to copy.
 /// - The final rename or write cannot be performed.

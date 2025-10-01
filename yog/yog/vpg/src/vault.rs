@@ -44,7 +44,6 @@ pub struct VaultCreds {
 /// 4. Fails on unexpected lookup errors or login failures.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - Executing `vault` fails or returns a non-zero exit status.
 /// - UTF-8 conversion fails.

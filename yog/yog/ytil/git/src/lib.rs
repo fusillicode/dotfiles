@@ -26,7 +26,6 @@ use ytil_cmd::CmdExt as _;
 /// [`git2::Repository::discover`].
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - The repository cannot be discovered starting from `path` (i.e. `path` is not inside a Git repository).
 pub fn get_repo(path: &Path) -> color_eyre::Result<Repository> {
@@ -48,7 +47,6 @@ pub fn get_repo_root(repo: &Repository) -> PathBuf {
 /// Returns the name of the current branch (e.g. `main`).
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - The repository cannot be discovered.
 /// - `HEAD` is detached.
@@ -72,7 +70,6 @@ pub fn get_current_branch() -> color_eyre::Result<String> {
 /// Does not switch to the new branch.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - The repository cannot be discovered.
 /// - `HEAD` cannot be resolved to a commit.
@@ -93,7 +90,6 @@ pub fn create_branch(branch_name: &str) -> color_eyre::Result<()> {
 /// modeled directly in [`git2`]).
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - The repository cannot be discovered.
 /// - Name resolution fails.
@@ -134,7 +130,6 @@ pub fn switch_branch(branch_name: &str) -> color_eyre::Result<()> {
 /// [`git2`].
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - The repository cannot be discovered.
 /// - Reading statuses fails.
@@ -161,7 +156,6 @@ pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
 /// to avoid accidental complexity – see <https://stackoverflow.com/a/73759110>).
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - Invoking the `git restore` command fails (process spawn or non-zero exit status).
 pub fn restore(paths: &[&str], branch: Option<&str>) -> color_eyre::Result<()> {
@@ -178,7 +172,6 @@ pub fn restore(paths: &[&str], branch: Option<&str>) -> color_eyre::Result<()> {
 /// (most recent first).
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - The repository cannot be discovered.
 /// - Enumerating branches fails.
@@ -249,7 +242,6 @@ pub fn remove_redundant_remotes(branches: &mut Vec<Branch>) {
 /// (e.g. derived from a GitHub PR URL).
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - The repository cannot be discovered.
 /// - The `origin` remote cannot be found.

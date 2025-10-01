@@ -31,7 +31,6 @@ mod vault;
 /// * `alias` - Database alias (optional, interactive selection if not provided)
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - Executing one of the external commands (pgcli, vault) fails or returns a non-zero exit status.
 /// - A filesystem operation (open/read/write/remove) fails.
@@ -119,7 +118,6 @@ fn main() -> color_eyre::Result<()> {
 /// * `vault_path` - Path of the secret to read from Vault.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - Launching or running the [`vault`] process fails (I/O error from [`Command`]).
 /// - The command standard output cannot be deserialized into [`VaultReadOutput`] via [`serde_json`].

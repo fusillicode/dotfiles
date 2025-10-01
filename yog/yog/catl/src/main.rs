@@ -19,7 +19,6 @@ use color_eyre::eyre::eyre;
 /// - `<path>` Path to file / directory / symlink to display.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - Executing one of the external commands (cat, ls) fails or returns a non-zero exit status.
 /// - A filesystem operation (open/read/write/remove) fails.

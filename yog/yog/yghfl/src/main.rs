@@ -26,7 +26,6 @@ use ytil_wezterm::get_sibling_pane_with_titles;
 /// ```
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - Executing `wezterm` fails or returns a non-zero exit status.
 /// - Status line extraction or parsing fails.
@@ -92,7 +91,6 @@ fn main() -> color_eyre::Result<()> {
 /// Builds absolute file path for Helix cursor position.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - Expanding a home-relative path (starting with `~`) fails because the home directory cannot be determined.
 fn build_hx_cursor_absolute_file_path(
@@ -116,7 +114,6 @@ fn build_hx_cursor_absolute_file_path(
 /// Builds GitHub link pointing to specific file and line.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - UTF-8 conversion fails.
 fn build_github_link<'a>(

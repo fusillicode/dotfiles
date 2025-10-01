@@ -11,7 +11,6 @@ use crate::pgpass::PgpassEntry;
 /// Saves or updates the `nvim-dbee` connections file with the provided [`PgpassEntry`], setting secure permissions.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - JSON serialization or deserialization fails.
@@ -34,7 +33,6 @@ pub fn save_new_nvim_dbee_conns_file(updated_pg_pass_entry: &PgpassEntry, conns_
 /// Get updated conns.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - JSON serialization or deserialization fails.

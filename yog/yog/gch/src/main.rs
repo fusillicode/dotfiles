@@ -34,7 +34,6 @@ use ytil_git::WorktreeState;
 /// - `[branch]` Optional branch name; if provided changed entries are restored from it.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - Initializing [`color_eyre`] fails.
 /// - Fetching entries via [`ytil_git::get_status`] fails.
@@ -72,7 +71,6 @@ fn main() -> color_eyre::Result<()> {
 /// entries are restored from that branch.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - Removing a file or directory for a new entry fails.
 /// - Building or executing the `git restore` command fails.

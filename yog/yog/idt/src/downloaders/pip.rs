@@ -4,7 +4,6 @@ use std::path::PathBuf;
 /// Downloads and installs Python packages using pip in a virtual environment.
 ///
 /// # Errors
-///
 /// Returns an error if:
 /// - Executing the `python3 -m venv` command fails or returns a non-zero exit status.
 /// - Executing the shell pipeline to activate the venv and install packages fails.
