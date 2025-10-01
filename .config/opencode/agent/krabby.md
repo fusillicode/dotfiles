@@ -12,6 +12,12 @@ permission:
     git reset: deny
     git rebase: deny
     git push: deny
+    git tag: deny
+    git cherry-pick: deny
+    git stash: deny
+    git am: deny
+    git apply: deny
+    git format-patch: deny
     "*": allow
   webfetch: allow
 tools:
