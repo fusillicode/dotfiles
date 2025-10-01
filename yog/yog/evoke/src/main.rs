@@ -31,7 +31,7 @@ const NVIM_LIBS_DEFAULT_PATH: &[&str] = &[".config", "nvim", "lua"];
 /// Omit trailing path arguments to accept defaults.
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - Resolving a required environment variable fails or yields invalid Unicode.
 /// - Formatting, linting, or building (`cargo fmt`, `cargo clippy`, `cargo build`) fails or exits non-zero.
 /// - Copying a built binary or library fails.
@@ -121,7 +121,7 @@ where
 /// [`ytil_system::atomic_cp`] and prints an "Installed" status line.
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - [`ytil_system::atomic_cp`] fails to copy.
 /// - The final rename or write cannot be performed.
 fn cp(from: &Path, to: &Path) -> color_eyre::Result<()> {

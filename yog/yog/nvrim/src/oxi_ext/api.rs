@@ -63,7 +63,7 @@ where
 /// - `items`: Slice of displayable values listed sequentially.
 ///
 /// # Errors
-/// If:
+/// In case:
 /// - Invoking `inputlist()` fails.
 /// - The returned index cannot be converted to `usize` (negative or overflow).
 pub fn inputlist<'a, I: core::fmt::Display>(prompt: &'a str, items: &'a [I]) -> color_eyre::Result<Option<&'a I>> {
