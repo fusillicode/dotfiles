@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "Interactively clean a Git working tree."
+description = "Interactively stage or remove entries from Git index."
 keywords = ["cli", "git", "github", "branch", "management"]
 categories = ["command-line-utilities", "development-tools"]
 
