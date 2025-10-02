@@ -10,25 +10,22 @@ use ytil_editor::FileToOpen;
 /// Open files in a running editor instance from `WezTerm`.
 ///
 /// # Usage
-///
 /// ```bash
-/// oe nvim path/to/file.rs            # open file in existing nvim pane
-/// oe hx path/to/file.rs:42:5         # open file at line 42 col 5 in helix
-/// oe nvim src/lib.rs 123456789       # explicitly pass pane id
+/// oe nvim path/to/file.rs # open file in existing nvim pane
+/// oe hx path/to/file.rs:42:5 # open file at line 42 col 5 in helix
+/// oe nvim src/lib.rs 123456789 # explicitly pass pane id
 /// ```
 ///
 /// # Arguments
-///
-/// * `editor` - Editor to use ("nvim" or "hx")
-/// * `file_path` - Path to file to open (supports :line:col suffix)
-/// * `pane_id` - Optional `WezTerm` pane ID (auto-detected if omitted)
+/// - `editor` Editor to use ("nvim" or "hx").
+/// - `file_path` Path to file to open (supports :line:col suffix).
+/// - `pane_id` Optional `WezTerm` pane ID (auto-detected if omitted).
 ///
 /// # Errors
-/// In case:
 /// - Editor argument is missing.
 /// - File path argument is missing.
 /// - Pane id argument is invalid (parse failure) or current pane lookup fails.
-/// - `WezTerm` pane enumeration / sibling lookup fails.
+/// - `WezTerm` Pane enumeration / sibling lookup fails.
 /// - File path parsing / validation for the target editor fails.
 /// - Spawning the shell command to drive `WezTerm` fails.
 fn main() -> color_eyre::Result<()> {
@@ -38,11 +35,11 @@ fn main() -> color_eyre::Result<()> {
     let args = ytil_system::get_args();
 
     let Some(editor) = args.first().map(|x| Editor::from_str(x)).transpose()? else {
-        bail!("missing editor specified {args:#?}");
+        bail!("missing editor arg | args={args:#?}");
     };
 
     let Some(file_to_open) = args.get(1) else {
-        bail!("missing input file specified {args:#?}");
+        bail!("missing file arg | args={args:#?}");
     };
 
     let pane_id = match args.get(2) {
@@ -81,7 +78,6 @@ fn main() -> color_eyre::Result<()> {
 /// Creates enriched PATH for `WezTerm` integration.
 ///
 /// # Errors
-/// In case:
 /// - A required environment variable is missing or invalid Unicode.
 fn get_enriched_path_env() -> color_eyre::Result<Env> {
     let enriched_path = [

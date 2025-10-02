@@ -7,18 +7,15 @@ use fkr::FkrOption;
 /// Prints generated value to standard output, optionally copies to clipboard.
 ///
 /// # Usage
-///
 /// ```bash
-/// fkr            # interactive choose + print
-/// fkr cp         # as above, additionally copy to system clipboard
+/// fkr # interactive choose + print
+/// fkr cp # as above, additionally copy to system clipboard
 /// ```
 ///
 /// # Arguments
-///
-/// * `cp` - Copy generated value to clipboard (optional)
+/// - `cp` Copy generated value to clipboard (optional).
 ///
 /// # Errors
-/// In case:
 /// - Interactive selection fails.
 /// - Writing the generated value to the clipboard fails.
 fn main() -> color_eyre::Result<()> {

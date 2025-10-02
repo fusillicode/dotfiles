@@ -31,7 +31,7 @@ fn insert_string(_: ()) {
     let options: Vec<_> = FkrOption::iter().collect();
 
     let Ok(selected_option) = crate::oxi_ext::api::inputlist("Select option:", &options).inspect_err(|error| {
-        crate::oxi_ext::api::notify_error(&format!("cannot get user input, error {error:#?}"));
+        crate::oxi_ext::api::notify_error(&format!("cannot get user input | error={error:#?}"));
     }) else {
         return;
     };

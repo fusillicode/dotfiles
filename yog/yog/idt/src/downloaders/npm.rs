@@ -4,7 +4,6 @@ use std::path::PathBuf;
 /// Downloads and installs Node.js packages using npm.
 ///
 /// # Errors
-/// In case:
 /// - Executing the `npm` command fails or returns a non-zero exit status.
 /// - A filesystem operation (create/read/write/remove) fails.
 pub fn run(dev_tools_dir: &Path, tool: &str, packages: &[&str]) -> color_eyre::Result<PathBuf> {

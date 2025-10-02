@@ -17,11 +17,11 @@ use ytil_cmd::CmdExt as _;
 pub fn get(_: ()) -> Option<WordUnderCursor> {
     let cur_win = Window::current();
     let cur_line = nvim_oxi::api::get_current_line()
-        .inspect_err(|e| crate::oxi_ext::api::notify_error(&format!("cannot get current line: {e:#?}")))
+        .inspect_err(|error| crate::oxi_ext::api::notify_error(&format!("cannot get current line | error={error:#?}")))
         .ok()?;
     let (_, col) = cur_win
         .get_cursor()
-        .inspect_err(|e| crate::oxi_ext::api::notify_error(&format!("cannot get cursor: {e:#?}")))
+        .inspect_err(|error| crate::oxi_ext::api::notify_error(&format!("cannot get cursor | error={error:#?}")))
         .ok()?;
     get_word_at_index(&cur_line, col)
         .map(ToOwned::to_owned)
@@ -100,7 +100,6 @@ impl From<String> for WordUnderCursor {
 /// - unknown types
 ///
 /// # Errors
-/// In case:
 /// - launching or waiting on the `file` command fails
 /// - the command exits with non-success
 /// - standard output cannot be decoded as valid UTF-8
@@ -139,8 +138,8 @@ pub enum FileCmdOutput {
 /// Find the non-whitespace token in the supplied string `s` containing the visual index `idx`.
 ///
 /// Returns [`Option::None`] if:
-/// - `idx` is out of bounds
-/// - `idx` does not point to a character boundary
+/// - `idx` Is out of bounds.
+/// - `idx` Does not point to a character boundary.
 /// - the character at `idx` is whitespace
 fn get_word_at_index(s: &str, idx: usize) -> Option<&str> {
     let byte_idx = convert_visual_to_byte_idx(s, idx)?;

@@ -6,7 +6,6 @@ Askama
 BFS
 Blockwise
 CTRL
-CWD
 Checkout
 DNI
 DTS
@@ -59,6 +58,7 @@ cmd
 colored
 colorscheme
 cooldown
+cwd
 dataflow
 dbee
 deserializable

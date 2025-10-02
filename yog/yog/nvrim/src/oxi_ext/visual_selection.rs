@@ -32,7 +32,6 @@ use crate::oxi_ext::buffer::BufferExt;
 /// (producing debug output) before being returned.
 ///
 /// # Caveats
-///
 /// - Relies on the live Visual selection; does not fall back to `'<` / `'>` marks.
 /// - Blockwise selections lose their column rectangle shape.
 /// - Returned columns for multi-byte UTF-8 characters depend on byte indices exposed by `getpos()`; no grapheme-aware
@@ -46,7 +45,7 @@ pub fn get_lines(_: ()) -> Vec<String> {
 /// Returns [`None`] if any prerequisite (positions, lines, text extraction) fails.
 pub fn get(_: ()) -> Option<Selection> {
     let Ok(mut bounds) = SelectionBounds::new().inspect_err(|error| {
-        crate::oxi_ext::api::notify_error(&format!("cannot create SelectionBounds, error {error:#?}"));
+        crate::oxi_ext::api::notify_error(&format!("cannot create selection bounds | error={error:#?}"));
     }) else {
         return None;
     };
@@ -59,9 +58,7 @@ pub fn get(_: ()) -> Option<Selection> {
         let Ok(lines) = cur_buf
             .get_lines(bounds.start().lnum..=bounds.end().lnum, false)
             .inspect_err(|error| {
-                crate::oxi_ext::api::notify_error(&format!(
-                    "cannot get lines from buffer {cur_buf:#?}, error {error:#?}"
-                ));
+                crate::oxi_ext::api::notify_error(&format!("cannot get lines | buffer={cur_buf:#?} error={error:#?}"));
             })
         else {
             return None;
@@ -87,7 +84,7 @@ pub fn get(_: ()) -> Option<Selection> {
         )
         .inspect_err(|error| {
             crate::oxi_ext::api::notify_error(&format!(
-                "cannot get text from buffer {cur_buf:#?} from bounds {bounds:#?}, error {error:#?}"
+                "cannot get text | buffer={cur_buf:#?} bounds={bounds:#?} error={error:#?}"
             ));
         })
     else {
@@ -134,9 +131,7 @@ impl SelectionBounds {
         let (start, end) = cursor_pos.sort(visual_pos);
 
         if start.buf_id != end.buf_id {
-            bail!(
-                "cannot create SelectionWithBounds, mismatched buffer ids between start {start:#?} and end {end:#?} positions"
-            )
+            bail!("mismatched buffer ids | start={start:#?} end={end:#?}")
         }
 
         Ok(Self {
@@ -295,19 +290,17 @@ impl Poppable for Pos {
 /// On success converts the raw 1-based tuple into 0-based [`Pos`].
 /// On failure emits an error notification and returns the originating error unchanged.
 ///
-/// # Parameters
-///
+/// # Arguments
 /// - `mark`: Mark identifier accepted by `getpos()` (e.g. `"v"` for start of active Visual selection, `"."` for the
 ///   cursor position).
 ///
 /// # Errors
-/// In case:
 /// - Calling `getpos()` fails.
 /// - Deserializing the returned tuple into [`Pos`] fails.
 fn get_pos(mark: &str) -> nvim_oxi::Result<Pos> {
     Ok(
         nvim_oxi::api::call_function::<_, Pos>("getpos", Array::from_iter([mark])).inspect_err(|error| {
-            crate::oxi_ext::api::notify_error(&format!("cannot get pos for {mark}, error {error:#?}"));
+            crate::oxi_ext::api::notify_error(&format!("cannot get pos | mark={mark} error={error:#?}"));
         })?,
     )
 }

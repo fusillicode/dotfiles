@@ -27,7 +27,6 @@ pub enum CurlDownloaderOption<'a> {
 /// Downloads a file from the given URL using curl with the specified [`CurlDownloaderOption`].
 ///
 /// # Errors
-/// In case:
 /// - Executing the `curl` command fails or returns a non-zero exit status.
 /// - Executing a decompression command (`zcat`, `tar`) fails or returns a non-zero exit status.
 /// - The spawned `curl` process does not expose a stdout pipe (missing piped handle).
@@ -79,7 +78,7 @@ fn get_cmd_stdout(cmd: &mut Command) -> color_eyre::Result<Stdio> {
         .stdout(Stdio::piped())
         .spawn()?
         .stdout
-        .ok_or_else(|| eyre!("missing stdout from cmd {cmd:#?}"))?;
+        .ok_or_else(|| eyre!("missing child stdout | cmd={cmd:#?}"))?;
 
     Ok(Stdio::from(stdout))
 }

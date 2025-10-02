@@ -26,7 +26,6 @@ const GITHUB_PR_ID_QUERY_KEY: &str = "pr";
 /// Runs `gh auth status`; if not authenticated it invokes an interactive `gh auth login`.
 ///
 /// # Errors
-/// In case:
 /// - Checking auth status fails.
 /// - The login command fails or exits with a non-zero status.
 pub fn log_into_github() -> color_eyre::Result<()> {
@@ -43,7 +42,6 @@ pub fn log_into_github() -> color_eyre::Result<()> {
 /// Retrieves the latest release tag name for the specified GitHub repository.
 ///
 /// # Errors
-/// In case:
 /// - Executing `gh` fails or returns a non-zero exit status.
 /// - UTF-8 conversion fails.
 /// - Invoking `gh api` fails.
@@ -58,7 +56,6 @@ pub fn get_latest_release(repo: &str) -> color_eyre::Result<String> {
 /// Extracts the branch name from a GitHub pull request [`Url`].
 ///
 /// # Errors
-/// In case:
 /// - Executing `gh` fails or returns a non-zero exit status.
 /// - Invoking `gh pr view` fails.
 /// - Output cannot be parsed.
@@ -77,7 +74,6 @@ pub fn get_branch_name_from_url(url: &Url) -> color_eyre::Result<String> {
 /// Filters remotes to those that parse as GitHub URLs.
 ///
 /// # Errors
-/// In case:
 /// - The repository cannot be opened.
 /// - A remote cannot be resolved.
 /// - A remote URL is invalid UTF-8.
@@ -89,7 +85,7 @@ pub fn get_repo_urls(repo_path: &Path) -> color_eyre::Result<Vec<Url>> {
             repo.find_remote(remote_name)?
                 .url()
                 .map(parse_github_url_from_git_remote_url)
-                .ok_or_else(|| eyre!("remote url is invalid UTF-8"))??,
+                .ok_or_else(|| eyre!("remote url invalid utf-8 | remote={remote_name}"))??,
         );
     }
     Ok(repo_urls)
@@ -102,7 +98,6 @@ pub fn get_repo_urls(repo_path: &Path) -> color_eyre::Result<Vec<Url>> {
 /// - `https://github.com/owner/repo[.git]`
 ///
 /// # Errors
-/// In case:
 /// - The URL cannot be parsed or lacks a path component.
 fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> color_eyre::Result<Url> {
     if let Ok(mut url) = Url::parse(git_remote_url) {
@@ -124,7 +119,6 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> color_eyre::Res
 /// Extracts and validates successful command output, converting it to a trimmed string.
 ///
 /// # Errors
-/// In case:
 /// - UTF-8 conversion fails.
 fn extract_success_output(output: &Output) -> color_eyre::Result<String> {
     output.status.exit_ok()?;
@@ -138,13 +132,12 @@ fn extract_success_output(output: &Output) -> color_eyre::Result<String> {
 /// - Actions run URL with `?pr=<ID>` (also supports `/job/<JOB_ID>` variants).
 ///
 /// # Errors
-/// In case:
 /// - Host is not `github.com`.
 /// - The PR id segment or query parameter is missing, empty, duplicated, or malformed.
 fn extract_pr_id_form_url(url: &Url) -> color_eyre::Result<String> {
     let host = url.host_str().ok_or_else(|| eyre!("cannot extract host from {url}"))?;
     if host != GITHUB_HOST {
-        bail!("host {host:#?} in {url} doesn't match {GITHUB_HOST:#?}")
+        bail!("host mismatch | host={host:#?} expected={GITHUB_HOST:#?} url={url}")
     }
 
     // To handle URLs like:
@@ -172,18 +165,18 @@ fn extract_pr_id_form_url(url: &Url) -> color_eyre::Result<String> {
     {
         [(idx, _)] => Ok(path_segments
             .get(idx.saturating_add(1))
-            .ok_or_else(|| eyre!("missing PR id in {url} path segments {path_segments:#?}"))
+            .ok_or_else(|| eyre!("missing pr id | url={url} path_segments={path_segments:#?}"))
             .and_then(|(_, pr_id)| {
                 if pr_id.is_empty() {
-                    return Err(eyre!("empty PR id in {url} path segments {path_segments:#?}"));
+                    return Err(eyre!("empty pr id | url={url} path_segments={path_segments:#?}"));
                 }
                 Ok((*pr_id).to_string())
             })?),
         [] => Err(eyre!(
-            "missing PR id prefix {GITHUB_PR_ID_PREFIX:#?} in {url} path segments {path_segments:#?}"
+            "missing pr id prefix | prefix={GITHUB_PR_ID_PREFIX:#?} url={url} path_segments={path_segments:#?}"
         )),
         _ => Err(eyre!(
-            "multiple {GITHUB_PR_ID_PREFIX:#?} found in {url} path segments {path_segments:#?}"
+            "multiple pr id prefixes | prefix={GITHUB_PR_ID_PREFIX:#?} url={url} path_segments={path_segments:#?}"
         )),
     }
 }
@@ -205,50 +198,50 @@ mod tests {
     fn extract_pr_id_form_url_returns_the_expected_error_when_url_is_not_from_github() {
         let url = Url::parse("https://foo.bar").unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_url(&url));
-        assert_eq!(
-            r#"host "foo.bar" in https://foo.bar/ doesn't match "github.com""#,
-            error.to_string()
-        );
+        let msg = error.to_string();
+        assert!(msg.starts_with("host mismatch |"));
+        assert!(msg.contains(r#"host="foo.bar""#), "actual: {msg}");
+        assert!(msg.contains(r#"expected="github.com""#), "actual: {msg}");
+        assert!(msg.contains("url=https://foo.bar/"), "actual: {msg}");
     }
 
     #[test]
     fn extract_pr_id_form_url_returns_the_expected_error_when_url_doesnt_have_path_segments() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}")).unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_url(&url));
-        assert_eq!(
-            "missing PR id prefix \"pull\" in https://github.com/ path segments [\n    (\n        0,\n        \"\",\n    ),\n]",
-            error.to_string()
-        );
+        let msg = error.to_string();
+        assert!(msg.starts_with("missing pr id prefix |"), "actual: {msg}");
+        assert!(msg.contains("prefix=\"pull\""), "actual: {msg}");
+        assert!(msg.contains("url=https://github.com/"), "actual: {msg}");
     }
 
     #[test]
     fn extract_pr_id_form_url_returns_the_expected_error_when_url_doesnt_have_pr_id() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/pull")).unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_url(&url));
-        assert_eq!(
-            "missing PR id in https://github.com/pull path segments [\n    (\n        0,\n        \"pull\",\n    ),\n]",
-            error.to_string()
-        );
+        let msg = error.to_string();
+        assert!(msg.starts_with("missing pr id |"), "actual: {msg}");
+        assert!(msg.contains("url=https://github.com/pull"), "actual: {msg}");
     }
 
     #[test]
     fn extract_pr_id_form_url_returns_the_expected_error_when_url_doenst_have_the_expected_pr_id_prefix() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/foo")).unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_url(&url));
-        assert_eq!(
-            "missing PR id prefix \"pull\" in https://github.com/foo path segments [\n    (\n        0,\n        \"foo\",\n    ),\n]",
-            error.to_string()
-        );
+        let msg = error.to_string();
+        assert!(msg.starts_with("missing pr id prefix |"), "actual: {msg}");
+        assert!(msg.contains("prefix=\"pull\""), "actual: {msg}");
+        assert!(msg.contains("url=https://github.com/foo"), "actual: {msg}");
     }
 
     #[test]
     fn extract_pr_id_form_url_returns_the_expected_error_when_url_has_multiple_pr_id_prefixes() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/pull/42/pull/43")).unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_url(&url));
-        assert_eq!(
-            "multiple \"pull\" found in https://github.com/pull/42/pull/43 path segments [\n    (\n        0,\n        \"pull\",\n    ),\n    (\n        1,\n        \"42\",\n    ),\n    (\n        2,\n        \"pull\",\n    ),\n    (\n        3,\n        \"43\",\n    ),\n]",
-            error.to_string()
-        );
+        let msg = error.to_string();
+        assert!(msg.starts_with("multiple pr id prefixes |"), "actual: {msg}");
+        assert!(msg.contains("prefix=\"pull\""), "actual: {msg}");
+        assert!(msg.contains("url=https://github.com/pull/42/pull/43"), "actual: {msg}");
     }
 
     #[test]

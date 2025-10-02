@@ -44,7 +44,6 @@ pub struct VaultCreds {
 /// 4. Fails on unexpected lookup errors or login failures.
 ///
 /// # Errors
-/// In case:
 /// - Executing `vault` fails or returns a non-zero exit status.
 /// - UTF-8 conversion fails.
 /// - OIDC/Okta login fails.
@@ -56,7 +55,7 @@ pub fn log_into_vault_if_required() -> color_eyre::Result<()> {
     }
     let stderr = std::str::from_utf8(&token_lookup.stderr)?.trim();
     if !stderr.contains("permission denied") {
-        bail!("unexpected error checking Vault token - error {stderr}")
+        bail!("vault token check failed | stderr={stderr}")
     }
 
     let login = Command::new("vault")
@@ -64,7 +63,7 @@ pub fn log_into_vault_if_required() -> color_eyre::Result<()> {
         .output()?;
     if !login.status.success() {
         bail!(
-            "error authenticating to Vault - error {}",
+            "vault login failed | stderr={}",
             std::str::from_utf8(&login.stderr)?.trim()
         )
     }

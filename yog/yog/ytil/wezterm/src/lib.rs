@@ -26,7 +26,6 @@ pub fn activate_pane_cmd(pane_id: i64) -> String {
 /// Retrieves the current pane ID from the `WEZTERM_PANE` environment variable.
 ///
 /// # Errors
-/// In case:
 /// - A required environment variable is missing or invalid Unicode.
 /// - `WEZTERM_PANE` cannot be parsed as an integer.
 /// - `WEZTERM_PANE` is unset.
@@ -40,7 +39,6 @@ pub fn get_current_pane_id() -> color_eyre::Result<i64> {
 /// when called by the `oe` CLI when a file path is clicked in `WezTerm` itself.
 ///
 /// # Errors
-/// In case:
 /// - Invoking `wezterm` (list command) fails or returns a non-zero exit status.
 /// - Output JSON cannot be deserialized into panes.
 pub fn get_all_panes(envs: &[(&str, &str)]) -> color_eyre::Result<Vec<WeztermPane>> {
@@ -53,7 +51,6 @@ pub fn get_all_panes(envs: &[(&str, &str)]) -> color_eyre::Result<Vec<WeztermPan
 /// Finds a sibling [`WeztermPane`] in the same tab that matches one of the given titles.
 ///
 /// # Errors
-/// In case:
 /// - No pane in the same tab matches any of `pane_titles`.
 /// - The current pane ID is not present in `panes`.
 pub fn get_sibling_pane_with_titles(
@@ -64,13 +61,15 @@ pub fn get_sibling_pane_with_titles(
     let current_pane_tab_id = panes
         .iter()
         .find(|w| w.pane_id == current_pane_id)
-        .ok_or_else(|| eyre!("current pane id '{current_pane_id}' not found among panes {panes:#?}"))?
+        .ok_or_else(|| eyre!("current pane id not found | pane_id={current_pane_id} panes={panes:#?}"))?
         .tab_id;
 
     Ok(panes
         .iter()
         .find(|w| w.tab_id == current_pane_tab_id && pane_titles.contains(&w.title.as_str()))
-        .ok_or_else(|| eyre!("pane with title '{pane_titles:#?}' not found in tab '{current_pane_tab_id}'"))?
+        .ok_or_else(|| {
+            eyre!("pane title not found in tab | pane_titles={pane_titles:#?} tab_id={current_pane_tab_id}")
+        })?
         .clone())
 }
 

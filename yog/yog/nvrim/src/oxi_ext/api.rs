@@ -12,16 +12,16 @@ use crate::dict;
 ///
 /// Errors are reported to Nvim via [`notify_error`].
 pub fn set_g_var<V: ToObject + core::fmt::Debug>(name: &str, value: V) {
-    let msg = format!("cannot set global var {name} value {value:#?}");
+    let msg = format!("cannot set global var | name={name} value={value:#?}");
     if let Err(error) = nvim_oxi::api::set_var(name, value) {
-        crate::oxi_ext::api::notify_error(&format!("{msg}, error {error:#?}"));
+        crate::oxi_ext::api::notify_error(&format!("{msg} | error={error:#?}"));
     }
 }
 
 /// Notifies the user of an error message in Nvim.
 pub fn notify_error(msg: &str) {
     if let Err(error) = nvim_oxi::api::notify(msg, LogLevel::Error, &dict! {}) {
-        nvim_oxi::dbg!(format!("cannot notify error {msg:?}, error {error:#?}"));
+        nvim_oxi::dbg!(format!("cannot notify error | msg={msg:?} error={error:#?}"));
     }
 }
 
@@ -29,7 +29,7 @@ pub fn notify_error(msg: &str) {
 #[expect(dead_code, reason = "Kept for future use")]
 pub fn notify_warn(msg: &str) {
     if let Err(error) = nvim_oxi::api::notify(msg, LogLevel::Warn, &dict! {}) {
-        nvim_oxi::dbg!(format!("cannot notify warning {msg:?}, error {error:#?}"));
+        nvim_oxi::dbg!(format!("cannot notify warning | msg={msg:?} error={error:#?}"));
     }
 }
 
@@ -47,7 +47,7 @@ where
         &CmdOpts::default(),
     ) {
         crate::oxi_ext::api::notify_error(&format!(
-            "cannot execute cmd {cmd:?} with args {args:#?}, error {error:#?}"
+            "cannot execute cmd | cmd={cmd:?} args={args:#?} error={error:#?}"
         ));
     }
 }
@@ -58,12 +58,11 @@ where
 /// `inputlist()` function and returns the chosen element (1-based user
 /// index translated to 0-based). Returns [`None`] if the user cancels.
 ///
-/// # Parameters
+/// # Arguments
 /// - `prompt`: Heading line shown before the options.
 /// - `items`: Slice of displayable values listed sequentially.
 ///
 /// # Errors
-/// In case:
 /// - Invoking `inputlist()` fails.
 /// - The returned index cannot be converted to `usize` (negative or overflow).
 pub fn inputlist<'a, I: core::fmt::Display>(prompt: &'a str, items: &'a [I]) -> color_eyre::Result<Option<&'a I>> {

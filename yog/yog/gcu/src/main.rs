@@ -13,26 +13,23 @@ use ytil_git::Branch;
 /// text or GitHub PR URLs), and branch switching (including previous-branch shorthand).
 ///
 /// # Usage
-///
 /// ```text
-/// gcu                    # interactive selector over recent / remote branches
-/// gcu -                  # switch to previous branch
-/// gcu -b feature add ui  # create branch (sanitised name from the remaining args) & switch
+/// gcu # interactive selector over recent / remote branches
+/// gcu - # switch to previous branch
+/// gcu -b feature add ui # create branch (sanitised name from the remaining args) & switch
 /// gcu login clean caches # single/multi args -> sanitised branch name (create if missing)
-/// gcu https://github.com/owner/repo/pull/123  # derive branch name from PR URL and switch
+/// gcu https://github.com/owner/repo/pull/123 # derive branch name from PR URL and switch
 /// ```
 ///
 /// # Arguments
-///
-/// - `-`                        Switch to previous branch (`git switch -`).
-/// - `-b <args...>`             Create new branch from sanitised `<args...>` then switch.
-/// - `<single>`                 Switch if exists, else confirm create & switch.
-/// - `<multiple args>`          All args combined & sanitised into branch name.
+/// - `-` Switch to previous branch (`git switch -`).
+/// - `-b <args...>` Create new branch from sanitised `<args...>` then switch.
+/// - `<single>` Switch if exists, else confirm create & switch.
+/// - `<multiple args>` All args combined & sanitised into branch name.
 /// - `<github pull request url>`Authenticate (if needed) and derive branch name from PR.
-/// - (none)                     Launch interactive selector (see [`autocomplete_git_branches`]).
+/// - (none) Launch interactive selector (see [`autocomplete_git_branches`]).
 ///
 /// # Errors
-/// In case:
 /// - GitHub authentication or pull request branch name derivation fails.
 /// - Branch name construction fails or produces an empty string.
 /// - Branch switching or creation fails.
@@ -64,7 +61,6 @@ fn main() -> color_eyre::Result<()> {
 /// line or "-" triggers previous-branch switching.
 ///
 /// # Errors
-/// In case:
 /// - Branch enumeration fails.
 /// - UI rendering fails.
 /// - Branch switching fails.
@@ -107,7 +103,6 @@ impl core::fmt::Display for RenderableBranch {
 ///   then switch to it.
 ///
 /// # Errors
-/// In case:
 /// - GitHub authentication fails.
 /// - Pull request branch name derivation fails.
 /// - Fetching the remote branch (git fetch) fails.
@@ -129,7 +124,6 @@ fn switch_branch_or_create_if_missing(arg: &str) -> color_eyre::Result<()> {
 /// Switches to the specified Git branch (delegates to [`ytil_git::switch_branch`]).
 ///
 /// # Errors
-///
 /// Returns an error if branch lookup or checkout fails.
 fn switch_branch(branch: &str) -> color_eyre::Result<()> {
     ytil_git::switch_branch(branch)?;
@@ -144,7 +138,6 @@ fn switch_branch(branch: &str) -> color_eyre::Result<()> {
 ///   required.
 ///
 /// # Errors
-/// In case:
 /// - Current branch discovery fails.
 /// - Branch creation or subsequent switching fails.
 /// - Reading user confirmation input fails.
@@ -172,7 +165,6 @@ fn create_branch_and_switch(branch: &str) -> color_eyre::Result<()> {
 /// - Otherwise, requires user confirmation via empty line input (non‑empty aborts).
 ///
 /// # Errors
-/// In case:
 /// - Current branch discovery fails.
 /// - Reading user confirmation input fails.
 fn should_create_new_branch(branch: &str) -> color_eyre::Result<bool> {
@@ -209,7 +201,6 @@ fn is_default_branch(branch: &str) -> bool {
 /// - Join resulting tokens with `-`.
 ///
 /// # Errors
-/// In case:
 /// - sanitisation produces an empty string.
 fn build_branch_name(args: &[&str]) -> color_eyre::Result<String> {
     fn is_permitted(c: char) -> bool {
@@ -239,7 +230,7 @@ fn build_branch_name(args: &[&str]) -> color_eyre::Result<String> {
         .join("-");
 
     if branch_name.is_empty() {
-        bail!("parameterizing {args:#?} resulted in empty String")
+        bail!("branch name construction produced empty string | args={args:#?}")
     }
 
     Ok(branch_name)
@@ -252,17 +243,11 @@ mod tests {
     use super::*;
 
     #[rstest]
-    #[case(
-        "",
-        "Err(\n    \"parameterizing [\\n    \\\"\\\",\\n] resulted in empty String\",\n)"
-    )]
-    #[case(
-        "❌",
-        "Err(\n    \"parameterizing [\\n    \\\"❌\\\",\\n] resulted in empty String\",\n)"
-    )]
-    fn build_branch_name_fails_as_expected(#[case] input: &str, #[case] expected_content: &str) {
-        let res = format!("{:#?}", build_branch_name(&[input]));
-        assert!(res.contains(expected_content), "unexpected {res}");
+    #[case("", "branch name construction produced empty string | args=[\n    \"\",\n]")]
+    #[case("❌", "branch name construction produced empty string | args=[\n    \"❌\",\n]")]
+    fn build_branch_name_fails_as_expected(#[case] input: &str, #[case] expected_output: &str) {
+        assert2::let_assert!(Err(actual_error) = build_branch_name(&[input]));
+        assert_eq!(expected_output, format!("{actual_error}"));
     }
 
     #[rstest]
@@ -281,6 +266,7 @@ mod tests {
     #[case(&["This", "---is.", "..a_test"], "this-is.-..a_test")]
     #[case(&["dependabot/cargo/opentelemetry-0.27.1"], "dependabot/cargo/opentelemetry-0.27.1")]
     fn build_branch_name_succeeds_as_expected(#[case] input: &[&str], #[case] expected_output: &str) {
-        assert_eq!(expected_output, build_branch_name(input).unwrap());
+        assert2::let_assert!(Ok(actual_output) = build_branch_name(input));
+        assert_eq!(expected_output, actual_output);
     }
 }

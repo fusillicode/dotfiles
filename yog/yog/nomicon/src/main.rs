@@ -20,7 +20,6 @@ mod templates;
 /// Build unified styled workspace documentation atop `cargo doc`.
 ///
 /// # Errors
-/// In case:
 /// - Removing the previous `target/doc` (if present) fails for a reason other than [`NotFound`].
 /// - `cargo doc` exits non‑zero (warnings are denied via `RUSTDOCFLAGS=-Dwarnings`).
 /// - A `Cargo.toml` cannot be read or required `[package]` keys (`name`, `description`) are missing.
@@ -37,7 +36,7 @@ fn main() -> color_eyre::eyre::Result<()> {
     if let Err(error) = std::fs::remove_dir_all(&doc_dir)
         && !matches!(error.kind(), NotFound)
     {
-        bail!("error removing doc_dir={}, error={error}", doc_dir.display());
+        bail!("cannot remove docs dir | doc_dir={} error={error}", doc_dir.display());
     }
 
     // Always (re)generate docs for all workspace crates (including private items) first.
@@ -75,7 +74,7 @@ fn main() -> color_eyre::eyre::Result<()> {
         let desc = get_toml_values(&content, "description")
             .first()
             .cloned()
-            .ok_or_else(|| eyre!("foo"))?;
+            .ok_or_else(|| eyre!("missing crate description | cargo_toml={cargo_toml:#?}"))?;
 
         // Only include crates that actually have a generated index (documentation produced).
         for name in names {
@@ -113,13 +112,12 @@ fn main() -> color_eyre::eyre::Result<()> {
 /// `<workspace_root>/target/doc/assets` using a recursive `cp`.
 ///
 /// # Arguments
-/// * `doc_dir` - Existing `<workspace>/target/doc` directory.
+/// - `doc_dir` Existing `<workspace>/target/doc` directory.
 ///
 /// # Returns
 /// Ok on success.
 ///
 /// # Errors
-/// In case:
 /// - Underlying `cp` command execution fails.
 /// - Destination directory cannot be written.
 fn copy_assets(doc_dir: &Path) -> color_eyre::Result<()> {
@@ -143,8 +141,8 @@ fn copy_assets(doc_dir: &Path) -> color_eyre::Result<()> {
 /// scalar values (`name = "foo"`, `description = "..."`).
 ///
 /// # Arguments
-/// * `content` - Entire TOML file contents.
-/// * `key` - Exact key to match at a line start (after trimming leading space).
+/// - `content` Entire TOML file contents.
+/// - `key` Exact key to match at a line start (after trimming leading space).
 ///
 /// # Returns
 /// A vector of raw value strings with surrounding double quotes removed when

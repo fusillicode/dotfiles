@@ -17,7 +17,6 @@ pub trait CmdExt {
     /// Executes the command and returns the output.
     ///
     /// # Errors
-    ///
     /// Returns an error if:
     /// - Spawning the command fails (I/O error).
     /// - The command exits with a non-zero status (stderr captured).
@@ -63,7 +62,7 @@ pub enum CmdError {
         output: Box<Output>,
     },
     /// UTF-8 conversion error when processing command output.
-    #[error("utf8 error {source} - {cmd_details}")]
+    #[error("utf-8 error | source={source} cmd_details={cmd_details}")]
     Utf8 {
         /// Details about the command that failed.
         cmd_details: CmdDetails,

@@ -20,9 +20,8 @@ pub fn dict() -> Dictionary {
 
 /// Returns the desired default `fzf-lua` previewer configuration as a [`Dictionary`].
 ///
-/// # Parameters
-///
-/// - `previewer_kind`: Optional override for the `previewer` key (falls back to the string literal `"builtin"` when
+/// # Arguments
+/// - `previewer_kind` Optional override for the `previewer` key (falls back to the string literal `"builtin"` when.
 ///   [`Option::None`]).
 fn fzf_lua_previewer(previewer_kind: Option<String>) -> Dictionary {
     dict! {

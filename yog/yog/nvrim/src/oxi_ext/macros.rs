@@ -88,10 +88,10 @@ mod tests {
     #[test]
     fn dictionary_ext_get_t_works_as_expected() {
         let dict = dict! { "foo": "42" };
-        assert_eq!(
-            r#"missing value matching query ["bar"] in dict { foo: "42" }"#,
-            dict.get_t::<nvim_oxi::String>("bar").unwrap_err().to_string()
-        );
+        let msg = dict.get_t::<nvim_oxi::String>("bar").unwrap_err().to_string();
+        assert!(msg.starts_with("missing dict value |"), "actual: {msg}");
+        assert!(msg.contains("query=[\n    \"bar\",\n]"), "actual: {msg}");
+        assert!(msg.contains("dict={ foo: \"42\" }"), "actual: {msg}");
         assert_eq!("42", dict.get_t::<nvim_oxi::String>("foo").unwrap());
 
         let dict = dict! { "foo": 42 };

@@ -20,13 +20,11 @@ use ytil_wezterm::get_sibling_pane_with_titles;
 /// Generate a GitHub URL pointing to the current Helix buffer location.
 ///
 /// # Usage
-///
 /// ```bash
-/// yghfl    # copies URL for current line/column to clipboard
+/// yghfl # copies URL for current line/column to clipboard
 /// ```
 ///
 /// # Errors
-/// In case:
 /// - Executing `wezterm` fails or returns a non-zero exit status.
 /// - Status line extraction or parsing fails.
 /// - Repository root path resolution fails.
@@ -51,7 +49,7 @@ fn main() -> color_eyre::Result<()> {
 
     let hx_status_line = HxStatusLine::from_str(wezterm_pane_text.lines().nth_back(1).ok_or_else(|| {
         eyre!(
-            "missing hx status line in pane '{}' text {wezterm_pane_text:#?}",
+            "missing hx status line | pane_id={} text={wezterm_pane_text:#?}",
             hx_pane.pane_id
         )
     })?)?;
@@ -64,10 +62,10 @@ fn main() -> color_eyre::Result<()> {
     let git_repo_root_path_clone = git_repo_root_path.clone();
     let get_github_repo_url = std::thread::spawn(move || -> color_eyre::Result<Url> {
         match &ytil_github::get_repo_urls(&git_repo_root_path_clone)?.as_slice() {
-            &[] => bail!("no GitHub URL found for repo path {git_repo_root_path_clone:#?}"),
+            &[] => bail!("missing github repo url | repo_path={git_repo_root_path_clone:#?}"),
             &[one] => Ok(one.clone()),
             multi => {
-                bail!("multiple GitHub URLs found {multi:#?} for supplied repo path {git_repo_root_path_clone:#?}")
+                bail!("multiple github repo urls | urls={multi:#?} repo_path={git_repo_root_path_clone:#?}")
             }
         }
     });
@@ -91,7 +89,6 @@ fn main() -> color_eyre::Result<()> {
 /// Builds absolute file path for Helix cursor position.
 ///
 /// # Errors
-/// In case:
 /// - Expanding a home-relative path (starting with `~`) fails because the home directory cannot be determined.
 fn build_hx_cursor_absolute_file_path(
     hx_cursor_file_path: &Path,
@@ -114,7 +111,6 @@ fn build_hx_cursor_absolute_file_path(
 /// Builds GitHub link pointing to specific file and line.
 ///
 /// # Errors
-/// In case:
 /// - UTF-8 conversion fails.
 fn build_github_link<'a>(
     github_repo_url: &'a Url,
@@ -128,7 +124,7 @@ fn build_github_link<'a>(
             component
                 .as_os_str()
                 .to_str()
-                .ok_or_else(|| eyre!("cannot get str from path component {component:#?}"))?,
+                .ok_or_else(|| eyre!("path component invalid utf-8 | component={component:#?}"))?,
         );
     }
 
@@ -136,7 +132,7 @@ fn build_github_link<'a>(
     let mut github_link = github_repo_url.clone();
     github_link
         .path_segments_mut()
-        .map_err(|()| eyre!("cannot extend URL '{github_repo_url}' with segments {segments:#?}"))?
+        .map_err(|()| eyre!("cannot extend url with segments | url={github_repo_url} segments={segments:#?}"))?
         .extend(&segments);
     github_link.set_fragment(Some(&format!(
         "L{}C{}",

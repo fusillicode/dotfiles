@@ -10,7 +10,6 @@ pub trait DictionaryExt {
     /// Gets a typed value from the dictionary using the [`OxiExtract`] trait.
     ///
     /// # Errors
-    ///
     /// Returns an error if:
     /// - The key is missing.
     /// - The value cannot be converted to the requested type (unexpected kind).
@@ -19,7 +18,6 @@ pub trait DictionaryExt {
     /// Gets a nested [`Dictionary`] from the [`Dictionary`] by a sequence of keys.
     ///
     /// # Errors
-    ///
     /// Returns an error if:
     /// - Traversal finds a non-dictionary object for an intermediate key.
     fn get_dict(&self, keys: &[&str]) -> color_eyre::Result<Option<Dictionary>>;
@@ -57,5 +55,5 @@ impl DictionaryExt for Dictionary {
 
 /// Creates an error for missing value in [`Dictionary`].
 fn no_value_matching(query: &[&str], dict: &Dictionary) -> color_eyre::eyre::Error {
-    eyre!("missing value matching query {query:?} in dict {dict:#?}")
+    eyre!("missing dict value | query={query:#?} dict={dict:#?}")
 }

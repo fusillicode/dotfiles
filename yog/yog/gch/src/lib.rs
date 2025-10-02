@@ -2,7 +2,7 @@
 //!
 //! Provides a common flow:
 //! 1. Collect [`ytil_git::GitStatusEntry`] via [`ytil_git::get_status`].
-//! 2. Wrap them in [`RenederableGitStatusEntry`] for colored display (similar to porcelain output).
+//! 2. Wrap them in [`RenderableGitStatusEntry`] for colored display (similar to porcelain output).
 //! 3. Present a multi‑select TUI (`ytil_tui::minimal_multi_select`).
 //! 4. Invoke a caller callback on the chosen subset.
 //!
@@ -19,7 +19,7 @@ use ytil_git::WorktreeState;
 /// Run interactive git status selection then invoke a callback on chosen entries.
 ///
 /// # Arguments
-/// * `apply_fn` - Callback receiving a slice of selected [`RenederableGitStatusEntry`].
+/// - `apply_fn` Callback receiving a slice of selected [`RenderableGitStatusEntry`].
 ///
 /// # Returns
 /// `Ok(())` when:
@@ -30,12 +30,11 @@ use ytil_git::WorktreeState;
 /// Propagates underlying errors otherwise.
 ///
 /// # Errors
-/// In case:
 /// - Retrieving status via [`ytil_git::get_status`] fails.
 /// - Running `ytil_tui::minimal_multi_select` fails.
 /// - The callback `apply_fn` returns an error.
 pub fn apply_on_selected_git_status_entries(
-    apply_fn: impl Fn(&[RenederableGitStatusEntry]) -> color_eyre::Result<()>,
+    apply_fn: impl Fn(&[RenderableGitStatusEntry]) -> color_eyre::Result<()>,
 ) -> color_eyre::Result<()> {
     let git_status_entries = ytil_git::get_status()?;
     if git_status_entries.is_empty() {
@@ -43,10 +42,9 @@ pub fn apply_on_selected_git_status_entries(
         return Ok(());
     }
 
-    let renderable_entries = git_status_entries.into_iter().map(RenederableGitStatusEntry).collect();
+    let renderable_entries = git_status_entries.into_iter().map(RenderableGitStatusEntry).collect();
 
-    let Some(selected_entries) = ytil_tui::minimal_multi_select::<RenederableGitStatusEntry>(renderable_entries)?
-    else {
+    let Some(selected_entries) = ytil_tui::minimal_multi_select::<RenderableGitStatusEntry>(renderable_entries)? else {
         println!("\n\n{}", "nothing done".bold());
         return Ok(());
     };
@@ -64,7 +62,7 @@ pub fn apply_on_selected_git_status_entries(
 ///
 /// # Examples
 /// ```no_run
-/// # fn show(e: &gch::RenederableGitStatusEntry) {
+/// # fn show(e: &gch::RenderableGitStatusEntry) {
 /// println!("{e}");
 /// # }
 /// ```
@@ -77,9 +75,9 @@ pub fn apply_on_selected_git_status_entries(
 ///
 /// # Future Work
 /// - Provide a structured render method (symbols + path) for alternative UIs.
-pub struct RenederableGitStatusEntry(GitStatusEntry);
+pub struct RenderableGitStatusEntry(GitStatusEntry);
 
-impl Deref for RenederableGitStatusEntry {
+impl Deref for RenderableGitStatusEntry {
     type Target = GitStatusEntry;
 
     fn deref(&self) -> &Self::Target {
@@ -87,7 +85,7 @@ impl Deref for RenederableGitStatusEntry {
     }
 }
 
-impl core::fmt::Display for RenederableGitStatusEntry {
+impl core::fmt::Display for RenderableGitStatusEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Conflict overrides everything
         if self.conflicted {

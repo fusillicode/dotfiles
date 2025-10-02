@@ -10,7 +10,6 @@ pub trait BufferExt {
     /// Errors if the line does not exist at `idx`.
     ///
     /// # Errors
-    ///
     /// Returns an error if:
     /// - Fetching the line via `nvim_buf_get_lines` fails.
     /// - The requested index is out of range (no line returned).
@@ -24,14 +23,14 @@ impl BufferExt for Buffer {
     fn get_line(&self, idx: usize) -> color_eyre::Result<nvim_oxi::String> {
         self.get_lines(idx..=idx, true)?
             .next()
-            .ok_or_else(|| eyre!("no line found with idx {idx} for buffer {self:#?}"))
+            .ok_or_else(|| eyre!("buffer line missing | idx={idx} buffer={self:#?}"))
     }
 
     /// Inserts `text` at the current cursor position in the active buffer.
     fn set_text_at_cursor_pos(&mut self, text: &str) {
         let cur_win = Window::current();
         let Ok((row, col)) = cur_win.get_cursor().inspect_err(|error| {
-            crate::oxi_ext::api::notify_error(&format!("cannot get cursor from window {cur_win:?}, error {error:?}"));
+            crate::oxi_ext::api::notify_error(&format!("cannot get cursor | window={cur_win:?} error={error:?}"));
         }) else {
             return;
         };
@@ -44,7 +43,7 @@ impl BufferExt for Buffer {
 
         if let Err(e) = self.set_text(line_range.clone(), start_col, end_col, text.clone()) {
             crate::oxi_ext::api::notify_error(&format!(
-                "cannot set text {text:?} in buffer {self:?}, line_range {line_range:?}, start_col {start_col:?}, end_col {end_col:?}, error {e:?}",
+                "cannot set text in buffer | text={text:?} buffer={self:?} line_range={line_range:?} start_col={start_col:?} end_col={end_col:?} error={e:?}",
             ));
         }
     }

@@ -15,20 +15,17 @@ use itertools::Itertools;
 /// Re-run a command until an exit condition is met.
 ///
 /// # Usage
-///
 /// ```bash
-/// try 2 ok cargo test            # run every 2s until success
-/// try 1 ko curl localhost:3000   # run until command FAILS (e.g. server down)
+/// try 2 ok cargo test # run every 2s until success
+/// try 1 ko curl localhost:3000 # run until command FAILS (e.g. server down)
 /// ```
 ///
 /// # Arguments
-///
-/// * `cooldown_secs` - Seconds to wait between executions
-/// * `exit_condition` - "ok" (stop on success) or "ko" (stop on failure)
-/// * `command` - Command to execute (everything after `exit_condition`)
+/// - `cooldown_secs` Seconds to wait between executions.
+/// - `exit_condition` "ok" (stop on success) or "ko" (stop on failure).
+/// - `command` Command to execute (everything after `exit_condition`).
 ///
 /// # Errors
-/// In case:
 /// - Executing `sh` fails or returns a non-zero exit status.
 /// - UTF-8 conversion fails.
 fn main() -> color_eyre::Result<()> {
@@ -37,18 +34,19 @@ fn main() -> color_eyre::Result<()> {
     let args = ytil_system::get_args();
 
     let Some((cooldown_secs, args)) = args.split_first() else {
-        bail!("missing cooldown supplied in {args:#?}");
+        bail!("missing cooldown arg | args={args:#?}");
     };
     let cooldown = Duration::from_secs(
         cooldown_secs
             .parse()
-            .with_context(|| format!("cannot parse {cooldown_secs} into Duration"))?,
+            .with_context(|| format!("invalid cooldown secs | value={cooldown_secs}"))?,
     );
 
     let Some((exit_cond, args)) = args.split_first() else {
-        bail!("missing exit condition supplied in {args:#?}");
+        bail!("missing exit condition arg | args={args:#?}");
     };
-    let exit_cond = ExitCond::from_str(exit_cond).with_context(|| format!("in supplied args {args:#?}"))?;
+    let exit_cond =
+        ExitCond::from_str(exit_cond).with_context(|| format!("invalid exit condition | args={args:#?}"))?;
 
     let cmd = args.iter().join(" ");
 
@@ -75,7 +73,8 @@ fn main() -> color_eyre::Result<()> {
         std::thread::sleep(cooldown);
     }
 
-    let tries_count = u32::try_from(tries.len()).with_context(|| format!("converting {} to u32", tries.len()))?;
+    let tries_count =
+        u32::try_from(tries.len()).with_context(|| format!("cannot convert tries len to u32 | len={}", tries.len()))?;
     let total_time = tries.iter().fold(Duration::ZERO, |acc, &d| acc.saturating_add(d));
     let avg_runs_time = if tries_count > 0 {
         total_time.checked_div(tries_count).unwrap_or(Duration::ZERO)
@@ -119,7 +118,7 @@ impl FromStr for ExitCond {
         Ok(match s {
             "ok" => Self::Ok,
             "ko" => Self::Ko,
-            unexpected => bail!("unexpected exit condition value {unexpected}"),
+            unexpected => bail!("unexpected exit condition | value={unexpected}"),
         })
     }
 }

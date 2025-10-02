@@ -15,7 +15,7 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
         .map(|s| s.to_string_lossy().to_string())
         .inspect_err(|error| {
             crate::oxi_ext::api::notify_error(&format!(
-                "cannot get buffer name of buffer #{cur_buf:#?}, error {error:#?}"
+                "cannot get buffer name | buffer={cur_buf:#?} error={error:#?}"
             ));
         })
     else {
@@ -23,11 +23,13 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
     };
 
     // Keeping this as a separate filter because it short circuits the whole filtering and
-    // doesn't require any LSP diagnostics to apply its logic.
+    // does not require any LSP diagnostics to apply its logic.
     if BufferFilter::new()
         .skip_diagnostic(&buf_path, None)
         .inspect_err(|error| {
-            crate::oxi_ext::api::notify_error(&format!("error filtering by buffer {buf_path}, error {error:#?}"));
+            crate::oxi_ext::api::notify_error(&format!(
+                "cannot filter diagnostics by buffer | buffer={buf_path} error={error:#?}"
+            ));
         })
         .is_ok_and(identity)
     {
@@ -35,7 +37,7 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
     }
 
     let Ok(filters) = DiagnosticsFilters::all(&lsp_diags).inspect_err(|error| {
-        crate::oxi_ext::api::notify_error(&format!("cannot get diangnostics filters, error {error:#?}"));
+        crate::oxi_ext::api::notify_error(&format!("cannot get diagnostics filters | error={error:#?}"));
     }) else {
         return vec![];
     };
@@ -46,7 +48,7 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
             .skip_diagnostic(&buf_path, Some(&lsp_diag))
             .inspect_err(|error| {
                 crate::oxi_ext::api::notify_error(&format!(
-                    "error filtering dignostic {lsp_diag:#?} for buffer {buf_path:#?}, error {error:?}"
+                    "cannot filter diagnostic | diagnostic={lsp_diag:#?} buffer={buf_path:#?} error={error:?}"
                 ));
             })
             .is_ok_and(identity)

@@ -10,7 +10,6 @@ pub trait OxiExtract {
     /// Extracts a typed value from an Nvim [Object] by key from a [`Dictionary`] with error context.
     ///
     /// # Errors
-    ///
     /// Returns an error if:
     /// - The value has a different kind than expected for the target type.
     fn extract_from_dict(key: &str, value: &Object, dict: &Dictionary) -> color_eyre::Result<Self::Out>;
