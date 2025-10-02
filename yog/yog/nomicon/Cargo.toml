@@ -20,6 +20,6 @@ ytil_system = { workspace = true }
 
 [build-dependencies]
 color-eyre = { workspace = true }
-lightningcss = { version = "1.0.0-alpha.67", default-features = false, features = [
+lightningcss = { version = "1.0.0-alpha.68", default-features = false, features = [
   "browserslist",
 ] }
