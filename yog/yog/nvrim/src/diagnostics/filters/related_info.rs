@@ -19,7 +19,6 @@ impl RelatedInfoFilter {
     /// Creates a new [`RelatedInfoFilter`] from LSP diagnostics.
     ///
     /// # Errors
-    ///
     /// Returns an error if:
     /// - Extracting related information arrays fails (missing key or wrong type).
     pub fn new(lsp_diags: &[Dictionary]) -> color_eyre::Result<Self> {
@@ -31,13 +30,12 @@ impl RelatedInfoFilter {
     /// Get the [`RelatedInfo`] of an LSP diagnostic represented by a [`Dictionary`].
     ///
     /// # Errors
-    ///
     /// Returns an error if:
     /// - Traversing diagnostics fails (unexpected value kinds or conversion errors).
     fn get_related_infos(lsp_diags: &[Dictionary]) -> color_eyre::Result<Vec<RelatedInfo>> {
         let mut out = vec![];
         for lsp_diag in lsp_diags {
-            // Not all LSPs have "user_data.lsp.relatedInformation", skip those which doesn't
+            // Not all LSPs have "user_data.lsp.relatedInformation"; skip those missing it
             let Some(lsp) = lsp_diag.get_dict(&["user_data", "lsp"])? else {
                 continue;
             };
@@ -62,7 +60,6 @@ impl DiagnosticsFilter for RelatedInfoFilter {
     /// Returns true if the diagnostic is related information already covered.
     ///
     /// # Errors
-    ///
     /// Returns an error if:
     /// - Building the candidate related info shape from the diagnostic fails.
     fn skip_diagnostic(&self, _buf_path: &str, lsp_diag: Option<&Dictionary>) -> color_eyre::Result<bool> {
@@ -100,7 +97,6 @@ impl RelatedInfo {
     /// Create a [`RelatedInfo`] from a root LSP diagnostic.
     ///
     /// # Errors
-    ///
     /// Returns an error if:
     /// - Required keys (`message`, `lnum`, `col`, `end_lnum`, `end_col`) are missing or of unexpected type.
     fn from_lsp_diagnostic(lsp_diagnostic: &Dictionary) -> color_eyre::Result<Self> {
@@ -116,7 +112,6 @@ impl RelatedInfo {
     /// Create a [`RelatedInfo`] from an element of an LSP diagnostic "`user_data.lsp.relatedInformation`" section.
     ///
     /// # Errors
-    ///
     /// Returns an error if:
     /// - Required nested keys (range.start, range.end, message, line/character) are missing or wrong type.
     fn from_related_info(rel_info: &Dictionary) -> color_eyre::Result<Self> {

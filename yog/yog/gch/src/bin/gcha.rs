@@ -11,7 +11,6 @@ use ytil_git::GitStatusEntry;
 /// Entry point: interactive selection then staging of chosen entries.
 ///
 /// # Errors
-/// In case:
 /// - Initializing `color_eyre` fails.
 /// - Collecting git status or running the selection UI fails.
 /// - Opening the repository or updating the index fails.
@@ -28,10 +27,9 @@ fn main() -> color_eyre::Result<()> {
 /// Stage the provided entries (equivalent to `git add` on each path).
 ///
 /// # Arguments
-/// * `entries` - Iterator of selected [`ytil_git::GitStatusEntry`] references.
+/// - `entries` Iterator of selected [`ytil_git::GitStatusEntry`] references.
 ///
 /// # Errors
-/// In case:
 /// - Opening the repository fails.
 /// - Adding any path to the index fails.
 fn add_entries_to_index<'a, I>(entries: I) -> color_eyre::Result<()>

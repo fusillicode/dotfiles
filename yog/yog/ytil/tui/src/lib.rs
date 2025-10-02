@@ -15,7 +15,6 @@ use strum::IntoEnumIterator;
 /// Wraps [`inquire::MultiSelect`] with a slim rendering (see `minimal_render_config`) and no help message.
 ///
 /// # Errors
-/// In case:
 /// - Rendering the prompt or terminal interaction inside [`inquire`] fails.
 /// - Collecting the user selection fails for any reason reported by [`MultiSelect`].
 pub fn minimal_multi_select<T: std::fmt::Display>(opts: Vec<T>) -> Result<Option<Vec<T>>, InquireError> {
@@ -35,7 +34,6 @@ pub fn minimal_multi_select<T: std::fmt::Display>(opts: Vec<T>) -> Result<Option
 /// Wraps [`inquire::Select`] with a slim rendering (see `minimal_render_config`) and no help message.
 ///
 /// # Errors
-/// In case:
 /// - Rendering the prompt or terminal interaction inside [`inquire`] fails.
 /// - Collecting the user selection fails for any reason reported by [`Select`].
 pub fn minimal_select<T: std::fmt::Display>(opts: Vec<T>) -> Result<Option<T>, InquireError> {
@@ -55,7 +53,6 @@ pub fn minimal_select<T: std::fmt::Display>(opts: Vec<T>) -> Result<Option<T>, I
 /// Returns `Ok(Some(_))` on selection, `Ok(None)` if canceled/interrupted.
 ///
 /// # Errors
-/// In case:
 /// - Rendering the prompt or terminal interaction inside [`inquire`] fails.
 pub fn yes_no_select(title: &str) -> Result<Option<bool>, InquireError> {
     closable_prompt(
@@ -102,12 +99,11 @@ impl core::fmt::Display for YesNo {
 /// Generic over a collection of displayable, cloneable items, so callers can pass any vector of choices.
 ///
 /// # Type Parameters
-/// * `CAS` - Closure filtering `(index, &String)` CLI arguments.
-/// * `OBA` - Closure mapping an argument `&str` into a predicate over `&O`.
-/// * `OF` - Predicate produced by `OBA` used to match an item.
+/// - `CAS` Closure filtering `(index, &String)` CLI arguments.
+/// - `OBA` Closure mapping an argument `&str` into a predicate over `&O`.
+/// - `OF` Predicate produced by `OBA` used to match an item.
 ///
 /// # Errors
-/// In case:
 /// - A CLI argument matches predicate but no corresponding item is found.
 /// - The interactive selection fails (see [`minimal_select`]).
 pub fn get_item_from_cli_args_or_select<'a, CAS, O, OBA, OF>(
@@ -125,7 +121,7 @@ where
     if let Some((_, cli_arg)) = cli_args.iter().enumerate().find(|x| cli_arg_selector(x)) {
         let mut item_find = item_find_by_arg(cli_arg);
         return Ok(Some(items.iter().find(|x| item_find(*x)).cloned().ok_or_else(
-            || eyre!("missing item matches CLI arg {cli_arg} in opts {items:#?}"),
+            || eyre!("missing item matching CLI arg | cli_arg={cli_arg} items={items:#?}"),
         )?));
     }
     Ok(minimal_select(items)?)

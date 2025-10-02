@@ -49,7 +49,7 @@ impl FromStr for Editor {
         match value {
             "hx" => Ok(Self::Hx),
             "nvim" | "nv" => Ok(Self::Nvim),
-            unknown => Err(eyre!("unknown editor {unknown}")),
+            unknown => Err(eyre!("unknown editor | value={unknown}")),
         }
     }
 }
@@ -77,7 +77,7 @@ impl TryFrom<(&str, i64, &[WeztermPane])> for FileToOpen {
         let mut source_pane_absolute_cwd = panes
             .iter()
             .find(|pane| pane.pane_id == pane_id)
-            .ok_or_else(|| eyre!("missing panes with id {pane_id} in {panes:#?}"))?
+            .ok_or_else(|| eyre!("missing pane | pane_id={pane_id} panes={panes:#?}"))?
             .absolute_cwd();
 
         source_pane_absolute_cwd.push(file_to_open);
@@ -85,7 +85,7 @@ impl TryFrom<(&str, i64, &[WeztermPane])> for FileToOpen {
         Self::from_str(
             source_pane_absolute_cwd
                 .to_str()
-                .ok_or_else(|| eyre!("cannot get &str from PathBuf {source_pane_absolute_cwd:#?}"))?,
+                .ok_or_else(|| eyre!("cannot get path str | path={source_pane_absolute_cwd:#?}"))?,
         )
     }
 }
@@ -96,11 +96,11 @@ impl FromStr for FileToOpen {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut parts = s.split(':');
-        let path = parts.next().ok_or_else(|| eyre!("missing file path found in {s}"))?;
+        let path = parts.next().ok_or_else(|| eyre!("file path missing | str={s}"))?;
         let line_nbr = parts.next().map(str::parse::<i64>).transpose()?.unwrap_or_default();
         let column = parts.next().map(str::parse::<i64>).transpose()?.unwrap_or_default();
         if !Path::new(path).try_exists()? {
-            bail!("file {path} doesn't exists")
+            bail!("file missing | path={path}")
         }
 
         Ok(Self {

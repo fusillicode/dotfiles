@@ -25,15 +25,14 @@ const NVIM_LIBS_DEFAULT_PATH: &[&str] = &[".config", "nvim", "lua"];
 /// `--debug` may appear anywhere; it is removed before positional argument parsing.
 ///
 /// # Arguments
-/// * `--debug` – Use debug profile, skip clippy and copy from `target/debug`.
-/// * `bins_path` – Destination for binaries, defaulting to `$HOME/.local/bin`.
-/// * `cargo_target_path` – Cargo target root containing `debug/` & `release/`, defaulting to project root `target/`.
-/// * `nvim_libs_path` – Destination for renamed Neovim libs (e.g. `nvrim.so`), defaulting to `$HOME/.config/nvim/lua`.
+/// - `--debug` Use debug profile, skip clippy and copy from `target/debug`.
+/// - `bins_path` Destination for binaries, defaulting to `$HOME/.local/bin`.
+/// - `cargo_target_path` Cargo target root containing `debug/` & `release/`, defaulting to project root `target/`.
+/// - `nvim_libs_path` Destination for renamed Neovim libs (e.g. `nvrim.so`), defaulting to `$HOME/.config/nvim/lua`.
 ///
 /// Omit trailing path arguments to accept defaults.
 ///
 /// # Errors
-/// In case:
 /// - Resolving a required environment variable fails or yields invalid Unicode.
 /// - Formatting, linting, or building (`cargo fmt`, `cargo clippy`, `cargo build`) fails or exits non-zero.
 /// - Copying a built binary or library fails.
@@ -123,7 +122,6 @@ where
 /// [`ytil_system::atomic_cp`] and prints an "Installed" status line.
 ///
 /// # Errors
-/// In case:
 /// - [`ytil_system::atomic_cp`] fails to copy.
 /// - The final rename or write cannot be performed.
 fn cp(from: &Path, to: &Path) -> color_eyre::Result<()> {

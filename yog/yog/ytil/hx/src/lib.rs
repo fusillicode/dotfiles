@@ -28,18 +28,18 @@ impl FromStr for HxStatusLine {
         let path_left_separator_idx = elements
             .iter()
             .position(|x| x == &"`")
-            .ok_or_else(|| eyre!("missing left path separator in status line elements {elements:#?}"))?;
+            .ok_or_else(|| eyre!("missing left path separator | elements={elements:#?}"))?;
         let path_right_separator_idx = elements
             .iter()
             .rposition(|x| x == &"`")
-            .ok_or_else(|| eyre!("missing right path separator in status line elements {elements:#?}"))?;
+            .ok_or_else(|| eyre!("missing right path separator | elements={elements:#?}"))?;
 
         let path_slice_range = path_left_separator_idx..path_right_separator_idx;
         let path_slice = elements
             .get(path_slice_range.clone())
-            .ok_or_else(|| eyre!("invalid path slice indices {path_slice_range:#?}"))?;
+            .ok_or_else(|| eyre!("invalid path slice indices | range={path_slice_range:#?}"))?;
         let ["`", path] = path_slice else {
-            bail!("missing path in status line elements {elements:#?}");
+            bail!("missing path | elements={elements:#?}");
         };
 
         Ok(Self {
@@ -47,7 +47,7 @@ impl FromStr for HxStatusLine {
             position: HxCursorPosition::from_str(
                 elements
                     .last()
-                    .ok_or_else(|| eyre!("missing last element in status line elements {elements:#?}"))?,
+                    .ok_or_else(|| eyre!("missing last element | elements={elements:#?}"))?,
             )?,
         })
     }
@@ -70,7 +70,7 @@ impl FromStr for HxCursorPosition {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (line, column) = s
             .split_once(':')
-            .ok_or_else(|| eyre!("missing line column delimiter found in str '{s}'"))?;
+            .ok_or_else(|| eyre!("missing line column delimiter | input='{s}'"))?;
 
         Ok(Self {
             line: line.parse()?,

@@ -36,13 +36,13 @@ fn minify_css(css_code: &str) -> color_eyre::Result<String> {
             ..Default::default()
         },
     )
-    .map_err(|error| eyre!(format!("CSS parse error={error:?}")))?;
+    .map_err(|error| eyre!(format!("css parse failed | error={error:#?}")))?;
 
     Ok(sheet
         .to_css(PrinterOptions {
             minify: true,
             ..Default::default()
         })
-        .map_err(|error| eyre!(format!("CSS print error={error:?}")))?
+        .map_err(|error| eyre!(format!("css print failed | error={error:#?}")))?
         .code)
 }
