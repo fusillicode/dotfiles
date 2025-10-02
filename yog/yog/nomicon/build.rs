@@ -15,13 +15,13 @@ fn main() -> color_eyre::Result<()> {
     let css_raw_path = manifest_dir.join(ASSETS_DIR).join("style.css");
     let css_raw = std::fs::read_to_string(&css_raw_path)?;
 
-    let css_minified_path = manifest_dir.join(ASSETS_DIR).join("style.min.css");
-
     let css_minified = if std::env::var_os("NO_MINIFY").is_some() {
         css_raw
     } else {
         minify_css(&css_raw)?
     };
+
+    let css_minified_path = manifest_dir.join(ASSETS_DIR).join("style.min.css");
 
     std::fs::write(&css_minified_path, css_minified)?;
     Ok(())
