@@ -168,6 +168,43 @@ pub fn restore(paths: &[&str], branch: Option<&str>) -> color_eyre::Result<()> {
     Ok(())
 }
 
+/// Adds (stages) paths or pathspec patterns to the index of the supplied [`Repository`].
+///
+/// Caller supplies an already–opened [`Repository`]; this function does NOT perform
+/// repository discovery. Each entry in `paths` is treated as a pathspec and passed
+/// to [`git2::Index::add_all`], mirroring `git add <pathspec...>` behaviour.
+///
+/// Supported pathspec forms include:
+/// - Individual files (e.g. `"src/main.rs"`)
+/// - Directories (recursive) (e.g. `"src/"`)
+/// - Glob / wildcard patterns understood by libgit2 (e.g. `"*.rs"`, `"docs/**/*.md"`)
+/// - Mixed explicit + pattern arguments
+///
+/// Git ignore rules are honoured (same as plain `git add`). Future enhancements could
+/// expose additional flags (e.g. [`git2::IndexAddOption::FORCE`]) to override ignores.
+///
+/// Idempotent: re‑adding already staged entries is a no‑op. Deletions are recorded when
+/// their parent pathspec is provided (matching native Git semantics).
+///
+/// # Arguments
+/// - `repo`: Mutable reference to an open [`Repository`] whose index will be updated.
+/// - `paths`: Slice of pathspecs relative to the repo root (empty slice = no‑op).
+///
+/// # Errors
+/// Returns an error if:
+/// - Reading (loading) the index fails.
+/// - Applying any pathspec fails (I/O, permissions, invalid pattern).
+/// - Writing the updated index to disk fails.
+pub fn add_to_index(repo: &mut Repository, paths: &[&str]) -> color_eyre::Result<()> {
+    if paths.is_empty() {
+        return Ok(());
+    }
+    let mut index = repo.index()?;
+    index.add_all(paths, git2::IndexAddOption::DEFAULT, None)?;
+    index.write()?;
+    Ok(())
+}
+
 /// Returns all local and remote [`Branch`]es sorted by last committer date
 /// (most recent first).
 ///
