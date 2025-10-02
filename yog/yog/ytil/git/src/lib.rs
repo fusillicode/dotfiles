@@ -3,7 +3,7 @@
 //! Wrap common operations (repo discovery, root resolution, status enumeration, branch listing,
 //! targeted fetch, branch switching, restore) in focused functions returning structured data
 //! (`GitStatusEntry`, `Branch`). Some semantics (previous branch with `switch -`, restore) defer to
-//! the porcelain CLI to avoid re‑implementing complex behavior.
+//! the porcelain CLI to avoid re‑implementing complex behaviour.
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -14,6 +14,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
+use git2::IntoCString;
 use git2::Repository;
 use git2::Status;
 use git2::StatusEntry;
@@ -165,6 +166,44 @@ pub fn restore(paths: &[&str], branch: Option<&str>) -> color_eyre::Result<()> {
     }
     args.extend_from_slice(paths);
     Command::new("git").args(args).exec()?;
+    Ok(())
+}
+
+/// Adds (stages) paths or pathspec patterns to the index of the supplied [`Repository`].
+///
+/// Caller supplies an already–opened [`Repository`]; this function does NOT perform
+/// repository discovery. Each entry in `paths` is treated as a pathspec and passed
+/// to [`git2::Index::add_all`], mirroring `git add <pathspec...>` behaviour.
+///
+/// Supported pathspec forms include:
+/// - Individual files (e.g. `"src/main.rs"`)
+/// - Directories (recursive) (e.g. `"src/"`)
+/// - Glob / wildcard patterns understood by libgit2 (e.g. `"*.rs"`, `"docs/**/*.md"`)
+/// - Mixed explicit + pattern arguments
+///
+/// Git ignore rules are honoured (same as plain `git add`). Future enhancements could
+/// expose additional flags (e.g. [`git2::IndexAddOption::FORCE`]) to override ignores.
+///
+/// Idempotent: re‑adding already staged entries is a no‑op. Deletions are recorded when
+/// their parent pathspec is provided (matching native Git semantics).
+///
+/// # Arguments
+/// - `repo`: Mutable reference to an open [`Repository`] whose index will be updated.
+/// - `paths`: Slice of pathspecs relative to the repo root (empty slice = no‑op).
+///
+/// # Errors
+/// Returns an error if:
+/// - Reading (loading) the index fails.
+/// - Applying any pathspec fails (I/O, permissions, invalid pattern).
+/// - Writing the updated index to disk fails.
+pub fn add_to_index<T, I>(repo: &mut Repository, paths: I) -> color_eyre::Result<()>
+where
+    T: IntoCString,
+    I: IntoIterator<Item = T>,
+{
+    let mut index = repo.index()?;
+    index.add_all(paths, git2::IndexAddOption::DEFAULT, None)?;
+    index.write()?;
     Ok(())
 }
 

@@ -55,6 +55,7 @@ charwise
 chmod
 clippy
 cmd
+colored
 colorscheme
 cooldown
 dataflow
@@ -71,6 +72,7 @@ façade
 file path
 fkr
 franquicia
+gitignore
 grug
 hx
 i64
@@ -79,6 +81,7 @@ infos
 k8s
 ko
 kos
+libgit2
 libs
 linewise
 mut
@@ -86,6 +89,8 @@ newtype
 nvim
 ok
 oks
+pathspec
+pathspecs
 pcw
 pgcli
 pgpass
