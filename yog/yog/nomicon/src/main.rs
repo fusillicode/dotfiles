@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use askama::Template;
 use chrono::Utc;
 use color_eyre::eyre::bail;
+use color_eyre::eyre::eyre;
 
 use crate::templates::components::footer::Footer;
 use crate::templates::pages::index::CrateMeta;
@@ -70,13 +71,21 @@ fn main() -> color_eyre::eyre::Result<()> {
             continue;
         }
 
-        let name = get_toml_value(&content, "name")?;
-        let description = get_toml_value(&content, "description")?;
+        let names = get_toml_values(&content, "name");
+        let desc = get_toml_values(&content, "description")
+            .first()
+            .cloned()
+            .ok_or_else(|| eyre!("foo"))?;
 
         // Only include crates that actually have a generated index (documentation produced).
-        let index_html = doc_dir.join(&name).join("index.html");
-        if index_html.is_file() {
-            crates.push(CrateMeta { name, description });
+        for name in names {
+            let index_html = doc_dir.join(&name).join("index.html");
+            if index_html.is_file() {
+                crates.push(CrateMeta {
+                    name,
+                    description: desc.clone(),
+                });
+            }
         }
     }
     crates.sort_by(|a, b| a.name.cmp(&b.name));
@@ -123,29 +132,33 @@ fn copy_assets(doc_dir: &Path) -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Extract the value of the supplied `key` from the supplied manifest text `content`.
+/// Collect all raw values for a given `key` from TOML manifest text.
+///
+/// Performs a simple line-by-line scan (no full TOML parsing).
+/// Multiple occurrences of the same key are all returned in file order. If the
+/// key does not appear, an empty vector is returned.
+///
+/// This is intentionally naive: it does not handle multi-line values, arrays,
+/// tables, or stripping inline comments. Its purpose here is to extract simple
+/// scalar values (`name = "foo"`, `description = "..."`).
 ///
 /// # Arguments
-/// * `content` - Toml file content.
-/// * `key` - Key name to search (e.g. "name").
+/// * `content` - Entire TOML file contents.
+/// * `key` - Exact key to match at a line start (after trimming leading space).
 ///
 /// # Returns
-/// Value with surrounding quotes removed if present.
-///
-/// # Errors
-/// In case:
-/// - The matching line is malformed (missing '=' or value).
-/// - The key is not present.
-fn get_toml_value(content: &str, key: &str) -> color_eyre::Result<String> {
+/// A vector of raw value strings with surrounding double quotes removed when
+/// they appear directly at both ends; may be empty.
+fn get_toml_values(content: &str, key: &str) -> Vec<String> {
+    let mut res = vec![];
     for line in content.lines() {
         let trimmed_line = line.trim_start();
         if let Some(rest) = trimmed_line.strip_prefix(key) {
             let rest = rest.trim_start();
             if let Some(after_eq) = rest.strip_prefix('=') {
-                return Ok(after_eq.trim().trim_matches('"').to_string());
+                res.push(after_eq.trim().trim_matches('"').to_string());
             }
-            bail!("malformed key line for '{key}': {line}");
         }
     }
-    bail!("required key '{key}' missing in manifest");
+    res
 }
