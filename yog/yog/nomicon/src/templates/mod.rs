@@ -1,3 +1,3 @@
 pub mod components;
-pub mod pages;
 pub mod filters;
+pub mod pages;
