@@ -48,6 +48,7 @@ asdf
 augroups
 autocommand
 autocommands
+backticked
 canonicalization
 characterwise
 chargeback
