@@ -12,7 +12,7 @@ use chrono::Utc;
 /// Produces strings like `2025-10-01T14:37:22Z`.
 ///
 /// # Arguments
-/// * `dt` - UTC timestamp to format.
+/// - `dt` UTC timestamp to format.
 ///
 /// # Returns
 /// RFC3339 / ISO‑8601 string with `Z` (UTC) designator, no fractional seconds.

@@ -29,20 +29,20 @@ pub fn get_args() -> Vec<String> {
 /// Awaits a `JoinHandle` and unwraps the inner `Result`.
 ///
 /// # Errors
-/// In case:
 /// - The task panicked.
 /// - The task returned an error.
 pub fn join<T>(join_handle: JoinHandle<color_eyre::Result<T>>) -> Result<T, eyre::Error> {
-    join_handle.join().map_err(|error| eyre!("join error {error:#?}"))?
+    join_handle
+        .join()
+        .map_err(|error| eyre!("join error | error={error:#?}"))?
 }
 
 /// Builds a path starting from the home directory by appending the given parts, returning a [`PathBuf`].
 ///
 /// # Errors
-/// In case:
 /// - The home directory cannot be determined.
 pub fn build_home_path<P: AsRef<Path>>(parts: &[P]) -> color_eyre::Result<PathBuf> {
-    let mut home_path = std::env::home_dir().ok_or_eyre("missing home dir")?;
+    let mut home_path = std::env::home_dir().ok_or_eyre("missing home dir | env=HOME")?;
     for part in parts {
         home_path.push(part);
     }
@@ -52,7 +52,6 @@ pub fn build_home_path<P: AsRef<Path>>(parts: &[P]) -> color_eyre::Result<PathBu
 /// Copies the given content to the system clipboard using the `pbcopy` command.
 ///
 /// # Errors
-/// In case:
 /// - The clipboard program cannot be spawned.
 /// - The clipboard program exits with failure.
 pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
@@ -62,10 +61,10 @@ pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
         pbcopy_child
             .stdin
             .as_mut()
-            .ok_or_else(|| eyre!("cannot get child stdin as mut"))?,
+            .ok_or_else(|| eyre!("cannot get child stdin | cmd=pbcopy"))?,
     )?;
     if !pbcopy_child.wait()?.success() {
-        bail!("error copy content to system clipboard, content {content:#?}");
+        bail!("copy to system clipboard failed | content={content:#?}");
     }
     Ok(())
 }
@@ -73,7 +72,6 @@ pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
 /// Sets executable permissions (755) on the specified file path.
 ///
 /// # Errors
-/// In case:
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - File metadata cannot be read.
 /// - Permissions cannot be updated.
@@ -87,7 +85,6 @@ pub fn chmod_x<P: AsRef<Path>>(path: P) -> color_eyre::Result<()> {
 /// Sets executable permissions on all files in the specified directory.
 ///
 /// # Errors
-/// In case:
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - A chmod operation fails.
 /// - Directory traversal fails.
@@ -104,7 +101,6 @@ pub fn chmod_x_files_in_dir<P: AsRef<Path>>(dir: P) -> color_eyre::Result<()> {
 /// Creates a symbolic link from the target to the link path, removing any existing file at the link location.
 ///
 /// # Errors
-/// In case:
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - Creating the symlink fails.
 /// - The existing link cannot be removed.
@@ -119,7 +115,6 @@ pub fn ln_sf<P: AsRef<Path>>(target: P, link: P) -> color_eyre::Result<()> {
 /// Creates symbolic links for all files in the target directory to the link directory.
 ///
 /// # Errors
-/// In case:
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - Creating an individual symlink fails.
 /// - Traversing `target_dir` fails.
@@ -129,7 +124,7 @@ pub fn ln_sf_files_in_dir<P: AsRef<std::path::Path>>(target_dir: P, link_dir: P)
         if target.is_file() {
             let target_name = target
                 .file_name()
-                .ok_or_else(|| eyre!("target {target:?} without filename"))?;
+                .ok_or_else(|| eyre!("missing filename for target | target={target:?}"))?;
             let link = link_dir.as_ref().join(target_name);
             ln_sf(target, link)?;
         }
@@ -140,7 +135,6 @@ pub fn ln_sf_files_in_dir<P: AsRef<std::path::Path>>(target_dir: P, link_dir: P)
 /// Removes dead symbolic links from the specified directory.
 ///
 /// # Errors
-/// In case:
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - Directory traversal fails.
 /// - Removing a dead symlink fails.
@@ -161,7 +155,6 @@ pub fn rm_dead_symlinks(dir: &str) -> color_eyre::Result<()> {
 /// Removes the file at the specified path, ignoring if the file does not exist.
 ///
 /// # Errors
-/// In case:
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - An unexpected I/O failure (other than [`std::io::ErrorKind::NotFound`]) occurs.
 pub fn rm_f<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
@@ -180,33 +173,38 @@ pub fn rm_f<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
 /// minimizes the window where readers could observe a partially written file.
 ///
 /// # Errors
-/// In case:
 /// - A filesystem operation (open/read/write/remove) fails.
-/// - `from` does not exist.
+/// - `from` Does not exist.
 /// - The atomic rename fails.
 /// - The destination's parent directory or file name cannot be resolved.
 /// - The temporary copy fails.
 pub fn atomic_cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
     if !from.exists() {
-        return Err(eyre!("from {} does not exists", from.display()));
+        return Err(eyre!("source file missing | path={}", from.display()));
     }
 
     let tmp_name = format!(
         "{}.tmp-{}-{}",
         to.file_name()
-            .ok_or_else(|| eyre!("cannot get file name of {}", to.display()))?
+            .ok_or_else(|| eyre!("cannot get file name | path={}", to.display()))?
             .to_string_lossy(),
         std::process::id(),
         Utc::now().to_rfc3339()
     );
     let tmp_path = to
         .parent()
-        .ok_or_else(|| eyre!("cannot get parent of {}", to.display()))?
+        .ok_or_else(|| eyre!("missing parent directory | path={}", to.display()))?
         .join(tmp_name);
 
-    std::fs::copy(from, &tmp_path)
-        .with_context(|| format!("copying {} to temp {}", from.display(), tmp_path.display()))?;
-    std::fs::rename(&tmp_path, to).with_context(|| format!("renaming {} to {}", tmp_path.display(), to.display()))?;
+    std::fs::copy(from, &tmp_path).with_context(|| {
+        format!(
+            "copying file to temp failed | from={} temp={}",
+            from.display(),
+            tmp_path.display()
+        )
+    })?;
+    std::fs::rename(&tmp_path, to)
+        .with_context(|| format!("rename failed | from={} to={}", tmp_path.display(), to.display()))?;
 
     Ok(())
 }
@@ -219,7 +217,6 @@ pub fn atomic_cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
 /// Absolute path to workspace root containing top-level `Cargo.toml`.
 ///
 /// # Errors
-/// In case:
 /// - Directory traversal fails (unexpected layout).
 pub fn get_workspace_root() -> color_eyre::Result<PathBuf> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -228,7 +225,7 @@ pub fn get_workspace_root() -> color_eyre::Result<PathBuf> {
         .and_then(|p| p.parent())
         .and_then(|p| p.parent())
         .ok_or_eyre(format!(
-            "cannot get workspace root from manifest_dir={}",
+            "cannot get workspace root | manifest_dir={}",
             manifest_dir.display()
         ))?
         .to_path_buf())
@@ -240,15 +237,14 @@ pub fn get_workspace_root() -> color_eyre::Result<PathBuf> {
 /// `skip_dir_fn` returns true, and collecting file paths for which `matching_file_fn` returns true.
 ///
 /// # Arguments
-/// * `dir` - Root directory to start traversal.
-/// * `matching_file_fn` - Predicate applied to each file entry; include path when it returns true.
-/// * `skip_dir_fn` - Predicate applied to each directory entry; skip descent when it returns true.
+/// - `dir` Root directory to start traversal.
+/// - `matching_file_fn` Predicate applied to each file entry; include path when it returns true.
+/// - `skip_dir_fn` Predicate applied to each directory entry; skip descent when it returns true.
 ///
 /// # Returns
 /// Vector of absolute file paths (discovery order unspecified; currently breadth-first).
 ///
 /// # Errors
-/// In case:
 /// - A directory cannot be read.
 /// - File type metadata for an entry cannot be determined.
 /// - Any underlying filesystem I/O error occurs during traversal.

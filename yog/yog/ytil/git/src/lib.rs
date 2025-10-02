@@ -27,7 +27,6 @@ use ytil_cmd::CmdExt as _;
 /// [`git2::Repository::discover`].
 ///
 /// # Errors
-/// In case:
 /// - The repository cannot be discovered starting from `path` (i.e. `path` is not inside a Git repository).
 pub fn get_repo(path: &Path) -> color_eyre::Result<Repository> {
     Ok(Repository::discover(path)?)
@@ -48,7 +47,6 @@ pub fn get_repo_root(repo: &Repository) -> PathBuf {
 /// Returns the name of the current branch (e.g. `main`).
 ///
 /// # Errors
-/// In case:
 /// - The repository cannot be discovered.
 /// - `HEAD` is detached.
 /// - The branch name is not valid UTF-8.
@@ -57,13 +55,13 @@ pub fn get_current_branch() -> color_eyre::Result<String> {
     let repo = get_repo(repo_path)?;
 
     if repo.head_detached()? {
-        bail!("detached head for git {}", repo_path.display())
+        bail!("detached head | repo_path={}", repo_path.display())
     }
 
     repo.head()?
         .shorthand()
         .map(str::to_string)
-        .ok_or_else(|| eyre!("shorthand is not valid UTF-8"))
+        .ok_or_else(|| eyre!("branch shorthand invalid utf-8 | repo_path={}", repo_path.display()))
 }
 
 /// Creates a new local branch pointing to the current `HEAD` commit.
@@ -71,9 +69,8 @@ pub fn get_current_branch() -> color_eyre::Result<String> {
 /// Does not switch to the new branch.
 ///
 /// # Errors
-/// In case:
 /// - The repository cannot be discovered.
-/// - `HEAD` cannot be resolved to a commit.
+/// - `HEAD` Cannot be resolved to a commit.
 /// - The branch already exists.
 pub fn create_branch(branch_name: &str) -> color_eyre::Result<()> {
     let repo = get_repo(Path::new("."))?;
@@ -91,7 +88,6 @@ pub fn create_branch(branch_name: &str) -> color_eyre::Result<()> {
 /// modeled directly in [`git2`]).
 ///
 /// # Errors
-/// In case:
 /// - The repository cannot be discovered.
 /// - Name resolution fails.
 /// - Checkout fails.
@@ -115,7 +111,7 @@ pub fn switch_branch(branch_name: &str) -> color_eyre::Result<()> {
         Some(reference) => repo.set_head(
             reference
                 .name()
-                .ok_or_else(|| eyre!("reference name is invalid UTF-8"))?,
+                .ok_or_else(|| eyre!("reference name invalid utf-8 | input={branch_name}"))?,
         )?,
         None => repo.set_head_detached(object.id())?,
     }
@@ -131,7 +127,6 @@ pub fn switch_branch(branch_name: &str) -> color_eyre::Result<()> {
 /// [`git2`].
 ///
 /// # Errors
-/// In case:
 /// - The repository cannot be discovered.
 /// - Reading statuses fails.
 /// - A status entry is missing a path (required to build a [`GitStatusEntry`]).
@@ -157,7 +152,6 @@ pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
 /// to avoid accidental complexity – see <https://stackoverflow.com/a/73759110>).
 ///
 /// # Errors
-/// In case:
 /// - Invoking the `git restore` command fails (process spawn or non-zero exit status).
 pub fn restore(paths: &[&str], branch: Option<&str>) -> color_eyre::Result<()> {
     let mut args = vec!["restore"];
@@ -188,8 +182,8 @@ pub fn restore(paths: &[&str], branch: Option<&str>) -> color_eyre::Result<()> {
 /// their parent pathspec is provided (matching native Git semantics).
 ///
 /// # Arguments
-/// - `repo`: Mutable reference to an open [`Repository`] whose index will be updated.
-/// - `paths`: Slice of pathspecs relative to the repo root (empty slice = no‑op).
+/// - `repo` Mutable reference to an open [`Repository`] whose index will be updated.
+/// - `paths` Slice of pathspecs relative to the repo root (empty slice = no‑op).
 ///
 /// # Errors
 /// Returns an error if:
@@ -211,7 +205,6 @@ where
 /// (most recent first).
 ///
 /// # Errors
-/// In case:
 /// - The repository cannot be discovered.
 /// - Enumerating branches fails.
 /// - A branch name is not valid UTF-8.
@@ -226,10 +219,10 @@ pub fn get_branches() -> color_eyre::Result<Vec<Branch>> {
 
         let branch_name = raw_branch
             .name()?
-            .ok_or_else(|| eyre!("branch name is not valid UTF-8"))?;
+            .ok_or_else(|| eyre!("branch name invalid utf-8 | input=raw_branch.name()"))?;
         let commit_time = raw_branch.get().peel_to_commit()?.committer().when();
         let committer_date_time = DateTime::from_timestamp(commit_time.seconds(), 0)
-            .ok_or_else(|| eyre!("cannot create DateTime<Utc> from seconds {}", commit_time.seconds()))?;
+            .ok_or_else(|| eyre!("invalid commit timestamp | seconds={}", commit_time.seconds()))?;
 
         let branch = match branch_type {
             git2::BranchType::Local => Branch::Local {
@@ -281,7 +274,6 @@ pub fn remove_redundant_remotes(branches: &mut Vec<Branch>) {
 /// (e.g. derived from a GitHub PR URL).
 ///
 /// # Errors
-/// In case:
 /// - The repository cannot be discovered.
 /// - The `origin` remote cannot be found.
 /// - Performing `git fetch` for the requested branches fails.
@@ -377,7 +369,7 @@ impl TryFrom<(PathBuf, &StatusEntry<'_>)> for GitStatusEntry {
         let path = value
             .path()
             .map(PathBuf::from)
-            .ok_or_else(|| eyre!("cannot build GitStatusEntry, missing path in StatusEntry"))?;
+            .ok_or_else(|| eyre!("missing status path | context=StatusEntry"))?;
 
         Ok(Self {
             path,

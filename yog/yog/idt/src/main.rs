@@ -42,20 +42,17 @@ mod installers;
 /// Install development tools including language servers and utilities.
 ///
 /// # Usage
-///
 /// ```bash
-/// idt <dev_tools_dir> <bin_dir>             # install ALL supported tools
+/// idt <dev_tools_dir> <bin_dir> # install ALL supported tools
 /// idt <dev_tools_dir> <bin_dir> deno ruff_lsp # install only listed tools
 /// ```
 ///
 /// # Arguments
-///
-/// * `dev_tools_dir` - Directory for tool installation (created if missing)
-/// * `bin_dir` - Directory for binary symlinks (created if missing)
-/// * `tool_names` - Optional specific tools to install (defaults to all)
+/// - `dev_tools_dir` Directory for tool installation (created if missing).
+/// - `bin_dir` Directory for binary symlinks (created if missing).
+/// - `tool_names` Optional specific tools to install (defaults to all).
 ///
 /// # Errors
-/// In case:
 /// - A required argument (`dev_tools_dir` or `bin_dir`) is missing.
 /// - Creating a required directory fails.
 /// - Authenticating with the GitHub CLI fails.
@@ -75,11 +72,11 @@ fn main() -> color_eyre::Result<()> {
 
     let dev_tools_dir = args
         .first()
-        .ok_or_else(|| eyre!("missing dev_tools_dir arg from {args:#?}"))?
+        .ok_or_else(|| eyre!("missing dev_tools_dir arg | args={args:#?}"))?
         .trim_end_matches('/');
     let bin_dir = args
         .get(1)
-        .ok_or_else(|| eyre!("missing bin_dir arg from {args:#?}"))?
+        .ok_or_else(|| eyre!("missing bin_dir arg | args={args:#?}"))?
         .trim_end_matches('/');
     let supplied_bin_names: Vec<&str> = args.iter().skip(2).map(AsRef::as_ref).collect();
 
@@ -218,7 +215,7 @@ fn main() -> color_eyre::Result<()> {
                     eprintln!(
                         "{} installer thread panicked, {}",
                         bin_name.bold().red(),
-                        format!("error {error:#?}").red().bold()
+                        format!("error={error:#?}").red().bold()
                     );
                     acc.push((bin_name, error));
                 }
@@ -238,7 +235,7 @@ fn main() -> color_eyre::Result<()> {
     if errors_count != 0 {
         // This is a general report about the installation process.
         // The single installation errors are reported directly in each [Installer].
-        bail!("{errors_count} bins failed to install, namely: {bin_names:#?}")
+        bail!("tool installations failed | errors_count={errors_count} bin_names={bin_names:#?}")
     }
 
     Ok(())

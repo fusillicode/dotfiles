@@ -34,7 +34,6 @@ pub fn dict() -> Dictionary {
 ///   [`crate::oxi_ext::api::notify_error`]).
 ///
 /// # Notes
-///
 /// Blockwise selections are treated as a contiguous span (not a rectangle).
 pub fn transform_selection(_: ()) {
     let Some(selection) = crate::oxi_ext::visual_selection::get(()) else {
@@ -43,7 +42,7 @@ pub fn transform_selection(_: ()) {
 
     let options: Vec<_> = Case::all_cases().iter().copied().map(CaseWrap).collect();
     let Ok(selected_option) = crate::oxi_ext::api::inputlist("Select option:", &options).inspect_err(|error| {
-        crate::oxi_ext::api::notify_error(&format!("cannot get user input, error {error:#?}"));
+        crate::oxi_ext::api::notify_error(&format!("cannot get user input | error={error:#?}"));
     }) else {
         return;
     };
@@ -64,7 +63,7 @@ pub fn transform_selection(_: ()) {
         transformed_lines,
     ) {
         crate::oxi_ext::api::notify_error(&format!(
-            "cannot set lines of buffer between {:#?} and {:#?}, error {error:#?}",
+            "cannot set lines of buffer | start={:#?} end={:#?} error={error:#?}",
             selection.start(),
             selection.end()
         ));

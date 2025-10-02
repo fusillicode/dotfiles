@@ -20,18 +20,15 @@ mod vault;
 /// After updating credentials, interactively prompts for confirmation before connecting via pgcli.
 ///
 /// # Usage
-///
 /// ```bash
-/// vpg               # select alias interactively
-/// vpg analytics     # update creds for alias 'analytics'
+/// vpg # select alias interactively
+/// vpg analytics # update creds for alias 'analytics'
 /// ```
 ///
 /// # Arguments
-///
-/// * `alias` - Database alias (optional, interactive selection if not provided)
+/// - `alias` Database alias (optional, interactive selection if not provided).
 ///
 /// # Errors
-/// In case:
 /// - Executing one of the external commands (pgcli, vault) fails or returns a non-zero exit status.
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - JSON serialization or deserialization fails.
@@ -114,11 +111,9 @@ fn main() -> color_eyre::Result<()> {
 /// deserializes the JSON standard output into a [`VaultReadOutput`].
 ///
 /// # Arguments
-///
-/// * `vault_path` - Path of the secret to read from Vault.
+/// - `vault_path` Path of the secret to read from Vault.
 ///
 /// # Errors
-/// In case:
 /// - Launching or running the [`vault`] process fails (I/O error from [`Command`]).
 /// - The command standard output cannot be deserialized into [`VaultReadOutput`] via [`serde_json`].
 /// - The standard output is not valid UTF-8 when constructing the contextual error message.
@@ -130,7 +125,7 @@ fn exec_vault_read_cmd(vault_path: &str) -> color_eyre::Result<VaultReadOutput> 
 
     serde_json::from_slice(cmd_stdout).with_context(|| {
         str::from_utf8(cmd_stdout).map_or_else(
-            |error| format!("cmd {cmd:#?} stdout is invalid UTF-8, error {error:?}"),
+            |error| format!("cmd stdout invalid utf-8 | cmd={cmd:#?} error={error:?}"),
             |str_stdout| format!("cannot build VaultReadOutput from vault cmd {cmd:#?} stdout {str_stdout:?}"),
         )
     })

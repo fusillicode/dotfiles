@@ -29,7 +29,6 @@ impl<'a> PgpassFile<'a> {
     /// Non‑comment / non‑metadata lines are ignored except when part of metadata + connection pair.
     ///
     /// # Errors
-    ///
     /// Returns an error if:
     /// - A metadata line is not followed by a valid connection line.
     /// - A connection line cannot be parsed into [`ConnectionParams`].
@@ -62,9 +61,7 @@ impl<'a> PgpassFile<'a> {
 
                     continue;
                 }
-                bail!(
-                    "missing expected conn line after metadata line {metadata:#?} obtained from idx_line {idx_line:#?}"
-                )
+                bail!("missing pgpass connection line after metadata | metadata={metadata:#?} idx_line={idx_line:#?}")
             }
         }
 
@@ -137,7 +134,7 @@ impl TryFrom<(usize, &str)> for ConnectionParams {
 
     fn try_from(idx_line @ (idx, line): (usize, &str)) -> Result<Self, Self::Error> {
         if let [host, port, db, user, pwd] = line.split(':').collect::<Vec<_>>().as_slice() {
-            let port = port.parse().context(format!("unexpected port value {port}"))?;
+            let port = port.parse().context(format!("unexpected port | port={port}"))?;
             return Ok(Self {
                 idx,
                 host: (*host).to_string(),
@@ -147,7 +144,7 @@ impl TryFrom<(usize, &str)> for ConnectionParams {
                 pwd: (*pwd).to_string(),
             });
         }
-        bail!("cannot build CredsLine from idx_line {idx_line:#?}")
+        bail!("malformed pgpass connection line | idx_line={idx_line:#?}")
     }
 }
 
@@ -160,9 +157,9 @@ impl core::fmt::Display for ConnectionParams {
 /// Saves updated `PostgreSQL` `.pgpass` to a temporary file, replaces the original, and sets permissions.
 ///
 /// # Arguments
-/// * `pgpass_idx_lines` - Original file lines with their indices (to identify line needing update).
-/// * `updated_conn_params` - New connection parameters (must implement `ToString`).
-/// * `pgpass_path` - Path to the original `.pgpass` file.
+/// - `pgpass_idx_lines` Original file lines with their indices (to identify line needing update).
+/// - `updated_conn_params` New connection parameters (must implement `ToString`).
+/// - `pgpass_path` Path to the original `.pgpass` file.
 ///
 /// # Workflow
 /// 1. Creates temporary file `.pgpass.tmp` in same directory.
@@ -171,7 +168,6 @@ impl core::fmt::Display for ConnectionParams {
 /// 4. Sets strict permissions (600) to match `.pgpass` security requirements.
 ///
 /// # Errors
-/// In case:
 /// - A filesystem operation (open/read/write/remove) fails.
 pub fn save_new_pgpass_file(
     pgpass_idx_lines: Vec<(usize, &str)>,
@@ -207,6 +203,7 @@ mod tests {
 
     #[test]
     fn creds_try_from_returns_the_expected_creds() {
+        assert2::let_assert!(Ok(actual) = ConnectionParams::try_from((42, "host:5432:db:user:pwd")));
         assert_eq!(
             ConnectionParams {
                 idx: 42,
@@ -216,25 +213,23 @@ mod tests {
                 user: "user".into(),
                 pwd: "pwd".into(),
             },
-            ConnectionParams::try_from((42, "host:5432:db:user:pwd")).unwrap()
+            actual
         );
     }
 
     #[test]
     fn creds_try_from_returns_an_error_if_port_is_not_a_number() {
-        let res = format!("{:#?}", ConnectionParams::try_from((42, "host:foo:db:user:pwd")));
-        assert!(
-            res.contains("Err(\n    Error {\n        msg: \"unexpected port value foo\",\n        source: ParseIntError {\n            kind: InvalidDigit,\n        },\n    },\n)"),
-            "unexpected {res}"
-        );
+        assert2::let_assert!(Err(error) = ConnectionParams::try_from((42, "host:foo:db:user:pwd")));
+        assert_eq!("unexpected port | port=foo", format!("{error}"));
     }
 
     #[test]
     fn creds_try_from_returns_an_error_if_str_is_malformed() {
-        let res = format!("{:#?}", ConnectionParams::try_from((42, "host:5432:db:user")));
-        assert!(
-            res.contains("Err(\n    \"cannot build CredsLine from idx_line (\\n    42,\\n    \\\"host:5432:db:user\\\",\\n)\",\n)"),
-            "unexpected {res}"
+        assert2::let_assert!(Err(error) = ConnectionParams::try_from((42, "host:5432:db:user")));
+        assert_eq!(
+            "malformed pgpass connection line | idx_line=(\n    42,\n    \"host:5432:db:user\",\n)",
+            format!("{error}"),
+            "unexpected {error}"
         );
     }
 

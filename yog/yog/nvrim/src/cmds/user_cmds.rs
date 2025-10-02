@@ -30,7 +30,7 @@ where
 {
     if let Err(error) = nvim_oxi::api::create_user_command(name, command, opts) {
         crate::oxi_ext::api::notify_error(&format!(
-            "cannot create user command {name} with opts {opts:#?}, error {error:#?}"
+            "cannot create user command | name={name} opts={opts:#?} error={error:#?}"
         ));
     }
 }

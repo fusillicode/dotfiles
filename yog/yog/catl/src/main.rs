@@ -9,17 +9,14 @@ use color_eyre::eyre::eyre;
 /// Uses `cat` for files/symlinks, `ls -llAtrh` for directories.
 ///
 /// # Usage
-///
 /// ```bash
-/// catl <path>     # file -> cat; directory -> coloured long listing
+/// catl <path> # file -> cat; directory -> coloured long listing
 /// ```
 ///
 /// # Arguments
-///
 /// - `<path>` Path to file / directory / symlink to display.
 ///
 /// # Errors
-/// In case:
 /// - Executing one of the external commands (cat, ls) fails or returns a non-zero exit status.
 /// - A filesystem operation (open/read/write/remove) fails.
 fn main() -> color_eyre::Result<()> {
@@ -27,7 +24,7 @@ fn main() -> color_eyre::Result<()> {
 
     let args = ytil_system::get_args();
 
-    let path = args.first().ok_or_else(|| eyre!("missing path arg from {args:#?}"))?;
+    let path = args.first().ok_or_else(|| eyre!("missing path arg | args={args:#?}"))?;
 
     let metadata = std::fs::metadata(path)?;
 

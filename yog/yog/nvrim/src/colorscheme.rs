@@ -88,7 +88,7 @@ fn get_opts() -> GetHighlightOptsBuilder {
 fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &SetHighlightOpts) {
     if let Err(error) = nvim_oxi::api::set_hl(ns_id, hl_name, hl_opts) {
         crate::oxi_ext::api::notify_error(&format!(
-            "cannot set hl opts {hl_opts:#?} to {hl_name} on namespace {ns_id}, error {error:#?}"
+            "cannot set highlight opts | hl_opts={hl_opts:#?} hl_name={hl_name} namespace={ns_id} error={error:#?}"
         ));
     }
 }
@@ -100,19 +100,20 @@ fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &SetHighlightOpts) {
 /// - Returns an error in case of multiple infos ([`GetHlInfos::Map`]) for the given `hl_opts` .
 ///
 /// # Errors
-/// In case:
 /// - Calling `nvim_get_hl` fails.
 /// - Multiple highlight groups are returned instead of a single one.
 fn get_hl(ns_id: u32, hl_opts: &GetHighlightOpts) -> color_eyre::Result<HighlightInfos> {
     nvim_oxi::api::get_hl(ns_id, hl_opts)
         .inspect_err(|error| {
-            crate::oxi_ext::api::notify_error(&format!("cannot get HighlightInfos by {hl_opts:#?}, error {error:#?}"));
+            crate::oxi_ext::api::notify_error(&format!(
+                "cannot get highlight infos | hl_opts={hl_opts:#?} error={error:#?}"
+            ));
         })
         .map_err(From::from)
         .and_then(|hl| match hl {
             GetHlInfos::Single(highlight_infos) => Ok(highlight_infos),
             GetHlInfos::Map(x) => Err(eyre!(
-                "unexpected multiple HighlightInfos {:#?} for {hl_opts:#?}",
+                "multiple highlight infos returned | hl_infos={:#?} hl_opts={hl_opts:#?}",
                 x.collect::<Vec<_>>()
             )),
         })
@@ -123,7 +124,6 @@ fn get_hl(ns_id: u32, hl_opts: &GetHighlightOpts) -> color_eyre::Result<Highligh
 /// Returns a [`color_eyre::Result`]. Errors if `blend` (`u32`) cannot convert to `u8` and notifies it to Neovim.
 ///
 /// # Errors
-/// In case:
 /// - The `blend` value cannot fit into a `u8`.
 fn hl_opts_from_hl_infos(hl_infos: &HighlightInfos) -> color_eyre::Result<SetHighlightOptsBuilder> {
     let mut opts = set_opts();
@@ -138,7 +138,7 @@ fn hl_opts_from_hl_infos(hl_infos: &HighlightInfos) -> color_eyre::Result<SetHig
         .transpose()
         .inspect_err(|error| {
             crate::oxi_ext::api::notify_error(&format!(
-                "cannot convert u32 {:?} to u8, error: {error:#?}",
+                "cannot convert blend value to u8 | value={:?} error={error:#?}",
                 hl_infos.blend
             ));
         })?

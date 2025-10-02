@@ -22,7 +22,7 @@ pub fn dict() -> Dictionary {
 pub fn set<Opt: ToObject + core::fmt::Debug + core::marker::Copy>(name: &str, value: Opt, opts: &OptionOpts) {
     if let Err(error) = nvim_oxi::api::set_option_value(name, value, opts) {
         crate::oxi_ext::api::notify_error(&format!(
-            "cannot set opt {name:?} value {value:#?} with {opts:#?}, error {error:#?}"
+            "cannot set option | name={name:?} value={value:#?} opts={opts:#?} error={error:#?}"
         ));
     }
 }
@@ -36,7 +36,7 @@ pub fn set<Opt: ToObject + core::fmt::Debug + core::marker::Copy>(name: &str, va
 pub fn append(name: &str, value: &str, opts: &OptionOpts) {
     let Ok(mut cur_value) = nvim_oxi::api::get_option_value::<String>(name, opts).inspect_err(|error| {
         crate::oxi_ext::api::notify_error(&format!(
-            "cannot get current value of opt {name:?} with {opts:#?} to append {value:#?}, error {error:#?}"
+            "cannot get option current value | name={name:?} opts={opts:#?} value_to_append={value:#?} error={error:#?}"
         ));
     }) else {
         return;
@@ -45,7 +45,7 @@ pub fn append(name: &str, value: &str, opts: &OptionOpts) {
     let comma = if cur_value.is_empty() { "" } else { "," };
     if let Err(error) = write!(cur_value, "{comma}{value}") {
         crate::oxi_ext::api::notify_error(&format!(
-            "cannot append value {value} to current value {cur_value} of opt {name:?} with {opts:#?}, error {error:#?}"
+            "cannot append option value | name={name:?} cur_value={cur_value} append_value={value} opts={opts:#?} error={error:#?}"
         ));
     }
     set(name, &*cur_value, opts);

@@ -48,13 +48,13 @@ where
         nvim_oxi::api::create_augroup(augroup_name, &CreateAugroupOptsBuilder::default().clear(true).build())
             .inspect_err(|error| {
                 crate::oxi_ext::api::notify_error(&format!(
-                    "cannot create augroup with name {augroup_name:#?}, error {error:#?}"
+                    "cannot create augroup | name={augroup_name:#?} error={error:#?}"
                 ));
             })
             .and_then(|group| nvim_oxi::api::create_autocmd(events, &opts_builder.group(group).build()))
     {
         crate::oxi_ext::api::notify_error(&format!(
-            "cannot create auto command for events {events:#?} and augroup {augroup_name}, error {error:#?}"
+            "cannot create auto command | events={events:#?} augroup={augroup_name} error={error:#?}"
         ));
     }
 }

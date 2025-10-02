@@ -15,7 +15,6 @@ use ytil_git::GitStatusEntry;
 /// Entry point: interactive selection then delete (new) / restore (changed) operations.
 ///
 /// # Errors
-/// In case:
 /// - Initializing `color_eyre` fails.
 /// - Collecting status entries or running selection UI fails.
 /// - Deleting a file/directory or executing the restore command fails.
@@ -37,14 +36,13 @@ fn main() -> color_eyre::Result<()> {
 /// If a `branch` is provided, it is passed so changed entries are restored from that branch.
 ///
 /// # Arguments
-/// * `entries` - Iterator of selected status entries.
-/// * `branch` - Optional branch name to restore from.
+/// - `entries` Iterator of selected status entries.
+/// - `branch` Optional branch name to restore from.
 ///
 /// # Returns
 /// `Ok(())` after processing; early returns after deleting if no changed entries remain.
 ///
 /// # Errors
-/// In case:
 /// - Removing a file or directory for a new entry fails.
 /// - Building or executing the `git restore` command fails.
 fn restore_entries<'a, I>(entries: I, branch: Option<&str>) -> color_eyre::Result<()>
