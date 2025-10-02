@@ -2,8 +2,7 @@
 //!
 //! Presents a multi-select UI; selected entries are:
 //! - Deleted if newly created / added.
-//! - Restored (`git restore`) if modified / renamed / deleted / type-changed, optionally
-//!   from a provided branch.
+//! - Restored (`git restore`) if modified / renamed / deleted / type-changed, optionally from a provided branch.
 //!
 //! This binary now focuses solely on cleanup; staging moved to `gcha`.
 #![feature(exit_status_error)]
@@ -39,7 +38,7 @@ fn main() -> color_eyre::Result<()> {
 ///
 /// # Arguments
 /// * `entries` - Iterator of selected status entries.
-/// * `branch`  - Optional branch name to restore from.
+/// * `branch` - Optional branch name to restore from.
 ///
 /// # Returns
 /// `Ok(())` after processing; early returns after deleting if no changed entries remain.
