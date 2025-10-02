@@ -1,6 +1,7 @@
 //! Generate a consolidated styled workspace documentation.
 #![feature(exit_status_error)]
 
+use std::io::ErrorKind::NotFound;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -15,26 +16,28 @@ use crate::templates::pages::not_found::NotFoundPage;
 
 mod templates;
 
-/// Generate a custom workspace documentation by wrapping `cargo doc` and
-/// producing a unified landing page linking to all crates generated docs.
-///
-/// # Usage
-///
-/// ```bash
-/// # From any workspace directory
-/// nomicon
-/// # Afterwards open target/doc/index.html (or serve) for aggregated view
-/// ```
+/// Build unified styled workspace documentation atop `cargo doc`.
 ///
 /// # Errors
 /// In case:
-/// - `cargo doc` invocation fails or exits non‑zero.
-/// - Workspace root or documentation directory cannot be resolved.
-/// - A crate manifest cannot be read or parsed for required keys.
-/// - A template fails to render.
-/// - Writing output files or copying assets fails.
+/// - Removing the previous `target/doc` (if present) fails for a reason other than [`NotFound`].
+/// - `cargo doc` exits non‑zero (warnings are denied via `RUSTDOCFLAGS=-Dwarnings`).
+/// - A `Cargo.toml` cannot be read or required `[package]` keys (`name`, `description`) are missing.
+/// - Template rendering fails.
+/// - Writing output files or copying static assets fails.
 fn main() -> color_eyre::eyre::Result<()> {
     color_eyre::install()?;
+
+    let workspace_root = ytil_system::get_workspace_root()?;
+    let doc_dir = workspace_root.join("target/doc");
+    // Always remove docs dir if present:
+    // - caching problems
+    // - implementing manual cache busting
+    if let Err(error) = std::fs::remove_dir_all(&doc_dir)
+        && !matches!(error.kind(), NotFound)
+    {
+        bail!("error removing doc_dir={}, error={error}", doc_dir.display());
+    }
 
     // Always (re)generate docs for all workspace crates (including private items) first.
     // Use RUSTDOCFLAGS to enforce warnings-as-errors (portable across cargo versions).
@@ -45,8 +48,6 @@ fn main() -> color_eyre::eyre::Result<()> {
         .status()?
         .exit_ok()?;
 
-    let workspace_root = ytil_system::get_workspace_root()?;
-    let doc_dir = get_existing_doc_dir(&workspace_root)?;
     let cargo_tomls = ytil_system::find_matching_files_recursively_in_dir(
         &workspace_root,
         |entry| entry.path().file_name().is_some_and(|f| f == "Cargo.toml"),
@@ -95,28 +96,6 @@ fn main() -> color_eyre::eyre::Result<()> {
     copy_assets(&doc_dir)?;
 
     Ok(())
-}
-
-/// Get existing documentation directory if exists.
-///
-/// # Arguments
-/// * `workspace_root` - Workspace root path.
-///
-/// # Returns
-/// Absolute docs directory path.
-///
-/// # Errors
-/// In case:
-/// - The directory is missing (suggest running `cargo doc --workspace`).
-fn get_existing_doc_dir(workspace_root: &Path) -> color_eyre::Result<PathBuf> {
-    let doc_dir = workspace_root.join("target/doc");
-    if !doc_dir.exists() {
-        bail!(
-            "documentation directory '{}' does not exist; run 'cargo doc --workspace' first",
-            doc_dir.display()
-        )
-    }
-    Ok(doc_dir)
 }
 
 /// Copy static assets into documentation output directory.
