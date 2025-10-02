@@ -3,7 +3,7 @@
 //! Wrap common operations (repo discovery, root resolution, status enumeration, branch listing,
 //! targeted fetch, branch switching, restore) in focused functions returning structured data
 //! (`GitStatusEntry`, `Branch`). Some semantics (previous branch with `switch -`, restore) defer to
-//! the porcelain CLI to avoid re‑implementing complex behavior.
+//! the porcelain CLI to avoid re‑implementing complex behaviour.
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -14,6 +14,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
+use git2::IntoCString;
 use git2::Repository;
 use git2::Status;
 use git2::StatusEntry;
@@ -195,10 +196,11 @@ pub fn restore(paths: &[&str], branch: Option<&str>) -> color_eyre::Result<()> {
 /// - Reading (loading) the index fails.
 /// - Applying any pathspec fails (I/O, permissions, invalid pattern).
 /// - Writing the updated index to disk fails.
-pub fn add_to_index(repo: &mut Repository, paths: &[&str]) -> color_eyre::Result<()> {
-    if paths.is_empty() {
-        return Ok(());
-    }
+pub fn add_to_index<T, I>(repo: &mut Repository, paths: I) -> color_eyre::Result<()>
+where
+    T: IntoCString,
+    I: IntoIterator<Item = T>,
+{
     let mut index = repo.index()?;
     index.add_all(paths, git2::IndexAddOption::DEFAULT, None)?;
     index.write()?;

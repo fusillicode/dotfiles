@@ -55,6 +55,7 @@ charwise
 chmod
 clippy
 cmd
+colored
 colorscheme
 cooldown
 dataflow

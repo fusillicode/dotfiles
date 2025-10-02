@@ -10,6 +10,14 @@ description = "Interactively clean a Git working tree."
 keywords = ["cli", "git", "github", "branch", "management"]
 categories = ["command-line-utilities", "development-tools"]
 
+[[bin]]
+name = "gchr"
+path = "src/bin/gchr.rs"
+
+[[bin]]
+name = "gcha"
+path = "src/bin/gcha.rs"
+
 [dependencies]
 ytil_cmd = { workspace = true }
 color-eyre = { workspace = true }
