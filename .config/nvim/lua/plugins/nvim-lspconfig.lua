@@ -23,7 +23,6 @@ local function get_custom_lsps_configs()
             LongSentences = false,
           },
           userDictPath = vim.fn.expand('~/.config/harper-ls/dictionary.txt'),
-          dialect = 'British',
         },
       },
     },
