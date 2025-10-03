@@ -54,6 +54,7 @@ chargeback
 charwise
 chmod
 clippy
+cloneable
 cmd
 colored
 colorscheme
