@@ -10,17 +10,10 @@ description = "Interactively stage or remove entries from Git index."
 keywords = ["cli", "git", "github", "branch", "management"]
 categories = ["command-line-utilities", "development-tools"]
 
-[[bin]]
-name = "gchr"
-path = "src/bin/gchr.rs"
-
-[[bin]]
-name = "gcha"
-path = "src/bin/gcha.rs"
-
 [dependencies]
-ytil_cmd = { workspace = true }
 color-eyre = { workspace = true }
+strum = { workspace = true }
+ytil_cmd = { workspace = true }
 ytil_git = { workspace = true }
 ytil_system = { workspace = true }
 ytil_tui = { workspace = true }

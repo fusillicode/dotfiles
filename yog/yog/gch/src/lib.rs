@@ -1,59 +1,11 @@
-//! Shared interactive selection & rendering utilities for `gch` binaries.
-//!
-//! Provides a common flow:
-//! 1. Collect [`ytil_git::GitStatusEntry`] via [`ytil_git::get_status`].
-//! 2. Wrap them in [`RenderableGitStatusEntry`] for colored display (similar to porcelain output).
-//! 3. Present a multi‑select TUI (`ytil_tui::minimal_multi_select`).
-//! 4. Invoke a caller callback on the chosen subset.
-//!
-//! Used by binaries:
-//! - `gcha` (stage selected entries)
-//! - `gchr` (restore / delete selected entries)
 use std::ops::Deref;
 
 use color_eyre::owo_colors::OwoColorize;
+use strum::Display;
+use strum::EnumIter;
 use ytil_git::GitStatusEntry;
 use ytil_git::IndexState;
 use ytil_git::WorktreeState;
-
-/// Run interactive git status selection then invoke a callback on chosen entries.
-///
-/// # Arguments
-/// - `apply_fn` Callback receiving a slice of selected [`RenderableGitStatusEntry`].
-///
-/// # Returns
-/// `Ok(())` when:
-/// - Working tree is clean (prints a message).
-/// - User aborts selection (prints a message).
-/// - Callback completes successfully.
-///
-/// Propagates underlying errors otherwise.
-///
-/// # Errors
-/// - Retrieving status via [`ytil_git::get_status`] fails.
-/// - Running `ytil_tui::minimal_multi_select` fails.
-/// - The callback `apply_fn` returns an error.
-pub fn apply_on_selected_git_status_entries(
-    apply_fn: impl Fn(&[RenderableGitStatusEntry]) -> color_eyre::Result<()>,
-) -> color_eyre::Result<()> {
-    let git_status_entries = ytil_git::get_status()?;
-    if git_status_entries.is_empty() {
-        println!("{}", "working tree clean".bold());
-        return Ok(());
-    }
-
-    let renderable_entries = git_status_entries.into_iter().map(RenderableGitStatusEntry).collect();
-
-    let Some(selected_entries) = ytil_tui::minimal_multi_select::<RenderableGitStatusEntry>(renderable_entries)? else {
-        println!("\n\n{}", "nothing done".bold());
-        return Ok(());
-    };
-
-    println!();
-    apply_fn(&selected_entries)?;
-
-    Ok(())
-}
 
 /// Newtype wrapper adding colored [`core::fmt::Display`] for a [`ytil_git::GitStatusEntry`].
 ///
@@ -75,7 +27,7 @@ pub fn apply_on_selected_git_status_entries(
 ///
 /// # Future Work
 /// - Provide a structured render method (symbols + path) for alternative UIs.
-pub struct RenderableGitStatusEntry(GitStatusEntry);
+pub struct RenderableGitStatusEntry(pub GitStatusEntry);
 
 impl Deref for RenderableGitStatusEntry {
     type Target = GitStatusEntry;
@@ -124,4 +76,14 @@ impl core::fmt::Display for RenderableGitStatusEntry {
 
         write!(f, "{}{} {}", index_symbol, worktree_symbol, self.path.display())
     }
+}
+
+/// High-level Git working tree/index operations exposed by the UI.
+#[derive(EnumIter, Display)]
+pub enum GitOperation {
+    /// Restore (discard) changes in the worktree and/or reset the index for a path
+    /// similar in spirit to `git restore` / `git checkout -- <path>`.
+    Restore,
+    /// Stage (add) path contents to the index similar to `git add <path>`.
+    Stage,
 }
