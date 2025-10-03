@@ -3,7 +3,7 @@
 //! Wrap common operations (repo discovery, root resolution, status enumeration, branch listing,
 //! targeted fetch, branch switching, restore) in focused functions returning structured data
 //! (`GitStatusEntry`, `Branch`). Some semantics (previous branch with `switch -`, restore) defer to
-//! the porcelain CLI to avoid re‑implementing complex behaviour.
+//! the porcelain CLI to avoid re‑implementing complex behavior.
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -167,7 +167,7 @@ pub fn restore(paths: &[&str], branch: Option<&str>) -> color_eyre::Result<()> {
 ///
 /// Caller supplies an already–opened [`Repository`]; this function does NOT perform
 /// repository discovery. Each entry in `paths` is treated as a pathspec and passed
-/// to [`git2::Index::add_all`], mirroring `git add <pathspec...>` behaviour.
+/// to [`git2::Index::add_all`], mirroring `git add <pathspec...>` behavior.
 ///
 /// Supported pathspec forms include:
 /// - Individual files (e.g. `"src/main.rs"`)
