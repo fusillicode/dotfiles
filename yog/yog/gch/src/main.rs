@@ -1,32 +1,41 @@
-//! Interactively delete new entries or restore changes in the working tree.
-//!
-//! Presents a multi-select UI; selected entries are:
-//! - Deleted if newly created / added.
-//! - Restored (`git restore`) if modified / renamed / deleted / type-changed, optionally from a provided branch.
-//!
-//! This binary now focuses solely on cleanup; staging moved to `gcha`.
-#![feature(exit_status_error)]
-
 use std::ops::Deref;
+use std::path::Path;
 
-use color_eyre::owo_colors::OwoColorize as _;
+use color_eyre::owo_colors::OwoColorize;
+use gch::GitOperation;
+use gch::RenderableGitStatusEntry;
+use strum::IntoEnumIterator;
 use ytil_git::GitStatusEntry;
 
-/// Entry point: interactive selection then delete (new) / restore (changed) operations.
-///
-/// # Errors
-/// - Initializing `color_eyre` fails.
-/// - Collecting status entries or running selection UI fails.
-/// - Deleting a file/directory or executing the restore command fails.
 fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
-
     let args = ytil_system::get_args();
     let args: Vec<_> = args.iter().map(String::as_str).collect();
 
-    gch::apply_on_selected_git_status_entries(|selected_entries| {
-        restore_entries(selected_entries.iter().map(Deref::deref), args.first().copied())
-    })?;
+    let git_status_entries = ytil_git::get_status()?;
+    if git_status_entries.is_empty() {
+        println!("{}", "working tree clean".bold());
+        return Ok(());
+    }
+
+    let renderable_entries = git_status_entries.into_iter().map(RenderableGitStatusEntry).collect();
+
+    let Some(selected_entries) = ytil_tui::minimal_multi_select::<RenderableGitStatusEntry>(renderable_entries)? else {
+        println!("\n\n{}", "nothing done".bold());
+        return Ok(());
+    };
+
+    let Some(selected_op) = ytil_tui::minimal_select::<GitOperation>(GitOperation::iter().collect())? else {
+        println!("\n\n{}", "nothing done".bold());
+        return Ok(());
+    };
+
+    let selected_entries = selected_entries.iter().map(Deref::deref);
+    match selected_op {
+        GitOperation::Restore => stage_entries(selected_entries)?,
+        GitOperation::Stage => restore_entries(selected_entries, args.first().copied())?,
+    }
+
+    println!();
 
     Ok(())
 }
@@ -84,5 +93,22 @@ where
             changed_entry.path.display().bold()
         );
     }
+    Ok(())
+}
+
+/// Stage the provided entries (equivalent to `git add` on each path).
+///
+/// # Arguments
+/// - `entries` Iterator of selected [`ytil_git::GitStatusEntry`] references.
+///
+/// # Errors
+/// - Opening the repository fails.
+/// - Adding any path to the index fails.
+fn stage_entries<'a, I>(entries: I) -> color_eyre::Result<()>
+where
+    I: Iterator<Item = &'a GitStatusEntry>,
+{
+    let mut repo = ytil_git::get_repo(Path::new("."))?;
+    ytil_git::add_to_index(&mut repo, entries.into_iter().map(|entry| entry.path.as_path()))?;
     Ok(())
 }
