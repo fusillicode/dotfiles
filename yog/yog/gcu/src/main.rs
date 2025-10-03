@@ -16,16 +16,16 @@ use ytil_git::Branch;
 /// ```text
 /// gcu # interactive selector over recent / remote branches
 /// gcu - # switch to previous branch
-/// gcu -b feature add ui # create branch (sanitised name from the remaining args) & switch
-/// gcu login clean caches # single/multi args -> sanitised branch name (create if missing)
+/// gcu -b feature add ui # create branch (sanitized name from the remaining args) & switch
+/// gcu login clean caches # single/multi args -> sanitized branch name (create if missing)
 /// gcu https://github.com/owner/repo/pull/123 # derive branch name from PR URL and switch
 /// ```
 ///
 /// # Arguments
 /// - `-` Switch to previous branch (`git switch -`).
-/// - `-b <args...>` Create new branch from sanitised `<args...>` then switch.
+/// - `-b <args...>` Create new branch from sanitized `<args...>` then switch.
 /// - `<single>` Switch if exists, else confirm create & switch.
-/// - `<multiple args>` All args combined & sanitised into branch name.
+/// - `<multiple args>` All args combined & sanitized into branch name.
 /// - `<github pull request url>`Authenticate (if needed) and derive branch name from PR.
 /// - (none) Launch interactive selector (see [`autocomplete_git_branches`]).
 ///
@@ -99,7 +99,7 @@ impl core::fmt::Display for RenderableBranch {
 /// Behaviour:
 /// - If `arg` parses as a GitHub PR URL, authenticate then derive the branch name, fetch it via
 ///   [`ytil_git::fetch_branches`] and switch to it.
-/// - Otherwise, sanitise `arg` into a branch name ([`build_branch_name`]) and create, if missing (after confirmation),
+/// - Otherwise, sanitize `arg` into a branch name ([`build_branch_name`]) and create, if missing (after confirmation),
 ///   then switch to it.
 ///
 /// # Errors
@@ -157,7 +157,7 @@ fn create_branch_and_switch(branch: &str) -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Returns `true` if a new branch may be created following the desired behaviour.
+/// Returns `true` if a new branch may be created following the desired behavior.
 ///
 /// Behaviour:
 /// - Always allowed when target is a default branch (`main`/`master`).
@@ -191,7 +191,7 @@ fn is_default_branch(branch: &str) -> bool {
     branch == "main" || branch == "master"
 }
 
-/// Builds a sanitised, lowercased Git branch name from raw arguments.
+/// Builds a sanitized, lowercased Git branch name from raw arguments.
 ///
 /// Transformation:
 /// - Split each argument by ASCII whitespace into tokens.
@@ -201,7 +201,7 @@ fn is_default_branch(branch: &str) -> bool {
 /// - Join resulting tokens with `-`.
 ///
 /// # Errors
-/// - sanitisation produces an empty string.
+/// - sanitization produces an empty string.
 fn build_branch_name(args: &[&str]) -> color_eyre::Result<String> {
     fn is_permitted(c: char) -> bool {
         const PERMITTED_CHARS: [char; 3] = ['.', '/', '_'];

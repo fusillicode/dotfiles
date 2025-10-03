@@ -10,7 +10,7 @@ use color_eyre::eyre::eyre;
 ///
 /// # Usage
 /// ```bash
-/// catl <path> # file -> cat; directory -> coloured long listing
+/// catl <path> # file -> cat; directory -> colored long listing
 /// ```
 ///
 /// # Arguments

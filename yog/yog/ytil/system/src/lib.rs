@@ -251,7 +251,7 @@ pub fn get_workspace_root() -> color_eyre::Result<PathBuf> {
 ///
 /// # Performance
 /// Uses an in-memory queue (BFS). For extremely deep trees consider a streaming iterator variant;
-/// current implementation favours simplicity over incremental output.
+/// current implementation favors simplicity over incremental output.
 ///
 /// # Future Work
 /// - Provide an iterator adapter (`impl Iterator<Item = PathBuf>`), avoiding collecting all results.
