@@ -29,10 +29,10 @@ fn main() -> color_eyre::Result<()> {
         return Ok(());
     };
 
-    let selected_entries = selected_entries.iter().map(Deref::deref);
+    let selected_entries = selected_entries.iter().map(Deref::deref).collect::<Vec<_>>();
     match selected_op {
-        GitOperation::Restore => stage_entries(selected_entries)?,
-        GitOperation::Stage => restore_entries(selected_entries, args.first().copied())?,
+        GitOperation::Restore => restore_entries(&selected_entries, args.first().copied())?,
+        GitOperation::Stage => stage_entries(&selected_entries)?,
     }
 
     println!();
@@ -45,7 +45,7 @@ fn main() -> color_eyre::Result<()> {
 /// If a `branch` is provided, it is passed so changed entries are restored from that branch.
 ///
 /// # Arguments
-/// - `entries` Iterator of selected status entries.
+/// - `entries` Selected Git entries.
 /// - `branch` Optional branch name to restore from.
 ///
 /// # Returns
@@ -54,11 +54,9 @@ fn main() -> color_eyre::Result<()> {
 /// # Errors
 /// - Removing a file or directory for a new entry fails.
 /// - Building or executing the `git restore` command fails.
-fn restore_entries<'a, I>(entries: I, branch: Option<&str>) -> color_eyre::Result<()>
-where
-    I: Iterator<Item = &'a GitStatusEntry>,
-{
-    let (new_entries, changed_entries): (Vec<_>, Vec<_>) = entries.partition(|entry| entry.is_new());
+fn restore_entries(entries: &[&GitStatusEntry], branch: Option<&str>) -> color_eyre::Result<()> {
+    let (new_entries, changed_entries): (Vec<&GitStatusEntry>, Vec<&GitStatusEntry>) =
+        entries.iter().partition(|entry| entry.is_new());
 
     for new_entry in &new_entries {
         let absolute_path = new_entry.absolute_path();
@@ -99,16 +97,16 @@ where
 /// Stage the provided entries (equivalent to `git add` on each path).
 ///
 /// # Arguments
-/// - `entries` Iterator of selected [`ytil_git::GitStatusEntry`] references.
+/// - `entries` Selected Git entries.
 ///
 /// # Errors
 /// - Opening the repository fails.
 /// - Adding any path to the index fails.
-fn stage_entries<'a, I>(entries: I) -> color_eyre::Result<()>
-where
-    I: Iterator<Item = &'a GitStatusEntry>,
-{
+fn stage_entries(entries: &[&GitStatusEntry]) -> color_eyre::Result<()> {
     let mut repo = ytil_git::get_repo(Path::new("."))?;
-    ytil_git::add_to_index(&mut repo, entries.into_iter().map(|entry| entry.path.as_path()))?;
+    ytil_git::add_to_index(&mut repo, entries.iter().map(|entry| entry.path.as_path()))?;
+    for entry in entries {
+        println!("{} {}", "staged".green().bold(), entry.path.display().bold());
+    }
     Ok(())
 }
