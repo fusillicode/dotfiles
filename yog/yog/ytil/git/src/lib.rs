@@ -21,22 +21,30 @@ use git2::StatusEntry;
 use git2::StatusOptions;
 use ytil_cmd::CmdExt as _;
 
-/// Returns the [`Repository`] containing `path`.
+/// Discover the Git repository containing `path`.
 ///
-/// Starts discovery from `path` and walks up parent directories using
-/// [`git2::Repository::discover`].
+/// Wrapper over [`git2::Repository::discover`]. Walks parent directories upward until a repo
+/// root is found.
+///
+/// # Arguments
+/// - `path` Starting filesystem path (file or directory) inside the repo.
+///
+/// # Returns
+/// Open [`Repository`].
 ///
 /// # Errors
-/// - The repository cannot be discovered starting from `path` (i.e. `path` is not inside a Git repository).
+/// - Not inside a Git repository (discovery fails).
+///
+/// # Future Work
+/// - Accept an option to disallow bare repositories.
 pub fn get_repo(path: &Path) -> color_eyre::Result<Repository> {
     Ok(Repository::discover(path)?)
 }
 
-/// Returns the absolute path to the working tree root of `repo`.
+/// Absolute working tree root path for repository
 ///
-/// The path is derived from [`Repository::commondir`].
-/// Any trailing `.git` component (for non‑bare repositories) is removed.
-/// For bare repositories the returned path is the repository directory itself.
+/// Derived from [`Repository::commondir`] with any trailing `.git` removed (non‑bare repos).
+/// Bare repositories return their directory path unchanged.
 pub fn get_repo_root(repo: &Repository) -> PathBuf {
     repo.commondir()
         .components()
@@ -44,12 +52,18 @@ pub fn get_repo_root(repo: &Repository) -> PathBuf {
         .collect()
 }
 
-/// Returns the name of the current branch (e.g. `main`).
+/// Get current branch name (fails if HEAD detached).
+///
+/// # Returns
+/// Branch short name (e.g. `main`).
 ///
 /// # Errors
-/// - The repository cannot be discovered.
-/// - `HEAD` is detached.
-/// - The branch name is not valid UTF-8.
+/// - Repository discovery fails.
+/// - HEAD is detached.
+/// - Branch shorthand not valid UTF-8.
+///
+/// # Future Work
+/// - Provide enum distinguishing detached state instead of error.
 pub fn get_current_branch() -> color_eyre::Result<String> {
     let repo_path = Path::new(".");
     let repo = get_repo(repo_path)?;
@@ -64,14 +78,24 @@ pub fn get_current_branch() -> color_eyre::Result<String> {
         .ok_or_else(|| eyre!("branch shorthand invalid utf-8 | repo_path={}", repo_path.display()))
 }
 
-/// Creates a new local branch pointing to the current `HEAD` commit.
+/// Create a new local branch at current HEAD (no checkout).
 ///
-/// Does not switch to the new branch.
+/// Branch starts at the commit pointed to by `HEAD`; caller remains on the original branch.
+///
+/// # Arguments
+/// - `branch_name` Name of branch to create (must not already exist).
+///
+/// # Returns
+/// `Ok(())` if creation succeeds.
 ///
 /// # Errors
-/// - The repository cannot be discovered.
-/// - `HEAD` Cannot be resolved to a commit.
-/// - The branch already exists.
+/// - Repository discovery fails.
+/// - Resolving `HEAD` to a commit fails.
+/// - Branch already exists.
+///
+/// # Future Work
+/// - Optionally force (move) existing branch with a flag.
+/// - Support creating tracking configuration in one step.
 pub fn create_branch(branch_name: &str) -> color_eyre::Result<()> {
     let repo = get_repo(Path::new("."))?;
 
@@ -81,16 +105,24 @@ pub fn create_branch(branch_name: &str) -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Switches `HEAD` to `branch_name` (or detaches if it resolves to a commit).
+/// Checkout a branch or detach HEAD; supports previous branch shorthand.
 ///
-/// Special case: if `branch_name` is `-` the system `git` is invoked with
-/// `git switch -` to reuse `Git's` built‑in previous branch logic (not currently
-/// modeled directly in [`git2`]).
+/// If `branch_name` is `-`, defers to `git switch -` to leverage porcelain previous branch
+/// semantics. Otherwise, resolves the name, checks out the tree, and updates HEAD (or detaches
+/// if resolving to a commit object).
+///
+/// # Arguments
+/// - `branch_name` Branch name or revision (use `-` for prior branch).
 ///
 /// # Errors
-/// - The repository cannot be discovered.
-/// - Name resolution fails.
-/// - Checkout fails.
+/// - Repository discovery fails.
+/// - Revparse / name resolution fails.
+/// - Checkout operation fails.
+/// - Setting HEAD reference fails.
+///
+/// # Future Work
+/// - Implement previous branch stack (beyond single toggle) internally.
+/// - Expose progress callbacks for large checkouts.
 pub fn switch_branch(branch_name: &str) -> color_eyre::Result<()> {
     // TODO: understand if there is a straightforward way with git2
     if branch_name == "-" {
@@ -119,17 +151,27 @@ pub fn switch_branch(branch_name: &str) -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Returns the working tree status as a list of [`GitStatusEntry`].
+/// Enumerate combined staged + unstaged status entries.
 ///
-/// Both staged (index) and unstaged (worktree) states are captured when present,
-/// along with conflict and ignore information. Untracked files are included,
-/// ignored files are excluded. Order reflects the iteration order from
-/// [`git2`].
+/// Builds [`GitStatusEntry`] values capturing index + worktree states plus conflict / ignore
+/// flags. Includes untracked, excludes ignored. Order matches libgit2 iteration order.
+///
+/// # Returns
+/// Vector of status entries (may be empty if clean working tree).
 ///
 /// # Errors
-/// - The repository cannot be discovered.
+/// - Repository discovery fails.
 /// - Reading statuses fails.
-/// - A status entry is missing a path (required to build a [`GitStatusEntry`]).
+/// - A status entry omits a path (required to construct a [`GitStatusEntry`]).
+///
+/// # Rationale
+/// Centralizes translation from libgit2 status bitflags into a friendlier struct with helper
+/// methods used by higher‑level commands.
+///
+/// # Future Work
+/// - Add option to include ignored entries.
+/// - Parameterize repo path instead of implicit current directory.
+/// - Expose performance metrics (count, timing) for diagnostics.
 pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
     let repo = get_repo(Path::new("."))?;
     let repo_root = get_repo_root(&repo);
@@ -145,14 +187,28 @@ pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
     Ok(out)
 }
 
-/// Restores one or more paths from the index or an optional `branch`.
+/// Restore one or more paths from index or optional branch,
 ///
-/// Equivalent to invoking `git restore [<branch>] <paths...>`.
-/// The system `git` binary is used instead of re‑implementing restore semantics
-/// to avoid accidental complexity – see <https://stackoverflow.com/a/73759110>).
+/// Delegates to porcelain `git restore` rather than approximating behavior with libgit2.
+/// If `branch` is provided its tree is the source; otherwise the index / HEAD is used.
+///
+/// # Arguments
+/// - `paths` Absolute or relative paths to restore. Empty slice = no‑op.
+/// - `branch` Optional branch (or commit-ish) acting as the source of truth.
+///
+/// # Returns
+/// `Ok(())` if the command spawns and completes successfully (zero status).
 ///
 /// # Errors
-/// - Invoking the `git restore` command fails (process spawn or non-zero exit status).
+/// - Spawning or executing the `git restore` process fails.
+///
+/// # Rationale
+/// Porcelain subcommand encapsulates nuanced restore semantics (rename detection, pathspec
+/// interpretation) that would be complex and error‑prone to replicate directly.
+///
+/// # Future Work
+/// - Support partial restore when command fails mid‑batch by iterating per path.
+/// - Add dry‑run flag to preview intended operations.
 pub fn restore(paths: &[&str], branch: Option<&str>) -> color_eyre::Result<()> {
     let mut args = vec!["restore"];
     if let Some(branch) = branch {
@@ -163,33 +219,65 @@ pub fn restore(paths: &[&str], branch: Option<&str>) -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Adds (stages) paths or pathspec patterns to the index of the supplied [`Repository`].
+/// Unstage specific paths without touching working tree contents.
 ///
-/// Caller supplies an already–opened [`Repository`]; this function does NOT perform
-/// repository discovery. Each entry in `paths` is treated as a pathspec and passed
-/// to [`git2::Index::add_all`], mirroring `git add <pathspec...>` behavior.
-///
-/// Supported pathspec forms include:
-/// - Individual files (e.g. `"src/main.rs"`)
-/// - Directories (recursive) (e.g. `"src/"`)
-/// - Glob / wildcard patterns understood by libgit2 (e.g. `"*.rs"`, `"docs/**/*.md"`)
-/// - Mixed explicit + pattern arguments
-///
-/// Git ignore rules are honoured (same as plain `git add`). Future enhancements could
-/// expose additional flags (e.g. [`git2::IndexAddOption::FORCE`]) to override ignores.
-///
-/// Idempotent: re‑adding already staged entries is a no‑op. Deletions are recorded when
-/// their parent pathspec is provided (matching native Git semantics).
+/// Thin wrapper over `git restore --staged <paths...>` which only affects the index
+/// (inverse of `git add`). Unlike using libgit2 `reset_default`, this avoids
+/// resurrecting deleted files whose blobs no longer exist on disk.
 ///
 /// # Arguments
-/// - `repo` Mutable reference to an open [`Repository`] whose index will be updated.
-/// - `paths` Slice of pathspecs relative to the repo root (empty slice = no‑op).
+/// - `paths` Repo‑relative paths currently staged (any state) to unstage. Empty slice = no‑op.
+///
+/// # Returns
+/// `Ok(())` if command spawns and exits successfully (zero status).
 ///
 /// # Errors
-/// Returns an error if:
-/// - Reading (loading) the index fails.
-/// - Applying any pathspec fails (I/O, permissions, invalid pattern).
-/// - Writing the updated index to disk fails.
+/// - Spawning or executing the `git restore --staged` command fails.
+///
+/// # Rationale
+/// Defers to porcelain for correctness (handles intent, pathspec edge cases) instead of
+/// manually editing the index via libgit2 which exhibited unintended side effects during
+/// experimentation.
+///
+/// # Future Work
+/// - Optionally fall back to libgit2 for environments lacking a `git` binary.
+/// - Capture command stderr and surface as richer context on failure.
+pub fn unstage(paths: &[&str]) -> color_eyre::Result<()> {
+    if paths.is_empty() {
+        return Ok(());
+    }
+    // Use porcelain `git restore --staged` which modifies only the index (opposite of `git add`).
+    // This avoids resurrecting deleted files (observed when using libgit2 `reset_default`).
+    Command::new("git").args(["restore", "--staged"]).args(paths).exec()?;
+    Ok(())
+}
+
+/// Stage pathspecs into the index (like `git add`),
+///
+/// Treats each item in `paths` as a pathspec and passes the collection to
+/// [`git2::Index::add_all`]. Ignores honored; re‑adding existing staged entries is a no‑op.
+///
+/// Supported pathspecs:
+/// - Files: "src/main.rs"
+/// - Directories (recursive): "src/"
+/// - Globs (libgit2 syntax): "*.rs", "docs/**/*.md"
+/// - Mixed file + pattern list
+///
+/// # Arguments
+/// - `repo` Open repository whose index will be modified.
+/// - `paths` Iterator of pathspecs. Empty iterator = no‑op.
+///
+/// # Returns
+/// `Ok(())` on success.
+///
+/// # Errors
+/// - Loading index fails.
+/// - Applying any pathspec fails.
+/// - Writing updated index fails.
+///
+/// # Future Work
+/// - Expose force option to include otherwise ignored files.
+/// - Return count of affected entries for diagnostics.
 pub fn add_to_index<T, I>(repo: &mut Repository, paths: I) -> color_eyre::Result<()>
 where
     T: IntoCString,
@@ -324,10 +412,10 @@ impl Branch {
     }
 }
 
-/// Single entry representing the status of a path in the working tree.
+/// Combined staged + worktree status for a path
 ///
-/// Combines both index (staged) and worktree (unstaged) information along with
-/// conflict / ignore state. Helper methods expose derived semantics.
+/// Aggregates index + worktree bitflags plus conflict / ignore markers into a higher‑level
+/// representation with convenience predicates (e.g. [`GitStatusEntry::is_new`]).
 #[derive(Debug, Clone)]
 pub struct GitStatusEntry {
     /// Path relative to the repository root.
@@ -352,12 +440,14 @@ impl GitStatusEntry {
 
     /// Returns `true` if the entry is newly added (in index or worktree).
     pub fn is_new(&self) -> bool {
-        if self.index_state.as_ref().is_some_and(IndexState::is_new)
-            || self.worktree_state.as_ref().is_some_and(WorktreeState::is_new)
-        {
+        if self.is_new_in_index() || self.worktree_state.as_ref().is_some_and(WorktreeState::is_new) {
             return true;
         }
         false
+    }
+
+    pub fn is_new_in_index(&self) -> bool {
+        self.index_state.as_ref().is_some_and(IndexState::is_new)
     }
 }
 
