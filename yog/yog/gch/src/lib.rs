@@ -1,7 +1,6 @@
 use std::ops::Deref;
 
 use color_eyre::owo_colors::OwoColorize;
-use strum::Display;
 use strum::EnumIter;
 use ytil_git::GitStatusEntry;
 use ytil_git::IndexState;
@@ -79,11 +78,21 @@ impl core::fmt::Display for RenderableGitStatusEntry {
 }
 
 /// High-level Git working tree/index operations exposed by the UI.
-#[derive(EnumIter, Display)]
+#[derive(EnumIter)]
 pub enum GitOperation {
     /// Restore (discard) changes in the worktree and/or reset the index for a path
     /// similar in spirit to `git restore` / `git checkout -- <path>`.
     Restore,
     /// Stage (add) path contents to the index similar to `git add <path>`.
     Stage,
+}
+
+impl core::fmt::Display for GitOperation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str_repr = match self {
+            Self::Restore => format!("{}/{}", "-".red().bold(), "~".yellow().bold()),
+            Self::Stage => "+".green().bold().to_string(),
+        };
+        write!(f, "{str_repr}")
+    }
 }
