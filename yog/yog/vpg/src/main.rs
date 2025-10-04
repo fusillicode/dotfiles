@@ -1,4 +1,4 @@
-//! Update Postgres creds from Vault, rewrite pgpass & nvim-dbee, optionally launch pgcli.
+//! Update Postgres credentials from Vault, rewrite pgpass & nvim-dbee, optionally launch pgcli.
 #![feature(exit_status_error)]
 
 use std::process::Command;
@@ -22,7 +22,7 @@ mod vault;
 /// # Usage
 /// ```bash
 /// vpg # select alias interactively
-/// vpg analytics # update creds for alias 'analytics'
+/// vpg analytics # update credentials for alias 'analytics'
 /// ```
 ///
 /// # Arguments
