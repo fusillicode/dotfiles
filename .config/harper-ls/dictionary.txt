@@ -30,8 +30,10 @@ RTR
 RabbitMQ
 Rastreator
 Rastreator's
+Revparse
 SIGINT
 SIGTERM
+SSO
 TODO
 Terceros
 TodoRiesgo
@@ -48,6 +50,7 @@ augroups
 autocommand
 autocommands
 backticked
+bitflags
 canonicalization
 characterwise
 chargeback
@@ -74,6 +77,7 @@ façade
 file path
 fkr
 franquicia
+gh
 gitignore
 grug
 hx
@@ -86,6 +90,7 @@ kos
 libgit2
 libs
 linewise
+md
 mut
 newtype
 nvim
@@ -106,9 +111,11 @@ requoting
 reselects
 resolvers
 riesgo
+rs
 shellcheck
 spendability
 sqlx
+src
 statuscolumn
 statusline
 stderr
@@ -117,6 +124,8 @@ t.
 tokio
 toml
 u64
+unstage
 unstaged
+unstaging
 worktree
 yog

@@ -1,3 +1,25 @@
+//! Provide a simple interactive helper for staging or discarding Git changes.
+//!
+//! Presents a textual user interface (TUI) of working tree status entries and lets the
+//! user (a) multi‑select entries, then (b) choose an operation to apply to the selection.
+//!
+//! Supported operations:
+//! - Discard: Delete newly created paths (worktree + unstage if indexed) then restore modified paths (optionally from a
+//!   provided branch).
+//! - Add: Stage (git add) the selected paths.
+//!
+//! Optional first CLI argument: a branch used as the source tree during
+//! the restore phase of the Discard operation.
+//!
+//! # Workflow
+//! 1. Collect status entries via [`ytil_git::get_status`].
+//! 2. Exit immediately if the working tree is clean.
+//! 3. Prompt for multi‑selection of entries (cancel => no-op).
+//! 4. Prompt for operation selection (cancel => no-op).
+//! 5. Delegate to operation helper (`restore_entries` or `add_entries`).
+//!
+//! Progress (Deleted/Restored/Added lines) is printed incrementally; failures surface rich
+//! diagnostics via `color_eyre`.
 use std::ops::Deref;
 use std::path::Path;
 
@@ -7,6 +29,13 @@ use gch::RenderableGitStatusEntry;
 use strum::IntoEnumIterator;
 use ytil_git::GitStatusEntry;
 
+/// Provide an interactive Git helper to stage or discard selected changes.
+///
+/// # Returns
+/// `Ok(())` if the program completes without I/O or subprocess errors.
+///
+/// # Errors
+/// - Any failure bubbling from status retrieval, user interaction, or Git operations.
 fn main() -> color_eyre::Result<()> {
     let args = ytil_system::get_args();
     let args: Vec<_> = args.iter().map(String::as_str).collect();
@@ -31,33 +60,50 @@ fn main() -> color_eyre::Result<()> {
 
     let selected_entries = selected_entries.iter().map(Deref::deref).collect::<Vec<_>>();
     match selected_op {
-        GitOperation::Restore => restore_entries(&selected_entries, args.first().copied())?,
-        GitOperation::Stage => stage_entries(&selected_entries)?,
+        GitOperation::Discard => restore_entries(&selected_entries, args.first().copied())?,
+        GitOperation::Add => add_entries(&selected_entries)?,
     }
-
-    println!();
 
     Ok(())
 }
 
-/// Delete new entries and restore changed ones with `git restore`.
+/// Delete newly created paths then restore modified paths (optionally from a branch)
 ///
-/// If a `branch` is provided, it is passed so changed entries are restored from that branch.
+/// Performs a two‑phase operation over the provided `entries`:
+/// 1) Physically removes any paths that are newly added (worktree and/or index). For paths that were staged as new,
+///    their repo‑relative paths are collected and subsequently unstaged via [`ytil_git::unstage`], ensuring only the
+///    index is touched (no accidental content resurrection).
+/// 2) Invokes [`ytil_git::restore`] for any remaining changed (non‑new) entries, optionally specifying `branch` so
+///    contents are restored from that branch rather than the index / HEAD.
+///
+/// Early exit: if after deleting new entries there are no remaining changed entries, the
+/// restore phase is skipped.
 ///
 /// # Arguments
-/// - `entries` Selected Git entries.
-/// - `branch` Optional branch name to restore from.
+/// - `entries` Slice of status entries selected by the user (borrowed, not consumed).
+/// - `branch` Optional branch name; when `Some`, restore reads blobs from that branch.
 ///
 /// # Returns
-/// `Ok(())` after processing; early returns after deleting if no changed entries remain.
+/// `Ok(())` if all deletions / unstaging / restore operations succeed.
 ///
 /// # Errors
-/// - Removing a file or directory for a new entry fails.
-/// - Building or executing the `git restore` command fails.
+/// - Removing a file or directory for a new entry fails (I/O error from `std::fs`).
+/// - Unstaging staged new entries via [`ytil_git::unstage`] fails.
+/// - Building or executing the underlying `git restore` command fails.
+///
+/// # Rationale
+/// Using the porcelain `git restore` preserves nuanced semantics (e.g. respect for sparse
+/// checkout, renames) without re‑implementing them atop libgit2.
+///
+/// # Future Work
+/// - Detect & report partial failures (continue deletion on best‑effort then aggregate errors).
+/// - Parallelize deletions if ever shown to be a bottleneck (likely unnecessary for typical counts).
 fn restore_entries(entries: &[&GitStatusEntry], branch: Option<&str>) -> color_eyre::Result<()> {
+    // Avoid creating &&GitStatusEntry by copying the slice of &GitStatusEntry directly.
     let (new_entries, changed_entries): (Vec<&GitStatusEntry>, Vec<&GitStatusEntry>) =
-        entries.iter().partition(|entry| entry.is_new());
+        entries.iter().copied().partition(|entry| entry.is_new());
 
+    let mut new_entries_in_index = vec![];
     for new_entry in &new_entries {
         let absolute_path = new_entry.absolute_path();
         if absolute_path.is_file() || absolute_path.is_symlink() {
@@ -65,8 +111,13 @@ fn restore_entries(entries: &[&GitStatusEntry], branch: Option<&str>) -> color_e
         } else if absolute_path.is_dir() {
             std::fs::remove_dir_all(&absolute_path)?;
         }
-        println!("{} {}", "deleted".red().bold(), new_entry.path.display().bold());
+        println!("{} {}", "Discarded".red().bold(), new_entry.path.display().bold());
+        if new_entry.is_new_in_index() {
+            new_entries_in_index.push(absolute_path.display().to_string());
+        }
     }
+    // Use repo-relative paths for unstaging so we *only* touch the index.
+    ytil_git::unstage(&new_entries_in_index.iter().map(String::as_str).collect::<Vec<_>>())?;
 
     // Exit early in case of no changes to avoid break `git restore` cmd.
     if changed_entries.is_empty() {
@@ -87,14 +138,14 @@ fn restore_entries(entries: &[&GitStatusEntry], branch: Option<&str>) -> color_e
         let from_branch = branch.map(|b| format!(" from {}", b.bold())).unwrap_or_default();
         println!(
             "{} {}{from_branch}",
-            "restored".yellow().bold(),
+            "Restored".yellow().bold(),
             changed_entry.path.display().bold()
         );
     }
     Ok(())
 }
 
-/// Stage the provided entries (equivalent to `git add` on each path).
+/// Add the provided entries to the Git index (equivalent to `git add` on each path).
 ///
 /// # Arguments
 /// - `entries` Selected Git entries.
@@ -102,11 +153,11 @@ fn restore_entries(entries: &[&GitStatusEntry], branch: Option<&str>) -> color_e
 /// # Errors
 /// - Opening the repository fails.
 /// - Adding any path to the index fails.
-fn stage_entries(entries: &[&GitStatusEntry]) -> color_eyre::Result<()> {
+fn add_entries(entries: &[&GitStatusEntry]) -> color_eyre::Result<()> {
     let mut repo = ytil_git::get_repo(Path::new("."))?;
     ytil_git::add_to_index(&mut repo, entries.iter().map(|entry| entry.path.as_path()))?;
     for entry in entries {
-        println!("{} {}", "staged".green().bold(), entry.path.display().bold());
+        println!("{} {}", "Added".green().bold(), entry.path.display().bold());
     }
     Ok(())
 }
