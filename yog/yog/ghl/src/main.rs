@@ -1,65 +1,80 @@
 #![feature(exit_status_error)]
 
+use std::ops::Deref;
+
 use color_eyre::owo_colors::OwoColorize;
-use strum::EnumIter;
-use strum::IntoEnumIterator;
-use ytil_github::pr::PullRequestLifecycle;
-use ytil_github::pr::PullRequestSearch;
-use ytil_github::pr::PullRequestStatus;
+use ytil_github::pr::PullRequest;
+use ytil_github::pr::PullRequestMergeState;
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
+    ytil_github::log_into_github()?;
 
-    let Some(selected_op) = ytil_tui::minimal_select::<Op>(Op::iter().collect())? else {
+    let repo = ytil_github::get_current_repo()?;
+
+    let args = ytil_system::get_args();
+    let args: Vec<_> = args.iter().map(String::as_str).collect();
+
+    let search_filter = args.first().copied();
+
+    let pull_requests = ytil_github::pr::get(
+        &repo,
+        search_filter,
+        Some(&|pr: &PullRequest| pr.merge_state == PullRequestMergeState::Clean),
+    )?;
+
+    let renderable_prs = pull_requests.into_iter().map(RenderablePullRequest).collect();
+    let Some(selected_prs) = ytil_tui::minimal_multi_select::<RenderablePullRequest>(renderable_prs)? else {
+        println!("\n{}", format!("no PRs found search_filter={search_filter:?}").bold());
         return Ok(());
     };
 
-    match selected_op {
-        Op::MergeDependabotPrs => merge_dependabod_prs()?,
-    }
-
-    Ok(())
-}
-
-#[derive(EnumIter)]
-enum Op {
-    MergeDependabotPrs,
-}
-
-impl core::fmt::Display for Op {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let str_repr = match self {
-            Self::MergeDependabotPrs => format!("{}", "Merge ALL dependabot PRs".bold()),
-        };
-        write!(f, "{str_repr}")
-    }
-}
-
-fn merge_dependabod_prs() -> color_eyre::Result<()> {
-    ytil_github::log_into_github()?;
-
-    let prs = ytil_github::pr::get(
-        "primait/es-be",
-        &PullRequestSearch {
-            author: Some("app/dependabot"),
-            status: Some(PullRequestStatus::Success),
-            lifecycle: Some(PullRequestLifecycle::Open),
-            merge_state: Some(ytil_github::pr::PullRequestMergeState::Clean),
-        },
-    )?;
-
-    for pr in prs {
+    let selected_prs = selected_prs.iter().map(Deref::deref).collect::<Vec<_>>();
+    for pr in selected_prs {
         let msg = match ytil_github::pr::merge(pr.number) {
             Ok(_) => format!("{} pr={} title={}", "Merged".green().bold(), pr.number, pr.title),
             Err(error) => format!(
-                "{} pr={} title={} error={error:?}",
+                "{} pr={} title={} error={}",
                 "Error merging".red().bold(),
                 pr.number,
-                pr.title
+                pr.title,
+                format!("{error:?}").red().bold()
             ),
         };
         println!("{msg}");
     }
 
     Ok(())
+}
+
+pub struct RenderablePullRequest(pub PullRequest);
+
+impl Deref for RenderablePullRequest {
+    type Target = PullRequest;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl core::fmt::Display for RenderablePullRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let state = match self.merge_state {
+            PullRequestMergeState::Behind => "Behind".yellow().to_string(),
+            PullRequestMergeState::Blocked => "Blocked".red().bold().to_string(),
+            PullRequestMergeState::Clean => "Clean".green().to_string(),
+            PullRequestMergeState::Dirty => "Dirty".red().bold().to_string(),
+            PullRequestMergeState::Draft => "Draft".blue().bold().to_string(),
+            PullRequestMergeState::HasHooks => "HasHooks".magenta().bold().to_string(),
+            PullRequestMergeState::Unknown => "Unknown".bold().to_string(),
+            PullRequestMergeState::Unmergeable => "Unmergeable".red().bold().to_string(),
+        };
+        write!(
+            f,
+            "{} {} {state} {}",
+            self.number.bold(),
+            self.author.login.blue().bold(),
+            self.title.bold()
+        )
+    }
 }

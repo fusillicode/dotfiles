@@ -7,7 +7,9 @@ use std::path::PathBuf;
 use color_eyre::owo_colors::OwoColorize;
 
 /// List of binary names that should be symlinked after building.
-const BINS: &[&str] = &["idt", "catl", "fkr", "gch", "gcu", "oe", "try", "vpg", "yghfl", "yhfp"];
+const BINS: &[&str] = &[
+    "idt", "catl", "fkr", "gch", "gcu", "ghl", "oe", "try", "vpg", "yghfl", "yhfp",
+];
 /// List of library files that need to be renamed after building, mapping (`source_name`, `target_name`).
 const LIBS: &[(&str, &str)] = &[("libnvrim.dylib", "nvrim.so")];
 /// Path segments for the default binaries install dir.

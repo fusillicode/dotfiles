@@ -36,6 +36,14 @@ const GITHUB_PR_ID_PREFIX: &str = "pull";
 /// The query parameter key used for pull request IDs in GitHub Actions URLs.
 const GITHUB_PR_ID_QUERY_KEY: &str = "pr";
 
+pub fn get_current_repo() -> color_eyre::Result<String> {
+    let output = Command::new("gh")
+        .args(["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"])
+        .output()?;
+
+    extract_success_output(&output)
+}
+
 /// Ensures the user is authenticated with the GitHub CLI.
 ///
 /// Runs `gh auth status`; if not authenticated it invokes an interactive `gh auth login`.
