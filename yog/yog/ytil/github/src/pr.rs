@@ -31,8 +31,6 @@ pub enum PullRequestLifecycle {
     Unmerged,
     #[strum(to_string = "draft")]
     Draft,
-    #[strum(to_string = "locked")]
-    Locked,
 }
 
 impl<'a> PullRequestSearch<'a> {
@@ -58,10 +56,24 @@ impl<'a> PullRequestSearch<'a> {
 pub struct PullRequest {
     pub number: usize,
     pub title: String,
+    pub merge_state: MergeState,
+}
+
+#[derive(Debug, Deserialize, Clone, Copy)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum MergeState {
+    Behind,
+    Blocked,
+    Clean,
+    Dirty,
+    Draft,
+    HasHooks,
+    Unknown,
+    Unmergeable,
 }
 
 pub fn get(repo: &str, search: &PullRequestSearch) -> color_eyre::Result<Vec<PullRequest>> {
-    let mut args = vec!["pr", "list", "--repo", repo, "--json", "number,title"];
+    let mut args = vec!["pr", "list", "--repo", repo, "--json", "number,title,mergeStateStatus"];
     let search_args: Vec<_> = search.to_gh_args();
     let mut search_args = search_args.iter().map(String::as_str).collect();
     args.append(&mut search_args);
