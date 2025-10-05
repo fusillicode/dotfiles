@@ -3,10 +3,12 @@ use std::process::Command;
 use serde::Deserialize;
 use ytil_cmd::CmdExt;
 
+#[derive(Default)]
 pub struct PullRequestSearch<'a> {
     pub author: Option<&'a str>,
     pub status: Option<PullRequestStatus>,
     pub lifecycle: Option<PullRequestLifecycle>,
+    pub merge_state: Option<PullRequestMergeState>,
 }
 
 #[derive(strum::Display, Clone, Copy)]
@@ -56,12 +58,12 @@ impl<'a> PullRequestSearch<'a> {
 pub struct PullRequest {
     pub number: usize,
     pub title: String,
-    pub merge_state: MergeState,
+    pub merge_state: PullRequestMergeState,
 }
 
-#[derive(Debug, Deserialize, Clone, Copy)]
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum MergeState {
+pub enum PullRequestMergeState {
     Behind,
     Blocked,
     Clean,
@@ -82,7 +84,13 @@ pub fn get(repo: &str, search: &PullRequestSearch) -> color_eyre::Result<Vec<Pul
     if output.is_empty() {
         return Ok(vec![]);
     }
-    Ok(serde_json::from_slice(&output)?)
+
+    let mut prs: Vec<PullRequest> = serde_json::from_slice(&output)?;
+    if let Some(merge_state) = search.merge_state {
+        prs.retain(|pr| pr.merge_state == merge_state);
+    }
+
+    Ok(prs)
 }
 
 pub fn merge(pr_number: usize) -> color_eyre::Result<()> {

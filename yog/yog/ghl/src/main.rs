@@ -44,6 +44,7 @@ fn merge_dependabod_prs() -> color_eyre::Result<()> {
             author: Some("app/dependabot"),
             status: Some(PullRequestStatus::Success),
             lifecycle: Some(PullRequestLifecycle::Open),
+            merge_state: Some(ytil_github::pr::PullRequestMergeState::Clean),
         },
     )?;
 
