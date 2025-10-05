@@ -1,0 +1,22 @@
+[package]
+name = "ghl"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = ""
+keywords = ["cli", "git", "github", "branch", "management"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+chrono = { workspace = true }
+color-eyre = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+url = { workspace = true }
+ytil_cmd = { workspace = true }
+ytil_git = { workspace = true }
+ytil_github = { workspace = true }
+ytil_system = { workspace = true }
