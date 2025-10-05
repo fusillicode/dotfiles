@@ -11,8 +11,8 @@ keywords = ["cli", "editor", "wezterm", "neovim", "nvim", "helix"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-ytil_cmd = { workspace = true }
 color-eyre = { workspace = true }
+ytil_cmd = { workspace = true }
 ytil_editor = { workspace = true }
 ytil_system = { workspace = true }
 ytil_wezterm = { workspace = true }

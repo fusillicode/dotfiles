@@ -737,6 +737,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ghl"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "color-eyre",
+ "serde",
+ "serde_json",
+ "url",
+ "ytil_cmd",
+ "ytil_git",
+ "ytil_github",
+ "ytil_system",
+]
+
+[[package]]
 name = "gimli"
 version = "0.32.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

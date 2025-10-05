@@ -11,10 +11,10 @@ keywords = ["github", "api", "repository", "refs", "cli"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-ytil_cmd = { workspace = true }
 color-eyre = { workspace = true }
-ytil_git = { workspace = true }
 url = { workspace = true }
+ytil_cmd = { workspace = true }
+ytil_git = { workspace = true }
 
 [dev-dependencies]
 assert2 = { workspace = true }
