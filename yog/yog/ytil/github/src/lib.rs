@@ -27,6 +27,8 @@ use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 use url::Url;
 
+pub mod pr;
+
 /// The GitHub host domain.
 const GITHUB_HOST: &str = "github.com";
 /// The URL path segment prefix for pull requests.

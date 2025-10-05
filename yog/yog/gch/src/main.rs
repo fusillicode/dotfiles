@@ -24,7 +24,7 @@ use std::ops::Deref;
 use std::path::Path;
 
 use color_eyre::owo_colors::OwoColorize;
-use gch::GitOperation;
+use gch::Op;
 use gch::RenderableGitStatusEntry;
 use strum::IntoEnumIterator;
 use ytil_git::GitStatusEntry;
@@ -53,15 +53,15 @@ fn main() -> color_eyre::Result<()> {
         return Ok(());
     };
 
-    let Some(selected_op) = ytil_tui::minimal_select::<GitOperation>(GitOperation::iter().collect())? else {
+    let Some(selected_op) = ytil_tui::minimal_select::<Op>(Op::iter().collect())? else {
         println!("\n\n{}", "nothing done".bold());
         return Ok(());
     };
 
     let selected_entries = selected_entries.iter().map(Deref::deref).collect::<Vec<_>>();
     match selected_op {
-        GitOperation::Discard => restore_entries(&selected_entries, args.first().copied())?,
-        GitOperation::Add => add_entries(&selected_entries)?,
+        Op::Discard => restore_entries(&selected_entries, args.first().copied())?,
+        Op::Add => add_entries(&selected_entries)?,
     }
 
     Ok(())

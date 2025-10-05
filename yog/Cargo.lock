@@ -740,15 +740,10 @@ dependencies = [
 name = "ghl"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "color-eyre",
- "serde",
- "serde_json",
- "url",
- "ytil_cmd",
- "ytil_git",
+ "strum",
  "ytil_github",
- "ytil_system",
+ "ytil_tui",
 ]
 
 [[package]]
@@ -2566,6 +2561,9 @@ dependencies = [
  "assert2",
  "color-eyre",
  "rstest",
+ "serde",
+ "serde_json",
+ "strum",
  "url",
  "ytil_cmd",
  "ytil_git",

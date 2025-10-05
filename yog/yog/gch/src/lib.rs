@@ -79,7 +79,7 @@ impl core::fmt::Display for RenderableGitStatusEntry {
 
 /// High-level Git working tree/index operations exposed by the UI.
 #[derive(EnumIter)]
-pub enum GitOperation {
+pub enum Op {
     /// Add path contents to the index similar to `git add <path>`.
     Add,
     /// Discard changes in the worktree and/or reset the index for a path
@@ -87,7 +87,7 @@ pub enum GitOperation {
     Discard,
 }
 
-impl core::fmt::Display for GitOperation {
+impl core::fmt::Display for Op {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let str_repr = match self {
             Self::Discard => format!("{}", "Discard".red().bold()),
