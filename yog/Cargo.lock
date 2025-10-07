@@ -741,7 +741,6 @@ name = "ghl"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
- "strum",
  "ytil_github",
  "ytil_system",
  "ytil_tui",

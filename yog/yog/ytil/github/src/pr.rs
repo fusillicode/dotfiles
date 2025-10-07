@@ -1,6 +1,7 @@
 use std::process::Command;
 
 use serde::Deserialize;
+use strum::EnumString;
 use ytil_cmd::CmdExt;
 
 #[derive(Debug, Deserialize)]
@@ -18,7 +19,7 @@ pub struct PullRequestAuthor {
     pub is_bot: bool,
 }
 
-#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, EnumString, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum PullRequestMergeState {
     Behind,
@@ -48,7 +49,7 @@ pub enum PullRequestMergeState {
 pub fn get(
     repo: &str,
     search: Option<&str>,
-    retain_fn: Option<&dyn Fn(&PullRequest) -> bool>,
+    retain_fn: &dyn Fn(&PullRequest) -> bool,
 ) -> color_eyre::Result<Vec<PullRequest>> {
     let mut args = vec![
         "pr",
@@ -71,10 +72,7 @@ pub fn get(
     }
 
     let mut prs: Vec<PullRequest> = serde_json::from_slice(&output)?;
-
-    if let Some(retain_fn) = retain_fn {
-        prs.retain(|pr| retain_fn(pr));
-    }
+    prs.retain(|pr| retain_fn(pr));
 
     Ok(prs)
 }

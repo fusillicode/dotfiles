@@ -1,6 +1,7 @@
 #![feature(exit_status_error)]
 
 use std::ops::Deref;
+use std::str::FromStr;
 
 use color_eyre::owo_colors::OwoColorize;
 use ytil_github::pr::PullRequest;
@@ -16,16 +17,23 @@ fn main() -> color_eyre::Result<()> {
     let args: Vec<_> = args.iter().map(String::as_str).collect();
 
     let search_filter = args.first().copied();
+    let merge_state = args.get(1).copied().map(PullRequestMergeState::from_str).transpose()?;
 
-    let pull_requests = ytil_github::pr::get(
-        &repo,
-        search_filter,
-        Some(&|pr: &PullRequest| pr.merge_state == PullRequestMergeState::Clean),
-    )?;
+    let params = format!(
+        "search_filter={search_filter:?}{}",
+        merge_state.map(|ms| format!(" merge_state={ms:?}")).unwrap_or_default()
+    );
+    println!("\n{} {}", "Search PRs by".cyan().bold(), params.bold());
+
+    let pull_requests = ytil_github::pr::get(&repo, search_filter, &|pr: &PullRequest| {
+        if let Some(merge_state) = merge_state {
+            return pr.merge_state == merge_state;
+        }
+        true
+    })?;
 
     let renderable_prs = pull_requests.into_iter().map(RenderablePullRequest).collect();
     let Some(selected_prs) = ytil_tui::minimal_multi_select::<RenderablePullRequest>(renderable_prs)? else {
-        println!("\n{}", format!("no PRs found search_filter={search_filter:?}").bold());
         return Ok(());
     };
 
