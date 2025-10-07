@@ -1,10 +1,9 @@
-#![feature(error_generic_member_access)]
-
 //! Execute system commands with structured errors and optional silenced output in release builds.
 //!
 //! Exposes an extension trait (`CmdExt`) with an `exec` method plus a helper `silent_cmd` that
 //! null-routes stdout/stderr outside debug mode. Errors capture the command name, args and working
 //! directory for concise diagnostics.
+#![feature(error_generic_member_access)]
 
 use std::path::Path;
 use std::path::PathBuf;
@@ -45,7 +44,7 @@ impl CmdExt for Command {
 #[derive(thiserror::Error, Debug)]
 pub enum CmdError {
     /// I/O error occurred during command execution.
-    #[error("io error {source} - {cmd_details}")]
+    #[error("{source} {cmd_details}")]
     Io {
         /// Details about the command that failed.
         cmd_details: CmdDetails,
@@ -54,7 +53,7 @@ pub enum CmdError {
         source: std::io::Error,
     },
     /// Command executed but returned a non-zero exit status.
-    #[error("stderr {output:#?} - {cmd_details}")]
+    #[error("{output:#?} {cmd_details}")]
     Stderr {
         /// Details about the command that failed.
         cmd_details: CmdDetails,
@@ -108,7 +107,11 @@ impl From<&mut Command> for CmdDetails {
 /// Formats [`CmdDetails`] for display, showing command name, arguments, and working directory.
 impl core::fmt::Display for CmdDetails {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "cmd {} - args {:#?} - dir {:#?}", self.name, self.args, self.cur_dir)
+        write!(
+            f,
+            "cmd_name={} cmd_args={:?} cmd_dir={:?}",
+            self.name, self.cur_dir, self.args,
+        )
     }
 }
 

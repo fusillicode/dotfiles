@@ -66,7 +66,7 @@ fn main() -> color_eyre::Result<()> {
             .map(|ms| format!("\nmerge_state={ms:?}"))
             .unwrap_or_default()
     );
-    println!("\n{}\n{}", "Search PRs by".cyan().bold(), params.white().bold());
+    println!("\n{}\n{}\n", "Search PRs by".cyan().bold(), params.white().bold());
 
     let pull_requests = ytil_github::pr::get(&repo, search_filter.as_deref(), &|pr: &PullRequest| {
         if let Some(merge_state) = merge_state {
@@ -135,11 +135,11 @@ fn merge_pr(pr: &PullRequest) {
     let msg = ytil_github::pr::merge(pr.number).map_or_else(
         |error| {
             format!(
-                "{} pr={} title={} error={}",
-                "Error merging".red().bold(),
-                pr.number,
-                pr.title,
-                format!("{error:?}").red().bold()
+                "{} {} {} {}",
+                "Error merging pr".red().bold(),
+                format!("number={}", pr.number).white().bold(),
+                format!("title={}", pr.title).white().bold(),
+                format!("error={error}").red().bold()
             )
         },
         |()| format!("{} pr={} title={}", "Merged".green().bold(), pr.number, pr.title),
