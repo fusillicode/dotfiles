@@ -5,6 +5,19 @@
 //! - `bin_dir` Directory for binary symlinks (created if missing).
 //! - `tool_names` Optional specific tools to install (defaults to all).
 //!
+//! # Usage
+//! ```bash
+//! idt ~/.dev/tools ~/.local/bin # install all tools
+//! idt ~/.dev/tools ~/.local/bin ruff_lsp rust_analyzer taplo # subset
+//! ```
+//!
+//! # Flow
+//! 1. Ensure target directories.
+//! 2. Auth to GitHub (rate limits, releases).
+//! 3. Resolve selected installers (all or subset).
+//! 4. Spawn scoped threads to run installers.
+//! 5. Cleanup dead symlinks; aggregate failures.
+//!
 //! # Errors
 //! - Missing required argument (`dev_tools_dir` / `bin_dir`).
 //! - Directory creation fails.
@@ -52,26 +65,6 @@ use crate::installers::yaml_language_server::YamlLanguageServer;
 mod downloaders;
 mod installers;
 
-/// Install development tools including language servers and utilities.
-///
-/// # Usage
-/// ```bash
-/// idt <dev_tools_dir> <bin_dir> # install ALL supported tools
-/// idt <dev_tools_dir> <bin_dir> deno ruff_lsp # install only listed tools
-/// ```
-///
-/// # Arguments
-/// - `dev_tools_dir` Directory for tool installation (created if missing).
-/// - `bin_dir` Directory for binary symlinks (created if missing).
-/// - `tool_names` Optional specific tools to install (defaults to all).
-///
-/// # Errors
-/// - A required argument (`dev_tools_dir` or `bin_dir`) is missing.
-/// - Creating a required directory fails.
-/// - Authenticating with the GitHub CLI fails.
-/// - An installer thread panics.
-/// - A tool installation fails (individual installer reports the specific cause).
-/// - Removing dead symlinks in `bin_dir` fails.
 #[allow(clippy::too_many_lines)]
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;

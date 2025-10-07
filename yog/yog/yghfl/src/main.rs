@@ -1,7 +1,12 @@
 //! Copy GitHub URL (file/line/col) for the current Helix buffer to clipboard.
 //!
+//! # Usage
+//! ```bash
+//! yghfl # copies https://github.com/<org>/<repo>/tree/<branch>/<path>#L<C> to clipboard
+//! ```
+//!
 //! # Errors
-//! - WezTerm pane text retrieval fails.
+//! - `WezTerm` pane text retrieval fails.
 //! - Status line extraction or parse fails.
 //! - Git repository root or remote URL resolution fails.
 //! - Multiple or zero GitHub remotes detected.
@@ -25,20 +30,6 @@ use ytil_hx::HxStatusLine;
 use ytil_wezterm::WeztermPane;
 use ytil_wezterm::get_sibling_pane_with_titles;
 
-/// Generate a GitHub URL pointing to the current Helix buffer location.
-///
-/// # Usage
-/// ```bash
-/// yghfl # copies URL for current line/column to clipboard
-/// ```
-///
-/// # Errors
-/// - Executing `wezterm` fails or returns a non-zero exit status.
-/// - Status line extraction or parsing fails.
-/// - Repository root path resolution fails.
-/// - GitHub remote URL (unique) cannot be determined.
-/// - Current branch name lookup fails.
-/// - UTF-8 conversion fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

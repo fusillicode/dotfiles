@@ -43,7 +43,7 @@ pub struct PullRequestAuthor {
 /// (Sourced via `mergeStateStatus` field.) Used to colorize and optionally
 /// filter PRs prior to attempting a merge.
 ///
-/// Variants map 1:1 to upstream values (SCREAMING_SNAKE_CASE) to simplify
+/// Variants map 1:1 to upstream values (`SCREAMING_SNAKE_CASE`) to simplify
 /// deserialization and future additions.
 #[derive(Debug, EnumString, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]

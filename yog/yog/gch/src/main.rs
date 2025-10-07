@@ -5,8 +5,14 @@
 //! prompt safely results in no changes.
 //!
 //! # Arguments
-//! - `<branch>` Optional branch used as blob source during restore in Discard; if omitted,
-//!   `git restore` falls back to index / HEAD.
+//! - `<branch>` Optional branch used as blob source during restore in Discard; if omitted, `git restore` falls back to
+//!   index / HEAD.
+//!
+//! # Usage
+//! ```bash
+//! gch # select changes -> choose Add or Discard
+//! gch main # use 'main' as blob source when discarding
+//! ```
 //!
 //! # Exit Codes
 //! - `0` Success (includes user cancellations performing no changes).
@@ -32,13 +38,6 @@ use gch::RenderableGitStatusEntry;
 use strum::IntoEnumIterator;
 use ytil_git::GitStatusEntry;
 
-/// Provide an interactive Git helper to stage or discard selected changes.
-///
-/// # Returns
-/// `Ok(())` if the program completes without I/O or subprocess errors.
-///
-/// # Errors
-/// - Any failure bubbling from status retrieval, user interaction, or Git operations.
 fn main() -> color_eyre::Result<()> {
     let args = ytil_system::get_args();
     let args: Vec<_> = args.iter().map(String::as_str).collect();

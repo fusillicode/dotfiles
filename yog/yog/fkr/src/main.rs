@@ -3,6 +3,12 @@
 //! # Arguments
 //! - `cp` Optional flag to copy the generated value to clipboard.
 //!
+//! # Usage
+//! ```bash
+//! fkr # select a generator; prints value
+//! fkr cp # select -> prints -> copies to clipboard
+//! ```
+//!
 //! # Errors
 //! - Interactive selection UI fails.
 //! - Writing the generated value to the clipboard fails.
@@ -10,21 +16,6 @@
 
 use fkr::FkrOption;
 
-/// Interactive fake data generator.
-/// Prints generated value to standard output, optionally copies to clipboard.
-///
-/// # Usage
-/// ```bash
-/// fkr # interactive choose + print
-/// fkr cp # as above, additionally copy to system clipboard
-/// ```
-///
-/// # Arguments
-/// - `cp` Copy generated value to clipboard (optional).
-///
-/// # Errors
-/// - Interactive selection fails.
-/// - Writing the generated value to the clipboard fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

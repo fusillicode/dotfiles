@@ -8,6 +8,15 @@
 //! - `<github pull request url>` Derive branch name from PR & switch (fetch if needed).
 //! - (none) Launch interactive selector.
 //!
+//! # Usage
+//! ```bash
+//! gcu # interactive branch picker
+//! gcu - # previous branch
+//! gcu -b Feature Add Foo # create: feature-add-foo
+//! gcu feature add foo # sanitized join -> feature-add-foo (create if missing)
+//! gcu https://github.com/org/repo/pull/123 # derive & fetch PR branch
+//! ```
+//!
 //! # Errors
 //! - GitHub authentication or PR branch name derivation fails.
 //! - Branch name construction yields empty string.
@@ -24,33 +33,6 @@ use color_eyre::owo_colors::OwoColorize as _;
 use url::Url;
 use ytil_git::Branch;
 
-/// Manage Git branches with interactive selection, branch creation (from free‑form
-/// text or GitHub PR URLs), and branch switching (including previous-branch shorthand).
-///
-/// # Usage
-/// ```text
-/// gcu # interactive selector over recent / remote branches
-/// gcu - # switch to previous branch
-/// gcu -b feature add ui # create branch (sanitized name from the remaining args) & switch
-/// gcu login clean caches # single/multi args -> sanitized branch name (create if missing)
-/// gcu https://github.com/owner/repo/pull/123 # derive branch name from PR URL and switch
-/// ```
-///
-/// # Arguments
-/// - `-` Switch to previous branch (`git switch -`).
-/// - `-b <args...>` Create new branch from sanitized `<args...>` then switch.
-/// - `<single>` Switch if exists, else confirm create & switch.
-/// - `<multiple args>` All args combined & sanitized into branch name.
-/// - `<github pull request url>`Authenticate (if needed) and derive branch name from PR.
-/// - (none) Launch interactive selector (see [`autocomplete_git_branches`]).
-///
-/// # Errors
-/// - GitHub authentication or pull request branch name derivation fails.
-/// - Branch name construction fails or produces an empty string.
-/// - Branch switching or creation fails.
-/// - Interactive selection fails.
-/// - Reading user input (stdin) or writing prompts (stdout) fails.
-/// - Current branch lookup fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

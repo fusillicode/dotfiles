@@ -4,13 +4,27 @@
 //! - `search_filter` Optional free-form search string forwarded to `gh pr list --search`.
 //! - `merge_state` Optional merge state filter (`Behind|Blocked|Clean|Dirty|Draft|HasHooks|Unknown|Unmergeable`).
 //!
+//! # Usage
+//! ```bash
+//! ghl # list all open PRs interactively
+//! ghl "fix ci" # filter via search terms
+//! ghl "lint" Clean # search + restrict to Clean mergeable PRs
+//! ```
+//!
+//! # Flow
+//! 1. Resolve current repo + optional filters.
+//! 2. Fetch PR list (client-side merge state filtering when provided).
+//! 3. Multi-select PRs.
+//! 4. Attempt merge each; failures reported inline without aborting.
+//!
 //! # Errors
 //! - GitHub CLI invocations fail.
 //! - Merge state string fails to parse.
 //! - TUI interaction fails.
 //!
 //! # Rationale
-//! Provide a focused alternative to opening a browser or chaining multiple `gh pr` commands when triaging batches of routine PRs while keeping the implementation lean and synchronous.
+//! Provide a focused alternative to opening a browser or chaining multiple `gh pr` commands when triaging batches of
+//! routine PRs while keeping the implementation lean and synchronous.
 #![feature(exit_status_error)]
 
 use std::ops::Deref;
@@ -20,27 +34,6 @@ use color_eyre::owo_colors::OwoColorize;
 use ytil_github::pr::PullRequest;
 use ytil_github::pr::PullRequestMergeState;
 
-/// List and optionally merge GitHub pull requests for the current repository.
-///
-/// Interactive flow:
-/// 1. Authenticate (or verify auth) via [`ytil_github::log_into_github`].
-/// 2. Resolve current repo `owner/name` via [`ytil_github::get_current_repo`].
-/// 3. Fetch pull requests (optionally filtered by search text + merge state).
-/// 4. Present multi‑select UI (cancel => exit).
-/// 5. For each selected PR attempt a squash merge (admin) and delete branch.
-///
-/// # Arguments
-/// CLI (positional) arguments:
-/// - `0` (optional) Free‑form search string passed to `gh pr list --search <ARG>`.
-/// - `1` (optional) Merge state filter (enum variant of [`PullRequestMergeState`]).
-///
-/// # Returns
-/// `Ok(())` when all selected merges finish (success or error reported inline).
-///
-/// # Errors
-/// - Any failure from GitHub CLI invocations.
-/// - Invalid merge state string (parse error).
-/// - Terminal interaction errors from the TUI helpers.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
     ytil_github::log_into_github()?;
@@ -135,7 +128,7 @@ fn merge_pr(pr: &PullRequest) {
                 format!("{error:?}").red().bold()
             )
         },
-        |_| format!("{} pr={} title={}", "Merged".green().bold(), pr.number, pr.title),
+        |()| format!("{} pr={} title={}", "Merged".green().bold(), pr.number, pr.title),
     );
     println!("{msg}");
 }
