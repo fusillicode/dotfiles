@@ -1,36 +1,41 @@
-//! List and optionally merge GitHub pull requests interactively.
+//! List and optionally batch‑merge GitHub pull requests interactively
 //!
-//! # Arguments
-//! - `search_filter` Optional free-form search string forwarded to `gh pr list --search`.
-//! - `merge_state` Optional merge state filter (`Behind|Blocked|Clean|Dirty|Draft|HasHooks|Unknown|Unmergeable`).
+//! Supports explicit flags instead of positional parameters:
+//!
+//! # Flags
+//! - `--search <FILTER>` or `--search=<FILTER>`: forwarded to `gh pr list --search`. Optional.
+//! - `--merge-state <STATE>` or `--merge-state=<STATE>`: client‑side filter over fetched PRs. Accepted
+//!   (case‑insensitive): `Behind|Blocked|Clean|Dirty|Draft|HasHooks|Unknown|Unmergeable`.
+//!
+//! Use `--` to terminate flag parsing (subsequent arguments ignored by this tool).
 //!
 //! # Usage
 //! ```bash
 //! ghl # list all open PRs interactively
-//! ghl "fix ci" # filter via search terms
-//! ghl "lint" Clean # search + restrict to Clean mergeable PRs
+//! ghl --search "fix ci" # filter by search terms
+//! ghl --merge-state Clean # filter by merge state only
+//! ghl --search="lint" --merge-state Dirty # combine search + state (supports = or space)
 //! ```
 //!
 //! # Flow
-//! 1. Resolve current repo + optional filters.
-//! 2. Fetch PR list (client-side merge state filtering when provided).
-//! 3. Multi-select PRs.
-//! 4. Attempt merge each; failures reported inline without aborting.
+//! 1. Parse flags (`--search`, `--merge-state`) and detect current repository.
+//! 2. Fetch PR list via GitHub CLI (`gh pr list`) forwarding the search filter.
+//! 3. Apply optional in‑process merge state filter.
+//! 4. Present multi‑select TUI.
+//! 5. Attempt merge for each selected PR; report per‑PR success / failure; continue on errors.
 //!
 //! # Errors
-//! - GitHub CLI invocations fail.
-//! - Merge state string fails to parse.
+//! - Flag parsing fails (unknown flag, missing value, invalid merge state).
+//! - GitHub CLI invocation fails.
 //! - TUI interaction fails.
-//!
-//! # Rationale
-//! Provide a focused alternative to opening a browser or chaining multiple `gh pr` commands when triaging batches of
-//! routine PRs while keeping the implementation lean and synchronous.
 #![feature(exit_status_error)]
 
 use std::ops::Deref;
 use std::str::FromStr;
 
+use color_eyre::Section;
 use color_eyre::owo_colors::OwoColorize;
+use ytil_github::pr::IntoEnumIterator;
 use ytil_github::pr::PullRequest;
 use ytil_github::pr::PullRequestMergeState;
 
@@ -40,11 +45,20 @@ fn main() -> color_eyre::Result<()> {
 
     let repo = ytil_github::get_current_repo()?;
 
-    let args = ytil_system::get_args();
-    let args: Vec<_> = args.iter().map(String::as_str).collect();
+    let mut pargs = pico_args::Arguments::from_env();
 
-    let search_filter = args.first().copied();
-    let merge_state = args.get(1).copied().map(PullRequestMergeState::from_str).transpose()?;
+    let search_filter: Option<String> = pargs.opt_value_from_str("--search")?;
+    let merge_state = pargs
+        .opt_value_from_fn("--merge-state", PullRequestMergeState::from_str)
+        .with_section(|| {
+            format!(
+                "accepted values are: {:#?}",
+                PullRequestMergeState::iter().collect::<Vec<_>>()
+            )
+            .red()
+            .bold()
+            .to_string()
+        })?;
 
     let params = format!(
         "search_filter={search_filter:?}{}",
@@ -54,7 +68,7 @@ fn main() -> color_eyre::Result<()> {
     );
     println!("\n{}\n{}", "Search PRs by".cyan().bold(), params.white().bold());
 
-    let pull_requests = ytil_github::pr::get(&repo, search_filter, &|pr: &PullRequest| {
+    let pull_requests = ytil_github::pr::get(&repo, search_filter.as_deref(), &|pr: &PullRequest| {
         if let Some(merge_state) = merge_state {
             return pr.merge_state == merge_state;
         }
