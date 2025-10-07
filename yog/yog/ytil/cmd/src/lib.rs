@@ -43,6 +43,14 @@ impl CmdExt for Command {
 /// Error type for command execution failures.
 #[derive(thiserror::Error, Debug)]
 pub enum CmdError {
+    /// Command executed but returned a non-zero exit status.
+    #[error("CmdError output={output:#?} {cmd_details}")]
+    Stderr {
+        /// Details about the command that failed.
+        cmd_details: CmdDetails,
+        /// The command output containing error information.
+        output: Box<Output>,
+    },
     /// I/O error occurred during command execution.
     #[error("{source} {cmd_details}")]
     Io {
@@ -52,16 +60,8 @@ pub enum CmdError {
         #[backtrace]
         source: std::io::Error,
     },
-    /// Command executed but returned a non-zero exit status.
-    #[error("{output:#?} {cmd_details}")]
-    Stderr {
-        /// Details about the command that failed.
-        cmd_details: CmdDetails,
-        /// The command output containing error information.
-        output: Box<Output>,
-    },
     /// UTF-8 conversion error when processing command output.
-    #[error("utf-8 error | source={source} cmd_details={cmd_details}")]
+    #[error("{source} cmd_details={cmd_details}")]
     Utf8 {
         /// Details about the command that failed.
         cmd_details: CmdDetails,
@@ -80,6 +80,17 @@ pub struct CmdDetails {
     cur_dir: Option<PathBuf>,
     /// The name of the command being executed.
     name: String,
+}
+
+/// Formats [`CmdDetails`] for display, showing command name, arguments, and working directory.
+impl core::fmt::Display for CmdDetails {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "cmd_name={} cmd_args={:?} cmd_dir={:?}",
+            self.name, self.cur_dir, self.args,
+        )
+    }
 }
 
 /// Converts a [`Command`] reference to [`CmdDetails`] for error reporting.
@@ -101,17 +112,6 @@ impl From<&mut Command> for CmdDetails {
             args: value.get_args().map(|x| x.to_string_lossy().to_string()).collect(),
             cur_dir: value.get_current_dir().map(Path::to_path_buf),
         }
-    }
-}
-
-/// Formats [`CmdDetails`] for display, showing command name, arguments, and working directory.
-impl core::fmt::Display for CmdDetails {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(
-            f,
-            "cmd_name={} cmd_args={:?} cmd_dir={:?}",
-            self.name, self.cur_dir, self.args,
-        )
     }
 }
 
