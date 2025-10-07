@@ -43,19 +43,8 @@ fn main() -> color_eyre::Result<()> {
         return Ok(());
     };
 
-    let selected_prs = selected_prs.iter().map(Deref::deref).collect::<Vec<_>>();
-    for pr in selected_prs {
-        let msg = match ytil_github::pr::merge(pr.number) {
-            Ok(_) => format!("{} pr={} title={}", "Merged".green().bold(), pr.number, pr.title),
-            Err(error) => format!(
-                "{} pr={} title={} error={}",
-                "Error merging".red().bold(),
-                pr.number,
-                pr.title,
-                format!("{error:?}").red().bold()
-            ),
-        };
-        println!("{msg}");
+    for pr in selected_prs.iter().map(Deref::deref) {
+        merge_pr(pr);
     }
 
     Ok(())
@@ -91,4 +80,20 @@ impl core::fmt::Display for RenderablePullRequest {
             self.title.white().bold()
         )
     }
+}
+
+fn merge_pr(pr: &PullRequest) {
+    let msg = ytil_github::pr::merge(pr.number).map_or_else(
+        |error| {
+            format!(
+                "{} pr={} title={} error={}",
+                "Error merging".red().bold(),
+                pr.number,
+                pr.title,
+                format!("{error:?}").red().bold()
+            )
+        },
+        |_| format!("{} pr={} title={}", "Merged".green().bold(), pr.number, pr.title),
+    );
+    println!("{msg}");
 }
