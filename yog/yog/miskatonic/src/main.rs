@@ -1,4 +1,4 @@
-//! Run quick ad‑hoc experiments and throwaway tests.
+//! Run ad‑hoc experimental snippets and throwaway tests.
 #![feature(exit_status_error)]
 
 /// Run ad‑hoc experimental code and throwaway tests.

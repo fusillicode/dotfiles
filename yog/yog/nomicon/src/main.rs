@@ -1,4 +1,12 @@
-//! Generate a consolidated styled workspace documentation.
+//! Generate consolidated styled workspace documentation.
+//!
+//! # Errors
+//! - Removing existing docs directory fails (other than NotFound).
+//! - `cargo doc` exits non-zero.
+//! - Reading a `Cargo.toml` or extracting required keys fails.
+//! - Template rendering fails.
+//! - Writing output files or copying static assets fails.
+//! - UTF-8 conversion or metadata parsing fails.
 #![feature(exit_status_error)]
 
 use std::io::ErrorKind::NotFound;

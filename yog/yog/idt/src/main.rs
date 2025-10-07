@@ -1,4 +1,17 @@
-//! Install language servers, linters, formatters and helpers concurrently.
+//! Install language servers, linters, formatters, and developer helpers concurrently.
+//!
+//! # Arguments
+//! - `dev_tools_dir` Directory for tool installation (created if missing).
+//! - `bin_dir` Directory for binary symlinks (created if missing).
+//! - `tool_names` Optional specific tools to install (defaults to all).
+//!
+//! # Errors
+//! - Missing required argument (`dev_tools_dir` / `bin_dir`).
+//! - Directory creation fails.
+//! - GitHub authentication fails.
+//! - Installer thread panics.
+//! - Individual tool installation fails (installer reports detail).
+//! - Dead symlink cleanup fails.
 #![feature(exit_status_error)]
 
 use std::path::Path;

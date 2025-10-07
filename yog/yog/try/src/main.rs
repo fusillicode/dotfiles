@@ -1,4 +1,15 @@
 //! Re-run a command until success (ok) or failure (ko) with cooldown.
+//!
+//! # Arguments
+//! - `cooldown_secs` Seconds to sleep between tries.
+//! - `exit_condition` `ok` (stop on success) or `ko` (stop on failure).
+//! - `command...` Remainder joined and executed via `sh -c`.
+//!
+//! # Errors
+//! - Cooldown seconds parse fails.
+//! - Exit condition parse fails.
+//! - Spawning or executing command fails.
+//! - UTF-8 conversion for output or error context fails.
 #![feature(exit_status_error)]
 
 use core::str::FromStr;

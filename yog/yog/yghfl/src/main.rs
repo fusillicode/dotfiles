@@ -1,4 +1,12 @@
 //! Copy GitHub URL (file/line/col) for the current Helix buffer to clipboard.
+//!
+//! # Errors
+//! - WezTerm pane text retrieval fails.
+//! - Status line extraction or parse fails.
+//! - Git repository root or remote URL resolution fails.
+//! - Multiple or zero GitHub remotes detected.
+//! - Current branch lookup fails.
+//! - Invalid UTF-8 in paths or process output.
 #![feature(exit_status_error)]
 
 use core::str::FromStr;

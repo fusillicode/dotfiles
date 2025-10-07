@@ -1,4 +1,17 @@
-//! Open files (optionally at line:col) in existing Neovim/Helix pane.
+//! Open files (optionally at line:col) in existing Neovim / Helix pane.
+//!
+//! # Arguments
+//! - `editor` Target editor (`nvim` | `hx`).
+//! - `file_path` File to open (append :line:col to jump location).
+//! - `pane_id` Optional WezTerm pane ID (auto-detected if omitted).
+//!
+//! # Errors
+//! - Missing editor or file argument.
+//! - Pane id parse or discovery fails.
+//! - Sibling pane detection fails.
+//! - File path parsing / validation fails.
+//! - Spawning shell command fails.
+//! - Required environment variable read fails.
 #![feature(exit_status_error)]
 
 use core::str::FromStr;

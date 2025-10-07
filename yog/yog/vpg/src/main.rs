@@ -1,4 +1,14 @@
 //! Update Postgres credentials from Vault, rewrite pgpass & nvim-dbee, optionally launch pgcli.
+//!
+//! # Arguments
+//! - `alias` Optional database alias (interactive selector if missing).
+//!
+//! # Errors
+//! - External command (`pgcli`, `vault`) fails or exits non-zero.
+//! - File read / write operations fail.
+//! - JSON serialization or deserialization fails.
+//! - Required environment variable missing or invalid Unicode.
+//! - User selection or prompt interaction fails.
 #![feature(exit_status_error)]
 
 use std::process::Command;

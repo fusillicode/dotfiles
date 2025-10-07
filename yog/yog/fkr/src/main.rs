@@ -1,4 +1,11 @@
-//! Interactively generate fake data (optionally copy to clipboard).
+//! Generate fake data interactively and optionally copy to clipboard.
+//!
+//! # Arguments
+//! - `cp` Optional flag to copy the generated value to clipboard.
+//!
+//! # Errors
+//! - Interactive selection UI fails.
+//! - Writing the generated value to the clipboard fails.
 #![feature(exit_status_error)]
 
 use fkr::FkrOption;

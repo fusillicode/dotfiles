@@ -1,19 +1,16 @@
-//! GitHub pull request lister + interactive merger.
+//! List and optionally merge GitHub pull requests interactively.
 //!
-//! Provides a minimal TUI to:
-//! - Enumerate pull requests for the current repository (optionally filtered).
-//! - Multi‑select interesting PRs.
-//! - Attempt squash merges (admin) deleting their branches.
+//! # Arguments
+//! - `search_filter` Optional free-form search string forwarded to `gh pr list --search`.
+//! - `merge_state` Optional merge state filter (`Behind|Blocked|Clean|Dirty|Draft|HasHooks|Unknown|Unmergeable`).
+//!
+//! # Errors
+//! - GitHub CLI invocations fail.
+//! - Merge state string fails to parse.
+//! - TUI interaction fails.
 //!
 //! # Rationale
-//! A focused alternative to opening the browser / using multiple `gh pr` invocations when
-//! resolving batches of routine PRs. Defers all heavy lifting (auth, API) to the GitHub CLI
-//! while keeping this binary lean and synchronous.
-//!
-//! # Future Work
-//! - Optional auto‑rebase / update before merge.
-//! - Label / author filters.
-//! - Async fetch + streaming render (likely unnecessary for small PR counts).
+//! Provide a focused alternative to opening a browser or chaining multiple `gh pr` commands when triaging batches of routine PRs while keeping the implementation lean and synchronous.
 #![feature(exit_status_error)]
 
 use std::ops::Deref;

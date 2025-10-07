@@ -1,4 +1,19 @@
-//! Switch or create Git branches (with PR URL parsing & selector).
+//! Switch, create, and derive Git branches (including from GitHub PR URLs).
+//!
+//! # Arguments
+//! - `-` Switch to previous branch.
+//! - `-b <args...>` Create new branch from sanitized `<args...>` then switch.
+//! - `<single>` Switch if exists, else confirm create & switch.
+//! - `<multiple args>` Sanitize & join into branch name (create if missing).
+//! - `<github pull request url>` Derive branch name from PR & switch (fetch if needed).
+//! - (none) Launch interactive selector.
+//!
+//! # Errors
+//! - GitHub authentication or PR branch name derivation fails.
+//! - Branch name construction yields empty string.
+//! - Branch listing / fetching / switching / creation fails.
+//! - Interactive selection or user confirmation input fails.
+//! - Current branch lookup fails.
 #![feature(exit_status_error)]
 
 use std::io::Write;

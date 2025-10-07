@@ -1,25 +1,28 @@
-//! Provide a simple interactive helper for staging or discarding Git changes.
+//! Stage or discard selected Git changes interactively
 //!
-//! Presents a textual user interface (TUI) of working tree status entries and lets the
-//! user (a) multi‑select entries, then (b) choose an operation to apply to the selection.
+//! Presents a compact TUI to multi‑select working tree entries and apply a bulk
+//! operation (stage or discard) with colorized progress output. Canceling any
+//! prompt safely results in no changes.
 //!
-//! Supported operations:
-//! - Discard: Delete newly created paths (worktree + unstage if indexed) then restore modified paths (optionally from a
-//!   provided branch).
-//! - Add: Stage (git add) the selected paths.
+//! # Arguments
+//! - `<branch>` Optional branch used as blob source during restore in Discard; if omitted,
+//!   `git restore` falls back to index / HEAD.
 //!
-//! Optional first CLI argument: a branch used as the source tree during
-//! the restore phase of the Discard operation.
+//! # Exit Codes
+//! - `0` Success (includes user cancellations performing no changes).
+//! - Non‑zero: bubbled I/O, subprocess, or git operation failure (reported via `color_eyre`).
 //!
-//! # Workflow
-//! 1. Collect status entries via [`ytil_git::get_status`].
-//! 2. Exit immediately if the working tree is clean.
-//! 3. Prompt for multi‑selection of entries (cancel => no-op).
-//! 4. Prompt for operation selection (cancel => no-op).
-//! 5. Delegate to operation helper (`restore_entries` or `add_entries`).
+//! # Errors
+//! - Status enumeration fails.
+//! - User interaction (selection prompts) fails.
+//! - File / directory removal for new entries fails.
+//! - Unstaging new index entries via [`ytil_git::unstage`] fails.
+//! - Restore command construction / execution fails.
+//! - Opening repository or adding paths to index fails.
 //!
-//! Progress (Deleted/Restored/Added lines) is printed incrementally; failures surface rich
-//! diagnostics via `color_eyre`.
+//! # Rationale
+//! - Delegates semantics to porcelain (`git restore`, `git add`) to inherit nuanced Git behavior.
+//! - Minimal two‑prompt UX optimizes rapid iterative staging / discarding.
 use std::ops::Deref;
 use std::path::Path;
 
