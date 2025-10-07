@@ -21,9 +21,11 @@ fn main() -> color_eyre::Result<()> {
 
     let params = format!(
         "search_filter={search_filter:?}{}",
-        merge_state.map(|ms| format!(" merge_state={ms:?}")).unwrap_or_default()
+        merge_state
+            .map(|ms| format!("\nmerge_state={ms:?}"))
+            .unwrap_or_default()
     );
-    println!("\n{} {}", "Search PRs by".cyan().bold(), params.bold());
+    println!("\n{}\n{}", "Search PRs by".cyan().bold(), params.white().bold());
 
     let pull_requests = ytil_github::pr::get(&repo, search_filter, &|pr: &PullRequest| {
         if let Some(merge_state) = merge_state {
@@ -32,7 +34,11 @@ fn main() -> color_eyre::Result<()> {
         true
     })?;
 
-    let renderable_prs = pull_requests.into_iter().map(RenderablePullRequest).collect();
+    let renderable_prs: Vec<_> = pull_requests.into_iter().map(RenderablePullRequest).collect();
+    if renderable_prs.is_empty() {
+        println!("\n{}", "No PRs matching search criteria".yellow().bold());
+    }
+
     let Some(selected_prs) = ytil_tui::minimal_multi_select::<RenderablePullRequest>(renderable_prs)? else {
         return Ok(());
     };
@@ -80,9 +86,9 @@ impl core::fmt::Display for RenderablePullRequest {
         write!(
             f,
             "{} {} {state} {}",
-            self.number.bold(),
+            self.number.white().bold(),
             self.author.login.blue().bold(),
-            self.title.bold()
+            self.title.white().bold()
         )
     }
 }
