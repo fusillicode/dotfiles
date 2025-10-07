@@ -132,17 +132,18 @@ impl core::fmt::Display for RenderablePullRequest {
 /// On success prints: `Merged pr=<N> title=<TITLE>` (green).
 /// On failure prints: `Error merging ... error=<E>` (red) but does not abort.
 fn merge_pr(pr: &PullRequest) {
-    let msg = ytil_github::pr::merge(pr.number).map_or_else(
-        |error| {
-            format!(
+    match ytil_github::pr::merge(pr.number) {
+        Ok(()) => {
+            println!("{} pr={} title={}", "Merged".green().bold(), pr.number, pr.title);
+        }
+        Err(error) => {
+            eprintln!(
                 "{} {} {} {}",
                 "Error merging pr".red().bold(),
                 format!("number={}", pr.number).white().bold(),
                 format!("title={}", pr.title).white().bold(),
                 format!("error={error}").red().bold()
-            )
-        },
-        |()| format!("{} pr={} title={}", "Merged".green().bold(), pr.number, pr.title),
-    );
-    println!("{msg}");
+            );
+        }
+    }
 }
