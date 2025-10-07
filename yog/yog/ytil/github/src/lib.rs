@@ -36,6 +36,17 @@ const GITHUB_PR_ID_PREFIX: &str = "pull";
 /// The query parameter key used for pull request IDs in GitHub Actions URLs.
 const GITHUB_PR_ID_QUERY_KEY: &str = "pr";
 
+/// Return the current repository `nameWithOwner` string via `gh repo view`.
+///
+/// Invokes: `gh repo view --json nameWithOwner --jq .nameWithOwner`.
+///
+/// # Returns
+/// Repository identifier in the canonical `owner/name` form.
+///
+/// # Errors
+/// - Spawning or executing the `gh repo view` command fails.
+/// - Command exits with non‑zero status.
+/// - Output is not valid UTF‑8.
 pub fn get_current_repo() -> color_eyre::Result<String> {
     let output = Command::new("gh")
         .args(["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"])

@@ -92,6 +92,7 @@ libgit2
 libs
 linewise
 md
+mergeability
 mut
 newtype
 nvim

@@ -1,3 +1,19 @@
+//! GitHub pull request lister + interactive merger.
+//!
+//! Provides a minimal TUI to:
+//! - Enumerate pull requests for the current repository (optionally filtered).
+//! - Multi‑select interesting PRs.
+//! - Attempt squash merges (admin) deleting their branches.
+//!
+//! # Rationale
+//! A focused alternative to opening the browser / using multiple `gh pr` invocations when
+//! resolving batches of routine PRs. Defers all heavy lifting (auth, API) to the GitHub CLI
+//! while keeping this binary lean and synchronous.
+//!
+//! # Future Work
+//! - Optional auto‑rebase / update before merge.
+//! - Label / author filters.
+//! - Async fetch + streaming render (likely unnecessary for small PR counts).
 #![feature(exit_status_error)]
 
 use std::ops::Deref;
@@ -7,6 +23,27 @@ use color_eyre::owo_colors::OwoColorize;
 use ytil_github::pr::PullRequest;
 use ytil_github::pr::PullRequestMergeState;
 
+/// List and optionally merge GitHub pull requests for the current repository.
+///
+/// Interactive flow:
+/// 1. Authenticate (or verify auth) via [`ytil_github::log_into_github`].
+/// 2. Resolve current repo `owner/name` via [`ytil_github::get_current_repo`].
+/// 3. Fetch pull requests (optionally filtered by search text + merge state).
+/// 4. Present multi‑select UI (cancel => exit).
+/// 5. For each selected PR attempt a squash merge (admin) and delete branch.
+///
+/// # Arguments
+/// CLI (positional) arguments:
+/// - `0` (optional) Free‑form search string passed to `gh pr list --search <ARG>`.
+/// - `1` (optional) Merge state filter (enum variant of [`PullRequestMergeState`]).
+///
+/// # Returns
+/// `Ok(())` when all selected merges finish (success or error reported inline).
+///
+/// # Errors
+/// - Any failure from GitHub CLI invocations.
+/// - Invalid merge state string (parse error).
+/// - Terminal interaction errors from the TUI helpers.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
     ytil_github::log_into_github()?;
@@ -50,6 +87,10 @@ fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
+/// Newtype wrapper implementing colored [`core::fmt::Display`] for a [`PullRequest`].
+///
+/// Renders: `<number> <author.login> <colored-merge-state> <title>`.
+/// Merge state receives a color to aid quick scanning.
 pub struct RenderablePullRequest(pub PullRequest);
 
 impl Deref for RenderablePullRequest {
@@ -82,6 +123,10 @@ impl core::fmt::Display for RenderablePullRequest {
     }
 }
 
+/// Attempt to merge the provided pull request and print a colored status line.
+///
+/// On success prints: `Merged pr=<N> title=<TITLE>` (green).
+/// On failure prints: `Error merging ... error=<E>` (red) but does not abort.
 fn merge_pr(pr: &PullRequest) {
     let msg = ytil_github::pr::merge(pr.number).map_or_else(
         |error| {
