@@ -1,24 +1,23 @@
-//! Print a file with `cat` or long‑list a directory with `ls`.
+//! Display file contents or long‑list directories.
+//!
+//! # Arguments
+//! - `<path>` Path to file / directory / symlink to display.
+//!
+//! # Usage
+//! ```bash
+//! catl <path> # file -> cat; directory -> colored long listing
+//! ```
+//!
+//! # Errors
+//! - Fetching metadata for `<path>` fails.
+//! - Spawning or waiting on `cat` / `ls` fails.
+//! - Underlying command exits with non-zero status.
 #![feature(exit_status_error)]
 
 use std::process::Command;
 
 use color_eyre::eyre::eyre;
 
-/// Display file contents or list a directory (long format).
-/// Uses `cat` for files/symlinks, `ls -llAtrh` for directories.
-///
-/// # Usage
-/// ```bash
-/// catl <path> # file -> cat; directory -> colored long listing
-/// ```
-///
-/// # Arguments
-/// - `<path>` Path to file / directory / symlink to display.
-///
-/// # Errors
-/// - Executing one of the external commands (cat, ls) fails or returns a non-zero exit status.
-/// - A filesystem operation (open/read/write/remove) fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

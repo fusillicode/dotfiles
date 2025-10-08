@@ -1,31 +1,35 @@
-#![feature(error_generic_member_access)]
-
 //! Execute system commands with structured errors and optional silenced output in release builds.
 //!
-//! Exposes an extension trait (`CmdExt`) with an `exec` method plus a helper `silent_cmd` that
+//! Exposes an extension trait [`CmdExt`] with an `exec` method plus a helper [`silent_cmd`] that
 //! null-routes stdout/stderr outside debug mode. Errors capture the command name, args and working
 //! directory for concise diagnostics.
+//!
+//! See [`CmdError`] for failure variants with rich context.
+#![feature(error_generic_member_access)]
 
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
+use std::process::ExitStatus;
 use std::process::Output;
 use std::process::Stdio;
 
 /// Extension trait for [`Command`] to execute and handle errors.
 pub trait CmdExt {
-    /// Executes the command and returns the output.
+    /// Run the command; capture stdout & stderr; return [`Output`] on success.
+    ///
+    /// # Returns
+    /// Full [`Output`] (captured stdout & stderr) when the exit status is zero.
     ///
     /// # Errors
-    /// Returns an error if:
-    /// - Spawning the command fails (I/O error).
-    /// - The command exits with a non-zero status (stderr captured).
-    /// - UTF-8 conversion of output is attempted and fails (see [`CmdError::Utf8`]).
+    /// - Spawning or waiting fails ([`CmdError::Io`]).
+    /// - Non-zero exit with valid UTF-8 stderr ([`CmdError::Stderr`]).
+    /// - Non-zero exit with invalid UTF-8 stderr ([`CmdError::FromUtf8`]).
+    /// - Borrowed UTF-8 validation failure ([`CmdError::Utf8`]).
     fn exec(&mut self) -> color_eyre::Result<Output, CmdError>;
 }
 
 impl CmdExt for Command {
-    /// Exec.
     fn exec(&mut self) -> color_eyre::Result<Output, CmdError> {
         let output = self.output().map_err(|source| CmdError::Io {
             cmd_details: CmdDetails::from(&*self),
@@ -34,53 +38,84 @@ impl CmdExt for Command {
         if !output.status.success() {
             return Err(CmdError::Stderr {
                 cmd_details: CmdDetails::from(&*self),
-                output: Box::new(output),
+                output: String::from_utf8(output.stderr).map_err(|error| CmdError::FromUtf8 {
+                    cmd_details: CmdDetails::from(&*self),
+                    source: error,
+                })?,
+                status: output.status,
             });
         }
         Ok(output)
     }
 }
 
-/// Error type for command execution failures.
+/// Command execution errors with contextual details.
+///
+/// Each variant embeds [`CmdDetails`] (program, args, cwd) for terse diagnostics. `Utf8`
+/// is currently not produced by [`CmdExt::exec`] but kept for potential future APIs.
 #[derive(thiserror::Error, Debug)]
 pub enum CmdError {
-    /// I/O error occurred during command execution.
-    #[error("io error {source} - {cmd_details}")]
-    Io {
-        /// Details about the command that failed.
+    /// Non-zero exit status; stderr captured & UTF-8 decoded.
+    #[error("non-zero status output={output:?} status={status:?} {cmd_details})")]
+    Stderr {
+        /// Command metadata snapshot.
         cmd_details: CmdDetails,
-        /// Source I/O error.
+        /// Full (untruncated) stderr.
+        output: String,
+        /// Failing status.
+        status: ExitStatus,
+    },
+    /// I/O failure spawning or waiting.
+    #[error("{source} {cmd_details}")]
+    Io {
+        /// Command metadata snapshot.
+        cmd_details: CmdDetails,
         #[backtrace]
+        /// Underlying OS error.
         source: std::io::Error,
     },
-    /// Command executed but returned a non-zero exit status.
-    #[error("stderr {output:#?} - {cmd_details}")]
-    Stderr {
-        /// Details about the command that failed.
-        cmd_details: CmdDetails,
-        /// The command output containing error information.
-        output: Box<Output>,
-    },
-    /// UTF-8 conversion error when processing command output.
-    #[error("utf-8 error | source={source} cmd_details={cmd_details}")]
+    /// Borrowed data UTF-8 validation failed.
+    #[error("{source} {cmd_details}")]
     Utf8 {
-        /// Details about the command that failed.
+        /// Command metadata snapshot.
         cmd_details: CmdDetails,
-        /// Source UTF-8 conversion error.
         #[backtrace]
+        /// UTF-8 error.
         source: core::str::Utf8Error,
+    },
+    /// Owned stderr bytes not valid UTF-8.
+    #[error("{source} {cmd_details}")]
+    FromUtf8 {
+        /// Command metadata snapshot.
+        cmd_details: CmdDetails,
+        #[backtrace]
+        /// Conversion error.
+        source: std::string::FromUtf8Error,
     },
 }
 
-/// Details about a command execution, used for error reporting and debugging.
+/// Snapshot of command name, args and cwd.
+///
+/// Arguments/program are converted lossily from [`std::ffi::OsStr`] to [`String`] for ease of logging.
 #[derive(Debug)]
 pub struct CmdDetails {
-    /// The arguments passed to the command.
+    /// Ordered arguments (lossy UTF-8).
     args: Vec<String>,
-    /// The current working directory for the command, if specified.
+    /// Working directory (if set).
     cur_dir: Option<PathBuf>,
-    /// The name of the command being executed.
+    /// Program / executable name.
     name: String,
+}
+
+/// Formats [`CmdDetails`] for display, showing command name, arguments, and working directory.
+impl core::fmt::Display for CmdDetails {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "CmdDetails=(name={:?} args={:?} cur_dir={:?})",
+            self.name, self.args, self.cur_dir,
+        )
+    }
 }
 
 /// Converts a [`Command`] reference to [`CmdDetails`] for error reporting.
@@ -105,14 +140,10 @@ impl From<&mut Command> for CmdDetails {
     }
 }
 
-/// Formats [`CmdDetails`] for display, showing command name, arguments, and working directory.
-impl core::fmt::Display for CmdDetails {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "cmd {} - args {:#?} - dir {:#?}", self.name, self.args, self.cur_dir)
-    }
-}
-
-/// Creates a [`Command`] for the given program with silenced standard output and standard error in release mode.
+/// Creates a [`Command`] for `program`; silences stdout/stderr in release builds.
+///
+/// In debug (`debug_assertions`), output is inherited for easier troubleshooting.
+/// In release, both streams are redirected to [`Stdio::null()`] to keep logs quiet.
 pub fn silent_cmd(program: &str) -> Command {
     let mut cmd = Command::new(program);
     if !cfg!(debug_assertions) {

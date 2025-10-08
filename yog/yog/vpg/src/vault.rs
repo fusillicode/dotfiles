@@ -37,12 +37,6 @@ pub struct VaultCreds {
 
 /// Checks and renews Vault authentication using OIDC/Okta if token is invalid.
 ///
-/// # Workflow
-/// 1. Checks current Vault token validity via `vault token lookup`.
-/// 2. If valid, returns immediately.
-/// 3. If token is invalid due to permission error, initiates OIDC login via Okta.
-/// 4. Fails on unexpected lookup errors or login failures.
-///
 /// # Errors
 /// - Executing `vault` fails or returns a non-zero exit status.
 /// - UTF-8 conversion fails.

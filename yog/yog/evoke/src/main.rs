@@ -1,4 +1,22 @@
 //! Format, lint, build, and deploy workspace binaries and Neovim libs.
+//!
+//! # Arguments
+//! - `--debug` Use debug profile; skip clippy; copy from `target/debug`.
+//! - `bins_path` Destination for binaries (default: `$HOME/.local/bin`).
+//! - `cargo_target_path` Cargo target root (default: workspace `target/`).
+//! - `nvim_libs_path` Destination for nvim libs (default: `$HOME/.config/nvim/lua`).
+//!
+//! # Usage
+//! ```bash
+//! evoke # fmt + clippy + build --release, copy bins & libs
+//! evoke --debug # fmt + build debug (skip clippy) copy from target/debug
+//! evoke --debug "$HOME/.local/bin" "$PWD/target" "$HOME/.config/nvim/lua"
+//! ```
+//!
+//! # Errors
+//! - Resolving required environment variables fails or yields invalid Unicode.
+//! - Running `cargo fmt`, `cargo clippy`, or `cargo build` fails.
+//! - Copying a binary or library fails.
 #![feature(exit_status_error)]
 
 use std::path::Path;
@@ -7,7 +25,9 @@ use std::path::PathBuf;
 use color_eyre::owo_colors::OwoColorize;
 
 /// List of binary names that should be symlinked after building.
-const BINS: &[&str] = &["idt", "catl", "fkr", "gch", "gcu", "oe", "try", "vpg", "yghfl", "yhfp"];
+const BINS: &[&str] = &[
+    "idt", "catl", "fkr", "gch", "gcu", "ghl", "oe", "try", "vpg", "yghfl", "yhfp",
+];
 /// List of library files that need to be renamed after building, mapping (`source_name`, `target_name`).
 const LIBS: &[(&str, &str)] = &[("libnvrim.dylib", "nvrim.so")];
 /// Path segments for the default binaries install dir.
@@ -15,25 +35,6 @@ const BINS_DEFAULT_PATH: &[&str] = &[".local", "bin"];
 /// Path segments for the Nvim libs install dir.
 const NVIM_LIBS_DEFAULT_PATH: &[&str] = &[".config", "nvim", "lua"];
 
-/// Format, lint, build, and deploy yog binaries and its Neovim libs.
-///
-/// # Usage
-/// `evoke [--debug] [bins_path] [cargo_target_path] [nvim_libs_path]`
-///
-/// `--debug` may appear anywhere; it is removed before positional argument parsing.
-///
-/// # Arguments
-/// - `--debug` Use debug profile, skip clippy and copy from `target/debug`.
-/// - `bins_path` Destination for binaries, defaulting to `$HOME/.local/bin`.
-/// - `cargo_target_path` Cargo target root containing `debug/` & `release/`, defaulting to project root `target/`.
-/// - `nvim_libs_path` Destination for renamed Neovim libs (e.g. `nvrim.so`), defaulting to `$HOME/.config/nvim/lua`.
-///
-/// Omit trailing path arguments to accept defaults.
-///
-/// # Errors
-/// - Resolving a required environment variable fails or yields invalid Unicode.
-/// - Formatting, linting, or building (`cargo fmt`, `cargo clippy`, `cargo build`) fails or exits non-zero.
-/// - Copying a built binary or library fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

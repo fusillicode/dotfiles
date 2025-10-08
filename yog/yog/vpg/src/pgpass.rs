@@ -161,12 +161,6 @@ impl core::fmt::Display for ConnectionParams {
 /// - `updated_conn_params` New connection parameters (must implement `ToString`).
 /// - `pgpass_path` Path to the original `.pgpass` file.
 ///
-/// # Workflow
-/// 1. Creates temporary file `.pgpass.tmp` in same directory.
-/// 2. Writes all lines, replacing the specified index with updated connection parameters.
-/// 3. Atomically replaces original file via rename.
-/// 4. Sets strict permissions (600) to match `.pgpass` security requirements.
-///
 /// # Errors
 /// - A filesystem operation (open/read/write/remove) fails.
 pub fn save_new_pgpass_file(

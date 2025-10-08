@@ -214,7 +214,7 @@ end
 function M.opencode(plugin)
   return {
     { '<leader>oA', mode = 'n',           plugin and { function() require('opencode').ask() end, desc = 'Ask opencode', }, },
-    { '<leader>oa', mode = 'v',           plugin and { function() require('opencode').ask('@selection: ') end, desc = 'Ask opencode about selection', }, },
+    { '<leader>oa', mode = 'v',           plugin and { function() require('opencode').ask('@selection: ', { submit = true, }) end, desc = 'Ask opencode about selection', }, },
     { '<leader>on', mode = 'n',           plugin and { function() require('opencode').command('session_new') end, desc = 'New session', }, },
     { '<leader>oy', mode = 'n',           plugin and { function() require('opencode').command('messages_copy') end, desc = 'Copy last message', }, },
     { '<leader>op', mode = { 'n', 'v', }, plugin and { function() require('opencode').select_prompt() end, desc = 'Select prompt', }, },

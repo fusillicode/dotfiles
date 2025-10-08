@@ -1,4 +1,12 @@
-//! Generate a consolidated styled workspace documentation.
+//! Generate consolidated styled workspace documentation.
+//!
+//! # Errors
+//! - Removing existing docs directory fails (other than `NotFound`).
+//! - `cargo doc` exits non-zero.
+//! - Reading a `Cargo.toml` or extracting required keys fails.
+//! - Template rendering fails.
+//! - Writing output files or copying static assets fails.
+//! - UTF-8 conversion or metadata parsing fails.
 #![feature(exit_status_error)]
 
 use std::io::ErrorKind::NotFound;
@@ -17,14 +25,6 @@ use crate::templates::pages::not_found::NotFoundPage;
 
 mod templates;
 
-/// Build unified styled workspace documentation atop `cargo doc`.
-///
-/// # Errors
-/// - Removing the previous `target/doc` (if present) fails for a reason other than [`NotFound`].
-/// - `cargo doc` exits non‑zero (warnings are denied via `RUSTDOCFLAGS=-Dwarnings`).
-/// - A `Cargo.toml` cannot be read or required `[package]` keys (`name`, `description`) are missing.
-/// - Template rendering fails.
-/// - Writing output files or copying static assets fails.
 fn main() -> color_eyre::eyre::Result<()> {
     color_eyre::install()?;
 

@@ -6,6 +6,7 @@ members = [
   "yog/fkr",
   "yog/gch",
   "yog/gcu",
+  "yog/ghl",
   "yog/idt",
   "yog/miskatonic",
   "yog/nomicon",
@@ -56,14 +57,14 @@ ytil_editor = { path = "./yog/ytil/editor" }
 ytil_git = { path = "./yog/ytil/git" }
 ytil_github = { path = "./yog/ytil/github" }
 ytil_hx = { path = "./yog/ytil/hx" }
-ytil_tui = { path = "./yog/ytil/tui" }
 ytil_system = { path = "./yog/ytil/system" }
+ytil_tui = { path = "./yog/ytil/tui" }
 ytil_wezterm = { path = "./yog/ytil/wezterm" }
 
 #[dev-dependencies]
 assert2 = { version = "0.3" }
-rstest = { version = "0.26" }
 pretty_assertions = { version = "1.4" }
+rstest = { version = "0.26" }
 
 [profile.test]
 # Reduces the size of the target directory
