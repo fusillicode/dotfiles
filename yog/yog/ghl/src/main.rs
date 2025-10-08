@@ -52,7 +52,7 @@ fn main() -> color_eyre::Result<()> {
         .opt_value_from_fn("--merge-state", PullRequestMergeState::from_str)
         .with_section(|| {
             format!(
-                "accepted values are: {:#?}",
+                "accepted values are {:#?}",
                 PullRequestMergeState::iter().collect::<Vec<_>>()
             )
             .red()
@@ -84,6 +84,8 @@ fn main() -> color_eyre::Result<()> {
         return Ok(());
     };
 
+    // Cosmetic space in prompt.
+    println!();
     for pr in selected_prs.iter().map(Deref::deref) {
         merge_pr(pr);
     }
@@ -141,7 +143,7 @@ fn merge_pr(pr: &PullRequest) {
                 "{} {} {} {}",
                 "Error merging pr".red().bold(),
                 format!("number={}", pr.number).white().bold(),
-                format!("title={}", pr.title).white().bold(),
+                format!("title={:?}", pr.title).white().bold(),
                 format!("error={error}").red().bold()
             );
         }

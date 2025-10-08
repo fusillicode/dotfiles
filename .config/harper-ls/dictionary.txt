@@ -91,6 +91,7 @@ kos
 libgit2
 libs
 linewise
+lossily
 md
 mergeability
 mut
