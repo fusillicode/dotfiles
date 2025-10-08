@@ -26,13 +26,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Setup
+      - name: Setup (cargo-sort)
         uses: ./.github/actions/setup
-      - name: Install cargo-sort
-        working-directory: yog
-        run: |
-          cargo install cargo-sort --locked --quiet
-          cargo sort --version
+        with:
+          tools: "cargo-sort"
       - name: Check Cargo.toml ordering (cargo-sort)
         working-directory: yog
         run: |
@@ -44,13 +41,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Setup
+      - name: Setup (cargo-machete)
         uses: ./.github/actions/setup
-      - name: Install cargo-machete
-        working-directory: yog
-        run: |
-          cargo install cargo-machete --locked --quiet
-          cargo machete --version
+        with:
+          tools: "cargo-machete"
       - name: Detect unused dependencies (cargo-machete)
         working-directory: yog
         run: |
@@ -62,7 +56,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Setup
+      - name: Setup (no extra tools)
         uses: ./.github/actions/setup
       - name: Lint code (clippy)
         working-directory: yog
@@ -75,7 +69,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Setup
+      - name: Setup (no extra tools)
         uses: ./.github/actions/setup
       - name: Test
         working-directory: yog
@@ -88,7 +82,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Setup
+      - name: Setup (no extra tools)
         uses: ./.github/actions/setup
       - name: Build
         working-directory: yog
