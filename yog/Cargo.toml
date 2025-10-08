@@ -61,7 +61,8 @@ ytil_system = { path = "./yog/ytil/system" }
 ytil_tui = { path = "./yog/ytil/tui" }
 ytil_wezterm = { path = "./yog/ytil/wezterm" }
 
-#[dev-dependencies]
+# Centralized shared dependencies (including those used only as dev-deps in member crates).
+# Member crates reference them with `{ workspace = true }` under their own [dev-dependencies].
 assert2 = { version = "0.3" }
 pretty_assertions = { version = "1.4" }
 rstest = { version = "0.26" }

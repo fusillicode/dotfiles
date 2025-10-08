@@ -22,6 +22,6 @@ ytil_wezterm = { workspace = true }
 
 [dev-dependencies]
 fake = { workspace = true }
-ytil_hx = { workspace = true, features = ["fake"] }
 temp-env = { version = "0.3" }
+ytil_hx = { workspace = true, features = ["fake"] }
 ytil_wezterm = { workspace = true, features = ["fake"] }
