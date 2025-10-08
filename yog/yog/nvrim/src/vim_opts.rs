@@ -70,7 +70,6 @@ fn set_all(_: ()) {
     set("ignorecase", true, &global_scope);
     set("laststatus", 3, &global_scope);
     set("list", true, &global_scope);
-    set("mouse", "", &global_scope);
     set("number", true, &global_scope);
     set("shiftwidth", 2, &global_scope);
     set("shortmess", "ascIF", &global_scope);
