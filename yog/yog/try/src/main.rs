@@ -1,4 +1,21 @@
 //! Re-run a command until success (ok) or failure (ko) with cooldown.
+//!
+//! # Arguments
+//! - `cooldown_secs` Seconds to sleep between tries.
+//! - `exit_condition` `ok` (stop on success) or `ko` (stop on failure).
+//! - `command...` Remainder joined and executed via `sh -c`.
+//!
+//! # Usage
+//! ```bash
+//! try 2 ok cargo test # rerun every 2s until tests pass
+//! try 5 ko curl -f localhost:8080 # rerun until it fails (e.g. service goes down)
+//! ```
+//!
+//! # Errors
+//! - Cooldown seconds parse fails.
+//! - Exit condition parse fails.
+//! - Spawning or executing command fails.
+//! - UTF-8 conversion for output or error context fails.
 #![feature(exit_status_error)]
 
 use core::str::FromStr;
@@ -12,22 +29,6 @@ use color_eyre::eyre::WrapErr;
 use color_eyre::eyre::bail;
 use itertools::Itertools;
 
-/// Re-run a command until an exit condition is met.
-///
-/// # Usage
-/// ```bash
-/// try 2 ok cargo test # run every 2s until success
-/// try 1 ko curl localhost:3000 # run until command FAILS (e.g. server down)
-/// ```
-///
-/// # Arguments
-/// - `cooldown_secs` Seconds to wait between executions.
-/// - `exit_condition` "ok" (stop on success) or "ko" (stop on failure).
-/// - `command` Command to execute (everything after `exit_condition`).
-///
-/// # Errors
-/// - Executing `sh` fails or returns a non-zero exit status.
-/// - UTF-8 conversion fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

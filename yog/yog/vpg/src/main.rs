@@ -1,4 +1,27 @@
 //! Update Postgres credentials from Vault, rewrite pgpass & nvim-dbee, optionally launch pgcli.
+//!
+//! # Arguments
+//! - `alias` Optional database alias (interactive selector if missing).
+//!
+//! # Usage
+//! ```bash
+//! vpg # pick alias interactively -> update credentials -> optional connect
+//! vpg reporting # directly update 'reporting' alias then prompt to connect
+//! ```
+//!
+//! # Flow
+//! 1. Read ~/.pgpass & parse entries.
+//! 2. Resolve alias (arg or picker).
+//! 3. Vault login (if needed) + read secret.
+//! 4. Update pgpass & nvim dbee conns file.
+//! 5. Prompt to start pgcli.
+//!
+//! # Errors
+//! - External command (`pgcli`, `vault`) fails or exits non-zero.
+//! - File read / write operations fail.
+//! - JSON serialization or deserialization fails.
+//! - Required environment variable missing or invalid Unicode.
+//! - User selection or prompt interaction fails.
 #![feature(exit_status_error)]
 
 use std::process::Command;
@@ -15,24 +38,6 @@ mod nvim_dbee;
 mod pgpass;
 mod vault;
 
-/// Manage `PostgreSQL` credentials from Vault and update connection files.
-///
-/// After updating credentials, interactively prompts for confirmation before connecting via pgcli.
-///
-/// # Usage
-/// ```bash
-/// vpg # select alias interactively
-/// vpg analytics # update credentials for alias 'analytics'
-/// ```
-///
-/// # Arguments
-/// - `alias` Database alias (optional, interactive selection if not provided).
-///
-/// # Errors
-/// - Executing one of the external commands (pgcli, vault) fails or returns a non-zero exit status.
-/// - A filesystem operation (open/read/write/remove) fails.
-/// - JSON serialization or deserialization fails.
-/// - A required environment variable is missing or invalid Unicode.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
