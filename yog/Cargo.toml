@@ -38,6 +38,10 @@ keywords = ["cli", "tools", "development", "productivity"]
 categories = ["command-line-utilities", "development-tools"]
 
 [workspace.dependencies]
+
+# Centralized shared dependencies (including those used only as dev-deps in member crates).
+# Member crates reference them with `{ workspace = true }` under their own [dev-dependencies].
+assert2 = { version = "0.3" }
 bitflags = { version = "2.9" }
 chrono = { version = "0.4", features = ["serde"] }
 color-eyre = { version = "0.6" }
@@ -46,6 +50,8 @@ fake = { version = "4.4", features = ["derive"] }
 getrandom = { version = "0.3" }
 git2 = { version = "0.20" }
 itertools = { version = "0.14" }
+pretty_assertions = { version = "1.4" }
+rstest = { version = "0.26" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 strum = { version = "0.27", features = ["derive"] }
@@ -60,12 +66,6 @@ ytil_hx = { path = "./yog/ytil/hx" }
 ytil_system = { path = "./yog/ytil/system" }
 ytil_tui = { path = "./yog/ytil/tui" }
 ytil_wezterm = { path = "./yog/ytil/wezterm" }
-
-# Centralized shared dependencies (including those used only as dev-deps in member crates).
-# Member crates reference them with `{ workspace = true }` under their own [dev-dependencies].
-assert2 = { version = "0.3" }
-pretty_assertions = { version = "1.4" }
-rstest = { version = "0.26" }
 
 [profile.test]
 # Reduces the size of the target directory

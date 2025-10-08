@@ -10,6 +10,9 @@ description = "Expose Neovim Lua modules backed by Rust utilities."
 keywords = ["neovim", "nvim", "lua", "plugin", "rust", "editor"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lib]
+crate-type = ["cdylib"]
+
 [dependencies]
 color-eyre = { workspace = true }
 convert_case = { workspace = true }
@@ -28,6 +31,3 @@ ytil_cmd = { workspace = true }
 ytil_git = { workspace = true }
 ytil_system = { workspace = true }
 ytil_wezterm = { workspace = true }
-
-[lib]
-crate-type = ["cdylib"]

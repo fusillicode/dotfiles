@@ -16,5 +16,5 @@ color-eyre = { workspace = true }
 ytil_cmd = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3.13"
 assert2 = { workspace = true }
+tempfile = "3.13"
