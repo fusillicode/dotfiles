@@ -1,5 +1,10 @@
 name: "Setup"
-description: "Set up Rust and cache dependencies"
+description: "Set up Rust, cache dependencies & optionally install specified global cargo tools"
+inputs:
+  tools:
+    description: "Space-separated list of cargo crate specs (name or name@version)"
+    required: false
+    default: ""
 runs:
   using: "composite"
   steps:
@@ -34,3 +39,56 @@ runs:
         key: cargo-build-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('**/Cargo.toml') }}
         restore-keys: |
           cargo-build-${{ runner.os }}-
+
+    - name: Derive tools hash
+      if: inputs.tools != ''
+      id: tools_hash
+      shell: bash
+      run: |
+        set -euo pipefail
+        norm=$(echo "${{ inputs.tools }}" | tr ' ' '\n' | sed '/^$/d' | sort | tr '\n' ' ' | sed 's/ $//')
+        echo "Normalized tools: $norm"
+        if command -v sha256sum >/dev/null 2>&1; then
+          hash=$(printf '%s' "$norm" | sha256sum | cut -c1-16)
+        else
+          hash=$(printf '%s' "$norm" | shasum -a 256 | cut -c1-16)
+        fi
+        echo "hash=$hash" >> "$GITHUB_OUTPUT"
+
+    - name: Cache Cargo global bin tools
+      if: inputs.tools != ''
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/bin
+        key: cargo-bin-${{ runner.os }}-${{ steps.tools_hash.outputs.hash }}-v1
+        restore-keys: |
+          cargo-bin-${{ runner.os }}-
+
+    - name: Install/ensure global cargo tools
+      if: inputs.tools != ''
+      shell: bash
+      working-directory: yog
+      run: |
+        set -euo pipefail
+        echo "Requested global tools: ${{ inputs.tools }}"
+        for spec in ${{ inputs.tools }}; do
+          [[ -z "$spec" ]] && continue
+          name=${spec%@*}
+          version=${spec#*@}
+          if [[ "$name" == "$version" ]]; then
+            # no @ present -> install latest
+            version=""
+          fi
+          if command -v "$name" >/dev/null 2>&1; then
+            echo "[tools] Found $name ($( "$name" --version 2>/dev/null || echo '?' ))"
+            continue
+          fi
+          if [[ -n "$version" ]]; then
+            echo "[tools] Installing $name@$version"
+            cargo install "$name" --version "$version" --locked
+          else
+            echo "[tools] Installing $name (latest)"
+            cargo install "$name" --locked
+          fi
+        done
