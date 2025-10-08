@@ -136,14 +136,21 @@ impl core::fmt::Display for RenderablePullRequest {
 fn merge_pr(pr: &PullRequest) {
     match ytil_github::pr::merge(pr.number) {
         Ok(()) => {
-            println!("{} pr={} title={}", "Merged".green().bold(), pr.number, pr.title);
+            println!(
+                "{} {} {} {}",
+                "Merged PR".green().bold(),
+                format!("number={}", pr.number).white().bold(),
+                format!("title={:?}", pr.title).white().bold(),
+                format!("author={:?}", pr.author).white().bold(),
+            );
         }
         Err(error) => {
             eprintln!(
-                "{} {} {} {}",
-                "Error merging pr".red().bold(),
+                "{} {} {} {} {}",
+                "Error merging PR".red().bold(),
                 format!("number={}", pr.number).white().bold(),
                 format!("title={:?}", pr.title).white().bold(),
+                format!("author={:?}", pr.author).white().bold(),
                 format!("error={error}").red().bold()
             );
         }
