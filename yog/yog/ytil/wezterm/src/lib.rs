@@ -146,3 +146,95 @@ pub struct WeztermPaneSize {
     /// Number of character rows in the pane.
     pub rows: i64,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn send_text_to_pane_cmd_returns_the_expected_bash_cmd_string() {
+        assert_eq!(
+            send_text_to_pane_cmd("echo hi", 7),
+            "wezterm cli send-text echo hi --pane-id '7' --no-paste"
+        );
+    }
+
+    #[test]
+    fn submit_pane_cmd_returns_the_expected_bash_cmd_string() {
+        assert_eq!(
+            submit_pane_cmd(3),
+            "printf \"\\r\" | wezterm cli send-text --pane-id '3' --no-paste"
+        );
+    }
+
+    #[test]
+    fn activate_pane_cmd_returns_the_expected_bash_cmd_string() {
+        assert_eq!(activate_pane_cmd(9), "wezterm cli activate-pane --pane-id '9'");
+    }
+
+    #[test]
+    fn get_sibling_pane_with_titles_returns_the_expected_match_in_same_tab() {
+        // removed local use assert2::let_assert; prefer fully qualified
+        let panes = vec![
+            pane_with(1, 10, "file:///host/home/user/project", "hx"),
+            pane_with(2, 10, "file:///host/home/user/project", "shell"),
+            pane_with(3, 11, "file:///host/home/user/other", "hx"),
+        ];
+        assert2::let_assert!(Ok(sibling) = get_sibling_pane_with_titles(&panes, 2, &["hx"]));
+        assert_eq!(sibling.pane_id, 1);
+    }
+
+    #[test]
+    fn get_sibling_pane_with_titles_errors_when_no_title_match() {
+        // removed local use assert2::let_assert; prefer fully qualified
+        let panes = vec![pane_with(1, 10, "file:///host/home/user/project", "shell")];
+        assert2::let_assert!(Err(error) = get_sibling_pane_with_titles(&panes, 1, &["hx"]));
+        assert!(error.to_string().contains("pane title not found"));
+    }
+
+    #[test]
+    fn absolute_cwd_strips_file_uri_prefix() {
+        let pane = pane_with(1, 10, "file:///localhost/Users/alice/src", "hx");
+        let abs = pane.absolute_cwd();
+        assert!(abs.starts_with("/Users/alice/src"));
+    }
+
+    #[test]
+    fn is_sibling_terminal_pane_of_works_as_expected() {
+        let root = pane_with(1, 10, "file:///localhost/Users/alice/src", "hx");
+        let child = pane_with(2, 10, "file:///localhost/Users/alice/src/project", "shell");
+        let other_tab = pane_with(3, 11, "file:///localhost/Users/alice/src/project", "shell");
+        assert!(child.is_sibling_terminal_pane_of(&root));
+        assert!(!root.is_sibling_terminal_pane_of(&root));
+        assert!(!other_tab.is_sibling_terminal_pane_of(&root));
+    }
+
+    fn pane_with(id: i64, tab: i64, cwd: &str, title: &str) -> WeztermPane {
+        WeztermPane {
+            cursor_shape: "Block".into(),
+            cursor_visibility: "Visible".into(),
+            cursor_x: 0,
+            cursor_y: 0,
+            cwd: PathBuf::from(cwd),
+            is_active: false,
+            is_zoomed: false,
+            left_col: 0,
+            pane_id: id,
+            size: WeztermPaneSize {
+                cols: 80,
+                dpi: 96,
+                pixel_height: 800,
+                pixel_width: 600,
+                rows: 24,
+            },
+            tab_id: tab,
+            tab_title: "tab".into(),
+            title: title.into(),
+            top_row: 0,
+            tty_name: "tty".into(),
+            window_id: 1,
+            window_title: "win".into(),
+            workspace: "default".into(),
+        }
+    }
+}

@@ -134,5 +134,6 @@ unminified
 unstage
 unstaged
 unstaging
+untruncated
 worktree
 yog

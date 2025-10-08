@@ -417,6 +417,7 @@ impl Branch {
 /// Aggregates index + worktree bitflags plus conflict / ignore markers into a higher‑level
 /// representation with convenience predicates (e.g. [`GitStatusEntry::is_new`]).
 #[derive(Debug, Clone)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 pub struct GitStatusEntry {
     /// Path relative to the repository root.
     pub path: PathBuf,
@@ -474,6 +475,7 @@ impl TryFrom<(PathBuf, &StatusEntry<'_>)> for GitStatusEntry {
 
 /// Staged (index) status for a path.
 #[derive(Debug, Clone)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 pub enum IndexState {
     /// Path added to the index.
     New,
@@ -511,6 +513,7 @@ impl IndexState {
 
 /// Unstaged (worktree) status for a path.
 #[derive(Debug, Clone)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 pub enum WorktreeState {
     /// Path newly created in worktree.
     New,
@@ -546,5 +549,104 @@ impl WorktreeState {
     /// Returns `true` if this represents a newly added path.
     pub const fn is_new(&self) -> bool {
         matches!(self, Self::New)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case::remote_same_short_name(
+        vec![local("feature-x"), remote("origin/feature-x")],
+        vec![local("feature-x")]
+    )]
+    #[case::no_redundant(
+        vec![local("feature-x"), remote("origin/feature-y")],
+        vec![local("feature-x"), remote("origin/feature-y")]
+    )]
+    #[case::multiple_mixed(
+        vec![
+            local("feature-x"),
+            remote("origin/feature-x"),
+            remote("origin/feature-y"),
+            local("main"),
+            remote("upstream/main")
+        ],
+        vec![local("feature-x"), remote("origin/feature-y"), local("main")]
+    )]
+    #[case::different_remote_prefix(
+        vec![local("feature-x"), remote("upstream/feature-x")],
+        vec![local("feature-x")]
+    )]
+    fn remove_redundant_remotes_cases(#[case] mut input: Vec<Branch>, #[case] expected: Vec<Branch>) {
+        remove_redundant_remotes(&mut input);
+        assert_eq!(expected, input);
+    }
+
+    #[rstest]
+    #[case::index_new(Some(IndexState::New), None, true)]
+    #[case::worktree_new(None, Some(WorktreeState::New), true)]
+    #[case::both_new(Some(IndexState::New), Some(WorktreeState::New), true)]
+    #[case::modified_index(Some(IndexState::Modified), None, false)]
+    #[case::modified_worktree(None, Some(WorktreeState::Modified), false)]
+    #[case::none(None, None, false)]
+    fn git_status_entry_is_new_cases(
+        #[case] index_state: Option<IndexState>,
+        #[case] worktree_state: Option<WorktreeState>,
+        #[case] expected: bool,
+    ) {
+        let entry = entry(index_state, worktree_state);
+        assert_eq!(expected, entry.is_new());
+    }
+
+    #[rstest]
+    #[case(Status::INDEX_NEW, Some(IndexState::New))]
+    #[case(Status::INDEX_MODIFIED, Some(IndexState::Modified))]
+    #[case(Status::INDEX_DELETED, Some(IndexState::Deleted))]
+    #[case(Status::INDEX_RENAMED, Some(IndexState::Renamed))]
+    #[case(Status::INDEX_TYPECHANGE, Some(IndexState::Typechange))]
+    #[case(Status::WT_MODIFIED, None)]
+    fn index_state_new_maps_each_flag(#[case] input: Status, #[case] expected: Option<IndexState>) {
+        assert_eq!(IndexState::new(&input), expected);
+    }
+
+    #[rstest]
+    #[case(Status::WT_NEW, Some(WorktreeState::New))]
+    #[case(Status::WT_MODIFIED, Some(WorktreeState::Modified))]
+    #[case(Status::WT_DELETED, Some(WorktreeState::Deleted))]
+    #[case(Status::WT_RENAMED, Some(WorktreeState::Renamed))]
+    #[case(Status::WT_TYPECHANGE, Some(WorktreeState::Typechange))]
+    #[case(Status::WT_UNREADABLE, Some(WorktreeState::Unreadable))]
+    #[case(Status::INDEX_MODIFIED, None)]
+    fn worktree_state_new_maps_each_flag(#[case] input: Status, #[case] expected: Option<WorktreeState>) {
+        assert_eq!(WorktreeState::new(&input), expected);
+    }
+
+    fn local(name: &str) -> Branch {
+        Branch::Local {
+            name: name.into(),
+            committer_date_time: DateTime::from_timestamp(0, 0).unwrap(),
+        }
+    }
+
+    fn remote(name: &str) -> Branch {
+        Branch::Remote {
+            name: name.into(),
+            committer_date_time: DateTime::from_timestamp(0, 0).unwrap(),
+        }
+    }
+
+    fn entry(index_state: Option<IndexState>, worktree_state: Option<WorktreeState>) -> GitStatusEntry {
+        GitStatusEntry {
+            path: "p".into(),
+            repo_root: ".".into(),
+            conflicted: false,
+            ignored: false,
+            index_state,
+            worktree_state,
+        }
     }
 }

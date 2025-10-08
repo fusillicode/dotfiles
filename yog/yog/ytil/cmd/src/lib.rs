@@ -151,3 +151,29 @@ pub fn silent_cmd(program: &str) -> Command {
     }
     cmd
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exec_success_returns_output() {
+        let mut cmd = Command::new("bash");
+        cmd.args(["-c", "echo -n ok"]);
+
+        assert2::let_assert!(Ok(out) = cmd.exec());
+        assert!(out.status.success());
+        assert_eq!("ok", String::from_utf8(out.stdout).unwrap());
+        assert_eq!("", String::from_utf8(out.stderr).unwrap());
+    }
+
+    #[test]
+    fn exec_captures_non_zero_status() {
+        let mut cmd = Command::new("bash");
+        cmd.args(["-c", "echo foo error 1>&2; exit 7"]);
+
+        assert2::let_assert!(Err(CmdError::Stderr { status, output, .. }) = cmd.exec());
+        assert_eq!(Some(7), status.code());
+        assert!(output.contains("foo err"));
+    }
+}

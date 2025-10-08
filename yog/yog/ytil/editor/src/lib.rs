@@ -113,37 +113,130 @@ impl FromStr for FileToOpen {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
+    use ytil_wezterm::WeztermPane;
+    use ytil_wezterm::WeztermPaneSize;
+
     use super::*;
 
     #[test]
-    fn file_to_open_is_properly_constructed_from_expected_str() {
+    fn open_file_cmd_returns_the_expected_cmd_string() {
+        let file = FileToOpen {
+            path: "src/main.rs".into(),
+            line_nbr: 12,
+            column: 5,
+        };
+        assert_eq!("':o src/main.rs:12'", Editor::Hx.open_file_cmd(&file));
+        assert_eq!(
+            ":e src/main.rs | :call cursor(12, 5)",
+            Editor::Nvim.open_file_cmd(&file)
+        );
+    }
+
+    #[test]
+    fn pane_titles_are_the_expected_ones() {
+        assert_eq!(Editor::Hx.pane_titles(), &["hx"]);
+        assert_eq!(Editor::Nvim.pane_titles(), &["nvim", "nv"]);
+    }
+
+    #[test]
+    fn editor_from_str_works_as_expected() {
+        assert2::let_assert!(Ok(Editor::Hx) = Editor::from_str("hx"));
+        assert2::let_assert!(Ok(Editor::Nvim) = Editor::from_str("nvim"));
+        assert2::let_assert!(Ok(Editor::Nvim) = Editor::from_str("nv"));
+        assert2::let_assert!(Err(error) = Editor::from_str("unknown"));
+        assert!(error.to_string().contains("unknown editor"));
+    }
+
+    #[test]
+    fn file_to_open_from_str_works_as_expected() {
         let root_dir = std::env::current_dir().unwrap();
         // We should always have a Cargo.toml...
         let dummy_path = root_dir.join("Cargo.toml").to_string_lossy().to_string();
 
-        assert_eq!(
-            FileToOpen {
-                path: dummy_path.clone(),
-                line_nbr: 0,
-                column: 0
-            },
-            FileToOpen::from_str(&dummy_path).unwrap()
+        assert2::let_assert!(Ok(f0) = FileToOpen::from_str(&dummy_path));
+        let expected = FileToOpen {
+            path: dummy_path.clone(),
+            line_nbr: 0,
+            column: 0,
+        };
+        assert_eq!(expected, f0);
+
+        assert2::let_assert!(Ok(f1) = FileToOpen::from_str(&format!("{dummy_path}:3")));
+        let expected = FileToOpen {
+            path: dummy_path.clone(),
+            line_nbr: 3,
+            column: 0,
+        };
+        assert_eq!(expected, f1);
+
+        assert2::let_assert!(Ok(f2) = FileToOpen::from_str(&format!("{dummy_path}:3:7")));
+        let expected = FileToOpen {
+            path: dummy_path,
+            line_nbr: 3,
+            column: 7,
+        };
+        assert_eq!(expected, f2);
+    }
+
+    #[test]
+    fn try_from_errors_when_pane_is_missing() {
+        let panes: Vec<WeztermPane> = vec![];
+        assert2::let_assert!(Err(error) = FileToOpen::try_from(("README.md", 999, panes.as_slice())));
+        assert!(error.to_string().contains("missing pane"));
+    }
+
+    #[test]
+    fn try_from_errors_when_relative_file_is_missing() {
+        let dir = std::env::current_dir().unwrap();
+        let panes = vec![pane_with(1, 1, &dir)];
+        assert2::let_assert!(
+            Err(error) = FileToOpen::try_from(("definitely_missing_12345__file.rs", 1, panes.as_slice()))
         );
-        assert_eq!(
-            FileToOpen {
-                path: dummy_path.clone(),
-                line_nbr: 3,
-                column: 0
+        assert!(error.to_string().contains("file missing"));
+    }
+
+    #[test]
+    fn try_from_resolves_relative_existing_file() {
+        let dir = std::env::current_dir().unwrap();
+        let panes = vec![pane_with(7, 1, &dir)];
+        assert2::let_assert!(Ok(file) = FileToOpen::try_from(("Cargo.toml", 7, panes.as_slice())));
+        let expected = FileToOpen {
+            path: dir.join("Cargo.toml").to_string_lossy().to_string(),
+            line_nbr: 0,
+            column: 0,
+        };
+        assert_eq!(expected, file);
+    }
+
+    fn pane_with(pane_id: i64, tab_id: i64, cwd_fs: &std::path::Path) -> WeztermPane {
+        WeztermPane {
+            cursor_shape: "Block".into(),
+            cursor_visibility: "Visible".into(),
+            cursor_x: 0,
+            cursor_y: 0,
+            // Use double-slash host form so absolute_cwd drops the first two components and yields the real fs path.
+            cwd: PathBuf::from(format!("file://host{}", cwd_fs.display())),
+            is_active: true,
+            is_zoomed: false,
+            left_col: 0,
+            pane_id,
+            size: WeztermPaneSize {
+                cols: 80,
+                dpi: 96,
+                pixel_height: 800,
+                pixel_width: 600,
+                rows: 24,
             },
-            FileToOpen::from_str(&format!("{dummy_path}:3")).unwrap()
-        );
-        assert_eq!(
-            FileToOpen {
-                path: dummy_path.clone(),
-                line_nbr: 3,
-                column: 7
-            },
-            FileToOpen::from_str(&format!("{dummy_path}:3:7")).unwrap()
-        );
+            tab_id,
+            tab_title: "tab".into(),
+            title: "hx".into(),
+            top_row: 0,
+            tty_name: "tty".into(),
+            window_id: 1,
+            window_title: "win".into(),
+            workspace: "default".into(),
+        }
     }
 }

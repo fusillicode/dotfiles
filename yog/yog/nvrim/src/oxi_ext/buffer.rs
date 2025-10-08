@@ -41,9 +41,9 @@ impl BufferExt for Buffer {
         let end_col = col;
         let text = vec![text];
 
-        if let Err(e) = self.set_text(line_range.clone(), start_col, end_col, text.clone()) {
+        if let Err(error) = self.set_text(line_range.clone(), start_col, end_col, text.clone()) {
             crate::oxi_ext::api::notify_error(&format!(
-                "cannot set text in buffer | text={text:?} buffer={self:?} line_range={line_range:?} start_col={start_col:?} end_col={end_col:?} error={e:?}",
+                "cannot set text in buffer | text={text:?} buffer={self:?} line_range={line_range:?} start_col={start_col:?} end_col={end_col:?} error={error:?}",
             ));
         }
     }
