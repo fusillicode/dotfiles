@@ -286,3 +286,69 @@ pub fn find_matching_files_recursively_in_dir(
 
     Ok(manifests)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rm_f_is_idempotent_for_missing_path() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let path = tmp.path().to_path_buf();
+
+        // Remove first time
+        assert2::let_assert!(Ok(()) = rm_f(&path));
+        // Second removal should succeed (no error) using assert2 pattern assertion
+        assert2::let_assert!(Ok(()) = rm_f(&path));
+    }
+
+    #[test]
+    fn atomic_cp_copies_file_contents() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("src.txt");
+        let dst = dir.path().join("dst.txt");
+        std::fs::write(&src, b"hello").unwrap();
+
+        let res = atomic_cp(&src, &dst);
+
+        assert2::let_assert!(Ok(()) = res);
+        assert_eq!(std::fs::read(&dst).unwrap(), b"hello");
+    }
+
+    #[test]
+    fn atomic_cp_errors_when_missing_source() {
+        use assert2::let_assert;
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("missing.txt");
+        let dst = dir.path().join("dst.txt");
+
+        let res = atomic_cp(&src, &dst);
+
+        let_assert!(Err(err) = res);
+        // Ensure we failed for the expected missing source reason.
+        assert!(err.to_string().contains("source file missing"));
+    }
+
+    #[test]
+    fn find_matching_files_recursively_in_dir_returns_the_expected_paths() {
+        use assert2::let_assert;
+        let dir = tempfile::tempdir().unwrap();
+        // layout: a/, a/b/, c.txt, a/b/d.txt
+        std::fs::create_dir(dir.path().join("a")).unwrap();
+        std::fs::create_dir(dir.path().join("a/b")).unwrap();
+        std::fs::write(dir.path().join("c.txt"), b"c").unwrap();
+        std::fs::write(dir.path().join("a/b/d.txt"), b"d").unwrap();
+
+        let res = find_matching_files_recursively_in_dir(
+            dir.path(),
+            |e| e.path().extension().and_then(|s| s.to_str()) == Some("txt"),
+            |_| false,
+        );
+        let_assert!(Ok(mut found) = res);
+        found.sort();
+
+        let mut expected = vec![dir.path().join("c.txt"), dir.path().join("a/b/d.txt")];
+        expected.sort();
+        assert_eq!(found, expected);
+    }
+}

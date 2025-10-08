@@ -15,3 +15,6 @@ chrono = { workspace = true }
 color-eyre = { workspace = true }
 git2 = { workspace = true }
 ytil_cmd = { workspace = true }
+
+[dev-dependencies]
+rstest = { workspace = true }
