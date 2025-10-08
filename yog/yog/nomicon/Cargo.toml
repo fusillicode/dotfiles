@@ -11,6 +11,9 @@ keywords = ["docs", "documentation", "html", "generator"]
 categories = ["command-line-utilities", "development-tools"]
 build = "build.rs"
 
+[package.metadata.cargo-machete]
+ignored = ["lightningcss"]
+
 [dependencies]
 askama = { version = "0.14" }
 chrono = { workspace = true }
