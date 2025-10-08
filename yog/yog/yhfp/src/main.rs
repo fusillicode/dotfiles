@@ -1,4 +1,14 @@
 //! Copy current Helix file path with line number to clipboard.
+//!
+//! # Usage
+//! ```bash
+//! yhfp # copies /absolute/path/to/file.rs:123 to clipboard
+//! ```
+//!
+//! # Errors
+//! - `WezTerm` command execution fails or exits non-zero.
+//! - Status line missing or cannot be parsed.
+//! - Invalid UTF-8 in process output.
 #![feature(exit_status_error)]
 
 use core::str::FromStr;
@@ -8,16 +18,6 @@ use color_eyre::eyre::eyre;
 use ytil_editor::Editor;
 use ytil_hx::HxStatusLine;
 
-/// Copy the current Helix file path and line number to the clipboard.
-///
-/// # Usage
-/// ```bash
-/// yhfp # copies 'relative/path/to/file:LINE' to clipboard
-/// ```
-///
-/// # Errors
-/// - Executing `wezterm` fails or returns a non-zero exit status.
-/// - UTF-8 conversion fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

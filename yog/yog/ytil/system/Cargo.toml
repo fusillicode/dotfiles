@@ -12,5 +12,5 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 chrono = { workspace = true }
-ytil_cmd = { workspace = true }
 color-eyre = { workspace = true }
+ytil_cmd = { workspace = true }

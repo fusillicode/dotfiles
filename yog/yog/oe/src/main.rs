@@ -1,4 +1,30 @@
-//! Open files (optionally at line:col) in existing Neovim/Helix pane.
+//! Open files (optionally at line:col) in existing Neovim / Helix pane.
+//!
+//! # Arguments
+//! - `editor` Target editor (`nvim` | `hx`).
+//! - `file_path` File to open (append :line:col to jump location).
+//! - `pane_id` Optional `WezTerm` pane ID (auto-detected if omitted).
+//!
+//! # Usage
+//! ```bash
+//! oe nvim src/lib.rs # open file in existing nvim pane
+//! oe nvim src/lib.rs:42:5 # jump to line 42 col 5
+//! oe hx   README.md 1234567890 # explicit pane id
+//! ```
+//!
+//! # Flow
+//! 1. Parse editor + file + optional pane id.
+//! 2. Resolve target pane (sibling) and enrich PATH for `Wezterm`.
+//! 3. Construct editor open command & send keystrokes via `Wezterm` CLI.
+//! 4. Activate target pane.
+//!
+//! # Errors
+//! - Missing editor or file argument.
+//! - Pane id parse or discovery fails.
+//! - Sibling pane detection fails.
+//! - File path parsing / validation fails.
+//! - Spawning shell command fails.
+//! - Required environment variable read fails.
 #![feature(exit_status_error)]
 
 use core::str::FromStr;
@@ -7,27 +33,6 @@ use color_eyre::eyre::bail;
 use ytil_editor::Editor;
 use ytil_editor::FileToOpen;
 
-/// Open files in a running editor instance from `WezTerm`.
-///
-/// # Usage
-/// ```bash
-/// oe nvim path/to/file.rs # open file in existing nvim pane
-/// oe hx path/to/file.rs:42:5 # open file at line 42 col 5 in helix
-/// oe nvim src/lib.rs 123456789 # explicitly pass pane id
-/// ```
-///
-/// # Arguments
-/// - `editor` Editor to use ("nvim" or "hx").
-/// - `file_path` Path to file to open (supports :line:col suffix).
-/// - `pane_id` Optional `WezTerm` pane ID (auto-detected if omitted).
-///
-/// # Errors
-/// - Editor argument is missing.
-/// - File path argument is missing.
-/// - Pane id argument is invalid (parse failure) or current pane lookup fails.
-/// - `WezTerm` Pane enumeration / sibling lookup fails.
-/// - File path parsing / validation for the target editor fails.
-/// - Spawning the shell command to drive `WezTerm` fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

@@ -52,6 +52,7 @@ autocommands
 backticked
 bitflags
 canonicalization
+canonicalized
 characterwise
 chargeback
 charwise
@@ -90,7 +91,9 @@ kos
 libgit2
 libs
 linewise
+lossily
 md
+mergeability
 mut
 newtype
 nvim
@@ -123,6 +126,7 @@ stdout
 t.
 tokio
 toml
+triaging
 u64
 unstage
 unstaged
