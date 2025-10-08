@@ -24,7 +24,8 @@ use std::path::PathBuf;
 
 use color_eyre::owo_colors::OwoColorize;
 
-/// List of binary names that should be symlinked after building.
+/// List of binaries that should be copied after building.
+/// NOTE: if a new binary is added this list must be updated!
 const BINS: &[&str] = &[
     "idt", "catl", "fkr", "gch", "gcu", "ghl", "oe", "try", "vpg", "yghfl", "yhfp",
 ];
