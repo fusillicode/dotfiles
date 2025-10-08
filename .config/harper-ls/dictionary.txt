@@ -71,6 +71,7 @@ dir
 dirs
 endblock
 endfor
+env
 envar
 expr
 extmark
@@ -94,6 +95,7 @@ linewise
 lossily
 md
 mergeability
+minification
 mut
 newtype
 nvim
@@ -128,6 +130,7 @@ tokio
 toml
 triaging
 u64
+unminified
 unstage
 unstaged
 unstaging
