@@ -695,7 +695,6 @@ dependencies = [
  "pretty_assertions",
  "rstest",
  "strum",
- "ytil_cmd",
  "ytil_git",
  "ytil_system",
  "ytil_tui",
@@ -706,14 +705,10 @@ name = "gcu"
 version = "0.1.0"
 dependencies = [
  "assert2",
- "chrono",
  "color-eyre",
  "pretty_assertions",
  "rstest",
- "serde",
- "serde_json",
  "url",
- "ytil_cmd",
  "ytil_git",
  "ytil_github",
  "ytil_system",
@@ -749,7 +744,6 @@ dependencies = [
  "color-eyre",
  "pico-args",
  "ytil_github",
- "ytil_system",
  "ytil_tui",
 ]
 
