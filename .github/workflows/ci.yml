@@ -20,17 +20,51 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  lint:
-    name: Lint
+  cargo_sort:
+    name: Cargo sort
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Setup
         uses: ./.github/actions/setup
+      - name: Install cargo-sort
+        working-directory: yog
+        run: |
+          cargo install cargo-sort --locked --quiet
+          cargo sort --version
+      - name: Check Cargo.toml ordering (cargo-sort)
+        working-directory: yog
+        run: |
+          cargo sort --workspace --check
 
-      - name: Lint code
+  machete:
+    name: Cargo machete
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup
+        uses: ./.github/actions/setup
+      - name: Install cargo-machete
+        working-directory: yog
+        run: |
+          cargo install cargo-machete --locked --quiet
+          cargo machete --version
+      - name: Detect unused dependencies (cargo-machete)
+        working-directory: yog
+        run: |
+          cargo machete --with-metadata
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup
+        uses: ./.github/actions/setup
+      - name: Lint code (clippy)
         working-directory: yog
         run: |
           cargo clippy --all-targets --all-features -- -D warnings
@@ -41,10 +75,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Setup
         uses: ./.github/actions/setup
-
       - name: Test
         working-directory: yog
         run: |
@@ -56,10 +88,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Setup
         uses: ./.github/actions/setup
-
       - name: Build
         working-directory: yog
         run: |

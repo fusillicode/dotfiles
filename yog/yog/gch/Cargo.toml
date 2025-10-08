@@ -16,8 +16,3 @@ strum = { workspace = true }
 ytil_git = { workspace = true }
 ytil_system = { workspace = true }
 ytil_tui = { workspace = true }
-
-[dev-dependencies]
-assert2 = { workspace = true }
-pretty_assertions = { workspace = true }
-rstest = { workspace = true }
