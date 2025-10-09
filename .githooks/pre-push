@@ -21,11 +21,10 @@ set -euo pipefail
 
 repo_root="$(git rev-parse --show-toplevel)"
 workspace_dir="$repo_root/yog"
-tec_bin="$workspace_dir/target/release/tec"
 
 cargo build --release --quiet --manifest-path "$workspace_dir/Cargo.toml" --bin tec || {
   echo "[pre-push] Build tec failed." >&2
   exit 1
 }
 
-"$tec_bin" "$workspace_dir"
+"$workspace_dir/target/release/tec"

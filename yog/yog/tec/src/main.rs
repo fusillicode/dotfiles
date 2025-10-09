@@ -1,33 +1,35 @@
-//! Run workspace lints concurrently.
+//! Run workspace lint suite concurrently.
 //!
-//! Executes Clippy, `cargo-machete`, and `cargo-sort` in parallel threads
-//! against the provided workspace path, then reports results in the static
-//! order defined by the internal `LINTS` table (deterministic regardless of
-//! finish order). Includes per-lint wall-clock timing (milliseconds).
+//! Executes lints against the Cargo workspace root auto–detected via [`ytil_system::get_workspace_root`].
 //!
-//! # Arguments
-//! - First CLI argument: path to the Cargo workspace root to lint.
+//! # Behavior
+//! - Auto-detects workspace root (no positional CLI argument required).
+//! - Spawns one thread per lint; all run concurrently.
+//! - Prints each lint result with: success/error, duration, status code, stripped stdout or error.
+//! - Exits 1 if any lint fails (non-zero exit status) or a thread panics; otherwise exits 0.
 //!
 //! # Returns
-//! - Process exits 0 if all lints succeed; 1 if any lint fails or a thread panics.
+//! - Process exit code communicates aggregate success (0) or failure (1).
 //!
 //! # Errors
-//! - Initialization errors from [`color_eyre::install`] abort before spawning lints.
+//! - Initialization errors from [`color_eyre::install`].
+//! - Workspace root discovery errors from [`ytil_system::get_workspace_root`].
 //!
 //! # Rationale
 //! Provides a single fast command (usable in git hooks / CI) aggregating core
-//! maintenance lints without shell scripting.
+//! maintenance lints (style, dependency pruning, manifest ordering) without
+//! bespoke shell scripting.
+use std::path::Path;
 use std::process::Command;
 use std::process::Output;
 use std::time::Duration;
 use std::time::Instant;
 
-use color_eyre::eyre::eyre;
 use color_eyre::owo_colors::OwoColorize;
 use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt as _;
 
-type LintRunner = fn(&str) -> color_eyre::Result<Output, CmdError>;
+type LintRunner = fn(&Path) -> color_eyre::Result<Output, CmdError>;
 
 /// Available workspace lints.
 ///
@@ -50,7 +52,9 @@ const LINTS: &[(&str, LintRunner)] = &[
     ("cargo-machete", |path| {
         // Using `cargo-machete` rather than `cargo machete` to avoid issues caused by passing the
         // `path`.
-        Command::new("cargo-machete").args(["--with-metadata", path]).exec()
+        Command::new("cargo-machete")
+            .args(["--with-metadata", &path.display().to_string()])
+            .exec()
     }),
     ("cargo-sort", |path| {
         Command::new("cargo-sort")
@@ -69,10 +73,7 @@ struct LintRun {
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let args = ytil_system::get_args();
-    let path = args
-        .first()
-        .ok_or_else(|| eyre!("missing required path arg in args={args:#?}"))?;
+    let workspace_root = ytil_system::get_workspace_root()?;
 
     println!(
         "{} {}\n",
@@ -86,11 +87,11 @@ fn main() -> color_eyre::Result<()> {
     let lints_handles: Vec<_> = LINTS
         .iter()
         .map(|(lint, run)| {
-            let path = path.clone();
+            let workspace_root = workspace_root.clone();
             let name_copy = *lint;
             let lint_handle = std::thread::spawn(move || {
                 let start = Instant::now();
-                let res = run(&path);
+                let res = run(&workspace_root);
                 LintRun {
                     duration: start.elapsed(),
                     result: res,

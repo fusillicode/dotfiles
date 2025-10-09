@@ -23,7 +23,7 @@ pub trait CmdExt {
     ///
     /// # Errors
     /// - Spawning or waiting fails ([`CmdError::Io`]).
-    /// - Non-zero exit with valid UTF-8 stderr ([`CmdError::Stderr`]).
+    /// - Non-zero exit with valid UTF-8 stderr ([`CmdError::FailedCmd`]).
     /// - Non-zero exit with invalid UTF-8 stderr ([`CmdError::FromUtf8`]).
     /// - Borrowed UTF-8 validation failure ([`CmdError::Utf8`]).
     fn exec(&mut self) -> color_eyre::Result<Output, CmdError>;
@@ -36,12 +36,18 @@ impl CmdExt for Command {
             source,
         })?;
         if !output.status.success() {
-            return Err(CmdError::Stderr {
+            let stderr = String::from_utf8(output.stderr).map_err(|error| CmdError::FromUtf8 {
                 cmd: Cmd::from(&*self),
-                output: String::from_utf8(output.stderr).map_err(|error| CmdError::FromUtf8 {
-                    cmd: Cmd::from(&*self),
-                    source: error,
-                })?,
+                source: error,
+            })?;
+            let stdout = String::from_utf8(output.stdout).map_err(|error| CmdError::FromUtf8 {
+                cmd: Cmd::from(&*self),
+                source: error,
+            })?;
+            return Err(CmdError::FailedCmd {
+                cmd: Cmd::from(&*self),
+                stderr,
+                stdout,
                 status: output.status,
             });
         }
@@ -56,12 +62,14 @@ impl CmdExt for Command {
 #[derive(thiserror::Error, Debug)]
 pub enum CmdError {
     /// Non-zero exit status; stderr captured & UTF-8 decoded.
-    #[error("StdErr(output={output:?} status={status:?} {cmd})")]
-    Stderr {
+    #[error("FailedCmd(stderr={stderr:?} stdout={stdout:?} status={status:?} {cmd})")]
+    FailedCmd {
         /// Command metadata snapshot.
         cmd: Cmd,
         /// Full (untruncated) stderr.
-        output: String,
+        stderr: String,
+        /// Full (untruncated) stdout.
+        stdout: String,
         /// Failing status.
         status: ExitStatus,
     },
@@ -172,8 +180,16 @@ mod tests {
         let mut cmd = Command::new("bash");
         cmd.args(["-c", "echo foo error 1>&2; exit 7"]);
 
-        assert2::let_assert!(Err(CmdError::Stderr { status, output, .. }) = cmd.exec());
+        assert2::let_assert!(
+            Err(CmdError::FailedCmd {
+                status,
+                stderr,
+                stdout,
+                ..
+            }) = cmd.exec()
+        );
         assert_eq!(Some(7), status.code());
-        assert!(output.contains("foo err"));
+        assert!(stderr.contains("foo err"));
+        assert!(stdout.is_empty());
     }
 }
