@@ -111,6 +111,18 @@ fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
+/// Execute a single lint runner and measure wall-clock duration.
+///
+/// # Arguments
+/// - `path` Workspace root path the lint should operate in.
+/// - `run` Function pointer executing the lint and returning its captured [`Output`].
+///
+/// # Returns
+/// [`TimedLintRun`] bundling the underlying lint result with elapsed duration.
+///
+/// # Rationale
+/// Centralizes timing logic so the thread spawn closure stays minimal and
+/// future changes (e.g. high-resolution timing, tracing spans) occur in one place.
 fn run_and_time_lint(path: &Path, run: LintRun) -> TimedLintRun {
     let start = Instant::now();
     let res = run(path);
@@ -144,16 +156,11 @@ fn report(lint_name: &str, lint_res: &std::thread::Result<TimedLintRun>) -> bool
             result: Ok(output),
         }) => {
             println!(
-                "{} {} {} {}",
-                format!("Success {lint_name}").green().bold(),
-                format!("time={}ms", duration.as_millis()).white().bold(),
+                "{} {} {} \n{}",
+                lint_name.green().bold(),
+                report_duration(*duration),
                 format!("status={:?}", output.status.code()).white().bold(),
-                format!(
-                    "stdout={:?}",
-                    str::from_utf8(&strip_ansi_escapes::strip(&output.stdout))
-                )
-                .white()
-                .bold()
+                str::from_utf8(&output.stdout).unwrap_or_default()
             );
             false
         }
@@ -161,12 +168,7 @@ fn report(lint_name: &str, lint_res: &std::thread::Result<TimedLintRun>) -> bool
             duration,
             result: Err(error),
         }) => {
-            eprintln!(
-                "{} {} {}",
-                format!("Error {lint_name}").red().bold(),
-                format!("time={}ms", duration.as_millis()).white().bold(),
-                format!("error={error}").white().bold()
-            );
+            eprintln!("{} {} \n{error}", lint_name.red().bold(), report_duration(*duration));
             true
         }
         Err(join_err) => {
@@ -174,4 +176,19 @@ fn report(lint_name: &str, lint_res: &std::thread::Result<TimedLintRun>) -> bool
             true
         }
     }
+}
+
+/// Format elapsed wall-clock duration (ms) for lint output.
+///
+/// # Arguments
+/// - `duration` Elapsed time for a single lint run.
+///
+/// # Returns
+/// Colored string of the form `took=<ms>ms`.
+///
+/// # Rationale
+/// Single styling point keeps result lines uniform and simplifies future
+/// formatting changes (e.g. alignment, units).
+fn report_duration(duration: Duration) -> String {
+    format!("took={}ms", duration.as_millis()).white().bold().to_string()
 }
