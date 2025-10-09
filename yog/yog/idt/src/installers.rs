@@ -85,7 +85,11 @@ pub trait Installer: Sync + Send {
                                 check_output.trim_matches(|c| c == '\n' || c == '\r').white().bold()
                             );
                         } else {
-                            println!("{} {}", "Installed not checked".yellow().bold(), self.bin_name().white().bold());
+                            println!(
+                                "{} {}",
+                                "Installed not checked".yellow().bold(),
+                                self.bin_name().white().bold()
+                            );
                         }
                     })
                     .inspect_err(|error| {

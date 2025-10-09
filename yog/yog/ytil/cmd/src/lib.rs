@@ -61,7 +61,7 @@ fn to_ut8_string(cmd: &Command, bytes: Vec<u8>) -> color_eyre::Result<String, Cm
 #[derive(thiserror::Error, Debug)]
 pub enum CmdError {
     /// Non-zero exit status; stderr captured & UTF-8 decoded.
-    #[error("FailedCmd({cmd} status={status:?} \nstderr=\n{stderr} \nstdout=\n{stdout})")]
+    #[error("FailedCmd(\n{cmd}\nstatus={status:?}\nstderr=\n{stderr}\nstdout=\n{stdout})")]
     FailedCmd {
         /// Command metadata snapshot.
         cmd: Cmd,

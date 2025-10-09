@@ -30,7 +30,7 @@ jobs:
         uses: ./.github/actions/setup
         with:
           tools: "cargo-machete cargo-sort"
-      - name: Run tec (clippy + machete + sort)
+      - name: Lint with tec
         working-directory: yog
         run: |
           cargo run --quiet --bin tec -- .
