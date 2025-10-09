@@ -19,10 +19,4 @@ cargo build --release --quiet --manifest-path "$workspace_dir/Cargo.toml" --bin 
   exit 1
 }
 
-if ! "$tec_bin" "$workspace_dir"; then
-  echo "[pre-push] Checks failed. Push blocked." >&2
-  exit 1
-fi
-
-echo "[pre-push] All checks passed. Proceeding with push."
-exit 0
+"$tec_bin" "$workspace_dir"
