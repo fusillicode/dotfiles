@@ -80,8 +80,8 @@ fn main() -> color_eyre::Result<()> {
         pgpass_entry.metadata.alias.green().bold(),
         nvim_dbee_conns_path.display()
     );
-    // Cosmetic space in prompt.
-    println!();
+
+    println!(); // Cosmetic spacing.
 
     if Some(true) == ytil_tui::yes_no_select(&format!("Connect to {}? ", pgpass_entry.metadata.alias))? {
         let db_url = pgpass_entry.connection_params.db_url();

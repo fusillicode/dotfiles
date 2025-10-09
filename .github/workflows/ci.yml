@@ -20,48 +20,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  cargo_sort:
-    name: Cargo sort
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Setup (cargo-sort)
+      - name: Setup (cargo-machete, cargo-sort)
         uses: ./.github/actions/setup
         with:
-          tools: "cargo-sort"
-      - name: Check Cargo.toml ordering (cargo-sort)
+          tools: "cargo-machete cargo-sort"
+      - name: Run tec (clippy + machete + sort)
         working-directory: yog
         run: |
-          cargo sort --workspace --check
-
-  machete:
-    name: Cargo machete
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Setup (cargo-machete)
-        uses: ./.github/actions/setup
-        with:
-          tools: "cargo-machete"
-      - name: Detect unused dependencies (cargo-machete)
-        working-directory: yog
-        run: |
-          cargo machete --with-metadata
-
-  clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Setup (no extra tools)
-        uses: ./.github/actions/setup
-      - name: Lint code (clippy)
-        working-directory: yog
-        run: |
-          cargo clippy --all-targets --all-features -- -D warnings
+          cargo run --quiet --bin tec -- .
 
   test:
     name: Test

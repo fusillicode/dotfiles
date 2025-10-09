@@ -84,8 +84,8 @@ fn main() -> color_eyre::Result<()> {
         return Ok(());
     };
 
-    // Cosmetic space in prompt.
-    println!();
+    println!(); // Cosmetic spacing.
+
     for pr in selected_prs.iter().map(Deref::deref) {
         merge_pr(pr);
     }
