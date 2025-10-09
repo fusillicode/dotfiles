@@ -11,7 +11,21 @@ fn main() -> color_eyre::Result<()> {
     let args = ytil_system::get_args();
     let path = args.first().unwrap().clone();
 
+    println!("{}", "Running lints...\n".cyan().bold());
+
     let lints_handles = [
+        (
+            "clippy",
+            std::thread::spawn({
+                let path = path.clone();
+                move || {
+                    Command::new("cargo")
+                        .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
+                        .current_dir(path)
+                        .exec()
+                }
+            }),
+        ),
         (
             "cargo-machete",
             std::thread::spawn({
@@ -68,6 +82,9 @@ fn main() -> color_eyre::Result<()> {
             }
         }
     }
+
+    // Cosmetic space in prompt.
+    println!();
 
     if errors {
         std::process::exit(1);
