@@ -29,7 +29,7 @@ use color_eyre::owo_colors::OwoColorize;
 use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt as _;
 
-type LintRunner = fn(&Path) -> color_eyre::Result<Output, CmdError>;
+type LintRun = fn(&Path) -> color_eyre::Result<Output, CmdError>;
 
 /// Available workspace lints.
 ///
@@ -42,7 +42,7 @@ type LintRunner = fn(&Path) -> color_eyre::Result<Output, CmdError>;
 /// # Rationale
 /// Central list makes it trivial to add / remove lints and print them up-front
 /// for user visibility.
-const LINTS: &[(&str, LintRunner)] = &[
+const LINTS: &[(&str, LintRun)] = &[
     ("clippy", |path| {
         Command::new("cargo")
             .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
@@ -64,12 +64,6 @@ const LINTS: &[(&str, LintRunner)] = &[
     }),
 ];
 
-/// Result of a single lint execution with timing.
-struct LintRun {
-    duration: Duration,
-    result: color_eyre::Result<Output, CmdError>,
-}
-
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
@@ -86,18 +80,14 @@ fn main() -> color_eyre::Result<()> {
     // Spawn all lints in parallel.
     let lints_handles: Vec<_> = LINTS
         .iter()
-        .map(|(lint, run)| {
-            let workspace_root = workspace_root.clone();
-            let name_copy = *lint;
-            let lint_handle = std::thread::spawn(move || {
-                let start = Instant::now();
-                let res = run(&workspace_root);
-                LintRun {
-                    duration: start.elapsed(),
-                    result: res,
-                }
-            });
-            (name_copy, lint_handle)
+        .map(|(lint_name, lint_run)| {
+            (
+                lint_name,
+                std::thread::spawn({
+                    let workspace_root = workspace_root.clone();
+                    move || run_and_time_lint(&workspace_root, lint_run)
+                }),
+            )
         })
         .collect();
 
@@ -121,6 +111,21 @@ fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
+fn run_and_time_lint(path: &Path, run: &LintRun) -> TimedLintRun {
+    let start = Instant::now();
+    let res = run(path);
+    TimedLintRun {
+        duration: start.elapsed(),
+        result: res,
+    }
+}
+
+/// Result of a single lint execution with timing.
+struct TimedLintRun {
+    duration: Duration,
+    result: color_eyre::Result<Output, CmdError>,
+}
+
 /// Report a single lint result produced by a joined thread.
 ///
 /// Prints a colored success or error line including status code, duration (ms), and stripped stdout.
@@ -132,9 +137,9 @@ fn main() -> color_eyre::Result<()> {
 ///
 /// # Rationale
 /// Isolates formatting concerns from the control flow in [`main`].
-fn report(lint_name: &str, lint_res: &std::thread::Result<LintRun>) -> bool {
+fn report(lint_name: &str, lint_res: &std::thread::Result<TimedLintRun>) -> bool {
     match lint_res {
-        Ok(LintRun {
+        Ok(TimedLintRun {
             duration,
             result: Ok(output),
         }) => {
@@ -152,7 +157,7 @@ fn report(lint_name: &str, lint_res: &std::thread::Result<LintRun>) -> bool {
             );
             false
         }
-        Ok(LintRun {
+        Ok(TimedLintRun {
             duration,
             result: Err(error),
         }) => {
