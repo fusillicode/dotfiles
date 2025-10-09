@@ -85,7 +85,7 @@ fn main() -> color_eyre::Result<()> {
                 lint_name,
                 std::thread::spawn({
                     let workspace_root = workspace_root.clone();
-                    move || run_and_time_lint(&workspace_root, lint_run)
+                    move || run_and_time_lint(&workspace_root, *lint_run)
                 }),
             )
         })
@@ -111,7 +111,7 @@ fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
-fn run_and_time_lint(path: &Path, run: &LintRun) -> TimedLintRun {
+fn run_and_time_lint(path: &Path, run: LintRun) -> TimedLintRun {
     let start = Instant::now();
     let res = run(path);
     TimedLintRun {
