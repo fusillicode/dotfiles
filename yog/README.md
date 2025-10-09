@@ -12,6 +12,8 @@ Bunch of _personal_ command-line utilities built-in [Rust](https://www.rust-lang
 > [!IMPORTANT]
 > Requirements:
 
+- `cargo-machete`
+- `cargo-sort`
 - `curl`
 - `gh`
 - `git`
