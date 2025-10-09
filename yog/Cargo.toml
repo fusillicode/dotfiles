@@ -12,6 +12,7 @@ members = [
     "yog/nomicon",
     "yog/nvrim",
     "yog/oe",
+    "yog/tec",
     "yog/try",
     "yog/vpg",
     "yog/yghfl",

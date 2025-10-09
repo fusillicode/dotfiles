@@ -32,14 +32,14 @@ pub trait CmdExt {
 impl CmdExt for Command {
     fn exec(&mut self) -> color_eyre::Result<Output, CmdError> {
         let output = self.output().map_err(|source| CmdError::Io {
-            cmd_details: CmdDetails::from(&*self),
+            cmd: Cmd::from(&*self),
             source,
         })?;
         if !output.status.success() {
             return Err(CmdError::Stderr {
-                cmd_details: CmdDetails::from(&*self),
+                cmd: Cmd::from(&*self),
                 output: String::from_utf8(output.stderr).map_err(|error| CmdError::FromUtf8 {
-                    cmd_details: CmdDetails::from(&*self),
+                    cmd: Cmd::from(&*self),
                     source: error,
                 })?,
                 status: output.status,
@@ -51,43 +51,43 @@ impl CmdExt for Command {
 
 /// Command execution errors with contextual details.
 ///
-/// Each variant embeds [`CmdDetails`] (program, args, cwd) for terse diagnostics. `Utf8`
+/// Each variant embeds [`Cmd`] (program, args, cwd) for terse diagnostics. `Utf8`
 /// is currently not produced by [`CmdExt::exec`] but kept for potential future APIs.
 #[derive(thiserror::Error, Debug)]
 pub enum CmdError {
     /// Non-zero exit status; stderr captured & UTF-8 decoded.
-    #[error("non-zero status output={output:?} status={status:?} {cmd_details})")]
+    #[error("StdErr(output={output:?} status={status:?} {cmd})")]
     Stderr {
         /// Command metadata snapshot.
-        cmd_details: CmdDetails,
+        cmd: Cmd,
         /// Full (untruncated) stderr.
         output: String,
         /// Failing status.
         status: ExitStatus,
     },
     /// I/O failure spawning or waiting.
-    #[error("{source} {cmd_details}")]
+    #[error("{source} {cmd}")]
     Io {
         /// Command metadata snapshot.
-        cmd_details: CmdDetails,
+        cmd: Cmd,
         #[backtrace]
         /// Underlying OS error.
         source: std::io::Error,
     },
     /// Borrowed data UTF-8 validation failed.
-    #[error("{source} {cmd_details}")]
+    #[error("{source} {cmd}")]
     Utf8 {
         /// Command metadata snapshot.
-        cmd_details: CmdDetails,
+        cmd: Cmd,
         #[backtrace]
         /// UTF-8 error.
         source: core::str::Utf8Error,
     },
     /// Owned stderr bytes not valid UTF-8.
-    #[error("{source} {cmd_details}")]
+    #[error("{source} {cmd}")]
     FromUtf8 {
         /// Command metadata snapshot.
-        cmd_details: CmdDetails,
+        cmd: Cmd,
         #[backtrace]
         /// Conversion error.
         source: std::string::FromUtf8Error,
@@ -98,7 +98,7 @@ pub enum CmdError {
 ///
 /// Arguments/program are converted lossily from [`std::ffi::OsStr`] to [`String`] for ease of logging.
 #[derive(Debug)]
-pub struct CmdDetails {
+pub struct Cmd {
     /// Ordered arguments (lossy UTF-8).
     args: Vec<String>,
     /// Working directory (if set).
@@ -107,19 +107,19 @@ pub struct CmdDetails {
     name: String,
 }
 
-/// Formats [`CmdDetails`] for display, showing command name, arguments, and working directory.
-impl core::fmt::Display for CmdDetails {
+/// Formats [`Cmd`] for display, showing command name, arguments, and working directory.
+impl core::fmt::Display for Cmd {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
-            "CmdDetails=(name={:?} args={:?} cur_dir={:?})",
+            "Cmd=(name={:?} args={:?} cur_dir={:?})",
             self.name, self.args, self.cur_dir,
         )
     }
 }
 
-/// Converts a [`Command`] reference to [`CmdDetails`] for error reporting.
-impl From<&Command> for CmdDetails {
+/// Converts a [`Command`] reference to [`Cmd`] for error reporting.
+impl From<&Command> for Cmd {
     fn from(value: &Command) -> Self {
         Self {
             name: value.get_program().to_string_lossy().to_string(),
@@ -129,8 +129,8 @@ impl From<&Command> for CmdDetails {
     }
 }
 
-/// Converts a mutable [`Command`] reference to [`CmdDetails`] for error reporting.
-impl From<&mut Command> for CmdDetails {
+/// Converts a mutable [`Command`] reference to [`Cmd`] for error reporting.
+impl From<&mut Command> for Cmd {
     fn from(value: &mut Command) -> Self {
         Self {
             name: value.get_program().to_string_lossy().to_string(),
