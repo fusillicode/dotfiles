@@ -73,7 +73,7 @@ fn main() -> color_eyre::Result<()> {
     println!(
         "{:#?} started with args {}",
         std::env::current_exe()?.bold().cyan(),
-        format!("{args:#?}").bold()
+        format!("{args:#?}").white().bold()
     );
 
     let dev_tools_dir = args

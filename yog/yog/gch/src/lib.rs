@@ -151,7 +151,7 @@ fn restore_entries(entries: &[&GitStatusEntry], branch: Option<&str>) -> color_e
         println!(
             "{} {}{from_branch}",
             "Restored".yellow().bold(),
-            changed_entry.path.display().bold()
+            changed_entry.path.display().white().bold()
         );
     }
     Ok(())

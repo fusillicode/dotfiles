@@ -69,7 +69,7 @@ pub trait Installer: Sync + Send {
                 eprintln!(
                     "{} {} with error: {}",
                     "Installation failed".red().bold(),
-                    self.bin_name().bold(),
+                    self.bin_name().white().bold(),
                     format!("{error:#?}").red().bold()
                 );
             })
@@ -81,18 +81,18 @@ pub trait Installer: Sync + Send {
                             println!(
                                 "{} {} with check: {}",
                                 "Installed".green().bold(),
-                                self.bin_name().bold(),
-                                check_output.trim_matches(|c| c == '\n' || c == '\r').bold()
+                                self.bin_name().white().bold(),
+                                check_output.trim_matches(|c| c == '\n' || c == '\r').white().bold()
                             );
                         } else {
-                            println!("{} {}", "Installed not checked".yellow().bold(), self.bin_name().bold());
+                            println!("{} {}", "Installed not checked".yellow().bold(), self.bin_name().white().bold());
                         }
                     })
                     .inspect_err(|error| {
                         eprintln!(
                             "{} {} with error: {}",
                             "Check failed".red().bold(),
-                            self.bin_name().bold(),
+                            self.bin_name().white().bold(),
                             format!("{error:#?}").red().bold()
                         );
                     })

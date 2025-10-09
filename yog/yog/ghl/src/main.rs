@@ -110,7 +110,7 @@ impl Deref for RenderablePullRequest {
 impl core::fmt::Display for RenderablePullRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let state = match self.merge_state {
-            PullRequestMergeState::Behind => "Behind".yellow().to_string(),
+            PullRequestMergeState::Behind => "Behind".yellow().bold().to_string(),
             PullRequestMergeState::Blocked => "Blocked".red().bold().to_string(),
             PullRequestMergeState::Clean => "Clean".green().to_string(),
             PullRequestMergeState::Dirty => "Dirty".red().bold().to_string(),
