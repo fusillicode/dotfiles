@@ -1,0 +1,72 @@
+# Codecov configuration for yog workspace
+# Reference: https://docs.codecov.com/docs/codecov-yaml
+# Goals:
+# - Enforce baseline (project) coverage >=70%
+# - Enforce patch (changed lines) coverage >=80%
+# - Ignore generated / template-heavy code (nomicon templates)
+# - Treat utility crates (ytil) as carry-forward so unchanged code does not penalize patch status
+# - Provide stable range for graph scaling
+
+codecov:
+  require_ci_to_pass: true       # Only report after CI success
+  notify:
+    wait_for_ci: true
+
+coverage:
+  precision: 2                   # Two decimals in reports
+  round: down
+  range: 60..90                  # Scale for coverage graph (min..max)
+
+  status:
+    project:
+      rust:                      # Flag name matches upload flag ("rust")
+        target: 70%              # Minimum acceptable overall coverage
+        threshold: 2%            # Allow small fluctuations without failing
+        informational: false
+    patch:
+      rust:
+        target: 80%              # Minimum acceptable coverage on new/changed lines
+        threshold: 2%
+        informational: false
+    changes:
+      default:
+        informational: true      # Per-file diff coverage only informational
+
+  adjust:
+    # Carry forward coverage for utility crates (avoid penalizing patch checks when untouched)
+    - path: "yog/ytil/"
+      carryforward: true
+    # Ignore template/generated sections (low signal for coverage)
+    - path: "yog/nomicon/src/templates/"
+      ignore: true
+
+# Paths to ignore entirely (alternative to adjust.ignore). Use for build scripts or assets.
+ignore:
+  - "yog/nomicon/templates/"     # Static external template assets
+  - "yog/nomicon/assets/"        # Non-source assets
+  - "yog/**/build.rs"            # Build scripts
+
+# Flags configuration (optional future customization)
+# You could split crates into multiple uploads with distinct flags for granular thresholds.
+# Example (not active yet): tec, nvrim, nomicon, libs.
+# coverage:
+#   status:
+#     project:
+#       tec:
+#         target: 75%
+#         threshold: 3%
+#       nvrim:
+#         target: 60%
+#         threshold: 5%
+
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
+
+# PR report customization
+# If comments feel noisy later, set behavior: once or off.
+
+# Future adjustments:
+# - Raise project target gradually after baseline stabilizes.
+# - Add branch coverage: enable cargo llvm-cov --branch and then configure branch targets here.
+# - Fine-tune ignore list as coverage blind spots become clear.
