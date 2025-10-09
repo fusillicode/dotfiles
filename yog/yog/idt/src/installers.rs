@@ -1,7 +1,7 @@
 use std::process::Command;
 
 use color_eyre::owo_colors::OwoColorize as _;
-use ytil_cmd::CmdDetails;
+use ytil_cmd::Cmd;
 use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt;
 
@@ -53,7 +53,7 @@ pub trait Installer: Sync + Send {
                 std::str::from_utf8(&output.stdout)
                     .map(ToOwned::to_owned)
                     .map_err(|error| CmdError::Utf8 {
-                        cmd_details: CmdDetails::from(&cmd),
+                        cmd: Cmd::from(&cmd),
                         source: error,
                     })
             })

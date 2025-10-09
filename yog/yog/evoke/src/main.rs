@@ -27,7 +27,7 @@ use color_eyre::owo_colors::OwoColorize;
 /// List of binaries that should be copied after building.
 /// NOTE: if a new binary is added this list must be updated!
 const BINS: &[&str] = &[
-    "idt", "catl", "fkr", "gch", "gcu", "ghl", "oe", "try", "vpg", "yghfl", "yhfp",
+    "idt", "catl", "fkr", "gch", "gcu", "ghl", "oe", "tec", "try", "vpg", "yghfl", "yhfp",
 ];
 /// List of library files that need to be renamed after building, mapping (`source_name`, `target_name`).
 const LIBS: &[(&str, &str)] = &[("libnvrim.dylib", "nvrim.so")];
