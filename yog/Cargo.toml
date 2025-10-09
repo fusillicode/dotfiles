@@ -69,8 +69,8 @@ ytil_tui = { path = "./yog/ytil/tui" }
 ytil_wezterm = { path = "./yog/ytil/wezterm" }
 
 [profile.test]
-# Reduces the size of the target directory
-debug = false
+# Enable debug symbols for coverage (required by llvm-cov / tarpaulin)
+debug = true
 
 [profile.release]
 # Reduces the size of the target directory

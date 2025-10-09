@@ -41,12 +41,35 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Setup (no extra tools)
+      - name: Setup (cargo-llvm-cov)
         uses: ./.github/actions/setup
-      - name: Test
+        with:
+          tools: "cargo-llvm-cov"
+      - name: Add llvm-tools component
+        shell: bash
         working-directory: yog
         run: |
-          cargo test --workspace --all-features
+          set -euo pipefail
+          rustup component add llvm-tools-preview
+      - name: Test and coverage (LCOV)
+        shell: bash
+        working-directory: yog
+        run: |
+          set -euo pipefail
+          cargo llvm-cov --workspace --all-features --lcov --output-path lcov.info
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: yog/lcov.info
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: yog/lcov.info
+          flags: rust
+          fail_ci_if_error: true
+          verbose: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   release:
     name: Build release
