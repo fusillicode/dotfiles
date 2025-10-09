@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/fusillicode/dotfiles/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fusillicode/dotfiles/actions/workflows/ci.yml)
 [![Doc](https://github.com/fusillicode/dotfiles/actions/workflows/doc.yml/badge.svg)](https://fusillicode.github.io/dotfiles)
+[![Coverage](https://codecov.io/gh/fusillicode/dotfiles/graph/badge.svg)](https://codecov.io/gh/fusillicode/dotfiles/tree/main)
 
 > It was an All-in-One and One-in-All of limitless being and self—not merely a thing of one Space-Time continuum, but
 > allied to the ultimate animating essence of existence's whole unbounded sweep—the last, utter sweep which has no
