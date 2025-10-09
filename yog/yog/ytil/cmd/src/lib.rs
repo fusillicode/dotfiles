@@ -36,23 +36,22 @@ impl CmdExt for Command {
             source,
         })?;
         if !output.status.success() {
-            let stderr = String::from_utf8(output.stderr).map_err(|error| CmdError::FromUtf8 {
-                cmd: Cmd::from(&*self),
-                source: error,
-            })?;
-            let stdout = String::from_utf8(output.stdout).map_err(|error| CmdError::FromUtf8 {
-                cmd: Cmd::from(&*self),
-                source: error,
-            })?;
             return Err(CmdError::FailedCmd {
                 cmd: Cmd::from(&*self),
-                stderr,
-                stdout,
+                stderr: to_ut8_string(self, output.stderr)?,
+                stdout: to_ut8_string(self, output.stdout)?,
                 status: output.status,
             });
         }
         Ok(output)
     }
+}
+
+fn to_ut8_string(cmd: &Command, bytes: Vec<u8>) -> color_eyre::Result<String, CmdError> {
+    String::from_utf8(bytes).map_err(|error| CmdError::FromUtf8 {
+        cmd: Cmd::from(cmd),
+        source: error,
+    })
 }
 
 /// Command execution errors with contextual details.
@@ -62,7 +61,7 @@ impl CmdExt for Command {
 #[derive(thiserror::Error, Debug)]
 pub enum CmdError {
     /// Non-zero exit status; stderr captured & UTF-8 decoded.
-    #[error("FailedCmd(stderr={stderr:?} stdout={stdout:?} status={status:?} {cmd})")]
+    #[error("FailedCmd({cmd} status={status:?} \nstderr=\n{stderr} \nstdout=\n{stdout})")]
     FailedCmd {
         /// Command metadata snapshot.
         cmd: Cmd,

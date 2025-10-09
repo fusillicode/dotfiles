@@ -12,6 +12,5 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 color-eyre = { workspace = true }
-strip-ansi-escapes = { version = "0.2" }
 ytil_cmd = { workspace = true }
 ytil_system = { workspace = true }
