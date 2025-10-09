@@ -77,7 +77,11 @@ fn main() -> color_eyre::Result<()> {
 
     let renderable_prs: Vec<_> = pull_requests.into_iter().map(RenderablePullRequest).collect();
     if renderable_prs.is_empty() {
-        println!("\n{}", "No PRs matching search criteria".yellow().bold());
+        println!(
+            "{}\n{}",
+            "No PRs matching supplied".yellow().bold(),
+            params.white().bold()
+        );
     }
 
     let Some(selected_prs) = ytil_tui::minimal_multi_select::<RenderablePullRequest>(renderable_prs)? else {
