@@ -126,8 +126,8 @@ fn main() -> color_eyre::Result<()> {
 /// Returns true if an error (lint failure or join panic) occurred.
 ///
 /// # Arguments
-/// - `lint_name`: Logical name of the lint (e.g. "clippy").
-/// - `lint_res`: The join result wrapping a `LintRun` (timed result).
+/// - `lint_name` Logical name of the lint (e.g. "clippy").
+/// - `lint_res` The join result wrapping a [`LintRun`] (timed result).
 ///
 /// # Rationale
 /// Isolates formatting concerns from the control flow in [`main`].
