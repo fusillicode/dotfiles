@@ -29,7 +29,7 @@ use color_eyre::owo_colors::OwoColorize;
 use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt as _;
 
-type LintRun = fn(&Path) -> color_eyre::Result<Output, CmdError>;
+type LintFn = fn(&Path) -> color_eyre::Result<Output, CmdError>;
 
 /// Available workspace lints.
 ///
@@ -42,12 +42,15 @@ type LintRun = fn(&Path) -> color_eyre::Result<Output, CmdError>;
 /// # Rationale
 /// Central list makes it trivial to add / remove lints and print them up-front
 /// for user visibility.
-const LINTS: &[(&str, LintRun)] = &[
+const LINTS: &[(&str, LintFn)] = &[
     ("clippy", |path| {
         Command::new("cargo")
             .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
             .current_dir(path)
             .exec()
+    }),
+    ("cargo fmt", |path| {
+        Command::new("cargo").args(["fmt", "--check"]).current_dir(path).exec()
     }),
     ("cargo-machete", |path| {
         // Using `cargo-machete` rather than `cargo machete` to avoid issues caused by passing the
@@ -70,9 +73,10 @@ fn main() -> color_eyre::Result<()> {
     let workspace_root = ytil_system::get_workspace_root()?;
 
     println!(
-        "{} {}\n",
-        "Running lints:".cyan().bold(),
-        format!("{:#?}", LINTS.iter().map(|(lint, _)| lint).collect::<Vec<_>>())
+        "\n{} in {}: {}\n",
+        "Run lints".cyan().bold(),
+        workspace_root.display().to_string().white().bold(),
+        format!("{:?}", LINTS.iter().map(|(lint, _)| lint).collect::<Vec<_>>())
             .white()
             .bold()
     );
@@ -80,12 +84,12 @@ fn main() -> color_eyre::Result<()> {
     // Spawn all lints in parallel.
     let lints_handles: Vec<_> = LINTS
         .iter()
-        .map(|(lint_name, lint_run)| {
+        .map(|(lint_name, lint_fn)| {
             (
                 lint_name,
                 std::thread::spawn({
                     let workspace_root = workspace_root.clone();
-                    move || run_and_time_lint(&workspace_root, *lint_run)
+                    move || run_and_time_lint(&workspace_root, *lint_fn)
                 }),
             )
         })
@@ -118,22 +122,22 @@ fn main() -> color_eyre::Result<()> {
 /// - `run` Function pointer executing the lint and returning its captured [`Output`].
 ///
 /// # Returns
-/// [`TimedLintRun`] bundling the underlying lint result with elapsed duration.
+/// [`TimedLintFn`] bundling the underlying lint result with elapsed duration.
 ///
 /// # Rationale
 /// Centralizes timing logic so the thread spawn closure stays minimal and
 /// future changes (e.g. high-resolution timing, tracing spans) occur in one place.
-fn run_and_time_lint(path: &Path, run: LintRun) -> TimedLintRun {
+fn run_and_time_lint(path: &Path, run: LintFn) -> TimedLintFn {
     let start = Instant::now();
     let res = run(path);
-    TimedLintRun {
+    TimedLintFn {
         duration: start.elapsed(),
         result: res,
     }
 }
 
 /// Result of a single lint execution with timing.
-struct TimedLintRun {
+struct TimedLintFn {
     duration: Duration,
     result: color_eyre::Result<Output, CmdError>,
 }
@@ -145,13 +149,13 @@ struct TimedLintRun {
 ///
 /// # Arguments
 /// - `lint_name` Logical name of the lint (e.g. "clippy").
-/// - `lint_res` The join result wrapping a [`LintRun`] (timed result).
+/// - `lint_res` The join result wrapping a [`LintFn`] (timed result).
 ///
 /// # Rationale
 /// Isolates formatting concerns from the control flow in [`main`].
-fn report(lint_name: &str, lint_res: &std::thread::Result<TimedLintRun>) -> bool {
+fn report(lint_name: &str, lint_res: &std::thread::Result<TimedLintFn>) -> bool {
     match lint_res {
-        Ok(TimedLintRun {
+        Ok(TimedLintFn {
             duration,
             result: Ok(output),
         }) => {
@@ -164,7 +168,7 @@ fn report(lint_name: &str, lint_res: &std::thread::Result<TimedLintRun>) -> bool
             );
             false
         }
-        Ok(TimedLintRun {
+        Ok(TimedLintFn {
             duration,
             result: Err(error),
         }) => {
