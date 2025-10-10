@@ -65,9 +65,10 @@ jobs:
       - name: Upload to Codecov
         uses: codecov/codecov-action@v4
         with:
-          files: yog/lcov.info
+          files: lcov.info
           flags: rust
           fail_ci_if_error: true
+          root_dir: yog
           verbose: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
