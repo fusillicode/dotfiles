@@ -10,7 +10,6 @@ pub trait DictionaryExt {
     /// Gets a typed value from the dictionary using the [`OxiExtract`] trait.
     ///
     /// # Errors
-    /// Returns an error if:
     /// - The key is missing.
     /// - The value cannot be converted to the requested type (unexpected kind).
     fn get_t<T: OxiExtract>(&self, key: &str) -> color_eyre::Result<T::Out>;
@@ -18,7 +17,6 @@ pub trait DictionaryExt {
     /// Gets a nested [`Dictionary`] from the [`Dictionary`] by a sequence of keys.
     ///
     /// # Errors
-    /// Returns an error if:
     /// - Traversal finds a non-dictionary object for an intermediate key.
     fn get_dict(&self, keys: &[&str]) -> color_eyre::Result<Option<Dictionary>>;
 

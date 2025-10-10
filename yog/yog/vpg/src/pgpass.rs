@@ -29,7 +29,6 @@ impl<'a> PgpassFile<'a> {
     /// Non‑comment / non‑metadata lines are ignored except when part of metadata + connection pair.
     ///
     /// # Errors
-    /// Returns an error if:
     /// - A metadata line is not followed by a valid connection line.
     /// - A connection line cannot be parsed into [`ConnectionParams`].
     pub fn parse(pgpass_content: &'a str) -> color_eyre::eyre::Result<Self> {

@@ -27,11 +27,6 @@ pub struct VaultCreds {
     /// Database password.
     pub password: String,
     /// Database username.
-    ///
-    ///
-    /// Returns an error if:
-    /// - Executing `vault` fails or returns non-zero exit status.
-    /// - UTF-8 conversion fails.
     pub username: String,
 }
 

@@ -10,7 +10,6 @@ pub trait BufferExt {
     /// Errors if the line does not exist at `idx`.
     ///
     /// # Errors
-    /// Returns an error if:
     /// - Fetching the line via `nvim_buf_get_lines` fails.
     /// - The requested index is out of range (no line returned).
     fn get_line(&self, idx: usize) -> color_eyre::Result<nvim_oxi::String>;

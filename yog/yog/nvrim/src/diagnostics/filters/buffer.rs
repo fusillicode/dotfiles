@@ -30,7 +30,6 @@ impl DiagnosticsFilter for BufferFilter {
     ///
     ///
     /// # Errors
-    /// Returns an error if:
     /// - Building the paths blacklist fails (home directory resolution).
     fn skip_diagnostic(&self, buf_path: &str, _lsp_diag: Option<&Dictionary>) -> color_eyre::Result<bool> {
         Ok(self.blacklist.iter().any(|up| buf_path.contains(up)))
