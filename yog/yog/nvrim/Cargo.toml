@@ -31,3 +31,6 @@ ytil_cmd = { workspace = true }
 ytil_git = { workspace = true }
 ytil_system = { workspace = true }
 ytil_wezterm = { workspace = true }
+
+[dev-dependencies]
+assert2 = { workspace = true }

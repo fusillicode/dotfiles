@@ -25,8 +25,8 @@ impl DiagnosticsFilters {
     /// # Errors
     /// - Constructing the related info filter fails (dictionary traversal or type mismatch).
     pub fn all(lsp_diags: &[Dictionary]) -> color_eyre::Result<Self> {
-        let mut filters = msg_blacklist::typos_filters();
-        filters.extend(msg_blacklist::harper_filters());
+        let mut filters = msg_blacklist::typos::filters();
+        filters.extend(msg_blacklist::harper::filters());
         filters.push(Box::new(RelatedInfoFilter::new(lsp_diags)?));
         Ok(Self(filters))
     }
