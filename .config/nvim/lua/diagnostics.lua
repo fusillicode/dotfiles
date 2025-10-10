@@ -1,24 +1,7 @@
 local M = {}
 
 function M.setup(nvrim)
-  vim.diagnostic.config({
-    float = {
-      anchor_bias = 'above',
-      border = nvrim.style_opts.window.border,
-      focusable = true,
-      format = nvrim.diagnostics.format,
-      header = '',
-      prefix = '',
-      source = false,
-      suffix = '',
-    },
-    severity_sort = true,
-    signs = true,
-    underline = true,
-    update_in_insert = false,
-    virtual_text = false,
-  })
-
+  vim.diagnostic.config(nvrim.diagnostics.config)
   local diag_set = vim.diagnostic.set
   vim.diagnostic.set = function(namespace, bufnr, diagnostics, opts)
     -- NOTE: enable this line to understand what's happening with diagnostics
