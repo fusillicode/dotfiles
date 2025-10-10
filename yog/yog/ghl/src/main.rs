@@ -91,7 +91,7 @@ fn main() -> color_eyre::Result<()> {
     println!(); // Cosmetic spacing.
 
     for pr in selected_prs.iter().map(Deref::deref) {
-        merge_pr(pr);
+        report(pr, ytil_github::pr::merge(pr.number));
     }
 
     Ok(())
@@ -133,12 +133,18 @@ impl core::fmt::Display for RenderablePullRequest {
     }
 }
 
-/// Attempt to merge the provided pull request and print a colored status line.
+/// Print colored merge status line for a merge attempt.
 ///
-/// On success prints: `Merged pr=<N> title=<TITLE>` (green).
-/// On failure prints: `Error merging ... error=<E>` (red) but does not abort.
-fn merge_pr(pr: &PullRequest) {
-    match ytil_github::pr::merge(pr.number) {
+/// Continues after failures; never aborts. Uses `{:?}` for `title` and `author` for quoting.
+///
+/// # Arguments
+/// - `pr`: Pull request metadata (number, title, author).
+/// - `merge_res`: Result of merge attempt; `Ok(())` => merged; `Err(e)` => prints error.
+///
+/// # Returns
+/// - Nothing; side effect is colored stdout/stderr output.
+fn report(pr: &PullRequest, merge_res: color_eyre::Result<()>) {
+    match merge_res {
         Ok(()) => {
             println!(
                 "{} {} {} {}",
