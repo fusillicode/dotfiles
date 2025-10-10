@@ -1,6 +1,5 @@
 use nvim_oxi::Dictionary;
 
-use crate::diagnostics::filters::msg_blacklist::MsgBlacklistFilter;
 use crate::diagnostics::filters::related_info::RelatedInfoFilter;
 
 pub mod buffer;
@@ -26,7 +25,8 @@ impl DiagnosticsFilters {
     /// # Errors
     /// - Constructing the related info filter fails (dictionary traversal or type mismatch).
     pub fn all(lsp_diags: &[Dictionary]) -> color_eyre::Result<Self> {
-        let mut tmp = MsgBlacklistFilter::all();
+        let mut tmp = msg_blacklist::typos_lsp_filters();
+        tmp.extend(msg_blacklist::harper_ls_filters());
         tmp.push(Box::new(RelatedInfoFilter::new(lsp_diags)?));
         Ok(Self(tmp))
     }
