@@ -1310,6 +1310,7 @@ dependencies = [
 name = "nvrim"
 version = "0.1.0"
 dependencies = [
+ "assert2",
  "color-eyre",
  "convert_case 0.8.0",
  "fkr",

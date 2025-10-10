@@ -1,0 +1,66 @@
+use crate::diagnostics::filters::DiagnosticsFilter;
+use crate::diagnostics::filters::msg_blacklist::MsgBlacklistFilter;
+
+/// Build typos LSP diagnostic filters.
+///
+/// Returns a vector of boxed [`DiagnosticsFilter`] configured for the typos
+/// language server. Includes a single [`MsgBlacklistFilter`] that suppresses
+/// false-positive spelling suggestions matching predefined substrings.
+///
+/// # Returns
+/// - [`Vec<Box<dyn DiagnosticsFilter>>`] Collection containing one configured [`MsgBlacklistFilter`] for the typos
+///   source.
+pub fn filters() -> Vec<Box<dyn DiagnosticsFilter>> {
+    let blacklist: Vec<_> = [
+        "accidentes",
+        "aci",
+        "administrar",
+        "anual",
+        "aplicable",
+        "autor",
+        "calle",
+        "clase",
+        "clea",
+        "cliente",
+        "clientes",
+        "comercial",
+        "conceptos",
+        "confidencial",
+        "constituye",
+        "decisiones",
+        "emision",
+        "explosivas",
+        "foto",
+        "importante",
+        "individuales",
+        "informativo",
+        "informe",
+        "internacional",
+        "legislativo",
+        "limite",
+        "materiales",
+        "materias",
+        "minerales",
+        "momento",
+        "nd",
+        "ot",
+        "patrones",
+        "presentes",
+        "producto",
+        "profesional",
+        "regulatorias",
+        "responsable",
+        "ser",
+        "ue",
+        "utiliza",
+    ]
+    .iter()
+    .map(|term| format!("`{term}` should be"))
+    .collect();
+
+    vec![Box::new(MsgBlacklistFilter {
+        source: "typos",
+        buf_path: None,
+        blacklist,
+    })]
+}
