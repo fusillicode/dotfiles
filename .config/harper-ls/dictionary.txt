@@ -86,6 +86,7 @@ hx
 i64
 impl
 infos
+invariance
 k8s
 ko
 kos

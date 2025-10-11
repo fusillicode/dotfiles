@@ -212,36 +212,51 @@ fn main() -> color_eyre::Result<()> {
         );
     }
 
-    let installers_errors = std::thread::scope(|scope| {
-        selected_installers
-            .iter()
-            .map(|installer| (installer.bin_name(), scope.spawn(move || installer.run())))
-            .fold(vec![], |mut acc, (bin_name, handle)| {
-                if let Err(error) = handle.join() {
-                    eprintln!(
-                        "{} installer thread panicked, {}",
-                        bin_name.bold().red(),
-                        format!("error={error:#?}").red().bold()
-                    );
-                    acc.push((bin_name, error));
-                }
-                acc
-            })
+    let installers_res = std::thread::scope(|scope| {
+        let mut handles = Vec::with_capacity(selected_installers.len());
+        for installer in selected_installers {
+            handles.push((installer.bin_name(), scope.spawn(move || installer.run())))
+        }
+        let mut res = Vec::with_capacity(handles.len());
+        for (bin_name, handle) in handles {
+            res.push((bin_name, handle.join()));
+        }
+        res
     });
+
+    report(&installers_res)?;
 
     ytil_system::rm_dead_symlinks(bin_dir)?;
 
-    let mut errors_count: usize = 0;
-    let mut bin_names = vec![];
-    for (bin_name, _) in &installers_errors {
-        errors_count = errors_count.saturating_add(1);
-        bin_names.push(bin_name);
+    Ok(())
+}
+
+// [`Installer`] errors and success scenario are reported directly by the installer
+// to have an early feedback.
+// The only errors that are reported are the thread panic and a general report.
+fn report(installers_res: &[(&str, std::thread::Result<color_eyre::Result<()>>)]) -> color_eyre::Result<()> {
+    let mut errors_bins = vec![];
+
+    for (bin_name, result) in installers_res {
+        match result {
+            Err(error) => {
+                eprintln!(
+                    "{} installer thread panicked {}",
+                    bin_name.bold().red(),
+                    format!("error={error:#?}").red().bold()
+                );
+                errors_bins.push(bin_name);
+            }
+            Ok(Err(_)) => errors_bins.push(bin_name),
+            Ok(Ok(())) => {}
+        }
     }
 
-    if errors_count != 0 {
+    let errors_count = errors_bins.len();
+    if errors_count > 0 {
         // This is a general report about the installation process.
-        // The single installation errors are reported directly in each [Installer].
-        bail!("tool installations failed | errors_count={errors_count} bin_names={bin_names:#?}")
+        // The single installation errors are reported directly in each [`Installer`].
+        bail!("Tool installations failed | errors_count={errors_count} bin_names={errors_bins:#?}")
     }
 
     Ok(())
