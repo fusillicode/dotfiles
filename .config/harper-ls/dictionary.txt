@@ -97,6 +97,7 @@ lossily
 md
 mergeability
 minification
+monotonicity
 mut
 newtype
 nvim
