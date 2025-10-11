@@ -174,7 +174,6 @@ mod tests {
 
     #[test]
     fn get_sibling_pane_with_titles_returns_the_expected_match_in_same_tab() {
-        // removed local use assert2::let_assert; prefer fully qualified
         let panes = vec![
             pane_with(1, 10, "file:///host/home/user/project", "hx"),
             pane_with(2, 10, "file:///host/home/user/project", "shell"),
@@ -186,7 +185,6 @@ mod tests {
 
     #[test]
     fn get_sibling_pane_with_titles_errors_when_no_title_match() {
-        // removed local use assert2::let_assert; prefer fully qualified
         let panes = vec![pane_with(1, 10, "file:///host/home/user/project", "shell")];
         assert2::let_assert!(Err(error) = get_sibling_pane_with_titles(&panes, 1, &["hx"]));
         assert!(error.to_string().contains("pane title not found"));
