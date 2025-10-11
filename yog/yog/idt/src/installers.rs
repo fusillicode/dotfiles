@@ -62,7 +62,39 @@ pub trait Installer: Sync + Send {
         Some(check_res)
     }
 
-    /// Runs the installer and checks installation.
+    /// Run installer: perform install + optional version check; emit exactly one colored status line (success,
+    /// not-checked, check-failed, or install-failed) for early feedback.
+    ///
+    /// # Returns
+    /// - `Ok(())` if installation succeeded and either no check performed ([`Installer::check_args`] returned `None`)
+    ///   or the check succeeded.
+    /// - `Err` if installation failed or (after a successful installation) the check failed.
+    ///
+    /// # Errors
+    /// - Propagates any error from [`Installer::install`].
+    /// - Propagates process / UTF-8 decoding errors surfaced through [`Installer::check`].
+    ///
+    /// # Assumptions
+    /// - [`Installer::install`] performs all required side effects and leaves the tool runnable by invoking its
+    ///   returned binary name.
+    /// - [`Installer::check_args`] returns a version / health command that exits `0` on success.
+    /// - Colorized output to stdout / stderr is acceptable for the invoking environment (CI tolerates ANSI sequences).
+    ///
+    /// # Rationale
+    /// - Provide a uniform UX: attempt install, then (if supported) a lightweight smoke test (`--version` by default).
+    /// - Keep per-tool specifics encapsulated in `install` / `check`; this wrapper only orchestrates and formats status
+    ///   lines.
+    /// - Emit immediate, colored, human-readable status line per tool (success with check output, success without
+    ///   check, install failure, or check failure) for early feedback. Printing acquires the stdout/stderr lock and
+    ///   briefly serializes threads; impact is negligible versus network / IO work. Return only coarse success/failure
+    ///   upward.
+    ///
+    /// # Performance
+    /// - Dominated by underlying installer work (downloads / decompression / fs). Wrapper adds trivial overhead.
+    /// - Avoids extra allocations: only trims trailing newlines on successful check output.
+    ///
+    /// # Future Work
+    /// - Return a richer enum describing phases (installed, skipped, checked) instead of only propagating errors.
     fn run(&self) -> color_eyre::Result<()> {
         self.install()
             .inspect_err(|error| {
