@@ -12,6 +12,11 @@ pub fn filters() -> Vec<Box<dyn DiagnosticsFilter>> {
     vec![Box::new(MsgBlacklistFilter {
         source: "Harper",
         buf_path: None,
-        blacklist: vec!["stderr".into(), "stdout".into(), "stdin".into()],
+        blacklist: vec![
+            "stderr".into(),
+            "stdout".into(),
+            "stdin".into(),
+            "insert `to` to complete the infinitive".into(),
+        ],
     })]
 }
