@@ -215,7 +215,7 @@ fn main() -> color_eyre::Result<()> {
     let installers_res = std::thread::scope(|scope| {
         let mut handles = Vec::with_capacity(selected_installers.len());
         for installer in selected_installers {
-            handles.push((installer.bin_name(), scope.spawn(move || installer.run())))
+            handles.push((installer.bin_name(), scope.spawn(move || installer.run())));
         }
         let mut res = Vec::with_capacity(handles.len());
         for (bin_name, handle) in handles {
@@ -231,9 +231,22 @@ fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
-// [`Installer`] errors and success scenario are reported directly by the installer
-// to have an early feedback.
-// The only errors that are reported are the thread panic and a general report.
+/// Summarize installer thread outcomes; enforce failure exit.
+///
+/// # Arguments
+/// - `installers_res` Slice of (bin name, join result) pairs. Outer [`std::thread::Result`] indicates panic; inner
+///   [`color_eyre::Result<()>`] is the installer's logical result.
+///
+/// # Returns
+/// - `Ok(())` if every installer finished without panic and returned `Ok(())`.
+/// - `Err` summarizing failing installer names otherwise.
+///
+/// # Errors
+/// - Any panic or logical installer error triggers a summary error via [`bail!`].
+///
+/// # Rationale
+/// - Keep detailed status inside each installer; emit only an aggregate for CI / scripting.
+/// - Single place sets non-zero exit to reflect any failure.
 fn report(installers_res: &[(&str, std::thread::Result<color_eyre::Result<()>>)]) -> color_eyre::Result<()> {
     let mut errors_bins = vec![];
 
@@ -254,8 +267,6 @@ fn report(installers_res: &[(&str, std::thread::Result<color_eyre::Result<()>>)]
 
     let errors_count = errors_bins.len();
     if errors_count > 0 {
-        // This is a general report about the installation process.
-        // The single installation errors are reported directly in each [`Installer`].
         bail!("Tool installations failed | errors_count={errors_count} bin_names={errors_bins:#?}")
     }
 
