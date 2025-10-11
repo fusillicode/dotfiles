@@ -34,7 +34,7 @@ alias cmdm='cargo make db-migrate'
 alias cmf='cargo make format'
 alias cmr='cargo make run'
 alias cc='cargo clippy'
-alias cb='cargo clippy'
+alias cfm='cargo fmt'
 alias ct='f() { cargo test "$*" }; f'
 
 ksecdec () {
