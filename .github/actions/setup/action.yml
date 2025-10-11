@@ -8,11 +8,14 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Set up Rust
+    - name: Set up Rust (pinned nightly via rust-toolchain.toml)
       shell: bash
       working-directory: yog
       run: |
+        set -euo pipefail
+        # Trigger toolchain & components install via directory override.
         rustup show
+        rustc -V
 
     - name: Cache Cargo registry
       id: cache_registry
@@ -36,7 +39,12 @@ runs:
       uses: actions/cache@v3
       with:
         path: target
-        key: cargo-build-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('**/Cargo.toml') }}
+        # Key components:
+        # - runner.os: platform differences
+        # - rust-toolchain.toml hash: pinned toolchain date/components
+        # - Cargo.lock hash: full dependency graph versioning
+        # (Cargo.toml hashes dropped: lockfile already changes when deps change; dropping reduces churn on non-dependency metadata edits.)
+        key: cargo-build-${{ runner.os }}-${{ hashFiles('yog/rust-toolchain.toml') }}-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: |
           cargo-build-${{ runner.os }}-
 
