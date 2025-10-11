@@ -162,7 +162,7 @@ fn report(lint_name: &str, lint_res: &std::thread::Result<TimedLintFn>) -> bool 
             println!(
                 "{} {} {} \n{}",
                 lint_name.green().bold(),
-                report_duration(*duration),
+                report_timing(*duration),
                 format!("status={:?}", output.status.code()).white().bold(),
                 str::from_utf8(&output.stdout).unwrap_or_default()
             );
@@ -172,7 +172,7 @@ fn report(lint_name: &str, lint_res: &std::thread::Result<TimedLintFn>) -> bool 
             duration,
             result: Err(error),
         }) => {
-            eprintln!("{} {} \n{error}", lint_name.red().bold(), report_duration(*duration));
+            eprintln!("{} {} \n{error}", lint_name.red().bold(), report_timing(*duration));
             true
         }
         Err(join_err) => {
@@ -182,17 +182,19 @@ fn report(lint_name: &str, lint_res: &std::thread::Result<TimedLintFn>) -> bool 
     }
 }
 
-/// Format elapsed wall-clock duration (ms) for lint output.
+/// Format lint duration into colored `took=<duration>` snippet (auto-scaled).
 ///
 /// # Arguments
-/// - `duration` Elapsed time for a single lint run.
+/// - `duration` Wall-clock elapsed time for a single lint execution.
 ///
 /// # Returns
-/// Colored string of the form `took=<ms>ms`.
+/// - Colored string `took=<duration>` where `<duration>` uses [`Duration`]'s `Debug` formatting (e.g., `1.234s`,
+///   `15.6ms`, `321µs`, `42ns`) providing concise human-readable units.
 ///
 /// # Rationale
-/// Single styling point keeps result lines uniform and simplifies future
-/// formatting changes (e.g. alignment, units).
-fn report_duration(duration: Duration) -> String {
-    format!("took={}ms", duration.as_millis()).white().bold().to_string()
+/// - Improves readability vs raw integer milliseconds; preserves sub-ms precision.
+/// - Uses stable standard library formatting (no custom scaling logic).
+/// - Keeps formatting centralized for future JSON / machine-output additions.
+fn report_timing(duration: Duration) -> String {
+    format!("took={duration:?}").white().bold().to_string()
 }
