@@ -44,8 +44,18 @@ pub struct MsgBlacklistFilter<'a> {
 impl DiagnosticsFilter for MsgBlacklistFilter<'_> {
     /// Returns true if the diagnostic message is blacklisted.
     ///
+    /// Behavior:
+    /// - Missing diagnostic: `Ok(false)`.
+    /// - `buf_path` constraint set but not found in `buf_path`: `Ok(false)`.
+    /// - Missing `source` key: treated as wildcard (still eligible for blacklist).
+    /// - Present `source` different from [`MsgBlacklistFilter::source`]: `Ok(false)`.
+    /// - Lowercased `message` contains any blacklist entry: `Ok(true)`.
+    /// - Otherwise: `Ok(false)`.
+    ///
     /// # Errors
-    /// - Required `source` or `message` keys are missing or have unexpected types.
+    /// - `message` key is missing.
+    /// - `message` value has unexpected type (must be `String`).
+    /// - `source` key present but has unexpected type (must be `String`).
     fn skip_diagnostic(&self, buf_path: &str, lsp_diag: Option<&Dictionary>) -> color_eyre::Result<bool> {
         let Some(lsp_diag) = lsp_diag else {
             return Ok(false);
@@ -55,7 +65,9 @@ impl DiagnosticsFilter for MsgBlacklistFilter<'_> {
         {
             return Ok(false);
         }
-        if self.source != lsp_diag.get_t::<nvim_oxi::String>("source")? {
+        if let Some(source) = lsp_diag.get_opt_t::<nvim_oxi::String>("source")?
+            && self.source != source
+        {
             return Ok(false);
         }
         let msg = lsp_diag.get_t::<nvim_oxi::String>("message")?.to_lowercase();
@@ -143,18 +155,16 @@ mod tests {
     }
 
     #[test]
-    fn skip_returns_error_when_missing_source_key() {
+    fn skip_returns_true_when_missing_source_key_and_message_blacklisted() {
         let filter = MsgBlacklistFilter {
             source: "foo",
             blacklist: vec!["stderr".into()],
             buf_path: None,
         };
-        // Only message key present.
+        // Only message key present. Missing source should not produce an error; blacklist still applies.
         let diag = dict! { message: "stderr reported" };
-        assert2::let_assert!(Err(err) = filter.skip_diagnostic("file.rs", Some(&diag)));
-        let msg = err.to_string();
-        assert!(msg.starts_with("missing dict value |"), "actual: {msg}");
-        assert!(msg.contains("query=[\n    \"source\",\n]"), "actual: {msg}");
+        assert2::let_assert!(Ok(res) = filter.skip_diagnostic("file.rs", Some(&diag)));
+        assert!(res);
     }
 
     #[test]
