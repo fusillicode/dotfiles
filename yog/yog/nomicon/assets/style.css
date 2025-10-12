@@ -119,3 +119,28 @@ footer a:hover {
   fill: currentColor;
   vertical-align: text-bottom;
 }
+
+/* Sprite animation (enumerated keyframes) */
+.portal-sprite {
+  inline-size: 64px;
+  block-size: 64px;
+  background: url("portal-sprite.png") 0 0 / 896px 64px no-repeat;
+  animation: portal-frames 1.2s infinite;
+}
+@keyframes portal-frames {
+  0%,      7.1428%  { background-position-x:    0px; }
+  7.1429%, 14.2856% { background-position-x:  -64px; }
+  14.2857%,21.4284% { background-position-x: -128px; }
+  21.4285%,28.5712% { background-position-x: -192px; }
+  28.5713%,35.7140% { background-position-x: -256px; }
+  35.7141%,42.8568% { background-position-x: -320px; }
+  42.8569%,50.0000% { background-position-x: -384px; }
+  50.0001%,57.1428% { background-position-x: -448px; }
+  57.1429%,64.2856% { background-position-x: -512px; }
+  64.2857%,71.4284% { background-position-x: -576px; }
+  71.4285%,78.5712% { background-position-x: -640px; }
+  78.5713%,85.7140% { background-position-x: -704px; }
+  85.7141%,92.8568% { background-position-x: -768px; }
+  92.8569%,100%     { background-position-x: -832px; }
+}
+
