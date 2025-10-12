@@ -3,11 +3,14 @@
 {% block header %}Yog Index{% endblock %}
 {% block content %}
 <ul>
-{%- for c in crates %}
-  <li>
-    <a href="./{{ c.name }}/index.html">{{ c.name }}</a>
-    <span class="desc"> — {{ c.description }}</span>
-  </li>
-{%- endfor %}
+  {%- for c in crates %}
+    <li>
+      <a href="./{{ c.name }}/index.html">{{ c.name }}</a>
+      <span class="desc"> — {{ c.description }}</span>
+    </li>
+  {%- endfor %}
 </ul>
+<section class="portal-demo" aria-labelledby="portal-heading">
+  <div class="portal-sprite" aria-hidden="true"></div>
+</section>
 {% endblock %}
