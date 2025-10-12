@@ -7,31 +7,68 @@ use crate::oxi_ext::extract::OxiExtract;
 
 /// Extension trait for [`Dictionary`] to provide typed getters.
 pub trait DictionaryExt {
-    /// Gets a typed value from the dictionary using the [`OxiExtract`] trait.
+    /// Gets a required typed value from the dictionary using the [`OxiExtract`] trait.
+    ///
+    /// Fails if the key is absent.
+    ///
+    /// # Returns
+    /// - `Ok(T::Out)` when the key exists and the value is successfully extracted.
     ///
     /// # Errors
     /// - The key is missing.
-    /// - The value cannot be converted to the requested type (unexpected kind).
+    /// - The value exists but cannot be converted to the requested type (unexpected kind).
     fn get_t<T: OxiExtract>(&self, key: &str) -> color_eyre::Result<T::Out>;
 
-    /// Gets a nested [`Dictionary`] from the [`Dictionary`] by a sequence of keys.
+    /// Gets an optional typed value from the dictionary using the [`OxiExtract`] trait.
+    ///
+    /// Returns `Ok(None)` if the key is absent instead of treating it as an error.
+    ///
+    /// # Returns
+    /// - `Ok(Some(T::Out))` when the key exists and value is successfully extracted.
+    /// - `Ok(None)` when the key does not exist in the [`Dictionary`].
     ///
     /// # Errors
-    /// - Traversal finds a non-dictionary object for an intermediate key.
+    /// - The value exists but cannot be converted to the requested type (unexpected kind).
+    fn get_opt_t<T: OxiExtract>(&self, key: &str) -> color_eyre::Result<Option<T::Out>>;
+
+    /// Gets an optional nested [`Dictionary`] by traversing a sequence of keys.
+    ///
+    /// Returns `Ok(None)` if any key in the path is absent.
+    ///
+    /// # Returns
+    /// - `Ok(Some(Dictionary))` when all keys are present and yield a dictionary.
+    /// - `Ok(None)` when a key is missing along the path.
+    ///
+    /// # Errors
+    /// - A value is found for an intermediate key but it is not a [`Dictionary`] (unexpected kind).
     fn get_dict(&self, keys: &[&str]) -> color_eyre::Result<Option<Dictionary>>;
 
+    /// Gets a required nested [`Dictionary`] by traversing a sequence of keys.
+    ///
+    /// Fails if any key in the path is missing.
+    ///
+    /// # Returns
+    /// - `Ok(Dictionary)` when all keys are present and yield a dictionary.
+    ///
+    /// # Errors
+    /// - A key in the path is missing.
+    /// - A value is found for an intermediate key but it is not a [`Dictionary`] (unexpected kind).
     fn get_required_dict(&self, keys: &[&str]) -> color_eyre::Result<Dictionary>;
 }
 
 /// Implementation of [`DictionaryExt`] for [`Dictionary`] providing typed getters.
 impl DictionaryExt for Dictionary {
-    /// Get t.
     fn get_t<T: OxiExtract>(&self, key: &str) -> color_eyre::Result<T::Out> {
         let value = self.get(key).ok_or_else(|| no_value_matching(&[key], self))?;
         T::extract_from_dict(key, value, self)
     }
 
-    /// Get dict.
+    fn get_opt_t<T: OxiExtract>(&self, key: &str) -> color_eyre::Result<Option<T::Out>> {
+        self.get(key)
+            .map(|value| T::extract_from_dict(key, value, self))
+            .transpose()
+    }
+
     fn get_dict(&self, keys: &[&str]) -> color_eyre::Result<Option<Dictionary>> {
         let mut current = self.clone();
 
@@ -45,7 +82,6 @@ impl DictionaryExt for Dictionary {
         Ok(Some(current))
     }
 
-    /// Get required dict.
     fn get_required_dict(&self, keys: &[&str]) -> color_eyre::Result<Dictionary> {
         self.get_dict(keys)?.ok_or_else(|| no_value_matching(keys, self))
     }

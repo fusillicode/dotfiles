@@ -7,14 +7,14 @@ use nvim_oxi::ObjectKind;
 pub trait OxiExtract {
     type Out;
 
-    /// Extracts a typed value from an Nvim [Object] by key from a [`Dictionary`] with error context.
+    /// Extracts a typed value from an Nvim [`Object`] by key from a [`Dictionary`] with error context.
     ///
     /// # Errors
     /// - The value has a different kind than expected for the target type.
     fn extract_from_dict(key: &str, value: &Object, dict: &Dictionary) -> color_eyre::Result<Self::Out>;
 }
 
-/// Implementation for extracting [String] values from Nvim objects.
+/// Implementation for extracting [`String`] values from Nvim objects.
 impl OxiExtract for nvim_oxi::String {
     type Out = String;
 
@@ -26,7 +26,7 @@ impl OxiExtract for nvim_oxi::String {
     }
 }
 
-/// Implementation for extracting i64 values from Nvim objects.
+/// Implementation for extracting [`i64`] values from Nvim objects.
 impl OxiExtract for nvim_oxi::Integer {
     type Out = Self;
 
@@ -38,7 +38,7 @@ impl OxiExtract for nvim_oxi::Integer {
     }
 }
 
-/// Generates an error message for unexpected [Object] kind.
+/// Generates an error message for unexpected [`Object`] kind.
 pub fn unexpected_kind_error_msg(obj: &Object, key: &str, dict: &Dictionary, expected_kind: ObjectKind) -> String {
     format!(
         "value {obj:#?} of key {key:?} in dict {dict:#?} is {0:#?} but {expected_kind:?} was expected",
