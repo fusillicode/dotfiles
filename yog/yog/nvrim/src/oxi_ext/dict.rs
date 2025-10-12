@@ -91,3 +91,53 @@ impl DictionaryExt for Dictionary {
 fn no_value_matching(query: &[&str], dict: &Dictionary) -> color_eyre::eyre::Error {
     eyre!("missing dict value | query={query:#?} dict={dict:#?}")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::dict;
+
+    #[test]
+    fn get_t_missing_key_errors() {
+        let d = dict! { other: 1 };
+        assert2::let_assert!(Err(err) = d.get_t::<nvim_oxi::String>("name"));
+        let msg = err.to_string();
+        assert!(msg.starts_with("missing dict value |"), "actual: {msg}");
+        assert!(msg.contains("query=[\n    \"name\",\n]"), "actual: {msg}");
+    }
+
+    #[test]
+    fn get_opt_t_missing_key_ok_none() {
+        let d = dict! { other: 1 };
+        assert2::let_assert!(Ok(v) = d.get_opt_t::<nvim_oxi::String>("name"));
+        assert!(v.is_none());
+    }
+
+    #[test]
+    fn get_dict_missing_intermediate_returns_none() {
+        let d = dict! { root: dict! { level: dict! { value: 1 } } };
+        assert2::let_assert!(Ok(v) = d.get_dict(&["root", "missing", "value"]));
+        assert!(v.is_none());
+    }
+
+    #[test]
+    fn get_dict_intermediate_wrong_type_errors() {
+        let d = dict! { root: dict! { leaf: 1 } };
+        assert2::let_assert!(Err(err) = d.get_dict(&["root", "leaf", "value"]));
+        let msg = err.to_string();
+        assert!(msg.contains(" is Integer but Dictionary was expected"), "actual: {msg}");
+        assert!(msg.contains("key \"leaf\""), "actual: {msg}");
+    }
+
+    #[test]
+    fn get_required_dict_missing_errors() {
+        let d = dict! { root: dict! { leaf: 1 } };
+        assert2::let_assert!(Err(err) = d.get_required_dict(&["root", "branch"]));
+        let msg = err.to_string();
+        assert!(msg.starts_with("missing dict value |"), "actual: {msg}");
+        assert!(
+            msg.contains("query=[\n    \"root\",\n    \"branch\",\n]"),
+            "actual: {msg}"
+        );
+    }
+}

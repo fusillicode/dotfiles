@@ -168,6 +168,30 @@ mod tests {
     }
 
     #[test]
+    fn skip_returns_false_when_missing_source_and_message_not_blacklisted() {
+        let filter = MsgBlacklistFilter {
+            source: "foo",
+            blacklist: vec!["stderr".into()],
+            buf_path: None,
+        };
+        let diag = dict! { message: "ordinary info" };
+        assert2::let_assert!(Ok(res) = filter.skip_diagnostic("file.rs", Some(&diag)));
+        assert!(!res);
+    }
+
+    #[test]
+    fn skip_returns_true_on_overlapping_blacklist_substrings() {
+        let filter = MsgBlacklistFilter {
+            source: "foo",
+            blacklist: vec!["error".into(), "err".into()],
+            buf_path: None,
+        };
+        let diag = dict! { message: "An ERROR occurred" };
+        assert2::let_assert!(Ok(res) = filter.skip_diagnostic("file.rs", Some(&diag)));
+        assert!(res);
+    }
+
+    #[test]
     fn skip_returns_error_when_missing_message_key() {
         let filter = MsgBlacklistFilter {
             source: "foo",
