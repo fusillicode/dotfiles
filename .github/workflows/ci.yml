@@ -41,22 +41,24 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Setup (cargo-llvm-cov)
+      - name: Setup (cargo-llvm-cov, cargo-nextest)
         uses: ./.github/actions/setup
         with:
-          tools: "cargo-llvm-cov"
+          tools: "cargo-llvm-cov cargo-nextest"
       - name: Add llvm-tools component
         shell: bash
         working-directory: yog
         run: |
           set -euo pipefail
           rustup component add llvm-tools-preview
-      - name: Test and coverage (LCOV)
+      - name: Test and coverage (LCOV via nextest)
         shell: bash
         working-directory: yog
         run: |
           set -euo pipefail
-          cargo llvm-cov --workspace --all-features --lcov --output-path lcov.info
+          # Run test binaries with nextest for faster & more reliable execution.
+          # Use --no-run to build instrumented binaries first, then nextest run.
+          cargo llvm-cov nextest --profile ci --workspace --all-features --lcov --output-path lcov.info
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
