@@ -19,6 +19,7 @@ IPs
 JFrog
 NodeJS
 OIDC
+OOM
 OS
 Okta
 OpenAPI
@@ -65,6 +66,7 @@ cmd
 colored
 colorscheme
 cooldown
+cpus
 cwd
 dataflow
 dbee
@@ -90,6 +92,7 @@ i64
 impl
 infos
 invariance
+junit
 k8s
 ko
 kos
@@ -104,6 +107,7 @@ monotonicity
 mut
 mux
 newtype
+nextest
 nvim
 ok
 oks
