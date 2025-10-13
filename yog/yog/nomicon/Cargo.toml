@@ -20,9 +20,11 @@ path = "src/server.rs"
 
 [dependencies]
 askama = { version = "0.14" }
+async-stream = { version = "0.3", default-features = false }
 axum = { version = "0.8" }
 chrono = { workspace = true }
 color-eyre = { workspace = true }
+datastar = { version = "0.3", features = ["axum"] }
 shuttle-axum = { version = "0.57" }
 shuttle-runtime = { version = "0.57" }
 ytil_cmd = { workspace = true }
