@@ -139,3 +139,25 @@ pub fn merge(pr_number: usize) -> color_eyre::Result<()> {
         .exec()?;
     Ok(())
 }
+
+/// Approve a pull request via `gh pr review --approve`.
+///
+/// Issues an approval review for the specified pull request using the GitHub
+/// CLI. Mirrors the minimalist style of [`merge`] for consistency and keeps
+/// policy / flag decisions localized here.
+///
+/// # Arguments
+/// - `pr_number` - Numeric pull request number.
+///
+/// # Returns
+/// `Ok(())` if the review command succeeds.
+///
+/// # Errors
+/// - Spawning or executing `gh pr review` fails.
+/// - Command exits with non‑zero status (propagated by [`ytil_cmd::CmdExt`]).
+pub fn approve(pr_number: usize) -> color_eyre::Result<()> {
+    Command::new("gh")
+        .args(["pr", "review", &format!("{pr_number}"), "--approve"])
+        .exec()?;
+    Ok(())
+}
