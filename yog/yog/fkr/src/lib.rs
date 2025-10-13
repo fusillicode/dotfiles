@@ -17,6 +17,10 @@
 //! - Interactive selection UI fails.
 //! - Writing the generated value to the clipboard fails.
 
+use fake::Fake;
+use strum::EnumIter;
+use strum::IntoEnumIterator;
+
 /// The actual `main` inner logic.
 ///
 /// # Errors
@@ -39,13 +43,8 @@ pub fn run() -> color_eyre::Result<()> {
     Ok(())
 }
 
-use fake::Fake;
-use strum::Display;
-use strum::EnumIter;
-use strum::IntoEnumIterator;
-
 /// Available fake data types for generation.
-#[derive(EnumIter, Display, Clone, Copy, Debug)]
+#[derive(EnumIter, strum::Display, Clone, Copy, Debug)]
 pub enum FkrOption {
     /// Generates a version 4 UUID (random)
     Uuidv4,

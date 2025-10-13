@@ -17,6 +17,7 @@ pub fn filters() -> Vec<Box<dyn DiagnosticsFilter>> {
             "stdout".into(),
             "stdin".into(),
             "insert `to` to complete the infinitive".into(),
+            "did you mean to spell `s` this way".into(),
         ],
     })]
 }
