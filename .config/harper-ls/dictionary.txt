@@ -9,6 +9,7 @@ CTRL
 Checkout
 DNI
 DTS
+Dependabot
 ESC
 FE
 GQL
