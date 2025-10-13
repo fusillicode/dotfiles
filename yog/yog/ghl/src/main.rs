@@ -91,7 +91,9 @@ fn main() -> color_eyre::Result<()> {
     println!(); // Cosmetic spacing.
 
     for pr in selected_prs.iter().map(Deref::deref) {
-        report(pr, ytil_github::pr::merge(pr.number));
+        let _ = Op::Approve
+            .report(pr, ytil_github::pr::approve(pr.number))
+            .and_then(|()| Op::Merge.report(pr, ytil_github::pr::merge(pr.number)));
     }
 
     Ok(())
@@ -133,36 +135,96 @@ impl core::fmt::Display for RenderablePullRequest {
     }
 }
 
-/// Print colored merge status line for a merge attempt.
+/// Pull request operation done in the context of `ghl`.
 ///
-/// Continues after failures; never aborts. Uses `{:?}` for `title` and `author` for quoting.
+/// Models the two discrete actions this tool performs against each selected
+/// pull request: first an approval review, then a merge. Encapsulating these
+/// as an enum lets reporting helpers pattern‑match for concise, readable output
+/// formatting and future expansion (e.g. `Close`, `Label`).
+///
+/// # Variants
+/// - `Approve` Submit an approving review (`gh pr review --approve`).
+/// - `Merge` Perform the administrative squash merge (`gh pr merge --admin --squash`).
+enum Op {
+    Approve,
+    Merge,
+}
+
+impl Op {
+    /// Report the result of executing an operation on a pull request.
+    ///
+    /// Delegates to success / error helpers that emit colorized, structured
+    /// terminal output. Keeps call‑site chaining terse while centralizing the
+    /// formatting logic.
+    ///
+    /// # Arguments
+    /// - `pr` Subject pull request.
+    /// - `res` Result returned by the underlying GitHub CLI wrapper.
+    ///
+    /// # Returns
+    /// Propagates `res` unchanged after side‑effect logging.
+    ///
+    /// # Errors
+    /// Returns the same error contained in `res` (no transformation) so callers
+    /// can continue combinators (`and_then`, etc.) if desired.
+    pub fn report(&self, pr: &PullRequest, res: color_eyre::Result<()>) -> color_eyre::Result<()> {
+        res.inspect(|()| self.report_ok(pr)).inspect_err(|error| {
+            self.report_error(pr, error);
+        })
+    }
+
+    /// Emit a success line for the completed operation.
+    ///
+    /// # Arguments
+    /// - `pr` Pull request just processed successfully.
+    fn report_ok(&self, pr: &PullRequest) {
+        let msg = match self {
+            Self::Approve => "Approved",
+            Self::Merge => "Merged",
+        };
+        println!("{} {}", format!("{msg} PR").green().bold(), format_pr(pr));
+    }
+
+    /// Emit a structured error report for a failed operation.
+    ///
+    /// # Arguments
+    /// - `pr` Pull request that failed to process.
+    /// - `error` Error returned by the CLI wrapper.
+    ///
+    /// # Rationale
+    /// Keeps multi‑line error payload visually grouped with the PR metadata.
+    fn report_error(&self, pr: &PullRequest, error: &color_eyre::Report) {
+        let msg = match self {
+            Self::Approve => "approving",
+            Self::Merge => "merging",
+        };
+        eprintln!(
+            "{} {} {}",
+            format!("Error {msg} PR").red().bold(),
+            format_pr(pr),
+            format!("error=\n{error}").red().bold()
+        );
+    }
+}
+
+/// Format concise identifying PR fields for log / status lines.
+///
+/// Builds a single colorized string containing number, quoted title, and
+/// debug formatting of the author object.
 ///
 /// # Arguments
-/// - `pr`: Pull request metadata (number, title, author).
-/// - `merge_res`: Result of merge attempt; `Ok(())` => merged; `Err(e)` => prints error.
+/// - `pr` Pull request whose identifying fields will be rendered.
 ///
 /// # Returns
-/// - Nothing; side effect is colored stdout/stderr output.
-fn report(pr: &PullRequest, merge_res: color_eyre::Result<()>) {
-    match merge_res {
-        Ok(()) => {
-            println!(
-                "{} {} {} {}",
-                "Merged PR".green().bold(),
-                format!("number={}", pr.number).white().bold(),
-                format!("title={:?}", pr.title).white().bold(),
-                format!("author={:?}", pr.author).white().bold(),
-            );
-        }
-        Err(error) => {
-            eprintln!(
-                "{} {} {} {} {}",
-                "Error merging PR".red().bold(),
-                format!("number={}", pr.number).white().bold(),
-                format!("title={:?}", pr.title).white().bold(),
-                format!("author={:?}", pr.author).white().bold(),
-                format!("error={error}").red().bold()
-            );
-        }
-    }
+/// Colorized composite string suitable for direct printing.
+///
+/// # Rationale
+/// Central helper avoids duplicating formatting order and styling decisions.
+fn format_pr(pr: &PullRequest) -> String {
+    format!(
+        "{} {} {}",
+        format!("number={}", pr.number).white().bold(),
+        format!("title={:?}", pr.title).white().bold(),
+        format!("author={:?}", pr.author).white().bold(),
+    )
 }
