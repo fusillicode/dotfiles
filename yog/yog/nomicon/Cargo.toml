@@ -14,10 +14,17 @@ build = "build.rs"
 [package.metadata.cargo-machete]
 ignored = ["lightningcss"]
 
+[[bin]]
+name = "nomicon-server"
+path = "src/server.rs"
+
 [dependencies]
 askama = { version = "0.14" }
+axum = { version = "0.8" }
 chrono = { workspace = true }
 color-eyre = { workspace = true }
+shuttle-axum = { version = "0.57" }
+shuttle-runtime = { version = "0.57" }
 ytil_cmd = { workspace = true }
 ytil_system = { workspace = true }
 
