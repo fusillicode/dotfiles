@@ -16,24 +16,6 @@ mod filters;
 mod formatter;
 mod sorter;
 
-/// Diagnostic severity levels.
-#[derive(Debug, Deserialize_repr, Hash, PartialEq, Eq, Copy, Clone, strum::Display, EnumIter)]
-#[repr(u8)]
-pub enum DiagnosticSeverity {
-    /// Error severity.
-    #[strum(to_string = "e")]
-    Error = 1,
-    /// Warning severity.
-    #[strum(to_string = "w")]
-    Warn = 2,
-    /// Info severity.
-    #[strum(to_string = "i")]
-    Info = 3,
-    /// Hint severity.
-    #[strum(to_string = "h")]
-    Hint = 4,
-}
-
 /// [`Dictionary`] of diagnostic processing helpers.
 ///
 /// Includes:
@@ -68,4 +50,22 @@ pub fn dict() -> Dictionary {
             }
         }
     }
+}
+
+/// Diagnostic severity levels.
+#[derive(Debug, Deserialize_repr, Hash, PartialEq, Eq, Copy, Clone, strum::Display, EnumIter)]
+#[repr(u8)]
+pub enum DiagnosticSeverity {
+    /// Error severity.
+    #[strum(to_string = "e")]
+    Error = 1,
+    /// Warning severity.
+    #[strum(to_string = "w")]
+    Warn = 2,
+    /// Info severity.
+    #[strum(to_string = "i")]
+    Info = 3,
+    /// Hint severity.
+    #[strum(to_string = "h")]
+    Hint = 4,
 }
