@@ -1318,6 +1318,7 @@ dependencies = [
  "itertools 0.14.0",
  "nvim-oxi",
  "serde",
+ "serde_json",
  "serde_repr",
  "strum",
  "tree-sitter",

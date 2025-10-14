@@ -23,6 +23,7 @@ mod diagnostics;
 mod fkr;
 /// Core (non‑plugin) keymaps.
 pub mod keymaps;
+mod linters;
 /// [`nvim_oxi`] custom extensions.
 mod oxi_ext;
 /// Status column (diagnostics + git signs).
@@ -59,5 +60,6 @@ fn nvrim() -> Dictionary {
         "keymaps": keymaps::dict(),
         "trex": trex::dict(),
         "fkr": fkr::dict(),
+        "linters": linters::dict(),
     }
 }

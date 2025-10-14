@@ -26,7 +26,6 @@ pub fn notify_error(msg: &str) {
 }
 
 /// Notifies the user of a warning message in Nvim.
-#[expect(dead_code, reason = "Kept for future use")]
 pub fn notify_warn(msg: &str) {
     if let Err(error) = nvim_oxi::api::notify(msg, LogLevel::Warn, &dict! {}) {
         nvim_oxi::dbg!(format!("cannot notify warning | msg={msg:?} error={error:#?}"));

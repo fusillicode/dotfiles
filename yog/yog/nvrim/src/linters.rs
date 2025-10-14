@@ -1,0 +1,104 @@
+use nvim_oxi::Dictionary;
+use serde::Deserialize;
+
+use crate::dict;
+use crate::fn_from;
+use crate::oxi_ext::api::notify_error;
+use crate::oxi_ext::api::notify_warn;
+
+pub fn dict() -> Dictionary {
+    dict! {
+        "sqruff": dict! {
+            "parser": fn_from!(parser)
+        },
+    }
+}
+
+fn parser(maybe_output: Option<nvim_oxi::String>) -> Vec<Dictionary> {
+    let Some(output) = &maybe_output else {
+        notify_warn(&format!("sqruff output missing output={maybe_output:?}"));
+        return vec![];
+    };
+    let output = output.to_string_lossy();
+
+    if output.trim().is_empty() {
+        notify_warn(&format!("sqruff output is an empty string output={maybe_output:?}"));
+        return vec![];
+    }
+
+    let parsed_output = match serde_json::from_str::<SqruffOutput>(&output) {
+        Ok(parsed_output) => parsed_output,
+        Err(error) => {
+            notify_error(&format!("error parsing sqruff output={output:?} error={error:#?}"));
+            return vec![];
+        }
+    };
+
+    parsed_output
+        .messages
+        .into_iter()
+        .map(|msg| {
+            dict! {
+                "lnum": msg.range.start.line.saturating_sub(1) as i64,
+                "end_lnum": msg.range.end.line.saturating_sub(1) as i64,
+                "col": msg.range.start.character.saturating_sub(1) as i64,
+                "end_col": msg.range.end.character.saturating_sub(1) as i64,
+                "message": msg.message,
+                "code": msg.code.map(nvim_oxi::Object::from).unwrap_or(nvim_oxi::Object::nil()),
+                "source": msg.source,
+                "severity": msg.severity.to_nvim_severity(),
+            }
+        })
+        .collect()
+}
+
+#[derive(Debug, Deserialize)]
+struct SqruffOutput {
+    #[serde(rename = "<string>", default)]
+    messages: Vec<SqruffMessage>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SqruffMessage {
+    code: Option<String>,
+    message: String,
+    range: Range,
+    severity: Severity,
+    source: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct Range {
+    start: Position,
+    #[serde(rename = "end")]
+    end: Position,
+}
+
+#[derive(Debug, Deserialize)]
+struct Position {
+    character: u32,
+    line: u32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+enum Severity {
+    Error,
+    Warning,
+    Info,
+    Hint,
+    #[serde(other)]
+    Other,
+}
+
+impl Severity {
+    fn to_nvim_severity(&self) -> i64 {
+        match self {
+            Severity::Error => 1,
+            Severity::Warning => 2,
+            Severity::Info => 3,
+            Severity::Hint => 4,
+            Severity::Other => 3,
+        }
+    }
+}
