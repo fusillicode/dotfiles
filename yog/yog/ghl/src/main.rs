@@ -97,7 +97,7 @@ fn main() -> color_eyre::Result<()> {
 
     let selected_op_run = selected_op.run();
     for pr in selected_prs.iter().map(Deref::deref) {
-        selected_op_run(pr)
+        selected_op_run(pr);
     }
 
     Ok(())
