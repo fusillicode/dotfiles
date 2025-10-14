@@ -21,16 +21,16 @@ mod sorter;
 #[repr(u8)]
 pub enum DiagnosticSeverity {
     /// Error severity.
-    #[strum(to_string = "E")]
+    #[strum(to_string = "e")]
     Error = 1,
     /// Warning severity.
-    #[strum(to_string = "W")]
+    #[strum(to_string = "w")]
     Warn = 2,
     /// Info severity.
-    #[strum(to_string = "I")]
+    #[strum(to_string = "i")]
     Info = 3,
     /// Hint severity.
-    #[strum(to_string = "H")]
+    #[strum(to_string = "h")]
     Hint = 4,
 }
 
