@@ -73,12 +73,12 @@ fn main() -> color_eyre::Result<()> {
     let workspace_root = ytil_system::get_workspace_root()?;
 
     println!(
-        "\n{} in {}: {}\n",
+        "\n{} {} in {}\n",
         "Run lints".cyan().bold(),
-        workspace_root.display().to_string().white().bold(),
         format!("{:?}", LINTS.iter().map(|(lint, _)| lint).collect::<Vec<_>>())
             .white()
-            .bold()
+            .bold(),
+        workspace_root.display().to_string().white().bold(),
     );
 
     // Spawn all lints in parallel.
@@ -160,10 +160,10 @@ fn report(lint_name: &str, lint_res: &std::thread::Result<TimedLintFn>) -> bool 
             result: Ok(output),
         }) => {
             println!(
-                "{} {} {} \n{}",
+                "{} {} status={:?} \n{}",
                 lint_name.green().bold(),
-                report_timing(*duration),
-                format!("status={:?}", output.status.code()).white().bold(),
+                format_timing(*duration),
+                output.status.code(),
                 str::from_utf8(&output.stdout).unwrap_or_default()
             );
             false
@@ -172,7 +172,7 @@ fn report(lint_name: &str, lint_res: &std::thread::Result<TimedLintFn>) -> bool 
             duration,
             result: Err(error),
         }) => {
-            eprintln!("{} {} \n{error}", lint_name.red().bold(), report_timing(*duration));
+            eprintln!("{} {} \n{error}", lint_name.red().bold(), format_timing(*duration));
             true
         }
         Err(join_err) => {
@@ -195,6 +195,6 @@ fn report(lint_name: &str, lint_res: &std::thread::Result<TimedLintFn>) -> bool 
 /// - Improves readability vs raw integer milliseconds; preserves sub-ms precision.
 /// - Uses stable standard library formatting (no custom scaling logic).
 /// - Keeps formatting centralized for future JSON / machine-output additions.
-fn report_timing(duration: Duration) -> String {
-    format!("took={duration:?}").white().bold().to_string()
+fn format_timing(duration: Duration) -> String {
+    format!("took={duration:?}")
 }
