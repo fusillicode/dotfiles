@@ -10,9 +10,15 @@ Checkout
 DNI
 DTS
 Dependabot
+DiagnosticSignError
+DiagnosticSignHint
+DiagnosticSignInfo
+DiagnosticSignOk
+DiagnosticSignWarn
 ESC
 FE
 GQL
+GitSigns
 HashMap
 I/O
 IO

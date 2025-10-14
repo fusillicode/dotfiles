@@ -180,8 +180,12 @@ mod tests {
             workspace_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
         };
         assert_eq!(
-            "%#DiagnosticStatusLineError#E:3 %#DiagnosticStatusLineInfo#I:1 %#StatusLine#foo %m %r%=",
-            &statusline.draw()
+            format!(
+                "%#DiagnosticStatusLineError#{}:3 %#DiagnosticStatusLineInfo#{}:1 %#StatusLine#foo %m %r%=",
+                DiagnosticSeverity::Error,
+                DiagnosticSeverity::Info
+            ),
+            statusline.draw()
         );
 
         let statusline = Statusline {
@@ -192,8 +196,12 @@ mod tests {
                 .collect(),
         };
         assert_eq!(
-            "%#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#E:3 %#DiagnosticStatusLineInfo#I:1",
-            &statusline.draw()
+            format!(
+                "%#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#{}:3 %#DiagnosticStatusLineInfo#{}:1",
+                DiagnosticSeverity::Error,
+                DiagnosticSeverity::Info
+            ),
+            statusline.draw()
         );
 
         let statusline = Statusline {
@@ -206,8 +214,14 @@ mod tests {
                 .collect(),
         };
         assert_eq!(
-            "%#DiagnosticStatusLineWarn#W:2 %#DiagnosticStatusLineHint#H:3 %#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#E:3 %#DiagnosticStatusLineInfo#I:1",
-            &statusline.draw()
+            format!(
+                "%#DiagnosticStatusLineWarn#{}:2 %#DiagnosticStatusLineHint#{}:3 %#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#{}:3 %#DiagnosticStatusLineInfo#{}:1",
+                DiagnosticSeverity::Warn,
+                DiagnosticSeverity::Hint,
+                DiagnosticSeverity::Error,
+                DiagnosticSeverity::Info
+            ),
+            statusline.draw()
         );
     }
 }

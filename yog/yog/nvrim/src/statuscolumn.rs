@@ -8,6 +8,7 @@ use nvim_oxi::lua::ffi::State;
 use nvim_oxi::serde::Deserializer;
 use serde::Deserialize;
 
+use crate::diagnostics::DiagnosticSeverity;
 use crate::dict;
 use crate::fn_from;
 
@@ -30,11 +31,12 @@ fn draw((cur_lnum, extmarks): (String, Vec<Extmark>)) -> Option<String> {
         })
         .ok()?;
 
-    Some(Statuscolumn::draw(
-        &cur_buf_type,
-        cur_lnum,
-        extmarks.iter().filter_map(|extmark| extmark.meta().cloned()).collect(),
-    ))
+    let mut extmark_meta: Vec<_> = extmarks.iter().filter_map(|extmark| extmark.meta().cloned()).collect();
+    for meta in &mut extmark_meta {
+        meta.override_sign_text();
+    }
+
+    Some(Statuscolumn::draw(&cur_buf_type, cur_lnum, extmark_meta))
 }
 
 /// Represents an extmark in Nvim.
@@ -84,20 +86,59 @@ impl ExtmarkMeta {
             self.sign_text.as_ref().map_or("", |x| x.trim())
         )
     }
+
+    /// Overrides diagnostic sign text with severity shorthand.
+    ///
+    /// Replaces the current [`ExtmarkMeta::sign_text`] with a canonical
+    /// single-letter representation derived from the [`DiagnosticSeverity`]
+    /// associated to the diagnostic variants of [`SignHlGroup`]. Non-diagnostic
+    /// variants (ok / git / other) keep their existing text unchanged.
+    ///
+    /// # Rationale
+    /// Normalizing diagnostic sign text ensures consistent rendering regardless
+    /// of what upstream plugins put into the extmark.
+    pub fn override_sign_text(&mut self) {
+        let new_sign_text = match self.sign_hl_group {
+            SignHlGroup::DiagnosticError => Some(DiagnosticSeverity::Error.to_string()),
+            SignHlGroup::DiagnosticWarn => Some(DiagnosticSeverity::Warn.to_string()),
+            SignHlGroup::DiagnosticInfo => Some(DiagnosticSeverity::Info.to_string()),
+            SignHlGroup::DiagnosticHint => Some(DiagnosticSeverity::Hint.to_string()),
+            SignHlGroup::DiagnosticOk | SignHlGroup::Git(_) | SignHlGroup::Other(_) => self.sign_text.clone(),
+        };
+        self.sign_text = new_sign_text;
+    }
 }
 
+/// Enumerates known and dynamic highlight groups for status column signs.
+///
+/// - Provides explicit variants for the standard diagnostic signs.
+/// - Captures Git related signs (`GitSigns*`) while retaining their concrete highlight group string in the
+///   [`SignHlGroup::Git`] variant.
+/// - Any other (custom / plugin) highlight group is retained verbatim in [`SignHlGroup::Other`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum SignHlGroup {
+    /// `DiagnosticSignError` highlight group.
     DiagnosticError,
+    /// `DiagnosticSignWarn` highlight group.
     DiagnosticWarn,
+    /// `DiagnosticSignInfo` highlight group.
     DiagnosticInfo,
+    /// `DiagnosticSignHint` highlight group.
     DiagnosticHint,
+    /// `DiagnosticSignOk` highlight group.
     DiagnosticOk,
+    /// A Git-related sign highlight group (contains `GitSigns`).
     Git(String),
+    /// Any other highlight group string not matched above.
     Other(String),
 }
 
 impl SignHlGroup {
+    /// Returns the canonical string form used by Neovim for this group.
+    ///
+    /// # Returns
+    /// - A static diagnostic string for diagnostic variants.
+    /// - The original owned string slice for dynamic variants (`Git`, `Other`).
     const fn as_str(&self) -> &str {
         match self {
             Self::DiagnosticError => "DiagnosticSignError",
@@ -111,12 +152,18 @@ impl SignHlGroup {
 }
 
 impl core::fmt::Display for SignHlGroup {
+    /// Formats the highlight group as the raw group string.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str(self.as_str())
     }
 }
 
 impl<'de> serde::Deserialize<'de> for SignHlGroup {
+    /// Deserializes a highlight group string into a typed [`SignHlGroup`].
+    ///
+    /// # Errors
+    /// Never returns an error beyond underlying string deserialization; every
+    /// string maps to some variant.
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
