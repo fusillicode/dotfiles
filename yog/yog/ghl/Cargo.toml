@@ -13,5 +13,6 @@ categories = ["command-line-utilities", "development-tools"]
 [dependencies]
 color-eyre = { workspace = true }
 pico-args = { version = "0.5" }
+strum = { workspace = true }
 ytil_github = { workspace = true }
 ytil_tui = { workspace = true }

@@ -161,3 +161,25 @@ pub fn approve(pr_number: usize) -> color_eyre::Result<()> {
         .exec()?;
     Ok(())
 }
+
+/// Trigger Dependabot to rebase a pull request.
+///
+/// Sends the special `@dependabot rebase` comment recognized by Dependabot to
+/// request an up‑to‑date rebase of its generated pull request. Useful when the
+/// PR is out-of-date with the base branch or conflicting after merges.
+///
+/// # Arguments
+/// - `pr_number` Numeric pull request number to rebase.
+///
+/// # Returns
+/// `Ok(())` if the comment command succeeds.
+///
+/// # Errors
+/// - Spawning or executing `gh pr comment` fails.
+/// - Command exits with non‑zero status (propagated by [`ytil_cmd::CmdExt`]).
+pub fn dependabot_rebase(pr_number: usize) -> color_eyre::Result<()> {
+    Command::new("gh")
+        .args(["pr", "comment", &format!("{pr_number}"), "--body", "@dependabot rebase"])
+        .exec()?;
+    Ok(())
+}
