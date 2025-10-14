@@ -53,9 +53,57 @@ impl Extmark {
 #[derive(Deserialize, Clone)]
 pub struct ExtmarkMeta {
     /// The highlight group for the sign.
-    sign_hl_group: String,
+    sign_hl_group: SignHlGroup,
     /// The text of the sign, optional due to grug-far buffers.
     sign_text: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum SignHlGroup {
+    DiagnosticError,
+    DiagnosticWarn,
+    DiagnosticInfo,
+    DiagnosticHint,
+    DiagnosticOk,
+    Git(String),
+    Other(String),
+}
+
+impl SignHlGroup {
+    const fn as_str(&self) -> &str {
+        match self {
+            Self::DiagnosticError => "DiagnosticSignError",
+            Self::DiagnosticWarn => "DiagnosticSignWarn",
+            Self::DiagnosticInfo => "DiagnosticSignInfo",
+            Self::DiagnosticHint => "DiagnosticSignHint",
+            Self::DiagnosticOk => "DiagnosticSignOk",
+            Self::Git(s) | Self::Other(s) => s.as_str(),
+        }
+    }
+}
+
+impl core::fmt::Display for SignHlGroup {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for SignHlGroup {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(match s.as_str() {
+            "DiagnosticSignError" => Self::DiagnosticError,
+            "DiagnosticSignWarn" => Self::DiagnosticWarn,
+            "DiagnosticSignInfo" => Self::DiagnosticInfo,
+            "DiagnosticSignHint" => Self::DiagnosticHint,
+            "DiagnosticSignOk" => Self::DiagnosticOk,
+            git_hl_group if git_hl_group.contains("GitSigns") => Self::Git(git_hl_group.to_string()),
+            other_hl_group => Self::Other(other_hl_group.to_string()),
+        })
+    }
 }
 
 impl ExtmarkMeta {
@@ -166,7 +214,7 @@ mod tests {
             "foo",
             "42".into(),
             vec![ExtmarkMeta {
-                sign_hl_group: "DiagnosticSignError".into(),
+                sign_hl_group: SignHlGroup::DiagnosticError,
                 sign_text: Some("E".into()),
             }],
         );
@@ -178,11 +226,11 @@ mod tests {
             "42".into(),
             vec![
                 ExtmarkMeta {
-                    sign_hl_group: "DiagnosticSignError".into(),
+                    sign_hl_group: SignHlGroup::DiagnosticError,
                     sign_text: Some("E".into()),
                 },
                 ExtmarkMeta {
-                    sign_hl_group: "DiagnosticSignWarn".into(),
+                    sign_hl_group: SignHlGroup::DiagnosticWarn,
                     sign_text: Some("W".into()),
                 },
             ],
@@ -194,7 +242,7 @@ mod tests {
             "foo",
             "42".into(),
             vec![ExtmarkMeta {
-                sign_hl_group: "GitSignsFoo".into(),
+                sign_hl_group: SignHlGroup::Git("GitSignsFoo".into()),
                 sign_text: Some("|".into()),
             }],
         );
@@ -206,15 +254,15 @@ mod tests {
             "42".into(),
             vec![
                 ExtmarkMeta {
-                    sign_hl_group: "DiagnosticSignError".into(),
+                    sign_hl_group: SignHlGroup::DiagnosticError,
                     sign_text: Some("E".into()),
                 },
                 ExtmarkMeta {
-                    sign_hl_group: "DiagnosticSignWarn".into(),
+                    sign_hl_group: SignHlGroup::DiagnosticWarn,
                     sign_text: Some("W".into()),
                 },
                 ExtmarkMeta {
-                    sign_hl_group: "GitSignsFoo".into(),
+                    sign_hl_group: SignHlGroup::Git("GitSignsFoo".into()),
                     sign_text: Some("|".into()),
                 },
             ],
