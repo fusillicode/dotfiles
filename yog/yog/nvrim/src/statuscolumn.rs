@@ -49,6 +49,23 @@ impl Extmark {
     }
 }
 
+/// Implementation of [`FromObject`] for [`Extmark`].
+impl FromObject for Extmark {
+    fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
+        Self::deserialize(Deserializer::new(obj)).map_err(Into::into)
+    }
+}
+
+/// Implementation of [`Poppable`] for [`Extmark`].
+impl Poppable for Extmark {
+    unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
+        unsafe {
+            let obj = Object::pop(lstate)?;
+            Self::from_object(obj).map_err(nvim_oxi::lua::Error::pop_error_from_err::<Self, _>)
+        }
+    }
+}
+
 /// Metadata associated with an extmark.
 #[derive(Deserialize, Clone)]
 pub struct ExtmarkMeta {
@@ -56,6 +73,17 @@ pub struct ExtmarkMeta {
     sign_hl_group: SignHlGroup,
     /// The text of the sign, optional due to grug-far buffers.
     sign_text: Option<String>,
+}
+
+impl ExtmarkMeta {
+    /// Draws the extmark metadata as a formatted string.
+    fn draw(&self) -> String {
+        format!(
+            "%#{}#{}%*",
+            self.sign_hl_group,
+            self.sign_text.as_ref().map_or("", |x| x.trim())
+        )
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -103,34 +131,6 @@ impl<'de> serde::Deserialize<'de> for SignHlGroup {
             git_hl_group if git_hl_group.contains("GitSigns") => Self::Git(git_hl_group.to_string()),
             other_hl_group => Self::Other(other_hl_group.to_string()),
         })
-    }
-}
-
-impl ExtmarkMeta {
-    /// Draws the extmark metadata as a formatted string.
-    fn draw(&self) -> String {
-        format!(
-            "%#{}#{}%*",
-            self.sign_hl_group,
-            self.sign_text.as_ref().map_or("", |x| x.trim())
-        )
-    }
-}
-
-/// Implementation of [`FromObject`] for [`Extmark`].
-impl FromObject for Extmark {
-    fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
-        Self::deserialize(Deserializer::new(obj)).map_err(Into::into)
-    }
-}
-
-/// Implementation of [`Poppable`] for [`Extmark`].
-impl Poppable for Extmark {
-    unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
-        unsafe {
-            let obj = Object::pop(lstate)?;
-            Self::from_object(obj).map_err(nvim_oxi::lua::Error::pop_error_from_err::<Self, _>)
-        }
     }
 }
 
