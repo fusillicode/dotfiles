@@ -58,6 +58,7 @@ asdf
 augroups
 autocommand
 autocommands
+backoffice
 backticked
 basename
 bitflags
@@ -129,6 +130,7 @@ protoc
 quickfix
 requote
 requoted
+requotes
 requoting
 reselects
 resolvers
