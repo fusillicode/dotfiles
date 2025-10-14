@@ -112,29 +112,26 @@ pub trait Installer: Sync + Send {
         match check_res {
             Some(Ok(check_output)) => {
                 println!(
-                    "{} {} {} check_output={}",
-                    "Installed".green().bold(),
-                    self.bin_name().white().bold(),
-                    report_timing(start, past_install, check_duration),
+                    "{} installed {} check_output={}",
+                    self.bin_name().green().bold(),
+                    format_timing(start, past_install, check_duration),
                     check_output.trim_matches(|c| c == '\n' || c == '\r').white().bold()
                 );
             }
             Some(Err(error)) => {
                 eprintln!(
-                    "{} {} {} error={}",
-                    "Check failed".red().bold(),
-                    self.bin_name().white().bold(),
-                    report_timing(start, past_install, check_duration),
-                    format!("{error:#?}").red().bold()
+                    "{} check failed {} error={}",
+                    self.bin_name().red().bold(),
+                    format_timing(start, past_install, check_duration),
+                    format!("{error:#?}").red()
                 );
                 return Err(error);
             }
             None => {
                 println!(
-                    "{} {} {}",
-                    "Installed not checked".yellow().bold(),
-                    self.bin_name().white().bold(),
-                    report_timing(start, past_install, check_duration),
+                    "{} installed not checked {}",
+                    self.bin_name().yellow().bold(),
+                    format_timing(start, past_install, check_duration),
                 );
             }
         }
@@ -163,7 +160,7 @@ pub trait Installer: Sync + Send {
 ///
 /// # Performance
 /// - Negligible: a few duration subtractions and one allocation for formatting.
-fn report_timing(start: Instant, past_install: Instant, check: Option<Duration>) -> String {
+fn format_timing(start: Instant, past_install: Instant, check: Option<Duration>) -> String {
     format!(
         "install={:?} check={:?} total={:?}",
         past_install.duration_since(start),

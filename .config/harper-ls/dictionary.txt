@@ -9,6 +9,7 @@ CTRL
 Checkout
 DNI
 DTS
+Dependabot
 ESC
 FE
 GQL
@@ -127,6 +128,7 @@ reselects
 resolvers
 riesgo
 rs
+selectable
 shellcheck
 spendability
 sqlx

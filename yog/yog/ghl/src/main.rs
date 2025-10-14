@@ -35,6 +35,7 @@ use std::str::FromStr;
 
 use color_eyre::Section;
 use color_eyre::owo_colors::OwoColorize;
+use strum::EnumIter;
 use ytil_github::pr::IntoEnumIterator;
 use ytil_github::pr::PullRequest;
 use ytil_github::pr::PullRequestMergeState;
@@ -88,12 +89,15 @@ fn main() -> color_eyre::Result<()> {
         return Ok(());
     };
 
+    let Some(selected_op) = ytil_tui::minimal_select::<SelectableOp>(SelectableOp::iter().collect())? else {
+        return Ok(());
+    };
+
     println!(); // Cosmetic spacing.
 
+    let selected_op_run = selected_op.run();
     for pr in selected_prs.iter().map(Deref::deref) {
-        let _ = Op::Approve
-            .report(pr, ytil_github::pr::approve(pr.number))
-            .and_then(|()| Op::Merge.report(pr, ytil_github::pr::merge(pr.number)));
+        selected_op_run(pr);
     }
 
     Ok(())
@@ -135,19 +139,58 @@ impl core::fmt::Display for RenderablePullRequest {
     }
 }
 
-/// Pull request operation done in the context of `ghl`.
+/// User-selectable high-level operations to apply to chosen PRs.
 ///
-/// Models the two discrete actions this tool performs against each selected
-/// pull request: first an approval review, then a merge. Encapsulating these
-/// as an enum lets reporting helpers pattern‑match for concise, readable output
-/// formatting and future expansion (e.g. `Close`, `Label`).
+/// Encapsulates composite actions presented in the TUI. Separate from [`Op`]
+/// which models the underlying atomic steps and reporting. Expanding this enum
+/// only affects menu construction / selection logic.
+///
+/// # Variants
+/// - `ApproveAndMerge` Perform approval review then merge if approval succeeds.
+/// - `DependabotRebase` Post the `@dependabot rebase` comment to a Dependabot PR.
+///
+/// # Future Work
+/// - Add bulk label operations (e.g. `Label` / `RemoveLabel`).
+/// - Introduce `Comment` with arbitrary body once use-cases emerge.
+/// - Provide dry-run variants for auditing actions.
+#[derive(strum::Display, EnumIter)]
+enum SelectableOp {
+    #[strum(to_string = "Approve & Merge")]
+    ApproveAndMerge,
+    #[strum(to_string = "Dependabot Rebase")]
+    DependabotRebase,
+}
+
+impl SelectableOp {
+    pub fn run(&self) -> Box<dyn Fn(&PullRequest)> {
+        match self {
+            Self::ApproveAndMerge => Box::new(|pr| {
+                let _ = Op::Approve
+                    .report(pr, ytil_github::pr::approve(pr.number))
+                    .and_then(|()| Op::Merge.report(pr, ytil_github::pr::merge(pr.number)));
+            }),
+            Self::DependabotRebase => Box::new(|pr| {
+                let _ = Op::DependabotRebase.report(pr, ytil_github::pr::dependabot_rebase(pr.number));
+            }),
+        }
+    }
+}
+
+/// Atomic pull request operations executed by `ghl`.
+///
+/// Represents each discrete action the tool can perform against a selected
+/// pull request. Higher‑level composite choices in the TUI (see [`SelectableOp`])
+/// sequence these as needed. Centralizing variants here keeps reporting logic
+/// (`report`, `report_ok`, `report_error`) uniform and extensible.
 ///
 /// # Variants
 /// - `Approve` Submit an approving review (`gh pr review --approve`).
 /// - `Merge` Perform the administrative squash merge (`gh pr merge --admin --squash`).
+/// - `DependabotRebase` Post the `@dependabot rebase` comment to request an updated rebase for a Dependabot PR.
 enum Op {
     Approve,
     Merge,
+    DependabotRebase,
 }
 
 impl Op {
@@ -181,6 +224,7 @@ impl Op {
         let msg = match self {
             Self::Approve => "Approved",
             Self::Merge => "Merged",
+            Self::DependabotRebase => "Dependabot rebased",
         };
         println!("{} {}", format!("{msg} PR").green().bold(), format_pr(pr));
     }
@@ -197,6 +241,7 @@ impl Op {
         let msg = match self {
             Self::Approve => "approving",
             Self::Merge => "merging",
+            Self::DependabotRebase => "triggering dependabot rebase",
         };
         eprintln!(
             "{} {} {}",

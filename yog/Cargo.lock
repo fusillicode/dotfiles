@@ -739,6 +739,7 @@ version = "0.1.0"
 dependencies = [
  "color-eyre",
  "pico-args",
+ "strum",
  "ytil_github",
  "ytil_tui",
 ]
