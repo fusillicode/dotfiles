@@ -1,28 +1,23 @@
 # Reference: https://nexte.st/book/configuration.html
 
 [profile.default]
-# Fail fast on first failure? Keep false to collect all.
+# Keep false to collect all.
 fail-fast = false
-# Retries for flaky tests (0 = disabled). Increase selectively.
+# Do not retry locally.
 retries = 0
-# Run tests in parallel. Nextest picks number of CPUs by default; cap to avoid OOM on CI.
+# Run tests in parallel. Nextest picks number of CPUs by default.
 threads-required = 1
-# Slow test threshold (emit diagnostics if exceeded).
 slow-timeout = { period = "60s", terminate-after = 3 }
 
 # Use a separate profile for CI to tweak concurrency and retries.
 [profile.ci]
-# Derive from default; only override specific fields.
-retries = 1
+# Keep false to collect all.
 fail-fast = false
+# Retries for flaky tests.
+retries = 1
 # Limit parallelism a bit for memory; adjust if CI runners are large.
 threads-required = 1
 slow-timeout = { period = "90s", terminate-after = 2 }
 
 [profile.ci.junit]
 path = "junit.xml"
-
-# Example of marking some tests as ignored by default (uncomment and customize):
-# [[profile.default.overrides]]
-# filter = { test-name = "expensive::" }
-# status = "ignored"
