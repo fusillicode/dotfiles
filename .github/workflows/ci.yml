@@ -53,14 +53,33 @@ jobs:
         run: |
           set -euo pipefail
           rustup component add llvm-tools-preview
-      - name: Test and coverage (LCOV + JUnit via nextest)
+      - name: Test and coverage (LCOV + JUnit via nextest with path remap)
         shell: bash
         working-directory: yog
         run: |
           set -euo pipefail
-          # Run test binaries with nextest for faster & more reliable execution.
-          # Produce both LCOV coverage (lcov.info) and JUnit test report (junit.xml).
-          cargo llvm-cov nextest --profile ci --workspace --all-features --lcov --output-path lcov.info
+          echo "Running from $(pwd)"
+          # Remap absolute source path prefix to empty so SF lines become repo-relative (e.g. 'yog/<crate>/...').
+          export RUSTFLAGS="--remap-path-prefix=$(pwd)/="
+          cargo llvm-cov nextest \
+            --profile ci \
+            --workspace \
+            --all-features \
+            --lcov \
+            --output-path lcov.info
+          echo "Sample SF lines after remap:";
+          grep -E '^SF:' lcov.info | head -10 || true
+          # Basic sanity: fail if any absolute path (/) immediately followed by Users (macOS) or home path fragments remain.
+          if grep -E '^SF:/' lcov.info | head -1 >/dev/null; then
+            echo 'ERROR: Absolute paths still present in lcov.info (remap may have failed)';
+            exit 1;
+          fi
+      - name: Debug coverage paths
+        shell: bash
+        working-directory: yog
+        run: |
+          set -euo pipefail
+          grep -E '^SF:' lcov.info | head -20 || true
       - name: Upload test results artifact (JUnit)
         uses: actions/upload-artifact@v4
         with:
