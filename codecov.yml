@@ -8,29 +8,29 @@
 # - Provide stable range for graph scaling
 
 codecov:
-  require_ci_to_pass: true       # Only report after CI success
+  require_ci_to_pass: true # Only report after CI success
   notify:
     wait_for_ci: true
 
 coverage:
-  precision: 2                   # Two decimals in reports
+  precision: 2 # Two decimals in reports
   round: down
-  range: 60..90                  # Scale for coverage graph (min..max)
+  range: 60..90 # Scale for coverage graph (min..max)
 
   status:
     project:
-      rust:                      # Flag name matches upload flag ("rust")
-        target: 70%              # Minimum acceptable overall coverage
-        threshold: 2%            # Allow small fluctuations without failing
+      default:
+        target: 70% # Minimum acceptable overall coverage
+        threshold: 2% # Allow small fluctuations without failing
         informational: false
     patch:
-      rust:
-        target: 80%              # Minimum acceptable coverage on new/changed lines
+      default:
+        target: 80% # Minimum acceptable coverage on new/changed lines
         threshold: 2%
         informational: false
     changes:
       default:
-        informational: true      # Per-file diff coverage only informational
+        informational: true # Per-file diff coverage only informational
 
   adjust:
     # Carry forward coverage for utility crates (avoid penalizing patch checks when untouched)
@@ -42,9 +42,9 @@ coverage:
 
 # Paths to ignore entirely (alternative to adjust.ignore). Use for build scripts or assets.
 ignore:
-  - "yog/nomicon/templates/"     # Static external template assets
-  - "yog/nomicon/assets/"        # Non-source assets
-  - "yog/**/build.rs"            # Build scripts
+  - "yog/nomicon/templates/" # Static external template assets
+  - "yog/nomicon/assets/" # Non-source assets
+  - "yog/**/build.rs" # Build scripts
 
 # Flags configuration (optional future customization)
 # You could split crates into multiple uploads with distinct flags for granular thresholds.
@@ -62,7 +62,6 @@ ignore:
 comment:
   layout: "reach, diff, flags, files"
   behavior: default
-
 # PR report customization
 # If comments feel noisy later, set behavior: once or off.
 
