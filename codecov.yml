@@ -28,12 +28,6 @@ coverage:
       default:
         informational: true
 
-  adjust:
-    - path: "yog/ytil/"
-      carryforward: true
-    - path: "yog/nomicon/src/templates/"
-      ignore: true
-
 ignore:
   - "yog/nomicon/templates/"
   - "yog/nomicon/assets/"
