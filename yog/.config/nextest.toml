@@ -19,6 +19,9 @@ fail-fast = false
 threads-required = 1
 slow-timeout = { period = "90s", terminate-after = 2 }
 
+[profile.ci.junit]
+path = "junit.xml"
+
 # Example of marking some tests as ignored by default (uncomment and customize):
 # [[profile.default.overrides]]
 # filter = { test-name = "expensive::" }
