@@ -7,10 +7,12 @@ on:
     paths:
       - ".github/**"
       - "yog/**"
+      - codecov.yml
   pull_request:
     paths:
       - ".github/**"
       - "yog/**"
+      - codecov.yml
 
 env:
   CARGO_TERM_COLOR: always
