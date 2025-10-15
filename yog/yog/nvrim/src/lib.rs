@@ -23,6 +23,7 @@ mod diagnostics;
 mod fkr;
 /// Core (non‑plugin) keymaps.
 pub mod keymaps;
+/// Utilities to handle linters output
 mod linters;
 /// [`nvim_oxi`] custom extensions.
 mod oxi_ext;

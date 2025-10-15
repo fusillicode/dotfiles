@@ -78,15 +78,17 @@ pub enum DiagnosticSeverity {
 }
 
 impl DiagnosticSeverity {
-    /// Returns numeric severity mapping (LSP-style 1-4; 0 for other).
+    /// Returns the numeric representation of a given [`DiagnosticSeverity`].
     ///
-    /// Maps variants to a stable numeric representation used when exporting
-    /// diagnostics to consumers expecting the canonical Language Server
-    /// Protocol severity ordering (1=Error, 2=Warning, 3=Information, 4=Hint).
-    /// `Other` is mapped to 0 to indicate an unmapped / unknown severity.
+    /// The representation is the canonical LSP severity:
+    /// - 1 for Error
+    /// - 2 for Warning
+    /// - 3 for Information
+    /// - 4 for Hint
+    /// - 0 for Other to indicate an unmapped / unknown severity.
     ///
     /// # Returns
-    /// - `u8` numeric code: 1..=4 for known severities, 0 for [`DiagnosticSeverity::Other`].
+    /// - `u8` numeric code 1 to 4 for known severities, 0 for [`DiagnosticSeverity::Other`].
     ///
     /// # Rationale
     /// Avoids relying on implicit enum discriminant order via `as u8` casts,
