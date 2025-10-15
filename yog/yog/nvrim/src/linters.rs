@@ -1,6 +1,7 @@
 use nvim_oxi::Dictionary;
 use serde::Deserialize;
 
+use crate::diagnostics::DiagnosticSeverity;
 use crate::dict;
 use crate::fn_from;
 use crate::oxi_ext::api::notify_error;
@@ -37,18 +38,7 @@ fn parser(maybe_output: Option<nvim_oxi::String>) -> Vec<Dictionary> {
     parsed_output
         .messages
         .into_iter()
-        .map(|msg| {
-            dict! {
-                "lnum": msg.range.start.line.saturating_sub(1) as i64,
-                "end_lnum": msg.range.end.line.saturating_sub(1) as i64,
-                "col": msg.range.start.character.saturating_sub(1) as i64,
-                "end_col": msg.range.end.character.saturating_sub(1) as i64,
-                "message": msg.message,
-                "code": msg.code.map(nvim_oxi::Object::from).unwrap_or(nvim_oxi::Object::nil()),
-                "source": msg.source,
-                "severity": msg.severity.to_nvim_severity(),
-            }
-        })
+        .map(diagnostic_dict_from_msg)
         .collect()
 }
 
@@ -63,14 +53,13 @@ struct SqruffMessage {
     code: Option<String>,
     message: String,
     range: Range,
-    severity: Severity,
+    severity: DiagnosticSeverity,
     source: String,
 }
 
 #[derive(Debug, Deserialize)]
 struct Range {
     start: Position,
-    #[serde(rename = "end")]
     end: Position,
 }
 
@@ -80,25 +69,15 @@ struct Position {
     line: u32,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
-enum Severity {
-    Error,
-    Warning,
-    Info,
-    Hint,
-    #[serde(other)]
-    Other,
-}
-
-impl Severity {
-    fn to_nvim_severity(&self) -> i64 {
-        match self {
-            Severity::Error => 1,
-            Severity::Warning => 2,
-            Severity::Info => 3,
-            Severity::Hint => 4,
-            Severity::Other => 3,
-        }
+fn diagnostic_dict_from_msg(msg: SqruffMessage) -> Dictionary {
+    dict! {
+        "lnum": msg.range.start.line.saturating_sub(1) as i64,
+        "end_lnum": msg.range.end.line.saturating_sub(1) as i64,
+        "col": msg.range.start.character.saturating_sub(1) as i64,
+        "end_col": msg.range.end.character.saturating_sub(1) as i64,
+        "message": msg.message,
+        "code": msg.code.map(nvim_oxi::Object::from).unwrap_or(nvim_oxi::Object::nil()),
+        "source": msg.source,
+        "severity": msg.severity as u8,
     }
 }

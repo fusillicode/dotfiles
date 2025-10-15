@@ -150,6 +150,7 @@ tokio
 toml
 triaging
 u64
+u8
 unminified
 unstage
 unstaged
