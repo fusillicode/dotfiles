@@ -1,71 +1,128 @@
-# Codecov configuration for yog workspace
+# Codecov configuration for yog workspace with per-crate components
 # Reference: https://docs.codecov.com/docs/codecov-yaml
 # Goals:
-# - Enforce baseline (project) coverage >=70%
-# - Enforce patch (changed lines) coverage >=80%
-# - Ignore generated / template-heavy code (nomicon templates)
-# - Treat utility crates (ytil) as carry-forward so unchanged code does not penalize patch status
-# - Provide stable range for graph scaling
+# - Per-crate component coverage (each workspace member = component)
+# - Baseline overall targets (project default) retained
+# - Patch coverage enforcement
+# - Carry-forward + ignore rules preserved (paths corrected to actual layout)
+# - Future: fine-tune thresholds per component once data stabilizes
 
 codecov:
-  require_ci_to_pass: true # Only report after CI success
+  require_ci_to_pass: true
   notify:
     wait_for_ci: true
 
 coverage:
-  precision: 2 # Two decimals in reports
+  precision: 2
   round: down
-  range: 60..90 # Scale for coverage graph (min..max)
+  range: 60..90
 
   status:
     project:
+      # Overall workspace target
       default:
-        target: 70% # Minimum acceptable overall coverage
-        threshold: 2% # Allow small fluctuations without failing
-        informational: false
+        target: 70%
+        threshold: 2%
+        informational: true
+      # Per-component project statuses (initially same target; adjust later)
+      catl: { target: 70%, threshold: 5%, informational: true }
+      evoke: { target: 70%, threshold: 5%, informational: true }
+      fkr: { target: 70%, threshold: 5%, informational: true }
+      gch: { target: 70%, threshold: 5%, informational: true }
+      gcu: { target: 70%, threshold: 5%, informational: true }
+      ghl: { target: 70%, threshold: 5%, informational: true }
+      idt: { target: 70%, threshold: 5%, informational: true }
+      miskatonic: { target: 70%, threshold: 5%, informational: true }
+      nomicon: { target: 70%, threshold: 5%, informational: true }
+      nvrim: { target: 70%, threshold: 5%, informational: true }
+      oe: { target: 70%, threshold: 5%, informational: true }
+      tec: { target: 70%, threshold: 5%, informational: true }
+      try: { target: 70%, threshold: 5%, informational: true }
+      vpg: { target: 70%, threshold: 5%, informational: true }
+      yghfl: { target: 70%, threshold: 5%, informational: true }
+      yhfp: { target: 70%, threshold: 5%, informational: true }
+      ytil_cmd: { target: 70%, threshold: 5%, informational: true }
+      ytil_editor: { target: 70%, threshold: 5%, informational: true }
+      ytil_git: { target: 70%, threshold: 5%, informational: true }
+      ytil_github: { target: 70%, threshold: 5%, informational: true }
+      ytil_hx: { target: 70%, threshold: 5%, informational: true }
+      ytil_system: { target: 70%, threshold: 5%, informational: true }
+      ytil_tui: { target: 70%, threshold: 5%, informational: true }
+      ytil_wezterm: { target: 70%, threshold: 5%, informational: true }
     patch:
       default:
-        target: 80% # Minimum acceptable coverage on new/changed lines
+        target: 80%
         threshold: 2%
         informational: false
     changes:
       default:
-        informational: true # Per-file diff coverage only informational
+        informational: true
 
   adjust:
-    # Carry forward coverage for utility crates (avoid penalizing patch checks when untouched)
-    - path: "yog/ytil/"
+    # Carry forward coverage for utility ytil crates so untouched code doesn't penalize patch metrics.
+    - path: "yog/yog/ytil/"
       carryforward: true
     # Ignore template/generated sections (low signal for coverage)
-    - path: "yog/nomicon/src/templates/"
+    - path: "yog/yog/nomicon/src/templates/"
       ignore: true
 
-# Paths to ignore entirely (alternative to adjust.ignore). Use for build scripts or assets.
+# Ignore entire paths from all reports (non-Rust or generated assets)
 ignore:
-  - "yog/nomicon/templates/" # Static external template assets
-  - "yog/nomicon/assets/" # Non-source assets
-  - "yog/**/build.rs" # Build scripts
+  - "yog/yog/nomicon/templates/"
+  - "yog/yog/nomicon/assets/"
+  - "yog/**/build.rs"
 
-# Flags configuration (optional future customization)
-# You could split crates into multiple uploads with distinct flags for granular thresholds.
-# Example (not active yet): tec, nvrim, nomicon, libs.
-# coverage:
-#   status:
-#     project:
-#       tec:
-#         target: 75%
-#         threshold: 3%
-#       nvrim:
-#         target: 60%
-#         threshold: 5%
+# Component definitions map crate directories to component IDs.
+components:
+  - component_id: catl
+    paths: ["yog/yog/catl/"]
+  - component_id: evoke
+    paths: ["yog/yog/evoke/"]
+  - component_id: fkr
+    paths: ["yog/yog/fkr/"]
+  - component_id: gch
+    paths: ["yog/yog/gch/"]
+  - component_id: gcu
+    paths: ["yog/yog/gcu/"]
+  - component_id: ghl
+    paths: ["yog/yog/ghl/"]
+  - component_id: idt
+    paths: ["yog/yog/idt/"]
+  - component_id: miskatonic
+    paths: ["yog/yog/miskatonic/"]
+  - component_id: nomicon
+    paths: ["yog/yog/nomicon/"]
+  - component_id: nvrim
+    paths: ["yog/yog/nvrim/"]
+  - component_id: oe
+    paths: ["yog/yog/oe/"]
+  - component_id: tec
+    paths: ["yog/yog/tec/"]
+  - component_id: try
+    paths: ["yog/yog/try/"]
+  - component_id: vpg
+    paths: ["yog/yog/vpg/"]
+  - component_id: yghfl
+    paths: ["yog/yog/yghfl/"]
+  - component_id: yhfp
+    paths: ["yog/yog/yhfp/"]
+  - component_id: ytil_cmd
+    paths: ["yog/yog/ytil/cmd/"]
+  - component_id: ytil_editor
+    paths: ["yog/yog/ytil/editor/"]
+  - component_id: ytil_git
+    paths: ["yog/yog/ytil/git/"]
+  - component_id: ytil_github
+    paths: ["yog/yog/ytil/github/"]
+  - component_id: ytil_hx
+    paths: ["yog/yog/ytil/hx/"]
+  - component_id: ytil_system
+    paths: ["yog/yog/ytil/system/"]
+  - component_id: ytil_tui
+    paths: ["yog/yog/ytil/tui/"]
+  - component_id: ytil_wezterm
+    paths: ["yog/yog/ytil/wezterm/"]
 
 comment:
-  layout: "reach, diff, flags, files"
+  layout: "reach, diff, components, files"
   behavior: default
-# PR report customization
-# If comments feel noisy later, set behavior: once or off.
-
-# Future adjustments:
-# - Raise project target gradually after baseline stabilizes.
-# - Add branch coverage: enable cargo llvm-cov --branch and then configure branch targets here.
-# - Fine-tune ignore list as coverage blind spots become clear.
