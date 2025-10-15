@@ -75,7 +75,6 @@ jobs:
           files: |
             lcov.info
             junit.xml
-          flags: rust
           fail_ci_if_error: true
           verbose: true
           token: ${{ secrets.CODECOV_TOKEN }}
