@@ -51,26 +51,32 @@ jobs:
         run: |
           set -euo pipefail
           rustup component add llvm-tools-preview
-      - name: Test and coverage (LCOV via nextest)
+      - name: Test and coverage (LCOV + JUnit via nextest)
         shell: bash
         working-directory: yog
         run: |
           set -euo pipefail
           # Run test binaries with nextest for faster & more reliable execution.
-          # Use --no-run to build instrumented binaries first, then nextest run.
+          # Produce both LCOV coverage (lcov.info) and JUnit test report (junit.xml).
           cargo llvm-cov nextest --profile ci --workspace --all-features --lcov --output-path lcov.info
+      - name: Upload test results artifact (JUnit)
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-junit
+          path: yog/junit.xml
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
           name: coverage-lcov
           path: yog/lcov.info
-      - name: Upload to Codecov
+      - name: Upload to Codecov (coverage + JUnit)
         uses: codecov/codecov-action@v4
         with:
-          files: lcov.info
+          files: |
+            lcov.info
+            junit.xml
           flags: rust
           fail_ci_if_error: true
-          root_dir: yog
           verbose: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
