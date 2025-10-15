@@ -82,6 +82,24 @@ Format:
 
 ## Testing Guidance
 
+### Forced Assertion & Test Conventions (PIVOTAL)
+
+The following rules are MANDATORY (treat violations as errors):
+- Fully qualified assertions: use `assert2::let_assert!` (never import it) whenever pattern/assert binding is needed and the crate already lists `assert2` in `[dev-dependencies]` or `[dependencies]`; otherwise ask to add it before proceeding.
+- Fully qualified equality: use `pretty_assertions::assert_eq!` (never `use pretty_assertions::assert_eq;`) for all equality assertions if `pretty_assertions` is present; otherwise propose adding it or fall back to plain `assert_eq!` only after confirming lack of dependency.
+- Exact equality only: never use approximate/epsilon float comparisons or `abs_diff_eq`, always rely on strict `assert_eq!` / `pretty_assertions::assert_eq!`. If floats require tolerance, ask for clarification before implementing.
+- Derives only for tests: when tests require `Eq`, `PartialEq`, or `Debug`, add them using conditional compilation only (e.g. `#[cfg_attr(test, derive(Debug, PartialEq, Eq))]`) or provide test-only wrapper types inside a `#[cfg(test)]` module; NEVER widen derives in production code solely for tests.
+- Single-path `use` statements: prefer one `use` per path rather than grouped braces (e.g. `use core::fmt::Debug;` not `use core::{fmt::Debug};`).
+- Test module import style: in test modules prefer `use super::*;` instead of enumerating individual `super::Thing` imports.
+- Absolute macro paths: do not create `use` statements just to shorten these macro paths.
+- Test function naming: MUST use `fn <subject>_<scenario>_<expected_outcome>()` where:
+  - `<subject>` = function or method under test.
+  - `<scenario>` = precise condition/input starting with `when_`, `if_`, or `in_case_of_` (e.g. `when_empty_input`, `if_capacity_full`, `in_case_of_network_failure`). Alternative phrasing is acceptable ONLY if it remains immediately clear and unambiguous; reject cryptic or abbreviated tokens.
+  - `<expected_outcome>` = explicit expected behavior/result expressed with a verb phrase (e.g. `returns_error`, `matches_reference`, `evicts_oldest`).
+  The full snake_case identifier, when underscores are converted to spaces, MUST read as a clear grammatical sentence describing behavior (e.g. `parse_header_when_empty_input_returns_error`, `checksum_when_large_buffer_matches_reference`, `push_if_capacity_full_evicts_oldest`, `reconnect_in_case_of_network_failure_retries_later`). Reject or rewrite vague names like `works`, `case1`, `handles_edge`. Prefer verbs in outcome (`returns_error`, `yields_none`, `parses_successfully`). Clarity is paramount; revise any name that could mislead or require guesswork.
+
+Enforce and restate these rules proactively when generating or reviewing tests.
+
 - Provide focused unit tests for non-trivial logic.
 - Use property-based tests (`proptest`) only when value > complexity; justify when used.
 - Table-driven tests via `rstest` for combinatorial cases.

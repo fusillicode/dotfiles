@@ -21,8 +21,8 @@ itertools = { workspace = true }
 nvim-oxi = { git = "https://github.com/noib3/nvim-oxi", rev = "b1278b123dbac3908f2686ebed6fdadbfef15be1", features = [
   "neovim-nightly",
 ] }
-serde = { version = "1.0" }
-serde_repr = { version = "0.1" }
+serde = { workspace = true }
+serde_json = { workspace = true }
 strum = { workspace = true }
 tree-sitter = { version = "0.25" }
 tree-sitter-rust = { version = "0.24" }
@@ -34,3 +34,5 @@ ytil_wezterm = { workspace = true }
 
 [dev-dependencies]
 assert2 = { workspace = true }
+pretty_assertions = { workspace = true }
+rstest = { workspace = true }

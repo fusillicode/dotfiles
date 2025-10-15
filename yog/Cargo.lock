@@ -1317,8 +1317,10 @@ dependencies = [
  "fkr",
  "itertools 0.14.0",
  "nvim-oxi",
+ "pretty_assertions",
+ "rstest",
  "serde",
- "serde_repr",
+ "serde_json",
  "strum",
  "tree-sitter",
  "tree-sitter-rust",
@@ -1535,6 +1537,16 @@ name = "precomputed-hash"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "925383efa346730478fb4838dbe9137d2a47675ad789c546d150a6e1dd4ab31c"
+
+[[package]]
+name = "pretty_assertions"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ae130e2f271fbc2ac3a40fb1d07180839cdbbe443c7a27e1e3c13c5cac0116d"
+dependencies = [
+ "diff",
+ "yansi",
+]
 
 [[package]]
 name = "proc-macro-crate"
