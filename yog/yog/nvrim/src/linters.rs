@@ -78,6 +78,113 @@ fn diagnostic_dict_from_msg(msg: SqruffMessage) -> Dictionary {
         "message": msg.message,
         "code": msg.code.map(nvim_oxi::Object::from).unwrap_or(nvim_oxi::Object::nil()),
         "source": msg.source,
-        "severity": msg.severity as u8,
+        "severity": msg.severity.to_number(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use nvim_oxi::Object;
+    use nvim_oxi::String as NvimString;
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn diagnostic_dict_from_msg_returns_the_expected_dict_from_msg() {
+        let msg = SqruffMessage {
+            code: Some("R001".to_string()),
+            message: "Example message".to_string(),
+            range: Range {
+                start: Position { line: 3, character: 7 },
+                end: Position { line: 4, character: 10 },
+            },
+            severity: DiagnosticSeverity::Warn,
+            source: "sqruff".to_string(),
+        };
+
+        let res = diagnostic_dict_from_msg(msg);
+
+        let expected = dict! {
+            "lnum": 2_i64,
+            "end_lnum": 3_i64,
+            "col": 6_i64,
+            "end_col": 9_i64,
+            "message": "Example message".to_string(),
+            "code": Object::from(NvimString::from("R001")),
+            "source": "sqruff".to_string(),
+            "severity": DiagnosticSeverity::Warn.to_number(),
+        };
+
+        pretty_assertions::assert_eq!(expected, res);
+    }
+
+    #[test]
+    fn parser_with_none_input_returns_no_diagnostics() {
+        let res = parser(None);
+        assert!(res.is_empty());
+    }
+
+    #[test]
+    fn parser_with_empty_input_string_returns_no_diagnostics() {
+        let input = nvim_oxi::String::from("");
+        let res = parser(Some(input));
+        assert!(res.is_empty());
+    }
+
+    #[test]
+    fn parser_with_malformed_json_input_string_returns_no_diagnostics() {
+        let input = nvim_oxi::String::from("not-json");
+        let res = parser(Some(input));
+        assert!(res.is_empty());
+    }
+
+    #[test]
+    fn parser_with_expected_input_returns_expected_diagnostics() {
+        let input = json!({
+            "<string>": [
+                {
+                    "code": "R001",
+                    "message": "Msg",
+                    "range": {"start": {"line": 2, "character": 5}, "end": {"line": 2, "character": 10}},
+                    "severity": "2",
+                    "source": "sqruff"
+                },
+                {
+                    "code": null,
+                    "message": "NoCode",
+                    "range": {"start": {"line": 1, "character": 1}, "end": {"line": 1, "character": 2}},
+                    "severity": "1",
+                    "source": "sqruff"
+                }
+            ]
+        });
+
+        let res = parser(Some(nvim_oxi::String::from(input.to_string())));
+
+        let expected = vec![
+            dict! {
+                "lnum": 1_i64,
+                "end_lnum": 1_i64,
+                "col": 4_i64,
+                "end_col": 9_i64,
+                "message": "Msg".to_string(),
+                "code": Object::from(NvimString::from("R001")),
+                "source": "sqruff".to_string(),
+                "severity": DiagnosticSeverity::Warn.to_number(),
+            },
+            dict! {
+                "lnum": 0_i64,
+                "end_lnum": 0_i64,
+                "col": 0_i64,
+                "end_col": 1_i64,
+                "message": "NoCode".to_string(),
+                "code": Object::nil(),
+                "source": "sqruff".to_string(),
+                "severity": DiagnosticSeverity::Error.to_number(),
+            },
+        ];
+
+        pretty_assertions::assert_eq!(expected, res);
     }
 }

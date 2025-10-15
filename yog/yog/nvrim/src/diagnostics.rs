@@ -77,6 +77,37 @@ pub enum DiagnosticSeverity {
     Other,
 }
 
+impl DiagnosticSeverity {
+    /// Returns numeric severity mapping (LSP-style 1-4; 0 for other).
+    ///
+    /// Maps variants to a stable numeric representation used when exporting
+    /// diagnostics to consumers expecting the canonical Language Server
+    /// Protocol severity ordering (1=Error, 2=Warning, 3=Information, 4=Hint).
+    /// `Other` is mapped to 0 to indicate an unmapped / unknown severity.
+    ///
+    /// # Returns
+    /// - `u8` numeric code: 1..=4 for known severities, 0 for [`DiagnosticSeverity::Other`].
+    ///
+    /// # Rationale
+    /// Avoids relying on implicit enum discriminant order via `as u8` casts,
+    /// making the mapping explicit and resilient to future variant reordering
+    /// or insertion. Using an inherent method keeps the API surface small while
+    /// centralizing the mapping logic in one place.
+    ///
+    /// # Future Work
+    /// - Expose a reverse conversion if needed (numeric -> variant) distinct
+    ///   from serde's flexible deserializer (which also accepts aliases).
+    pub const fn to_number(self) -> u8 {
+        match self {
+            DiagnosticSeverity::Error => 1,
+            DiagnosticSeverity::Warn => 2,
+            DiagnosticSeverity::Info => 3,
+            DiagnosticSeverity::Hint => 4,
+            DiagnosticSeverity::Other => 0,
+        }
+    }
+}
+
 /// Deserializes accepted severity representations:
 /// - Numeric u8
 /// - Numeric strings
@@ -199,7 +230,8 @@ mod tests {
 
     #[test]
     fn diagnostic_severity_deserializes_invalid_json_errors() {
-        // Structural JSON errors should bubble up (here: missing quotes around alpha token)
-        assert!(serde_json::from_str::<DiagnosticSeverity>("error").is_err());
+        assert2::let_assert!(Err(err) = serde_json::from_str::<DiagnosticSeverity>("error"));
+        let msg = err.to_string();
+        assert!(msg.contains("expected value"), "unexpected error message: {msg}");
     }
 }
