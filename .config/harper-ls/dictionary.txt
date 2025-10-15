@@ -24,6 +24,7 @@ I/O
 IO
 IPs
 JFrog
+Krabby
 NodeJS
 OIDC
 OOM
@@ -99,6 +100,7 @@ hx
 i64
 impl
 infos
+intra
 invariance
 junit
 k8s
