@@ -15,6 +15,7 @@ pub fn dict() -> Dictionary {
     }
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn parser(maybe_output: Option<nvim_oxi::String>) -> Vec<Dictionary> {
     let Some(output) = &maybe_output else {
         notify_warn(&format!("sqruff output missing output={maybe_output:?}"));
@@ -71,12 +72,12 @@ struct Position {
 
 fn diagnostic_dict_from_msg(msg: SqruffMessage) -> Dictionary {
     dict! {
-        "lnum": msg.range.start.line.saturating_sub(1) as i64,
-        "end_lnum": msg.range.end.line.saturating_sub(1) as i64,
-        "col": msg.range.start.character.saturating_sub(1) as i64,
-        "end_col": msg.range.end.character.saturating_sub(1) as i64,
+        "lnum": msg.range.start.line.saturating_sub(1),
+        "end_lnum": msg.range.end.line.saturating_sub(1),
+        "col": msg.range.start.character.saturating_sub(1),
+        "end_col": msg.range.end.character.saturating_sub(1),
         "message": msg.message,
-        "code": msg.code.map(nvim_oxi::Object::from).unwrap_or(nvim_oxi::Object::nil()),
+        "code": msg.code.map_or_else(nvim_oxi::Object::nil, nvim_oxi::Object::from),
         "source": msg.source,
         "severity": msg.severity.to_number(),
     }
@@ -85,8 +86,6 @@ fn diagnostic_dict_from_msg(msg: SqruffMessage) -> Dictionary {
 #[cfg(test)]
 mod tests {
     use nvim_oxi::Object;
-    use nvim_oxi::String as NvimString;
-    use serde_json::json;
 
     use super::*;
 
@@ -106,12 +105,12 @@ mod tests {
         let res = diagnostic_dict_from_msg(msg);
 
         let expected = dict! {
-            "lnum": 2_i64,
-            "end_lnum": 3_i64,
-            "col": 6_i64,
-            "end_col": 9_i64,
+            "lnum": 2,
+            "end_lnum": 3,
+            "col": 6,
+            "end_col": 9,
             "message": "Example message".to_string(),
-            "code": Object::from(NvimString::from("R001")),
+            "code": Object::from(nvim_oxi::String::from("R001")),
             "source": "sqruff".to_string(),
             "severity": DiagnosticSeverity::Warn.to_number(),
         };
@@ -141,7 +140,7 @@ mod tests {
 
     #[test]
     fn parser_with_expected_input_returns_expected_diagnostics() {
-        let input = json!({
+        let input = serde_json::json!({
             "<string>": [
                 {
                     "code": "R001",
@@ -164,20 +163,20 @@ mod tests {
 
         let expected = vec![
             dict! {
-                "lnum": 1_i64,
-                "end_lnum": 1_i64,
-                "col": 4_i64,
-                "end_col": 9_i64,
+                "lnum": 1,
+                "end_lnum": 1,
+                "col": 4,
+                "end_col": 9,
                 "message": "Msg".to_string(),
-                "code": Object::from(NvimString::from("R001")),
+                "code": Object::from(nvim_oxi::String::from("R001")),
                 "source": "sqruff".to_string(),
                 "severity": DiagnosticSeverity::Warn.to_number(),
             },
             dict! {
-                "lnum": 0_i64,
-                "end_lnum": 0_i64,
-                "col": 0_i64,
-                "end_col": 1_i64,
+                "lnum": 0,
+                "end_lnum": 0,
+                "col": 0,
+                "end_col": 1,
                 "message": "NoCode".to_string(),
                 "code": Object::nil(),
                 "source": "sqruff".to_string(),

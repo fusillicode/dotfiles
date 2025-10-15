@@ -2,6 +2,7 @@ return {
   'mfussenegger/nvim-lint',
   config = function()
     local lint = require('lint')
+    local nvrim = require('nvrim')
 
     lint.linters_by_ft = {
       dockerfile = { 'hadolint', },
@@ -12,13 +13,8 @@ return {
       typescriptreact = { 'eslint_d', },
     }
 
-    local severities = {
-      Error = vim.diagnostic.severity.ERROR,
-      Warning = vim.diagnostic.severity.WARN,
-    }
-
     lint.linters.sqruff.parser = function(output, _)
-      return require('nvrim').linters.sqruff.parser(output)
+      return nvrim.linters.sqruff.parser(output)
     end
 
     vim.api.nvim_create_autocmd('BufWritePost', {

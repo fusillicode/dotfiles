@@ -132,8 +132,7 @@ fn draw_diagnostics(severity: DiagnosticSeverity, diags_count: i32) -> String {
         DiagnosticSeverity::Error => "DiagnosticStatusLineError",
         DiagnosticSeverity::Warn => "DiagnosticStatusLineWarn",
         DiagnosticSeverity::Info => "DiagnosticStatusLineInfo",
-        DiagnosticSeverity::Hint => "DiagnosticStatusLineHint",
-        DiagnosticSeverity::Other => "DiagnosticStatusLineHint",
+        DiagnosticSeverity::Hint | DiagnosticSeverity::Other => "DiagnosticStatusLineHint",
     };
     format!("%#{hg_group}#{severity}:{diags_count}")
 }

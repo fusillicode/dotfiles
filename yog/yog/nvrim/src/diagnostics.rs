@@ -93,17 +93,13 @@ impl DiagnosticSeverity {
     /// making the mapping explicit and resilient to future variant reordering
     /// or insertion. Using an inherent method keeps the API surface small while
     /// centralizing the mapping logic in one place.
-    ///
-    /// # Future Work
-    /// - Expose a reverse conversion if needed (numeric -> variant) distinct
-    ///   from serde's flexible deserializer (which also accepts aliases).
     pub const fn to_number(self) -> u8 {
         match self {
-            DiagnosticSeverity::Error => 1,
-            DiagnosticSeverity::Warn => 2,
-            DiagnosticSeverity::Info => 3,
-            DiagnosticSeverity::Hint => 4,
-            DiagnosticSeverity::Other => 0,
+            Self::Error => 1,
+            Self::Warn => 2,
+            Self::Info => 3,
+            Self::Hint => 4,
+            Self::Other => 0,
         }
     }
 }
@@ -120,7 +116,7 @@ impl<'de> serde::Deserialize<'de> for DiagnosticSeverity {
     {
         struct SevVisitor;
 
-        impl<'de> Visitor<'de> for SevVisitor {
+        impl Visitor<'_> for SevVisitor {
             type Value = DiagnosticSeverity;
 
             fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -131,7 +127,7 @@ impl<'de> serde::Deserialize<'de> for DiagnosticSeverity {
             where
                 E: serde::de::Error,
             {
-                Ok(match v as u8 {
+                Ok(match v {
                     1 => DiagnosticSeverity::Error,
                     2 => DiagnosticSeverity::Warn,
                     3 => DiagnosticSeverity::Info,
@@ -147,7 +143,7 @@ impl<'de> serde::Deserialize<'de> for DiagnosticSeverity {
                 if v < 0 {
                     return Ok(DiagnosticSeverity::Other);
                 }
-                self.visit_u64(v as u64)
+                self.visit_u64(v.cast_unsigned())
             }
 
             fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
@@ -155,8 +151,8 @@ impl<'de> serde::Deserialize<'de> for DiagnosticSeverity {
                 E: serde::de::Error,
             {
                 let norm = s.trim().to_ascii_lowercase();
-                if let Ok(n) = norm.parse::<u8>() {
-                    return self.visit_u64(n as u64);
+                if let Ok(n) = norm.parse::<u64>() {
+                    return self.visit_u64(n);
                 }
                 Ok(match norm.as_str() {
                     "error" | "err" | "e" => DiagnosticSeverity::Error,
