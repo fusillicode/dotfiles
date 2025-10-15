@@ -53,7 +53,7 @@ jobs:
         run: |
           set -euo pipefail
           rustup component add llvm-tools-preview
-      - name: Test and coverage (LCOV + JUnit via nextest with path remap)
+      - name: Test and coverage (lcov + JUnit via nextest with path remap)
         shell: bash
         working-directory: yog
         run: |
@@ -67,22 +67,20 @@ jobs:
             --all-features \
             --lcov \
             --output-path lcov.info
-      - name: Upload coverage artifact
+      - name: Upload to GitHub (lcov + junit.xml)
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-lcov
-          path: yog/lcov.info
-      - name: Upload test results artifact (JUnit)
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results-junit
-          path: yog/junit.xml
-      - name: Upload to Codecov (coverage + JUnit)
+          name: lcov-junit
+          path: |
+            yog/lcov.info
+            yog/target/nextest/ci/junit.xml
+      - name: Upload to Codecov (lcov + junit.xml)
         uses: codecov/codecov-action@v5
         with:
-          files: |
-            yog/lcov.info
-            yog/junit.xml
+          working-directory: yog
+          files: ./lcov.info,./target/nextest/ci/junit.xml
+          disable_search: true
+          disable_telem: true
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
