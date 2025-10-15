@@ -1,7 +1,6 @@
 //! Build script for the `nomicon` binary.
 //!
 //! - Reads the unminified CSS asset at `assets/style.css`.
-//! - Optionally minifies it using [`lightningcss`] unless the `NO_MINIFY` env var is set.
 //! - Writes the result to `assets/style.min.css`.
 //!
 //! # Rationale
