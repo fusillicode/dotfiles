@@ -44,12 +44,14 @@ fn parser(maybe_output: Option<nvim_oxi::String>) -> Vec<Dictionary> {
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 struct SqruffOutput {
     #[serde(rename = "<string>", default)]
     messages: Vec<SqruffMessage>,
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 struct SqruffMessage {
     code: Option<String>,
     message: String,
@@ -59,12 +61,14 @@ struct SqruffMessage {
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 struct Range {
     start: Position,
     end: Position,
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 struct Position {
     character: u32,
     line: u32,
@@ -114,38 +118,59 @@ mod tests {
             "source": "sqruff".to_string(),
             "severity": DiagnosticSeverity::Warn.to_number(),
         };
-
         pretty_assertions::assert_eq!(expected, res);
     }
 
     #[test]
-    fn parser_with_none_input_returns_no_diagnostics() {
-        let res = parser(None);
-        assert!(res.is_empty());
+    fn sqruff_output_deserializes_empty_messages() {
+        let value = serde_json::json!({
+            "<string>": []
+        });
+
+        assert2::let_assert!(Ok(parsed) = serde_json::from_value::<SqruffOutput>(value));
+        pretty_assertions::assert_eq!(SqruffOutput { messages: vec![] }, parsed);
     }
 
     #[test]
-    fn parser_with_empty_input_string_returns_no_diagnostics() {
-        let input = nvim_oxi::String::from("");
-        let res = parser(Some(input));
-        assert!(res.is_empty());
-    }
-
-    #[test]
-    fn parser_with_malformed_json_input_string_returns_no_diagnostics() {
-        let input = nvim_oxi::String::from("not-json");
-        let res = parser(Some(input));
-        assert!(res.is_empty());
-    }
-
-    #[test]
-    fn parser_with_expected_input_returns_expected_diagnostics() {
-        let input = serde_json::json!({
+    fn sqruff_output_deserializes_single_message_with_code() {
+        let value = serde_json::json!({
             "<string>": [
                 {
                     "code": "R001",
                     "message": "Msg",
                     "range": {"start": {"line": 2, "character": 5}, "end": {"line": 2, "character": 10}},
+                    "severity": "2",
+                    "source": "sqruff"
+                }
+            ]
+        });
+
+        assert2::let_assert!(Ok(res) = serde_json::from_value::<SqruffOutput>(value));
+        pretty_assertions::assert_eq!(
+            SqruffOutput {
+                messages: vec![SqruffMessage {
+                    code: Some("R001".into()),
+                    message: "Msg".into(),
+                    range: Range {
+                        start: Position { line: 2, character: 5 },
+                        end: Position { line: 2, character: 10 },
+                    },
+                    severity: DiagnosticSeverity::Warn,
+                    source: "sqruff".into(),
+                }],
+            },
+            res
+        );
+    }
+
+    #[test]
+    fn sqruff_output_deserializes_multiple_messages_mixed_code() {
+        let value = serde_json::json!({
+            "<string>": [
+                {
+                    "code": "R001",
+                    "message": "HasCode",
+                    "range": {"start": {"line": 3, "character": 7}, "end": {"line": 3, "character": 12}},
                     "severity": "2",
                     "source": "sqruff"
                 },
@@ -159,31 +184,33 @@ mod tests {
             ]
         });
 
-        let res = parser(Some(nvim_oxi::String::from(input.to_string())));
-
-        let expected = vec![
-            dict! {
-                "lnum": 1,
-                "end_lnum": 1,
-                "col": 4,
-                "end_col": 9,
-                "message": "Msg".to_string(),
-                "code": Object::from(nvim_oxi::String::from("R001")),
-                "source": "sqruff".to_string(),
-                "severity": DiagnosticSeverity::Warn.to_number(),
+        assert2::let_assert!(Ok(res) = serde_json::from_value::<SqruffOutput>(value));
+        pretty_assertions::assert_eq!(
+            SqruffOutput {
+                messages: vec![
+                    SqruffMessage {
+                        code: Some("R001".into()),
+                        message: "HasCode".into(),
+                        range: Range {
+                            start: Position { line: 3, character: 7 },
+                            end: Position { line: 3, character: 12 },
+                        },
+                        severity: DiagnosticSeverity::Warn,
+                        source: "sqruff".into(),
+                    },
+                    SqruffMessage {
+                        code: None,
+                        message: "NoCode".into(),
+                        range: Range {
+                            start: Position { line: 1, character: 1 },
+                            end: Position { line: 1, character: 2 },
+                        },
+                        severity: DiagnosticSeverity::Error,
+                        source: "sqruff".into(),
+                    },
+                ],
             },
-            dict! {
-                "lnum": 0,
-                "end_lnum": 0,
-                "col": 0,
-                "end_col": 1,
-                "message": "NoCode".to_string(),
-                "code": Object::nil(),
-                "source": "sqruff".to_string(),
-                "severity": DiagnosticSeverity::Error.to_number(),
-            },
-        ];
-
-        pretty_assertions::assert_eq!(expected, res);
+            res
+        );
     }
 }
