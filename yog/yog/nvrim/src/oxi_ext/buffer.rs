@@ -3,17 +3,32 @@ use nvim_oxi::api::Buffer;
 use nvim_oxi::api::Window;
 
 /// Extension trait for [`Buffer`] to provide extra functionalities.
+///
+/// Provides focused helpers for line fetching and text insertion at the current
+/// cursor position while surfacing Neovim errors via `notify_error`.
 pub trait BufferExt {
     /// Fetch a single line from a [`Buffer`] by 0-based index.
     ///
     /// Returns a [`color_eyre::Result`] with the line as [`nvim_oxi::String`].
     /// Errors if the line does not exist at `idx`.
     ///
+    /// # Arguments
+    /// - `idx`: 0-based line index inside the buffer.
+    ///
     /// # Errors
     /// - Fetching the line via `nvim_buf_get_lines` fails.
     /// - The requested index is out of range (no line returned).
     fn get_line(&self, idx: usize) -> color_eyre::Result<nvim_oxi::String>;
 
+    /// Inserts `text` at the current cursor position in the active buffer.
+    ///
+    /// Obtains the current [`CursorPosition`], converts the 1-based row to 0-based
+    /// for Neovim's `set_text` call, and inserts `text` without replacing existing
+    /// content (`start_col` == `end_col`). Errors are reported via `notify_error`.
+    /// Silently returns if cursor position cannot be fetched.
+    ///
+    /// # Arguments
+    /// - `text`: UTF-8 slice inserted at the cursor byte column.
     fn set_text_at_cursor_pos(&mut self, text: &str);
 }
 
@@ -25,7 +40,7 @@ impl BufferExt for Buffer {
             .ok_or_else(|| eyre!("buffer line missing | idx={idx} buffer={self:#?}"))
     }
 
-    /// Inserts `text` at the current cursor position in the active buffer.
+    /// Insert text at cursor.
     fn set_text_at_cursor_pos(&mut self, text: &str) {
         let Some(cur_pos) = CursorPosition::get_current() else {
             return;
@@ -90,5 +105,44 @@ impl CursorPosition {
             return None;
         };
         Some(Self { row, col })
+    }
+
+    /// Returns 1-based column index for rendering purposes.
+    ///
+    /// Converts the raw 0-based Neovim column stored in [`CursorPosition::col`] into a
+    /// human-friendly 1-based column suitable for statusline / UI output.
+    ///
+    /// # Returns
+    /// - The 1-based column index (`self.col + 1`).
+    ///
+    /// # Assumptions
+    /// - [`CursorPosition::col`] is the unmodified 0-based byte offset provided by Neovim.
+    ///
+    /// # Rationale
+    /// Neovim exposes a 0-based column while rows are 1-based. Normalizing to 1-based for
+    /// display avoids mixed-base confusion in user-facing components (e.g. status line) and
+    /// clarifies intent at call sites.
+    ///
+    /// # Performance
+    /// Constant time. Uses `saturating_add` defensively (overflow is unrealistic given line length).
+    pub const fn adjusted_col(&self) -> usize {
+        self.col.saturating_add(1)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cursor_position_adjusted_col_when_zero_returns_one() {
+        let pos = CursorPosition { row: 1, col: 0 };
+        pretty_assertions::assert_eq!(1, pos.adjusted_col());
+    }
+
+    #[test]
+    fn cursor_position_adjusted_col_when_non_zero_increments_by_one() {
+        let pos = CursorPosition { row: 10, col: 7 };
+        pretty_assertions::assert_eq!(8, pos.adjusted_col());
     }
 }
