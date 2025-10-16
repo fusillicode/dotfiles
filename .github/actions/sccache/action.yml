@@ -27,7 +27,7 @@ runs:
           echo "Installing sccache..."
           # Temporarily disable RUSTC_WRAPPER during installation so cargo can invoke rustc directly.
           # This avoids failures when the workflow sets RUSTC_WRAPPER=sccache before sccache exists.
-          (unset RUSTC_WRAPPER; cargo install sccache --locked)
+          (unset RUSTC_WRAPPER; cargo install sccache)
         fi
         sccache --version
         if [[ -n "${{ inputs.cache-size }}" ]]; then
