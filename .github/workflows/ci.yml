@@ -84,7 +84,6 @@ jobs:
           disable_search: true
           disable_telem: true
           fail_ci_if_error: true
-          token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
       - name: Upload test results to Codecov
         uses: codecov/test-results-action@v1
@@ -94,7 +93,6 @@ jobs:
           files: ./target/nextest/ci/junit.xml
           disable_search: true
           fail_ci_if_error: true
-          token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
 
   release:
