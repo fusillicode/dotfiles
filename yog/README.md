@@ -38,5 +38,3 @@ cargo run --bin evoke
 ```console
 cargo run --bin evoke -- debug
 ```
-
-https://codecov.io/gh/fusillicode/dotfiles/graphs/tree.svg?token=zNKeBBpg8K
