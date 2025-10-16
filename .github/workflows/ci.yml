@@ -60,27 +60,39 @@ jobs:
           set -euo pipefail
           echo "Running from $(pwd)"
           # Remap absolute source path prefix to empty so SF lines become repo-relative (e.g. 'yog/<crate>/...').
-          export RUSTFLAGS="--remap-path-prefix=$(pwd)/="
+          repo_root="$(git rev-parse --show-toplevel)"
+          export RUSTFLAGS="--remap-path-prefix=${repo_root}/="
           cargo llvm-cov nextest \
             --profile ci \
             --workspace \
             --all-features \
             --lcov \
             --output-path lcov.info
-      - name: Upload to GitHub (lcov + junit.xml)
+      - name: Upload coverage and test results to GitHub
         uses: actions/upload-artifact@v4
         with:
           name: lcov-junit
           path: |
             yog/lcov.info
             yog/target/nextest/ci/junit.xml
-      - name: Upload to Codecov (lcov + junit.xml)
+      - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
+        if: ${{ !cancelled() }}
         with:
           working-directory: yog
-          files: ./lcov.info,./target/nextest/ci/junit.xml
+          files: ./lcov.info
           disable_search: true
           disable_telem: true
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
+      - name: Upload test results to Codecov
+        uses: codecov/test-results-action@v1
+        if: ${{ !cancelled() }}
+        with:
+          working-directory: yog
+          files: ./target/nextest/ci/junit.xml
+          disable_search: true
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
