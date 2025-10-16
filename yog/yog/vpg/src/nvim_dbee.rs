@@ -63,7 +63,7 @@ fn get_updated_conns(updated_pg_pass_entry: &PgpassEntry, conns_path: &Path) -> 
     Ok(conns)
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct NvimDbeeConn {
     id: String,
     name: String,

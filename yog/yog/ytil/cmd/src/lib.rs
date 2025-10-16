@@ -58,7 +58,7 @@ fn to_ut8_string(cmd: &Command, bytes: Vec<u8>) -> color_eyre::Result<String, Cm
 ///
 /// Each variant embeds [`Cmd`] (program, args, cwd) for terse diagnostics. `Utf8`
 /// is currently not produced by [`CmdExt::exec`] but kept for potential future APIs.
-#[derive(thiserror::Error, Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum CmdError {
     /// Non-zero exit status; stderr captured & UTF-8 decoded.
     #[error("FailedCmd(\n{cmd}\nstatus={status:?}\nstderr=\n{stderr}\nstdout=\n{stdout})")]

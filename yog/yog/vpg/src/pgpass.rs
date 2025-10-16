@@ -69,7 +69,7 @@ impl<'a> PgpassFile<'a> {
 }
 
 /// A validated `.pgpass` entry with associated metadata and connection parameters.
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct PgpassEntry {
     /// Parsed connection parameters from a valid `.pgpass` line.
     pub connection_params: ConnectionParams,
@@ -84,7 +84,7 @@ impl core::fmt::Display for PgpassEntry {
 }
 
 /// Metadata extracted from comment lines preceding a `.pgpass` entry.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Metadata {
     /// Human-readable identifier for the connection (from comments).
     pub alias: String,
@@ -99,7 +99,7 @@ impl core::fmt::Display for Metadata {
 }
 
 /// Connection parameters parsed from a `.pgpass` line.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ConnectionParams {
     /// Database name.
     db: String,

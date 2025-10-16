@@ -15,6 +15,7 @@ Bunch of _personal_ command-line utilities built-in [Rust](https://www.rust-lang
 
 - `cargo-machete`
 - `cargo-sort`
+- `cargo-sort-derives`
 - `curl`
 - `gh`
 - `git`

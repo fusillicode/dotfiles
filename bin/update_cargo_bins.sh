@@ -5,7 +5,10 @@ set -euo pipefail
 # cargo CLI tools ❤️
 cargo install --force \
   atuin \
+  cargo-machete \
   cargo-make \
+  cargo-sort \
+  cargo-sort-derives \
   ccase \
   difftastic \
   drill \

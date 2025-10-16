@@ -63,7 +63,7 @@ pub fn dict() -> Dictionary {
 /// - The declared variant order (Error, Warn, Info, Hint, Other) defines the iteration order via [`EnumIter`], which
 ///   downstream rendering (e.g. `statusline`) relies on to produce stable, predictable severity ordering.
 /// - Changing the variant order is a breaking change for components depending on deterministic ordering.
-#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone, strum::Display, EnumIter)]
+#[derive(Clone, Copy, Debug, strum::Display, EnumIter, Eq, Hash, PartialEq)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum DiagnosticSeverity {
     /// Error severity.

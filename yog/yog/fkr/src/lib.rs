@@ -44,7 +44,7 @@ pub fn run() -> color_eyre::Result<()> {
 }
 
 /// Available fake data types for generation.
-#[derive(EnumIter, strum::Display, Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, strum::Display, EnumIter)]
 pub enum FkrOption {
     /// Generates a version 4 UUID (random)
     Uuidv4,
