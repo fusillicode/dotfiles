@@ -10,7 +10,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTC_WRAPPER: sccache
+
   SCCACHE_DIR: /home/runner/.cache/sccache
   SCCACHE_CACHE_SIZE: 3G
   SCCACHE_FAIL_FAST: "1"
@@ -40,10 +40,7 @@ jobs:
           cache-targets: true
 
       - name: sccache setup
-        uses: ./.github/actions/sccache
-        with:
-          cache-key-suffix: docs
-          cache-size: 3G
+        uses: Mozilla-Actions/sccache-action@4097539ece2ebbb6fd759bb45e5f0321071ac87d
 
       - name: Setup
         uses: ./.github/actions/setup
