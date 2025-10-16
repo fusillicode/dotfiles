@@ -12,7 +12,6 @@ coverage:
   precision: 2
   round: down
   range: 60..90
-
   status:
     project:
       default:
@@ -31,7 +30,10 @@ coverage:
 ignore:
   - "yog/nomicon/templates/"
   - "yog/nomicon/assets/"
-  - "yog/**/build.rs"
+  - "**/build.rs"
+
+comment:
+  layout: "header, diff, flags, components"
 
 # Component management (per-crate components).
 component_management:
@@ -43,77 +45,97 @@ component_management:
   individual_components:
     - component_id: catl
       name: catl
-      paths: ["yog/catl/**"]
+      paths:
+        - yog/catl/**
     - component_id: evoke
       name: evoke
-      paths: ["yog/evoke/**"]
+      paths:
+        - yog/evoke/**
     - component_id: fkr
       name: fkr
-      paths: ["yog/fkr/**"]
+      paths:
+        - yog/fkr/**
     - component_id: gch
       name: gch
-      paths: ["yog/gch/**"]
+      paths:
+        - yog/gch/**
     - component_id: gcu
       name: gcu
-      paths: ["yog/gcu/**"]
+      paths:
+        - yog/gcu/**
     - component_id: ghl
       name: ghl
-      paths: ["yog/ghl/**"]
+      paths:
+        - yog/ghl/**
     - component_id: idt
       name: idt
-      paths: ["yog/idt/**"]
+      paths:
+        - yog/idt/**
     - component_id: miskatonic
       name: miskatonic
-      paths: ["yog/miskatonic/**"]
+      paths:
+        - yog/miskatonic/**
     - component_id: nomicon
       name: nomicon
-      paths: ["yog/nomicon/**"]
+      paths:
+        - yog/nomicon/**
     - component_id: nvrim
       name: nvrim
-      paths: ["yog/nvrim/**"]
+      paths:
+        - yog/nvrim/**
     - component_id: oe
       name: oe
-      paths: ["yog/oe/**"]
+      paths:
+        - yog/oe/**
     - component_id: tec
       name: tec
-      paths: ["yog/tec/**"]
+      paths:
+        - yog/tec/**
     - component_id: try
       name: try
-      paths: ["yog/try/**"]
+      paths:
+        - yog/try/**
     - component_id: vpg
       name: vpg
-      paths: ["yog/vpg/**"]
+      paths:
+        - yog/vpg/**
     - component_id: yghfl
       name: yghfl
-      paths: ["yog/yghfl/**"]
+      paths:
+        - yog/yghfl/**
     - component_id: yhfp
       name: yhfp
-      paths: ["yog/yhfp/**"]
+      paths:
+        - yog/yhfp/**
     - component_id: ytil_cmd
       name: ytil_cmd
-      paths: ["yog/ytil/cmd/**"]
+      paths:
+        - yog/ytil/cmd/**
     - component_id: ytil_editor
       name: ytil_editor
-      paths: ["yog/ytil/editor/**"]
+      paths:
+        - yog/ytil/editor/**
     - component_id: ytil_git
       name: ytil_git
-      paths: ["yog/ytil/git/**"]
+      paths:
+        - yog/ytil/git/**
     - component_id: ytil_github
       name: ytil_github
-      paths: ["yog/ytil/github/**"]
+      paths:
+        - yog/ytil/github/**
     - component_id: ytil_hx
       name: ytil_hx
-      paths: ["yog/ytil/hx/**"]
+      paths:
+        - yog/ytil/hx/**
     - component_id: ytil_system
       name: ytil_system
-      paths: ["yog/ytil/system/**"]
+      paths:
+        - yog/ytil/system/**
     - component_id: ytil_tui
       name: ytil_tui
-      paths: ["yog/ytil/tui/**"]
+      paths:
+        - yog/ytil/tui/**
     - component_id: ytil_wezterm
       name: ytil_wezterm
-      paths: ["yog/ytil/wezterm/**"]
-
-comment:
-  layout: "reach, diff, components, files"
-  behavior: default
+      paths:
+        - yog/ytil/wezterm/**
