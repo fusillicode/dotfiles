@@ -10,6 +10,10 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  RUSTC_WRAPPER: sccache
+  SCCACHE_DIR: /home/runner/.cache/sccache
+  SCCACHE_CACHE_SIZE: 3G
+  SCCACHE_FAIL_FAST: "1"
 
 concurrency:
   group: ${{ github.ref }}-doc
@@ -28,6 +32,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: yog
+          shared-key: docs
+          cache-targets: true
+
+      - name: sccache setup
+        uses: ./.github/actions/sccache
+        with:
+          cache-key-suffix: docs
+          cache-size: 3G
+
       - name: Setup
         uses: ./.github/actions/setup
 
@@ -35,6 +52,12 @@ jobs:
         working-directory: yog
         run: |
           cargo run --bin nomicon
+
+      - name: sccache post stats
+        if: always()
+        uses: ./.github/actions/sccache-post-stats
+        with:
+          label: Docs
 
       - name: Upload Rust doc as artifact
         id: deployment
