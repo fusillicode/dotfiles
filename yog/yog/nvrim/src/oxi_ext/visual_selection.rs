@@ -111,7 +111,7 @@ impl Selection {
 }
 
 /// Start / end bounds plus owning buffer id for a Visual selection.
-#[derive(Debug, Copy, Clone)]
+#[derive(Clone, Copy, Debug)]
 pub struct SelectionBounds {
     buf_id: i32,
     start: Bound,
@@ -168,7 +168,7 @@ impl SelectionBounds {
 }
 
 /// Single position (line, column) inside a buffer.
-#[derive(Debug, Copy, Clone)]
+#[derive(Clone, Copy, Debug)]
 pub struct Bound {
     /// 0-based line number.
     pub lnum: usize,
@@ -216,7 +216,7 @@ impl Selection {
 ///
 /// Built from [`RawPos`]. Represents a single position inside a buffer using
 /// zero-based (line, column) indices.
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Pos {
     buf_id: i32,
     /// 0-based line index.
@@ -264,7 +264,7 @@ impl From<RawPos> for Pos {
 }
 
 /// Raw `getpos()` tuple: (`bufnum`, `lnum`, `col`, `off`).
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize)]
 #[expect(dead_code, reason = "Unused fields are kept for completeness")]
 struct RawPos(i32, i64, i64, i64);
 

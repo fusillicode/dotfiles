@@ -69,7 +69,7 @@ impl Poppable for Extmark {
 }
 
 /// Metadata associated with an extmark.
-#[derive(Deserialize, Clone)]
+#[derive(Clone, Deserialize)]
 pub struct ExtmarkMeta {
     /// The highlight group for the sign.
     sign_hl_group: SignHlGroup,
@@ -115,7 +115,7 @@ impl ExtmarkMeta {
 /// - Captures Git related signs (`GitSigns*`) while retaining their concrete highlight group string in the
 ///   [`SignHlGroup::Git`] variant.
 /// - Any other (custom / plugin) highlight group is retained verbatim in [`SignHlGroup::Other`].
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 enum SignHlGroup {
     /// `DiagnosticSignError` highlight group.
     DiagnosticError,

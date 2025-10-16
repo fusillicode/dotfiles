@@ -43,10 +43,10 @@ jobs:
       - name: sccache setup
         uses: Mozilla-Actions/sccache-action@4097539ece2ebbb6fd759bb45e5f0321071ac87d
 
-      - name: Setup (cargo-machete, cargo-sort)
+      - name: Setup (cargo-machete, cargo-sort, cargo-sort-derives)
         uses: ./.github/actions/setup
         with:
-          tools: "cargo-machete cargo-sort"
+          tools: "cargo-machete cargo-sort cargo-sort-derives"
 
       - name: Lint with tec
         working-directory: yog

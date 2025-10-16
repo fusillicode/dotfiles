@@ -74,7 +74,7 @@ pub fn get_sibling_pane_with_titles(
 }
 
 /// Represents a `WezTerm` pane with all its properties and state information.
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Clone, Debug, Deserialize)]
 #[cfg_attr(any(test, feature = "fake"), derive(fake::Dummy))]
 pub struct WeztermPane {
     /// The shape of the cursor.
@@ -132,7 +132,7 @@ impl WeztermPane {
 }
 
 /// Represents the size and dimensions of a `WezTerm` pane.
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Clone, Debug, Deserialize)]
 #[cfg_attr(any(test, feature = "fake"), derive(fake::Dummy))]
 pub struct WeztermPaneSize {
     /// Number of character columns in the pane.
