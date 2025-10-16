@@ -16,6 +16,10 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  RUSTC_WRAPPER: sccache
+  SCCACHE_DIR: /home/runner/.cache/sccache
+  SCCACHE_CACHE_SIZE: 3G
+  SCCACHE_FAIL_FAST: "1"
 
 concurrency:
   group: ${{ github.ref }}-ci
@@ -28,38 +32,76 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: yog
+          shared-key: default
+          cache-targets: true
+
+      - name: sccache setup
+        uses: ./.github/actions/sccache
+        with:
+          cache-key-suffix: lint
+          cache-size: 3G
+
       - name: Setup (cargo-machete, cargo-sort)
         uses: ./.github/actions/setup
         with:
           tools: "cargo-machete cargo-sort"
+
       - name: Lint with tec
         working-directory: yog
         run: |
           cargo run --quiet --bin tec -- .
 
-  test:
-    name: Test
+      - name: sccache post stats
+        if: always()
+        uses: ./.github/actions/sccache-post-stats
+        with:
+          label: Lint
+
+  test_coverage:
+    name: Test & Coverage
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: yog
+          shared-key: coverage
+          cache-targets: true
+
+      - name: sccache setup
+        uses: ./.github/actions/sccache
+        with:
+          cache-key-suffix: coverage
+          cache-size: 3G
+
       - name: Setup (cargo-llvm-cov, cargo-nextest)
         uses: ./.github/actions/setup
         with:
           tools: "cargo-llvm-cov cargo-nextest"
+
       - name: Add llvm-tools component
         shell: bash
         working-directory: yog
         run: |
           set -euo pipefail
           rustup component add llvm-tools-preview
-      - name: Test and coverage (lcov + JUnit via nextest with path remap)
+
+      - name: Tests & Coverage (lcov + JUnit via nextest with path remap)
         shell: bash
         working-directory: yog
+        env:
+          CARGO_TARGET_DIR: target/coverage
         run: |
           set -euo pipefail
           echo "Running from $(pwd)"
-          # Remap absolute source path prefix to empty so SF lines become repo-relative (e.g. 'yog/<crate>/...').
           repo_root="$(git rev-parse --show-toplevel)"
           export RUSTFLAGS="--remap-path-prefix=${repo_root}/="
           cargo llvm-cov nextest \
@@ -68,13 +110,16 @@ jobs:
             --all-features \
             --lcov \
             --output-path lcov.info
-      - name: Upload coverage and test results to GitHub
+
+      - name: Upload coverage and junit to GitHub
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: lcov-junit
           path: |
             yog/lcov.info
-            yog/target/nextest/ci/junit.xml
+            yog/target/coverage/nextest/ci/junit.xml
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         if: ${{ !cancelled() }}
@@ -85,15 +130,22 @@ jobs:
           disable_telem: true
           fail_ci_if_error: true
           verbose: true
+
       - name: Upload test results to Codecov
         uses: codecov/test-results-action@v1
         if: ${{ !cancelled() }}
         with:
           working-directory: yog
-          files: ./target/nextest/ci/junit.xml
+          files: ./target/coverage/nextest/ci/junit.xml
           disable_search: true
           fail_ci_if_error: true
           verbose: true
+
+      - name: sccache post stats
+        if: always()
+        uses: ./.github/actions/sccache-post-stats
+        with:
+          label: Test+Coverage
 
   release:
     name: Build release
@@ -101,9 +153,30 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: yog
+          shared-key: default
+          cache-targets: true
+
+      - name: sccache setup
+        uses: ./.github/actions/sccache
+        with:
+          cache-key-suffix: release
+          cache-size: 3G
+
       - name: Setup (no extra tools)
         uses: ./.github/actions/setup
+
       - name: Build
         working-directory: yog
         run: |
           cargo build --release
+
+      - name: sccache post stats
+        if: always()
+        uses: ./.github/actions/sccache-post-stats
+        with:
+          label: Release

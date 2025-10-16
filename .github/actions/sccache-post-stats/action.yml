@@ -1,0 +1,31 @@
+name: "sccache-post-stats"
+description: "Collect sccache stats, parse hits/misses, append to step summary, and expose outputs."
+inputs:
+  label:
+    description: "Human-friendly label for this job section (e.g. Lint, Test, Coverage, Release, Docs)."
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Show & summarize sccache stats
+      id: collect
+      shell: bash
+      env:
+        INPUT_LABEL: ${{ inputs.label }}
+      run: |
+        set -euo pipefail
+        echo '=== sccache stats ==='
+        if ! command -v sccache >/dev/null 2>&1; then
+          echo "sccache binary not found; nothing to summarize" >&2
+          exit 0
+        fi
+        sccache --show-stats || true
+        # Parse hits / misses (first aggregate line for each)
+        stats="$(sccache --show-stats 2>/dev/null || true)"
+        hits=$(printf '%s\n' "$stats" | grep -E 'Cache hits' | head -n1 | awk '{print $3}') || true
+        misses=$(printf '%s\n' "$stats" | grep -E 'Cache misses' | head -n1 | awk '{print $3}') || true
+        echo "### ${INPUT_LABEL} sccache stats" >> "$GITHUB_STEP_SUMMARY"
+        echo "hits: ${hits:-?}" >> "$GITHUB_STEP_SUMMARY"
+        echo "misses: ${misses:-?}" >> "$GITHUB_STEP_SUMMARY"
+        echo "hits=${hits:-}" >> "$GITHUB_OUTPUT"
+        echo "misses=${misses:-}" >> "$GITHUB_OUTPUT"

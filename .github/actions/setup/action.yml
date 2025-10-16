@@ -1,5 +1,5 @@
 name: "Setup"
-description: "Set up Rust, cache dependencies & optionally install specified global cargo tools"
+description: "Set up Rust toolchain & optionally install specified global cargo tools (caching handled externally via Swatinem/rust-cache)."
 inputs:
   tools:
     description: "Space-separated list of cargo crate specs (name or name@version)"
@@ -13,40 +13,11 @@ runs:
       working-directory: yog
       run: |
         set -euo pipefail
-        # Trigger toolchain & components install via directory override.
         rustup show
         rustc -V
 
-    - name: Cache Cargo registry
-      id: cache_registry
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-registry-
-
-    - name: Cache Cargo index
-      id: cache_git
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.toml') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-git-
-
-    - name: Cache Cargo build
-      uses: actions/cache@v3
-      with:
-        path: target
-        # Key components:
-        # - runner.os: platform differences
-        # - rust-toolchain.toml hash: pinned toolchain date/components
-        # - Cargo.lock hash: full dependency graph versioning
-        # (Cargo.toml hashes dropped: lockfile already changes when deps change; dropping reduces churn on non-dependency metadata edits.)
-        key: cargo-build-${{ runner.os }}-${{ hashFiles('yog/rust-toolchain.toml') }}-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          cargo-build-${{ runner.os }}-
+    # NOTE: Dependency & build artifact caching is delegated to Swatinem/rust-cache
+    # which must be invoked in each workflow AFTER checkout and BEFORE builds/tests.
 
     - name: Derive tools hash
       if: inputs.tools != ''
@@ -69,8 +40,9 @@ runs:
       with:
         path: |
           ~/.cargo/bin
-        key: cargo-bin-${{ runner.os }}-${{ steps.tools_hash.outputs.hash }}-v1
+        key: cargo-bin-${{ runner.os }}-${{ hashFiles('yog/rust-toolchain.toml') }}-${{ steps.tools_hash.outputs.hash }}-v1
         restore-keys: |
+          cargo-bin-${{ runner.os }}-${{ steps.tools_hash.outputs.hash }}-
           cargo-bin-${{ runner.os }}-
 
     - name: Install/ensure global cargo tools
@@ -85,18 +57,22 @@ runs:
           name=${spec%@*}
           version=${spec#*@}
           if [[ "$name" == "$version" ]]; then
-            # no @ present -> install latest
-            version=""
+            version=""  # no version pinned
           fi
           if command -v "$name" >/dev/null 2>&1; then
-            echo "[tools] Found $name ($( "$name" --version 2>/dev/null || echo '?' ))"
+            if [[ -n "$version" ]] && ! "$name" --version 2>/dev/null | grep -q "$version"; then
+              echo "[tools] Re-installing $name@$version (version drift)"
+              cargo install "$name" --force --version "$version" --locked
+            else
+              echo "[tools] Found $name ($( "$name" --version 2>/dev/null || echo '?' ))"
+            fi
             continue
           fi
-          if [[ -n "$version" ]]; then
-            echo "[tools] Installing $name@$version"
-            cargo install "$name" --version "$version" --locked
-          else
-            echo "[tools] Installing $name (latest)"
-            cargo install "$name" --locked
-          fi
+            if [[ -n "$version" ]]; then
+              echo "[tools] Installing $name@$version"
+              cargo install "$name" --version "$version" --locked
+            else
+              echo "[tools] Installing $name (latest)"
+              cargo install "$name" --locked
+            fi
         done
