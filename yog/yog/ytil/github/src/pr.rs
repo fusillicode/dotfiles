@@ -47,7 +47,7 @@ pub struct PullRequestAuthor {
 ///
 /// Variants map 1:1 to upstream values (`SCREAMING_SNAKE_CASE`) to simplify
 /// deserialization and future additions.
-#[derive(Debug, EnumString, EnumIter, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, EnumIter, EnumString, Eq, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum PullRequestMergeState {
     Behind,

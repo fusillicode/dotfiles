@@ -65,6 +65,12 @@ const LINTS: &[(&str, LintFn)] = &[
             .current_dir(path)
             .exec()
     }),
+    ("cargo-sort-derives", |path| {
+        Command::new("cargo-sort-derives")
+            .args(["sort-derives", "--check"])
+            .current_dir(path)
+            .exec()
+    }),
 ];
 
 fn main() -> color_eyre::Result<()> {

@@ -416,7 +416,7 @@ impl Branch {
 ///
 /// Aggregates index + worktree bitflags plus conflict / ignore markers into a higher‑level
 /// representation with convenience predicates (e.g. [`GitStatusEntry::is_new`]).
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
 pub struct GitStatusEntry {
     /// Path relative to the repository root.
@@ -474,7 +474,7 @@ impl TryFrom<(PathBuf, &StatusEntry<'_>)> for GitStatusEntry {
 }
 
 /// Staged (index) status for a path.
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
 pub enum IndexState {
     /// Path added to the index.
@@ -512,7 +512,7 @@ impl IndexState {
 }
 
 /// Unstaged (worktree) status for a path.
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
 pub enum WorktreeState {
     /// Path newly created in worktree.
