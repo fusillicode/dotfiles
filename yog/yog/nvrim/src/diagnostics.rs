@@ -58,6 +58,11 @@ pub fn dict() -> Dictionary {
 /// Diagnostic severity levels.
 ///
 /// See the `Deserialize` impl below for accepted serialized forms.
+///
+/// Ordering contract:
+/// - The declared variant order (Error, Warn, Info, Hint, Other) defines the iteration order via [`EnumIter`], which
+///   downstream rendering (e.g. `statusline`) relies on to produce stable, predictable severity ordering.
+/// - Changing the variant order is a breaking change for components depending on deterministic ordering.
 #[derive(Debug, Hash, PartialEq, Eq, Copy, Clone, strum::Display, EnumIter)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum DiagnosticSeverity {
@@ -173,6 +178,7 @@ impl<'de> serde::Deserialize<'de> for DiagnosticSeverity {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use strum::IntoEnumIterator;
 
     use super::*;
 
@@ -207,6 +213,19 @@ mod tests {
     fn diagnostic_severity_deserializes_strings_as_expected(#[case] input: &str, #[case] expected: DiagnosticSeverity) {
         assert2::let_assert!(Ok(sev) = serde_json::from_str::<DiagnosticSeverity>(input));
         assert_eq!(sev, expected);
+    }
+
+    #[test]
+    fn diagnostic_severity_when_iterated_via_enumiter_yields_declared_order() {
+        let expected = [
+            DiagnosticSeverity::Error,
+            DiagnosticSeverity::Warn,
+            DiagnosticSeverity::Info,
+            DiagnosticSeverity::Hint,
+            DiagnosticSeverity::Other,
+        ];
+        let collected: Vec<DiagnosticSeverity> = DiagnosticSeverity::iter().collect();
+        pretty_assertions::assert_eq!(expected.as_slice(), collected.as_slice());
     }
 
     #[rstest]
