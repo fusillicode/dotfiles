@@ -81,8 +81,8 @@ pub trait Installer: Sync + Send {
     ///
     /// # Rationale
     /// - Uniform UX: always attempt install then (if supported) lightweight smoke test.
-    /// - Prints a single line including phase durations: `install=<dur> check=<dur|None> total=<dur>` to quickly spot
-    ///   slow tools.
+    /// - Prints a single line including phase durations: `install_time=<dur> check_time=<dur|None> total_time=<dur>` to
+    ///   quickly spot slow tools.
     /// - Keeps tool-specific logic encapsulated; orchestration only formats and times phases.
     ///
     /// # Performance
@@ -93,9 +93,8 @@ pub trait Installer: Sync + Send {
         // Install phase
         self.install().inspect_err(|error| {
             eprintln!(
-                "{} {} with {}",
-                "Installation failed".red().bold(),
-                self.bin_name().white().bold(),
+                "{} installation failed {}",
+                self.bin_name().red().bold(),
                 format!("error={error:#?}").red().bold()
             );
         })?;
@@ -112,7 +111,7 @@ pub trait Installer: Sync + Send {
         match check_res {
             Some(Ok(check_output)) => {
                 println!(
-                    "{} installed {} check_output={}",
+                    "{} {} check_output=\n{}",
                     self.bin_name().green().bold(),
                     format_timing(start, past_install, check_duration),
                     check_output.trim_matches(|c| c == '\n' || c == '\r').white().bold()
@@ -129,7 +128,7 @@ pub trait Installer: Sync + Send {
             }
             None => {
                 println!(
-                    "{} installed not checked {}",
+                    "{} {}",
                     self.bin_name().yellow().bold(),
                     format_timing(start, past_install, check_duration),
                 );
@@ -153,7 +152,7 @@ pub trait Installer: Sync + Send {
 /// - `check` Optional duration of the check phase (if a check was executed).
 ///
 /// # Returns
-/// - String formatted as `install=<dur> check=<dur|None> total=<dur>` consumed by status lines.
+/// - String formatted as `install_time=<dur> check_time=<dur|None> total_time=<dur>` consumed by status lines.
 ///
 /// # Rationale
 /// - Centralizes formatting logic to keep [`Installer::run`] concise and ensure consistent output shape.
@@ -162,7 +161,7 @@ pub trait Installer: Sync + Send {
 /// - Negligible: a few duration subtractions and one allocation for formatting.
 fn format_timing(start: Instant, past_install: Instant, check: Option<Duration>) -> String {
     format!(
-        "install={:?} check={:?} total={:?}",
+        "install_time={:?} check_time={:?} total_time={:?}",
         past_install.duration_since(start),
         check,
         start.elapsed()

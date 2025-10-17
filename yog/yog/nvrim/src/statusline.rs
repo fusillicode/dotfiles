@@ -117,11 +117,11 @@ impl Statusline<'_> {
     /// - Zero-count severities are omitted entirely (see [`draw_diagnostics`]).
     /// - Column displayed is 1-based via [`CursorPosition::adjusted_col`] (raw 0-based stored in
     ///   [`CursorPosition::col`]).
-    /// - Row/column segment is wrapped as `[row:col]` for visual separation from diagnostic prefixes and to keep a
-    ///   stable parse point if downstream consumers split on spaces; previously it was `row:col` without brackets and
-    ///   proved ambiguous near adjacent highlight groups.
+    /// - Row/column segment rendered as `row:col` to reduce visual noise and mimic default statusline conventions.
+    /// - A `%#StatusLine#` highlight reset precedes the `row:col` segment to avoid inheriting the last diagnostic
+    ///   group's style.
     ///
-    /// If this ordering, layout, bracket selection, or column conversion changes, update the focused tests in
+    /// If this ordering, layout, highlight reset placement, or column conversion changes, update the focused tests in
     /// `statusline::tests` whose names encode the contract for clarity.
     fn draw(&self) -> String {
         let mut cur_buf_diags = DiagnosticSeverity::iter()
@@ -137,7 +137,7 @@ impl Statusline<'_> {
         }
 
         format!(
-            "{cur_buf_diags}%#StatusLine#{} [{}:{}] %m %r%={workspace_diags}",
+            "{cur_buf_diags}%#StatusLine#{} %m %r%={workspace_diags}%#StatusLine# {}:{}",
             self.cur_buf_path,
             self.cursor_position.row,
             self.cursor_position.adjusted_col()
@@ -191,7 +191,7 @@ mod tests {
                 cursor_position: CursorPosition { row: 42, col: 7 },
             },
         ] {
-            pretty_assertions::assert_eq!("%#StatusLine#foo [42:8] %m %r%=", statusline.draw());
+            pretty_assertions::assert_eq!("%#StatusLine#foo %m %r%=%#StatusLine# 42:8", statusline.draw());
         }
     }
 
@@ -207,7 +207,7 @@ mod tests {
         };
         pretty_assertions::assert_eq!(
             format!(
-                "%#DiagnosticStatusLineError#{}:3 %#DiagnosticStatusLineInfo#{}:1 %#StatusLine#foo [42:8] %m %r%=",
+                "%#DiagnosticStatusLineError#{}:3 %#DiagnosticStatusLineInfo#{}:1 %#StatusLine#foo %m %r%=%#StatusLine# 42:8",
                 DiagnosticSeverity::Error,
                 DiagnosticSeverity::Info
             ),
@@ -227,7 +227,7 @@ mod tests {
         };
         pretty_assertions::assert_eq!(
             format!(
-                "%#StatusLine#foo [42:8] %m %r%=%#DiagnosticStatusLineError#{}:3 %#DiagnosticStatusLineInfo#{}:1",
+                "%#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#{}:3 %#DiagnosticStatusLineInfo#{}:1%#StatusLine# 42:8",
                 DiagnosticSeverity::Error,
                 DiagnosticSeverity::Info
             ),
@@ -249,7 +249,7 @@ mod tests {
         };
         pretty_assertions::assert_eq!(
             format!(
-                "%#DiagnosticStatusLineWarn#{}:2 %#DiagnosticStatusLineHint#{}:3 %#StatusLine#foo [42:8] %m %r%=%#DiagnosticStatusLineError#{}:3 %#DiagnosticStatusLineInfo#{}:1",
+                "%#DiagnosticStatusLineWarn#{}:2 %#DiagnosticStatusLineHint#{}:3 %#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#{}:3 %#DiagnosticStatusLineInfo#{}:1%#StatusLine# 42:8",
                 DiagnosticSeverity::Warn,
                 DiagnosticSeverity::Hint,
                 DiagnosticSeverity::Error,
@@ -272,7 +272,7 @@ mod tests {
         };
         pretty_assertions::assert_eq!(
             format!(
-                "%#DiagnosticStatusLineWarn#{}:1 %#DiagnosticStatusLineHint#{}:5 %#StatusLine#foo [42:8] %m %r%=",
+                "%#DiagnosticStatusLineWarn#{}:1 %#DiagnosticStatusLineHint#{}:5 %#StatusLine#foo %m %r%=%#StatusLine# 42:8",
                 DiagnosticSeverity::Warn,
                 DiagnosticSeverity::Hint
             ),
@@ -285,8 +285,8 @@ mod tests {
         // Any severity with zero count should yield empty string.
         pretty_assertions::assert_eq!(String::new(), draw_diagnostics(DiagnosticSeverity::Error, 0));
         pretty_assertions::assert_eq!(String::new(), draw_diagnostics(DiagnosticSeverity::Warn, 0));
-        pretty_assertions::assert_eq!(String::new(), draw_diagnostics(DiagnosticSeverity::Info, 0));
-        pretty_assertions::assert_eq!(String::new(), draw_diagnostics(DiagnosticSeverity::Hint, 0));
+        pretty_assertions::assert_eq!(String::new(), draw_diagnostics(DiagnosticSeverity::Info, 0)); // invariants: no bracketed position segment anymore
+        pretty_assertions::assert_eq!(String::new(), draw_diagnostics(DiagnosticSeverity::Hint, 0)); // invariants updated
     }
 
     #[test]
@@ -314,7 +314,7 @@ mod tests {
         };
         pretty_assertions::assert_eq!(
             format!(
-                "%#DiagnosticStatusLineError#{}:4 %#DiagnosticStatusLineWarn#{}:3 %#DiagnosticStatusLineInfo#{}:2 %#DiagnosticStatusLineHint#{}:1 %#StatusLine#foo [42:8] %m %r%=%#DiagnosticStatusLineError#{}:8 %#DiagnosticStatusLineWarn#{}:7 %#DiagnosticStatusLineInfo#{}:6 %#DiagnosticStatusLineHint#{}:5",
+                "%#DiagnosticStatusLineError#{}:4 %#DiagnosticStatusLineWarn#{}:3 %#DiagnosticStatusLineInfo#{}:2 %#DiagnosticStatusLineHint#{}:1 %#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#{}:8 %#DiagnosticStatusLineWarn#{}:7 %#DiagnosticStatusLineInfo#{}:6 %#DiagnosticStatusLineHint#{}:5%#StatusLine# 42:8",
                 DiagnosticSeverity::Error,
                 DiagnosticSeverity::Warn,
                 DiagnosticSeverity::Info,
@@ -337,7 +337,7 @@ mod tests {
             workspace_diags: HashMap::new(),
             cursor_position: CursorPosition { row: 10, col: 0 },
         };
-        pretty_assertions::assert_eq!("%#StatusLine#foo [10:1] %m %r%=", statusline.draw());
+        pretty_assertions::assert_eq!("%#StatusLine#foo %m %r%=%#StatusLine# 10:1", statusline.draw());
     }
 
     #[test]
@@ -349,6 +349,6 @@ mod tests {
             workspace_diags: HashMap::new(),
             cursor_position: CursorPosition { row: 10, col: 5 },
         };
-        pretty_assertions::assert_eq!("%#StatusLine#foo [10:6] %m %r%=", statusline.draw());
+        pretty_assertions::assert_eq!("%#StatusLine#foo %m %r%=%#StatusLine# 10:6", statusline.draw());
     }
 }
