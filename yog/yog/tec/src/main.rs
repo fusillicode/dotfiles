@@ -5,7 +5,9 @@
 //! # Behavior
 //! - Auto-detects workspace root (no positional CLI argument required).
 //! - Spawns one thread per lint; all run concurrently.
-//! - Prints each lint result with: success/error, duration, status code, stripped stdout or error.
+//! - Result reporting joins threads in declaration order; a long first lint can delay visible output, potentially
+//!   giving a false impression of serial execution.
+//! - Prints each lint result with: success/error, duration (`time=<Duration>`), status code, stripped stdout or error.
 //! - Exits 1 if any lint fails (non-zero exit status) or a thread panics; otherwise exits 0.
 //!
 //! # Returns
@@ -19,6 +21,7 @@
 //! Provides a single fast command (usable in git hooks / CI) aggregating core
 //! maintenance lints (style, dependency pruning, manifest ordering) without
 //! bespoke shell scripting.
+//! Adds deterministic, ordered reporting for stable output while retaining parallel execution for speed.
 use std::path::Path;
 use std::process::Command;
 use std::process::Output;
@@ -81,7 +84,7 @@ fn main() -> color_eyre::Result<()> {
     println!(
         "\n{} {} in {}\n",
         "Run lints".cyan().bold(),
-        format!("{:?}", LINTS.iter().map(|(lint, _)| lint).collect::<Vec<_>>())
+        format!("{:#?}", LINTS.iter().map(|(lint, _)| lint).collect::<Vec<_>>())
             .white()
             .bold(),
         workspace_root.display().to_string().white().bold(),
@@ -188,13 +191,13 @@ fn report(lint_name: &str, lint_res: &std::thread::Result<TimedLintFn>) -> bool 
     }
 }
 
-/// Format lint duration into colored `took=<duration>` snippet (auto-scaled).
+/// Format lint duration into colored `time=<duration>` snippet (auto-scaled).
 ///
 /// # Arguments
 /// - `duration` Wall-clock elapsed time for a single lint execution.
 ///
 /// # Returns
-/// - Colored string `took=<duration>` where `<duration>` uses [`Duration`]'s `Debug` formatting (e.g., `1.234s`,
+/// - Colored string `time=<duration>` where `<duration>` uses [`Duration`]'s `Debug` formatting (e.g., `1.234s`,
 ///   `15.6ms`, `321µs`, `42ns`) providing concise human-readable units.
 ///
 /// # Rationale
@@ -202,5 +205,5 @@ fn report(lint_name: &str, lint_res: &std::thread::Result<TimedLintFn>) -> bool 
 /// - Uses stable standard library formatting (no custom scaling logic).
 /// - Keeps formatting centralized for future JSON / machine-output additions.
 fn format_timing(duration: Duration) -> String {
-    format!("took={duration:?}")
+    format!("time={duration:?}")
 }
