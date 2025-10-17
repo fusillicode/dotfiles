@@ -190,14 +190,22 @@ impl core::fmt::Display for RenderablePullRequest {
 /// - Add bulk label operations (e.g. `Label` / `RemoveLabel`).
 /// - Introduce `Comment` with arbitrary body once use-cases emerge.
 /// - Provide dry-run variants for auditing actions.
-#[derive(strum::Display, EnumIter)]
+#[derive(EnumIter)]
 enum SelectableOp {
-    #[strum(to_string = "Approve & Merge")]
     ApproveAndMerge,
-    #[strum(to_string = "Dependabot Rebase")]
     DependabotRebase,
-    #[strum(to_string = "Enable auto-merge")]
     EnableAutoMerge,
+}
+
+impl core::fmt::Display for SelectableOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let repr = match self {
+            Self::ApproveAndMerge => "Approve & Merge".green().bold().to_string(),
+            Self::DependabotRebase => "Dependabot Rebase".blue().bold().to_string(),
+            Self::EnableAutoMerge => "Enable auto-merge".magenta().bold().to_string(),
+        };
+        write!(f, "{repr}")
+    }
 }
 
 impl SelectableOp {
