@@ -24,7 +24,7 @@ pub trait CmdExt {
     ///
     /// # Errors
     /// - Spawning or waiting fails ([`CmdError::Io`]).
-    /// - Non-zero exit with valid UTF-8 stderr ([`CmdError::FailedCmd`]).
+    /// - Non-zero exit with valid UTF-8 stderr ([`CmdError::CmdFailure`]).
     /// - Non-zero exit with invalid UTF-8 stderr ([`CmdError::FromUtf8`]).
     /// - Borrowed UTF-8 validation failure ([`CmdError::Utf8`]).
     fn exec(&mut self) -> color_eyre::Result<Output, CmdError>;
@@ -37,7 +37,7 @@ impl CmdExt for Command {
             source,
         })?;
         if !output.status.success() {
-            return Err(CmdError::FailedCmd {
+            return Err(CmdError::CmdFailure {
                 cmd: Cmd::from(&*self),
                 stderr: to_ut8_string(self, output.stderr)?,
                 stdout: to_ut8_string(self, output.stdout)?,
@@ -62,8 +62,8 @@ fn to_ut8_string(cmd: &Command, bytes: Vec<u8>) -> color_eyre::Result<String, Cm
 #[derive(Debug, thiserror::Error)]
 pub enum CmdError {
     /// Non-zero exit status; stderr captured & UTF-8 decoded.
-    #[error("FailedCmd(\n{cmd}\nstatus={status:?}\nstderr=\n{stderr}\nstdout=\n{stdout})")]
-    FailedCmd {
+    #[error("CmdFailure(\n{cmd}\nstatus={status:?}\nstderr=\n{stderr}\nstdout=\n{stdout})")]
+    CmdFailure {
         /// Command metadata snapshot.
         cmd: Cmd,
         /// Full (untruncated) stderr.
@@ -181,7 +181,7 @@ mod tests {
         cmd.args(["-c", "echo foo error 1>&2; exit 7"]);
 
         assert2::let_assert!(
-            Err(CmdError::FailedCmd {
+            Err(CmdError::CmdFailure {
                 status,
                 stderr,
                 stdout,

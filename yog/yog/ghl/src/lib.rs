@@ -280,10 +280,10 @@ impl Op {
             Self::DependabotRebase => "triggering dependabot rebase",
         };
         eprintln!(
-            "{} {} {}",
-            format!("Error {msg} PR").red().bold(),
+            "{} {} error=\n{}",
+            format!("Error {msg} PR").red(),
             format_pr(pr),
-            format!("error=\n{error}").red().bold()
+            format!("{error:#?}").red()
         );
     }
 }

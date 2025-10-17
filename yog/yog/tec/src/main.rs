@@ -240,7 +240,11 @@ fn report(lint_name: &str, lint_res: &std::thread::Result<TimedLintFn>) -> bool 
             true
         }
         Err(join_err) => {
-            eprintln!("{}", format!("JoinHandle error={join_err:?}").red().bold());
+            eprintln!(
+                "{} error={}",
+                "Error joining thread".red().bold(),
+                format!("{join_err:#?}").red()
+            );
             true
         }
     }

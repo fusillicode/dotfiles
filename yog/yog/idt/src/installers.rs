@@ -93,9 +93,9 @@ pub trait Installer: Sync + Send {
         // Install phase
         self.install().inspect_err(|error| {
             eprintln!(
-                "{} installation failed {}",
+                "{} failed installation error=\n{}",
                 self.bin_name().red().bold(),
-                format!("error={error:#?}").red().bold()
+                format!("{error:#?}").red()
             );
         })?;
 
@@ -119,8 +119,8 @@ pub trait Installer: Sync + Send {
             }
             Some(Err(error)) => {
                 eprintln!(
-                    "{} check failed {} error={}",
-                    self.bin_name().red().bold(),
+                    "{} failed check {} error=\n{}",
+                    self.bin_name().red(),
                     format_timing(start, past_install, check_duration),
                     format!("{error:#?}").red()
                 );
