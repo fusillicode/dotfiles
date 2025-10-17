@@ -45,7 +45,7 @@ type LintFn = fn(&Path) -> color_eyre::Result<Output, CmdError>;
 /// # Rationale
 /// Central list makes it trivial to add / remove lints and print them up-front
 /// for user visibility.
-const LINTS: &[(&str, LintFn)] = &[
+const LINTS_CHECK: &[(&str, LintFn)] = &[
     ("clippy", |path| {
         Command::new("cargo")
             .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
@@ -76,22 +76,54 @@ const LINTS: &[(&str, LintFn)] = &[
     }),
 ];
 
+const LINTS_FIX: &[(&str, LintFn)] = &[
+    ("cargo fmt", |path| {
+        Command::new("cargo").args(["fmt"]).current_dir(path).exec()
+    }),
+    ("cargo-machete", |path| {
+        Command::new("cargo-machete")
+            .args(["--fix", "--with-metadata", &path.display().to_string()])
+            .exec()
+    }),
+    ("cargo-sort", |path| {
+        Command::new("cargo-sort")
+            .args(["--workspace"])
+            .current_dir(path)
+            .exec()
+    }),
+    ("cargo-sort-derives", |path| {
+        Command::new("cargo-sort-derives")
+            .args(["sort-derives"])
+            .current_dir(path)
+            .exec()
+    }),
+];
+
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
+
+    let args = ytil_system::get_args();
+    let fix_mode = args.first().is_some_and(|s| s == "--fix");
+
+    let (start_msg, lints) = if fix_mode {
+        ("Lints fix", LINTS_FIX)
+    } else {
+        ("Lints check", LINTS_CHECK)
+    };
 
     let workspace_root = ytil_system::get_workspace_root()?;
 
     println!(
         "\n{} {} in {}\n",
-        "Run lints".cyan().bold(),
-        format!("{:#?}", LINTS.iter().map(|(lint, _)| lint).collect::<Vec<_>>())
+        start_msg.cyan().bold(),
+        format!("{:#?}", lints.iter().map(|(lint, _)| lint).collect::<Vec<_>>())
             .white()
             .bold(),
         workspace_root.display().to_string().white().bold(),
     );
 
     // Spawn all lints in parallel.
-    let lints_handles: Vec<_> = LINTS
+    let lints_handles: Vec<_> = lints
         .iter()
         .map(|(lint_name, lint_fn)| {
             (
