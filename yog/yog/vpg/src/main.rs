@@ -22,6 +22,7 @@
 //! - JSON serialization or deserialization fails.
 //! - Required environment variable missing or invalid Unicode.
 //! - User selection or prompt interaction fails.
+
 #![feature(exit_status_error)]
 
 use std::process::Command;
