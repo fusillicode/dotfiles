@@ -7,6 +7,7 @@
 //!
 //! Performing CSS minification in `build.rs` avoids adding a runtime dependency or a
 //! separate Node / npm pipeline.
+
 use std::path::PathBuf;
 
 use color_eyre::eyre::eyre;

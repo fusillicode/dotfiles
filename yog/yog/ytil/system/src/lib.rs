@@ -2,6 +2,7 @@
 //!
 //! Offer small utilities for CLI tools: joining thread handles, building home-relative paths,
 //! manipulating filesystem entries (chmod, symlinks, atomic copy) and clipboard integration.
+
 use std::collections::VecDeque;
 use std::fs::DirEntry;
 use std::os::unix::fs::PermissionsExt as _;

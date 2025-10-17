@@ -1,6 +1,7 @@
 //! Askama custom templates filters.
 //!
 //! Provides helpers to format various types in Askama templates.
+
 #![allow(clippy::unnecessary_wraps)]
 
 use chrono::DateTime;

@@ -13,10 +13,11 @@
 //! - Current feature surface (latest release tag, PR head branch lookup) is small; process spawn overhead is negligible
 //!   versus HTTP setup cost.
 //!
-//! Trade‑offs accepted:
-//! - Less fine‑grained control over rate limiting and retries.
+//! Trade-offs accepted:
+//! - Less fine-grained control over rate limiting and retries.
 //! - Tight coupling to `gh` output flags (low churn historically, but still external).
 //! - Requires `gh` binary presence in runtime environments.
+
 #![feature(exit_status_error)]
 
 use std::path::Path;
