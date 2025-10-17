@@ -163,6 +163,7 @@ impl core::fmt::Display for RenderablePullRequest {
             PullRequestMergeState::HasHooks => "HasHooks".magenta().bold().to_string(),
             PullRequestMergeState::Unknown => "Unknown".bold().to_string(),
             PullRequestMergeState::Unmergeable => "Unmergeable".red().bold().to_string(),
+            PullRequestMergeState::Unstable => "Unstable".red().bold().to_string(),
         };
         write!(
             f,

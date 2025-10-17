@@ -58,6 +58,7 @@ pub enum PullRequestMergeState {
     HasHooks,
     Unknown,
     Unmergeable,
+    Unstable,
 }
 
 /// Fetch pull requests for a repository using `gh pr list`.
