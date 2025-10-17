@@ -29,7 +29,6 @@
 
 use std::path::Path;
 
-use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 use color_eyre::owo_colors::OwoColorize as _;
 
@@ -224,30 +223,42 @@ fn main() -> color_eyre::Result<()> {
         res
     });
 
-    report(&installers_res)?;
+    if let Err(errors) = report(&installers_res) {
+        eprintln!(
+            "Tool installations failed | errors_count={} bin_names={errors:#?}",
+            errors.len()
+        );
+        std::process::exit(1);
+    }
 
     ytil_system::rm_dead_symlinks(bin_dir)?;
 
     Ok(())
 }
 
-/// Summarize installer thread outcomes; enforce failure exit.
+/// Summarize installer thread outcomes; collect failing bin names.
 ///
 /// # Arguments
 /// - `installers_res` Slice of (bin name, join result) pairs. Outer [`std::thread::Result`] indicates panic; inner
-///   [`color_eyre::Result<()>`] is the installer's logical result.
+///   [`color_eyre::Result<()>`] is the installer's logical result (`Ok(())` success, `Err(_)` failure).
 ///
 /// # Returns
-/// - `Ok(())` if every installer finished without panic and returned `Ok(())`.
-/// - `Err` summarizing failing installer names otherwise.
+/// - `Ok(())` when all installers completed without panic and returned `Ok(())`.
+/// - `Err(Vec<&str>)` containing bin names that either panicked or returned an error. The caller emits the process
+///   failure exit and optional summary logging.
 ///
 /// # Errors
-/// - Any panic or logical installer error triggers a summary error via [`bail!`].
+/// - Does not construct a rich error enum; instead returns failing bin names. Individual installers are expected to
+///   have already printed detailed stderr output.
+/// - A thread panic is logged immediately and its bin name added to the returned list.
 ///
 /// # Rationale
-/// - Keep detailed status inside each installer; emit only an aggregate for CI / scripting.
-/// - Single place sets non-zero exit to reflect any failure.
-fn report(installers_res: &[(&str, std::thread::Result<color_eyre::Result<()>>)]) -> color_eyre::Result<()> {
+/// - Simple bin-name list keeps aggregation lightweight for CI scripting.
+/// - Delegates detailed formatting to installers; central function only normalizes aggregation.
+/// - Easier to extend with JSON output later (convert list directly).
+fn report<'a>(
+    installers_res: &'a [(&'a str, std::thread::Result<color_eyre::Result<()>>)],
+) -> Result<(), Vec<&'a str>> {
     let mut errors_bins = vec![];
 
     for (bin_name, result) in installers_res {
@@ -258,17 +269,15 @@ fn report(installers_res: &[(&str, std::thread::Result<color_eyre::Result<()>>)]
                     bin_name.bold().red(),
                     format!("error={error:#?}").red().bold()
                 );
-                errors_bins.push(bin_name);
+                errors_bins.push(*bin_name);
             }
             Ok(Err(_)) => errors_bins.push(bin_name),
             Ok(Ok(())) => {}
         }
     }
 
-    let errors_count = errors_bins.len();
-    if errors_count > 0 {
-        bail!("Tool installations failed | errors_count={errors_count} bin_names={errors_bins:#?}")
+    if errors_bins.is_empty() {
+        return Ok(());
     }
-
-    Ok(())
+    Err(errors_bins)
 }
