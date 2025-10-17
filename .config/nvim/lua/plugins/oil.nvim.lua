@@ -1,4 +1,5 @@
 local keymaps = require('keymaps')
+local style_opts = require('nvrim').style_opts
 local plugin_keymaps = keymaps.oil
 
 return {
@@ -13,13 +14,17 @@ return {
       },
       delete_to_trash = true,
       float = {
-        padding = 2,
+        border = style_opts['window']['border'],
         max_width = 100,
         max_height = 30,
         override = function(conf)
           return vim.tbl_extend('error', conf, { anchor = 'SW', })
         end,
       },
+      confirmation = style_opts['window']['border'],
+      progress = style_opts['window']['border'],
+      ssh = style_opts['window']['border'],
+      keymaps_help = style_opts['window']['border'],
       keymaps = {
         ['<esc>'] = ':bd!<cr>',
         ['<s-l>'] = 'actions.select',
