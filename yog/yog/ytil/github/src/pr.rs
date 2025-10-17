@@ -184,3 +184,32 @@ pub fn dependabot_rebase(pr_number: usize) -> color_eyre::Result<()> {
         .exec()?;
     Ok(())
 }
+
+/// Enable GitHub auto-merge for a pull request (rebase strategy).
+///
+/// Invokes: `gh pr merge <PR_NUMBER> --auto --rebase --delete-branch`.
+/// Schedules a rebase merge to occur automatically once required status checks
+/// and reviews pass. If all requirements are already satisfied, merge occurs immediately.
+///
+/// # Arguments
+/// - `pr_number` Numeric pull request number to enable auto-merge on.
+///
+/// # Returns
+/// `Ok(())` if the GitHub CLI command succeeds (either scheduling or performing the merge).
+///
+/// # Errors
+/// - Spawning or executing `gh pr merge` fails.
+/// - Command exits non-zero (propagated by [`ytil_cmd::CmdExt`]).
+pub fn enable_auto_merge(pr_number: usize) -> color_eyre::Result<()> {
+    Command::new("gh")
+        .args([
+            "pr",
+            "merge",
+            &format!("{pr_number}"),
+            "--auto",
+            "--rebase",
+            "--delete-branch",
+        ])
+        .exec()?;
+    Ok(())
+}

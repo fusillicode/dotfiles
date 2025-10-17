@@ -1,7 +1,7 @@
 //! List and optionally batch‑merge GitHub pull requests interactively.
 //!
 //! Provides a colorized TUI to select multiple PRs then apply a composite
-//! operation (approve & merge, dependabot rebase). Mirrors the `run()` pattern
+//! operation (approve & merge, dependabot rebase, enable auto-merge). Mirrors the `run()` pattern
 //! used by `gch` so the binary `main` stays trivial.
 //!
 //! # Flow
@@ -184,6 +184,7 @@ impl core::fmt::Display for RenderablePullRequest {
 /// # Variants
 /// - `ApproveAndMerge` Perform approval review then merge if approval succeeds.
 /// - `DependabotRebase` Post the `@dependabot rebase` comment to a Dependabot PR.
+/// - `EnableAutoMerge` Enable GitHub auto-merge (rebase strategy + delete branch) for the PR.
 ///
 /// # Future Work
 /// - Add bulk label operations (e.g. `Label` / `RemoveLabel`).
@@ -195,6 +196,8 @@ enum SelectableOp {
     ApproveAndMerge,
     #[strum(to_string = "Dependabot Rebase")]
     DependabotRebase,
+    #[strum(to_string = "Enable auto-merge")]
+    EnableAutoMerge,
 }
 
 impl SelectableOp {
@@ -207,6 +210,9 @@ impl SelectableOp {
             }),
             Self::DependabotRebase => Box::new(|pr| {
                 let _ = Op::DependabotRebase.report(pr, ytil_github::pr::dependabot_rebase(pr.number));
+            }),
+            Self::EnableAutoMerge => Box::new(|pr| {
+                let _ = Op::EnableAutoMerge.report(pr, ytil_github::pr::enable_auto_merge(pr.number));
             }),
         }
     }
@@ -223,10 +229,12 @@ impl SelectableOp {
 /// - `Approve` Submit an approving review (`gh pr review --approve`).
 /// - `Merge` Perform the administrative squash merge (`gh pr merge --admin --squash`).
 /// - `DependabotRebase` Post the `@dependabot rebase` comment to request an updated rebase for a Dependabot PR.
+/// - `EnableAutoMerge` Schedule automatic merge (rebase) once requirements satisfied.
 enum Op {
     Approve,
     Merge,
     DependabotRebase,
+    EnableAutoMerge,
 }
 
 impl Op {
@@ -261,6 +269,7 @@ impl Op {
             Self::Approve => "Approved",
             Self::Merge => "Merged",
             Self::DependabotRebase => "Dependabot rebased",
+            Self::EnableAutoMerge => "Auto-merge enabled",
         };
         println!("{} {}", format!("{msg} PR").green().bold(), format_pr(pr));
     }
@@ -278,6 +287,7 @@ impl Op {
             Self::Approve => "approving",
             Self::Merge => "merging",
             Self::DependabotRebase => "triggering dependabot rebase",
+            Self::EnableAutoMerge => "enabling auto-merge",
         };
         eprintln!(
             "{} {} error=\n{}",
