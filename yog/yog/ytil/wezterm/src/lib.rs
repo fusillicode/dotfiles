@@ -2,6 +2,7 @@
 //!
 //! Query panes (`wezterm cli list`) and generate shell‑safe strings for actions. Helpers locate sibling
 //! panes in the same tab by title and derive absolute working directories from file URIs.
+
 use std::path::PathBuf;
 use std::process::Command;
 

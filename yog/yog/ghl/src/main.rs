@@ -28,6 +28,7 @@
 //! - Flag parsing fails (unknown flag, missing value, invalid merge state).
 //! - GitHub CLI invocation fails.
 //! - TUI interaction fails.
+
 #![feature(exit_status_error)]
 
 use std::ops::Deref;

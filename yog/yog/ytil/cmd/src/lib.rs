@@ -5,6 +5,7 @@
 //! directory for concise diagnostics.
 //!
 //! See [`CmdError`] for failure variants with rich context.
+
 #![feature(error_generic_member_access)]
 
 use std::path::Path;
