@@ -37,6 +37,7 @@ alias cc='cargo clippy'
 alias cfm='cargo fmt'
 alias ct='f() { cargo test "$*" }; f'
 alias cnt='f() { cargo nextest run "$*" }; f'
+alias ctn='f() { cargo nextest run "$*" }; f'
 
 ksecdec () {
   kubectl get secrets -oname ${3:+--namespace=$3} | \
