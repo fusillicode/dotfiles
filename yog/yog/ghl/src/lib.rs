@@ -1,7 +1,7 @@
 //! List and optionally batch‑merge GitHub pull requests interactively.
 //!
 //! Provides a colorized TUI to select multiple PRs then apply a composite
-//! operation (approve & merge, dependabot rebase, enable auto-merge). Mirrors the `run()` pattern
+//! operation (approve & merge, Dependabot rebase, enable auto-merge). Mirrors the `run()` pattern
 //! used by `gch` so the binary `main` stays trivial.
 //!
 //! # Flow
@@ -192,6 +192,7 @@ impl core::fmt::Display for RenderablePullRequest {
 /// - Provide dry-run variants for auditing actions.
 #[derive(EnumIter)]
 enum SelectableOp {
+    Approve,
     ApproveAndMerge,
     DependabotRebase,
     EnableAutoMerge,
@@ -200,6 +201,7 @@ enum SelectableOp {
 impl core::fmt::Display for SelectableOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let repr = match self {
+            Self::Approve => "Approve".green().bold().to_string(),
             Self::ApproveAndMerge => "Approve & Merge".green().bold().to_string(),
             Self::DependabotRebase => "Dependabot Rebase".blue().bold().to_string(),
             Self::EnableAutoMerge => "Enable auto-merge".magenta().bold().to_string(),
@@ -211,6 +213,9 @@ impl core::fmt::Display for SelectableOp {
 impl SelectableOp {
     pub fn run(&self) -> Box<dyn Fn(&PullRequest)> {
         match self {
+            Self::Approve => Box::new(|pr| {
+                let _ = Op::Approve.report(pr, ytil_github::pr::approve(pr.number));
+            }),
             Self::ApproveAndMerge => Box::new(|pr| {
                 let _ = Op::Approve
                     .report(pr, ytil_github::pr::approve(pr.number))
