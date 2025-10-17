@@ -185,10 +185,10 @@ pub fn dependabot_rebase(pr_number: usize) -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Enable GitHub auto-merge for a pull request (rebase strategy).
+/// Enable GitHub auto-merge for a pull request (squash strategy).
 ///
-/// Invokes: `gh pr merge <PR_NUMBER> --auto --rebase --delete-branch`.
-/// Schedules a rebase merge to occur automatically once required status checks
+/// Invokes: `gh pr merge <PR_NUMBER> --auto --squash --delete-branch`.
+/// Schedules a squash merge to occur automatically once required status checks
 /// and reviews pass. If all requirements are already satisfied, merge occurs immediately.
 ///
 /// # Arguments
@@ -207,7 +207,7 @@ pub fn enable_auto_merge(pr_number: usize) -> color_eyre::Result<()> {
             "merge",
             &format!("{pr_number}"),
             "--auto",
-            "--rebase",
+            "--squas",
             "--delete-branch",
         ])
         .exec()?;
