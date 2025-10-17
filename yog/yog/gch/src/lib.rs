@@ -29,6 +29,7 @@
 //! # Rationale
 //! - Delegates semantics to porcelain (`git restore`, `git add`) to inherit nuanced Git behavior.
 //! - Minimal two‑prompt UX optimizes rapid iterative staging / discarding.
+
 use std::ops::Deref;
 use std::path::Path;
 

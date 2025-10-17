@@ -25,6 +25,7 @@
 //! - File path parsing / validation fails.
 //! - Spawning shell command fails.
 //! - Required environment variable read fails.
+
 #![feature(exit_status_error)]
 
 use core::str::FromStr;

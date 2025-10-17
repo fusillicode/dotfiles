@@ -84,6 +84,7 @@ dir
 dirs
 endblock
 endfor
+entrypoint
 env
 envar
 expr

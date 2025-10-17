@@ -69,7 +69,12 @@ fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
     Some(statusline.draw())
 }
 
-/// Represents a diagnostic from Nvim.
+/// Diagnostic emitted by Neovim.
+///
+/// Captures buffer association and severity for aggregation in the statusline.
+///
+/// # Rationale
+/// Minimal fields keep deserialization lean; position, message, etc. are not needed for summary counts.
 #[derive(Deserialize)]
 pub struct Diagnostic {
     /// The buffer number.

@@ -1,9 +1,12 @@
-//! Run workspace lint suite concurrently.
+//! Run workspace lint suite concurrently (check or fix modes).
 //!
 //! Executes lints against the Cargo workspace root auto–detected via [`ytil_system::get_workspace_root`].
 //!
 //! # Behavior
 //! - Auto-detects workspace root (no positional CLI argument required).
+//! - Supports two modes:
+//!   - Check (default) runs non-mutating lints.
+//!   - Fix (`--fix` CLI flag) runs the lints that support automatic fixes.
 //! - Spawns one thread per lint; all run concurrently.
 //! - Result reporting joins threads in declaration order; a long first lint can delay visible output, potentially
 //!   giving a false impression of serial execution.
@@ -18,10 +21,11 @@
 //! - Workspace root discovery errors from [`ytil_system::get_workspace_root`].
 //!
 //! # Rationale
-//! Provides a single fast command (usable in git hooks / CI) aggregating core
-//! maintenance lints (style, dependency pruning, manifest ordering) without
-//! bespoke shell scripting.
+//! Provides a single fast command (usable in git hooks / CI) aggregating core maintenance lints (style, dependency
+//! pruning, manifest ordering) without bespoke shell scripting.
+//! Split check vs fix modes minimize hook latency while enabling quick remediation.
 //! Adds deterministic, ordered reporting for stable output while retaining parallel execution for speed.
+
 use std::path::Path;
 use std::process::Command;
 use std::process::Output;
@@ -34,18 +38,19 @@ use ytil_cmd::CmdExt as _;
 
 type LintFn = fn(&Path) -> color_eyre::Result<Output, CmdError>;
 
-/// Available workspace lints.
+/// Workspace lint check set.
 ///
-/// Each entry maps a human-readable lint name to a function that builds and
-/// executes the corresponding command, returning its captured [`Output`].
+/// Contains non-mutating lints safe for fast verification in hooks / CI:
 ///
-/// - Order in this slice defines the (deterministic) order of result reporting.
-/// - Execution itself is parallel: all runners are spawned before any joins.
+/// Execution model:
+/// - Each lint spawns in its own thread; parallelism maximizes throughput while retaining deterministic join &
+///   reporting order defined by slice declaration order.
+/// - All runners are started before any join to avoid head-of-line blocking caused by early long-running lints.
 ///
-/// # Rationale
-/// Central list makes it trivial to add / remove lints and print them up-front
-/// for user visibility.
-const LINTS: &[(&str, LintFn)] = &[
+/// Output contract:
+/// - Prints logical name, duration (`time=<Duration>`), status code, and stripped stdout or error.
+/// - Aggregate process exit code is 1 if any lint fails (non-zero status or panic), else 0.
+const LINTS_CHECK: &[(&str, LintFn)] = &[
     ("clippy", |path| {
         Command::new("cargo")
             .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
@@ -76,22 +81,72 @@ const LINTS: &[(&str, LintFn)] = &[
     }),
 ];
 
+/// Workspace lint fix set.
+///
+/// Contains mutating lints for rapid remediation of formatting / unused dependencies / manifest ordering.
+///
+/// Execution model:
+/// - Parallel thread spawn identical to [`LINTS_CHECK`]; ordering of slice elements defines deterministic join &
+///   reporting sequence.
+/// - Excludes `clippy` (no auto-fix) keeping fix passes shorter; users should run a subsequent check pass.
+///
+/// Output contract:
+/// - Same reporting shape as [`LINTS_CHECK`]: name, duration snippet (`time=<Duration>`), status code, stripped stdout
+///   or error.
+/// - Aggregate process exit code is 1 if any lint fails (non-zero status or panic), else 0.
+///
+/// Rationale:
+/// - Focused mutation set avoids accidentally introducing changes via check-only tools.
+/// - Deterministic ordered output aids CI log diffing while retaining concurrency for speed.
+/// - Mirrors structure of [`LINTS_CHECK`] for predictable maintenance (additions require updating both tables).
+const LINTS_FIX: &[(&str, LintFn)] = &[
+    ("cargo fmt", |path| {
+        Command::new("cargo").args(["fmt"]).current_dir(path).exec()
+    }),
+    ("cargo-machete", |path| {
+        Command::new("cargo-machete")
+            .args(["--fix", "--with-metadata", &path.display().to_string()])
+            .exec()
+    }),
+    ("cargo-sort", |path| {
+        Command::new("cargo-sort")
+            .args(["--workspace"])
+            .current_dir(path)
+            .exec()
+    }),
+    ("cargo-sort-derives", |path| {
+        Command::new("cargo-sort-derives")
+            .args(["sort-derives"])
+            .current_dir(path)
+            .exec()
+    }),
+];
+
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
+
+    let args = ytil_system::get_args();
+    let fix_mode = args.first().is_some_and(|s| s == "--fix");
+
+    let (start_msg, lints) = if fix_mode {
+        ("Lints fix", LINTS_FIX)
+    } else {
+        ("Lints check", LINTS_CHECK)
+    };
 
     let workspace_root = ytil_system::get_workspace_root()?;
 
     println!(
         "\n{} {} in {}\n",
-        "Run lints".cyan().bold(),
-        format!("{:#?}", LINTS.iter().map(|(lint, _)| lint).collect::<Vec<_>>())
+        start_msg.cyan().bold(),
+        format!("{:#?}", lints.iter().map(|(lint, _)| lint).collect::<Vec<_>>())
             .white()
             .bold(),
         workspace_root.display().to_string().white().bold(),
     );
 
     // Spawn all lints in parallel.
-    let lints_handles: Vec<_> = LINTS
+    let lints_handles: Vec<_> = lints
         .iter()
         .map(|(lint_name, lint_fn)| {
             (
@@ -191,19 +246,21 @@ fn report(lint_name: &str, lint_res: &std::thread::Result<TimedLintFn>) -> bool 
     }
 }
 
-/// Format lint duration into colored `time=<duration>` snippet (auto-scaled).
+/// Format lint duration into `time=<duration>` snippet (auto-scaled, no color).
 ///
 /// # Arguments
 /// - `duration` Wall-clock elapsed time for a single lint execution.
 ///
 /// # Returns
-/// - Colored string `time=<duration>` where `<duration>` uses [`Duration`]'s `Debug` formatting (e.g., `1.234s`,
+/// - Plain string `time=<duration>` where `<duration>` uses [`Duration`]'s `Debug` formatting (e.g., `1.234s`,
 ///   `15.6ms`, `321µs`, `42ns`) providing concise human-readable units.
+///
+/// Note: Colorization (if any) is applied by the caller (e.g. in [`report`]) not here, keeping this helper suitable for
+/// future machine-readable output modes.
 ///
 /// # Rationale
 /// - Improves readability vs raw integer milliseconds; preserves sub-ms precision.
 /// - Uses stable standard library formatting (no custom scaling logic).
-/// - Keeps formatting centralized for future JSON / machine-output additions.
 fn format_timing(duration: Duration) -> String {
     format!("time={duration:?}")
 }

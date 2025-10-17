@@ -1,30 +1,3 @@
 #!/usr/bin/env bash
-# Builds & runs the `tec` binary to validate the Rust workspace before allowing a push.
-#
-# Setup:
-#   1. Place this file under a tracked directory (e.g. .githooks/pre-push).
-#   2. Point Git at the directory:
-#        git config core.hooksPath .githooks
-#   3. Ensure required external tools are installed in PATH:
-#        cargo install cargo-machete cargo-sort
-#
-# Behavior:
-#   - Builds the release `tec` binary (fast warm subsequent builds).
-#   - Runs it against the workspace root (./yog) to execute all lints in parallel.
-#   - Fails (non‑zero exit) if any lint fails or a thread panics.
-#   - Provides millisecond timing per lint for quick feedback.
-#
-# Manual equivalent:
-#   cargo run --quiet --bin tec -- yog
-
 set -euo pipefail
-
-repo_root="$(git rev-parse --show-toplevel)"
-workspace_dir="$repo_root/yog"
-
-cargo build --release --quiet --manifest-path "$workspace_dir/Cargo.toml" --bin tec || {
-  echo "[pre-push] Build tec failed." >&2
-  exit 1
-}
-
-"$workspace_dir/target/release/tec"
+"$(git rev-parse --show-toplevel)"/.githooks/tec.sh check

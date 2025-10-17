@@ -9,6 +9,7 @@
 //! - `WezTerm` command execution fails or exits non-zero.
 //! - Status line missing or cannot be parsed.
 //! - Invalid UTF-8 in process output.
+
 #![feature(exit_status_error)]
 
 use core::str::FromStr;

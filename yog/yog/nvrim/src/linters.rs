@@ -10,6 +10,7 @@
 //!   instance. This implementation treats absence / `nil` values defensively and never propagates a panic.
 //! - Centralizing parsers allows consistent error reporting & future sharing of common normalization logic (e.g.
 //!   severity mapping, range sanitation).
+
 use nvim_oxi::Dictionary;
 use serde::Deserialize;
 

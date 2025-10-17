@@ -23,6 +23,7 @@
 //! - Branch listing / fetching / switching / creation fails.
 //! - Interactive selection or user confirmation input fails.
 //! - Current branch lookup fails.
+
 #![feature(exit_status_error)]
 
 use std::io::Write;
