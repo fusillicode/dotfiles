@@ -266,9 +266,9 @@ fn report<'a>(
         match result {
             Err(error) => {
                 eprintln!(
-                    "{} installer thread panicked {}",
-                    bin_name.bold().red(),
-                    format!("error={error:#?}").red().bold()
+                    "{} installer thread panicked error={}",
+                    bin_name.red(), // removed bold
+                    format!("{error:#?}").red()
                 );
                 errors_bins.push(*bin_name);
             }
