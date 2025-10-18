@@ -17,10 +17,6 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
-  SCCACHE_DIR: /home/runner/.cache/sccache
-  SCCACHE_CACHE_SIZE: 3G
-  SCCACHE_FAIL_FAST: "1"
-
 concurrency:
   group: ${{ github.ref }}-ci
   cancel-in-progress: true
@@ -40,9 +36,6 @@ jobs:
           shared-key: default
           cache-targets: true
 
-      - name: sccache setup
-        uses: Mozilla-Actions/sccache-action@4097539ece2ebbb6fd759bb45e5f0321071ac87d
-
       - name: Setup (cargo-machete, cargo-sort, cargo-sort-derives)
         uses: ./.github/actions/setup
         with:
@@ -52,12 +45,6 @@ jobs:
         working-directory: yog
         run: |
           cargo run --quiet --bin tec -- .
-
-      - name: sccache post stats
-        if: always()
-        uses: ./.github/actions/sccache-post-stats
-        with:
-          label: Lint
 
   test_coverage:
     name: Test & Coverage
@@ -72,9 +59,6 @@ jobs:
           workspaces: yog
           shared-key: coverage
           cache-targets: true
-
-      - name: sccache setup
-        uses: Mozilla-Actions/sccache-action@4097539ece2ebbb6fd759bb45e5f0321071ac87d
 
       - name: Setup (cargo-llvm-cov, cargo-nextest)
         uses: ./.github/actions/setup
@@ -135,12 +119,6 @@ jobs:
           fail_ci_if_error: true
           verbose: true
 
-      - name: sccache post stats
-        if: always()
-        uses: ./.github/actions/sccache-post-stats
-        with:
-          label: Test+Coverage
-
   release:
     name: Build release
     runs-on: ubuntu-latest
@@ -155,9 +133,6 @@ jobs:
           shared-key: default
           cache-targets: true
 
-      - name: sccache setup
-        uses: Mozilla-Actions/sccache-action@4097539ece2ebbb6fd759bb45e5f0321071ac87d
-
       - name: Setup (no extra tools)
         uses: ./.github/actions/setup
 
@@ -165,9 +140,3 @@ jobs:
         working-directory: yog
         run: |
           cargo build --release
-
-      - name: sccache post stats
-        if: always()
-        uses: ./.github/actions/sccache-post-stats
-        with:
-          label: Release
