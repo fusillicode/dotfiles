@@ -41,7 +41,7 @@ fn main() -> color_eyre::Result<()> {
 
     let files = ytil_system::get_args();
 
-    let mut errors: i32 = 0;
+    let mut errors = false;
     for file in &files {
         let trimmed = before_last_colon(file);
         let path = Path::new(&trimmed);
@@ -51,7 +51,7 @@ fn main() -> color_eyre::Result<()> {
                 let ft = metadata.file_type();
                 if ft.is_file() || ft.is_symlink() {
                     if let Err(error) = std::fs::remove_file(path) {
-                        errors = errors.saturating_add(1);
+                        errors = true;
                         eprintln!(
                             "Cannot delete file={} error={}",
                             path.display(),
@@ -62,7 +62,7 @@ fn main() -> color_eyre::Result<()> {
                 }
                 if ft.is_dir() {
                     if let Err(error) = std::fs::remove_dir_all(path) {
-                        errors = errors.saturating_add(1);
+                        errors = true;
                         eprintln!(
                             "Cannot delete dir={} error={}",
                             path.display(),
@@ -71,11 +71,11 @@ fn main() -> color_eyre::Result<()> {
                     }
                     continue;
                 }
-                errors = errors.saturating_add(1);
+                errors = true;
                 eprintln!("{}", format!("Not found path={}", path.display()).red());
             }
             Err(error) => {
-                errors = errors.saturating_add(1);
+                errors = true;
                 eprintln!(
                     "Cannot read metadata of path={} error={}",
                     path.display(),
@@ -85,7 +85,7 @@ fn main() -> color_eyre::Result<()> {
         }
     }
 
-    if errors > 0 {
+    if errors {
         std::process::exit(1);
     }
 
