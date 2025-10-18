@@ -139,14 +139,14 @@ mod tests {
     fn drop_element_returns_true_and_removes_the_element_from_the_vec() {
         let mut input = vec![42, 7];
         assert!(drop_element(&mut input, &7));
-        assert_eq!(vec![42], input);
+        assert_eq!(input, vec![42]);
     }
 
     #[test]
     fn drop_element_returns_false_and_does_nothing_to_a_non_empty_vec() {
         let mut input = vec![42, 7];
         assert!(!drop_element(&mut input, &3));
-        assert_eq!(vec![42, 7], input);
+        assert_eq!(input, vec![42, 7]);
     }
 
     #[test]

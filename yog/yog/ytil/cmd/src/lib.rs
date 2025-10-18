@@ -171,8 +171,8 @@ mod tests {
 
         assert2::let_assert!(Ok(out) = cmd.exec());
         assert!(out.status.success());
-        assert_eq!("ok", String::from_utf8(out.stdout).unwrap());
-        assert_eq!("", String::from_utf8(out.stderr).unwrap());
+        assert_eq!(String::from_utf8(out.stdout).unwrap(), "ok");
+        assert_eq!(String::from_utf8(out.stderr).unwrap(), "");
     }
 
     #[test]
@@ -188,7 +188,7 @@ mod tests {
                 ..
             }) = cmd.exec()
         );
-        assert_eq!(Some(7), status.code());
+        assert_eq!(status.code(), Some(7));
         assert!(stderr.contains("foo err"));
         assert!(stdout.is_empty());
     }

@@ -245,7 +245,7 @@ mod tests {
     #[case("❌", "branch name construction produced empty string | args=[\n    \"❌\",\n]")]
     fn build_branch_name_fails_as_expected(#[case] input: &str, #[case] expected_output: &str) {
         assert2::let_assert!(Err(actual_error) = build_branch_name(&[input]));
-        assert_eq!(expected_output, format!("{actual_error}"));
+        assert_eq!(format!("{actual_error}"), expected_output);
     }
 
     #[rstest]
@@ -265,6 +265,6 @@ mod tests {
     #[case(&["dependabot/cargo/opentelemetry-0.27.1"], "dependabot/cargo/opentelemetry-0.27.1")]
     fn build_branch_name_succeeds_as_expected(#[case] input: &[&str], #[case] expected_output: &str) {
         assert2::let_assert!(Ok(actual_output) = build_branch_name(input));
-        assert_eq!(expected_output, actual_output);
+        assert_eq!(actual_output, expected_output);
     }
 }
