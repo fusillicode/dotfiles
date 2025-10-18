@@ -1,7 +1,7 @@
 //! Remove files or directories passed as CLI args (recursive for dirs).
 //!
-//! Strips trailing metadata suffix beginning at the last ':' in each argument (inclusive) before deletion.
-//! Useful when piping annotated paths (e.g. from linters or search tools emitting `path:line:col`).
+//! Strips trailing metadata suffix beginning at the first ':' in each argument (colon and suffix removed) before
+//! deletion. Useful when piping annotated paths (e.g. from linters or search tools emitting `path:line:col`).
 //!
 //! # Arguments
 //! - `<paths...>` One or more filesystem paths (files, symlinks, or directories). Optional trailing `:...` suffix is
@@ -43,7 +43,7 @@ fn main() -> color_eyre::Result<()> {
 
     let mut errors = false;
     for file in &files {
-        let trimmed = before_last_colon(file);
+        let trimmed = before_first_colon(file);
         let path = Path::new(&trimmed);
 
         match path.symlink_metadata() {
@@ -92,25 +92,22 @@ fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Returns a subslice of `s` up to (excluding) the last ':'; used to strip trailing metadata.
+/// Returns a subslice of `s` up to (excluding) the first ':'; strips everything from the first colon onward.
 ///
-/// Performs a reverse byte scan (ASCII match) without allocation.
+/// Performs a forward byte scan (ASCII match) without allocation.
 ///
 /// # Arguments
 /// - `s` Raw argument string potentially containing a suffix like `:line:col`.
 ///
 /// # Returns
-/// - Slice before the final ':'; original `s` if no ':' present.
+/// - Slice before the first ':'; original `s` if no ':' present.
 ///
 /// # Performance
-/// - Single reverse traversal `O(n)`; avoids UTF-8 decoding (colon is ASCII).
-/// - Faster than `rfind(':')` due to skipping pattern matching overhead.
-pub fn before_last_colon(s: &str) -> &str {
-    let bytes = s.as_bytes();
-    let mut i = bytes.len();
-    while i > 0 {
-        i -= 1;
-        if bytes[i] == b':' {
+/// - Single forward traversal `O(n)`; avoids UTF-8 decoding (colon is ASCII).
+/// - Simple explicit loop similar in cost to `find(':')`.
+pub fn before_first_colon(s: &str) -> &str {
+    for (i, &b) in s.as_bytes().iter().enumerate() {
+        if b == b':' {
             return &s[..i];
         }
     }
@@ -126,13 +123,16 @@ mod tests {
     #[rstest]
     #[case("hello", "hello")]
     #[case("alpha:", "alpha")]
-    #[case("one:two:three", "one:two")]
+    #[case("one:two:three", "one")]
     #[case(":rest", "")]
     #[case(":", "")]
     #[case("", "")]
-    #[case("\u{03C0}:\u{03C4}:\u{03C9}", "\u{03C0}:\u{03C4}")]
-    fn before_last_colon_when_various_inputs_returns_expected(#[case] input: &str, #[case] expected: &str) {
-        let out = before_last_colon(input);
+    #[case("\u{03C0}:\u{03C4}:\u{03C9}", "\u{03C0}")]
+    fn before_first_colon_when_various_inputs_strips_after_first_colon_returns_expected(
+        #[case] input: &str,
+        #[case] expected: &str,
+    ) {
+        let out = before_first_colon(input);
         pretty_assertions::assert_eq!(out, expected);
     }
 }
