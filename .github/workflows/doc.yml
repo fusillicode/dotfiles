@@ -11,10 +11,6 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
-  SCCACHE_DIR: /home/runner/.cache/sccache
-  SCCACHE_CACHE_SIZE: 3G
-  SCCACHE_FAIL_FAST: "1"
-
 concurrency:
   group: ${{ github.ref }}-doc
   cancel-in-progress: true
