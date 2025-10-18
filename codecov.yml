@@ -87,6 +87,10 @@ component_management:
       name: oe
       paths:
         - yog/oe/**
+    - component_id: rmr
+      name: rmr
+      paths:
+        - yog/rmr/**
     - component_id: tec
       name: tec
       paths:
