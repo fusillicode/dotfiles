@@ -198,6 +198,7 @@ mod tests {
     fn creds_try_from_returns_the_expected_creds() {
         assert2::let_assert!(Ok(actual) = ConnectionParams::try_from((42, "host:5432:db:user:pwd")));
         assert_eq!(
+            actual,
             ConnectionParams {
                 idx: 42,
                 host: "host".into(),
@@ -205,23 +206,22 @@ mod tests {
                 db: "db".into(),
                 user: "user".into(),
                 pwd: "pwd".into(),
-            },
-            actual
+            }
         );
     }
 
     #[test]
     fn creds_try_from_returns_an_error_if_port_is_not_a_number() {
         assert2::let_assert!(Err(error) = ConnectionParams::try_from((42, "host:foo:db:user:pwd")));
-        assert_eq!("unexpected port | port=foo", format!("{error}"));
+        assert_eq!(format!("{error}"), "unexpected port | port=foo");
     }
 
     #[test]
     fn creds_try_from_returns_an_error_if_str_is_malformed() {
         assert2::let_assert!(Err(error) = ConnectionParams::try_from((42, "host:5432:db:user")));
         assert_eq!(
-            "malformed pgpass connection line | idx_line=(\n    42,\n    \"host:5432:db:user\",\n)",
             format!("{error}"),
+            "malformed pgpass connection line | idx_line=(\n    42,\n    \"host:5432:db:user\",\n)",
             "unexpected {error}"
         );
     }
@@ -229,7 +229,6 @@ mod tests {
     #[test]
     fn creds_db_url_returns_the_expected_output() {
         assert_eq!(
-            "postgres://user@host:5432/db".to_string(),
             ConnectionParams {
                 idx: 42,
                 host: "host".into(),
@@ -238,7 +237,8 @@ mod tests {
                 user: "user".into(),
                 pwd: "whatever".into()
             }
-            .db_url()
+            .db_url(),
+            "postgres://user@host:5432/db".to_string()
         );
     }
 }

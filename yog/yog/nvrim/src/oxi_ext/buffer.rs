@@ -137,12 +137,12 @@ mod tests {
     #[test]
     fn cursor_position_adjusted_col_when_zero_returns_one() {
         let pos = CursorPosition { row: 1, col: 0 };
-        pretty_assertions::assert_eq!(1, pos.adjusted_col());
+        pretty_assertions::assert_eq!(pos.adjusted_col(), 1);
     }
 
     #[test]
     fn cursor_position_adjusted_col_when_non_zero_increments_by_one() {
         let pos = CursorPosition { row: 10, col: 7 };
-        pretty_assertions::assert_eq!(8, pos.adjusted_col());
+        pretty_assertions::assert_eq!(pos.adjusted_col(), 8);
     }
 }

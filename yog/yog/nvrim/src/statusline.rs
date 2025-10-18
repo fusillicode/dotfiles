@@ -214,7 +214,7 @@ mod tests {
                 cursor_position: CursorPosition { row: 42, col: 7 },
             },
         ] {
-            pretty_assertions::assert_eq!("%#StatusLine#foo %m %r%=%#StatusLine# 42:8", statusline.draw());
+            pretty_assertions::assert_eq!(statusline.draw(), "%#StatusLine#foo %m %r%=%#StatusLine# 42:8");
         }
     }
 
@@ -229,12 +229,12 @@ mod tests {
             cursor_position: CursorPosition { row: 42, col: 7 },
         };
         pretty_assertions::assert_eq!(
+            statusline.draw(),
             format!(
                 "%#DiagnosticStatusLineError#{}:3 %#DiagnosticStatusLineInfo#{}:1 %#StatusLine#foo %m %r%=%#StatusLine# 42:8",
                 DiagnosticSeverity::Error,
                 DiagnosticSeverity::Info
             ),
-            statusline.draw()
         );
     }
 
@@ -249,12 +249,12 @@ mod tests {
             cursor_position: CursorPosition { row: 42, col: 7 },
         };
         pretty_assertions::assert_eq!(
+            statusline.draw(),
             format!(
                 "%#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#{}:3 %#DiagnosticStatusLineInfo#{}:1%#StatusLine# 42:8",
                 DiagnosticSeverity::Error,
                 DiagnosticSeverity::Info
             ),
-            statusline.draw()
         );
     }
 
@@ -271,6 +271,7 @@ mod tests {
             cursor_position: CursorPosition { row: 42, col: 7 },
         };
         pretty_assertions::assert_eq!(
+            statusline.draw(),
             format!(
                 "%#DiagnosticStatusLineWarn#{}:2 %#DiagnosticStatusLineHint#{}:3 %#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#{}:3 %#DiagnosticStatusLineInfo#{}:1%#StatusLine# 42:8",
                 DiagnosticSeverity::Warn,
@@ -278,7 +279,6 @@ mod tests {
                 DiagnosticSeverity::Error,
                 DiagnosticSeverity::Info
             ),
-            statusline.draw()
         );
     }
 
@@ -294,12 +294,12 @@ mod tests {
             cursor_position: CursorPosition { row: 42, col: 7 },
         };
         pretty_assertions::assert_eq!(
+            statusline.draw(),
             format!(
                 "%#DiagnosticStatusLineWarn#{}:1 %#DiagnosticStatusLineHint#{}:5 %#StatusLine#foo %m %r%=%#StatusLine# 42:8",
                 DiagnosticSeverity::Warn,
                 DiagnosticSeverity::Hint
             ),
-            statusline.draw()
         );
     }
 
@@ -336,6 +336,7 @@ mod tests {
             cursor_position: CursorPosition { row: 42, col: 7 },
         };
         pretty_assertions::assert_eq!(
+            statusline.draw(),
             format!(
                 "%#DiagnosticStatusLineError#{}:4 %#DiagnosticStatusLineWarn#{}:3 %#DiagnosticStatusLineInfo#{}:2 %#DiagnosticStatusLineHint#{}:1 %#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#{}:8 %#DiagnosticStatusLineWarn#{}:7 %#DiagnosticStatusLineInfo#{}:6 %#DiagnosticStatusLineHint#{}:5%#StatusLine# 42:8",
                 DiagnosticSeverity::Error,
@@ -347,7 +348,6 @@ mod tests {
                 DiagnosticSeverity::Info,
                 DiagnosticSeverity::Hint
             ),
-            statusline.draw()
         );
     }
 
@@ -360,7 +360,7 @@ mod tests {
             workspace_diags: HashMap::new(),
             cursor_position: CursorPosition { row: 10, col: 0 },
         };
-        pretty_assertions::assert_eq!("%#StatusLine#foo %m %r%=%#StatusLine# 10:1", statusline.draw());
+        pretty_assertions::assert_eq!(statusline.draw(), "%#StatusLine#foo %m %r%=%#StatusLine# 10:1");
     }
 
     #[test]
@@ -372,6 +372,6 @@ mod tests {
             workspace_diags: HashMap::new(),
             cursor_position: CursorPosition { row: 10, col: 5 },
         };
-        pretty_assertions::assert_eq!("%#StatusLine#foo %m %r%=%#StatusLine# 10:6", statusline.draw());
+        pretty_assertions::assert_eq!(statusline.draw(), "%#StatusLine#foo %m %r%=%#StatusLine# 10:6");
     }
 }

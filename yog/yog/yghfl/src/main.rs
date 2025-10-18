@@ -167,7 +167,7 @@ mod tests {
 
             // Assert
             let expected = Path::new("/Users/Foo/src/bar/baz.rs").to_path_buf();
-            assert_eq!(expected, result.unwrap());
+            assert_eq!(result.unwrap(), expected);
         });
     }
 

@@ -583,7 +583,7 @@ mod tests {
     )]
     fn remove_redundant_remotes_cases(#[case] mut input: Vec<Branch>, #[case] expected: Vec<Branch>) {
         remove_redundant_remotes(&mut input);
-        assert_eq!(expected, input);
+        assert_eq!(input, expected);
     }
 
     #[rstest]
@@ -599,7 +599,7 @@ mod tests {
         #[case] expected: bool,
     ) {
         let entry = entry(index_state, worktree_state);
-        assert_eq!(expected, entry.is_new());
+        assert_eq!(entry.is_new(), expected);
     }
 
     #[rstest]

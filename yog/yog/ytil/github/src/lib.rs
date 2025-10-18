@@ -226,7 +226,7 @@ mod tests {
     fn extract_pr_id_form_url_returns_the_expected_error_when_host_cannot_be_extracted() {
         let url = Url::parse("mailto:foo@bar.com").unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_url(&url));
-        assert_eq!("cannot extract host from mailto:foo@bar.com", error.to_string());
+        assert_eq!(error.to_string(), "cannot extract host from mailto:foo@bar.com");
     }
 
     #[test]
@@ -282,20 +282,20 @@ mod tests {
     #[test]
     fn extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_that_ends_with_the_pr_id() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/pull/42")).unwrap();
-        assert_eq!("42", extract_pr_id_form_url(&url).unwrap());
+        assert_eq!(extract_pr_id_form_url(&url).unwrap(), "42");
     }
 
     #[test]
     fn extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_that_does_not_end_with_the_pr_id() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/pull/42/foo")).unwrap();
-        assert_eq!("42", extract_pr_id_form_url(&url).unwrap());
+        assert_eq!(extract_pr_id_form_url(&url).unwrap(), "42");
     }
 
     #[test]
     fn extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_if_pr_id_prefix_is_not_1st_path_segment()
     {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/foo/pull/42/foo")).unwrap();
-        assert_eq!("42", extract_pr_id_form_url(&url).unwrap());
+        assert_eq!(extract_pr_id_form_url(&url).unwrap(), "42");
     }
 
     #[test]
@@ -304,13 +304,13 @@ mod tests {
             "https://{GITHUB_HOST}/<OWNER>/<REPO>/actions/runs/<RUN_ID>?pr=42"
         ))
         .unwrap();
-        assert_eq!("42", extract_pr_id_form_url(&url).unwrap());
+        assert_eq!(extract_pr_id_form_url(&url).unwrap(), "42");
 
         let url = Url::parse(&format!(
             "https://{GITHUB_HOST}/<OWNER>/<REPO>/actions/runs/<RUN_ID>/job/<JOB_ID>?pr=42"
         ))
         .unwrap();
-        assert_eq!("42", extract_pr_id_form_url(&url).unwrap());
+        assert_eq!(extract_pr_id_form_url(&url).unwrap(), "42");
     }
 
     #[rstest]
@@ -318,6 +318,6 @@ mod tests {
     #[case("https://github.com/fusillicode/dotfiles", Url::parse("https://github.com/fusillicode/dotfiles").unwrap())]
     fn parse_github_url_from_git_remote_url_works_as_expected(#[case] input: &str, #[case] expected: Url) {
         let result = parse_github_url_from_git_remote_url(input).unwrap();
-        assert_eq!(expected, result);
+        assert_eq!(result, expected);
     }
 }

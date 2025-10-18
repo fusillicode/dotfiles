@@ -132,7 +132,6 @@ mod tests {
         #[case] input: &str,
         #[case] expected: &str,
     ) {
-        let out = before_first_colon(input);
-        pretty_assertions::assert_eq!(out, expected);
+        pretty_assertions::assert_eq!(before_first_colon(input), expected);
     }
 }

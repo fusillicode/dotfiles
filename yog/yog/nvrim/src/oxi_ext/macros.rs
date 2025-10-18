@@ -62,7 +62,7 @@ mod tests {
     #[test]
     fn dict_macro_empty_creates_empty_dictionary() {
         let actual = dict!();
-        assert_eq!(0, actual.len());
+        assert_eq!(actual.len(), 0);
     }
 
     #[test]
@@ -73,7 +73,7 @@ mod tests {
             ("foo", Object::from(1)),
             ("num", Object::from(3i64)),
         ]);
-        assert_eq!(expected, actual);
+        assert_eq!(actual, expected);
     }
 
     #[test]
@@ -82,7 +82,7 @@ mod tests {
         let inner = dict! { inner_key: "value" };
         let actual = dict! { (k): 10i64, "beta": inner.clone() };
         let expected = Dictionary::from_iter([("alpha", Object::from(10i64)), ("beta", Object::from(inner))]);
-        assert_eq!(expected, actual);
+        assert_eq!(actual, expected);
     }
 
     #[test]
@@ -92,28 +92,28 @@ mod tests {
         assert!(msg.starts_with("missing dict value |"), "actual: {msg}");
         assert!(msg.contains("query=[\n    \"bar\",\n]"), "actual: {msg}");
         assert!(msg.contains("dict={ foo: \"42\" }"), "actual: {msg}");
-        assert_eq!("42", dict.get_t::<nvim_oxi::String>("foo").unwrap());
+        assert_eq!(dict.get_t::<nvim_oxi::String>("foo").unwrap(), "42");
 
         let dict = dict! { "foo": 42 };
         assert_eq!(
-            r#"value 42 of key "foo" in dict { foo: 42 } is Integer but String was expected"#,
-            dict.get_t::<nvim_oxi::String>("foo").unwrap_err().to_string()
+            dict.get_t::<nvim_oxi::String>("foo").unwrap_err().to_string(),
+            r#"value 42 of key "foo" in dict { foo: 42 } is Integer but String was expected"#
         );
     }
 
     #[test]
     fn dictionary_ext_get_dict_works_as_expected() {
         let dict = dict! { "foo": "42" };
-        assert_eq!(None, dict.get_dict(&["bar"]).unwrap());
+        assert_eq!(dict.get_dict(&["bar"]).unwrap(), None);
 
         let dict = dict! { "foo": 42 };
         assert_eq!(
-            r#"value 42 of key "foo" in dict { foo: 42 } is Integer but Dictionary was expected"#,
-            dict.get_dict(&["foo"]).unwrap_err().to_string()
+            dict.get_dict(&["foo"]).unwrap_err().to_string(),
+            r#"value 42 of key "foo" in dict { foo: 42 } is Integer but Dictionary was expected"#
         );
 
         let expected = dict! { "bar": "42" };
         let dict = dict! { "foo": expected.clone() };
-        assert_eq!(Some(expected), dict.get_dict(&["foo"]).unwrap());
+        assert_eq!(dict.get_dict(&["foo"]).unwrap(), Some(expected));
     }
 }

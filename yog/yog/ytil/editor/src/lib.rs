@@ -127,10 +127,10 @@ mod tests {
             line_nbr: 12,
             column: 5,
         };
-        assert_eq!("':o src/main.rs:12'", Editor::Hx.open_file_cmd(&file));
+        assert_eq!(Editor::Hx.open_file_cmd(&file), "':o src/main.rs:12'");
         assert_eq!(
-            ":e src/main.rs | :call cursor(12, 5)",
-            Editor::Nvim.open_file_cmd(&file)
+            Editor::Nvim.open_file_cmd(&file),
+            ":e src/main.rs | :call cursor(12, 5)"
         );
     }
 
@@ -161,7 +161,7 @@ mod tests {
             line_nbr: 0,
             column: 0,
         };
-        assert_eq!(expected, f0);
+        assert_eq!(f0, expected);
 
         assert2::let_assert!(Ok(f1) = FileToOpen::from_str(&format!("{dummy_path}:3")));
         let expected = FileToOpen {
@@ -169,7 +169,7 @@ mod tests {
             line_nbr: 3,
             column: 0,
         };
-        assert_eq!(expected, f1);
+        assert_eq!(f1, expected);
 
         assert2::let_assert!(Ok(f2) = FileToOpen::from_str(&format!("{dummy_path}:3:7")));
         let expected = FileToOpen {
@@ -177,7 +177,7 @@ mod tests {
             line_nbr: 3,
             column: 7,
         };
-        assert_eq!(expected, f2);
+        assert_eq!(f2, expected);
     }
 
     #[test]
@@ -207,7 +207,7 @@ mod tests {
             line_nbr: 0,
             column: 0,
         };
-        assert_eq!(expected, file);
+        assert_eq!(file, expected);
     }
 
     fn pane_with(pane_id: i64, tab_id: i64, cwd_fs: &std::path::Path) -> WeztermPane {

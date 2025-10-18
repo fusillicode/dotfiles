@@ -42,7 +42,7 @@ fn rmr_with_nonexistent_path_returns_error_exit_code() {
 
     assert2::let_assert!(Ok(status) = res);
     assert2::let_assert!(Some(actual_exit_code) = status.code());
-    pretty_assertions::assert_eq!(1, actual_exit_code);
+    pretty_assertions::assert_eq!(actual_exit_code, 1);
 }
 
 fn run_rmr(args: &[&str]) -> std::io::Result<ExitStatus> {

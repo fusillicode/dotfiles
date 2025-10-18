@@ -94,7 +94,7 @@ mod tests {
             position: HxCursorPosition { line: 42, column: 33 },
         };
 
-        assert_eq!(expected, result.unwrap());
+        assert_eq!(result.unwrap(), expected);
     }
 
     #[test]
@@ -107,6 +107,6 @@ mod tests {
             position: HxCursorPosition { line: 33, column: 42 },
         };
 
-        assert_eq!(expected, result.unwrap());
+        assert_eq!(result.unwrap(), expected);
     }
 }

@@ -225,7 +225,7 @@ mod tests {
             DiagnosticSeverity::Other,
         ];
         let collected: Vec<DiagnosticSeverity> = DiagnosticSeverity::iter().collect();
-        pretty_assertions::assert_eq!(expected.as_slice(), collected.as_slice());
+        pretty_assertions::assert_eq!(collected.as_slice(), expected.as_slice());
     }
 
     #[rstest]
