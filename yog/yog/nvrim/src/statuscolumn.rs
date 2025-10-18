@@ -20,6 +20,17 @@ pub fn dict() -> Dictionary {
 }
 
 /// Draws the status column for the current buffer.
+///
+/// # Returns
+/// - `Some(String)`: formatted status column when the current buffer `buftype` is successfully retrieved.
+/// - `None`: if `buftype` retrieval fails (details logged via [`crate::oxi_ext::api::notify_error`]).
+///
+/// Special cases:
+/// - When `buftype == "grug-far"` returns a single space string to minimize visual noise in transient search buffers.
+///
+/// # Rationale
+/// Using `Option<String>` (instead of empty placeholder) allows caller-side distinction between an intentional blank
+/// status column (special buffer type) and an error acquiring required state.
 fn draw((cur_lnum, extmarks): (String, Vec<Extmark>)) -> Option<String> {
     let cur_buf = Buffer::current();
     let opts = OptionOptsBuilder::default().buf(cur_buf.clone()).build();
@@ -202,6 +213,13 @@ struct Statuscolumn {
 
 impl Statuscolumn {
     /// Draws the status column based on buffer type and [`ExtmarkMeta`].
+    ///
+    /// Special case:
+    /// - Returns a single space (`" "`) when `cur_buf_type == "grug-far"` to avoid clutter in grug-far search buffers.
+    ///
+    /// # Rationale
+    /// Rendering a minimal placeholder for special buffer types keeps alignment predictable without introducing
+    /// diagnostic / git sign artifacts that are irrelevant in those contexts.
     fn draw(cur_buf_type: &str, cur_lnum: String, extmarks: Vec<ExtmarkMeta>) -> String {
         match cur_buf_type {
             "grug-far" => " ".into(),
