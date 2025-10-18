@@ -12,6 +12,7 @@ members = [
     "yog/nomicon",
     "yog/nvrim",
     "yog/oe",
+    "yog/rmr",
     "yog/tec",
     "yog/try",
     "yog/vpg",
@@ -56,6 +57,7 @@ rstest = { version = "0.26" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 strum = { version = "0.27", features = ["derive"] }
+tempfile = { version = "3.13" }
 thiserror = { version = "2.0" }
 url = { version = "2.5", features = ["serde"] }
 

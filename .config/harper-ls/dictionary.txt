@@ -149,6 +149,7 @@ statuscolumn
 statusline
 stderr
 stdout
+subslice
 t.
 tokio
 toml

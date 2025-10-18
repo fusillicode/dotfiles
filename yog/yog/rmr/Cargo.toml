@@ -1,20 +1,21 @@
 [package]
-name = "ytil_system"
+name = "rmr"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "Work with system paths, time, clipboard, and files."
-keywords = ["system", "time", "io", "environment", "platform"]
+description = ""
+keywords = ["cli", "rm", "command"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-chrono = { workspace = true }
 color-eyre = { workspace = true }
-ytil_cmd = { workspace = true }
+ytil_system = { workspace = true }
 
 [dev-dependencies]
 assert2 = { workspace = true }
-tempfile = { workspace = true }
+pretty_assertions = { workspace = true }
+rstest = { workspace = true }
+tempfile = "3.10"
