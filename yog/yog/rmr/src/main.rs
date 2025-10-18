@@ -105,7 +105,7 @@ fn main() -> color_eyre::Result<()> {
 /// # Performance
 /// - Single forward traversal `O(n)`; avoids UTF-8 decoding (colon is ASCII).
 /// - Simple explicit loop similar in cost to `find(':')`.
-pub fn before_first_colon(s: &str) -> &str {
+fn before_first_colon(s: &str) -> &str {
     for (i, &b) in s.as_bytes().iter().enumerate() {
         if b == b':' {
             return &s[..i];
