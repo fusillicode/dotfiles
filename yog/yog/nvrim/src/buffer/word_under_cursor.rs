@@ -194,7 +194,7 @@ mod tests {
     fn get_word_at_index_returns_word_inside_ascii_word() {
         let s = "open file.txt now";
         let idx = 7;
-        assert_eq!(Some("file.txt"), get_word_at_index(s, idx));
+        assert_eq!(get_word_at_index(s, idx), Some("file.txt"));
     }
 
     #[test]
@@ -202,43 +202,43 @@ mod tests {
         let s = "yes run main.rs";
         let idx_start = 8;
         let idx_last_inside = 14;
-        assert_eq!(Some("main.rs"), get_word_at_index(s, idx_start));
-        assert_eq!(Some("main.rs"), get_word_at_index(s, idx_last_inside));
+        assert_eq!(get_word_at_index(s, idx_start), Some("main.rs"));
+        assert_eq!(get_word_at_index(s, idx_last_inside), Some("main.rs"));
     }
 
     #[test]
     fn get_word_at_index_returns_none_on_whitespace() {
         let s = "hello  world";
-        assert_eq!(None, get_word_at_index(s, 5));
-        assert_eq!(None, get_word_at_index(s, 6));
+        assert_eq!(get_word_at_index(s, 5), None);
+        assert_eq!(get_word_at_index(s, 6), None);
     }
 
     #[test]
     fn get_word_at_index_includes_punctuation_in_word() {
         let s = "print(arg)";
         let idx = 5;
-        assert_eq!(Some("print(arg)"), get_word_at_index(s, idx));
+        assert_eq!(get_word_at_index(s, idx), Some("print(arg)"));
     }
 
     #[test]
     fn get_word_at_index_returns_word_at_line_boundaries() {
         let s = "/usr/local/bin";
-        assert_eq!(Some("/usr/local/bin"), get_word_at_index(s, 0));
-        assert_eq!(Some("/usr/local/bin"), get_word_at_index(s, 14));
+        assert_eq!(get_word_at_index(s, 0), Some("/usr/local/bin"));
+        assert_eq!(get_word_at_index(s, 14), Some("/usr/local/bin"));
     }
 
     #[test]
     fn get_word_at_index_handles_utf8_boundaries_and_space() {
         let s = "αβ γ";
-        assert_eq!(Some("αβ"), get_word_at_index(s, 0));
-        assert_eq!(Some("αβ"), get_word_at_index(s, 1));
-        assert_eq!(Some("γ"), get_word_at_index(s, 4));
-        assert_eq!(None, get_word_at_index(s, 5));
+        assert_eq!(get_word_at_index(s, 0), Some("αβ"));
+        assert_eq!(get_word_at_index(s, 1), Some("αβ"));
+        assert_eq!(get_word_at_index(s, 4), Some("γ"));
+        assert_eq!(get_word_at_index(s, 5), None);
     }
 
     #[test]
     fn get_word_at_index_returns_none_with_index_out_of_bounds() {
         let s = "abc";
-        assert_eq!(None, get_word_at_index(s, 10));
+        assert_eq!(get_word_at_index(s, 10), None);
     }
 }

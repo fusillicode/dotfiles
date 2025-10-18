@@ -181,7 +181,7 @@ mod tests {
             "source": "sqruff".to_string(),
             "severity": DiagnosticSeverity::Warn.to_number(),
         };
-        pretty_assertions::assert_eq!(expected, res);
+        pretty_assertions::assert_eq!(res, expected);
     }
 
     #[test]
@@ -191,7 +191,7 @@ mod tests {
         });
 
         assert2::let_assert!(Ok(parsed) = serde_json::from_value::<SqruffOutput>(value));
-        pretty_assertions::assert_eq!(SqruffOutput { messages: vec![] }, parsed);
+        pretty_assertions::assert_eq!(parsed, SqruffOutput { messages: vec![] });
     }
 
     #[test]
@@ -210,6 +210,7 @@ mod tests {
 
         assert2::let_assert!(Ok(res) = serde_json::from_value::<SqruffOutput>(value));
         pretty_assertions::assert_eq!(
+            res,
             SqruffOutput {
                 messages: vec![SqruffMessage {
                     code: Some("R001".into()),
@@ -221,8 +222,7 @@ mod tests {
                     severity: DiagnosticSeverity::Warn,
                     source: "sqruff".into(),
                 }],
-            },
-            res
+            }
         );
     }
 
@@ -249,6 +249,7 @@ mod tests {
 
         assert2::let_assert!(Ok(res) = serde_json::from_value::<SqruffOutput>(value));
         pretty_assertions::assert_eq!(
+            res,
             SqruffOutput {
                 messages: vec![
                     SqruffMessage {
@@ -272,8 +273,7 @@ mod tests {
                         source: "sqruff".into(),
                     },
                 ],
-            },
-            res
+            }
         );
     }
 }
