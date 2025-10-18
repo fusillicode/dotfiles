@@ -11,7 +11,7 @@
 //! - Result reporting joins threads in declaration order; a long first lint can delay visible output, potentially
 //!   giving a false impression of serial execution.
 //! - Prints each lint result with: success/error, duration (`time=<Duration>`), status code, stripped stdout or error.
-//! - Exits 1 if any lint fails (non-zero exit status) or a thread panics; otherwise exits 0.
+//! - Exits with code 1 if any lint command returns a non-zero status, any lint command invocation errors, or any lint thread panics; exits 0 otherwise.
 //!
 //! # Returns
 //! - Process exit code communicates aggregate success (0) or failure (1).
@@ -129,15 +129,15 @@ fn main() -> color_eyre::Result<()> {
     let fix_mode = args.first().is_some_and(|s| s == "--fix");
 
     let (start_msg, lints) = if fix_mode {
-        ("Lints fix", LINTS_FIX)
+        ("lints fix", LINTS_FIX)
     } else {
-        ("Lints check", LINTS_CHECK)
+        ("lints check", LINTS_CHECK)
     };
 
     let workspace_root = ytil_system::get_workspace_root()?;
 
     println!(
-        "\n{} {} in {}\n",
+        "\nRunning {} {} in {}\n",
         start_msg.cyan().bold(),
         format!("{:#?}", lints.iter().map(|(lint, _)| lint).collect::<Vec<_>>())
             .white()
@@ -153,99 +153,88 @@ fn main() -> color_eyre::Result<()> {
                 lint_name,
                 std::thread::spawn({
                     let workspace_root = workspace_root.clone();
-                    move || run_and_time_lint(&workspace_root, *lint_fn)
+                    move || run_and_report(lint_name, &workspace_root, *lint_fn)
                 }),
             )
         })
         .collect();
 
-    let mut errors = false;
-    for (lint_name, handle) in lints_handles {
-        let lint_res = handle.join();
-        if lint_res.is_err() {
-            errors = true;
-        }
-        if report(lint_name, &lint_res) {
-            errors = true;
+    let mut errors_count: i32 = 0;
+    for (_lint_name, handle) in lints_handles {
+        match handle.join() {
+            Ok(Ok(_)) => (),
+            Ok(Err(_)) => {
+                errors_count = errors_count.saturating_add(1);
+            }
+            Err(join_err) => {
+                errors_count = errors_count.saturating_add(1);
+                eprintln!(
+                    "{} error={}",
+                    "Error joining thread".red().bold(),
+                    format!("{join_err:#?}").red()
+                );
+            }
         }
     }
 
     println!(); // Cosmetic spacing.
 
-    if errors {
+    if errors_count > 0 {
         std::process::exit(1);
     }
 
     Ok(())
 }
 
-/// Execute a single lint runner and measure wall-clock duration.
+/// Run a single lint, measure its duration, and report immediately.
 ///
 /// # Arguments
-/// - `path` Workspace root path the lint should operate in.
+/// - `lint_name` Human-friendly logical name of the lint (e.g. "clippy").
+/// - `path` Workspace root path the lint operates in.
 /// - `run` Function pointer executing the lint and returning its captured [`Output`].
 ///
 /// # Returns
-/// [`TimedLintFn`] bundling the underlying lint result with elapsed duration.
+/// - `true` if the lint failed (non-zero exit code or command execution error).
+/// - `false` if the lint succeeded.
 ///
 /// # Rationale
-/// Centralizes timing logic so the thread spawn closure stays minimal and
-/// future changes (e.g. high-resolution timing, tracing spans) occur in one place.
-fn run_and_time_lint(path: &Path, run: LintFn) -> TimedLintFn {
+/// Collapses the previous two‑step pattern (timing + later reporting) into one
+/// function so thread closures stay minimal and result propagation is explicit.
+/// This also prevents losing the error flag (a regression after refactor).
+fn run_and_report(lint_name: &str, path: &Path, run: LintFn) -> Result<Output, CmdError> {
     let start = Instant::now();
-    let res = run(path);
-    TimedLintFn {
-        duration: start.elapsed(),
-        result: res,
-    }
+    let lint_res = run(path);
+    report(lint_name, &lint_res, start.elapsed());
+    lint_res
 }
 
-/// Result of a single lint execution with timing.
-struct TimedLintFn {
-    duration: Duration,
-    result: color_eyre::Result<Output, CmdError>,
-}
-
-/// Report a single lint result produced by a joined thread.
-///
-/// Prints a colored success or error line including status code, duration (ms), and stripped stdout.
-/// Returns true if an error (lint failure or join panic) occurred.
+/// Format and print the result of a completed lint execution.
 ///
 /// # Arguments
 /// - `lint_name` Logical name of the lint (e.g. "clippy").
-/// - `lint_res` The join result wrapping a [`LintFn`] (timed result).
+/// - `lint_res` Result returned by executing the [`LintFn`].
+/// - `elapsed` Wall‑clock duration of the lint.
+///
+/// # Returns
+/// - `true` if the lint failed (command error / non-zero exit status).
+/// - `false` on success.
 ///
 /// # Rationale
-/// Isolates formatting concerns from the control flow in [`main`].
-fn report(lint_name: &str, lint_res: &std::thread::Result<TimedLintFn>) -> bool {
+/// Keeps output formatting separate from orchestration logic in [`main`]; enables
+/// alternate reporters (JSON, terse) later without threading timing logic everywhere.
+fn report(lint_name: &str, lint_res: &Result<Output, CmdError>, elapsed: Duration) {
     match lint_res {
-        Ok(TimedLintFn {
-            duration,
-            result: Ok(output),
-        }) => {
+        Ok(output) => {
             println!(
                 "{} {} status={:?} \n{}",
                 lint_name.green().bold(),
-                format_timing(*duration),
+                format_timing(elapsed),
                 output.status.code(),
                 str::from_utf8(&output.stdout).unwrap_or_default()
             );
-            false
         }
-        Ok(TimedLintFn {
-            duration,
-            result: Err(error),
-        }) => {
-            eprintln!("{} {} \n{error}", lint_name.red().bold(), format_timing(*duration));
-            true
-        }
-        Err(join_err) => {
-            eprintln!(
-                "{} error={}",
-                "Error joining thread".red().bold(),
-                format!("{join_err:#?}").red()
-            );
-            true
+        Err(error) => {
+            eprintln!("{} {} \n{error}", lint_name.red().bold(), format_timing(elapsed));
         }
     }
 }
