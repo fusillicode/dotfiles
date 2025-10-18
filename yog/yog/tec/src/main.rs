@@ -11,7 +11,8 @@
 //! - Result reporting joins threads in declaration order; a long first lint can delay visible output, potentially
 //!   giving a false impression of serial execution.
 //! - Prints each lint result with: success/error, duration (`time=<Duration>`), status code, stripped stdout or error.
-//! - Exits with code 1 if any lint command returns a non-zero status, any lint command invocation errors, or any lint thread panics; exits 0 otherwise.
+//! - Exits with code 1 if any lint command returns a non-zero status, any lint command invocation errors, or any lint
+//!   thread panics; exits 0 otherwise.
 //!
 //! # Returns
 //! - Process exit code communicates aggregate success (0) or failure (1).
@@ -201,11 +202,11 @@ fn main() -> color_eyre::Result<()> {
 /// Collapses the previous two‑step pattern (timing + later reporting) into one
 /// function so thread closures stay minimal and result propagation is explicit.
 /// This also prevents losing the error flag (a regression after refactor).
-fn run_and_report(lint_name: &str, path: &Path, run: LintFn) -> Result<Output, CmdError> {
+fn run_and_report(lint_name: &str, path: &Path, run: LintFn) -> Result<Output, Box<CmdError>> {
     let start = Instant::now();
     let lint_res = run(path);
     report(lint_name, &lint_res, start.elapsed());
-    lint_res
+    lint_res.map_err(Box::new)
 }
 
 /// Format and print the result of a completed lint execution.
