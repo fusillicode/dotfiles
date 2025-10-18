@@ -55,19 +55,19 @@ fn main() -> color_eyre::Result<()> {
 
     let git_status_entries = ytil_git::get_status()?;
     if git_status_entries.is_empty() {
-        println!("{}", "Working tree clean".bold());
+        println!("Working tree clean");
         return Ok(());
     }
 
     let renderable_entries = git_status_entries.into_iter().map(RenderableGitStatusEntry).collect();
 
     let Some(selected_entries) = ytil_tui::minimal_multi_select::<RenderableGitStatusEntry>(renderable_entries)? else {
-        println!("\n\n{}", "Nothing done".bold());
+        println!("\n\nNo entries selected");
         return Ok(());
     };
 
     let Some(selected_op) = ytil_tui::minimal_select::<Op>(Op::iter().collect())? else {
-        println!("\n\n{}", "Nothing done".bold());
+        println!("\n\nNothing operation selected");
         return Ok(());
     };
 
