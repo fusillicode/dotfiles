@@ -156,14 +156,14 @@ impl core::fmt::Display for RenderablePullRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let state = match self.merge_state {
             PullRequestMergeState::Behind => "Behind".yellow().bold().to_string(),
-            PullRequestMergeState::Blocked => "Blocked".red().bold().to_string(),
+            PullRequestMergeState::Blocked => "Blocked".red().to_string(),
             PullRequestMergeState::Clean => "Clean".green().to_string(),
             PullRequestMergeState::Dirty => "Dirty".red().bold().to_string(),
             PullRequestMergeState::Draft => "Draft".blue().bold().to_string(),
-            PullRequestMergeState::HasHooks => "HasHooks".magenta().bold().to_string(),
-            PullRequestMergeState::Unknown => "Unknown".bold().to_string(),
+            PullRequestMergeState::HasHooks => "HasHooks".magenta().to_string(),
+            PullRequestMergeState::Unknown => "Unknown".to_string(),
             PullRequestMergeState::Unmergeable => "Unmergeable".red().bold().to_string(),
-            PullRequestMergeState::Unstable => "Unstable".red().bold().to_string(),
+            PullRequestMergeState::Unstable => "Unstable".magenta().bold().to_string(),
         };
         write!(
             f,
