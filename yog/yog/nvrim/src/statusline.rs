@@ -27,6 +27,15 @@ pub fn dict() -> Dictionary {
 }
 
 /// Draws the status line with diagnostic information.
+///
+/// # Returns
+/// - `Some(String)`: formatted statusline when buffer name, cwd, and cursor position retrieval succeed.
+/// - `None`: if any prerequisite retrieval fails (buffer name, cwd, or cursor position). An error is logged via
+///   [`crate::oxi_ext::api::notify_error`].
+///
+/// # Rationale
+/// Returning `None` lets callers distinguish between a valid (possibly empty diagnostics) statusline and a data
+/// acquisition failure.
 fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
     let cur_buf = nvim_oxi::api::get_current_buf();
     let cur_buf_path = cur_buf
@@ -151,6 +160,15 @@ impl Statusline<'_> {
 }
 
 /// Draws the diagnostic count for this severity.
+///
+/// # Returns
+/// - An empty `String` when `diags_count == 0` so zero-count severities can be cleanly filtered out during join
+///   operations.
+/// - A formatted segment `%#<HlGroup>#<severity>:<count>` otherwise.
+///
+/// # Rationale
+/// Emitting an empty string (instead of e.g. a placeholder) keeps downstream formatting simple and avoids stray spaces
+/// after `join(" ")`.
 fn draw_diagnostics(severity: DiagnosticSeverity, diags_count: i32) -> String {
     if diags_count == 0 {
         return String::new();
