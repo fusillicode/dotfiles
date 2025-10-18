@@ -18,6 +18,8 @@ pub fn filters() -> Vec<Box<dyn DiagnosticsFilter>> {
             "stdin".into(),
             "insert `to` to complete the infinitive".into(),
             "did you mean to spell `s` this way".into(),
+            "not the possessive `its`".into(),
+            "`argument` instead of `arg`".into(),
         ],
     })]
 }
