@@ -116,10 +116,12 @@ fn main() -> color_eyre::Result<()> {
     }
 
     let Some(selected_prs) = ytil_tui::minimal_multi_select::<RenderablePullRequest>(renderable_prs)? else {
+        println!("No PRs selected");
         return Ok(());
     };
 
     let Some(selected_op) = ytil_tui::minimal_select::<SelectableOp>(SelectableOp::iter().collect())? else {
+        println!("No operation selected");
         return Ok(());
     };
 
