@@ -32,8 +32,11 @@
 //! - Add parallel deletion (configurable) for large batches.
 //! - Accept glob patterns expanded internally (on platforms without shell globbing).
 
+use std::fs::Metadata;
 use std::path::Path;
 
+use color_eyre::Report;
+use color_eyre::eyre::bail;
 use color_eyre::owo_colors::OwoColorize;
 
 fn main() -> color_eyre::Result<()> {
@@ -41,60 +44,76 @@ fn main() -> color_eyre::Result<()> {
 
     let files = ytil_system::get_args();
 
-    let mut errors = false;
+    let mut any_errors = false;
     for file in &files {
-        let trimmed = before_first_colon(file);
-        let path = Path::new(&trimmed);
-
-        match path.symlink_metadata() {
-            Ok(metadata) => {
-                let ft = metadata.file_type();
-                if ft.is_file() || ft.is_symlink() {
-                    if let Err(error) = std::fs::remove_file(path) {
-                        errors = true;
-                        eprintln!(
-                            "Cannot delete file={} error={}",
-                            path.display(),
-                            format!("{error:?}").red()
-                        );
-                    }
-                    continue;
-                }
-                if ft.is_dir() {
-                    if let Err(error) = std::fs::remove_dir_all(path) {
-                        errors = true;
-                        eprintln!(
-                            "Cannot delete dir={} error={}",
-                            path.display(),
-                            format!("{error:?}").red()
-                        );
-                    }
-                    continue;
-                }
-                errors = true;
-                eprintln!("{}", format!("Not found path={}", path.display()).red());
-            }
-            Err(error) => {
-                errors = true;
-                eprintln!(
-                    "Cannot read metadata of path={} error={}",
-                    path.display(),
-                    format!("{error:?}").red()
-                );
-            }
+        if process(file).is_err() {
+            any_errors = true;
         }
     }
 
-    if errors {
+    if any_errors {
         std::process::exit(1);
     }
 
     Ok(())
 }
 
-/// Returns a subslice of `s` up to (excluding) the first ':'; strips everything from the first colon onward.
+/// Attempts to delete a single path argument after stripping any colon suffix.
 ///
-/// Performs a forward byte scan (ASCII match) without allocation.
+/// Performs metadata lookup, branches on filetype, and deletes files, symlinks,
+/// or directories. Emits colored error messages to stderr; caller accumulates
+/// failures. Always returns an error currently (success path ends in an error) -
+/// slated for refactor.
+///
+/// # Arguments
+/// - `file` Raw CLI argument possibly containing suffixes like `:line:col`.
+///
+/// # Returns
+/// - Presently always `Err`; future versions will distinguish success.
+///
+/// # Errors
+/// - I/O error during metadata retrieval (e.g. permissions, not found).
+/// - I/O error during deletion (file or directory removal).
+fn process(file: &str) -> color_eyre::Result<()> {
+    let trimmed = before_first_colon(file);
+    let path = Path::new(&trimmed);
+
+    path.symlink_metadata()
+        .map_err(|error| {
+            eprintln!(
+                "Cannot read metadata of path={} error={}",
+                path.display(),
+                format!("{error:?}").red()
+            );
+            Report::from(error)
+        })
+        .and_then(|metadata: Metadata| -> color_eyre::Result<()> {
+            let ft = metadata.file_type();
+            if ft.is_file() || ft.is_symlink() {
+                std::fs::remove_file(path).inspect_err(|error| {
+                    eprintln!(
+                        "Cannot delete file={} error={}",
+                        path.display(),
+                        format!("{error:?}").red()
+                    );
+                })?;
+                return Ok(());
+            }
+            if ft.is_dir() {
+                std::fs::remove_dir_all(path).inspect_err(|error| {
+                    eprintln!(
+                        "Cannot delete dir={} error={}",
+                        path.display(),
+                        format!("{error:?}").red()
+                    );
+                })?;
+                return Ok(());
+            }
+            bail!("{}", format!("Not found path={}", path.display()).red())
+        })
+}
+
+/// Strips suffix beginning at first ':'; returns subslice before colon.
 ///
 /// # Arguments
 /// - `s` Raw argument string potentially containing a suffix like `:line:col`.
