@@ -37,7 +37,44 @@ use color_eyre::owo_colors::OwoColorize;
 use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt as _;
 
+/// Function pointer type for a single lint command invocation.
+///
+/// Encapsulates a non-mutating check or (optionally) mutating fix routine executed against the workspace root.
+///
+/// # Arguments
+/// - `&Path` Workspace root directory the lint operates within.
+///
+/// # Returns
+/// - [`Output`] on success wrapped in `Ok` providing access to status code and captured stdout/stderr.
+/// - `Err` wrapping [`CmdError`] if process spawning or execution fails.
+///
+/// # Rationale
+/// Using a simple function pointer keeps dynamic dispatch trivial and avoids boxing trait objects; closures remain
+/// zero-cost and we can compose slices of `(name, LintFn)` without lifetime complications.
+///
+/// # Future Work
+/// - Consider an enum encapsulating richer metadata (e.g. auto-fix capability flag) to filter sets without duplicating
+///   entries across lists.
 type LintFn = fn(&Path) -> color_eyre::Result<Output, CmdError>;
+
+/// Shared `clippy` lint definition.
+///
+/// Performs a full workspace lint across all targets and features, denying any warnings (`-D warnings`). This is
+/// intentionally strict so CI / hooks surface new warnings immediately rather than allowing gradual drift.
+///
+/// # Rationale
+/// Centralizing the closure avoids duplication between [`LINTS_CHECK`] and [`LINTS_FIX`] and makes future flag
+/// adjustments (adding `--tests`, changing deny set) a single-line change.
+///
+/// # Performance
+/// `cargo clippy` can be relatively expensive versus formatting or sorting tools. Placing it first provides early
+/// feedback for a potentially longest-running lint while other shorter lints execute concurrently.
+const CLIPPY: (&str, LintFn) = ("clippy", |path| {
+    Command::new("cargo")
+        .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
+        .current_dir(path)
+        .exec()
+});
 
 /// Workspace lint check set.
 ///
@@ -52,12 +89,7 @@ type LintFn = fn(&Path) -> color_eyre::Result<Output, CmdError>;
 /// - Prints logical name, duration (`time=<Duration>`), status code, and stripped stdout or error.
 /// - Aggregate process exit code is 1 if any lint fails (non-zero status or panic), else 0.
 const LINTS_CHECK: &[(&str, LintFn)] = &[
-    ("clippy", |path| {
-        Command::new("cargo")
-            .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
-            .current_dir(path)
-            .exec()
-    }),
+    CLIPPY,
     ("cargo fmt", |path| {
         Command::new("cargo").args(["fmt", "--check"]).current_dir(path).exec()
     }),
@@ -89,7 +121,6 @@ const LINTS_CHECK: &[(&str, LintFn)] = &[
 /// Execution model:
 /// - Parallel thread spawn identical to [`LINTS_CHECK`]; ordering of slice elements defines deterministic join &
 ///   reporting sequence.
-/// - Excludes `clippy` (no auto-fix) keeping fix passes shorter; users should run a subsequent check pass.
 ///
 /// Output contract:
 /// - Same reporting shape as [`LINTS_CHECK`]: name, duration snippet (`time=<Duration>`), status code, stripped stdout
@@ -101,6 +132,7 @@ const LINTS_CHECK: &[(&str, LintFn)] = &[
 /// - Deterministic ordered output aids CI log diffing while retaining concurrency for speed.
 /// - Mirrors structure of [`LINTS_CHECK`] for predictable maintenance (additions require updating both tables).
 const LINTS_FIX: &[(&str, LintFn)] = &[
+    CLIPPY,
     ("cargo fmt", |path| {
         Command::new("cargo").args(["fmt"]).current_dir(path).exec()
     }),
