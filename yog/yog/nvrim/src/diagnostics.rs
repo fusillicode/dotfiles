@@ -67,16 +67,16 @@ pub fn dict() -> Dictionary {
 #[allow(clippy::upper_case_acronyms)]
 pub enum DiagnosticSeverity {
     /// Error severity.
-    #[strum(to_string = "e")]
+    #[strum(to_string = "x")]
     Error,
     /// Warning severity.
-    #[strum(to_string = "w")]
+    #[strum(to_string = "*")]
     Warn,
     /// Info severity.
     #[strum(to_string = "i")]
     Info,
     /// Hint severity.
-    #[strum(to_string = "h")]
+    #[strum(to_string = "?")]
     Hint,
     /// Any other / unknown severity value.
     Other,
