@@ -44,6 +44,10 @@ fn main() -> color_eyre::Result<()> {
 
     let files = ytil_system::get_args();
 
+    if files.is_empty() {
+        println!("Nothing done.");
+    }
+
     let mut any_errors = false;
     for file in &files {
         if process(file).is_err() {
@@ -58,22 +62,30 @@ fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Attempts to delete a single path argument after stripping any colon suffix.
+/// Deletes one path after stripping the first ':' suffix segment.
 ///
-/// Performs metadata lookup, branches on filetype, and deletes files, symlinks,
-/// or directories. Emits colored error messages to stderr; caller accumulates
-/// failures. Always returns an error currently (success path ends in an error) -
-/// slated for refactor.
+/// Performs metadata lookup, branches on filetype, and deletes a file, symlink,
+/// or directory. Emits colored error messages to stderr; caller aggregates
+/// failures.
 ///
 /// # Arguments
 /// - `file` Raw CLI argument possibly containing suffixes like `:line:col`.
 ///
 /// # Returns
-/// - Presently always `Err`; future versions will distinguish success.
+/// - `Ok(())` if the path existed and was deleted (file, symlink, or directory).
+/// - `Err` if metadata lookup fails, deletion fails, or the path type is unsupported / missing.
 ///
 /// # Errors
-/// - I/O error during metadata retrieval (e.g. permissions, not found).
-/// - I/O error during deletion (file or directory removal).
+/// - Metadata retrieval failure (permissions, not found, etc.).
+/// - Deletion failure (I/O error removing file or directory).
+/// - Unsupported path type (reported as "Not found").
+///
+/// # Performance
+/// - Single metadata syscall plus one deletion syscall on success.
+/// - No heap allocation besides error formatting.
+///
+/// # Future Work
+/// - Distinguish success via a dedicated return type (e.g. `Result<Deleted, DeleteError>`).
 fn process(file: &str) -> color_eyre::Result<()> {
     let trimmed = before_first_colon(file);
     let path = Path::new(&trimmed);
