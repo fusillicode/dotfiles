@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-"$(git rev-parse --show-toplevel)"/.githooks/tec.sh check
