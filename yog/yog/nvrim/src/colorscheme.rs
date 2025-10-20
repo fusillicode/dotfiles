@@ -33,15 +33,15 @@ pub fn set(colorscheme: Option<String>) {
     crate::vim_opts::set("termguicolors", true, &opts);
 
     let status_line_hl = set_opts().foreground("gray").background(STATUS_LINE_BG).build();
-    let bg_hl = set_opts().background(BG).build();
+    let normal_hl = set_opts().background(BG).build();
 
     let general_hls = [
         ("ColorColumn", set_opts().background("NvimDarkGrey3").build()),
         ("Cursor", set_opts().foreground("black").background("white").build()),
         ("CursorLine", set_opts().foreground("none").build()),
         ("MsgArea", status_line_hl.clone()),
-        ("Normal", bg_hl.clone()),
-        ("NormalFloat", bg_hl),
+        ("Normal", normal_hl.clone()),
+        ("NormalFloat", normal_hl),
         ("StatusLine", status_line_hl),
         ("TreesitterContext", set_opts().background("NvimDarkGrey3").build()),
     ];
