@@ -164,7 +164,7 @@ fn should_create_new_branch(branch: &str) -> color_eyre::Result<bool> {
     if is_default_branch(&curr_branch) {
         return Ok(true);
     }
-    report_branch_not_from_default(branch, &curr_branch);
+    ask_branching_from_not_default(branch, &curr_branch);
     std::io::stdout().flush()?;
     let mut input = String::new();
     std::io::stdin().read_line(&mut input)?;
@@ -246,7 +246,7 @@ fn report_branch_new(branch: &str) {
 /// # Arguments
 /// - `branch` Existing branch name that is being switched to.
 fn report_branch_exists(branch: &str) {
-    println!("{} {} {}", "@".blue().bold(), ">".magenta().bold(), branch.bold());
+    println!("{}{} {}", "@".blue().bold(), ">".magenta().bold(), branch.bold());
 }
 
 /// Prints a styled indication that branch creation was aborted (no newline).
@@ -262,7 +262,7 @@ fn report_branch_not_created(branch: &str) {
 /// # Arguments
 /// - `branch` Target branch being created.
 /// - `default_branch` Current (non-default) branch acting as the base.
-fn report_branch_not_from_default(branch: &str, default_branch: &str) {
+fn ask_branching_from_not_default(branch: &str, default_branch: &str) {
     print!("{} {} from {}", "*".cyan().bold(), branch.bold(), default_branch.bold());
 }
 
