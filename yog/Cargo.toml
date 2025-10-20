@@ -44,7 +44,7 @@ categories = ["command-line-utilities", "development-tools"]
 # Centralized shared dependencies (including those used only as dev-deps in member crates).
 # Member crates reference them with `{ workspace = true }` under their own [dev-dependencies].
 assert2 = { version = "0.3" }
-bitflags = { version = "2.9" }
+bitflags = { version = "2.10" }
 chrono = { version = "0.4", features = ["serde"] }
 color-eyre = { version = "0.6" }
 convert_case = { version = "0.8" }
