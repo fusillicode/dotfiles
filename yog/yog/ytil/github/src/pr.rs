@@ -1,5 +1,7 @@
 use std::process::Command;
 
+use chrono::DateTime;
+use chrono::Utc;
 use serde::Deserialize;
 use strum::EnumIter;
 use strum::EnumString;
@@ -8,15 +10,14 @@ use ytil_cmd::CmdExt;
 
 /// Pull request summary fetched via the `gh pr list` command.
 ///
-/// Captures only the fields the current workspace needs for listing, filtering,
-/// display, and merge decisions. Additional fields can be appended later without
-/// breaking callers.
+/// Captures only the fields needed for listing, filtering, display, and merge
+/// decisions. Additional fields can be appended later without breaking callers.
 ///
-/// # Fields
 /// - `number` Numeric PR number (unique per repository).
 /// - `title` Current PR title.
 /// - `author` Author login + bot flag (see [`PullRequestAuthor`]).
 /// - `merge_state` High‑level mergeability classification returned by GitHub (see [`PullRequestMergeState`]).
+/// - `updated_at` Last update timestamp in UTC (GitHub `updatedAt`).
 ///
 /// # Future Work
 /// - Add labels and draft status if/when used for filtering.
@@ -28,6 +29,8 @@ pub struct PullRequest {
     pub author: PullRequestAuthor,
     #[serde(rename = "mergeStateStatus")]
     pub merge_state: PullRequestMergeState,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: DateTime<Utc>,
 }
 
 /// Author metadata for a pull request.
@@ -63,13 +66,18 @@ pub enum PullRequestMergeState {
 
 /// Fetch pull requests for a repository using `gh pr list`.
 ///
+/// Requests the JSON fields: `number,title,author,mergeStateStatus,updatedAt`.
+/// The `updated_at` timestamp (UTC) enables client‑side freshness sorting, stale PR
+/// detection, and activity‑based filtering without an additional API round‑trip.
+///
 /// # Arguments
 /// - `repo` - `owner/name` repository spec.
 /// - `search` - Optional search expression (without the `--search` flag) using GitHub search qualifiers.
 /// - `retain_fn` - Predicate applied post‑fetch; only PRs for which it returns true are kept.
 ///
 /// # Returns
-/// Vector of deserialized pull requests (may be empty).
+/// Vector of deserialized pull requests (may be empty). All timestamps are normalized
+/// to UTC (`DateTime<Utc>`).
 ///
 /// # Errors
 /// - Spawning or executing `gh pr list` fails.
@@ -80,6 +88,9 @@ pub enum PullRequestMergeState {
 /// Accepting `Option<&str>` for search cleanly distinguishes absence vs empty and avoids
 /// forcing callers to include flag/quoting. Using a trait object for the predicate avoids
 /// generic inference issues when passing `None`.
+///
+/// # Future Work
+/// - Expose pagination (currently relies on `gh` default limit).
 pub fn get(
     repo: &str,
     search: Option<&str>,
@@ -91,11 +102,9 @@ pub fn get(
         "--repo",
         repo,
         "--json",
-        "number,title,author,mergeStateStatus",
+        "number,title,author,mergeStateStatus,updatedAt",
     ];
-    if let Some(s) = search
-        && !s.is_empty()
-    {
+    if let Some(s) = search.filter(|s| !s.is_empty()) {
         args.extend(["--search", s]);
     }
 
@@ -107,6 +116,7 @@ pub fn get(
 
     let mut prs: Vec<PullRequest> = serde_json::from_slice(&output)?;
     prs.retain(|pr| retain_fn(pr));
+    prs.sort_unstable_by(|a, b| b.updated_at.cmp(&a.updated_at));
 
     Ok(prs)
 }
@@ -207,7 +217,7 @@ pub fn enable_auto_merge(pr_number: usize) -> color_eyre::Result<()> {
             "merge",
             &format!("{pr_number}"),
             "--auto",
-            "--squas",
+            "--squash",
             "--delete-branch",
         ])
         .exec()?;
