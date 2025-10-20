@@ -164,10 +164,11 @@ impl core::fmt::Display for RenderablePullRequest {
         };
         write!(
             f,
-            "{} {} {state} {}",
-            self.number.white().bold(),
+            // The spacing before the title is required to align it with the first line.
+            "{} {} {state}\n      {}",
             self.author.login.blue().bold(),
-            self.title.white().bold()
+            self.updated_at.format("%d-%m-%Y %H:%M UTC"),
+            self.title
         )
     }
 }

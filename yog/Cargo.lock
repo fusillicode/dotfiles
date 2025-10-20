@@ -2593,6 +2593,7 @@ name = "ytil_github"
 version = "0.1.0"
 dependencies = [
  "assert2",
+ "chrono",
  "color-eyre",
  "rstest",
  "serde",

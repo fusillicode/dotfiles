@@ -45,7 +45,7 @@ fn main() -> color_eyre::Result<()> {
     let files = ytil_system::get_args();
 
     if files.is_empty() {
-        println!("Nothing done.");
+        println!("Nothing done");
     }
 
     let mut any_errors = false;
