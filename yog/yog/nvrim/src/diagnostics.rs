@@ -8,6 +8,7 @@ use core::fmt;
 use nvim_oxi::Dictionary;
 use serde::de::Deserializer;
 use serde::de::Visitor;
+use strum::EnumCount;
 use strum::EnumIter;
 
 use crate::dict;
@@ -43,7 +44,7 @@ pub fn dict() -> Dictionary {
 /// - The declared variant order (Error, Warn, Info, Hint, Other) defines the iteration order via [`EnumIter`], which
 ///   downstream rendering (e.g. `statusline`) relies on to produce stable, predictable severity ordering.
 /// - Changing the variant order is a breaking change for components depending on deterministic ordering.
-#[derive(Clone, Copy, Debug, strum::Display, EnumIter, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, strum::Display, EnumCount, EnumIter, Eq, Hash, PartialEq)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum DiagnosticSeverity {
     /// Error severity.
@@ -63,6 +64,9 @@ pub enum DiagnosticSeverity {
 }
 
 impl DiagnosticSeverity {
+    /// Number of declared severity variants.
+    pub const VARIANT_COUNT: usize = <Self as strum::EnumCount>::COUNT;
+
     /// Returns the numeric representation of a given [`DiagnosticSeverity`].
     ///
     /// The representation is the canonical LSP severity:
@@ -196,7 +200,7 @@ mod tests {
     }
 
     #[test]
-    fn diagnostic_severity_when_iterated_via_enumiter_yields_declared_order() {
+    fn diagnostic_severity_when_iterated_via_enumiter_yields_declared_order_and_matches_variant_count() {
         let expected = [
             DiagnosticSeverity::Error,
             DiagnosticSeverity::Warn,
@@ -206,6 +210,7 @@ mod tests {
         ];
         let collected: Vec<DiagnosticSeverity> = DiagnosticSeverity::iter().collect();
         pretty_assertions::assert_eq!(collected.as_slice(), expected.as_slice());
+        pretty_assertions::assert_eq!(collected.len(), DiagnosticSeverity::VARIANT_COUNT);
     }
 
     #[rstest]
