@@ -1315,7 +1315,6 @@ dependencies = [
  "color-eyre",
  "convert_case 0.8.0",
  "fkr",
- "itertools 0.14.0",
  "nvim-oxi",
  "pretty_assertions",
  "rstest",

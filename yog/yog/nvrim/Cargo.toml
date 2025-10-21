@@ -17,7 +17,6 @@ crate-type = ["cdylib"]
 color-eyre = { workspace = true }
 convert_case = { workspace = true }
 fkr = { path = "../fkr" }
-itertools = { workspace = true }
 nvim-oxi = { git = "https://github.com/noib3/nvim-oxi", rev = "b1278b123dbac3908f2686ebed6fdadbfef15be1", features = [
   "neovim-nightly",
 ] }
