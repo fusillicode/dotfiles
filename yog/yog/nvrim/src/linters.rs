@@ -29,7 +29,7 @@ pub fn dict() -> Dictionary {
     }
 }
 
-/// Parse raw `sqruff` JSON output into Neovim diagnostic [`Dictionary`]'s.
+/// Parse raw `sqruff` JSON output into Neovim diagnostic [`Dictionary`].
 ///
 /// # Behavior
 /// - Empty / missing input: returns an empty vector and emits a warning.

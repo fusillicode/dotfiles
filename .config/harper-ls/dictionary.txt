@@ -59,6 +59,7 @@ arg
 args
 asdf
 augroups
+autocmds
 autocommand
 autocommands
 backoffice
@@ -156,6 +157,7 @@ stderr
 stdout
 subslice
 t.
+termguicolors
 tokio
 toml
 triaging
