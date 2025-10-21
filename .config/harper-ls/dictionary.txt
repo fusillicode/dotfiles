@@ -64,6 +64,7 @@ backoffice
 backticked
 basename
 bitflags
+buf
 canonicalization
 canonicalized
 characterwise
@@ -111,6 +112,7 @@ kos
 libgit2
 libs
 linewise
+localisable
 lossily
 md
 mergeability
