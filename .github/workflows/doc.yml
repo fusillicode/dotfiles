@@ -35,9 +35,6 @@ jobs:
           shared-key: docs
           cache-targets: true
 
-      - name: sccache setup
-        uses: Mozilla-Actions/sccache-action@4097539ece2ebbb6fd759bb45e5f0321071ac87d
-
       - name: Setup
         uses: ./.github/actions/setup
 
@@ -45,12 +42,6 @@ jobs:
         working-directory: yog
         run: |
           cargo run --bin nomicon
-
-      - name: sccache post stats
-        if: always()
-        uses: ./.github/actions/sccache-post-stats
-        with:
-          label: Docs
 
       - name: Upload Rust doc as artifact
         id: deployment
