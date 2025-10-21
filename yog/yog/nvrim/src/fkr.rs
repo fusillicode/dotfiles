@@ -1,7 +1,7 @@
 //! Random string generation helpers backed by [`fkr`].
 //!
 //! Exposes a dictionary with an insertion command (`insert_string`) prompting the user to select an
-//! [`fkr::FkrOption`] then inserting the generated string at the cursor. Input / buffer errors are
+//! [`::fkr::FkrOption`] then inserting the generated string at the cursor. Input / buffer errors are
 //! reported via [`crate::oxi_ext::api::notify_error`].
 
 use fkr::FkrOption;

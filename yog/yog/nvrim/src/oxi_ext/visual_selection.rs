@@ -219,7 +219,7 @@ impl Selection {
 
 /// Normalized, 0-based indexed output of Nvim `getpos()`.
 ///
-/// Built from [`RawPos`]. Represents a single position inside a buffer using
+/// Built from internal `RawPos` (private). Represents a single position inside a buffer using
 /// zero-based (line, column) indices.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Pos {
@@ -242,7 +242,7 @@ impl Pos {
     }
 }
 
-/// Custom [`Deserialize`] from Lua tuple (see [`RawPos`]).
+/// Custom [`Deserialize`] from Lua tuple produced by `getpos()` (via internal `RawPos`).
 impl<'de> Deserialize<'de> for Pos {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -253,7 +253,7 @@ impl<'de> Deserialize<'de> for Pos {
     }
 }
 
-/// Convert [`RawPos`] to [`Pos`] by switching to 0-based indexing from Lua 1-based.
+/// Convert internal `RawPos` to [`Pos`] by switching to 0-based indexing from Lua 1-based.
 impl From<RawPos> for Pos {
     fn from(raw: RawPos) -> Self {
         fn to_0_based_usize(v: i64) -> usize {
