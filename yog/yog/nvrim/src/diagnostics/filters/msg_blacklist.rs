@@ -60,8 +60,8 @@ impl DiagnosticsFilter for MsgBlacklistFilter<'_> {
     ///
     /// # Errors
     /// - `message` key is missing.
-    /// - `message` value has unexpected type (must be `String`).
-    /// - `source` key present but has unexpected type (must be `String`).
+    /// - `message` value has unexpected type (must be [`String`]).
+    /// - `source` key present but has unexpected type (must be [`String`]).
     fn skip_diagnostic(&self, buf_path: &str, lsp_diag: Option<&Dictionary>) -> color_eyre::Result<bool> {
         let Some(lsp_diag) = lsp_diag else {
             return Ok(false);

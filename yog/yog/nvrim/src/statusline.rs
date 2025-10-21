@@ -137,8 +137,9 @@ impl SeverityBuckets {
     /// Approximate rendered length (diagnostics segment only) for pre-allocation.
     fn approx_render_len(&self) -> usize {
         let non_zero = self.counts.iter().filter(|&&c| c > 0).count();
-        // Each segment roughly: "%#DiagnosticStatusLineWarn#W:123" ~ 32 chars worst case; be conservative.
-        non_zero * 32
+        // Each segment roughly: `"%#DiagnosticStatusLineWarn#W:123"` ~ 32 chars worst case; be conservative.
+        // Use saturating_mul to satisfy `clippy::arithmetic_side_effects` pedantic lint.
+        non_zero.saturating_mul(32)
     }
 }
 
@@ -242,7 +243,10 @@ fn draw_diagnostics((severity, diags_count): (DiagnosticSeverity, u16)) -> Strin
         DiagnosticSeverity::Info => "Info",
         DiagnosticSeverity::Hint | DiagnosticSeverity::Other => "Hint",
     };
-    format!("%#DiagnosticStatusLine{hg_group_dyn_part}#{severity}:{diags_count}")
+    format!(
+        "%#DiagnosticStatusLine{hg_group_dyn_part}#{}:{diags_count}",
+        severity.glyph()
+    )
 }
 
 #[cfg(test)]
@@ -295,8 +299,8 @@ mod tests {
             statusline.draw(),
             format!(
                 "%#DiagnosticStatusLineError#{}:3 %#DiagnosticStatusLineInfo#{}:1 %#StatusLine#foo %m %r%=%#StatusLine# 42:8",
-                DiagnosticSeverity::Error,
-                DiagnosticSeverity::Info
+                DiagnosticSeverity::Error.glyph(),
+                DiagnosticSeverity::Info.glyph()
             ),
         );
     }
@@ -315,8 +319,8 @@ mod tests {
             statusline.draw(),
             format!(
                 "%#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#{}:3 %#DiagnosticStatusLineInfo#{}:1%#StatusLine# 42:8",
-                DiagnosticSeverity::Error,
-                DiagnosticSeverity::Info
+                DiagnosticSeverity::Error.glyph(),
+                DiagnosticSeverity::Info.glyph()
             ),
         );
     }
@@ -337,10 +341,10 @@ mod tests {
             statusline.draw(),
             format!(
                 "%#DiagnosticStatusLineWarn#{}:2 %#DiagnosticStatusLineHint#{}:3 %#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#{}:3 %#DiagnosticStatusLineInfo#{}:1%#StatusLine# 42:8",
-                DiagnosticSeverity::Warn,
-                DiagnosticSeverity::Hint,
-                DiagnosticSeverity::Error,
-                DiagnosticSeverity::Info
+                DiagnosticSeverity::Warn.glyph(),
+                DiagnosticSeverity::Hint.glyph(),
+                DiagnosticSeverity::Error.glyph(),
+                DiagnosticSeverity::Info.glyph()
             ),
         );
     }
@@ -360,8 +364,8 @@ mod tests {
             statusline.draw(),
             format!(
                 "%#DiagnosticStatusLineWarn#{}:1 %#DiagnosticStatusLineHint#{}:5 %#StatusLine#foo %m %r%=%#StatusLine# 42:8",
-                DiagnosticSeverity::Warn,
-                DiagnosticSeverity::Hint
+                DiagnosticSeverity::Warn.glyph(),
+                DiagnosticSeverity::Hint.glyph()
             ),
         );
     }
@@ -405,14 +409,14 @@ mod tests {
             statusline.draw(),
             format!(
                 "%#DiagnosticStatusLineError#{}:4 %#DiagnosticStatusLineWarn#{}:3 %#DiagnosticStatusLineInfo#{}:2 %#DiagnosticStatusLineHint#{}:1 %#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#{}:8 %#DiagnosticStatusLineWarn#{}:7 %#DiagnosticStatusLineInfo#{}:6 %#DiagnosticStatusLineHint#{}:5%#StatusLine# 42:8",
-                DiagnosticSeverity::Error,
-                DiagnosticSeverity::Warn,
-                DiagnosticSeverity::Info,
-                DiagnosticSeverity::Hint,
-                DiagnosticSeverity::Error,
-                DiagnosticSeverity::Warn,
-                DiagnosticSeverity::Info,
-                DiagnosticSeverity::Hint
+                DiagnosticSeverity::Error.glyph(),
+                DiagnosticSeverity::Warn.glyph(),
+                DiagnosticSeverity::Info.glyph(),
+                DiagnosticSeverity::Hint.glyph(),
+                DiagnosticSeverity::Error.glyph(),
+                DiagnosticSeverity::Warn.glyph(),
+                DiagnosticSeverity::Info.glyph(),
+                DiagnosticSeverity::Hint.glyph()
             ),
         );
     }

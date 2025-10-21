@@ -16,9 +16,7 @@ use crate::oxi_ext::dict::DictionaryExt;
 
 /// Nvim diagnostics configuration.
 pub fn get() -> Dictionary {
-    let texts_signs: Array = DiagnosticSeverity::iter()
-        .map(|s| Object::from(s.to_string()))
-        .collect();
+    let texts_signs: Array = DiagnosticSeverity::iter().map(|s| Object::from(s.glyph())).collect();
 
     dict! {
         "severity_sort": true,

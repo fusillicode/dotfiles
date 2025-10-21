@@ -96,26 +96,32 @@ pub struct ExtmarkMeta {
 }
 
 impl ExtmarkMeta {
-    /// Draws the extmark metadata as a formatted string.
+    /// Writes the formatted extmark metadata into `out`.
     ///
-    /// - Performs inline normalization for diagnostic variants (except `Ok`), mapping them to canonical severity
-    ///   letters from [`DiagnosticSeverity`].
+    /// - Performs inline normalization for diagnostic variants (except `Ok`), mapping them to canonical severity glyphs
+    ///   from [`DiagnosticSeverity::glyph`].
     /// - Leaves `Ok` / Git / Other variants using their existing trimmed `sign_text` (empty placeholder when absent).
     ///
     /// # Rationale
-    /// Consolidates normalization with rendering so callers never need a
-    /// separate pre-processing step.
-    fn draw(&self) -> String {
-        let shown = match self.sign_hl_group {
-            SignHlGroup::DiagnosticError => DiagnosticSeverity::Error.to_string(),
-            SignHlGroup::DiagnosticWarn => DiagnosticSeverity::Warn.to_string(),
-            SignHlGroup::DiagnosticInfo => DiagnosticSeverity::Info.to_string(),
-            SignHlGroup::DiagnosticHint => DiagnosticSeverity::Hint.to_string(),
+    /// Appending directly avoids per-sign allocation of an intermediate [`String`].
+    fn write(&self, out: &mut String) {
+        let shown: &str = match self.sign_hl_group {
+            SignHlGroup::DiagnosticError => DiagnosticSeverity::Error.glyph(),
+            SignHlGroup::DiagnosticWarn => DiagnosticSeverity::Warn.glyph(),
+            SignHlGroup::DiagnosticInfo => DiagnosticSeverity::Info.glyph(),
+            SignHlGroup::DiagnosticHint => DiagnosticSeverity::Hint.glyph(),
             SignHlGroup::DiagnosticOk | SignHlGroup::Git(_) | SignHlGroup::Other(_) => {
-                self.sign_text.as_ref().map_or("", |x| x.trim()).to_string()
+                self.sign_text.as_ref().map_or("", |x| x.trim())
             }
         };
-        format!("%#{}#{}%*", self.sign_hl_group, shown)
+        // %#<HlGroup>#<text>%*
+        out.push('%');
+        out.push('#');
+        out.push_str(self.sign_hl_group.as_str());
+        out.push('#');
+        out.push_str(shown);
+        out.push('%');
+        out.push('*');
     }
 }
 
@@ -221,21 +227,28 @@ fn render_statuscolumn(cur_buf_type: &str, cur_lnum: &str, metas: impl Iterator<
             SignHlGroup::Git(_) if git.is_none() => git = Some(meta),
             SignHlGroup::Git(_) | SignHlGroup::Other(_) => {}
         }
+        // Early break: if we already have top severity (Error rank 5) and have determined git presence
+        // (either captured or impossible to capture later because we already saw a git sign or caller provided none).
+        if let Some(sel) = &highest_severity
+            && sel.rank == 5
+            && git.is_some()
+        {
+            break;
+        }
     }
 
-    let diag = highest_severity.map_or_else(|| " ".to_string(), |sel| sel.meta.draw());
-    let git = git.map_or_else(|| " ".to_string(), |m| m.draw());
-
-    // Capacity preallocation uses saturating_add to avoid overflow while keeping
-    // intent clear under -D clippy::arithmetic-side-effects.
-    let cap = diag
-        .len()
-        .saturating_add(git.len())
-        .saturating_add(cur_lnum.len())
-        .saturating_add(8);
-    let mut out = String::with_capacity(cap);
-    out.push_str(&diag);
-    out.push_str(&git);
+    // Capacity heuristic: each sign ~ 32 chars + lnum + static separators.
+    let mut out = String::with_capacity(cur_lnum.len().saturating_add(64));
+    if let Some(sel) = highest_severity {
+        sel.meta.write(&mut out);
+    } else {
+        out.push(' ');
+    }
+    if let Some(g) = git {
+        g.write(&mut out);
+    } else {
+        out.push(' ');
+    }
     out.push_str("%=% ");
     out.push_str(cur_lnum);
     out.push(' ');
