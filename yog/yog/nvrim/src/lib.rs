@@ -37,7 +37,8 @@ mod style_opts;
 mod trex;
 /// Rust tests utilities.
 mod truster;
-/// `vim.opts` utilities.
+/// `vim.opts` utilities. Avoids intra-doc links to private items for stable docs; uses plain function calls for error
+/// notifications.
 pub mod vim_opts;
 
 /// Plugin entry point.
