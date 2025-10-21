@@ -1,3 +1,9 @@
+//! Statusline drawing helpers with diagnostics aggregation.
+//!
+//! Provides `statusline.dict()` with a `draw` function combining cwd, buffer name, cursor position and
+//! LSP diagnostic severities / counts into a formatted status line; failures yield `None` and are
+//! surfaced through [`crate::oxi_ext::api::notify_error`].
+
 use std::borrow::Cow;
 use std::collections::HashMap;
 

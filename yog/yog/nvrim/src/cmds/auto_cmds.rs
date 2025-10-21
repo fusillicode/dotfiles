@@ -1,3 +1,8 @@
+//! Autocommand group and definition helpers.
+//!
+//! Creates yank highlight, autosave, and quickfix configuration autocmds with resilient error
+//! reporting (failures logged, rest continue). Provides granular `create_autocmd` utility.
+
 use nvim_oxi::api::opts::CreateAugroupOptsBuilder;
 use nvim_oxi::api::opts::CreateAutocmdOptsBuilder;
 use nvim_oxi::api::opts::SetKeymapOptsBuilder;

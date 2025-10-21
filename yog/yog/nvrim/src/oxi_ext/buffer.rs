@@ -1,3 +1,8 @@
+//! Buffer extension utilities (line access, cursor‑based insertion, cursor position model).
+//!
+//! Supplies [`BufferExt`] trait plus [`CursorPosition`] struct preserving raw Neovim coordinates for
+//! consistent conversions at call sites.
+
 use color_eyre::eyre::eyre;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::Window;

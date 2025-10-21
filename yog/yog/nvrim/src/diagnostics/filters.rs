@@ -1,3 +1,8 @@
+//! Collection and construction of diagnostic filters.
+//!
+//! Defines [`DiagnosticsFilter`] trait plus ordered creation of all active filters (message blacklist,
+//! source‑specific sets, related info deduper). Ordering is significant for short‑circuit behavior.
+
 use nvim_oxi::Dictionary;
 
 use crate::diagnostics::filters::related_info::RelatedInfoFilter;

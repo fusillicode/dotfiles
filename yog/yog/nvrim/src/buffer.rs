@@ -1,3 +1,8 @@
+//! Buffer text extraction helpers exposed to Lua.
+//!
+//! Provides a dictionary with functions to obtain visual selection lines and classify the word under
+//! cursor (see `word_under_cursor`).
+
 use nvim_oxi::Dictionary;
 
 use crate::dict;

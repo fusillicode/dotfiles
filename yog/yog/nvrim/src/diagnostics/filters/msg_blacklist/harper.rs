@@ -1,3 +1,7 @@
+//! Message blacklist configuration for the `Harper` LSP source.
+//!
+//! Suppresses noisy channel tokens and minor phrasing suggestions using a single [`MsgBlacklistFilter`].
+
 use crate::diagnostics::filters::DiagnosticsFilter;
 use crate::diagnostics::filters::msg_blacklist::MsgBlacklistFilter;
 
