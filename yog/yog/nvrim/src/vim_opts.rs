@@ -2,7 +2,7 @@
 //!
 //! Provides a dictionary `vim_opts.dict()` with batch application (`set_all`) and granular option mutation
 //! utilities wrapping [`nvim_oxi::api::set_option_value`], emitting notifications via
-//! [`crate::oxi_ext::api::notify_error`] on failure.
+//! Uses `crate::oxi_ext::api::notify_error` on failure.
 
 use std::fmt::Write as _;
 
