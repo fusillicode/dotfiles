@@ -40,7 +40,7 @@ pub fn dict() -> Dictionary {
 fn draw((cur_lnum, extmarks): (String, Vec<Extmark>)) -> Option<String> {
     let cur_buf = Buffer::current();
     let opts = OptionOptsBuilder::default().buf(cur_buf.clone()).build();
-    let cur_buf_type = nvim_oxi::api::get_option_value::<String>("buftype", &opts)
+    let buf_type = nvim_oxi::api::get_option_value::<String>("buftype", &opts)
         .inspect_err(|error| {
             crate::oxi_ext::api::notify_error(&format!(
                 "cannot get buftype of current buffer | buffer={cur_buf:#?} error={error:#?}"
@@ -48,12 +48,11 @@ fn draw((cur_lnum, extmarks): (String, Vec<Extmark>)) -> Option<String> {
         })
         .ok()?;
 
-    let mut extmark_meta: Vec<_> = extmarks.iter().filter_map(|extmark| extmark.meta().cloned()).collect();
-    for meta in &mut extmark_meta {
-        meta.override_sign_text();
-    }
-
-    Some(Statuscolumn::draw(&cur_buf_type, cur_lnum, extmark_meta))
+    Some(render_statuscolumn(
+        &buf_type,
+        &cur_lnum,
+        extmarks.into_iter().filter_map(Extmark::into_meta),
+    ))
 }
 
 /// Represents an extmark in Nvim.
@@ -62,9 +61,9 @@ fn draw((cur_lnum, extmarks): (String, Vec<Extmark>)) -> Option<String> {
 pub struct Extmark(u32, usize, usize, Option<ExtmarkMeta>);
 
 impl Extmark {
-    /// Returns the [`ExtmarkMeta`] of the extmark if present.
-    pub const fn meta(&self) -> Option<&ExtmarkMeta> {
-        self.3.as_ref()
+    /// Consumes the extmark returning its metadata (if any).
+    fn into_meta(self) -> Option<ExtmarkMeta> {
+        self.3
     }
 }
 
@@ -78,6 +77,7 @@ impl FromObject for Extmark {
 /// Implementation of [`Poppable`] for [`Extmark`].
 impl Poppable for Extmark {
     unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
+        // SAFETY: Delegates to nvim_oxi object popping then deserializes.
         unsafe {
             let obj = Object::pop(lstate)?;
             Self::from_object(obj).map_err(nvim_oxi::lua::Error::pop_error_from_err::<Self, _>)
@@ -87,6 +87,7 @@ impl Poppable for Extmark {
 
 /// Metadata associated with an extmark.
 #[derive(Clone, Deserialize)]
+#[cfg_attr(test, derive(Debug))]
 pub struct ExtmarkMeta {
     /// The highlight group for the sign.
     sign_hl_group: SignHlGroup,
@@ -96,33 +97,25 @@ pub struct ExtmarkMeta {
 
 impl ExtmarkMeta {
     /// Draws the extmark metadata as a formatted string.
-    fn draw(&self) -> String {
-        format!(
-            "%#{}#{}%*",
-            self.sign_hl_group,
-            self.sign_text.as_ref().map_or("", |x| x.trim())
-        )
-    }
-
-    /// Overrides diagnostic sign text with severity shorthand.
     ///
-    /// Replaces the current [`ExtmarkMeta::sign_text`] with a canonical
-    /// single-letter representation derived from the [`DiagnosticSeverity`]
-    /// associated to the diagnostic variants of [`SignHlGroup`]. Non-diagnostic
-    /// variants (ok / git / other) keep their existing text unchanged.
+    /// - Performs inline normalization for diagnostic variants (except `Ok`), mapping them to canonical severity
+    ///   letters from [`DiagnosticSeverity`].
+    /// - Leaves `Ok` / Git / Other variants using their existing trimmed `sign_text` (empty placeholder when absent).
     ///
     /// # Rationale
-    /// Normalizing diagnostic sign text ensures consistent rendering regardless
-    /// of what upstream plugins put into the extmark.
-    pub fn override_sign_text(&mut self) {
-        let new_sign_text = match self.sign_hl_group {
-            SignHlGroup::DiagnosticError => Some(DiagnosticSeverity::Error.to_string()),
-            SignHlGroup::DiagnosticWarn => Some(DiagnosticSeverity::Warn.to_string()),
-            SignHlGroup::DiagnosticInfo => Some(DiagnosticSeverity::Info.to_string()),
-            SignHlGroup::DiagnosticHint => Some(DiagnosticSeverity::Hint.to_string()),
-            SignHlGroup::DiagnosticOk | SignHlGroup::Git(_) | SignHlGroup::Other(_) => self.sign_text.clone(),
+    /// Consolidates normalization with rendering so callers never need a
+    /// separate pre-processing step.
+    fn draw(&self) -> String {
+        let shown = match self.sign_hl_group {
+            SignHlGroup::DiagnosticError => DiagnosticSeverity::Error.to_string(),
+            SignHlGroup::DiagnosticWarn => DiagnosticSeverity::Warn.to_string(),
+            SignHlGroup::DiagnosticInfo => DiagnosticSeverity::Info.to_string(),
+            SignHlGroup::DiagnosticHint => DiagnosticSeverity::Hint.to_string(),
+            SignHlGroup::DiagnosticOk | SignHlGroup::Git(_) | SignHlGroup::Other(_) => {
+                self.sign_text.as_ref().map_or("", |x| x.trim()).to_string()
+            }
         };
-        self.sign_text = new_sign_text;
+        format!("%#{}#{}%*", self.sign_hl_group, shown)
     }
 }
 
@@ -198,75 +191,77 @@ impl<'de> serde::Deserialize<'de> for SignHlGroup {
     }
 }
 
-/// Represents the status column with various signs and line number.
-#[derive(Default)]
-struct Statuscolumn {
-    /// Current line number.
-    cur_lnum: String,
-    /// Error diagnostic sign.
-    error: Option<ExtmarkMeta>,
-    /// Git sign.
-    git: Option<ExtmarkMeta>,
-    /// Hint diagnostic sign.
-    hint: Option<ExtmarkMeta>,
-    /// Info diagnostic sign.
-    info: Option<ExtmarkMeta>,
-    /// Ok diagnostic sign.
-    ok: Option<ExtmarkMeta>,
-    /// Warning diagnostic sign.
-    warn: Option<ExtmarkMeta>,
+#[cfg_attr(test, derive(Debug))]
+struct SelectedDiag {
+    rank: u8,
+    meta: ExtmarkMeta,
 }
 
-impl Statuscolumn {
-    /// Draws the status column based on buffer type and [`ExtmarkMeta`].
+fn render_statuscolumn(cur_buf_type: &str, cur_lnum: &str, metas: impl Iterator<Item = ExtmarkMeta>) -> String {
+    if cur_buf_type == "grug-far" {
+        return " ".into();
+    }
+
+    let mut highest_severity: Option<SelectedDiag> = None;
+    let mut git: Option<ExtmarkMeta> = None;
+
+    for meta in metas {
+        match meta.sign_hl_group {
+            SignHlGroup::DiagnosticError
+            | SignHlGroup::DiagnosticWarn
+            | SignHlGroup::DiagnosticInfo
+            | SignHlGroup::DiagnosticHint
+            | SignHlGroup::DiagnosticOk => {
+                let rank = meta.sign_hl_group.rank();
+                match &highest_severity {
+                    Some(sel) if sel.rank >= rank => {}
+                    _ => highest_severity = Some(SelectedDiag { rank, meta }),
+                }
+            }
+            SignHlGroup::Git(_) if git.is_none() => git = Some(meta),
+            SignHlGroup::Git(_) | SignHlGroup::Other(_) => {}
+        }
+    }
+
+    let diag = highest_severity.map_or_else(|| " ".to_string(), |sel| sel.meta.draw());
+    let git = git.map_or_else(|| " ".to_string(), |m| m.draw());
+
+    // Capacity preallocation uses saturating_add to avoid overflow while keeping
+    // intent clear under -D clippy::arithmetic-side-effects.
+    let cap = diag
+        .len()
+        .saturating_add(git.len())
+        .saturating_add(cur_lnum.len())
+        .saturating_add(8);
+    let mut out = String::with_capacity(cap);
+    out.push_str(&diag);
+    out.push_str(&git);
+    out.push_str("%=% ");
+    out.push_str(cur_lnum);
+    out.push(' ');
+    out
+}
+
+impl SignHlGroup {
+    /// Severity ranking used to pick the highest diagnostic.
     ///
-    /// Special case:
-    /// - Returns a single space (`" "`) when `cur_buf_type == "grug-far"` to avoid clutter in grug-far search buffers.
+    /// # Returns
+    /// - Numeric priority (higher means more severe) for diagnostic variants.
+    /// - `0` for non-diagnostic variants (Git / Other).
     ///
     /// # Rationale
-    /// Rendering a minimal placeholder for special buffer types keeps alignment predictable without introducing
-    /// diagnostic / git sign artifacts that are irrelevant in those contexts.
-    fn draw(cur_buf_type: &str, cur_lnum: String, extmarks: Vec<ExtmarkMeta>) -> String {
-        match cur_buf_type {
-            "grug-far" => " ".into(),
-            _ => Self::new(cur_lnum, extmarks).to_string(),
+    /// Encapsulating the rank logic in the enum keeps selection code simpler and
+    /// removes the need for a standalone helper.
+    #[inline]
+    const fn rank(&self) -> u8 {
+        match self {
+            Self::DiagnosticError => 5,
+            Self::DiagnosticWarn => 4,
+            Self::DiagnosticInfo => 3,
+            Self::DiagnosticHint => 2,
+            Self::DiagnosticOk => 1,
+            Self::Git(_) | Self::Other(_) => 0,
         }
-    }
-
-    /// Creates a new [`Statuscolumn`] from line number and [`ExtmarkMeta`].
-    fn new(cur_lnum: String, extmarks: Vec<ExtmarkMeta>) -> Self {
-        let mut statuscolumn = Self {
-            cur_lnum,
-            ..Default::default()
-        };
-
-        for extmark in extmarks {
-            match extmark.sign_hl_group.as_str() {
-                "DiagnosticSignError" => statuscolumn.error = Some(extmark),
-                "DiagnosticSignWarn" => statuscolumn.warn = Some(extmark),
-                "DiagnosticSignInfo" => statuscolumn.info = Some(extmark),
-                "DiagnosticSignHint" => statuscolumn.hint = Some(extmark),
-                "DiagnosticSignOk" => statuscolumn.ok = Some(extmark),
-                git if git.contains("GitSigns") => statuscolumn.git = Some(extmark),
-                _ => (),
-            }
-        }
-
-        statuscolumn
-    }
-}
-
-/// Implementation of [`core::fmt::Display`] for [`Statuscolumn`].
-impl core::fmt::Display for Statuscolumn {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let diag_sign = [&self.error, &self.warn, &self.info, &self.hint, &self.ok]
-            .iter()
-            .find_map(|s| s.as_ref().map(ExtmarkMeta::draw))
-            .unwrap_or_else(|| " ".into());
-
-        let git_sign = self.git.as_ref().map_or_else(|| " ".into(), ExtmarkMeta::draw);
-
-        write!(f, "{}{}%=% {} ", diag_sign, git_sign, self.cur_lnum)
     }
 }
 
@@ -274,70 +269,51 @@ impl core::fmt::Display for Statuscolumn {
 mod tests {
     use super::*;
 
+    fn mk_extmark_meta(group: SignHlGroup, text: &str) -> ExtmarkMeta {
+        ExtmarkMeta {
+            sign_hl_group: group,
+            sign_text: Some(text.to_string()),
+        }
+    }
+
     #[test]
-    fn statuscolumn_draw_works_as_expected() {
-        // No extmarks
-        let out = Statuscolumn::draw("foo", "42".into(), vec![]);
-        assert_eq!("  %=% 42 ", &out);
+    fn render_statuscolumn_when_no_extmarks_returns_placeholders() {
+        let out = render_statuscolumn("foo", "42", std::iter::empty());
+        pretty_assertions::assert_eq!(out, "  %=% 42 ");
+    }
 
-        // 1 diagnostic sign
-        let out = Statuscolumn::draw(
-            "foo",
-            "42".into(),
-            vec![ExtmarkMeta {
-                sign_hl_group: SignHlGroup::DiagnosticError,
-                sign_text: Some("E".into()),
-            }],
-        );
-        assert_eq!("%#DiagnosticSignError#E%* %=% 42 ", &out);
+    #[test]
+    fn render_statuscolumn_when_diagnostic_error_and_warn_displays_error() {
+        let metas = vec![
+            mk_extmark_meta(SignHlGroup::DiagnosticError, "E"),
+            mk_extmark_meta(SignHlGroup::DiagnosticWarn, "W"),
+        ];
+        let out = render_statuscolumn("foo", "42", metas.into_iter());
+        // Canonical normalized error sign text is 'x'.
+        pretty_assertions::assert_eq!(out, "%#DiagnosticSignError#x%* %=% 42 ");
+    }
 
-        // Multiple diagnostics extmarks and only the higher severity sign is displayed
-        let out = Statuscolumn::draw(
-            "foo",
-            "42".into(),
-            vec![
-                ExtmarkMeta {
-                    sign_hl_group: SignHlGroup::DiagnosticError,
-                    sign_text: Some("E".into()),
-                },
-                ExtmarkMeta {
-                    sign_hl_group: SignHlGroup::DiagnosticWarn,
-                    sign_text: Some("W".into()),
-                },
-            ],
-        );
-        assert_eq!("%#DiagnosticSignError#E%* %=% 42 ", &out);
+    #[test]
+    fn render_statuscolumn_when_git_sign_present_displays_git_sign() {
+        let metas = vec![mk_extmark_meta(SignHlGroup::Git("GitSignsFoo".into()), "|")];
+        let out = render_statuscolumn("foo", "42", metas.into_iter());
+        pretty_assertions::assert_eq!(out, " %#GitSignsFoo#|%*%=% 42 ");
+    }
 
-        // git sign
-        let out = Statuscolumn::draw(
-            "foo",
-            "42".into(),
-            vec![ExtmarkMeta {
-                sign_hl_group: SignHlGroup::Git("GitSignsFoo".into()),
-                sign_text: Some("|".into()),
-            }],
-        );
-        assert_eq!(" %#GitSignsFoo#|%*%=% 42 ", &out);
+    #[test]
+    fn render_statuscolumn_when_diagnostics_and_git_sign_displays_both() {
+        let metas = vec![
+            mk_extmark_meta(SignHlGroup::DiagnosticError, "E"),
+            mk_extmark_meta(SignHlGroup::DiagnosticWarn, "W"),
+            mk_extmark_meta(SignHlGroup::Git("GitSignsFoo".into()), "|"),
+        ];
+        let out = render_statuscolumn("foo", "42", metas.into_iter());
+        pretty_assertions::assert_eq!(out, "%#DiagnosticSignError#x%*%#GitSignsFoo#|%*%=% 42 ");
+    }
 
-        // Multiple diagnostics extmarks and a git sign
-        let out = Statuscolumn::draw(
-            "foo",
-            "42".into(),
-            vec![
-                ExtmarkMeta {
-                    sign_hl_group: SignHlGroup::DiagnosticError,
-                    sign_text: Some("E".into()),
-                },
-                ExtmarkMeta {
-                    sign_hl_group: SignHlGroup::DiagnosticWarn,
-                    sign_text: Some("W".into()),
-                },
-                ExtmarkMeta {
-                    sign_hl_group: SignHlGroup::Git("GitSignsFoo".into()),
-                    sign_text: Some("|".into()),
-                },
-            ],
-        );
-        assert_eq!("%#DiagnosticSignError#E%*%#GitSignsFoo#|%*%=% 42 ", &out);
+    #[test]
+    fn render_statuscolumn_when_grug_far_buffer_returns_single_space() {
+        let out = render_statuscolumn("grug-far", "7", std::iter::empty());
+        pretty_assertions::assert_eq!(out, " ");
     }
 }
