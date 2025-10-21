@@ -113,6 +113,7 @@ kos
 libgit2
 libs
 linewise
+lnum
 localisable
 lossily
 md

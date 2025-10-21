@@ -44,20 +44,16 @@ pub fn dict() -> Dictionary {
 /// - The declared variant order (Error, Warn, Info, Hint, Other) defines the iteration order via [`EnumIter`], which
 ///   downstream rendering (e.g. `statusline`) relies on to produce stable, predictable severity ordering.
 /// - Changing the variant order is a breaking change for components depending on deterministic ordering.
-#[derive(Clone, Copy, Debug, strum::Display, EnumCount, EnumIter, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, EnumCount, EnumIter, Eq, Hash, PartialEq)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum DiagnosticSeverity {
     /// Error severity.
-    #[strum(to_string = "x")]
     Error,
     /// Warning severity.
-    #[strum(to_string = "*")]
     Warn,
     /// Info severity.
-    #[strum(to_string = "i")]
     Info,
     /// Hint severity.
-    #[strum(to_string = "?")]
     Hint,
     /// Any other / unknown severity value.
     Other,
@@ -91,6 +87,23 @@ impl DiagnosticSeverity {
             Self::Info => 3,
             Self::Hint => 4,
             Self::Other => 0,
+        }
+    }
+
+    /// Returns the canonical single-character glyph for this severity.
+    ///
+    /// # Returns
+    /// - One of: "x" (Error), "*" (Warn), "i" (Info), "?" (Hint), "?" (Other / unknown).
+    ///
+    /// # Rationale
+    /// Used by status UI components (statuscolumn) to render severity without allocating via [`core::fmt::Display`]
+    /// or `to_string()`. A `const fn` mapping gives zero runtime branching cost when inlined.
+    pub const fn glyph(self) -> &'static str {
+        match self {
+            Self::Error => "x",
+            Self::Warn => "*",
+            Self::Info => "i",
+            Self::Hint | Self::Other => "?",
         }
     }
 }
