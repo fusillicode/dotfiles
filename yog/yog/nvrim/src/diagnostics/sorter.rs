@@ -1,3 +1,8 @@
+//! Diagnostic sorting utilities.
+//!
+//! Supplies a severity sorter used by statusline / floating windows. Missing severities default to
+//! [`nvim_oxi::Integer::MIN`] to push them last relative to valid levels.
+
 use nvim_oxi::Dictionary;
 use nvim_oxi::Integer;
 

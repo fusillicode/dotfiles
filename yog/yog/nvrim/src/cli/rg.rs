@@ -1,3 +1,8 @@
+//! `rg` CLI flag builder implementation.
+//!
+//! Implements [`CliFlags`] for ripgrep with base flags emphasizing structured output and case smartness plus glob
+//! exclusions.
+
 use crate::cli::CliFlags;
 
 /// CLI flags for the `rg` command.

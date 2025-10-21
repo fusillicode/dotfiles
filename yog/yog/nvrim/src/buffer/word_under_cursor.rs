@@ -1,3 +1,8 @@
+//! Token classification under cursor (URL / file / directory / word).
+//!
+//! Retrieves current line + cursor column, extracts contiguous non‑whitespace token, classifies via
+//! filesystem inspection or URL parsing, returning a tagged Lua table.
+
 use std::process::Command;
 
 use nvim_oxi::Object;

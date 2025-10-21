@@ -1,3 +1,8 @@
+//! Colorscheme and highlight group configuration helpers.
+//!
+//! Exposes a dictionary with a `set` function applying base UI preferences (dark background, termguicolors)
+//! and custom highlight groups (diagnostics, statusline, general UI).
+
 use color_eyre::eyre::eyre;
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::opts::GetHighlightOpts;

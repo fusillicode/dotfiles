@@ -1,3 +1,8 @@
+//! `fd` CLI flag builder implementation.
+//!
+//! Implements [`CliFlags`] for `fd`, producing base flags and exclusion patterns derived from the shared glob
+//! blacklist.
+
 use crate::cli::CliFlags;
 
 /// CLI flags for the `fd` command.

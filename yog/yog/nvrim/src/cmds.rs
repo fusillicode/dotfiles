@@ -1,3 +1,8 @@
+//! User / auto command creation orchestration.
+//!
+//! Provides a dictionary exposing `create` which defines all autocommands and user commands by
+//! delegating to internal modules (`auto_cmds`, `user_cmds`).
+
 use nvim_oxi::Dictionary;
 
 use crate::dict;
