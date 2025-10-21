@@ -132,6 +132,7 @@ pcw
 pgcli
 pgpass
 pr
+preallocation
 preselected
 protoc
 quickfix
