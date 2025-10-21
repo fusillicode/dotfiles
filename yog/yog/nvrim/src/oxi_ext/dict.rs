@@ -1,3 +1,8 @@
+//! Typed dictionary extraction helpers for Neovim objects.
+//!
+//! Adds [`DictionaryExt`] trait supplying required / optional typed getters and nested dictionary
+//! traversal with precise error messages (missing key, unexpected kind).
+
 use color_eyre::eyre::Context;
 use color_eyre::eyre::eyre;
 use nvim_oxi::Dictionary;

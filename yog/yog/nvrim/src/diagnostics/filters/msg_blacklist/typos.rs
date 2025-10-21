@@ -1,3 +1,8 @@
+//! Message blacklist configuration for the `typos` LSP source.
+//!
+//! Provides a curated set of substrings to suppress recurring false‑positive spelling suggestions
+//! (domain‑specific terms) via [`MsgBlacklistFilter`].
+
 use crate::diagnostics::filters::DiagnosticsFilter;
 use crate::diagnostics::filters::msg_blacklist::MsgBlacklistFilter;
 

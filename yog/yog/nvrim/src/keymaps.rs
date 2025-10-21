@@ -1,3 +1,9 @@
+//! Keymap helpers and expr RHS generators.
+//!
+//! Provides `keymaps.dict()` offering bulk keymap setup (`set_all`) plus smart editing helpers.
+//! Core mappings target Normal / Visual / Operator modes; failures in individual definitions are
+//! logged without aborting subsequent mappings.
+
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::opts::SetKeymapOpts;
 use nvim_oxi::api::opts::SetKeymapOptsBuilder;

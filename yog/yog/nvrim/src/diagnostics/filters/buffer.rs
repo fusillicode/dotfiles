@@ -1,3 +1,8 @@
+//! Buffer path based diagnostic suppression.
+//!
+//! Skips diagnostics entirely for buffers whose absolute path matches configured blacklist entries
+//! (e.g. cargo registry), preventing irrelevant analysis noise.
+
 use nvim_oxi::Dictionary;
 use ytil_system::build_home_path;
 

@@ -1,3 +1,9 @@
+//! Statuscolumn drawing helpers for buffer-local indicators.
+//!
+//! Supplies `statuscolumn.dict()` exposing `draw`, rendering line numbers / extmarks while honoring
+//! special buffer types (e.g. minimal output for transient search buffers). Errors are notified via
+//! [`crate::oxi_ext::api::notify_error`].
+
 use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;

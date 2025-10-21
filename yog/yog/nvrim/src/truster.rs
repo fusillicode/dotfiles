@@ -1,3 +1,9 @@
+//! Rust test runner helpers integrating with Neovim.
+//!
+//! Exposes a dictionary enabling cursor-aware test execution (`run_test`) by parsing the current buffer
+//! with Tree‑sitter to locate the nearest test function and spawning it inside a WezTerm pane.
+//! All Neovim API failures are reported via [`crate::oxi_ext::api::notify_error`].
+
 use std::path::Path;
 use std::path::PathBuf;
 

@@ -1,3 +1,8 @@
+//! Filter for deduplicating diagnostics based on related information arrays.
+//!
+//! Extracts `user_data.lsp.relatedInformation` entries and skips root diagnostics whose rendered
+//! information is already represented, reducing noise (especially repeated hints).
+
 use color_eyre::eyre::Context;
 use nvim_oxi::Array;
 use nvim_oxi::Dictionary;

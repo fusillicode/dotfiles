@@ -1,3 +1,8 @@
+//! Neovim diagnostics configuration dictionary builder.
+//!
+//! Produces a Lua‑consumable `config` dict mirroring `vim.diagnostic.config({...})` with custom float
+//! window border, severity sorting, and sign text derived from [`DiagnosticSeverity`] variants.
+
 use nvim_oxi::Array;
 use nvim_oxi::Dictionary;
 use nvim_oxi::Object;

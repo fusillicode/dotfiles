@@ -1,3 +1,7 @@
+//! CLI flag generation helpers for search tools (`fd`, `rg`).
+//!
+//! Centralizes glob blacklist + base flags; exposes a dictionary with per‑tool flag builders for Lua.
+
 use nvim_oxi::Dictionary;
 
 use crate::dict;

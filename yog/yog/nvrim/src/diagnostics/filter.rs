@@ -1,3 +1,8 @@
+//! High-level diagnostic filtering pipeline.
+//!
+//! Orchestrates buffer path filtering, message blacklist, and related info deduplication, returning
+//! retained diagnostics for display while reporting errors via notifications.
+
 use std::convert::identity;
 
 use nvim_oxi::Dictionary;

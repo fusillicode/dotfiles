@@ -1,3 +1,8 @@
+//! Diagnostic formatting helpers.
+//!
+//! Converts raw LSP diagnostics plus embedded `user_data` into concise messages with source / code.
+//! Missing required fields trigger user notifications and yield `None`.
+
 use nvim_oxi::Object;
 use nvim_oxi::conversion::FromObject;
 use nvim_oxi::lua::Poppable;

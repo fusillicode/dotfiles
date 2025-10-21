@@ -1,3 +1,8 @@
+//! Visual selection extraction helpers.
+//!
+//! Provides functions to capture current Visual mode text (line‑wise or character‑wise) into owned
+//! structures (`Selection`, `SelectionBounds`) with normalized 0‑based indices.
+
 use std::ops::Range;
 
 use color_eyre::eyre::bail;

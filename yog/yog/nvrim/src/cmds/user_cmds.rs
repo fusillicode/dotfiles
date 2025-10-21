@@ -1,3 +1,8 @@
+//! User command registration helpers.
+//!
+//! Defines a small set of ergonomic commands (copy all, highlight listing, lazy maintenance, select all, fkr generator)
+//! and registers them with Neovim while notifying on failures.
+
 use nvim_oxi::api::StringOrFunction;
 use nvim_oxi::api::opts::CreateCommandOpts;
 use nvim_oxi::api::opts::CreateCommandOptsBuilder;

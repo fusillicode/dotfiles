@@ -1,3 +1,8 @@
+//! Thin wrappers over common Neovim API functions with improved error reporting.
+//!
+//! Helpers include global var setting, notifications (`notify_error` / `notify_warn`), ex command
+//! execution, and interactive list selection (`inputlist`).
+
 use nvim_oxi::Array;
 use nvim_oxi::api::opts::CmdOpts;
 use nvim_oxi::api::types::CmdInfosBuilder;

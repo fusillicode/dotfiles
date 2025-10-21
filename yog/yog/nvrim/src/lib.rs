@@ -19,7 +19,7 @@ mod cmds;
 mod colorscheme;
 /// Diagnostics filtering / formatting / sorting.
 mod diagnostics;
-/// Random string generation via the `fkr` crate.
+/// Random string generation via the [`fkr`] crate.
 mod fkr;
 /// Core (non‑plugin) keymaps.
 pub mod keymaps;

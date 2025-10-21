@@ -1,3 +1,9 @@
+//! Diagnostic message substring blacklist filters.
+//!
+//! Implements per‑source case‑insensitive substring matching to hide low‑value diagnostics
+//! (channel noise, trivial spelling hints). Supports optional buffer path gating for targeted
+//! suppression.
+
 use nvim_oxi::Dictionary;
 
 use crate::diagnostics::filters::DiagnosticsFilter;
