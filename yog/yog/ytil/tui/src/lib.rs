@@ -11,23 +11,42 @@ use inquire::ui::RenderConfig;
 use strum::EnumIter;
 use strum::IntoEnumIterator;
 
-/// Minimal interactive multi-select returning [`None`] if `opts` is empty or the user cancels.
+/// Provides a minimal interactive multi-select prompt, returning [`None`] if no options are provided, the user cancels,
+/// or no items are selected.
 ///
 /// Wraps [`inquire::MultiSelect`] with a slim rendering (see `minimal_render_config`) and no help message.
 ///
+/// # Arguments
+/// - `opts`: The list of options to present for selection. Each option must implement [`std::fmt::Display`].
+///
+/// # Type Parameters
+/// - `T`: The type of the options, constrained to implement [`std::fmt::Display`].
+///
+/// # Returns
+/// - `Ok(Some(selected))` A vector of the selected options if the user makes a non-empty selection.
+/// - `Ok(None)` If `opts` is empty, the user cancels the prompt, or the user selects no items.
+/// - `Err(InquireError)` If rendering the prompt or handling terminal interaction fails.
+///
 /// # Errors
-/// - Rendering the prompt or terminal interaction inside [`inquire`] fails.
-/// - Collecting the user selection fails for any reason reported by [`MultiSelect`].
+/// - [`InquireError`]: Propagated from [`inquire`] for failures in prompt rendering or user interaction, excluding
+///   cancellation which is handled as [`None`].
 pub fn minimal_multi_select<T: std::fmt::Display>(opts: Vec<T>) -> Result<Option<Vec<T>>, InquireError> {
     if opts.is_empty() {
         return Ok(None);
     }
-    closable_prompt(
+    let Some(selected_opts) = closable_prompt(
         MultiSelect::new("", opts)
             .with_render_config(minimal_render_config())
             .without_help_message()
             .prompt(),
-    )
+    )?
+    else {
+        return Ok(None);
+    };
+    if selected_opts.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(selected_opts))
 }
 
 /// Minimal interactive single-select returning [`None`] if `opts` is empty or the user cancels.
