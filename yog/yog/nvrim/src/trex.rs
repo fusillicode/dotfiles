@@ -10,6 +10,7 @@ use convert_case::Casing as _;
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::mlua;
+use nvim_oxi::mlua::ObjectLike;
 
 use crate::dict;
 use crate::fn_from;
@@ -37,23 +38,23 @@ pub fn dict() -> Dictionary {
 /// # Notes
 /// Blockwise selections are treated as a contiguous span (not a rectangle).
 pub fn transform_selection(_: ()) {
-    let lua = mlua::lua();
-
     let Some(selection) = crate::oxi_ext::visual_selection::get(()) else {
         return;
     };
 
     let options: Vec<String> = Case::all_cases().iter().map(|c| format!("{:?}", c)).collect();
+
+    let lua = mlua::lua();
     let opts = {
         let t = lua.create_table().unwrap();
-        t.set("prompt", "Select case:").unwrap();
+        t.set("prompt", "Select case ").unwrap();
         t
     };
 
     let callback = lua
-        .create_function(move |_: &mlua::Lua, choice: Option<String>| {
-            if let Some(chosen) = choice
-                && let Some(case) = Case::all_cases().iter().find(|c| format!("{:?}", c) == chosen)
+        .create_function(move |_: &mlua::Lua, (_, idx1): (Option<String>, Option<usize>)| {
+            if let Some(idx) = idx1.map(|idx1| idx1.saturating_sub(1))
+                && let Some(case) = Case::all_cases().get(idx)
             {
                 let transformed_lines = selection
                     .lines()
@@ -77,15 +78,8 @@ pub fn transform_selection(_: ()) {
         })
         .unwrap();
 
-    let bar = lua
-        .globals()
-        .get::<mlua::Table>("vim")
-        .unwrap()
-        .get::<mlua::Table>("ui")
-        .unwrap()
-        .get::<mlua::Function>("select")
-        .unwrap();
-    let _ = bar.call::<()>((options, opts, callback));
+    let vim_ui_select = lua.globals().get_path::<mlua::Function>("vim.ui.select").unwrap();
+    let _ = vim_ui_select.call::<()>((options, opts, callback));
 }
 
 // /// Wrapper implementing [`core::fmt::Display`] for [`Case`] so choices can be
