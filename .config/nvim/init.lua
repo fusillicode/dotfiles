@@ -2,7 +2,6 @@ vim.loader.enable()
 
 local nvrim = require('nvrim')
 nvrim.vim_opts.set_all()
-nvrim.colorscheme.set()
 nvrim.cmds.create()
 nvrim.keymaps.set_all()
 require('keymaps').set_lua_implemented()
@@ -62,3 +61,7 @@ require('lazy').setup('plugins', {
     },
   },
 })
+
+-- Colorscheme are installed via lazy so this
+-- must be called after they are actually installed
+nvrim.colorscheme.set()
