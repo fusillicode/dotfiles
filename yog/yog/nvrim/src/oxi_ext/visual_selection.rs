@@ -6,6 +6,7 @@
 use std::ops::Range;
 
 use color_eyre::eyre::bail;
+use color_eyre::eyre::eyre;
 use nvim_oxi::Array;
 use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;
@@ -130,8 +131,14 @@ impl SelectionBounds {
     /// - Fails if retrieving either mark fails.
     /// - Fails if the two marks reference different buffers.
     pub fn new() -> color_eyre::Result<Self> {
-        let cursor_pos = get_pos(".")?;
-        let visual_pos = get_pos("v")?;
+        let cursor_pos = match get_pos(".") {
+            Ok(p) => p,
+            Err(_) => return Err(eyre!("get_pos failed")),
+        };
+        let visual_pos = match get_pos("v") {
+            Ok(p) => p,
+            Err(_) => return Err(eyre!("get_pos failed")),
+        };
 
         let (start, end) = cursor_pos.sort(visual_pos);
 

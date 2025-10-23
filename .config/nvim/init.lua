@@ -62,6 +62,5 @@ require('lazy').setup('plugins', {
   },
 })
 
--- Colorscheme are installed via lazy so this
--- must be called after they are actually installed
+-- Colorscheme are installed via lazy so this must be called after they are actually installed
 nvrim.colorscheme.set()
