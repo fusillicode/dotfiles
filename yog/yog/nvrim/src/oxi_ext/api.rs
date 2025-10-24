@@ -124,7 +124,7 @@ where
     let vim_ui_select = lua
         .globals()
         .get_path::<mlua::Function>("vim.ui.select")
-        .map_err(|error| eyre!("error fetching vim.ui.select function from Lua globals | error={error:#?}"))?;
+        .map_err(|error| eyre!("cannot fetch vim.ui.select function from Lua globals | error={error:#?}"))?;
 
     let opts_table = lua
         .create_table_from(opts.clone())
@@ -138,13 +138,13 @@ where
             Ok(())
         })
         .map_err(|error| {
-            eyre!("error creating vim.ui.select callback | choices={choices:#?} opts={opts_table:#?} error={error:#?}")
+            eyre!("cannot create vim.ui.select callback | choices={choices:#?} opts={opts_table:#?} error={error:#?}")
         })?;
 
     vim_ui_select
         .call::<()>((choices.to_owned(), opts_table.clone(), vim_ui_select_callback))
         .map_err(|error| {
-            eyre!("error calling vim.ui.select | choices={choices:#?} opts={opts_table:#?} error={error:#?}")
+            eyre!("cannot call vim.ui.select | choices={choices:#?} opts={opts_table:#?} error={error:#?}")
         })?;
 
     Ok(())
