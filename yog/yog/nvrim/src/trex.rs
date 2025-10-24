@@ -35,22 +35,19 @@ pub fn dict() -> Dictionary {
 ///
 /// # Notes
 /// Blockwise selections are treated as a contiguous span (not a rectangle).
-pub fn transform_selection(_: ()) {
-    let Some(selection) = crate::oxi_ext::visual_selection::get(()) else {
-        return;
-    };
+pub fn transform_selection(_: ()) -> Option<()> {
+    let selection = crate::oxi_ext::visual_selection::get(())?;
 
     let choices: Vec<String> = Case::all_cases().iter().map(|c| format!("{:?}", c)).collect();
 
     let lua = mlua::lua();
     let opts = [("prompt", "Select case ")];
-    let opts = match lua.create_table_from(opts) {
-        Ok(opts) => opts,
-        Err(error) => {
+    let opts = lua
+        .create_table_from(opts)
+        .inspect_err(|error| {
             crate::oxi_ext::api::notify_error(&format!("cannot create opts table | opts={opts:#?} error={error:#?}",));
-            return;
-        }
-    };
+        })
+        .ok()?;
 
     let callback = lua
         .create_function(move |_: &mlua::Lua, (_, idx1): (Option<String>, Option<usize>)| {
@@ -79,19 +76,24 @@ pub fn transform_selection(_: ()) {
         })
         .unwrap();
 
-    let vim_ui_select = match lua.globals().get_path::<mlua::Function>("vim.ui.select") {
-        Ok(vim_ui_select) => vim_ui_select,
-        Err(error) => {
+    let vim_ui_select = lua
+        .globals()
+        .get_path::<mlua::Function>("vim.ui.select")
+        .inspect_err(|error| {
             crate::oxi_ext::api::notify_error(&format!(
                 "error fetching vim.ui.select function from Lua globals | error={error:#?}",
             ));
-            return;
-        }
-    };
+        })
+        .ok()?;
 
-    if let Err(error) = vim_ui_select.call::<()>((choices.clone(), opts.clone(), callback)) {
-        crate::oxi_ext::api::notify_error(&format!(
-            "error calling vim.ui.select | choices={choices:#?} opts={opts:#?} error={error:#?}",
-        ));
-    }
+    vim_ui_select
+        .call::<()>((choices.clone(), opts.clone(), callback))
+        .inspect_err(|error| {
+            crate::oxi_ext::api::notify_error(&format!(
+                "error calling vim.ui.select | choices={choices:#?} opts={opts:#?} error={error:#?}",
+            ));
+        })
+        .ok()?;
+
+    None
 }
