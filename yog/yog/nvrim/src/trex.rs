@@ -43,10 +43,13 @@ pub fn transform_selection(_: ()) {
     let choices: Vec<String> = Case::all_cases().iter().map(|c| format!("{:?}", c)).collect();
 
     let lua = mlua::lua();
-    let opts = {
-        let t = lua.create_table().unwrap();
-        t.set("prompt", "Select case ").unwrap();
-        t
+    let opts = [("prompt", "Select case ")];
+    let opts = match lua.create_table_from(opts) {
+        Ok(opts) => opts,
+        Err(error) => {
+            crate::oxi_ext::api::notify_error(&format!("cannot create opts table | opts={opts:#?} error={error:#?}",));
+            return;
+        }
     };
 
     let callback = lua
