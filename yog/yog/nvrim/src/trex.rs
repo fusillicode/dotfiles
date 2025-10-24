@@ -7,8 +7,6 @@ use convert_case::Case;
 use convert_case::Casing as _;
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
-use nvim_oxi::mlua;
-use nvim_oxi::mlua::ObjectLike;
 
 use crate::dict;
 use crate::fn_from;
@@ -40,60 +38,27 @@ pub fn transform_selection(_: ()) -> Option<()> {
 
     let choices: Vec<String> = Case::all_cases().iter().map(|c| format!("{:?}", c)).collect();
 
-    let lua = mlua::lua();
-    let opts = [("prompt", "Select case ")];
-    let opts = lua
-        .create_table_from(opts)
-        .inspect_err(|error| {
-            crate::oxi_ext::api::notify_error(&format!("cannot create opts table | opts={opts:#?} error={error:#?}",));
-        })
-        .ok()?;
-
-    let callback = lua
-        .create_function(move |_: &mlua::Lua, (_, idx1): (Option<String>, Option<usize>)| {
-            if let Some(idx) = idx1.map(|idx1| idx1.saturating_sub(1))
-                && let Some(case) = Case::all_cases().get(idx)
-            {
-                let transformed_lines = selection
-                    .lines()
-                    .iter()
-                    .map(|line| line.as_str().to_case(*case))
-                    .collect::<Vec<_>>();
-                if let Err(error) = Buffer::from(selection.buf_id()).set_text(
-                    selection.line_range(),
-                    selection.start().col,
-                    selection.end().col,
-                    transformed_lines,
-                ) {
-                    crate::oxi_ext::api::notify_error(&format!(
-                        "cannot set lines of buffer | start={:#?} end={:#?} error={error:#?}",
-                        selection.start(),
-                        selection.end()
-                    ));
-                }
+    crate::oxi_ext::api::vim_ui_select(choices, [("prompt", "Select case ")], move |idx| {
+        if let Some(case) = Case::all_cases().get(idx) {
+            let transformed_lines = selection
+                .lines()
+                .iter()
+                .map(|line| line.as_str().to_case(*case))
+                .collect::<Vec<_>>();
+            if let Err(error) = Buffer::from(selection.buf_id()).set_text(
+                selection.line_range(),
+                selection.start().col,
+                selection.end().col,
+                transformed_lines,
+            ) {
+                crate::oxi_ext::api::notify_error(&format!(
+                    "cannot set lines of buffer | start={:#?} end={:#?} error={error:#?}",
+                    selection.start(),
+                    selection.end()
+                ));
             }
-            Ok(())
-        })
-        .unwrap();
-
-    let vim_ui_select = lua
-        .globals()
-        .get_path::<mlua::Function>("vim.ui.select")
-        .inspect_err(|error| {
-            crate::oxi_ext::api::notify_error(&format!(
-                "error fetching vim.ui.select function from Lua globals | error={error:#?}",
-            ));
-        })
-        .ok()?;
-
-    vim_ui_select
-        .call::<()>((choices.clone(), opts.clone(), callback))
-        .inspect_err(|error| {
-            crate::oxi_ext::api::notify_error(&format!(
-                "error calling vim.ui.select | choices={choices:#?} opts={opts:#?} error={error:#?}",
-            ));
-        })
-        .ok()?;
+        }
+    })?;
 
     None
 }

@@ -4,6 +4,8 @@
 //! utilities wrapping [`nvim_oxi::api::set_option_value`], emitting notifications via
 //! Uses `crate::oxi_ext::api::notify_error` on failure.
 
+use core::fmt::Debug;
+use core::marker::Copy;
 use std::fmt::Write as _;
 
 use nvim_oxi::Dictionary;
@@ -25,7 +27,7 @@ pub fn dict() -> Dictionary {
 /// Sets a Vim option by `name` to `value` within the given [`OptionOpts`].
 ///
 /// Errors are notified to Nvim via `crate::oxi_ext::api::notify_error`.
-pub fn set<Opt: ToObject + core::fmt::Debug + core::marker::Copy>(name: &str, value: Opt, opts: &OptionOpts) {
+pub fn set<Opt: ToObject + Debug + Copy>(name: &str, value: Opt, opts: &OptionOpts) {
     if let Err(error) = nvim_oxi::api::set_option_value(name, value, opts) {
         crate::oxi_ext::api::notify_error(&format!(
             "cannot set option | name={name:?} value={value:#?} opts={opts:#?} error={error:#?}"

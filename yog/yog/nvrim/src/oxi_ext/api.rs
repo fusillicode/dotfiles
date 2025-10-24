@@ -3,11 +3,16 @@
 //! Helpers include global var setting, notifications (`notify_error` / `notify_warn`), ex command
 //! execution, and interactive list selection (`inputlist`).
 
+use core::fmt::Debug;
+
 use nvim_oxi::Array;
 use nvim_oxi::api::opts::CmdOpts;
 use nvim_oxi::api::types::CmdInfosBuilder;
 use nvim_oxi::api::types::LogLevel;
 use nvim_oxi::conversion::ToObject;
+use nvim_oxi::mlua;
+use nvim_oxi::mlua::IntoLua;
+use nvim_oxi::mlua::ObjectLike;
 
 use crate::dict;
 
@@ -16,7 +21,7 @@ use crate::dict;
 /// Wraps [`nvim_oxi::api::set_var`].
 ///
 /// Errors are reported to Nvim via [`notify_error`].
-pub fn set_g_var<V: ToObject + core::fmt::Debug>(name: &str, value: V) {
+pub fn set_g_var<V: ToObject + Debug>(name: &str, value: V) {
     let msg = format!("cannot set global var | name={name} value={value:#?}");
     if let Err(error) = nvim_oxi::api::set_var(name, value) {
         crate::oxi_ext::api::notify_error(&format!("{msg} | error={error:#?}"));
@@ -41,10 +46,10 @@ pub fn notify_warn(msg: &str) {
 ///
 /// Wraps [`nvim_oxi::api::cmd`], reporting failures through
 /// [`crate::oxi_ext::api::notify_error`].
-pub fn exec_vim_cmd<S, I>(cmd: impl Into<String> + core::fmt::Debug + std::marker::Copy, args: I)
+pub fn exec_vim_cmd<S, I>(cmd: impl Into<String> + Debug + std::marker::Copy, args: I)
 where
     S: Into<String>,
-    I: IntoIterator<Item = S> + core::fmt::Debug + std::marker::Copy,
+    I: IntoIterator<Item = S> + Debug + std::marker::Copy,
 {
     if let Err(error) = nvim_oxi::api::cmd(
         &CmdInfosBuilder::default().cmd(cmd).args(args).build(),
@@ -85,4 +90,53 @@ pub fn inputlist<'a, I: core::fmt::Display>(prompt: &'a str, items: &'a [I]) -> 
     Ok(usize::try_from(idx.saturating_sub(1))
         .ok()
         .and_then(|idx| items.get(idx)))
+}
+
+pub fn vim_ui_select<K, V>(
+    choices: Vec<String>,
+    opts: impl IntoIterator<Item = (K, V)> + Debug + Clone,
+    callback: impl Fn(usize) + 'static,
+) -> Option<()>
+where
+    K: IntoLua,
+    V: IntoLua,
+{
+    let lua = mlua::lua();
+
+    let vim_ui_select = lua
+        .globals()
+        .get_path::<mlua::Function>("vim.ui.select")
+        .inspect_err(|error| {
+            crate::oxi_ext::api::notify_error(&format!(
+                "error fetching vim.ui.select function from Lua globals | error={error:#?}",
+            ));
+        })
+        .ok()?;
+
+    let opts_table = lua
+        .create_table_from(opts.clone())
+        .inspect_err(|error| {
+            crate::oxi_ext::api::notify_error(&format!("cannot create opts table | opts={opts:#?} error={error:#?}",));
+        })
+        .ok()?;
+
+    let vim_ui_select_callback = lua
+        .create_function(move |_: &mlua::Lua, (_, idx1): (Option<String>, Option<usize>)| {
+            if let Some(idx) = idx1.map(|idx1| idx1.saturating_sub(1)) {
+                callback(idx)
+            }
+            Ok(())
+        })
+        .unwrap();
+
+    vim_ui_select
+        .call::<()>((choices.clone(), opts_table.clone(), vim_ui_select_callback))
+        .inspect_err(|error| {
+            crate::oxi_ext::api::notify_error(&format!(
+                "error calling vim.ui.select | choices={choices:#?} opts={opts_table:#?} error={error:#?}",
+            ));
+        })
+        .ok()?;
+
+    Some(())
 }
