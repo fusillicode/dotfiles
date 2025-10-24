@@ -3,8 +3,6 @@
 //! Provides a namespaced [`Dictionary`] exposing selection transformation
 //! functionality (currently only case conversion via [`convert_case`]).
 
-// use std::ops::Deref;
-
 use convert_case::Case;
 use convert_case::Casing as _;
 use nvim_oxi::Dictionary;
@@ -42,7 +40,7 @@ pub fn transform_selection(_: ()) {
         return;
     };
 
-    let options: Vec<String> = Case::all_cases().iter().map(|c| format!("{:?}", c)).collect();
+    let choices: Vec<String> = Case::all_cases().iter().map(|c| format!("{:?}", c)).collect();
 
     let lua = mlua::lua();
     let opts = {
@@ -78,24 +76,19 @@ pub fn transform_selection(_: ()) {
         })
         .unwrap();
 
-    let vim_ui_select = lua.globals().get_path::<mlua::Function>("vim.ui.select").unwrap();
-    let _ = vim_ui_select.call::<()>((options, opts, callback));
-}
+    let vim_ui_select = match lua.globals().get_path::<mlua::Function>("vim.ui.select") {
+        Ok(vim_ui_select) => vim_ui_select,
+        Err(error) => {
+            crate::oxi_ext::api::notify_error(&format!(
+                "error fetching vim.ui.select function from Lua globals | error={error:#?}",
+            ));
+            return;
+        }
+    };
 
-// /// Wrapper implementing [`core::fmt::Display`] for [`Case`] so choices can be
-// /// shown in the prompt list.
-// struct CaseWrap<'a>(Case<'a>);
-//
-// impl core::fmt::Display for CaseWrap<'_> {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "{:?}", self.0)
-//     }
-// }
-//
-// impl<'a> Deref for CaseWrap<'a> {
-//     type Target = Case<'a>;
-//
-//     fn deref(&self) -> &Self::Target {
-//         &self.0
-//     }
-// }
+    if let Err(error) = vim_ui_select.call::<()>((choices.clone(), opts.clone(), callback)) {
+        crate::oxi_ext::api::notify_error(&format!(
+            "error calling vim.ui.select | choices={choices:#?} opts={opts:#?} error={error:#?}",
+        ));
+    }
+}
