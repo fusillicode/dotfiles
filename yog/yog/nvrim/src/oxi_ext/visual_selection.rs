@@ -137,14 +137,8 @@ impl SelectionBounds {
     /// - Fails if retrieving either mark fails.
     /// - Fails if the two marks reference different buffers.
     pub fn new() -> color_eyre::Result<Self> {
-        let cursor_pos = match get_pos(".") {
-            Ok(p) => p,
-            Err(_) => return Err(eyre!("get_pos failed")),
-        };
-        let visual_pos = match get_pos("v") {
-            Ok(p) => p,
-            Err(_) => return Err(eyre!("get_pos failed")),
-        };
+        let cursor_pos = get_pos(".")?;
+        let visual_pos = get_pos("v")?;
 
         let (start, end) = cursor_pos.sort(visual_pos);
 
@@ -303,22 +297,23 @@ impl Poppable for Pos {
     }
 }
 
-/// Call Nvim function `getpos()` for the supplied mark identifier and return a normalized [`Pos`].
+/// Calls Neovim's `getpos()` function for the supplied mark identifier and returns a normalized [`Pos`].
 ///
-/// On success converts the raw 1-based tuple into 0-based [`Pos`].
-/// On failure emits an error notification and returns the originating error unchanged.
+/// On success, converts the raw 1-based tuple into a 0-based [`Pos`].
+/// On failure, emits an error notification via [`crate::oxi_ext::api::notify_error`] and wraps the error with
+/// additional context using [`color_eyre::eyre`].
 ///
 /// # Arguments
-/// - `mark`: Mark identifier accepted by `getpos()` (e.g. `"v"` for start of active Visual selection, `"."` for the
+/// - `mark` Mark identifier accepted by `getpos()` (e.g. `"v"` for start of active Visual selection, `"."` for the
 ///   cursor position).
 ///
 /// # Errors
 /// - Calling `getpos()` fails.
 /// - Deserializing the returned tuple into [`Pos`] fails.
-fn get_pos(mark: &str) -> nvim_oxi::Result<Pos> {
-    Ok(
-        nvim_oxi::api::call_function::<_, Pos>("getpos", Array::from_iter([mark])).inspect_err(|error| {
+fn get_pos(mark: &str) -> color_eyre::Result<Pos> {
+    nvim_oxi::api::call_function::<_, Pos>("getpos", Array::from_iter([mark]))
+        .inspect_err(|error| {
             crate::oxi_ext::api::notify_error(&format!("cannot get pos | mark={mark} error={error:#?}"));
-        })?,
-    )
+        })
+        .map_err(|error| eyre!("get_pos failed | mark={mark:?} error={error:#?}"))
 }
