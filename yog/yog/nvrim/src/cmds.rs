@@ -5,9 +5,6 @@
 
 use nvim_oxi::Dictionary;
 
-use crate::dict;
-use crate::fn_from;
-
 mod auto_cmds;
 mod user_cmds;
 

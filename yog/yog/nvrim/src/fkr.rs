@@ -2,16 +2,13 @@
 //!
 //! Exposes a dictionary with an insertion command (`insert_string`) prompting the user to select an
 //! [`::fkr::FkrOption`] then inserting the generated string at the cursor. Input / buffer errors are
-//! reported via [`crate::oxi_ext::api::notify_error`].
+//! reported via [`ytil_nvim_oxi::api::notify_error`].
 
 use fkr::FkrOption;
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
 use strum::IntoEnumIterator;
-
-use crate::dict;
-use crate::fn_from;
-use crate::oxi_ext::buffer::BufferExt as _;
+use ytil_nvim_oxi::buffer::BufferExt as _;
 
 /// [`Dictionary`] of random string generation helpers powered by [`fkr`].
 ///
@@ -26,9 +23,9 @@ pub fn dict() -> Dictionary {
 
 /// Prompt the user to select a [`fkr::FkrOption`] and insert its generated string.
 ///
-/// The user is shown a numbered menu via [`crate::oxi_ext::api::inputlist`]; on
+/// The user is shown a numbered menu via [`ytil_nvim_oxi::api::inputlist`]; on
 /// selection the corresponding generated string is inserted at the cursor using
-/// [`crate::oxi_ext::buffer::BufferExt::set_text_at_cursor_pos`].
+/// [`ytil_nvim_oxi::buffer::BufferExt::set_text_at_cursor_pos`].
 ///
 /// Behaviour:
 /// - Returns early (no insertion) if fetching user input fails or is canceled.
@@ -36,8 +33,8 @@ pub fn dict() -> Dictionary {
 fn insert_string(_: ()) {
     let options: Vec<_> = FkrOption::iter().collect();
 
-    let Ok(selected_option) = crate::oxi_ext::api::inputlist("Select option:", &options).inspect_err(|error| {
-        crate::oxi_ext::api::notify_error(&format!("cannot get user input | error={error:#?}"));
+    let Ok(selected_option) = ytil_nvim_oxi::api::inputlist("Select option:", &options).inspect_err(|error| {
+        ytil_nvim_oxi::api::notify_error(&format!("cannot get user input | error={error:#?}"));
     }) else {
         return;
     };

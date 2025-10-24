@@ -13,12 +13,10 @@
 
 use nvim_oxi::Dictionary;
 use serde::Deserialize;
+use ytil_nvim_oxi::api::notify_error;
+use ytil_nvim_oxi::api::notify_warn;
 
 use crate::diagnostics::DiagnosticSeverity;
-use crate::dict;
-use crate::fn_from;
-use crate::oxi_ext::api::notify_error;
-use crate::oxi_ext::api::notify_warn;
 
 /// [`Dictionary`] of linters parsers.
 pub fn dict() -> Dictionary {

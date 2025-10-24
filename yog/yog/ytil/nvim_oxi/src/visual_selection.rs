@@ -6,6 +6,7 @@
 use std::ops::Range;
 
 use color_eyre::eyre::bail;
+use color_eyre::eyre::eyre;
 use nvim_oxi::Array;
 use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;
@@ -17,7 +18,7 @@ use nvim_oxi::lua::ffi::State;
 use serde::Deserialize;
 use serde::Deserializer;
 
-use crate::oxi_ext::buffer::BufferExt;
+use crate::buffer::BufferExt;
 
 /// Extract selected text lines from the current [`Buffer`] using the active Visual range.
 ///
@@ -50,7 +51,7 @@ pub fn get_lines(_: ()) -> Vec<String> {
 /// Returns [`None`] if any prerequisite (positions, lines, text extraction) fails.
 pub fn get(_: ()) -> Option<Selection> {
     let Ok(mut bounds) = SelectionBounds::new().inspect_err(|error| {
-        crate::oxi_ext::api::notify_error(&format!("cannot create selection bounds | error={error:#?}"));
+        crate::api::notify_error(&format!("cannot create selection bounds | error={error:#?}"));
     }) else {
         return None;
     };
@@ -63,7 +64,7 @@ pub fn get(_: ()) -> Option<Selection> {
         let Ok(lines) = cur_buf
             .get_lines(bounds.start().lnum..=bounds.end().lnum, false)
             .inspect_err(|error| {
-                crate::oxi_ext::api::notify_error(&format!("cannot get lines | buffer={cur_buf:#?} error={error:#?}"));
+                crate::api::notify_error(&format!("cannot get lines | buffer={cur_buf:#?} error={error:#?}"));
             })
         else {
             return None;
@@ -88,7 +89,7 @@ pub fn get(_: ()) -> Option<Selection> {
             &GetTextOpts::default(),
         )
         .inspect_err(|error| {
-            crate::oxi_ext::api::notify_error(&format!(
+            crate::api::notify_error(&format!(
                 "cannot get text | buffer={cur_buf:#?} bounds={bounds:#?} error={error:#?}"
             ));
         })
@@ -124,7 +125,13 @@ pub struct SelectionBounds {
 }
 
 impl SelectionBounds {
-    /// Build bounds from cursor (`.`) and visual start (`v`) marks.
+    /// Builds selection bounds from the current cursor (`.`) and visual start (`v`) marks.
+    ///
+    /// Retrieves positions using Neovim's `getpos()` function and normalizes them to 0-based indices.
+    /// The start and end are sorted to ensure start is before end.
+    ///
+    /// # Returns
+    /// Returns a new `SelectionBounds` instance with normalized start and end positions.
     ///
     /// # Errors
     /// - Fails if retrieving either mark fails.
@@ -290,22 +297,23 @@ impl Poppable for Pos {
     }
 }
 
-/// Call Nvim function `getpos()` for the supplied mark identifier and return a normalized [`Pos`].
+/// Calls Neovim's `getpos()` function for the supplied mark identifier and returns a normalized [`Pos`].
 ///
-/// On success converts the raw 1-based tuple into 0-based [`Pos`].
-/// On failure emits an error notification and returns the originating error unchanged.
+/// On success, converts the raw 1-based tuple into a 0-based [`Pos`].
+/// On failure, emits an error notification via [`crate::api::notify_error`] and wraps the error with
+/// additional context using [`color_eyre::eyre`].
 ///
 /// # Arguments
-/// - `mark`: Mark identifier accepted by `getpos()` (e.g. `"v"` for start of active Visual selection, `"."` for the
+/// - `mark` Mark identifier accepted by `getpos()` (e.g. `"v"` for start of active Visual selection, `"."` for the
 ///   cursor position).
 ///
 /// # Errors
 /// - Calling `getpos()` fails.
 /// - Deserializing the returned tuple into [`Pos`] fails.
-fn get_pos(mark: &str) -> nvim_oxi::Result<Pos> {
-    Ok(
-        nvim_oxi::api::call_function::<_, Pos>("getpos", Array::from_iter([mark])).inspect_err(|error| {
-            crate::oxi_ext::api::notify_error(&format!("cannot get pos | mark={mark} error={error:#?}"));
-        })?,
-    )
+fn get_pos(mark: &str) -> color_eyre::Result<Pos> {
+    nvim_oxi::api::call_function::<_, Pos>("getpos", Array::from_iter([mark]))
+        .inspect_err(|error| {
+            crate::api::notify_error(&format!("cannot get pos | mark={mark} error={error:#?}"));
+        })
+        .map_err(|error| eyre!("get_pos failed | mark={mark:?} error={error:#?}"))
 }

@@ -1,5 +1,5 @@
 [package]
-name = "nvrim"
+name = "ytil_nvim_oxi"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -10,30 +10,14 @@ description = "Expose Neovim Lua modules backed by Rust utilities."
 keywords = ["neovim", "nvim", "lua", "plugin", "rust", "editor"]
 categories = ["command-line-utilities", "development-tools"]
 
-[lib]
-crate-type = ["cdylib"]
-
 [dependencies]
 color-eyre = { workspace = true }
-convert_case = { workspace = true }
-fkr = { path = "../fkr" }
 nvim-oxi = { git = "https://github.com/noib3/nvim-oxi", rev = "b1278b123dbac3908f2686ebed6fdadbfef15be1", features = [
   "neovim-nightly",
   "mlua",
 ] }
 serde = { workspace = true }
-serde_json = { workspace = true }
-strum = { workspace = true }
-tree-sitter = { version = "0.25" }
-tree-sitter-rust = { version = "0.24" }
-url = { version = "2.5" }
-ytil_cmd = { workspace = true }
-ytil_git = { workspace = true }
-ytil_nvim_oxi = { workspace = true }
-ytil_system = { workspace = true }
-ytil_wezterm = { workspace = true }
 
 [dev-dependencies]
 assert2 = { workspace = true }
 pretty_assertions = { workspace = true }
-rstest = { workspace = true }

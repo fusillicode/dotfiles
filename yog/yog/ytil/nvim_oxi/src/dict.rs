@@ -8,7 +8,7 @@ use color_eyre::eyre::eyre;
 use nvim_oxi::Dictionary;
 use nvim_oxi::ObjectKind;
 
-use crate::oxi_ext::extract::OxiExtract;
+use crate::extract::OxiExtract;
 
 /// Extension trait for [`Dictionary`] to provide typed getters.
 pub trait DictionaryExt {
@@ -80,7 +80,7 @@ impl DictionaryExt for Dictionary {
         for key in keys {
             let Some(obj) = current.get(key) else { return Ok(None) };
             current = Self::try_from(obj.clone()).with_context(|| {
-                crate::oxi_ext::extract::unexpected_kind_error_msg(obj, key, &current, ObjectKind::Dictionary)
+                crate::extract::unexpected_kind_error_msg(obj, key, &current, ObjectKind::Dictionary)
             })?;
         }
 

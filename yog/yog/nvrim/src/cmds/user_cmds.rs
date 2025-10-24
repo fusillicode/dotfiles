@@ -34,7 +34,7 @@ where
     Cmd: StringOrFunction<CommandArgs, ()>,
 {
     if let Err(error) = nvim_oxi::api::create_user_command(name, command, opts) {
-        crate::oxi_ext::api::notify_error(&format!(
+        ytil_nvim_oxi::api::notify_error(&format!(
             "cannot create user command | name={name} opts={opts:#?} error={error:#?}"
         ));
     }

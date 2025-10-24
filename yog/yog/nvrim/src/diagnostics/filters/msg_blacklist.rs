@@ -5,9 +5,9 @@
 //! suppression.
 
 use nvim_oxi::Dictionary;
+use ytil_nvim_oxi::dict::DictionaryExt;
 
 use crate::diagnostics::filters::DiagnosticsFilter;
-use crate::oxi_ext::dict::DictionaryExt;
 
 pub mod harper;
 pub mod typos;
@@ -87,7 +87,6 @@ impl DiagnosticsFilter for MsgBlacklistFilter<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dict;
 
     #[test]
     fn skip_returns_false_when_no_diagnostic() {

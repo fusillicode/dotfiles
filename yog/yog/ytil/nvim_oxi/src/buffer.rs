@@ -58,7 +58,7 @@ impl BufferExt for Buffer {
         let text = vec![text];
 
         if let Err(error) = self.set_text(line_range.clone(), start_col, end_col, text.clone()) {
-            crate::oxi_ext::api::notify_error(&format!(
+            crate::api::notify_error(&format!(
                 "cannot set text in buffer | text={text:?} buffer={self:?} line_range={line_range:?} start_col={start_col:?} end_col={end_col:?} error={error:?}",
             ));
         }
@@ -105,7 +105,7 @@ impl CursorPosition {
     pub fn get_current() -> Option<Self> {
         let cur_win = Window::current();
         let Ok((row, col)) = cur_win.get_cursor().inspect_err(|error| {
-            crate::oxi_ext::api::notify_error(&format!("cannot get cursor | window={cur_win:?} error={error:?}"));
+            crate::api::notify_error(&format!("cannot get cursor | window={cur_win:?} error={error:?}"));
         }) else {
             return None;
         };

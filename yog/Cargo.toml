@@ -24,6 +24,7 @@ members = [
     "yog/ytil/git",
     "yog/ytil/github",
     "yog/ytil/hx",
+    "yog/ytil/nvim_oxi",
     "yog/ytil/system",
     "yog/ytil/tui",
     "yog/ytil/wezterm",
@@ -66,6 +67,7 @@ ytil_editor = { path = "./yog/ytil/editor" }
 ytil_git = { path = "./yog/ytil/git" }
 ytil_github = { path = "./yog/ytil/github" }
 ytil_hx = { path = "./yog/ytil/hx" }
+ytil_nvim_oxi = { path = "./yog/ytil/nvim_oxi" }
 ytil_system = { path = "./yog/ytil/system" }
 ytil_tui = { path = "./yog/ytil/tui" }
 ytil_wezterm = { path = "./yog/ytil/wezterm" }

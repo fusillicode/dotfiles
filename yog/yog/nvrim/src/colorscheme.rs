@@ -12,9 +12,6 @@ use nvim_oxi::api::opts::SetHighlightOptsBuilder;
 use nvim_oxi::api::types::GetHlInfos;
 use nvim_oxi::api::types::HighlightInfos;
 
-use crate::dict;
-use crate::fn_from;
-
 const BG: &str = "#002200";
 const DIAGNOSTIC_LVLS: [&str; 5] = ["Error", "Warn", "Info", "Hint", "Ok"];
 const STATUS_LINE_BG: &str = "none";
@@ -30,7 +27,7 @@ pub fn dict() -> Dictionary {
 #[allow(clippy::needless_pass_by_value)]
 pub fn set(colorscheme: Option<String>) {
     if let Some(cs) = colorscheme {
-        crate::oxi_ext::api::exec_vim_cmd("colorscheme", &[cs]);
+        ytil_nvim_oxi::api::exec_vim_cmd("colorscheme", &[cs]);
     }
 
     let opts = crate::vim_opts::global_scope();
@@ -92,7 +89,7 @@ fn get_opts() -> GetHighlightOptsBuilder {
 /// Wrapper around `nvim_oxi::api::set_hl` with error notification.
 fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &SetHighlightOpts) {
     if let Err(error) = nvim_oxi::api::set_hl(ns_id, hl_name, hl_opts) {
-        crate::oxi_ext::api::notify_error(&format!(
+        ytil_nvim_oxi::api::notify_error(&format!(
             "cannot set highlight opts | hl_opts={hl_opts:#?} hl_name={hl_name} namespace={ns_id} error={error:#?}"
         ));
     }
@@ -110,7 +107,7 @@ fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &SetHighlightOpts) {
 fn get_hl(ns_id: u32, hl_opts: &GetHighlightOpts) -> color_eyre::Result<HighlightInfos> {
     nvim_oxi::api::get_hl(ns_id, hl_opts)
         .inspect_err(|error| {
-            crate::oxi_ext::api::notify_error(&format!(
+            ytil_nvim_oxi::api::notify_error(&format!(
                 "cannot get highlight infos | hl_opts={hl_opts:#?} error={error:#?}"
             ));
         })
@@ -142,7 +139,7 @@ fn hl_opts_from_hl_infos(hl_infos: &HighlightInfos) -> color_eyre::Result<SetHig
         .map(u8::try_from)
         .transpose()
         .inspect_err(|error| {
-            crate::oxi_ext::api::notify_error(&format!(
+            ytil_nvim_oxi::api::notify_error(&format!(
                 "cannot convert blend value to u8 | value={:?} error={error:#?}",
                 hl_infos.blend
             ));

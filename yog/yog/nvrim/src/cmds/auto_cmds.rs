@@ -3,6 +3,9 @@
 //! Creates yank highlight, autosave, and quickfix configuration autocmds with resilient error
 //! reporting (failures logged, rest continue). Provides granular `create_autocmd` utility.
 
+use core::fmt::Debug;
+use core::marker::Copy;
+
 use nvim_oxi::api::opts::CreateAugroupOptsBuilder;
 use nvim_oxi::api::opts::CreateAutocmdOptsBuilder;
 use nvim_oxi::api::opts::SetKeymapOptsBuilder;
@@ -34,7 +37,7 @@ pub fn create() {
             crate::keymaps::set(&[Mode::Normal], "<c-n>", ":cn<cr>", &opts);
             crate::keymaps::set(&[Mode::Normal], "<c-p>", ":cp<cr>", &opts);
             crate::keymaps::set(&[Mode::Normal], "<c-x>", ":ccl<cr>", &opts);
-            crate::oxi_ext::api::exec_vim_cmd("resize", &["7".to_string()]);
+            ytil_nvim_oxi::api::exec_vim_cmd("resize", &["7".to_string()]);
 
             true
         }),
@@ -47,18 +50,18 @@ pub fn create() {
 /// does not abort the rest of the setup.
 pub fn create_autocmd<'a, I>(events: I, augroup_name: &str, opts_builder: &mut CreateAutocmdOptsBuilder)
 where
-    I: IntoIterator<Item = &'a str> + core::fmt::Debug + core::marker::Copy,
+    I: IntoIterator<Item = &'a str> + Debug + Copy,
 {
     if let Err(error) =
         nvim_oxi::api::create_augroup(augroup_name, &CreateAugroupOptsBuilder::default().clear(true).build())
             .inspect_err(|error| {
-                crate::oxi_ext::api::notify_error(&format!(
+                ytil_nvim_oxi::api::notify_error(&format!(
                     "cannot create augroup | name={augroup_name:#?} error={error:#?}"
                 ));
             })
             .and_then(|group| nvim_oxi::api::create_autocmd(events, &opts_builder.group(group).build()))
     {
-        crate::oxi_ext::api::notify_error(&format!(
+        ytil_nvim_oxi::api::notify_error(&format!(
             "cannot create auto command | events={events:#?} augroup={augroup_name} error={error:#?}"
         ));
     }

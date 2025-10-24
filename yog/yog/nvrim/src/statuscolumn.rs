@@ -2,7 +2,7 @@
 //!
 //! Supplies `statuscolumn.dict()` exposing `draw`, rendering line numbers / extmarks while honoring
 //! special buffer types (e.g. minimal output for transient search buffers). Errors are notified via
-//! [`crate::oxi_ext::api::notify_error`].
+//! [`ytil_nvim_oxi::api::notify_error`].
 
 use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
@@ -15,8 +15,6 @@ use nvim_oxi::serde::Deserializer;
 use serde::Deserialize;
 
 use crate::diagnostics::DiagnosticSeverity;
-use crate::dict;
-use crate::fn_from;
 
 /// [`Dictionary`] exposing statuscolumn draw helpers.
 pub fn dict() -> Dictionary {
@@ -29,7 +27,7 @@ pub fn dict() -> Dictionary {
 ///
 /// # Returns
 /// - `Some(String)`: formatted status column when the current buffer `buftype` is successfully retrieved.
-/// - `None`: if `buftype` retrieval fails (details logged via [`crate::oxi_ext::api::notify_error`]).
+/// - `None`: if `buftype` retrieval fails (details logged via [`ytil_nvim_oxi::api::notify_error`]).
 ///
 /// Special cases:
 /// - When `buftype == "grug-far"` returns a single space string to minimize visual noise in transient search buffers.
@@ -42,7 +40,7 @@ fn draw((cur_lnum, extmarks): (String, Vec<Extmark>)) -> Option<String> {
     let opts = OptionOptsBuilder::default().buf(cur_buf.clone()).build();
     let buf_type = nvim_oxi::api::get_option_value::<String>("buftype", &opts)
         .inspect_err(|error| {
-            crate::oxi_ext::api::notify_error(&format!(
+            ytil_nvim_oxi::api::notify_error(&format!(
                 "cannot get buftype of current buffer | buffer={cur_buf:#?} error={error:#?}"
             ));
         })

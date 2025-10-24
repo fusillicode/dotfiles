@@ -1326,6 +1326,7 @@ dependencies = [
  "url",
  "ytil_cmd",
  "ytil_git",
+ "ytil_nvim_oxi",
  "ytil_system",
  "ytil_wezterm",
 ]
@@ -2609,6 +2610,17 @@ version = "0.1.0"
 dependencies = [
  "color-eyre",
  "fake",
+]
+
+[[package]]
+name = "ytil_nvim_oxi"
+version = "0.1.0"
+dependencies = [
+ "assert2",
+ "color-eyre",
+ "nvim-oxi",
+ "pretty_assertions",
+ "serde",
 ]
 
 [[package]]

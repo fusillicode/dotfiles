@@ -7,12 +7,10 @@ use nvim_oxi::Array;
 use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
 use strum::IntoEnumIterator;
+use ytil_nvim_oxi::dict::DictionaryExt;
 
 use crate::diagnostics::DiagnosticSeverity;
-use crate::diagnostics::dict;
 use crate::diagnostics::formatter;
-use crate::fn_from;
-use crate::oxi_ext::dict::DictionaryExt;
 
 /// Nvim diagnostics configuration.
 pub fn get() -> Dictionary {

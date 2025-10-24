@@ -19,7 +19,7 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
         .get_name()
         .map(|s| s.to_string_lossy().to_string())
         .inspect_err(|error| {
-            crate::oxi_ext::api::notify_error(&format!(
+            ytil_nvim_oxi::api::notify_error(&format!(
                 "cannot get buffer name | buffer={cur_buf:#?} error={error:#?}"
             ));
         })
@@ -32,7 +32,7 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
     if BufferFilter::new()
         .skip_diagnostic(&buf_path, None)
         .inspect_err(|error| {
-            crate::oxi_ext::api::notify_error(&format!(
+            ytil_nvim_oxi::api::notify_error(&format!(
                 "cannot filter diagnostics by buffer | buffer={buf_path} error={error:#?}"
             ));
         })
@@ -42,7 +42,7 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
     }
 
     let Ok(filters) = DiagnosticsFilters::all(&lsp_diags).inspect_err(|error| {
-        crate::oxi_ext::api::notify_error(&format!("cannot get diagnostics filters | error={error:#?}"));
+        ytil_nvim_oxi::api::notify_error(&format!("cannot get diagnostics filters | error={error:#?}"));
     }) else {
         return vec![];
     };
@@ -52,7 +52,7 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
         if filters
             .skip_diagnostic(&buf_path, Some(&lsp_diag))
             .inspect_err(|error| {
-                crate::oxi_ext::api::notify_error(&format!(
+                ytil_nvim_oxi::api::notify_error(&format!(
                     "cannot filter diagnostic | diagnostic={lsp_diag:#?} buffer={buf_path:#?} error={error:?}"
                 ));
             })
