@@ -93,6 +93,23 @@ pub fn inputlist<'a, I: core::fmt::Display>(prompt: &'a str, items: &'a [I]) -> 
         .and_then(|idx| items.get(idx)))
 }
 
+/// Prompts the user to select an item from a list using Neovim's `vim.ui.select`.
+///
+/// Wraps the Lua `vim.ui.select` function to provide an interactive selection prompt.
+/// The selected index (0-based) is passed to the provided callback.
+///
+/// # Arguments
+/// - `choices` List of string options to display for selection.
+/// - `opts` Key-value pairs for additional options (e.g., prompt text).
+/// - `callback` Closure invoked with the 0-based index of the selected choice.
+///
+/// # Returns
+/// Returns `Ok(())` if the selection succeeds.
+///
+/// # Errors
+/// - Fails if `vim.ui.select` cannot be fetched from Lua globals.
+/// - Fails if the options table cannot be created.
+/// - Fails if calling `vim.ui.select` encounters an error.
 pub fn vim_ui_select<K, V>(
     choices: Vec<String>,
     opts: impl IntoIterator<Item = (K, V)> + Debug + Clone,

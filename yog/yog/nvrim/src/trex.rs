@@ -22,14 +22,23 @@ pub fn dict() -> Dictionary {
     }
 }
 
-/// Transform the current Visual selection to a user‑chosen [`Case`].
+/// Transforms the current visual selection to a user-chosen case variant.
 ///
-/// Prompts (via [`crate::oxi_ext::api::inputlist`]) for a case variant, converts all
-/// selected lines in place, and replaces the selection text. Returns early if:
+/// Prompts the user (via [`crate::oxi_ext::api::vim_ui_select`]) to select a case conversion
+/// option, then applies the transformation to all selected lines in place.
+///
+/// Returns early if:
 /// - No active Visual selection is detected.
 /// - The user cancels the prompt.
 /// - Writing the transformed text back to the buffer fails (an error is reported via
 ///   [`crate::oxi_ext::api::notify_error`]).
+///
+/// # Returns
+/// Returns `Some(())` if the transformation succeeds, or `None` otherwise.
+///
+/// # Errors
+/// Errors from [`crate::oxi_ext::api::vim_ui_select`] are reported via [`crate::oxi_ext::api::notify_error`]
+/// using the direct display representation of [`color_eyre::Report`].
 ///
 /// # Notes
 /// Blockwise selections are treated as a contiguous span (not a rectangle).
@@ -61,7 +70,6 @@ pub fn transform_selection(_: ()) -> Option<()> {
         }
     })
     .inspect_err(|error| {
-        // Just using the `error` display representation as it is a [`color_eyre::Report`]
         crate::oxi_ext::api::notify_error(&format!("{error}"));
     })
     .ok()?;

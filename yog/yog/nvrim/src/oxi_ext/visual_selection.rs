@@ -125,7 +125,13 @@ pub struct SelectionBounds {
 }
 
 impl SelectionBounds {
-    /// Build bounds from cursor (`.`) and visual start (`v`) marks.
+    /// Builds selection bounds from the current cursor (`.`) and visual start (`v`) marks.
+    ///
+    /// Retrieves positions using Neovim's `getpos()` function and normalizes them to 0-based indices.
+    /// The start and end are sorted to ensure start is before end.
+    ///
+    /// # Returns
+    /// Returns a new `SelectionBounds` instance with normalized start and end positions.
     ///
     /// # Errors
     /// - Fails if retrieving either mark fails.
