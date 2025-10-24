@@ -48,7 +48,7 @@ pub fn transform_selection(_: ()) -> Option<()> {
     let cases = Case::all_cases();
     let choices: Vec<String> = cases.iter().map(|c| format!("{c:?}")).collect();
 
-    crate::oxi_ext::api::vim_ui_select(choices, [("prompt", "Select case ")], move |choice_idx| {
+    crate::oxi_ext::api::vim_ui_select(&choices, &[("prompt", "Select case ")], move |choice_idx| {
         if let Some(case) = cases.get(choice_idx) {
             let transformed_lines = selection
                 .lines()

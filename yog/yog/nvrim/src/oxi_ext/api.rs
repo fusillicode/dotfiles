@@ -111,8 +111,8 @@ pub fn inputlist<'a, I: core::fmt::Display>(prompt: &'a str, items: &'a [I]) -> 
 /// - Fails if the options table cannot be created.
 /// - Fails if calling `vim.ui.select` encounters an error.
 pub fn vim_ui_select<K, V>(
-    choices: Vec<String>,
-    opts: impl IntoIterator<Item = (K, V)> + Debug + Clone,
+    choices: &[String],
+    opts: &(impl IntoIterator<Item = (K, V)> + Debug + Clone),
     callback: impl Fn(usize) + 'static,
 ) -> color_eyre::Result<()>
 where
@@ -124,7 +124,7 @@ where
     let vim_ui_select = lua
         .globals()
         .get_path::<mlua::Function>("vim.ui.select")
-        .map_err(|error| eyre!("error fetching vim.ui.select function from Lua globals | error={error:#?}",))?;
+        .map_err(|error| eyre!("error fetching vim.ui.select function from Lua globals | error={error:#?}"))?;
 
     let opts_table = lua
         .create_table_from(opts.clone())
@@ -133,14 +133,16 @@ where
     let vim_ui_select_callback = lua
         .create_function(move |_: &mlua::Lua, (_, idx1): (Option<String>, Option<usize>)| {
             if let Some(idx) = idx1.map(|idx1| idx1.saturating_sub(1)) {
-                callback(idx)
+                callback(idx);
             }
             Ok(())
         })
-        .unwrap();
+        .map_err(|error| {
+            eyre!("error creating vim.ui.select callback | choices={choices:#?} opts={opts_table:#?} error={error:#?}")
+        })?;
 
     vim_ui_select
-        .call::<()>((choices.clone(), opts_table.clone(), vim_ui_select_callback))
+        .call::<()>((choices.to_owned(), opts_table.clone(), vim_ui_select_callback))
         .map_err(|error| {
             eyre!("error calling vim.ui.select | choices={choices:#?} opts={opts_table:#?} error={error:#?}")
         })?;
