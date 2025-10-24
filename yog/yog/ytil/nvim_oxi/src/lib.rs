@@ -9,3 +9,5 @@ pub mod dict;
 pub mod extract;
 pub mod macros;
 pub mod visual_selection;
+
+pub use nvim_oxi::*;
