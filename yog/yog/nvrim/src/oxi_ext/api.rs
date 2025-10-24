@@ -5,6 +5,7 @@
 
 use core::fmt::Debug;
 
+use color_eyre::eyre::eyre;
 use nvim_oxi::Array;
 use nvim_oxi::api::opts::CmdOpts;
 use nvim_oxi::api::types::CmdInfosBuilder;
@@ -96,7 +97,7 @@ pub fn vim_ui_select<K, V>(
     choices: Vec<String>,
     opts: impl IntoIterator<Item = (K, V)> + Debug + Clone,
     callback: impl Fn(usize) + 'static,
-) -> Option<()>
+) -> color_eyre::Result<()>
 where
     K: IntoLua,
     V: IntoLua,
@@ -106,19 +107,11 @@ where
     let vim_ui_select = lua
         .globals()
         .get_path::<mlua::Function>("vim.ui.select")
-        .inspect_err(|error| {
-            crate::oxi_ext::api::notify_error(&format!(
-                "error fetching vim.ui.select function from Lua globals | error={error:#?}",
-            ));
-        })
-        .ok()?;
+        .map_err(|error| eyre!("error fetching vim.ui.select function from Lua globals | error={error:#?}",))?;
 
     let opts_table = lua
         .create_table_from(opts.clone())
-        .inspect_err(|error| {
-            crate::oxi_ext::api::notify_error(&format!("cannot create opts table | opts={opts:#?} error={error:#?}",));
-        })
-        .ok()?;
+        .map_err(|error| eyre!("cannot create opts table | opts={opts:#?} error={error:#?}"))?;
 
     let vim_ui_select_callback = lua
         .create_function(move |_: &mlua::Lua, (_, idx1): (Option<String>, Option<usize>)| {
@@ -131,12 +124,9 @@ where
 
     vim_ui_select
         .call::<()>((choices.clone(), opts_table.clone(), vim_ui_select_callback))
-        .inspect_err(|error| {
-            crate::oxi_ext::api::notify_error(&format!(
-                "error calling vim.ui.select | choices={choices:#?} opts={opts_table:#?} error={error:#?}",
-            ));
-        })
-        .ok()?;
+        .map_err(|error| {
+            eyre!("error calling vim.ui.select | choices={choices:#?} opts={opts_table:#?} error={error:#?}")
+        })?;
 
-    Some(())
+    Ok(())
 }

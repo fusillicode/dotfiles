@@ -59,7 +59,11 @@ pub fn transform_selection(_: ()) -> Option<()> {
                 ));
             }
         }
-    })?;
+    })
+    .inspect_err(|error| {
+        crate::oxi_ext::api::notify_error(&format!("{error}"));
+    })
+    .ok()?;
 
     None
 }
