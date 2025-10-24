@@ -36,10 +36,11 @@ pub fn dict() -> Dictionary {
 pub fn transform_selection(_: ()) -> Option<()> {
     let selection = crate::oxi_ext::visual_selection::get(())?;
 
-    let choices: Vec<String> = Case::all_cases().iter().map(|c| format!("{:?}", c)).collect();
+    let cases = Case::all_cases();
+    let choices: Vec<String> = cases.iter().map(|c| format!("{c:?}")).collect();
 
     crate::oxi_ext::api::vim_ui_select(choices, [("prompt", "Select case ")], move |idx| {
-        if let Some(case) = Case::all_cases().get(idx) {
+        if let Some(case) = cases.get(idx) {
             let transformed_lines = selection
                 .lines()
                 .iter()
