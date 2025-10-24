@@ -2,7 +2,7 @@
 //!
 //! Provides `statusline.dict()` with a `draw` function combining cwd, buffer name, cursor position and
 //! LSP diagnostic severities / counts into a formatted status line; failures yield `None` and are
-//! surfaced through [`crate::oxi_ext::api::notify_error`].
+//! surfaced through [`ytil_nvim_oxi::api::notify_error`].
 
 use nvim_oxi::Array;
 use nvim_oxi::Dictionary;
@@ -12,11 +12,9 @@ use nvim_oxi::lua::ffi::State;
 use nvim_oxi::serde::Deserializer;
 use serde::Deserialize;
 use strum::IntoEnumIterator;
+use ytil_nvim_oxi::buffer::CursorPosition;
 
 use crate::diagnostics::DiagnosticSeverity;
-use crate::dict;
-use crate::fn_from;
-use crate::oxi_ext::buffer::CursorPosition;
 
 const DRAW_TRIGGERS: &[&str] = &["DiagnosticChanged", "BufEnter", "CursorMoved"];
 
@@ -33,7 +31,7 @@ pub fn dict() -> Dictionary {
 /// # Returns
 /// - `Some(String)`: formatted statusline when buffer name, cwd, and cursor position retrieval succeed.
 /// - `None`: if any prerequisite retrieval fails (buffer name, cwd, or cursor position). An error is logged via
-///   [`crate::oxi_ext::api::notify_error`].
+///   [`ytil_nvim_oxi::api::notify_error`].
 ///
 /// # Rationale
 /// Returning `None` lets callers distinguish between a valid (possibly empty diagnostics) statusline and a data
@@ -43,14 +41,14 @@ fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
     let cur_buf_path_os = cur_buf
         .get_name()
         .inspect_err(|error| {
-            crate::oxi_ext::api::notify_error(&format!(
+            ytil_nvim_oxi::api::notify_error(&format!(
                 "cannot get name of current buffer | buffer={cur_buf:#?} error={error:#?}"
             ));
         })
         .ok()?;
     let cwd = nvim_oxi::api::call_function::<_, String>("getcwd", Array::new())
         .inspect_err(|error| {
-            crate::oxi_ext::api::notify_error(&format!("cannot get cwd | error={error:#?}"));
+            ytil_nvim_oxi::api::notify_error(&format!("cannot get cwd | error={error:#?}"));
         })
         .ok()?;
     let cur_buf_path_lossy = cur_buf_path_os.to_string_lossy();

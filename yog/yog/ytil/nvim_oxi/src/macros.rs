@@ -62,7 +62,7 @@ mod tests {
     use nvim_oxi::Dictionary;
     use nvim_oxi::Object;
 
-    use crate::oxi_ext::dict::DictionaryExt as _;
+    use crate::dict::DictionaryExt as _;
 
     #[test]
     fn dict_macro_empty_creates_empty_dictionary() {

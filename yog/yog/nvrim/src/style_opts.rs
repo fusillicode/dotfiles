@@ -5,9 +5,6 @@
 
 use nvim_oxi::Dictionary;
 
-use crate::dict;
-use crate::fn_from;
-
 /// UI style options exported as an Nvim [`Dictionary`].
 pub fn dict() -> Dictionary {
     dict! {

@@ -9,6 +9,9 @@
 
 use nvim_oxi::Dictionary;
 
+#[macro_use]
+mod macros;
+
 /// [`nvim_oxi::api::Buffer`] helpers.
 mod buffer;
 /// CLI flags for `fd` and `ripgrep`.
@@ -25,8 +28,6 @@ mod fkr;
 pub mod keymaps;
 /// Utilities to handle linters output
 mod linters;
-/// [`nvim_oxi`] custom extensions.
-mod oxi_ext;
 /// Status column (diagnostics + git signs).
 mod statuscolumn;
 /// Status line (diagnostics summary).
@@ -48,7 +49,7 @@ pub mod vim_opts;
 /// few standalone helpers.
 #[nvim_oxi::plugin]
 fn nvrim() -> Dictionary {
-    dict! {
+    ytil_nvim_oxi::dict! {
         "diagnostics": diagnostics::dict(),
         "statusline": statusline::dict(),
         "statuscolumn": statuscolumn::dict(),
