@@ -3,6 +3,8 @@
 //! Offer uniform, cancellable single / multi select prompts with stripped visual noise and helpers
 //! to derive a value from CLI args or fallback to an interactive selector.
 
+use core::fmt::Debug;
+
 use color_eyre::eyre::eyre;
 use inquire::InquireError;
 use inquire::MultiSelect;
@@ -133,7 +135,7 @@ pub fn get_item_from_cli_args_or_select<'a, CAS, O, OBA, OF>(
     item_find_by_arg: OBA,
 ) -> color_eyre::Result<Option<O>>
 where
-    O: Clone + core::fmt::Debug + core::fmt::Display,
+    O: Clone + Debug + core::fmt::Display,
     CAS: FnMut(&(usize, &String)) -> bool,
     OBA: Fn(&'a str) -> OF,
     OF: FnMut(&O) -> bool + 'a,

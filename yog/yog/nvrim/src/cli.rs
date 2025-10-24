@@ -4,9 +4,6 @@
 
 use nvim_oxi::Dictionary;
 
-use crate::dict;
-use crate::fn_from;
-
 mod fd;
 mod rg;
 

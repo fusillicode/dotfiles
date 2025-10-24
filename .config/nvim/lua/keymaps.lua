@@ -13,7 +13,6 @@ function M.set_lua_implemented()
   keymap_set('n', 'dd', nvrim.keymaps.smart_dd_no_yank_empty_line, base_opts)
   keymap_set('v', '<esc>', nvrim.keymaps.visual_esc, base_opts)
   keymap_set({ 'n', 'v', }, '<leader>t', nvrim.truster.run_test)
-  keymap_set({ 'n', 'v', }, '<leader>u', nvrim.trex.transform_selection)
   keymap_set('n', 'gx', require('opener').open_under_cursor)
 
   -- Thanks perplexity 🥲
@@ -93,7 +92,9 @@ function M.fzf_lua(plugin)
       { function() plugin.live_grep({ prompt = 'rg: ', search = nvrim.buffer.get_visual_selection_lines()[1], }) end, },
     },
 
-    { '<leader>h', mode = 'n', plugin and { function() plugin.resume({}) end, }, },
+    { '<leader>h', mode = 'n',           plugin and { function() plugin.resume({}) end, }, },
+
+    { '<leader>u', mode = { 'n', 'v', }, plugin and { nvrim.trex.transform_selection, }, },
   }
 end
 
@@ -214,7 +215,17 @@ end
 function M.opencode(plugin)
   return {
     { '<leader>oA', mode = 'n',           plugin and { function() require('opencode').ask() end, desc = 'Ask opencode', }, },
-    { '<leader>oa', mode = 'v',           plugin and { function() require('opencode').ask('@selection: ', { submit = true, }) end, desc = 'Ask opencode about selection', }, },
+    {
+      '<leader>oa',
+      mode = 'v',
+      plugin and {
+        function()
+          require('opencode').ask('@selection: ',
+            { submit = true, })
+        end,
+        desc = 'Ask opencode about selection',
+      },
+    },
     { '<leader>on', mode = 'n',           plugin and { function() require('opencode').command('session_new') end, desc = 'New session', }, },
     { '<leader>oy', mode = 'n',           plugin and { function() require('opencode').command('messages_copy') end, desc = 'Copy last message', }, },
     { '<leader>op', mode = { 'n', 'v', }, plugin and { function() require('opencode').select_prompt() end, desc = 'Select prompt', }, },

@@ -2,8 +2,10 @@
 //!
 //! Provides a dictionary `vim_opts.dict()` with batch application (`set_all`) and granular option mutation
 //! utilities wrapping [`nvim_oxi::api::set_option_value`], emitting notifications via
-//! Uses `crate::oxi_ext::api::notify_error` on failure.
+//! Uses `ytil_nvim_oxi::api::notify_error` on failure.
 
+use core::fmt::Debug;
+use core::marker::Copy;
 use std::fmt::Write as _;
 
 use nvim_oxi::Dictionary;
@@ -11,9 +13,6 @@ use nvim_oxi::api::opts::OptionOpts;
 use nvim_oxi::api::opts::OptionOptsBuilder;
 use nvim_oxi::api::opts::OptionScope;
 use nvim_oxi::conversion::ToObject;
-
-use crate::dict;
-use crate::fn_from;
 
 /// [`Dictionary`] of `vim.opts` helpers.
 pub fn dict() -> Dictionary {
@@ -24,10 +23,10 @@ pub fn dict() -> Dictionary {
 
 /// Sets a Vim option by `name` to `value` within the given [`OptionOpts`].
 ///
-/// Errors are notified to Nvim via `crate::oxi_ext::api::notify_error`.
-pub fn set<Opt: ToObject + core::fmt::Debug + core::marker::Copy>(name: &str, value: Opt, opts: &OptionOpts) {
+/// Errors are notified to Nvim via `ytil_nvim_oxi::api::notify_error`.
+pub fn set<Opt: ToObject + Debug + Copy>(name: &str, value: Opt, opts: &OptionOpts) {
     if let Err(error) = nvim_oxi::api::set_option_value(name, value, opts) {
-        crate::oxi_ext::api::notify_error(&format!(
+        ytil_nvim_oxi::api::notify_error(&format!(
             "cannot set option | name={name:?} value={value:#?} opts={opts:#?} error={error:#?}"
         ));
     }
@@ -38,10 +37,10 @@ pub fn set<Opt: ToObject + core::fmt::Debug + core::marker::Copy>(name: &str, va
 /// The current value is read as a [`String`] and modified by appending the supplied one with a
 /// comma.
 ///
-/// Errors are notified to Nvim via `crate::oxi_ext::api::notify_error`.
+/// Errors are notified to Nvim via `ytil_nvim_oxi::api::notify_error`.
 pub fn append(name: &str, value: &str, opts: &OptionOpts) {
     let Ok(mut cur_value) = nvim_oxi::api::get_option_value::<String>(name, opts).inspect_err(|error| {
-        crate::oxi_ext::api::notify_error(&format!(
+        ytil_nvim_oxi::api::notify_error(&format!(
             "cannot get option current value | name={name:?} opts={opts:#?} value_to_append={value:#?} error={error:#?}"
         ));
     }) else {
@@ -50,7 +49,7 @@ pub fn append(name: &str, value: &str, opts: &OptionOpts) {
     // This shenanigan with `comma` and `write!` is to avoid additional allocations
     let comma = if cur_value.is_empty() { "" } else { "," };
     if let Err(error) = write!(cur_value, "{comma}{value}") {
-        crate::oxi_ext::api::notify_error(&format!(
+        ytil_nvim_oxi::api::notify_error(&format!(
             "cannot append option value | name={name:?} cur_value={cur_value} append_value={value} opts={opts:#?} error={error:#?}"
         ));
     }
