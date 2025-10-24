@@ -21,10 +21,10 @@ return {
           return vim.tbl_extend('error', conf, { anchor = 'SW', })
         end,
       },
-      confirmation = style_opts['window']['border'],
-      progress = style_opts['window']['border'],
-      ssh = style_opts['window']['border'],
-      keymaps_help = style_opts['window']['border'],
+      confirmation = { border = style_opts['window']['border'], },
+      progress = { border = style_opts['window']['border'], },
+      ssh = { border = style_opts['window']['border'], },
+      keymaps_help = { border = style_opts['window']['border'], },
       keymaps = {
         ['<esc>'] = ':bd!<cr>',
         ['<s-l>'] = 'actions.select',
