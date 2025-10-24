@@ -4,10 +4,10 @@
 //! Core mappings target Normal / Visual / Operator modes; failures in individual definitions are
 //! logged without aborting subsequent mappings.
 
-use nvim_oxi::Dictionary;
-use nvim_oxi::api::opts::SetKeymapOpts;
-use nvim_oxi::api::opts::SetKeymapOptsBuilder;
-use nvim_oxi::api::types::Mode;
+use ytil_nvim_oxi::Dictionary;
+use ytil_nvim_oxi::api::opts::SetKeymapOpts;
+use ytil_nvim_oxi::api::opts::SetKeymapOptsBuilder;
+use ytil_nvim_oxi::api::types::Mode;
 
 const NV_MODE: [Mode; 2] = [Mode::Normal, Mode::Visual];
 const NVOP_MODE: [Mode; 1] = [Mode::NormalVisualOperator];

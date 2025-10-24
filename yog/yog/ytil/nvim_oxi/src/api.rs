@@ -7,7 +7,9 @@ use core::fmt::Debug;
 
 use color_eyre::eyre::eyre;
 use nvim_oxi::Array;
+pub use nvim_oxi::api::opts;
 use nvim_oxi::api::opts::CmdOpts;
+pub use nvim_oxi::api::types;
 use nvim_oxi::api::types::CmdInfosBuilder;
 use nvim_oxi::api::types::LogLevel;
 use nvim_oxi::conversion::ToObject;
