@@ -1963,6 +1963,7 @@ name = "tec"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
+ "thiserror 2.0.17",
  "ytil_cmd",
  "ytil_system",
 ]
