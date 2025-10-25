@@ -45,8 +45,8 @@ use ytil_cmd::CmdExt as _;
 /// - `&Path` Workspace root directory the lint operates within.
 ///
 /// # Returns
-/// - [`Output`] on success wrapped in `Ok` providing access to status code and captured stdout/stderr.
-/// - `Err` wrapping [`CmdError`] if process spawning or execution fails.
+/// - `Ok`([`LintFnSuccess`]) on success, providing either command output or a plain message.
+/// - `Err`([`LintFnError`]) if process spawning or execution fails.
 ///
 /// # Rationale
 /// Using a simple function pointer keeps dynamic dispatch trivial and avoids boxing trait objects; closures remain
@@ -55,7 +55,28 @@ use ytil_cmd::CmdExt as _;
 /// # Future Work
 /// - Consider an enum encapsulating richer metadata (e.g. auto-fix capability flag) to filter sets without duplicating
 ///   entries across lists.
-type LintFn = fn(&Path) -> color_eyre::Result<Output, CmdError>;
+type LintFn = fn(&Path) -> Result<LintFnSuccess, LintFnError>;
+
+/// Error type for lint function execution failures.
+///
+/// # Errors
+/// - [`LintFnError::CmdError`] Process spawning or execution failure.
+#[derive(Debug, thiserror::Error)]
+enum LintFnError {
+    #[error(transparent)]
+    CmdError(#[from] CmdError),
+}
+
+/// Success result from lint function execution.
+///
+/// # Variants
+/// - [`LintFnSuccess::CmdOutput`] Standard command output with status and streams.
+/// - [`LintFnSuccess::PlainMsg`] Simple string message (currently unused).
+enum LintFnSuccess {
+    CmdOutput(Output),
+    #[allow(unused)]
+    PlainMsg(String),
+}
 
 /// Shared `clippy` lint definition.
 ///
@@ -74,6 +95,8 @@ const CLIPPY: (&str, LintFn) = ("clippy", |path| {
         .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
         .current_dir(path)
         .exec()
+        .map(LintFnSuccess::CmdOutput)
+        .map_err(LintFnError::from)
 });
 
 /// Workspace lint check set.
@@ -91,7 +114,12 @@ const CLIPPY: (&str, LintFn) = ("clippy", |path| {
 const LINTS_CHECK: &[(&str, LintFn)] = &[
     CLIPPY,
     ("cargo fmt", |path| {
-        Command::new("cargo").args(["fmt", "--check"]).current_dir(path).exec()
+        Command::new("cargo")
+            .args(["fmt", "--check"])
+            .current_dir(path)
+            .exec()
+            .map(LintFnSuccess::CmdOutput)
+            .map_err(LintFnError::from)
     }),
     ("cargo-machete", |path| {
         // Using `cargo-machete` rather than `cargo machete` to avoid issues caused by passing the
@@ -99,18 +127,24 @@ const LINTS_CHECK: &[(&str, LintFn)] = &[
         Command::new("cargo-machete")
             .args(["--with-metadata", &path.display().to_string()])
             .exec()
+            .map(LintFnSuccess::CmdOutput)
+            .map_err(LintFnError::from)
     }),
     ("cargo-sort", |path| {
         Command::new("cargo-sort")
             .args(["--workspace", "--check", "--check-format"])
             .current_dir(path)
             .exec()
+            .map(LintFnSuccess::CmdOutput)
+            .map_err(LintFnError::from)
     }),
     ("cargo-sort-derives", |path| {
         Command::new("cargo-sort-derives")
             .args(["sort-derives", "--check"])
             .current_dir(path)
             .exec()
+            .map(LintFnSuccess::CmdOutput)
+            .map_err(LintFnError::from)
     }),
 ];
 
@@ -134,24 +168,35 @@ const LINTS_CHECK: &[(&str, LintFn)] = &[
 const LINTS_FIX: &[(&str, LintFn)] = &[
     CLIPPY,
     ("cargo fmt", |path| {
-        Command::new("cargo").args(["fmt"]).current_dir(path).exec()
+        Command::new("cargo")
+            .args(["fmt"])
+            .current_dir(path)
+            .exec()
+            .map(LintFnSuccess::CmdOutput)
+            .map_err(LintFnError::from)
     }),
     ("cargo-machete", |path| {
         Command::new("cargo-machete")
             .args(["--fix", "--with-metadata", &path.display().to_string()])
             .exec()
+            .map(LintFnSuccess::CmdOutput)
+            .map_err(LintFnError::from)
     }),
     ("cargo-sort", |path| {
         Command::new("cargo-sort")
             .args(["--workspace"])
             .current_dir(path)
             .exec()
+            .map(LintFnSuccess::CmdOutput)
+            .map_err(LintFnError::from)
     }),
     ("cargo-sort-derives", |path| {
         Command::new("cargo-sort-derives")
             .args(["sort-derives"])
             .current_dir(path)
             .exec()
+            .map(LintFnSuccess::CmdOutput)
+            .map_err(LintFnError::from)
     }),
 ];
 
@@ -224,17 +269,17 @@ fn main() -> color_eyre::Result<()> {
 /// # Arguments
 /// - `lint_name` Human-friendly logical name of the lint (e.g. "clippy").
 /// - `path` Workspace root path the lint operates in.
-/// - `run` Function pointer executing the lint and returning its captured [`Output`].
+/// - `run` Function pointer executing the lint and returning [`LintFnSuccess`] or [`LintFnError`].
 ///
 /// # Returns
-/// - `true` if the lint failed (non-zero exit code or command execution error).
-/// - `false` if the lint succeeded.
+/// - `Ok`([`LintFnSuccess`]) on lint success.
+/// - `Err`([`Box<LintFnError>`]) on lint failure.
 ///
 /// # Rationale
 /// Collapses the previous two‑step pattern (timing + later reporting) into one
 /// function so thread closures stay minimal and result propagation is explicit.
 /// This also prevents losing the error flag (a regression after refactor).
-fn run_and_report(lint_name: &str, path: &Path, run: LintFn) -> Result<Output, Box<CmdError>> {
+fn run_and_report(lint_name: &str, path: &Path, run: LintFn) -> Result<LintFnSuccess, Box<LintFnError>> {
     let start = Instant::now();
     let lint_res = run(path);
     report(lint_name, &lint_res, start.elapsed());
@@ -245,19 +290,15 @@ fn run_and_report(lint_name: &str, path: &Path, run: LintFn) -> Result<Output, B
 ///
 /// # Arguments
 /// - `lint_name` Logical name of the lint (e.g. "clippy").
-/// - `lint_res` Result returned by executing the [`LintFn`].
+/// - `lint_res` Result returned by executing the [`LintFn`], a [`Result<LintFnSuccess, LintFnError>`].
 /// - `elapsed` Wall‑clock duration of the lint.
-///
-/// # Returns
-/// - `true` if the lint failed (command error / non-zero exit status).
-/// - `false` on success.
 ///
 /// # Rationale
 /// Keeps output formatting separate from orchestration logic in [`main`]; enables
 /// alternate reporters (JSON, terse) later without threading timing logic everywhere.
-fn report(lint_name: &str, lint_res: &Result<Output, CmdError>, elapsed: Duration) {
+fn report(lint_name: &str, lint_res: &Result<LintFnSuccess, LintFnError>, elapsed: Duration) {
     match lint_res {
-        Ok(output) => {
+        Ok(LintFnSuccess::CmdOutput(output)) => {
             println!(
                 "{} {} status={:?} \n{}",
                 lint_name.green().bold(),
@@ -265,6 +306,9 @@ fn report(lint_name: &str, lint_res: &Result<Output, CmdError>, elapsed: Duratio
                 output.status.code(),
                 str::from_utf8(&output.stdout).unwrap_or_default()
             );
+        }
+        Ok(LintFnSuccess::PlainMsg(msg)) => {
+            println!("{} {} \n{msg:?}", lint_name.green().bold(), format_timing(elapsed));
         }
         Err(error) => {
             eprintln!("{} {} \n{error}", lint_name.red().bold(), format_timing(elapsed));
