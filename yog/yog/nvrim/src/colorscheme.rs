@@ -34,26 +34,35 @@ pub fn set(colorscheme: Option<String>) {
     crate::vim_opts::set("background", "dark", &opts);
     crate::vim_opts::set("termguicolors", true, &opts);
 
-    let status_line_hl = set_opts().foreground("gray").background(STATUS_LINE_BG).build();
-    let normal_hl = set_opts().background(BG).build();
+    let status_line_hl = get_default_hl_opts()
+        .foreground("gray")
+        .background(STATUS_LINE_BG)
+        .build();
+    let normal_hl = get_default_hl_opts().background(BG).build();
 
     let general_hls = [
-        ("ColorColumn", set_opts().background("NvimDarkGrey3").build()),
-        ("Cursor", set_opts().foreground("black").background("white").build()),
-        ("CursorLine", set_opts().foreground("none").build()),
+        ("ColorColumn", get_default_hl_opts().background("NvimDarkGrey3").build()),
+        (
+            "Cursor",
+            get_default_hl_opts().foreground("black").background("white").build(),
+        ),
+        ("CursorLine", get_default_hl_opts().foreground("none").build()),
         ("MsgArea", status_line_hl.clone()),
         ("Normal", normal_hl.clone()),
         ("NormalFloat", normal_hl),
         ("StatusLine", status_line_hl),
-        ("TreesitterContext", set_opts().background("NvimDarkGrey3").build()),
+        (
+            "TreesitterContext",
+            get_default_hl_opts().background("NvimDarkGrey3").build(),
+        ),
     ];
     for (hl_name, hl_opts) in general_hls {
         set_hl(0, hl_name, &hl_opts);
     }
 
-    let mut get_opts = get_opts();
+    let mut get_hl_opts = GetHighlightOptsBuilder::default();
     for lvl in DIAGNOSTIC_LVLS {
-        let Ok(hl_infos) = get_hl(0, &get_opts.name(format!("Diagnostic{lvl}")).build()) else {
+        let Ok(hl_infos) = get_hl(0, &get_hl_opts.name(format!("Diagnostic{lvl}")).build()) else {
             continue;
         };
         let Ok(set_hl_opts) =
@@ -64,7 +73,7 @@ pub fn set(colorscheme: Option<String>) {
         set_hl(0, &format!("DiagnosticStatusLine{lvl}"), &set_hl_opts);
 
         let diagn_underline_hl = format!("DiagnosticUnderline{lvl}");
-        let Ok(hl_infos) = get_hl(0, &get_opts.name(diagn_underline_hl.clone()).build()) else {
+        let Ok(hl_infos) = get_hl(0, &get_hl_opts.name(diagn_underline_hl.clone()).build()) else {
             continue;
         };
         let Ok(set_hl_opts) =
@@ -77,13 +86,8 @@ pub fn set(colorscheme: Option<String>) {
 }
 
 /// Shorthand to start building [`SetHighlightOpts`].
-fn set_opts() -> SetHighlightOptsBuilder {
+fn get_default_hl_opts() -> SetHighlightOptsBuilder {
     SetHighlightOptsBuilder::default()
-}
-
-/// Shorthand to start building [`GetHighlightOpts`].
-fn get_opts() -> GetHighlightOptsBuilder {
-    GetHighlightOptsBuilder::default()
 }
 
 /// Wrapper around `nvim_oxi::api::set_hl` with error notification.
@@ -128,7 +132,7 @@ fn get_hl(ns_id: u32, hl_opts: &GetHighlightOpts) -> color_eyre::Result<Highligh
 /// # Errors
 /// - The `blend` value cannot fit into a `u8`.
 fn hl_opts_from_hl_infos(hl_infos: &HighlightInfos) -> color_eyre::Result<SetHighlightOptsBuilder> {
-    let mut opts = set_opts();
+    let mut opts = get_default_hl_opts();
     hl_infos.altfont.map(|value| opts.altfont(value));
     hl_infos
         .background
