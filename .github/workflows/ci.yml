@@ -36,8 +36,8 @@ jobs:
           shared-key: default
           cache-targets: true
 
-      - name: Setup Rust and cargo-machete, cargo-sort, cargo-sort-derives
-        uses: ./.github/workflows/setup.yml
+      - name: Setup (cargo-machete, cargo-sort, cargo-sort-derives)
+        uses: ./.github/actions/setup
         with:
           tools: "cargo-machete,cargo-sort,cargo-sort-derives"
 
@@ -60,8 +60,8 @@ jobs:
           shared-key: coverage
           cache-targets: true
 
-      - name: Setup Rust and cargo-llvm-cov, cargo-nextest
-        uses: ./.github/workflows/setup.yml
+      - name: Setup (cargo-llvm-cov, cargo-nextest)
+        uses: ./.github/actions/setup
         with:
           tools: "cargo-llvm-cov,cargo-nextest"
 
@@ -133,8 +133,8 @@ jobs:
           shared-key: default
           cache-targets: true
 
-      - name: Setup Rust and no extra tools
-        uses: ./.github/workflows/setup.yml
+      - name: Setup (no extra tools)
+        uses: ./.github/actions/setup
 
       - name: Build
         working-directory: yog
