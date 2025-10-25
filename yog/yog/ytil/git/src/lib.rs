@@ -86,7 +86,7 @@ pub fn get_current_branch() -> color_eyre::Result<String> {
 /// - `branch_name` Name of branch to create (must not already exist).
 ///
 /// # Returns
-/// `Ok(())` if creation succeeds.
+/// [`Result::Ok`] (()) if creation succeeds.
 ///
 /// # Errors
 /// - Repository discovery fails.
@@ -197,7 +197,7 @@ pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
 /// - `branch` Optional branch (or commit-ish) acting as the source of truth.
 ///
 /// # Returns
-/// `Ok(())` if the command spawns and completes successfully (zero status).
+/// [`Result::Ok`] (()) if the command spawns and completes successfully (zero status).
 ///
 /// # Errors
 /// - Spawning or executing the `git restore` process fails.
@@ -229,7 +229,7 @@ pub fn restore(paths: &[&str], branch: Option<&str>) -> color_eyre::Result<()> {
 /// - `paths` Repo‑relative paths currently staged (any state) to unstage. Empty slice = no‑op.
 ///
 /// # Returns
-/// `Ok(())` if command spawns and exits successfully (zero status).
+/// [`Result::Ok`] (()) if command spawns and exits successfully (zero status).
 ///
 /// # Errors
 /// - Spawning or executing the `git restore --staged` command fails.
@@ -268,7 +268,7 @@ pub fn unstage(paths: &[&str]) -> color_eyre::Result<()> {
 /// - `paths` Iterator of pathspecs. Empty iterator = no‑op.
 ///
 /// # Returns
-/// `Ok(())` on success.
+/// [`Result::Ok`] (()) on success.
 ///
 /// # Errors
 /// - Loading index fails.

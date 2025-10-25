@@ -71,13 +71,13 @@ pub enum PullRequestMergeState {
 /// detection, and activity‑based filtering without an additional API round‑trip.
 ///
 /// # Arguments
-/// - `repo` - `owner/name` repository spec.
-/// - `search` - Optional search expression (without the `--search` flag) using GitHub search qualifiers.
-/// - `retain_fn` - Predicate applied post‑fetch; only PRs for which it returns true are kept.
+/// - `repo` `owner/name` repository spec.
+/// - `search` Optional search expression (without the `--search` flag) using GitHub search qualifiers.
+/// - `retain_fn` Predicate applied post‑fetch; only PRs for which it returns true are kept.
 ///
 /// # Returns
 /// Vector of deserialized pull requests (may be empty). All timestamps are normalized
-/// to UTC (`DateTime<Utc>`).
+/// to UTC ([`chrono::DateTime<Utc>`]).
 ///
 /// # Errors
 /// - Spawning or executing `gh pr list` fails.
@@ -126,10 +126,10 @@ pub fn get(
 /// Invokes: `gh pr merge --admin --squash --delete-branch <PR_NUMBER>`.
 ///
 /// # Arguments
-/// - `pr_number` - Numeric pull request number.
+/// - `pr_number` Numeric pull request number.
 ///
 /// # Returns
-/// `Ok(())` if the merge command succeeds.
+/// [`Result::Ok`] (()) if the merge command succeeds.
 ///
 /// # Errors
 /// - Spawning or executing the `gh pr merge` command fails.
@@ -158,10 +158,10 @@ pub fn merge(pr_number: usize) -> color_eyre::Result<()> {
 /// policy / flag decisions localized here.
 ///
 /// # Arguments
-/// - `pr_number` - Numeric pull request number.
+/// - `pr_number` Numeric pull request number.
 ///
 /// # Returns
-/// `Ok(())` if the review command succeeds.
+/// [`Result::Ok`] (()) if the review command succeeds.
 ///
 /// # Errors
 /// - Spawning or executing `gh pr review` fails.
@@ -183,7 +183,7 @@ pub fn approve(pr_number: usize) -> color_eyre::Result<()> {
 /// - `pr_number` Numeric pull request number to rebase.
 ///
 /// # Returns
-/// `Ok(())` if the comment command succeeds.
+/// [`Result::Ok`] (()) if the comment command succeeds.
 ///
 /// # Errors
 /// - Spawning or executing `gh pr comment` fails.
@@ -205,7 +205,7 @@ pub fn dependabot_rebase(pr_number: usize) -> color_eyre::Result<()> {
 /// - `pr_number` Numeric pull request number to enable auto-merge on.
 ///
 /// # Returns
-/// `Ok(())` if the GitHub CLI command succeeds (either scheduling or performing the merge).
+/// [`Result::Ok`] (()) if the GitHub CLI command succeeds (either scheduling or performing the merge).
 ///
 /// # Errors
 /// - Spawning or executing `gh pr merge` fails.
