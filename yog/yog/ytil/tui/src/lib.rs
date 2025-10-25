@@ -14,21 +14,22 @@ use inquire::ui::RenderConfig;
 use strum::EnumIter;
 use strum::IntoEnumIterator;
 
-/// Provides a minimal interactive multi-select prompt, returning [`None`] if no options are provided, the user cancels,
-/// or no items are selected.
+/// Provides a minimal interactive multi-select prompt, returning [`Option::None`] if no options are provided, the user
+/// cancels, or no items are selected.
 ///
 /// Wraps [`inquire::MultiSelect`] with a slim rendering (see `minimal_render_config`) and no help message.
 ///
 /// # Arguments
-/// - `opts`: The list of options to present for selection. Each option must implement [`Display`].
+/// - `opts` The list of options to present for selection. Each option must implement [`Display`].
 ///
 /// # Type Parameters
 /// - `T`: The type of the options, constrained to implement [`Display`].
 ///
 /// # Returns
-/// - `Ok(Some(selected))` A vector of the selected options if the user makes a non-empty selection.
-/// - `Ok(None)` If `opts` is empty, the user cancels the prompt, or the user selects no items.
-/// - `Err(InquireError)` If rendering the prompt or handling terminal interaction fails.
+/// - [`Result::Ok`] ([`Option::Some`] (selected)) A vector of the selected options if the user makes a non-empty
+///   selection.
+/// - [`Result::Ok`] ([`Option::None`]) If `opts` is empty, the user cancels the prompt, or the user selects no items.
+/// - [`Result::Err`] ([`InquireError`]) If rendering the prompt or handling terminal interaction fails.
 ///
 /// # Errors
 /// - [`InquireError`]: Propagated from [`inquire`] for failures in prompt rendering or user interaction, excluding
@@ -52,7 +53,7 @@ pub fn minimal_multi_select<T: Display>(opts: Vec<T>) -> Result<Option<Vec<T>>, 
     Ok(Some(selected_opts))
 }
 
-/// Minimal interactive single-select returning [`None`] if `opts` is empty or the user cancels.
+/// Minimal interactive single-select returning [`Option::None`] if `opts` is empty or the user cancels.
 ///
 /// Wraps [`inquire::Select`] with a slim rendering (see `minimal_render_config`) and no help message.
 ///
@@ -73,7 +74,8 @@ pub fn minimal_select<T: Display>(opts: Vec<T>) -> Result<Option<T>, InquireErro
 
 /// Displays a yes/no selection prompt with a minimal UI.
 ///
-/// Returns `Ok(Some(_))` on selection, `Ok(None)` if canceled/interrupted.
+/// Returns [`Result::Ok`] ([`Option::Some`] (_)) on selection, [`Result::Ok`] ([`Option::None`]) if
+/// canceled/interrupted.
 ///
 /// # Errors
 /// - Rendering the prompt or terminal interaction inside [`inquire`] fails.
@@ -152,7 +154,8 @@ where
 
 /// Converts an [`inquire`] prompt [`Result`] into an [`Option`]-wrapped [`Result`].
 ///
-/// Treats [`InquireError::OperationCanceled`] / [`InquireError::OperationInterrupted`] as `Ok(None)`.
+/// Treats [`InquireError::OperationCanceled`] / [`InquireError::OperationInterrupted`] as [`Result::Ok`]
+/// ([`Option::None`]).
 fn closable_prompt<T>(prompt_res: Result<T, InquireError>) -> Result<Option<T>, InquireError> {
     match prompt_res {
         Ok(res) => Ok(Some(res)),

@@ -19,12 +19,13 @@
 //! - Non‑zero: bubbled I/O, subprocess, or git operation failure (reported via `color_eyre`).
 //!
 //! # Errors
-//! - Status enumeration fails.
-//! - User interaction (selection prompts) fails.
+//! - Status enumeration via [`ytil_git::get_status`] fails.
+//! - User interaction (selection prompts via [`ytil_tui::minimal_multi_select`] and [`ytil_tui::minimal_select`])
+//!   fails.
 //! - File / directory removal for new entries fails.
 //! - Unstaging new index entries via [`ytil_git::unstage`] fails.
-//! - Restore command construction / execution fails.
-//! - Opening repository or adding paths to index fails.
+//! - Restore command construction / execution via [`ytil_git::restore`] fails.
+//! - Opening repository via [`ytil_git::get_repo`] or adding paths to index via [`ytil_git::add_to_index`] fails.
 //!
 //! # Rationale
 //! - Delegates semantics to porcelain (`git restore`, `git add`) to inherit nuanced Git behavior.
@@ -44,12 +45,13 @@ use ytil_git::WorktreeState;
 /// The actual `main` inner logic.
 ///
 /// # Errors
-/// - Status enumeration fails.
-/// - User interaction (selection prompts) fails.
+/// - Status enumeration via [`ytil_git::get_status`] fails.
+/// - User interaction (selection prompts via [`ytil_tui::minimal_multi_select`] and [`ytil_tui::minimal_select`])
+///   fails.
 /// - File / directory removal for new entries fails.
 /// - Unstaging new index entries via [`ytil_git::unstage`] fails.
-/// - Restore command construction / execution fails.
-/// - Opening repository or adding paths to index fails.
+/// - Restore command construction / execution via [`ytil_git::restore`] fails.
+/// - Opening repository via [`ytil_git::get_repo`] or adding paths to index via [`ytil_git::add_to_index`] fails.
 fn main() -> color_eyre::Result<()> {
     let args = ytil_system::get_args();
     let args: Vec<_> = args.iter().map(String::as_str).collect();
@@ -103,7 +105,7 @@ fn main() -> color_eyre::Result<()> {
 /// # Errors
 /// - Removing a file or directory for a new entry fails (I/O error from `std::fs`).
 /// - Unstaging staged new entries via [`ytil_git::unstage`] fails.
-/// - Building or executing the underlying `git restore` command fails.
+/// - Building or executing the underlying `git restore` command via [`ytil_git::restore`] fails.
 ///
 /// # Rationale
 /// Using the porcelain `git restore` preserves nuanced semantics (e.g. respect for sparse
@@ -165,8 +167,8 @@ fn restore_entries(entries: &[&GitStatusEntry], branch: Option<&str>) -> color_e
 /// - `entries` Selected Git entries.
 ///
 /// # Errors
-/// - Opening the repository fails.
-/// - Adding any path to the index fails.
+/// - Opening the repository via [`ytil_git::get_repo`] fails.
+/// - Adding any path to the index via [`ytil_git::add_to_index`] fails.
 fn add_entries(entries: &[&GitStatusEntry]) -> color_eyre::Result<()> {
     let mut repo = ytil_git::get_repo(Path::new("."))?;
     ytil_git::add_to_index(&mut repo, entries.iter().map(|entry| entry.path.as_path()))?;
@@ -183,7 +185,7 @@ fn add_entries(entries: &[&GitStatusEntry]) -> color_eyre::Result<()> {
 ///
 /// # Examples
 /// ```no_run
-/// # fn show(e: &gch::RenderableGitStatusEntry) {
+/// # fn show(e: &RenderableGitStatusEntry) {
 /// println!("{e}");
 /// # }
 /// ```
