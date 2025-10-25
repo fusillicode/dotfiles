@@ -101,23 +101,24 @@ pub fn inputlist<'a, I: core::fmt::Display>(prompt: &'a str, items: &'a [I]) -> 
 /// The selected index (0-based) is passed to the provided callback.
 ///
 /// # Arguments
-/// - `choices` List of string options to display for selection.
+/// - `choices` Iterable of displayable items to display for selection.
 /// - `opts` Key-value pairs for additional options (e.g., prompt text).
 /// - `callback` Closure invoked with the 0-based index of the selected choice.
 ///
 /// # Returns
-/// Returns `Ok(())` if the selection succeeds.
+/// `Ok(())` if the selection succeeds.
 ///
 /// # Errors
 /// - Fails if `vim.ui.select` cannot be fetched from Lua globals.
 /// - Fails if the options table cannot be created.
 /// - Fails if calling `vim.ui.select` encounters an error.
-pub fn vim_ui_select<K, V>(
-    choices: &[String],
+pub fn vim_ui_select<C, K, V>(
+    choices: impl IntoIterator<Item = C> + Debug,
     opts: &(impl IntoIterator<Item = (K, V)> + Debug + Clone),
     callback: impl Fn(usize) + 'static,
 ) -> color_eyre::Result<()>
 where
+    C: core::fmt::Display,
     K: IntoLua,
     V: IntoLua,
 {
@@ -143,10 +144,12 @@ where
             eyre!("cannot create vim.ui.select callback | choices={choices:#?} opts={opts_table:#?} error={error:#?}")
         })?;
 
+    let vim_ui_choices = choices.into_iter().map(|c| c.to_string()).collect::<Vec<_>>();
+
     vim_ui_select
-        .call::<()>((choices.to_owned(), opts_table.clone(), vim_ui_select_callback))
+        .call::<()>((vim_ui_choices.clone(), opts_table.clone(), vim_ui_select_callback))
         .map_err(|error| {
-            eyre!("cannot call vim.ui.select | choices={choices:#?} opts={opts_table:#?} error={error:#?}")
+            eyre!("cannot call vim.ui.select | choices={vim_ui_choices:#?} opts={opts_table:#?} error={error:#?}")
         })?;
 
     Ok(())
