@@ -203,11 +203,15 @@ const LINTS_FIX: &[(&str, LintFn)] = &[
         let (removed_paths, errors) = ytil_system::rm_matching_files(path, ".DS_Store", &[".git", "target"], false);
         let mut success_out = String::new();
         for path in removed_paths {
-            success_out.push_str(&format!("Removed {path:?}\n"));
+            success_out.push_str(&format!("{} {path:?}\n", "Removed".green()));
         }
         let mut error_out = String::new();
         for (path, error) in &errors {
-            error_out.push_str(&format!("Error removing path={path:?} error={error}\n"));
+            error_out.push_str(&format!(
+                "{} path {path:?} error={}\n",
+                "Error removing".red(),
+                format!("{error}").red()
+            ));
         }
         if errors.is_empty() {
             Ok(LintFnSuccess::PlainMsg(success_out))
