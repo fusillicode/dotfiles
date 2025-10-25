@@ -3,6 +3,8 @@
 //! Provides a namespaced [`Dictionary`] exposing selection transformation
 //! functionality (currently only case conversion via [`convert_case`]).
 
+use core::fmt::Display;
+
 use convert_case::Case;
 use convert_case::Casing as _;
 use nvim_oxi::Dictionary;
@@ -80,7 +82,7 @@ pub fn transform_selection(_: ()) -> Option<()> {
 /// Newtype wrapper to make [`Case`] displayable using its [`Debug`] representation.
 struct DisplayableCase<'a>(&'a Case<'a>);
 
-impl core::fmt::Display for DisplayableCase<'_> {
+impl Display for DisplayableCase<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.0)
     }

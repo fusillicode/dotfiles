@@ -4,6 +4,7 @@
 //! to derive a value from CLI args or fallback to an interactive selector.
 
 use core::fmt::Debug;
+use core::fmt::Display;
 
 use color_eyre::eyre::eyre;
 use inquire::InquireError;
@@ -19,10 +20,10 @@ use strum::IntoEnumIterator;
 /// Wraps [`inquire::MultiSelect`] with a slim rendering (see `minimal_render_config`) and no help message.
 ///
 /// # Arguments
-/// - `opts`: The list of options to present for selection. Each option must implement [`std::fmt::Display`].
+/// - `opts`: The list of options to present for selection. Each option must implement [`Display`].
 ///
 /// # Type Parameters
-/// - `T`: The type of the options, constrained to implement [`std::fmt::Display`].
+/// - `T`: The type of the options, constrained to implement [`Display`].
 ///
 /// # Returns
 /// - `Ok(Some(selected))` A vector of the selected options if the user makes a non-empty selection.
@@ -32,7 +33,7 @@ use strum::IntoEnumIterator;
 /// # Errors
 /// - [`InquireError`]: Propagated from [`inquire`] for failures in prompt rendering or user interaction, excluding
 ///   cancellation which is handled as [`None`].
-pub fn minimal_multi_select<T: std::fmt::Display>(opts: Vec<T>) -> Result<Option<Vec<T>>, InquireError> {
+pub fn minimal_multi_select<T: Display>(opts: Vec<T>) -> Result<Option<Vec<T>>, InquireError> {
     if opts.is_empty() {
         return Ok(None);
     }
@@ -58,7 +59,7 @@ pub fn minimal_multi_select<T: std::fmt::Display>(opts: Vec<T>) -> Result<Option
 /// # Errors
 /// - Rendering the prompt or terminal interaction inside [`inquire`] fails.
 /// - Collecting the user selection fails for any reason reported by [`Select`].
-pub fn minimal_select<T: std::fmt::Display>(opts: Vec<T>) -> Result<Option<T>, InquireError> {
+pub fn minimal_select<T: Display>(opts: Vec<T>) -> Result<Option<T>, InquireError> {
     if opts.is_empty() {
         return Ok(None);
     }
@@ -102,7 +103,7 @@ impl From<YesNo> for bool {
     }
 }
 
-impl core::fmt::Display for YesNo {
+impl Display for YesNo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let repr = match self {
             Self::Yes => "Yes",
@@ -135,7 +136,7 @@ pub fn get_item_from_cli_args_or_select<'a, CAS, O, OBA, OF>(
     item_find_by_arg: OBA,
 ) -> color_eyre::Result<Option<O>>
 where
-    O: Clone + Debug + core::fmt::Display,
+    O: Clone + Debug + Display,
     CAS: FnMut(&(usize, &String)) -> bool,
     OBA: Fn(&'a str) -> OF,
     OF: FnMut(&O) -> bool + 'a,

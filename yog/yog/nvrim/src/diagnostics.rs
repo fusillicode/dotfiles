@@ -93,7 +93,7 @@ impl DiagnosticSeverity {
     /// - One of: "x" (Error), "*" (Warn), "i" (Info), "?" (Hint), "?" (Other / unknown).
     ///
     /// # Rationale
-    /// Used by status UI components (statuscolumn) to render severity without allocating via [`core::fmt::Display`]
+    /// Used by status UI components (statuscolumn) to render severity without allocating via [`Display`]
     /// or `to_string()`. A `const fn` mapping gives zero runtime branching cost when inlined.
     pub const fn glyph(self) -> &'static str {
         match self {
