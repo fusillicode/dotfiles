@@ -4,6 +4,7 @@
 //! execution, and interactive list selection (`inputlist`).
 
 use core::fmt::Debug;
+use core::fmt::Display;
 
 use color_eyre::eyre::eyre;
 use nvim_oxi::Array;
@@ -77,7 +78,7 @@ where
 /// # Errors
 /// - Invoking `inputlist()` fails.
 /// - The returned index cannot be converted to `usize` (negative or overflow).
-pub fn inputlist<'a, I: core::fmt::Display>(prompt: &'a str, items: &'a [I]) -> color_eyre::Result<Option<&'a I>> {
+pub fn inputlist<'a, I: Display>(prompt: &'a str, items: &'a [I]) -> color_eyre::Result<Option<&'a I>> {
     let displayable_items: Vec<_> = items
         .iter()
         .enumerate()
@@ -118,7 +119,7 @@ pub fn vim_ui_select<C, K, V>(
     callback: impl Fn(usize) + 'static,
 ) -> color_eyre::Result<()>
 where
-    C: core::fmt::Display,
+    C: Display,
     K: IntoLua,
     V: IntoLua,
 {
