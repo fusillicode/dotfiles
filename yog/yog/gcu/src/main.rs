@@ -18,11 +18,13 @@
 //! ```
 //!
 //! # Errors
-//! - GitHub authentication or PR branch name derivation fails.
-//! - Branch name construction yields empty string.
-//! - Branch listing / fetching / switching / creation fails.
-//! - Interactive selection or user confirmation input fails.
-//! - Current branch lookup fails.
+//! - GitHub authentication via [`ytil_github::log_into_github`] or PR branch name derivation via
+//!   [`ytil_github::get_branch_name_from_url`] fails.
+//! - Branch name construction via [`build_branch_name`] yields empty string.
+//! - Branch listing via [`ytil_git::get_branches`] / fetching via [`ytil_git::fetch_branches`] / switching via
+//!   [`ytil_git::switch_branch`] / creation via [`ytil_git::create_branch`] fails.
+//! - Interactive selection via [`ytil_tui::minimal_select`] or user confirmation input fails.
+//! - Current branch lookup via [`ytil_git::get_current_branch`] fails.
 
 #![feature(exit_status_error)]
 
@@ -60,9 +62,9 @@ fn main() -> color_eyre::Result<()> {
 /// line or "-" triggers previous-branch switching.
 ///
 /// # Errors
-/// - Branch enumeration fails.
-/// - UI rendering fails.
-/// - Branch switching fails.
+/// - Branch enumeration via [`ytil_git::get_branches`] fails.
+/// - UI rendering via [`ytil_tui::minimal_select`] fails.
+/// - Branch switching via [`ytil_git::switch_branch`] fails.
 fn autocomplete_git_branches() -> color_eyre::Result<()> {
     let mut branches = ytil_git::get_branches()?;
     ytil_git::remove_redundant_remotes(&mut branches);
@@ -104,13 +106,13 @@ impl Display for RenderableBranch {
 ///   then switch to it.
 ///
 /// # Errors
-/// - GitHub authentication fails.
-/// - Pull request branch name derivation fails.
-/// - Fetching the remote branch (git fetch) fails.
-/// - Branch name construction fails or produces an empty string.
-/// - Branch creation fails.
-/// - Branch switching fails.
-/// - Current branch discovery (during creation decision) fails.
+/// - GitHub authentication via [`ytil_github::log_into_github`] fails.
+/// - Pull request branch name derivation via [`ytil_github::get_branch_name_from_url`] fails.
+/// - Fetching the remote branch via [`ytil_git::fetch_branches`] (git fetch) fails.
+/// - Branch name construction via [`build_branch_name`] fails or produces an empty string.
+/// - Branch creation via [`ytil_git::create_branch`] fails.
+/// - Branch switching via [`ytil_git::switch_branch`] fails.
+/// - Current branch discovery via [`ytil_git::get_current_branch`] (during creation decision) fails.
 /// - Reading user confirmation input (stdin) fails.
 fn switch_branch_or_create_if_missing(arg: &str) -> color_eyre::Result<()> {
     if let Ok(url) = Url::parse(arg) {
@@ -129,8 +131,8 @@ fn switch_branch_or_create_if_missing(arg: &str) -> color_eyre::Result<()> {
 ///   required.
 ///
 /// # Errors
-/// - Current branch discovery fails.
-/// - Branch creation or subsequent switching fails.
+/// - Current branch discovery via [`ytil_git::get_current_branch`] fails.
+/// - Branch creation via [`ytil_git::create_branch`] or subsequent switching via [`ytil_git::switch_branch`] fails.
 /// - Reading user confirmation input fails.
 fn create_branch_and_switch(branch: &str) -> color_eyre::Result<()> {
     if !should_create_new_branch(branch)? {
@@ -155,7 +157,7 @@ fn create_branch_and_switch(branch: &str) -> color_eyre::Result<()> {
 /// - Otherwise, requires user confirmation via empty line input (non‑empty aborts).
 ///
 /// # Errors
-/// - Current branch discovery fails.
+/// - Current branch discovery via [`ytil_git::get_current_branch`] fails.
 /// - Reading user confirmation input fails.
 fn should_create_new_branch(branch: &str) -> color_eyre::Result<bool> {
     if is_default_branch(branch) {

@@ -6,16 +6,17 @@
 //!
 //! # Flow
 //! - Parse flags (`--search`, `--merge-state`).
-//! - Detect current repository.
-//! - Fetch PR list via GitHub CLI (`gh pr list`) forwarding the search filter.
+//! - Detect current repository via [`ytil_github::get_current_repo`].
+//! - Fetch PR list via [`ytil_github::pr::get`] (GitHub CLI `gh pr list`) forwarding the search filter.
 //! - Apply optional in‑process merge state filter.
-//! - Present multi‑select TUI.
+//! - Present multi‑select TUI via [`ytil_tui::minimal_multi_select`].
 //! - Execute chosen high‑level operation over selected PRs, reporting per‑PR result.
 //!
 //! # Flags
 //! - `--search <FILTER>` or `--search=<FILTER>`: forwarded to `gh pr list --search`. Optional.
 //! - `--merge-state <STATE>` or `--merge-state=<STATE>`: client‑side filter over fetched PRs. Accepted
-//!   (case‑insensitive): `Behind|Blocked|Clean|Dirty|Draft|HasHooks|Unknown|Unmergeable`.
+//!   (case‑insensitive) values for [`PullRequestMergeState`]:
+//!   `Behind|Blocked|Clean|Dirty|Draft|HasHooks|Unknown|Unmergeable`.
 //!
 //! Use `--` to terminate flag parsing (subsequent arguments ignored by this tool).
 //!
@@ -28,9 +29,11 @@
 //! ```
 //!
 //! # Errors
-//! - Flag parsing fails (unknown flag, missing value, invalid merge state).
-//! - GitHub CLI invocation fails.
-//! - TUI interaction fails.
+//! - Flag parsing fails (unknown flag, missing value, invalid [`PullRequestMergeState`]).
+//! - GitHub CLI invocation fails (listing PRs via [`ytil_github::pr::get`], approving via [`ytil_github::pr::approve`],
+//!   merging via [`ytil_github::pr::merge`], commenting via [`ytil_github::pr::dependabot_rebase`]).
+//! - TUI interaction fails (selection UI errors via [`ytil_tui::minimal_multi_select`] and
+//!   [`ytil_tui::minimal_select`]).
 //!
 //! # Future Work
 //! - Add dry‑run mode printing planned operations without executing.
@@ -53,16 +56,19 @@ use ytil_github::pr::PullRequestMergeState;
 /// Execute the interactive pull request listing and batch operation flow.
 ///
 /// Mirrors the design of `gch::run` so the binary `main` remains a thin wrapper.
-/// Performs GitHub authentication, flag parsing, PR fetching, selection, and
+/// Performs GitHub authentication via [`ytil_github::log_into_github`], flag parsing, PR fetching via
+/// [`ytil_github::pr::get`], selection via [`ytil_tui::minimal_multi_select`] and [`ytil_tui::minimal_select`], and
 /// application of user‑chosen operations.
 ///
 /// # Returns
 /// `Ok(())` if all operations complete (individual PR action failures are reported but do not abort processing).
 ///
 /// # Errors
-/// - Flag parsing fails (unknown flag, missing value, invalid merge state).
-/// - GitHub CLI invocation fails (listing PRs, approving, merging, commenting).
-/// - TUI interaction fails (selection UI errors).
+/// - Flag parsing fails (unknown flag, missing value, invalid [`PullRequestMergeState`]).
+/// - GitHub CLI invocation fails (listing PRs via [`ytil_github::pr::get`], approving via [`ytil_github::pr::approve`],
+///   merging via [`ytil_github::pr::merge`], commenting via [`ytil_github::pr::dependabot_rebase`]).
+/// - TUI interaction fails (selection UI errors via [`ytil_tui::minimal_multi_select`] and
+///   [`ytil_tui::minimal_select`]).
 ///
 /// # Rationale
 /// Uniform `run()` entrypoint across tools (`gch`, `ghl`) simplifies integration (e.g. shared launcher invoking
@@ -181,9 +187,10 @@ impl Display for RenderablePullRequest {
 /// only affects menu construction / selection logic.
 ///
 /// # Variants
-/// - `ApproveAndMerge` Perform approval review then merge if approval succeeds.
-/// - `DependabotRebase` Post the `@dependabot rebase` comment to a Dependabot PR.
-/// - `EnableAutoMerge` Enable GitHub auto-merge (rebase strategy + delete branch) for the PR.
+/// - `Approve` Perform [`Op::Approve`] review.
+/// - `ApproveAndMerge` Perform [`Op::Approve`] review then [`Op::Merge`] if approval succeeds.
+/// - `DependabotRebase` Post the `@dependabot rebase` comment via [`Op::DependabotRebase`] to a Dependabot PR.
+/// - `EnableAutoMerge` Enable [`Op::EnableAutoMerge`] (rebase strategy + delete branch) for the PR.
 ///
 /// # Future Work
 /// - Add bulk label operations (e.g. `Label` / `RemoveLabel`).
@@ -238,10 +245,12 @@ impl SelectableOp {
 /// (`report`, `report_ok`, `report_error`) uniform and extensible.
 ///
 /// # Variants
-/// - `Approve` Submit an approving review (`gh pr review --approve`).
-/// - `Merge` Perform the administrative squash merge (`gh pr merge --admin --squash`).
-/// - `DependabotRebase` Post the `@dependabot rebase` comment to request an updated rebase for a Dependabot PR.
-/// - `EnableAutoMerge` Schedule automatic merge (rebase) once requirements satisfied.
+/// - `Approve` Submit an approving review via [`ytil_github::pr::approve`] (`gh pr review --approve`).
+/// - `Merge` Perform the administrative squash merge via [`ytil_github::pr::merge`] (`gh pr merge --admin --squash`).
+/// - `DependabotRebase` Post the `@dependabot rebase` comment via [`ytil_github::pr::dependabot_rebase`] to request an
+///   updated rebase for a Dependabot PR.
+/// - `EnableAutoMerge` Schedule automatic merge via [`ytil_github::pr::enable_auto_merge`] (rebase) once requirements
+///   satisfied.
 enum Op {
     Approve,
     Merge,
@@ -258,7 +267,7 @@ impl Op {
     ///
     /// # Arguments
     /// - `pr` Subject pull request.
-    /// - `res` Result returned by the underlying GitHub CLI wrapper.
+    /// - `res` [`color_eyre::Result`] returned by the underlying GitHub CLI wrapper.
     ///
     /// # Returns
     /// Propagates `res` unchanged after side‑effect logging.
@@ -289,8 +298,8 @@ impl Op {
     /// Emit a structured error report for a failed operation.
     ///
     /// # Arguments
-    /// - `pr` Pull request that failed to process.
-    /// - `error` Error returned by the CLI wrapper.
+    /// - `pr` [`PullRequest`] Pull request that failed to process.
+    /// - `error` [`color_eyre::Report`] returned by the CLI wrapper.
     ///
     /// # Rationale
     /// Keeps multi‑line error payload visually grouped with the PR metadata.
