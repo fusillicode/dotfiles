@@ -1,4 +1,4 @@
-name: "Setup"
+name: "Setup Rust and cargo tools"
 description: "Set up Rust toolchain & optionally install specified global cargo tools."
 inputs:
   tools:
