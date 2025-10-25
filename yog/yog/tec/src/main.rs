@@ -65,6 +65,8 @@ type LintFn = fn(&Path) -> Result<LintFnSuccess, LintFnError>;
 enum LintFnError {
     #[error(transparent)]
     CmdError(#[from] CmdError),
+    #[error("{0}")]
+    PlainMsg(String),
 }
 
 /// Success result from lint function execution.
@@ -74,7 +76,6 @@ enum LintFnError {
 /// - [`LintFnSuccess::PlainMsg`] Simple string message (currently unused).
 enum LintFnSuccess {
     CmdOutput(Output),
-    #[allow(unused)]
     PlainMsg(String),
 }
 
@@ -198,6 +199,22 @@ const LINTS_FIX: &[(&str, LintFn)] = &[
             .map(LintFnSuccess::CmdOutput)
             .map_err(LintFnError::from)
     }),
+    ("rm-ds-store", |path| {
+        let (removed_paths, errors) = ytil_system::rm_matching_files(path, ".DS_Store", &[".git", "target"], false);
+        let mut success_out = String::new();
+        for path in removed_paths {
+            success_out.push_str(&format!("Removed {path:?}\n"));
+        }
+        let mut error_out = String::new();
+        for (path, error) in &errors {
+            error_out.push_str(&format!("Error removing path={path:?} error={error}\n"));
+        }
+        if errors.is_empty() {
+            Ok(LintFnSuccess::PlainMsg(success_out))
+        } else {
+            Err(LintFnError::PlainMsg(format!("{success_out}\n{error_out}")))
+        }
+    }),
 ];
 
 fn main() -> color_eyre::Result<()> {
@@ -308,7 +325,7 @@ fn report(lint_name: &str, lint_res: &Result<LintFnSuccess, LintFnError>, elapse
             );
         }
         Ok(LintFnSuccess::PlainMsg(msg)) => {
-            println!("{} {} \n{msg:?}", lint_name.green().bold(), format_timing(elapsed));
+            println!("{} {} \n{msg}", lint_name.green().bold(), format_timing(elapsed));
         }
         Err(error) => {
             eprintln!("{} {} \n{error}", lint_name.red().bold(), format_timing(elapsed));
