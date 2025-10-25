@@ -50,25 +50,27 @@ pub fn transform_selection(_: ()) -> Option<()> {
         cases.iter().map(DisplayableCase),
         &[("prompt", "Select case ")],
         move |choice_idx| {
-            if let Some(case) = cases.get(choice_idx) {
+            cases.get(choice_idx).map(|case| {
                 let transformed_lines = selection
                     .lines()
                     .iter()
                     .map(|line| line.as_str().to_case(*case))
                     .collect::<Vec<_>>();
-                if let Err(error) = Buffer::from(selection.buf_id()).set_text(
-                    selection.line_range(),
-                    selection.start().col,
-                    selection.end().col,
-                    transformed_lines,
-                ) {
-                    ytil_nvim_oxi::api::notify_error(&format!(
-                        "cannot set lines of buffer | start={:#?} end={:#?} error={error:#?}",
-                        selection.start(),
-                        selection.end()
-                    ));
-                }
-            }
+                Buffer::from(selection.buf_id())
+                    .set_text(
+                        selection.line_range(),
+                        selection.start().col,
+                        selection.end().col,
+                        transformed_lines,
+                    )
+                    .inspect_err(|error| {
+                        ytil_nvim_oxi::api::notify_error(&format!(
+                            "cannot set lines of buffer | start={:#?} end={:#?} error={error:#?}",
+                            selection.start(),
+                            selection.end()
+                        ));
+                    })
+            });
         },
     )
     .inspect_err(|error| {
