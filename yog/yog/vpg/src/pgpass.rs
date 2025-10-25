@@ -1,3 +1,4 @@
+use core::fmt::Display;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -77,7 +78,7 @@ pub struct PgpassEntry {
     pub metadata: Metadata,
 }
 
-impl core::fmt::Display for PgpassEntry {
+impl Display for PgpassEntry {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.metadata.alias)
     }
@@ -92,7 +93,7 @@ pub struct Metadata {
     pub vault_path: String,
 }
 
-impl core::fmt::Display for Metadata {
+impl Display for Metadata {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.alias)
     }
@@ -147,7 +148,7 @@ impl TryFrom<(usize, &str)> for ConnectionParams {
     }
 }
 
-impl core::fmt::Display for ConnectionParams {
+impl Display for ConnectionParams {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}:{}:{}:{}:{}", self.host, self.port, self.db, self.user, self.pwd)
     }

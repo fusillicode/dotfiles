@@ -39,6 +39,7 @@
 
 #![feature(exit_status_error)]
 
+use core::fmt::Display;
 use std::ops::Deref;
 use std::str::FromStr;
 
@@ -135,7 +136,7 @@ fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Newtype wrapper implementing colored [`core::fmt::Display`] for a [`PullRequest`].
+/// Newtype wrapper implementing colored [`Display`] for a [`PullRequest`].
 ///
 /// Renders: `<number> <author.login> <colored-merge-state> <title>`.
 /// Merge state receives a color to aid quick scanning.
@@ -149,7 +150,7 @@ impl Deref for RenderablePullRequest {
     }
 }
 
-impl core::fmt::Display for RenderablePullRequest {
+impl Display for RenderablePullRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let state = match self.merge_state {
             PullRequestMergeState::Behind => "Behind".yellow().bold().to_string(),
@@ -196,7 +197,7 @@ enum SelectableOp {
     EnableAutoMerge,
 }
 
-impl core::fmt::Display for SelectableOp {
+impl Display for SelectableOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let repr = match self {
             Self::Approve => "Approve".green().bold().to_string(),

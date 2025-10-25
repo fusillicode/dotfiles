@@ -4,6 +4,8 @@
 //! special buffer types (e.g. minimal output for transient search buffers). Errors are notified via
 //! [`ytil_nvim_oxi::api::notify_error`].
 
+use core::fmt::Display;
+
 use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;
@@ -274,7 +276,7 @@ impl SignHlGroup {
     }
 }
 
-impl core::fmt::Display for SignHlGroup {
+impl Display for SignHlGroup {
     /// Formats the highlight group as the raw group string.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str(self.as_str())

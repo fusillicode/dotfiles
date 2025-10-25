@@ -30,6 +30,7 @@
 //! - Delegates semantics to porcelain (`git restore`, `git add`) to inherit nuanced Git behavior.
 //! - Minimal two‑prompt UX optimizes rapid iterative staging / discarding.
 
+use core::fmt::Display;
 use std::ops::Deref;
 use std::path::Path;
 
@@ -175,7 +176,7 @@ fn add_entries(entries: &[&GitStatusEntry]) -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Newtype wrapper adding colored [`core::fmt::Display`] for a [`ytil_git::GitStatusEntry`].
+/// Newtype wrapper adding colored [`Display`] for a [`ytil_git::GitStatusEntry`].
 ///
 /// Renders two status columns (index + worktree) plus the path, dimming ignored entries
 /// and prioritizing conflict markers.
@@ -188,7 +189,7 @@ fn add_entries(entries: &[&GitStatusEntry]) -> color_eyre::Result<()> {
 /// ```
 ///
 /// # Rationale
-/// Needed to implement [`std::fmt::Display`] without modifying an external type (orphan rule).
+/// Needed to implement [`Display`] without modifying an external type (orphan rule).
 ///
 /// # Performance
 /// Only constructs small colored string fragments per render.
@@ -205,7 +206,7 @@ impl Deref for RenderableGitStatusEntry {
     }
 }
 
-impl core::fmt::Display for RenderableGitStatusEntry {
+impl Display for RenderableGitStatusEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Conflict overrides everything
         if self.conflicted {
@@ -256,7 +257,7 @@ pub enum Op {
     Discard,
 }
 
-impl core::fmt::Display for Op {
+impl Display for Op {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let str_repr = match self {
             Self::Discard => format!("{}", "Discard".red().bold()),

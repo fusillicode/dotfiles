@@ -26,6 +26,7 @@
 
 #![feature(exit_status_error)]
 
+use core::fmt::Display;
 use std::io::Write;
 use std::ops::Deref;
 
@@ -85,7 +86,7 @@ impl Deref for RenderableBranch {
     }
 }
 
-impl core::fmt::Display for RenderableBranch {
+impl Display for RenderableBranch {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let styled_date_time = format!("({})", self.committer_date_time());
         write!(f, "{} {}", self.name(), styled_date_time.blue())
