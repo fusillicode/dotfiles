@@ -4,7 +4,9 @@
 //! manipulating filesystem entries (chmod, symlinks, atomic copy) and clipboard integration.
 
 use std::collections::VecDeque;
+use std::ffi::OsStr;
 use std::fs::DirEntry;
+use std::fs::FileType;
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
 use std::path::PathBuf;
@@ -167,6 +169,116 @@ pub fn rm_f<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
     })
 }
 
+/// Iteratively removes all files with the specified name starting from the given root path, with optional directory
+/// exclusions.
+///
+/// This function uses a depth-first iterative traversal with a stack to avoid recursion limits.
+/// It checks each file/symlink and removes those matching the name, skipping any directories listed in `excluded_dirs`.
+/// Metadata is read once per path to determine file type, reducing syscalls.
+///
+/// # Arguments
+/// - `root_path` The root directory path to start the removal from.
+/// - `file_name` The name of the files to remove.
+/// - `excluded_dirs` A list of directory names (as strings) to skip during traversal.
+/// - `dry_run` If true, collects paths that would be removed without actually removing them.
+///
+/// # Returns
+/// Returns a tuple `(Vec<PathBuf>, Vec<(Option<PathBuf>, std::io::Error)>)` with the list of removed (or would-be
+/// removed in `dry_run`) paths and any errors encountered.
+/// Each error is paired with the optional path where it occurred (e.g., during metadata read, traversal, or removal).
+///
+/// # Performance
+/// - Reads metadata once per path using `symlink_metadata`, avoiding redundant syscalls.
+/// - Iterative approach prevents stack overflow in deep trees.
+/// - Exclusions reduce unnecessary traversal, improving performance for large trees with skipped dirs.
+/// - IO-bound; memory usage scales with stack depth and error count.
+pub fn rm_matching_files<P: AsRef<Path>>(
+    root_path: P,
+    file_name: &str,
+    excluded_dirs: &[&str],
+    dry_run: bool,
+) -> (Vec<PathBuf>, Vec<(Option<PathBuf>, std::io::Error)>) {
+    fn handle_file_or_symlink(
+        current_path: &PathBuf,
+        dry_run: bool,
+        removed: &mut Vec<PathBuf>,
+        errors: &mut Vec<(Option<PathBuf>, std::io::Error)>,
+        file_type: FileType,
+    ) {
+        let mut paths_to_remove = vec![current_path.clone()];
+
+        // If it's a symlink, also try to remove the target file
+        if file_type.is_symlink()
+            && let Ok(target) = std::fs::read_link(current_path)
+            && target.is_file()
+        {
+            paths_to_remove.push(target);
+        }
+
+        if dry_run {
+            removed.extend(paths_to_remove);
+            return;
+        }
+
+        for path in paths_to_remove {
+            if let Err(error) = std::fs::remove_file(&path) {
+                errors.push((Some(path), error));
+            } else {
+                removed.push(path);
+            }
+        }
+    }
+
+    fn handle_dir(
+        current_path: PathBuf,
+        stack: &mut VecDeque<PathBuf>,
+        excluded_dirs: &[&str],
+        errors: &mut Vec<(Option<PathBuf>, std::io::Error)>,
+    ) {
+        if let Some(dir_name) = current_path.file_name().and_then(|n| n.to_str())
+            && excluded_dirs.contains(&dir_name)
+        {
+            return;
+        }
+        match std::fs::read_dir(&current_path) {
+            Ok(entries) => {
+                for entry in entries {
+                    match entry {
+                        Ok(entry) => stack.push_back(entry.path()),
+                        Err(error) => errors.push((Some(current_path.clone()), error)),
+                    }
+                }
+            }
+            Err(error) => errors.push((Some(current_path), error)),
+        }
+    }
+
+    let mut stack = VecDeque::new();
+    stack.push_back(root_path.as_ref().to_path_buf());
+
+    let file_name_os = OsStr::new(file_name);
+    let mut removed = vec![];
+    let mut errors = vec![];
+
+    while let Some(current_path) = stack.pop_back() {
+        match std::fs::symlink_metadata(&current_path) {
+            Ok(metadata) => {
+                let file_type = metadata.file_type();
+                if current_path.file_name() == Some(file_name_os) && (file_type.is_file() || file_type.is_symlink()) {
+                    handle_file_or_symlink(&current_path, dry_run, &mut removed, &mut errors, file_type);
+                } else if file_type.is_dir() {
+                    handle_dir(current_path, &mut stack, excluded_dirs, &mut errors)
+                }
+            }
+            Err(error) => {
+                errors.push((None, error));
+            }
+        }
+    }
+
+    (removed, errors)
+}
+
 /// Atomically copies a file from `from` to `to`.
 ///
 /// The content is first written to a uniquely named temporary sibling (with
@@ -297,9 +409,9 @@ mod tests {
         let tmp = tempfile::NamedTempFile::new().unwrap();
         let path = tmp.path().to_path_buf();
 
-        // Remove first time
+        // First remove
         assert2::let_assert!(Ok(()) = rm_f(&path));
-        // Second removal should succeed (no error) using assert2 pattern assertion
+        // Second remove, no error
         assert2::let_assert!(Ok(()) = rm_f(&path));
     }
 
@@ -318,21 +430,18 @@ mod tests {
 
     #[test]
     fn atomic_cp_errors_when_missing_source() {
-        use assert2::let_assert;
         let dir = tempfile::tempdir().unwrap();
         let src = dir.path().join("missing.txt");
         let dst = dir.path().join("dst.txt");
 
         let res = atomic_cp(&src, &dst);
 
-        let_assert!(Err(err) = res);
-        // Ensure we failed for the expected missing source reason.
+        assert2::let_assert!(Err(err) = res);
         assert!(err.to_string().contains("source file missing"));
     }
 
     #[test]
     fn find_matching_files_recursively_in_dir_returns_the_expected_paths() {
-        use assert2::let_assert;
         let dir = tempfile::tempdir().unwrap();
         // layout: a/, a/b/, c.txt, a/b/d.txt
         std::fs::create_dir(dir.path().join("a")).unwrap();
@@ -345,11 +454,104 @@ mod tests {
             |e| e.path().extension().and_then(|s| s.to_str()) == Some("txt"),
             |_| false,
         );
-        let_assert!(Ok(mut found) = res);
+        assert2::let_assert!(Ok(mut found) = res);
         found.sort();
 
         let mut expected = vec![dir.path().join("c.txt"), dir.path().join("a/b/d.txt")];
         expected.sort();
         assert_eq!(found, expected);
+    }
+
+    #[test]
+    fn rm_matching_files_dry_run_collects_paths_without_removing() {
+        let dir = tempfile::tempdir().unwrap();
+        let ds_store = dir.path().join(".DS_Store");
+        std::fs::write(&ds_store, b"dummy").unwrap();
+
+        let (removed, errors) = rm_matching_files(dir.path(), ".DS_Store", &[], true);
+
+        assert_eq!(removed, vec![ds_store.clone()]);
+        assert!(errors.is_empty());
+        assert!(ds_store.exists()); // Should not be removed
+    }
+
+    #[test]
+    fn rm_matching_files_removes_matching_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let ds_store = dir.path().join(".DS_Store");
+        std::fs::write(&ds_store, b"dummy").unwrap();
+
+        let (removed, errors) = rm_matching_files(dir.path(), ".DS_Store", &[], false);
+
+        assert_eq!(removed, vec![ds_store.clone()]);
+        assert!(errors.is_empty());
+        assert!(!ds_store.exists()); // Should be removed
+    }
+
+    #[test]
+    fn rm_matching_files_excludes_specified_dirs() {
+        let dir = tempfile::tempdir().unwrap();
+        let excluded_dir = dir.path().join("node_modules");
+        std::fs::create_dir(&excluded_dir).unwrap();
+        let ds_store_in_excluded = excluded_dir.join(".DS_Store");
+        std::fs::write(&ds_store_in_excluded, b"dummy").unwrap();
+
+        let regular_dir = dir.path().join("src");
+        std::fs::create_dir(&regular_dir).unwrap();
+        let ds_store_in_regular = regular_dir.join(".DS_Store");
+        std::fs::write(&ds_store_in_regular, b"dummy").unwrap();
+
+        let (removed, errors) = rm_matching_files(dir.path(), ".DS_Store", &["node_modules"], false);
+
+        assert_eq!(removed, vec![ds_store_in_regular.clone()]);
+        assert!(errors.is_empty());
+        assert!(ds_store_in_excluded.exists()); // Not removed
+        assert!(!ds_store_in_regular.exists()); // Removed
+    }
+
+    #[test]
+    fn rm_matching_files_handles_nested_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let sub_dir = dir.path().join("subdir");
+        std::fs::create_dir(&sub_dir).unwrap();
+        let ds_store = sub_dir.join(".DS_Store");
+        std::fs::write(&ds_store, b"dummy").unwrap();
+
+        let (removed, errors) = rm_matching_files(dir.path(), ".DS_Store", &[], false);
+
+        assert_eq!(removed, vec![ds_store.clone()]);
+        assert!(errors.is_empty());
+        assert!(!ds_store.exists());
+    }
+
+    #[test]
+    fn rm_matching_files_collects_errors_for_unreadable_dirs() {
+        let dir = tempfile::tempdir().unwrap();
+        let unreadable_dir = dir.path().join("unreadable");
+        std::fs::create_dir(&unreadable_dir).unwrap();
+
+        let (removed, errors) = rm_matching_files("/non/existent/path", ".DS_Store", &[], false);
+
+        assert!(removed.is_empty());
+        assert!(!errors.is_empty());
+        // Check that error has None path for metadata failure
+        assert!(errors.iter().any(|(path, _)| path.is_none()));
+    }
+
+    #[test]
+    fn rm_matching_files_removes_symlink_and_target() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("target.txt");
+        std::fs::write(&target, b"content").unwrap();
+        let symlink = dir.path().join(".DS_Store");
+        std::os::unix::fs::symlink(&target, &symlink).unwrap();
+
+        let (removed, errors) = rm_matching_files(dir.path(), ".DS_Store", &[], false);
+        assert_eq!(removed.len(), 2);
+        assert!(errors.is_empty());
+        assert!(removed.contains(&symlink));
+        assert!(removed.contains(&target));
+        assert!(!symlink.exists());
+        assert!(!target.exists());
     }
 }
