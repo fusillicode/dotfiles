@@ -27,6 +27,7 @@
 //! Split check vs fix modes minimize hook latency while enabling quick remediation.
 //! Adds deterministic, ordered reporting for stable output while retaining parallel execution for speed.
 
+use std::fmt::Write;
 use std::path::Path;
 use std::process::Command;
 use std::process::Output;
@@ -203,15 +204,20 @@ const LINTS_FIX: &[(&str, LintFn)] = &[
         let (removed_paths, errors) = ytil_system::rm_matching_files(path, ".DS_Store", &[".git", "target"], false);
         let mut success_out = String::new();
         for path in removed_paths {
-            success_out.push_str(&format!("{} {path:?}\n", "Removed".green()));
+            writeln!(&mut success_out, "{} {}", "Removed".green(), path.display()).unwrap();
         }
         let mut error_out = String::new();
         for (path, error) in &errors {
-            error_out.push_str(&format!(
-                "{} path {path:?} error={}\n",
+            writeln!(
+                &mut error_out,
+                "{} path {} error={}",
                 "Error removing".red(),
+                path.as_ref()
+                    .map(|p| p.display())
+                    .unwrap_or_else(|| std::path::Path::new("<unknown>").display()),
                 format!("{error}").red()
-            ));
+            )
+            .unwrap();
         }
         if errors.is_empty() {
             Ok(LintFnSuccess::PlainMsg(success_out))
