@@ -1,0 +1,27 @@
+name: Setup Rust and cargo tools
+
+on:
+  workflow_call:
+    inputs:
+      tools:
+        description: "Comma-separated list of cargo tools specs (name or name@version)"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Rust (pinned nightly via rust-toolchain.toml)
+        working-directory: yog
+        run: |
+          set -euo pipefail
+          rustup show
+          rustc -V
+
+      - name: Install global cargo tools
+        if: inputs.tools != ''
+        uses: taiki-e/install-action@v2
+        with:
+          tool: ${{ inputs.tools }}
