@@ -69,7 +69,7 @@ Format:
    Use '-' for bullet points; never use '*' for lists.
 2. Blank line.
 3. Sections in this strict order (omit unused):
-   - `# Arguments`
+   - `# Arguments` (format: `- `arg_name` Description.`)
    - `# Type Parameters`
    - `# Returns`
    - `# Errors` (list each variant & meaning; conditions)
