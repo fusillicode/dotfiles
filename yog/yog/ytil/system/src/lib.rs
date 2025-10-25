@@ -267,7 +267,7 @@ pub fn rm_matching_files<P: AsRef<Path>>(
                 if current_path.file_name() == Some(file_name_os) && (file_type.is_file() || file_type.is_symlink()) {
                     handle_file_or_symlink(&current_path, dry_run, &mut removed, &mut errors, file_type);
                 } else if file_type.is_dir() {
-                    handle_dir(current_path, &mut stack, excluded_dirs, &mut errors)
+                    handle_dir(current_path, &mut stack, excluded_dirs, &mut errors);
                 }
             }
             Err(error) => {
