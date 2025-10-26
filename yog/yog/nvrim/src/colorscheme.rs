@@ -13,7 +13,7 @@ use nvim_oxi::api::opts::SetHighlightOptsBuilder;
 use nvim_oxi::api::types::GetHlInfos;
 use nvim_oxi::api::types::HighlightInfos;
 
-const BG: &str = "#002200";
+const BG: &str = "#002000";
 const FG: &str = "#D0D0D0";
 const DIAGNOSTIC_LVLS: [&str; 5] = ["Error", "Warn", "Info", "Hint", "Ok"];
 const STATUS_LINE_BG: &str = "none";
