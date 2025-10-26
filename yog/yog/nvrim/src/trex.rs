@@ -48,7 +48,7 @@ pub fn transform_selection(_: ()) {
 
     let cases = Case::all_cases();
 
-    let Ok(_) = ytil_nvim_oxi::api::vim_ui_select(
+    let Ok(()) = ytil_nvim_oxi::api::vim_ui_select(
         cases.iter().map(DisplayableCase),
         &[("prompt", "Select case ")],
         move |choice_idx| {
