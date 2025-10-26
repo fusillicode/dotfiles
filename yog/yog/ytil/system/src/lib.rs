@@ -213,11 +213,17 @@ pub fn rm_matching_files<P: AsRef<Path>>(
         let mut paths_to_remove = vec![current_path.clone()];
 
         // If it's a symlink, also try to remove the target file
-        if file_type.is_symlink()
-            && let Ok(target) = std::fs::read_link(current_path)
-            && target.is_file()
-        {
-            paths_to_remove.push(target);
+        if file_type.is_symlink() {
+            let target = match std::fs::read_link(current_path) {
+                Ok(target) => target,
+                Err(error) => {
+                    errors.push((Some(current_path.clone()), error));
+                    return;
+                }
+            };
+            if target.is_file() {
+                paths_to_remove.push(target);
+            }
         }
 
         if dry_run {
