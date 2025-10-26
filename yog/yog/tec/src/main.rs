@@ -116,6 +116,7 @@ impl From<RmFilesOutcome> for LintFnResult {
 ///
 /// # Errors
 /// - [`LintFnError::CmdError`] Process spawning or execution failure.
+/// - [`LintFnError::PlainMsg`] Generic error with a plain message string.
 #[derive(Debug, thiserror::Error)]
 enum LintFnError {
     #[error(transparent)]
