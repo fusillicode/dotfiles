@@ -416,3 +416,92 @@ fn report(lint_name: &str, lint_res: &Result<LintFnSuccess, LintFnError>, elapse
 fn format_timing(duration: Duration) -> String {
     format!("time={duration:?}")
 }
+
+#[cfg(test)]
+mod tests {
+    use std::io::Error;
+    use std::io::ErrorKind;
+    use std::path::PathBuf;
+
+    use super::*;
+
+    #[test]
+    fn from_rm_files_outcome_when_no_removed_no_errors_returns_success() {
+        let outcome = RmFilesOutcome {
+            removed: vec![],
+            errors: vec![],
+        };
+
+        let result = LintFnResult::from(outcome);
+
+        assert2::let_assert!(Ok(LintFnSuccess::PlainMsg(msg)) = result.0);
+        pretty_assertions::assert_eq!(msg, "");
+    }
+
+    #[test]
+    fn from_rm_files_outcome_when_some_removed_no_errors_returns_success() {
+        let outcome = RmFilesOutcome {
+            removed: vec![PathBuf::from("file1.txt"), PathBuf::from("file2.txt")],
+            errors: vec![],
+        };
+
+        let result = LintFnResult::from(outcome);
+
+        assert2::let_assert!(Ok(LintFnSuccess::PlainMsg(msg)) = result.0);
+        pretty_assertions::assert_eq!(
+            msg,
+            "\x1b[32mRemoved\x1b[39m file1.txt\n\x1b[32mRemoved\x1b[39m file2.txt\n"
+        );
+    }
+
+    #[test]
+    fn from_rm_files_outcome_when_no_removed_some_errors_returns_failure() {
+        let outcome = RmFilesOutcome {
+            removed: vec![],
+            errors: vec![(
+                Some(PathBuf::from("badfile.txt")),
+                Error::new(ErrorKind::PermissionDenied, "permission denied"),
+            )],
+        };
+
+        let result = LintFnResult::from(outcome);
+
+        assert2::let_assert!(Err(LintFnError::PlainMsg(msg)) = result.0);
+        pretty_assertions::assert_eq!(
+            msg,
+            "\x1b[31mError removing\x1b[39m path \"badfile.txt\" error=\x1b[31mpermission denied\x1b[39m\n"
+        );
+    }
+
+    #[test]
+    fn from_rm_files_outcome_when_error_without_path_returns_failure() {
+        let outcome = RmFilesOutcome {
+            removed: vec![],
+            errors: vec![(None, Error::new(ErrorKind::NotFound, "file not found"))],
+        };
+
+        let result = LintFnResult::from(outcome);
+
+        assert2::let_assert!(Err(LintFnError::PlainMsg(msg)) = result.0);
+        pretty_assertions::assert_eq!(
+            msg,
+            "\x1b[31mError removing\x1b[39m path error=\x1b[31mfile not found\x1b[39m\n"
+        );
+    }
+
+    #[test]
+    fn from_rm_files_outcome_when_mixed_removed_and_errors_returns_failure() {
+        let outcome = RmFilesOutcome {
+            removed: vec![PathBuf::from("goodfile.txt")],
+            errors: vec![(Some(PathBuf::from("badfile.txt")), Error::other("some error"))],
+        };
+
+        let result = LintFnResult::from(outcome);
+
+        assert2::let_assert!(Err(LintFnError::PlainMsg(msg)) = result.0);
+        pretty_assertions::assert_eq!(
+            msg,
+            "\x1b[32mRemoved\x1b[39m goodfile.txt\n\x1b[31mError removing\x1b[39m path \"badfile.txt\" error=\x1b[31msome error\x1b[39m\n"
+        );
+    }
+}
