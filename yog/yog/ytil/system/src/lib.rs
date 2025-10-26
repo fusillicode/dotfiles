@@ -6,7 +6,6 @@
 use std::collections::VecDeque;
 use std::ffi::OsStr;
 use std::fs::DirEntry;
-use std::fs::FileType;
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
 use std::path::PathBuf;
@@ -203,64 +202,57 @@ pub fn rm_matching_files<P: AsRef<Path>>(
     excluded_dirs: &[&str],
     dry_run: bool,
 ) -> RmFilesOutcome {
-    fn handle_file_or_symlink(
-        current_path: &PathBuf,
+    fn rm_file(
+        path: PathBuf,
         dry_run: bool,
         removed: &mut Vec<PathBuf>,
         errors: &mut Vec<(Option<PathBuf>, std::io::Error)>,
-        file_type: FileType,
     ) {
-        let mut paths_to_remove = vec![current_path.clone()];
-
-        // If it's a symlink, also try to remove the target file
-        if file_type.is_symlink() {
-            let target = match std::fs::read_link(current_path) {
-                Ok(target) => target,
-                Err(error) => {
-                    errors.push((Some(current_path.clone()), error));
-                    return;
-                }
-            };
-            if target.is_file() {
-                paths_to_remove.push(target);
-            }
-        }
-
         if dry_run {
-            removed.extend(paths_to_remove);
+            removed.push(path);
             return;
         }
-
-        for path in paths_to_remove {
-            if let Err(error) = std::fs::remove_file(&path) {
-                errors.push((Some(path), error));
-            } else {
-                removed.push(path);
-            }
+        if let Err(error) = std::fs::remove_file(&path) {
+            errors.push((Some(path), error));
+            return;
         }
+        removed.push(path);
+    }
+
+    fn handle_symlink(
+        path: PathBuf,
+        dry_run: bool,
+        removed: &mut Vec<PathBuf>,
+        errors: &mut Vec<(Option<PathBuf>, std::io::Error)>,
+    ) {
+        match std::fs::read_link(&path) {
+            Ok(target) => rm_file(target, dry_run, removed, errors),
+            Err(error) => errors.push((Some(path.clone()), error)),
+        }
+        rm_file(path, dry_run, removed, errors);
     }
 
     fn handle_dir(
-        current_path: PathBuf,
+        path: PathBuf,
         stack: &mut VecDeque<PathBuf>,
         excluded_dirs: &[&str],
         errors: &mut Vec<(Option<PathBuf>, std::io::Error)>,
     ) {
-        if let Some(dir_name) = current_path.file_name().and_then(|n| n.to_str())
+        if let Some(dir_name) = path.file_name().and_then(|n| n.to_str())
             && excluded_dirs.contains(&dir_name)
         {
             return;
         }
-        match std::fs::read_dir(&current_path) {
+        match std::fs::read_dir(&path) {
             Ok(entries) => {
                 for entry in entries {
                     match entry {
                         Ok(entry) => stack.push_back(entry.path()),
-                        Err(error) => errors.push((Some(current_path.clone()), error)),
+                        Err(error) => errors.push((Some(path.clone()), error)),
                     }
                 }
             }
-            Err(error) => errors.push((Some(current_path), error)),
+            Err(error) => errors.push((Some(path), error)),
         }
     }
 
@@ -275,15 +267,19 @@ pub fn rm_matching_files<P: AsRef<Path>>(
         match std::fs::symlink_metadata(&current_path) {
             Ok(metadata) => {
                 let file_type = metadata.file_type();
-                if current_path.file_name() == Some(file_name_os) && (file_type.is_file() || file_type.is_symlink()) {
-                    handle_file_or_symlink(&current_path, dry_run, &mut removed, &mut errors, file_type);
-                } else if file_type.is_dir() {
+                if file_type.is_dir() {
                     handle_dir(current_path, &mut stack, excluded_dirs, &mut errors);
+                    continue;
+                }
+                if current_path.file_name() == Some(file_name_os) {
+                    if file_type.is_file() {
+                        rm_file(current_path.clone(), dry_run, &mut removed, &mut errors);
+                    } else if file_type.is_symlink() {
+                        handle_symlink(current_path.clone(), dry_run, &mut removed, &mut errors);
+                    }
                 }
             }
-            Err(error) => {
-                errors.push((None, error));
-            }
+            Err(error) => errors.push((None, error)),
         }
     }
 
