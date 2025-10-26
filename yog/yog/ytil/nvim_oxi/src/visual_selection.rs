@@ -48,7 +48,15 @@ pub fn get_lines(_: ()) -> Vec<String> {
 
 /// Return an owned [`Selection`] for the active Visual range.
 ///
-/// Returns [`None`] if any prerequisite (positions, lines, text extraction) fails.
+/// On any Neovim API error (fetching marks, lines, or text) a notification is emitted and [`None`] is returned.
+///
+/// # Returns
+/// Returns `Some(Selection)` if the visual selection can be extracted successfully, [`None`] otherwise.
+///
+/// # Errors
+/// - Return [`None`] if retrieving either mark fails.
+/// - Return [`None`] if the two marks reference different buffers.
+/// - Return [`None`] if getting lines or text fails.
 pub fn get(_: ()) -> Option<Selection> {
     let Ok(mut bounds) = SelectionBounds::new().inspect_err(|error| {
         crate::api::notify_error(&format!("cannot create selection bounds | error={error:#?}"));
