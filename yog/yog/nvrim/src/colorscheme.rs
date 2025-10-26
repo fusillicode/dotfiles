@@ -57,7 +57,7 @@ pub fn set(colorscheme: Option<String>) {
             "TreesitterContext",
             get_default_hl_opts().background("NvimDarkGrey3").build(),
         ),
-        // Jonathan Blow inspired
+        // Tone down the whites
         ("@variable", get_default_hl_opts().foreground(FG).build()),
         ("Constant", get_default_hl_opts().foreground(FG).build()),
         ("Delimiter", get_default_hl_opts().foreground(FG).build()),
