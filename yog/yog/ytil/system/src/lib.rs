@@ -169,6 +169,11 @@ pub fn rm_f<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
     })
 }
 
+pub struct RmFilesOutcome {
+    pub removed: Vec<PathBuf>,
+    pub errors: Vec<(Option<PathBuf>, std::io::Error)>,
+}
+
 /// Iteratively removes all files with the specified name starting from the given root path, with optional directory
 /// exclusions.
 ///
@@ -197,7 +202,7 @@ pub fn rm_matching_files<P: AsRef<Path>>(
     file_name: &str,
     excluded_dirs: &[&str],
     dry_run: bool,
-) -> (Vec<PathBuf>, Vec<(Option<PathBuf>, std::io::Error)>) {
+) -> RmFilesOutcome {
     fn handle_file_or_symlink(
         current_path: &PathBuf,
         dry_run: bool,
@@ -276,7 +281,7 @@ pub fn rm_matching_files<P: AsRef<Path>>(
         }
     }
 
-    (removed, errors)
+    RmFilesOutcome { removed, errors }
 }
 
 /// Atomically copies a file from `from` to `to`.
@@ -468,7 +473,7 @@ mod tests {
         let ds_store = dir.path().join(".DS_Store");
         std::fs::write(&ds_store, b"dummy").unwrap();
 
-        let (removed, errors) = rm_matching_files(dir.path(), ".DS_Store", &[], true);
+        let RmFilesOutcome { removed, errors } = rm_matching_files(dir.path(), ".DS_Store", &[], true);
 
         assert_eq!(removed, vec![ds_store.clone()]);
         assert!(errors.is_empty());
@@ -481,7 +486,7 @@ mod tests {
         let ds_store = dir.path().join(".DS_Store");
         std::fs::write(&ds_store, b"dummy").unwrap();
 
-        let (removed, errors) = rm_matching_files(dir.path(), ".DS_Store", &[], false);
+        let RmFilesOutcome { removed, errors } = rm_matching_files(dir.path(), ".DS_Store", &[], false);
 
         assert_eq!(removed, vec![ds_store.clone()]);
         assert!(errors.is_empty());
@@ -501,7 +506,7 @@ mod tests {
         let ds_store_in_regular = regular_dir.join(".DS_Store");
         std::fs::write(&ds_store_in_regular, b"dummy").unwrap();
 
-        let (removed, errors) = rm_matching_files(dir.path(), ".DS_Store", &["node_modules"], false);
+        let RmFilesOutcome { removed, errors } = rm_matching_files(dir.path(), ".DS_Store", &["node_modules"], false);
 
         assert_eq!(removed, vec![ds_store_in_regular.clone()]);
         assert!(errors.is_empty());
@@ -517,7 +522,7 @@ mod tests {
         let ds_store = sub_dir.join(".DS_Store");
         std::fs::write(&ds_store, b"dummy").unwrap();
 
-        let (removed, errors) = rm_matching_files(dir.path(), ".DS_Store", &[], false);
+        let RmFilesOutcome { removed, errors } = rm_matching_files(dir.path(), ".DS_Store", &[], false);
 
         assert_eq!(removed, vec![ds_store.clone()]);
         assert!(errors.is_empty());
@@ -530,7 +535,7 @@ mod tests {
         let unreadable_dir = dir.path().join("unreadable");
         std::fs::create_dir(&unreadable_dir).unwrap();
 
-        let (removed, errors) = rm_matching_files("/non/existent/path", ".DS_Store", &[], false);
+        let RmFilesOutcome { removed, errors } = rm_matching_files("/non/existent/path", ".DS_Store", &[], false);
 
         assert!(removed.is_empty());
         assert!(!errors.is_empty());
@@ -546,7 +551,8 @@ mod tests {
         let symlink = dir.path().join(".DS_Store");
         std::os::unix::fs::symlink(&target, &symlink).unwrap();
 
-        let (removed, errors) = rm_matching_files(dir.path(), ".DS_Store", &[], false);
+        let RmFilesOutcome { removed, errors } = rm_matching_files(dir.path(), ".DS_Store", &[], false);
+
         assert_eq!(removed.len(), 2);
         assert!(errors.is_empty());
         assert!(removed.contains(&symlink));

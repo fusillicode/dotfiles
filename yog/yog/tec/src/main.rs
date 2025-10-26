@@ -28,6 +28,7 @@
 //! Adds deterministic, ordered reporting for stable output while retaining parallel execution for speed.
 
 use std::fmt::Write;
+use std::ops::Deref;
 use std::path::Path;
 use std::process::Command;
 use std::process::Output;
@@ -37,6 +38,7 @@ use std::time::Instant;
 use color_eyre::owo_colors::OwoColorize;
 use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt as _;
+use ytil_system::RmFilesOutcome;
 
 /// Function pointer type for a single lint command invocation.
 ///
@@ -56,7 +58,59 @@ use ytil_cmd::CmdExt as _;
 /// # Future Work
 /// - Consider an enum encapsulating richer metadata (e.g. auto-fix capability flag) to filter sets without duplicating
 ///   entries across lists.
-type LintFn = fn(&Path) -> Result<LintFnSuccess, LintFnError>;
+type LintFn = fn(&Path) -> LintFnResult;
+
+/// Newtype wrapper around [`Result<LintFnSuccess, LintFnError>`].
+///
+/// Provides ergonomic conversions from [`RmFilesOutcome`] and [`Deref`] access to the inner result.
+///
+/// # Rationale
+/// Wraps the result to enable custom conversions without orphan rule violations.
+struct LintFnResult(Result<LintFnSuccess, LintFnError>);
+
+impl Deref for LintFnResult {
+    type Target = Result<LintFnSuccess, LintFnError>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<Result<LintFnSuccess, LintFnError>> for LintFnResult {
+    fn from(value: Result<LintFnSuccess, LintFnError>) -> Self {
+        Self(value)
+    }
+}
+
+/// Converts [`RmFilesOutcome`] into [`LintFnResult`] for uniform lint result handling.
+///
+/// Builds a formatted message listing removed files and errors, then wraps in success if no errors or failure
+/// otherwise.
+///
+/// # Rationale
+/// Enables treating file removal operations as lint results without duplicating conversion logic.
+impl From<RmFilesOutcome> for LintFnResult {
+    fn from(value: RmFilesOutcome) -> Self {
+        let mut msg = String::new();
+        for path in value.removed {
+            let _ = writeln!(&mut msg, "{} {}", "Removed".green(), path.display());
+        }
+        for (path, error) in &value.errors {
+            let _ = writeln!(
+                &mut msg,
+                "{} path{} error={}",
+                "Error removing".red(),
+                path.as_ref().map(|p| format!(" {:?}", p.display())).unwrap_or_default(),
+                format!("{error}").red()
+            );
+        }
+        if value.errors.is_empty() {
+            Self(Ok(LintFnSuccess::PlainMsg(msg)))
+        } else {
+            Self(Err(LintFnError::PlainMsg(msg)))
+        }
+    }
+}
 
 /// Error type for lint function execution failures.
 ///
@@ -93,12 +147,14 @@ enum LintFnSuccess {
 /// `cargo clippy` can be relatively expensive versus formatting or sorting tools. Placing it first provides early
 /// feedback for a potentially longest-running lint while other shorter lints execute concurrently.
 const CLIPPY: (&str, LintFn) = ("clippy", |path| {
-    Command::new("cargo")
-        .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
-        .current_dir(path)
-        .exec()
-        .map(LintFnSuccess::CmdOutput)
-        .map_err(LintFnError::from)
+    LintFnResult::from(
+        Command::new("cargo")
+            .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
+            .current_dir(path)
+            .exec()
+            .map(LintFnSuccess::CmdOutput)
+            .map_err(LintFnError::from),
+    )
 });
 
 /// Workspace lint check set.
@@ -116,37 +172,45 @@ const CLIPPY: (&str, LintFn) = ("clippy", |path| {
 const LINTS_CHECK: &[(&str, LintFn)] = &[
     CLIPPY,
     ("cargo fmt", |path| {
-        Command::new("cargo")
-            .args(["fmt", "--check"])
-            .current_dir(path)
-            .exec()
-            .map(LintFnSuccess::CmdOutput)
-            .map_err(LintFnError::from)
+        LintFnResult::from(
+            Command::new("cargo")
+                .args(["fmt", "--check"])
+                .current_dir(path)
+                .exec()
+                .map(LintFnSuccess::CmdOutput)
+                .map_err(LintFnError::from),
+        )
     }),
     ("cargo-machete", |path| {
-        // Using `cargo-machete` rather than `cargo machete` to avoid issues caused by passing the
-        // `path`.
-        Command::new("cargo-machete")
-            .args(["--with-metadata", &path.display().to_string()])
-            .exec()
-            .map(LintFnSuccess::CmdOutput)
-            .map_err(LintFnError::from)
+        LintFnResult::from(
+            // Using `cargo-machete` rather than `cargo machete` to avoid issues caused by passing the
+            // `path`.
+            Command::new("cargo-machete")
+                .args(["--with-metadata", &path.display().to_string()])
+                .exec()
+                .map(LintFnSuccess::CmdOutput)
+                .map_err(LintFnError::from),
+        )
     }),
     ("cargo-sort", |path| {
-        Command::new("cargo-sort")
-            .args(["--workspace", "--check", "--check-format"])
-            .current_dir(path)
-            .exec()
-            .map(LintFnSuccess::CmdOutput)
-            .map_err(LintFnError::from)
+        LintFnResult::from(
+            Command::new("cargo-sort")
+                .args(["--workspace", "--check", "--check-format"])
+                .current_dir(path)
+                .exec()
+                .map(LintFnSuccess::CmdOutput)
+                .map_err(LintFnError::from),
+        )
     }),
     ("cargo-sort-derives", |path| {
-        Command::new("cargo-sort-derives")
-            .args(["sort-derives", "--check"])
-            .current_dir(path)
-            .exec()
-            .map(LintFnSuccess::CmdOutput)
-            .map_err(LintFnError::from)
+        LintFnResult::from(
+            Command::new("cargo-sort-derives")
+                .args(["sort-derives", "--check"])
+                .current_dir(path)
+                .exec()
+                .map(LintFnSuccess::CmdOutput)
+                .map_err(LintFnError::from),
+        )
     }),
 ];
 
@@ -170,56 +234,51 @@ const LINTS_CHECK: &[(&str, LintFn)] = &[
 const LINTS_FIX: &[(&str, LintFn)] = &[
     CLIPPY,
     ("cargo fmt", |path| {
-        Command::new("cargo")
-            .args(["fmt"])
-            .current_dir(path)
-            .exec()
-            .map(LintFnSuccess::CmdOutput)
-            .map_err(LintFnError::from)
+        LintFnResult::from(
+            Command::new("cargo")
+                .args(["fmt"])
+                .current_dir(path)
+                .exec()
+                .map(LintFnSuccess::CmdOutput)
+                .map_err(LintFnError::from),
+        )
     }),
     ("cargo-machete", |path| {
-        Command::new("cargo-machete")
-            .args(["--fix", "--with-metadata", &path.display().to_string()])
-            .exec()
-            .map(LintFnSuccess::CmdOutput)
-            .map_err(LintFnError::from)
+        LintFnResult::from(
+            Command::new("cargo-machete")
+                .args(["--fix", "--with-metadata", &path.display().to_string()])
+                .exec()
+                .map(LintFnSuccess::CmdOutput)
+                .map_err(LintFnError::from),
+        )
     }),
     ("cargo-sort", |path| {
-        Command::new("cargo-sort")
-            .args(["--workspace"])
-            .current_dir(path)
-            .exec()
-            .map(LintFnSuccess::CmdOutput)
-            .map_err(LintFnError::from)
+        LintFnResult::from(
+            Command::new("cargo-sort")
+                .args(["--workspace"])
+                .current_dir(path)
+                .exec()
+                .map(LintFnSuccess::CmdOutput)
+                .map_err(LintFnError::from),
+        )
     }),
     ("cargo-sort-derives", |path| {
-        Command::new("cargo-sort-derives")
-            .args(["sort-derives"])
-            .current_dir(path)
-            .exec()
-            .map(LintFnSuccess::CmdOutput)
-            .map_err(LintFnError::from)
+        LintFnResult::from(
+            Command::new("cargo-sort-derives")
+                .args(["sort-derives"])
+                .current_dir(path)
+                .exec()
+                .map(LintFnSuccess::CmdOutput)
+                .map_err(LintFnError::from),
+        )
     }),
     ("rm-ds-store", |path| {
-        let (removed_paths, errors) = ytil_system::rm_matching_files(path, ".DS_Store", &[".git", "target"], false);
-        let mut msg = String::new();
-        for path in removed_paths {
-            let _ = writeln!(&mut msg, "{} {}", "Removed".green(), path.display());
-        }
-        for (path, error) in &errors {
-            let _ = writeln!(
-                &mut msg,
-                "{} path{} error={}",
-                "Error removing".red(),
-                path.as_ref().map(|p| format!(" {:?}", p.display())).unwrap_or_default(),
-                format!("{error}").red()
-            );
-        }
-        if errors.is_empty() {
-            Ok(LintFnSuccess::PlainMsg(msg))
-        } else {
-            Err(LintFnError::PlainMsg(msg))
-        }
+        LintFnResult::from(ytil_system::rm_matching_files(
+            path,
+            ".DS_Store",
+            &[".git", "target"],
+            false,
+        ))
     }),
 ];
 
@@ -262,7 +321,7 @@ fn main() -> color_eyre::Result<()> {
 
     let mut errors_count: i32 = 0;
     for (_lint_name, handle) in lints_handles {
-        match handle.join() {
+        match handle.join().as_deref() {
             Ok(Ok(_)) => (),
             Ok(Err(_)) => {
                 errors_count = errors_count.saturating_add(1);
@@ -302,11 +361,11 @@ fn main() -> color_eyre::Result<()> {
 /// Collapses the previous two‑step pattern (timing + later reporting) into one
 /// function so thread closures stay minimal and result propagation is explicit.
 /// This also prevents losing the error flag (a regression after refactor).
-fn run_and_report(lint_name: &str, path: &Path, run: LintFn) -> Result<LintFnSuccess, Box<LintFnError>> {
+fn run_and_report(lint_name: &str, path: &Path, run: LintFn) -> LintFnResult {
     let start = Instant::now();
     let lint_res = run(path);
     report(lint_name, &lint_res, start.elapsed());
-    lint_res.map_err(Box::new)
+    lint_res
 }
 
 /// Format and print the result of a completed lint execution.
