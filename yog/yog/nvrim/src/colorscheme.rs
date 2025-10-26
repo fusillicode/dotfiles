@@ -5,6 +5,7 @@
 
 use color_eyre::eyre::eyre;
 use nvim_oxi::Dictionary;
+use nvim_oxi::api::SuperIterator;
 use nvim_oxi::api::opts::GetHighlightOpts;
 use nvim_oxi::api::opts::GetHighlightOptsBuilder;
 use nvim_oxi::api::opts::SetHighlightOpts;
@@ -62,7 +63,7 @@ pub fn set(colorscheme: Option<String>) {
 
     let mut get_hl_opts = GetHighlightOptsBuilder::default();
     for lvl in DIAGNOSTIC_LVLS {
-        let Ok(hl_infos) = get_hl(0, &get_hl_opts.name(format!("Diagnostic{lvl}")).build()) else {
+        let Ok(hl_infos) = get_hl_single(0, &get_hl_opts.name(format!("Diagnostic{lvl}")).build()) else {
             continue;
         };
         let Ok(set_hl_opts) =
@@ -73,7 +74,7 @@ pub fn set(colorscheme: Option<String>) {
         set_hl(0, &format!("DiagnosticStatusLine{lvl}"), &set_hl_opts);
 
         let diagn_underline_hl = format!("DiagnosticUnderline{lvl}");
-        let Ok(hl_infos) = get_hl(0, &get_hl_opts.name(diagn_underline_hl.clone()).build()) else {
+        let Ok(hl_infos) = get_hl_single(0, &get_hl_opts.name(diagn_underline_hl.clone()).build()) else {
             continue;
         };
         let Ok(set_hl_opts) =
@@ -99,7 +100,7 @@ fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &SetHighlightOpts) {
     }
 }
 
-/// Retrieves [`HighlightInfos`] for a single group.
+/// Retrieves [`HighlightInfos`] of a single group.
 ///
 /// Errors:
 /// - Propagates failures from [`nvim_oxi::api::get_hl`] while notifying them to Neovim.
@@ -108,7 +109,49 @@ fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &SetHighlightOpts) {
 /// # Errors
 /// - Calling `nvim_get_hl` fails.
 /// - Multiple highlight groups are returned instead of a single one.
-fn get_hl(ns_id: u32, hl_opts: &GetHighlightOpts) -> color_eyre::Result<HighlightInfos> {
+fn get_hl_single(ns_id: u32, hl_opts: &GetHighlightOpts) -> color_eyre::Result<HighlightInfos> {
+    get_hl(ns_id, hl_opts).and_then(|hl| match hl {
+        GetHlInfos::Single(highlight_infos) => Ok(highlight_infos),
+        GetHlInfos::Map(hl_infos) => Err(eyre!(
+            "multiple highlight infos returned | hl_infos={:#?} hl_opts={hl_opts:#?}",
+            hl_infos.collect::<Vec<_>>()
+        )),
+    })
+}
+
+/// Retrieves multiple [`HighlightInfos`] entries (map variant) for given highlight options.
+///
+/// Errors:
+/// - Propagates failures from [`nvim_oxi::api::get_hl`] while notifying them to Neovim.
+/// - Returns an error if only a single highlight group ([`GetHlInfos::Single`]) is returned.
+///
+/// # Errors
+/// - Calling `nvim_get_hl` fails.
+/// - A single highlight group is returned instead of multiple.
+#[allow(dead_code)]
+fn get_hl_multiple(
+    ns_id: u32,
+    hl_opts: &GetHighlightOpts,
+) -> color_eyre::Result<Vec<(nvim_oxi::String, HighlightInfos)>> {
+    get_hl(ns_id, hl_opts).and_then(|hl| match hl {
+        GetHlInfos::Single(hl_info) => Err(eyre!(
+            "single highlight info returned | hl_info={hl_info:#?} hl_opts={hl_opts:#?}",
+        )),
+        GetHlInfos::Map(hl_infos) => Ok(hl_infos.into_iter().collect()),
+    })
+}
+
+/// Retrieves [`GetHlInfos`] (single or map) for given highlight options.
+///
+/// Errors:
+/// - Propagates failures from [`nvim_oxi::api::get_hl`] while notifying them to Neovim.
+///
+/// # Errors
+/// - Calling `nvim_get_hl` fails.
+fn get_hl(
+    ns_id: u32,
+    hl_opts: &GetHighlightOpts,
+) -> color_eyre::Result<GetHlInfos<impl SuperIterator<(nvim_oxi::String, HighlightInfos)>>> {
     nvim_oxi::api::get_hl(ns_id, hl_opts)
         .inspect_err(|error| {
             ytil_nvim_oxi::api::notify_error(&format!(
@@ -116,13 +159,6 @@ fn get_hl(ns_id: u32, hl_opts: &GetHighlightOpts) -> color_eyre::Result<Highligh
             ));
         })
         .map_err(From::from)
-        .and_then(|hl| match hl {
-            GetHlInfos::Single(highlight_infos) => Ok(highlight_infos),
-            GetHlInfos::Map(x) => Err(eyre!(
-                "multiple highlight infos returned | hl_infos={:#?} hl_opts={hl_opts:#?}",
-                x.collect::<Vec<_>>()
-            )),
-        })
 }
 
 /// Builds a [`SetHighlightOptsBuilder`] from [`HighlightInfos`], applying only present fields via [`Option::map`].
