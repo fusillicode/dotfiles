@@ -33,7 +33,7 @@ pub fn dict() -> Dictionary {
 ///   [`ytil_nvim_oxi::api::notify_error`]).
 ///
 /// # Returns
-/// Returns `Some(())` if the transformation succeeds, or `None` otherwise.
+/// Returns `()` upon successful completion.
 ///
 /// # Errors
 /// Errors from [`ytil_nvim_oxi::api::vim_ui_select`] are reported via [`ytil_nvim_oxi::api::notify_error`]
@@ -41,12 +41,14 @@ pub fn dict() -> Dictionary {
 ///
 /// # Notes
 /// Blockwise selections are treated as a contiguous span (not a rectangle).
-pub fn transform_selection(_: ()) -> Option<()> {
-    let selection = ytil_nvim_oxi::visual_selection::get(())?;
+pub fn transform_selection(_: ()) {
+    let Some(selection) = ytil_nvim_oxi::visual_selection::get(()) else {
+        return;
+    };
 
     let cases = Case::all_cases();
 
-    ytil_nvim_oxi::api::vim_ui_select(
+    let Ok(_) = ytil_nvim_oxi::api::vim_ui_select(
         cases.iter().map(DisplayableCase),
         &[("prompt", "Select case ")],
         move |choice_idx| {
@@ -75,10 +77,9 @@ pub fn transform_selection(_: ()) -> Option<()> {
     )
     .inspect_err(|error| {
         ytil_nvim_oxi::api::notify_error(&format!("{error}"));
-    })
-    .ok()?;
-
-    None
+    }) else {
+        return;
+    };
 }
 
 /// Newtype wrapper to make [`Case`] displayable using its [`Debug`] representation.
