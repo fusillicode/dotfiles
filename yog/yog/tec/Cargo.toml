@@ -15,3 +15,7 @@ color-eyre = { workspace = true }
 thiserror = { workspace = true }
 ytil_cmd = { workspace = true }
 ytil_system = { workspace = true }
+
+[dev-dependencies]
+assert2 = { workspace = true }
+pretty_assertions = { workspace = true }

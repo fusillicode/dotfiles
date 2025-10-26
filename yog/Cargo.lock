@@ -1962,7 +1962,9 @@ dependencies = [
 name = "tec"
 version = "0.1.0"
 dependencies = [
+ "assert2",
  "color-eyre",
+ "pretty_assertions",
  "thiserror 2.0.17",
  "ytil_cmd",
  "ytil_system",
