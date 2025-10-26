@@ -14,6 +14,7 @@ use nvim_oxi::api::types::GetHlInfos;
 use nvim_oxi::api::types::HighlightInfos;
 
 const BG: &str = "#002200";
+const FG: &str = "#D0D0D0";
 const DIAGNOSTIC_LVLS: [&str; 5] = ["Error", "Warn", "Info", "Hint", "Ok"];
 const STATUS_LINE_BG: &str = "none";
 
@@ -56,6 +57,13 @@ pub fn set(colorscheme: Option<String>) {
             "TreesitterContext",
             get_default_hl_opts().background("NvimDarkGrey3").build(),
         ),
+        // Jonathan Blow inspired
+        ("@variable", get_default_hl_opts().foreground(FG).build()),
+        ("Constant", get_default_hl_opts().foreground(FG).build()),
+        ("Delimiter", get_default_hl_opts().foreground(FG).build()),
+        ("Operator", get_default_hl_opts().foreground(FG).build()),
+        ("Statement", get_default_hl_opts().foreground(FG).bold(true).build()),
+        ("Type", get_default_hl_opts().foreground(FG).build()),
     ];
     for (hl_name, hl_opts) in general_hls {
         set_hl(0, hl_name, &hl_opts);
