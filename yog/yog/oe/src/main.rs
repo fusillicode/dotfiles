@@ -34,6 +34,7 @@ use color_eyre::eyre::bail;
 use ytil_editor::Editor;
 use ytil_editor::FileToOpen;
 
+/// Open files (optionally at line:col) in existing Neovim / Helix pane.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

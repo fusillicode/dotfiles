@@ -39,6 +39,7 @@ use color_eyre::Report;
 use color_eyre::eyre::bail;
 use color_eyre::owo_colors::OwoColorize;
 
+/// Remove files or directories passed as CLI args (recursive for dirs).
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

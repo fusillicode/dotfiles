@@ -19,6 +19,7 @@ use std::process::Command;
 
 use color_eyre::eyre::eyre;
 
+/// Display file contents or long‑list directories.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

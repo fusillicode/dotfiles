@@ -65,6 +65,7 @@ use crate::installers::yaml_language_server::YamlLanguageServer;
 mod downloaders;
 mod installers;
 
+/// Install language servers, linters, formatters, and developer helpers concurrently.
 #[allow(clippy::too_many_lines)]
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;

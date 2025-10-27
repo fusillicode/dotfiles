@@ -26,6 +26,7 @@ use crate::templates::pages::not_found::NotFoundPage;
 
 mod templates;
 
+/// Generate consolidated styled workspace documentation.
 fn main() -> color_eyre::eyre::Result<()> {
     color_eyre::install()?;
 
