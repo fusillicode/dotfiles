@@ -14,7 +14,7 @@ use nvim_oxi::api::types::GetHlInfos;
 use nvim_oxi::api::types::HighlightInfos;
 
 const BG: &str = "#002000";
-const FG: &str = "#D0D0D0";
+const FG: &str = "#FFFFFF";
 const DIAGNOSTIC_LVLS: [&str; 5] = ["Error", "Warn", "Info", "Hint", "Ok"];
 const STATUS_LINE_BG: &str = "none";
 
@@ -57,7 +57,7 @@ pub fn set(colorscheme: Option<String>) {
             "TreesitterContext",
             get_default_hl_opts().background("NvimDarkGrey3").build(),
         ),
-        // Tone down the whites
+        // Changing these will change the main foreground color.
         ("@variable", get_default_hl_opts().foreground(FG).build()),
         ("Constant", get_default_hl_opts().foreground(FG).build()),
         ("Delimiter", get_default_hl_opts().foreground(FG).build()),
