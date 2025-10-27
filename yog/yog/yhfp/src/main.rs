@@ -19,6 +19,7 @@ use color_eyre::eyre::eyre;
 use ytil_editor::Editor;
 use ytil_hx::HxStatusLine;
 
+/// Copy current Helix file path with line number to clipboard.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

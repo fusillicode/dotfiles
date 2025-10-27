@@ -42,7 +42,7 @@ use ytil_git::GitStatusEntry;
 use ytil_git::IndexState;
 use ytil_git::WorktreeState;
 
-/// The actual `main` inner logic.
+/// Stage or discard selected Git changes interactively.
 ///
 /// # Errors
 /// - Status enumeration via [`ytil_git::get_status`] fails.

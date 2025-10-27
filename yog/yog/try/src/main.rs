@@ -30,6 +30,7 @@ use color_eyre::eyre::WrapErr;
 use color_eyre::eyre::bail;
 use itertools::Itertools;
 
+/// Re-run a command until success (ok) or failure (ko) with cooldown.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

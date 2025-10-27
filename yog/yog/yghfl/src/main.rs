@@ -31,6 +31,7 @@ use ytil_hx::HxStatusLine;
 use ytil_wezterm::WeztermPane;
 use ytil_wezterm::get_sibling_pane_with_titles;
 
+/// Copy GitHub URL (file/line/col) for the current Helix buffer to clipboard.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

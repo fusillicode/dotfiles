@@ -39,6 +39,7 @@ mod nvim_dbee;
 mod pgpass;
 mod vault;
 
+/// Update Postgres credentials from Vault, rewrite pgpass & nvim-dbee, optionally launch pgcli.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

@@ -37,6 +37,7 @@ const BINS_DEFAULT_PATH: &[&str] = &[".local", "bin"];
 /// Path segments for the Nvim libs install dir.
 const NVIM_LIBS_DEFAULT_PATH: &[&str] = &[".config", "nvim", "lua"];
 
+/// Format, lint, build, and deploy workspace binaries and Neovim libs.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

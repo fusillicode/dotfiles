@@ -53,7 +53,7 @@ use ytil_github::pr::IntoEnumIterator;
 use ytil_github::pr::PullRequest;
 use ytil_github::pr::PullRequestMergeState;
 
-/// Execute the interactive pull request listing and batch operation flow.
+/// List and optionally batch‑merge GitHub pull requests interactively.
 ///
 /// Mirrors the design of `gch::run` so the binary `main` remains a thin wrapper.
 /// Performs GitHub authentication via [`ytil_github::log_into_github`], flag parsing, PR fetching via
