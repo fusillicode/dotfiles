@@ -283,6 +283,7 @@ const LINTS_FIX: &[(&str, LintFn)] = &[
     }),
 ];
 
+/// Run workspace lint suite concurrently (check or fix modes).
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

@@ -37,6 +37,7 @@ use color_eyre::owo_colors::OwoColorize as _;
 use url::Url;
 use ytil_git::Branch;
 
+/// Switch, create, and derive Git branches (including from GitHub PR URLs).
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

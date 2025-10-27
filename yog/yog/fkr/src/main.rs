@@ -21,7 +21,7 @@
 
 use fkr::FkrOption;
 
-/// The actual `main` inner logic.
+/// Generate fake data strings from an enum façade over selected fake providers.
 ///
 /// # Errors
 /// - Interactive selection UI fails.
