@@ -693,7 +693,6 @@ dependencies = [
  "color-eyre",
  "strum",
  "ytil_git",
- "ytil_github",
  "ytil_system",
  "ytil_tui",
 ]
