@@ -160,6 +160,8 @@ t.
 termguicolors
 tokio
 toml
+tree-sitter
+tree-sitter's
 triaging
 u64
 u8

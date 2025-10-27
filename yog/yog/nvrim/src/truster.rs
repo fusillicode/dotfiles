@@ -4,6 +4,7 @@
 //! with Tree‑sitter to locate the nearest test function and spawning it inside a WezTerm pane.
 //! All Neovim API failures are reported via [`ytil_nvim_oxi::api::notify_error`].
 
+use std::ops::Deref;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -29,15 +30,11 @@ fn run_test(_: ()) {
     let cur_buf = Buffer::current();
     let cur_win = Window::current();
 
-    let Ok(position) = cur_win
-        .get_cursor()
-        .map(|(row, column)| Point { row, column })
-        .inspect_err(|error| {
-            ytil_nvim_oxi::api::notify_error(&format!(
-                "cannot get cursor from current window | window={cur_win:#?} error={error:#?}"
-            ));
-        })
-    else {
+    let Ok(position) = cur_win.get_cursor().map(PointWrap::from).inspect_err(|error| {
+        ytil_nvim_oxi::api::notify_error(&format!(
+            "cannot get cursor from current window | window={cur_win:#?} error={error:#?}"
+        ));
+    }) else {
         return;
     };
 
@@ -53,7 +50,7 @@ fn run_test(_: ()) {
         return;
     };
 
-    let Some(test_name) = get_enclosing_fn_name_of_position(&file_path, position)
+    let Some(test_name) = get_enclosing_fn_name_of_position(&file_path, *position)
         .inspect_err(|error| {
             ytil_nvim_oxi::api::notify_error(&format!(
                 "cannot get enclosing fn | position={position:#?} error={error:#?}"
@@ -116,6 +113,42 @@ fn run_test(_: ()) {
     else {
         return;
     };
+}
+
+/// Wrapper around [`tree_sitter::Point`] that converts Neovim's 1-based row indexing
+/// to tree-sitter's 0-based indexing.
+///
+/// # Rationale
+///
+/// Neovim uses 1-based row indices for cursor positions, while tree-sitter expects 0-based rows.
+/// This wrapper simplifies the conversion in the codebase.
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
+struct PointWrap(Point);
+
+impl Deref for PointWrap {
+    type Target = Point;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<(usize, usize)> for PointWrap {
+    /// Converts a Neovim cursor position (1-based row, 0-based column) to a [`PointWrap`].
+    ///
+    /// # Arguments
+    /// - `row` 1-based row index from Neovim.
+    /// - `column` 0-based column index from Neovim.
+    ///
+    /// # Returns
+    /// A [`PointWrap`] with 0-based row and column suitable for tree-sitter.
+    fn from((row, column): (usize, usize)) -> Self {
+        Self(Point {
+            row: row.saturating_sub(1),
+            column,
+        })
+    }
 }
 
 /// Gets the name of the function enclosing the given [Point] in a Rust file.
@@ -196,4 +229,33 @@ fn get_test_runner_app_for_path(path: &Path) -> color_eyre::Result<&'static str>
     }
 
     Ok("cargo test")
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case((1, 5), (0, 5))]
+    #[case((10, 20), (9, 20))]
+    #[case((0, 0), (0, 0))]
+    fn point_wrap_from_converts_neovim_cursor_to_tree_sitter_point(
+        #[case] input: (usize, usize),
+        #[case] expected: (usize, usize),
+    ) {
+        pretty_assertions::assert_eq!(
+            PointWrap::from(input),
+            PointWrap(Point {
+                row: expected.0,
+                column: expected.1
+            })
+        );
+    }
+
+    #[test]
+    fn point_wrap_deref_allows_direct_access_to_point() {
+        pretty_assertions::assert_eq!(*PointWrap::from((5, 10)), Point { row: 4, column: 10 });
+    }
 }
