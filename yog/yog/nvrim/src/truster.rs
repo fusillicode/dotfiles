@@ -258,4 +258,52 @@ mod tests {
     fn point_wrap_deref_allows_direct_access_to_point() {
         pretty_assertions::assert_eq!(*PointWrap::from((5, 10)), Point { row: 4, column: 10 });
     }
+
+    #[test]
+    fn get_enclosing_fn_name_of_node_returns_fn_name_when_inside_function() {
+        let result = with_node(
+            b"fn test_function() { let x = 1; }",
+            Point { row: 0, column: 20 },
+            get_enclosing_fn_name_of_node,
+        );
+        pretty_assertions::assert_eq!(result, Some("test_function".to_string()));
+    }
+
+    #[test]
+    fn get_enclosing_fn_name_of_node_returns_none_when_not_inside_function() {
+        let result = with_node(
+            b"let x = 1;",
+            Point { row: 0, column: 5 },
+            get_enclosing_fn_name_of_node,
+        );
+        pretty_assertions::assert_eq!(result, None);
+    }
+
+    #[test]
+    fn get_enclosing_fn_name_of_node_returns_method_name_when_inside_method() {
+        let result = with_node(
+            b"impl Test { fn method(&self) { let x = 1; } }",
+            Point { row: 0, column: 25 },
+            get_enclosing_fn_name_of_node,
+        );
+        pretty_assertions::assert_eq!(result, Some("method".to_string()));
+    }
+
+    #[test]
+    fn get_enclosing_fn_name_of_node_returns_none_when_node_is_none() {
+        let result = get_enclosing_fn_name_of_node(b"fn test() {}", None);
+        pretty_assertions::assert_eq!(result, None);
+    }
+
+    // Helper to work around the [`tree_sitter::Tree`] and [`tree_sitter::Node`] lifetime issues.
+    fn with_node<F, R>(src: &[u8], position: Point, f: F) -> R
+    where
+        F: FnOnce(&[u8], Option<Node>) -> R,
+    {
+        let mut parser = Parser::new();
+        parser.set_language(&tree_sitter_rust::LANGUAGE.into()).unwrap();
+        let tree = parser.parse(src, None).unwrap();
+        let node = tree.root_node().descendant_for_point_range(position, position);
+        f(src, node)
+    }
 }
