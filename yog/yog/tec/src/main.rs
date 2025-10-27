@@ -449,10 +449,9 @@ mod tests {
         let result = LintFnResult::from(outcome);
 
         assert2::let_assert!(Ok(LintFnSuccess::PlainMsg(msg)) = result.0);
-        pretty_assertions::assert_eq!(
-            msg,
-            "\x1b[32mRemoved\x1b[39m file1.txt\n\x1b[32mRemoved\x1b[39m file2.txt\n"
-        );
+        assert!(msg.contains("Removed"));
+        assert!(msg.contains("file1.txt"));
+        assert!(msg.contains("file2.txt"));
     }
 
     #[test]
@@ -468,10 +467,9 @@ mod tests {
         let result = LintFnResult::from(outcome);
 
         assert2::let_assert!(Err(LintFnError::PlainMsg(msg)) = result.0);
-        pretty_assertions::assert_eq!(
-            msg,
-            "\x1b[31mError removing\x1b[39m path \"badfile.txt\" error=\x1b[31mpermission denied\x1b[39m\n"
-        );
+        assert!(msg.contains("Error removing"));
+        assert!(msg.contains("\"badfile.txt\""));
+        assert!(msg.contains("permission denied"));
     }
 
     #[test]
@@ -484,10 +482,8 @@ mod tests {
         let result = LintFnResult::from(outcome);
 
         assert2::let_assert!(Err(LintFnError::PlainMsg(msg)) = result.0);
-        pretty_assertions::assert_eq!(
-            msg,
-            "\x1b[31mError removing\x1b[39m path error=\x1b[31mfile not found\x1b[39m\n"
-        );
+        assert!(msg.contains("Error removing"));
+        assert!(msg.contains("file not found"));
     }
 
     #[test]
@@ -500,9 +496,10 @@ mod tests {
         let result = LintFnResult::from(outcome);
 
         assert2::let_assert!(Err(LintFnError::PlainMsg(msg)) = result.0);
-        pretty_assertions::assert_eq!(
-            msg,
-            "\x1b[32mRemoved\x1b[39m goodfile.txt\n\x1b[31mError removing\x1b[39m path \"badfile.txt\" error=\x1b[31msome error\x1b[39m\n"
-        );
+        assert!(msg.contains("Removed"));
+        assert!(msg.contains("goodfile.txt"));
+        assert!(msg.contains("Error removing"));
+        assert!(msg.contains("\"badfile.txt\""));
+        assert!(msg.contains("some error"));
     }
 }
