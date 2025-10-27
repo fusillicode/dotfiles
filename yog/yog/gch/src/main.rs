@@ -53,6 +53,9 @@ use ytil_git::WorktreeState;
 /// - Restore command construction / execution via [`ytil_git::restore`] fails.
 /// - Opening repository via [`ytil_git::get_repo`] or adding paths to index via [`ytil_git::add_to_index`] fails.
 fn main() -> color_eyre::Result<()> {
+    color_eyre::install()?;
+    ytil_github::log_into_github()?;
+
     let args = ytil_system::get_args();
     let args: Vec<_> = args.iter().map(String::as_str).collect();
 
