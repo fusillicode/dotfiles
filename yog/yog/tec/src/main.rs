@@ -324,9 +324,7 @@ fn main() -> color_eyre::Result<()> {
     for (_lint_name, handle) in lints_handles {
         match handle.join().as_deref() {
             Ok(Ok(_)) => (),
-            Ok(Err(_)) => {
-                errors_count = errors_count.saturating_add(1);
-            }
+            Ok(Err(_)) => errors_count = errors_count.saturating_add(1),
             Err(join_err) => {
                 errors_count = errors_count.saturating_add(1);
                 eprintln!(
