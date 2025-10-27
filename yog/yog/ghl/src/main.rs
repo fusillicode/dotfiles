@@ -78,7 +78,7 @@ use ytil_github::pr::PullRequestMergeState;
 /// - Surface aggregated failure summary at end of run.
 /// - Inject CLI dependencies for isolated testing.
 fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?; // Keep install here to match previous behavior and isolate side effects.
+    color_eyre::install()?;
     ytil_github::log_into_github()?;
 
     let repo = ytil_github::get_current_repo()?;
