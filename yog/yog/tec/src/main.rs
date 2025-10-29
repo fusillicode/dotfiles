@@ -361,7 +361,7 @@ fn run_and_report(lint_name: &str, path: &Path, run: Lint) -> LintFnResult {
 ///
 /// # Arguments
 /// - `lint_name` Logical name of the lint (e.g. "clippy").
-/// - `lint_res` Result returned by executing the [`LintFn`], a [`Result<LintFnSuccess, LintFnError>`].
+/// - `lint_res` Result returned by executing the [`Lint`], a [`Result<LintFnSuccess, LintFnError>`].
 /// - `elapsed` Wall‑clock duration of the lint.
 ///
 /// # Rationale
