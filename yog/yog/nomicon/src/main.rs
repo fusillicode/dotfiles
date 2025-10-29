@@ -26,6 +26,61 @@ use crate::templates::pages::not_found::NotFoundPage;
 
 mod templates;
 
+/// Copy static assets into documentation output directory.
+///
+/// Copies all files under crate-local `assets/` (CSS, fonts, favicon) into
+/// `<workspace_root>/target/doc/assets` using a recursive `cp`.
+///
+/// # Arguments
+/// - `doc_dir` Existing `<workspace>/target/doc` directory.
+///
+/// # Returns
+/// Ok on success.
+///
+/// # Errors
+/// - Underlying `cp` command execution fails.
+/// - Destination directory cannot be written.
+fn copy_assets(doc_dir: &Path) -> color_eyre::Result<()> {
+    let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
+    let dest = doc_dir.join("assets");
+    ytil_cmd::silent_cmd("cp")
+        .args(["-r", &source.to_string_lossy(), &dest.to_string_lossy()])
+        .status()?
+        .exit_ok()?;
+    Ok(())
+}
+
+/// Collect all raw values for a given `key` from TOML manifest text.
+///
+/// Performs a simple line-by-line scan (no full TOML parsing).
+/// Multiple occurrences of the same key are all returned in file order. If the
+/// key does not appear, an empty vector is returned.
+///
+/// This is intentionally naive: it does not handle multi-line values, arrays,
+/// tables, or stripping inline comments. Its purpose here is to extract simple
+/// scalar values (`name = "foo"`, `description = "..."`).
+///
+/// # Arguments
+/// - `content` Entire TOML file contents.
+/// - `key` Exact key to match at a line start (after trimming leading space).
+///
+/// # Returns
+/// A vector of raw value strings with surrounding double quotes removed when
+/// they appear directly at both ends; may be empty.
+fn get_toml_values(content: &str, key: &str) -> Vec<String> {
+    let mut res = vec![];
+    for line in content.lines() {
+        let trimmed_line = line.trim_start();
+        if let Some(rest) = trimmed_line.strip_prefix(key) {
+            let rest = rest.trim_start();
+            if let Some(after_eq) = rest.strip_prefix('=') {
+                res.push(after_eq.trim().trim_matches('"').to_string());
+            }
+        }
+    }
+    res
+}
+
 /// Generate consolidated styled workspace documentation.
 fn main() -> color_eyre::eyre::Result<()> {
     color_eyre::install()?;
@@ -107,59 +162,4 @@ fn main() -> color_eyre::eyre::Result<()> {
     copy_assets(&doc_dir)?;
 
     Ok(())
-}
-
-/// Copy static assets into documentation output directory.
-///
-/// Copies all files under crate-local `assets/` (CSS, fonts, favicon) into
-/// `<workspace_root>/target/doc/assets` using a recursive `cp`.
-///
-/// # Arguments
-/// - `doc_dir` Existing `<workspace>/target/doc` directory.
-///
-/// # Returns
-/// Ok on success.
-///
-/// # Errors
-/// - Underlying `cp` command execution fails.
-/// - Destination directory cannot be written.
-fn copy_assets(doc_dir: &Path) -> color_eyre::Result<()> {
-    let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
-    let dest = doc_dir.join("assets");
-    ytil_cmd::silent_cmd("cp")
-        .args(["-r", &source.to_string_lossy(), &dest.to_string_lossy()])
-        .status()?
-        .exit_ok()?;
-    Ok(())
-}
-
-/// Collect all raw values for a given `key` from TOML manifest text.
-///
-/// Performs a simple line-by-line scan (no full TOML parsing).
-/// Multiple occurrences of the same key are all returned in file order. If the
-/// key does not appear, an empty vector is returned.
-///
-/// This is intentionally naive: it does not handle multi-line values, arrays,
-/// tables, or stripping inline comments. Its purpose here is to extract simple
-/// scalar values (`name = "foo"`, `description = "..."`).
-///
-/// # Arguments
-/// - `content` Entire TOML file contents.
-/// - `key` Exact key to match at a line start (after trimming leading space).
-///
-/// # Returns
-/// A vector of raw value strings with surrounding double quotes removed when
-/// they appear directly at both ends; may be empty.
-fn get_toml_values(content: &str, key: &str) -> Vec<String> {
-    let mut res = vec![];
-    for line in content.lines() {
-        let trimmed_line = line.trim_start();
-        if let Some(rest) = trimmed_line.strip_prefix(key) {
-            let rest = rest.trim_start();
-            if let Some(after_eq) = rest.strip_prefix('=') {
-                res.push(after_eq.trim().trim_matches('"').to_string());
-            }
-        }
-    }
-    res
 }

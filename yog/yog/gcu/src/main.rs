@@ -37,23 +37,21 @@ use color_eyre::owo_colors::OwoColorize as _;
 use url::Url;
 use ytil_git::Branch;
 
-/// Switch, create, and derive Git branches (including from GitHub PR URLs).
-fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
+struct RenderableBranch(Branch);
 
-    let args = ytil_system::get_args();
-    let args: Vec<_> = args.iter().map(String::as_str).collect();
+impl Deref for RenderableBranch {
+    type Target = Branch;
 
-    match args.split_first() {
-        None => autocomplete_git_branches(),
-        // Assumption: cannot create a branch with a name that starts with -
-        Some((hd, _)) if *hd == "-" => ytil_git::switch_branch(hd).inspect(|()| report_branch_switch(hd)),
-        Some((hd, tail)) if *hd == "-b" => create_branch_and_switch(&build_branch_name(tail)?),
-        Some((hd, &[])) => switch_branch_or_create_if_missing(hd),
-        _ => create_branch_and_switch(&build_branch_name(&args)?),
-    }?;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
-    Ok(())
+impl Display for RenderableBranch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let styled_date_time = format!("({})", self.committer_date_time());
+        write!(f, "{} {}", self.name(), styled_date_time.blue())
+    }
 }
 
 /// Interactive selection and switching of Git branches.
@@ -76,23 +74,6 @@ fn autocomplete_git_branches() -> color_eyre::Result<()> {
         }
         Some(other) => ytil_git::switch_branch(other.name()).inspect(|()| report_branch_switch(other.name())),
         None => Ok(()),
-    }
-}
-
-struct RenderableBranch(Branch);
-
-impl Deref for RenderableBranch {
-    type Target = Branch;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl Display for RenderableBranch {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let styled_date_time = format!("({})", self.committer_date_time());
-        write!(f, "{} {}", self.name(), styled_date_time.blue())
     }
 }
 
@@ -268,6 +249,25 @@ fn report_branch_not_created(branch: &str) {
 /// - `default_branch` Current (non-default) branch acting as the base.
 fn ask_branching_from_not_default(branch: &str, default_branch: &str) {
     print!("{} {} from {}", "*".cyan().bold(), branch.bold(), default_branch.bold());
+}
+
+/// Switch, create, and derive Git branches (including from GitHub PR URLs).
+fn main() -> color_eyre::Result<()> {
+    color_eyre::install()?;
+
+    let args = ytil_system::get_args();
+    let args: Vec<_> = args.iter().map(String::as_str).collect();
+
+    match args.split_first() {
+        None => autocomplete_git_branches(),
+        // Assumption: cannot create a branch with a name that starts with -
+        Some((hd, _)) if *hd == "-" => ytil_git::switch_branch(hd).inspect(|()| report_branch_switch(hd)),
+        Some((hd, tail)) if *hd == "-b" => create_branch_and_switch(&build_branch_name(tail)?),
+        Some((hd, &[])) => switch_branch_or_create_if_missing(hd),
+        _ => create_branch_and_switch(&build_branch_name(&args)?),
+    }?;
+
+    Ok(())
 }
 
 #[cfg(test)]

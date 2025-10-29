@@ -14,3 +14,7 @@ categories = ["command-line-utilities", "development-tools"]
 color-eyre = { workspace = true }
 ytil_cmd = { workspace = true }
 ytil_system = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+rstest = { workspace = true }

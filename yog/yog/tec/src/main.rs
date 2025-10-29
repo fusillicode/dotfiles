@@ -40,6 +40,180 @@ use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt as _;
 use ytil_system::RmFilesOutcome;
 
+/// Workspace lint check set.
+///
+/// Contains non-mutating lints safe for fast verification in hooks / CI:
+///
+/// Execution model:
+/// - Each lint spawns in its own thread; parallelism maximizes throughput while retaining deterministic join &
+///   reporting order defined by slice declaration order.
+/// - All runners are started before any join to avoid head-of-line blocking caused by early long-running lints.
+///
+/// Output contract:
+/// - Prints logical name, duration (`time=<Duration>`), status code, and stripped stdout or error.
+/// - Aggregate process exit code is 1 if any lint fails (non-zero status or panic), else 0.
+const LINTS_CHECK: &[(&str, ConditionalLint)] = &[
+    ("clippy", |_| {
+        |path| {
+            LintFnResult::from(
+                Command::new("cargo")
+                    .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
+                    .current_dir(path)
+                    .exec()
+                    .map(LintFnSuccess::CmdOutput)
+                    .map_err(LintFnError::from),
+            )
+        }
+    }),
+    ("cargo fmt", |_| {
+        |path| {
+            LintFnResult::from(
+                Command::new("cargo")
+                    .args(["fmt", "--check"])
+                    .current_dir(path)
+                    .exec()
+                    .map(LintFnSuccess::CmdOutput)
+                    .map_err(LintFnError::from),
+            )
+        }
+    }),
+    ("cargo-machete", |_| {
+        |path| {
+            LintFnResult::from(
+                // Using `cargo-machete` rather than `cargo machete` to avoid issues caused by passing the
+                // `path`.
+                Command::new("cargo-machete")
+                    .args(["--with-metadata", &path.display().to_string()])
+                    .exec()
+                    .map(LintFnSuccess::CmdOutput)
+                    .map_err(LintFnError::from),
+            )
+        }
+    }),
+    ("cargo-sort", |_| {
+        |path| {
+            LintFnResult::from(
+                Command::new("cargo-sort")
+                    .args(["--workspace", "--check", "--check-format"])
+                    .current_dir(path)
+                    .exec()
+                    .map(LintFnSuccess::CmdOutput)
+                    .map_err(LintFnError::from),
+            )
+        }
+    }),
+    ("cargo-sort-derives", |_| {
+        |path| {
+            LintFnResult::from(
+                Command::new("cargo-sort-derives")
+                    .args(["sort-derives", "--check"])
+                    .current_dir(path)
+                    .exec()
+                    .map(LintFnSuccess::CmdOutput)
+                    .map_err(LintFnError::from),
+            )
+        }
+    }),
+];
+
+/// Workspace lint fix set.
+///
+/// Contains mutating lints for rapid remediation of formatting / unused dependencies / manifest ordering.
+///
+/// Execution model:
+/// - Parallel thread spawn identical to [`LINTS_CHECK`]; ordering of slice elements defines deterministic join &
+///   reporting sequence.
+///
+/// Output contract:
+/// - Same reporting shape as [`LINTS_CHECK`]: name, duration snippet (`time=<Duration>`), status code, stripped stdout
+///   or error.
+/// - Aggregate process exit code is 1 if any lint fails (non-zero status or panic), else 0.
+///
+/// Rationale:
+/// - Focused mutation set avoids accidentally introducing changes via check-only tools.
+/// - Deterministic ordered output aids CI log diffing while retaining concurrency for speed.
+/// - Mirrors structure of [`LINTS_CHECK`] for predictable maintenance (additions require updating both tables).
+const LINTS_FIX: &[(&str, ConditionalLint)] = &[
+    ("clippy", |changes| {
+        conditional_lint(changes, Some(".rs"), |path| {
+            LintFnResult::from(
+                Command::new("cargo")
+                    .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
+                    .current_dir(path)
+                    .exec()
+                    .map(LintFnSuccess::CmdOutput)
+                    .map_err(LintFnError::from),
+            )
+        })
+    }),
+    ("cargo fmt", |changes| {
+        conditional_lint(changes, Some(".rs"), |path| {
+            LintFnResult::from(
+                Command::new("cargo")
+                    .args(["fmt"])
+                    .current_dir(path)
+                    .exec()
+                    .map(LintFnSuccess::CmdOutput)
+                    .map_err(LintFnError::from),
+            )
+        })
+    }),
+    ("cargo-machete", |changes| {
+        conditional_lint(changes, Some(".rs"), |path| {
+            LintFnResult::from(
+                Command::new("cargo-machete")
+                    .args(["--fix", "--with-metadata", &path.display().to_string()])
+                    .exec()
+                    .map(LintFnSuccess::CmdOutput)
+                    .map_err(LintFnError::from),
+            )
+        })
+    }),
+    ("cargo-sort", |changes| {
+        conditional_lint(changes, Some(".rs"), |path| {
+            LintFnResult::from(
+                Command::new("cargo-sort")
+                    .args(["--workspace"])
+                    .current_dir(path)
+                    .exec()
+                    .map(LintFnSuccess::CmdOutput)
+                    .map_err(LintFnError::from),
+            )
+        })
+    }),
+    ("cargo-sort-derives", |changes| {
+        conditional_lint(changes, Some(".rs"), |path| {
+            LintFnResult::from(
+                Command::new("cargo-sort-derives")
+                    .args(["sort-derives"])
+                    .current_dir(path)
+                    .exec()
+                    .map(LintFnSuccess::CmdOutput)
+                    .map_err(LintFnError::from),
+            )
+        })
+    }),
+    ("rm-ds-store", |changes| {
+        conditional_lint(changes, None, |path| {
+            LintFnResult::from(ytil_system::rm_matching_files(
+                path,
+                ".DS_Store",
+                &[".git", "target"],
+                false,
+            ))
+        })
+    }),
+];
+
+/// No-operation lint that reports "skipped" status.
+///
+/// Used by [`conditional_lint`] when a lint should be skipped due to no relevant file changes.
+///
+/// # Rationale
+/// Provides a reusable constant for skipped lints, avoiding duplication of the skip logic and ensuring consistent
+/// output.
+const LINT_NO: Lint = |_| LintFnResult(Ok(LintFnSuccess::PlainMsg(format!("{}\n", "skipped".bold()))));
+
 /// Function pointer type for a single lint command invocation.
 ///
 /// Encapsulates a non-mutating check or (optionally) mutating fix routine executed against the workspace root.
@@ -58,7 +232,9 @@ use ytil_system::RmFilesOutcome;
 /// # Future Work
 /// - Consider an enum encapsulating richer metadata (e.g. auto-fix capability flag) to filter sets without duplicating
 ///   entries across lists.
-type LintFn = fn(&Path) -> LintFnResult;
+type Lint = fn(&Path) -> LintFnResult;
+
+type ConditionalLint = fn(&[String]) -> Lint;
 
 /// Newtype wrapper around [`Result<LintFnSuccess, LintFnError>`].
 ///
@@ -135,215 +311,28 @@ enum LintFnSuccess {
     PlainMsg(String),
 }
 
-/// Shared `clippy` lint definition.
+/// Conditionally returns the supplied lint or [`LINT_NO`] based on file changes.
 ///
-/// Performs a full workspace lint across all targets and features, denying any warnings (`-D warnings`). This is
-/// intentionally strict so CI / hooks surface new warnings immediately rather than allowing gradual drift.
+/// Returns the provided lint function if no extension filter is set or if any changed file matches the specified
+/// extension. Otherwise, returns [`LINT_NO`].
+///
+/// # Arguments
+/// - `changes` List of changed file paths as strings.
+/// - `extension` Optional file extension; if present, lint runs only if any changed file ends with it.
+/// - `lint` The lint function to conditionally execute.
+///
+/// # Returns
+/// - [`Lint`] function that either executes the provided lint or reports skipped status.
 ///
 /// # Rationale
-/// Centralizing the closure avoids duplication between [`LINTS_CHECK`] and [`LINTS_FIX`] and makes future flag
-/// adjustments (adding `--tests`, changing deny set) a single-line change.
-///
-/// # Performance
-/// `cargo clippy` can be relatively expensive versus formatting or sorting tools. Placing it first provides early
-/// feedback for a potentially longest-running lint while other shorter lints execute concurrently.
-const CLIPPY: (&str, LintFn) = ("clippy", |path| {
-    LintFnResult::from(
-        Command::new("cargo")
-            .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
-            .current_dir(path)
-            .exec()
-            .map(LintFnSuccess::CmdOutput)
-            .map_err(LintFnError::from),
-    )
-});
-
-/// Workspace lint check set.
-///
-/// Contains non-mutating lints safe for fast verification in hooks / CI:
-///
-/// Execution model:
-/// - Each lint spawns in its own thread; parallelism maximizes throughput while retaining deterministic join &
-///   reporting order defined by slice declaration order.
-/// - All runners are started before any join to avoid head-of-line blocking caused by early long-running lints.
-///
-/// Output contract:
-/// - Prints logical name, duration (`time=<Duration>`), status code, and stripped stdout or error.
-/// - Aggregate process exit code is 1 if any lint fails (non-zero status or panic), else 0.
-const LINTS_CHECK: &[(&str, LintFn)] = &[
-    CLIPPY,
-    ("cargo fmt", |path| {
-        LintFnResult::from(
-            Command::new("cargo")
-                .args(["fmt", "--check"])
-                .current_dir(path)
-                .exec()
-                .map(LintFnSuccess::CmdOutput)
-                .map_err(LintFnError::from),
-        )
-    }),
-    ("cargo-machete", |path| {
-        LintFnResult::from(
-            // Using `cargo-machete` rather than `cargo machete` to avoid issues caused by passing the
-            // `path`.
-            Command::new("cargo-machete")
-                .args(["--with-metadata", &path.display().to_string()])
-                .exec()
-                .map(LintFnSuccess::CmdOutput)
-                .map_err(LintFnError::from),
-        )
-    }),
-    ("cargo-sort", |path| {
-        LintFnResult::from(
-            Command::new("cargo-sort")
-                .args(["--workspace", "--check", "--check-format"])
-                .current_dir(path)
-                .exec()
-                .map(LintFnSuccess::CmdOutput)
-                .map_err(LintFnError::from),
-        )
-    }),
-    ("cargo-sort-derives", |path| {
-        LintFnResult::from(
-            Command::new("cargo-sort-derives")
-                .args(["sort-derives", "--check"])
-                .current_dir(path)
-                .exec()
-                .map(LintFnSuccess::CmdOutput)
-                .map_err(LintFnError::from),
-        )
-    }),
-];
-
-/// Workspace lint fix set.
-///
-/// Contains mutating lints for rapid remediation of formatting / unused dependencies / manifest ordering.
-///
-/// Execution model:
-/// - Parallel thread spawn identical to [`LINTS_CHECK`]; ordering of slice elements defines deterministic join &
-///   reporting sequence.
-///
-/// Output contract:
-/// - Same reporting shape as [`LINTS_CHECK`]: name, duration snippet (`time=<Duration>`), status code, stripped stdout
-///   or error.
-/// - Aggregate process exit code is 1 if any lint fails (non-zero status or panic), else 0.
-///
-/// Rationale:
-/// - Focused mutation set avoids accidentally introducing changes via check-only tools.
-/// - Deterministic ordered output aids CI log diffing while retaining concurrency for speed.
-/// - Mirrors structure of [`LINTS_CHECK`] for predictable maintenance (additions require updating both tables).
-const LINTS_FIX: &[(&str, LintFn)] = &[
-    CLIPPY,
-    ("cargo fmt", |path| {
-        LintFnResult::from(
-            Command::new("cargo")
-                .args(["fmt"])
-                .current_dir(path)
-                .exec()
-                .map(LintFnSuccess::CmdOutput)
-                .map_err(LintFnError::from),
-        )
-    }),
-    ("cargo-machete", |path| {
-        LintFnResult::from(
-            Command::new("cargo-machete")
-                .args(["--fix", "--with-metadata", &path.display().to_string()])
-                .exec()
-                .map(LintFnSuccess::CmdOutput)
-                .map_err(LintFnError::from),
-        )
-    }),
-    ("cargo-sort", |path| {
-        LintFnResult::from(
-            Command::new("cargo-sort")
-                .args(["--workspace"])
-                .current_dir(path)
-                .exec()
-                .map(LintFnSuccess::CmdOutput)
-                .map_err(LintFnError::from),
-        )
-    }),
-    ("cargo-sort-derives", |path| {
-        LintFnResult::from(
-            Command::new("cargo-sort-derives")
-                .args(["sort-derives"])
-                .current_dir(path)
-                .exec()
-                .map(LintFnSuccess::CmdOutput)
-                .map_err(LintFnError::from),
-        )
-    }),
-    ("rm-ds-store", |path| {
-        LintFnResult::from(ytil_system::rm_matching_files(
-            path,
-            ".DS_Store",
-            &[".git", "target"],
-            false,
-        ))
-    }),
-];
-
-/// Run workspace lint suite concurrently (check or fix modes).
-fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
-
-    let args = ytil_system::get_args();
-    let fix_mode = args.first().is_some_and(|s| s == "--fix");
-
-    let (start_msg, lints) = if fix_mode {
-        ("lints fix", LINTS_FIX)
-    } else {
-        ("lints check", LINTS_CHECK)
-    };
-
-    let workspace_root = ytil_system::get_workspace_root()?;
-
-    println!(
-        "\nRunning {} {} in {}\n",
-        start_msg.cyan().bold(),
-        format!("{:#?}", lints.iter().map(|(lint, _)| lint).collect::<Vec<_>>())
-            .white()
-            .bold(),
-        workspace_root.display().to_string().white().bold(),
-    );
-
-    // Spawn all lints in parallel.
-    let lints_handles: Vec<_> = lints
-        .iter()
-        .map(|(lint_name, lint_fn)| {
-            (
-                lint_name,
-                std::thread::spawn({
-                    let workspace_root = workspace_root.clone();
-                    move || run_and_report(lint_name, &workspace_root, *lint_fn)
-                }),
-            )
-        })
-        .collect();
-
-    let mut errors_count: i32 = 0;
-    for (_lint_name, handle) in lints_handles {
-        match handle.join().as_deref() {
-            Ok(Ok(_)) => (),
-            Ok(Err(_)) => errors_count = errors_count.saturating_add(1),
-            Err(join_err) => {
-                errors_count = errors_count.saturating_add(1);
-                eprintln!(
-                    "{} error={}",
-                    "Error joining thread".red().bold(),
-                    format!("{join_err:#?}").red()
-                );
-            }
-        }
+/// Enables efficient skipping of lints when no relevant files have changed, reducing unnecessary work while
+/// maintaining deterministic output.
+fn conditional_lint(changes: &[String], extension: Option<&str>, lint: Lint) -> Lint {
+    match extension {
+        Some(ext) if changes.iter().any(|x| x.ends_with(ext)) => lint,
+        None => lint,
+        _ => LINT_NO,
     }
-
-    println!(); // Cosmetic spacing.
-
-    if errors_count > 0 {
-        std::process::exit(1);
-    }
-
-    Ok(())
 }
 
 /// Run a single lint, measure its duration, and report immediately.
@@ -361,7 +350,7 @@ fn main() -> color_eyre::Result<()> {
 /// Collapses the previous two‑step pattern (timing + later reporting) into one
 /// function so thread closures stay minimal and result propagation is explicit.
 /// This also prevents losing the error flag (a regression after refactor).
-fn run_and_report(lint_name: &str, path: &Path, run: LintFn) -> LintFnResult {
+fn run_and_report(lint_name: &str, path: &Path, run: Lint) -> LintFnResult {
     let start = Instant::now();
     let lint_res = run(path);
     report(lint_name, &lint_res, start.elapsed());
@@ -417,11 +406,84 @@ fn format_timing(duration: Duration) -> String {
     format!("time={duration:?}")
 }
 
+/// Run workspace lint suite concurrently (check or fix modes).
+fn main() -> color_eyre::Result<()> {
+    color_eyre::install()?;
+
+    let args = ytil_system::get_args();
+    let fix_mode = args.first().is_some_and(|s| s == "--fix");
+
+    let (start_msg, lints) = if fix_mode {
+        ("lints fix", LINTS_FIX)
+    } else {
+        ("lints check", LINTS_CHECK)
+    };
+
+    let workspace_root = ytil_system::get_workspace_root()?;
+
+    let repo = ytil_git::get_repo(&workspace_root)?;
+    let changes = repo
+        .statuses(None)?
+        .iter()
+        .filter_map(|entry| entry.path().map(str::to_string))
+        .collect::<Vec<_>>();
+
+    println!(
+        "\nRunning {} {} in {}\n",
+        start_msg.cyan().bold(),
+        format!("{:#?}", lints.iter().map(|(lint, _)| lint).collect::<Vec<_>>())
+            .white()
+            .bold(),
+        workspace_root.display().to_string().white().bold(),
+    );
+
+    // Spawn all lints in parallel.
+    let lints_handles: Vec<_> = lints
+        .iter()
+        .map(|(lint_name, conditional_lint_fn)| {
+            (
+                lint_name,
+                std::thread::spawn({
+                    let workspace_root = workspace_root.clone();
+                    let changes = changes.clone();
+                    move || run_and_report(lint_name, &workspace_root, conditional_lint_fn(&changes))
+                }),
+            )
+        })
+        .collect();
+
+    let mut errors_count: i32 = 0;
+    for (_lint_name, handle) in lints_handles {
+        match handle.join().as_deref() {
+            Ok(Ok(_)) => (),
+            Ok(Err(_)) => errors_count = errors_count.saturating_add(1),
+            Err(join_err) => {
+                errors_count = errors_count.saturating_add(1);
+                eprintln!(
+                    "{} error={}",
+                    "Error joining thread".red().bold(),
+                    format!("{join_err:#?}").red()
+                );
+            }
+        }
+    }
+
+    println!(); // Cosmetic spacing.
+
+    if errors_count > 0 {
+        std::process::exit(1);
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::Error;
     use std::io::ErrorKind;
     use std::path::PathBuf;
+
+    use rstest::rstest;
 
     use super::*;
 
@@ -500,5 +562,26 @@ mod tests {
         assert!(msg.contains("Error removing"));
         assert!(msg.contains("\"badfile.txt\""));
         assert!(msg.contains("some error"));
+    }
+
+    #[rstest]
+    #[case(vec!["README.md".to_string(), "src/main.rs".to_string()], None, "dummy success")]
+    #[case(vec!["README.md".to_string(), "src/main.rs".to_string()], Some(".rs"), "dummy success")]
+    #[case(vec!["README.md".to_string()], Some(".rs"), "skipped")]
+    fn conditional_lint_returns_expected_result(
+        #[case] changes: Vec<String>,
+        #[case] extension: Option<&str>,
+        #[case] expected: &str,
+    ) {
+        let result_lint = conditional_lint(&changes, extension, dummy_lint);
+        let lint_result = result_lint(Path::new("/tmp"));
+
+        assert2::let_assert!(Ok(LintFnSuccess::PlainMsg(msg)) = lint_result.0);
+        // Using contains instead of exact match because [`NO_OP`] [`Lint`] returns a colorized [`String`].
+        assert!(msg.contains(expected));
+    }
+
+    fn dummy_lint(_path: &Path) -> LintFnResult {
+        LintFnResult(Ok(LintFnSuccess::PlainMsg("dummy success".to_string())))
     }
 }

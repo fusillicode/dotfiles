@@ -39,6 +39,32 @@ mod nvim_dbee;
 mod pgpass;
 mod vault;
 
+/// Executes the `vault` CLI to read a secret as JSON and deserialize it.
+///
+/// Runs `vault read <vault_path> --format=json` using [`std::process::Command`] and
+/// deserializes the JSON standard output into a [`VaultReadOutput`].
+///
+/// # Arguments
+/// - `vault_path` Path of the secret to read from Vault.
+///
+/// # Errors
+/// - Launching or running the [`vault`] process fails (I/O error from [`Command`]).
+/// - The command standard output cannot be deserialized into [`VaultReadOutput`] via [`serde_json`].
+/// - The standard output is not valid UTF-8 when constructing the contextual error message.
+fn exec_vault_read_cmd(vault_path: &str) -> color_eyre::Result<VaultReadOutput> {
+    let mut cmd = Command::new("vault");
+    cmd.args(["read", vault_path, "--format=json"]);
+
+    let cmd_stdout = &cmd.output()?.stdout;
+
+    serde_json::from_slice(cmd_stdout).with_context(|| {
+        str::from_utf8(cmd_stdout).map_or_else(
+            |error| format!("cmd stdout invalid utf-8 | cmd={cmd:#?} error={error:?}"),
+            |str_stdout| format!("cannot build VaultReadOutput from vault cmd {cmd:#?} stdout {str_stdout:?}"),
+        )
+    })
+}
+
 /// Update Postgres credentials from Vault, rewrite pgpass & nvim-dbee, optionally launch pgcli.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
@@ -110,30 +136,4 @@ fn main() -> color_eyre::Result<()> {
     }
 
     Ok(())
-}
-
-/// Executes the `vault` CLI to read a secret as JSON and deserialize it.
-///
-/// Runs `vault read <vault_path> --format=json` using [`std::process::Command`] and
-/// deserializes the JSON standard output into a [`VaultReadOutput`].
-///
-/// # Arguments
-/// - `vault_path` Path of the secret to read from Vault.
-///
-/// # Errors
-/// - Launching or running the [`vault`] process fails (I/O error from [`Command`]).
-/// - The command standard output cannot be deserialized into [`VaultReadOutput`] via [`serde_json`].
-/// - The standard output is not valid UTF-8 when constructing the contextual error message.
-fn exec_vault_read_cmd(vault_path: &str) -> color_eyre::Result<VaultReadOutput> {
-    let mut cmd = Command::new("vault");
-    cmd.args(["read", vault_path, "--format=json"]);
-
-    let cmd_stdout = &cmd.output()?.stdout;
-
-    serde_json::from_slice(cmd_stdout).with_context(|| {
-        str::from_utf8(cmd_stdout).map_or_else(
-            |error| format!("cmd stdout invalid utf-8 | cmd={cmd:#?} error={error:?}"),
-            |str_stdout| format!("cannot build VaultReadOutput from vault cmd {cmd:#?} stdout {str_stdout:?}"),
-        )
-    })
 }

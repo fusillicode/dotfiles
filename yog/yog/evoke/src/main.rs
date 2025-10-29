@@ -37,6 +37,40 @@ const BINS_DEFAULT_PATH: &[&str] = &[".local", "bin"];
 /// Path segments for the Nvim libs install dir.
 const NVIM_LIBS_DEFAULT_PATH: &[&str] = &[".config", "nvim", "lua"];
 
+/// Removes the last `n` directories from a [`PathBuf`].
+fn remove_last_n_dirs(path: &mut PathBuf, n: usize) {
+    for _ in 0..n {
+        if !path.pop() {
+            return;
+        }
+    }
+}
+
+/// Removes the first occurrence of an element from a vector.
+/// Returns `true` if found and removed, `false` otherwise.
+fn drop_element<T, U: ?Sized>(vec: &mut Vec<T>, target: &U) -> bool
+where
+    T: PartialEq<U>,
+{
+    if let Some(idx) = vec.iter().position(|x| x == target) {
+        vec.swap_remove(idx);
+        return true;
+    }
+    false
+}
+
+/// Copies a built binary or library from `from` to `to` using
+/// [`ytil_system::atomic_cp`] and prints an "Installed" status line.
+///
+/// # Errors
+/// - [`ytil_system::atomic_cp`] fails to copy.
+/// - The final rename or write cannot be performed.
+fn cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
+    ytil_system::atomic_cp(from, to)?;
+    println!("{} {} to {}", "Copied".green().bold(), from.display(), to.display());
+    Ok(())
+}
+
 /// Format, lint, build, and deploy workspace binaries and Neovim libs.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
@@ -98,42 +132,10 @@ fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Removes the last `n` directories from a [`PathBuf`].
-fn remove_last_n_dirs(path: &mut PathBuf, n: usize) {
-    for _ in 0..n {
-        if !path.pop() {
-            return;
-        }
-    }
-}
-
-/// Removes the first occurrence of an element from a vector.
-/// Returns `true` if found and removed, `false` otherwise.
-fn drop_element<T, U: ?Sized>(vec: &mut Vec<T>, target: &U) -> bool
-where
-    T: PartialEq<U>,
-{
-    if let Some(idx) = vec.iter().position(|x| x == target) {
-        vec.swap_remove(idx);
-        return true;
-    }
-    false
-}
-
-/// Copies a built binary or library from `from` to `to` using
-/// [`ytil_system::atomic_cp`] and prints an "Installed" status line.
-///
-/// # Errors
-/// - [`ytil_system::atomic_cp`] fails to copy.
-/// - The final rename or write cannot be performed.
-fn cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
-    ytil_system::atomic_cp(from, to)?;
-    println!("{} {} to {}", "Copied".green().bold(), from.display(), to.display());
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
     use super::*;
 
     #[test]
@@ -155,5 +157,16 @@ mod tests {
         let mut input: Vec<usize> = vec![];
         assert!(!drop_element(&mut input, &3));
         assert!(input.is_empty());
+    }
+
+    #[rstest]
+    #[case(PathBuf::from("/home/user/docs"), 0, PathBuf::from("/home/user/docs"))]
+    #[case(PathBuf::from("/home/user/docs"), 1, PathBuf::from("/home/user"))]
+    #[case(PathBuf::from("/home/user"), 5, PathBuf::from("/"))]
+    #[case(PathBuf::from("/"), 1, PathBuf::from("/"))]
+    #[case(PathBuf::new(), 1, PathBuf::new())]
+    fn remove_last_n_dirs_works(#[case] mut initial: PathBuf, #[case] n: usize, #[case] expected: PathBuf) {
+        remove_last_n_dirs(&mut initial, n);
+        pretty_assertions::assert_eq!(initial, expected);
     }
 }

@@ -34,6 +34,39 @@ use color_eyre::eyre::bail;
 use ytil_editor::Editor;
 use ytil_editor::FileToOpen;
 
+/// Wrapper for environment variables.
+struct Env {
+    /// The name of the environment variable (static string).
+    name: &'static str,
+    /// The value of the environment variable (dynamically constructed string).
+    value: String,
+}
+
+impl Env {
+    /// Returns environment variable as tuple.
+    pub fn by_ref(&self) -> (&'static str, &str) {
+        (self.name, &self.value)
+    }
+}
+
+/// Creates enriched PATH for `WezTerm` integration.
+///
+/// # Errors
+/// - A required environment variable is missing or invalid Unicode.
+fn get_enriched_path_env() -> color_eyre::Result<Env> {
+    let enriched_path = [
+        &std::env::var("PATH").unwrap_or_else(|_| String::new()),
+        "/opt/homebrew/bin",
+        &ytil_system::build_home_path(&[".local", "bin"])?.to_string_lossy(),
+    ]
+    .join(":");
+
+    Ok(Env {
+        name: "PATH",
+        value: enriched_path,
+    })
+}
+
 /// Open files (optionally at line:col) in existing Neovim / Helix pane.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
@@ -80,37 +113,4 @@ fn main() -> color_eyre::Result<()> {
         .spawn()?;
 
     Ok(())
-}
-
-/// Creates enriched PATH for `WezTerm` integration.
-///
-/// # Errors
-/// - A required environment variable is missing or invalid Unicode.
-fn get_enriched_path_env() -> color_eyre::Result<Env> {
-    let enriched_path = [
-        &std::env::var("PATH").unwrap_or_else(|_| String::new()),
-        "/opt/homebrew/bin",
-        &ytil_system::build_home_path(&[".local", "bin"])?.to_string_lossy(),
-    ]
-    .join(":");
-
-    Ok(Env {
-        name: "PATH",
-        value: enriched_path,
-    })
-}
-
-/// Wrapper for environment variables.
-struct Env {
-    /// The name of the environment variable (static string).
-    name: &'static str,
-    /// The value of the environment variable (dynamically constructed string).
-    value: String,
-}
-
-impl Env {
-    /// Returns environment variable as tuple.
-    pub fn by_ref(&self) -> (&'static str, &str) {
-        (self.name, &self.value)
-    }
 }
