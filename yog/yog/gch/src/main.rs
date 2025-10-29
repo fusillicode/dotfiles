@@ -42,49 +42,6 @@ use ytil_git::GitStatusEntry;
 use ytil_git::IndexState;
 use ytil_git::WorktreeState;
 
-/// Stage or discard selected Git changes interactively.
-///
-/// # Errors
-/// - Status enumeration via [`ytil_git::get_status`] fails.
-/// - User interaction (selection prompts via [`ytil_tui::minimal_multi_select`] and [`ytil_tui::minimal_select`])
-///   fails.
-/// - File / directory removal for new entries fails.
-/// - Unstaging new index entries via [`ytil_git::unstage`] fails.
-/// - Restore command construction / execution via [`ytil_git::restore`] fails.
-/// - Opening repository via [`ytil_git::get_repo`] or adding paths to index via [`ytil_git::add_to_index`] fails.
-fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
-
-    let args = ytil_system::get_args();
-    let args: Vec<_> = args.iter().map(String::as_str).collect();
-
-    let git_status_entries = ytil_git::get_status()?;
-    if git_status_entries.is_empty() {
-        println!("Working tree clean");
-        return Ok(());
-    }
-
-    let renderable_entries = git_status_entries.into_iter().map(RenderableGitStatusEntry).collect();
-
-    let Some(selected_entries) = ytil_tui::minimal_multi_select::<RenderableGitStatusEntry>(renderable_entries)? else {
-        println!("\n\nNo entries selected");
-        return Ok(());
-    };
-
-    let Some(selected_op) = ytil_tui::minimal_select::<Op>(Op::iter().collect())? else {
-        println!("\n\nNothing operation selected");
-        return Ok(());
-    };
-
-    let selected_entries = selected_entries.iter().map(Deref::deref).collect::<Vec<_>>();
-    match selected_op {
-        Op::Discard => restore_entries(&selected_entries, args.first().copied())?,
-        Op::Add => add_entries(&selected_entries)?,
-    }
-
-    Ok(())
-}
-
 /// Delete newly created paths then restore modified paths (optionally from a branch)
 ///
 /// Performs a two‑phase operation over the provided `entries`:
@@ -269,4 +226,47 @@ impl Display for Op {
         };
         write!(f, "{str_repr}")
     }
+}
+
+/// Stage or discard selected Git changes interactively.
+///
+/// # Errors
+/// - Status enumeration via [`ytil_git::get_status`] fails.
+/// - User interaction (selection prompts via [`ytil_tui::minimal_multi_select`] and [`ytil_tui::minimal_select`])
+///   fails.
+/// - File / directory removal for new entries fails.
+/// - Unstaging new index entries via [`ytil_git::unstage`] fails.
+/// - Restore command construction / execution via [`ytil_git::restore`] fails.
+/// - Opening repository via [`ytil_git::get_repo`] or adding paths to index via [`ytil_git::add_to_index`] fails.
+fn main() -> color_eyre::Result<()> {
+    color_eyre::install()?;
+
+    let args = ytil_system::get_args();
+    let args: Vec<_> = args.iter().map(String::as_str).collect();
+
+    let git_status_entries = ytil_git::get_status()?;
+    if git_status_entries.is_empty() {
+        println!("Working tree clean");
+        return Ok(());
+    }
+
+    let renderable_entries = git_status_entries.into_iter().map(RenderableGitStatusEntry).collect();
+
+    let Some(selected_entries) = ytil_tui::minimal_multi_select::<RenderableGitStatusEntry>(renderable_entries)? else {
+        println!("\n\nNo entries selected");
+        return Ok(());
+    };
+
+    let Some(selected_op) = ytil_tui::minimal_select::<Op>(Op::iter().collect())? else {
+        println!("\n\nNothing operation selected");
+        return Ok(());
+    };
+
+    let selected_entries = selected_entries.iter().map(Deref::deref).collect::<Vec<_>>();
+    match selected_op {
+        Op::Discard => restore_entries(&selected_entries, args.first().copied())?,
+        Op::Add => add_entries(&selected_entries)?,
+    }
+
+    Ok(())
 }

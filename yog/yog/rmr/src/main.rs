@@ -39,30 +39,6 @@ use color_eyre::Report;
 use color_eyre::eyre::bail;
 use color_eyre::owo_colors::OwoColorize;
 
-/// Remove files or directories passed as CLI args (recursive for dirs).
-fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
-
-    let files = ytil_system::get_args();
-
-    if files.is_empty() {
-        println!("Nothing done");
-    }
-
-    let mut any_errors = false;
-    for file in &files {
-        if process(file).is_err() {
-            any_errors = true;
-        }
-    }
-
-    if any_errors {
-        std::process::exit(1);
-    }
-
-    Ok(())
-}
-
 /// Deletes one path after stripping the first ':' suffix segment.
 ///
 /// Performs metadata lookup, branches on filetype, and deletes a file, symlink,
@@ -144,6 +120,30 @@ fn before_first_colon(s: &str) -> &str {
         }
     }
     s
+}
+
+/// Remove files or directories passed as CLI args (recursive for dirs).
+fn main() -> color_eyre::Result<()> {
+    color_eyre::install()?;
+
+    let files = ytil_system::get_args();
+
+    if files.is_empty() {
+        println!("Nothing done");
+    }
+
+    let mut any_errors = false;
+    for file in &files {
+        if process(file).is_err() {
+            any_errors = true;
+        }
+    }
+
+    if any_errors {
+        std::process::exit(1);
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

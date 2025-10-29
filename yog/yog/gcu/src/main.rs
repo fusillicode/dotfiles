@@ -37,25 +37,6 @@ use color_eyre::owo_colors::OwoColorize as _;
 use url::Url;
 use ytil_git::Branch;
 
-/// Switch, create, and derive Git branches (including from GitHub PR URLs).
-fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
-
-    let args = ytil_system::get_args();
-    let args: Vec<_> = args.iter().map(String::as_str).collect();
-
-    match args.split_first() {
-        None => autocomplete_git_branches(),
-        // Assumption: cannot create a branch with a name that starts with -
-        Some((hd, _)) if *hd == "-" => ytil_git::switch_branch(hd).inspect(|()| report_branch_switch(hd)),
-        Some((hd, tail)) if *hd == "-b" => create_branch_and_switch(&build_branch_name(tail)?),
-        Some((hd, &[])) => switch_branch_or_create_if_missing(hd),
-        _ => create_branch_and_switch(&build_branch_name(&args)?),
-    }?;
-
-    Ok(())
-}
-
 /// Interactive selection and switching of Git branches.
 ///
 /// Presents a minimal TUI listing recent local / remote branches (with redundant
@@ -268,6 +249,25 @@ fn report_branch_not_created(branch: &str) {
 /// - `default_branch` Current (non-default) branch acting as the base.
 fn ask_branching_from_not_default(branch: &str, default_branch: &str) {
     print!("{} {} from {}", "*".cyan().bold(), branch.bold(), default_branch.bold());
+}
+
+/// Switch, create, and derive Git branches (including from GitHub PR URLs).
+fn main() -> color_eyre::Result<()> {
+    color_eyre::install()?;
+
+    let args = ytil_system::get_args();
+    let args: Vec<_> = args.iter().map(String::as_str).collect();
+
+    match args.split_first() {
+        None => autocomplete_git_branches(),
+        // Assumption: cannot create a branch with a name that starts with -
+        Some((hd, _)) if *hd == "-" => ytil_git::switch_branch(hd).inspect(|()| report_branch_switch(hd)),
+        Some((hd, tail)) if *hd == "-b" => create_branch_and_switch(&build_branch_name(tail)?),
+        Some((hd, &[])) => switch_branch_or_create_if_missing(hd),
+        _ => create_branch_and_switch(&build_branch_name(&args)?),
+    }?;
+
+    Ok(())
 }
 
 #[cfg(test)]

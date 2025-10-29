@@ -53,95 +53,6 @@ use ytil_github::pr::IntoEnumIterator;
 use ytil_github::pr::PullRequest;
 use ytil_github::pr::PullRequestMergeState;
 
-/// List and optionally batch‑merge GitHub pull requests interactively.
-///
-/// Mirrors the design of `gch::run` so the binary `main` remains a thin wrapper.
-/// Performs GitHub authentication via [`ytil_github::log_into_github`], flag parsing, PR fetching via
-/// [`ytil_github::pr::get`], selection via [`ytil_tui::minimal_multi_select`] and [`ytil_tui::minimal_select`], and
-/// application of user‑chosen operations.
-///
-/// # Returns
-/// `Ok(())` if all operations complete (individual PR action failures are reported but do not abort processing).
-///
-/// # Errors
-/// - Flag parsing fails (unknown flag, missing value, invalid [`PullRequestMergeState`]).
-/// - GitHub CLI invocation fails (listing PRs via [`ytil_github::pr::get`], approving via [`ytil_github::pr::approve`],
-///   merging via [`ytil_github::pr::merge`], commenting via [`ytil_github::pr::dependabot_rebase`]).
-/// - TUI interaction fails (selection UI errors via [`ytil_tui::minimal_multi_select`] and
-///   [`ytil_tui::minimal_select`]).
-///
-/// # Rationale
-/// Uniform `run()` entrypoint across tools (`gch`, `ghl`) simplifies integration (e.g. shared launcher invoking
-/// `<tool>::run()`).
-///
-/// # Future Work
-/// - Surface aggregated failure summary at end of run.
-/// - Inject CLI dependencies for isolated testing.
-fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
-    ytil_github::log_into_github()?;
-
-    let repo = ytil_github::get_current_repo()?;
-
-    let mut pargs = pico_args::Arguments::from_env();
-
-    let search_filter: Option<String> = pargs.opt_value_from_str("--search")?;
-    let merge_state = pargs
-        .opt_value_from_fn("--merge-state", PullRequestMergeState::from_str)
-        .with_section(|| {
-            format!(
-                "accepted values are {:#?}",
-                PullRequestMergeState::iter().collect::<Vec<_>>()
-            )
-            .red()
-            .bold()
-            .to_string()
-        })?;
-
-    let params = format!(
-        "search_filter={search_filter:?}{}",
-        merge_state
-            .map(|ms| format!("\nmerge_state={ms:?}"))
-            .unwrap_or_default()
-    );
-    println!("\n{}\n{}\n", "Search PRs by".cyan().bold(), params.white().bold());
-
-    let pull_requests = ytil_github::pr::get(&repo, search_filter.as_deref(), &|pr: &PullRequest| {
-        if let Some(merge_state) = merge_state {
-            return pr.merge_state == merge_state;
-        }
-        true
-    })?;
-
-    let renderable_prs: Vec<_> = pull_requests.into_iter().map(RenderablePullRequest).collect();
-    if renderable_prs.is_empty() {
-        println!(
-            "{}\n{}",
-            "No PRs matching supplied".yellow().bold(),
-            params.white().bold()
-        );
-    }
-
-    let Some(selected_prs) = ytil_tui::minimal_multi_select::<RenderablePullRequest>(renderable_prs)? else {
-        println!("No PRs selected");
-        return Ok(());
-    };
-
-    let Some(selected_op) = ytil_tui::minimal_select::<SelectableOp>(SelectableOp::iter().collect())? else {
-        println!("No operation selected");
-        return Ok(());
-    };
-
-    println!(); // Cosmetic spacing.
-
-    let selected_op_run = selected_op.run();
-    for pr in selected_prs.iter().map(Deref::deref) {
-        selected_op_run(pr);
-    }
-
-    Ok(())
-}
-
 /// Newtype wrapper implementing colored [`Display`] for a [`PullRequest`].
 ///
 /// Renders: `<number> <author.login> <colored-merge-state> <title>`.
@@ -339,4 +250,93 @@ fn format_pr(pr: &PullRequest) -> String {
         format!("title={:?}", pr.title).white().bold(),
         format!("author={:?}", pr.author).white().bold(),
     )
+}
+
+/// List and optionally batch‑merge GitHub pull requests interactively.
+///
+/// Mirrors the design of `gch::run` so the binary `main` remains a thin wrapper.
+/// Performs GitHub authentication via [`ytil_github::log_into_github`], flag parsing, PR fetching via
+/// [`ytil_github::pr::get`], selection via [`ytil_tui::minimal_multi_select`] and [`ytil_tui::minimal_select`], and
+/// application of user‑chosen operations.
+///
+/// # Returns
+/// `Ok(())` if all operations complete (individual PR action failures are reported but do not abort processing).
+///
+/// # Errors
+/// - Flag parsing fails (unknown flag, missing value, invalid [`PullRequestMergeState`]).
+/// - GitHub CLI invocation fails (listing PRs via [`ytil_github::pr::get`], approving via [`ytil_github::pr::approve`],
+///   merging via [`ytil_github::pr::merge`], commenting via [`ytil_github::pr::dependabot_rebase`]).
+/// - TUI interaction fails (selection UI errors via [`ytil_tui::minimal_multi_select`] and
+///   [`ytil_tui::minimal_select`]).
+///
+/// # Rationale
+/// Uniform `run()` entrypoint across tools (`gch`, `ghl`) simplifies integration (e.g. shared launcher invoking
+/// `<tool>::run()`).
+///
+/// # Future Work
+/// - Surface aggregated failure summary at end of run.
+/// - Inject CLI dependencies for isolated testing.
+fn main() -> color_eyre::Result<()> {
+    color_eyre::install()?;
+    ytil_github::log_into_github()?;
+
+    let repo = ytil_github::get_current_repo()?;
+
+    let mut pargs = pico_args::Arguments::from_env();
+
+    let search_filter: Option<String> = pargs.opt_value_from_str("--search")?;
+    let merge_state = pargs
+        .opt_value_from_fn("--merge-state", PullRequestMergeState::from_str)
+        .with_section(|| {
+            format!(
+                "accepted values are {:#?}",
+                PullRequestMergeState::iter().collect::<Vec<_>>()
+            )
+            .red()
+            .bold()
+            .to_string()
+        })?;
+
+    let params = format!(
+        "search_filter={search_filter:?}{}",
+        merge_state
+            .map(|ms| format!("\nmerge_state={ms:?}"))
+            .unwrap_or_default()
+    );
+    println!("\n{}\n{}\n", "Search PRs by".cyan().bold(), params.white().bold());
+
+    let pull_requests = ytil_github::pr::get(&repo, search_filter.as_deref(), &|pr: &PullRequest| {
+        if let Some(merge_state) = merge_state {
+            return pr.merge_state == merge_state;
+        }
+        true
+    })?;
+
+    let renderable_prs: Vec<_> = pull_requests.into_iter().map(RenderablePullRequest).collect();
+    if renderable_prs.is_empty() {
+        println!(
+            "{}\n{}",
+            "No PRs matching supplied".yellow().bold(),
+            params.white().bold()
+        );
+    }
+
+    let Some(selected_prs) = ytil_tui::minimal_multi_select::<RenderablePullRequest>(renderable_prs)? else {
+        println!("No PRs selected");
+        return Ok(());
+    };
+
+    let Some(selected_op) = ytil_tui::minimal_select::<SelectableOp>(SelectableOp::iter().collect())? else {
+        println!("No operation selected");
+        return Ok(());
+    };
+
+    println!(); // Cosmetic spacing.
+
+    let selected_op_run = selected_op.run();
+    for pr in selected_prs.iter().map(Deref::deref) {
+        selected_op_run(pr);
+    }
+
+    Ok(())
 }
