@@ -2627,6 +2627,7 @@ dependencies = [
  "color-eyre",
  "nvim-oxi",
  "pretty_assertions",
+ "rstest",
  "serde",
 ]
 
