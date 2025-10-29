@@ -30,6 +30,43 @@ use color_eyre::eyre::WrapErr;
 use color_eyre::eyre::bail;
 use itertools::Itertools;
 
+/// Exit condition for retry loop.
+enum ExitCond {
+    /// Exit when the command succeeds.
+    Ok,
+    /// Exit when the command fails.
+    Ko,
+}
+
+impl ExitCond {
+    /// Determines if the loop should break.
+    #[allow(clippy::suspicious_operation_groupings)]
+    pub const fn should_break(&self, cmd_res: Result<(), ExitStatusError>) -> bool {
+        self.is_ok() && cmd_res.is_ok() || !self.is_ok() && cmd_res.is_err()
+    }
+
+    /// Checks if this represents success.
+    const fn is_ok(&self) -> bool {
+        match self {
+            Self::Ok => true,
+            Self::Ko => false,
+        }
+    }
+}
+
+/// Parses [`ExitCond`] from string.
+impl FromStr for ExitCond {
+    type Err = eyre::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "ok" => Self::Ok,
+            "ko" => Self::Ko,
+            unexpected => bail!("unexpected exit condition | value={unexpected}"),
+        })
+    }
+}
+
 /// Re-run a command until success (ok) or failure (ko) with cooldown.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
@@ -87,41 +124,4 @@ fn main() -> color_eyre::Result<()> {
     println!("Summary:\n - tries {tries_count}\n - avg time {avg_runs_time:#?}");
 
     Ok(())
-}
-
-/// Exit condition for retry loop.
-enum ExitCond {
-    /// Exit when the command succeeds.
-    Ok,
-    /// Exit when the command fails.
-    Ko,
-}
-
-impl ExitCond {
-    /// Determines if the loop should break.
-    #[allow(clippy::suspicious_operation_groupings)]
-    pub const fn should_break(&self, cmd_res: Result<(), ExitStatusError>) -> bool {
-        self.is_ok() && cmd_res.is_ok() || !self.is_ok() && cmd_res.is_err()
-    }
-
-    /// Checks if this represents success.
-    const fn is_ok(&self) -> bool {
-        match self {
-            Self::Ok => true,
-            Self::Ko => false,
-        }
-    }
-}
-
-/// Parses [`ExitCond`] from string.
-impl FromStr for ExitCond {
-    type Err = eyre::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s {
-            "ok" => Self::Ok,
-            "ko" => Self::Ko,
-            unexpected => bail!("unexpected exit condition | value={unexpected}"),
-        })
-    }
 }

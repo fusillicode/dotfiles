@@ -17,22 +17,6 @@ use lightningcss::stylesheet::StyleSheet;
 
 const ASSETS_DIR: &str = "assets";
 
-fn main() -> color_eyre::Result<()> {
-    println!("cargo:rerun-if-changed=assets/style.css");
-
-    color_eyre::install()?;
-
-    let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
-    let css_raw_path = manifest_dir.join(ASSETS_DIR).join("style.css");
-    let css_raw = std::fs::read_to_string(&css_raw_path)?;
-
-    let css_minified_path = manifest_dir.join(ASSETS_DIR).join("style.min.css");
-    let css_minified = minify_css(&css_raw)?;
-
-    std::fs::write(&css_minified_path, css_minified)?;
-    Ok(())
-}
-
 /// Minifies raw CSS source into an optimized string.
 ///
 /// - Parses the provided CSS with permissive error recovery.
@@ -69,4 +53,20 @@ fn minify_css(css_code: &str) -> color_eyre::Result<String> {
         })
         .map_err(|error| eyre!(format!("css print failed | error={error:#?}")))?
         .code)
+}
+
+fn main() -> color_eyre::Result<()> {
+    println!("cargo:rerun-if-changed=assets/style.css");
+
+    color_eyre::install()?;
+
+    let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
+    let css_raw_path = manifest_dir.join(ASSETS_DIR).join("style.css");
+    let css_raw = std::fs::read_to_string(&css_raw_path)?;
+
+    let css_minified_path = manifest_dir.join(ASSETS_DIR).join("style.min.css");
+    let css_minified = minify_css(&css_raw)?;
+
+    std::fs::write(&css_minified_path, css_minified)?;
+    Ok(())
 }
