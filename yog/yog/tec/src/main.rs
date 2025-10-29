@@ -212,9 +212,9 @@ const LINTS_FIX: &[(&str, ConditionalLint)] = &[
 /// # Rationale
 /// Provides a reusable constant for skipped lints, avoiding duplication of the skip logic and ensuring consistent
 /// output.
-const LINT_NO: Lint = |_| LintFnResult(Ok(LintFnSuccess::PlainMsg(format!("{}\n", "skipped".bold()))));
+const LINT_NO_OP: Lint = |_| LintFnResult(Ok(LintFnSuccess::PlainMsg(format!("{}\n", "skipped".bold()))));
 
-/// Function pointer type for a single lint command invocation.
+/// Function pointer type for a single lint invocation.
 ///
 /// Encapsulates a non-mutating check or (optionally) mutating fix routine executed against the workspace root.
 ///
@@ -288,7 +288,7 @@ impl From<RmFilesOutcome> for LintFnResult {
     }
 }
 
-/// Error type for lint function execution failures.
+/// Error type for [`Lint`] function execution failures.
 ///
 /// # Errors
 /// - [`LintFnError::CmdError`] Process spawning or execution failure.
@@ -301,7 +301,7 @@ enum LintFnError {
     PlainMsg(String),
 }
 
-/// Success result from lint function execution.
+/// Success result from [`Lint`] function execution.
 ///
 /// # Variants
 /// - [`LintFnSuccess::CmdOutput`] Standard command output with status and streams.
@@ -311,15 +311,15 @@ enum LintFnSuccess {
     PlainMsg(String),
 }
 
-/// Conditionally returns the supplied lint or [`LINT_NO`] based on file changes.
+/// Conditionally returns the supplied lint or [`LINT_NO_OP`] based on file changes.
 ///
-/// Returns the provided lint function if no extension filter is set or if any changed file matches the specified
-/// extension. Otherwise, returns [`LINT_NO`].
+/// Returns the provided [`Lint`] function if no extension filter is set or if any changed file matches the specified
+/// extension. Otherwise, returns [`LINT_NO_OP`].
 ///
 /// # Arguments
 /// - `changes` List of changed file paths as strings.
 /// - `extension` Optional file extension; if present, lint runs only if any changed file ends with it.
-/// - `lint` The lint function to conditionally execute.
+/// - `lint` The [`Lint`] function to conditionally execute.
 ///
 /// # Returns
 /// - [`Lint`] function that either executes the provided lint or reports skipped status.
@@ -331,7 +331,7 @@ fn conditional_lint(changes: &[String], extension: Option<&str>, lint: Lint) -> 
     match extension {
         Some(ext) if changes.iter().any(|x| x.ends_with(ext)) => lint,
         None => lint,
-        _ => LINT_NO,
+        _ => LINT_NO_OP,
     }
 }
 
