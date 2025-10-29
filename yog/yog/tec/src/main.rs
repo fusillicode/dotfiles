@@ -58,12 +58,12 @@ use ytil_system::RmFilesOutcome;
 /// # Future Work
 /// - Consider an enum encapsulating richer metadata (e.g. auto-fix capability flag) to filter sets without duplicating
 ///   entries across lists.
-type LintFn = fn(&Path) -> LintFnResult;
+type Lint = fn(&Path) -> LintFnResult;
 
-type ConditionalLintFn = fn(&[String]) -> LintFn;
+type ConditionalLint = fn(&[String]) -> Lint;
 
-fn conditional_lint(changes: &[String], ext: Option<&str>, lint: LintFn) -> LintFn {
-    match ext {
+fn conditional_lint(changes: &[String], extension: Option<&str>, lint: Lint) -> Lint {
+    match extension {
         Some(ext) if changes.iter().any(|x| x.ends_with(ext)) => lint,
         None => lint,
         _ => |_| LintFnResult(Ok(LintFnSuccess::PlainMsg("skipped".to_string()))),
@@ -157,7 +157,7 @@ enum LintFnSuccess {
 /// # Performance
 /// `cargo clippy` can be relatively expensive versus formatting or sorting tools. Placing it first provides early
 /// feedback for a potentially longest-running lint while other shorter lints execute concurrently.
-const CLIPPY: (&str, ConditionalLintFn) = ("clippy", |changes| {
+const CLIPPY: (&str, ConditionalLint) = ("clippy", |changes| {
     conditional_lint(changes, Some(".rs"), |path| {
         LintFnResult::from(
             Command::new("cargo")
@@ -182,7 +182,7 @@ const CLIPPY: (&str, ConditionalLintFn) = ("clippy", |changes| {
 /// Output contract:
 /// - Prints logical name, duration (`time=<Duration>`), status code, and stripped stdout or error.
 /// - Aggregate process exit code is 1 if any lint fails (non-zero status or panic), else 0.
-const LINTS_CHECK: &[(&str, ConditionalLintFn)] = &[
+const LINTS_CHECK: &[(&str, ConditionalLint)] = &[
     CLIPPY,
     ("cargo fmt", |changes| {
         conditional_lint(changes, Some(".rs"), |path| {
@@ -252,7 +252,7 @@ const LINTS_CHECK: &[(&str, ConditionalLintFn)] = &[
 /// - Focused mutation set avoids accidentally introducing changes via check-only tools.
 /// - Deterministic ordered output aids CI log diffing while retaining concurrency for speed.
 /// - Mirrors structure of [`LINTS_CHECK`] for predictable maintenance (additions require updating both tables).
-const LINTS_FIX: &[(&str, ConditionalLintFn)] = &[
+const LINTS_FIX: &[(&str, ConditionalLint)] = &[
     CLIPPY,
     ("cargo fmt", |changes| {
         conditional_lint(changes, Some(".rs"), |path| {
@@ -399,7 +399,7 @@ fn main() -> color_eyre::Result<()> {
 /// Collapses the previous two‑step pattern (timing + later reporting) into one
 /// function so thread closures stay minimal and result propagation is explicit.
 /// This also prevents losing the error flag (a regression after refactor).
-fn run_and_report(lint_name: &str, path: &Path, run: LintFn) -> LintFnResult {
+fn run_and_report(lint_name: &str, path: &Path, run: Lint) -> LintFnResult {
     let start = Instant::now();
     let lint_res = run(path);
     report(lint_name, &lint_res, start.elapsed());
