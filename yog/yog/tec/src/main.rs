@@ -578,9 +578,21 @@ mod tests {
     }
 
     #[rstest]
-    #[case(&["README.md".to_string(), "src/main.rs".to_string()], None, "dummy success")]
-    #[case(&["README.md".to_string(), "src/main.rs".to_string()], Some(".rs"), "dummy success")]
-    #[case(&["README.md".to_string()], Some(".rs"), "skipped")]
+    #[case::multiple_files_no_extension_filter(
+        &["README.md".to_string(), "src/main.rs".to_string()],
+        None,
+        "dummy success"
+    )]
+    #[case::multiple_files_with_rs_extension_filter(
+        &["README.md".to_string(), "src/main.rs".to_string()],
+        Some(".rs"),
+        "dummy success"
+    )]
+    #[case::single_non_rs_file_with_rs_extension_filter(
+        &["README.md".to_string()],
+        Some(".rs"),
+        "skipped"
+    )]
     fn build_conditional_lint_returns_expected_result(
         #[case] changed_paths: &[String],
         #[case] extension: Option<&str>,

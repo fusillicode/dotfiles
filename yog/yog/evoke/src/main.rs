@@ -160,11 +160,11 @@ mod tests {
     }
 
     #[rstest]
-    #[case(PathBuf::from("/home/user/docs"), 0, PathBuf::from("/home/user/docs"))]
-    #[case(PathBuf::from("/home/user/docs"), 1, PathBuf::from("/home/user"))]
-    #[case(PathBuf::from("/home/user"), 5, PathBuf::from("/"))]
-    #[case(PathBuf::from("/"), 1, PathBuf::from("/"))]
-    #[case(PathBuf::new(), 1, PathBuf::new())]
+    #[case::no_dirs_removed(PathBuf::from("/home/user/docs"), 0, PathBuf::from("/home/user/docs"))]
+    #[case::remove_one_dir(PathBuf::from("/home/user/docs"), 1, PathBuf::from("/home/user"))]
+    #[case::remove_more_than_exist(PathBuf::from("/home/user"), 5, PathBuf::from("/"))]
+    #[case::root_path(PathBuf::from("/"), 1, PathBuf::from("/"))]
+    #[case::empty_path(PathBuf::new(), 1, PathBuf::new())]
     fn remove_last_n_dirs_works(#[case] mut initial: PathBuf, #[case] n: usize, #[case] expected: PathBuf) {
         remove_last_n_dirs(&mut initial, n);
         pretty_assertions::assert_eq!(initial, expected);
