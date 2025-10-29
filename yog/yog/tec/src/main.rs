@@ -52,7 +52,7 @@ use ytil_system::RmFilesOutcome;
 /// Output contract:
 /// - Prints logical name, duration (`time=<Duration>`), status code, and stripped stdout or error.
 /// - Aggregate process exit code is 1 if any lint fails (non-zero status or panic), else 0.
-const LINTS_CHECK: &[(&str, ConditionalLint)] = &[
+const LINTS_CHECK: &[(&str, LintBuilder)] = &[
     ("clippy", |_| {
         |path| {
             LintFnResult::from(
@@ -133,9 +133,9 @@ const LINTS_CHECK: &[(&str, ConditionalLint)] = &[
 /// - Focused mutation set avoids accidentally introducing changes via check-only tools.
 /// - Deterministic ordered output aids CI log diffing while retaining concurrency for speed.
 /// - Mirrors structure of [`LINTS_CHECK`] for predictable maintenance (additions require updating both tables).
-const LINTS_FIX: &[(&str, ConditionalLint)] = &[
-    ("clippy", |changes| {
-        conditional_lint(changes, Some(".rs"), |path| {
+const LINTS_FIX: &[(&str, LintBuilder)] = &[
+    ("clippy", |changed_paths| {
+        build_conditional_lint(changed_paths, Some(".rs"), |path| {
             LintFnResult::from(
                 Command::new("cargo")
                     .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
@@ -146,8 +146,8 @@ const LINTS_FIX: &[(&str, ConditionalLint)] = &[
             )
         })
     }),
-    ("cargo fmt", |changes| {
-        conditional_lint(changes, Some(".rs"), |path| {
+    ("cargo fmt", |changed_paths| {
+        build_conditional_lint(changed_paths, Some(".rs"), |path| {
             LintFnResult::from(
                 Command::new("cargo")
                     .args(["fmt"])
@@ -158,8 +158,8 @@ const LINTS_FIX: &[(&str, ConditionalLint)] = &[
             )
         })
     }),
-    ("cargo-machete", |changes| {
-        conditional_lint(changes, Some(".rs"), |path| {
+    ("cargo-machete", |changed_paths| {
+        build_conditional_lint(changed_paths, Some(".rs"), |path| {
             LintFnResult::from(
                 Command::new("cargo-machete")
                     .args(["--fix", "--with-metadata", &path.display().to_string()])
@@ -169,8 +169,8 @@ const LINTS_FIX: &[(&str, ConditionalLint)] = &[
             )
         })
     }),
-    ("cargo-sort", |changes| {
-        conditional_lint(changes, Some(".rs"), |path| {
+    ("cargo-sort", |changed_paths| {
+        build_conditional_lint(changed_paths, Some(".rs"), |path| {
             LintFnResult::from(
                 Command::new("cargo-sort")
                     .args(["--workspace"])
@@ -181,8 +181,8 @@ const LINTS_FIX: &[(&str, ConditionalLint)] = &[
             )
         })
     }),
-    ("cargo-sort-derives", |changes| {
-        conditional_lint(changes, Some(".rs"), |path| {
+    ("cargo-sort-derives", |changed_paths| {
+        build_conditional_lint(changed_paths, Some(".rs"), |path| {
             LintFnResult::from(
                 Command::new("cargo-sort-derives")
                     .args(["sort-derives"])
@@ -193,8 +193,8 @@ const LINTS_FIX: &[(&str, ConditionalLint)] = &[
             )
         })
     }),
-    ("rm-ds-store", |changes| {
-        conditional_lint(changes, None, |path| {
+    ("rm-ds-store", |changed_paths| {
+        build_conditional_lint(changed_paths, None, |path| {
             LintFnResult::from(ytil_system::rm_matching_files(
                 path,
                 ".DS_Store",
@@ -207,7 +207,7 @@ const LINTS_FIX: &[(&str, ConditionalLint)] = &[
 
 /// No-operation lint that reports "skipped" status.
 ///
-/// Used by [`conditional_lint`] when a lint should be skipped due to no relevant file changes.
+/// Used by [`build_conditional_lint`] when a lint should be skipped due to no relevant file changes.
 ///
 /// # Rationale
 /// Provides a reusable constant for skipped lints, avoiding duplication of the skip logic and ensuring consistent
@@ -234,9 +234,9 @@ const LINT_NO_OP: Lint = |_| LintFnResult(Ok(LintFnSuccess::PlainMsg(format!("{}
 ///   entries across lists.
 type Lint = fn(&Path) -> LintFnResult;
 
-/// Function pointer type for a conditional lint invocation.
+/// Function pointer type for building lints based on file changes.
 ///
-/// Encapsulates a lint that may be skipped based on file changes, returning a [`Lint`] function to execute.
+/// Encapsulates logic to build or select a lint based on file changes, returning a [`Lint`] function to execute.
 ///
 /// # Arguments
 /// - `&[String]` List of changed file paths as strings.
@@ -247,7 +247,7 @@ type Lint = fn(&Path) -> LintFnResult;
 /// # Rationale
 /// Enables efficient conditional execution of lints, avoiding unnecessary work when no relevant files have changed
 /// while maintaining consistent output format.
-type ConditionalLint = fn(&[String]) -> Lint;
+type LintBuilder = fn(&[String]) -> Lint;
 
 /// Newtype wrapper around [`Result<LintFnSuccess, LintFnError>`].
 ///
@@ -330,7 +330,7 @@ enum LintFnSuccess {
 /// extension. Otherwise, returns [`LINT_NO_OP`].
 ///
 /// # Arguments
-/// - `changes` List of changed file paths as strings.
+/// - `changed_paths` List of changed file paths as strings.
 /// - `extension` Optional file extension; if present, lint runs only if any changed file ends with it.
 /// - `lint` The [`Lint`] function to conditionally execute.
 ///
@@ -340,9 +340,9 @@ enum LintFnSuccess {
 /// # Rationale
 /// Enables efficient skipping of lints when no relevant files have changed, reducing unnecessary work while
 /// maintaining deterministic output.
-fn conditional_lint(changes: &[String], extension: Option<&str>, lint: Lint) -> Lint {
+fn build_conditional_lint(changed_paths: &[String], extension: Option<&str>, lint: Lint) -> Lint {
     match extension {
-        Some(ext) if changes.iter().any(|x| x.ends_with(ext)) => lint,
+        Some(ext) if changed_paths.iter().any(|path| path.ends_with(ext)) => lint,
         None => lint,
         _ => LINT_NO_OP,
     }
@@ -435,7 +435,7 @@ fn main() -> color_eyre::Result<()> {
     let workspace_root = ytil_system::get_workspace_root()?;
 
     let repo = ytil_git::get_repo(&workspace_root)?;
-    let changes = repo
+    let changed_paths = repo
         .statuses(None)?
         .iter()
         .filter_map(|entry| entry.path().map(str::to_string))
@@ -453,13 +453,13 @@ fn main() -> color_eyre::Result<()> {
     // Spawn all lints in parallel.
     let lints_handles: Vec<_> = lints
         .iter()
-        .map(|(lint_name, conditional_lint_fn)| {
+        .map(|(lint_name, lint_builder)| {
             (
                 lint_name,
                 std::thread::spawn({
                     let workspace_root = workspace_root.clone();
-                    let changes = changes.clone();
-                    move || run_and_report(lint_name, &workspace_root, conditional_lint_fn(&changes))
+                    let changed_paths = changed_paths.clone();
+                    move || run_and_report(lint_name, &workspace_root, lint_builder(&changed_paths))
                 }),
             )
         })
@@ -578,15 +578,15 @@ mod tests {
     }
 
     #[rstest]
-    #[case(vec!["README.md".to_string(), "src/main.rs".to_string()], None, "dummy success")]
-    #[case(vec!["README.md".to_string(), "src/main.rs".to_string()], Some(".rs"), "dummy success")]
-    #[case(vec!["README.md".to_string()], Some(".rs"), "skipped")]
-    fn conditional_lint_returns_expected_result(
-        #[case] changes: Vec<String>,
+    #[case(&["README.md".to_string(), "src/main.rs".to_string()], None, "dummy success")]
+    #[case(&["README.md".to_string(), "src/main.rs".to_string()], Some(".rs"), "dummy success")]
+    #[case(&["README.md".to_string()], Some(".rs"), "skipped")]
+    fn build_conditional_lint_returns_expected_result(
+        #[case] changed_paths: &[String],
         #[case] extension: Option<&str>,
         #[case] expected: &str,
     ) {
-        let result_lint = conditional_lint(&changes, extension, dummy_lint);
+        let result_lint = build_conditional_lint(changed_paths, extension, dummy_lint);
         let lint_result = result_lint(Path::new("/tmp"));
 
         assert2::let_assert!(Ok(LintFnSuccess::PlainMsg(msg)) = lint_result.0);
