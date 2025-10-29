@@ -37,6 +37,23 @@ use color_eyre::owo_colors::OwoColorize as _;
 use url::Url;
 use ytil_git::Branch;
 
+struct RenderableBranch(Branch);
+
+impl Deref for RenderableBranch {
+    type Target = Branch;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Display for RenderableBranch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let styled_date_time = format!("({})", self.committer_date_time());
+        write!(f, "{} {}", self.name(), styled_date_time.blue())
+    }
+}
+
 /// Interactive selection and switching of Git branches.
 ///
 /// Presents a minimal TUI listing recent local / remote branches (with redundant
@@ -57,23 +74,6 @@ fn autocomplete_git_branches() -> color_eyre::Result<()> {
         }
         Some(other) => ytil_git::switch_branch(other.name()).inspect(|()| report_branch_switch(other.name())),
         None => Ok(()),
-    }
-}
-
-struct RenderableBranch(Branch);
-
-impl Deref for RenderableBranch {
-    type Target = Branch;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl Display for RenderableBranch {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let styled_date_time = format!("({})", self.committer_date_time());
-        write!(f, "{} {}", self.name(), styled_date_time.blue())
     }
 }
 

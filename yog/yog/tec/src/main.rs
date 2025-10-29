@@ -40,111 +40,6 @@ use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt as _;
 use ytil_system::RmFilesOutcome;
 
-/// Function pointer type for a single lint command invocation.
-///
-/// Encapsulates a non-mutating check or (optionally) mutating fix routine executed against the workspace root.
-///
-/// # Arguments
-/// - `&Path` Workspace root directory the lint operates within.
-///
-/// # Returns
-/// - `Ok`([`LintFnSuccess`]) on success, providing either command output or a plain message.
-/// - `Err`([`LintFnError`]) if process spawning or execution fails.
-///
-/// # Rationale
-/// Using a simple function pointer keeps dynamic dispatch trivial and avoids boxing trait objects; closures remain
-/// zero-cost and we can compose slices of `(name, LintFn)` without lifetime complications.
-///
-/// # Future Work
-/// - Consider an enum encapsulating richer metadata (e.g. auto-fix capability flag) to filter sets without duplicating
-///   entries across lists.
-type Lint = fn(&Path) -> LintFnResult;
-
-type ConditionalLint = fn(&[String]) -> Lint;
-
-fn conditional_lint(changes: &[String], extension: Option<&str>, lint: Lint) -> Lint {
-    match extension {
-        Some(ext) if changes.iter().any(|x| x.ends_with(ext)) => lint,
-        None => lint,
-        _ => |_| LintFnResult(Ok(LintFnSuccess::PlainMsg(format!("{}\n", "skipped".bold())))),
-    }
-}
-
-/// Newtype wrapper around [`Result<LintFnSuccess, LintFnError>`].
-///
-/// Provides ergonomic conversions from [`RmFilesOutcome`] and [`Deref`] access to the inner result.
-///
-/// # Rationale
-/// Wraps the result to enable custom conversions without orphan rule violations.
-struct LintFnResult(Result<LintFnSuccess, LintFnError>);
-
-impl Deref for LintFnResult {
-    type Target = Result<LintFnSuccess, LintFnError>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl From<Result<LintFnSuccess, LintFnError>> for LintFnResult {
-    fn from(value: Result<LintFnSuccess, LintFnError>) -> Self {
-        Self(value)
-    }
-}
-
-/// Converts [`RmFilesOutcome`] into [`LintFnResult`] for uniform lint result handling.
-///
-/// Builds a formatted message listing removed files and errors, then wraps in success if no errors or failure
-/// otherwise.
-///
-/// # Rationale
-/// Enables treating file removal operations as lint results without duplicating conversion logic.
-impl From<RmFilesOutcome> for LintFnResult {
-    fn from(value: RmFilesOutcome) -> Self {
-        let mut msg = String::new();
-        for path in value.removed {
-            let _ = writeln!(&mut msg, "{} {}", "Removed".green(), path.display());
-        }
-        for (path, error) in &value.errors {
-            let _ = writeln!(
-                &mut msg,
-                "{} path{} error={}",
-                "Error removing".red(),
-                path.as_ref().map(|p| format!(" {:?}", p.display())).unwrap_or_default(),
-                format!("{error}").red()
-            );
-        }
-        if value.errors.is_empty() {
-            Self(Ok(LintFnSuccess::PlainMsg(msg)))
-        } else {
-            Self(Err(LintFnError::PlainMsg(msg)))
-        }
-    }
-}
-
-/// Error type for lint function execution failures.
-///
-/// # Errors
-/// - [`LintFnError::CmdError`] Process spawning or execution failure.
-/// - [`LintFnError::PlainMsg`] Generic error with a plain message string.
-#[derive(Debug, thiserror::Error)]
-enum LintFnError {
-    #[error(transparent)]
-    CmdError(#[from] CmdError),
-    #[error("{0}")]
-    PlainMsg(String),
-}
-
-/// Success result from lint function execution.
-///
-/// # Variants
-/// - [`LintFnSuccess::CmdOutput`] Standard command output with status and streams.
-/// - [`LintFnSuccess::PlainMsg`] Simple string message (currently unused).
-enum LintFnSuccess {
-    CmdOutput(Output),
-    PlainMsg(String),
-}
-
 /// Shared `clippy` lint definition.
 ///
 /// Performs a full workspace lint across all targets and features, denying any warnings (`-D warnings`). This is
@@ -312,6 +207,111 @@ const LINTS_FIX: &[(&str, ConditionalLint)] = &[
         })
     }),
 ];
+
+/// Function pointer type for a single lint command invocation.
+///
+/// Encapsulates a non-mutating check or (optionally) mutating fix routine executed against the workspace root.
+///
+/// # Arguments
+/// - `&Path` Workspace root directory the lint operates within.
+///
+/// # Returns
+/// - `Ok`([`LintFnSuccess`]) on success, providing either command output or a plain message.
+/// - `Err`([`LintFnError`]) if process spawning or execution fails.
+///
+/// # Rationale
+/// Using a simple function pointer keeps dynamic dispatch trivial and avoids boxing trait objects; closures remain
+/// zero-cost and we can compose slices of `(name, LintFn)` without lifetime complications.
+///
+/// # Future Work
+/// - Consider an enum encapsulating richer metadata (e.g. auto-fix capability flag) to filter sets without duplicating
+///   entries across lists.
+type Lint = fn(&Path) -> LintFnResult;
+
+type ConditionalLint = fn(&[String]) -> Lint;
+
+/// Newtype wrapper around [`Result<LintFnSuccess, LintFnError>`].
+///
+/// Provides ergonomic conversions from [`RmFilesOutcome`] and [`Deref`] access to the inner result.
+///
+/// # Rationale
+/// Wraps the result to enable custom conversions without orphan rule violations.
+struct LintFnResult(Result<LintFnSuccess, LintFnError>);
+
+impl Deref for LintFnResult {
+    type Target = Result<LintFnSuccess, LintFnError>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<Result<LintFnSuccess, LintFnError>> for LintFnResult {
+    fn from(value: Result<LintFnSuccess, LintFnError>) -> Self {
+        Self(value)
+    }
+}
+
+/// Converts [`RmFilesOutcome`] into [`LintFnResult`] for uniform lint result handling.
+///
+/// Builds a formatted message listing removed files and errors, then wraps in success if no errors or failure
+/// otherwise.
+///
+/// # Rationale
+/// Enables treating file removal operations as lint results without duplicating conversion logic.
+impl From<RmFilesOutcome> for LintFnResult {
+    fn from(value: RmFilesOutcome) -> Self {
+        let mut msg = String::new();
+        for path in value.removed {
+            let _ = writeln!(&mut msg, "{} {}", "Removed".green(), path.display());
+        }
+        for (path, error) in &value.errors {
+            let _ = writeln!(
+                &mut msg,
+                "{} path{} error={}",
+                "Error removing".red(),
+                path.as_ref().map(|p| format!(" {:?}", p.display())).unwrap_or_default(),
+                format!("{error}").red()
+            );
+        }
+        if value.errors.is_empty() {
+            Self(Ok(LintFnSuccess::PlainMsg(msg)))
+        } else {
+            Self(Err(LintFnError::PlainMsg(msg)))
+        }
+    }
+}
+
+/// Error type for lint function execution failures.
+///
+/// # Errors
+/// - [`LintFnError::CmdError`] Process spawning or execution failure.
+/// - [`LintFnError::PlainMsg`] Generic error with a plain message string.
+#[derive(Debug, thiserror::Error)]
+enum LintFnError {
+    #[error(transparent)]
+    CmdError(#[from] CmdError),
+    #[error("{0}")]
+    PlainMsg(String),
+}
+
+/// Success result from lint function execution.
+///
+/// # Variants
+/// - [`LintFnSuccess::CmdOutput`] Standard command output with status and streams.
+/// - [`LintFnSuccess::PlainMsg`] Simple string message (currently unused).
+enum LintFnSuccess {
+    CmdOutput(Output),
+    PlainMsg(String),
+}
+
+fn conditional_lint(changes: &[String], extension: Option<&str>, lint: Lint) -> Lint {
+    match extension {
+        Some(ext) if changes.iter().any(|x| x.ends_with(ext)) => lint,
+        None => lint,
+        _ => |_| LintFnResult(Ok(LintFnSuccess::PlainMsg(format!("{}\n", "skipped".bold())))),
+    }
+}
 
 /// Run a single lint, measure its duration, and report immediately.
 ///
