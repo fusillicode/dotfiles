@@ -325,3 +325,31 @@ fn get_pos(mark: &str) -> color_eyre::Result<Pos> {
         })
         .map_err(|error| eyre!("get_pos failed | mark={mark:?} error={error:#?}"))
 }
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case::self_has_lower_line(pos(0, 5), pos(1, 0), pos(0, 5), pos(1, 0))]
+    #[case::self_has_higher_line(pos(2, 0), pos(1, 5), pos(1, 5), pos(2, 0))]
+    #[case::same_line_self_lower_col(pos(1, 0), pos(1, 5), pos(1, 0), pos(1, 5))]
+    #[case::same_line_self_higher_col(pos(1, 10), pos(1, 5), pos(1, 5), pos(1, 10))]
+    #[case::positions_identical(pos(1, 5), pos(1, 5), pos(1, 5), pos(1, 5))]
+    fn pos_sort_returns_expected_order(
+        #[case] self_pos: Pos,
+        #[case] other_pos: Pos,
+        #[case] expected_first: Pos,
+        #[case] expected_second: Pos,
+    ) {
+        let (first, second) = self_pos.sort(other_pos);
+        pretty_assertions::assert_eq!(first, expected_first);
+        pretty_assertions::assert_eq!(second, expected_second);
+    }
+
+    fn pos(lnum: usize, col: usize) -> Pos {
+        Pos { buf_id: 1, lnum, col }
+    }
+}
