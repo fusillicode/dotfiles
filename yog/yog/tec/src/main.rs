@@ -40,31 +40,6 @@ use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt as _;
 use ytil_system::RmFilesOutcome;
 
-/// Shared `clippy` lint definition.
-///
-/// Performs a full workspace lint across all targets and features, denying any warnings (`-D warnings`). This is
-/// intentionally strict so CI / hooks surface new warnings immediately rather than allowing gradual drift.
-///
-/// # Rationale
-/// Centralizing the closure avoids duplication between [`LINTS_CHECK`] and [`LINTS_FIX`] and makes future flag
-/// adjustments (adding `--tests`, changing deny set) a single-line change.
-///
-/// # Performance
-/// `cargo clippy` can be relatively expensive versus formatting or sorting tools. Placing it first provides early
-/// feedback for a potentially longest-running lint while other shorter lints execute concurrently.
-const CLIPPY: (&str, ConditionalLint) = ("clippy", |changes| {
-    conditional_lint(changes, Some(".rs"), |path| {
-        LintFnResult::from(
-            Command::new("cargo")
-                .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
-                .current_dir(path)
-                .exec()
-                .map(LintFnSuccess::CmdOutput)
-                .map_err(LintFnError::from),
-        )
-    })
-});
-
 /// Workspace lint check set.
 ///
 /// Contains non-mutating lints safe for fast verification in hooks / CI:
@@ -78,9 +53,20 @@ const CLIPPY: (&str, ConditionalLint) = ("clippy", |changes| {
 /// - Prints logical name, duration (`time=<Duration>`), status code, and stripped stdout or error.
 /// - Aggregate process exit code is 1 if any lint fails (non-zero status or panic), else 0.
 const LINTS_CHECK: &[(&str, ConditionalLint)] = &[
-    CLIPPY,
-    ("cargo fmt", |changes| {
-        conditional_lint(changes, Some(".rs"), |path| {
+    ("clippy", |_| {
+        |path| {
+            LintFnResult::from(
+                Command::new("cargo")
+                    .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
+                    .current_dir(path)
+                    .exec()
+                    .map(LintFnSuccess::CmdOutput)
+                    .map_err(LintFnError::from),
+            )
+        }
+    }),
+    ("cargo fmt", |_| {
+        |path| {
             LintFnResult::from(
                 Command::new("cargo")
                     .args(["fmt", "--check"])
@@ -89,10 +75,10 @@ const LINTS_CHECK: &[(&str, ConditionalLint)] = &[
                     .map(LintFnSuccess::CmdOutput)
                     .map_err(LintFnError::from),
             )
-        })
+        }
     }),
-    ("cargo-machete", |changes| {
-        conditional_lint(changes, Some(".rs"), |path| {
+    ("cargo-machete", |_| {
+        |path| {
             LintFnResult::from(
                 // Using `cargo-machete` rather than `cargo machete` to avoid issues caused by passing the
                 // `path`.
@@ -102,10 +88,10 @@ const LINTS_CHECK: &[(&str, ConditionalLint)] = &[
                     .map(LintFnSuccess::CmdOutput)
                     .map_err(LintFnError::from),
             )
-        })
+        }
     }),
-    ("cargo-sort", |changes| {
-        conditional_lint(changes, Some(".rs"), |path| {
+    ("cargo-sort", |_| {
+        |path| {
             LintFnResult::from(
                 Command::new("cargo-sort")
                     .args(["--workspace", "--check", "--check-format"])
@@ -114,10 +100,10 @@ const LINTS_CHECK: &[(&str, ConditionalLint)] = &[
                     .map(LintFnSuccess::CmdOutput)
                     .map_err(LintFnError::from),
             )
-        })
+        }
     }),
-    ("cargo-sort-derives", |changes| {
-        conditional_lint(changes, Some(".rs"), |path| {
+    ("cargo-sort-derives", |_| {
+        |path| {
             LintFnResult::from(
                 Command::new("cargo-sort-derives")
                     .args(["sort-derives", "--check"])
@@ -126,7 +112,7 @@ const LINTS_CHECK: &[(&str, ConditionalLint)] = &[
                     .map(LintFnSuccess::CmdOutput)
                     .map_err(LintFnError::from),
             )
-        })
+        }
     }),
 ];
 
@@ -148,7 +134,18 @@ const LINTS_CHECK: &[(&str, ConditionalLint)] = &[
 /// - Deterministic ordered output aids CI log diffing while retaining concurrency for speed.
 /// - Mirrors structure of [`LINTS_CHECK`] for predictable maintenance (additions require updating both tables).
 const LINTS_FIX: &[(&str, ConditionalLint)] = &[
-    CLIPPY,
+    ("clippy", |changes| {
+        conditional_lint(changes, Some(".rs"), |path| {
+            LintFnResult::from(
+                Command::new("cargo")
+                    .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
+                    .current_dir(path)
+                    .exec()
+                    .map(LintFnSuccess::CmdOutput)
+                    .map_err(LintFnError::from),
+            )
+        })
+    }),
     ("cargo fmt", |changes| {
         conditional_lint(changes, Some(".rs"), |path| {
             LintFnResult::from(
