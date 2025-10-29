@@ -63,12 +63,10 @@ type LintFn = fn(&Path) -> LintFnResult;
 type ConditionalLintFn = fn(&[String]) -> LintFn;
 
 fn conditional_lint(changes: &[String], ext: Option<&str>, lint: LintFn) -> LintFn {
-    if let Some(ext) = ext
-        && changes.iter().any(|x| x.ends_with(ext))
-    {
-        lint
-    } else {
-        |_| LintFnResult(Ok(LintFnSuccess::PlainMsg("skipped".to_string())))
+    match ext {
+        Some(ext) if changes.iter().any(|x| x.ends_with(ext)) => lint,
+        None => lint,
+        _ => |_| LintFnResult(Ok(LintFnSuccess::PlainMsg("skipped".to_string()))),
     }
 }
 
