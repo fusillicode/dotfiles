@@ -1965,6 +1965,7 @@ dependencies = [
  "assert2",
  "color-eyre",
  "pretty_assertions",
+ "rstest",
  "thiserror 2.0.17",
  "ytil_cmd",
  "ytil_git",

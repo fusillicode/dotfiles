@@ -205,6 +205,15 @@ const LINTS_FIX: &[(&str, ConditionalLint)] = &[
     }),
 ];
 
+/// No-operation lint that reports "skipped" status.
+///
+/// Used by [`conditional_lint`] when a lint should be skipped due to no relevant file changes.
+///
+/// # Rationale
+/// Provides a reusable constant for skipped lints, avoiding duplication of the skip logic and ensuring consistent
+/// output.
+const LINT_NO: Lint = |_| LintFnResult(Ok(LintFnSuccess::PlainMsg(format!("{}\n", "skipped".bold()))));
+
 /// Function pointer type for a single lint command invocation.
 ///
 /// Encapsulates a non-mutating check or (optionally) mutating fix routine executed against the workspace root.
@@ -302,11 +311,27 @@ enum LintFnSuccess {
     PlainMsg(String),
 }
 
+/// Conditionally returns the supplied lint or [`LINT_NO`] based on file changes.
+///
+/// Returns the provided lint function if no extension filter is set or if any changed file matches the specified
+/// extension. Otherwise, returns [`LINT_NO`].
+///
+/// # Arguments
+/// - `changes` List of changed file paths as strings.
+/// - `extension` Optional file extension; if present, lint runs only if any changed file ends with it.
+/// - `lint` The lint function to conditionally execute.
+///
+/// # Returns
+/// - [`Lint`] function that either executes the provided lint or reports skipped status.
+///
+/// # Rationale
+/// Enables efficient skipping of lints when no relevant files have changed, reducing unnecessary work while
+/// maintaining deterministic output.
 fn conditional_lint(changes: &[String], extension: Option<&str>, lint: Lint) -> Lint {
     match extension {
         Some(ext) if changes.iter().any(|x| x.ends_with(ext)) => lint,
         None => lint,
-        _ => |_| LintFnResult(Ok(LintFnSuccess::PlainMsg(format!("{}\n", "skipped".bold())))),
+        _ => LINT_NO,
     }
 }
 
@@ -458,6 +483,8 @@ mod tests {
     use std::io::ErrorKind;
     use std::path::PathBuf;
 
+    use rstest::rstest;
+
     use super::*;
 
     #[test]
@@ -535,5 +562,26 @@ mod tests {
         assert!(msg.contains("Error removing"));
         assert!(msg.contains("\"badfile.txt\""));
         assert!(msg.contains("some error"));
+    }
+
+    #[rstest]
+    #[case(vec!["README.md".to_string(), "src/main.rs".to_string()], None, "dummy success")]
+    #[case(vec!["README.md".to_string(), "src/main.rs".to_string()], Some(".rs"), "dummy success")]
+    #[case(vec!["README.md".to_string()], Some(".rs"), "skipped")]
+    fn conditional_lint_returns_expected_result(
+        #[case] changes: Vec<String>,
+        #[case] extension: Option<&str>,
+        #[case] expected: &str,
+    ) {
+        let result_lint = conditional_lint(&changes, extension, dummy_lint);
+        let lint_result = result_lint(Path::new("/tmp"));
+
+        assert2::let_assert!(Ok(LintFnSuccess::PlainMsg(msg)) = lint_result.0);
+        // Using contains instead of exact match because [`NO_OP`] [`Lint`] returns a colorized [`String`].
+        assert!(msg.contains(expected));
+    }
+
+    fn dummy_lint(_path: &Path) -> LintFnResult {
+        LintFnResult(Ok(LintFnSuccess::PlainMsg("dummy success".to_string())))
     }
 }
