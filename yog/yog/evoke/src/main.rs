@@ -134,6 +134,8 @@ fn main() -> color_eyre::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
     use super::*;
 
     #[test]
@@ -155,5 +157,16 @@ mod tests {
         let mut input: Vec<usize> = vec![];
         assert!(!drop_element(&mut input, &3));
         assert!(input.is_empty());
+    }
+
+    #[rstest]
+    #[case(PathBuf::from("/home/user/docs"), 0, PathBuf::from("/home/user/docs"))]
+    #[case(PathBuf::from("/home/user/docs"), 1, PathBuf::from("/home/user"))]
+    #[case(PathBuf::from("/home/user"), 5, PathBuf::from("/"))]
+    #[case(PathBuf::from("/"), 1, PathBuf::from("/"))]
+    #[case(PathBuf::new(), 1, PathBuf::new())]
+    fn remove_last_n_dirs_works(#[case] mut initial: PathBuf, #[case] n: usize, #[case] expected: PathBuf) {
+        remove_last_n_dirs(&mut initial, n);
+        pretty_assertions::assert_eq!(initial, expected);
     }
 }

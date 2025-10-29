@@ -569,6 +569,8 @@ name = "evoke"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
+ "pretty_assertions",
+ "rstest",
  "ytil_cmd",
  "ytil_system",
 ]
