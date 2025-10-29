@@ -19,6 +19,19 @@ use color_eyre::eyre::eyre;
 use ytil_editor::Editor;
 use ytil_hx::HxStatusLine;
 
+/// Formats Helix status line into file path with line number.
+///
+/// # Errors
+/// - UTF-8 conversion fails.
+fn format_hx_status_line(hx_status_line: &HxStatusLine) -> color_eyre::Result<String> {
+    let file_path = hx_status_line
+        .file_path
+        .to_str()
+        .ok_or_else(|| eyre!("cannot convert path to str | path={:#?}", hx_status_line.file_path))?;
+
+    Ok(format!("{file_path}:{}", hx_status_line.position.line))
+}
+
 /// Copy current Helix file path with line number to clipboard.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
@@ -47,17 +60,4 @@ fn main() -> color_eyre::Result<()> {
     ytil_system::cp_to_system_clipboard(&mut format_hx_status_line(&hx_status_line)?.as_bytes())?;
 
     Ok(())
-}
-
-/// Formats Helix status line into file path with line number.
-///
-/// # Errors
-/// - UTF-8 conversion fails.
-fn format_hx_status_line(hx_status_line: &HxStatusLine) -> color_eyre::Result<String> {
-    let file_path = hx_status_line
-        .file_path
-        .to_str()
-        .ok_or_else(|| eyre!("cannot convert path to str | path={:#?}", hx_status_line.file_path))?;
-
-    Ok(format!("{file_path}:{}", hx_status_line.position.line))
 }

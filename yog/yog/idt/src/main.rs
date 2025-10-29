@@ -65,6 +65,52 @@ use crate::installers::yaml_language_server::YamlLanguageServer;
 mod downloaders;
 mod installers;
 
+/// Summarize installer thread outcomes; collect failing bin names.
+///
+/// # Arguments
+/// - `installers_res` Slice of (bin name, join result) pairs. Outer [`std::thread::Result`] indicates panic; inner
+///   [`color_eyre::Result<()>`] is the installer's logical result (`Ok(())` success, `Err(_)` failure).
+///
+/// # Returns
+/// - `Ok(())` when all installers completed without panic and returned `Ok(())`.
+/// - `Err(Vec<&str>)` containing bin names that either panicked or returned an error. The caller emits the process
+///   failure exit and optional summary logging.
+///
+/// # Errors
+/// - Does not construct a rich error enum; instead returns failing bin names. Individual installers are expected to
+///   have already printed detailed stderr output.
+/// - A thread panic is logged immediately and its bin name added to the returned list.
+///
+/// # Rationale
+/// - Simple bin-name list keeps aggregation lightweight for CI scripting.
+/// - Delegates detailed formatting to installers; central function only normalizes aggregation.
+/// - Easier to extend with JSON output later (convert list directly).
+fn report<'a>(
+    installers_res: &'a [(&'a str, std::thread::Result<color_eyre::Result<()>>)],
+) -> Result<(), Vec<&'a str>> {
+    let mut errors_bins = vec![];
+
+    for (bin_name, result) in installers_res {
+        match result {
+            Err(error) => {
+                eprintln!(
+                    "{} installer thread panicked error={}",
+                    bin_name.red(), // removed bold
+                    format!("{error:#?}").red()
+                );
+                errors_bins.push(*bin_name);
+            }
+            Ok(Err(_)) => errors_bins.push(bin_name),
+            Ok(Ok(())) => {}
+        }
+    }
+
+    if errors_bins.is_empty() {
+        return Ok(());
+    }
+    Err(errors_bins)
+}
+
 /// Install language servers, linters, formatters, and developer helpers concurrently.
 #[allow(clippy::too_many_lines)]
 fn main() -> color_eyre::Result<()> {
@@ -236,50 +282,4 @@ fn main() -> color_eyre::Result<()> {
     ytil_system::rm_dead_symlinks(bin_dir)?;
 
     Ok(())
-}
-
-/// Summarize installer thread outcomes; collect failing bin names.
-///
-/// # Arguments
-/// - `installers_res` Slice of (bin name, join result) pairs. Outer [`std::thread::Result`] indicates panic; inner
-///   [`color_eyre::Result<()>`] is the installer's logical result (`Ok(())` success, `Err(_)` failure).
-///
-/// # Returns
-/// - `Ok(())` when all installers completed without panic and returned `Ok(())`.
-/// - `Err(Vec<&str>)` containing bin names that either panicked or returned an error. The caller emits the process
-///   failure exit and optional summary logging.
-///
-/// # Errors
-/// - Does not construct a rich error enum; instead returns failing bin names. Individual installers are expected to
-///   have already printed detailed stderr output.
-/// - A thread panic is logged immediately and its bin name added to the returned list.
-///
-/// # Rationale
-/// - Simple bin-name list keeps aggregation lightweight for CI scripting.
-/// - Delegates detailed formatting to installers; central function only normalizes aggregation.
-/// - Easier to extend with JSON output later (convert list directly).
-fn report<'a>(
-    installers_res: &'a [(&'a str, std::thread::Result<color_eyre::Result<()>>)],
-) -> Result<(), Vec<&'a str>> {
-    let mut errors_bins = vec![];
-
-    for (bin_name, result) in installers_res {
-        match result {
-            Err(error) => {
-                eprintln!(
-                    "{} installer thread panicked error={}",
-                    bin_name.red(), // removed bold
-                    format!("{error:#?}").red()
-                );
-                errors_bins.push(*bin_name);
-            }
-            Ok(Err(_)) => errors_bins.push(bin_name),
-            Ok(Ok(())) => {}
-        }
-    }
-
-    if errors_bins.is_empty() {
-        return Ok(());
-    }
-    Err(errors_bins)
 }

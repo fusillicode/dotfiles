@@ -31,62 +31,6 @@ use ytil_hx::HxStatusLine;
 use ytil_wezterm::WeztermPane;
 use ytil_wezterm::get_sibling_pane_with_titles;
 
-/// Copy GitHub URL (file/line/col) for the current Helix buffer to clipboard.
-fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
-
-    let hx_pane = get_sibling_pane_with_titles(
-        &ytil_wezterm::get_all_panes(&[])?,
-        ytil_wezterm::get_current_pane_id()?,
-        Editor::Hx.pane_titles(),
-    )?;
-
-    let wezterm_pane_text = String::from_utf8(
-        Command::new("wezterm")
-            .args(["cli", "get-text", "--pane-id", &hx_pane.pane_id.to_string()])
-            .output()?
-            .stdout,
-    )?;
-
-    let hx_status_line = HxStatusLine::from_str(wezterm_pane_text.lines().nth_back(1).ok_or_else(|| {
-        eyre!(
-            "missing hx status line | pane_id={} text={wezterm_pane_text:#?}",
-            hx_pane.pane_id
-        )
-    })?)?;
-
-    let git_repo_root_path = Arc::new(ytil_git::get_repo_root(&ytil_git::get_repo(&hx_status_line.file_path)?));
-
-    let get_git_current_branch =
-        std::thread::spawn(move || -> color_eyre::Result<String> { ytil_git::get_current_branch() });
-
-    let git_repo_root_path_clone = git_repo_root_path.clone();
-    let get_github_repo_url = std::thread::spawn(move || -> color_eyre::Result<Url> {
-        match &ytil_github::get_repo_urls(&git_repo_root_path_clone)?.as_slice() {
-            &[] => bail!("missing github repo url | repo_path={git_repo_root_path_clone:#?}"),
-            &[one] => Ok(one.clone()),
-            multi => {
-                bail!("multiple github repo urls | urls={multi:#?} repo_path={git_repo_root_path_clone:#?}")
-            }
-        }
-    });
-
-    // `build_file_path_relative_to_git_repo_root` are called before the threads `join` to let them work in the
-    // background as much as possible
-    let hx_cursor_absolute_file_path = build_hx_cursor_absolute_file_path(&hx_status_line.file_path, &hx_pane)?;
-
-    let github_link = build_github_link(
-        &ytil_system::join(get_github_repo_url)?,
-        &ytil_system::join(get_git_current_branch)?,
-        hx_cursor_absolute_file_path.strip_prefix(git_repo_root_path.as_ref())?,
-        &hx_status_line.position,
-    )?;
-
-    ytil_system::cp_to_system_clipboard(&mut github_link.as_str().as_bytes())?;
-
-    Ok(())
-}
-
 /// Builds absolute file path for Helix cursor position.
 ///
 /// # Errors
@@ -141,6 +85,62 @@ fn build_github_link<'a>(
     )));
 
     Ok(github_link)
+}
+
+/// Copy GitHub URL (file/line/col) for the current Helix buffer to clipboard.
+fn main() -> color_eyre::Result<()> {
+    color_eyre::install()?;
+
+    let hx_pane = get_sibling_pane_with_titles(
+        &ytil_wezterm::get_all_panes(&[])?,
+        ytil_wezterm::get_current_pane_id()?,
+        Editor::Hx.pane_titles(),
+    )?;
+
+    let wezterm_pane_text = String::from_utf8(
+        Command::new("wezterm")
+            .args(["cli", "get-text", "--pane-id", &hx_pane.pane_id.to_string()])
+            .output()?
+            .stdout,
+    )?;
+
+    let hx_status_line = HxStatusLine::from_str(wezterm_pane_text.lines().nth_back(1).ok_or_else(|| {
+        eyre!(
+            "missing hx status line | pane_id={} text={wezterm_pane_text:#?}",
+            hx_pane.pane_id
+        )
+    })?)?;
+
+    let git_repo_root_path = Arc::new(ytil_git::get_repo_root(&ytil_git::get_repo(&hx_status_line.file_path)?));
+
+    let get_git_current_branch =
+        std::thread::spawn(move || -> color_eyre::Result<String> { ytil_git::get_current_branch() });
+
+    let git_repo_root_path_clone = git_repo_root_path.clone();
+    let get_github_repo_url = std::thread::spawn(move || -> color_eyre::Result<Url> {
+        match &ytil_github::get_repo_urls(&git_repo_root_path_clone)?.as_slice() {
+            &[] => bail!("missing github repo url | repo_path={git_repo_root_path_clone:#?}"),
+            &[one] => Ok(one.clone()),
+            multi => {
+                bail!("multiple github repo urls | urls={multi:#?} repo_path={git_repo_root_path_clone:#?}")
+            }
+        }
+    });
+
+    // `build_file_path_relative_to_git_repo_root` are called before the threads `join` to let them work in the
+    // background as much as possible
+    let hx_cursor_absolute_file_path = build_hx_cursor_absolute_file_path(&hx_status_line.file_path, &hx_pane)?;
+
+    let github_link = build_github_link(
+        &ytil_system::join(get_github_repo_url)?,
+        &ytil_system::join(get_git_current_branch)?,
+        hx_cursor_absolute_file_path.strip_prefix(git_repo_root_path.as_ref())?,
+        &hx_status_line.position,
+    )?;
+
+    ytil_system::cp_to_system_clipboard(&mut github_link.as_str().as_bytes())?;
+
+    Ok(())
 }
 
 #[cfg(test)]

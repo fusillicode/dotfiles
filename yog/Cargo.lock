@@ -569,6 +569,8 @@ name = "evoke"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
+ "pretty_assertions",
+ "rstest",
  "ytil_cmd",
  "ytil_system",
 ]
@@ -1965,8 +1967,10 @@ dependencies = [
  "assert2",
  "color-eyre",
  "pretty_assertions",
+ "rstest",
  "thiserror 2.0.17",
  "ytil_cmd",
+ "ytil_git",
  "ytil_system",
 ]
 
