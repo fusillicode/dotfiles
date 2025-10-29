@@ -1967,6 +1967,7 @@ dependencies = [
  "pretty_assertions",
  "thiserror 2.0.17",
  "ytil_cmd",
+ "ytil_git",
  "ytil_system",
 ]
 

@@ -60,6 +60,18 @@ use ytil_system::RmFilesOutcome;
 ///   entries across lists.
 type LintFn = fn(&Path) -> LintFnResult;
 
+type ConditionalLintFn = fn(&[String]) -> LintFn;
+
+fn conditional_lint(changes: &[String], ext: Option<&str>, lint: LintFn) -> LintFn {
+    if let Some(ext) = ext
+        && changes.iter().any(|x| x.ends_with(ext))
+    {
+        lint
+    } else {
+        |_| LintFnResult(Ok(LintFnSuccess::PlainMsg("skipped".to_string())))
+    }
+}
+
 /// Newtype wrapper around [`Result<LintFnSuccess, LintFnError>`].
 ///
 /// Provides ergonomic conversions from [`RmFilesOutcome`] and [`Deref`] access to the inner result.
@@ -147,15 +159,17 @@ enum LintFnSuccess {
 /// # Performance
 /// `cargo clippy` can be relatively expensive versus formatting or sorting tools. Placing it first provides early
 /// feedback for a potentially longest-running lint while other shorter lints execute concurrently.
-const CLIPPY: (&str, LintFn) = ("clippy", |path| {
-    LintFnResult::from(
-        Command::new("cargo")
-            .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
-            .current_dir(path)
-            .exec()
-            .map(LintFnSuccess::CmdOutput)
-            .map_err(LintFnError::from),
-    )
+const CLIPPY: (&str, ConditionalLintFn) = ("clippy", |changes| {
+    conditional_lint(changes, Some(".rs"), |path| {
+        LintFnResult::from(
+            Command::new("cargo")
+                .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
+                .current_dir(path)
+                .exec()
+                .map(LintFnSuccess::CmdOutput)
+                .map_err(LintFnError::from),
+        )
+    })
 });
 
 /// Workspace lint check set.
@@ -170,48 +184,56 @@ const CLIPPY: (&str, LintFn) = ("clippy", |path| {
 /// Output contract:
 /// - Prints logical name, duration (`time=<Duration>`), status code, and stripped stdout or error.
 /// - Aggregate process exit code is 1 if any lint fails (non-zero status or panic), else 0.
-const LINTS_CHECK: &[(&str, LintFn)] = &[
+const LINTS_CHECK: &[(&str, ConditionalLintFn)] = &[
     CLIPPY,
-    ("cargo fmt", |path| {
-        LintFnResult::from(
-            Command::new("cargo")
-                .args(["fmt", "--check"])
-                .current_dir(path)
-                .exec()
-                .map(LintFnSuccess::CmdOutput)
-                .map_err(LintFnError::from),
-        )
+    ("cargo fmt", |changes| {
+        conditional_lint(changes, Some(".rs"), |path| {
+            LintFnResult::from(
+                Command::new("cargo")
+                    .args(["fmt", "--check"])
+                    .current_dir(path)
+                    .exec()
+                    .map(LintFnSuccess::CmdOutput)
+                    .map_err(LintFnError::from),
+            )
+        })
     }),
-    ("cargo-machete", |path| {
-        LintFnResult::from(
-            // Using `cargo-machete` rather than `cargo machete` to avoid issues caused by passing the
-            // `path`.
-            Command::new("cargo-machete")
-                .args(["--with-metadata", &path.display().to_string()])
-                .exec()
-                .map(LintFnSuccess::CmdOutput)
-                .map_err(LintFnError::from),
-        )
+    ("cargo-machete", |changes| {
+        conditional_lint(changes, Some(".rs"), |path| {
+            LintFnResult::from(
+                // Using `cargo-machete` rather than `cargo machete` to avoid issues caused by passing the
+                // `path`.
+                Command::new("cargo-machete")
+                    .args(["--with-metadata", &path.display().to_string()])
+                    .exec()
+                    .map(LintFnSuccess::CmdOutput)
+                    .map_err(LintFnError::from),
+            )
+        })
     }),
-    ("cargo-sort", |path| {
-        LintFnResult::from(
-            Command::new("cargo-sort")
-                .args(["--workspace", "--check", "--check-format"])
-                .current_dir(path)
-                .exec()
-                .map(LintFnSuccess::CmdOutput)
-                .map_err(LintFnError::from),
-        )
+    ("cargo-sort", |changes| {
+        conditional_lint(changes, Some(".rs"), |path| {
+            LintFnResult::from(
+                Command::new("cargo-sort")
+                    .args(["--workspace", "--check", "--check-format"])
+                    .current_dir(path)
+                    .exec()
+                    .map(LintFnSuccess::CmdOutput)
+                    .map_err(LintFnError::from),
+            )
+        })
     }),
-    ("cargo-sort-derives", |path| {
-        LintFnResult::from(
-            Command::new("cargo-sort-derives")
-                .args(["sort-derives", "--check"])
-                .current_dir(path)
-                .exec()
-                .map(LintFnSuccess::CmdOutput)
-                .map_err(LintFnError::from),
-        )
+    ("cargo-sort-derives", |changes| {
+        conditional_lint(changes, Some(".rs"), |path| {
+            LintFnResult::from(
+                Command::new("cargo-sort-derives")
+                    .args(["sort-derives", "--check"])
+                    .current_dir(path)
+                    .exec()
+                    .map(LintFnSuccess::CmdOutput)
+                    .map_err(LintFnError::from),
+            )
+        })
     }),
 ];
 
@@ -232,54 +254,64 @@ const LINTS_CHECK: &[(&str, LintFn)] = &[
 /// - Focused mutation set avoids accidentally introducing changes via check-only tools.
 /// - Deterministic ordered output aids CI log diffing while retaining concurrency for speed.
 /// - Mirrors structure of [`LINTS_CHECK`] for predictable maintenance (additions require updating both tables).
-const LINTS_FIX: &[(&str, LintFn)] = &[
+const LINTS_FIX: &[(&str, ConditionalLintFn)] = &[
     CLIPPY,
-    ("cargo fmt", |path| {
-        LintFnResult::from(
-            Command::new("cargo")
-                .args(["fmt"])
-                .current_dir(path)
-                .exec()
-                .map(LintFnSuccess::CmdOutput)
-                .map_err(LintFnError::from),
-        )
+    ("cargo fmt", |changes| {
+        conditional_lint(changes, Some(".rs"), |path| {
+            LintFnResult::from(
+                Command::new("cargo")
+                    .args(["fmt"])
+                    .current_dir(path)
+                    .exec()
+                    .map(LintFnSuccess::CmdOutput)
+                    .map_err(LintFnError::from),
+            )
+        })
     }),
-    ("cargo-machete", |path| {
-        LintFnResult::from(
-            Command::new("cargo-machete")
-                .args(["--fix", "--with-metadata", &path.display().to_string()])
-                .exec()
-                .map(LintFnSuccess::CmdOutput)
-                .map_err(LintFnError::from),
-        )
+    ("cargo-machete", |changes| {
+        conditional_lint(changes, Some(".rs"), |path| {
+            LintFnResult::from(
+                Command::new("cargo-machete")
+                    .args(["--fix", "--with-metadata", &path.display().to_string()])
+                    .exec()
+                    .map(LintFnSuccess::CmdOutput)
+                    .map_err(LintFnError::from),
+            )
+        })
     }),
-    ("cargo-sort", |path| {
-        LintFnResult::from(
-            Command::new("cargo-sort")
-                .args(["--workspace"])
-                .current_dir(path)
-                .exec()
-                .map(LintFnSuccess::CmdOutput)
-                .map_err(LintFnError::from),
-        )
+    ("cargo-sort", |changes| {
+        conditional_lint(changes, Some(".rs"), |path| {
+            LintFnResult::from(
+                Command::new("cargo-sort")
+                    .args(["--workspace"])
+                    .current_dir(path)
+                    .exec()
+                    .map(LintFnSuccess::CmdOutput)
+                    .map_err(LintFnError::from),
+            )
+        })
     }),
-    ("cargo-sort-derives", |path| {
-        LintFnResult::from(
-            Command::new("cargo-sort-derives")
-                .args(["sort-derives"])
-                .current_dir(path)
-                .exec()
-                .map(LintFnSuccess::CmdOutput)
-                .map_err(LintFnError::from),
-        )
+    ("cargo-sort-derives", |changes| {
+        conditional_lint(changes, Some(".rs"), |path| {
+            LintFnResult::from(
+                Command::new("cargo-sort-derives")
+                    .args(["sort-derives"])
+                    .current_dir(path)
+                    .exec()
+                    .map(LintFnSuccess::CmdOutput)
+                    .map_err(LintFnError::from),
+            )
+        })
     }),
-    ("rm-ds-store", |path| {
-        LintFnResult::from(ytil_system::rm_matching_files(
-            path,
-            ".DS_Store",
-            &[".git", "target"],
-            false,
-        ))
+    ("rm-ds-store", |changes| {
+        conditional_lint(changes, None, |path| {
+            LintFnResult::from(ytil_system::rm_matching_files(
+                path,
+                ".DS_Store",
+                &[".git", "target"],
+                false,
+            ))
+        })
     }),
 ];
 
@@ -298,6 +330,13 @@ fn main() -> color_eyre::Result<()> {
 
     let workspace_root = ytil_system::get_workspace_root()?;
 
+    let repo = ytil_git::get_repo(&workspace_root)?;
+    let changes = repo
+        .statuses(None)?
+        .iter()
+        .filter_map(|entry| entry.path().map(str::to_string))
+        .collect::<Vec<_>>();
+
     println!(
         "\nRunning {} {} in {}\n",
         start_msg.cyan().bold(),
@@ -310,12 +349,13 @@ fn main() -> color_eyre::Result<()> {
     // Spawn all lints in parallel.
     let lints_handles: Vec<_> = lints
         .iter()
-        .map(|(lint_name, lint_fn)| {
+        .map(|(lint_name, conditional_lint_fn)| {
             (
                 lint_name,
                 std::thread::spawn({
                     let workspace_root = workspace_root.clone();
-                    move || run_and_report(lint_name, &workspace_root, *lint_fn)
+                    let changes = changes.clone();
+                    move || run_and_report(lint_name, &workspace_root, conditional_lint_fn(&changes))
                 }),
             )
         })
