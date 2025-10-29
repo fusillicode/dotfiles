@@ -313,77 +313,6 @@ const LINTS_FIX: &[(&str, ConditionalLint)] = &[
     }),
 ];
 
-/// Run workspace lint suite concurrently (check or fix modes).
-fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
-
-    let args = ytil_system::get_args();
-    let fix_mode = args.first().is_some_and(|s| s == "--fix");
-
-    let (start_msg, lints) = if fix_mode {
-        ("lints fix", LINTS_FIX)
-    } else {
-        ("lints check", LINTS_CHECK)
-    };
-
-    let workspace_root = ytil_system::get_workspace_root()?;
-
-    let repo = ytil_git::get_repo(&workspace_root)?;
-    let changes = repo
-        .statuses(None)?
-        .iter()
-        .filter_map(|entry| entry.path().map(str::to_string))
-        .collect::<Vec<_>>();
-
-    println!(
-        "\nRunning {} {} in {}\n",
-        start_msg.cyan().bold(),
-        format!("{:#?}", lints.iter().map(|(lint, _)| lint).collect::<Vec<_>>())
-            .white()
-            .bold(),
-        workspace_root.display().to_string().white().bold(),
-    );
-
-    // Spawn all lints in parallel.
-    let lints_handles: Vec<_> = lints
-        .iter()
-        .map(|(lint_name, conditional_lint_fn)| {
-            (
-                lint_name,
-                std::thread::spawn({
-                    let workspace_root = workspace_root.clone();
-                    let changes = changes.clone();
-                    move || run_and_report(lint_name, &workspace_root, conditional_lint_fn(&changes))
-                }),
-            )
-        })
-        .collect();
-
-    let mut errors_count: i32 = 0;
-    for (_lint_name, handle) in lints_handles {
-        match handle.join().as_deref() {
-            Ok(Ok(_)) => (),
-            Ok(Err(_)) => errors_count = errors_count.saturating_add(1),
-            Err(join_err) => {
-                errors_count = errors_count.saturating_add(1);
-                eprintln!(
-                    "{} error={}",
-                    "Error joining thread".red().bold(),
-                    format!("{join_err:#?}").red()
-                );
-            }
-        }
-    }
-
-    println!(); // Cosmetic spacing.
-
-    if errors_count > 0 {
-        std::process::exit(1);
-    }
-
-    Ok(())
-}
-
 /// Run a single lint, measure its duration, and report immediately.
 ///
 /// # Arguments
@@ -453,6 +382,77 @@ fn report(lint_name: &str, lint_res: &Result<LintFnSuccess, LintFnError>, elapse
 /// - Uses stable standard library formatting (no custom scaling logic).
 fn format_timing(duration: Duration) -> String {
     format!("time={duration:?}")
+}
+
+/// Run workspace lint suite concurrently (check or fix modes).
+fn main() -> color_eyre::Result<()> {
+    color_eyre::install()?;
+
+    let args = ytil_system::get_args();
+    let fix_mode = args.first().is_some_and(|s| s == "--fix");
+
+    let (start_msg, lints) = if fix_mode {
+        ("lints fix", LINTS_FIX)
+    } else {
+        ("lints check", LINTS_CHECK)
+    };
+
+    let workspace_root = ytil_system::get_workspace_root()?;
+
+    let repo = ytil_git::get_repo(&workspace_root)?;
+    let changes = repo
+        .statuses(None)?
+        .iter()
+        .filter_map(|entry| entry.path().map(str::to_string))
+        .collect::<Vec<_>>();
+
+    println!(
+        "\nRunning {} {} in {}\n",
+        start_msg.cyan().bold(),
+        format!("{:#?}", lints.iter().map(|(lint, _)| lint).collect::<Vec<_>>())
+            .white()
+            .bold(),
+        workspace_root.display().to_string().white().bold(),
+    );
+
+    // Spawn all lints in parallel.
+    let lints_handles: Vec<_> = lints
+        .iter()
+        .map(|(lint_name, conditional_lint_fn)| {
+            (
+                lint_name,
+                std::thread::spawn({
+                    let workspace_root = workspace_root.clone();
+                    let changes = changes.clone();
+                    move || run_and_report(lint_name, &workspace_root, conditional_lint_fn(&changes))
+                }),
+            )
+        })
+        .collect();
+
+    let mut errors_count: i32 = 0;
+    for (_lint_name, handle) in lints_handles {
+        match handle.join().as_deref() {
+            Ok(Ok(_)) => (),
+            Ok(Err(_)) => errors_count = errors_count.saturating_add(1),
+            Err(join_err) => {
+                errors_count = errors_count.saturating_add(1);
+                eprintln!(
+                    "{} error={}",
+                    "Error joining thread".red().bold(),
+                    format!("{join_err:#?}").red()
+                );
+            }
+        }
+    }
+
+    println!(); // Cosmetic spacing.
+
+    if errors_count > 0 {
+        std::process::exit(1);
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
