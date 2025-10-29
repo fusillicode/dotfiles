@@ -234,6 +234,19 @@ const LINT_NO_OP: Lint = |_| LintFnResult(Ok(LintFnSuccess::PlainMsg(format!("{}
 ///   entries across lists.
 type Lint = fn(&Path) -> LintFnResult;
 
+/// Function pointer type for a conditional lint invocation.
+///
+/// Encapsulates a lint that may be skipped based on file changes, returning a [`Lint`] function to execute.
+///
+/// # Arguments
+/// - `&[String]` List of changed file paths as strings.
+///
+/// # Returns
+/// - [`Lint`] function that either runs the lint or reports skipped status.
+///
+/// # Rationale
+/// Enables efficient conditional execution of lints, avoiding unnecessary work when no relevant files have changed
+/// while maintaining consistent output format.
 type ConditionalLint = fn(&[String]) -> Lint;
 
 /// Newtype wrapper around [`Result<LintFnSuccess, LintFnError>`].
