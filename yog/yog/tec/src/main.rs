@@ -66,7 +66,7 @@ fn conditional_lint(changes: &[String], extension: Option<&str>, lint: Lint) -> 
     match extension {
         Some(ext) if changes.iter().any(|x| x.ends_with(ext)) => lint,
         None => lint,
-        _ => |_| LintFnResult(Ok(LintFnSuccess::PlainMsg("skipped".to_string()))),
+        _ => |_| LintFnResult(Ok(LintFnSuccess::PlainMsg(format!("{}\n", "skipped".bold())))),
     }
 }
 
