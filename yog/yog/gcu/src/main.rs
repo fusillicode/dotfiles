@@ -277,28 +277,28 @@ mod tests {
     use super::*;
 
     #[rstest]
-    #[case("", "branch name construction produced empty string | args=[\n    \"\",\n]")]
-    #[case("❌", "branch name construction produced empty string | args=[\n    \"❌\",\n]")]
+    #[case::empty_input("", "branch name construction produced empty string | args=[\n    \"\",\n]")]
+    #[case::invalid_characters_only("❌", "branch name construction produced empty string | args=[\n    \"❌\",\n]")]
     fn build_branch_name_fails_as_expected(#[case] input: &str, #[case] expected_output: &str) {
         assert2::let_assert!(Err(actual_error) = build_branch_name(&[input]));
         assert_eq!(format!("{actual_error}"), expected_output);
     }
 
     #[rstest]
-    #[case(&["HelloWorld"], "helloworld")]
-    #[case(&["Hello World"], "hello-world")]
-    #[case(&["Feature: Implement User Login!"], "feature-implement-user-login")]
-    #[case(&["Version 2.0"], "version-2.0")]
-    #[case(&["This---is...a_test"], "this-is...a_test")]
-    #[case(&["  Leading and trailing   "], "leading-and-trailing")]
-    #[case(&["Hello 🌎 World"], "hello-world")]
-    #[case(&["🚀Launch🚀Day"], "launch-day")]
-    #[case(&["Smile 😊 and 🤖 code"], "smile-and-code")]
-    #[case(&["Hello", "World"], "hello-world")]
-    #[case(&["Hello World", "World"], "hello-world-world")]
-    #[case(&["Hello World", "🌎", "42"], "hello-world-42")]
-    #[case(&["This", "---is.", "..a_test"], "this-is.-..a_test")]
-    #[case(&["dependabot/cargo/opentelemetry-0.27.1"], "dependabot/cargo/opentelemetry-0.27.1")]
+    #[case::single_word(&["HelloWorld"], "helloworld")]
+    #[case::space_separated(&["Hello World"], "hello-world")]
+    #[case::special_characters(&["Feature: Implement User Login!"], "feature-implement-user-login")]
+    #[case::version_number(&["Version 2.0"], "version-2.0")]
+    #[case::multiple_separators(&["This---is...a_test"], "this-is...a_test")]
+    #[case::leading_trailing_spaces(&["  Leading and trailing   "], "leading-and-trailing")]
+    #[case::emoji(&["Hello 🌎 World"], "hello-world")]
+    #[case::emoji_at_start_end(&["🚀Launch🚀Day"], "launch-day")]
+    #[case::multiple_emojis(&["Smile 😊 and 🤖 code"], "smile-and-code")]
+    #[case::multiple_args(&["Hello", "World"], "hello-world")]
+    #[case::args_with_spaces(&["Hello World", "World"], "hello-world-world")]
+    #[case::mixed_args(&["Hello World", "🌎", "42"], "hello-world-42")]
+    #[case::special_chars_in_args(&["This", "---is.", "..a_test"], "this-is.-..a_test")]
+    #[case::dependabot_path(&["dependabot/cargo/opentelemetry-0.27.1"], "dependabot/cargo/opentelemetry-0.27.1")]
     fn build_branch_name_succeeds_as_expected(#[case] input: &[&str], #[case] expected_output: &str) {
         assert2::let_assert!(Ok(actual_output) = build_branch_name(input));
         assert_eq!(actual_output, expected_output);

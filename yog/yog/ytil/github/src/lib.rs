@@ -314,8 +314,14 @@ mod tests {
     }
 
     #[rstest]
-    #[case("git@github.com:fusillicode/dotfiles.git", Url::parse("https://github.com/fusillicode/dotfiles").unwrap())]
-    #[case("https://github.com/fusillicode/dotfiles", Url::parse("https://github.com/fusillicode/dotfiles").unwrap())]
+    #[case::ssh_url_with_git_suffix(
+        "git@github.com:fusillicode/dotfiles.git",
+        Url::parse("https://github.com/fusillicode/dotfiles").unwrap()
+    )]
+    #[case::https_url_without_git_suffix(
+        "https://github.com/fusillicode/dotfiles",
+        Url::parse("https://github.com/fusillicode/dotfiles").unwrap()
+    )]
     fn parse_github_url_from_git_remote_url_works_as_expected(#[case] input: &str, #[case] expected: Url) {
         let result = parse_github_url_from_git_remote_url(input).unwrap();
         assert_eq!(result, expected);

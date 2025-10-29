@@ -153,13 +153,13 @@ mod tests {
     use super::*;
 
     #[rstest]
-    #[case("hello", "hello")]
-    #[case("alpha:", "alpha")]
-    #[case("one:two:three", "one")]
-    #[case(":rest", "")]
-    #[case(":", "")]
-    #[case("", "")]
-    #[case("\u{03C0}:\u{03C4}:\u{03C9}", "\u{03C0}")]
+    #[case::no_colon("hello", "hello")]
+    #[case::single_colon_at_end("alpha:", "alpha")]
+    #[case::multiple_colons("one:two:three", "one")]
+    #[case::colon_at_start(":rest", "")]
+    #[case::only_colon(":", "")]
+    #[case::empty_string("", "")]
+    #[case::unicode_characters("\u{03C0}:\u{03C4}:\u{03C9}", "\u{03C0}")]
     fn before_first_colon_when_various_inputs_strips_after_first_colon_returns_expected(
         #[case] input: &str,
         #[case] expected: &str,
