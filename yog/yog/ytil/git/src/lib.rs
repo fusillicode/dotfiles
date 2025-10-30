@@ -425,6 +425,30 @@ impl Branch {
     }
 }
 
+impl<'a> TryFrom<(git2::Branch<'a>, git2::BranchType)> for Branch {
+    type Error = color_eyre::Report;
+
+    fn try_from((raw_branch, branch_type): (git2::Branch<'a>, git2::BranchType)) -> Result<Self, Self::Error> {
+        let branch_name = raw_branch
+            .name()?
+            .ok_or_else(|| eyre!("branch name invalid utf-8 | input=raw_branch.name()"))?;
+        let commit_time = raw_branch.get().peel_to_commit()?.committer().when();
+        let committer_date_time = DateTime::from_timestamp(commit_time.seconds(), 0)
+            .ok_or_else(|| eyre!("invalid commit timestamp | seconds={}", commit_time.seconds()))?;
+
+        Ok(match branch_type {
+            git2::BranchType::Local => Branch::Local {
+                name: branch_name.to_string(),
+                committer_date_time,
+            },
+            git2::BranchType::Remote => Branch::Remote {
+                name: branch_name.to_string(),
+                committer_date_time,
+            },
+        })
+    }
+}
+
 /// Combined staged + worktree status for a path
 ///
 /// Aggregates index + worktree bitflags plus conflict / ignore markers into a higher‑level
@@ -567,7 +591,11 @@ impl WorktreeState {
 
 #[cfg(test)]
 mod tests {
+    use git2::Repository;
+    use git2::Signature;
+    use git2::Time;
     use rstest::rstest;
+    use tempfile::TempDir;
 
     use super::*;
 
@@ -638,6 +666,24 @@ mod tests {
         assert_eq!(WorktreeState::new(&input), expected);
     }
 
+    #[test]
+    fn branch_try_from_converts_local_branch_successfully() {
+        let (_temp_dir, repo) = init_test_repo(Some(Time::new(42, 3)));
+
+        let head_commit = repo.head().unwrap().peel_to_commit().unwrap();
+        let branch = repo.branch("test-branch", &head_commit, false).unwrap();
+
+        assert2::let_assert!(Ok(result) = Branch::try_from((branch, git2::BranchType::Local)));
+
+        pretty_assertions::assert_eq!(
+            result,
+            Branch::Local {
+                name: "test-branch".to_string(),
+                committer_date_time: DateTime::from_timestamp(42, 0).unwrap(),
+            }
+        );
+    }
+
     fn local(name: &str) -> Branch {
         Branch::Local {
             name: name.into(),
@@ -661,5 +707,25 @@ mod tests {
             index_state,
             worktree_state,
         }
+    }
+
+    fn init_test_repo(time: Option<Time>) -> (TempDir, Repository) {
+        let temp_dir = TempDir::new().unwrap();
+        let repo = Repository::init(temp_dir.path()).unwrap();
+
+        // Dummy initial commit
+        let mut index = repo.index().unwrap();
+        let oid = index.write_tree().unwrap();
+        let tree = repo.find_tree(oid).unwrap();
+        let sig = if let Some(time) = time {
+            Signature::new("test", "test@example.com", &time).unwrap()
+        } else {
+            Signature::now("test", "test@example.com").unwrap()
+        };
+        repo.commit(Some("HEAD"), &sig, &sig, "initial", &tree, &[]).unwrap();
+
+        drop(tree);
+
+        (temp_dir, repo)
     }
 }

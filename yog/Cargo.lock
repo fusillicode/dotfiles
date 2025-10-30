@@ -2588,10 +2588,13 @@ dependencies = [
 name = "ytil_git"
 version = "0.1.0"
 dependencies = [
+ "assert2",
  "chrono",
  "color-eyre",
  "git2",
+ "pretty_assertions",
  "rstest",
+ "tempfile",
  "ytil_cmd",
 ]
 
