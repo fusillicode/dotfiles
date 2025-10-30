@@ -61,6 +61,7 @@ pub fn set(colorscheme: Option<String>) {
         ("@variable", get_default_hl_opts().foreground(FG).build()),
         ("Constant", get_default_hl_opts().foreground(FG).build()),
         ("Delimiter", get_default_hl_opts().foreground(FG).build()),
+        // ("Function", get_default_hl_opts().foreground(FG).build()),
         ("Operator", get_default_hl_opts().foreground(FG).build()),
         ("Statement", get_default_hl_opts().foreground(FG).bold(true).build()),
         ("Type", get_default_hl_opts().foreground(FG).build()),
