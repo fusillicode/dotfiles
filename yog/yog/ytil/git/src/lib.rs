@@ -14,7 +14,9 @@ use chrono::DateTime;
 use chrono::Utc;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
+use git2::Cred;
 use git2::IntoCString;
+use git2::RemoteCallbacks;
 use git2::Repository;
 use git2::Status;
 use git2::StatusEntry;
@@ -367,7 +369,18 @@ pub fn remove_redundant_remotes(branches: &mut Vec<Branch>) {
 /// - Performing `git fetch` for the requested branches fails.
 pub fn fetch_branches(branches: &[&str]) -> color_eyre::Result<()> {
     let repo = get_repo(Path::new("."))?;
-    repo.find_remote("origin")?.fetch(branches, None, None)?;
+
+    let mut callbacks = RemoteCallbacks::new();
+    callbacks.credentials(|_url, username_from_url, _allowed_types| {
+        Cred::ssh_key_from_agent(username_from_url.unwrap_or("git"))
+    });
+
+    let mut fetch_opts = git2::FetchOptions::new();
+    fetch_opts.remote_callbacks(callbacks);
+
+    repo.find_remote("origin")?
+        .fetch(branches, Some(&mut fetch_opts), None)?;
+
     Ok(())
 }
 
