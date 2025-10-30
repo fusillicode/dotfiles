@@ -26,9 +26,9 @@ mod sorter;
 /// - `config`: nested dictionary mirroring `vim.diagnostic.config({...})` currently defined in Lua.
 pub fn dict() -> Dictionary {
     dict! {
-        "format": fn_from!(formatter::format),
-        "sort": fn_from!(sorter::sort),
         "filter": fn_from!(filter::filter),
+        "sort": fn_from!(sorter::sort),
+        "format": fn_from!(formatter::format),
         "config": config::get()
     }
 }
