@@ -84,8 +84,6 @@ brew tap homebrew/cask-versions
 brew install \
   alt-tab --cask \
   appcleaner \
-  bitbar \
-  chromedriver \
   discord \
   firefox \
   google-chrome \
@@ -96,7 +94,6 @@ brew install \
   telegram \
   the-unarchiver \
   transmission --cask \
-  vlc \
   wezterm@nightly --cask --no-quarantine --greedy-latest \
   whatsapp \
 
