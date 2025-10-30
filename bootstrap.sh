@@ -89,7 +89,7 @@ tempfile=$(mktemp) \
 # Oh My Zsh
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
 
-# Requirements for nvim
+# Requirements to build nvim
 brew install ninja cmake gettext curl
 
 # Setup ~/.local/bin & ~/.dev_tools
