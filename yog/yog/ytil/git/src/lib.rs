@@ -126,30 +126,7 @@ pub fn create_branch(branch_name: &str) -> color_eyre::Result<()> {
 /// - Implement previous branch stack (beyond single toggle) internally.
 /// - Expose progress callbacks for large checkouts.
 pub fn switch_branch(branch_name: &str) -> color_eyre::Result<()> {
-    // TODO: understand if there is a straightforward way with git2
-    if branch_name == "-" {
-        Command::new("git").args(["switch", branch_name]).exec()?;
-        return Ok(());
-    }
-
-    let repo = get_repo(Path::new("."))?;
-
-    // Find the branch reference
-    let (object, reference) = repo.revparse_ext(branch_name)?;
-
-    // Checkout the branch head
-    repo.checkout_tree(&object, None)?;
-
-    // Set HEAD to point to the new branch reference
-    match reference {
-        Some(reference) => repo.set_head(
-            reference
-                .name()
-                .ok_or_else(|| eyre!("reference name invalid utf-8 | input={branch_name}"))?,
-        )?,
-        None => repo.set_head_detached(object.id())?,
-    }
-
+    Command::new("git").args(["switch", branch_name, "--guess"]).exec()?;
     Ok(())
 }
 
@@ -291,8 +268,8 @@ where
     Ok(())
 }
 
-/// Returns all local and remote [`Branch`]es sorted by last committer date
-/// (most recent first).
+/// Returns all local and remote (but already fetched!) [`Branch`]es
+/// sorted by last committer date (most recent first).
 ///
 /// # Errors
 /// - The repository cannot be discovered.
@@ -300,32 +277,12 @@ where
 /// - A branch name is not valid UTF-8.
 /// - Resolving the branch tip commit fails.
 /// - Converting the committer timestamp into a [`DateTime`] fails.
-pub fn get_branches() -> color_eyre::Result<Vec<Branch>> {
+pub fn get_fetched_branches() -> color_eyre::Result<Vec<Branch>> {
     let repo = get_repo(Path::new("."))?;
+
     let mut out = vec![];
-
     for branch_res in repo.branches(None)? {
-        let (raw_branch, branch_type) = branch_res?;
-
-        let branch_name = raw_branch
-            .name()?
-            .ok_or_else(|| eyre!("branch name invalid utf-8 | input=raw_branch.name()"))?;
-        let commit_time = raw_branch.get().peel_to_commit()?.committer().when();
-        let committer_date_time = DateTime::from_timestamp(commit_time.seconds(), 0)
-            .ok_or_else(|| eyre!("invalid commit timestamp | seconds={}", commit_time.seconds()))?;
-
-        let branch = match branch_type {
-            git2::BranchType::Local => Branch::Local {
-                name: branch_name.to_string(),
-                committer_date_time,
-            },
-            git2::BranchType::Remote => Branch::Remote {
-                name: branch_name.to_string(),
-                committer_date_time,
-            },
-        };
-
-        out.push(branch);
+        out.push(Branch::try_from(branch_res?)?);
     }
 
     out.sort_by(|a, b| b.committer_date_time().cmp(a.committer_date_time()));

@@ -64,8 +64,12 @@ impl Display for RenderableBranch {
 /// - Branch enumeration via [`ytil_git::get_branches`] fails.
 /// - UI rendering via [`ytil_tui::minimal_select`] fails.
 /// - Branch switching via [`ytil_git::switch_branch`] fails.
-fn autocomplete_git_branches() -> color_eyre::Result<()> {
-    let mut branches = ytil_git::get_branches()?;
+fn autocomplete_git_branches_and_switch(branches: &[Branch]) -> color_eyre::Result<()> {
+    let mut branches = if branches.is_empty() {
+        ytil_git::get_fetched_branches()?
+    } else {
+        branches.to_vec()
+    };
     ytil_git::remove_redundant_remotes(&mut branches);
 
     match ytil_tui::minimal_select(branches.into_iter().map(RenderableBranch).collect())? {
@@ -96,14 +100,14 @@ fn autocomplete_git_branches() -> color_eyre::Result<()> {
 /// - Branch switching via [`ytil_git::switch_branch`] fails.
 /// - Current branch discovery via [`ytil_git::get_current_branch`] (during creation decision) fails.
 /// - Reading user confirmation input (stdin) fails.
-fn switch_branch_or_create_if_missing(arg: &str) -> color_eyre::Result<()> {
-    if let Ok(url) = Url::parse(arg) {
+fn handle_single_input_argument(arg: &str) -> color_eyre::Result<()> {
+    let branch_name = if let Ok(url) = Url::parse(arg) {
         ytil_github::log_into_github()?;
-        let branch_name = ytil_github::get_branch_name_from_url(&url)?;
-        ytil_git::fetch_branches(&[&branch_name])?;
-        return ytil_git::switch_branch(&branch_name).inspect(|()| report_branch_switch(&branch_name));
-    }
-    create_branch_and_switch(&build_branch_name(&[arg])?)
+        ytil_github::get_branch_name_from_url(&url)?
+    } else {
+        arg.to_string()
+    };
+    ytil_git::switch_branch(&branch_name).inspect(|()| report_branch_switch(&branch_name))
 }
 
 /// Creates a new local branch (if desired) and switches to it.
@@ -259,11 +263,11 @@ fn main() -> color_eyre::Result<()> {
     let args: Vec<_> = args.iter().map(String::as_str).collect();
 
     match args.split_first() {
-        None => autocomplete_git_branches(),
+        None => autocomplete_git_branches_and_switch(&[]),
         // Assumption: cannot create a branch with a name that starts with -
         Some((hd, _)) if *hd == "-" => ytil_git::switch_branch(hd).inspect(|()| report_branch_switch(hd)),
         Some((hd, tail)) if *hd == "-b" => create_branch_and_switch(&build_branch_name(tail)?),
-        Some((hd, &[])) => switch_branch_or_create_if_missing(hd),
+        Some((hd, &[])) => handle_single_input_argument(hd),
         _ => create_branch_and_switch(&build_branch_name(&args)?),
     }?;
 
