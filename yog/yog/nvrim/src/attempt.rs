@@ -7,7 +7,7 @@ use chrono::Local;
 use color_eyre::eyre::eyre;
 use nvim_oxi::Dictionary;
 
-const FILES_DIR: &[&str] = &["yog", "nvrim", "src", "attempt"];
+const TEMPLATES_PATH_PARTS: &[&str] = &["yog", "nvrim", "src", "attempt"];
 
 pub fn dict() -> Dictionary {
     dict! {
@@ -16,21 +16,21 @@ pub fn dict() -> Dictionary {
 }
 
 fn select(_: ()) {
-    let Ok(files_dir) = get_attempt_files() else {
+    let Ok(templates_dir_content) = get_templates_dir_content() else {
         return;
     };
 
-    let mut opts = vec![];
-    for entry_res in files_dir {
-        let Some(opt_res) = Opt::build(entry_res) else {
+    let mut templates = vec![];
+    for entry in templates_dir_content {
+        let Some(template_build_res) = Template::build(entry) else {
             continue;
         };
-        let Ok(opt) = opt_res.inspect_err(|error| {
+        let Ok(template) = template_build_res.inspect_err(|error| {
             ytil_nvim_oxi::api::notify_error(&format!("{error}"));
         }) else {
             continue;
         };
-        opts.push(opt);
+        templates.push(template);
     }
 
     let target_dir = Path::new("/tmp").join("attempt.rs");
@@ -44,19 +44,19 @@ fn select(_: ()) {
     }
 
     if let Err(error) = ytil_nvim_oxi::api::vim_ui_select(
-        opts.iter().map(|opt| opt.display_name.clone()),
-        &[("prompt", "Select file type ")],
+        templates.iter().map(|template| template.display_name.clone()),
+        &[("prompt", "Select template ")],
         {
-            let opts = opts.clone();
+            let templates = templates.clone();
             move |choice_idx| {
-                let Some(opt) = opts.get(choice_idx) else {
+                let Some(template) = templates.get(choice_idx) else {
                     return;
                 };
-                let to = opt.target_file_path(&target_dir);
-                if let Err(error) = std::fs::copy(opt.file_path.clone(), &to) {
+                let to = template.target_file_path(&target_dir);
+                if let Err(error) = std::fs::copy(template.path.clone(), &to) {
                     ytil_nvim_oxi::api::notify_error(&format!(
-                        "cannot copy file | from={:?} to={} error={error:#?}",
-                        opt.file_path,
+                        "cannot copy file | from={} to={} error={error:#?}",
+                        template.path.display(),
                         to.display()
                     ));
                     return;
@@ -74,9 +74,9 @@ fn select(_: ()) {
     }
 }
 
-fn get_attempt_files() -> color_eyre::Result<ReadDir> {
+fn get_templates_dir_content() -> color_eyre::Result<ReadDir> {
     ytil_system::get_workspace_root()
-        .map(|workspace_root| ytil_system::build_path(workspace_root, FILES_DIR))
+        .map(|workspace_root| ytil_system::build_path(workspace_root, TEMPLATES_PATH_PARTS))
         .inspect_err(|error| {
             ytil_nvim_oxi::api::notify_error(&format!("cannot get workspace root | error={error:#?}"));
         })
@@ -88,16 +88,16 @@ fn get_attempt_files() -> color_eyre::Result<ReadDir> {
 
 #[derive(Clone, Debug)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
-struct Opt {
+struct Template {
     display_name: String,
     base_name: String,
     extension: String,
-    file_path: PathBuf,
+    path: PathBuf,
 }
 
-impl Opt {
-    pub fn build(read_dir: std::io::Result<DirEntry>) -> Option<color_eyre::Result<Self>> {
-        let path = match read_dir.map(|entry| entry.path()) {
+impl Template {
+    pub fn build(read_dir_res: std::io::Result<DirEntry>) -> Option<color_eyre::Result<Self>> {
+        let path = match read_dir_res.map(|entry| entry.path()) {
             Ok(path) => path,
             Err(e) => return Some(Err(e.into())),
         };
@@ -121,7 +121,7 @@ impl Opt {
             display_name,
             base_name,
             extension,
-            file_path: path,
+            path,
         }))
     }
 
@@ -145,7 +145,7 @@ mod tests {
     #[rstest]
     #[case("test.txt", "test.txt", "test", "txt")]
     #[case(".hidden.txt", ".hidden.txt", ".hidden", "txt")]
-    fn opt_build_when_valid_file_returns_some_ok(
+    fn template_build_when_valid_file_returns_some_ok(
         #[case] file_name: &str,
         #[case] expected_display: &str,
         #[case] expected_base: &str,
@@ -154,29 +154,29 @@ mod tests {
         let (_tmp_dir, entry) = dummy_dir_entry(file_name);
         let expected_path = entry.path();
 
-        let result = Opt::build(Ok(entry));
+        let result = Template::build(Ok(entry));
 
         assert2::let_assert!(Some(Ok(actual)) = result);
         pretty_assertions::assert_eq!(
             actual,
-            Opt {
+            Template {
                 display_name: expected_display.to_string(),
                 base_name: expected_base.to_string(),
                 extension: expected_ext.to_string(),
-                file_path: expected_path,
+                path: expected_path,
             },
         );
     }
 
     #[test]
-    fn opt_build_when_directory_returns_none() {
+    fn template_build_when_directory_returns_none() {
         let temp_dir = TempDir::new().unwrap();
         let sub_dir = temp_dir.path().join("subdir");
         std::fs::create_dir(&sub_dir).unwrap();
         let mut read_dir = std::fs::read_dir(temp_dir.path()).unwrap();
         let entry = read_dir.next().unwrap().unwrap();
 
-        let result = Opt::build(Ok(entry));
+        let result = Template::build(Ok(entry));
 
         assert!(result.is_none());
     }
@@ -184,39 +184,42 @@ mod tests {
     #[rstest]
     #[case("test", "missing extension")]
     #[case(".hidden", "missing extension")]
-    fn opt_build_when_invalid_file_returns_some_expected_error(#[case] file_name: &str, #[case] expected_error: &str) {
+    fn template_build_when_invalid_file_returns_some_expected_error(
+        #[case] file_name: &str,
+        #[case] expected_error: &str,
+    ) {
         let (_tmp_dir, entry) = dummy_dir_entry(file_name);
 
-        let result = Opt::build(Ok(entry));
+        let result = Template::build(Ok(entry));
 
         assert2::let_assert!(Some(Err(error)) = result);
         assert!(error.to_string().contains(expected_error));
     }
 
     #[test]
-    fn opt_build_when_io_error_returns_some_expected_err() {
+    fn template_build_when_io_error_returns_some_expected_err() {
         let error = std::io::Error::new(std::io::ErrorKind::NotFound, "test error");
 
-        let result = Opt::build(Err(error));
+        let result = Template::build(Err(error));
 
         assert2::let_assert!(Some(Err(e)) = result);
         assert!(e.to_string().contains("test error"));
     }
 
     #[test]
-    fn opt_target_file_path_returns_correct_path() {
-        let opt = Opt {
+    fn template_target_file_path_returns_correct_path() {
+        let template = Template {
             display_name: "test.txt".to_string(),
             base_name: "test".to_string(),
             extension: "txt".to_string(),
-            file_path: PathBuf::from("/some/path/test.txt"),
+            path: PathBuf::from("/some/path/test.txt"),
         };
 
-        let result_path = opt.target_file_path(Path::new("/tmp"));
+        let result = template.target_file_path(Path::new("/tmp"));
 
-        let string_path = result_path.to_string_lossy();
-        assert!(string_path.contains("/tmp/test_"));
-        assert!(string_path.ends_with(".txt"));
+        let path = result.to_string_lossy();
+        assert!(path.contains("/tmp/test_"));
+        assert!(path.ends_with(".txt"));
     }
 
     fn dummy_dir_entry(file_name: &str) -> (TempDir, DirEntry) {
