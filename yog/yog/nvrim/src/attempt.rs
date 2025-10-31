@@ -45,7 +45,7 @@ fn select(_: ()) {
         opts.push(opt);
     }
 
-    let target_dir = Path::new("/tmp").join("attempt.rs").to_path_buf();
+    let target_dir = Path::new("/tmp").join("attempt.rs");
 
     if let Err(error) = std::fs::create_dir_all(&target_dir) {
         ytil_nvim_oxi::api::notify_error(&format!(
@@ -53,7 +53,7 @@ fn select(_: ()) {
             target_dir.display().to_string()
         ));
         return;
-    };
+    }
 
     if let Err(error) = ytil_nvim_oxi::api::vim_ui_select(
         opts.iter().map(|opt| opt.display_name.clone()),
@@ -67,17 +67,18 @@ fn select(_: ()) {
                 let to = opt.target_file_path(&target_dir);
                 if let Err(error) = std::fs::copy(opt.file_path.clone(), &to) {
                     ytil_nvim_oxi::api::notify_error(&format!(
-                        "cannot copy file | from={:?} to={to:?} error={error:#?}",
-                        opt.file_path
+                        "cannot copy file | from={:?} to={} error={error:#?}",
+                        opt.file_path,
+                        to.display()
                     ));
                     return;
-                };
+                }
                 if let Err(error) = nvim_oxi::api::command(&format!("edit {}", to.display())) {
                     ytil_nvim_oxi::api::notify_error(&format!(
                         "cannot open file in new buffer | path={} error={error:#?}",
                         to.display()
                     ));
-                };
+                }
             }
         },
     ) {
@@ -86,6 +87,7 @@ fn select(_: ()) {
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 struct Opt {
     display_name: String,
     base_name: String,
@@ -130,5 +132,56 @@ impl TryFrom<PathBuf> for Opt {
             extension,
             file_path: path,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case(PathBuf::from("/tmp/test.txt"), "test.txt", "test", "txt")]
+    #[case(PathBuf::from("/tmp/.hidden.txt"), ".hidden.txt", ".hidden", "txt")]
+    fn opt_try_from_path_buf_when_valid_file_returns_opt(
+        #[case] path: PathBuf,
+        #[case] expected_display: &str,
+        #[case] expected_base: &str,
+        #[case] expected_ext: &str,
+    ) {
+        assert2::let_assert!(Ok(actual) = Opt::try_from(path.clone()));
+        pretty_assertions::assert_eq!(
+            actual,
+            Opt {
+                display_name: expected_display.to_string(),
+                base_name: expected_base.to_string(),
+                extension: expected_ext.to_string(),
+                file_path: path,
+            },
+        );
+    }
+
+    #[rstest]
+    #[case(PathBuf::from("/tmp/test"), "missing extension")]
+    #[case(PathBuf::from("/tmp/.hidden"), "missing extension")]
+    #[case(PathBuf::from("/"), "missing file_name")]
+    fn opt_try_from_path_buf_when_invalid_file_returns_error(#[case] path: PathBuf, #[case] expected_error: &str) {
+        assert2::let_assert!(Err(error) = Opt::try_from(path));
+        assert!(error.to_string().contains(expected_error));
+    }
+
+    #[test]
+    fn opt_target_file_path_returns_correct_path() {
+        let opt = Opt {
+            display_name: "test.txt".to_string(),
+            base_name: "test".to_string(),
+            extension: "txt".to_string(),
+            file_path: PathBuf::from("/some/path/test.txt"),
+        };
+        let result_path = opt.target_file_path(Path::new("/tmp"));
+        let string_path = result_path.to_string_lossy();
+        assert!(string_path.contains("/tmp/test_"));
+        assert!(string_path.ends_with(".txt"));
     }
 }
