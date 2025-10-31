@@ -232,7 +232,7 @@ fn report_branch_new(branch: &str) {
 /// # Arguments
 /// - `branch` Existing branch name that is being switched to.
 fn report_branch_exists(branch: &str) {
-    println!("{}{} {}", "@".blue().bold(), ">".magenta().bold(), branch.bold());
+    println!("{}{} {}", "!".blue().bold(), ">".magenta().bold(), branch.bold());
 }
 
 /// Prints a styled indication that branch creation was aborted (no newline).
