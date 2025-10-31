@@ -17,4 +17,7 @@ git2 = { workspace = true }
 ytil_cmd = { workspace = true }
 
 [dev-dependencies]
+assert2 = { workspace = true }
+pretty_assertions = { workspace = true }
 rstest = { workspace = true }
+tempfile = { workspace = true }
