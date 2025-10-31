@@ -44,7 +44,7 @@ fn select(_: ()) {
     }
 
     if let Err(error) = ytil_nvim_oxi::api::vim_ui_select(
-        templates.iter().map(|template| template.display_name.clone()),
+        templates.iter().map(|template| template.display_name.as_str()),
         &[("prompt", "Select template ")],
         {
             let templates = templates.clone();
