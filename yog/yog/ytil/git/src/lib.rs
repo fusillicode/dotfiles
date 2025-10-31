@@ -107,49 +107,21 @@ pub fn create_branch(branch_name: &str) -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Checkout a branch or detach HEAD; supports previous branch shorthand.
+/// Checkout a branch or detach HEAD; supports previous branch shorthand and branch creation via guessing.
 ///
-/// If `branch_name` is `-`, defers to `git switch -` to leverage porcelain previous branch
-/// semantics. Otherwise, resolves the name, checks out the tree, and updates HEAD (or detaches
-/// if resolving to a commit object).
+/// Defers to `git switch --guess` to leverage porcelain semantics, which can create a new branch
+/// if the name is ambiguous and matches an existing remote branch.
 ///
 /// # Arguments
 /// - `branch_name` Branch name or revision (use `-` for prior branch).
 ///
 /// # Errors
-/// - Repository discovery fails.
-/// - Revparse / name resolution fails.
-/// - Checkout operation fails.
-/// - Setting HEAD reference fails.
+/// - Spawning or executing the `git switch` command fails.
 ///
 /// # Future Work
-/// - Implement previous branch stack (beyond single toggle) internally.
 /// - Expose progress callbacks for large checkouts.
 pub fn switch_branch(branch_name: &str) -> color_eyre::Result<()> {
-    // TODO: understand if there is a straightforward way with git2
-    if branch_name == "-" {
-        Command::new("git").args(["switch", branch_name]).exec()?;
-        return Ok(());
-    }
-
-    let repo = get_repo(Path::new("."))?;
-
-    // Find the branch reference
-    let (object, reference) = repo.revparse_ext(branch_name)?;
-
-    // Checkout the branch head
-    repo.checkout_tree(&object, None)?;
-
-    // Set HEAD to point to the new branch reference
-    match reference {
-        Some(reference) => repo.set_head(
-            reference
-                .name()
-                .ok_or_else(|| eyre!("reference name invalid utf-8 | input={branch_name}"))?,
-        )?,
-        None => repo.set_head_detached(object.id())?,
-    }
-
+    Command::new("git").args(["switch", branch_name, "--guess"]).exec()?;
     Ok(())
 }
 
@@ -291,41 +263,24 @@ where
     Ok(())
 }
 
-/// Returns all local and remote [`Branch`]es sorted by last committer date
-/// (most recent first).
+/// Fetches all branches from the 'origin' remote and returns all local and remote [`Branch`]es
+/// sorted by last committer date (most recent first).
 ///
 /// # Errors
 /// - The repository cannot be discovered.
+/// - The 'origin' remote cannot be found.
+/// - Performing `git fetch` for all branches fails.
 /// - Enumerating branches fails.
 /// - A branch name is not valid UTF-8.
 /// - Resolving the branch tip commit fails.
 /// - Converting the committer timestamp into a [`DateTime`] fails.
 pub fn get_branches() -> color_eyre::Result<Vec<Branch>> {
     let repo = get_repo(Path::new("."))?;
+    fetch_branches(&[])?;
+
     let mut out = vec![];
-
     for branch_res in repo.branches(None)? {
-        let (raw_branch, branch_type) = branch_res?;
-
-        let branch_name = raw_branch
-            .name()?
-            .ok_or_else(|| eyre!("branch name invalid utf-8 | input=raw_branch.name()"))?;
-        let commit_time = raw_branch.get().peel_to_commit()?.committer().when();
-        let committer_date_time = DateTime::from_timestamp(commit_time.seconds(), 0)
-            .ok_or_else(|| eyre!("invalid commit timestamp | seconds={}", commit_time.seconds()))?;
-
-        let branch = match branch_type {
-            git2::BranchType::Local => Branch::Local {
-                name: branch_name.to_string(),
-                committer_date_time,
-            },
-            git2::BranchType::Remote => Branch::Remote {
-                name: branch_name.to_string(),
-                committer_date_time,
-            },
-        };
-
-        out.push(branch);
+        out.push(Branch::try_from(branch_res?)?);
     }
 
     out.sort_by(|a, b| b.committer_date_time().cmp(a.committer_date_time()));
@@ -422,6 +377,38 @@ impl Branch {
                 committer_date_time, ..
             } => committer_date_time,
         }
+    }
+}
+
+/// Attempts to convert a libgit2 branch and its type into our [`Branch`] enum.
+///
+/// Extracts the branch name and last committer date from the raw branch.
+///
+/// # Errors
+/// - Branch name is not valid UTF-8.
+/// - Resolving the branch tip commit fails.
+/// - Converting the committer timestamp into a [`DateTime`] fails.
+impl<'a> TryFrom<(git2::Branch<'a>, git2::BranchType)> for Branch {
+    type Error = color_eyre::Report;
+
+    fn try_from((raw_branch, branch_type): (git2::Branch<'a>, git2::BranchType)) -> Result<Self, Self::Error> {
+        let branch_name = raw_branch
+            .name()?
+            .ok_or_else(|| eyre!("branch name invalid utf-8 | input=raw_branch.name()"))?;
+        let commit_time = raw_branch.get().peel_to_commit()?.committer().when();
+        let committer_date_time = DateTime::from_timestamp(commit_time.seconds(), 0)
+            .ok_or_else(|| eyre!("invalid commit timestamp | seconds={}", commit_time.seconds()))?;
+
+        Ok(match branch_type {
+            git2::BranchType::Local => Self::Local {
+                name: branch_name.to_string(),
+                committer_date_time,
+            },
+            git2::BranchType::Remote => Self::Remote {
+                name: branch_name.to_string(),
+                committer_date_time,
+            },
+        })
     }
 }
 
@@ -567,7 +554,11 @@ impl WorktreeState {
 
 #[cfg(test)]
 mod tests {
+    use git2::Repository;
+    use git2::Signature;
+    use git2::Time;
     use rstest::rstest;
+    use tempfile::TempDir;
 
     use super::*;
 
@@ -638,6 +629,24 @@ mod tests {
         assert_eq!(WorktreeState::new(&input), expected);
     }
 
+    #[test]
+    fn branch_try_from_converts_local_branch_successfully() {
+        let (_temp_dir, repo) = init_test_repo(Some(Time::new(42, 3)));
+
+        let head_commit = repo.head().unwrap().peel_to_commit().unwrap();
+        let branch = repo.branch("test-branch", &head_commit, false).unwrap();
+
+        assert2::let_assert!(Ok(result) = Branch::try_from((branch, git2::BranchType::Local)));
+
+        pretty_assertions::assert_eq!(
+            result,
+            Branch::Local {
+                name: "test-branch".to_string(),
+                committer_date_time: DateTime::from_timestamp(42, 0).unwrap(),
+            }
+        );
+    }
+
     fn local(name: &str) -> Branch {
         Branch::Local {
             name: name.into(),
@@ -661,5 +670,24 @@ mod tests {
             index_state,
             worktree_state,
         }
+    }
+
+    fn init_test_repo(time: Option<Time>) -> (TempDir, Repository) {
+        let temp_dir = TempDir::new().unwrap();
+        let repo = Repository::init(temp_dir.path()).unwrap();
+
+        // Dummy initial commit
+        let mut index = repo.index().unwrap();
+        let oid = index.write_tree().unwrap();
+        let tree = repo.find_tree(oid).unwrap();
+        let sig = time.map_or_else(
+            || Signature::now("test", "test@example.com").unwrap(),
+            |time| Signature::new("test", "test@example.com", &time).unwrap(),
+        );
+        repo.commit(Some("HEAD"), &sig, &sig, "initial", &tree, &[]).unwrap();
+
+        drop(tree);
+
+        (temp_dir, repo)
     }
 }
