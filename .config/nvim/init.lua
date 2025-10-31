@@ -4,7 +4,7 @@ local nvrim = require('nvrim')
 nvrim.vim_opts.set_all()
 nvrim.cmds.create()
 nvrim.keymaps.set_all()
-require('keymaps').set_lua_implemented()
+require('keymaps').set_lua_defined()
 require('diagnostics').setup(nvrim)
 
 for _, provider in ipairs { 'node', 'perl', 'python3', 'ruby', } do
