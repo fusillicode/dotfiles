@@ -6,7 +6,7 @@ local function keymap_set(mode, lhs, rhs, opts)
   vim.keymap.set(mode, lhs, rhs, vim.tbl_extend('error', { silent = true, }, opts or {}))
 end
 
-function M.set_lua_implemented()
+function M.set_lua_defined()
   local base_opts = { expr = true, }
 
   keymap_set('n', 'i', nvrim.keymaps.smart_ident_on_blank_line, base_opts)
