@@ -14,15 +14,15 @@
 //! gcu - # previous branch
 //! gcu -b Feature Add Foo # create: feature-add-foo
 //! gcu feature add foo # sanitized join -> feature-add-foo (create if missing)
-//! gcu https://github.com/org/repo/pull/123 # derive & fetch PR branch
+//! gcu https://github.com/org/repo/pull/123 # derive PR branch name & switch
 //! ```
 //!
 //! # Errors
 //! - GitHub authentication via [`ytil_github::log_into_github`] or PR branch name derivation via
 //!   [`ytil_github::get_branch_name_from_url`] fails.
 //! - Branch name construction via [`build_branch_name`] yields empty string.
-//! - Branch listing via [`ytil_git::get_branches`] / fetching via [`ytil_git::fetch_branches`] / switching via
-//!   [`ytil_git::switch_branch`] / creation via [`ytil_git::create_branch`] fails.
+//! - Branch listing via [`ytil_git::get_fetched_branches`] / switching via [`ytil_git::switch_branch`] / creation via
+//!   [`ytil_git::create_branch`] fails.
 //! - Interactive selection via [`ytil_tui::minimal_select`] or user confirmation input fails.
 //! - Current branch lookup via [`ytil_git::get_current_branch`] fails.
 
@@ -56,12 +56,15 @@ impl Display for RenderableBranch {
 
 /// Interactive selection and switching of Git branches.
 ///
-/// Presents a minimal TUI listing recent local / remote branches (with redundant
-/// remotes removed via [`ytil_git::remove_redundant_remotes`]). Selecting an empty
-/// line or "-" triggers previous-branch switching.
+/// Presents a minimal TUI listing the provided branches (or fetches recent local / remote branches
+/// if none provided), with redundant remotes removed via [`ytil_git::remove_redundant_remotes`].
+/// Selecting an empty line or "-" triggers previous-branch switching.
+///
+/// # Arguments
+/// - `branches` Pre-fetched branches to display; if empty, fetches via [`ytil_git::get_fetched_branches`].
 ///
 /// # Errors
-/// - Branch enumeration via [`ytil_git::get_branches`] fails.
+/// - Branch enumeration via [`ytil_git::get_fetched_branches`] fails (if `branches` is empty).
 /// - UI rendering via [`ytil_tui::minimal_select`] fails.
 /// - Branch switching via [`ytil_git::switch_branch`] fails.
 fn autocomplete_git_branches_and_switch(branches: &[Branch]) -> color_eyre::Result<()> {
@@ -81,25 +84,19 @@ fn autocomplete_git_branches_and_switch(branches: &[Branch]) -> color_eyre::Resu
     }
 }
 
-/// Switches to an existing branch or creates-and-switches if it does not exist.
-///
-/// Also accepts a single GitHub PR URL and derives the associated branch name.
+/// Handles a single input argument, either a GitHub PR URL or a branch name, and switches to the corresponding branch.
 ///
 /// Behaviour:
-/// - If `arg` parses as a GitHub PR URL, authenticate then derive the branch name, fetch it via
-///   [`ytil_git::fetch_branches`] and switch to it.
-/// - Otherwise, sanitize `arg` into a branch name ([`build_branch_name`]) and create, if missing (after confirmation),
-///   then switch to it.
+/// - If `arg` parses as a GitHub PR URL, authenticate then derive the branch name and switch to it.
+/// - Otherwise, use `arg` as the branch name and switch to it.
+///
+/// # Arguments
+/// - `arg` Either a GitHub PR URL or a branch name.
 ///
 /// # Errors
-/// - GitHub authentication via [`ytil_github::log_into_github`] fails.
-/// - Pull request branch name derivation via [`ytil_github::get_branch_name_from_url`] fails.
-/// - Fetching the remote branch via [`ytil_git::fetch_branches`] (git fetch) fails.
-/// - Branch name construction via [`build_branch_name`] fails or produces an empty string.
-/// - Branch creation via [`ytil_git::create_branch`] fails.
+/// - GitHub authentication via [`ytil_github::log_into_github`] fails (if URL).
+/// - Pull request branch name derivation via [`ytil_github::get_branch_name_from_url`] fails (if URL).
 /// - Branch switching via [`ytil_git::switch_branch`] fails.
-/// - Current branch discovery via [`ytil_git::get_current_branch`] (during creation decision) fails.
-/// - Reading user confirmation input (stdin) fails.
 fn handle_single_input_argument(arg: &str) -> color_eyre::Result<()> {
     let branch_name = if let Ok(url) = Url::parse(arg) {
         ytil_github::log_into_github()?;
