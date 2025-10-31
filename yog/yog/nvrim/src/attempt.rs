@@ -33,12 +33,12 @@ fn select(_: ()) {
         templates.push(template);
     }
 
-    let target_dir = Path::new("/tmp").join("attempt.rs");
+    let dest_dir = Path::new("/tmp").join("attempt.rs");
 
-    if let Err(error) = std::fs::create_dir_all(&target_dir) {
+    if let Err(error) = std::fs::create_dir_all(&dest_dir) {
         ytil_nvim_oxi::api::notify_error(&format!(
-            "cannot create target dir | target={:?} error={error:#?}",
-            target_dir.display().to_string()
+            "cannot create dest dir | dest_dir={:?} error={error:#?}",
+            dest_dir.display().to_string()
         ));
         return;
     }
@@ -52,19 +52,19 @@ fn select(_: ()) {
                 let Some(template) = templates.get(choice_idx) else {
                     return;
                 };
-                let to = template.target_file_path(&target_dir);
-                if let Err(error) = std::fs::copy(template.path.clone(), &to) {
+                let dest = template.dest_file_path(&dest_dir);
+                if let Err(error) = std::fs::copy(&template.path, &dest) {
                     ytil_nvim_oxi::api::notify_error(&format!(
                         "cannot copy file | from={} to={} error={error:#?}",
                         template.path.display(),
-                        to.display()
+                        dest.display()
                     ));
                     return;
                 }
-                if let Err(error) = nvim_oxi::api::command(&format!("edit {}", to.display())) {
+                if let Err(error) = nvim_oxi::api::command(&format!("edit {}", dest.display())) {
                     ytil_nvim_oxi::api::notify_error(&format!(
                         "cannot open file in new buffer | path={} error={error:#?}",
-                        to.display()
+                        dest.display()
                     ));
                 }
             }
@@ -125,8 +125,8 @@ impl Template {
         }))
     }
 
-    pub fn target_file_path(&self, target: &Path) -> PathBuf {
-        target.join(format!(
+    pub fn dest_file_path(&self, dest_dir: &Path) -> PathBuf {
+        dest_dir.join(format!(
             "{}_{}.{}",
             self.base_name,
             Local::now().format("%Y%m%d_%H%M"),
@@ -207,7 +207,7 @@ mod tests {
     }
 
     #[test]
-    fn template_target_file_path_returns_correct_path() {
+    fn template_dest_file_path_returns_correct_path() {
         let template = Template {
             display_name: "test.txt".to_string(),
             base_name: "test".to_string(),
@@ -215,7 +215,7 @@ mod tests {
             path: PathBuf::from("/some/path/test.txt"),
         };
 
-        let result = template.target_file_path(Path::new("/tmp"));
+        let result = template.dest_file_path(Path::new("/tmp"));
 
         let path = result.to_string_lossy();
         assert!(path.contains("/tmp/test_"));
