@@ -1309,6 +1309,7 @@ name = "nvrim"
 version = "0.1.0"
 dependencies = [
  "assert2",
+ "chrono",
  "color-eyre",
  "convert_case 0.8.0",
  "fkr",
