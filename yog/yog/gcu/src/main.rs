@@ -69,7 +69,7 @@ impl Display for RenderableBranch {
 /// - Branch switching via [`ytil_git::switch_branch`] fails.
 fn autocomplete_git_branches_and_switch(branches: &[Branch]) -> color_eyre::Result<()> {
     let mut branches = if branches.is_empty() {
-        ytil_git::get_fetched_branches()?
+        ytil_git::get_branches()?
     } else {
         branches.to_vec()
     };

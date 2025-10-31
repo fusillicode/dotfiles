@@ -263,17 +263,20 @@ where
     Ok(())
 }
 
-/// Returns all local and remote (but already fetched!) [`Branch`]es
+/// Fetches all branches from the 'origin' remote and returns all local and remote [`Branch`]es
 /// sorted by last committer date (most recent first).
 ///
 /// # Errors
 /// - The repository cannot be discovered.
+/// - The 'origin' remote cannot be found.
+/// - Performing `git fetch` for all branches fails.
 /// - Enumerating branches fails.
 /// - A branch name is not valid UTF-8.
 /// - Resolving the branch tip commit fails.
 /// - Converting the committer timestamp into a [`DateTime`] fails.
-pub fn get_fetched_branches() -> color_eyre::Result<Vec<Branch>> {
+pub fn get_branches() -> color_eyre::Result<Vec<Branch>> {
     let repo = get_repo(Path::new("."))?;
+    fetch_branches(&[])?;
 
     let mut out = vec![];
     for branch_res in repo.branches(None)? {
