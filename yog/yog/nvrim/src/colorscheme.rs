@@ -29,7 +29,7 @@ pub fn dict() -> Dictionary {
 #[allow(clippy::needless_pass_by_value)]
 pub fn set(colorscheme: Option<String>) {
     if let Some(cs) = colorscheme {
-        ytil_nvim_oxi::api::exec_vim_cmd("colorscheme", &[cs]);
+        let _ = ytil_nvim_oxi::api::exec_vim_cmd("colorscheme", Some(&[cs]));
     }
 
     let opts = crate::vim_opts::global_scope();

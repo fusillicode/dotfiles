@@ -14,6 +14,7 @@ categories = ["command-line-utilities", "development-tools"]
 crate-type = ["cdylib"]
 
 [dependencies]
+chrono = { workspace = true }
 color-eyre = { workspace = true }
 convert_case = { workspace = true }
 fkr = { path = "../fkr" }
@@ -37,3 +38,4 @@ ytil_wezterm = { workspace = true }
 assert2 = { workspace = true }
 pretty_assertions = { workspace = true }
 rstest = { workspace = true }
+tempfile = { workspace = true }

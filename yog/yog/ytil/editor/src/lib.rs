@@ -6,7 +6,6 @@
 use core::str::FromStr;
 use std::path::Path;
 
-use color_eyre::eyre;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 use ytil_wezterm::WeztermPane;
@@ -43,7 +42,7 @@ impl Editor {
 
 /// Parses an [`Editor`] from a string representation.
 impl FromStr for Editor {
-    type Err = eyre::Error;
+    type Err = color_eyre::eyre::Error;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {
@@ -67,7 +66,7 @@ pub struct FileToOpen {
 
 /// Attempts to create a [`FileToOpen`] from a file path, pane ID, and list of panes.
 impl TryFrom<(&str, i64, &[WeztermPane])> for FileToOpen {
-    type Error = eyre::Error;
+    type Error = color_eyre::eyre::Error;
 
     fn try_from((file_to_open, pane_id, panes): (&str, i64, &[WeztermPane])) -> Result<Self, Self::Error> {
         if Path::new(file_to_open).is_absolute() {
@@ -92,7 +91,7 @@ impl TryFrom<(&str, i64, &[WeztermPane])> for FileToOpen {
 
 /// Parses a [`FileToOpen`] from a string in the format "path:line:column".
 impl FromStr for FileToOpen {
-    type Err = eyre::Error;
+    type Err = color_eyre::eyre::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut parts = s.split(':');
