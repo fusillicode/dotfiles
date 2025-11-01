@@ -6,6 +6,7 @@ use std::fs::ReadDir;
 use std::path::Path;
 use std::path::PathBuf;
 
+use chrono::DateTime;
 use chrono::Local;
 use color_eyre::eyre::eyre;
 use nvim_oxi::Dictionary;
@@ -60,7 +61,7 @@ fn create_scratch_file(_: ()) {
                 let Some(scratch) = scratches.get(choice_idx) else {
                     return;
                 };
-                let dest = scratch.dest_file_path(&dest_dir);
+                let dest = scratch.dest_file_path(&dest_dir, Local::now());
                 if let Err(error) = std::fs::copy(&scratch.path, &dest) {
                     ytil_nvim_oxi::api::notify_error(&format!(
                         "cannot copy file | from={} to={} error={error:#?}",
@@ -151,19 +152,20 @@ impl Scratch {
 
     /// Generates the destination file path for the scratch.
     ///
-    /// The path is constructed as `{dest_dir}/{base_name}_{timestamp}.{extension}` where timestamp is current local
-    /// time in YYYYMMDD-HHMMSS format.
+    /// The path is constructed as `{dest_dir}/{base_name}-{timestamp}.{extension}` where timestamp is a provided
+    /// [`Local`] [`DateTime`].
     ///
     /// # Arguments
     /// - `dest_dir` The directory where the file should be placed.
+    /// - `date_time` The date and time to use for the timestamp.
     ///
     /// # Returns
     /// The full path to the destination file.
-    pub fn dest_file_path(&self, dest_dir: &Path) -> PathBuf {
+    pub fn dest_file_path(&self, dest_dir: &Path, date_time: DateTime<Local>) -> PathBuf {
         dest_dir.join(format!(
             "{}-{}.{}",
             self.base_name,
-            Local::now().format("%Y%m%d-%H%M%S"),
+            date_time.format("%Y%m%d-%H%M%S"),
             self.extension
         ))
     }
@@ -171,6 +173,7 @@ impl Scratch {
 
 #[cfg(test)]
 mod tests {
+    use chrono::TimeZone;
     use rstest::rstest;
     use tempfile::TempDir;
 
@@ -241,7 +244,7 @@ mod tests {
     }
 
     #[test]
-    fn scratch_dest_file_path_returns_correct_path() {
+    fn scratch_dest_file_path_returns_expected_path() {
         let scratch = Scratch {
             display_name: "test.txt".to_string(),
             base_name: "test".to_string(),
@@ -249,11 +252,10 @@ mod tests {
             path: PathBuf::from("/some/path/test.txt"),
         };
 
-        let result = scratch.dest_file_path(Path::new("/tmp"));
+        let date_time = Local.with_ymd_and_hms(2023, 1, 1, 12, 0, 0).unwrap();
+        let result = scratch.dest_file_path(Path::new("/tmp"), date_time);
 
-        let path = result.to_string_lossy();
-        assert!(path.contains("/tmp/test-"));
-        assert!(path.ends_with(".txt"));
+        pretty_assertions::assert_eq!(result, PathBuf::from("/tmp/test-20230101-120000.txt"));
     }
 
     fn dummy_dir_entry(file_name: &str) -> (TempDir, DirEntry) {
