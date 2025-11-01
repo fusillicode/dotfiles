@@ -46,9 +46,19 @@ pub fn notify_warn(msg: &str) {
     }
 }
 
-/// Execute an ex command with arguments.
+/// Execute an ex command with optional arguments.
 ///
 /// Wraps [`nvim_oxi::api::cmd`], reporting failures through [`crate::api::notify_error`].
+///
+/// # Arguments
+/// - `cmd`: The ex command to execute.
+/// - `args`: Optional list of arguments for the command.
+///
+/// # Returns
+/// Returns `Ok(output)` where `output` is the command's output if any, or `Err(error)` if execution failed.
+///
+/// # Errors
+/// Errors from [`nvim_oxi::api::cmd`] are propagated after logging via [`crate::api::notify_error`].
 pub fn exec_vim_cmd(
     cmd: impl AsRef<str> + Debug + std::marker::Copy,
     args: Option<&[impl AsRef<str> + Debug]>,
@@ -60,8 +70,7 @@ pub fn exec_vim_cmd(
     }
     nvim_oxi::api::cmd(&cmd_infos_builder.build(), &CmdOpts::default()).inspect(|error| {
         crate::api::notify_error(&format!(
-            "cannot execute cmd | cmd={:?} args={args:#?} error={error:#?}",
-            cmd
+            "cannot execute cmd | cmd={cmd:?} args={args:#?} error={error:#?}",
         ));
     })
 }

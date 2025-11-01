@@ -1,3 +1,6 @@
+//! Exposes a dictionary with a `create_scratch_file` function for selecting and copying scratch files from the attempts
+//! directory.
+
 use std::fs::DirEntry;
 use std::fs::ReadDir;
 use std::path::Path;
@@ -7,30 +10,35 @@ use chrono::Local;
 use color_eyre::eyre::eyre;
 use nvim_oxi::Dictionary;
 
-const TEMPLATES_PATH_PARTS: &[&str] = &["yog", "nvrim", "src", "attempt"];
+const SCRATCHES_PATH_PARTS: &[&str] = &["yog", "nvrim", "src", "attempt"];
 
+/// [`Dictionary`] of scratch file utilities.
 pub fn dict() -> Dictionary {
     dict! {
-        "select": fn_from!(select),
+        "create_scratch_file": fn_from!(create_scratch_file),
     }
 }
 
-fn select(_: ()) {
-    let Ok(templates_dir_content) = get_templates_dir_content() else {
+/// Creates a scratch file by selecting and copying a template file.
+///
+/// This function retrieves available scratch files, presents a selection UI to the user,
+/// and creates a new scratch file based on the selection inside a tmp folder.
+fn create_scratch_file(_: ()) {
+    let Ok(scratches_dir_content) = get_scratches_dir_content() else {
         return;
     };
 
-    let mut templates = vec![];
-    for entry in templates_dir_content {
-        let Some(template_build_res) = Template::build(entry) else {
+    let mut scratches = vec![];
+    for entry in scratches_dir_content {
+        let Some(scratch_build_res) = Scratch::from(entry) else {
             continue;
         };
-        let Ok(template) = template_build_res.inspect_err(|error| {
+        let Ok(scratch) = scratch_build_res.inspect_err(|error| {
             ytil_nvim_oxi::api::notify_error(&format!("{error}"));
         }) else {
             continue;
         };
-        templates.push(template);
+        scratches.push(scratch);
     }
 
     let dest_dir = Path::new("/tmp").join("attempt.rs");
@@ -44,19 +52,19 @@ fn select(_: ()) {
     }
 
     if let Err(error) = ytil_nvim_oxi::api::vim_ui_select(
-        templates.iter().map(|template| template.display_name.as_str()),
-        &[("prompt", "Select template ")],
+        scratches.iter().map(|scratch| scratch.display_name.as_str()),
+        &[("prompt", "Select scratch file ")],
         {
-            let templates = templates.clone();
+            let scratches = scratches.clone();
             move |choice_idx| {
-                let Some(template) = templates.get(choice_idx) else {
+                let Some(scratch) = scratches.get(choice_idx) else {
                     return;
                 };
-                let dest = template.dest_file_path(&dest_dir);
-                if let Err(error) = std::fs::copy(&template.path, &dest) {
+                let dest = scratch.dest_file_path(&dest_dir);
+                if let Err(error) = std::fs::copy(&scratch.path, &dest) {
                     ytil_nvim_oxi::api::notify_error(&format!(
                         "cannot copy file | from={} to={} error={error:#?}",
-                        template.path.display(),
+                        scratch.path.display(),
                         dest.display()
                     ));
                     return;
@@ -69,9 +77,16 @@ fn select(_: ()) {
     }
 }
 
-fn get_templates_dir_content() -> color_eyre::Result<ReadDir> {
+/// Retrieves the entries of the scratches directory.
+///
+/// # Returns
+/// A generic result containing a [`ReadDir`] in case of success.
+///
+/// # Errors
+/// Returns an error if the workspace root cannot be determined or the directory cannot be read.
+fn get_scratches_dir_content() -> color_eyre::Result<ReadDir> {
     ytil_system::get_workspace_root()
-        .map(|workspace_root| ytil_system::build_path(workspace_root, TEMPLATES_PATH_PARTS))
+        .map(|workspace_root| ytil_system::build_path(workspace_root, SCRATCHES_PATH_PARTS))
         .inspect_err(|error| {
             ytil_nvim_oxi::api::notify_error(&format!("cannot get workspace root | error={error:#?}"));
         })
@@ -81,17 +96,31 @@ fn get_templates_dir_content() -> color_eyre::Result<ReadDir> {
         })
 }
 
+/// An available scratch file.
 #[derive(Clone, Debug)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
-struct Template {
+struct Scratch {
+    /// The name shown when selecting the scratch file.
     display_name: String,
+    /// The base name of the scratch file without extension.
     base_name: String,
+    /// The file extension of the scratch file.
     extension: String,
+    /// The full path to the scratch file.
     path: PathBuf,
 }
 
-impl Template {
-    pub fn build(read_dir_res: std::io::Result<DirEntry>) -> Option<color_eyre::Result<Self>> {
+impl Scratch {
+    /// Attempts to build a [`Scratch`] file from a [`DirEntry`] result.
+    ///
+    /// # Arguments
+    /// - `read_dir_res`: The result of reading a directory entry.
+    ///
+    /// # Returns
+    /// - `Some(Ok(scratch))` if the entry is a valid file with all required components (name, stem, extension).
+    /// - `Some(Err(error))` if an error occurs while extracting file components.
+    /// - `None` if the entry is not a file.
+    pub fn from(read_dir_res: std::io::Result<DirEntry>) -> Option<color_eyre::Result<Self>> {
         let path = match read_dir_res.map(|entry| entry.path()) {
             Ok(path) => path,
             Err(e) => return Some(Err(e.into())),
@@ -120,11 +149,21 @@ impl Template {
         }))
     }
 
+    /// Generates the destination file path for the scratch.
+    ///
+    /// The path is constructed as `{dest_dir}/{base_name}_{timestamp}.{extension}` where timestamp is current local
+    /// time in YYYYMMDD-HHMM format.
+    ///
+    /// # Arguments
+    /// - `dest_dir`: The directory where the file should be placed.
+    ///
+    /// # Returns
+    /// The full path to the destination file.
     pub fn dest_file_path(&self, dest_dir: &Path) -> PathBuf {
         dest_dir.join(format!(
             "{}_{}.{}",
             self.base_name,
-            Local::now().format("%Y%m%d_%H%M"),
+            Local::now().format("%Y%m%d-%H%M"),
             self.extension
         ))
     }
@@ -140,7 +179,7 @@ mod tests {
     #[rstest]
     #[case("test.txt", "test.txt", "test", "txt")]
     #[case(".hidden.txt", ".hidden.txt", ".hidden", "txt")]
-    fn template_build_when_valid_file_returns_some_ok(
+    fn scratch_from_when_valid_file_returns_some_ok(
         #[case] file_name: &str,
         #[case] expected_display: &str,
         #[case] expected_base: &str,
@@ -149,12 +188,12 @@ mod tests {
         let (_tmp_dir, entry) = dummy_dir_entry(file_name);
         let expected_path = entry.path();
 
-        let result = Template::build(Ok(entry));
+        let result = Scratch::from(Ok(entry));
 
         assert2::let_assert!(Some(Ok(actual)) = result);
         pretty_assertions::assert_eq!(
             actual,
-            Template {
+            Scratch {
                 display_name: expected_display.to_string(),
                 base_name: expected_base.to_string(),
                 extension: expected_ext.to_string(),
@@ -164,14 +203,14 @@ mod tests {
     }
 
     #[test]
-    fn template_build_when_directory_returns_none() {
+    fn scratch_from_when_directory_returns_none() {
         let temp_dir = TempDir::new().unwrap();
         let sub_dir = temp_dir.path().join("subdir");
         std::fs::create_dir(&sub_dir).unwrap();
         let mut read_dir = std::fs::read_dir(temp_dir.path()).unwrap();
         let entry = read_dir.next().unwrap().unwrap();
 
-        let result = Template::build(Ok(entry));
+        let result = Scratch::from(Ok(entry));
 
         assert!(result.is_none());
     }
@@ -179,38 +218,38 @@ mod tests {
     #[rstest]
     #[case("test", "missing extension")]
     #[case(".hidden", "missing extension")]
-    fn template_build_when_invalid_file_returns_some_expected_error(
+    fn scratch_from_when_invalid_file_returns_some_expected_error(
         #[case] file_name: &str,
         #[case] expected_error: &str,
     ) {
         let (_tmp_dir, entry) = dummy_dir_entry(file_name);
 
-        let result = Template::build(Ok(entry));
+        let result = Scratch::from(Ok(entry));
 
         assert2::let_assert!(Some(Err(error)) = result);
         assert!(error.to_string().contains(expected_error));
     }
 
     #[test]
-    fn template_build_when_io_error_returns_some_expected_err() {
+    fn scratch_from_when_io_error_returns_some_expected_err() {
         let error = std::io::Error::new(std::io::ErrorKind::NotFound, "test error");
 
-        let result = Template::build(Err(error));
+        let result = Scratch::from(Err(error));
 
         assert2::let_assert!(Some(Err(e)) = result);
         assert!(e.to_string().contains("test error"));
     }
 
     #[test]
-    fn template_dest_file_path_returns_correct_path() {
-        let template = Template {
+    fn scratch_dest_file_path_returns_correct_path() {
+        let scratch = Scratch {
             display_name: "test.txt".to_string(),
             base_name: "test".to_string(),
             extension: "txt".to_string(),
             path: PathBuf::from("/some/path/test.txt"),
         };
 
-        let result = template.dest_file_path(Path::new("/tmp"));
+        let result = scratch.dest_file_path(Path::new("/tmp"));
 
         let path = result.to_string_lossy();
         assert!(path.contains("/tmp/test_"));

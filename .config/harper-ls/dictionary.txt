@@ -158,6 +158,7 @@ stdout
 subslice
 t.
 termguicolors
+tmp
 tokio
 toml
 tree-sitter
