@@ -31,7 +31,7 @@ fn run_test(_: ()) {
     let cur_win = Window::current();
 
     let Ok(position) = cur_win.get_cursor().map(PointWrap::from).inspect_err(|error| {
-        ytil_nvim_oxi::api::notify_error(&format!(
+        ytil_nvim_oxi::api::notify_error(format!(
             "cannot get cursor from current window | window={cur_win:#?} error={error:#?}"
         ));
     }) else {
@@ -42,9 +42,7 @@ fn run_test(_: ()) {
         .get_name()
         .map(|s| PathBuf::from(s.to_string_lossy().as_ref()))
         .inspect_err(|error| {
-            ytil_nvim_oxi::api::notify_error(&format!(
-                "cannot get buffer name | buffer={cur_buf:#?} error={error:#?}"
-            ));
+            ytil_nvim_oxi::api::notify_error(format!("cannot get buffer name | buffer={cur_buf:#?} error={error:#?}"));
         })
     else {
         return;
@@ -52,45 +50,45 @@ fn run_test(_: ()) {
 
     let Some(test_name) = get_enclosing_fn_name_of_position(&file_path, *position)
         .inspect_err(|error| {
-            ytil_nvim_oxi::api::notify_error(&format!(
+            ytil_nvim_oxi::api::notify_error(format!(
                 "cannot get enclosing fn | position={position:#?} error={error:#?}"
             ));
         })
         .ok()
         .flatten()
     else {
-        ytil_nvim_oxi::api::notify_error(&format!("missing enclosing fn | position={position:#?}"));
+        ytil_nvim_oxi::api::notify_error(format!("missing enclosing fn | position={position:#?}"));
         return;
     };
 
     let Ok(cur_pane_id) = ytil_wezterm::get_current_pane_id().inspect_err(|error| {
-        ytil_nvim_oxi::api::notify_error(&format!("cannot get current `WezTerm` pane id | error={error:#?}"));
+        ytil_nvim_oxi::api::notify_error(format!("cannot get current `WezTerm` pane id | error={error:#?}"));
     }) else {
         return;
     };
 
     let Ok(wez_panes) = ytil_wezterm::get_all_panes(&[]).inspect_err(|error| {
-        ytil_nvim_oxi::api::notify_error(&format!("cannot get `WezTerm` panes | error={error:#?}"));
+        ytil_nvim_oxi::api::notify_error(format!("cannot get `WezTerm` panes | error={error:#?}"));
     }) else {
         return;
     };
 
     let Some(cur_pane) = wez_panes.iter().find(|p| p.pane_id == cur_pane_id) else {
-        ytil_nvim_oxi::api::notify_error(&format!(
+        ytil_nvim_oxi::api::notify_error(format!(
             "wezterm pane not found | pane_id={cur_pane_id:#?} panes={wez_panes:#?}"
         ));
         return;
     };
 
     let Some(test_runner_pane) = wez_panes.iter().find(|p| p.is_sibling_terminal_pane_of(cur_pane)) else {
-        ytil_nvim_oxi::api::notify_error(&format!(
+        ytil_nvim_oxi::api::notify_error(format!(
             "cannot find sibling pane to run test | current_pane={cur_pane:#?} panes={wez_panes:#?} test={test_name}"
         ));
         return;
     };
 
     let Ok(test_runner_app) = get_test_runner_app_for_path(&file_path).inspect_err(|error| {
-        ytil_nvim_oxi::api::notify_error(&format!(
+        ytil_nvim_oxi::api::notify_error(format!(
             "cannot get test runner app | path={} error={error:#?}",
             file_path.display()
         ));
@@ -106,7 +104,7 @@ fn run_test(_: ()) {
         .args(["-c", &format!("{send_text_to_pane_cmd} && {submit_pane_cmd}")])
         .spawn()
         .inspect_err(|error| {
-            ytil_nvim_oxi::api::notify_error(&format!(
+            ytil_nvim_oxi::api::notify_error(format!(
                 "cannot execute test run cmd | cmd={test_run_cmd:#?} pane={test_runner_pane:#?} error={error:#?}"
             ));
         })

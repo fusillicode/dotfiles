@@ -26,7 +26,7 @@ pub fn dict() -> Dictionary {
 /// Errors are notified to Nvim via `ytil_nvim_oxi::api::notify_error`.
 pub fn set<Opt: ToObject + Debug + Copy>(name: &str, value: Opt, opts: &OptionOpts) {
     if let Err(error) = nvim_oxi::api::set_option_value(name, value, opts) {
-        ytil_nvim_oxi::api::notify_error(&format!(
+        ytil_nvim_oxi::api::notify_error(format!(
             "cannot set option | name={name:?} value={value:#?} opts={opts:#?} error={error:#?}"
         ));
     }
@@ -40,7 +40,7 @@ pub fn set<Opt: ToObject + Debug + Copy>(name: &str, value: Opt, opts: &OptionOp
 /// Errors are notified to Nvim via `ytil_nvim_oxi::api::notify_error`.
 pub fn append(name: &str, value: &str, opts: &OptionOpts) {
     let Ok(mut cur_value) = nvim_oxi::api::get_option_value::<String>(name, opts).inspect_err(|error| {
-        ytil_nvim_oxi::api::notify_error(&format!(
+        ytil_nvim_oxi::api::notify_error(format!(
             "cannot get option current value | name={name:?} opts={opts:#?} value_to_append={value:#?} error={error:#?}"
         ));
     }) else {
@@ -49,7 +49,7 @@ pub fn append(name: &str, value: &str, opts: &OptionOpts) {
     // This shenanigan with `comma` and `write!` is to avoid additional allocations
     let comma = if cur_value.is_empty() { "" } else { "," };
     if let Err(error) = write!(cur_value, "{comma}{value}") {
-        ytil_nvim_oxi::api::notify_error(&format!(
+        ytil_nvim_oxi::api::notify_error(format!(
             "cannot append option value | name={name:?} cur_value={cur_value} append_value={value} opts={opts:#?} error={error:#?}"
         ));
     }

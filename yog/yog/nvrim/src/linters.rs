@@ -42,20 +42,20 @@ pub fn dict() -> Dictionary {
 #[allow(clippy::needless_pass_by_value)]
 fn parser(maybe_output: Option<nvim_oxi::String>) -> Vec<Dictionary> {
     let Some(output) = &maybe_output else {
-        notify_warn(&format!("sqruff output missing output={maybe_output:?}"));
+        notify_warn(format!("sqruff output missing output={maybe_output:?}"));
         return vec![];
     };
     let output = output.to_string_lossy();
 
     if output.trim().is_empty() {
-        notify_warn(&format!("sqruff output is an empty string output={maybe_output:?}"));
+        notify_warn(format!("sqruff output is an empty string output={maybe_output:?}"));
         return vec![];
     }
 
     let parsed_output = match serde_json::from_str::<SqruffOutput>(&output) {
         Ok(parsed_output) => parsed_output,
         Err(error) => {
-            notify_error(&format!("error parsing sqruff output={output:?} error={error:#?}"));
+            notify_error(format!("error parsing sqruff output={output:?} error={error:#?}"));
             return vec![];
         }
     };
