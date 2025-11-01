@@ -95,18 +95,14 @@ function M.fzf_lua(plugin)
     { '<leader>h', mode = 'n',           plugin and { function() plugin.resume({}) end, }, },
 
     { '<leader>u', mode = { 'n', 'v', }, plugin and { nvrim.trex.transform_selection, }, },
+
+    { '<leader>n', mode = 'n',           plugin and { nvrim.attempt.create_scratch_file, }, },
   }
 end
 
 function M.oil(plugin)
   return {
     { '<leader>F', mode = 'n', plugin and { ':Oil --float<cr>', }, },
-  }
-end
-
-function M.attempt(plugin)
-  return {
-    { '<leader>n', mode = 'n', plugin and { plugin.new_select, }, },
   }
 end
 

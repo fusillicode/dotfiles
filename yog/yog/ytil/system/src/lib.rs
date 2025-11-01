@@ -44,11 +44,23 @@ pub fn join<T>(join_handle: JoinHandle<color_eyre::Result<T>>) -> Result<T, eyre
 /// # Errors
 /// - The home directory cannot be determined.
 pub fn build_home_path<P: AsRef<Path>>(parts: &[P]) -> color_eyre::Result<PathBuf> {
-    let mut home_path = std::env::home_dir().ok_or_eyre("missing home dir | env=HOME")?;
+    let home_path = std::env::home_dir().ok_or_eyre("missing home dir | env=HOME")?;
+    Ok(build_path(home_path, parts))
+}
+
+/// Builds a path by appending multiple parts to a root path.
+///
+/// # Arguments
+/// - `root` The base path to start with.
+/// - `parts` A slice of path components to append.
+///
+/// # Returns
+/// A new [`PathBuf`] with all parts appended to the root.
+pub fn build_path<P: AsRef<Path>>(mut root: PathBuf, parts: &[P]) -> PathBuf {
     for part in parts {
-        home_path.push(part);
+        root.push(part);
     }
-    Ok(home_path)
+    root
 }
 
 /// Copies the given content to the system clipboard using the `pbcopy` command.

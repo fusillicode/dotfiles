@@ -58,9 +58,9 @@ fn draw((cur_lnum, extmarks): (String, Vec<Extmark>)) -> Option<String> {
 /// Constructs the status column string for the current line.
 ///
 /// # Arguments
-/// - `cur_buf_type`: Current buffer `buftype` (used for special-case elision like `"grug-far"`).
-/// - `cur_lnum`: Current line number string (already formatted by the caller / Vim script).
-/// - `metas`: Iterator of extmark metadata for the current line; only items with a present [`ExtmarkMeta`] are yielded.
+/// - `cur_buf_type` Current buffer `buftype` (used for special-case elision like `"grug-far"`).
+/// - `cur_lnum` Current line number string (already formatted by the caller / Vim script).
+/// - `metas` Iterator of extmark metadata for the current line; only items with a present [`ExtmarkMeta`] are yielded.
 ///
 /// # Returns
 /// - Formatted status column string containing (at most) one diagnostic sign (highest severity), one Git sign (first

@@ -12,6 +12,8 @@ use ytil_nvim_oxi::Dictionary;
 #[macro_use]
 mod macros;
 
+/// Scratch files selection and creation.
+mod attempt;
 /// [`nvim_oxi::api::Buffer`] helpers.
 mod buffer;
 /// CLI flags for `fd` and `ripgrep`.
@@ -64,5 +66,6 @@ fn nvrim() -> Dictionary {
         "trex": trex::dict(),
         "fkr": fkr::dict(),
         "linters": linters::dict(),
+        "attempt": attempt::dict(),
     }
 }
