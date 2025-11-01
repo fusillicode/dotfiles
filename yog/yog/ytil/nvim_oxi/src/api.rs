@@ -31,13 +31,13 @@ pub trait Notifiable: Debug {
     fn to_msg(&self) -> impl AsRef<str>;
 }
 
-impl Notifiable for color_eyre::Report {
+impl<T: Notifiable + ?Sized> Notifiable for &T {
     fn to_msg(&self) -> impl AsRef<str> {
-        self.to_string()
+        (*self).to_msg()
     }
 }
 
-impl Notifiable for &color_eyre::Report {
+impl Notifiable for color_eyre::Report {
     fn to_msg(&self) -> impl AsRef<str> {
         self.to_string()
     }
@@ -68,7 +68,6 @@ pub fn set_g_var<V: ToObject + Debug>(name: &str, value: V) {
 }
 
 /// Notifies the user of an error message in Nvim.
-#[allow(clippy::needless_pass_by_value)]
 pub fn notify_error<N: Notifiable>(notifiable: N) {
     if let Err(error) = nvim_oxi::api::notify(notifiable.to_msg().as_ref(), LogLevel::Error, &dict! {}) {
         nvim_oxi::dbg!(format!("cannot notify error | msg={notifiable:?} error={error:#?}"));
@@ -76,7 +75,6 @@ pub fn notify_error<N: Notifiable>(notifiable: N) {
 }
 
 /// Notifies the user of a warning message in Nvim.
-#[allow(clippy::needless_pass_by_value)]
 pub fn notify_warn<N: Notifiable>(notifiable: N) {
     if let Err(error) = nvim_oxi::api::notify(notifiable.to_msg().as_ref(), LogLevel::Warn, &dict! {}) {
         nvim_oxi::dbg!(format!("cannot notify warning | msg={notifiable:?} error={error:#?}"));
