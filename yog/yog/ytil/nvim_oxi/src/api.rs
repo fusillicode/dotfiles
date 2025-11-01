@@ -48,21 +48,22 @@ pub fn notify_warn(msg: &str) {
 
 /// Execute an ex command with arguments.
 ///
-/// Wraps [`nvim_oxi::api::cmd`], reporting failures through
-/// [`crate::api::notify_error`].
-pub fn exec_vim_cmd<S, I>(cmd: impl Into<String> + Debug + std::marker::Copy, args: I)
-where
-    S: Into<String>,
-    I: IntoIterator<Item = S> + Debug + std::marker::Copy,
-{
-    if let Err(error) = nvim_oxi::api::cmd(
-        &CmdInfosBuilder::default().cmd(cmd).args(args).build(),
-        &CmdOpts::default(),
-    ) {
-        crate::api::notify_error(&format!(
-            "cannot execute cmd | cmd={cmd:?} args={args:#?} error={error:#?}"
-        ));
+/// Wraps [`nvim_oxi::api::cmd`], reporting failures through [`crate::api::notify_error`].
+pub fn exec_vim_cmd(
+    cmd: impl AsRef<str> + Debug + std::marker::Copy,
+    args: Option<&[impl AsRef<str> + Debug]>,
+) -> Result<Option<String>, nvim_oxi::api::Error> {
+    let mut cmd_infos_builder = CmdInfosBuilder::default();
+    cmd_infos_builder.cmd(cmd.as_ref());
+    if let Some(args) = args {
+        cmd_infos_builder.args(args.iter().map(|s| s.as_ref().to_string()));
     }
+    nvim_oxi::api::cmd(&cmd_infos_builder.build(), &CmdOpts::default()).inspect(|error| {
+        crate::api::notify_error(&format!(
+            "cannot execute cmd | cmd={:?} args={args:#?} error={error:#?}",
+            cmd
+        ));
+    })
 }
 
 /// Prompt the user to select an item from a numbered list.

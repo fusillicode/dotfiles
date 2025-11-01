@@ -61,12 +61,7 @@ fn select(_: ()) {
                     ));
                     return;
                 }
-                if let Err(error) = nvim_oxi::api::command(&format!("edit {}", dest.display())) {
-                    ytil_nvim_oxi::api::notify_error(&format!(
-                        "cannot open file in new buffer | path={} error={error:#?}",
-                        dest.display()
-                    ));
-                }
+                let _ = ytil_nvim_oxi::api::exec_vim_cmd(&format!("edit {}", dest.display()), None::<&[&str]>);
             }
         },
     ) {
