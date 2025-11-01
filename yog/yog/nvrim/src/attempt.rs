@@ -33,9 +33,7 @@ fn create_scratch_file(_: ()) {
         .into_iter()
         .filter_map(|entry| {
             Scratch::from(entry)?
-                .inspect_err(|error| {
-                    ytil_nvim_oxi::api::notify_error(format!("{error}"));
-                })
+                .inspect_err(|error| ytil_nvim_oxi::api::notify_error(error))
                 .ok()
         })
         .collect::<Vec<_>>();
@@ -72,7 +70,7 @@ fn create_scratch_file(_: ()) {
             }
         },
     ) {
-        ytil_nvim_oxi::api::notify_error(format!("{error}"));
+        ytil_nvim_oxi::api::notify_error(error);
     }
 }
 

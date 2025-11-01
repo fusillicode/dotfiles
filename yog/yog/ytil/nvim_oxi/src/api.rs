@@ -20,6 +20,41 @@ use nvim_oxi::mlua::ObjectLike;
 
 use crate::dict;
 
+/// Types that can be converted to a notification message for Neovim.
+///
+/// Implementors provide a way to transform themselves into a string suitable for display
+/// in Neovim notifications.
+///
+/// # Returns
+/// A string representation of the notifiable item.
+pub trait Notifiable: Debug {
+    fn to_msg(&self) -> impl AsRef<str>;
+}
+
+impl Notifiable for color_eyre::Report {
+    fn to_msg(&self) -> impl AsRef<str> {
+        self.to_string()
+    }
+}
+
+impl Notifiable for &color_eyre::Report {
+    fn to_msg(&self) -> impl AsRef<str> {
+        self.to_string()
+    }
+}
+
+impl Notifiable for String {
+    fn to_msg(&self) -> impl AsRef<str> {
+        self
+    }
+}
+
+impl Notifiable for &str {
+    fn to_msg(&self) -> impl AsRef<str> {
+        self
+    }
+}
+
 /// Sets the value of a global Nvim variable `name` to `value`.
 ///
 /// Wraps [`nvim_oxi::api::set_var`].
@@ -33,16 +68,18 @@ pub fn set_g_var<V: ToObject + Debug>(name: &str, value: V) {
 }
 
 /// Notifies the user of an error message in Nvim.
-pub fn notify_error<S: AsRef<str> + Debug>(msg: S) {
-    if let Err(error) = nvim_oxi::api::notify(msg.as_ref(), LogLevel::Error, &dict! {}) {
-        nvim_oxi::dbg!(format!("cannot notify error | msg={msg:?} error={error:#?}"));
+#[allow(clippy::needless_pass_by_value)]
+pub fn notify_error<N: Notifiable>(notifiable: N) {
+    if let Err(error) = nvim_oxi::api::notify(notifiable.to_msg().as_ref(), LogLevel::Error, &dict! {}) {
+        nvim_oxi::dbg!(format!("cannot notify error | msg={notifiable:?} error={error:#?}"));
     }
 }
 
 /// Notifies the user of a warning message in Nvim.
-pub fn notify_warn<S: AsRef<str> + Debug>(msg: S) {
-    if let Err(error) = nvim_oxi::api::notify(msg.as_ref(), LogLevel::Warn, &dict! {}) {
-        nvim_oxi::dbg!(format!("cannot notify warning | msg={msg:?} error={error:#?}"));
+#[allow(clippy::needless_pass_by_value)]
+pub fn notify_warn<N: Notifiable>(notifiable: N) {
+    if let Err(error) = nvim_oxi::api::notify(notifiable.to_msg().as_ref(), LogLevel::Warn, &dict! {}) {
+        nvim_oxi::dbg!(format!("cannot notify warning | msg={notifiable:?} error={error:#?}"));
     }
 }
 

@@ -75,7 +75,7 @@ fn transform_selection(_: ()) {
             });
         },
     ) {
-        ytil_nvim_oxi::api::notify_error(format!("{error}"));
+        ytil_nvim_oxi::api::notify_error(error);
     }
 }
 
