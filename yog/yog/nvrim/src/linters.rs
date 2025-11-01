@@ -75,7 +75,7 @@ fn parser(maybe_output: Option<nvim_oxi::String>) -> Vec<Dictionary> {
 /// Mirrors the external tool's JSON so deserialization stays trivial and
 /// downstream logic can iterate messages directly.
 #[derive(Debug, Deserialize)]
-#[cfg_attr(test, derive(PartialEq, Eq))]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 struct SqruffOutput {
     #[serde(rename = "<string>", default)]
     messages: Vec<SqruffMessage>,
@@ -83,7 +83,7 @@ struct SqruffOutput {
 
 /// Single `sqruff` lint message entry.
 #[derive(Debug, Deserialize)]
-#[cfg_attr(test, derive(PartialEq, Eq))]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 struct SqruffMessage {
     /// Optional rule identifier emitted by `sqruff`.
     code: Option<String>,
@@ -104,7 +104,7 @@ struct SqruffMessage {
 /// saturation adjustments when converting to line/column indices expected by
 /// Neovim (0-based internally after adjustment).
 #[derive(Debug, Deserialize)]
-#[cfg_attr(test, derive(PartialEq, Eq))]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 struct Range {
     /// Start position (1-based line / column as emitted by `sqruff`).
     start: Position,
@@ -119,7 +119,7 @@ struct Range {
 /// Maintains external numbering; translation to 0-based indices occurs when
 /// building Neovim dictionaries.
 #[derive(Debug, Deserialize)]
-#[cfg_attr(test, derive(PartialEq, Eq))]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 struct Position {
     /// 1-based column number.
     character: u32,

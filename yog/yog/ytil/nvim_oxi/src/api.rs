@@ -68,7 +68,7 @@ pub fn exec_vim_cmd(
     if let Some(args) = args {
         cmd_infos_builder.args(args.iter().map(|s| s.as_ref().to_string()));
     }
-    nvim_oxi::api::cmd(&cmd_infos_builder.build(), &CmdOpts::default()).inspect(|error| {
+    nvim_oxi::api::cmd(&cmd_infos_builder.build(), &CmdOpts::default()).inspect_err(|error| {
         crate::api::notify_error(&format!(
             "cannot execute cmd | cmd={cmd:?} args={args:#?} error={error:#?}",
         ));
