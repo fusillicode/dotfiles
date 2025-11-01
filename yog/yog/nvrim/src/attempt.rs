@@ -53,7 +53,7 @@ fn create_scratch_file(_: ()) {
 
     if let Err(error) = ytil_nvim_oxi::api::vim_ui_select(
         scratches.iter().map(|scratch| scratch.display_name.as_str()),
-        &[("prompt", "Select scratch file ")],
+        &[("prompt", "Create scratch file ")],
         {
             let scratches = scratches.clone();
             move |choice_idx| {
@@ -69,7 +69,7 @@ fn create_scratch_file(_: ()) {
                     ));
                     return;
                 }
-                let _ = ytil_nvim_oxi::api::exec_vim_cmd(&format!("edit {}", dest.display()), None::<&[&str]>);
+                let _ = ytil_nvim_oxi::api::exec_vim_cmd("edit", Some(&[dest.display().to_string()]));
             }
         },
     ) {
@@ -98,7 +98,7 @@ fn get_scratches_dir_content() -> color_eyre::Result<ReadDir> {
 
 /// An available scratch file.
 #[derive(Clone, Debug)]
-#[cfg_attr(test, derive(PartialEq, Eq))]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 struct Scratch {
     /// The name shown when selecting the scratch file.
     display_name: String,
@@ -152,7 +152,7 @@ impl Scratch {
     /// Generates the destination file path for the scratch.
     ///
     /// The path is constructed as `{dest_dir}/{base_name}_{timestamp}.{extension}` where timestamp is current local
-    /// time in YYYYMMDD-HHMM format.
+    /// time in YYYYMMDD-HHMMSS format.
     ///
     /// # Arguments
     /// - `dest_dir` The directory where the file should be placed.
@@ -161,9 +161,9 @@ impl Scratch {
     /// The full path to the destination file.
     pub fn dest_file_path(&self, dest_dir: &Path) -> PathBuf {
         dest_dir.join(format!(
-            "{}_{}.{}",
+            "{}-{}.{}",
             self.base_name,
-            Local::now().format("%Y%m%d-%H%M"),
+            Local::now().format("%Y%m%d-%H%M%S"),
             self.extension
         ))
     }
@@ -252,7 +252,7 @@ mod tests {
         let result = scratch.dest_file_path(Path::new("/tmp"));
 
         let path = result.to_string_lossy();
-        assert!(path.contains("/tmp/test_"));
+        assert!(path.contains("/tmp/test-"));
         assert!(path.ends_with(".txt"));
     }
 

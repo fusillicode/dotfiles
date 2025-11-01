@@ -123,7 +123,7 @@ fn run_test(_: ()) {
 /// Neovim uses 1-based row indices for cursor positions, while tree-sitter expects 0-based rows.
 /// This wrapper simplifies the conversion in the codebase.
 #[derive(Debug)]
-#[cfg_attr(test, derive(PartialEq, Eq))]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 struct PointWrap(Point);
 
 impl Deref for PointWrap {

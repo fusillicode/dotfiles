@@ -341,7 +341,7 @@ pub fn fetch_branches(branches: &[&str]) -> color_eyre::Result<()> {
 
 /// Local or remote branch with metadata about the last commit.
 #[derive(Clone, Debug)]
-#[cfg_attr(test, derive(PartialEq, Eq))]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 pub enum Branch {
     /// Local branch (under `refs/heads/`).
     Local {
@@ -417,7 +417,7 @@ impl<'a> TryFrom<(git2::Branch<'a>, git2::BranchType)> for Branch {
 /// Aggregates index + worktree bitflags plus conflict / ignore markers into a higher‑level
 /// representation with convenience predicates (e.g. [`GitStatusEntry::is_new`]).
 #[derive(Clone, Debug)]
-#[cfg_attr(test, derive(PartialEq, Eq))]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct GitStatusEntry {
     /// Path relative to the repository root.
     pub path: PathBuf,
@@ -475,7 +475,7 @@ impl TryFrom<(PathBuf, &StatusEntry<'_>)> for GitStatusEntry {
 
 /// Staged (index) status for a path.
 #[derive(Clone, Debug)]
-#[cfg_attr(test, derive(PartialEq, Eq))]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 pub enum IndexState {
     /// Path added to the index.
     New,
@@ -513,7 +513,7 @@ impl IndexState {
 
 /// Unstaged (worktree) status for a path.
 #[derive(Clone, Debug)]
-#[cfg_attr(test, derive(PartialEq, Eq))]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 pub enum WorktreeState {
     /// Path newly created in worktree.
     New,
