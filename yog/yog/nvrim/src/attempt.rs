@@ -48,27 +48,29 @@ fn create_scratch_file(_: ()) {
         return;
     }
 
+    let callback = {
+        let scratches = scratches.clone();
+        move |choice_idx| {
+            let Some(scratch): Option<&Scratch> = scratches.get(choice_idx) else {
+                return;
+            };
+            let dest = scratch.dest_file_path(&dest_dir, Local::now());
+            if let Err(error) = std::fs::copy(&scratch.path, &dest) {
+                ytil_nvim_oxi::api::notify_error(format!(
+                    "cannot copy file | from={} to={} error={error:#?}",
+                    scratch.path.display(),
+                    dest.display()
+                ));
+                return;
+            }
+            let _ = ytil_nvim_oxi::api::exec_vim_cmd("edit", Some(&[dest.display().to_string()]));
+        }
+    };
+
     if let Err(error) = ytil_nvim_oxi::api::vim_ui_select(
         scratches.iter().map(|scratch| scratch.display_name.as_str()),
         &[("prompt", "Create scratch file ")],
-        {
-            let scratches = scratches.clone();
-            move |choice_idx| {
-                let Some(scratch) = scratches.get(choice_idx) else {
-                    return;
-                };
-                let dest = scratch.dest_file_path(&dest_dir, Local::now());
-                if let Err(error) = std::fs::copy(&scratch.path, &dest) {
-                    ytil_nvim_oxi::api::notify_error(format!(
-                        "cannot copy file | from={} to={} error={error:#?}",
-                        scratch.path.display(),
-                        dest.display()
-                    ));
-                    return;
-                }
-                let _ = ytil_nvim_oxi::api::exec_vim_cmd("edit", Some(&[dest.display().to_string()]));
-            }
-        },
+        callback,
     ) {
         ytil_nvim_oxi::api::notify_error(error);
     }
