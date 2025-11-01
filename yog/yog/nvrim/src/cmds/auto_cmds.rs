@@ -37,7 +37,7 @@ pub fn create() {
             crate::keymaps::set(&[Mode::Normal], "<c-n>", ":cn<cr>", &opts);
             crate::keymaps::set(&[Mode::Normal], "<c-p>", ":cp<cr>", &opts);
             crate::keymaps::set(&[Mode::Normal], "<c-x>", ":ccl<cr>", &opts);
-            ytil_nvim_oxi::api::exec_vim_cmd("resize", &["7".to_string()]);
+            let _ = ytil_nvim_oxi::api::exec_vim_cmd("resize", Some(&["7"]));
 
             true
         }),

@@ -389,7 +389,7 @@ impl Branch {
 /// - Resolving the branch tip commit fails.
 /// - Converting the committer timestamp into a [`DateTime`] fails.
 impl<'a> TryFrom<(git2::Branch<'a>, git2::BranchType)> for Branch {
-    type Error = color_eyre::Report;
+    type Error = color_eyre::eyre::Error;
 
     fn try_from((raw_branch, branch_type): (git2::Branch<'a>, git2::BranchType)) -> Result<Self, Self::Error> {
         let branch_name = raw_branch
@@ -453,7 +453,7 @@ impl GitStatusEntry {
 }
 
 impl TryFrom<(PathBuf, &StatusEntry<'_>)> for GitStatusEntry {
-    type Error = color_eyre::Report;
+    type Error = color_eyre::eyre::Error;
 
     fn try_from((repo_root, value): (PathBuf, &StatusEntry<'_>)) -> Result<Self, Self::Error> {
         let status = value.status();

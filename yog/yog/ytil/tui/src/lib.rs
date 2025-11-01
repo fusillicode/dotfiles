@@ -23,7 +23,7 @@ use strum::IntoEnumIterator;
 /// - `opts` The list of options to present for selection. Each option must implement [`Display`].
 ///
 /// # Type Parameters
-/// - `T`: The type of the options, constrained to implement [`Display`].
+/// - `T` The type of the options, constrained to implement [`Display`].
 ///
 /// # Returns
 /// - [`Result::Ok`] ([`Option::Some`] (selected)) A vector of the selected options if the user makes a non-empty

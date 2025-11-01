@@ -23,7 +23,7 @@ const ASSETS_DIR: &str = "assets";
 /// - Serializes it with minification enabled.
 ///
 /// # Arguments
-/// - `css_code`: Raw (unminified) CSS source as UTF-8 text.
+/// - `css_code` Raw (unminified) CSS source as UTF-8 text.
 ///
 /// # Returns
 /// Minified CSS string on success.

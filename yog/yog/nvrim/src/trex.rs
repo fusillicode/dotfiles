@@ -41,14 +41,14 @@ pub fn dict() -> Dictionary {
 ///
 /// # Notes
 /// Blockwise selections are treated as a contiguous span (not a rectangle).
-pub fn transform_selection(_: ()) {
+fn transform_selection(_: ()) {
     let Some(selection) = ytil_nvim_oxi::visual_selection::get(()) else {
         return;
     };
 
     let cases = Case::all_cases();
 
-    let Ok(()) = ytil_nvim_oxi::api::vim_ui_select(
+    if let Err(error) = ytil_nvim_oxi::api::vim_ui_select(
         cases.iter().map(DisplayableCase),
         &[("prompt", "Select case ")],
         move |choice_idx| {
@@ -74,12 +74,9 @@ pub fn transform_selection(_: ()) {
                     })
             });
         },
-    )
-    .inspect_err(|error| {
+    ) {
         ytil_nvim_oxi::api::notify_error(&format!("{error}"));
-    }) else {
-        return;
-    };
+    }
 }
 
 /// Newtype wrapper to make [`Case`] displayable using its [`Debug`] representation.

@@ -20,10 +20,10 @@ mod sorter;
 /// [`Dictionary`] of diagnostic processing helpers.
 ///
 /// Includes:
-/// - `format`: format function used by floating diagnostics window.
-/// - `sort`: severity sorter (descending severity).
-/// - `filter`: buffer / rules based filter.
-/// - `config`: nested dictionary mirroring `vim.diagnostic.config({...})` currently defined in Lua.
+/// - `format` format function used by floating diagnostics window.
+/// - `sort` severity sorter (descending severity).
+/// - `filter` buffer / rules based filter.
+/// - `config` nested dictionary mirroring `vim.diagnostic.config({...})` currently defined in Lua.
 pub fn dict() -> Dictionary {
     dict! {
         "filter": fn_from!(filter::filter),

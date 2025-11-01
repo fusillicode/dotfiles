@@ -18,7 +18,7 @@ pub trait BufferExt {
     /// Errors if the line does not exist at `idx`.
     ///
     /// # Arguments
-    /// - `idx`: 0-based line index inside the buffer.
+    /// - `idx` 0-based line index inside the buffer.
     ///
     /// # Errors
     /// - Fetching the line via `nvim_buf_get_lines` fails.
@@ -33,7 +33,7 @@ pub trait BufferExt {
     /// Silently returns if cursor position cannot be fetched.
     ///
     /// # Arguments
-    /// - `text`: UTF-8 slice inserted at the cursor byte column.
+    /// - `text` UTF-8 slice inserted at the cursor byte column.
     fn set_text_at_cursor_pos(&mut self, text: &str);
 }
 
