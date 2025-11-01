@@ -59,7 +59,7 @@ pub fn get_lines(_: ()) -> Vec<String> {
 /// - Return [`None`] if getting lines or text fails.
 pub fn get(_: ()) -> Option<Selection> {
     let Ok(mut bounds) = SelectionBounds::new().inspect_err(|error| {
-        crate::api::notify_error(&format!("cannot create selection bounds | error={error:#?}"));
+        crate::api::notify_error(format!("cannot create selection bounds | error={error:#?}"));
     }) else {
         return None;
     };
@@ -72,7 +72,7 @@ pub fn get(_: ()) -> Option<Selection> {
         let Ok(lines) = cur_buf
             .get_lines(bounds.start().lnum..=bounds.end().lnum, false)
             .inspect_err(|error| {
-                crate::api::notify_error(&format!("cannot get lines | buffer={cur_buf:#?} error={error:#?}"));
+                crate::api::notify_error(format!("cannot get lines | buffer={cur_buf:#?} error={error:#?}"));
             })
         else {
             return None;
@@ -97,7 +97,7 @@ pub fn get(_: ()) -> Option<Selection> {
             &GetTextOpts::default(),
         )
         .inspect_err(|error| {
-            crate::api::notify_error(&format!(
+            crate::api::notify_error(format!(
                 "cannot get text | buffer={cur_buf:#?} bounds={bounds:#?} error={error:#?}"
             ));
         })
@@ -321,7 +321,7 @@ impl Poppable for Pos {
 fn get_pos(mark: &str) -> color_eyre::Result<Pos> {
     nvim_oxi::api::call_function::<_, Pos>("getpos", Array::from_iter([mark]))
         .inspect_err(|error| {
-            crate::api::notify_error(&format!("cannot get pos | mark={mark} error={error:#?}"));
+            crate::api::notify_error(format!("cannot get pos | mark={mark} error={error:#?}"));
         })
         .map_err(|error| eyre!("get_pos failed | mark={mark:?} error={error:#?}"))
 }

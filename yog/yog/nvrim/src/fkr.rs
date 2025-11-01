@@ -34,7 +34,7 @@ fn insert_string(_: ()) {
     let options: Vec<_> = FkrOption::iter().collect();
 
     let Ok(selected_option) = ytil_nvim_oxi::api::inputlist("Select option:", &options).inspect_err(|error| {
-        ytil_nvim_oxi::api::notify_error(&format!("cannot get user input | error={error:#?}"));
+        ytil_nvim_oxi::api::notify_error(format!("cannot get user input | error={error:#?}"));
     }) else {
         return;
     };

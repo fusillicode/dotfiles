@@ -28,20 +28,20 @@ use crate::dict;
 pub fn set_g_var<V: ToObject + Debug>(name: &str, value: V) {
     let msg = format!("cannot set global var | name={name} value={value:#?}");
     if let Err(error) = nvim_oxi::api::set_var(name, value) {
-        crate::api::notify_error(&format!("{msg} | error={error:#?}"));
+        crate::api::notify_error(format!("{msg} | error={error:#?}"));
     }
 }
 
 /// Notifies the user of an error message in Nvim.
-pub fn notify_error(msg: &str) {
-    if let Err(error) = nvim_oxi::api::notify(msg, LogLevel::Error, &dict! {}) {
+pub fn notify_error<S: AsRef<str> + Debug>(msg: S) {
+    if let Err(error) = nvim_oxi::api::notify(msg.as_ref(), LogLevel::Error, &dict! {}) {
         nvim_oxi::dbg!(format!("cannot notify error | msg={msg:?} error={error:#?}"));
     }
 }
 
 /// Notifies the user of a warning message in Nvim.
-pub fn notify_warn(msg: &str) {
-    if let Err(error) = nvim_oxi::api::notify(msg, LogLevel::Warn, &dict! {}) {
+pub fn notify_warn<S: AsRef<str> + Debug>(msg: S) {
+    if let Err(error) = nvim_oxi::api::notify(msg.as_ref(), LogLevel::Warn, &dict! {}) {
         nvim_oxi::dbg!(format!("cannot notify warning | msg={msg:?} error={error:#?}"));
     }
 }
@@ -69,7 +69,7 @@ pub fn exec_vim_cmd(
         cmd_infos_builder.args(args.iter().map(|s| s.as_ref().to_string()));
     }
     nvim_oxi::api::cmd(&cmd_infos_builder.build(), &CmdOpts::default()).inspect_err(|error| {
-        crate::api::notify_error(&format!(
+        crate::api::notify_error(format!(
             "cannot execute cmd | cmd={cmd:?} args={args:#?} error={error:#?}",
         ));
     })

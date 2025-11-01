@@ -22,11 +22,11 @@ use ytil_cmd::CmdExt as _;
 pub fn get(_: ()) -> Option<WordUnderCursor> {
     let cur_win = Window::current();
     let cur_line = nvim_oxi::api::get_current_line()
-        .inspect_err(|error| ytil_nvim_oxi::api::notify_error(&format!("cannot get current line | error={error:#?}")))
+        .inspect_err(|error| ytil_nvim_oxi::api::notify_error(format!("cannot get current line | error={error:#?}")))
         .ok()?;
     let (_, col) = cur_win
         .get_cursor()
-        .inspect_err(|error| ytil_nvim_oxi::api::notify_error(&format!("cannot get cursor | error={error:#?}")))
+        .inspect_err(|error| ytil_nvim_oxi::api::notify_error(format!("cannot get cursor | error={error:#?}")))
         .ok()?;
     get_word_at_index(&cur_line, col)
         .map(ToOwned::to_owned)

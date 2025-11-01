@@ -103,7 +103,7 @@ fn get_default_hl_opts() -> SetHighlightOptsBuilder {
 /// Wrapper around `nvim_oxi::api::set_hl` with error notification.
 fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &SetHighlightOpts) {
     if let Err(error) = nvim_oxi::api::set_hl(ns_id, hl_name, hl_opts) {
-        ytil_nvim_oxi::api::notify_error(&format!(
+        ytil_nvim_oxi::api::notify_error(format!(
             "cannot set highlight opts | hl_opts={hl_opts:#?} hl_name={hl_name} namespace={ns_id} error={error:#?}"
         ));
     }
@@ -163,7 +163,7 @@ fn get_hl(
 ) -> color_eyre::Result<GetHlInfos<impl SuperIterator<(nvim_oxi::String, HighlightInfos)>>> {
     nvim_oxi::api::get_hl(ns_id, hl_opts)
         .inspect_err(|error| {
-            ytil_nvim_oxi::api::notify_error(&format!(
+            ytil_nvim_oxi::api::notify_error(format!(
                 "cannot get highlight infos | hl_opts={hl_opts:#?} error={error:#?}"
             ));
         })
@@ -188,7 +188,7 @@ fn hl_opts_from_hl_infos(hl_infos: &HighlightInfos) -> color_eyre::Result<SetHig
         .map(u8::try_from)
         .transpose()
         .inspect_err(|error| {
-            ytil_nvim_oxi::api::notify_error(&format!(
+            ytil_nvim_oxi::api::notify_error(format!(
                 "cannot convert blend value to u8 | value={:?} error={error:#?}",
                 hl_infos.blend
             ));
