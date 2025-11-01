@@ -51,8 +51,8 @@ pub fn notify_warn(msg: &str) {
 /// Wraps [`nvim_oxi::api::cmd`], reporting failures through [`crate::api::notify_error`].
 ///
 /// # Arguments
-/// - `cmd`: The ex command to execute.
-/// - `args`: Optional list of arguments for the command.
+/// - `cmd` The ex command to execute.
+/// - `args` Optional list of arguments for the command.
 ///
 /// # Returns
 /// Returns `Ok(output)` where `output` is the command's output if any, or `Err(error)` if execution failed.

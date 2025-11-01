@@ -51,8 +51,8 @@ pub fn build_home_path<P: AsRef<Path>>(parts: &[P]) -> color_eyre::Result<PathBu
 /// Builds a path by appending multiple parts to a root path.
 ///
 /// # Arguments
-/// - `root`: The base path to start with.
-/// - `parts`: A slice of path components to append.
+/// - `root` The base path to start with.
+/// - `parts` A slice of path components to append.
 ///
 /// # Returns
 /// A new [`PathBuf`] with all parts appended to the root.

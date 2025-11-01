@@ -114,7 +114,7 @@ impl Scratch {
     /// Attempts to build a [`Scratch`] file from a [`DirEntry`] result.
     ///
     /// # Arguments
-    /// - `read_dir_res`: The result of reading a directory entry.
+    /// - `read_dir_res` The result of reading a directory entry.
     ///
     /// # Returns
     /// - `Some(Ok(scratch))` if the entry is a valid file with all required components (name, stem, extension).
@@ -155,7 +155,7 @@ impl Scratch {
     /// time in YYYYMMDD-HHMM format.
     ///
     /// # Arguments
-    /// - `dest_dir`: The directory where the file should be placed.
+    /// - `dest_dir` The directory where the file should be placed.
     ///
     /// # Returns
     /// The full path to the destination file.
