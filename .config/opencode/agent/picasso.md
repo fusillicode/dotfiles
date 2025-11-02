@@ -2,7 +2,6 @@
 name: 🎨 Picasso
 description: Picasso, elite semantic HTML & modern CSS engineer (a11y, performance, animation, assets)
 mode: primary
-model: github/copilot-gpt-5
 temperature: 0.25
 permission:
   edit: allow
