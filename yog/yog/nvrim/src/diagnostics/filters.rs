@@ -2,7 +2,6 @@
 //!
 //! Defines [`DiagnosticsFilter`] trait plus ordered creation of all active filters (message blacklist,
 //! source‑specific sets, related info deduper). Ordering is significant for short‑circuit behavior.
-
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::opts::GetTextOpts;
@@ -15,11 +14,13 @@ pub mod msg_blacklist;
 pub mod related_info;
 
 pub struct BufferWithPath {
+    #[allow(dead_code)]
     buffer: Buffer,
     path: String,
 }
 
 impl BufferWithPath {
+    #[allow(dead_code)]
     pub fn get_diagnosed_word(&self, lsp_diag: &Dictionary) -> color_eyre::Result<Option<String>> {
         // Error if these are missing. LSPs diagnostics seems to always have these fields.
         let col = lsp_diag.get_t::<nvim_oxi::Integer>("col")? as usize;

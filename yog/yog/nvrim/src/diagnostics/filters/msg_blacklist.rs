@@ -78,7 +78,7 @@ impl DiagnosticsFilter for MsgBlacklistFilter<'_> {
             return Ok(false);
         }
         let msg = lsp_diag.get_t::<nvim_oxi::String>("message")?.to_lowercase();
-        nvim_oxi::dbg!(buf.get_diagnosed_word(lsp_diag)?);
+        // nvim_oxi::dbg!(buf.get_diagnosed_word(lsp_diag)?);
 
         if self.blacklist.iter().any(|b| msg.contains(b)) {
             return Ok(true);
