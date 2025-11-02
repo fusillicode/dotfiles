@@ -15,14 +15,13 @@ pub mod msg_blacklist;
 pub mod related_info;
 
 pub struct BufferWithPath {
-    #[allow(dead_code)]
     buffer: Buffer,
     path: String,
 }
 
 impl BufferWithPath {
-    #[allow(dead_code)]
     pub fn get_diagnosed_word(&self, lsp_diag: &Dictionary) -> color_eyre::Result<Option<String>> {
+        // Error if these are missing. LSPs diagnostics seems to always have these fields.
         let col = lsp_diag.get_t::<nvim_oxi::Integer>("col")? as usize;
         let end_col = lsp_diag.get_t::<nvim_oxi::Integer>("end_col")? as usize;
         let lnum = lsp_diag.get_t::<nvim_oxi::Integer>("lnum")? as usize;
@@ -34,24 +33,23 @@ impl BufferWithPath {
 
         let lines = self
             .buffer
-            .get_text(lnum..=end_lnum, col, end_col, &GetTextOpts::default())?
-            .filter(|s| !s.is_empty())
+            .get_text(lnum..end_lnum, col, end_col, &GetTextOpts::default())?
             .collect::<Vec<_>>();
 
-        if lines.is_empty() {
+        let lines_len = lines.len();
+        if lines_len == 0 {
             return Ok(None);
         }
-
-        let last_line_idx = lines.len().saturating_sub(1);
+        let last_line_idx = lines_len.saturating_sub(1);
         let adjusted_end_col = end_col.saturating_sub(col);
 
         let mut out = String::new();
         for (line_idx, line) in lines.iter().enumerate() {
-            let s = line.to_string();
+            let line = line.to_string();
             let text = if line_idx == last_line_idx {
-                s.get(..adjusted_end_col).unwrap_or(&s)
+                line.get(..adjusted_end_col).unwrap_or(&line)
             } else {
-                &s
+                &line
             };
             out.push_str(text)
         }
