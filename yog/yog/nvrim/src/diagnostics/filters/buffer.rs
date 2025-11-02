@@ -6,6 +6,7 @@
 use nvim_oxi::Dictionary;
 use ytil_system::build_home_path;
 
+use crate::diagnostics::filters::BufferWithPath;
 use crate::diagnostics::filters::DiagnosticsFilter;
 
 /// Filters out diagnostics based on the coded paths blacklist.
@@ -36,7 +37,12 @@ impl DiagnosticsFilter for BufferFilter {
     ///
     /// # Errors
     /// - Building the paths blacklist fails (home directory resolution).
-    fn skip_diagnostic(&self, buf_path: &str, _lsp_diag: Option<&Dictionary>) -> color_eyre::Result<bool> {
-        Ok(self.blacklist.iter().any(|up| buf_path.contains(up)))
+    fn skip_diagnostic(
+        &self,
+        buf: Option<&BufferWithPath>,
+        _lsp_diag: Option<&Dictionary>,
+    ) -> color_eyre::Result<bool> {
+        let Some(buf) = buf else { return Ok(false) };
+        Ok(self.blacklist.iter().any(|up| buf.path.contains(up)))
     }
 }

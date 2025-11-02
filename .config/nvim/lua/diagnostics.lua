@@ -5,7 +5,7 @@ function M.setup(nvrim)
   local diag_set = vim.diagnostic.set
   vim.diagnostic.set = function(namespace, bufnr, diagnostics, opts)
     -- NOTE: enable this line to understand what's happening with diagnostics
-    -- require('utils').log(diagnostics)
+    require('utils').log(diagnostics)
     -- NOTE: switch to this line if `nvrim.filter_diagnostics(diagnostics)` misbehave
     -- diag_set(namespace, bufnr, diagnostics, opts)
     diag_set(
