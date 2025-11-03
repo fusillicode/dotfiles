@@ -175,7 +175,7 @@ mod tests {
         let buf = create_buffer_with_path("/project/src/lib.rs");
         let diag = dict! {
             source: "foo",
-            message: "stdout channel mention",
+            message: "foo stdout channel mention",
             lnum: 1,
             col: 1,
             end_lnum: 1,
@@ -195,7 +195,7 @@ mod tests {
         let buf = create_buffer_with_path("file.rs");
         let diag = dict! {
             source: "foo",
-            message: "STDERR reported",
+            message: "foo STDERR reported",
             lnum: 1,
             col: 1,
             end_lnum: 1,
@@ -235,7 +235,7 @@ mod tests {
         // Only message key present. Missing source should not produce an error; blacklist still applies.
         let buf = create_buffer_with_path("file.rs");
         let diag = dict! {
-            message: "stderr reported",
+            message: "foo stderr reported",
             lnum: 1,
             col: 1,
             end_lnum: 1,
@@ -273,7 +273,7 @@ mod tests {
         };
         let buf = create_buffer_with_path("file.rs");
         let diag = dict! {
-            message: "An ERROR occurred",
+            message: "foo An ERROR occurred",
             lnum: 1,
             col: 1,
             end_lnum: 1,
