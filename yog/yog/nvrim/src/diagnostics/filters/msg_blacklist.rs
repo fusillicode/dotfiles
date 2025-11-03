@@ -355,15 +355,14 @@ mod tests {
     fn skip_diagnostic_when_diagnosed_text_matches_has_space_and_message_matches_preposition_suggestion_returns_true() {
         let filter = MsgBlacklistFilter {
             source: "test_source",
-            blacklist: [(
+            blacklist: std::iter::once((
                 "has ",
                 Some(
                     vec!["You may be missing a preposition here"]
                         .into_iter()
                         .collect::<HashSet<_>>(),
                 ),
-            )]
-            .into_iter()
+            ))
             .collect(),
             buf_path: None,
         };

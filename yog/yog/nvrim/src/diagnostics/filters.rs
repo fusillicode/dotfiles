@@ -16,19 +16,17 @@ pub mod msg_blacklist;
 pub mod related_info;
 
 pub struct BufferWithPath {
-    #[allow(dead_code)]
     buffer: Box<dyn BufferExt>,
     path: String,
 }
 
 impl BufferWithPath {
-    #[allow(dead_code)]
     pub fn get_diagnosed_text(&self, lsp_diag: &Dictionary) -> color_eyre::Result<Option<String>> {
         // Error if these are missing. LSPs diagnostics seems to always have these fields.
-        let lnum = lsp_diag.get_t::<nvim_oxi::Integer>("lnum")? as usize;
-        let col = lsp_diag.get_t::<nvim_oxi::Integer>("col")? as usize;
-        let end_col = lsp_diag.get_t::<nvim_oxi::Integer>("end_col")? as usize;
-        let end_lnum = lsp_diag.get_t::<nvim_oxi::Integer>("end_lnum")? as usize;
+        let lnum = usize::try_from(lsp_diag.get_t::<nvim_oxi::Integer>("lnum")?)?;
+        let col = usize::try_from(lsp_diag.get_t::<nvim_oxi::Integer>("col")?)?;
+        let end_col = usize::try_from(lsp_diag.get_t::<nvim_oxi::Integer>("end_col")?)?;
+        let end_lnum = usize::try_from(lsp_diag.get_t::<nvim_oxi::Integer>("end_lnum")?)?;
 
         if lnum > end_lnum || col > end_col {
             return Ok(None);
@@ -47,13 +45,13 @@ impl BufferWithPath {
 
         let mut out = String::new();
         for (line_idx, line) in lines.iter().enumerate() {
-            let line = line.to_string();
+            let line = line.clone();
             let text = if line_idx == last_line_idx {
                 line.get(..adjusted_end_col).unwrap_or(&line)
             } else {
                 &line
             };
-            out.push_str(text)
+            out.push_str(text);
         }
 
         if out.is_empty() {
