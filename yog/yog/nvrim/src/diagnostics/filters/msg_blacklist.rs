@@ -47,7 +47,7 @@ pub struct MsgBlacklistFilter<'a> {
     /// LSP diagnostic source name; only diagnostics from this source are eligible for blacklist matching.
     pub source: &'a str,
     /// Blacklist of messages per source.
-    pub blacklist: HashMap<&'static str, Option<HashSet<String>>>,
+    pub blacklist: HashMap<&'static str, Option<HashSet<&'static str>>>,
     /// Optional buffer path substring that must be contained within the buffer path for filtering to apply.
     pub buf_path: Option<&'a str>,
 }
@@ -81,15 +81,17 @@ impl DiagnosticsFilter for MsgBlacklistFilter<'_> {
         {
             return Ok(false);
         }
-        let msg = lsp_diag.get_t::<nvim_oxi::String>("message")?.to_lowercase();
+        let msg = lsp_diag.get_t::<nvim_oxi::String>("message")?;
         let maybe_diagnosed_text = buf.get_diagnosed_text(lsp_diag)?;
 
         if maybe_diagnosed_text
             .and_then(|diagnosed_text| {
                 self.blacklist
                     .get(diagnosed_text.as_str())
-                    .and_then(|blacklisted_msgs| {
-                        blacklisted_msgs.as_ref().map(|set| set.iter().any(|s| msg.contains(s)))
+                    .and_then(|maybe_blacklisted_msgs| {
+                        maybe_blacklisted_msgs
+                            .as_ref()
+                            .map(|set| set.iter().any(|s| s.contains(&msg)))
                     })
             })
             .is_some_and(identity)
@@ -116,7 +118,7 @@ mod tests {
     fn skip_diagnostic_when_no_diagnostic_returns_false() {
         let filter = MsgBlacklistFilter {
             source: "foo",
-            blacklist: HashMap::from([("foo", Some(HashSet::from(["stderr".into()])))]),
+            blacklist: HashMap::from([("foo", Some(HashSet::from(["stderr"])))]),
             buf_path: None,
         };
         assert2::let_assert!(Ok(res) = filter.skip_diagnostic(None, None));
@@ -127,7 +129,7 @@ mod tests {
     fn skip_diagnostic_when_buf_path_pattern_not_matched_returns_false() {
         let filter = MsgBlacklistFilter {
             source: "foo",
-            blacklist: HashMap::from([("foo", Some(HashSet::from(["stderr".into()])))]),
+            blacklist: HashMap::from([("foo", Some(HashSet::from(["stderr"])))]),
             buf_path: Some("src/"),
         };
         let buf = create_buffer_with_path("tests/main.rs");
@@ -147,7 +149,7 @@ mod tests {
     fn skip_diagnostic_when_source_mismatch_even_if_message_matches_returns_false() {
         let filter = MsgBlacklistFilter {
             source: "foo",
-            blacklist: HashMap::from([("foo", Some(HashSet::from(["stderr".into()])))]),
+            blacklist: HashMap::from([("foo", Some(HashSet::from(["stderr"])))]),
             buf_path: None,
         };
         let buf = create_buffer_with_path("src/lib.rs");
@@ -167,7 +169,7 @@ mod tests {
     fn skip_diagnostic_when_blacklisted_substring_with_all_preconditions_met_returns_true() {
         let filter = MsgBlacklistFilter {
             source: "foo",
-            blacklist: HashMap::from([("foo", Some(HashSet::from(["stderr".into(), "stdout".into()])))]),
+            blacklist: HashMap::from([("foo", Some(HashSet::from(["stderr", "stdout"])))]),
             buf_path: Some("src"),
         };
         let buf = create_buffer_with_path("/project/src/lib.rs");
@@ -184,10 +186,10 @@ mod tests {
     }
 
     #[test]
-    fn skip_diagnostic_when_case_insensitive_message_matches_reference_returns_true() {
+    fn skip_diagnostic_when_message_contains_blacklisted_substring_returns_true() {
         let filter = MsgBlacklistFilter {
             source: "foo",
-            blacklist: HashMap::from([("foo", Some(HashSet::from(["stderr".into()])))]),
+            blacklist: HashMap::from([("foo", Some(HashSet::from(["STDERR"])))]),
             buf_path: None,
         };
         let buf = create_buffer_with_path("file.rs");
@@ -207,7 +209,7 @@ mod tests {
     fn skip_diagnostic_when_message_not_in_blacklist_returns_false() {
         let filter = MsgBlacklistFilter {
             source: "foo",
-            blacklist: HashMap::from([("foo", Some(HashSet::from(["stderr".into()])))]),
+            blacklist: HashMap::from([("foo", Some(HashSet::from(["stderr"])))]),
             buf_path: None,
         };
         let buf = create_buffer_with_path("file.rs");
@@ -227,7 +229,7 @@ mod tests {
     fn skip_diagnostic_when_missing_source_key_and_message_blacklisted_returns_true() {
         let filter = MsgBlacklistFilter {
             source: "foo",
-            blacklist: HashMap::from([("foo", Some(HashSet::from(["stderr".into()])))]),
+            blacklist: HashMap::from([("foo", Some(HashSet::from(["stderr"])))]),
             buf_path: None,
         };
         // Only message key present. Missing source should not produce an error; blacklist still applies.
@@ -247,7 +249,7 @@ mod tests {
     fn skip_diagnostic_when_missing_source_and_message_not_blacklisted_returns_false() {
         let filter = MsgBlacklistFilter {
             source: "foo",
-            blacklist: HashMap::from([("foo", Some(HashSet::from(["stderr".into()])))]),
+            blacklist: HashMap::from([("foo", Some(HashSet::from(["stderr"])))]),
             buf_path: None,
         };
         let buf = create_buffer_with_path("file.rs");
@@ -266,7 +268,7 @@ mod tests {
     fn skip_diagnostic_when_overlapping_blacklist_substrings_returns_true() {
         let filter = MsgBlacklistFilter {
             source: "foo",
-            blacklist: HashMap::from([("foo", Some(HashSet::from(["error".into(), "err".into()])))]),
+            blacklist: HashMap::from([("foo", Some(HashSet::from(["ERROR", "err"])))]),
             buf_path: None,
         };
         let buf = create_buffer_with_path("file.rs");
@@ -285,7 +287,7 @@ mod tests {
     fn skip_diagnostic_when_missing_message_key_returns_error() {
         let filter = MsgBlacklistFilter {
             source: "foo",
-            blacklist: HashMap::from([("foo", Some(HashSet::from(["stderr".into()])))]),
+            blacklist: HashMap::from([("foo", Some(HashSet::from(["stderr"])))]),
             buf_path: None,
         };
         // Only source key present.
@@ -307,7 +309,7 @@ mod tests {
     fn skip_diagnostic_when_source_wrong_type_returns_error() {
         let filter = MsgBlacklistFilter {
             source: "foo",
-            blacklist: HashMap::from([("foo", Some(HashSet::from(["stderr".into()])))]),
+            blacklist: HashMap::from([("foo", Some(HashSet::from(["stderr"])))]),
             buf_path: None,
         };
         // Wrong type for source (integer) plus valid message.
@@ -330,7 +332,7 @@ mod tests {
     fn skip_diagnostic_when_message_wrong_type_returns_error() {
         let filter = MsgBlacklistFilter {
             source: "foo",
-            blacklist: HashMap::from([("foo", Some(HashSet::from(["stderr".into()])))]),
+            blacklist: HashMap::from([("foo", Some(HashSet::from(["stderr"])))]),
             buf_path: None,
         };
         // Wrong type for message (integer) plus valid source.
@@ -347,6 +349,38 @@ mod tests {
         let msg = err.to_string();
         assert!(msg.contains("is Integer but String was expected"), "actual: {msg}");
         assert!(msg.contains("key \"message\""), "actual: {msg}");
+    }
+
+    #[test]
+    fn skip_diagnostic_when_diagnosed_text_matches_has_space_and_message_matches_preposition_suggestion_returns_true() {
+        let filter = MsgBlacklistFilter {
+            source: "test_source",
+            blacklist: [(
+                "has ",
+                Some(
+                    vec!["You may be missing a preposition here"]
+                        .into_iter()
+                        .collect::<HashSet<_>>(),
+                ),
+            )]
+            .into_iter()
+            .collect(),
+            buf_path: None,
+        };
+        let buf = BufferWithPath {
+            buffer: Box::new(MockBuffer(vec!["has something".to_string()])),
+            path: "test.rs".to_string(),
+        };
+        let diag = dict! {
+            source: "test_source",
+            message: "You may be missing a preposition here",
+            lnum: 0,
+            col: 0,
+            end_lnum: 0,
+            end_col: 4,
+        };
+        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(Some(&buf), Some(&diag)));
+        assert!(res);
     }
 
     fn create_buffer_with_path(path: &str) -> BufferWithPath {

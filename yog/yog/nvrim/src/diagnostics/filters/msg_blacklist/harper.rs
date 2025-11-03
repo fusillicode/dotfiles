@@ -3,6 +3,7 @@
 //! Suppresses noisy channel tokens and minor phrasing suggestions using a single [`MsgBlacklistFilter`].
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use crate::diagnostics::filters::DiagnosticsFilter;
 use crate::diagnostics::filters::msg_blacklist::MsgBlacklistFilter;
@@ -15,17 +16,15 @@ use crate::diagnostics::filters::msg_blacklist::MsgBlacklistFilter;
 /// # Returns
 /// - `Vec<Box<dyn DiagnosticsFilter>>`: Collection containing one configured [`MsgBlacklistFilter`] for Harper.
 pub fn filters() -> Vec<Box<dyn DiagnosticsFilter>> {
-    let blacklist: HashMap<_, _> = [
-        "stderr",
-        "stdout",
-        "stdin",
-        "insert `to` to complete the infinitive",
-        "did you mean to spell `s` this way",
-        "not the possessive `its`",
-        "`argument` instead of `arg`",
-    ]
+    let blacklist: HashMap<_, _> = [(
+        "has ",
+        Some(
+            vec!["You may be missing a preposition here"]
+                .into_iter()
+                .collect::<HashSet<_>>(),
+        ),
+    )]
     .into_iter()
-    .map(|term| (term, None))
     .collect();
 
     vec![Box::new(MsgBlacklistFilter {
