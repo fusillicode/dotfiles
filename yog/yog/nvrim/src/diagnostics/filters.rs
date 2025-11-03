@@ -122,9 +122,8 @@ impl DiagnosticsFilter for DiagnosticsFilters {
 
 #[cfg(test)]
 mod tests {
-    use nvim_oxi::api::opts::GetTextOpts;
     use rstest::rstest;
-    use ytil_nvim_oxi::buffer::BufferExt;
+    use ytil_nvim_oxi::buffer::mock::MockBuffer;
 
     use super::*;
 
@@ -179,57 +178,15 @@ mod tests {
         #[case] diag: Dictionary,
         #[case] expected: Option<String>,
     ) {
-        let buf = create_buffer_with_path(lines);
+        let buf = BufferWithPath {
+            buffer: Box::new(MockBuffer(lines)),
+            path: "test.rs".to_string(),
+        };
         assert2::let_assert!(Ok(actual) = buf.get_diagnosed_word(&diag));
         pretty_assertions::assert_eq!(actual, expected);
     }
 
-    struct MockBuffer(Vec<String>);
-
-    impl BufferExt for MockBuffer {
-        fn get_line(&self, _idx: usize) -> color_eyre::Result<nvim_oxi::String> {
-            unimplemented!()
-        }
-
-        fn set_text_at_cursor_pos(&mut self, _text: &str) {
-            unimplemented!()
-        }
-
-        fn get_text_between(
-            &self,
-            (start_lnum, start_col): (usize, usize),
-            (end_lnum, end_col): (usize, usize),
-            _opts: &GetTextOpts,
-        ) -> Result<Vec<String>, nvim_oxi::api::Error> {
-            if start_lnum > end_lnum || (start_lnum == end_lnum && start_col > end_col) {
-                return Ok(vec![]);
-            }
-            let mut result = Vec::new();
-            for lnum in start_lnum..=end_lnum {
-                if lnum >= self.0.len() {
-                    break;
-                }
-                let line = &self.0[lnum];
-                let start = if lnum == start_lnum { start_col } else { 0 };
-                let end = if lnum == end_lnum { end_col } else { line.len() };
-                if start >= line.len() {
-                    result.push(String::new());
-                } else {
-                    result.push(line[start..end.min(line.len())].to_string());
-                }
-            }
-            Ok(result)
-        }
-    }
-
     fn create_diag(lnum: i64, col: i64, end_lnum: i64, end_col: i64) -> Dictionary {
         ytil_nvim_oxi::dict! { col: col, end_col: end_col, lnum: lnum, end_lnum: end_lnum }
-    }
-
-    fn create_buffer_with_path(lines: Vec<String>) -> BufferWithPath {
-        BufferWithPath {
-            buffer: Box::new(MockBuffer(lines)),
-            path: "test.rs".to_string(),
-        }
     }
 }

@@ -12,6 +12,7 @@ use nvim_oxi::api::opts::GetTextOpts;
 ///
 /// Provides focused helpers for line fetching and text insertion at the current
 /// cursor position while surfacing Neovim errors via `notify_error`.
+#[cfg_attr(any(test, feature = "mockall"), mockall::automock)]
 pub trait BufferExt {
     /// Fetch a single line from a [`Buffer`] by 0-based index.
     ///
@@ -184,5 +185,48 @@ mod tests {
     fn cursor_position_adjusted_col_when_non_zero_increments_by_one() {
         let pos = CursorPosition { row: 10, col: 7 };
         pretty_assertions::assert_eq!(pos.adjusted_col(), 8);
+    }
+}
+
+#[cfg(any(test, feature = "mockall"))]
+pub mod mock {
+    use super::*;
+
+    pub struct MockBuffer(pub Vec<String>);
+
+    impl BufferExt for MockBuffer {
+        fn get_line(&self, _idx: usize) -> color_eyre::Result<nvim_oxi::String> {
+            unimplemented!()
+        }
+
+        fn set_text_at_cursor_pos(&mut self, _text: &str) {
+            unimplemented!()
+        }
+
+        fn get_text_between(
+            &self,
+            (start_lnum, start_col): (usize, usize),
+            (end_lnum, end_col): (usize, usize),
+            _opts: &GetTextOpts,
+        ) -> Result<Vec<String>, nvim_oxi::api::Error> {
+            if start_lnum > end_lnum || (start_lnum == end_lnum && start_col > end_col) {
+                return Ok(vec![]);
+            }
+            let mut result = Vec::new();
+            for lnum in start_lnum..=end_lnum {
+                if lnum >= self.0.len() {
+                    break;
+                }
+                let line = &self.0[lnum];
+                let start = if lnum == start_lnum { start_col } else { 0 };
+                let end = if lnum == end_lnum { end_col } else { line.len() };
+                if start >= line.len() {
+                    result.push(String::new());
+                } else {
+                    result.push(line[start..end.min(line.len())].to_string());
+                }
+            }
+            Ok(result)
+        }
     }
 }

@@ -89,8 +89,7 @@ impl DiagnosticsFilter for MsgBlacklistFilter<'_> {
 
 #[cfg(test)]
 mod tests {
-    use nvim_oxi::api::opts::GetTextOpts;
-    use ytil_nvim_oxi::buffer::BufferExt;
+    use ytil_nvim_oxi::buffer::mock::MockBuffer;
 
     use super::*;
     use crate::diagnostics::filters::BufferWithPath;
@@ -259,30 +258,9 @@ mod tests {
         assert!(msg.contains("key \"message\""), "actual: {msg}");
     }
 
-    struct MockBuffer;
-
-    impl BufferExt for MockBuffer {
-        fn get_line(&self, _idx: usize) -> color_eyre::Result<nvim_oxi::String> {
-            unimplemented!()
-        }
-
-        fn set_text_at_cursor_pos(&mut self, _text: &str) {
-            unimplemented!()
-        }
-
-        fn get_text_between(
-            &self,
-            _start: (usize, usize),
-            _end: (usize, usize),
-            _opts: &GetTextOpts,
-        ) -> Result<Vec<String>, nvim_oxi::api::Error> {
-            unimplemented!()
-        }
-    }
-
     fn create_buffer_with_path(path: &str) -> BufferWithPath {
         BufferWithPath {
-            buffer: Box::new(MockBuffer),
+            buffer: Box::new(MockBuffer(vec![])),
             path: path.to_string(),
         }
     }
