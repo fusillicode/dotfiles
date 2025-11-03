@@ -195,15 +195,7 @@ mod tests {
         pretty_assertions::assert_eq!(actual, Some("hi".to_string()));
     }
 
-    struct MockBuffer {
-        lines: Vec<String>,
-    }
-
-    impl MockBuffer {
-        fn new(lines: Vec<String>) -> Self {
-            Self { lines }
-        }
-    }
+    struct MockBuffer(Vec<String>);
 
     impl BufferExt for MockBuffer {
         fn get_line(&self, _idx: usize) -> color_eyre::Result<nvim_oxi::String> {
@@ -225,10 +217,10 @@ mod tests {
             }
             let mut result = Vec::new();
             for lnum in start_lnum..=end_lnum {
-                if lnum >= self.lines.len() {
+                if lnum >= self.0.len() {
                     break;
                 }
-                let line = &self.lines[lnum];
+                let line = &self.0[lnum];
                 let start = if lnum == start_lnum { start_col } else { 0 };
                 let end = if lnum == end_lnum { end_col } else { line.len() };
                 if start >= line.len() {
@@ -247,7 +239,7 @@ mod tests {
 
     fn create_buffer_with_path(lines: Vec<String>) -> BufferWithPath {
         BufferWithPath {
-            buffer: Box::new(MockBuffer::new(lines)),
+            buffer: Box::new(MockBuffer(lines)),
             path: "test.rs".to_string(),
         }
     }
