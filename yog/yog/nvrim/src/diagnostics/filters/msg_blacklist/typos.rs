@@ -3,6 +3,8 @@
 //! Provides a curated set of substrings to suppress recurring false‑positive spelling suggestions
 //! (domain‑specific terms) via [`MsgBlacklistFilter`].
 
+use std::collections::HashMap;
+
 use crate::diagnostics::filters::DiagnosticsFilter;
 use crate::diagnostics::filters::msg_blacklist::MsgBlacklistFilter;
 
@@ -16,7 +18,7 @@ use crate::diagnostics::filters::msg_blacklist::MsgBlacklistFilter;
 /// - [`Vec<Box<dyn DiagnosticsFilter>>`] Collection containing one configured [`MsgBlacklistFilter`] for the typos
 ///   source.
 pub fn filters() -> Vec<Box<dyn DiagnosticsFilter>> {
-    let blacklist: Vec<_> = [
+    let blacklist: HashMap<_, _> = [
         "accidentes",
         "aci",
         "administrar",
@@ -59,8 +61,8 @@ pub fn filters() -> Vec<Box<dyn DiagnosticsFilter>> {
         "ue",
         "utiliza",
     ]
-    .iter()
-    .map(|term| format!("`{term}` should be"))
+    .into_iter()
+    .map(|term| (term, None))
     .collect();
 
     vec![Box::new(MsgBlacklistFilter {

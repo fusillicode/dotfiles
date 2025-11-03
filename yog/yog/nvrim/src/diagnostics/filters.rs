@@ -23,7 +23,7 @@ pub struct BufferWithPath {
 
 impl BufferWithPath {
     #[allow(dead_code)]
-    pub fn get_diagnosed_word(&self, lsp_diag: &Dictionary) -> color_eyre::Result<Option<String>> {
+    pub fn get_diagnosed_text(&self, lsp_diag: &Dictionary) -> color_eyre::Result<Option<String>> {
         // Error if these are missing. LSPs diagnostics seems to always have these fields.
         let lnum = lsp_diag.get_t::<nvim_oxi::Integer>("lnum")? as usize;
         let col = lsp_diag.get_t::<nvim_oxi::Integer>("col")? as usize;
@@ -173,7 +173,7 @@ mod tests {
         create_diag(0, 0, 0, 10),
         Some("hi".to_string())
     )]
-    fn get_diagnosed_word_returns_expected(
+    fn get_diagnosed_text_returns_expected(
         #[case] lines: Vec<String>,
         #[case] diag: Dictionary,
         #[case] expected: Option<String>,
@@ -182,7 +182,7 @@ mod tests {
             buffer: Box::new(MockBuffer(lines)),
             path: "test.rs".to_string(),
         };
-        assert2::let_assert!(Ok(actual) = buf.get_diagnosed_word(&diag));
+        assert2::let_assert!(Ok(actual) = buf.get_diagnosed_text(&diag));
         pretty_assertions::assert_eq!(actual, expected);
     }
 
