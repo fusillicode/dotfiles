@@ -16,14 +16,19 @@ use crate::diagnostics::filters::msg_blacklist::MsgBlacklistFilter;
 /// # Returns
 /// - `Vec<Box<dyn DiagnosticsFilter>>`: Collection containing one configured [`MsgBlacklistFilter`] for Harper.
 pub fn filters() -> Vec<Box<dyn DiagnosticsFilter>> {
-    let blacklist: HashMap<_, _> = [(
-        "has ",
-        Some(
-            vec!["You may be missing a preposition here"]
-                .into_iter()
-                .collect::<HashSet<_>>(),
+    let blacklist: HashMap<_, _> = [
+        (
+            "has ",
+            Some(
+                vec!["You may be missing a preposition here"]
+                    .into_iter()
+                    .collect::<HashSet<_>>(),
+            ),
         ),
-    )]
+        ("stderr", Some(vec!["instead of"].into_iter().collect::<HashSet<_>>())),
+        ("stdout", Some(vec!["instead of"].into_iter().collect::<HashSet<_>>())),
+        ("stdin", Some(vec!["instead of"].into_iter().collect::<HashSet<_>>())),
+    ]
     .into_iter()
     .collect();
 

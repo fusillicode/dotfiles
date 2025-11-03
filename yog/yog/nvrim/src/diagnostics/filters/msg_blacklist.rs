@@ -91,19 +91,19 @@ impl DiagnosticsFilter for MsgBlacklistFilter<'_> {
                     .and_then(|maybe_blacklisted_msgs| {
                         maybe_blacklisted_msgs
                             .as_ref()
-                            .map(|set| set.iter().any(|s| s.contains(&msg)))
+                            .map(|set| set.iter().any(|s| msg.contains(s)))
                     })
             })
             .is_some_and(identity)
         {
-            return Ok(true);
+            Ok(true)
+        } else {
+            Ok(self
+                .blacklist
+                .keys()
+                .into_iter()
+                .any(|blacklisted_msg| msg.contains(blacklisted_msg)))
         }
-        Ok(self.blacklist.values().into_iter().any(|blacklisted_msgs| {
-            blacklisted_msgs
-                .as_ref()
-                .map(|set| set.iter().any(|s| msg.contains(s)))
-                .is_some_and(identity)
-        }))
     }
 }
 
