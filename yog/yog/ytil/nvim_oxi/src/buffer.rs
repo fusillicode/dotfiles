@@ -45,7 +45,7 @@ pub trait BufferExt {
     ///
     /// # Arguments
     /// - `start` (lnum, col) 0-based starting line and column (column is byte offset).
-    /// - `end` (end_lnum, end_col) 0-based ending line and column (inclusive; column is byte offset).
+    /// - `end` (`end_lnum`, `end_col`) 0-based ending line and column (inclusive; column is byte offset).
     /// - `opts` Reference to [`GetTextOpts`] for additional options.
     ///
     /// # Returns
