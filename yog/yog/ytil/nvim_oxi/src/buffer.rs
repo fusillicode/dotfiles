@@ -6,6 +6,7 @@
 use color_eyre::eyre::eyre;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::Window;
+use nvim_oxi::api::opts::GetTextOpts;
 
 /// Extension trait for [`Buffer`] to provide extra functionalities.
 ///
@@ -35,6 +36,13 @@ pub trait BufferExt {
     /// # Arguments
     /// - `text` UTF-8 slice inserted at the cursor byte column.
     fn set_text_at_cursor_pos(&mut self, text: &str);
+
+    fn get_text_as_vec_of_lines(
+        &self,
+        start: (usize, usize),
+        end: (usize, usize),
+        opts: &GetTextOpts,
+    ) -> Result<Vec<String>, nvim_oxi::api::Error>;
 }
 
 impl BufferExt for Buffer {
@@ -62,6 +70,18 @@ impl BufferExt for Buffer {
                 "cannot set text in buffer | text={text:?} buffer={self:?} line_range={line_range:?} start_col={start_col:?} end_col={end_col:?} error={error:?}",
             ));
         }
+    }
+
+    fn get_text_as_vec_of_lines(
+        &self,
+        (start_lnum, start_col): (usize, usize),
+        (end_lnum, end_col): (usize, usize),
+        opts: &GetTextOpts,
+    ) -> Result<Vec<String>, nvim_oxi::api::Error> {
+        Ok(self
+            .get_text(start_lnum..end_lnum, start_col, end_col, opts)?
+            .map(|line| line.to_string())
+            .collect::<Vec<_>>())
     }
 }
 

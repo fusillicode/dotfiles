@@ -2,9 +2,11 @@
 //!
 //! Defines [`DiagnosticsFilter`] trait plus ordered creation of all active filters (message blacklist,
 //! source‑specific sets, related info deduper). Ordering is significant for short‑circuit behavior.
+
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::opts::GetTextOpts;
+use ytil_nvim_oxi::buffer::BufferExt;
 use ytil_nvim_oxi::dict::DictionaryExt as _;
 
 use crate::diagnostics::filters::related_info::RelatedInfoFilter;
@@ -15,7 +17,7 @@ pub mod related_info;
 
 pub struct BufferWithPath {
     #[allow(dead_code)]
-    buffer: Buffer,
+    buffer: Box<dyn BufferExt>,
     path: String,
 }
 
@@ -34,8 +36,7 @@ impl BufferWithPath {
 
         let lines = self
             .buffer
-            .get_text(lnum..end_lnum, col, end_col, &GetTextOpts::default())?
-            .collect::<Vec<_>>();
+            .get_text_as_vec_of_lines((lnum, col), (end_lnum, end_col), &GetTextOpts::default())?;
 
         let lines_len = lines.len();
         if lines_len == 0 {
@@ -64,7 +65,10 @@ impl TryFrom<Buffer> for BufferWithPath {
 
     fn try_from(value: Buffer) -> Result<Self, Self::Error> {
         let path = value.get_name().map(|s| s.to_string_lossy().to_string())?;
-        Ok(Self { path, buffer: value })
+        Ok(Self {
+            path,
+            buffer: Box::new(value),
+        })
     }
 }
 
@@ -109,5 +113,142 @@ impl DiagnosticsFilter for DiagnosticsFilters {
             }
         }
         Ok(false)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use nvim_oxi::api::opts::GetTextOpts;
+    use ytil_nvim_oxi::buffer::BufferExt;
+
+    use super::*;
+
+    #[test]
+    fn get_diagnosed_word_when_lnum_greater_than_end_lnum_returns_none() {
+        let buf = create_buffer_with_path(vec!["hello world".to_string()]);
+        let diag = create_diag(0, 5, 1, 0);
+        assert2::let_assert!(Ok(actual) = buf.get_diagnosed_word(&diag));
+        pretty_assertions::assert_eq!(actual, None);
+    }
+
+    #[test]
+    fn get_diagnosed_word_when_col_greater_than_end_col_returns_none() {
+        let buf = create_buffer_with_path(vec!["hello world".to_string()]);
+        let diag = create_diag(5, 0, 0, 0);
+        assert2::let_assert!(Ok(actual) = buf.get_diagnosed_word(&diag));
+        pretty_assertions::assert_eq!(actual, None);
+    }
+
+    #[test]
+    fn get_diagnosed_word_when_empty_lines_returns_none() {
+        let buf = create_buffer_with_path(vec![]);
+        let diag = create_diag(0, 5, 0, 0);
+        assert2::let_assert!(Ok(actual) = buf.get_diagnosed_word(&diag));
+        pretty_assertions::assert_eq!(actual, None);
+    }
+
+    #[test]
+    fn get_diagnosed_word_single_line_partial_word() {
+        let buf = create_buffer_with_path(vec!["hello world".to_string()]);
+        let diag = create_diag(0, 5, 0, 0); // "hello"
+        assert2::let_assert!(Ok(actual) = buf.get_diagnosed_word(&diag));
+        pretty_assertions::assert_eq!(actual, Some("hello".to_string()));
+    }
+
+    #[test]
+    fn get_diagnosed_word_single_line_full_word() {
+        let buf = create_buffer_with_path(vec!["hello".to_string()]);
+        let diag = create_diag(0, 5, 0, 0);
+        assert2::let_assert!(Ok(actual) = buf.get_diagnosed_word(&diag));
+        pretty_assertions::assert_eq!(actual, Some("hello".to_string()));
+    }
+
+    #[test]
+    fn get_diagnosed_word_multi_line_word() {
+        let buf = create_buffer_with_path(vec!["heal".to_string(), "lo".to_string()]);
+        let diag = create_diag(0, 2, 0, 1);
+        assert2::let_assert!(Ok(actual) = buf.get_diagnosed_word(&diag));
+        pretty_assertions::assert_eq!(actual, Some("heallo".to_string()));
+    }
+
+    #[test]
+    fn get_diagnosed_word_multi_line_partial_last_line() {
+        let buf = create_buffer_with_path(vec!["heal".to_string(), "lo world".to_string()]);
+        let diag = create_diag(0, 2, 0, 1);
+        assert2::let_assert!(Ok(actual) = buf.get_diagnosed_word(&diag));
+        pretty_assertions::assert_eq!(actual, Some("heallo".to_string()));
+    }
+
+    #[test]
+    fn get_diagnosed_word_when_start_col_out_of_bounds() {
+        let buf = create_buffer_with_path(vec!["hi".to_string()]);
+        let diag = create_diag(10, 15, 0, 0);
+        assert2::let_assert!(Ok(actual) = buf.get_diagnosed_word(&diag));
+        pretty_assertions::assert_eq!(actual, Some("".to_string()));
+    }
+
+    #[test]
+    fn get_diagnosed_word_when_end_col_beyond_line() {
+        let buf = create_buffer_with_path(vec!["hi".to_string()]);
+        let diag = create_diag(0, 10, 0, 0);
+        assert2::let_assert!(Ok(actual) = buf.get_diagnosed_word(&diag));
+        pretty_assertions::assert_eq!(actual, Some("hi".to_string()));
+    }
+
+    struct MockBuffer {
+        lines: Vec<String>,
+    }
+
+    impl MockBuffer {
+        fn new(lines: Vec<String>) -> Self {
+            Self { lines }
+        }
+    }
+
+    impl BufferExt for MockBuffer {
+        fn get_line(&self, _idx: usize) -> color_eyre::Result<nvim_oxi::String> {
+            unimplemented!()
+        }
+
+        fn set_text_at_cursor_pos(&mut self, _text: &str) {
+            unimplemented!()
+        }
+
+        fn get_text_as_vec_of_lines(
+            &self,
+            (start_lnum, start_col): (usize, usize),
+            (end_lnum, end_col): (usize, usize),
+            _opts: &GetTextOpts,
+        ) -> Result<Vec<String>, nvim_oxi::api::Error> {
+            if start_lnum > end_lnum || (start_lnum == end_lnum && start_col > end_col) {
+                return Ok(vec![]);
+            }
+            let mut result = Vec::new();
+            for lnum in start_lnum..=end_lnum {
+                if lnum >= self.lines.len() {
+                    break;
+                }
+                let line = &self.lines[lnum];
+                let start = if lnum == start_lnum { start_col } else { 0 };
+                let end = if lnum == end_lnum { end_col } else { line.len() };
+                if start >= line.len() {
+                    result.push(String::new());
+                } else {
+                    result.push(line[start..end.min(line.len())].to_string());
+                }
+            }
+            Ok(result)
+        }
+    }
+
+    fn create_diag(col: i64, end_col: i64, lnum: i64, end_lnum: i64) -> Dictionary {
+        ytil_nvim_oxi::dict! { col: col, end_col: end_col, lnum: lnum, end_lnum: end_lnum }
+    }
+
+    fn create_buffer_with_path(lines: Vec<String>) -> BufferWithPath {
+        BufferWithPath {
+            buffer: Box::new(MockBuffer::new(lines)),
+            path: "test.rs".to_string(),
+        }
     }
 }
