@@ -190,18 +190,17 @@ mod tests {
 
 #[cfg(any(test, feature = "mockall"))]
 pub mod mock {
-    use super::*;
+    use super::BufferExt;
+    use super::GetTextOpts;
 
     pub struct MockBuffer(pub Vec<String>);
 
     impl BufferExt for MockBuffer {
         fn get_line(&self, _idx: usize) -> color_eyre::Result<nvim_oxi::String> {
-            unimplemented!()
+            Ok(nvim_oxi::String::from("foo"))
         }
 
-        fn set_text_at_cursor_pos(&mut self, _text: &str) {
-            unimplemented!()
-        }
+        fn set_text_at_cursor_pos(&mut self, _text: &str) {}
 
         fn get_text_between(
             &self,
@@ -217,7 +216,10 @@ pub mod mock {
                 if lnum >= self.0.len() {
                     break;
                 }
-                let line = &self.0[lnum];
+                let line = &self
+                    .0
+                    .get(lnum)
+                    .ok_or_else(|| nvim_oxi::api::Error::Other("this should not happen".into()))?;
                 let start = if lnum == start_lnum { start_col } else { 0 };
                 let end = if lnum == end_lnum { end_col } else { line.len() };
                 if start >= line.len() {
