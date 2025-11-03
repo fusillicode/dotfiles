@@ -37,6 +37,21 @@ pub trait BufferExt {
     /// - `text` UTF-8 slice inserted at the cursor byte column.
     fn set_text_at_cursor_pos(&mut self, text: &str);
 
+    /// Get text from a [`nvim_oxi::api::Buffer`].
+    ///
+    /// Retrieves lines from the specified start position to end position (inclusive), converting
+    /// each line to a [`String`].
+    ///
+    /// # Arguments
+    /// - `start` (lnum, col) 0-based starting line and column (column is byte offset).
+    /// - `end` (end_lnum, end_col) 0-based ending line and column (inclusive; column is byte offset).
+    /// - `opts` Reference to [`GetTextOpts`] for additional options.
+    ///
+    /// # Returns
+    /// - `Ok(Vec<String>)` with the extracted lines.
+    ///
+    /// # Errors
+    /// - Propagates [`nvim_oxi::api::Error`] from the underlying `nvim_buf_get_text` call.
     fn get_text_as_vec_of_lines(
         &self,
         start: (usize, usize),

@@ -16,11 +16,13 @@ pub mod msg_blacklist;
 pub mod related_info;
 
 pub struct BufferWithPath {
+    #[allow(dead_code)]
     buffer: Box<dyn BufferExt>,
     path: String,
 }
 
 impl BufferWithPath {
+    #[allow(dead_code)]
     pub fn get_diagnosed_word(&self, lsp_diag: &Dictionary) -> color_eyre::Result<Option<String>> {
         // Error if these are missing. LSPs diagnostics seems to always have these fields.
         let lnum = lsp_diag.get_t::<nvim_oxi::Integer>("lnum")? as usize;

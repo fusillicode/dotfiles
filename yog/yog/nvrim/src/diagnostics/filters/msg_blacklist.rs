@@ -78,7 +78,7 @@ impl DiagnosticsFilter for MsgBlacklistFilter<'_> {
             return Ok(false);
         }
         let msg = lsp_diag.get_t::<nvim_oxi::String>("message")?.to_lowercase();
-        nvim_oxi::dbg!(buf.get_diagnosed_word(lsp_diag)?);
+        // nvim_oxi::dbg!(buf.get_diagnosed_word(lsp_diag)?);
 
         if self.blacklist.iter().any(|b| msg.contains(b)) {
             return Ok(true);
@@ -87,160 +87,203 @@ impl DiagnosticsFilter for MsgBlacklistFilter<'_> {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//
-//     #[test]
-//     fn skip_returns_false_when_no_diagnostic() {
-//         let filter = MsgBlacklistFilter {
-//             source: "foo",
-//             blacklist: vec!["stderr".into()],
-//             buf_path: None,
-//         };
-//         assert2::let_assert!(Ok(res) = filter.skip_diagnostic("any/path", None));
-//         assert!(!res);
-//     }
-//
-//     #[test]
-//     fn skip_returns_false_when_buf_path_pattern_not_matched() {
-//         let filter = MsgBlacklistFilter {
-//             source: "foo",
-//             blacklist: vec!["stderr".into()],
-//             buf_path: Some("src/"),
-//         };
-//         let diag = dict! { source: "foo", message: "stderr something" };
-//         assert2::let_assert!(Ok(res) = filter.skip_diagnostic("tests/main.rs", Some(&diag)));
-//         assert!(!res);
-//     }
-//
-//     #[test]
-//     fn skip_returns_false_when_source_mismatch_even_if_message_matches() {
-//         let filter = MsgBlacklistFilter {
-//             source: "foo",
-//             blacklist: vec!["stderr".into()],
-//             buf_path: None,
-//         };
-//         let diag = dict! { source: "other", message: "stderr noise" };
-//         assert2::let_assert!(Ok(res) = filter.skip_diagnostic("src/lib.rs", Some(&diag)));
-//         assert!(!res);
-//     }
-//
-//     #[test]
-//     fn skip_returns_true_on_blacklisted_substring_with_all_preconditions_met() {
-//         let filter = MsgBlacklistFilter {
-//             source: "foo",
-//             blacklist: vec!["stderr".into(), "stdout".into()],
-//             buf_path: Some("src"),
-//         };
-//         let diag = dict! { source: "foo", message: "stdout channel mention" };
-//         assert2::let_assert!(Ok(res) = filter.skip_diagnostic("/project/src/lib.rs", Some(&diag)));
-//         assert!(res);
-//     }
-//
-//     #[test]
-//     fn skip_matches_case_insensitive_message() {
-//         let filter = MsgBlacklistFilter {
-//             source: "foo",
-//             blacklist: vec!["stderr".into()],
-//             buf_path: None,
-//         };
-//         let diag = dict! { source: "foo", message: "STDERR reported" };
-//         assert2::let_assert!(Ok(res) = filter.skip_diagnostic("file.rs", Some(&diag)));
-//         assert!(res);
-//     }
-//
-//     #[test]
-//     fn skip_returns_false_when_message_not_in_blacklist() {
-//         let filter = MsgBlacklistFilter {
-//             source: "foo",
-//             blacklist: vec!["stderr".into()],
-//             buf_path: None,
-//         };
-//         let diag = dict! { source: "foo", message: "regular info" };
-//         assert2::let_assert!(Ok(res) = filter.skip_diagnostic("file.rs", Some(&diag)));
-//         assert!(!res);
-//     }
-//
-//     #[test]
-//     fn skip_returns_true_when_missing_source_key_and_message_blacklisted() {
-//         let filter = MsgBlacklistFilter {
-//             source: "foo",
-//             blacklist: vec!["stderr".into()],
-//             buf_path: None,
-//         };
-//         // Only message key present. Missing source should not produce an error; blacklist still applies.
-//         let diag = dict! { message: "stderr reported" };
-//         assert2::let_assert!(Ok(res) = filter.skip_diagnostic("file.rs", Some(&diag)));
-//         assert!(res);
-//     }
-//
-//     #[test]
-//     fn skip_returns_false_when_missing_source_and_message_not_blacklisted() {
-//         let filter = MsgBlacklistFilter {
-//             source: "foo",
-//             blacklist: vec!["stderr".into()],
-//             buf_path: None,
-//         };
-//         let diag = dict! { message: "ordinary info" };
-//         assert2::let_assert!(Ok(res) = filter.skip_diagnostic("file.rs", Some(&diag)));
-//         assert!(!res);
-//     }
-//
-//     #[test]
-//     fn skip_returns_true_on_overlapping_blacklist_substrings() {
-//         let filter = MsgBlacklistFilter {
-//             source: "foo",
-//             blacklist: vec!["error".into(), "err".into()],
-//             buf_path: None,
-//         };
-//         let diag = dict! { message: "An ERROR occurred" };
-//         assert2::let_assert!(Ok(res) = filter.skip_diagnostic("file.rs", Some(&diag)));
-//         assert!(res);
-//     }
-//
-//     #[test]
-//     fn skip_returns_error_when_missing_message_key() {
-//         let filter = MsgBlacklistFilter {
-//             source: "foo",
-//             blacklist: vec!["stderr".into()],
-//             buf_path: None,
-//         };
-//         // Only source key present.
-//         let diag = dict! { source: "foo" };
-//         assert2::let_assert!(Err(err) = filter.skip_diagnostic("file.rs", Some(&diag)));
-//         let msg = err.to_string();
-//         assert!(msg.starts_with("missing dict value |"), "actual: {msg}");
-//         assert!(msg.contains("query=[\n    \"message\",\n]"), "actual: {msg}");
-//     }
-//
-//     #[test]
-//     fn skip_returns_error_when_source_wrong_type() {
-//         let filter = MsgBlacklistFilter {
-//             source: "foo",
-//             blacklist: vec!["stderr".into()],
-//             buf_path: None,
-//         };
-//         // Wrong type for source (integer) plus valid message.
-//         let diag = dict! { source: 42, message: "stderr noise" };
-//         assert2::let_assert!(Err(err) = filter.skip_diagnostic("file.rs", Some(&diag)));
-//         let msg = err.to_string();
-//         assert!(msg.contains("is Integer but String was expected"), "actual: {msg}");
-//         assert!(msg.contains("key \"source\""), "actual: {msg}");
-//     }
-//
-//     #[test]
-//     fn skip_returns_error_when_message_wrong_type() {
-//         let filter = MsgBlacklistFilter {
-//             source: "foo",
-//             blacklist: vec!["stderr".into()],
-//             buf_path: None,
-//         };
-//         // Wrong type for message (integer) plus valid source.
-//         let diag = dict! { source: "foo", message: 7 };
-//         assert2::let_assert!(Err(err) = filter.skip_diagnostic("file.rs", Some(&diag)));
-//         let msg = err.to_string();
-//         assert!(msg.contains("is Integer but String was expected"), "actual: {msg}");
-//         assert!(msg.contains("key \"message\""), "actual: {msg}");
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    use nvim_oxi::api::opts::GetTextOpts;
+    use ytil_nvim_oxi::buffer::BufferExt;
+
+    use super::*;
+    use crate::diagnostics::filters::BufferWithPath;
+
+    #[test]
+    fn skip_returns_false_when_no_diagnostic() {
+        let filter = MsgBlacklistFilter {
+            source: "foo",
+            blacklist: vec!["stderr".into()],
+            buf_path: None,
+        };
+        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(None, None));
+        assert!(!res);
+    }
+
+    #[test]
+    fn skip_returns_false_when_buf_path_pattern_not_matched() {
+        let filter = MsgBlacklistFilter {
+            source: "foo",
+            blacklist: vec!["stderr".into()],
+            buf_path: Some("src/"),
+        };
+        let buf = create_buffer_with_path("tests/main.rs");
+        let diag = dict! { source: "foo", message: "stderr something" };
+        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(Some(&buf), Some(&diag)));
+        assert!(!res);
+    }
+
+    #[test]
+    fn skip_returns_false_when_source_mismatch_even_if_message_matches() {
+        let filter = MsgBlacklistFilter {
+            source: "foo",
+            blacklist: vec!["stderr".into()],
+            buf_path: None,
+        };
+        let buf = create_buffer_with_path("src/lib.rs");
+        let diag = dict! { source: "other", message: "stderr noise" };
+        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(Some(&buf), Some(&diag)));
+        assert!(!res);
+    }
+
+    #[test]
+    fn skip_returns_true_on_blacklisted_substring_with_all_preconditions_met() {
+        let filter = MsgBlacklistFilter {
+            source: "foo",
+            blacklist: vec!["stderr".into(), "stdout".into()],
+            buf_path: Some("src"),
+        };
+        let buf = create_buffer_with_path("/project/src/lib.rs");
+        let diag = dict! { source: "foo", message: "stdout channel mention" };
+        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(Some(&buf), Some(&diag)));
+        assert!(res);
+    }
+
+    #[test]
+    fn skip_matches_case_insensitive_message() {
+        let filter = MsgBlacklistFilter {
+            source: "foo",
+            blacklist: vec!["stderr".into()],
+            buf_path: None,
+        };
+        let buf = create_buffer_with_path("file.rs");
+        let diag = dict! { source: "foo", message: "STDERR reported" };
+        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(Some(&buf), Some(&diag)));
+        assert!(res);
+    }
+
+    #[test]
+    fn skip_returns_false_when_message_not_in_blacklist() {
+        let filter = MsgBlacklistFilter {
+            source: "foo",
+            blacklist: vec!["stderr".into()],
+            buf_path: None,
+        };
+        let buf = create_buffer_with_path("file.rs");
+        let diag = dict! { source: "foo", message: "regular info" };
+        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(Some(&buf), Some(&diag)));
+        assert!(!res);
+    }
+
+    #[test]
+    fn skip_returns_true_when_missing_source_key_and_message_blacklisted() {
+        let filter = MsgBlacklistFilter {
+            source: "foo",
+            blacklist: vec!["stderr".into()],
+            buf_path: None,
+        };
+        // Only message key present. Missing source should not produce an error; blacklist still applies.
+        let buf = create_buffer_with_path("file.rs");
+        let diag = dict! { message: "stderr reported" };
+        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(Some(&buf), Some(&diag)));
+        assert!(res);
+    }
+
+    #[test]
+    fn skip_returns_false_when_missing_source_and_message_not_blacklisted() {
+        let filter = MsgBlacklistFilter {
+            source: "foo",
+            blacklist: vec!["stderr".into()],
+            buf_path: None,
+        };
+        let buf = create_buffer_with_path("file.rs");
+        let diag = dict! { message: "ordinary info" };
+        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(Some(&buf), Some(&diag)));
+        assert!(!res);
+    }
+
+    #[test]
+    fn skip_returns_true_on_overlapping_blacklist_substrings() {
+        let filter = MsgBlacklistFilter {
+            source: "foo",
+            blacklist: vec!["error".into(), "err".into()],
+            buf_path: None,
+        };
+        let buf = create_buffer_with_path("file.rs");
+        let diag = dict! { message: "An ERROR occurred" };
+        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(Some(&buf), Some(&diag)));
+        assert!(res);
+    }
+
+    #[test]
+    fn skip_returns_error_when_missing_message_key() {
+        let filter = MsgBlacklistFilter {
+            source: "foo",
+            blacklist: vec!["stderr".into()],
+            buf_path: None,
+        };
+        // Only source key present.
+        let buf = create_buffer_with_path("file.rs");
+        let diag = dict! { source: "foo" };
+        assert2::let_assert!(Err(err) = filter.skip_diagnostic(Some(&buf), Some(&diag)));
+        let msg = err.to_string();
+        assert!(msg.starts_with("missing dict value |"), "actual: {msg}");
+        assert!(msg.contains("query=[\n    \"message\",\n]"), "actual: {msg}");
+    }
+
+    #[test]
+    fn skip_returns_error_when_source_wrong_type() {
+        let filter = MsgBlacklistFilter {
+            source: "foo",
+            blacklist: vec!["stderr".into()],
+            buf_path: None,
+        };
+        // Wrong type for source (integer) plus valid message.
+        let buf = create_buffer_with_path("file.rs");
+        let diag = dict! { source: 42, message: "stderr noise" };
+        assert2::let_assert!(Err(err) = filter.skip_diagnostic(Some(&buf), Some(&diag)));
+        let msg = err.to_string();
+        assert!(msg.contains("is Integer but String was expected"), "actual: {msg}");
+        assert!(msg.contains("key \"source\""), "actual: {msg}");
+    }
+
+    #[test]
+    fn skip_returns_error_when_message_wrong_type() {
+        let filter = MsgBlacklistFilter {
+            source: "foo",
+            blacklist: vec!["stderr".into()],
+            buf_path: None,
+        };
+        // Wrong type for message (integer) plus valid source.
+        let buf = create_buffer_with_path("file.rs");
+        let diag = dict! { source: "foo", message: 7 };
+        assert2::let_assert!(Err(err) = filter.skip_diagnostic(Some(&buf), Some(&diag)));
+        let msg = err.to_string();
+        assert!(msg.contains("is Integer but String was expected"), "actual: {msg}");
+        assert!(msg.contains("key \"message\""), "actual: {msg}");
+    }
+
+    struct MockBuffer;
+
+    impl BufferExt for MockBuffer {
+        fn get_line(&self, _idx: usize) -> color_eyre::Result<nvim_oxi::String> {
+            unimplemented!()
+        }
+
+        fn set_text_at_cursor_pos(&mut self, _text: &str) {
+            unimplemented!()
+        }
+
+        fn get_text_as_vec_of_lines(
+            &self,
+            _start: (usize, usize),
+            _end: (usize, usize),
+            _opts: &GetTextOpts,
+        ) -> Result<Vec<String>, nvim_oxi::api::Error> {
+            unimplemented!()
+        }
+    }
+
+    fn create_buffer_with_path(path: &str) -> BufferWithPath {
+        BufferWithPath {
+            buffer: Box::new(MockBuffer),
+            path: path.to_string(),
+        }
+    }
+}
