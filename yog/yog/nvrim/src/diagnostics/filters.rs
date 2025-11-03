@@ -25,9 +25,9 @@ impl BufferWithPath {
     #[allow(dead_code)]
     pub fn get_diagnosed_word(&self, lsp_diag: &Dictionary) -> color_eyre::Result<Option<String>> {
         // Error if these are missing. LSPs diagnostics seems to always have these fields.
+        let lnum = lsp_diag.get_t::<nvim_oxi::Integer>("lnum")? as usize;
         let col = lsp_diag.get_t::<nvim_oxi::Integer>("col")? as usize;
         let end_col = lsp_diag.get_t::<nvim_oxi::Integer>("end_col")? as usize;
-        let lnum = lsp_diag.get_t::<nvim_oxi::Integer>("lnum")? as usize;
         let end_lnum = lsp_diag.get_t::<nvim_oxi::Integer>("end_lnum")? as usize;
 
         if lnum > end_lnum || col > end_col {
@@ -54,6 +54,10 @@ impl BufferWithPath {
                 &line
             };
             out.push_str(text)
+        }
+
+        if out.is_empty() {
+            return Ok(None);
         }
 
         Ok(Some(out))
@@ -119,80 +123,65 @@ impl DiagnosticsFilter for DiagnosticsFilters {
 #[cfg(test)]
 mod tests {
     use nvim_oxi::api::opts::GetTextOpts;
+    use rstest::rstest;
     use ytil_nvim_oxi::buffer::BufferExt;
 
     use super::*;
 
-    #[test]
-    fn get_diagnosed_word_when_lnum_greater_than_end_lnum_returns_none() {
-        let buf = create_buffer_with_path(vec!["hello world".to_string()]);
-        let diag = create_diag(0, 5, 1, 0);
+    #[rstest]
+    #[case::lnum_greater_than_end_lnum(
+        vec!["hello world".to_string()],
+        create_diag(1, 0, 0, 5),
+        None
+    )]
+    #[case::col_greater_than_end_col(
+        vec!["hello world".to_string()],
+        create_diag(0, 5, 0, 0),
+        None
+    )]
+    #[case::empty_lines(
+        vec![],
+        create_diag(0, 0, 0, 5),
+        None
+    )]
+    #[case::single_line_partial_word(
+        vec!["hello world".to_string()],
+        create_diag(0, 0, 0, 5),
+        Some("hello".to_string())
+    )]
+    #[case::single_line_full_word(
+        vec!["hello".to_string()],
+        create_diag(0, 0, 0, 5),
+        Some("hello".to_string())
+    )]
+    #[case::multi_line_word(
+        vec!["heal".to_string(), "lo".to_string()],
+        create_diag(0, 0, 1, 2),
+        Some("heallo".to_string())
+    )]
+    #[case::multi_line_partial_last_line(
+        vec!["heal".to_string(), "lo world".to_string()],
+        create_diag(0, 0, 1, 2),
+        Some("heallo".to_string())
+    )]
+    #[case::start_col_out_of_bounds(
+        vec!["hi".to_string()],
+        create_diag(0, 10, 0, 15),
+        None
+    )]
+    #[case::end_col_beyond_line(
+        vec!["hi".to_string()],
+        create_diag(0, 0, 0, 10),
+        Some("hi".to_string())
+    )]
+    fn get_diagnosed_word_returns_expected(
+        #[case] lines: Vec<String>,
+        #[case] diag: Dictionary,
+        #[case] expected: Option<String>,
+    ) {
+        let buf = create_buffer_with_path(lines);
         assert2::let_assert!(Ok(actual) = buf.get_diagnosed_word(&diag));
-        pretty_assertions::assert_eq!(actual, None);
-    }
-
-    #[test]
-    fn get_diagnosed_word_when_col_greater_than_end_col_returns_none() {
-        let buf = create_buffer_with_path(vec!["hello world".to_string()]);
-        let diag = create_diag(5, 0, 0, 0);
-        assert2::let_assert!(Ok(actual) = buf.get_diagnosed_word(&diag));
-        pretty_assertions::assert_eq!(actual, None);
-    }
-
-    #[test]
-    fn get_diagnosed_word_when_empty_lines_returns_none() {
-        let buf = create_buffer_with_path(vec![]);
-        let diag = create_diag(0, 5, 0, 0);
-        assert2::let_assert!(Ok(actual) = buf.get_diagnosed_word(&diag));
-        pretty_assertions::assert_eq!(actual, None);
-    }
-
-    #[test]
-    fn get_diagnosed_word_single_line_partial_word() {
-        let buf = create_buffer_with_path(vec!["hello world".to_string()]);
-        let diag = create_diag(0, 5, 0, 0); // "hello"
-        assert2::let_assert!(Ok(actual) = buf.get_diagnosed_word(&diag));
-        pretty_assertions::assert_eq!(actual, Some("hello".to_string()));
-    }
-
-    #[test]
-    fn get_diagnosed_word_single_line_full_word() {
-        let buf = create_buffer_with_path(vec!["hello".to_string()]);
-        let diag = create_diag(0, 5, 0, 0);
-        assert2::let_assert!(Ok(actual) = buf.get_diagnosed_word(&diag));
-        pretty_assertions::assert_eq!(actual, Some("hello".to_string()));
-    }
-
-    #[test]
-    fn get_diagnosed_word_multi_line_word() {
-        let buf = create_buffer_with_path(vec!["heal".to_string(), "lo".to_string()]);
-        let diag = create_diag(0, 2, 0, 1);
-        assert2::let_assert!(Ok(actual) = buf.get_diagnosed_word(&diag));
-        pretty_assertions::assert_eq!(actual, Some("heallo".to_string()));
-    }
-
-    #[test]
-    fn get_diagnosed_word_multi_line_partial_last_line() {
-        let buf = create_buffer_with_path(vec!["heal".to_string(), "lo world".to_string()]);
-        let diag = create_diag(0, 2, 0, 1);
-        assert2::let_assert!(Ok(actual) = buf.get_diagnosed_word(&diag));
-        pretty_assertions::assert_eq!(actual, Some("heallo".to_string()));
-    }
-
-    #[test]
-    fn get_diagnosed_word_when_start_col_out_of_bounds() {
-        let buf = create_buffer_with_path(vec!["hi".to_string()]);
-        let diag = create_diag(10, 15, 0, 0);
-        assert2::let_assert!(Ok(actual) = buf.get_diagnosed_word(&diag));
-        pretty_assertions::assert_eq!(actual, Some("".to_string()));
-    }
-
-    #[test]
-    fn get_diagnosed_word_when_end_col_beyond_line() {
-        let buf = create_buffer_with_path(vec!["hi".to_string()]);
-        let diag = create_diag(0, 10, 0, 0);
-        assert2::let_assert!(Ok(actual) = buf.get_diagnosed_word(&diag));
-        pretty_assertions::assert_eq!(actual, Some("hi".to_string()));
+        pretty_assertions::assert_eq!(actual, expected);
     }
 
     struct MockBuffer(Vec<String>);
@@ -233,7 +222,7 @@ mod tests {
         }
     }
 
-    fn create_diag(col: i64, end_col: i64, lnum: i64, end_lnum: i64) -> Dictionary {
+    fn create_diag(lnum: i64, col: i64, end_lnum: i64, end_col: i64) -> Dictionary {
         ytil_nvim_oxi::dict! { col: col, end_col: end_col, lnum: lnum, end_lnum: end_lnum }
     }
 
