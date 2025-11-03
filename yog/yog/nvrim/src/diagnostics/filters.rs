@@ -36,7 +36,7 @@ impl BufferWithPath {
 
         let lines = self
             .buffer
-            .get_text_as_vec_of_lines((lnum, col), (end_lnum, end_col), &GetTextOpts::default())?;
+            .get_text_between((lnum, col), (end_lnum, end_col), &GetTextOpts::default())?;
 
         let lines_len = lines.len();
         if lines_len == 0 {
@@ -195,7 +195,7 @@ mod tests {
             unimplemented!()
         }
 
-        fn get_text_as_vec_of_lines(
+        fn get_text_between(
             &self,
             (start_lnum, start_col): (usize, usize),
             (end_lnum, end_col): (usize, usize),

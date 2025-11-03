@@ -270,7 +270,7 @@ mod tests {
             unimplemented!()
         }
 
-        fn get_text_as_vec_of_lines(
+        fn get_text_between(
             &self,
             _start: (usize, usize),
             _end: (usize, usize),

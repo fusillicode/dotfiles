@@ -52,7 +52,7 @@ pub trait BufferExt {
     ///
     /// # Errors
     /// - Propagates [`nvim_oxi::api::Error`] from the underlying `nvim_buf_get_text` call.
-    fn get_text_as_vec_of_lines(
+    fn get_text_between(
         &self,
         start: (usize, usize),
         end: (usize, usize),
@@ -87,7 +87,7 @@ impl BufferExt for Buffer {
         }
     }
 
-    fn get_text_as_vec_of_lines(
+    fn get_text_between(
         &self,
         (start_lnum, start_col): (usize, usize),
         (end_lnum, end_col): (usize, usize),
