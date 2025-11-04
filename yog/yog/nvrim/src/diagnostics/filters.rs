@@ -58,6 +58,10 @@ impl BufferWithPath {
 
         Ok(Some(out))
     }
+
+    pub fn path(&self) -> &str {
+        &self.path
+    }
 }
 
 impl TryFrom<Buffer> for BufferWithPath {

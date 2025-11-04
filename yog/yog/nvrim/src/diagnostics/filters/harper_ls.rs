@@ -55,9 +55,7 @@ impl HarperLsFilter<'_> {
 
 impl DiagnosticsFilter for HarperLsFilter<'_> {
     fn skip_diagnostic(&self, buf: &BufferWithPath, lsp_diag: &Dictionary) -> color_eyre::Result<bool> {
-        if let Some(ref bp) = self.buf_path
-            && !buf.path.contains(bp)
-        {
+        if self.buf_path.is_some_and(|bp| !buf.path.contains(bp)) {
             return Ok(false);
         }
         let maybe_diag_source = lsp_diag.get_opt_t::<nvim_oxi::String>("source")?;
@@ -65,6 +63,7 @@ impl DiagnosticsFilter for HarperLsFilter<'_> {
             return Ok(false);
         }
         let diag_msg = lsp_diag.get_t::<nvim_oxi::String>("message")?;
+
         let diagnosed_text = buf.get_diagnosed_text(lsp_diag)?.ok_or_else(|| {
             eyre!(
                 "missing diagnosed text for {} filter | lsp_diag={lsp_diag:#?}",

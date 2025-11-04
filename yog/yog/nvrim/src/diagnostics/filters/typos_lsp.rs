@@ -84,9 +84,7 @@ impl TyposLspFilter<'_> {
 
 impl DiagnosticsFilter for TyposLspFilter<'_> {
     fn skip_diagnostic(&self, buf: &BufferWithPath, lsp_diag: &nvim_oxi::Dictionary) -> color_eyre::Result<bool> {
-        if let Some(ref bp) = self.buf_path
-            && !buf.path.contains(bp)
-        {
+        if self.buf_path.is_some_and(|bp| !buf.path.contains(bp)) {
             return Ok(false);
         }
         let maybe_diag_source = lsp_diag.get_opt_t::<nvim_oxi::String>("source")?;

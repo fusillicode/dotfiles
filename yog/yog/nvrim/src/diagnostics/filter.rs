@@ -34,7 +34,7 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
 
     // Keeping this as a separate filter because it short circuits the whole filtering and
     // does not require any LSP diagnostics to apply its logic.
-    if BufferFilter::new().skip_diagnostic(&buf_with_path) {
+    if BufferFilter::new().skip_diagnostic(buf_with_path.path()) {
         return vec![];
     }
 
