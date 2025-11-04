@@ -10,7 +10,7 @@ use nvim_oxi::api::opts::GetTextOpts;
 use ytil_nvim_oxi::buffer::BufferExt;
 use ytil_nvim_oxi::dict::DictionaryExt as _;
 
-use crate::diagnostics::filters::harper_ls::HarpeLsFilter;
+use crate::diagnostics::filters::harper_ls::HarperLsFilter;
 use crate::diagnostics::filters::related_info::RelatedInfoFilter;
 use crate::diagnostics::filters::typos_lsp::TyposLspFilter;
 
@@ -147,7 +147,7 @@ impl DiagnosticsFilters {
     /// - Constructing the related info filter fails (dictionary traversal or type mismatch).
     pub fn all(lsp_diags: &[Dictionary]) -> color_eyre::Result<Self> {
         let mut filters = TyposLspFilter::filters();
-        filters.extend(HarpeLsFilter::filters());
+        filters.extend(HarperLsFilter::filters());
         filters.push(Box::new(RelatedInfoFilter::new(lsp_diags)?));
         Ok(Self(filters))
     }
