@@ -3,6 +3,7 @@
 //! Defines [`DiagnosticsFilter`] trait plus ordered creation of all active filters (message blacklist,
 //! source‑specific sets, related info deduper). Ordering is significant for short‑circuit behavior.
 
+use color_eyre::eyre::bail;
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::opts::GetTextOpts;
@@ -22,26 +23,20 @@ pub struct BufferWithPath {
 
 impl BufferWithPath {
     pub fn get_diagnosed_text(&self, lsp_diag: &Dictionary) -> color_eyre::Result<Option<String>> {
-        // Error if these are missing. LSPs diagnostics seems to always have these fields.
-        let lnum = usize::try_from(lsp_diag.get_t::<nvim_oxi::Integer>("lnum")?)?;
-        let col = usize::try_from(lsp_diag.get_t::<nvim_oxi::Integer>("col")?)?;
-        let end_col = usize::try_from(lsp_diag.get_t::<nvim_oxi::Integer>("end_col")?)?;
-        let end_lnum = usize::try_from(lsp_diag.get_t::<nvim_oxi::Integer>("end_lnum")?)?;
-
-        if lnum > end_lnum || col > end_col {
+        let Some(loc) = DiagnosticLocation::try_from(lsp_diag).ok() else {
             return Ok(None);
-        }
+        };
 
         let lines = self
             .buffer
-            .get_text_between((lnum, col), (end_lnum, end_col), &GetTextOpts::default())?;
+            .get_text_between(loc.start(), loc.end(), &GetTextOpts::default())?;
 
         let lines_len = lines.len();
         if lines_len == 0 {
             return Ok(None);
         }
         let last_line_idx = lines_len.saturating_sub(1);
-        let adjusted_end_col = end_col.saturating_sub(col);
+        let adjusted_end_col = loc.adjusted_end_col();
 
         let mut out = String::new();
         for (line_idx, line) in lines.iter().enumerate() {
@@ -70,6 +65,61 @@ impl TryFrom<Buffer> for BufferWithPath {
         Ok(Self {
             path,
             buffer: Box::new(value),
+        })
+    }
+}
+
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
+struct DiagnosticLocation {
+    lnum: usize,
+    col: usize,
+    end_col: usize,
+    end_lnum: usize,
+}
+
+impl DiagnosticLocation {
+    pub const fn start(&self) -> (usize, usize) {
+        (self.lnum, self.col)
+    }
+
+    pub const fn end(&self) -> (usize, usize) {
+        (self.end_lnum, self.end_col)
+    }
+
+    pub const fn adjusted_end_col(&self) -> usize {
+        self.end_col.saturating_sub(self.col)
+    }
+}
+
+impl TryFrom<&Dictionary> for DiagnosticLocation {
+    type Error = color_eyre::eyre::Error;
+
+    fn try_from(value: &Dictionary) -> Result<Self, Self::Error> {
+        let lnum = value
+            .get_t::<nvim_oxi::Integer>("lnum")
+            .and_then(|n| usize::try_from(n).map_err(From::from))?;
+        let col = value
+            .get_t::<nvim_oxi::Integer>("col")
+            .and_then(|n| usize::try_from(n).map_err(From::from))?;
+        let end_col = value
+            .get_t::<nvim_oxi::Integer>("end_col")
+            .and_then(|n| usize::try_from(n).map_err(From::from))?;
+        let end_lnum = value
+            .get_t::<nvim_oxi::Integer>("end_lnum")
+            .and_then(|n| usize::try_from(n).map_err(From::from))?;
+
+        if lnum > end_lnum {
+            bail!("inconsistent boundaries {}", stringify!(lnum > end_lnum));
+        }
+        if col > end_col {
+            bail!("inconsistent boundaries {}", stringify!(col > end_col));
+        }
+
+        Ok(Self {
+            lnum,
+            col,
+            end_col,
+            end_lnum,
         })
     }
 }
@@ -171,7 +221,7 @@ mod tests {
         create_diag(0, 0, 0, 10),
         Some("hi".to_string())
     )]
-    fn get_diagnosed_text_returns_expected(
+    fn get_diagnosed_text_returns_expected_text(
         #[case] lines: Vec<String>,
         #[case] diag: Dictionary,
         #[case] expected: Option<String>,
@@ -182,6 +232,69 @@ mod tests {
         };
         assert2::let_assert!(Ok(actual) = buf.get_diagnosed_text(&diag));
         pretty_assertions::assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn try_from_valid_dictionary_succeeds() {
+        let dict = create_diag(0, 1, 2, 3);
+        assert2::let_assert!(Ok(loc) = DiagnosticLocation::try_from(&dict));
+        pretty_assertions::assert_eq!(loc.lnum, 0);
+        pretty_assertions::assert_eq!(loc.col, 1);
+        pretty_assertions::assert_eq!(loc.end_lnum, 2);
+        pretty_assertions::assert_eq!(loc.end_col, 3);
+    }
+
+    #[test]
+    fn try_from_missing_lnum_key_fails() {
+        let dict = ytil_nvim_oxi::dict! { col: 1_i64, end_col: 3_i64, end_lnum: 2_i64 };
+        assert2::let_assert!(Err(err) = DiagnosticLocation::try_from(&dict));
+        assert!(err.to_string().contains("missing dict value"));
+    }
+
+    #[test]
+    fn try_from_wrong_type_for_lnum_fails() {
+        let dict = ytil_nvim_oxi::dict! { lnum: "not_an_int", col: 1_i64, end_col: 3_i64, end_lnum: 2_i64 };
+        assert2::let_assert!(Err(err) = DiagnosticLocation::try_from(&dict));
+        assert!(err.to_string().contains(r#"value "not_an_int" of key "lnum""#));
+        assert!(err.to_string().contains("is String but Integer was expected"));
+    }
+
+    #[test]
+    fn try_from_negative_lnum_fails() {
+        let dict = create_diag(-1, 1, 2, 3);
+        assert2::let_assert!(Err(err) = DiagnosticLocation::try_from(&dict));
+        assert!(err.to_string().contains("out of range"));
+    }
+
+    #[test]
+    fn try_from_lnum_greater_than_end_lnum_fails() {
+        let dict = create_diag(2, 1, 0, 3);
+        assert2::let_assert!(Err(err) = DiagnosticLocation::try_from(&dict));
+        assert!(err.to_string().contains("inconsistent boundaries"));
+        assert!(err.to_string().contains("lnum > end_lnum"));
+    }
+
+    #[test]
+    fn try_from_col_greater_than_end_col_fails() {
+        let dict = create_diag(0, 3, 2, 1);
+        assert2::let_assert!(Err(err) = DiagnosticLocation::try_from(&dict));
+        assert!(err.to_string().contains("inconsistent boundaries"));
+        assert!(err.to_string().contains("col > end_col"));
+    }
+
+    #[test]
+    fn try_from_equal_boundaries_succeeds() {
+        let dict = create_diag(1, 2, 1, 2);
+        assert2::let_assert!(Ok(loc) = DiagnosticLocation::try_from(&dict));
+        pretty_assertions::assert_eq!(
+            loc,
+            DiagnosticLocation {
+                lnum: 1,
+                col: 2,
+                end_lnum: 1,
+                end_col: 2
+            }
+        );
     }
 
     fn create_diag(lnum: i64, col: i64, end_lnum: i64, end_col: i64) -> Dictionary {
