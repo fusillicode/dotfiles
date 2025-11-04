@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::identity;
 
+use color_eyre::eyre::eyre;
 use ytil_nvim_oxi::dict::DictionaryExt as _;
 
 use crate::diagnostics::filters::BufferWithPath;
@@ -65,16 +66,17 @@ impl DiagnosticsFilter for HarperLsFilter<'_> {
         {
             return Ok(false);
         }
-        if let Some(source) = lsp_diag.get_opt_t::<nvim_oxi::String>("source")?
-            && self.source != source
-        {
+        let maybe_diag_source = lsp_diag.get_opt_t::<nvim_oxi::String>("source")?;
+        if maybe_diag_source.is_none() || maybe_diag_source.is_some_and(|diag_source| self.source != diag_source) {
             return Ok(false);
         }
         let diag_msg = lsp_diag.get_t::<nvim_oxi::String>("message")?;
-        // TODO: understand who to avoid Harper in lazy buffers
-        let Some(diagnosed_text) = buf.get_diagnosed_text(lsp_diag)? else {
-            return Ok(false);
-        };
+        let diagnosed_text = buf.get_diagnosed_text(lsp_diag)?.ok_or_else(|| {
+            eyre!(
+                "missing diagnosed text for {} filter | lsp_diag={lsp_diag:#?}",
+                self.source
+            )
+        })?;
 
         Ok(self
             .blacklist
