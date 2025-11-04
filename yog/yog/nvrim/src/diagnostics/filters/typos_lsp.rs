@@ -7,6 +7,7 @@ use std::collections::HashSet;
 
 use ytil_nvim_oxi::dict::DictionaryExt as _;
 
+use crate::diagnostics::filters::BufferWithPath;
 use crate::diagnostics::filters::DiagnosticsFilter;
 
 pub struct TyposLspFilter<'a> {
@@ -84,7 +85,7 @@ impl<'a> TyposLspFilter<'a> {
 impl DiagnosticsFilter for TyposLspFilter<'_> {
     fn skip_diagnostic(
         &self,
-        buf: Option<&crate::diagnostics::filters::BufferWithPath>,
+        buf: Option<&BufferWithPath>,
         lsp_diag: Option<&nvim_oxi::Dictionary>,
     ) -> color_eyre::Result<bool> {
         let (Some(buf), Some(lsp_diag)) = (buf, lsp_diag) else {

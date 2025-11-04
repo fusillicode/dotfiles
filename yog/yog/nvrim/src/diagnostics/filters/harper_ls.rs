@@ -6,12 +6,12 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::identity;
 
-use color_eyre::eyre::eyre;
 use ytil_nvim_oxi::dict::DictionaryExt as _;
 
+use crate::diagnostics::filters::BufferWithPath;
 use crate::diagnostics::filters::DiagnosticsFilter;
 
-pub struct HarpeLsrFilter<'a> {
+pub struct HarpeLsFilter<'a> {
     /// LSP diagnostic source name; only diagnostics from this source are eligible for blacklist matching.
     pub source: &'a str,
     /// Blacklist of messages per source.
@@ -20,7 +20,7 @@ pub struct HarpeLsrFilter<'a> {
     pub buf_path: Option<&'a str>,
 }
 
-impl<'a> HarpeLsrFilter<'a> {
+impl<'a> HarpeLsFilter<'a> {
     /// Build Harper LSP diagnostic filters.
     ///
     /// Returns a vector of boxed [`DiagnosticsFilter`] configured for the Harper language server. Includes a single
@@ -47,7 +47,7 @@ impl<'a> HarpeLsrFilter<'a> {
         .into_iter()
         .collect();
 
-        vec![Box::new(HarpeLsrFilter {
+        vec![Box::new(HarpeLsFilter {
             source: "Harper",
             buf_path: None,
             blacklist,
@@ -55,10 +55,10 @@ impl<'a> HarpeLsrFilter<'a> {
     }
 }
 
-impl DiagnosticsFilter for HarpeLsrFilter<'_> {
+impl DiagnosticsFilter for HarpeLsFilter<'_> {
     fn skip_diagnostic(
         &self,
-        buf: Option<&crate::diagnostics::filters::BufferWithPath>,
+        buf: Option<&BufferWithPath>,
         lsp_diag: Option<&nvim_oxi::Dictionary>,
     ) -> color_eyre::Result<bool> {
         let (Some(buf), Some(lsp_diag)) = (buf, lsp_diag) else {
@@ -75,12 +75,10 @@ impl DiagnosticsFilter for HarpeLsrFilter<'_> {
             return Ok(false);
         }
         let diag_msg = lsp_diag.get_t::<nvim_oxi::String>("message")?;
-        let diagnosed_text = buf.get_diagnosed_text(lsp_diag)?.ok_or_else(|| {
-            eyre!(
-                "missing diagnosed text for {} filter | lsp_diag={lsp_diag:#?}",
-                self.source
-            )
-        })?;
+        // TODO: understand who to avoid Harper in lazy buffers
+        let Some(diagnosed_text) = buf.get_diagnosed_text(lsp_diag)? else {
+            return Ok(false);
+        };
 
         Ok(self
             .blacklist
@@ -105,7 +103,7 @@ mod tests {
 
     #[test]
     fn skip_diagnostic_when_no_diagnostic_returns_false() {
-        let filter = HarpeLsrFilter {
+        let filter = HarpeLsFilter {
             source: "Harper",
             blacklist: HashMap::new(),
             buf_path: None,
@@ -116,7 +114,7 @@ mod tests {
 
     #[test]
     fn skip_diagnostic_when_buf_path_pattern_not_matched_returns_false() {
-        let filter = HarpeLsrFilter {
+        let filter = HarpeLsFilter {
             source: "Harper",
             blacklist: [("stderr", HashSet::from(["instead of"]))].into(),
             buf_path: Some("src/"),
@@ -136,7 +134,7 @@ mod tests {
 
     #[test]
     fn skip_diagnostic_when_source_mismatch_returns_false() {
-        let filter = HarpeLsrFilter {
+        let filter = HarpeLsFilter {
             source: "Harper",
             blacklist: [("stderr", HashSet::from(["instead of"]))].into(),
             buf_path: None,
@@ -156,7 +154,7 @@ mod tests {
 
     #[test]
     fn skip_diagnostic_when_diagnosed_text_not_in_blacklist_returns_false() {
-        let filter = HarpeLsrFilter {
+        let filter = HarpeLsFilter {
             source: "Harper",
             blacklist: [("stdout", HashSet::from(["instead of"]))].into(),
             buf_path: None,
@@ -176,7 +174,7 @@ mod tests {
 
     #[test]
     fn skip_diagnostic_when_diagnosed_text_in_blacklist_but_message_no_match_returns_false() {
-        let filter = HarpeLsrFilter {
+        let filter = HarpeLsFilter {
             source: "Harper",
             blacklist: [("stderr", HashSet::from(["instead of"]))].into(),
             buf_path: None,
@@ -196,7 +194,7 @@ mod tests {
 
     #[test]
     fn skip_diagnostic_when_all_conditions_met_returns_true() {
-        let filter = HarpeLsrFilter {
+        let filter = HarpeLsFilter {
             source: "Harper",
             blacklist: [("stderr", HashSet::from(["instead of"]))].into(),
             buf_path: None,
@@ -216,7 +214,7 @@ mod tests {
 
     #[test]
     fn skip_diagnostic_when_diagnosed_text_cannot_be_extracted_returns_error() {
-        let filter = HarpeLsrFilter {
+        let filter = HarpeLsFilter {
             source: "Harper",
             blacklist: [("stderr", HashSet::from(["instead of"]))].into(),
             buf_path: None,
