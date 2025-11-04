@@ -96,17 +96,16 @@ impl DiagnosticsFilter for TyposLspFilter<'_> {
         {
             return Ok(false);
         }
-        if let Some(source) = lsp_diag.get_opt_t::<nvim_oxi::String>("source")?
-            && self.source != source
-        {
+        let maybe_diag_source = lsp_diag.get_opt_t::<nvim_oxi::String>("source")?;
+        if maybe_diag_source.is_none() || maybe_diag_source.is_some_and(|diag_source| self.source != diag_source) {
             return Ok(false);
         }
-        let msg = lsp_diag.get_t::<nvim_oxi::String>("message")?;
+        let diag_msg = lsp_diag.get_t::<nvim_oxi::String>("message")?;
 
         Ok(self
             .blacklist
             .iter()
-            .any(|blacklisted_msg| msg.contains(blacklisted_msg)))
+            .any(|blacklisted_msg| diag_msg.contains(blacklisted_msg)))
     }
 }
 
