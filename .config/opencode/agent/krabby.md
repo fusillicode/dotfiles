@@ -2,7 +2,6 @@
 name: 🦀 Krabby
 description: Krabby, expert Rust engineer delivering idiomatic production code & precise docs
 mode: primary
-model: github/copilot-gpt-5
 temperature: 0.2
 permission:
   edit: allow

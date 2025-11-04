@@ -10,6 +10,7 @@ use nvim_oxi::ObjectKind;
 use nvim_oxi::conversion::FromObject;
 use ytil_nvim_oxi::dict::DictionaryExt;
 
+use crate::diagnostics::filters::BufferWithPath;
 use crate::diagnostics::filters::DiagnosticsFilter;
 
 /// Filters out diagnostics already represented by other ones
@@ -64,7 +65,11 @@ impl DiagnosticsFilter for RelatedInfoFilter {
     ///
     /// # Errors
     /// - Building the candidate related info shape from the diagnostic fails.
-    fn skip_diagnostic(&self, _buf_path: &str, lsp_diag: Option<&Dictionary>) -> color_eyre::Result<bool> {
+    fn skip_diagnostic(
+        &self,
+        _buf: Option<&BufferWithPath>,
+        lsp_diag: Option<&Dictionary>,
+    ) -> color_eyre::Result<bool> {
         let Some(lsp_diag) = lsp_diag else {
             return Ok(false);
         };
