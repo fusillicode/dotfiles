@@ -47,7 +47,7 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
     let mut out = vec![];
     for lsp_diag in lsp_diags {
         if filters
-            .skip_diagnostic(Some(&buf_with_path), Some(&lsp_diag))
+            .skip_diagnostic(&buf_with_path, &lsp_diag)
             .inspect_err(|error| {
                 ytil_nvim_oxi::api::notify_error(format!(
                     "cannot filter diagnostic | diagnostic={lsp_diag:#?} buffer={buf_path:#?} error={error:?}"

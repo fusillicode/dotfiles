@@ -7,6 +7,7 @@ use std::collections::HashSet;
 use std::convert::identity;
 
 use color_eyre::eyre::eyre;
+use nvim_oxi::Dictionary;
 use ytil_nvim_oxi::dict::DictionaryExt as _;
 
 use crate::diagnostics::filters::BufferWithPath;
@@ -53,14 +54,7 @@ impl HarperLsFilter<'_> {
 }
 
 impl DiagnosticsFilter for HarperLsFilter<'_> {
-    fn skip_diagnostic(
-        &self,
-        buf: Option<&BufferWithPath>,
-        lsp_diag: Option<&nvim_oxi::Dictionary>,
-    ) -> color_eyre::Result<bool> {
-        let (Some(buf), Some(lsp_diag)) = (buf, lsp_diag) else {
-            return Ok(false);
-        };
+    fn skip_diagnostic(&self, buf: &BufferWithPath, lsp_diag: &Dictionary) -> color_eyre::Result<bool> {
         if let Some(ref bp) = self.buf_path
             && !buf.path.contains(bp)
         {
@@ -100,17 +94,6 @@ mod tests {
     use crate::diagnostics::filters::BufferWithPath;
 
     #[test]
-    fn skip_diagnostic_when_no_diagnostic_returns_false() {
-        let filter = HarperLsFilter {
-            source: "Harper",
-            blacklist: HashMap::new(),
-            buf_path: None,
-        };
-        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(None, None));
-        assert!(!res);
-    }
-
-    #[test]
     fn skip_diagnostic_when_buf_path_pattern_not_matched_returns_false() {
         let filter = HarperLsFilter {
             source: "Harper",
@@ -126,7 +109,7 @@ mod tests {
             end_lnum: 0,
             end_col: 6,
         };
-        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(Some(&buf), Some(&diag)));
+        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(&buf, &diag));
         assert!(!res);
     }
 
@@ -146,7 +129,7 @@ mod tests {
             end_lnum: 0,
             end_col: 6,
         };
-        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(Some(&buf), Some(&diag)));
+        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(&buf, &diag));
         assert!(!res);
     }
 
@@ -166,7 +149,7 @@ mod tests {
             end_lnum: 0,
             end_col: 6,
         };
-        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(Some(&buf), Some(&diag)));
+        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(&buf, &diag));
         assert!(!res);
     }
 
@@ -186,7 +169,7 @@ mod tests {
             end_lnum: 0,
             end_col: 6,
         };
-        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(Some(&buf), Some(&diag)));
+        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(&buf, &diag));
         assert!(!res);
     }
 
@@ -206,7 +189,7 @@ mod tests {
             end_lnum: 0,
             end_col: 6,
         };
-        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(Some(&buf), Some(&diag)));
+        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(&buf, &diag));
         assert!(res);
     }
 
@@ -225,7 +208,7 @@ mod tests {
             col: 1,
             end_col: 7,
         };
-        assert2::let_assert!(Err(err) = filter.skip_diagnostic(Some(&buf), Some(&diag)));
+        assert2::let_assert!(Err(err) = filter.skip_diagnostic(&buf, &diag));
         assert!(err.to_string().contains("missing diagnosed text"));
     }
 

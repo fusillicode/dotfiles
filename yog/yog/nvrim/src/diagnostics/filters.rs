@@ -134,7 +134,7 @@ pub trait DiagnosticsFilter {
     /// # Errors
     /// - Access to required diagnostic fields (dictionary keys) fails (missing key or wrong type).
     /// - Filter-specific logic (e.g. related info extraction) fails.
-    fn skip_diagnostic(&self, buf: Option<&BufferWithPath>, lsp_diag: Option<&Dictionary>) -> color_eyre::Result<bool>;
+    fn skip_diagnostic(&self, buf: &BufferWithPath, lsp_diag: &Dictionary) -> color_eyre::Result<bool>;
 }
 
 /// A collection of diagnostic filters.
@@ -159,7 +159,7 @@ impl DiagnosticsFilter for DiagnosticsFilters {
     ///
     /// # Errors
     /// - A filter implementation (invoked in sequence) returns an error; it is propagated unchanged.
-    fn skip_diagnostic(&self, buf: Option<&BufferWithPath>, lsp_diag: Option<&Dictionary>) -> color_eyre::Result<bool> {
+    fn skip_diagnostic(&self, buf: &BufferWithPath, lsp_diag: &Dictionary) -> color_eyre::Result<bool> {
         // The first filter that returns true skips the LSP diagnostic and all subsequent filters
         // evaluation.
         for filter in &self.0 {

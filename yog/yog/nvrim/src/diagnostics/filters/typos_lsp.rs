@@ -83,14 +83,7 @@ impl TyposLspFilter<'_> {
 }
 
 impl DiagnosticsFilter for TyposLspFilter<'_> {
-    fn skip_diagnostic(
-        &self,
-        buf: Option<&BufferWithPath>,
-        lsp_diag: Option<&nvim_oxi::Dictionary>,
-    ) -> color_eyre::Result<bool> {
-        let (Some(buf), Some(lsp_diag)) = (buf, lsp_diag) else {
-            return Ok(false);
-        };
+    fn skip_diagnostic(&self, buf: &BufferWithPath, lsp_diag: &nvim_oxi::Dictionary) -> color_eyre::Result<bool> {
         if let Some(ref bp) = self.buf_path
             && !buf.path.contains(bp)
         {
@@ -124,17 +117,6 @@ mod tests {
     }
 
     #[test]
-    fn skip_diagnostic_when_no_diagnostic_returns_false() {
-        let filter = TyposLspFilter {
-            source: "typos",
-            blacklist: HashSet::from(["test"]),
-            buf_path: None,
-        };
-        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(None, None));
-        assert!(!res);
-    }
-
-    #[test]
     fn skip_diagnostic_when_buf_path_pattern_not_matched_returns_false() {
         let filter = TyposLspFilter {
             source: "typos",
@@ -146,7 +128,7 @@ mod tests {
             source: "typos",
             message: "some test message",
         };
-        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(Some(&buf), Some(&diag)));
+        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(&buf, &diag));
         assert!(!res);
     }
 
@@ -162,7 +144,7 @@ mod tests {
             source: "other",
             message: "some test message",
         };
-        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(Some(&buf), Some(&diag)));
+        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(&buf, &diag));
         assert!(!res);
     }
 
@@ -178,7 +160,7 @@ mod tests {
             source: "typos",
             message: "some other message",
         };
-        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(Some(&buf), Some(&diag)));
+        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(&buf, &diag));
         assert!(!res);
     }
 
@@ -194,7 +176,7 @@ mod tests {
             source: "typos",
             message: "some test message",
         };
-        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(Some(&buf), Some(&diag)));
+        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(&buf, &diag));
         assert!(res);
     }
 
@@ -209,7 +191,7 @@ mod tests {
         let diag = dict! {
             source: "typos",
         };
-        assert2::let_assert!(Err(err) = filter.skip_diagnostic(Some(&buf), Some(&diag)));
+        assert2::let_assert!(Err(err) = filter.skip_diagnostic(&buf, &diag));
         pretty_assertions::assert_eq!(
             err.to_string(),
             "missing dict value | query=[\n    \"message\",\n] dict={ source: \"typos\" }"
