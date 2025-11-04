@@ -19,7 +19,7 @@ pub struct TyposLspFilter<'a> {
     pub buf_path: Option<&'a str>,
 }
 
-impl<'a> TyposLspFilter<'a> {
+impl TyposLspFilter<'_> {
     /// Build typos LSP diagnostic filters.
     ///
     /// Returns a vector of boxed [`DiagnosticsFilter`] configured for the typos

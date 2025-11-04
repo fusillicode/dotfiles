@@ -20,7 +20,7 @@ pub struct HarpeLsFilter<'a> {
     pub buf_path: Option<&'a str>,
 }
 
-impl<'a> HarpeLsFilter<'a> {
+impl HarpeLsFilter<'_> {
     /// Build Harper LSP diagnostic filters.
     ///
     /// Returns a vector of boxed [`DiagnosticsFilter`] configured for the Harper language server. Includes a single
@@ -32,17 +32,13 @@ impl<'a> HarpeLsFilter<'a> {
         let blacklist: HashMap<_, _> = [
             (
                 "has ",
-                vec!["You may be missing a preposition here"]
-                    .into_iter()
-                    .collect::<HashSet<_>>(),
+                vec!["You may be missing a preposition here"].into_iter().collect(),
             ),
-            ("stderr", vec!["instead of"].into_iter().collect::<HashSet<_>>()),
-            ("stdout", vec!["instead of"].into_iter().collect::<HashSet<_>>()),
-            ("stdin", vec!["instead of"].into_iter().collect::<HashSet<_>>()),
-            (
-                "deduper",
-                vec!["Did you mean to spell"].into_iter().collect::<HashSet<_>>(),
-            ),
+            ("stderr", vec!["instead of"].into_iter().collect()),
+            ("stdout", vec!["instead of"].into_iter().collect()),
+            ("stdin", vec!["instead of"].into_iter().collect()),
+            ("deduper", vec!["Did you mean to spell"].into_iter().collect()),
+            ("TODO", vec!["Hyphenate"].into_iter().collect()),
         ]
         .into_iter()
         .collect();
