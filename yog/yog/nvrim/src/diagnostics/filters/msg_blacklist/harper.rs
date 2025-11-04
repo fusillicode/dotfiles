@@ -28,6 +28,10 @@ pub fn filters() -> Vec<Box<dyn DiagnosticsFilter>> {
         ("stderr", Some(vec!["instead of"].into_iter().collect::<HashSet<_>>())),
         ("stdout", Some(vec!["instead of"].into_iter().collect::<HashSet<_>>())),
         ("stdin", Some(vec!["instead of"].into_iter().collect::<HashSet<_>>())),
+        (
+            "deduper",
+            Some(vec!["Did you mean to spell"].into_iter().collect::<HashSet<_>>()),
+        ),
     ]
     .into_iter()
     .collect();
