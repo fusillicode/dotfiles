@@ -10,11 +10,14 @@ use nvim_oxi::api::opts::GetTextOpts;
 use ytil_nvim_oxi::buffer::BufferExt;
 use ytil_nvim_oxi::dict::DictionaryExt as _;
 
+use crate::diagnostics::filters::harper_ls::HarpeLsrFilter;
 use crate::diagnostics::filters::related_info::RelatedInfoFilter;
+use crate::diagnostics::filters::typos_lsp::TyposLspFilter;
 
 pub mod buffer;
-pub mod msg_blacklist;
+pub mod harper_ls;
 pub mod related_info;
+pub mod typos_lsp;
 
 pub struct BufferWithPath {
     buffer: Box<dyn BufferExt>,
@@ -143,8 +146,8 @@ impl DiagnosticsFilters {
     /// # Errors
     /// - Constructing the related info filter fails (dictionary traversal or type mismatch).
     pub fn all(lsp_diags: &[Dictionary]) -> color_eyre::Result<Self> {
-        let mut filters = msg_blacklist::typos::filters();
-        filters.extend(msg_blacklist::harper::filters());
+        let mut filters = TyposLspFilter::filters();
+        filters.extend(HarpeLsrFilter::filters());
         filters.push(Box::new(RelatedInfoFilter::new(lsp_diags)?));
         Ok(Self(filters))
     }
