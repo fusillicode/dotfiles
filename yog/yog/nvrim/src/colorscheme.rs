@@ -13,8 +13,9 @@ use nvim_oxi::api::opts::SetHighlightOptsBuilder;
 use nvim_oxi::api::types::GetHlInfos;
 use nvim_oxi::api::types::HighlightInfos;
 
-const BG: &str = "#002000";
-const FG: &str = "#FFFFFF";
+const BG: &str = "#1a1b25";
+const FG: &str = "#cad3f2";
+const COMMENT: &str = "#8289b2";
 const DIAGNOSTIC_LVLS: [&str; 5] = ["Error", "Warn", "Info", "Hint", "Ok"];
 const STATUS_LINE_BG: &str = "none";
 
@@ -59,6 +60,7 @@ pub fn set(colorscheme: Option<String>) {
         ),
         // Changing these will change the main foreground color.
         ("@variable", get_default_hl_opts().foreground(FG).build()),
+        ("Comment", get_default_hl_opts().foreground(COMMENT).build()),
         ("Constant", get_default_hl_opts().foreground(FG).build()),
         ("Delimiter", get_default_hl_opts().foreground(FG).build()),
         // ("Function", get_default_hl_opts().foreground(FG).build()),

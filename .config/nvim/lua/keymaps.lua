@@ -216,7 +216,7 @@ function M.opencode(plugin)
       mode = 'v',
       plugin and {
         function()
-          require('opencode').ask('@selection: ',
+          require('opencode').ask('@this: ',
             { submit = true, })
         end,
         desc = 'Ask opencode about selection',

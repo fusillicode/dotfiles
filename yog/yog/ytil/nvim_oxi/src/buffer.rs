@@ -6,11 +6,13 @@
 use color_eyre::eyre::eyre;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::Window;
+use nvim_oxi::api::opts::GetTextOpts;
 
 /// Extension trait for [`Buffer`] to provide extra functionalities.
 ///
 /// Provides focused helpers for line fetching and text insertion at the current
 /// cursor position while surfacing Neovim errors via `notify_error`.
+#[cfg_attr(any(test, feature = "mockall"), mockall::automock)]
 pub trait BufferExt {
     /// Fetch a single line from a [`Buffer`] by 0-based index.
     ///
@@ -35,6 +37,28 @@ pub trait BufferExt {
     /// # Arguments
     /// - `text` UTF-8 slice inserted at the cursor byte column.
     fn set_text_at_cursor_pos(&mut self, text: &str);
+
+    /// Get text from a [`nvim_oxi::api::Buffer`].
+    ///
+    /// Retrieves lines from the specified start position to end position (inclusive), converting
+    /// each line to a [`String`].
+    ///
+    /// # Arguments
+    /// - `start` (lnum, col) 0-based starting line and column (column is byte offset).
+    /// - `end` (`end_lnum`, `end_col`) 0-based ending line and column (inclusive; column is byte offset).
+    /// - `opts` Reference to [`GetTextOpts`] for additional options.
+    ///
+    /// # Returns
+    /// - `Ok(Vec<String>)` with the extracted lines.
+    ///
+    /// # Errors
+    /// - Propagates [`nvim_oxi::api::Error`] from the underlying `nvim_buf_get_text` call.
+    fn get_text_between(
+        &self,
+        start: (usize, usize),
+        end: (usize, usize),
+        opts: &GetTextOpts,
+    ) -> Result<Vec<String>, nvim_oxi::api::Error>;
 }
 
 impl BufferExt for Buffer {
@@ -62,6 +86,18 @@ impl BufferExt for Buffer {
                 "cannot set text in buffer | text={text:?} buffer={self:?} line_range={line_range:?} start_col={start_col:?} end_col={end_col:?} error={error:?}",
             ));
         }
+    }
+
+    fn get_text_between(
+        &self,
+        (start_lnum, start_col): (usize, usize),
+        (end_lnum, end_col): (usize, usize),
+        opts: &GetTextOpts,
+    ) -> Result<Vec<String>, nvim_oxi::api::Error> {
+        Ok(self
+            .get_text(start_lnum..end_lnum, start_col, end_col, opts)?
+            .map(|line| line.to_string())
+            .collect::<Vec<_>>())
     }
 }
 
@@ -149,5 +185,50 @@ mod tests {
     fn cursor_position_adjusted_col_when_non_zero_increments_by_one() {
         let pos = CursorPosition { row: 10, col: 7 };
         pretty_assertions::assert_eq!(pos.adjusted_col(), 8);
+    }
+}
+
+#[cfg(any(test, feature = "mockall"))]
+pub mod mock {
+    use super::BufferExt;
+    use super::GetTextOpts;
+
+    pub struct MockBuffer(pub Vec<String>);
+
+    impl BufferExt for MockBuffer {
+        fn get_line(&self, _idx: usize) -> color_eyre::Result<nvim_oxi::String> {
+            Ok(nvim_oxi::String::from("foo"))
+        }
+
+        fn set_text_at_cursor_pos(&mut self, _text: &str) {}
+
+        fn get_text_between(
+            &self,
+            (start_lnum, start_col): (usize, usize),
+            (end_lnum, end_col): (usize, usize),
+            _opts: &GetTextOpts,
+        ) -> Result<Vec<String>, nvim_oxi::api::Error> {
+            if start_lnum > end_lnum || (start_lnum == end_lnum && start_col > end_col) {
+                return Ok(vec![]);
+            }
+            let mut result = Vec::new();
+            for lnum in start_lnum..=end_lnum {
+                if lnum >= self.0.len() {
+                    break;
+                }
+                let line = &self
+                    .0
+                    .get(lnum)
+                    .ok_or_else(|| nvim_oxi::api::Error::Other("this should not happen".into()))?;
+                let start = if lnum == start_lnum { start_col } else { 0 };
+                let end = if lnum == end_lnum { end_col } else { line.len() };
+                if start >= line.len() {
+                    result.push(String::new());
+                } else {
+                    result.push(line[start..end.min(line.len())].to_string());
+                }
+            }
+            Ok(result)
+        }
     }
 }
