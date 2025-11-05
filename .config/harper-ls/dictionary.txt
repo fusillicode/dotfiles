@@ -118,6 +118,7 @@ linewise
 lnum
 localisable
 lossily
+lsp
 md
 mergeability
 minification
