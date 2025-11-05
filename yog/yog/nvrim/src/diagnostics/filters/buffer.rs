@@ -6,33 +6,22 @@
 
 use crate::diagnostics::filters::BufferWithPath;
 
-/// Buffer types for which diagnostics are skipped entirely.
+/// Defines filtering logic for buffers based on path and type criteria.
 ///
-/// Buffers with these `buftype` values are excluded from diagnostic processing
-/// to avoid noise from non-source files (e.g. fzf-lua results, grug-far search buffers).
-const BLACKLISTED_BUF_TYPES: &[&str; 2] = &["nofile", "grug-far"];
+/// Implementations specify which buffer paths and types should be excluded from
+/// diagnostic processing to reduce noise from build artifacts and non-source files.
+pub trait BufferFilter {
+    /// Buffer path substrings for which diagnostics are skipped entirely.
+    ///
+    /// Buffers with paths containing these substrings are excluded from diagnostic processing
+    /// to avoid noise from build artifacts and dependencies (e.g. Cargo registry).
+    fn blacklisted_buf_paths(&self) -> &[&str];
 
-/// Filters out diagnostics based on the coded paths blacklist.
-///
-/// This filter doesn't implement the [`crate::diagnostics::filters::DiagnosticsFilter`] because
-/// it's not really a "Diagnostic" filter. It's filtering doesn't work with an LSP diagnostic but
-/// just with a buffer path.
-pub struct BufferFilter {
-    blacklisted_paths: Vec<String>,
-}
-
-impl BufferFilter {
-    /// Creates a new [`BufferFilter`] with the default blacklist.
-    pub fn new() -> Self {
-        let blacklisted_paths = vec![
-            ytil_system::build_home_path(&[".cargo"])
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string(),
-        ];
-
-        Self { blacklisted_paths }
-    }
+    /// Buffer types for which diagnostics are skipped entirely.
+    ///
+    /// Buffers with these `buftype` values are excluded from diagnostic processing
+    /// to avoid noise from non-source files (e.g. fzf-lua results, grug-far search buffers).
+    fn blacklisted_buf_types(&self) -> &[&str];
 
     /// Checks if diagnostics should be skipped for the given buffer.
     ///
@@ -45,11 +34,156 @@ impl BufferFilter {
     ///
     /// # Errors
     /// - Propagates [`nvim_oxi::api::Error`] from buffer type retrieval.
-    pub fn skip_diagnostic(&self, buf_with_path: &BufferWithPath) -> nvim_oxi::Result<bool> {
-        if self.blacklisted_paths.iter().any(|bp| buf_with_path.path.contains(bp)) {
+    fn skip_diagnostic(&self, buf_with_path: &BufferWithPath) -> nvim_oxi::Result<bool> {
+        if self
+            .blacklisted_buf_paths()
+            .iter()
+            .any(|bp| buf_with_path.path.contains(bp))
+        {
             return Ok(true);
         }
         let buf_type = buf_with_path.buffer.get_buf_type()?;
-        Ok(BLACKLISTED_BUF_TYPES.contains(&buf_type.as_str()))
+        Ok(self.blacklisted_buf_types().contains(&buf_type.as_str()))
+    }
+}
+
+pub struct BufferFilterImpl;
+
+impl BufferFilter for BufferFilterImpl {
+    fn blacklisted_buf_paths(&self) -> &[&str] {
+        &[".cargo"]
+    }
+
+    fn blacklisted_buf_types(&self) -> &[&str] {
+        &["nofile", "grug-far"]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ytil_nvim_oxi::buffer::mock::MockBuffer;
+
+    use super::*;
+
+    #[test]
+    fn skip_diagnostic_when_path_contains_blacklisted_substring_returns_true() {
+        let filter = TestBufferFilter::new(&[".cargo"], &[]);
+        let buf_with_path = create_buffer_with_path("/home/user/.cargo/registry/src/index.crates.io/crate.tar.gz", "");
+
+        assert2::let_assert!(Ok(result) = filter.skip_diagnostic(&buf_with_path));
+        pretty_assertions::assert_eq!(result, true);
+    }
+
+    #[test]
+    fn skip_diagnostic_when_path_does_not_contain_blacklisted_and_buf_type_not_blacklisted_returns_false() {
+        let filter = TestBufferFilter::new(&[".cargo"], &["nofile"]);
+        let buf_with_path = create_buffer_with_path("/home/user/src/main.rs", "");
+
+        assert2::let_assert!(Ok(result) = filter.skip_diagnostic(&buf_with_path));
+        pretty_assertions::assert_eq!(result, false);
+    }
+
+    #[test]
+    fn skip_diagnostic_when_path_not_blacklisted_but_buf_type_is_blacklisted_returns_true() {
+        let filter = TestBufferFilter::new(&[".cargo"], &["nofile"]);
+        let buf_with_path = create_buffer_with_path("/home/user/src/main.rs", "nofile");
+
+        assert2::let_assert!(Ok(result) = filter.skip_diagnostic(&buf_with_path));
+        pretty_assertions::assert_eq!(result, true);
+    }
+
+    #[test]
+    fn skip_diagnostic_when_multiple_blacklisted_paths_and_types_works_works_as_expected() {
+        let filter = TestBufferFilter::new(&[".cargo", "target"], &["nofile", "grug-far"]);
+        let buf_with_path = create_buffer_with_path("/home/user/target/debug/main", "");
+
+        assert2::let_assert!(Ok(result) = filter.skip_diagnostic(&buf_with_path));
+        pretty_assertions::assert_eq!(result, true);
+    }
+
+    #[test]
+    fn skip_diagnostic_when_no_blacklists_configured_returns_false() {
+        let filter = TestBufferFilter::new(&[], &[]);
+        let buf_with_path = create_buffer_with_path("/home/user/src/main.rs", "normal");
+
+        assert2::let_assert!(Ok(result) = filter.skip_diagnostic(&buf_with_path));
+        pretty_assertions::assert_eq!(result, false);
+    }
+
+    #[test]
+    fn skip_diagnostic_when_path_exactly_matches_blacklisted_substring_returns_true() {
+        let filter = TestBufferFilter::new(&[".cargo"], &[]);
+        let buf_with_path = create_buffer_with_path(".cargo", "");
+
+        assert2::let_assert!(Ok(result) = filter.skip_diagnostic(&buf_with_path));
+        pretty_assertions::assert_eq!(result, true);
+    }
+
+    #[test]
+    fn skip_diagnostic_when_path_contains_multiple_occurrences_of_blacklisted_substring_returns_true() {
+        let filter = TestBufferFilter::new(&["target"], &[]);
+        let buf_with_path = create_buffer_with_path("/target/debug/target/release/target", "");
+
+        assert2::let_assert!(Ok(result) = filter.skip_diagnostic(&buf_with_path));
+        pretty_assertions::assert_eq!(result, true);
+    }
+
+    #[test]
+    fn skip_diagnostic_with_empty_path_returns_false() {
+        let filter = TestBufferFilter::new(&[".cargo"], &["nofile"]);
+        let buf_with_path = create_buffer_with_path("", "");
+
+        assert2::let_assert!(Ok(result) = filter.skip_diagnostic(&buf_with_path));
+        pretty_assertions::assert_eq!(result, false);
+    }
+
+    #[test]
+    fn skip_diagnostic_with_unicode_path_containing_blacklisted_substring_returns_true() {
+        let filter = TestBufferFilter::new(&[".cargo"], &[]);
+        let buf_with_path = create_buffer_with_path("/home/user/📁/.cargo/registry/🚀.tar.gz", "");
+
+        assert2::let_assert!(Ok(result) = filter.skip_diagnostic(&buf_with_path));
+        pretty_assertions::assert_eq!(result, true);
+    }
+
+    #[test]
+    fn skip_diagnostic_when_both_path_and_buffer_type_are_blacklisted_returns_true_early() {
+        let filter = TestBufferFilter::new(&[".cargo"], &["nofile"]);
+        let buf_with_path = create_buffer_with_path("/home/user/.cargo/main.rs", "nofile");
+
+        assert2::let_assert!(Ok(result) = filter.skip_diagnostic(&buf_with_path));
+        pretty_assertions::assert_eq!(result, true);
+    }
+
+    /// Test implementation of BufferFilter with configurable blacklists.
+    struct TestBufferFilter {
+        blacklisted_paths: &'static [&'static str],
+        blacklisted_types: &'static [&'static str],
+    }
+
+    impl TestBufferFilter {
+        fn new(blacklisted_paths: &'static [&'static str], blacklisted_types: &'static [&'static str]) -> Self {
+            Self {
+                blacklisted_paths,
+                blacklisted_types,
+            }
+        }
+    }
+
+    impl BufferFilter for TestBufferFilter {
+        fn blacklisted_buf_paths(&self) -> &[&str] {
+            self.blacklisted_paths
+        }
+
+        fn blacklisted_buf_types(&self) -> &[&str] {
+            self.blacklisted_types
+        }
+    }
+
+    fn create_buffer_with_path(path: &str, buf_type: &str) -> BufferWithPath {
+        BufferWithPath {
+            buffer: Box::new(MockBuffer::with_buf_type(vec![], buf_type)),
+            path: path.to_string(),
+        }
     }
 }

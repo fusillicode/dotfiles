@@ -233,7 +233,7 @@ mod tests {
         #[case] expected: Option<String>,
     ) {
         let buf = BufferWithPath {
-            buffer: Box::new(MockBuffer(lines)),
+            buffer: Box::new(MockBuffer::new(lines)),
             path: "test.rs".to_string(),
         };
         assert2::let_assert!(Ok(actual) = buf.get_diagnosed_text(&diag));

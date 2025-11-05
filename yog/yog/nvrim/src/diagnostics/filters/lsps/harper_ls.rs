@@ -219,7 +219,7 @@ mod tests {
 
     fn create_buffer_with_path_and_content(path: &str, content: Vec<&str>) -> BufferWithPath {
         BufferWithPath {
-            buffer: Box::new(MockBuffer(content.into_iter().map(str::to_string).collect())),
+            buffer: Box::new(MockBuffer::new(content.into_iter().map(str::to_string).collect())),
             path: path.to_string(),
         }
     }

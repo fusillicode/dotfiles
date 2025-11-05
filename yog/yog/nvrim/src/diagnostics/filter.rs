@@ -12,6 +12,7 @@ use crate::diagnostics::filters::BufferWithPath;
 use crate::diagnostics::filters::DiagnosticsFilter;
 use crate::diagnostics::filters::DiagnosticsFilters;
 use crate::diagnostics::filters::buffer::BufferFilter;
+use crate::diagnostics::filters::buffer::BufferFilterImpl;
 
 /// Filters LSP diagnostics based on configured filters.
 pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
@@ -34,7 +35,8 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
 
     // Keeping this as a separate filter because it short circuits the whole filtering and
     // does not require any LSP diagnostics to apply its logic, just the [`nvim_oxi::api::Buffer`].
-    if BufferFilter::new()
+    let buffer_filter = BufferFilterImpl;
+    if buffer_filter
         .skip_diagnostic(&buf_with_path)
         .inspect_err(|error| {
             ytil_nvim_oxi::api::notify_error(format!("cannot get filter by buffer | error={error:#?}"));
