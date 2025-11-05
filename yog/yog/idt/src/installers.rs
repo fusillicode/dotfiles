@@ -11,8 +11,6 @@ pub mod bash_language_server;
 pub mod commitlint;
 pub mod deno;
 pub mod docker_langserver;
-pub mod elixir_ls;
-pub mod elm_language_server;
 pub mod eslint_d;
 pub mod graphql_lsp;
 pub mod hadolint;

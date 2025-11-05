@@ -38,8 +38,6 @@ use crate::installers::bash_language_server::BashLanguageServer;
 use crate::installers::commitlint::Commitlint;
 use crate::installers::deno::Deno;
 use crate::installers::docker_langserver::DockerLangServer;
-use crate::installers::elixir_ls::ElixirLs;
-use crate::installers::elm_language_server::ElmLanguageServer;
 use crate::installers::eslint_d::EslintD;
 use crate::installers::graphql_lsp::GraphQlLsp;
 use crate::installers::hadolint::Hadolint;
@@ -151,14 +149,6 @@ fn main() -> color_eyre::Result<()> {
             bin_dir: Path::new(bin_dir),
         }),
         Box::new(DockerLangServer {
-            dev_tools_dir: Path::new(dev_tools_dir),
-            bin_dir: Path::new(bin_dir),
-        }),
-        Box::new(ElixirLs {
-            dev_tools_dir: Path::new(dev_tools_dir),
-            bin_dir: Path::new(bin_dir),
-        }),
-        Box::new(ElmLanguageServer {
             dev_tools_dir: Path::new(dev_tools_dir),
             bin_dir: Path::new(bin_dir),
         }),

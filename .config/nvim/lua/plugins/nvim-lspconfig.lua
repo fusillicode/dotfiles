@@ -5,16 +5,6 @@ local function get_custom_lsps_configs()
     bashls = {},
     docker_compose_language_service = {},
     dockerls = {},
-    elixirls = {
-      cmd = { vim.fn.expand('~/.local/bin/elixir-ls'), },
-      settings = {
-        elixirLS = {
-          signatureAfterComplete = true,
-          suggestSpecs = true,
-        },
-      },
-    },
-    elmls = {},
     graphql = {},
     harper_ls = {
       settings = {
