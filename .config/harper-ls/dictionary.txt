@@ -98,6 +98,7 @@ façade
 file path
 fkr
 franquicia
+fzf
 gh
 gitignore
 grug
@@ -119,6 +120,7 @@ lnum
 localisable
 lossily
 lsp
+lua
 md
 mergeability
 minification
