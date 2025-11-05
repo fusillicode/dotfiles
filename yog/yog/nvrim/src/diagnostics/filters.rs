@@ -134,6 +134,10 @@ impl TryFrom<&Dictionary> for DiagnosticLocation {
 pub trait DiagnosticsFilter {
     /// Returns true if the diagnostic should be skipped.
     ///
+    /// # Arguments
+    /// - `buf`: Buffer with path information.
+    /// - `lsp_diag`: LSP diagnostic dictionary.
+    ///
     /// # Errors
     /// - Access to required diagnostic fields (dictionary keys) fails (missing key or wrong type).
     /// - Filter-specific logic (e.g. related info extraction) fails.

@@ -1,6 +1,6 @@
-//! Message blacklist configuration for the `Harper` LSP source.
+//! "Harper" LSP custom filter.
 //!
-//! Suppresses noisy channel tokens and minor phrasing suggestions using a single [`MsgBlacklistFilter`].
+//! Suppresses noisy diagnostics that cannot be filtered directly with "Harper".
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -27,10 +27,10 @@ impl HarperLsFilter<'_> {
     /// Build Harper LSP diagnostic filters.
     ///
     /// Returns a vector of boxed [`DiagnosticsFilter`] configured for the Harper language server. Includes a single
-    /// [`MsgBlacklistFilter`] suppressing channel-related noise ("stderr", "stdout", "stdin").
+    /// [`HarperLsFilter`] suppressing channel-related noise ("stderr", "stdout", "stdin").
     ///
     /// # Returns
-    /// - `Vec<Box<dyn DiagnosticsFilter>>`: Collection containing one configured [`MsgBlacklistFilter`] for Harper.
+    /// - `Vec<Box<dyn DiagnosticsFilter>>`: Collection containing one configured [`HarperLsFilter`] for Harper.
     pub fn filters() -> Vec<Box<dyn DiagnosticsFilter>> {
         let blacklist: HashMap<_, _> = [
             (

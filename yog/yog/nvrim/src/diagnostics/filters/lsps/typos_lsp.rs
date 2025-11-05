@@ -1,7 +1,6 @@
-//! Message blacklist configuration for the `typos` LSP source.
+//! "typos-lsp" custom filter.
 //!
-//! Provides a curated set of substrings to suppress recurring false‑positive spelling suggestions
-//! (domain‑specific terms) via [`MsgBlacklistFilter`].
+//! Suppresses noisy diagnostics that cannot be filtered directly with "typos-lsp".
 
 use std::collections::HashSet;
 
@@ -23,11 +22,11 @@ impl TyposLspFilter<'_> {
     /// Build typos LSP diagnostic filters.
     ///
     /// Returns a vector of boxed [`DiagnosticsFilter`] configured for the typos
-    /// language server. Includes a single [`MsgBlacklistFilter`] that suppresses
+    /// language server. Includes a single [`TyposLspFilter`] that suppresses
     /// false-positive spelling suggestions matching predefined substrings.
     ///
     /// # Returns
-    /// - [`Vec<Box<dyn DiagnosticsFilter>>`] Collection containing one configured [`MsgBlacklistFilter`] for the typos
+    /// - [`Vec<Box<dyn DiagnosticsFilter>>`] Collection containing one configured [`TyposLspFilter`] for the typos
     ///   source.
     pub fn filters() -> Vec<Box<dyn DiagnosticsFilter>> {
         let blacklist = HashSet::from([

@@ -4,17 +4,38 @@ use ytil_nvim_oxi::dict::DictionaryExt as _;
 pub mod harper_ls;
 pub mod typos_lsp;
 
+/// Output of diagnostic message extraction or skip decision.
 #[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub enum GetDiagMsgOutput {
+    /// Diagnostic message extracted successfully.
     Msg(String),
+    /// Skip this diagnostic.
     Skip,
 }
 
+/// Common interface for LSP-specific diagnostic filters.
+///
+/// Provides utilities for path and source matching before message extraction.
 pub trait LspFilter {
+    /// Optional buffer path substring required for filtering.
+    ///
+    /// If present, filtering only applies to buffers containing this substring.
     fn path_substring(&self) -> Option<&str>;
 
+    /// LSP source name for this filter.
     fn source(&self) -> &str;
 
+    /// Extract diagnostic message or decide to skip.
+    ///
+    /// Checks path substring and source match, then extracts message if applicable.
+    ///
+    /// # Arguments
+    /// - `buf_path` Buffer filepath.
+    /// - `lsp_diag` LSP diagnostic dictionary.
+    ///
+    /// # Errors
+    /// - Missing or invalid "source" key.
+    /// - Missing or invalid "message" key.
     fn get_diag_msg_or_skip(&self, buf_path: &str, lsp_diag: &Dictionary) -> color_eyre::Result<GetDiagMsgOutput> {
         if self
             .path_substring()
