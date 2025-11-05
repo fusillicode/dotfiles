@@ -85,8 +85,8 @@ pub fn set(colorscheme: Option<String>) {
         };
         set_hl(0, &format!("DiagnosticStatusLine{lvl}"), &set_hl_opts);
 
-        let diagn_underline_hl = format!("DiagnosticUnderline{lvl}");
-        let Ok(hl_infos) = get_hl_single(0, &get_hl_opts.name(diagn_underline_hl.clone()).build()) else {
+        let diag_underline_hl = format!("DiagnosticUnderline{lvl}");
+        let Ok(hl_infos) = get_hl_single(0, &get_hl_opts.name(diag_underline_hl.clone()).build()) else {
             continue;
         };
         let Ok(set_hl_opts) =
@@ -94,7 +94,7 @@ pub fn set(colorscheme: Option<String>) {
         else {
             continue;
         };
-        set_hl(0, &diagn_underline_hl, &set_hl_opts);
+        set_hl(0, &diag_underline_hl, &set_hl_opts);
     }
 }
 
