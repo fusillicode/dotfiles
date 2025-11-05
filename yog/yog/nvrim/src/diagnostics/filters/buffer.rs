@@ -20,6 +20,7 @@ impl BufferFilter {
                 .unwrap_or_default()
                 .to_string_lossy()
                 .to_string(),
+            "Grug FAR".to_string(),
         ];
 
         Self { blacklist }

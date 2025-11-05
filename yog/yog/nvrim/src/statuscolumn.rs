@@ -9,12 +9,12 @@ use core::fmt::Display;
 use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;
-use nvim_oxi::api::opts::OptionOptsBuilder;
 use nvim_oxi::conversion::FromObject;
 use nvim_oxi::lua::Poppable;
 use nvim_oxi::lua::ffi::State;
 use nvim_oxi::serde::Deserializer;
 use serde::Deserialize;
+use ytil_nvim_oxi::buffer::BufferExt;
 
 use crate::diagnostics::DiagnosticSeverity;
 
@@ -39,8 +39,8 @@ pub fn dict() -> Dictionary {
 /// status column (special buffer type) and an error acquiring required state.
 fn draw((cur_lnum, extmarks): (String, Vec<Extmark>)) -> Option<String> {
     let cur_buf = Buffer::current();
-    let opts = OptionOptsBuilder::default().buf(cur_buf.clone()).build();
-    let buf_type = nvim_oxi::api::get_option_value::<String>("buftype", &opts)
+    let buf_type = cur_buf
+        .get_buf_type()
         .inspect_err(|error| {
             ytil_nvim_oxi::api::notify_error(format!(
                 "cannot get buftype of current buffer | buffer={cur_buf:#?} error={error:#?}"

@@ -7,6 +7,7 @@ use color_eyre::eyre::eyre;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::Window;
 use nvim_oxi::api::opts::GetTextOpts;
+use nvim_oxi::api::opts::OptionOptsBuilder;
 
 /// Extension trait for [`Buffer`] to provide extra functionalities.
 ///
@@ -59,6 +60,15 @@ pub trait BufferExt {
         end: (usize, usize),
         opts: &GetTextOpts,
     ) -> Result<Vec<String>, nvim_oxi::api::Error>;
+
+    /// Retrieves the buffer type via the `buftype` option.
+    ///
+    /// # Returns
+    /// - `Ok(String)` The buffer type (e.g., `""` for normal, `"help"` for help buffers).
+    ///
+    /// # Errors
+    /// - Propagates [`nvim_oxi::api::Error`] from the underlying option retrieval.
+    fn get_buf_type(&self) -> Result<String, nvim_oxi::api::Error>;
 }
 
 impl BufferExt for Buffer {
@@ -98,6 +108,11 @@ impl BufferExt for Buffer {
             .get_text(start_lnum..end_lnum, start_col, end_col, opts)?
             .map(|line| line.to_string())
             .collect::<Vec<_>>())
+    }
+
+    fn get_buf_type(&self) -> Result<String, nvim_oxi::api::Error> {
+        let opts = OptionOptsBuilder::default().buf(self.clone()).build();
+        nvim_oxi::api::get_option_value::<String>("buftype", &opts)
     }
 }
 
@@ -229,6 +244,10 @@ pub mod mock {
                 }
             }
             Ok(result)
+        }
+
+        fn get_buf_type(&self) -> Result<String, nvim_oxi::api::Error> {
+            Ok("foo".to_string())
         }
     }
 }
