@@ -33,8 +33,14 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
     };
 
     // Keeping this as a separate filter because it short circuits the whole filtering and
-    // does not require any LSP diagnostics to apply its logic.
-    if BufferFilter::new().skip_diagnostic(buf_with_path.path()) {
+    // does not require any LSP diagnostics to apply its logic, just the [`nvim_oxi::api::Buffer`].
+    if BufferFilter::new()
+        .skip_diagnostic(&buf_with_path)
+        .inspect_err(|error| {
+            ytil_nvim_oxi::api::notify_error(format!("cannot get filter by buffer | error={error:#?}"));
+        })
+        .unwrap_or(false)
+    {
         return vec![];
     }
 

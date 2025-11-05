@@ -1,3 +1,8 @@
+//! Filter diagnostics based on LSP source and buffer path.
+//!
+//! Provides the [`LspFilter`] trait for filtering diagnostics by LSP source and buffer path,
+//! along with implementations for specific LSPs like Harper and Typos.
+
 use nvim_oxi::Dictionary;
 use ytil_nvim_oxi::dict::DictionaryExt as _;
 
