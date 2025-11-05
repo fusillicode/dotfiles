@@ -10,14 +10,13 @@ use nvim_oxi::api::opts::GetTextOpts;
 use ytil_nvim_oxi::buffer::BufferExt;
 use ytil_nvim_oxi::dict::DictionaryExt as _;
 
-use crate::diagnostics::filters::harper_ls::HarperLsFilter;
+use crate::diagnostics::filters::lsps::harper_ls::HarperLsFilter;
+use crate::diagnostics::filters::lsps::typos_lsp::TyposLspFilter;
 use crate::diagnostics::filters::related_info::RelatedInfoFilter;
-use crate::diagnostics::filters::typos_lsp::TyposLspFilter;
 
 pub mod buffer;
-pub mod harper_ls;
+pub mod lsps;
 pub mod related_info;
-pub mod typos_lsp;
 
 pub struct BufferWithPath {
     buffer: Box<dyn BufferExt>,

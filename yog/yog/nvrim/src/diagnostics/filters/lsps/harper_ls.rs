@@ -8,10 +8,11 @@ use std::convert::identity;
 
 use color_eyre::eyre::eyre;
 use nvim_oxi::Dictionary;
-use ytil_nvim_oxi::dict::DictionaryExt as _;
 
+use super::GetDiagMsgOutput;
 use crate::diagnostics::filters::BufferWithPath;
 use crate::diagnostics::filters::DiagnosticsFilter;
+use crate::diagnostics::filters::lsps::LspFilter;
 
 pub struct HarperLsFilter<'a> {
     /// LSP diagnostic source name; only diagnostics from this source are eligible for blacklist matching.
@@ -41,6 +42,7 @@ impl HarperLsFilter<'_> {
             ("stdin", vec!["instead of"].into_iter().collect()),
             ("deduper", vec!["Did you mean to spell"].into_iter().collect()),
             ("TODO", vec!["Hyphenate"].into_iter().collect()),
+            ("FIXME", vec!["Did you mean `IME`"].into_iter().collect()),
         ]
         .into_iter()
         .collect();
@@ -53,16 +55,22 @@ impl HarperLsFilter<'_> {
     }
 }
 
+impl LspFilter for HarperLsFilter<'_> {
+    fn buf_path(&self) -> Option<&str> {
+        self.buf_path
+    }
+
+    fn source(&self) -> &str {
+        self.source
+    }
+}
+
 impl DiagnosticsFilter for HarperLsFilter<'_> {
     fn skip_diagnostic(&self, buf: &BufferWithPath, lsp_diag: &Dictionary) -> color_eyre::Result<bool> {
-        if self.buf_path.is_some_and(|bp| !buf.path.contains(bp)) {
-            return Ok(false);
-        }
-        let maybe_diag_source = lsp_diag.get_opt_t::<nvim_oxi::String>("source")?;
-        if maybe_diag_source.is_none() || maybe_diag_source.is_some_and(|diag_source| self.source != diag_source) {
-            return Ok(false);
-        }
-        let diag_msg = lsp_diag.get_t::<nvim_oxi::String>("message")?;
+        let diag_msg = match self.get_diag_msg_or_skip(&buf.path, lsp_diag)? {
+            GetDiagMsgOutput::Msg(diag_msg) => diag_msg,
+            GetDiagMsgOutput::Skip => return Ok(false),
+        };
 
         let diagnosed_text = buf.get_diagnosed_text(lsp_diag)?.ok_or_else(|| {
             eyre!(
@@ -213,7 +221,7 @@ mod tests {
 
     fn create_buffer_with_path_and_content(path: &str, content: Vec<&str>) -> BufferWithPath {
         BufferWithPath {
-            buffer: Box::new(MockBuffer(content.into_iter().map(|s| s.to_string()).collect())),
+            buffer: Box::new(MockBuffer(content.into_iter().map(str::to_string).collect())),
             path: path.to_string(),
         }
     }
