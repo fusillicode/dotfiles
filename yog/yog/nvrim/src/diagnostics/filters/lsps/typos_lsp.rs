@@ -4,6 +4,8 @@
 
 use std::collections::HashSet;
 
+use lit2::set;
+
 use crate::diagnostics::filters::BufferWithPath;
 use crate::diagnostics::filters::DiagnosticsFilter;
 use crate::diagnostics::filters::lsps::GetDiagMsgOutput;
@@ -29,7 +31,7 @@ impl TyposLspFilter<'_> {
     /// - [`Vec<Box<dyn DiagnosticsFilter>>`] Collection containing one configured [`TyposLspFilter`] for the typos
     ///   source.
     pub fn filters() -> Vec<Box<dyn DiagnosticsFilter>> {
-        let blacklist = HashSet::from([
+        let blacklist = set![
             "accidentes",
             "aci",
             "administrar",
@@ -71,7 +73,7 @@ impl TyposLspFilter<'_> {
             "ser",
             "ue",
             "utiliza",
-        ]);
+        ];
 
         vec![Box::new(TyposLspFilter {
             source: "typos",
@@ -107,8 +109,6 @@ impl DiagnosticsFilter for TyposLspFilter<'_> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use super::*;
     use crate::diagnostics::filters::BufferWithPath;
 
@@ -123,7 +123,7 @@ mod tests {
     fn skip_diagnostic_when_buf_path_pattern_not_matched_returns_false() {
         let filter = TyposLspFilter {
             source: "typos",
-            blacklist: HashSet::from(["test"]),
+            blacklist: set!["test"],
             path_substring: Some("src/"),
         };
         let buf = create_buffer_with_path("tests/main.rs");
@@ -139,7 +139,7 @@ mod tests {
     fn skip_diagnostic_when_source_mismatch_returns_false() {
         let filter = TyposLspFilter {
             source: "typos",
-            blacklist: HashSet::from(["test"]),
+            blacklist: set!["test"],
             path_substring: None,
         };
         let buf = create_buffer_with_path("src/lib.rs");
@@ -155,7 +155,7 @@ mod tests {
     fn skip_diagnostic_when_message_does_not_contain_blacklisted_substring_returns_false() {
         let filter = TyposLspFilter {
             source: "typos",
-            blacklist: HashSet::from(["test"]),
+            blacklist: set!["test"],
             path_substring: None,
         };
         let buf = create_buffer_with_path("src/lib.rs");
@@ -171,7 +171,7 @@ mod tests {
     fn skip_diagnostic_when_message_contains_blacklisted_substring_returns_true() {
         let filter = TyposLspFilter {
             source: "typos",
-            blacklist: HashSet::from(["test"]),
+            blacklist: set!["test"],
             path_substring: None,
         };
         let buf = create_buffer_with_path("src/lib.rs");
@@ -187,7 +187,7 @@ mod tests {
     fn skip_diagnostic_when_missing_message_key_returns_error() {
         let filter = TyposLspFilter {
             source: "typos",
-            blacklist: HashSet::from(["test"]),
+            blacklist: set!["test"],
             path_substring: None,
         };
         let buf = create_buffer_with_path("src/lib.rs");
