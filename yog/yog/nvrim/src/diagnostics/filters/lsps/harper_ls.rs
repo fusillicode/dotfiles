@@ -43,6 +43,8 @@ impl HarperLsFilter<'_> {
             "TODO": set!["Hyphenate"],
             "FIXME": set!["Did you mean `IME`"],
             "Resolve": set!["Insert `to` to complete the infinitive"],
+            "foreground": set!["This sentence does not start with a capital letter"],
+            "build": set!["This sentence does not start with a capital letter"],
         };
 
         vec![Box::new(HarperLsFilter {
