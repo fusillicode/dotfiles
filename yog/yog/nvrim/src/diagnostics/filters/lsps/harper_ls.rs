@@ -43,6 +43,10 @@ impl HarperLsFilter<'_> {
             ("deduper", vec!["Did you mean to spell"].into_iter().collect()),
             ("TODO", vec!["Hyphenate"].into_iter().collect()),
             ("FIXME", vec!["Did you mean `IME`"].into_iter().collect()),
+            (
+                "Resolve",
+                vec!["Insert `to` to complete the infinitive"].into_iter().collect(),
+            ),
         ]
         .into_iter()
         .collect();
