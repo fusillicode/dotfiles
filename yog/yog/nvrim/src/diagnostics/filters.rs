@@ -10,10 +10,12 @@ use nvim_oxi::api::opts::GetTextOpts;
 use ytil_nvim_oxi::buffer::BufferExt;
 use ytil_nvim_oxi::dict::DictionaryExt as _;
 
+use crate::diagnostics::filters::lsps::harper_ls::HarperLsFilter;
+use crate::diagnostics::filters::lsps::typos_lsp::TyposLspFilter;
 use crate::diagnostics::filters::related_info::RelatedInfoFilter;
 
 pub mod buffer;
-pub mod msg_blacklist;
+pub mod lsps;
 pub mod related_info;
 
 pub struct BufferWithPath {
@@ -54,6 +56,10 @@ impl BufferWithPath {
         }
 
         Ok(Some(out))
+    }
+
+    pub fn path(&self) -> &str {
+        &self.path
     }
 }
 
@@ -128,10 +134,14 @@ impl TryFrom<&Dictionary> for DiagnosticLocation {
 pub trait DiagnosticsFilter {
     /// Returns true if the diagnostic should be skipped.
     ///
+    /// # Arguments
+    /// - `buf`: Buffer with path information.
+    /// - `lsp_diag`: LSP diagnostic dictionary.
+    ///
     /// # Errors
     /// - Access to required diagnostic fields (dictionary keys) fails (missing key or wrong type).
     /// - Filter-specific logic (e.g. related info extraction) fails.
-    fn skip_diagnostic(&self, buf: Option<&BufferWithPath>, lsp_diag: Option<&Dictionary>) -> color_eyre::Result<bool>;
+    fn skip_diagnostic(&self, buf: &BufferWithPath, lsp_diag: &Dictionary) -> color_eyre::Result<bool>;
 }
 
 /// A collection of diagnostic filters.
@@ -143,8 +153,8 @@ impl DiagnosticsFilters {
     /// # Errors
     /// - Constructing the related info filter fails (dictionary traversal or type mismatch).
     pub fn all(lsp_diags: &[Dictionary]) -> color_eyre::Result<Self> {
-        let mut filters = msg_blacklist::typos::filters();
-        filters.extend(msg_blacklist::harper::filters());
+        let mut filters = TyposLspFilter::filters();
+        filters.extend(HarperLsFilter::filters());
         filters.push(Box::new(RelatedInfoFilter::new(lsp_diags)?));
         Ok(Self(filters))
     }
@@ -156,7 +166,7 @@ impl DiagnosticsFilter for DiagnosticsFilters {
     ///
     /// # Errors
     /// - A filter implementation (invoked in sequence) returns an error; it is propagated unchanged.
-    fn skip_diagnostic(&self, buf: Option<&BufferWithPath>, lsp_diag: Option<&Dictionary>) -> color_eyre::Result<bool> {
+    fn skip_diagnostic(&self, buf: &BufferWithPath, lsp_diag: &Dictionary) -> color_eyre::Result<bool> {
         // The first filter that returns true skips the LSP diagnostic and all subsequent filters
         // evaluation.
         for filter in &self.0 {

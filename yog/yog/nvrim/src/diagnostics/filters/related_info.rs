@@ -65,14 +65,7 @@ impl DiagnosticsFilter for RelatedInfoFilter {
     ///
     /// # Errors
     /// - Building the candidate related info shape from the diagnostic fails.
-    fn skip_diagnostic(
-        &self,
-        _buf: Option<&BufferWithPath>,
-        lsp_diag: Option<&Dictionary>,
-    ) -> color_eyre::Result<bool> {
-        let Some(lsp_diag) = lsp_diag else {
-            return Ok(false);
-        };
+    fn skip_diagnostic(&self, _buf: &BufferWithPath, lsp_diag: &Dictionary) -> color_eyre::Result<bool> {
         if self.rel_infos.is_empty() {
             return Ok(false);
         }
