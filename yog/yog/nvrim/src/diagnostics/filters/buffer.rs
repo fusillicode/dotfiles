@@ -61,108 +61,104 @@ impl BufferFilter for BufferFilterImpl {
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
     use ytil_nvim_oxi::buffer::mock::MockBuffer;
 
     use super::*;
 
-    #[test]
-    fn skip_diagnostic_when_path_contains_blacklisted_substring_returns_true() {
-        let filter = TestBufferFilter::new(&[".cargo"], &[]);
-        let buf_with_path = create_buffer_with_path("/home/user/.cargo/registry/src/index.crates.io/crate.tar.gz", "");
+    #[rstest]
+    #[case::path_contains_blacklisted_substring(
+        &[".cargo"],
+        &[],
+        "/home/user/.cargo/registry/src/index.crates.io/crate.tar.gz",
+        "",
+        true
+    )]
+    #[case::path_not_blacklisted_and_buf_type_not_blacklisted(
+        &[".cargo"],
+        &["nofile"],
+        "/home/user/src/main.rs",
+        "",
+        false
+    )]
+    #[case::path_not_blacklisted_but_buf_type_is_blacklisted(
+        &[".cargo"],
+        &["nofile"],
+        "/home/user/src/main.rs",
+        "nofile",
+        true
+    )]
+    #[case::multiple_blacklisted_paths_and_types(
+        &[".cargo", "target"],
+        &["nofile", "grug-far"],
+        "/home/user/target/debug/main",
+        "",
+        true
+    )]
+    #[case::no_blacklists_configured(
+        &[],
+        &[],
+        "/home/user/src/main.rs",
+        "normal",
+        false
+    )]
+    #[case::path_exactly_matches_blacklisted_substring(
+        &[".cargo"],
+        &[],
+        ".cargo",
+        "",
+        true
+    )]
+    #[case::path_contains_multiple_occurrences_of_blacklisted_substring(
+        &["target"],
+        &[],
+        "/target/debug/target/release/target",
+        "",
+        true
+    )]
+    #[case::empty_path(
+        &[".cargo"],
+        &["nofile"],
+        "",
+        "",
+        false
+    )]
+    #[case::unicode_path_containing_blacklisted_substring(
+        &[".cargo"],
+        &[],
+        "/home/user/📁/.cargo/registry/🚀.tar.gz",
+        "",
+        true
+    )]
+    #[case::both_path_and_buffer_type_are_blacklisted(
+        &[".cargo"],
+        &["nofile"],
+        "/home/user/.cargo/main.rs",
+        "nofile",
+        true
+    )]
+    fn skip_diagnostic_works_as_expected(
+        #[case] blacklisted_paths: &[&str],
+        #[case] blacklisted_types: &[&str],
+        #[case] buffer_path: &str,
+        #[case] buffer_type: &str,
+        #[case] expected: bool,
+    ) {
+        let filter = TestBufferFilter::new(blacklisted_paths, blacklisted_types);
+        let buf_with_path = create_buffer_with_path(buffer_path, buffer_type);
 
         assert2::let_assert!(Ok(result) = filter.skip_diagnostic(&buf_with_path));
-        pretty_assertions::assert_eq!(result, true);
-    }
-
-    #[test]
-    fn skip_diagnostic_when_path_does_not_contain_blacklisted_and_buf_type_not_blacklisted_returns_false() {
-        let filter = TestBufferFilter::new(&[".cargo"], &["nofile"]);
-        let buf_with_path = create_buffer_with_path("/home/user/src/main.rs", "");
-
-        assert2::let_assert!(Ok(result) = filter.skip_diagnostic(&buf_with_path));
-        pretty_assertions::assert_eq!(result, false);
-    }
-
-    #[test]
-    fn skip_diagnostic_when_path_not_blacklisted_but_buf_type_is_blacklisted_returns_true() {
-        let filter = TestBufferFilter::new(&[".cargo"], &["nofile"]);
-        let buf_with_path = create_buffer_with_path("/home/user/src/main.rs", "nofile");
-
-        assert2::let_assert!(Ok(result) = filter.skip_diagnostic(&buf_with_path));
-        pretty_assertions::assert_eq!(result, true);
-    }
-
-    #[test]
-    fn skip_diagnostic_when_multiple_blacklisted_paths_and_types_works_works_as_expected() {
-        let filter = TestBufferFilter::new(&[".cargo", "target"], &["nofile", "grug-far"]);
-        let buf_with_path = create_buffer_with_path("/home/user/target/debug/main", "");
-
-        assert2::let_assert!(Ok(result) = filter.skip_diagnostic(&buf_with_path));
-        pretty_assertions::assert_eq!(result, true);
-    }
-
-    #[test]
-    fn skip_diagnostic_when_no_blacklists_configured_returns_false() {
-        let filter = TestBufferFilter::new(&[], &[]);
-        let buf_with_path = create_buffer_with_path("/home/user/src/main.rs", "normal");
-
-        assert2::let_assert!(Ok(result) = filter.skip_diagnostic(&buf_with_path));
-        pretty_assertions::assert_eq!(result, false);
-    }
-
-    #[test]
-    fn skip_diagnostic_when_path_exactly_matches_blacklisted_substring_returns_true() {
-        let filter = TestBufferFilter::new(&[".cargo"], &[]);
-        let buf_with_path = create_buffer_with_path(".cargo", "");
-
-        assert2::let_assert!(Ok(result) = filter.skip_diagnostic(&buf_with_path));
-        pretty_assertions::assert_eq!(result, true);
-    }
-
-    #[test]
-    fn skip_diagnostic_when_path_contains_multiple_occurrences_of_blacklisted_substring_returns_true() {
-        let filter = TestBufferFilter::new(&["target"], &[]);
-        let buf_with_path = create_buffer_with_path("/target/debug/target/release/target", "");
-
-        assert2::let_assert!(Ok(result) = filter.skip_diagnostic(&buf_with_path));
-        pretty_assertions::assert_eq!(result, true);
-    }
-
-    #[test]
-    fn skip_diagnostic_with_empty_path_returns_false() {
-        let filter = TestBufferFilter::new(&[".cargo"], &["nofile"]);
-        let buf_with_path = create_buffer_with_path("", "");
-
-        assert2::let_assert!(Ok(result) = filter.skip_diagnostic(&buf_with_path));
-        pretty_assertions::assert_eq!(result, false);
-    }
-
-    #[test]
-    fn skip_diagnostic_with_unicode_path_containing_blacklisted_substring_returns_true() {
-        let filter = TestBufferFilter::new(&[".cargo"], &[]);
-        let buf_with_path = create_buffer_with_path("/home/user/📁/.cargo/registry/🚀.tar.gz", "");
-
-        assert2::let_assert!(Ok(result) = filter.skip_diagnostic(&buf_with_path));
-        pretty_assertions::assert_eq!(result, true);
-    }
-
-    #[test]
-    fn skip_diagnostic_when_both_path_and_buffer_type_are_blacklisted_returns_true_early() {
-        let filter = TestBufferFilter::new(&[".cargo"], &["nofile"]);
-        let buf_with_path = create_buffer_with_path("/home/user/.cargo/main.rs", "nofile");
-
-        assert2::let_assert!(Ok(result) = filter.skip_diagnostic(&buf_with_path));
-        pretty_assertions::assert_eq!(result, true);
+        pretty_assertions::assert_eq!(result, expected);
     }
 
     /// Test implementation of [`BufferFilter`] with configurable blacklists.
-    struct TestBufferFilter {
-        blacklisted_paths: &'static [&'static str],
-        blacklisted_types: &'static [&'static str],
+    struct TestBufferFilter<'a> {
+        blacklisted_paths: &'a [&'a str],
+        blacklisted_types: &'a [&'a str],
     }
 
-    impl TestBufferFilter {
-        fn new(blacklisted_paths: &'static [&'static str], blacklisted_types: &'static [&'static str]) -> Self {
+    impl<'a> TestBufferFilter<'a> {
+        fn new(blacklisted_paths: &'a [&'a str], blacklisted_types: &'a [&'a str]) -> Self {
             Self {
                 blacklisted_paths,
                 blacklisted_types,
@@ -170,7 +166,7 @@ mod tests {
         }
     }
 
-    impl BufferFilter for TestBufferFilter {
+    impl BufferFilter for TestBufferFilter<'_> {
         fn blacklisted_buf_paths(&self) -> &[&str] {
             self.blacklisted_paths
         }
