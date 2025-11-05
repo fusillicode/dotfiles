@@ -155,7 +155,7 @@ mod tests {
         pretty_assertions::assert_eq!(result, true);
     }
 
-    /// Test implementation of BufferFilter with configurable blacklists.
+    /// Test implementation of [`BufferFilter`] with configurable blacklists.
     struct TestBufferFilter {
         blacklisted_paths: &'static [&'static str],
         blacklisted_types: &'static [&'static str],
