@@ -208,7 +208,26 @@ pub mod mock {
     use super::BufferExt;
     use super::GetTextOpts;
 
-    pub struct MockBuffer(pub Vec<String>);
+    pub struct MockBuffer {
+        pub lines: Vec<String>,
+        pub buf_type: String,
+    }
+
+    impl MockBuffer {
+        pub fn new(lines: Vec<String>) -> Self {
+            Self {
+                lines,
+                buf_type: "foo".to_string(),
+            }
+        }
+
+        pub fn with_buf_type(lines: Vec<String>, buf_type: &str) -> Self {
+            Self {
+                lines,
+                buf_type: buf_type.to_string(),
+            }
+        }
+    }
 
     impl BufferExt for MockBuffer {
         fn get_line(&self, _idx: usize) -> color_eyre::Result<nvim_oxi::String> {
@@ -228,11 +247,11 @@ pub mod mock {
             }
             let mut result = Vec::new();
             for lnum in start_lnum..=end_lnum {
-                if lnum >= self.0.len() {
+                if lnum >= self.lines.len() {
                     break;
                 }
                 let line = &self
-                    .0
+                    .lines
                     .get(lnum)
                     .ok_or_else(|| nvim_oxi::api::Error::Other("this should not happen".into()))?;
                 let start = if lnum == start_lnum { start_col } else { 0 };
@@ -247,7 +266,7 @@ pub mod mock {
         }
 
         fn get_buf_type(&self) -> Result<String, nvim_oxi::api::Error> {
-            Ok("foo".to_string())
+            Ok(self.buf_type.clone())
         }
     }
 }
