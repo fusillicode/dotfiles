@@ -20,7 +20,7 @@ pub struct HarperLsFilter<'a> {
     /// Blacklist of messages per source.
     pub blacklist: HashMap<&'static str, HashSet<&'static str>>,
     /// Optional buffer path substring that must be contained within the buffer path for filtering to apply.
-    pub buf_path: Option<&'a str>,
+    pub path_substring: Option<&'a str>,
 }
 
 impl HarperLsFilter<'_> {
@@ -49,15 +49,15 @@ impl HarperLsFilter<'_> {
 
         vec![Box::new(HarperLsFilter {
             source: "Harper",
-            buf_path: None,
+            path_substring: None,
             blacklist,
         })]
     }
 }
 
 impl LspFilter for HarperLsFilter<'_> {
-    fn buf_path(&self) -> Option<&str> {
-        self.buf_path
+    fn path_substring(&self) -> Option<&str> {
+        self.path_substring
     }
 
     fn source(&self) -> &str {
@@ -101,11 +101,11 @@ mod tests {
     use crate::diagnostics::filters::BufferWithPath;
 
     #[test]
-    fn skip_diagnostic_when_buf_path_pattern_not_matched_returns_false() {
+    fn skip_diagnostic_when_path_substring_pattern_not_matched_returns_false() {
         let filter = HarperLsFilter {
             source: "Harper",
             blacklist: [("stderr", HashSet::from(["instead of"]))].into(),
-            buf_path: Some("src/"),
+            path_substring: Some("src/"),
         };
         let buf = create_buffer_with_path_and_content("tests/main.rs", vec!["stderr"]);
         let diag = dict! {
@@ -125,7 +125,7 @@ mod tests {
         let filter = HarperLsFilter {
             source: "Harper",
             blacklist: [("stderr", HashSet::from(["instead of"]))].into(),
-            buf_path: None,
+            path_substring: None,
         };
         let buf = create_buffer_with_path_and_content("src/lib.rs", vec!["stderr"]);
         let diag = dict! {
@@ -145,7 +145,7 @@ mod tests {
         let filter = HarperLsFilter {
             source: "Harper",
             blacklist: [("stdout", HashSet::from(["instead of"]))].into(),
-            buf_path: None,
+            path_substring: None,
         };
         let buf = create_buffer_with_path_and_content("src/lib.rs", vec!["stderr"]);
         let diag = dict! {
@@ -165,7 +165,7 @@ mod tests {
         let filter = HarperLsFilter {
             source: "Harper",
             blacklist: [("stderr", HashSet::from(["instead of"]))].into(),
-            buf_path: None,
+            path_substring: None,
         };
         let buf = create_buffer_with_path_and_content("src/lib.rs", vec!["stderr"]);
         let diag = dict! {
@@ -185,7 +185,7 @@ mod tests {
         let filter = HarperLsFilter {
             source: "Harper",
             blacklist: [("stderr", HashSet::from(["instead of"]))].into(),
-            buf_path: None,
+            path_substring: None,
         };
         let buf = create_buffer_with_path_and_content("src/lib.rs", vec!["stderr"]);
         let diag = dict! {
@@ -205,7 +205,7 @@ mod tests {
         let filter = HarperLsFilter {
             source: "Harper",
             blacklist: [("stderr", HashSet::from(["instead of"]))].into(),
-            buf_path: None,
+            path_substring: None,
         };
         let buf = create_buffer_with_path_and_content("src/lib.rs", vec!["short"]);
         let diag = dict! {

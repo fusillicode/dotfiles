@@ -16,7 +16,7 @@ pub struct TyposLspFilter<'a> {
     /// Blacklist of messages per source.
     pub blacklist: HashSet<&'static str>,
     /// Optional buffer path substring that must be contained within the buffer path for filtering to apply.
-    pub buf_path: Option<&'a str>,
+    pub path_substring: Option<&'a str>,
 }
 
 impl TyposLspFilter<'_> {
@@ -76,15 +76,15 @@ impl TyposLspFilter<'_> {
 
         vec![Box::new(TyposLspFilter {
             source: "typos",
-            buf_path: None,
+            path_substring: None,
             blacklist,
         })]
     }
 }
 
 impl LspFilter for TyposLspFilter<'_> {
-    fn buf_path(&self) -> Option<&str> {
-        self.buf_path
+    fn path_substring(&self) -> Option<&str> {
+        self.path_substring
     }
 
     fn source(&self) -> &str {
@@ -125,7 +125,7 @@ mod tests {
         let filter = TyposLspFilter {
             source: "typos",
             blacklist: HashSet::from(["test"]),
-            buf_path: Some("src/"),
+            path_substring: Some("src/"),
         };
         let buf = create_buffer_with_path("tests/main.rs");
         let diag = dict! {
@@ -141,7 +141,7 @@ mod tests {
         let filter = TyposLspFilter {
             source: "typos",
             blacklist: HashSet::from(["test"]),
-            buf_path: None,
+            path_substring: None,
         };
         let buf = create_buffer_with_path("src/lib.rs");
         let diag = dict! {
@@ -157,7 +157,7 @@ mod tests {
         let filter = TyposLspFilter {
             source: "typos",
             blacklist: HashSet::from(["test"]),
-            buf_path: None,
+            path_substring: None,
         };
         let buf = create_buffer_with_path("src/lib.rs");
         let diag = dict! {
@@ -173,7 +173,7 @@ mod tests {
         let filter = TyposLspFilter {
             source: "typos",
             blacklist: HashSet::from(["test"]),
-            buf_path: None,
+            path_substring: None,
         };
         let buf = create_buffer_with_path("src/lib.rs");
         let diag = dict! {
@@ -189,7 +189,7 @@ mod tests {
         let filter = TyposLspFilter {
             source: "typos",
             blacklist: HashSet::from(["test"]),
-            buf_path: None,
+            path_substring: None,
         };
         let buf = create_buffer_with_path("src/lib.rs");
         let diag = dict! {

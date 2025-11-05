@@ -11,12 +11,15 @@ pub enum GetDiagMsgOutput {
 }
 
 pub trait LspFilter {
-    fn buf_path(&self) -> Option<&str>;
+    fn path_substring(&self) -> Option<&str>;
 
     fn source(&self) -> &str;
 
     fn get_diag_msg_or_skip(&self, buf_path: &str, lsp_diag: &Dictionary) -> color_eyre::Result<GetDiagMsgOutput> {
-        if self.buf_path().is_some_and(|bp| !buf_path.contains(bp)) {
+        if self
+            .path_substring()
+            .is_some_and(|path_substring| !buf_path.contains(path_substring))
+        {
             return Ok(GetDiagMsgOutput::Skip);
         }
         let maybe_diag_source = lsp_diag.get_opt_t::<nvim_oxi::String>("source")?;
@@ -35,7 +38,7 @@ mod tests {
     fn get_diag_msg_or_skip_when_buf_path_not_matched_returns_skip() {
         let filter = TestFilter {
             source: "Test",
-            buf_path: Some("src/"),
+            path_substring: Some("src/"),
         };
         let diag = dict! {
             source: "Test",
@@ -49,7 +52,7 @@ mod tests {
     fn get_diag_msg_or_skip_when_buf_path_matched_but_source_none_returns_skip() {
         let filter = TestFilter {
             source: "Test",
-            buf_path: Some("src/"),
+            path_substring: Some("src/"),
         };
         let diag = dict! {
             message: "some message",
@@ -62,7 +65,7 @@ mod tests {
     fn get_diag_msg_or_skip_when_buf_path_matched_but_source_mismatch_returns_skip() {
         let filter = TestFilter {
             source: "Test",
-            buf_path: Some("src/"),
+            path_substring: Some("src/"),
         };
         let diag = dict! {
             source: "Other",
@@ -76,7 +79,7 @@ mod tests {
     fn get_diag_msg_or_skip_when_buf_path_and_source_matches_returns_msg() {
         let filter = TestFilter {
             source: "Test",
-            buf_path: Some("src/"),
+            path_substring: Some("src/"),
         };
         let diag = dict! {
             source: "Test",
@@ -90,7 +93,7 @@ mod tests {
     fn get_diag_msg_or_skip_when_no_buf_path_and_source_matches_returns_msg() {
         let filter = TestFilter {
             source: "Test",
-            buf_path: None,
+            path_substring: None,
         };
         let diag = dict! {
             source: "Test",
@@ -102,12 +105,12 @@ mod tests {
 
     struct TestFilter {
         source: &'static str,
-        buf_path: Option<&'static str>,
+        path_substring: Option<&'static str>,
     }
 
     impl LspFilter for TestFilter {
-        fn buf_path(&self) -> Option<&str> {
-            self.buf_path
+        fn path_substring(&self) -> Option<&str> {
+            self.path_substring
         }
 
         fn source(&self) -> &str {
