@@ -114,7 +114,7 @@ mod tests {
 
     fn create_buffer_with_path(path: &str) -> BufferWithPath {
         BufferWithPath {
-            buffer: Box::new(ytil_nvim_oxi::buffer::mock::MockBuffer(vec![])),
+            buffer: Box::new(ytil_nvim_oxi::buffer::mock::MockBuffer::new(vec![])),
             path: path.to_string(),
         }
     }
