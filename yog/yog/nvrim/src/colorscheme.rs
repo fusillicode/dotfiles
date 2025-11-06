@@ -13,11 +13,29 @@ use nvim_oxi::api::opts::SetHighlightOptsBuilder;
 use nvim_oxi::api::types::GetHlInfos;
 use nvim_oxi::api::types::HighlightInfos;
 
-const BG: &str = "#1a1b25";
-const FG: &str = "#cad3f2";
-const COMMENT: &str = "#8289b2";
-const DIAGNOSTIC_LVLS: [&str; 5] = ["Error", "Warn", "Info", "Hint", "Ok"];
-const STATUS_LINE_BG: &str = "none";
+const GLOBAL_BG: &str = "#1a1b25";
+const GLOBAL_FG: &str = "#cad3f2";
+
+const ERROR_FG: &str = "#be5c59";
+const OK_FG: &str = "#89fc6e";
+const WARN_FG: &str = "#e7e77c";
+const HINT_FG: &str = "#8ce4e5";
+const INFO_FG: &str = "white";
+const CURSOR_BG: &str = "white";
+const CURSOR_FG: &str = "black";
+const TREESITTER_CONTEXT_FG: &str = "NvimDarkGrey3";
+const NON_TEXT_FG: &str = "NvimDarkGrey4";
+const COMMENTS_FG: &str = "#8289b2";
+const NONE: &str = "none";
+
+const DIAGNOSTICS_FG: [(&str, &str); 5] = [
+    ("Error", ERROR_FG),
+    ("Warn", WARN_FG),
+    ("Ok", OK_FG),
+    ("Hint", HINT_FG),
+    ("Info", INFO_FG),
+];
+const GITSIGNS_FG: [(&str, &str); 3] = [("Added", OK_FG), ("Changed", HINT_FG), ("Removed", ERROR_FG)];
 
 /// [`Dictionary`] with colorscheme and highlight helpers.
 pub fn dict() -> Dictionary {
@@ -37,65 +55,108 @@ pub fn set(colorscheme: Option<String>) {
     crate::vim_opts::set("background", "dark", &opts);
     crate::vim_opts::set("termguicolors", true, &opts);
 
-    let status_line_hl = get_default_hl_opts()
-        .foreground("gray")
-        .background(STATUS_LINE_BG)
-        .build();
-    let normal_hl = get_default_hl_opts().background(BG).build();
+    let non_text_hl = get_default_hl_opts().foreground(NON_TEXT_FG).background(NONE).build();
 
     let general_hls = [
-        ("ColorColumn", get_default_hl_opts().background("NvimDarkGrey3").build()),
         (
             "Cursor",
-            get_default_hl_opts().foreground("black").background("white").build(),
+            get_default_hl_opts()
+                .foreground(CURSOR_FG)
+                .background(CURSOR_BG)
+                .build(),
         ),
-        ("CursorLine", get_default_hl_opts().foreground("none").build()),
-        ("MsgArea", status_line_hl.clone()),
-        ("Normal", normal_hl.clone()),
-        ("NormalFloat", normal_hl),
-        ("StatusLine", status_line_hl),
+        ("CursorLine", get_default_hl_opts().foreground(NONE).build()),
+        ("ErrorMsg", get_default_hl_opts().foreground(ERROR_FG).build()),
+        (
+            "MsgArea",
+            get_default_hl_opts().foreground("grey").background(NONE).build(),
+        ),
+        ("LineNr", non_text_hl.clone()),
+        ("Normal", get_default_hl_opts().background(GLOBAL_BG).build()),
+        ("NormalFloat", get_default_hl_opts().background(GLOBAL_BG).build()),
+        ("StatusLine", non_text_hl),
         (
             "TreesitterContext",
-            get_default_hl_opts().background("NvimDarkGrey3").build(),
+            get_default_hl_opts().background(TREESITTER_CONTEXT_FG).build(),
         ),
         // Changing these will change the main foreground color.
-        ("@variable", get_default_hl_opts().foreground(FG).build()),
-        ("Comment", get_default_hl_opts().foreground(COMMENT).build()),
-        ("Constant", get_default_hl_opts().foreground(FG).build()),
-        ("Delimiter", get_default_hl_opts().foreground(FG).build()),
+        ("@variable", get_default_hl_opts().foreground(GLOBAL_FG).build()),
+        ("Comment", get_default_hl_opts().foreground(COMMENTS_FG).build()),
+        ("Constant", get_default_hl_opts().foreground(GLOBAL_FG).build()),
+        ("Delimiter", get_default_hl_opts().foreground(GLOBAL_FG).build()),
         // ("Function", get_default_hl_opts().foreground(FG).build()),
-        ("PreProc", get_default_hl_opts().foreground(FG).build()),
-        ("Operator", get_default_hl_opts().foreground(FG).build()),
-        ("Statement", get_default_hl_opts().foreground(FG).bold(true).build()),
-        ("Type", get_default_hl_opts().foreground(FG).build()),
+        ("PreProc", get_default_hl_opts().foreground(GLOBAL_FG).build()),
+        ("Operator", get_default_hl_opts().foreground(GLOBAL_FG).build()),
+        (
+            "Statement",
+            get_default_hl_opts().foreground(GLOBAL_FG).bold(true).build(),
+        ),
+        ("Type", get_default_hl_opts().foreground(GLOBAL_FG).build()),
     ];
     for (hl_name, hl_opts) in general_hls {
         set_hl(0, hl_name, &hl_opts);
     }
 
-    let mut get_hl_opts = GetHighlightOptsBuilder::default();
-    for lvl in DIAGNOSTIC_LVLS {
-        let Ok(hl_infos) = get_hl_single(0, &get_hl_opts.name(format!("Diagnostic{lvl}")).build()) else {
+    for (lvl, fg) in DIAGNOSTICS_FG {
+        let Ok(set_hl_opts) = get_overridden_set_hl_opts(
+            &format!("Diagnostic{lvl}"),
+            |mut hl_opts| hl_opts.foreground(fg).background(NONE).build(),
+            None,
+        ) else {
             continue;
         };
-        let Ok(set_hl_opts) =
-            hl_opts_from_hl_infos(&hl_infos).map(|mut hl_opts| hl_opts.background(STATUS_LINE_BG).build())
-        else {
-            continue;
-        };
+        set_hl(0, &format!("Diagnostic{lvl}"), &set_hl_opts);
         set_hl(0, &format!("DiagnosticStatusLine{lvl}"), &set_hl_opts);
 
-        let diag_underline_hl = format!("DiagnosticUnderline{lvl}");
-        let Ok(hl_infos) = get_hl_single(0, &get_hl_opts.name(diag_underline_hl.clone()).build()) else {
+        let diag_underline_hl_name = format!("DiagnosticUnderline{lvl}");
+        let Ok(set_hl_opts) = get_overridden_set_hl_opts(
+            &diag_underline_hl_name,
+            |mut hl_opts| hl_opts.special(fg).background(NONE).build(),
+            None,
+        )
+        .inspect_err(|error| {
+            ytil_nvim_oxi::api::notify_error(format!(
+                "cannot get overridden set_hl_opts | hl_name={diag_underline_hl_name} error={error:#?}"
+            ));
+        }) else {
             continue;
         };
-        let Ok(set_hl_opts) =
-            hl_opts_from_hl_infos(&hl_infos).map(|mut hl_opts| hl_opts.background(STATUS_LINE_BG).build())
-        else {
-            continue;
-        };
-        set_hl(0, &diag_underline_hl, &set_hl_opts);
+        set_hl(0, &diag_underline_hl_name, &set_hl_opts);
     }
+
+    for (hl_name, fg) in GITSIGNS_FG {
+        set_hl(0, hl_name, &get_default_hl_opts().foreground(fg).build());
+    }
+}
+
+/// Retrieves the current highlight options for a given highlight group and applies overrides.
+///
+/// This function fetches the existing highlight information for the specified `hl_name`,
+/// and then applies the provided `override_set_hl_opts` function to modify the options.
+/// This is useful for incrementally changing highlight groups based on their current state.
+///
+/// # Arguments
+/// - `hl_name` The name of the highlight group to retrieve and modify.
+/// - `override_set_hl_opts` A closure that takes a [`SetHighlightOptsBuilder`] (pre-filled with the current highlight
+///   options) and returns a modified [`SetHighlightOpts`].
+/// - `opts_builder` Optional builder for customizing how the highlight info is retrieved. Defaults to
+///   [`GetHighlightOptsBuilder::default()`] if [`None`].
+///
+/// # Returns
+/// A [`Result`] containing the overridden [`SetHighlightOpts`] on success, or an error
+/// if retrieving or processing the highlight information fails.
+///
+/// # Errors
+/// - If [`get_hl_single`] fails to retrieve the highlight info.
+/// - If [`hl_opts_from_hl_infos`] fails to convert the highlight info.
+fn get_overridden_set_hl_opts(
+    hl_name: &str,
+    override_set_hl_opts: impl FnMut(SetHighlightOptsBuilder) -> SetHighlightOpts,
+    opts_builder: Option<GetHighlightOptsBuilder>,
+) -> color_eyre::Result<SetHighlightOpts> {
+    let mut get_hl_opts = opts_builder.unwrap_or_default();
+    let hl_infos = get_hl_single(0, &get_hl_opts.name(hl_name).build())?;
+    hl_opts_from_hl_infos(&hl_infos).map(override_set_hl_opts)
 }
 
 /// Shorthand to start building [`SetHighlightOpts`].
@@ -103,7 +164,19 @@ fn get_default_hl_opts() -> SetHighlightOptsBuilder {
     SetHighlightOptsBuilder::default()
 }
 
-/// Wrapper around `nvim_oxi::api::set_hl` with error notification.
+/// Sets a highlight group in the specified namespace, with error handling via Neovim notifications.
+///
+/// This function wraps [`nvim_oxi::api::set_hl`] to apply highlight options to a group.
+/// On failure, it notifies the error to Neovim instead of propagating it, ensuring
+/// the colorscheme setup continues gracefully.
+///
+/// # Arguments
+/// - `ns_id`: The namespace ID (0 for global).
+/// - `hl_name`: The name of the highlight group to set.
+/// - `hl_opts`: The highlight options to apply.
+///
+/// # Errors
+/// Errors are notified to Neovim but not returned; the function always succeeds externally.
 fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &SetHighlightOpts) {
     if let Err(error) = nvim_oxi::api::set_hl(ns_id, hl_name, hl_opts) {
         ytil_nvim_oxi::api::notify_error(format!(
@@ -114,13 +187,9 @@ fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &SetHighlightOpts) {
 
 /// Retrieves [`HighlightInfos`] of a single group.
 ///
-/// Errors:
+/// # Errors
 /// - Propagates failures from [`nvim_oxi::api::get_hl`] while notifying them to Neovim.
 /// - Returns an error in case of multiple infos ([`GetHlInfos::Map`]) for the given `hl_opts` .
-///
-/// # Errors
-/// - Calling `nvim_get_hl` fails.
-/// - Multiple highlight groups are returned instead of a single one.
 fn get_hl_single(ns_id: u32, hl_opts: &GetHighlightOpts) -> color_eyre::Result<HighlightInfos> {
     get_hl(ns_id, hl_opts).and_then(|hl| match hl {
         GetHlInfos::Single(highlight_infos) => Ok(highlight_infos),
@@ -136,10 +205,6 @@ fn get_hl_single(ns_id: u32, hl_opts: &GetHighlightOpts) -> color_eyre::Result<H
 /// Errors:
 /// - Propagates failures from [`nvim_oxi::api::get_hl`] while notifying them to Neovim.
 /// - Returns an error if only a single highlight group ([`GetHlInfos::Single`]) is returned.
-///
-/// # Errors
-/// - Calling `nvim_get_hl` fails.
-/// - A single highlight group is returned instead of multiple.
 #[allow(dead_code)]
 fn get_hl_multiple(
     ns_id: u32,
@@ -155,11 +220,8 @@ fn get_hl_multiple(
 
 /// Retrieves [`GetHlInfos`] (single or map) for given highlight options.
 ///
-/// Errors:
-/// - Propagates failures from [`nvim_oxi::api::get_hl`] while notifying them to Neovim.
-///
 /// # Errors
-/// - Calling `nvim_get_hl` fails.
+/// - Propagates failures from [`nvim_oxi::api::get_hl`] while notifying them to Neovim.
 fn get_hl(
     ns_id: u32,
     hl_opts: &GetHighlightOpts,
