@@ -13,7 +13,7 @@ use nvim_oxi::api::opts::SetHighlightOptsBuilder;
 use nvim_oxi::api::types::GetHlInfos;
 use nvim_oxi::api::types::HighlightInfos;
 
-const GLOBAL_BG: &str = "#072123";
+const GLOBAL_BG: &str = "#002200";
 const GLOBAL_FG: &str = "#cad3f2";
 
 const ERROR_FG: &str = "#be5c59";
@@ -25,7 +25,7 @@ const CURSOR_BG: &str = "white";
 const CURSOR_FG: &str = "black";
 const TREESITTER_CONTEXT_FG: &str = "NvimDarkGrey3";
 const NON_TEXT_FG: &str = "NvimDarkGrey4";
-const COMMENTS_FG: &str = "#8289b2";
+const COMMENTS_FG: &str = "NvimLightGrey4";
 const NONE: &str = "none";
 
 const DIAGNOSTICS_FG: [(&str, &str); 5] = [
@@ -69,7 +69,7 @@ pub fn set(colorscheme: Option<String>) {
         ("ErrorMsg", get_default_hl_opts().foreground(ERROR_FG).build()),
         (
             "MsgArea",
-            get_default_hl_opts().foreground("grey").background(NONE).build(),
+            get_default_hl_opts().foreground(COMMENTS_FG).background(NONE).build(),
         ),
         ("LineNr", non_text_hl.clone()),
         ("Normal", get_default_hl_opts().background(GLOBAL_BG).build()),
