@@ -49,7 +49,9 @@ pub trait LspFilter {
             return Ok(GetDiagMsgOutput::Skip);
         }
         let maybe_diag_source = lsp_diag.get_opt_t::<nvim_oxi::String>("source")?;
-        if maybe_diag_source.is_none() || maybe_diag_source.is_some_and(|diag_source| self.source() != diag_source) {
+        if maybe_diag_source.is_none()
+            || maybe_diag_source.is_some_and(|diag_source| !diag_source.contains(self.source()))
+        {
             return Ok(GetDiagMsgOutput::Skip);
         }
         Ok(GetDiagMsgOutput::Msg(lsp_diag.get_t::<nvim_oxi::String>("message")?))
