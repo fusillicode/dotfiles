@@ -23,7 +23,7 @@ end
 config.animation_fps = 1
 
 local background = '#002200'
-local foreground = '#cad3f2'
+local foreground = '#DCDCD7'
 config.colors = {
   background = background,
   foreground = foreground,
