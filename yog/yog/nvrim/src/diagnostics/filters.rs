@@ -24,6 +24,16 @@ pub struct BufferWithPath {
 }
 
 impl BufferWithPath {
+    /// Extracts the text from the buffer that corresponds to the given LSP diagnostic location.
+    ///
+    /// # Arguments
+    /// - `lsp_diag` The LSP diagnostic dictionary containing location information.
+    ///
+    /// # Returns
+    /// [`Option<String>`] The extracted text if the location is valid and text exists, otherwise [`None`].
+    ///
+    /// # Errors
+    /// If retrieving text from the buffer fails.
     pub fn get_diagnosed_text(&self, lsp_diag: &Dictionary) -> color_eyre::Result<Option<String>> {
         let Some(loc) = DiagnosticLocation::try_from(lsp_diag).ok() else {
             return Ok(None);
