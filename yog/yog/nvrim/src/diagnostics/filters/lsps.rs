@@ -131,6 +131,20 @@ mod tests {
         pretty_assertions::assert_eq!(result, GetDiagMsgOutput::Msg("another message".to_string()));
     }
 
+    #[test]
+    fn get_diag_msg_or_skip_when_source_contains_filter_source_returns_msg() {
+        let filter = TestFilter {
+            source: "Test",
+            path_substring: None,
+        };
+        let diag = dict! {
+            source: "TestLSP",
+            message: "some message",
+        };
+        assert2::let_assert!(Ok(result) = filter.get_diag_msg_or_skip("any/path.rs", &diag));
+        pretty_assertions::assert_eq!(result, GetDiagMsgOutput::Msg("some message".to_string()));
+    }
+
     struct TestFilter {
         source: &'static str,
         path_substring: Option<&'static str>,
