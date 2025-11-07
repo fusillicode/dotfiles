@@ -57,7 +57,7 @@ pub fn set(colorscheme: Option<String>) {
 
     let non_text_hl = get_default_hl_opts().foreground(NON_TEXT_FG).background(NONE).build();
 
-    let general_hls = [
+    for (hl_name, hl_opts) in [
         (
             "Cursor",
             get_default_hl_opts()
@@ -92,36 +92,30 @@ pub fn set(colorscheme: Option<String>) {
             get_default_hl_opts().foreground(GLOBAL_FG).bold(true).build(),
         ),
         ("Type", get_default_hl_opts().foreground(GLOBAL_FG).build()),
-    ];
-    for (hl_name, hl_opts) in general_hls {
+    ] {
         set_hl(0, hl_name, &hl_opts);
     }
 
     for (lvl, fg) in DIAGNOSTICS_FG {
-        let Ok(set_hl_opts) = get_overridden_set_hl_opts(
+        // Errors are already notified by [`get_overridden_set_hl_opts`]
+        let _ = get_overridden_set_hl_opts(
             &format!("Diagnostic{lvl}"),
             |mut hl_opts| hl_opts.foreground(fg).background(NONE).build(),
             None,
-        ) else {
-            continue;
-        };
-        set_hl(0, &format!("Diagnostic{lvl}"), &set_hl_opts);
-        set_hl(0, &format!("DiagnosticStatusLine{lvl}"), &set_hl_opts);
+        )
+        .map(|set_hl_opts| {
+            set_hl(0, &format!("Diagnostic{lvl}"), &set_hl_opts);
+            set_hl(0, &format!("DiagnosticStatusLine{lvl}"), &set_hl_opts);
+        });
 
         let diag_underline_hl_name = format!("DiagnosticUnderline{lvl}");
-        let Ok(set_hl_opts) = get_overridden_set_hl_opts(
+        // Errors are already notified by [`get_overridden_set_hl_opts`]
+        let _ = get_overridden_set_hl_opts(
             &diag_underline_hl_name,
             |mut hl_opts| hl_opts.special(fg).background(NONE).build(),
             None,
         )
-        .inspect_err(|error| {
-            ytil_nvim_oxi::api::notify_error(format!(
-                "cannot get overridden set_hl_opts | hl_name={diag_underline_hl_name} error={error:#?}"
-            ));
-        }) else {
-            continue;
-        };
-        set_hl(0, &diag_underline_hl_name, &set_hl_opts);
+        .map(|set_hl_opts| set_hl(0, &diag_underline_hl_name, &set_hl_opts));
     }
 
     for (hl_name, fg) in GITSIGNS_FG {
