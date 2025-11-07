@@ -14,7 +14,7 @@ use nvim_oxi::api::types::GetHlInfos;
 use nvim_oxi::api::types::HighlightInfos;
 
 const GLOBAL_BG: &str = "#002200";
-const GLOBAL_FG: &str = "#cad3f2";
+const GLOBAL_FG: &str = "#DCDCD7";
 
 const ERROR_FG: &str = "#be5c59";
 const OK_FG: &str = "#89fc6e";
