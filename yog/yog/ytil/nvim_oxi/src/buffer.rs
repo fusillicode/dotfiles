@@ -265,6 +265,8 @@ impl CursorPosition {
 
 #[cfg(test)]
 mod tests {
+    use mockall::predicate::*;
+
     use super::*;
 
     #[test]
@@ -277,6 +279,126 @@ mod tests {
     fn cursor_position_adjusted_col_when_non_zero_increments_by_one() {
         let pos = CursorPosition { row: 10, col: 7 };
         pretty_assertions::assert_eq!(pos.adjusted_col(), 8);
+    }
+
+    #[test]
+    fn get_text_between2_single_line_exact() {
+        let mut mock = MockBufferExt::new();
+        mock.expect_get_lines().with(eq(0..=0), eq(true)).returning(|_, _| {
+            let lines: Vec<nvim_oxi::String> = vec!["hello world".into()];
+            Ok(Box::new(lines.into_iter()) as Box<dyn SuperIterator<nvim_oxi::String>>)
+        });
+        let buffer = TestBuffer { mock };
+        let result = buffer.get_text_between2((0, 6), (0, 11), TextBoundary::Exact);
+        pretty_assertions::assert_eq!(result.unwrap(), "world");
+    }
+
+    #[test]
+    fn get_text_between2_single_line_from_line_start() {
+        let mut mock = MockBufferExt::new();
+        mock.expect_get_lines().with(eq(0..=0), eq(true)).returning(|_, _| {
+            let lines: Vec<nvim_oxi::String> = vec!["hello world".into()];
+            Ok(Box::new(lines.into_iter()) as Box<dyn SuperIterator<nvim_oxi::String>>)
+        });
+        let buffer = TestBuffer { mock };
+        let result = buffer.get_text_between2((0, 6), (0, 11), TextBoundary::FromLineStart);
+        pretty_assertions::assert_eq!(result.unwrap(), "hello world");
+    }
+
+    #[test]
+    fn get_text_between2_single_line_to_line_end() {
+        let mut mock = MockBufferExt::new();
+        mock.expect_get_lines().with(eq(0..=0), eq(true)).returning(|_, _| {
+            let lines: Vec<nvim_oxi::String> = vec!["hello world".into()];
+            Ok(Box::new(lines.into_iter()) as Box<dyn SuperIterator<nvim_oxi::String>>)
+        });
+        let buffer = TestBuffer { mock };
+        let result = buffer.get_text_between2((0, 0), (0, 5), TextBoundary::ToLineEnd);
+        pretty_assertions::assert_eq!(result.unwrap(), "hello world");
+    }
+
+    #[test]
+    fn get_text_between2_single_line_from_start_to_end() {
+        let mut mock = MockBufferExt::new();
+        mock.expect_get_lines().with(eq(0..=0), eq(true)).returning(|_, _| {
+            let lines: Vec<nvim_oxi::String> = vec!["hello world".into()];
+            Ok(Box::new(lines.into_iter()) as Box<dyn SuperIterator<nvim_oxi::String>>)
+        });
+        let buffer = TestBuffer { mock };
+        let result = buffer.get_text_between2((0, 6), (0, 5), TextBoundary::FromLineStartToEnd);
+        pretty_assertions::assert_eq!(result.unwrap(), "hello world");
+    }
+
+    #[test]
+    fn get_text_between2_multiple_lines_exact() {
+        let mut mock = MockBufferExt::new();
+        mock.expect_get_lines().with(eq(0..=2), eq(true)).returning(|_, _| {
+            let lines: Vec<nvim_oxi::String> = vec!["line1".into(), "line2".into(), "line3".into()];
+            Ok(Box::new(lines.into_iter()) as Box<dyn SuperIterator<nvim_oxi::String>>)
+        });
+        let buffer = TestBuffer { mock };
+        let result = buffer.get_text_between2((0, 1), (2, 3), TextBoundary::Exact);
+        pretty_assertions::assert_eq!(result.unwrap(), "in/nin/nin");
+    }
+
+    #[test]
+    fn get_text_between2_multiple_lines_from_start_to_end() {
+        let mut mock = MockBufferExt::new();
+        mock.expect_get_lines().with(eq(0..=2), eq(true)).returning(|_, _| {
+            let lines: Vec<nvim_oxi::String> = vec!["line1".into(), "line2".into(), "line3".into()];
+            Ok(Box::new(lines.into_iter()) as Box<dyn SuperIterator<nvim_oxi::String>>)
+        });
+        let buffer = TestBuffer { mock };
+        let result = buffer.get_text_between2((0, 1), (2, 3), TextBoundary::FromLineStartToEnd);
+        pretty_assertions::assert_eq!(result.unwrap(), "lin/nin/nine3");
+    }
+
+    #[test]
+    fn get_text_between2_error_out_of_bounds() {
+        let mut mock = MockBufferExt::new();
+        mock.expect_get_lines().with(eq(0..=0), eq(true)).returning(|_, _| {
+            let lines: Vec<nvim_oxi::String> = vec!["hello".into()];
+            Ok(Box::new(lines.into_iter()) as Box<dyn SuperIterator<nvim_oxi::String>>)
+        });
+        let buffer = TestBuffer { mock };
+        let result = buffer.get_text_between2((0, 10), (0, 15), TextBoundary::Exact);
+        assert2::let_assert!(Err(e) = result);
+        assert_eq!(e.to_string(), "foo");
+    }
+
+    struct TestBuffer {
+        mock: MockBufferExt,
+    }
+
+    impl BufferExt for TestBuffer {
+        fn get_line(&self, _idx: usize) -> color_eyre::Result<nvim_oxi::String> {
+            unimplemented!()
+        }
+
+        fn get_lines(
+            &self,
+            line_range: RangeInclusive<usize>,
+            strict_indexing: bool,
+        ) -> Result<Box<dyn SuperIterator<nvim_oxi::String>>, nvim_oxi::api::Error> {
+            self.mock.get_lines(line_range, strict_indexing)
+        }
+
+        fn set_text_at_cursor_pos(&mut self, _text: &str) {
+            unimplemented!()
+        }
+
+        fn get_text_between(
+            &self,
+            _start: (usize, usize),
+            _end: (usize, usize),
+            _opts: &GetTextOpts,
+        ) -> Result<Vec<String>, nvim_oxi::api::Error> {
+            unimplemented!()
+        }
+
+        fn get_buf_type(&self) -> Result<String, nvim_oxi::api::Error> {
+            unimplemented!()
+        }
     }
 }
 
