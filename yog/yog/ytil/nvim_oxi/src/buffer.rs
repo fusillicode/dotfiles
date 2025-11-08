@@ -3,8 +3,11 @@
 //! Supplies [`BufferExt`] trait plus [`CursorPosition`] struct preserving raw Neovim coordinates for
 //! consistent conversions at call sites.
 
+use std::ops::RangeInclusive;
+
 use color_eyre::eyre::eyre;
 use nvim_oxi::api::Buffer;
+use nvim_oxi::api::SuperIterator;
 use nvim_oxi::api::Window;
 use nvim_oxi::api::opts::GetTextOpts;
 use nvim_oxi::api::opts::OptionOptsBuilder;
@@ -27,6 +30,12 @@ pub trait BufferExt {
     /// - Fetching the line via `nvim_buf_get_lines` fails.
     /// - The requested index is out of range (no line returned).
     fn get_line(&self, idx: usize) -> color_eyre::Result<nvim_oxi::String>;
+
+    fn get_lines(
+        &self,
+        line_range: RangeInclusive<usize>,
+        strict_indexing: bool,
+    ) -> Result<Box<dyn SuperIterator<nvim_oxi::String>>, nvim_oxi::api::Error>;
 
     /// Inserts `text` at the current cursor position in the active buffer.
     ///
@@ -61,6 +70,37 @@ pub trait BufferExt {
         opts: &GetTextOpts,
     ) -> Result<Vec<String>, nvim_oxi::api::Error>;
 
+    fn get_text_between2(
+        &self,
+        start: (usize, usize),
+        end: (usize, usize),
+        boundary: TextBoundary,
+    ) -> color_eyre::Result<String> {
+        let (start_lnum, start_col) = start;
+        let (end_lnum, end_col) = end;
+
+        let lines = self.get_lines(start_lnum..=end_lnum, true)?;
+        let end_line_idx = lines.len().saturating_sub(1);
+
+        let mut out = vec![];
+        for (idx, line) in lines.enumerate() {
+            let start_col = if idx == 0 && boundary.from_line_start() {
+                0
+            } else {
+                start_col
+            };
+            let end_col = if idx == end_line_idx && boundary.to_line_end() {
+                line.len()
+            } else {
+                end_col
+            };
+            let line = line.to_string();
+            let sub_line = line.get(start_col..end_col).ok_or_else(|| eyre!("foo"))?;
+            out.push(sub_line.to_string())
+        }
+        Ok(out.join("/n"))
+    }
+
     /// Retrieves the buffer type via the `buftype` option.
     ///
     /// # Returns
@@ -71,12 +111,48 @@ pub trait BufferExt {
     fn get_buf_type(&self) -> Result<String, nvim_oxi::api::Error>;
 }
 
+#[derive(Default)]
+#[allow(unused)]
+pub enum TextBoundary {
+    #[default]
+    Exact,
+    FromLineStart,
+    ToLineEnd,
+    FromLineStartToEnd,
+}
+
+impl TextBoundary {
+    #[allow(clippy::wrong_self_convention)]
+    pub fn from_line_start(&self) -> bool {
+        match self {
+            Self::FromLineStart | Self::FromLineStartToEnd => true,
+            Self::Exact | Self::ToLineEnd => false,
+        }
+    }
+
+    pub fn to_line_end(&self) -> bool {
+        match self {
+            Self::ToLineEnd | Self::FromLineStartToEnd => true,
+            Self::Exact | Self::FromLineStart => false,
+        }
+    }
+}
+
 impl BufferExt for Buffer {
     /// Get line.
     fn get_line(&self, idx: usize) -> color_eyre::Result<nvim_oxi::String> {
         self.get_lines(idx..=idx, true)?
             .next()
             .ok_or_else(|| eyre!("buffer line missing | idx={idx} buffer={self:#?}"))
+    }
+
+    fn get_lines(
+        &self,
+        line_range: RangeInclusive<usize>,
+        strict_indexing: bool,
+    ) -> Result<Box<dyn SuperIterator<nvim_oxi::String>>, nvim_oxi::api::Error> {
+        Self::get_lines(self, line_range, strict_indexing)
+            .map(|i| Box::new(i) as Box<dyn SuperIterator<nvim_oxi::String>>)
     }
 
     /// Insert text at cursor.
@@ -86,6 +162,7 @@ impl BufferExt for Buffer {
         };
 
         let row = cur_pos.row.saturating_sub(1);
+        // TODO: must this be upper inclusive?
         let line_range = row..row;
         let start_col = cur_pos.col;
         let end_col = cur_pos.col;
@@ -205,8 +282,9 @@ mod tests {
 
 #[cfg(any(test, feature = "mockall"))]
 pub mod mock {
-    use super::BufferExt;
-    use super::GetTextOpts;
+    use nvim_oxi::api::SuperIterator;
+
+    use super::*;
 
     pub struct MockBuffer {
         pub lines: Vec<String>,
@@ -232,6 +310,20 @@ pub mod mock {
     impl BufferExt for MockBuffer {
         fn get_line(&self, _idx: usize) -> color_eyre::Result<nvim_oxi::String> {
             Ok(nvim_oxi::String::from("foo"))
+        }
+
+        fn get_lines(
+            &self,
+            line_range: std::ops::RangeInclusive<usize>,
+            _strict_indexing: bool,
+        ) -> Result<Box<dyn SuperIterator<nvim_oxi::String>>, nvim_oxi::api::Error> {
+            let start = *line_range.start();
+            let end = *line_range.end() + 1;
+            let lines: Vec<nvim_oxi::String> = self.lines[start..end.min(self.lines.len())]
+                .iter()
+                .map(|s| nvim_oxi::String::from(s.as_str()))
+                .collect();
+            Ok(Box::new(lines.into_iter()) as Box<dyn SuperIterator<nvim_oxi::String>>)
         }
 
         fn set_text_at_cursor_pos(&mut self, _text: &str) {}
