@@ -6,8 +6,8 @@
 use color_eyre::eyre::bail;
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
-use nvim_oxi::api::opts::GetTextOpts;
 use ytil_nvim_oxi::buffer::BufferExt;
+use ytil_nvim_oxi::buffer::TextBoundary;
 use ytil_nvim_oxi::dict::DictionaryExt as _;
 
 use crate::diagnostics::filters::lsps::harper_ls::HarperLsFilter;
@@ -39,27 +39,9 @@ impl BufferWithPath {
             return Ok(None);
         };
 
-        let lines = self
+        let out = self
             .buffer
-            .get_text_between(loc.start(), loc.end(), &GetTextOpts::default())?;
-
-        let lines_len = lines.len();
-        if lines_len == 0 {
-            return Ok(None);
-        }
-        let last_line_idx = lines_len.saturating_sub(1);
-        let adjusted_end_col = loc.adjusted_end_col();
-
-        let mut out = String::new();
-        for (line_idx, line) in lines.iter().enumerate() {
-            let line = line.clone();
-            let text = if line_idx == last_line_idx {
-                line.get(..adjusted_end_col).unwrap_or(&line)
-            } else {
-                &line
-            };
-            out.push_str(text);
-        }
+            .get_text_between2(loc.start(), loc.end(), TextBoundary::Exact)?;
 
         if out.is_empty() {
             return Ok(None);
@@ -96,10 +78,6 @@ impl DiagnosticLocation {
 
     pub const fn end(&self) -> (usize, usize) {
         (self.end_lnum, self.end_col)
-    }
-
-    pub const fn adjusted_end_col(&self) -> usize {
-        self.end_col.saturating_sub(self.col)
     }
 }
 
@@ -210,7 +188,7 @@ mod tests {
     #[case::single_line_partial_word(
         vec!["hello world".to_string()],
         create_diag(0, 0, 0, 5),
-        Some("hello".to_string())
+        Some("hello ".to_string())
     )]
     #[case::single_line_full_word(
         vec!["hello".to_string()],
@@ -220,17 +198,12 @@ mod tests {
     #[case::multi_line_word(
         vec!["heal".to_string(), "lo".to_string()],
         create_diag(0, 0, 1, 2),
-        Some("heallo".to_string())
+        Some("heal/nlo".to_string())
     )]
     #[case::multi_line_partial_last_line(
         vec!["heal".to_string(), "lo world".to_string()],
         create_diag(0, 0, 1, 2),
-        Some("heallo".to_string())
-    )]
-    #[case::start_col_out_of_bounds(
-        vec!["hi".to_string()],
-        create_diag(0, 10, 0, 15),
-        None
+        Some("heal/nlo ".to_string())
     )]
     #[case::end_col_beyond_line(
         vec!["hi".to_string()],
@@ -248,6 +221,18 @@ mod tests {
         };
         assert2::let_assert!(Ok(actual) = buf.get_diagnosed_text(&diag));
         pretty_assertions::assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn get_diagnosed_text_returns_error_when_start_col_out_of_bounds() {
+        let lines = vec!["hi".to_string()];
+        let diag = create_diag(0, 10, 0, 15);
+        let buf = BufferWithPath {
+            buffer: Box::new(MockBuffer::new(lines)),
+            path: "test.rs".to_string(),
+        };
+        assert2::let_assert!(Err(err) = buf.get_diagnosed_text(&diag));
+        assert!(err.to_string().contains("cannot extract substring"));
     }
 
     #[test]
