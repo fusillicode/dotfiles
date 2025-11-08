@@ -95,7 +95,11 @@ pub trait BufferExt {
                 end_col
             };
             let line = line.to_string();
-            let sub_line = line.get(start_col..end_col).ok_or_else(|| eyre!("foo"))?;
+            let sub_line = line.get(start_col..end_col).ok_or_else(|| {
+                eyre!(
+                    "cannot extract substring from line | line={line} idx={idx} start_col={start_col} end_col={end_col}"
+                )
+            })?;
             out.push(sub_line.to_string())
         }
         Ok(out.join("/n"))
@@ -337,7 +341,7 @@ mod tests {
         let result = buffer.get_text_between2((0, 1), (2, 3), TextBoundary::Exact);
 
         assert2::let_assert!(Ok(value) = result);
-        pretty_assertions::assert_eq!(value, "in/nin/nin");
+        pretty_assertions::assert_eq!(value, "ine1/nline2/nline");
     }
 
     #[test]
@@ -352,7 +356,22 @@ mod tests {
         let result = buffer.get_text_between2((0, 1), (2, 3), TextBoundary::FromLineStartToEnd);
 
         assert2::let_assert!(Ok(value) = result);
-        pretty_assertions::assert_eq!(value, "lin/nin/nine3");
+        pretty_assertions::assert_eq!(value, "line1/nline2/nline");
+    }
+
+    #[test]
+    fn get_text_between2_multiple_lines_to_line_end() {
+        let mock = mock_buffer(
+            vec!["line1".to_string(), "line2".to_string(), "line3".to_string()],
+            0,
+            2,
+        );
+        let buffer = TestBuffer { mock };
+
+        let result = buffer.get_text_between2((0, 1), (2, 3), TextBoundary::ToLineEnd);
+
+        assert2::let_assert!(Ok(value) = result);
+        pretty_assertions::assert_eq!(value, "line1/nline2/nline3");
     }
 
     #[test]
