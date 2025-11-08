@@ -82,32 +82,36 @@ pub trait BufferExt {
         let lines = self.get_lines(start_lnum..=end_lnum, true)?;
         let last_line_idx = lines.len().saturating_sub(1);
 
-        let mut out = vec![];
+        let mut out = String::new();
         for (line_idx, line) in lines.enumerate() {
             let start_idx = if line_idx == 0 {
                 if boundary.from_line_start() { 0 } else { start_col }
             } else {
                 0
             };
+            let line_last_idx = line.len().saturating_sub(1);
             let end_idx = if line_idx == last_line_idx {
                 if boundary.to_line_end() {
-                    line.len().saturating_sub(1)
+                    line_last_idx
                 } else {
-                    end_col.min(line.len().saturating_sub(1))
+                    end_col.min(line_last_idx)
                 }
             } else {
-                line.len().saturating_sub(1)
+                line_last_idx
             };
-            dbg!(&line, start_idx, end_idx, start, end);
             let line = line.to_string();
             let sub_line = line.get(start_idx..=end_idx).ok_or_else(|| {
                 eyre!(
                     "cannot extract substring from line | line={line:?} idx={line_idx} start_idx={start_idx} end_idx={end_idx}"
                 )
             })?;
-            out.push(sub_line.to_string())
+            out.push_str(sub_line);
+            if line_idx != last_line_idx {
+                out.push_str("/n")
+            }
         }
-        Ok(out.join("/n"))
+
+        Ok(out)
     }
 
     /// Retrieves the buffer type via the `buftype` option.

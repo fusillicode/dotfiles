@@ -23,7 +23,7 @@ const HINT_FG: &str = "#6a6adf";
 const INFO_FG: &str = "white";
 const CURSOR_BG: &str = "white";
 const CURSOR_FG: &str = "black";
-const TREESITTER_CONTEXT_FG: &str = "NvimDarkGrey3";
+const TREESITTER_CONTEXT_BG: &str = "NvimDarkGrey3";
 const NON_TEXT_FG: &str = "NvimDarkGrey4";
 const COMMENTS_FG: &str = "NvimLightGrey4";
 const NONE: &str = "none";
@@ -77,7 +77,7 @@ pub fn set(colorscheme: Option<String>) {
         ("StatusLine", non_text_hl),
         (
             "TreesitterContext",
-            get_default_hl_opts().background(TREESITTER_CONTEXT_FG).build(),
+            get_default_hl_opts().background(TREESITTER_CONTEXT_BG).build(),
         ),
         // Changing these will change the main foreground color.
         ("@variable", get_default_hl_opts().foreground(GLOBAL_FG).build()),
