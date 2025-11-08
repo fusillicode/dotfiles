@@ -10,6 +10,9 @@ description = "Expose Neovim Lua modules backed by Rust utilities."
 keywords = ["neovim", "nvim", "lua", "plugin", "rust", "editor"]
 categories = ["command-line-utilities", "development-tools"]
 
+[features]
+mockall = ["dep:mockall"]
+
 [dependencies]
 color-eyre = { workspace = true }
 mockall = { version = "0.13", optional = true }
