@@ -7,7 +7,6 @@ use color_eyre::eyre::bail;
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
 use ytil_nvim_oxi::buffer::BufferExt;
-use ytil_nvim_oxi::buffer::TextBoundary;
 use ytil_nvim_oxi::dict::DictionaryExt as _;
 
 use crate::diagnostics::filters::lsps::harper_ls::HarperLsFilter;
@@ -23,34 +22,6 @@ pub struct BufferWithPath {
     path: String,
 }
 
-impl BufferWithPath {
-    /// Extracts the text from the buffer that corresponds to the given LSP diagnostic location.
-    ///
-    /// # Arguments
-    /// - `lsp_diag` The LSP diagnostic dictionary containing location information.
-    ///
-    /// # Returns
-    /// [`Option<String>`] The extracted text if the location is valid and text exists, otherwise [`None`].
-    ///
-    /// # Errors
-    /// If retrieving text from the buffer fails.
-    pub fn get_diagnosed_text(&self, lsp_diag: &Dictionary) -> color_eyre::Result<Option<String>> {
-        let Some(loc) = DiagnosticLocation::try_from(lsp_diag).ok() else {
-            return Ok(None);
-        };
-
-        let out = self
-            .buffer
-            .get_text_between2(loc.start(), loc.end(), TextBoundary::Exact)?;
-
-        if out.is_empty() {
-            return Ok(None);
-        }
-
-        Ok(Some(out))
-    }
-}
-
 impl TryFrom<Buffer> for BufferWithPath {
     type Error = color_eyre::eyre::Error;
 
@@ -63,7 +34,8 @@ impl TryFrom<Buffer> for BufferWithPath {
     }
 }
 
-#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
+#[derive(Debug)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 struct DiagnosticLocation {
     lnum: usize,
     col: usize,
@@ -164,76 +136,7 @@ impl DiagnosticsFilter for DiagnosticsFilters {
 
 #[cfg(test)]
 mod tests {
-    use rstest::rstest;
-    use ytil_nvim_oxi::buffer::mock::MockBuffer;
-
     use super::*;
-
-    #[rstest]
-    #[case::lnum_greater_than_end_lnum(
-        vec!["hello world".to_string()],
-        create_diag(1, 0, 0, 5),
-        None
-    )]
-    #[case::col_greater_than_end_col(
-        vec!["hello world".to_string()],
-        create_diag(0, 5, 0, 0),
-        None
-    )]
-    #[case::empty_lines(
-        vec![],
-        create_diag(0, 0, 0, 5),
-        None
-    )]
-    #[case::single_line_partial_word(
-        vec!["hello world".to_string()],
-        create_diag(0, 0, 0, 5),
-        Some("hello ".to_string())
-    )]
-    #[case::single_line_full_word(
-        vec!["hello".to_string()],
-        create_diag(0, 0, 0, 5),
-        Some("hello".to_string())
-    )]
-    #[case::multi_line_word(
-        vec!["heal".to_string(), "lo".to_string()],
-        create_diag(0, 0, 1, 2),
-        Some("heal/nlo".to_string())
-    )]
-    #[case::multi_line_partial_last_line(
-        vec!["heal".to_string(), "lo world".to_string()],
-        create_diag(0, 0, 1, 2),
-        Some("heal/nlo ".to_string())
-    )]
-    #[case::end_col_beyond_line(
-        vec!["hi".to_string()],
-        create_diag(0, 0, 0, 10),
-        Some("hi".to_string())
-    )]
-    fn get_diagnosed_text_returns_expected_text(
-        #[case] lines: Vec<String>,
-        #[case] diag: Dictionary,
-        #[case] expected: Option<String>,
-    ) {
-        let buf = BufferWithPath {
-            buffer: Box::new(MockBuffer::new(lines)),
-            path: "test.rs".to_string(),
-        };
-        assert2::let_assert!(Ok(actual) = buf.get_diagnosed_text(&diag));
-        pretty_assertions::assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn get_diagnosed_text_returns_error_when_start_col_out_of_bounds() {
-        let lines = vec!["hi".to_string()];
-        let diag = create_diag(0, 10, 0, 15);
-        let buf = BufferWithPath {
-            buffer: Box::new(MockBuffer::new(lines)),
-            path: "test.rs".to_string(),
-        };
-        assert2::let_assert!(Err(err) = buf.get_diagnosed_text(&diag));
-        assert!(err.to_string().contains("cannot extract substring"));
-    }
 
     #[test]
     fn try_from_valid_dictionary_succeeds() {
