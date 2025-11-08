@@ -80,24 +80,29 @@ pub trait BufferExt {
         let (end_lnum, end_col) = end;
 
         let lines = self.get_lines(start_lnum..=end_lnum, true)?;
-        let end_line_idx = lines.len().saturating_sub(1);
+        let last_line_idx = lines.len().saturating_sub(1);
 
         let mut out = vec![];
-        for (idx, line) in lines.enumerate() {
-            let start_col = if idx == 0 && boundary.from_line_start() {
+        for (line_idx, line) in lines.enumerate() {
+            let start_idx = if line_idx == 0 {
+                if boundary.from_line_start() { 0 } else { start_col }
+            } else {
                 0
-            } else {
-                start_col
             };
-            let end_col = if idx == end_line_idx && boundary.to_line_end() {
-                line.len()
+            let end_idx = if line_idx == last_line_idx {
+                if boundary.to_line_end() {
+                    line.len().saturating_sub(1)
+                } else {
+                    end_col.min(line.len().saturating_sub(1))
+                }
             } else {
-                end_col
+                line.len().saturating_sub(1)
             };
+            dbg!(&line, start_idx, end_idx, start, end);
             let line = line.to_string();
-            let sub_line = line.get(start_col..end_col).ok_or_else(|| {
+            let sub_line = line.get(start_idx..=end_idx).ok_or_else(|| {
                 eyre!(
-                    "cannot extract substring from line | line={line} idx={idx} start_col={start_col} end_col={end_col}"
+                    "cannot extract substring from line | line={line:?} idx={line_idx} start_idx={start_idx} end_idx={end_idx}"
                 )
             })?;
             out.push(sub_line.to_string())
@@ -356,7 +361,7 @@ mod tests {
         let result = buffer.get_text_between2((0, 1), (2, 3), TextBoundary::FromLineStartToEnd);
 
         assert2::let_assert!(Ok(value) = result);
-        pretty_assertions::assert_eq!(value, "line1/nline2/nline");
+        pretty_assertions::assert_eq!(value, "line1/nline2/nline3");
     }
 
     #[test]
@@ -371,7 +376,7 @@ mod tests {
         let result = buffer.get_text_between2((0, 1), (2, 3), TextBoundary::ToLineEnd);
 
         assert2::let_assert!(Ok(value) = result);
-        pretty_assertions::assert_eq!(value, "line1/nline2/nline3");
+        pretty_assertions::assert_eq!(value, "ine1/nline2/nline3");
     }
 
     #[test]
@@ -382,7 +387,10 @@ mod tests {
         let result = buffer.get_text_between2((0, 10), (0, 15), TextBoundary::Exact);
 
         assert2::let_assert!(Err(e) = result);
-        pretty_assertions::assert_eq!(e.to_string(), "foo");
+        pretty_assertions::assert_eq!(
+            e.to_string(),
+            r#"cannot extract substring from line | line="hello" idx=0 start_idx=10 end_idx=4"#
+        );
     }
 
     fn mock_buffer(lines: Vec<String>, start_line: usize, end_line: usize) -> MockBufferExt {
