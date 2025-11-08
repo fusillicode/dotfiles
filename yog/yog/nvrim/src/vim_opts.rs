@@ -99,7 +99,7 @@ fn set_all(_: ()) {
     set("tabstop", 2, &global_scope);
     set("undofile", true, &global_scope);
     set("updatetime", 250, &global_scope);
-    set("wrap", false, &global_scope);
+    set("wrap", true, &global_scope);
 
     append("clipboard", "unnamedplus", &global_scope);
     append("iskeyword", "-", &global_scope);
