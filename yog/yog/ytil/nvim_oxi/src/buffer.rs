@@ -80,18 +80,18 @@ pub trait BufferExt {
             } else {
                 0
             };
-            let line_last_idx = line.len().saturating_sub(1);
+            let line_len = line.len();
             let end_idx = if line_idx == last_line_idx {
                 if boundary.to_line_end() {
-                    line_last_idx
+                    line_len
                 } else {
-                    end_col.min(line_last_idx)
+                    end_col.min(line_len)
                 }
             } else {
-                line_last_idx
+                line_len
             };
             let line = line.to_string();
-            let sub_line = line.get(start_idx..=end_idx).ok_or_else(|| {
+            let sub_line = line.get(start_idx..end_idx).ok_or_else(|| {
                 eyre!(
                     "cannot extract substring from line | line={line:?} idx={line_idx} start_idx={start_idx} end_idx={end_idx}"
                 )
@@ -278,7 +278,7 @@ mod tests {
         let mock = mock_buffer(vec!["hello world".to_string()], 0, 0);
         let buffer = TestBuffer { mock };
 
-        let result = buffer.get_text_between((0, 6), (0, 10), TextBoundary::Exact);
+        let result = buffer.get_text_between((0, 6), (0, 11), TextBoundary::Exact);
 
         assert2::let_assert!(Ok(value) = result);
         pretty_assertions::assert_eq!(value, "world");
@@ -289,7 +289,7 @@ mod tests {
         let mock = mock_buffer(vec!["hello world".to_string()], 0, 0);
         let buffer = TestBuffer { mock };
 
-        let result = buffer.get_text_between((0, 6), (0, 10), TextBoundary::FromLineStart);
+        let result = buffer.get_text_between((0, 6), (0, 11), TextBoundary::FromLineStart);
 
         assert2::let_assert!(Ok(value) = result);
         pretty_assertions::assert_eq!(value, "hello world");
@@ -329,7 +329,7 @@ mod tests {
         let result = buffer.get_text_between((0, 1), (2, 3), TextBoundary::Exact);
 
         assert2::let_assert!(Ok(value) = result);
-        pretty_assertions::assert_eq!(value, "ine1/nline2/nline");
+        pretty_assertions::assert_eq!(value, "ine1/nline2/nlin");
     }
 
     #[test]
@@ -372,7 +372,7 @@ mod tests {
         assert2::let_assert!(Err(e) = result);
         pretty_assertions::assert_eq!(
             e.to_string(),
-            r#"cannot extract substring from line | line="hello" idx=0 start_idx=10 end_idx=4"#
+            r#"cannot extract substring from line | line="hello" idx=0 start_idx=10 end_idx=5"#
         );
     }
 
