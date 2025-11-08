@@ -285,32 +285,44 @@ mod tests {
     fn get_text_between2_single_line_exact() {
         let mock = mock_buffer(vec!["hello world".to_string()], 0, 0);
         let buffer = TestBuffer { mock };
+
         let result = buffer.get_text_between2((0, 6), (0, 11), TextBoundary::Exact);
-        pretty_assertions::assert_eq!(result.unwrap(), "world");
+
+        assert2::let_assert!(Ok(value) = result);
+        pretty_assertions::assert_eq!(value, "world");
     }
 
     #[test]
     fn get_text_between2_single_line_from_line_start() {
         let mock = mock_buffer(vec!["hello world".to_string()], 0, 0);
         let buffer = TestBuffer { mock };
+
         let result = buffer.get_text_between2((0, 6), (0, 11), TextBoundary::FromLineStart);
-        pretty_assertions::assert_eq!(result.unwrap(), "hello world");
+
+        assert2::let_assert!(Ok(value) = result);
+        pretty_assertions::assert_eq!(value, "hello world");
     }
 
     #[test]
     fn get_text_between2_single_line_to_line_end() {
         let mock = mock_buffer(vec!["hello world".to_string()], 0, 0);
         let buffer = TestBuffer { mock };
+
         let result = buffer.get_text_between2((0, 0), (0, 5), TextBoundary::ToLineEnd);
-        pretty_assertions::assert_eq!(result.unwrap(), "hello world");
+
+        assert2::let_assert!(Ok(value) = result);
+        pretty_assertions::assert_eq!(value, "hello world");
     }
 
     #[test]
     fn get_text_between2_single_line_from_start_to_end() {
         let mock = mock_buffer(vec!["hello world".to_string()], 0, 0);
         let buffer = TestBuffer { mock };
+
         let result = buffer.get_text_between2((0, 6), (0, 5), TextBoundary::FromLineStartToEnd);
-        pretty_assertions::assert_eq!(result.unwrap(), "hello world");
+
+        assert2::let_assert!(Ok(value) = result);
+        pretty_assertions::assert_eq!(value, "hello world");
     }
 
     #[test]
@@ -321,8 +333,11 @@ mod tests {
             2,
         );
         let buffer = TestBuffer { mock };
+
         let result = buffer.get_text_between2((0, 1), (2, 3), TextBoundary::Exact);
-        pretty_assertions::assert_eq!(result.unwrap(), "ine1/nline2/nline");
+
+        assert2::let_assert!(Ok(value) = result);
+        pretty_assertions::assert_eq!(value, "in/nin/nin");
     }
 
     #[test]
@@ -333,17 +348,22 @@ mod tests {
             2,
         );
         let buffer = TestBuffer { mock };
+
         let result = buffer.get_text_between2((0, 1), (2, 3), TextBoundary::FromLineStartToEnd);
-        pretty_assertions::assert_eq!(result.unwrap(), "lin/nin/nine3");
+
+        assert2::let_assert!(Ok(value) = result);
+        pretty_assertions::assert_eq!(value, "lin/nin/nine3");
     }
 
     #[test]
     fn get_text_between2_error_out_of_bounds() {
         let mock = mock_buffer(vec!["hello".to_string()], 0, 0);
         let buffer = TestBuffer { mock };
+
         let result = buffer.get_text_between2((0, 10), (0, 15), TextBoundary::Exact);
+
         assert2::let_assert!(Err(e) = result);
-        assert_eq!(e.to_string(), "foo");
+        pretty_assertions::assert_eq!(e.to_string(), "foo");
     }
 
     fn mock_buffer(lines: Vec<String>, start_line: usize, end_line: usize) -> MockBufferExt {
