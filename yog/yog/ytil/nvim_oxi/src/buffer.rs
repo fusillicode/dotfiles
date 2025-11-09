@@ -30,6 +30,23 @@ pub trait BufferExt {
     /// - The requested index is out of range (no line returned).
     fn get_line(&self, idx: usize) -> color_eyre::Result<nvim_oxi::String>;
 
+    /// Retrieves a range of lines from the buffer.
+    ///
+    /// # Arguments
+    /// - `line_range` - The inclusive range of 0-based line indices to retrieve.
+    /// - `strict_indexing` - If true, returns an error if any index in the range exceeds the buffer's line count; if
+    ///   false, the range is clamped to valid bounds.
+    ///
+    /// # Returns
+    /// An iterator over the lines in the specified range, as [`nvim_oxi::String`].
+    ///
+    /// # Errors
+    /// - If `strict_indexing` is true and the range is out of bounds.
+    /// - If the Neovim API call to fetch lines fails.
+    ///
+    /// # Rationale
+    /// This is a thin wrapper around [`nvim_oxi::api::Buffer::get_lines`] to enable unit testing of the default trait
+    /// method [`BufferExt::get_text_between`].
     fn get_lines(
         &self,
         line_range: RangeInclusive<usize>,
@@ -102,16 +119,33 @@ pub trait BufferExt {
     fn get_buf_type(&self) -> Result<String, nvim_oxi::api::Error>;
 }
 
+/// Defines boundaries for text selection within lines.
+///
+/// # Rationale
+/// Used in [`BufferExt::get_text_between`] to specify how the start and end positions
+/// should be interpreted relative to line boundaries.
 #[derive(Default)]
 pub enum TextBoundary {
+    /// Exact column positions are used as-is.
     #[default]
     Exact,
+    /// Selection starts from the beginning of the line.
     FromLineStart,
+    /// Selection ends at the specified line ending column.
     ToLineEnd,
+    /// Selection spans from the start of the line to the end of the line.
     FromLineStartToEnd,
 }
 
 impl TextBoundary {
+    /// Computes the starting column index for text selection based on the boundary type.
+    ///
+    /// # Arguments
+    /// - `line_idx` The 0-based index of the current line in the range.
+    /// - `start_col` The user-specified starting column.
+    ///
+    /// # Returns
+    /// The adjusted starting column index.
     pub fn get_line_start_idx(&self, line_idx: usize, start_col: usize) -> usize {
         if line_idx != 0 {
             return 0;
@@ -122,6 +156,16 @@ impl TextBoundary {
         }
     }
 
+    /// Computes the ending column index for text selection based on the boundary type.
+    ///
+    /// # Arguments
+    /// - `line` The content of the current line.
+    /// - `line_idx` The 0-based index of the current line in the range.
+    /// - `last_line_idx` The 0-based index of the last line in the range.
+    /// - `end_col` The user-specified ending column.
+    ///
+    /// # Returns
+    /// The adjusted ending column index.
     pub fn get_line_end_idx(&self, line: &str, line_idx: usize, last_line_idx: usize, end_col: usize) -> usize {
         let line_len = line.len();
         if line_idx != last_line_idx {
@@ -135,7 +179,6 @@ impl TextBoundary {
 }
 
 impl BufferExt for Buffer {
-    /// Get line.
     fn get_line(&self, idx: usize) -> color_eyre::Result<nvim_oxi::String> {
         self.get_lines(idx..=idx, true)?
             .next()
@@ -151,7 +194,6 @@ impl BufferExt for Buffer {
             .map(|i| Box::new(i) as Box<dyn SuperIterator<nvim_oxi::String>>)
     }
 
-    /// Insert text at cursor.
     fn set_text_at_cursor_pos(&mut self, text: &str) {
         let Some(cur_pos) = CursorPosition::get_current() else {
             return;
@@ -250,6 +292,7 @@ impl CursorPosition {
 #[cfg(test)]
 mod tests {
     use mockall::predicate::*;
+    use rstest::rstest;
 
     use super::*;
 
@@ -266,7 +309,7 @@ mod tests {
     }
 
     #[test]
-    fn get_text_between_single_line_exact() {
+    fn buffer_ext_get_text_between_single_line_exact() {
         let mock = mock_buffer(vec!["hello world".to_string()], 0, 0);
         let buffer = TestBuffer { mock };
 
@@ -277,7 +320,7 @@ mod tests {
     }
 
     #[test]
-    fn get_text_between_single_line_from_line_start() {
+    fn buffer_ext_get_text_between_single_line_from_line_start() {
         let mock = mock_buffer(vec!["hello world".to_string()], 0, 0);
         let buffer = TestBuffer { mock };
 
@@ -288,7 +331,7 @@ mod tests {
     }
 
     #[test]
-    fn get_text_between_single_line_to_line_end() {
+    fn buffer_ext_get_text_between_single_line_to_line_end() {
         let mock = mock_buffer(vec!["hello world".to_string()], 0, 0);
         let buffer = TestBuffer { mock };
 
@@ -299,7 +342,7 @@ mod tests {
     }
 
     #[test]
-    fn get_text_between_single_line_from_start_to_end() {
+    fn buffer_ext_get_text_between_single_line_from_start_to_end() {
         let mock = mock_buffer(vec!["hello world".to_string()], 0, 0);
         let buffer = TestBuffer { mock };
 
@@ -310,7 +353,7 @@ mod tests {
     }
 
     #[test]
-    fn get_text_between_multiple_lines_exact() {
+    fn buffer_ext_get_text_between_multiple_lines_exact() {
         let mock = mock_buffer(
             vec!["line1".to_string(), "line2".to_string(), "line3".to_string()],
             0,
@@ -325,7 +368,7 @@ mod tests {
     }
 
     #[test]
-    fn get_text_between_multiple_lines_from_start_to_end() {
+    fn buffer_ext_get_text_between_multiple_lines_from_start_to_end() {
         let mock = mock_buffer(
             vec!["line1".to_string(), "line2".to_string(), "line3".to_string()],
             0,
@@ -340,7 +383,7 @@ mod tests {
     }
 
     #[test]
-    fn get_text_between_multiple_lines_to_line_end() {
+    fn buffer_ext_get_text_between_multiple_lines_to_line_end() {
         let mock = mock_buffer(
             vec!["line1".to_string(), "line2".to_string(), "line3".to_string()],
             0,
@@ -355,7 +398,7 @@ mod tests {
     }
 
     #[test]
-    fn get_text_between_error_out_of_bounds() {
+    fn buffer_ext_get_text_between_error_out_of_bounds() {
         let mock = mock_buffer(vec!["hello".to_string()], 0, 0);
         let buffer = TestBuffer { mock };
 
@@ -365,6 +408,45 @@ mod tests {
         pretty_assertions::assert_eq!(
             e.to_string(),
             r#"cannot extract substring from line | line="hello" idx=0 start_idx=10 end_idx=5"#
+        );
+    }
+
+    #[rstest]
+    #[case::exact_non_zero_line_idx(TextBoundary::Exact, 1, 5, 0)]
+    #[case::to_line_end_non_zero_line_idx(TextBoundary::ToLineEnd, 1, 5, 0)]
+    #[case::from_line_start_non_zero_line_idx(TextBoundary::FromLineStart, 1, 5, 0)]
+    #[case::from_line_start_to_end_non_zero_line_idx(TextBoundary::FromLineStartToEnd, 1, 5, 0)]
+    #[case::exact_zero_line_idx(TextBoundary::Exact, 0, 5, 5)]
+    #[case::to_line_end_zero_line_idx(TextBoundary::ToLineEnd, 0, 5, 5)]
+    #[case::from_line_start_zero_line_idx(TextBoundary::FromLineStart, 0, 5, 0)]
+    #[case::from_line_start_to_end_zero_line_idx(TextBoundary::FromLineStartToEnd, 0, 5, 0)]
+    fn text_boundary_get_line_start_idx(
+        #[case] boundary: TextBoundary,
+        #[case] line_idx: usize,
+        #[case] start_col: usize,
+        #[case] expected: usize,
+    ) {
+        pretty_assertions::assert_eq!(boundary.get_line_start_idx(line_idx, start_col), expected);
+    }
+
+    #[rstest]
+    #[case::exact_line_idx_not_last(TextBoundary::Exact, "hello", 0, 1, 3, 5)]
+    #[case::exact_line_idx_is_last(TextBoundary::Exact, "hello", 1, 1, 3, 3)]
+    #[case::exact_end_col_greater_than_line_len(TextBoundary::Exact, "hi", 0, 0, 5, 2)]
+    #[case::from_line_start_line_idx_is_last(TextBoundary::FromLineStart, "hello", 1, 1, 3, 3)]
+    #[case::to_line_end_line_idx_is_last(TextBoundary::ToLineEnd, "hello", 1, 1, 3, 5)]
+    #[case::from_line_start_to_end_line_idx_is_last(TextBoundary::FromLineStartToEnd, "hello", 1, 1, 3, 5)]
+    fn text_boundary_get_line_end_idx(
+        #[case] boundary: TextBoundary,
+        #[case] line: &str,
+        #[case] line_idx: usize,
+        #[case] last_line_idx: usize,
+        #[case] end_col: usize,
+        #[case] expected: usize,
+    ) {
+        pretty_assertions::assert_eq!(
+            boundary.get_line_end_idx(line, line_idx, last_line_idx, end_col),
+            expected
         );
     }
 

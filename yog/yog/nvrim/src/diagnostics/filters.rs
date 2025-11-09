@@ -17,8 +17,11 @@ pub mod buffer;
 pub mod lsps;
 pub mod related_info;
 
+/// Represents a buffer associated with its filepath.
 pub struct BufferWithPath {
+    /// The buffer instance.
     buffer: Box<dyn BufferExt>,
+    /// The filepath associated with the buffer.
     path: String,
 }
 
@@ -34,20 +37,33 @@ impl TryFrom<Buffer> for BufferWithPath {
     }
 }
 
+/// Represents the location of a diagnostic in a file.
 #[derive(Debug)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 struct DiagnosticLocation {
+    /// The 1-based line number where the diagnostic starts.
     lnum: usize,
+    /// The 0-based column number where the diagnostic starts.
     col: usize,
+    /// The 0-based column number where the diagnostic ends.
     end_col: usize,
+    /// The 1-based line number where the diagnostic ends.
     end_lnum: usize,
 }
 
 impl DiagnosticLocation {
+    /// Returns the start position of the diagnostic as (line, column).
+    ///
+    /// # Returns
+    /// A tuple containing the 1-based line number and 0-based column number.
     pub const fn start(&self) -> (usize, usize) {
         (self.lnum, self.col)
     }
 
+    /// Returns the end position of the diagnostic as (line, column).
+    ///
+    /// # Returns
+    /// A tuple containing the 1-based line number and 0-based column number.
     pub const fn end(&self) -> (usize, usize) {
         (self.end_lnum, self.end_col)
     }
@@ -56,6 +72,18 @@ impl DiagnosticLocation {
 impl TryFrom<&Dictionary> for DiagnosticLocation {
     type Error = color_eyre::eyre::Error;
 
+    /// Attempts to convert a Neovim dictionary into a `DiagnosticLocation`.
+    ///
+    /// # Arguments
+    /// - `value` A reference to a [`Dictionary`] containing diagnostic location fields.
+    ///
+    /// # Returns
+    /// - `Ok(DiagnosticLocation)` if conversion succeeds and boundaries are consistent.
+    ///
+    /// # Errors
+    /// - If required fields ("lnum", "col", "end_col", "end_lnum") are missing or invalid.
+    /// - If integer conversion to `usize` fails.
+    /// - If start position is after end position (inconsistent boundaries).
     fn try_from(value: &Dictionary) -> Result<Self, Self::Error> {
         let lnum = value
             .get_t::<nvim_oxi::Integer>("lnum")
