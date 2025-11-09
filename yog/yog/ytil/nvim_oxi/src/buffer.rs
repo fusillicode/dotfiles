@@ -200,13 +200,11 @@ impl BufferExt for Buffer {
         };
 
         let row = cur_pos.row.saturating_sub(1);
-        // TODO: must this be upper inclusive?
-        let line_range = row..row;
+        let line_range = row..=row;
         let start_col = cur_pos.col;
         let end_col = cur_pos.col;
-        let text = vec![text];
 
-        if let Err(error) = self.set_text(line_range.clone(), start_col, end_col, text.clone()) {
+        if let Err(error) = self.set_text(line_range.clone(), start_col, end_col, vec![text]) {
             crate::api::notify_error(format!(
                 "cannot set text in buffer | text={text:?} buffer={self:?} line_range={line_range:?} start_col={start_col:?} end_col={end_col:?} error={error:?}",
             ));
