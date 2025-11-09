@@ -16,14 +16,14 @@ use nvim_oxi::api::types::HighlightInfos;
 const GLOBAL_BG: &str = "#002020";
 const GLOBAL_FG: &str = "#DCDCD7";
 
-const ERROR_FG: &str = "#be5c59";
-const OK_FG: &str = "#89fc6e";
+const ERROR_FG: &str = "#ec635c";
+const OK_FG: &str = "#8ce479";
 const WARN_FG: &str = "#e7e77c";
-const HINT_FG: &str = "#8ce4e5";
+const HINT_FG: &str = "#6a6adf";
 const INFO_FG: &str = "white";
 const CURSOR_BG: &str = "white";
 const CURSOR_FG: &str = "black";
-const TREESITTER_CONTEXT_FG: &str = "NvimDarkGrey3";
+const TREESITTER_CONTEXT_BG: &str = "NvimDarkGrey3";
 const NON_TEXT_FG: &str = "NvimDarkGrey4";
 const COMMENTS_FG: &str = "NvimLightGrey4";
 const NONE: &str = "none";
@@ -77,7 +77,7 @@ pub fn set(colorscheme: Option<String>) {
         ("StatusLine", non_text_hl),
         (
             "TreesitterContext",
-            get_default_hl_opts().background(TREESITTER_CONTEXT_FG).build(),
+            get_default_hl_opts().background(TREESITTER_CONTEXT_BG).build(),
         ),
         // Changing these will change the main foreground color.
         ("@variable", get_default_hl_opts().foreground(GLOBAL_FG).build()),
