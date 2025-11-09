@@ -11,10 +11,10 @@ use lit2::set;
 use nvim_oxi::Dictionary;
 use ytil_nvim_oxi::buffer::TextBoundary;
 
-use super::GetDiagMsgOutput;
 use crate::diagnostics::filters::BufferWithPath;
 use crate::diagnostics::filters::DiagnosticLocation;
 use crate::diagnostics::filters::DiagnosticsFilter;
+use crate::diagnostics::filters::lsps::GetDiagMsgOutput;
 use crate::diagnostics::filters::lsps::LspFilter;
 
 pub struct HarperLsFilter<'a> {
