@@ -450,6 +450,7 @@ mod tests {
         );
     }
 
+    #[allow(clippy::needless_collect)]
     fn mock_buffer(lines: Vec<String>, start_line: usize, end_line: usize) -> MockBufferExt {
         let mut mock = MockBufferExt::new();
         mock.expect_get_lines()
@@ -467,7 +468,7 @@ mod tests {
 
     impl BufferExt for TestBuffer {
         fn get_line(&self, _idx: usize) -> color_eyre::Result<nvim_oxi::String> {
-            unimplemented!()
+            Ok("".into())
         }
 
         fn get_lines(
@@ -478,12 +479,10 @@ mod tests {
             self.mock.get_lines(line_range, strict_indexing)
         }
 
-        fn set_text_at_cursor_pos(&mut self, _text: &str) {
-            unimplemented!()
-        }
+        fn set_text_at_cursor_pos(&mut self, _text: &str) {}
 
         fn get_buf_type(&self) -> Result<String, nvim_oxi::api::Error> {
-            unimplemented!()
+            Ok(String::new())
         }
     }
 }
@@ -517,9 +516,10 @@ pub mod mock {
 
     impl BufferExt for MockBuffer {
         fn get_line(&self, _idx: usize) -> color_eyre::Result<nvim_oxi::String> {
-            Ok(nvim_oxi::String::from(""))
+            Ok("".into())
         }
 
+        #[allow(clippy::needless_collect)]
         fn get_lines(
             &self,
             line_range: std::ops::RangeInclusive<usize>,

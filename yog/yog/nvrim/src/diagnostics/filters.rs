@@ -81,7 +81,7 @@ impl TryFrom<&Dictionary> for DiagnosticLocation {
     /// - `Ok(DiagnosticLocation)` if conversion succeeds and boundaries are consistent.
     ///
     /// # Errors
-    /// - If required fields ("lnum", "col", "end_col", "end_lnum") are missing or invalid.
+    /// - If required fields (`lnum`, `col`, `end_col`, `end_lnum`) are missing or invalid.
     /// - If integer conversion to `usize` fails.
     /// - If start position is after end position (inconsistent boundaries).
     fn try_from(value: &Dictionary) -> Result<Self, Self::Error> {
