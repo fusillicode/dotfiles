@@ -256,12 +256,13 @@ impl CursorPosition {
     /// error context is still surfaced to the user through `notify_error`.
     pub fn get_current() -> Option<Self> {
         let cur_win = Window::current();
-        let Ok((row, col)) = cur_win.get_cursor().inspect_err(|error| {
-            crate::api::notify_error(format!("cannot get cursor | window={cur_win:?} error={error:?}"));
-        }) else {
-            return None;
-        };
-        Some(Self { row, col })
+        cur_win
+            .get_cursor()
+            .map(|(row, col)| Self { row, col })
+            .inspect_err(|error| {
+                crate::api::notify_error(format!("cannot get cursor | window={cur_win:?} error={error:?}"));
+            })
+            .ok()
     }
 
     /// Returns 1-based column index for rendering purposes.
