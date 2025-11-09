@@ -102,7 +102,7 @@ pub trait BufferExt {
             })?;
             out.push_str(sub_line);
             if line_idx != last_line_idx {
-                out.push_str("/n")
+                out.push_str("/n");
             }
         }
 
@@ -146,7 +146,7 @@ impl TextBoundary {
     ///
     /// # Returns
     /// The adjusted starting column index.
-    pub fn get_line_start_idx(&self, line_idx: usize, start_col: usize) -> usize {
+    pub const fn get_line_start_idx(&self, line_idx: usize, start_col: usize) -> usize {
         if line_idx != 0 {
             return 0;
         }
@@ -492,7 +492,7 @@ mod tests {
 pub mod mock {
     use nvim_oxi::api::SuperIterator;
 
-    use super::*;
+    use crate::buffer::BufferExt;
 
     pub struct MockBuffer {
         pub lines: Vec<String>,
@@ -526,8 +526,11 @@ pub mod mock {
             _strict_indexing: bool,
         ) -> Result<Box<dyn SuperIterator<nvim_oxi::String>>, nvim_oxi::api::Error> {
             let start = *line_range.start();
-            let end = *line_range.end() + 1;
-            let lines: Vec<nvim_oxi::String> = self.lines[start..end.min(self.lines.len())]
+            let end = line_range.end().saturating_add(1);
+            let lines: Vec<nvim_oxi::String> = self
+                .lines
+                .get(start..end.min(self.lines.len()))
+                .unwrap_or(&[])
                 .iter()
                 .map(|s| nvim_oxi::String::from(s.as_str()))
                 .collect();
