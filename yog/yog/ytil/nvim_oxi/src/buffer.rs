@@ -75,25 +75,12 @@ pub trait BufferExt {
 
         let mut out = String::new();
         for (line_idx, line) in lines.enumerate() {
-            let start_idx = if line_idx == 0 {
-                if boundary.from_line_start() { 0 } else { start_col }
-            } else {
-                0
-            };
-            let line_len = line.len();
-            let end_idx = if line_idx == last_line_idx {
-                if boundary.to_line_end() {
-                    line_len
-                } else {
-                    end_col.min(line_len)
-                }
-            } else {
-                line_len
-            };
             let line = line.to_string();
-            let sub_line = line.get(start_idx..end_idx).ok_or_else(|| {
+            let line_start_idx = boundary.get_line_start_idx(line_idx, start_col);
+            let line_end_idx = boundary.get_line_end_idx(&line, line_idx, last_line_idx, end_col);
+            let sub_line = line.get(line_start_idx..line_end_idx).ok_or_else(|| {
                 eyre!(
-                    "cannot extract substring from line | line={line:?} idx={line_idx} start_idx={start_idx} end_idx={end_idx}"
+                    "cannot extract substring from line | line={line:?} idx={line_idx} start_idx={line_start_idx} end_idx={line_end_idx}"
                 )
             })?;
             out.push_str(sub_line);
@@ -116,7 +103,6 @@ pub trait BufferExt {
 }
 
 #[derive(Default)]
-#[allow(unused)]
 pub enum TextBoundary {
     #[default]
     Exact,
@@ -126,18 +112,24 @@ pub enum TextBoundary {
 }
 
 impl TextBoundary {
-    #[allow(clippy::wrong_self_convention)]
-    pub fn from_line_start(&self) -> bool {
+    pub fn get_line_start_idx(&self, line_idx: usize, start_col: usize) -> usize {
+        if line_idx != 0 {
+            return 0;
+        }
         match self {
-            Self::FromLineStart | Self::FromLineStartToEnd => true,
-            Self::Exact | Self::ToLineEnd => false,
+            Self::FromLineStart | Self::FromLineStartToEnd => 0,
+            Self::Exact | Self::ToLineEnd => start_col,
         }
     }
 
-    pub fn to_line_end(&self) -> bool {
+    pub fn get_line_end_idx(&self, line: &str, line_idx: usize, last_line_idx: usize, end_col: usize) -> usize {
+        let line_len = line.len();
+        if line_idx != last_line_idx {
+            return line_len;
+        }
         match self {
-            Self::ToLineEnd | Self::FromLineStartToEnd => true,
-            Self::Exact | Self::FromLineStart => false,
+            Self::ToLineEnd | Self::FromLineStartToEnd => line_len,
+            Self::Exact | Self::FromLineStart => end_col.min(line_len),
         }
     }
 }
