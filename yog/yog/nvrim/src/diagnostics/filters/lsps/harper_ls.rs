@@ -6,13 +6,14 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::identity;
 
-use color_eyre::eyre::eyre;
 use lit2::map;
 use lit2::set;
 use nvim_oxi::Dictionary;
+use ytil_nvim_oxi::buffer::TextBoundary;
 
 use super::GetDiagMsgOutput;
 use crate::diagnostics::filters::BufferWithPath;
+use crate::diagnostics::filters::DiagnosticLocation;
 use crate::diagnostics::filters::DiagnosticsFilter;
 use crate::diagnostics::filters::lsps::LspFilter;
 
@@ -72,16 +73,15 @@ impl DiagnosticsFilter for HarperLsFilter<'_> {
             GetDiagMsgOutput::Skip => return Ok(false),
         };
 
-        let diagnosed_text = buf.get_diagnosed_text(lsp_diag)?.ok_or_else(|| {
-            eyre!(
-                "missing diagnosed text for {} filter | lsp_diag={lsp_diag:#?}",
-                self.source
-            )
-        })?;
+        let diag_location = DiagnosticLocation::try_from(lsp_diag)?;
+
+        let diag_text = buf
+            .buffer
+            .get_text_between(diag_location.start(), diag_location.end(), TextBoundary::Exact)?;
 
         Ok(self
             .blacklist
-            .get(diagnosed_text.as_str())
+            .get(diag_text.as_str())
             .map(|blacklisted_msgs| {
                 blacklisted_msgs
                     .iter()
@@ -213,8 +213,91 @@ mod tests {
             col: 1,
             end_col: 7,
         };
-        assert2::let_assert!(Err(err) = filter.skip_diagnostic(&buf, &diag));
-        assert!(err.to_string().contains("missing diagnosed text"));
+        assert2::let_assert!(Err(error) = filter.skip_diagnostic(&buf, &diag));
+        assert!(error.to_string().contains("missing dict value"));
+        assert!(error.to_string().contains(r#""end_lnum""#));
+    }
+
+    #[test]
+    fn skip_diagnostic_when_lnum_greater_than_end_lnum_returns_error() {
+        let filter = HarperLsFilter {
+            source: "Harper",
+            blacklist: map! {"stderr": set!["instead of"]},
+            path_substring: None,
+        };
+        let buf = create_buffer_with_path_and_content("src/lib.rs", vec!["hello world"]);
+        let diag = dict! {
+            source: "Harper",
+            message: "some message",
+            lnum: 1,
+            col: 0,
+            end_lnum: 0,
+            end_col: 5,
+        };
+        assert2::let_assert!(Err(error) = filter.skip_diagnostic(&buf, &diag));
+        assert!(error.to_string().contains("inconsistent boundaries"));
+        assert!(error.to_string().contains("lnum > end_lnum"));
+    }
+
+    #[test]
+    fn skip_diagnostic_when_col_greater_than_end_col_returns_error() {
+        let filter = HarperLsFilter {
+            source: "Harper",
+            blacklist: map! {"stderr": set!["instead of"]},
+            path_substring: None,
+        };
+        let buf = create_buffer_with_path_and_content("src/lib.rs", vec!["hello world"]);
+        let diag = dict! {
+            source: "Harper",
+            message: "some message",
+            lnum: 0,
+            col: 5,
+            end_lnum: 0,
+            end_col: 0,
+        };
+        assert2::let_assert!(Err(error) = filter.skip_diagnostic(&buf, &diag));
+        assert!(error.to_string().contains("inconsistent boundaries"));
+        assert!(error.to_string().contains("col > end_col"));
+    }
+
+    #[test]
+    fn skip_diagnostic_when_start_col_out_of_bounds_returns_error() {
+        let filter = HarperLsFilter {
+            source: "Harper",
+            blacklist: map! {"stderr": set!["instead of"]},
+            path_substring: None,
+        };
+        let buf = create_buffer_with_path_and_content("src/lib.rs", vec!["hi"]);
+        let diag = dict! {
+            source: "Harper",
+            message: "some message",
+            lnum: 0,
+            col: 10,
+            end_lnum: 0,
+            end_col: 15,
+        };
+        assert2::let_assert!(Err(error) = filter.skip_diagnostic(&buf, &diag));
+        assert!(error.to_string().contains("cannot extract substring"));
+    }
+
+    #[test]
+    fn skip_diagnostic_when_empty_lines_returns_false() {
+        let filter = HarperLsFilter {
+            source: "Harper",
+            blacklist: map! {"stderr": set!["instead of"]},
+            path_substring: None,
+        };
+        let buf = create_buffer_with_path_and_content("src/lib.rs", vec![]);
+        let diag = dict! {
+            source: "Harper",
+            message: "some message",
+            lnum: 0,
+            col: 0,
+            end_lnum: 0,
+            end_col: 5,
+        };
+        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(&buf, &diag));
+        assert!(!res);
     }
 
     fn create_buffer_with_path_and_content(path: &str, content: Vec<&str>) -> BufferWithPath {
