@@ -152,18 +152,20 @@ fn rgb_to_hex(input: &str) -> color_eyre::Result<String> {
 /// Returns an error if the input cannot be parsed with any supported format.
 fn date_time_str_to_chrono_parse_from_str(input: &str) -> color_eyre::Result<String> {
     if DateTime::parse_from_str(input, "%d-%m-%Y,%H:%M:%S%z").is_ok() {
-        return Ok(format!(r#"DateTime::parse_from_str("{input}", "%d-%m-%Y,%H:%M:%S%Z")"#));
+        return Ok(format!(
+            r#"DateTime::parse_from_str("{input}", "%d-%m-%Y,%H:%M:%S%Z").unwrap()"#
+        ));
     }
     if NaiveDateTime::parse_from_str(input, "%d-%m-%Y,%H:%M:%S").is_ok() {
         return Ok(format!(
-            r#"NaiveDateTime::parse_from_str("{input}", "%d-%m-%Y,%H:%M:%S")"#
+            r#"NaiveDateTime::parse_from_str("{input}", "%d-%m-%Y,%H:%M:%S").unwrap()"#
         ));
     }
     if NaiveDate::parse_from_str(input, "%d-%m-%Y").is_ok() {
-        return Ok(format!(r#"NaiveDate::parse_from_str("{input}", "%d-%m-%Y")"#));
+        return Ok(format!(r#"NaiveDate::parse_from_str("{input}", "%d-%m-%Y").unwrap()"#));
     }
     if NaiveTime::parse_from_str(input, "%H:%M:%S").is_ok() {
-        return Ok(format!(r#"NaiveTime::parse_from_str("{input}", "%H:%M:%S")"#));
+        return Ok(format!(r#"NaiveTime::parse_from_str("{input}", "%H:%M:%S").unwrap()"#));
     }
     Err(eyre!(
         "cannot get chrono parse_from_str for supplied input | input={input:?}"
@@ -214,14 +216,14 @@ mod tests {
     #[rstest]
     #[case::datetime_with_offset(
         "25-12-2023,14:30:45+00:00",
-        r#"DateTime::parse_from_str("25-12-2023,14:30:45+00:00", "%d-%m-%Y,%H:%M:%S%Z")"#
+        r#"DateTime::parse_from_str("25-12-2023,14:30:45+00:00", "%d-%m-%Y,%H:%M:%S%Z").unwrap()"#
     )]
     #[case::naive_datetime(
         "25-12-2023,14:30:45",
-        r#"NaiveDateTime::parse_from_str("25-12-2023,14:30:45", "%d-%m-%Y,%H:%M:%S")"#
+        r#"NaiveDateTime::parse_from_str("25-12-2023,14:30:45", "%d-%m-%Y,%H:%M:%S").unwrap()"#
     )]
-    #[case::naive_date("25-12-2023", r#"NaiveDate::parse_from_str("25-12-2023", "%d-%m-%Y")"#)]
-    #[case::naive_time("14:30:45", r#"NaiveTime::parse_from_str("14:30:45", "%H:%M:%S")"#)]
+    #[case::naive_date("25-12-2023", r#"NaiveDate::parse_from_str("25-12-2023", "%d-%m-%Y").unwrap()"#)]
+    #[case::naive_time("14:30:45", r#"NaiveTime::parse_from_str("14:30:45", "%H:%M:%S").unwrap()"#)]
     fn date_time_str_to_chrono_parse_from_str_when_valid_input_returns_correct_code(
         #[case] input: &str,
         #[case] expected: &str,
