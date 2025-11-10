@@ -84,8 +84,8 @@ fn draw_statuscolumn(cur_buf_type: &str, cur_lnum: &str, metas: impl Iterator<It
         return " ".into();
     }
 
-    let mut highest_severity: Option<SelectedDiag> = None;
-    let mut git: Option<ExtmarkMeta> = None;
+    let mut highest_severity_diag: Option<SelectedDiag> = None;
+    let mut git_extmark: Option<ExtmarkMeta> = None;
 
     for meta in metas {
         match meta.sign_hl_group {
@@ -95,19 +95,19 @@ fn draw_statuscolumn(cur_buf_type: &str, cur_lnum: &str, metas: impl Iterator<It
             | SignHlGroup::DiagnosticHint
             | SignHlGroup::DiagnosticOk => {
                 let rank = meta.sign_hl_group.rank();
-                match &highest_severity {
+                match &highest_severity_diag {
                     Some(sel) if sel.rank >= rank => {}
-                    _ => highest_severity = Some(SelectedDiag { rank, meta }),
+                    _ => highest_severity_diag = Some(SelectedDiag { rank, meta }),
                 }
             }
-            SignHlGroup::Git(_) if git.is_none() => git = Some(meta),
+            SignHlGroup::Git(_) if git_extmark.is_none() => git_extmark = Some(meta),
             SignHlGroup::Git(_) | SignHlGroup::Other(_) => {}
         }
         // Early break: if we already have top severity (Error rank 5) and have determined git presence
         // (either captured or impossible to capture later because we already saw a git sign or caller provided none).
-        if let Some(sel) = &highest_severity
+        if let Some(sel) = &highest_severity_diag
             && sel.rank == 5
-            && git.is_some()
+            && git_extmark.is_some()
         {
             break;
         }
@@ -115,13 +115,13 @@ fn draw_statuscolumn(cur_buf_type: &str, cur_lnum: &str, metas: impl Iterator<It
 
     // Capacity heuristic: each sign ~ 32 chars + lnum + static separators.
     let mut out = String::with_capacity(cur_lnum.len().saturating_add(64));
-    if let Some(sel) = highest_severity {
-        sel.meta.write(&mut out);
+    if let Some(highest_severity_diag) = highest_severity_diag {
+        highest_severity_diag.meta.write(&mut out);
     } else {
         out.push(' ');
     }
-    if let Some(g) = git {
-        g.write(&mut out);
+    if let Some(git_extmark) = git_extmark {
+        git_extmark.write(&mut out);
     } else {
         out.push(' ');
     }
@@ -193,7 +193,7 @@ impl ExtmarkMeta {
     /// # Rationale
     /// Appending directly avoids per-sign allocation of an intermediate [`String`].
     fn write(&self, out: &mut String) {
-        let shown: &str = match self.sign_hl_group {
+        let displayed_glyph: &str = match self.sign_hl_group {
             SignHlGroup::DiagnosticError => DiagnosticSeverity::Error.glyph(),
             SignHlGroup::DiagnosticWarn => DiagnosticSeverity::Warn.glyph(),
             SignHlGroup::DiagnosticInfo => DiagnosticSeverity::Info.glyph(),
@@ -207,7 +207,7 @@ impl ExtmarkMeta {
         out.push('#');
         out.push_str(self.sign_hl_group.as_str());
         out.push('#');
-        out.push_str(shown);
+        out.push_str(displayed_glyph);
         out.push('%');
         out.push('*');
     }
