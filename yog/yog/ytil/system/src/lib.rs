@@ -83,7 +83,7 @@ pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Sets executable permissions (755) on the specified file path.
+/// Sets executable permissions (755) on the specified filepath.
 ///
 /// # Errors
 /// - A filesystem operation (open/read/write/remove) fails.
