@@ -96,6 +96,7 @@ envar
 expr
 extmark
 façade
+ff0000
 file path
 fkr
 franquicia

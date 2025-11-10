@@ -1,3 +1,8 @@
+//! General conversions helpers for the current Visual selection.
+//!
+//! Provides a namespaced [`Dictionary`] exposing selection conversion
+//! functionality (RGB to HEX and date/time to chrono parse code).
+
 use chrono::DateTime;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
@@ -8,12 +13,39 @@ use nvim_oxi::api::Buffer;
 use strum::EnumIter;
 use strum::IntoEnumIterator;
 
+/// Namespaced dictionary of general conversion helpers.
+///
+/// Entries:
+/// - `"convert_selection"`: wraps [`convert_selection`] and converts the active Visual selection using a user-selected
+///   conversion option.
 pub fn dict() -> Dictionary {
     dict! {
         "convert_selection": fn_from!(convert_selection),
     }
 }
 
+/// Converts the current visual selection using a user-chosen conversion option.
+///
+/// Prompts the user (via [`ytil_nvim_oxi::api::vim_ui_select`]) to select a conversion
+/// option, then applies the conversion to the selected text in place.
+///
+/// Returns early if:
+/// - No active Visual selection is detected.
+/// - The user cancels the prompt.
+/// - The conversion fails (an error is reported via [`ytil_nvim_oxi::api::notify_error`]).
+/// - Writing the converted text back to the buffer fails (an error is reported via
+///   [`ytil_nvim_oxi::api::notify_error`]).
+///
+/// # Returns
+/// Returns `()` upon successful completion.
+///
+/// # Errors
+/// Errors from [`ytil_nvim_oxi::api::vim_ui_select`] are reported via [`ytil_nvim_oxi::api::notify_error`]
+/// using the direct display representation of [`color_eyre::Report`].
+/// Conversion errors are also reported similarly.
+///
+/// # Notes
+/// Currently supports single-line selections; multiline could be added later.
 fn convert_selection(_: ()) {
     let Some(selection) = ytil_nvim_oxi::visual_selection::get(()) else {
         return;
@@ -63,10 +95,13 @@ fn convert_selection(_: ()) {
     }
 }
 
+/// Enum representing available conversion options.
 #[derive(strum::Display, EnumIter)]
 enum ConversionOption {
+    /// Converts RGB color values to hexadecimal format.
     #[strum(to_string = "RGB to HEX")]
     RgbToHex,
+    /// Converts date/time strings to chrono parse_from_str code.
     #[strum(to_string = "dd-mm-yyyy,hh:mm:ss to DateTime<Utc>")]
     DateTimeStrToChronoDateTimeParseFromStr,
 }
@@ -80,6 +115,16 @@ impl ConversionOption {
     }
 }
 
+/// Converts an RGB string to a hexadecimal color code.
+///
+/// Expects an input in the format of [`u8`] R, G, B values.
+/// Whitespaces around components are trimmed.
+///
+/// # Returns
+/// Returns the hexadecimal color code as a string (e.g., "#ff0000").
+///
+/// # Errors
+/// Returns an error if the input format is invalid or components cannot be parsed as u8.
 fn rgb_to_hex(input: &str) -> color_eyre::Result<String> {
     fn u8_color_code_from_rgb_split(rgb: &mut std::str::Split<'_, &str>, color: &str) -> color_eyre::Result<u8> {
         rgb.next()
@@ -99,6 +144,19 @@ fn rgb_to_hex(input: &str) -> color_eyre::Result<String> {
     Ok(format!("#{r:02x}{g:02x}{b:02x}"))
 }
 
+/// Converts a date/time string to the appropriate chrono parse_from_str code snippet.
+///
+/// Attempts to parse the input with various chrono types and formats:
+/// - [`DateTime`] with offset
+/// - [`NaiveDateTime`]
+/// - [`NaiveDate`]
+/// - [`NaiveTime`]
+///
+/// # Returns
+/// Returns a string containing the Rust code for parsing the input with chrono.
+///
+/// # Errors
+/// Returns an error if the input cannot be parsed with any supported format.
 fn date_time_str_to_chrono_parse_from_str(input: &str) -> color_eyre::Result<String> {
     if DateTime::parse_from_str(input, "%d-%m-%Y,%H:%M:%S%z").is_ok() {
         return Ok(format!(r#"DateTime::parse_from_str("{input}", "%d-%m-%Y,%H:%M:%S%Z")"#));
