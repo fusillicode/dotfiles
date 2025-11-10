@@ -339,6 +339,8 @@ impl<'de> serde::Deserialize<'de> for SignHlGroup {
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
     use super::*;
 
     #[test]
@@ -415,6 +417,26 @@ mod tests {
             }),
         );
         pretty_assertions::assert_eq!(out, " ");
+    }
+
+    #[rstest]
+    #[case(None)]
+    #[case(Some(Opts { show_line_numbers: false }))]
+    fn draw_statuscolumn_when_line_numbers_disabled_returns_no_line_numbers(#[case] opts: Option<Opts>) {
+        let out = draw_statuscolumn("foo", "42", std::iter::empty(), opts);
+        pretty_assertions::assert_eq!(out, "  ");
+    }
+
+    #[rstest]
+    #[case(None)]
+    #[case(Some(Opts { show_line_numbers: false }))]
+    fn draw_statuscolumn_when_line_numbers_disabled_with_extmarks_returns_no_line_numbers(#[case] opts: Option<Opts>) {
+        let metas = vec![
+            mk_extmark_meta(SignHlGroup::DiagnosticError, "E"),
+            mk_extmark_meta(SignHlGroup::Git("GitSignsFoo".into()), "|"),
+        ];
+        let out = draw_statuscolumn("foo", "42", metas.into_iter(), opts);
+        pretty_assertions::assert_eq!(out, "%#DiagnosticSignError#x%*%#GitSignsFoo#|%*");
     }
 
     fn mk_extmark_meta(group: SignHlGroup, text: &str) -> ExtmarkMeta {
