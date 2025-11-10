@@ -19,7 +19,7 @@ fn convert_selection(_: ()) {
         return;
     };
 
-    let opts = Opt::iter();
+    let opts = ConversionOption::iter();
 
     let callback = {
         let opts = opts.clone();
@@ -64,14 +64,14 @@ fn convert_selection(_: ()) {
 }
 
 #[derive(strum::Display, EnumIter)]
-enum Opt {
+enum ConversionOption {
     #[strum(to_string = "RGB to HEX")]
     RgbToHex,
     #[strum(to_string = "dd-mm-yyyy,hh:mm:ss to DateTime<Utc>")]
     DateTimeStrToChronoDateTimeParseFromStr,
 }
 
-impl Opt {
+impl ConversionOption {
     pub fn convert(&self, selection: &str) -> color_eyre::Result<String> {
         match self {
             Self::RgbToHex => rgb_to_hex(selection),

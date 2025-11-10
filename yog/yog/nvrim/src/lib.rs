@@ -16,17 +16,20 @@ mod macros;
 mod attempt;
 /// [`nvim_oxi::api::Buffer`] helpers.
 mod buffer;
+/// Case conversion.
+mod caseconv;
 /// CLI flags for `fd` and `ripgrep`.
 mod cli;
 /// User commands.
 mod cmds;
 /// Colorscheme setup.
 mod colorscheme;
-mod converto;
 /// Diagnostics filtering / formatting / sorting.
 mod diagnostics;
 /// Random string generation via the [`fkr`] crate.
 mod fkr;
+/// Generic text conversions.
+mod genconv;
 /// Core (non‑plugin) keymaps.
 pub mod keymaps;
 /// Utilities to handle linters output
@@ -37,8 +40,6 @@ mod statuscolumn;
 mod statusline;
 /// Style options.
 mod style_opts;
-/// Text transform.
-mod trex;
 /// Rust tests utilities.
 mod truster;
 /// `vim.opts` utilities. Avoids intra-doc links to private items for stable docs; uses plain function calls for error
@@ -64,10 +65,10 @@ fn nvrim() -> Dictionary {
         "style_opts": style_opts::dict(),
         "vim_opts": vim_opts::dict(),
         "keymaps": keymaps::dict(),
-        "trex": trex::dict(),
+        "caseconv": caseconv::dict(),
         "fkr": fkr::dict(),
         "linters": linters::dict(),
         "attempt": attempt::dict(),
-        "converto": converto::dict(),
+        "genconv": genconv::dict(),
     }
 }
