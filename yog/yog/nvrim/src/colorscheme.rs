@@ -13,7 +13,7 @@ use nvim_oxi::api::opts::SetHighlightOptsBuilder;
 use nvim_oxi::api::types::GetHlInfos;
 use nvim_oxi::api::types::HighlightInfos;
 
-const GLOBAL_BG: &str = "#002020";
+const GLOBAL_BG: &str = "#002000";
 const GLOBAL_FG: &str = "#DCDCD7";
 
 const ERROR_FG: &str = "#ec635c";
