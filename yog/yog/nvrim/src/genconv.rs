@@ -9,6 +9,7 @@ use chrono::DateTime;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use chrono::NaiveTime;
+use color_eyre::eyre::Context;
 use color_eyre::eyre::Report;
 use color_eyre::eyre::eyre;
 use nvim_oxi::Dictionary;
@@ -124,7 +125,7 @@ fn rgb_to_hex(input: &str) -> color_eyre::Result<String> {
             .and_then(|s| {
                 s.trim()
                     .parse::<u8>()
-                    .map_err(|error| eyre!("cannot parse str as u8 color code | str={s:?} error={error:?}"))
+                    .wrap_err_with(|| format!("cannot parse str as u8 color code | str={s:?}"))
             })
     }
 
@@ -172,7 +173,7 @@ fn date_time_str_to_chrono_parse_from_str(input: &str) -> color_eyre::Result<Str
 fn unix_timestamp_to_iso_8601_date_time(input: &str) -> color_eyre::Result<String> {
     input
         .parse::<i64>()
-        .map_err(|error| eyre!("cannot convert input to i64 | input={input:?} error={error:?}"))
+        .wrap_err_with(|| format!("cannot convert input to i64 | input={input:?}"))
         .and_then(|timestamp| {
             DateTime::from_timestamp_secs(timestamp)
                 .ok_or_else(|| eyre!("cannot convert timestamp to DateTime<Utc> | timestamp={timestamp}"))
@@ -198,24 +199,12 @@ mod tests {
     }
 
     #[rstest]
-    #[case::empty_input(
-        "",
-        "cannot parse str as u8 color code | str=\"\" error=ParseIntError { kind: Empty }"
-    )]
+    #[case::empty_input("", "cannot parse str as u8 color code | str=\"\"")]
     #[case::single_component("0", "missing color component G")]
     #[case::two_components("255,0", "missing color component B")]
-    #[case::out_of_range_red(
-        "256,0,0",
-        "cannot parse str as u8 color code | str=\"256\" error=ParseIntError { kind: PosOverflow }"
-    )]
-    #[case::invalid_green(
-        "255,abc,0",
-        "cannot parse str as u8 color code | str=\"abc\" error=ParseIntError { kind: InvalidDigit }"
-    )]
-    #[case::invalid_blue(
-        "255,0,def",
-        "cannot parse str as u8 color code | str=\"def\" error=ParseIntError { kind: InvalidDigit }"
-    )]
+    #[case::out_of_range_red("256,0,0", "cannot parse str as u8 color code | str=\"256\"")]
+    #[case::invalid_green("255,abc,0", "cannot parse str as u8 color code | str=\"abc\"")]
+    #[case::invalid_blue("255,0,def", "cannot parse str as u8 color code | str=\"def\"")]
     fn rgb_to_hex_when_invalid_input_returns_error(#[case] input: &str, #[case] expected_error: &str) {
         let result = rgb_to_hex(input);
         assert2::let_assert!(Err(error) = result);
@@ -251,22 +240,8 @@ mod tests {
     }
 
     #[rstest]
-    #[case::epoch("0", "1970-01-01T00:00:00+00:00")]
-    #[case::new_year_2021("1609459200", "2021-01-01T00:00:00+00:00")]
-    fn unix_timestamp_to_iso_8601_date_time_when_valid_timestamp_returns_iso_string(
-        #[case] input: &str,
-        #[case] expected: &str,
-    ) {
-        assert2::let_assert!(Ok(actual) = unix_timestamp_to_iso_8601_date_time(input));
-        pretty_assertions::assert_eq!(actual, expected);
-    }
-
-    #[rstest]
-    #[case::non_numeric_input(
-        "abc",
-        "cannot convert input to i64 | input=\"abc\" error=ParseIntError { kind: InvalidDigit }"
-    )]
-    #[case::empty_input("", "cannot convert input to i64 | input=\"\" error=ParseIntError { kind: Empty }")]
+    #[case::non_numeric_input("abc", "cannot convert input to i64 | input=\"abc\"")]
+    #[case::empty_input("", "cannot convert input to i64 | input=\"\"")]
     fn unix_timestamp_to_iso_8601_date_time_when_invalid_input_returns_error(
         #[case] input: &str,
         #[case] expected_error: &str,

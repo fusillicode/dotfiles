@@ -75,6 +75,7 @@ characterwise
 chargeback
 charwise
 chmod
+chrono
 clippy
 cloneable
 cmd
