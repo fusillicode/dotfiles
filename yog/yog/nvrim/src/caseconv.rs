@@ -55,7 +55,7 @@ fn convert_selection(_: ()) {
                 .iter()
                 .map(|line| line.as_str().to_case(*case))
                 .collect::<Vec<_>>();
-            ytil_nvim_oxi::buffer::replace_text_and_notify_error(&selection, converted_lines);
+            ytil_nvim_oxi::buffer::replace_text_and_notify_if_error(&selection, converted_lines);
             Ok::<(), Report>(())
         });
     };
