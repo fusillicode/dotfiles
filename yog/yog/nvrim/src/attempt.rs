@@ -122,7 +122,7 @@ impl Scratch {
     pub fn from(read_dir_res: std::io::Result<DirEntry>) -> Option<color_eyre::Result<Self>> {
         let path = match read_dir_res.map(|entry| entry.path()) {
             Ok(path) => path,
-            Err(e) => return Some(Err(e.into())),
+            Err(error) => return Some(Err(error.into())),
         };
         if !path.is_file() {
             return None;

@@ -109,6 +109,7 @@ pub fn get(_: ()) -> Option<Selection> {
 }
 
 /// Owned selection content plus bounds.
+#[derive(Debug)]
 pub struct Selection {
     bounds: SelectionBounds,
     lines: Vec<String>,
