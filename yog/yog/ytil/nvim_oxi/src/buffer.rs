@@ -300,7 +300,7 @@ impl CursorPosition {
 /// # Arguments
 /// - `selection` The selection defining the text range to replace.
 /// - `replacement` Vector of strings representing the lines to insert.
-pub fn replace_text_and_notify_error<Line, Lines>(selection: &Selection, replacement: Lines)
+pub fn replace_text_and_notify_if_error<Line, Lines>(selection: &Selection, replacement: Lines)
 where
     Lines: IntoIterator<Item = Line>,
     Line: Into<nvim_oxi::String>,
