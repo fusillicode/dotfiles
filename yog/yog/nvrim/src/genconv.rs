@@ -73,7 +73,7 @@ fn convert_selection(_: ()) {
                 else {
                     return Ok::<(), Report>(());
                 };
-                ytil_nvim_oxi::buffer::replace_text_and_notify_error(&selection, vec![transformed_line]);
+                ytil_nvim_oxi::buffer::replace_text_and_notify_if_error(&selection, vec![transformed_line]);
                 Ok(())
             });
         }
