@@ -90,7 +90,7 @@ enum ConversionOption {
     /// Converts RGB color values to hexadecimal format.
     #[strum(to_string = "RGB to HEX")]
     RgbToHex,
-    /// Converts date/time strings to chrono parse_from_str code.
+    /// Converts date/time strings to chrono `parse_from_str` code.
     #[strum(to_string = "dd-mm-yyyy,hh:mm:ss to DateTime<Utc>")]
     DateTimeStrToChronoDateTimeParseFromStr,
 }
@@ -115,7 +115,7 @@ impl ConversionOption {
 /// # Errors
 /// Returns an error if the input format is invalid or components cannot be parsed as u8.
 fn rgb_to_hex(input: &str) -> color_eyre::Result<String> {
-    fn u8_color_code_from_rgb_split(rgb: &mut Split<'_, &str>, color: &str) -> color_eyre::Result<u8> {
+    fn u8_color_code_from_rgb_split(rgb: &mut Split<'_, char>, color: &str) -> color_eyre::Result<u8> {
         rgb.next()
             .ok_or_else(|| eyre!("missing color component {color}"))
             .and_then(|s| {
@@ -125,7 +125,7 @@ fn rgb_to_hex(input: &str) -> color_eyre::Result<String> {
             })
     }
 
-    let mut rgb_split = input.split(",");
+    let mut rgb_split = input.split(',');
     let r = u8_color_code_from_rgb_split(&mut rgb_split, "R")?;
     let g = u8_color_code_from_rgb_split(&mut rgb_split, "G")?;
     let b = u8_color_code_from_rgb_split(&mut rgb_split, "B")?;
@@ -133,7 +133,7 @@ fn rgb_to_hex(input: &str) -> color_eyre::Result<String> {
     Ok(format!("#{r:02x}{g:02x}{b:02x}"))
 }
 
-/// Converts a date/time string to the appropriate chrono parse_from_str code snippet.
+/// Converts a date/time string to the appropriate chrono `parse_from_str` code snippet.
 ///
 /// Attempts to parse the input with various chrono types and formats:
 /// - [`DateTime`] with offset
