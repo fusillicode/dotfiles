@@ -91,15 +91,15 @@ enum ConversionOption {
     #[strum(to_string = "RGB to HEX")]
     RgbToHex,
     /// Converts date/time strings to chrono `parse_from_str` code.
-    #[strum(to_string = "dd-mm-yyyy,hh:mm:ss to DateTime<Utc>")]
-    DateTimeStrToChronoDateTimeParseFromStr,
+    #[strum(to_string = "Datetime formatted strings to chrono parse_from_str code")]
+    DateTimeStrToChronoParseFromStr,
 }
 
 impl ConversionOption {
     pub fn convert(&self, selection: &str) -> color_eyre::Result<String> {
         match self {
             Self::RgbToHex => rgb_to_hex(selection),
-            Self::DateTimeStrToChronoDateTimeParseFromStr => date_time_str_to_chrono_parse_from_str(selection),
+            Self::DateTimeStrToChronoParseFromStr => date_time_str_to_chrono_parse_from_str(selection),
         }
     }
 }
