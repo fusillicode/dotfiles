@@ -5,8 +5,8 @@
 
 use std::ops::Range;
 
+use color_eyre::eyre::Context as _;
 use color_eyre::eyre::bail;
-use color_eyre::eyre::eyre;
 use nvim_oxi::Array;
 use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;
@@ -324,7 +324,7 @@ fn get_pos(mark: &str) -> color_eyre::Result<Pos> {
         .inspect_err(|error| {
             crate::api::notify_error(format!("cannot get pos | mark={mark} error={error:#?}"));
         })
-        .map_err(|error| eyre!("get_pos failed | mark={mark:?} error={error:#?}"))
+        .wrap_err_with(|| format!("get_pos failed | mark={mark:?}"))
 }
 
 #[cfg(test)]
