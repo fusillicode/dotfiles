@@ -37,7 +37,7 @@ pub fn dict() -> Dictionary {
 /// # Rationale
 /// Using `Option<String>` (instead of empty placeholder) allows caller-side distinction between an intentional blank
 /// status column (special buffer type) and an error acquiring required state.
-fn draw((cur_lnum, extmarks): (String, Vec<Extmark>)) -> Option<String> {
+fn draw((cur_lnum, extmarks, opts): (String, Vec<Extmark>, Option<Opts>)) -> Option<String> {
     let cur_buf = Buffer::current();
     let buf_type = cur_buf
         .get_buf_type()
@@ -52,6 +52,7 @@ fn draw((cur_lnum, extmarks): (String, Vec<Extmark>)) -> Option<String> {
         &buf_type,
         &cur_lnum,
         extmarks.into_iter().filter_map(Extmark::into_meta),
+        opts,
     ))
 }
 
@@ -79,7 +80,12 @@ fn draw((cur_lnum, extmarks): (String, Vec<Extmark>)) -> Option<String> {
 /// - Allocates once with a conservative capacity heuristic (`lnum.len() + 64`).
 /// - O(n) over `metas`, short-circuiting when optimal state reached.
 /// - Rank computation is a simple match with small constant cost.
-fn draw_statuscolumn(cur_buf_type: &str, cur_lnum: &str, metas: impl Iterator<Item = ExtmarkMeta>) -> String {
+fn draw_statuscolumn(
+    cur_buf_type: &str,
+    cur_lnum: &str,
+    metas: impl Iterator<Item = ExtmarkMeta>,
+    opts: Option<Opts>,
+) -> String {
     if cur_buf_type == "grug-far" {
         return " ".into();
     }
@@ -125,10 +131,35 @@ fn draw_statuscolumn(cur_buf_type: &str, cur_lnum: &str, metas: impl Iterator<It
     } else {
         out.push(' ');
     }
-    out.push_str("%=% ");
-    out.push_str(cur_lnum);
-    out.push(' ');
+    if opts.is_some_and(|o| o.show_line_numbers) {
+        out.push_str("%=% ");
+        out.push_str(cur_lnum);
+        out.push(' ');
+    }
     out
+}
+
+#[derive(Deserialize)]
+struct Opts {
+    show_line_numbers: bool,
+}
+
+/// Implementation of [`FromObject`] for [`Extmark`].
+impl FromObject for Opts {
+    fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
+        Self::deserialize(Deserializer::new(obj)).map_err(Into::into)
+    }
+}
+
+/// Implementation of [`Poppable`] for [`Opts`].
+impl Poppable for Opts {
+    unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
+        // SAFETY: Delegates to nvim_oxi object popping then deserializes.
+        unsafe {
+            let obj = Object::pop(lstate)?;
+            Self::from_object(obj).map_err(nvim_oxi::lua::Error::pop_error_from_err::<Self, _>)
+        }
+    }
 }
 
 /// Internal selection of the highest ranked diagnostic extmark.
@@ -310,16 +341,16 @@ impl<'de> serde::Deserialize<'de> for SignHlGroup {
 mod tests {
     use super::*;
 
-    fn mk_extmark_meta(group: SignHlGroup, text: &str) -> ExtmarkMeta {
-        ExtmarkMeta {
-            sign_hl_group: group,
-            sign_text: Some(text.to_string()),
-        }
-    }
-
     #[test]
     fn draw_statuscolumn_when_no_extmarks_returns_placeholders() {
-        let out = draw_statuscolumn("foo", "42", std::iter::empty());
+        let out = draw_statuscolumn(
+            "foo",
+            "42",
+            std::iter::empty(),
+            Some(Opts {
+                show_line_numbers: true,
+            }),
+        );
         pretty_assertions::assert_eq!(out, "  %=% 42 ");
     }
 
@@ -329,7 +360,14 @@ mod tests {
             mk_extmark_meta(SignHlGroup::DiagnosticError, "E"),
             mk_extmark_meta(SignHlGroup::DiagnosticWarn, "W"),
         ];
-        let out = draw_statuscolumn("foo", "42", metas.into_iter());
+        let out = draw_statuscolumn(
+            "foo",
+            "42",
+            metas.into_iter(),
+            Some(Opts {
+                show_line_numbers: true,
+            }),
+        );
         // Canonical normalized error sign text is 'x'.
         pretty_assertions::assert_eq!(out, "%#DiagnosticSignError#x%* %=% 42 ");
     }
@@ -337,7 +375,14 @@ mod tests {
     #[test]
     fn draw_statuscolumn_when_git_sign_present_displays_git_sign() {
         let metas = vec![mk_extmark_meta(SignHlGroup::Git("GitSignsFoo".into()), "|")];
-        let out = draw_statuscolumn("foo", "42", metas.into_iter());
+        let out = draw_statuscolumn(
+            "foo",
+            "42",
+            metas.into_iter(),
+            Some(Opts {
+                show_line_numbers: true,
+            }),
+        );
         pretty_assertions::assert_eq!(out, " %#GitSignsFoo#|%*%=% 42 ");
     }
 
@@ -348,13 +393,34 @@ mod tests {
             mk_extmark_meta(SignHlGroup::DiagnosticWarn, "W"),
             mk_extmark_meta(SignHlGroup::Git("GitSignsFoo".into()), "|"),
         ];
-        let out = draw_statuscolumn("foo", "42", metas.into_iter());
+        let out = draw_statuscolumn(
+            "foo",
+            "42",
+            metas.into_iter(),
+            Some(Opts {
+                show_line_numbers: true,
+            }),
+        );
         pretty_assertions::assert_eq!(out, "%#DiagnosticSignError#x%*%#GitSignsFoo#|%*%=% 42 ");
     }
 
     #[test]
     fn draw_statuscolumn_when_grug_far_buffer_returns_single_space() {
-        let out = draw_statuscolumn("grug-far", "7", std::iter::empty());
+        let out = draw_statuscolumn(
+            "grug-far",
+            "7",
+            std::iter::empty(),
+            Some(Opts {
+                show_line_numbers: true,
+            }),
+        );
         pretty_assertions::assert_eq!(out, " ");
+    }
+
+    fn mk_extmark_meta(group: SignHlGroup, text: &str) -> ExtmarkMeta {
+        ExtmarkMeta {
+            sign_hl_group: group,
+            sign_text: Some(text.to_string()),
+        }
     }
 }
