@@ -139,12 +139,14 @@ fn draw_statuscolumn(
     out
 }
 
+/// Configuration options for the status column.
 #[derive(Deserialize)]
 struct Opts {
+    /// Whether to display line numbers in the status column.
     show_line_numbers: bool,
 }
 
-/// Implementation of [`FromObject`] for [`Extmark`].
+/// Implementation of [`FromObject`] for [`Opts`].
 impl FromObject for Opts {
     fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
         Self::deserialize(Deserializer::new(obj)).map_err(Into::into)
