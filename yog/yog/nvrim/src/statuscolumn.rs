@@ -27,6 +27,11 @@ pub fn dict() -> Dictionary {
 
 /// Draws the status column for the current buffer.
 ///
+/// # Arguments
+/// - `cur_lnum` The current line number as a string.
+/// - `extmarks` A vector of extmarks associated with the buffer.
+/// - `opts` Optional configuration options for rendering.
+///
 /// # Returns
 /// - `Some(String)`: formatted status column when the current buffer `buftype` is successfully retrieved.
 /// - `None`: if `buftype` retrieval fails (details logged via [`ytil_nvim_oxi::api::notify_error`]).
@@ -62,6 +67,7 @@ fn draw((cur_lnum, extmarks, opts): (String, Vec<Extmark>, Option<Opts>)) -> Opt
 /// - `cur_buf_type` Current buffer `buftype` (used for special-case elision like `"grug-far"`).
 /// - `cur_lnum` Current line number string (already formatted by the caller / Vim script).
 /// - `metas` Iterator of extmark metadata for the current line; only items with a present [`ExtmarkMeta`] are yielded.
+/// - `opts` Optional configuration options for rendering the status column.
 ///
 /// # Returns
 /// - Formatted status column string containing (at most) one diagnostic sign (highest severity), one Git sign (first
