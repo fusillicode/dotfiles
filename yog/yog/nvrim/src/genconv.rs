@@ -3,6 +3,8 @@
 //! Provides a namespaced [`Dictionary`] exposing selection conversion
 //! functionality (RGB to HEX and date/time to chrono parse code).
 
+use std::str::Split;
+
 use chrono::DateTime;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
@@ -126,7 +128,7 @@ impl ConversionOption {
 /// # Errors
 /// Returns an error if the input format is invalid or components cannot be parsed as u8.
 fn rgb_to_hex(input: &str) -> color_eyre::Result<String> {
-    fn u8_color_code_from_rgb_split(rgb: &mut std::str::Split<'_, &str>, color: &str) -> color_eyre::Result<u8> {
+    fn u8_color_code_from_rgb_split(rgb: &mut Split<'_, &str>, color: &str) -> color_eyre::Result<u8> {
         rgb.next()
             .ok_or_else(|| eyre!("missing color component {color}"))
             .and_then(|s| {
