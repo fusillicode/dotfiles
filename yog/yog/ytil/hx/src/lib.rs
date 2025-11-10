@@ -7,11 +7,11 @@ use color_eyre::eyre;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 
-/// Represents the parsed status line from Helix editor, containing file path and cursor position.
+/// Represents the parsed status line from Helix editor, containing filepath and cursor position.
 #[derive(Debug, Eq, PartialEq)]
 #[cfg_attr(any(test, feature = "fake"), derive(fake::Dummy))]
 pub struct HxStatusLine {
-    /// The file path currently open in the editor.
+    /// The filepath currently open in the editor.
     pub file_path: PathBuf,
     /// The current cursor position in the file.
     pub position: HxCursorPosition,
