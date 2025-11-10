@@ -9,9 +9,9 @@ use chrono::DateTime;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use chrono::NaiveTime;
+use color_eyre::eyre::Report;
 use color_eyre::eyre::eyre;
 use nvim_oxi::Dictionary;
-use nvim_oxi::api::Buffer;
 use strum::EnumIter;
 use strum::IntoEnumIterator;
 
@@ -71,23 +71,10 @@ fn convert_selection(_: ()) {
                         ));
                     })
                 else {
-                    return Ok(());
+                    return Ok::<(), Report>(());
                 };
-
-                Buffer::from(selection.buf_id())
-                    .set_text(
-                        selection.line_range(),
-                        selection.start().col,
-                        selection.end().col,
-                        vec![transformed_line],
-                    )
-                    .inspect_err(|error| {
-                        ytil_nvim_oxi::api::notify_error(format!(
-                            "cannot set lines of buffer | start={:#?} end={:#?} error={error:#?}",
-                            selection.start(),
-                            selection.end()
-                        ));
-                    })
+                ytil_nvim_oxi::buffer::replace_text_and_notify_error(&selection, vec![transformed_line]);
+                Ok(())
             });
         }
     };

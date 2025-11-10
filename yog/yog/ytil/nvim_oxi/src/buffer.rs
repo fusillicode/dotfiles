@@ -11,6 +11,8 @@ use nvim_oxi::api::SuperIterator;
 use nvim_oxi::api::Window;
 use nvim_oxi::api::opts::OptionOptsBuilder;
 
+use crate::visual_selection::Selection;
+
 /// Extension trait for [`Buffer`] to provide extra functionalities.
 ///
 /// Provides focused helpers for line fetching and text insertion at the current
@@ -52,17 +54,6 @@ pub trait BufferExt {
         line_range: RangeInclusive<usize>,
         strict_indexing: bool,
     ) -> Result<Box<dyn SuperIterator<nvim_oxi::String>>, nvim_oxi::api::Error>;
-
-    /// Inserts `text` at the current cursor position in the active buffer.
-    ///
-    /// Obtains the current [`CursorPosition`], converts the 1-based row to 0-based
-    /// for Neovim's `set_text` call, and inserts `text` without replacing existing
-    /// content (`start_col` == `end_col`). Errors are reported via `notify_error`.
-    /// Silently returns if cursor position cannot be fetched.
-    ///
-    /// # Arguments
-    /// - `text` UTF-8 slice inserted at the cursor byte column.
-    fn set_text_at_cursor_pos(&mut self, text: &str);
 
     /// Get text from a [`nvim_oxi::api::Buffer`].
     ///
@@ -117,6 +108,17 @@ pub trait BufferExt {
     /// # Errors
     /// - Propagates [`nvim_oxi::api::Error`] from the underlying option retrieval.
     fn get_buf_type(&self) -> Result<String, nvim_oxi::api::Error>;
+
+    /// Inserts `text` at the current cursor position in the active buffer.
+    ///
+    /// Obtains the current [`CursorPosition`], converts the 1-based row to 0-based
+    /// for Neovim's `set_text` call, and inserts `text` without replacing existing
+    /// content (`start_col` == `end_col`). Errors are reported via `notify_error`.
+    /// Silently returns if cursor position cannot be fetched.
+    ///
+    /// # Arguments
+    /// - `text` UTF-8 slice inserted at the cursor byte column.
+    fn set_text_at_cursor_pos(&mut self, text: &str);
 }
 
 /// Defines boundaries for text selection within lines.
@@ -285,6 +287,35 @@ impl CursorPosition {
     /// Constant time. Uses `saturating_add` defensively (overflow is unrealistic given line length).
     pub const fn adjusted_col(&self) -> usize {
         self.col.saturating_add(1)
+    }
+}
+
+/// Replaces the text in the specified `selection` with the `replacement` lines.
+///
+/// Calls Neovim's `set_text` with the selection's line range and column positions,
+/// replacing the selected content with the provided lines.
+/// Errors are reported via [`crate::api::notify_error`] with details about the selection
+/// boundaries and error.
+///
+/// # Arguments
+/// - `selection` The selection defining the text range to replace.
+/// - `replacement` Vector of strings representing the lines to insert.
+pub fn replace_text_and_notify_error<Line, Lines>(selection: &Selection, replacement: Lines)
+where
+    Lines: IntoIterator<Item = Line>,
+    Line: Into<nvim_oxi::String>,
+{
+    if let Err(error) = Buffer::from(selection.buf_id()).set_text(
+        selection.line_range(),
+        selection.start().col,
+        selection.end().col,
+        replacement,
+    ) {
+        crate::api::notify_error(format!(
+            "cannot set lines of buffer | start={:#?} end={:#?} error={error:#?}",
+            selection.start(),
+            selection.end()
+        ));
     }
 }
 

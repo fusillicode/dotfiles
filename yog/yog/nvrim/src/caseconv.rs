@@ -5,10 +5,10 @@
 
 use core::fmt::Display;
 
+use color_eyre::eyre::Report;
 use convert_case::Case;
 use convert_case::Casing as _;
 use nvim_oxi::Dictionary;
-use nvim_oxi::api::Buffer;
 
 /// Namespaced dictionary of case conversion helpers.
 ///
@@ -55,20 +55,8 @@ fn convert_selection(_: ()) {
                 .iter()
                 .map(|line| line.as_str().to_case(*case))
                 .collect::<Vec<_>>();
-            Buffer::from(selection.buf_id())
-                .set_text(
-                    selection.line_range(),
-                    selection.start().col,
-                    selection.end().col,
-                    converted_lines,
-                )
-                .inspect_err(|error| {
-                    ytil_nvim_oxi::api::notify_error(format!(
-                        "cannot set lines of buffer | start={:#?} end={:#?} error={error:#?}",
-                        selection.start(),
-                        selection.end()
-                    ));
-                })
+            ytil_nvim_oxi::buffer::replace_text_and_notify_error(&selection, converted_lines);
+            Ok::<(), Report>(())
         });
     };
 
