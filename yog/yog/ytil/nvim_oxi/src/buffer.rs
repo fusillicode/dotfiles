@@ -403,9 +403,9 @@ mod tests {
 
         let result = buffer.get_text_between((0, 10), (0, 15), TextBoundary::Exact);
 
-        assert2::let_assert!(Err(e) = result);
+        assert2::let_assert!(Err(error) = result);
         pretty_assertions::assert_eq!(
-            e.to_string(),
+            error.to_string(),
             r#"cannot extract substring from line | line="hello" idx=0 start_idx=10 end_idx=5"#
         );
     }

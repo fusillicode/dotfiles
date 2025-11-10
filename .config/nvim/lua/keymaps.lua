@@ -93,10 +93,9 @@ function M.fzf_lua(plugin)
     },
 
     { '<leader>h', mode = 'n',           plugin and { function() plugin.resume({}) end, }, },
-
     { '<leader>u', mode = { 'n', 'v', }, plugin and { nvrim.trex.transform_selection, }, },
-
     { '<leader>n', mode = 'n',           plugin and { nvrim.attempt.create_scratch_file, }, },
+    { '<leader>k', mode = { 'n', 'v', }, plugin and { nvrim.converto.convert_selection, }, },
   }
 end
 

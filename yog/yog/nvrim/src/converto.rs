@@ -1,3 +1,7 @@
+use chrono::DateTime;
+use chrono::NaiveDate;
+use chrono::NaiveDateTime;
+use chrono::NaiveTime;
 use color_eyre::eyre::eyre;
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
@@ -64,14 +68,14 @@ enum Opt {
     #[strum(to_string = "RGB to HEX")]
     RgbToHex,
     #[strum(to_string = "dd-mm-yyyy,hh:mm:ss to DateTime<Utc>")]
-    DateTimeStrToChronoDateTime,
+    DateTimeStrToChronoDateTimeParseFromStr,
 }
 
 impl Opt {
     pub fn convert(&self, selection: &str) -> color_eyre::Result<String> {
         match self {
             Self::RgbToHex => rgb_to_hex(selection),
-            Self::DateTimeStrToChronoDateTime => Ok("bar".into()),
+            Self::DateTimeStrToChronoDateTimeParseFromStr => date_time_str_to_chrono_parse_from_str(selection),
         }
     }
 }
@@ -93,6 +97,26 @@ fn rgb_to_hex(input: &str) -> color_eyre::Result<String> {
     let b = u8_color_code_from_rgb_split(&mut rgb_split, "B")?;
 
     Ok(format!("#{r:02x}{g:02x}{b:02x}"))
+}
+
+fn date_time_str_to_chrono_parse_from_str(input: &str) -> color_eyre::Result<String> {
+    if DateTime::parse_from_str(input, "%d-%m-%Y,%H:%M:%S%z").is_ok() {
+        return Ok(format!(r#"DateTime::parse_from_str("{input}", "%d-%m-%Y,%H:%M:%S%Z")"#));
+    }
+    if NaiveDateTime::parse_from_str(input, "%d-%m-%Y,%H:%M:%S").is_ok() {
+        return Ok(format!(
+            r#"NaiveDateTime::parse_from_str("{input}", "%d-%m-%Y,%H:%M:%S")"#
+        ));
+    }
+    if NaiveDate::parse_from_str(input, "%d-%m-%Y").is_ok() {
+        return Ok(format!(r#"NaiveDate::parse_from_str("{input}", "%d-%m-%Y")"#));
+    }
+    if NaiveTime::parse_from_str(input, "%H:%M:%S").is_ok() {
+        return Ok(format!(r#"NaiveTime::parse_from_str("{input}", "%H:%M:%S")"#));
+    }
+    Err(eyre!(
+        "cannot get chrono parse_from_str for supplied input | input={input:?}"
+    ))
 }
 
 #[cfg(test)]
@@ -133,7 +157,35 @@ mod tests {
     )]
     fn rgb_to_hex_when_invalid_input_returns_error(#[case] input: &str, #[case] expected_error: &str) {
         let result = rgb_to_hex(input);
-        assert2::let_assert!(Err(e) = result);
-        pretty_assertions::assert_eq!(e.to_string(), expected_error);
+        assert2::let_assert!(Err(error) = result);
+        pretty_assertions::assert_eq!(error.to_string(), expected_error);
+    }
+
+    #[rstest]
+    #[case::datetime_with_offset(
+        "25-12-2023,14:30:45+00:00",
+        r#"DateTime::parse_from_str("25-12-2023,14:30:45+00:00", "%d-%m-%Y,%H:%M:%S%Z")"#
+    )]
+    #[case::naive_datetime(
+        "25-12-2023,14:30:45",
+        r#"NaiveDateTime::parse_from_str("25-12-2023,14:30:45", "%d-%m-%Y,%H:%M:%S")"#
+    )]
+    #[case::naive_date("25-12-2023", r#"NaiveDate::parse_from_str("25-12-2023", "%d-%m-%Y")"#)]
+    #[case::naive_time("14:30:45", r#"NaiveTime::parse_from_str("14:30:45", "%H:%M:%S")"#)]
+    fn date_time_str_to_chrono_parse_from_str_when_valid_input_returns_correct_code(
+        #[case] input: &str,
+        #[case] expected: &str,
+    ) {
+        assert2::let_assert!(Ok(actual) = date_time_str_to_chrono_parse_from_str(input));
+        pretty_assertions::assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn date_time_str_to_chrono_parse_from_str_when_invalid_input_returns_error() {
+        assert2::let_assert!(Err(error) = date_time_str_to_chrono_parse_from_str("invalid"));
+        pretty_assertions::assert_eq!(
+            error.to_string(),
+            "cannot get chrono parse_from_str for supplied input | input=\"invalid\""
+        );
     }
 }
