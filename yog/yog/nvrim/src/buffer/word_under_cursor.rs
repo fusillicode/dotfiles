@@ -145,7 +145,7 @@ pub enum FileCmdOutput {
 /// Returns [`Option::None`] if:
 /// - `idx` Is out of bounds.
 /// - `idx` Does not point to a character boundary.
-/// - the character at `idx` is whitespace
+/// - The character at `idx` is whitespace
 fn get_word_at_index(s: &str, idx: usize) -> Option<&str> {
     let byte_idx = convert_visual_to_byte_idx(s, idx)?;
 
