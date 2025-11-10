@@ -22,6 +22,7 @@ mod cli;
 mod cmds;
 /// Colorscheme setup.
 mod colorscheme;
+mod converto;
 /// Diagnostics filtering / formatting / sorting.
 mod diagnostics;
 /// Random string generation via the [`fkr`] crate.
@@ -67,5 +68,6 @@ fn nvrim() -> Dictionary {
         "fkr": fkr::dict(),
         "linters": linters::dict(),
         "attempt": attempt::dict(),
+        "converto": converto::dict(),
     }
 }
