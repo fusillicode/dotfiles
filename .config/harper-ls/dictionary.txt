@@ -100,6 +100,7 @@ façade
 ff0000
 file path
 fkr
+fn
 franquicia
 fzf
 gh
