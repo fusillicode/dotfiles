@@ -93,6 +93,8 @@ enum ConversionOption {
     /// Converts date/time strings to chrono `parse_from_str` code.
     #[strum(to_string = "Datetime formatted strings to chrono parse_from_str code")]
     DateTimeStrToChronoParseFromStr,
+    #[strum(to_string = "Unix timestamp to ISO 8601 date time")]
+    UnixTimestampToIso8601,
 }
 
 impl ConversionOption {
@@ -100,6 +102,7 @@ impl ConversionOption {
         match self {
             Self::RgbToHex => rgb_to_hex(selection),
             Self::DateTimeStrToChronoParseFromStr => date_time_str_to_chrono_parse_from_str(selection),
+            Self::UnixTimestampToIso8601 => unix_timestamp_to_iso_8601_date_time(selection),
         }
     }
 }
@@ -164,6 +167,17 @@ fn date_time_str_to_chrono_parse_from_str(input: &str) -> color_eyre::Result<Str
     Err(eyre!(
         "cannot get chrono parse_from_str for supplied input | input={input:?}"
     ))
+}
+
+fn unix_timestamp_to_iso_8601_date_time(input: &str) -> color_eyre::Result<String> {
+    input
+        .parse::<i64>()
+        .map_err(|error| eyre!("cannot convert input to i64 | input={input:?} error={error:?}"))
+        .and_then(|timestamp| {
+            DateTime::from_timestamp_secs(timestamp)
+                .ok_or_else(|| eyre!("cannot convert timestamp to DateTime<Utc> | timestamp={timestamp}"))
+        })
+        .map(|dt| dt.to_rfc3339())
 }
 
 #[cfg(test)]
@@ -234,5 +248,31 @@ mod tests {
             error.to_string(),
             "cannot get chrono parse_from_str for supplied input | input=\"invalid\""
         );
+    }
+
+    #[rstest]
+    #[case::epoch("0", "1970-01-01T00:00:00+00:00")]
+    #[case::new_year_2021("1609459200", "2021-01-01T00:00:00+00:00")]
+    fn unix_timestamp_to_iso_8601_date_time_when_valid_timestamp_returns_iso_string(
+        #[case] input: &str,
+        #[case] expected: &str,
+    ) {
+        assert2::let_assert!(Ok(actual) = unix_timestamp_to_iso_8601_date_time(input));
+        pretty_assertions::assert_eq!(actual, expected);
+    }
+
+    #[rstest]
+    #[case::non_numeric_input(
+        "abc",
+        "cannot convert input to i64 | input=\"abc\" error=ParseIntError { kind: InvalidDigit }"
+    )]
+    #[case::empty_input("", "cannot convert input to i64 | input=\"\" error=ParseIntError { kind: Empty }")]
+    fn unix_timestamp_to_iso_8601_date_time_when_invalid_input_returns_error(
+        #[case] input: &str,
+        #[case] expected_error: &str,
+    ) {
+        let result = unix_timestamp_to_iso_8601_date_time(input);
+        assert2::let_assert!(Err(error) = result);
+        pretty_assertions::assert_eq!(error.to_string(), expected_error);
     }
 }
