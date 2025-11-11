@@ -94,7 +94,7 @@ local split_perc = 0.73
 
 -- 🥲 https://github.com/wez/wezterm/issues/3173
 wezterm.on('window-config-reloaded', function(window, _)
-  -- Approximately identify this gui window, by using the associated mux id
+  -- Approximately identify this GUI window, by using the associated mux id
   local id = tostring(window:window_id())
 
   -- Maintain a mapping of windows that we have previously seen before in this event handler
