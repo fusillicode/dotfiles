@@ -14,10 +14,10 @@ cargo install --force \
   drill \
   fd-find \
   mise \
-  prmt \
   pv \
   ripgrep \
   sd \
   sqlx-cli \
+  starship \
   typos-cli \
   watchexec-cli
