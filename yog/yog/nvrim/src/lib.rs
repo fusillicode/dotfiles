@@ -34,6 +34,7 @@ mod genconv;
 pub mod keymaps;
 /// Utilities to handle linters output
 mod linters;
+mod scrolloff;
 /// Status column (diagnostics + git signs).
 mod statuscolumn;
 /// Status line (diagnostics summary).
