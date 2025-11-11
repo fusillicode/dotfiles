@@ -14,6 +14,7 @@ cargo install --force \
   drill \
   fd-find \
   mise \
+  prmt \
   pv \
   ripgrep \
   sd \
