@@ -12,6 +12,7 @@ ln -s "$dotfiles_dir/.config/nvim/" "$HOME/.config/nvim"
 ln -s "$dotfiles_dir/.config/pgcli/config" "$HOME/.config/pgcli/config"
 ln -s "$dotfiles_dir/.config/opencode" "$HOME/.config/opencode"
 ln -s "$dotfiles_dir/.config/harper-ls" "$HOME/.config/harper-ls"
+ln -s "$dotfiles_dir/.config/starship.toml" "$HOME/.config/starship.toml"
 
 cp "$dotfiles_dir/.gitconfig" "$HOME"
 ln -s "$dotfiles_dir/.gitignore" "$HOME"
@@ -22,7 +23,6 @@ ln -s "$dotfiles_dir/.psqlrc" "$HOME"
 ln -s "$dotfiles_dir/.wezterm" "$HOME"
 ln -s "$dotfiles_dir/.zshenv" "$HOME"
 ln -s "$dotfiles_dir/.zshrc" "$HOME"
-ln -s "$dotfiles_dir/my-zsh.zsh-theme" "$HOME/.oh-my-zsh/custom/themes"
 
 # Xcode tools
 xcode-select --install
