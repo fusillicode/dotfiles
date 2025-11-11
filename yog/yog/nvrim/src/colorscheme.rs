@@ -16,26 +16,37 @@ use nvim_oxi::api::types::HighlightInfos;
 const GLOBAL_BG: &str = "#002020";
 const GLOBAL_FG: &str = "#DCDCD7";
 
-const ERROR_FG: &str = "#ec635c";
-const OK_FG: &str = "#8ce479";
-const WARN_FG: &str = "#e7e77c";
-const HINT_FG: &str = "#6a6adf";
-const INFO_FG: &str = "white";
 const CURSOR_BG: &str = "white";
 const CURSOR_FG: &str = "black";
-const TREESITTER_CONTEXT_BG: &str = "NvimDarkGrey3";
 const NON_TEXT_FG: &str = "NvimDarkGrey4";
 const COMMENTS_FG: &str = "NvimLightGrey4";
 const NONE: &str = "none";
 
+const DIAG_ERROR_FG: &str = "#ec635c";
+const DIAG_OK_FG: &str = "#8ce479";
+const DIAG_WARN_FG: &str = "#e7e77c";
+const DIAG_HINT_FG: &str = "NvimLightGrey3";
+const DIAG_INFO_FG: &str = "white";
+
+const GITSIGNS_ADDED: &str = DIAG_OK_FG;
+const GITSIGNS_CHANGED: &str = "#6a6adf";
+const GITSIGNS_REMOVED: &str = DIAG_ERROR_FG;
+
+const TREESITTER_CONTEXT_BG: &str = "NvimDarkGrey3";
+
 const DIAGNOSTICS_FG: [(&str, &str); 5] = [
-    ("Error", ERROR_FG),
-    ("Warn", WARN_FG),
-    ("Ok", OK_FG),
-    ("Hint", HINT_FG),
-    ("Info", INFO_FG),
+    ("Error", DIAG_ERROR_FG),
+    ("Warn", DIAG_WARN_FG),
+    ("Ok", DIAG_OK_FG),
+    ("Hint", DIAG_HINT_FG),
+    ("Info", DIAG_INFO_FG),
 ];
-const GITSIGNS_FG: [(&str, &str); 3] = [("Added", OK_FG), ("Changed", HINT_FG), ("Removed", ERROR_FG)];
+
+const GITSIGNS_FG: [(&str, &str); 3] = [
+    ("Added", GITSIGNS_ADDED),
+    ("Changed", GITSIGNS_CHANGED),
+    ("Removed", GITSIGNS_REMOVED),
+];
 
 /// [`Dictionary`] with colorscheme and highlight helpers.
 pub fn dict() -> Dictionary {
@@ -66,7 +77,7 @@ pub fn set(colorscheme: Option<String>) {
                 .build(),
         ),
         ("CursorLine", get_default_hl_opts().foreground(NONE).build()),
-        ("ErrorMsg", get_default_hl_opts().foreground(ERROR_FG).build()),
+        ("ErrorMsg", get_default_hl_opts().foreground(DIAG_ERROR_FG).build()),
         (
             "MsgArea",
             get_default_hl_opts().foreground(COMMENTS_FG).background(NONE).build(),
