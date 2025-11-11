@@ -18,6 +18,10 @@ use ytil_nvim_oxi::buffer::BufferExt;
 
 use crate::diagnostics::DiagnosticSeverity;
 
+/// Markup for a visible space in the Neovim statuscolumn.
+/// Plain spaces (" ") are not rendered; they must be wrapped in highlight markup like `%#Normal# %*`.
+const EMPTY_SPACE: &str = "%#Normal# %*";
+
 /// [`Dictionary`] exposing statuscolumn draw helpers.
 pub fn dict() -> Dictionary {
     dict! {
@@ -127,17 +131,18 @@ fn draw_statuscolumn(
 
     // Capacity heuristic: each sign ~ 32 chars + lnum + static separators.
     let mut out = String::with_capacity(cur_lnum.len().saturating_add(64));
-    if let Some(highest_severity_diag) = highest_severity_diag {
-        highest_severity_diag.meta.write(&mut out);
-    } else {
-        out.push(' ');
-    }
     if let Some(git_extmark) = git_extmark {
         git_extmark.write(&mut out);
     } else {
-        out.push(' ');
+        out.push_str(EMPTY_SPACE);
+    }
+    if let Some(highest_severity_diag) = highest_severity_diag {
+        highest_severity_diag.meta.write(&mut out);
+    } else {
+        out.push_str(EMPTY_SPACE);
     }
     if opts.is_some_and(|o| o.show_line_numbers) {
+        out.push(' ');
         out.push_str("%=% ");
         out.push_str(cur_lnum);
         out.push(' ');
@@ -361,7 +366,7 @@ mod tests {
                 show_line_numbers: true,
             }),
         );
-        pretty_assertions::assert_eq!(out, "  %=% 42 ");
+        pretty_assertions::assert_eq!(out, format!("{EMPTY_SPACE}{EMPTY_SPACE} %=% 42 "));
     }
 
     #[test]
@@ -379,7 +384,7 @@ mod tests {
             }),
         );
         // Canonical normalized error sign text is 'x'.
-        pretty_assertions::assert_eq!(out, "%#DiagnosticSignError#x%* %=% 42 ");
+        pretty_assertions::assert_eq!(out, format!("{EMPTY_SPACE}%#DiagnosticSignError#x%* %=% 42 "));
     }
 
     #[test]
@@ -393,7 +398,7 @@ mod tests {
                 show_line_numbers: true,
             }),
         );
-        pretty_assertions::assert_eq!(out, " %#GitSignsFoo#|%*%=% 42 ");
+        pretty_assertions::assert_eq!(out, format!("%#GitSignsFoo#|%*{EMPTY_SPACE} %=% 42 "));
     }
 
     #[test]
@@ -411,7 +416,7 @@ mod tests {
                 show_line_numbers: true,
             }),
         );
-        pretty_assertions::assert_eq!(out, "%#DiagnosticSignError#x%*%#GitSignsFoo#|%*%=% 42 ");
+        pretty_assertions::assert_eq!(out, "%#GitSignsFoo#|%*%#DiagnosticSignError#x%* %=% 42 ");
     }
 
     #[test]
@@ -432,7 +437,7 @@ mod tests {
     #[case(Some(Opts { show_line_numbers: false }))]
     fn draw_statuscolumn_when_line_numbers_disabled_returns_no_line_numbers(#[case] opts: Option<Opts>) {
         let out = draw_statuscolumn("foo", "42", std::iter::empty(), opts);
-        pretty_assertions::assert_eq!(out, "  ");
+        pretty_assertions::assert_eq!(out, format!("{EMPTY_SPACE}{EMPTY_SPACE}"));
     }
 
     #[rstest]
@@ -444,7 +449,7 @@ mod tests {
             mk_extmark_meta(SignHlGroup::Git("GitSignsFoo".into()), "|"),
         ];
         let out = draw_statuscolumn("foo", "42", metas.into_iter(), opts);
-        pretty_assertions::assert_eq!(out, "%#DiagnosticSignError#x%*%#GitSignsFoo#|%*");
+        pretty_assertions::assert_eq!(out, "%#GitSignsFoo#|%*%#DiagnosticSignError#x%*");
     }
 
     fn mk_extmark_meta(group: SignHlGroup, text: &str) -> ExtmarkMeta {
