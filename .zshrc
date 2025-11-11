@@ -7,7 +7,7 @@ export ZSH="$HOME/.oh-my-zsh"
 setopt PROMPT_SUBST
 
 # Simple with named colors
-PROMPT='$(prmt --code $? "{ok:green}{fail:red} {time:bold:24hs} {path:cyan.bold} {git:purple}\n ")'
+PROMPT='$(prmt --code $? "{time:bold:24hs} {path:cyan.bold} {git:purple}\n{ok:green}{fail:red} ")'
 
 # Set list of themes to pick from when loading at random
 # Setting this variable when ZSH_THEME=random will cause zsh to load
