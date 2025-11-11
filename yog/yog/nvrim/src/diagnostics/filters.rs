@@ -99,10 +99,10 @@ impl TryFrom<&Dictionary> for DiagnosticLocation {
             .and_then(|n| usize::try_from(n).map_err(From::from))?;
 
         if lnum > end_lnum {
-            bail!("inconsistent boundaries lnum {lnum} > {end_lnum}");
+            bail!("inconsistent line boundaries lnum {lnum} > end_lnum {end_lnum}");
         }
         if col > end_col {
-            bail!("inconsistent boundaries col {col} > {end_col}");
+            bail!("inconsistent col boundaries col {col} > end_col {end_col}");
         }
 
         Ok(Self {
@@ -202,16 +202,16 @@ mod tests {
     fn try_from_lnum_greater_than_end_lnum_fails() {
         let dict = create_diag(2, 1, 0, 3);
         assert2::let_assert!(Err(err) = DiagnosticLocation::try_from(&dict));
-        assert!(err.to_string().contains("inconsistent boundaries"));
-        assert!(err.to_string().contains("lnum 2 > 0"));
+        assert!(err.to_string().contains("inconsistent line boundaries"));
+        assert!(err.to_string().contains("lnum 2 > end_lnum 0"));
     }
 
     #[test]
     fn try_from_col_greater_than_end_col_fails() {
         let dict = create_diag(0, 3, 2, 1);
         assert2::let_assert!(Err(err) = DiagnosticLocation::try_from(&dict));
-        assert!(err.to_string().contains("inconsistent boundaries"));
-        assert!(err.to_string().contains("col 3 > 1"));
+        assert!(err.to_string().contains("inconsistent col boundaries"));
+        assert!(err.to_string().contains("col 3 > end_col 1"));
     }
 
     #[test]

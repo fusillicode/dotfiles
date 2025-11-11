@@ -237,8 +237,8 @@ mod tests {
             end_col: 5,
         };
         assert2::let_assert!(Err(error) = filter.skip_diagnostic(&buf, &diag));
-        assert!(error.to_string().contains("inconsistent boundaries"));
-        assert!(error.to_string().contains("lnum 1 > 0"));
+        assert!(error.to_string().contains("inconsistent line boundaries"));
+        assert!(error.to_string().contains("lnum 1 > end_lnum 0"));
     }
 
     #[test]
@@ -258,8 +258,8 @@ mod tests {
             end_col: 0,
         };
         assert2::let_assert!(Err(error) = filter.skip_diagnostic(&buf, &diag));
-        assert!(error.to_string().contains("inconsistent boundaries"));
-        assert!(error.to_string().contains("col 5 > 0"));
+        assert!(error.to_string().contains("inconsistent col boundaries"));
+        assert!(error.to_string().contains("col 5 > end_col 0"));
     }
 
     #[test]
