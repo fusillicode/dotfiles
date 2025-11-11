@@ -280,7 +280,7 @@ fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
     ytil_github::log_into_github()?;
 
-    let repo = ytil_github::get_current_repo()?;
+    let repo = ytil_github::get_current_repo_name_with_owner()?;
 
     let mut pargs = pico_args::Arguments::from_env();
 

@@ -48,7 +48,7 @@ const GITHUB_PR_ID_QUERY_KEY: &str = "pr";
 /// - Spawning or executing the `gh repo view` command fails.
 /// - Command exits with non‑zero status.
 /// - Output is not valid UTF‑8.
-pub fn get_current_repo() -> color_eyre::Result<String> {
+pub fn get_current_repo_name_with_owner() -> color_eyre::Result<String> {
     let output = Command::new("gh")
         .args(["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"])
         .output()?;
