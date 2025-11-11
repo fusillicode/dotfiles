@@ -4,11 +4,6 @@
 # Path to your oh-my-zsh installation.
 export ZSH="$HOME/.oh-my-zsh"
 
-setopt PROMPT_SUBST
-
-# Simple with named colors
-PROMPT='$(prmt --code $? "{time:bold:24hs} {path:cyan.bold} {git:purple}\n{ok:green}{fail:red} ")'
-
 # Set list of themes to pick from when loading at random
 # Setting this variable when ZSH_THEME=random will cause zsh to load
 # a theme from this variable instead of looking in ~/.oh-my-zsh/themes/
@@ -153,3 +148,5 @@ export PATH="/opt/homebrew/opt/m4/bin:$PATH"
 
 # FFS...k8s
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
+
+eval "$(starship init zsh)"
