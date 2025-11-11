@@ -2,7 +2,7 @@
 
 add_newline = true
 
-format = "$time$directory$git_branch$git_status$git_metrics$git_state$git_commit$line_break$status$character"
+format = "$time$directory$git_branch$git_status$git_state$git_commit$git_metrics$line_break$status$character"
 
 [time]
 disabled = false
@@ -11,6 +11,7 @@ style = "white bold"
 
 [directory]
 style = "bold cyan"
+read_only = " #"
 truncation_length = 0
 truncate_to_repo = false
 
@@ -39,7 +40,7 @@ up_to_date = "✓"
 disabled = false
 
 [git_commit]
-format = "[$hash ($tag)]($style) "
+format = "[($hash )($tag )]($style)"
 style = "white"
 only_detached = false
 tag_disabled = false
