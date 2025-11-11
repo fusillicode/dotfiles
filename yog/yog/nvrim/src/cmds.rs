@@ -8,6 +8,8 @@ use nvim_oxi::Dictionary;
 mod auto_cmds;
 mod user_cmds;
 
+pub use auto_cmds::create_autocmd;
+
 /// [`Dictionary`] of user command helpers.
 pub fn dict() -> Dictionary {
     dict! {
