@@ -61,6 +61,7 @@ arg
 args
 asdf
 augroups
+autocmd
 autocmds
 autocommand
 autocommands
@@ -155,6 +156,7 @@ reselects
 resolvers
 riesgo
 rs
+scrolloff
 selectable
 shellcheck
 spendability
