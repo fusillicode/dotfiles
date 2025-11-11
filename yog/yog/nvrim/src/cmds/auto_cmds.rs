@@ -43,7 +43,7 @@ pub fn create() {
         }),
     );
 
-    crate::scrolloff::create_autocmd()
+    crate::scrolloff::create_autocmd();
 }
 
 /// Creates an autocommand group and associated autocommands for `events`.
