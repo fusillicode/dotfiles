@@ -7,7 +7,7 @@ format = "$time$directory$git_branch$git_status$git_metrics$git_state$git_commit
 [time]
 disabled = false
 format = "[$time ]($style)"
-style = "blue bold"
+style = "white bold"
 
 [directory]
 style = "bold cyan"
@@ -16,7 +16,7 @@ truncate_to_repo = false
 
 [git_branch]
 format = "[$branch ]($style)"
-style = "purple"
+style = "white"
 
 [git_state]
 
@@ -40,7 +40,7 @@ disabled = false
 
 [git_commit]
 format = "[$hash ($tag)]($style) "
-style = "yellow"
+style = "white"
 only_detached = false
 tag_disabled = false
 tag_symbol = ""
