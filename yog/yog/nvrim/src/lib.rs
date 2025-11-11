@@ -30,6 +30,7 @@ mod diagnostics;
 mod fkr;
 /// Generic text conversions.
 mod genconv;
+mod gitlinker;
 /// Core (non‑plugin) keymaps.
 pub mod keymaps;
 /// Utilities to handle linters output
