@@ -34,6 +34,7 @@ mod genconv;
 pub mod keymaps;
 /// Utilities to handle linters output
 mod linters;
+/// Port of scrollofffraction.nvim plugin.
 mod scrolloff;
 /// Status column (diagnostics + git signs).
 mod statuscolumn;
