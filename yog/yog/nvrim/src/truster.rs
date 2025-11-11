@@ -13,10 +13,10 @@ use color_eyre::eyre::Context;
 use color_eyre::eyre::eyre;
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
-use nvim_oxi::api::Window;
 use tree_sitter::Node;
 use tree_sitter::Parser;
 use tree_sitter::Point;
+use ytil_nvim_oxi::buffer::CursorPosition;
 
 /// [`Dictionary`] of Rust tests utilities.
 pub fn dict() -> Dictionary {
@@ -27,16 +27,10 @@ pub fn dict() -> Dictionary {
 
 /// Runs the test function at the current cursor position in a `WezTerm` pane.
 fn run_test(_: ()) {
-    let cur_buf = Buffer::current();
-    let cur_win = Window::current();
-
-    let Ok(position) = cur_win.get_cursor().map(PointWrap::from).inspect_err(|error| {
-        ytil_nvim_oxi::api::notify_error(format!(
-            "cannot get cursor from current window | window={cur_win:#?} error={error:#?}"
-        ));
-    }) else {
+    let Some(position) = CursorPosition::get_current().map(PointWrap::from) else {
         return;
     };
+    let cur_buf = Buffer::current();
 
     let Ok(file_path) = cur_buf
         .get_name()
@@ -132,7 +126,7 @@ impl Deref for PointWrap {
     }
 }
 
-impl From<(usize, usize)> for PointWrap {
+impl From<CursorPosition> for PointWrap {
     /// Converts a Neovim cursor position (1-based row, 0-based column) to a [`PointWrap`].
     ///
     /// # Arguments
@@ -140,11 +134,11 @@ impl From<(usize, usize)> for PointWrap {
     /// - `column` 0-based column index from Neovim.
     ///
     /// # Returns
-    /// A [`PointWrap`] with 0-based row and column suitable for tree-sitter.
-    fn from((row, column): (usize, usize)) -> Self {
+    /// A [`PointWrap`] with 0-based row and column suitable for Tree-sitter.
+    fn from(cursor_position: CursorPosition) -> Self {
         Self(Point {
-            row: row.saturating_sub(1),
-            column,
+            row: cursor_position.row.saturating_sub(1),
+            column: cursor_position.col,
         })
     }
 }
@@ -236,11 +230,11 @@ mod tests {
     use super::*;
 
     #[rstest]
-    #[case((1, 5), (0, 5))]
-    #[case((10, 20), (9, 20))]
-    #[case((0, 0), (0, 0))]
+    #[case(CursorPosition { row:1, col: 5}, (0, 5))]
+    #[case(CursorPosition { row:10, col: 20}, (9, 20))]
+    #[case(CursorPosition { row:0, col: 0}, (0, 0))]
     fn point_wrap_from_converts_neovim_cursor_to_tree_sitter_point(
-        #[case] input: (usize, usize),
+        #[case] input: CursorPosition,
         #[case] expected: (usize, usize),
     ) {
         pretty_assertions::assert_eq!(
@@ -254,7 +248,10 @@ mod tests {
 
     #[test]
     fn point_wrap_deref_allows_direct_access_to_point() {
-        pretty_assertions::assert_eq!(*PointWrap::from((5, 10)), Point { row: 4, column: 10 });
+        pretty_assertions::assert_eq!(
+            *PointWrap::from(CursorPosition { row: 5, col: 10 }),
+            Point { row: 4, column: 10 }
+        );
     }
 
     #[test]

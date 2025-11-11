@@ -262,7 +262,9 @@ impl CursorPosition {
             .get_cursor()
             .map(|(row, col)| Self { row, col })
             .inspect_err(|error| {
-                crate::api::notify_error(format!("cannot get cursor | window={cur_win:?} error={error:?}"));
+                crate::api::notify_error(format!(
+                    "cannot get cursor from current window | window={cur_win:?} error={error:?}"
+                ));
             })
             .ok()
     }
