@@ -33,7 +33,7 @@ fn get_link(link_type: String) {
         return;
     };
 
-    build_github_file_link(
+    build_github_file_url(
         &mut repo_url,
         &link_type,
         &current_commit_hash,
@@ -47,7 +47,7 @@ fn get_link(link_type: String) {
 /// `repo_url` is [`String`] instead of an [`Url`] because working with [`Url`] is a PITA.
 /// `link_type` is [`&str`] instead of an enum because the [`&str`] is what will be used to
 /// build different links.
-fn build_github_file_link(
+fn build_github_file_url(
     repo_url: &mut String,
     link_type: &str,
     commit_hash: &str,
@@ -137,7 +137,7 @@ mod tests {
             Selection::new(bounds, std::iter::empty::<nvim_oxi::String>())
         };
 
-        build_github_file_link(&mut repo_url, url_kind, commit_hash, cur_buf_path, selection);
+        build_github_file_url(&mut repo_url, url_kind, commit_hash, cur_buf_path, selection);
 
         pretty_assertions::assert_eq!(repo_url, expected);
     }
