@@ -68,6 +68,17 @@ pub fn get(_: ()) -> Option<Selection> {
 
     // Handle linewise mode: grab full lines
     if nvim_oxi::api::get_mode().mode == "V" {
+        let end_lnum = bounds.end().lnum;
+        let Ok(last_line) = cur_buf.get_line(end_lnum).inspect_err(|error| {
+            crate::api::notify_error(format!(
+                "cannot get selection last line | end_lnum={end_lnum} buffer={cur_buf:#?} error={error:#?}",
+            ));
+        }) else {
+            return None;
+        };
+        // Adjust bounds to start at column 0 and end at the last line's length
+        bounds.start.col = 0;
+        bounds.end.col = last_line.len();
         // end.lnum inclusive for lines range
         let Ok(lines) = cur_buf
             .get_lines(bounds.start().lnum..=bounds.end().lnum, false)
@@ -126,7 +137,7 @@ impl Selection {
 }
 
 /// Start / end bounds plus owning buffer id for a Visual selection.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct SelectionBounds {
     #[cfg(feature = "testing")]
     pub buf_id: i32,
