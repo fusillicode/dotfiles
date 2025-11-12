@@ -1,4 +1,4 @@
-//! Primitive extraction trait implementations for Neovim `Object` kinds.
+//! Primitive extraction trait implementations for Nvim `Object` kinds.
 //!
 //! Provides [`OxiExtract`] for converting raw `Object` values into concrete Rust types with
 //! contextual kind mismatch errors.

@@ -87,20 +87,20 @@ impl DiagnosticSeverity {
         }
     }
 
-    /// Returns the canonical single-character glyph for this severity.
+    /// Returns the canonical single-character symbol for this severity.
     ///
     /// # Returns
-    /// - One of: "x" (Error), "*" (Warn), "i" (Info), "?" (Hint), "?" (Other / unknown).
+    /// - One of: "x" (Error), "⏶" (Warn), "•" (Info), "⏷" (Hint), "⏷" (Other / unknown).
     ///
     /// # Rationale
     /// Used by status UI components (statuscolumn) to render severity without allocating via [`core::fmt::Display`]
     /// or `to_string()`. A `const fn` mapping gives zero runtime branching cost when inlined.
-    pub const fn glyph(self) -> &'static str {
+    pub const fn symbol(self) -> &'static str {
         match self {
             Self::Error => "x",
-            Self::Warn => "*",
-            Self::Info => "i",
-            Self::Hint | Self::Other => "?",
+            Self::Warn => "⏶",
+            Self::Info => "◆",
+            Self::Hint | Self::Other => "•",
         }
     }
 }

@@ -30,6 +30,8 @@ mod diagnostics;
 mod fkr;
 /// Generic text conversions.
 mod genconv;
+/// GitHub permalink generation for selected code.
+mod github_linker;
 /// Core (non‑plugin) keymaps.
 pub mod keymaps;
 /// Utilities to handle linters output
@@ -72,5 +74,6 @@ fn nvrim() -> Dictionary {
         "linters": linters::dict(),
         "attempt": attempt::dict(),
         "genconv": genconv::dict(),
+        "gitlinker": github_linker::dict(),
     }
 }

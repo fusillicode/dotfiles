@@ -1,4 +1,4 @@
-//! Open files (optionally at line:col) in existing Neovim / Helix pane.
+//! Open files (optionally at line:col) in existing Nvim / Helix pane.
 //!
 //! # Arguments
 //! - `editor` Target editor (`nvim` | `hx`).
@@ -67,7 +67,7 @@ fn get_enriched_path_env() -> color_eyre::Result<Env> {
     })
 }
 
-/// Open files (optionally at line:col) in existing Neovim / Helix pane.
+/// Open files (optionally at line:col) in existing Nvim / Helix pane.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

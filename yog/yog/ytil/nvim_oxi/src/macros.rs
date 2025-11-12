@@ -1,7 +1,7 @@
-//! Extension macros and helpers for bridging Rust and Neovim (`nvim_oxi`).
+//! Extension macros and helpers for bridging Rust and Nvim (`nvim_oxi`).
 //!
 //! Defines `dict!` for ergonomic [`nvim_oxi::Dictionary`] construction plus `fn_from!` to wrap Rust
-//! functions into Neovim callable `Function` objects.
+//! functions into Nvim callable `Function` objects.
 
 /// Construct a [`nvim_oxi::Dictionary`] from key-value pairs, supporting nested `dict!` usage.
 ///

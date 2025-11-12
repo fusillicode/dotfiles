@@ -115,6 +115,7 @@ impl
 infos
 intra
 invariance
+jq
 junit
 k8s
 ko
@@ -141,6 +142,8 @@ oks
 pathspec
 pathspecs
 pcw
+permalink
+permalinks
 pgcli
 pgpass
 pr

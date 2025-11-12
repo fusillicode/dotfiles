@@ -19,10 +19,8 @@ truncate_to_repo = false
 format = "[$branch ]($style)"
 style = "white"
 
-[git_state]
-
 [git_status]
-# No stashed symbol
+# Don't want the stashed symbol
 format = "[($conflicted$deleted$renamed$modified$typechanged$staged$untracked$ahead_behind )]($style)"
 style = "white"
 ahead = '>${count}'
@@ -36,8 +34,7 @@ stashed = "\\$"
 untracked = "?"
 up_to_date = "✓"
 
-[git_metrics]
-disabled = false
+[git_state]
 
 [git_commit]
 format = "[($hash )($tag )]($style)"
@@ -45,5 +42,8 @@ style = "white"
 only_detached = false
 tag_disabled = false
 tag_symbol = ""
+
+[git_metrics]
+disabled = false
 
 [status]

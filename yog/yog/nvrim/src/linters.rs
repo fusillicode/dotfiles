@@ -2,11 +2,11 @@
 //!
 //! - Provides an extensible registry of linter parser functions (see [`dict`]).
 //! - Currently ships a hardened `sqruff` parser exposed under the `sqruff` table.
-//! - Parses tool JSON output into Neovim diagnostic dictionaries.
+//! - Parses tool JSON output into Nvim diagnostic dictionaries.
 //! - Designed so additional linters can be added with minimal boilerplate.
 //!
 //! # Rationale
-//! - Introduced after the upstream `nvim-lint` default `sqruff` parser failed to handle `vim.NIL`, crashing the Neovim
+//! - Introduced after the upstream `nvim-lint` default `sqruff` parser failed to handle `vim.NIL`, crashing the Nvim
 //!   instance. This implementation treats absence / `nil` values defensively and never propagates a panic.
 //! - Centralizing parsers allows consistent error reporting & future sharing of common normalization logic (e.g.
 //!   severity mapping, range sanitation).
@@ -27,7 +27,7 @@ pub fn dict() -> Dictionary {
     }
 }
 
-/// Parse raw `sqruff` JSON output into Neovim diagnostic [`Dictionary`].
+/// Parse raw `sqruff` JSON output into Nvim diagnostic [`Dictionary`].
 ///
 /// # Behavior
 /// - Empty / missing input: returns an empty vector and emits a warning.
@@ -35,10 +35,10 @@ pub fn dict() -> Dictionary {
 /// - Successful parse: converts each message into a diagnostic `Dictionary`.
 ///
 /// # Arguments
-/// - `maybe_output` Optional Neovim string containing the `sqruff` JSON payload.
+/// - `maybe_output` Optional Nvim string containing the `sqruff` JSON payload.
 ///
 /// # Returns
-/// Vector of diagnostic [`Dictionary`]'s consumable by Neovim.
+/// Vector of diagnostic [`Dictionary`]'s consumable by Nvim.
 #[allow(clippy::needless_pass_by_value)]
 fn parser(maybe_output: Option<nvim_oxi::String>) -> Vec<Dictionary> {
     let Some(output) = &maybe_output else {
@@ -102,14 +102,14 @@ struct SqruffMessage {
 /// # Rationale
 /// Explicit start/end structs keep deserialization unambiguous and allow
 /// saturation adjustments when converting to line/column indices expected by
-/// Neovim (0-based internally after adjustment).
+/// Nvim (0-based internally after adjustment).
 #[derive(Debug, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 struct Range {
     /// Start position (1-based line / column as emitted by `sqruff`).
     start: Position,
     /// End position (1-based line / column, exclusive column semantics when
-    /// converted to Neovim diagnostics after 0-based adjustment).
+    /// converted to Nvim diagnostics after 0-based adjustment).
     end: Position,
 }
 
@@ -117,7 +117,7 @@ struct Range {
 ///
 /// # Rationale
 /// Maintains external numbering; translation to 0-based indices occurs when
-/// building Neovim dictionaries.
+/// building Nvim dictionaries.
 #[derive(Debug, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 struct Position {
@@ -127,7 +127,7 @@ struct Position {
     line: u32,
 }
 
-/// Convert a single [`SqruffMessage`] into a Neovim [`Dictionary`].
+/// Convert a single [`SqruffMessage`] into a Nvim [`Dictionary`].
 ///
 /// # Arguments
 /// - `msg` The parsed `sqruff` message.

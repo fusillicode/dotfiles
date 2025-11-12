@@ -1,11 +1,13 @@
 //! Buffer extension utilities (line access, cursor‑based insertion, cursor position model).
 //!
-//! Supplies [`BufferExt`] trait plus [`CursorPosition`] struct preserving raw Neovim coordinates for
+//! Supplies [`BufferExt`] trait plus [`CursorPosition`] struct preserving raw Nvim coordinates for
 //! consistent conversions at call sites.
 
 use std::ops::RangeInclusive;
+use std::path::PathBuf;
 
 use color_eyre::eyre::eyre;
+use nvim_oxi::Array;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::SuperIterator;
 use nvim_oxi::api::Window;
@@ -16,7 +18,7 @@ use crate::visual_selection::Selection;
 /// Extension trait for [`Buffer`] to provide extra functionalities.
 ///
 /// Provides focused helpers for line fetching and text insertion at the current
-/// cursor position while surfacing Neovim errors via `notify_error`.
+/// cursor position while surfacing Nvim errors via `notify_error`.
 #[cfg_attr(any(test, feature = "mockall"), mockall::automock)]
 pub trait BufferExt {
     /// Fetch a single line from a [`Buffer`] by 0-based index.
@@ -44,7 +46,7 @@ pub trait BufferExt {
     ///
     /// # Errors
     /// - If `strict_indexing` is true and the range is out of bounds.
-    /// - If the Neovim API call to fetch lines fails.
+    /// - If the Nvim API call to fetch lines fails.
     ///
     /// # Rationale
     /// This is a thin wrapper around [`nvim_oxi::api::Buffer::get_lines`] to enable unit testing of the default trait
@@ -112,7 +114,7 @@ pub trait BufferExt {
     /// Inserts `text` at the current cursor position in the active buffer.
     ///
     /// Obtains the current [`CursorPosition`], converts the 1-based row to 0-based
-    /// for Neovim's `set_text` call, and inserts `text` without replacing existing
+    /// for Nvim's `set_text` call, and inserts `text` without replacing existing
     /// content (`start_col` == `end_col`). Errors are reported via `notify_error`.
     /// Silently returns if cursor position cannot be fetched.
     ///
@@ -221,15 +223,15 @@ impl BufferExt for Buffer {
 
 /// Represents the current cursor coordinates in the active [`Window`].
 ///
-/// Row is 1-based (Neovim convention) and column is 0-based (byte index inside
-/// the line per Neovim API). These are kept verbatim to avoid off-by-one bugs.
+/// Row is 1-based (Nvim convention) and column is 0-based (byte index inside
+/// the line per Nvim API). These are kept verbatim to avoid off-by-one bugs.
 /// Call sites converting to Rust slice indices subtract 1 from `row` as needed.
 ///
 /// # Assumptions
 /// - Constructed through [`CursorPosition::get_current`]; manual construction should respect coordinate conventions.
 ///
 /// # Rationale
-/// Preserving raw Neovim values centralizes conversion logic at usage points
+/// Preserving raw Nvim values centralizes conversion logic at usage points
 /// (e.g. buffer line indexing) instead of embedding heuristics here.
 #[derive(Debug)]
 pub struct CursorPosition {
@@ -240,15 +242,15 @@ pub struct CursorPosition {
 impl CursorPosition {
     /// Obtains the current cursor position from the active [`Window`].
     ///
-    /// Queries Neovim for the (row, col) of the active window cursor and returns a
+    /// Queries Nvim for the (row, col) of the active window cursor and returns a
     /// [`CursorPosition`] reflecting those raw coordinates.
     ///
     /// # Returns
     /// - `Some(CursorPosition)` when the cursor location is successfully fetched.
-    /// - `None` if Neovim fails to provide the cursor position (an error is already reported via `notify_error`).
+    /// - `None` if Nvim fails to provide the cursor position (an error is already reported via `notify_error`).
     ///
     /// # Assumptions
-    /// - Row is 1-based (Neovim convention); column is 0-based. Callers needing 0-based row for Rust indexing must
+    /// - Row is 1-based (Nvim convention); column is 0-based. Callers needing 0-based row for Rust indexing must
     ///   subtract 1 explicitly.
     /// - The active window is the intended source of truth for cursor location.
     ///
@@ -262,24 +264,26 @@ impl CursorPosition {
             .get_cursor()
             .map(|(row, col)| Self { row, col })
             .inspect_err(|error| {
-                crate::api::notify_error(format!("cannot get cursor | window={cur_win:?} error={error:?}"));
+                crate::api::notify_error(format!(
+                    "cannot get cursor from current window | window={cur_win:?} error={error:?}"
+                ));
             })
             .ok()
     }
 
     /// Returns 1-based column index for rendering purposes.
     ///
-    /// Converts the raw 0-based Neovim column stored in [`CursorPosition::col`] into a
+    /// Converts the raw 0-based Nvim column stored in [`CursorPosition::col`] into a
     /// human-friendly 1-based column suitable for statusline / UI output.
     ///
     /// # Returns
     /// - The 1-based column index (`self.col + 1`).
     ///
     /// # Assumptions
-    /// - [`CursorPosition::col`] is the unmodified 0-based byte offset provided by Neovim.
+    /// - [`CursorPosition::col`] is the unmodified 0-based byte offset provided by Nvim.
     ///
     /// # Rationale
-    /// Neovim exposes a 0-based column while rows are 1-based. Normalizing to 1-based for
+    /// Nvim exposes a 0-based column while rows are 1-based. Normalizing to 1-based for
     /// display avoids mixed-base confusion in user-facing components (e.g. status line) and
     /// clarifies intent at call sites.
     ///
@@ -292,7 +296,7 @@ impl CursorPosition {
 
 /// Replaces the text in the specified `selection` with the `replacement` lines.
 ///
-/// Calls Neovim's `set_text` with the selection's line range and column positions,
+/// Calls Nvim's `set_text` with the selection's line range and column positions,
 /// replacing the selected content with the provided lines.
 /// Errors are reported via [`crate::api::notify_error`] with details about the selection
 /// boundaries and error.
@@ -317,6 +321,39 @@ where
             selection.end()
         ));
     }
+}
+
+/// Retrieves the relative path of the given buffer from the current working directory.
+///
+/// Attempts to strip the current working directory prefix from the buffer's absolute path.
+/// If the buffer path does not start with the cwd, returns the absolute path as-is.
+///
+/// # Arguments
+/// - `cur_buf` The buffer whose path to retrieve.
+///
+/// # Returns
+/// The relative path as a [`PathBuf`] if successful, [`None`] on error.
+///
+/// # Errors
+/// Errors (e.g., cannot get cwd or buffer name) are notified to Nvim but not propagated.
+pub fn get_relative_buffer_path(cur_buf: &Buffer) -> Option<PathBuf> {
+    let cwd = nvim_oxi::api::call_function::<_, String>("getcwd", Array::new())
+        .inspect_err(|error| {
+            crate::api::notify_error(format!("cannot get cwd | error={error:#?}"));
+        })
+        .ok()?;
+    let cur_buf_path = {
+        let tmp = cur_buf
+            .get_name()
+            .inspect_err(|error| {
+                crate::api::notify_error(format!(
+                    "cannot get path of current buffer | buffer={cur_buf:#?} error={error:#?}"
+                ));
+            })
+            .ok()?;
+        tmp.to_string()
+    };
+    Some(PathBuf::from(cur_buf_path.strip_prefix(&cwd).unwrap_or(&cur_buf_path)))
 }
 
 #[cfg(test)]

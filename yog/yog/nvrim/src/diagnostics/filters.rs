@@ -72,7 +72,7 @@ impl DiagnosticLocation {
 impl TryFrom<&Dictionary> for DiagnosticLocation {
     type Error = color_eyre::eyre::Error;
 
-    /// Attempts to convert a Neovim dictionary into a `DiagnosticLocation`.
+    /// Attempts to convert a Nvim dictionary into a `DiagnosticLocation`.
     ///
     /// # Arguments
     /// - `value` A reference to a [`Dictionary`] containing diagnostic location fields.

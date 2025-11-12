@@ -24,7 +24,7 @@ const NONE: &str = "none";
 
 const DIAG_ERROR_FG: &str = "#ec635c";
 const DIAG_OK_FG: &str = "#8ce479";
-const DIAG_WARN_FG: &str = "#e7e77c";
+const DIAG_WARN_FG: &str = "#ffaa33";
 const DIAG_HINT_FG: &str = "NvimLightGrey3";
 const DIAG_INFO_FG: &str = "white";
 
@@ -55,7 +55,7 @@ pub fn dict() -> Dictionary {
     }
 }
 
-/// Sets the desired Neovim colorscheme and custom highlight groups.
+/// Sets the desired Nvim colorscheme and custom highlight groups.
 #[allow(clippy::needless_pass_by_value)]
 pub fn set(colorscheme: Option<String>) {
     if let Some(cs) = colorscheme {
@@ -111,7 +111,7 @@ pub fn set(colorscheme: Option<String>) {
         // Errors are already notified by [`get_overridden_set_hl_opts`]
         let _ = get_overridden_set_hl_opts(
             &format!("Diagnostic{lvl}"),
-            |mut hl_opts| hl_opts.foreground(fg).background(NONE).build(),
+            |mut hl_opts| hl_opts.foreground(fg).background(NONE).bold(true).build(),
             None,
         )
         .map(|set_hl_opts| {
@@ -169,10 +169,10 @@ fn get_default_hl_opts() -> SetHighlightOptsBuilder {
     SetHighlightOptsBuilder::default()
 }
 
-/// Sets a highlight group in the specified namespace, with error handling via Neovim notifications.
+/// Sets a highlight group in the specified namespace, with error handling via Nvim notifications.
 ///
 /// This function wraps [`nvim_oxi::api::set_hl`] to apply highlight options to a group.
-/// On failure, it notifies the error to Neovim instead of propagating it, ensuring
+/// On failure, it notifies the error to Nvim instead of propagating it, ensuring
 /// the colorscheme setup continues gracefully.
 ///
 /// # Arguments
@@ -181,7 +181,7 @@ fn get_default_hl_opts() -> SetHighlightOptsBuilder {
 /// - `hl_opts`: The highlight options to apply.
 ///
 /// # Errors
-/// Errors are notified to Neovim but not returned; the function always succeeds externally.
+/// Errors are notified to Nvim but not returned; the function always succeeds externally.
 fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &SetHighlightOpts) {
     if let Err(error) = nvim_oxi::api::set_hl(ns_id, hl_name, hl_opts) {
         ytil_nvim_oxi::api::notify_error(format!(
@@ -193,7 +193,7 @@ fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &SetHighlightOpts) {
 /// Retrieves [`HighlightInfos`] of a single group.
 ///
 /// # Errors
-/// - Propagates failures from [`nvim_oxi::api::get_hl`] while notifying them to Neovim.
+/// - Propagates failures from [`nvim_oxi::api::get_hl`] while notifying them to Nvim.
 /// - Returns an error in case of multiple infos ([`GetHlInfos::Map`]) for the given `hl_opts` .
 fn get_hl_single(ns_id: u32, hl_opts: &GetHighlightOpts) -> color_eyre::Result<HighlightInfos> {
     get_hl(ns_id, hl_opts).and_then(|hl| match hl {
@@ -208,7 +208,7 @@ fn get_hl_single(ns_id: u32, hl_opts: &GetHighlightOpts) -> color_eyre::Result<H
 /// Retrieves multiple [`HighlightInfos`] entries (map variant) for given highlight options.
 ///
 /// Errors:
-/// - Propagates failures from [`nvim_oxi::api::get_hl`] while notifying them to Neovim.
+/// - Propagates failures from [`nvim_oxi::api::get_hl`] while notifying them to Nvim.
 /// - Returns an error if only a single highlight group ([`GetHlInfos::Single`]) is returned.
 #[allow(dead_code)]
 fn get_hl_multiple(
@@ -226,7 +226,7 @@ fn get_hl_multiple(
 /// Retrieves [`GetHlInfos`] (single or map) for given highlight options.
 ///
 /// # Errors
-/// - Propagates failures from [`nvim_oxi::api::get_hl`] while notifying them to Neovim.
+/// - Propagates failures from [`nvim_oxi::api::get_hl`] while notifying them to Nvim.
 fn get_hl(
     ns_id: u32,
     hl_opts: &GetHighlightOpts,
@@ -242,7 +242,7 @@ fn get_hl(
 
 /// Builds a [`SetHighlightOptsBuilder`] from [`HighlightInfos`], applying only present fields via [`Option::map`].
 ///
-/// Returns a [`color_eyre::Result`]. Errors if `blend` (`u32`) cannot convert to `u8` and notifies it to Neovim.
+/// Returns a [`color_eyre::Result`]. Errors if `blend` (`u32`) cannot convert to `u8` and notifies it to Nvim.
 ///
 /// # Errors
 /// - The `blend` value cannot fit into a `u8`.

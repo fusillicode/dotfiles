@@ -37,28 +37,55 @@ const GITHUB_PR_ID_PREFIX: &str = "pull";
 /// The query parameter key used for pull request IDs in GitHub Actions URLs.
 const GITHUB_PR_ID_QUERY_KEY: &str = "pr";
 
-/// Return the current repository `nameWithOwner` string via `gh repo view`.
+/// Return the specified repository field via `gh repo view`.
 ///
-/// Invokes: `gh repo view --json nameWithOwner --jq .nameWithOwner`.
+/// Invokes: `gh repo view --json <field> --jq .<field>`.
+///
+/// # Arguments
+/// - `field` The repository field to retrieve.
 ///
 /// # Returns
-/// Repository identifier in the canonical `owner/name` form.
+/// The value of the requested field as a string.
 ///
 /// # Errors
 /// - Spawning or executing the `gh repo view` command fails.
 /// - Command exits with non‑zero status.
 /// - Output is not valid UTF‑8.
-pub fn get_current_repo() -> color_eyre::Result<String> {
+pub fn get_repo_view_field(field: &RepoViewField) -> color_eyre::Result<String> {
     let output = Command::new("gh")
-        .args(["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"])
+        .args(["repo", "view", "--json", field.as_ref(), "--jq", &field.jq_repr()])
         .output()?;
 
     extract_success_output(&output)
 }
 
+/// Repository fields available for querying via `gh repo view`.
+#[derive(strum::AsRefStr)]
+pub enum RepoViewField {
+    /// The repository name with owner in `owner/name` format.
+    #[strum(serialize = "nameWithOwner")]
+    NameWithOwner,
+    /// The repository URL.
+    #[strum(serialize = "url")]
+    Url,
+}
+
+impl RepoViewField {
+    /// Returns the jq representation of the field for GitHub CLI queries.
+    ///
+    /// # Returns
+    /// A string prefixed with `.` for use in jq expressions.
+    pub fn jq_repr(&self) -> String {
+        format!(".{}", self.as_ref())
+    }
+}
+
 /// Ensures the user is authenticated with the GitHub CLI.
 ///
 /// Runs `gh auth status`; if not authenticated it invokes an interactive `gh auth login`.
+///
+/// # Returns
+/// Nothing on success.
 ///
 /// # Errors
 /// - Checking auth status fails.

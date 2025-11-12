@@ -1,4 +1,4 @@
-//! Thin wrappers over common Neovim API functions with improved error reporting.
+//! Thin wrappers over common Nvim API functions with improved error reporting.
 //!
 //! Helpers include global var setting, notifications (`notify_error` / `notify_warn`), ex command
 //! execution, and interactive list selection (`inputlist`).
@@ -20,10 +20,10 @@ use nvim_oxi::mlua::ObjectLike;
 
 use crate::dict;
 
-/// Types that can be converted to a notification message for Neovim.
+/// Types that can be converted to a notification message for Nvim.
 ///
 /// Implementors provide a way to transform themselves into a string suitable for display
-/// in Neovim notifications.
+/// in Nvim notifications.
 ///
 /// # Returns
 /// A string representation of the notifiable item.
@@ -141,7 +141,7 @@ pub fn inputlist<'a, I: Display>(prompt: &'a str, items: &'a [I]) -> color_eyre:
         .and_then(|idx| items.get(idx)))
 }
 
-/// Prompts the user to select an item from a list using Neovim's `vim.ui.select`.
+/// Prompts the user to select an item from a list using Nvim's `vim.ui.select`.
 ///
 /// Wraps the Lua `vim.ui.select` function to provide an interactive selection prompt.
 /// The selected index (0-based) is passed to the provided callback.
