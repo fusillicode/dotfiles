@@ -67,7 +67,7 @@ fn build_github_file_link(
 
 fn add_github_line_col_to_url(repo_url: &mut String, bound: &Bound) {
     repo_url.push('L');
-    repo_url.push_str(&bound.lnum.to_string());
+    repo_url.push_str(&bound.lnum.saturating_add(1).to_string());
     repo_url.push('C');
     repo_url.push_str(&bound.col.to_string());
 }
@@ -99,7 +99,7 @@ mod tests {
         "/src/main.rs",
         Bound { lnum: 10, col: 5 },
         Bound { lnum: 10, col: 10 },
-        "https://github.com/user/repo/blob/abc123/src/main.rs?plain=1#L10C5-L10C10"
+        "https://github.com/user/repo/blob/abc123/src/main.rs?plain=1#L11C5-L11C10"
     )]
     #[case::multi_line_selection(
         "https://github.com/user/repo",
@@ -108,7 +108,7 @@ mod tests {
         "/lib/utils.rs",
         Bound { lnum: 1, col: 0 },
         Bound { lnum: 3, col: 20 },
-        "https://github.com/user/repo/blob/def456/lib/utils.rs?plain=1#L1C0-L3C20"
+        "https://github.com/user/repo/blob/def456/lib/utils.rs?plain=1#L2C0-L4C20"
     )]
     #[case::root_file(
         "https://github.com/user/repo",
@@ -117,7 +117,7 @@ mod tests {
         "/README.md",
         Bound { lnum: 5, col: 2 },
         Bound { lnum: 5, col: 2 },
-        "https://github.com/user/repo/tree/ghi789/README.md?plain=1#L5C2-L5C2"
+        "https://github.com/user/repo/tree/ghi789/README.md?plain=1#L6C2-L6C2"
     )]
     fn build_github_file_link_appends_correct_url(
         #[case] initial_repo_url: &str,
