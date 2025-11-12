@@ -90,7 +90,7 @@ impl DiagnosticSeverity {
     /// Returns the canonical single-character glyph for this severity.
     ///
     /// # Returns
-    /// - One of: "x" (Error), "*" (Warn), "i" (Info), "?" (Hint), "?" (Other / unknown).
+    /// - One of: "x" (Error), "*" (Warn), "i" (Info), "●" (Hint), "●" (Other / unknown).
     ///
     /// # Rationale
     /// Used by status UI components (statuscolumn) to render severity without allocating via [`core::fmt::Display`]
@@ -99,8 +99,8 @@ impl DiagnosticSeverity {
         match self {
             Self::Error => "x",
             Self::Warn => "*",
-            Self::Info => "i",
-            Self::Hint | Self::Other => "?",
+            Self::Info => "ℹ︎",
+            Self::Hint | Self::Other => "●",
         }
     }
 }
