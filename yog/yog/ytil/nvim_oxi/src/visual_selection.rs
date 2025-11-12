@@ -33,7 +33,7 @@ use crate::buffer::BufferExt;
 ///   converting the end column to an exclusive bound.
 /// - Blockwise (CTRL-V): currently treated like a plain characterwise span; rectangular shape is not preserved.
 ///
-/// On any Neovim API error (fetching marks, lines, or text) a notification is emitted and an
+/// On any Nvim API error (fetching marks, lines, or text) a notification is emitted and an
 /// empty [`Vec`] is returned. The resulting lines are also passed through [`nvim_oxi::dbg!`]
 /// (producing debug output) before being returned.
 ///
@@ -48,7 +48,7 @@ pub fn get_lines(_: ()) -> Vec<String> {
 
 /// Return an owned [`Selection`] for the active Visual range.
 ///
-/// On any Neovim API error (fetching marks, lines, or text) a notification is emitted and [`None`] is returned.
+/// On any Nvim API error (fetching marks, lines, or text) a notification is emitted and [`None`] is returned.
 ///
 /// # Returns
 /// Returns `Some(Selection)` if the visual selection can be extracted successfully, [`None`] otherwise.
@@ -68,6 +68,17 @@ pub fn get(_: ()) -> Option<Selection> {
 
     // Handle linewise mode: grab full lines
     if nvim_oxi::api::get_mode().mode == "V" {
+        let end_lnum = bounds.end().lnum;
+        let Ok(last_line) = cur_buf.get_line(end_lnum).inspect_err(|error| {
+            crate::api::notify_error(format!(
+                "cannot get selection last line | end_lnum={end_lnum} buffer={cur_buf:#?} error={error:#?}",
+            ));
+        }) else {
+            return None;
+        };
+        // Adjust bounds to start at column 0 and end at the last line's length
+        bounds.start.col = 0;
+        bounds.end.col = last_line.len();
         // end.lnum inclusive for lines range
         let Ok(lines) = cur_buf
             .get_lines(bounds.start().lnum..=bounds.end().lnum, false)
@@ -126,17 +137,26 @@ impl Selection {
 }
 
 /// Start / end bounds plus owning buffer id for a Visual selection.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct SelectionBounds {
+    #[cfg(feature = "testing")]
+    pub buf_id: i32,
+    #[cfg(feature = "testing")]
+    pub start: Bound,
+    #[cfg(feature = "testing")]
+    pub end: Bound,
+    #[cfg(not(feature = "testing"))]
     buf_id: i32,
+    #[cfg(not(feature = "testing"))]
     start: Bound,
+    #[cfg(not(feature = "testing"))]
     end: Bound,
 }
 
 impl SelectionBounds {
     /// Builds selection bounds from the current cursor (`.`) and visual start (`v`) marks.
     ///
-    /// Retrieves positions using Neovim's `getpos()` function and normalizes them to 0-based indices.
+    /// Retrieves positions using Nvim's `getpos()` function and normalizes them to 0-based indices.
     /// The start and end are sorted to ensure start is before end.
     ///
     /// # Returns
@@ -306,7 +326,7 @@ impl Poppable for Pos {
     }
 }
 
-/// Calls Neovim's `getpos()` function for the supplied mark identifier and returns a normalized [`Pos`].
+/// Calls Nvim's `getpos()` function for the supplied mark identifier and returns a normalized [`Pos`].
 ///
 /// On success, converts the raw 1-based tuple into a 0-based [`Pos`].
 /// On failure, emits an error notification via [`crate::api::notify_error`] and wraps the error with

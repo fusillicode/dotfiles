@@ -1,4 +1,4 @@
-//! Parse `path:line[:column]` specs and build editor open commands for Helix / Neovim panes.
+//! Parse `path:line[:column]` specs and build editor open commands for Helix / Nvim panes.
 //!
 //! Supports absolute or relative paths (resolved against a pane's cwd) and returns shell snippets
 //! to open a file and place the cursor at the requested position.

@@ -11,7 +11,7 @@ use nvim_oxi::api::opts::CreateAutocmdOptsBuilder;
 use nvim_oxi::api::opts::SetKeymapOptsBuilder;
 use nvim_oxi::api::types::Mode;
 
-/// Creates Neovim autocommands and their augroups.
+/// Creates Nvim autocommands and their augroups.
 ///
 /// Includes yank highlight, autosave on focus loss / buffer leave, and quickfix
 /// specific key mappings & configuration.

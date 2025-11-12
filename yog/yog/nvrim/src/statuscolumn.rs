@@ -18,7 +18,7 @@ use ytil_nvim_oxi::buffer::BufferExt;
 
 use crate::diagnostics::DiagnosticSeverity;
 
-/// Markup for a visible space in the Neovim statuscolumn.
+/// Markup for a visible space in the Nvim statuscolumn.
 /// Plain spaces (" ") are not rendered; they must be wrapped in highlight markup like `%#Normal# %*`.
 const EMPTY_SPACE: &str = "%#Normal# %*";
 
@@ -230,18 +230,18 @@ struct ExtmarkMeta {
 impl ExtmarkMeta {
     /// Writes the formatted extmark metadata into `out`.
     ///
-    /// - Performs inline normalization for diagnostic variants (except `Ok`), mapping them to canonical severity glyphs
-    ///   from [`DiagnosticSeverity::glyph`].
+    /// - Performs inline normalization for diagnostic variants (except `Ok`), mapping them to canonical severity
+    ///   symbols from [`DiagnosticSeverity::symbol`].
     /// - Leaves `Ok` / Git / Other variants using their existing trimmed `sign_text` (empty placeholder when absent).
     ///
     /// # Rationale
     /// Appending directly avoids per-sign allocation of an intermediate [`String`].
     fn write(&self, out: &mut String) {
-        let displayed_glyph: &str = match self.sign_hl_group {
-            SignHlGroup::DiagnosticError => DiagnosticSeverity::Error.glyph(),
-            SignHlGroup::DiagnosticWarn => DiagnosticSeverity::Warn.glyph(),
-            SignHlGroup::DiagnosticInfo => DiagnosticSeverity::Info.glyph(),
-            SignHlGroup::DiagnosticHint => DiagnosticSeverity::Hint.glyph(),
+        let displayed_symbol: &str = match self.sign_hl_group {
+            SignHlGroup::DiagnosticError => DiagnosticSeverity::Error.symbol(),
+            SignHlGroup::DiagnosticWarn => DiagnosticSeverity::Warn.symbol(),
+            SignHlGroup::DiagnosticInfo => DiagnosticSeverity::Info.symbol(),
+            SignHlGroup::DiagnosticHint => DiagnosticSeverity::Hint.symbol(),
             SignHlGroup::DiagnosticOk | SignHlGroup::Git(_) | SignHlGroup::Other(_) => {
                 self.sign_text.as_ref().map_or("", |x| x.trim())
             }
@@ -251,7 +251,7 @@ impl ExtmarkMeta {
         out.push('#');
         out.push_str(self.sign_hl_group.as_str());
         out.push('#');
-        out.push_str(displayed_glyph);
+        out.push_str(displayed_symbol);
         out.push('%');
         out.push('*');
     }
@@ -282,7 +282,7 @@ enum SignHlGroup {
 }
 
 impl SignHlGroup {
-    /// Returns the canonical string form used by Neovim for this group.
+    /// Returns the canonical string form used by Nvim for this group.
     ///
     /// # Returns
     /// - A static diagnostic string for diagnostic variants.

@@ -1,4 +1,4 @@
-//! Neovim diagnostics configuration dictionary builder.
+//! Nvim diagnostics configuration dictionary builder.
 //!
 //! Produces a Lua‑consumable `config` dict mirroring `vim.diagnostic.config({...})` with custom float
 //! window border, severity sorting, and sign text derived from [`DiagnosticSeverity`] variants.
@@ -14,7 +14,7 @@ use crate::diagnostics::formatter;
 
 /// Nvim diagnostics configuration.
 pub fn get() -> Dictionary {
-    let texts_signs: Array = DiagnosticSeverity::iter().map(|s| Object::from(s.glyph())).collect();
+    let texts_signs: Array = DiagnosticSeverity::iter().map(|s| Object::from(s.symbol())).collect();
 
     dict! {
         "severity_sort": true,
