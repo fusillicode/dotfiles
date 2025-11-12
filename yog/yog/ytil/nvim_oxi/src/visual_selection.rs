@@ -33,7 +33,7 @@ use crate::buffer::BufferExt;
 ///   converting the end column to an exclusive bound.
 /// - Blockwise (CTRL-V): currently treated like a plain characterwise span; rectangular shape is not preserved.
 ///
-/// On any Neovim API error (fetching marks, lines, or text) a notification is emitted and an
+/// On any Nvim API error (fetching marks, lines, or text) a notification is emitted and an
 /// empty [`Vec`] is returned. The resulting lines are also passed through [`nvim_oxi::dbg!`]
 /// (producing debug output) before being returned.
 ///
@@ -48,7 +48,7 @@ pub fn get_lines(_: ()) -> Vec<String> {
 
 /// Return an owned [`Selection`] for the active Visual range.
 ///
-/// On any Neovim API error (fetching marks, lines, or text) a notification is emitted and [`None`] is returned.
+/// On any Nvim API error (fetching marks, lines, or text) a notification is emitted and [`None`] is returned.
 ///
 /// # Returns
 /// Returns `Some(Selection)` if the visual selection can be extracted successfully, [`None`] otherwise.
@@ -156,7 +156,7 @@ pub struct SelectionBounds {
 impl SelectionBounds {
     /// Builds selection bounds from the current cursor (`.`) and visual start (`v`) marks.
     ///
-    /// Retrieves positions using Neovim's `getpos()` function and normalizes them to 0-based indices.
+    /// Retrieves positions using Nvim's `getpos()` function and normalizes them to 0-based indices.
     /// The start and end are sorted to ensure start is before end.
     ///
     /// # Returns
@@ -326,7 +326,7 @@ impl Poppable for Pos {
     }
 }
 
-/// Calls Neovim's `getpos()` function for the supplied mark identifier and returns a normalized [`Pos`].
+/// Calls Nvim's `getpos()` function for the supplied mark identifier and returns a normalized [`Pos`].
 ///
 /// On success, converts the raw 1-based tuple into a 0-based [`Pos`].
 /// On failure, emits an error notification via [`crate::api::notify_error`] and wraps the error with

@@ -29,7 +29,7 @@ pub fn dict() -> Dictionary {
 ///
 /// Behaviour:
 /// - Returns early (no insertion) if fetching user input fails or is canceled.
-/// - Emits error notifications to Neovim for selection prompt or buffer write failures.
+/// - Emits error notifications to Nvim for selection prompt or buffer write failures.
 fn insert_string(_: ()) {
     let options: Vec<_> = FkrOption::iter().collect();
 

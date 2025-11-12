@@ -1,4 +1,4 @@
-//! Aggregated Neovim extension submodules.
+//! Aggregated Nvim extension submodules.
 //!
 //! Re‑exports helper modules (`api`, `buffer`, `dict`, `extract`, `macros`, `visual_selection`) used
 //! throughout the plugin for structured Lua exposure.

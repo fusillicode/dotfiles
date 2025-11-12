@@ -58,7 +58,7 @@ fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
     Some(statusline.draw())
 }
 
-/// Diagnostic emitted by Neovim.
+/// Diagnostic emitted by Nvim.
 ///
 /// Captures buffer association and severity for aggregation in the statusline.
 ///

@@ -18,7 +18,7 @@ use ytil_nvim_oxi::buffer::BufferExt;
 
 use crate::diagnostics::DiagnosticSeverity;
 
-/// Markup for a visible space in the Neovim statuscolumn.
+/// Markup for a visible space in the Nvim statuscolumn.
 /// Plain spaces (" ") are not rendered; they must be wrapped in highlight markup like `%#Normal# %*`.
 const EMPTY_SPACE: &str = "%#Normal# %*";
 
@@ -282,7 +282,7 @@ enum SignHlGroup {
 }
 
 impl SignHlGroup {
-    /// Returns the canonical string form used by Neovim for this group.
+    /// Returns the canonical string form used by Nvim for this group.
     ///
     /// # Returns
     /// - A static diagnostic string for diagnostic variants.

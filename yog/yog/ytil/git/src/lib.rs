@@ -343,6 +343,7 @@ pub fn fetch_branches(branches: &[&str]) -> color_eyre::Result<()> {
 ///
 /// Returns
 /// The commit hash as a hexadecimal string.
+/// FOO
 ///
 /// Errors
 /// - If the repository cannot be opened.

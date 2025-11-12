@@ -1,8 +1,8 @@
-//! Rust test runner helpers integrating with Neovim.
+//! Rust test runner helpers integrating with Nvim.
 //!
 //! Exposes a dictionary enabling cursor-aware test execution (`run_test`) by parsing the current buffer
 //! with Tree‑sitter to locate the nearest test function and spawning it inside a WezTerm pane.
-//! All Neovim API failures are reported via [`ytil_nvim_oxi::api::notify_error`].
+//! All Nvim API failures are reported via [`ytil_nvim_oxi::api::notify_error`].
 
 use std::ops::Deref;
 use std::path::Path;
@@ -107,12 +107,12 @@ fn run_test(_: ()) {
     };
 }
 
-/// Wrapper around [`tree_sitter::Point`] that converts Neovim's 1-based row indexing
+/// Wrapper around [`tree_sitter::Point`] that converts Nvim's 1-based row indexing
 /// to tree-sitter's 0-based indexing.
 ///
 /// # Rationale
 ///
-/// Neovim uses 1-based row indices for cursor positions, while tree-sitter expects 0-based rows.
+/// Nvim uses 1-based row indices for cursor positions, while tree-sitter expects 0-based rows.
 /// This wrapper simplifies the conversion in the codebase.
 #[derive(Debug)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
@@ -127,11 +127,11 @@ impl Deref for PointWrap {
 }
 
 impl From<CursorPosition> for PointWrap {
-    /// Converts a Neovim cursor position (1-based row, 0-based column) to a [`PointWrap`].
+    /// Converts a Nvim cursor position (1-based row, 0-based column) to a [`PointWrap`].
     ///
     /// # Arguments
-    /// - `row` 1-based row index from Neovim.
-    /// - `column` 0-based column index from Neovim.
+    /// - `row` 1-based row index from Nvim.
+    /// - `column` 0-based column index from Nvim.
     ///
     /// # Returns
     /// A [`PointWrap`] with 0-based row and column suitable for Tree-sitter.
