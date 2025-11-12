@@ -1376,6 +1376,7 @@ dependencies = [
  "url",
  "ytil_cmd",
  "ytil_git",
+ "ytil_github",
  "ytil_nvim_oxi",
  "ytil_system",
  "ytil_wezterm",

@@ -4,8 +4,10 @@
 //! consistent conversions at call sites.
 
 use std::ops::RangeInclusive;
+use std::path::PathBuf;
 
 use color_eyre::eyre::eyre;
+use nvim_oxi::Array;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::SuperIterator;
 use nvim_oxi::api::Window;
@@ -319,6 +321,26 @@ where
             selection.end()
         ));
     }
+}
+
+pub fn get_relative_buffer_path(cur_buf: &Buffer) -> Option<PathBuf> {
+    let cwd = nvim_oxi::api::call_function::<_, String>("getcwd", Array::new())
+        .inspect_err(|error| {
+            crate::api::notify_error(format!("cannot get cwd | error={error:#?}"));
+        })
+        .ok()?;
+    let cur_buf_path = {
+        let tmp = cur_buf
+            .get_name()
+            .inspect_err(|error| {
+                crate::api::notify_error(format!(
+                    "cannot get path of current buffer | buffer={cur_buf:#?} error={error:#?}"
+                ));
+            })
+            .ok()?;
+        tmp.to_string()
+    };
+    Some(PathBuf::from(cur_buf_path.strip_prefix(&cwd).unwrap_or(&cur_buf_path)))
 }
 
 #[cfg(test)]

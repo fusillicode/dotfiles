@@ -31,6 +31,7 @@ tree-sitter-rust = { version = "0.24" }
 url = { version = "2.5" }
 ytil_cmd = { workspace = true }
 ytil_git = { workspace = true }
+ytil_github = { workspace = true }
 ytil_nvim_oxi = { workspace = true, features = ["mockall"] }
 ytil_system = { workspace = true }
 ytil_wezterm = { workspace = true }

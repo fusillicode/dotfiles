@@ -186,6 +186,11 @@ impl SelectionBounds {
     const fn incr_end_col(&mut self) {
         self.end.col = self.end.col.saturating_add(1);
     }
+
+    /// Create a new `SelectionBounds` for testing purposes.
+    pub fn test_new(buf_id: i32, start: Bound, end: Bound) -> Self {
+        Self { buf_id, start, end }
+    }
 }
 
 /// Single position (line, column) inside a buffer.

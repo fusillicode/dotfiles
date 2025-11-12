@@ -339,6 +339,13 @@ pub fn fetch_branches(branches: &[&str]) -> color_eyre::Result<()> {
     Ok(())
 }
 
+pub fn get_current_commit_hash() -> color_eyre::Result<String> {
+    let repo = get_repo(Path::new("."))?;
+    let head = repo.head()?;
+    let commit = head.peel_to_commit()?;
+    Ok(commit.id().to_string())
+}
+
 /// Local or remote branch with metadata about the last commit.
 #[derive(Clone, Debug)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
