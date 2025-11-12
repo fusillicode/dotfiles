@@ -8,6 +8,12 @@ pub fn dict() -> Dictionary {
     }
 }
 
-fn get_link(_: Option<()>) {}
+#[allow(dead_code, unused)]
+fn get_link(_: Option<()>) {
+    let Some(selection) = ytil_nvim_oxi::visual_selection::get(()) else {
+        return;
+    };
+    let line_range = selection.line_range();
+}
 
 fn get_blame_link(_: Option<()>) {}
