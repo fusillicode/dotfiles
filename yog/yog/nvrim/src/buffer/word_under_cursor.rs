@@ -6,13 +6,13 @@
 use std::process::Command;
 
 use nvim_oxi::Object;
-use nvim_oxi::api::Window;
 use nvim_oxi::conversion::ToObject;
 use nvim_oxi::lua::ffi::State;
 use nvim_oxi::serde::Serializer;
 use serde::Serialize;
 use url::Url;
 use ytil_cmd::CmdExt as _;
+use ytil_nvim_oxi::buffer::CursorPosition;
 
 /// Retrieve and classify the non-whitespace token under the cursor in the current window.
 ///
@@ -20,14 +20,10 @@ use ytil_cmd::CmdExt as _;
 /// or if the cursor is on whitespace. On errors a notification is emitted to Nvim.
 /// On success returns a classified [`WordUnderCursor`].
 pub fn get(_: ()) -> Option<WordUnderCursor> {
-    let cur_win = Window::current();
     let cur_line = nvim_oxi::api::get_current_line()
         .inspect_err(|error| ytil_nvim_oxi::api::notify_error(format!("cannot get current line | error={error:#?}")))
         .ok()?;
-    let (_, col) = cur_win
-        .get_cursor()
-        .inspect_err(|error| ytil_nvim_oxi::api::notify_error(format!("cannot get cursor | error={error:#?}")))
-        .ok()?;
+    let col = CursorPosition::get_current()?.col;
     get_word_at_index(&cur_line, col)
         .map(ToOwned::to_owned)
         .map(WordUnderCursor::from)

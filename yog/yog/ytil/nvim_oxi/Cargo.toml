@@ -12,6 +12,7 @@ categories = ["command-line-utilities", "development-tools"]
 
 [features]
 mockall = ["dep:mockall"]
+testing = []
 
 [dependencies]
 color-eyre = { workspace = true }

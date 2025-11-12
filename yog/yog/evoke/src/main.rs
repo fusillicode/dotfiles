@@ -1,4 +1,4 @@
-//! Format, lint, build, and deploy workspace binaries and Neovim libs.
+//! Format, lint, build, and deploy workspace binaries and Nvim libs.
 //!
 //! # Arguments
 //! - `--debug` Use debug profile; skip clippy; copy from `target/debug`.
@@ -71,7 +71,7 @@ fn cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Format, lint, build, and deploy workspace binaries and Neovim libs.
+/// Format, lint, build, and deploy workspace binaries and Nvim libs.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

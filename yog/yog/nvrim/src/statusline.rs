@@ -4,7 +4,6 @@
 //! LSP diagnostic severities / counts into a formatted status line; failures yield `None` and are
 //! surfaced through [`ytil_nvim_oxi::api::notify_error`].
 
-use nvim_oxi::Array;
 use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
 use nvim_oxi::conversion::FromObject;
@@ -38,26 +37,13 @@ pub fn dict() -> Dictionary {
 /// acquisition failure.
 fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
     let cur_buf = nvim_oxi::api::get_current_buf();
-    let cur_buf_path_os = cur_buf
-        .get_name()
-        .inspect_err(|error| {
-            ytil_nvim_oxi::api::notify_error(format!(
-                "cannot get name of current buffer | buffer={cur_buf:#?} error={error:#?}"
-            ));
-        })
-        .ok()?;
-    let cwd = nvim_oxi::api::call_function::<_, String>("getcwd", Array::new())
-        .inspect_err(|error| {
-            ytil_nvim_oxi::api::notify_error(format!("cannot get cwd | error={error:#?}"));
-        })
-        .ok()?;
-    let cur_buf_path_lossy = cur_buf_path_os.to_string_lossy();
-    let cur_buf_path_full: &str = &cur_buf_path_lossy;
-    let cur_buf_path = cur_buf_path_full.strip_prefix(&cwd).unwrap_or(cur_buf_path_full);
+    let cur_buf_path = ytil_nvim_oxi::buffer::get_relative_buffer_path(&cur_buf)?
+        .display()
+        .to_string();
 
     let cur_buf_nr = cur_buf.handle();
     let mut statusline = Statusline {
-        cur_buf_path,
+        cur_buf_path: &cur_buf_path,
         cur_buf_diags: SeverityBuckets::default(),
         workspace_diags: SeverityBuckets::default(),
         cursor_position: CursorPosition::get_current()?,
@@ -72,7 +58,7 @@ fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
     Some(statusline.draw())
 }
 
-/// Diagnostic emitted by Neovim.
+/// Diagnostic emitted by Nvim.
 ///
 /// Captures buffer association and severity for aggregation in the statusline.
 ///
@@ -159,6 +145,7 @@ impl FromIterator<(DiagnosticSeverity, u16)> for SeverityBuckets {
 #[derive(Debug)]
 struct Statusline<'a> {
     /// The current buffer path.
+    // TODO: maybe switch to Path
     cur_buf_path: &'a str,
     /// Diagnostics for the current buffer.
     cur_buf_diags: SeverityBuckets,
@@ -243,7 +230,7 @@ fn draw_diagnostics((severity, diags_count): (DiagnosticSeverity, u16)) -> Strin
     };
     format!(
         "%#DiagnosticStatusLine{hg_group_dyn_part}#{}:{diags_count}",
-        severity.glyph()
+        severity.symbol()
     )
 }
 
@@ -297,8 +284,8 @@ mod tests {
             statusline.draw(),
             format!(
                 "%#DiagnosticStatusLineError#{}:3 %#DiagnosticStatusLineInfo#{}:1 %#StatusLine#foo %m %r%=%#StatusLine# 42:8",
-                DiagnosticSeverity::Error.glyph(),
-                DiagnosticSeverity::Info.glyph()
+                DiagnosticSeverity::Error.symbol(),
+                DiagnosticSeverity::Info.symbol()
             ),
         );
     }
@@ -317,8 +304,8 @@ mod tests {
             statusline.draw(),
             format!(
                 "%#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#{}:3 %#DiagnosticStatusLineInfo#{}:1%#StatusLine# 42:8",
-                DiagnosticSeverity::Error.glyph(),
-                DiagnosticSeverity::Info.glyph()
+                DiagnosticSeverity::Error.symbol(),
+                DiagnosticSeverity::Info.symbol()
             ),
         );
     }
@@ -339,10 +326,10 @@ mod tests {
             statusline.draw(),
             format!(
                 "%#DiagnosticStatusLineWarn#{}:2 %#DiagnosticStatusLineHint#{}:3 %#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#{}:3 %#DiagnosticStatusLineInfo#{}:1%#StatusLine# 42:8",
-                DiagnosticSeverity::Warn.glyph(),
-                DiagnosticSeverity::Hint.glyph(),
-                DiagnosticSeverity::Error.glyph(),
-                DiagnosticSeverity::Info.glyph()
+                DiagnosticSeverity::Warn.symbol(),
+                DiagnosticSeverity::Hint.symbol(),
+                DiagnosticSeverity::Error.symbol(),
+                DiagnosticSeverity::Info.symbol()
             ),
         );
     }
@@ -362,8 +349,8 @@ mod tests {
             statusline.draw(),
             format!(
                 "%#DiagnosticStatusLineWarn#{}:1 %#DiagnosticStatusLineHint#{}:5 %#StatusLine#foo %m %r%=%#StatusLine# 42:8",
-                DiagnosticSeverity::Warn.glyph(),
-                DiagnosticSeverity::Hint.glyph()
+                DiagnosticSeverity::Warn.symbol(),
+                DiagnosticSeverity::Hint.symbol()
             ),
         );
     }
@@ -407,14 +394,14 @@ mod tests {
             statusline.draw(),
             format!(
                 "%#DiagnosticStatusLineError#{}:4 %#DiagnosticStatusLineWarn#{}:3 %#DiagnosticStatusLineInfo#{}:2 %#DiagnosticStatusLineHint#{}:1 %#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#{}:8 %#DiagnosticStatusLineWarn#{}:7 %#DiagnosticStatusLineInfo#{}:6 %#DiagnosticStatusLineHint#{}:5%#StatusLine# 42:8",
-                DiagnosticSeverity::Error.glyph(),
-                DiagnosticSeverity::Warn.glyph(),
-                DiagnosticSeverity::Info.glyph(),
-                DiagnosticSeverity::Hint.glyph(),
-                DiagnosticSeverity::Error.glyph(),
-                DiagnosticSeverity::Warn.glyph(),
-                DiagnosticSeverity::Info.glyph(),
-                DiagnosticSeverity::Hint.glyph()
+                DiagnosticSeverity::Error.symbol(),
+                DiagnosticSeverity::Warn.symbol(),
+                DiagnosticSeverity::Info.symbol(),
+                DiagnosticSeverity::Hint.symbol(),
+                DiagnosticSeverity::Error.symbol(),
+                DiagnosticSeverity::Warn.symbol(),
+                DiagnosticSeverity::Info.symbol(),
+                DiagnosticSeverity::Hint.symbol()
             ),
         );
     }

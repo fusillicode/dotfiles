@@ -49,6 +49,7 @@ use std::str::FromStr;
 use color_eyre::Section;
 use color_eyre::owo_colors::OwoColorize;
 use strum::EnumIter;
+use ytil_github::RepoViewField;
 use ytil_github::pr::IntoEnumIterator;
 use ytil_github::pr::PullRequest;
 use ytil_github::pr::PullRequestMergeState;
@@ -280,7 +281,7 @@ fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
     ytil_github::log_into_github()?;
 
-    let repo = ytil_github::get_current_repo()?;
+    let repo_name_with_owner = ytil_github::get_repo_view_field(&RepoViewField::NameWithOwner)?;
 
     let mut pargs = pico_args::Arguments::from_env();
 
@@ -305,7 +306,7 @@ fn main() -> color_eyre::Result<()> {
     );
     println!("\n{}\n{}\n", "Search PRs by".cyan().bold(), params.white().bold());
 
-    let pull_requests = ytil_github::pr::get(&repo, search_filter.as_deref(), &|pr: &PullRequest| {
+    let pull_requests = ytil_github::pr::get(&repo_name_with_owner, search_filter.as_deref(), &|pr: &PullRequest| {
         if let Some(merge_state) = merge_state {
             return pr.merge_state == merge_state;
         }
