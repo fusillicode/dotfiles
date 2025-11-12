@@ -75,10 +75,7 @@ impl DiagnosticsFilter for HarperLsFilter<'_> {
             GetDiagMsgOutput::Skip => return Ok(false),
         };
 
-        // FIXME: understand why this breaks so often
-        let Ok(diag_location) = DiagnosticLocation::try_from(lsp_diag) else {
-            return Ok(false);
-        };
+        let diag_location = DiagnosticLocation::try_from(lsp_diag)?;
 
         let diag_text = buf
             .buffer
