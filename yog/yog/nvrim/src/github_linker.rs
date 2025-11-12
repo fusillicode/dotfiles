@@ -1,6 +1,6 @@
 //! GitHub permalink generation for selected code.
 //!
-//! Exposes a dictionary with a `get_link` function that constructs GitHub URLs for visually selected
+//! Exposes a dictionary with a [`get_link`] function that constructs GitHub URLs for visually selected
 //! code ranges in the current buffer, using the repository's current commit hash for permalinks.
 //! The generated URL is automatically copied to the system clipboard.
 
@@ -54,7 +54,7 @@ fn get_link(link_type: String) {
         &selection,
     );
 
-    cp_to_system_clipboard_and_notify_error(&mut repo_url.to_string().as_bytes());
+    cp_to_system_clipboard_and_notify_error(&mut repo_url.as_bytes());
 }
 
 /// Builds a GitHub file URL by appending link type, commit hash, file path, and selection range.
