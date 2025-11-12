@@ -7,6 +7,7 @@
 use std::path::Path;
 
 use nvim_oxi::Dictionary;
+use ytil_github::RepoViewField;
 use ytil_nvim_oxi::visual_selection::Bound;
 use ytil_nvim_oxi::visual_selection::Selection;
 
@@ -21,6 +22,7 @@ pub fn dict() -> Dictionary {
 ///
 /// # Arguments
 /// - `link_type` The type of GitHub link to generate (e.g., "blob" for file view).
+#[allow(clippy::needless_pass_by_value)]
 fn get_link(link_type: String) {
     let Some(cur_buf_path) = ytil_nvim_oxi::buffer::get_relative_buffer_path(&nvim_oxi::api::get_current_buf()) else {
         return;
@@ -32,7 +34,7 @@ fn get_link(link_type: String) {
     let Some(selection) = ytil_nvim_oxi::visual_selection::get(()) else {
         return;
     };
-    let Ok(mut repo_url) = ytil_github::get_repo_view_field(ytil_github::RepoViewField::Url).inspect_err(|error| {
+    let Ok(mut repo_url) = ytil_github::get_repo_view_field(&RepoViewField::Url).inspect_err(|error| {
         ytil_nvim_oxi::api::notify_error(format!("cannot get GitHub repo URL | error={error:#?}"));
     }) else {
         return;
@@ -49,7 +51,7 @@ fn get_link(link_type: String) {
         &link_type,
         &current_commit_hash,
         &cur_buf_path,
-        selection,
+        &selection,
     );
 
     cp_to_system_clipboard_and_notify_error(&mut repo_url.to_string().as_bytes());
@@ -72,7 +74,7 @@ fn build_github_file_url(
     link_type: &str,
     commit_hash: &str,
     cur_buf_path: &Path,
-    selection: Selection,
+    selection: &Selection,
 ) {
     repo_url.push('/');
     repo_url.push_str(link_type);
@@ -166,7 +168,7 @@ mod tests {
             Selection::new(bounds, std::iter::empty::<nvim_oxi::String>())
         };
 
-        build_github_file_url(&mut repo_url, url_kind, commit_hash, cur_buf_path, selection);
+        build_github_file_url(&mut repo_url, url_kind, commit_hash, cur_buf_path, &selection);
 
         pretty_assertions::assert_eq!(repo_url, expected);
     }

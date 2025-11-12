@@ -281,7 +281,7 @@ fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
     ytil_github::log_into_github()?;
 
-    let repo_name_with_owner = ytil_github::get_repo_view_field(RepoViewField::NameWithOwner)?;
+    let repo_name_with_owner = ytil_github::get_repo_view_field(&RepoViewField::NameWithOwner)?;
 
     let mut pargs = pico_args::Arguments::from_env();
 
