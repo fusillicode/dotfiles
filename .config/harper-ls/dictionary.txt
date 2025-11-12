@@ -142,6 +142,8 @@ oks
 pathspec
 pathspecs
 pcw
+permalink
+permalinks
 pgcli
 pgpass
 pr

@@ -339,6 +339,15 @@ pub fn fetch_branches(branches: &[&str]) -> color_eyre::Result<()> {
     Ok(())
 }
 
+/// Retrieves the commit hash of the current HEAD.
+///
+/// Returns
+/// The commit hash as a hexadecimal string.
+///
+/// Errors
+/// - If the repository cannot be opened.
+/// - If the HEAD reference cannot be resolved.
+/// - If the HEAD reference does not point to a commit.
 pub fn get_current_commit_hash() -> color_eyre::Result<String> {
     let repo = get_repo(Path::new("."))?;
     let head = repo.head()?;

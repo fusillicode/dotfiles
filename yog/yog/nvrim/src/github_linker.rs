@@ -1,15 +1,26 @@
+//! GitHub permalink generation for selected code.
+//!
+//! Exposes a dictionary with a `get_link` function that constructs GitHub URLs for visually selected
+//! code ranges in the current buffer, using the repository's current commit hash for permalinks.
+//! The generated URL is automatically copied to the system clipboard.
+
 use std::path::Path;
 
 use nvim_oxi::Dictionary;
 use ytil_nvim_oxi::visual_selection::Bound;
 use ytil_nvim_oxi::visual_selection::Selection;
 
+/// [`Dictionary`] with GitHub link generation helpers.
 pub fn dict() -> Dictionary {
     dict! {
         "get_link": fn_from!(get_link),
     }
 }
 
+/// Generates a GitHub permalink for the current visual selection and copies it to the clipboard.
+///
+/// # Arguments
+/// - `link_type` The type of GitHub link to generate (e.g., "blob" for file view).
 fn get_link(link_type: String) {
     let Some(cur_buf_path) = ytil_nvim_oxi::buffer::get_relative_buffer_path(&nvim_oxi::api::get_current_buf()) else {
         return;
@@ -44,9 +55,18 @@ fn get_link(link_type: String) {
     cp_to_system_clipboard_and_notify_error(&mut repo_url.to_string().as_bytes());
 }
 
-/// `repo_url` is [`String`] instead of an [`Url`] because working with [`Url`] is a PITA.
-/// `link_type` is [`&str`] instead of an enum because the [`&str`] is what will be used to
-/// build different links.
+/// Builds a GitHub file URL by appending link type, commit hash, file path, and selection range.
+///
+/// # Arguments
+/// - `repo_url` The base repository URL to modify in-place.
+/// - `link_type` The GitHub link type (e.g., "blob").
+/// - `commit_hash` The commit hash for the permalink.
+/// - `cur_buf_path` The relative path of the current buffer.
+/// - `selection` The visual selection bounds.
+///
+/// # Rationale
+/// `repo_url` is [`String`] instead of [`Url`] because working with [`Url`] is really painful.
+/// `link_type` is [`&str`] instead of an enum because the [`&str`] is what will be used to build different links.
 fn build_github_file_url(
     repo_url: &mut String,
     link_type: &str,
@@ -67,6 +87,11 @@ fn build_github_file_url(
     add_github_line_col_to_url(repo_url, selection.end());
 }
 
+/// Appends a GitHub-style line and column anchor (e.g., L42C7) to the supplied URL.
+///
+/// # Arguments
+/// - `repo_url` The URL string to append to.
+/// - `bound` The line and column bound (1-based line, 0-based column).
 fn add_github_line_col_to_url(repo_url: &mut String, bound: &Bound) {
     repo_url.push('L');
     repo_url.push_str(&bound.lnum.saturating_add(1).to_string());
@@ -74,6 +99,10 @@ fn add_github_line_col_to_url(repo_url: &mut String, bound: &Bound) {
     repo_url.push_str(&bound.col.to_string());
 }
 
+/// Copies the given content to the system clipboard, notifying Nvim on error.
+///
+/// # Arguments
+/// - `content` The bytes to copy to the clipboard.
 fn cp_to_system_clipboard_and_notify_error(content: &mut &[u8]) {
     if let Err(error) = ytil_system::cp_to_system_clipboard(content) {
         ytil_nvim_oxi::api::notify_error(format!(
