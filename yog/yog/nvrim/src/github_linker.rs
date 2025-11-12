@@ -115,12 +115,7 @@ fn cp_to_system_clipboard_and_notify_error(content: &mut &[u8]) {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-
     use rstest::rstest;
-    use ytil_nvim_oxi::visual_selection::Bound;
-    use ytil_nvim_oxi::visual_selection::Selection;
-    use ytil_nvim_oxi::visual_selection::SelectionBounds;
 
     use super::*;
 
@@ -164,6 +159,8 @@ mod tests {
         let mut repo_url = initial_repo_url.to_string();
         let cur_buf_path = Path::new(file_path);
         let selection = {
+            use ytil_nvim_oxi::visual_selection::SelectionBounds;
+
             let bounds = SelectionBounds { buf_id: 1, start, end };
             Selection::new(bounds, std::iter::empty::<nvim_oxi::String>())
         };
