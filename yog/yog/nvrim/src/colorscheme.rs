@@ -111,7 +111,7 @@ pub fn set(colorscheme: Option<String>) {
         // Errors are already notified by [`get_overridden_set_hl_opts`]
         let _ = get_overridden_set_hl_opts(
             &format!("Diagnostic{lvl}"),
-            |mut hl_opts| hl_opts.foreground(fg).background(NONE).build(),
+            |mut hl_opts| hl_opts.foreground(fg).background(NONE).bold(true).build(),
             None,
         )
         .map(|set_hl_opts| {
