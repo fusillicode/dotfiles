@@ -130,15 +130,13 @@ mod tests {
     ) {
         let mut repo_url = initial_repo_url.to_string();
         let cur_buf_path = Path::new(file_path);
-        let selection = make_selection(start, end);
+        let selection = {
+            let bounds = SelectionBounds { buf_id: 1, start, end };
+            Selection::new(bounds, std::iter::empty::<nvim_oxi::String>())
+        };
 
         build_github_file_link(&mut repo_url, url_kind, commit_hash, cur_buf_path, selection);
 
         pretty_assertions::assert_eq!(repo_url, expected);
-    }
-
-    fn make_selection(start: Bound, end: Bound) -> Selection {
-        let bounds = SelectionBounds::test_new(1, start, end);
-        Selection::new(bounds, std::iter::empty::<nvim_oxi::String>())
     }
 }

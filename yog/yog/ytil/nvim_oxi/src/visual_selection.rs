@@ -128,8 +128,17 @@ impl Selection {
 /// Start / end bounds plus owning buffer id for a Visual selection.
 #[derive(Clone, Copy, Debug)]
 pub struct SelectionBounds {
+    #[cfg(feature = "testing")]
+    pub buf_id: i32,
+    #[cfg(feature = "testing")]
+    pub start: Bound,
+    #[cfg(feature = "testing")]
+    pub end: Bound,
+    #[cfg(not(feature = "testing"))]
     buf_id: i32,
+    #[cfg(not(feature = "testing"))]
     start: Bound,
+    #[cfg(not(feature = "testing"))]
     end: Bound,
 }
 
@@ -185,11 +194,6 @@ impl SelectionBounds {
     /// Increment end column (making it exclusive for charwise selections).
     const fn incr_end_col(&mut self) {
         self.end.col = self.end.col.saturating_add(1);
-    }
-
-    /// Create a new `SelectionBounds` for testing purposes.
-    pub fn test_new(buf_id: i32, start: Bound, end: Bound) -> Self {
-        Self { buf_id, start, end }
     }
 }
 
