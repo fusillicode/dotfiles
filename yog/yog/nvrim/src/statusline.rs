@@ -230,7 +230,7 @@ fn draw_diagnostics((severity, diags_count): (DiagnosticSeverity, u16)) -> Strin
     };
     format!(
         "%#DiagnosticStatusLine{hg_group_dyn_part}#{}:{diags_count}",
-        severity.glyph()
+        severity.symbol()
     )
 }
 
@@ -284,8 +284,8 @@ mod tests {
             statusline.draw(),
             format!(
                 "%#DiagnosticStatusLineError#{}:3 %#DiagnosticStatusLineInfo#{}:1 %#StatusLine#foo %m %r%=%#StatusLine# 42:8",
-                DiagnosticSeverity::Error.glyph(),
-                DiagnosticSeverity::Info.glyph()
+                DiagnosticSeverity::Error.symbol(),
+                DiagnosticSeverity::Info.symbol()
             ),
         );
     }
@@ -304,8 +304,8 @@ mod tests {
             statusline.draw(),
             format!(
                 "%#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#{}:3 %#DiagnosticStatusLineInfo#{}:1%#StatusLine# 42:8",
-                DiagnosticSeverity::Error.glyph(),
-                DiagnosticSeverity::Info.glyph()
+                DiagnosticSeverity::Error.symbol(),
+                DiagnosticSeverity::Info.symbol()
             ),
         );
     }
@@ -326,10 +326,10 @@ mod tests {
             statusline.draw(),
             format!(
                 "%#DiagnosticStatusLineWarn#{}:2 %#DiagnosticStatusLineHint#{}:3 %#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#{}:3 %#DiagnosticStatusLineInfo#{}:1%#StatusLine# 42:8",
-                DiagnosticSeverity::Warn.glyph(),
-                DiagnosticSeverity::Hint.glyph(),
-                DiagnosticSeverity::Error.glyph(),
-                DiagnosticSeverity::Info.glyph()
+                DiagnosticSeverity::Warn.symbol(),
+                DiagnosticSeverity::Hint.symbol(),
+                DiagnosticSeverity::Error.symbol(),
+                DiagnosticSeverity::Info.symbol()
             ),
         );
     }
@@ -349,8 +349,8 @@ mod tests {
             statusline.draw(),
             format!(
                 "%#DiagnosticStatusLineWarn#{}:1 %#DiagnosticStatusLineHint#{}:5 %#StatusLine#foo %m %r%=%#StatusLine# 42:8",
-                DiagnosticSeverity::Warn.glyph(),
-                DiagnosticSeverity::Hint.glyph()
+                DiagnosticSeverity::Warn.symbol(),
+                DiagnosticSeverity::Hint.symbol()
             ),
         );
     }
@@ -394,14 +394,14 @@ mod tests {
             statusline.draw(),
             format!(
                 "%#DiagnosticStatusLineError#{}:4 %#DiagnosticStatusLineWarn#{}:3 %#DiagnosticStatusLineInfo#{}:2 %#DiagnosticStatusLineHint#{}:1 %#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#{}:8 %#DiagnosticStatusLineWarn#{}:7 %#DiagnosticStatusLineInfo#{}:6 %#DiagnosticStatusLineHint#{}:5%#StatusLine# 42:8",
-                DiagnosticSeverity::Error.glyph(),
-                DiagnosticSeverity::Warn.glyph(),
-                DiagnosticSeverity::Info.glyph(),
-                DiagnosticSeverity::Hint.glyph(),
-                DiagnosticSeverity::Error.glyph(),
-                DiagnosticSeverity::Warn.glyph(),
-                DiagnosticSeverity::Info.glyph(),
-                DiagnosticSeverity::Hint.glyph()
+                DiagnosticSeverity::Error.symbol(),
+                DiagnosticSeverity::Warn.symbol(),
+                DiagnosticSeverity::Info.symbol(),
+                DiagnosticSeverity::Hint.symbol(),
+                DiagnosticSeverity::Error.symbol(),
+                DiagnosticSeverity::Warn.symbol(),
+                DiagnosticSeverity::Info.symbol(),
+                DiagnosticSeverity::Hint.symbol()
             ),
         );
     }

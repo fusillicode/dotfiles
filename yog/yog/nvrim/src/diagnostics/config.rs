@@ -14,7 +14,7 @@ use crate::diagnostics::formatter;
 
 /// Nvim diagnostics configuration.
 pub fn get() -> Dictionary {
-    let texts_signs: Array = DiagnosticSeverity::iter().map(|s| Object::from(s.glyph())).collect();
+    let texts_signs: Array = DiagnosticSeverity::iter().map(|s| Object::from(s.symbol())).collect();
 
     dict! {
         "severity_sort": true,
