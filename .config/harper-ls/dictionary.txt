@@ -115,6 +115,7 @@ impl
 infos
 intra
 invariance
+jq
 junit
 k8s
 ko
