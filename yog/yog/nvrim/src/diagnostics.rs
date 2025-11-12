@@ -99,8 +99,8 @@ impl DiagnosticSeverity {
         match self {
             Self::Error => "x",
             Self::Warn => "⏶",
-            Self::Info => "•",
-            Self::Hint | Self::Other => "⏷",
+            Self::Info => "◆",
+            Self::Hint | Self::Other => "•",
         }
     }
 }

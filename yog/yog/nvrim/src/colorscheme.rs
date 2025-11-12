@@ -24,7 +24,7 @@ const NONE: &str = "none";
 
 const DIAG_ERROR_FG: &str = "#ec635c";
 const DIAG_OK_FG: &str = "#8ce479";
-const DIAG_WARN_FG: &str = "#e7c77c";
+const DIAG_WARN_FG: &str = "#ffaa33";
 const DIAG_HINT_FG: &str = "NvimLightGrey3";
 const DIAG_INFO_FG: &str = "white";
 
