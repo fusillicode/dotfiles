@@ -92,11 +92,12 @@ function M.fzf_lua(plugin)
       { function() plugin.live_grep({ prompt = 'rg: ', search = nvrim.buffer.get_visual_selection_lines()[1], }) end, },
     },
 
-    { '<leader>h', mode = 'n',           plugin and { function() plugin.resume({}) end, }, },
-    { '<leader>n', mode = 'n',           plugin and { nvrim.attempt.create_scratch_file, }, },
-    { '<leader>u', mode = 'v',           plugin and { nvrim.caseconv.convert_selection, }, },
-    { '<leader>k', mode = 'v',           plugin and { nvrim.genconv.convert_selection, }, },
-    { '<leader>j', mode = { 'n', 'v', }, plugin and { nvrim.gitlinker.get_link, }, },
+    { '<leader>h',  mode = 'n',           plugin and { function() plugin.resume({}) end, }, },
+    { '<leader>n',  mode = 'n',           plugin and { nvrim.attempt.create_scratch_file, }, },
+    { '<leader>u',  mode = 'v',           plugin and { nvrim.caseconv.convert_selection, }, },
+    { '<leader>k',  mode = 'v',           plugin and { nvrim.genconv.convert_selection, }, },
+    { '<leader>yl', mode = { 'n', 'v', }, plugin and { function() nvrim.gitlinker.get_link('blob') end, }, },
+    { '<leader>yb', mode = { 'n', 'v', }, plugin and { function() nvrim.gitlinker.get_link('blame') end, }, },
   }
 end
 
@@ -110,15 +111,6 @@ function M.close_buffers(plugin)
   return {
     { '<leader>o', mode = 'n', plugin and { function() plugin.wipe({ type = 'other', }) end, }, },
     { '<leader>O', mode = 'n', plugin and { function() plugin.wipe({ type = 'other', force = true, }) end, }, },
-  }
-end
-
-function M.gitlinker(plugin)
-  return {
-    { '<leader>yl', mode = { 'n', 'v', }, plugin and { ':GitLink<cr>', }, },
-    { '<leader>yL', mode = { 'n', 'v', }, plugin and { ':GitLink!<cr>', }, },
-    { '<leader>yb', mode = { 'n', 'v', }, plugin and { ':GitLink blame<cr>', }, },
-    { '<leader>yB', mode = { 'n', 'v', }, plugin and { ':GitLink! blame<cr>', }, },
   }
 end
 

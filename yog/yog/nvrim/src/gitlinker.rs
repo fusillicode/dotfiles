@@ -7,11 +7,10 @@ use ytil_nvim_oxi::visual_selection::Selection;
 pub fn dict() -> Dictionary {
     dict! {
         "get_link": fn_from!(get_link),
-        "get_blame_link": fn_from!(get_blame_link),
     }
 }
 
-fn get_link(_: Option<()>) {
+fn get_link(link_type: String) {
     let Some(cur_buf_path) = ytil_nvim_oxi::buffer::get_relative_buffer_path(&nvim_oxi::api::get_current_buf()) else {
         return;
     };
@@ -34,26 +33,29 @@ fn get_link(_: Option<()>) {
         return;
     };
 
-    build_github_file_link(&mut repo_url, "blob", &current_commit_hash, &cur_buf_path, selection);
+    build_github_file_link(
+        &mut repo_url,
+        &link_type,
+        &current_commit_hash,
+        &cur_buf_path,
+        selection,
+    );
 
     cp_to_system_clipboard_and_notify_error(&mut repo_url.to_string().as_bytes());
 }
 
-fn get_blame_link(_: Option<()>) {
-    let link_to_file = "foo";
-    cp_to_system_clipboard_and_notify_error(&mut link_to_file.as_bytes());
-}
-
-/// Using a [`String`] instead of an [`Url`] because working with that is a PITA.
+/// `repo_url` is [`String`] instead of an [`Url`] because working with [`Url`] is a PITA.
+/// `link_type` is [`&str`] instead of an enum because the [`&str`] is what will be used to
+/// build different links.
 fn build_github_file_link(
     repo_url: &mut String,
-    url_kind: &str,
+    link_type: &str,
     commit_hash: &str,
     cur_buf_path: &Path,
     selection: Selection,
 ) {
     repo_url.push('/');
-    repo_url.push_str(url_kind);
+    repo_url.push_str(link_type);
     repo_url.push('/');
     repo_url.push_str(commit_hash);
     repo_url.push('/');
