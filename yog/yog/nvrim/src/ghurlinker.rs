@@ -64,7 +64,7 @@ fn get_link((link_type, open): (String, Option<bool>)) {
                 "cannot copy content to system clipboard | content={repo_url:?} error={error:#?}"
             ));
         }
-        nvim_oxi::print!("GitHub URL copied to clipboard:\n{repo_url}");
+        nvim_oxi::print!("GitHub {link_type} URL copied to clipboard:\n{repo_url}");
     }
 }
 
