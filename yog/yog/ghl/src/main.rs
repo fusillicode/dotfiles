@@ -6,7 +6,7 @@
 //!
 //! # Flow
 //! - Parse flags (`--search`, `--merge-state`).
-//! - Detect current repository via [`ytil_github::get_current_repo`].
+//! - Detect current repository via [`ytil_github::get_repo_view_field`].
 //! - Fetch PR list via [`ytil_github::pr::get`] (GitHub CLI `gh pr list`) forwarding the search filter.
 //! - Apply optional in‑process merge state filter.
 //! - Present multi‑select TUI via [`ytil_tui::minimal_multi_select`].

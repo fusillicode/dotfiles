@@ -72,7 +72,7 @@ impl DiagnosticLocation {
 impl TryFrom<&Dictionary> for DiagnosticLocation {
     type Error = color_eyre::eyre::Error;
 
-    /// Attempts to convert a Nvim dictionary into a `DiagnosticLocation`.
+    /// Attempts to convert an Nvim dictionary into a `DiagnosticLocation`.
     ///
     /// # Arguments
     /// - `value` A reference to a [`Dictionary`] containing diagnostic location fields.
@@ -101,8 +101,8 @@ impl TryFrom<&Dictionary> for DiagnosticLocation {
         if lnum > end_lnum {
             bail!("inconsistent line boundaries lnum {lnum} > end_lnum {end_lnum}");
         }
-        if col > end_col {
-            bail!("inconsistent col boundaries col {col} > end_col {end_col}");
+        if lnum == end_lnum && col > end_col {
+            bail!("inconsistent col boundaries col {col} > end_col {end_col} on same line");
         }
 
         Ok(Self {
@@ -208,10 +208,10 @@ mod tests {
 
     #[test]
     fn try_from_col_greater_than_end_col_fails() {
-        let dict = create_diag(0, 3, 2, 1);
+        let dict = create_diag(0, 3, 0, 1);
         assert2::let_assert!(Err(err) = DiagnosticLocation::try_from(&dict));
         assert!(err.to_string().contains("inconsistent col boundaries"));
-        assert!(err.to_string().contains("col 3 > end_col 1"));
+        assert!(err.to_string().contains("col 3 > end_col 1 on same line"));
     }
 
     #[test]

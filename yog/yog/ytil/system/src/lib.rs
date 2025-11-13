@@ -3,12 +3,15 @@
 //! Offer small utilities for CLI tools: joining thread handles, building home-relative paths,
 //! manipulating filesystem entries (chmod, symlinks, atomic copy) and clipboard integration.
 
+#![feature(exit_status_error)]
+
 use std::collections::VecDeque;
 use std::ffi::OsStr;
 use std::fs::DirEntry;
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
 use std::path::PathBuf;
+use std::process::Command;
 use std::process::Stdio;
 use std::thread::JoinHandle;
 
@@ -180,8 +183,11 @@ pub fn rm_f<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
     })
 }
 
+/// Outcome of file removal operations.
 pub struct RmFilesOutcome {
+    /// Paths successfully removed or collected in dry run.
     pub removed: Vec<PathBuf>,
+    /// Errors encountered, paired with optional affected paths.
     pub errors: Vec<(Option<PathBuf>, std::io::Error)>,
 }
 
@@ -417,6 +423,22 @@ pub fn find_matching_files_recursively_in_dir(
     }
 
     Ok(manifests)
+}
+
+/// Opens the given argument using the system's default opener.
+///
+/// # Arguments
+/// - `arg` The argument to open (e.g., URL, or file path).
+///
+/// # Returns
+/// Returns `Ok(())` if the command executes successfully.
+///
+/// # Errors
+/// - The `open` command fails to execute.
+/// - The `open` command exits with a non-zero status.
+pub fn open(arg: &str) -> color_eyre::Result<()> {
+    Command::new("open").arg(arg).status()?.exit_ok()?;
+    Ok(())
 }
 
 #[cfg(test)]

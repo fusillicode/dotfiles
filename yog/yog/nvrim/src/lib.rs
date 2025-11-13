@@ -74,6 +74,6 @@ fn nvrim() -> Dictionary {
         "linters": linters::dict(),
         "attempt": attempt::dict(),
         "genconv": genconv::dict(),
-        "gitlinker": github_linker::dict(),
+        "github_linker": github_linker::dict(),
     }
 }
