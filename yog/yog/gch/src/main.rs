@@ -192,13 +192,9 @@ fn restore_entries(entries: &[&GitStatusEntry], branch: Option<&str>) -> color_e
 
     let changed_entries_paths = changed_entries
         .iter()
-        .map(|changed_entry| changed_entry.absolute_path().to_string_lossy().into_owned())
-        .collect::<Vec<_>>();
+        .map(|changed_entry| changed_entry.absolute_path().to_string_lossy().into_owned());
 
-    ytil_git::restore(
-        &changed_entries_paths.iter().map(String::as_str).collect::<Vec<_>>(),
-        branch,
-    )?;
+    ytil_git::restore(changed_entries_paths, branch)?;
 
     for changed_entry in changed_entries {
         let from_branch = branch.map(|b| format!(" from {}", b.bold())).unwrap_or_default();
