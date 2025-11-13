@@ -96,10 +96,10 @@ function M.fzf_lua(plugin)
     { '<leader>n',  mode = 'n',           plugin and { nvrim.attempt.create_scratch_file, }, },
     { '<leader>u',  mode = 'v',           plugin and { nvrim.caseconv.convert_selection, }, },
     { '<leader>k',  mode = 'v',           plugin and { nvrim.genconv.convert_selection, }, },
-    { '<leader>yl', mode = { 'n', 'v', }, plugin and { function() nvrim.github_linker.get_link('blob') end, }, },
-    { '<leader>yb', mode = { 'n', 'v', }, plugin and { function() nvrim.github_linker.get_link('blame') end, }, },
-    { '<leader>yL', mode = { 'n', 'v', }, plugin and { function() nvrim.github_linker.get_link('blob', true) end, }, },
-    { '<leader>yB', mode = { 'n', 'v', }, plugin and { function() nvrim.github_linker.get_link('blame', true) end, }, },
+    { '<leader>yl', mode = { 'n', 'v', }, plugin and { function() nvrim.ghurlinker.get_link('blob') end, }, },
+    { '<leader>yb', mode = { 'n', 'v', }, plugin and { function() nvrim.ghurlinker.get_link('blame') end, }, },
+    { '<leader>yL', mode = { 'n', 'v', }, plugin and { function() nvrim.ghurlinker.get_link('blob', true) end, }, },
+    { '<leader>yB', mode = { 'n', 'v', }, plugin and { function() nvrim.ghurlinker.get_link('blame', true) end, }, },
   }
 end
 
