@@ -23,7 +23,7 @@ pub fn dict() -> Dictionary {
 /// # Arguments
 /// - `link_type` The type of GitHub link to generate (e.g., "blob" for file view).
 #[allow(clippy::needless_pass_by_value)]
-fn get_link(link_type: String) {
+fn get_link((link_type, open): (String, Option<bool>)) {
     let Some(cur_buf_path) = ytil_nvim_oxi::buffer::get_relative_buffer_path(&nvim_oxi::api::get_current_buf()) else {
         return;
     };
@@ -54,7 +54,18 @@ fn get_link(link_type: String) {
         &selection,
     );
 
-    cp_to_system_clipboard_and_notify_error(&mut repo_url.as_bytes());
+    if open.is_some_and(std::convert::identity) {
+        if let Err(error) = ytil_system::open(&repo_url) {
+            ytil_nvim_oxi::api::notify_error(format!("cannot open URL | url={repo_url} error={error:#?}"));
+        }
+    } else {
+        if let Err(error) = ytil_system::cp_to_system_clipboard(&mut repo_url.as_bytes()) {
+            ytil_nvim_oxi::api::notify_error(format!(
+                "cannot copy content to system clipboard | content={repo_url:?} error={error:#?}"
+            ));
+        }
+        nvim_oxi::print!("GitHub URL copied to clipboard:\n{repo_url}")
+    }
 }
 
 /// Builds a GitHub file URL by appending link type, commit hash, file path, and selection range.
@@ -99,18 +110,6 @@ fn add_github_line_col_to_url(repo_url: &mut String, bound: &Bound) {
     repo_url.push_str(&bound.lnum.saturating_add(1).to_string());
     repo_url.push('C');
     repo_url.push_str(&bound.col.to_string());
-}
-
-/// Copies the given content to the system clipboard, notifying Nvim on error.
-///
-/// # Arguments
-/// - `content` The bytes to copy to the clipboard.
-fn cp_to_system_clipboard_and_notify_error(content: &mut &[u8]) {
-    if let Err(error) = ytil_system::cp_to_system_clipboard(content) {
-        ytil_nvim_oxi::api::notify_error(format!(
-            "cannot copy content to system clipboard | content={content:?} error={error:#?}"
-        ));
-    }
 }
 
 #[cfg(test)]
