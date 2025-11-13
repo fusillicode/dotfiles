@@ -167,7 +167,7 @@ pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
 /// If `branch` is provided its tree is the source; otherwise the index / HEAD is used.
 ///
 /// # Arguments
-/// - `paths` Absolute or relative paths to restore. Empty slice = no‑op.
+/// - `paths` Iterator of absolute or relative paths to restore. Empty iterator = no‑op.
 /// - `branch` Optional branch (or commit-ish) acting as the source of truth.
 ///
 /// # Returns
@@ -183,13 +183,20 @@ pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
 /// # Future Work
 /// - Support partial restore when command fails mid‑batch by iterating per path.
 /// - Add dry‑run flag to preview intended operations.
-pub fn restore(paths: &[&str], branch: Option<&str>) -> color_eyre::Result<()> {
-    let mut args = vec!["restore"];
+pub fn restore<I, P>(paths: I, branch: Option<&str>) -> color_eyre::Result<()>
+where
+    I: IntoIterator<Item = P>,
+    P: AsRef<str>,
+{
+    let mut cmd = Command::new("git");
+    cmd.arg("restore");
     if let Some(branch) = branch {
-        args.push(branch);
+        cmd.arg(branch);
     }
-    args.extend_from_slice(paths);
-    Command::new("git").args(args).exec()?;
+    for p in paths {
+        cmd.arg(p.as_ref());
+    }
+    cmd.exec()?;
     Ok(())
 }
 
