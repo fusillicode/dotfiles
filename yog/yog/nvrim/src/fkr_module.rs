@@ -4,7 +4,6 @@
 //! [`::fkr::FkrOption`] then inserting the generated string at the cursor. Input / buffer errors are
 //! reported via [`ytil_nvim_oxi::api::notify_error`].
 
-use fkr::FkrOption;
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
 use strum::IntoEnumIterator;
@@ -13,7 +12,7 @@ use ytil_nvim_oxi::buffer::BufferExt as _;
 /// [`Dictionary`] of random string generation helpers powered by [`fkr`].
 ///
 /// Entries:
-/// - `"insert_string"` inserts a generated value at the current cursor position replacing any active selection via the
+/// - `"insert_string"`: inserts a generated value at the current cursor position replacing any active selection via the
 ///   buffer helper.
 pub fn dict() -> Dictionary {
     dict! {
@@ -23,7 +22,7 @@ pub fn dict() -> Dictionary {
 
 /// Prompt the user to select a [`fkr::FkrOption`] and insert its generated string.
 ///
-/// The user is shown a selection menu via [`ytil_nvim_oxi::api::vim_ui_select`]; on
+/// The user is shown a numbered menu via [`ytil_nvim_oxi::api::inputlist`]; on
 /// selection the corresponding generated string is inserted at the cursor using
 /// [`ytil_nvim_oxi::buffer::BufferExt::set_text_at_cursor_pos`].
 ///
@@ -31,14 +30,15 @@ pub fn dict() -> Dictionary {
 /// - Returns early (no insertion) if fetching user input fails or is canceled.
 /// - Emits error notifications to Nvim for selection prompt or buffer write failures.
 fn insert_string(_: ()) {
-    let opts: Vec<FkrOption> = FkrOption::iter().collect();
+    let _ = ::fkr::FkrOption::Uuidv4;
+    let opts: Vec<::fkr::FkrOption> = ::fkr::FkrOption::iter().collect();
 
     let callback = {
         let opts = opts.clone();
         move |choice_idx| {
-            let selected_opt: Option<&FkrOption> = opts.get(choice_idx);
-            if let Some(selected_opt) = selected_opt {
-                Buffer::current().set_text_at_cursor_pos(&selected_opt.gen_string());
+            if let Some(selected_opt) = opts.get(choice_idx) {
+                let generated = ::fkr::FkrOption::gen_string(selected_opt);
+                Buffer::current().set_text_at_cursor_pos(&generated);
             }
         }
     };
