@@ -29,6 +29,7 @@ use color_eyre::eyre;
 use color_eyre::eyre::WrapErr;
 use color_eyre::eyre::bail;
 use itertools::Itertools;
+use ytil_system::CliArgs;
 
 /// Exit condition for retry loop.
 enum ExitCond {
@@ -72,6 +73,11 @@ fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
     let args = ytil_system::get_args();
+
+    if args.has_help() {
+        println!("{}", include_str!("../help.txt"));
+        return Ok(());
+    }
 
     let Some((cooldown_secs, args)) = args.split_first() else {
         bail!("missing cooldown arg | args={args:#?}");

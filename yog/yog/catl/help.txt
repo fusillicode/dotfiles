@@ -1,0 +1,10 @@
+Usage: catl <path>
+
+Display file contents or long-list directories.
+
+Arguments:
+  <path>  Path to file/directory/symlink to display.
+
+Examples:
+  catl file.txt          Display file contents.
+  catl /tmp              Long-list directory contents.

@@ -1,0 +1,10 @@
+Usage: vpg [<alias>]
+
+Update Postgres credentials from Vault, rewrite pgpass & nvim-dbee, optionally launch pgcli.
+
+Arguments:
+  [<alias>]  Optional database alias (interactive selector if missing).
+
+Examples:
+  vpg          Pick alias interactively, update, optional connect.
+  vpg reporting  Directly update 'reporting' alias, prompt to connect.

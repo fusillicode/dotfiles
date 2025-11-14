@@ -24,6 +24,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use color_eyre::owo_colors::OwoColorize;
+use ytil_system::CliArgs;
 
 /// List of binaries that should be copied after building.
 /// NOTE: if a new binary is added this list must be updated!
@@ -76,6 +77,11 @@ fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
     let mut args = ytil_system::get_args();
+
+    if args.has_help() {
+        println!("{}", include_str!("../help.txt"));
+        return Ok(());
+    }
 
     let is_debug = drop_element(&mut args, "--debug");
     let bins_path = args.first().cloned().map_or_else(

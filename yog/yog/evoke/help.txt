@@ -1,0 +1,16 @@
+Usage: evoke [--debug] [bins_path] [cargo_target_path] [nvim_libs_path]
+
+Format, lint, build, and deploy workspace binaries and Nvim libs.
+
+Options:
+  --debug  Use debug profile; skip clippy; copy from target/debug.
+
+Arguments:
+  bins_path          Destination for binaries (default: ~/.local/bin).
+  cargo_target_path  Cargo target root (default: workspace target/).
+  nvim_libs_path     Destination for nvim libs (default: ~/.config/nvim/lua).
+
+Examples:
+  evoke                          Format, lint, build release, copy bins/libs.
+  evoke --debug                  Format, build debug (skip clippy), copy.
+  evoke ~/.local/bin /tmp/target ~/.config/nvim/lua
