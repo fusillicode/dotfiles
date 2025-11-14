@@ -246,10 +246,13 @@ impl Op {
 /// Central helper avoids duplicating formatting order and styling decisions.
 fn format_pr(pr: &PullRequest) -> String {
     format!(
-        "{} {} {}",
-        format!("number={}", pr.number).white().bold(),
-        format!("title={:?}", pr.title).white().bold(),
-        format!("author={:?}", pr.author).white().bold(),
+        "{}{:?} {}{:?} {}{:?}",
+        "number=".white().bold(),
+        pr.number,
+        "title=".white().bold(),
+        pr.title,
+        "author=",
+        pr.author,
     )
 }
 
