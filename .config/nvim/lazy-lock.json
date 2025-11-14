@@ -7,8 +7,8 @@
   "conform.nvim": { "branch": "master", "commit": "cde4da5c1083d3527776fee69536107d98dae6c9" },
   "crates.nvim": { "branch": "main", "commit": "ac9fa498a9edb96dc3056724ff69d5f40b898453" },
   "fidget.nvim": { "branch": "main", "commit": "e32b672d8fd343f9d6a76944fedb8c61d7d8111a" },
-  "fzf": { "branch": "master", "commit": "535b610a6b0858364cfb12cee8b5ae7132883ea0" },
-  "fzf-lua": { "branch": "main", "commit": "996b2366489324983ac1a555cf4d156fe3786fa0" },
+  "fzf": { "branch": "master", "commit": "3f499f055ee04fa9a3f0691b00c1088da2bab475" },
+  "fzf-lua": { "branch": "main", "commit": "ce40b36a14f4eaf89c4aad10b01a83df13d624be" },
   "gitsigns.nvim": { "branch": "main", "commit": "20ad4419564d6e22b189f6738116b38871082332" },
   "grug-far.nvim": { "branch": "main", "commit": "b58b2d65863f4ebad88b10a1ddd519e5380466e0" },
   "lazy.nvim": { "branch": "main", "commit": "85c7ff3711b730b4030d03144f6db6375044ae82" },
@@ -17,7 +17,7 @@
   "nvim-autopairs": { "branch": "master", "commit": "7a2c97cccd60abc559344042fefb1d5a85b3e33b" },
   "nvim-dbee": { "branch": "master", "commit": "dda517694889a5d238d7aa407403984da9f80cc0" },
   "nvim-lint": { "branch": "master", "commit": "2536f1b18ea389e6b078b3a47a5e273c74a46a34" },
-  "nvim-lspconfig": { "branch": "master", "commit": "b34fbdffdcb6295c7a25df6ba375452a2e73c32e" },
+  "nvim-lspconfig": { "branch": "master", "commit": "95fe3c170753238d3ca4f760e79a991400677abc" },
   "nvim-spider": { "branch": "main", "commit": "1260cfe73faeda74d6fea78ff41f0b66cb777e06" },
   "nvim-surround": { "branch": "main", "commit": "fcfa7e02323d57bfacc3a141f8a74498e1522064" },
   "nvim-treesitter": { "branch": "master", "commit": "42fc28ba918343ebfd5565147a42a26580579482" },
@@ -28,5 +28,5 @@
   "opencode.nvim": { "branch": "main", "commit": "217d363bf1263d18ecd00cbb618b74e8553432e2" },
   "peek.nvim": { "branch": "master", "commit": "5820d937d5414baea5f586dc2a3d912a74636e5b" },
   "render-markdown.nvim": { "branch": "main", "commit": "f58c05f349d6e7650f4b40b0df1514400f0c10de" },
-  "schemastore.nvim": { "branch": "main", "commit": "229e7ecd3ed9b882cc172f7e8a8d6eb8ba4124ff" }
+  "schemastore.nvim": { "branch": "main", "commit": "eed1834170f343c14a6768f085b26b3571a55302" }
 }
