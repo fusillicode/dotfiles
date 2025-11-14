@@ -1,0 +1,6 @@
+Usage: yghfl
+
+Copy GitHub URL (file/line/col) for the current Helix buffer to clipboard.
+
+Examples:
+  yghfl  Copies https://github.com/<org>/<repo>/tree/<branch>/<path>#L<line>C<col> to clipboard.
