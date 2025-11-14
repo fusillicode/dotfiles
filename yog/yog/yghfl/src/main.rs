@@ -28,6 +28,7 @@ use url::Url;
 use ytil_editor::Editor;
 use ytil_hx::HxCursorPosition;
 use ytil_hx::HxStatusLine;
+use ytil_system::CliArgs;
 use ytil_wezterm::WeztermPane;
 use ytil_wezterm::get_sibling_pane_with_titles;
 
@@ -92,7 +93,7 @@ fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
     let args = ytil_system::get_args();
-    if args.contains(&"--help".to_string()) {
+    if args.has_help() {
         println!("{}", include_str!("../help.txt"));
         return Ok(());
     }

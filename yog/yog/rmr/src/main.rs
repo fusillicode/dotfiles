@@ -38,6 +38,7 @@ use std::path::Path;
 use color_eyre::Report;
 use color_eyre::eyre::bail;
 use color_eyre::owo_colors::OwoColorize;
+use ytil_system::CliArgs;
 
 /// Deletes one path after stripping the first ':' suffix segment.
 ///
@@ -128,7 +129,7 @@ fn main() -> color_eyre::Result<()> {
 
     let files = ytil_system::get_args();
 
-    if files.contains(&"--help".to_string()) {
+    if files.has_help() {
         println!("{}", include_str!("../help.txt"));
         return Ok(());
     }

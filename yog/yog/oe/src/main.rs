@@ -33,6 +33,7 @@ use core::str::FromStr;
 use color_eyre::eyre::bail;
 use ytil_editor::Editor;
 use ytil_editor::FileToOpen;
+use ytil_system::CliArgs;
 
 /// Wrapper for environment variables.
 struct Env {
@@ -74,7 +75,7 @@ fn main() -> color_eyre::Result<()> {
     let enriched_path_env = get_enriched_path_env()?;
     let args = ytil_system::get_args();
 
-    if args.contains(&"--help".to_string()) {
+    if args.has_help() {
         println!("{}", include_str!("../help.txt"));
         return Ok(());
     }

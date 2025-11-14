@@ -32,6 +32,7 @@ use std::path::Path;
 
 use color_eyre::eyre::eyre;
 use color_eyre::owo_colors::OwoColorize as _;
+use ytil_system::CliArgs;
 
 use crate::installers::Installer;
 use crate::installers::bash_language_server::BashLanguageServer;
@@ -115,7 +116,7 @@ fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
     let args = ytil_system::get_args();
-    if args.contains(&"--help".to_string()) {
+    if args.has_help() {
         println!("{}", include_str!("../help.txt"));
         return Ok(());
     }

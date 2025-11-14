@@ -29,6 +29,7 @@ use color_eyre::eyre;
 use color_eyre::eyre::WrapErr;
 use color_eyre::eyre::bail;
 use itertools::Itertools;
+use ytil_system::CliArgs;
 
 /// Exit condition for retry loop.
 enum ExitCond {
@@ -73,7 +74,7 @@ fn main() -> color_eyre::Result<()> {
 
     let args = ytil_system::get_args();
 
-    if args.contains(&"--help".to_string()) {
+    if args.has_help() {
         println!("{}", include_str!("../help.txt"));
         return Ok(());
     }

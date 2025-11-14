@@ -18,6 +18,7 @@ use std::process::Command;
 use color_eyre::eyre::eyre;
 use ytil_editor::Editor;
 use ytil_hx::HxStatusLine;
+use ytil_system::CliArgs;
 
 /// Formats Helix status line into file path with line number.
 ///
@@ -37,7 +38,7 @@ fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
     let args = ytil_system::get_args();
-    if args.contains(&"--help".to_string()) {
+    if args.has_help() {
         println!("{}", include_str!("../help.txt"));
         return Ok(());
     }

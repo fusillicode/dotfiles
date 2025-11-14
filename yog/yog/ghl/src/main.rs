@@ -53,6 +53,8 @@ use ytil_github::RepoViewField;
 use ytil_github::pr::IntoEnumIterator;
 use ytil_github::pr::PullRequest;
 use ytil_github::pr::PullRequestMergeState;
+use ytil_system::CliArgs as _;
+use ytil_system::pico_args::Arguments;
 
 /// Newtype wrapper implementing colored [`Display`] for a [`PullRequest`].
 ///
@@ -283,8 +285,8 @@ fn format_pr(pr: &PullRequest) -> String {
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let mut pargs = pico_args::Arguments::from_env();
-    if pargs.contains("--help") {
+    let mut pargs = Arguments::from_env();
+    if pargs.has_help() {
         println!("{}", include_str!("../help.txt"));
         return Ok(());
     }
