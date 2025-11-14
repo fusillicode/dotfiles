@@ -11,6 +11,7 @@ CTRL
 Checkout
 DNI
 DTS
+Datadog
 Dependabot
 DiagnosticSignError
 DiagnosticSignHint
