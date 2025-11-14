@@ -69,6 +69,12 @@ fn exec_vault_read_cmd(vault_path: &str) -> color_eyre::Result<VaultReadOutput> 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
+    let args = ytil_system::get_args();
+    if args.contains(&"--help".to_string()) {
+        println!("{}", include_str!("../help.txt"));
+        return Ok(());
+    }
+
     let pgpass_path = ytil_system::build_home_path(&[".pgpass"])?;
     let pgpass_content = std::fs::read_to_string(&pgpass_path)?;
     let pgpass_file = PgpassFile::parse(pgpass_content.as_str())?;

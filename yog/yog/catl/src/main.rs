@@ -25,6 +25,11 @@ fn main() -> color_eyre::Result<()> {
 
     let args = ytil_system::get_args();
 
+    if args.contains(&"--help".to_string()) {
+        println!("{}", include_str!("../help.txt"));
+        return Ok(());
+    }
+
     let path = args.first().ok_or_else(|| eyre!("missing path arg | args={args:#?}"))?;
 
     let metadata = std::fs::metadata(path)?;

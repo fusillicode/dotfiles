@@ -128,6 +128,11 @@ fn main() -> color_eyre::Result<()> {
 
     let files = ytil_system::get_args();
 
+    if files.contains(&"--help".to_string()) {
+        println!("{}", include_str!("../help.txt"));
+        return Ok(());
+    }
+
     if files.is_empty() {
         println!("Nothing done");
     }

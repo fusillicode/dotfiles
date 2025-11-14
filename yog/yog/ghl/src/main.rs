@@ -282,11 +282,16 @@ fn format_pr(pr: &PullRequest) -> String {
 /// - Inject CLI dependencies for isolated testing.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
+
+    let mut pargs = pico_args::Arguments::from_env();
+    if pargs.contains("--help") {
+        println!("{}", include_str!("../help.txt"));
+        return Ok(());
+    }
+
     ytil_github::log_into_github()?;
 
     let repo_name_with_owner = ytil_github::get_repo_view_field(&RepoViewField::NameWithOwner)?;
-
-    let mut pargs = pico_args::Arguments::from_env();
 
     let search_filter: Option<String> = pargs.opt_value_from_str("--search")?;
     let merge_state = pargs

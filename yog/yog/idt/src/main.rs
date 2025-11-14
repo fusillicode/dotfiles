@@ -115,6 +115,10 @@ fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
     let args = ytil_system::get_args();
+    if args.contains(&"--help".to_string()) {
+        println!("{}", include_str!("../help.txt"));
+        return Ok(());
+    }
     println!(
         "{:#?} started with args {}",
         std::env::current_exe()?.bold().cyan(),

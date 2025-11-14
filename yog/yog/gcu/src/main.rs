@@ -257,6 +257,10 @@ fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
     let args = ytil_system::get_args();
+    if args.contains(&"--help".to_string()) {
+        println!("{}", include_str!("../help.txt"));
+        return Ok(());
+    }
     let args: Vec<_> = args.iter().map(String::as_str).collect();
 
     match args.split_first() {

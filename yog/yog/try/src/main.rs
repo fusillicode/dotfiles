@@ -73,6 +73,11 @@ fn main() -> color_eyre::Result<()> {
 
     let args = ytil_system::get_args();
 
+    if args.contains(&"--help".to_string()) {
+        println!("{}", include_str!("../help.txt"));
+        return Ok(());
+    }
+
     let Some((cooldown_secs, args)) = args.split_first() else {
         bail!("missing cooldown arg | args={args:#?}");
     };

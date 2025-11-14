@@ -77,6 +77,11 @@ fn main() -> color_eyre::Result<()> {
 
     let mut args = ytil_system::get_args();
 
+    if args.contains(&"--help".to_string()) {
+        println!("{}", include_str!("../help.txt"));
+        return Ok(());
+    }
+
     let is_debug = drop_element(&mut args, "--debug");
     let bins_path = args.first().cloned().map_or_else(
         || ytil_system::build_home_path(BINS_DEFAULT_PATH),

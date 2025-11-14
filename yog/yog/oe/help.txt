@@ -1,0 +1,13 @@
+Usage: oe <editor> <file_path> [pane_id]
+
+Open files (optionally at line:col) in existing Nvim / Helix pane.
+
+Arguments:
+  <editor>     Target editor: nvim or hx.
+  <file_path>  File to open (append :line:col for jump).
+  [pane_id]    Optional WezTerm pane ID (auto-detected if omitted).
+
+Examples:
+  oe nvim src/lib.rs          Open file in existing nvim pane.
+  oe nvim src/lib.rs:42:5     Jump to line 42 col 5.
+  oe hx README.md 1234567890  Explicit pane ID.

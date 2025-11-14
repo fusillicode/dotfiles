@@ -1,0 +1,10 @@
+Usage: fkr [cp]
+
+Generate fake data strings from selected providers.
+
+Arguments:
+  cp  Optional flag to copy the generated value to clipboard.
+
+Examples:
+  fkr     Select generator, print value.
+  fkr cp  Select generator, print and copy to clipboard.

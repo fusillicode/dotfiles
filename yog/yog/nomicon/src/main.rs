@@ -85,6 +85,12 @@ fn get_toml_values(content: &str, key: &str) -> Vec<String> {
 fn main() -> color_eyre::eyre::Result<()> {
     color_eyre::install()?;
 
+    let args = ytil_system::get_args();
+    if args.contains(&"--help".to_string()) {
+        println!("{}", include_str!("../help.txt"));
+        return Ok(());
+    }
+
     let workspace_root = ytil_system::get_workspace_root()?;
     let doc_dir = workspace_root.join("target/doc");
     // Always remove docs dir if present:

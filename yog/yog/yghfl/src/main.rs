@@ -91,6 +91,12 @@ fn build_github_link<'a>(
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
+    let args = ytil_system::get_args();
+    if args.contains(&"--help".to_string()) {
+        println!("{}", include_str!("../help.txt"));
+        return Ok(());
+    }
+
     let hx_pane = get_sibling_pane_with_titles(
         &ytil_wezterm::get_all_panes(&[])?,
         ytil_wezterm::get_current_pane_id()?,

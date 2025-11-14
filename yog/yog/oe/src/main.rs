@@ -74,6 +74,11 @@ fn main() -> color_eyre::Result<()> {
     let enriched_path_env = get_enriched_path_env()?;
     let args = ytil_system::get_args();
 
+    if args.contains(&"--help".to_string()) {
+        println!("{}", include_str!("../help.txt"));
+        return Ok(());
+    }
+
     let Some(editor) = args.first().map(|x| Editor::from_str(x)).transpose()? else {
         bail!("missing editor arg | args={args:#?}");
     };
