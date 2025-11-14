@@ -758,9 +758,9 @@ name = "ghl"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
- "pico-args",
  "strum",
  "ytil_github",
+ "ytil_system",
  "ytil_tui",
 ]
 
@@ -2635,6 +2635,7 @@ dependencies = [
  "assert2",
  "chrono",
  "color-eyre",
+ "pico-args",
  "tempfile",
  "ytil_cmd",
 ]

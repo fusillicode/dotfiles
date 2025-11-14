@@ -1,0 +1,10 @@
+Usage: rmr <paths...>
+
+Remove files or directories passed as CLI args (recursive for dirs).
+
+Arguments:
+  <paths...>  One or more filesystem paths. Optional trailing :... suffix removed.
+
+Examples:
+  rmr file.txt dir/          Remove file and directory.
+  rmr path:42                Remove 'path' (suffix stripped).

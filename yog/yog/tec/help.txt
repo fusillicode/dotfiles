@@ -1,0 +1,10 @@
+Usage: tec [--fix]
+
+Run workspace lint suite concurrently (check or fix modes).
+
+Options:
+  --fix  Run lints that support automatic fixes (default: check mode).
+
+Examples:
+  tec      Run non-mutating lints.
+  tec --fix  Run lints with automatic fixes.

@@ -1,0 +1,17 @@
+Usage: gcu [- | -b <args...> | <single> | <multiple args...> | <github pr url>]
+
+Switch, create, and derive Git branches (including from GitHub PR URLs).
+
+Modes:
+  -                    Switch to previous branch.
+  -b <args...>         Create new branch from sanitized <args...>, switch.
+  <single>             Switch if exists, else confirm create & switch.
+  <multiple args...>   Sanitize & join into branch name (create if missing).
+  <github pr url>      Derive branch name from PR & switch (fetch if needed).
+
+Examples:
+  gcu                    Interactive branch picker.
+  gcu -                  Previous branch.
+  gcu -b Feature Add Foo Create 'feature-add-foo', switch.
+  gcu feature add foo    Sanitized join to 'feature-add-foo'.
+  gcu https://github.com/org/repo/pull/123  Derive PR branch, switch.

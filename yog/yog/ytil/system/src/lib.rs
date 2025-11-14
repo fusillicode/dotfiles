@@ -22,6 +22,25 @@ use color_eyre::eyre::OptionExt as _;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 use color_eyre::owo_colors::OwoColorize as _;
+pub use pico_args;
+
+const HELP_ARG: &str = "--help";
+
+pub trait CliArgs {
+    fn has_help(&self) -> bool;
+}
+
+impl<T: AsRef<str>> CliArgs for Vec<T> {
+    fn has_help(&self) -> bool {
+        self.iter().any(|arg| arg.as_ref() == HELP_ARG)
+    }
+}
+
+impl CliArgs for pico_args::Arguments {
+    fn has_help(&self) -> bool {
+        self.clone().contains(HELP_ARG)
+    }
+}
 
 /// Retrieves command-line arguments excluding the program name, returning them as a [`Vec`] of [`String`].
 pub fn get_args() -> Vec<String> {

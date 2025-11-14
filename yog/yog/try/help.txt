@@ -1,0 +1,12 @@
+Usage: try <cooldown_secs> <exit_condition> <command...>
+
+Re-run a command until success (ok) or failure (ko) with cooldown.
+
+Arguments:
+  <cooldown_secs>   Seconds to sleep between tries.
+  <exit_condition>  'ok' (stop on success) or 'ko' (stop on failure).
+  <command...>      Remainder joined and executed via 'sh -c'.
+
+Examples:
+  try 2 ok cargo test      Rerun every 2s until tests pass.
+  try 5 ko curl -f localhost:8080  Rerun until it fails.

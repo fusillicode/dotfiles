@@ -38,6 +38,7 @@ use std::time::Instant;
 use color_eyre::owo_colors::OwoColorize;
 use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt as _;
+use ytil_system::CliArgs;
 use ytil_system::RmFilesOutcome;
 
 /// Workspace lint check set.
@@ -424,6 +425,10 @@ fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
     let args = ytil_system::get_args();
+    if args.has_help() {
+        println!("{}", include_str!("../help.txt"));
+        return Ok(());
+    }
     let fix_mode = args.first().is_some_and(|s| s == "--fix");
 
     let (start_msg, lints) = if fix_mode {

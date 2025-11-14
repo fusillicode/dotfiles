@@ -1,0 +1,6 @@
+Usage: yhfp
+
+Copy current Helix file path with line number to clipboard.
+
+Examples:
+  yhfp  Copies /absolute/path/to/file.rs:123 to clipboard.

@@ -1,0 +1,15 @@
+Usage: ghl [--search <FILTER>] [--merge-state <STATE>]
+
+List and optionally batch-merge GitHub pull requests interactively.
+
+Options:
+  --search <FILTER>     Forward to 'gh pr list --search'.
+  --merge-state <STATE> Client-side filter by merge state.
+                        Values: Behind, Blocked, Clean, Dirty, Draft, HasHooks,
+                        Unknown, Unmergeable.
+
+Examples:
+  ghl                          List all open PRs.
+  ghl --search "fix ci"        Filter by search terms.
+  ghl --merge-state Clean      Filter by merge state.
+  ghl --search="lint" --merge-state Dirty  Combine filters.

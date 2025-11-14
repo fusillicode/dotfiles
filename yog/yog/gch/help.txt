@@ -1,0 +1,10 @@
+Usage: gch [<branch>]
+
+Stage or discard selected Git changes interactively.
+
+Arguments:
+  <branch>  Optional branch for restore in Discard mode.
+
+Examples:
+  gch        Select changes, choose Add or Discard.
+  gch main   Use 'main' as blob source when discarding.

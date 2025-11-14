@@ -18,6 +18,7 @@ use askama::Template;
 use chrono::Utc;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
+use ytil_system::CliArgs;
 
 use crate::templates::components::footer::Footer;
 use crate::templates::pages::index::CrateMeta;
@@ -84,6 +85,12 @@ fn get_toml_values(content: &str, key: &str) -> Vec<String> {
 /// Generate consolidated styled workspace documentation.
 fn main() -> color_eyre::eyre::Result<()> {
     color_eyre::install()?;
+
+    let args = ytil_system::get_args();
+    if args.has_help() {
+        println!("{}", include_str!("../help.txt"));
+        return Ok(());
+    }
 
     let workspace_root = ytil_system::get_workspace_root()?;
     let doc_dir = workspace_root.join("target/doc");
