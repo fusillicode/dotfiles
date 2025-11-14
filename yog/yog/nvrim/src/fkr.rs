@@ -13,7 +13,7 @@ use ytil_nvim_oxi::buffer::BufferExt as _;
 /// [`Dictionary`] of random string generation helpers powered by [`fkr`].
 ///
 /// Entries:
-/// - `"insert_string"`: inserts a generated value at the current cursor position replacing any active selection via the
+/// - `"insert_string"` inserts a generated value at the current cursor position replacing any active selection via the
 ///   buffer helper.
 pub fn dict() -> Dictionary {
     dict! {
@@ -23,7 +23,7 @@ pub fn dict() -> Dictionary {
 
 /// Prompt the user to select a [`fkr::FkrOption`] and insert its generated string.
 ///
-/// The user is shown a numbered menu via [`ytil_nvim_oxi::api::inputlist`]; on
+/// The user is shown a selection menu via [`ytil_nvim_oxi::api::vim_ui_select`]; on
 /// selection the corresponding generated string is inserted at the cursor using
 /// [`ytil_nvim_oxi::buffer::BufferExt::set_text_at_cursor_pos`].
 ///
@@ -31,15 +31,19 @@ pub fn dict() -> Dictionary {
 /// - Returns early (no insertion) if fetching user input fails or is canceled.
 /// - Emits error notifications to Nvim for selection prompt or buffer write failures.
 fn insert_string(_: ()) {
-    let options: Vec<_> = FkrOption::iter().collect();
+    let opts: Vec<FkrOption> = FkrOption::iter().collect();
 
-    let Ok(selected_option) = ytil_nvim_oxi::api::inputlist("Select option:", &options).inspect_err(|error| {
-        ytil_nvim_oxi::api::notify_error(format!("cannot get user input | error={error:#?}"));
-    }) else {
-        return;
+    let callback = {
+        let opts = opts.clone();
+        move |choice_idx| {
+            let selected_opt: Option<&FkrOption> = opts.get(choice_idx);
+            if let Some(selected_opt) = selected_opt {
+                Buffer::current().set_text_at_cursor_pos(&selected_opt.gen_string());
+            }
+        }
     };
 
-    if let Some(sel_opt) = selected_option {
-        Buffer::current().set_text_at_cursor_pos(&sel_opt.gen_string());
+    if let Err(error) = ytil_nvim_oxi::api::vim_ui_select(opts, &[("prompt", "Select option: ")], callback) {
+        ytil_nvim_oxi::api::notify_error(error);
     }
 }
