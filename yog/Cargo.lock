@@ -2598,6 +2598,7 @@ dependencies = [
  "assert2",
  "chrono",
  "color-eyre",
+ "pretty_assertions",
  "rstest",
  "serde",
  "serde_json",

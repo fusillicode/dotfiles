@@ -59,24 +59,61 @@ pub fn get_repo_view_field(field: &RepoViewField) -> color_eyre::Result<String> 
     extract_success_output(&output)
 }
 
-/// Repository fields available for querying via `gh repo view`.
-#[derive(strum::AsRefStr)]
-pub enum RepoViewField {
-    /// The repository name with owner in `owner/name` format.
-    #[strum(serialize = "nameWithOwner")]
-    NameWithOwner,
-    /// The repository URL.
-    #[strum(serialize = "url")]
-    Url,
+pub fn create_issue(title: &str) -> color_eyre::Result<CreatedIssue> {
+    let output = Command::new("gh")
+        .args(["issue", "create", "--title", title, "--body", ""])
+        .output()?;
+
+    let created_issue = extract_success_output(&output).and_then(|output| CreatedIssue::new(title, &output))?;
+
+    Ok(created_issue)
 }
 
-impl RepoViewField {
-    /// Returns the jq representation of the field for GitHub CLI queries.
-    ///
-    /// # Returns
-    /// A string prefixed with `.` for use in jq expressions.
-    pub fn jq_repr(&self) -> String {
-        format!(".{}", self.as_ref())
+pub fn open_pr(title: &str) -> color_eyre::Result<String> {
+    let output = Command::new("gh").args(["pr", "create", "--title", title]).output()?;
+    extract_success_output(&output)
+}
+
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
+pub struct CreatedIssue {
+    pub title: String,
+    pub issue_nr: String,
+    pub repo: String,
+}
+
+impl CreatedIssue {
+    fn new(title: &str, output: &str) -> color_eyre::Result<Self> {
+        let mut split = output.split("issues");
+        let repo = split
+            .next()
+            .ok_or_else(|| eyre!("cannot build CreateIssueOutput missing repo | output={output}"))
+            .and_then(|s| {
+                if s.is_empty() {
+                    Err(eyre!("cannot build CreateIssueOutput empty repo | output={output}"))
+                } else {
+                    Ok(s.trim_end_matches("/"))
+                }
+            })?;
+        let issue_nr = split
+            .next()
+            .ok_or_else(|| eyre!("cannot build CreateIssueOutput missing issue_nr | output={output}"))
+            .and_then(|s| {
+                if s.is_empty() {
+                    Err(eyre!("cannot build CreateIssueOutput empty issue_nr | output={output}"))
+                } else {
+                    Ok(s)
+                }
+            })?;
+
+        Ok(Self {
+            title: title.to_string(),
+            issue_nr: issue_nr.trim_start_matches('/').to_string(),
+            repo: repo.to_string(),
+        })
+    }
+
+    pub fn pr_title(&self) -> String {
+        format!("[{}]: {}", self.issue_nr, self.title)
     }
 }
 
@@ -151,6 +188,27 @@ pub fn get_repo_urls(repo_path: &Path) -> color_eyre::Result<Vec<Url>> {
         );
     }
     Ok(repo_urls)
+}
+
+/// Repository fields available for querying via `gh repo view`.
+#[derive(strum::AsRefStr)]
+pub enum RepoViewField {
+    /// The repository name with owner in `owner/name` format.
+    #[strum(serialize = "nameWithOwner")]
+    NameWithOwner,
+    /// The repository URL.
+    #[strum(serialize = "url")]
+    Url,
+}
+
+impl RepoViewField {
+    /// Returns the jq representation of the field for GitHub CLI queries.
+    ///
+    /// # Returns
+    /// A string prefixed with `.` for use in jq expressions.
+    pub fn jq_repr(&self) -> String {
+        format!(".{}", self.as_ref())
+    }
 }
 
 /// Converts a Git remote URL (SSH or HTTPS) to a canonical GitHub HTTPS URL without the `.git` suffix.
@@ -338,6 +396,41 @@ mod tests {
         ))
         .unwrap();
         assert_eq!(extract_pr_id_form_url(&url).unwrap(), "42");
+    }
+
+    #[test]
+    fn created_issue_new_parses_valid_output() {
+        pretty_assertions::assert_eq!(
+            CreatedIssue::new("Test Issue", "https://github.com/owner/repo/issues/123").unwrap(),
+            CreatedIssue {
+                title: "Test Issue".to_string(),
+                repo: "https://github.com/owner/repo".to_string(),
+                issue_nr: "123".to_string(),
+            }
+        );
+    }
+
+    #[rstest]
+    #[case("", "cannot build CreateIssueOutput empty repo | output=")]
+    #[case("issues", "cannot build CreateIssueOutput empty repo | output=issues")]
+    #[case(
+        "https://github.com/owner/repo/123",
+        "cannot build CreateIssueOutput missing issue_nr | output=https://github.com/owner/repo/123"
+    )]
+    #[case("repo/issues", "cannot build CreateIssueOutput empty issue_nr | output=repo/issues")]
+    fn created_issue_new_errors_on_invalid_output(#[case] output: &str, #[case] expected_error: &str) {
+        assert2::let_assert!(Err(error) = CreatedIssue::new("title", output));
+        pretty_assertions::assert_eq!(error.to_string(), expected_error);
+    }
+
+    #[test]
+    fn created_issue_pr_title_formats_correctly() {
+        let issue = CreatedIssue {
+            title: "Fix bug".to_string(),
+            issue_nr: "42".to_string(),
+            repo: "https://github.com/owner/repo/".to_string(),
+        };
+        pretty_assertions::assert_eq!(issue.pr_title(), "[42]: Fix bug");
     }
 
     #[rstest]
