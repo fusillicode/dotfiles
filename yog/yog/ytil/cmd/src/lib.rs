@@ -32,7 +32,7 @@ pub trait CmdExt {
 }
 
 impl CmdExt for Command {
-    fn exec(&mut self) -> color_eyre::Result<Output, CmdError> {
+    fn exec(&mut self) -> Result<Output, CmdError> {
         let output = self.output().map_err(|source| CmdError::Io {
             cmd: Cmd::from(&*self),
             source,

@@ -36,6 +36,7 @@ use color_eyre::eyre::bail;
 use color_eyre::owo_colors::OwoColorize as _;
 use url::Url;
 use ytil_git::Branch;
+use ytil_git::CmdError;
 use ytil_system::CliArgs;
 
 struct RenderableBranch(Branch);
@@ -76,13 +77,11 @@ fn autocomplete_git_branches_and_switch(branches: &[Branch]) -> color_eyre::Resu
     };
     ytil_git::remove_redundant_remotes(&mut branches);
 
-    match ytil_tui::minimal_select(branches.into_iter().map(RenderableBranch).collect())? {
-        Some(hd) if hd.name() == "-" || hd.name().is_empty() => {
-            ytil_git::switch_branch("-").inspect(|()| report_branch_switch("-"))
-        }
-        Some(other) => ytil_git::switch_branch(other.name()).inspect(|()| report_branch_switch(other.name())),
-        None => Ok(()),
-    }
+    let branch = ytil_tui::minimal_select(branches.into_iter().map(RenderableBranch).collect())?;
+    let branch_name = branch.as_ref().map_or("-", |b| b.name());
+    ytil_git::switch_branch(branch_name).inspect(|()| report_branch_switch(branch_name))?;
+
+    Ok(())
 }
 
 /// Handles a single input argument, either a GitHub PR URL or a branch name, and switches to the corresponding branch.
@@ -105,7 +104,13 @@ fn handle_single_input_argument(arg: &str) -> color_eyre::Result<()> {
     } else {
         arg.to_string()
     };
-    ytil_git::switch_branch(&branch_name).inspect(|()| report_branch_switch(&branch_name))
+
+    match ytil_git::switch_branch(&branch_name).map_err(|e| *e) {
+        Err(CmdError::CmdFailure { stderr, .. }) if stderr.contains("invalid reference: ") => {
+            create_branch_and_switch(&branch_name)
+        }
+        other => Ok(other?),
+    }
 }
 
 /// Creates a new local branch (if desired) and switches to it.
@@ -267,7 +272,9 @@ fn main() -> color_eyre::Result<()> {
     match args.split_first() {
         None => autocomplete_git_branches_and_switch(&[]),
         // Assumption: cannot create a branch with a name that starts with -
-        Some((hd, _)) if *hd == "-" => ytil_git::switch_branch(hd).inspect(|()| report_branch_switch(hd)),
+        Some((hd, _)) if *hd == "-" => ytil_git::switch_branch(hd)
+            .inspect(|()| report_branch_switch(hd))
+            .map_err(From::from),
         Some((hd, tail)) if *hd == "-b" => create_branch_and_switch(&build_branch_name(tail)?),
         Some((hd, &[])) => handle_single_input_argument(hd),
         _ => create_branch_and_switch(&build_branch_name(&args)?),
