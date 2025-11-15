@@ -109,10 +109,10 @@ pub fn open_pr(title: &str) -> color_eyre::Result<String> {
 pub struct CreatedIssue {
     /// The title of the created issue.
     pub title: String,
-    /// The issue number (e.g., "123").
-    pub issue_nr: String,
     /// The repository URL prefix (e.g., `https://github.com/owner/repo/`).
     pub repo: String,
+    /// The issue number (e.g., "123").
+    pub issue_nr: String,
 }
 
 impl CreatedIssue {
@@ -131,32 +131,24 @@ impl CreatedIssue {
     /// - Output does not contain "issues".
     /// - Repository or issue number parts are empty.
     fn new(title: &str, output: &str) -> color_eyre::Result<Self> {
+        let get_not_empty_field = |maybe_value: Option<&str>, field: &str| -> color_eyre::Result<String> {
+            maybe_value
+                .ok_or_else(|| eyre!("cannot build CreateIssueOutput missing {field} | output={output}"))
+                .and_then(|s| {
+                    if s.is_empty() {
+                        Err(eyre!("cannot build CreateIssueOutput empty {field} | output={output}"))
+                    } else {
+                        Ok(s.trim_matches('/').to_string())
+                    }
+                })
+        };
+
         let mut split = output.split("issues");
-        let repo = split
-            .next()
-            .ok_or_else(|| eyre!("cannot build CreateIssueOutput missing repo | output={output}"))
-            .and_then(|s| {
-                if s.is_empty() {
-                    Err(eyre!("cannot build CreateIssueOutput empty repo | output={output}"))
-                } else {
-                    Ok(s.trim_end_matches('/'))
-                }
-            })?;
-        let issue_nr = split
-            .next()
-            .ok_or_else(|| eyre!("cannot build CreateIssueOutput missing issue_nr | output={output}"))
-            .and_then(|s| {
-                if s.is_empty() {
-                    Err(eyre!("cannot build CreateIssueOutput empty issue_nr | output={output}"))
-                } else {
-                    Ok(s)
-                }
-            })?;
 
         Ok(Self {
             title: title.to_string(),
-            issue_nr: issue_nr.trim_start_matches('/').to_string(),
-            repo: repo.to_string(),
+            repo: get_not_empty_field(split.next(), "repo")?,
+            issue_nr: get_not_empty_field(split.next(), "issue_nr")?,
         })
     }
 
@@ -452,8 +444,9 @@ mod tests {
 
     #[test]
     fn created_issue_new_parses_valid_output() {
+        assert2::let_assert!(Ok(actual) = CreatedIssue::new("Test Issue", "https://github.com/owner/repo/issues/123"));
         pretty_assertions::assert_eq!(
-            CreatedIssue::new("Test Issue", "https://github.com/owner/repo/issues/123").unwrap(),
+            actual,
             CreatedIssue {
                 title: "Test Issue".to_string(),
                 repo: "https://github.com/owner/repo".to_string(),
