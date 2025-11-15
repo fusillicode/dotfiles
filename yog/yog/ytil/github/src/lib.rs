@@ -59,6 +59,20 @@ pub fn get_repo_view_field(field: &RepoViewField) -> color_eyre::Result<String> 
     extract_success_output(&output)
 }
 
+/// Creates a new GitHub issue using the `gh` CLI.
+///
+/// Invokes: `gh issue create --title <title> --body ""`.
+///
+/// # Arguments
+/// - `title` The title of the issue to create.
+///
+/// # Returns
+/// The [`CreatedIssue`] containing the parsed issue details.
+///
+/// # Errors
+/// - Spawning or executing the `gh issue create` command fails.
+/// - Command exits with non-zero status.
+/// - Output cannot be parsed as a valid issue URL.
 pub fn create_issue(title: &str) -> color_eyre::Result<CreatedIssue> {
     let output = Command::new("gh")
         .args(["issue", "create", "--title", title, "--body", ""])
@@ -69,19 +83,53 @@ pub fn create_issue(title: &str) -> color_eyre::Result<CreatedIssue> {
     Ok(created_issue)
 }
 
+/// Opens a new GitHub pull request using the `gh` CLI.
+///
+/// Invokes: `gh pr create --title <title>`.
+///
+/// # Arguments
+/// - `title` The title of the pull request to create.
+///
+/// # Returns
+/// The URL of the created pull request.
+///
+/// # Errors
+/// - Spawning or executing the `gh pr create` command fails.
+/// - Command exits with non-zero status.
+/// - Output is not valid UTF-8.
 pub fn open_pr(title: &str) -> color_eyre::Result<String> {
     let output = Command::new("gh").args(["pr", "create", "--title", title]).output()?;
     extract_success_output(&output)
 }
 
+/// Represents a newly created GitHub issue.
+///
+/// Contains the parsed details from the `gh issue create` command output.
 #[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub struct CreatedIssue {
+    /// The title of the created issue.
     pub title: String,
+    /// The issue number (e.g., "123").
     pub issue_nr: String,
+    /// The repository URL prefix (e.g., `https://github.com/owner/repo/`).
     pub repo: String,
 }
 
 impl CreatedIssue {
+    /// Creates a [`CreatedIssue`] from the `gh issue create` command output.
+    ///
+    /// Parses the output URL to extract repository and issue number.
+    ///
+    /// # Arguments
+    /// - `title` The issue title.
+    /// - `output` The stdout from `gh issue create`.
+    ///
+    /// # Returns
+    /// The parsed [`CreatedIssue`].
+    ///
+    /// # Errors
+    /// - Output does not contain "issues".
+    /// - Repository or issue number parts are empty.
     fn new(title: &str, output: &str) -> color_eyre::Result<Self> {
         let mut split = output.split("issues");
         let repo = split
@@ -91,7 +139,7 @@ impl CreatedIssue {
                 if s.is_empty() {
                     Err(eyre!("cannot build CreateIssueOutput empty repo | output={output}"))
                 } else {
-                    Ok(s.trim_end_matches("/"))
+                    Ok(s.trim_end_matches('/'))
                 }
             })?;
         let issue_nr = split
@@ -112,6 +160,10 @@ impl CreatedIssue {
         })
     }
 
+    /// Formats the issue title for use as a pull request title.
+    ///
+    /// # Returns
+    /// A string in the format `[issue_nr]: title`.
     pub fn pr_title(&self) -> String {
         format!("[{}]: {}", self.issue_nr, self.title)
     }
