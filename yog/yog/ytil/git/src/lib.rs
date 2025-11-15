@@ -21,6 +21,7 @@ use git2::Repository;
 use git2::Status;
 use git2::StatusEntry;
 use git2::StatusOptions;
+pub use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt as _;
 
 /// Discover the Git repository containing `path`.
@@ -120,8 +121,11 @@ pub fn create_branch(branch_name: &str) -> color_eyre::Result<()> {
 ///
 /// # Future Work
 /// - Expose progress callbacks for large checkouts.
-pub fn switch_branch(branch_name: &str) -> color_eyre::Result<()> {
-    Command::new("git").args(["switch", branch_name, "--guess"]).exec()?;
+pub fn switch_branch(branch_name: &str) -> Result<(), Box<CmdError>> {
+    Command::new("git")
+        .args(["switch", branch_name, "--guess"])
+        .exec()
+        .map_err(Box::new)?;
     Ok(())
 }
 
