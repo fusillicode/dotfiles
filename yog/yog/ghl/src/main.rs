@@ -303,7 +303,7 @@ fn main() -> color_eyre::Result<()> {
                 "Issue + PR created".green().bold()
             ),
             Err(OpenPrError::AlreadyExist { pr_url }) => {
-                println!("{} pr_url={pr_url:?}", "PR already exists".yellow().bold())
+                println!("{} pr_url={pr_url:?}", "PR already exists".yellow().bold());
             }
             Err(error) => return Err(error.into()),
         }

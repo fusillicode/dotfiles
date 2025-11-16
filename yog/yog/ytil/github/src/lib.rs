@@ -319,7 +319,7 @@ fn handle_open_pr_output(output: &Output) -> Result<String, OpenPrError> {
 
     let mut split = stderr.split("already exists:");
     split.next();
-    let Some(pr_url) = split.next().map(|s| s.trim()) else {
+    let Some(pr_url) = split.next().map(str::trim) else {
         return Err(OpenPrError::Other(eyre!(
             "cannot extract pr_url from cmd stderr | stderr={stderr:?}"
         )));
@@ -563,7 +563,12 @@ mod tests {
             stdout: vec![],
             stderr: vec![],
         };
-        assert2::let_assert!(Err(OpenPrError::Other(_)) = handle_open_pr_output(&output));
+        assert2::let_assert!(Err(OpenPrError::Other(error)) = handle_open_pr_output(&output));
+        assert!(
+            error
+                .to_string()
+                .contains("process exited unsuccessfully: signal: 1 (SIGHUP)")
+        );
     }
 
     #[test]
@@ -584,7 +589,10 @@ mod tests {
             stdout: vec![],
             stderr: b"some error message\n".to_vec(),
         };
-        assert2::let_assert!(Err(OpenPrError::Other(_)) = handle_open_pr_output(&output));
+        assert2::let_assert!(Err(OpenPrError::Other(error)) = handle_open_pr_output(&output));
+        let error_string = error.to_string();
+        assert!(error_string.contains("cannot extract pr_url from cmd stderr"));
+        assert!(error_string.contains("stderr=\"some error message\""));
     }
 
     #[test]
@@ -594,6 +602,7 @@ mod tests {
             stdout: vec![],
             stderr: vec![0xff],
         };
-        assert2::let_assert!(Err(OpenPrError::Other(_)) = handle_open_pr_output(&output));
+        assert2::let_assert!(Err(OpenPrError::Other(error)) = handle_open_pr_output(&output));
+        assert!(error.to_string().contains("error decoding stderr"));
     }
 }
