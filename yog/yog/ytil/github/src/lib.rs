@@ -117,9 +117,9 @@ impl RepoViewField {
     }
 }
 
-/// Creates a new GitHub issue using the `gh` CLI.
+/// Creates a new GitHub issue with the specified title.
 ///
-/// Invokes: `gh issue create --title <title> --body ""`.
+/// This function invokes `gh issue create --title <title> --body ""` to create the issue.
 ///
 /// # Arguments
 /// - `title` The title of the issue to create.
@@ -128,10 +128,15 @@ impl RepoViewField {
 /// The [`CreatedIssue`] containing the parsed issue details.
 ///
 /// # Errors
+/// - If `title` is empty.
 /// - Spawning or executing the `gh issue create` command fails.
 /// - Command exits with non-zero status.
 /// - Output cannot be parsed as a valid issue URL.
 pub fn create_issue(title: &str) -> color_eyre::Result<CreatedIssue> {
+    if title.is_empty() {
+        bail!("cannot create GitHub issue with empty title")
+    }
+
     let output = Command::new("gh")
         .args(["issue", "create", "--title", title, "--body", ""])
         .output()?;
