@@ -37,71 +37,6 @@ const GITHUB_PR_ID_PREFIX: &str = "pull";
 /// The query parameter key used for pull request IDs in GitHub Actions URLs.
 const GITHUB_PR_ID_QUERY_KEY: &str = "pr";
 
-/// Return the specified repository field via `gh repo view`.
-///
-/// Invokes: `gh repo view --json <field> --jq .<field>`.
-///
-/// # Arguments
-/// - `field` The repository field to retrieve.
-///
-/// # Returns
-/// The value of the requested field as a string.
-///
-/// # Errors
-/// - Spawning or executing the `gh repo view` command fails.
-/// - Command exits with non‑zero status.
-/// - Output is not valid UTF‑8.
-pub fn get_repo_view_field(field: &RepoViewField) -> color_eyre::Result<String> {
-    let output = Command::new("gh")
-        .args(["repo", "view", "--json", field.as_ref(), "--jq", &field.jq_repr()])
-        .output()?;
-
-    extract_success_output(&output)
-}
-
-/// Creates a new GitHub issue using the `gh` CLI.
-///
-/// Invokes: `gh issue create --title <title> --body ""`.
-///
-/// # Arguments
-/// - `title` The title of the issue to create.
-///
-/// # Returns
-/// The [`CreatedIssue`] containing the parsed issue details.
-///
-/// # Errors
-/// - Spawning or executing the `gh issue create` command fails.
-/// - Command exits with non-zero status.
-/// - Output cannot be parsed as a valid issue URL.
-pub fn create_issue(title: &str) -> color_eyre::Result<CreatedIssue> {
-    let output = Command::new("gh")
-        .args(["issue", "create", "--title", title, "--body", ""])
-        .output()?;
-
-    let created_issue = extract_success_output(&output).and_then(|output| CreatedIssue::new(title, &output))?;
-
-    Ok(created_issue)
-}
-
-/// Opens a new GitHub pull request using the `gh` CLI.
-///
-/// Invokes: `gh pr create --title <title>`.
-///
-/// # Arguments
-/// - `title` The title of the pull request to create.
-///
-/// # Returns
-/// The URL of the created pull request.
-///
-/// # Errors
-/// - Spawning or executing the `gh pr create` command fails.
-/// - Command exits with non-zero status.
-/// - Output is not valid UTF-8.
-pub fn open_pr(title: &str) -> color_eyre::Result<String> {
-    let output = Command::new("gh").args(["pr", "create", "--title", title]).output()?;
-    extract_success_output(&output)
-}
-
 /// Represents a newly created GitHub issue.
 ///
 /// Contains the parsed details from the `gh issue create` command output.
@@ -159,6 +94,92 @@ impl CreatedIssue {
     pub fn pr_title(&self) -> String {
         format!("[{}]: {}", self.issue_nr, self.title)
     }
+}
+
+/// Repository fields available for querying via `gh repo view`.
+#[derive(strum::AsRefStr)]
+pub enum RepoViewField {
+    /// The repository name with owner in `owner/name` format.
+    #[strum(serialize = "nameWithOwner")]
+    NameWithOwner,
+    /// The repository URL.
+    #[strum(serialize = "url")]
+    Url,
+}
+
+impl RepoViewField {
+    /// Returns the jq representation of the field for GitHub CLI queries.
+    ///
+    /// # Returns
+    /// A string prefixed with `.` for use in jq expressions.
+    pub fn jq_repr(&self) -> String {
+        format!(".{}", self.as_ref())
+    }
+}
+
+/// Creates a new GitHub issue using the `gh` CLI.
+///
+/// Invokes: `gh issue create --title <title> --body ""`.
+///
+/// # Arguments
+/// - `title` The title of the issue to create.
+///
+/// # Returns
+/// The [`CreatedIssue`] containing the parsed issue details.
+///
+/// # Errors
+/// - Spawning or executing the `gh issue create` command fails.
+/// - Command exits with non-zero status.
+/// - Output cannot be parsed as a valid issue URL.
+pub fn create_issue(title: &str) -> color_eyre::Result<CreatedIssue> {
+    let output = Command::new("gh")
+        .args(["issue", "create", "--title", title, "--body", ""])
+        .output()?;
+
+    let created_issue = extract_success_output(&output).and_then(|output| CreatedIssue::new(title, &output))?;
+
+    Ok(created_issue)
+}
+
+/// Return the specified repository field via `gh repo view`.
+///
+/// Invokes: `gh repo view --json <field> --jq .<field>`.
+///
+/// # Arguments
+/// - `field` The repository field to retrieve.
+///
+/// # Returns
+/// The value of the requested field as a string.
+///
+/// # Errors
+/// - Spawning or executing the `gh repo view` command fails.
+/// - Command exits with non‑zero status.
+/// - Output is not valid UTF‑8.
+pub fn get_repo_view_field(field: &RepoViewField) -> color_eyre::Result<String> {
+    let output = Command::new("gh")
+        .args(["repo", "view", "--json", field.as_ref(), "--jq", &field.jq_repr()])
+        .output()?;
+
+    extract_success_output(&output)
+}
+
+/// Opens a new GitHub pull request using the `gh` CLI.
+///
+/// Invokes: `gh pr create --title <title>`.
+///
+/// # Arguments
+/// - `title` The title of the pull request to create.
+///
+/// # Returns
+/// The URL of the created pull request.
+///
+/// # Errors
+/// - Spawning or executing the `gh pr create` command fails.
+/// - Command exits with non-zero status.
+/// - Output is not valid UTF-8.
+pub fn open_pr(title: &str) -> color_eyre::Result<String> {
+    let output = Command::new("gh").args(["pr", "create", "--title", title]).output()?;
+    extract_success_output(&output)
 }
 
 /// Ensures the user is authenticated with the GitHub CLI.
@@ -232,27 +253,6 @@ pub fn get_repo_urls(repo_path: &Path) -> color_eyre::Result<Vec<Url>> {
         );
     }
     Ok(repo_urls)
-}
-
-/// Repository fields available for querying via `gh repo view`.
-#[derive(strum::AsRefStr)]
-pub enum RepoViewField {
-    /// The repository name with owner in `owner/name` format.
-    #[strum(serialize = "nameWithOwner")]
-    NameWithOwner,
-    /// The repository URL.
-    #[strum(serialize = "url")]
-    Url,
-}
-
-impl RepoViewField {
-    /// Returns the jq representation of the field for GitHub CLI queries.
-    ///
-    /// # Returns
-    /// A string prefixed with `.` for use in jq expressions.
-    pub fn jq_repr(&self) -> String {
-        format!(".{}", self.as_ref())
-    }
 }
 
 /// Converts a Git remote URL (SSH or HTTPS) to a canonical GitHub HTTPS URL without the `.git` suffix.
