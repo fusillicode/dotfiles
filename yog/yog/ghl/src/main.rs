@@ -49,6 +49,7 @@ use std::str::FromStr;
 use color_eyre::Section;
 use color_eyre::owo_colors::OwoColorize;
 use strum::EnumIter;
+use ytil_github::OpenPrError;
 use ytil_github::RepoViewField;
 use ytil_github::pr::IntoEnumIterator;
 use ytil_github::pr::PullRequest;
@@ -296,8 +297,16 @@ fn main() -> color_eyre::Result<()> {
     if pargs.contains("issue") {
         let title = pargs.all().join(" ");
         let created_issue = ytil_github::create_issue(&title)?;
-        ytil_github::open_pr(&created_issue.pr_title())?;
-        return Ok(());
+        match ytil_github::open_pr(&created_issue.pr_title()) {
+            Ok(pr_url) => println!(
+                "{} with title={title:?} pr_url={pr_url:?}",
+                "Issue + PR created".green().bold()
+            ),
+            Err(OpenPrError::AlreadyExist { pr_url }) => {
+                println!("{} pr_url={pr_url:?}", "PR already exists".yellow().bold())
+            }
+            Err(error) => return Err(error.into()),
+        }
     }
 
     let repo_name_with_owner = ytil_github::get_repo_view_field(&RepoViewField::NameWithOwner)?;

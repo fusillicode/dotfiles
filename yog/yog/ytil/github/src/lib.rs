@@ -24,6 +24,7 @@ use std::path::Path;
 use std::process::Command;
 use std::process::Output;
 
+use color_eyre::eyre::Context;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 use url::Url;
@@ -117,6 +118,14 @@ impl RepoViewField {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum OpenPrError {
+    #[error("PR already exist pr_url={pr_url}")]
+    AlreadyExist { pr_url: String },
+    #[error(transparent)]
+    Other(color_eyre::eyre::Error),
+}
+
 /// Creates a new GitHub issue with the specified title.
 ///
 /// This function invokes `gh issue create --title <title> --body ""` to create the issue.
@@ -146,6 +155,30 @@ pub fn create_issue(title: &str) -> color_eyre::Result<CreatedIssue> {
     Ok(created_issue)
 }
 
+/// Opens a new GitHub pull request using the `gh` CLI.
+///
+/// Invokes: `gh pr create --title <title>`.
+///
+/// # Arguments
+/// - `title` The title of the pull request to create.
+///
+/// # Returns
+/// The URL of the created pull request.
+///
+/// # Errors
+/// - Spawning or executing the `gh pr create` command fails.
+/// - Command exits with non-zero status.
+/// - Output is not valid UTF-8.
+pub fn open_pr(title: &str) -> Result<String, OpenPrError> {
+    let output = Command::new("gh")
+        .args(["pr", "create", "--title", title])
+        .output()
+        .wrap_err_with(|| eyre!("error opening PR with title={title:?}"))
+        .map_err(OpenPrError::Other)?;
+
+    handle_open_pr_output(&output)
+}
+
 /// Return the specified repository field via `gh repo view`.
 ///
 /// Invokes: `gh repo view --json <field> --jq .<field>`.
@@ -165,25 +198,6 @@ pub fn get_repo_view_field(field: &RepoViewField) -> color_eyre::Result<String> 
         .args(["repo", "view", "--json", field.as_ref(), "--jq", &field.jq_repr()])
         .output()?;
 
-    extract_success_output(&output)
-}
-
-/// Opens a new GitHub pull request using the `gh` CLI.
-///
-/// Invokes: `gh pr create --title <title>`.
-///
-/// # Arguments
-/// - `title` The title of the pull request to create.
-///
-/// # Returns
-/// The URL of the created pull request.
-///
-/// # Errors
-/// - Spawning or executing the `gh pr create` command fails.
-/// - Command exits with non-zero status.
-/// - Output is not valid UTF-8.
-pub fn open_pr(title: &str) -> color_eyre::Result<String> {
-    let output = Command::new("gh").args(["pr", "create", "--title", title]).output()?;
     extract_success_output(&output)
 }
 
@@ -285,6 +299,37 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> color_eyre::Res
     Ok(url)
 }
 
+/// Handles the output of the `gh pr create` command.
+///
+/// Parses the stdout for success or stderr for errors, including already-existing PRs.
+///
+/// # Returns
+/// - The PR URL on success.
+/// - [`OpenPrError::AlreadyExist`] if a PR already exists.
+/// - [`OpenPrError::Other`] for other failures.
+fn handle_open_pr_output(output: &Output) -> Result<String, OpenPrError> {
+    let stderr = std::str::from_utf8(&output.stderr)
+        .wrap_err_with(|| eyre!("error decoding stderr of open PR cmd output"))
+        .map_err(OpenPrError::Other)?
+        .trim();
+
+    if stderr.is_empty() {
+        return extract_success_output(output).map_err(OpenPrError::Other);
+    }
+
+    let mut split = stderr.split("already exists:");
+    split.next();
+    let Some(pr_url) = split.next().map(|s| s.trim()) else {
+        return Err(OpenPrError::Other(eyre!(
+            "cannot extract pr_url from cmd stderr | stderr={stderr:?}"
+        )));
+    };
+
+    Err(OpenPrError::AlreadyExist {
+        pr_url: pr_url.to_string(),
+    })
+}
+
 /// Extracts and validates successful command output, converting it to a trimmed string.
 ///
 /// # Errors
@@ -352,6 +397,9 @@ fn extract_pr_id_form_url(url: &Url) -> color_eyre::Result<String> {
 
 #[cfg(test)]
 mod tests {
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::ExitStatus;
+
     use rstest::rstest;
 
     use super::*;
@@ -495,5 +543,57 @@ mod tests {
     fn parse_github_url_from_git_remote_url_works_as_expected(#[case] input: &str, #[case] expected: Url) {
         let result = parse_github_url_from_git_remote_url(input).unwrap();
         assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn handle_open_pr_output_when_stderr_empty_and_command_succeeds_returns_pr_url() {
+        let output = std::process::Output {
+            status: ExitStatus::from_raw(0),
+            stdout: b"https://github.com/owner/repo/pull/123\n".to_vec(),
+            stderr: vec![],
+        };
+        assert2::let_assert!(Ok(url) = handle_open_pr_output(&output));
+        pretty_assertions::assert_eq!(url, "https://github.com/owner/repo/pull/123");
+    }
+
+    #[test]
+    fn handle_open_pr_output_when_stderr_empty_and_command_fails_returns_generic_error() {
+        let output = std::process::Output {
+            status: ExitStatus::from_raw(1),
+            stdout: vec![],
+            stderr: vec![],
+        };
+        assert2::let_assert!(Err(OpenPrError::Other(_)) = handle_open_pr_output(&output));
+    }
+
+    #[test]
+    fn handle_open_pr_output_when_stderr_contains_already_exists_returns_already_exist_error() {
+        let output = std::process::Output {
+            status: ExitStatus::from_raw(1),
+            stdout: vec![],
+            stderr: b"already exists: https://github.com/owner/repo/pull/123\n".to_vec(),
+        };
+        assert2::let_assert!(Err(OpenPrError::AlreadyExist { pr_url }) = handle_open_pr_output(&output));
+        pretty_assertions::assert_eq!(pr_url, "https://github.com/owner/repo/pull/123");
+    }
+
+    #[test]
+    fn handle_open_pr_output_when_stderr_contains_unexpected_error_returns_generic_error() {
+        let output = std::process::Output {
+            status: ExitStatus::from_raw(1),
+            stdout: vec![],
+            stderr: b"some error message\n".to_vec(),
+        };
+        assert2::let_assert!(Err(OpenPrError::Other(_)) = handle_open_pr_output(&output));
+    }
+
+    #[test]
+    fn handle_open_pr_output_when_stderr_not_utf8_returns_generic_error() {
+        let output = std::process::Output {
+            status: ExitStatus::from_raw(1),
+            stdout: vec![],
+            stderr: vec![0xff],
+        };
+        assert2::let_assert!(Err(OpenPrError::Other(_)) = handle_open_pr_output(&output));
     }
 }
