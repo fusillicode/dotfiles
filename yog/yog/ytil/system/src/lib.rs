@@ -66,8 +66,8 @@ impl<T: AsRef<str> + Clone> CliArgs<T> for Vec<T> {
         self.iter().any(|arg| arg.as_ref() == HELP_ARG)
     }
 
-    fn all(&self) -> Vec<T> {
-        self.to_vec()
+    fn all(&self) -> Self {
+        self.clone()
     }
 }
 
