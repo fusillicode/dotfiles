@@ -43,7 +43,6 @@
 #![feature(exit_status_error)]
 
 use core::fmt::Display;
-use std::ffi::OsString;
 use std::ops::Deref;
 use std::str::FromStr;
 
@@ -295,14 +294,8 @@ fn main() -> color_eyre::Result<()> {
     ytil_github::log_into_github()?;
 
     if pargs.contains("issue") {
-        let title = pargs.finish().into_iter().fold(OsString::new(), |mut acc, s| {
-            if !acc.is_empty() {
-                acc.push(" ");
-            }
-            acc.push(s);
-            acc
-        });
-        let created_issue = ytil_github::create_issue(&title.to_string_lossy())?;
+        let title = pargs.all().join(" ");
+        let created_issue = ytil_github::create_issue(&title)?;
         ytil_github::open_pr(&created_issue.pr_title())?;
         return Ok(());
     }
