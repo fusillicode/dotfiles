@@ -21,14 +21,16 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
         .get_name()
         .map(|s| s.to_string_lossy().to_string())
         .inspect_err(|error| {
-            ytil_nvim_oxi::api::notify_error(format!("cannot get buffer name | buffer={cur_buf:#?} error={error:#?}"));
+            ytil_nvim_oxi::api::notify_error(format!(
+                "error getting buffer name | buffer={cur_buf:#?} error={error:#?}"
+            ));
         })
     else {
         return vec![];
     };
 
     let Ok(buf_with_path) = BufferWithPath::try_from(cur_buf).inspect_err(|error| {
-        ytil_nvim_oxi::api::notify_error(format!("cannot create BufferWithContent | error={error:#?}"));
+        ytil_nvim_oxi::api::notify_error(format!("error creating BufferWithContent | error={error:#?}"));
     }) else {
         return vec![];
     };
@@ -39,7 +41,7 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
     if buffer_filter
         .skip_diagnostic(&buf_with_path)
         .inspect_err(|error| {
-            ytil_nvim_oxi::api::notify_error(format!("cannot get filter by buffer | error={error:#?}"));
+            ytil_nvim_oxi::api::notify_error(format!("error getting filter by buffer | error={error:#?}"));
         })
         .unwrap_or(false)
     {
@@ -47,7 +49,7 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
     }
 
     let Ok(filters) = DiagnosticsFilters::all(&lsp_diags).inspect_err(|error| {
-        ytil_nvim_oxi::api::notify_error(format!("cannot get diagnostics filters | error={error:#?}"));
+        ytil_nvim_oxi::api::notify_error(format!("error getting diagnostics filters | error={error:#?}"));
     }) else {
         return vec![];
     };
@@ -58,7 +60,7 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
             .skip_diagnostic(&buf_with_path, &lsp_diag)
             .inspect_err(|error| {
                 ytil_nvim_oxi::api::notify_error(format!(
-                    "cannot filter diagnostic | diagnostic={lsp_diag:#?} buffer={buf_path:#?} error={error:?}"
+                    "error filtering diagnostic | diagnostic={lsp_diag:#?} buffer={buf_path:?} error={error:?}",
                 ));
             })
             .is_ok_and(identity)

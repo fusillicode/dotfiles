@@ -35,7 +35,7 @@ where
 {
     if let Err(error) = nvim_oxi::api::create_user_command(name, command, opts) {
         ytil_nvim_oxi::api::notify_error(format!(
-            "cannot create user command | name={name} opts={opts:#?} error={error:#?}"
+            "error creating user command | name={name} opts={opts:#?} error={error:#?}"
         ));
     }
 }

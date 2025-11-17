@@ -36,7 +36,9 @@ fn run_test(_: ()) {
         .get_name()
         .map(|s| PathBuf::from(s.to_string_lossy().as_ref()))
         .inspect_err(|error| {
-            ytil_nvim_oxi::api::notify_error(format!("cannot get buffer name | buffer={cur_buf:#?} error={error:#?}"));
+            ytil_nvim_oxi::api::notify_error(format!(
+                "error getting buffer name | buffer={cur_buf:#?} error={error:#?}"
+            ));
         })
     else {
         return;
@@ -51,39 +53,39 @@ fn run_test(_: ()) {
         .ok()
         .flatten()
     else {
-        ytil_nvim_oxi::api::notify_error(format!("missing enclosing fn | position={position:#?}"));
+        ytil_nvim_oxi::api::notify_error(format!("error missing enclosing fn | position={position:#?}"));
         return;
     };
 
     let Ok(cur_pane_id) = ytil_wezterm::get_current_pane_id().inspect_err(|error| {
-        ytil_nvim_oxi::api::notify_error(format!("cannot get current `WezTerm` pane id | error={error:#?}"));
+        ytil_nvim_oxi::api::notify_error(format!("error getting current WezTerm pane id | error={error:#?}"));
     }) else {
         return;
     };
 
     let Ok(wez_panes) = ytil_wezterm::get_all_panes(&[]).inspect_err(|error| {
-        ytil_nvim_oxi::api::notify_error(format!("cannot get `WezTerm` panes | error={error:#?}"));
+        ytil_nvim_oxi::api::notify_error(format!("error getting WezTerm panes | error={error:#?}"));
     }) else {
         return;
     };
 
     let Some(cur_pane) = wez_panes.iter().find(|p| p.pane_id == cur_pane_id) else {
         ytil_nvim_oxi::api::notify_error(format!(
-            "wezterm pane not found | pane_id={cur_pane_id:#?} panes={wez_panes:#?}"
+            "error wezterm pane not found | pane_id={cur_pane_id:#?} panes={wez_panes:#?}"
         ));
         return;
     };
 
     let Some(test_runner_pane) = wez_panes.iter().find(|p| p.is_sibling_terminal_pane_of(cur_pane)) else {
         ytil_nvim_oxi::api::notify_error(format!(
-            "cannot find sibling pane to run test | current_pane={cur_pane:#?} panes={wez_panes:#?} test={test_name}"
+            "error finding sibling pane to run test | current_pane={cur_pane:#?} panes={wez_panes:#?} test={test_name}"
         ));
         return;
     };
 
     let Ok(test_runner_app) = get_test_runner_app_for_path(&file_path).inspect_err(|error| {
         ytil_nvim_oxi::api::notify_error(format!(
-            "cannot get test runner app | path={} error={error:#?}",
+            "error getting test runner app | path={} error={error:#?}",
             file_path.display()
         ));
     }) else {
@@ -99,7 +101,7 @@ fn run_test(_: ()) {
         .spawn()
         .inspect_err(|error| {
             ytil_nvim_oxi::api::notify_error(format!(
-                "cannot execute test run cmd | cmd={test_run_cmd:#?} pane={test_runner_pane:#?} error={error:#?}"
+                "error executing test run cmd | cmd={test_run_cmd:#?} pane={test_runner_pane:#?} error={error:#?}"
             ));
         })
     else {
@@ -150,7 +152,8 @@ impl From<CursorPosition> for PointWrap {
 fn get_enclosing_fn_name_of_position(file_path: &Path, position: Point) -> color_eyre::Result<Option<String>> {
     eyre::ensure!(
         file_path.extension().is_some_and(|ext| ext == "rs"),
-        "invalid file extension | path={file_path:?} expected_ext=rs"
+        "invalid file extension | path={} expected_ext=\"rs\"",
+        file_path.display(),
     );
     let src = std::fs::read(file_path).with_context(|| format!("Error reading {}", file_path.display()))?;
 
@@ -161,7 +164,7 @@ fn get_enclosing_fn_name_of_position(file_path: &Path, position: Point) -> color
 
     let src_tree = parser
         .parse(&src, None)
-        .ok_or_else(|| eyre!("rust parse failed | path={}", file_path.display()))?;
+        .ok_or_else(|| eyre!("error parsing rust code | path={}", file_path.display()))?;
 
     let node_at_position = src_tree.root_node().descendant_for_point_range(position, position);
 

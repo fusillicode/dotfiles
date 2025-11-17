@@ -185,7 +185,7 @@ fn get_default_hl_opts() -> SetHighlightOptsBuilder {
 fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &SetHighlightOpts) {
     if let Err(error) = nvim_oxi::api::set_hl(ns_id, hl_name, hl_opts) {
         ytil_nvim_oxi::api::notify_error(format!(
-            "cannot set highlight opts | hl_opts={hl_opts:#?} hl_name={hl_name} namespace={ns_id} error={error:#?}"
+            "error setting highlight opts | hl_opts={hl_opts:#?} hl_name={hl_name:?} namespace={ns_id:?} error={error:#?}"
         ));
     }
 }

@@ -6,6 +6,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 
+use color_eyre::eyre::WrapErr;
 use color_eyre::eyre::eyre;
 use serde::Deserialize;
 
@@ -31,7 +32,10 @@ pub fn activate_pane_cmd(pane_id: i64) -> String {
 /// - `WEZTERM_PANE` cannot be parsed as an integer.
 /// - `WEZTERM_PANE` is unset.
 pub fn get_current_pane_id() -> color_eyre::Result<i64> {
-    Ok(std::env::var("WEZTERM_PANE")?.parse()?)
+    std::env::var("WEZTERM_PANE")
+        .wrap_err_with(|| eyre!("error missing WEZTERM_PANE environment variable"))?
+        .parse()
+        .wrap_err_with(|| eyre!("error parsing WEZTERM_PANE value"))
 }
 
 /// Retrieves all `WezTerm` panes using the `WezTerm` CLI.
@@ -46,7 +50,12 @@ pub fn get_all_panes(envs: &[(&str, &str)]) -> color_eyre::Result<Vec<WeztermPan
     let mut cmd = Command::new("wezterm");
     cmd.args(["cli", "list", "--format", "json"]);
     cmd.envs(envs.iter().copied());
-    Ok(serde_json::from_slice(&cmd.output()?.stdout)?)
+    serde_json::from_slice(
+        &cmd.output()
+            .wrap_err_with(|| eyre!("error running wezterm cli list"))?
+            .stdout,
+    )
+    .wrap_err_with(|| eyre!("error parsing wezterm cli list output | format=JSON"))
 }
 
 /// Finds a sibling [`WeztermPane`] in the same tab that matches one of the given titles.
@@ -62,14 +71,14 @@ pub fn get_sibling_pane_with_titles(
     let current_pane_tab_id = panes
         .iter()
         .find(|w| w.pane_id == current_pane_id)
-        .ok_or_else(|| eyre!("current pane id not found | pane_id={current_pane_id} panes={panes:#?}"))?
+        .ok_or_else(|| eyre!("error finding current pane | pane_id={current_pane_id} panes={panes:#?}"))?
         .tab_id;
 
     Ok(panes
         .iter()
         .find(|w| w.tab_id == current_pane_tab_id && pane_titles.contains(&w.title.as_str()))
         .ok_or_else(|| {
-            eyre!("pane title not found in tab | pane_titles={pane_titles:#?} tab_id={current_pane_tab_id}")
+            eyre!("error finding pane title in tab | pane_titles={pane_titles:#?} tab_id={current_pane_tab_id}")
         })?
         .clone())
 }
@@ -188,7 +197,7 @@ mod tests {
     fn get_sibling_pane_with_titles_errors_when_no_title_match() {
         let panes = vec![pane_with(1, 10, "file:///host/home/user/project", "shell")];
         assert2::let_assert!(Err(error) = get_sibling_pane_with_titles(&panes, 1, &["hx"]));
-        assert!(error.to_string().contains("pane title not found"));
+        assert!(error.to_string().contains("error finding pane title in tab"));
     }
 
     #[test]

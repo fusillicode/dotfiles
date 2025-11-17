@@ -69,10 +69,12 @@ impl CreatedIssue {
     fn new(title: &str, output: &str) -> color_eyre::Result<Self> {
         let get_not_empty_field = |maybe_value: Option<&str>, field: &str| -> color_eyre::Result<String> {
             maybe_value
-                .ok_or_else(|| eyre!("cannot build CreateIssueOutput missing {field} | output={output}"))
+                .ok_or_else(|| eyre!("error building CreateIssueOutput | missing={field:?} output={output:?}"))
                 .and_then(|s| {
                     if s.is_empty() {
-                        Err(eyre!("cannot build CreateIssueOutput empty {field} | output={output}"))
+                        Err(eyre!(
+                            "error building CreateIssueOutput | empty={field:?} output={output:?}"
+                        ))
                     } else {
                         Ok(s.trim_matches('/').to_string())
                     }
@@ -98,7 +100,7 @@ impl CreatedIssue {
 }
 
 /// Repository fields available for querying via `gh repo view`.
-#[derive(strum::AsRefStr)]
+#[derive(strum::AsRefStr, Debug)]
 pub enum RepoViewField {
     /// The repository name with owner in `owner/name` format.
     #[strum(serialize = "nameWithOwner")]
@@ -148,9 +150,12 @@ pub fn create_issue(title: &str) -> color_eyre::Result<CreatedIssue> {
 
     let output = Command::new("gh")
         .args(["issue", "create", "--title", title, "--body", ""])
-        .output()?;
+        .output()
+        .wrap_err_with(|| eyre!("error creating GitHub issue | title={title:?}"))?;
 
-    let created_issue = extract_success_output(&output).and_then(|output| CreatedIssue::new(title, &output))?;
+    let created_issue = extract_success_output(&output)
+        .and_then(|output| CreatedIssue::new(title, &output))
+        .wrap_err_with(|| eyre!("error parsing created issue output | title={title:?}"))?;
 
     Ok(created_issue)
 }
@@ -173,7 +178,7 @@ pub fn open_pr(title: &str) -> Result<String, OpenPrError> {
     let output = Command::new("gh")
         .args(["pr", "create", "--title", title])
         .output()
-        .wrap_err_with(|| eyre!("error opening PR with title={title:?}"))
+        .wrap_err_with(|| eyre!("error opening PR | title={title:?}"))
         .map_err(OpenPrError::Other)?;
 
     handle_open_pr_output(&output)
@@ -196,7 +201,8 @@ pub fn open_pr(title: &str) -> Result<String, OpenPrError> {
 pub fn get_repo_view_field(field: &RepoViewField) -> color_eyre::Result<String> {
     let output = Command::new("gh")
         .args(["repo", "view", "--json", field.as_ref(), "--jq", &field.jq_repr()])
-        .output()?;
+        .output()
+        .wrap_err_with(|| eyre!("error getting repo view field | field={field:?}"))?;
 
     extract_success_output(&output)
 }
@@ -212,14 +218,21 @@ pub fn get_repo_view_field(field: &RepoViewField) -> color_eyre::Result<String> 
 /// - Checking auth status fails.
 /// - The login command fails or exits with a non-zero status.
 pub fn log_into_github() -> color_eyre::Result<()> {
-    if ytil_cmd::silent_cmd("gh").args(["auth", "status"]).status()?.success() {
+    if ytil_cmd::silent_cmd("gh")
+        .args(["auth", "status"])
+        .status()
+        .wrap_err_with(|| eyre!("error checking gh auth status"))?
+        .success()
+    {
         return Ok(());
     }
 
-    Ok(ytil_cmd::silent_cmd("sh")
+    ytil_cmd::silent_cmd("sh")
         .args(["-c", "gh auth login"])
-        .status()?
-        .exit_ok()?)
+        .status()
+        .wrap_err_with(|| eyre!("error running gh auth login command"))?
+        .exit_ok()
+        .wrap_err_with(|| eyre!("error running gh auth login"))
 }
 
 /// Retrieves the latest release tag name for the specified GitHub repository.
@@ -231,7 +244,8 @@ pub fn log_into_github() -> color_eyre::Result<()> {
 pub fn get_latest_release(repo: &str) -> color_eyre::Result<String> {
     let output = Command::new("gh")
         .args(["api", &format!("repos/{repo}/releases/latest"), "--jq=.tag_name"])
-        .output()?;
+        .output()
+        .wrap_err_with(|| eyre!("error getting latest release | repo={repo:?}"))?;
 
     extract_success_output(&output)
 }
@@ -247,7 +261,8 @@ pub fn get_branch_name_from_url(url: &Url) -> color_eyre::Result<String> {
 
     let output = Command::new("gh")
         .args(["pr", "view", &pr_id, "--json", "headRefName", "--jq", ".headRefName"])
-        .output()?;
+        .output()
+        .wrap_err_with(|| eyre!("error getting branch name | pr_id={pr_id:?}"))?;
 
     extract_success_output(&output)
 }
@@ -261,14 +276,17 @@ pub fn get_branch_name_from_url(url: &Url) -> color_eyre::Result<String> {
 /// - A remote cannot be resolved.
 /// - A remote URL is invalid UTF-8.
 pub fn get_repo_urls(repo_path: &Path) -> color_eyre::Result<Vec<Url>> {
-    let repo = ytil_git::get_repo(repo_path)?;
+    let repo =
+        ytil_git::get_repo(repo_path).wrap_err_with(|| eyre!("error opening repo | path={}", repo_path.display()))?;
     let mut repo_urls = vec![];
     for remote_name in repo.remotes()?.iter().flatten() {
         repo_urls.push(
-            repo.find_remote(remote_name)?
+            repo.find_remote(remote_name)
+                .wrap_err_with(|| eyre!("error finding remote | remote={remote_name:?}"))?
                 .url()
                 .map(parse_github_url_from_git_remote_url)
-                .ok_or_else(|| eyre!("remote url invalid utf-8 | remote={remote_name}"))??,
+                .ok_or_else(|| eyre!("error invalid remote URL UTF-8 | remote={remote_name:?}"))
+                .wrap_err_with(|| eyre!("error parsing remote URL | remote={remote_name:?}"))??,
         );
     }
     Ok(repo_urls)
@@ -291,9 +309,9 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> color_eyre::Res
     let path = git_remote_url
         .split_once(':')
         .map(|(_, path)| path.trim_end_matches(".git"))
-        .ok_or_else(|| eyre!("cannot extract URL path from '{git_remote_url}'"))?;
+        .ok_or_else(|| eyre!("error extracting URL path | git_remote_url={git_remote_url:?}"))?;
 
-    let mut url = Url::parse("https://github.com")?;
+    let mut url = Url::parse("https://github.com").wrap_err_with(|| eyre!("error parsing base GitHub URL"))?;
     url.set_path(path);
 
     Ok(url)
@@ -309,7 +327,7 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> color_eyre::Res
 /// - [`OpenPrError::Other`] for other failures.
 fn handle_open_pr_output(output: &Output) -> Result<String, OpenPrError> {
     let stderr = std::str::from_utf8(&output.stderr)
-        .wrap_err_with(|| eyre!("error decoding stderr of open PR cmd output"))
+        .wrap_err_with(|| eyre!("error decoding stderr | cmd=\"gh pr create\""))
         .map_err(OpenPrError::Other)?
         .trim();
 
@@ -321,7 +339,7 @@ fn handle_open_pr_output(output: &Output) -> Result<String, OpenPrError> {
     split.next();
     let Some(pr_url) = split.next().map(str::trim) else {
         return Err(OpenPrError::Other(eyre!(
-            "cannot extract pr_url from cmd stderr | stderr={stderr:?}"
+            "error extracting pr_url from cmd stderr | stderr={stderr:?}"
         )));
     };
 
@@ -335,8 +353,14 @@ fn handle_open_pr_output(output: &Output) -> Result<String, OpenPrError> {
 /// # Errors
 /// - UTF-8 conversion fails.
 fn extract_success_output(output: &Output) -> color_eyre::Result<String> {
-    output.status.exit_ok()?;
-    Ok(std::str::from_utf8(&output.stdout)?.trim().into())
+    output
+        .status
+        .exit_ok()
+        .wrap_err_with(|| eyre!("command exited with non-zero status"))?;
+    Ok(std::str::from_utf8(&output.stdout)
+        .wrap_err_with(|| eyre!("error decoding command stdout"))?
+        .trim()
+        .into())
 }
 
 /// Extracts the pull request numeric ID from a GitHub URL.
@@ -349,9 +373,11 @@ fn extract_success_output(output: &Output) -> color_eyre::Result<String> {
 /// - Host is not `github.com`.
 /// - The PR id segment or query parameter is missing, empty, duplicated, or malformed.
 fn extract_pr_id_form_url(url: &Url) -> color_eyre::Result<String> {
-    let host = url.host_str().ok_or_else(|| eyre!("cannot extract host from {url}"))?;
+    let host = url
+        .host_str()
+        .ok_or_else(|| eyre!("error extracting host from URL | url={url}"))?;
     if host != GITHUB_HOST {
-        bail!("host mismatch | host={host:#?} expected={GITHUB_HOST:#?} url={url}")
+        bail!("error host mismatch | host={host:?} expected={GITHUB_HOST:?} URL={url}")
     }
 
     // To handle URLs like:
@@ -367,7 +393,7 @@ fn extract_pr_id_form_url(url: &Url) -> color_eyre::Result<String> {
 
     let path_segments = url
         .path_segments()
-        .ok_or_else(|| eyre!("{url} cannot-be-a-base"))?
+        .ok_or_else(|| eyre!("error URL cannot be base | url={url}"))?
         .enumerate()
         .collect::<Vec<_>>();
 
@@ -379,18 +405,18 @@ fn extract_pr_id_form_url(url: &Url) -> color_eyre::Result<String> {
     {
         [(idx, _)] => Ok(path_segments
             .get(idx.saturating_add(1))
-            .ok_or_else(|| eyre!("missing pr id | url={url} path_segments={path_segments:#?}"))
+            .ok_or_else(|| eyre!("error missing PR ID | url={url} path_segments={path_segments:#?}"))
             .and_then(|(_, pr_id)| {
                 if pr_id.is_empty() {
-                    return Err(eyre!("empty pr id | url={url} path_segments={path_segments:#?}"));
+                    return Err(eyre!("error empty PR ID | url={url} path_segments={path_segments:#?}"));
                 }
                 Ok((*pr_id).to_string())
             })?),
         [] => Err(eyre!(
-            "missing pr id prefix | prefix={GITHUB_PR_ID_PREFIX:#?} url={url} path_segments={path_segments:#?}"
+            "error missing PR ID prefix | prefix={GITHUB_PR_ID_PREFIX:?} url={url} path_segments={path_segments:#?}"
         )),
         _ => Err(eyre!(
-            "multiple pr id prefixes | prefix={GITHUB_PR_ID_PREFIX:#?} url={url} path_segments={path_segments:#?}"
+            "error multiple PR ID prefixes | prefix={GITHUB_PR_ID_PREFIX:?} url={url} path_segments={path_segments:#?}"
         )),
     }
 }
@@ -408,7 +434,10 @@ mod tests {
     fn extract_pr_id_form_url_returns_the_expected_error_when_host_cannot_be_extracted() {
         let url = Url::parse("mailto:foo@bar.com").unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_url(&url));
-        assert_eq!(error.to_string(), "cannot extract host from mailto:foo@bar.com");
+        assert_eq!(
+            error.to_string(),
+            "error extracting host from URL | url=mailto:foo@bar.com"
+        );
     }
 
     #[test]
@@ -416,10 +445,10 @@ mod tests {
         let url = Url::parse("https://foo.bar").unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_url(&url));
         let msg = error.to_string();
-        assert!(msg.starts_with("host mismatch |"));
+        assert!(msg.starts_with("error host mismatch |"));
         assert!(msg.contains(r#"host="foo.bar""#), "actual: {msg}");
         assert!(msg.contains(r#"expected="github.com""#), "actual: {msg}");
-        assert!(msg.contains("url=https://foo.bar/"), "actual: {msg}");
+        assert!(msg.contains("URL=https://foo.bar/"), "actual: {msg}");
     }
 
     #[test]
@@ -427,7 +456,7 @@ mod tests {
         let url = Url::parse(&format!("https://{GITHUB_HOST}")).unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_url(&url));
         let msg = error.to_string();
-        assert!(msg.starts_with("missing pr id prefix |"), "actual: {msg}");
+        assert!(msg.starts_with("error missing PR ID prefix |"), "actual: {msg}");
         assert!(msg.contains("prefix=\"pull\""), "actual: {msg}");
         assert!(msg.contains("url=https://github.com/"), "actual: {msg}");
     }
@@ -437,7 +466,7 @@ mod tests {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/pull")).unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_url(&url));
         let msg = error.to_string();
-        assert!(msg.starts_with("missing pr id |"), "actual: {msg}");
+        assert!(msg.starts_with("error missing PR ID |"), "actual: {msg}");
         assert!(msg.contains("url=https://github.com/pull"), "actual: {msg}");
     }
 
@@ -446,7 +475,7 @@ mod tests {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/foo")).unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_url(&url));
         let msg = error.to_string();
-        assert!(msg.starts_with("missing pr id prefix |"), "actual: {msg}");
+        assert!(msg.starts_with("error missing PR ID prefix |"), "actual: {msg}");
         assert!(msg.contains("prefix=\"pull\""), "actual: {msg}");
         assert!(msg.contains("url=https://github.com/foo"), "actual: {msg}");
     }
@@ -456,7 +485,7 @@ mod tests {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/pull/42/pull/43")).unwrap();
         assert2::let_assert!(Err(error) = extract_pr_id_form_url(&url));
         let msg = error.to_string();
-        assert!(msg.starts_with("multiple pr id prefixes |"), "actual: {msg}");
+        assert!(msg.starts_with("error multiple PR ID prefixes |"), "actual: {msg}");
         assert!(msg.contains("prefix=\"pull\""), "actual: {msg}");
         assert!(msg.contains("url=https://github.com/pull/42/pull/43"), "actual: {msg}");
     }
@@ -509,13 +538,16 @@ mod tests {
     }
 
     #[rstest]
-    #[case("", "cannot build CreateIssueOutput empty repo | output=")]
-    #[case("issues", "cannot build CreateIssueOutput empty repo | output=issues")]
+    #[case("", "error building CreateIssueOutput | empty=\"repo\" output=\"\"")]
+    #[case("issues", "error building CreateIssueOutput | empty=\"repo\" output=\"issues\"")]
     #[case(
         "https://github.com/owner/repo/123",
-        "cannot build CreateIssueOutput missing issue_nr | output=https://github.com/owner/repo/123"
+        "error building CreateIssueOutput | missing=\"issue_nr\" output=\"https://github.com/owner/repo/123\""
     )]
-    #[case("repo/issues", "cannot build CreateIssueOutput empty issue_nr | output=repo/issues")]
+    #[case(
+        "repo/issues",
+        "error building CreateIssueOutput | empty=\"issue_nr\" output=\"repo/issues\""
+    )]
     fn created_issue_new_errors_on_invalid_output(#[case] output: &str, #[case] expected_error: &str) {
         assert2::let_assert!(Err(error) = CreatedIssue::new("title", output));
         pretty_assertions::assert_eq!(error.to_string(), expected_error);
@@ -564,11 +596,7 @@ mod tests {
             stderr: vec![],
         };
         assert2::let_assert!(Err(OpenPrError::Other(error)) = handle_open_pr_output(&output));
-        assert!(
-            error
-                .to_string()
-                .contains("process exited unsuccessfully: signal: 1 (SIGHUP)")
-        );
+        assert!(error.to_string().contains("command exited with non-zero status"));
     }
 
     #[test]
@@ -591,7 +619,7 @@ mod tests {
         };
         assert2::let_assert!(Err(OpenPrError::Other(error)) = handle_open_pr_output(&output));
         let error_string = error.to_string();
-        assert!(error_string.contains("cannot extract pr_url from cmd stderr"));
+        assert!(error_string.contains("error extracting pr_url from cmd stderr"));
         assert!(error_string.contains("stderr=\"some error message\""));
     }
 

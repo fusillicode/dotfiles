@@ -61,7 +61,7 @@ impl Notifiable for &str {
 ///
 /// Errors are reported to Nvim via [`notify_error`].
 pub fn set_g_var<V: ToObject + Debug>(name: &str, value: V) {
-    let msg = format!("cannot set global var | name={name} value={value:#?}");
+    let msg = format!("error setting global var | name={name} value={value:#?}");
     if let Err(error) = nvim_oxi::api::set_var(name, value) {
         crate::api::notify_error(format!("{msg} | error={error:#?}"));
     }
@@ -105,7 +105,7 @@ pub fn exec_vim_cmd(
     }
     nvim_oxi::api::cmd(&cmd_infos_builder.build(), &CmdOpts::default()).inspect_err(|error| {
         crate::api::notify_error(format!(
-            "cannot execute cmd | cmd={cmd:?} args={args:#?} error={error:#?}",
+            "error executing cmd | cmd={cmd:?} args={args:#?} error={error:#?}",
         ));
     })
 }

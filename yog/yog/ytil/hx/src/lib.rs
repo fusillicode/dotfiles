@@ -4,6 +4,7 @@ use core::str::FromStr;
 use std::path::PathBuf;
 
 use color_eyre::eyre;
+use color_eyre::eyre::WrapErr;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 
@@ -29,16 +30,16 @@ impl FromStr for HxStatusLine {
         let path_left_separator_idx = elements
             .iter()
             .position(|x| x == &"`")
-            .ok_or_else(|| eyre!("missing left path separator | elements={elements:#?}"))?;
+            .ok_or_else(|| eyre!("error missing left path separator | elements={elements:#?}"))?;
         let path_right_separator_idx = elements
             .iter()
             .rposition(|x| x == &"`")
-            .ok_or_else(|| eyre!("missing right path separator | elements={elements:#?}"))?;
+            .ok_or_else(|| eyre!("error missing right path separator | elements={elements:#?}"))?;
 
         let path_slice_range = path_left_separator_idx..path_right_separator_idx;
         let path_slice = elements
             .get(path_slice_range.clone())
-            .ok_or_else(|| eyre!("invalid path slice indices | range={path_slice_range:#?}"))?;
+            .ok_or_else(|| eyre!("error invalid path slice indices | range={path_slice_range:#?}"))?;
         let ["`", path] = path_slice else {
             bail!("missing path | elements={elements:#?}");
         };
@@ -48,7 +49,7 @@ impl FromStr for HxStatusLine {
             position: HxCursorPosition::from_str(
                 elements
                     .last()
-                    .ok_or_else(|| eyre!("missing last element | elements={elements:#?}"))?,
+                    .ok_or_else(|| eyre!("error missing last element | elements={elements:#?}"))?,
             )?,
         })
     }
@@ -71,11 +72,15 @@ impl FromStr for HxCursorPosition {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (line, column) = s
             .split_once(':')
-            .ok_or_else(|| eyre!("missing line column delimiter | input='{s}'"))?;
+            .ok_or_else(|| eyre!("error missing line column delimiter | input={s}"))?;
 
         Ok(Self {
-            line: line.parse()?,
-            column: column.parse()?,
+            line: line
+                .parse()
+                .wrap_err_with(|| eyre!("invalid line number | input={s:?}"))?,
+            column: column
+                .parse()
+                .wrap_err_with(|| eyre!("invalid column number | input={s:?}"))?,
         })
     }
 }
