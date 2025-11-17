@@ -35,8 +35,8 @@ use std::ops::Deref;
 use color_eyre::eyre::bail;
 use color_eyre::owo_colors::OwoColorize as _;
 use url::Url;
-use ytil_git::Branch;
 use ytil_git::CmdError;
+use ytil_git::branch::Branch;
 use ytil_system::CliArgs;
 
 struct RenderableBranch(Branch);
@@ -71,15 +71,15 @@ impl Display for RenderableBranch {
 /// - Branch switching via [`ytil_git::switch_branch`] fails.
 fn autocomplete_git_branches_and_switch(branches: &[Branch]) -> color_eyre::Result<()> {
     let mut branches = if branches.is_empty() {
-        ytil_git::get_branches()?
+        ytil_git::branch::get()?
     } else {
         branches.to_vec()
     };
-    ytil_git::remove_redundant_remotes(&mut branches);
+    ytil_git::branch::remove_redundant_remotes(&mut branches);
 
     let branch = ytil_tui::minimal_select(branches.into_iter().map(RenderableBranch).collect())?;
     let branch_name = branch.as_ref().map_or("-", |b| b.name());
-    ytil_git::switch_branch(branch_name).inspect(|()| report_branch_switch(branch_name))?;
+    ytil_git::branch::switch(branch_name).inspect(|()| report_branch_switch(branch_name))?;
 
     Ok(())
 }
@@ -105,7 +105,7 @@ fn handle_single_input_argument(arg: &str) -> color_eyre::Result<()> {
         arg.to_string()
     };
 
-    match ytil_git::switch_branch(&branch_name).map_err(|e| *e) {
+    match ytil_git::branch::switch(&branch_name).map_err(|e| *e) {
         Err(CmdError::CmdFailure { stderr, .. }) if stderr.contains("invalid reference: ") => {
             create_branch_and_switch(&branch_name)
         }
@@ -127,14 +127,14 @@ fn create_branch_and_switch(branch: &str) -> color_eyre::Result<()> {
     if !should_create_new_branch(branch)? {
         return Ok(());
     }
-    if let Err(error) = ytil_git::create_branch(branch) {
+    if let Err(error) = ytil_git::branch::create(branch) {
         if error.to_string().contains("already exists") {
-            ytil_git::switch_branch(branch).inspect(|()| report_branch_exists(branch))?;
+            ytil_git::branch::switch(branch).inspect(|()| report_branch_exists(branch))?;
             return Ok(());
         }
         return Err(error);
     }
-    ytil_git::switch_branch(branch).inspect(|()| report_branch_new(branch))?;
+    ytil_git::branch::switch(branch).inspect(|()| report_branch_new(branch))?;
     Ok(())
 }
 
@@ -152,7 +152,7 @@ fn should_create_new_branch(branch: &str) -> color_eyre::Result<bool> {
     if is_default_branch(branch) {
         return Ok(true);
     }
-    let curr_branch = ytil_git::get_current_branch()?;
+    let curr_branch = ytil_git::branch::get_current()?;
     if is_default_branch(&curr_branch) {
         return Ok(true);
     }
@@ -272,7 +272,7 @@ fn main() -> color_eyre::Result<()> {
     match args.split_first() {
         None => autocomplete_git_branches_and_switch(&[]),
         // Assumption: cannot create a branch with a name that starts with -
-        Some((hd, _)) if *hd == "-" => ytil_git::switch_branch(hd)
+        Some((hd, _)) if *hd == "-" => ytil_git::branch::switch(hd)
             .inspect(|()| report_branch_switch(hd))
             .map_err(From::from),
         Some((hd, tail)) if *hd == "-b" => create_branch_and_switch(&build_branch_name(tail)?),

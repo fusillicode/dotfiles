@@ -378,7 +378,7 @@ fn create_issue_and_branch_from_default_branch() -> Result<(), color_eyre::eyre:
 
     let created_issue = ytil_github::create_issue(&title)?;
 
-    ytil_git::create_branch(&created_issue.branch_title()).inspect(|pr_url| {
+    ytil_git::branch::create(&created_issue.branch_title()).inspect(|pr_url| {
         println!(
             "{} with title={title:?} pr_url={pr_url:?}",
             "Issue and branch created".green().bold()

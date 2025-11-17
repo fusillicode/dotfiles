@@ -121,7 +121,7 @@ fn main() -> color_eyre::Result<()> {
     let git_repo_root_path = Arc::new(ytil_git::get_repo_root(&ytil_git::get_repo(&hx_status_line.file_path)?));
 
     let get_git_current_branch =
-        std::thread::spawn(move || -> color_eyre::Result<String> { ytil_git::get_current_branch() });
+        std::thread::spawn(move || -> color_eyre::Result<String> { ytil_git::branch::get_current() });
 
     let git_repo_root_path_clone = git_repo_root_path.clone();
     let get_github_repo_url = std::thread::spawn(move || -> color_eyre::Result<Url> {
