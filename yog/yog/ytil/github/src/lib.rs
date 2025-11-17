@@ -162,10 +162,12 @@ pub fn create_issue(title: &str) -> color_eyre::Result<CreatedIssue> {
 
 /// Creates a new GitHub pull request using the `gh` CLI.
 ///
-/// Invokes: `gh pr create --title <title>`.
+/// Invokes: `gh pr create --title <title> --body "" --head <branch>`.
+/// If `branch` is `None`, uses the default branch from the repository.
 ///
 /// # Arguments
 /// - `title` The title of the pull request to create.
+/// - `branch` The head branch for the PR; if `None`, defaults to the repository's default branch.
 ///
 /// # Returns
 /// The URL of the created pull request.
@@ -174,11 +176,22 @@ pub fn create_issue(title: &str) -> color_eyre::Result<CreatedIssue> {
 /// - Spawning or executing the `gh pr create` command fails.
 /// - Command exits with non-zero status.
 /// - Output is not valid UTF-8.
-pub fn create_pr(title: &str) -> Result<String, CreatePrError> {
+/// - Retrieving the default branch fails when `branch` is `None`.
+pub fn create_pr(title: &str, branch: Option<&str>) -> Result<String, CreatePrError> {
+    let mut args = vec!["pr", "create", "--title", title, "--body", ""];
+
+    let branch = if let Some(branch) = branch {
+        branch
+    } else {
+        &ytil_git::get_default_branch().map_err(CreatePrError::Other)?
+    };
+
+    args.extend(["--head", branch]);
+
     let output = Command::new("gh")
-        .args(["pr", "create", "--title", title, "--body", ""])
+        .args(args)
         .output()
-        .wrap_err_with(|| eyre!("error creating PR | title={title:?}"))
+        .wrap_err_with(|| eyre!("error creating PR from branch | title={title:?} branch={branch:?}"))
         .map_err(CreatePrError::Other)?;
 
     handle_create_pr_output(&output)

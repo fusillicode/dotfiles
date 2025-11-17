@@ -56,6 +56,36 @@ pub fn get_repo_root(repo: &Repository) -> PathBuf {
         .collect()
 }
 
+/// Retrieves the default branch name from the Git repository.
+///
+/// Iterates over all configured remotes and returns the branch name pointed to by the first valid
+/// `refs/remotes/{remote}/HEAD` reference.
+///
+/// # Returns
+/// The default branch name (e.g., "main" or "master").
+///
+/// # Errors
+/// - If the repository cannot be opened.
+/// - If no remote has a valid `HEAD` reference.
+/// - If the branch name cannot be extracted from the reference target.
+pub fn get_default_branch() -> color_eyre::Result<String> {
+    let repo = get_repo(Path::new("."))?;
+
+    for remote_name in repo.remotes()?.iter().flatten() {
+        if let Ok(head_ref) = repo.find_reference(&format!("refs/remotes/{remote_name}/HEAD"))
+            && let Some(target) = head_ref.symbolic_target()
+        {
+            let branch_name = target
+                .split('/')
+                .next_back()
+                .ok_or_else(|| eyre!("error extracting default branch_name from target | target={target:?}"))?;
+            return Ok(branch_name.to_string());
+        }
+    }
+
+    bail!("error missing default branch")
+}
+
 /// Get current branch name (fails if HEAD detached).
 ///
 /// # Returns
