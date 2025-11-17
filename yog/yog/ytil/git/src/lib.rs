@@ -17,6 +17,7 @@ use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 use git2::Cred;
 use git2::IntoCString;
+use git2::Reference;
 use git2::RemoteCallbacks;
 use git2::Repository;
 use git2::Status;
@@ -71,19 +72,26 @@ pub fn get_repo_root(repo: &Repository) -> PathBuf {
 pub fn get_default_branch() -> color_eyre::Result<String> {
     let repo = get_repo(Path::new("."))?;
 
+    let default_remote_ref = get_default_remote(&repo)?;
+
+    let Some(target) = default_remote_ref.symbolic_target() else {
+        bail!("error missing default branch");
+    };
+
+    Ok(target
+        .split('/')
+        .next_back()
+        .ok_or_else(|| eyre!("error extracting default branch_name from target | target={target:?}"))?
+        .to_string())
+}
+
+pub fn get_default_remote(repo: &Repository) -> color_eyre::Result<Reference<'_>> {
     for remote_name in repo.remotes()?.iter().flatten() {
-        if let Ok(head_ref) = repo.find_reference(&format!("refs/remotes/{remote_name}/HEAD"))
-            && let Some(target) = head_ref.symbolic_target()
-        {
-            let branch_name = target
-                .split('/')
-                .next_back()
-                .ok_or_else(|| eyre!("error extracting default branch_name from target | target={target:?}"))?;
-            return Ok(branch_name.to_string());
+        if let Ok(default_remote_ref) = repo.find_reference(&format!("refs/remotes/{remote_name}/HEAD")) {
+            return Ok(default_remote_ref);
         }
     }
-
-    bail!("error missing default branch")
+    bail!("error missing default remote")
 }
 
 /// Get current branch name (fails if HEAD detached).
@@ -144,11 +152,33 @@ pub fn create_branch(branch_name: &str) -> color_eyre::Result<()> {
 
     let commit = repo
         .head()
-        .wrap_err_with(|| eyre!("error getting head | branch={branch_name:?}"))?
+        .wrap_err_with(|| eyre!("error getting head | branch_name={branch_name:?}"))?
         .peel_to_commit()
-        .wrap_err_with(|| eyre!("error peeling head to commit | branch={branch_name:?}"))?;
+        .wrap_err_with(|| eyre!("error peeling head to commit | branch_name={branch_name:?}"))?;
+
     repo.branch(branch_name, &commit, false)
-        .wrap_err_with(|| eyre!("error creating branch | branch={branch_name:?}"))?;
+        .wrap_err_with(|| eyre!("error creating branch | branch_name={branch_name:?}"))?;
+
+    Ok(())
+}
+
+pub fn push_branch(branch_name: &str) -> color_eyre::Result<()> {
+    let repo = get_repo(Path::new(".")).wrap_err_with(|| eyre!("error getting repo | branch={branch_name:?}"))?;
+
+    let default_remote = get_default_remote(&repo)?;
+
+    let default_remote_name = default_remote
+        .name()
+        .unwrap()
+        .trim_start_matches("refs/remotes/")
+        .trim_end_matches("/HEAD");
+
+    let mut remote = repo.find_remote(default_remote_name)?;
+
+    let branch_refspec = format!("refs/heads/{branch_name}");
+    remote.push(&[&branch_refspec], None).wrap_err_with(|| {
+        eyre!("error pushing branch to remote | branch_refspec={branch_refspec:?} default_remote_name={default_remote_name:?}")
+    })?;
 
     Ok(())
 }

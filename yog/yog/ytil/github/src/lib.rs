@@ -27,6 +27,8 @@ use std::process::Output;
 use color_eyre::eyre::Context;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
+use convert_case::Case;
+use convert_case::Casing as _;
 use url::Url;
 
 pub mod pr;
@@ -90,12 +92,19 @@ impl CreatedIssue {
         })
     }
 
-    /// Formats the issue title for use as a pull request title.
+    /// Generates a branch title from the issue number and title.
+    ///
+    /// Formats as `{issue_nr}-{title}` where `title` is converted to kebab-case and leading/trailing dashes are
+    /// trimmed.
     ///
     /// # Returns
-    /// A string in the format `[issue_nr]: title`.
-    pub fn pr_title(&self) -> String {
-        format!("[{}]: {}", self.issue_nr, self.title)
+    /// A string suitable for use as a Git branch name.
+    pub fn branch_title(&self) -> String {
+        format!(
+            "{}-{}",
+            self.issue_nr.trim_matches('-'),
+            self.title.to_case(Case::Kebab).trim_matches('-')
+        )
     }
 }
 
@@ -118,14 +127,6 @@ impl RepoViewField {
     pub fn jq_repr(&self) -> String {
         format!(".{}", self.as_ref())
     }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum CreatePrError {
-    #[error("PR already exist pr_url={pr_url}")]
-    AlreadyExist { pr_url: String },
-    #[error(transparent)]
-    Other(color_eyre::eyre::Error),
 }
 
 /// Creates a new GitHub issue with the specified title.
@@ -158,43 +159,6 @@ pub fn create_issue(title: &str) -> color_eyre::Result<CreatedIssue> {
         .wrap_err_with(|| eyre!("error parsing created issue output | title={title:?}"))?;
 
     Ok(created_issue)
-}
-
-/// Creates a new GitHub pull request using the `gh` CLI.
-///
-/// Invokes: `gh pr create --title <title> --body "" --head <branch>`.
-/// If `branch` is `None`, uses the default branch from the repository.
-///
-/// # Arguments
-/// - `title` The title of the pull request to create.
-/// - `branch` The head branch for the PR; if `None`, defaults to the repository's default branch.
-///
-/// # Returns
-/// The URL of the created pull request.
-///
-/// # Errors
-/// - Spawning or executing the `gh pr create` command fails.
-/// - Command exits with non-zero status.
-/// - Output is not valid UTF-8.
-/// - Retrieving the default branch fails when `branch` is `None`.
-pub fn create_pr(title: &str, branch: Option<&str>) -> Result<String, CreatePrError> {
-    let mut args = vec!["pr", "create", "--title", title, "--body", ""];
-
-    let branch = if let Some(branch) = branch {
-        branch
-    } else {
-        &ytil_git::get_default_branch().map_err(CreatePrError::Other)?
-    };
-
-    args.extend(["--head", branch]);
-
-    let output = Command::new("gh")
-        .args(args)
-        .output()
-        .wrap_err_with(|| eyre!("error creating PR from branch | title={title:?} branch={branch:?}"))
-        .map_err(CreatePrError::Other)?;
-
-    handle_create_pr_output(&output)
 }
 
 /// Return the specified repository field via `gh repo view`.
@@ -330,37 +294,6 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> color_eyre::Res
     Ok(url)
 }
 
-/// Handles the output of the `gh pr create` command.
-///
-/// Parses the stdout for success or stderr for errors, including already-existing PRs.
-///
-/// # Returns
-/// - The PR URL on success.
-/// - [`CreatePrError::AlreadyExist`] if a PR already exists.
-/// - [`CreatePrError::Other`] for other failures.
-fn handle_create_pr_output(output: &Output) -> Result<String, CreatePrError> {
-    let stderr = std::str::from_utf8(&output.stderr)
-        .wrap_err_with(|| eyre!("error decoding stderr | cmd=\"gh pr create\""))
-        .map_err(CreatePrError::Other)?
-        .trim();
-
-    if stderr.is_empty() {
-        return extract_success_output(output).map_err(CreatePrError::Other);
-    }
-
-    let mut split = stderr.split("already exists:");
-    split.next();
-    let Some(pr_url) = split.next().map(str::trim) else {
-        return Err(CreatePrError::Other(eyre!(
-            "error extracting pr_url from cmd stderr | stderr={stderr:?}"
-        )));
-    };
-
-    Err(CreatePrError::AlreadyExist {
-        pr_url: pr_url.to_string(),
-    })
-}
-
 /// Extracts and validates successful command output, converting it to a trimmed string.
 ///
 /// # Errors
@@ -436,9 +369,6 @@ fn extract_pr_id_form_url(url: &Url) -> color_eyre::Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::os::unix::process::ExitStatusExt;
-    use std::process::ExitStatus;
-
     use rstest::rstest;
 
     use super::*;
@@ -566,14 +496,20 @@ mod tests {
         pretty_assertions::assert_eq!(error.to_string(), expected_error);
     }
 
-    #[test]
-    fn created_issue_pr_title_formats_correctly() {
+    #[rstest]
+    #[case("Fix bug", "42", "42-fix-bug")]
+    #[case("-Fix bug", "-42-", "42-fix-bug")]
+    fn created_issue_branch_title_formats_correctly(
+        #[case] title: &str,
+        #[case] issue_nr: &str,
+        #[case] expected: &str,
+    ) {
         let issue = CreatedIssue {
-            title: "Fix bug".to_string(),
-            issue_nr: "42".to_string(),
+            title: title.to_string(),
+            issue_nr: issue_nr.to_string(),
             repo: "https://github.com/owner/repo/".to_string(),
         };
-        pretty_assertions::assert_eq!(issue.pr_title(), "[42]: Fix bug");
+        pretty_assertions::assert_eq!(issue.branch_title(), expected);
     }
 
     #[rstest]
@@ -588,62 +524,5 @@ mod tests {
     fn parse_github_url_from_git_remote_url_works_as_expected(#[case] input: &str, #[case] expected: Url) {
         let result = parse_github_url_from_git_remote_url(input).unwrap();
         assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn handle_create_pr_output_when_stderr_empty_and_command_succeeds_returns_pr_url() {
-        let output = std::process::Output {
-            status: ExitStatus::from_raw(0),
-            stdout: b"https://github.com/owner/repo/pull/123\n".to_vec(),
-            stderr: vec![],
-        };
-        assert2::let_assert!(Ok(url) = handle_create_pr_output(&output));
-        pretty_assertions::assert_eq!(url, "https://github.com/owner/repo/pull/123");
-    }
-
-    #[test]
-    fn handle_create_pr_output_when_stderr_empty_and_command_fails_returns_generic_error() {
-        let output = std::process::Output {
-            status: ExitStatus::from_raw(1),
-            stdout: vec![],
-            stderr: vec![],
-        };
-        assert2::let_assert!(Err(CreatePrError::Other(error)) = handle_create_pr_output(&output));
-        assert!(error.to_string().contains("command exited with non-zero status"));
-    }
-
-    #[test]
-    fn handle_create_pr_output_when_stderr_contains_already_exists_returns_already_exist_error() {
-        let output = std::process::Output {
-            status: ExitStatus::from_raw(1),
-            stdout: vec![],
-            stderr: b"already exists: https://github.com/owner/repo/pull/123\n".to_vec(),
-        };
-        assert2::let_assert!(Err(CreatePrError::AlreadyExist { pr_url }) = handle_create_pr_output(&output));
-        pretty_assertions::assert_eq!(pr_url, "https://github.com/owner/repo/pull/123");
-    }
-
-    #[test]
-    fn handle_create_pr_output_when_stderr_contains_unexpected_error_returns_generic_error() {
-        let output = std::process::Output {
-            status: ExitStatus::from_raw(1),
-            stdout: vec![],
-            stderr: b"some error message\n".to_vec(),
-        };
-        assert2::let_assert!(Err(CreatePrError::Other(error)) = handle_create_pr_output(&output));
-        let error_string = error.to_string();
-        assert!(error_string.contains("error extracting pr_url from cmd stderr"));
-        assert!(error_string.contains("stderr=\"some error message\""));
-    }
-
-    #[test]
-    fn handle_create_pr_output_when_stderr_not_utf8_returns_generic_error() {
-        let output = std::process::Output {
-            status: ExitStatus::from_raw(1),
-            stdout: vec![],
-            stderr: vec![0xff],
-        };
-        assert2::let_assert!(Err(CreatePrError::Other(error)) = handle_create_pr_output(&output));
-        assert!(error.to_string().contains("error decoding stderr"));
     }
 }

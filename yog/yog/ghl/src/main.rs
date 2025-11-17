@@ -49,7 +49,6 @@ use std::str::FromStr;
 use color_eyre::Section;
 use color_eyre::owo_colors::OwoColorize;
 use strum::EnumIter;
-use ytil_github::CreatePrError;
 use ytil_github::RepoViewField;
 use ytil_github::pr::IntoEnumIterator;
 use ytil_github::pr::PullRequest;
@@ -295,7 +294,7 @@ fn main() -> color_eyre::Result<()> {
     ytil_github::log_into_github()?;
 
     if pargs.contains("issue") {
-        create_issue_and_pr_from_default_branch()?;
+        create_issue_and_branch_from_default_branch()?;
         return Ok(());
     }
 
@@ -358,38 +357,31 @@ fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Creates a GitHub issue and attempts to create a corresponding pull request.
+/// Creates a GitHub issue and a corresponding branch from the default branch.
 ///
-/// Prompts the user for an issue title, creates the issue, and then creates a PR linked to it.
-/// If the PR already exists, it logs a warning but does not fail.
+/// Prompts the user for an issue title, creates the issue, and then creates a branch named after the issue.
+/// If the branch already exists, it logs a warning but does not fail.
+///
+/// # Rationale
+/// It's not possible to create a GitHub PR from a branch that has no diff with the head branch.
 ///
 /// # Returns
-/// Returns `Ok(())` on successful creation or if the PR already exists.
-/// Returns an error if prompting fails, issue creation fails, or PR creation fails with an unexpected error.
+/// Returns `Ok(())` on successful creation or if the branch already exists.
+/// Returns an error if prompting fails, issue creation fails, or branch creation fails with an unexpected error.
 ///
 /// # Errors
 /// - [`ytil_tui::Text::prompt`] failure if user input cannot be obtained.
 /// - [`ytil_github::create_issue`] failure if the issue cannot be created.
-/// - [`ytil_github::create_pr`] failure if the PR cannot be created and is not due to it already existing.
-fn create_issue_and_pr_from_default_branch() -> Result<(), color_eyre::eyre::Error> {
+/// - [`ytil_git::create_branch`] failure if the branch cannot be created and is not due to it already existing.
+fn create_issue_and_branch_from_default_branch() -> Result<(), color_eyre::eyre::Error> {
     let title = ytil_tui::Text::new("Issue title:").prompt()?;
 
     let created_issue = ytil_github::create_issue(&title)?;
 
-    match ytil_github::create_pr(&created_issue.pr_title(), None)
-        .inspect(|pr_url| {
-            println!(
-                "{} with title={title:?} pr_url={pr_url:?}",
-                "Issue and PR created".green().bold()
-            );
-        })
-        .inspect_err(|error| match error {
-            CreatePrError::AlreadyExist { pr_url } => {
-                println!("{} pr_url={pr_url:?}", "PR already exists".yellow().bold());
-            }
-            CreatePrError::Other(_) => (),
-        }) {
-        Ok(_) | Err(CreatePrError::AlreadyExist { .. }) => Ok(()),
-        Err(error @ CreatePrError::Other(_)) => Err(error.into()),
-    }
+    ytil_git::create_branch(&created_issue.branch_title()).inspect(|pr_url| {
+        println!(
+            "{} with title={title:?} pr_url={pr_url:?}",
+            "Issue and branch created".green().bold()
+        );
+    })
 }
