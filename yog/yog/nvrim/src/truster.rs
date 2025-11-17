@@ -164,7 +164,7 @@ fn get_enclosing_fn_name_of_position(file_path: &Path, position: Point) -> color
 
     let src_tree = parser
         .parse(&src, None)
-        .ok_or_else(|| eyre!("error parsing rust code | path={}", file_path.display()))?;
+        .ok_or_else(|| eyre!("error parsing Rust code | path={}", file_path.display()))?;
 
     let node_at_position = src_tree.root_node().descendant_for_point_range(position, position);
 

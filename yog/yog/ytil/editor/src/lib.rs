@@ -102,17 +102,17 @@ impl FromStr for FileToOpen {
             .next()
             .map(str::parse::<i64>)
             .transpose()
-            .wrap_err_with(|| eyre!("invalid line number | str={s}"))?
+            .wrap_err_with(|| eyre!("invalid line number | str={s:?}"))?
             .unwrap_or_default();
         let column = parts
             .next()
             .map(str::parse::<i64>)
             .transpose()
-            .wrap_err_with(|| eyre!("invalid column number | str={s}"))?
+            .wrap_err_with(|| eyre!("invalid column number | str={s:?}"))?
             .unwrap_or_default();
         if !Path::new(path)
             .try_exists()
-            .wrap_err_with(|| eyre!("error checking if file exists | path={path}"))?
+            .wrap_err_with(|| eyre!("error checking if file exists | path={path:?}"))?
         {
             bail!("file missing | path={path}")
         }
@@ -230,7 +230,8 @@ mod tests {
             cursor_visibility: "Visible".into(),
             cursor_x: 0,
             cursor_y: 0,
-            // Use double-slash host form so absolute_cwd drops the first two components and yields the real fs path.
+            // Use double-slash host form so absolute_cwd drops the first two components and yields the real filesystem
+            // path.
             cwd: PathBuf::from(format!("file://host{}", cwd_fs.display())),
             is_active: true,
             is_zoomed: false,

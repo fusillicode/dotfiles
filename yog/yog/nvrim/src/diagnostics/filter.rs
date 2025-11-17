@@ -60,7 +60,7 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
             .skip_diagnostic(&buf_with_path, &lsp_diag)
             .inspect_err(|error| {
                 ytil_nvim_oxi::api::notify_error(format!(
-                    "error filtering diagnostic | diagnostic={lsp_diag:#?} buffer={buf_path:?} error={error:?}",
+                    "error filtering diagnostic | buffer={buf_path:?} diagnostic={lsp_diag:#?} error={error:#?}",
                 ));
             })
             .is_ok_and(identity)

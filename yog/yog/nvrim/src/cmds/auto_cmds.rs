@@ -58,13 +58,13 @@ where
         nvim_oxi::api::create_augroup(augroup_name, &CreateAugroupOptsBuilder::default().clear(true).build())
             .inspect_err(|error| {
                 ytil_nvim_oxi::api::notify_error(format!(
-                    "error creating augroup | name={augroup_name:#?} error={error:#?}"
+                    "error creating augroup | name={augroup_name:?} error={error:#?}"
                 ));
             })
             .and_then(|group| nvim_oxi::api::create_autocmd(events, &opts_builder.group(group).build()))
     {
         ytil_nvim_oxi::api::notify_error(format!(
-            "error creating auto command | events={events:#?} augroup={augroup_name} error={error:#?}"
+            "error creating auto command | augroup={augroup_name:?} events={events:#?} error={error:#?}"
         ));
     }
 }

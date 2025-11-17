@@ -4,7 +4,7 @@
 //! - `--debug` Use debug profile; skip clippy; copy from `target/debug`.
 //! - `bins_path` Destination for binaries (default: `$HOME/.local/bin`).
 //! - `cargo_target_path` Cargo target root (default: workspace `target/`).
-//! - `nvim_libs_path` Destination for nvim libs (default: `$HOME/.config/nvim/lua`).
+//! - `nvim_libs_path` Destination for Neovim libs (default: `$HOME/.config/nvim/lua`).
 //!
 //! # Usage
 //! ```bash

@@ -134,26 +134,28 @@ pub fn build_path<P: AsRef<Path>>(mut root: PathBuf, parts: &[P]) -> PathBuf {
 /// - The clipboard program cannot be spawned.
 /// - The clipboard program exits with failure.
 pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
-    let mut pbcopy_child = ytil_cmd::silent_cmd("pbcopy")
+    let cmd = "pbcopy";
+
+    let mut pbcopy_child = ytil_cmd::silent_cmd(cmd)
         .stdin(Stdio::piped())
         .spawn()
-        .wrap_err_with(|| eyre!("error spawning pbcopy"))?;
+        .wrap_err_with(|| eyre!("error spawning cmd | cmd={cmd:?}"))?;
 
     std::io::copy(
         content,
         pbcopy_child
             .stdin
             .as_mut()
-            .ok_or_else(|| eyre!("error getting child stdin | cmd=pbcopy"))?,
+            .ok_or_else(|| eyre!("error getting cmd child stdin | cmd={cmd:?}"))?,
     )
-    .wrap_err_with(|| eyre!("error copying content to pbcopy stdin"))?;
+    .wrap_err_with(|| eyre!("error copying content to stdin | cmd={cmd:?}"))?;
 
     if !pbcopy_child
         .wait()
-        .wrap_err_with(|| eyre!("error waiting for pbcopy"))?
+        .wrap_err_with(|| eyre!("error waiting for cmd | cmd={cmd:?}"))?
         .success()
     {
-        bail!("error copying to system clipboard | content={content:#?}");
+        bail!("error copying to system clipboard | cmd={cmd:?} content={content:#?}");
     }
 
     Ok(())
@@ -545,12 +547,13 @@ pub fn find_matching_files_recursively_in_dir(
 /// - The `open` command fails to execute.
 /// - The `open` command exits with a non-zero status.
 pub fn open(arg: &str) -> color_eyre::Result<()> {
-    Command::new("open")
+    let cmd = "open";
+    Command::new(cmd)
         .arg(arg)
         .status()
-        .wrap_err_with(|| eyre!("error running open command | arg={arg:?}"))?
+        .wrap_err_with(|| eyre!("error running cmd | cmd={cmd:?} arg={arg:?}"))?
         .exit_ok()
-        .wrap_err_with(|| eyre!("error open cmd exit not ok | arg={arg:?}"))?;
+        .wrap_err_with(|| eyre!("error cmd exit not ok | cmd={cmd:?} arg={arg:?}"))?;
     Ok(())
 }
 
