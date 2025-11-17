@@ -121,7 +121,7 @@ impl RepoViewField {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum OpenPrError {
+pub enum CreatePrError {
     #[error("PR already exist pr_url={pr_url}")]
     AlreadyExist { pr_url: String },
     #[error(transparent)]
@@ -160,7 +160,7 @@ pub fn create_issue(title: &str) -> color_eyre::Result<CreatedIssue> {
     Ok(created_issue)
 }
 
-/// Opens a new GitHub pull request using the `gh` CLI.
+/// Creates a new GitHub pull request using the `gh` CLI.
 ///
 /// Invokes: `gh pr create --title <title>`.
 ///
@@ -174,14 +174,14 @@ pub fn create_issue(title: &str) -> color_eyre::Result<CreatedIssue> {
 /// - Spawning or executing the `gh pr create` command fails.
 /// - Command exits with non-zero status.
 /// - Output is not valid UTF-8.
-pub fn open_pr(title: &str) -> Result<String, OpenPrError> {
+pub fn create_pr(title: &str) -> Result<String, CreatePrError> {
     let output = Command::new("gh")
-        .args(["pr", "create", "--title", title])
+        .args(["pr", "create", "--title", title, "--body", ""])
         .output()
-        .wrap_err_with(|| eyre!("error opening PR | title={title:?}"))
-        .map_err(OpenPrError::Other)?;
+        .wrap_err_with(|| eyre!("error creating PR | title={title:?}"))
+        .map_err(CreatePrError::Other)?;
 
-    handle_open_pr_output(&output)
+    handle_create_pr_output(&output)
 }
 
 /// Return the specified repository field via `gh repo view`.
@@ -323,27 +323,27 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> color_eyre::Res
 ///
 /// # Returns
 /// - The PR URL on success.
-/// - [`OpenPrError::AlreadyExist`] if a PR already exists.
-/// - [`OpenPrError::Other`] for other failures.
-fn handle_open_pr_output(output: &Output) -> Result<String, OpenPrError> {
+/// - [`CreatePrError::AlreadyExist`] if a PR already exists.
+/// - [`CreatePrError::Other`] for other failures.
+fn handle_create_pr_output(output: &Output) -> Result<String, CreatePrError> {
     let stderr = std::str::from_utf8(&output.stderr)
         .wrap_err_with(|| eyre!("error decoding stderr | cmd=\"gh pr create\""))
-        .map_err(OpenPrError::Other)?
+        .map_err(CreatePrError::Other)?
         .trim();
 
     if stderr.is_empty() {
-        return extract_success_output(output).map_err(OpenPrError::Other);
+        return extract_success_output(output).map_err(CreatePrError::Other);
     }
 
     let mut split = stderr.split("already exists:");
     split.next();
     let Some(pr_url) = split.next().map(str::trim) else {
-        return Err(OpenPrError::Other(eyre!(
+        return Err(CreatePrError::Other(eyre!(
             "error extracting pr_url from cmd stderr | stderr={stderr:?}"
         )));
     };
 
-    Err(OpenPrError::AlreadyExist {
+    Err(CreatePrError::AlreadyExist {
         pr_url: pr_url.to_string(),
     })
 }
@@ -578,59 +578,59 @@ mod tests {
     }
 
     #[test]
-    fn handle_open_pr_output_when_stderr_empty_and_command_succeeds_returns_pr_url() {
+    fn handle_create_pr_output_when_stderr_empty_and_command_succeeds_returns_pr_url() {
         let output = std::process::Output {
             status: ExitStatus::from_raw(0),
             stdout: b"https://github.com/owner/repo/pull/123\n".to_vec(),
             stderr: vec![],
         };
-        assert2::let_assert!(Ok(url) = handle_open_pr_output(&output));
+        assert2::let_assert!(Ok(url) = handle_create_pr_output(&output));
         pretty_assertions::assert_eq!(url, "https://github.com/owner/repo/pull/123");
     }
 
     #[test]
-    fn handle_open_pr_output_when_stderr_empty_and_command_fails_returns_generic_error() {
+    fn handle_create_pr_output_when_stderr_empty_and_command_fails_returns_generic_error() {
         let output = std::process::Output {
             status: ExitStatus::from_raw(1),
             stdout: vec![],
             stderr: vec![],
         };
-        assert2::let_assert!(Err(OpenPrError::Other(error)) = handle_open_pr_output(&output));
+        assert2::let_assert!(Err(CreatePrError::Other(error)) = handle_create_pr_output(&output));
         assert!(error.to_string().contains("command exited with non-zero status"));
     }
 
     #[test]
-    fn handle_open_pr_output_when_stderr_contains_already_exists_returns_already_exist_error() {
+    fn handle_create_pr_output_when_stderr_contains_already_exists_returns_already_exist_error() {
         let output = std::process::Output {
             status: ExitStatus::from_raw(1),
             stdout: vec![],
             stderr: b"already exists: https://github.com/owner/repo/pull/123\n".to_vec(),
         };
-        assert2::let_assert!(Err(OpenPrError::AlreadyExist { pr_url }) = handle_open_pr_output(&output));
+        assert2::let_assert!(Err(CreatePrError::AlreadyExist { pr_url }) = handle_create_pr_output(&output));
         pretty_assertions::assert_eq!(pr_url, "https://github.com/owner/repo/pull/123");
     }
 
     #[test]
-    fn handle_open_pr_output_when_stderr_contains_unexpected_error_returns_generic_error() {
+    fn handle_create_pr_output_when_stderr_contains_unexpected_error_returns_generic_error() {
         let output = std::process::Output {
             status: ExitStatus::from_raw(1),
             stdout: vec![],
             stderr: b"some error message\n".to_vec(),
         };
-        assert2::let_assert!(Err(OpenPrError::Other(error)) = handle_open_pr_output(&output));
+        assert2::let_assert!(Err(CreatePrError::Other(error)) = handle_create_pr_output(&output));
         let error_string = error.to_string();
         assert!(error_string.contains("error extracting pr_url from cmd stderr"));
         assert!(error_string.contains("stderr=\"some error message\""));
     }
 
     #[test]
-    fn handle_open_pr_output_when_stderr_not_utf8_returns_generic_error() {
+    fn handle_create_pr_output_when_stderr_not_utf8_returns_generic_error() {
         let output = std::process::Output {
             status: ExitStatus::from_raw(1),
             stdout: vec![],
             stderr: vec![0xff],
         };
-        assert2::let_assert!(Err(OpenPrError::Other(error)) = handle_open_pr_output(&output));
+        assert2::let_assert!(Err(CreatePrError::Other(error)) = handle_create_pr_output(&output));
         assert!(error.to_string().contains("error decoding stderr"));
     }
 }
