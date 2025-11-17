@@ -99,7 +99,7 @@ impl CreatedIssue {
     ///
     /// # Returns
     /// A string suitable for use as a Git branch name.
-    pub fn branch_title(&self) -> String {
+    pub fn branch_name(&self) -> String {
         format!(
             "{}-{}",
             self.issue_nr.trim_matches('-'),
@@ -253,8 +253,8 @@ pub fn get_branch_name_from_url(url: &Url) -> color_eyre::Result<String> {
 /// - A remote cannot be resolved.
 /// - A remote URL is invalid UTF-8.
 pub fn get_repo_urls(repo_path: &Path) -> color_eyre::Result<Vec<Url>> {
-    let repo =
-        ytil_git::get_repo(repo_path).wrap_err_with(|| eyre!("error opening repo | path={}", repo_path.display()))?;
+    let repo = ytil_git::discover_repo(repo_path)
+        .wrap_err_with(|| eyre!("error opening repo | path={}", repo_path.display()))?;
     let mut repo_urls = vec![];
     for remote_name in repo.remotes()?.iter().flatten() {
         repo_urls.push(
@@ -499,7 +499,7 @@ mod tests {
     #[rstest]
     #[case("Fix bug", "42", "42-fix-bug")]
     #[case("-Fix bug", "-42-", "42-fix-bug")]
-    fn created_issue_branch_title_formats_correctly(
+    fn created_issue_branch_name_formats_correctly(
         #[case] title: &str,
         #[case] issue_nr: &str,
         #[case] expected: &str,
@@ -509,7 +509,7 @@ mod tests {
             issue_nr: issue_nr.to_string(),
             repo: "https://github.com/owner/repo/".to_string(),
         };
-        pretty_assertions::assert_eq!(issue.branch_title(), expected);
+        pretty_assertions::assert_eq!(issue.branch_name(), expected);
     }
 
     #[rstest]

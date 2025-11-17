@@ -123,18 +123,18 @@ fn handle_single_input_argument(arg: &str) -> color_eyre::Result<()> {
 /// - Current branch discovery via [`ytil_git::get_current_branch`] fails.
 /// - Branch creation via [`ytil_git::create_branch`] or subsequent switching via [`ytil_git::switch_branch`] fails.
 /// - Reading user confirmation input fails.
-fn create_branch_and_switch(branch: &str) -> color_eyre::Result<()> {
-    if !should_create_new_branch(branch)? {
+fn create_branch_and_switch(branch_name: &str) -> color_eyre::Result<()> {
+    if !should_create_new_branch(branch_name)? {
         return Ok(());
     }
-    if let Err(error) = ytil_git::branch::create(branch) {
+    if let Err(error) = ytil_git::branch::create_from_default_branch(branch_name, None) {
         if error.to_string().contains("already exists") {
-            ytil_git::branch::switch(branch).inspect(|()| report_branch_exists(branch))?;
+            ytil_git::branch::switch(branch_name).inspect(|()| report_branch_exists(branch_name))?;
             return Ok(());
         }
         return Err(error);
     }
-    ytil_git::branch::switch(branch).inspect(|()| report_branch_new(branch))?;
+    ytil_git::branch::switch(branch_name).inspect(|()| report_branch_new(branch_name))?;
     Ok(())
 }
 
@@ -148,28 +148,28 @@ fn create_branch_and_switch(branch: &str) -> color_eyre::Result<()> {
 /// # Errors
 /// - Current branch discovery via [`ytil_git::get_current_branch`] fails.
 /// - Reading user confirmation input fails.
-fn should_create_new_branch(branch: &str) -> color_eyre::Result<bool> {
-    if is_default_branch(branch) {
+fn should_create_new_branch(branch_name: &str) -> color_eyre::Result<bool> {
+    if is_default_branch(branch_name) {
         return Ok(true);
     }
     let curr_branch = ytil_git::branch::get_current()?;
     if is_default_branch(&curr_branch) {
         return Ok(true);
     }
-    ask_branching_from_not_default(branch, &curr_branch);
+    ask_branching_from_not_default(branch_name, &curr_branch);
     std::io::stdout().flush()?;
     let mut input = String::new();
     std::io::stdin().read_line(&mut input)?;
     if !input.trim().is_empty() {
-        report_branch_not_created(branch);
+        report_branch_not_created(branch_name);
         return Ok(false);
     }
     Ok(true)
 }
 
 /// Returns `true` if `branch` is a default branch (`main` or `master`).
-fn is_default_branch(branch: &str) -> bool {
-    branch == "main" || branch == "master"
+fn is_default_branch(branch_name: &str) -> bool {
+    branch_name == "main" || branch_name == "master"
 }
 
 /// Builds a sanitized, lowercased Git branch name from raw arguments.
@@ -221,32 +221,32 @@ fn build_branch_name(args: &[&str]) -> color_eyre::Result<String> {
 ///
 /// # Arguments
 /// - `branch` Branch name just switched to (displayed in bold magenta/normal styles).
-fn report_branch_switch(branch: &str) {
-    println!("{} {}", ">".magenta().bold(), branch.bold());
+fn report_branch_switch(branch_name: &str) {
+    println!("{} {}", ">".magenta().bold(), branch_name.bold());
 }
 
 /// Prints a styled indication that a new branch was created.
 ///
 /// # Arguments
 /// - `branch` Newly created branch name.
-fn report_branch_new(branch: &str) {
-    println!("{} {}", "+".green().bold(), branch.bold());
+fn report_branch_new(branch_name: &str) {
+    println!("{} {}", "+".green().bold(), branch_name.bold());
 }
 
 /// Prints a styled indication that the branch already exists; then indicates switch.
 ///
 /// # Arguments
 /// - `branch` Existing branch name that is being switched to.
-fn report_branch_exists(branch: &str) {
-    println!("{}{} {}", "!".blue().bold(), ">".magenta().bold(), branch.bold());
+fn report_branch_exists(branch_name: &str) {
+    println!("{}{} {}", "!".blue().bold(), ">".magenta().bold(), branch_name.bold());
 }
 
 /// Prints a styled indication that branch creation was aborted (no newline).
 ///
 /// # Arguments
 /// - `branch` Branch name whose creation was declined.
-fn report_branch_not_created(branch: &str) {
-    print!("{} {} not created", "x".red().bold(), branch.bold());
+fn report_branch_not_created(branch_name: &str) {
+    print!("{} {} not created", "x".red().bold(), branch_name.bold());
 }
 
 /// Prints a styled notice that a new branch is being created from a non-default branch.
@@ -254,8 +254,13 @@ fn report_branch_not_created(branch: &str) {
 /// # Arguments
 /// - `branch` Target branch being created.
 /// - `default_branch` Current (non-default) branch acting as the base.
-fn ask_branching_from_not_default(branch: &str, default_branch: &str) {
-    print!("{} {} from {}", "*".cyan().bold(), branch.bold(), default_branch.bold());
+fn ask_branching_from_not_default(branch_name: &str, default_branch_name: &str) {
+    print!(
+        "{} {} from {}",
+        "*".cyan().bold(),
+        branch_name.bold(),
+        default_branch_name.bold()
+    );
 }
 
 /// Switch, create, and derive Git branches (including from GitHub PR URLs).

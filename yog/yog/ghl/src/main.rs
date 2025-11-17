@@ -44,6 +44,7 @@
 
 use core::fmt::Display;
 use std::ops::Deref;
+use std::path::Path;
 use std::str::FromStr;
 
 use color_eyre::Section;
@@ -374,14 +375,20 @@ fn main() -> color_eyre::Result<()> {
 /// - [`ytil_github::create_issue`] failure if the issue cannot be created.
 /// - [`ytil_git::create_branch`] failure if the branch cannot be created and is not due to it already existing.
 fn create_issue_and_branch_from_default_branch() -> Result<(), color_eyre::eyre::Error> {
-    let title = ytil_tui::Text::new("Issue title:").prompt()?;
+    let issue_title = ytil_tui::Text::new("Issue title:").prompt()?;
 
-    let created_issue = ytil_github::create_issue(&title)?;
+    let created_issue = ytil_github::create_issue(&issue_title)?;
+    println!("\n{} with title={issue_title:?}", "Issue created".green().bold());
 
-    ytil_git::branch::create(&created_issue.branch_title()).inspect(|pr_url| {
-        println!(
-            "{} with title={title:?} pr_url={pr_url:?}",
-            "Issue and branch created".green().bold()
-        );
-    })
+    let branch_name = created_issue.branch_name();
+
+    let current_repo = ytil_git::discover_repo(Path::new("."))?;
+
+    ytil_git::branch::create_from_default_branch(&branch_name, Some(&current_repo))?;
+    println!("{} with name={branch_name:?}", "Branch created".green().bold());
+
+    ytil_git::branch::push(&branch_name, Some(&current_repo))?;
+    println!("{} name={branch_name:?}", "Branch pushed".green().bold());
+
+    Ok(())
 }

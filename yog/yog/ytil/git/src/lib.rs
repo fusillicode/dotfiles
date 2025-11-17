@@ -39,7 +39,7 @@ pub mod branch;
 ///
 /// # Future Work
 /// - Accept an option to disallow bare repositories.
-pub fn get_repo(path: &Path) -> color_eyre::Result<Repository> {
+pub fn discover_repo(path: &Path) -> color_eyre::Result<Repository> {
     Repository::discover(path).wrap_err_with(|| eyre!("error discovering repo | path={}", path.display()))
 }
 
@@ -99,7 +99,7 @@ pub fn get_default_remote(repo: &Repository) -> color_eyre::Result<Reference<'_>
 /// - Parameterize repo path instead of implicit current directory.
 /// - Expose performance metrics (count, timing) for diagnostics.
 pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
-    let repo = get_repo(Path::new(".")).wrap_err_with(|| eyre!("error getting repo | operation=status"))?;
+    let repo = discover_repo(Path::new(".")).wrap_err_with(|| eyre!("error getting repo | operation=status"))?;
     let repo_root = get_repo_root(&repo);
 
     let mut opts = StatusOptions::default();
@@ -245,7 +245,7 @@ where
 /// - If the HEAD reference cannot be resolved.
 /// - If the HEAD reference does not point to a commit.
 pub fn get_current_commit_hash() -> color_eyre::Result<String> {
-    let repo = get_repo(Path::new(".")).wrap_err_with(|| eyre!("error getting repo for current commit hash"))?;
+    let repo = discover_repo(Path::new(".")).wrap_err_with(|| eyre!("error getting repo for current commit hash"))?;
     let head = repo.head().wrap_err_with(|| eyre!("error getting repo head"))?;
     let commit = head
         .peel_to_commit()
