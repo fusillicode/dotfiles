@@ -360,20 +360,21 @@ fn main() -> color_eyre::Result<()> {
 
 /// Creates a GitHub issue and a corresponding branch from the default branch.
 ///
-/// Prompts the user for an issue title, creates the issue, and then creates a branch named after the issue.
-/// If the branch already exists, it logs a warning but does not fail.
+/// Prompts the user for an issue title, creates the issue, creates and pushes a branch named after the issue.
 ///
 /// # Rationale
 /// It's not possible to create a GitHub PR from a branch that has no diff with the head branch.
+/// For this reason this function just creates and pushes a branch without creating a GitHub PR.
 ///
 /// # Returns
-/// Returns `Ok(())` on successful creation or if the branch already exists.
-/// Returns an error if prompting fails, issue creation fails, or branch creation fails with an unexpected error.
+/// Returns `Ok(())` on successful creation.
+/// Returns an error if prompting fails, issue creation fails, branch creation fails, or pushing fails.
 ///
 /// # Errors
 /// - [`ytil_tui::Text::prompt`] failure if user input cannot be obtained.
 /// - [`ytil_github::create_issue`] failure if the issue cannot be created.
-/// - [`ytil_git::create_branch`] failure if the branch cannot be created and is not due to it already existing.
+/// - [`ytil_git::branch::create_from_default_branch`] failure if the branch cannot be created.
+/// - [`ytil_git::branch::push`] failure if pushing the branch fails.
 fn create_issue_and_branch_from_default_branch() -> Result<(), color_eyre::eyre::Error> {
     let issue_title = ytil_tui::Text::new("Issue title:").prompt()?;
 

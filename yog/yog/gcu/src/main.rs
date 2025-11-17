@@ -149,11 +149,12 @@ fn create_branch_and_switch(branch_name: &str) -> color_eyre::Result<()> {
 /// - Current branch discovery via [`ytil_git::get_current_branch`] fails.
 /// - Reading user confirmation input fails.
 fn should_create_new_branch(branch_name: &str) -> color_eyre::Result<bool> {
-    if is_default_branch(branch_name) {
+    let default_branch = ytil_git::branch::get_default()?;
+    if default_branch == branch_name {
         return Ok(true);
     }
     let curr_branch = ytil_git::branch::get_current()?;
-    if is_default_branch(&curr_branch) {
+    if default_branch == curr_branch {
         return Ok(true);
     }
     ask_branching_from_not_default(branch_name, &curr_branch);
@@ -165,11 +166,6 @@ fn should_create_new_branch(branch_name: &str) -> color_eyre::Result<bool> {
         return Ok(false);
     }
     Ok(true)
-}
-
-/// Returns `true` if `branch` is a default branch (`main` or `master`).
-fn is_default_branch(branch_name: &str) -> bool {
-    branch_name == "main" || branch_name == "master"
 }
 
 /// Builds a sanitized, lowercased Git branch name from raw arguments.
