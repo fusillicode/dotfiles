@@ -33,7 +33,9 @@ use crate::get_repo;
 /// - If no remote has a valid `HEAD` reference.
 /// - If the branch name cannot be extracted from the reference target.
 pub fn get_default() -> color_eyre::Result<String> {
-    let repo = get_repo(Path::new("."))?;
+    let repo_path = Path::new(".");
+    let repo = get_repo(repo_path)
+        .wrap_err_with(|| eyre!("error getting default repo | repo_path={}", repo_path.display()))?;
 
     let default_remote_ref = get_default_remote(&repo)?;
 
@@ -62,7 +64,8 @@ pub fn get_default() -> color_eyre::Result<String> {
 /// - Provide enum distinguishing detached state instead of error.
 pub fn get_current() -> color_eyre::Result<String> {
     let repo_path = Path::new(".");
-    let repo = get_repo(repo_path).wrap_err_with(|| eyre!("error getting repo at current directory"))?;
+    let repo = get_repo(repo_path)
+        .wrap_err_with(|| eyre!("error getting current repo_path | path={}", repo_path.display()))?;
 
     if repo
         .head_detached()
@@ -102,7 +105,13 @@ pub fn get_current() -> color_eyre::Result<String> {
 /// - Optionally force (move) existing branch with a flag.
 /// - Support creating tracking configuration in one step.
 pub fn create(branch_name: &str) -> color_eyre::Result<()> {
-    let repo = get_repo(Path::new(".")).wrap_err_with(|| eyre!("error getting repo | branch={branch_name:?}"))?;
+    let repo_path = Path::new(".");
+    let repo = get_repo(repo_path).wrap_err_with(|| {
+        eyre!(
+            "error getting repo for creating new branch | path={} branch={branch_name:?}",
+            repo_path.display()
+        )
+    })?;
 
     let commit = repo
         .head()
@@ -133,13 +142,19 @@ pub fn create(branch_name: &str) -> color_eyre::Result<()> {
 /// - The default remote cannot be found.
 /// - Pushing the branch fails.
 pub fn push(branch_name: &str) -> color_eyre::Result<()> {
-    let repo = get_repo(Path::new(".")).wrap_err_with(|| eyre!("error getting repo | branch={branch_name:?}"))?;
+    let repo_path = Path::new(".");
+    let repo = get_repo(repo_path).wrap_err_with(|| {
+        eyre!(
+            "error getting repo for pushing new branch | path={} branch={branch_name:?}",
+            repo_path.display()
+        )
+    })?;
 
     let default_remote = get_default_remote(&repo)?;
 
     let default_remote_name = default_remote
         .name()
-        .unwrap()
+        .ok_or_else(|| eyre!("error missing name of default remote"))?
         .trim_start_matches("refs/remotes/")
         .trim_end_matches("/HEAD");
 
@@ -186,7 +201,10 @@ pub fn switch(branch_name: &str) -> Result<(), Box<CmdError>> {
 /// - Resolving the branch tip commit fails.
 /// - Converting the committer timestamp into a [`DateTime`] fails.
 pub fn get() -> color_eyre::Result<Vec<Branch>> {
-    let repo = get_repo(Path::new(".")).wrap_err_with(|| eyre!("error getting repo for branches"))?;
+    let repo_path = Path::new(".");
+    let repo = get_repo(repo_path)
+        .wrap_err_with(|| eyre!("error getting repo for getting branches | path={}", repo_path.display()))?;
+
     fetch(&[]).wrap_err_with(|| eyre!("error fetching branches"))?;
 
     let mut out = vec![];
@@ -213,7 +231,13 @@ pub fn get() -> color_eyre::Result<Vec<Branch>> {
 /// - The `origin` remote cannot be found.
 /// - Performing `git fetch` for the requested branches fails.
 pub fn fetch(branches: &[&str]) -> color_eyre::Result<()> {
-    let repo = get_repo(Path::new(".")).wrap_err_with(|| eyre!("error getting repo for fetching branches"))?;
+    let repo_path = Path::new(".");
+    let repo = get_repo(repo_path).wrap_err_with(|| {
+        eyre!(
+            "error getting repo for fetching branches | path={}",
+            repo_path.display()
+        )
+    })?;
 
     let mut callbacks = RemoteCallbacks::new();
     callbacks.credentials(|_url, username_from_url, _allowed_types| {

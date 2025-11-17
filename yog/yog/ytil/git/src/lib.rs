@@ -54,6 +54,20 @@ pub fn get_repo_root(repo: &Repository) -> PathBuf {
         .collect()
 }
 
+/// Retrieves the default remote HEAD reference from the repository.
+///
+/// Iterates over all configured remotes and returns the first valid
+/// `refs/remotes/{remote}/HEAD` reference, which typically points to the
+/// default branch (e.g., main, or master) on that remote.
+///
+/// # Arguments
+/// - `repo` The repository to query for remotes.
+///
+/// # Returns
+/// The default remote HEAD reference.
+///
+/// # Errors
+/// - If no remote has a valid `HEAD` reference.
 pub fn get_default_remote(repo: &Repository) -> color_eyre::Result<Reference<'_>> {
     for remote_name in repo.remotes()?.iter().flatten() {
         if let Ok(default_remote_ref) = repo.find_reference(&format!("refs/remotes/{remote_name}/HEAD")) {
