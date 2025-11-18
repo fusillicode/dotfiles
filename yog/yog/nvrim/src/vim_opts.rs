@@ -71,6 +71,7 @@ fn set_all(_: ()) {
     set("completeopt", "menuone,noselect", &global_scope);
     set("cursorline", true, &global_scope);
     set("expandtab", true, &global_scope);
+    set("fillchars", "eob: ", &global_scope);
     set("hlsearch", true, &global_scope);
     set("ignorecase", true, &global_scope);
     set("laststatus", 3, &global_scope);
