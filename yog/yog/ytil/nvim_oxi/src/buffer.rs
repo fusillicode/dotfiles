@@ -4,6 +4,7 @@
 //! consistent conversions at call sites.
 
 use std::ops::RangeInclusive;
+use std::path::Path;
 use std::path::PathBuf;
 
 use color_eyre::eyre::eyre;
@@ -294,8 +295,25 @@ impl CursorPosition {
     }
 }
 
-pub fn open(path: &str, line: Option<usize>, col: Option<usize>) -> color_eyre::Result<()> {
-    crate::api::exec_vim_cmd("edit", Some(&[path]))?;
+/// Opens a file in the editor and positions the cursor at the specified line and column.
+///
+/// # Arguments
+/// - `path` The path to the file to open.
+/// - `line` The line number to position the cursor at. Defaults to 0 if `None`.
+/// - `col` The column number to position the cursor at. Defaults to 0 if `None`.
+///
+/// # Returns
+/// Returns `Ok(())` on success, or an error if the file cannot be opened or the cursor cannot be set.
+///
+/// # Errors
+/// - If execution of "edit" command via [`crate::api::exec_vim_cmd`] fails.
+/// - If setting the cursor position via [`Window::set_cursor`] fails.
+///
+/// # Rationale
+/// Executes two Neovim commands, one to open the file and one to set the cursor because it doesn't
+/// seems possible to execute a command line "edit +call\n cursor(<LNUM>, <COL>)".
+pub fn open<T: AsRef<Path>>(path: T, line: Option<usize>, col: Option<usize>) -> color_eyre::Result<()> {
+    crate::api::exec_vim_cmd("edit", Some(&[path.as_ref().display().to_string()]))?;
     Window::current().set_cursor(line.unwrap_or_default(), col.unwrap_or_default())?;
     Ok(())
 }

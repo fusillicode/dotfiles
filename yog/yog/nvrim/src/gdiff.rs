@@ -1,11 +1,19 @@
+//! Exposes a dictionary with a `get_diff_lines` function that fetches git diff output, extracts paths and line numbers
+//! of changed lines, and presents a selection UI to jump to specific diff locations in buffers.
+
 use nvim_oxi::Dictionary;
 
+/// [`Dictionary`] of git diff helpers.
 pub fn dict() -> Dictionary {
     dict! {
         "get_diff_lines": fn_from!(get_diff_lines),
     }
 }
 
+/// Opens the selected git diff file and line number.
+///
+/// Fetches git diff output, parses paths and line numbers of changed lines, displays them in a Neovim selection UI, and
+/// on selection opens the buffer at the specified line.
 fn get_diff_lines(_: ()) {
     let Ok(git_diff_output) = ytil_git::diff::get()
         .inspect_err(|err| ytil_nvim_oxi::api::notify_error(format!("error getting git diff output | error={err:#?}")))
@@ -20,7 +28,7 @@ fn get_diff_lines(_: ()) {
                 .collect::<Vec<_>>()
         })
         .inspect_err(|err| {
-            ytil_nvim_oxi::api::notify_error(format!("error getting git paths and lnums | error={err:#?}"))
+            ytil_nvim_oxi::api::notify_error(format!("error getting git paths and lnums | error={err:#?}"));
         })
     else {
         return;
@@ -32,15 +40,14 @@ fn get_diff_lines(_: ()) {
         .collect::<Vec<_>>();
 
     let callback = {
-        let paths_with_lnums = paths_lnums.clone();
         move |choice_idx: usize| {
-            let Some((path, lnum)) = paths_with_lnums.get(choice_idx) else {
+            let Some((path, lnum)) = paths_lnums.get(choice_idx) else {
                 return;
             };
             let _ = ytil_nvim_oxi::buffer::open(path, Some(*lnum), None).inspect_err(|err| {
                 ytil_nvim_oxi::api::notify_error(format!(
                     "error opening buffer | path={path:?} lnum={lnum} error={err:#?}"
-                ))
+                ));
             });
         }
     };

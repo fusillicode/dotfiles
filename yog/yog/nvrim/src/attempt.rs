@@ -65,7 +65,7 @@ fn create_scratch_file(_: ()) {
                 ));
                 return;
             }
-            let _ = ytil_nvim_oxi::api::exec_vim_cmd("edit", Some(&[dest.display().to_string()]));
+            let _ = ytil_nvim_oxi::buffer::open(&dest, None, None);
         }
     };
 

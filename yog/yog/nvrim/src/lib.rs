@@ -28,6 +28,7 @@ mod colorscheme;
 mod diagnostics;
 /// Random string generation via the [`fkr`] crate.
 mod fkr;
+/// Git diff line selection.
 mod gdiff;
 /// Generic text conversions.
 mod genconv;
