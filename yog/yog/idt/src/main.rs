@@ -269,7 +269,7 @@ fn main() -> color_eyre::Result<()> {
     if let Err(errors) = report(&installers_res) {
         eprintln!(
             "{} | errors_count={} bin_names={errors:#?}",
-            "Tool installations failed".red(),
+            "error installing tools".red(),
             errors.len()
         );
         std::process::exit(1);

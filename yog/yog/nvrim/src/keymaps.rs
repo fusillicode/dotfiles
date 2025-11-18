@@ -124,12 +124,12 @@ fn smart_dd_no_yank_empty_line(_: ()) -> String {
 fn visual_esc(_: ()) -> String {
     let current_line: i64 = nvim_oxi::api::call_function("line", (".",))
         .inspect_err(|error| {
-            ytil_nvim_oxi::api::notify_error(format!("cannot get current line | error={error:#?}"));
+            ytil_nvim_oxi::api::notify_error(format!("error getting current line | error={error:#?}"));
         })
         .unwrap_or(0);
     let visual_line: i64 = nvim_oxi::api::call_function("line", ("v",))
         .inspect_err(|error| {
-            ytil_nvim_oxi::api::notify_error(format!("cannot get visual line | error={error:#?}"));
+            ytil_nvim_oxi::api::notify_error(format!("error getting visual line | error={error:#?}"));
         })
         .unwrap_or(0);
     format!(
@@ -147,7 +147,7 @@ fn visual_esc(_: ()) -> String {
 fn apply_on_current_line_or_unwrap<'a, F: FnOnce(String) -> &'a str>(fun: F, default: &'a str) -> String {
     nvim_oxi::api::get_current_line()
         .inspect_err(|error| {
-            ytil_nvim_oxi::api::notify_error(format!("cannot get current line | error={error:#?}"));
+            ytil_nvim_oxi::api::notify_error(format!("error getting current line | error={error:#?}"));
         })
         .map(fun)
         .unwrap_or(default)

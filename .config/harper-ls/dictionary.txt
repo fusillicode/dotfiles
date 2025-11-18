@@ -72,6 +72,7 @@ backticked
 basename
 bitflags
 buf
+camelCase
 canonicalization
 canonicalized
 characterwise

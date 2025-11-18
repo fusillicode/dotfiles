@@ -217,7 +217,7 @@ fn restore_entries(entries: &[&GitStatusEntry], branch: Option<&str>) -> color_e
 /// - Opening the repository via [`ytil_git::get_repo`] fails.
 /// - Adding any path to the index via [`ytil_git::add_to_index`] fails.
 fn add_entries(entries: &[&GitStatusEntry]) -> color_eyre::Result<()> {
-    let mut repo = ytil_git::get_repo(Path::new("."))?;
+    let mut repo = ytil_git::discover_repo(Path::new("."))?;
     ytil_git::add_to_index(&mut repo, entries.iter().map(|entry| entry.path.as_path()))?;
     for entry in entries {
         println!("{} {}", "Added".green().bold(), entry.path.display().bold());

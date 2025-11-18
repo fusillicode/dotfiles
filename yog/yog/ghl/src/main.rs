@@ -44,6 +44,7 @@
 
 use core::fmt::Display;
 use std::ops::Deref;
+use std::path::Path;
 use std::str::FromStr;
 
 use color_eyre::Section;
@@ -293,6 +294,11 @@ fn main() -> color_eyre::Result<()> {
 
     ytil_github::log_into_github()?;
 
+    if pargs.contains("issue") {
+        create_issue_and_branch_from_default_branch()?;
+        return Ok(());
+    }
+
     let repo_name_with_owner = ytil_github::get_repo_view_field(&RepoViewField::NameWithOwner)?;
 
     let search_filter: Option<String> = pargs.opt_value_from_str("--search")?;
@@ -348,6 +354,42 @@ fn main() -> color_eyre::Result<()> {
     for pr in selected_prs.iter().map(Deref::deref) {
         selected_op_run(pr);
     }
+
+    Ok(())
+}
+
+/// Creates a GitHub issue and a corresponding branch from the default branch.
+///
+/// Prompts the user for an issue title, creates the issue, creates and pushes a branch named after the issue.
+///
+/// # Rationale
+/// It's not possible to create a GitHub PR from a branch that has no diff with the head branch.
+/// For this reason this function just creates and pushes a branch without creating a GitHub PR.
+///
+/// # Returns
+/// Returns `Ok(())` on successful creation.
+/// Returns an error if prompting fails, issue creation fails, branch creation fails, or pushing fails.
+///
+/// # Errors
+/// - [`ytil_tui::Text::prompt`] failure if user input cannot be obtained.
+/// - [`ytil_github::create_issue`] failure if the issue cannot be created.
+/// - [`ytil_git::branch::create_from_default_branch`] failure if the branch cannot be created.
+/// - [`ytil_git::branch::push`] failure if pushing the branch fails.
+fn create_issue_and_branch_from_default_branch() -> Result<(), color_eyre::eyre::Error> {
+    let issue_title = ytil_tui::Text::new("Issue title:").prompt()?;
+
+    let created_issue = ytil_github::create_issue(&issue_title)?;
+    println!("\n{} with title={issue_title:?}", "Issue created".green().bold());
+
+    let branch_name = created_issue.branch_name();
+
+    let current_repo = ytil_git::discover_repo(Path::new("."))?;
+
+    ytil_git::branch::create_from_default_branch(&branch_name, Some(&current_repo))?;
+    println!("{} with name={branch_name:?}", "Branch created".green().bold());
+
+    ytil_git::branch::push(&branch_name, Some(&current_repo))?;
+    println!("{} name={branch_name:?}", "Branch pushed".green().bold());
 
     Ok(())
 }

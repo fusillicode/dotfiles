@@ -26,19 +26,62 @@ pub use pico_args;
 
 const HELP_ARG: &str = "--help";
 
-pub trait CliArgs {
+/// Abstraction over command-line argument collections for help detection and access.
+///
+/// # Type Parameters
+/// - `T` The type of individual arguments, typically string-like (e.g., `String`, `&str`).
+///
+/// # Rationale
+/// - Enables polymorphic argument handling without coupling to specific collection types.
+/// - Centralizes help flag detection logic for consistency across binaries.
+/// - Supports both owned and borrowed argument slices for flexibility.
+///
+/// # Performance
+/// - `has_help` performs a linear scan; suitable for small argument lists (typical CLI usage).
+/// - `all` clones arguments; use borrowed types (`T = &str`) to avoid allocation overhead.
+pub trait CliArgs<T> {
+    /// Checks if the help flag (`--help`) is present in the arguments.
+    ///
+    /// # Returns
+    /// - `true` if `--help` is found; `false` otherwise.
+    ///
+    /// # Rationale
+    /// - Standardized help detection avoids ad-hoc string comparisons in binaries.
+    /// - Case-sensitive matching aligns with common CLI conventions.
     fn has_help(&self) -> bool;
+
+    /// Returns a copy of all arguments.
+    ///
+    /// # Returns
+    /// - A vector containing all arguments in their original order.
+    ///
+    /// # Rationale
+    /// - Provides uniform access to arguments regardless of underlying storage.
+    /// - Cloning ensures caller ownership; consider `T = &str` for zero-copy variants.
+    fn all(&self) -> Vec<T>;
 }
 
-impl<T: AsRef<str>> CliArgs for Vec<T> {
+impl<T: AsRef<str> + Clone> CliArgs<T> for Vec<T> {
     fn has_help(&self) -> bool {
         self.iter().any(|arg| arg.as_ref() == HELP_ARG)
     }
+
+    fn all(&self) -> Self {
+        self.clone()
+    }
 }
 
-impl CliArgs for pico_args::Arguments {
+impl CliArgs<String> for pico_args::Arguments {
     fn has_help(&self) -> bool {
         self.clone().contains(HELP_ARG)
+    }
+
+    fn all(&self) -> Vec<String> {
+        self.clone()
+            .finish()
+            .into_iter()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect()
     }
 }
 
@@ -58,7 +101,7 @@ pub fn get_args() -> Vec<String> {
 pub fn join<T>(join_handle: JoinHandle<color_eyre::Result<T>>) -> Result<T, eyre::Error> {
     join_handle
         .join()
-        .map_err(|error| eyre!("join error | error={error:#?}"))?
+        .map_err(|error| eyre!("error joining handle | error={error:#?}"))?
 }
 
 /// Builds a path starting from the home directory by appending the given parts, returning a [`PathBuf`].
@@ -91,17 +134,30 @@ pub fn build_path<P: AsRef<Path>>(mut root: PathBuf, parts: &[P]) -> PathBuf {
 /// - The clipboard program cannot be spawned.
 /// - The clipboard program exits with failure.
 pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
-    let mut pbcopy_child = ytil_cmd::silent_cmd("pbcopy").stdin(Stdio::piped()).spawn()?;
+    let cmd = "pbcopy";
+
+    let mut pbcopy_child = ytil_cmd::silent_cmd(cmd)
+        .stdin(Stdio::piped())
+        .spawn()
+        .wrap_err_with(|| eyre!("error spawning cmd | cmd={cmd:?}"))?;
+
     std::io::copy(
         content,
         pbcopy_child
             .stdin
             .as_mut()
-            .ok_or_else(|| eyre!("cannot get child stdin | cmd=pbcopy"))?,
-    )?;
-    if !pbcopy_child.wait()?.success() {
-        bail!("copy to system clipboard failed | content={content:#?}");
+            .ok_or_else(|| eyre!("error getting cmd child stdin | cmd={cmd:?}"))?,
+    )
+    .wrap_err_with(|| eyre!("error copying content to stdin | cmd={cmd:?}"))?;
+
+    if !pbcopy_child
+        .wait()
+        .wrap_err_with(|| eyre!("error waiting for cmd | cmd={cmd:?}"))?
+        .success()
+    {
+        bail!("error copying to system clipboard | cmd={cmd:?} content={content:#?}");
     }
+
     Ok(())
 }
 
@@ -112,9 +168,15 @@ pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
 /// - File metadata cannot be read.
 /// - Permissions cannot be updated.
 pub fn chmod_x<P: AsRef<Path>>(path: P) -> color_eyre::Result<()> {
-    let mut perms = std::fs::metadata(&path)?.permissions();
+    let mut perms = std::fs::metadata(&path)
+        .wrap_err_with(|| eyre!("error reading metadata | path={}", path.as_ref().display()))?
+        .permissions();
+
     perms.set_mode(0o755);
-    std::fs::set_permissions(&path, perms)?;
+
+    std::fs::set_permissions(&path, perms)
+        .wrap_err_with(|| eyre!("error setting permissions | path={}", path.as_ref().display()))?;
+
     Ok(())
 }
 
@@ -125,10 +187,14 @@ pub fn chmod_x<P: AsRef<Path>>(path: P) -> color_eyre::Result<()> {
 /// - A chmod operation fails.
 /// - Directory traversal fails.
 pub fn chmod_x_files_in_dir<P: AsRef<Path>>(dir: P) -> color_eyre::Result<()> {
-    for target_res in std::fs::read_dir(dir)? {
-        let target = target_res?.path();
+    for target_res in
+        std::fs::read_dir(&dir).wrap_err_with(|| eyre!("error reading directory | path={}", dir.as_ref().display()))?
+    {
+        let target = target_res
+            .wrap_err_with(|| eyre!("error getting directory entry"))?
+            .path();
         if target.is_file() {
-            chmod_x(&target)?;
+            chmod_x(&target).wrap_err_with(|| eyre!("error setting permissions | path={}", target.display()))?;
         }
     }
     Ok(())
@@ -140,11 +206,22 @@ pub fn chmod_x_files_in_dir<P: AsRef<Path>>(dir: P) -> color_eyre::Result<()> {
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - Creating the symlink fails.
 /// - The existing link cannot be removed.
-pub fn ln_sf<P: AsRef<Path>>(target: P, link: P) -> color_eyre::Result<()> {
-    if link.as_ref().try_exists()? {
-        std::fs::remove_file(&link)?;
+pub fn ln_sf<P: AsRef<Path>>(target: &P, link: &P) -> color_eyre::Result<()> {
+    if link
+        .as_ref()
+        .try_exists()
+        .wrap_err_with(|| eyre!("error checking if link exists | link={}", link.as_ref().display()))?
+    {
+        std::fs::remove_file(link.as_ref())
+            .wrap_err_with(|| eyre!("error removing existing link | link={}", link.as_ref().display()))?;
     }
-    std::os::unix::fs::symlink(target, &link)?;
+    std::os::unix::fs::symlink(target.as_ref(), link.as_ref()).wrap_err_with(|| {
+        eyre!(
+            "error creating symlink for target={} link={}",
+            target.as_ref().display(),
+            link.as_ref().display()
+        )
+    })?;
     Ok(())
 }
 
@@ -155,14 +232,22 @@ pub fn ln_sf<P: AsRef<Path>>(target: P, link: P) -> color_eyre::Result<()> {
 /// - Creating an individual symlink fails.
 /// - Traversing `target_dir` fails.
 pub fn ln_sf_files_in_dir<P: AsRef<std::path::Path>>(target_dir: P, link_dir: P) -> color_eyre::Result<()> {
-    for target in std::fs::read_dir(target_dir)? {
-        let target = target?.path();
+    for target in std::fs::read_dir(&target_dir)
+        .wrap_err_with(|| eyre!("error reading directory | path={}", target_dir.as_ref().display()))?
+    {
+        let target = target.wrap_err_with(|| eyre!("error getting target entry"))?.path();
         if target.is_file() {
             let target_name = target
                 .file_name()
-                .ok_or_else(|| eyre!("missing filename for target | target={target:?}"))?;
+                .ok_or_else(|| eyre!("error missing filename for target | path={}", target.display()))?;
             let link = link_dir.as_ref().join(target_name);
-            ln_sf(target, link)?;
+            ln_sf(&target, &link).wrap_err_with(|| {
+                eyre!(
+                    "error creating symlink | target={} link={}",
+                    target.display(),
+                    link.display()
+                )
+            })?;
         }
     }
     Ok(())
@@ -175,13 +260,15 @@ pub fn ln_sf_files_in_dir<P: AsRef<std::path::Path>>(target_dir: P, link_dir: P)
 /// - Directory traversal fails.
 /// - Removing a dead symlink fails.
 pub fn rm_dead_symlinks(dir: &str) -> color_eyre::Result<()> {
-    for entry_res in std::fs::read_dir(dir)? {
-        let entry = entry_res?;
+    for entry_res in std::fs::read_dir(dir).wrap_err_with(|| eyre!("error reading directory | path={dir:?}"))? {
+        let entry = entry_res.wrap_err_with(|| eyre!("error getting entry"))?;
         let path = entry.path();
 
-        let metadata = std::fs::symlink_metadata(&path)?;
+        let metadata = std::fs::symlink_metadata(&path)
+            .wrap_err_with(|| eyre!("error reading symlink metadata | path={}", path.display()))?;
         if metadata.file_type().is_symlink() && std::fs::metadata(&path).is_err() {
-            std::fs::remove_file(&path)?;
+            std::fs::remove_file(&path)
+                .wrap_err_with(|| eyre!("error removing dead symlink | path={}", path.display()))?;
             println!("{} {}", "Deleted dead symlink".cyan().bold(), path.display());
         }
     }
@@ -337,31 +424,31 @@ pub fn rm_matching_files<P: AsRef<Path>>(
 /// - The temporary copy fails.
 pub fn atomic_cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
     if !from.exists() {
-        return Err(eyre!("source file missing | path={}", from.display()));
+        return Err(eyre!("error missing source file | path={}", from.display()));
     }
 
     let tmp_name = format!(
         "{}.tmp-{}-{}",
         to.file_name()
-            .ok_or_else(|| eyre!("cannot get file name | path={}", to.display()))?
+            .ok_or_else(|| eyre!("error getting file name | path={}", to.display()))?
             .to_string_lossy(),
         std::process::id(),
         Utc::now().to_rfc3339()
     );
     let tmp_path = to
         .parent()
-        .ok_or_else(|| eyre!("missing parent directory | path={}", to.display()))?
+        .ok_or_else(|| eyre!("error missing parent directory | path={}", to.display()))?
         .join(tmp_name);
 
     std::fs::copy(from, &tmp_path).with_context(|| {
         format!(
-            "copying file to temp failed | from={} temp={}",
+            "error copying file to temp | from={} temp={}",
             from.display(),
             tmp_path.display()
         )
     })?;
     std::fs::rename(&tmp_path, to)
-        .with_context(|| format!("rename failed | from={} to={}", tmp_path.display(), to.display()))?;
+        .with_context(|| format!("error renaming file | from={} to={}", tmp_path.display(), to.display()))?;
 
     Ok(())
 }
@@ -422,10 +509,14 @@ pub fn find_matching_files_recursively_in_dir(
     let mut queue = VecDeque::from([dir.to_path_buf()]);
 
     while let Some(dir) = queue.pop_front() {
-        for entry in std::fs::read_dir(&dir)? {
-            let entry = entry?;
+        for entry in
+            std::fs::read_dir(&dir).wrap_err_with(|| eyre!("error reading directory | path={}", dir.display()))?
+        {
+            let entry = entry.wrap_err_with(|| eyre!("error getting entry"))?;
             let path = entry.path();
-            let file_type = entry.file_type()?;
+            let file_type = entry
+                .file_type()
+                .wrap_err_with(|| eyre!("error getting file type | entry={}", path.display()))?;
 
             if file_type.is_file() {
                 if matching_file_fn(&entry) {
@@ -456,7 +547,13 @@ pub fn find_matching_files_recursively_in_dir(
 /// - The `open` command fails to execute.
 /// - The `open` command exits with a non-zero status.
 pub fn open(arg: &str) -> color_eyre::Result<()> {
-    Command::new("open").arg(arg).status()?.exit_ok()?;
+    let cmd = "open";
+    Command::new(cmd)
+        .arg(arg)
+        .status()
+        .wrap_err_with(|| eyre!("error running cmd | cmd={cmd:?} arg={arg:?}"))?
+        .exit_ok()
+        .wrap_err_with(|| eyre!("error cmd exit not ok | cmd={cmd:?} arg={arg:?}"))?;
     Ok(())
 }
 
@@ -497,7 +594,7 @@ mod tests {
         let res = atomic_cp(&src, &dst);
 
         assert2::let_assert!(Err(err) = res);
-        assert!(err.to_string().contains("source file missing"));
+        assert!(err.to_string().contains("error missing source file"));
     }
 
     #[test]
