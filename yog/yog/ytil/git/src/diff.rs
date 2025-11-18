@@ -10,7 +10,7 @@ pub fn get() -> color_eyre::Result<Vec<String>> {
 
     Ok(ytil_cmd::extract_success_output(&output)?
         .lines()
-        .map(|s| s.to_string())
+        .map(str::to_string)
         .collect())
 }
 
@@ -35,7 +35,7 @@ pub fn get_paths_with_lnums(diff_output: &[String]) -> color_eyre::Result<HashMa
             eyre!("error extracting path from path_line | path_idx={path_idx} path_line={path_line:?} diff_line_idx={diff_line_idx} diff_line={diff_line:?}")
         })?;
 
-        let lnum_lines_start_idx = diff_line_idx + 1;
+        let lnum_lines_start_idx = diff_line_idx.saturating_add(1);
         for maybe_lnum_line in diff_output
             .get(lnum_lines_start_idx..)
             .ok_or_else(|| eyre!("error extracting lnum_lines from diff_output | lnum_lines_start_idx={lnum_lines_start_idx} diff_line_idx={diff_line_idx}"))?

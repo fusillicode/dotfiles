@@ -337,19 +337,19 @@ where
 /// # Errors
 /// Errors (e.g., cannot get cwd or buffer name) are notified to Nvim but not propagated.
 pub fn get_relative_buffer_path(cur_buf: &Buffer) -> Option<PathBuf> {
-        let cwd = nvim_oxi::api::call_function::<_, String>("getcwd", Array::new())
-            .inspect_err(|err| {
-                crate::api::notify_error(format!("error getting cwd | error={err:#?}"));
-            })
+    let cwd = nvim_oxi::api::call_function::<_, String>("getcwd", Array::new())
+        .inspect_err(|err| {
+            crate::api::notify_error(format!("error getting cwd | error={err:#?}"));
+        })
         .ok()?;
-        let cur_buf_path = {
-            let tmp = cur_buf
-                .get_name()
-                .inspect_err(|err| {
-                    crate::api::notify_error(format!(
-                        "error getting path of current buffer | buffer={cur_buf:#?} error={err:#?}"
-                    ));
-                })
+    let cur_buf_path = {
+        let tmp = cur_buf
+            .get_name()
+            .inspect_err(|err| {
+                crate::api::notify_error(format!(
+                    "error getting path of current buffer | buffer={cur_buf:#?} error={err:#?}"
+                ));
+            })
             .ok()?;
         tmp.to_string()
     };
