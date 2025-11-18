@@ -1,6 +1,8 @@
 use std::process::Command;
 
+use color_eyre::eyre::Context as _;
 use color_eyre::eyre::bail;
+use color_eyre::eyre::eyre;
 use serde::Deserialize;
 
 /// Response structure from Vault's secret read operations.
@@ -42,19 +44,31 @@ pub fn log_into_vault_if_required() -> color_eyre::Result<()> {
     if token_lookup.status.success() {
         return Ok(());
     }
-    let stderr = std::str::from_utf8(&token_lookup.stderr)?.trim();
+    let stderr = std::str::from_utf8(&token_lookup.stderr)
+        .wrap_err_with(|| {
+            eyre!(
+                "error invalid utf-8 stderr | cmd=\"vault token lookup\", stderr={:?}",
+                token_lookup.stderr
+            )
+        })?
+        .trim();
     if !stderr.contains("permission denied") {
-        bail!("vault token check failed | stderr={stderr}")
+        bail!("error checking vault token | stderr={stderr:?}")
     }
 
     let login = Command::new("vault")
         .args(["login", "-method=oidc", "-path=okta", "--no-print"])
         .output()?;
     if !login.status.success() {
-        bail!(
-            "vault login failed | stderr={}",
-            std::str::from_utf8(&login.stderr)?.trim()
-        )
+        let stderr = std::str::from_utf8(&login.stderr)
+            .wrap_err_with(|| {
+                eyre!(
+                    "error invalid utf-8 stderr | cmd=\"vault login\" stderr={:?}",
+                    login.stderr
+                )
+            })?
+            .trim();
+        bail!("error logging into vault | stderr={stderr:?}")
     }
 
     Ok(())

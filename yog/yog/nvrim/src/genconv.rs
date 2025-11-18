@@ -66,7 +66,7 @@ fn convert_selection(_: ()) {
                     .convert(&selection.lines().to_vec().join("\n"))
                     .inspect_err(|error| {
                         ytil_nvim_oxi::api::notify_error(format!(
-                            "cannot set lines of buffer | start={:#?} end={:#?} error={error:#?}",
+                            "error setting lines of buffer | start={:#?} end={:#?} error={error:#?}",
                             selection.start(),
                             selection.end()
                         ));
@@ -81,7 +81,7 @@ fn convert_selection(_: ()) {
     };
 
     if let Err(error) = ytil_nvim_oxi::api::vim_ui_select(opts, &[("prompt", "Select conversion ")], callback) {
-        ytil_nvim_oxi::api::notify_error(error);
+        ytil_nvim_oxi::api::notify_error(format!("error converting selection | error={error:#?}"));
     }
 }
 

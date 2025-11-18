@@ -33,7 +33,9 @@ fn create_scratch_file(_: ()) {
         .into_iter()
         .filter_map(|entry| {
             Scratch::from(entry)?
-                .inspect_err(|error| ytil_nvim_oxi::api::notify_error(error))
+                .inspect_err(|error| {
+                    ytil_nvim_oxi::api::notify_error(format!("error building Scratch struct | error={error:#?}"));
+                })
                 .ok()
         })
         .collect::<Vec<_>>();
@@ -42,8 +44,8 @@ fn create_scratch_file(_: ()) {
 
     if let Err(error) = std::fs::create_dir_all(&dest_dir) {
         ytil_nvim_oxi::api::notify_error(format!(
-            "cannot create dest dir | dest_dir={:?} error={error:#?}",
-            dest_dir.display().to_string()
+            "cannot create dest dir | dest_dir={} error={error:#?}",
+            dest_dir.display()
         ));
         return;
     }
@@ -72,7 +74,7 @@ fn create_scratch_file(_: ()) {
         &[("prompt", "Create scratch file ")],
         callback,
     ) {
-        ytil_nvim_oxi::api::notify_error(error);
+        ytil_nvim_oxi::api::notify_error(format!("error creating scratch file | error={error:#?}"));
     }
 }
 
@@ -87,11 +89,11 @@ fn get_scratches_dir_content() -> color_eyre::Result<ReadDir> {
     ytil_system::get_workspace_root()
         .map(|workspace_root| ytil_system::build_path(workspace_root, SCRATCHES_PATH_PARTS))
         .inspect_err(|error| {
-            ytil_nvim_oxi::api::notify_error(format!("cannot get workspace root | error={error:#?}"));
+            ytil_nvim_oxi::api::notify_error(format!("error getting workspace root | error={error:#?}"));
         })
         .and_then(|dir| std::fs::read_dir(dir).map_err(From::from))
         .inspect_err(|error| {
-            ytil_nvim_oxi::api::notify_error(format!("cannot read attempt files dir | error={error:#?}"));
+            ytil_nvim_oxi::api::notify_error(format!("error reading attempt files dir | error={error:#?}"));
         })
 }
 
@@ -129,15 +131,15 @@ impl Scratch {
         }
         let display_name = match path.file_name().map(|s| s.to_string_lossy()) {
             Some(s) => s.to_string(),
-            None => return Some(Err(eyre!("missing file_name in path | path={path:?}"))),
+            None => return Some(Err(eyre!("error missing file name in path | path={}", path.display()))),
         };
         let base_name = match path.file_stem().map(|s| s.to_string_lossy()) {
             Some(s) => s.to_string(),
-            None => return Some(Err(eyre!("missing file_stem in path | path={path:?}"))),
+            None => return Some(Err(eyre!("error missing file stem in path | path={}", path.display()))),
         };
         let extension = match path.extension().map(|s| s.to_string_lossy()) {
             Some(s) => s.to_string(),
-            None => return Some(Err(eyre!("missing extension in path | path={path:?}"))),
+            None => return Some(Err(eyre!("error missing extension in path | path={}", path.display()))),
         };
 
         Some(Ok(Self {

@@ -6,6 +6,7 @@
 use core::str::FromStr;
 use std::path::Path;
 
+use color_eyre::eyre::WrapErr;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 use ytil_wezterm::WeztermPane;
@@ -86,6 +87,7 @@ impl TryFrom<(&str, i64, &[WeztermPane])> for FileToOpen {
                 .to_str()
                 .ok_or_else(|| eyre!("cannot get path str | path={source_pane_absolute_cwd:#?}"))?,
         )
+        .wrap_err_with(|| eyre!("error parsing file to open | file_to_open={file_to_open} pane_id={pane_id}"))
     }
 }
 
@@ -96,9 +98,22 @@ impl FromStr for FileToOpen {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut parts = s.split(':');
         let path = parts.next().ok_or_else(|| eyre!("file path missing | str={s}"))?;
-        let line_nbr = parts.next().map(str::parse::<i64>).transpose()?.unwrap_or_default();
-        let column = parts.next().map(str::parse::<i64>).transpose()?.unwrap_or_default();
-        if !Path::new(path).try_exists()? {
+        let line_nbr = parts
+            .next()
+            .map(str::parse::<i64>)
+            .transpose()
+            .wrap_err_with(|| eyre!("invalid line number | str={s:?}"))?
+            .unwrap_or_default();
+        let column = parts
+            .next()
+            .map(str::parse::<i64>)
+            .transpose()
+            .wrap_err_with(|| eyre!("invalid column number | str={s:?}"))?
+            .unwrap_or_default();
+        if !Path::new(path)
+            .try_exists()
+            .wrap_err_with(|| eyre!("error checking if file exists | path={path:?}"))?
+        {
             bail!("file missing | path={path}")
         }
 
@@ -193,7 +208,7 @@ mod tests {
         assert2::let_assert!(
             Err(error) = FileToOpen::try_from(("definitely_missing_12345__file.rs", 1, panes.as_slice()))
         );
-        assert!(error.to_string().contains("file missing"));
+        assert!(error.to_string().contains("error parsing file to open"));
     }
 
     #[test]
@@ -215,7 +230,8 @@ mod tests {
             cursor_visibility: "Visible".into(),
             cursor_x: 0,
             cursor_y: 0,
-            // Use double-slash host form so absolute_cwd drops the first two components and yields the real fs path.
+            // Use double-slash host form so absolute_cwd drops the first two components and yields the real filesystem
+            // path.
             cwd: PathBuf::from(format!("file://host{}", cwd_fs.display())),
             is_active: true,
             is_zoomed: false,

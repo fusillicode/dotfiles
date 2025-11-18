@@ -210,7 +210,7 @@ impl BufferExt for Buffer {
 
         if let Err(error) = self.set_text(line_range.clone(), start_col, end_col, vec![text]) {
             crate::api::notify_error(format!(
-                "cannot set text in buffer | text={text:?} buffer={self:?} line_range={line_range:?} start_col={start_col:?} end_col={end_col:?} error={error:?}",
+                "error setting text in buffer | text={text:?} buffer={self:?} line_range={line_range:?} start_col={start_col:?} end_col={end_col:?} error={error:#?}",
             ));
         }
     }
@@ -265,7 +265,7 @@ impl CursorPosition {
             .map(|(row, col)| Self { row, col })
             .inspect_err(|error| {
                 crate::api::notify_error(format!(
-                    "cannot get cursor from current window | window={cur_win:?} error={error:?}"
+                    "error getting cursor from current window | window={cur_win:?} error={error:#?}"
                 ));
             })
             .ok()
@@ -316,7 +316,7 @@ where
         replacement,
     ) {
         crate::api::notify_error(format!(
-            "cannot set lines of buffer | start={:#?} end={:#?} error={error:#?}",
+            "error setting lines of buffer | start={:#?} end={:#?} error={error:#?}",
             selection.start(),
             selection.end()
         ));
@@ -339,7 +339,7 @@ where
 pub fn get_relative_buffer_path(cur_buf: &Buffer) -> Option<PathBuf> {
     let cwd = nvim_oxi::api::call_function::<_, String>("getcwd", Array::new())
         .inspect_err(|error| {
-            crate::api::notify_error(format!("cannot get cwd | error={error:#?}"));
+            crate::api::notify_error(format!("error getting cwd | error={error:#?}"));
         })
         .ok()?;
     let cur_buf_path = {
@@ -347,7 +347,7 @@ pub fn get_relative_buffer_path(cur_buf: &Buffer) -> Option<PathBuf> {
             .get_name()
             .inspect_err(|error| {
                 crate::api::notify_error(format!(
-                    "cannot get path of current buffer | buffer={cur_buf:#?} error={error:#?}"
+                    "error getting path of current buffer | buffer={cur_buf:#?} error={error:#?}"
                 ));
             })
             .ok()?;

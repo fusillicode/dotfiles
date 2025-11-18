@@ -2,27 +2,26 @@
 //!
 //! Wrap common operations (repo discovery, root resolution, status enumeration, branch listing,
 //! targeted fetch, branch switching, restore) in focused functions returning structured data
-//! (`GitStatusEntry`, `Branch`). Some semantics (previous branch with `switch -`, restore) defer to
+//! ([`GitStatusEntry`], [`branch::Branch`]). Some semantics (previous branch with `switch -`, restore) defer to
 //! the porcelain CLI to avoid re‑implementing complex behavior.
 
-use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
-use chrono::DateTime;
-use chrono::Utc;
+use color_eyre::eyre::WrapErr;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
-use git2::Cred;
 use git2::IntoCString;
-use git2::RemoteCallbacks;
+use git2::Reference;
 use git2::Repository;
 use git2::Status;
 use git2::StatusEntry;
 use git2::StatusOptions;
 pub use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt as _;
+
+pub mod branch;
 
 /// Discover the Git repository containing `path`.
 ///
@@ -40,8 +39,8 @@ use ytil_cmd::CmdExt as _;
 ///
 /// # Future Work
 /// - Accept an option to disallow bare repositories.
-pub fn get_repo(path: &Path) -> color_eyre::Result<Repository> {
-    Ok(Repository::discover(path)?)
+pub fn discover_repo(path: &Path) -> color_eyre::Result<Repository> {
+    Repository::discover(path).wrap_err_with(|| eyre!("error discovering repo | path={}", path.display()))
 }
 
 /// Absolute working tree root path for repository
@@ -55,78 +54,27 @@ pub fn get_repo_root(repo: &Repository) -> PathBuf {
         .collect()
 }
 
-/// Get current branch name (fails if HEAD detached).
+/// Retrieves the default remote HEAD reference from the repository.
+///
+/// Iterates over all configured remotes and returns the first valid
+/// `refs/remotes/{remote}/HEAD` reference, which typically points to the
+/// default branch (e.g., main, or master) on that remote.
+///
+/// # Arguments
+/// - `repo` The repository to query for remotes.
 ///
 /// # Returns
-/// Branch short name (e.g. `main`).
+/// The default remote HEAD reference.
 ///
 /// # Errors
-/// - Repository discovery fails.
-/// - HEAD is detached.
-/// - Branch shorthand not valid UTF-8.
-///
-/// # Future Work
-/// - Provide enum distinguishing detached state instead of error.
-pub fn get_current_branch() -> color_eyre::Result<String> {
-    let repo_path = Path::new(".");
-    let repo = get_repo(repo_path)?;
-
-    if repo.head_detached()? {
-        bail!("detached head | repo_path={}", repo_path.display())
+/// - If no remote has a valid `HEAD` reference.
+pub fn get_default_remote(repo: &Repository) -> color_eyre::Result<Reference<'_>> {
+    for remote_name in repo.remotes()?.iter().flatten() {
+        if let Ok(default_remote_ref) = repo.find_reference(&format!("refs/remotes/{remote_name}/HEAD")) {
+            return Ok(default_remote_ref);
+        }
     }
-
-    repo.head()?
-        .shorthand()
-        .map(str::to_string)
-        .ok_or_else(|| eyre!("branch shorthand invalid utf-8 | repo_path={}", repo_path.display()))
-}
-
-/// Create a new local branch at current HEAD (no checkout).
-///
-/// Branch starts at the commit pointed to by `HEAD`; caller remains on the original branch.
-///
-/// # Arguments
-/// - `branch_name` Name of branch to create (must not already exist).
-///
-/// # Returns
-/// [`Result::Ok`] (()) if creation succeeds.
-///
-/// # Errors
-/// - Repository discovery fails.
-/// - Resolving `HEAD` to a commit fails.
-/// - Branch already exists.
-///
-/// # Future Work
-/// - Optionally force (move) existing branch with a flag.
-/// - Support creating tracking configuration in one step.
-pub fn create_branch(branch_name: &str) -> color_eyre::Result<()> {
-    let repo = get_repo(Path::new("."))?;
-
-    let commit = repo.head()?.peel_to_commit()?;
-    repo.branch(branch_name, &commit, false)?;
-
-    Ok(())
-}
-
-/// Checkout a branch or detach HEAD; supports previous branch shorthand and branch creation via guessing.
-///
-/// Defers to `git switch --guess` to leverage porcelain semantics, which can create a new branch
-/// if the name is ambiguous and matches an existing remote branch.
-///
-/// # Arguments
-/// - `branch_name` Branch name or revision (use `-` for prior branch).
-///
-/// # Errors
-/// - Spawning or executing the `git switch` command fails.
-///
-/// # Future Work
-/// - Expose progress callbacks for large checkouts.
-pub fn switch_branch(branch_name: &str) -> Result<(), Box<CmdError>> {
-    Command::new("git")
-        .args(["switch", branch_name, "--guess"])
-        .exec()
-        .map_err(Box::new)?;
-    Ok(())
+    bail!("error missing default remote")
 }
 
 /// Enumerate combined staged + unstaged status entries.
@@ -151,7 +99,7 @@ pub fn switch_branch(branch_name: &str) -> Result<(), Box<CmdError>> {
 /// - Parameterize repo path instead of implicit current directory.
 /// - Expose performance metrics (count, timing) for diagnostics.
 pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
-    let repo = get_repo(Path::new("."))?;
+    let repo = discover_repo(Path::new(".")).wrap_err_with(|| eyre!("error getting repo | operation=status"))?;
     let repo_root = get_repo_root(&repo);
 
     let mut opts = StatusOptions::default();
@@ -159,8 +107,15 @@ pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
     opts.include_ignored(false);
 
     let mut out = vec![];
-    for status_entry in repo.statuses(Some(&mut opts))?.iter() {
-        out.push(GitStatusEntry::try_from((repo_root.clone(), &status_entry))?);
+    for status_entry in repo
+        .statuses(Some(&mut opts))
+        .wrap_err_with(|| eyre!("error getting statuses | repo_root={}", repo_root.display()))?
+        .iter()
+    {
+        out.push(
+            GitStatusEntry::try_from((repo_root.clone(), &status_entry))
+                .wrap_err_with(|| eyre!("error creating status entry | repo_root={}", repo_root.display()))?,
+        );
     }
     Ok(out)
 }
@@ -233,7 +188,11 @@ pub fn unstage(paths: &[&str]) -> color_eyre::Result<()> {
     }
     // Use porcelain `git restore --staged` which modifies only the index (opposite of `git add`).
     // This avoids resurrecting deleted files (observed when using libgit2 `reset_default`).
-    Command::new("git").args(["restore", "--staged"]).args(paths).exec()?;
+    Command::new("git")
+        .args(["restore", "--staged"])
+        .args(paths)
+        .exec()
+        .wrap_err_with(|| eyre!("error restoring statged Git entries | paths={paths:?}"))?;
     Ok(())
 }
 
@@ -268,85 +227,11 @@ where
     T: IntoCString,
     I: IntoIterator<Item = T>,
 {
-    let mut index = repo.index()?;
-    index.add_all(paths, git2::IndexAddOption::DEFAULT, None)?;
-    index.write()?;
-    Ok(())
-}
-
-/// Fetches all branches from the 'origin' remote and returns all local and remote [`Branch`]es
-/// sorted by last committer date (most recent first).
-///
-/// # Errors
-/// - The repository cannot be discovered.
-/// - The 'origin' remote cannot be found.
-/// - Performing `git fetch` for all branches fails.
-/// - Enumerating branches fails.
-/// - A branch name is not valid UTF-8.
-/// - Resolving the branch tip commit fails.
-/// - Converting the committer timestamp into a [`DateTime`] fails.
-pub fn get_branches() -> color_eyre::Result<Vec<Branch>> {
-    let repo = get_repo(Path::new("."))?;
-    fetch_branches(&[])?;
-
-    let mut out = vec![];
-    for branch_res in repo.branches(None)? {
-        out.push(Branch::try_from(branch_res?)?);
-    }
-
-    out.sort_by(|a, b| b.committer_date_time().cmp(a.committer_date_time()));
-
-    Ok(out)
-}
-
-/// Removes remote branches that have a corresponding local branch of the same
-/// shortened name.
-///
-/// A remote branch is considered redundant if its name after the first `/`
-/// (e.g. `origin/feature-x` -> `feature-x`) matches a local branch name.
-///
-/// After this function returns, each remaining [`Branch::Remote`] has no local
-/// counterpart with the same short name.
-pub fn remove_redundant_remotes(branches: &mut Vec<Branch>) {
-    let mut local_names = HashSet::with_capacity(branches.len());
-    for branch in branches.iter() {
-        if let Branch::Local { name, .. } = branch {
-            local_names.insert(name.clone());
-        }
-    }
-
-    branches.retain(|b| match b {
-        Branch::Local { .. } => true,
-        Branch::Remote { name, .. } => {
-            let short = name.split_once('/').map_or(name.as_str(), |(_, rest)| rest);
-            !local_names.contains(short)
-        }
-    });
-}
-
-/// Fetches the specified branch names from the `origin` remote.
-///
-/// Used before switching to a branch that may only exist remotely
-/// (e.g. derived from a GitHub PR URL).
-///
-/// # Errors
-/// - The repository cannot be discovered.
-/// - The `origin` remote cannot be found.
-/// - Performing `git fetch` for the requested branches fails.
-pub fn fetch_branches(branches: &[&str]) -> color_eyre::Result<()> {
-    let repo = get_repo(Path::new("."))?;
-
-    let mut callbacks = RemoteCallbacks::new();
-    callbacks.credentials(|_url, username_from_url, _allowed_types| {
-        Cred::ssh_key_from_agent(username_from_url.unwrap_or("git"))
-    });
-
-    let mut fetch_opts = git2::FetchOptions::new();
-    fetch_opts.remote_callbacks(callbacks);
-
-    repo.find_remote("origin")?
-        .fetch(branches, Some(&mut fetch_opts), None)?;
-
+    let mut index = repo.index().wrap_err_with(|| eyre!("error loading index"))?;
+    index
+        .add_all(paths, git2::IndexAddOption::DEFAULT, None)
+        .wrap_err_with(|| eyre!("error adding paths to index"))?;
+    index.write().wrap_err_with(|| eyre!("error writing index"))?;
     Ok(())
 }
 
@@ -360,83 +245,12 @@ pub fn fetch_branches(branches: &[&str]) -> color_eyre::Result<()> {
 /// - If the HEAD reference cannot be resolved.
 /// - If the HEAD reference does not point to a commit.
 pub fn get_current_commit_hash() -> color_eyre::Result<String> {
-    let repo = get_repo(Path::new("."))?;
-    let head = repo.head()?;
-    let commit = head.peel_to_commit()?;
+    let repo = discover_repo(Path::new(".")).wrap_err_with(|| eyre!("error getting repo for current commit hash"))?;
+    let head = repo.head().wrap_err_with(|| eyre!("error getting repo head"))?;
+    let commit = head
+        .peel_to_commit()
+        .wrap_err_with(|| eyre!("error peeling head to commit"))?;
     Ok(commit.id().to_string())
-}
-
-/// Local or remote branch with metadata about the last commit.
-#[derive(Clone, Debug)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
-pub enum Branch {
-    /// Local branch (under `refs/heads/`).
-    Local {
-        /// The name of the branch (without refs/heads/ or refs/remotes/ prefix).
-        name: String,
-        /// The date and time when the last commit was made.
-        committer_date_time: DateTime<Utc>,
-    },
-    /// Remote tracking branch (under `refs/remotes/`).
-    Remote {
-        /// The name of the branch (without refs/heads/ or refs/remotes/ prefix).
-        name: String,
-        /// The date and time when the last commit was made.
-        committer_date_time: DateTime<Utc>,
-    },
-}
-
-impl Branch {
-    /// Returns the branch name (no `refs/` prefix).
-    pub fn name(&self) -> &str {
-        match self {
-            Self::Local { name, .. } | Self::Remote { name, .. } => name,
-        }
-    }
-
-    /// Returns the timestamp of the last commit on this branch.
-    pub const fn committer_date_time(&self) -> &DateTime<Utc> {
-        match self {
-            Self::Local {
-                committer_date_time, ..
-            }
-            | Self::Remote {
-                committer_date_time, ..
-            } => committer_date_time,
-        }
-    }
-}
-
-/// Attempts to convert a libgit2 branch and its type into our [`Branch`] enum.
-///
-/// Extracts the branch name and last committer date from the raw branch.
-///
-/// # Errors
-/// - Branch name is not valid UTF-8.
-/// - Resolving the branch tip commit fails.
-/// - Converting the committer timestamp into a [`DateTime`] fails.
-impl<'a> TryFrom<(git2::Branch<'a>, git2::BranchType)> for Branch {
-    type Error = color_eyre::eyre::Error;
-
-    fn try_from((raw_branch, branch_type): (git2::Branch<'a>, git2::BranchType)) -> Result<Self, Self::Error> {
-        let branch_name = raw_branch
-            .name()?
-            .ok_or_else(|| eyre!("branch name invalid utf-8 | input=raw_branch.name()"))?;
-        let commit_time = raw_branch.get().peel_to_commit()?.committer().when();
-        let committer_date_time = DateTime::from_timestamp(commit_time.seconds(), 0)
-            .ok_or_else(|| eyre!("invalid commit timestamp | seconds={}", commit_time.seconds()))?;
-
-        Ok(match branch_type {
-            git2::BranchType::Local => Self::Local {
-                name: branch_name.to_string(),
-                committer_date_time,
-            },
-            git2::BranchType::Remote => Self::Remote {
-                name: branch_name.to_string(),
-                committer_date_time,
-            },
-        })
-    }
 }
 
 /// Combined staged + worktree status for a path
@@ -487,7 +301,7 @@ impl TryFrom<(PathBuf, &StatusEntry<'_>)> for GitStatusEntry {
         let path = value
             .path()
             .map(PathBuf::from)
-            .ok_or_else(|| eyre!("missing status path | context=StatusEntry"))?;
+            .ok_or_else(|| eyre!("error missing status path | context=StatusEntry"))?;
 
         Ok(Self {
             path,
@@ -590,34 +404,6 @@ mod tests {
     use super::*;
 
     #[rstest]
-    #[case::remote_same_short_name(
-        vec![local("feature-x"), remote("origin/feature-x")],
-        vec![local("feature-x")]
-    )]
-    #[case::no_redundant(
-        vec![local("feature-x"), remote("origin/feature-y")],
-        vec![local("feature-x"), remote("origin/feature-y")]
-    )]
-    #[case::multiple_mixed(
-        vec![
-            local("feature-x"),
-            remote("origin/feature-x"),
-            remote("origin/feature-y"),
-            local("main"),
-            remote("upstream/main")
-        ],
-        vec![local("feature-x"), remote("origin/feature-y"), local("main")]
-    )]
-    #[case::different_remote_prefix(
-        vec![local("feature-x"), remote("upstream/feature-x")],
-        vec![local("feature-x")]
-    )]
-    fn remove_redundant_remotes_cases(#[case] mut input: Vec<Branch>, #[case] expected: Vec<Branch>) {
-        remove_redundant_remotes(&mut input);
-        assert_eq!(input, expected);
-    }
-
-    #[rstest]
     #[case::index_new(Some(IndexState::New), None, true)]
     #[case::worktree_new(None, Some(WorktreeState::New), true)]
     #[case::both_new(Some(IndexState::New), Some(WorktreeState::New), true)]
@@ -656,38 +442,6 @@ mod tests {
         assert_eq!(WorktreeState::new(&input), expected);
     }
 
-    #[test]
-    fn branch_try_from_converts_local_branch_successfully() {
-        let (_temp_dir, repo) = init_test_repo(Some(Time::new(42, 3)));
-
-        let head_commit = repo.head().unwrap().peel_to_commit().unwrap();
-        let branch = repo.branch("test-branch", &head_commit, false).unwrap();
-
-        assert2::let_assert!(Ok(result) = Branch::try_from((branch, git2::BranchType::Local)));
-
-        pretty_assertions::assert_eq!(
-            result,
-            Branch::Local {
-                name: "test-branch".to_string(),
-                committer_date_time: DateTime::from_timestamp(42, 0).unwrap(),
-            }
-        );
-    }
-
-    fn local(name: &str) -> Branch {
-        Branch::Local {
-            name: name.into(),
-            committer_date_time: DateTime::from_timestamp(0, 0).unwrap(),
-        }
-    }
-
-    fn remote(name: &str) -> Branch {
-        Branch::Remote {
-            name: name.into(),
-            committer_date_time: DateTime::from_timestamp(0, 0).unwrap(),
-        }
-    }
-
     fn entry(index_state: Option<IndexState>, worktree_state: Option<WorktreeState>) -> GitStatusEntry {
         GitStatusEntry {
             path: "p".into(),
@@ -699,7 +453,7 @@ mod tests {
         }
     }
 
-    fn init_test_repo(time: Option<Time>) -> (TempDir, Repository) {
+    pub fn init_test_repo(time: Option<Time>) -> (TempDir, Repository) {
         let temp_dir = TempDir::new().unwrap();
         let repo = Repository::init(temp_dir.path()).unwrap();
 

@@ -10,6 +10,7 @@ use color_eyre::eyre::eyre;
 use inquire::InquireError;
 use inquire::MultiSelect;
 use inquire::Select;
+pub use inquire::Text;
 use inquire::ui::RenderConfig;
 use strum::EnumIter;
 use strum::IntoEnumIterator;
