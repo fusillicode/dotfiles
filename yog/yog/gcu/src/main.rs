@@ -21,10 +21,10 @@
 //! - GitHub authentication via [`ytil_github::log_into_github`] or PR branch name derivation via
 //!   [`ytil_github::get_branch_name_from_url`] fails.
 //! - Branch name construction via [`build_branch_name`] yields empty string.
-//! - Branch listing via [`ytil_git::get_branches`] / switching via [`ytil_git::switch_branch`] / creation via
-//!   [`ytil_git::create_branch`] fails.
+//! - Branch listing via [`ytil_git::branch::get`] / switching via [`ytil_git::branch::switch`] / creation via
+//!   [`ytil_git::branch::create_from_default_branch`] fails.
 //! - Interactive selection via [`ytil_tui::minimal_select`] or user confirmation input fails.
-//! - Current branch lookup via [`ytil_git::get_current_branch`] fails.
+//! - Current branch lookup via [`ytil_git::branch::get_current`] fails.
 
 #![feature(exit_status_error)]
 
@@ -59,16 +59,16 @@ impl Display for RenderableBranch {
 /// Interactive selection and switching of Git branches.
 ///
 /// Presents a minimal TUI listing the provided branches (or fetches recent local / remote branches
-/// if none provided), with redundant remotes removed via [`ytil_git::remove_redundant_remotes`].
+/// if none provided), with redundant remotes removed via [`ytil_git::branch::remove_redundant_remotes`].
 /// Selecting an empty line or "-" triggers previous-branch switching.
 ///
 /// # Arguments
-/// - `branches` Pre-fetched branches to display; if empty, fetches via [`ytil_git::get_branches`].
+/// - `branches` Pre-fetched branches to display; if empty, fetches via [`ytil_git::branch::get`].
 ///
 /// # Errors
-/// - Branch enumeration via [`ytil_git::get_branches`] fails (if `branches` is empty).
+/// - Branch enumeration via [`ytil_git::branch::get`] fails (if `branches` is empty).
 /// - UI rendering via [`ytil_tui::minimal_select`] fails.
-/// - Branch switching via [`ytil_git::switch_branch`] fails.
+/// - Branch switching via [`ytil_git::branch::switch`] fails.
 fn autocomplete_git_branches_and_switch(branches: &[Branch]) -> color_eyre::Result<()> {
     let mut branches = if branches.is_empty() {
         ytil_git::branch::get()?
@@ -96,7 +96,7 @@ fn autocomplete_git_branches_and_switch(branches: &[Branch]) -> color_eyre::Resu
 /// # Errors
 /// - GitHub authentication via [`ytil_github::log_into_github`] fails (if URL).
 /// - Pull request branch name derivation via [`ytil_github::get_branch_name_from_url`] fails (if URL).
-/// - Branch switching via [`ytil_git::switch_branch`] fails.
+/// - Branch switching via [`ytil_git::branch::switch`] fails.
 fn handle_single_input_argument(arg: &str) -> color_eyre::Result<()> {
     let branch_name = if let Ok(url) = Url::parse(arg) {
         ytil_github::log_into_github()?;
@@ -120,8 +120,9 @@ fn handle_single_input_argument(arg: &str) -> color_eyre::Result<()> {
 ///   required.
 ///
 /// # Errors
-/// - Current branch discovery via [`ytil_git::get_current_branch`] fails.
-/// - Branch creation via [`ytil_git::create_branch`] or subsequent switching via [`ytil_git::switch_branch`] fails.
+/// - Current branch discovery via [`ytil_git::branch::get_current`] fails.
+/// - Branch creation via [`ytil_git::branch::create_from_default_branch`] or subsequent switching via
+///   [`ytil_git::branch::switch`] fails.
 /// - Reading user confirmation input fails.
 fn create_branch_and_switch(branch_name: &str) -> color_eyre::Result<()> {
     if !should_create_new_branch(branch_name)? {
@@ -146,7 +147,7 @@ fn create_branch_and_switch(branch_name: &str) -> color_eyre::Result<()> {
 /// - Otherwise, requires user confirmation via empty line input (non‑empty aborts).
 ///
 /// # Errors
-/// - Current branch discovery via [`ytil_git::get_current_branch`] fails.
+/// - Current branch discovery via [`ytil_git::branch::get_current`] fails.
 /// - Reading user confirmation input fails.
 fn should_create_new_branch(branch_name: &str) -> color_eyre::Result<bool> {
     let default_branch = ytil_git::branch::get_default()?;
