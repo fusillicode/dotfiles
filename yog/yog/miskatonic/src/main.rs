@@ -8,6 +8,7 @@
 #![feature(exit_status_error)]
 
 /// Run ad‑hoc experimental snippets and throwaway tests.
+#[allow(clippy::unnecessary_wraps)]
 fn main() -> color_eyre::Result<()> {
     Ok(())
 }
