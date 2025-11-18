@@ -64,10 +64,11 @@ pub fn get_paths_with_lnums(diff_output: &[String]) -> color_eyre::Result<HashMa
         })?;
 
         let lnum_lines_start_idx = diff_line_idx.saturating_add(1);
-        for maybe_lnum_line in diff_output
+        let maybe_lnum_lines = diff_output
             .get(lnum_lines_start_idx..)
-            .ok_or_else(|| eyre!("error extracting lnum_lines from diff_output | lnum_lines_start_idx={lnum_lines_start_idx} diff_line_idx={diff_line_idx}"))?
-        {
+            .ok_or_else(|| eyre!("error extracting lnum_lines from diff_output | lnum_lines_start_idx={lnum_lines_start_idx} diff_line_idx={diff_line_idx}"))?;
+
+        for maybe_lnum_line in maybe_lnum_lines {
             if maybe_lnum_line.starts_with(PATH_LINE_PREFIX) {
                 break;
             }
@@ -75,6 +76,7 @@ pub fn get_paths_with_lnums(diff_output: &[String]) -> color_eyre::Result<HashMa
                 continue;
             };
 
+            // Adjusting `git diff` lnum to match what is displayed by Neovim.
             let lnum = extract_lnum(lnum_line)?.saturating_add(3);
 
             out.entry(path)
