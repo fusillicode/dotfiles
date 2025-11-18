@@ -759,6 +759,7 @@ version = "0.1.0"
 dependencies = [
  "color-eyre",
  "strum",
+ "ytil_git",
  "ytil_github",
  "ytil_system",
  "ytil_tui",
@@ -2598,6 +2599,8 @@ dependencies = [
  "assert2",
  "chrono",
  "color-eyre",
+ "convert_case 0.9.0",
+ "pretty_assertions",
  "rstest",
  "serde",
  "serde_json",

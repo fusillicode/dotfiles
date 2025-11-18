@@ -103,7 +103,7 @@ fn main() -> color_eyre::Result<()> {
             .arg("-c")
             .arg(&cmd)
             .output()
-            .with_context(|| cmd.clone())?;
+            .with_context(|| format!("error running cmd | cmd={cmd:?}"))?;
         tries.push(now.elapsed());
 
         let terminal_output = if output.status.success() {

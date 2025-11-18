@@ -35,13 +35,13 @@ fn get_link((link_type, open): (String, Option<bool>)) {
         return;
     };
     let Ok(mut repo_url) = ytil_github::get_repo_view_field(&RepoViewField::Url).inspect_err(|error| {
-        ytil_nvim_oxi::api::notify_error(format!("cannot get GitHub repo URL | error={error:#?}"));
+        ytil_nvim_oxi::api::notify_error(format!("error getting GitHub repo URL | error={error:#?}"));
     }) else {
         return;
     };
 
     let Ok(current_commit_hash) = ytil_git::get_current_commit_hash().inspect_err(|error| {
-        ytil_nvim_oxi::api::notify_error(format!("cannot get current repo commit hash | error={error:#?}"));
+        ytil_nvim_oxi::api::notify_error(format!("error getting current repo commit hash | error={error:#?}"));
     }) else {
         return;
     };
@@ -56,12 +56,12 @@ fn get_link((link_type, open): (String, Option<bool>)) {
 
     if open.is_some_and(std::convert::identity) {
         if let Err(error) = ytil_system::open(&repo_url) {
-            ytil_nvim_oxi::api::notify_error(format!("cannot open URL | url={repo_url} error={error:#?}"));
+            ytil_nvim_oxi::api::notify_error(format!("error opening URL | url={repo_url:?} error={error:#?}"));
         }
     } else {
         if let Err(error) = ytil_system::cp_to_system_clipboard(&mut repo_url.as_bytes()) {
             ytil_nvim_oxi::api::notify_error(format!(
-                "cannot copy content to system clipboard | content={repo_url:?} error={error:#?}"
+                "error copying content to system clipboard | content={repo_url:?} error={error:#?}"
             ));
         }
         nvim_oxi::print!("GitHub {link_type} URL copied to clipboard:\n{repo_url}");

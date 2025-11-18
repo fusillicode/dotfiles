@@ -59,7 +59,7 @@ pub fn get_lines(_: ()) -> Vec<String> {
 /// - Return [`None`] if getting lines or text fails.
 pub fn get(_: ()) -> Option<Selection> {
     let Ok(mut bounds) = SelectionBounds::new().inspect_err(|error| {
-        crate::api::notify_error(format!("cannot create selection bounds | error={error:#?}"));
+        crate::api::notify_error(format!("error creating selection bounds | error={error:#?}"));
     }) else {
         return None;
     };
@@ -71,7 +71,7 @@ pub fn get(_: ()) -> Option<Selection> {
         let end_lnum = bounds.end().lnum;
         let Ok(last_line) = cur_buf.get_line(end_lnum).inspect_err(|error| {
             crate::api::notify_error(format!(
-                "cannot get selection last line | end_lnum={end_lnum} buffer={cur_buf:#?} error={error:#?}",
+                "error getting selection last line | end_lnum={end_lnum} buffer={cur_buf:#?} error={error:#?}",
             ));
         }) else {
             return None;
@@ -83,7 +83,7 @@ pub fn get(_: ()) -> Option<Selection> {
         let Ok(lines) = cur_buf
             .get_lines(bounds.start().lnum..=bounds.end().lnum, false)
             .inspect_err(|error| {
-                crate::api::notify_error(format!("cannot get lines | buffer={cur_buf:#?} error={error:#?}"));
+                crate::api::notify_error(format!("error getting lines | buffer={cur_buf:#?} error={error:#?}"));
             })
         else {
             return None;
@@ -109,7 +109,7 @@ pub fn get(_: ()) -> Option<Selection> {
         )
         .inspect_err(|error| {
             crate::api::notify_error(format!(
-                "cannot get text | buffer={cur_buf:#?} bounds={bounds:#?} error={error:#?}"
+                "error getting text | buffer={cur_buf:#?} bounds={bounds:#?} error={error:#?}"
             ));
         })
     else {
@@ -342,9 +342,9 @@ impl Poppable for Pos {
 fn get_pos(mark: &str) -> color_eyre::Result<Pos> {
     nvim_oxi::api::call_function::<_, Pos>("getpos", Array::from_iter([mark]))
         .inspect_err(|error| {
-            crate::api::notify_error(format!("cannot get pos | mark={mark} error={error:#?}"));
+            crate::api::notify_error(format!("error getting pos | mark={mark:?} error={error:#?}"));
         })
-        .wrap_err_with(|| format!("get_pos failed | mark={mark:?}"))
+        .wrap_err_with(|| format!("error getting position | mark={mark:?}"))
 }
 
 #[cfg(test)]

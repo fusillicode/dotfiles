@@ -118,18 +118,20 @@ fn main() -> color_eyre::Result<()> {
         )
     })?)?;
 
-    let git_repo_root_path = Arc::new(ytil_git::get_repo_root(&ytil_git::get_repo(&hx_status_line.file_path)?));
+    let git_repo_root_path = Arc::new(ytil_git::get_repo_root(&ytil_git::discover_repo(
+        &hx_status_line.file_path,
+    )?));
 
     let get_git_current_branch =
-        std::thread::spawn(move || -> color_eyre::Result<String> { ytil_git::get_current_branch() });
+        std::thread::spawn(move || -> color_eyre::Result<String> { ytil_git::branch::get_current() });
 
     let git_repo_root_path_clone = git_repo_root_path.clone();
     let get_github_repo_url = std::thread::spawn(move || -> color_eyre::Result<Url> {
         match &ytil_github::get_repo_urls(&git_repo_root_path_clone)?.as_slice() {
-            &[] => bail!("missing github repo url | repo_path={git_repo_root_path_clone:#?}"),
+            &[] => bail!("missing GitHub repo URL | repo_path={git_repo_root_path_clone:#?}"),
             &[one] => Ok(one.clone()),
             multi => {
-                bail!("multiple github repo urls | urls={multi:#?} repo_path={git_repo_root_path_clone:#?}")
+                bail!("multiple GitHub repo URLs | URLs={multi:#?} repo_path={git_repo_root_path_clone:#?}")
             }
         }
     });

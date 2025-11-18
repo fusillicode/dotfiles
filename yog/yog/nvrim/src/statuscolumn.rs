@@ -52,7 +52,7 @@ fn draw((cur_lnum, extmarks, opts): (String, Vec<Extmark>, Option<Opts>)) -> Opt
         .get_buf_type()
         .inspect_err(|error| {
             ytil_nvim_oxi::api::notify_error(format!(
-                "cannot get buftype of current buffer | buffer={cur_buf:#?} error={error:#?}"
+                "error getting buftype of current buffer | buffer={cur_buf:#?} error={error:#?}"
             ));
         })
         .ok()?;
