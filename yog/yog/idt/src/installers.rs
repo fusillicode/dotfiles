@@ -5,7 +5,7 @@ use std::time::Instant;
 use color_eyre::owo_colors::OwoColorize as _;
 use ytil_cmd::Cmd;
 use ytil_cmd::CmdError;
-use ytil_cmd::CmdExt;
+use ytil_cmd::CmdExt as _;
 
 pub mod bash_language_server;
 pub mod commitlint;

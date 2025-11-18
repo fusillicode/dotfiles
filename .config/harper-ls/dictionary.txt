@@ -189,5 +189,6 @@ unstage
 unstaged
 unstaging
 untruncated
+usize
 worktree
 yog
