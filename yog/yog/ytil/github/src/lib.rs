@@ -22,7 +22,6 @@
 
 use std::path::Path;
 use std::process::Command;
-use std::process::Output;
 
 use color_eyre::eyre::Context;
 use color_eyre::eyre::bail;
@@ -154,7 +153,7 @@ pub fn create_issue(title: &str) -> color_eyre::Result<CreatedIssue> {
         .output()
         .wrap_err_with(|| eyre!("error creating GitHub issue | title={title:?}"))?;
 
-    let created_issue = extract_success_output(&output)
+    let created_issue = ytil_cmd::extract_success_output(&output)
         .and_then(|output| CreatedIssue::new(title, &output))
         .wrap_err_with(|| eyre!("error parsing created issue output | title={title:?}"))?;
 
@@ -181,7 +180,7 @@ pub fn get_repo_view_field(field: &RepoViewField) -> color_eyre::Result<String> 
         .output()
         .wrap_err_with(|| eyre!("error getting repo view field | field={field:?}"))?;
 
-    extract_success_output(&output)
+    ytil_cmd::extract_success_output(&output)
 }
 
 /// Ensures the user is authenticated with the GitHub CLI.
@@ -224,7 +223,7 @@ pub fn get_latest_release(repo: &str) -> color_eyre::Result<String> {
         .output()
         .wrap_err_with(|| eyre!("error getting latest release | repo={repo:?}"))?;
 
-    extract_success_output(&output)
+    ytil_cmd::extract_success_output(&output)
 }
 
 /// Extracts the branch name from a GitHub pull request [`Url`].
@@ -241,7 +240,7 @@ pub fn get_branch_name_from_url(url: &Url) -> color_eyre::Result<String> {
         .output()
         .wrap_err_with(|| eyre!("error getting branch name | pr_id={pr_id:?}"))?;
 
-    extract_success_output(&output)
+    ytil_cmd::extract_success_output(&output)
 }
 
 /// Returns all GitHub remote URLs for the repository rooted at `repo_path`.
@@ -292,21 +291,6 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> color_eyre::Res
     url.set_path(path);
 
     Ok(url)
-}
-
-/// Extracts and validates successful command output, converting it to a trimmed string.
-///
-/// # Errors
-/// - UTF-8 conversion fails.
-fn extract_success_output(output: &Output) -> color_eyre::Result<String> {
-    output
-        .status
-        .exit_ok()
-        .wrap_err_with(|| eyre!("command exited with non-zero status"))?;
-    Ok(std::str::from_utf8(&output.stdout)
-        .wrap_err_with(|| eyre!("error decoding command stdout"))?
-        .trim()
-        .into())
 }
 
 /// Extracts the pull request numeric ID from a GitHub URL.

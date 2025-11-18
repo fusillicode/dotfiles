@@ -8,6 +8,6 @@
 #![feature(exit_status_error)]
 
 /// Run ad‑hoc experimental snippets and throwaway tests.
-fn main() {
-    println!("Hi :)");
+fn main() -> color_eyre::Result<()> {
+    Ok(())
 }

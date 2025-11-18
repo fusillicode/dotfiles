@@ -22,6 +22,7 @@ pub use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt as _;
 
 pub mod branch;
+pub mod diff;
 
 /// Discover the Git repository containing `path`.
 ///
