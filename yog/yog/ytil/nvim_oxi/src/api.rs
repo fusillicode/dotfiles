@@ -100,6 +100,7 @@ pub fn exec_vim_cmd(
 ) -> Result<Option<String>, nvim_oxi::api::Error> {
     let mut cmd_infos_builder = CmdInfosBuilder::default();
     cmd_infos_builder.cmd(cmd.as_ref());
+
     if let Some(args) = args {
         cmd_infos_builder.args(args.iter().map(|s| s.as_ref().to_string()));
     }
