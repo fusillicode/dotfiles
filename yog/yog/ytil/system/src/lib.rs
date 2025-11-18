@@ -85,6 +85,14 @@ impl CliArgs<String> for pico_args::Arguments {
     }
 }
 
+/// Outcome of file removal operations.
+pub struct RmFilesOutcome {
+    /// Paths successfully removed or collected in dry run.
+    pub removed: Vec<PathBuf>,
+    /// Errors encountered, paired with optional affected paths.
+    pub errors: Vec<(Option<PathBuf>, std::io::Error)>,
+}
+
 /// Retrieves command-line arguments excluding the program name, returning them as a [`Vec`] of [`String`].
 pub fn get_args() -> Vec<String> {
     let mut args = std::env::args();
@@ -287,14 +295,6 @@ pub fn rm_f<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
         }
         Err(err)
     })
-}
-
-/// Outcome of file removal operations.
-pub struct RmFilesOutcome {
-    /// Paths successfully removed or collected in dry run.
-    pub removed: Vec<PathBuf>,
-    /// Errors encountered, paired with optional affected paths.
-    pub errors: Vec<(Option<PathBuf>, std::io::Error)>,
 }
 
 /// Iteratively removes all files with the specified name starting from the given root path, with optional directory
