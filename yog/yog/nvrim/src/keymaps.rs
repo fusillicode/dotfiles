@@ -31,9 +31,9 @@ pub fn dict() -> Dictionary {
 /// Errors are reported (not propagated) via `ytil_nvim_oxi::api::notify_error`.
 pub fn set(modes: &[Mode], lhs: &str, rhs: &str, opts: &SetKeymapOpts) {
     for mode in modes {
-        if let Err(error) = nvim_oxi::api::set_keymap(*mode, lhs, rhs, opts) {
+        if let Err(err) = nvim_oxi::api::set_keymap(*mode, lhs, rhs, opts) {
             ytil_nvim_oxi::api::notify_error(format!(
-                "cannot set keymap | mode={mode:#?} lhs={lhs} rhs={rhs} opts={opts:#?} error={error:#?}"
+                "cannot set keymap | mode={mode:#?} lhs={lhs} rhs={rhs} opts={opts:#?} error={err:#?}"
             ));
         }
     }
@@ -123,13 +123,13 @@ fn smart_dd_no_yank_empty_line(_: ()) -> String {
 /// visual range (direction aware) and then applies [`NORMAL_ESC`].
 fn visual_esc(_: ()) -> String {
     let current_line: i64 = nvim_oxi::api::call_function("line", (".",))
-        .inspect_err(|error| {
-            ytil_nvim_oxi::api::notify_error(format!("error getting current line | error={error:#?}"));
+        .inspect_err(|err| {
+            ytil_nvim_oxi::api::notify_error(format!("error getting current line | error={err:#?}"));
         })
         .unwrap_or(0);
     let visual_line: i64 = nvim_oxi::api::call_function("line", ("v",))
-        .inspect_err(|error| {
-            ytil_nvim_oxi::api::notify_error(format!("error getting visual line | error={error:#?}"));
+        .inspect_err(|err| {
+            ytil_nvim_oxi::api::notify_error(format!("error getting visual line | error={err:#?}"));
         })
         .unwrap_or(0);
     format!(
@@ -146,8 +146,8 @@ fn visual_esc(_: ()) -> String {
 /// Errors from [`nvim_oxi::api::get_current_line`] are reported and the `default` is returned.
 fn apply_on_current_line_or_unwrap<'a, F: FnOnce(String) -> &'a str>(fun: F, default: &'a str) -> String {
     nvim_oxi::api::get_current_line()
-        .inspect_err(|error| {
-            ytil_nvim_oxi::api::notify_error(format!("error getting current line | error={error:#?}"));
+        .inspect_err(|err| {
+            ytil_nvim_oxi::api::notify_error(format!("error getting current line | error={err:#?}"));
         })
         .map(fun)
         .unwrap_or(default)

@@ -208,9 +208,9 @@ impl BufferExt for Buffer {
         let start_col = cur_pos.col;
         let end_col = cur_pos.col;
 
-        if let Err(error) = self.set_text(line_range.clone(), start_col, end_col, vec![text]) {
+        if let Err(err) = self.set_text(line_range.clone(), start_col, end_col, vec![text]) {
             crate::api::notify_error(format!(
-                "error setting text in buffer | text={text:?} buffer={self:?} line_range={line_range:?} start_col={start_col:?} end_col={end_col:?} error={error:#?}",
+                "error setting text in buffer | text={text:?} buffer={self:?} line_range={line_range:?} start_col={start_col:?} end_col={end_col:?} error={err:#?}",
             ));
         }
     }
@@ -263,9 +263,9 @@ impl CursorPosition {
         cur_win
             .get_cursor()
             .map(|(row, col)| Self { row, col })
-            .inspect_err(|error| {
+            .inspect_err(|err| {
                 crate::api::notify_error(format!(
-                    "error getting cursor from current window | window={cur_win:?} error={error:#?}"
+                    "error getting cursor from current window | window={cur_win:?} error={err:#?}"
                 ));
             })
             .ok()
@@ -309,14 +309,14 @@ where
     Lines: IntoIterator<Item = Line>,
     Line: Into<nvim_oxi::String>,
 {
-    if let Err(error) = Buffer::from(selection.buf_id()).set_text(
+    if let Err(err) = Buffer::from(selection.buf_id()).set_text(
         selection.line_range(),
         selection.start().col,
         selection.end().col,
         replacement,
     ) {
         crate::api::notify_error(format!(
-            "error setting lines of buffer | start={:#?} end={:#?} error={error:#?}",
+            "error setting lines of buffer | start={:#?} end={:#?} error={err:#?}",
             selection.start(),
             selection.end()
         ));
@@ -337,19 +337,19 @@ where
 /// # Errors
 /// Errors (e.g., cannot get cwd or buffer name) are notified to Nvim but not propagated.
 pub fn get_relative_buffer_path(cur_buf: &Buffer) -> Option<PathBuf> {
-    let cwd = nvim_oxi::api::call_function::<_, String>("getcwd", Array::new())
-        .inspect_err(|error| {
-            crate::api::notify_error(format!("error getting cwd | error={error:#?}"));
-        })
-        .ok()?;
-    let cur_buf_path = {
-        let tmp = cur_buf
-            .get_name()
-            .inspect_err(|error| {
-                crate::api::notify_error(format!(
-                    "error getting path of current buffer | buffer={cur_buf:#?} error={error:#?}"
-                ));
+        let cwd = nvim_oxi::api::call_function::<_, String>("getcwd", Array::new())
+            .inspect_err(|err| {
+                crate::api::notify_error(format!("error getting cwd | error={err:#?}"));
             })
+        .ok()?;
+        let cur_buf_path = {
+            let tmp = cur_buf
+                .get_name()
+                .inspect_err(|err| {
+                    crate::api::notify_error(format!(
+                        "error getting path of current buffer | buffer={cur_buf:#?} error={err:#?}"
+                    ));
+                })
             .ok()?;
         tmp.to_string()
     };
@@ -471,9 +471,9 @@ mod tests {
 
         let result = buffer.get_text_between((0, 10), (0, 15), TextBoundary::Exact);
 
-        assert2::let_assert!(Err(error) = result);
+        assert2::let_assert!(Err(err) = result);
         pretty_assertions::assert_eq!(
-            error.to_string(),
+            err.to_string(),
             r#"cannot extract substring from line | line="hello" idx=0 start_idx=10 end_idx=5"#
         );
     }

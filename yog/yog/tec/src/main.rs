@@ -285,13 +285,13 @@ impl From<RmFilesOutcome> for LintFnResult {
         for path in value.removed {
             let _ = writeln!(&mut msg, "{} {}", "Removed".green(), path.display());
         }
-        for (path, error) in &value.errors {
+        for (path, err) in &value.errors {
             let _ = writeln!(
                 &mut msg,
                 "{} path{} error={}",
                 "Error removing".red(),
                 path.as_ref().map(|p| format!(" {:?}", p.display())).unwrap_or_default(),
-                format!("{error}").red()
+                format!("{err}").red()
             );
         }
         if value.errors.is_empty() {
@@ -395,8 +395,8 @@ fn report(lint_name: &str, lint_res: &Result<LintFnSuccess, LintFnError>, elapse
         Ok(LintFnSuccess::PlainMsg(msg)) => {
             println!("{} {} \n{msg}", lint_name.green().bold(), format_timing(elapsed));
         }
-        Err(error) => {
-            eprintln!("{} {} \n{error}", lint_name.red().bold(), format_timing(elapsed));
+        Err(err) => {
+            eprintln!("{} {} \n{err}", lint_name.red().bold(), format_timing(elapsed));
         }
     }
 }

@@ -33,8 +33,8 @@ fn create_scratch_file(_: ()) {
         .into_iter()
         .filter_map(|entry| {
             Scratch::from(entry)?
-                .inspect_err(|error| {
-                    ytil_nvim_oxi::api::notify_error(format!("error building Scratch struct | error={error:#?}"));
+                .inspect_err(|err| {
+                    ytil_nvim_oxi::api::notify_error(format!("error building Scratch struct | error={err:#?}"));
                 })
                 .ok()
         })
@@ -42,9 +42,9 @@ fn create_scratch_file(_: ()) {
 
     let dest_dir = Path::new("/tmp").join("attempt.rs");
 
-    if let Err(error) = std::fs::create_dir_all(&dest_dir) {
+    if let Err(err) = std::fs::create_dir_all(&dest_dir) {
         ytil_nvim_oxi::api::notify_error(format!(
-            "cannot create dest dir | dest_dir={} error={error:#?}",
+            "cannot create dest dir | dest_dir={} error={err:#?}",
             dest_dir.display()
         ));
         return;
@@ -57,9 +57,9 @@ fn create_scratch_file(_: ()) {
                 return;
             };
             let dest = scratch.dest_file_path(&dest_dir, Local::now());
-            if let Err(error) = std::fs::copy(&scratch.path, &dest) {
+            if let Err(err) = std::fs::copy(&scratch.path, &dest) {
                 ytil_nvim_oxi::api::notify_error(format!(
-                    "cannot copy file | from={} to={} error={error:#?}",
+                    "cannot copy file | from={} to={} error={err:#?}",
                     scratch.path.display(),
                     dest.display()
                 ));
@@ -69,12 +69,12 @@ fn create_scratch_file(_: ()) {
         }
     };
 
-    if let Err(error) = ytil_nvim_oxi::api::vim_ui_select(
+    if let Err(err) = ytil_nvim_oxi::api::vim_ui_select(
         scratches.iter().map(|scratch| scratch.display_name.as_str()),
         &[("prompt", "Create scratch file ")],
         callback,
     ) {
-        ytil_nvim_oxi::api::notify_error(format!("error creating scratch file | error={error:#?}"));
+        ytil_nvim_oxi::api::notify_error(format!("error creating scratch file | error={err:#?}"));
     }
 }
 
@@ -88,12 +88,12 @@ fn create_scratch_file(_: ()) {
 fn get_scratches_dir_content() -> color_eyre::Result<ReadDir> {
     ytil_system::get_workspace_root()
         .map(|workspace_root| ytil_system::build_path(workspace_root, SCRATCHES_PATH_PARTS))
-        .inspect_err(|error| {
-            ytil_nvim_oxi::api::notify_error(format!("error getting workspace root | error={error:#?}"));
+        .inspect_err(|err| {
+            ytil_nvim_oxi::api::notify_error(format!("error getting workspace root | error={err:#?}"));
         })
         .and_then(|dir| std::fs::read_dir(dir).map_err(From::from))
-        .inspect_err(|error| {
-            ytil_nvim_oxi::api::notify_error(format!("error reading attempt files dir | error={error:#?}"));
+        .inspect_err(|err| {
+            ytil_nvim_oxi::api::notify_error(format!("error reading attempt files dir | error={err:#?}"));
         })
 }
 
@@ -124,7 +124,7 @@ impl Scratch {
     pub fn from(read_dir_res: std::io::Result<DirEntry>) -> Option<color_eyre::Result<Self>> {
         let path = match read_dir_res.map(|entry| entry.path()) {
             Ok(path) => path,
-            Err(error) => return Some(Err(error.into())),
+            Err(err) => return Some(Err(err.into())),
         };
         if !path.is_file() {
             return None;
@@ -229,15 +229,15 @@ mod tests {
 
         let result = Scratch::from(Ok(entry));
 
-        assert2::let_assert!(Some(Err(error)) = result);
-        assert!(error.to_string().contains(expected_error));
+        assert2::let_assert!(Some(Err(err)) = result);
+        assert!(err.to_string().contains(expected_error));
     }
 
     #[test]
     fn scratch_from_when_io_error_returns_some_expected_err() {
-        let error = std::io::Error::new(std::io::ErrorKind::NotFound, "test error");
+        let err = std::io::Error::new(std::io::ErrorKind::NotFound, "test error");
 
-        let result = Scratch::from(Err(error));
+        let result = Scratch::from(Err(err));
 
         assert2::let_assert!(Some(Err(e)) = result);
         assert!(e.to_string().contains("test error"));

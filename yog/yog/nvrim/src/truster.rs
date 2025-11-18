@@ -35,9 +35,9 @@ fn run_test(_: ()) {
     let Ok(file_path) = cur_buf
         .get_name()
         .map(|s| PathBuf::from(s.to_string_lossy().as_ref()))
-        .inspect_err(|error| {
+        .inspect_err(|err| {
             ytil_nvim_oxi::api::notify_error(format!(
-                "error getting buffer name | buffer={cur_buf:#?} error={error:#?}"
+                "error getting buffer name | buffer={cur_buf:#?} error={err:#?}"
             ));
         })
     else {
@@ -45,9 +45,9 @@ fn run_test(_: ()) {
     };
 
     let Some(test_name) = get_enclosing_fn_name_of_position(&file_path, *position)
-        .inspect_err(|error| {
+        .inspect_err(|err| {
             ytil_nvim_oxi::api::notify_error(format!(
-                "cannot get enclosing fn | position={position:#?} error={error:#?}"
+                "cannot get enclosing fn | position={position:#?} error={err:#?}"
             ));
         })
         .ok()
@@ -57,14 +57,14 @@ fn run_test(_: ()) {
         return;
     };
 
-    let Ok(cur_pane_id) = ytil_wezterm::get_current_pane_id().inspect_err(|error| {
-        ytil_nvim_oxi::api::notify_error(format!("error getting current WezTerm pane id | error={error:#?}"));
+    let Ok(cur_pane_id) = ytil_wezterm::get_current_pane_id().inspect_err(|err| {
+        ytil_nvim_oxi::api::notify_error(format!("error getting current WezTerm pane id | error={err:#?}"));
     }) else {
         return;
     };
 
-    let Ok(wez_panes) = ytil_wezterm::get_all_panes(&[]).inspect_err(|error| {
-        ytil_nvim_oxi::api::notify_error(format!("error getting WezTerm panes | error={error:#?}"));
+    let Ok(wez_panes) = ytil_wezterm::get_all_panes(&[]).inspect_err(|err| {
+        ytil_nvim_oxi::api::notify_error(format!("error getting WezTerm panes | error={err:#?}"));
     }) else {
         return;
     };
@@ -83,9 +83,9 @@ fn run_test(_: ()) {
         return;
     };
 
-    let Ok(test_runner_app) = get_test_runner_app_for_path(&file_path).inspect_err(|error| {
+    let Ok(test_runner_app) = get_test_runner_app_for_path(&file_path).inspect_err(|err| {
         ytil_nvim_oxi::api::notify_error(format!(
-            "error getting test runner app | path={} error={error:#?}",
+            "error getting test runner app | path={} error={err:#?}",
             file_path.display()
         ));
     }) else {
@@ -99,9 +99,9 @@ fn run_test(_: ()) {
     let Ok(_) = ytil_cmd::silent_cmd("sh")
         .args(["-c", &format!("{send_text_to_pane_cmd} && {submit_pane_cmd}")])
         .spawn()
-        .inspect_err(|error| {
+        .inspect_err(|err| {
             ytil_nvim_oxi::api::notify_error(format!(
-                "error executing test run cmd | cmd={test_run_cmd:#?} pane={test_runner_pane:#?} error={error:#?}"
+                "error executing test run cmd | cmd={test_run_cmd:#?} pane={test_runner_pane:#?} error={err:#?}"
             ));
         })
     else {

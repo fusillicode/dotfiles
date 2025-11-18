@@ -33,9 +33,9 @@ fn create_user_cmd<Cmd>(name: &str, command: Cmd, opts: &CreateCommandOpts)
 where
     Cmd: StringOrFunction<CommandArgs, ()>,
 {
-    if let Err(error) = nvim_oxi::api::create_user_command(name, command, opts) {
+    if let Err(err) = nvim_oxi::api::create_user_command(name, command, opts) {
         ytil_nvim_oxi::api::notify_error(format!(
-            "error creating user command | name={name:?} opts={opts:#?} error={error:#?}"
+            "error creating user command | name={name:?} opts={opts:#?} error={err:#?}"
         ));
     }
 }

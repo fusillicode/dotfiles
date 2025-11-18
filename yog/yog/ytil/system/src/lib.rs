@@ -101,7 +101,7 @@ pub fn get_args() -> Vec<String> {
 pub fn join<T>(join_handle: JoinHandle<color_eyre::Result<T>>) -> Result<T, eyre::Error> {
     join_handle
         .join()
-        .map_err(|error| eyre!("error joining handle | error={error:#?}"))?
+        .map_err(|err| eyre!("error joining handle | error={err:#?}"))?
 }
 
 /// Builds a path starting from the home directory by appending the given parts, returning a [`PathBuf`].
@@ -281,11 +281,11 @@ pub fn rm_dead_symlinks(dir: &str) -> color_eyre::Result<()> {
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - An unexpected I/O failure (other than [`std::io::ErrorKind::NotFound`]) occurs.
 pub fn rm_f<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
-    std::fs::remove_file(path).or_else(|error| {
-        if std::io::ErrorKind::NotFound == error.kind() {
+    std::fs::remove_file(path).or_else(|err| {
+        if std::io::ErrorKind::NotFound == err.kind() {
             return Ok(());
         }
-        Err(error)
+        Err(err)
     })
 }
 
@@ -336,8 +336,8 @@ pub fn rm_matching_files<P: AsRef<Path>>(
             removed.push(path);
             return;
         }
-        if let Err(error) = std::fs::remove_file(&path) {
-            errors.push((Some(path), error));
+        if let Err(err) = std::fs::remove_file(&path) {
+            errors.push((Some(path), err));
             return;
         }
         removed.push(path);
@@ -351,7 +351,7 @@ pub fn rm_matching_files<P: AsRef<Path>>(
     ) {
         match std::fs::read_link(&path) {
             Ok(target) => rm_file(target, dry_run, removed, errors),
-            Err(error) => errors.push((Some(path.clone()), error)),
+            Err(err) => errors.push((Some(path.clone()), err)),
         }
         rm_file(path, dry_run, removed, errors);
     }
@@ -372,11 +372,11 @@ pub fn rm_matching_files<P: AsRef<Path>>(
                 for entry in entries {
                     match entry {
                         Ok(entry) => stack.push_back(entry.path()),
-                        Err(error) => errors.push((Some(path.clone()), error)),
+                        Err(err) => errors.push((Some(path.clone()), err)),
                     }
                 }
             }
-            Err(error) => errors.push((Some(path), error)),
+            Err(err) => errors.push((Some(path), err)),
         }
     }
 
@@ -403,7 +403,7 @@ pub fn rm_matching_files<P: AsRef<Path>>(
                     }
                 }
             }
-            Err(error) => errors.push((None, error)),
+            Err(err) => errors.push((None, err)),
         }
     }
 

@@ -191,8 +191,8 @@ impl Op {
     /// Returns the same error contained in `res` (no transformation) so callers
     /// can continue combinators (`and_then`, etc.) if desired.
     pub fn report(&self, pr: &PullRequest, res: color_eyre::Result<()>) -> color_eyre::Result<()> {
-        res.inspect(|()| self.report_ok(pr)).inspect_err(|error| {
-            self.report_error(pr, error);
+        res.inspect(|()| self.report_ok(pr)).inspect_err(|err| {
+            self.report_error(pr, err);
         })
     }
 

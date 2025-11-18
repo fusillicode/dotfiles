@@ -54,17 +54,17 @@ pub fn create_autocmd<'a, I>(events: I, augroup_name: &str, opts_builder: &mut C
 where
     I: IntoIterator<Item = &'a str> + Debug + Copy,
 {
-    if let Err(error) =
+    if let Err(err) =
         nvim_oxi::api::create_augroup(augroup_name, &CreateAugroupOptsBuilder::default().clear(true).build())
-            .inspect_err(|error| {
+            .inspect_err(|err| {
                 ytil_nvim_oxi::api::notify_error(format!(
-                    "error creating augroup | name={augroup_name:?} error={error:#?}"
+                    "error creating augroup | name={augroup_name:?} error={err:#?}"
                 ));
             })
             .and_then(|group| nvim_oxi::api::create_autocmd(events, &opts_builder.group(group).build()))
     {
         ytil_nvim_oxi::api::notify_error(format!(
-            "error creating auto command | augroup={augroup_name:?} events={events:#?} error={error:#?}"
+            "error creating auto command | augroup={augroup_name:?} events={events:#?} error={err:#?}"
         ));
     }
 }

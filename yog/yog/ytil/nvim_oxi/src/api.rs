@@ -62,22 +62,22 @@ impl Notifiable for &str {
 /// Errors are reported to Nvim via [`notify_error`].
 pub fn set_g_var<V: ToObject + Debug>(name: &str, value: V) {
     let msg = format!("error setting global var | name={name} value={value:#?}");
-    if let Err(error) = nvim_oxi::api::set_var(name, value) {
-        crate::api::notify_error(format!("{msg} | error={error:#?}"));
+    if let Err(err) = nvim_oxi::api::set_var(name, value) {
+        crate::api::notify_error(format!("{msg} | error={err:#?}"));
     }
 }
 
 /// Notifies the user of an error message in Nvim.
 pub fn notify_error<N: Notifiable>(notifiable: N) {
-    if let Err(error) = nvim_oxi::api::notify(notifiable.to_msg().as_ref(), LogLevel::Error, &dict! {}) {
-        nvim_oxi::dbg!(format!("cannot notify error | msg={notifiable:?} error={error:#?}"));
+    if let Err(err) = nvim_oxi::api::notify(notifiable.to_msg().as_ref(), LogLevel::Error, &dict! {}) {
+        nvim_oxi::dbg!(format!("cannot notify error | msg={notifiable:?} error={err:#?}"));
     }
 }
 
 /// Notifies the user of a warning message in Nvim.
 pub fn notify_warn<N: Notifiable>(notifiable: N) {
-    if let Err(error) = nvim_oxi::api::notify(notifiable.to_msg().as_ref(), LogLevel::Warn, &dict! {}) {
-        nvim_oxi::dbg!(format!("cannot notify warning | msg={notifiable:?} error={error:#?}"));
+    if let Err(err) = nvim_oxi::api::notify(notifiable.to_msg().as_ref(), LogLevel::Warn, &dict! {}) {
+        nvim_oxi::dbg!(format!("cannot notify warning | msg={notifiable:?} error={err:#?}"));
     }
 }
 
@@ -103,9 +103,9 @@ pub fn exec_vim_cmd(
     if let Some(args) = args {
         cmd_infos_builder.args(args.iter().map(|s| s.as_ref().to_string()));
     }
-    nvim_oxi::api::cmd(&cmd_infos_builder.build(), &CmdOpts::default()).inspect_err(|error| {
+    nvim_oxi::api::cmd(&cmd_infos_builder.build(), &CmdOpts::default()).inspect_err(|err| {
         crate::api::notify_error(format!(
-            "error executing cmd | cmd={cmd:?} args={args:#?} error={error:#?}",
+            "error executing cmd | cmd={cmd:?} args={args:#?} error={err:#?}",
         ));
     })
 }
@@ -173,11 +173,11 @@ where
     let vim_ui_select = lua
         .globals()
         .get_path::<mlua::Function>("vim.ui.select")
-        .map_err(|error| eyre!("cannot fetch vim.ui.select function from Lua globals | error={error:#?}"))?;
+        .map_err(|err| eyre!("cannot fetch vim.ui.select function from Lua globals | error={err:#?}"))?;
 
     let opts_table = lua
         .create_table_from(opts.clone())
-        .map_err(|error| eyre!("cannot create opts table | opts={opts:#?} error={error:#?}"))?;
+        .map_err(|err| eyre!("cannot create opts table | opts={opts:#?} error={err:#?}"))?;
 
     let vim_ui_select_callback = lua
         .create_function(move |_: &mlua::Lua, (_, idx1): (Option<String>, Option<usize>)| {
@@ -186,16 +186,16 @@ where
             }
             Ok(())
         })
-        .map_err(|error| {
-            eyre!("cannot create vim.ui.select callback | choices={choices:#?} opts={opts_table:#?} error={error:#?}")
+        .map_err(|err| {
+            eyre!("cannot create vim.ui.select callback | choices={choices:#?} opts={opts_table:#?} error={err:#?}")
         })?;
 
     let vim_ui_choices = choices.into_iter().map(|c| c.to_string()).collect::<Vec<_>>();
 
     vim_ui_select
         .call::<()>((vim_ui_choices.clone(), opts_table.clone(), vim_ui_select_callback))
-        .map_err(|error| {
-            eyre!("cannot call vim.ui.select | choices={vim_ui_choices:#?} opts={opts_table:#?} error={error:#?}")
+        .map_err(|err| {
+            eyre!("cannot call vim.ui.select | choices={vim_ui_choices:#?} opts={opts_table:#?} error={err:#?}")
         })?;
 
     Ok(())

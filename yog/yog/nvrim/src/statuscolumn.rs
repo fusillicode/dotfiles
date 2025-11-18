@@ -50,9 +50,9 @@ fn draw((cur_lnum, extmarks, opts): (String, Vec<Extmark>, Option<Opts>)) -> Opt
     let cur_buf = Buffer::current();
     let buf_type = cur_buf
         .get_buf_type()
-        .inspect_err(|error| {
+        .inspect_err(|err| {
             ytil_nvim_oxi::api::notify_error(format!(
-                "error getting buftype of current buffer | buffer={cur_buf:#?} error={error:#?}"
+                "error getting buftype of current buffer | buffer={cur_buf:#?} error={err:#?}"
             ));
         })
         .ok()?;

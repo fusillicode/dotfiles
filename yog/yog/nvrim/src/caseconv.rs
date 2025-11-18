@@ -60,12 +60,12 @@ fn convert_selection(_: ()) {
         });
     };
 
-    if let Err(error) = ytil_nvim_oxi::api::vim_ui_select(
+    if let Err(err) = ytil_nvim_oxi::api::vim_ui_select(
         cases.iter().map(DisplayableCase),
         &[("prompt", "Convert selection to case ")],
         callback,
     ) {
-        ytil_nvim_oxi::api::notify_error(format!("error converting selection to case | error={error:#?}"));
+        ytil_nvim_oxi::api::notify_error(format!("error converting selection to case | error={err:#?}"));
     }
 }
 

@@ -128,12 +128,12 @@ fn create_branch_and_switch(branch_name: &str) -> color_eyre::Result<()> {
     if !should_create_new_branch(branch_name)? {
         return Ok(());
     }
-    if let Err(error) = ytil_git::branch::create_from_default_branch(branch_name, None) {
-        if error.to_string().contains("already exists") {
+    if let Err(err) = ytil_git::branch::create_from_default_branch(branch_name, None) {
+        if err.to_string().contains("already exists") {
             ytil_git::branch::switch(branch_name).inspect(|()| report_branch_exists(branch_name))?;
             return Ok(());
         }
-        return Err(error);
+        return Err(err);
     }
     ytil_git::branch::switch(branch_name).inspect(|()| report_branch_new(branch_name))?;
     Ok(())

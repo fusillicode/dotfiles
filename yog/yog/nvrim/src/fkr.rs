@@ -43,7 +43,7 @@ fn insert_string(_: ()) {
         }
     };
 
-    if let Err(error) = ytil_nvim_oxi::api::vim_ui_select(opts, &[("prompt", "Select option: ")], callback) {
-        ytil_nvim_oxi::api::notify_error(format!("error generating fkr value | error={error:#?}"));
+    if let Err(err) = ytil_nvim_oxi::api::vim_ui_select(opts, &[("prompt", "Select option: ")], callback) {
+        ytil_nvim_oxi::api::notify_error(format!("error generating fkr value | error={err:#?}"));
     }
 }

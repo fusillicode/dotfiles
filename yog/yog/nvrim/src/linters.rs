@@ -54,9 +54,9 @@ fn parser(maybe_output: Option<nvim_oxi::String>) -> Vec<Dictionary> {
 
     let parsed_output = match serde_json::from_str::<SqruffOutput>(&output) {
         Ok(parsed_output) => parsed_output,
-        Err(error) => {
+        Err(err) => {
             notify_error(format!(
-                "error parsing sqruff output | output={output:?} error={error:#?}"
+                "error parsing sqruff output | output={output:?} error={err:#?}"
             ));
             return vec![];
         }
