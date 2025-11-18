@@ -294,6 +294,12 @@ impl CursorPosition {
     }
 }
 
+pub fn open(path: &str, line: Option<usize>, col: Option<usize>) -> color_eyre::Result<()> {
+    crate::api::exec_vim_cmd("edit", Some(&[path]))?;
+    Window::current().set_cursor(line.unwrap_or_default(), col.unwrap_or_default())?;
+    Ok(())
+}
+
 /// Replaces the text in the specified `selection` with the `replacement` lines.
 ///
 /// Calls Nvim's `set_text` with the selection's line range and column positions,

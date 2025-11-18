@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::process::Command;
 
 use color_eyre::eyre::Context;
@@ -30,7 +29,7 @@ pub fn get() -> color_eyre::Result<Vec<String>> {
 /// - `diff_output` The lines of `git diff` output to parse.
 ///
 /// # Returns
-/// A [`HashSet`] mapping file paths to vectors of line numbers where changes occurred.
+/// A [`Vec<(&str, usize)>`] mapping file paths to vectors of line numbers where changes occurred.
 ///
 /// # Errors
 /// - Missing path delimiter in the diff line.
@@ -42,8 +41,8 @@ pub fn get() -> color_eyre::Result<Vec<String>> {
 ///
 /// # Assumptions
 /// Assumes `diff_output` is in standard unified diff format produced by `git diff`.
-pub fn get_paths_with_lnums(diff_output: &[String]) -> color_eyre::Result<HashSet<(&str, usize)>> {
-    let mut out = HashSet::new();
+pub fn get_paths_with_lnums(diff_output: &[String]) -> color_eyre::Result<Vec<(&str, usize)>> {
+    let mut out = vec![];
 
     for (diff_line_idx, diff_line) in diff_output.iter().enumerate() {
         let Some(path_line) = diff_line.strip_prefix(PATH_LINE_PREFIX) else {
@@ -79,7 +78,7 @@ pub fn get_paths_with_lnums(diff_output: &[String]) -> color_eyre::Result<HashSe
             // Adjusting `git diff` lnum to match what is displayed by Neovim.
             let lnum = extract_lnum(lnum_line)?.saturating_add(3);
 
-            out.insert((path, lnum));
+            out.push((path, lnum));
         }
     }
 
@@ -123,8 +122,6 @@ fn find_between<'a>(haystack: &'a str, start: &str, end: &str) -> Option<&'a str
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use rstest::rstest;
 
     use super::*;
@@ -138,7 +135,7 @@ mod tests {
             "+++ b/src/main.rs".to_string(),
             "@@ -42,7 +42,7 @@".to_string(),
         ],
-        HashSet::from([("src/main.rs", 45)])
+        vec![("src/main.rs", 45)]
     )]
     #[case::multiple_files(
         vec![
@@ -153,7 +150,7 @@ mod tests {
             "+++ b/src/lib.rs".to_string(),
             "@@ -20,3 +20,3 @@".to_string(),
         ],
-        HashSet::from([("src/main.rs", 13), ("src/lib.rs", 23)])
+        vec![("src/main.rs", 13), ("src/lib.rs", 23)]
     )]
     #[case::multiple_hunks_same_file(
         vec![
@@ -164,12 +161,12 @@ mod tests {
             "@@ -10,5 +10,5 @@".to_string(),
             "@@ -50,2 +50,2 @@".to_string(),
         ],
-        HashSet::from([("src/main.rs", 13), ("src/main.rs", 53)])
+        vec![("src/main.rs", 13), ("src/main.rs", 53)]
     )]
-    #[case::empty_input(vec![], HashSet::new())]
+    #[case::empty_input(vec![], vec![])]
     #[case::no_hunks(
         vec!["diff --git a/src/main.rs b/src/main.rs".to_string()],
-        HashSet::new()
+        vec![]
     )]
     #[case::non_diff_lines_ignored(
         vec![
@@ -180,7 +177,7 @@ mod tests {
             "+++ b/src/main.rs".to_string(),
             "@@ -42,7 +42,7 @@".to_string(),
         ],
-        HashSet::from([("src/main.rs", 45)])
+        vec![("src/main.rs", 45)]
     )]
     #[case::multiple_files_with_multiple_hunks(
         vec![
@@ -197,9 +194,9 @@ mod tests {
             "@@ -20,3 +20,3 @@".to_string(),
             "@@ -60,1 +60,1 @@".to_string(),
         ],
-        HashSet::from([("src/main.rs", 13), ("src/main.rs", 53), ("src/lib.rs", 23), ("src/lib.rs", 63)])
+        vec![("src/main.rs", 13), ("src/main.rs", 53), ("src/lib.rs", 23), ("src/lib.rs", 63)]
     )]
-    fn test_get_paths_with_lnums_success(#[case] input: Vec<String>, #[case] expected: HashSet<(&str, usize)>) {
+    fn test_get_paths_with_lnums_success(#[case] input: Vec<String>, #[case] expected: Vec<(&str, usize)>) {
         assert2::let_assert!(Ok(result) = get_paths_with_lnums(&input));
         pretty_assertions::assert_eq!(result, expected);
     }

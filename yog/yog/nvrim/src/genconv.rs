@@ -10,7 +10,6 @@ use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use chrono::NaiveTime;
 use color_eyre::eyre::Context;
-use color_eyre::eyre::Report;
 use color_eyre::eyre::eyre;
 use nvim_oxi::Dictionary;
 use strum::EnumIter;
@@ -59,8 +58,8 @@ fn convert_selection(_: ()) {
     let callback = {
         let opts = opts.clone();
         move |choice_idx| {
-            opts.get(choice_idx).map(|opt| {
-                let Ok(transformed_line) = opt
+            let Some(opt) = opts.get(choice_idx) else { return };
+            let Ok(transformed_line) = opt
                     // Conversion should work only with 1 single line but maybe multiline could be
                     // supported at some point.
                     .convert(&selection.lines().to_vec().join("\n"))
@@ -71,12 +70,10 @@ fn convert_selection(_: ()) {
                             selection.end()
                         ));
                     })
-                else {
-                    return Ok::<(), Report>(());
-                };
-                ytil_nvim_oxi::buffer::replace_text_and_notify_if_error(&selection, vec![transformed_line]);
-                Ok(())
-            });
+            else {
+                return;
+            };
+            ytil_nvim_oxi::buffer::replace_text_and_notify_if_error(&selection, vec![transformed_line]);
         }
     };
 

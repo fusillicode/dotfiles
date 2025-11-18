@@ -28,6 +28,7 @@ mod colorscheme;
 mod diagnostics;
 /// Random string generation via the [`fkr`] crate.
 mod fkr;
+mod gdiff;
 /// Generic text conversions.
 mod genconv;
 /// GitHub permalink generation for selected code.
@@ -75,5 +76,6 @@ fn nvrim() -> Dictionary {
         "attempt": attempt::dict(),
         "genconv": genconv::dict(),
         "ghurlinker": ghurlinker::dict(),
+        "gdiff": gdiff::dict(),
     }
 }
