@@ -170,7 +170,7 @@ pub fn vim_ui_select<C, K, V>(
     choices: impl IntoIterator<Item = C> + Debug,
     opts: &(impl IntoIterator<Item = (K, V)> + Debug + Clone),
     callback: impl Fn(usize) + 'static,
-    quickfix: Option<QuickfixConfig>,
+    maybe_quickfix: Option<QuickfixConfig>,
 ) -> color_eyre::Result<()>
 where
     C: Display,
@@ -188,15 +188,14 @@ where
         .create_table_from(opts.clone())
         .map_err(|err| eyre!("cannot create opts table | opts={opts:#?} error={err:#?}"))?;
 
-    let quickfix = quickfix.map(Rc::new);
+    let quickfix = maybe_quickfix.map(Rc::new);
 
     let vim_ui_select_callback = lua
         .create_function(move |_: &mlua::Lua, (value, idx1): (Option<String>, Option<usize>)| {
-            if let Some(q) = &quickfix
-                && value.is_some_and(|x| x == q.trigger_value)
+            if let Some(quickfix) = &quickfix
+                && value.is_some_and(|x| x == quickfix.trigger_value)
             {
-                let items_refs: Vec<(&str, i64)> = q.all_items.iter().map(|(s, i)| (s.as_str(), *i)).collect();
-                let _ = open_quickfix(&items_refs).inspect_err(|err| {
+                let _ = open_quickfix(quickfix.all_items.iter().map(|(s, i)| (s.as_str(), *i))).inspect_err(|err| {
                     notify_error(format!("error opening quickfix | error={err:#?}"));
                 });
             } else if let Some(idx) = idx1.map(|idx1| idx1.saturating_sub(1)) {
@@ -225,7 +224,7 @@ where
 /// for user navigation. Each entry consists of a filename and line number.
 ///
 /// # Arguments
-/// - `entries` Slice of tuples containing filename and line number (1-based).
+/// - `entries` Iterator yielding tuples containing filename and line number (1-based).
 ///
 /// # Returns
 /// `Ok(())` if the quickfix list is set and the window opens successfully.
@@ -236,12 +235,12 @@ where
 ///
 /// # Rationale
 /// Uses Nvim's built-in quickfix functionality to avoid custom UI implementations.
-pub fn open_quickfix(entries: &[(&str, i64)]) -> color_eyre::Result<()> {
+pub fn open_quickfix<'a>(entries: impl IntoIterator<Item = (&'a str, i64)> + Debug) -> color_eyre::Result<()> {
     let mut qflist = vec![];
     for (filename, lnum) in entries {
         qflist.push(dict! {
             "filename": filename.to_string(),
-            "lnum": *lnum
+            "lnum": lnum
         });
     }
     nvim_oxi::api::call_function::<_, i64>("setqflist", (Array::from_iter(qflist),))
