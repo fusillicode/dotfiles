@@ -6,6 +6,7 @@
 use core::fmt::Debug;
 use core::fmt::Display;
 
+use color_eyre::eyre::Context;
 use color_eyre::eyre::eyre;
 use nvim_oxi::Array;
 pub use nvim_oxi::api::opts;
@@ -199,5 +200,20 @@ where
             eyre!("cannot call vim.ui.select | choices={vim_ui_choices:#?} opts={opts_table:#?} error={err:#?}")
         })?;
 
+    Ok(())
+}
+
+pub fn open_quickfix(entries: &[(&str, usize)]) -> color_eyre::Result<()> {
+    let mut qflist = vec![];
+    for (filename, lnum) in entries {
+        qflist.push(dict! {
+            "filename": filename.to_string(),
+            "lnum": i64::try_from(*lnum)?
+        });
+    }
+    nvim_oxi::api::call_function::<_, i64>("setqflist", (Array::from_iter(qflist),))
+        .wrap_err("error executing setqflist function")?;
+    nvim_oxi::api::cmd(&CmdInfosBuilder::default().cmd("copen").build(), &CmdOpts::default())
+        .wrap_err("error executing copen cmd")?;
     Ok(())
 }

@@ -3,6 +3,8 @@
 
 use nvim_oxi::Dictionary;
 
+const ALL_QUICKFIX_CHOICE: &str = "All to quickfix";
+
 /// [`Dictionary`] of git diff helpers.
 pub fn dict() -> Dictionary {
     dict! {
@@ -34,13 +36,30 @@ fn get_hunks(_: ()) {
         return;
     };
 
-    let displayable_hunks = hunks
-        .iter()
-        .map(|(path, lnum)| format!("{path}:{lnum}"))
-        .collect::<Vec<_>>();
+    let mut displayable_hunks = vec![ALL_QUICKFIX_CHOICE.to_owned()];
+    displayable_hunks.extend(
+        hunks
+            .iter()
+            .map(|(path, lnum)| format!("{path}:{lnum}"))
+            .collect::<Vec<_>>(),
+    );
 
     let callback = {
+        let displayable_hunks = displayable_hunks.clone();
         move |choice_idx: usize| {
+            if displayable_hunks
+                .get(choice_idx)
+                .is_some_and(|s| s == ALL_QUICKFIX_CHOICE)
+            {
+                let all_hunks = hunks
+                    .iter()
+                    .map(|(path, lnum)| (path.as_str(), *lnum))
+                    .collect::<Vec<_>>();
+                let _ = ytil_nvim_oxi::api::open_quickfix(&all_hunks).inspect_err(|err| {
+                    ytil_nvim_oxi::api::notify_error(format!(" | error={err:#?}"));
+                });
+                return;
+            }
             let Some((path, lnum)) = hunks.get(choice_idx) else {
                 return;
             };
