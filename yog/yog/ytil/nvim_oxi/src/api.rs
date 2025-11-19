@@ -222,12 +222,14 @@ where
 ///
 /// Populates the quickfix list with the given entries and opens the quickfix window
 /// for user navigation. Each entry consists of a filename and line number.
+/// If no entries are provided, returns early without opening the quickfix window.
 ///
 /// # Arguments
 /// - `entries` Iterator yielding tuples containing filename and line number (1-based).
 ///
 /// # Returns
 /// `Ok(())` if the quickfix list is set and the window opens successfully.
+/// `Ok(())` without doing anything if no entries are provided.
 ///
 /// # Errors
 /// - Fails if `setqflist` Neovim function call encounters an error.
@@ -243,9 +245,15 @@ pub fn open_quickfix<'a>(entries: impl IntoIterator<Item = (&'a str, i64)> + Deb
             "lnum": lnum
         });
     }
+
+    if qflist.is_empty() {
+        return Ok(());
+    }
+
     nvim_oxi::api::call_function::<_, i64>("setqflist", (Array::from_iter(qflist),))
         .wrap_err("error executing setqflist function")?;
     nvim_oxi::api::cmd(&CmdInfosBuilder::default().cmd("copen").build(), &CmdOpts::default())
         .wrap_err("error executing copen cmd")?;
+
     Ok(())
 }
