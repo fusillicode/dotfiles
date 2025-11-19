@@ -100,7 +100,7 @@ pub fn get_hunks(raw_diff_output: &[String]) -> color_eyre::Result<Vec<(&str, us
 /// - If the new line number part is malformed (missing comma).
 /// - If the extracted line number value cannot be parsed as a valid [`usize`].
 fn extract_new_lnum(lnum_line: &str) -> color_eyre::Result<usize> {
-    let mut parts = lnum_line.split(" ");
+    let mut parts = lnum_line.split(' ');
     parts.next();
     parts.next();
 
@@ -108,11 +108,11 @@ fn extract_new_lnum(lnum_line: &str) -> color_eyre::Result<usize> {
         .next()
         .ok_or_else(|| eyre!("error missing new_lnum from lnum_line after split by space | lnum_line={lnum_line:?}"))?;
 
-    let mut lnum_parts = new_lnum.split(",");
+    let mut lnum_parts = new_lnum.split(',');
 
     lnum_parts
         .next()
-        .map(|s| s.trim_start_matches("+"))
+        .map(|s| s.trim_start_matches('+'))
         .ok_or_else(|| eyre!("error malformed new_lnum in lnum_line | lnum_line={lnum_line:?}"))
         .and_then(|lnum_value| {
             lnum_value.parse::<usize>().wrap_err_with(|| {
