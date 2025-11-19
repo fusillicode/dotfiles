@@ -36,12 +36,12 @@ fn get_hunks(_: ()) {
     };
 
     let mut all_items = vec![];
-    for (path, lnum) in hunks.iter() {
+    for (path, lnum) in &hunks {
         let Ok(lnum) = i64::try_from(*lnum) else {
             ytil_nvim_oxi::api::notify_error(format!("error converting hunk lnum to i64 | lnum={lnum}"));
             return;
         };
-        all_items.push((path.to_string(), lnum));
+        all_items.push((path.clone(), lnum));
     }
 
     let quickfix = QuickfixConfig {
@@ -49,13 +49,8 @@ fn get_hunks(_: ()) {
         all_items,
     };
 
-    let mut displayable_hunks = vec![quickfix.trigger_value.to_owned()];
-    displayable_hunks.extend(
-        hunks
-            .iter()
-            .map(|(path, lnum)| format!("{path}:{lnum}"))
-            .collect::<Vec<_>>(),
-    );
+    let mut displayable_hunks = vec![quickfix.trigger_value.clone()];
+    displayable_hunks.extend(hunks.iter().map(|(path, lnum)| format!("{path}:{lnum}")));
 
     let callback = {
         move |choice_idx: usize| {
