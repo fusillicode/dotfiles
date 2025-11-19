@@ -90,7 +90,7 @@ impl DiagnosticSeverity {
     /// Returns the canonical single-character symbol for this severity.
     ///
     /// # Returns
-    /// - One of: "x" (Error), "⏶" (Warn), "◆" (Info), "∙" (Hint or Other).
+    /// - One of: "x" (Error), "⏶" (Warn), "◆" (Info), "" (Hint or Other).
     ///
     /// # Rationale
     /// Used by status UI components (statuscolumn) to render severity without allocating via [`core::fmt::Display`]
@@ -100,7 +100,7 @@ impl DiagnosticSeverity {
             Self::Error => "x",
             Self::Warn => "⏶",
             Self::Info => "◆",
-            Self::Hint | Self::Other => "∙",
+            Self::Hint | Self::Other => "",
         }
     }
 }
