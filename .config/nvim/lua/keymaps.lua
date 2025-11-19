@@ -100,7 +100,7 @@ function M.fzf_lua(plugin)
     { '<leader>yb', mode = { 'n', 'v', }, plugin and { function() nvrim.ghurlinker.get_link('blame') end, }, },
     { '<leader>yL', mode = { 'n', 'v', }, plugin and { function() nvrim.ghurlinker.get_link('blob', true) end, }, },
     { '<leader>yB', mode = { 'n', 'v', }, plugin and { function() nvrim.ghurlinker.get_link('blame', true) end, }, },
-    { '<leader>gw', mode = { 'n', 'v', }, plugin and { nvrim.gdiff.get_diff_lines, }, },
+    { '<leader>gh', mode = { 'n', 'v', }, plugin and { nvrim.gdiff.get_hunks, }, },
   }
 end
 

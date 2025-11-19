@@ -6,15 +6,15 @@ use ytil_cmd::CmdExt as _;
 
 const PATH_LINE_PREFIX: &str = "diff --git ";
 
-/// Retrieves the current `git diff` output as a [`Vec<String>`].
+/// Retrieves the current `git diff` raw output as a [`Vec<String>`].
 ///
 /// # Returns
-/// A [`Vec<String>`] where each line corresponds to a line of `git diff` output.
+/// A [`Vec<String>`] where each line corresponds to a line of `git diff` raw output.
 ///
 /// # Errors
 /// - If the `git diff` command fails to execute or returns a non-zero exit code.
 /// - If extracting the output from the command fails.
-pub fn get() -> color_eyre::Result<Vec<String>> {
+pub fn get_raw() -> color_eyre::Result<Vec<String>> {
     let output = Command::new("git").arg("diff").exec()?;
 
     Ok(ytil_cmd::extract_success_output(&output)?
@@ -23,13 +23,13 @@ pub fn get() -> color_eyre::Result<Vec<String>> {
         .collect())
 }
 
-/// Extracts file paths and their modified line numbers from `git diff` output.
+/// Extracts file paths and starting line numbers of hunks from `git diff` output.
 ///
 /// # Arguments
-/// - `diff_output` The lines of `git diff` output to parse.
+/// - `raw_diff_output` The lines of `git diff` output to parse.
 ///
 /// # Returns
-/// A [`Vec<(&str, usize)>`] mapping file paths to vectors of line numbers where changes occurred.
+/// A [`Vec<(&str, usize)>`] where each tuple contains a filepath and the starting line number of a hunk.
 ///
 /// # Errors
 /// - Missing path delimiter in the diff line.
@@ -40,12 +40,12 @@ pub fn get() -> color_eyre::Result<Vec<String>> {
 /// - Line number cannot be parsed as a valid [`usize`].
 ///
 /// # Assumptions
-/// Assumes `diff_output` is in standard unified diff format produced by `git diff`.
-pub fn get_paths_with_lnums(diff_output: &[String]) -> color_eyre::Result<Vec<(&str, usize)>> {
+/// Assumes `raw_diff_output` is in standard unified diff format produced by `git diff`.
+pub fn get_hunks(raw_diff_output: &[String]) -> color_eyre::Result<Vec<(&str, usize)>> {
     let mut out = vec![];
 
-    for (diff_line_idx, diff_line) in diff_output.iter().enumerate() {
-        let Some(path_line) = diff_line.strip_prefix(PATH_LINE_PREFIX) else {
+    for (raw_diff_line_idx, raw_diff_line) in raw_diff_output.iter().enumerate() {
+        let Some(path_line) = raw_diff_line.strip_prefix(PATH_LINE_PREFIX) else {
             continue;
         };
 
@@ -53,19 +53,19 @@ pub fn get_paths_with_lnums(diff_output: &[String]) -> color_eyre::Result<Vec<(&
             .find(" b/")
             .ok_or_else(|| {
                 eyre!(
-                    "error missing path prefix in path_line | path_line={path_line:?} diff_line_idx={diff_line_idx} diff_line={diff_line:?}"
+                    "error missing path prefix in path_line | path_line={path_line:?} raw_diff_line_idx={raw_diff_line_idx} raw_diff_line={raw_diff_line:?}"
                 )
             })?
             .saturating_add(3);
 
         let path = path_line.get(path_idx..).ok_or_else(|| {
-            eyre!("error extracting path from path_line | path_idx={path_idx} path_line={path_line:?} diff_line_idx={diff_line_idx} diff_line={diff_line:?}")
+            eyre!("error extracting path from path_line | path_idx={path_idx} path_line={path_line:?} raw_diff_line_idx={raw_diff_line_idx} raw_diff_line={raw_diff_line:?}")
         })?;
 
-        let lnum_lines_start_idx = diff_line_idx.saturating_add(1);
-        let maybe_lnum_lines = diff_output
+        let lnum_lines_start_idx = raw_diff_line_idx.saturating_add(1);
+        let maybe_lnum_lines = raw_diff_output
             .get(lnum_lines_start_idx..)
-            .ok_or_else(|| eyre!("error extracting lnum_lines from diff_output | lnum_lines_start_idx={lnum_lines_start_idx} diff_line_idx={diff_line_idx}"))?;
+            .ok_or_else(|| eyre!("error extracting lnum_lines from raw_diff_output | lnum_lines_start_idx={lnum_lines_start_idx} raw_diff_line_idx={raw_diff_line_idx}"))?;
 
         for maybe_lnum_line in maybe_lnum_lines {
             if maybe_lnum_line.starts_with(PATH_LINE_PREFIX) {
@@ -196,8 +196,8 @@ mod tests {
         ],
         vec![("src/main.rs", 13), ("src/main.rs", 53), ("src/lib.rs", 23), ("src/lib.rs", 63)]
     )]
-    fn test_get_paths_with_lnums_success(#[case] input: Vec<String>, #[case] expected: Vec<(&str, usize)>) {
-        assert2::let_assert!(Ok(result) = get_paths_with_lnums(&input));
+    fn test_get_hunks_success(#[case] input: Vec<String>, #[case] expected: Vec<(&str, usize)>) {
+        assert2::let_assert!(Ok(result) = get_hunks(&input));
         pretty_assertions::assert_eq!(result, expected);
     }
 
@@ -220,8 +220,8 @@ mod tests {
         ],
         "error parsing lnum value"
     )]
-    fn test_get_paths_with_lnums_error(#[case] input: Vec<String>, #[case] expected_error_contains: &str) {
-        assert2::let_assert!(Err(err) = get_paths_with_lnums(&input));
+    fn test_get_hunks_error(#[case] input: Vec<String>, #[case] expected_error_contains: &str) {
+        assert2::let_assert!(Err(err) = get_hunks(&input));
         assert!(err.to_string().contains(expected_error_contains));
     }
 
