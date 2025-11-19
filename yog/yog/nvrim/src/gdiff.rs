@@ -41,7 +41,7 @@ fn get_hunks(_: ()) {
             ytil_nvim_oxi::api::notify_error(format!("error converting hunk lnum to i64 | lnum={lnum}"));
             return;
         };
-        all_items.push((path.clone(), lnum));
+        all_items.push((path.to_string(), lnum));
     }
 
     let quickfix = QuickfixConfig {

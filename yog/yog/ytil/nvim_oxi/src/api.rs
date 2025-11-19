@@ -219,6 +219,23 @@ where
     Ok(())
 }
 
+/// Opens the quickfix window with the provided file and line number entries.
+///
+/// Populates the quickfix list with the given entries and opens the quickfix window
+/// for user navigation. Each entry consists of a filename and line number.
+///
+/// # Arguments
+/// - `entries` Slice of tuples containing filename and line number (1-based).
+///
+/// # Returns
+/// `Ok(())` if the quickfix list is set and the window opens successfully.
+///
+/// # Errors
+/// - Fails if `setqflist` Neovim function call encounters an error.
+/// - Fails if `copen` command execution encounters an error.
+///
+/// # Rationale
+/// Uses Nvim's built-in quickfix functionality to avoid custom UI implementations.
 pub fn open_quickfix(entries: &[(&str, i64)]) -> color_eyre::Result<()> {
     let mut qflist = vec![];
     for (filename, lnum) in entries {

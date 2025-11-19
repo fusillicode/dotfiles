@@ -228,10 +228,7 @@ fn draw_diagnostics((severity, diags_count): (DiagnosticSeverity, u16)) -> Strin
         DiagnosticSeverity::Info => "Info",
         DiagnosticSeverity::Hint | DiagnosticSeverity::Other => "Hint",
     };
-    format!(
-        "%#DiagnosticStatusLine{hg_group_dyn_part}#{}{diags_count}",
-        severity.symbol()
-    )
+    format!("%#DiagnosticStatusLine{hg_group_dyn_part}#{diags_count}")
 }
 
 #[cfg(test)]
@@ -282,11 +279,7 @@ mod tests {
         };
         pretty_assertions::assert_eq!(
             statusline.draw(),
-            format!(
-                "%#DiagnosticStatusLineError#{}3 %#DiagnosticStatusLineInfo#{}1 %#StatusLine#foo %m %r%=%#StatusLine# 42:8",
-                DiagnosticSeverity::Error.symbol(),
-                DiagnosticSeverity::Info.symbol()
-            ),
+            "%#DiagnosticStatusLineError#3 %#DiagnosticStatusLineInfo#1 %#StatusLine#foo %m %r%=%#StatusLine# 42:8",
         );
     }
 
@@ -302,11 +295,7 @@ mod tests {
         };
         pretty_assertions::assert_eq!(
             statusline.draw(),
-            format!(
-                "%#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#{}3 %#DiagnosticStatusLineInfo#{}1%#StatusLine# 42:8",
-                DiagnosticSeverity::Error.symbol(),
-                DiagnosticSeverity::Info.symbol()
-            ),
+            "%#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#3 %#DiagnosticStatusLineInfo#1%#StatusLine# 42:8",
         );
     }
 
@@ -324,13 +313,7 @@ mod tests {
         };
         pretty_assertions::assert_eq!(
             statusline.draw(),
-            format!(
-                "%#DiagnosticStatusLineWarn#{}2 %#DiagnosticStatusLineHint#{}3 %#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#{}3 %#DiagnosticStatusLineInfo#{}1%#StatusLine# 42:8",
-                DiagnosticSeverity::Warn.symbol(),
-                DiagnosticSeverity::Hint.symbol(),
-                DiagnosticSeverity::Error.symbol(),
-                DiagnosticSeverity::Info.symbol()
-            ),
+            "%#DiagnosticStatusLineWarn#2 %#DiagnosticStatusLineHint#3 %#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#3 %#DiagnosticStatusLineInfo#1%#StatusLine# 42:8",
         );
     }
 
@@ -347,11 +330,7 @@ mod tests {
         };
         pretty_assertions::assert_eq!(
             statusline.draw(),
-            format!(
-                "%#DiagnosticStatusLineWarn#{}1 %#DiagnosticStatusLineHint#{}5 %#StatusLine#foo %m %r%=%#StatusLine# 42:8",
-                DiagnosticSeverity::Warn.symbol(),
-                DiagnosticSeverity::Hint.symbol()
-            ),
+            "%#DiagnosticStatusLineWarn#1 %#DiagnosticStatusLineHint#5 %#StatusLine#foo %m %r%=%#StatusLine# 42:8",
         );
     }
 
@@ -392,17 +371,7 @@ mod tests {
         // Affirm draw output matches severity ordering; equality macro takes (actual, expected).
         pretty_assertions::assert_eq!(
             statusline.draw(),
-            format!(
-                "%#DiagnosticStatusLineError#{}4 %#DiagnosticStatusLineWarn#{}3 %#DiagnosticStatusLineInfo#{}2 %#DiagnosticStatusLineHint#{}1 %#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#{}8 %#DiagnosticStatusLineWarn#{}7 %#DiagnosticStatusLineInfo#{}6 %#DiagnosticStatusLineHint#{}5%#StatusLine# 42:8",
-                DiagnosticSeverity::Error.symbol(),
-                DiagnosticSeverity::Warn.symbol(),
-                DiagnosticSeverity::Info.symbol(),
-                DiagnosticSeverity::Hint.symbol(),
-                DiagnosticSeverity::Error.symbol(),
-                DiagnosticSeverity::Warn.symbol(),
-                DiagnosticSeverity::Info.symbol(),
-                DiagnosticSeverity::Hint.symbol()
-            ),
+            "%#DiagnosticStatusLineError#4 %#DiagnosticStatusLineWarn#3 %#DiagnosticStatusLineInfo#2 %#DiagnosticStatusLineHint#1 %#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#8 %#DiagnosticStatusLineWarn#7 %#DiagnosticStatusLineInfo#6 %#DiagnosticStatusLineHint#5%#StatusLine# 42:8",
         );
     }
 
