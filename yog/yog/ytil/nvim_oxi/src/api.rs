@@ -5,6 +5,7 @@
 
 use core::fmt::Debug;
 use core::fmt::Display;
+use std::rc::Rc;
 
 use color_eyre::eyre::Context;
 use color_eyre::eyre::eyre;
@@ -143,6 +144,11 @@ pub fn inputlist<'a, I: Display>(prompt: &'a str, items: &'a [I]) -> color_eyre:
         .and_then(|idx| items.get(idx)))
 }
 
+pub struct QuickfixConfig {
+    pub trigger_value: String,
+    pub all_items: Vec<(String, i64)>,
+}
+
 /// Prompts the user to select an item from a list using Nvim's `vim.ui.select`.
 ///
 /// Wraps the Lua `vim.ui.select` function to provide an interactive selection prompt.
@@ -164,6 +170,7 @@ pub fn vim_ui_select<C, K, V>(
     choices: impl IntoIterator<Item = C> + Debug,
     opts: &(impl IntoIterator<Item = (K, V)> + Debug + Clone),
     callback: impl Fn(usize) + 'static,
+    quickfix: Option<QuickfixConfig>,
 ) -> color_eyre::Result<()>
 where
     C: Display,
@@ -181,9 +188,18 @@ where
         .create_table_from(opts.clone())
         .map_err(|err| eyre!("cannot create opts table | opts={opts:#?} error={err:#?}"))?;
 
+    let quickfix = quickfix.map(Rc::new);
+
     let vim_ui_select_callback = lua
-        .create_function(move |_: &mlua::Lua, (_, idx1): (Option<String>, Option<usize>)| {
-            if let Some(idx) = idx1.map(|idx1| idx1.saturating_sub(1)) {
+        .create_function(move |_: &mlua::Lua, (value, idx1): (Option<String>, Option<usize>)| {
+            if let Some(q) = &quickfix
+                && value.is_some_and(|x| x == q.trigger_value)
+            {
+                let items_refs: Vec<(&str, i64)> = q.all_items.iter().map(|(s, i)| (s.as_str(), *i)).collect();
+                let _ = open_quickfix(&items_refs).inspect_err(|err| {
+                    notify_error(format!("error opening quickfix | error={err:#?}"));
+                });
+            } else if let Some(idx) = idx1.map(|idx1| idx1.saturating_sub(1)) {
                 callback(idx);
             }
             Ok(())
@@ -203,12 +219,12 @@ where
     Ok(())
 }
 
-pub fn open_quickfix(entries: &[(&str, usize)]) -> color_eyre::Result<()> {
+pub fn open_quickfix(entries: &[(&str, i64)]) -> color_eyre::Result<()> {
     let mut qflist = vec![];
     for (filename, lnum) in entries {
         qflist.push(dict! {
             "filename": filename.to_string(),
-            "lnum": i64::try_from(*lnum)?
+            "lnum": *lnum
         });
     }
     nvim_oxi::api::call_function::<_, i64>("setqflist", (Array::from_iter(qflist),))

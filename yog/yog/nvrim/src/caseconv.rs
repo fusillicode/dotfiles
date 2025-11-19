@@ -64,6 +64,7 @@ fn convert_selection(_: ()) {
         cases.iter().map(DisplayableCase),
         &[("prompt", "Convert selection to case ")],
         callback,
+        None,
     ) {
         ytil_nvim_oxi::api::notify_error(format!("error converting selection to case | error={err:#?}"));
     }

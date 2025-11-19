@@ -73,6 +73,7 @@ fn create_scratch_file(_: ()) {
         scratches.iter().map(|scratch| scratch.display_name.as_str()),
         &[("prompt", "Create scratch file ")],
         callback,
+        None,
     ) {
         ytil_nvim_oxi::api::notify_error(format!("error creating scratch file | error={err:#?}"));
     }

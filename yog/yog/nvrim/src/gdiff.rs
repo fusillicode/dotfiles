@@ -2,8 +2,7 @@
 //! of changed hunks, and presents a selection UI to jump to specific diff locations in buffers.
 
 use nvim_oxi::Dictionary;
-
-const ALL_QUICKFIX_CHOICE: &str = "All to quickfix";
+use ytil_nvim_oxi::api::QuickfixConfig;
 
 /// [`Dictionary`] of git diff helpers.
 pub fn dict() -> Dictionary {
@@ -36,7 +35,21 @@ fn get_hunks(_: ()) {
         return;
     };
 
-    let mut displayable_hunks = vec![ALL_QUICKFIX_CHOICE.to_owned()];
+    let mut all_items = vec![];
+    for (path, lnum) in hunks.iter() {
+        let Ok(lnum) = i64::try_from(*lnum) else {
+            ytil_nvim_oxi::api::notify_error(format!("error converting hunk lnum to i64 | lnum={lnum}"));
+            return;
+        };
+        all_items.push((path.clone(), lnum));
+    }
+
+    let quickfix = QuickfixConfig {
+        trigger_value: "All to quickfix".into(),
+        all_items,
+    };
+
+    let mut displayable_hunks = vec![quickfix.trigger_value.to_owned()];
     displayable_hunks.extend(
         hunks
             .iter()
@@ -45,21 +58,7 @@ fn get_hunks(_: ()) {
     );
 
     let callback = {
-        let displayable_hunks = displayable_hunks.clone();
         move |choice_idx: usize| {
-            if displayable_hunks
-                .get(choice_idx)
-                .is_some_and(|s| s == ALL_QUICKFIX_CHOICE)
-            {
-                let all_hunks = hunks
-                    .iter()
-                    .map(|(path, lnum)| (path.as_str(), *lnum))
-                    .collect::<Vec<_>>();
-                let _ = ytil_nvim_oxi::api::open_quickfix(&all_hunks).inspect_err(|err| {
-                    ytil_nvim_oxi::api::notify_error(format!(" | error={err:#?}"));
-                });
-                return;
-            }
             let Some((path, lnum)) = hunks.get(choice_idx) else {
                 return;
             };
@@ -71,7 +70,12 @@ fn get_hunks(_: ()) {
         }
     };
 
-    if let Err(err) = ytil_nvim_oxi::api::vim_ui_select(displayable_hunks, &[("prompt", "Git diff hunks ")], callback) {
+    if let Err(err) = ytil_nvim_oxi::api::vim_ui_select(
+        displayable_hunks,
+        &[("prompt", "Git diff hunks ")],
+        callback,
+        Some(quickfix),
+    ) {
         ytil_nvim_oxi::api::notify_error(format!("error opening selected path | error={err:#?}"));
     }
 }

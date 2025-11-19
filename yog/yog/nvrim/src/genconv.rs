@@ -77,7 +77,7 @@ fn convert_selection(_: ()) {
         }
     };
 
-    if let Err(err) = ytil_nvim_oxi::api::vim_ui_select(opts, &[("prompt", "Select conversion ")], callback) {
+    if let Err(err) = ytil_nvim_oxi::api::vim_ui_select(opts, &[("prompt", "Select conversion ")], callback, None) {
         ytil_nvim_oxi::api::notify_error(format!("error converting selection | error={err:#?}"));
     }
 }
