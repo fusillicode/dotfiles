@@ -191,18 +191,27 @@ where
     let quickfix = maybe_quickfix.map(Rc::new);
 
     let vim_ui_select_callback = lua
-        .create_function(move |_: &mlua::Lua, (value, idx1): (Option<String>, Option<usize>)| {
-            if let Some(quickfix) = &quickfix
-                && value.is_some_and(|x| x == quickfix.trigger_value)
-            {
-                let _ = open_quickfix(quickfix.all_items.iter().map(|(s, i)| (s.as_str(), *i))).inspect_err(|err| {
-                    notify_error(format!("error opening quickfix | error={err:#?}"));
-                });
-            } else if let Some(idx) = idx1.map(|idx1| idx1.saturating_sub(1)) {
-                callback(idx);
-            }
-            Ok(())
-        })
+        .create_function(
+            move |_: &mlua::Lua, (selected_value, idx): (Option<String>, Option<usize>)| {
+                if let Some(quickfix) = &quickfix
+                    && selected_value.is_some_and(|x| x == quickfix.trigger_value)
+                {
+                    let _ =
+                        open_quickfix(quickfix.all_items.iter().map(|(s, i)| (s.as_str(), *i))).inspect_err(|err| {
+                            notify_error(format!("error opening quickfix | error={err:#?}"));
+                        });
+                    return Ok(());
+                }
+                if let Some(idx) = idx {
+                    // The index passed to the callback is adjusted to take into account:
+                    // - The 1-based indexing of the pickers
+                    // - The additional quickfix synthetic entry in the picker
+                    let adjusted_idx = if quickfix.is_some() { 2 } else { 1 };
+                    callback(idx.saturating_sub(adjusted_idx));
+                }
+                Ok(())
+            },
+        )
         .map_err(|err| {
             eyre!("cannot create vim.ui.select callback | choices={choices:#?} opts={opts_table:#?} error={err:#?}")
         })?;

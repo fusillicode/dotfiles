@@ -6,7 +6,7 @@ use ytil_cmd::CmdExt as _;
 
 const PATH_LINE_PREFIX: &str = "diff --git ";
 
-/// Retrieves the current `git diff` raw output as a [`Vec<String>`].
+/// Retrieves the current `git diff` raw output with `-U0` for fine-grained diffs as a [`Vec<String>`].
 ///
 /// # Returns
 /// A [`Vec<String>`] where each line corresponds to a line of `git diff` raw output.
@@ -14,8 +14,11 @@ const PATH_LINE_PREFIX: &str = "diff --git ";
 /// # Errors
 /// - If the `git diff` command fails to execute or returns a non-zero exit code.
 /// - If extracting the output from the command fails.
+///
+/// # Rationale
+/// Uses `-U0` to produce the most fine-grained line diffs.
 pub fn get_raw() -> color_eyre::Result<Vec<String>> {
-    let output = Command::new("git").arg("diff").exec()?;
+    let output = Command::new("git").args(["diff", "-U0"]).exec()?;
 
     Ok(ytil_cmd::extract_success_output(&output)?
         .lines()
@@ -71,12 +74,11 @@ pub fn get_hunks(raw_diff_output: &[String]) -> color_eyre::Result<Vec<(&str, us
             if maybe_lnum_line.starts_with(PATH_LINE_PREFIX) {
                 break;
             }
-            let Some(lnum_line) = maybe_lnum_line.strip_prefix("@@ ") else {
+            if !maybe_lnum_line.starts_with("@@ ") {
                 continue;
-            };
+            }
 
-            // Adjusting `git diff` lnum to match what is displayed by Neovim.
-            let lnum = extract_lnum(lnum_line)?.saturating_add(3);
+            let lnum = extract_new_lnum(maybe_lnum_line)?;
 
             out.push((path, lnum));
         }
@@ -88,36 +90,35 @@ pub fn get_hunks(raw_diff_output: &[String]) -> color_eyre::Result<Vec<(&str, us
 /// Extracts the line number from a `git diff` hunk header line.
 ///
 /// # Arguments
-/// - `lnum_line` The hunk header line (e.g., "@@ -42,7 +42,7 @@").
+/// - `lnum_line` The hunk header line (e.g., "@@ -42,7 +42,7 @@", "@@ -42,7 42,7 @@", "@@ -42,7 +42 @@").
 ///
 /// # Returns
 /// The line number as a `usize` (e.g., 42).
 ///
 /// # Errors
-/// - If the line number cannot be extracted between " +" and ",".
-/// - If the extracted value cannot be parsed as a valid [`usize`].
-fn extract_lnum(lnum_line: &str) -> color_eyre::Result<usize> {
-    let lnum_value = find_between(lnum_line, " +", ",")
-        .ok_or_else(|| eyre!("error extracting lnum from lnum_line | lnum_line={lnum_line:?}"))?;
-    lnum_value
-        .parse()
-        .wrap_err_with(|| eyre!("error parsing lnum value as usize | lnum_value={lnum_value:?}"))
-}
+/// - If the hunk header line lacks sufficient space-separated parts.
+/// - If the new line number part is malformed (missing comma).
+/// - If the extracted line number value cannot be parsed as a valid [`usize`].
+fn extract_new_lnum(lnum_line: &str) -> color_eyre::Result<usize> {
+    let mut parts = lnum_line.split(" ");
+    parts.next();
+    parts.next();
 
-/// Extracts the substring between the first occurrence of `start` and the first `end` after it.
-///
-/// # Arguments
-/// - `haystack` The string to search in.
-/// - `start` The starting delimiter.
-/// - `end` The ending delimiter.
-///
-/// # Returns
-/// The substring between `start` and `end`, or `None` if either delimiter is not found or `end` precedes `start`.
-fn find_between<'a>(haystack: &'a str, start: &str, end: &str) -> Option<&'a str> {
-    let start_idx = haystack.find(start)?.saturating_add(start.len());
-    let rest = haystack.get(start_idx..)?;
-    let end_idx = rest.find(end)?;
-    rest.get(..end_idx)
+    let new_lnum = parts
+        .next()
+        .ok_or_else(|| eyre!("error missing new_lnum from lnum_line after split by space | lnum_line={lnum_line:?}"))?;
+
+    let mut lnum_parts = new_lnum.split(",");
+
+    lnum_parts
+        .next()
+        .map(|s| s.trim_start_matches("+"))
+        .ok_or_else(|| eyre!("error malformed new_lnum in lnum_line | lnum_line={lnum_line:?}"))
+        .and_then(|lnum_value| {
+            lnum_value.parse::<usize>().wrap_err_with(|| {
+                eyre!("error parsing new_lnum value as usize | lnum_value={lnum_value:?}, lnum_line={lnum_line:?}")
+            })
+        })
 }
 
 #[cfg(test)]
@@ -135,7 +136,7 @@ mod tests {
             "+++ b/src/main.rs".to_string(),
             "@@ -42,7 +42,7 @@".to_string(),
         ],
-        vec![("src/main.rs", 45)]
+        vec![("src/main.rs", 42)]
     )]
     #[case::multiple_files(
         vec![
@@ -150,7 +151,7 @@ mod tests {
             "+++ b/src/lib.rs".to_string(),
             "@@ -20,3 +20,3 @@".to_string(),
         ],
-        vec![("src/main.rs", 13), ("src/lib.rs", 23)]
+        vec![("src/main.rs", 10), ("src/lib.rs", 20)]
     )]
     #[case::multiple_hunks_same_file(
         vec![
@@ -161,7 +162,7 @@ mod tests {
             "@@ -10,5 +10,5 @@".to_string(),
             "@@ -50,2 +50,2 @@".to_string(),
         ],
-        vec![("src/main.rs", 13), ("src/main.rs", 53)]
+        vec![("src/main.rs", 10), ("src/main.rs", 50)]
     )]
     #[case::empty_input(vec![], vec![])]
     #[case::no_hunks(
@@ -177,7 +178,7 @@ mod tests {
             "+++ b/src/main.rs".to_string(),
             "@@ -42,7 +42,7 @@".to_string(),
         ],
-        vec![("src/main.rs", 45)]
+        vec![("src/main.rs", 42)]
     )]
     #[case::multiple_files_with_multiple_hunks(
         vec![
@@ -194,7 +195,7 @@ mod tests {
             "@@ -20,3 +20,3 @@".to_string(),
             "@@ -60,1 +60,1 @@".to_string(),
         ],
-        vec![("src/main.rs", 13), ("src/main.rs", 53), ("src/lib.rs", 23), ("src/lib.rs", 63)]
+        vec![("src/main.rs", 10), ("src/main.rs", 50), ("src/lib.rs", 20), ("src/lib.rs", 60)]
     )]
     fn test_get_hunks_success(#[case] input: Vec<String>, #[case] expected: Vec<(&str, usize)>) {
         assert2::let_assert!(Ok(result) = get_hunks(&input));
@@ -206,57 +207,33 @@ mod tests {
         vec!["diff --git a/src/main.rs".to_string()],
         "error missing path prefix"
     )]
-    #[case::missing_comma_in_hunk(
-        vec![
-            "diff --git a/src/main.rs b/src/main.rs".to_string(),
-            "@@ -42 +42 @@".to_string(),
-        ],
-        "error extracting lnum"
-    )]
     #[case::invalid_lnum(
         vec![
             "diff --git a/src/main.rs b/src/main.rs".to_string(),
             "@@ -abc,5 +abc,5 @@".to_string(),
         ],
-        "error parsing lnum value"
+        "error parsing new_lnum value"
     )]
     fn test_get_hunks_error(#[case] input: Vec<String>, #[case] expected_error_contains: &str) {
         assert2::let_assert!(Err(err) = get_hunks(&input));
         assert!(err.to_string().contains(expected_error_contains));
     }
 
-    #[test]
-    fn extract_lnum_when_valid_lnum_line_returns_correct_usize() {
-        let input = "@@ -42,7 +42,7 @@";
-        assert2::let_assert!(Ok(result) = extract_lnum(input));
-        pretty_assertions::assert_eq!(result, 42);
-    }
-
     #[rstest]
-    #[case::missing_plus_prefix("@@ -42,7 42,7 @@", "error extracting lnum")]
-    #[case::missing_comma_suffix("@@ -42,7 +42 7 @@", "error extracting lnum")]
-    #[case::lnum_value_not_numeric("@@ -42,7 +abc,7 @@", "error parsing lnum value")]
-    fn extract_lnum_error_cases(#[case] input: &str, #[case] expected_error_contains: &str) {
-        assert2::let_assert!(Err(err) = extract_lnum(input));
-        assert!(err.to_string().contains(expected_error_contains));
-    }
-
-    #[rstest]
-    #[case::normal_case("prefixSTARTcontentENDsuffix", "START", "END", Some("content"))]
-    #[case::empty_between("STARTEND", "START", "END", Some(""))]
-    #[case::start_at_beginning("STARTcontentEND", "START", "END", Some("content"))]
-    #[case::end_at_end("prefixSTARTcontentEND", "START", "END", Some("content"))]
-    #[case::no_start("no start here", "START", "END", None)]
-    #[case::start_no_end("STARTcontent no end", "START", "END", None)]
-    #[case::end_before_start("ENDbeforeSTART", "START", "END", None)]
-    #[case::multiple_occurrences("STARTfirstEND STARTsecondEND", "START", "END", Some("first"))]
-    fn find_between_cases(
-        #[case] haystack: &str,
-        #[case] start: &str,
-        #[case] end: &str,
-        #[case] expected: Option<&str>,
-    ) {
-        let result = find_between(haystack, start, end);
+    #[case::missing_plus_prefix("@@ -42,7 +42,7 @@", 42)]
+    #[case::missing_plus_prefix("@@ -42,7 42,7 @@", 42)]
+    #[case::missing_plus_prefix("@@ -42,7 +42 @@", 42)]
+    #[case::missing_plus_prefix("@@ -42,7 42 @@", 42)]
+    fn extract_new_lnum_when_valid_lnum_line_returns_correct_usize(#[case] input: &str, #[case] expected: usize) {
+        assert2::let_assert!(Ok(result) = extract_new_lnum(input));
         pretty_assertions::assert_eq!(result, expected);
+    }
+
+    #[rstest]
+    #[case::missing_new_lnum_part("@@ -42,7", "error missing new_lnum from lnum_line after split by space")]
+    #[case::lnum_value_not_numeric("@@ -42,7 +abc,7 @@", "error parsing new_lnum value as usize")]
+    fn extract_new_lnum_error_cases(#[case] input: &str, #[case] expected_error_contains: &str) {
+        assert2::let_assert!(Err(err) = extract_new_lnum(input));
+        assert!(err.to_string().contains(expected_error_contains));
     }
 }
