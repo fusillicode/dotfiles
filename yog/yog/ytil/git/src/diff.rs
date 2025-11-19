@@ -78,7 +78,7 @@ pub fn get_hunks(raw_diff_output: &[String]) -> color_eyre::Result<Vec<(&str, us
                 continue;
             }
 
-            let lnum = extract_new_lnum(maybe_lnum_line)?;
+            let lnum = extract_new_lnum_value(maybe_lnum_line)?;
 
             out.push((path, lnum));
         }
@@ -97,28 +97,26 @@ pub fn get_hunks(raw_diff_output: &[String]) -> color_eyre::Result<Vec<(&str, us
 ///
 /// # Errors
 /// - If the hunk header line lacks sufficient space-separated parts.
-/// - If the new line number part is malformed (missing comma).
+/// - If the newline number part is malformed (missing comma).
 /// - If the extracted line number value cannot be parsed as a valid [`usize`].
-fn extract_new_lnum(lnum_line: &str) -> color_eyre::Result<usize> {
-    let mut parts = lnum_line.split(' ');
-    parts.next();
-    parts.next();
-
-    let new_lnum = parts
-        .next()
+fn extract_new_lnum_value(lnum_line: &str) -> color_eyre::Result<usize> {
+    let new_lnum = lnum_line
+        .split(' ')
+        .nth(2)
         .ok_or_else(|| eyre!("error missing new_lnum from lnum_line after split by space | lnum_line={lnum_line:?}"))?;
 
-    let mut lnum_parts = new_lnum.split(',');
-
-    lnum_parts
+    let new_lnum_value = new_lnum
+        .split(',')
         .next()
-        .map(|s| s.trim_start_matches('+'))
-        .ok_or_else(|| eyre!("error malformed new_lnum in lnum_line | lnum_line={lnum_line:?}"))
-        .and_then(|lnum_value| {
-            lnum_value.parse::<usize>().wrap_err_with(|| {
-                eyre!("error parsing new_lnum value as usize | lnum_value={lnum_value:?}, lnum_line={lnum_line:?}")
-            })
+        .and_then(|s| {
+            let trimmed = s.trim_start_matches('+');
+            if trimmed.is_empty() { None } else { Some(trimmed) }
         })
+        .ok_or_else(|| eyre!("error malformed new_lnum in lnum_line | lnum_line={lnum_line:?}"))?;
+
+    new_lnum_value.parse::<usize>().wrap_err_with(|| {
+        eyre!("error parsing new_lnum value as usize | lnum_value={new_lnum_value:?}, lnum_line={lnum_line:?}")
+    })
 }
 
 #[cfg(test)]
@@ -220,20 +218,21 @@ mod tests {
     }
 
     #[rstest]
-    #[case::missing_plus_prefix("@@ -42,7 +42,7 @@", 42)]
-    #[case::missing_plus_prefix("@@ -42,7 42,7 @@", 42)]
-    #[case::missing_plus_prefix("@@ -42,7 +42 @@", 42)]
-    #[case::missing_plus_prefix("@@ -42,7 42 @@", 42)]
-    fn extract_new_lnum_when_valid_lnum_line_returns_correct_usize(#[case] input: &str, #[case] expected: usize) {
-        assert2::let_assert!(Ok(result) = extract_new_lnum(input));
+    #[case::standard("@@ -42,7 +42,7 @@", 42)]
+    #[case::without_plus("@@ -42,7 42,7 @@", 42)]
+    #[case::without_comma("@@ -42,7 +42 @@", 42)]
+    #[case::without_plus_or_comma("@@ -42,7 42 @@", 42)]
+    fn extract_new_lnum_value_when_valid_lnum_line_returns_correct_usize(#[case] input: &str, #[case] expected: usize) {
+        assert2::let_assert!(Ok(result) = extract_new_lnum_value(input));
         pretty_assertions::assert_eq!(result, expected);
     }
 
     #[rstest]
     #[case::missing_new_lnum_part("@@ -42,7", "error missing new_lnum from lnum_line after split by space")]
+    #[case::malformed_lnum("@@ -42,7 +,7 @@", "error malformed new_lnum in lnum_line")]
     #[case::lnum_value_not_numeric("@@ -42,7 +abc,7 @@", "error parsing new_lnum value as usize")]
-    fn extract_new_lnum_error_cases(#[case] input: &str, #[case] expected_error_contains: &str) {
-        assert2::let_assert!(Err(err) = extract_new_lnum(input));
+    fn extract_new_lnum_value_error_cases(#[case] input: &str, #[case] expected_error_contains: &str) {
+        assert2::let_assert!(Err(err) = extract_new_lnum_value(input));
         assert!(err.to_string().contains(expected_error_contains));
     }
 }
