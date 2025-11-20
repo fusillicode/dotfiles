@@ -8,7 +8,7 @@ use nvim_oxi::conversion::ToObject;
 ///
 /// Wraps [`nvim_oxi::api::set_var`].
 ///
-/// Errors are reported to Nvim via [`notify_error`].
+/// Errors are reported to Nvim via [`crate::notify::error`].
 pub fn set_g_var<V: ToObject + Debug>(name: &str, value: V) {
     let msg = format!("error setting global var | name={name} value={value:#?}");
     if let Err(err) = nvim_oxi::api::set_var(name, value) {

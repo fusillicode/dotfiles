@@ -306,12 +306,12 @@ impl CursorPosition {
 /// Returns `Ok(())` on success, or an error if the file cannot be opened or the cursor cannot be set.
 ///
 /// # Errors
-/// - If execution of "edit" command via [`crate::api::exec_vim_cmd`] fails.
+/// - If execution of "edit" command via [`crate::common::exec_vim_cmd`] fails.
 /// - If setting the cursor position via [`Window::set_cursor`] fails.
 ///
 /// # Rationale
 /// Executes two Neovim commands, one to open the file and one to set the cursor because it doesn't
-/// seems possible to execute a command line "edit +call\n cursor(<LNUM>, <COL>)".
+/// seems possible to execute a command line "edit +call\n cursor(LNUM, COL)".
 pub fn open<T: AsRef<Path>>(path: T, line: Option<usize>, col: Option<usize>) -> color_eyre::Result<()> {
     crate::common::exec_vim_cmd("edit", Some(&[path.as_ref().display().to_string()]))?;
     Window::current().set_cursor(line.unwrap_or_default(), col.unwrap_or_default())?;
