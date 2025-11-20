@@ -161,6 +161,7 @@ requotes
 requoting
 reselects
 resolvers
+retryable
 riesgo
 rs
 scrolloff
