@@ -2,7 +2,7 @@
 //! of changed hunks, and presents a selection UI to jump to specific diff locations in buffers.
 
 use nvim_oxi::Dictionary;
-use ytil_nvim_oxi::quickfix::QuickfixConfig;
+use ytil_nvim_oxi::vim_ui_select::QuickfixConfig;
 
 /// [`Dictionary`] of git diff helpers.
 pub fn dict() -> Dictionary {

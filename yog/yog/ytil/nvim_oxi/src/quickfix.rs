@@ -7,11 +7,6 @@ use nvim_oxi::api::types::CmdInfosBuilder;
 
 use crate::dict;
 
-pub struct QuickfixConfig {
-    pub trigger_value: String,
-    pub all_items: Vec<(String, i64)>,
-}
-
 /// Opens the quickfix window with the provided file and line number entries.
 ///
 /// Populates the quickfix list with the given entries and opens the quickfix window

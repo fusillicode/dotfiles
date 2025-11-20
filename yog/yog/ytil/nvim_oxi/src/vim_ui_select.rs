@@ -7,7 +7,17 @@ use nvim_oxi::mlua;
 use nvim_oxi::mlua::IntoLua;
 use nvim_oxi::mlua::ObjectLike;
 
-use crate::quickfix::QuickfixConfig;
+/// Configuration for quickfix list population and display.
+///
+/// Holds the trigger value that initiated the quickfix operation and the complete
+/// set of items to populate the quickfix list, where each item consists of a
+/// filename and its corresponding line number.
+pub struct QuickfixConfig {
+    /// The value that triggered the quickfix operation.
+    pub trigger_value: String,
+    /// List of all items to populate the quickfix list, each as filename and line number.
+    pub all_items: Vec<(String, i64)>,
+}
 
 /// Prompts the user to select an item from a list using Nvim's `vim.ui.select`.
 ///
