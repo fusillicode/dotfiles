@@ -77,9 +77,10 @@ fn autocomplete_git_branches_and_switch(branches: &[Branch]) -> color_eyre::Resu
     };
     ytil_git::branch::remove_redundant_remotes(&mut branches);
 
-    let branch = ytil_tui::minimal_select(branches.into_iter().map(RenderableBranch).collect())?;
-    let branch_name = branch.as_ref().map_or("-", |b| b.name());
-    ytil_git::branch::switch(branch_name).inspect(|()| report_branch_switch(branch_name))?;
+    let Some(branch) = ytil_tui::minimal_select(branches.into_iter().map(RenderableBranch).collect())? else {
+        return Ok(());
+    };
+    ytil_git::branch::switch(branch.name()).inspect(|()| report_branch_switch(branch.name()))?;
 
     Ok(())
 }
