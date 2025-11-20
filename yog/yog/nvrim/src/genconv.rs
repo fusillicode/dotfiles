@@ -10,7 +10,6 @@ use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use chrono::NaiveTime;
 use color_eyre::eyre::Context;
-use color_eyre::eyre::Report;
 use color_eyre::eyre::eyre;
 use nvim_oxi::Dictionary;
 use strum::EnumIter;
@@ -29,21 +28,20 @@ pub fn dict() -> Dictionary {
 
 /// Converts the current visual selection using a user-chosen conversion option.
 ///
-/// Prompts the user (via [`ytil_nvim_oxi::api::vim_ui_select`]) to select a conversion
+/// Prompts the user (via [`ytil_nvim_oxi::vim_ui_select::open`]) to select a conversion
 /// option, then applies the conversion to the selected text in place.
 ///
 /// Returns early if:
 /// - No active Visual selection is detected.
 /// - The user cancels the prompt.
-/// - The conversion fails (an error is reported via [`ytil_nvim_oxi::api::notify_error`]).
-/// - Writing the converted text back to the buffer fails (an error is reported via
-///   [`ytil_nvim_oxi::api::notify_error`]).
+/// - The conversion fails (an error is reported via [`ytil_nvim_oxi::notify::error`]).
+/// - Writing the converted text back to the buffer fails (an error is reported via [`ytil_nvim_oxi::notify::error`]).
 ///
 /// # Returns
 /// Returns `()` upon successful completion.
 ///
 /// # Errors
-/// Errors from [`ytil_nvim_oxi::api::vim_ui_select`] are reported via [`ytil_nvim_oxi::api::notify_error`]
+/// Errors from [`ytil_nvim_oxi::vim_ui_select::open`] are reported via [`ytil_nvim_oxi::notify::error`]
 /// using the direct display representation of [`color_eyre::Report`].
 /// Conversion errors are also reported similarly.
 ///
@@ -59,29 +57,27 @@ fn convert_selection(_: ()) {
     let callback = {
         let opts = opts.clone();
         move |choice_idx| {
-            opts.get(choice_idx).map(|opt| {
-                let Ok(transformed_line) = opt
+            let Some(opt) = opts.get(choice_idx) else { return };
+            let Ok(transformed_line) = opt
                     // Conversion should work only with 1 single line but maybe multiline could be
                     // supported at some point.
                     .convert(&selection.lines().to_vec().join("\n"))
-                    .inspect_err(|error| {
-                        ytil_nvim_oxi::api::notify_error(format!(
-                            "error setting lines of buffer | start={:#?} end={:#?} error={error:#?}",
+                    .inspect_err(|err| {
+                        ytil_nvim_oxi::notify::error(format!(
+                            "error setting lines of buffer | start={:#?} end={:#?} error={err:#?}",
                             selection.start(),
                             selection.end()
                         ));
                     })
-                else {
-                    return Ok::<(), Report>(());
-                };
-                ytil_nvim_oxi::buffer::replace_text_and_notify_if_error(&selection, vec![transformed_line]);
-                Ok(())
-            });
+            else {
+                return;
+            };
+            ytil_nvim_oxi::buffer::replace_text_and_notify_if_error(&selection, vec![transformed_line]);
         }
     };
 
-    if let Err(error) = ytil_nvim_oxi::api::vim_ui_select(opts, &[("prompt", "Select conversion ")], callback) {
-        ytil_nvim_oxi::api::notify_error(format!("error converting selection | error={error:#?}"));
+    if let Err(err) = ytil_nvim_oxi::vim_ui_select::open(opts, &[("prompt", "Select conversion ")], callback, None) {
+        ytil_nvim_oxi::notify::error(format!("error converting selection | error={err:#?}"));
     }
 }
 
@@ -209,8 +205,8 @@ mod tests {
     #[case::invalid_blue("255,0,def", "cannot parse str as u8 color code | str=\"def\"")]
     fn rgb_to_hex_when_invalid_input_returns_error(#[case] input: &str, #[case] expected_error: &str) {
         let result = rgb_to_hex(input);
-        assert2::let_assert!(Err(error) = result);
-        pretty_assertions::assert_eq!(error.to_string(), expected_error);
+        assert2::let_assert!(Err(err) = result);
+        pretty_assertions::assert_eq!(err.to_string(), expected_error);
     }
 
     #[rstest]
@@ -234,9 +230,9 @@ mod tests {
 
     #[test]
     fn date_time_str_to_chrono_parse_from_str_when_invalid_input_returns_error() {
-        assert2::let_assert!(Err(error) = date_time_str_to_chrono_parse_from_str("invalid"));
+        assert2::let_assert!(Err(err) = date_time_str_to_chrono_parse_from_str("invalid"));
         pretty_assertions::assert_eq!(
-            error.to_string(),
+            err.to_string(),
             "cannot get chrono parse_from_str for supplied input | input=\"invalid\""
         );
     }
@@ -249,7 +245,7 @@ mod tests {
         #[case] expected_error: &str,
     ) {
         let result = unix_timestamp_to_iso_8601_date_time(input);
-        assert2::let_assert!(Err(error) = result);
-        pretty_assertions::assert_eq!(error.to_string(), expected_error);
+        assert2::let_assert!(Err(err) = result);
+        pretty_assertions::assert_eq!(err.to_string(), expected_error);
     }
 }

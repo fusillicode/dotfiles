@@ -4,6 +4,7 @@
 //! consistent conversions at call sites.
 
 use std::ops::RangeInclusive;
+use std::path::Path;
 use std::path::PathBuf;
 
 use color_eyre::eyre::eyre;
@@ -208,9 +209,9 @@ impl BufferExt for Buffer {
         let start_col = cur_pos.col;
         let end_col = cur_pos.col;
 
-        if let Err(error) = self.set_text(line_range.clone(), start_col, end_col, vec![text]) {
-            crate::api::notify_error(format!(
-                "error setting text in buffer | text={text:?} buffer={self:?} line_range={line_range:?} start_col={start_col:?} end_col={end_col:?} error={error:#?}",
+        if let Err(err) = self.set_text(line_range.clone(), start_col, end_col, vec![text]) {
+            crate::notify::error(format!(
+                "error setting text in buffer | text={text:?} buffer={self:?} line_range={line_range:?} start_col={start_col:?} end_col={end_col:?} error={err:#?}",
             ));
         }
     }
@@ -263,9 +264,9 @@ impl CursorPosition {
         cur_win
             .get_cursor()
             .map(|(row, col)| Self { row, col })
-            .inspect_err(|error| {
-                crate::api::notify_error(format!(
-                    "error getting cursor from current window | window={cur_win:?} error={error:#?}"
+            .inspect_err(|err| {
+                crate::notify::error(format!(
+                    "error getting cursor from current window | window={cur_win:?} error={err:#?}"
                 ));
             })
             .ok()
@@ -294,11 +295,34 @@ impl CursorPosition {
     }
 }
 
+/// Opens a file in the editor and positions the cursor at the specified line and column.
+///
+/// # Arguments
+/// - `path` The path to the file to open.
+/// - `line` The line number to position the cursor at. Defaults to 0 if `None`.
+/// - `col` The column number to position the cursor at. Defaults to 0 if `None`.
+///
+/// # Returns
+/// Returns `Ok(())` on success, or an error if the file cannot be opened or the cursor cannot be set.
+///
+/// # Errors
+/// - If execution of "edit" command via [`crate::api::exec_vim_cmd`] fails.
+/// - If setting the cursor position via [`Window::set_cursor`] fails.
+///
+/// # Rationale
+/// Executes two Neovim commands, one to open the file and one to set the cursor because it doesn't
+/// seems possible to execute a command line "edit +call\n cursor(<LNUM>, <COL>)".
+pub fn open<T: AsRef<Path>>(path: T, line: Option<usize>, col: Option<usize>) -> color_eyre::Result<()> {
+    crate::common::exec_vim_cmd("edit", Some(&[path.as_ref().display().to_string()]))?;
+    Window::current().set_cursor(line.unwrap_or_default(), col.unwrap_or_default())?;
+    Ok(())
+}
+
 /// Replaces the text in the specified `selection` with the `replacement` lines.
 ///
 /// Calls Nvim's `set_text` with the selection's line range and column positions,
 /// replacing the selected content with the provided lines.
-/// Errors are reported via [`crate::api::notify_error`] with details about the selection
+/// Errors are reported via [`crate::notify::error`] with details about the selection
 /// boundaries and error.
 ///
 /// # Arguments
@@ -309,14 +333,14 @@ where
     Lines: IntoIterator<Item = Line>,
     Line: Into<nvim_oxi::String>,
 {
-    if let Err(error) = Buffer::from(selection.buf_id()).set_text(
+    if let Err(err) = Buffer::from(selection.buf_id()).set_text(
         selection.line_range(),
         selection.start().col,
         selection.end().col,
         replacement,
     ) {
-        crate::api::notify_error(format!(
-            "error setting lines of buffer | start={:#?} end={:#?} error={error:#?}",
+        crate::notify::error(format!(
+            "error setting lines of buffer | start={:#?} end={:#?} error={err:#?}",
             selection.start(),
             selection.end()
         ));
@@ -338,16 +362,16 @@ where
 /// Errors (e.g., cannot get cwd or buffer name) are notified to Nvim but not propagated.
 pub fn get_relative_buffer_path(cur_buf: &Buffer) -> Option<PathBuf> {
     let cwd = nvim_oxi::api::call_function::<_, String>("getcwd", Array::new())
-        .inspect_err(|error| {
-            crate::api::notify_error(format!("error getting cwd | error={error:#?}"));
+        .inspect_err(|err| {
+            crate::notify::error(format!("error getting cwd | error={err:#?}"));
         })
         .ok()?;
     let cur_buf_path = {
         let tmp = cur_buf
             .get_name()
-            .inspect_err(|error| {
-                crate::api::notify_error(format!(
-                    "error getting path of current buffer | buffer={cur_buf:#?} error={error:#?}"
+            .inspect_err(|err| {
+                crate::notify::error(format!(
+                    "error getting path of current buffer | buffer={cur_buf:#?} error={err:#?}"
                 ));
             })
             .ok()?;
@@ -471,9 +495,9 @@ mod tests {
 
         let result = buffer.get_text_between((0, 10), (0, 15), TextBoundary::Exact);
 
-        assert2::let_assert!(Err(error) = result);
+        assert2::let_assert!(Err(err) = result);
         pretty_assertions::assert_eq!(
-            error.to_string(),
+            err.to_string(),
             r#"cannot extract substring from line | line="hello" idx=0 start_idx=10 end_idx=5"#
         );
     }
