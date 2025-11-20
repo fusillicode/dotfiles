@@ -1,6 +1,6 @@
 local M = {}
 
-local statuscolumn = require('nvrim').statuscolumn
+local statuscolumn = require('nvrim').plugins.statuscolumn
 
 function M.draw(cur_lnum)
   local line_signs = vim.api.nvim_buf_get_extmarks(
