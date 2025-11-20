@@ -11,7 +11,7 @@ use chrono::Local;
 use color_eyre::eyre::eyre;
 use nvim_oxi::Dictionary;
 
-const SCRATCHES_PATH_PARTS: &[&str] = &["yog", "nvrim", "src", "attempt"];
+const SCRATCHES_PATH_PARTS: &[&str] = &["yog", "nvrim", "src", "plugins", "attempt"];
 
 /// [`Dictionary`] of scratch file utilities.
 pub fn dict() -> Dictionary {
