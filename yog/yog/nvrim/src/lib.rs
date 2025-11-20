@@ -12,12 +12,8 @@ use ytil_nvim_oxi::Dictionary;
 #[macro_use]
 mod macros;
 
-/// Scratch files selection and creation.
-mod attempt;
 /// [`nvim_oxi::api::Buffer`] helpers.
 mod buffer;
-/// Case conversion.
-mod caseconv;
 /// CLI flags for `fd` and `ripgrep`.
 mod cli;
 /// User commands.
@@ -26,28 +22,14 @@ mod cmds;
 mod colorscheme;
 /// Diagnostics filtering / formatting / sorting.
 mod diagnostics;
-/// Random string generation via the [`fkr`] crate.
-mod fkr;
-/// Git diff line selection.
-mod gdiff;
-/// Generic text conversions.
-mod genconv;
-/// GitHub permalink generation for selected code.
-mod ghurlinker;
 /// Core (non‑plugin) keymaps.
 pub mod keymaps;
 /// Utilities to handle linters output
 mod linters;
-/// Port of scrollofffraction.nvim plugin.
-mod scrolloff;
-/// Status column (diagnostics + git signs).
-mod statuscolumn;
-/// Status line (diagnostics summary).
-mod statusline;
+/// Custom build plugins.
+mod plugins;
 /// Style options.
 mod style_opts;
-/// Rust tests utilities.
-mod truster;
 /// `vim.opts` utilities. Avoids intra-doc links to private items for stable docs; uses plain function calls for error
 /// notifications.
 pub mod vim_opts;
@@ -60,23 +42,15 @@ pub mod vim_opts;
 #[ytil_nvim_oxi::plugin]
 fn nvrim() -> Dictionary {
     ytil_nvim_oxi::dict! {
-        "diagnostics": diagnostics::dict(),
-        "statusline": statusline::dict(),
-        "statuscolumn": statuscolumn::dict(),
-        "cmds": cmds::dict(),
-        "cli": cli::dict(),
-        "truster": truster::dict(),
         "buffer": buffer::dict(),
+        "cli": cli::dict(),
+        "cmds": cmds::dict(),
         "colorscheme": colorscheme::dict(),
+        "diagnostics": diagnostics::dict(),
+        "keymaps": keymaps::dict(),
+        "linters": linters::dict(),
+        "plugins": plugins::dict(),
         "style_opts": style_opts::dict(),
         "vim_opts": vim_opts::dict(),
-        "keymaps": keymaps::dict(),
-        "caseconv": caseconv::dict(),
-        "fkr": fkr::dict(),
-        "linters": linters::dict(),
-        "attempt": attempt::dict(),
-        "genconv": genconv::dict(),
-        "ghurlinker": ghurlinker::dict(),
-        "gdiff": gdiff::dict(),
     }
 }
