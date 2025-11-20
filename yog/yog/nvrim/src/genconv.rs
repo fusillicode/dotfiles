@@ -28,21 +28,20 @@ pub fn dict() -> Dictionary {
 
 /// Converts the current visual selection using a user-chosen conversion option.
 ///
-/// Prompts the user (via [`ytil_nvim_oxi::api::vim_ui_select`]) to select a conversion
+/// Prompts the user (via [`ytil_nvim_oxi::vim_ui_select::open`]) to select a conversion
 /// option, then applies the conversion to the selected text in place.
 ///
 /// Returns early if:
 /// - No active Visual selection is detected.
 /// - The user cancels the prompt.
-/// - The conversion fails (an error is reported via [`ytil_nvim_oxi::api::notify_error`]).
-/// - Writing the converted text back to the buffer fails (an error is reported via
-///   [`ytil_nvim_oxi::api::notify_error`]).
+/// - The conversion fails (an error is reported via [`ytil_nvim_oxi::notify::error`]).
+/// - Writing the converted text back to the buffer fails (an error is reported via [`ytil_nvim_oxi::notify::error`]).
 ///
 /// # Returns
 /// Returns `()` upon successful completion.
 ///
 /// # Errors
-/// Errors from [`ytil_nvim_oxi::api::vim_ui_select`] are reported via [`ytil_nvim_oxi::api::notify_error`]
+/// Errors from [`ytil_nvim_oxi::vim_ui_select::open`] are reported via [`ytil_nvim_oxi::notify::error`]
 /// using the direct display representation of [`color_eyre::Report`].
 /// Conversion errors are also reported similarly.
 ///
@@ -64,7 +63,7 @@ fn convert_selection(_: ()) {
                     // supported at some point.
                     .convert(&selection.lines().to_vec().join("\n"))
                     .inspect_err(|err| {
-                        ytil_nvim_oxi::api::notify_error(format!(
+                        ytil_nvim_oxi::notify::error(format!(
                             "error setting lines of buffer | start={:#?} end={:#?} error={err:#?}",
                             selection.start(),
                             selection.end()
@@ -77,8 +76,8 @@ fn convert_selection(_: ()) {
         }
     };
 
-    if let Err(err) = ytil_nvim_oxi::api::vim_ui_select(opts, &[("prompt", "Select conversion ")], callback, None) {
-        ytil_nvim_oxi::api::notify_error(format!("error converting selection | error={err:#?}"));
+    if let Err(err) = ytil_nvim_oxi::vim_ui_select::open(opts, &[("prompt", "Select conversion ")], callback, None) {
+        ytil_nvim_oxi::notify::error(format!("error converting selection | error={err:#?}"));
     }
 }
 

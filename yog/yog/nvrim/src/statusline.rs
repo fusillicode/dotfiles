@@ -2,7 +2,7 @@
 //!
 //! Provides `statusline.dict()` with a `draw` function combining cwd, buffer name, cursor position and
 //! LSP diagnostic severities / counts into a formatted status line; failures yield `None` and are
-//! surfaced through [`ytil_nvim_oxi::api::notify_error`].
+//! surfaced through [`ytil_nvim_oxi::notify::error`].
 
 use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
@@ -30,7 +30,7 @@ pub fn dict() -> Dictionary {
 /// # Returns
 /// - `Some(String)`: formatted statusline when buffer name, cwd, and cursor position retrieval succeed.
 /// - `None`: if any prerequisite retrieval fails (buffer name, cwd, or cursor position). An error is logged via
-///   [`ytil_nvim_oxi::api::notify_error`].
+///   [`ytil_nvim_oxi::notify::error`].
 ///
 /// # Rationale
 /// Returning `None` lets callers distinguish between a valid (possibly empty diagnostics) statusline and a data

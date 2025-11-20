@@ -42,7 +42,7 @@ pub fn create_autocmd() {
 /// Logs an error notification if window height cannot be retrieved; otherwise proceeds silently.
 fn callback(_: AutocmdCallbackArgs) -> bool {
     let Ok(height) = Window::current().get_height().inspect_err(|err| {
-        ytil_nvim_oxi::api::notify_error(format!("error getting Neovim window height | error={err:#?}"));
+        ytil_nvim_oxi::notify::error(format!("error getting Neovim window height | error={err:#?}"));
     }) else {
         return false;
     };

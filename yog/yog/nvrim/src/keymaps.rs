@@ -28,11 +28,11 @@ pub fn dict() -> Dictionary {
 
 /// Set a keymap for each provided [`Mode`].
 ///
-/// Errors are reported (not propagated) via `ytil_nvim_oxi::api::notify_error`.
+/// Errors are reported (not propagated) via `ytil_nvim_oxi::notify::error`.
 pub fn set(modes: &[Mode], lhs: &str, rhs: &str, opts: &SetKeymapOpts) {
     for mode in modes {
         if let Err(err) = nvim_oxi::api::set_keymap(*mode, lhs, rhs, opts) {
-            ytil_nvim_oxi::api::notify_error(format!(
+            ytil_nvim_oxi::notify::error(format!(
                 "cannot set keymap | mode={mode:#?} lhs={lhs} rhs={rhs} opts={opts:#?} error={err:#?}"
             ));
         }
@@ -44,12 +44,12 @@ pub fn set(modes: &[Mode], lhs: &str, rhs: &str, opts: &SetKeymapOpts) {
 /// All mappings are set with the default non-recursive, silent options returned
 /// by [`default_opts`].
 ///
-/// Failures are reported internally by the [`set`] helper via `ytil_nvim_oxi::api::notify_error`.
+/// Failures are reported internally by the [`set`] helper via `ytil_nvim_oxi::notify::error`.
 fn set_all(_: ()) {
     let default_opts = default_opts();
 
-    ytil_nvim_oxi::api::set_g_var("mapleader", " ");
-    ytil_nvim_oxi::api::set_g_var("maplocalleader", " ");
+    ytil_nvim_oxi::common::set_g_var("mapleader", " ");
+    ytil_nvim_oxi::common::set_g_var("maplocalleader", " ");
 
     set(&[Mode::Terminal], "<Esc>", "<c-\\><c-n>", &default_opts);
     set(&[Mode::Insert], "<c-a>", "<esc>^i", &default_opts);
@@ -124,12 +124,12 @@ fn smart_dd_no_yank_empty_line(_: ()) -> String {
 fn visual_esc(_: ()) -> String {
     let current_line: i64 = nvim_oxi::api::call_function("line", (".",))
         .inspect_err(|err| {
-            ytil_nvim_oxi::api::notify_error(format!("error getting current line | error={err:#?}"));
+            ytil_nvim_oxi::notify::error(format!("error getting current line | error={err:#?}"));
         })
         .unwrap_or(0);
     let visual_line: i64 = nvim_oxi::api::call_function("line", ("v",))
         .inspect_err(|err| {
-            ytil_nvim_oxi::api::notify_error(format!("error getting visual line | error={err:#?}"));
+            ytil_nvim_oxi::notify::error(format!("error getting visual line | error={err:#?}"));
         })
         .unwrap_or(0);
     format!(
@@ -147,7 +147,7 @@ fn visual_esc(_: ()) -> String {
 fn apply_on_current_line_or_unwrap<'a, F: FnOnce(String) -> &'a str>(fun: F, default: &'a str) -> String {
     nvim_oxi::api::get_current_line()
         .inspect_err(|err| {
-            ytil_nvim_oxi::api::notify_error(format!("error getting current line | error={err:#?}"));
+            ytil_nvim_oxi::notify::error(format!("error getting current line | error={err:#?}"));
         })
         .map(fun)
         .unwrap_or(default)

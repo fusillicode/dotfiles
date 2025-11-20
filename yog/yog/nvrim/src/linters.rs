@@ -13,8 +13,6 @@
 
 use nvim_oxi::Dictionary;
 use serde::Deserialize;
-use ytil_nvim_oxi::api::notify_error;
-use ytil_nvim_oxi::api::notify_warn;
 
 use crate::diagnostics::DiagnosticSeverity;
 
@@ -42,20 +40,20 @@ pub fn dict() -> Dictionary {
 #[allow(clippy::needless_pass_by_value)]
 fn parser(maybe_output: Option<nvim_oxi::String>) -> Vec<Dictionary> {
     let Some(output) = &maybe_output else {
-        notify_warn(format!("sqruff output missing output={maybe_output:?}"));
+        ytil_nvim_oxi::notify::warn(format!("sqruff output missing output={maybe_output:?}"));
         return vec![];
     };
     let output = output.to_string_lossy();
 
     if output.trim().is_empty() {
-        notify_warn(format!("sqruff output is an empty string output={maybe_output:?}"));
+        ytil_nvim_oxi::notify::warn(format!("sqruff output is an empty string output={maybe_output:?}"));
         return vec![];
     }
 
     let parsed_output = match serde_json::from_str::<SqruffOutput>(&output) {
         Ok(parsed_output) => parsed_output,
         Err(err) => {
-            notify_error(format!(
+            ytil_nvim_oxi::notify::error(format!(
                 "error parsing sqruff output | output={output:?} error={err:#?}"
             ));
             return vec![];
@@ -129,7 +127,7 @@ struct Position {
     line: u32,
 }
 
-/// Convert a single [`SqruffMessage`] into a Nvim [`Dictionary`].
+/// Convert a single [`SqruffMessage`] into an Nvim [`Dictionary`].
 ///
 /// # Arguments
 /// - `msg` The parsed `sqruff` message.

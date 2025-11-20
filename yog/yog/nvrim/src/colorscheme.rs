@@ -59,7 +59,7 @@ pub fn dict() -> Dictionary {
 #[allow(clippy::needless_pass_by_value)]
 pub fn set(colorscheme: Option<String>) {
     if let Some(cs) = colorscheme {
-        let _ = ytil_nvim_oxi::api::exec_vim_cmd("colorscheme", Some(&[cs]));
+        let _ = ytil_nvim_oxi::common::exec_vim_cmd("colorscheme", Some(&[cs]));
     }
 
     let opts = crate::vim_opts::global_scope();
@@ -184,7 +184,7 @@ fn get_default_hl_opts() -> SetHighlightOptsBuilder {
 /// Errors are notified to Neovim but not returned; the function always succeeds externally.
 fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &SetHighlightOpts) {
     if let Err(err) = nvim_oxi::api::set_hl(ns_id, hl_name, hl_opts) {
-        ytil_nvim_oxi::api::notify_error(format!(
+        ytil_nvim_oxi::notify::error(format!(
             "error setting highlight opts | hl_opts={hl_opts:#?} hl_name={hl_name:?} namespace={ns_id:?} error={err:#?}"
         ));
     }
@@ -233,7 +233,7 @@ fn get_hl(
 ) -> color_eyre::Result<GetHlInfos<impl SuperIterator<(nvim_oxi::String, HighlightInfos)>>> {
     nvim_oxi::api::get_hl(ns_id, hl_opts)
         .inspect_err(|err| {
-            ytil_nvim_oxi::api::notify_error(format!(
+            ytil_nvim_oxi::notify::error(format!(
                 "cannot get highlight infos | hl_opts={hl_opts:#?} error={err:#?}"
             ));
         })
@@ -258,7 +258,7 @@ fn hl_opts_from_hl_infos(hl_infos: &HighlightInfos) -> color_eyre::Result<SetHig
         .map(u8::try_from)
         .transpose()
         .inspect_err(|err| {
-            ytil_nvim_oxi::api::notify_error(format!(
+            ytil_nvim_oxi::notify::error(format!(
                 "cannot convert blend value to u8 | value={:?} error={err:#?}",
                 hl_infos.blend
             ));

@@ -210,7 +210,7 @@ impl BufferExt for Buffer {
         let end_col = cur_pos.col;
 
         if let Err(err) = self.set_text(line_range.clone(), start_col, end_col, vec![text]) {
-            crate::api::notify_error(format!(
+            crate::notify::error(format!(
                 "error setting text in buffer | text={text:?} buffer={self:?} line_range={line_range:?} start_col={start_col:?} end_col={end_col:?} error={err:#?}",
             ));
         }
@@ -265,7 +265,7 @@ impl CursorPosition {
             .get_cursor()
             .map(|(row, col)| Self { row, col })
             .inspect_err(|err| {
-                crate::api::notify_error(format!(
+                crate::notify::error(format!(
                     "error getting cursor from current window | window={cur_win:?} error={err:#?}"
                 ));
             })
@@ -313,7 +313,7 @@ impl CursorPosition {
 /// Executes two Neovim commands, one to open the file and one to set the cursor because it doesn't
 /// seems possible to execute a command line "edit +call\n cursor(<LNUM>, <COL>)".
 pub fn open<T: AsRef<Path>>(path: T, line: Option<usize>, col: Option<usize>) -> color_eyre::Result<()> {
-    crate::api::exec_vim_cmd("edit", Some(&[path.as_ref().display().to_string()]))?;
+    crate::common::exec_vim_cmd("edit", Some(&[path.as_ref().display().to_string()]))?;
     Window::current().set_cursor(line.unwrap_or_default(), col.unwrap_or_default())?;
     Ok(())
 }
@@ -322,7 +322,7 @@ pub fn open<T: AsRef<Path>>(path: T, line: Option<usize>, col: Option<usize>) ->
 ///
 /// Calls Nvim's `set_text` with the selection's line range and column positions,
 /// replacing the selected content with the provided lines.
-/// Errors are reported via [`crate::api::notify_error`] with details about the selection
+/// Errors are reported via [`crate::notify::error`] with details about the selection
 /// boundaries and error.
 ///
 /// # Arguments
@@ -339,7 +339,7 @@ where
         selection.end().col,
         replacement,
     ) {
-        crate::api::notify_error(format!(
+        crate::notify::error(format!(
             "error setting lines of buffer | start={:#?} end={:#?} error={err:#?}",
             selection.start(),
             selection.end()
@@ -363,14 +363,14 @@ where
 pub fn get_relative_buffer_path(cur_buf: &Buffer) -> Option<PathBuf> {
     let cwd = nvim_oxi::api::call_function::<_, String>("getcwd", Array::new())
         .inspect_err(|err| {
-            crate::api::notify_error(format!("error getting cwd | error={err:#?}"));
+            crate::notify::error(format!("error getting cwd | error={err:#?}"));
         })
         .ok()?;
     let cur_buf_path = {
         let tmp = cur_buf
             .get_name()
             .inspect_err(|err| {
-                crate::api::notify_error(format!(
+                crate::notify::error(format!(
                     "error getting path of current buffer | buffer={cur_buf:#?} error={err:#?}"
                 ));
             })

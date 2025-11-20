@@ -2,7 +2,7 @@
 //!
 //! Supplies `statuscolumn.dict()` exposing `draw`, rendering line numbers / extmarks while honoring
 //! special buffer types (e.g. minimal output for transient search buffers). Errors are notified via
-//! [`ytil_nvim_oxi::api::notify_error`].
+//! [`ytil_nvim_oxi::notify::error`].
 
 use core::fmt::Display;
 
@@ -38,7 +38,7 @@ pub fn dict() -> Dictionary {
 ///
 /// # Returns
 /// - `Some(String)`: formatted status column when the current buffer `buftype` is successfully retrieved.
-/// - `None`: if `buftype` retrieval fails (details logged via [`ytil_nvim_oxi::api::notify_error`]).
+/// - `None`: if `buftype` retrieval fails (details logged via [`ytil_nvim_oxi::notify::error`]).
 ///
 /// Special cases:
 /// - When `buftype == "grug-far"` returns a single space string to minimize visual noise in transient search buffers.
@@ -51,7 +51,7 @@ fn draw((cur_lnum, extmarks, opts): (String, Vec<Extmark>, Option<Opts>)) -> Opt
     let buf_type = cur_buf
         .get_buf_type()
         .inspect_err(|err| {
-            ytil_nvim_oxi::api::notify_error(format!(
+            ytil_nvim_oxi::notify::error(format!(
                 "error getting buftype of current buffer | buffer={cur_buf:#?} error={err:#?}"
             ));
         })

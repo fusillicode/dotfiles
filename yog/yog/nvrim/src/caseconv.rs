@@ -23,20 +23,19 @@ pub fn dict() -> Dictionary {
 
 /// Converts the current visual selection to a user-chosen case variant.
 ///
-/// Prompts the user (via [`ytil_nvim_oxi::api::vim_ui_select`]) to select a case conversion
+/// Prompts the user (via [`ytil_nvim_oxi::vim_ui_select::open`]) to select a case conversion
 /// option, then applies the conversion to all selected lines in place.
 ///
 /// Returns early if:
 /// - No active Visual selection is detected.
 /// - The user cancels the prompt.
-/// - Writing the converted text back to the buffer fails (an error is reported via
-///   [`ytil_nvim_oxi::api::notify_error`]).
+/// - Writing the converted text back to the buffer fails (an error is reported via [`ytil_nvim_oxi::notify::error`]).
 ///
 /// # Returns
 /// Returns `()` upon successful completion.
 ///
 /// # Errors
-/// Errors from [`ytil_nvim_oxi::api::vim_ui_select`] are reported via [`ytil_nvim_oxi::api::notify_error`]
+/// Errors from [`ytil_nvim_oxi::vim_ui_select::open`] are reported via [`ytil_nvim_oxi::notify::error`]
 /// using the direct display representation of [`color_eyre::Report`].
 ///
 /// # Notes
@@ -60,13 +59,13 @@ fn convert_selection(_: ()) {
         });
     };
 
-    if let Err(err) = ytil_nvim_oxi::api::vim_ui_select(
+    if let Err(err) = ytil_nvim_oxi::vim_ui_select::open(
         cases.iter().map(DisplayableCase),
         &[("prompt", "Convert selection to case ")],
         callback,
         None,
     ) {
-        ytil_nvim_oxi::api::notify_error(format!("error converting selection to case | error={err:#?}"));
+        ytil_nvim_oxi::notify::error(format!("error converting selection to case | error={err:#?}"));
     }
 }
 
