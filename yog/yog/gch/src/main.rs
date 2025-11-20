@@ -77,7 +77,7 @@ impl Display for RenderableGitStatusEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Conflict overrides everything
         if self.conflicted {
-            return write!(f, "{} {}", "CC".red().bold(), self.path.display().bold());
+            return write!(f, "{} {}", "CC".red().bold(), self.path.display());
         }
 
         let index_symbol = self.index_state.as_ref().map_or_else(
@@ -178,7 +178,7 @@ fn restore_entries(entries: &[&GitStatusEntry], branch: Option<&str>) -> color_e
         } else if absolute_path.is_dir() {
             std::fs::remove_dir_all(&absolute_path)?;
         }
-        println!("{} {}", "Discarded".red().bold(), new_entry.path.display().bold());
+        println!("{} {}", "Discarded".red().bold(), new_entry.path.display());
         if new_entry.is_new_in_index() {
             new_entries_in_index.push(absolute_path.display().to_string());
         }
@@ -198,11 +198,11 @@ fn restore_entries(entries: &[&GitStatusEntry], branch: Option<&str>) -> color_e
     ytil_git::restore(changed_entries_paths, branch)?;
 
     for changed_entry in changed_entries {
-        let from_branch = branch.map(|b| format!(" from {}", b.bold())).unwrap_or_default();
+        let from_branch = branch.map(|b| format!(" from {b}")).unwrap_or_default();
         println!(
             "{} {}{from_branch}",
             "Restored".yellow().bold(),
-            changed_entry.path.display().white().bold()
+            changed_entry.path.display()
         );
     }
     Ok(())
@@ -220,7 +220,7 @@ fn add_entries(entries: &[&GitStatusEntry]) -> color_eyre::Result<()> {
     let mut repo = ytil_git::discover_repo(Path::new("."))?;
     ytil_git::add_to_index(&mut repo, entries.iter().map(|entry| entry.path.as_path()))?;
     for entry in entries {
-        println!("{} {}", "Added".green().bold(), entry.path.display().bold());
+        println!("{} {}", "Added".green().bold(), entry.path.display());
     }
     Ok(())
 }
