@@ -1,3 +1,5 @@
+//! Utilities for managing and displaying Nvim quickfix lists.
+
 use core::fmt::Debug;
 
 use color_eyre::eyre::Context;

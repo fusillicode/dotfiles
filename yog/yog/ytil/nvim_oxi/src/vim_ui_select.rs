@@ -1,3 +1,5 @@
+//! Implementation of Nvim's vim.ui.select for interactive user selection.
+
 use core::fmt::Debug;
 use core::fmt::Display;
 use std::rc::Rc;
@@ -22,12 +24,16 @@ pub struct QuickfixConfig {
 /// Prompts the user to select an item from a list using Nvim's `vim.ui.select`.
 ///
 /// Wraps the Lua `vim.ui.select` function to provide an interactive selection prompt.
-/// The selected index (0-based) is passed to the provided callback.
+/// The selected index (0-based) is passed to the provided callback. If a quickfix
+/// configuration is provided, an additional synthetic choice is added to open the
+/// quickfix list instead.
 ///
 /// # Arguments
 /// - `choices` Iterable of displayable items to display for selection.
 /// - `opts` Key-value pairs for additional options (e.g., prompt text).
 /// - `callback` Closure invoked with the 0-based index of the selected choice.
+/// - `maybe_quickfix` Optional quickfix configuration; if provided, adds a choice to open the quickfix list with the
+///   specified items.
 ///
 /// # Returns
 /// `Ok(())` if the selection succeeds.
