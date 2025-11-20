@@ -12,7 +12,7 @@ function M.set_lua_defined()
   keymap_set('n', 'i', nvrim.keymaps.smart_ident_on_blank_line, base_opts)
   keymap_set('n', 'dd', nvrim.keymaps.smart_dd_no_yank_empty_line, base_opts)
   keymap_set('v', '<esc>', nvrim.keymaps.visual_esc, base_opts)
-  keymap_set({ 'n', 'v', }, '<leader>t', nvrim.truster.run_test)
+  keymap_set({ 'n', 'v', }, '<leader>t', nvrim.plugins.truster.run_test)
   keymap_set('n', 'gx', require('opener').open_under_cursor)
 
   -- Thanks perplexity 🥲
@@ -93,14 +93,14 @@ function M.fzf_lua(plugin)
     },
 
     { '<leader>h',  mode = 'n',           plugin and { function() plugin.resume({}) end, }, },
-    { '<leader>n',  mode = 'n',           plugin and { nvrim.attempt.create_scratch_file, }, },
-    { '<leader>u',  mode = 'v',           plugin and { nvrim.caseconv.convert_selection, }, },
-    { '<leader>k',  mode = 'v',           plugin and { nvrim.genconv.convert_selection, }, },
-    { '<leader>yl', mode = { 'n', 'v', }, plugin and { function() nvrim.ghurlinker.get_link('blob') end, }, },
-    { '<leader>yb', mode = { 'n', 'v', }, plugin and { function() nvrim.ghurlinker.get_link('blame') end, }, },
-    { '<leader>yL', mode = { 'n', 'v', }, plugin and { function() nvrim.ghurlinker.get_link('blob', true) end, }, },
-    { '<leader>yB', mode = { 'n', 'v', }, plugin and { function() nvrim.ghurlinker.get_link('blame', true) end, }, },
-    { '<leader>gh', mode = { 'n', 'v', }, plugin and { nvrim.gdiff.get_hunks, }, },
+    { '<leader>n',  mode = 'n',           plugin and { nvrim.plugins.attempt.create_scratch_file, }, },
+    { '<leader>u',  mode = 'v',           plugin and { nvrim.plugins.caseconv.convert_selection, }, },
+    { '<leader>k',  mode = 'v',           plugin and { nvrim.plugins.genconv.convert_selection, }, },
+    { '<leader>yl', mode = { 'n', 'v', }, plugin and { function() nvrim.plugins.ghurlinker.get_link('blob') end, }, },
+    { '<leader>yb', mode = { 'n', 'v', }, plugin and { function() nvrim.plugins.ghurlinker.get_link('blame') end, }, },
+    { '<leader>yL', mode = { 'n', 'v', }, plugin and { function() nvrim.plugins.ghurlinker.get_link('blob', true) end, }, },
+    { '<leader>yB', mode = { 'n', 'v', }, plugin and { function() nvrim.plugins.ghurlinker.get_link('blame', true) end, }, },
+    { '<leader>gh', mode = { 'n', 'v', }, plugin and { nvrim.plugins.gdiff.get_hunks, }, },
   }
 end
 
