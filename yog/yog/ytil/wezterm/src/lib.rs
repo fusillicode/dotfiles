@@ -33,9 +33,12 @@ pub fn activate_pane_cmd(pane_id: i64) -> String {
 /// - `WEZTERM_PANE` is unset.
 pub fn get_current_pane_id() -> color_eyre::Result<i64> {
     std::env::var("WEZTERM_PANE")
-        .wrap_err_with(|| eyre!("error missing WEZTERM_PANE environment variable"))?
-        .parse()
-        .wrap_err_with(|| eyre!("error parsing WEZTERM_PANE value"))
+        .wrap_err_with(|| eyre!("error missing WEZTERM_PANE environment variable"))
+        .and_then(|value| {
+            value
+                .parse()
+                .wrap_err_with(|| eyre!("error parsing WEZTERM_PANE value as i64 | value={value:?}"))
+        })
 }
 
 /// Retrieves all `WezTerm` panes using the `WezTerm` CLI.
