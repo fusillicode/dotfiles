@@ -159,8 +159,8 @@ mod tests {
         assert2::let_assert!(Ok(Editor::Hx) = Editor::from_str("hx"));
         assert2::let_assert!(Ok(Editor::Nvim) = Editor::from_str("nvim"));
         assert2::let_assert!(Ok(Editor::Nvim) = Editor::from_str("nv"));
-        assert2::let_assert!(Err(error) = Editor::from_str("unknown"));
-        assert!(error.to_string().contains("unknown editor"));
+        assert2::let_assert!(Err(err) = Editor::from_str("unknown"));
+        assert!(err.to_string().contains("unknown editor"));
     }
 
     #[test]
@@ -197,8 +197,8 @@ mod tests {
     #[test]
     fn try_from_errors_when_pane_is_missing() {
         let panes: Vec<WeztermPane> = vec![];
-        assert2::let_assert!(Err(error) = FileToOpen::try_from(("README.md", 999, panes.as_slice())));
-        assert!(error.to_string().contains("missing pane"));
+        assert2::let_assert!(Err(err) = FileToOpen::try_from(("README.md", 999, panes.as_slice())));
+        assert!(err.to_string().contains("missing pane"));
     }
 
     #[test]
@@ -206,9 +206,9 @@ mod tests {
         let dir = std::env::current_dir().unwrap();
         let panes = vec![pane_with(1, 1, &dir)];
         assert2::let_assert!(
-            Err(error) = FileToOpen::try_from(("definitely_missing_12345__file.rs", 1, panes.as_slice()))
+            Err(err) = FileToOpen::try_from(("definitely_missing_12345__file.rs", 1, panes.as_slice()))
         );
-        assert!(error.to_string().contains("error parsing file to open"));
+        assert!(err.to_string().contains("error parsing file to open"));
     }
 
     #[test]

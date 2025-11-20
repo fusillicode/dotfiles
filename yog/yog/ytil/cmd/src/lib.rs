@@ -6,7 +6,7 @@
 //!
 //! See [`CmdError`] for failure variants with rich context.
 
-#![feature(error_generic_member_access)]
+#![feature(error_generic_member_access, exit_status_error)]
 
 use core::fmt::Display;
 use std::path::Path;
@@ -15,6 +15,9 @@ use std::process::Command;
 use std::process::ExitStatus;
 use std::process::Output;
 use std::process::Stdio;
+
+use color_eyre::eyre::Context as _;
+use color_eyre::eyre::eyre;
 
 /// Extension trait for [`Command`] to execute and handle errors.
 pub trait CmdExt {
@@ -47,6 +50,21 @@ impl CmdExt for Command {
         }
         Ok(output)
     }
+}
+
+/// Extracts and validates successful command output, converting it to a trimmed string.
+///
+/// # Errors
+/// - UTF-8 conversion fails.
+pub fn extract_success_output(output: &Output) -> color_eyre::Result<String> {
+    output
+        .status
+        .exit_ok()
+        .wrap_err_with(|| eyre!("command exited with non-zero status"))?;
+    Ok(std::str::from_utf8(&output.stdout)
+        .wrap_err_with(|| eyre!("error decoding command stdout"))?
+        .trim()
+        .into())
 }
 
 fn to_ut8_string(cmd: &Command, bytes: Vec<u8>) -> color_eyre::Result<String, CmdError> {

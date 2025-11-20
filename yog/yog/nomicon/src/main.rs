@@ -97,10 +97,10 @@ fn main() -> color_eyre::eyre::Result<()> {
     // Always remove docs dir if present:
     // - caching problems
     // - implementing manual cache busting
-    if let Err(error) = std::fs::remove_dir_all(&doc_dir)
-        && !matches!(error.kind(), NotFound)
+    if let Err(err) = std::fs::remove_dir_all(&doc_dir)
+        && !matches!(err.kind(), NotFound)
     {
-        bail!("cannot remove docs dir | doc_dir={} error={error}", doc_dir.display());
+        bail!("cannot remove docs dir | doc_dir={} error={err}", doc_dir.display());
     }
 
     // Always (re)generate docs for all workspace crates (including private items) first.

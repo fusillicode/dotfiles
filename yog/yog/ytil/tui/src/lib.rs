@@ -161,7 +161,7 @@ fn closable_prompt<T>(prompt_res: Result<T, InquireError>) -> Result<Option<T>, 
     match prompt_res {
         Ok(res) => Ok(Some(res)),
         Err(InquireError::OperationCanceled | InquireError::OperationInterrupted) => Ok(None),
-        Err(error) => Err(error),
+        Err(err) => Err(err),
     }
 }
 

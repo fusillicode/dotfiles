@@ -1,22 +1,29 @@
-//! List and optionally batch‑merge GitHub pull requests interactively.
+//! List and optionally batch‑merge GitHub pull requests interactively, or create issues with associated branches.
 //!
 //! Provides a colorized TUI to select multiple PRs then apply a composite
-//! operation (approve & merge, Dependabot rebase, enable auto-merge). Mirrors the `run()` pattern
+//! operation (approve & merge, Dependabot rebase, enable auto-merge). Alternatively, create a GitHub issue
+//! and an associated branch from the default branch. Mirrors the `run()` pattern
 //! used by `gch` so the binary `main` stays trivial.
 //!
 //! # Flow
-//! - Parse flags (`--search`, `--merge-state`).
-//! - Detect current repository via [`ytil_github::get_repo_view_field`].
-//! - Fetch PR list via [`ytil_github::pr::get`] (GitHub CLI `gh pr list`) forwarding the search filter.
-//! - Apply optional in‑process merge state filter.
-//! - Present multi‑select TUI via [`ytil_tui::minimal_multi_select`].
-//! - Execute chosen high‑level operation over selected PRs, reporting per‑PR result.
+//! - Parse flags (`--search`, `--merge-state`, `issue`).
+//! - If `issue` is present:
+//!   - Prompt for issue title via [`ytil_tui::Text::prompt`].
+//!   - Create issue via [`ytil_github::create_issue`].
+//!   - Create and push branch from default branch named after the issue.
+//! - Otherwise:
+//!   - Detect current repository via [`ytil_github::get_repo_view_field`].
+//!   - Fetch PR list via [`ytil_github::pr::get`] (GitHub CLI `gh pr list`) forwarding the search filter.
+//!   - Apply optional in‑process merge state filter.
+//!   - Present multi‑select TUI via [`ytil_tui::minimal_multi_select`].
+//!   - Execute chosen high‑level operation over selected PRs, reporting per‑PR result.
 //!
 //! # Flags
 //! - `--search <FILTER>` or `--search=<FILTER>`: forwarded to `gh pr list --search`. Optional.
 //! - `--merge-state <STATE>` or `--merge-state=<STATE>`: client‑side filter over fetched PRs. Accepted
 //!   (case‑insensitive) values for [`PullRequestMergeState`]:
-//!   `Behind|Blocked|Clean|Dirty|Draft|HasHooks|Unknown|Unmergeable`.
+//!   `Behind|Blocked|Clean|Dirty|Draft|HasHooks|Unknown|Unmergeable|Unstable`.
+//! - `issue`: switch to issue creation mode (prompts for title, creates issue and branch).
 //!
 //! Use `--` to terminate flag parsing (subsequent arguments ignored by this tool).
 //!
@@ -26,14 +33,18 @@
 //! ghl --search "fix ci" # filter by search terms
 //! ghl --merge-state Clean # filter by merge state only
 //! ghl --search="lint" --merge-state Dirty # combine search + state (supports = or space)
+//! ghl issue # create issue and branch interactively
 //! ```
 //!
 //! # Errors
 //! - Flag parsing fails (unknown flag, missing value, invalid [`PullRequestMergeState`]).
 //! - GitHub CLI invocation fails (listing PRs via [`ytil_github::pr::get`], approving via [`ytil_github::pr::approve`],
-//!   merging via [`ytil_github::pr::merge`], commenting via [`ytil_github::pr::dependabot_rebase`]).
+//!   merging via [`ytil_github::pr::merge`], commenting via [`ytil_github::pr::dependabot_rebase`], creating issue via
+//!   [`ytil_github::create_issue`]).
 //! - TUI interaction fails (selection UI errors via [`ytil_tui::minimal_multi_select`] and
-//!   [`ytil_tui::minimal_select`]).
+//!   [`ytil_tui::minimal_select`], issue title prompt via [`ytil_tui::Text::prompt`]).
+//! - Git operations fail (branch creation via [`ytil_git::branch::create_from_default_branch`], branch push via
+//!   [`ytil_git::branch::push`]).
 //!
 //! # Future Work
 //! - Add dry‑run mode printing planned operations without executing.
@@ -191,8 +202,8 @@ impl Op {
     /// Returns the same error contained in `res` (no transformation) so callers
     /// can continue combinators (`and_then`, etc.) if desired.
     pub fn report(&self, pr: &PullRequest, res: color_eyre::Result<()>) -> color_eyre::Result<()> {
-        res.inspect(|()| self.report_ok(pr)).inspect_err(|error| {
-            self.report_error(pr, error);
+        res.inspect(|()| self.report_ok(pr)).inspect_err(|err| {
+            self.report_error(pr, err);
         })
     }
 
@@ -259,30 +270,17 @@ fn format_pr(pr: &PullRequest) -> String {
     )
 }
 
-/// List and optionally batch‑merge GitHub pull requests interactively.
-///
-/// Mirrors the design of `gch::run` so the binary `main` remains a thin wrapper.
-/// Performs GitHub authentication via [`ytil_github::log_into_github`], flag parsing, PR fetching via
-/// [`ytil_github::pr::get`], selection via [`ytil_tui::minimal_multi_select`] and [`ytil_tui::minimal_select`], and
-/// application of user‑chosen operations.
-///
-/// # Returns
-/// `Ok(())` if all operations complete (individual PR action failures are reported but do not abort processing).
+/// List and optionally batch‑merge GitHub pull requests interactively or create issues with associated branches.
 ///
 /// # Errors
 /// - Flag parsing fails (unknown flag, missing value, invalid [`PullRequestMergeState`]).
 /// - GitHub CLI invocation fails (listing PRs via [`ytil_github::pr::get`], approving via [`ytil_github::pr::approve`],
-///   merging via [`ytil_github::pr::merge`], commenting via [`ytil_github::pr::dependabot_rebase`]).
+///   merging via [`ytil_github::pr::merge`], commenting via [`ytil_github::pr::dependabot_rebase`], creating issue via
+///   [`ytil_github::create_issue`]).
 /// - TUI interaction fails (selection UI errors via [`ytil_tui::minimal_multi_select`] and
-///   [`ytil_tui::minimal_select`]).
-///
-/// # Rationale
-/// Uniform `run()` entrypoint across tools (`gch`, `ghl`) simplifies integration (e.g. shared launcher invoking
-/// `<tool>::run()`).
-///
-/// # Future Work
-/// - Surface aggregated failure summary at end of run.
-/// - Inject CLI dependencies for isolated testing.
+///   [`ytil_tui::minimal_select`], issue title prompt via [`ytil_tui::Text::prompt`]).
+/// - Git operations fail (branch creation via [`ytil_git::branch::create_from_default_branch`], branch push via
+///   [`ytil_git::branch::push`]).
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

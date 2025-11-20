@@ -22,7 +22,6 @@
 
 use std::path::Path;
 use std::process::Command;
-use std::process::Output;
 
 use color_eyre::eyre::Context;
 use color_eyre::eyre::bail;
@@ -154,7 +153,7 @@ pub fn create_issue(title: &str) -> color_eyre::Result<CreatedIssue> {
         .output()
         .wrap_err_with(|| eyre!("error creating GitHub issue | title={title:?}"))?;
 
-    let created_issue = extract_success_output(&output)
+    let created_issue = ytil_cmd::extract_success_output(&output)
         .and_then(|output| CreatedIssue::new(title, &output))
         .wrap_err_with(|| eyre!("error parsing created issue output | title={title:?}"))?;
 
@@ -181,7 +180,7 @@ pub fn get_repo_view_field(field: &RepoViewField) -> color_eyre::Result<String> 
         .output()
         .wrap_err_with(|| eyre!("error getting repo view field | field={field:?}"))?;
 
-    extract_success_output(&output)
+    ytil_cmd::extract_success_output(&output)
 }
 
 /// Ensures the user is authenticated with the GitHub CLI.
@@ -224,7 +223,7 @@ pub fn get_latest_release(repo: &str) -> color_eyre::Result<String> {
         .output()
         .wrap_err_with(|| eyre!("error getting latest release | repo={repo:?}"))?;
 
-    extract_success_output(&output)
+    ytil_cmd::extract_success_output(&output)
 }
 
 /// Extracts the branch name from a GitHub pull request [`Url`].
@@ -241,7 +240,7 @@ pub fn get_branch_name_from_url(url: &Url) -> color_eyre::Result<String> {
         .output()
         .wrap_err_with(|| eyre!("error getting branch name | pr_id={pr_id:?}"))?;
 
-    extract_success_output(&output)
+    ytil_cmd::extract_success_output(&output)
 }
 
 /// Returns all GitHub remote URLs for the repository rooted at `repo_path`.
@@ -292,21 +291,6 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> color_eyre::Res
     url.set_path(path);
 
     Ok(url)
-}
-
-/// Extracts and validates successful command output, converting it to a trimmed string.
-///
-/// # Errors
-/// - UTF-8 conversion fails.
-fn extract_success_output(output: &Output) -> color_eyre::Result<String> {
-    output
-        .status
-        .exit_ok()
-        .wrap_err_with(|| eyre!("command exited with non-zero status"))?;
-    Ok(std::str::from_utf8(&output.stdout)
-        .wrap_err_with(|| eyre!("error decoding command stdout"))?
-        .trim()
-        .into())
 }
 
 /// Extracts the pull request numeric ID from a GitHub URL.
@@ -376,9 +360,9 @@ mod tests {
     #[test]
     fn extract_pr_id_form_url_returns_the_expected_error_when_host_cannot_be_extracted() {
         let url = Url::parse("mailto:foo@bar.com").unwrap();
-        assert2::let_assert!(Err(error) = extract_pr_id_form_url(&url));
+        assert2::let_assert!(Err(err) = extract_pr_id_form_url(&url));
         assert_eq!(
-            error.to_string(),
+            err.to_string(),
             "error extracting host from URL | url=mailto:foo@bar.com"
         );
     }
@@ -386,8 +370,8 @@ mod tests {
     #[test]
     fn extract_pr_id_form_url_returns_the_expected_error_when_url_is_not_from_github() {
         let url = Url::parse("https://foo.bar").unwrap();
-        assert2::let_assert!(Err(error) = extract_pr_id_form_url(&url));
-        let msg = error.to_string();
+        assert2::let_assert!(Err(err) = extract_pr_id_form_url(&url));
+        let msg = err.to_string();
         assert!(msg.starts_with("error host mismatch |"));
         assert!(msg.contains(r#"host="foo.bar""#), "actual: {msg}");
         assert!(msg.contains(r#"expected="github.com""#), "actual: {msg}");
@@ -397,8 +381,8 @@ mod tests {
     #[test]
     fn extract_pr_id_form_url_returns_the_expected_error_when_url_doesnt_have_path_segments() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}")).unwrap();
-        assert2::let_assert!(Err(error) = extract_pr_id_form_url(&url));
-        let msg = error.to_string();
+        assert2::let_assert!(Err(err) = extract_pr_id_form_url(&url));
+        let msg = err.to_string();
         assert!(msg.starts_with("error missing PR ID prefix |"), "actual: {msg}");
         assert!(msg.contains("prefix=\"pull\""), "actual: {msg}");
         assert!(msg.contains("url=https://github.com/"), "actual: {msg}");
@@ -407,8 +391,8 @@ mod tests {
     #[test]
     fn extract_pr_id_form_url_returns_the_expected_error_when_url_doesnt_have_pr_id() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/pull")).unwrap();
-        assert2::let_assert!(Err(error) = extract_pr_id_form_url(&url));
-        let msg = error.to_string();
+        assert2::let_assert!(Err(err) = extract_pr_id_form_url(&url));
+        let msg = err.to_string();
         assert!(msg.starts_with("error missing PR ID |"), "actual: {msg}");
         assert!(msg.contains("url=https://github.com/pull"), "actual: {msg}");
     }
@@ -416,8 +400,8 @@ mod tests {
     #[test]
     fn extract_pr_id_form_url_returns_the_expected_error_when_url_doenst_have_the_expected_pr_id_prefix() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/foo")).unwrap();
-        assert2::let_assert!(Err(error) = extract_pr_id_form_url(&url));
-        let msg = error.to_string();
+        assert2::let_assert!(Err(err) = extract_pr_id_form_url(&url));
+        let msg = err.to_string();
         assert!(msg.starts_with("error missing PR ID prefix |"), "actual: {msg}");
         assert!(msg.contains("prefix=\"pull\""), "actual: {msg}");
         assert!(msg.contains("url=https://github.com/foo"), "actual: {msg}");
@@ -426,8 +410,8 @@ mod tests {
     #[test]
     fn extract_pr_id_form_url_returns_the_expected_error_when_url_has_multiple_pr_id_prefixes() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/pull/42/pull/43")).unwrap();
-        assert2::let_assert!(Err(error) = extract_pr_id_form_url(&url));
-        let msg = error.to_string();
+        assert2::let_assert!(Err(err) = extract_pr_id_form_url(&url));
+        let msg = err.to_string();
         assert!(msg.starts_with("error multiple PR ID prefixes |"), "actual: {msg}");
         assert!(msg.contains("prefix=\"pull\""), "actual: {msg}");
         assert!(msg.contains("url=https://github.com/pull/42/pull/43"), "actual: {msg}");
@@ -492,8 +476,8 @@ mod tests {
         "error building CreateIssueOutput | empty=\"issue_nr\" output=\"repo/issues\""
     )]
     fn created_issue_new_errors_on_invalid_output(#[case] output: &str, #[case] expected_error: &str) {
-        assert2::let_assert!(Err(error) = CreatedIssue::new("title", output));
-        pretty_assertions::assert_eq!(error.to_string(), expected_error);
+        assert2::let_assert!(Err(err) = CreatedIssue::new("title", output));
+        pretty_assertions::assert_eq!(err.to_string(), expected_error);
     }
 
     #[rstest]

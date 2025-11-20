@@ -34,14 +34,14 @@ fn get_link((link_type, open): (String, Option<bool>)) {
     let Some(selection) = ytil_nvim_oxi::visual_selection::get(()) else {
         return;
     };
-    let Ok(mut repo_url) = ytil_github::get_repo_view_field(&RepoViewField::Url).inspect_err(|error| {
-        ytil_nvim_oxi::api::notify_error(format!("error getting GitHub repo URL | error={error:#?}"));
+    let Ok(mut repo_url) = ytil_github::get_repo_view_field(&RepoViewField::Url).inspect_err(|err| {
+        ytil_nvim_oxi::notify::error(format!("error getting GitHub repo URL | error={err:#?}"));
     }) else {
         return;
     };
 
-    let Ok(current_commit_hash) = ytil_git::get_current_commit_hash().inspect_err(|error| {
-        ytil_nvim_oxi::api::notify_error(format!("error getting current repo commit hash | error={error:#?}"));
+    let Ok(current_commit_hash) = ytil_git::get_current_commit_hash().inspect_err(|err| {
+        ytil_nvim_oxi::notify::error(format!("error getting current repo commit hash | error={err:#?}"));
     }) else {
         return;
     };
@@ -55,13 +55,13 @@ fn get_link((link_type, open): (String, Option<bool>)) {
     );
 
     if open.is_some_and(std::convert::identity) {
-        if let Err(error) = ytil_system::open(&repo_url) {
-            ytil_nvim_oxi::api::notify_error(format!("error opening URL | url={repo_url:?} error={error:#?}"));
+        if let Err(err) = ytil_system::open(&repo_url) {
+            ytil_nvim_oxi::notify::error(format!("error opening URL | url={repo_url:?} error={err:#?}"));
         }
     } else {
-        if let Err(error) = ytil_system::cp_to_system_clipboard(&mut repo_url.as_bytes()) {
-            ytil_nvim_oxi::api::notify_error(format!(
-                "error copying content to system clipboard | content={repo_url:?} error={error:#?}"
+        if let Err(err) = ytil_system::cp_to_system_clipboard(&mut repo_url.as_bytes()) {
+            ytil_nvim_oxi::notify::error(format!(
+                "error copying content to system clipboard | content={repo_url:?} error={err:#?}"
             ));
         }
         nvim_oxi::print!("GitHub {link_type} URL copied to clipboard:\n{repo_url}");

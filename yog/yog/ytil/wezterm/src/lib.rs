@@ -196,8 +196,8 @@ mod tests {
     #[test]
     fn get_sibling_pane_with_titles_errors_when_no_title_match() {
         let panes = vec![pane_with(1, 10, "file:///host/home/user/project", "shell")];
-        assert2::let_assert!(Err(error) = get_sibling_pane_with_titles(&panes, 1, &["hx"]));
-        assert!(error.to_string().contains("error finding pane title in tab"));
+        assert2::let_assert!(Err(err) = get_sibling_pane_with_titles(&panes, 1, &["hx"]));
+        assert!(err.to_string().contains("error finding pane title in tab"));
     }
 
     #[test]

@@ -11,3 +11,4 @@ keywords = ["cli", "experimental", "playground", "testing"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
+color-eyre = { workspace = true }

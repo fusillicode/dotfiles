@@ -213,17 +213,17 @@ mod tests {
 
     #[test]
     fn creds_try_from_returns_an_error_if_port_is_not_a_number() {
-        assert2::let_assert!(Err(error) = ConnectionParams::try_from((42, "host:foo:db:user:pwd")));
-        assert_eq!(format!("{error}"), "unexpected port | port=foo");
+        assert2::let_assert!(Err(err) = ConnectionParams::try_from((42, "host:foo:db:user:pwd")));
+        assert_eq!(format!("{err}"), "unexpected port | port=foo");
     }
 
     #[test]
     fn creds_try_from_returns_an_error_if_str_is_malformed() {
-        assert2::let_assert!(Err(error) = ConnectionParams::try_from((42, "host:5432:db:user")));
+        assert2::let_assert!(Err(err) = ConnectionParams::try_from((42, "host:5432:db:user")));
         assert_eq!(
-            format!("{error}"),
+            format!("{err}"),
             "malformed pgpass connection line | idx_line=(\n    42,\n    \"host:5432:db:user\",\n)",
-            "unexpected {error}"
+            "unexpected {err}"
         );
     }
 

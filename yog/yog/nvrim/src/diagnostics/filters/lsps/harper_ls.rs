@@ -216,9 +216,9 @@ mod tests {
             col: 1,
             end_col: 7,
         };
-        assert2::let_assert!(Err(error) = filter.skip_diagnostic(&buf, &diag));
-        assert!(error.to_string().contains("missing dict value"));
-        assert!(error.to_string().contains(r#""end_lnum""#));
+        assert2::let_assert!(Err(err) = filter.skip_diagnostic(&buf, &diag));
+        assert!(err.to_string().contains("missing dict value"));
+        assert!(err.to_string().contains(r#""end_lnum""#));
     }
 
     #[test]
@@ -237,9 +237,9 @@ mod tests {
             end_lnum: 0,
             end_col: 5,
         };
-        assert2::let_assert!(Err(error) = filter.skip_diagnostic(&buf, &diag));
-        assert!(error.to_string().contains("inconsistent line boundaries"));
-        assert!(error.to_string().contains("lnum 1 > end_lnum 0"));
+        assert2::let_assert!(Err(err) = filter.skip_diagnostic(&buf, &diag));
+        assert!(err.to_string().contains("inconsistent line boundaries"));
+        assert!(err.to_string().contains("lnum 1 > end_lnum 0"));
     }
 
     #[test]
@@ -258,9 +258,9 @@ mod tests {
             end_lnum: 0,
             end_col: 0,
         };
-        assert2::let_assert!(Err(error) = filter.skip_diagnostic(&buf, &diag));
-        assert!(error.to_string().contains("inconsistent col boundaries"));
-        assert!(error.to_string().contains("col 5 > end_col 0"));
+        assert2::let_assert!(Err(err) = filter.skip_diagnostic(&buf, &diag));
+        assert!(err.to_string().contains("inconsistent col boundaries"));
+        assert!(err.to_string().contains("col 5 > end_col 0"));
     }
 
     #[test]
@@ -279,8 +279,8 @@ mod tests {
             end_lnum: 0,
             end_col: 15,
         };
-        assert2::let_assert!(Err(error) = filter.skip_diagnostic(&buf, &diag));
-        assert!(error.to_string().contains("cannot extract substring"));
+        assert2::let_assert!(Err(err) = filter.skip_diagnostic(&buf, &diag));
+        assert!(err.to_string().contains("cannot extract substring"));
     }
 
     #[test]
