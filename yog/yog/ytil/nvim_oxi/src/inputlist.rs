@@ -1,3 +1,5 @@
+//! Utilities for user input selection from lists using Vimscript inputlist.
+
 use core::fmt::Display;
 
 use nvim_oxi::Array;

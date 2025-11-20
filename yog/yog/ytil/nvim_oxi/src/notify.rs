@@ -1,3 +1,5 @@
+//! Notification utilities for sending error and warning messages to Nvim.
+
 use core::fmt::Debug;
 
 pub use nvim_oxi::api::opts;
