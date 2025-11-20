@@ -112,7 +112,7 @@ pub trait Installer: Sync + Send {
                     "{} {} check_output=\n{}",
                     self.bin_name().green().bold(),
                     format_timing(start, past_install, check_duration),
-                    check_output.trim_matches(|c| c == '\n' || c == '\r').white().bold()
+                    check_output.trim_matches(|c| c == '\n' || c == '\r')
                 );
             }
             Some(Err(err)) => {
