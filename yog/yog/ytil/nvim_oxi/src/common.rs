@@ -1,3 +1,5 @@
+//! Common utilities for Nvim API interactions, including variable setting and command execution.
+
 use core::fmt::Debug;
 
 use nvim_oxi::api::opts::CmdOpts;
