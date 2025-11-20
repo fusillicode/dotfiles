@@ -84,7 +84,8 @@ function M.fzf_lua(plugin)
     { '<leader>d',  mode = { 'n', 'v', }, plugin and { function() plugin.diagnostics_document({ prompt = 'Diags: ', }) end, }, },
     { '<leader>D',  mode = { 'n', 'v', }, plugin and { function() plugin.diagnostics_workspace({ prompt = '*Diags: ', sort = 0, }) end, }, },
 
-    { '<leader>w',  mode = 'n',           plugin and { function() plugin.live_grep({ prompt = 'rg: ', }) end, }, },
+    { '<leader>w',  mode = 'n',           plugin and { function() plugin.live_grep({ prompt = '*rg: ', }) end, }, },
+    { '<leader>/',  mode = 'n',           plugin and { function() plugin.lgrep_curbuf({ prompt = 'rg: ', }) end, }, },
     {
       '<leader>w',
       mode = 'v',
