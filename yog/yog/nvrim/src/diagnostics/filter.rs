@@ -20,17 +20,17 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
     let Ok(buf_path) = cur_buf
         .get_name()
         .map(|s| s.to_string_lossy().to_string())
-        .inspect_err(|error| {
-            ytil_nvim_oxi::api::notify_error(format!(
-                "error getting buffer name | buffer={cur_buf:#?} error={error:#?}"
+        .inspect_err(|err| {
+            ytil_nvim_oxi::notify::error(format!(
+                "error getting buffer name | buffer={cur_buf:#?} error={err:#?}"
             ));
         })
     else {
         return vec![];
     };
 
-    let Ok(buf_with_path) = BufferWithPath::try_from(cur_buf).inspect_err(|error| {
-        ytil_nvim_oxi::api::notify_error(format!("error creating BufferWithContent | error={error:#?}"));
+    let Ok(buf_with_path) = BufferWithPath::try_from(cur_buf).inspect_err(|err| {
+        ytil_nvim_oxi::notify::error(format!("error creating BufferWithContent | error={err:#?}"));
     }) else {
         return vec![];
     };
@@ -40,16 +40,16 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
     let buffer_filter = BufferFilterImpl;
     if buffer_filter
         .skip_diagnostic(&buf_with_path)
-        .inspect_err(|error| {
-            ytil_nvim_oxi::api::notify_error(format!("error getting filter by buffer | error={error:#?}"));
+        .inspect_err(|err| {
+            ytil_nvim_oxi::notify::error(format!("error getting filter by buffer | error={err:#?}"));
         })
         .unwrap_or(false)
     {
         return vec![];
     }
 
-    let Ok(filters) = DiagnosticsFilters::all(&lsp_diags).inspect_err(|error| {
-        ytil_nvim_oxi::api::notify_error(format!("error getting diagnostics filters | error={error:#?}"));
+    let Ok(filters) = DiagnosticsFilters::all(&lsp_diags).inspect_err(|err| {
+        ytil_nvim_oxi::notify::error(format!("error getting diagnostics filters | error={err:#?}"));
     }) else {
         return vec![];
     };
@@ -58,9 +58,9 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
     for lsp_diag in lsp_diags {
         if filters
             .skip_diagnostic(&buf_with_path, &lsp_diag)
-            .inspect_err(|error| {
-                ytil_nvim_oxi::api::notify_error(format!(
-                    "error filtering diagnostic | buffer={buf_path:?} diagnostic={lsp_diag:#?} error={error:#?}",
+            .inspect_err(|err| {
+                ytil_nvim_oxi::notify::error(format!(
+                    "error filtering diagnostic | buffer={buf_path:?} diagnostic={lsp_diag:#?} error={err:#?}",
                 ));
             })
             .is_ok_and(identity)

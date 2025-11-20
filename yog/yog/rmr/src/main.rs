@@ -80,21 +80,21 @@ fn process(file: &str) -> color_eyre::Result<()> {
         .and_then(|metadata: Metadata| -> color_eyre::Result<()> {
             let ft = metadata.file_type();
             if ft.is_file() || ft.is_symlink() {
-                std::fs::remove_file(path).inspect_err(|error| {
+                std::fs::remove_file(path).inspect_err(|err| {
                     eprintln!(
                         "Cannot delete file={} error={}",
                         path.display(),
-                        format!("{error:?}").red()
+                        format!("{err:?}").red()
                     );
                 })?;
                 return Ok(());
             }
             if ft.is_dir() {
-                std::fs::remove_dir_all(path).inspect_err(|error| {
+                std::fs::remove_dir_all(path).inspect_err(|err| {
                     eprintln!(
                         "Cannot delete dir={} error={}",
                         path.display(),
-                        format!("{error:?}").red()
+                        format!("{err:?}").red()
                     );
                 })?;
                 return Ok(());

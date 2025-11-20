@@ -5,7 +5,7 @@ use std::time::Instant;
 use color_eyre::owo_colors::OwoColorize as _;
 use ytil_cmd::Cmd;
 use ytil_cmd::CmdError;
-use ytil_cmd::CmdExt;
+use ytil_cmd::CmdExt as _;
 
 pub mod bash_language_server;
 pub mod commitlint;
@@ -52,9 +52,9 @@ pub trait Installer: Sync + Send {
             .and_then(|output| {
                 std::str::from_utf8(&output.stdout)
                     .map(ToOwned::to_owned)
-                    .map_err(|error| CmdError::Utf8 {
+                    .map_err(|err| CmdError::Utf8 {
                         cmd: Cmd::from(&cmd),
-                        source: error,
+                        source: err,
                     })
             })
             .map_err(From::from);
@@ -89,11 +89,11 @@ pub trait Installer: Sync + Send {
         let start = Instant::now();
 
         // Install phase
-        self.install().inspect_err(|error| {
+        self.install().inspect_err(|err| {
             eprintln!(
                 "{} error installing error=\n{}",
                 self.bin_name().red().bold(),
-                format!("{error:#?}").red()
+                format!("{err:#?}").red()
             );
         })?;
 
@@ -115,14 +115,14 @@ pub trait Installer: Sync + Send {
                     check_output.trim_matches(|c| c == '\n' || c == '\r').white().bold()
                 );
             }
-            Some(Err(error)) => {
+            Some(Err(err)) => {
                 eprintln!(
                     "{} error checking {} error=\n{}",
                     self.bin_name().red(),
                     format_timing(start, past_install, check_duration),
-                    format!("{error:#?}").red()
+                    format!("{err:#?}").red()
                 );
-                return Err(error);
+                return Err(err);
             }
             None => {
                 println!(

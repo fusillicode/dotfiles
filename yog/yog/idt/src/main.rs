@@ -91,11 +91,11 @@ fn report<'a>(
 
     for (bin_name, result) in installers_res {
         match result {
-            Err(error) => {
+            Err(err) => {
                 eprintln!(
                     "{} installer thread panicked error={}",
                     bin_name.red(), // removed bold
-                    format!("{error:#?}").red()
+                    format!("{err:#?}").red()
                 );
                 errors_bins.push(*bin_name);
             }

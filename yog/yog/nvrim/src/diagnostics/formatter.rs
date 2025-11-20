@@ -14,12 +14,12 @@ use serde::Deserialize;
 #[allow(clippy::needless_pass_by_value)]
 pub fn format(diagnostic: Diagnostic) -> Option<String> {
     let Some(msg) = get_msg(&diagnostic).map(|s| s.trim_end_matches('.').to_string()) else {
-        ytil_nvim_oxi::api::notify_error(format!("error missing diagnostic message | diagnostic={diagnostic:#?}"));
+        ytil_nvim_oxi::notify::error(format!("error missing diagnostic message | diagnostic={diagnostic:#?}"));
         return None;
     };
 
     let Some(src) = get_src(&diagnostic).map(str::to_string) else {
-        ytil_nvim_oxi::api::notify_error(format!("error missing diagnostic source | diagnostic={diagnostic:#?}"));
+        ytil_nvim_oxi::notify::error(format!("error missing diagnostic source | diagnostic={diagnostic:#?}"));
         return None;
     };
 

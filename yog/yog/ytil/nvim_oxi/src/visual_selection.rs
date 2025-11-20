@@ -58,8 +58,8 @@ pub fn get_lines(_: ()) -> Vec<String> {
 /// - Return [`None`] if the two marks reference different buffers.
 /// - Return [`None`] if getting lines or text fails.
 pub fn get(_: ()) -> Option<Selection> {
-    let Ok(mut bounds) = SelectionBounds::new().inspect_err(|error| {
-        crate::api::notify_error(format!("error creating selection bounds | error={error:#?}"));
+    let Ok(mut bounds) = SelectionBounds::new().inspect_err(|err| {
+        crate::notify::error(format!("error creating selection bounds | error={err:#?}"));
     }) else {
         return None;
     };
@@ -69,9 +69,9 @@ pub fn get(_: ()) -> Option<Selection> {
     // Handle linewise mode: grab full lines
     if nvim_oxi::api::get_mode().mode == "V" {
         let end_lnum = bounds.end().lnum;
-        let Ok(last_line) = cur_buf.get_line(end_lnum).inspect_err(|error| {
-            crate::api::notify_error(format!(
-                "error getting selection last line | end_lnum={end_lnum} buffer={cur_buf:#?} error={error:#?}",
+        let Ok(last_line) = cur_buf.get_line(end_lnum).inspect_err(|err| {
+            crate::notify::error(format!(
+                "error getting selection last line | end_lnum={end_lnum} buffer={cur_buf:#?} error={err:#?}",
             ));
         }) else {
             return None;
@@ -82,8 +82,8 @@ pub fn get(_: ()) -> Option<Selection> {
         // end.lnum inclusive for lines range
         let Ok(lines) = cur_buf
             .get_lines(bounds.start().lnum..=bounds.end().lnum, false)
-            .inspect_err(|error| {
-                crate::api::notify_error(format!("error getting lines | buffer={cur_buf:#?} error={error:#?}"));
+            .inspect_err(|err| {
+                crate::notify::error(format!("error getting lines | buffer={cur_buf:#?} error={err:#?}"));
             })
         else {
             return None;
@@ -107,9 +107,9 @@ pub fn get(_: ()) -> Option<Selection> {
             bounds.end().col,
             &GetTextOpts::default(),
         )
-        .inspect_err(|error| {
-            crate::api::notify_error(format!(
-                "error getting text | buffer={cur_buf:#?} bounds={bounds:#?} error={error:#?}"
+        .inspect_err(|err| {
+            crate::notify::error(format!(
+                "error getting text | buffer={cur_buf:#?} bounds={bounds:#?} error={err:#?}"
             ));
         })
     else {
@@ -329,7 +329,7 @@ impl Poppable for Pos {
 /// Calls Nvim's `getpos()` function for the supplied mark identifier and returns a normalized [`Pos`].
 ///
 /// On success, converts the raw 1-based tuple into a 0-based [`Pos`].
-/// On failure, emits an error notification via [`crate::api::notify_error`] and wraps the error with
+/// On failure, emits an error notification via [`crate::notify::error`] and wraps the error with
 /// additional context using [`color_eyre::eyre`].
 ///
 /// # Arguments
@@ -341,8 +341,8 @@ impl Poppable for Pos {
 /// - Deserializing the returned tuple into [`Pos`] fails.
 fn get_pos(mark: &str) -> color_eyre::Result<Pos> {
     nvim_oxi::api::call_function::<_, Pos>("getpos", Array::from_iter([mark]))
-        .inspect_err(|error| {
-            crate::api::notify_error(format!("error getting pos | mark={mark:?} error={error:#?}"));
+        .inspect_err(|err| {
+            crate::notify::error(format!("error getting pos | mark={mark:?} error={err:#?}"));
         })
         .wrap_err_with(|| format!("error getting position | mark={mark:?}"))
 }
