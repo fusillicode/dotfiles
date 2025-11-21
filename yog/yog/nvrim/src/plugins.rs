@@ -1,3 +1,5 @@
+//! Custom Neovim plugins.
+
 use nvim_oxi::Dictionary;
 
 /// Scratch files selection and creation.
