@@ -34,8 +34,8 @@ return {
       winopts    = {
         title       = '',
         title_flags = false,
-        width       = 0.70,
-        height      = 0.40,
+        width       = 1,
+        height      = 1,
         row         = 0,
         backdrop    = 100,
         preview     = { default = 'hidden', },
