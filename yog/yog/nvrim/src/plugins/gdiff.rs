@@ -49,8 +49,8 @@ fn get_hunks(_: ()) {
         all_items,
     };
 
-    let mut displayable_hunks = vec![quickfix.trigger_value.clone()];
-    displayable_hunks.extend(hunks.iter().map(|(path, lnum)| format!("{path}:{lnum}")));
+    let mut displayable_hunks: Vec<_> = hunks.iter().map(|(path, lnum)| format!("{path}:{lnum}")).collect();
+    displayable_hunks.push(quickfix.trigger_value.clone());
 
     let callback = {
         move |choice_idx: usize| {
