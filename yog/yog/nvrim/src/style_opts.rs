@@ -25,7 +25,7 @@ fn fzf_lua_previewer(previewer_kind: Option<String>) -> Dictionary {
         "previewer": previewer_kind.unwrap_or_else(|| "builtin".to_string()),
         "winopts": dict! {
             "title": "",
-            "height": 0.95,
+            "height": 1,
             "preview": dict! {
                 "default":  "builtin",
                 "layout":  "vertical",
