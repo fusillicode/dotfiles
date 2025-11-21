@@ -79,11 +79,7 @@ where
                     return Ok(());
                 }
                 if let Some(idx) = idx {
-                    // The index passed to the callback is adjusted to take into account:
-                    // - The 1-based indexing of the pickers
-                    // - The additional quickfix synthetic entry in the picker
-                    let adjusted_idx = if quickfix.is_some() { 2 } else { 1 };
-                    callback(idx.saturating_sub(adjusted_idx));
+                    callback(idx.saturating_sub(1));
                 }
                 Ok(())
             },
