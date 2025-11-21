@@ -34,12 +34,12 @@ config.colors = {
     inactive_tab = { bg_color = background, fg_color = 'grey', },
   },
 }
-config.font_size = 18.5
-config.font = wezterm.font('PxPlus ToshibaSat 9x16')
+config.font_size = 16
+config.font = wezterm.font('0xProto NL')
 config.freetype_load_target = 'Light'
 -- No ligatures thanks
 config.harfbuzz_features = { 'calt=0', 'clig=0', 'liga=0', }
-config.line_height = 1.4
+config.line_height = 1.3
 
 config.keys = {
   { key = 'LeftArrow',  mods = 'OPT',         action = act.SendKey { key = 'b', mods = 'ALT', }, },
