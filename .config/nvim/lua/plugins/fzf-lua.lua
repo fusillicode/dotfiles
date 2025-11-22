@@ -38,7 +38,7 @@ return {
         height      = 1,
         row         = 0,
         backdrop    = 100,
-        preview     = { default = 'hidden', },
+        preview     = nvrim.style_opts.fzf_lua().winopts.preview,
       },
       previewers = {
         builtin = {
@@ -80,7 +80,7 @@ return {
           glob_flag      = '--iglob',
           glob_separator = '%s%-%-',
         },
-        nvrim.style_opts.fzf_lua_previewer()
+        nvrim.style_opts.fzf_lua()
       ),
       git        = {
         status = vim.tbl_extend('error',
@@ -91,10 +91,10 @@ return {
               ['ctrl-x'] = { fn = plugin.actions.git_reset, reload = true, },
             },
           },
-          nvrim.style_opts.fzf_lua_previewer('git_diff')
+          nvrim.style_opts.fzf_lua('git_diff')
         ),
       },
-      lsp        = nvrim.style_opts.fzf_lua_previewer(),
+      lsp        = nvrim.style_opts.fzf_lua(),
     })
     plugin.register_ui_select()
     keymaps.set(plugin_keymaps(plugin))
