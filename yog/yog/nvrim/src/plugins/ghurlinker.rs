@@ -24,7 +24,7 @@ pub fn dict() -> Dictionary {
 /// - `link_type` The type of GitHub link to generate (e.g., "blob" for file view).
 #[allow(clippy::needless_pass_by_value)]
 fn get_link((link_type, open): (String, Option<bool>)) {
-    let Some(cur_buf_path) = ytil_nvim_oxi::buffer::get_relative_buffer_path(&nvim_oxi::api::get_current_buf()) else {
+    let Some(cur_buf_path) = ytil_nvim_oxi::buffer::get_relative_path_to_cwd(&nvim_oxi::api::get_current_buf()) else {
         return;
     };
     if cur_buf_path.as_os_str().is_empty() {

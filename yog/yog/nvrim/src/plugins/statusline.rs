@@ -37,9 +37,9 @@ pub fn dict() -> Dictionary {
 /// acquisition failure.
 fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
     let cur_buf = nvim_oxi::api::get_current_buf();
-    let cur_buf_path = ytil_nvim_oxi::buffer::get_relative_buffer_path(&cur_buf)?
-        .display()
-        .to_string();
+    let cur_buf_path = ytil_nvim_oxi::buffer::get_relative_path_to_cwd(&cur_buf)
+        .map(|x| x.display().to_string())
+        .unwrap_or_default();
 
     let cur_buf_nr = cur_buf.handle();
     let mut statusline = Statusline {

@@ -17,17 +17,6 @@ use crate::diagnostics::filters::buffer::BufferFilterImpl;
 /// Filters LSP diagnostics based on configured filters.
 pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
     let cur_buf = Buffer::current();
-    let Ok(buf_path) = cur_buf
-        .get_name()
-        .map(|s| s.to_string_lossy().to_string())
-        .inspect_err(|err| {
-            ytil_nvim_oxi::notify::error(format!(
-                "error getting buffer name | buffer={cur_buf:#?} error={err:#?}"
-            ));
-        })
-    else {
-        return vec![];
-    };
 
     let Ok(buf_with_path) = BufferWithPath::try_from(cur_buf).inspect_err(|err| {
         ytil_nvim_oxi::notify::error(format!("error creating BufferWithContent | error={err:#?}"));
@@ -60,7 +49,8 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
             .skip_diagnostic(&buf_with_path, &lsp_diag)
             .inspect_err(|err| {
                 ytil_nvim_oxi::notify::error(format!(
-                    "error filtering diagnostic | buffer={buf_path:?} diagnostic={lsp_diag:#?} error={err:#?}",
+                    "error filtering diagnostic | buffer={:?} diagnostic={lsp_diag:#?} error={err:#?}",
+                    buf_with_path.path()
                 ));
             })
             .is_ok_and(identity)

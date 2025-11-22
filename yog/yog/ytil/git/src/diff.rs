@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::process::Command;
 
 use color_eyre::eyre::Context;
@@ -17,8 +18,14 @@ const PATH_LINE_PREFIX: &str = "diff --git ";
 ///
 /// # Rationale
 /// Uses `-U0` to produce the most fine-grained line diffs.
-pub fn get_raw() -> color_eyre::Result<Vec<String>> {
-    let output = Command::new("git").args(["diff", "-U0"]).exec()?;
+pub fn get_raw(path: Option<&Path>) -> color_eyre::Result<Vec<String>> {
+    let mut args = vec!["diff".into(), "-U0".into()];
+
+    if let Some(path) = path {
+        args.push(path.display().to_string())
+    }
+
+    let output = Command::new("git").args(args).exec()?;
 
     Ok(ytil_cmd::extract_success_output(&output)?
         .lines()

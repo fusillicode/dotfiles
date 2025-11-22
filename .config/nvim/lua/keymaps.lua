@@ -102,6 +102,7 @@ function M.fzf_lua(plugin)
     { '<leader>yL', mode = { 'n', 'v', }, plugin and { function() nvrim.plugins.ghurlinker.get_link('blob', true) end, }, },
     { '<leader>yB', mode = { 'n', 'v', }, plugin and { function() nvrim.plugins.ghurlinker.get_link('blame', true) end, }, },
     { '<leader>gh', mode = { 'n', 'v', }, plugin and { nvrim.plugins.gdiff.get_hunks, }, },
+    { '<leader>gh', mode = { 'n', 'v', }, plugin and { function() nvrim.plugins.gdiff.get_hunks(true) end, }, },
   }
 end
 
