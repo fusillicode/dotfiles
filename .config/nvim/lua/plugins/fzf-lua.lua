@@ -38,7 +38,6 @@ return {
         height      = 1,
         row         = 0,
         backdrop    = 100,
-        preview     = nvrim.style_opts.fzf_lua().winopts.preview,
       },
       previewers = {
         builtin = {
@@ -63,13 +62,15 @@ return {
       files      = {
         -- Jump to line! https://github.com/ibhagwan/fzf-lua/discussions/2032#discussioncomment-13046310
         line_query = true,
+        previewer  = false,
         winopts    = { title = '', },
         fzf_opts   = { ['--ansi'] = true, },
         fd_opts    = table.concat(nvrim.cli.get_fd_flags(), ' '),
         git_icons  = true,
       },
       buffers    = {
-        winopts = { title = '', },
+        previewer             = false,
+        winopts               = { title = '', },
         ignore_current_buffer = true,
       },
       grep       = vim.tbl_extend('error',

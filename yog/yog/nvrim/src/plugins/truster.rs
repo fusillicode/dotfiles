@@ -6,13 +6,11 @@
 
 use std::ops::Deref;
 use std::path::Path;
-use std::path::PathBuf;
 
 use color_eyre::eyre;
 use color_eyre::eyre::Context;
 use color_eyre::eyre::eyre;
 use nvim_oxi::Dictionary;
-use nvim_oxi::api::Buffer;
 use tree_sitter::Node;
 use tree_sitter::Parser;
 use tree_sitter::Point;
@@ -30,17 +28,8 @@ fn run_test(_: ()) {
     let Some(position) = CursorPosition::get_current().map(PointWrap::from) else {
         return;
     };
-    let cur_buf = Buffer::current();
 
-    let Ok(file_path) = cur_buf
-        .get_name()
-        .map(|s| PathBuf::from(s.to_string_lossy().as_ref()))
-        .inspect_err(|err| {
-            ytil_nvim_oxi::notify::error(format!(
-                "error getting buffer name | buffer={cur_buf:#?} error={err:#?}"
-            ));
-        })
-    else {
+    let Some(file_path) = ytil_nvim_oxi::buffer::get_absolute_path(None) else {
         return;
     };
 
