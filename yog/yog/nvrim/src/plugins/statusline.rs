@@ -39,6 +39,8 @@ fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
     let current_buffer = nvim_oxi::api::get_current_buf();
     let current_buffer_path = ytil_nvim_oxi::buffer::get_relative_path_to_cwd(&current_buffer)
         .map(|x| x.display().to_string())
+        // This `unwrap_or_default` is to avoid "null" in the statusline when an empty buffer is
+        // open.
         .unwrap_or_default();
 
     let current_buffer_nr = current_buffer.handle();

@@ -16,6 +16,10 @@ pub fn dict() -> Dictionary {
 ///
 /// Fetches git diff output, parses paths and line numbers of changed hunks, displays them in a Neovim selection UI, and
 /// on selection opens the buffer at the specified line.
+///
+/// # Arguments
+/// `only_current_buffer` If `Some(true)`, restricts the diff to only the current buffer's changes, If `None` or
+/// `Some(false)`, shows all changed hunks across the repository.
 fn get_hunks(only_current_buffer: Option<bool>) {
     let current_buffer_path = ytil_nvim_oxi::buffer::get_absolute_path(
         only_current_buffer

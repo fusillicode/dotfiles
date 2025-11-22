@@ -380,8 +380,8 @@ pub fn get_relative_path_to_cwd(current_buffer: &Buffer) -> Option<PathBuf> {
 /// - `current_buffer` The buffer to get the path for. If `None`, uses the current buffer.
 ///
 /// # Returns
-/// Returns `Some(PathBuf)` containing the absolute path if successful, or `None` if the buffer has no name, an empty
-/// name, or an error occurs.
+/// - `Some(PathBuf)` containing the absolute path if successful.
+/// - `None` if the buffer has no name, an empty name, or an error occurs.
 ///
 /// # Errors
 /// Errors are logged internally but do not propagate; the function returns [`None`] on failure.
