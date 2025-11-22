@@ -64,14 +64,14 @@ pub fn get(_: ()) -> Option<Selection> {
         return None;
     };
 
-    let cur_buf = Buffer::from(bounds.buf_id());
+    let current_buffer = Buffer::from(bounds.buf_id());
 
     // Handle linewise mode: grab full lines
     if nvim_oxi::api::get_mode().mode == "V" {
         let end_lnum = bounds.end().lnum;
-        let Ok(last_line) = cur_buf.get_line(end_lnum).inspect_err(|err| {
+        let Ok(last_line) = current_buffer.get_line(end_lnum).inspect_err(|err| {
             crate::notify::error(format!(
-                "error getting selection last line | end_lnum={end_lnum} buffer={cur_buf:#?} error={err:#?}",
+                "error getting selection last line | end_lnum={end_lnum} buffer={current_buffer:#?} error={err:#?}",
             ));
         }) else {
             return None;
@@ -80,10 +80,12 @@ pub fn get(_: ()) -> Option<Selection> {
         bounds.start.col = 0;
         bounds.end.col = last_line.len();
         // end.lnum inclusive for lines range
-        let Ok(lines) = cur_buf
+        let Ok(lines) = current_buffer
             .get_lines(bounds.start().lnum..=bounds.end().lnum, false)
             .inspect_err(|err| {
-                crate::notify::error(format!("error getting lines | buffer={cur_buf:#?} error={err:#?}"));
+                crate::notify::error(format!(
+                    "error getting lines | buffer={current_buffer:#?} error={err:#?}"
+                ));
             })
         else {
             return None;
@@ -93,14 +95,14 @@ pub fn get(_: ()) -> Option<Selection> {
 
     // Charwise mode:
     // Clamp end.col to line length, then make exclusive by +1 (if not already at end).
-    if let Ok(line) = cur_buf.get_line(bounds.end().lnum)
+    if let Ok(line) = current_buffer.get_line(bounds.end().lnum)
         && bounds.end().col < line.len()
     {
         bounds.incr_end_col(); // make exclusive
     }
 
     // For multi-line charwise selection rely on `nvim_buf_get_text` with an exclusive end.
-    let Ok(lines) = cur_buf
+    let Ok(lines) = current_buffer
         .get_text(
             bounds.line_range(),
             bounds.start().col,
@@ -109,7 +111,7 @@ pub fn get(_: ()) -> Option<Selection> {
         )
         .inspect_err(|err| {
             crate::notify::error(format!(
-                "error getting text | buffer={cur_buf:#?} bounds={bounds:#?} error={err:#?}"
+                "error getting text | buffer={current_buffer:#?} bounds={bounds:#?} error={err:#?}"
             ));
         })
     else {

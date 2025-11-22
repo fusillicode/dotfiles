@@ -26,7 +26,7 @@ pub trait BufferFilter {
     /// Checks if diagnostics should be skipped for the given buffer.
     ///
     /// # Arguments
-    /// - `buf_with_path` Buffer and its absolute path for filtering.
+    /// - `buffer_with_path` Buffer and its absolute path for filtering.
     ///
     /// # Returns
     /// - `Ok(true)` Buffer should be skipped (blacklisted path or type).
@@ -34,15 +34,15 @@ pub trait BufferFilter {
     ///
     /// # Errors
     /// - Propagates [`nvim_oxi::api::Error`] from buffer type retrieval.
-    fn skip_diagnostic(&self, buf_with_path: &BufferWithPath) -> nvim_oxi::Result<bool> {
+    fn skip_diagnostic(&self, buffer_with_path: &BufferWithPath) -> nvim_oxi::Result<bool> {
         if self
             .blacklisted_buf_paths()
             .iter()
-            .any(|bp| buf_with_path.path.contains(bp))
+            .any(|bp| buffer_with_path.path.contains(bp))
         {
             return Ok(true);
         }
-        let buf_type = buf_with_path.buffer.get_buf_type()?;
+        let buf_type = buffer_with_path.buffer.get_buf_type()?;
         Ok(self.blacklisted_buf_types().contains(&buf_type.as_str()))
     }
 }
@@ -145,9 +145,9 @@ mod tests {
         #[case] expected: bool,
     ) {
         let filter = TestBufferFilter::new(blacklisted_paths, blacklisted_types);
-        let buf_with_path = create_buffer_with_path(buffer_path, buffer_type);
+        let buffer_with_path = create_buffer_with_path(buffer_path, buffer_type);
 
-        assert2::let_assert!(Ok(result) = filter.skip_diagnostic(&buf_with_path));
+        assert2::let_assert!(Ok(result) = filter.skip_diagnostic(&buffer_with_path));
         pretty_assertions::assert_eq!(result, expected);
     }
 

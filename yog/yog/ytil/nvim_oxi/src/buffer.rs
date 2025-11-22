@@ -353,29 +353,31 @@ where
 /// If the buffer path does not start with the cwd, returns the absolute path as-is.
 ///
 /// # Arguments
-/// - `cur_buf` The buffer whose path to retrieve.
+/// - `current_buffer` The buffer whose path to retrieve.
 ///
 /// # Returns
 /// The relative path as a [`PathBuf`] if successful, [`None`] on error.
 ///
 /// # Errors
 /// Errors (e.g., cannot get cwd or buffer name) are notified to Nvim but not propagated.
-pub fn get_relative_path_to_cwd(cur_buf: &Buffer) -> Option<PathBuf> {
+pub fn get_relative_path_to_cwd(current_buffer: &Buffer) -> Option<PathBuf> {
     let cwd = nvim_oxi::api::call_function::<_, String>("getcwd", Array::new())
         .inspect_err(|err| {
             crate::notify::error(format!("error getting cwd | error={err:#?}"));
         })
         .ok()?;
 
-    let cur_buf_path = get_absolute_path(Some(cur_buf))?.display().to_string();
+    let current_buffer_path = get_absolute_path(Some(current_buffer))?.display().to_string();
 
-    Some(PathBuf::from(cur_buf_path.strip_prefix(&cwd).unwrap_or(&cur_buf_path)))
+    Some(PathBuf::from(
+        current_buffer_path.strip_prefix(&cwd).unwrap_or(&current_buffer_path),
+    ))
 }
 
 /// Retrieves the absolute path of the specified buffer, or the current buffer if none provided.
 ///
 /// # Arguments
-/// - `cur_buf` The buffer to get the path for. If `None`, uses the current buffer.
+/// - `current_buffer` The buffer to get the path for. If `None`, uses the current buffer.
 ///
 /// # Returns
 /// Returns `Some(PathBuf)` containing the absolute path if successful, or `None` if the buffer has no name, an empty
@@ -386,7 +388,7 @@ pub fn get_relative_path_to_cwd(cur_buf: &Buffer) -> Option<PathBuf> {
 ///
 /// # Assumptions
 /// Assumes that the buffer's name represents a valid path.
-pub fn get_absolute_path(cur_buf: Option<&Buffer>) -> Option<PathBuf> {
+pub fn get_absolute_path(current_buffer: Option<&Buffer>) -> Option<PathBuf> {
     fn get_absolute_path_by_ref(buf: &Buffer) -> Option<PathBuf> {
         let path = buf
             .get_name()
@@ -403,11 +405,11 @@ pub fn get_absolute_path(cur_buf: Option<&Buffer>) -> Option<PathBuf> {
         path.map(PathBuf::from)
     }
 
-    let Some(cur_buf) = cur_buf else {
+    let Some(current_buffer) = current_buffer else {
         return get_absolute_path_by_ref(&Buffer::current());
     };
 
-    get_absolute_path_by_ref(cur_buf)
+    get_absolute_path_by_ref(current_buffer)
 }
 
 #[cfg(test)]

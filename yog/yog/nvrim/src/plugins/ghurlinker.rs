@@ -24,10 +24,11 @@ pub fn dict() -> Dictionary {
 /// - `link_type` The type of GitHub link to generate (e.g., "blob" for file view).
 #[allow(clippy::needless_pass_by_value)]
 fn get_link((link_type, open): (String, Option<bool>)) {
-    let Some(cur_buf_path) = ytil_nvim_oxi::buffer::get_relative_path_to_cwd(&nvim_oxi::api::get_current_buf()) else {
+    let Some(current_buffer_path) = ytil_nvim_oxi::buffer::get_relative_path_to_cwd(&nvim_oxi::api::get_current_buf())
+    else {
         return;
     };
-    if cur_buf_path.as_os_str().is_empty() {
+    if current_buffer_path.as_os_str().is_empty() {
         return;
     }
 
@@ -50,7 +51,7 @@ fn get_link((link_type, open): (String, Option<bool>)) {
         &mut repo_url,
         &link_type,
         &current_commit_hash,
-        &cur_buf_path,
+        &current_buffer_path,
         &selection,
     );
 
@@ -74,7 +75,7 @@ fn get_link((link_type, open): (String, Option<bool>)) {
 /// - `repo_url` The base repository URL to modify in-place.
 /// - `link_type` The GitHub link type (e.g., "blob").
 /// - `commit_hash` The commit hash for the permalink.
-/// - `cur_buf_path` The relative path of the current buffer.
+/// - `current_buffer_path` The relative path of the current buffer.
 /// - `selection` The visual selection bounds.
 ///
 /// # Rationale
@@ -84,7 +85,7 @@ fn build_github_file_url(
     repo_url: &mut String,
     link_type: &str,
     commit_hash: &str,
-    cur_buf_path: &Path,
+    current_buffer_path: &Path,
     selection: &Selection,
 ) {
     repo_url.push('/');
@@ -92,7 +93,7 @@ fn build_github_file_url(
     repo_url.push('/');
     repo_url.push_str(commit_hash);
     repo_url.push('/');
-    repo_url.push_str(cur_buf_path.to_string_lossy().trim_start_matches('/'));
+    repo_url.push_str(current_buffer_path.to_string_lossy().trim_start_matches('/'));
     repo_url.push_str("?plain=1");
     repo_url.push('#');
     add_github_line_col_to_url(repo_url, selection.start());
@@ -156,7 +157,7 @@ mod tests {
         #[case] expected: &str,
     ) {
         let mut repo_url = initial_repo_url.to_string();
-        let cur_buf_path = Path::new(file_path);
+        let current_buffer_path = Path::new(file_path);
         let selection = {
             use ytil_nvim_oxi::visual_selection::SelectionBounds;
 
@@ -164,7 +165,7 @@ mod tests {
             Selection::new(bounds, std::iter::empty::<nvim_oxi::String>())
         };
 
-        build_github_file_url(&mut repo_url, url_kind, commit_hash, cur_buf_path, &selection);
+        build_github_file_url(&mut repo_url, url_kind, commit_hash, current_buffer_path, &selection);
 
         pretty_assertions::assert_eq!(repo_url, expected);
     }
