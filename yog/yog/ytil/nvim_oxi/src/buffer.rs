@@ -248,7 +248,7 @@ impl CursorPosition {
     ///
     /// # Returns
     /// - `Some(CursorPosition)` when the cursor location is successfully fetched.
-    /// - `None` if Nvim fails to provide the cursor position (an error is already reported via `notify_error`).
+    /// - [`None`] if Nvim fails to provide the cursor position (an error is already reported via `notify_error`).
     ///
     /// # Assumptions
     /// - Row is 1-based (Nvim convention); column is 0-based. Callers needing 0-based row for Rust indexing must
@@ -377,11 +377,11 @@ pub fn get_relative_path_to_cwd(current_buffer: &Buffer) -> Option<PathBuf> {
 /// Retrieves the absolute path of the specified buffer, or the current buffer if none provided.
 ///
 /// # Arguments
-/// - `current_buffer` The buffer to get the path for. If `None`, uses the current buffer.
+/// - `current_buffer` The buffer to get the path for. If [`None`], uses the current buffer.
 ///
 /// # Returns
 /// - `Some(PathBuf)` containing the absolute path if successful.
-/// - `None` if the buffer has no name, an empty name, or an error occurs.
+/// - [`None`] if the buffer has no name, an empty name, or an error occurs.
 ///
 /// # Errors
 /// Errors are logged internally but do not propagate; the function returns [`None`] on failure.

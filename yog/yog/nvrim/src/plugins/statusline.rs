@@ -1,7 +1,7 @@
 //! Statusline drawing helpers with diagnostics aggregation.
 //!
 //! Provides `statusline.dict()` with a `draw` function combining cwd, buffer name, cursor position and
-//! LSP diagnostic severities / counts into a formatted status line; failures yield `None` and are
+//! LSP diagnostic severities / counts into a formatted status line; failures yield [`None`] and are
 //! surfaced through [`ytil_nvim_oxi::notify::error`].
 
 use nvim_oxi::Dictionary;
@@ -33,7 +33,7 @@ pub fn dict() -> Dictionary {
 ///   [`ytil_nvim_oxi::notify::error`].
 ///
 /// # Rationale
-/// Returning `None` lets callers distinguish between a valid (possibly empty diagnostics) statusline and a data
+/// Returning [`None`] lets callers distinguish between a valid (possibly empty diagnostics) statusline and a data
 /// acquisition failure.
 fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
     let current_buffer = nvim_oxi::api::get_current_buf();
