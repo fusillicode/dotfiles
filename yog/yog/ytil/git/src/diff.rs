@@ -22,7 +22,7 @@ pub fn get_raw(path: Option<&Path>) -> color_eyre::Result<Vec<String>> {
     let mut args = vec!["diff".into(), "-U0".into()];
 
     if let Some(path) = path {
-        args.push(path.display().to_string())
+        args.push(path.display().to_string());
     }
 
     let output = Command::new("git").args(args).exec()?;

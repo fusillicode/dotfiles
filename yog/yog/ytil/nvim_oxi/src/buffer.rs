@@ -399,7 +399,7 @@ pub fn get_absolute_path(current_buffer: Option<&Buffer>) -> Option<PathBuf> {
                 ));
             })
             .ok();
-        if path.as_ref().is_some_and(|x| x.is_empty()) {
+        if path.as_ref().is_some_and(String::is_empty) {
             return None;
         }
         path.map(PathBuf::from)
