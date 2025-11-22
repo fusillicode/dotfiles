@@ -11,7 +11,7 @@ pub fn dict() -> Dictionary {
         "window": dict! {
             "border": "rounded",
         },
-        "fzf_lua_previewer": fn_from!(fzf_lua_previewer)
+        "fzf_lua": fn_from!(fzf_lua),
     }
 }
 
@@ -20,7 +20,7 @@ pub fn dict() -> Dictionary {
 /// # Arguments
 /// - `previewer_kind` Optional override for the `previewer` key (falls back to the string literal `"builtin"` when.
 ///   [`Option::None`]).
-fn fzf_lua_previewer(previewer_kind: Option<String>) -> Dictionary {
+fn fzf_lua(previewer_kind: Option<String>) -> Dictionary {
     dict! {
         "previewer": previewer_kind.unwrap_or_else(|| "builtin".to_string()),
         "winopts": dict! {
