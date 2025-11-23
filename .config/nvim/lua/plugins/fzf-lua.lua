@@ -30,6 +30,7 @@ return {
         file_icons = false,
         no_header = true,
         no_header_i = true,
+        previewer = false,
       },
       winopts    = {
         title       = '',
@@ -38,7 +39,6 @@ return {
         height      = 1,
         row         = 0,
         backdrop    = 100,
-        preview     = nvrim.style_opts.fzf_lua().winopts.preview,
       },
       previewers = {
         builtin = {
@@ -69,7 +69,7 @@ return {
         git_icons  = true,
       },
       buffers    = {
-        winopts = { title = '', },
+        winopts               = { title = '', },
         ignore_current_buffer = true,
       },
       grep       = vim.tbl_extend('error',

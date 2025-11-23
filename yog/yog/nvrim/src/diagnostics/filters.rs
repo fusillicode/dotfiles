@@ -25,6 +25,12 @@ pub struct BufferWithPath {
     path: String,
 }
 
+impl BufferWithPath {
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+}
+
 impl TryFrom<Buffer> for BufferWithPath {
     type Error = color_eyre::eyre::Error;
 

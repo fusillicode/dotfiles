@@ -1,7 +1,7 @@
 //! Statusline drawing helpers with diagnostics aggregation.
 //!
 //! Provides `statusline.dict()` with a `draw` function combining cwd, buffer name, cursor position and
-//! LSP diagnostic severities / counts into a formatted status line; failures yield `None` and are
+//! LSP diagnostic severities / counts into a formatted status line; failures yield [`None`] and are
 //! surfaced through [`ytil_nvim_oxi::notify::error`].
 
 use nvim_oxi::Dictionary;
@@ -33,25 +33,27 @@ pub fn dict() -> Dictionary {
 ///   [`ytil_nvim_oxi::notify::error`].
 ///
 /// # Rationale
-/// Returning `None` lets callers distinguish between a valid (possibly empty diagnostics) statusline and a data
+/// Returning [`None`] lets callers distinguish between a valid (possibly empty diagnostics) statusline and a data
 /// acquisition failure.
 fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
-    let cur_buf = nvim_oxi::api::get_current_buf();
-    let cur_buf_path = ytil_nvim_oxi::buffer::get_relative_buffer_path(&cur_buf)?
-        .display()
-        .to_string();
+    let current_buffer = nvim_oxi::api::get_current_buf();
+    let current_buffer_path = ytil_nvim_oxi::buffer::get_relative_path_to_cwd(&current_buffer)
+        .map(|x| x.display().to_string())
+        // This `unwrap_or_default` is to avoid "null" in the statusline when an empty buffer is
+        // open.
+        .unwrap_or_default();
 
-    let cur_buf_nr = cur_buf.handle();
+    let current_buffer_nr = current_buffer.handle();
     let mut statusline = Statusline {
-        cur_buf_path: &cur_buf_path,
-        cur_buf_diags: SeverityBuckets::default(),
+        current_buffer_path: &current_buffer_path,
+        current_buffer_diags: SeverityBuckets::default(),
         workspace_diags: SeverityBuckets::default(),
         cursor_position: CursorPosition::get_current()?,
     };
     for diagnostic in diagnostics {
         statusline.workspace_diags.inc(diagnostic.severity);
-        if cur_buf_nr == diagnostic.bufnr {
-            statusline.cur_buf_diags.inc(diagnostic.severity);
+        if current_buffer_nr == diagnostic.bufnr {
+            statusline.current_buffer_diags.inc(diagnostic.severity);
         }
     }
 
@@ -146,9 +148,9 @@ impl FromIterator<(DiagnosticSeverity, u16)> for SeverityBuckets {
 struct Statusline<'a> {
     /// The current buffer path.
     // TODO: maybe switch to Path
-    cur_buf_path: &'a str,
+    current_buffer_path: &'a str,
     /// Diagnostics for the current buffer.
-    cur_buf_diags: SeverityBuckets,
+    current_buffer_diags: SeverityBuckets,
     /// Diagnostics for the workspace.
     workspace_diags: SeverityBuckets,
     /// Current cursor position used to render the trailing `row:col` segment.
@@ -167,20 +169,20 @@ impl Statusline<'_> {
     fn draw(&self) -> String {
         // Build current buffer diagnostics (with trailing space if any present) manually to avoid
         // iterator allocation and secondary pass (.any()).
-        let mut cur_buf_segment = String::with_capacity(self.cur_buf_diags.approx_render_len());
+        let mut current_buffer_segment = String::with_capacity(self.current_buffer_diags.approx_render_len());
         let mut wrote_any = false;
-        for (sev, count) in self.cur_buf_diags.iter() {
+        for (sev, count) in self.current_buffer_diags.iter() {
             if count == 0 {
                 continue;
             }
             if wrote_any {
-                cur_buf_segment.push(' ');
+                current_buffer_segment.push(' ');
             }
-            cur_buf_segment.push_str(&draw_diagnostics((sev, count)));
+            current_buffer_segment.push_str(&draw_diagnostics((sev, count)));
             wrote_any = true;
         }
         if wrote_any {
-            cur_buf_segment.push(' '); // maintain previous trailing space contract
+            current_buffer_segment.push(' '); // maintain previous trailing space contract
         }
 
         // Workspace diagnostics (no trailing space).
@@ -198,8 +200,8 @@ impl Statusline<'_> {
         }
 
         format!(
-            "{cur_buf_segment}%#StatusLine#{} %m %r%={workspace_segment}%#StatusLine# {}:{}",
-            self.cur_buf_path,
+            "{current_buffer_segment}%#StatusLine#{} %m %r%={workspace_segment}%#StatusLine# {}:{}",
+            self.current_buffer_path,
             self.cursor_position.row,
             self.cursor_position.adjusted_col()
         )
@@ -239,26 +241,26 @@ mod tests {
     fn statusline_draw_when_all_diagnostics_absent_or_zero_renders_plain_statusline() {
         for statusline in [
             Statusline {
-                cur_buf_path: "foo",
-                cur_buf_diags: SeverityBuckets::default(),
+                current_buffer_path: "foo",
+                current_buffer_diags: SeverityBuckets::default(),
                 workspace_diags: SeverityBuckets::default(),
                 cursor_position: CursorPosition { row: 42, col: 7 },
             },
             Statusline {
-                cur_buf_path: "foo",
-                cur_buf_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
+                current_buffer_path: "foo",
+                current_buffer_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
                 workspace_diags: SeverityBuckets::default(),
                 cursor_position: CursorPosition { row: 42, col: 7 },
             },
             Statusline {
-                cur_buf_path: "foo",
-                cur_buf_diags: SeverityBuckets::default(),
+                current_buffer_path: "foo",
+                current_buffer_diags: SeverityBuckets::default(),
                 workspace_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
                 cursor_position: CursorPosition { row: 42, col: 7 },
             },
             Statusline {
-                cur_buf_path: "foo",
-                cur_buf_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
+                current_buffer_path: "foo",
+                current_buffer_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
                 workspace_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
                 cursor_position: CursorPosition { row: 42, col: 7 },
             },
@@ -270,8 +272,8 @@ mod tests {
     #[test]
     fn statusline_draw_when_current_buffer_has_diagnostics_renders_buffer_prefix() {
         let statusline = Statusline {
-            cur_buf_path: "foo",
-            cur_buf_diags: [(DiagnosticSeverity::Info, 1), (DiagnosticSeverity::Error, 3)]
+            current_buffer_path: "foo",
+            current_buffer_diags: [(DiagnosticSeverity::Info, 1), (DiagnosticSeverity::Error, 3)]
                 .into_iter()
                 .collect(),
             workspace_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
@@ -286,8 +288,8 @@ mod tests {
     #[test]
     fn statusline_draw_when_workspace_has_diagnostics_renders_workspace_suffix() {
         let statusline = Statusline {
-            cur_buf_path: "foo",
-            cur_buf_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
+            current_buffer_path: "foo",
+            current_buffer_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
             workspace_diags: [(DiagnosticSeverity::Info, 1), (DiagnosticSeverity::Error, 3)]
                 .into_iter()
                 .collect(),
@@ -302,8 +304,8 @@ mod tests {
     #[test]
     fn statusline_draw_when_both_buffer_and_workspace_have_diagnostics_renders_both_prefix_and_suffix() {
         let statusline = Statusline {
-            cur_buf_path: "foo",
-            cur_buf_diags: [(DiagnosticSeverity::Hint, 3), (DiagnosticSeverity::Warn, 2)]
+            current_buffer_path: "foo",
+            current_buffer_diags: [(DiagnosticSeverity::Hint, 3), (DiagnosticSeverity::Warn, 2)]
                 .into_iter()
                 .collect(),
             workspace_diags: [(DiagnosticSeverity::Info, 1), (DiagnosticSeverity::Error, 3)]
@@ -321,8 +323,8 @@ mod tests {
     fn statusline_draw_when_buffer_diagnostics_inserted_unordered_orders_by_severity() {
         // Insert in non-canonical order (Hint before Warn) and ensure output orders by severity (Warn then Hint).
         let statusline = Statusline {
-            cur_buf_path: "foo",
-            cur_buf_diags: [(DiagnosticSeverity::Hint, 5), (DiagnosticSeverity::Warn, 1)]
+            current_buffer_path: "foo",
+            current_buffer_diags: [(DiagnosticSeverity::Hint, 5), (DiagnosticSeverity::Warn, 1)]
                 .into_iter()
                 .collect(), // multi-element unchanged
             workspace_diags: SeverityBuckets::default(),
@@ -349,8 +351,8 @@ mod tests {
     fn statusline_draw_when_all_severity_counts_present_orders_buffer_and_workspace_diagnostics_by_severity() {
         // Insert diagnostics in deliberately scrambled order to validate deterministic ordering.
         let statusline = Statusline {
-            cur_buf_path: "foo",
-            cur_buf_diags: [
+            current_buffer_path: "foo",
+            current_buffer_diags: [
                 (DiagnosticSeverity::Hint, 1),
                 (DiagnosticSeverity::Error, 4),
                 (DiagnosticSeverity::Info, 2),
@@ -379,8 +381,8 @@ mod tests {
     fn statusline_draw_when_cursor_column_zero_renders_one_based_column() {
         // Column zero (internal 0-based) must render as 1 (human-facing).
         let statusline = Statusline {
-            cur_buf_path: "foo",
-            cur_buf_diags: SeverityBuckets::default(),
+            current_buffer_path: "foo",
+            current_buffer_diags: SeverityBuckets::default(),
             workspace_diags: SeverityBuckets::default(),
             cursor_position: CursorPosition { row: 10, col: 0 },
         };
@@ -391,8 +393,8 @@ mod tests {
     fn statusline_draw_when_cursor_column_non_zero_renders_column_plus_one() {
         // Non-zero column must render raw + 1.
         let statusline = Statusline {
-            cur_buf_path: "foo",
-            cur_buf_diags: SeverityBuckets::default(),
+            current_buffer_path: "foo",
+            current_buffer_diags: SeverityBuckets::default(),
             workspace_diags: SeverityBuckets::default(),
             cursor_position: CursorPosition { row: 10, col: 5 },
         };

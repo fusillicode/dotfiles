@@ -2,6 +2,7 @@
 //! of changed hunks, and presents a selection UI to jump to specific diff locations in buffers.
 
 use nvim_oxi::Dictionary;
+use nvim_oxi::api::Buffer;
 use ytil_nvim_oxi::vim_ui_select::QuickfixConfig;
 
 /// [`Dictionary`] of git diff helpers.
@@ -15,8 +16,19 @@ pub fn dict() -> Dictionary {
 ///
 /// Fetches git diff output, parses paths and line numbers of changed hunks, displays them in a Neovim selection UI, and
 /// on selection opens the buffer at the specified line.
-fn get_hunks(_: ()) {
-    let Ok(raw_output) = ytil_git::diff::get_raw().inspect_err(|err| {
+///
+/// # Arguments
+/// `only_current_buffer` If `Some(true)`, restricts the diff to only the current buffer's changes, If [`None`] or
+/// `Some(false)`, shows all changed hunks across the repository.
+fn get_hunks(only_current_buffer: Option<bool>) {
+    let current_buffer_path = ytil_nvim_oxi::buffer::get_absolute_path(
+        only_current_buffer
+            .is_some_and(std::convert::identity)
+            .then(Buffer::current)
+            .as_ref(),
+    );
+
+    let Ok(raw_output) = ytil_git::diff::get_raw(current_buffer_path.as_deref()).inspect_err(|err| {
         ytil_nvim_oxi::notify::error(format!("error getting git diff raw output | error={err:#?}"));
     }) else {
         return;

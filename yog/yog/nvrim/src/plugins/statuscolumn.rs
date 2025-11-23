@@ -47,12 +47,12 @@ pub fn dict() -> Dictionary {
 /// Using `Option<String>` (instead of empty placeholder) allows caller-side distinction between an intentional blank
 /// status column (special buffer type) and an error acquiring required state.
 fn draw((cur_lnum, extmarks, opts): (String, Vec<Extmark>, Option<Opts>)) -> Option<String> {
-    let cur_buf = Buffer::current();
-    let buf_type = cur_buf
+    let current_buffer = Buffer::current();
+    let buf_type = current_buffer
         .get_buf_type()
         .inspect_err(|err| {
             ytil_nvim_oxi::notify::error(format!(
-                "error getting buftype of current buffer | buffer={cur_buf:#?} error={err:#?}"
+                "error getting buftype of current buffer | buffer={current_buffer:#?} error={err:#?}"
             ));
         })
         .ok()?;
@@ -68,7 +68,7 @@ fn draw((cur_lnum, extmarks, opts): (String, Vec<Extmark>, Option<Opts>)) -> Opt
 /// Constructs the status column string for the current line.
 ///
 /// # Arguments
-/// - `cur_buf_type` Current buffer `buftype` (used for special-case elision like `"grug-far"`).
+/// - `current_buffer_type` Current buffer `buftype` (used for special-case elision like `"grug-far"`).
 /// - `cur_lnum` Current line number string (already formatted by the caller / Vim script).
 /// - `metas` Iterator of extmark metadata for the current line; only items with a present [`ExtmarkMeta`] are yielded.
 /// - `opts` Optional configuration options for rendering the status column.
@@ -91,12 +91,12 @@ fn draw((cur_lnum, extmarks, opts): (String, Vec<Extmark>, Option<Opts>)) -> Opt
 /// - O(n) over `metas`, short-circuiting when optimal state reached.
 /// - Rank computation is a simple match with small constant cost.
 fn draw_statuscolumn(
-    cur_buf_type: &str,
+    current_buffer_type: &str,
     cur_lnum: &str,
     metas: impl Iterator<Item = ExtmarkMeta>,
     opts: Option<Opts>,
 ) -> String {
-    if cur_buf_type == "grug-far" {
+    if current_buffer_type == "grug-far" {
         return " ".into();
     }
 
