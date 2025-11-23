@@ -67,6 +67,7 @@ use ytil_github::pr::PullRequest;
 use ytil_github::pr::PullRequestMergeState;
 use ytil_system::CliArgs as _;
 use ytil_system::pico_args::Arguments;
+use ytil_tui::closable_text_prompt;
 
 /// Newtype wrapper implementing colored [`Display`] for a [`PullRequest`].
 ///
@@ -374,7 +375,9 @@ fn main() -> color_eyre::Result<()> {
 /// - [`ytil_git::branch::create_from_default_branch`] failure if the branch cannot be created.
 /// - [`ytil_git::branch::push`] failure if pushing the branch fails.
 fn create_issue_and_branch_from_default_branch() -> Result<(), color_eyre::eyre::Error> {
-    let issue_title = ytil_tui::Text::new("Issue title:").prompt()?;
+    let Some(issue_title) = closable_text_prompt("Issue title:")? else {
+        return Ok(());
+    };
 
     let created_issue = ytil_github::create_issue(&issue_title)?;
     println!("\n{} with title={issue_title:?}", "Issue created".green().bold());
