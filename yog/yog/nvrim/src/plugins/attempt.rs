@@ -121,7 +121,7 @@ impl Scratch {
     /// # Returns
     /// - `Some(Ok(scratch))` if the entry is a valid file with all required components (name, stem, extension).
     /// - `Some(Err(error))` if an error occurs while extracting file components.
-    /// - `None` if the entry is not a file.
+    /// - [`None`] if the entry is not a file.
     pub fn from(read_dir_res: std::io::Result<DirEntry>) -> Option<color_eyre::Result<Self>> {
         let path = match read_dir_res.map(|entry| entry.path()) {
             Ok(path) => path,
