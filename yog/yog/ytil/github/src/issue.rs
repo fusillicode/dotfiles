@@ -5,6 +5,7 @@ use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 use convert_case::Case;
 use convert_case::Casing as _;
+use ytil_cmd::CmdExt;
 
 /// Represents a newly created GitHub issue.
 ///
@@ -74,6 +75,11 @@ impl CreatedIssue {
     }
 }
 
+pub struct DevelopOutput {
+    pub branch_ref: String,
+    pub branch_name: String,
+}
+
 /// Creates a new GitHub issue with the specified title.
 ///
 /// This function invokes `gh issue create --title <title> --body ""` to create the issue.
@@ -105,6 +111,32 @@ pub fn create(title: &str) -> color_eyre::Result<CreatedIssue> {
 
     Ok(created_issue)
 }
+
+pub fn develop(issue_number: &str, checkout: bool) -> color_eyre::Result<DevelopOutput> {
+    let mut args = vec!["issue", "develop"];
+
+    if checkout {
+        args.push("-c")
+    }
+
+    let output = Command::new("gh")
+        .args(args)
+        .exec()
+        .wrap_err_with(|| eyre!("error develop GitHub issue | issue_number={issue_number}"))?;
+
+    let branch_ref = str::from_utf8(&output.stdout)?.to_string();
+    let branch_name = branch_ref
+        .rsplit('/')
+        .next()
+        .ok_or_else(|| eyre!("error extracting branch name from develop output | output={branch_ref:?}"))?
+        .to_string();
+
+    Ok(DevelopOutput {
+        branch_ref,
+        branch_name,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use rstest::rstest;

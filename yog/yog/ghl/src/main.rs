@@ -8,7 +8,7 @@
 //! # Flow
 //! - Parse flags (`--search`, `--merge-state`, `issue`).
 //! - If `issue` is present:
-//!   - Prompt for issue title via [`ytil_tui::closable_text_prompt`].
+//!   - Prompt for issue title via [`ytil_tui::text_prompt`].
 //!   - Create issue via [`ytil_github::create_issue`].
 //!   - Create and push branch from default branch named after the issue.
 //! - Otherwise:
@@ -42,7 +42,7 @@
 //!   merging via [`ytil_github::pr::merge`], commenting via [`ytil_github::pr::dependabot_rebase`], creating issue via
 //!   [`ytil_github::create_issue`]).
 //! - TUI interaction fails (selection UI errors via [`ytil_tui::minimal_multi_select`] and
-//!   [`ytil_tui::minimal_select`], issue title prompt via [`ytil_tui::closable_text_prompt`]).
+//!   [`ytil_tui::minimal_select`], issue title prompt via [`ytil_tui::text_prompt`]).
 //! - Git operations fail (branch creation via [`ytil_git::branch::create_from_default_branch`], branch push via
 //!   [`ytil_git::branch::push`]).
 //!
@@ -55,11 +55,9 @@
 
 use core::fmt::Display;
 use std::ops::Deref;
-use std::path::Path;
 use std::str::FromStr;
 
 use color_eyre::Section;
-use color_eyre::eyre::bail;
 use color_eyre::owo_colors::OwoColorize;
 use strum::EnumIter;
 use ytil_github::RepoViewField;
@@ -68,7 +66,6 @@ use ytil_github::pr::PullRequest;
 use ytil_github::pr::PullRequestMergeState;
 use ytil_system::CliArgs as _;
 use ytil_system::pico_args::Arguments;
-use ytil_tui::closable_text_prompt;
 
 /// Newtype wrapper implementing colored [`Display`] for a [`PullRequest`].
 ///
@@ -280,7 +277,7 @@ fn format_pr(pr: &PullRequest) -> String {
 ///   merging via [`ytil_github::pr::merge`], commenting via [`ytil_github::pr::dependabot_rebase`], creating issue via
 ///   [`ytil_github::create_issue`]).
 /// - TUI interaction fails (selection UI errors via [`ytil_tui::minimal_multi_select`] and
-///   [`ytil_tui::minimal_select`], issue title prompt via [`ytil_tui::closable_text_prompt`]).
+///   [`ytil_tui::minimal_select`], issue title prompt via [`ytil_tui::text_prompt`]).
 /// - Git operations fail (branch creation via [`ytil_git::branch::create_from_default_branch`], branch push via
 ///   [`ytil_git::branch::push`]).
 fn main() -> color_eyre::Result<()> {
@@ -296,11 +293,6 @@ fn main() -> color_eyre::Result<()> {
 
     if pargs.contains("issue") {
         create_issue_and_branch_from_default_branch()?;
-        return Ok(());
-    }
-
-    if pargs.contains("pr") {
-        create_pr_with_related_issue_title()?;
         return Ok(());
     }
 
@@ -363,51 +355,24 @@ fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Creates a GitHub issue and a corresponding branch from the default branch.
-///
-/// Prompts the user for an issue title, creates the issue, creates and pushes a branch named after the issue.
-///
-/// # Rationale
-/// It's not possible to create a GitHub PR from a branch that has no diff with the head branch.
-/// For this reason this function just creates and pushes a branch without creating a GitHub PR.
-///
-/// # Returns
-/// Returns `Ok(())` on successful creation.
-/// Returns an error if prompting fails, issue creation fails, branch creation fails, or pushing fails.
-///
-/// # Errors
-/// - [`ytil_tui::closable_text_prompt`] failure if user input cannot be obtained.
-/// - [`ytil_github::create_issue`] failure if the issue cannot be created.
-/// - [`ytil_git::branch::create_from_default_branch`] failure if the branch cannot be created.
-/// - [`ytil_git::branch::push`] failure if pushing the branch fails.
 fn create_issue_and_branch_from_default_branch() -> Result<(), color_eyre::eyre::Error> {
-    let Some(issue_title) = closable_text_prompt("Issue title:")? else {
+    let Some(issue_title) = ytil_tui::text_prompt("Issue title:")? else {
+        return Ok(());
+    };
+
+    let Some(checkout_branch) = ytil_tui::yes_no_select("Checkout branch?")? else {
         return Ok(());
     };
 
     let created_issue = ytil_github::issue::create(&issue_title)?;
     println!("\n{} with title={issue_title:?}", "Issue created".green().bold());
 
-    let branch_name = created_issue.branch_name();
-
-    let current_repo = ytil_git::discover_repo(Path::new("."))?;
-
-    ytil_git::branch::create_from_default_branch(&branch_name, Some(&current_repo))?;
-    println!("{} with name={branch_name:?}", "Branch created".green().bold());
-
-    ytil_git::branch::push(&branch_name, Some(&current_repo))?;
-    println!("{} name={branch_name:?}", "Branch pushed".green().bold());
-
-    Ok(())
-}
-
-fn create_pr_with_related_issue_title() -> Result<(), color_eyre::eyre::Error> {
-    let current_branch = ytil_git::branch::get_current()?;
-
-    let issue_number: String = current_branch.chars().take_while(|c| c.is_ascii_digit()).collect();
-    if issue_number.is_empty() {
-        bail!("error current branch doesn't start with numbers | current_branch={current_branch:?}")
-    }
+    let develop_output = ytil_github::issue::develop(&created_issue.issue_nr, checkout_branch)?;
+    println!(
+        "{} with name={:?}",
+        "Branch created".green().bold(),
+        develop_output.branch_name
+    );
 
     Ok(())
 }
