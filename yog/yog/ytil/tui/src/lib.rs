@@ -75,7 +75,7 @@ pub fn minimal_select<T: Display>(opts: Vec<T>) -> Result<Option<T>, InquireErro
 
 /// Displays a text input prompt with the given message, allowing cancellation.
 ///
-/// Wraps [`inquire::Text`] with minimal rendering and cancellation handling via [`closable_prompt`].
+/// Wraps [`inquire::Text`] with minimal rendering and cancellation handling.
 ///
 /// # Arguments
 /// - `message` The prompt message displayed to the user.
