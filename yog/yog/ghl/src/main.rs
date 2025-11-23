@@ -59,6 +59,7 @@ use std::path::Path;
 use std::str::FromStr;
 
 use color_eyre::Section;
+use color_eyre::eyre::bail;
 use color_eyre::owo_colors::OwoColorize;
 use strum::EnumIter;
 use ytil_github::RepoViewField;
@@ -298,6 +299,11 @@ fn main() -> color_eyre::Result<()> {
         return Ok(());
     }
 
+    if pargs.contains("pr") {
+        create_pr_with_related_issue_title()?;
+        return Ok(());
+    }
+
     let repo_name_with_owner = ytil_github::get_repo_view_field(&RepoViewField::NameWithOwner)?;
 
     let search_filter: Option<String> = pargs.opt_value_from_str("--search")?;
@@ -379,7 +385,7 @@ fn create_issue_and_branch_from_default_branch() -> Result<(), color_eyre::eyre:
         return Ok(());
     };
 
-    let created_issue = ytil_github::create_issue(&issue_title)?;
+    let created_issue = ytil_github::issue::create(&issue_title)?;
     println!("\n{} with title={issue_title:?}", "Issue created".green().bold());
 
     let branch_name = created_issue.branch_name();
@@ -391,6 +397,17 @@ fn create_issue_and_branch_from_default_branch() -> Result<(), color_eyre::eyre:
 
     ytil_git::branch::push(&branch_name, Some(&current_repo))?;
     println!("{} name={branch_name:?}", "Branch pushed".green().bold());
+
+    Ok(())
+}
+
+fn create_pr_with_related_issue_title() -> Result<(), color_eyre::eyre::Error> {
+    let current_branch = ytil_git::branch::get_current()?;
+
+    let issue_number: String = current_branch.chars().take_while(|c| c.is_ascii_digit()).collect();
+    if issue_number.is_empty() {
+        bail!("error current branch doesn't start with numbers | current_branch={current_branch:?}")
+    }
 
     Ok(())
 }
