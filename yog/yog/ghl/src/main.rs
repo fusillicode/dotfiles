@@ -8,7 +8,7 @@
 //! # Flow
 //! - Parse flags (`--search`, `--merge-state`, `issue`).
 //! - If `issue` is present:
-//!   - Prompt for issue title via [`ytil_tui::Text::prompt`].
+//!   - Prompt for issue title via [`ytil_tui::closable_text_prompt`].
 //!   - Create issue via [`ytil_github::create_issue`].
 //!   - Create and push branch from default branch named after the issue.
 //! - Otherwise:
@@ -42,7 +42,7 @@
 //!   merging via [`ytil_github::pr::merge`], commenting via [`ytil_github::pr::dependabot_rebase`], creating issue via
 //!   [`ytil_github::create_issue`]).
 //! - TUI interaction fails (selection UI errors via [`ytil_tui::minimal_multi_select`] and
-//!   [`ytil_tui::minimal_select`], issue title prompt via [`ytil_tui::Text::prompt`]).
+//!   [`ytil_tui::minimal_select`], issue title prompt via [`ytil_tui::closable_text_prompt`]).
 //! - Git operations fail (branch creation via [`ytil_git::branch::create_from_default_branch`], branch push via
 //!   [`ytil_git::branch::push`]).
 //!
@@ -279,7 +279,7 @@ fn format_pr(pr: &PullRequest) -> String {
 ///   merging via [`ytil_github::pr::merge`], commenting via [`ytil_github::pr::dependabot_rebase`], creating issue via
 ///   [`ytil_github::create_issue`]).
 /// - TUI interaction fails (selection UI errors via [`ytil_tui::minimal_multi_select`] and
-///   [`ytil_tui::minimal_select`], issue title prompt via [`ytil_tui::Text::prompt`]).
+///   [`ytil_tui::minimal_select`], issue title prompt via [`ytil_tui::closable_text_prompt`]).
 /// - Git operations fail (branch creation via [`ytil_git::branch::create_from_default_branch`], branch push via
 ///   [`ytil_git::branch::push`]).
 fn main() -> color_eyre::Result<()> {
@@ -370,7 +370,7 @@ fn main() -> color_eyre::Result<()> {
 /// Returns an error if prompting fails, issue creation fails, branch creation fails, or pushing fails.
 ///
 /// # Errors
-/// - [`ytil_tui::Text::prompt`] failure if user input cannot be obtained.
+/// - [`ytil_tui::closable_text_prompt`] failure if user input cannot be obtained.
 /// - [`ytil_github::create_issue`] failure if the issue cannot be created.
 /// - [`ytil_git::branch::create_from_default_branch`] failure if the branch cannot be created.
 /// - [`ytil_git::branch::push`] failure if pushing the branch fails.
