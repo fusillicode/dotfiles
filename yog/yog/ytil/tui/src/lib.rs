@@ -10,7 +10,7 @@ use color_eyre::eyre::eyre;
 use inquire::InquireError;
 use inquire::MultiSelect;
 use inquire::Select;
-pub use inquire::Text;
+use inquire::Text;
 use inquire::ui::RenderConfig;
 use strum::EnumIter;
 use strum::IntoEnumIterator;
@@ -71,6 +71,25 @@ pub fn minimal_select<T: Display>(opts: Vec<T>) -> Result<Option<T>, InquireErro
             .without_help_message()
             .prompt(),
     )
+}
+
+/// Displays a text input prompt with the given message, allowing cancellation.
+///
+/// Wraps [`inquire::Text`] with minimal rendering and cancellation handling via [`closable_prompt`].
+///
+/// # Arguments
+/// - `message` The prompt message displayed to the user.
+///
+/// # Returns
+/// - [`Result::Ok`] ([`Option::Some`] (input)) If the user provides input.
+/// - [`Result::Ok`] ([`Option::None`]) If the user cancels or interrupts the prompt.
+/// - [`Result::Err`] ([`InquireError`]) If rendering the prompt or handling terminal interaction fails.
+///
+/// # Errors
+/// - Rendering the prompt or terminal interaction inside [`inquire`] fails.
+/// - Collecting the user input fails for any reason reported by [`Text`].
+pub fn closable_text_prompt(message: &str) -> Result<Option<String>, InquireError> {
+    closable_prompt(Text::new(message).prompt())
 }
 
 /// Displays a yes/no selection prompt with a minimal UI.
