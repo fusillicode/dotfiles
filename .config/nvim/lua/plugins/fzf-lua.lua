@@ -30,6 +30,7 @@ return {
         file_icons = false,
         no_header = true,
         no_header_i = true,
+        previewer = false,
       },
       winopts    = {
         title       = '',
@@ -62,14 +63,12 @@ return {
       files      = {
         -- Jump to line! https://github.com/ibhagwan/fzf-lua/discussions/2032#discussioncomment-13046310
         line_query = true,
-        previewer  = false,
         winopts    = { title = '', },
         fzf_opts   = { ['--ansi'] = true, },
         fd_opts    = table.concat(nvrim.cli.get_fd_flags(), ' '),
         git_icons  = true,
       },
       buffers    = {
-        previewer             = false,
         winopts               = { title = '', },
         ignore_current_buffer = true,
       },
