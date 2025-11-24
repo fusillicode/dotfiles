@@ -94,7 +94,11 @@ return {
           nvrim.style_opts.fzf_lua('git_diff')
         ),
       },
-      lsp        = nvrim.style_opts.fzf_lua(),
+      lsp        = vim.tbl_extend('error', {
+        code_actions = {
+          previewer = false,
+        },
+      }, nvrim.style_opts.fzf_lua()),
     })
     plugin.register_ui_select()
     keymaps.set(plugin_keymaps(plugin))
