@@ -113,7 +113,7 @@ pub fn create(title: &str) -> color_eyre::Result<CreatedIssue> {
 }
 
 pub fn develop(issue_number: &str, checkout: bool) -> color_eyre::Result<DevelopOutput> {
-    let mut args = vec!["issue", "develop"];
+    let mut args = vec!["issue", "develop", issue_number];
 
     if checkout {
         args.push("-c")
@@ -124,7 +124,7 @@ pub fn develop(issue_number: &str, checkout: bool) -> color_eyre::Result<Develop
         .exec()
         .wrap_err_with(|| eyre!("error develop GitHub issue | issue_number={issue_number}"))?;
 
-    let branch_ref = str::from_utf8(&output.stdout)?.to_string();
+    let branch_ref = str::from_utf8(&output.stdout)?.trim().to_string();
     let branch_name = branch_ref
         .rsplit('/')
         .next()
