@@ -331,7 +331,7 @@ impl Branch {
     ///
     /// # Returns
     /// The branch name without "origin/" prefix.
-    /// For local branches, this is the same as [`name`].
+    /// For local branches, this is the same as [`Self::name()`].
     /// For remote branches from "origin", it strips the prefix.
     /// For remote branches from other remotes, it remains unchanged.
     pub fn name_no_origin(&self) -> &str {

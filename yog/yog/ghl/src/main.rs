@@ -41,12 +41,12 @@
 //! - Flag parsing fails (unknown flag, missing value, invalid [`PullRequestMergeState`]).
 //! - GitHub CLI invocation fails (listing PRs via [`ytil_github::pr::get`], approving via [`ytil_github::pr::approve`],
 //!   merging via [`ytil_github::pr::merge`], commenting via [`ytil_github::pr::dependabot_rebase`], creating issue via
-//!   [`ytil_github::create_issue`]).
+//!   [`ytil_github::issue::create`]).
 //! - TUI interaction fails (selection UI errors via [`ytil_tui::minimal_multi_select`] and
 //!   [`ytil_tui::minimal_select`], issue title prompt via [`ytil_tui::text_prompt`], branch checkout prompt via
 //!   [`ytil_tui::yes_no_select`]).
-//! - Git operations fail (branch creation via [`ytil_git::branch::create_from_default_branch`], branch push via
-//!   [`ytil_git::branch::push`]).
+//! - GitHub CLI invocation fails (issue and branch creation via [`ytil_github::issue::create`] and
+//!   [`ytil_github::issue::develop`]).
 //!
 //! # Future Work
 //! - Add dry‑run mode printing planned operations without executing.
@@ -277,12 +277,12 @@ fn format_pr(pr: &PullRequest) -> String {
 /// - Flag parsing fails (unknown flag, missing value, invalid [`PullRequestMergeState`]).
 /// - GitHub CLI invocation fails (listing PRs via [`ytil_github::pr::get`], approving via [`ytil_github::pr::approve`],
 ///   merging via [`ytil_github::pr::merge`], commenting via [`ytil_github::pr::dependabot_rebase`], creating issue via
-///   [`ytil_github::create_issue`]).
+///   [`ytil_github::issue::create`]).
 /// - TUI interaction fails (selection UI errors via [`ytil_tui::minimal_multi_select`] and
 ///   [`ytil_tui::minimal_select`], issue title prompt via [`ytil_tui::text_prompt`], branch checkout prompt via
 ///   [`ytil_tui::yes_no_select`]).
-/// - Git operations fail (branch creation via [`ytil_git::branch::create_from_default_branch`], branch push via
-///   [`ytil_git::branch::push`]).
+/// - GitHub CLI invocation fails (issue and branch creation via [`ytil_github::issue::create`] and
+///   [`ytil_github::issue::develop`]).
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
