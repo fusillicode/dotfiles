@@ -75,8 +75,13 @@ impl CreatedIssue {
     }
 }
 
+/// Output of [`develop`] a GitHub issue.
+///
+/// Contains the branch reference and name created by the `gh issue develop` command.
 pub struct DevelopOutput {
+    /// The full branch reference (e.g., "refs/heads/issue-123-feature").
     pub branch_ref: String,
+    /// The branch name (e.g., "issue-123-feature").
     pub branch_name: String,
 }
 
@@ -112,11 +117,26 @@ pub fn create(title: &str) -> color_eyre::Result<CreatedIssue> {
     Ok(created_issue)
 }
 
+/// Creates a branch for the supplied GitHub issue number.
+///
+/// Uses the `gh issue develop` command to create a development branch for the specified issue.
+///
+/// # Arguments
+/// - `issue_number` The issue number to develop.
+/// - `checkout` Whether to checkout the created branch immediately.
+///
+/// # Returns
+/// A [`DevelopOutput`] containing the branch reference and name.
+///
+/// # Errors
+/// - If the `gh` command execution fails.
+/// - If the command output cannot be parsed as UTF-8.
+/// - If the branch name cannot be extracted from the output.
 pub fn develop(issue_number: &str, checkout: bool) -> color_eyre::Result<DevelopOutput> {
     let mut args = vec!["issue", "develop", issue_number];
 
     if checkout {
-        args.push("-c")
+        args.push("-c");
     }
 
     let output = Command::new("gh")

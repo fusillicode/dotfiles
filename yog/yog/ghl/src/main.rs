@@ -9,8 +9,9 @@
 //! - Parse flags (`--search`, `--merge-state`, `issue`).
 //! - If `issue` is present:
 //!   - Prompt for issue title via [`ytil_tui::text_prompt`].
-//!   - Create issue via [`ytil_github::create_issue`].
-//!   - Create and push branch from default branch named after the issue.
+//!   - Prompt for whether to checkout the branch via [`ytil_tui::yes_no_select`].
+//!   - Create issue via [`ytil_github::issue::create`].
+//!   - Develop the issue via [`ytil_github::issue::develop`] (creates branch and optionally checks it out).
 //! - Otherwise:
 //!   - Detect current repository via [`ytil_github::get_repo_view_field`].
 //!   - Fetch PR list via [`ytil_github::pr::get`] (GitHub CLI `gh pr list`) forwarding the search filter.
@@ -42,7 +43,8 @@
 //!   merging via [`ytil_github::pr::merge`], commenting via [`ytil_github::pr::dependabot_rebase`], creating issue via
 //!   [`ytil_github::create_issue`]).
 //! - TUI interaction fails (selection UI errors via [`ytil_tui::minimal_multi_select`] and
-//!   [`ytil_tui::minimal_select`], issue title prompt via [`ytil_tui::text_prompt`]).
+//!   [`ytil_tui::minimal_select`], issue title prompt via [`ytil_tui::text_prompt`], branch checkout prompt via
+//!   [`ytil_tui::yes_no_select`]).
 //! - Git operations fail (branch creation via [`ytil_git::branch::create_from_default_branch`], branch push via
 //!   [`ytil_git::branch::push`]).
 //!
@@ -277,7 +279,8 @@ fn format_pr(pr: &PullRequest) -> String {
 ///   merging via [`ytil_github::pr::merge`], commenting via [`ytil_github::pr::dependabot_rebase`], creating issue via
 ///   [`ytil_github::create_issue`]).
 /// - TUI interaction fails (selection UI errors via [`ytil_tui::minimal_multi_select`] and
-///   [`ytil_tui::minimal_select`], issue title prompt via [`ytil_tui::text_prompt`]).
+///   [`ytil_tui::minimal_select`], issue title prompt via [`ytil_tui::text_prompt`], branch checkout prompt via
+///   [`ytil_tui::yes_no_select`]).
 /// - Git operations fail (branch creation via [`ytil_git::branch::create_from_default_branch`], branch push via
 ///   [`ytil_git::branch::push`]).
 fn main() -> color_eyre::Result<()> {
