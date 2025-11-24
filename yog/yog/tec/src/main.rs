@@ -213,14 +213,14 @@ const LINTS_FIX: &[(&str, LintBuilder)] = &[
             ))
         })
     }),
-    ("rust-doc-build", |_| {
-        |path| {
+    ("rust-doc-build", |changed_paths| {
+        build_conditional_lint(changed_paths, Some(".rs"), |path| {
             LintFnResult::from(
                 nomicon::generate_rust_doc(path)
                     .map(LintFnSuccess::CmdOutput)
                     .map_err(LintFnError::from),
             )
-        }
+        })
     }),
 ];
 
