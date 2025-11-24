@@ -62,6 +62,8 @@ tempfile = { version = "3.13" }
 thiserror = { version = "2.0" }
 url = { version = "2.5", features = ["serde"] }
 
+nomicon = { path = "./yog/nomicon" }
+
 ytil_cmd = { path = "./yog/ytil/cmd" }
 ytil_editor = { path = "./yog/ytil/editor" }
 ytil_git = { path = "./yog/ytil/git" }

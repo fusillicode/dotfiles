@@ -104,14 +104,7 @@ fn main() -> color_eyre::eyre::Result<()> {
     }
 
     // Always (re)generate docs for all workspace crates (including private items) first.
-    // Use RUSTDOCFLAGS to enforce warnings-as-errors (portable across cargo versions).
-    ytil_cmd::silent_cmd("cargo")
-        .current_dir(&workspace_root)
-        // Using env because supplying `"--", "-D", "warnings"` doesn't seem to work.
-        .env("RUSTDOCFLAGS", "-Dwarnings")
-        .args(["doc", "--all", "--no-deps", "--document-private-items"])
-        .status()?
-        .exit_ok()?;
+    nomicon::generate_rust_doc(&workspace_root)?;
 
     let cargo_tomls = ytil_system::find_matching_files_recursively_in_dir(
         &workspace_root,

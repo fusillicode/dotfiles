@@ -115,6 +115,15 @@ const LINTS_CHECK: &[(&str, LintBuilder)] = &[
             )
         }
     }),
+    ("rust-doc-build", |_| {
+        |path| {
+            LintFnResult::from(
+                nomicon::generate_rust_doc(path)
+                    .map(LintFnSuccess::CmdOutput)
+                    .map_err(LintFnError::from),
+            )
+        }
+    }),
 ];
 
 /// Workspace lint fix set.
