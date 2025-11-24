@@ -88,7 +88,7 @@ pub fn minimal_select<T: Display>(opts: Vec<T>) -> Result<Option<T>, InquireErro
 /// # Errors
 /// - Rendering the prompt or terminal interaction inside [`inquire`] fails.
 /// - Collecting the user input fails for any reason reported by [`Text`].
-pub fn closable_text_prompt(message: &str) -> Result<Option<String>, InquireError> {
+pub fn text_prompt(message: &str) -> Result<Option<String>, InquireError> {
     closable_prompt(Text::new(message).prompt())
 }
 
