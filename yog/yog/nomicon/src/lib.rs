@@ -15,18 +15,17 @@ use ytil_cmd::CmdExt;
 /// - `workspace_root` The path to the workspace root directory.
 ///
 /// # Returns
-/// `Ok(())` if documentation generation succeeds without warnings.
+/// Full command output if documentation generation succeeds without warnings.
 ///
 /// # Errors
 /// - If the `cargo doc` command fails or exits with a non-zero status.
 /// - If documentation warnings are present (due to `-Dwarnings`).
-// FIXME: I don't want this...
-#[allow(clippy::result_large_err)]
-pub fn generate_rust_doc(workspace_root: &Path) -> Result<Output, CmdError> {
+pub fn generate_rust_doc(workspace_root: &Path) -> Result<Output, Box<CmdError>> {
     ytil_cmd::silent_cmd("cargo")
         .current_dir(workspace_root.display().to_string())
         // Using env because supplying `"--", "-D", "warnings"` doesn't seem to work.
         .env("RUSTDOCFLAGS", "-Dwarnings")
         .args(["doc", "--all", "--no-deps", "--document-private-items"])
         .exec()
+        .map_err(Box::new)
 }
