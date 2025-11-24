@@ -320,11 +320,22 @@ pub enum Branch {
 }
 
 impl Branch {
-    /// Returns the branch name (no `refs/` prefix).
+    /// Returns the branch name (no "refs/" prefix).
     pub fn name(&self) -> &str {
         match self {
             Self::Local { name, .. } | Self::Remote { name, .. } => name,
         }
+    }
+
+    /// Returns the branch name with the "origin/" prefix removed if present.
+    ///
+    /// # Returns
+    /// The branch name without "origin/" prefix.
+    /// For local branches, this is the same as [`name`].
+    /// For remote branches from "origin", it strips the prefix.
+    /// For remote branches from other remotes, it remains unchanged.
+    pub fn name_no_origin(&self) -> &str {
+        self.name().trim_start_matches("origin/")
     }
 
     /// Returns the timestamp of the last commit on this branch.
@@ -423,6 +434,43 @@ mod tests {
                 committer_date_time: DateTime::from_timestamp(42, 0).unwrap(),
             }
         );
+    }
+
+    #[rstest]
+    #[case::local_variant(local("main"), "main")]
+    #[case::remote_variant(remote("origin/feature"), "origin/feature")]
+    fn branch_name_when_variant_returns_name(#[case] branch: Branch, #[case] expected: &str) {
+        pretty_assertions::assert_eq!(branch.name(), expected);
+    }
+
+    #[rstest]
+    #[case::local_no_origin(local("main"), "main")]
+    #[case::remote_origin_prefix(remote("origin/main"), "main")]
+    #[case::remote_other_prefix(remote("upstream/feature"), "upstream/feature")]
+    fn branch_name_no_origin_when_name_returns_trimmed(#[case] branch: Branch, #[case] expected: &str) {
+        pretty_assertions::assert_eq!(branch.name_no_origin(), expected);
+    }
+
+    #[rstest]
+    #[case::local_variant(
+        Branch::Local {
+            name: "test".to_string(),
+            committer_date_time: DateTime::from_timestamp(123_456, 0).unwrap(),
+        },
+        DateTime::from_timestamp(123_456, 0).unwrap()
+    )]
+    #[case::remote_variant(
+        Branch::Remote {
+            name: "origin/test".to_string(),
+            committer_date_time: DateTime::from_timestamp(654_321, 0).unwrap(),
+        },
+        DateTime::from_timestamp(654_321, 0).unwrap()
+    )]
+    fn branch_committer_date_time_when_variant_returns_date_time(
+        #[case] branch: Branch,
+        #[case] expected: DateTime<Utc>,
+    ) {
+        pretty_assertions::assert_eq!(branch.committer_date_time(), &expected);
     }
 
     fn local(name: &str) -> Branch {

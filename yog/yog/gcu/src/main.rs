@@ -80,7 +80,9 @@ fn autocomplete_git_branches_and_switch(branches: &[Branch]) -> color_eyre::Resu
     let Some(branch) = ytil_tui::minimal_select(branches.into_iter().map(RenderableBranch).collect())? else {
         return Ok(());
     };
-    ytil_git::branch::switch(branch.name()).inspect(|()| report_branch_switch(branch.name()))?;
+
+    let branch_name_no_origin = branch.name_no_origin();
+    ytil_git::branch::switch(branch_name_no_origin).inspect(|()| report_branch_switch(branch_name_no_origin))?;
 
     Ok(())
 }

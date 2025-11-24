@@ -40,9 +40,9 @@ function M.set_lua_defined()
     end
   end)
 
-  local min_diag_level = vim.diagnostic.severity.WARN
-  keymap_set('n', 'dn', function() vim.diagnostic.jump({ count = 1, severity = min_diag_level, }) end)
-  keymap_set('n', 'dp', function() vim.diagnostic.jump({ count = -1, severity = min_diag_level, }) end)
+  local min_diag_level = vim.diagnostic.severity.ERROR
+  keymap_set('n', 'dn', function() vim.diagnostic.jump({ count = 1, severity = min_diag_level }) end)
+  keymap_set('n', 'dp', function() vim.diagnostic.jump({ count = -1, severity = min_diag_level }) end)
   keymap_set('n', '<leader>e', vim.diagnostic.open_float)
 end
 

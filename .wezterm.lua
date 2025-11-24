@@ -34,8 +34,8 @@ config.colors = {
     inactive_tab = { bg_color = background, fg_color = 'grey', },
   },
 }
-config.font_size = 16
-config.font = wezterm.font('0xProto NL')
+config.font_size = 17
+config.font = wezterm.font('PT Mono')
 config.freetype_load_target = 'Light'
 -- No ligatures thanks
 config.harfbuzz_features = { 'calt=0', 'clig=0', 'liga=0', }
