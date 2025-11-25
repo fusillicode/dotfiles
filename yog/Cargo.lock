@@ -2653,6 +2653,7 @@ dependencies = [
  "color-eyre",
  "inquire",
  "strum",
+ "ytil_git",
 ]
 
 [[package]]

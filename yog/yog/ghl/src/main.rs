@@ -299,6 +299,11 @@ fn main() -> color_eyre::Result<()> {
         return Ok(());
     }
 
+    if pargs.contains("pr") {
+        open_pr()?;
+        return Ok(());
+    }
+
     let repo_name_with_owner = ytil_github::get_repo_view_field(&RepoViewField::NameWithOwner)?;
 
     let search_filter: Option<String> = pargs.opt_value_from_str("--search")?;
@@ -380,6 +385,14 @@ fn create_issue_and_branch_from_default_branch() -> Result<(), color_eyre::eyre:
         "Branch created".green().bold(),
         develop_output.branch_name
     );
+
+    Ok(())
+}
+
+fn open_pr() -> Result<(), color_eyre::eyre::Error> {
+    let Some(_branch) = ytil_tui::git_branch::select()? else {
+        return Ok(());
+    };
 
     Ok(())
 }
