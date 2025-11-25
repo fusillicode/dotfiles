@@ -477,7 +477,7 @@ mod tests {
     )]
     #[case("42", r#"error empty title | branch_name="42""#)]
     #[case("", r#"error parsing issue number | branch_name="" issue_number="""#)]
-    fn pr_title_from_branch_name_when_input_returns_error(#[case] input: &str, #[case] expected_error: &str) {
+    fn pr_title_from_branch_name_when_invalid_input_returns_error(#[case] input: &str, #[case] expected_error: &str) {
         assert2::let_assert!(Err(err) = pr_title_from_branch_name(input));
         pretty_assertions::assert_eq!(err.to_string(), expected_error);
     }
