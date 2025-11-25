@@ -2044,6 +2044,7 @@ version = "0.1.0"
 dependencies = [
  "assert2",
  "color-eyre",
+ "nomicon",
  "pretty_assertions",
  "rstest",
  "thiserror 2.0.17",

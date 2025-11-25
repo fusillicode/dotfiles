@@ -115,6 +115,15 @@ const LINTS_CHECK: &[(&str, LintBuilder)] = &[
             )
         }
     }),
+    ("rust-doc-build", |_| {
+        |path| {
+            LintFnResult::from(
+                nomicon::generate_rust_doc(path)
+                    .map(LintFnSuccess::CmdOutput)
+                    .map_err(LintFnError::from),
+            )
+        }
+    }),
 ];
 
 /// Workspace lint fix set.
@@ -202,6 +211,15 @@ const LINTS_FIX: &[(&str, LintBuilder)] = &[
                 &[".git", "target"],
                 false,
             ))
+        })
+    }),
+    ("rust-doc-build", |changed_paths| {
+        build_conditional_lint(changed_paths, Some(".rs"), |path| {
+            LintFnResult::from(
+                nomicon::generate_rust_doc(path)
+                    .map(LintFnSuccess::CmdOutput)
+                    .map_err(LintFnError::from),
+            )
         })
     }),
 ];
@@ -310,9 +328,21 @@ impl From<RmFilesOutcome> for LintFnResult {
 #[derive(Debug, thiserror::Error)]
 enum LintFnError {
     #[error(transparent)]
-    CmdError(#[from] CmdError),
+    CmdError(Box<CmdError>),
     #[error("{0}")]
     PlainMsg(String),
+}
+
+impl From<CmdError> for LintFnError {
+    fn from(err: CmdError) -> Self {
+        Self::CmdError(Box::new(err))
+    }
+}
+
+impl From<Box<CmdError>> for LintFnError {
+    fn from(err: Box<CmdError>) -> Self {
+        Self::CmdError(err)
+    }
 }
 
 /// Success result from [`Lint`] function execution.
