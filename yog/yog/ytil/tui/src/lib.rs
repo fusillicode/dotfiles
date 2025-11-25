@@ -15,6 +15,8 @@ use inquire::ui::RenderConfig;
 use strum::EnumIter;
 use strum::IntoEnumIterator;
 
+pub mod git_branch;
+
 /// Provides a minimal interactive multi-select prompt, returning [`Option::None`] if no options are provided, the user
 /// cancels, or no items are selected.
 ///
