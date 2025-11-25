@@ -2,6 +2,7 @@ use std::process::Command;
 
 use chrono::DateTime;
 use chrono::Utc;
+use color_eyre::eyre::bail;
 use serde::Deserialize;
 use strum::EnumIter;
 use strum::EnumString;
@@ -222,4 +223,26 @@ pub fn enable_auto_merge(pr_number: usize) -> color_eyre::Result<()> {
         ])
         .exec()?;
     Ok(())
+}
+
+/// Creates a GitHub pull request with the specified title.
+///
+/// # Arguments
+/// - `title` The title for the GitHub pull request.
+///
+/// # Returns
+/// The output from the successful `gh pr create` command.
+///
+/// # Errors
+/// - The title is empty.
+/// - Spawning or executing `gh pr create` fails.
+/// - Command exits non-zero (propagated by [`ytil_cmd::CmdExt`]).
+pub fn create(title: &str) -> color_eyre::Result<String> {
+    if title.is_empty() {
+        bail!("error cannot create GitHub PR with empty title");
+    }
+    let output = Command::new("gh")
+        .args(["pr", "create", "--title", title, "--body", ""])
+        .exec()?;
+    ytil_cmd::extract_success_output(&output)
 }

@@ -1,6 +1,6 @@
 {
   "blink-cmp-words": { "branch": "main", "commit": "d6a56f532a1826b4f3aeed4d5e2fe7b8743a9244" },
-  "blink.cmp": { "branch": "main", "commit": "74967d4f9e6bffd4f707493917503e9d9c73e92c" },
+  "blink.cmp": { "branch": "main", "commit": "2e4e54b1283f4cf3673063fc3e10993c20aeec5c" },
   "blink.compat": { "branch": "main", "commit": "2ed6d9a28b07fa6f3bface818470605f8896408c" },
   "close-buffers.nvim": { "branch": "master", "commit": "3acbcad1211572342632a6c0151f839e7dead27f" },
   "cmp-dbee": { "branch": "main", "commit": "1650f67b9bf43c029fc37570665ca895a33cdf5a" },

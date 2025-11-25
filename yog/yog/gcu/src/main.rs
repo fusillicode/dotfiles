@@ -21,63 +21,34 @@
 //! - GitHub authentication via [`ytil_github::log_into_github`] or PR branch name derivation via
 //!   [`ytil_github::get_branch_name_from_url`] fails.
 //! - Branch name construction via [`build_branch_name`] yields empty string.
-//! - Branch listing via [`ytil_git::branch::get`] / switching via [`ytil_git::branch::switch`] / creation via
+//! - Branch listing via [`ytil_git::branch::get_all`] / switching via [`ytil_git::branch::switch`] / creation via
 //!   [`ytil_git::branch::create_from_default_branch`] fails.
 //! - Interactive selection via [`ytil_tui::minimal_select`] or user confirmation input fails.
 //! - Current branch lookup via [`ytil_git::branch::get_current`] fails.
 
 #![feature(exit_status_error)]
 
-use core::fmt::Display;
 use std::io::Write;
-use std::ops::Deref;
 
 use color_eyre::eyre::bail;
 use color_eyre::owo_colors::OwoColorize as _;
 use url::Url;
 use ytil_git::CmdError;
-use ytil_git::branch::Branch;
 use ytil_system::CliArgs;
-
-struct RenderableBranch(Branch);
-
-impl Deref for RenderableBranch {
-    type Target = Branch;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl Display for RenderableBranch {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let styled_date_time = format!("({})", self.committer_date_time());
-        write!(f, "{} {}", self.name(), styled_date_time.blue())
-    }
-}
 
 /// Interactive selection and switching of Git branches.
 ///
 /// Presents a minimal TUI listing the provided branches (or fetches recent local / remote branches
-/// if none provided), with redundant remotes removed via [`ytil_git::branch::remove_redundant_remotes`].
+/// if none provided), with redundant remotes removed.
+///
 /// Selecting an empty line or "-" triggers previous-branch switching.
 ///
-/// # Arguments
-/// - `branches` Pre-fetched branches to display; if empty, fetches via [`ytil_git::branch::get`].
-///
 /// # Errors
-/// - Branch enumeration via [`ytil_git::branch::get`] fails (if `branches` is empty).
+/// - Branch enumeration via [`ytil_git::branch::get_all_no_redundant`] fails (if `branches` is empty).
 /// - UI rendering via [`ytil_tui::minimal_select`] fails.
 /// - Branch switching via [`ytil_git::branch::switch`] fails.
-fn autocomplete_git_branches_and_switch(branches: &[Branch]) -> color_eyre::Result<()> {
-    let mut branches = if branches.is_empty() {
-        ytil_git::branch::get()?
-    } else {
-        branches.to_vec()
-    };
-    ytil_git::branch::remove_redundant_remotes(&mut branches);
-
-    let Some(branch) = ytil_tui::minimal_select(branches.into_iter().map(RenderableBranch).collect())? else {
+fn autocomplete_git_branches_and_switch() -> color_eyre::Result<()> {
+    let Some(branch) = ytil_tui::git_branch::select()? else {
         return Ok(());
     };
 
@@ -275,7 +246,7 @@ fn main() -> color_eyre::Result<()> {
     let args: Vec<_> = args.iter().map(String::as_str).collect();
 
     match args.split_first() {
-        None => autocomplete_git_branches_and_switch(&[]),
+        None => autocomplete_git_branches_and_switch(),
         // Assumption: cannot create a branch with a name that starts with -
         Some((hd, _)) if *hd == "-" => ytil_git::branch::switch(hd)
             .inspect(|()| report_branch_switch(hd))

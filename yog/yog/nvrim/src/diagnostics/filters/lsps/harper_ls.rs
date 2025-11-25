@@ -48,7 +48,8 @@ impl HarperLsFilter<'_> {
             "build": set!["This sentence does not start with a capital letter"],
             "args": set!["Use `argument` instead of `arg`"],
             "stack overflow": set!["Ensure proper capitalization of companies"],
-            "over all": set!["closed compound `overall`"]
+            "over all": set!["closed compound `overall`"],
+            "checkout": set!["not a compound noun"]
         };
 
         vec![Box::new(HarperLsFilter {
