@@ -368,7 +368,11 @@ fn create_issue_and_branch_from_default_branch() -> Result<(), color_eyre::eyre:
     };
 
     let created_issue = ytil_github::issue::create(&issue_title)?;
-    println!("\n{} with title={issue_title:?}", "Issue created".green().bold());
+    println!(
+        "\n{} number={} title={issue_title:?}",
+        "Issue created".green().bold(),
+        created_issue.issue_nr
+    );
 
     let develop_output = ytil_github::issue::develop(&created_issue.issue_nr, checkout_branch)?;
     println!(
