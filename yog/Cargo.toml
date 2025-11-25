@@ -53,6 +53,8 @@ fake = { version = "4.4", features = ["derive"] }
 getrandom = { version = "0.3" }
 git2 = { version = "0.20" }
 itertools = { version = "0.14" }
+
+nomicon = { path = "./yog/nomicon" }
 pretty_assertions = { version = "1.4" }
 rstest = { version = "0.26" }
 serde = { version = "1.0", features = ["derive"] }
