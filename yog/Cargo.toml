@@ -54,6 +54,7 @@ getrandom = { version = "0.3" }
 git2 = { version = "0.20" }
 itertools = { version = "0.14" }
 nomicon = { path = "./yog/nomicon" }
+owo-colors = { version = "4.2" }
 pretty_assertions = { version = "1.4" }
 rootcause = { version = "0.10" }
 rstest = { version = "0.26" }
