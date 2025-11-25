@@ -25,14 +25,14 @@ pub mod truster;
 
 pub fn dict() -> Dictionary {
     dict! {
-        "statusline": statusline::dict(),
-        "statuscolumn": statuscolumn::dict(),
-        "truster": truster::dict(),
+        "attempt": attempt::dict(),
         "caseconv": caseconv::dict(),
         "fkr": fkr::dict(),
-        "attempt": attempt::dict(),
+        "gdiff": gdiff::dict(),
         "genconv": genconv::dict(),
         "ghurlinker": ghurlinker::dict(),
-        "gdiff": gdiff::dict(),
+        "statuscolumn": statuscolumn::dict(),
+        "statusline": statusline::dict(),
+        "truster": truster::dict(),
     }
 }
