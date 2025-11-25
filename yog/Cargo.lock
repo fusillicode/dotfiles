@@ -757,7 +757,10 @@ dependencies = [
 name = "ghl"
 version = "0.1.0"
 dependencies = [
+ "assert2",
  "color-eyre",
+ "pretty_assertions",
+ "rstest",
  "strum",
  "ytil_github",
  "ytil_system",

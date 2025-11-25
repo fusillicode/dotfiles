@@ -60,6 +60,9 @@ use std::ops::Deref;
 use std::str::FromStr;
 
 use color_eyre::Section;
+use color_eyre::eyre::Context as _;
+use color_eyre::eyre::bail;
+use color_eyre::eyre::eyre;
 use color_eyre::owo_colors::OwoColorize;
 use strum::EnumIter;
 use ytil_github::RepoViewField;
@@ -300,7 +303,7 @@ fn main() -> color_eyre::Result<()> {
     }
 
     if pargs.contains("pr") {
-        open_pr()?;
+        create_pr()?;
         return Ok(());
     }
 
@@ -336,11 +339,8 @@ fn main() -> color_eyre::Result<()> {
 
     let renderable_prs: Vec<_> = pull_requests.into_iter().map(RenderablePullRequest).collect();
     if renderable_prs.is_empty() {
-        println!(
-            "{}\n{}",
-            "No PRs matching supplied".yellow().bold(),
-            params.white().bold()
-        );
+        println!("{}\n{}", "No matching PRs found".yellow().bold(), params.white().bold());
+        return Ok(());
     }
 
     let Some(selected_prs) = ytil_tui::minimal_multi_select::<RenderablePullRequest>(renderable_prs)? else {
@@ -389,10 +389,96 @@ fn create_issue_and_branch_from_default_branch() -> Result<(), color_eyre::eyre:
     Ok(())
 }
 
-fn open_pr() -> Result<(), color_eyre::eyre::Error> {
-    let Some(_branch) = ytil_tui::git_branch::select()? else {
+/// Prompts the selection of a branch and creates a pull request for the selected one.
+///
+/// # Returns
+/// - `()` on success or if no branch is selected.
+///
+/// # Errors
+/// - If [`ytil_tui::git_branch::select`] fails.
+/// - If [`pr_title_from_branch_name`] fails.
+/// - If [`ytil_github::pr::create`] fails.
+fn create_pr() -> Result<(), color_eyre::eyre::Error> {
+    let Some(branch) = ytil_tui::git_branch::select()? else {
         return Ok(());
     };
 
+    let title = pr_title_from_branch_name(branch.name_no_origin())?;
+    let pr_url = ytil_github::pr::create(&title)?;
+    println!("{} title={title:?} pr_url={pr_url:?}", "PR created".green().bold());
+
     Ok(())
+}
+
+/// Parses a branch name to generate a pull request title.
+///
+/// # Arguments
+/// - `branch_name` The branch name in the format `{issue_number}-{title-words}`.
+///
+/// # Returns
+/// The formatted pull request title as `[{issue_number}]: {Capitalized Title}`.
+///
+/// # Errors
+/// - Branch name has no parts separated by `-`.
+/// - The first part is not a valid usize for issue number.
+/// - The title parts result in an empty title.
+fn pr_title_from_branch_name(branch_name: &str) -> color_eyre::Result<String> {
+    let mut parts = branch_name.split('-');
+
+    let issue_number: usize = parts
+        .next()
+        .ok_or_else(|| eyre!("error malformed branch_name | branch_name={branch_name:?}"))
+        .and_then(|x| {
+            x.parse().wrap_err_with(|| {
+                format!("error parsing issue number | branch_name={branch_name:?} issue_number={x:?}")
+            })
+        })?;
+
+    let title = parts
+        .enumerate()
+        .map(|(i, word)| {
+            if i == 0 {
+                let mut chars = word.chars();
+                let Some(first) = chars.next() else {
+                    return String::new();
+                };
+                return first.to_uppercase().chain(chars.as_str().chars()).collect();
+            }
+            word.to_string()
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    if title.is_empty() {
+        bail!("error empty title | branch_name={branch_name:?}");
+    }
+
+    Ok(format!("[{issue_number}]: {title}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case("43-foo-bar-baz", "[43]: Foo bar baz")]
+    #[case("1-hello", "[1]: Hello")]
+    #[case("123-long-branch-name-here", "[123]: Long branch name here")]
+    fn pr_title_from_branch_name_when_valid_input_formats_correctly(#[case] input: &str, #[case] expected: &str) {
+        pretty_assertions::assert_eq!(pr_title_from_branch_name(input).unwrap(), expected);
+    }
+
+    #[rstest]
+    #[case(
+        "abc-foo",
+        r#"error parsing issue number | branch_name="abc-foo" issue_number="abc""#
+    )]
+    #[case("42", r#"error empty title | branch_name="42""#)]
+    #[case("", r#"error parsing issue number | branch_name="" issue_number="""#)]
+    fn pr_title_from_branch_name_when_input_returns_error(#[case] input: &str, #[case] expected_error: &str) {
+        assert2::let_assert!(Err(err) = pr_title_from_branch_name(input));
+        pretty_assertions::assert_eq!(err.to_string(), expected_error);
+    }
 }

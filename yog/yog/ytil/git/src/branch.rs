@@ -240,6 +240,19 @@ pub fn get_all() -> color_eyre::Result<Vec<Branch>> {
     Ok(out)
 }
 
+/// Retrieves all branches without redundant remote duplicates.
+///
+/// # Returns
+/// A vector of [`Branch`] instances with redundant remotes removed.
+///
+/// # Errors
+/// - The repository cannot be discovered.
+/// - The 'origin' remote cannot be found.
+/// - Performing `git fetch` for all branches fails.
+/// - Enumerating branches fails.
+/// - A branch name is not valid UTF-8.
+/// - Resolving the branch tip commit fails.
+/// - Converting the committer timestamp into a [`DateTime`] fails.
 pub fn get_all_no_redundant() -> color_eyre::Result<Vec<Branch>> {
     let mut branches = get_all()?;
     remove_redundant_remotes(&mut branches);
