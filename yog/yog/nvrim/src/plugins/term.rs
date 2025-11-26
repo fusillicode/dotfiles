@@ -3,7 +3,6 @@ use nvim_oxi::api::Buffer;
 use nvim_oxi::api::Window;
 use nvim_oxi::api::opts::CreateAutocmdOptsBuilder;
 use nvim_oxi::api::opts::ExecOptsBuilder;
-use nvim_oxi::api::types::Mode;
 use ytil_nvim_oxi::buffer::BufferExt;
 
 /// [`Dictionary`] of Rust tests utilities.
@@ -20,15 +19,6 @@ pub fn create_autocmd() {
         CreateAutocmdOptsBuilder::default()
             .patterns(["term://*"])
             .command("startinsert"),
-    );
-}
-
-pub fn keymaps() {
-    crate::keymaps::set(
-        &[Mode::Insert, Mode::Normal, Mode::Terminal, Mode::VisualSelect],
-        "<C-w>",
-        ":lua vim.cmd('wincmd w')",
-        &crate::keymaps::default_opts(),
     );
 }
 

@@ -97,8 +97,6 @@ fn set_all(_: ()) {
 
     set(&NV_MODE, "<c-;>", ":set wrap!<cr>", &default_opts);
     set(&[Mode::Normal], "<esc>", r#":noh<cr>:echo""<cr>"#, &default_opts);
-
-    crate::plugins::term::keymaps();
 }
 
 /// Return the RHS for a smart normal-mode `i` mapping.
