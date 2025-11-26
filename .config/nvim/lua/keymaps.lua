@@ -15,6 +15,8 @@ function M.set_lua_defined()
   keymap_set({ 'n', 'v', }, '<leader>t', nvrim.plugins.truster.run_test)
   keymap_set('n', 'gx', require('opener').open_under_cursor)
 
+  keymap_set({ 'n', 'v', 'i', 't', }, '<C-w>', function() vim.cmd('wincmd w') end)
+
   -- Thanks perplexity 🥲
   keymap_set({ 'n', 'v', }, 'ga', function()
     local alt_buf = vim.fn.bufnr('#')
