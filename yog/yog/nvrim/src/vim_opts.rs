@@ -12,6 +12,7 @@ use nvim_oxi::Dictionary;
 use nvim_oxi::api::opts::OptionOpts;
 use nvim_oxi::api::opts::OptionOptsBuilder;
 use nvim_oxi::api::opts::OptionScope;
+use nvim_oxi::conversion::FromObject;
 use nvim_oxi::conversion::ToObject;
 
 /// [`Dictionary`] of `vim.opts` helpers.
@@ -29,6 +30,21 @@ pub fn set<Opt: ToObject + Debug + Copy>(name: &str, value: Opt, opts: &OptionOp
         ytil_nvim_oxi::notify::error(format!(
             "error setting option | name={name:?} value={value:#?} opts={opts:#?} error={err:#?}"
         ));
+    }
+}
+
+/// Gets a Vim option by `name` within the given [`OptionOpts`].
+///
+/// Errors are notified to Nvim via [`ytil_nvim_oxi::notify::error`].
+pub fn get<Opt: FromObject + Debug>(name: &str, opts: &OptionOpts) -> Option<Opt> {
+    match nvim_oxi::api::get_option_value(name, opts) {
+        Ok(value) => Some(value),
+        Err(err) => {
+            ytil_nvim_oxi::notify::error(format!(
+                "error getting option | name={name:?} opts={opts:#?} error={err:#?}"
+            ));
+            None
+        }
     }
 }
 

@@ -41,8 +41,8 @@ function M.set_lua_defined()
   end)
 
   local min_diag_level = vim.diagnostic.severity.ERROR
-  keymap_set('n', 'dn', function() vim.diagnostic.jump({ count = 1, severity = min_diag_level }) end)
-  keymap_set('n', 'dp', function() vim.diagnostic.jump({ count = -1, severity = min_diag_level }) end)
+  keymap_set('n', 'dn', function() vim.diagnostic.jump({ count = 1, severity = min_diag_level, }) end)
+  keymap_set('n', 'dp', function() vim.diagnostic.jump({ count = -1, severity = min_diag_level, }) end)
   keymap_set('n', '<leader>e', vim.diagnostic.open_float)
 end
 
@@ -103,6 +103,7 @@ function M.fzf_lua(plugin)
     { '<leader>yB', mode = { 'n', 'v', }, plugin and { function() nvrim.plugins.ghurlinker.get_link('blame', true) end, }, },
     { '<leader>gh', mode = { 'n', 'v', }, plugin and { nvrim.plugins.gdiff.get_hunks, }, },
     { '<leader>gH', mode = { 'n', 'v', }, plugin and { function() nvrim.plugins.gdiff.get_hunks(true) end, }, },
+    { '<leader>t',  mode = { 'n', 'v', }, plugin and { nvrim.plugins.treminal.toggle_term, }, },
   }
 end
 
