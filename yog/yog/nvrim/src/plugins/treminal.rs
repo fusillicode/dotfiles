@@ -1,7 +1,6 @@
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::Window;
-use nvim_oxi::api::opts::CreateAutocmdOptsBuilder;
 use nvim_oxi::api::opts::ExecOptsBuilder;
 use ytil_nvim_oxi::buffer::BufferExt;
 
@@ -10,16 +9,6 @@ pub fn dict() -> Dictionary {
     dict! {
         "toggle_term": fn_from!(toggle_term),
     }
-}
-
-pub fn create_autocmd() {
-    crate::cmds::create_autocmd(
-        ["BufEnter"],
-        "EnterTerminal",
-        CreateAutocmdOptsBuilder::default()
-            .patterns(["term://*"])
-            .command("startinsert"),
-    );
 }
 
 fn toggle_term(width_perc: u32) {
@@ -67,6 +56,7 @@ impl<'a> TerminalBufferOp<'a> {
             TerminalBufferOp::Create => {
                 // Error already notified internally by [`exec_vim_cmd`].
                 let _ = ytil_nvim_oxi::common::exec_vim_cmd("terminal", None::<&[&str]>);
+                let _ = ytil_nvim_oxi::common::exec_vim_cmd("startinsert", None::<&[&str]>);
             }
             TerminalBufferOp::Show(buffer) => {
                 let _ = nvim_oxi::api::set_current_buf(buffer).inspect_err(|err| {
