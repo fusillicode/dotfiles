@@ -44,7 +44,7 @@ pub fn create() {
     );
 
     crate::plugins::scrolloff::create_autocmd();
-    crate::plugins::treminal::create_autocmd();
+    crate::plugins::term::create_autocmd();
 }
 
 /// Creates an autocommand group and associated autocommands for `events`.
