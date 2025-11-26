@@ -90,6 +90,10 @@ pub fn set(colorscheme: Option<String>) {
             "TreesitterContext",
             get_default_hl_opts().background(TREESITTER_CONTEXT_BG).build(),
         ),
+        (
+            "WinSeparator",
+            get_default_hl_opts().foreground(TREESITTER_CONTEXT_BG).build(),
+        ),
         // Changing these will change the main foreground color.
         ("@variable", get_default_hl_opts().foreground(GLOBAL_FG).build()),
         ("Comment", get_default_hl_opts().foreground(COMMENTS_FG).build()),
