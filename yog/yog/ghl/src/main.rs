@@ -364,7 +364,7 @@ fn main() -> color_eyre::Result<()> {
 }
 
 fn create_issue_and_branch_from_default_branch() -> Result<(), color_eyre::eyre::Error> {
-    let Some(issue_title) = ytil_tui::text_prompt("Issue title:")? else {
+    let Some(issue_title) = ytil_tui::text_prompt("Issue title:")?.map(|x| x.trim().to_string()) else {
         return Ok(());
     };
 
