@@ -374,42 +374,36 @@ pub fn get_relative_path_to_cwd(current_buffer: &Buffer) -> Option<PathBuf> {
     ))
 }
 
-/// Retrieves the absolute path of the specified buffer, or the current buffer if none provided.
+/// Retrieves the absolute path of the specified buffer.
 ///
 /// # Arguments
-/// - `current_buffer` The buffer to get the path for. If [`None`], uses the current buffer.
+/// - `buffer` The buffer to get the path for. If [`None`], returns [`None`].
 ///
 /// # Returns
 /// - `Some(PathBuf)` containing the absolute path if successful.
-/// - [`None`] if the buffer has no name, an empty name, or an error occurs.
+/// - [`None`] if no buffer provided, the buffer has no name, an empty name, or an error occurs.
 ///
 /// # Errors
 /// Errors are logged internally but do not propagate; the function returns [`None`] on failure.
 ///
 /// # Assumptions
 /// Assumes that the buffer's name represents a valid path.
-pub fn get_absolute_path(current_buffer: Option<&Buffer>) -> Option<PathBuf> {
-    fn get_absolute_path_by_ref(buf: &Buffer) -> Option<PathBuf> {
-        let path = buf
-            .get_name()
-            .map(|s| s.to_string_lossy().to_string())
-            .inspect_err(|err| {
-                crate::notify::error(format!(
-                    "error getting buffer absolute path | buffer={buf:#?} error={err:#?}"
-                ));
-            })
-            .ok();
-        if path.as_ref().is_some_and(String::is_empty) {
-            return None;
-        }
-        path.map(PathBuf::from)
+pub fn get_absolute_path(buffer: Option<&Buffer>) -> Option<PathBuf> {
+    let path = buffer?
+        .get_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .inspect_err(|err| {
+            crate::notify::error(format!(
+                "error getting buffer absolute path | buffer={buffer:#?} error={err:#?}"
+            ));
+        })
+        .ok();
+
+    if path.as_ref().is_some_and(String::is_empty) {
+        return None;
     }
 
-    let Some(current_buffer) = current_buffer else {
-        return get_absolute_path_by_ref(&Buffer::current());
-    };
-
-    get_absolute_path_by_ref(current_buffer)
+    path.map(PathBuf::from)
 }
 
 #[cfg(test)]

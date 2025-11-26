@@ -23,7 +23,7 @@ pub fn dict() -> Dictionary {
 
 /// Sets a Vim option by `name` to `value` within the given [`OptionOpts`].
 ///
-/// Errors are notified to Nvim via `ytil_nvim_oxi::notify::error`.
+/// Errors are notified to Nvim via [`ytil_nvim_oxi::notify::error`].
 pub fn set<Opt: ToObject + Debug + Copy>(name: &str, value: Opt, opts: &OptionOpts) {
     if let Err(err) = nvim_oxi::api::set_option_value(name, value, opts) {
         ytil_nvim_oxi::notify::error(format!(
