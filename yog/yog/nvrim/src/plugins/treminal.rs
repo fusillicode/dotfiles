@@ -1,4 +1,5 @@
 use nvim_oxi::Dictionary;
+use nvim_oxi::api::Buffer;
 use nvim_oxi::api::Window;
 use nvim_oxi::api::opts::CreateAutocmdOptsBuilder;
 use nvim_oxi::api::opts::ExecOptsBuilder;
@@ -21,16 +22,16 @@ pub fn create_autocmd() {
     );
 }
 
-fn toggle_term(_: ()) {
+fn toggle_term(width_perc: u32) {
     let Some(terminal_buffer) = nvim_oxi::api::list_bufs()
         .into_iter()
         .find(BufferExt::is_terminal_buffer)
     else {
-        new_term(30);
+        create_or_show_terminal_buffer(width_perc, TerminalBufferOp::Create);
         return;
     };
 
-    let Some(visible_terminal_win) = nvim_oxi::api::list_wins().into_iter().find(|win| {
+    let Some(visible_terminal_window) = nvim_oxi::api::list_wins().into_iter().find(|win| {
         if let Ok(buffer) = win.get_buf().inspect_err(|err| {
             ytil_nvim_oxi::notify::error(format!(
                 "error getting buffer from window | window={win:?} error={err:?}",
@@ -41,51 +42,58 @@ fn toggle_term(_: ()) {
             false
         }
     }) else {
-        let Some(total_width): Option<u32> = crate::vim_opts::get("columns", &crate::vim_opts::global_scope()) else {
-            return;
-        };
-
-        let term_width = (total_width * 30) / 100;
-
-        // Terminal exists but hidden: show it
-        if let Err(err) = nvim_oxi::api::exec2("leftabove vsplit", &ExecOptsBuilder::default().build()) {
-            ytil_nvim_oxi::notify::error(format!("error executing vim cmd | width={term_width:#?} error={err:?}",));
-            return;
-        };
-
-        if let Err(err) = nvim_oxi::api::set_current_buf(&terminal_buffer) {
-            ytil_nvim_oxi::notify::error(format!("error executing vim cmd | width={term_width:#?} error={err:?}",));
-            return;
-        }
-
-        let mut current_window = Window::current();
-        if let Err(err) = current_window.set_width(term_width) {
-            ytil_nvim_oxi::notify::error(format!(
-                "error setting width of current window | current_window={current_window:?} width={term_width:#?} error={err:?}",
-            ));
-        }
+        // If terminal buffer is not visible, show it.
+        create_or_show_terminal_buffer(width_perc, TerminalBufferOp::Show(&terminal_buffer));
         return;
     };
 
-    // Terminal is visible: close it
-    if let Err(err) = visible_terminal_win.clone().close(false) {
+    // If terminal buffer is visible, hide it.
+    if let Err(err) = visible_terminal_window.clone().close(false) {
         ytil_nvim_oxi::notify::error(format!(
-            "error closing window | window={visible_terminal_win:?} error={err:?}",
+            "error closing window | window={visible_terminal_window:?} error={err:?}",
         ));
     }
 }
 
-fn new_term(width_perc: u32) {
+#[derive(Clone, Copy)]
+enum TerminalBufferOp<'a> {
+    Create,
+    Show(&'a Buffer),
+}
+
+impl<'a> TerminalBufferOp<'a> {
+    pub fn run(&'a self) {
+        match self {
+            TerminalBufferOp::Create => {
+                // Error already notified internally by [`exec_vim_cmd`].
+                let _ = ytil_nvim_oxi::common::exec_vim_cmd("terminal", None::<&[&str]>);
+            }
+            TerminalBufferOp::Show(buffer) => {
+                let _ = nvim_oxi::api::set_current_buf(buffer).inspect_err(|err| {
+                    ytil_nvim_oxi::notify::error(format!(
+                        "error setting buffer as current | buffer={buffer:?} error={err:?}"
+                    ));
+                });
+            }
+        }
+    }
+}
+
+fn create_or_show_terminal_buffer(width_perc: u32, op: TerminalBufferOp) {
+    // Error already notified internally by [`crate::vim_opts::get`].
     let Some(total_width): Option<u32> = crate::vim_opts::get("columns", &crate::vim_opts::global_scope()) else {
         return;
     };
 
-    let term_width = (total_width * width_perc) / 100;
     if let Err(err) = nvim_oxi::api::exec2("leftabove vsplit", &ExecOptsBuilder::default().build()) {
-        ytil_nvim_oxi::notify::error(format!("error executing vim cmd | width={term_width:#?} error={err:?}",));
+        ytil_nvim_oxi::notify::error(format!(
+            "error vsplitting buffer | width_perc={width_perc} error={err:?}"
+        ));
     };
-    let _ = ytil_nvim_oxi::common::exec_vim_cmd("terminal", None::<&[&str]>);
 
+    op.run();
+
+    let term_width = (total_width * width_perc) / 100;
     let mut current_window = Window::current();
     if let Err(err) = current_window.set_width(term_width) {
         ytil_nvim_oxi::notify::error(format!(
