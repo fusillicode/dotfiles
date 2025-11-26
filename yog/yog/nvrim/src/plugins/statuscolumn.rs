@@ -48,14 +48,7 @@ pub fn dict() -> Dictionary {
 /// status column (special buffer type) and an error acquiring required state.
 fn draw((cur_lnum, extmarks, opts): (String, Vec<Extmark>, Option<Opts>)) -> Option<String> {
     let current_buffer = Buffer::current();
-    let buf_type = current_buffer
-        .get_buf_type()
-        .inspect_err(|err| {
-            ytil_nvim_oxi::notify::error(format!(
-                "error getting buftype of current buffer | buffer={current_buffer:#?} error={err:#?}"
-            ));
-        })
-        .ok()?;
+    let buf_type = current_buffer.get_buf_type()?;
 
     Some(draw_statuscolumn(
         &buf_type,

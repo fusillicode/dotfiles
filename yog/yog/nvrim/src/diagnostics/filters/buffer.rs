@@ -42,7 +42,9 @@ pub trait BufferFilter {
         {
             return Ok(true);
         }
-        let buf_type = buffer_with_path.buffer.get_buf_type()?;
+        let Some(buf_type) = buffer_with_path.buffer.get_buf_type() else {
+            return Ok(false);
+        };
         Ok(self.blacklisted_buf_types().contains(&buf_type.as_str()))
     }
 }

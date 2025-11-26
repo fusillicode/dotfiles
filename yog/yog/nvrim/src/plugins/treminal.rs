@@ -29,20 +29,17 @@ pub fn create_autocmd() {
 }
 
 fn toggle_term(_: ()) {
-    let buffers = nvim_oxi::api::list_bufs();
-
-    let Some(terminal_buffer) = buffers
+    let Some(terminal_buffer) = nvim_oxi::api::list_bufs()
         .into_iter()
-        .find(|b| b.get_buf_type().unwrap_or_default() == "terminal")
+        .find(BufferExt::is_terminal_buffer)
     else {
         create_term();
         return;
     };
 
-    let windows = nvim_oxi::api::list_wins();
-    let Some(visible_terminal_win) = windows.into_iter().find(|win| {
+    let Some(visible_terminal_win) = nvim_oxi::api::list_wins().into_iter().find(|win| {
         if let Ok(buffer) = win.get_buf() {
-            buffer.get_buf_type().unwrap_or_default() == "terminal"
+            buffer.is_terminal_buffer()
         } else {
             false
         }

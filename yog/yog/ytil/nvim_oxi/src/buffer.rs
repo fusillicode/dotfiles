@@ -106,11 +106,12 @@ pub trait BufferExt {
     /// Retrieves the buffer type via the `buftype` option.
     ///
     /// # Returns
-    /// - `Ok(String)` The buffer type (e.g., `""` for normal, `"help"` for help buffers).
+    /// - `Some(String)` The buffer type (e.g., `""` for normal, `"help"` for help buffers).
+    /// - `None` if the option cannot be retrieved or is not set.
     ///
-    /// # Errors
-    /// - Propagates [`nvim_oxi::api::Error`] from the underlying option retrieval.
-    fn get_buf_type(&self) -> Result<String, nvim_oxi::api::Error>;
+    /// # Rationale
+    /// Errors are notified directly to Nvim because this is the behavior wanted in all cases.
+    fn get_buf_type(&self) -> Option<String>;
 
     /// Inserts `text` at the current cursor position in the active buffer.
     ///
@@ -122,6 +123,10 @@ pub trait BufferExt {
     /// # Arguments
     /// - `text` UTF-8 slice inserted at the cursor byte column.
     fn set_text_at_cursor_pos(&mut self, text: &str);
+
+    fn is_terminal_buffer(&self) -> bool {
+        self.get_buf_type().is_some_and(|bt| bt == "terminal")
+    }
 }
 
 /// Defines boundaries for text selection within lines.
@@ -216,9 +221,15 @@ impl BufferExt for Buffer {
         }
     }
 
-    fn get_buf_type(&self) -> Result<String, nvim_oxi::api::Error> {
+    fn get_buf_type(&self) -> Option<String> {
         let opts = OptionOptsBuilder::default().buf(self.clone()).build();
         nvim_oxi::api::get_option_value::<String>("buftype", &opts)
+            .inspect_err(|err| {
+                crate::notify::error(format!(
+                    "error getting buftype of buffer | buffer={self:#?} error={err:?}"
+                ));
+            })
+            .ok()
     }
 }
 
@@ -598,8 +609,8 @@ mod tests {
 
         fn set_text_at_cursor_pos(&mut self, _text: &str) {}
 
-        fn get_buf_type(&self) -> Result<String, nvim_oxi::api::Error> {
-            Ok(String::new())
+        fn get_buf_type(&self) -> Option<String> {
+            None
         }
     }
 }
@@ -656,8 +667,8 @@ pub mod mock {
 
         fn set_text_at_cursor_pos(&mut self, _text: &str) {}
 
-        fn get_buf_type(&self) -> Result<String, nvim_oxi::api::Error> {
-            Ok(self.buf_type.clone())
+        fn get_buf_type(&self) -> Option<String> {
+            Some(self.buf_type.clone())
         }
     }
 }
