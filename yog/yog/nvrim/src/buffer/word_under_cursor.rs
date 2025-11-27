@@ -7,6 +7,7 @@ use std::process::Command;
 
 use nvim_oxi::Object;
 use nvim_oxi::conversion::ToObject;
+use nvim_oxi::lua::Pushable;
 use nvim_oxi::lua::ffi::State;
 use nvim_oxi::serde::Serializer;
 use serde::Serialize;
@@ -41,20 +42,29 @@ pub fn get(_: ()) -> Option<WordUnderCursor> {
 /// Serialized to Lua as a tagged table (`{ kind = "...", value = "..." }`).
 #[derive(Serialize)]
 #[serde(tag = "kind", content = "value")]
+#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 pub enum WordUnderCursor {
     /// A string that successfully parsed as a [`Url`] via [`Url::parse`].
     Url(String),
     /// A filesystem path identified as a binary file by [`exec_file_cmd`].
     BinaryFile(String),
-    /// A filesystem path identified as a (plain / CSV) text file by [`exec_file_cmd`].
-    TextFile(String),
+    /// A filesystem path identified as a text file by [`exec_file_cmd`].
+    TextFile(TextFile),
     /// A filesystem path identified as a directory by [`exec_file_cmd`].
     Directory(String),
     /// A fallback plain token (word) when no more specific classification applied.
     Word(String),
 }
 
-impl nvim_oxi::lua::Pushable for WordUnderCursor {
+#[derive(Serialize)]
+#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
+pub struct TextFile {
+    pub path: String,
+    pub lnum: i64,
+    pub col: i64,
+}
+
+impl Pushable for WordUnderCursor {
     unsafe fn push(self, lstate: *mut State) -> Result<std::ffi::c_int, nvim_oxi::lua::Error> {
         unsafe {
             self.to_object()
@@ -80,9 +90,33 @@ impl From<String> for WordUnderCursor {
         if Url::parse(&value).is_ok() {
             return Self::Url(value);
         }
-        match exec_file_cmd(&value) {
+
+        let mut parts = value.split(':');
+        let Some(maybe_path) = parts.next() else {
+            return Self::Word(value);
+        };
+
+        let Ok(lnum) = parts
+            .next()
+            .map(|s| s.parse())
+            .transpose()
+            .map(|x: Option<i64>| x.unwrap_or_default())
+        else {
+            return Self::Word(value);
+        };
+
+        let Ok(col) = parts
+            .next()
+            .map(|s| s.parse())
+            .transpose()
+            .map(|x: Option<i64>| x.unwrap_or_default())
+        else {
+            return Self::Word(value);
+        };
+
+        match exec_file_cmd(maybe_path) {
             Ok(FileCmdOutput::BinaryFile(x)) => Self::BinaryFile(x),
-            Ok(FileCmdOutput::TextFile(x)) => Self::TextFile(x),
+            Ok(FileCmdOutput::TextFile(path)) => Self::TextFile(TextFile { path, lnum, col }),
             Ok(FileCmdOutput::Directory(x)) => Self::Directory(x),
             Ok(FileCmdOutput::NotFound(path) | FileCmdOutput::Unknown(path)) => Self::Word(path),
             Err(_) => Self::Word(value),
@@ -112,7 +146,7 @@ fn exec_file_cmd(path: &str) -> color_eyre::Result<FileCmdOutput> {
     if output.contains(" text/plain;") || output.contains(" text/csv;") {
         return Ok(FileCmdOutput::TextFile(path.to_owned()));
     }
-    if output.contains(" text/binary;") {
+    if output.contains("application/") {
         return Ok(FileCmdOutput::BinaryFile(path.to_owned()));
     }
     if output.contains(" no such file or directory") {
@@ -189,6 +223,10 @@ fn convert_visual_to_byte_idx(s: &str, idx: usize) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
+    use pretty_assertions::assert_eq;
+    use tempfile::NamedTempFile;
+    use tempfile::TempDir;
+
     use super::*;
 
     #[test]
@@ -241,5 +279,101 @@ mod tests {
     fn get_word_at_index_returns_none_with_index_out_of_bounds() {
         let s = "abc";
         assert_eq!(get_word_at_index(s, 10), None);
+    }
+
+    #[test]
+    fn word_under_cursor_from_valid_url_returns_url() {
+        let input = "https://example.com".to_string();
+        let result = WordUnderCursor::from(input.clone());
+        assert_eq!(result, WordUnderCursor::Url(input));
+    }
+
+    #[test]
+    fn word_under_cursor_from_invalid_url_plain_word_returns_word() {
+        let input = "noturl".to_string();
+        let result = WordUnderCursor::from(input.clone());
+        assert_eq!(result, WordUnderCursor::Word(input));
+    }
+
+    #[test]
+    fn word_under_cursor_from_path_to_text_file_returns_text_file() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
+        let path = temp_file.path().to_string_lossy().to_string();
+        let result = WordUnderCursor::from(path.clone());
+        assert_eq!(result, WordUnderCursor::TextFile(TextFile { path, lnum: 0, col: 0 }));
+    }
+
+    #[test]
+    fn word_under_cursor_from_path_lnum_to_text_file_returns_text_file_with_lnum() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
+        let path = temp_file.path().to_string_lossy().to_string();
+        let input = format!("{}:10", path);
+        let result = WordUnderCursor::from(input);
+        assert_eq!(result, WordUnderCursor::TextFile(TextFile { path, lnum: 10, col: 0 }));
+    }
+
+    #[test]
+    fn word_under_cursor_from_path_lnum_col_to_text_file_returns_text_file_with_lnum_col() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
+        let path = temp_file.path().to_string_lossy().to_string();
+        let input = format!("{}:10:5", path);
+        let result = WordUnderCursor::from(input);
+        assert_eq!(result, WordUnderCursor::TextFile(TextFile { path, lnum: 10, col: 5 }));
+    }
+
+    #[test]
+    fn word_under_cursor_from_path_to_directory_returns_directory() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_string_lossy().to_string();
+        let result = WordUnderCursor::from(path.clone());
+        assert_eq!(result, WordUnderCursor::Directory(path));
+    }
+
+    #[test]
+    fn word_under_cursor_from_path_to_binary_file_returns_binary_file() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        // Write some binary data
+        std::io::Write::write_all(&mut temp_file, &[0, 1, 2, 255]).unwrap();
+        let path = temp_file.path().to_string_lossy().to_string();
+        let result = WordUnderCursor::from(path.clone());
+        assert_eq!(result, WordUnderCursor::BinaryFile(path));
+    }
+
+    #[test]
+    fn word_under_cursor_from_nonexistent_path_returns_word() {
+        let path = "/nonexistent/path".to_string();
+        let result = WordUnderCursor::from(path.clone());
+        assert_eq!(result, WordUnderCursor::Word(path));
+    }
+
+    #[test]
+    fn word_under_cursor_from_path_with_invalid_lnum_returns_word() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let path = temp_file.path().to_string_lossy().to_string();
+        let input = format!("{}:invalid", path);
+        let result = WordUnderCursor::from(input.clone());
+        assert_eq!(result, WordUnderCursor::Word(input));
+    }
+
+    #[test]
+    fn word_under_cursor_from_path_with_invalid_col_returns_word() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let path = temp_file.path().to_string_lossy().to_string();
+        let input = format!("{}:10:invalid", path);
+        let result = WordUnderCursor::from(input.clone());
+        assert_eq!(result, WordUnderCursor::Word(input));
+    }
+
+    #[test]
+    fn word_under_cursor_from_path_lnum_col_extra_ignores_extra() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
+        let path = temp_file.path().to_string_lossy().to_string();
+        let input = format!("{}:10:5:extra", path);
+        let result = WordUnderCursor::from(input);
+        assert_eq!(result, WordUnderCursor::TextFile(TextFile { path, lnum: 10, col: 5 }));
     }
 }

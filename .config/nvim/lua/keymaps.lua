@@ -11,11 +11,13 @@ function M.set_lua_defined()
 
   keymap_set('n', 'i', nvrim.keymaps.smart_ident_on_blank_line, base_opts)
   keymap_set('n', 'dd', nvrim.keymaps.smart_dd_no_yank_empty_line, base_opts)
+  -- TODO: is this really needed?
   keymap_set('v', '<esc>', nvrim.keymaps.visual_esc, base_opts)
   keymap_set({ 'n', 'v', }, '<leader>t', nvrim.plugins.truster.run_test)
   keymap_set('n', 'gx', require('opener').open_under_cursor)
 
-  keymap_set({ 'n', 'v', 'i', 't', }, '<C-w>', function() vim.cmd('wincmd w') end)
+  keymap_set({ 'n', 'v', 'i', 't', }, '<c-e>', function() vim.cmd('wincmd w') end)
+  keymap_set({ 'n', 'v', }, '<leader>t', function() nvrim.plugins.term.toggle(30) end)
 
   -- Thanks perplexity 🥲
   keymap_set({ 'n', 'v', }, 'ga', function()
@@ -105,7 +107,6 @@ function M.fzf_lua(plugin)
     { '<leader>yB', mode = { 'n', 'v', }, plugin and { function() nvrim.plugins.ghurlinker.get_link('blame', true) end, }, },
     { '<leader>gh', mode = { 'n', 'v', }, plugin and { nvrim.plugins.gdiff.get_hunks, }, },
     { '<leader>gH', mode = { 'n', 'v', }, plugin and { function() nvrim.plugins.gdiff.get_hunks(true) end, }, },
-    { '<leader>t',  mode = { 'n', 'v', }, plugin and { function() nvrim.plugins.term.toggle(30) end, }, },
   }
 end
 

@@ -124,7 +124,7 @@ pub trait BufferExt {
     /// - `text` UTF-8 slice inserted at the cursor byte column.
     fn set_text_at_cursor_pos(&mut self, text: &str);
 
-    fn is_terminal_buffer(&self) -> bool {
+    fn is_terminal(&self) -> bool {
         self.get_buf_type().is_some_and(|bt| bt == "terminal")
     }
 }

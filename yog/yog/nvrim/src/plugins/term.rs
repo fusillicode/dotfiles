@@ -3,12 +3,16 @@ use nvim_oxi::api::Buffer;
 use nvim_oxi::api::Window;
 use nvim_oxi::api::opts::CreateAutocmdOptsBuilder;
 use nvim_oxi::api::opts::ExecOptsBuilder;
+// use ytil_editor::Editor;
+// use ytil_editor::FileToOpen;
 use ytil_nvim_oxi::buffer::BufferExt;
 
 /// [`Dictionary`] of Rust tests utilities.
 pub fn dict() -> Dictionary {
     dict! {
         "toggle": fn_from!(toggle),
+        "toggle_term_modes": fn_from!(toggle_term_modes),
+        // "open_word_under_cursor": fn_from!(open_word_under_cursor),
     }
 }
 
@@ -22,11 +26,18 @@ pub fn create_autocmd() {
     );
 }
 
+fn toggle_term_modes(_: ()) {
+    let current_buffer = Buffer::current();
+    if !current_buffer.is_terminal() {
+        return;
+    }
+    if nvim_oxi::api::get_mode().mode != "i" {
+        let _ = ytil_nvim_oxi::common::exec_vim_cmd("startinsert", None::<&[&str]>);
+    }
+}
+
 fn toggle(width_perc: u32) {
-    let Some(terminal_buffer) = nvim_oxi::api::list_bufs()
-        .into_iter()
-        .find(BufferExt::is_terminal_buffer)
-    else {
+    let Some(terminal_buffer) = nvim_oxi::api::list_bufs().into_iter().find(BufferExt::is_terminal) else {
         create_or_show_terminal_buffer(width_perc, TerminalBufferOp::Create);
         return;
     };
@@ -37,7 +48,7 @@ fn toggle(width_perc: u32) {
                 "error getting buffer from window | window={win:?} error={err:?}",
             ));
         }) {
-            buffer.is_terminal_buffer()
+            buffer.is_terminal()
         } else {
             false
         }
@@ -101,3 +112,25 @@ fn create_or_show_terminal_buffer(width_perc: u32, op: TerminalBufferOp) {
         ));
     }
 }
+
+// fn open_word_under_cursor(_: ()) {
+//     if !Buffer::current().is_terminal() {
+//         return;
+//     }
+//     let Some(word_under_cursor) = crate::buffer::word_under_cursor::get(()) else {
+//         return;
+//     };
+//     match word_under_cursor {
+//         crate::buffer::word_under_cursor::WordUnderCursor::BinaryFile(_)
+//         | crate::buffer::word_under_cursor::WordUnderCursor::Directory(_)
+//         | crate::buffer::word_under_cursor::WordUnderCursor::Word(_) => (),
+//         crate::buffer::word_under_cursor::WordUnderCursor::Url(_url) => todo!(),
+//         crate::buffer::word_under_cursor::WordUnderCursor::TextFile(text_file) => {
+//             Editor::Nvim.open_file_cmd(&FileToOpen {
+//                 column: text_file.col,
+//                 line_nbr: text_file.lnum,
+//                 path: text_file.path,
+//             });
+//         }
+//     };
+// }
