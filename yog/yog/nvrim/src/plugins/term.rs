@@ -1,7 +1,6 @@
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::Window;
-use nvim_oxi::api::opts::CreateAutocmdOptsBuilder;
 use nvim_oxi::api::opts::ExecOptsBuilder;
 // use ytil_editor::Editor;
 // use ytil_editor::FileToOpen;
@@ -11,28 +10,7 @@ use ytil_nvim_oxi::buffer::BufferExt;
 pub fn dict() -> Dictionary {
     dict! {
         "toggle": fn_from!(toggle),
-        "toggle_term_modes": fn_from!(toggle_term_modes),
         // "open_word_under_cursor": fn_from!(open_word_under_cursor),
-    }
-}
-
-pub fn create_autocmd() {
-    crate::cmds::create_autocmd(
-        ["BufEnter", "TermOpen"],
-        "EnterTerminal",
-        CreateAutocmdOptsBuilder::default()
-            .patterns(["term://*"])
-            .command("startinsert"),
-    );
-}
-
-fn toggle_term_modes(_: ()) {
-    let current_buffer = Buffer::current();
-    if !current_buffer.is_terminal() {
-        return;
-    }
-    if nvim_oxi::api::get_mode().mode != "i" {
-        let _ = ytil_nvim_oxi::common::exec_vim_cmd("startinsert", None::<&[&str]>);
     }
 }
 
