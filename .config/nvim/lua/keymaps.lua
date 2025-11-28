@@ -21,30 +21,7 @@ function M.set_lua_defined()
   keymap_set({ 'n', 'v', 'i', 't', }, '<c-h>', nvrim.layout.focus_term)
   keymap_set({ 'n', 'v', 'i', 't', }, '<c-l>', nvrim.layout.focus_buffer)
 
-  -- Thanks perplexity 🥲
-  keymap_set({ 'n', 'v', }, 'ga', function()
-    local alt_buf = vim.fn.bufnr('#')
-    -- If alternate buffer valid, loaded, and listed, switch to it
-    if alt_buf ~= -1 and vim.api.nvim_buf_is_loaded(alt_buf) and vim.fn.buflisted(alt_buf) == 1 then
-      vim.api.nvim_set_current_buf(alt_buf)
-      return
-    end
-
-    -- Otherwise, get list of loaded & listed buffers
-    local bufs = vim.fn.getbufinfo({ bufloaded = true, listed = true, })
-    local current_buf = vim.api.nvim_get_current_buf()
-    if #bufs == 0 then return end
-    -- Find the last buffer in the list that's not the current one
-    for i = #bufs, 1, -1 do
-      local bufnr = bufs[i].bufnr
-      local buftype = vim.api.nvim_buf_get_option(bufnr, 'buftype')
-      local bufname = vim.api.nvim_buf_get_name(bufnr)
-      if bufnr ~= current_buf and buftype == '' and bufname ~= '' then
-        vim.api.nvim_set_current_buf(bufnr)
-        return
-      end
-    end
-  end)
+  keymap_set({ 'n', 'v', }, 'ga', nvrim.layout.ga)
 
   local min_diag_level = vim.diagnostic.severity.ERROR
   keymap_set('n', 'dn', function() vim.diagnostic.jump({ count = 1, severity = min_diag_level, }) end)
