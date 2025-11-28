@@ -17,7 +17,9 @@ function M.set_lua_defined()
   keymap_set('n', 'gx', require('opener').open_under_cursor)
 
   keymap_set({ 'n', 'v', 'i', 't', }, '<c-e>', function() vim.cmd('wincmd w') end)
-  keymap_set({ 'n', 'v', }, '<leader>t', function() nvrim.layout.toggle_term(30) end)
+  -- TODO: h and l are already important keymap in terminals. need to change them.
+  keymap_set({ 'n', 'v', 'i', 't', }, '<c-h>', nvrim.layout.focus_term)
+  keymap_set({ 'n', 'v', 'i', 't', }, '<c-l>', nvrim.layout.focus_buffer)
 
   -- Thanks perplexity 🥲
   keymap_set({ 'n', 'v', }, 'ga', function()
