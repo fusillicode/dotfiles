@@ -20,8 +20,6 @@ pub mod scrolloff;
 pub mod statuscolumn;
 /// Status line (diagnostics summary).
 pub mod statusline;
-/// Nvim terminal utilities
-pub mod term;
 /// Rust tests runner plugin.
 pub mod truster;
 
@@ -35,7 +33,6 @@ pub fn dict() -> Dictionary {
         "ghurlinker": ghurlinker::dict(),
         "statuscolumn": statuscolumn::dict(),
         "statusline": statusline::dict(),
-        "term": term::dict(),
         "truster": truster::dict(),
     }
 }

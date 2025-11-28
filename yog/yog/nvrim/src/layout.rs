@@ -9,12 +9,12 @@ use ytil_nvim_oxi::buffer::BufferExt;
 /// [`Dictionary`] of Rust tests utilities.
 pub fn dict() -> Dictionary {
     dict! {
-        "toggle": fn_from!(toggle),
+        "toggle_term": fn_from!(toggle_term),
         // "open_word_under_cursor": fn_from!(open_word_under_cursor),
     }
 }
 
-fn toggle(width_perc: u32) {
+fn toggle_term(width_perc: u32) {
     let Some(terminal_buffer) = nvim_oxi::api::list_bufs().into_iter().find(BufferExt::is_terminal) else {
         create_or_show_terminal_buffer(width_perc, TerminalBufferOp::Create);
         return;
