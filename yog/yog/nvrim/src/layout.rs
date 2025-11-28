@@ -18,13 +18,6 @@ pub fn dict() -> Dictionary {
     }
 }
 
-// fn setup_layout(_: ()) {
-//     nvim_oxi::api::command("vsplit").unwrap();
-//     nvim_oxi::api::command("terminal").unwrap();
-//     nvim_oxi::api::command("wincmd h").unwrap();
-// }
-//
-
 pub fn focus_term(_: ()) -> Option<()> {
     let current_buffer = nvim_oxi::api::get_current_buf();
 
@@ -40,11 +33,26 @@ pub fn focus_term(_: ()) -> Option<()> {
             // Calculate 30% width
             let width = (total_cols as f64 * 0.3).round() as u32;
 
-            // Using exec2 because nvim_oxi::api::open_win fails with split left.
-            exec2(
-                &format!("leftabove vsplit | vertical resize {width} | term"),
-                &Default::default(),
-            );
+            if let Some(terminal_buffer) = nvim_oxi::api::list_bufs().find(BufferExt::is_terminal) {
+                // Using exec2 because nvim_oxi::api::open_win fails with split left.
+                exec2(
+                    &format!("leftabove vsplit | vertical resize {width}"),
+                    &Default::default(),
+                );
+                nvim_oxi::api::set_current_buf(&terminal_buffer)
+                    .inspect_err(|err| {
+                        ytil_nvim_oxi::notify::error(format!(
+                            "error setting current buffer | buffer={terminal_buffer:?}, err={err:?}"
+                        ))
+                    })
+                    .ok()?;
+            } else {
+                // Using exec2 because nvim_oxi::api::open_win fails with split left.
+                exec2(
+                    &format!("leftabove vsplit | vertical resize {width} | term"),
+                    &Default::default(),
+                );
+            }
 
             // Cannot chain "startinsert" in previous exec2 because of this error:
             // ```
