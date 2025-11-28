@@ -41,11 +41,10 @@ pub fn focus_term(_: ()) -> Option<()> {
             let width = (total_cols as f64 * 0.3).round() as u32;
 
             // Using exec2 because nvim_oxi::api::open_win fails with split left.
-
             exec2(
-                &format!("leftabove vsplit | vertical resize {width} | terminal"),
+                &format!("leftabove vsplit | vertical resize {width} | term"),
                 &Default::default(),
-            )?;
+            );
 
             // Cannot chain "startinsert" in previous exec2 because of this error:
             // ```
@@ -113,12 +112,13 @@ pub fn focus_buffer(_: ()) {}
 //     };
 // }
 
-fn exec2(src: &str, opts: &ExecOpts) -> Option<String> {
-    nvim_oxi::api::exec2(src, opts)
-        .inspect_err(|err| {
-            ytil_nvim_oxi::notify::error(format!("error executing Vimscript | src={src:?}, opts={opts:?}"))
-        })
-        .ok()
-        .flatten()
-        .map(|s| s.to_string())
+fn exec2(src: &str, opts: &ExecOpts) -> Option<Option<String>> {
+    Some(
+        nvim_oxi::api::exec2(src, opts)
+            .inspect_err(|err| {
+                ytil_nvim_oxi::notify::error(format!("error executing Vimscript | src={src:?}, opts={opts:?}"))
+            })
+            .ok()?
+            .map(|s| s.to_string()),
+    )
 }
