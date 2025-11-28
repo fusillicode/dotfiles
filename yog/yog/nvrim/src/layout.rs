@@ -80,15 +80,86 @@ pub fn focus_term(_: ()) -> Option<()> {
         }
     // Current buffer IS TERMINAL
     } else {
-        // Current buffer is full screen.
+        // Current buffer is NOT full screen.
         if nvim_oxi::api::list_wins().len() != 1 {
             exec2("only", &Default::default())?;
         }
     }
+
     Some(())
 }
 
-pub fn focus_buffer(_: ()) {}
+pub fn focus_buffer(_: ()) -> Option<()> {
+    let current_buffer = nvim_oxi::api::get_current_buf();
+
+    // If current buffer is terminal.
+    if current_buffer.is_terminal() {
+        let visible_windows = nvim_oxi::api::list_wins();
+
+        // Current buffer is full screen.
+        if visible_windows.len() == 1 {
+            // Get current total columns in the editor
+            let total_cols: i32 = crate::vim_opts::get("columns", &crate::vim_opts::global_scope())?;
+
+            // Calculate 70% width
+            let width = (total_cols as f64 * 0.7).round() as u32;
+
+            // Using exec2 because nvim_oxi::api::open_win fails with split left.
+            exec2(&format!("vsplit | vertical resize {width}"), &Default::default())?;
+
+            let Ok(last_buffer_id) = nvim_oxi::api::call_function::<_, i32>("bufnr", ("#",)) else {
+                return None;
+            };
+
+            let buffer = if last_buffer_id < 0 {
+                nvim_oxi::api::create_buf(true, false)
+                    .inspect_err(|err| ytil_nvim_oxi::notify::error(format!("error creating buffer | err={err:?}")))
+                    .ok()?
+            } else {
+                Buffer::from(last_buffer_id)
+            };
+
+            nvim_oxi::api::set_current_buf(&buffer)
+                .inspect_err(|err| {
+                    ytil_nvim_oxi::notify::error(format!(
+                        "error setting current buffer | buffer={buffer:?}, err={err:?}"
+                    ))
+                })
+                .ok()?;
+
+        // Current buffer is NOT full screen.
+        } else {
+            for win in visible_windows {
+                if !win
+                    .get_buf()
+                    .inspect_err(|err| {
+                        ytil_nvim_oxi::notify::error(format!(
+                            "error getting window buffer | window={win:?}, err={err:?}"
+                        ))
+                    })
+                    .ok()?
+                    .is_terminal()
+                {
+                    nvim_oxi::api::set_current_win(&win)
+                        .inspect_err(|err| {
+                            ytil_nvim_oxi::notify::error(format!(
+                                "error setting current window | window={win:?}, err={err:?}"
+                            ))
+                        })
+                        .ok()?;
+                }
+            }
+        }
+    // Current buffer IS NOT terminal.
+    } else {
+        // Current buffer is not full screen.
+        if nvim_oxi::api::list_wins().len() != 1 {
+            exec2("only", &Default::default())?;
+        }
+    }
+
+    Some(())
+}
 
 // fn open_word_under_cursor(_: ()) {
 //     if !Buffer::current().is_terminal() {
