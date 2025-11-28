@@ -17,7 +17,7 @@ function M.set_lua_defined()
   keymap_set('n', 'gx', require('opener').open_under_cursor)
 
   keymap_set({ 'n', 'v', 'i', 't', }, '<c-e>', function() vim.cmd('wincmd w') end)
-  keymap_set({ 'n', 'v', }, '<leader>t', function() nvrim.plugins.term.toggle(30) end)
+  keymap_set({ 'n', 'v', }, '<leader>t', function() nvrim.layout.toggle_term(30) end)
 
   -- Thanks perplexity 🥲
   keymap_set({ 'n', 'v', }, 'ga', function()
