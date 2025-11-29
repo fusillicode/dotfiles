@@ -7,6 +7,7 @@
 use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
 use nvim_oxi::conversion::FromObject;
+use nvim_oxi::lua::Poppable;
 use nvim_oxi::lua::ffi::State;
 use nvim_oxi::serde::Deserializer;
 use serde::Deserialize;
@@ -82,7 +83,7 @@ impl FromObject for Diagnostic {
 }
 
 /// Implementation of [`nvim_oxi::lua::Poppable`] for [`Diagnostic`].
-impl nvim_oxi::lua::Poppable for Diagnostic {
+impl Poppable for Diagnostic {
     unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
         unsafe {
             let obj = Object::pop(lstate)?;

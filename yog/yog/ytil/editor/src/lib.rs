@@ -58,11 +58,11 @@ impl FromStr for Editor {
 #[derive(Debug, Eq, PartialEq)]
 pub struct FileToOpen {
     /// The column number to position the cursor (0-based, defaults to 0).
-    column: i64,
+    pub column: i64,
     /// The line number to position the cursor (0-based, defaults to 0).
-    line_nbr: i64,
+    pub line_nbr: i64,
     /// The filesystem path to the file.
-    path: String,
+    pub path: String,
 }
 
 /// Attempts to create a [`FileToOpen`] from a file path, pane ID, and list of panes.

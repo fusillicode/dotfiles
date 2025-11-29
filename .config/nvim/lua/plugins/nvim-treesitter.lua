@@ -68,12 +68,6 @@ return {
         move = {
           enable = true,
           set_jumps = true,
-          goto_next_start = {
-            ['<c-l>'] = '@block.outer',
-          },
-          goto_previous_end = {
-            ['<c-h>'] = '@block.outer',
-          },
         },
       },
     })

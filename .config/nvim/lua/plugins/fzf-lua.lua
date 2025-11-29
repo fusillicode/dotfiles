@@ -35,10 +35,12 @@ return {
       winopts    = {
         title       = '',
         title_flags = false,
-        width       = 1,
+        width       = 0.7,
         height      = 1,
         row         = 0,
+        col         = 1,
         backdrop    = 100,
+        anchor      = 'NE',
       },
       previewers = {
         builtin = {
