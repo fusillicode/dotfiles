@@ -219,6 +219,8 @@ fn compute_width(perc: i32) -> Option<i32> {
 //     };
 // }
 
+// Option<Option> to be able to use ? and short circuit.
+#[allow(clippy::option_option)]
 fn exec2(src: &str, opts: Option<ExecOpts>) -> Option<Option<String>> {
     let opts = opts.unwrap_or_default();
     Some(
