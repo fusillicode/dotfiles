@@ -89,8 +89,8 @@ fn draw_statuscolumn(
     metas: impl Iterator<Item = ExtmarkMeta>,
     opts: Option<Opts>,
 ) -> String {
-    if current_buffer_type == "grug-far" {
-        return " ".into();
+    if current_buffer_type == "grug-far" || current_buffer_type == "terminal" {
+        return "".into();
     }
 
     let mut highest_severity_diag: Option<SelectedDiag> = None;
