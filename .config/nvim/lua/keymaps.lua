@@ -16,9 +16,8 @@ function M.set_lua_defined()
   keymap_set({ 'n', 'v', }, '<leader>t', nvrim.plugins.truster.run_test)
   keymap_set('n', 'gx', require('opener').open_under_cursor)
 
-  -- TODO: h and l are already important keymap in terminals. need to change them.
   keymap_set({ 'n', 'v', 'i', 't', }, '<c-h>', nvrim.layout.focus_term)
-  keymap_set({ 'n', 'v', 'i', 't', }, '<c-l>', nvrim.layout.focus_buffer)
+  keymap_set({ 'n', 'v', 'i', 't', }, '<c-j>', nvrim.layout.focus_buffer)
 
   keymap_set({ 'n', 'v', }, 'ga', nvrim.layout.ga)
 
@@ -127,13 +126,12 @@ function M.gitsigns(plugin)
         { expr = true, },
       },
     },
-    { '<leader>hd', mode = 'n',           plugin and { plugin.preview_hunk, }, },
-    { '<leader>hs', mode = 'n',           plugin and { plugin.stage_hunk, }, },
-    { '<leader>hr', mode = 'n',           plugin and { plugin.reset_hunk, }, },
-    { '<leader>hs', mode = 'v',           plugin and { function() plugin.stage_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end, }, },
-    { '<leader>hr', mode = 'v',           plugin and { function() plugin.reset_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end, }, },
-    { '<leader>hu', mode = 'n',           plugin and { plugin.undo_stage_hunk, }, },
-    { '<c-b>',      mode = { 'n', 'v', }, plugin and { function() plugin.blame_line({ full = true, }) end, }, },
+    { '<leader>hd', mode = 'n', plugin and { plugin.preview_hunk, }, },
+    { '<leader>hs', mode = 'n', plugin and { plugin.stage_hunk, }, },
+    { '<leader>hr', mode = 'n', plugin and { plugin.reset_hunk, }, },
+    { '<leader>hs', mode = 'v', plugin and { function() plugin.stage_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end, }, },
+    { '<leader>hr', mode = 'v', plugin and { function() plugin.reset_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end, }, },
+    { '<leader>hu', mode = 'n', plugin and { plugin.undo_stage_hunk, }, },
   }
 end
 

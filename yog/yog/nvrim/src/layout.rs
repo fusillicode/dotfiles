@@ -16,42 +16,6 @@ pub fn dict() -> Dictionary {
     }
 }
 
-fn ga(_: ()) -> Option<()> {
-    let alt_buf_id = nvim_oxi::api::call_function::<_, i32>("bufnr", ("#",))
-        .inspect_err(|err| ytil_nvim_oxi::notify::error(format!("error getting alternate buffer | err={err:?}")))
-        .ok()?;
-
-    if alt_buf_id != -1
-        && let alt_buf = Buffer::from(alt_buf_id)
-        && alt_buf.is_loaded()
-        && !alt_buf.is_terminal()
-    {
-        set_current_buf(&alt_buf)?;
-        return Some(());
-    }
-
-    let current_buf = Buffer::current();
-    for buf in nvim_oxi::api::list_bufs().rev() {
-        if buf != current_buf
-            && buf.is_loaded()
-            && !buf.is_terminal()
-            && buf.get_buf_type().is_some_and(|bt| bt.is_empty())
-            && buf
-                .get_name()
-                .inspect_err(|err| {
-                    ytil_nvim_oxi::notify::error(format!("error getting buffer name | buffer={buf:?} err={err:?}"))
-                })
-                .ok()
-                .is_some_and(|bn| !bn.is_empty())
-        {
-            set_current_buf(&buf)?;
-            return Some(());
-        }
-    }
-
-    Some(())
-}
-
 fn focus_term(_: ()) -> Option<()> {
     let current_buffer = nvim_oxi::api::get_current_buf();
 
@@ -152,6 +116,42 @@ fn focus_buffer(_: ()) -> Option<()> {
         // FIXME: do not consider floating windows like LSP progress
         if nvim_oxi::api::list_wins().len() != 1 {
             exec2("only", None)?;
+        }
+    }
+
+    Some(())
+}
+
+fn ga(_: ()) -> Option<()> {
+    let alt_buf_id = nvim_oxi::api::call_function::<_, i32>("bufnr", ("#",))
+        .inspect_err(|err| ytil_nvim_oxi::notify::error(format!("error getting alternate buffer | err={err:?}")))
+        .ok()?;
+
+    if alt_buf_id != -1
+        && let alt_buf = Buffer::from(alt_buf_id)
+        && alt_buf.is_loaded()
+        && !alt_buf.is_terminal()
+    {
+        set_current_buf(&alt_buf)?;
+        return Some(());
+    }
+
+    let current_buf = Buffer::current();
+    for buf in nvim_oxi::api::list_bufs().rev() {
+        if buf != current_buf
+            && buf.is_loaded()
+            && !buf.is_terminal()
+            && buf.get_buf_type().is_some_and(|bt| bt.is_empty())
+            && buf
+                .get_name()
+                .inspect_err(|err| {
+                    ytil_nvim_oxi::notify::error(format!("error getting buffer name | buffer={buf:?} err={err:?}"))
+                })
+                .ok()
+                .is_some_and(|bn| !bn.is_empty())
+        {
+            set_current_buf(&buf)?;
+            return Some(());
         }
     }
 
