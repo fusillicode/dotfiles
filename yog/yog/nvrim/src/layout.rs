@@ -1,11 +1,6 @@
-#![allow(unused_imports, dead_code, clippy::needless_return, unused_variables)]
-
-use color_eyre::owo_colors::OwoColorize;
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::opts::ExecOpts;
-use nvim_oxi::api::types::SplitDirection;
-use nvim_oxi::api::types::WindowConfigBuilder;
 use ytil_nvim_oxi::buffer::BufferExt;
 // use ytil_nvim_oxi::buffer::BufferExt;
 // use ytil_editor::Editor;
@@ -59,8 +54,14 @@ fn ga(_: ()) -> Option<()> {
 fn focus_term(_: ()) -> Option<()> {
     let current_buffer = nvim_oxi::api::get_current_buf();
 
+    // Current buffer IS TERMINAL
+    if current_buffer.is_terminal() {
+        // AND it's NOT full screen
+        if nvim_oxi::api::list_wins().len() != 1 {
+            exec2("only", None)?;
+        }
     // If current buffer is NOT terminal.
-    if !current_buffer.is_terminal() {
+    } else {
         let visible_windows = nvim_oxi::api::list_wins();
 
         // Current buffer is full screen.
@@ -69,17 +70,11 @@ fn focus_term(_: ()) -> Option<()> {
 
             if let Some(terminal_buffer) = nvim_oxi::api::list_bufs().find(BufferExt::is_terminal) {
                 // Using exec2 because nvim_oxi::api::open_win fails with split left.
-                exec2(
-                    &format!("leftabove vsplit | vertical resize {width}"),
-                    &Default::default(),
-                );
+                exec2(&format!("leftabove vsplit | vertical resize {width}"), None);
                 set_current_buf(&terminal_buffer)?;
             } else {
                 // Using exec2 because nvim_oxi::api::open_win fails with split left.
-                exec2(
-                    &format!("leftabove vsplit | vertical resize {width} | term"),
-                    &Default::default(),
-                );
+                exec2(&format!("leftabove vsplit | vertical resize {width} | term"), None);
             }
 
             // Cannot chain "startinsert" in previous exec2 because of this error:
@@ -88,7 +83,7 @@ fn focus_term(_: ()) -> Option<()> {
             //
             // [Process exited 1]
             // ````
-            exec2("startinsert", &Default::default())?;
+            exec2("startinsert", None)?;
 
         // Current buffer is NOT full screen.
         } else {
@@ -110,15 +105,9 @@ fn focus_term(_: ()) -> Option<()> {
                             ))
                         })
                         .ok()?;
-                    exec2("startinsert", &Default::default())?;
+                    exec2("startinsert", None)?;
                 }
             }
-        }
-    // Current buffer IS TERMINAL
-    } else {
-        // Current buffer is NOT full screen.
-        if nvim_oxi::api::list_wins().len() != 1 {
-            exec2("only", &Default::default())?;
         }
     }
 
@@ -137,7 +126,7 @@ fn focus_buffer(_: ()) -> Option<()> {
             let width = compute_width(FILE_BUF_WIDTH_PERC)?;
 
             // Using exec2 because nvim_oxi::api::open_win fails with split left.
-            exec2(&format!("vsplit | vertical resize {width}"), &Default::default())?;
+            exec2(&format!("vsplit | vertical resize {width}"), None)?;
 
             let Ok(last_buffer_id) = nvim_oxi::api::call_function::<_, i32>("bufnr", ("#",)) else {
                 return None;
@@ -186,7 +175,7 @@ fn focus_buffer(_: ()) -> Option<()> {
     } else {
         // Current buffer is not full screen.
         if nvim_oxi::api::list_wins().len() != 1 {
-            exec2("only", &Default::default())?;
+            exec2("only", None)?;
         }
     }
 
@@ -230,11 +219,14 @@ fn compute_width(perc: i32) -> Option<i32> {
 //     };
 // }
 
-fn exec2(src: &str, opts: &ExecOpts) -> Option<Option<String>> {
+fn exec2(src: &str, opts: Option<ExecOpts>) -> Option<Option<String>> {
+    let opts = opts.unwrap_or_default();
     Some(
-        nvim_oxi::api::exec2(src, opts)
+        nvim_oxi::api::exec2(src, &opts)
             .inspect_err(|err| {
-                ytil_nvim_oxi::notify::error(format!("error executing Vimscript | src={src:?}, opts={opts:?}"))
+                ytil_nvim_oxi::notify::error(format!(
+                    "error executing Vimscript | src={src:?} opts={opts:?} err={err:?}"
+                ))
             })
             .ok()?
             .map(|s| s.to_string()),
