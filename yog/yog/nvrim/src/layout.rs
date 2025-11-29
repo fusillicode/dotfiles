@@ -30,11 +30,7 @@ fn ga(_: ()) -> Option<()> {
         && alt_buf.is_loaded()
         && !alt_buf.is_terminal()
     {
-        nvim_oxi::api::set_current_buf(&alt_buf)
-            .inspect_err(|err| {
-                ytil_nvim_oxi::notify::error(format!("error setting current buf | buf={alt_buf:?} err={err:?}"))
-            })
-            .ok()?;
+        set_current_buf(&alt_buf)?;
         return Some(());
     }
 
@@ -52,16 +48,12 @@ fn ga(_: ()) -> Option<()> {
                 .ok()
                 .is_some_and(|bn| !bn.is_empty())
         {
-            nvim_oxi::api::set_current_buf(&buf)
-                .inspect_err(|err| {
-                    ytil_nvim_oxi::notify::error(format!("error setting current buf | buf={buf:?} err={err:?}"))
-                })
-                .ok()?;
+            set_current_buf(&buf)?;
             return Some(());
         }
     }
 
-    None
+    Some(())
 }
 
 fn focus_term(_: ()) -> Option<()> {
@@ -73,11 +65,7 @@ fn focus_term(_: ()) -> Option<()> {
 
         // Current buffer is full screen.
         if visible_windows.len() == 1 {
-            // Get current total columns in the editor
-            let total_cols: i32 = crate::vim_opts::get("columns", &crate::vim_opts::global_scope())?;
-
-            // Calculate 30% width
-            let width = (total_cols as f64 * 0.3).round() as u32;
+            let width = compute_width(TERM_WIDTH_PERC)?;
 
             if let Some(terminal_buffer) = nvim_oxi::api::list_bufs().find(BufferExt::is_terminal) {
                 // Using exec2 because nvim_oxi::api::open_win fails with split left.
@@ -85,13 +73,7 @@ fn focus_term(_: ()) -> Option<()> {
                     &format!("leftabove vsplit | vertical resize {width}"),
                     &Default::default(),
                 );
-                nvim_oxi::api::set_current_buf(&terminal_buffer)
-                    .inspect_err(|err| {
-                        ytil_nvim_oxi::notify::error(format!(
-                            "error setting current buffer | buffer={terminal_buffer:?}, err={err:?}"
-                        ))
-                    })
-                    .ok()?;
+                set_current_buf(&terminal_buffer)?;
             } else {
                 // Using exec2 because nvim_oxi::api::open_win fails with split left.
                 exec2(
@@ -140,7 +122,7 @@ fn focus_term(_: ()) -> Option<()> {
         }
     }
 
-    None
+    Some(())
 }
 
 fn focus_buffer(_: ()) -> Option<()> {
@@ -152,11 +134,7 @@ fn focus_buffer(_: ()) -> Option<()> {
 
         // Current buffer is full screen.
         if visible_windows.len() == 1 {
-            // Get current total columns in the editor
-            let total_cols: i32 = crate::vim_opts::get("columns", &crate::vim_opts::global_scope())?;
-
-            // Calculate 70% width
-            let width = (total_cols as f64 * 0.7).round() as u32;
+            let width = compute_width(FILE_BUF_WIDTH_PERC)?;
 
             // Using exec2 because nvim_oxi::api::open_win fails with split left.
             exec2(&format!("vsplit | vertical resize {width}"), &Default::default())?;
@@ -212,7 +190,22 @@ fn focus_buffer(_: ()) -> Option<()> {
         }
     }
 
-    None
+    Some(())
+}
+
+fn set_current_buf(buf: &Buffer) -> Option<()> {
+    nvim_oxi::api::set_current_buf(buf)
+        .inspect_err(|err| ytil_nvim_oxi::notify::error(format!("error setting current buf | buf={buf:?} err={err:?}")))
+        .ok()?;
+    Some(())
+}
+
+const TERM_WIDTH_PERC: i32 = 30;
+const FILE_BUF_WIDTH_PERC: i32 = 100 - TERM_WIDTH_PERC;
+
+fn compute_width(perc: i32) -> Option<i32> {
+    let total_width: i32 = crate::vim_opts::get("columns", &crate::vim_opts::global_scope())?;
+    Some((total_width * perc) / 100)
 }
 
 // fn open_word_under_cursor(_: ()) {
