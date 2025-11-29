@@ -18,7 +18,7 @@ function M.set_lua_defined()
 
   -- TODO: h and l are already important keymap in terminals. need to change them.
   keymap_set({ 'n', 'v', 'i', 't', }, '<c-h>', nvrim.layout.focus_term)
-  keymap_set({ 'n', 'v', 'i', 't', }, '<c-j>', nvrim.layout.focus_buffer)
+  keymap_set({ 'n', 'v', 'i', 't', }, '<c-l>', nvrim.layout.focus_buffer)
 
   keymap_set({ 'n', 'v', }, 'ga', nvrim.layout.ga)
 

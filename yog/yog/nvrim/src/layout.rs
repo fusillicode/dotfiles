@@ -54,60 +54,56 @@ fn ga(_: ()) -> Option<()> {
 fn focus_term(_: ()) -> Option<()> {
     let current_buffer = nvim_oxi::api::get_current_buf();
 
-    // Current buffer IS TERMINAL
+    // If current buffer is terminal and not full screen make it full screen.
     if current_buffer.is_terminal() {
-        // AND it's NOT full screen
         if nvim_oxi::api::list_wins().len() != 1 {
             exec2("only", None)?;
         }
-    // If current buffer is NOT terminal.
-    } else {
-        let visible_windows = nvim_oxi::api::list_wins();
+        return Some(());
+    }
 
-        // Current buffer is full screen.
-        if visible_windows.len() == 1 {
-            let width = compute_width(TERM_WIDTH_PERC)?;
+    // If current buffer is not terminal and full screen focus the terminal buffer or create a new
+    // one if not found.
+    let visible_windows = nvim_oxi::api::list_wins();
+    if visible_windows.len() == 1 {
+        let width = compute_width(TERM_WIDTH_PERC)?;
 
-            if let Some(terminal_buffer) = nvim_oxi::api::list_bufs().find(BufferExt::is_terminal) {
-                // Using exec2 because nvim_oxi::api::open_win fails with split left.
-                exec2(&format!("leftabove vsplit | vertical resize {width}"), None);
-                set_current_buf(&terminal_buffer)?;
-            } else {
-                // Using exec2 because nvim_oxi::api::open_win fails with split left.
-                exec2(&format!("leftabove vsplit | vertical resize {width} | term"), None);
-            }
-
-            // Cannot chain "startinsert" in previous exec2 because of this error:
-            // ```
-            // zsh:1: parse error near `|'
-            //
-            // [Process exited 1]
-            // ````
-            exec2("startinsert", None)?;
-
-        // Current buffer is NOT full screen.
+        // Using exec2 because nvim_oxi::api::open_win fails with split left.
+        if let Some(terminal_buffer) = nvim_oxi::api::list_bufs().find(BufferExt::is_terminal) {
+            exec2(&format!("leftabove vsplit | vertical resize {width}"), None);
+            set_current_buf(&terminal_buffer)?;
         } else {
-            for win in visible_windows {
-                if win
-                    .get_buf()
-                    .inspect_err(|err| {
-                        ytil_nvim_oxi::notify::error(format!(
-                            "error getting window buffer | window={win:?}, err={err:?}"
-                        ))
-                    })
-                    .ok()?
-                    .is_terminal()
-                {
-                    nvim_oxi::api::set_current_win(&win)
-                        .inspect_err(|err| {
-                            ytil_nvim_oxi::notify::error(format!(
-                                "error setting current window | window={win:?}, err={err:?}"
-                            ))
-                        })
-                        .ok()?;
-                    exec2("startinsert", None)?;
-                }
-            }
+            exec2(&format!("leftabove vsplit | vertical resize {width} | term"), None);
+        }
+
+        // Cannot chain "startinsert" in previous exec2 because of this error:
+        // ```
+        // zsh:1: parse error near `|'
+        //
+        // [Process exited 1]
+        // ````
+        exec2("startinsert", None)?;
+        return Some(());
+    }
+
+    // If current buffer is not terminal and not full screen focus the terminal buffer.
+    for win in visible_windows {
+        if win
+            .get_buf()
+            .inspect_err(|err| {
+                ytil_nvim_oxi::notify::error(format!("error getting buffer of window | window={win:?}, err={err:?}"))
+            })
+            .ok()?
+            .is_terminal()
+        {
+            nvim_oxi::api::set_current_win(&win)
+                .inspect_err(|err| {
+                    ytil_nvim_oxi::notify::error(format!("error setting current window | window={win:?}, err={err:?}"))
+                })
+                .ok()?;
+            exec2("startinsert", None)?;
+            // Exit as soon as the first terminal is found.
+            return Some(());
         }
     }
 
