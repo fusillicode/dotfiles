@@ -149,6 +149,7 @@ fn focus_buffer(_: ()) -> Option<()> {
     // Current buffer IS NOT terminal.
     } else {
         // Current buffer is not full screen.
+        // FIXME: do not consider floating windows like LSP progress
         if nvim_oxi::api::list_wins().len() != 1 {
             exec2("only", None)?;
         }
