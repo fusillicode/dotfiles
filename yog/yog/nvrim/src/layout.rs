@@ -1,5 +1,6 @@
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
+use nvim_oxi::api::Window;
 use nvim_oxi::api::opts::ExecOpts;
 use ytil_nvim_oxi::buffer::BufferExt;
 // use ytil_nvim_oxi::buffer::BufferExt;
@@ -38,7 +39,7 @@ fn ga(_: ()) -> Option<()> {
             && buf
                 .get_name()
                 .inspect_err(|err| {
-                    ytil_nvim_oxi::notify::error(format!("error getting buf name | buf={buf:?} err={err:?}"))
+                    ytil_nvim_oxi::notify::error(format!("error getting buffer name | buffer={buf:?} err={err:?}"))
                 })
                 .ok()
                 .is_some_and(|bn| !bn.is_empty())
@@ -88,14 +89,7 @@ fn focus_term(_: ()) -> Option<()> {
 
     // If current buffer is not terminal and not full screen focus the terminal buffer.
     for win in visible_windows {
-        if win
-            .get_buf()
-            .inspect_err(|err| {
-                ytil_nvim_oxi::notify::error(format!("error getting buffer of window | window={win:?}, err={err:?}"))
-            })
-            .ok()?
-            .is_terminal()
-        {
+        if get_window_buf(&win)?.is_terminal() {
             nvim_oxi::api::set_current_win(&win)
                 .inspect_err(|err| {
                     ytil_nvim_oxi::notify::error(format!("error setting current window | window={win:?}, err={err:?}"))
@@ -136,27 +130,12 @@ fn focus_buffer(_: ()) -> Option<()> {
                 Buffer::from(last_buffer_id)
             };
 
-            nvim_oxi::api::set_current_buf(&buffer)
-                .inspect_err(|err| {
-                    ytil_nvim_oxi::notify::error(format!(
-                        "error setting current buffer | buffer={buffer:?}, err={err:?}"
-                    ))
-                })
-                .ok()?;
+            set_current_buf(&buffer)?;
 
         // Current buffer is NOT full screen.
         } else {
             for win in visible_windows {
-                if !win
-                    .get_buf()
-                    .inspect_err(|err| {
-                        ytil_nvim_oxi::notify::error(format!(
-                            "error getting window buffer | window={win:?}, err={err:?}"
-                        ))
-                    })
-                    .ok()?
-                    .is_terminal()
-                {
+                if !get_window_buf(&win)?.is_terminal() {
                     nvim_oxi::api::set_current_win(&win)
                         .inspect_err(|err| {
                             ytil_nvim_oxi::notify::error(format!(
@@ -180,9 +159,19 @@ fn focus_buffer(_: ()) -> Option<()> {
 
 fn set_current_buf(buf: &Buffer) -> Option<()> {
     nvim_oxi::api::set_current_buf(buf)
-        .inspect_err(|err| ytil_nvim_oxi::notify::error(format!("error setting current buf | buf={buf:?} err={err:?}")))
+        .inspect_err(|err| {
+            ytil_nvim_oxi::notify::error(format!("error setting current buffer | buffer={buf:?} err={err:?}"))
+        })
         .ok()?;
     Some(())
+}
+
+fn get_window_buf(win: &Window) -> Option<Buffer> {
+    win.get_buf()
+        .inspect_err(|err| {
+            ytil_nvim_oxi::notify::error(format!("error getting window buffer | window={win:?}, err={err:?}"))
+        })
+        .ok()
 }
 
 const TERM_WIDTH_PERC: i32 = 30;
@@ -191,6 +180,22 @@ const FILE_BUF_WIDTH_PERC: i32 = 100 - TERM_WIDTH_PERC;
 fn compute_width(perc: i32) -> Option<i32> {
     let total_width: i32 = crate::vim_opts::get("columns", &crate::vim_opts::global_scope())?;
     Some((total_width * perc) / 100)
+}
+
+// Option<Option> to be able to use ? and short circuit.
+#[allow(clippy::option_option)]
+fn exec2(src: &str, opts: Option<ExecOpts>) -> Option<Option<String>> {
+    let opts = opts.unwrap_or_default();
+    Some(
+        nvim_oxi::api::exec2(src, &opts)
+            .inspect_err(|err| {
+                ytil_nvim_oxi::notify::error(format!(
+                    "error executing Vimscript | src={src:?} opts={opts:?} err={err:?}"
+                ))
+            })
+            .ok()?
+            .map(|s| s.to_string()),
+    )
 }
 
 // fn open_word_under_cursor(_: ()) {
@@ -214,19 +219,3 @@ fn compute_width(perc: i32) -> Option<i32> {
 //         }
 //     };
 // }
-
-// Option<Option> to be able to use ? and short circuit.
-#[allow(clippy::option_option)]
-fn exec2(src: &str, opts: Option<ExecOpts>) -> Option<Option<String>> {
-    let opts = opts.unwrap_or_default();
-    Some(
-        nvim_oxi::api::exec2(src, &opts)
-            .inspect_err(|err| {
-                ytil_nvim_oxi::notify::error(format!(
-                    "error executing Vimscript | src={src:?} opts={opts:?} err={err:?}"
-                ))
-            })
-            .ok()?
-            .map(|s| s.to_string()),
-    )
-}
