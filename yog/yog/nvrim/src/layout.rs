@@ -75,7 +75,7 @@ fn focus_buffer(_: ()) -> Option<()> {
     if current_buffer.is_terminal() {
         let visible_windows = nvim_oxi::api::list_wins();
 
-        // Current buffer is full screen.
+        // Terminal is full screen.
         if visible_windows.len() == 1 {
             let width = compute_width(FILE_BUF_WIDTH_PERC)?;
 
@@ -96,10 +96,10 @@ fn focus_buffer(_: ()) -> Option<()> {
 
             set_current_buf(&buffer)?;
 
-        // Current buffer is NOT full screen.
+        // Terminal is NOT full screen.
         } else {
             for win in visible_windows {
-                if !get_window_buf(&win)?.is_terminal() {
+                if get_window_buf(&win)?.get_buf_type().is_some_and(|bt| bt.is_empty()) {
                     nvim_oxi::api::set_current_win(&win)
                         .inspect_err(|err| {
                             ytil_nvim_oxi::notify::error(format!(
@@ -112,8 +112,7 @@ fn focus_buffer(_: ()) -> Option<()> {
         }
     // Current buffer IS NOT terminal.
     } else {
-        // Current buffer is not full screen.
-        // FIXME: do not consider floating windows like LSP progress
+        // Not terminal is not full screen.
         if nvim_oxi::api::list_wins().len() != 1 {
             exec2("only", None)?;
         }
