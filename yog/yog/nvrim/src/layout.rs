@@ -248,6 +248,21 @@ enum BufferKind {
     NoName,
 }
 
+impl<T: AsRef<str>> From<T> for BufferKind {
+    fn from(value: T) -> Self {
+        let str = value.as_ref();
+        if str.starts_with("term://") {
+            Self::Term
+        } else if str.starts_with("Grug FAR") {
+            Self::GrugFar
+        } else if str.starts_with("[No Name]") {
+            Self::NoName
+        } else {
+            Self::Path
+        }
+    }
+}
+
 impl FromStr for MruBuffer {
     type Err = color_eyre::eyre::Error;
 
@@ -282,21 +297,11 @@ impl FromStr for MruBuffer {
             .split_once('"')
             .ok_or_else(|| eyre!("error extracting name | rest={rest:?} mru_buffer_line={mru_buffer_line:?}"))?;
 
-        let kind = if name.starts_with("term://") {
-            BufferKind::Term
-        } else if name.starts_with("Grug FAR") {
-            BufferKind::GrugFar
-        } else if name.starts_with("[No Name]") {
-            BufferKind::NoName
-        } else {
-            BufferKind::Path
-        };
-
         Ok(Self {
             id,
             is_unlisted,
             name: name.to_string(),
-            kind,
+            kind: BufferKind::from(name),
         })
     }
 }
