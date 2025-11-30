@@ -24,8 +24,8 @@ pub fn dict() -> Dictionary {
     dict! {
         "focus_term": fn_from!(focus_term),
         "focus_buffer": fn_from!(focus_buffer),
-        "ga": fn_from!(ga),
-        "gx": fn_from!(gx),
+        "smart_close_buffer": fn_from!(smart_close_buffer),
+        "toggle_alternate_buffer": fn_from!(toggle_alternate_buffer),
     }
 }
 
@@ -160,7 +160,7 @@ fn get_jumplist() -> Option<Vec<JumpEntry>> {
     )
 }
 
-fn ga(_: ()) -> Option<()> {
+fn toggle_alternate_buffer(_: ()) -> Option<()> {
     let alt_buf_id = nvim_oxi::api::call_function::<_, i32>("bufnr", ("#",))
         .inspect_err(|err| ytil_nvim_oxi::notify::error(format!("error getting alternate buffer | err={err:?}")))
         .ok()?;
@@ -196,29 +196,37 @@ fn ga(_: ()) -> Option<()> {
     Some(())
 }
 
-fn gx(force_close: Option<bool>) -> Option<()> {
+fn smart_close_buffer(force_close: Option<bool>) -> Option<()> {
     let mru_buffers = get_mru_buffers()?;
 
     let Some(current_buffer) = mru_buffers.first() else {
-        // TODO: understand who to handle no buffers
         return Some(());
     };
-
-    let new_current_buffer = if let Some(mru_buffer) = mru_buffers.get(1) {
-        Buffer::from(mru_buffer.id)
-    } else {
-        nvim_oxi::api::create_buf(true, false)
-            .inspect_err(|err| ytil_nvim_oxi::notify::error(format!("error creating buffer | err={err:?}")))
-            .ok()?
-    };
-
-    set_current_buf(&new_current_buffer)?;
 
     let force = if force_close.is_some_and(std::convert::identity) {
         "!"
     } else {
         ""
     };
+
+    match current_buffer.kind {
+        BufferKind::Term | BufferKind::NoName => return Some(()),
+        BufferKind::GrugFar => {}
+        BufferKind::Path => {
+            let new_current_buffer = if let Some(mru_buffer) = mru_buffers.get(1)
+                && !matches!(mru_buffer.kind, BufferKind::Term)
+            {
+                Buffer::from(mru_buffer.id)
+            } else {
+                nvim_oxi::api::create_buf(true, false)
+                    .inspect_err(|err| ytil_nvim_oxi::notify::error(format!("error creating buffer | err={err:?}")))
+                    .ok()?
+            };
+
+            set_current_buf(&new_current_buffer)?;
+        }
+    };
+
     exec2(&format!("bd{force} {}", current_buffer.id), Default::default())?;
 
     Some(())
@@ -237,38 +245,49 @@ enum BufferKind {
     Term,
     GrugFar,
     Path,
+    NoName,
 }
 
 impl FromStr for MruBuffer {
     type Err = color_eyre::eyre::Error;
 
     fn from_str(mru_buffer_line: &str) -> Result<Self, Self::Err> {
-        let mut parts = mru_buffer_line.split_whitespace();
+        let mru_buffer_line = mru_buffer_line.trim();
 
-        let id_part = parts
-            .next()
-            .ok_or_else(|| eyre!("error missing id part in mru_buffer_line | mru_buffer_line={mru_buffer_line:?}"))?;
-        let id = id_part.strip_suffix('u');
-        let (id, is_unlisted) = if let Some(id) = id {
-            (id, true)
-        } else {
-            (id_part, false)
+        let is_unlisted_idx = mru_buffer_line
+            .char_indices()
+            .find_map(|(idx, c)| if !c.is_numeric() { Some(idx) } else { None })
+            .ok_or_else(|| eyre!("error finding buffer id end | mru_buffer_line={mru_buffer_line:?}"))?;
+
+        let id: i32 = {
+            let id = mru_buffer_line
+                .get(..is_unlisted_idx)
+                .ok_or_else(|| eyre!("error extracting buffer id | mru_buffer_line={mru_buffer_line:?}"))?;
+            id.parse()
+                .wrap_err_with(|| format!("error parsing buffer id | id={id:?} mru_buffer_line={mru_buffer_line:?}"))?
         };
-        let id: i32 = id
-            .parse()
-            .wrap_err_with(|| format!("error parsing buffer id in mru_buffer_line | id={id:?} {mru_buffer_line:?}"))?;
 
-        // Skip the flags for now
-        parts.next();
+        let is_unlisted = mru_buffer_line.get(is_unlisted_idx..=is_unlisted_idx).ok_or_else(|| {
+            eyre!("error extracting is_unlisted by idx | idx={is_unlisted_idx} mru_buffer_line={mru_buffer_line:?}")
+        })? == "u";
 
-        let name_part = parts
-            .next()
-            .ok_or_else(|| eyre!("error missing name part in mru_buffer_line | mru_buffer_line={mru_buffer_line:?}"))?
-            .trim_matches('"');
-        let kind = if name_part.starts_with("term://") {
+        // Skip entirely the other flags and the first '"' char.
+        let name_idx = is_unlisted_idx.saturating_add(7);
+
+        let rest = mru_buffer_line.get(name_idx..).ok_or_else(|| {
+            eyre!("error extracting name part by idx | idx={name_idx} mru_buffer_line={mru_buffer_line:?}")
+        })?;
+
+        let (name, _) = rest
+            .split_once('"')
+            .ok_or_else(|| eyre!("error extracting name | rest={rest:?} mru_buffer_line={mru_buffer_line:?}"))?;
+
+        let kind = if name.starts_with("term://") {
             BufferKind::Term
-        } else if name_part.starts_with("Grug Far") {
+        } else if name.starts_with("Grug FAR") {
             BufferKind::GrugFar
+        } else if name.starts_with("[No Name]") {
+            BufferKind::NoName
         } else {
             BufferKind::Path
         };
@@ -276,7 +295,7 @@ impl FromStr for MruBuffer {
         Ok(Self {
             id,
             is_unlisted,
-            name: name_part.to_string(),
+            name: name.to_string(),
             kind,
         })
     }
