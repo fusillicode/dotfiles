@@ -1,5 +1,9 @@
-#![allow(dead_code)]
+#![allow(dead_code, unused_variables)]
 
+use std::str::FromStr;
+
+use color_eyre::eyre::Context;
+use color_eyre::eyre::eyre;
 use nvim_oxi::Array;
 use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
@@ -192,30 +196,120 @@ fn ga(_: ()) -> Option<()> {
     Some(())
 }
 
-fn gx(force: Option<bool>) -> Option<()> {
-    let buf_to_close = Buffer::current();
+fn gx(force_close: Option<bool>) -> Option<()> {
+    let mru_buffers = get_mru_buffers()?;
 
-    let Ok(alt_buf_id) = nvim_oxi::api::call_function::<_, i32>("ls", ("t",)) else {
-        return None;
+    let Some(current_buffer) = mru_buffers.first() else {
+        // TODO: understand who to handle no buffers
+        return Some(());
     };
 
-    let cur_buf_id = if alt_buf_id > 0 && alt_buf_id != buf_to_close.handle() {
-        alt_buf_id
+    let new_current_buffer = if let Some(mru_buffer) = mru_buffers.get(1) {
+        Buffer::from(mru_buffer.id)
     } else {
-        nvim_oxi::api::call_function::<_, i32>("nexbuf", Array::new()).ok()?
+        nvim_oxi::api::create_buf(true, false)
+            .inspect_err(|err| ytil_nvim_oxi::notify::error(format!("error creating buffer | err={err:?}")))
+            .ok()?
     };
 
-    set_current_buf(&Buffer::from(cur_buf_id))?;
+    set_current_buf(&new_current_buffer)?;
 
-    let force = if force.is_some_and(std::convert::identity) {
+    let force = if force_close.is_some_and(std::convert::identity) {
         "!"
     } else {
         ""
     };
-
-    exec2(&format!("bd{force} {}", buf_to_close.handle()), Default::default())?;
+    exec2(&format!("bd{force} {}", current_buffer.id), Default::default())?;
 
     Some(())
+}
+
+#[derive(Debug)]
+struct MruBuffer {
+    pub id: i32,
+    pub is_unlisted: bool,
+    pub name: String,
+    pub kind: BufferKind,
+}
+
+#[derive(Debug)]
+enum BufferKind {
+    Term,
+    GrugFar,
+    Path,
+}
+
+impl FromStr for MruBuffer {
+    type Err = color_eyre::eyre::Error;
+
+    fn from_str(mru_buffer_line: &str) -> Result<Self, Self::Err> {
+        let mut parts = mru_buffer_line.split_whitespace();
+
+        let id_part = parts
+            .next()
+            .ok_or_else(|| eyre!("error missing id part in mru_buffer_line | mru_buffer_line={mru_buffer_line:?}"))?;
+        let id = id_part.strip_suffix('u');
+        let (id, is_unlisted) = if let Some(id) = id {
+            (id, true)
+        } else {
+            (id_part, false)
+        };
+        let id: i32 = id
+            .parse()
+            .wrap_err_with(|| format!("error parsing buffer id in mru_buffer_line | id={id:?} {mru_buffer_line:?}"))?;
+
+        // Skip the flags for now
+        parts.next();
+
+        let name_part = parts
+            .next()
+            .ok_or_else(|| eyre!("error missing name part in mru_buffer_line | mru_buffer_line={mru_buffer_line:?}"))?
+            .trim_matches('"');
+        let kind = if name_part.starts_with("term://") {
+            BufferKind::Term
+        } else if name_part.starts_with("Grug Far") {
+            BufferKind::GrugFar
+        } else {
+            BufferKind::Path
+        };
+
+        Ok(Self {
+            id,
+            is_unlisted,
+            name: name_part.to_string(),
+            kind,
+        })
+    }
+}
+
+fn get_mru_buffers() -> Option<Vec<MruBuffer>> {
+    let Ok(mru_buffers_output) = nvim_oxi::api::call_function::<_, String>("execute", ("ls t",))
+        .inspect_err(|err| ytil_nvim_oxi::notify::error(format!("error getting mru buffers | err={err:?}")))
+    else {
+        return None;
+    };
+
+    parse_mru_buffers_output(&mru_buffers_output)
+        .inspect_err(|err| {
+            ytil_nvim_oxi::notify::error(format!(
+                "error parsing mru buffers output | mru_buffers_output={mru_buffers_output:?} err={err:?}"
+            ))
+        })
+        .ok()
+}
+
+fn parse_mru_buffers_output(mru_buffers_output: &str) -> color_eyre::Result<Vec<MruBuffer>> {
+    if mru_buffers_output.is_empty() {
+        return Ok(vec![]);
+    }
+    let mut out = vec![];
+    for mru_buffer_line in mru_buffers_output.lines() {
+        if mru_buffer_line.is_empty() {
+            continue;
+        }
+        out.push(MruBuffer::from_str(mru_buffer_line)?)
+    }
+    Ok(out)
 }
 
 fn set_current_buf(buf: &Buffer) -> Option<()> {
