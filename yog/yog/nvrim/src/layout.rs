@@ -21,6 +21,7 @@ pub fn dict() -> Dictionary {
         "focus_term": fn_from!(focus_term),
         "focus_buffer": fn_from!(focus_buffer),
         "ga": fn_from!(ga),
+        "gx": fn_from!(gx),
     }
 }
 
@@ -90,17 +91,7 @@ fn focus_buffer(_: ()) -> Option<()> {
             // Using exec2 because nvim_oxi::api::open_win fails with split left.
             exec2(&format!("vsplit | vertical resize {width}"), None)?;
 
-            let Ok(last_buffer_id) = nvim_oxi::api::call_function::<_, i32>("bufnr", ("#",)) else {
-                return None;
-            };
-
-            let buffer = if last_buffer_id < 0 {
-                nvim_oxi::api::create_buf(true, false)
-                    .inspect_err(|err| ytil_nvim_oxi::notify::error(format!("error creating buffer | err={err:?}")))
-                    .ok()?
-            } else {
-                Buffer::from(last_buffer_id)
-            };
+            let buffer = get_alt_buf_or_new()?;
 
             set_current_buf(&buffer)?;
 
@@ -201,6 +192,32 @@ fn ga(_: ()) -> Option<()> {
     Some(())
 }
 
+fn gx(force: Option<bool>) -> Option<()> {
+    let buf_to_close = Buffer::current();
+
+    let Ok(alt_buf_id) = nvim_oxi::api::call_function::<_, i32>("ls", ("t",)) else {
+        return None;
+    };
+
+    let cur_buf_id = if alt_buf_id > 0 && alt_buf_id != buf_to_close.handle() {
+        alt_buf_id
+    } else {
+        nvim_oxi::api::call_function::<_, i32>("nexbuf", Array::new()).ok()?
+    };
+
+    set_current_buf(&Buffer::from(cur_buf_id))?;
+
+    let force = if force.is_some_and(std::convert::identity) {
+        "!"
+    } else {
+        ""
+    };
+
+    exec2(&format!("bd{force} {}", buf_to_close.handle()), Default::default())?;
+
+    Some(())
+}
+
 fn set_current_buf(buf: &Buffer) -> Option<()> {
     nvim_oxi::api::set_current_buf(buf)
         .inspect_err(|err| {
@@ -224,6 +241,20 @@ const FILE_BUF_WIDTH_PERC: i32 = 100 - TERM_WIDTH_PERC;
 fn compute_width(perc: i32) -> Option<i32> {
     let total_width: i32 = crate::vim_opts::get("columns", &crate::vim_opts::global_scope())?;
     Some((total_width * perc) / 100)
+}
+
+fn get_alt_buf_or_new() -> Option<Buffer> {
+    let Ok(alt_buf_id) = nvim_oxi::api::call_function::<_, i32>("bufnr", ("#",)) else {
+        return None;
+    };
+
+    if alt_buf_id < 0 {
+        nvim_oxi::api::create_buf(true, false)
+            .inspect_err(|err| ytil_nvim_oxi::notify::error(format!("error creating buffer | err={err:?}")))
+            .ok()
+    } else {
+        Some(Buffer::from(alt_buf_id))
+    }
 }
 
 // Option<Option> to be able to use ? and short circuit.

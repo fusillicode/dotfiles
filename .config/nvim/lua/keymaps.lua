@@ -18,6 +18,8 @@ function M.set_lua_defined()
 
   keymap_set({ 'n', 'v', 'i', 't', }, '<c-e>', nvrim.layout.focus_term)
   keymap_set({ 'n', 'v', 'i', 't', }, '<c-h>', nvrim.layout.focus_buffer)
+  keymap_set({ 'n', 'v', }, '<leader>x', function() nvrim.layout.gx() end)
+  keymap_set({ 'n', 'v', }, '<leader>X', function() nvrim.layout.gx(true) end)
 
   keymap_set({ 'n', 'v', }, 'ga', nvrim.layout.ga)
 
