@@ -34,9 +34,10 @@ fn focus_term(_: ()) -> Option<()> {
 
     // If current buffer is terminal and not full screen make it full screen.
     if current_buffer.is_terminal() {
-        if nvim_oxi::api::list_wins().len() != 1 {
-            exec2("only", None)?;
-        }
+        // TODO: not sure if the if needed?
+        // if nvim_oxi::api::list_wins().len() != 1 {
+        exec2("only", None)?;
+        // }
         return Some(());
     }
 
@@ -86,10 +87,18 @@ fn focus_buffer(_: ()) -> Option<()> {
 
     // If current buffer is terminal.
     if current_buffer.is_terminal() {
-        let visible_windows = nvim_oxi::api::list_wins();
+        let mut visible_windows =
+            nvim_oxi::api::list_wins().map(|w| (get_window_buffer(&w).and_then(|b| b.get_buf_type()), w));
 
-        // Terminal is full screen.
-        if visible_windows.len() == 1 {
+        let maybe_buffer_window = visible_windows.find(|(bt, win)| bt.as_ref().is_some_and(|b| b.is_empty()));
+
+        if let Some((buffer_type, win)) = maybe_buffer_window {
+            nvim_oxi::api::set_current_win(&win)
+                .inspect_err(|err| {
+                    ytil_nvim_oxi::notify::error(format!("error setting current window | window={win:?}, err={err:?}"))
+                })
+                .ok()?;
+        } else {
             let width = compute_width(FILE_BUF_WIDTH_PERC)?;
 
             // Using exec2 because nvim_oxi::api::open_win fails with split left.
@@ -105,21 +114,8 @@ fn focus_buffer(_: ()) -> Option<()> {
             };
 
             set_current_buffer(&buffer)?;
-
-        // Terminal is NOT full screen.
-        } else {
-            for win in visible_windows {
-                if get_window_buffer(&win)?.get_buf_type().is_some_and(|bt| bt.is_empty()) {
-                    nvim_oxi::api::set_current_win(&win)
-                        .inspect_err(|err| {
-                            ytil_nvim_oxi::notify::error(format!(
-                                "error setting current window | window={win:?}, err={err:?}"
-                            ))
-                        })
-                        .ok()?;
-                }
-            }
         }
+
     // Current buffer IS NOT terminal.
     } else {
         // Not terminal is not full screen.

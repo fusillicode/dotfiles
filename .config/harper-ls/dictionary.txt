@@ -106,6 +106,7 @@ file path
 fkr
 fn
 franquicia
+fullscreen
 fzf
 gh
 gitignore
