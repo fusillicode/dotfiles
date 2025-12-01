@@ -1,5 +1,3 @@
-#![allow(dead_code, unused_variables)]
-
 use std::str::FromStr;
 
 use color_eyre::eyre::Context;
@@ -42,7 +40,7 @@ fn focus_term(_: ()) -> Option<()> {
     let mut visible_windows =
         nvim_oxi::api::list_wins().map(|w| (get_window_buffer(&w).and_then(|b| b.get_buf_type()), w));
 
-    let maybe_terminal_window = visible_windows.find(|(bt, win)| bt.as_ref().is_some_and(|b| b == "terminal"));
+    let maybe_terminal_window = visible_windows.find(|(bt, _)| bt.as_ref().is_some_and(|b| b == "terminal"));
 
     // If there is a VISIBLE terminal buffer.
     if let Some((_, win)) = maybe_terminal_window {
@@ -81,10 +79,10 @@ fn focus_buffer(_: ()) -> Option<()> {
     let mut visible_windows =
         nvim_oxi::api::list_wins().map(|w| (get_window_buffer(&w).and_then(|b| b.get_buf_type()), w));
 
-    let maybe_buffer_window = visible_windows.find(|(bt, win)| bt.as_ref().is_some_and(|b| b.is_empty()));
+    let maybe_buffer_window = visible_windows.find(|(bt, _)| bt.as_ref().is_some_and(|b| b.is_empty()));
 
     // If there is a visible file buffer.
-    if let Some((buffer_type, win)) = maybe_buffer_window {
+    if let Some((_, win)) = maybe_buffer_window {
         set_current_window(&win)?;
         return Some(());
     }
@@ -136,6 +134,7 @@ impl Poppable for JumpList {
     }
 }
 
+#[allow(dead_code)]
 fn get_jumplist() -> Option<Vec<JumpEntry>> {
     Some(
         nvim_oxi::api::call_function::<_, JumpList>("getjumplist", Array::new())
@@ -216,6 +215,7 @@ fn smart_close_buffer(force_close: Option<bool>) -> Option<()> {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 struct MruBuffer {
     pub id: i32,
     pub is_unlisted: bool,
@@ -359,6 +359,7 @@ fn compute_width(perc: i32) -> Option<i32> {
     Some((total_width * perc) / 100)
 }
 
+#[allow(dead_code)]
 fn get_alt_buffer_or_new() -> Option<Buffer> {
     let alt_buf_id = nvim_oxi::api::call_function::<_, i32>("bufnr", ("#",))
         .inspect(|err| {
