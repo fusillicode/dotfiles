@@ -79,7 +79,7 @@ fn focus_buffer(_: ()) -> Option<()> {
     let mut visible_windows =
         nvim_oxi::api::list_wins().map(|w| (get_window_buffer(&w).and_then(|b| b.get_buf_type()), w));
 
-    let maybe_buffer_window = visible_windows.find(|(bt, _)| bt.as_ref().is_some_and(|b| b.is_empty()));
+    let maybe_buffer_window = visible_windows.find(|(bt, _)| bt.as_ref().is_some_and(String::is_empty));
 
     // If there is a visible file buffer.
     if let Some((_, win)) = maybe_buffer_window {
@@ -167,7 +167,7 @@ fn toggle_alternate_buffer(_: ()) -> Option<()> {
             && buf
                 .get_name()
                 .inspect_err(|err| {
-                    ytil_nvim_oxi::notify::error(format!("error getting buffer name | buffer={buf:?} err={err:?}"))
+                    ytil_nvim_oxi::notify::error(format!("error getting buffer name | buffer={buf:?} err={err:?}"));
                 })
                 .ok()
                 .is_some_and(|bn| !bn.is_empty())
@@ -207,9 +207,9 @@ fn smart_close_buffer(force_close: Option<bool>) -> Option<()> {
 
             set_current_buffer(&new_current_buffer)?;
         }
-    };
+    }
 
-    exec2(&format!("bd{force} {}", current_buffer.id), Default::default())?;
+    exec2(&format!("bd{force} {}", current_buffer.id), Option::default())?;
 
     Some(())
 }
@@ -225,7 +225,7 @@ struct MruBuffer {
 
 impl From<&MruBuffer> for Buffer {
     fn from(value: &MruBuffer) -> Self {
-        Buffer::from(value.id)
+        Self::from(value.id)
     }
 }
 
@@ -260,7 +260,7 @@ impl FromStr for MruBuffer {
 
         let is_unlisted_idx = mru_buffer_line
             .char_indices()
-            .find_map(|(idx, c)| if !c.is_numeric() { Some(idx) } else { None })
+            .find_map(|(idx, c)| if c.is_numeric() { None } else { Some(idx) })
             .ok_or_else(|| eyre!("error finding buffer id end | mru_buffer_line={mru_buffer_line:?}"))?;
 
         let id: i32 = {
@@ -306,7 +306,7 @@ fn get_mru_buffers() -> Option<Vec<MruBuffer>> {
         .inspect_err(|err| {
             ytil_nvim_oxi::notify::error(format!(
                 "error parsing mru buffers output | mru_buffers_output={mru_buffers_output:?} err={err:?}"
-            ))
+            ));
         })
         .ok()
 }
@@ -320,7 +320,7 @@ fn parse_mru_buffers_output(mru_buffers_output: &str) -> color_eyre::Result<Vec<
         if mru_buffer_line.is_empty() {
             continue;
         }
-        out.push(MruBuffer::from_str(mru_buffer_line)?)
+        out.push(MruBuffer::from_str(mru_buffer_line)?);
     }
     Ok(out)
 }
@@ -328,7 +328,7 @@ fn parse_mru_buffers_output(mru_buffers_output: &str) -> color_eyre::Result<Vec<
 fn set_current_buffer(buf: &Buffer) -> Option<()> {
     nvim_oxi::api::set_current_buf(buf)
         .inspect_err(|err| {
-            ytil_nvim_oxi::notify::error(format!("error setting current buffer | buffer={buf:?} err={err:?}"))
+            ytil_nvim_oxi::notify::error(format!("error setting current buffer | buffer={buf:?} err={err:?}"));
         })
         .ok()?;
     Some(())
@@ -337,7 +337,7 @@ fn set_current_buffer(buf: &Buffer) -> Option<()> {
 fn set_current_window(window: &Window) -> Option<()> {
     nvim_oxi::api::set_current_win(window)
         .inspect_err(|err| {
-            ytil_nvim_oxi::notify::error(format!("error setting current window | window={window:?}, err={err:?}"))
+            ytil_nvim_oxi::notify::error(format!("error setting current window | window={window:?}, err={err:?}"));
         })
         .ok()?;
     Some(())
@@ -346,7 +346,7 @@ fn set_current_window(window: &Window) -> Option<()> {
 fn get_window_buffer(win: &Window) -> Option<Buffer> {
     win.get_buf()
         .inspect_err(|err| {
-            ytil_nvim_oxi::notify::error(format!("error getting window buffer | window={win:?}, err={err:?}"))
+            ytil_nvim_oxi::notify::error(format!("error getting window buffer | window={win:?}, err={err:?}"));
         })
         .ok()
 }
@@ -356,7 +356,7 @@ const FILE_BUF_WIDTH_PERC: i32 = 100 - TERM_WIDTH_PERC;
 
 fn compute_width(perc: i32) -> Option<i32> {
     let total_width: i32 = crate::vim_opts::get("columns", &crate::vim_opts::global_scope())?;
-    Some((total_width * perc) / 100)
+    Some((total_width.saturating_mul(perc)) / 100)
 }
 
 #[allow(dead_code)]
@@ -382,7 +382,7 @@ fn exec2(src: &str, opts: Option<ExecOpts>) -> Option<Option<String>> {
             .inspect_err(|err| {
                 ytil_nvim_oxi::notify::error(format!(
                     "error executing Vimscript | src={src:?} opts={opts:?} err={err:?}"
-                ))
+                ));
             })
             .ok()?
             .map(|s| s.to_string()),

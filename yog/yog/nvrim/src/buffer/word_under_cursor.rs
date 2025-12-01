@@ -42,7 +42,7 @@ pub fn get(_: ()) -> Option<WordUnderCursor> {
 /// Serialized to Lua as a tagged table (`{ kind = "...", value = "..." }`).
 #[derive(Serialize)]
 #[serde(tag = "kind", content = "value")]
-#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub enum WordUnderCursor {
     /// A string that successfully parsed as a [`Url`] via [`Url::parse`].
     Url(String),
@@ -57,7 +57,7 @@ pub enum WordUnderCursor {
 }
 
 #[derive(Serialize)]
-#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub struct TextFile {
     pub path: String,
     pub lnum: i64,
@@ -98,7 +98,7 @@ impl From<String> for WordUnderCursor {
 
         let Ok(lnum) = parts
             .next()
-            .map(|s| s.parse())
+            .map(str::parse)
             .transpose()
             .map(|x: Option<i64>| x.unwrap_or_default())
         else {
@@ -107,7 +107,7 @@ impl From<String> for WordUnderCursor {
 
         let Ok(col) = parts
             .next()
-            .map(|s| s.parse())
+            .map(str::parse)
             .transpose()
             .map(|x: Option<i64>| x.unwrap_or_default())
         else {
@@ -309,8 +309,7 @@ mod tests {
         let mut temp_file = NamedTempFile::new().unwrap();
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
-        let input = format!("{}:10", path);
-        let result = WordUnderCursor::from(input);
+        let result = WordUnderCursor::from(format!("{path}:10"));
         assert_eq!(result, WordUnderCursor::TextFile(TextFile { path, lnum: 10, col: 0 }));
     }
 
@@ -319,8 +318,7 @@ mod tests {
         let mut temp_file = NamedTempFile::new().unwrap();
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
-        let input = format!("{}:10:5", path);
-        let result = WordUnderCursor::from(input);
+        let result = WordUnderCursor::from(format!("{path}:10:5"));
         assert_eq!(result, WordUnderCursor::TextFile(TextFile { path, lnum: 10, col: 5 }));
     }
 
@@ -353,7 +351,7 @@ mod tests {
     fn word_under_cursor_from_path_with_invalid_lnum_returns_word() {
         let temp_file = NamedTempFile::new().unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
-        let input = format!("{}:invalid", path);
+        let input = format!("{path}:invalid");
         let result = WordUnderCursor::from(input.clone());
         assert_eq!(result, WordUnderCursor::Word(input));
     }
@@ -362,7 +360,7 @@ mod tests {
     fn word_under_cursor_from_path_with_invalid_col_returns_word() {
         let temp_file = NamedTempFile::new().unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
-        let input = format!("{}:10:invalid", path);
+        let input = format!("{path}:10:invalid");
         let result = WordUnderCursor::from(input.clone());
         assert_eq!(result, WordUnderCursor::Word(input));
     }
@@ -372,8 +370,7 @@ mod tests {
         let mut temp_file = NamedTempFile::new().unwrap();
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
-        let input = format!("{}:10:5:extra", path);
-        let result = WordUnderCursor::from(input);
+        let result = WordUnderCursor::from(format!("{path}:10:5:extra"));
         assert_eq!(result, WordUnderCursor::TextFile(TextFile { path, lnum: 10, col: 5 }));
     }
 }

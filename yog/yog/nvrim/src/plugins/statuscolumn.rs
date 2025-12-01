@@ -90,7 +90,7 @@ fn draw_statuscolumn(
     opts: Option<Opts>,
 ) -> String {
     if current_buffer_type == "grug-far" || current_buffer_type == "terminal" {
-        return "".into();
+        return String::new();
     }
 
     let mut highest_severity_diag: Option<SelectedDiag> = None;
