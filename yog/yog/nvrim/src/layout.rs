@@ -32,48 +32,38 @@ pub fn dict() -> Dictionary {
 fn focus_term(_: ()) -> Option<()> {
     let current_buffer = nvim_oxi::api::get_current_buf();
 
-    // If current buffer is terminal and not full screen make it full screen.
+    // If current buffer IS terminal.
     if current_buffer.is_terminal() {
-        // TODO: not sure if the if needed?
-        // if nvim_oxi::api::list_wins().len() != 1 {
         exec2("only", None)?;
-        // }
         return Some(());
     }
 
-    // If current buffer is not terminal and full screen focus the terminal buffer or create a new
-    // one if not found.
-    let visible_windows = nvim_oxi::api::list_wins();
-    if visible_windows.len() == 1 {
-        let width = compute_width(TERM_WIDTH_PERC)?;
+    // If current buffer IS NOT terminal.
+    let mut visible_windows =
+        nvim_oxi::api::list_wins().map(|w| (get_window_buffer(&w).and_then(|b| b.get_buf_type()), w));
 
-        // Using exec2 because nvim_oxi::api::open_win fails with split left.
-        if let Some(terminal_buffer) = nvim_oxi::api::list_bufs().find(BufferExt::is_terminal) {
-            exec2(&format!("leftabove vsplit | vertical resize {width}"), None);
-            set_current_buffer(&terminal_buffer)?;
-        } else {
-            exec2(&format!("leftabove vsplit | vertical resize {width} | term"), None);
-        }
+    let maybe_terminal_window = visible_windows.find(|(bt, win)| bt.as_ref().is_some_and(|b| b == "terminal"));
 
-        // Cannot chain "startinsert" in previous exec2 because of this error:
-        // ```
-        // zsh:1: parse error near `|'
-        //
-        // [Process exited 1]
-        // ````
+    // If there is a VISIBLE terminal buffer.
+    if let Some((_, win)) = maybe_terminal_window {
+        set_current_window(&win)?;
         exec2("startinsert", None)?;
         return Some(());
     }
 
-    // If current buffer is not terminal and not full screen focus the terminal buffer.
-    for win in visible_windows {
-        if get_window_buffer(&win)?.is_terminal() {
-            set_current_window(&win)?;
-            exec2("startinsert", None)?;
-            // Exit as soon as the first terminal is found.
-            return Some(());
-        }
+    let width = compute_width(TERM_WIDTH_PERC)?;
+
+    // If there is NO VISIBLE terminal buffer.
+    if let Some(terminal_buffer) = nvim_oxi::api::list_bufs().find(BufferExt::is_terminal) {
+        exec2(&format!("leftabove vsplit | vertical resize {width}"), None);
+        set_current_buffer(&terminal_buffer)?;
+        exec2("startinsert", None)?;
+        return Some(());
     }
+
+    // If there is NO terminal buffer at all.
+    exec2(&format!("leftabove vsplit | vertical resize {width} | term"), None);
+    exec2("startinsert", None)?;
 
     Some(())
 }
