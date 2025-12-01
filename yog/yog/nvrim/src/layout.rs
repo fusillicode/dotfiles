@@ -49,7 +49,7 @@ fn focus_term(_: ()) -> Option<()> {
         // Using exec2 because nvim_oxi::api::open_win fails with split left.
         if let Some(terminal_buffer) = nvim_oxi::api::list_bufs().find(BufferExt::is_terminal) {
             exec2(&format!("leftabove vsplit | vertical resize {width}"), None);
-            set_current_buf(&terminal_buffer)?;
+            set_current_buffer(&terminal_buffer)?;
         } else {
             exec2(&format!("leftabove vsplit | vertical resize {width} | term"), None);
         }
@@ -66,7 +66,7 @@ fn focus_term(_: ()) -> Option<()> {
 
     // If current buffer is not terminal and not full screen focus the terminal buffer.
     for win in visible_windows {
-        if get_window_buf(&win)?.is_terminal() {
+        if get_window_buffer(&win)?.is_terminal() {
             nvim_oxi::api::set_current_win(&win)
                 .inspect_err(|err| {
                     ytil_nvim_oxi::notify::error(format!("error setting current window | window={win:?}, err={err:?}"))
@@ -95,14 +95,21 @@ fn focus_buffer(_: ()) -> Option<()> {
             // Using exec2 because nvim_oxi::api::open_win fails with split left.
             exec2(&format!("vsplit | vertical resize {width}"), None)?;
 
-            let buffer = get_alt_buf_or_new()?;
+            let buffer = if let Some(mru_buffer) = get_mru_buffers()?
+                .iter()
+                .find(|b| matches!(b.kind, BufferKind::Path | BufferKind::NoName))
+            {
+                Buffer::from(mru_buffer)
+            } else {
+                create_buffer()?
+            };
 
-            set_current_buf(&buffer)?;
+            set_current_buffer(&buffer)?;
 
         // Terminal is NOT full screen.
         } else {
             for win in visible_windows {
-                if get_window_buf(&win)?.get_buf_type().is_some_and(|bt| bt.is_empty()) {
+                if get_window_buffer(&win)?.get_buf_type().is_some_and(|bt| bt.is_empty()) {
                     nvim_oxi::api::set_current_win(&win)
                         .inspect_err(|err| {
                             ytil_nvim_oxi::notify::error(format!(
@@ -170,7 +177,7 @@ fn toggle_alternate_buffer(_: ()) -> Option<()> {
         && alt_buf.is_loaded()
         && !alt_buf.is_terminal()
     {
-        set_current_buf(&alt_buf)?;
+        set_current_buffer(&alt_buf)?;
         return Some(());
     }
 
@@ -188,7 +195,7 @@ fn toggle_alternate_buffer(_: ()) -> Option<()> {
                 .ok()
                 .is_some_and(|bn| !bn.is_empty())
         {
-            set_current_buf(&buf)?;
+            set_current_buffer(&buf)?;
             return Some(());
         }
     }
@@ -218,12 +225,10 @@ fn smart_close_buffer(force_close: Option<bool>) -> Option<()> {
             {
                 Buffer::from(mru_buffer.id)
             } else {
-                nvim_oxi::api::create_buf(true, false)
-                    .inspect_err(|err| ytil_nvim_oxi::notify::error(format!("error creating buffer | err={err:?}")))
-                    .ok()?
+                create_buffer()?
             };
 
-            set_current_buf(&new_current_buffer)?;
+            set_current_buffer(&new_current_buffer)?;
         }
     };
 
@@ -238,6 +243,12 @@ struct MruBuffer {
     pub is_unlisted: bool,
     pub name: String,
     pub kind: BufferKind,
+}
+
+impl From<&MruBuffer> for Buffer {
+    fn from(value: &MruBuffer) -> Self {
+        Buffer::from(value.id)
+    }
 }
 
 #[derive(Debug)]
@@ -336,7 +347,7 @@ fn parse_mru_buffers_output(mru_buffers_output: &str) -> color_eyre::Result<Vec<
     Ok(out)
 }
 
-fn set_current_buf(buf: &Buffer) -> Option<()> {
+fn set_current_buffer(buf: &Buffer) -> Option<()> {
     nvim_oxi::api::set_current_buf(buf)
         .inspect_err(|err| {
             ytil_nvim_oxi::notify::error(format!("error setting current buffer | buffer={buf:?} err={err:?}"))
@@ -345,7 +356,7 @@ fn set_current_buf(buf: &Buffer) -> Option<()> {
     Some(())
 }
 
-fn get_window_buf(win: &Window) -> Option<Buffer> {
+fn get_window_buffer(win: &Window) -> Option<Buffer> {
     win.get_buf()
         .inspect_err(|err| {
             ytil_nvim_oxi::notify::error(format!("error getting window buffer | window={win:?}, err={err:?}"))
@@ -361,18 +372,17 @@ fn compute_width(perc: i32) -> Option<i32> {
     Some((total_width * perc) / 100)
 }
 
-fn get_alt_buf_or_new() -> Option<Buffer> {
-    let Ok(alt_buf_id) = nvim_oxi::api::call_function::<_, i32>("bufnr", ("#",)) else {
-        return None;
-    };
+fn get_alt_buffer_or_new() -> Option<Buffer> {
+    let alt_buf_id = nvim_oxi::api::call_function::<_, i32>("bufnr", ("#",))
+        .inspect(|err| {
+            ytil_nvim_oxi::notify::error(format!("error getting alternate buffer | err={err:?}"));
+        })
+        .ok()?;
 
     if alt_buf_id < 0 {
-        nvim_oxi::api::create_buf(true, false)
-            .inspect_err(|err| ytil_nvim_oxi::notify::error(format!("error creating buffer | err={err:?}")))
-            .ok()
-    } else {
-        Some(Buffer::from(alt_buf_id))
+        return create_buffer();
     }
+    Some(Buffer::from(alt_buf_id))
 }
 
 // Option<Option> to be able to use ? and short circuit.
@@ -389,6 +399,12 @@ fn exec2(src: &str, opts: Option<ExecOpts>) -> Option<Option<String>> {
             .ok()?
             .map(|s| s.to_string()),
     )
+}
+
+fn create_buffer() -> Option<Buffer> {
+    nvim_oxi::api::create_buf(true, false)
+        .inspect_err(|err| ytil_nvim_oxi::notify::error(format!("error creating buffer | err={err:?}")))
+        .ok()
 }
 
 // fn open_word_under_cursor(_: ()) {
