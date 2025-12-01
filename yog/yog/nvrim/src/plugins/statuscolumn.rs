@@ -422,7 +422,7 @@ mod tests {
                 show_line_numbers: true,
             }),
         );
-        pretty_assertions::assert_eq!(out, " ");
+        pretty_assertions::assert_eq!(out, "");
     }
 
     #[rstest]
