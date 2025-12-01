@@ -68,11 +68,7 @@ fn focus_term(_: ()) -> Option<()> {
     // If current buffer is not terminal and not full screen focus the terminal buffer.
     for win in visible_windows {
         if get_window_buffer(&win)?.is_terminal() {
-            nvim_oxi::api::set_current_win(&win)
-                .inspect_err(|err| {
-                    ytil_nvim_oxi::notify::error(format!("error setting current window | window={win:?}, err={err:?}"))
-                })
-                .ok()?;
+            set_current_window(&win)?;
             exec2("startinsert", None)?;
             // Exit as soon as the first terminal is found.
             return Some(());
@@ -93,11 +89,7 @@ fn focus_buffer(_: ()) -> Option<()> {
         let maybe_buffer_window = visible_windows.find(|(bt, win)| bt.as_ref().is_some_and(|b| b.is_empty()));
 
         if let Some((buffer_type, win)) = maybe_buffer_window {
-            nvim_oxi::api::set_current_win(&win)
-                .inspect_err(|err| {
-                    ytil_nvim_oxi::notify::error(format!("error setting current window | window={win:?}, err={err:?}"))
-                })
-                .ok()?;
+            set_current_window(&win)?;
         } else {
             let width = compute_width(FILE_BUF_WIDTH_PERC)?;
 
@@ -347,6 +339,15 @@ fn set_current_buffer(buf: &Buffer) -> Option<()> {
     nvim_oxi::api::set_current_buf(buf)
         .inspect_err(|err| {
             ytil_nvim_oxi::notify::error(format!("error setting current buffer | buffer={buf:?} err={err:?}"))
+        })
+        .ok()?;
+    Some(())
+}
+
+fn set_current_window(window: &Window) -> Option<()> {
+    nvim_oxi::api::set_current_win(window)
+        .inspect_err(|err| {
+            ytil_nvim_oxi::notify::error(format!("error setting current window | window={window:?}, err={err:?}"))
         })
         .ok()?;
     Some(())
