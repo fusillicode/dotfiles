@@ -81,40 +81,40 @@ fn focus_term(_: ()) -> Option<()> {
 fn focus_buffer(_: ()) -> Option<()> {
     let current_buffer = nvim_oxi::api::get_current_buf();
 
-    // If current buffer is terminal.
-    if current_buffer.is_terminal() {
-        let mut visible_windows =
-            nvim_oxi::api::list_wins().map(|w| (get_window_buffer(&w).and_then(|b| b.get_buf_type()), w));
-
-        let maybe_buffer_window = visible_windows.find(|(bt, win)| bt.as_ref().is_some_and(|b| b.is_empty()));
-
-        if let Some((buffer_type, win)) = maybe_buffer_window {
-            set_current_window(&win)?;
-        } else {
-            let width = compute_width(FILE_BUF_WIDTH_PERC)?;
-
-            // Using exec2 because nvim_oxi::api::open_win fails with split left.
-            exec2(&format!("vsplit | vertical resize {width}"), None)?;
-
-            let buffer = if let Some(mru_buffer) = get_mru_buffers()?
-                .iter()
-                .find(|b| matches!(b.kind, BufferKind::Path | BufferKind::NoName))
-            {
-                Buffer::from(mru_buffer)
-            } else {
-                create_buffer()?
-            };
-
-            set_current_buffer(&buffer)?;
-        }
-
-    // Current buffer IS NOT terminal.
-    } else {
-        // Not terminal is not full screen.
-        if nvim_oxi::api::list_wins().len() != 1 {
-            exec2("only", None)?;
-        }
+    // If current buffer IS NOT terminal.
+    if !current_buffer.is_terminal() {
+        exec2("only", None)?;
+        return Some(());
     }
+
+    // If current buffer IS terminal.
+    let mut visible_windows =
+        nvim_oxi::api::list_wins().map(|w| (get_window_buffer(&w).and_then(|b| b.get_buf_type()), w));
+
+    let maybe_buffer_window = visible_windows.find(|(bt, win)| bt.as_ref().is_some_and(|b| b.is_empty()));
+
+    // If there is a visible file buffer.
+    if let Some((buffer_type, win)) = maybe_buffer_window {
+        set_current_window(&win)?;
+        return Some(());
+    }
+
+    // If there is NO visible file buffer.
+    let width = compute_width(FILE_BUF_WIDTH_PERC)?;
+
+    // Using exec2 because nvim_oxi::api::open_win fails with split left.
+    exec2(&format!("vsplit | vertical resize {width}"), None)?;
+
+    let buffer = if let Some(mru_buffer) = get_mru_buffers()?
+        .iter()
+        .find(|b| matches!(b.kind, BufferKind::Path | BufferKind::NoName))
+    {
+        Buffer::from(mru_buffer)
+    } else {
+        create_buffer()?
+    };
+
+    set_current_buffer(&buffer)?;
 
     Some(())
 }
