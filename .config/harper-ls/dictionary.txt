@@ -121,6 +121,7 @@ inputlist
 intra
 invariance
 jq
+jumplist
 junit
 k8s
 ko

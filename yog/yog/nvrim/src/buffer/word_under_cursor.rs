@@ -56,11 +56,15 @@ pub enum WordUnderCursor {
     Word(String),
 }
 
+/// Represents a text file with a specific cursor position for navigation.
 #[derive(Serialize)]
 #[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub struct TextFile {
+    /// The filesystem path to the text file.
     pub path: String,
+    /// The 1-based line number within the file.
     pub lnum: i64,
+    /// The 1-based column number within the line.
     pub col: i64,
 }
 

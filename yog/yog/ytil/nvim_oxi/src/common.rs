@@ -49,7 +49,19 @@ pub fn exec_vim_cmd(
     })
 }
 
-// Option<Option> to be able to use ? and short circuit.
+/// Executes Vimscript source code and returns the output if any.
+///
+/// # Arguments
+/// - `src` The Vimscript source code to execute.
+/// - `opts` Optional execution options; defaults to [`ExecOpts::default`] if [`None`].
+///
+/// # Returns
+/// - `Some(Some(String))` if execution succeeds and produces output.
+/// - `Some(None)` if execution succeeds but produces no output.
+/// - `None` if execution fails.
+///
+/// # Errors
+/// Errors are reported to Nvim via [`crate::notify::error`].
 #[allow(clippy::option_option)]
 pub fn exec_vim_script(src: &str, opts: Option<ExecOpts>) -> Option<Option<String>> {
     let opts = opts.unwrap_or_default();
@@ -57,7 +69,7 @@ pub fn exec_vim_script(src: &str, opts: Option<ExecOpts>) -> Option<Option<Strin
         nvim_oxi::api::exec2(src, &opts)
             .inspect_err(|err| {
                 crate::notify::error(format!(
-                    "error executing Vimscript | src={src:?} opts={opts:?} err={err:?}"
+                    "error executing Vimscript | src={src:?} opts={opts:?} error={err:?}"
                 ));
             })
             .ok()?

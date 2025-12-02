@@ -1,7 +1,4 @@
-//! Buffer extension utilities (line access, cursor‑based insertion, cursor position model).
-//!
-//! Supplies [`BufferExt`] trait plus [`CursorPosition`] struct preserving raw Nvim coordinates for
-//! consistent conversions at call sites.
+//! Buffer extension utilities like line access, cursor‑based insertion, cursor position model, etc.
 
 use std::ops::RangeInclusive;
 use std::path::Path;
@@ -105,9 +102,12 @@ pub trait BufferExt {
 
     /// Retrieves the buffer type via the `buftype` option.
     ///
+    /// Queries Nvim for the buffer type option and returns the value.
+    /// Errors are handled internally by notifying Nvim and converting to `None`.
+    ///
     /// # Returns
     /// - `Some(String)` The buffer type (e.g., `""` for normal, `"help"` for help buffers).
-    /// - `None` if the option cannot be retrieved or is not set.
+    /// - `None` if the option cannot be retrieved, is not set, or an error occurs.
     ///
     /// # Rationale
     /// Errors are notified directly to Nvim because this is the behavior wanted in all cases.
@@ -306,16 +306,35 @@ impl CursorPosition {
     }
 }
 
+/// Creates a new listed, not scratch, buffer.
+///
+/// # Returns
+/// - `Some(Buffer)` if the buffer is created successfully.
+/// - `None` if buffer creation fails.
+///
+/// Errors are reported to Nvim via [`crate::notify::error`].
 pub fn create() -> Option<Buffer> {
     nvim_oxi::api::create_buf(true, false)
-        .inspect_err(|err| crate::notify::error(format!("error creating buffer | err={err:?}")))
+        .inspect_err(|err| crate::notify::error(format!("error creating buffer | error={err:?}")))
         .ok()
 }
 
+/// Retrieves the alternate buffer or creates a new one if none exists.
+///
+/// The alternate buffer is the buffer previously visited, accessed via Nvim's "#" register.
+/// If no alternate buffer exists (bufnr("#") < 0), a new buffer is created.
+///
+/// # Returns
+/// - `Some(Buffer)` the alternate buffer if it exists, otherwise a new buffer.
+/// - `None` if retrieving the alternate buffer fails and creating a new buffer also fails.
+///
+/// # Errors
+/// - Retrieving the alternate buffer fails (notified via [`crate::notify::error`]).
+/// - Creating a new buffer fails (falls back to [`create`]).
 pub fn get_alternate_or_new() -> Option<Buffer> {
     let alt_buf_id = nvim_oxi::api::call_function::<_, i32>("bufnr", ("#",))
         .inspect(|err| {
-            crate::notify::error(format!("error getting alternate buffer | err={err:?}"));
+            crate::notify::error(format!("error getting alternate buffer | error={err:?}"));
         })
         .ok()?;
 
@@ -325,10 +344,21 @@ pub fn get_alternate_or_new() -> Option<Buffer> {
     Some(Buffer::from(alt_buf_id))
 }
 
+/// Sets the specified buffer as the current buffer in the active window.
+///
+/// # Arguments
+/// - `buf` The buffer to set as current.
+///
+/// # Returns
+/// - `Some(())` if the buffer is set successfully.
+/// - `None` if setting the current buffer fails.
+///
+/// # Errors
+/// - Setting the current buffer fails (notified via [`crate::notify::error`]).
 pub fn set_current(buf: &Buffer) -> Option<()> {
     nvim_oxi::api::set_current_buf(buf)
         .inspect_err(|err| {
-            crate::notify::error(format!("error setting current buffer | buffer={buf:?} err={err:?}"));
+            crate::notify::error(format!("error setting current buffer | buffer={buf:?} error={err:?}"));
         })
         .ok()?;
     Some(())
@@ -361,6 +391,7 @@ pub fn open<T: AsRef<Path>>(path: T, line: Option<usize>, col: Option<usize>) ->
 ///
 /// Calls Nvim's `set_text` with the selection's line range and column positions,
 /// replacing the selected content with the provided lines.
+///
 /// Errors are reported via [`crate::notify::error`] with details about the selection
 /// boundaries and error.
 ///

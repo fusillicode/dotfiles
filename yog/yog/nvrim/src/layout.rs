@@ -101,7 +101,7 @@ fn focus_buffer(_: ()) -> Option<()> {
 
 fn toggle_alternate_buffer(_: ()) -> Option<()> {
     let alt_buf_id = nvim_oxi::api::call_function::<_, i32>("bufnr", ("#",))
-        .inspect_err(|err| ytil_nvim_oxi::notify::error(format!("error getting alternate buffer | err={err:?}")))
+        .inspect_err(|err| ytil_nvim_oxi::notify::error(format!("error getting alternate buffer | error={err:?}")))
         .ok()?;
 
     if alt_buf_id != -1
@@ -122,7 +122,7 @@ fn toggle_alternate_buffer(_: ()) -> Option<()> {
             && buf
                 .get_name()
                 .inspect_err(|err| {
-                    ytil_nvim_oxi::notify::error(format!("error getting buffer name | buffer={buf:?} err={err:?}"));
+                    ytil_nvim_oxi::notify::error(format!("error getting buffer name | buffer={buf:?} error={err:?}"));
                 })
                 .ok()
                 .is_some_and(|bn| !bn.is_empty())

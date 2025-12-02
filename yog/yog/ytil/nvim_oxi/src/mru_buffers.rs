@@ -1,15 +1,22 @@
+//! Most recently used (MRU) buffers parsing from Nvim's buffer list.
+
 use std::str::FromStr;
 
 use color_eyre::eyre::Context as _;
 use color_eyre::eyre::eyre;
 use nvim_oxi::api::Buffer;
 
+/// Represents a most recently used buffer with its metadata.
 #[derive(Debug)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct MruBuffer {
+    /// The buffer ID.
     pub id: i32,
+    /// Whether the buffer is unlisted.
     pub is_unlisted: bool,
+    /// The buffer name.
     pub name: String,
+    /// The kind of buffer based on its name.
     pub kind: BufferKind,
 }
 
@@ -19,12 +26,17 @@ impl From<&MruBuffer> for Buffer {
     }
 }
 
+/// Categorizes buffers by their type based on name patterns.
 #[derive(Debug)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub enum BufferKind {
+    /// Terminal buffers starting with "term://".
     Term,
+    /// Grug FAR results buffers.
     GrugFar,
+    /// Regular file path buffers.
     Path,
+    /// No name buffers.
     NoName,
 }
 
@@ -43,6 +55,19 @@ impl<T: AsRef<str>> From<T> for BufferKind {
     }
 }
 
+/// Parses a line from Nvim's buffer list output into an [`MruBuffer`].
+///
+/// # Arguments
+/// - `mru_buffer_line` A line from the output of Nvim's "ls t" command.
+///
+/// # Returns
+/// - `Ok(MruBuffer)` if parsing succeeds.
+/// - `Err` if parsing fails due to invalid format or missing data.
+///
+/// # Errors
+/// - Parsing the buffer ID fails.
+/// - Extracting the unlisted flag fails.
+/// - Extracting the name fails.
 impl FromStr for MruBuffer {
     type Err = color_eyre::eyre::Error;
 
@@ -86,9 +111,18 @@ impl FromStr for MruBuffer {
     }
 }
 
+/// Retrieves the list of most recently used buffers from Nvim.
+///
+/// Calls Nvim's "execute" function with "ls t" to get the buffer list output,
+/// then parses it into a vector of [`MruBuffer`]. Errors during execution or parsing
+/// are notified to the user and result in [`None`] being returned.
+///
+/// # Returns
+/// - `Some(Vec<MruBuffer>)` if the buffers are successfully retrieved and parsed.
+/// - `None` if the Nvim call fails or parsing fails.
 pub fn get() -> Option<Vec<MruBuffer>> {
     let Ok(mru_buffers_output) = nvim_oxi::api::call_function::<_, String>("execute", ("ls t",))
-        .inspect_err(|err| crate::notify::error(format!("error getting mru buffers | err={err:?}")))
+        .inspect_err(|err| crate::notify::error(format!("error getting mru buffers | error={err:?}")))
     else {
         return None;
     };
@@ -96,12 +130,23 @@ pub fn get() -> Option<Vec<MruBuffer>> {
     parse_mru_buffers_output(&mru_buffers_output)
         .inspect_err(|err| {
             crate::notify::error(format!(
-                "error parsing mru buffers output | mru_buffers_output={mru_buffers_output:?} err={err:?}"
+                "error parsing mru buffers output | mru_buffers_output={mru_buffers_output:?} error={err:?}"
             ));
         })
         .ok()
 }
 
+/// Parses the output of Nvim's "ls t" command into a vector of [`MruBuffer`].
+///
+/// # Arguments
+/// - `mru_buffers_output` The raw output string from "ls t".
+///
+/// # Returns
+/// - `Ok(Vec<MruBuffer>)` containing the parsed buffers.
+/// - `Err` if any line fails to parse.
+///
+/// # Errors
+/// - Parsing any individual buffer line fails.
 fn parse_mru_buffers_output(mru_buffers_output: &str) -> color_eyre::Result<Vec<MruBuffer>> {
     if mru_buffers_output.is_empty() {
         return Ok(vec![]);

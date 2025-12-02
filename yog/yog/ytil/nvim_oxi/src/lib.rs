@@ -1,7 +1,4 @@
 //! Aggregated Nvim extension submodules.
-//!
-//! Re‑exports helper modules (`api`, `buffer`, `dict`, `extract`, `macros`, `visual_selection`) used
-//! throughout the plugin for structured Lua exposure.
 
 pub mod buffer;
 pub mod common;
