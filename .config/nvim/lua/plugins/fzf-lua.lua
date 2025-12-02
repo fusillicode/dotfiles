@@ -35,11 +35,11 @@ return {
       winopts    = {
         title       = '',
         title_flags = false,
-        width       = 0.7,
-        height      = 1,
-        row         = 0,
-        col         = 1,
         backdrop    = 100,
+        width       = 0.7,
+        height      = 0.99,
+        row         = 0,
+        col         = vim.o.columns,
         anchor      = 'NE',
       },
       previewers = {
