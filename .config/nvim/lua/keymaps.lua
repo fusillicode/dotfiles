@@ -16,7 +16,8 @@ function M.set_lua_defined()
   keymap_set({ 'n', 'v', }, '<leader>t', nvrim.plugins.truster.run_test)
   keymap_set('n', 'gx', require('opener').open_under_cursor)
 
-  keymap_set({ 'n', 'v', 'i', 't', }, '<c-e>', nvrim.layout.focus_term)
+  -- <c-s> clashes with fwd search in terminal but I've never used it much.
+  keymap_set({ 'n', 'v', 'i', 't', }, '<c-s>', nvrim.layout.focus_term)
   keymap_set({ 'n', 'v', 'i', 't', }, '<c-h>', nvrim.layout.focus_buffer)
   keymap_set({ 'n', 'v', }, 'ga', nvrim.layout.toggle_alternate_buffer)
   keymap_set({ 'n', 'v', }, '<leader>x', function() nvrim.layout.smart_close_buffer() end)
