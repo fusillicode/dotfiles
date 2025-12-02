@@ -13,6 +13,29 @@ offset = { x = 0, y = 7 }
 [colors]
 primary.background = "#002020"
 cursor = { text = "#000000", cursor = "#ffffff" }
+selection = { text = "CellForeground", background = "#505257" }
+normal.black = "#181818"
+normal.red = "#ec635c"
+normal.green = "#8ce479"
+normal.yellow = "#ffaa33"
+normal.blue = "#6a6adf"
+normal.magenta = "#ff00ff"
+normal.cyan = "#00ffff"
+normal.white = "#dcdcd7"
+bright.black = "#181818"
+bright.red = "#ec635c"
+bright.green = "#8ce479"
+bright.yellow = "#ffaa33"
+bright.blue = "#6a6adf"
+bright.magenta = "#ff00ff"
+bright.cyan = "#00ffff"
+bright.white = "#dcdcd7"
+
+[selection]
+save_to_clipboard = false
+
+[mouse]
+hide_when_typing = true
 
 [keyboard]
 bindings = [

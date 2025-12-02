@@ -14,7 +14,7 @@ use nvim_oxi::api::types::GetHlInfos;
 use nvim_oxi::api::types::HighlightInfos;
 
 const GLOBAL_BG: &str = "#002020";
-const GLOBAL_FG: &str = "#DCDCD7";
+const GLOBAL_FG: &str = "#dcdcd7";
 
 const CURSOR_BG: &str = "white";
 const CURSOR_FG: &str = "black";
