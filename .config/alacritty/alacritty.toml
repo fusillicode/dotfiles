@@ -1,0 +1,21 @@
+[window]
+startup_mode = "Maximized"
+option_as_alt = "Both"
+
+[scrolling]
+history = 99999
+
+[font]
+normal.family = "PT Mono"
+size = 17
+offset = { x = 0, y = 7 }
+
+[colors]
+primary.background = "#002020"
+cursor = { text = "#000000", cursor = "#ffffff" }
+
+[keyboard]
+bindings = [
+  { key = "Left", mods = "Alt", chars = "\u001BB" },
+  { key = "Right", mods = "Alt", chars = "\u001BF" },
+]
