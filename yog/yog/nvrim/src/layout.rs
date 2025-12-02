@@ -215,7 +215,7 @@ fn smart_close_buffer(force_close: Option<bool>) -> Option<()> {
 }
 
 #[derive(Debug)]
-#[cfg_attr(test, derive(PartialEq, Eq))]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 #[allow(dead_code)]
 struct MruBuffer {
     pub id: i32,
@@ -231,7 +231,7 @@ impl From<&MruBuffer> for Buffer {
 }
 
 #[derive(Debug)]
-#[cfg_attr(test, derive(PartialEq, Eq))]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 enum BufferKind {
     Term,
     GrugFar,
