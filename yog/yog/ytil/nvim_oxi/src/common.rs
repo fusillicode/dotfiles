@@ -3,6 +3,7 @@
 use core::fmt::Debug;
 
 use nvim_oxi::api::opts::CmdOpts;
+use nvim_oxi::api::opts::ExecOpts;
 use nvim_oxi::api::types::CmdInfosBuilder;
 use nvim_oxi::conversion::ToObject;
 
@@ -46,4 +47,20 @@ pub fn exec_vim_cmd(
             "error executing cmd | cmd={cmd:?} args={args:#?} error={err:#?}",
         ));
     })
+}
+
+// Option<Option> to be able to use ? and short circuit.
+#[allow(clippy::option_option)]
+pub fn exec_vim_script(src: &str, opts: Option<ExecOpts>) -> Option<Option<String>> {
+    let opts = opts.unwrap_or_default();
+    Some(
+        nvim_oxi::api::exec2(src, &opts)
+            .inspect_err(|err| {
+                crate::notify::error(format!(
+                    "error executing Vimscript | src={src:?} opts={opts:?} err={err:?}"
+                ));
+            })
+            .ok()?
+            .map(|s| s.to_string()),
+    )
 }

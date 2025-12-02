@@ -306,6 +306,34 @@ impl CursorPosition {
     }
 }
 
+pub fn create() -> Option<Buffer> {
+    nvim_oxi::api::create_buf(true, false)
+        .inspect_err(|err| crate::notify::error(format!("error creating buffer | err={err:?}")))
+        .ok()
+}
+
+pub fn get_alternate_or_new() -> Option<Buffer> {
+    let alt_buf_id = nvim_oxi::api::call_function::<_, i32>("bufnr", ("#",))
+        .inspect(|err| {
+            crate::notify::error(format!("error getting alternate buffer | err={err:?}"));
+        })
+        .ok()?;
+
+    if alt_buf_id < 0 {
+        return create();
+    }
+    Some(Buffer::from(alt_buf_id))
+}
+
+pub fn set_current(buf: &Buffer) -> Option<()> {
+    nvim_oxi::api::set_current_buf(buf)
+        .inspect_err(|err| {
+            crate::notify::error(format!("error setting current buffer | buffer={buf:?} err={err:?}"));
+        })
+        .ok()?;
+    Some(())
+}
+
 /// Opens a file in the editor and positions the cursor at the specified line and column.
 ///
 /// # Arguments
