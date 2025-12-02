@@ -223,7 +223,6 @@ fn convert_visual_to_byte_idx(s: &str, idx: usize) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
-    use pretty_assertions::assert_eq;
     #[cfg(not(feature = "ci"))]
     use tempfile::NamedTempFile;
     #[cfg(not(feature = "ci"))]
@@ -235,7 +234,7 @@ mod tests {
     fn get_word_at_index_returns_word_inside_ascii_word() {
         let s = "open file.txt now";
         let idx = 7;
-        assert_eq!(get_word_at_index(s, idx), Some("file.txt"));
+        pretty_assertions::assert_eq!(get_word_at_index(s, idx), Some("file.txt"));
     }
 
     #[test]
@@ -243,44 +242,44 @@ mod tests {
         let s = "yes run main.rs";
         let idx_start = 8;
         let idx_last_inside = 14;
-        assert_eq!(get_word_at_index(s, idx_start), Some("main.rs"));
-        assert_eq!(get_word_at_index(s, idx_last_inside), Some("main.rs"));
+        pretty_assertions::assert_eq!(get_word_at_index(s, idx_start), Some("main.rs"));
+        pretty_assertions::assert_eq!(get_word_at_index(s, idx_last_inside), Some("main.rs"));
     }
 
     #[test]
     fn get_word_at_index_returns_none_on_whitespace() {
         let s = "hello  world";
-        assert_eq!(get_word_at_index(s, 5), None);
-        assert_eq!(get_word_at_index(s, 6), None);
+        pretty_assertions::assert_eq!(get_word_at_index(s, 5), None);
+        pretty_assertions::assert_eq!(get_word_at_index(s, 6), None);
     }
 
     #[test]
     fn get_word_at_index_includes_punctuation_in_word() {
         let s = "print(arg)";
         let idx = 5;
-        assert_eq!(get_word_at_index(s, idx), Some("print(arg)"));
+        pretty_assertions::assert_eq!(get_word_at_index(s, idx), Some("print(arg)"));
     }
 
     #[test]
     fn get_word_at_index_returns_word_at_line_boundaries() {
         let s = "/usr/local/bin";
-        assert_eq!(get_word_at_index(s, 0), Some("/usr/local/bin"));
-        assert_eq!(get_word_at_index(s, 14), Some("/usr/local/bin"));
+        pretty_assertions::assert_eq!(get_word_at_index(s, 0), Some("/usr/local/bin"));
+        pretty_assertions::assert_eq!(get_word_at_index(s, 14), Some("/usr/local/bin"));
     }
 
     #[test]
     fn get_word_at_index_handles_utf8_boundaries_and_space() {
         let s = "αβ γ";
-        assert_eq!(get_word_at_index(s, 0), Some("αβ"));
-        assert_eq!(get_word_at_index(s, 1), Some("αβ"));
-        assert_eq!(get_word_at_index(s, 4), Some("γ"));
-        assert_eq!(get_word_at_index(s, 5), None);
+        pretty_assertions::assert_eq!(get_word_at_index(s, 0), Some("αβ"));
+        pretty_assertions::assert_eq!(get_word_at_index(s, 1), Some("αβ"));
+        pretty_assertions::assert_eq!(get_word_at_index(s, 4), Some("γ"));
+        pretty_assertions::assert_eq!(get_word_at_index(s, 5), None);
     }
 
     #[test]
     fn get_word_at_index_returns_none_with_index_out_of_bounds() {
         let s = "abc";
-        assert_eq!(get_word_at_index(s, 10), None);
+        pretty_assertions::assert_eq!(get_word_at_index(s, 10), None);
     }
 
     // Tests are skipped in CI because [`WordUnderCursor::from`] calls `file` command and that
@@ -291,7 +290,7 @@ mod tests {
     fn word_under_cursor_from_valid_url_returns_url() {
         let input = "https://example.com".to_string();
         let result = WordUnderCursor::from(input.clone());
-        assert_eq!(result, WordUnderCursor::Url(input));
+        pretty_assertions::assert_eq!(result, WordUnderCursor::Url(input));
     }
 
     #[test]
@@ -299,7 +298,7 @@ mod tests {
     fn word_under_cursor_from_invalid_url_plain_word_returns_word() {
         let input = "noturl".to_string();
         let result = WordUnderCursor::from(input.clone());
-        assert_eq!(result, WordUnderCursor::Word(input));
+        pretty_assertions::assert_eq!(result, WordUnderCursor::Word(input));
     }
 
     #[test]
@@ -309,7 +308,7 @@ mod tests {
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
         let result = WordUnderCursor::from(path.clone());
-        assert_eq!(result, WordUnderCursor::TextFile(TextFile { path, lnum: 0, col: 0 }));
+        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile(TextFile { path, lnum: 0, col: 0 }));
     }
 
     #[test]
@@ -319,7 +318,7 @@ mod tests {
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
         let result = WordUnderCursor::from(format!("{path}:10"));
-        assert_eq!(result, WordUnderCursor::TextFile(TextFile { path, lnum: 10, col: 0 }));
+        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile(TextFile { path, lnum: 10, col: 0 }));
     }
 
     #[test]
@@ -329,7 +328,7 @@ mod tests {
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
         let result = WordUnderCursor::from(format!("{path}:10:5"));
-        assert_eq!(result, WordUnderCursor::TextFile(TextFile { path, lnum: 10, col: 5 }));
+        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile(TextFile { path, lnum: 10, col: 5 }));
     }
 
     #[test]
@@ -338,7 +337,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().to_string_lossy().to_string();
         let result = WordUnderCursor::from(path.clone());
-        assert_eq!(result, WordUnderCursor::Directory(path));
+        pretty_assertions::assert_eq!(result, WordUnderCursor::Directory(path));
     }
 
     #[test]
@@ -349,7 +348,7 @@ mod tests {
         std::io::Write::write_all(&mut temp_file, &[0, 1, 2, 255]).unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
         let result = WordUnderCursor::from(path.clone());
-        assert_eq!(result, WordUnderCursor::BinaryFile(path));
+        pretty_assertions::assert_eq!(result, WordUnderCursor::BinaryFile(path));
     }
 
     #[test]
@@ -357,7 +356,7 @@ mod tests {
     fn word_under_cursor_from_nonexistent_path_returns_word() {
         let path = "/nonexistent/path".to_string();
         let result = WordUnderCursor::from(path.clone());
-        assert_eq!(result, WordUnderCursor::Word(path));
+        pretty_assertions::assert_eq!(result, WordUnderCursor::Word(path));
     }
 
     #[test]
@@ -367,7 +366,7 @@ mod tests {
         let path = temp_file.path().to_string_lossy().to_string();
         let input = format!("{path}:invalid");
         let result = WordUnderCursor::from(input.clone());
-        assert_eq!(result, WordUnderCursor::Word(input));
+        pretty_assertions::assert_eq!(result, WordUnderCursor::Word(input));
     }
 
     #[test]
@@ -377,7 +376,7 @@ mod tests {
         let path = temp_file.path().to_string_lossy().to_string();
         let input = format!("{path}:10:invalid");
         let result = WordUnderCursor::from(input.clone());
-        assert_eq!(result, WordUnderCursor::Word(input));
+        pretty_assertions::assert_eq!(result, WordUnderCursor::Word(input));
     }
 
     #[test]
@@ -387,6 +386,6 @@ mod tests {
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
         let result = WordUnderCursor::from(format!("{path}:10:5:extra"));
-        assert_eq!(result, WordUnderCursor::TextFile(TextFile { path, lnum: 10, col: 5 }));
+        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile(TextFile { path, lnum: 10, col: 5 }));
     }
 }

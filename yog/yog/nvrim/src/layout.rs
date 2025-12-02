@@ -215,6 +215,7 @@ fn smart_close_buffer(force_close: Option<bool>) -> Option<()> {
 }
 
 #[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 #[allow(dead_code)]
 struct MruBuffer {
     pub id: i32,
@@ -230,6 +231,7 @@ impl From<&MruBuffer> for Buffer {
 }
 
 #[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 enum BufferKind {
     Term,
     GrugFar,
@@ -416,3 +418,83 @@ fn create_buffer() -> Option<Buffer> {
 //         }
 //     };
 // }
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case(
+        "1u %a \"file.txt\"",
+        MruBuffer {
+            id: 1,
+            is_unlisted: true,
+            name: "ile.txt".to_string(),
+            kind: BufferKind::Path,
+        }
+    )]
+    #[case(
+        "2  %a \"another.txt\"",
+        MruBuffer {
+            id: 2,
+            is_unlisted: false,
+            name: "nother.txt".to_string(),
+            kind: BufferKind::Path,
+        }
+    )]
+    #[case(
+        "3  %a \"[No Name]\"",
+        MruBuffer {
+            id: 3,
+            is_unlisted: false,
+            name: "No Name]".to_string(),
+            kind: BufferKind::Path,
+        }
+    )]
+    #[case(
+        "4  %a \"term://bash\"",
+        MruBuffer {
+            id: 4,
+            is_unlisted: false,
+            name: "erm://bash".to_string(),
+            kind: BufferKind::Path,
+        }
+    )]
+    #[case(
+        "5  %a \"Grug FAR results\"",
+        MruBuffer {
+            id: 5,
+            is_unlisted: false,
+            name: "rug FAR results".to_string(),
+            kind: BufferKind::Path,
+        }
+    )]
+    #[case(
+        "  6  %a \"trimmed.txt\"  ",
+        MruBuffer {
+            id: 6,
+            is_unlisted: false,
+            name: "rimmed.txt".to_string(),
+            kind: BufferKind::Path,
+        }
+    )]
+    fn from_str_when_valid_input_returns_mru_buffer(#[case] input: &str, #[case] expected: MruBuffer) {
+        let result = MruBuffer::from_str(input);
+        assert2::let_assert!(Ok(mru_buffer) = result);
+        pretty_assertions::assert_eq!(mru_buffer, expected);
+    }
+
+    #[rstest]
+    #[case("", "error finding buffer id end")]
+    #[case(" %a \"file.txt\"", "error parsing buffer id")]
+    #[case("au %a \"file.txt\"", "error parsing buffer id")]
+    #[case("1u %a \"file.txt", "error extracting name")]
+    #[case("1u %a file.txt", "error extracting name")]
+    fn from_str_when_invalid_input_returns_error(#[case] input: &str, #[case] expected_err_substr: &str) {
+        let result = MruBuffer::from_str(input);
+        assert2::let_assert!(Err(err) = result);
+        assert!(err.to_string().contains(expected_err_substr));
+    }
+}
