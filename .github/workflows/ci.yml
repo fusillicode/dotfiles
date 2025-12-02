@@ -73,6 +73,7 @@ jobs:
           rustup component add llvm-tools-preview
 
       - name: Tests & Coverage (lcov + JUnit via nextest with path remap)
+        id: test_run
         shell: bash
         working-directory: yog
         env:
@@ -90,7 +91,7 @@ jobs:
             --output-path lcov.info
 
       - name: Upload coverage and junit to GitHub
-        if: always()
+        if: steps.test_run.outcome == 'success'
         uses: actions/upload-artifact@v5
         with:
           name: lcov-junit
@@ -100,7 +101,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
-        if: ${{ !cancelled() }}
+        if: steps.test_run.outcome == 'success'
         with:
           working-directory: yog
           files: ./lcov.info
@@ -111,7 +112,7 @@ jobs:
 
       - name: Upload test results to Codecov
         uses: codecov/test-results-action@v1
-        if: ${{ !cancelled() }}
+        if: steps.test_run.outcome == 'success'
         with:
           working-directory: yog
           files: ./target/coverage/nextest/ci/junit.xml
