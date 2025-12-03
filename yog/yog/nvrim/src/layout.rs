@@ -1,8 +1,8 @@
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
-use ytil_nvim_oxi::buffer::BufferExt;
-use ytil_nvim_oxi::mru_buffers::BufferKind;
-// use ytil_nvim_oxi::buffer::BufferExt;
+use ytil_noxi::buffer::BufferExt;
+use ytil_noxi::mru_buffers::BufferKind;
+// use ytil_noxi::buffer::BufferExt;
 // use ytil_editor::Editor;
 // use ytil_editor::FileToOpen;
 
@@ -24,20 +24,20 @@ fn focus_term(_: ()) -> Option<()> {
 
     // If current buffer IS terminal.
     if current_buffer.is_terminal() {
-        ytil_nvim_oxi::common::exec_vim_script("only", None)?;
+        ytil_noxi::common::exec_vim_script("only", None)?;
         return Some(());
     }
 
     // If current buffer IS NOT terminal.
     let mut visible_windows =
-        nvim_oxi::api::list_wins().map(|w| (ytil_nvim_oxi::window::get_buffer(&w).and_then(|b| b.get_buf_type()), w));
+        nvim_oxi::api::list_wins().map(|w| (ytil_noxi::window::get_buffer(&w).and_then(|b| b.get_buf_type()), w));
 
     let maybe_terminal_window = visible_windows.find(|(bt, _)| bt.as_ref().is_some_and(|b| b == "terminal"));
 
     // If there is a VISIBLE terminal buffer.
     if let Some((_, win)) = maybe_terminal_window {
-        ytil_nvim_oxi::window::set_current(&win)?;
-        ytil_nvim_oxi::common::exec_vim_script("startinsert", None)?;
+        ytil_noxi::window::set_current(&win)?;
+        ytil_noxi::common::exec_vim_script("startinsert", None)?;
         return Some(());
     }
 
@@ -45,15 +45,15 @@ fn focus_term(_: ()) -> Option<()> {
 
     // If there is NO VISIBLE terminal buffer.
     if let Some(terminal_buffer) = nvim_oxi::api::list_bufs().find(BufferExt::is_terminal) {
-        ytil_nvim_oxi::common::exec_vim_script(&format!("leftabove vsplit | vertical resize {width}"), None);
-        ytil_nvim_oxi::buffer::set_current(&terminal_buffer)?;
-        ytil_nvim_oxi::common::exec_vim_script("startinsert", None)?;
+        ytil_noxi::common::exec_vim_script(&format!("leftabove vsplit | vertical resize {width}"), None);
+        ytil_noxi::buffer::set_current(&terminal_buffer)?;
+        ytil_noxi::common::exec_vim_script("startinsert", None)?;
         return Some(());
     }
 
     // If there is NO terminal buffer at all.
-    ytil_nvim_oxi::common::exec_vim_script(&format!("leftabove vsplit | vertical resize {width} | term"), None);
-    ytil_nvim_oxi::common::exec_vim_script("startinsert", None)?;
+    ytil_noxi::common::exec_vim_script(&format!("leftabove vsplit | vertical resize {width} | term"), None);
+    ytil_noxi::common::exec_vim_script("startinsert", None)?;
 
     Some(())
 }
@@ -63,45 +63,45 @@ fn focus_buffer(_: ()) -> Option<()> {
 
     // If current buffer IS NOT terminal.
     if !current_buffer.is_terminal() {
-        ytil_nvim_oxi::common::exec_vim_script("only", None)?;
+        ytil_noxi::common::exec_vim_script("only", None)?;
         return Some(());
     }
 
     // If current buffer IS terminal.
     let mut visible_windows =
-        nvim_oxi::api::list_wins().map(|w| (ytil_nvim_oxi::window::get_buffer(&w).and_then(|b| b.get_buf_type()), w));
+        nvim_oxi::api::list_wins().map(|w| (ytil_noxi::window::get_buffer(&w).and_then(|b| b.get_buf_type()), w));
 
     let maybe_buffer_window = visible_windows.find(|(bt, _)| bt.as_ref().is_some_and(String::is_empty));
 
     // If there is a visible file buffer.
     if let Some((_, win)) = maybe_buffer_window {
-        ytil_nvim_oxi::window::set_current(&win)?;
+        ytil_noxi::window::set_current(&win)?;
         return Some(());
     }
 
     // If there is NO visible file buffer.
     let width = compute_width(FILE_BUF_WIDTH_PERC)?;
 
-    // Using ytil_nvim_oxi::common::exec2 because nvim_oxi::api::open_win fails with split left.
-    ytil_nvim_oxi::common::exec_vim_script(&format!("vsplit | vertical resize {width}"), None)?;
+    // Using ytil_noxi::common::exec2 because nvim_oxi::api::open_win fails with split left.
+    ytil_noxi::common::exec_vim_script(&format!("vsplit | vertical resize {width}"), None)?;
 
-    let buffer = if let Some(mru_buffer) = ytil_nvim_oxi::mru_buffers::get()?
+    let buffer = if let Some(mru_buffer) = ytil_noxi::mru_buffers::get()?
         .iter()
         .find(|b| matches!(b.kind, BufferKind::Path | BufferKind::NoName))
     {
         Buffer::from(mru_buffer)
     } else {
-        ytil_nvim_oxi::buffer::create()?
+        ytil_noxi::buffer::create()?
     };
 
-    ytil_nvim_oxi::buffer::set_current(&buffer)?;
+    ytil_noxi::buffer::set_current(&buffer)?;
 
     Some(())
 }
 
 fn toggle_alternate_buffer(_: ()) -> Option<()> {
     let alt_buf_id = nvim_oxi::api::call_function::<_, i32>("bufnr", ("#",))
-        .inspect_err(|err| ytil_nvim_oxi::notify::error(format!("error getting alternate buffer | error={err:?}")))
+        .inspect_err(|err| ytil_noxi::notify::error(format!("error getting alternate buffer | error={err:?}")))
         .ok()?;
 
     if alt_buf_id != -1
@@ -109,7 +109,7 @@ fn toggle_alternate_buffer(_: ()) -> Option<()> {
         && alt_buf.is_loaded()
         && !alt_buf.is_terminal()
     {
-        ytil_nvim_oxi::buffer::set_current(&alt_buf)?;
+        ytil_noxi::buffer::set_current(&alt_buf)?;
         return Some(());
     }
 
@@ -122,12 +122,12 @@ fn toggle_alternate_buffer(_: ()) -> Option<()> {
             && buf
                 .get_name()
                 .inspect_err(|err| {
-                    ytil_nvim_oxi::notify::error(format!("error getting buffer name | buffer={buf:?} error={err:?}"));
+                    ytil_noxi::notify::error(format!("error getting buffer name | buffer={buf:?} error={err:?}"));
                 })
                 .ok()
                 .is_some_and(|bn| !bn.is_empty())
         {
-            ytil_nvim_oxi::buffer::set_current(&buf)?;
+            ytil_noxi::buffer::set_current(&buf)?;
             return Some(());
         }
     }
@@ -136,7 +136,7 @@ fn toggle_alternate_buffer(_: ()) -> Option<()> {
 }
 
 fn smart_close_buffer(force_close: Option<bool>) -> Option<()> {
-    let mru_buffers = ytil_nvim_oxi::mru_buffers::get()?;
+    let mru_buffers = ytil_noxi::mru_buffers::get()?;
 
     let Some(current_buffer) = mru_buffers.first() else {
         return Some(());
@@ -157,14 +157,14 @@ fn smart_close_buffer(force_close: Option<bool>) -> Option<()> {
             {
                 Buffer::from(mru_buffer.id)
             } else {
-                ytil_nvim_oxi::buffer::create()?
+                ytil_noxi::buffer::create()?
             };
 
-            ytil_nvim_oxi::buffer::set_current(&new_current_buffer)?;
+            ytil_noxi::buffer::set_current(&new_current_buffer)?;
         }
     }
 
-    ytil_nvim_oxi::common::exec_vim_script(&format!("bd{force} {}", current_buffer.id), Option::default())?;
+    ytil_noxi::common::exec_vim_script(&format!("bd{force} {}", current_buffer.id), Option::default())?;
 
     Some(())
 }

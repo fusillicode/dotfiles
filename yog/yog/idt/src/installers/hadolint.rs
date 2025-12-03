@@ -23,7 +23,7 @@ impl Installer for Hadolint<'_> {
             },
         )?;
 
-        ytil_system::chmod_x(&target)?;
+        ytil_sys::chmod_x(&target)?;
 
         Ok(())
     }

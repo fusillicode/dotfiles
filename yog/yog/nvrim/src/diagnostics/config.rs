@@ -7,7 +7,7 @@ use nvim_oxi::Array;
 use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
 use strum::IntoEnumIterator;
-use ytil_nvim_oxi::dict::DictionaryExt;
+use ytil_noxi::dict::DictionaryExt;
 
 use crate::diagnostics::DiagnosticSeverity;
 use crate::diagnostics::formatter;

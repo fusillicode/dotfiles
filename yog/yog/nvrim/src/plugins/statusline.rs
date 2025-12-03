@@ -2,7 +2,7 @@
 //!
 //! Provides `statusline.dict()` with a `draw` function combining cwd, buffer name, cursor position and
 //! LSP diagnostic severities / counts into a formatted status line; failures yield [`None`] and are
-//! surfaced through [`ytil_nvim_oxi::notify::error`].
+//! surfaced through [`ytil_noxi::notify::error`].
 
 use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
@@ -12,7 +12,7 @@ use nvim_oxi::lua::ffi::State;
 use nvim_oxi::serde::Deserializer;
 use serde::Deserialize;
 use strum::IntoEnumIterator;
-use ytil_nvim_oxi::buffer::CursorPosition;
+use ytil_noxi::buffer::CursorPosition;
 
 use crate::diagnostics::DiagnosticSeverity;
 
@@ -31,14 +31,14 @@ pub fn dict() -> Dictionary {
 /// # Returns
 /// - `Some(String)`: formatted statusline when buffer name, cwd, and cursor position retrieval succeed.
 /// - `None`: if any prerequisite retrieval fails (buffer name, cwd, or cursor position). An error is logged via
-///   [`ytil_nvim_oxi::notify::error`].
+///   [`ytil_noxi::notify::error`].
 ///
 /// # Rationale
 /// Returning [`None`] lets callers distinguish between a valid (possibly empty diagnostics) statusline and a data
 /// acquisition failure.
 fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
     let current_buffer = nvim_oxi::api::get_current_buf();
-    let current_buffer_path = ytil_nvim_oxi::buffer::get_relative_path_to_cwd(&current_buffer)
+    let current_buffer_path = ytil_noxi::buffer::get_relative_path_to_cwd(&current_buffer)
         .map(|x| x.display().to_string())
         // This `unwrap_or_default` is to avoid "null" in the statusline when an empty buffer is
         // open.

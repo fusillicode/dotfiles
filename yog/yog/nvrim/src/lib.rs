@@ -7,7 +7,7 @@
 //! - a table of related functions / data (e.g. `diagnostics`, `statusline`, `cli`)
 //! - or a standalone function / value.
 
-use ytil_nvim_oxi::Dictionary;
+use ytil_noxi::Dictionary;
 
 #[macro_use]
 mod macros;
@@ -40,9 +40,9 @@ pub mod vim_opts;
 /// Returns a namespaced [`Dictionary`] whose values are grouped
 /// sub‑dictionaries (diagnostics, UI, CLI flags, keymaps, etc.) plus a
 /// few standalone helpers.
-#[ytil_nvim_oxi::plugin]
+#[ytil_noxi::plugin]
 fn nvrim() -> Dictionary {
-    ytil_nvim_oxi::dict! {
+    ytil_noxi::dict! {
         "buffer": buffer::dict(),
         "cli": cli::dict(),
         "cmds": cmds::dict(),

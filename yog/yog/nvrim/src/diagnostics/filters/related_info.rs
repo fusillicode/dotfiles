@@ -8,7 +8,7 @@ use nvim_oxi::Array;
 use nvim_oxi::Dictionary;
 use nvim_oxi::ObjectKind;
 use nvim_oxi::conversion::FromObject;
-use ytil_nvim_oxi::dict::DictionaryExt;
+use ytil_noxi::dict::DictionaryExt;
 
 use crate::diagnostics::filters::BufferWithPath;
 use crate::diagnostics::filters::DiagnosticsFilter;
@@ -49,7 +49,7 @@ impl RelatedInfoFilter {
             };
 
             let rel_infos = Array::from_object(rel_infos.clone()).with_context(|| {
-                ytil_nvim_oxi::extract::unexpected_kind_error_msg(rel_infos, rel_infos_key, &lsp, ObjectKind::Array)
+                ytil_noxi::extract::unexpected_kind_error_msg(rel_infos, rel_infos_key, &lsp, ObjectKind::Array)
             })?;
             for rel_info in rel_infos {
                 let rel_info = Dictionary::try_from(rel_info)?;

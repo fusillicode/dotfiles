@@ -13,8 +13,8 @@ categories = ["command-line-utilities", "development-tools"]
 [dependencies]
 color-eyre = { workspace = true }
 strum = { workspace = true }
-ytil_github = { workspace = true }
-ytil_system = { workspace = true }
+ytil_gh = { workspace = true }
+ytil_sys = { workspace = true }
 ytil_tui = { workspace = true }
 
 [dev-dependencies]

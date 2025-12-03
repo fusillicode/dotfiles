@@ -20,8 +20,8 @@ impl Installer for GraphQlLsp<'_> {
         )?;
 
         let target = target_dir.join(self.bin_name());
-        ytil_system::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;
-        ytil_system::chmod_x(target)?;
+        ytil_sys::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;
+        ytil_sys::chmod_x(target)?;
 
         Ok(())
     }

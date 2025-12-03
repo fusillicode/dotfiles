@@ -7,9 +7,9 @@
 use std::path::Path;
 
 use nvim_oxi::Dictionary;
-use ytil_github::RepoViewField;
-use ytil_nvim_oxi::visual_selection::Bound;
-use ytil_nvim_oxi::visual_selection::Selection;
+use ytil_gh::RepoViewField;
+use ytil_noxi::visual_selection::Bound;
+use ytil_noxi::visual_selection::Selection;
 
 /// [`Dictionary`] with GitHub link generation helpers.
 pub fn dict() -> Dictionary {
@@ -24,7 +24,7 @@ pub fn dict() -> Dictionary {
 /// - `link_type` The type of GitHub link to generate (e.g., "blob" for file view).
 #[allow(clippy::needless_pass_by_value)]
 fn get_link((link_type, open): (String, Option<bool>)) {
-    let Some(current_buffer_path) = ytil_nvim_oxi::buffer::get_relative_path_to_cwd(&nvim_oxi::api::get_current_buf())
+    let Some(current_buffer_path) = ytil_noxi::buffer::get_relative_path_to_cwd(&nvim_oxi::api::get_current_buf())
     else {
         return;
     };
@@ -32,17 +32,17 @@ fn get_link((link_type, open): (String, Option<bool>)) {
         return;
     }
 
-    let Some(selection) = ytil_nvim_oxi::visual_selection::get(()) else {
+    let Some(selection) = ytil_noxi::visual_selection::get(()) else {
         return;
     };
-    let Ok(mut repo_url) = ytil_github::get_repo_view_field(&RepoViewField::Url).inspect_err(|err| {
-        ytil_nvim_oxi::notify::error(format!("error getting GitHub repo URL | error={err:#?}"));
+    let Ok(mut repo_url) = ytil_gh::get_repo_view_field(&RepoViewField::Url).inspect_err(|err| {
+        ytil_noxi::notify::error(format!("error getting GitHub repo URL | error={err:#?}"));
     }) else {
         return;
     };
 
     let Ok(current_commit_hash) = ytil_git::get_current_commit_hash().inspect_err(|err| {
-        ytil_nvim_oxi::notify::error(format!("error getting current repo commit hash | error={err:#?}"));
+        ytil_noxi::notify::error(format!("error getting current repo commit hash | error={err:#?}"));
     }) else {
         return;
     };
@@ -56,12 +56,12 @@ fn get_link((link_type, open): (String, Option<bool>)) {
     );
 
     if open.is_some_and(std::convert::identity) {
-        if let Err(err) = ytil_system::open(&repo_url) {
-            ytil_nvim_oxi::notify::error(format!("error opening URL | url={repo_url:?} error={err:#?}"));
+        if let Err(err) = ytil_sys::open(&repo_url) {
+            ytil_noxi::notify::error(format!("error opening URL | url={repo_url:?} error={err:#?}"));
         }
     } else {
-        if let Err(err) = ytil_system::cp_to_system_clipboard(&mut repo_url.as_bytes()) {
-            ytil_nvim_oxi::notify::error(format!(
+        if let Err(err) = ytil_sys::cp_to_system_clipboard(&mut repo_url.as_bytes()) {
+            ytil_noxi::notify::error(format!(
                 "error copying content to system clipboard | content={repo_url:?} error={err:#?}"
             ));
         }
@@ -159,7 +159,7 @@ mod tests {
         let mut repo_url = initial_repo_url.to_string();
         let current_buffer_path = Path::new(file_path);
         let selection = {
-            use ytil_nvim_oxi::visual_selection::SelectionBounds;
+            use ytil_noxi::visual_selection::SelectionBounds;
 
             let bounds = SelectionBounds { buf_id: 1, start, end };
             Selection::new(bounds, std::iter::empty::<nvim_oxi::String>())

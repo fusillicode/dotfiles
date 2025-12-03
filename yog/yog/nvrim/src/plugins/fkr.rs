@@ -2,13 +2,13 @@
 //!
 //! Exposes a dictionary with an insertion command (`insert_string`) prompting the user to select an
 //! [`::fkr::FkrOption`] then inserting the generated string at the cursor. Input / buffer errors are
-//! reported via [`ytil_nvim_oxi::notify::error`].
+//! reported via [`ytil_noxi::notify::error`].
 
 use fkr::FkrOption;
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
 use strum::IntoEnumIterator;
-use ytil_nvim_oxi::buffer::BufferExt as _;
+use ytil_noxi::buffer::BufferExt as _;
 
 /// [`Dictionary`] of random string generation helpers powered by [`fkr`].
 ///
@@ -23,9 +23,9 @@ pub fn dict() -> Dictionary {
 
 /// Prompt the user to select a [`fkr::FkrOption`] and insert its generated string.
 ///
-/// The user is shown a selection menu via [`ytil_nvim_oxi::vim_ui_select::open`]; on
+/// The user is shown a selection menu via [`ytil_noxi::vim_ui_select::open`]; on
 /// selection the corresponding generated string is inserted at the cursor using
-/// [`ytil_nvim_oxi::buffer::BufferExt::set_text_at_cursor_pos`].
+/// [`ytil_noxi::buffer::BufferExt::set_text_at_cursor_pos`].
 ///
 /// Behaviour:
 /// - Returns early (no insertion) if fetching user input fails or is canceled.
@@ -43,7 +43,7 @@ fn insert_string(_: ()) {
         }
     };
 
-    if let Err(err) = ytil_nvim_oxi::vim_ui_select::open(opts, &[("prompt", "Select option: ")], callback, None) {
-        ytil_nvim_oxi::notify::error(format!("error generating fkr value | error={err:#?}"));
+    if let Err(err) = ytil_noxi::vim_ui_select::open(opts, &[("prompt", "Select option: ")], callback, None) {
+        ytil_noxi::notify::error(format!("error generating fkr value | error={err:#?}"));
     }
 }
