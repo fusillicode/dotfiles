@@ -100,6 +100,10 @@ return {
         code_actions = {
           previewer = false,
         },
+        symbols = {
+          locate       = true,
+          symbol_style = 3,
+        },
       }, nvrim.style_opts.fzf_lua()),
     })
     plugin.register_ui_select()
