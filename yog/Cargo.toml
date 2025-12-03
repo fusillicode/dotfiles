@@ -21,8 +21,8 @@ members = [
     # Utility libraries (ytil)
     "yog/ytil/cmd",
     "yog/ytil/editor",
-    "yog/ytil/git",
     "yog/ytil/gh",
+    "yog/ytil/git",
     "yog/ytil/hx",
     "yog/ytil/noxi",
     "yog/ytil/sys",
@@ -66,8 +66,8 @@ url = { version = "2.5", features = ["serde"] }
 
 ytil_cmd = { path = "./yog/ytil/cmd" }
 ytil_editor = { path = "./yog/ytil/editor" }
-ytil_git = { path = "./yog/ytil/git" }
 ytil_gh = { path = "./yog/ytil/gh" }
+ytil_git = { path = "./yog/ytil/git" }
 ytil_hx = { path = "./yog/ytil/hx" }
 ytil_noxi = { path = "./yog/ytil/noxi" }
 ytil_sys = { path = "./yog/ytil/sys" }
