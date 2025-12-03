@@ -30,7 +30,7 @@ pub fn dict() -> Dictionary {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Copy, Deserialize)]
 enum TargetTerminal {
     WezTerm,
     Nvim,
@@ -74,7 +74,7 @@ fn run_test(target_terminal: TargetTerminal) -> Option<()> {
             ytil_noxi::notify::error(format!(
                 "error getting test runner | path={} error={err:#?}",
                 file_path.display()
-            ))
+            ));
         })
         .ok()?;
 
