@@ -34,9 +34,6 @@ bright.white = "#dcdcd7"
 [selection]
 save_to_clipboard = false
 
-[mouse]
-hide_when_typing = true
-
 [keyboard]
 # Apparently `option_as_alt = "Both"` is not enough
 bindings = [
