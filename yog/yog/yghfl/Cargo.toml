@@ -14,8 +14,8 @@ categories = ["command-line-utilities", "development-tools"]
 color-eyre = { workspace = true }
 url = { workspace = true }
 ytil_editor = { workspace = true }
-ytil_git = { workspace = true }
 ytil_gh = { workspace = true }
+ytil_git = { workspace = true }
 ytil_hx = { workspace = true }
 ytil_sys = { workspace = true }
 ytil_wezterm = { workspace = true }

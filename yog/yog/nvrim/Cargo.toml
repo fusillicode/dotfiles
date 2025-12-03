@@ -33,8 +33,8 @@ tree-sitter = { version = "0.25" }
 tree-sitter-rust = { version = "0.24" }
 url = { version = "2.5" }
 ytil_cmd = { workspace = true }
-ytil_git = { workspace = true }
 ytil_gh = { workspace = true }
+ytil_git = { workspace = true }
 ytil_noxi = { workspace = true, features = ["mockall", "testing"] }
 ytil_sys = { workspace = true }
 ytil_wezterm = { workspace = true }
