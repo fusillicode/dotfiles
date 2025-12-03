@@ -38,15 +38,12 @@ pub fn dict() -> Dictionary {
 /// acquisition failure.
 fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
     let current_buffer = nvim_oxi::api::get_current_buf();
-    let current_buffer_path = ytil_noxi::buffer::get_relative_path_to_cwd(&current_buffer)
-        .map(|x| x.display().to_string())
-        // This `unwrap_or_default` is to avoid "null" in the statusline when an empty buffer is
-        // open.
-        .unwrap_or_default();
+    let current_buffer_path =
+        ytil_noxi::buffer::get_relative_path_to_cwd(&current_buffer).map(|x| x.display().to_string());
 
     let current_buffer_nr = current_buffer.handle();
     let mut statusline = Statusline {
-        current_buffer_path: &current_buffer_path,
+        current_buffer_path: current_buffer_path.as_deref(),
         current_buffer_diags: SeverityBuckets::default(),
         workspace_diags: SeverityBuckets::default(),
         cursor_position: CursorPosition::get_current()?,
@@ -148,8 +145,7 @@ impl FromIterator<(DiagnosticSeverity, u16)> for SeverityBuckets {
 #[derive(Debug)]
 struct Statusline<'a> {
     /// The current buffer path.
-    // TODO: maybe switch to Path
-    current_buffer_path: &'a str,
+    current_buffer_path: Option<&'a str>,
     /// Diagnostics for the current buffer.
     current_buffer_diags: SeverityBuckets,
     /// Diagnostics for the workspace.
@@ -170,39 +166,43 @@ impl Statusline<'_> {
     fn draw(&self) -> String {
         // Build current buffer diagnostics (with trailing space if any present) manually to avoid
         // iterator allocation and secondary pass (.any()).
-        let mut current_buffer_segment = String::with_capacity(self.current_buffer_diags.approx_render_len());
+        let mut current_buffer_diags_segment = String::with_capacity(self.current_buffer_diags.approx_render_len());
         let mut wrote_any = false;
         for (sev, count) in self.current_buffer_diags.iter() {
             if count == 0 {
                 continue;
             }
             if wrote_any {
-                current_buffer_segment.push(' ');
+                current_buffer_diags_segment.push(' ');
             }
-            current_buffer_segment.push_str(&draw_diagnostics((sev, count)));
+            current_buffer_diags_segment.push_str(&draw_diagnostics((sev, count)));
             wrote_any = true;
         }
         if wrote_any {
-            current_buffer_segment.push(' '); // maintain previous trailing space contract
+            current_buffer_diags_segment.push(' '); // maintain previous trailing space contract
         }
 
         // Workspace diagnostics (no trailing space).
-        let mut workspace_segment = String::with_capacity(self.workspace_diags.approx_render_len());
+        let mut workspace_diags_segment = String::with_capacity(self.workspace_diags.approx_render_len());
         let mut first = true;
         for (sev, count) in self.workspace_diags.iter() {
             if count == 0 {
                 continue;
             }
             if !first {
-                workspace_segment.push(' ');
+                workspace_diags_segment.push(' ');
             }
-            workspace_segment.push_str(&draw_diagnostics((sev, count)));
+            workspace_diags_segment.push_str(&draw_diagnostics((sev, count)));
             first = false;
         }
 
+        let current_buffer_path_segment = self
+            .current_buffer_path
+            .map(|buf_path| format!("{buf_path} "))
+            .unwrap_or_default();
+
         format!(
-            "{current_buffer_segment}%#StatusLine#{} %m %r%={workspace_segment}%#StatusLine# {}:{}",
-            self.current_buffer_path,
+            "{workspace_diags_segment}%#StatusLine# {current_buffer_path_segment}{}:{} {current_buffer_diags_segment}%#StatusLine#",
             self.cursor_position.row,
             self.cursor_position.adjusted_col()
         )
@@ -236,44 +236,43 @@ fn draw_diagnostics((severity, diags_count): (DiagnosticSeverity, u16)) -> Strin
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
     use super::*;
 
-    #[test]
-    fn statusline_draw_when_all_diagnostics_absent_or_zero_renders_plain_statusline() {
-        for statusline in [
-            Statusline {
-                current_buffer_path: "foo",
-                current_buffer_diags: SeverityBuckets::default(),
-                workspace_diags: SeverityBuckets::default(),
-                cursor_position: CursorPosition { row: 42, col: 7 },
-            },
-            Statusline {
-                current_buffer_path: "foo",
-                current_buffer_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
-                workspace_diags: SeverityBuckets::default(),
-                cursor_position: CursorPosition { row: 42, col: 7 },
-            },
-            Statusline {
-                current_buffer_path: "foo",
-                current_buffer_diags: SeverityBuckets::default(),
-                workspace_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
-                cursor_position: CursorPosition { row: 42, col: 7 },
-            },
-            Statusline {
-                current_buffer_path: "foo",
-                current_buffer_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
-                workspace_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
-                cursor_position: CursorPosition { row: 42, col: 7 },
-            },
-        ] {
-            pretty_assertions::assert_eq!(statusline.draw(), "%#StatusLine#foo %m %r%=%#StatusLine# 42:8");
-        }
+    #[rstest]
+    #[case::default_diags(Statusline {
+        current_buffer_path: Some("foo"),
+        current_buffer_diags: SeverityBuckets::default(),
+        workspace_diags: SeverityBuckets::default(),
+        cursor_position: CursorPosition { row: 42, col: 7 },
+    })]
+    #[case::buffer_zero(Statusline {
+        current_buffer_path: Some("foo"),
+        current_buffer_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
+        workspace_diags: SeverityBuckets::default(),
+        cursor_position: CursorPosition { row: 42, col: 7 },
+    })]
+    #[case::workspace_zero(Statusline {
+        current_buffer_path: Some("foo"),
+        current_buffer_diags: SeverityBuckets::default(),
+        workspace_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
+        cursor_position: CursorPosition { row: 42, col: 7 },
+    })]
+    #[case::both_zero(Statusline {
+        current_buffer_path: Some("foo"),
+        current_buffer_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
+        workspace_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
+        cursor_position: CursorPosition { row: 42, col: 7 },
+    })]
+    fn statusline_draw_when_all_diagnostics_absent_or_zero_renders_plain_statusline(#[case] statusline: Statusline) {
+        pretty_assertions::assert_eq!(statusline.draw(), "%#StatusLine# foo 42:8 %#StatusLine#");
     }
 
     #[test]
     fn statusline_draw_when_current_buffer_has_diagnostics_renders_buffer_prefix() {
         let statusline = Statusline {
-            current_buffer_path: "foo",
+            current_buffer_path: Some("foo"),
             current_buffer_diags: [(DiagnosticSeverity::Info, 1), (DiagnosticSeverity::Error, 3)]
                 .into_iter()
                 .collect(),
@@ -282,14 +281,14 @@ mod tests {
         };
         pretty_assertions::assert_eq!(
             statusline.draw(),
-            "%#DiagnosticStatusLineError#3 %#DiagnosticStatusLineInfo#1 %#StatusLine#foo %m %r%=%#StatusLine# 42:8",
+            "%#StatusLine# foo 42:8 %#DiagnosticStatusLineError#3 %#DiagnosticStatusLineInfo#1 %#StatusLine#",
         );
     }
 
     #[test]
     fn statusline_draw_when_workspace_has_diagnostics_renders_workspace_suffix() {
         let statusline = Statusline {
-            current_buffer_path: "foo",
+            current_buffer_path: Some("foo"),
             current_buffer_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
             workspace_diags: [(DiagnosticSeverity::Info, 1), (DiagnosticSeverity::Error, 3)]
                 .into_iter()
@@ -298,14 +297,14 @@ mod tests {
         };
         pretty_assertions::assert_eq!(
             statusline.draw(),
-            "%#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#3 %#DiagnosticStatusLineInfo#1%#StatusLine# 42:8",
+            "%#DiagnosticStatusLineError#3 %#DiagnosticStatusLineInfo#1%#StatusLine# foo 42:8 %#StatusLine#",
         );
     }
 
     #[test]
     fn statusline_draw_when_both_buffer_and_workspace_have_diagnostics_renders_both_prefix_and_suffix() {
         let statusline = Statusline {
-            current_buffer_path: "foo",
+            current_buffer_path: Some("foo"),
             current_buffer_diags: [(DiagnosticSeverity::Hint, 3), (DiagnosticSeverity::Warn, 2)]
                 .into_iter()
                 .collect(),
@@ -316,7 +315,7 @@ mod tests {
         };
         pretty_assertions::assert_eq!(
             statusline.draw(),
-            "%#DiagnosticStatusLineWarn#2 %#DiagnosticStatusLineHint#3 %#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#3 %#DiagnosticStatusLineInfo#1%#StatusLine# 42:8",
+            "%#DiagnosticStatusLineError#3 %#DiagnosticStatusLineInfo#1%#StatusLine# foo 42:8 %#DiagnosticStatusLineWarn#2 %#DiagnosticStatusLineHint#3 %#StatusLine#",
         );
     }
 
@@ -324,7 +323,7 @@ mod tests {
     fn statusline_draw_when_buffer_diagnostics_inserted_unordered_orders_by_severity() {
         // Insert in non-canonical order (Hint before Warn) and ensure output orders by severity (Warn then Hint).
         let statusline = Statusline {
-            current_buffer_path: "foo",
+            current_buffer_path: Some("foo"),
             current_buffer_diags: [(DiagnosticSeverity::Hint, 5), (DiagnosticSeverity::Warn, 1)]
                 .into_iter()
                 .collect(), // multi-element unchanged
@@ -333,26 +332,26 @@ mod tests {
         };
         pretty_assertions::assert_eq!(
             statusline.draw(),
-            "%#DiagnosticStatusLineWarn#1 %#DiagnosticStatusLineHint#5 %#StatusLine#foo %m %r%=%#StatusLine# 42:8",
+            "%#StatusLine# foo 42:8 %#DiagnosticStatusLineWarn#1 %#DiagnosticStatusLineHint#5 %#StatusLine#",
         );
     }
 
-    #[test]
-    fn draw_diagnostics_when_zero_count_returns_empty_string() {
+    #[rstest]
+    #[case::error(DiagnosticSeverity::Error)]
+    #[case::warn(DiagnosticSeverity::Warn)]
+    #[case::info(DiagnosticSeverity::Info)]
+    #[case::hint(DiagnosticSeverity::Hint)]
+    #[case::other(DiagnosticSeverity::Other)]
+    fn draw_diagnostics_when_zero_count_returns_empty_string(#[case] severity: DiagnosticSeverity) {
         // Any severity with zero count should yield empty string.
-        pretty_assertions::assert_eq!(draw_diagnostics((DiagnosticSeverity::Error, 0)), String::new());
-        pretty_assertions::assert_eq!(draw_diagnostics((DiagnosticSeverity::Warn, 0)), String::new());
-        pretty_assertions::assert_eq!(draw_diagnostics((DiagnosticSeverity::Info, 0)), String::new());
-        pretty_assertions::assert_eq!(draw_diagnostics((DiagnosticSeverity::Hint, 0)), String::new());
-        // NOTE: Other is not explicitly tested elsewhere here.
-        pretty_assertions::assert_eq!(draw_diagnostics((DiagnosticSeverity::Other, 0)), String::new());
+        pretty_assertions::assert_eq!(draw_diagnostics((severity, 0)), String::new());
     }
 
     #[test]
     fn statusline_draw_when_all_severity_counts_present_orders_buffer_and_workspace_diagnostics_by_severity() {
         // Insert diagnostics in deliberately scrambled order to validate deterministic ordering.
         let statusline = Statusline {
-            current_buffer_path: "foo",
+            current_buffer_path: Some("foo"),
             current_buffer_diags: [
                 (DiagnosticSeverity::Hint, 1),
                 (DiagnosticSeverity::Error, 4),
@@ -374,31 +373,22 @@ mod tests {
         // Affirm draw output matches severity ordering; equality macro takes (actual, expected).
         pretty_assertions::assert_eq!(
             statusline.draw(),
-            "%#DiagnosticStatusLineError#4 %#DiagnosticStatusLineWarn#3 %#DiagnosticStatusLineInfo#2 %#DiagnosticStatusLineHint#1 %#StatusLine#foo %m %r%=%#DiagnosticStatusLineError#8 %#DiagnosticStatusLineWarn#7 %#DiagnosticStatusLineInfo#6 %#DiagnosticStatusLineHint#5%#StatusLine# 42:8",
+            "%#DiagnosticStatusLineError#8 %#DiagnosticStatusLineWarn#7 %#DiagnosticStatusLineInfo#6 %#DiagnosticStatusLineHint#5%#StatusLine# foo 42:8 %#DiagnosticStatusLineError#4 %#DiagnosticStatusLineWarn#3 %#DiagnosticStatusLineInfo#2 %#DiagnosticStatusLineHint#1 %#StatusLine#",
         );
     }
 
-    #[test]
-    fn statusline_draw_when_cursor_column_zero_renders_one_based_column() {
+    #[rstest]
+    #[case::zero_column(0, "%#StatusLine# foo 10:1 %#StatusLine#")]
+    #[case::non_zero_column(5, "%#StatusLine# foo 10:6 %#StatusLine#")]
+    fn statusline_draw_when_cursor_column_renders_correctly(#[case] col: usize, #[case] expected: &str) {
         // Column zero (internal 0-based) must render as 1 (human-facing).
-        let statusline = Statusline {
-            current_buffer_path: "foo",
-            current_buffer_diags: SeverityBuckets::default(),
-            workspace_diags: SeverityBuckets::default(),
-            cursor_position: CursorPosition { row: 10, col: 0 },
-        };
-        pretty_assertions::assert_eq!(statusline.draw(), "%#StatusLine#foo %m %r%=%#StatusLine# 10:1");
-    }
-
-    #[test]
-    fn statusline_draw_when_cursor_column_non_zero_renders_column_plus_one() {
         // Non-zero column must render raw + 1.
         let statusline = Statusline {
-            current_buffer_path: "foo",
+            current_buffer_path: Some("foo"),
             current_buffer_diags: SeverityBuckets::default(),
             workspace_diags: SeverityBuckets::default(),
-            cursor_position: CursorPosition { row: 10, col: 5 },
+            cursor_position: CursorPosition { row: 10, col },
         };
-        pretty_assertions::assert_eq!(statusline.draw(), "%#StatusLine#foo %m %r%=%#StatusLine# 10:6");
+        pretty_assertions::assert_eq!(statusline.draw(), expected);
     }
 }
