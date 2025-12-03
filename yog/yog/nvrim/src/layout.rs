@@ -1,7 +1,9 @@
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
+use nvim_oxi::api::opts::CreateAutocmdOpts;
 use ytil_noxi::buffer::BufferExt;
 use ytil_noxi::mru_buffers::BufferKind;
+
 // use ytil_noxi::buffer::BufferExt;
 // use ytil_editor::Editor;
 // use ytil_editor::FileToOpen;
@@ -17,6 +19,16 @@ pub fn dict() -> Dictionary {
         "smart_close_buffer": fn_from!(smart_close_buffer),
         "toggle_alternate_buffer": fn_from!(toggle_alternate_buffer),
     }
+}
+
+pub fn create_autocmd() {
+    crate::cmds::create_autocmd(
+        ["BufEnter", "WinEnter", "TermOpen"],
+        "TerminalAutoInsertMode",
+        CreateAutocmdOpts::builder()
+            .patterns(["term://*"])
+            .command("startinsert"),
+    );
 }
 
 fn focus_term(_: ()) -> Option<()> {
@@ -37,7 +49,6 @@ fn focus_term(_: ()) -> Option<()> {
     // If there is a VISIBLE terminal buffer.
     if let Some((_, win)) = maybe_terminal_window {
         ytil_noxi::window::set_current(&win)?;
-        ytil_noxi::common::exec_vim_script("startinsert", None)?;
         return Some(());
     }
 
@@ -47,13 +58,11 @@ fn focus_term(_: ()) -> Option<()> {
     if let Some(terminal_buffer) = nvim_oxi::api::list_bufs().find(BufferExt::is_terminal) {
         ytil_noxi::common::exec_vim_script(&format!("leftabove vsplit | vertical resize {width}"), None);
         ytil_noxi::buffer::set_current(&terminal_buffer)?;
-        ytil_noxi::common::exec_vim_script("startinsert", None)?;
         return Some(());
     }
 
     // If there is NO terminal buffer at all.
     ytil_noxi::common::exec_vim_script(&format!("leftabove vsplit | vertical resize {width} | term"), None);
-    ytil_noxi::common::exec_vim_script("startinsert", None)?;
 
     Some(())
 }
