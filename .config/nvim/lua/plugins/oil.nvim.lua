@@ -15,10 +15,14 @@ return {
       delete_to_trash = true,
       float = {
         border = style_opts['window']['border'],
-        max_width = 0.99,
+        max_width = 0.68,
         max_height = 0.99,
         override = function(conf)
-          return vim.tbl_extend('error', conf, { anchor = 'SW', })
+          return vim.tbl_extend('force', conf, {
+            row    = 0,
+            col    = vim.o.columns,
+            anchor = 'NE',
+          })
         end,
       },
       confirmation = { border = style_opts['window']['border'], },

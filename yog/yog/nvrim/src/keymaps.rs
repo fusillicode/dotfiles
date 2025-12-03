@@ -39,6 +39,14 @@ pub fn set(modes: &[Mode], lhs: &str, rhs: &str, opts: &SetKeymapOpts) {
     }
 }
 
+/// Build the default [`SetKeymapOpts`]: silent + non-recursive.
+///
+/// Unlike Lua's `vim.keymap.set`, the default for [`SetKeymapOpts`] does *not*
+/// enable `noremap` so we do it explicitly.
+pub fn default_opts() -> SetKeymapOpts {
+    SetKeymapOptsBuilder::default().silent(true).noremap(true).build()
+}
+
 /// Sets the core (non‑plugin) keymaps ported from the Lua `M.setup` function.
 ///
 /// All mappings are set with the default non-recursive, silent options returned
@@ -152,12 +160,4 @@ fn apply_on_current_line_or_unwrap<'a, F: FnOnce(String) -> &'a str>(fun: F, def
         .map(fun)
         .unwrap_or(default)
         .to_string()
-}
-
-/// Build the default [`SetKeymapOpts`]: silent + non-recursive.
-///
-/// Unlike Lua's `vim.keymap.set`, the default for [`SetKeymapOpts`] does *not*
-/// enable `noremap` so we do it explicitly.
-fn default_opts() -> SetKeymapOpts {
-    SetKeymapOptsBuilder::default().silent(true).noremap(true).build()
 }

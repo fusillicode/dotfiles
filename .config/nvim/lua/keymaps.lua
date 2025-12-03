@@ -11,38 +11,21 @@ function M.set_lua_defined()
 
   keymap_set('n', 'i', nvrim.keymaps.smart_ident_on_blank_line, base_opts)
   keymap_set('n', 'dd', nvrim.keymaps.smart_dd_no_yank_empty_line, base_opts)
+  -- TODO: is this really needed?
   keymap_set('v', '<esc>', nvrim.keymaps.visual_esc, base_opts)
   keymap_set({ 'n', 'v', }, '<leader>t', nvrim.plugins.truster.run_test)
   keymap_set('n', 'gx', require('opener').open_under_cursor)
 
-  -- Thanks perplexity 🥲
-  keymap_set({ 'n', 'v', }, 'ga', function()
-    local alt_buf = vim.fn.bufnr('#')
-    -- If alternate buffer valid, loaded, and listed, switch to it
-    if alt_buf ~= -1 and vim.api.nvim_buf_is_loaded(alt_buf) and vim.fn.buflisted(alt_buf) == 1 then
-      vim.api.nvim_set_current_buf(alt_buf)
-      return
-    end
-
-    -- Otherwise, get list of loaded & listed buffers
-    local bufs = vim.fn.getbufinfo({ bufloaded = true, listed = true, })
-    local current_buf = vim.api.nvim_get_current_buf()
-    if #bufs == 0 then return end
-    -- Find the last buffer in the list that's not the current one
-    for i = #bufs, 1, -1 do
-      local bufnr = bufs[i].bufnr
-      local buftype = vim.api.nvim_buf_get_option(bufnr, 'buftype')
-      local bufname = vim.api.nvim_buf_get_name(bufnr)
-      if bufnr ~= current_buf and buftype == '' and bufname ~= '' then
-        vim.api.nvim_set_current_buf(bufnr)
-        return
-      end
-    end
-  end)
+  -- <c-s> clashes with fwd search in terminal but I've never used it much.
+  keymap_set({ 'n', 'v', 'i', 't', }, '<c-s>', nvrim.layout.focus_term)
+  keymap_set({ 'n', 'v', 'i', 't', }, '<c-h>', nvrim.layout.focus_buffer)
+  keymap_set({ 'n', 'v', }, 'ga', nvrim.layout.toggle_alternate_buffer)
+  keymap_set({ 'n', 'v', }, '<leader>x', function() nvrim.layout.smart_close_buffer() end)
+  keymap_set({ 'n', 'v', }, '<leader>X', function() nvrim.layout.smart_close_buffer(true) end)
 
   local min_diag_level = vim.diagnostic.severity.ERROR
-  keymap_set('n', 'dn', function() vim.diagnostic.jump({ count = 1, severity = min_diag_level }) end)
-  keymap_set('n', 'dp', function() vim.diagnostic.jump({ count = -1, severity = min_diag_level }) end)
+  keymap_set('n', 'dn', function() vim.diagnostic.jump({ count = 1, severity = min_diag_level, }) end)
+  keymap_set('n', 'dp', function() vim.diagnostic.jump({ count = -1, severity = min_diag_level, }) end)
   keymap_set('n', '<leader>e', vim.diagnostic.open_float)
 end
 
@@ -145,13 +128,12 @@ function M.gitsigns(plugin)
         { expr = true, },
       },
     },
-    { '<leader>hd', mode = 'n',           plugin and { plugin.preview_hunk, }, },
-    { '<leader>hs', mode = 'n',           plugin and { plugin.stage_hunk, }, },
-    { '<leader>hr', mode = 'n',           plugin and { plugin.reset_hunk, }, },
-    { '<leader>hs', mode = 'v',           plugin and { function() plugin.stage_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end, }, },
-    { '<leader>hr', mode = 'v',           plugin and { function() plugin.reset_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end, }, },
-    { '<leader>hu', mode = 'n',           plugin and { plugin.undo_stage_hunk, }, },
-    { '<c-b>',      mode = { 'n', 'v', }, plugin and { function() plugin.blame_line({ full = true, }) end, }, },
+    { '<leader>hd', mode = 'n', plugin and { plugin.preview_hunk, }, },
+    { '<leader>hs', mode = 'n', plugin and { plugin.stage_hunk, }, },
+    { '<leader>hr', mode = 'n', plugin and { plugin.reset_hunk, }, },
+    { '<leader>hs', mode = 'v', plugin and { function() plugin.stage_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end, }, },
+    { '<leader>hr', mode = 'v', plugin and { function() plugin.reset_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end, }, },
+    { '<leader>hu', mode = 'n', plugin and { plugin.undo_stage_hunk, }, },
   }
 end
 
