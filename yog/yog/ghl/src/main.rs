@@ -10,11 +10,11 @@
 //! - If `issue` is present:
 //!   - Prompt for issue title via [`ytil_tui::text_prompt`].
 //!   - Prompt for whether to checkout the branch via [`ytil_tui::yes_no_select`].
-//!   - Create issue via [`ytil_github::issue::create`].
-//!   - Develop the issue via [`ytil_github::issue::develop`] (creates branch and optionally checks it out).
+//!   - Create issue via [`ytil_gh::issue::create`].
+//!   - Develop the issue via [`ytil_gh::issue::develop`] (creates branch and optionally checks it out).
 //! - Otherwise:
-//!   - Detect current repository via [`ytil_github::get_repo_view_field`].
-//!   - Fetch PR list via [`ytil_github::pr::get`] (GitHub CLI `gh pr list`) forwarding the search filter.
+//!   - Detect current repository via [`ytil_gh::get_repo_view_field`].
+//!   - Fetch PR list via [`ytil_gh::pr::get`] (GitHub CLI `gh pr list`) forwarding the search filter.
 //!   - Apply optional in‑process merge state filter.
 //!   - Present multi‑select TUI via [`ytil_tui::minimal_multi_select`].
 //!   - Execute chosen high‑level operation over selected PRs, reporting per‑PR result.
@@ -39,14 +39,14 @@
 //!
 //! # Errors
 //! - Flag parsing fails (unknown flag, missing value, invalid [`PullRequestMergeState`]).
-//! - GitHub CLI invocation fails (listing PRs via [`ytil_github::pr::get`], approving via [`ytil_github::pr::approve`],
-//!   merging via [`ytil_github::pr::merge`], commenting via [`ytil_github::pr::dependabot_rebase`], creating issue via
-//!   [`ytil_github::issue::create`]).
+//! - GitHub CLI invocation fails (listing PRs via [`ytil_gh::pr::get`], approving via [`ytil_gh::pr::approve`], merging
+//!   via [`ytil_gh::pr::merge`], commenting via [`ytil_gh::pr::dependabot_rebase`], creating issue via
+//!   [`ytil_gh::issue::create`]).
 //! - TUI interaction fails (selection UI errors via [`ytil_tui::minimal_multi_select`] and
 //!   [`ytil_tui::minimal_select`], issue title prompt via [`ytil_tui::text_prompt`], branch checkout prompt via
 //!   [`ytil_tui::yes_no_select`]).
-//! - GitHub CLI invocation fails (issue and branch creation via [`ytil_github::issue::create`] and
-//!   [`ytil_github::issue::develop`]).
+//! - GitHub CLI invocation fails (issue and branch creation via [`ytil_gh::issue::create`] and
+//!   [`ytil_gh::issue::develop`]).
 //!
 //! # Future Work
 //! - Add dry‑run mode printing planned operations without executing.
@@ -65,12 +65,12 @@ use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 use color_eyre::owo_colors::OwoColorize;
 use strum::EnumIter;
-use ytil_github::RepoViewField;
-use ytil_github::pr::IntoEnumIterator;
-use ytil_github::pr::PullRequest;
-use ytil_github::pr::PullRequestMergeState;
-use ytil_system::CliArgs as _;
-use ytil_system::pico_args::Arguments;
+use ytil_gh::RepoViewField;
+use ytil_gh::pr::IntoEnumIterator;
+use ytil_gh::pr::PullRequest;
+use ytil_gh::pr::PullRequestMergeState;
+use ytil_sys::CliArgs as _;
+use ytil_sys::pico_args::Arguments;
 
 /// Newtype wrapper implementing colored [`Display`] for a [`PullRequest`].
 ///
@@ -150,18 +150,18 @@ impl SelectableOp {
     pub fn run(&self) -> Box<dyn Fn(&PullRequest)> {
         match self {
             Self::Approve => Box::new(|pr| {
-                let _ = Op::Approve.report(pr, ytil_github::pr::approve(pr.number));
+                let _ = Op::Approve.report(pr, ytil_gh::pr::approve(pr.number));
             }),
             Self::ApproveAndMerge => Box::new(|pr| {
                 let _ = Op::Approve
-                    .report(pr, ytil_github::pr::approve(pr.number))
-                    .and_then(|()| Op::Merge.report(pr, ytil_github::pr::merge(pr.number)));
+                    .report(pr, ytil_gh::pr::approve(pr.number))
+                    .and_then(|()| Op::Merge.report(pr, ytil_gh::pr::merge(pr.number)));
             }),
             Self::DependabotRebase => Box::new(|pr| {
-                let _ = Op::DependabotRebase.report(pr, ytil_github::pr::dependabot_rebase(pr.number));
+                let _ = Op::DependabotRebase.report(pr, ytil_gh::pr::dependabot_rebase(pr.number));
             }),
             Self::EnableAutoMerge => Box::new(|pr| {
-                let _ = Op::EnableAutoMerge.report(pr, ytil_github::pr::enable_auto_merge(pr.number));
+                let _ = Op::EnableAutoMerge.report(pr, ytil_gh::pr::enable_auto_merge(pr.number));
             }),
         }
     }
@@ -175,11 +175,11 @@ impl SelectableOp {
 /// (`report`, `report_ok`, `report_error`) uniform and extensible.
 ///
 /// # Variants
-/// - `Approve` Submit an approving review via [`ytil_github::pr::approve`] (`gh pr review --approve`).
-/// - `Merge` Perform the administrative squash merge via [`ytil_github::pr::merge`] (`gh pr merge --admin --squash`).
-/// - `DependabotRebase` Post the `@dependabot rebase` comment via [`ytil_github::pr::dependabot_rebase`] to request an
+/// - `Approve` Submit an approving review via [`ytil_gh::pr::approve`] (`gh pr review --approve`).
+/// - `Merge` Perform the administrative squash merge via [`ytil_gh::pr::merge`] (`gh pr merge --admin --squash`).
+/// - `DependabotRebase` Post the `@dependabot rebase` comment via [`ytil_gh::pr::dependabot_rebase`] to request an
 ///   updated rebase for a Dependabot PR.
-/// - `EnableAutoMerge` Schedule automatic merge via [`ytil_github::pr::enable_auto_merge`] (rebase) once requirements
+/// - `EnableAutoMerge` Schedule automatic merge via [`ytil_gh::pr::enable_auto_merge`] (rebase) once requirements
 ///   satisfied.
 enum Op {
     Approve,
@@ -278,14 +278,14 @@ fn format_pr(pr: &PullRequest) -> String {
 ///
 /// # Errors
 /// - Flag parsing fails (unknown flag, missing value, invalid [`PullRequestMergeState`]).
-/// - GitHub CLI invocation fails (listing PRs via [`ytil_github::pr::get`], approving via [`ytil_github::pr::approve`],
-///   merging via [`ytil_github::pr::merge`], commenting via [`ytil_github::pr::dependabot_rebase`], creating issue via
-///   [`ytil_github::issue::create`]).
+/// - GitHub CLI invocation fails (listing PRs via [`ytil_gh::pr::get`], approving via [`ytil_gh::pr::approve`], merging
+///   via [`ytil_gh::pr::merge`], commenting via [`ytil_gh::pr::dependabot_rebase`], creating issue via
+///   [`ytil_gh::issue::create`]).
 /// - TUI interaction fails (selection UI errors via [`ytil_tui::minimal_multi_select`] and
 ///   [`ytil_tui::minimal_select`], issue title prompt via [`ytil_tui::text_prompt`], branch checkout prompt via
 ///   [`ytil_tui::yes_no_select`]).
-/// - GitHub CLI invocation fails (issue and branch creation via [`ytil_github::issue::create`] and
-///   [`ytil_github::issue::develop`]).
+/// - GitHub CLI invocation fails (issue and branch creation via [`ytil_gh::issue::create`] and
+///   [`ytil_gh::issue::develop`]).
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
@@ -295,7 +295,7 @@ fn main() -> color_eyre::Result<()> {
         return Ok(());
     }
 
-    ytil_github::log_into_github()?;
+    ytil_gh::log_into_github()?;
 
     if pargs.contains("issue") {
         create_issue_and_branch_from_default_branch()?;
@@ -307,7 +307,7 @@ fn main() -> color_eyre::Result<()> {
         return Ok(());
     }
 
-    let repo_name_with_owner = ytil_github::get_repo_view_field(&RepoViewField::NameWithOwner)?;
+    let repo_name_with_owner = ytil_gh::get_repo_view_field(&RepoViewField::NameWithOwner)?;
 
     let search_filter: Option<String> = pargs.opt_value_from_str("--search")?;
     let merge_state = pargs
@@ -330,7 +330,7 @@ fn main() -> color_eyre::Result<()> {
     );
     println!("\n{}\n{}\n", "Search PRs by".cyan().bold(), params.white().bold());
 
-    let pull_requests = ytil_github::pr::get(&repo_name_with_owner, search_filter.as_deref(), &|pr: &PullRequest| {
+    let pull_requests = ytil_gh::pr::get(&repo_name_with_owner, search_filter.as_deref(), &|pr: &PullRequest| {
         if let Some(merge_state) = merge_state {
             return pr.merge_state == merge_state;
         }
@@ -375,8 +375,8 @@ fn main() -> color_eyre::Result<()> {
 /// # Errors
 /// - If [`ytil_tui::text_prompt`] fails when prompting for issue title.
 /// - If [`ytil_tui::yes_no_select`] fails when prompting for branch checkout preference.
-/// - If [`ytil_github::issue::create`] fails when creating the GitHub issue.
-/// - If [`ytil_github::issue::develop`] fails when creating the associated branch.
+/// - If [`ytil_gh::issue::create`] fails when creating the GitHub issue.
+/// - If [`ytil_gh::issue::develop`] fails when creating the associated branch.
 ///
 /// # Rationale
 /// Separates issue creation flow from PR listing flow, allowing users to quickly
@@ -390,14 +390,14 @@ fn create_issue_and_branch_from_default_branch() -> Result<(), color_eyre::eyre:
         return Ok(());
     };
 
-    let created_issue = ytil_github::issue::create(&issue_title)?;
+    let created_issue = ytil_gh::issue::create(&issue_title)?;
     println!(
         "\n{} number={} title={issue_title:?}",
         "Issue created".green().bold(),
         created_issue.issue_nr
     );
 
-    let develop_output = ytil_github::issue::develop(&created_issue.issue_nr, checkout_branch)?;
+    let develop_output = ytil_gh::issue::develop(&created_issue.issue_nr, checkout_branch)?;
     println!(
         "{} with name={:?}",
         "Branch created".green().bold(),
@@ -415,14 +415,14 @@ fn create_issue_and_branch_from_default_branch() -> Result<(), color_eyre::eyre:
 /// # Errors
 /// - If [`ytil_tui::git_branch::select`] fails.
 /// - If [`pr_title_from_branch_name`] fails.
-/// - If [`ytil_github::pr::create`] fails.
+/// - If [`ytil_gh::pr::create`] fails.
 fn create_pr() -> Result<(), color_eyre::eyre::Error> {
     let Some(branch) = ytil_tui::git_branch::select()? else {
         return Ok(());
     };
 
     let title = pr_title_from_branch_name(branch.name_no_origin())?;
-    let pr_url = ytil_github::pr::create(&title)?;
+    let pr_url = ytil_gh::pr::create(&title)?;
     println!("{} title={title:?} pr_url={pr_url:?}", "PR created".green().bold());
 
     Ok(())

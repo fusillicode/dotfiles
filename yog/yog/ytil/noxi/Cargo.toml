@@ -1,5 +1,5 @@
 [package]
-name = "ytil_nvim_oxi"
+name = "ytil_noxi"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

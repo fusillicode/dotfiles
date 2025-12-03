@@ -14,7 +14,7 @@ impl Installer for TyposLsp<'_> {
 
     fn install(&self) -> color_eyre::Result<()> {
         let repo = "tekumara/typos-vscode";
-        let latest_release = ytil_github::get_latest_release(repo)?;
+        let latest_release = ytil_gh::get_latest_release(repo)?;
 
         let target = crate::downloaders::curl::run(
             &format!(
@@ -27,7 +27,7 @@ impl Installer for TyposLsp<'_> {
             },
         )?;
 
-        ytil_system::chmod_x(target)?;
+        ytil_sys::chmod_x(target)?;
 
         Ok(())
     }

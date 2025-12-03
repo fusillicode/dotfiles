@@ -2,7 +2,7 @@
 //!
 //! Supplies `statuscolumn.dict()` exposing `draw`, rendering line numbers / extmarks while honoring
 //! special buffer types (e.g. minimal output for transient search buffers). Errors are notified via
-//! [`ytil_nvim_oxi::notify::error`].
+//! [`ytil_noxi::notify::error`].
 
 use core::fmt::Display;
 
@@ -14,7 +14,7 @@ use nvim_oxi::lua::Poppable;
 use nvim_oxi::lua::ffi::State;
 use nvim_oxi::serde::Deserializer;
 use serde::Deserialize;
-use ytil_nvim_oxi::buffer::BufferExt;
+use ytil_noxi::buffer::BufferExt;
 
 use crate::diagnostics::DiagnosticSeverity;
 
@@ -38,7 +38,7 @@ pub fn dict() -> Dictionary {
 ///
 /// # Returns
 /// - `Some(String)`: formatted status column when the current buffer `buftype` is successfully retrieved.
-/// - `None`: if `buftype` retrieval fails (details logged via [`ytil_nvim_oxi::notify::error`]).
+/// - `None`: if `buftype` retrieval fails (details logged via [`ytil_noxi::notify::error`]).
 ///
 /// Special cases:
 /// - When `buftype == "grug-far"` returns a single space string to minimize visual noise in transient search buffers.

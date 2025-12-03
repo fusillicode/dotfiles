@@ -34,7 +34,7 @@ fn create_scratch_file(_: ()) {
         .filter_map(|entry| {
             Scratch::from(entry)?
                 .inspect_err(|err| {
-                    ytil_nvim_oxi::notify::error(format!("error building Scratch struct | error={err:#?}"));
+                    ytil_noxi::notify::error(format!("error building Scratch struct | error={err:#?}"));
                 })
                 .ok()
         })
@@ -43,7 +43,7 @@ fn create_scratch_file(_: ()) {
     let dest_dir = Path::new("/tmp").join("attempt.rs");
 
     if let Err(err) = std::fs::create_dir_all(&dest_dir) {
-        ytil_nvim_oxi::notify::error(format!(
+        ytil_noxi::notify::error(format!(
             "cannot create dest dir | dest_dir={} error={err:#?}",
             dest_dir.display()
         ));
@@ -58,24 +58,24 @@ fn create_scratch_file(_: ()) {
             };
             let dest = scratch.dest_file_path(&dest_dir, Local::now());
             if let Err(err) = std::fs::copy(&scratch.path, &dest) {
-                ytil_nvim_oxi::notify::error(format!(
+                ytil_noxi::notify::error(format!(
                     "cannot copy file | from={} to={} error={err:#?}",
                     scratch.path.display(),
                     dest.display()
                 ));
                 return;
             }
-            let _ = ytil_nvim_oxi::buffer::open(&dest, None, None);
+            let _ = ytil_noxi::buffer::open(&dest, None, None);
         }
     };
 
-    if let Err(err) = ytil_nvim_oxi::vim_ui_select::open(
+    if let Err(err) = ytil_noxi::vim_ui_select::open(
         scratches.iter().map(|scratch| scratch.display_name.as_str()),
         &[("prompt", "Create scratch file ")],
         callback,
         None,
     ) {
-        ytil_nvim_oxi::notify::error(format!("error creating scratch file | error={err:#?}"));
+        ytil_noxi::notify::error(format!("error creating scratch file | error={err:#?}"));
     }
 }
 
@@ -87,14 +87,14 @@ fn create_scratch_file(_: ()) {
 /// # Errors
 /// Returns an error if the workspace root cannot be determined or the directory cannot be read.
 fn get_scratches_dir_content() -> color_eyre::Result<ReadDir> {
-    ytil_system::get_workspace_root()
-        .map(|workspace_root| ytil_system::build_path(workspace_root, SCRATCHES_PATH_PARTS))
+    ytil_sys::get_workspace_root()
+        .map(|workspace_root| ytil_sys::build_path(workspace_root, SCRATCHES_PATH_PARTS))
         .inspect_err(|err| {
-            ytil_nvim_oxi::notify::error(format!("error getting workspace root | error={err:#?}"));
+            ytil_noxi::notify::error(format!("error getting workspace root | error={err:#?}"));
         })
         .and_then(|dir| std::fs::read_dir(dir).map_err(From::from))
         .inspect_err(|err| {
-            ytil_nvim_oxi::notify::error(format!("error reading attempt files dir | error={err:#?}"));
+            ytil_noxi::notify::error(format!("error reading attempt files dir | error={err:#?}"));
         })
 }
 

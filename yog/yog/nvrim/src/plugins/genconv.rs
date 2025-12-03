@@ -28,27 +28,27 @@ pub fn dict() -> Dictionary {
 
 /// Converts the current visual selection using a user-chosen conversion option.
 ///
-/// Prompts the user (via [`ytil_nvim_oxi::vim_ui_select::open`]) to select a conversion
+/// Prompts the user (via [`ytil_noxi::vim_ui_select::open`]) to select a conversion
 /// option, then applies the conversion to the selected text in place.
 ///
 /// Returns early if:
 /// - No active Visual selection is detected.
 /// - The user cancels the prompt.
-/// - The conversion fails (an error is reported via [`ytil_nvim_oxi::notify::error`]).
-/// - Writing the converted text back to the buffer fails (an error is reported via [`ytil_nvim_oxi::notify::error`]).
+/// - The conversion fails (an error is reported via [`ytil_noxi::notify::error`]).
+/// - Writing the converted text back to the buffer fails (an error is reported via [`ytil_noxi::notify::error`]).
 ///
 /// # Returns
 /// Returns `()` upon successful completion.
 ///
 /// # Errors
-/// Errors from [`ytil_nvim_oxi::vim_ui_select::open`] are reported via [`ytil_nvim_oxi::notify::error`]
+/// Errors from [`ytil_noxi::vim_ui_select::open`] are reported via [`ytil_noxi::notify::error`]
 /// using the direct display representation of [`color_eyre::Report`].
 /// Conversion errors are also reported similarly.
 ///
 /// # Notes
 /// Currently supports single-line selections; multiline could be added later.
 fn convert_selection(_: ()) {
-    let Some(selection) = ytil_nvim_oxi::visual_selection::get(()) else {
+    let Some(selection) = ytil_noxi::visual_selection::get(()) else {
         return;
     };
 
@@ -63,7 +63,7 @@ fn convert_selection(_: ()) {
                     // supported at some point.
                     .convert(&selection.lines().to_vec().join("\n"))
                     .inspect_err(|err| {
-                        ytil_nvim_oxi::notify::error(format!(
+                        ytil_noxi::notify::error(format!(
                             "error setting lines of buffer | start={:#?} end={:#?} error={err:#?}",
                             selection.start(),
                             selection.end()
@@ -72,12 +72,12 @@ fn convert_selection(_: ()) {
             else {
                 return;
             };
-            ytil_nvim_oxi::buffer::replace_text_and_notify_if_error(&selection, vec![transformed_line]);
+            ytil_noxi::buffer::replace_text_and_notify_if_error(&selection, vec![transformed_line]);
         }
     };
 
-    if let Err(err) = ytil_nvim_oxi::vim_ui_select::open(opts, &[("prompt", "Select conversion ")], callback, None) {
-        ytil_nvim_oxi::notify::error(format!("error converting selection | error={err:#?}"));
+    if let Err(err) = ytil_noxi::vim_ui_select::open(opts, &[("prompt", "Select conversion ")], callback, None) {
+        ytil_noxi::notify::error(format!("error converting selection | error={err:#?}"));
     }
 }
 

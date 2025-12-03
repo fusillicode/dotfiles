@@ -64,7 +64,7 @@ impl BufferFilter for BufferFilterImpl {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
-    use ytil_nvim_oxi::buffer::mock::MockBuffer;
+    use ytil_noxi::buffer::mock::MockBuffer;
 
     use super::*;
 

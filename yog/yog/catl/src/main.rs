@@ -18,13 +18,13 @@
 use std::process::Command;
 
 use color_eyre::eyre::eyre;
-use ytil_system::CliArgs;
+use ytil_sys::CliArgs;
 
 /// Display file contents or long‑list directories.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let args = ytil_system::get_args();
+    let args = ytil_sys::get_args();
 
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));

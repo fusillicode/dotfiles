@@ -24,7 +24,7 @@ impl Installer for Sqruff<'_> {
             },
         )?;
 
-        ytil_system::chmod_x(target)?;
+        ytil_sys::chmod_x(target)?;
 
         Ok(())
     }

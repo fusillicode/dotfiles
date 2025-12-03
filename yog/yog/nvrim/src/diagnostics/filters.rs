@@ -6,8 +6,8 @@
 use color_eyre::eyre::bail;
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
-use ytil_nvim_oxi::buffer::BufferExt;
-use ytil_nvim_oxi::dict::DictionaryExt as _;
+use ytil_noxi::buffer::BufferExt;
+use ytil_noxi::dict::DictionaryExt as _;
 
 use crate::diagnostics::filters::lsps::harper_ls::HarperLsFilter;
 use crate::diagnostics::filters::lsps::typos_lsp::TyposLspFilter;
@@ -184,14 +184,14 @@ mod tests {
 
     #[test]
     fn try_from_missing_lnum_key_fails() {
-        let dict = ytil_nvim_oxi::dict! { col: 1_i64, end_col: 3_i64, end_lnum: 2_i64 };
+        let dict = ytil_noxi::dict! { col: 1_i64, end_col: 3_i64, end_lnum: 2_i64 };
         assert2::let_assert!(Err(err) = DiagnosticLocation::try_from(&dict));
         assert!(err.to_string().contains("missing dict value"));
     }
 
     #[test]
     fn try_from_wrong_type_for_lnum_fails() {
-        let dict = ytil_nvim_oxi::dict! { lnum: "not_an_int", col: 1_i64, end_col: 3_i64, end_lnum: 2_i64 };
+        let dict = ytil_noxi::dict! { lnum: "not_an_int", col: 1_i64, end_col: 3_i64, end_lnum: 2_i64 };
         assert2::let_assert!(Err(err) = DiagnosticLocation::try_from(&dict));
         assert!(err.to_string().contains(r#"value "not_an_int" of key "lnum""#));
         assert!(err.to_string().contains("is String but Integer was expected"));
@@ -236,6 +236,6 @@ mod tests {
     }
 
     fn create_diag(lnum: i64, col: i64, end_lnum: i64, end_col: i64) -> Dictionary {
-        ytil_nvim_oxi::dict! { col: col, end_col: end_col, lnum: lnum, end_lnum: end_lnum }
+        ytil_noxi::dict! { col: col, end_col: end_col, lnum: lnum, end_lnum: end_lnum }
     }
 }

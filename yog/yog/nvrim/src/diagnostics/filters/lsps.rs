@@ -4,7 +4,7 @@
 //! along with implementations for specific LSPs like Harper and Typos.
 
 use nvim_oxi::Dictionary;
-use ytil_nvim_oxi::dict::DictionaryExt as _;
+use ytil_noxi::dict::DictionaryExt as _;
 
 pub mod harper_ls;
 pub mod typos_lsp;

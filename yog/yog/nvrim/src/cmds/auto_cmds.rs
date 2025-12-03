@@ -37,7 +37,7 @@ pub fn create() {
             crate::keymaps::set(&[Mode::Normal], "<c-n>", ":cn<cr>", &opts);
             crate::keymaps::set(&[Mode::Normal], "<c-p>", ":cp<cr>", &opts);
             crate::keymaps::set(&[Mode::Normal], "<c-x>", ":ccl<cr>", &opts);
-            let _ = ytil_nvim_oxi::common::exec_vim_cmd("resize", Some(&["7"]));
+            let _ = ytil_noxi::common::exec_vim_cmd("resize", Some(&["7"]));
 
             true
         }),
@@ -57,11 +57,11 @@ where
     if let Err(err) =
         nvim_oxi::api::create_augroup(augroup_name, &CreateAugroupOptsBuilder::default().clear(true).build())
             .inspect_err(|err| {
-                ytil_nvim_oxi::notify::error(format!("error creating augroup | name={augroup_name:?} error={err:#?}"));
+                ytil_noxi::notify::error(format!("error creating augroup | name={augroup_name:?} error={err:#?}"));
             })
             .and_then(|group| nvim_oxi::api::create_autocmd(events, &opts_builder.group(group).build()))
     {
-        ytil_nvim_oxi::notify::error(format!(
+        ytil_noxi::notify::error(format!(
             "error creating auto command | augroup={augroup_name:?} events={events:#?} error={err:#?}"
         ));
     }
