@@ -48,14 +48,7 @@ pub fn dict() -> Dictionary {
 /// status column (special buffer type) and an error acquiring required state.
 fn draw((cur_lnum, extmarks, opts): (String, Vec<Extmark>, Option<Opts>)) -> Option<String> {
     let current_buffer = Buffer::current();
-    let buf_type = current_buffer
-        .get_buf_type()
-        .inspect_err(|err| {
-            ytil_nvim_oxi::notify::error(format!(
-                "error getting buftype of current buffer | buffer={current_buffer:#?} error={err:#?}"
-            ));
-        })
-        .ok()?;
+    let buf_type = current_buffer.get_buf_type()?;
 
     Some(draw_statuscolumn(
         &buf_type,
@@ -96,8 +89,8 @@ fn draw_statuscolumn(
     metas: impl Iterator<Item = ExtmarkMeta>,
     opts: Option<Opts>,
 ) -> String {
-    if current_buffer_type == "grug-far" {
-        return " ".into();
+    if current_buffer_type == "grug-far" || current_buffer_type == "terminal" {
+        return String::new();
     }
 
     let mut highest_severity_diag: Option<SelectedDiag> = None;
@@ -429,7 +422,7 @@ mod tests {
                 show_line_numbers: true,
             }),
         );
-        pretty_assertions::assert_eq!(out, " ");
+        pretty_assertions::assert_eq!(out, "");
     }
 
     #[rstest]

@@ -106,6 +106,7 @@ file path
 fkr
 fn
 franquicia
+fullscreen
 fzf
 gh
 gitignore
@@ -120,6 +121,7 @@ inputlist
 intra
 invariance
 jq
+jumplist
 junit
 k8s
 ko

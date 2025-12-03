@@ -363,8 +363,26 @@ fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
+/// Create a GitHub issue and develop it with an associated branch.
+///
+/// Prompts the user for an issue title, creates the issue via GitHub CLI,
+/// then develops it by creating an associated branch from the default branch.
+/// Optionally checks out the newly created branch based on user preference.
+///
+/// # Returns
+/// - `()` on successful completion or if the user cancels at any prompt.
+///
+/// # Errors
+/// - If [`ytil_tui::text_prompt`] fails when prompting for issue title.
+/// - If [`ytil_tui::yes_no_select`] fails when prompting for branch checkout preference.
+/// - If [`ytil_github::issue::create`] fails when creating the GitHub issue.
+/// - If [`ytil_github::issue::develop`] fails when creating the associated branch.
+///
+/// # Rationale
+/// Separates issue creation flow from PR listing flow, allowing users to quickly
+/// bootstrap new work items without leaving the terminal interface.
 fn create_issue_and_branch_from_default_branch() -> Result<(), color_eyre::eyre::Error> {
-    let Some(issue_title) = ytil_tui::text_prompt("Issue title:")? else {
+    let Some(issue_title) = ytil_tui::text_prompt("Issue title:")?.map(|x| x.trim().to_string()) else {
         return Ok(());
     };
 

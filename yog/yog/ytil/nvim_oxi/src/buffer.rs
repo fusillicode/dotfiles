@@ -1,7 +1,4 @@
-//! Buffer extension utilities (line access, cursor‑based insertion, cursor position model).
-//!
-//! Supplies [`BufferExt`] trait plus [`CursorPosition`] struct preserving raw Nvim coordinates for
-//! consistent conversions at call sites.
+//! Buffer extension utilities like line access, cursor‑based insertion, cursor position model, etc.
 
 use std::ops::RangeInclusive;
 use std::path::Path;
@@ -105,12 +102,16 @@ pub trait BufferExt {
 
     /// Retrieves the buffer type via the `buftype` option.
     ///
-    /// # Returns
-    /// - `Ok(String)` The buffer type (e.g., `""` for normal, `"help"` for help buffers).
+    /// Queries Nvim for the buffer type option and returns the value.
+    /// Errors are handled internally by notifying Nvim and converting to `None`.
     ///
-    /// # Errors
-    /// - Propagates [`nvim_oxi::api::Error`] from the underlying option retrieval.
-    fn get_buf_type(&self) -> Result<String, nvim_oxi::api::Error>;
+    /// # Returns
+    /// - `Some(String)` The buffer type (e.g., `""` for normal, `"help"` for help buffers).
+    /// - `None` if the option cannot be retrieved, is not set, or an error occurs.
+    ///
+    /// # Rationale
+    /// Errors are notified directly to Nvim because this is the behavior wanted in all cases.
+    fn get_buf_type(&self) -> Option<String>;
 
     /// Inserts `text` at the current cursor position in the active buffer.
     ///
@@ -122,6 +123,10 @@ pub trait BufferExt {
     /// # Arguments
     /// - `text` UTF-8 slice inserted at the cursor byte column.
     fn set_text_at_cursor_pos(&mut self, text: &str);
+
+    fn is_terminal(&self) -> bool {
+        self.get_buf_type().is_some_and(|bt| bt == "terminal")
+    }
 }
 
 /// Defines boundaries for text selection within lines.
@@ -216,9 +221,15 @@ impl BufferExt for Buffer {
         }
     }
 
-    fn get_buf_type(&self) -> Result<String, nvim_oxi::api::Error> {
+    fn get_buf_type(&self) -> Option<String> {
         let opts = OptionOptsBuilder::default().buf(self.clone()).build();
         nvim_oxi::api::get_option_value::<String>("buftype", &opts)
+            .inspect_err(|err| {
+                crate::notify::error(format!(
+                    "error getting buftype of buffer | buffer={self:#?} error={err:?}"
+                ));
+            })
+            .ok()
     }
 }
 
@@ -295,6 +306,64 @@ impl CursorPosition {
     }
 }
 
+/// Creates a new listed, not scratch, buffer.
+///
+/// # Returns
+/// - `Some(Buffer)` if the buffer is created successfully.
+/// - `None` if buffer creation fails.
+///
+/// Errors are reported to Nvim via [`crate::notify::error`].
+pub fn create() -> Option<Buffer> {
+    nvim_oxi::api::create_buf(true, false)
+        .inspect_err(|err| crate::notify::error(format!("error creating buffer | error={err:?}")))
+        .ok()
+}
+
+/// Retrieves the alternate buffer or creates a new one if none exists.
+///
+/// The alternate buffer is the buffer previously visited, accessed via Nvim's "#" register.
+/// If no alternate buffer exists (bufnr("#") < 0), a new buffer is created.
+///
+/// # Returns
+/// - `Some(Buffer)` the alternate buffer if it exists, otherwise a new buffer.
+/// - `None` if retrieving the alternate buffer fails and creating a new buffer also fails.
+///
+/// # Errors
+/// - Retrieving the alternate buffer fails (notified via [`crate::notify::error`]).
+/// - Creating a new buffer fails (falls back to [`create`]).
+pub fn get_alternate_or_new() -> Option<Buffer> {
+    let alt_buf_id = nvim_oxi::api::call_function::<_, i32>("bufnr", ("#",))
+        .inspect(|err| {
+            crate::notify::error(format!("error getting alternate buffer | error={err:?}"));
+        })
+        .ok()?;
+
+    if alt_buf_id < 0 {
+        return create();
+    }
+    Some(Buffer::from(alt_buf_id))
+}
+
+/// Sets the specified buffer as the current buffer in the active window.
+///
+/// # Arguments
+/// - `buf` The buffer to set as current.
+///
+/// # Returns
+/// - `Some(())` if the buffer is set successfully.
+/// - `None` if setting the current buffer fails.
+///
+/// # Errors
+/// - Setting the current buffer fails (notified via [`crate::notify::error`]).
+pub fn set_current(buf: &Buffer) -> Option<()> {
+    nvim_oxi::api::set_current_buf(buf)
+        .inspect_err(|err| {
+            crate::notify::error(format!("error setting current buffer | buffer={buf:?} error={err:?}"));
+        })
+        .ok()?;
+    Some(())
+}
+
 /// Opens a file in the editor and positions the cursor at the specified line and column.
 ///
 /// # Arguments
@@ -322,6 +391,7 @@ pub fn open<T: AsRef<Path>>(path: T, line: Option<usize>, col: Option<usize>) ->
 ///
 /// Calls Nvim's `set_text` with the selection's line range and column positions,
 /// replacing the selected content with the provided lines.
+///
 /// Errors are reported via [`crate::notify::error`] with details about the selection
 /// boundaries and error.
 ///
@@ -374,42 +444,36 @@ pub fn get_relative_path_to_cwd(current_buffer: &Buffer) -> Option<PathBuf> {
     ))
 }
 
-/// Retrieves the absolute path of the specified buffer, or the current buffer if none provided.
+/// Retrieves the absolute path of the specified buffer.
 ///
 /// # Arguments
-/// - `current_buffer` The buffer to get the path for. If [`None`], uses the current buffer.
+/// - `buffer` The buffer to get the path for. If [`None`], returns [`None`].
 ///
 /// # Returns
 /// - `Some(PathBuf)` containing the absolute path if successful.
-/// - [`None`] if the buffer has no name, an empty name, or an error occurs.
+/// - [`None`] if no buffer provided, the buffer has no name, an empty name, or an error occurs.
 ///
 /// # Errors
 /// Errors are logged internally but do not propagate; the function returns [`None`] on failure.
 ///
 /// # Assumptions
 /// Assumes that the buffer's name represents a valid path.
-pub fn get_absolute_path(current_buffer: Option<&Buffer>) -> Option<PathBuf> {
-    fn get_absolute_path_by_ref(buf: &Buffer) -> Option<PathBuf> {
-        let path = buf
-            .get_name()
-            .map(|s| s.to_string_lossy().to_string())
-            .inspect_err(|err| {
-                crate::notify::error(format!(
-                    "error getting buffer absolute path | buffer={buf:#?} error={err:#?}"
-                ));
-            })
-            .ok();
-        if path.as_ref().is_some_and(String::is_empty) {
-            return None;
-        }
-        path.map(PathBuf::from)
+pub fn get_absolute_path(buffer: Option<&Buffer>) -> Option<PathBuf> {
+    let path = buffer?
+        .get_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .inspect_err(|err| {
+            crate::notify::error(format!(
+                "error getting buffer absolute path | buffer={buffer:#?} error={err:#?}"
+            ));
+        })
+        .ok();
+
+    if path.as_ref().is_some_and(String::is_empty) {
+        return None;
     }
 
-    let Some(current_buffer) = current_buffer else {
-        return get_absolute_path_by_ref(&Buffer::current());
-    };
-
-    get_absolute_path_by_ref(current_buffer)
+    path.map(PathBuf::from)
 }
 
 #[cfg(test)]
@@ -604,8 +668,8 @@ mod tests {
 
         fn set_text_at_cursor_pos(&mut self, _text: &str) {}
 
-        fn get_buf_type(&self) -> Result<String, nvim_oxi::api::Error> {
-            Ok(String::new())
+        fn get_buf_type(&self) -> Option<String> {
+            None
         }
     }
 }
@@ -662,8 +726,8 @@ pub mod mock {
 
         fn set_text_at_cursor_pos(&mut self, _text: &str) {}
 
-        fn get_buf_type(&self) -> Result<String, nvim_oxi::api::Error> {
-            Ok(self.buf_type.clone())
+        fn get_buf_type(&self) -> Option<String> {
+            Some(self.buf_type.clone())
         }
     }
 }

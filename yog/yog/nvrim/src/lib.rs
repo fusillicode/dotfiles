@@ -24,6 +24,7 @@ mod colorscheme;
 mod diagnostics;
 /// Core (non‑plugin) keymaps.
 pub mod keymaps;
+pub mod layout;
 /// Utilities to handle linters output
 mod linters;
 /// Custom build plugins.
@@ -49,6 +50,7 @@ fn nvrim() -> Dictionary {
         "diagnostics": diagnostics::dict(),
         "keymaps": keymaps::dict(),
         "linters": linters::dict(),
+        "layout": layout::dict(),
         "plugins": plugins::dict(),
         "style_opts": style_opts::dict(),
         "vim_opts": vim_opts::dict(),

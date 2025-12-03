@@ -14,7 +14,7 @@ use nvim_oxi::api::types::GetHlInfos;
 use nvim_oxi::api::types::HighlightInfos;
 
 const GLOBAL_BG: &str = "#002020";
-const GLOBAL_FG: &str = "#DCDCD7";
+const GLOBAL_FG: &str = "#dcdcd7";
 
 const CURSOR_BG: &str = "white";
 const CURSOR_FG: &str = "black";
@@ -89,6 +89,10 @@ pub fn set(colorscheme: Option<String>) {
         (
             "TreesitterContext",
             get_default_hl_opts().background(TREESITTER_CONTEXT_BG).build(),
+        ),
+        (
+            "WinSeparator",
+            get_default_hl_opts().foreground(TREESITTER_CONTEXT_BG).build(),
         ),
         // Changing these will change the main foreground color.
         ("@variable", get_default_hl_opts().foreground(GLOBAL_FG).build()),

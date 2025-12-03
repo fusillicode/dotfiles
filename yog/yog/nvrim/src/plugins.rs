@@ -20,7 +20,7 @@ pub mod scrolloff;
 pub mod statuscolumn;
 /// Status line (diagnostics summary).
 pub mod statusline;
-/// Rust tests utilities.
+/// Rust tests runner plugin.
 pub mod truster;
 
 pub fn dict() -> Dictionary {

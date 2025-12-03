@@ -1,7 +1,4 @@
 //! Primitive extraction trait implementations for Nvim `Object` kinds.
-//!
-//! Provides [`OxiExtract`] for converting raw `Object` values into concrete Rust types with
-//! contextual kind mismatch errors.
 
 use color_eyre::eyre::Context;
 use nvim_oxi::Dictionary;

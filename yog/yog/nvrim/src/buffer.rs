@@ -5,7 +5,7 @@
 
 use nvim_oxi::Dictionary;
 
-mod word_under_cursor;
+pub mod word_under_cursor;
 
 /// [`Dictionary`] of buffer text helpers.
 ///
