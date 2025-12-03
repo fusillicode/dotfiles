@@ -38,6 +38,7 @@ save_to_clipboard = false
 hide_when_typing = true
 
 [keyboard]
+# Apparently `option_as_alt = "Both"` is not enough
 bindings = [
   { key = "Left", mods = "Alt", chars = "\u001Bb" },
   { key = "Right", mods = "Alt", chars = "\u001Bf" },
