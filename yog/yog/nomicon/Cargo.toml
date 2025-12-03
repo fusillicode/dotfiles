@@ -19,7 +19,7 @@ askama = { version = "0.14" }
 chrono = { workspace = true }
 color-eyre = { workspace = true }
 ytil_cmd = { workspace = true }
-ytil_system = { workspace = true }
+ytil_sys = { workspace = true }
 
 [build-dependencies]
 color-eyre = { workspace = true }

@@ -228,7 +228,7 @@ name = "catl"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
- "ytil_system",
+ "ytil_sys",
 ]
 
 [[package]]
@@ -584,7 +584,7 @@ dependencies = [
  "pretty_assertions",
  "rstest",
  "ytil_cmd",
- "ytil_system",
+ "ytil_sys",
 ]
 
 [[package]]
@@ -629,7 +629,7 @@ dependencies = [
  "color-eyre",
  "fake",
  "strum",
- "ytil_system",
+ "ytil_sys",
  "ytil_tui",
 ]
 
@@ -713,7 +713,7 @@ dependencies = [
  "color-eyre",
  "strum",
  "ytil_git",
- "ytil_system",
+ "ytil_sys",
  "ytil_tui",
 ]
 
@@ -725,9 +725,9 @@ dependencies = [
  "color-eyre",
  "rstest",
  "url",
+ "ytil_gh",
  "ytil_git",
- "ytil_github",
- "ytil_system",
+ "ytil_sys",
  "ytil_tui",
 ]
 
@@ -762,8 +762,8 @@ dependencies = [
  "pretty_assertions",
  "rstest",
  "strum",
- "ytil_github",
- "ytil_system",
+ "ytil_gh",
+ "ytil_sys",
  "ytil_tui",
 ]
 
@@ -944,8 +944,8 @@ version = "0.1.0"
 dependencies = [
  "color-eyre",
  "ytil_cmd",
- "ytil_github",
- "ytil_system",
+ "ytil_gh",
+ "ytil_sys",
 ]
 
 [[package]]
@@ -1293,7 +1293,7 @@ dependencies = [
  "color-eyre",
  "lightningcss",
  "ytil_cmd",
- "ytil_system",
+ "ytil_sys",
 ]
 
 [[package]]
@@ -1381,10 +1381,10 @@ dependencies = [
  "tree-sitter-rust",
  "url",
  "ytil_cmd",
+ "ytil_gh",
  "ytil_git",
- "ytil_github",
- "ytil_nvim_oxi",
- "ytil_system",
+ "ytil_noxi",
+ "ytil_sys",
  "ytil_wezterm",
 ]
 
@@ -1404,7 +1404,7 @@ dependencies = [
  "color-eyre",
  "ytil_cmd",
  "ytil_editor",
- "ytil_system",
+ "ytil_sys",
  "ytil_wezterm",
 ]
 
@@ -1761,7 +1761,7 @@ dependencies = [
  "pretty_assertions",
  "rstest",
  "tempfile",
- "ytil_system",
+ "ytil_sys",
 ]
 
 [[package]]
@@ -2053,7 +2053,7 @@ dependencies = [
  "thiserror 2.0.17",
  "ytil_cmd",
  "ytil_git",
- "ytil_system",
+ "ytil_sys",
 ]
 
 [[package]]
@@ -2250,7 +2250,7 @@ version = "0.1.0"
 dependencies = [
  "color-eyre",
  "itertools 0.14.0",
- "ytil_system",
+ "ytil_sys",
 ]
 
 [[package]]
@@ -2335,7 +2335,7 @@ dependencies = [
  "color-eyre",
  "serde",
  "serde_json",
- "ytil_system",
+ "ytil_sys",
  "ytil_tui",
 ]
 
@@ -2525,10 +2525,10 @@ dependencies = [
  "temp-env",
  "url",
  "ytil_editor",
+ "ytil_gh",
  "ytil_git",
- "ytil_github",
  "ytil_hx",
- "ytil_system",
+ "ytil_sys",
  "ytil_wezterm",
 ]
 
@@ -2539,7 +2539,7 @@ dependencies = [
  "color-eyre",
  "ytil_editor",
  "ytil_hx",
- "ytil_system",
+ "ytil_sys",
  "ytil_wezterm",
 ]
 
@@ -2585,21 +2585,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ytil_git"
-version = "0.1.0"
-dependencies = [
- "assert2",
- "chrono",
- "color-eyre",
- "git2",
- "pretty_assertions",
- "rstest",
- "tempfile",
- "ytil_cmd",
-]
-
-[[package]]
-name = "ytil_github"
+name = "ytil_gh"
 version = "0.1.0"
 dependencies = [
  "assert2",
@@ -2617,6 +2603,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ytil_git"
+version = "0.1.0"
+dependencies = [
+ "assert2",
+ "chrono",
+ "color-eyre",
+ "git2",
+ "pretty_assertions",
+ "rstest",
+ "tempfile",
+ "ytil_cmd",
+]
+
+[[package]]
 name = "ytil_hx"
 version = "0.1.0"
 dependencies = [
@@ -2625,7 +2625,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ytil_nvim_oxi"
+name = "ytil_noxi"
 version = "0.1.0"
 dependencies = [
  "assert2",
@@ -2638,7 +2638,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ytil_system"
+name = "ytil_sys"
 version = "0.1.0"
 dependencies = [
  "assert2",

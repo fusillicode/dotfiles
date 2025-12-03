@@ -18,8 +18,8 @@
 //! ```
 //!
 //! # Errors
-//! - GitHub authentication via [`ytil_github::log_into_github`] or PR branch name derivation via
-//!   [`ytil_github::get_branch_name_from_url`] fails.
+//! - GitHub authentication via [`ytil_gh::log_into_github`] or PR branch name derivation via
+//!   [`ytil_gh::get_branch_name_from_url`] fails.
 //! - Branch name construction via [`build_branch_name`] yields empty string.
 //! - Branch listing via [`ytil_git::branch::get_all`] / switching via [`ytil_git::branch::switch`] / creation via
 //!   [`ytil_git::branch::create_from_default_branch`] fails.
@@ -34,7 +34,7 @@ use color_eyre::eyre::bail;
 use color_eyre::owo_colors::OwoColorize as _;
 use url::Url;
 use ytil_git::CmdError;
-use ytil_system::CliArgs;
+use ytil_sys::CliArgs;
 
 /// Interactive selection and switching of Git branches.
 ///
@@ -68,13 +68,13 @@ fn autocomplete_git_branches_and_switch() -> color_eyre::Result<()> {
 /// - `arg` Either a GitHub PR URL or a branch name.
 ///
 /// # Errors
-/// - GitHub authentication via [`ytil_github::log_into_github`] fails (if URL).
-/// - Pull request branch name derivation via [`ytil_github::get_branch_name_from_url`] fails (if URL).
+/// - GitHub authentication via [`ytil_gh::log_into_github`] fails (if URL).
+/// - Pull request branch name derivation via [`ytil_gh::get_branch_name_from_url`] fails (if URL).
 /// - Branch switching via [`ytil_git::branch::switch`] fails.
 fn handle_single_input_argument(arg: &str) -> color_eyre::Result<()> {
     let branch_name = if let Ok(url) = Url::parse(arg) {
-        ytil_github::log_into_github()?;
-        ytil_github::get_branch_name_from_url(&url)?
+        ytil_gh::log_into_github()?;
+        ytil_gh::get_branch_name_from_url(&url)?
     } else {
         arg.to_string()
     };
@@ -238,7 +238,7 @@ fn ask_branching_from_not_default(branch_name: &str, default_branch_name: &str) 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let args = ytil_system::get_args();
+    let args = ytil_sys::get_args();
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));
         return Ok(());

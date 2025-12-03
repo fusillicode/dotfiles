@@ -18,7 +18,7 @@ use askama::Template;
 use chrono::Utc;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
-use ytil_system::CliArgs;
+use ytil_sys::CliArgs;
 
 use crate::templates::components::footer::Footer;
 use crate::templates::pages::index::CrateMeta;
@@ -86,13 +86,13 @@ fn get_toml_values(content: &str, key: &str) -> Vec<String> {
 fn main() -> color_eyre::eyre::Result<()> {
     color_eyre::install()?;
 
-    let args = ytil_system::get_args();
+    let args = ytil_sys::get_args();
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));
         return Ok(());
     }
 
-    let workspace_root = ytil_system::get_workspace_root()?;
+    let workspace_root = ytil_sys::get_workspace_root()?;
     let doc_dir = workspace_root.join("target/doc");
     // Always remove docs dir if present:
     // - caching problems
@@ -106,7 +106,7 @@ fn main() -> color_eyre::eyre::Result<()> {
     // Always (re)generate docs for all workspace crates (including private items) first.
     nomicon::generate_rust_doc(&workspace_root)?;
 
-    let cargo_tomls = ytil_system::find_matching_files_recursively_in_dir(
+    let cargo_tomls = ytil_sys::find_matching_files_recursively_in_dir(
         &workspace_root,
         |entry| entry.path().file_name().is_some_and(|f| f == "Cargo.toml"),
         |entry| {

@@ -9,7 +9,7 @@ use std::convert::identity;
 use lit2::map;
 use lit2::set;
 use nvim_oxi::Dictionary;
-use ytil_nvim_oxi::buffer::TextBoundary;
+use ytil_noxi::buffer::TextBoundary;
 
 use crate::diagnostics::filters::BufferWithPath;
 use crate::diagnostics::filters::DiagnosticLocation;
@@ -97,7 +97,7 @@ impl DiagnosticsFilter for HarperLsFilter<'_> {
 
 #[cfg(test)]
 mod tests {
-    use ytil_nvim_oxi::buffer::mock::MockBuffer;
+    use ytil_noxi::buffer::mock::MockBuffer;
 
     use super::*;
     use crate::diagnostics::filters::BufferWithPath;

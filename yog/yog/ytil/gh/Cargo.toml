@@ -1,5 +1,5 @@
 [package]
-name = "ytil_github"
+name = "ytil_gh"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

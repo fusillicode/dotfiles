@@ -14,7 +14,7 @@ categories = ["command-line-utilities", "development-tools"]
 color-eyre = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-ytil_system = { workspace = true }
+ytil_sys = { workspace = true }
 ytil_tui = { workspace = true }
 
 [dev-dependencies]

@@ -23,25 +23,25 @@ pub fn dict() -> Dictionary {
 
 /// Converts the current visual selection to a user-chosen case variant.
 ///
-/// Prompts the user (via [`ytil_nvim_oxi::vim_ui_select::open`]) to select a case conversion
+/// Prompts the user (via [`ytil_noxi::vim_ui_select::open`]) to select a case conversion
 /// option, then applies the conversion to all selected lines in place.
 ///
 /// Returns early if:
 /// - No active Visual selection is detected.
 /// - The user cancels the prompt.
-/// - Writing the converted text back to the buffer fails (an error is reported via [`ytil_nvim_oxi::notify::error`]).
+/// - Writing the converted text back to the buffer fails (an error is reported via [`ytil_noxi::notify::error`]).
 ///
 /// # Returns
 /// Returns `()` upon successful completion.
 ///
 /// # Errors
-/// Errors from [`ytil_nvim_oxi::vim_ui_select::open`] are reported via [`ytil_nvim_oxi::notify::error`]
+/// Errors from [`ytil_noxi::vim_ui_select::open`] are reported via [`ytil_noxi::notify::error`]
 /// using the direct display representation of [`color_eyre::Report`].
 ///
 /// # Notes
 /// Blockwise selections are treated as a contiguous span (not a rectangle).
 fn convert_selection(_: ()) {
-    let Some(selection) = ytil_nvim_oxi::visual_selection::get(()) else {
+    let Some(selection) = ytil_noxi::visual_selection::get(()) else {
         return;
     };
 
@@ -54,18 +54,18 @@ fn convert_selection(_: ()) {
                 .iter()
                 .map(|line| line.as_str().to_case(*case))
                 .collect::<Vec<_>>();
-            ytil_nvim_oxi::buffer::replace_text_and_notify_if_error(&selection, converted_lines);
+            ytil_noxi::buffer::replace_text_and_notify_if_error(&selection, converted_lines);
             Ok::<(), Report>(())
         });
     };
 
-    if let Err(err) = ytil_nvim_oxi::vim_ui_select::open(
+    if let Err(err) = ytil_noxi::vim_ui_select::open(
         cases.iter().map(DisplayableCase),
         &[("prompt", "Convert selection to case ")],
         callback,
         None,
     ) {
-        ytil_nvim_oxi::notify::error(format!("error converting selection to case | error={err:#?}"));
+        ytil_noxi::notify::error(format!("error converting selection to case | error={err:#?}"));
     }
 }
 

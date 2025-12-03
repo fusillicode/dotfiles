@@ -13,7 +13,7 @@ use nvim_oxi::serde::Serializer;
 use serde::Serialize;
 use url::Url;
 use ytil_cmd::CmdExt as _;
-use ytil_nvim_oxi::buffer::CursorPosition;
+use ytil_noxi::buffer::CursorPosition;
 
 /// Retrieve and classify the non-whitespace token under the cursor in the current window.
 ///
@@ -22,7 +22,7 @@ use ytil_nvim_oxi::buffer::CursorPosition;
 /// On success returns a classified [`WordUnderCursor`].
 pub fn get(_: ()) -> Option<WordUnderCursor> {
     let cur_line = nvim_oxi::api::get_current_line()
-        .inspect_err(|err| ytil_nvim_oxi::notify::error(format!("error getting current line | error={err:#?}")))
+        .inspect_err(|err| ytil_noxi::notify::error(format!("error getting current line | error={err:#?}")))
         .ok()?;
     let col = CursorPosition::get_current()?.col;
     get_word_at_index(&cur_line, col)

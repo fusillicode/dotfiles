@@ -1,5 +1,5 @@
 [package]
-name = "ytil_system"
+name = "ytil_sys"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

@@ -12,4 +12,4 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 color-eyre = { workspace = true }
-ytil_system = { workspace = true }
+ytil_sys = { workspace = true }

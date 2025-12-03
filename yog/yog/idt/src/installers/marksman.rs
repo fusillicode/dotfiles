@@ -23,7 +23,7 @@ impl Installer for Marksman<'_> {
             },
         )?;
 
-        ytil_system::chmod_x(&target)?;
+        ytil_sys::chmod_x(&target)?;
 
         Ok(())
     }

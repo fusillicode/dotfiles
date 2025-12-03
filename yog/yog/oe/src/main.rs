@@ -33,7 +33,7 @@ use core::str::FromStr;
 use color_eyre::eyre::bail;
 use ytil_editor::Editor;
 use ytil_editor::FileToOpen;
-use ytil_system::CliArgs;
+use ytil_sys::CliArgs;
 
 /// Wrapper for environment variables.
 struct Env {
@@ -58,7 +58,7 @@ fn get_enriched_path_env() -> color_eyre::Result<Env> {
     let enriched_path = [
         &std::env::var("PATH").unwrap_or_else(|_| String::new()),
         "/opt/homebrew/bin",
-        &ytil_system::build_home_path(&[".local", "bin"])?.to_string_lossy(),
+        &ytil_sys::build_home_path(&[".local", "bin"])?.to_string_lossy(),
     ]
     .join(":");
 
@@ -73,7 +73,7 @@ fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
     let enriched_path_env = get_enriched_path_env()?;
-    let args = ytil_system::get_args();
+    let args = ytil_sys::get_args();
 
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));
