@@ -3,6 +3,7 @@
 use core::fmt::Debug;
 
 use nvim_oxi::api::opts::CmdOpts;
+use nvim_oxi::api::opts::ExecOpts;
 use nvim_oxi::api::types::CmdInfosBuilder;
 use nvim_oxi::conversion::ToObject;
 
@@ -46,4 +47,32 @@ pub fn exec_vim_cmd(
             "error executing cmd | cmd={cmd:?} args={args:#?} error={err:#?}",
         ));
     })
+}
+
+/// Executes Vimscript source code and returns the output if any.
+///
+/// # Arguments
+/// - `src` The Vimscript source code to execute.
+/// - `opts` Optional execution options; defaults to [`ExecOpts::default`] if [`None`].
+///
+/// # Returns
+/// - `Some(Some(String))` if execution succeeds and produces output.
+/// - `Some(None)` if execution succeeds but produces no output.
+/// - `None` if execution fails.
+///
+/// # Errors
+/// Errors are reported to Nvim via [`crate::notify::error`].
+#[allow(clippy::option_option)]
+pub fn exec_vim_script(src: &str, opts: Option<ExecOpts>) -> Option<Option<String>> {
+    let opts = opts.unwrap_or_default();
+    Some(
+        nvim_oxi::api::exec2(src, &opts)
+            .inspect_err(|err| {
+                crate::notify::error(format!(
+                    "error executing Vimscript | src={src:?} opts={opts:?} error={err:?}"
+                ));
+            })
+            .ok()?
+            .map(|s| s.to_string()),
+    )
 }

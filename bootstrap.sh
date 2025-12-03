@@ -4,6 +4,7 @@ script_dir="${BASH_SOURCE%/*}"
 dotfiles_dir="$HOME/data/dev/dotfiles/dotfiles"
 
 # Symlink configs
+ln -s "$dotfiles_dir/.config/alacritty/" "$HOME/.config/alacritty"
 ln -s "$dotfiles_dir/.config/atuin/" "$HOME/.config/atuin"
 ln -s "$dotfiles_dir/.config/gitui/" "$HOME/.config/gitui"
 ln -s "$dotfiles_dir/.config/helix/" "$HOME/.config/helix"
