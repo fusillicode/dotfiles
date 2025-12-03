@@ -11,9 +11,16 @@ use color_eyre::eyre;
 use color_eyre::eyre::Context;
 use color_eyre::eyre::eyre;
 use nvim_oxi::Dictionary;
+use nvim_oxi::Object;
+use nvim_oxi::conversion::FromObject;
+use nvim_oxi::lua::Poppable;
+use nvim_oxi::lua::ffi::State;
+use nvim_oxi::serde::Deserializer;
+use serde::Deserialize;
 use tree_sitter::Node;
 use tree_sitter::Parser;
 use tree_sitter::Point;
+use ytil_noxi::buffer::BufferExt;
 use ytil_noxi::buffer::CursorPosition;
 
 /// [`Dictionary`] of Rust tests utilities.
@@ -23,69 +30,91 @@ pub fn dict() -> Dictionary {
     }
 }
 
-/// Runs the test function at the current cursor position in a `WezTerm` pane.
-fn run_test(_: ()) {
-    let Some(position) = CursorPosition::get_current().map(PointWrap::from) else {
-        return;
-    };
+#[derive(Clone, Copy, Deserialize)]
+enum TargetTerminal {
+    WezTerm,
+    Nvim,
+}
 
-    let Some(file_path) = ytil_noxi::buffer::get_absolute_path(None) else {
-        return;
-    };
+impl FromObject for TargetTerminal {
+    fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
+        Self::deserialize(Deserializer::new(obj)).map_err(Into::into)
+    }
+}
+
+impl Poppable for TargetTerminal {
+    unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
+        unsafe {
+            let obj = Object::pop(lstate)?;
+            Self::from_object(obj).map_err(nvim_oxi::lua::Error::pop_error_from_err::<Self, _>)
+        }
+    }
+}
+
+fn run_test(target_terminal: TargetTerminal) -> Option<()> {
+    let position = CursorPosition::get_current().map(PointWrap::from)?;
+
+    let file_path = ytil_noxi::buffer::get_absolute_path(Some(&nvim_oxi::api::get_current_buf()))?;
 
     let Some(test_name) = get_enclosing_fn_name_of_position(&file_path, *position)
         .inspect_err(|err| {
             ytil_noxi::notify::error(format!(
-                "cannot get enclosing fn | position={position:#?} error={err:#?}"
+                "error getting enclosing fn | position={position:#?} error={err:#?}"
             ));
         })
         .ok()
         .flatten()
     else {
         ytil_noxi::notify::error(format!("error missing enclosing fn | position={position:#?}"));
-        return;
+        return None;
     };
 
-    let Ok(cur_pane_id) = ytil_wezterm::get_current_pane_id().inspect_err(|err| {
-        ytil_noxi::notify::error(format!("error getting current WezTerm pane id | error={err:#?}"));
-    }) else {
-        return;
-    };
+    let test_runner = get_test_runner_for_path(&file_path)
+        .inspect_err(|err| {
+            ytil_noxi::notify::error(format!(
+                "error getting test runner | path={} error={err:#?}",
+                file_path.display()
+            ));
+        })
+        .ok()?;
 
-    let Ok(wez_panes) = ytil_wezterm::get_all_panes(&[]).inspect_err(|err| {
-        ytil_noxi::notify::error(format!("error getting WezTerm panes | error={err:#?}"));
-    }) else {
-        return;
-    };
+    match target_terminal {
+        TargetTerminal::WezTerm => run_test_in_wezterm(test_runner, &test_name),
+        TargetTerminal::Nvim => run_test_in_nvim_term(test_runner, &test_name),
+    }
+}
+
+fn run_test_in_wezterm(test_runner: &str, test_name: &str) -> Option<()> {
+    let cur_pane_id = ytil_wezterm::get_current_pane_id()
+        .inspect_err(|err| ytil_noxi::notify::error(format!("error getting current WezTerm pane id | error={err:#?}")))
+        .ok()?;
+
+    let wez_panes = ytil_wezterm::get_all_panes(&[])
+        .inspect_err(|err| {
+            ytil_noxi::notify::error(format!("error getting WezTerm panes | error={err:#?}"));
+        })
+        .ok()?;
 
     let Some(cur_pane) = wez_panes.iter().find(|p| p.pane_id == cur_pane_id) else {
         ytil_noxi::notify::error(format!(
-            "error wezterm pane not found | pane_id={cur_pane_id:#?} panes={wez_panes:#?}"
+            "error WezTerm pane not found | pane_id={cur_pane_id:#?} panes={wez_panes:#?}"
         ));
-        return;
+        return None;
     };
 
     let Some(test_runner_pane) = wez_panes.iter().find(|p| p.is_sibling_terminal_pane_of(cur_pane)) else {
         ytil_noxi::notify::error(format!(
             "error finding sibling pane to run test | current_pane={cur_pane:#?} panes={wez_panes:#?} test={test_name}"
         ));
-        return;
+        return None;
     };
 
-    let Ok(test_runner_app) = get_test_runner_app_for_path(&file_path).inspect_err(|err| {
-        ytil_noxi::notify::error(format!(
-            "error getting test runner app | path={} error={err:#?}",
-            file_path.display()
-        ));
-    }) else {
-        return;
-    };
+    let test_run_cmd = format!("'{test_runner} {test_name}'");
 
-    let test_run_cmd = format!("'{test_runner_app} {test_name}'");
     let send_text_to_pane_cmd = ytil_wezterm::send_text_to_pane_cmd(&test_run_cmd, test_runner_pane.pane_id);
     let submit_pane_cmd = ytil_wezterm::submit_pane_cmd(test_runner_pane.pane_id);
 
-    let Ok(_) = ytil_cmd::silent_cmd("sh")
+    ytil_cmd::silent_cmd("sh")
         .args(["-c", &format!("{send_text_to_pane_cmd} && {submit_pane_cmd}")])
         .spawn()
         .inspect_err(|err| {
@@ -93,9 +122,30 @@ fn run_test(_: ()) {
                 "error executing test run cmd | cmd={test_run_cmd:#?} pane={test_runner_pane:#?} error={err:#?}"
             ));
         })
-    else {
-        return;
+        .ok()?;
+
+    Some(())
+}
+
+fn run_test_in_nvim_term(test_runner: &str, test_name: &str) -> Option<()> {
+    let Some(terminal_buffer) = nvim_oxi::api::list_bufs().find(BufferExt::is_terminal) else {
+        ytil_noxi::notify::error(format!(
+            "error no terminal buffer found | test_runner={test_runner:?} test_name={test_name:?}",
+        ));
+        return None;
     };
+
+    let channel_id = terminal_buffer.get_channel()?;
+
+    let test_run_cmd = format!("{test_runner} {test_name}\n");
+
+    nvim_oxi::api::chan_send(channel_id, &test_run_cmd).inspect_err(|err|{
+        ytil_noxi::notify::error(format!(
+            "error sending command to buffer channel | command={test_run_cmd:?} buffer={terminal_buffer:?} channel_id={channel_id} error={err:?}"
+        ));
+    }).ok()?;
+
+    Some(())
 }
 
 /// Wrapper around [`tree_sitter::Point`] that converts Nvim's 1-based row indexing
@@ -201,7 +251,7 @@ fn get_enclosing_fn_name_of_node(src: &[u8], node: Option<Node>) -> Option<Strin
 /// # Errors
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - The path is not inside a Git repository.
-fn get_test_runner_app_for_path(path: &Path) -> color_eyre::Result<&'static str> {
+fn get_test_runner_for_path(path: &Path) -> color_eyre::Result<&'static str> {
     let git_repo_root = ytil_git::get_repo_root(&ytil_git::discover_repo(path)?);
 
     if std::fs::read_dir(git_repo_root)?.any(|res| {

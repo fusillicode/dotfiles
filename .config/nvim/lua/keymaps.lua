@@ -13,7 +13,7 @@ function M.set_lua_defined()
   keymap_set('n', 'dd', nvrim.keymaps.smart_dd_no_yank_empty_line, base_opts)
   -- TODO: is this really needed?
   keymap_set('v', '<esc>', nvrim.keymaps.visual_esc, base_opts)
-  keymap_set({ 'n', 'v', }, '<leader>t', nvrim.plugins.truster.run_test)
+  keymap_set({ 'n', 'v', }, '<leader>t', function() nvrim.plugins.truster.run_test('Nvim') end)
   keymap_set('n', 'gx', require('opener').open_under_cursor)
 
   -- <c-s> clashes with fwd search in terminal but I've never used it much.

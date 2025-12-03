@@ -113,6 +113,8 @@ pub trait BufferExt {
     /// Errors are notified directly to Nvim because this is the behavior wanted in all cases.
     fn get_buf_type(&self) -> Option<String>;
 
+    fn get_channel(&self) -> Option<u32>;
+
     /// Inserts `text` at the current cursor position in the active buffer.
     ///
     /// Obtains the current [`CursorPosition`], converts the 1-based row to 0-based
@@ -227,6 +229,17 @@ impl BufferExt for Buffer {
             .inspect_err(|err| {
                 crate::notify::error(format!(
                     "error getting buftype of buffer | buffer={self:#?} error={err:?}"
+                ));
+            })
+            .ok()
+    }
+
+    fn get_channel(&self) -> Option<u32> {
+        let opts = OptionOptsBuilder::default().buf(self.clone()).build();
+        nvim_oxi::api::get_option_value::<u32>("channel", &opts)
+            .inspect_err(|err| {
+                crate::notify::error(format!(
+                    "error getting channel of buffer | buffer={self:#?} error={err:?}"
                 ));
             })
             .ok()
@@ -671,6 +684,10 @@ mod tests {
         fn get_buf_type(&self) -> Option<String> {
             None
         }
+
+        fn get_channel(&self) -> Option<u32> {
+            None
+        }
     }
 }
 
@@ -728,6 +745,10 @@ pub mod mock {
 
         fn get_buf_type(&self) -> Option<String> {
             Some(self.buf_type.clone())
+        }
+
+        fn get_channel(&self) -> Option<u32> {
+            None
         }
     }
 }
