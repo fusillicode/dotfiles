@@ -8,9 +8,6 @@ use ytil_noxi::mru_buffers::BufferKind;
 // use ytil_editor::Editor;
 // use ytil_editor::FileToOpen;
 
-const TERM_WIDTH_PERC: i32 = 30;
-const FILE_BUF_WIDTH_PERC: i32 = 100 - TERM_WIDTH_PERC;
-
 /// [`Dictionary`] of Rust tests utilities.
 pub fn dict() -> Dictionary {
     dict! {
@@ -31,7 +28,7 @@ pub fn create_autocmd() {
     );
 }
 
-fn focus_term(_: ()) -> Option<()> {
+fn focus_term(width_perc: i32) -> Option<()> {
     let current_buffer = nvim_oxi::api::get_current_buf();
 
     // If current buffer IS terminal.
@@ -52,7 +49,7 @@ fn focus_term(_: ()) -> Option<()> {
         return Some(());
     }
 
-    let width = compute_width(TERM_WIDTH_PERC)?;
+    let width = compute_width(width_perc)?;
 
     // If there is NO VISIBLE terminal buffer.
     if let Some(terminal_buffer) = nvim_oxi::api::list_bufs().find(BufferExt::is_terminal) {
@@ -67,7 +64,7 @@ fn focus_term(_: ()) -> Option<()> {
     Some(())
 }
 
-fn focus_buffer(_: ()) -> Option<()> {
+fn focus_buffer(width_perc: i32) -> Option<()> {
     let current_buffer = nvim_oxi::api::get_current_buf();
 
     // If current buffer IS NOT terminal.
@@ -89,7 +86,7 @@ fn focus_buffer(_: ()) -> Option<()> {
     }
 
     // If there is NO visible file buffer.
-    let width = compute_width(FILE_BUF_WIDTH_PERC)?;
+    let width = compute_width(width_perc)?;
 
     // Using ytil_noxi::common::exec2 because nvim_oxi::api::open_win fails with split left.
     ytil_noxi::common::exec_vim_script(&format!("vsplit | vertical resize {width}"), None)?;
