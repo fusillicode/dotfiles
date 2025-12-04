@@ -227,6 +227,7 @@ fn convert_visual_to_byte_idx(s: &str, idx: usize) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
+    use rstest::*;
     #[cfg(not(feature = "ci"))]
     use tempfile::NamedTempFile;
     #[cfg(not(feature = "ci"))]
@@ -234,56 +235,27 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn get_word_at_index_returns_word_inside_ascii_word() {
-        let s = "open file.txt now";
-        let idx = 7;
-        pretty_assertions::assert_eq!(get_word_at_index(s, idx), Some("file.txt"));
-    }
-
-    #[test]
-    fn get_word_at_index_returns_word_at_start_and_end_boundaries() {
-        let s = "yes run main.rs";
-        let idx_start = 8;
-        let idx_last_inside = 14;
-        pretty_assertions::assert_eq!(get_word_at_index(s, idx_start), Some("main.rs"));
-        pretty_assertions::assert_eq!(get_word_at_index(s, idx_last_inside), Some("main.rs"));
-    }
-
-    #[test]
-    fn get_word_at_index_returns_none_on_whitespace() {
-        let s = "hello  world";
-        pretty_assertions::assert_eq!(get_word_at_index(s, 5), None);
-        pretty_assertions::assert_eq!(get_word_at_index(s, 6), None);
-    }
-
-    #[test]
-    fn get_word_at_index_includes_punctuation_in_word() {
-        let s = "print(arg)";
-        let idx = 5;
-        pretty_assertions::assert_eq!(get_word_at_index(s, idx), Some("print(arg)"));
-    }
-
-    #[test]
-    fn get_word_at_index_returns_word_at_line_boundaries() {
-        let s = "/usr/local/bin";
-        pretty_assertions::assert_eq!(get_word_at_index(s, 0), Some("/usr/local/bin"));
-        pretty_assertions::assert_eq!(get_word_at_index(s, 14), Some("/usr/local/bin"));
-    }
-
-    #[test]
-    fn get_word_at_index_handles_utf8_boundaries_and_space() {
-        let s = "αβ γ";
-        pretty_assertions::assert_eq!(get_word_at_index(s, 0), Some("αβ"));
-        pretty_assertions::assert_eq!(get_word_at_index(s, 1), Some("αβ"));
-        pretty_assertions::assert_eq!(get_word_at_index(s, 4), Some("γ"));
-        pretty_assertions::assert_eq!(get_word_at_index(s, 5), None);
-    }
-
-    #[test]
-    fn get_word_at_index_returns_none_with_index_out_of_bounds() {
-        let s = "abc";
-        pretty_assertions::assert_eq!(get_word_at_index(s, 10), None);
+    #[rstest]
+    #[case("open file.txt now", 7, Some("file.txt"))]
+    #[case("yes run main.rs", 8, Some("main.rs"))]
+    #[case("yes run main.rs", 14, Some("main.rs"))]
+    #[case("hello  world", 5, None)]
+    #[case("hello  world", 6, None)]
+    #[case("/usr/local/bin", 0, Some("/usr/local/bin"))]
+    #[case("/usr/local/bin", 14, Some("/usr/local/bin"))]
+    #[case("print(arg)", 5, Some("print(arg)"))]
+    #[case("abc", 10, None)]
+    #[case("αβ γ", 0, Some("αβ"))]
+    #[case("αβ γ", 1, Some("αβ"))]
+    #[case("αβ γ", 4, Some("γ"))]
+    #[case("αβ γ", 5, None)]
+    #[case("hello\nworld", 0, Some("hello"))]
+    #[case("hello\nworld", 6, Some("world"))]
+    #[case("hello\nworld", 5, None)]
+    #[case("hello\n\nworld", 5, None)]
+    #[case("hello\n\nworld", 6, None)]
+    fn get_word_at_index_scenarios(#[case] s: &str, #[case] idx: usize, #[case] expected: Option<&str>) {
+        pretty_assertions::assert_eq!(get_word_at_index(s, idx), expected);
     }
 
     // Tests are skipped in CI because [`WordUnderCursor::from`] calls `file` command and that
