@@ -1,3 +1,5 @@
+#![allow(dead_code, unused_variables)]
+
 //! Token classification under cursor (URL / file / directory / word).
 //!
 //! Retrieves current line + cursor column, extracts contiguous non‑whitespace token, classifies via
@@ -7,12 +9,12 @@ use std::process::Command;
 
 use nvim_oxi::Object;
 use nvim_oxi::conversion::ToObject;
-use nvim_oxi::lua::Pushable;
 use nvim_oxi::lua::ffi::State;
 use nvim_oxi::serde::Serializer;
 use serde::Serialize;
 use url::Url;
 use ytil_cmd::CmdExt as _;
+use ytil_noxi::buffer::BufferExt;
 use ytil_noxi::buffer::CursorPosition;
 
 /// Retrieve and classify the non-whitespace token under the cursor in the current window.
@@ -21,13 +23,52 @@ use ytil_noxi::buffer::CursorPosition;
 /// or if the cursor is on whitespace. On errors a notification is emitted to Nvim.
 /// On success returns a classified [`WordUnderCursor`].
 pub fn get(_: ()) -> Option<WordUnderCursor> {
-    let cur_line = nvim_oxi::api::get_current_line()
-        .inspect_err(|err| ytil_noxi::notify::error(format!("error getting current line | error={err:#?}")))
-        .ok()?;
-    let col = CursorPosition::get_current()?.col;
-    get_word_at_index(&cur_line, col)
-        .map(ToOwned::to_owned)
-        .map(WordUnderCursor::from)
+    let current_buffer = nvim_oxi::api::get_current_buf();
+
+    let cursor_pos = CursorPosition::get_current()?;
+    let cursor_pos_col = cursor_pos.col;
+    let cursor_pos_row = cursor_pos.row - 1;
+
+    let mut rev_chars = vec![];
+
+    // Backward loop
+    'outer: for row_idx in (0..=cursor_pos_row).rev() {
+        let current_row = current_buffer.get_line(row_idx).unwrap().to_string_lossy().to_string();
+
+        for (char_idx, current_char) in current_row.char_indices().rev() {
+            if row_idx == cursor_pos_row && char_idx > cursor_pos_col {
+                continue;
+            }
+            if current_char.is_ascii_whitespace() {
+                break 'outer;
+            }
+            rev_chars.push(current_char);
+        }
+    }
+
+    let mut out: String = rev_chars.into_iter().rev().collect();
+
+    if !out.is_empty() {
+        // Fwd loop - using usize::MAX to avoid asking for actual window height (i.e. window max row)
+        'outer: for row_idx in cursor_pos_row..usize::MAX {
+            let current_row = current_buffer.get_line(row_idx).unwrap().to_str().unwrap().to_owned();
+
+            for (char_idx, current_char) in current_row.char_indices() {
+                if row_idx == cursor_pos_row && char_idx <= cursor_pos_col {
+                    continue;
+                }
+                if current_char.is_ascii_whitespace() {
+                    break 'outer;
+                }
+                out.push(current_char);
+            }
+        }
+    }
+
+    nvim_oxi::dbg!(&out);
+
+    // TODO: switch back to from
+    Some(WordUnderCursor::Word(out))
 }
 
 /// Classified representation of the token found under the cursor.
@@ -40,9 +81,9 @@ pub fn get(_: ()) -> Option<WordUnderCursor> {
 /// - plain tokens (fallback [`WordUnderCursor::Word`])
 ///
 /// Serialized to Lua as a tagged table (`{ kind = "...", value = "..." }`).
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(tag = "kind", content = "value")]
-#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 pub enum WordUnderCursor {
     /// A string that successfully parsed as a [`Url`] via [`Url::parse`].
     Url(String),
@@ -57,8 +98,8 @@ pub enum WordUnderCursor {
 }
 
 /// Represents a text file with a specific cursor position for navigation.
-#[derive(Serialize)]
-#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
+#[derive(Debug, Serialize)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct TextFile {
     /// The filesystem path to the text file.
     pub path: String,
@@ -68,7 +109,7 @@ pub struct TextFile {
     pub col: i64,
 }
 
-impl Pushable for WordUnderCursor {
+impl nvim_oxi::lua::Pushable for WordUnderCursor {
     unsafe fn push(self, lstate: *mut State) -> Result<std::ffi::c_int, nvim_oxi::lua::Error> {
         unsafe {
             self.to_object()
