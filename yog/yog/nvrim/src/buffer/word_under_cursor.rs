@@ -1,5 +1,3 @@
-#![allow(dead_code, unused_variables)]
-
 //! Token classification under cursor (URL / file / directory / word).
 //!
 //! Retrieves current line + cursor column, extracts contiguous non‑whitespace token, classifies via
@@ -24,51 +22,62 @@ use ytil_noxi::buffer::CursorPosition;
 /// On success returns a classified [`WordUnderCursor`].
 pub fn get(_: ()) -> Option<WordUnderCursor> {
     let current_buffer = nvim_oxi::api::get_current_buf();
-
     let cursor_pos = CursorPosition::get_current()?;
     let cursor_pos_col = cursor_pos.col;
     let cursor_pos_row = cursor_pos.row - 1;
 
-    let mut rev_chars = vec![];
+    if current_buffer.is_terminal() {
+        let mut rev_chars = vec![];
 
-    // Backward loop
-    'outer: for row_idx in (0..=cursor_pos_row).rev() {
-        let current_row = current_buffer.get_line(row_idx).unwrap().to_string_lossy().to_string();
+        // Backward loop
+        'outer: for row_idx in (0..=cursor_pos_row).rev() {
+            let current_row = current_buffer.get_line(row_idx).unwrap().to_string_lossy().to_string();
 
-        for (char_idx, current_char) in current_row.char_indices().rev() {
-            if row_idx == cursor_pos_row && char_idx > cursor_pos_col {
-                continue;
-            }
-            if current_char.is_ascii_whitespace() {
+            if current_row.is_empty() {
                 break 'outer;
             }
-            rev_chars.push(current_char);
-        }
-    }
 
-    let mut out: String = rev_chars.into_iter().rev().collect();
-
-    if !out.is_empty() {
-        // Fwd loop - using usize::MAX to avoid asking for actual window height (i.e. window max row)
-        'outer: for row_idx in cursor_pos_row..usize::MAX {
-            let current_row = current_buffer.get_line(row_idx).unwrap().to_str().unwrap().to_owned();
-
-            for (char_idx, current_char) in current_row.char_indices() {
-                if row_idx == cursor_pos_row && char_idx <= cursor_pos_col {
+            for (char_idx, current_char) in current_row.char_indices().rev() {
+                if row_idx == cursor_pos_row && char_idx > cursor_pos_col {
                     continue;
                 }
                 if current_char.is_ascii_whitespace() {
                     break 'outer;
                 }
-                out.push(current_char);
+                rev_chars.push(current_char);
             }
         }
+
+        let mut out: String = rev_chars.into_iter().rev().collect();
+
+        if !out.is_empty() {
+            // Fwd loop - using usize::MAX to avoid asking for actual window height (i.e. window max row)
+            'outer: for row_idx in cursor_pos_row..usize::MAX {
+                let current_row = current_buffer.get_line(row_idx).unwrap().to_str().unwrap().to_owned();
+
+                if current_row.is_empty() {
+                    break 'outer;
+                }
+
+                for (char_idx, current_char) in current_row.char_indices() {
+                    if row_idx == cursor_pos_row && char_idx <= cursor_pos_col {
+                        continue;
+                    }
+                    if current_char.is_ascii_whitespace() {
+                        break 'outer;
+                    }
+                    out.push(current_char);
+                }
+            }
+        }
+
+        Some(WordUnderCursor::Word(out))
+    } else {
+        let cur_line = nvim_oxi::api::get_current_line().ok()?;
+        get_word_at_index(&cur_line, cursor_pos_col)
+            .map(ToOwned::to_owned)
+            .map(WordUnderCursor::from)
     }
-
-    nvim_oxi::dbg!(&out);
-
-    // TODO: switch back to from
-    Some(WordUnderCursor::Word(out))
 }
 
 /// Classified representation of the token found under the cursor.
