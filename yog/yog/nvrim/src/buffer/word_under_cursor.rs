@@ -1,5 +1,3 @@
-#![allow(dead_code, unused_variables)]
-
 //! Token classification under cursor (URL / file / directory / word).
 //!
 //! Retrieves current line + cursor column, extracts contiguous non‑whitespace token, classifies via
@@ -37,7 +35,7 @@ pub fn get(_: ()) -> Option<WordUnderCursor> {
 }
 
 fn get_word_under_cursor_in_normal_buffer(cursor_pos: &CursorPosition) -> Option<String> {
-    let current_line = nvim_oxi::api::get_current_line().ok()?;
+    let current_line = ytil_noxi::buffer::get_current_line()?;
     get_word_at_index(&current_line, cursor_pos.col).map(ToOwned::to_owned)
 }
 
@@ -54,15 +52,7 @@ fn get_word_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &Cursor
 
     let mut out = vec![];
     let mut word_end_idx = 0;
-    for (idx, current_char) in nvim_oxi::api::get_current_line()
-        .inspect_err(|err| {
-            ytil_noxi::notify::error(format!(
-                "error getting buffer current line | buffer={buffer:?} error={err}"
-            ))
-        })
-        .ok()?
-        .char_indices()
-    {
+    for (idx, current_char) in ytil_noxi::buffer::get_current_line()?.char_indices() {
         word_end_idx = idx;
         if idx < cursor_pos.col {
             if current_char.is_ascii_whitespace() {
@@ -91,7 +81,7 @@ fn get_word_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &Cursor
             if line.is_empty() {
                 break 'outer;
             }
-            if let Some((_, prev)) = line.rsplit_once(" ") {
+            if let Some((_, prev)) = line.rsplit_once(' ') {
                 out.splice(0..0, prev.chars());
                 break;
             }
@@ -109,7 +99,7 @@ fn get_word_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &Cursor
             if line.is_empty() {
                 break 'outer;
             }
-            if let Some((next, _)) = line.split_once(" ") {
+            if let Some((next, _)) = line.split_once(' ') {
                 out.extend(next.chars());
                 break;
             }

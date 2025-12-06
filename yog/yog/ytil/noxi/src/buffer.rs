@@ -491,6 +491,12 @@ pub fn get_absolute_path(buffer: Option<&Buffer>) -> Option<PathBuf> {
     path.map(PathBuf::from)
 }
 
+pub fn get_current_line() -> Option<String> {
+    nvim_oxi::api::get_current_line()
+        .inspect_err(|err| crate::notify::error(format!("error getting current line | error={err}")))
+        .ok()
+}
+
 #[cfg(test)]
 mod tests {
     use mockall::predicate::*;
