@@ -83,26 +83,13 @@ fn get_word_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &Cursor
         }
     }
 
-    let word_start_idx = word_end_idx.saturating_sub(out.len());
-
-    // Check prev rows
-    if word_start_idx == 0 {
+    // Check rows before the cursor one.
+    if word_end_idx.saturating_sub(out.len()) == 0 {
         'outer: for idx in (0..cursor_pos.row.saturating_sub(1)).rev() {
-            let line = buffer
-                .get_line(idx)
-                .inspect_err(|err| {
-                    ytil_noxi::notify::error(format!(
-                        "error getting line from buffer | line_idx={idx} buffer={buffer:?} error={err}"
-                    ))
-                })
-                .ok()?
-                .to_string_lossy()
-                .to_string();
-
+            let line = buffer.get_line(idx).ok()?.to_string_lossy().to_string();
             if line.is_empty() {
                 break 'outer;
             }
-
             if let Some((_, prev)) = line.rsplit_once(" ") {
                 out.splice(0..0, prev.chars());
                 break;
@@ -114,24 +101,13 @@ fn get_word_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &Cursor
         }
     }
 
-    // Check next rows
+    // Check rows after the cursor one.
     if word_end_idx >= window_width {
         'outer: for idx in cursor_pos.row..usize::MAX {
-            let line = buffer
-                .get_line(idx)
-                .inspect_err(|err| {
-                    ytil_noxi::notify::error(format!(
-                        "error getting line from buffer | line_idx={idx} buffer={buffer:?} error={err}"
-                    ))
-                })
-                .ok()?
-                .to_string_lossy()
-                .to_string();
-
+            let line = buffer.get_line(idx).ok()?.to_string_lossy().to_string();
             if line.is_empty() {
                 break 'outer;
             }
-
             if let Some((next, _)) = line.split_once(" ") {
                 out.extend(next.chars());
                 break;
