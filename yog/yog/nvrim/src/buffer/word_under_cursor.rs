@@ -132,23 +132,11 @@ pub enum WordUnderCursor {
     /// A filesystem path identified as a binary file by [`exec_file_cmd`].
     BinaryFile(String),
     /// A filesystem path identified as a text file by [`exec_file_cmd`].
-    TextFile(TextFile),
+    TextFile(String),
     /// A filesystem path identified as a directory by [`exec_file_cmd`].
     Directory(String),
     /// A fallback plain token (word) when no more specific classification applied.
     Word(String),
-}
-
-/// Represents a text file with a specific cursor position for navigation.
-#[derive(Debug, Serialize)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
-pub struct TextFile {
-    /// The filesystem path to the text file.
-    pub path: String,
-    /// The 1-based line number within the file.
-    pub lnum: i64,
-    /// The 1-based column number within the line.
-    pub col: i64,
 }
 
 impl nvim_oxi::lua::Pushable for WordUnderCursor {
@@ -203,7 +191,7 @@ impl From<String> for WordUnderCursor {
 
         match exec_file_cmd(maybe_path) {
             Ok(FileCmdOutput::BinaryFile(x)) => Self::BinaryFile(x),
-            Ok(FileCmdOutput::TextFile(path)) => Self::TextFile(TextFile { path, lnum, col }),
+            Ok(FileCmdOutput::TextFile(path)) => Self::TextFile(format!("{path}:{lnum}:{col}")),
             Ok(FileCmdOutput::Directory(x)) => Self::Directory(x),
             Ok(FileCmdOutput::NotFound(path) | FileCmdOutput::Unknown(path)) => Self::Word(path),
             Err(_) => Self::Word(value),
@@ -367,7 +355,7 @@ mod tests {
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
         let result = WordUnderCursor::from(path.clone());
-        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile(TextFile { path, lnum: 0, col: 0 }));
+        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile(format!("{path}:0:0")));
     }
 
     #[test]
@@ -377,7 +365,7 @@ mod tests {
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
         let result = WordUnderCursor::from(format!("{path}:10"));
-        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile(TextFile { path, lnum: 10, col: 0 }));
+        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile(format!("{path}:10:0")));
     }
 
     #[test]
@@ -387,7 +375,7 @@ mod tests {
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
         let result = WordUnderCursor::from(format!("{path}:10:5"));
-        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile(TextFile { path, lnum: 10, col: 5 }));
+        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile(format!("{path}:10:5")));
     }
 
     #[test]
@@ -445,6 +433,6 @@ mod tests {
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
         let result = WordUnderCursor::from(format!("{path}:10:5:extra"));
-        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile(TextFile { path, lnum: 10, col: 5 }));
+        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile(format!("{path}:10:5")));
     }
 }
