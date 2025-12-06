@@ -4,6 +4,7 @@ use std::ops::RangeInclusive;
 use std::path::Path;
 use std::path::PathBuf;
 
+use color_eyre::eyre::Context;
 use color_eyre::eyre::eyre;
 use nvim_oxi::Array;
 use nvim_oxi::api::Buffer;
@@ -192,7 +193,8 @@ impl TextBoundary {
 
 impl BufferExt for Buffer {
     fn get_line(&self, idx: usize) -> color_eyre::Result<nvim_oxi::String> {
-        self.get_lines(idx..=idx, true)?
+        self.get_lines(idx..=idx, true)
+            .wrap_err_with(|| format!("error getting buffer line at index | idx={idx} buffer={self:?}"))?
             .next()
             .ok_or_else(|| eyre!("buffer line missing | idx={idx} buffer={self:#?}"))
     }
