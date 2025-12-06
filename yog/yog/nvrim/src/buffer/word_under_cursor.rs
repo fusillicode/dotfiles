@@ -76,6 +76,7 @@ fn get_word_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &Cursor
             }
             out.push(current_char);
         } else if current_char.is_ascii_whitespace() {
+            out.clear();
             out.push(current_char);
             break;
         } else {
