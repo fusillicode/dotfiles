@@ -1,3 +1,5 @@
+#![allow(dead_code, unused_variables)]
+
 //! Token classification under cursor (URL / file / directory / word).
 //!
 //! Retrieves current line + cursor column, extracts contiguous non‑whitespace token, classifies via
@@ -43,54 +45,76 @@ fn get_word_under_cursor_in_normal_buffer(cursor_pos: &CursorPosition) -> Option
 fn get_word_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &CursorPosition) -> String {
     let cursor_pos_col = cursor_pos.col;
     let cursor_pos_row = cursor_pos.row - 1;
+    let window_width = usize::try_from(nvim_oxi::api::Window::current().get_width().unwrap())
+        .unwrap()
+        .saturating_sub(1);
 
-    let mut rev_chars = vec![];
-
-    // Backward loop
-    'outer: for row_idx in (0..=cursor_pos_row).rev() {
-        let current_row = buffer.get_line(row_idx).unwrap().to_string_lossy().to_string();
-
-        if current_row.is_empty() {
-            break 'outer;
-        }
-
-        for (char_idx, current_char) in current_row.char_indices().rev() {
-            if row_idx == cursor_pos_row && char_idx > cursor_pos_col {
-                continue;
-            }
+    let mut out = vec![];
+    let mut word_end_idx = 0;
+    for (idx, current_char) in nvim_oxi::api::get_current_line().unwrap().char_indices() {
+        word_end_idx = idx;
+        if idx < cursor_pos_col {
             if current_char.is_ascii_whitespace() {
-                break 'outer;
+                out.clear();
+            } else {
+                out.push(current_char);
             }
-            rev_chars.push(current_char);
-        }
-    }
-
-    let mut out: String = rev_chars.into_iter().rev().collect();
-
-    if out.is_empty() {
-        return out;
-    }
-
-    // Fwd loop - using usize::MAX to avoid asking for actual window height (i.e. window max row)
-    'outer: for row_idx in cursor_pos_row..usize::MAX {
-        let current_row = buffer.get_line(row_idx).unwrap().to_str().unwrap().to_owned();
-
-        if current_row.is_empty() {
-            break 'outer;
-        }
-
-        for (char_idx, current_char) in current_row.char_indices() {
-            if row_idx == cursor_pos_row && char_idx <= cursor_pos_col {
-                continue;
-            }
+        } else if idx > cursor_pos_col {
             if current_char.is_ascii_whitespace() {
-                break 'outer;
+                break;
             }
+            out.push(current_char);
+        } else if current_char.is_ascii_whitespace() {
+            out.push(current_char);
+            break;
+        } else {
             out.push(current_char);
         }
     }
 
-    out
+    let word_start_idx = word_end_idx.saturating_sub(out.len());
+
+    // Check prev rows
+    if word_start_idx == 0 {
+        'outer: for idx in (0..cursor_pos_row).rev() {
+            let line = buffer.get_line(idx).unwrap().to_string_lossy().to_string();
+
+            if line.is_empty() {
+                break 'outer;
+            }
+
+            if let Some((_, prev)) = line.rsplit_once(" ") {
+                out.splice(0..0, prev.chars());
+                break;
+            }
+            if line.chars().count() < window_width {
+                break;
+            }
+            out.splice(0..0, line.chars());
+        }
+    }
+
+    // Check next rows
+    if word_end_idx >= window_width {
+        'outer: for idx in (cursor_pos_row + 1)..usize::MAX {
+            let line = buffer.get_line(idx).unwrap().to_string_lossy().to_string();
+
+            if line.is_empty() {
+                break 'outer;
+            }
+
+            if let Some((next, _)) = line.split_once(" ") {
+                out.extend(next.chars());
+                break;
+            }
+            out.extend(line.chars());
+            if line.chars().count() < window_width {
+                break;
+            }
+        }
+    }
+
+    nvim_oxi::dbg!(out.into_iter().collect())
 }
 
 /// Classified representation of the token found under the cursor.
