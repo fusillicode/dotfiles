@@ -7,6 +7,7 @@
 
 use std::process::Command;
 
+use color_eyre::eyre::Context;
 use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::conversion::ToObject;
@@ -28,13 +29,11 @@ pub fn get(_: ()) -> Option<WordUnderCursor> {
     let cursor_pos = CursorPosition::get_current()?;
 
     if current_buffer.is_terminal() {
-        return Some(WordUnderCursor::from(get_word_under_cursor_in_terminal_buffer(
-            &current_buffer,
-            &cursor_pos,
-        )));
+        get_word_under_cursor_in_terminal_buffer(&current_buffer, &cursor_pos)
+    } else {
+        get_word_under_cursor_in_normal_buffer(&cursor_pos)
     }
-
-    get_word_under_cursor_in_normal_buffer(&cursor_pos).map(WordUnderCursor::from)
+    .map(WordUnderCursor::from)
 }
 
 fn get_word_under_cursor_in_normal_buffer(cursor_pos: &CursorPosition) -> Option<String> {
@@ -42,24 +41,36 @@ fn get_word_under_cursor_in_normal_buffer(cursor_pos: &CursorPosition) -> Option
     get_word_at_index(&current_line, cursor_pos.col).map(ToOwned::to_owned)
 }
 
-fn get_word_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &CursorPosition) -> String {
-    let cursor_pos_col = cursor_pos.col;
-    let cursor_pos_row = cursor_pos.row - 1;
-    let window_width = usize::try_from(nvim_oxi::api::Window::current().get_width().unwrap())
-        .unwrap()
+fn get_word_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &CursorPosition) -> Option<String> {
+    let window_width = nvim_oxi::api::Window::current()
+        .get_width()
+        .wrap_err("error getting window width")
+        .and_then(|x| {
+            usize::try_from(x).wrap_err_with(|| format!("error converting window width to usize | width={x}"))
+        })
+        .inspect_err(|err| ytil_noxi::notify::error(format!("{err}")))
+        .ok()?
         .saturating_sub(1);
 
     let mut out = vec![];
     let mut word_end_idx = 0;
-    for (idx, current_char) in nvim_oxi::api::get_current_line().unwrap().char_indices() {
+    for (idx, current_char) in nvim_oxi::api::get_current_line()
+        .inspect_err(|err| {
+            ytil_noxi::notify::error(format!(
+                "error getting buffer current line | buffer={buffer:?} error={err}"
+            ))
+        })
+        .ok()?
+        .char_indices()
+    {
         word_end_idx = idx;
-        if idx < cursor_pos_col {
+        if idx < cursor_pos.col {
             if current_char.is_ascii_whitespace() {
                 out.clear();
             } else {
                 out.push(current_char);
             }
-        } else if idx > cursor_pos_col {
+        } else if idx > cursor_pos.col {
             if current_char.is_ascii_whitespace() {
                 break;
             }
@@ -76,8 +87,17 @@ fn get_word_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &Cursor
 
     // Check prev rows
     if word_start_idx == 0 {
-        'outer: for idx in (0..cursor_pos_row).rev() {
-            let line = buffer.get_line(idx).unwrap().to_string_lossy().to_string();
+        'outer: for idx in (0..cursor_pos.row.saturating_sub(1)).rev() {
+            let line = buffer
+                .get_line(idx)
+                .inspect_err(|err| {
+                    ytil_noxi::notify::error(format!(
+                        "error getting line from buffer | line_idx={idx} buffer={buffer:?} error={err}"
+                    ))
+                })
+                .ok()?
+                .to_string_lossy()
+                .to_string();
 
             if line.is_empty() {
                 break 'outer;
@@ -96,8 +116,17 @@ fn get_word_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &Cursor
 
     // Check next rows
     if word_end_idx >= window_width {
-        'outer: for idx in (cursor_pos_row + 1)..usize::MAX {
-            let line = buffer.get_line(idx).unwrap().to_string_lossy().to_string();
+        'outer: for idx in cursor_pos.row..usize::MAX {
+            let line = buffer
+                .get_line(idx)
+                .inspect_err(|err| {
+                    ytil_noxi::notify::error(format!(
+                        "error getting line from buffer | line_idx={idx} buffer={buffer:?} error={err}"
+                    ))
+                })
+                .ok()?
+                .to_string_lossy()
+                .to_string();
 
             if line.is_empty() {
                 break 'outer;
@@ -114,7 +143,7 @@ fn get_word_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &Cursor
         }
     }
 
-    nvim_oxi::dbg!(out.into_iter().collect())
+    Some(nvim_oxi::dbg!(out.into_iter().collect()))
 }
 
 /// Classified representation of the token found under the cursor.
