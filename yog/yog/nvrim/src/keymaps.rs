@@ -151,13 +151,7 @@ fn visual_esc(_: ()) -> String {
 ///
 /// Used by the smart *expr* mapping helpers.
 ///
-/// Errors from [`nvim_oxi::api::get_current_line`] are reported and the `default` is returned.
+/// In case of errors, they are notified to Nvim and a `default` value is returned.
 fn apply_on_current_line_or_unwrap<'a, F: FnOnce(String) -> &'a str>(fun: F, default: &'a str) -> String {
-    nvim_oxi::api::get_current_line()
-        .inspect_err(|err| {
-            ytil_noxi::notify::error(format!("error getting current line | error={err:#?}"));
-        })
-        .map(fun)
-        .unwrap_or(default)
-        .to_string()
+    ytil_noxi::buffer::get_current_line().map_or(default, fun).to_string()
 }

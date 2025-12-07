@@ -5,14 +5,16 @@
 
 use std::process::Command;
 
+use color_eyre::eyre::Context;
 use nvim_oxi::Object;
+use nvim_oxi::api::Buffer;
 use nvim_oxi::conversion::ToObject;
-use nvim_oxi::lua::Pushable;
 use nvim_oxi::lua::ffi::State;
 use nvim_oxi::serde::Serializer;
 use serde::Serialize;
 use url::Url;
 use ytil_cmd::CmdExt as _;
+use ytil_noxi::buffer::BufferExt;
 use ytil_noxi::buffer::CursorPosition;
 
 /// Retrieve and classify the non-whitespace token under the cursor in the current window.
@@ -21,13 +23,94 @@ use ytil_noxi::buffer::CursorPosition;
 /// or if the cursor is on whitespace. On errors a notification is emitted to Nvim.
 /// On success returns a classified [`WordUnderCursor`].
 pub fn get(_: ()) -> Option<WordUnderCursor> {
-    let cur_line = nvim_oxi::api::get_current_line()
-        .inspect_err(|err| ytil_noxi::notify::error(format!("error getting current line | error={err:#?}")))
-        .ok()?;
-    let col = CursorPosition::get_current()?.col;
-    get_word_at_index(&cur_line, col)
-        .map(ToOwned::to_owned)
-        .map(WordUnderCursor::from)
+    let current_buffer = nvim_oxi::api::get_current_buf();
+    let cursor_pos = CursorPosition::get_current()?;
+
+    if current_buffer.is_terminal() {
+        get_word_under_cursor_in_terminal_buffer(&current_buffer, &cursor_pos)
+    } else {
+        get_word_under_cursor_in_normal_buffer(&cursor_pos)
+    }
+    .map(WordUnderCursor::from)
+}
+
+fn get_word_under_cursor_in_normal_buffer(cursor_pos: &CursorPosition) -> Option<String> {
+    let current_line = ytil_noxi::buffer::get_current_line()?;
+    get_word_at_index(&current_line, cursor_pos.col).map(ToOwned::to_owned)
+}
+
+fn get_word_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &CursorPosition) -> Option<String> {
+    let window_width = nvim_oxi::api::Window::current()
+        .get_width()
+        .wrap_err("error getting window width")
+        .and_then(|x| {
+            usize::try_from(x).wrap_err_with(|| format!("error converting window width to usize | width={x}"))
+        })
+        .inspect_err(|err| ytil_noxi::notify::error(format!("{err}")))
+        .ok()?
+        .saturating_sub(1);
+
+    let mut out = vec![];
+    let mut word_end_idx = 0;
+    for (idx, current_char) in ytil_noxi::buffer::get_current_line()?.char_indices() {
+        word_end_idx = idx;
+        if idx < cursor_pos.col {
+            if current_char.is_ascii_whitespace() {
+                out.clear();
+            } else {
+                out.push(current_char);
+            }
+        } else if idx > cursor_pos.col {
+            if current_char.is_ascii_whitespace() {
+                break;
+            }
+            out.push(current_char);
+        } else if current_char.is_ascii_whitespace() {
+            out.clear();
+            out.push(current_char);
+            break;
+        } else {
+            out.push(current_char);
+        }
+    }
+
+    // Check rows before the cursor one.
+    if word_end_idx.saturating_sub(out.len()) == 0 {
+        'outer: for idx in (0..cursor_pos.row.saturating_sub(1)).rev() {
+            let line = buffer.get_line(idx).ok()?.to_string_lossy().to_string();
+            if line.is_empty() {
+                break 'outer;
+            }
+            if let Some((_, prev)) = line.rsplit_once(' ') {
+                out.splice(0..0, prev.chars());
+                break;
+            }
+            if line.chars().count() < window_width {
+                break;
+            }
+            out.splice(0..0, line.chars());
+        }
+    }
+
+    // Check rows after the cursor one.
+    if word_end_idx >= window_width {
+        'outer: for idx in cursor_pos.row..usize::MAX {
+            let line = buffer.get_line(idx).ok()?.to_string_lossy().to_string();
+            if line.is_empty() {
+                break 'outer;
+            }
+            if let Some((next, _)) = line.split_once(' ') {
+                out.extend(next.chars());
+                break;
+            }
+            out.extend(line.chars());
+            if line.chars().count() < window_width {
+                break;
+            }
+        }
+    }
+
+    Some(nvim_oxi::dbg!(out.into_iter().collect()))
 }
 
 /// Classified representation of the token found under the cursor.
@@ -40,35 +123,23 @@ pub fn get(_: ()) -> Option<WordUnderCursor> {
 /// - plain tokens (fallback [`WordUnderCursor::Word`])
 ///
 /// Serialized to Lua as a tagged table (`{ kind = "...", value = "..." }`).
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(tag = "kind", content = "value")]
-#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 pub enum WordUnderCursor {
     /// A string that successfully parsed as a [`Url`] via [`Url::parse`].
     Url(String),
     /// A filesystem path identified as a binary file by [`exec_file_cmd`].
     BinaryFile(String),
     /// A filesystem path identified as a text file by [`exec_file_cmd`].
-    TextFile(TextFile),
+    TextFile(String),
     /// A filesystem path identified as a directory by [`exec_file_cmd`].
     Directory(String),
     /// A fallback plain token (word) when no more specific classification applied.
     Word(String),
 }
 
-/// Represents a text file with a specific cursor position for navigation.
-#[derive(Serialize)]
-#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
-pub struct TextFile {
-    /// The filesystem path to the text file.
-    pub path: String,
-    /// The 1-based line number within the file.
-    pub lnum: i64,
-    /// The 1-based column number within the line.
-    pub col: i64,
-}
-
-impl Pushable for WordUnderCursor {
+impl nvim_oxi::lua::Pushable for WordUnderCursor {
     unsafe fn push(self, lstate: *mut State) -> Result<std::ffi::c_int, nvim_oxi::lua::Error> {
         unsafe {
             self.to_object()
@@ -120,7 +191,7 @@ impl From<String> for WordUnderCursor {
 
         match exec_file_cmd(maybe_path) {
             Ok(FileCmdOutput::BinaryFile(x)) => Self::BinaryFile(x),
-            Ok(FileCmdOutput::TextFile(path)) => Self::TextFile(TextFile { path, lnum, col }),
+            Ok(FileCmdOutput::TextFile(path)) => Self::TextFile(format!("{path}:{lnum}:{col}")),
             Ok(FileCmdOutput::Directory(x)) => Self::Directory(x),
             Ok(FileCmdOutput::NotFound(path) | FileCmdOutput::Unknown(path)) => Self::Word(path),
             Err(_) => Self::Word(value),
@@ -227,6 +298,7 @@ fn convert_visual_to_byte_idx(s: &str, idx: usize) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
+    use rstest::*;
     #[cfg(not(feature = "ci"))]
     use tempfile::NamedTempFile;
     #[cfg(not(feature = "ci"))]
@@ -234,56 +306,27 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn get_word_at_index_returns_word_inside_ascii_word() {
-        let s = "open file.txt now";
-        let idx = 7;
-        pretty_assertions::assert_eq!(get_word_at_index(s, idx), Some("file.txt"));
-    }
-
-    #[test]
-    fn get_word_at_index_returns_word_at_start_and_end_boundaries() {
-        let s = "yes run main.rs";
-        let idx_start = 8;
-        let idx_last_inside = 14;
-        pretty_assertions::assert_eq!(get_word_at_index(s, idx_start), Some("main.rs"));
-        pretty_assertions::assert_eq!(get_word_at_index(s, idx_last_inside), Some("main.rs"));
-    }
-
-    #[test]
-    fn get_word_at_index_returns_none_on_whitespace() {
-        let s = "hello  world";
-        pretty_assertions::assert_eq!(get_word_at_index(s, 5), None);
-        pretty_assertions::assert_eq!(get_word_at_index(s, 6), None);
-    }
-
-    #[test]
-    fn get_word_at_index_includes_punctuation_in_word() {
-        let s = "print(arg)";
-        let idx = 5;
-        pretty_assertions::assert_eq!(get_word_at_index(s, idx), Some("print(arg)"));
-    }
-
-    #[test]
-    fn get_word_at_index_returns_word_at_line_boundaries() {
-        let s = "/usr/local/bin";
-        pretty_assertions::assert_eq!(get_word_at_index(s, 0), Some("/usr/local/bin"));
-        pretty_assertions::assert_eq!(get_word_at_index(s, 14), Some("/usr/local/bin"));
-    }
-
-    #[test]
-    fn get_word_at_index_handles_utf8_boundaries_and_space() {
-        let s = "αβ γ";
-        pretty_assertions::assert_eq!(get_word_at_index(s, 0), Some("αβ"));
-        pretty_assertions::assert_eq!(get_word_at_index(s, 1), Some("αβ"));
-        pretty_assertions::assert_eq!(get_word_at_index(s, 4), Some("γ"));
-        pretty_assertions::assert_eq!(get_word_at_index(s, 5), None);
-    }
-
-    #[test]
-    fn get_word_at_index_returns_none_with_index_out_of_bounds() {
-        let s = "abc";
-        pretty_assertions::assert_eq!(get_word_at_index(s, 10), None);
+    #[rstest]
+    #[case("open file.txt now", 7, Some("file.txt"))]
+    #[case("yes run main.rs", 8, Some("main.rs"))]
+    #[case("yes run main.rs", 14, Some("main.rs"))]
+    #[case("hello  world", 5, None)]
+    #[case("hello  world", 6, None)]
+    #[case("/usr/local/bin", 0, Some("/usr/local/bin"))]
+    #[case("/usr/local/bin", 14, Some("/usr/local/bin"))]
+    #[case("print(arg)", 5, Some("print(arg)"))]
+    #[case("abc", 10, None)]
+    #[case("αβ γ", 0, Some("αβ"))]
+    #[case("αβ γ", 1, Some("αβ"))]
+    #[case("αβ γ", 4, Some("γ"))]
+    #[case("αβ γ", 5, None)]
+    #[case("hello\nworld", 0, Some("hello"))]
+    #[case("hello\nworld", 6, Some("world"))]
+    #[case("hello\nworld", 5, None)]
+    #[case("hello\n\nworld", 5, None)]
+    #[case("hello\n\nworld", 6, None)]
+    fn get_word_at_index_scenarios(#[case] s: &str, #[case] idx: usize, #[case] expected: Option<&str>) {
+        pretty_assertions::assert_eq!(get_word_at_index(s, idx), expected);
     }
 
     // Tests are skipped in CI because [`WordUnderCursor::from`] calls `file` command and that
@@ -312,7 +355,7 @@ mod tests {
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
         let result = WordUnderCursor::from(path.clone());
-        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile(TextFile { path, lnum: 0, col: 0 }));
+        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile(format!("{path}:0:0")));
     }
 
     #[test]
@@ -322,7 +365,7 @@ mod tests {
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
         let result = WordUnderCursor::from(format!("{path}:10"));
-        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile(TextFile { path, lnum: 10, col: 0 }));
+        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile(format!("{path}:10:0")));
     }
 
     #[test]
@@ -332,7 +375,7 @@ mod tests {
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
         let result = WordUnderCursor::from(format!("{path}:10:5"));
-        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile(TextFile { path, lnum: 10, col: 5 }));
+        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile(format!("{path}:10:5")));
     }
 
     #[test]
@@ -390,6 +433,6 @@ mod tests {
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
         let result = WordUnderCursor::from(format!("{path}:10:5:extra"));
-        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile(TextFile { path, lnum: 10, col: 5 }));
+        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile(format!("{path}:10:5")));
     }
 }
