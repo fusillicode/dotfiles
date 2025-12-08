@@ -135,15 +135,7 @@ fn run_test_in_nvim_term(test_runner: &str, test_name: &str) -> Option<()> {
         return None;
     };
 
-    let channel_id = terminal_buffer.get_channel()?;
-
-    let test_run_cmd = format!("{test_runner} {test_name}\n");
-
-    nvim_oxi::api::chan_send(channel_id, &test_run_cmd).inspect_err(|err|{
-        ytil_noxi::notify::error(format!(
-            "error sending command to buffer channel | command={test_run_cmd:?} buffer={terminal_buffer:?} channel_id={channel_id} error={err:?}"
-        ));
-    }).ok()?;
+    terminal_buffer.send_command(&format!("{test_runner} {test_name}\n"));
 
     Some(())
 }
