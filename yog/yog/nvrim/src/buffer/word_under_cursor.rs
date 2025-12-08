@@ -162,6 +162,8 @@ impl ToObject for WordUnderCursor {
 /// 3. Falls back to [`WordUnderCursor::Word`] on errors or unknown kinds.
 impl From<String> for WordUnderCursor {
     fn from(value: String) -> Self {
+        let value = value.trim_matches('"').trim_matches('`').trim_matches('\'').to_string();
+
         if Url::parse(&value).is_ok() {
             return Self::Url(value);
         }
