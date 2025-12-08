@@ -110,7 +110,7 @@ fn get_word_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &Cursor
         }
     }
 
-    Some(nvim_oxi::dbg!(out.into_iter().collect()))
+    Some(out.into_iter().collect())
 }
 
 /// Classified representation of the token found under the cursor.
@@ -216,17 +216,22 @@ impl From<String> for WordUnderCursor {
 /// - the command exits with non-success
 /// - standard output cannot be decoded as valid UTF-8
 fn exec_file_cmd(path: &str) -> color_eyre::Result<FileCmdOutput> {
-    let output = std::str::from_utf8(&Command::new("file").args([path, "-I"]).exec()?.stdout)?.to_lowercase();
-    if output.contains(" inode/directory;") {
+    let stdout_bytes = Command::new("sh")
+        .arg("-c")
+        .arg(format!("file {path} -I"))
+        .exec()?
+        .stdout;
+    let stdout = std::str::from_utf8(&stdout_bytes)?.to_lowercase();
+    if stdout.contains(" inode/directory;") {
         return Ok(FileCmdOutput::Directory(path.to_owned()));
     }
-    if output.contains(" text/plain;") || output.contains(" text/csv;") {
+    if stdout.contains(" text/plain;") || stdout.contains(" text/csv;") {
         return Ok(FileCmdOutput::TextFile(path.to_owned()));
     }
-    if output.contains("application/") {
+    if stdout.contains("application/") {
         return Ok(FileCmdOutput::BinaryFile(path.to_owned()));
     }
-    if output.contains(" no such file or directory") {
+    if stdout.contains(" no such file or directory") {
         return Ok(FileCmdOutput::NotFound(path.to_owned()));
     }
     Ok(FileCmdOutput::Unknown(path.to_owned()))

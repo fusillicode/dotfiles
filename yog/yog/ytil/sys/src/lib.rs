@@ -548,8 +548,9 @@ pub fn find_matching_files_recursively_in_dir(
 /// - The `open` command exits with a non-zero status.
 pub fn open(arg: &str) -> color_eyre::Result<()> {
     let cmd = "open";
-    Command::new(cmd)
-        .arg(arg)
+    Command::new("sh")
+        .arg("-c")
+        .arg(format!("{cmd} {arg}"))
         .status()
         .wrap_err_with(|| eyre!("error running cmd | cmd={cmd:?} arg={arg:?}"))?
         .exit_ok()

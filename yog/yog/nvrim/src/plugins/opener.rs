@@ -12,11 +12,15 @@ pub fn dict() -> Dictionary {
 fn open_word_under_cursor(_: ()) -> Option<()> {
     let word_under_cursor = word_under_cursor::get(())?;
 
+    nvim_oxi::dbg!(&word_under_cursor);
+
     match word_under_cursor {
         WordUnderCursor::BinaryFile(_) | WordUnderCursor::Word(_) => None,
-        WordUnderCursor::TextFile(text_file) => None,
-        WordUnderCursor::Url(arg) | WordUnderCursor::Directory(arg) => ytil_sys::open(arg).inspect_err(|err| {
-            ytil_noxi::notify::error(format!("{error:?}"));
-        }),
+        WordUnderCursor::TextFile(_) => None,
+        WordUnderCursor::Url(arg) | WordUnderCursor::Directory(arg) => ytil_sys::open(&arg)
+            .inspect_err(|err| {
+                ytil_noxi::notify::error(format!("{err:?}"));
+            })
+            .ok(),
     }
 }
