@@ -8,6 +8,7 @@ use std::process::Command;
 use color_eyre::eyre::Context;
 use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;
+use nvim_oxi::api::Window;
 use nvim_oxi::conversion::ToObject;
 use nvim_oxi::lua::ffi::State;
 use nvim_oxi::serde::Serializer;
@@ -40,7 +41,7 @@ fn get_word_under_cursor_in_normal_buffer(cursor_pos: &CursorPosition) -> Option
 }
 
 fn get_word_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &CursorPosition) -> Option<String> {
-    let window_width = nvim_oxi::api::Window::current()
+    let window_width = Window::current()
         .get_width()
         .wrap_err("error getting window width")
         .and_then(|x| {
