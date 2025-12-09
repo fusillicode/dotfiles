@@ -53,23 +53,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Install Lua and development headers
-        run: sudo apt-get update && sudo apt-get install -y liblua5.4-dev liblua5.3-dev luajit libluajit-5.1-dev
-
-      - name: Build and install Neovim (for libnvim.so)
-        run: |
-          git clone --depth 1 https://github.com/neovim/neovim.git
-          cd neovim
-          make CMAKE_BUILD_TYPE=RelWithDebInfo CMAKE_EXTRA_FLAGS="-DCMAKE_INSTALL_PREFIX=$HOME/nvim"
-          make install
-          echo "$HOME/nvim/lib" >> $GITHUB_PATH
-          echo "LD_LIBRARY_PATH=$HOME/nvim/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
-          echo "PKG_CONFIG_PATH=$HOME/nvim/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
-
-      - name: List LUA and Neovim libs
-        run: |
-          ldconfig -p | grep lua
-
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:

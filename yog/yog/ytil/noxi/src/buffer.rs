@@ -710,6 +710,10 @@ mod tests {
         fn get_channel(&self) -> Option<u32> {
             None
         }
+
+        fn send_command(&self, _cmd: &str) -> Option<()> {
+            None
+        }
     }
 }
 
@@ -771,6 +775,10 @@ pub mod mock {
         }
 
         fn get_channel(&self) -> Option<u32> {
+            None
+        }
+
+        fn send_command(&self, _cmd: &str) -> Option<()> {
             None
         }
     }
