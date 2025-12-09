@@ -7,7 +7,7 @@ history = 99999
 
 [font]
 normal.family = "PT Mono"
-size = 17
+size = 16.5
 offset = { x = 0, y = 7 }
 
 [colors]

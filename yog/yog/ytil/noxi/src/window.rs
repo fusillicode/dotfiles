@@ -3,6 +3,8 @@
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::Window;
 
+use crate::buffer::BufferExt;
+
 /// Sets the specified window as the current window in Neovim.
 ///
 /// On failure, notifies Neovim of the error and returns `None`.
@@ -48,5 +50,23 @@ pub fn get_buffer(window: &Window) -> Option<Buffer> {
                 "error getting window buffer | window={window:?}, error={err:?}"
             ));
         })
+        .ok()
+}
+
+pub fn find_with_buffer(buffer_type: &str) -> Option<(Window, Buffer)> {
+    nvim_oxi::api::list_wins().find_map(|win| {
+        if let Some(buffer) = get_buffer(&win)
+            && buffer.get_buf_type().is_some_and(|bt| bt == buffer_type)
+        {
+            Some((win, buffer))
+        } else {
+            None
+        }
+    })
+}
+
+pub fn get_number(win: &Window) -> Option<u32> {
+    win.get_number()
+        .inspect_err(|err| crate::notify::error(format!("error getting window number | window={win:?} error={err:?}")))
         .ok()
 }
