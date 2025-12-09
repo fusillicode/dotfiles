@@ -1,33 +1,33 @@
 [workspace]
 resolver = "2"
 members = [
-  "yog/catl",
-  "yog/evoke",
-  "yog/fkr",
-  "yog/gch",
-  "yog/gcu",
-  "yog/ghl",
-  "yog/idt",
-  "yog/miskatonic",
-  "yog/nomicon",
-  "yog/nvrim",
-  "yog/oe",
-  "yog/rmr",
-  "yog/tec",
-  "yog/try",
-  "yog/vpg",
-  "yog/yghfl",
-  "yog/yhfp",
-  # Utility libraries (ytil)
-  "yog/ytil/cmd",
-  "yog/ytil/editor",
-  "yog/ytil/gh",
-  "yog/ytil/git",
-  "yog/ytil/hx",
-  "yog/ytil/noxi",
-  "yog/ytil/sys",
-  "yog/ytil/tui",
-  "yog/ytil/wezterm",
+    "yog/catl",
+    "yog/evoke",
+    "yog/fkr",
+    "yog/gch",
+    "yog/gcu",
+    "yog/ghl",
+    "yog/idt",
+    "yog/miskatonic",
+    "yog/nomicon",
+    "yog/nvrim",
+    "yog/oe",
+    "yog/rmr",
+    "yog/tec",
+    "yog/try",
+    "yog/vpg",
+    "yog/yghfl",
+    "yog/yhfp",
+    # Utility libraries (ytil)
+    "yog/ytil/cmd",
+    "yog/ytil/editor",
+    "yog/ytil/gh",
+    "yog/ytil/git",
+    "yog/ytil/hx",
+    "yog/ytil/noxi",
+    "yog/ytil/sys",
+    "yog/ytil/tui",
+    "yog/ytil/wezterm",
 ]
 
 [workspace.package]
@@ -51,7 +51,7 @@ color-eyre = { version = "0.6" }
 convert_case = { version = "0.10" }
 fake = { version = "4.4", features = ["derive"] }
 getrandom = { version = "0.3" }
-git2 = { version = "0.20.2" }
+git2 = { version = "0.20" }
 itertools = { version = "0.14" }
 
 nomicon = { path = "./yog/nomicon" }
