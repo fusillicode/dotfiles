@@ -23,8 +23,8 @@ convert_case = { workspace = true }
 fkr = { path = "../fkr" }
 lit2 = { version = "1.0" }
 nvim-oxi = { git = "https://github.com/noib3/nvim-oxi", rev = "b1278b123dbac3908f2686ebed6fdadbfef15be1", features = [
-  "neovim-nightly",
   "mlua",
+  "neovim-nightly",
 ] }
 serde = { workspace = true }
 serde_json = { workspace = true }
