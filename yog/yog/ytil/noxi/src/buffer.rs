@@ -1,5 +1,6 @@
 //! Buffer extension utilities like line access, cursor‑based insertion, cursor position model, etc.
 
+use std::fmt::Debug;
 use std::ops::RangeInclusive;
 use std::path::Path;
 use std::path::PathBuf;
@@ -19,7 +20,7 @@ use crate::visual_selection::Selection;
 /// Provides focused helpers for line fetching and text insertion at the current
 /// cursor position while surfacing Nvim errors via `notify_error`.
 #[cfg_attr(any(test, feature = "mockall"), mockall::automock)]
-pub trait BufferExt {
+pub trait BufferExt: Debug {
     /// Fetch a single line from a [`Buffer`] by 0-based index.
     ///
     /// Returns a [`color_eyre::Result`] with the line as [`nvim_oxi::String`].
@@ -129,6 +130,18 @@ pub trait BufferExt {
 
     fn is_terminal(&self) -> bool {
         self.get_buf_type().is_some_and(|bt| bt == "terminal")
+    }
+
+    fn send_command(&self, cmd: &str) -> Option<()> {
+        let channel_id = self.get_channel()?;
+
+        nvim_oxi::api::chan_send(channel_id, cmd).inspect_err(|err|{
+            crate::notify::error(format!(
+                "error sending command to buffer | command={cmd:?} buffer={self:?} channel_id={channel_id} error={err:?}"
+            ));
+        }).ok()?;
+
+        Some(())
     }
 }
 
@@ -670,6 +683,7 @@ mod tests {
         mock
     }
 
+    #[derive(Debug)]
     struct TestBuffer {
         mock: MockBufferExt,
     }
@@ -696,6 +710,10 @@ mod tests {
         fn get_channel(&self) -> Option<u32> {
             None
         }
+
+        fn send_command(&self, _cmd: &str) -> Option<()> {
+            None
+        }
     }
 }
 
@@ -705,6 +723,7 @@ pub mod mock {
 
     use crate::buffer::BufferExt;
 
+    #[derive(Debug)]
     pub struct MockBuffer {
         pub lines: Vec<String>,
         pub buf_type: String,
@@ -756,6 +775,10 @@ pub mod mock {
         }
 
         fn get_channel(&self) -> Option<u32> {
+            None
+        }
+
+        fn send_command(&self, _cmd: &str) -> Option<()> {
             None
         }
     }

@@ -14,6 +14,7 @@ mod gdiff;
 mod genconv;
 /// GitHub permalink generation for selected code.
 mod ghurlinker;
+pub mod opener;
 /// Port of scrollofffraction.nvim plugin.
 pub mod scrolloff;
 /// Status column (diagnostics + git signs).
@@ -31,6 +32,7 @@ pub fn dict() -> Dictionary {
         "gdiff": gdiff::dict(),
         "genconv": genconv::dict(),
         "ghurlinker": ghurlinker::dict(),
+        "opener": opener::dict(),
         "statuscolumn": statuscolumn::dict(),
         "statusline": statusline::dict(),
         "truster": truster::dict(),
