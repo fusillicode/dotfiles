@@ -83,7 +83,6 @@ jobs:
           echo "Running from $(pwd)"
           repo_root="$(git rev-parse --show-toplevel)"
           export RUSTFLAGS="--remap-path-prefix=${repo_root}/="
-          cargo clean
           cargo llvm-cov nextest \
             --profile ci \
             --workspace \
