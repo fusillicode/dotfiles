@@ -16,6 +16,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
 
 concurrency:
   group: ${{ github.ref }}-ci
