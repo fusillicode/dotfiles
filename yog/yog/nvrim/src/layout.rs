@@ -34,7 +34,7 @@ fn focus_term(width_perc: i32) -> Option<()> {
     }
 
     // If current buffer IS NOT terminal.
-    let maybe_terminal_window = ytil_noxi::window::find_window_with_buffer("terminal");
+    let maybe_terminal_window = ytil_noxi::window::find_with_buffer("terminal");
 
     // If there is a VISIBLE terminal buffer.
     if let Some((win, _)) = maybe_terminal_window {
@@ -67,7 +67,7 @@ fn focus_buffer(width_perc: i32) -> Option<()> {
     }
 
     // If current buffer IS terminal.
-    let maybe_buffer_window = ytil_noxi::window::find_window_with_buffer("");
+    let maybe_buffer_window = ytil_noxi::window::find_with_buffer("");
 
     // If there is a visible file buffer.
     if let Some((win, _)) = maybe_buffer_window {

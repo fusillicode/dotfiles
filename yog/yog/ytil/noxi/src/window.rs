@@ -53,7 +53,7 @@ pub fn get_buffer(window: &Window) -> Option<Buffer> {
         .ok()
 }
 
-pub fn find_window_with_buffer(buffer_type: &str) -> Option<(Window, Buffer)> {
+pub fn find_with_buffer(buffer_type: &str) -> Option<(Window, Buffer)> {
     nvim_oxi::api::list_wins().find_map(|win| {
         if let Some(buffer) = get_buffer(&win)
             && buffer.get_buf_type().is_some_and(|bt| bt == buffer_type)

@@ -17,7 +17,7 @@ fn open_word_under_cursor(_: ()) -> Option<()> {
         WordUnderCursor::TextFile { path, lnum, .. } => {
             let open_path_at_line_cmd = format!("edit +{lnum} {path}");
             let vim_script = if let Some(win_num) =
-                ytil_noxi::window::find_window_with_buffer("").and_then(|(win, _)| ytil_noxi::window::get_number(&win))
+                ytil_noxi::window::find_with_buffer("").and_then(|(win, _)| ytil_noxi::window::get_number(&win))
             {
                 format!("{win_num} wincmd w | {open_path_at_line_cmd}")
             } else {
