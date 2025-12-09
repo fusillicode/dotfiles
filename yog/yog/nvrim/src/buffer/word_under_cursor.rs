@@ -8,6 +8,7 @@ use std::process::Command;
 use color_eyre::eyre::Context;
 use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;
+use nvim_oxi::api::Window;
 use nvim_oxi::conversion::ToObject;
 use nvim_oxi::lua::ffi::State;
 use nvim_oxi::serde::Serializer;
@@ -40,7 +41,7 @@ fn get_word_under_cursor_in_normal_buffer(cursor_pos: &CursorPosition) -> Option
 }
 
 fn get_word_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &CursorPosition) -> Option<String> {
-    let window_width = nvim_oxi::api::Window::current()
+    let window_width = Window::current()
         .get_width()
         .wrap_err("error getting window width")
         .and_then(|x| {
@@ -110,7 +111,7 @@ fn get_word_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &Cursor
         }
     }
 
-    Some(nvim_oxi::dbg!(out.into_iter().collect()))
+    Some(out.into_iter().collect())
 }
 
 /// Classified representation of the token found under the cursor.
@@ -132,7 +133,7 @@ pub enum WordUnderCursor {
     /// A filesystem path identified as a binary file by [`exec_file_cmd`].
     BinaryFile(String),
     /// A filesystem path identified as a text file by [`exec_file_cmd`].
-    TextFile(String),
+    TextFile { path: String, lnum: i64, col: i64 },
     /// A filesystem path identified as a directory by [`exec_file_cmd`].
     Directory(String),
     /// A fallback plain token (word) when no more specific classification applied.
@@ -162,6 +163,8 @@ impl ToObject for WordUnderCursor {
 /// 3. Falls back to [`WordUnderCursor::Word`] on errors or unknown kinds.
 impl From<String> for WordUnderCursor {
     fn from(value: String) -> Self {
+        let value = value.trim_matches('"').trim_matches('`').trim_matches('\'').to_string();
+
         if Url::parse(&value).is_ok() {
             return Self::Url(value);
         }
@@ -191,7 +194,7 @@ impl From<String> for WordUnderCursor {
 
         match exec_file_cmd(maybe_path) {
             Ok(FileCmdOutput::BinaryFile(x)) => Self::BinaryFile(x),
-            Ok(FileCmdOutput::TextFile(path)) => Self::TextFile(format!("{path}:{lnum}:{col}")),
+            Ok(FileCmdOutput::TextFile(path)) => Self::TextFile { path, lnum, col },
             Ok(FileCmdOutput::Directory(x)) => Self::Directory(x),
             Ok(FileCmdOutput::NotFound(path) | FileCmdOutput::Unknown(path)) => Self::Word(path),
             Err(_) => Self::Word(value),
@@ -214,17 +217,22 @@ impl From<String> for WordUnderCursor {
 /// - the command exits with non-success
 /// - standard output cannot be decoded as valid UTF-8
 fn exec_file_cmd(path: &str) -> color_eyre::Result<FileCmdOutput> {
-    let output = std::str::from_utf8(&Command::new("file").args([path, "-I"]).exec()?.stdout)?.to_lowercase();
-    if output.contains(" inode/directory;") {
+    let stdout_bytes = Command::new("sh")
+        .arg("-c")
+        .arg(format!("file {path} -I"))
+        .exec()?
+        .stdout;
+    let stdout = std::str::from_utf8(&stdout_bytes)?.to_lowercase();
+    if stdout.contains(" inode/directory;") {
         return Ok(FileCmdOutput::Directory(path.to_owned()));
     }
-    if output.contains(" text/plain;") || output.contains(" text/csv;") {
+    if stdout.contains(" text/plain;") || stdout.contains(" text/csv;") {
         return Ok(FileCmdOutput::TextFile(path.to_owned()));
     }
-    if output.contains("application/") {
+    if stdout.contains("application/") {
         return Ok(FileCmdOutput::BinaryFile(path.to_owned()));
     }
-    if output.contains(" no such file or directory") {
+    if stdout.contains(" no such file or directory") {
         return Ok(FileCmdOutput::NotFound(path.to_owned()));
     }
     Ok(FileCmdOutput::Unknown(path.to_owned()))
@@ -355,7 +363,7 @@ mod tests {
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
         let result = WordUnderCursor::from(path.clone());
-        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile(format!("{path}:0:0")));
+        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile { path, lnum: 0, col: 0 });
     }
 
     #[test]
@@ -365,7 +373,7 @@ mod tests {
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
         let result = WordUnderCursor::from(format!("{path}:10"));
-        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile(format!("{path}:10:0")));
+        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile { path, lnum: 10, col: 0 });
     }
 
     #[test]
@@ -375,7 +383,7 @@ mod tests {
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
         let result = WordUnderCursor::from(format!("{path}:10:5"));
-        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile(format!("{path}:10:5")));
+        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile { path, lnum: 10, col: 5 });
     }
 
     #[test]
@@ -433,6 +441,6 @@ mod tests {
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
         let result = WordUnderCursor::from(format!("{path}:10:5:extra"));
-        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile(format!("{path}:10:5")));
+        pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile { path, lnum: 10, col: 5 });
     }
 }
