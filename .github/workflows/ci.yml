@@ -59,7 +59,7 @@ jobs:
           export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config libluajit-5.1-dev neovim
+        run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config libluajit-5.1-dev libnvim-dev
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
