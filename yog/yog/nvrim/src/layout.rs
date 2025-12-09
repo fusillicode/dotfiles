@@ -4,10 +4,6 @@ use nvim_oxi::api::opts::CreateAutocmdOpts;
 use ytil_noxi::buffer::BufferExt;
 use ytil_noxi::mru_buffers::BufferKind;
 
-// use ytil_noxi::buffer::BufferExt;
-// use ytil_editor::Editor;
-// use ytil_editor::FileToOpen;
-
 /// [`Dictionary`] of Rust tests utilities.
 pub fn dict() -> Dictionary {
     dict! {
@@ -38,13 +34,10 @@ fn focus_term(width_perc: i32) -> Option<()> {
     }
 
     // If current buffer IS NOT terminal.
-    let mut visible_windows =
-        nvim_oxi::api::list_wins().map(|w| (ytil_noxi::window::get_buffer(&w).and_then(|b| b.get_buf_type()), w));
-
-    let maybe_terminal_window = visible_windows.find(|(bt, _)| bt.as_ref().is_some_and(|b| b == "terminal"));
+    let maybe_terminal_window = ytil_noxi::window::find_window_with_buffer("terminal");
 
     // If there is a VISIBLE terminal buffer.
-    if let Some((_, win)) = maybe_terminal_window {
+    if let Some((win, _)) = maybe_terminal_window {
         ytil_noxi::window::set_current(&win)?;
         return Some(());
     }
@@ -74,13 +67,10 @@ fn focus_buffer(width_perc: i32) -> Option<()> {
     }
 
     // If current buffer IS terminal.
-    let mut visible_windows =
-        nvim_oxi::api::list_wins().map(|w| (ytil_noxi::window::get_buffer(&w).and_then(|b| b.get_buf_type()), w));
-
-    let maybe_buffer_window = visible_windows.find(|(bt, _)| bt.as_ref().is_some_and(String::is_empty));
+    let maybe_buffer_window = ytil_noxi::window::find_window_with_buffer("");
 
     // If there is a visible file buffer.
-    if let Some((_, win)) = maybe_buffer_window {
+    if let Some((win, _)) = maybe_buffer_window {
         ytil_noxi::window::set_current(&win)?;
         return Some(());
     }
@@ -175,29 +165,7 @@ fn smart_close_buffer(force_close: Option<bool>) -> Option<()> {
     Some(())
 }
 
-fn compute_width(perc: i32) -> Option<i32> {
+pub fn compute_width(perc: i32) -> Option<i32> {
     let total_width: i32 = crate::vim_opts::get("columns", &crate::vim_opts::global_scope())?;
     Some((total_width.saturating_mul(perc)) / 100)
 }
-
-// fn open_word_under_cursor(_: ()) {
-//     if !Buffer::current().is_terminal() {
-//         return;
-//     }
-//     let Some(word_under_cursor) = crate::buffer::word_under_cursor::get(()) else {
-//         return;
-//     };
-//     match word_under_cursor {
-//         crate::buffer::word_under_cursor::WordUnderCursor::BinaryFile(_)
-//         | crate::buffer::word_under_cursor::WordUnderCursor::Directory(_)
-//         | crate::buffer::word_under_cursor::WordUnderCursor::Word(_) => (),
-//         crate::buffer::word_under_cursor::WordUnderCursor::Url(_url) => todo!(),
-//         crate::buffer::word_under_cursor::WordUnderCursor::TextFile(text_file) => {
-//             Editor::Nvim.open_file_cmd(&FileToOpen {
-//                 column: text_file.col,
-//                 line_nbr: text_file.lnum,
-//                 path: text_file.path,
-//             });
-//         }
-//     };
-// }
