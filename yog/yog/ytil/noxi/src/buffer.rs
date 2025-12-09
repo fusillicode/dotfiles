@@ -131,6 +131,18 @@ pub trait BufferExt: Debug {
     fn is_terminal(&self) -> bool {
         self.get_buf_type().is_some_and(|bt| bt == "terminal")
     }
+
+    fn send_command(&self, cmd: &str) -> Option<()> {
+        let channel_id = self.get_channel()?;
+
+        nvim_oxi::api::chan_send(channel_id, cmd).inspect_err(|err|{
+            crate::notify::error(format!(
+                "error sending command to buffer | command={cmd:?} buffer={self:?} channel_id={channel_id} error={err:?}"
+            ));
+        }).ok()?;
+
+        Some(())
+    }
 }
 
 /// Defines boundaries for text selection within lines.
@@ -496,19 +508,6 @@ pub fn get_current_line() -> Option<String> {
     nvim_oxi::api::get_current_line()
         .inspect_err(|err| crate::notify::error(format!("error getting current line | error={err}")))
         .ok()
-}
-
-// Not part of BufferExt because it breaks the tests!
-pub fn send_command(buffer: &Buffer, cmd: &str) -> Option<()> {
-    let channel_id = buffer.get_channel()?;
-
-    nvim_oxi::api::chan_send(channel_id, cmd).inspect_err(|err|{
-            crate::notify::error(format!(
-                "error sending command to buffer | command={cmd:?} buffer={buffer:?} channel_id={channel_id} error={err:?}"
-            ));
-        }).ok()?;
-
-    Some(())
 }
 
 #[cfg(test)]
