@@ -135,7 +135,7 @@ fn run_test_in_nvim_term(test_runner: &str, test_name: &str) -> Option<()> {
         return None;
     };
 
-    terminal_buffer.send_command(&format!("{test_runner} {test_name}\n"));
+    ytil_noxi::buffer::send_command(&terminal_buffer, &format!("{test_runner} {test_name}\n"));
 
     Some(())
 }
