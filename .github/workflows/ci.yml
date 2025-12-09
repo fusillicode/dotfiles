@@ -17,6 +17,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
+  RUSTFLAGS: "-L/usr/lib/x86_64-linux-gnu"
 
 concurrency:
   group: ${{ github.ref }}-ci
@@ -53,6 +54,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y luajit libluajit-5.1-dev pkg-config
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
