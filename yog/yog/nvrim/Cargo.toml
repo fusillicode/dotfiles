@@ -13,9 +13,6 @@ categories = ["command-line-utilities", "development-tools"]
 [lib]
 crate-type = ["cdylib"]
 
-[features]
-ci = []
-
 [dependencies]
 chrono = { workspace = true }
 color-eyre = { workspace = true }
