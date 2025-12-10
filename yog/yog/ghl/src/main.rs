@@ -69,7 +69,7 @@ use ytil_gh::RepoViewField;
 use ytil_gh::pr::IntoEnumIterator;
 use ytil_gh::pr::PullRequest;
 use ytil_gh::pr::PullRequestMergeState;
-use ytil_sys::cli_args::CliArgs as _;
+use ytil_sys::cli::Args as _;
 use ytil_sys::pico_args::Arguments;
 
 /// Newtype wrapper implementing colored [`Display`] for a [`PullRequest`].

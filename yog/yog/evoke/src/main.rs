@@ -24,7 +24,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use color_eyre::owo_colors::OwoColorize;
-use ytil_sys::cli_args::CliArgs;
+use ytil_sys::cli::Args;
 
 /// List of binaries that should be copied after building.
 /// NOTE: if a new binary is added this list must be updated!
@@ -61,13 +61,13 @@ where
 }
 
 /// Copies a built binary or library from `from` to `to` using
-/// [`ytil_sys::atomic_cp`] and prints an "Installed" status line.
+/// [`ytil_sys::file::atomic_cp`] and prints an "Installed" status line.
 ///
 /// # Errors
-/// - [`ytil_sys::atomic_cp`] fails to copy.
+/// - [`ytil_sys::file::atomic_cp`] fails to copy.
 /// - The final rename or write cannot be performed.
 fn cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
-    ytil_sys::atomic_cp(from, to)?;
+    ytil_sys::file::atomic_cp(from, to)?;
     println!("{} {} to {}", "Copied".green().bold(), from.display(), to.display());
     Ok(())
 }
@@ -76,7 +76,7 @@ fn cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let mut args = ytil_sys::cli_args::get();
+    let mut args = ytil_sys::cli::get();
 
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));
@@ -85,7 +85,7 @@ fn main() -> color_eyre::Result<()> {
 
     let is_debug = drop_element(&mut args, "--debug");
     let bins_path = args.first().cloned().map_or_else(
-        || ytil_sys::build_home_path(BINS_DEFAULT_PATH),
+        || ytil_sys::dir::build_home_path(BINS_DEFAULT_PATH),
         |supplied_bins_path| Ok(PathBuf::from(supplied_bins_path)),
     )?;
     let cargo_target_path = args.get(1).cloned().map_or_else(
@@ -99,7 +99,7 @@ fn main() -> color_eyre::Result<()> {
         |x| Ok(PathBuf::from(x)),
     )?;
     let nvim_libs_path = args.get(2).cloned().map_or_else(
-        || ytil_sys::build_home_path(NVIM_LIBS_DEFAULT_PATH),
+        || ytil_sys::dir::build_home_path(NVIM_LIBS_DEFAULT_PATH),
         |supplied_nvim_libs_path| Ok(PathBuf::from(supplied_nvim_libs_path)),
     )?;
 

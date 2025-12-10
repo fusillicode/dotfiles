@@ -30,7 +30,7 @@ use std::process::Stdio;
 
 use color_eyre::eyre::Context;
 use color_eyre::owo_colors::OwoColorize as _;
-use ytil_sys::cli_args::CliArgs;
+use ytil_sys::cli::Args;
 
 use crate::pgpass::PgpassEntry;
 use crate::pgpass::PgpassFile;
@@ -70,17 +70,17 @@ fn exec_vault_read_cmd(vault_path: &str) -> color_eyre::Result<VaultReadOutput> 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let args = ytil_sys::cli_args::get();
+    let args = ytil_sys::cli::get();
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));
         return Ok(());
     }
 
-    let pgpass_path = ytil_sys::build_home_path(&[".pgpass"])?;
+    let pgpass_path = ytil_sys::dir::build_home_path(&[".pgpass"])?;
     let pgpass_content = std::fs::read_to_string(&pgpass_path)?;
     let pgpass_file = PgpassFile::parse(pgpass_content.as_str())?;
 
-    let args = ytil_sys::cli_args::get();
+    let args = ytil_sys::cli::get();
     let Some(mut pgpass_entry) = ytil_tui::get_item_from_cli_args_or_select(
         &args,
         |(idx, _)| *idx == 0,
@@ -102,7 +102,7 @@ fn main() -> color_eyre::Result<()> {
     pgpass_entry.connection_params.update(&vault_read_output.data);
     pgpass::save_new_pgpass_file(pgpass_file.idx_lines, &pgpass_entry.connection_params, &pgpass_path)?;
 
-    let nvim_dbee_conns_path = ytil_sys::build_home_path(&[".local", "state", "nvim", "dbee", "conns.json"])?;
+    let nvim_dbee_conns_path = ytil_sys::dir::build_home_path(&[".local", "state", "nvim", "dbee", "conns.json"])?;
     nvim_dbee::save_new_nvim_dbee_conns_file(&pgpass_entry, &nvim_dbee_conns_path)?;
 
     println!(

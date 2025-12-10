@@ -34,7 +34,7 @@ use color_eyre::eyre::bail;
 use color_eyre::owo_colors::OwoColorize as _;
 use url::Url;
 use ytil_git::CmdError;
-use ytil_sys::cli_args::CliArgs;
+use ytil_sys::cli::Args;
 
 /// Interactive selection and switching of Git branches.
 ///
@@ -238,7 +238,7 @@ fn ask_branching_from_not_default(branch_name: &str, default_branch_name: &str) 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let args = ytil_sys::cli_args::get();
+    let args = ytil_sys::cli::get();
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));
         return Ok(());

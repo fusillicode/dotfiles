@@ -13,7 +13,7 @@ const HELP_ARG: &str = "--help";
 /// # Performance
 /// - `has_help` performs a linear scan; suitable for small argument lists (typical CLI usage).
 /// - `all` clones arguments; use borrowed types (`T = &str`) to avoid allocation overhead.
-pub trait CliArgs<T> {
+pub trait Args<T> {
     /// Checks if the help flag (`--help`) is present in the arguments.
     ///
     /// # Returns
@@ -35,7 +35,7 @@ pub trait CliArgs<T> {
     fn all(&self) -> Vec<T>;
 }
 
-impl<T: AsRef<str> + Clone> CliArgs<T> for Vec<T> {
+impl<T: AsRef<str> + Clone> Args<T> for Vec<T> {
     fn has_help(&self) -> bool {
         self.iter().any(|arg| arg.as_ref() == HELP_ARG)
     }
@@ -45,7 +45,7 @@ impl<T: AsRef<str> + Clone> CliArgs<T> for Vec<T> {
     }
 }
 
-impl CliArgs<String> for pico_args::Arguments {
+impl Args<String> for pico_args::Arguments {
     fn has_help(&self) -> bool {
         self.clone().contains(HELP_ARG)
     }

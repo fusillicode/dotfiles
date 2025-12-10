@@ -1,6 +1,6 @@
 //! Run workspace lint suite concurrently (check or fix modes).
 //!
-//! Executes lints against the Cargo workspace root auto–detected via [`ytil_sys::get_workspace_root`].
+//! Executes lints against the Cargo workspace root auto–detected via [`ytil_sys::dir::get_workspace_root`].
 //!
 //! # Behavior
 //! - Auto-detects workspace root (no positional CLI argument required).
@@ -19,7 +19,7 @@
 //!
 //! # Errors
 //! - Initialization errors from [`color_eyre::install`].
-//! - Workspace root discovery errors from [`ytil_sys::get_workspace_root`].
+//! - Workspace root discovery errors from [`ytil_sys::dir::get_workspace_root`].
 //!
 //! # Rationale
 //! Provides a single fast command (usable in git hooks / CI) aggregating core maintenance lints (style, dependency
@@ -38,7 +38,7 @@ use std::time::Instant;
 use color_eyre::owo_colors::OwoColorize;
 use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt as _;
-use ytil_sys::cli_args::CliArgs;
+use ytil_sys::cli::Args;
 use ytil_sys::rm::RmFilesOutcome;
 
 /// Workspace lint check set.
@@ -454,7 +454,7 @@ fn format_timing(duration: Duration) -> String {
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let args = ytil_sys::cli_args::get();
+    let args = ytil_sys::cli::get();
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));
         return Ok(());
@@ -467,7 +467,7 @@ fn main() -> color_eyre::Result<()> {
         ("lints check", LINTS_CHECK)
     };
 
-    let workspace_root = ytil_sys::get_workspace_root()?;
+    let workspace_root = ytil_sys::dir::get_workspace_root()?;
 
     let repo = ytil_git::discover_repo(&workspace_root)?;
     let changed_paths = repo

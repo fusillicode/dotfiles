@@ -42,8 +42,8 @@ impl Installer for Nvim<'_> {
             .exit_ok()?;
 
         let target = nvim_release_dir.join("bin").join(self.bin_name());
-        ytil_sys::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;
-        ytil_sys::chmod_x(&target)?;
+        ytil_sys::file::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;
+        ytil_sys::file::chmod_x(&target)?;
 
         Ok(())
     }
