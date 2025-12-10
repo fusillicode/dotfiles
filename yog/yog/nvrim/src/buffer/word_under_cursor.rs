@@ -32,6 +32,7 @@ pub fn get(_: ()) -> Option<WordUnderCursor> {
     } else {
         get_word_under_cursor_in_normal_buffer(&cursor_pos)
     }
+    .as_deref()
     .map(WordUnderCursor::classify)
 }
 
@@ -162,7 +163,7 @@ impl ToObject for WordUnderCursor {
 /// 2. Otherwise, invokes [`exec_file_cmd`] to check filesystem type.
 /// 3. Falls back to [`WordUnderCursor::Word`] on errors or unknown kinds.
 impl WordUnderCursor {
-    pub fn classify(value: String) -> Self {
+    pub fn classify(value: &str) -> Self {
         let value = value.trim_matches('"').trim_matches('`').trim_matches('\'').to_string();
 
         if Url::parse(&value).is_ok() {
@@ -344,7 +345,7 @@ mod tests {
     #[cfg(not(feature = "ci"))]
     fn word_under_cursor_classify_valid_url_returns_url() {
         let input = "https://example.com".to_string();
-        let result = WordUnderCursor::classify(input.clone());
+        let result = WordUnderCursor::classify(&input);
         pretty_assertions::assert_eq!(result, WordUnderCursor::Url(input));
     }
 
@@ -352,7 +353,7 @@ mod tests {
     #[cfg(not(feature = "ci"))]
     fn word_under_cursor_classify_invalid_url_plain_word_returns_word() {
         let input = "noturl".to_string();
-        let result = WordUnderCursor::classify(input.clone());
+        let result = WordUnderCursor::classify(&input);
         pretty_assertions::assert_eq!(result, WordUnderCursor::Word(input));
     }
 
@@ -362,7 +363,7 @@ mod tests {
         let mut temp_file = NamedTempFile::new().unwrap();
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
-        let result = WordUnderCursor::classify(path.clone());
+        let result = WordUnderCursor::classify(&path);
         pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile { path, lnum: 0, col: 0 });
     }
 
@@ -372,7 +373,7 @@ mod tests {
         let mut temp_file = NamedTempFile::new().unwrap();
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
-        let result = WordUnderCursor::classify(format!("{path}:10"));
+        let result = WordUnderCursor::classify(&format!("{path}:10"));
         pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile { path, lnum: 10, col: 0 });
     }
 
@@ -382,7 +383,7 @@ mod tests {
         let mut temp_file = NamedTempFile::new().unwrap();
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
-        let result = WordUnderCursor::classify(format!("{path}:10:5"));
+        let result = WordUnderCursor::classify(&format!("{path}:10:5"));
         pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile { path, lnum: 10, col: 5 });
     }
 
@@ -391,7 +392,7 @@ mod tests {
     fn word_under_cursor_classify_path_to_directory_returns_directory() {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().to_string_lossy().to_string();
-        let result = WordUnderCursor::classify(path.clone());
+        let result = WordUnderCursor::classify(&path);
         pretty_assertions::assert_eq!(result, WordUnderCursor::Directory(path));
     }
 
@@ -402,7 +403,7 @@ mod tests {
         // Write some binary data
         std::io::Write::write_all(&mut temp_file, &[0, 1, 2, 255]).unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
-        let result = WordUnderCursor::classify(path.clone());
+        let result = WordUnderCursor::classify(&path);
         pretty_assertions::assert_eq!(result, WordUnderCursor::BinaryFile(path));
     }
 
@@ -410,7 +411,7 @@ mod tests {
     #[cfg(not(feature = "ci"))]
     fn word_under_cursor_classify_nonexistent_path_returns_word() {
         let path = "/nonexistent/path".to_string();
-        let result = WordUnderCursor::classify(path.clone());
+        let result = WordUnderCursor::classify(&path);
         pretty_assertions::assert_eq!(result, WordUnderCursor::Word(path));
     }
 
@@ -420,7 +421,7 @@ mod tests {
         let temp_file = NamedTempFile::new().unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
         let input = format!("{path}:invalid");
-        let result = WordUnderCursor::classify(input.clone());
+        let result = WordUnderCursor::classify(&input);
         pretty_assertions::assert_eq!(result, WordUnderCursor::Word(input));
     }
 
@@ -430,7 +431,7 @@ mod tests {
         let temp_file = NamedTempFile::new().unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
         let input = format!("{path}:10:invalid");
-        let result = WordUnderCursor::classify(input.clone());
+        let result = WordUnderCursor::classify(&input);
         pretty_assertions::assert_eq!(result, WordUnderCursor::Word(input));
     }
 
@@ -440,7 +441,7 @@ mod tests {
         let mut temp_file = NamedTempFile::new().unwrap();
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
-        let result = WordUnderCursor::classify(format!("{path}:10:5:extra"));
+        let result = WordUnderCursor::classify(&format!("{path}:10:5:extra"));
         pretty_assertions::assert_eq!(result, WordUnderCursor::TextFile { path, lnum: 10, col: 5 });
     }
 }
