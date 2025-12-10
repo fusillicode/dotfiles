@@ -5,11 +5,13 @@ use color_eyre::eyre::eyre;
 use itertools::Itertools as _;
 use ytil_cmd::CmdExt as _;
 
+#[derive(Debug)]
 pub enum ProcessFilter<'a> {
     Pid(&'a str),
     Name(&'a str),
 }
 
+#[derive(Debug)]
 pub struct ProcessDescription {
     pub pid: String,
     pub cwd: String,
@@ -40,10 +42,18 @@ pub fn lsof(process_filter: &ProcessFilter) -> color_eyre::Result<Vec<ProcessDes
 
 fn parse_lsof_output(output: &str) -> color_eyre::Result<Vec<ProcessDescription>> {
     let mut out = vec![];
+    // The hardcoded 3 is tight to the lsof args.
+    // Changes to lsof args will have impact on the chunks size.
     for mut line in &output.lines().chunks(3) {
-        let pid = line.next().ok_or_else(|| eyre!("error missing pid in lsof line"))?;
+        let pid = line
+            .next()
+            .ok_or_else(|| eyre!("error missing pid in lsof line"))?
+            .trim_start_matches('p');
         line.next().ok_or_else(|| eyre!("error missing f in lsof line"))?;
-        let cwd = line.next().ok_or_else(|| eyre!("error missing cwd in lsof line"))?;
+        let cwd = line
+            .next()
+            .ok_or_else(|| eyre!("error missing cwd in lsof line"))?
+            .trim_start_matches('n');
         out.push(ProcessDescription {
             pid: pid.to_owned(),
             cwd: cwd.to_owned(),
