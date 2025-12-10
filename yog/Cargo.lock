@@ -2644,6 +2644,7 @@ dependencies = [
  "assert2",
  "chrono",
  "color-eyre",
+ "itertools 0.14.0",
  "pico-args",
  "tempfile",
  "ytil_cmd",

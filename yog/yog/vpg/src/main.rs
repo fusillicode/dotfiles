@@ -30,7 +30,7 @@ use std::process::Stdio;
 
 use color_eyre::eyre::Context;
 use color_eyre::owo_colors::OwoColorize as _;
-use ytil_sys::CliArgs;
+use ytil_sys::cli_args::CliArgs;
 
 use crate::pgpass::PgpassEntry;
 use crate::pgpass::PgpassFile;
@@ -70,7 +70,7 @@ fn exec_vault_read_cmd(vault_path: &str) -> color_eyre::Result<VaultReadOutput> 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let args = ytil_sys::get_args();
+    let args = ytil_sys::cli_args::get();
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));
         return Ok(());
@@ -80,7 +80,7 @@ fn main() -> color_eyre::Result<()> {
     let pgpass_content = std::fs::read_to_string(&pgpass_path)?;
     let pgpass_file = PgpassFile::parse(pgpass_content.as_str())?;
 
-    let args = ytil_sys::get_args();
+    let args = ytil_sys::cli_args::get();
     let Some(mut pgpass_entry) = ytil_tui::get_item_from_cli_args_or_select(
         &args,
         |(idx, _)| *idx == 0,

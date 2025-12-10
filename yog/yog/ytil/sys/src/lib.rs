@@ -6,7 +6,6 @@
 #![feature(exit_status_error)]
 
 use std::collections::VecDeque;
-use std::ffi::OsStr;
 use std::fs::DirEntry;
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
@@ -21,84 +20,11 @@ use color_eyre::eyre::Context;
 use color_eyre::eyre::OptionExt as _;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
-use color_eyre::owo_colors::OwoColorize as _;
 pub use pico_args;
 
-const HELP_ARG: &str = "--help";
-
-/// Abstraction over command-line argument collections for help detection and access.
-///
-/// # Type Parameters
-/// - `T` The type of individual arguments, typically string-like (e.g., `String`, `&str`).
-///
-/// # Rationale
-/// - Enables polymorphic argument handling without coupling to specific collection types.
-/// - Centralizes help flag detection logic for consistency across binaries.
-/// - Supports both owned and borrowed argument slices for flexibility.
-///
-/// # Performance
-/// - `has_help` performs a linear scan; suitable for small argument lists (typical CLI usage).
-/// - `all` clones arguments; use borrowed types (`T = &str`) to avoid allocation overhead.
-pub trait CliArgs<T> {
-    /// Checks if the help flag (`--help`) is present in the arguments.
-    ///
-    /// # Returns
-    /// - `true` if `--help` is found; `false` otherwise.
-    ///
-    /// # Rationale
-    /// - Standardized help detection avoids ad-hoc string comparisons in binaries.
-    /// - Case-sensitive matching aligns with common CLI conventions.
-    fn has_help(&self) -> bool;
-
-    /// Returns a copy of all arguments.
-    ///
-    /// # Returns
-    /// - A vector containing all arguments in their original order.
-    ///
-    /// # Rationale
-    /// - Provides uniform access to arguments regardless of underlying storage.
-    /// - Cloning ensures caller ownership; consider `T = &str` for zero-copy variants.
-    fn all(&self) -> Vec<T>;
-}
-
-impl<T: AsRef<str> + Clone> CliArgs<T> for Vec<T> {
-    fn has_help(&self) -> bool {
-        self.iter().any(|arg| arg.as_ref() == HELP_ARG)
-    }
-
-    fn all(&self) -> Self {
-        self.clone()
-    }
-}
-
-impl CliArgs<String> for pico_args::Arguments {
-    fn has_help(&self) -> bool {
-        self.clone().contains(HELP_ARG)
-    }
-
-    fn all(&self) -> Vec<String> {
-        self.clone()
-            .finish()
-            .into_iter()
-            .map(|arg| arg.to_string_lossy().to_string())
-            .collect()
-    }
-}
-
-/// Outcome of file removal operations.
-pub struct RmFilesOutcome {
-    /// Paths successfully removed or collected in dry run.
-    pub removed: Vec<PathBuf>,
-    /// Errors encountered, paired with optional affected paths.
-    pub errors: Vec<(Option<PathBuf>, std::io::Error)>,
-}
-
-/// Retrieves command-line arguments excluding the program name, returning them as a [`Vec`] of [`String`].
-pub fn get_args() -> Vec<String> {
-    let mut args = std::env::args();
-    args.next();
-    args.collect::<Vec<String>>()
-}
+pub mod cli_args;
+pub mod lsof;
+pub mod rm;
 
 /// Joins a thread handle and returns the result, handling join errors as [`eyre::Error`].
 /// Awaits a `JoinHandle` and unwraps the inner `Result`.
@@ -261,155 +187,6 @@ pub fn ln_sf_files_in_dir<P: AsRef<std::path::Path>>(target_dir: P, link_dir: P)
     Ok(())
 }
 
-/// Removes dead symbolic links from the specified directory.
-///
-/// # Errors
-/// - A filesystem operation (open/read/write/remove) fails.
-/// - Directory traversal fails.
-/// - Removing a dead symlink fails.
-pub fn rm_dead_symlinks(dir: &str) -> color_eyre::Result<()> {
-    for entry_res in std::fs::read_dir(dir).wrap_err_with(|| eyre!("error reading directory | path={dir:?}"))? {
-        let entry = entry_res.wrap_err_with(|| eyre!("error getting entry"))?;
-        let path = entry.path();
-
-        let metadata = std::fs::symlink_metadata(&path)
-            .wrap_err_with(|| eyre!("error reading symlink metadata | path={}", path.display()))?;
-        if metadata.file_type().is_symlink() && std::fs::metadata(&path).is_err() {
-            std::fs::remove_file(&path)
-                .wrap_err_with(|| eyre!("error removing dead symlink | path={}", path.display()))?;
-            println!("{} {}", "Deleted dead symlink".cyan().bold(), path.display());
-        }
-    }
-    Ok(())
-}
-
-/// Removes the file at the specified path, ignoring if the file does not exist.
-///
-/// # Errors
-/// - A filesystem operation (open/read/write/remove) fails.
-/// - An unexpected I/O failure (other than [`std::io::ErrorKind::NotFound`]) occurs.
-pub fn rm_f<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
-    std::fs::remove_file(path).or_else(|err| {
-        if std::io::ErrorKind::NotFound == err.kind() {
-            return Ok(());
-        }
-        Err(err)
-    })
-}
-
-/// Iteratively removes all files with the specified name starting from the given root path, with optional directory
-/// exclusions.
-///
-/// This function uses a depth-first iterative traversal with a stack to avoid recursion limits.
-/// It checks each file/symlink and removes those matching the name, skipping any directories listed in `excluded_dirs`.
-/// Metadata is read once per path to determine file type, reducing syscalls.
-///
-/// # Arguments
-/// - `root_path` The root directory path to start the removal from.
-/// - `file_name` The name of the files to remove.
-/// - `excluded_dirs` A list of directory names (as strings) to skip during traversal.
-/// - `dry_run` If true, collects paths that would be removed without actually removing them.
-///
-/// # Returns
-/// Returns a tuple `(Vec<PathBuf>, Vec<(Option<PathBuf>, std::io::Error)>)` with the list of removed (or would-be
-/// removed in `dry_run`) paths and any errors encountered.
-/// Each error is paired with the optional path where it occurred (e.g., during metadata read, traversal, or removal).
-///
-/// # Performance
-/// - Reads metadata once per path using `symlink_metadata`, avoiding redundant syscalls.
-/// - Iterative approach prevents stack overflow in deep trees.
-/// - Exclusions reduce unnecessary traversal, improving performance for large trees with skipped dirs.
-/// - IO-bound; memory usage scales with stack depth and error count.
-pub fn rm_matching_files<P: AsRef<Path>>(
-    root_path: P,
-    file_name: &str,
-    excluded_dirs: &[&str],
-    dry_run: bool,
-) -> RmFilesOutcome {
-    fn rm_file(
-        path: PathBuf,
-        dry_run: bool,
-        removed: &mut Vec<PathBuf>,
-        errors: &mut Vec<(Option<PathBuf>, std::io::Error)>,
-    ) {
-        if dry_run {
-            removed.push(path);
-            return;
-        }
-        if let Err(err) = std::fs::remove_file(&path) {
-            errors.push((Some(path), err));
-            return;
-        }
-        removed.push(path);
-    }
-
-    fn handle_symlink(
-        path: PathBuf,
-        dry_run: bool,
-        removed: &mut Vec<PathBuf>,
-        errors: &mut Vec<(Option<PathBuf>, std::io::Error)>,
-    ) {
-        match std::fs::read_link(&path) {
-            Ok(target) => rm_file(target, dry_run, removed, errors),
-            Err(err) => errors.push((Some(path.clone()), err)),
-        }
-        rm_file(path, dry_run, removed, errors);
-    }
-
-    fn handle_dir(
-        path: PathBuf,
-        stack: &mut VecDeque<PathBuf>,
-        excluded_dirs: &[&str],
-        errors: &mut Vec<(Option<PathBuf>, std::io::Error)>,
-    ) {
-        if let Some(dir_name) = path.file_name().and_then(|n| n.to_str())
-            && excluded_dirs.contains(&dir_name)
-        {
-            return;
-        }
-        match std::fs::read_dir(&path) {
-            Ok(entries) => {
-                for entry in entries {
-                    match entry {
-                        Ok(entry) => stack.push_back(entry.path()),
-                        Err(err) => errors.push((Some(path.clone()), err)),
-                    }
-                }
-            }
-            Err(err) => errors.push((Some(path), err)),
-        }
-    }
-
-    let mut stack = VecDeque::new();
-    stack.push_back(root_path.as_ref().to_path_buf());
-
-    let file_name_os = OsStr::new(file_name);
-    let mut removed = vec![];
-    let mut errors = vec![];
-
-    while let Some(current_path) = stack.pop_back() {
-        match std::fs::symlink_metadata(&current_path) {
-            Ok(metadata) => {
-                let file_type = metadata.file_type();
-                if file_type.is_dir() {
-                    handle_dir(current_path, &mut stack, excluded_dirs, &mut errors);
-                    continue;
-                }
-                if current_path.file_name() == Some(file_name_os) {
-                    if file_type.is_file() {
-                        rm_file(current_path.clone(), dry_run, &mut removed, &mut errors);
-                    } else if file_type.is_symlink() {
-                        handle_symlink(current_path.clone(), dry_run, &mut removed, &mut errors);
-                    }
-                }
-            }
-            Err(err) => errors.push((None, err)),
-        }
-    }
-
-    RmFilesOutcome { removed, errors }
-}
-
 /// Atomically copies a file from `from` to `to`.
 ///
 /// The content is first written to a uniquely named temporary sibling (with
@@ -563,17 +340,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn rm_f_is_idempotent_for_missing_path() {
-        let tmp = tempfile::NamedTempFile::new().unwrap();
-        let path = tmp.path().to_path_buf();
-
-        // First remove
-        assert2::let_assert!(Ok(()) = rm_f(&path));
-        // Second remove, no error
-        assert2::let_assert!(Ok(()) = rm_f(&path));
-    }
-
-    #[test]
     fn atomic_cp_copies_file_contents() {
         let dir = tempfile::tempdir().unwrap();
         let src = dir.path().join("src.txt");
@@ -618,99 +384,5 @@ mod tests {
         let mut expected = vec![dir.path().join("c.txt"), dir.path().join("a/b/d.txt")];
         expected.sort();
         assert_eq!(found, expected);
-    }
-
-    #[test]
-    fn rm_matching_files_dry_run_collects_paths_without_removing() {
-        let dir = tempfile::tempdir().unwrap();
-        let ds_store = dir.path().join(".DS_Store");
-        std::fs::write(&ds_store, b"dummy").unwrap();
-
-        let RmFilesOutcome { removed, errors } = rm_matching_files(dir.path(), ".DS_Store", &[], true);
-
-        assert_eq!(removed, vec![ds_store.clone()]);
-        assert!(errors.is_empty());
-        assert!(ds_store.exists()); // Should not be removed
-    }
-
-    #[test]
-    fn rm_matching_files_removes_matching_files() {
-        let dir = tempfile::tempdir().unwrap();
-        let ds_store = dir.path().join(".DS_Store");
-        std::fs::write(&ds_store, b"dummy").unwrap();
-
-        let RmFilesOutcome { removed, errors } = rm_matching_files(dir.path(), ".DS_Store", &[], false);
-
-        assert_eq!(removed, vec![ds_store.clone()]);
-        assert!(errors.is_empty());
-        assert!(!ds_store.exists()); // Should be removed
-    }
-
-    #[test]
-    fn rm_matching_files_excludes_specified_dirs() {
-        let dir = tempfile::tempdir().unwrap();
-        let excluded_dir = dir.path().join("node_modules");
-        std::fs::create_dir(&excluded_dir).unwrap();
-        let ds_store_in_excluded = excluded_dir.join(".DS_Store");
-        std::fs::write(&ds_store_in_excluded, b"dummy").unwrap();
-
-        let regular_dir = dir.path().join("src");
-        std::fs::create_dir(&regular_dir).unwrap();
-        let ds_store_in_regular = regular_dir.join(".DS_Store");
-        std::fs::write(&ds_store_in_regular, b"dummy").unwrap();
-
-        let RmFilesOutcome { removed, errors } = rm_matching_files(dir.path(), ".DS_Store", &["node_modules"], false);
-
-        assert_eq!(removed, vec![ds_store_in_regular.clone()]);
-        assert!(errors.is_empty());
-        assert!(ds_store_in_excluded.exists()); // Not removed
-        assert!(!ds_store_in_regular.exists()); // Removed
-    }
-
-    #[test]
-    fn rm_matching_files_handles_nested_files() {
-        let dir = tempfile::tempdir().unwrap();
-        let sub_dir = dir.path().join("subdir");
-        std::fs::create_dir(&sub_dir).unwrap();
-        let ds_store = sub_dir.join(".DS_Store");
-        std::fs::write(&ds_store, b"dummy").unwrap();
-
-        let RmFilesOutcome { removed, errors } = rm_matching_files(dir.path(), ".DS_Store", &[], false);
-
-        assert_eq!(removed, vec![ds_store.clone()]);
-        assert!(errors.is_empty());
-        assert!(!ds_store.exists());
-    }
-
-    #[test]
-    fn rm_matching_files_collects_errors_for_unreadable_dirs() {
-        let dir = tempfile::tempdir().unwrap();
-        let unreadable_dir = dir.path().join("unreadable");
-        std::fs::create_dir(&unreadable_dir).unwrap();
-
-        let RmFilesOutcome { removed, errors } = rm_matching_files("/non/existent/path", ".DS_Store", &[], false);
-
-        assert!(removed.is_empty());
-        assert!(!errors.is_empty());
-        // Check that error has None path for metadata failure
-        assert!(errors.iter().any(|(path, _)| path.is_none()));
-    }
-
-    #[test]
-    fn rm_matching_files_removes_symlink_and_target() {
-        let dir = tempfile::tempdir().unwrap();
-        let target = dir.path().join("target.txt");
-        std::fs::write(&target, b"content").unwrap();
-        let symlink = dir.path().join(".DS_Store");
-        std::os::unix::fs::symlink(&target, &symlink).unwrap();
-
-        let RmFilesOutcome { removed, errors } = rm_matching_files(dir.path(), ".DS_Store", &[], false);
-
-        assert_eq!(removed.len(), 2);
-        assert!(errors.is_empty());
-        assert!(removed.contains(&symlink));
-        assert!(removed.contains(&target));
-        assert!(!symlink.exists());
-        assert!(!target.exists());
     }
 }

@@ -32,7 +32,7 @@ use std::path::Path;
 
 use color_eyre::eyre::eyre;
 use color_eyre::owo_colors::OwoColorize as _;
-use ytil_sys::CliArgs;
+use ytil_sys::cli_args::CliArgs;
 
 use crate::installers::Installer;
 use crate::installers::bash_language_server::BashLanguageServer;
@@ -115,7 +115,7 @@ fn report<'a>(
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let args = ytil_sys::get_args();
+    let args = ytil_sys::cli_args::get();
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));
         return Ok(());
@@ -275,7 +275,7 @@ fn main() -> color_eyre::Result<()> {
         std::process::exit(1);
     }
 
-    ytil_sys::rm_dead_symlinks(bin_dir)?;
+    ytil_sys::rm::rm_dead_symlinks(bin_dir)?;
 
     Ok(())
 }

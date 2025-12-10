@@ -20,7 +20,7 @@
 //! - Writing the generated value to the clipboard fails.
 
 use fkr::FkrOption;
-use ytil_sys::CliArgs;
+use ytil_sys::cli_args::CliArgs;
 
 /// Generate fake data strings from an enum façade over selected fake providers.
 ///
@@ -30,7 +30,7 @@ use ytil_sys::CliArgs;
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let args = ytil_sys::get_args();
+    let args = ytil_sys::cli_args::get();
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));
         return Ok(());

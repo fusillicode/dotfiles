@@ -18,7 +18,7 @@ use askama::Template;
 use chrono::Utc;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
-use ytil_sys::CliArgs;
+use ytil_sys::cli_args::CliArgs;
 
 use crate::templates::components::footer::Footer;
 use crate::templates::pages::index::CrateMeta;
@@ -86,7 +86,7 @@ fn get_toml_values(content: &str, key: &str) -> Vec<String> {
 fn main() -> color_eyre::eyre::Result<()> {
     color_eyre::install()?;
 
-    let args = ytil_sys::get_args();
+    let args = ytil_sys::cli_args::get();
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));
         return Ok(());

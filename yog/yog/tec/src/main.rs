@@ -38,8 +38,8 @@ use std::time::Instant;
 use color_eyre::owo_colors::OwoColorize;
 use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt as _;
-use ytil_sys::CliArgs;
-use ytil_sys::RmFilesOutcome;
+use ytil_sys::cli_args::CliArgs;
+use ytil_sys::rm::RmFilesOutcome;
 
 /// Workspace lint check set.
 ///
@@ -205,7 +205,7 @@ const LINTS_FIX: &[(&str, LintBuilder)] = &[
     }),
     ("rm-ds-store", |changed_paths| {
         build_conditional_lint(changed_paths, None, |path| {
-            LintFnResult::from(ytil_sys::rm_matching_files(
+            LintFnResult::from(ytil_sys::rm::rm_matching_files(
                 path,
                 ".DS_Store",
                 &[".git", "target"],
@@ -454,7 +454,7 @@ fn format_timing(duration: Duration) -> String {
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let args = ytil_sys::get_args();
+    let args = ytil_sys::cli_args::get();
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));
         return Ok(());

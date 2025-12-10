@@ -27,6 +27,12 @@ pub fn get(_: ()) -> Option<WordUnderCursor> {
     let current_buffer = nvim_oxi::api::get_current_buf();
     let cursor_pos = CursorPosition::get_current()?;
 
+    // 1. Get current_buffer name
+    // 2. If name is term
+    // a. extract pid
+    // b. exec "lsof -p <PID>"
+    // c. parse output
+
     if current_buffer.is_terminal() {
         get_word_under_cursor_in_terminal_buffer(&current_buffer, &cursor_pos)
     } else {
