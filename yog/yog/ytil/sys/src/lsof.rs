@@ -15,7 +15,7 @@ pub struct ProcessDescription {
     pub cwd: String,
 }
 
-pub fn lsof(process_filter: ProcessFilter) -> color_eyre::Result<Vec<ProcessDescription>> {
+pub fn lsof(process_filter: &ProcessFilter) -> color_eyre::Result<Vec<ProcessDescription>> {
     let cmd = "lsof";
 
     let process_filter = match process_filter {
@@ -47,7 +47,7 @@ fn parse_lsof_output(output: &str) -> color_eyre::Result<Vec<ProcessDescription>
         out.push(ProcessDescription {
             pid: pid.to_owned(),
             cwd: cwd.to_owned(),
-        })
+        });
     }
     Ok(out)
 }
