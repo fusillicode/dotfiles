@@ -28,7 +28,7 @@ use url::Url;
 use ytil_editor::Editor;
 use ytil_hx::HxCursorPosition;
 use ytil_hx::HxStatusLine;
-use ytil_sys::CliArgs;
+use ytil_sys::cli::Args;
 use ytil_wezterm::WeztermPane;
 use ytil_wezterm::get_sibling_pane_with_titles;
 
@@ -41,7 +41,7 @@ fn build_hx_cursor_absolute_file_path(
     hx_pane: &WeztermPane,
 ) -> color_eyre::Result<PathBuf> {
     if let Ok(hx_cursor_file_path) = hx_cursor_file_path.strip_prefix("~") {
-        return ytil_sys::build_home_path(&[hx_cursor_file_path]);
+        return ytil_sys::dir::build_home_path(&[hx_cursor_file_path]);
     }
 
     let mut components = hx_pane.cwd.components();
@@ -92,7 +92,7 @@ fn build_github_link<'a>(
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let args = ytil_sys::get_args();
+    let args = ytil_sys::cli::get();
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));
         return Ok(());
@@ -147,7 +147,7 @@ fn main() -> color_eyre::Result<()> {
         &hx_status_line.position,
     )?;
 
-    ytil_sys::cp_to_system_clipboard(&mut github_link.as_str().as_bytes())?;
+    ytil_sys::file::cp_to_system_clipboard(&mut github_link.as_str().as_bytes())?;
 
     Ok(())
 }
