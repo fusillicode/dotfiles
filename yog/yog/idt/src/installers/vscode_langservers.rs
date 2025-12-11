@@ -15,8 +15,8 @@ impl Installer for VsCodeLangServers<'_> {
     fn install(&self) -> color_eyre::Result<()> {
         let target_dir = crate::downloaders::npm::run(self.dev_tools_dir, self.bin_name(), &[self.bin_name()])?;
 
-        ytil_sys::ln_sf_files_in_dir(target_dir, (&self.bin_dir).into())?;
-        ytil_sys::chmod_x_files_in_dir(self.bin_dir)?;
+        ytil_sys::file::ln_sf_files_in_dir(target_dir, (&self.bin_dir).into())?;
+        ytil_sys::file::chmod_x_files_in_dir(self.bin_dir)?;
 
         Ok(())
     }

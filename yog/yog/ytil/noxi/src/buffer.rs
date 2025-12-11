@@ -143,6 +143,19 @@ pub trait BufferExt: Debug {
 
         Some(())
     }
+
+    /// Retrieves the process ID associated with the buffer.
+    ///
+    /// # Returns
+    /// The process ID as a string. For terminal buffers, this is the PID of the running
+    /// terminal process parsed from the buffer name. For other buffers, this is the PID
+    /// of the Neovim instance.
+    ///
+    /// # Errors
+    /// - If the buffer name cannot be retrieved.
+    /// - If the buffer is a terminal but the name format is invalid.
+    /// - If the Neovim `getpid` function call fails.
+    fn get_pid(&self) -> color_eyre::Result<String>;
 }
 
 /// Defines boundaries for text selection within lines.
@@ -258,6 +271,28 @@ impl BufferExt for Buffer {
                 ));
             })
             .ok()
+    }
+
+    fn get_pid(&self) -> color_eyre::Result<String> {
+        let buf_name = self
+            .get_name()
+            .wrap_err_with(|| eyre!("error getting name of buffer | buffer={self:#?}"))
+            .map(|s| s.to_string_lossy().to_string())?;
+
+        if buf_name.starts_with("term://") {
+            let (_, pid_cmd) = buf_name.rsplit_once("//").ok_or_else(|| {
+                eyre!("error getting pid and cmd from buffer name | buffer={self:?} buffer_name={buf_name:?}")
+            })?;
+            let (pid, _) = pid_cmd
+                .rsplit_once(':')
+                .ok_or_else(|| eyre!("error getting pid from buffer name| buffer={self:?} buffer_name={buf_name:?}"))?;
+            return Ok(pid.to_owned());
+        }
+
+        let pid = nvim_oxi::api::call_function::<_, i32>("getpid", Array::new())
+            .wrap_err_with(|| eyre!("error getting pid of buffer | buffer={self:#?}"))?;
+
+        Ok(pid.to_string())
     }
 }
 
@@ -714,6 +749,10 @@ mod tests {
         fn send_command(&self, _cmd: &str) -> Option<()> {
             None
         }
+
+        fn get_pid(&self) -> color_eyre::Result<String> {
+            Ok("42".to_owned())
+        }
     }
 }
 
@@ -780,6 +819,10 @@ pub mod mock {
 
         fn send_command(&self, _cmd: &str) -> Option<()> {
             None
+        }
+
+        fn get_pid(&self) -> color_eyre::Result<String> {
+            Ok("42".to_owned())
         }
     }
 }

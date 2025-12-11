@@ -13,7 +13,9 @@ categories = ["command-line-utilities", "development-tools"]
 [dependencies]
 chrono = { workspace = true }
 color-eyre = { workspace = true }
+itertools = { workspace = true }
 pico-args = { version = "0.5" }
+serde = { workspace = true }
 ytil_cmd = { workspace = true }
 
 [dev-dependencies]
