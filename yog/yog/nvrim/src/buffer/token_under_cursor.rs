@@ -229,11 +229,11 @@ impl TokenUnderCursor {
                 let mut tmp = process_desc.cwd.to_string_lossy().to_string();
                 if let Some(lnum) = lnum {
                     tmp.push(':');
-                    tmp.push_str(&lnum.to_string())
+                    tmp.push_str(&lnum.to_string());
                 }
                 if let Some(col) = col {
                     tmp.push(':');
-                    tmp.push_str(&col.to_string())
+                    tmp.push_str(&col.to_string());
                 }
                 tmp
             };
