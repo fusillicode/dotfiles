@@ -1,6 +1,8 @@
+use std::path::PathBuf;
 use std::process::Command;
+use std::str::FromStr;
 
-use color_eyre::eyre::Context as _;
+use color_eyre::eyre::Context;
 use color_eyre::eyre::eyre;
 use itertools::Itertools as _;
 use ytil_cmd::CmdExt as _;
@@ -14,7 +16,7 @@ pub enum ProcessFilter<'a> {
 #[derive(Debug)]
 pub struct ProcessDescription {
     pub pid: String,
-    pub cwd: String,
+    pub cwd: PathBuf,
 }
 
 pub fn lsof(process_filter: &ProcessFilter) -> color_eyre::Result<Vec<ProcessDescription>> {
@@ -54,9 +56,11 @@ fn parse_lsof_output(output: &str) -> color_eyre::Result<Vec<ProcessDescription>
             .next()
             .ok_or_else(|| eyre!("error missing cwd in lsof line"))?
             .trim_start_matches('n');
+
         out.push(ProcessDescription {
             pid: pid.to_owned(),
-            cwd: cwd.to_owned(),
+            cwd: PathBuf::from_str(cwd)
+                .wrap_err_with(|| format!("error constructing PathBuf from cwd | cwd={cwd:?}"))?,
         });
     }
     Ok(out)

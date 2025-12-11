@@ -3,12 +3,66 @@ use std::fs::DirEntry;
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
 use std::path::PathBuf;
+use std::process::Command;
 use std::process::Stdio;
 
 use chrono::Utc;
 use color_eyre::eyre::Context as _;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
+use serde::Serialize;
+use ytil_cmd::CmdExt as _;
+
+/// Raw filesystem / MIME classification result returned by [`exec_file_cmd`].
+#[derive(Serialize)]
+pub enum FileCmdOutput {
+    /// Path identified as a binary file.
+    BinaryFile(String),
+    /// Path identified as a text (plain / CSV) file.
+    TextFile(String),
+    /// Path identified as a directory.
+    Directory(String),
+    /// Path that does not exist.
+    NotFound(String),
+    /// Path whose type could not be determined.
+    Unknown(String),
+}
+
+/// Execute the system `file -I` command for `path` and classify the MIME output
+/// into a [`FileCmdOutput`].
+///
+/// Used to distinguish:
+/// - directories
+/// - text files
+/// - binary files
+/// - missing paths
+/// - unknown types
+///
+/// # Errors
+/// - launching or waiting on the `file` command fails
+/// - the command exits with non-success
+/// - standard output cannot be decoded as valid UTF-8
+pub fn exec_file_cmd(path: &str) -> color_eyre::Result<FileCmdOutput> {
+    let stdout_bytes = Command::new("sh")
+        .arg("-c")
+        .arg(format!("file {path} -I"))
+        .exec()?
+        .stdout;
+    let stdout = std::str::from_utf8(&stdout_bytes)?.to_lowercase();
+    if stdout.contains(" inode/directory;") {
+        return Ok(FileCmdOutput::Directory(path.to_owned()));
+    }
+    if stdout.contains(" text/") || stdout.contains(" application/json") {
+        return Ok(FileCmdOutput::TextFile(path.to_owned()));
+    }
+    if stdout.contains(" application/") {
+        return Ok(FileCmdOutput::BinaryFile(path.to_owned()));
+    }
+    if stdout.contains(" no such file or directory") {
+        return Ok(FileCmdOutput::NotFound(path.to_owned()));
+    }
+    Ok(FileCmdOutput::Unknown(path.to_owned()))
+}
 
 /// Creates a symbolic link from the target to the link path, removing any existing file at the link location.
 ///
