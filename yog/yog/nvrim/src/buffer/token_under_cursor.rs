@@ -22,30 +22,30 @@ use ytil_sys::lsof::ProcessFilter;
 ///
 /// Returns [`Option::None`] if the current line or cursor position cannot be obtained,
 /// or if the cursor is on whitespace. On errors a notification is emitted to Nvim.
-/// On success returns a classified [`WordUnderCursor`].
-pub fn get(_: ()) -> Option<WordUnderCursor> {
+/// On success returns a classified [`TokenUnderCursor`].
+pub fn get(_: ()) -> Option<TokenUnderCursor> {
     let current_buffer = nvim_oxi::api::get_current_buf();
     let cursor_pos = CursorPosition::get_current()?;
 
-    let word_under_cursor = if current_buffer.is_terminal() {
-        get_word_under_cursor_in_terminal_buffer(&current_buffer, &cursor_pos)
+    let token_under_cursor = if current_buffer.is_terminal() {
+        get_token_under_cursor_in_terminal_buffer(&current_buffer, &cursor_pos)
     } else {
-        get_word_under_cursor_in_normal_buffer(&cursor_pos)
+        get_token_under_cursor_in_normal_buffer(&cursor_pos)
     }
     .as_deref()
-    .map(WordUnderCursor::classify)?
+    .map(TokenUnderCursor::classify)?
     .inspect_err(|err| ytil_noxi::notify::error(format!("error classifying word under cursor | error={err:?}")))
     .ok()?;
 
-    let word_under_cursor = word_under_cursor
+    let token_under_cursor = token_under_cursor
         .refine_word(&current_buffer)
         .inspect_err(|err| ytil_noxi::notify::error(format!("error refining word under cursor | error={err:?}")))
         .ok()?;
 
-    Some(word_under_cursor)
+    Some(token_under_cursor)
 }
 
-fn get_word_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &CursorPosition) -> Option<String> {
+fn get_token_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &CursorPosition) -> Option<String> {
     let window_width = Window::current()
         .get_width()
         .wrap_err("error getting window width")
@@ -119,7 +119,7 @@ fn get_word_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &Cursor
     Some(out.into_iter().collect())
 }
 
-fn get_word_under_cursor_in_normal_buffer(cursor_pos: &CursorPosition) -> Option<String> {
+fn get_token_under_cursor_in_normal_buffer(cursor_pos: &CursorPosition) -> Option<String> {
     let current_line = ytil_noxi::buffer::get_current_line()?;
     get_word_at_index(&current_line, cursor_pos.col).map(ToOwned::to_owned)
 }
@@ -131,13 +131,13 @@ fn get_word_under_cursor_in_normal_buffer(cursor_pos: &CursorPosition) -> Option
 /// - existing binary files
 /// - existing text files
 /// - existing directories
-/// - plain tokens (fallback [`WordUnderCursor::Word`])
+/// - plain tokens (fallback [`TokenUnderCursor::Word`])
 ///
 /// Serialized to Lua as a tagged table (`{ kind = "...", value = "..." }`).
 #[derive(Clone, Debug, Serialize)]
 #[serde(tag = "kind", content = "value")]
 #[cfg_attr(test, derive(Eq, PartialEq))]
-pub enum WordUnderCursor {
+pub enum TokenUnderCursor {
     /// A string that successfully parsed as a [`Url`] via [`Url::parse`].
     Url(String),
     /// A filesystem path identified as a binary file by [`ytil_sys::file::exec_file_cmd`].
@@ -150,7 +150,7 @@ pub enum WordUnderCursor {
     Word(String),
 }
 
-impl nvim_oxi::lua::Pushable for WordUnderCursor {
+impl nvim_oxi::lua::Pushable for TokenUnderCursor {
     unsafe fn push(self, lstate: *mut State) -> Result<std::ffi::c_int, nvim_oxi::lua::Error> {
         unsafe {
             self.to_object()
@@ -160,18 +160,18 @@ impl nvim_oxi::lua::Pushable for WordUnderCursor {
     }
 }
 
-impl ToObject for WordUnderCursor {
+impl ToObject for TokenUnderCursor {
     fn to_object(self) -> Result<Object, nvim_oxi::conversion::Error> {
         self.serialize(Serializer::new()).map_err(Into::into)
     }
 }
 
-/// Classify a [`String`] captured under the cursor into a [`WordUnderCursor`].
+/// Classify a [`String`] captured under the cursor into a [`TokenUnderCursor`].
 ///
-/// 1. If it parses as a URL with [`Url::parse`], returns [`WordUnderCursor::Url`].
+/// 1. If it parses as a URL with [`Url::parse`], returns [`TokenUnderCursor::Url`].
 /// 2. Otherwise, invokes [`ytil_sys::file::exec_file_cmd`] to check filesystem type.
-/// 3. Falls back to [`WordUnderCursor::Word`] on errors or unknown kinds.
-impl WordUnderCursor {
+/// 3. Falls back to [`TokenUnderCursor::Word`] on errors or unknown kinds.
+impl TokenUnderCursor {
     fn classify(value: &str) -> color_eyre::Result<Self> {
         let value = value.trim_matches('"').trim_matches('`').trim_matches('\'').to_string();
 
@@ -316,121 +316,121 @@ mod tests {
         pretty_assertions::assert_eq!(get_word_at_index(s, idx), expected);
     }
 
-    // Tests are skipped in CI because [`WordUnderCursor::from`] calls `file` command and that
+    // Tests are skipped in CI because [`TokenUnderCursor::from`] calls `file` command and that
     // behaves differently based on the platform (e.g. macOS vs Linux)
 
     #[test]
     #[cfg(target_os = "macos")]
-    fn word_under_cursor_classify_valid_url_returns_url() {
+    fn token_under_cursor_classify_valid_url_returns_url() {
         let input = "https://example.com".to_string();
-        let result = WordUnderCursor::classify(&input);
+        let result = TokenUnderCursor::classify(&input);
         assert2::let_assert!(Ok(actual) = result);
-        pretty_assertions::assert_eq!(actual, WordUnderCursor::Url(input));
+        pretty_assertions::assert_eq!(actual, TokenUnderCursor::Url(input));
     }
 
     #[test]
     #[cfg(target_os = "macos")]
-    fn word_under_cursor_classify_invalid_url_plain_word_returns_word() {
+    fn token_under_cursor_classify_invalid_url_plain_word_returns_word() {
         let input = "noturl".to_string();
-        let result = WordUnderCursor::classify(&input);
+        let result = TokenUnderCursor::classify(&input);
         assert2::let_assert!(Ok(actual) = result);
-        pretty_assertions::assert_eq!(actual, WordUnderCursor::Word(input));
+        pretty_assertions::assert_eq!(actual, TokenUnderCursor::Word(input));
     }
 
     #[test]
     #[cfg(target_os = "macos")]
-    fn word_under_cursor_classify_path_to_text_file_returns_text_file() {
+    fn token_under_cursor_classify_path_to_text_file_returns_text_file() {
         let mut temp_file = NamedTempFile::new().unwrap();
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
-        let result = WordUnderCursor::classify(&path);
+        let result = TokenUnderCursor::classify(&path);
         assert2::let_assert!(Ok(actual) = result);
-        pretty_assertions::assert_eq!(actual, WordUnderCursor::TextFile { path, lnum: 0, col: 0 });
+        pretty_assertions::assert_eq!(actual, TokenUnderCursor::TextFile { path, lnum: 0, col: 0 });
     }
 
     #[test]
     #[cfg(target_os = "macos")]
-    fn word_under_cursor_classify_path_lnum_to_text_file_returns_text_file_with_lnum() {
+    fn token_under_cursor_classify_path_lnum_to_text_file_returns_text_file_with_lnum() {
         let mut temp_file = NamedTempFile::new().unwrap();
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
-        let result = WordUnderCursor::classify(&format!("{path}:10"));
+        let result = TokenUnderCursor::classify(&format!("{path}:10"));
         assert2::let_assert!(Ok(actual) = result);
-        pretty_assertions::assert_eq!(actual, WordUnderCursor::TextFile { path, lnum: 10, col: 0 });
+        pretty_assertions::assert_eq!(actual, TokenUnderCursor::TextFile { path, lnum: 10, col: 0 });
     }
 
     #[test]
     #[cfg(target_os = "macos")]
-    fn word_under_cursor_classify_path_lnum_col_to_text_file_returns_text_file_with_lnum_col() {
+    fn token_under_cursor_classify_path_lnum_col_to_text_file_returns_text_file_with_lnum_col() {
         let mut temp_file = NamedTempFile::new().unwrap();
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
-        let result = WordUnderCursor::classify(&format!("{path}:10:5"));
+        let result = TokenUnderCursor::classify(&format!("{path}:10:5"));
         assert2::let_assert!(Ok(actual) = result);
-        pretty_assertions::assert_eq!(actual, WordUnderCursor::TextFile { path, lnum: 10, col: 5 });
+        pretty_assertions::assert_eq!(actual, TokenUnderCursor::TextFile { path, lnum: 10, col: 5 });
     }
 
     #[test]
     #[cfg(target_os = "macos")]
-    fn word_under_cursor_classify_path_to_directory_returns_directory() {
+    fn token_under_cursor_classify_path_to_directory_returns_directory() {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().to_string_lossy().to_string();
-        let result = WordUnderCursor::classify(&path);
+        let result = TokenUnderCursor::classify(&path);
         assert2::let_assert!(Ok(actual) = result);
-        pretty_assertions::assert_eq!(actual, WordUnderCursor::Directory(path));
+        pretty_assertions::assert_eq!(actual, TokenUnderCursor::Directory(path));
     }
 
     #[test]
     #[cfg(target_os = "macos")]
-    fn word_under_cursor_classify_path_to_binary_file_returns_binary_file() {
+    fn token_under_cursor_classify_path_to_binary_file_returns_binary_file() {
         let mut temp_file = NamedTempFile::new().unwrap();
         // Write some binary data
         std::io::Write::write_all(&mut temp_file, &[0, 1, 2, 255]).unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
-        let result = WordUnderCursor::classify(&path);
+        let result = TokenUnderCursor::classify(&path);
         assert2::let_assert!(Ok(actual) = result);
-        pretty_assertions::assert_eq!(actual, WordUnderCursor::BinaryFile(path));
+        pretty_assertions::assert_eq!(actual, TokenUnderCursor::BinaryFile(path));
     }
 
     #[test]
     #[cfg(target_os = "macos")]
-    fn word_under_cursor_classify_nonexistent_path_returns_word() {
+    fn token_under_cursor_classify_nonexistent_path_returns_word() {
         let path = "/nonexistent/path".to_string();
-        let result = WordUnderCursor::classify(&path);
+        let result = TokenUnderCursor::classify(&path);
         assert2::let_assert!(Ok(actual) = result);
-        pretty_assertions::assert_eq!(actual, WordUnderCursor::Word(path));
+        pretty_assertions::assert_eq!(actual, TokenUnderCursor::Word(path));
     }
 
     #[test]
     #[cfg(target_os = "macos")]
-    fn word_under_cursor_classify_path_with_invalid_lnum_returns_word() {
+    fn token_under_cursor_classify_path_with_invalid_lnum_returns_word() {
         let temp_file = NamedTempFile::new().unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
         let input = format!("{path}:invalid");
-        let result = WordUnderCursor::classify(&input);
+        let result = TokenUnderCursor::classify(&input);
         assert2::let_assert!(Ok(actual) = result);
-        pretty_assertions::assert_eq!(actual, WordUnderCursor::Word(input));
+        pretty_assertions::assert_eq!(actual, TokenUnderCursor::Word(input));
     }
 
     #[test]
     #[cfg(target_os = "macos")]
-    fn word_under_cursor_classify_path_with_invalid_col_returns_word() {
+    fn token_under_cursor_classify_path_with_invalid_col_returns_word() {
         let temp_file = NamedTempFile::new().unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
         let input = format!("{path}:10:invalid");
-        let result = WordUnderCursor::classify(&input);
+        let result = TokenUnderCursor::classify(&input);
         assert2::let_assert!(Ok(actual) = result);
-        pretty_assertions::assert_eq!(actual, WordUnderCursor::Word(input));
+        pretty_assertions::assert_eq!(actual, TokenUnderCursor::Word(input));
     }
 
     #[test]
     #[cfg(target_os = "macos")]
-    fn word_under_cursor_classify_path_lnum_col_extra_ignores_extra() {
+    fn token_under_cursor_classify_path_lnum_col_extra_ignores_extra() {
         let mut temp_file = NamedTempFile::new().unwrap();
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
-        let result = WordUnderCursor::classify(&format!("{path}:10:5:extra"));
+        let result = TokenUnderCursor::classify(&format!("{path}:10:5:extra"));
         assert2::let_assert!(Ok(actual) = result);
-        pretty_assertions::assert_eq!(actual, WordUnderCursor::TextFile { path, lnum: 10, col: 5 });
+        pretty_assertions::assert_eq!(actual, TokenUnderCursor::TextFile { path, lnum: 10, col: 5 });
     }
 }
