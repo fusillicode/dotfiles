@@ -18,7 +18,7 @@ use std::process::Command;
 use color_eyre::eyre::eyre;
 use ytil_editor::Editor;
 use ytil_hx::HxStatusLine;
-use ytil_sys::CliArgs;
+use ytil_sys::cli::Args;
 
 /// Formats Helix status line into file path with line number.
 ///
@@ -37,7 +37,7 @@ fn format_hx_status_line(hx_status_line: &HxStatusLine) -> color_eyre::Result<St
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let args = ytil_sys::get_args();
+    let args = ytil_sys::cli::get();
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));
         return Ok(());
@@ -64,7 +64,7 @@ fn main() -> color_eyre::Result<()> {
 
     let hx_status_line = HxStatusLine::from_str(hx_status_line_str)?;
 
-    ytil_sys::cp_to_system_clipboard(&mut format_hx_status_line(&hx_status_line)?.as_bytes())?;
+    ytil_sys::file::cp_to_system_clipboard(&mut format_hx_status_line(&hx_status_line)?.as_bytes())?;
 
     Ok(())
 }

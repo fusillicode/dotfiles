@@ -87,8 +87,8 @@ fn create_scratch_file(_: ()) {
 /// # Errors
 /// Returns an error if the workspace root cannot be determined or the directory cannot be read.
 fn get_scratches_dir_content() -> color_eyre::Result<ReadDir> {
-    ytil_sys::get_workspace_root()
-        .map(|workspace_root| ytil_sys::build_path(workspace_root, SCRATCHES_PATH_PARTS))
+    ytil_sys::dir::get_workspace_root()
+        .map(|workspace_root| ytil_sys::dir::build_path(workspace_root, SCRATCHES_PATH_PARTS))
         .inspect_err(|err| {
             ytil_noxi::notify::error(format!("error getting workspace root | error={err:#?}"));
         })

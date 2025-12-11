@@ -24,7 +24,7 @@ impl Installer for HarperLs<'_> {
             ])
             .status()?;
 
-        ytil_sys::chmod_x(self.bin_dir.join(self.bin_name()))?;
+        ytil_sys::file::chmod_x(self.bin_dir.join(self.bin_name()))?;
 
         Ok(())
     }

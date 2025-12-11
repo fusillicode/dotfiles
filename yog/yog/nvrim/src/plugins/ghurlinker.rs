@@ -60,7 +60,7 @@ fn get_link((link_type, open): (String, Option<bool>)) {
             ytil_noxi::notify::error(format!("error opening URL | url={repo_url:?} error={err:#?}"));
         }
     } else {
-        if let Err(err) = ytil_sys::cp_to_system_clipboard(&mut repo_url.as_bytes()) {
+        if let Err(err) = ytil_sys::file::cp_to_system_clipboard(&mut repo_url.as_bytes()) {
             ytil_noxi::notify::error(format!(
                 "error copying content to system clipboard | content={repo_url:?} error={err:#?}"
             ));

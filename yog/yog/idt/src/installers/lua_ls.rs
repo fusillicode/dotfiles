@@ -31,7 +31,7 @@ impl Installer for LuaLanguageServer<'_> {
             },
         )?;
 
-        ytil_sys::chmod_x(target_dir.join("bin").join(self.bin_name()))?;
+        ytil_sys::file::chmod_x(target_dir.join("bin").join(self.bin_name()))?;
 
         Ok(())
     }

@@ -35,7 +35,7 @@ impl Installer for Shellcheck<'_> {
                 .join(self.bin_name()),
             &target,
         )?;
-        ytil_sys::chmod_x(target)?;
+        ytil_sys::file::chmod_x(target)?;
 
         Ok(())
     }

@@ -41,7 +41,7 @@ use strum::IntoEnumIterator;
 use ytil_git::GitStatusEntry;
 use ytil_git::IndexState;
 use ytil_git::WorktreeState;
-use ytil_sys::CliArgs;
+use ytil_sys::cli::Args;
 
 /// Newtype wrapper adding colored [`Display`] for a [`ytil_git::GitStatusEntry`].
 ///
@@ -238,7 +238,7 @@ fn add_entries(entries: &[&GitStatusEntry]) -> color_eyre::Result<()> {
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let args = ytil_sys::get_args();
+    let args = ytil_sys::cli::get();
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));
         return Ok(());

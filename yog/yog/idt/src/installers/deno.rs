@@ -27,7 +27,7 @@ impl Installer for Deno<'_> {
             },
         )?;
 
-        ytil_sys::chmod_x(&target)?;
+        ytil_sys::file::chmod_x(&target)?;
 
         Ok(())
     }
