@@ -66,6 +66,7 @@ use color_eyre::eyre::eyre;
 use color_eyre::owo_colors::OwoColorize;
 use strum::EnumIter;
 use ytil_gh::RepoViewField;
+use ytil_gh::issue::Issue;
 use ytil_gh::pr::IntoEnumIterator;
 use ytil_gh::pr::PullRequest;
 use ytil_gh::pr::PullRequestMergeState;
@@ -307,6 +308,11 @@ fn main() -> color_eyre::Result<()> {
         return Ok(());
     }
 
+    if pargs.contains("branch") {
+        create_branch_from_issue()?;
+        return Ok(());
+    }
+
     let repo_name_with_owner = ytil_gh::get_repo_view_field(&RepoViewField::NameWithOwner)?;
 
     let search_filter: Option<String> = pargs.opt_value_from_str("--search")?;
@@ -424,6 +430,50 @@ fn create_pr() -> Result<(), color_eyre::eyre::Error> {
     let title = pr_title_from_branch_name(branch.name_no_origin())?;
     let pr_url = ytil_gh::pr::create(&title)?;
     println!("{} title={title:?} pr_url={pr_url:?}", "PR created".green().bold());
+
+    Ok(())
+}
+
+struct RenderableIssue(pub Issue);
+
+impl Deref for RenderableIssue {
+    type Target = Issue;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Display for RenderableIssue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            // The spacing before the title is required to align it with the first line.
+            "{} {} \n  {}",
+            self.author.login.blue().bold(),
+            self.updated_at.format("%d-%m-%Y %H:%M UTC"),
+            self.title
+        )
+    }
+}
+
+fn create_branch_from_issue() -> Result<(), color_eyre::eyre::Error> {
+    let issues = ytil_gh::issue::list()?;
+
+    let Some(issue) = ytil_tui::minimal_select(issues.into_iter().map(RenderableIssue).collect())? else {
+        return Ok(());
+    };
+
+    let Some(checkout_branch) = ytil_tui::yes_no_select("Checkout branch?")? else {
+        return Ok(());
+    };
+
+    let develop_output = ytil_gh::issue::develop(&issue.number.to_string(), checkout_branch)?;
+    println!(
+        "{} with name={:?}",
+        "Branch created".green().bold(),
+        develop_output.branch_name
+    );
 
     Ok(())
 }

@@ -1,10 +1,13 @@
 use std::process::Command;
 
+use chrono::DateTime;
+use chrono::Utc;
 use color_eyre::eyre::Context as _;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 use convert_case::Case;
 use convert_case::Casing as _;
+use serde::Deserialize;
 use ytil_cmd::CmdExt;
 
 /// Represents a newly created GitHub issue.
@@ -155,6 +158,31 @@ pub fn develop(issue_number: &str, checkout: bool) -> color_eyre::Result<Develop
         branch_ref,
         branch_name,
     })
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Issue {
+    pub author: Author,
+    pub title: String,
+    pub number: usize,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Author {
+    pub login: String,
+}
+
+pub fn list() -> color_eyre::Result<Vec<Issue>> {
+    let output = Command::new("gh")
+        .args(["issue", "list", "--json", "number,title,author,updatedAt"])
+        .exec()
+        .wrap_err_with(|| eyre!("error listing GitHub issues"))?;
+
+    let list_output = str::from_utf8(&output.stdout)?.trim().to_string();
+
+    Ok(serde_json::from_str(&list_output)?)
 }
 
 #[cfg(test)]
