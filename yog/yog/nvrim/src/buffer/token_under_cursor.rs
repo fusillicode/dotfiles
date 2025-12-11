@@ -131,7 +131,7 @@ fn get_token_under_cursor_in_normal_buffer(cursor_pos: &CursorPosition) -> Optio
 /// - existing binary files
 /// - existing text files
 /// - existing directories
-/// - plain tokens (fallback [`TokenUnderCursor::Word`])
+/// - plain tokens (fallback [`TokenUnderCursor::MaybeTextFile`])
 ///
 /// Serialized to Lua as a tagged table (`{ kind = "...", value = "..." }`).
 #[derive(Clone, Debug, Serialize)]
@@ -143,11 +143,19 @@ pub enum TokenUnderCursor {
     /// A filesystem path identified as a binary file by [`ytil_sys::file::exec_file_cmd`].
     BinaryFile(String),
     /// A filesystem path identified as a text file by [`ytil_sys::file::exec_file_cmd`].
-    TextFile { path: String, lnum: i64, col: i64 },
+    TextFile {
+        path: String,
+        lnum: Option<i64>,
+        col: Option<i64>,
+    },
     /// A filesystem path identified as a directory by [`ytil_sys::file::exec_file_cmd`].
     Directory(String),
     /// A fallback plain token (word) when no more specific classification applied.
-    Word(String),
+    MaybeTextFile {
+        value: String,
+        lnum: Option<i64>,
+        col: Option<i64>,
+    },
 }
 
 impl nvim_oxi::lua::Pushable for TokenUnderCursor {
@@ -170,7 +178,7 @@ impl ToObject for TokenUnderCursor {
 ///
 /// 1. If it parses as a URL with [`Url::parse`], returns [`TokenUnderCursor::Url`].
 /// 2. Otherwise, invokes [`ytil_sys::file::exec_file_cmd`] to check filesystem type.
-/// 3. Falls back to [`TokenUnderCursor::Word`] on errors or unknown kinds.
+/// 3. Falls back to [`TokenUnderCursor::MaybeTextFile`] on errors or unknown kinds.
 impl TokenUnderCursor {
     fn classify(value: &str) -> color_eyre::Result<Self> {
         let value = value.trim_matches('"').trim_matches('`').trim_matches('\'').to_string();
@@ -184,38 +192,30 @@ impl TokenUnderCursor {
 
     fn classify_not_url(value: String) -> color_eyre::Result<Self> {
         let mut parts = value.split(':');
+
         let Some(maybe_path) = parts.next() else {
-            return Ok(Self::Word(value));
+            return Ok(Self::MaybeTextFile {
+                value,
+                lnum: None,
+                col: None,
+            });
         };
 
-        let Ok(lnum) = parts
-            .next()
-            .map(str::parse)
-            .transpose()
-            .map(|x: Option<i64>| x.unwrap_or_default())
-        else {
-            return Ok(Self::Word(value));
-        };
-
-        let Ok(col) = parts
-            .next()
-            .map(str::parse)
-            .transpose()
-            .map(|x: Option<i64>| x.unwrap_or_default())
-        else {
-            return Ok(Self::Word(value));
-        };
+        let lnum = parts.next().map(str::parse).transpose().ok().flatten();
+        let col = parts.next().map(str::parse).transpose().ok().flatten();
 
         Ok(match ytil_sys::file::exec_file_cmd(maybe_path)? {
             FileCmdOutput::BinaryFile(x) => Self::BinaryFile(x),
             FileCmdOutput::TextFile(path) => Self::TextFile { path, lnum, col },
             FileCmdOutput::Directory(x) => Self::Directory(x),
-            FileCmdOutput::NotFound(path) | FileCmdOutput::Unknown(path) => Self::Word(path),
+            FileCmdOutput::NotFound(path) | FileCmdOutput::Unknown(path) => {
+                Self::MaybeTextFile { value: path, lnum, col }
+            }
         })
     }
 
     fn refine_word(&self, buffer: &Buffer) -> color_eyre::Result<Self> {
-        if let Self::Word(word) = self {
+        if let Self::MaybeTextFile { value, lnum, col } = self {
             let pid = buffer.get_pid()?;
 
             let mut lsof_res = ytil_sys::lsof::lsof(&ProcessFilter::Pid(&pid))?;
@@ -224,9 +224,21 @@ impl TokenUnderCursor {
                 bail!("error no process found for pid | pid={pid:?}");
             };
 
-            process_desc.cwd.push(word);
+            let maybe_path = {
+                process_desc.cwd.push(value);
+                let mut tmp = process_desc.cwd.to_string_lossy().to_string();
+                if let Some(lnum) = lnum {
+                    tmp.push(':');
+                    tmp.push_str(&lnum.to_string());
+                }
+                if let Some(col) = col {
+                    tmp.push(':');
+                    tmp.push_str(&col.to_string());
+                }
+                tmp
+            };
 
-            return Self::classify_not_url(process_desc.cwd.to_string_lossy().to_string());
+            return Self::classify_not_url(maybe_path);
         }
         Ok(self.clone())
     }
@@ -334,7 +346,14 @@ mod tests {
         let input = "noturl".to_string();
         let result = TokenUnderCursor::classify(&input);
         assert2::let_assert!(Ok(actual) = result);
-        pretty_assertions::assert_eq!(actual, TokenUnderCursor::Word(input));
+        pretty_assertions::assert_eq!(
+            actual,
+            TokenUnderCursor::MaybeTextFile {
+                value: input,
+                lnum: None,
+                col: None
+            }
+        );
     }
 
     #[test]
@@ -345,7 +364,14 @@ mod tests {
         let path = temp_file.path().to_string_lossy().to_string();
         let result = TokenUnderCursor::classify(&path);
         assert2::let_assert!(Ok(actual) = result);
-        pretty_assertions::assert_eq!(actual, TokenUnderCursor::TextFile { path, lnum: 0, col: 0 });
+        pretty_assertions::assert_eq!(
+            actual,
+            TokenUnderCursor::TextFile {
+                path,
+                lnum: None,
+                col: None
+            }
+        );
     }
 
     #[test]
@@ -356,7 +382,14 @@ mod tests {
         let path = temp_file.path().to_string_lossy().to_string();
         let result = TokenUnderCursor::classify(&format!("{path}:10"));
         assert2::let_assert!(Ok(actual) = result);
-        pretty_assertions::assert_eq!(actual, TokenUnderCursor::TextFile { path, lnum: 10, col: 0 });
+        pretty_assertions::assert_eq!(
+            actual,
+            TokenUnderCursor::TextFile {
+                path,
+                lnum: Some(10),
+                col: None
+            }
+        );
     }
 
     #[test]
@@ -367,7 +400,14 @@ mod tests {
         let path = temp_file.path().to_string_lossy().to_string();
         let result = TokenUnderCursor::classify(&format!("{path}:10:5"));
         assert2::let_assert!(Ok(actual) = result);
-        pretty_assertions::assert_eq!(actual, TokenUnderCursor::TextFile { path, lnum: 10, col: 5 });
+        pretty_assertions::assert_eq!(
+            actual,
+            TokenUnderCursor::TextFile {
+                path,
+                lnum: Some(10),
+                col: Some(5)
+            }
+        );
     }
 
     #[test]
@@ -394,33 +434,54 @@ mod tests {
 
     #[test]
     #[cfg(target_os = "macos")]
-    fn token_under_cursor_classify_nonexistent_path_returns_word() {
+    fn token_under_cursor_classify_nonexistent_path_returns_maybe_text_file() {
         let path = "/nonexistent/path".to_string();
         let result = TokenUnderCursor::classify(&path);
         assert2::let_assert!(Ok(actual) = result);
-        pretty_assertions::assert_eq!(actual, TokenUnderCursor::Word(path));
+        pretty_assertions::assert_eq!(
+            actual,
+            TokenUnderCursor::MaybeTextFile {
+                value: path,
+                lnum: None,
+                col: None
+            }
+        );
     }
 
     #[test]
     #[cfg(target_os = "macos")]
-    fn token_under_cursor_classify_path_with_invalid_lnum_returns_word() {
+    fn token_under_cursor_classify_path_with_invalid_lnum_returns_maybe_text_file() {
         let temp_file = NamedTempFile::new().unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
         let input = format!("{path}:invalid");
         let result = TokenUnderCursor::classify(&input);
         assert2::let_assert!(Ok(actual) = result);
-        pretty_assertions::assert_eq!(actual, TokenUnderCursor::Word(input));
+        pretty_assertions::assert_eq!(
+            actual,
+            TokenUnderCursor::MaybeTextFile {
+                value: path,
+                lnum: None,
+                col: None
+            }
+        );
     }
 
     #[test]
     #[cfg(target_os = "macos")]
-    fn token_under_cursor_classify_path_with_invalid_col_returns_word() {
+    fn token_under_cursor_classify_path_with_invalid_col_returns_maybe_text_file() {
         let temp_file = NamedTempFile::new().unwrap();
         let path = temp_file.path().to_string_lossy().to_string();
         let input = format!("{path}:10:invalid");
         let result = TokenUnderCursor::classify(&input);
         assert2::let_assert!(Ok(actual) = result);
-        pretty_assertions::assert_eq!(actual, TokenUnderCursor::Word(input));
+        pretty_assertions::assert_eq!(
+            actual,
+            TokenUnderCursor::MaybeTextFile {
+                value: path,
+                lnum: Some(10),
+                col: None
+            }
+        );
     }
 
     #[test]
@@ -431,6 +492,13 @@ mod tests {
         let path = temp_file.path().to_string_lossy().to_string();
         let result = TokenUnderCursor::classify(&format!("{path}:10:5:extra"));
         assert2::let_assert!(Ok(actual) = result);
-        pretty_assertions::assert_eq!(actual, TokenUnderCursor::TextFile { path, lnum: 10, col: 5 });
+        pretty_assertions::assert_eq!(
+            actual,
+            TokenUnderCursor::TextFile {
+                path,
+                lnum: Some(10),
+                col: Some(5)
+            }
+        );
     }
 }
