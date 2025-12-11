@@ -144,6 +144,17 @@ pub trait BufferExt: Debug {
         Some(())
     }
 
+    /// Retrieves the process ID associated with the buffer.
+    ///
+    /// # Returns
+    /// The process ID as a string. For terminal buffers, this is the PID of the running
+    /// terminal process parsed from the buffer name. For other buffers, this is the PID
+    /// of the Neovim instance.
+    ///
+    /// # Errors
+    /// - If the buffer name cannot be retrieved.
+    /// - If the buffer is a terminal but the name format is invalid.
+    /// - If the Neovim `getpid` function call fails.
     fn get_pid(&self) -> color_eyre::Result<String>;
 }
 
