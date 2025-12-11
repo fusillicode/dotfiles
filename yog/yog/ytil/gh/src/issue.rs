@@ -1,10 +1,13 @@
 use std::process::Command;
 
+use chrono::DateTime;
+use chrono::Utc;
 use color_eyre::eyre::Context as _;
 use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 use convert_case::Case;
 use convert_case::Casing as _;
+use serde::Deserialize;
 use ytil_cmd::CmdExt;
 
 /// Represents a newly created GitHub issue.
@@ -85,6 +88,20 @@ pub struct DevelopOutput {
     pub branch_name: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ListedIssue {
+    pub author: Author,
+    pub title: String,
+    pub number: usize,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Author {
+    pub login: String,
+}
+
 /// Creates a new GitHub issue with the specified title.
 ///
 /// This function invokes `gh issue create --title <title> --body ""` to create the issue.
@@ -155,6 +172,39 @@ pub fn develop(issue_number: &str, checkout: bool) -> color_eyre::Result<Develop
         branch_ref,
         branch_name,
     })
+}
+
+/// Lists all GitHub issues for the current repository.
+///
+/// # Returns
+/// A vector of [`ListedIssue`] structs containing the issue details.
+///
+/// # Errors
+/// Returns an error if the `gh` command fails to execute, if the output is not valid UTF-8, or if the JSON cannot be
+/// deserialized into [`Vec<ListedIssue>`].
+///
+/// # Assumptions
+/// Assumes the `gh` CLI tool is installed and properly authenticated with GitHub.
+///
+/// # Rationale
+/// Uses the GitHub CLI (`gh`) for simplicity and to leverage existing authentication setup, rather than implementing
+/// direct API calls.
+///
+/// # Performance
+/// Involves a subprocess call to `gh`, which may be slower than direct HTTP requests but avoids dependency on GitHub
+/// API tokens in code.
+///
+/// # Future Work
+/// Consider migrating to direct GitHub API calls using a library like `octocrab` for better performance and control.
+pub fn list() -> color_eyre::Result<Vec<ListedIssue>> {
+    let output = Command::new("gh")
+        .args(["issue", "list", "--json", "number,title,author,updatedAt"])
+        .exec()
+        .wrap_err_with(|| eyre!("error listing GitHub issues"))?;
+
+    let list_output = str::from_utf8(&output.stdout)?.trim().to_string();
+
+    Ok(serde_json::from_str(&list_output)?)
 }
 
 #[cfg(test)]
