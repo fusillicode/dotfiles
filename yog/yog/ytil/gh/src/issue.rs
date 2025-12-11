@@ -174,6 +174,28 @@ pub struct Author {
     pub login: String,
 }
 
+/// Lists all GitHub issues for the current repository.
+///
+/// # Returns
+/// A vector of [`Issue`] structs containing the issue details.
+///
+/// # Errors
+/// Returns an error if the `gh` command fails to execute, if the output is not valid UTF-8, or if the JSON cannot be
+/// deserialized into [`Vec<Issue>`].
+///
+/// # Assumptions
+/// Assumes the `gh` CLI tool is installed and properly authenticated with GitHub.
+///
+/// # Rationale
+/// Uses the GitHub CLI (`gh`) for simplicity and to leverage existing authentication setup, rather than implementing
+/// direct API calls.
+///
+/// # Performance
+/// Involves a subprocess call to `gh`, which may be slower than direct HTTP requests but avoids dependency on GitHub
+/// API tokens in code.
+///
+/// # Future Work
+/// Consider migrating to direct GitHub API calls using a library like `octocrab` for better performance and control.
 pub fn list() -> color_eyre::Result<Vec<Issue>> {
     let output = Command::new("gh")
         .args(["issue", "list", "--json", "number,title,author,updatedAt"])

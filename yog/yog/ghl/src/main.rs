@@ -111,6 +111,29 @@ impl Display for RenderablePullRequest {
     }
 }
 
+struct RenderableIssue(pub Issue);
+
+impl Deref for RenderableIssue {
+    type Target = Issue;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Display for RenderableIssue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            // The spacing before the title is required to align it with the first line.
+            "{} {} \n  {}",
+            self.author.login.blue().bold(),
+            self.updated_at.format("%d-%m-%Y %H:%M UTC"),
+            self.title
+        )
+    }
+}
+
 /// User-selectable high-level operations to apply to chosen PRs.
 ///
 /// Encapsulates composite actions presented in the TUI. Separate from [`Op`]
@@ -275,6 +298,157 @@ fn format_pr(pr: &PullRequest) -> String {
     )
 }
 
+/// Create a GitHub issue and develop it with an associated branch.
+///
+/// Prompts the user for an issue title, creates the issue via GitHub CLI,
+/// then develops it by creating an associated branch from the default branch.
+/// Optionally checks out the newly created branch based on user preference.
+///
+/// # Returns
+/// - `()` on successful completion or if the user cancels at any prompt.
+///
+/// # Errors
+/// - If [`ytil_tui::text_prompt`] fails when prompting for issue title.
+/// - If [`ytil_tui::yes_no_select`] fails when prompting for branch checkout preference.
+/// - If [`ytil_gh::issue::create`] fails when creating the GitHub issue.
+/// - If [`ytil_gh::issue::develop`] fails when creating the associated branch.
+///
+/// # Rationale
+/// Separates issue creation flow from PR listing flow, allowing users to quickly
+/// bootstrap new work items without leaving the terminal interface.
+fn create_issue_and_branch_from_default_branch() -> Result<(), color_eyre::eyre::Error> {
+    let Some(issue_title) = ytil_tui::text_prompt("Issue title:")?.map(|x| x.trim().to_string()) else {
+        return Ok(());
+    };
+
+    let Some(checkout_branch) = ytil_tui::yes_no_select("Checkout branch?")? else {
+        return Ok(());
+    };
+
+    let created_issue = ytil_gh::issue::create(&issue_title)?;
+    println!(
+        "\n{} number={} title={issue_title:?}",
+        "Issue created".green().bold(),
+        created_issue.issue_nr
+    );
+
+    let develop_output = ytil_gh::issue::develop(&created_issue.issue_nr, checkout_branch)?;
+    println!(
+        "{} with name={:?}",
+        "Branch created".green().bold(),
+        develop_output.branch_name
+    );
+
+    Ok(())
+}
+
+/// Prompts the selection of a branch and creates a pull request for the selected one.
+///
+/// # Returns
+/// - `()` on success or if no branch is selected.
+///
+/// # Errors
+/// - If [`ytil_tui::git_branch::select`] fails.
+/// - If [`pr_title_from_branch_name`] fails.
+/// - If [`ytil_gh::pr::create`] fails.
+fn create_pr() -> Result<(), color_eyre::eyre::Error> {
+    let Some(branch) = ytil_tui::git_branch::select()? else {
+        return Ok(());
+    };
+
+    let title = pr_title_from_branch_name(branch.name_no_origin())?;
+    let pr_url = ytil_gh::pr::create(&title)?;
+    println!("{} title={title:?} pr_url={pr_url:?}", "PR created".green().bold());
+
+    Ok(())
+}
+
+/// Interactively creates a GitHub branch from a selected issue.
+///
+/// # Returns
+/// Returns `Ok(())` on successful branch creation, or an error if any step fails.
+///
+/// # Errors
+/// Propagates errors from issue listing, user selection, or branch development.
+///
+/// # Assumptions
+/// Assumes a terminal UI is available for user interaction and the GitHub CLI is configured.
+///
+/// # Rationale
+/// Provides an interactive workflow for developers to quickly create feature branches tied to specific GitHub issues.
+///
+/// # Performance
+/// Involves user interaction and subprocess calls, suitable for interactive use.
+///
+/// # Future Work
+/// Consider adding branch naming customization or integration with project management tools.
+fn create_branch_from_issue() -> Result<(), color_eyre::eyre::Error> {
+    let issues = ytil_gh::issue::list()?;
+
+    let Some(issue) = ytil_tui::minimal_select(issues.into_iter().map(RenderableIssue).collect())? else {
+        return Ok(());
+    };
+
+    let Some(checkout_branch) = ytil_tui::yes_no_select("Checkout branch?")? else {
+        return Ok(());
+    };
+
+    let develop_output = ytil_gh::issue::develop(&issue.number.to_string(), checkout_branch)?;
+    println!(
+        "{} with name={:?}",
+        "Branch created".green().bold(),
+        develop_output.branch_name
+    );
+
+    Ok(())
+}
+
+/// Parses a branch name to generate a pull request title.
+///
+/// # Arguments
+/// - `branch_name` The branch name in the format `{issue_number}-{title-words}`.
+///
+/// # Returns
+/// The formatted pull request title as `[{issue_number}]: {Capitalized Title}`.
+///
+/// # Errors
+/// - Branch name has no parts separated by `-`.
+/// - The first part is not a valid usize for issue number.
+/// - The title parts result in an empty title.
+fn pr_title_from_branch_name(branch_name: &str) -> color_eyre::Result<String> {
+    let mut parts = branch_name.split('-');
+
+    let issue_number: usize = parts
+        .next()
+        .ok_or_else(|| eyre!("error malformed branch_name | branch_name={branch_name:?}"))
+        .and_then(|x| {
+            x.parse().wrap_err_with(|| {
+                format!("error parsing issue number | branch_name={branch_name:?} issue_number={x:?}")
+            })
+        })?;
+
+    let title = parts
+        .enumerate()
+        .map(|(i, word)| {
+            if i == 0 {
+                let mut chars = word.chars();
+                let Some(first) = chars.next() else {
+                    return String::new();
+                };
+                return first.to_uppercase().chain(chars.as_str().chars()).collect();
+            }
+            word.to_string()
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    if title.is_empty() {
+        bail!("error empty title | branch_name={branch_name:?}");
+    }
+
+    Ok(format!("[{issue_number}]: {title}"))
+}
+
 /// List and optionally batch‑merge GitHub pull requests interactively or create issues with associated branches.
 ///
 /// # Errors
@@ -367,161 +541,6 @@ fn main() -> color_eyre::Result<()> {
     }
 
     Ok(())
-}
-
-/// Create a GitHub issue and develop it with an associated branch.
-///
-/// Prompts the user for an issue title, creates the issue via GitHub CLI,
-/// then develops it by creating an associated branch from the default branch.
-/// Optionally checks out the newly created branch based on user preference.
-///
-/// # Returns
-/// - `()` on successful completion or if the user cancels at any prompt.
-///
-/// # Errors
-/// - If [`ytil_tui::text_prompt`] fails when prompting for issue title.
-/// - If [`ytil_tui::yes_no_select`] fails when prompting for branch checkout preference.
-/// - If [`ytil_gh::issue::create`] fails when creating the GitHub issue.
-/// - If [`ytil_gh::issue::develop`] fails when creating the associated branch.
-///
-/// # Rationale
-/// Separates issue creation flow from PR listing flow, allowing users to quickly
-/// bootstrap new work items without leaving the terminal interface.
-fn create_issue_and_branch_from_default_branch() -> Result<(), color_eyre::eyre::Error> {
-    let Some(issue_title) = ytil_tui::text_prompt("Issue title:")?.map(|x| x.trim().to_string()) else {
-        return Ok(());
-    };
-
-    let Some(checkout_branch) = ytil_tui::yes_no_select("Checkout branch?")? else {
-        return Ok(());
-    };
-
-    let created_issue = ytil_gh::issue::create(&issue_title)?;
-    println!(
-        "\n{} number={} title={issue_title:?}",
-        "Issue created".green().bold(),
-        created_issue.issue_nr
-    );
-
-    let develop_output = ytil_gh::issue::develop(&created_issue.issue_nr, checkout_branch)?;
-    println!(
-        "{} with name={:?}",
-        "Branch created".green().bold(),
-        develop_output.branch_name
-    );
-
-    Ok(())
-}
-
-/// Prompts the selection of a branch and creates a pull request for the selected one.
-///
-/// # Returns
-/// - `()` on success or if no branch is selected.
-///
-/// # Errors
-/// - If [`ytil_tui::git_branch::select`] fails.
-/// - If [`pr_title_from_branch_name`] fails.
-/// - If [`ytil_gh::pr::create`] fails.
-fn create_pr() -> Result<(), color_eyre::eyre::Error> {
-    let Some(branch) = ytil_tui::git_branch::select()? else {
-        return Ok(());
-    };
-
-    let title = pr_title_from_branch_name(branch.name_no_origin())?;
-    let pr_url = ytil_gh::pr::create(&title)?;
-    println!("{} title={title:?} pr_url={pr_url:?}", "PR created".green().bold());
-
-    Ok(())
-}
-
-struct RenderableIssue(pub Issue);
-
-impl Deref for RenderableIssue {
-    type Target = Issue;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl Display for RenderableIssue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            // The spacing before the title is required to align it with the first line.
-            "{} {} \n  {}",
-            self.author.login.blue().bold(),
-            self.updated_at.format("%d-%m-%Y %H:%M UTC"),
-            self.title
-        )
-    }
-}
-
-fn create_branch_from_issue() -> Result<(), color_eyre::eyre::Error> {
-    let issues = ytil_gh::issue::list()?;
-
-    let Some(issue) = ytil_tui::minimal_select(issues.into_iter().map(RenderableIssue).collect())? else {
-        return Ok(());
-    };
-
-    let Some(checkout_branch) = ytil_tui::yes_no_select("Checkout branch?")? else {
-        return Ok(());
-    };
-
-    let develop_output = ytil_gh::issue::develop(&issue.number.to_string(), checkout_branch)?;
-    println!(
-        "{} with name={:?}",
-        "Branch created".green().bold(),
-        develop_output.branch_name
-    );
-
-    Ok(())
-}
-
-/// Parses a branch name to generate a pull request title.
-///
-/// # Arguments
-/// - `branch_name` The branch name in the format `{issue_number}-{title-words}`.
-///
-/// # Returns
-/// The formatted pull request title as `[{issue_number}]: {Capitalized Title}`.
-///
-/// # Errors
-/// - Branch name has no parts separated by `-`.
-/// - The first part is not a valid usize for issue number.
-/// - The title parts result in an empty title.
-fn pr_title_from_branch_name(branch_name: &str) -> color_eyre::Result<String> {
-    let mut parts = branch_name.split('-');
-
-    let issue_number: usize = parts
-        .next()
-        .ok_or_else(|| eyre!("error malformed branch_name | branch_name={branch_name:?}"))
-        .and_then(|x| {
-            x.parse().wrap_err_with(|| {
-                format!("error parsing issue number | branch_name={branch_name:?} issue_number={x:?}")
-            })
-        })?;
-
-    let title = parts
-        .enumerate()
-        .map(|(i, word)| {
-            if i == 0 {
-                let mut chars = word.chars();
-                let Some(first) = chars.next() else {
-                    return String::new();
-                };
-                return first.to_uppercase().chain(chars.as_str().chars()).collect();
-            }
-            word.to_string()
-        })
-        .collect::<Vec<_>>()
-        .join(" ");
-
-    if title.is_empty() {
-        bail!("error empty title | branch_name={branch_name:?}");
-    }
-
-    Ok(format!("[{issue_number}]: {title}"))
 }
 
 #[cfg(test)]
