@@ -66,6 +66,7 @@ use color_eyre::eyre::eyre;
 use color_eyre::owo_colors::OwoColorize;
 use strum::EnumIter;
 use ytil_gh::RepoViewField;
+use ytil_gh::issue::ListedIssue;
 use ytil_gh::pr::IntoEnumIterator;
 use ytil_gh::pr::PullRequest;
 use ytil_gh::pr::PullRequestMergeState;
@@ -103,6 +104,29 @@ impl Display for RenderablePullRequest {
             f,
             // The spacing before the title is required to align it with the first line.
             "{} {} {state}\n      {}",
+            self.author.login.blue().bold(),
+            self.updated_at.format("%d-%m-%Y %H:%M UTC"),
+            self.title
+        )
+    }
+}
+
+struct RenderableListedIssue(pub ListedIssue);
+
+impl Deref for RenderableListedIssue {
+    type Target = ListedIssue;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Display for RenderableListedIssue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            // The spacing before the title is required to align it with the first line.
+            "{} {} \n  {}",
             self.author.login.blue().bold(),
             self.updated_at.format("%d-%m-%Y %H:%M UTC"),
             self.title
@@ -274,95 +298,6 @@ fn format_pr(pr: &PullRequest) -> String {
     )
 }
 
-/// List and optionally batch‑merge GitHub pull requests interactively or create issues with associated branches.
-///
-/// # Errors
-/// - Flag parsing fails (unknown flag, missing value, invalid [`PullRequestMergeState`]).
-/// - GitHub CLI invocation fails (listing PRs via [`ytil_gh::pr::get`], approving via [`ytil_gh::pr::approve`], merging
-///   via [`ytil_gh::pr::merge`], commenting via [`ytil_gh::pr::dependabot_rebase`], creating issue via
-///   [`ytil_gh::issue::create`]).
-/// - TUI interaction fails (selection UI errors via [`ytil_tui::minimal_multi_select`] and
-///   [`ytil_tui::minimal_select`], issue title prompt via [`ytil_tui::text_prompt`], branch checkout prompt via
-///   [`ytil_tui::yes_no_select`]).
-/// - GitHub CLI invocation fails (issue and branch creation via [`ytil_gh::issue::create`] and
-///   [`ytil_gh::issue::develop`]).
-fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
-
-    let mut pargs = Arguments::from_env();
-    if pargs.has_help() {
-        println!("{}", include_str!("../help.txt"));
-        return Ok(());
-    }
-
-    ytil_gh::log_into_github()?;
-
-    if pargs.contains("issue") {
-        create_issue_and_branch_from_default_branch()?;
-        return Ok(());
-    }
-
-    if pargs.contains("pr") {
-        create_pr()?;
-        return Ok(());
-    }
-
-    let repo_name_with_owner = ytil_gh::get_repo_view_field(&RepoViewField::NameWithOwner)?;
-
-    let search_filter: Option<String> = pargs.opt_value_from_str("--search")?;
-    let merge_state = pargs
-        .opt_value_from_fn("--merge-state", PullRequestMergeState::from_str)
-        .with_section(|| {
-            format!(
-                "accepted values are {:#?}",
-                PullRequestMergeState::iter().collect::<Vec<_>>()
-            )
-            .red()
-            .bold()
-            .to_string()
-        })?;
-
-    let params = format!(
-        "search_filter={search_filter:?}{}",
-        merge_state
-            .map(|ms| format!("\nmerge_state={ms:?}"))
-            .unwrap_or_default()
-    );
-    println!("\n{}\n{}\n", "Search PRs by".cyan().bold(), params.white().bold());
-
-    let pull_requests = ytil_gh::pr::get(&repo_name_with_owner, search_filter.as_deref(), &|pr: &PullRequest| {
-        if let Some(merge_state) = merge_state {
-            return pr.merge_state == merge_state;
-        }
-        true
-    })?;
-
-    let renderable_prs: Vec<_> = pull_requests.into_iter().map(RenderablePullRequest).collect();
-    if renderable_prs.is_empty() {
-        println!("{}\n{}", "No matching PRs found".yellow().bold(), params.white().bold());
-        return Ok(());
-    }
-
-    let Some(selected_prs) = ytil_tui::minimal_multi_select::<RenderablePullRequest>(renderable_prs)? else {
-        println!("No PRs selected");
-        return Ok(());
-    };
-
-    let Some(selected_op) = ytil_tui::minimal_select::<SelectableOp>(SelectableOp::iter().collect())? else {
-        println!("No operation selected");
-        return Ok(());
-    };
-
-    println!(); // Cosmetic spacing.
-
-    let selected_op_run = selected_op.run();
-    for pr in selected_prs.iter().map(Deref::deref) {
-        selected_op_run(pr);
-    }
-
-    Ok(())
-}
-
 /// Create a GitHub issue and develop it with an associated branch.
 ///
 /// Prompts the user for an issue title, creates the issue via GitHub CLI,
@@ -428,6 +363,46 @@ fn create_pr() -> Result<(), color_eyre::eyre::Error> {
     Ok(())
 }
 
+/// Interactively creates a GitHub branch from a selected issue.
+///
+/// # Returns
+/// Returns `Ok(())` on successful branch creation, or an error if any step fails.
+///
+/// # Errors
+/// Propagates errors from issue listing, user selection, or branch development.
+///
+/// # Assumptions
+/// Assumes a terminal UI is available for user interaction and the GitHub CLI is configured.
+///
+/// # Rationale
+/// Provides an interactive workflow for developers to quickly create feature branches tied to specific GitHub issues.
+///
+/// # Performance
+/// Involves user interaction and subprocess calls, suitable for interactive use.
+///
+/// # Future Work
+/// Consider adding branch naming customization or integration with project management tools.
+fn create_branch_from_issue() -> Result<(), color_eyre::eyre::Error> {
+    let issues = ytil_gh::issue::list()?;
+
+    let Some(issue) = ytil_tui::minimal_select(issues.into_iter().map(RenderableListedIssue).collect())? else {
+        return Ok(());
+    };
+
+    let Some(checkout_branch) = ytil_tui::yes_no_select("Checkout branch?")? else {
+        return Ok(());
+    };
+
+    let develop_output = ytil_gh::issue::develop(&issue.number.to_string(), checkout_branch)?;
+    println!(
+        "{} with name={:?}",
+        "Branch created".green().bold(),
+        develop_output.branch_name
+    );
+
+    Ok(())
+}
+
 /// Parses a branch name to generate a pull request title.
 ///
 /// # Arguments
@@ -472,6 +447,100 @@ fn pr_title_from_branch_name(branch_name: &str) -> color_eyre::Result<String> {
     }
 
     Ok(format!("[{issue_number}]: {title}"))
+}
+
+/// List and optionally batch‑merge GitHub pull requests interactively or create issues with associated branches.
+///
+/// # Errors
+/// - Flag parsing fails (unknown flag, missing value, invalid [`PullRequestMergeState`]).
+/// - GitHub CLI invocation fails (listing PRs via [`ytil_gh::pr::get`], approving via [`ytil_gh::pr::approve`], merging
+///   via [`ytil_gh::pr::merge`], commenting via [`ytil_gh::pr::dependabot_rebase`], creating issue via
+///   [`ytil_gh::issue::create`]).
+/// - TUI interaction fails (selection UI errors via [`ytil_tui::minimal_multi_select`] and
+///   [`ytil_tui::minimal_select`], issue title prompt via [`ytil_tui::text_prompt`], branch checkout prompt via
+///   [`ytil_tui::yes_no_select`]).
+/// - GitHub CLI invocation fails (issue and branch creation via [`ytil_gh::issue::create`] and
+///   [`ytil_gh::issue::develop`]).
+fn main() -> color_eyre::Result<()> {
+    color_eyre::install()?;
+
+    let mut pargs = Arguments::from_env();
+    if pargs.has_help() {
+        println!("{}", include_str!("../help.txt"));
+        return Ok(());
+    }
+
+    ytil_gh::log_into_github()?;
+
+    if pargs.contains("issue") {
+        create_issue_and_branch_from_default_branch()?;
+        return Ok(());
+    }
+
+    if pargs.contains("pr") {
+        create_pr()?;
+        return Ok(());
+    }
+
+    if pargs.contains("branch") {
+        create_branch_from_issue()?;
+        return Ok(());
+    }
+
+    let repo_name_with_owner = ytil_gh::get_repo_view_field(&RepoViewField::NameWithOwner)?;
+
+    let search_filter: Option<String> = pargs.opt_value_from_str("--search")?;
+    let merge_state = pargs
+        .opt_value_from_fn("--merge-state", PullRequestMergeState::from_str)
+        .with_section(|| {
+            format!(
+                "accepted values are {:#?}",
+                PullRequestMergeState::iter().collect::<Vec<_>>()
+            )
+            .red()
+            .bold()
+            .to_string()
+        })?;
+
+    let params = format!(
+        "search_filter={search_filter:?}{}",
+        merge_state
+            .map(|ms| format!("\nmerge_state={ms:?}"))
+            .unwrap_or_default()
+    );
+    println!("\n{}\n{}\n", "Search PRs by".cyan().bold(), params.white().bold());
+
+    let pull_requests = ytil_gh::pr::get(&repo_name_with_owner, search_filter.as_deref(), &|pr: &PullRequest| {
+        if let Some(merge_state) = merge_state {
+            return pr.merge_state == merge_state;
+        }
+        true
+    })?;
+
+    let renderable_prs: Vec<_> = pull_requests.into_iter().map(RenderablePullRequest).collect();
+    if renderable_prs.is_empty() {
+        println!("{}\n{}", "No matching PRs found".yellow().bold(), params.white().bold());
+        return Ok(());
+    }
+
+    let Some(selected_prs) = ytil_tui::minimal_multi_select::<RenderablePullRequest>(renderable_prs)? else {
+        println!("No PRs selected");
+        return Ok(());
+    };
+
+    let Some(selected_op) = ytil_tui::minimal_select::<SelectableOp>(SelectableOp::iter().collect())? else {
+        println!("No operation selected");
+        return Ok(());
+    };
+
+    println!(); // Cosmetic spacing.
+
+    let selected_op_run = selected_op.run();
+    for pr in selected_prs.iter().map(Deref::deref) {
+        selected_op_run(pr);
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
