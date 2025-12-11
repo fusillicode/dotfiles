@@ -19,6 +19,29 @@ pub struct ProcessDescription {
     pub cwd: PathBuf,
 }
 
+/// Retrieves process descriptions using the lsof command.
+///
+/// # Arguments
+/// - `process_filter`The filter to apply to the lsof command.
+///
+/// # Returns
+/// A list of process descriptions matching the filter.
+///
+/// # Errors
+/// - If the lsof command fails to execute.
+/// - If the lsof command exits with a non-zero status.
+/// - If the output cannot be parsed as UTF-8.
+/// - If parsing the lsof output fails.
+///
+/// # Assumptions
+/// - The `lsof` command is available on the system.
+///
+/// # Rationale
+/// Uses the `lsof` utility to query process information, specifically focusing on current working directories.
+/// The `-F n` format is used for machine-readable output, filtered by PID or command name.
+///
+/// # Performance
+/// Involves spawning an external process, so performance is IO-bound by the lsof execution time.
 pub fn lsof(process_filter: &ProcessFilter) -> color_eyre::Result<Vec<ProcessDescription>> {
     let cmd = "lsof";
 
