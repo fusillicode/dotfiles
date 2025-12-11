@@ -6,22 +6,21 @@ dotfiles_dir="$HOME/data/dev/dotfiles/dotfiles"
 # Symlink configs
 ln -s "$dotfiles_dir/.config/alacritty/" "$HOME/.config/alacritty"
 ln -s "$dotfiles_dir/.config/atuin/" "$HOME/.config/atuin"
-ln -s "$dotfiles_dir/.config/gitui/" "$HOME/.config/gitui"
+# ln -s "$dotfiles_dir/.config/gitui/" "$HOME/.config/gitui"
 ln -s "$dotfiles_dir/.config/helix/" "$HOME/.config/helix"
 ln -s "$dotfiles_dir/.config/mise/" "$HOME/.config/mise"
 ln -s "$dotfiles_dir/.config/nvim/" "$HOME/.config/nvim"
 ln -s "$dotfiles_dir/.config/pgcli/config" "$HOME/.config/pgcli/config"
-ln -s "$dotfiles_dir/.config/opencode" "$HOME/.config/opencode"
+# ln -s "$dotfiles_dir/.config/opencode" "$HOME/.config/opencode"
 ln -s "$dotfiles_dir/.config/harper-ls" "$HOME/.config/harper-ls"
 ln -s "$dotfiles_dir/.config/starship.toml" "$HOME/.config/starship.toml"
 
 cp "$dotfiles_dir/.gitconfig" "$HOME"
 ln -s "$dotfiles_dir/.gitignore" "$HOME"
 ln -s "$dotfiles_dir/.gitignore_global" "$HOME"
-ln -s "$dotfiles_dir/.myclirc" "$HOME"
+# ln -s "$dotfiles_dir/.myclirc" "$HOME"
 ln -s "$dotfiles_dir/.psqlrc" "$HOME"
-ln -s "$dotfiles_dir/.psqlrc" "$HOME"
-ln -s "$dotfiles_dir/.wezterm" "$HOME"
+# ln -s "$dotfiles_dir/.wezterm" "$HOME"
 ln -s "$dotfiles_dir/.zshenv" "$HOME"
 ln -s "$dotfiles_dir/.zshrc" "$HOME"
 
@@ -51,11 +50,11 @@ brew install \
   jq \
   kube-ps1 \
   kubectx \
-  kustomize \
-  lftp \
+  \ # kustomize \
+  \ # lftp \
   libpq \
   librdkafka \
-  mycli \
+  \ # mycli \
   stern \
   txn2/tap/kubefwd \
   vegeta \
@@ -67,19 +66,20 @@ brew link libpq --force
 brew tap homebrew/cask-versions
 brew install \
   alt-tab --cask \
+  alacritty --cask \
   appcleaner \
   discord \
   firefox \
   google-chrome \
   keepingyouawake \
-  orbstack \
+  \ # orbstack \
   rectangle \
   slack \
-  telegram \
+  \ # telegram \
   the-unarchiver \
   transmission --cask \
-  wezterm@nightly --cask --no-quarantine --greedy-latest \
-  whatsapp \
+  \ # wezterm@nightly --cask --no-quarantine --greedy-latest \
+  \ # whatsapp \
 
 # 🥲 https://wezfurlong.org/wezterm/faq.html#how-do-i-enable-undercurl-curly-underlines
 tempfile=$(mktemp) \
