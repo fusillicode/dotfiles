@@ -88,6 +88,20 @@ pub struct DevelopOutput {
     pub branch_name: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ListedIssue {
+    pub author: Author,
+    pub title: String,
+    pub number: usize,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Author {
+    pub login: String,
+}
+
 /// Creates a new GitHub issue with the specified title.
 ///
 /// This function invokes `gh issue create --title <title> --body ""` to create the issue.
@@ -160,28 +174,14 @@ pub fn develop(issue_number: &str, checkout: bool) -> color_eyre::Result<Develop
     })
 }
 
-#[derive(Debug, Deserialize)]
-pub struct Issue {
-    pub author: Author,
-    pub title: String,
-    pub number: usize,
-    #[serde(rename = "updatedAt")]
-    pub updated_at: DateTime<Utc>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Author {
-    pub login: String,
-}
-
 /// Lists all GitHub issues for the current repository.
 ///
 /// # Returns
-/// A vector of [`Issue`] structs containing the issue details.
+/// A vector of [`ListedIssue`] structs containing the issue details.
 ///
 /// # Errors
 /// Returns an error if the `gh` command fails to execute, if the output is not valid UTF-8, or if the JSON cannot be
-/// deserialized into [`Vec<Issue>`].
+/// deserialized into [`Vec<ListedIssue>`].
 ///
 /// # Assumptions
 /// Assumes the `gh` CLI tool is installed and properly authenticated with GitHub.
@@ -196,7 +196,7 @@ pub struct Author {
 ///
 /// # Future Work
 /// Consider migrating to direct GitHub API calls using a library like `octocrab` for better performance and control.
-pub fn list() -> color_eyre::Result<Vec<Issue>> {
+pub fn list() -> color_eyre::Result<Vec<ListedIssue>> {
     let output = Command::new("gh")
         .args(["issue", "list", "--json", "number,title,author,updatedAt"])
         .exec()

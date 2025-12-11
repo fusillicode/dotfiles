@@ -66,7 +66,7 @@ use color_eyre::eyre::eyre;
 use color_eyre::owo_colors::OwoColorize;
 use strum::EnumIter;
 use ytil_gh::RepoViewField;
-use ytil_gh::issue::Issue;
+use ytil_gh::issue::ListedIssue;
 use ytil_gh::pr::IntoEnumIterator;
 use ytil_gh::pr::PullRequest;
 use ytil_gh::pr::PullRequestMergeState;
@@ -111,17 +111,17 @@ impl Display for RenderablePullRequest {
     }
 }
 
-struct RenderableIssue(pub Issue);
+struct RenderableListedIssue(pub ListedIssue);
 
-impl Deref for RenderableIssue {
-    type Target = Issue;
+impl Deref for RenderableListedIssue {
+    type Target = ListedIssue;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl Display for RenderableIssue {
+impl Display for RenderableListedIssue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -385,7 +385,7 @@ fn create_pr() -> Result<(), color_eyre::eyre::Error> {
 fn create_branch_from_issue() -> Result<(), color_eyre::eyre::Error> {
     let issues = ytil_gh::issue::list()?;
 
-    let Some(issue) = ytil_tui::minimal_select(issues.into_iter().map(RenderableIssue).collect())? else {
+    let Some(issue) = ytil_tui::minimal_select(issues.into_iter().map(RenderableListedIssue).collect())? else {
         return Ok(());
     };
 
