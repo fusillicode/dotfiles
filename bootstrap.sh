@@ -5,9 +5,9 @@ dotfiles_dir="$HOME/data/dev/dotfiles/dotfiles"
 
 # Symlink configs
 ln -s "$dotfiles_dir/.config/alacritty/" "$HOME/.config/alacritty"
-ln -s "$dotfiles_dir/.config/atuin/" "$HOME/.config/atuin"
+# ln -s "$dotfiles_dir/.config/atuin/" "$HOME/.config/atuin"
 # ln -s "$dotfiles_dir/.config/gitui/" "$HOME/.config/gitui"
-ln -s "$dotfiles_dir/.config/helix/" "$HOME/.config/helix"
+# ln -s "$dotfiles_dir/.config/helix/" "$HOME/.config/helix"
 ln -s "$dotfiles_dir/.config/mise/" "$HOME/.config/mise"
 ln -s "$dotfiles_dir/.config/nvim/" "$HOME/.config/nvim"
 ln -s "$dotfiles_dir/.config/pgcli/config" "$HOME/.config/pgcli/config"
@@ -57,7 +57,7 @@ brew install \
   \ # mycli \
   stern \
   txn2/tap/kubefwd \
-  vegeta \
+  \ # vegeta \
   zsh \
 
 brew link libpq --force
@@ -67,7 +67,7 @@ brew tap homebrew/cask-versions
 brew install \
   alt-tab --cask \
   alacritty --cask \
-  appcleaner \
+  \ # appcleaner \
   discord \
   firefox \
   google-chrome \
@@ -77,7 +77,7 @@ brew install \
   slack \
   \ # telegram \
   the-unarchiver \
-  transmission --cask \
+  \ # transmission --cask \
   \ # wezterm@nightly --cask --no-quarantine --greedy-latest \
   \ # whatsapp \
 
