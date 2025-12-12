@@ -4,13 +4,13 @@ set -euo pipefail
 
 # cargo CLI tools ❤️
 cargo install --force \
-  atuin \
+  \ # atuin \
   cargo-machete \
   cargo-make \
   cargo-sort \
   cargo-sort-derives \
   ccase \
-  difftastic \
+  \ # difftastic \
   drill \
   fd-find \
   mise \
@@ -20,4 +20,4 @@ cargo install --force \
   sqlx-cli \
   starship \
   typos-cli \
-  watchexec-cli
+  \ # watchexec-cli
