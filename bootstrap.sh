@@ -5,22 +5,17 @@ dotfiles_dir="$HOME/data/dev/dotfiles/dotfiles"
 
 # Symlink configs
 ln -s "$dotfiles_dir/.config/alacritty/" "$HOME/.config"
-# ln -s "$dotfiles_dir/.config/atuin/" "$HOME/.config"
-# ln -s "$dotfiles_dir/.config/gitui/" "$HOME/.config"
-# ln -s "$dotfiles_dir/.config/helix/" "$HOME/.config"
 ln -s "$dotfiles_dir/.config/mise/" "$HOME/.config"
 ln -s "$dotfiles_dir/.config/nvim/" "$HOME/.config"
 ln -s "$dotfiles_dir/.config/pgcli/config" "$HOME/.config/pgcli/config"
-# ln -s "$dotfiles_dir/.config/opencode" "$HOME/.config/opencode"
+ln -s "$dotfiles_dir/.config/opencode" "$HOME/.config/opencode"
 ln -s "$dotfiles_dir/.config/harper-ls" "$HOME/.config"
 ln -s "$dotfiles_dir/.config/starship.toml" "$HOME/.config/starship.toml"
 
 cp "$dotfiles_dir/.gitconfig" "$HOME"
 ln -s "$dotfiles_dir/.gitignore" "$HOME"
 ln -s "$dotfiles_dir/.gitignore_global" "$HOME"
-# ln -s "$dotfiles_dir/.myclirc" "$HOME"
 ln -s "$dotfiles_dir/.psqlrc" "$HOME"
-# ln -s "$dotfiles_dir/.wezterm" "$HOME"
 ln -s "$dotfiles_dir/.zshenv" "$HOME"
 ln -s "$dotfiles_dir/.zshrc" "$HOME"
 
@@ -89,10 +84,7 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/mas
 brew install ninja cmake gettext curl
 
 # Setup ~/.local/bin & ~/.dev_tools
-cd ./yog && \
-  ./install.sh && \
-  rm -f "$HOME/.local/bin/update_*" && \
-  ln -s "$HOME/data/dev/dotfiles/dotfiles/bin/update_*" "$HOME/.local/bin"
+cd yog && cargo run --bin evoke && cd -
 
 # Update & cleanup brew
 /bin/bash "$script_dir"/bin/update_brew.sh
