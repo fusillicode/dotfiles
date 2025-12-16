@@ -11,7 +11,7 @@ cargo install --force \
   cargo-sort-derives \
   ccase \
   \ # difftastic \
-  drill \
+  \ # drill \
   fd-find \
   mise \
   pv \

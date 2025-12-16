@@ -4,15 +4,15 @@ script_dir="${BASH_SOURCE%/*}"
 dotfiles_dir="$HOME/data/dev/dotfiles/dotfiles"
 
 # Symlink configs
-ln -s "$dotfiles_dir/.config/alacritty/" "$HOME/.config/alacritty"
-# ln -s "$dotfiles_dir/.config/atuin/" "$HOME/.config/atuin"
-# ln -s "$dotfiles_dir/.config/gitui/" "$HOME/.config/gitui"
-# ln -s "$dotfiles_dir/.config/helix/" "$HOME/.config/helix"
-ln -s "$dotfiles_dir/.config/mise/" "$HOME/.config/mise"
-ln -s "$dotfiles_dir/.config/nvim/" "$HOME/.config/nvim"
+ln -s "$dotfiles_dir/.config/alacritty/" "$HOME/.config"
+# ln -s "$dotfiles_dir/.config/atuin/" "$HOME/.config"
+# ln -s "$dotfiles_dir/.config/gitui/" "$HOME/.config"
+# ln -s "$dotfiles_dir/.config/helix/" "$HOME/.config"
+ln -s "$dotfiles_dir/.config/mise/" "$HOME/.config"
+ln -s "$dotfiles_dir/.config/nvim/" "$HOME/.config"
 ln -s "$dotfiles_dir/.config/pgcli/config" "$HOME/.config/pgcli/config"
 # ln -s "$dotfiles_dir/.config/opencode" "$HOME/.config/opencode"
-ln -s "$dotfiles_dir/.config/harper-ls" "$HOME/.config/harper-ls"
+ln -s "$dotfiles_dir/.config/harper-ls" "$HOME/.config"
 ln -s "$dotfiles_dir/.config/starship.toml" "$HOME/.config/starship.toml"
 
 cp "$dotfiles_dir/.gitconfig" "$HOME"
@@ -50,36 +50,31 @@ brew install \
   jq \
   kube-ps1 \
   kubectx \
-  \ # kustomize \
-  \ # lftp \
   libpq \
   librdkafka \
-  \ # mycli \
   stern \
   txn2/tap/kubefwd \
-  \ # vegeta \
   zsh \
 
 brew link libpq --force
 
 # Homebrew casks
-brew tap homebrew/cask-versions
 brew install \
   alt-tab --cask \
   alacritty --cask \
-  \ # appcleaner \
+  appcleaner \
   discord \
   firefox \
   google-chrome \
   keepingyouawake \
-  \ # orbstack \
+  orbstack \
   rectangle \
   slack \
-  \ # telegram \
+  telegram \
   the-unarchiver \
-  \ # transmission --cask \
-  \ # wezterm@nightly --cask --no-quarantine --greedy-latest \
-  \ # whatsapp \
+  transmission --cask \
+  wezterm@nightly --cask --no-quarantine \
+  whatsapp \
 
 # 🥲 https://wezfurlong.org/wezterm/faq.html#how-do-i-enable-undercurl-curly-underlines
 tempfile=$(mktemp) \
@@ -100,4 +95,4 @@ cd ./yog && \
   ln -s "$HOME/data/dev/dotfiles/dotfiles/bin/update_*" "$HOME/.local/bin"
 
 # Update & cleanup brew
-/bin/bash "$script_dir/bin/update_brew.sh"
+/bin/bash "$script_dir"/bin/update_brew.sh
