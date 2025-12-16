@@ -12,16 +12,14 @@ for _, provider in ipairs { 'node', 'perl', 'python3', 'ruby', } do
 end
 
 local lazypath = vim.fn.stdpath('data') .. '/lazy/lazy.nvim'
-if not vim.loop.fs_stat(lazypath) then
+if not (vim.uv or vim.loop).fs_stat(lazypath) then
   vim.fn.system({
-    'gh',
-    'repo',
+    'git',
     'clone',
-    'folke/lazy.nvm.git',
-    lazypath,
-    '--',
     '--filter=blob:none',
     '--branch=stable',
+    'https://github.com/folke/lazy.nvim',
+    lazypath,
   })
 end
 vim.opt.rtp:prepend(lazypath)

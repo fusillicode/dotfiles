@@ -4,23 +4,18 @@ script_dir="${BASH_SOURCE%/*}"
 dotfiles_dir="$HOME/data/dev/dotfiles/dotfiles"
 
 # Symlink configs
-ln -s "$dotfiles_dir/.config/alacritty/" "$HOME/.config/alacritty"
-ln -s "$dotfiles_dir/.config/atuin/" "$HOME/.config/atuin"
-# ln -s "$dotfiles_dir/.config/gitui/" "$HOME/.config/gitui"
-ln -s "$dotfiles_dir/.config/helix/" "$HOME/.config/helix"
-ln -s "$dotfiles_dir/.config/mise/" "$HOME/.config/mise"
-ln -s "$dotfiles_dir/.config/nvim/" "$HOME/.config/nvim"
+ln -s "$dotfiles_dir/.config/alacritty/" "$HOME/.config"
+ln -s "$dotfiles_dir/.config/mise/" "$HOME/.config"
+ln -s "$dotfiles_dir/.config/nvim/" "$HOME/.config"
 ln -s "$dotfiles_dir/.config/pgcli/config" "$HOME/.config/pgcli/config"
-# ln -s "$dotfiles_dir/.config/opencode" "$HOME/.config/opencode"
-ln -s "$dotfiles_dir/.config/harper-ls" "$HOME/.config/harper-ls"
+ln -s "$dotfiles_dir/.config/opencode" "$HOME/.config/opencode"
+ln -s "$dotfiles_dir/.config/harper-ls" "$HOME/.config"
 ln -s "$dotfiles_dir/.config/starship.toml" "$HOME/.config/starship.toml"
 
 cp "$dotfiles_dir/.gitconfig" "$HOME"
 ln -s "$dotfiles_dir/.gitignore" "$HOME"
 ln -s "$dotfiles_dir/.gitignore_global" "$HOME"
-# ln -s "$dotfiles_dir/.myclirc" "$HOME"
 ln -s "$dotfiles_dir/.psqlrc" "$HOME"
-# ln -s "$dotfiles_dir/.wezterm" "$HOME"
 ln -s "$dotfiles_dir/.zshenv" "$HOME"
 ln -s "$dotfiles_dir/.zshrc" "$HOME"
 
@@ -50,20 +45,15 @@ brew install \
   jq \
   kube-ps1 \
   kubectx \
-  \ # kustomize \
-  \ # lftp \
   libpq \
   librdkafka \
-  \ # mycli \
   stern \
   txn2/tap/kubefwd \
-  vegeta \
   zsh \
 
 brew link libpq --force
 
 # Homebrew casks
-brew tap homebrew/cask-versions
 brew install \
   alt-tab --cask \
   alacritty --cask \
@@ -72,14 +62,14 @@ brew install \
   firefox \
   google-chrome \
   keepingyouawake \
-  \ # orbstack \
+  orbstack \
   rectangle \
   slack \
-  \ # telegram \
+  telegram \
   the-unarchiver \
   transmission --cask \
-  \ # wezterm@nightly --cask --no-quarantine --greedy-latest \
-  \ # whatsapp \
+  wezterm@nightly --cask --no-quarantine \
+  whatsapp \
 
 # 🥲 https://wezfurlong.org/wezterm/faq.html#how-do-i-enable-undercurl-curly-underlines
 tempfile=$(mktemp) \
@@ -94,10 +84,7 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/mas
 brew install ninja cmake gettext curl
 
 # Setup ~/.local/bin & ~/.dev_tools
-cd ./yog && \
-  ./install.sh && \
-  rm -f "$HOME/.local/bin/update_*" && \
-  ln -s "$HOME/data/dev/dotfiles/dotfiles/bin/update_*" "$HOME/.local/bin"
+cd yog && cargo run --bin evoke && cd -
 
 # Update & cleanup brew
-/bin/bash "$script_dir/bin/update_brew.sh"
+/bin/bash "$script_dir"/bin/update_brew.sh

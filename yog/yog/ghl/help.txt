@@ -1,6 +1,6 @@
-Usage: ghl [--search <FILTER>] [--merge-state <STATE>] [issue|pr]
+ Usage: ghl [--search <FILTER>] [--merge-state <STATE>] [issue|pr|branch]
 
-List and optionally batch-merge GitHub pull requests interactively, or create issues with associated branches.
+ List and optionally batch-merge GitHub pull requests interactively, create issues with associated branches, or create branches from issues.
 
 Options:
   --search <FILTER>     Forward to 'gh pr list --search'.
@@ -8,14 +8,16 @@ Options:
                         Values: Behind, Blocked, Clean, Dirty, Draft, HasHooks,
                         Unknown, Unmergeable.
 
-Subcommands:
-  issue                 Create a GitHub issue and associated branch interactively.
-  pr                    Create a pull request from a selected branch interactively.
+ Subcommands:
+   issue                 Create a GitHub issue and associated branch interactively.
+   pr                    Create a pull request from a selected branch interactively.
+   branch                Create a GitHub branch from a selected issue interactively.
 
-Examples:
-  ghl                                      List all open PRs.
-  ghl --search "fix ci"                    Filter by search terms.
-  ghl --merge-state Clean                  Filter by merge state.
-  ghl --search="lint" --merge-state Dirty  Combine filters.
-  ghl issue                                Create issue and branch interactively.
-  ghl pr                                   Create PR interactively.
+ Examples:
+   ghl                                      List all open PRs.
+   ghl --search "fix ci"                    Filter by search terms.
+   ghl --merge-state Clean                  Filter by merge state.
+   ghl --search="lint" --merge-state Dirty  Combine filters.
+   ghl issue                                Create issue and branch interactively.
+   ghl pr                                   Create PR interactively.
+   ghl branch                               Create branch from issue interactively.
