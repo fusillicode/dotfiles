@@ -3,7 +3,6 @@ local get_item_idx = require('utils').item_idx
 
 local default_sources = {
   'lsp',
-  'cmp_dbee',
   'snippets',
   'buffer',
   'path',
@@ -19,11 +18,6 @@ return {
   dependencies = {
     'archie-judd/blink-cmp-words',
     { 'saghen/blink.compat', version = '2.*', lazy = true, opts = {}, },
-    {
-      'MattiasMTS/cmp-dbee',
-      ft = 'sql',
-      opts = {},
-    },
   },
   opts = {
     appearance = {
@@ -74,10 +68,6 @@ return {
         dictionary = {
           name = 'blink-cmp-words',
           module = 'blink-cmp-words.dictionary',
-        },
-        cmp_dbee = {
-          name = 'cmp-dbee',
-          module = 'blink.compat.source',
         },
       },
     },
