@@ -5,7 +5,6 @@ dotfiles_dir="$HOME/data/dev/dotfiles/dotfiles"
 
 # Symlink configs
 ln -s "$dotfiles_dir/.config/alacritty/" "$HOME/.config"
-ln -s "$dotfiles_dir/.config/mise/" "$HOME/.config"
 ln -s "$dotfiles_dir/.config/nvim/" "$HOME/.config"
 ln -s "$dotfiles_dir/.config/pgcli/config" "$HOME/.config/pgcli/config"
 ln -s "$dotfiles_dir/.config/opencode" "$HOME/.config/opencode"
