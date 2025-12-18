@@ -59,8 +59,5 @@ kcronrest () {
   kubectl apply -f "$maybe_namespace" foo.yaml
 }
 
-# FFS 😩
-[ -e "$HOME/.rover/env" ] && . "$HOME/.rover/env"
-
 # GIGACHAD 🦾
 [ -e "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
