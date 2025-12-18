@@ -96,9 +96,6 @@ fi
 # My bins
 export PATH=$HOME/.local/bin:$PATH
 
-# Helix from the source! 😎
-export HELIX_RUNTIME=~/.dev-tools/helix/runtime
-
 # K8S
 export KUBECONFIG=~/.kube/config:~/.kube/config.qa:~/.kube/config.prod
 
