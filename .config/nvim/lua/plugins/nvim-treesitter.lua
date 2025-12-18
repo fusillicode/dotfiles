@@ -1,8 +1,9 @@
 return {
   'nvim-treesitter/nvim-treesitter',
   event = { 'BufReadPre', 'BufNewFile', },
+  branch = 'master',
   dependencies = {
-    'nvim-treesitter/nvim-treesitter-textobjects',
+    { 'nvim-treesitter/nvim-treesitter-textobjects', branch = 'master' },
     'theHamsta/nvim-treesitter-pairs',
   },
   build = ':TSUpdate',
