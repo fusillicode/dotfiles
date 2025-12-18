@@ -67,14 +67,7 @@ brew install \
   telegram \
   the-unarchiver \
   transmission --cask \
-  wezterm@nightly --cask --no-quarantine \
   whatsapp \
-
-# 🥲 https://wezfurlong.org/wezterm/faq.html#how-do-i-enable-undercurl-curly-underlines
-tempfile=$(mktemp) \
-  && curl -o "$tempfile" https://raw.githubusercontent.com/wez/wezterm/master/termwiz/data/wezterm.terminfo \
-  && tic -x -o ~/.terminfo "$tempfile" \
-  && rm "$tempfile" \
 
 # Oh My Zsh
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
