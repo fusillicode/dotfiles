@@ -99,30 +99,11 @@ export PATH=$HOME/.local/bin:$PATH
 # Rust
 [ -e "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
 
-# Haskell
-[ -e "$HOME/.ghcup/env" ] && . "$HOME/.ghcup/env"
-
-# Elixir & Erlang
-export ERL_AFLAGS="-kernel shell_history enabled -kernel shell_history_file_bytes 1024000"
-
-# ...Go...
-export PATH="$HOME/go/bin:$PATH"
-
-# ...Poetry...
-[ -e "$HOME/.poetry/env" ] && . "$HOME/.poetry/env"
-export PATH="$HOME/.poetry/bin:$PATH"
-
-# Lira 🥲
-export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
-
 # rdkafka & M1 🥲
 export PATH="/opt/homebrew/opt/openssl/bin:$PATH"
 export OPENSSL_ROOT_DIR="/opt/homebrew/opt/openssl"
 export LDFLAGS="-L/opt/homebrew/opt/openssl/lib -L/opt/homebrew/opt/llvm/lib"
 export CPPFLAGS="-I/opt/homebrew/opt/openssl/include -I/opt/homebrew/opt/llvm/include"
 export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl/lib/pkgconfig"
-
-# FFS PHP...
-export PATH="/opt/homebrew/opt/m4/bin:$PATH"
 
 eval "$(starship init zsh)"
