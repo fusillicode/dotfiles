@@ -93,9 +93,6 @@ fi
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 . "$HOME/.zshenv"
 
-# Mise 😎
-eval "$(mise activate zsh)"
-
 # My bins
 export PATH=$HOME/.local/bin:$PATH
 
