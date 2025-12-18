@@ -96,9 +96,6 @@ fi
 # My bins
 export PATH=$HOME/.local/bin:$PATH
 
-# 🥲 https://wezfurlong.org/wezterm/faq.html#how-do-i-enable-undercurl-curly-underlines
-export TERM=wezterm
-
 # Helix from the source! 😎
 export HELIX_RUNTIME=~/.dev-tools/helix/runtime
 
