@@ -139,8 +139,6 @@ fn main() -> color_eyre::Result<()> {
     std::fs::create_dir_all(dev_tools_dir)?;
     std::fs::create_dir_all(bin_dir)?;
 
-    ytil_gh::log_into_github()?;
-
     let all_installers: Vec<Box<dyn Installer>> = vec![
         Box::new(BashLanguageServer {
             dev_tools_dir: Path::new(dev_tools_dir),
