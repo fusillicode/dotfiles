@@ -1,13 +1,31 @@
 use std::path::Path;
 
+use ytil_sys::Arch;
+use ytil_sys::Os;
 use ytil_sys::SysInfo;
 
-use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
+use crate::installers::Installer;
+use crate::installers::SystemDependent;
 
 pub struct Hadolint<'a> {
     pub bin_dir: &'a Path,
     pub sys_info: &'a SysInfo,
+}
+
+impl SystemDependent for Hadolint<'_> {
+    fn target_arch_and_os(&self) -> (&str, &str) {
+        let SysInfo { os, arch } = self.sys_info;
+        let os = match os {
+            Os::MacOs => "macos",
+            Os::Linux => "linux",
+        };
+        let arch = match arch {
+            Arch::Arm => "arm",
+            Arch::X86 => "x86_64",
+        };
+        (arch, os)
+    }
 }
 
 impl Installer for Hadolint<'_> {
@@ -16,15 +34,7 @@ impl Installer for Hadolint<'_> {
     }
 
     fn install(&self) -> color_eyre::Result<()> {
-        let SysInfo { os, arch } = self.sys_info;
-        let os = match os {
-            ytil_sys::Os::MacOs => "macos",
-            ytil_sys::Os::Linux => "linux",
-        };
-        let arch = match arch {
-            ytil_sys::Arch::Arm => "arm",
-            ytil_sys::Arch::X86 => "x86_64",
-        };
+        let (arch, os) = self.target_arch_and_os();
 
         let target = crate::downloaders::curl::run(
             &format!(
