@@ -46,6 +46,7 @@ brew install \
   kubectx \
   libpq \
   librdkafka \
+  opencode \
   stern \
   txn2/tap/kubefwd \
   zsh \
