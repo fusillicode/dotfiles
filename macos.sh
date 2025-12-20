@@ -1,19 +1,34 @@
 #!/usr/bin/env bash
 
-# Disable general animations
+# If the Effective User ID (EUID) is not 0 (root), restart the script with sudo.
+if [ "$EUID" -ne 0 ]; then
+  echo "Need admin privileges, please enter your password:"
+  exec sudo -p "" "$0" "$@"
+fi
+
+# Update existing sudo time stamp until the script has finished.
+while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
+
+# Disable general animations.
 defaults write -g QLPanelAnimationDuration -float 0;
 defaults write NSGlobalDomain NSAutomaticWindowAnimationsEnabled -bool false;
 defaults write NSGlobalDomain NSWindowResizeTime -float 0.001;
 
-# Menubar
+# Menubar.
 defaults -currentHost write com.apple.controlcenter Bluetooth -int 18;
 defaults -currentHost write com.apple.controlcenter Sound -int 18;
 defaults -currentHost write com.apple.controlcenter Battery -int 18;
 defaults -currentHost write com.apple.controlcenter BatteryShowPercentage -bool true;
 defaults write com.apple.menuextra.clock ShowDate -int 1;
+
+# Sounds.
+defaults write com.apple.systemsound "com.apple.sound.uiaudio.enabled" -int 0;
+defaults write com.apple.systemsound "com.apple.sound.beep.volume" -float 0.0
+defaults write NSGlobalDomain com.apple.sound.beep.feedback -int 0
+nvram StartupMute=%01
 killall ControlCenter; killall SystemUIServer;
 
-# Finder
+# Finder.
 defaults write NSGlobalDomain AppleShowAllExtensions -bool true;
 defaults write com.apple.finder AppleShowAllFiles -bool true;
 defaults write com.apple.finder DisableAllAnimations -bool true;
@@ -24,11 +39,10 @@ defaults write com.apple.finder _FXSortFoldersFirstOnDesktop -bool true;
 /usr/libexec/PlistBuddy \
   -c "Set :DesktopViewSettings:IconViewSettings:arrangeBy grid" \
   ~/Library/Preferences/com.apple.finder.plist;
-echo 'Remove all .DS_Store';
-sudo find / -name '.DS_Store' -delete;
+find / -name ".DS_Store" -delete;
 killall Finder;
 
-# Dock
+# Dock.
 defaults write com.apple.dock autohide-delay -float 0;
 defaults write com.apple.dock autohide-time-modifier -float 0;
 defaults write com.apple.dock expose-animation-duration -float 0;
