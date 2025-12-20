@@ -142,6 +142,10 @@ pub trait Installer: Sync + Send {
     }
 }
 
+pub trait SystemDependent {
+    fn target_arch_and_os(&self) -> (&str, &str);
+}
+
 /// Format phase timing summary line.
 ///
 /// # Arguments

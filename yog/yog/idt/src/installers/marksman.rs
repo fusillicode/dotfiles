@@ -1,13 +1,32 @@
 use std::path::Path;
 
+use ytil_sys::Arch;
+use ytil_sys::Os;
 use ytil_sys::SysInfo;
 
-use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
+use crate::installers::Installer;
+use crate::installers::SystemDependent;
 
 pub struct Marksman<'a> {
     pub bin_dir: &'a Path,
     pub sys_info: &'a SysInfo,
+}
+
+impl SystemDependent for Marksman<'_> {
+    fn target_arch_and_os(&self) -> (&str, &str) {
+        let SysInfo { os, arch } = self.sys_info;
+        let arch_suffix = match (os, arch) {
+            (Os::MacOs, Arch::Arm | Arch::X86) => "",
+            (Os::Linux, Arch::Arm) => "-arm64",
+            (Os::Linux, Arch::X86) => "-x64",
+        };
+        let os = match os {
+            Os::MacOs => "macos",
+            Os::Linux => "linux",
+        };
+        (arch_suffix, os)
+    }
 }
 
 impl Installer for Marksman<'_> {
@@ -16,16 +35,7 @@ impl Installer for Marksman<'_> {
     }
 
     fn install(&self) -> color_eyre::Result<()> {
-        let SysInfo { os, arch } = self.sys_info;
-        let arch = match (os, arch) {
-            (ytil_sys::Os::MacOs, ytil_sys::Arch::Arm | ytil_sys::Arch::X86) => "",
-            (ytil_sys::Os::Linux, ytil_sys::Arch::Arm) => "-arm64",
-            (ytil_sys::Os::Linux, ytil_sys::Arch::X86) => "-x64",
-        };
-        let os = match os {
-            ytil_sys::Os::MacOs => "macos",
-            ytil_sys::Os::Linux => "linux",
-        };
+        let (arch, os) = self.target_arch_and_os();
 
         let target = crate::downloaders::curl::run(
             &format!(
