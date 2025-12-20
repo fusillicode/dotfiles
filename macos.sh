@@ -21,7 +21,10 @@ defaults write com.apple.finder FXEnableExtensionChangeWarning -bool false;
 defaults write com.apple.finder FXPreferredViewStyle -string "Nlsv";
 defaults write com.apple.finder _FXSortFoldersFirst -bool true;
 defaults write com.apple.finder _FXSortFoldersFirstOnDesktop -bool true;
-echo 'Remove all .DS_Store'
+/usr/libexec/PlistBuddy \
+  -c "Set :DesktopViewSettings:IconViewSettings:arrangeBy grid" \
+  ~/Library/Preferences/com.apple.finder.plist;
+echo 'Remove all .DS_Store';
 sudo find / -name '.DS_Store' -delete;
 killall Finder;
 
