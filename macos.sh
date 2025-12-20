@@ -36,4 +36,5 @@ defaults write com.apple.dock mineffect -string "scale";
 defaults write com.apple.dock minimize-to-application -bool true;
 defaults write com.apple.dock show-recents -bool false;
 defaults write com.apple.dock static-only -bool true;
+defaults write com.apple.dock wvous-bl-corner -int 13;
 killall Dock;
