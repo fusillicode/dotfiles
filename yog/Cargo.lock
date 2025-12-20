@@ -2639,6 +2639,8 @@ dependencies = [
  "color-eyre",
  "itertools 0.14.0",
  "pico-args",
+ "pretty_assertions",
+ "rstest",
  "serde",
  "tempfile",
  "ytil_cmd",

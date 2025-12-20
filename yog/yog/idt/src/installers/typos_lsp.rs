@@ -1,10 +1,13 @@
 use std::path::Path;
 
+use ytil_sys::SysInfo;
+
 use crate::Installer;
 use crate::downloaders::curl::CurlDownloaderOption;
 
 pub struct TyposLsp<'a> {
     pub bin_dir: &'a Path,
+    pub sys_info: &'a SysInfo,
 }
 
 impl Installer for TyposLsp<'_> {
@@ -13,12 +16,22 @@ impl Installer for TyposLsp<'_> {
     }
 
     fn install(&self) -> color_eyre::Result<()> {
+        let SysInfo { os, arch } = self.sys_info;
+        let os = match os {
+            ytil_sys::Os::MacOs => "apple-darwin",
+            ytil_sys::Os::Linux => "unknown-linux",
+        };
+        let arch = match arch {
+            ytil_sys::Arch::Arm => "aarch64",
+            ytil_sys::Arch::X86 => "x86_64",
+        };
+
         let repo = "tekumara/typos-vscode";
         let latest_release = ytil_gh::get_latest_release(repo)?;
 
         let target = crate::downloaders::curl::run(
             &format!(
-                "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}-aarch64-apple-darwin.tar.gz",
+                "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}-{arch}-{os}.tar.gz",
                 self.bin_name()
             ),
             &CurlDownloaderOption::PipeIntoTar {

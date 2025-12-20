@@ -12,7 +12,6 @@ impl Installer for HarperLs<'_> {
     }
 
     fn install(&self) -> color_eyre::Result<()> {
-        // Installing with `cargo` because I like it this way
         ytil_cmd::silent_cmd("cargo")
             .args([
                 "install",
