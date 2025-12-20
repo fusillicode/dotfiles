@@ -97,7 +97,7 @@ impl FromStr for SysInfo {
     }
 }
 
-#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub enum Os {
     MacOs,
     Linux,
@@ -117,7 +117,7 @@ impl FromStr for Os {
     }
 }
 
-#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub enum Arch {
     Arm,
     X86,
