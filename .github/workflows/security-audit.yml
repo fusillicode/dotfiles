@@ -1,0 +1,32 @@
+name: Security audit
+
+on:
+  push:
+    paths:
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+
+jobs:
+  security_audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: yog
+          shared-key: default
+          cache-targets: true
+
+      - name: Setup (cargo-audit, cargo-auditable)
+        uses: ./.github/actions/setup
+        with:
+          tools: "cargo-audit,cargo-auditable,fd-find"
+
+      - name: Build auditable release and audit
+        working-directory: yog
+        run: |
+          cargo auditable build --release
+          fd . './target/release' --type=executable --max-depth=1 --exec-batch cargo audit bin
