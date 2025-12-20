@@ -32,6 +32,7 @@ use std::path::Path;
 
 use color_eyre::eyre::eyre;
 use color_eyre::owo_colors::OwoColorize as _;
+use ytil_sys::SysInfo;
 use ytil_sys::cli::Args;
 
 use crate::installers::Installer;
@@ -136,6 +137,8 @@ fn main() -> color_eyre::Result<()> {
         .trim_end_matches('/');
     let supplied_bin_names: Vec<&str> = args.iter().skip(2).map(AsRef::as_ref).collect();
 
+    let sys_info = SysInfo::get()?;
+
     std::fs::create_dir_all(dev_tools_dir)?;
     std::fs::create_dir_all(bin_dir)?;
 
@@ -150,6 +153,7 @@ fn main() -> color_eyre::Result<()> {
         }),
         Box::new(Deno {
             bin_dir: Path::new(bin_dir),
+            sys_info: &sys_info,
         }),
         Box::new(DockerLangServer {
             dev_tools_dir: Path::new(dev_tools_dir),
@@ -165,18 +169,22 @@ fn main() -> color_eyre::Result<()> {
         }),
         Box::new(Hadolint {
             bin_dir: Path::new(bin_dir),
+            sys_info: &sys_info,
         }),
         Box::new(HarperLs {
             bin_dir: Path::new(bin_dir),
         }),
         Box::new(HelmLs {
             bin_dir: Path::new(bin_dir),
+            sys_info: &sys_info,
         }),
         Box::new(LuaLanguageServer {
             dev_tools_dir: Path::new(dev_tools_dir),
+            sys_info: &sys_info,
         }),
         Box::new(Marksman {
             bin_dir: Path::new(bin_dir),
+            sys_info: &sys_info,
         }),
         Box::new(Nvim {
             dev_tools_dir: Path::new(dev_tools_dir),
@@ -196,12 +204,15 @@ fn main() -> color_eyre::Result<()> {
         }),
         Box::new(RustAnalyzer {
             bin_dir: Path::new(bin_dir),
+            sys_info: &sys_info,
         }),
         Box::new(Shellcheck {
             bin_dir: Path::new(bin_dir),
+            sys_info: &sys_info,
         }),
         Box::new(Sqruff {
             bin_dir: Path::new(bin_dir),
+            sys_info: &sys_info,
         }),
         Box::new(SqlLanguageServer {
             dev_tools_dir: Path::new(dev_tools_dir),
@@ -212,6 +223,7 @@ fn main() -> color_eyre::Result<()> {
         }),
         Box::new(TerraformLs {
             bin_dir: Path::new(bin_dir),
+            sys_info: &sys_info,
         }),
         Box::new(TypescriptLanguageServer {
             dev_tools_dir: Path::new(dev_tools_dir),
@@ -219,6 +231,7 @@ fn main() -> color_eyre::Result<()> {
         }),
         Box::new(TyposLsp {
             bin_dir: Path::new(bin_dir),
+            sys_info: &sys_info,
         }),
         Box::new(VsCodeLangServers {
             dev_tools_dir: Path::new(dev_tools_dir),
