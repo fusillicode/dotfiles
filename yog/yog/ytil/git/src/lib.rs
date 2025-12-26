@@ -221,8 +221,7 @@ where
 /// - If the repository cannot be opened.
 /// - If the HEAD reference cannot be resolved.
 /// - If the HEAD reference does not point to a commit.
-pub fn get_current_commit_hash() -> color_eyre::Result<String> {
-    let repo = discover_repo(Path::new(".")).wrap_err_with(|| eyre!("error getting repo for current commit hash"))?;
+pub fn get_current_commit_hash(repo: &Repository) -> color_eyre::Result<String> {
     let head = repo.head().wrap_err_with(|| eyre!("error getting repo head"))?;
     let commit = head
         .peel_to_commit()
