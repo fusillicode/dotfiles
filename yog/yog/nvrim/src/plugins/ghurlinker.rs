@@ -77,7 +77,7 @@ fn get_link((link_type, open): (String, Option<bool>)) -> Option<()> {
     if open.is_some_and(std::convert::identity) {
         ytil_sys::open(&repo_url)
             .inspect_err(|err| {
-                ytil_noxi::notify::error(format!("error opening file URL | repo_url={repo_url:?} error={err:#?}"))
+                ytil_noxi::notify::error(format!("error opening file URL | repo_url={repo_url:?} error={err:#?}"));
             })
             .ok()?;
     } else {
