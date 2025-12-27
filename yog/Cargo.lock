@@ -1639,7 +1639,6 @@ dependencies = [
  "tree-sitter-rust",
  "url",
  "ytil_cmd",
- "ytil_gh",
  "ytil_git",
  "ytil_noxi",
  "ytil_sys",
