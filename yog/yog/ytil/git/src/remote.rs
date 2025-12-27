@@ -90,7 +90,7 @@ fn map_to_https_url(url: &str) -> color_eyre::Result<String> {
         .and_then(|no_ssh| no_ssh.strip_prefix("git@"))
         .or_else(|| url.strip_prefix("git@"))
     {
-        return Ok(format!("https://{}", rest.replace(':', "/")));
+        return Ok(format!("https://{}", rest.replace(':', "/").trim_end_matches(".git")));
     }
     bail!("error unsupported protocol for URL | url={url}")
 }
@@ -104,9 +104,9 @@ mod tests {
     #[rstest]
     #[case("https://github.com/user/repo", "https://github.com/user/repo")]
     #[case("https://gitlab.com/user/repo", "https://gitlab.com/user/repo")]
-    #[case("git@github.com:user/repo.git", "https://github.com/user/repo.git")]
-    #[case("ssh://git@github.com/user/repo.git", "https://github.com/user/repo.git")]
-    #[case("git@gitlab.com:user/repo.git", "https://gitlab.com/user/repo.git")]
+    #[case("git@github.com:user/repo.git", "https://github.com/user/repo")]
+    #[case("ssh://git@github.com/user/repo.git", "https://github.com/user/repo")]
+    #[case("git@gitlab.com:user/repo.git", "https://gitlab.com/user/repo")]
     #[case("https://bitbucket.org/user/repo", "https://bitbucket.org/user/repo")]
     fn map_to_https_url_when_valid_input_maps_successfully(#[case] input: &str, #[case] expected: &str) {
         let result = map_to_https_url(input);
