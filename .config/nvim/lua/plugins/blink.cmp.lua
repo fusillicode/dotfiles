@@ -72,7 +72,7 @@ return {
       },
     },
     fuzzy = {
-      implementation = "lua",
+      implementation = 'lua',
       sorts = {
         function(a, b)
           return

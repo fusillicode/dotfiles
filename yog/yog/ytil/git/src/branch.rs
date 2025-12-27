@@ -39,7 +39,7 @@ pub fn get_default() -> color_eyre::Result<String> {
         )
     })?;
 
-    let default_remote_ref = crate::get_default_remote(&repo)?;
+    let default_remote_ref = crate::remote::get_default(&repo)?;
 
     let Some(target) = default_remote_ref.symbolic_target() else {
         bail!("error missing default branch");
@@ -161,7 +161,7 @@ pub fn push(branch_name: &str, repo: Option<&Repository>) -> color_eyre::Result<
         })?
     };
 
-    let default_remote = crate::get_default_remote(repo)?;
+    let default_remote = crate::remote::get_default(repo)?;
 
     let default_remote_name = default_remote
         .name()

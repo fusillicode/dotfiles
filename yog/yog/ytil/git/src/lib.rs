@@ -10,10 +10,8 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use color_eyre::eyre::WrapErr;
-use color_eyre::eyre::bail;
 use color_eyre::eyre::eyre;
 use git2::IntoCString;
-use git2::Reference;
 use git2::Repository;
 use git2::Status;
 use git2::StatusEntry;
@@ -23,6 +21,7 @@ use ytil_cmd::CmdExt as _;
 
 pub mod branch;
 pub mod diff;
+pub mod remote;
 
 /// Discover the Git repository containing `path`.
 ///
@@ -53,29 +52,6 @@ pub fn get_repo_root(repo: &Repository) -> PathBuf {
         .components()
         .filter(|c| c.as_os_str() != ".git")
         .collect()
-}
-
-/// Retrieves the default remote HEAD reference from the repository.
-///
-/// Iterates over all configured remotes and returns the first valid
-/// `refs/remotes/{remote}/HEAD` reference, which typically points to the
-/// default branch (e.g., main, or master) on that remote.
-///
-/// # Arguments
-/// - `repo` The repository to query for remotes.
-///
-/// # Returns
-/// The default remote HEAD reference.
-///
-/// # Errors
-/// - If no remote has a valid `HEAD` reference.
-pub fn get_default_remote(repo: &Repository) -> color_eyre::Result<Reference<'_>> {
-    for remote_name in repo.remotes()?.iter().flatten() {
-        if let Ok(default_remote_ref) = repo.find_reference(&format!("refs/remotes/{remote_name}/HEAD")) {
-            return Ok(default_remote_ref);
-        }
-    }
-    bail!("error missing default remote")
 }
 
 /// Enumerate combined staged + unstaged status entries.
@@ -245,8 +221,7 @@ where
 /// - If the repository cannot be opened.
 /// - If the HEAD reference cannot be resolved.
 /// - If the HEAD reference does not point to a commit.
-pub fn get_current_commit_hash() -> color_eyre::Result<String> {
-    let repo = discover_repo(Path::new(".")).wrap_err_with(|| eyre!("error getting repo for current commit hash"))?;
+pub fn get_current_commit_hash(repo: &Repository) -> color_eyre::Result<String> {
     let head = repo.head().wrap_err_with(|| eyre!("error getting repo head"))?;
     let commit = head
         .peel_to_commit()
