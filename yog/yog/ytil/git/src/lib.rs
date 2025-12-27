@@ -12,7 +12,7 @@ use std::process::Command;
 use color_eyre::eyre::WrapErr;
 use color_eyre::eyre::eyre;
 use git2::IntoCString;
-use git2::Repository;
+pub use git2::Repository;
 use git2::Status;
 use git2::StatusEntry;
 use git2::StatusOptions;
