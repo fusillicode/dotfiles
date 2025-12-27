@@ -26,6 +26,13 @@ pub fn get_default(repo: &Repository) -> color_eyre::Result<Reference<'_>> {
     bail!("error missing default remote")
 }
 
+/// Retrieves HTTPS URLs for all configured remotes in the repository.
+///
+/// # Errors
+/// - If listing remotes fails.
+/// - If finding a remote by name fails.
+/// - If a remote has no URL configured.
+/// - If URL has an unsupported protocol.
 pub fn get_https_urls(repo: &Repository) -> color_eyre::Result<Vec<String>> {
     let mut https_urls = vec![];
     for remote_name in repo.remotes()?.iter().flatten() {
@@ -39,12 +46,23 @@ pub fn get_https_urls(repo: &Repository) -> color_eyre::Result<Vec<String>> {
     Ok(https_urls)
 }
 
+/// Supported Git hosting providers.
 pub enum GitProvider {
+    /// GitHub.com or GitHub Enterprise.
     GitHub,
+    /// GitLab.com or self-hosted GitLab.
     GitLab,
 }
 
 impl GitProvider {
+    /// Detects the Git provider by inspecting HTTP response headers from the given URL.
+    ///
+    /// # Errors
+    /// - If the HTTP request fails (network issues, invalid URL, etc.).
+    ///
+    /// # Rationale
+    /// Header-based detection avoids parsing HTML content or relying on URL patterns,
+    /// providing a more reliable and lightweight approach to provider identification.
     pub fn get(url: &str) -> color_eyre::Result<Option<Self>> {
         let resp = reqwest::blocking::get(url)?;
 
@@ -53,10 +71,9 @@ impl GitProvider {
             let name = name.as_str();
             if name.contains("gitlab") {
                 return Ok(Some(Self::GitLab));
-            } else if name.contains("github") {
+            }
+            if name.contains("github") {
                 return Ok(Some(Self::GitHub));
-            } else {
-                continue;
             }
         }
 
