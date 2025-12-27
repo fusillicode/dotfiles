@@ -23,37 +23,30 @@ pub fn dict() -> Dictionary {
 /// # Arguments
 /// - `link_type` The type of GitHub link to generate (e.g., "blob" for file view).
 #[allow(clippy::needless_pass_by_value)]
-fn get_link((link_type, open): (String, Option<bool>)) {
-    let Some(current_buffer_path) = ytil_noxi::buffer::get_relative_path_to_cwd(&nvim_oxi::api::get_current_buf())
-    else {
-        return;
-    };
+fn get_link((link_type, open): (String, Option<bool>)) -> Option<()> {
+    let current_buffer_path = ytil_noxi::buffer::get_relative_path_to_cwd(&nvim_oxi::api::get_current_buf())?;
     if current_buffer_path.as_os_str().is_empty() {
-        return;
+        return None;
     }
 
-    let Some(selection) = ytil_noxi::visual_selection::get(()) else {
-        return;
-    };
+    let selection = ytil_noxi::visual_selection::get(())?;
 
-    let Ok(repo) = ytil_git::discover_repo(Path::new(".")).inspect_err(|err| {
-        ytil_noxi::notify::error(err);
-    }) else {
-        return;
-    };
+    let repo = ytil_git::discover_repo(Path::new("."))
+        .inspect_err(|err| {
+            ytil_noxi::notify::error(err);
+        })
+        .ok()?;
 
-    let Ok(repo_urls) = ytil_git::remote::get_https_urls(&repo).inspect_err(|err| {
-        ytil_noxi::notify::error(format!("error discovering git repo | error={err:#?}"));
-    }) else {
-        return;
-    };
+    let repo_urls = ytil_git::remote::get_https_urls(&repo)
+        .inspect_err(|err| {
+            ytil_noxi::notify::error(format!("error discovering git repo | error={err:#?}"));
+        })
+        .ok()?;
 
     // FIXME: handle case of multiple remotes
-    let Some(mut repo_url) = repo_urls.into_iter().next() else {
-        return;
-    };
+    let mut repo_url = repo_urls.into_iter().next()?;
 
-    let Ok(Some(git_provider)) = GitProvider::get(&repo_url)
+    let git_provider = GitProvider::get(&repo_url)
         .inspect_err(|err| {
             ytil_noxi::notify::error(format!(
                 "error getting git provider for url | url={repo_url:#?} error={err:?}"
@@ -64,15 +57,13 @@ fn get_link((link_type, open): (String, Option<bool>)) {
                 ytil_noxi::notify::error(format!("error no git provider found for url | url={repo_url:#?}"));
             }
         })
-    else {
-        return;
-    };
+        .ok()??;
 
-    let Ok(current_commit_hash) = ytil_git::get_current_commit_hash(&repo).inspect_err(|err| {
-        ytil_noxi::notify::error(format!("error getting current repo commit hash | error={err:#?}"));
-    }) else {
-        return;
-    };
+    let current_commit_hash = ytil_git::get_current_commit_hash(&repo)
+        .inspect_err(|err| {
+            ytil_noxi::notify::error(format!("error getting current repo commit hash | error={err:#?}"));
+        })
+        .ok()?;
 
     build_file_url(
         &mut repo_url,
@@ -84,17 +75,23 @@ fn get_link((link_type, open): (String, Option<bool>)) {
     );
 
     if open.is_some_and(std::convert::identity) {
-        if let Err(err) = ytil_sys::open(&repo_url) {
-            ytil_noxi::notify::error(format!("error opening file URL | repo_url={repo_url:?} error={err:#?}"));
-        }
+        ytil_sys::open(&repo_url)
+            .inspect_err(|err| {
+                ytil_noxi::notify::error(format!("error opening file URL | repo_url={repo_url:?} error={err:#?}"))
+            })
+            .ok()?;
     } else {
-        if let Err(err) = ytil_sys::file::cp_to_system_clipboard(&mut repo_url.as_bytes()) {
-            ytil_noxi::notify::error(format!(
-                "error copying content to system clipboard | content={repo_url:?} error={err:#?}"
-            ));
-        }
+        ytil_sys::file::cp_to_system_clipboard(&mut repo_url.as_bytes())
+            .inspect_err(|err| {
+                ytil_noxi::notify::error(format!(
+                    "error copying content to system clipboard | content={repo_url:?} error={err:#?}"
+                ));
+            })
+            .ok()?;
         nvim_oxi::print!("URL copied to clipboard:\n{repo_url}");
     }
+
+    Some(())
 }
 
 fn build_file_url(
