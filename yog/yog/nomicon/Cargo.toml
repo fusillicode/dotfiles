@@ -26,3 +26,7 @@ color-eyre = { workspace = true }
 lightningcss = { version = "1.0.0-alpha.68", default-features = false, features = [
   "browserslist",
 ] }
+
+[dev-dependencies]
+assert2 = { workspace = true }
+pretty_assertions = { workspace = true }

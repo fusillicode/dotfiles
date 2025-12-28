@@ -1557,9 +1557,11 @@ name = "nomicon"
 version = "0.1.0"
 dependencies = [
  "askama",
+ "assert2",
  "chrono",
  "color-eyre",
  "lightningcss",
+ "pretty_assertions",
  "ytil_cmd",
  "ytil_sys",
 ]

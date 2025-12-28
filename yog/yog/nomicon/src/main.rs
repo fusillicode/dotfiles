@@ -151,7 +151,7 @@ fn main() -> color_eyre::eyre::Result<()> {
     let footer = Footer { generated_at };
 
     let index_page = IndexPage {
-        crates: &crates,
+        crates,
         footer: footer.clone(),
     };
     std::fs::write(doc_dir.join("index.html"), index_page.render()?)?;
