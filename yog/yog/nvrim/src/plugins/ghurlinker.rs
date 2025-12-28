@@ -50,6 +50,12 @@ fn get_link((link_type, open): (String, Option<bool>)) -> Option<()> {
     // FIXME: handle case of multiple remotes
     let mut repo_url = repo_urls.into_iter().next()?;
 
+    let current_commit_hash = ytil_git::get_current_commit_hash(&repo)
+        .inspect_err(|err| {
+            ytil_noxi::notify::error(format!("error getting current repo commit hash | error={err:#?}"));
+        })
+        .ok()?;
+
     let git_provider = GitProvider::get(&repo_url)
         .inspect_err(|err| {
             ytil_noxi::notify::error(format!(
@@ -63,20 +69,22 @@ fn get_link((link_type, open): (String, Option<bool>)) -> Option<()> {
         })
         .ok()??;
 
-    let current_commit_hash = ytil_git::get_current_commit_hash(&repo)
-        .inspect_err(|err| {
-            ytil_noxi::notify::error(format!("error getting current repo commit hash | error={err:#?}"));
-        })
-        .ok()?;
-
-    build_file_url(
-        &mut repo_url,
-        &git_provider,
-        &link_type,
-        &current_commit_hash,
-        &current_buffer_path,
-        &selection,
-    );
+    match git_provider {
+        GitProvider::GitHub => build_github_file_url(
+            &mut repo_url,
+            &link_type,
+            &current_commit_hash,
+            &current_buffer_path,
+            &selection,
+        ),
+        GitProvider::GitLab => build_gitlab_file_url(
+            &mut repo_url,
+            &link_type,
+            &current_commit_hash,
+            &current_buffer_path,
+            &selection,
+        ),
+    }
 
     if open.is_some_and(std::convert::identity) {
         ytil_sys::open(&repo_url)
@@ -98,14 +106,20 @@ fn get_link((link_type, open): (String, Option<bool>)) -> Option<()> {
     Some(())
 }
 
-fn build_file_url(
+fn build_github_file_url(
     repo_url: &mut String,
-    git_provider: &GitProvider,
     link_type: &str,
     commit_hash: &str,
     current_buffer_path: &Path,
     selection: &Selection,
 ) {
+    fn add_github_lnum_and_col_to_url(repo_url: &mut String, bound: &Bound) {
+        repo_url.push('L');
+        append_lnum(repo_url, bound);
+        repo_url.push('C');
+        repo_url.push_str(&bound.col.to_string());
+    }
+
     repo_url.push('/');
     repo_url.push_str(link_type);
     repo_url.push('/');
@@ -113,19 +127,6 @@ fn build_file_url(
     repo_url.push('/');
     repo_url.push_str(current_buffer_path.to_string_lossy().trim_start_matches('/'));
 
-    match git_provider {
-        GitProvider::GitHub => append_github_file_selection(repo_url, selection),
-        GitProvider::GitLab => append_gitlab_file_selection(repo_url, selection),
-    }
-}
-
-fn append_github_file_selection(repo_url: &mut String, selection: &Selection) {
-    fn add_github_lnum_and_col_to_url(repo_url: &mut String, bound: &Bound) {
-        repo_url.push('L');
-        append_lnum(repo_url, bound);
-        repo_url.push('C');
-        repo_url.push_str(&bound.col.to_string());
-    }
     repo_url.push_str("?plain=1");
     repo_url.push('#');
     add_github_lnum_and_col_to_url(repo_url, selection.start());
@@ -133,11 +134,23 @@ fn append_github_file_selection(repo_url: &mut String, selection: &Selection) {
     add_github_lnum_and_col_to_url(repo_url, selection.end());
 }
 
-fn append_lnum(repo_url: &mut String, bound: &Bound) {
-    repo_url.push_str(&bound.lnum.saturating_add(1).to_string());
-}
+fn build_gitlab_file_url(
+    repo_url: &mut String,
+    link_type: &str,
+    commit_hash: &str,
+    current_buffer_path: &Path,
+    selection: &Selection,
+) {
+    repo_url.push('/');
+    repo_url.push('-');
 
-fn append_gitlab_file_selection(repo_url: &mut String, selection: &Selection) {
+    repo_url.push('/');
+    repo_url.push_str(link_type);
+    repo_url.push('/');
+    repo_url.push_str(commit_hash);
+    repo_url.push('/');
+    repo_url.push_str(current_buffer_path.to_string_lossy().trim_start_matches('/'));
+
     repo_url.push('#');
     repo_url.push('L');
     append_lnum(repo_url, selection.start());
@@ -145,19 +158,19 @@ fn append_gitlab_file_selection(repo_url: &mut String, selection: &Selection) {
     append_lnum(repo_url, selection.end());
 }
 
+fn append_lnum(repo_url: &mut String, bound: &Bound) {
+    repo_url.push_str(&bound.lnum.saturating_add(1).to_string());
+}
+
 #[cfg(test)]
 mod tests {
-    // At module level because over rstest function it doesn't work.
-    #![allow(clippy::too_many_arguments)]
-
     use rstest::rstest;
 
     use super::*;
 
     #[rstest]
-    #[case::github_single_line_selection(
+    #[case::single_line_selection(
         "https://github.com/user/repo",
-        GitProvider::GitHub,
         "blob",
         "abc123",
         "/src/main.rs",
@@ -165,9 +178,8 @@ mod tests {
         Bound { lnum: 10, col: 10 },
         "https://github.com/user/repo/blob/abc123/src/main.rs?plain=1#L11C5-L11C10"
     )]
-    #[case::github_multi_line_selection(
+    #[case::multi_line_selection(
         "https://github.com/user/repo",
-        GitProvider::GitHub,
         "blob",
         "def456",
         "/lib/utils.rs",
@@ -175,9 +187,8 @@ mod tests {
         Bound { lnum: 3, col: 20 },
         "https://github.com/user/repo/blob/def456/lib/utils.rs?plain=1#L2C0-L4C20"
     )]
-    #[case::github_root_file(
+    #[case::root_file(
         "https://github.com/user/repo",
-        GitProvider::GitHub,
         "tree",
         "ghi789",
         "/README.md",
@@ -185,39 +196,8 @@ mod tests {
         Bound { lnum: 5, col: 2 },
         "https://github.com/user/repo/tree/ghi789/README.md?plain=1#L6C2-L6C2"
     )]
-    #[case::gitlab_single_line_selection(
-        "https://gitlab.com/user/repo",
-        GitProvider::GitLab,
-        "blob",
-        "abc123",
-        "/src/main.rs",
-        Bound { lnum: 10, col: 5 },
-        Bound { lnum: 10, col: 10 },
-        "https://gitlab.com/user/repo/blob/abc123/src/main.rs#L11-11"
-    )]
-    #[case::gitlab_multi_line_selection(
-        "https://gitlab.com/user/repo",
-        GitProvider::GitLab,
-        "blob",
-        "def456",
-        "/lib/utils.rs",
-        Bound { lnum: 1, col: 0 },
-        Bound { lnum: 3, col: 20 },
-        "https://gitlab.com/user/repo/blob/def456/lib/utils.rs#L2-4"
-    )]
-    #[case::gitlab_root_file(
-        "https://gitlab.com/user/repo",
-        GitProvider::GitLab,
-        "tree",
-        "ghi789",
-        "/README.md",
-        Bound { lnum: 5, col: 2 },
-        Bound { lnum: 5, col: 2 },
-        "https://gitlab.com/user/repo/tree/ghi789/README.md#L6-6"
-    )]
-    fn build_file_url_works_as_expected(
+    fn build_github_file_url_works_as_expected(
         #[case] initial_repo_url: &str,
-        #[case] git_provider: GitProvider,
         #[case] url_kind: &str,
         #[case] commit_hash: &str,
         #[case] file_path: &str,
@@ -227,22 +207,62 @@ mod tests {
     ) {
         let mut repo_url = initial_repo_url.to_string();
         let current_buffer_path = Path::new(file_path);
-        let selection = {
-            use ytil_noxi::visual_selection::SelectionBounds;
+        let selection = dummy_selection(start, end);
 
-            let bounds = SelectionBounds { buf_id: 1, start, end };
-            Selection::new(bounds, std::iter::empty::<nvim_oxi::String>())
-        };
-
-        build_file_url(
-            &mut repo_url,
-            &git_provider,
-            url_kind,
-            commit_hash,
-            current_buffer_path,
-            &selection,
-        );
+        build_github_file_url(&mut repo_url, url_kind, commit_hash, current_buffer_path, &selection);
 
         pretty_assertions::assert_eq!(repo_url, expected);
+    }
+
+    #[rstest]
+    #[case::single_line_selection(
+        "https://gitlab.com/user/repo",
+        "blob",
+        "abc123",
+        "/src/main.rs",
+        Bound { lnum: 10, col: 5 },
+        Bound { lnum: 10, col: 10 },
+        "https://gitlab.com/user/repo/-/blob/abc123/src/main.rs#L11-11"
+    )]
+    #[case::multi_line_selection(
+        "https://gitlab.com/user/repo",
+        "blob",
+        "def456",
+        "/lib/utils.rs",
+        Bound { lnum: 1, col: 0 },
+        Bound { lnum: 3, col: 20 },
+        "https://gitlab.com/user/repo/-/blob/def456/lib/utils.rs#L2-4"
+    )]
+    #[case::root_file(
+        "https://gitlab.com/user/repo",
+        "tree",
+        "ghi789",
+        "/README.md",
+        Bound { lnum: 5, col: 2 },
+        Bound { lnum: 5, col: 2 },
+        "https://gitlab.com/user/repo/-/tree/ghi789/README.md#L6-6"
+    )]
+    fn build_gitlab_file_url_works_as_expected(
+        #[case] initial_repo_url: &str,
+        #[case] url_kind: &str,
+        #[case] commit_hash: &str,
+        #[case] file_path: &str,
+        #[case] start: Bound,
+        #[case] end: Bound,
+        #[case] expected: &str,
+    ) {
+        let mut repo_url = initial_repo_url.to_string();
+        let current_buffer_path = Path::new(file_path);
+        let selection = dummy_selection(start, end);
+
+        build_gitlab_file_url(&mut repo_url, url_kind, commit_hash, current_buffer_path, &selection);
+
+        pretty_assertions::assert_eq!(repo_url, expected);
+    }
+
+    fn dummy_selection(start: Bound, end: Bound) -> Selection {
+        use ytil_noxi::visual_selection::SelectionBounds;
+        let bounds = SelectionBounds { buf_id: 1, start, end };
+        Selection::new(bounds, std::iter::empty::<nvim_oxi::String>())
     }
 }
