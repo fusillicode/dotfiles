@@ -5,8 +5,8 @@ use crate::templates::filters;
 
 #[derive(Template)]
 #[template(path = "pages/index.html")]
-pub struct IndexPage<'a> {
-    pub crates: &'a [CrateMeta],
+pub struct IndexPage {
+    pub crates: Vec<CrateMeta>,
     pub footer: Footer,
 }
 
