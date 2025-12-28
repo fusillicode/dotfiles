@@ -181,21 +181,32 @@ impl ToObject for TokenUnderCursor {
 /// 3. Falls back to [`TokenUnderCursor::MaybeTextFile`] on errors or unknown kinds.
 impl TokenUnderCursor {
     fn classify(value: &str) -> color_eyre::Result<Self> {
-        let value = value.trim_matches('"').trim_matches('`').trim_matches('\'').to_string();
-
-        if Url::parse(&value).is_ok() {
-            return Ok(Self::Url(value));
-        }
-
-        Self::classify_not_url(value)
+        Self::classify_url(value).or_else(|_| Self::classify_not_url(value))
     }
 
-    fn classify_not_url(value: String) -> color_eyre::Result<Self> {
+    fn classify_url(value: &str) -> color_eyre::Result<Self> {
+        let value = value
+            .trim_matches('"')
+            .trim_matches('`')
+            .trim_matches('\'')
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .trim_start_matches('(')
+            .trim_end_matches(')')
+            .trim_start_matches('{')
+            .trim_end_matches('}');
+
+        let maybe_md_link = extract_markdown_link(value).unwrap_or(value);
+
+        Ok(Url::parse(maybe_md_link).map(|_| Self::Url(maybe_md_link.to_string()))?)
+    }
+
+    fn classify_not_url(value: &str) -> color_eyre::Result<Self> {
         let mut parts = value.split(':');
 
         let Some(maybe_path) = parts.next() else {
             return Ok(Self::MaybeTextFile {
-                value,
+                value: value.to_string(),
                 lnum: None,
                 col: None,
             });
@@ -238,7 +249,7 @@ impl TokenUnderCursor {
                 tmp
             };
 
-            return Self::classify_not_url(maybe_path);
+            return Self::classify_not_url(&maybe_path);
         }
         Ok(self.clone())
     }
@@ -293,6 +304,16 @@ fn convert_visual_to_byte_idx(s: &str, idx: usize) -> Option<usize> {
         return Some(s.len());
     }
     None
+}
+
+fn extract_markdown_link(input: &str) -> Option<&str> {
+    let mid_idx = input.find("](")?;
+    let url_start = mid_idx.saturating_add(2);
+
+    input.get(url_start..)?.find(')').map_or_else(
+        || input.get(url_start..),
+        |end_relative| input.get(url_start..url_start.saturating_add(end_relative)),
+    )
 }
 
 #[cfg(test)]
@@ -500,5 +521,44 @@ mod tests {
                 col: Some(5)
             }
         );
+    }
+
+    #[rstest]
+    #[case("https://example.com", "https://example.com")]
+    #[case("\"https://example.com\"", "https://example.com")]
+    #[case("`https://example.com`", "https://example.com")]
+    #[case("'https://example.com'", "https://example.com")]
+    #[case("{https://example.com}", "https://example.com")]
+    #[case("(https://example.com)", "https://example.com")]
+    #[case("[text](https://example.com)", "https://example.com")]
+    #[case("[[text]](https://example.com)", "https://example.com")]
+    fn classify_url_returns_the_token_url_under_curos(#[case] input: &str, #[case] expected_value: &str) {
+        assert2::let_assert!(Ok(actual) = TokenUnderCursor::classify_url(input));
+        pretty_assertions::assert_eq!(actual, TokenUnderCursor::Url(expected_value.to_string()));
+    }
+
+    #[rstest]
+    #[case("not a url")]
+    #[case("https://example.com extra")]
+    #[case("[text](noturl)")]
+    fn classify_url_when_cannot_classify_url_returns_the_expected_error(#[case] input: &str) {
+        assert2::let_assert!(Err(err) = TokenUnderCursor::classify_url(input));
+        assert!(err.downcast_ref::<url::ParseError>().is_some());
+    }
+
+    #[rstest]
+    #[case("[hello](world)", Some("world"))]
+    #[case("[hello world](https://example.com)", Some("https://example.com"))]
+    #[case("[text](url with spaces)", Some("url with spaces"))]
+    #[case("[a](1)[b](2)", Some("1"))]
+    #[case("[hello]()", Some(""))]
+    #[case("[hello](world", Some("world"))]
+    #[case("hello](world)", Some("world"))]
+    #[case("hello](world", Some("world"))]
+    #[case("no link", None)]
+    #[case("[incomplete", None)]
+    #[case("](empty)", Some("empty"))]
+    fn extract_markdown_link_works_as_expected(#[case] input: &str, #[case] expected: Option<&str>) {
+        pretty_assertions::assert_eq!(extract_markdown_link(input), expected);
     }
 }
