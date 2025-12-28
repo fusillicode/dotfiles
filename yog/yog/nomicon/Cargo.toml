@@ -15,7 +15,7 @@ build = "build.rs"
 ignored = ["lightningcss"]
 
 [dependencies]
-askama = { version = "0.14" }
+askama = { version = "0.15" }
 chrono = { workspace = true }
 color-eyre = { workspace = true }
 ytil_cmd = { workspace = true }
