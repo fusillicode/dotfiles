@@ -5,11 +5,8 @@
 //! The generated URL is automatically copied to the system clipboard.
 
 use std::path::Path;
-use std::path::PathBuf;
 
-use color_eyre::eyre::ContextCompat;
 use nvim_oxi::Dictionary;
-use ytil_git::Repository;
 use ytil_git::remote::GitProvider;
 use ytil_noxi::visual_selection::Bound;
 use ytil_noxi::visual_selection::Selection;
@@ -26,16 +23,22 @@ pub fn dict() -> Dictionary {
 fn get_link((link_type, open): (String, Option<bool>)) -> Option<()> {
     let selection = ytil_noxi::visual_selection::get(())?;
 
-    let repo = ytil_git::discover_repo(Path::new("."))
+    let repo = ytil_git::repo::discover(Path::new("."))
         .inspect_err(|err| {
             ytil_noxi::notify::error(err);
         })
         .ok()?;
 
-    let current_buffer_path = get_current_buffer_relative_path(&repo)
-        .inspect_err(|err| {
-            ytil_noxi::notify::error(err);
+    let cur_buf = nvim_oxi::api::get_current_buf();
+    let abs_buf_path = ytil_noxi::buffer::get_absolute_path(Some(&cur_buf))
+        .ok_or_else(|| {
+            ytil_noxi::notify::error(format!(
+                "error getting absolute path for current_buffer | current_buffer={cur_buf:?}"
+            ));
         })
+        .ok()?;
+    let current_buffer_path = ytil_git::repo::get_relative_path_to_repo(&abs_buf_path, &repo)
+        .inspect_err(|err| ytil_noxi::notify::error(err))
         .ok()?;
 
     let repo_urls = ytil_git::remote::get_https_urls(&repo)
@@ -93,19 +96,6 @@ fn get_link((link_type, open): (String, Option<bool>)) -> Option<()> {
     }
 
     Some(())
-}
-
-fn get_current_buffer_relative_path(repo: &Repository) -> color_eyre::Result<PathBuf> {
-    let cur_buf = nvim_oxi::api::get_current_buf();
-    let abs_buf_path = ytil_noxi::buffer::get_absolute_path(Some(&cur_buf))
-        .wrap_err_with(|| format!("error getting absolute path for current_buffer | current_buffer={cur_buf:?}"))?;
-    let repo_workdir = repo.workdir().wrap_err_with(|| {
-        format!(
-            "error getting repository working directory | repo={:?}",
-            repo.path().display()
-        )
-    })?;
-    Ok(Path::new("/").join(abs_buf_path.strip_prefix(repo_workdir)?))
 }
 
 fn build_file_url(

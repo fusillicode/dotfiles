@@ -32,7 +32,7 @@ use ytil_cmd::CmdExt as _;
 /// - If the branch name cannot be extracted from the reference target.
 pub fn get_default() -> color_eyre::Result<String> {
     let repo_path = Path::new(".");
-    let repo = crate::discover_repo(repo_path).wrap_err_with(|| {
+    let repo = crate::repo::discover(repo_path).wrap_err_with(|| {
         eyre!(
             "error getting repo for getting default branch | path={}",
             repo_path.display()
@@ -66,7 +66,7 @@ pub fn get_default() -> color_eyre::Result<String> {
 /// - Provide enum distinguishing detached state instead of error.
 pub fn get_current() -> color_eyre::Result<String> {
     let repo_path = Path::new(".");
-    let repo = crate::discover_repo(repo_path).wrap_err_with(|| {
+    let repo = crate::repo::discover(repo_path).wrap_err_with(|| {
         eyre!(
             "error getting repo for getting current branch | path={}",
             repo_path.display()
@@ -111,7 +111,7 @@ pub fn create_from_default_branch(branch_name: &str, repo: Option<&Repository>) 
         repo
     } else {
         let path = Path::new(".");
-        &crate::discover_repo(path).wrap_err_with(|| {
+        &crate::repo::discover(path).wrap_err_with(|| {
             eyre!(
                 "error getting repo for creating new branch | path={} branch={branch_name:?}",
                 path.display()
@@ -153,7 +153,7 @@ pub fn push(branch_name: &str, repo: Option<&Repository>) -> color_eyre::Result<
         repo
     } else {
         let path = Path::new(".");
-        &crate::discover_repo(path).wrap_err_with(|| {
+        &crate::repo::discover(path).wrap_err_with(|| {
             eyre!(
                 "error getting repo for pushing new branch | path={} branch={branch_name:?}",
                 path.display()
@@ -221,7 +221,7 @@ pub fn switch(branch_name: &str) -> Result<(), Box<CmdError>> {
 /// - Converting the committer timestamp into a [`DateTime`] fails.
 pub fn get_all() -> color_eyre::Result<Vec<Branch>> {
     let repo_path = Path::new(".");
-    let repo = crate::discover_repo(repo_path)
+    let repo = crate::repo::discover(repo_path)
         .wrap_err_with(|| eyre!("error getting repo for getting branches | path={}", repo_path.display()))?;
 
     fetch(&[]).wrap_err_with(|| eyre!("error fetching branches"))?;
@@ -270,7 +270,7 @@ pub fn get_all_no_redundant() -> color_eyre::Result<Vec<Branch>> {
 /// - Performing `git fetch` for the requested branches fails.
 pub fn fetch(branches: &[&str]) -> color_eyre::Result<()> {
     let repo_path = Path::new(".");
-    let repo = crate::discover_repo(repo_path).wrap_err_with(|| {
+    let repo = crate::repo::discover(repo_path).wrap_err_with(|| {
         eyre!(
             "error getting repo for fetching branches | path={} branches={branches:?}",
             repo_path.display()

@@ -151,7 +151,7 @@ pub fn get_branch_name_from_url(url: &Url) -> color_eyre::Result<String> {
 /// - A remote cannot be resolved.
 /// - A remote URL is invalid UTF-8.
 pub fn get_repo_urls(repo_path: &Path) -> color_eyre::Result<Vec<Url>> {
-    let repo = ytil_git::discover_repo(repo_path)
+    let repo = ytil_git::repo::discover(repo_path)
         .wrap_err_with(|| eyre!("error opening repo | path={}", repo_path.display()))?;
     let mut repo_urls = vec![];
     for remote_name in repo.remotes()?.iter().flatten() {

@@ -469,7 +469,7 @@ fn main() -> color_eyre::Result<()> {
 
     let workspace_root = ytil_sys::dir::get_workspace_root()?;
 
-    let repo = ytil_git::discover_repo(&workspace_root)?;
+    let repo = ytil_git::repo::discover(&workspace_root)?;
     let changed_paths = repo
         .statuses(None)?
         .iter()

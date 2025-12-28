@@ -118,7 +118,7 @@ fn main() -> color_eyre::Result<()> {
         )
     })?)?;
 
-    let git_repo_root_path = Arc::new(ytil_git::get_repo_root(&ytil_git::discover_repo(
+    let git_repo_root_path = Arc::new(ytil_git::repo::get_root(&ytil_git::repo::discover(
         &hx_status_line.file_path,
     )?));
 

@@ -22,37 +22,7 @@ use ytil_cmd::CmdExt as _;
 pub mod branch;
 pub mod diff;
 pub mod remote;
-
-/// Discover the Git repository containing `path`.
-///
-/// Wrapper over [`git2::Repository::discover`]. Walks parent directories upward until a repo
-/// root is found.
-///
-/// # Arguments
-/// - `path` Starting filesystem path (file or directory) inside the repo.
-///
-/// # Returns
-/// Open [`Repository`].
-///
-/// # Errors
-/// - Not inside a Git repository (discovery fails).
-///
-/// # Future Work
-/// - Accept an option to disallow bare repositories.
-pub fn discover_repo(path: &Path) -> color_eyre::Result<Repository> {
-    Repository::discover(path).wrap_err_with(|| eyre!("error discovering repo | path={}", path.display()))
-}
-
-/// Absolute working tree root path for repository
-///
-/// Derived from [`Repository::commondir`] with any trailing `.git` removed (non‑bare repos).
-/// Bare repositories return their directory path unchanged.
-pub fn get_repo_root(repo: &Repository) -> PathBuf {
-    repo.commondir()
-        .components()
-        .filter(|c| c.as_os_str() != ".git")
-        .collect()
-}
+pub mod repo;
 
 /// Enumerate combined staged + unstaged status entries.
 ///
@@ -76,8 +46,9 @@ pub fn get_repo_root(repo: &Repository) -> PathBuf {
 /// - Parameterize repo path instead of implicit current directory.
 /// - Expose performance metrics (count, timing) for diagnostics.
 pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
-    let repo = discover_repo(Path::new(".")).wrap_err_with(|| eyre!("error getting repo | operation=status"))?;
-    let repo_root = get_repo_root(&repo);
+    let repo =
+        crate::repo::discover(Path::new(".")).wrap_err_with(|| eyre!("error getting repo | operation=status"))?;
+    let repo_root = crate::repo::get_root(&repo);
 
     let mut opts = StatusOptions::default();
     opts.include_untracked(true);
