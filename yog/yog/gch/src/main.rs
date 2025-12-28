@@ -25,7 +25,7 @@
 //! - File / directory removal for new entries fails.
 //! - Unstaging new index entries via [`ytil_git::unstage`] fails.
 //! - Restore command construction / execution via [`ytil_git::restore`] fails.
-//! - Opening repository via [`ytil_git::discover_repo`] or adding paths to index via [`ytil_git::add_to_index`] fails.
+//! - Opening repository via [`ytil_git::repo::discover`] or adding paths to index via [`ytil_git::add_to_index`] fails.
 //!
 //! # Rationale
 //! - Delegates semantics to porcelain (`git restore`, `git add`) to inherit nuanced Git behavior.
@@ -214,10 +214,10 @@ fn restore_entries(entries: &[&GitStatusEntry], branch: Option<&str>) -> color_e
 /// - `entries` Selected Git entries.
 ///
 /// # Errors
-/// - Opening the repository via [`ytil_git::discover_repo`] fails.
+/// - Opening the repository via [`ytil_git::repo::discover`] fails.
 /// - Adding any path to the index via [`ytil_git::add_to_index`] fails.
 fn add_entries(entries: &[&GitStatusEntry]) -> color_eyre::Result<()> {
-    let mut repo = ytil_git::discover_repo(Path::new("."))?;
+    let mut repo = ytil_git::repo::discover(Path::new("."))?;
     ytil_git::add_to_index(&mut repo, entries.iter().map(|entry| entry.path.as_path()))?;
     for entry in entries {
         println!("{} {}", "Added".green().bold(), entry.path.display());
@@ -234,7 +234,7 @@ fn add_entries(entries: &[&GitStatusEntry]) -> color_eyre::Result<()> {
 /// - File / directory removal for new entries fails.
 /// - Unstaging new index entries via [`ytil_git::unstage`] fails.
 /// - Restore command construction / execution via [`ytil_git::restore`] fails.
-/// - Opening repository via [`ytil_git::discover_repo`] or adding paths to index via [`ytil_git::add_to_index`] fails.
+/// - Opening repository via [`ytil_git::repo::discover`] or adding paths to index via [`ytil_git::add_to_index`] fails.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
