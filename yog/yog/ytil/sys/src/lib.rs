@@ -129,7 +129,7 @@ impl FromStr for Arch {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value.to_lowercase().as_str() {
             "x86_64" => Ok(Self::X86),
-            "arm" => Ok(Self::Arm),
+            "arm64" => Ok(Self::Arm),
             normalized_value => {
                 bail!(
                     "error unknown normalized arch value | value={value:?} normalized_value={normalized_value:?} value={value:?} "
@@ -147,9 +147,9 @@ mod tests {
 
     #[rstest]
     #[case("x86_64", Arch::X86)]
-    #[case("arm", Arch::Arm)]
+    #[case("arm64", Arch::Arm)]
     #[case("X86_64", Arch::X86)]
-    #[case("ARM", Arch::Arm)]
+    #[case("ARM64", Arch::Arm)]
     fn arch_from_str_when_valid_input_returns_expected_arch(#[case] input: &str, #[case] expected: Arch) {
         let result = Arch::from_str(input);
         assert2::let_assert!(Ok(arch) = result);
