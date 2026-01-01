@@ -34,22 +34,20 @@ pub fn join<T>(join_handle: JoinHandle<color_eyre::Result<T>>) -> Result<T, eyre
         .map_err(|err| eyre!("error joining handle | error={err:#?}"))?
 }
 
-/// Opens the given argument using the system's default opener.
+/// Opens the given argument using the system's default app ("open").
 ///
-/// # Arguments
-/// - `arg` The argument to open (e.g., URL, or file path).
-///
-/// # Returns
-/// Returns `Ok(())` if the command executes successfully.
+/// # Rationale
+/// The argument passed to the "open" command is naively wrapped with ''
+/// to avoid failures in case of URLs with & or other shell sensitive
+/// characters.
 ///
 /// # Errors
-/// - The `open` command fails to execute.
-/// - The `open` command exits with a non-zero status.
+/// - If the `open` command exits with a non-zero status.
 pub fn open(arg: &str) -> color_eyre::Result<()> {
     let cmd = "open";
     Command::new("sh")
         .arg("-c")
-        .arg(format!("{cmd} {arg}"))
+        .arg(format!("{cmd} '{arg}'"))
         .status()
         .wrap_err_with(|| eyre!("error running cmd | cmd={cmd:?} arg={arg:?}"))?
         .exit_ok()
