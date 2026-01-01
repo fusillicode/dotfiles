@@ -2,7 +2,9 @@ allow-unwrap-in-tests = true
 allowed-duplicate-crates = [
   "bitflags",
   "convert_case",
+  "core-foundation",
   "getrandom",
+  "openssl-probe",
   "thiserror",
   "thiserror-impl",
   "wasi",
