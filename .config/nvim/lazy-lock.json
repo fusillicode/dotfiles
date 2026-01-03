@@ -2,7 +2,6 @@
   "blink-cmp-words": { "branch": "main", "commit": "d6a56f532a1826b4f3aeed4d5e2fe7b8743a9244" },
   "blink.cmp": { "branch": "main", "commit": "10c164bbdf065f9781b6cc2f7d068c016276055b" },
   "blink.compat": { "branch": "main", "commit": "2ed6d9a28b07fa6f3bface818470605f8896408c" },
-  "close-buffers.nvim": { "branch": "master", "commit": "3acbcad1211572342632a6c0151f839e7dead27f" },
   "conform.nvim": { "branch": "master", "commit": "8314f4c9e205e7f30b62147069729f9a1227d8bf" },
   "crates.nvim": { "branch": "main", "commit": "ac9fa498a9edb96dc3056724ff69d5f40b898453" },
   "fidget.nvim": { "branch": "main", "commit": "64463022a1f2ff1318ab22a2ea4125ed9313a483" },

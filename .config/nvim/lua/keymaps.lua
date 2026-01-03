@@ -20,8 +20,10 @@ function M.set_lua_defined()
   keymap_set({ 'n', 'v', 'i', 't', }, '<c-s>', function() nvrim.layout.focus_term(30) end)
   keymap_set({ 'n', 'v', 'i', 't', }, '<c-h>', function() nvrim.layout.focus_buffer(70) end)
   keymap_set({ 'n', 'v', }, 'ga', nvrim.layout.toggle_alternate_buffer)
-  keymap_set({ 'n', 'v', }, '<leader>x', function() nvrim.layout.smart_close_buffer() end)
+  keymap_set({ 'n', 'v', }, '<leader>x', nvrim.layout.smart_close_buffer)
   keymap_set({ 'n', 'v', }, '<leader>X', function() nvrim.layout.smart_close_buffer(true) end)
+  keymap_set({ 'n', 'v', }, '<leader>o', nvrim.plugins.clotherbufs.close_other_buffers)
+  keymap_set({ 'n', 'v', }, '<leader>O', function() nvrim.plugins.clotherbufs.close_other_buffers(true) end)
 
   local min_diag_level = vim.diagnostic.severity.ERROR
   keymap_set('n', 'dn', function() vim.diagnostic.jump({ count = 1, severity = min_diag_level, }) end)
@@ -92,13 +94,6 @@ end
 function M.oil(plugin)
   return {
     { '<leader>F', mode = 'n', plugin and { ':Oil --float<cr>', }, },
-  }
-end
-
-function M.close_buffers(plugin)
-  return {
-    { '<leader>o', mode = 'n', plugin and { function() plugin.wipe({ type = 'other', }) end, }, },
-    { '<leader>O', mode = 'n', plugin and { function() plugin.wipe({ type = 'other', force = true, }) end, }, },
   }
 end
 

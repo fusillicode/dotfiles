@@ -20,6 +20,15 @@ pub struct MruBuffer {
     pub kind: BufferKind,
 }
 
+impl MruBuffer {
+    pub const fn is_term(&self) -> bool {
+        match self.kind {
+            BufferKind::Term => true,
+            BufferKind::GrugFar | BufferKind::Path | BufferKind::NoName => false,
+        }
+    }
+}
+
 impl From<&MruBuffer> for Buffer {
     fn from(value: &MruBuffer) -> Self {
         Self::from(value.id)

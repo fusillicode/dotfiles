@@ -6,6 +6,7 @@ use nvim_oxi::Dictionary;
 mod attempt;
 /// Case conversion.
 mod caseconv;
+pub mod clotherbufs;
 /// Random string generation via the [`fkr`] crate.
 mod fkr;
 /// Git diff line selection.
@@ -28,6 +29,7 @@ pub fn dict() -> Dictionary {
     dict! {
         "attempt": attempt::dict(),
         "caseconv": caseconv::dict(),
+        "clotherbufs": clotherbufs::dict(),
         "fkr": fkr::dict(),
         "gdiff": gdiff::dict(),
         "genconv": genconv::dict(),
