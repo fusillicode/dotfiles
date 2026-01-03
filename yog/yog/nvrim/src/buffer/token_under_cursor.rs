@@ -196,7 +196,9 @@ impl TokenUnderCursor {
             .trim_start_matches('{')
             .trim_end_matches('}');
 
-        let maybe_md_link = extract_markdown_link(value).unwrap_or(value);
+        let maybe_md_link = extract_markdown_link(value)
+            .or_else(|| extract_https_or_http_link(value))
+            .unwrap_or(value);
 
         Ok(Url::parse(maybe_md_link).map(|_| Self::Url(maybe_md_link.to_string()))?)
     }
@@ -308,12 +310,28 @@ fn convert_visual_to_byte_idx(s: &str, idx: usize) -> Option<usize> {
 
 fn extract_markdown_link(input: &str) -> Option<&str> {
     let mid_idx = input.find("](")?;
-    let url_start = mid_idx.saturating_add(2);
+    let start_idx = mid_idx.saturating_add(2);
 
-    input.get(url_start..)?.find(')').map_or_else(
-        || input.get(url_start..),
-        |end_relative| input.get(url_start..url_start.saturating_add(end_relative)),
+    input.get(start_idx..)?.find(')').map_or_else(
+        || input.get(start_idx..),
+        |end_relative| input.get(start_idx..start_idx.saturating_add(end_relative)),
     )
+}
+
+fn extract_https_or_http_link(input: &str) -> Option<&str> {
+    let start_idx = match (input.find("https://"), input.find("http://")) {
+        (None, None) => None,
+        (None, Some(start_idx)) | (Some(start_idx), None) => Some(start_idx),
+        (Some(start_https_idx), Some(start_http_idx)) => Some(if start_https_idx <= start_http_idx {
+            start_https_idx
+        } else {
+            start_http_idx
+        }),
+    }?;
+    if let Some(end_idx) = input.find(" ") {
+        return input.get(start_idx..end_idx);
+    }
+    input.get(start_idx..)
 }
 
 #[cfg(test)]
@@ -525,6 +543,7 @@ mod tests {
 
     #[rstest]
     #[case("https://example.com", "https://example.com")]
+    #[case("http://example.com", "http://example.com")]
     #[case("\"https://example.com\"", "https://example.com")]
     #[case("`https://example.com`", "https://example.com")]
     #[case("'https://example.com'", "https://example.com")]
@@ -532,6 +551,10 @@ mod tests {
     #[case("(https://example.com)", "https://example.com")]
     #[case("[text](https://example.com)", "https://example.com")]
     #[case("[[text]](https://example.com)", "https://example.com")]
+    #[case("https://example.com extra", "https://example.com")]
+    #[case("http://example.com with text", "http://example.com")]
+    #[case("(http://example.com)", "http://example.com")]
+    #[case("`http://example.com`", "http://example.com")]
     fn classify_url_returns_the_token_url_under_curos(#[case] input: &str, #[case] expected_value: &str) {
         assert2::let_assert!(Ok(actual) = TokenUnderCursor::classify_url(input));
         pretty_assertions::assert_eq!(actual, TokenUnderCursor::Url(expected_value.to_string()));
@@ -539,8 +562,8 @@ mod tests {
 
     #[rstest]
     #[case("not a url")]
-    #[case("https://example.com extra")]
     #[case("[text](noturl)")]
+    #[case("https://invalid url")]
     fn classify_url_when_cannot_classify_url_returns_the_expected_error(#[case] input: &str) {
         assert2::let_assert!(Err(err) = TokenUnderCursor::classify_url(input));
         assert!(err.downcast_ref::<url::ParseError>().is_some());
@@ -560,5 +583,21 @@ mod tests {
     #[case("](empty)", Some("empty"))]
     fn extract_markdown_link_works_as_expected(#[case] input: &str, #[case] expected: Option<&str>) {
         pretty_assertions::assert_eq!(extract_markdown_link(input), expected);
+    }
+
+    #[rstest]
+    #[case("https://example.com", Some("https://example.com"))]
+    #[case("http://site.org", Some("http://site.org"))]
+    #[case("https://example.com with text", Some("https://example.com"))]
+    #[case("http://site.org more", Some("http://site.org"))]
+    #[case("text https://example.com", None)]
+    #[case("no link here", None)]
+    #[case("https://first.com https://second.com", Some("https://first.com"))]
+    #[case("http://a.com https://b.com", Some("http://a.com"))]
+    #[case("https://a.com http://b.com", Some("https://a.com"))]
+    #[case("https://example.com/path?query=value", Some("https://example.com/path?query=value"))]
+    #[case("https://example.com:8080", Some("https://example.com:8080"))]
+    fn extract_https_or_http_link_scenarios(#[case] input: &str, #[case] expected: Option<&str>) {
+        pretty_assertions::assert_eq!(extract_https_or_http_link(input), expected);
     }
 }
