@@ -181,21 +181,34 @@ impl ToObject for TokenUnderCursor {
 /// 3. Falls back to [`TokenUnderCursor::MaybeTextFile`] on errors or unknown kinds.
 impl TokenUnderCursor {
     fn classify(value: &str) -> color_eyre::Result<Self> {
-        let value = value.trim_matches('"').trim_matches('`').trim_matches('\'').to_string();
-
-        if Url::parse(&value).is_ok() {
-            return Ok(Self::Url(value));
-        }
-
-        Self::classify_not_url(value)
+        Self::classify_url(value).or_else(|_| Self::classify_not_url(value))
     }
 
-    fn classify_not_url(value: String) -> color_eyre::Result<Self> {
+    fn classify_url(value: &str) -> color_eyre::Result<Self> {
+        let value = value
+            .trim_matches('"')
+            .trim_matches('`')
+            .trim_matches('\'')
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .trim_start_matches('(')
+            .trim_end_matches(')')
+            .trim_start_matches('{')
+            .trim_end_matches('}');
+
+        let maybe_md_link = extract_markdown_link(value)
+            .or_else(|| extract_https_or_http_link(value))
+            .unwrap_or(value);
+
+        Ok(Url::parse(maybe_md_link).map(|_| Self::Url(maybe_md_link.to_string()))?)
+    }
+
+    fn classify_not_url(value: &str) -> color_eyre::Result<Self> {
         let mut parts = value.split(':');
 
         let Some(maybe_path) = parts.next() else {
             return Ok(Self::MaybeTextFile {
-                value,
+                value: value.to_string(),
                 lnum: None,
                 col: None,
             });
@@ -238,7 +251,7 @@ impl TokenUnderCursor {
                 tmp
             };
 
-            return Self::classify_not_url(maybe_path);
+            return Self::classify_not_url(&maybe_path);
         }
         Ok(self.clone())
     }
@@ -293,6 +306,33 @@ fn convert_visual_to_byte_idx(s: &str, idx: usize) -> Option<usize> {
         return Some(s.len());
     }
     None
+}
+
+fn extract_markdown_link(input: &str) -> Option<&str> {
+    let mid_idx = input.find("](")?;
+    let start_idx = mid_idx.saturating_add(2);
+
+    input.get(start_idx..)?.find(')').map_or_else(
+        || input.get(start_idx..),
+        |end_relative| input.get(start_idx..start_idx.saturating_add(end_relative)),
+    )
+}
+
+#[allow(clippy::similar_names)]
+fn extract_https_or_http_link(input: &str) -> Option<&str> {
+    let start_idx = match (input.find("https://"), input.find("http://")) {
+        (None, None) => None,
+        (None, Some(start_idx)) | (Some(start_idx), None) => Some(start_idx),
+        (Some(start_https_idx), Some(start_http_idx)) => Some(if start_https_idx <= start_http_idx {
+            start_https_idx
+        } else {
+            start_http_idx
+        }),
+    }?;
+    if let Some(end_idx) = input.find(' ') {
+        return input.get(start_idx..end_idx);
+    }
+    input.get(start_idx..)
 }
 
 #[cfg(test)]
@@ -500,5 +540,64 @@ mod tests {
                 col: Some(5)
             }
         );
+    }
+
+    #[rstest]
+    #[case("https://example.com", "https://example.com")]
+    #[case("http://example.com", "http://example.com")]
+    #[case("\"https://example.com\"", "https://example.com")]
+    #[case("`https://example.com`", "https://example.com")]
+    #[case("'https://example.com'", "https://example.com")]
+    #[case("{https://example.com}", "https://example.com")]
+    #[case("(https://example.com)", "https://example.com")]
+    #[case("[text](https://example.com)", "https://example.com")]
+    #[case("[[text]](https://example.com)", "https://example.com")]
+    #[case("https://example.com extra", "https://example.com")]
+    #[case("http://example.com with text", "http://example.com")]
+    #[case("(http://example.com)", "http://example.com")]
+    #[case("`http://example.com`", "http://example.com")]
+    fn classify_url_returns_the_token_url_under_curos(#[case] input: &str, #[case] expected_value: &str) {
+        assert2::let_assert!(Ok(actual) = TokenUnderCursor::classify_url(input));
+        pretty_assertions::assert_eq!(actual, TokenUnderCursor::Url(expected_value.to_string()));
+    }
+
+    #[rstest]
+    #[case("not a url")]
+    #[case("[text](noturl)")]
+    fn classify_url_when_cannot_classify_url_returns_the_expected_error(#[case] input: &str) {
+        assert2::let_assert!(Err(err) = TokenUnderCursor::classify_url(input));
+        assert!(err.downcast_ref::<url::ParseError>().is_some());
+    }
+
+    #[rstest]
+    #[case("[hello](world)", Some("world"))]
+    #[case("[hello world](https://example.com)", Some("https://example.com"))]
+    #[case("[text](url with spaces)", Some("url with spaces"))]
+    #[case("[a](1)[b](2)", Some("1"))]
+    #[case("[hello]()", Some(""))]
+    #[case("[hello](world", Some("world"))]
+    #[case("hello](world)", Some("world"))]
+    #[case("hello](world", Some("world"))]
+    #[case("no link", None)]
+    #[case("[incomplete", None)]
+    #[case("](empty)", Some("empty"))]
+    fn extract_markdown_link_works_as_expected(#[case] input: &str, #[case] expected: Option<&str>) {
+        pretty_assertions::assert_eq!(extract_markdown_link(input), expected);
+    }
+
+    #[rstest]
+    #[case("https://example.com", Some("https://example.com"))]
+    #[case("http://site.org", Some("http://site.org"))]
+    #[case("https://example.com with text", Some("https://example.com"))]
+    #[case("http://site.org more", Some("http://site.org"))]
+    #[case("text https://example.com", None)]
+    #[case("no link here", None)]
+    #[case("https://first.com https://second.com", Some("https://first.com"))]
+    #[case("http://a.com https://b.com", Some("http://a.com"))]
+    #[case("https://a.com http://b.com", Some("https://a.com"))]
+    #[case("https://example.com/path?query=value", Some("https://example.com/path?query=value"))]
+    #[case("https://example.com:8080", Some("https://example.com:8080"))]
+    fn extract_https_or_http_link_scenarios(#[case] input: &str, #[case] expected: Option<&str>) {
+        pretty_assertions::assert_eq!(extract_https_or_http_link(input), expected);
     }
 }
