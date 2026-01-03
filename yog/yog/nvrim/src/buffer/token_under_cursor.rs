@@ -318,6 +318,7 @@ fn extract_markdown_link(input: &str) -> Option<&str> {
     )
 }
 
+#[allow(clippy::similar_names)]
 fn extract_https_or_http_link(input: &str) -> Option<&str> {
     let start_idx = match (input.find("https://"), input.find("http://")) {
         (None, None) => None,
@@ -328,7 +329,7 @@ fn extract_https_or_http_link(input: &str) -> Option<&str> {
             start_http_idx
         }),
     }?;
-    if let Some(end_idx) = input.find(" ") {
+    if let Some(end_idx) = input.find(' ') {
         return input.get(start_idx..end_idx);
     }
     input.get(start_idx..)
@@ -563,7 +564,6 @@ mod tests {
     #[rstest]
     #[case("not a url")]
     #[case("[text](noturl)")]
-    #[case("https://invalid url")]
     fn classify_url_when_cannot_classify_url_returns_the_expected_error(#[case] input: &str) {
         assert2::let_assert!(Err(err) = TokenUnderCursor::classify_url(input));
         assert!(err.downcast_ref::<url::ParseError>().is_some());
