@@ -16,7 +16,6 @@
 //! - Exit condition parse fails.
 //! - Spawning or executing command fails.
 //! - UTF-8 conversion for output or error context fails.
-
 #![feature(exit_status_error)]
 
 use core::str::FromStr;

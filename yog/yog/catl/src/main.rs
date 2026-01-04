@@ -12,7 +12,6 @@
 //! - Fetching metadata for `<path>` fails.
 //! - Spawning or waiting on `cat` / `ls` fails.
 //! - Underlying command exits with non-zero status.
-
 #![feature(exit_status_error)]
 
 use std::process::Command;

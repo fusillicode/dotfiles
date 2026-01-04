@@ -52,7 +52,6 @@
 //! - Add dry‑run mode printing planned operations without executing.
 //! - Provide additional bulk actions (labeling, commenting).
 //! - Introduce structured logging (JSON) for automated auditing.
-
 #![feature(exit_status_error)]
 
 use core::fmt::Display;

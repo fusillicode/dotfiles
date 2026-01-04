@@ -12,7 +12,6 @@
 //! - Multiple or zero GitHub remotes detected.
 //! - Current branch lookup fails.
 //! - Invalid UTF-8 in paths or process output.
-
 #![feature(exit_status_error)]
 
 use core::str::FromStr;
