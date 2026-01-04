@@ -25,7 +25,6 @@
 //! - Installer thread panics.
 //! - Individual tool installation fails (installer reports detail).
 //! - Dead symlink cleanup fails.
-
 #![feature(exit_status_error)]
 
 use std::path::Path;

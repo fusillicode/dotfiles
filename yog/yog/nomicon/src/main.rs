@@ -7,7 +7,6 @@
 //! - Template rendering fails.
 //! - Writing output files or copying static assets fails.
 //! - UTF-8 conversion or metadata parsing fails.
-
 #![feature(exit_status_error)]
 
 use std::io::ErrorKind::NotFound;

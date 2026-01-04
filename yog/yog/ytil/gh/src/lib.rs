@@ -17,7 +17,6 @@
 //! - Less fine-grained control over rate limiting and retries.
 //! - Tight coupling to `gh` output flags (low churn historically, but still external).
 //! - Requires `gh` binary presence in runtime environments.
-
 #![feature(exit_status_error)]
 
 use std::path::Path;

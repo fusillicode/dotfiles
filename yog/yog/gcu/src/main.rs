@@ -25,7 +25,6 @@
 //!   [`ytil_git::branch::create_from_default_branch`] fails.
 //! - Interactive selection via [`ytil_tui::minimal_select`] or user confirmation input fails.
 //! - Current branch lookup via [`ytil_git::branch::get_current`] fails.
-
 #![feature(exit_status_error)]
 
 use std::io::Write;

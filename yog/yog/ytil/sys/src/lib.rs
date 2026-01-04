@@ -2,7 +2,6 @@
 //!
 //! Offer small utilities for CLI tools: joining thread handles, building home-relative paths,
 //! manipulating filesystem entries (chmod, symlinks, atomic copy) and clipboard integration.
-
 #![feature(exit_status_error)]
 
 use std::process::Command;

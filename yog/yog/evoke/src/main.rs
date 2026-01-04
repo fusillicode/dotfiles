@@ -17,7 +17,6 @@
 //! - Resolving required environment variables fails or yields invalid Unicode.
 //! - Running `cargo fmt`, `cargo clippy`, or `cargo build` fails.
 //! - Copying a binary or library fails.
-
 #![feature(exit_status_error)]
 
 use std::path::Path;
