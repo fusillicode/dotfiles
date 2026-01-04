@@ -35,9 +35,6 @@ pub struct QuickfixConfig {
 /// - `maybe_quickfix` Optional quickfix configuration; if provided, adds a choice to open the quickfix list with the
 ///   specified items.
 ///
-/// # Returns
-/// `Ok(())` if the selection succeeds.
-///
 /// # Errors
 /// - Fails if `vim.ui.select` cannot be fetched from Lua globals.
 /// - Fails if the options table cannot be created.

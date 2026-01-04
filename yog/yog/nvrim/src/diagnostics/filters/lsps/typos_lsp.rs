@@ -26,10 +26,6 @@ impl TyposLspFilter<'_> {
     /// Returns a vector of boxed [`DiagnosticsFilter`] configured for the typos
     /// language server. Includes a single [`TyposLspFilter`] that suppresses
     /// false-positive spelling suggestions matching predefined substrings.
-    ///
-    /// # Returns
-    /// - [`Vec<Box<dyn DiagnosticsFilter>>`] Collection containing one configured [`TyposLspFilter`] for the typos
-    ///   source.
     pub fn filters() -> Vec<Box<dyn DiagnosticsFilter>> {
         let blacklist = set![
             "accidentes",

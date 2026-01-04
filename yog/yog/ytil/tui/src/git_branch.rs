@@ -27,9 +27,6 @@ impl Display for RenderableBranch {
 
 /// Prompts the user to select a branch from all available branches.
 ///
-/// # Returns
-/// The selected [`Branch`] or [`None`] if no selection was made.
-///
 /// # Errors
 /// - If [`ytil_git::branch::get_all_no_redundant`] fails.
 /// - If [`crate::minimal_select`] fails.

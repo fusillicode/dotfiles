@@ -150,9 +150,6 @@ impl Display for Op {
 /// - `entries` Slice of status entries selected by the user (borrowed, not consumed).
 /// - `branch` Optional branch name; when `Some`, restore reads blobs from that branch.
 ///
-/// # Returns
-/// `Ok(())` if all deletions / unstaging / restore operations succeed.
-///
 /// # Errors
 /// - Removing a file or directory for a new entry fails (I/O error from `std::fs`).
 /// - Unstaging staged new entries via [`ytil_git::unstage`] fails.

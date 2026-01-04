@@ -64,9 +64,6 @@ pub trait Installer: Sync + Send {
 
     /// Execute install + optional check; emit status & per-phase timings.
     ///
-    /// # Returns
-    /// - `Ok(())` if install succeeded and (when performed) the check succeeded.
-    /// - `Err` if install failed or, after a successful install, the check failed.
     ///
     /// # Errors
     /// - Any error from [`Installer::install`].
@@ -152,9 +149,6 @@ pub trait SystemDependent {
 /// - `start` Instant captured immediately before install began.
 /// - `past_install` Instant captured immediately after a successful install phase.
 /// - `check` Optional duration of the check phase (if a check was executed).
-///
-/// # Returns
-/// - String formatted as `install_time=<dur> check_time=<dur|None> total_time=<dur>` consumed by status lines.
 ///
 /// # Rationale
 /// - Centralizes formatting logic to keep [`Installer::run`] concise and ensure consistent output shape.

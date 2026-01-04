@@ -51,9 +51,6 @@ pub enum RepoViewField {
 
 impl RepoViewField {
     /// Returns the jq representation of the field for GitHub CLI queries.
-    ///
-    /// # Returns
-    /// A string prefixed with `.` for use in jq expressions.
     pub fn jq_repr(&self) -> String {
         format!(".{}", self.as_ref())
     }
@@ -65,9 +62,6 @@ impl RepoViewField {
 ///
 /// # Arguments
 /// - `field` The repository field to retrieve.
-///
-/// # Returns
-/// The value of the requested field as a string.
 ///
 /// # Errors
 /// - Spawning or executing the `gh repo view` command fails.
@@ -85,9 +79,6 @@ pub fn get_repo_view_field(field: &RepoViewField) -> color_eyre::Result<String> 
 /// Ensures the user is authenticated with the GitHub CLI.
 ///
 /// Runs `gh auth status`; if not authenticated it invokes an interactive `gh auth login`.
-///
-/// # Returns
-/// Nothing on success.
 ///
 /// # Errors
 /// - Checking auth status fails.

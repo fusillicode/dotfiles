@@ -165,9 +165,6 @@ impl From<CursorPosition> for PointWrap {
     /// # Arguments
     /// - `row` 1-based row index from Nvim.
     /// - `column` 0-based column index from Nvim.
-    ///
-    /// # Returns
-    /// A [`PointWrap`] with 0-based row and column suitable for Tree-sitter.
     fn from(cursor_position: CursorPosition) -> Self {
         Self(Point {
             row: cursor_position.row.saturating_sub(1),

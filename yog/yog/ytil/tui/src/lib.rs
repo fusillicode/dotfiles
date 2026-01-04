@@ -28,12 +28,6 @@ pub mod git_branch;
 /// # Type Parameters
 /// - `T` The type of the options, constrained to implement [`Display`].
 ///
-/// # Returns
-/// - [`Result::Ok`] ([`Option::Some`] (selected)) A vector of the selected options if the user makes a non-empty
-///   selection.
-/// - [`Result::Ok`] ([`Option::None`]) If `opts` is empty, the user cancels the prompt, or the user selects no items.
-/// - [`Result::Err`] ([`InquireError`]) If rendering the prompt or handling terminal interaction fails.
-///
 /// # Errors
 /// - [`InquireError`]: Propagated from [`inquire`] for failures in prompt rendering or user interaction, excluding
 ///   cancellation which is handled as [`None`].
@@ -81,11 +75,6 @@ pub fn minimal_select<T: Display>(opts: Vec<T>) -> Result<Option<T>, InquireErro
 ///
 /// # Arguments
 /// - `message` The prompt message displayed to the user.
-///
-/// # Returns
-/// - [`Result::Ok`] ([`Option::Some`] (input)) If the user provides input.
-/// - [`Result::Ok`] ([`Option::None`]) If the user cancels or interrupts the prompt.
-/// - [`Result::Err`] ([`InquireError`]) If rendering the prompt or handling terminal interaction fails.
 ///
 /// # Errors
 /// - Rendering the prompt or terminal interaction inside [`inquire`] fails.

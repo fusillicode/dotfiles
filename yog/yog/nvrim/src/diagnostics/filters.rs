@@ -59,17 +59,11 @@ struct DiagnosticLocation {
 
 impl DiagnosticLocation {
     /// Returns the start position of the diagnostic as (line, column).
-    ///
-    /// # Returns
-    /// A tuple containing the 1-based line number and 0-based column number.
     pub const fn start(&self) -> (usize, usize) {
         (self.lnum, self.col)
     }
 
     /// Returns the end position of the diagnostic as (line, column).
-    ///
-    /// # Returns
-    /// A tuple containing the 1-based line number and 0-based column number.
     pub const fn end(&self) -> (usize, usize) {
         (self.end_lnum, self.end_col)
     }
@@ -82,9 +76,6 @@ impl TryFrom<&Dictionary> for DiagnosticLocation {
     ///
     /// # Arguments
     /// - `value` A reference to a [`Dictionary`] containing diagnostic location fields.
-    ///
-    /// # Returns
-    /// - `Ok(DiagnosticLocation)` if conversion succeeds and boundaries are consistent.
     ///
     /// # Errors
     /// - If required fields (`lnum`, `col`, `end_col`, `end_lnum`) are missing or invalid.

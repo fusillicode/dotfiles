@@ -31,9 +31,6 @@ pub fn dict() -> Dictionary {
 /// - The user cancels the prompt.
 /// - Writing the converted text back to the buffer fails (an error is reported via [`ytil_noxi::notify::error`]).
 ///
-/// # Returns
-/// Returns `()` upon successful completion.
-///
 /// # Errors
 /// Errors from [`ytil_noxi::vim_ui_select::open`] are reported via [`ytil_noxi::notify::error`]
 /// using the direct display representation of [`color_eyre::Report`].

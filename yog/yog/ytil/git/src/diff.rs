@@ -9,9 +9,6 @@ const PATH_LINE_PREFIX: &str = "diff --git ";
 
 /// Retrieves the current `git diff` raw output with `-U0` for fine-grained diffs as a [`Vec<String>`].
 ///
-/// # Returns
-/// A [`Vec<String>`] where each line corresponds to a line of `git diff` raw output.
-///
 /// # Errors
 /// - If the `git diff` command fails to execute or returns a non-zero exit code.
 /// - If extracting the output from the command fails.
@@ -37,9 +34,6 @@ pub fn get_raw(path: Option<&Path>) -> color_eyre::Result<Vec<String>> {
 ///
 /// # Arguments
 /// - `raw_diff_output` The lines of `git diff` output to parse.
-///
-/// # Returns
-/// A [`Vec<(&str, usize)>`] where each tuple contains a filepath and the starting line number of a hunk.
 ///
 /// # Errors
 /// - Missing path delimiter in the diff line.
@@ -98,9 +92,6 @@ pub fn get_hunks(raw_diff_output: &[String]) -> color_eyre::Result<Vec<(&str, us
 ///
 /// # Arguments
 /// - `lnum_line` The hunk header line (e.g., "@@ -42,7 +42,7 @@", "@@ -42,7 42,7 @@", "@@ -42,7 +42 @@").
-///
-/// # Returns
-/// The line number as a `usize` (e.g., 42).
 ///
 /// # Errors
 /// - If the hunk header line lacks sufficient space-separated parts.

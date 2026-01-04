@@ -24,9 +24,6 @@ pub struct ProcessDescription {
 /// # Arguments
 /// - `process_filter`The filter to apply to the lsof command.
 ///
-/// # Returns
-/// A list of process descriptions matching the filter.
-///
 /// # Errors
 /// - If the lsof command fails to execute.
 /// - If the lsof command exits with a non-zero status.

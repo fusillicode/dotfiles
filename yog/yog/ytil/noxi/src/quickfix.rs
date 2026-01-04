@@ -18,10 +18,6 @@ use crate::dict;
 /// # Arguments
 /// - `entries` Iterator yielding tuples containing filename and line number (1-based).
 ///
-/// # Returns
-/// `Ok(())` if the quickfix list is set and the window opens successfully.
-/// `Ok(())` without doing anything if no entries are provided.
-///
 /// # Errors
 /// - Fails if `setqflist` Neovim function call encounters an error.
 /// - Fails if `copen` command execution encounters an error.

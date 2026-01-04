@@ -41,9 +41,6 @@ pub trait BufferExt: Debug {
     /// - `strict_indexing` - If true, returns an error if any index in the range exceeds the buffer's line count; if
     ///   false, the range is clamped to valid bounds.
     ///
-    /// # Returns
-    /// An iterator over the lines in the specified range, as [`nvim_oxi::String`].
-    ///
     /// # Errors
     /// - If `strict_indexing` is true and the range is out of bounds.
     /// - If the Nvim API call to fetch lines fails.
@@ -65,9 +62,6 @@ pub trait BufferExt: Debug {
     /// - `start` (lnum, col) 0-based starting line and column (column is byte offset).
     /// - `end` (`end_lnum`, `end_col`) 0-based ending line and column (inclusive; column is byte offset).
     /// - `boundary` [`TextBoundary`] specifying how to handle line boundaries.
-    ///
-    /// # Returns
-    /// - `Ok(String)` with the extracted text, where lines are joined with "/n".
     ///
     /// # Errors
     /// - If substring extraction fails due to invalid indices.
@@ -107,10 +101,6 @@ pub trait BufferExt: Debug {
     /// Queries Nvim for the buffer type option and returns the value.
     /// Errors are handled internally by notifying Nvim and converting to `None`.
     ///
-    /// # Returns
-    /// - `Some(String)` The buffer type (e.g., `""` for normal, `"help"` for help buffers).
-    /// - `None` if the option cannot be retrieved, is not set, or an error occurs.
-    ///
     /// # Rationale
     /// Errors are notified directly to Nvim because this is the behavior wanted in all cases.
     fn get_buf_type(&self) -> Option<String>;
@@ -146,11 +136,6 @@ pub trait BufferExt: Debug {
 
     /// Retrieves the process ID associated with the buffer.
     ///
-    /// # Returns
-    /// The process ID as a string. For terminal buffers, this is the PID of the running
-    /// terminal process parsed from the buffer name. For other buffers, this is the PID
-    /// of the Neovim instance.
-    ///
     /// # Errors
     /// - If the buffer name cannot be retrieved.
     /// - If the buffer is a terminal but the name format is invalid.
@@ -182,9 +167,6 @@ impl TextBoundary {
     /// # Arguments
     /// - `line_idx` The 0-based index of the current line in the range.
     /// - `start_col` The user-specified starting column.
-    ///
-    /// # Returns
-    /// The adjusted starting column index.
     pub const fn get_line_start_idx(&self, line_idx: usize, start_col: usize) -> usize {
         if line_idx != 0 {
             return 0;
@@ -202,9 +184,6 @@ impl TextBoundary {
     /// - `line_idx` The 0-based index of the current line in the range.
     /// - `last_line_idx` The 0-based index of the last line in the range.
     /// - `end_col` The user-specified ending column.
-    ///
-    /// # Returns
-    /// The adjusted ending column index.
     pub fn get_line_end_idx(&self, line: &str, line_idx: usize, last_line_idx: usize, end_col: usize) -> usize {
         let line_len = line.len();
         if line_idx != last_line_idx {
@@ -320,10 +299,6 @@ impl CursorPosition {
     /// Queries Nvim for the (row, col) of the active window cursor and returns a
     /// [`CursorPosition`] reflecting those raw coordinates.
     ///
-    /// # Returns
-    /// - `Some(CursorPosition)` when the cursor location is successfully fetched.
-    /// - [`None`] if Nvim fails to provide the cursor position (an error is already reported via `notify_error`).
-    ///
     /// # Assumptions
     /// - Row is 1-based (Nvim convention); column is 0-based. Callers needing 0-based row for Rust indexing must
     ///   subtract 1 explicitly.
@@ -351,9 +326,6 @@ impl CursorPosition {
     /// Converts the raw 0-based Nvim column stored in [`CursorPosition::col`] into a
     /// human-friendly 1-based column suitable for statusline / UI output.
     ///
-    /// # Returns
-    /// - The 1-based column index (`self.col + 1`).
-    ///
     /// # Assumptions
     /// - [`CursorPosition::col`] is the unmodified 0-based byte offset provided by Nvim.
     ///
@@ -371,10 +343,6 @@ impl CursorPosition {
 
 /// Creates a new listed, not scratch, buffer.
 ///
-/// # Returns
-/// - `Some(Buffer)` if the buffer is created successfully.
-/// - `None` if buffer creation fails.
-///
 /// Errors are reported to Nvim via [`crate::notify::error`].
 pub fn create() -> Option<Buffer> {
     nvim_oxi::api::create_buf(true, false)
@@ -386,10 +354,6 @@ pub fn create() -> Option<Buffer> {
 ///
 /// The alternate buffer is the buffer previously visited, accessed via Nvim's "#" register.
 /// If no alternate buffer exists (bufnr("#") < 0), a new buffer is created.
-///
-/// # Returns
-/// - `Some(Buffer)` the alternate buffer if it exists, otherwise a new buffer.
-/// - `None` if retrieving the alternate buffer fails and creating a new buffer also fails.
 ///
 /// # Errors
 /// - Retrieving the alternate buffer fails (notified via [`crate::notify::error`]).
@@ -412,10 +376,6 @@ pub fn get_alternate_or_new() -> Option<Buffer> {
 /// # Arguments
 /// - `buf` The buffer to set as current.
 ///
-/// # Returns
-/// - `Some(())` if the buffer is set successfully.
-/// - `None` if setting the current buffer fails.
-///
 /// # Errors
 /// - Setting the current buffer fails (notified via [`crate::notify::error`]).
 pub fn set_current(buf: &Buffer) -> Option<()> {
@@ -433,9 +393,6 @@ pub fn set_current(buf: &Buffer) -> Option<()> {
 /// - `path` The path to the file to open.
 /// - `line` The line number to position the cursor at. Defaults to 0 if `None`.
 /// - `col` The column number to position the cursor at. Defaults to 0 if `None`.
-///
-/// # Returns
-/// Returns `Ok(())` on success, or an error if the file cannot be opened or the cursor cannot be set.
 ///
 /// # Errors
 /// - If execution of "edit" command via [`crate::common::exec_vim_cmd`] fails.
@@ -488,9 +445,6 @@ where
 /// # Arguments
 /// - `current_buffer` The buffer whose path to retrieve.
 ///
-/// # Returns
-/// The relative path as a [`PathBuf`] if successful, [`None`] on error.
-///
 /// # Errors
 /// Errors (e.g., cannot get cwd or buffer name) are notified to Nvim but not propagated.
 pub fn get_relative_path_to_cwd(current_buffer: &Buffer) -> Option<PathBuf> {
@@ -511,10 +465,6 @@ pub fn get_relative_path_to_cwd(current_buffer: &Buffer) -> Option<PathBuf> {
 ///
 /// # Arguments
 /// - `buffer` The buffer to get the path for. If [`None`], returns [`None`].
-///
-/// # Returns
-/// - `Some(PathBuf)` containing the absolute path if successful.
-/// - [`None`] if no buffer provided, the buffer has no name, an empty name, or an error occurs.
 ///
 /// # Errors
 /// Errors are logged internally but do not propagate; the function returns [`None`] on failure.

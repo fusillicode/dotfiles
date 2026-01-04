@@ -223,8 +223,6 @@ impl Op {
     /// - `pr` Subject pull request.
     /// - `res` [`color_eyre::Result`] returned by the underlying GitHub CLI wrapper.
     ///
-    /// # Returns
-    /// Propagates `res` unchanged after side‑effect logging.
     ///
     /// # Errors
     /// Returns the same error contained in `res` (no transformation) so callers
@@ -281,9 +279,6 @@ impl Op {
 /// # Arguments
 /// - `pr` Pull request whose identifying fields will be rendered.
 ///
-/// # Returns
-/// Colorized composite string suitable for direct printing.
-///
 /// # Rationale
 /// Central helper avoids duplicating formatting order and styling decisions.
 fn format_pr(pr: &PullRequest) -> String {
@@ -303,9 +298,6 @@ fn format_pr(pr: &PullRequest) -> String {
 /// Prompts the user for an issue title, creates the issue via GitHub CLI,
 /// then develops it by creating an associated branch from the default branch.
 /// Optionally checks out the newly created branch based on user preference.
-///
-/// # Returns
-/// - `()` on successful completion or if the user cancels at any prompt.
 ///
 /// # Errors
 /// - If [`ytil_tui::text_prompt`] fails when prompting for issue title.
@@ -344,9 +336,6 @@ fn create_issue_and_branch_from_default_branch() -> Result<(), color_eyre::eyre:
 
 /// Prompts the selection of a branch and creates a pull request for the selected one.
 ///
-/// # Returns
-/// - `()` on success or if no branch is selected.
-///
 /// # Errors
 /// - If [`ytil_tui::git_branch::select`] fails.
 /// - If [`pr_title_from_branch_name`] fails.
@@ -364,9 +353,6 @@ fn create_pr() -> Result<(), color_eyre::eyre::Error> {
 }
 
 /// Interactively creates a GitHub branch from a selected issue.
-///
-/// # Returns
-/// Returns `Ok(())` on successful branch creation, or an error if any step fails.
 ///
 /// # Errors
 /// Propagates errors from issue listing, user selection, or branch development.
@@ -407,9 +393,6 @@ fn create_branch_from_issue() -> Result<(), color_eyre::eyre::Error> {
 ///
 /// # Arguments
 /// - `branch_name` The branch name in the format `{issue_number}-{title-words}`.
-///
-/// # Returns
-/// The formatted pull request title as `[{issue_number}]: {Capitalized Title}`.
 ///
 /// # Errors
 /// - Branch name has no parts separated by `-`.

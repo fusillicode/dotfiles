@@ -74,10 +74,6 @@ struct JumpList(Vec<JumpEntry>, usize);
 /// Calls Nvim's `getjumplist()` function and extracts the jump entries vector.
 /// Errors are handled internally by notifying Nvim and returning `None`.
 ///
-/// # Returns
-/// - `Some(Vec<JumpEntry>)` containing all jump entries on success.
-/// - `None` if the jumplist cannot be retrieved or an error occurs.
-///
 /// # Errors
 /// - Lua function call fails when invoking `getjumplist`.
 /// - Deserialization fails when parsing the jumplist structure.

@@ -16,8 +16,6 @@ const HELP_ARG: &str = "--help";
 pub trait Args<T> {
     /// Checks if the help flag (`--help`) is present in the arguments.
     ///
-    /// # Returns
-    /// - `true` if `--help` is found; `false` otherwise.
     ///
     /// # Rationale
     /// - Standardized help detection avoids ad-hoc string comparisons in binaries.
@@ -26,8 +24,6 @@ pub trait Args<T> {
 
     /// Returns a copy of all arguments.
     ///
-    /// # Returns
-    /// - A vector containing all arguments in their original order.
     ///
     /// # Rationale
     /// - Provides uniform access to arguments regardless of underlying storage.

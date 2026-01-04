@@ -29,9 +29,6 @@ pub mod repo;
 /// Builds [`GitStatusEntry`] values capturing index + worktree states plus conflict / ignore
 /// flags. Includes untracked, excludes ignored. Order matches libgit2 iteration order.
 ///
-/// # Returns
-/// Vector of status entries (may be empty if clean working tree).
-///
 /// # Errors
 /// - Repository discovery fails.
 /// - Reading statuses fails.
@@ -77,9 +74,6 @@ pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
 /// - `paths` Iterator of absolute or relative paths to restore. Empty iterator = no‑op.
 /// - `branch` Optional branch (or commit-ish) acting as the source of truth.
 ///
-/// # Returns
-/// [`Result::Ok`] (()) if the command spawns and completes successfully (zero status).
-///
 /// # Errors
 /// - Spawning or executing the `git restore` process fails.
 ///
@@ -115,9 +109,6 @@ where
 ///
 /// # Arguments
 /// - `paths` Repo‑relative paths currently staged (any state) to unstage. Empty slice = no‑op.
-///
-/// # Returns
-/// [`Result::Ok`] (()) if command spawns and exits successfully (zero status).
 ///
 /// # Errors
 /// - Spawning or executing the `git restore --staged` command fails.
@@ -159,9 +150,6 @@ pub fn unstage(paths: &[&str]) -> color_eyre::Result<()> {
 /// - `repo` Open repository whose index will be modified.
 /// - `paths` Iterator of pathspecs. Empty iterator = no‑op.
 ///
-/// # Returns
-/// [`Result::Ok`] (()) on success.
-///
 /// # Errors
 /// - Loading index fails.
 /// - Applying any pathspec fails.
@@ -184,9 +172,6 @@ where
 }
 
 /// Retrieves the commit hash of the current HEAD.
-///
-/// # Returns
-/// The commit hash as a hexadecimal string.
 ///
 /// # Errors
 /// - If the repository cannot be opened.

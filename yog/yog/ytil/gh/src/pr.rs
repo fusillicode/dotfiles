@@ -76,10 +76,6 @@ pub enum PullRequestMergeState {
 /// - `search` Optional search expression (without the `--search` flag) using GitHub search qualifiers.
 /// - `retain_fn` Predicate applied post‑fetch; only PRs for which it returns true are kept.
 ///
-/// # Returns
-/// Vector of deserialized pull requests (may be empty). All timestamps are normalized
-/// to UTC ([`chrono::DateTime<Utc>`]).
-///
 /// # Errors
 /// - Spawning or executing `gh pr list` fails.
 /// - Command exits non‑zero (handled inside [`ytil_cmd::CmdExt`]).
@@ -129,9 +125,6 @@ pub fn get(
 /// # Arguments
 /// - `pr_number` Numeric pull request number.
 ///
-/// # Returns
-/// [`Result::Ok`] (()) if the merge command succeeds.
-///
 /// # Errors
 /// - Spawning or executing the `gh pr merge` command fails.
 /// - Command exits with non‑zero status (propagated by [`ytil_cmd::CmdExt`]).
@@ -161,9 +154,6 @@ pub fn merge(pr_number: usize) -> color_eyre::Result<()> {
 /// # Arguments
 /// - `pr_number` Numeric pull request number.
 ///
-/// # Returns
-/// [`Result::Ok`] (()) if the review command succeeds.
-///
 /// # Errors
 /// - Spawning or executing `gh pr review` fails.
 /// - Command exits with non‑zero status (propagated by [`ytil_cmd::CmdExt`]).
@@ -183,9 +173,6 @@ pub fn approve(pr_number: usize) -> color_eyre::Result<()> {
 /// # Arguments
 /// - `pr_number` Numeric pull request number to rebase.
 ///
-/// # Returns
-/// [`Result::Ok`] (()) if the comment command succeeds.
-///
 /// # Errors
 /// - Spawning or executing `gh pr comment` fails.
 /// - Command exits with non‑zero status (propagated by [`ytil_cmd::CmdExt`]).
@@ -204,9 +191,6 @@ pub fn dependabot_rebase(pr_number: usize) -> color_eyre::Result<()> {
 ///
 /// # Arguments
 /// - `pr_number` Numeric pull request number to enable auto-merge on.
-///
-/// # Returns
-/// [`Result::Ok`] (()) if the GitHub CLI command succeeds (either scheduling or performing the merge).
 ///
 /// # Errors
 /// - Spawning or executing `gh pr merge` fails.
@@ -229,9 +213,6 @@ pub fn enable_auto_merge(pr_number: usize) -> color_eyre::Result<()> {
 ///
 /// # Arguments
 /// - `title` The title for the GitHub pull request.
-///
-/// # Returns
-/// The output from the successful `gh pr create` command.
 ///
 /// # Errors
 /// - The title is empty.

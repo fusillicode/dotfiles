@@ -242,9 +242,6 @@ pub fn atomic_cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
 /// - `matching_file_fn` Predicate applied to each file entry; include path when it returns true.
 /// - `skip_dir_fn` Predicate applied to each directory entry; skip descent when it returns true.
 ///
-/// # Returns
-/// Vector of absolute file paths (discovery order unspecified; currently breadth-first).
-///
 /// # Errors
 /// - A directory cannot be read.
 /// - File type metadata for an entry cannot be determined.

@@ -23,9 +23,6 @@ use ytil_cmd::CmdExt as _;
 /// Iterates over all configured remotes and returns the branch name pointed to by the first valid
 /// `refs/remotes/{remote}/HEAD` reference.
 ///
-/// # Returns
-/// The default branch name (e.g., "main" or "master").
-///
 /// # Errors
 /// - If the repository cannot be opened.
 /// - If no remote has a valid `HEAD` reference.
@@ -53,9 +50,6 @@ pub fn get_default() -> color_eyre::Result<String> {
 }
 
 /// Get current branch name (fails if HEAD detached).
-///
-/// # Returns
-/// Branch short name (e.g. `main`).
 ///
 /// # Errors
 /// - Repository discovery fails.
@@ -94,9 +88,6 @@ pub fn get_current() -> color_eyre::Result<String> {
 /// # Arguments
 /// - `branch_name` Name of branch to create (must not already exist).
 /// - `repo` Optional repository to use. If None, discovers the repo from current directory.
-///
-/// # Returns
-/// [`Result::Ok`] (()) if creation succeeds.
 ///
 /// # Errors
 /// - Repository discovery fails.
@@ -139,9 +130,6 @@ pub fn create_from_default_branch(branch_name: &str, repo: Option<&Repository>) 
 /// # Arguments
 /// - `branch_name` Name of the branch to push (must exist locally).
 /// - `repo` Optional repository to use. If None, discovers the repo from current directory.
-///
-/// # Returns
-/// [`Result::Ok`] (()) if the push succeeds.
 ///
 /// # Errors
 /// - Repository discovery fails.
@@ -241,9 +229,6 @@ pub fn get_all() -> color_eyre::Result<Vec<Branch>> {
 }
 
 /// Retrieves all branches without redundant remote duplicates.
-///
-/// # Returns
-/// A vector of [`Branch`] instances with redundant remotes removed.
 ///
 /// # Errors
 /// - The repository cannot be discovered.
@@ -347,12 +332,6 @@ impl Branch {
     }
 
     /// Returns the branch name with the "origin/" prefix removed if present.
-    ///
-    /// # Returns
-    /// The branch name without "origin/" prefix.
-    /// For local branches, this is the same as [`Self::name()`].
-    /// For remote branches from "origin", it strips the prefix.
-    /// For remote branches from other remotes, it remains unchanged.
     pub fn name_no_origin(&self) -> &str {
         self.name().trim_start_matches("origin/")
     }

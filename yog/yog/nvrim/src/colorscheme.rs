@@ -151,10 +151,6 @@ pub fn set(colorscheme: Option<String>) {
 /// - `opts_builder` Optional builder for customizing how the highlight info is retrieved. Defaults to
 ///   [`GetHighlightOptsBuilder::default()`] if [`None`].
 ///
-/// # Returns
-/// A [`Result`] containing the overridden [`SetHighlightOpts`] on success, or an error
-/// if retrieving or processing the highlight information fails.
-///
 /// # Errors
 /// - If [`get_hl_single`] fails to retrieve the highlight info.
 /// - If [`hl_opts_from_hl_infos`] fails to convert the highlight info.
