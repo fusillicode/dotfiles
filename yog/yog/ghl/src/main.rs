@@ -219,11 +219,6 @@ impl Op {
     /// terminal output. Keeps call‑site chaining terse while centralizing the
     /// formatting logic.
     ///
-    /// # Arguments
-    /// - `pr` Subject pull request.
-    /// - `res` [`color_eyre::Result`] returned by the underlying GitHub CLI wrapper.
-    ///
-    ///
     /// # Errors
     /// Returns the same error contained in `res` (no transformation) so callers
     /// can continue combinators (`and_then`, etc.) if desired.
@@ -234,9 +229,6 @@ impl Op {
     }
 
     /// Emit a success line for the completed operation.
-    ///
-    /// # Arguments
-    /// - `pr` Pull request just processed successfully.
     fn report_ok(&self, pr: &PullRequest) {
         let msg = match self {
             Self::Approve => "Approved",
@@ -248,10 +240,6 @@ impl Op {
     }
 
     /// Emit a structured error report for a failed operation.
-    ///
-    /// # Arguments
-    /// - `pr` [`PullRequest`] Pull request that failed to process.
-    /// - `error` [`color_eyre::Report`] returned by the CLI wrapper.
     ///
     /// # Rationale
     /// Keeps multi‑line error payload visually grouped with the PR metadata.
@@ -275,9 +263,6 @@ impl Op {
 ///
 /// Builds a single colorized string containing number, quoted title, and
 /// debug formatting of the author object.
-///
-/// # Arguments
-/// - `pr` Pull request whose identifying fields will be rendered.
 ///
 /// # Rationale
 /// Central helper avoids duplicating formatting order and styling decisions.
@@ -390,9 +375,6 @@ fn create_branch_from_issue() -> Result<(), color_eyre::eyre::Error> {
 }
 
 /// Parses a branch name to generate a pull request title.
-///
-/// # Arguments
-/// - `branch_name` The branch name in the format `{issue_number}-{title-words}`.
 ///
 /// # Errors
 /// - Branch name has no parts separated by `-`.

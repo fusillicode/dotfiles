@@ -26,20 +26,12 @@ pub trait BufferExt: Debug {
     /// Returns a [`color_eyre::Result`] with the line as [`nvim_oxi::String`].
     /// Errors if the line does not exist at `idx`.
     ///
-    /// # Arguments
-    /// - `idx` 0-based line index inside the buffer.
-    ///
     /// # Errors
     /// - Fetching the line via `nvim_buf_get_lines` fails.
     /// - The requested index is out of range (no line returned).
     fn get_line(&self, idx: usize) -> color_eyre::Result<nvim_oxi::String>;
 
     /// Retrieves a range of lines from the buffer.
-    ///
-    /// # Arguments
-    /// - `line_range` - The inclusive range of 0-based line indices to retrieve.
-    /// - `strict_indexing` - If true, returns an error if any index in the range exceeds the buffer's line count; if
-    ///   false, the range is clamped to valid bounds.
     ///
     /// # Errors
     /// - If `strict_indexing` is true and the range is out of bounds.
@@ -57,11 +49,6 @@ pub trait BufferExt: Debug {
     /// Get text from a [`nvim_oxi::api::Buffer`].
     ///
     /// Retrieves text from the specified start position to end position, respecting the given boundary.
-    ///
-    /// # Arguments
-    /// - `start` (lnum, col) 0-based starting line and column (column is byte offset).
-    /// - `end` (`end_lnum`, `end_col`) 0-based ending line and column (inclusive; column is byte offset).
-    /// - `boundary` [`TextBoundary`] specifying how to handle line boundaries.
     ///
     /// # Errors
     /// - If substring extraction fails due to invalid indices.
@@ -113,9 +100,6 @@ pub trait BufferExt: Debug {
     /// for Nvim's `set_text` call, and inserts `text` without replacing existing
     /// content (`start_col` == `end_col`). Errors are reported via `notify_error`.
     /// Silently returns if cursor position cannot be fetched.
-    ///
-    /// # Arguments
-    /// - `text` UTF-8 slice inserted at the cursor byte column.
     fn set_text_at_cursor_pos(&mut self, text: &str);
 
     fn is_terminal(&self) -> bool {
@@ -163,10 +147,6 @@ pub enum TextBoundary {
 
 impl TextBoundary {
     /// Computes the starting column index for text selection based on the boundary type.
-    ///
-    /// # Arguments
-    /// - `line_idx` The 0-based index of the current line in the range.
-    /// - `start_col` The user-specified starting column.
     pub const fn get_line_start_idx(&self, line_idx: usize, start_col: usize) -> usize {
         if line_idx != 0 {
             return 0;
@@ -178,12 +158,6 @@ impl TextBoundary {
     }
 
     /// Computes the ending column index for text selection based on the boundary type.
-    ///
-    /// # Arguments
-    /// - `line` The content of the current line.
-    /// - `line_idx` The 0-based index of the current line in the range.
-    /// - `last_line_idx` The 0-based index of the last line in the range.
-    /// - `end_col` The user-specified ending column.
     pub fn get_line_end_idx(&self, line: &str, line_idx: usize, last_line_idx: usize, end_col: usize) -> usize {
         let line_len = line.len();
         if line_idx != last_line_idx {
@@ -373,9 +347,6 @@ pub fn get_alternate_or_new() -> Option<Buffer> {
 
 /// Sets the specified buffer as the current buffer in the active window.
 ///
-/// # Arguments
-/// - `buf` The buffer to set as current.
-///
 /// # Errors
 /// - Setting the current buffer fails (notified via [`crate::notify::error`]).
 pub fn set_current(buf: &Buffer) -> Option<()> {
@@ -388,11 +359,6 @@ pub fn set_current(buf: &Buffer) -> Option<()> {
 }
 
 /// Opens a file in the editor and positions the cursor at the specified line and column.
-///
-/// # Arguments
-/// - `path` The path to the file to open.
-/// - `line` The line number to position the cursor at. Defaults to 0 if `None`.
-/// - `col` The column number to position the cursor at. Defaults to 0 if `None`.
 ///
 /// # Errors
 /// - If execution of "edit" command via [`crate::common::exec_vim_cmd`] fails.
@@ -414,10 +380,6 @@ pub fn open<T: AsRef<Path>>(path: T, line: Option<usize>, col: Option<usize>) ->
 ///
 /// Errors are reported via [`crate::notify::error`] with details about the selection
 /// boundaries and error.
-///
-/// # Arguments
-/// - `selection` The selection defining the text range to replace.
-/// - `replacement` Vector of strings representing the lines to insert.
 pub fn replace_text_and_notify_if_error<Line, Lines>(selection: &Selection, replacement: Lines)
 where
     Lines: IntoIterator<Item = Line>,
@@ -442,9 +404,6 @@ where
 /// Attempts to strip the current working directory prefix from the buffer's absolute path.
 /// If the buffer path does not start with the cwd, returns the absolute path as-is.
 ///
-/// # Arguments
-/// - `current_buffer` The buffer whose path to retrieve.
-///
 /// # Errors
 /// Errors (e.g., cannot get cwd or buffer name) are notified to Nvim but not propagated.
 pub fn get_relative_path_to_cwd(current_buffer: &Buffer) -> Option<PathBuf> {
@@ -462,9 +421,6 @@ pub fn get_relative_path_to_cwd(current_buffer: &Buffer) -> Option<PathBuf> {
 }
 
 /// Retrieves the absolute path of the specified buffer.
-///
-/// # Arguments
-/// - `buffer` The buffer to get the path for. If [`None`], returns [`None`].
 ///
 /// # Errors
 /// Errors are logged internally but do not propagate; the function returns [`None`] on failure.

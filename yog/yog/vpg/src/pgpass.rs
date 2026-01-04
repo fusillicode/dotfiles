@@ -156,11 +156,6 @@ impl Display for ConnectionParams {
 
 /// Saves updated `PostgreSQL` `.pgpass` to a temporary file, replaces the original, and sets permissions.
 ///
-/// # Arguments
-/// - `pgpass_idx_lines` Original file lines with their indices (to identify line needing update).
-/// - `updated_conn_params` New connection parameters (must implement `ToString`).
-/// - `pgpass_path` Path to the original `.pgpass` file.
-///
 /// # Errors
 /// - A filesystem operation (open/read/write/remove) fails.
 pub fn save_new_pgpass_file(

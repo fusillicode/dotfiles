@@ -28,13 +28,6 @@ pub struct QuickfixConfig {
 /// configuration is provided, an additional synthetic choice is added to open the
 /// quickfix list instead.
 ///
-/// # Arguments
-/// - `choices` Iterable of displayable items to display for selection.
-/// - `opts` Key-value pairs for additional options (e.g., prompt text).
-/// - `callback` Closure invoked with the 0-based index of the selected choice.
-/// - `maybe_quickfix` Optional quickfix configuration; if provided, adds a choice to open the quickfix list with the
-///   specified items.
-///
 /// # Errors
 /// - Fails if `vim.ui.select` cannot be fetched from Lua globals.
 /// - Fails if the options table cannot be created.

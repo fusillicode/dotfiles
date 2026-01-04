@@ -28,10 +28,6 @@ impl CreatedIssue {
     ///
     /// Parses the output URL to extract repository and issue number.
     ///
-    /// # Arguments
-    /// - `title` The issue title.
-    /// - `output` The stdout from `gh issue create`.
-    ///
     /// # Errors
     /// - Output does not contain "issues".
     /// - Repository or issue number parts are empty.
@@ -100,9 +96,6 @@ pub struct Author {
 ///
 /// This function invokes `gh issue create --title <title> --body ""` to create the issue.
 ///
-/// # Arguments
-/// - `title` The title of the issue to create.
-///
 /// # Errors
 /// - If `title` is empty.
 /// - Spawning or executing the `gh issue create` command fails.
@@ -128,10 +121,6 @@ pub fn create(title: &str) -> color_eyre::Result<CreatedIssue> {
 /// Creates a branch for the supplied GitHub issue number.
 ///
 /// Uses the `gh issue develop` command to create a development branch for the specified issue.
-///
-/// # Arguments
-/// - `issue_number` The issue number to develop.
-/// - `checkout` Whether to checkout the created branch immediately.
 ///
 /// # Errors
 /// - If the `gh` command execution fails.

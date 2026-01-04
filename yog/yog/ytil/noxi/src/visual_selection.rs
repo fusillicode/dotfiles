@@ -155,7 +155,6 @@ impl SelectionBounds {
     /// Retrieves positions using Nvim's `getpos()` function and normalizes them to 0-based indices.
     /// The start and end are sorted to ensure start is before end.
     ///
-    ///
     /// # Errors
     /// - Fails if retrieving either mark fails.
     /// - Fails if the two marks reference different buffers.
@@ -325,10 +324,6 @@ impl Poppable for Pos {
 /// On success, converts the raw 1-based tuple into a 0-based [`Pos`].
 /// On failure, emits an error notification via [`crate::notify::error`] and wraps the error with
 /// additional context using [`color_eyre::eyre`].
-///
-/// # Arguments
-/// - `mark` Mark identifier accepted by `getpos()` (e.g. `"v"` for start of active Visual selection, `"."` for the
-///   cursor position).
 ///
 /// # Errors
 /// - Calling `getpos()` fails.

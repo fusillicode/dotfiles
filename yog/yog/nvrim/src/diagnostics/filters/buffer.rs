@@ -25,10 +25,6 @@ pub trait BufferFilter {
 
     /// Checks if diagnostics should be skipped for the given buffer.
     ///
-    /// # Arguments
-    /// - `buffer_with_path` Buffer and its absolute path for filtering.
-    ///
-    ///
     /// # Errors
     /// - Propagates [`nvim_oxi::api::Error`] from buffer type retrieval.
     fn skip_diagnostic(&self, buffer_with_path: &BufferWithPath) -> nvim_oxi::Result<bool> {

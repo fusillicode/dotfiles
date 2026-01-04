@@ -71,11 +71,6 @@ pub enum PullRequestMergeState {
 /// The `updated_at` timestamp (UTC) enables client‑side freshness sorting, stale PR
 /// detection, and activity‑based filtering without an additional API round‑trip.
 ///
-/// # Arguments
-/// - `repo` `owner/name` repository spec.
-/// - `search` Optional search expression (without the `--search` flag) using GitHub search qualifiers.
-/// - `retain_fn` Predicate applied post‑fetch; only PRs for which it returns true are kept.
-///
 /// # Errors
 /// - Spawning or executing `gh pr list` fails.
 /// - Command exits non‑zero (handled inside [`ytil_cmd::CmdExt`]).
@@ -122,9 +117,6 @@ pub fn get(
 ///
 /// Invokes: `gh pr merge --admin --squash --delete-branch <PR_NUMBER>`.
 ///
-/// # Arguments
-/// - `pr_number` Numeric pull request number.
-///
 /// # Errors
 /// - Spawning or executing the `gh pr merge` command fails.
 /// - Command exits with non‑zero status (propagated by [`ytil_cmd::CmdExt`]).
@@ -151,9 +143,6 @@ pub fn merge(pr_number: usize) -> color_eyre::Result<()> {
 /// CLI. Mirrors the minimalist style of [`merge`] for consistency and keeps
 /// policy / flag decisions localized here.
 ///
-/// # Arguments
-/// - `pr_number` Numeric pull request number.
-///
 /// # Errors
 /// - Spawning or executing `gh pr review` fails.
 /// - Command exits with non‑zero status (propagated by [`ytil_cmd::CmdExt`]).
@@ -170,9 +159,6 @@ pub fn approve(pr_number: usize) -> color_eyre::Result<()> {
 /// request an up‑to‑date rebase of its generated pull request. Useful when the
 /// PR is out-of-date with the base branch or conflicting after merges.
 ///
-/// # Arguments
-/// - `pr_number` Numeric pull request number to rebase.
-///
 /// # Errors
 /// - Spawning or executing `gh pr comment` fails.
 /// - Command exits with non‑zero status (propagated by [`ytil_cmd::CmdExt`]).
@@ -188,9 +174,6 @@ pub fn dependabot_rebase(pr_number: usize) -> color_eyre::Result<()> {
 /// Invokes: `gh pr merge <PR_NUMBER> --auto --squash --delete-branch`.
 /// Schedules a squash merge to occur automatically once required status checks
 /// and reviews pass. If all requirements are already satisfied, merge occurs immediately.
-///
-/// # Arguments
-/// - `pr_number` Numeric pull request number to enable auto-merge on.
 ///
 /// # Errors
 /// - Spawning or executing `gh pr merge` fails.
@@ -210,9 +193,6 @@ pub fn enable_auto_merge(pr_number: usize) -> color_eyre::Result<()> {
 }
 
 /// Creates a GitHub pull request with the specified title.
-///
-/// # Arguments
-/// - `title` The title for the GitHub pull request.
 ///
 /// # Errors
 /// - The title is empty.

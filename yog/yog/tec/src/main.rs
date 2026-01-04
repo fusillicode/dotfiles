@@ -237,9 +237,6 @@ const LINT_NO_OP: Lint = |_| LintFnResult(Ok(LintFnSuccess::PlainMsg(format!("{}
 ///
 /// Encapsulates a non-mutating check or (optionally) mutating fix routine executed against the workspace root.
 ///
-/// # Arguments
-/// - `&Path` Workspace root directory the lint operates within.
-///
 /// # Rationale
 /// Using a simple function pointer keeps dynamic dispatch trivial and avoids boxing trait objects; closures remain
 /// zero-cost and we can compose slices of `(name, LintFn)` without lifetime complications.
@@ -252,9 +249,6 @@ type Lint = fn(&Path) -> LintFnResult;
 /// Function pointer type for building lints based on file changes.
 ///
 /// Encapsulates logic to build or select a lint based on file changes, returning a [`Lint`] function to execute.
-///
-/// # Arguments
-/// - `&[String]` List of changed file paths as strings.
 ///
 /// # Rationale
 /// Enables efficient conditional execution of lints, avoiding unnecessary work when no relevant files have changed
@@ -353,11 +347,6 @@ enum LintFnSuccess {
 /// Returns the provided [`Lint`] function if no extension filter is set or if any changed file matches the specified
 /// extension. Otherwise, returns [`LINT_NO_OP`].
 ///
-/// # Arguments
-/// - `changed_paths` List of changed file paths as strings.
-/// - `extension` Optional file extension; if present, lint runs only if any changed file ends with it.
-/// - `lint` The [`Lint`] function to conditionally execute.
-///
 /// # Rationale
 /// Enables efficient skipping of lints when no relevant files have changed, reducing unnecessary work while
 /// maintaining deterministic output.
@@ -371,11 +360,6 @@ fn build_conditional_lint(changed_paths: &[String], extension: Option<&str>, lin
 
 /// Run a single lint, measure its duration, and report immediately.
 ///
-/// # Arguments
-/// - `lint_name` Human-friendly logical name of the lint (e.g. "clippy").
-/// - `path` Workspace root path the lint operates in.
-/// - `run` Function pointer executing the lint and returning [`LintFnSuccess`] or [`LintFnError`].
-///
 /// # Rationale
 /// Collapses the previous two‑step pattern (timing + later reporting) into one
 /// function so thread closures stay minimal and result propagation is explicit.
@@ -388,11 +372,6 @@ fn run_and_report(lint_name: &str, path: &Path, run: Lint) -> LintFnResult {
 }
 
 /// Format and print the result of a completed lint execution.
-///
-/// # Arguments
-/// - `lint_name` Logical name of the lint (e.g. "clippy").
-/// - `lint_res` Result returned by executing the [`Lint`], a [`Result<LintFnSuccess, LintFnError>`].
-/// - `elapsed` Wall‑clock duration of the lint.
 ///
 /// # Rationale
 /// Keeps output formatting separate from orchestration logic in [`main`]; enables
@@ -418,9 +397,6 @@ fn report(lint_name: &str, lint_res: &Result<LintFnSuccess, LintFnError>, elapse
 }
 
 /// Format lint duration into `time=<duration>` snippet (auto-scaled, no color).
-///
-/// # Arguments
-/// - `duration` Wall-clock elapsed time for a single lint execution.
 ///
 /// Note: Colorization (if any) is applied by the caller (e.g. in [`report`]) not here, keeping this helper suitable for
 /// future machine-readable output modes.

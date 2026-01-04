@@ -46,9 +46,6 @@ use ytil_sys::cli::Args;
 /// or directory. Emits colored error messages to stderr; caller aggregates
 /// failures.
 ///
-/// # Arguments
-/// - `file` Raw CLI argument possibly containing suffixes like `:line:col`.
-///
 /// # Errors
 /// - Metadata retrieval failure (permissions, not found, etc.).
 /// - Deletion failure (I/O error removing file or directory).
@@ -100,9 +97,6 @@ fn process(file: &str) -> color_eyre::Result<()> {
 }
 
 /// Strips suffix beginning at first ':'; returns subslice before colon.
-///
-/// # Arguments
-/// - `s` Raw argument string potentially containing a suffix like `:line:col`.
 ///
 /// # Performance
 /// - Single forward traversal `O(n)`; avoids UTF-8 decoding (colon is ASCII).

@@ -45,9 +45,6 @@ mod vault;
 /// Runs `vault read <vault_path> --format=json` using [`std::process::Command`] and
 /// deserializes the JSON standard output into a [`VaultReadOutput`].
 ///
-/// # Arguments
-/// - `vault_path` Path of the secret to read from Vault.
-///
 /// # Errors
 /// - Launching or running the [`vault`] process fails (I/O error from [`Command`]).
 /// - The command standard output cannot be deserialized into [`VaultReadOutput`] via [`serde_json`].

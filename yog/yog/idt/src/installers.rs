@@ -64,7 +64,6 @@ pub trait Installer: Sync + Send {
 
     /// Execute install + optional check; emit status & per-phase timings.
     ///
-    ///
     /// # Errors
     /// - Any error from [`Installer::install`].
     /// - Any process / UTF-8 error from the check phase.
@@ -144,11 +143,6 @@ pub trait SystemDependent {
 }
 
 /// Format phase timing summary line.
-///
-/// # Arguments
-/// - `start` Instant captured immediately before install began.
-/// - `past_install` Instant captured immediately after a successful install phase.
-/// - `check` Optional duration of the check phase (if a check was executed).
 ///
 /// # Rationale
 /// - Centralizes formatting logic to keep [`Installer::run`] concise and ensure consistent output shape.

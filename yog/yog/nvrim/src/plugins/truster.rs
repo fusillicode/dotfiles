@@ -161,10 +161,6 @@ impl Deref for PointWrap {
 
 impl From<CursorPosition> for PointWrap {
     /// Converts a Nvim cursor position (1-based row, 0-based column) to a [`PointWrap`].
-    ///
-    /// # Arguments
-    /// - `row` 1-based row index from Nvim.
-    /// - `column` 0-based column index from Nvim.
     fn from(cursor_position: CursorPosition) -> Self {
         Self(Point {
             row: cursor_position.row.saturating_sub(1),

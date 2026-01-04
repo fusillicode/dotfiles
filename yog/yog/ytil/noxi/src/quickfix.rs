@@ -15,9 +15,6 @@ use crate::dict;
 /// for user navigation. Each entry consists of a filename and line number.
 /// If no entries are provided, returns early without opening the quickfix window.
 ///
-/// # Arguments
-/// - `entries` Iterator yielding tuples containing filename and line number (1-based).
-///
 /// # Errors
 /// - Fails if `setqflist` Neovim function call encounters an error.
 /// - Fails if `copen` command execution encounters an error.

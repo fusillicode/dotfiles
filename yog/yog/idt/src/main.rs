@@ -67,10 +67,6 @@ mod installers;
 
 /// Summarize installer thread outcomes; collect failing bin names.
 ///
-/// # Arguments
-/// - `installers_res` Slice of (bin name, join result) pairs. Outer [`std::thread::Result`] indicates panic; inner
-///   [`color_eyre::Result<()>`] is the installer's logical result (`Ok(())` success, `Err(_)` failure).
-///
 /// # Errors
 /// - Does not construct a rich error enum; instead returns failing bin names. Individual installers are expected to
 ///   have already printed detailed stderr output.

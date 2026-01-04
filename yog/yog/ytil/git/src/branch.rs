@@ -85,10 +85,6 @@ pub fn get_current() -> color_eyre::Result<String> {
 ///
 /// Branch starts at the commit pointed to by `HEAD`; caller remains on the original branch.
 ///
-/// # Arguments
-/// - `branch_name` Name of branch to create (must not already exist).
-/// - `repo` Optional repository to use. If None, discovers the repo from current directory.
-///
 /// # Errors
 /// - Repository discovery fails.
 /// - Resolving `HEAD` to a commit fails.
@@ -126,10 +122,6 @@ pub fn create_from_default_branch(branch_name: &str, repo: Option<&Repository>) 
 ///
 /// Uses the default remote (determined by the first valid `refs/remotes/{remote}/HEAD` reference)
 /// to push the specified branch.
-///
-/// # Arguments
-/// - `branch_name` Name of the branch to push (must exist locally).
-/// - `repo` Optional repository to use. If None, discovers the repo from current directory.
 ///
 /// # Errors
 /// - Repository discovery fails.
@@ -179,9 +171,6 @@ pub fn push(branch_name: &str, repo: Option<&Repository>) -> color_eyre::Result<
 ///
 /// Defers to `git switch --guess` to leverage porcelain semantics, which can create a new branch
 /// if the name is ambiguous and matches an existing remote branch.
-///
-/// # Arguments
-/// - `branch_name` Branch name or revision (use `-` for prior branch).
 ///
 /// # Errors
 /// - Spawning or executing the `git switch` command fails.

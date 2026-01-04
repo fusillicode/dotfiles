@@ -111,9 +111,6 @@ struct Scratch {
 
 impl Scratch {
     /// Attempts to build a [`Scratch`] file from a [`DirEntry`] result.
-    ///
-    /// # Arguments
-    /// - `read_dir_res` The result of reading a directory entry.
     pub fn from(read_dir_res: std::io::Result<DirEntry>) -> Option<color_eyre::Result<Self>> {
         let path = match read_dir_res.map(|entry| entry.path()) {
             Ok(path) => path,
@@ -147,10 +144,6 @@ impl Scratch {
     ///
     /// The path is constructed as `{dest_dir}/{base_name}-{timestamp}.{extension}` where timestamp is a provided
     /// [`Local`] [`DateTime`].
-    ///
-    /// # Arguments
-    /// - `dest_dir` The directory where the file should be placed.
-    /// - `date_time` The date and time to use for the timestamp.
     pub fn dest_file_path(&self, dest_dir: &Path, date_time: DateTime<Local>) -> PathBuf {
         dest_dir.join(format!(
             "{}-{}.{}",

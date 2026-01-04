@@ -9,9 +9,6 @@ use git2::Repository;
 /// `refs/remotes/{remote}/HEAD` reference, which typically points to the
 /// default branch (e.g., main, or master) on that remote.
 ///
-/// # Arguments
-/// - `repo` The repository to query for remotes.
-///
 /// # Errors
 /// - If no remote has a valid `HEAD` reference.
 pub fn get_default(repo: &Repository) -> color_eyre::Result<Reference<'_>> {

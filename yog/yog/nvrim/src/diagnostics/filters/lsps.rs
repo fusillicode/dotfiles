@@ -34,10 +34,6 @@ pub trait LspFilter {
     ///
     /// Checks path substring and source match, then extracts message if applicable.
     ///
-    /// # Arguments
-    /// - `buf_path` Buffer filepath.
-    /// - `lsp_diag` LSP diagnostic dictionary.
-    ///
     /// # Errors
     /// - Missing or invalid "source" key.
     /// - Missing or invalid "message" key.

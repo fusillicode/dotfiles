@@ -32,9 +32,6 @@ mod templates;
 /// Copies all files under crate-local `assets/` (CSS, fonts, favicon) into
 /// `<workspace_root>/target/doc/assets` using a recursive `cp`.
 ///
-/// # Arguments
-/// - `doc_dir` Existing `<workspace>/target/doc` directory.
-///
 /// # Errors
 /// - Underlying `cp` command execution fails.
 /// - Destination directory cannot be written.
@@ -57,10 +54,6 @@ fn copy_assets(doc_dir: &Path) -> color_eyre::Result<()> {
 /// This is intentionally naive: it does not handle multi-line values, arrays,
 /// tables, or stripping inline comments. Its purpose here is to extract simple
 /// scalar values (`name = "foo"`, `description = "..."`).
-///
-/// # Arguments
-/// - `content` Entire TOML file contents.
-/// - `key` Exact key to match at a line start (after trimming leading space).
 fn get_toml_values(content: &str, key: &str) -> Vec<String> {
     let mut res = vec![];
     for line in content.lines() {
