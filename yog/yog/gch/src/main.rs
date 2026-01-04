@@ -146,10 +146,6 @@ impl Display for Op {
 /// Early exit: if after deleting new entries there are no remaining changed entries, the
 /// restore phase is skipped.
 ///
-/// # Arguments
-/// - `entries` Slice of status entries selected by the user (borrowed, not consumed).
-/// - `branch` Optional branch name; when `Some`, restore reads blobs from that branch.
-///
 /// # Errors
 /// - Removing a file or directory for a new entry fails (I/O error from `std::fs`).
 /// - Unstaging staged new entries via [`ytil_git::unstage`] fails.
@@ -206,9 +202,6 @@ fn restore_entries(entries: &[&GitStatusEntry], branch: Option<&str>) -> color_e
 }
 
 /// Add the provided entries to the Git index (equivalent to `git add` on each path).
-///
-/// # Arguments
-/// - `entries` Selected Git entries.
 ///
 /// # Errors
 /// - Opening the repository via [`ytil_git::repo::discover`] fails.

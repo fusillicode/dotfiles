@@ -22,9 +22,6 @@ pub mod git_branch;
 ///
 /// Wraps [`inquire::MultiSelect`] with a slim rendering (see `minimal_render_config`) and no help message.
 ///
-/// # Arguments
-/// - `opts` The list of options to present for selection. Each option must implement [`Display`].
-///
 /// # Type Parameters
 /// - `T` The type of the options, constrained to implement [`Display`].
 ///
@@ -72,9 +69,6 @@ pub fn minimal_select<T: Display>(opts: Vec<T>) -> Result<Option<T>, InquireErro
 /// Displays a text input prompt with the given message, allowing cancellation.
 ///
 /// Wraps [`inquire::Text`] with minimal rendering and cancellation handling.
-///
-/// # Arguments
-/// - `message` The prompt message displayed to the user.
 ///
 /// # Errors
 /// - Rendering the prompt or terminal interaction inside [`inquire`] fails.

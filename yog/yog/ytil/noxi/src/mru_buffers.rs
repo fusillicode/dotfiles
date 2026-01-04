@@ -66,9 +66,6 @@ impl<T: AsRef<str>> From<T> for BufferKind {
 
 /// Parses a line from Nvim's buffer list output into an [`MruBuffer`].
 ///
-/// # Arguments
-/// - `mru_buffer_line` A line from the output of Nvim's "ls t" command.
-///
 /// # Errors
 /// - Parsing the buffer ID fails.
 /// - Extracting the unlisted flag fails.
@@ -138,9 +135,6 @@ pub fn get() -> Option<Vec<MruBuffer>> {
 }
 
 /// Parses the output of Nvim's "ls t" command into a vector of [`MruBuffer`].
-///
-/// # Arguments
-/// - `mru_buffers_output` The raw output string from "ls t".
 ///
 /// # Errors
 /// - Parsing any individual buffer line fails.

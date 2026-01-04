@@ -64,9 +64,6 @@ fn autocomplete_git_branches_and_switch() -> color_eyre::Result<()> {
 /// - If `arg` parses as a GitHub PR URL, authenticate then derive the branch name and switch to it.
 /// - Otherwise, use `arg` as the branch name and switch to it.
 ///
-/// # Arguments
-/// - `arg` Either a GitHub PR URL or a branch name.
-///
 /// # Errors
 /// - GitHub authentication via [`ytil_gh::log_into_github`] fails (if URL).
 /// - Pull request branch name derivation via [`ytil_gh::get_branch_name_from_url`] fails (if URL).
@@ -189,42 +186,26 @@ fn build_branch_name(args: &[&str]) -> color_eyre::Result<String> {
 }
 
 /// Prints a styled indication of a successful branch switch.
-///
-/// # Arguments
-/// - `branch` Branch name just switched to (displayed in bold magenta/normal styles).
 fn report_branch_switch(branch_name: &str) {
     println!("{} {}", ">".magenta().bold(), branch_name.bold());
 }
 
 /// Prints a styled indication that a new branch was created.
-///
-/// # Arguments
-/// - `branch` Newly created branch name.
 fn report_branch_new(branch_name: &str) {
     println!("{} {}", "+".green().bold(), branch_name.bold());
 }
 
 /// Prints a styled indication that the branch already exists; then indicates switch.
-///
-/// # Arguments
-/// - `branch` Existing branch name that is being switched to.
 fn report_branch_exists(branch_name: &str) {
     println!("{}{} {}", "!".blue().bold(), ">".magenta().bold(), branch_name.bold());
 }
 
 /// Prints a styled indication that branch creation was aborted (no newline).
-///
-/// # Arguments
-/// - `branch` Branch name whose creation was declined.
 fn report_branch_not_created(branch_name: &str) {
     print!("{} {} not created", "x".red().bold(), branch_name.bold());
 }
 
 /// Prints a styled notice that a new branch is being created from a non-default branch.
-///
-/// # Arguments
-/// - `branch` Target branch being created.
-/// - `default_branch` Current (non-default) branch acting as the base.
 fn ask_branching_from_not_default(branch_name: &str, default_branch_name: &str) {
     print!(
         "{} {} from {}",

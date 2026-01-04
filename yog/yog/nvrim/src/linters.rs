@@ -31,9 +31,6 @@ pub fn dict() -> Dictionary {
 /// - Empty / missing input: returns an empty vector and emits a warning.
 /// - Malformed JSON: returns an empty vector and emits an error notification.
 /// - Successful parse: converts each message into a diagnostic `Dictionary`.
-///
-/// # Arguments
-/// - `maybe_output` Optional Nvim string containing the `sqruff` JSON payload.
 #[allow(clippy::needless_pass_by_value)]
 fn parser(maybe_output: Option<nvim_oxi::String>) -> Vec<Dictionary> {
     let Some(output) = &maybe_output else {
@@ -125,9 +122,6 @@ struct Position {
 }
 
 /// Convert a single [`SqruffMessage`] into an Nvim [`Dictionary`].
-///
-/// # Arguments
-/// - `msg` The parsed `sqruff` message.
 fn diagnostic_dict_from_msg(msg: SqruffMessage) -> Dictionary {
     dict! {
         "lnum": msg.range.start.line.saturating_sub(1),

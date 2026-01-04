@@ -31,11 +31,6 @@ pub fn dict() -> Dictionary {
 
 /// Draws the status column for the current buffer.
 ///
-/// # Arguments
-/// - `cur_lnum` The current line number as a string.
-/// - `extmarks` A vector of extmarks associated with the buffer.
-/// - `opts` Optional configuration options for rendering.
-///
 /// Special cases:
 /// - When `buftype == "grug-far"` returns a single space string to minimize visual noise in transient search buffers.
 ///
@@ -55,12 +50,6 @@ fn draw((cur_lnum, extmarks, opts): (String, Vec<Extmark>, Option<Opts>)) -> Opt
 }
 
 /// Constructs the status column string for the current line.
-///
-/// # Arguments
-/// - `current_buffer_type` Current buffer `buftype` (used for special-case elision like `"grug-far"`).
-/// - `cur_lnum` Current line number string (already formatted by the caller / Vim script).
-/// - `metas` Iterator of extmark metadata for the current line; only items with a present [`ExtmarkMeta`] are yielded.
-/// - `opts` Optional configuration options for rendering the status column.
 ///
 /// # Assumptions
 /// - `metas` yields at most a small number of items (typical per-line sign density is low).

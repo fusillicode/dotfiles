@@ -60,9 +60,6 @@ impl RepoViewField {
 ///
 /// Invokes: `gh repo view --json <field> --jq .<field>`.
 ///
-/// # Arguments
-/// - `field` The repository field to retrieve.
-///
 /// # Errors
 /// - Spawning or executing the `gh repo view` command fails.
 /// - Command exits with non‑zero status.

@@ -10,10 +10,6 @@ use nvim_oxi::Array;
 /// `inputlist()` function and returns the chosen element (1-based user
 /// index translated to 0-based). Returns [`None`] if the user cancels.
 ///
-/// # Arguments
-/// - `prompt`: Heading line shown before the options.
-/// - `items`: Slice of displayable values listed sequentially.
-///
 /// # Errors
 /// - Invoking `inputlist()` fails.
 /// - The returned index cannot be converted to `usize` (negative or overflow).

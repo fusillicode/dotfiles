@@ -58,12 +58,6 @@ pub fn rm_f<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
 /// It checks each file/symlink and removes those matching the name, skipping any directories listed in `excluded_dirs`.
 /// Metadata is read once per path to determine file type, reducing syscalls.
 ///
-/// # Arguments
-/// - `root_path` The root directory path to start the removal from.
-/// - `file_name` The name of the files to remove.
-/// - `excluded_dirs` A list of directory names (as strings) to skip during traversal.
-/// - `dry_run` If true, collects paths that would be removed without actually removing them.
-///
 /// # Performance
 /// - Reads metadata once per path using `symlink_metadata`, avoiding redundant syscalls.
 /// - Iterative approach prevents stack overflow in deep trees.

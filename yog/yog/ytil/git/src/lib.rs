@@ -70,10 +70,6 @@ pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
 /// Delegates to porcelain `git restore` rather than approximating behavior with libgit2.
 /// If `branch` is provided its tree is the source; otherwise the index / HEAD is used.
 ///
-/// # Arguments
-/// - `paths` Iterator of absolute or relative paths to restore. Empty iterator = no‑op.
-/// - `branch` Optional branch (or commit-ish) acting as the source of truth.
-///
 /// # Errors
 /// - Spawning or executing the `git restore` process fails.
 ///
@@ -106,9 +102,6 @@ where
 /// Thin wrapper over `git restore --staged <paths...>` which only affects the index
 /// (inverse of `git add`). Unlike using libgit2 `reset_default`, this avoids
 /// resurrecting deleted files whose blobs no longer exist on disk.
-///
-/// # Arguments
-/// - `paths` Repo‑relative paths currently staged (any state) to unstage. Empty slice = no‑op.
 ///
 /// # Errors
 /// - Spawning or executing the `git restore --staged` command fails.
@@ -145,10 +138,6 @@ pub fn unstage(paths: &[&str]) -> color_eyre::Result<()> {
 /// - Directories (recursive): "src/"
 /// - Globs (libgit2 syntax): "*.rs", "docs/**/*.md"
 /// - Mixed file + pattern list
-///
-/// # Arguments
-/// - `repo` Open repository whose index will be modified.
-/// - `paths` Iterator of pathspecs. Empty iterator = no‑op.
 ///
 /// # Errors
 /// - Loading index fails.

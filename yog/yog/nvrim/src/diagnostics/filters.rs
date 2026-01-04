@@ -74,9 +74,6 @@ impl TryFrom<&Dictionary> for DiagnosticLocation {
 
     /// Attempts to convert an Nvim dictionary into a `DiagnosticLocation`.
     ///
-    /// # Arguments
-    /// - `value` A reference to a [`Dictionary`] containing diagnostic location fields.
-    ///
     /// # Errors
     /// - If required fields (`lnum`, `col`, `end_col`, `end_lnum`) are missing or invalid.
     /// - If integer conversion to `usize` fails.
@@ -114,10 +111,6 @@ impl TryFrom<&Dictionary> for DiagnosticLocation {
 /// Trait for filtering diagnostics.
 pub trait DiagnosticsFilter {
     /// Returns true if the diagnostic should be skipped.
-    ///
-    /// # Arguments
-    /// - `buf`: Buffer with path information.
-    /// - `lsp_diag`: LSP diagnostic dictionary.
     ///
     /// # Errors
     /// - Access to required diagnostic fields (dictionary keys) fails (missing key or wrong type).

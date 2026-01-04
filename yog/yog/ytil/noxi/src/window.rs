@@ -9,9 +9,6 @@ use crate::buffer::BufferExt;
 ///
 /// On failure, notifies Neovim of the error and returns `None`.
 ///
-/// # Arguments
-/// - `window` The window to set as current.
-///
 /// # Errors
 /// - Setting the current window fails.
 pub fn set_current(window: &Window) -> Option<()> {
@@ -28,9 +25,6 @@ pub fn set_current(window: &Window) -> Option<()> {
 /// Retrieves the buffer associated with the specified window.
 ///
 /// On failure, notifies Neovim of the error and returns `None`.
-///
-/// # Arguments
-/// - `win` The window whose buffer to retrieve.
 ///
 /// # Errors
 /// - Retrieving the buffer fails.

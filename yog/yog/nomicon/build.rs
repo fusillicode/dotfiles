@@ -22,9 +22,6 @@ const ASSETS_DIR: &str = "assets";
 /// - Parses the provided CSS with permissive error recovery.
 /// - Serializes it with minification enabled.
 ///
-/// # Arguments
-/// - `css_code` Raw (unminified) CSS source as UTF-8 text.
-///
 /// # Errors
 /// - Parse failure: Returned if [`StyleSheet::parse`] cannot recover from invalid CSS.
 /// - Print failure: Returned if [`StyleSheet::to_css`] encounters an internal error while serializing.

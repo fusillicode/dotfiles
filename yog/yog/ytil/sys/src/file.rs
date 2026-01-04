@@ -237,11 +237,6 @@ pub fn atomic_cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
 /// Performs a breadth-first traversal starting at `dir`, skipping directories for which
 /// `skip_dir_fn` returns true, and collecting file paths for which `matching_file_fn` returns true.
 ///
-/// # Arguments
-/// - `dir` Root directory to start traversal.
-/// - `matching_file_fn` Predicate applied to each file entry; include path when it returns true.
-/// - `skip_dir_fn` Predicate applied to each directory entry; skip descent when it returns true.
-///
 /// # Errors
 /// - A directory cannot be read.
 /// - File type metadata for an entry cannot be determined.

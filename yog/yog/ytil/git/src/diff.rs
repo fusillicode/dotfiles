@@ -32,9 +32,6 @@ pub fn get_raw(path: Option<&Path>) -> color_eyre::Result<Vec<String>> {
 
 /// Extracts file paths and starting line numbers of hunks from `git diff` output.
 ///
-/// # Arguments
-/// - `raw_diff_output` The lines of `git diff` output to parse.
-///
 /// # Errors
 /// - Missing path delimiter in the diff line.
 /// - Unable to extract the filepath from the diff line.
@@ -89,9 +86,6 @@ pub fn get_hunks(raw_diff_output: &[String]) -> color_eyre::Result<Vec<(&str, us
 }
 
 /// Extracts the line number from a `git diff` hunk header line.
-///
-/// # Arguments
-/// - `lnum_line` The hunk header line (e.g., "@@ -42,7 +42,7 @@", "@@ -42,7 42,7 @@", "@@ -42,7 +42 @@").
 ///
 /// # Errors
 /// - If the hunk header line lacks sufficient space-separated parts.

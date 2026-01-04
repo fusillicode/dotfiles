@@ -144,13 +144,6 @@ pub fn set(colorscheme: Option<String>) {
 /// and then applies the provided `override_set_hl_opts` function to modify the options.
 /// This is useful for incrementally changing highlight groups based on their current state.
 ///
-/// # Arguments
-/// - `hl_name` The name of the highlight group to retrieve and modify.
-/// - `override_set_hl_opts` A closure that takes a [`SetHighlightOptsBuilder`] (pre-filled with the current highlight
-///   options) and returns a modified [`SetHighlightOpts`].
-/// - `opts_builder` Optional builder for customizing how the highlight info is retrieved. Defaults to
-///   [`GetHighlightOptsBuilder::default()`] if [`None`].
-///
 /// # Errors
 /// - If [`get_hl_single`] fails to retrieve the highlight info.
 /// - If [`hl_opts_from_hl_infos`] fails to convert the highlight info.
@@ -174,11 +167,6 @@ fn get_default_hl_opts() -> SetHighlightOptsBuilder {
 /// This function wraps [`nvim_oxi::api::set_hl`] to apply highlight options to a group.
 /// On failure, it notifies the error to Neovim instead of propagating it, ensuring
 /// the colorscheme setup continues gracefully.
-///
-/// # Arguments
-/// - `ns_id`: The namespace ID (0 for global).
-/// - `hl_name`: The name of the highlight group to set.
-/// - `hl_opts`: The highlight options to apply.
 ///
 /// # Errors
 /// Errors are notified to Neovim but not returned; the function always succeeds externally.

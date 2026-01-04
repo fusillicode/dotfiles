@@ -9,9 +9,6 @@ use ytil_cmd::CmdExt;
 /// Executes `cargo doc --all --no-deps --document-private-items` in the specified workspace root,
 /// setting `RUSTDOCFLAGS=-Dwarnings` to treat documentation warnings as errors.
 ///
-/// # Arguments
-/// - `workspace_root` The path to the workspace root directory.
-///
 /// # Errors
 /// - If the `cargo doc` command fails or exits with a non-zero status.
 /// - If documentation warnings are present (due to `-Dwarnings`).
