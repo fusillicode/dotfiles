@@ -13,8 +13,6 @@ pub trait DictionaryExt {
     ///
     /// Fails if the key is absent.
     ///
-    /// # Returns
-    /// - `Ok(T::Out)` when the key exists and the value is successfully extracted.
     ///
     /// # Errors
     /// - The key is missing.
@@ -25,9 +23,6 @@ pub trait DictionaryExt {
     ///
     /// Returns `Ok(None)` if the key is absent instead of treating it as an error.
     ///
-    /// # Returns
-    /// - `Ok(Some(T::Out))` when the key exists and value is successfully extracted.
-    /// - `Ok(None)` when the key does not exist in the [`Dictionary`].
     ///
     /// # Errors
     /// - The value exists but cannot be converted to the requested type (unexpected kind).
@@ -37,9 +32,6 @@ pub trait DictionaryExt {
     ///
     /// Returns `Ok(None)` if any key in the path is absent.
     ///
-    /// # Returns
-    /// - `Ok(Some(Dictionary))` when all keys are present and yield a dictionary.
-    /// - `Ok(None)` when a key is missing along the path.
     ///
     /// # Errors
     /// - A value is found for an intermediate key but it is not a [`Dictionary`] (unexpected kind).
@@ -49,8 +41,6 @@ pub trait DictionaryExt {
     ///
     /// Fails if any key in the path is missing.
     ///
-    /// # Returns
-    /// - `Ok(Dictionary)` when all keys are present and yield a dictionary.
     ///
     /// # Errors
     /// - A key in the path is missing.

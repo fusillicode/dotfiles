@@ -12,9 +12,6 @@ use crate::dict;
 ///
 /// Implementors provide a way to transform themselves into a string suitable for display
 /// in Nvim notifications.
-///
-/// # Returns
-/// A string representation of the notifiable item.
 pub trait Notifiable: Debug {
     fn to_msg(&self) -> impl AsRef<str>;
 }

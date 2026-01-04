@@ -49,10 +49,6 @@ use ytil_sys::cli::Args;
 /// # Arguments
 /// - `file` Raw CLI argument possibly containing suffixes like `:line:col`.
 ///
-/// # Returns
-/// - `Ok(())` if the path existed and was deleted (file, symlink, or directory).
-/// - `Err` if metadata lookup fails, deletion fails, or the path type is unsupported / missing.
-///
 /// # Errors
 /// - Metadata retrieval failure (permissions, not found, etc.).
 /// - Deletion failure (I/O error removing file or directory).
@@ -107,9 +103,6 @@ fn process(file: &str) -> color_eyre::Result<()> {
 ///
 /// # Arguments
 /// - `s` Raw argument string potentially containing a suffix like `:line:col`.
-///
-/// # Returns
-/// - Slice before the first ':'; original `s` if no ':' present.
 ///
 /// # Performance
 /// - Single forward traversal `O(n)`; avoids UTF-8 decoding (colon is ASCII).

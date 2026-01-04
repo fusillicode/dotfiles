@@ -32,9 +32,6 @@ impl CreatedIssue {
     /// - `title` The issue title.
     /// - `output` The stdout from `gh issue create`.
     ///
-    /// # Returns
-    /// The parsed [`CreatedIssue`].
-    ///
     /// # Errors
     /// - Output does not contain "issues".
     /// - Repository or issue number parts are empty.
@@ -66,9 +63,6 @@ impl CreatedIssue {
     ///
     /// Formats as `{issue_nr}-{title}` where `title` is converted to kebab-case and leading/trailing dashes are
     /// trimmed.
-    ///
-    /// # Returns
-    /// A string suitable for use as a Git branch name.
     pub fn branch_name(&self) -> String {
         format!(
             "{}-{}",
@@ -109,9 +103,6 @@ pub struct Author {
 /// # Arguments
 /// - `title` The title of the issue to create.
 ///
-/// # Returns
-/// The [`CreatedIssue`] containing the parsed issue details.
-///
 /// # Errors
 /// - If `title` is empty.
 /// - Spawning or executing the `gh issue create` command fails.
@@ -141,9 +132,6 @@ pub fn create(title: &str) -> color_eyre::Result<CreatedIssue> {
 /// # Arguments
 /// - `issue_number` The issue number to develop.
 /// - `checkout` Whether to checkout the created branch immediately.
-///
-/// # Returns
-/// A [`DevelopOutput`] containing the branch reference and name.
 ///
 /// # Errors
 /// - If the `gh` command execution fails.
@@ -175,9 +163,6 @@ pub fn develop(issue_number: &str, checkout: bool) -> color_eyre::Result<Develop
 }
 
 /// Lists all GitHub issues for the current repository.
-///
-/// # Returns
-/// A vector of [`ListedIssue`] structs containing the issue details.
 ///
 /// # Errors
 /// Returns an error if the `gh` command fails to execute, if the output is not valid UTF-8, or if the JSON cannot be

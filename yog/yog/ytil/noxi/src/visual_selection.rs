@@ -47,9 +47,6 @@ pub fn get_lines(_: ()) -> Vec<String> {
 ///
 /// On any Nvim API error (fetching marks, lines, or text) a notification is emitted and [`None`] is returned.
 ///
-/// # Returns
-/// Returns `Some(Selection)` if the visual selection can be extracted successfully, [`None`] otherwise.
-///
 /// # Errors
 /// - Return [`None`] if retrieving either mark fails.
 /// - Return [`None`] if the two marks reference different buffers.
@@ -158,8 +155,6 @@ impl SelectionBounds {
     /// Retrieves positions using Nvim's `getpos()` function and normalizes them to 0-based indices.
     /// The start and end are sorted to ensure start is before end.
     ///
-    /// # Returns
-    /// Returns a new `SelectionBounds` instance with normalized start and end positions.
     ///
     /// # Errors
     /// - Fails if retrieving either mark fails.

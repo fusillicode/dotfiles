@@ -12,10 +12,6 @@ use crate::buffer::BufferExt;
 /// # Arguments
 /// - `window` The window to set as current.
 ///
-/// # Returns
-/// - `Some(())` if the window was successfully set as current.
-/// - `None` if setting the current window fails.
-///
 /// # Errors
 /// - Setting the current window fails.
 pub fn set_current(window: &Window) -> Option<()> {
@@ -35,10 +31,6 @@ pub fn set_current(window: &Window) -> Option<()> {
 ///
 /// # Arguments
 /// - `win` The window whose buffer to retrieve.
-///
-/// # Returns
-/// - `Some(Buffer)` containing the window's buffer if successful.
-/// - `None` if retrieving the buffer fails.
 ///
 /// # Errors
 /// - Retrieving the buffer fails.

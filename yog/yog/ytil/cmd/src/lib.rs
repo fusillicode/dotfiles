@@ -23,8 +23,6 @@ use color_eyre::eyre::eyre;
 pub trait CmdExt {
     /// Run the command; capture stdout & stderr; return [`Output`] on success.
     ///
-    /// # Returns
-    /// Full [`Output`] (captured stdout & stderr) when the exit status is zero.
     ///
     /// # Errors
     /// - Spawning or waiting fails ([`CmdError::Io`]).

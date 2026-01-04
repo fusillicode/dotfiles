@@ -35,9 +35,6 @@ mod templates;
 /// # Arguments
 /// - `doc_dir` Existing `<workspace>/target/doc` directory.
 ///
-/// # Returns
-/// Ok on success.
-///
 /// # Errors
 /// - Underlying `cp` command execution fails.
 /// - Destination directory cannot be written.
@@ -64,10 +61,6 @@ fn copy_assets(doc_dir: &Path) -> color_eyre::Result<()> {
 /// # Arguments
 /// - `content` Entire TOML file contents.
 /// - `key` Exact key to match at a line start (after trimming leading space).
-///
-/// # Returns
-/// A vector of raw value strings with surrounding double quotes removed when
-/// they appear directly at both ends; may be empty.
 fn get_toml_values(content: &str, key: &str) -> Vec<String> {
     let mut res = vec![];
     for line in content.lines() {

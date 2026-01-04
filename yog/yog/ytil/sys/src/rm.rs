@@ -64,11 +64,6 @@ pub fn rm_f<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
 /// - `excluded_dirs` A list of directory names (as strings) to skip during traversal.
 /// - `dry_run` If true, collects paths that would be removed without actually removing them.
 ///
-/// # Returns
-/// Returns a tuple `(Vec<PathBuf>, Vec<(Option<PathBuf>, std::io::Error)>)` with the list of removed (or would-be
-/// removed in `dry_run`) paths and any errors encountered.
-/// Each error is paired with the optional path where it occurred (e.g., during metadata read, traversal, or removal).
-///
 /// # Performance
 /// - Reads metadata once per path using `symlink_metadata`, avoiding redundant syscalls.
 /// - Iterative approach prevents stack overflow in deep trees.

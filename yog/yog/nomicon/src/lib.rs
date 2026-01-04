@@ -12,9 +12,6 @@ use ytil_cmd::CmdExt;
 /// # Arguments
 /// - `workspace_root` The path to the workspace root directory.
 ///
-/// # Returns
-/// Full command output if documentation generation succeeds without warnings.
-///
 /// # Errors
 /// - If the `cargo doc` command fails or exits with a non-zero status.
 /// - If documentation warnings are present (due to `-Dwarnings`).

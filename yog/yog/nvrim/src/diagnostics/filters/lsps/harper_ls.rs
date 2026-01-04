@@ -31,9 +31,6 @@ impl HarperLsFilter<'_> {
     ///
     /// Returns a vector of boxed [`DiagnosticsFilter`] configured for the Harper language server. Includes a single
     /// [`HarperLsFilter`] suppressing channel-related noise ("stderr", "stdout", "stdin").
-    ///
-    /// # Returns
-    /// - [`Vec<Box<dyn DiagnosticsFilter>>`] Collection containing one configured [`HarperLsFilter`] for Harper.
     pub fn filters() -> Vec<Box<dyn DiagnosticsFilter>> {
         let blacklist = map! {
             "has ": set!["You may be missing a preposition here"],

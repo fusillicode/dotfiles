@@ -27,9 +27,6 @@ pub fn set_g_var<V: ToObject + Debug>(name: &str, value: V) {
 /// - `cmd` The ex command to execute.
 /// - `args` Optional list of arguments for the command.
 ///
-/// # Returns
-/// Returns `Ok(output)` where `output` is the command's output if any, or `Err(error)` if execution failed.
-///
 /// # Errors
 /// Errors from [`nvim_oxi::api::cmd`] are propagated after logging via [`crate::notify::error`].
 pub fn exec_vim_cmd(
@@ -54,11 +51,6 @@ pub fn exec_vim_cmd(
 /// # Arguments
 /// - `src` The Vimscript source code to execute.
 /// - `opts` Optional execution options; defaults to [`ExecOpts::default`] if [`None`].
-///
-/// # Returns
-/// - `Some(Some(String))` if execution succeeds and produces output.
-/// - `Some(None)` if execution succeeds but produces no output.
-/// - `None` if execution fails.
 ///
 /// # Errors
 /// Errors are reported to Nvim via [`crate::notify::error`].

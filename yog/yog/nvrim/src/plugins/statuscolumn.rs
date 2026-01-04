@@ -36,10 +36,6 @@ pub fn dict() -> Dictionary {
 /// - `extmarks` A vector of extmarks associated with the buffer.
 /// - `opts` Optional configuration options for rendering.
 ///
-/// # Returns
-/// - `Some(String)`: formatted status column when the current buffer `buftype` is successfully retrieved.
-/// - `None`: if `buftype` retrieval fails (details logged via [`ytil_noxi::notify::error`]).
-///
 /// Special cases:
 /// - When `buftype == "grug-far"` returns a single space string to minimize visual noise in transient search buffers.
 ///
@@ -65,10 +61,6 @@ fn draw((cur_lnum, extmarks, opts): (String, Vec<Extmark>, Option<Opts>)) -> Opt
 /// - `cur_lnum` Current line number string (already formatted by the caller / Vim script).
 /// - `metas` Iterator of extmark metadata for the current line; only items with a present [`ExtmarkMeta`] are yielded.
 /// - `opts` Optional configuration options for rendering the status column.
-///
-/// # Returns
-/// - Formatted status column string containing (at most) one diagnostic sign (highest severity), one Git sign (first
-///   encountered), a spacer + line number with surrounding separators.
 ///
 /// # Assumptions
 /// - `metas` yields at most a small number of items (typical per-line sign density is low).
@@ -274,10 +266,6 @@ enum SignHlGroup {
 
 impl SignHlGroup {
     /// Returns the canonical string form used by Nvim for this group.
-    ///
-    /// # Returns
-    /// - A static diagnostic string for diagnostic variants.
-    /// - The original owned string slice for dynamic variants (`Git`, `Other`).
     const fn as_str(&self) -> &str {
         match self {
             Self::DiagnosticError => "DiagnosticSignError",
@@ -290,10 +278,6 @@ impl SignHlGroup {
     }
 
     /// Severity ranking used to pick the highest diagnostic.
-    ///
-    /// # Returns
-    /// - Numeric priority (higher means more severe) for diagnostic variants.
-    /// - `0` for non-diagnostic variants (Git / Other).
     ///
     /// # Rationale
     /// Encapsulating the rank logic in the enum keeps selection code simpler and

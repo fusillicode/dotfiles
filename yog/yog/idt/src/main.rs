@@ -71,11 +71,6 @@ mod installers;
 /// - `installers_res` Slice of (bin name, join result) pairs. Outer [`std::thread::Result`] indicates panic; inner
 ///   [`color_eyre::Result<()>`] is the installer's logical result (`Ok(())` success, `Err(_)` failure).
 ///
-/// # Returns
-/// - `Ok(())` when all installers completed without panic and returned `Ok(())`.
-/// - `Err(Vec<&str>)` containing bin names that either panicked or returned an error. The caller emits the process
-///   failure exit and optional summary logging.
-///
 /// # Errors
 /// - Does not construct a rich error enum; instead returns failing bin names. Individual installers are expected to
 ///   have already printed detailed stderr output.

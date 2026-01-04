@@ -34,9 +34,6 @@ pub fn dict() -> Dictionary {
 ///
 /// # Arguments
 /// - `maybe_output` Optional Nvim string containing the `sqruff` JSON payload.
-///
-/// # Returns
-/// Vector of diagnostic [`Dictionary`]'s consumable by Nvim.
 #[allow(clippy::needless_pass_by_value)]
 fn parser(maybe_output: Option<nvim_oxi::String>) -> Vec<Dictionary> {
     let Some(output) = &maybe_output else {
@@ -131,10 +128,6 @@ struct Position {
 ///
 /// # Arguments
 /// - `msg` The parsed `sqruff` message.
-///
-/// # Returns
-/// A [`Dictionary`] keyed with fields `lnum`, `col`, `message`, `code`,
-/// `source`, `severity`.
 fn diagnostic_dict_from_msg(msg: SqruffMessage) -> Dictionary {
     dict! {
         "lnum": msg.range.start.line.saturating_sub(1),

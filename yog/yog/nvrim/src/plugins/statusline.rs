@@ -28,11 +28,6 @@ pub fn dict() -> Dictionary {
 
 /// Draws the status line with diagnostic information.
 ///
-/// # Returns
-/// - `Some(String)`: formatted statusline when buffer name, cwd, and cursor position retrieval succeed.
-/// - `None`: if any prerequisite retrieval fails (buffer name, cwd, or cursor position). An error is logged via
-///   [`ytil_noxi::notify::error`].
-///
 /// # Rationale
 /// Returning [`None`] lets callers distinguish between a valid (possibly empty diagnostics) statusline and a data
 /// acquisition failure.
@@ -213,10 +208,6 @@ impl Statusline<'_> {
 ///
 /// Accepts a tuple so it can be passed directly to iterator adapters like `.map(draw_diagnostics)` without
 /// additional closure wrapping.
-///
-/// # Returns
-/// - An empty [`String`] when count == 0 so zero-count severities can be filtered out upstream.
-/// - A formatted segment `%#<HlGroup>#<severity>:<count>` otherwise.
 ///
 /// # Rationale
 /// Tuple parameter matches iterator `(DiagnosticSeverity, u16)` item shape, removing a tiny layer of syntactic noise

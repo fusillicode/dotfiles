@@ -69,10 +69,6 @@ impl<T: AsRef<str>> From<T> for BufferKind {
 /// # Arguments
 /// - `mru_buffer_line` A line from the output of Nvim's "ls t" command.
 ///
-/// # Returns
-/// - `Ok(MruBuffer)` if parsing succeeds.
-/// - `Err` if parsing fails due to invalid format or missing data.
-///
 /// # Errors
 /// - Parsing the buffer ID fails.
 /// - Extracting the unlisted flag fails.
@@ -125,10 +121,6 @@ impl FromStr for MruBuffer {
 /// Calls Nvim's "execute" function with "ls t" to get the buffer list output,
 /// then parses it into a vector of [`MruBuffer`]. Errors during execution or parsing
 /// are notified to the user and result in [`None`] being returned.
-///
-/// # Returns
-/// - `Some(Vec<MruBuffer>)` if the buffers are successfully retrieved and parsed.
-/// - `None` if the Nvim call fails or parsing fails.
 pub fn get() -> Option<Vec<MruBuffer>> {
     let Ok(mru_buffers_output) = nvim_oxi::api::call_function::<_, String>("execute", ("ls t",))
         .inspect_err(|err| crate::notify::error(format!("error getting mru buffers | error={err:?}")))
@@ -149,10 +141,6 @@ pub fn get() -> Option<Vec<MruBuffer>> {
 ///
 /// # Arguments
 /// - `mru_buffers_output` The raw output string from "ls t".
-///
-/// # Returns
-/// - `Ok(Vec<MruBuffer>)` containing the parsed buffers.
-/// - `Err` if any line fails to parse.
 ///
 /// # Errors
 /// - Parsing any individual buffer line fails.

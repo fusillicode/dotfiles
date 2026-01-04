@@ -69,8 +69,6 @@ impl DiagnosticSeverity {
     /// - 4 for Hint
     /// - 0 for Other to indicate an unmapped / unknown severity.
     ///
-    /// # Returns
-    /// - `u8` numeric code 1 to 4 for known severities, 0 for [`DiagnosticSeverity::Other`].
     ///
     /// # Rationale
     /// Avoids relying on implicit enum discriminant order via `as u8` casts,
@@ -89,8 +87,6 @@ impl DiagnosticSeverity {
 
     /// Returns the canonical single-character symbol for this severity.
     ///
-    /// # Returns
-    /// - One of: "x" (Error), "⏶" (Warn), "◆" (Info), "" (Hint or Other).
     ///
     /// # Rationale
     /// Used by status UI components (statuscolumn) to render severity without allocating via [`core::fmt::Display`]

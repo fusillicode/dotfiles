@@ -12,9 +12,6 @@ use git2::Repository;
 /// # Arguments
 /// - `repo` The repository to query for remotes.
 ///
-/// # Returns
-/// The default remote HEAD reference.
-///
 /// # Errors
 /// - If no remote has a valid `HEAD` reference.
 pub fn get_default(repo: &Repository) -> color_eyre::Result<Reference<'_>> {

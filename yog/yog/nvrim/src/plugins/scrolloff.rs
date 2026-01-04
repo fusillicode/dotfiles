@@ -29,16 +29,7 @@ pub fn create_autocmd() {
 /// Retrieves the current window height, calculates scrolloff as 50% of height (floored),
 /// and sets the global 'scrolloff' option. Returns `false` to continue processing other autocmds.
 ///
-/// # Arguments
-///
-/// - `_`:Unused autocmd arguments.
-///
-/// # Returns
-///
-/// Always `false` to allow further autocmd processing.
-///
 /// # Errors
-///
 /// Logs an error notification if window height cannot be retrieved; otherwise proceeds silently.
 fn callback(_: AutocmdCallbackArgs) -> bool {
     let Ok(height) = Window::current().get_height().inspect_err(|err| {

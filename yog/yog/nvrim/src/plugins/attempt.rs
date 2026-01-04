@@ -81,9 +81,6 @@ fn create_scratch_file(_: ()) {
 
 /// Retrieves the entries of the scratches directory.
 ///
-/// # Returns
-/// A generic result containing a [`ReadDir`] in case of success.
-///
 /// # Errors
 /// Returns an error if the workspace root cannot be determined or the directory cannot be read.
 fn get_scratches_dir_content() -> color_eyre::Result<ReadDir> {
@@ -117,11 +114,6 @@ impl Scratch {
     ///
     /// # Arguments
     /// - `read_dir_res` The result of reading a directory entry.
-    ///
-    /// # Returns
-    /// - `Some(Ok(scratch))` if the entry is a valid file with all required components (name, stem, extension).
-    /// - `Some(Err(error))` if an error occurs while extracting file components.
-    /// - [`None`] if the entry is not a file.
     pub fn from(read_dir_res: std::io::Result<DirEntry>) -> Option<color_eyre::Result<Self>> {
         let path = match read_dir_res.map(|entry| entry.path()) {
             Ok(path) => path,
@@ -159,9 +151,6 @@ impl Scratch {
     /// # Arguments
     /// - `dest_dir` The directory where the file should be placed.
     /// - `date_time` The date and time to use for the timestamp.
-    ///
-    /// # Returns
-    /// The full path to the destination file.
     pub fn dest_file_path(&self, dest_dir: &Path, date_time: DateTime<Local>) -> PathBuf {
         dest_dir.join(format!(
             "{}-{}.{}",

@@ -37,9 +37,6 @@ pub fn dict() -> Dictionary {
 /// - The conversion fails (an error is reported via [`ytil_noxi::notify::error`]).
 /// - Writing the converted text back to the buffer fails (an error is reported via [`ytil_noxi::notify::error`]).
 ///
-/// # Returns
-/// Returns `()` upon successful completion.
-///
 /// # Errors
 /// Errors from [`ytil_noxi::vim_ui_select::open`] are reported via [`ytil_noxi::notify::error`]
 /// using the direct display representation of [`color_eyre::Report`].
@@ -109,9 +106,6 @@ impl ConversionOption {
 /// Expects an input in the format of [`u8`] R, G, B values.
 /// Whitespaces around components are trimmed.
 ///
-/// # Returns
-/// Returns the hexadecimal color code as a string (e.g., "#ff0000").
-///
 /// # Errors
 /// Returns an error if the input format is invalid or components cannot be parsed as u8.
 fn rgb_to_hex(input: &str) -> color_eyre::Result<String> {
@@ -140,9 +134,6 @@ fn rgb_to_hex(input: &str) -> color_eyre::Result<String> {
 /// - [`NaiveDateTime`]
 /// - [`NaiveDate`]
 /// - [`NaiveTime`]
-///
-/// # Returns
-/// Returns a string containing the Rust code for parsing the input with chrono.
 ///
 /// # Errors
 /// Returns an error if the input cannot be parsed with any supported format.

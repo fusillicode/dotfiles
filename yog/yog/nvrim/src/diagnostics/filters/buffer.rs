@@ -28,9 +28,6 @@ pub trait BufferFilter {
     /// # Arguments
     /// - `buffer_with_path` Buffer and its absolute path for filtering.
     ///
-    /// # Returns
-    /// - `Ok(true)` Buffer should be skipped (blacklisted path or type).
-    /// - `Ok(false)` Buffer should not be skipped.
     ///
     /// # Errors
     /// - Propagates [`nvim_oxi::api::Error`] from buffer type retrieval.
