@@ -9,10 +9,15 @@ fi
 # Update existing sudo time stamp until the script has finished.
 while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 
-# Disable general animations.
+# Animations.
 defaults write -g QLPanelAnimationDuration -float 0;
 defaults write NSGlobalDomain NSAutomaticWindowAnimationsEnabled -bool false;
 defaults write NSGlobalDomain NSWindowResizeTime -float 0.001;
+
+# Keyboard.
+defaults write -g ApplePressAndHoldEnabled --bool false
+defaults write -g KeyRepeat -int 0
+defaults write -g InitialKeyRepeat -int 15
 
 # Menubar.
 defaults -currentHost write com.apple.controlcenter Bluetooth -int 18;
