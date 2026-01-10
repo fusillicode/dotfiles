@@ -1,0 +1,16 @@
+[package]
+name = "hr"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Grep history with rg."
+keywords = ["cli", "editor", "zsh"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+chrono = { workspace = true }
+color-eyre = { workspace = true }
+ytil_cmd = { workspace = true }

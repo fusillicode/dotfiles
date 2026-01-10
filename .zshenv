@@ -1,6 +1,6 @@
 alias nv='nvim'
 alias code='code-insiders'
-alias h='history'
+alias h='history -i'
 alias l='ls -llAtrh'
 alias j='jq . -c'
 alias jl='jq . '
