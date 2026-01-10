@@ -1706,8 +1706,6 @@ dependencies = [
  "serde_json",
  "strum",
  "tempfile",
- "tree-sitter",
- "tree-sitter-rust",
  "url",
  "ytil_cmd",
  "ytil_git",
@@ -3641,6 +3639,8 @@ dependencies = [
  "pretty_assertions",
  "rstest",
  "serde",
+ "tree-sitter",
+ "tree-sitter-rust",
 ]
 
 [[package]]
