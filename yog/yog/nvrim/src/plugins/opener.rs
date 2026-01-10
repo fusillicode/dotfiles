@@ -6,7 +6,22 @@ use crate::buffer::token_under_cursor::TokenUnderCursor;
 pub fn dict() -> Dictionary {
     dict! {
         "open_token_under_cursor": fn_from!(open_token_under_cursor),
+        "copy_enclosing_function": fn_from!(copy_enclosing_function),
     }
+}
+
+fn copy_enclosing_function(_: ()) -> Option<()> {
+    let file_path = ytil_noxi::buffer::get_absolute_path(Some(&nvim_oxi::api::get_current_buf()))?;
+    let enclosing_fn = ytil_noxi::tree_sitter::get_enclosing_fn_name_of_position(&file_path)?;
+    ytil_sys::file::cp_to_system_clipboard(&mut enclosing_fn.as_bytes())
+        .inspect_err(|err| {
+            ytil_noxi::notify::error(format!(
+                "error copying content to system clipboard | content={enclosing_fn:?} error={err:#?}"
+            ));
+        })
+        .ok()?;
+    nvim_oxi::print!("Enclosing fn name copied to clipboard: {enclosing_fn}");
+    Some(())
 }
 
 fn open_token_under_cursor(_: ()) -> Option<()> {

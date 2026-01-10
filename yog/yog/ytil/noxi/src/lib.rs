@@ -10,6 +10,7 @@ pub mod macros;
 pub mod mru_buffers;
 pub mod notify;
 pub mod quickfix;
+pub mod tree_sitter;
 pub mod vim_ui_select;
 pub mod visual_selection;
 pub mod window;

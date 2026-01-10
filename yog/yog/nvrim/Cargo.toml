@@ -26,8 +26,6 @@ nvim-oxi = { git = "https://github.com/noib3/nvim-oxi", rev = "b1278b123dbac3908
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }
-tree-sitter = { version = "0.26" }
-tree-sitter-rust = { version = "0.24" }
 url = { version = "2.5" }
 ytil_cmd = { workspace = true }
 ytil_git = { workspace = true }
