@@ -85,7 +85,7 @@ fn set_all(_: ()) {
     set("backspace", "indent,eol,start", &global_scope);
     set("breakindent", true, &global_scope);
     set("completeopt", "menuone,noselect", &global_scope);
-    set("cursorline", true, &global_scope);
+    set("cursorline", false, &global_scope);
     set("expandtab", true, &global_scope);
     set("fillchars", "eob: ", &global_scope);
     set("hlsearch", true, &global_scope);
