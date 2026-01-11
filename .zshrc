@@ -123,28 +123,31 @@ unset FZF_CTRL_R_COMMAND
 
 fzf-custom-history() {
   local selected
-  # This correctly inherits FZF_DEFAULT_OPTS automatically.
-  selected=$(fc -lnDir 1 | fzf \
+
+  # Using custom inline fzf override.
+  selected=$(h | fzf \
     --layout=reverse \
     --info=inline \
     --height=12 \
     --multi \
     --cycle \
     --bind 'tab:accept' \
-    --nth=4.. \
     --prompt='' \
     --separator='' \
     --pointer='' \
     --marker='+' \
     --color=hl:#8cf8f6,hl+:#8cf8f6:bold,fg+:bold \
+    # This is to properly integrate with cusotm history format.
     --query="$LBUFFER" \
+    --nth=3.. \
+    --no-sort \
   )
 
   if [[ -n "$selected" ]]; then
     # Trim leading whitespace.
     selected="${selected#"${selected%%[![:space:]]*}"}"
     # Extract command (4th field onwards) using Zsh's internal parser.
-    LBUFFER="${${(z)selected}[4,-1]}"
+    LBUFFER="${${(z)selected}[3,-1]}"
   fi
   zle reset-prompt
 }
