@@ -7,7 +7,6 @@ members = [
     "yog/gch",
     "yog/gcu",
     "yog/ghl",
-    "yog/hr",
     "yog/idt",
     "yog/miskatonic",
     "yog/nomicon",
