@@ -985,7 +985,6 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "color-eyre",
- "ytil_cmd",
 ]
 
 [[package]]

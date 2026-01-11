@@ -47,6 +47,7 @@ pub trait Installer: Sync + Send {
         let mut cmd = Command::new(self.bin_name());
         cmd.args(check_args);
 
+        #[allow(clippy::result_large_err)]
         let check_res = cmd
             .exec()
             .and_then(|output| {

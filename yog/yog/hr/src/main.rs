@@ -16,11 +16,14 @@ use color_eyre::eyre::eyre;
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let history_path = std::env::var("HISTFILE").map(PathBuf::from).unwrap_or_else(|_| {
-        let mut p = PathBuf::from(std::env::var("HOME").unwrap_or_default());
-        p.push(".zsh_history");
-        p
-    });
+    let history_path = std::env::var("HISTFILE").map_or_else(
+        |_| {
+            let mut p = PathBuf::from(std::env::var("HOME").unwrap_or_default());
+            p.push(".zsh_history");
+            p
+        },
+        PathBuf::from,
+    );
 
     let mut lines = BufReader::new(File::open(history_path)?).split(b'\n').peekable();
 
@@ -31,13 +34,12 @@ fn main() -> color_eyre::Result<()> {
             if entry.ends_with('\\') {
                 while let Some(Ok(next_line)) = lines.peek() {
                     let next_line = String::from_utf8_lossy(next_line);
-                    if !next_line.starts_with(": ") {
-                        entry.push('\n');
-                        entry.push_str(&next_line);
-                        lines.next();
-                    } else {
+                    if next_line.starts_with(": ") {
                         break;
                     }
+                    entry.push('\n');
+                    entry.push_str(&next_line);
+                    lines.next();
                 }
             }
             println!("{}", ParsedEntry::from_str(&entry)?);
