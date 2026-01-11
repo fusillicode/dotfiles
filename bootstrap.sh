@@ -11,6 +11,7 @@ ln -s "$dotfiles_dir/.config/opencode" "$HOME/.config/opencode"
 ln -s "$dotfiles_dir/.config/harper-ls" "$HOME/.config"
 ln -s "$dotfiles_dir/.config/starship.toml" "$HOME/.config/starship.toml"
 
+ln -s "$dotfiles_dir/.hushlogin" "$HOME"
 cp "$dotfiles_dir/.gitconfig" "$HOME"
 ln -s "$dotfiles_dir/.gitignore" "$HOME"
 ln -s "$dotfiles_dir/.gitignore_global" "$HOME"
