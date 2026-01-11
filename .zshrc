@@ -118,27 +118,27 @@ SAVEHIST=99999
 
 source <(fzf --zsh)
 [[ -n "${terminfo[kcuu1]}" ]] && bindkey "${terminfo[kcuu1]}" fzf-history-widget
-export FZF_DEFAULT_OPTS="\
---layout=reverse \
---info=inline \
---height=12 \
---multi \
---cycle \
---bind 'tab:accept' \
---nth=4.. \
---prompt='' \
---separator='' \
---pointer='' \
---marker='+' \
---color=hl:#8cf8f6,hl+:#8cf8f6:bold,fg+:bold \
-"
 
 unset FZF_CTRL_R_COMMAND
 
 fzf-custom-history() {
   local selected
   # This correctly inherits FZF_DEFAULT_OPTS automatically.
-  selected=$(fc -lnDir 1 | fzf --query="$LBUFFER")
+  selected=$(fc -lnDir 1 | fzf \
+    --layout=reverse \
+    --info=inline \
+    --height=12 \
+    --multi \
+    --cycle \
+    --bind 'tab:accept' \
+    --nth=4.. \
+    --prompt='' \
+    --separator='' \
+    --pointer='' \
+    --marker='+' \
+    --color=hl:#8cf8f6,hl+:#8cf8f6:bold,fg+:bold \
+    --query="$LBUFFER" \
+  )
 
   if [[ -n "$selected" ]]; then
     # Trim leading whitespace.

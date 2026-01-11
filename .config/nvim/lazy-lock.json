@@ -7,8 +7,8 @@
   "crates.nvim": { "branch": "main", "commit": "ac9fa498a9edb96dc3056724ff69d5f40b898453" },
   "fidget.nvim": { "branch": "main", "commit": "64463022a1f2ff1318ab22a2ea4125ed9313a483" },
   "flatten.nvim": { "branch": "main", "commit": "72527798e75b5e34757491947c2cb853ce21dc0e" },
-  "fzf": { "branch": "master", "commit": "3f94bcb5bf93b0c04a7fc4087dff8f99e84e4a9b" },
-  "fzf-lua": { "branch": "main", "commit": "b8d1356b7120f5cf111709cb2fa504096248fb26" },
+  "fzf": { "branch": "master", "commit": "d1f037059ab57aa1c70abe124b2b72a710f4a28f" },
+  "fzf-lua": { "branch": "main", "commit": "940ffbfb54842b1b2bdd7aacc35db998a952b616" },
   "gitsigns.nvim": { "branch": "main", "commit": "42d6aed4e94e0f0bbced16bbdcc42f57673bd75e" },
   "grug-far.nvim": { "branch": "main", "commit": "794f03c97afc7f4b03fb6ec5111be507df1850cf" },
   "lazy.nvim": { "branch": "main", "commit": "306a05526ada86a7b30af95c5cc81ffba93fef97" },
@@ -22,6 +22,6 @@
   "nvim-treesitter-pairs": { "branch": "master", "commit": "f8c195d4d8464cba6971bf8de2d6a5c8c109b37a" },
   "nvim-treesitter-textobjects": { "branch": "master", "commit": "5ca4aaa6efdcc59be46b95a3e876300cfead05ef" },
   "oil.nvim": { "branch": "master", "commit": "81b8a91735ad5cd24a6b3137f14a89f19176364f" },
-  "opencode.nvim": { "branch": "main", "commit": "17d0aad778fb2fed18f1fbd66e6e5f5b938d53f3" },
+  "opencode.nvim": { "branch": "main", "commit": "e83a9eb1e24aad925769cc7451ba6c2fbe54b400" },
   "schemastore.nvim": { "branch": "main", "commit": "f35b7747d4d536fba96aa098a4144e5c85252828" }
 }
