@@ -137,7 +137,6 @@ fzf-custom-history() {
     --pointer='' \
     --marker='+' \
     --color=hl:#8cf8f6,hl+:#8cf8f6:bold,fg+:bold \
-    # This is to properly integrate with cusotm history format.
     --query="$LBUFFER" \
     --nth=3.. \
     --no-sort \
