@@ -18,6 +18,7 @@ ln -s "$dotfiles_dir/.gitignore_global" "$HOME"
 ln -s "$dotfiles_dir/.psqlrc" "$HOME"
 ln -s "$dotfiles_dir/.zshenv" "$HOME"
 ln -s "$dotfiles_dir/.zshrc" "$HOME"
+ln -s "$dotfiles_dir/.zsh-fzf-custom-histoy" "$HOME"
 
 # Xcode tools
 xcode-select --install
