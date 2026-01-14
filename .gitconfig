@@ -3,6 +3,7 @@
     email = 2248534+fusillicode@users.noreply.github.com
 [core]
     filemode = false
+    excludesfile = ~/.gitignore_global
 [branch]
     autosetuprebase = always
 [diff]
