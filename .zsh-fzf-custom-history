@@ -21,6 +21,7 @@ fzf-custom-history() {
 
   # Using custom inline fzf override.
   selected=$(h | fzf \
+    --exact \
     --layout=reverse \
     --info=inline \
     --height=12 \
