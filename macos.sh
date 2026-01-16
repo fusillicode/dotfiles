@@ -39,6 +39,7 @@ defaults write com.apple.finder AppleShowAllFiles -bool true;
 defaults write com.apple.finder DisableAllAnimations -bool true;
 defaults write com.apple.finder FXEnableExtensionChangeWarning -bool false;
 defaults write com.apple.finder FXPreferredViewStyle -string "Nlsv";
+defaults write com.apple.finder WarnOnEmptyTrash -bool false;
 defaults write com.apple.finder _FXSortFoldersFirst -bool true;
 defaults write com.apple.finder _FXSortFoldersFirstOnDesktop -bool true;
 /usr/libexec/PlistBuddy \
