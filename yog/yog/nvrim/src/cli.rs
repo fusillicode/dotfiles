@@ -8,9 +8,10 @@ mod fd;
 mod rg;
 
 /// A list of glob patterns to exclude from searches.
-pub const GLOB_BLACKLIST: [&str; 6] = [
+pub const GLOB_BLACKLIST: [&str; 7] = [
     "**/.git/*",
     "**/target/*",
+    "**/target-*/*",
     "**/_build/*",
     "**/deps/*",
     "**/.elixir_ls/*",
