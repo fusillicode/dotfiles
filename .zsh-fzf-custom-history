@@ -22,9 +22,8 @@ fzf-custom-history() {
   # Using custom inline fzf override.
   selected=$(h | fzf \
     --exact \
-    --layout=reverse \
     --info=inline \
-    --height=12 \
+    --height=7 \
     --multi \
     --cycle \
     --bind 'tab:accept' \
