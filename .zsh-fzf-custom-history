@@ -1,9 +1,13 @@
 # Zsh history and fzf
-setopt EXTENDED_HISTORY
-setopt HIST_REDUCE_BLANKS
-setopt HIST_IGNORE_ALL_DUPS
-HISTSIZE=99999
-SAVEHIST=99999
+HISTSIZE=1000000             # How many lines to keep in active memory
+SAVEHIST=1000000             # How many lines to keep in the actual file
+setopt EXTENDED_HISTORY      # Save timestamps (This replaces HISTTIMEFORMAT)
+setopt HIST_FIND_NO_DUPS     # Do not display a line previously found, even if it's a dup
+setopt HIST_IGNORE_ALL_DUPS  # If a new command is a duplicate, delete the old one
+setopt HIST_IGNORE_SPACE     # Don't save commands that start with a space
+setopt HIST_REDUCE_BLANKS    # Remove superfluous blanks before recording
+setopt INC_APPEND_HISTORY    # Write to the history file immediately, not just on exit
+setopt SHARE_HISTORY         # Share history between all open terminal tabs
 
 # Check if fzf is installed
 if ! (( $+commands[fzf] )); then
