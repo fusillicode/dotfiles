@@ -31,6 +31,11 @@ bright.magenta = "#ff00ff"
 bright.cyan = "#00ffff"
 bright.white = "#dcdcd7"
 
+[cursor]
+blink_interval = 750
+style = { shape = "Block", blinking = "On" }
+vi_mode_style = { shape = "Block", blinking = "On" }
+
 [selection]
 save_to_clipboard = false
 
