@@ -88,6 +88,11 @@ fn set_all(_: ()) {
     set("cursorline", false, &global_scope);
     set("expandtab", true, &global_scope);
     set("fillchars", "eob: ", &global_scope);
+    set(
+        "guicursor",
+        "n-v-c:block,i-ci-ve:ver25,a:blinkon150-blinkoff150",
+        &global_scope,
+    );
     set("hlsearch", true, &global_scope);
     set("ignorecase", true, &global_scope);
     set("laststatus", 3, &global_scope);
