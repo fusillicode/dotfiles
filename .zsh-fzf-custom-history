@@ -29,7 +29,6 @@ fzf-custom-history() {
     --info=inline \
     --height=7 \
     --multi \
-    --cycle \
     --bind 'tab:accept' \
     --prompt='' \
     --separator='' \
