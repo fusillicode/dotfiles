@@ -2,7 +2,6 @@
 //! of changed hunks, and presents a selection UI to jump to specific diff locations in buffers.
 
 use nvim_oxi::Dictionary;
-use nvim_oxi::api::Buffer;
 use ytil_noxi::vim_ui_select::QuickfixConfig;
 
 /// [`Dictionary`] of git diff helpers.
@@ -20,7 +19,7 @@ fn get_hunks(only_current_buffer: Option<bool>) {
     let current_buffer_path = ytil_noxi::buffer::get_absolute_path(
         only_current_buffer
             .is_some_and(std::convert::identity)
-            .then(Buffer::current)
+            .then(nvim_oxi::api::get_current_buf)
             .as_ref(),
     );
 
