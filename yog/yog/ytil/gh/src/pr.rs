@@ -108,7 +108,7 @@ pub fn get(
 
     let mut prs: Vec<PullRequest> = serde_json::from_slice(&output)?;
     prs.retain(|pr| retain_fn(pr));
-    prs.sort_unstable_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    prs.sort_unstable_by_key(|x| x.updated_at);
 
     Ok(prs)
 }
