@@ -64,9 +64,9 @@ local function get_custom_lsps_configs()
         ['rust-analyzer'] = {
           cargo = {
             build_script = { enable = true, },
-            targetDir = 'target-neovim',
+            targetDir = 'target-nv',
             extraEnv = {
-              CARGO_TARGET_DIR = 'target-neovim',
+              CARGO_TARGET_DIR = 'target-nv',
               CARGO_PROFILE_RUST_ANALYZER_INHERITS = 'dev',
             },
             allTargets = true,
