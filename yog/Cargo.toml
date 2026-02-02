@@ -48,7 +48,7 @@ assert2 = { version = "0.3" }
 bitflags = { version = "2.9" }
 chrono = { version = "0.4", features = ["serde"] }
 color-eyre = { version = "0.6" }
-convert_case = { version = "0.10" }
+convert_case = { version = "0.11" }
 fake = { version = "4.4", features = ["derive"] }
 getrandom = { version = "0.3" }
 git2 = { version = "0.20" }
