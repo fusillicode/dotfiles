@@ -1,5 +1,7 @@
 //! Statusline drawing helpers with diagnostics aggregation.
 
+use std::fmt::Write as _;
+
 use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
 use nvim_oxi::conversion::FromObject;
@@ -147,7 +149,8 @@ impl Statusline<'_> {
             if wrote_any {
                 current_buffer_diags_segment.push(' ');
             }
-            current_buffer_diags_segment.push_str(&draw_diagnostics((sev, count)));
+            // Write directly to string to avoid intermediate allocation
+            write_diagnostics(&mut current_buffer_diags_segment, sev, count);
             wrote_any = true;
         }
         if wrote_any {
@@ -164,7 +167,8 @@ impl Statusline<'_> {
             if !first {
                 workspace_diags_segment.push(' ');
             }
-            workspace_diags_segment.push_str(&draw_diagnostics((sev, count)));
+            // Write directly to string to avoid intermediate allocation
+            write_diagnostics(&mut workspace_diags_segment, sev, count);
             first = false;
         }
 
@@ -181,10 +185,10 @@ impl Statusline<'_> {
     }
 }
 
-/// Draws the diagnostic count for a (severity, count) pair.
-fn draw_diagnostics((severity, diags_count): (DiagnosticSeverity, u16)) -> String {
+/// Writes the diagnostic count directly to the target string, avoiding intermediate allocation.
+fn write_diagnostics(target: &mut String, severity: DiagnosticSeverity, diags_count: u16) {
     if diags_count == 0 {
-        return String::new();
+        return;
     }
     let hg_group_dyn_part = match severity {
         DiagnosticSeverity::Error => "Error",
@@ -192,7 +196,17 @@ fn draw_diagnostics((severity, diags_count): (DiagnosticSeverity, u16)) -> Strin
         DiagnosticSeverity::Info => "Info",
         DiagnosticSeverity::Hint | DiagnosticSeverity::Other => "Hint",
     };
-    format!("%#DiagnosticStatusLine{hg_group_dyn_part}#{diags_count}")
+    // write! to String is infallible, so we can safely ignore the result
+    let _ = write!(target, "%#DiagnosticStatusLine{hg_group_dyn_part}#{diags_count}");
+}
+
+/// Draws the diagnostic count for a (severity, count) pair.
+/// Kept for test compatibility.
+#[cfg(test)]
+fn draw_diagnostics((severity, diags_count): (DiagnosticSeverity, u16)) -> String {
+    let mut out = String::new();
+    write_diagnostics(&mut out, severity, diags_count);
+    out
 }
 
 #[cfg(test)]

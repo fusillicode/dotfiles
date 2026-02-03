@@ -31,7 +31,8 @@ pub fn get_raw(path: Option<&Path>) -> color_eyre::Result<Vec<String>> {
 /// # Errors
 /// - Parsing diff output fails.
 pub fn get_hunks(raw_diff_output: &[String]) -> color_eyre::Result<Vec<(&str, usize)>> {
-    let mut out = vec![];
+    // Pre-allocate with estimated capacity: roughly 1 hunk per 4 diff lines
+    let mut out = Vec::with_capacity(raw_diff_output.len().saturating_div(4).max(1));
 
     for (raw_diff_line_idx, raw_diff_line) in raw_diff_output.iter().enumerate() {
         let Some(path_line) = raw_diff_line.strip_prefix(PATH_LINE_PREFIX) else {

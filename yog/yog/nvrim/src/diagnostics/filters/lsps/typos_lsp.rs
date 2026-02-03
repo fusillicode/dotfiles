@@ -3,6 +3,7 @@
 //! Suppresses noisy diagnostics that cannot be filtered directly with "typos-lsp".
 
 use std::collections::HashSet;
+use std::sync::LazyLock;
 
 use lit2::set;
 
@@ -11,11 +12,59 @@ use crate::diagnostics::filters::DiagnosticsFilter;
 use crate::diagnostics::filters::lsps::GetDiagMsgOutput;
 use crate::diagnostics::filters::lsps::LspFilter;
 
+/// Static blacklist initialized once on first access.
+/// Contains false-positive spelling suggestions to suppress.
+static TYPOS_BLACKLIST: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    set![
+        "accidentes",
+        "aci",
+        "administrar",
+        "anual",
+        "aplicable",
+        "autor",
+        "calle",
+        "clase",
+        "clea",
+        "cliente",
+        "clientes",
+        "comercial",
+        "conceptos",
+        "confidencial",
+        "constituye",
+        "decisiones",
+        "emision",
+        "explosivas",
+        "foto",
+        "importante",
+        "individuales",
+        "informativo",
+        "informe",
+        "internacional",
+        "legislativo",
+        "limite",
+        "materiales",
+        "materias",
+        "minerales",
+        "momento",
+        "nd",
+        "ot",
+        "patrones",
+        "presentes",
+        "producto",
+        "profesional",
+        "regulatorias",
+        "responsable",
+        "ser",
+        "ue",
+        "utiliza",
+    ]
+});
+
 pub struct TyposLspFilter<'a> {
     /// LSP diagnostic source name; only diagnostics from this source are eligible for blacklist matching.
     pub source: &'a str,
-    /// Blacklist of messages per source.
-    pub blacklist: HashSet<&'static str>,
+    /// Blacklist of messages per source. References the static blacklist for one-time initialization.
+    pub blacklist: &'a HashSet<&'static str>,
     /// Optional buffer path substring that must be contained within the buffer path for filtering to apply.
     pub path_substring: Option<&'a str>,
 }
@@ -27,54 +76,10 @@ impl TyposLspFilter<'_> {
     /// language server. Includes a single [`TyposLspFilter`] that suppresses
     /// false-positive spelling suggestions matching predefined substrings.
     pub fn filters() -> Vec<Box<dyn DiagnosticsFilter>> {
-        let blacklist = set![
-            "accidentes",
-            "aci",
-            "administrar",
-            "anual",
-            "aplicable",
-            "autor",
-            "calle",
-            "clase",
-            "clea",
-            "cliente",
-            "clientes",
-            "comercial",
-            "conceptos",
-            "confidencial",
-            "constituye",
-            "decisiones",
-            "emision",
-            "explosivas",
-            "foto",
-            "importante",
-            "individuales",
-            "informativo",
-            "informe",
-            "internacional",
-            "legislativo",
-            "limite",
-            "materiales",
-            "materias",
-            "minerales",
-            "momento",
-            "nd",
-            "ot",
-            "patrones",
-            "presentes",
-            "producto",
-            "profesional",
-            "regulatorias",
-            "responsable",
-            "ser",
-            "ue",
-            "utiliza",
-        ];
-
         vec![Box::new(TyposLspFilter {
             source: "typos",
             path_substring: None,
-            blacklist,
+            blacklist: &TYPOS_BLACKLIST,
         })]
     }
 }
@@ -117,9 +122,10 @@ mod tests {
 
     #[test]
     fn skip_diagnostic_when_buf_path_pattern_not_matched_returns_false() {
+        let test_blacklist = set!["test"];
         let filter = TyposLspFilter {
             source: "typos",
-            blacklist: set!["test"],
+            blacklist: &test_blacklist,
             path_substring: Some("src/"),
         };
         let buf = create_buffer_with_path("tests/main.rs");
@@ -133,9 +139,10 @@ mod tests {
 
     #[test]
     fn skip_diagnostic_when_source_mismatch_returns_false() {
+        let test_blacklist = set!["test"];
         let filter = TyposLspFilter {
             source: "typos",
-            blacklist: set!["test"],
+            blacklist: &test_blacklist,
             path_substring: None,
         };
         let buf = create_buffer_with_path("src/lib.rs");
@@ -149,9 +156,10 @@ mod tests {
 
     #[test]
     fn skip_diagnostic_when_message_does_not_contain_blacklisted_substring_returns_false() {
+        let test_blacklist = set!["test"];
         let filter = TyposLspFilter {
             source: "typos",
-            blacklist: set!["test"],
+            blacklist: &test_blacklist,
             path_substring: None,
         };
         let buf = create_buffer_with_path("src/lib.rs");
@@ -165,9 +173,10 @@ mod tests {
 
     #[test]
     fn skip_diagnostic_when_message_contains_blacklisted_substring_returns_true() {
+        let test_blacklist = set!["test"];
         let filter = TyposLspFilter {
             source: "typos",
-            blacklist: set!["test"],
+            blacklist: &test_blacklist,
             path_substring: None,
         };
         let buf = create_buffer_with_path("src/lib.rs");
@@ -181,9 +190,10 @@ mod tests {
 
     #[test]
     fn skip_diagnostic_when_missing_message_key_returns_error() {
+        let test_blacklist = set!["test"];
         let filter = TyposLspFilter {
             source: "typos",
-            blacklist: set!["test"],
+            blacklist: &test_blacklist,
             path_substring: None,
         };
         let buf = create_buffer_with_path("src/lib.rs");
