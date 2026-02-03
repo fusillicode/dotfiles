@@ -337,7 +337,7 @@ fn main() -> color_eyre::Result<()> {
         println!("{}", include_str!("../help.txt"));
         return Ok(());
     }
-    let fix_mode = args.first().is_some_and(|s| s == "--fix");
+    let fix_mode = args.first().is_some_and(|s| s == "fix");
 
     let (start_msg, lints) = if fix_mode {
         ("lints fix", LINTS_FIX)
