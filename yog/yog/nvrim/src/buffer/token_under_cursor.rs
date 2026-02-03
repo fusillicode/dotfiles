@@ -167,6 +167,9 @@ pub enum TokenUnderCursor {
 
 impl nvim_oxi::lua::Pushable for TokenUnderCursor {
     unsafe fn push(self, lstate: *mut State) -> Result<std::ffi::c_int, nvim_oxi::lua::Error> {
+        // SAFETY: The caller (nvim-oxi framework) guarantees that:
+        // 1. `lstate` is a valid pointer to an initialized Lua state
+        // 2. The Lua stack has sufficient capacity for the pushed value
         unsafe {
             self.to_object()
                 .map_err(nvim_oxi::lua::Error::push_error_from_err::<Self, _>)?
