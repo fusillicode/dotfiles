@@ -147,8 +147,9 @@ impl Display for Cmd {
 impl From<&Command> for Cmd {
     fn from(value: &Command) -> Self {
         Self {
-            name: value.get_program().to_string_lossy().to_string(),
-            args: value.get_args().map(|x| x.to_string_lossy().to_string()).collect(),
+            // Use into_owned() instead of to_string() to avoid extra allocation when Cow is already owned
+            name: value.get_program().to_string_lossy().into_owned(),
+            args: value.get_args().map(|x| x.to_string_lossy().into_owned()).collect(),
             cur_dir: value.get_current_dir().map(Path::to_path_buf),
         }
     }
@@ -158,8 +159,9 @@ impl From<&Command> for Cmd {
 impl From<&mut Command> for Cmd {
     fn from(value: &mut Command) -> Self {
         Self {
-            name: value.get_program().to_string_lossy().to_string(),
-            args: value.get_args().map(|x| x.to_string_lossy().to_string()).collect(),
+            // Use into_owned() instead of to_string() to avoid extra allocation when Cow is already owned
+            name: value.get_program().to_string_lossy().into_owned(),
+            args: value.get_args().map(|x| x.to_string_lossy().into_owned()).collect(),
             cur_dir: value.get_current_dir().map(Path::to_path_buf),
         }
     }

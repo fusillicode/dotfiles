@@ -28,7 +28,7 @@ impl Args<String> for pico_args::Arguments {
         self.clone()
             .finish()
             .into_iter()
-            .map(|arg| arg.to_string_lossy().to_string())
+            .map(|arg| arg.to_string_lossy().into_owned())
             .collect()
     }
 }

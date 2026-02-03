@@ -53,7 +53,8 @@ pub trait BufferExt: Debug {
 
         let mut out = String::new();
         for (line_idx, line) in lines.enumerate() {
-            let line = line.to_string();
+            // Use to_string_lossy() which returns Cow<str> - borrows if valid UTF-8, allocates only if invalid
+            let line = line.to_string_lossy();
             let line_start_idx = boundary.get_line_start_idx(line_idx, start_col);
             let line_end_idx = boundary.get_line_end_idx(&line, line_idx, last_line_idx, end_col);
             let sub_line = line.get(line_start_idx..line_end_idx).ok_or_else(|| {
@@ -171,6 +172,7 @@ impl BufferExt for Buffer {
     }
 
     fn get_buf_type(&self) -> Option<String> {
+        // Buffer clone is cheap (just an i32 handle copy)
         let opts = OptionOptsBuilder::default().buf(self.clone()).build();
         nvim_oxi::api::get_option_value::<String>("buftype", &opts)
             .inspect_err(|err| {
@@ -196,7 +198,7 @@ impl BufferExt for Buffer {
         let buf_name = self
             .get_name()
             .wrap_err_with(|| eyre!("error getting name of buffer | buffer={self:#?}"))
-            .map(|s| s.to_string_lossy().to_string())?;
+            .map(|s| s.to_string_lossy().into_owned())?;
 
         if buf_name.starts_with("term://") {
             let (_, pid_cmd) = buf_name.rsplit_once("//").ok_or_else(|| {
@@ -325,7 +327,7 @@ pub fn get_relative_path_to_cwd(current_buffer: &Buffer) -> Option<PathBuf> {
 pub fn get_absolute_path(buffer: Option<&Buffer>) -> Option<PathBuf> {
     let path = buffer?
         .get_name()
-        .map(|s| s.to_string_lossy().to_string())
+        .map(|s| s.to_string_lossy().into_owned())
         .inspect_err(|err| {
             crate::notify::error(format!(
                 "error getting buffer absolute path | buffer={buffer:#?} error={err:#?}"

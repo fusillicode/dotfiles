@@ -167,7 +167,7 @@ mod tests {
     fn file_to_open_from_str_works_as_expected() {
         let root_dir = std::env::current_dir().unwrap();
         // We should always have a Cargo.toml...
-        let dummy_path = root_dir.join("Cargo.toml").to_string_lossy().to_string();
+        let dummy_path = root_dir.join("Cargo.toml").to_string_lossy().into_owned();
 
         assert2::let_assert!(Ok(f0) = FileToOpen::from_str(&dummy_path));
         let expected = FileToOpen {
@@ -217,7 +217,7 @@ mod tests {
         let panes = vec![pane_with(7, 1, &dir)];
         assert2::let_assert!(Ok(file) = FileToOpen::try_from(("Cargo.toml", 7, panes.as_slice())));
         let expected = FileToOpen {
-            path: dir.join("Cargo.toml").to_string_lossy().to_string(),
+            path: dir.join("Cargo.toml").to_string_lossy().into_owned(),
             line_nbr: 0,
             column: 0,
         };

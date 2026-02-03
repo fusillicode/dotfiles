@@ -83,7 +83,7 @@ fn get_token_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &Curso
     // Check rows before the cursor one.
     if word_end_idx.saturating_sub(out.len()) == 0 {
         'outer: for idx in (0..cursor_pos.row.saturating_sub(1)).rev() {
-            let line = buffer.get_line(idx).ok()?.to_string_lossy().to_string();
+            let line = buffer.get_line(idx).ok()?.to_string_lossy().into_owned();
             if line.is_empty() {
                 break 'outer;
             }
@@ -101,7 +101,7 @@ fn get_token_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &Curso
     // Check rows after the cursor one.
     if word_end_idx >= window_width {
         'outer: for idx in cursor_pos.row..usize::MAX {
-            let line = buffer.get_line(idx).ok()?.to_string_lossy().to_string();
+            let line = buffer.get_line(idx).ok()?.to_string_lossy().into_owned();
             if line.is_empty() {
                 break 'outer;
             }
@@ -239,7 +239,7 @@ impl TokenUnderCursor {
 
             let maybe_path = {
                 process_desc.cwd.push(value);
-                let mut tmp = process_desc.cwd.to_string_lossy().to_string();
+                let mut tmp = process_desc.cwd.to_string_lossy().into_owned();
                 if let Some(lnum) = lnum {
                     tmp.push(':');
                     tmp.push_str(&lnum.to_string());
@@ -401,7 +401,7 @@ mod tests {
     fn token_under_cursor_classify_path_to_text_file_returns_text_file() {
         let mut temp_file = NamedTempFile::new().unwrap();
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
-        let path = temp_file.path().to_string_lossy().to_string();
+        let path = temp_file.path().to_string_lossy().into_owned();
         let result = TokenUnderCursor::classify(&path);
         assert2::let_assert!(Ok(actual) = result);
         pretty_assertions::assert_eq!(
@@ -419,7 +419,7 @@ mod tests {
     fn token_under_cursor_classify_path_lnum_to_text_file_returns_text_file_with_lnum() {
         let mut temp_file = NamedTempFile::new().unwrap();
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
-        let path = temp_file.path().to_string_lossy().to_string();
+        let path = temp_file.path().to_string_lossy().into_owned();
         let result = TokenUnderCursor::classify(&format!("{path}:10"));
         assert2::let_assert!(Ok(actual) = result);
         pretty_assertions::assert_eq!(
@@ -437,7 +437,7 @@ mod tests {
     fn token_under_cursor_classify_path_lnum_col_to_text_file_returns_text_file_with_lnum_col() {
         let mut temp_file = NamedTempFile::new().unwrap();
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
-        let path = temp_file.path().to_string_lossy().to_string();
+        let path = temp_file.path().to_string_lossy().into_owned();
         let result = TokenUnderCursor::classify(&format!("{path}:10:5"));
         assert2::let_assert!(Ok(actual) = result);
         pretty_assertions::assert_eq!(
@@ -454,7 +454,7 @@ mod tests {
     #[cfg(target_os = "macos")]
     fn token_under_cursor_classify_path_to_directory_returns_directory() {
         let temp_dir = TempDir::new().unwrap();
-        let path = temp_dir.path().to_string_lossy().to_string();
+        let path = temp_dir.path().to_string_lossy().into_owned();
         let result = TokenUnderCursor::classify(&path);
         assert2::let_assert!(Ok(actual) = result);
         pretty_assertions::assert_eq!(actual, TokenUnderCursor::Directory(path));
@@ -466,7 +466,7 @@ mod tests {
         let mut temp_file = NamedTempFile::new().unwrap();
         // Write some binary data
         std::io::Write::write_all(&mut temp_file, &[0, 1, 2, 255]).unwrap();
-        let path = temp_file.path().to_string_lossy().to_string();
+        let path = temp_file.path().to_string_lossy().into_owned();
         let result = TokenUnderCursor::classify(&path);
         assert2::let_assert!(Ok(actual) = result);
         pretty_assertions::assert_eq!(actual, TokenUnderCursor::BinaryFile(path));
@@ -492,7 +492,7 @@ mod tests {
     #[cfg(target_os = "macos")]
     fn token_under_cursor_classify_path_with_invalid_lnum_returns_maybe_text_file() {
         let temp_file = NamedTempFile::new().unwrap();
-        let path = temp_file.path().to_string_lossy().to_string();
+        let path = temp_file.path().to_string_lossy().into_owned();
         let input = format!("{path}:invalid");
         let result = TokenUnderCursor::classify(&input);
         assert2::let_assert!(Ok(actual) = result);
@@ -510,7 +510,7 @@ mod tests {
     #[cfg(target_os = "macos")]
     fn token_under_cursor_classify_path_with_invalid_col_returns_maybe_text_file() {
         let temp_file = NamedTempFile::new().unwrap();
-        let path = temp_file.path().to_string_lossy().to_string();
+        let path = temp_file.path().to_string_lossy().into_owned();
         let input = format!("{path}:10:invalid");
         let result = TokenUnderCursor::classify(&input);
         assert2::let_assert!(Ok(actual) = result);
@@ -529,7 +529,7 @@ mod tests {
     fn token_under_cursor_classify_path_lnum_col_extra_ignores_extra() {
         let mut temp_file = NamedTempFile::new().unwrap();
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
-        let path = temp_file.path().to_string_lossy().to_string();
+        let path = temp_file.path().to_string_lossy().into_owned();
         let result = TokenUnderCursor::classify(&format!("{path}:10:5:extra"));
         assert2::let_assert!(Ok(actual) = result);
         pretty_assertions::assert_eq!(
