@@ -1,17 +1,7 @@
-//! Display file contents or long‑list directories.
-//!
-//! # Arguments
-//! - `<path>` Path to file / directory / symlink to display.
-//!
-//! # Usage
-//! ```bash
-//! catl <path> # file -> cat; directory -> colored long listing
-//! ```
+//! Display file contents or long-list directories.
 //!
 //! # Errors
-//! - Fetching metadata for `<path>` fails.
-//! - Spawning or waiting on `cat` / `ls` fails.
-//! - Underlying command exits with non-zero status.
+//! - Metadata retrieval or command execution fails.
 #![feature(exit_status_error)]
 
 use std::process::Command;

@@ -1,8 +1,4 @@
 //! Statusline drawing helpers with diagnostics aggregation.
-//!
-//! Provides `statusline.dict()` with a `draw` function combining cwd, buffer name, cursor position and
-//! LSP diagnostic severities / counts into a formatted status line; failures yield [`None`] and are
-//! surfaced through [`ytil_noxi::notify::error`].
 
 use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
@@ -27,10 +23,6 @@ pub fn dict() -> Dictionary {
 }
 
 /// Draws the status line with diagnostic information.
-///
-/// # Rationale
-/// Returning [`None`] lets callers distinguish between a valid (possibly empty diagnostics) statusline and a data
-/// acquisition failure.
 fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
     let current_buffer = nvim_oxi::api::get_current_buf();
     let current_buffer_path =
@@ -53,12 +45,7 @@ fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
     Some(statusline.draw())
 }
 
-/// Diagnostic emitted by Nvim.
-///
-/// Captures buffer association and severity for aggregation in the statusline.
-///
-/// # Rationale
-/// Minimal fields keep deserialization lean; position, message, etc. are not needed for summary counts.
+/// Diagnostic emitted by Nvim for statusline aggregation.
 #[derive(Deserialize)]
 pub struct Diagnostic {
     /// The buffer number.
@@ -85,9 +72,6 @@ impl Poppable for Diagnostic {
 }
 
 /// Fixed-size aggregation of counts per [`DiagnosticSeverity`].
-///
-/// Stores counts in an array indexed by a stable ordering declared by [`DiagnosticSeverity`] count.
-/// Iteration yields (severity, count) pairs.
 #[derive(Clone, Copy, Debug, Default)]
 struct SeverityBuckets {
     counts: [u16; DiagnosticSeverity::VARIANT_COUNT],
@@ -108,12 +92,12 @@ impl SeverityBuckets {
         self.counts.get(idx).copied().unwrap_or(0)
     }
 
-    /// Iterate over (severity, count) pairs in canonical order (enum variant order per `EnumIter`).
+    /// Iterate over (severity, count) pairs.
     fn iter(&self) -> impl Iterator<Item = (DiagnosticSeverity, u16)> + '_ {
         DiagnosticSeverity::iter().map(|s| (s, self.get(s)))
     }
 
-    /// Approximate rendered length (diagnostics segment only) for pre-allocation.
+    /// Approximate rendered length for pre-allocation.
     fn approx_render_len(&self) -> usize {
         let non_zero = self.counts.iter().filter(|&&c| c > 0).count();
         // Each segment roughly: `"%#DiagnosticStatusLineWarn#W:123"` ~ 32 chars worst case; be conservative.
@@ -122,7 +106,7 @@ impl SeverityBuckets {
     }
 }
 
-/// Allow tests to build buckets from iterator of (severity, count).
+/// Build buckets from iterator of (severity, count).
 impl FromIterator<(DiagnosticSeverity, u16)> for SeverityBuckets {
     fn from_iter<T: IntoIterator<Item = (DiagnosticSeverity, u16)>>(iter: T) -> Self {
         let mut buckets = Self::default();
@@ -139,25 +123,14 @@ impl FromIterator<(DiagnosticSeverity, u16)> for SeverityBuckets {
 /// Represents the status line with buffer path and diagnostics.
 #[derive(Debug)]
 struct Statusline<'a> {
-    /// The current buffer path.
     current_buffer_path: Option<&'a str>,
-    /// Diagnostics for the current buffer.
     current_buffer_diags: SeverityBuckets,
-    /// Diagnostics for the workspace.
     workspace_diags: SeverityBuckets,
-    /// Current cursor position used to render the trailing `row:col` segment.
     cursor_position: CursorPosition,
 }
 
 impl Statusline<'_> {
     /// Draws the status line as a formatted string.
-    ///
-    /// Invariants:
-    /// - Severity ordering stability defined by [`DiagnosticSeverity`] enum variants order.
-    /// - Zero-count severities are omitted (see [`draw_diagnostics`]).
-    /// - Column displayed is 1-based via [`CursorPosition::adjusted_col`].
-    /// - Row/column segment rendered as `row:col`.
-    /// - A `%#StatusLine#` highlight reset precedes the position segment.
     fn draw(&self) -> String {
         // Build current buffer diagnostics (with trailing space if any present) manually to avoid
         // iterator allocation and secondary pass (.any()).
@@ -205,13 +178,6 @@ impl Statusline<'_> {
 }
 
 /// Draws the diagnostic count for a (severity, count) pair.
-///
-/// Accepts a tuple so it can be passed directly to iterator adapters like `.map(draw_diagnostics)` without
-/// additional closure wrapping.
-///
-/// # Rationale
-/// Tuple parameter matches iterator `(DiagnosticSeverity, u16)` item shape, removing a tiny layer of syntactic noise
-/// (`.map(|(s,c)| draw_diagnostics(s,c))`). Keeping zero-elision here is a harmless guard.
 fn draw_diagnostics((severity, diags_count): (DiagnosticSeverity, u16)) -> String {
     if diags_count == 0 {
         return String::new();

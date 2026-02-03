@@ -1,33 +1,11 @@
 const HELP_ARG: &str = "--help";
 
-/// Abstraction over command-line argument collections for help detection and access.
-///
-/// # Type Parameters
-/// - `T` The type of individual arguments, typically string-like (e.g., `String`, `&str`).
-///
-/// # Rationale
-/// - Enables polymorphic argument handling without coupling to specific collection types.
-/// - Centralizes help flag detection logic for consistency across binaries.
-/// - Supports both owned and borrowed argument slices for flexibility.
-///
-/// # Performance
-/// - `has_help` performs a linear scan; suitable for small argument lists (typical CLI usage).
-/// - `all` clones arguments; use borrowed types (`T = &str`) to avoid allocation overhead.
+/// Abstraction over command-line argument collections.
 pub trait Args<T> {
-    /// Checks if the help flag (`--help`) is present in the arguments.
-    ///
-    ///
-    /// # Rationale
-    /// - Standardized help detection avoids ad-hoc string comparisons in binaries.
-    /// - Case-sensitive matching aligns with common CLI conventions.
+    /// Checks if the help flag (`--help`) is present.
     fn has_help(&self) -> bool;
 
     /// Returns a copy of all arguments.
-    ///
-    ///
-    /// # Rationale
-    /// - Provides uniform access to arguments regardless of underlying storage.
-    /// - Cloning ensures caller ownership; consider `T = &str` for zero-copy variants.
     fn all(&self) -> Vec<T>;
 }
 

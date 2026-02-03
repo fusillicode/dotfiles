@@ -1,30 +1,7 @@
 //! Switch, create, and derive Git branches (including from GitHub PR URLs).
 //!
-//! # Arguments
-//! - `-` Switch to previous branch.
-//! - `-b <args...>` Create new branch from sanitized `<args...>` then switch.
-//! - `<single>` Switch if exists, else confirm create & switch.
-//! - `<multiple args>` Sanitize & join into branch name (create if missing).
-//! - `<github pull request url>` Derive branch name from PR & switch (fetch if needed).
-//! - (none) Launch interactive selector.
-//!
-//! # Usage
-//! ```bash
-//! gcu # interactive branch picker
-//! gcu - # previous branch
-//! gcu -b Feature Add Foo # create: feature-add-foo
-//! gcu feature add foo # sanitized join -> feature-add-foo (create if missing)
-//! gcu https://github.com/org/repo/pull/123 # derive PR branch name & switch
-//! ```
-//!
 //! # Errors
-//! - GitHub authentication via [`ytil_gh::log_into_github`] or PR branch name derivation via
-//!   [`ytil_gh::get_branch_name_from_url`] fails.
-//! - Branch name construction via [`build_branch_name`] yields empty string.
-//! - Branch listing via [`ytil_git::branch::get_all`] / switching via [`ytil_git::branch::switch`] / creation via
-//!   [`ytil_git::branch::create_from_default_branch`] fails.
-//! - Interactive selection via [`ytil_tui::minimal_select`] or user confirmation input fails.
-//! - Current branch lookup via [`ytil_git::branch::get_current`] fails.
+//! - Git operations, GitHub API calls, or user interaction fails.
 #![feature(exit_status_error)]
 
 use std::io::Write;

@@ -1,27 +1,9 @@
 //! Update Postgres credentials from Vault, rewrite pgpass & nvim-dbee, optionally launch pgcli.
 //!
-//! # Arguments
-//! - `alias` Optional database alias (interactive selector if missing).
-//!
-//! # Usage
-//! ```bash
-//! vpg # pick alias interactively -> update credentials -> optional connect
-//! vpg reporting # directly update 'reporting' alias then prompt to connect
-//! ```
-//!
-//! # Flow
-//! 1. Read ~/.pgpass & parse entries.
-//! 2. Resolve alias (arg or picker).
-//! 3. Vault login (if needed) + read secret.
-//! 4. Update pgpass & nvim dbee conns file.
-//! 5. Prompt to start pgcli.
-//!
 //! # Errors
-//! - External command (`pgcli`, `vault`) fails or exits non-zero.
-//! - File read / write operations fail.
-//! - JSON serialization or deserialization fails.
-//! - Required environment variable missing or invalid Unicode.
-//! - User selection or prompt interaction fails.
+//! - External command fails or file I/O fails.
+//! - JSON serialization/deserialization fails.
+//! - Environment variable missing or user interaction fails.
 #![feature(exit_status_error)]
 
 use std::process::Command;
@@ -39,15 +21,10 @@ mod nvim_dbee;
 mod pgpass;
 mod vault;
 
-/// Executes the `vault` CLI to read a secret as JSON and deserialize it.
-///
-/// Runs `vault read <vault_path> --format=json` using [`std::process::Command`] and
-/// deserializes the JSON standard output into a [`VaultReadOutput`].
+/// Executes the `vault` CLI to read a secret as JSON.
 ///
 /// # Errors
-/// - Launching or running the [`vault`] process fails (I/O error from [`Command`]).
-/// - The command standard output cannot be deserialized into [`VaultReadOutput`] via [`serde_json`].
-/// - The standard output is not valid UTF-8 when constructing the contextual error message.
+/// - Vault command fails or JSON deserialization fails.
 fn exec_vault_read_cmd(vault_path: &str) -> color_eyre::Result<VaultReadOutput> {
     let mut cmd = Command::new("vault");
     cmd.args(["read", vault_path, "--format=json"]);

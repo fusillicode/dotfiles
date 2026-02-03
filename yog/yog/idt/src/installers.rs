@@ -33,15 +33,15 @@ pub mod typos_lsp;
 pub mod vscode_langservers;
 pub mod yaml_language_server;
 
-/// Trait for installing development tools and language servers.
+/// Trait for installing development tools.
 pub trait Installer: Sync + Send {
-    /// Returns the binary name of the tool to install.
+    /// Returns the binary name.
     fn bin_name(&self) -> &'static str;
 
-    /// Installs the tool to the configured location.
+    /// Installs the tool.
     fn install(&self) -> color_eyre::Result<()>;
 
-    /// Checks if the tool is installed correctly.
+    /// Checks if the tool is installed.
     fn check(&self) -> Option<color_eyre::Result<String>> {
         let check_args = self.check_args()?;
         let mut cmd = Command::new(self.bin_name());
@@ -63,25 +63,10 @@ pub trait Installer: Sync + Send {
         Some(check_res)
     }
 
-    /// Execute install + optional check; emit status & per-phase timings.
+    /// Execute install + optional check with timing output.
     ///
     /// # Errors
-    /// - Any error from [`Installer::install`].
-    /// - Any process / UTF-8 error from the check phase.
-    ///
-    /// # Assumptions
-    /// - [`Installer::install`] leaves the binary runnable via [`Installer::bin_name`].
-    /// - [`Installer::check_args`] (when `Some`) is fast and exits 0 on success.
-    /// - ANSI color output acceptable (CI tolerates ANSI sequences).
-    ///
-    /// # Rationale
-    /// - Uniform UX: always attempt install then (if supported) lightweight smoke test.
-    /// - Prints a single line including phase durations: `install_time=<dur> check_time=<dur|None> total_time=<dur>` to
-    ///   quickly spot slow tools.
-    /// - Keeps tool-specific logic encapsulated; orchestration only formats and times phases.
-    ///
-    /// # Performance
-    /// - Overhead limited to a few [`Instant`] captures and formatted prints.
+    /// - Install or check phase fails.
     fn run(&self) -> color_eyre::Result<()> {
         let start = Instant::now();
 
@@ -144,12 +129,6 @@ pub trait SystemDependent {
 }
 
 /// Format phase timing summary line.
-///
-/// # Rationale
-/// - Centralizes formatting logic to keep [`Installer::run`] concise and ensure consistent output shape.
-///
-/// # Performance
-/// - Negligible: a few duration subtractions and one allocation for formatting.
 fn format_timing(start: Instant, past_install: Instant, check: Option<Duration>) -> String {
     format!(
         "install_time={:?} check_time={:?} total_time={:?}",

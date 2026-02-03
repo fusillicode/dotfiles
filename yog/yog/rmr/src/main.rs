@@ -1,36 +1,9 @@
 //! Remove files or directories passed as CLI args (recursive for dirs).
 //!
-//! Strips trailing metadata suffix beginning at the first ':' in each argument (colon and suffix removed) before
-//! deletion. Useful when piping annotated paths (e.g. from linters or search tools emitting `path:line:col`).
-//!
-//! # Arguments
-//! - `<paths...>` One or more filesystem paths (files, symlinks, or directories). Optional trailing `:...` suffix is
-//!   removed.
-//!
-//! # Returns
-//! - Exit code 0 if all provided paths were deleted successfully (or no paths given).
-//! - Exit code 1 if any path failed to delete or did not exist.
+//! Strips trailing `:...` suffix from paths before deletion.
 //!
 //! # Errors
-//! - Initialization failure from [`color_eyre::install`].
-//! - I/O errors from [`std::fs::remove_file`] or [`std::fs::remove_dir_all`]. These are reported individually and
-//!   contribute to a non-zero exit code.
-//!
-//! # Rationale
-//! - Eliminates need for ad-hoc shell loops to mass-delete mixed file & directory sets while handling `tool:line:col`
-//!   style suffixes.
-//! - Colorized error reporting highlights problematic paths quickly.
-//!
-//! # Performance
-//! - One reverse byte scan per argument to locate last ':' (no allocation).
-//! - Single `symlink_metadata` call per path (branches on [`std::fs::FileType`]), minimizing metadata syscalls.
-//! - Sequential deletions avoid contention; for huge argument lists, parallelism could help but increases complexity
-//!   (ordering, error aggregation).
-//!
-//! # Future Work
-//! - Add `--dry-run` flag for previewing deletions.
-//! - Add parallel deletion (configurable) for large batches.
-//! - Accept glob patterns expanded internally (on platforms without shell globbing).
+//! - I/O errors from file/directory removal.
 
 use std::fs::Metadata;
 use std::path::Path;
@@ -42,21 +15,8 @@ use ytil_sys::cli::Args;
 
 /// Deletes one path after stripping the first ':' suffix segment.
 ///
-/// Performs metadata lookup, branches on filetype, and deletes a file, symlink,
-/// or directory. Emits colored error messages to stderr; caller aggregates
-/// failures.
-///
 /// # Errors
-/// - Metadata retrieval failure (permissions, not found, etc.).
-/// - Deletion failure (I/O error removing file or directory).
-/// - Unsupported path type (reported as "Not found").
-///
-/// # Performance
-/// - Single metadata syscall plus one deletion syscall on success.
-/// - No heap allocation besides error formatting.
-///
-/// # Future Work
-/// - Distinguish success via a dedicated return type (e.g. `Result<Deleted, DeleteError>`).
+/// - Metadata retrieval or deletion fails.
 fn process(file: &str) -> color_eyre::Result<()> {
     let trimmed = before_first_colon(file);
     let path = Path::new(&trimmed);
@@ -96,11 +56,7 @@ fn process(file: &str) -> color_eyre::Result<()> {
         })
 }
 
-/// Strips suffix beginning at first ':'; returns subslice before colon.
-///
-/// # Performance
-/// - Single forward traversal `O(n)`; avoids UTF-8 decoding (colon is ASCII).
-/// - Simple explicit loop similar in cost to `find(':')`.
+/// Strips suffix beginning at first ':'.
 fn before_first_colon(s: &str) -> &str {
     for (i, &b) in s.as_bytes().iter().enumerate() {
         if b == b':' {

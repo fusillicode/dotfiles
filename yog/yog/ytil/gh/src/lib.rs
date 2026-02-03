@@ -1,22 +1,4 @@
-//! Provide lightweight GitHub helpers using the `gh` CLI.
-//!
-//! Provide focused wrappers around `gh` subcommands plus URL parsing helpers for PR IDs and remote
-//! canonicalization.
-//!
-//! # Rationale
-//! This module shells out to the GitHub CLI ('gh') instead of using a direct HTTP client (e.g. `octocrab`) because:
-//! - Reuses the user's existing authenticated `gh` session (no PAT / device-flow code, fewer secrets to manage).
-//! - Keeps this utility crate synchronous and lightweight (avoids adding `tokio` + `reqwest` dependency graph).
-//! - Minimizes compile time and binary size in the broader workspace.
-//! - Leverages 'gh' stable porcelain for JSON output (`--json` / `--jq`) and future compatibility with GitHub auth
-//!   flows / SSO.
-//! - Current feature surface (latest release tag, PR head branch lookup) is small; process spawn overhead is negligible
-//!   versus HTTP setup cost.
-//!
-//! Trade-offs accepted:
-//! - Less fine-grained control over rate limiting and retries.
-//! - Tight coupling to `gh` output flags (low churn historically, but still external).
-//! - Requires `gh` binary presence in runtime environments.
+//! Lightweight GitHub helpers using the `gh` CLI.
 #![feature(exit_status_error)]
 
 use std::path::Path;
@@ -40,10 +22,8 @@ const GITHUB_PR_ID_QUERY_KEY: &str = "pr";
 /// Repository fields available for querying via `gh repo view`.
 #[derive(strum::AsRefStr, Debug)]
 pub enum RepoViewField {
-    /// The repository name with owner in `owner/name` format.
     #[strum(serialize = "nameWithOwner")]
     NameWithOwner,
-    /// The repository URL.
     #[strum(serialize = "url")]
     Url,
 }

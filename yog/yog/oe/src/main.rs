@@ -1,30 +1,7 @@
 //! Open files (optionally at line:col) in existing Nvim / Helix pane.
 //!
-//! # Arguments
-//! - `editor` Target editor (`nvim` | `hx`).
-//! - `file_path` File to open (append :line:col to jump location).
-//! - `pane_id` Optional `WezTerm` pane ID (auto-detected if omitted).
-//!
-//! # Usage
-//! ```bash
-//! oe nvim src/lib.rs # open file in existing nvim pane
-//! oe nvim src/lib.rs:42:5 # jump to line 42 col 5
-//! oe hx   README.md 1234567890 # explicit pane id
-//! ```
-//!
-//! # Flow
-//! 1. Parse editor + file + optional pane id.
-//! 2. Resolve target pane (sibling) and enrich PATH for `Wezterm`.
-//! 3. Construct editor open command & send keystrokes via `Wezterm` CLI.
-//! 4. Activate target pane.
-//!
 //! # Errors
-//! - Missing editor or file argument.
-//! - Pane id parse or discovery fails.
-//! - Sibling pane detection fails.
-//! - File path parsing / validation fails.
-//! - Spawning shell command fails.
-//! - Required environment variable read fails.
+//! - Argument parsing, pane discovery, or command execution fails.
 #![feature(exit_status_error)]
 
 use core::str::FromStr;

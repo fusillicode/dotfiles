@@ -53,16 +53,6 @@ pub fn rm_f<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
 
 /// Iteratively removes all files with the specified name starting from the given root path, with optional directory
 /// exclusions.
-///
-/// This function uses a depth-first iterative traversal with a stack to avoid recursion limits.
-/// It checks each file/symlink and removes those matching the name, skipping any directories listed in `excluded_dirs`.
-/// Metadata is read once per path to determine file type, reducing syscalls.
-///
-/// # Performance
-/// - Reads metadata once per path using `symlink_metadata`, avoiding redundant syscalls.
-/// - Iterative approach prevents stack overflow in deep trees.
-/// - Exclusions reduce unnecessary traversal, improving performance for large trees with skipped dirs.
-/// - IO-bound; memory usage scales with stack depth and error count.
 pub fn rm_matching_files<P: AsRef<Path>>(
     root_path: P,
     file_name: &str,

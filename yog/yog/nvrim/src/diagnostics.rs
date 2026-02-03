@@ -18,12 +18,6 @@ mod formatter;
 mod sorter;
 
 /// [`Dictionary`] of diagnostic processing helpers.
-///
-/// Includes:
-/// - `format` format function used by floating diagnostics window.
-/// - `sort` severity sorter (descending severity).
-/// - `filter` buffer / rules based filter.
-/// - `config` nested dictionary mirroring `vim.diagnostic.config({...})` currently defined in Lua.
 pub fn dict() -> Dictionary {
     dict! {
         "filter": fn_from!(filter::filter),
@@ -35,24 +29,14 @@ pub fn dict() -> Dictionary {
 
 /// Diagnostic severity levels.
 ///
-/// See the `Deserialize` impl below for accepted serialized forms.
-///
-/// Ordering contract:
-/// - The declared variant order (Error, Warn, Info, Hint, Other) defines the iteration order via [`EnumIter`], which
-///   downstream rendering (e.g. `statusline`) relies on to produce stable, predictable severity ordering.
-/// - Changing the variant order is a breaking change for components depending on deterministic ordering.
+/// Variant order defines iteration order via [`EnumIter`] for stable rendering.
 #[derive(Clone, Copy, Debug, EnumCount, EnumIter, Eq, Hash, PartialEq)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum DiagnosticSeverity {
-    /// Error severity.
     Error,
-    /// Warning severity.
     Warn,
-    /// Info severity.
     Info,
-    /// Hint severity.
     Hint,
-    /// Any other / unknown severity value.
     Other,
 }
 
@@ -60,21 +44,7 @@ impl DiagnosticSeverity {
     /// Number of declared severity variants.
     pub const VARIANT_COUNT: usize = <Self as strum::EnumCount>::COUNT;
 
-    /// Returns the numeric representation of a given [`DiagnosticSeverity`].
-    ///
-    /// The representation is the canonical LSP severity:
-    /// - 1 for Error
-    /// - 2 for Warning
-    /// - 3 for Information
-    /// - 4 for Hint
-    /// - 0 for Other to indicate an unmapped / unknown severity.
-    ///
-    ///
-    /// # Rationale
-    /// Avoids relying on implicit enum discriminant order via `as u8` casts,
-    /// making the mapping explicit and resilient to future variant reordering
-    /// or insertion. Using an inherent method keeps the API surface small while
-    /// centralizing the mapping logic in one place.
+    /// Returns the canonical LSP severity number (1-4, or 0 for Other).
     pub const fn to_number(self) -> u8 {
         match self {
             Self::Error => 1,
@@ -86,11 +56,6 @@ impl DiagnosticSeverity {
     }
 
     /// Returns the canonical single-character symbol for this severity.
-    ///
-    ///
-    /// # Rationale
-    /// Used by status UI components (statuscolumn) to render severity without allocating via [`core::fmt::Display`]
-    /// or `to_string()`. A `const fn` mapping gives zero runtime branching cost when inlined.
     pub const fn symbol(self) -> &'static str {
         match self {
             Self::Error => "x",
@@ -101,11 +66,7 @@ impl DiagnosticSeverity {
     }
 }
 
-/// Deserializes accepted severity representations:
-/// - Numeric u8
-/// - Numeric strings
-/// - Text aliases (case-insensitive)
-/// - Any other value maps to [`DiagnosticSeverity::Other`].
+/// Deserializes numeric, string, or text alias severity representations.
 impl<'de> serde::Deserialize<'de> for DiagnosticSeverity {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where

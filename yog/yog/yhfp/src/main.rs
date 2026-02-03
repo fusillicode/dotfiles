@@ -1,14 +1,7 @@
 //! Copy current Helix file path with line number to clipboard.
 //!
-//! # Usage
-//! ```bash
-//! yhfp # copies /absolute/path/to/file.rs:123 to clipboard
-//! ```
-//!
 //! # Errors
-//! - `WezTerm` command execution fails or exits non-zero.
-//! - Status line missing or cannot be parsed.
-//! - Invalid UTF-8 in process output.
+//! - `WezTerm` command or status line parsing fails.
 #![feature(exit_status_error)]
 
 use core::str::FromStr;

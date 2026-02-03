@@ -1,12 +1,4 @@
 //! Build script for the `nomicon` binary.
-//!
-//! - Reads the unminified CSS asset at `assets/style.css`.
-//! - Writes the result to `assets/style.min.css`.
-//!
-//! # Rationale
-//!
-//! Performing CSS minification in `build.rs` avoids adding a runtime dependency or a
-//! separate Node / npm pipeline.
 
 use std::path::PathBuf;
 
@@ -19,16 +11,8 @@ const ASSETS_DIR: &str = "assets";
 
 /// Minifies raw CSS source into an optimized string.
 ///
-/// - Parses the provided CSS with permissive error recovery.
-/// - Serializes it with minification enabled.
-///
 /// # Errors
-/// - Parse failure: Returned if [`StyleSheet::parse`] cannot recover from invalid CSS.
-/// - Print failure: Returned if [`StyleSheet::to_css`] encounters an internal error while serializing.
-///
-/// # Performance
-/// One parse + one print. For small stylesheets this is negligible. If you add more stylesheets consider batching them
-/// into a single concatenated parse to reduce overhead.
+/// - CSS parsing or printing fails.
 fn minify_css(css_code: &str) -> color_eyre::Result<String> {
     let sheet = StyleSheet::parse(
         css_code,

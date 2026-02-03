@@ -1,29 +1,11 @@
 //! Install language servers, linters, formatters, and developer helpers concurrently.
 //!
-//! # Arguments
-//! - `dev_tools_dir` Directory for tool installation (created if missing).
-//! - `bin_dir` Directory for binary symlinks (created if missing).
-//! - `tool_names` Optional specific tools to install (defaults to all).
-//!
-//! # Usage
-//! ```bash
-//! idt ~/.dev/tools ~/.local/bin # install all tools
-//! idt ~/.dev/tools ~/.local/bin ruff_lsp rust_analyzer taplo # subset
-//! ```
-//!
-//! # Flow
-//! 1. Ensure target directories.
-//! 2. Auth to GitHub (rate limits, releases).
-//! 3. Resolve selected installers (all or subset).
-//! 4. Spawn scoped threads to run installers.
-//! 5. Cleanup dead symlinks; aggregate failures.
-//!
 //! # Errors
 //! - Missing required argument (`dev_tools_dir` / `bin_dir`).
 //! - Directory creation fails.
 //! - GitHub authentication fails.
 //! - Installer thread panics.
-//! - Individual tool installation fails (installer reports detail).
+//! - Individual tool installation fails.
 //! - Dead symlink cleanup fails.
 #![feature(exit_status_error)]
 
@@ -67,14 +49,7 @@ mod installers;
 /// Summarize installer thread outcomes; collect failing bin names.
 ///
 /// # Errors
-/// - Does not construct a rich error enum; instead returns failing bin names. Individual installers are expected to
-///   have already printed detailed stderr output.
-/// - A thread panic is logged immediately and its bin name added to the returned list.
-///
-/// # Rationale
-/// - Simple bin-name list keeps aggregation lightweight for CI scripting.
-/// - Delegates detailed formatting to installers; central function only normalizes aggregation.
-/// - Easier to extend with JSON output later (convert list directly).
+/// Returns failing bin names; installers handle detailed error output.
 fn report<'a>(
     installers_res: &'a [(&'a str, std::thread::Result<color_eyre::Result<()>>)],
 ) -> Result<(), Vec<&'a str>> {

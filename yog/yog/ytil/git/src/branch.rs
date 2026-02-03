@@ -52,12 +52,7 @@ pub fn get_default() -> color_eyre::Result<String> {
 /// Get current branch name (fails if HEAD detached).
 ///
 /// # Errors
-/// - Repository discovery fails.
-/// - HEAD is detached.
-/// - Branch shorthand not valid UTF-8.
-///
-/// # Future Work
-/// - Provide enum distinguishing detached state instead of error.
+/// - Repository discovery fails or HEAD is detached.
 pub fn get_current() -> color_eyre::Result<String> {
     let repo_path = Path::new(".");
     let repo = crate::repo::discover(repo_path).wrap_err_with(|| {
@@ -83,16 +78,8 @@ pub fn get_current() -> color_eyre::Result<String> {
 
 /// Create a new local branch at current HEAD (no checkout).
 ///
-/// Branch starts at the commit pointed to by `HEAD`; caller remains on the original branch.
-///
 /// # Errors
-/// - Repository discovery fails.
-/// - Resolving `HEAD` to a commit fails.
-/// - Branch already exists.
-///
-/// # Future Work
-/// - Optionally force (move) existing branch with a flag.
-/// - Support creating tracking configuration in one step.
+/// - Repository discovery, HEAD resolution, or branch creation fails.
 pub fn create_from_default_branch(branch_name: &str, repo: Option<&Repository>) -> color_eyre::Result<()> {
     let repo = if let Some(repo) = repo {
         repo
@@ -167,16 +154,10 @@ pub fn push(branch_name: &str, repo: Option<&Repository>) -> color_eyre::Result<
     Ok(())
 }
 
-/// Checkout a branch or detach HEAD; supports previous branch shorthand and branch creation via guessing.
-///
-/// Defers to `git switch --guess` to leverage porcelain semantics, which can create a new branch
-/// if the name is ambiguous and matches an existing remote branch.
+/// Checkout a branch or detach HEAD.
 ///
 /// # Errors
-/// - Spawning or executing the `git switch` command fails.
-///
-/// # Future Work
-/// - Expose progress callbacks for large checkouts.
+/// - `git switch` command fails.
 pub fn switch(branch_name: &str) -> Result<(), Box<CmdError>> {
     Command::new("git")
         .args(["switch", branch_name, "--guess"])
