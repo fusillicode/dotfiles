@@ -15,6 +15,10 @@ use crate::diagnostics::DiagnosticSeverity;
 const DRAW_TRIGGERS: &[&str] = &["DiagnosticChanged", "BufEnter", "CursorMoved"];
 
 /// [`Dictionary`] exposing statusline draw helpers.
+///
+/// Note: `draw_triggers` creates a new Object each call. This cannot be cached in a static
+/// because nvim_oxi::Object is tied to the Neovim Lua state (not Sync) and unavailable at
+/// static initialization. Since dict() is called once at plugin init, the overhead is minimal.
 pub fn dict() -> Dictionary {
     dict! {
         "draw": fn_from!(draw),

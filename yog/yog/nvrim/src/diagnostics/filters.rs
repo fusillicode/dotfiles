@@ -35,7 +35,7 @@ impl TryFrom<Buffer> for BufferWithPath {
     type Error = color_eyre::eyre::Error;
 
     fn try_from(value: Buffer) -> Result<Self, Self::Error> {
-        let path = value.get_name().map(|s| s.to_string_lossy().to_string())?;
+        let path = value.get_name().map(|s| s.to_string_lossy().into_owned())?;
         Ok(Self {
             path,
             buffer: Box::new(value),

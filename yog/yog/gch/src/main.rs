@@ -112,7 +112,7 @@ fn restore_entries(entries: &[&GitStatusEntry], branch: Option<&str>) -> color_e
         }
     }
     // Use repo-relative paths for unstaging so we *only* touch the index.
-    ytil_git::unstage(&new_entries_in_index.iter().map(String::as_str).collect::<Vec<_>>())?;
+    ytil_git::unstage(new_entries_in_index.iter().map(String::as_str))?;
 
     // Exit early in case of no changes to avoid break `git restore` cmd.
     if changed_entries.is_empty() {

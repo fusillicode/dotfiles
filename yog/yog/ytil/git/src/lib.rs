@@ -71,17 +71,25 @@ where
 ///
 /// # Errors
 /// - `git restore --staged` command fails.
-pub fn unstage(paths: &[&str]) -> color_eyre::Result<()> {
-    if paths.is_empty() {
-        return Ok(());
-    }
+pub fn unstage<I, P>(paths: I) -> color_eyre::Result<()>
+where
+    I: IntoIterator<Item = P>,
+    P: AsRef<str>,
+{
     // Use porcelain `git restore --staged` which modifies only the index (opposite of `git add`).
     // This avoids resurrecting deleted files (observed when using libgit2 `reset_default`).
-    Command::new("git")
-        .args(["restore", "--staged"])
-        .args(paths)
-        .exec()
-        .wrap_err_with(|| eyre!("error restoring statged Git entries | paths={paths:?}"))?;
+    let mut cmd = Command::new("git");
+    cmd.args(["restore", "--staged"]);
+    let mut has_paths = false;
+    for p in paths {
+        cmd.arg(p.as_ref());
+        has_paths = true;
+    }
+    if !has_paths {
+        return Ok(());
+    }
+    cmd.exec()
+        .wrap_err_with(|| eyre!("error restoring staged Git entries"))?;
     Ok(())
 }
 

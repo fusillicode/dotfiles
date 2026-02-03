@@ -133,18 +133,22 @@ impl TryFrom<(usize, &str)> for ConnectionParams {
     type Error = color_eyre::eyre::Error;
 
     fn try_from(idx_line @ (idx, line): (usize, &str)) -> Result<Self, Self::Error> {
-        if let [host, port, db, user, pwd] = line.split(':').collect::<Vec<_>>().as_slice() {
-            let port = port.parse().context(format!("unexpected port | port={port}"))?;
-            return Ok(Self {
-                idx,
-                host: (*host).to_string(),
-                port,
-                db: (*db).to_string(),
-                user: (*user).to_string(),
-                pwd: (*pwd).to_string(),
-            });
-        }
-        bail!("malformed pgpass connection line | idx_line={idx_line:#?}")
+        // Use splitn to avoid Vec allocation; pgpass format is exactly 5 colon-separated fields
+        let mut parts = line.splitn(5, ':');
+        let (Some(host), Some(port_str), Some(db), Some(user), Some(pwd)) =
+            (parts.next(), parts.next(), parts.next(), parts.next(), parts.next())
+        else {
+            bail!("malformed pgpass connection line | idx_line={idx_line:#?}")
+        };
+        let port = port_str.parse().context(format!("unexpected port | port={port_str}"))?;
+        Ok(Self {
+            idx,
+            host: host.to_string(),
+            port,
+            db: db.to_string(),
+            user: user.to_string(),
+            pwd: pwd.to_string(),
+        })
     }
 }
 
