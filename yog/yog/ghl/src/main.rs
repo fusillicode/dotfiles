@@ -1,57 +1,7 @@
-//! List and optionally batch‑merge GitHub pull requests interactively, or create issues with associated branches.
-//!
-//! Provides a colorized TUI to select multiple PRs then apply a composite
-//! operation (approve & merge, Dependabot rebase, enable auto-merge). Alternatively, create a GitHub issue
-//! and an associated branch from the default branch. Mirrors the `run()` pattern
-//! used by `gch` so the binary `main` stays trivial.
-//!
-//! # Flow
-//! - Parse flags (`--search`, `--merge-state`, `issue`).
-//! - If `issue` is present:
-//!   - Prompt for issue title via [`ytil_tui::text_prompt`].
-//!   - Prompt for whether to checkout the branch via [`ytil_tui::yes_no_select`].
-//!   - Create issue via [`ytil_gh::issue::create`].
-//!   - Develop the issue via [`ytil_gh::issue::develop`] (creates branch and optionally checks it out).
-//! - Otherwise:
-//!   - Detect current repository via [`ytil_gh::get_repo_view_field`].
-//!   - Fetch PR list via [`ytil_gh::pr::get`] (GitHub CLI `gh pr list`) forwarding the search filter.
-//!   - Apply optional in‑process merge state filter.
-//!   - Present multi‑select TUI via [`ytil_tui::minimal_multi_select`].
-//!   - Execute chosen high‑level operation over selected PRs, reporting per‑PR result.
-//!
-//! # Flags
-//! - `--search <FILTER>` or `--search=<FILTER>`: forwarded to `gh pr list --search`. Optional.
-//! - `--merge-state <STATE>` or `--merge-state=<STATE>`: client‑side filter over fetched PRs. Accepted
-//!   (case‑insensitive) values for [`PullRequestMergeState`]:
-//!   `Behind|Blocked|Clean|Dirty|Draft|HasHooks|Unknown|Unmergeable|Unstable`.
-//! - `issue`: switch to issue creation mode (prompts for title, creates issue and branch).
-//!
-//! Use `--` to terminate flag parsing (subsequent arguments ignored by this tool).
-//!
-//! # Usage
-//! ```bash
-//! ghl # list all open PRs interactively
-//! ghl --search "fix ci" # filter by search terms
-//! ghl --merge-state Clean # filter by merge state only
-//! ghl --search="lint" --merge-state Dirty # combine search + state (supports = or space)
-//! ghl issue # create issue and branch interactively
-//! ```
+//! List and batch-merge GitHub pull requests interactively, or create issues with branches.
 //!
 //! # Errors
-//! - Flag parsing fails (unknown flag, missing value, invalid [`PullRequestMergeState`]).
-//! - GitHub CLI invocation fails (listing PRs via [`ytil_gh::pr::get`], approving via [`ytil_gh::pr::approve`], merging
-//!   via [`ytil_gh::pr::merge`], commenting via [`ytil_gh::pr::dependabot_rebase`], creating issue via
-//!   [`ytil_gh::issue::create`]).
-//! - TUI interaction fails (selection UI errors via [`ytil_tui::minimal_multi_select`] and
-//!   [`ytil_tui::minimal_select`], issue title prompt via [`ytil_tui::text_prompt`], branch checkout prompt via
-//!   [`ytil_tui::yes_no_select`]).
-//! - GitHub CLI invocation fails (issue and branch creation via [`ytil_gh::issue::create`] and
-//!   [`ytil_gh::issue::develop`]).
-//!
-//! # Future Work
-//! - Add dry‑run mode printing planned operations without executing.
-//! - Provide additional bulk actions (labeling, commenting).
-//! - Introduce structured logging (JSON) for automated auditing.
+//! - Flag parsing, GitHub CLI invocation, or TUI interaction fails.
 #![feature(exit_status_error)]
 
 use core::fmt::Display;
@@ -138,17 +88,6 @@ impl Display for RenderableListedIssue {
 /// Encapsulates composite actions presented in the TUI. Separate from [`Op`]
 /// which models the underlying atomic steps and reporting. Expanding this enum
 /// only affects menu construction / selection logic.
-///
-/// # Variants
-/// - `Approve` Perform [`Op::Approve`] review.
-/// - `ApproveAndMerge` Perform [`Op::Approve`] review then [`Op::Merge`] if approval succeeds.
-/// - `DependabotRebase` Post the `@dependabot rebase` comment via [`Op::DependabotRebase`] to a Dependabot PR.
-/// - `EnableAutoMerge` Enable [`Op::EnableAutoMerge`] (rebase strategy + delete branch) for the PR.
-///
-/// # Future Work
-/// - Add bulk label operations (e.g. `Label` / `RemoveLabel`).
-/// - Introduce `Comment` with arbitrary body once use-cases emerge.
-/// - Provide dry-run variants for auditing actions.
 #[derive(EnumIter)]
 enum SelectableOp {
     Approve,
@@ -239,9 +178,6 @@ impl Op {
     }
 
     /// Emit a structured error report for a failed operation.
-    ///
-    /// # Rationale
-    /// Keeps multi‑line error payload visually grouped with the PR metadata.
     fn report_error(&self, pr: &PullRequest, error: &color_eyre::Report) {
         let msg = match self {
             Self::Approve => "approving",
@@ -259,12 +195,6 @@ impl Op {
 }
 
 /// Format concise identifying PR fields for log / status lines.
-///
-/// Builds a single colorized string containing number, quoted title, and
-/// debug formatting of the author object.
-///
-/// # Rationale
-/// Central helper avoids duplicating formatting order and styling decisions.
 fn format_pr(pr: &PullRequest) -> String {
     format!(
         "{}{:?} {}{:?} {}{:?}",
@@ -279,19 +209,8 @@ fn format_pr(pr: &PullRequest) -> String {
 
 /// Create a GitHub issue and develop it with an associated branch.
 ///
-/// Prompts the user for an issue title, creates the issue via GitHub CLI,
-/// then develops it by creating an associated branch from the default branch.
-/// Optionally checks out the newly created branch based on user preference.
-///
 /// # Errors
-/// - If [`ytil_tui::text_prompt`] fails when prompting for issue title.
-/// - If [`ytil_tui::yes_no_select`] fails when prompting for branch checkout preference.
-/// - If [`ytil_gh::issue::create`] fails when creating the GitHub issue.
-/// - If [`ytil_gh::issue::develop`] fails when creating the associated branch.
-///
-/// # Rationale
-/// Separates issue creation flow from PR listing flow, allowing users to quickly
-/// bootstrap new work items without leaving the terminal interface.
+/// - User interaction or GitHub CLI operations fail.
 fn create_issue_and_branch_from_default_branch() -> Result<(), color_eyre::eyre::Error> {
     let Some(issue_title) = ytil_tui::text_prompt("Issue title:")?.map(|x| x.trim().to_string()) else {
         return Ok(());
@@ -339,19 +258,7 @@ fn create_pr() -> Result<(), color_eyre::eyre::Error> {
 /// Interactively creates a GitHub branch from a selected issue.
 ///
 /// # Errors
-/// Propagates errors from issue listing, user selection, or branch development.
-///
-/// # Assumptions
-/// Assumes a terminal UI is available for user interaction and the GitHub CLI is configured.
-///
-/// # Rationale
-/// Provides an interactive workflow for developers to quickly create feature branches tied to specific GitHub issues.
-///
-/// # Performance
-/// Involves user interaction and subprocess calls, suitable for interactive use.
-///
-/// # Future Work
-/// Consider adding branch naming customization or integration with project management tools.
+/// - Issue listing, user selection, or branch development fails.
 fn create_branch_from_issue() -> Result<(), color_eyre::eyre::Error> {
     let issues = ytil_gh::issue::list()?;
 

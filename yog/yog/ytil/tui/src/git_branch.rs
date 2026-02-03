@@ -5,9 +5,6 @@ use color_eyre::owo_colors::OwoColorize as _;
 use ytil_git::branch::Branch;
 
 /// A wrapper around [`Branch`] for display purposes.
-///
-/// # Rationale
-/// Provides a custom [`Display`] implementation for branch selection UI.
 struct RenderableBranch(pub Branch);
 
 impl Deref for RenderableBranch {

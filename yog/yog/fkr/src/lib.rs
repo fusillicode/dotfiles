@@ -5,24 +5,17 @@ use strum::IntoEnumIterator;
 /// Available fake data types for generation.
 #[derive(Clone, Copy, Debug, strum::Display, EnumIter)]
 pub enum FkrOption {
-    /// Generates a version 4 UUID (random)
     Uuidv4,
-    /// Generates a version 7 UUID (timestamp-based)
     Uuidv7,
-    /// Generates a realistic email address
     Email,
-    /// Generates a browser user agent string
     UserAgent,
-    /// Generates an IPv4 address
     IPv4,
-    /// Generates an IPv6 address
     IPv6,
-    /// Generates a MAC address
     MACAddress,
 }
 
 impl FkrOption {
-    /// Generates a fake string value based on the selected variant.
+    /// Generates a fake string value.
     pub fn gen_string(&self) -> String {
         match self {
             Self::Uuidv4 => fake::uuid::UUIDv4.fake::<String>(),
@@ -35,7 +28,7 @@ impl FkrOption {
         }
     }
 
-    /// Returns a vector of all available [`FkrOption`] variants.
+    /// Returns all available variants.
     pub fn to_vec() -> Vec<Self> {
         Self::iter().collect()
     }

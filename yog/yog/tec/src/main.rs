@@ -1,31 +1,7 @@
 //! Run workspace lint suite concurrently (check or fix modes).
 //!
-//! Executes lints against the Cargo workspace root auto–detected via [`ytil_sys::dir::get_workspace_root`].
-//!
-//! # Behavior
-//! - Auto-detects workspace root (no positional CLI argument required).
-//! - Supports two modes:
-//!   - Check (default) runs non-mutating lints.
-//!   - Fix (`--fix` CLI flag) runs the lints that support automatic fixes.
-//! - Spawns one thread per lint; all run concurrently.
-//! - Result reporting joins threads in declaration order; a long first lint can delay visible output, potentially
-//!   giving a false impression of serial execution.
-//! - Prints each lint result with: success/error, duration (`time=<Duration>`), status code, stripped stdout or error.
-//! - Exits with code 1 if any lint command returns a non-zero status, any lint command invocation errors, or any lint
-//!   thread panics; exits 0 otherwise.
-//!
-//! # Returns
-//! - Process exit code communicates aggregate success (0) or failure (1).
-//!
 //! # Errors
-//! - Initialization errors from [`color_eyre::install`].
-//! - Workspace root discovery errors from [`ytil_sys::dir::get_workspace_root`].
-//!
-//! # Rationale
-//! Provides a single fast command (usable in git hooks / CI) aggregating core maintenance lints (style, dependency
-//! pruning, manifest ordering) without bespoke shell scripting.
-//! Split check vs fix modes minimize hook latency while enabling quick remediation.
-//! Adds deterministic, ordered reporting for stable output while retaining parallel execution for speed.
+//! - Workspace root discovery or lint execution fails.
 
 use std::fmt::Write;
 use std::ops::Deref;
@@ -225,42 +201,15 @@ const LINTS_FIX: &[(&str, LintBuilder)] = &[
 ];
 
 /// No-operation lint that reports "skipped" status.
-///
-/// Used by [`build_conditional_lint`] when a lint should be skipped due to no relevant file changes.
-///
-/// # Rationale
-/// Provides a reusable constant for skipped lints, avoiding duplication of the skip logic and ensuring consistent
-/// output.
 const LINT_NO_OP: Lint = |_| LintFnResult(Ok(LintFnSuccess::PlainMsg(format!("{}\n", "skipped".bold()))));
 
 /// Function pointer type for a single lint invocation.
-///
-/// Encapsulates a non-mutating check or (optionally) mutating fix routine executed against the workspace root.
-///
-/// # Rationale
-/// Using a simple function pointer keeps dynamic dispatch trivial and avoids boxing trait objects; closures remain
-/// zero-cost and we can compose slices of `(name, LintFn)` without lifetime complications.
-///
-/// # Future Work
-/// - Consider an enum encapsulating richer metadata (e.g. auto-fix capability flag) to filter sets without duplicating
-///   entries across lists.
 type Lint = fn(&Path) -> LintFnResult;
 
 /// Function pointer type for building lints based on file changes.
-///
-/// Encapsulates logic to build or select a lint based on file changes, returning a [`Lint`] function to execute.
-///
-/// # Rationale
-/// Enables efficient conditional execution of lints, avoiding unnecessary work when no relevant files have changed
-/// while maintaining consistent output format.
 type LintBuilder = fn(&[String]) -> Lint;
 
 /// Newtype wrapper around [`Result<LintFnSuccess, LintFnError>`].
-///
-/// Provides ergonomic conversions from [`RmFilesOutcome`] and [`Deref`] access to the inner result.
-///
-/// # Rationale
-/// Wraps the result to enable custom conversions without orphan rule violations.
 struct LintFnResult(Result<LintFnSuccess, LintFnError>);
 
 impl Deref for LintFnResult {
@@ -277,13 +226,7 @@ impl From<Result<LintFnSuccess, LintFnError>> for LintFnResult {
     }
 }
 
-/// Converts [`RmFilesOutcome`] into [`LintFnResult`] for uniform lint result handling.
-///
-/// Builds a formatted message listing removed files and errors, then wraps in success if no errors or failure
-/// otherwise.
-///
-/// # Rationale
-/// Enables treating file removal operations as lint results without duplicating conversion logic.
+/// Converts [`RmFilesOutcome`] into [`LintFnResult`].
 impl From<RmFilesOutcome> for LintFnResult {
     fn from(value: RmFilesOutcome) -> Self {
         let mut msg = String::new();
@@ -343,13 +286,6 @@ enum LintFnSuccess {
 }
 
 /// Conditionally returns the supplied lint or [`LINT_NO_OP`] based on file changes.
-///
-/// Returns the provided [`Lint`] function if no extension filter is set or if any changed file matches the specified
-/// extension. Otherwise, returns [`LINT_NO_OP`].
-///
-/// # Rationale
-/// Enables efficient skipping of lints when no relevant files have changed, reducing unnecessary work while
-/// maintaining deterministic output.
 fn build_conditional_lint(changed_paths: &[String], extension: Option<&str>, lint: Lint) -> Lint {
     match extension {
         Some(ext) if changed_paths.iter().any(|path| path.ends_with(ext)) => lint,
@@ -359,11 +295,6 @@ fn build_conditional_lint(changed_paths: &[String], extension: Option<&str>, lin
 }
 
 /// Run a single lint, measure its duration, and report immediately.
-///
-/// # Rationale
-/// Collapses the previous two‑step pattern (timing + later reporting) into one
-/// function so thread closures stay minimal and result propagation is explicit.
-/// This also prevents losing the error flag (a regression after refactor).
 fn run_and_report(lint_name: &str, path: &Path, run: Lint) -> LintFnResult {
     let start = Instant::now();
     let lint_res = run(path);
@@ -372,10 +303,6 @@ fn run_and_report(lint_name: &str, path: &Path, run: Lint) -> LintFnResult {
 }
 
 /// Format and print the result of a completed lint execution.
-///
-/// # Rationale
-/// Keeps output formatting separate from orchestration logic in [`main`]; enables
-/// alternate reporters (JSON, terse) later without threading timing logic everywhere.
 fn report(lint_name: &str, lint_res: &Result<LintFnSuccess, LintFnError>, elapsed: Duration) {
     match lint_res {
         Ok(LintFnSuccess::CmdOutput(output)) => {
@@ -396,14 +323,7 @@ fn report(lint_name: &str, lint_res: &Result<LintFnSuccess, LintFnError>, elapse
     }
 }
 
-/// Format lint duration into `time=<duration>` snippet (auto-scaled, no color).
-///
-/// Note: Colorization (if any) is applied by the caller (e.g. in [`report`]) not here, keeping this helper suitable for
-/// future machine-readable output modes.
-///
-/// # Rationale
-/// - Improves readability vs raw integer milliseconds; preserves sub-ms precision.
-/// - Uses stable standard library formatting (no custom scaling logic).
+/// Format lint duration into `time=<duration>` snippet.
 fn format_timing(duration: Duration) -> String {
     format!("time={duration:?}")
 }

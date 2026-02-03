@@ -1,8 +1,4 @@
 //! Statuscolumn drawing helpers for buffer-local indicators.
-//!
-//! Supplies `statuscolumn.dict()` exposing `draw`, rendering line numbers / extmarks while honoring
-//! special buffer types (e.g. minimal output for transient search buffers). Errors are notified via
-//! [`ytil_noxi::notify::error`].
 
 use core::fmt::Display;
 
@@ -30,13 +26,6 @@ pub fn dict() -> Dictionary {
 }
 
 /// Draws the status column for the current buffer.
-///
-/// Special cases:
-/// - When `buftype == "grug-far"` returns a single space string to minimize visual noise in transient search buffers.
-///
-/// # Rationale
-/// Using `Option<String>` (instead of empty placeholder) allows caller-side distinction between an intentional blank
-/// status column (special buffer type) and an error acquiring required state.
 fn draw((cur_lnum, extmarks, opts): (String, Vec<Extmark>, Option<Opts>)) -> Option<String> {
     let current_buffer = Buffer::current();
     let buf_type = current_buffer.get_buf_type()?;
@@ -50,20 +39,6 @@ fn draw((cur_lnum, extmarks, opts): (String, Vec<Extmark>, Option<Opts>)) -> Opt
 }
 
 /// Constructs the status column string for the current line.
-///
-/// # Assumptions
-/// - `metas` yields at most a small number of items (typical per-line sign density is low).
-/// - Caller has already restricted extmarks to those relevant for the line being drawn.
-///
-/// # Rationale
-/// - Single pass selects highest severity and first git sign to avoid repeated scans.
-/// - Early break once an Error (rank 5) and a Git sign are both determined prevents unnecessary iteration.
-/// - Manual string building reduces intermediate allocation versus collecting sign fragments.
-///
-/// # Performance
-/// - Allocates once with a conservative capacity heuristic (`lnum.len() + 64`).
-/// - O(n) over `metas`, short-circuiting when optimal state reached.
-/// - Rank computation is a simple match with small constant cost.
 fn draw_statuscolumn(
     current_buffer_type: &str,
     cur_lnum: &str,
@@ -127,7 +102,6 @@ fn draw_statuscolumn(
 /// Configuration options for the status column.
 #[derive(Deserialize)]
 struct Opts {
-    /// Whether to display line numbers in the status column.
     show_line_numbers: bool,
 }
 
@@ -149,14 +123,9 @@ impl Poppable for Opts {
 }
 
 /// Internal selection of the highest ranked diagnostic extmark.
-///
-/// Captures both the numeric rank (see [`SignHlGroup::rank`]) and the associated
-/// [`ExtmarkMeta`] to allow deferred rendering after the scan completes.
 #[cfg_attr(test, derive(Debug))]
 struct SelectedDiag {
-    /// Severity rank (higher means more severe); non-diagnostic signs use 0.
     rank: u8,
-    /// The metadata of the chosen diagnostic sign.
     meta: ExtmarkMeta,
 }
 
@@ -193,21 +162,12 @@ impl Poppable for Extmark {
 #[derive(Clone, Deserialize)]
 #[cfg_attr(test, derive(Debug))]
 struct ExtmarkMeta {
-    /// The highlight group for the sign.
     sign_hl_group: SignHlGroup,
-    /// The text of the sign, optional due to grug-far buffers.
     sign_text: Option<String>,
 }
 
 impl ExtmarkMeta {
     /// Writes the formatted extmark metadata into `out`.
-    ///
-    /// - Performs inline normalization for diagnostic variants (except `Ok`), mapping them to canonical severity
-    ///   symbols from [`DiagnosticSeverity::symbol`].
-    /// - Leaves `Ok` / Git / Other variants using their existing trimmed `sign_text` (empty placeholder when absent).
-    ///
-    /// # Rationale
-    /// Appending directly avoids per-sign allocation of an intermediate [`String`].
     fn write(&self, out: &mut String) {
         let displayed_symbol: &str = match self.sign_hl_group {
             SignHlGroup::DiagnosticError => DiagnosticSeverity::Error.symbol(),
@@ -230,26 +190,14 @@ impl ExtmarkMeta {
 }
 
 /// Enumerates known and dynamic highlight groups for status column signs.
-///
-/// - Provides explicit variants for the standard diagnostic signs.
-/// - Captures Git related signs (`GitSigns*`) while retaining their concrete highlight group string in the
-///   [`SignHlGroup::Git`] variant.
-/// - Any other (custom / plugin) highlight group is retained verbatim in [`SignHlGroup::Other`].
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum SignHlGroup {
-    /// `DiagnosticSignError` highlight group.
     DiagnosticError,
-    /// `DiagnosticSignWarn` highlight group.
     DiagnosticWarn,
-    /// `DiagnosticSignInfo` highlight group.
     DiagnosticInfo,
-    /// `DiagnosticSignHint` highlight group.
     DiagnosticHint,
-    /// `DiagnosticSignOk` highlight group.
     DiagnosticOk,
-    /// A Git-related sign highlight group (contains `GitSigns`).
     Git(String),
-    /// Any other highlight group string not matched above.
     Other(String),
 }
 
@@ -267,10 +215,6 @@ impl SignHlGroup {
     }
 
     /// Severity ranking used to pick the highest diagnostic.
-    ///
-    /// # Rationale
-    /// Encapsulating the rank logic in the enum keeps selection code simpler and
-    /// removes the need for a standalone helper.
     #[inline]
     const fn rank(&self) -> u8 {
         match self {

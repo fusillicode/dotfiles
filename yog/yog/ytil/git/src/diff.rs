@@ -7,14 +7,10 @@ use ytil_cmd::CmdExt as _;
 
 const PATH_LINE_PREFIX: &str = "diff --git ";
 
-/// Retrieves the current `git diff` raw output with `-U0` for fine-grained diffs as a [`Vec<String>`].
+/// Retrieves the current `git diff` raw output with `-U0`.
 ///
 /// # Errors
-/// - If the `git diff` command fails to execute or returns a non-zero exit code.
-/// - If extracting the output from the command fails.
-///
-/// # Rationale
-/// Uses `-U0` to produce the most fine-grained line diffs.
+/// - `git diff` command fails.
 pub fn get_raw(path: Option<&Path>) -> color_eyre::Result<Vec<String>> {
     let mut args = vec!["diff".into(), "-U0".into()];
 
@@ -33,15 +29,7 @@ pub fn get_raw(path: Option<&Path>) -> color_eyre::Result<Vec<String>> {
 /// Extracts file paths and starting line numbers of hunks from `git diff` output.
 ///
 /// # Errors
-/// - Missing path delimiter in the diff line.
-/// - Unable to extract the filepath from the diff line.
-/// - Unable to access subsequent lines for line numbers.
-/// - Missing comma delimiter in the hunk header.
-/// - Unable to extract the line number from the hunk header.
-/// - Line number cannot be parsed as a valid [`usize`].
-///
-/// # Assumptions
-/// Assumes `raw_diff_output` is in standard unified diff format produced by `git diff`.
+/// - Parsing diff output fails.
 pub fn get_hunks(raw_diff_output: &[String]) -> color_eyre::Result<Vec<(&str, usize)>> {
     let mut out = vec![];
 

@@ -1,18 +1,5 @@
 //! Generate fake data strings from an enum façade over selected [`fake`] providers.
 //!
-//! Provides a single variant enum ([`FkrOption`]) with a uniform `gen_string` method for
-//! quick ad‑hoc values (UUIDs, emails, IPs, user agents) without pulling individual faker
-//! types into every caller.
-//!
-//! # Arguments
-//! - `cp` Optional flag to copy the generated value to clipboard.
-//!
-//! # Usage
-//! ```bash
-//! fkr # select a generator; prints value
-//! fkr cp # select -> prints -> copies to clipboard
-//! ```
-//!
 //! # Errors
 //! - Interactive selection UI fails.
 //! - Writing the generated value to the clipboard fails.
@@ -21,11 +8,7 @@
 use fkr::FkrOption;
 use ytil_sys::cli::Args;
 
-/// Generate fake data strings from an enum façade over selected fake providers.
-///
-/// # Errors
-/// - Interactive selection UI fails.
-/// - Writing the generated value to the clipboard fails.
+/// Entry point for the fake data generator CLI.
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 

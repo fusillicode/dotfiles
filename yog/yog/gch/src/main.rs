@@ -1,35 +1,7 @@
-//! Stage or discard selected Git changes interactively
-//!
-//! Presents a compact TUI to multi‑select working tree entries and apply a bulk
-//! operation (stage or discard) with colorized progress output. Canceling any
-//! prompt safely results in no changes.
-//!
-//! # Arguments
-//! - `<branch>` Optional branch used as blob source during restore in Discard; if omitted, `git restore` falls back to
-//!   index / HEAD.
-//!
-//! # Usage
-//! ```bash
-//! gch # select changes -> choose Add or Discard
-//! gch main # use 'main' as blob source when discarding
-//! ```
-//!
-//! # Exit Codes
-//! - `0` Success (includes user cancellations performing no changes).
-//! - Non‑zero: bubbled I/O, subprocess, or git operation failure (reported via `color_eyre`).
+//! Stage or discard selected Git changes interactively.
 //!
 //! # Errors
-//! - Status enumeration via [`ytil_git::get_status`] fails.
-//! - User interaction (selection prompts via [`ytil_tui::minimal_multi_select`] and [`ytil_tui::minimal_select`])
-//!   fails.
-//! - File / directory removal for new entries fails.
-//! - Unstaging new index entries via [`ytil_git::unstage`] fails.
-//! - Restore command construction / execution via [`ytil_git::restore`] fails.
-//! - Opening repository via [`ytil_git::repo::discover`] or adding paths to index via [`ytil_git::add_to_index`] fails.
-//!
-//! # Rationale
-//! - Delegates semantics to porcelain (`git restore`, `git add`) to inherit nuanced Git behavior.
-//! - Minimal two‑prompt UX optimizes rapid iterative staging / discarding.
+//! - Git operations or user interaction fails.
 
 use core::fmt::Display;
 use std::ops::Deref;
@@ -45,24 +17,7 @@ use ytil_sys::cli::Args;
 
 /// Newtype wrapper adding colored [`Display`] for a [`ytil_git::GitStatusEntry`].
 ///
-/// Renders two status columns (index + worktree) plus the path, dimming ignored entries
-/// and prioritizing conflict markers.
-///
-/// # Examples
-/// ```no_run
-/// # fn show(e: &RenderableGitStatusEntry) {
-/// println!("{e}");
-/// # }
-/// ```
-///
-/// # Rationale
-/// Needed to implement [`Display`] without modifying an external type (orphan rule).
-///
-/// # Performance
-/// Only constructs small colored string fragments per render.
-///
-/// # Future Work
-/// - Provide a structured render method (symbols + path) for alternative UIs.
+/// Renders two status columns (index + worktree) plus the path.
 pub struct RenderableGitStatusEntry(pub GitStatusEntry);
 
 impl Deref for RenderableGitStatusEntry {
@@ -134,30 +89,10 @@ impl Display for Op {
     }
 }
 
-/// Delete newly created paths then restore modified paths (optionally from a branch)
-///
-/// Performs a two‑phase operation over the provided `entries`:
-/// 1) Physically removes any paths that are newly added (worktree and/or index). For paths that were staged as new,
-///    their repo‑relative paths are collected and subsequently unstaged via [`ytil_git::unstage`], ensuring only the
-///    index is touched (no accidental content resurrection).
-/// 2) Invokes [`ytil_git::restore`] for any remaining changed (non‑new) entries, optionally specifying `branch` so
-///    contents are restored from that branch rather than the index / HEAD.
-///
-/// Early exit: if after deleting new entries there are no remaining changed entries, the
-/// restore phase is skipped.
+/// Delete newly created paths then restore modified paths.
 ///
 /// # Errors
-/// - Removing a file or directory for a new entry fails (I/O error from `std::fs`).
-/// - Unstaging staged new entries via [`ytil_git::unstage`] fails.
-/// - Building or executing the underlying `git restore` command via [`ytil_git::restore`] fails.
-///
-/// # Rationale
-/// Using the porcelain `git restore` preserves nuanced semantics (e.g. respect for sparse
-/// checkout, renames) without re‑implementing them atop libgit2.
-///
-/// # Future Work
-/// - Detect & report partial failures (continue deletion on best‑effort then aggregate errors).
-/// - Parallelize deletions if ever shown to be a bottleneck (likely unnecessary for typical counts).
+/// - File removal, unstaging, or restore command fails.
 fn restore_entries(entries: &[&GitStatusEntry], branch: Option<&str>) -> color_eyre::Result<()> {
     // Avoid creating &&GitStatusEntry by copying the slice of &GitStatusEntry directly.
     let (new_entries, changed_entries): (Vec<&GitStatusEntry>, Vec<&GitStatusEntry>) =

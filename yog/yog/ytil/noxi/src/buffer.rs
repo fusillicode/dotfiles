@@ -15,20 +15,13 @@ use nvim_oxi::api::opts::OptionOptsBuilder;
 
 use crate::visual_selection::Selection;
 
-/// Extension trait for [`Buffer`] to provide extra functionalities.
-///
-/// Provides focused helpers for line fetching and text insertion at the current
-/// cursor position while surfacing Nvim errors via `notify_error`.
+/// Extension trait for [`Buffer`].
 #[cfg_attr(any(test, feature = "mockall"), mockall::automock)]
 pub trait BufferExt: Debug {
     /// Fetch a single line from a [`Buffer`] by 0-based index.
     ///
-    /// Returns a [`color_eyre::Result`] with the line as [`nvim_oxi::String`].
-    /// Errors if the line does not exist at `idx`.
-    ///
     /// # Errors
-    /// - Fetching the line via `nvim_buf_get_lines` fails.
-    /// - The requested index is out of range (no line returned).
+    /// - Fetching the line fails or index is out of range.
     fn get_line(&self, idx: usize) -> color_eyre::Result<nvim_oxi::String>;
 
     /// Retrieves a range of lines from the buffer.
@@ -36,22 +29,16 @@ pub trait BufferExt: Debug {
     /// # Errors
     /// - If `strict_indexing` is true and the range is out of bounds.
     /// - If the Nvim API call to fetch lines fails.
-    ///
-    /// # Rationale
-    /// This is a thin wrapper around [`nvim_oxi::api::Buffer::get_lines`] to enable unit testing of the default trait
-    /// method [`BufferExt::get_text_between`].
     fn get_lines(
         &self,
         line_range: RangeInclusive<usize>,
         strict_indexing: bool,
     ) -> Result<Box<dyn SuperIterator<nvim_oxi::String>>, nvim_oxi::api::Error>;
 
-    /// Get text from a [`nvim_oxi::api::Buffer`].
-    ///
-    /// Retrieves text from the specified start position to end position, respecting the given boundary.
+    /// Get text between start and end positions.
     ///
     /// # Errors
-    /// - If substring extraction fails due to invalid indices.
+    /// - Substring extraction fails due to invalid indices.
     fn get_text_between(
         &self,
         start: (usize, usize),
@@ -84,22 +71,11 @@ pub trait BufferExt: Debug {
     }
 
     /// Retrieves the buffer type via the `buftype` option.
-    ///
-    /// Queries Nvim for the buffer type option and returns the value.
-    /// Errors are handled internally by notifying Nvim and converting to `None`.
-    ///
-    /// # Rationale
-    /// Errors are notified directly to Nvim because this is the behavior wanted in all cases.
     fn get_buf_type(&self) -> Option<String>;
 
     fn get_channel(&self) -> Option<u32>;
 
-    /// Inserts `text` at the current cursor position in the active buffer.
-    ///
-    /// Obtains the current [`CursorPosition`], converts the 1-based row to 0-based
-    /// for Nvim's `set_text` call, and inserts `text` without replacing existing
-    /// content (`start_col` == `end_col`). Errors are reported via `notify_error`.
-    /// Silently returns if cursor position cannot be fetched.
+    /// Inserts `text` at the current cursor position.
     fn set_text_at_cursor_pos(&mut self, text: &str);
 
     fn is_terminal(&self) -> bool {
@@ -121,32 +97,22 @@ pub trait BufferExt: Debug {
     /// Retrieves the process ID associated with the buffer.
     ///
     /// # Errors
-    /// - If the buffer name cannot be retrieved.
-    /// - If the buffer is a terminal but the name format is invalid.
-    /// - If the Neovim `getpid` function call fails.
+    /// - Buffer name retrieval or PID parsing fails.
     fn get_pid(&self) -> color_eyre::Result<String>;
 }
 
 /// Defines boundaries for text selection within lines.
-///
-/// # Rationale
-/// Used in [`BufferExt::get_text_between`] to specify how the start and end positions
-/// should be interpreted relative to line boundaries.
 #[derive(Default)]
 pub enum TextBoundary {
-    /// Exact column positions are used as-is.
     #[default]
     Exact,
-    /// Selection starts from the beginning of the line.
     FromLineStart,
-    /// Selection ends at the specified line ending column.
     ToLineEnd,
-    /// Selection spans from the start of the line to the end of the line.
     FromLineStartToEnd,
 }
 
 impl TextBoundary {
-    /// Computes the starting column index for text selection based on the boundary type.
+    /// Computes the starting column index for text selection.
     pub const fn get_line_start_idx(&self, line_idx: usize, start_col: usize) -> usize {
         if line_idx != 0 {
             return 0;
@@ -157,7 +123,7 @@ impl TextBoundary {
         }
     }
 
-    /// Computes the ending column index for text selection based on the boundary type.
+    /// Computes the ending column index for text selection.
     pub fn get_line_end_idx(&self, line: &str, line_idx: usize, last_line_idx: usize, end_col: usize) -> usize {
         let line_len = line.len();
         if line_idx != last_line_idx {
@@ -251,16 +217,7 @@ impl BufferExt for Buffer {
 
 /// Represents the current cursor coordinates in the active [`Window`].
 ///
-/// Row is 1-based (Nvim convention) and column is 0-based (byte index inside
-/// the line per Nvim API). These are kept verbatim to avoid off-by-one bugs.
-/// Call sites converting to Rust slice indices subtract 1 from `row` as needed.
-///
-/// # Assumptions
-/// - Constructed through [`CursorPosition::get_current`]; manual construction should respect coordinate conventions.
-///
-/// # Rationale
-/// Preserving raw Nvim values centralizes conversion logic at usage points
-/// (e.g. buffer line indexing) instead of embedding heuristics here.
+/// Row is 1-based (Nvim convention), column is 0-based (byte index).
 #[derive(Debug)]
 pub struct CursorPosition {
     pub row: usize,
@@ -269,19 +226,6 @@ pub struct CursorPosition {
 
 impl CursorPosition {
     /// Obtains the current cursor position from the active [`Window`].
-    ///
-    /// Queries Nvim for the (row, col) of the active window cursor and returns a
-    /// [`CursorPosition`] reflecting those raw coordinates.
-    ///
-    /// # Assumptions
-    /// - Row is 1-based (Nvim convention); column is 0-based. Callers needing 0-based row for Rust indexing must
-    ///   subtract 1 explicitly.
-    /// - The active window is the intended source of truth for cursor location.
-    ///
-    /// # Rationale
-    /// Returning `Option` (instead of `Result`) simplifies common call sites that
-    /// treat absence as a soft failure (e.g. skipping an insertion). Detailed
-    /// error context is still surfaced to the user through `notify_error`.
     pub fn get_current() -> Option<Self> {
         let cur_win = Window::current();
         cur_win
@@ -296,28 +240,12 @@ impl CursorPosition {
     }
 
     /// Returns 1-based column index for rendering purposes.
-    ///
-    /// Converts the raw 0-based Nvim column stored in [`CursorPosition::col`] into a
-    /// human-friendly 1-based column suitable for statusline / UI output.
-    ///
-    /// # Assumptions
-    /// - [`CursorPosition::col`] is the unmodified 0-based byte offset provided by Nvim.
-    ///
-    /// # Rationale
-    /// Nvim exposes a 0-based column while rows are 1-based. Normalizing to 1-based for
-    /// display avoids mixed-base confusion in user-facing components (e.g. status line) and
-    /// clarifies intent at call sites.
-    ///
-    /// # Performance
-    /// Constant time. Uses `saturating_add` defensively (overflow is unrealistic given line length).
     pub const fn adjusted_col(&self) -> usize {
         self.col.saturating_add(1)
     }
 }
 
-/// Creates a new listed, not scratch, buffer.
-///
-/// Errors are reported to Nvim via [`crate::notify::error`].
+/// Creates a new listed buffer.
 pub fn create() -> Option<Buffer> {
     nvim_oxi::api::create_buf(true, false)
         .inspect_err(|err| crate::notify::error(format!("error creating buffer | error={err:?}")))
@@ -325,13 +253,6 @@ pub fn create() -> Option<Buffer> {
 }
 
 /// Retrieves the alternate buffer or creates a new one if none exists.
-///
-/// The alternate buffer is the buffer previously visited, accessed via Nvim's "#" register.
-/// If no alternate buffer exists (bufnr("#") < 0), a new buffer is created.
-///
-/// # Errors
-/// - Retrieving the alternate buffer fails (notified via [`crate::notify::error`]).
-/// - Creating a new buffer fails (falls back to [`create`]).
 pub fn get_alternate_or_new() -> Option<Buffer> {
     let alt_buf_id = nvim_oxi::api::call_function::<_, i32>("bufnr", ("#",))
         .inspect(|err| {
@@ -345,10 +266,7 @@ pub fn get_alternate_or_new() -> Option<Buffer> {
     Some(Buffer::from(alt_buf_id))
 }
 
-/// Sets the specified buffer as the current buffer in the active window.
-///
-/// # Errors
-/// - Setting the current buffer fails (notified via [`crate::notify::error`]).
+/// Sets the specified buffer as the current buffer.
 pub fn set_current(buf: &Buffer) -> Option<()> {
     nvim_oxi::api::set_current_buf(buf)
         .inspect_err(|err| {
@@ -358,15 +276,10 @@ pub fn set_current(buf: &Buffer) -> Option<()> {
     Some(())
 }
 
-/// Opens a file in the editor and positions the cursor at the specified line and column.
+/// Opens a file and positions the cursor at the specified line and column.
 ///
 /// # Errors
-/// - If execution of "edit" command via [`crate::common::exec_vim_cmd`] fails.
-/// - If setting the cursor position via [`Window::set_cursor`] fails.
-///
-/// # Rationale
-/// Executes two Neovim commands, one to open the file and one to set the cursor because it doesn't
-/// seems possible to execute a command line "edit +call\n cursor(LNUM, COL)".
+/// - Edit command or cursor positioning fails.
 pub fn open<T: AsRef<Path>>(path: T, line: Option<usize>, col: Option<usize>) -> color_eyre::Result<()> {
     crate::common::exec_vim_cmd("edit", Some(&[path.as_ref().display().to_string()]))?;
     Window::current().set_cursor(line.unwrap_or_default(), col.unwrap_or_default())?;
@@ -374,12 +287,6 @@ pub fn open<T: AsRef<Path>>(path: T, line: Option<usize>, col: Option<usize>) ->
 }
 
 /// Replaces the text in the specified `selection` with the `replacement` lines.
-///
-/// Calls Nvim's `set_text` with the selection's line range and column positions,
-/// replacing the selected content with the provided lines.
-///
-/// Errors are reported via [`crate::notify::error`] with details about the selection
-/// boundaries and error.
 pub fn replace_text_and_notify_if_error<Line, Lines>(selection: &Selection, replacement: Lines)
 where
     Lines: IntoIterator<Item = Line>,
@@ -399,13 +306,7 @@ where
     }
 }
 
-/// Retrieves the relative path of the given buffer from the current working directory.
-///
-/// Attempts to strip the current working directory prefix from the buffer's absolute path.
-/// If the buffer path does not start with the cwd, returns the absolute path as-is.
-///
-/// # Errors
-/// Errors (e.g., cannot get cwd or buffer name) are notified to Nvim but not propagated.
+/// Retrieves the relative path of the buffer from the current working directory.
 pub fn get_relative_path_to_cwd(current_buffer: &Buffer) -> Option<PathBuf> {
     let cwd = nvim_oxi::api::call_function::<_, String>("getcwd", Array::new())
         .inspect_err(|err| {
@@ -421,12 +322,6 @@ pub fn get_relative_path_to_cwd(current_buffer: &Buffer) -> Option<PathBuf> {
 }
 
 /// Retrieves the absolute path of the specified buffer.
-///
-/// # Errors
-/// Errors are logged internally but do not propagate; the function returns [`None`] on failure.
-///
-/// # Assumptions
-/// Assumes that the buffer's name represents a valid path.
 pub fn get_absolute_path(buffer: Option<&Buffer>) -> Option<PathBuf> {
     let path = buffer?
         .get_name()

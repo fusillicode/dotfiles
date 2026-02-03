@@ -10,13 +10,7 @@ use tree_sitter::Point;
 
 use crate::buffer::CursorPosition;
 
-/// Wrapper around [`tree_sitter::Point`] that converts Nvim's 1-based row indexing
-/// to tree-sitter's 0-based indexing.
-///
-/// # Rationale
-///
-/// Nvim uses 1-based row indices for cursor positions, while tree-sitter expects 0-based rows.
-/// This wrapper simplifies the conversion in the codebase.
+/// Wrapper around [`tree_sitter::Point`] converting Nvim's 1-based row to 0-based.
 #[derive(Debug)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct PointWrap(Point);

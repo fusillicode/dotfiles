@@ -11,26 +11,18 @@ use serde::Deserialize;
 use ytil_cmd::CmdExt;
 
 /// Represents a newly created GitHub issue.
-///
-/// Contains the parsed details from the `gh issue create` command output.
 #[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub struct CreatedIssue {
-    /// The title of the created issue.
     pub title: String,
-    /// The repository URL prefix (e.g., `https://github.com/owner/repo/`).
     pub repo: String,
-    /// The issue number (e.g., "123").
     pub issue_nr: String,
 }
 
 impl CreatedIssue {
     /// Creates a [`CreatedIssue`] from the `gh issue create` command output.
     ///
-    /// Parses the output URL to extract repository and issue number.
-    ///
     /// # Errors
-    /// - Output does not contain "issues".
-    /// - Repository or issue number parts are empty.
+    /// - Output parsing fails.
     fn new(title: &str, output: &str) -> color_eyre::Result<Self> {
         let get_not_empty_field = |maybe_value: Option<&str>, field: &str| -> color_eyre::Result<String> {
             maybe_value
@@ -55,10 +47,7 @@ impl CreatedIssue {
         })
     }
 
-    /// Generates a branch title from the issue number and title.
-    ///
-    /// Formats as `{issue_nr}-{title}` where `title` is converted to kebab-case and leading/trailing dashes are
-    /// trimmed.
+    /// Generates a branch name from the issue number and title.
     pub fn branch_name(&self) -> String {
         format!(
             "{}-{}",
@@ -69,12 +58,8 @@ impl CreatedIssue {
 }
 
 /// Output of [`develop`] a GitHub issue.
-///
-/// Contains the branch reference and name created by the `gh issue develop` command.
 pub struct DevelopOutput {
-    /// The full branch reference (e.g., "refs/heads/issue-123-feature").
     pub branch_ref: String,
-    /// The branch name (e.g., "issue-123-feature").
     pub branch_name: String,
 }
 
@@ -94,13 +79,8 @@ pub struct Author {
 
 /// Creates a new GitHub issue with the specified title.
 ///
-/// This function invokes `gh issue create --title <title> --body ""` to create the issue.
-///
 /// # Errors
-/// - If `title` is empty.
-/// - Spawning or executing the `gh issue create` command fails.
-/// - Command exits with non-zero status.
-/// - Output cannot be parsed as a valid issue URL.
+/// - Title is empty or `gh issue create` fails.
 pub fn create(title: &str) -> color_eyre::Result<CreatedIssue> {
     if title.is_empty() {
         bail!("cannot create GitHub issue with empty title")
@@ -120,12 +100,8 @@ pub fn create(title: &str) -> color_eyre::Result<CreatedIssue> {
 
 /// Creates a branch for the supplied GitHub issue number.
 ///
-/// Uses the `gh issue develop` command to create a development branch for the specified issue.
-///
 /// # Errors
-/// - If the `gh` command execution fails.
-/// - If the command output cannot be parsed as UTF-8.
-/// - If the branch name cannot be extracted from the output.
+/// - `gh issue develop` fails or output parsing fails.
 pub fn develop(issue_number: &str, checkout: bool) -> color_eyre::Result<DevelopOutput> {
     let mut args = vec!["issue", "develop", issue_number];
 
@@ -154,22 +130,7 @@ pub fn develop(issue_number: &str, checkout: bool) -> color_eyre::Result<Develop
 /// Lists all GitHub issues for the current repository.
 ///
 /// # Errors
-/// Returns an error if the `gh` command fails to execute, if the output is not valid UTF-8, or if the JSON cannot be
-/// deserialized into [`Vec<ListedIssue>`].
-///
-/// # Assumptions
-/// Assumes the `gh` CLI tool is installed and properly authenticated with GitHub.
-///
-/// # Rationale
-/// Uses the GitHub CLI (`gh`) for simplicity and to leverage existing authentication setup, rather than implementing
-/// direct API calls.
-///
-/// # Performance
-/// Involves a subprocess call to `gh`, which may be slower than direct HTTP requests but avoids dependency on GitHub
-/// API tokens in code.
-///
-/// # Future Work
-/// Consider migrating to direct GitHub API calls using a library like `octocrab` for better performance and control.
+/// - `gh issue list` fails or JSON deserialization fails.
 pub fn list() -> color_eyre::Result<Vec<ListedIssue>> {
     let output = Command::new("gh")
         .args(["issue", "list", "--json", "number,title,author,updatedAt"])

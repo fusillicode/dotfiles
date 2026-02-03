@@ -1,7 +1,4 @@
-//! Provide cohesive system helpers: args, paths, symlinks, permissions, atomic copy, clipboard.
-//!
-//! Offer small utilities for CLI tools: joining thread handles, building home-relative paths,
-//! manipulating filesystem entries (chmod, symlinks, atomic copy) and clipboard integration.
+//! System helpers: args, paths, symlinks, permissions, clipboard.
 #![feature(exit_status_error)]
 
 use std::process::Command;
@@ -21,27 +18,20 @@ pub mod file;
 pub mod lsof;
 pub mod rm;
 
-/// Joins a thread handle and returns the result, handling join errors as [`eyre::Error`].
-/// Awaits a `JoinHandle` and unwraps the inner `Result`.
+/// Joins a thread handle and returns the result.
 ///
 /// # Errors
-/// - The task panicked.
-/// - The task returned an error.
+/// - Task panicked or returned an error.
 pub fn join<T>(join_handle: JoinHandle<color_eyre::Result<T>>) -> Result<T, eyre::Error> {
     join_handle
         .join()
         .map_err(|err| eyre!("error joining handle | error={err:#?}"))?
 }
 
-/// Opens the given argument using the system's default app ("open").
-///
-/// # Rationale
-/// The argument passed to the "open" command is naively wrapped with ''
-/// to avoid failures in case of URLs with & or other shell sensitive
-/// characters.
+/// Opens the given argument using the system's default app.
 ///
 /// # Errors
-/// - If the `open` command exits with a non-zero status.
+/// - `open` command fails.
 pub fn open(arg: &str) -> color_eyre::Result<()> {
     let cmd = "open";
     Command::new("sh")

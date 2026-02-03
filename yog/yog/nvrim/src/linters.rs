@@ -1,15 +1,4 @@
 //! Linter parsing helpers.
-//!
-//! - Provides an extensible registry of linter parser functions (see [`dict`]).
-//! - Currently ships a hardened `sqruff` parser exposed under the `sqruff` table.
-//! - Parses tool JSON output into Nvim diagnostic dictionaries.
-//! - Designed so additional linters can be added with minimal boilerplate.
-//!
-//! # Rationale
-//! - Introduced after the upstream `nvim-lint` default `sqruff` parser failed to handle `vim.NIL`, crashing the Nvim
-//!   instance. This implementation treats absence / `nil` values defensively and never propagates a panic.
-//! - Centralizing parsers allows consistent error reporting & future sharing of common normalization logic (e.g.
-//!   severity mapping, range sanitation).
 
 use nvim_oxi::Dictionary;
 use serde::Deserialize;
@@ -26,11 +15,6 @@ pub fn dict() -> Dictionary {
 }
 
 /// Parse raw `sqruff` JSON output into Nvim diagnostic [`Dictionary`].
-///
-/// # Behavior
-/// - Empty / missing input: returns an empty vector and emits a warning.
-/// - Malformed JSON: returns an empty vector and emits an error notification.
-/// - Successful parse: converts each message into a diagnostic `Dictionary`.
 #[allow(clippy::needless_pass_by_value)]
 fn parser(maybe_output: Option<nvim_oxi::String>) -> Vec<Dictionary> {
     let Some(output) = &maybe_output else {
@@ -62,12 +46,6 @@ fn parser(maybe_output: Option<nvim_oxi::String>) -> Vec<Dictionary> {
 }
 
 /// Parsed `sqruff` top-level output structure.
-///
-/// - Holds a list of lint messages under the JSON key `<string>` produced by `sqruff`.
-///
-/// # Rationale
-/// Mirrors the external tool's JSON so deserialization stays trivial and
-/// downstream logic can iterate messages directly.
 #[derive(Debug, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 struct SqruffOutput {
@@ -79,45 +57,26 @@ struct SqruffOutput {
 #[derive(Debug, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 struct SqruffMessage {
-    /// Optional rule identifier emitted by `sqruff`.
     code: Option<String>,
-    /// Human-readable lint explanation.
     message: String,
-    /// 1-based inclusive start / exclusive end span reported by the tool.
     range: Range,
-    /// Lint severity expressed as [`DiagnosticSeverity`].
     severity: DiagnosticSeverity,
-    /// Source tool identifier (always `sqruff`).
     source: String,
 }
 
 /// Source span covering the offending text range.
-///
-/// # Rationale
-/// Explicit start/end structs keep deserialization unambiguous and allow
-/// saturation adjustments when converting to line/column indices expected by
-/// Nvim (0-based internally after adjustment).
 #[derive(Debug, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 struct Range {
-    /// Start position (1-based line / column as emitted by `sqruff`).
     start: Position,
-    /// End position (1-based line / column, exclusive column semantics when
-    /// converted to Nvim diagnostics after 0-based adjustment).
     end: Position,
 }
 
 /// Line/column pair (1-based as emitted by `sqruff`).
-///
-/// # Rationale
-/// Maintains external numbering; translation to 0-based indices occurs when
-/// building Nvim dictionaries.
 #[derive(Debug, Deserialize)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 struct Position {
-    /// 1-based column number.
     character: u32,
-    /// 1-based line number.
     line: u32,
 }
 

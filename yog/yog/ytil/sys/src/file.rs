@@ -238,17 +238,7 @@ pub fn atomic_cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
 /// `skip_dir_fn` returns true, and collecting file paths for which `matching_file_fn` returns true.
 ///
 /// # Errors
-/// - A directory cannot be read.
-/// - File type metadata for an entry cannot be determined.
-/// - Any underlying filesystem I/O error occurs during traversal.
-///
-/// # Performance
-/// Uses an in-memory queue (BFS). For extremely deep trees consider a streaming iterator variant;
-/// current implementation favors simplicity over incremental output.
-///
-/// # Future Work
-/// - Provide an iterator adapter (`impl Iterator<Item = PathBuf>`), avoiding collecting all results.
-/// - Optional parallel traversal behind a feature flag for large repositories.
+/// - Filesystem I/O error during traversal.
 pub fn find_matching_recursively_in_dir(
     dir: &Path,
     matching_file_fn: impl Fn(&DirEntry) -> bool,

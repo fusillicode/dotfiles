@@ -1,9 +1,4 @@
-//! Provide lightweight Git helpers atop [`git2`] plus selective fallbacks to the system `git` binary.
-//!
-//! Wrap common operations (repo discovery, root resolution, status enumeration, branch listing,
-//! targeted fetch, branch switching, restore) in focused functions returning structured data
-//! ([`GitStatusEntry`], [`branch::Branch`]). Some semantics (previous branch with `switch -`, restore) defer to
-//! the porcelain CLI to avoid re‑implementing complex behavior.
+//! Lightweight Git helpers atop [`git2`] with fallbacks to `git` CLI.
 
 use std::path::Path;
 use std::path::PathBuf;
@@ -26,22 +21,8 @@ pub mod repo;
 
 /// Enumerate combined staged + unstaged status entries.
 ///
-/// Builds [`GitStatusEntry`] values capturing index + worktree states plus conflict / ignore
-/// flags. Includes untracked, excludes ignored. Order matches libgit2 iteration order.
-///
 /// # Errors
-/// - Repository discovery fails.
-/// - Reading statuses fails.
-/// - A status entry omits a path (required to construct a [`GitStatusEntry`]).
-///
-/// # Rationale
-/// Centralizes translation from libgit2 status bitflags into a friendlier struct with helper
-/// methods used by higher‑level commands.
-///
-/// # Future Work
-/// - Add option to include ignored entries.
-/// - Parameterize repo path instead of implicit current directory.
-/// - Expose performance metrics (count, timing) for diagnostics.
+/// - Repository discovery, status reading, or entry construction fails.
 pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
     let repo =
         crate::repo::discover(Path::new(".")).wrap_err_with(|| eyre!("error getting repo | operation=status"))?;
@@ -65,21 +46,10 @@ pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
     Ok(out)
 }
 
-/// Restore one or more paths from index or optional branch,
-///
-/// Delegates to porcelain `git restore` rather than approximating behavior with libgit2.
-/// If `branch` is provided its tree is the source; otherwise the index / HEAD is used.
+/// Restore one or more paths from index or optional branch.
 ///
 /// # Errors
-/// - Spawning or executing the `git restore` process fails.
-///
-/// # Rationale
-/// Porcelain subcommand encapsulates nuanced restore semantics (rename detection, pathspec
-/// interpretation) that would be complex and error‑prone to replicate directly.
-///
-/// # Future Work
-/// - Support partial restore when command fails mid‑batch by iterating per path.
-/// - Add dry‑run flag to preview intended operations.
+/// - `git restore` command fails.
 pub fn restore<I, P>(paths: I, branch: Option<&str>) -> color_eyre::Result<()>
 where
     I: IntoIterator<Item = P>,
@@ -99,21 +69,8 @@ where
 
 /// Unstage specific paths without touching working tree contents.
 ///
-/// Thin wrapper over `git restore --staged <paths...>` which only affects the index
-/// (inverse of `git add`). Unlike using libgit2 `reset_default`, this avoids
-/// resurrecting deleted files whose blobs no longer exist on disk.
-///
 /// # Errors
-/// - Spawning or executing the `git restore --staged` command fails.
-///
-/// # Rationale
-/// Defers to porcelain for correctness (handles intent, pathspec edge cases) instead of
-/// manually editing the index via libgit2 which exhibited unintended side effects during
-/// experimentation.
-///
-/// # Future Work
-/// - Optionally fall back to libgit2 for environments lacking a `git` binary.
-/// - Capture command stderr and surface as richer context on failure.
+/// - `git restore --staged` command fails.
 pub fn unstage(paths: &[&str]) -> color_eyre::Result<()> {
     if paths.is_empty() {
         return Ok(());
@@ -128,25 +85,10 @@ pub fn unstage(paths: &[&str]) -> color_eyre::Result<()> {
     Ok(())
 }
 
-/// Stage pathspecs into the index (like `git add`),
-///
-/// Treats each item in `paths` as a pathspec and passes the collection to
-/// [`git2::Index::add_all`]. Ignores honored; re‑adding existing staged entries is a no‑op.
-///
-/// Supported pathspecs:
-/// - Files: "src/main.rs"
-/// - Directories (recursive): "src/"
-/// - Globs (libgit2 syntax): "*.rs", "docs/**/*.md"
-/// - Mixed file + pattern list
+/// Stage pathspecs into the index (like `git add`).
 ///
 /// # Errors
-/// - Loading index fails.
-/// - Applying any pathspec fails.
-/// - Writing updated index fails.
-///
-/// # Future Work
-/// - Expose force option to include otherwise ignored files.
-/// - Return count of affected entries for diagnostics.
+/// - Loading, updating, or writing index fails.
 pub fn add_to_index<T, I>(repo: &mut Repository, paths: I) -> color_eyre::Result<()>
 where
     T: IntoCString,
@@ -163,9 +105,7 @@ where
 /// Retrieves the commit hash of the current HEAD.
 ///
 /// # Errors
-/// - If the repository cannot be opened.
-/// - If the HEAD reference cannot be resolved.
-/// - If the HEAD reference does not point to a commit.
+/// - HEAD resolution fails.
 pub fn get_current_commit_hash(repo: &Repository) -> color_eyre::Result<String> {
     let head = repo.head().wrap_err_with(|| eyre!("error getting repo head"))?;
     let commit = head
@@ -174,24 +114,15 @@ pub fn get_current_commit_hash(repo: &Repository) -> color_eyre::Result<String> 
     Ok(commit.id().to_string())
 }
 
-/// Combined staged + worktree status for a path
-///
-/// Aggregates index + worktree bitflags plus conflict / ignore markers into a higher‑level
-/// representation with convenience predicates (e.g. [`GitStatusEntry::is_new`]).
+/// Combined staged + worktree status for a path.
 #[derive(Clone, Debug)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct GitStatusEntry {
-    /// Path relative to the repository root.
     pub path: PathBuf,
-    /// Absolute repository root path used to compute [`GitStatusEntry::absolute_path`].
     pub repo_root: PathBuf,
-    /// `true` if the path is in a conflict state.
     pub conflicted: bool,
-    /// `true` if the path is ignored.
     pub ignored: bool,
-    /// Staged (index) status, if any.
     pub index_state: Option<IndexState>,
-    /// Unstaged (worktree) status, if any.
     pub worktree_state: Option<WorktreeState>,
 }
 

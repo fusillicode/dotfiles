@@ -1,22 +1,7 @@
 //! Format, lint, build, and deploy workspace binaries and Nvim libs.
 //!
-//! # Arguments
-//! - `--debug` Use debug profile; skip clippy; copy from `target/debug`.
-//! - `bins_path` Destination for binaries (default: `$HOME/.local/bin`).
-//! - `cargo_target_path` Cargo target root (default: workspace `target/`).
-//! - `nvim_libs_path` Destination for Neovim libs (default: `$HOME/.config/nvim/lua`).
-//!
-//! # Usage
-//! ```bash
-//! evoke # fmt + clippy + build --release, copy bins & libs
-//! evoke --debug # fmt + build debug (skip clippy) copy from target/debug
-//! evoke --debug "$HOME/.local/bin" "$PWD/target" "$HOME/.config/nvim/lua"
-//! ```
-//!
 //! # Errors
-//! - Resolving required environment variables fails or yields invalid Unicode.
-//! - Running `cargo fmt`, `cargo clippy`, or `cargo build` fails.
-//! - Copying a binary or library fails.
+//! - Cargo commands or file copy operations fail.
 #![feature(exit_status_error)]
 
 use std::path::Path;
