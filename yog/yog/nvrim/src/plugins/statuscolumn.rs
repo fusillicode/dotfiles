@@ -115,6 +115,9 @@ impl FromObject for Opts {
 /// Implementation of [`Poppable`] for [`Opts`].
 impl Poppable for Opts {
     unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
+        // SAFETY: The caller (nvim-oxi framework) guarantees that:
+        // 1. `lstate` is a valid pointer to an initialized Lua state
+        // 2. The Lua stack has at least one value to pop
         unsafe {
             let obj = Object::pop(lstate)?;
             Self::from_object(obj).map_err(nvim_oxi::lua::Error::pop_error_from_err::<Self, _>)
@@ -151,6 +154,9 @@ impl FromObject for Extmark {
 /// Implementation of [`Poppable`] for [`Extmark`].
 impl Poppable for Extmark {
     unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
+        // SAFETY: The caller (nvim-oxi framework) guarantees that:
+        // 1. `lstate` is a valid pointer to an initialized Lua state
+        // 2. The Lua stack has at least one value to pop
         unsafe {
             let obj = Object::pop(lstate)?;
             Self::from_object(obj).map_err(nvim_oxi::lua::Error::pop_error_from_err::<Self, _>)

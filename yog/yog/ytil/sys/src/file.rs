@@ -43,11 +43,7 @@ pub enum FileCmdOutput {
 /// - the command exits with non-success
 /// - standard output cannot be decoded as valid UTF-8
 pub fn exec_file_cmd(path: &str) -> color_eyre::Result<FileCmdOutput> {
-    let stdout_bytes = Command::new("sh")
-        .arg("-c")
-        .arg(format!("file {path} -I"))
-        .exec()?
-        .stdout;
+    let stdout_bytes = Command::new("file").args(["-I", path]).exec()?.stdout;
     let stdout = std::str::from_utf8(&stdout_bytes)?.to_lowercase();
     if stdout.contains(" inode/directory;") {
         return Ok(FileCmdOutput::Directory(path.to_owned()));
@@ -71,13 +67,13 @@ pub fn exec_file_cmd(path: &str) -> color_eyre::Result<FileCmdOutput> {
 /// - Creating the symlink fails.
 /// - The existing link cannot be removed.
 pub fn ln_sf<P: AsRef<Path>>(target: &P, link: &P) -> color_eyre::Result<()> {
-    if link
-        .as_ref()
-        .try_exists()
-        .wrap_err_with(|| eyre!("error checking if link exists | link={}", link.as_ref().display()))?
-    {
-        std::fs::remove_file(link.as_ref())
-            .wrap_err_with(|| eyre!("error removing existing link | link={}", link.as_ref().display()))?;
+    // Remove atomically without check-then-remove TOCTOU race, ignoring NotFound
+    match std::fs::remove_file(link.as_ref()) {
+        Ok(()) => {}
+        Err(ref e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            return Err(e).wrap_err_with(|| eyre!("error removing existing link | link={}", link.as_ref().display()));
+        }
     }
     std::os::unix::fs::symlink(target.as_ref(), link.as_ref()).wrap_err_with(|| {
         eyre!(
@@ -197,15 +193,13 @@ pub fn chmod_x_files_in_dir<P: AsRef<Path>>(dir: P) -> color_eyre::Result<()> {
 ///
 /// # Errors
 /// - A filesystem operation (open/read/write/remove) fails.
-/// - `from` Does not exist.
+/// - `from` does not exist (error from `std::fs::copy`).
 /// - The atomic rename fails.
 /// - The destination's parent directory or file name cannot be resolved.
 /// - The temporary copy fails.
 pub fn atomic_cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
-    if !from.exists() {
-        return Err(eyre!("error missing source file | path={}", from.display()));
-    }
-
+    // Removed explicit existence check to avoid TOCTOU race - let std::fs::copy
+    // report the error if the source doesn't exist
     let tmp_name = format!(
         "{}.tmp-{}-{}",
         to.file_name()
@@ -300,7 +294,8 @@ mod tests {
         let res = atomic_cp(&src, &dst);
 
         assert2::let_assert!(Err(err) = res);
-        assert!(err.to_string().contains("error missing source file"));
+        // Error now comes from std::fs::copy wrapped with context
+        assert!(err.to_string().contains("error copying file to temp"));
     }
 
     #[test]

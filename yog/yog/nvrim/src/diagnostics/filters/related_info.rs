@@ -83,7 +83,7 @@ impl DiagnosticsFilter for RelatedInfoFilter {
 }
 
 /// Common shape of a root LSP diagnostic and the elements of its "`user_data.lsp.relatedInformation`".
-#[derive(Eq, PartialEq, Hash)]
+#[derive(Eq, Hash, PartialEq)]
 struct RelatedInfo {
     /// The starting column number.
     col: i64,
