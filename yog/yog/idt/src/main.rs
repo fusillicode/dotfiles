@@ -9,6 +9,7 @@
 //! - Dead symlink cleanup fails.
 #![feature(exit_status_error)]
 
+use std::collections::HashMap;
 use std::path::Path;
 
 use color_eyre::eyre::eyre;
@@ -211,11 +212,15 @@ fn main() -> color_eyre::Result<()> {
     let (selected_installers, unknown_bin_names): (Vec<_>, Vec<_>) = if supplied_bin_names.is_empty() {
         (all_installers.iter().collect(), vec![])
     } else {
-        let mut selected_installers = vec![];
+        // Build HashMap for O(1) installer lookup instead of O(n) linear search
+        let installer_map: HashMap<&str, &Box<dyn Installer>> =
+            all_installers.iter().map(|i| (i.bin_name(), i)).collect();
+
+        let mut selected_installers = Vec::with_capacity(supplied_bin_names.len());
         let mut unknown_installers = vec![];
         for chosen_bin in supplied_bin_names {
-            if let Some(i) = all_installers.iter().find(|i| chosen_bin == i.bin_name()) {
-                selected_installers.push(i);
+            if let Some(&installer) = installer_map.get(chosen_bin) {
+                selected_installers.push(installer);
             } else {
                 unknown_installers.push(chosen_bin);
             }

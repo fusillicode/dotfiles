@@ -3,6 +3,8 @@
 //! Extracts `user_data.lsp.relatedInformation` entries and skips root diagnostics whose rendered
 //! information is already represented, reducing noise (especially repeated hints).
 
+use std::collections::HashSet;
+
 use color_eyre::eyre::Context;
 use nvim_oxi::Array;
 use nvim_oxi::Dictionary;
@@ -18,7 +20,8 @@ use crate::diagnostics::filters::DiagnosticsFilter;
 pub struct RelatedInfoFilter {
     /// The set of already-seen related infos extracted from LSP diagnostics.
     /// Used to skip duplicate root diagnostics that only repeat information.
-    rel_infos: Vec<RelatedInfo>,
+    /// Uses [`HashSet`] for O(1) lookup instead of Vec's O(n).
+    rel_infos: HashSet<RelatedInfo>,
 }
 
 impl RelatedInfoFilter {
@@ -36,8 +39,9 @@ impl RelatedInfoFilter {
     ///
     /// # Errors
     /// - Traversing diagnostics fails (unexpected value kinds or conversion errors).
-    fn get_related_infos(lsp_diags: &[Dictionary]) -> color_eyre::Result<Vec<RelatedInfo>> {
-        let mut out = vec![];
+    fn get_related_infos(lsp_diags: &[Dictionary]) -> color_eyre::Result<HashSet<RelatedInfo>> {
+        // Pre-allocate with estimated capacity (average ~2 related infos per diagnostic)
+        let mut out = HashSet::with_capacity(lsp_diags.len().saturating_mul(2));
         for lsp_diag in lsp_diags {
             // Not all LSPs have "user_data.lsp.relatedInformation"; skip those missing it
             let Some(lsp) = lsp_diag.get_dict(&["user_data", "lsp"])? else {
@@ -53,7 +57,7 @@ impl RelatedInfoFilter {
             })?;
             for rel_info in rel_infos {
                 let rel_info = Dictionary::try_from(rel_info)?;
-                out.push(RelatedInfo::from_related_info(&rel_info)?);
+                out.insert(RelatedInfo::from_related_info(&rel_info)?);
             }
         }
         Ok(out)
@@ -79,7 +83,7 @@ impl DiagnosticsFilter for RelatedInfoFilter {
 }
 
 /// Common shape of a root LSP diagnostic and the elements of its "`user_data.lsp.relatedInformation`".
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Hash)]
 struct RelatedInfo {
     /// The starting column number.
     col: i64,

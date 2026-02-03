@@ -3,6 +3,8 @@
 //! Retrieves current line + cursor column, extracts contiguous non‑whitespace token, classifies via
 //! filesystem inspection or URL parsing, returning a tagged Lua table.
 
+use std::borrow::Cow;
+
 use color_eyre::eyre::Context;
 use color_eyre::eyre::bail;
 use nvim_oxi::Object;
@@ -56,7 +58,8 @@ fn get_token_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &Curso
         .ok()?
         .saturating_sub(1);
 
-    let mut out = vec![];
+    // Pre-allocate with reasonable capacity for typical token lengths
+    let mut out = Vec::with_capacity(128);
     let mut word_end_idx = 0;
     for (idx, current_char) in ytil_noxi::buffer::get_current_line()?.char_indices() {
         word_end_idx = idx;
@@ -83,7 +86,9 @@ fn get_token_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &Curso
     // Check rows before the cursor one.
     if word_end_idx.saturating_sub(out.len()) == 0 {
         'outer: for idx in (0..cursor_pos.row.saturating_sub(1)).rev() {
-            let line = buffer.get_line(idx).ok()?.to_string_lossy().into_owned();
+            // Use Cow<str> to avoid allocation when string is valid UTF-8
+            let line_bytes = buffer.get_line(idx).ok()?;
+            let line: Cow<'_, str> = line_bytes.to_string_lossy();
             if line.is_empty() {
                 break 'outer;
             }
@@ -101,7 +106,9 @@ fn get_token_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &Curso
     // Check rows after the cursor one.
     if word_end_idx >= window_width {
         'outer: for idx in cursor_pos.row..usize::MAX {
-            let line = buffer.get_line(idx).ok()?.to_string_lossy().into_owned();
+            // Use Cow<str> to avoid allocation when string is valid UTF-8
+            let line_bytes = buffer.get_line(idx).ok()?;
+            let line: Cow<'_, str> = line_bytes.to_string_lossy();
             if line.is_empty() {
                 break 'outer;
             }
