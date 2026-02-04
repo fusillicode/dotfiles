@@ -5,7 +5,7 @@ export ZSH="$HOME/.oh-my-zsh"
 # Standard plugins can be found in ~/.oh-my-zsh/plugins/*
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(gitfast docker docker-compose kubectl)
+plugins=(git gitfast docker docker-compose kubectl)
 
 . "$ZSH/oh-my-zsh.sh"
 

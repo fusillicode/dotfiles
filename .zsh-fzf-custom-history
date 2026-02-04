@@ -34,7 +34,7 @@ fzf-custom-history() {
     --separator='' \
     --pointer='' \
     --marker='+' \
-    --color=hl:#8cf8f6,hl+:#8cf8f6:bold,fg+:bold \
+    --color='hl:#8cf8f6,hl+:#8cf8f6:bold,fg+:bold' \
     --query="$LBUFFER" \
     --nth=3.. \
     --no-sort \

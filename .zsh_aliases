@@ -3,11 +3,13 @@
 # General
 alias nv='nvim'
 alias code='code-insiders'
-alias h='fc -lnir 1'
 alias l='ls -llAtrh'
 alias j='jq . -c'
 alias jl='jq . '
 alias sorce='f() { set -a && source "$@" && set +a; }; f'
+
+# Function instead of alias because it's used in fzf-custom-history
+h() { fc -lnir 1 }
 
 # Git
 alias gs='git status'
