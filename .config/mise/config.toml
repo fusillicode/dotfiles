@@ -1,9 +1,4 @@
 [tools]
-node = "lts"
-poetry = "latest"
-postgres = "latest"
-python = "latest"
 
 [settings]
 experimental = true
-idiomatic_version_file_enable_tools = ["rust"]
