@@ -41,7 +41,7 @@ safe_link "$dotfiles_dir/.myclirc" "$HOME/.myclirc"
 safe_link "$dotfiles_dir/.psqlrc" "$HOME/.psqlrc"
 safe_link "$dotfiles_dir/.sqruff" "$HOME/.sqruff"
 safe_link "$dotfiles_dir/.wezterm.lua" "$HOME/.wezterm.lua"
-safe_link "$dotfiles_dir/.zshenv" "$HOME/.zshenv"
+safe_link "$dotfiles_dir/.zsh_aliases" "$HOME/.zsh_aliases"
 safe_link "$dotfiles_dir/.zshrc" "$HOME/.zshrc"
 safe_link "$dotfiles_dir/.zsh-fzf-custom-history" "$HOME/.zsh-fzf-custom-history"
 
