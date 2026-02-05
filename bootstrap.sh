@@ -5,10 +5,8 @@ set -euo pipefail
 script_dir="${BASH_SOURCE%/*}"
 dotfiles_dir="$HOME/data/dev/dotfiles/dotfiles"
 
-# Helper functions for output
-info() { echo -e "\033[34m==>\033[0m $1"; }
-success() { echo -e "\033[32m==>\033[0m $1"; }
-warn() { echo -e "\033[33m==>\033[0m $1"; }
+# shellcheck source=log.sh
+source "$script_dir/log.sh"
 
 command_exists() { command -v "$1" &>/dev/null; }
 
@@ -139,4 +137,4 @@ cd yog && cargo run --bin evoke && cd -
 info "Cleaning up Homebrew..."
 /bin/bash "$script_dir"/bin/update_brew.sh
 
-success "Bootstrap complete!"
+ok "Bootstrap complete!"
