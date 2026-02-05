@@ -131,14 +131,6 @@ else
   warn "mise not found, skipping mise update..."
 fi
 
-# Oh My Zsh
-info "Installing Oh My Zsh..."
-if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
-  sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
-else
-  warn "Oh My Zsh already installed, skipping..."
-fi
-
 # Setup ~/.local/bin & ~/.dev_tools
 info "Running evoke setup..."
 cd yog && cargo run --bin evoke && cd -

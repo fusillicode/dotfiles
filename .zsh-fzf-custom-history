@@ -1,29 +1,33 @@
-# Zsh history and fzf
-HISTSIZE=1000000             # How many lines to keep in active memory
-SAVEHIST=1000000             # How many lines to keep in the actual file
-setopt EXTENDED_HISTORY      # Save timestamps (This replaces HISTTIMEFORMAT)
-setopt HIST_FIND_NO_DUPS     # Do not display a line previously found, even if it's a dup
-setopt HIST_IGNORE_ALL_DUPS  # If a new command is a duplicate, delete the old one
-setopt HIST_IGNORE_SPACE     # Don't save commands that start with a space
-setopt HIST_REDUCE_BLANKS    # Remove superfluous blanks before recording
-setopt INC_APPEND_HISTORY    # Write to the history file immediately, not just on exit
-setopt SHARE_HISTORY         # Share history between all open terminal tabs
+# History configuration
+HISTFILE="$HOME/.zsh_history"
+HISTSIZE=1000000
+SAVEHIST=1000000
+setopt EXTENDED_HISTORY       # Save timestamps
+setopt HIST_FIND_NO_DUPS      # Don't display duplicates when searching
+setopt HIST_IGNORE_ALL_DUPS   # Delete old duplicate entries
+setopt HIST_IGNORE_SPACE      # Don't save commands starting with space
+setopt HIST_REDUCE_BLANKS     # Remove superfluous blanks
+setopt HIST_VERIFY            # Show expanded history before executing
+setopt INC_APPEND_HISTORY     # Write immediately, not on exit
+setopt SHARE_HISTORY          # Share between terminals
+[[ -f "$HISTFILE" ]] && chmod 600 "$HISTFILE"
 
-# Check if fzf is installed
+# FZF integration
 if ! (( $+commands[fzf] )); then
   echo "Warning: fzf not found, custom history widget not loaded."
   return 1
 fi
-
-source <(fzf --zsh)
-[[ -n "${terminfo[kcuu1]}" ]] && bindkey "${terminfo[kcuu1]}" fzf-history-widget
-
+_fzf_cache="$HOME/.cache/zsh/fzf.zsh"
+if [[ ! -f "$_fzf_cache" || "$(command -v fzf)" -nt "$_fzf_cache" ]]; then
+  mkdir -p "$HOME/.cache/zsh"
+  fzf --zsh > "$_fzf_cache"
+fi
+source "$_fzf_cache"
 unset FZF_CTRL_R_COMMAND
 
-fzf-custom-history() {
+# Custom history widget
+function fzf-custom-history() {
   local selected
-
-  # Using custom inline fzf override.
   selected=$(h | fzf \
     --exact \
     --info=inline \
@@ -39,19 +43,13 @@ fzf-custom-history() {
     --nth=3.. \
     --no-sort \
   )
-
   if [[ -n "$selected" ]]; then
-    # Trim leading whitespace.
     selected="${selected#"${selected%%[![:space:]]*}"}"
-    # Extract command (4th field onwards) using Zsh's internal parser.
     LBUFFER="${${(z)selected}[3,-1]}"
   fi
   zle reset-prompt
 }
-
 zle -N fzf-custom-history
-
-# Bindings ctrl-r, ctrl-p, up-arrow.
 bindkey '^R' fzf-custom-history
 bindkey '^P' fzf-custom-history
-[[ -n "${terminfo[kcuu1]}" ]] && bindkey "${terminfo[kcuu1]}" fzf-custom-history
+bindkey '^[[A' fzf-custom-history
