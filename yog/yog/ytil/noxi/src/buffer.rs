@@ -64,7 +64,7 @@ pub trait BufferExt: Debug {
             })?;
             out.push_str(sub_line);
             if line_idx != last_line_idx {
-                out.push_str("/n");
+                out.push('\n');
             }
         }
 
@@ -423,7 +423,7 @@ mod tests {
         let result = buffer.get_text_between((0, 1), (2, 3), TextBoundary::Exact);
 
         assert2::let_assert!(Ok(value) = result);
-        pretty_assertions::assert_eq!(value, "ine1/nline2/nlin");
+        pretty_assertions::assert_eq!(value, "ine1\nline2\nlin");
     }
 
     #[test]
@@ -438,7 +438,7 @@ mod tests {
         let result = buffer.get_text_between((0, 1), (2, 3), TextBoundary::FromLineStartToEnd);
 
         assert2::let_assert!(Ok(value) = result);
-        pretty_assertions::assert_eq!(value, "line1/nline2/nline3");
+        pretty_assertions::assert_eq!(value, "line1\nline2\nline3");
     }
 
     #[test]
@@ -453,7 +453,7 @@ mod tests {
         let result = buffer.get_text_between((0, 1), (2, 3), TextBoundary::ToLineEnd);
 
         assert2::let_assert!(Ok(value) = result);
-        pretty_assertions::assert_eq!(value, "ine1/nline2/nline3");
+        pretty_assertions::assert_eq!(value, "ine1\nline2\nline3");
     }
 
     #[test]

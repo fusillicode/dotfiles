@@ -28,7 +28,7 @@ pub fn join<T>(join_handle: JoinHandle<color_eyre::Result<T>>) -> Result<T, eyre
         .map_err(|err| eyre!("error joining handle | error={err:#?}"))?
 }
 
-/// Opens the given argument using the system's default app.
+/// Opens the given argument using the system's default app (`open` on macOS).
 ///
 /// # Errors
 /// - `open` command fails.
@@ -98,7 +98,7 @@ impl FromStr for Os {
             "darwin" => Ok(Self::MacOs),
             "linux" => Ok(Self::Linux),
             normalized_value => {
-                bail!("error unknown normalized arch value | normalized_value={normalized_value:?} value={value:?} ")
+                bail!("error unknown normalized os value | normalized_value={normalized_value:?} value={value:?} ")
             }
         }
     }
@@ -165,6 +165,6 @@ mod tests {
     fn os_from_str_when_unknown_input_returns_error_with_message() {
         let result = Os::from_str("unknown");
         assert2::let_assert!(Err(err) = result);
-        assert!(err.to_string().contains("error unknown normalized arch value"));
+        assert!(err.to_string().contains("error unknown normalized os value"));
     }
 }

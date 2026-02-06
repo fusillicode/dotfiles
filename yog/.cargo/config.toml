@@ -1,33 +1,5 @@
 [build]
-rustflags = [
-  "-Ctarget-cpu=native",
-  "-Dclippy::all",
-  "-Dclippy::cargo",
-  "-Dclippy::complexity",
-  "-Dclippy::correctness",
-  "-Dclippy::nursery",
-  "-Dclippy::pedantic",
-  "-Dclippy::perf",
-  "-Dclippy::dbg_macro",
-  "-Dclippy::unimplemented",
-  "-Dclippy::todo",
-  "-Dclippy::unreachable",
-  "-Dclippy::panic",
-  "-Dclippy::unwrap_used",
-  "-Dclippy::expect_used",
-  "-Dclippy::indexing_slicing",
-  "-Dclippy::arithmetic_side_effects",
-  "-Dclippy::float_arithmetic",
-  "-Dclippy::implicit_clone",
-  "-Dclippy::redundant_else",
-  "-Dclippy::single_match",
-  "-Dclippy::wildcard_enum_match_arm",
-  "-Dclippy::rc_buffer",
-  "-Dclippy::vec_init_then_push",
-  "-Dclippy::style",
-  "-Dclippy::suspicious",
-  "-Aclippy::must-use-candidate",
-]
+rustflags = ["-Ctarget-cpu=native"]
 rustdocflags = ["-D", "warnings"]
 
 [target.x86_64-apple-darwin]

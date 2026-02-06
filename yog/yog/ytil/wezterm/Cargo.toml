@@ -22,3 +22,6 @@ serde_json = { workspace = true }
 [dev-dependencies]
 assert2 = { workspace = true }
 fake = { workspace = true }
+
+[lints]
+workspace = true

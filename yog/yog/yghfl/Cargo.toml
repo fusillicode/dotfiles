@@ -25,3 +25,6 @@ fake = { workspace = true }
 temp-env = { version = "0.3" }
 ytil_hx = { workspace = true, features = ["fake"] }
 ytil_wezterm = { workspace = true, features = ["fake"] }
+
+[lints]
+workspace = true

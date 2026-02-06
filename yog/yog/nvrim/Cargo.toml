@@ -38,3 +38,6 @@ assert2 = { workspace = true }
 pretty_assertions = { workspace = true }
 rstest = { workspace = true }
 tempfile = { workspace = true }
+
+[lints]
+workspace = true

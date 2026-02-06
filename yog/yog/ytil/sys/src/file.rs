@@ -113,7 +113,7 @@ pub fn ln_sf_files_in_dir<P: AsRef<std::path::Path>>(target_dir: P, link_dir: P)
     Ok(())
 }
 
-/// Copies the given content to the system clipboard using the `pbcopy` command.
+/// Copies the given content to the system clipboard using the `pbcopy` command (macOS only).
 ///
 /// # Errors
 /// - The clipboard program cannot be spawned.

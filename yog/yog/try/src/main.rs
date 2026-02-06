@@ -13,10 +13,10 @@ use std::time::Instant;
 use color_eyre::eyre;
 use color_eyre::eyre::WrapErr;
 use color_eyre::eyre::bail;
-use itertools::Itertools;
 use ytil_sys::cli::Args;
 
 /// Exit condition for retry loop.
+#[cfg_attr(test, derive(Debug))]
 enum ExitCond {
     /// Exit when the command succeeds.
     Ok,
@@ -25,18 +25,9 @@ enum ExitCond {
 }
 
 impl ExitCond {
-    /// Determines if the loop should break.
-    #[allow(clippy::suspicious_operation_groupings)]
+    /// Determines if the loop should break based on the exit condition and command result.
     pub const fn should_break(&self, cmd_res: Result<(), ExitStatusError>) -> bool {
-        self.is_ok() && cmd_res.is_ok() || !self.is_ok() && cmd_res.is_err()
-    }
-
-    /// Checks if this represents success.
-    const fn is_ok(&self) -> bool {
-        match self {
-            Self::Ok => true,
-            Self::Ko => false,
-        }
+        matches!((self, cmd_res), (Self::Ok, Ok(())) | (Self::Ko, Err(_)))
     }
 }
 
@@ -79,16 +70,17 @@ fn main() -> color_eyre::Result<()> {
     let exit_cond =
         ExitCond::from_str(exit_cond).with_context(|| format!("invalid exit condition | args={args:#?}"))?;
 
-    let cmd = args.iter().join(" ");
+    let Some((program, program_args)) = args.split_first() else {
+        bail!("missing command arg | args={args:#?}");
+    };
 
     let mut tries = vec![];
     loop {
         let now = Instant::now();
-        let output = Command::new("sh")
-            .arg("-c")
-            .arg(&cmd)
+        let output = Command::new(program)
+            .args(program_args)
             .output()
-            .with_context(|| format!("error running cmd | cmd={cmd:?}"))?;
+            .with_context(|| format!("error running cmd | program={program:?} args={program_args:?}"))?;
         tries.push(now.elapsed());
 
         let terminal_output = if output.status.success() {
@@ -115,4 +107,49 @@ fn main() -> color_eyre::Result<()> {
     println!("Summary:\n - tries {tries_count}\n - avg time {avg_runs_time:#?}");
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use core::str::FromStr;
+
+    use super::*;
+
+    #[test]
+    fn exit_cond_from_str_when_ok_returns_ok_variant() {
+        assert2::let_assert!(Ok(ExitCond::Ok) = ExitCond::from_str("ok"));
+    }
+
+    #[test]
+    fn exit_cond_from_str_when_ko_returns_ko_variant() {
+        assert2::let_assert!(Ok(ExitCond::Ko) = ExitCond::from_str("ko"));
+    }
+
+    #[test]
+    fn exit_cond_from_str_when_invalid_returns_error() {
+        assert2::let_assert!(Err(err) = ExitCond::from_str("invalid"));
+        assert!(err.to_string().contains("unexpected exit condition"));
+    }
+
+    #[test]
+    fn should_break_ok_cond_with_success_result_returns_true() {
+        pretty_assertions::assert_eq!(ExitCond::Ok.should_break(Ok(())), true);
+    }
+
+    #[test]
+    fn should_break_ok_cond_with_failure_result_returns_false() {
+        let err_result: Result<(), ExitStatusError> = std::process::Command::new("false").status().unwrap().exit_ok();
+        pretty_assertions::assert_eq!(ExitCond::Ok.should_break(err_result), false);
+    }
+
+    #[test]
+    fn should_break_ko_cond_with_failure_result_returns_true() {
+        let err_result: Result<(), ExitStatusError> = std::process::Command::new("false").status().unwrap().exit_ok();
+        pretty_assertions::assert_eq!(ExitCond::Ko.should_break(err_result), true);
+    }
+
+    #[test]
+    fn should_break_ko_cond_with_success_result_returns_false() {
+        pretty_assertions::assert_eq!(ExitCond::Ko.should_break(Ok(())), false);
+    }
 }

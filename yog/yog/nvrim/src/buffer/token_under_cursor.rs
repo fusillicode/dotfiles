@@ -300,7 +300,7 @@ fn get_word_at_index(s: &str, idx: usize) -> Option<&str> {
 /// - [`Option::Some`] with the corresponding byte index (including `s.len()` for end-of-line)
 /// - [`Option::None`] if `idx` is past the end
 fn convert_visual_to_byte_idx(s: &str, idx: usize) -> Option<usize> {
-    let mut chars_seen = 0usize;
+    let mut chars_seen = 0_usize;
     let mut byte_idx = None;
     for (b, _) in s.char_indices() {
         if chars_seen == idx {

@@ -58,12 +58,7 @@ fn process(file: &str) -> color_eyre::Result<()> {
 
 /// Strips suffix beginning at first ':'.
 fn before_first_colon(s: &str) -> &str {
-    for (i, &b) in s.as_bytes().iter().enumerate() {
-        if b == b':' {
-            return &s[..i];
-        }
-    }
-    s
+    s.split_once(':').map_or(s, |(before, _)| before)
 }
 
 /// Remove files or directories passed as CLI args (recursive for dirs).

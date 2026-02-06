@@ -154,3 +154,40 @@ pub fn create(title: &str) -> color_eyre::Result<String> {
         .exec()?;
     ytil_cmd::extract_success_output(&output)
 }
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[test]
+    fn create_when_empty_title_returns_error() {
+        assert2::let_assert!(Err(err) = create(""));
+        assert!(
+            err.to_string()
+                .contains("error cannot create GitHub PR with empty title")
+        );
+    }
+
+    #[rstest]
+    #[case("BEHIND", PullRequestMergeState::Behind)]
+    #[case("BLOCKED", PullRequestMergeState::Blocked)]
+    #[case("CLEAN", PullRequestMergeState::Clean)]
+    #[case("DIRTY", PullRequestMergeState::Dirty)]
+    #[case("DRAFT", PullRequestMergeState::Draft)]
+    #[case("HAS_HOOKS", PullRequestMergeState::HasHooks)]
+    #[case("UNKNOWN", PullRequestMergeState::Unknown)]
+    #[case("UNMERGEABLE", PullRequestMergeState::Unmergeable)]
+    #[case("UNSTABLE", PullRequestMergeState::Unstable)]
+    fn pull_request_merge_state_deserializes_all_variants(
+        #[case] status_str: &str,
+        #[case] expected: PullRequestMergeState,
+    ) {
+        let json = format!(
+            r#"{{"number":1,"title":"t","author":{{"login":"a","is_bot":false}},"mergeStateStatus":"{status_str}","updatedAt":"2024-01-01T00:00:00Z"}}"#
+        );
+        assert2::let_assert!(Ok(pr) = serde_json::from_str::<PullRequest>(&json));
+        pretty_assertions::assert_eq!(pr.merge_state, expected);
+    }
+}

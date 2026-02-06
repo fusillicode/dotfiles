@@ -25,7 +25,8 @@ impl Installer for Taplo<'_> {
                 // `--root` automatically append `bin` 🥲
                 self.bin_dir.to_string_lossy().trim_end_matches("bin"),
             ])
-            .status()?;
+            .status()?
+            .exit_ok()?;
 
         ytil_sys::file::chmod_x(self.bin_dir.join(self.bin_name()))?;
 

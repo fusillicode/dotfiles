@@ -19,3 +19,6 @@ ytil_tui = { workspace = true }
 
 [dev-dependencies]
 assert2 = { workspace = true }
+
+[lints]
+workspace = true

@@ -19,3 +19,6 @@ fake = { workspace = true, optional = true }
 
 [dev-dependencies]
 fake = { workspace = true }
+
+[lints]
+workspace = true

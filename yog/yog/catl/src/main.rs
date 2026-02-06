@@ -35,5 +35,5 @@ fn main() -> color_eyre::Result<()> {
         return Ok(Command::new("cat").args([path]).status()?.exit_ok()?);
     }
 
-    Ok(())
+    Err(eyre!("unsupported file type | path={path:?}"))
 }
