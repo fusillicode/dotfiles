@@ -211,14 +211,22 @@ impl<'de> serde::Deserialize<'de> for SignHlGroup {
         D: serde::Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        Ok(match s.as_str() {
-            "DiagnosticSignError" => Self::DiagnosticError,
-            "DiagnosticSignWarn" => Self::DiagnosticWarn,
-            "DiagnosticSignInfo" => Self::DiagnosticInfo,
-            "DiagnosticSignHint" => Self::DiagnosticHint,
-            "DiagnosticSignOk" => Self::DiagnosticOk,
-            git_hl_group if git_hl_group.contains("GitSigns") => Self::Git(git_hl_group.to_string()),
-            other_hl_group => Self::Other(other_hl_group.to_string()),
+        // Use if/else instead of match to move the already-owned `s` into Git/Other variants,
+        // avoiding a redundant `.to_string()` allocation on every non-diagnostic extmark.
+        Ok(if s == "DiagnosticSignError" {
+            Self::DiagnosticError
+        } else if s == "DiagnosticSignWarn" {
+            Self::DiagnosticWarn
+        } else if s == "DiagnosticSignInfo" {
+            Self::DiagnosticInfo
+        } else if s == "DiagnosticSignHint" {
+            Self::DiagnosticHint
+        } else if s == "DiagnosticSignOk" {
+            Self::DiagnosticOk
+        } else if s.contains("GitSigns") {
+            Self::Git(s)
+        } else {
+            Self::Other(s)
         })
     }
 }
