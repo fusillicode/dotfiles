@@ -52,6 +52,7 @@ convert_case = { version = "0.11" }
 fake = { version = "4.4", features = ["derive"] }
 getrandom = { version = "0.3" }
 git2 = { version = "0.20" }
+home = { version = "0.5" }
 itertools = { version = "0.14" }
 nomicon = { path = "./yog/nomicon" }
 pretty_assertions = { version = "1.4" }
@@ -73,6 +74,36 @@ ytil_noxi = { path = "./yog/ytil/noxi" }
 ytil_sys = { path = "./yog/ytil/sys" }
 ytil_tui = { path = "./yog/ytil/tui" }
 ytil_wezterm = { path = "./yog/ytil/wezterm" }
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+cargo = { level = "deny", priority = -1 }
+nursery = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+dbg_macro = "deny"
+unimplemented = "deny"
+todo = "deny"
+unreachable = "deny"
+panic = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+indexing_slicing = "deny"
+arithmetic_side_effects = "deny"
+float_arithmetic = "deny"
+implicit_clone = "deny"
+redundant_else = "deny"
+single_match = "deny"
+wildcard_enum_match_arm = "deny"
+rc_buffer = "deny"
+vec_init_then_push = "deny"
+format_push_string = "deny"
+verbose_file_reads = "deny"
+if_then_some_else_none = "deny"
+unseparated_literal_suffix = "deny"
+must_use_candidate = "allow"
+
+[workspace.lints.rust]
+warnings = "deny"
 
 [profile.test]
 # Enable debug symbols for coverage (required by llvm-cov / tarpaulin)

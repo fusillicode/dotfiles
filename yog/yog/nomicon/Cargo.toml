@@ -14,6 +14,9 @@ build = "build.rs"
 [package.metadata.cargo-machete]
 ignored = ["lightningcss"]
 
+[lints]
+workspace = true
+
 [dependencies]
 askama = { version = "0.15" }
 chrono = { workspace = true }

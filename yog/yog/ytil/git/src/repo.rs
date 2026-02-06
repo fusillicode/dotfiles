@@ -40,3 +40,45 @@ pub fn get_relative_path_to_repo(path: &Path, repo: &Repository) -> color_eyre::
     })?;
     Ok(Path::new("/").join(path.strip_prefix(repo_workdir)?))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn discover_when_path_is_inside_repo_returns_repo() {
+        let (_temp_dir, repo) = crate::tests::init_test_repo(None);
+        let workdir = repo.workdir().unwrap();
+        assert2::let_assert!(Ok(_repo) = discover(workdir));
+    }
+
+    #[test]
+    fn discover_when_path_is_not_a_repo_returns_error() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        assert2::let_assert!(Err(err) = discover(temp_dir.path()));
+        assert!(err.to_string().contains("error discovering repo"));
+    }
+
+    #[test]
+    fn get_root_returns_path_without_dot_git_suffix() {
+        let (_temp_dir, repo) = crate::tests::init_test_repo(None);
+        let root = get_root(&repo);
+        pretty_assertions::assert_eq!(root.ends_with(".git"), false);
+    }
+
+    #[test]
+    fn get_relative_path_to_repo_when_path_inside_repo_returns_rooted_relative() {
+        let (_temp_dir, repo) = crate::tests::init_test_repo(None);
+        let workdir = repo.workdir().unwrap();
+        let file_path = workdir.join("src").join("main.rs");
+        assert2::let_assert!(Ok(rel) = get_relative_path_to_repo(&file_path, &repo));
+        pretty_assertions::assert_eq!(rel, PathBuf::from("/src/main.rs"));
+    }
+
+    #[test]
+    fn get_relative_path_to_repo_when_path_outside_repo_returns_error() {
+        let (_temp_dir, repo) = crate::tests::init_test_repo(None);
+        let outside_path = Path::new("/completely/different/path");
+        assert2::let_assert!(Err(_err) = get_relative_path_to_repo(outside_path, &repo));
+    }
+}

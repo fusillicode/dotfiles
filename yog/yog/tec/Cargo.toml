@@ -10,6 +10,9 @@ description = "Run workspace lint suite (clippy, dependency & manifest checks)."
 keywords = ["cli", "check", "lints"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lints]
+workspace = true
+
 [dependencies]
 color-eyre = { workspace = true }
 nomicon = { workspace = true }

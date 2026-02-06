@@ -10,6 +10,9 @@ description = "Execute system commands with structured error handling."
 keywords = ["command", "process", "exec", "shell", "utilities"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lints]
+workspace = true
+
 [dependencies]
 color-eyre = { workspace = true }
 thiserror = { workspace = true }

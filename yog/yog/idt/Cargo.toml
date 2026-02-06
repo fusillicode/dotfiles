@@ -10,6 +10,9 @@ description = "Install language servers and development utilities."
 keywords = ["cli", "installer", "development", "tools", "language-server"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lints]
+workspace = true
+
 [dependencies]
 color-eyre = { workspace = true }
 ytil_cmd = { workspace = true }

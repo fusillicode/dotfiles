@@ -10,6 +10,9 @@ description = "Manage Git branches with optional GitHub lookup."
 keywords = ["cli", "git", "github", "branch", "management"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lints]
+workspace = true
+
 [dependencies]
 color-eyre = { workspace = true }
 url = { workspace = true }

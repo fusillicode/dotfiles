@@ -989,6 +989,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
+name = "home"
+version = "0.5.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc627f471c528ff0c4a49e1d5e60450c8f6461dd6d10ba9dcd3a61d3dff7728d"
+dependencies = [
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "http"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1737,6 +1746,8 @@ name = "oe"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
+ "pretty_assertions",
+ "rstest",
  "ytil_cmd",
  "ytil_editor",
  "ytil_sys",
@@ -2953,8 +2964,10 @@ dependencies = [
 name = "try"
 version = "0.1.0"
 dependencies = [
+ "assert2",
  "color-eyre",
- "itertools 0.14.0",
+ "pretty_assertions",
+ "rstest",
  "ytil_sys",
 ]
 
@@ -3548,7 +3561,10 @@ dependencies = [
 name = "yhfp"
 version = "0.1.0"
 dependencies = [
+ "assert2",
  "color-eyre",
+ "pretty_assertions",
+ "rstest",
  "ytil_editor",
  "ytil_hx",
  "ytil_sys",
@@ -3659,6 +3675,7 @@ dependencies = [
  "assert2",
  "chrono",
  "color-eyre",
+ "home",
  "itertools 0.14.0",
  "pico-args",
  "pretty_assertions",

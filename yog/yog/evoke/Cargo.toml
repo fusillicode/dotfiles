@@ -10,6 +10,9 @@ description = "Format, lint, build, and deploy workspace binaries."
 keywords = ["cli", "build", "automation", "deployment", "rust"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lints]
+workspace = true
+
 [dependencies]
 color-eyre = { workspace = true }
 ytil_cmd = { workspace = true }

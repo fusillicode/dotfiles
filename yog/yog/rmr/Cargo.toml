@@ -10,6 +10,9 @@ description = "Remove files or directories, stripping path metadata suffixes (pa
 keywords = ["cli", "rm", "command"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lints]
+workspace = true
+
 [dependencies]
 color-eyre = { workspace = true }
 ytil_sys = { workspace = true }

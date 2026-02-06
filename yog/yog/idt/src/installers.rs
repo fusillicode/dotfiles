@@ -128,6 +128,24 @@ pub trait SystemDependent {
     fn target_arch_and_os(&self) -> (&str, &str);
 }
 
+/// Common install pattern for npm-based tools: download via npm, symlink the binary, and make it executable.
+///
+/// # Errors
+/// - npm download, symlink creation, or chmod fails.
+pub fn install_npm_tool(
+    dev_tools_dir: &std::path::Path,
+    bin_dir: &std::path::Path,
+    bin_name: &str,
+    npm_name: &str,
+    packages: &[&str],
+) -> color_eyre::Result<()> {
+    let target_dir = crate::downloaders::npm::run(dev_tools_dir, npm_name, packages)?;
+    let target = target_dir.join(bin_name);
+    ytil_sys::file::ln_sf(&target, &bin_dir.join(bin_name))?;
+    ytil_sys::file::chmod_x(target)?;
+    Ok(())
+}
+
 /// Format phase timing summary line.
 fn format_timing(start: Instant, past_install: Instant, check: Option<Duration>) -> String {
     format!(

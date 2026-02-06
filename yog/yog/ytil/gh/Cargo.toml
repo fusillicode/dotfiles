@@ -10,6 +10,9 @@ description = "Query GitHub refs, URLs, and repository metadata."
 keywords = ["github", "api", "repository", "refs", "cli"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lints]
+workspace = true
+
 [dependencies]
 chrono = { workspace = true }
 color-eyre = { workspace = true }

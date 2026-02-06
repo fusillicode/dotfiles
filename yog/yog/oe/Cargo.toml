@@ -10,9 +10,16 @@ description = "Open files in an editor from `WezTerm` context."
 keywords = ["cli", "editor", "wezterm", "neovim", "nvim", "helix"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lints]
+workspace = true
+
 [dependencies]
 color-eyre = { workspace = true }
 ytil_cmd = { workspace = true }
 ytil_editor = { workspace = true }
 ytil_sys = { workspace = true }
 ytil_wezterm = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+rstest = { workspace = true }

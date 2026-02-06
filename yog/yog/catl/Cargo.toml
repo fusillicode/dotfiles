@@ -10,6 +10,9 @@ description = "View a file with cat or list a directory with ls."
 keywords = ["cli", "file", "directory", "viewer", "cat", "ls"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lints]
+workspace = true
+
 [dependencies]
 color-eyre = { workspace = true }
 ytil_sys = { workspace = true }

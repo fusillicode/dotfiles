@@ -10,5 +10,8 @@ description = "Experiment with code snippets and ideas."
 keywords = ["cli", "experimental", "playground", "testing"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lints]
+workspace = true
+
 [dependencies]
 color-eyre = { workspace = true }

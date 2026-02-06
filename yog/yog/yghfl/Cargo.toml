@@ -10,6 +10,9 @@ description = "Generate GitHub links for files open in Helix."
 keywords = ["cli", "github", "helix", "editor", "links"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lints]
+workspace = true
+
 [dependencies]
 color-eyre = { workspace = true }
 url = { workspace = true }

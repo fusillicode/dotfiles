@@ -14,6 +14,9 @@ categories = ["command-line-utilities", "development-tools"]
 mockall = ["dep:mockall"]
 testing = []
 
+[lints]
+workspace = true
+
 [dependencies]
 color-eyre = { workspace = true }
 mockall = { version = "0.14", optional = true }

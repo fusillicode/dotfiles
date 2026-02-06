@@ -10,6 +10,9 @@ description = "Interactively stage or remove entries from Git index."
 keywords = ["cli", "git", "github", "branch", "management"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lints]
+workspace = true
+
 [dependencies]
 color-eyre = { workspace = true }
 strum = { workspace = true }

@@ -10,9 +10,17 @@ description = "Copy Helix file paths to the system clipboard."
 keywords = ["cli", "helix", "editor", "clipboard", "file-path"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lints]
+workspace = true
+
 [dependencies]
 color-eyre = { workspace = true }
 ytil_editor = { workspace = true }
 ytil_hx = { workspace = true }
 ytil_sys = { workspace = true }
 ytil_wezterm = { workspace = true }
+
+[dev-dependencies]
+assert2 = { workspace = true }
+pretty_assertions = { workspace = true }
+rstest = { workspace = true }

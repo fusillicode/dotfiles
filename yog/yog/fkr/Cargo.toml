@@ -10,6 +10,9 @@ description = "Generate interactive fake test data."
 keywords = ["cli", "fake", "data", "generator", "testing", "development"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lints]
+workspace = true
+
 [dependencies]
 color-eyre = { workspace = true }
 fake = { workspace = true, features = ["uuid"] }

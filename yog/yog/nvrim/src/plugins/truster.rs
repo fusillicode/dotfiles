@@ -7,11 +7,6 @@
 use std::path::Path;
 
 use nvim_oxi::Dictionary;
-use nvim_oxi::Object;
-use nvim_oxi::conversion::FromObject;
-use nvim_oxi::lua::Poppable;
-use nvim_oxi::lua::ffi::State;
-use nvim_oxi::serde::Deserializer;
 use serde::Deserialize;
 use ytil_noxi::buffer::BufferExt;
 
@@ -28,23 +23,7 @@ enum TargetTerminal {
     Nvim,
 }
 
-impl FromObject for TargetTerminal {
-    fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
-        Self::deserialize(Deserializer::new(obj)).map_err(Into::into)
-    }
-}
-
-impl Poppable for TargetTerminal {
-    unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
-        // SAFETY: The caller (nvim-oxi framework) guarantees that:
-        // 1. `lstate` is a valid pointer to an initialized Lua state
-        // 2. The Lua stack has at least one value to pop
-        unsafe {
-            let obj = Object::pop(lstate)?;
-            Self::from_object(obj).map_err(nvim_oxi::lua::Error::pop_error_from_err::<Self, _>)
-        }
-    }
-}
+ytil_noxi::impl_nvim_deserializable!(TargetTerminal);
 
 fn run_test(target_terminal: TargetTerminal) -> Option<()> {
     let file_path = ytil_noxi::buffer::get_absolute_path(Some(&nvim_oxi::api::get_current_buf()))?;

@@ -10,6 +10,9 @@ description = "List and interactively merge GitHub pull requests."
 keywords = ["cli", "git", "github", "branch", "management"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lints]
+workspace = true
+
 [dependencies]
 color-eyre = { workspace = true }
 strum = { workspace = true }

@@ -10,6 +10,9 @@ description = "Launch and interact with Helix, Neovim, and WezTerm."
 keywords = ["editor", "wezterm", "neovim", "helix", "integration"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lints]
+workspace = true
+
 [dependencies]
 color-eyre = { workspace = true }
 ytil_wezterm = { workspace = true }

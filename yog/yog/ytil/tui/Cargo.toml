@@ -10,6 +10,9 @@ description = "Provide minimal terminal prompt and selection helpers."
 keywords = ["tui", "terminal", "prompt", "widgets"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lints]
+workspace = true
+
 [dependencies]
 color-eyre = { workspace = true }
 inquire = { version = "0.9", features = ["fuzzy-matcher"] }

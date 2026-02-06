@@ -8,7 +8,7 @@ use color_eyre::eyre::OptionExt as _;
 /// # Errors
 /// - The home directory cannot be determined.
 pub fn build_home_path<P: AsRef<Path>>(parts: &[P]) -> color_eyre::Result<PathBuf> {
-    let home_path = std::env::home_dir().ok_or_eyre("missing home dir | env=HOME")?;
+    let home_path = home::home_dir().ok_or_eyre("missing home dir | env=HOME")?;
     Ok(build_path(home_path, parts))
 }
 
@@ -37,4 +37,37 @@ pub fn get_workspace_root() -> color_eyre::Result<PathBuf> {
             manifest_dir.display()
         ))?
         .to_path_buf())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_path_appends_parts_to_root() {
+        let root = PathBuf::from("/base");
+        let result = build_path(root, &["a", "b", "c"]);
+        pretty_assertions::assert_eq!(result, PathBuf::from("/base/a/b/c"));
+    }
+
+    #[test]
+    fn build_path_with_empty_parts_returns_root() {
+        let root = PathBuf::from("/base");
+        let result = build_path(root, &[] as &[&str]);
+        pretty_assertions::assert_eq!(result, PathBuf::from("/base"));
+    }
+
+    #[test]
+    fn build_home_path_returns_path_ending_with_parts() {
+        assert2::let_assert!(Ok(path) = build_home_path(&[".config", "test"]));
+        assert!(path.ends_with(".config/test"), "path={}", path.display());
+    }
+
+    #[test]
+    fn get_workspace_root_returns_existing_directory() {
+        assert2::let_assert!(Ok(root) = get_workspace_root());
+        assert!(root.is_dir(), "root={}", root.display());
+        // The workspace root should contain Cargo.toml
+        assert!(root.join("Cargo.toml").exists(), "root={}", root.display());
+    }
 }

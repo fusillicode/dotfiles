@@ -3,11 +3,6 @@
 //! Converts raw LSP diagnostics plus embedded `user_data` into concise messages with source / code.
 //! Missing required fields trigger user notifications and yield `None`.
 
-use nvim_oxi::Object;
-use nvim_oxi::conversion::FromObject;
-use nvim_oxi::lua::Poppable;
-use nvim_oxi::lua::ffi::State;
-use nvim_oxi::serde::Deserializer;
 use serde::Deserialize;
 
 /// Formats a diagnostic into a human-readable string.
@@ -76,25 +71,7 @@ pub struct Diagnostic {
     user_data: Option<UserData>,
 }
 
-/// Implementation of [`FromObject`] for [`Diagnostic`].
-impl FromObject for Diagnostic {
-    fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
-        Self::deserialize(Deserializer::new(obj)).map_err(Into::into)
-    }
-}
-
-/// Implementation of [`Poppable`] for [`Diagnostic`].
-impl Poppable for Diagnostic {
-    unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
-        // SAFETY: The caller (nvim-oxi framework) guarantees that:
-        // 1. `lstate` is a valid pointer to an initialized Lua state
-        // 2. The Lua stack has at least one value to pop
-        unsafe {
-            let obj = Object::pop(lstate)?;
-            Self::from_object(obj).map_err(nvim_oxi::lua::Error::pop_error_from_err::<Self, _>)
-        }
-    }
-}
+ytil_noxi::impl_nvim_deserializable!(Diagnostic);
 
 /// User data associated with a diagnostic.
 #[derive(Debug, Deserialize)]

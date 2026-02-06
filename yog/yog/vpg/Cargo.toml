@@ -10,6 +10,9 @@ description = "Manage PostgreSQL credentials with Vault and connect."
 keywords = ["cli", "postgresql", "vault", "credentials", "database"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lints]
+workspace = true
+
 [dependencies]
 color-eyre = { workspace = true }
 serde = { workspace = true }

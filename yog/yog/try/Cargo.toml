@@ -10,7 +10,13 @@ description = "Retry a command with success/failure tracking."
 keywords = ["cli", "retry", "command", "automation", "testing"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lints]
+workspace = true
+
 [dependencies]
 color-eyre = { workspace = true }
-itertools = { workspace = true }
 ytil_sys = { workspace = true }
+
+[dev-dependencies]
+assert2 = { workspace = true }
+pretty_assertions = { workspace = true }

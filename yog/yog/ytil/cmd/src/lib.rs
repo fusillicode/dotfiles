@@ -41,8 +41,8 @@ impl CmdExt for Command {
         if !output.status.success() {
             return Err(CmdError::CmdFailure {
                 cmd: Cmd::from(&*self),
-                stderr: to_ut8_string(self, output.stderr)?,
-                stdout: to_ut8_string(self, output.stdout)?,
+                stderr: to_utf8_string(self, output.stderr)?,
+                stdout: to_utf8_string(self, output.stdout)?,
                 status: output.status,
             });
         }
@@ -65,7 +65,7 @@ pub fn extract_success_output(output: &Output) -> color_eyre::Result<String> {
         .into())
 }
 
-fn to_ut8_string(cmd: &Command, bytes: Vec<u8>) -> color_eyre::Result<String, CmdError> {
+fn to_utf8_string(cmd: &Command, bytes: Vec<u8>) -> color_eyre::Result<String, CmdError> {
     String::from_utf8(bytes).map_err(|error| CmdError::FromUtf8 {
         cmd: Cmd::from(cmd),
         source: error,
