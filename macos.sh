@@ -72,7 +72,7 @@ defaults write com.apple.finder _FXSortFoldersFirstOnDesktop -bool true
   -c "Set :StandardViewSettings:ExtendedListViewSettingsV2:sortColumn dateModified" \
   -c "Set :StandardViewSettings:ExtendedListViewSettingsV2:columns:1:ascending true" \
   "$REAL_HOME/Library/Preferences/com.apple.finder.plist" 2>/dev/null || true
-# Desktop: arrange by date modified
+# Desktop: auto-arrange icons by date modified (latest at top-right)
 /usr/libexec/PlistBuddy \
   -c "Set :DesktopViewSettings:IconViewSettings:arrangeBy dateModified" \
   "$REAL_HOME/Library/Preferences/com.apple.finder.plist" 2>/dev/null || true
