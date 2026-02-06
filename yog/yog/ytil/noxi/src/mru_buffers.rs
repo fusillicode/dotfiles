@@ -93,8 +93,13 @@ impl FromStr for MruBuffer {
             eyre!("error extracting is_unlisted by idx | idx={is_unlisted_idx} mru_buffer_line={mru_buffer_line:?}")
         })? == "u";
 
-        // Skip the unlisted/listed flag, other flags, and the opening '"' char.
-        let name_idx = is_unlisted_idx.saturating_add(6);
+        // Find the opening '"' after the flags and extract the name between the quotes.
+        // Nvim's `:ls` format is `%3d%c%c%c%c%c "%s"` (5 flag chars + space + quoted name),
+        // but we locate the quote dynamically to be resilient to format changes.
+        let name_idx = mru_buffer_line
+            .get(is_unlisted_idx..)
+            .and_then(|s| s.find('"').map(|i| is_unlisted_idx.saturating_add(i).saturating_add(1)))
+            .ok_or_else(|| eyre!("error finding opening quote | mru_buffer_line={mru_buffer_line:?}"))?;
 
         let rest = mru_buffer_line.get(name_idx..).ok_or_else(|| {
             eyre!("error extracting name part by idx | idx={name_idx} mru_buffer_line={mru_buffer_line:?}")
@@ -158,9 +163,11 @@ mod tests {
 
     use super::*;
 
+    // Test data matches Nvim's real `:ls` format: `%3d%c%c%c%c%c "%s"`
+    // i.e. 5 flag chars (unlisted, current/alt, active/hidden, ro, changed) + space + quoted name.
     #[rstest]
     #[case(
-        "1u %a \"file.txt\"",
+        "1u%a   \"file.txt\"",
         MruBuffer {
             id: 1,
             is_unlisted: true,
@@ -169,7 +176,7 @@ mod tests {
         }
     )]
     #[case(
-        "2  %a \"another.txt\"",
+        "2  %a  \"another.txt\"",
         MruBuffer {
             id: 2,
             is_unlisted: false,
@@ -178,7 +185,7 @@ mod tests {
         }
     )]
     #[case(
-        "3  %a \"[No Name]\"",
+        "3  %a  \"[No Name]\"",
         MruBuffer {
             id: 3,
             is_unlisted: false,
@@ -187,16 +194,16 @@ mod tests {
         }
     )]
     #[case(
-        "4  %a \"term://bash\"",
+        "4u  a  \"term://bash\"",
         MruBuffer {
             id: 4,
-            is_unlisted: false,
+            is_unlisted: true,
             name: "term://bash".to_string(),
             kind: BufferKind::Term,
         }
     )]
     #[case(
-        "5  %a \"Grug FAR results\"",
+        "5  %a  \"Grug FAR results\"",
         MruBuffer {
             id: 5,
             is_unlisted: false,
@@ -205,12 +212,30 @@ mod tests {
         }
     )]
     #[case(
-        "  6  %a \"trimmed.txt\"  ",
+        "  6  %a  \"trimmed.txt\"  ",
         MruBuffer {
             id: 6,
             is_unlisted: false,
             name: "trimmed.txt".to_string(),
             kind: BufferKind::Path,
+        }
+    )]
+    #[case(
+        "10 #h   \"multi_digit.txt\"",
+        MruBuffer {
+            id: 10,
+            is_unlisted: false,
+            name: "multi_digit.txt".to_string(),
+            kind: BufferKind::Path,
+        }
+    )]
+    #[case(
+        "7u  aR  \"term://~//12345:/bin/zsh\"",
+        MruBuffer {
+            id: 7,
+            is_unlisted: true,
+            name: "term://~//12345:/bin/zsh".to_string(),
+            kind: BufferKind::Term,
         }
     )]
     fn from_str_when_valid_input_returns_mru_buffer(#[case] input: &str, #[case] expected: MruBuffer) {
@@ -221,10 +246,10 @@ mod tests {
 
     #[rstest]
     #[case("", "error finding buffer id end")]
-    #[case(" %a \"file.txt\"", "error parsing buffer id")]
-    #[case("au %a \"file.txt\"", "error parsing buffer id")]
-    #[case("1u %a \"file.txt", "error extracting name")]
-    #[case("1u %a file.txt", "error extracting name")]
+    #[case(" %a  \"file.txt\"", "error parsing buffer id")]
+    #[case("au %a  \"file.txt\"", "error parsing buffer id")]
+    #[case("1u%a  \"file.txt", "error extracting name")]
+    #[case("1u%a  file.txt", "error finding opening quote")]
     fn from_str_when_invalid_input_returns_error(#[case] input: &str, #[case] expected_err_substr: &str) {
         let result = MruBuffer::from_str(input);
         assert2::let_assert!(Err(err) = result);
