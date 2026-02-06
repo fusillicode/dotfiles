@@ -14,7 +14,7 @@ use serde::Serialize;
 use ytil_cmd::CmdExt as _;
 
 /// Raw filesystem / MIME classification result returned by [`exec_file_cmd`].
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub enum FileCmdOutput {
     /// Path identified as a binary file.
     BinaryFile(String),

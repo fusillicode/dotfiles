@@ -46,7 +46,7 @@ categories = ["command-line-utilities", "development-tools"]
 # Member crates reference them with `{ workspace = true }` under their own [dev-dependencies].
 assert2 = { version = "0.3" }
 bitflags = { version = "2.9" }
-chrono = { version = "0.4", default-features = false, features = ["serde", "clock"] }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 color-eyre = { version = "0.6" }
 convert_case = { version = "0.11" }
 fake = { version = "4.4", features = ["derive"] }
@@ -56,14 +56,14 @@ home = { version = "0.5" }
 itertools = { version = "0.14" }
 nomicon = { path = "./yog/nomicon" }
 pretty_assertions = { version = "1.4" }
-reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls-native-certs"] }
 rstest = { version = "0.26" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 strum = { version = "0.27", features = ["derive"] }
 tempfile = { version = "3.24" }
 thiserror = { version = "2.0" }
-url = { version = "2.5", features = ["serde"] }
+ureq = { version = "3.2", default-features = false, features = ["rustls"] }
+url = { version = "2.5" }
 
 ytil_cmd = { path = "./yog/ytil/cmd" }
 ytil_editor = { path = "./yog/ytil/editor" }
@@ -104,6 +104,9 @@ must_use_candidate = "allow"
 
 [workspace.lints.rust]
 warnings = "deny"
+
+[profile.dev]
+incremental = true
 
 [profile.test]
 # Enable debug symbols for coverage (required by llvm-cov / tarpaulin)

@@ -58,9 +58,8 @@ impl GitProvider {
     /// Header-based detection avoids parsing HTML content or relying on URL patterns,
     /// providing a more reliable and lightweight approach to provider identification.
     pub fn get(url: &str) -> color_eyre::Result<Option<Self>> {
-        let resp = reqwest::blocking::get(url)?;
+        let resp = ureq::get(url).call()?;
 
-        let out = Ok(None);
         for (name, _) in resp.headers() {
             let name = name.as_str();
             if name.contains("gitlab") {
@@ -71,7 +70,7 @@ impl GitProvider {
             }
         }
 
-        out
+        Ok(None)
     }
 }
 

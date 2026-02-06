@@ -4,6 +4,7 @@
 //! code ranges in the current buffer, using the repository's current commit hash for permalinks.
 //! The generated URL is automatically copied to the system clipboard.
 
+use std::fmt::Write as _;
 use std::path::Path;
 
 use nvim_oxi::Dictionary;
@@ -117,7 +118,8 @@ fn build_github_file_url(
         repo_url.push('L');
         append_lnum(repo_url, bound);
         repo_url.push('C');
-        repo_url.push_str(&bound.col.to_string());
+        // write! to String is infallible; avoids intermediate String allocation from .to_string()
+        let _ = write!(repo_url, "{}", bound.col);
     }
 
     repo_url.push('/');
@@ -159,7 +161,8 @@ fn build_gitlab_file_url(
 }
 
 fn append_lnum(repo_url: &mut String, bound: &Bound) {
-    repo_url.push_str(&bound.lnum.saturating_add(1).to_string());
+    // write! to String is infallible; avoids intermediate String allocation from .to_string()
+    let _ = write!(repo_url, "{}", bound.lnum.saturating_add(1));
 }
 
 #[cfg(test)]

@@ -117,7 +117,7 @@ fn run_test_in_nvim_term(test_runner: &str, test_name: &str) -> Option<()> {
 fn get_test_runner_for_path(path: &Path) -> color_eyre::Result<&'static str> {
     let git_repo_root = ytil_git::repo::get_root(&ytil_git::repo::discover(path)?);
 
-    if std::fs::read_dir(git_repo_root)?.any(|res| res.as_ref().is_ok_and(|de| de.file_name() == "Makefile.toml")) {
+    if git_repo_root.join("Makefile.toml").exists() {
         return Ok("cargo make test");
     }
 
