@@ -46,17 +46,17 @@ categories = ["command-line-utilities", "development-tools"]
 # Member crates reference them with `{ workspace = true }` under their own [dev-dependencies].
 assert2 = { version = "0.3" }
 bitflags = { version = "2.9" }
-chrono = { version = "0.4", features = ["serde"] }
+chrono = { version = "0.4", default-features = false, features = ["serde", "clock"] }
 color-eyre = { version = "0.6" }
 convert_case = { version = "0.11" }
 fake = { version = "4.4", features = ["derive"] }
 getrandom = { version = "0.4" }
-git2 = { version = "0.20" }
+git2 = { version = "0.20", default-features = false, features = ["ssh"] }
 home = { version = "0.5" }
 itertools = { version = "0.14" }
 nomicon = { path = "./yog/nomicon" }
 pretty_assertions = { version = "1.4" }
-reqwest = { version = "0.13", features = ["blocking"] }
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls-native-certs"] }
 rstest = { version = "0.26" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }

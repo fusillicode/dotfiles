@@ -1,5 +1,6 @@
 //! Statusline drawing helpers with diagnostics aggregation.
 
+use std::cell::RefCell;
 use std::fmt::Write as _;
 
 use nvim_oxi::Dictionary;
@@ -11,6 +12,13 @@ use ytil_noxi::buffer::CursorPosition;
 use crate::diagnostics::DiagnosticSeverity;
 
 const DRAW_TRIGGERS: &[&str] = &["DiagnosticChanged", "BufEnter", "CursorMoved"];
+
+thread_local! {
+    /// Cached `(buffer_handle, relative_path)` to avoid recomputing the buffer path on every
+    /// `CursorMoved` event. Automatically invalidated when the active buffer handle changes
+    /// (e.g. on `BufEnter`).
+    static CACHED_BUFFER_PATH: RefCell<Option<(i32, Option<String>)>> = const { RefCell::new(None) };
+}
 
 /// [`Dictionary`] exposing statusline draw helpers.
 ///
@@ -27,10 +35,23 @@ pub fn dict() -> Dictionary {
 /// Draws the status line with diagnostic information.
 fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
     let current_buffer = nvim_oxi::api::get_current_buf();
-    let current_buffer_path =
-        ytil_noxi::buffer::get_relative_path_to_cwd(&current_buffer).map(|x| x.display().to_string());
-
     let current_buffer_nr = current_buffer.handle();
+
+    // Use cached buffer path when the buffer handle hasn't changed (avoids FFI + PathBuf work on
+    // every CursorMoved). The cache is invalidated implicitly when the handle changes (BufEnter).
+    let current_buffer_path = CACHED_BUFFER_PATH.with(|cache| {
+        let cached = cache.borrow();
+        if let Some((handle, ref path)) = *cached
+            && handle == current_buffer_nr
+        {
+            return path.clone();
+        }
+        drop(cached);
+        let path = ytil_noxi::buffer::get_relative_path_to_cwd(&current_buffer).map(|x| x.display().to_string());
+        *cache.borrow_mut() = Some((current_buffer_nr, path.clone()));
+        path
+    });
+
     let mut statusline = Statusline {
         current_buffer_path: current_buffer_path.as_deref(),
         current_buffer_diags: SeverityBuckets::default(),

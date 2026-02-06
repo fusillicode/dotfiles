@@ -133,26 +133,32 @@ fn build_branch_name(args: &[&str]) -> color_eyre::Result<String> {
         c.is_alphanumeric() || PERMITTED_CHARS.contains(&c)
     }
 
-    let branch_name = args
-        .iter()
-        .flat_map(|x| {
-            x.split_whitespace().filter_map(|y| {
-                let z = y
-                    .chars()
-                    .map(|c| if is_permitted(c) { c } else { ' ' })
-                    .collect::<String>()
-                    .split_whitespace()
-                    .collect::<Vec<_>>()
-                    .join("-")
-                    .to_lowercase();
-                if z.is_empty() {
-                    return None;
+    // Single-pass approach: walk every char once, push permitted chars lowercased directly into the
+    // output buffer, and collapse runs of non-permitted chars / whitespace boundaries into a single
+    // '-' separator. This avoids the previous 5+ intermediate allocations per token.
+    let mut branch_name = String::new();
+    let mut need_separator = false;
+
+    for arg in args {
+        for token in arg.split_whitespace() {
+            for c in token.chars() {
+                if is_permitted(c) {
+                    if need_separator && !branch_name.is_empty() {
+                        branch_name.push('-');
+                    }
+                    need_separator = false;
+                    for lc in c.to_lowercase() {
+                        branch_name.push(lc);
+                    }
+                } else {
+                    // Non-permitted chars collapse into a pending separator.
+                    need_separator = true;
                 }
-                Some(z)
-            })
-        })
-        .collect::<Vec<_>>()
-        .join("-");
+            }
+            // Boundary between whitespace-separated tokens is also a separator.
+            need_separator = true;
+        }
+    }
 
     if branch_name.is_empty() {
         bail!("branch name construction produced empty string | args={args:#?}")

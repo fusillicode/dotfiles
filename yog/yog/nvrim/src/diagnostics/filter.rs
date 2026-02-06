@@ -57,7 +57,7 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
         {
             continue;
         }
-        out.push(lsp_diag.clone());
+        out.push(lsp_diag);
     }
     out
 }

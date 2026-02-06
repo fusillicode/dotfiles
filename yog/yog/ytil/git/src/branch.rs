@@ -182,7 +182,9 @@ pub fn get_all() -> color_eyre::Result<Vec<Branch>> {
     let repo = crate::repo::discover(repo_path)
         .wrap_err_with(|| eyre!("error getting repo for getting branches | path={}", repo_path.display()))?;
 
-    fetch(&[]).wrap_err_with(|| eyre!("error fetching branches"))?;
+    // Reuse the already-discovered repo for the fetch operation to avoid a redundant filesystem
+    // walk in `repo::discover`.
+    fetch_with_repo(&repo, &[]).wrap_err_with(|| eyre!("error fetching branches"))?;
 
     let mut out = vec![];
     for branch_res in repo
@@ -193,7 +195,7 @@ pub fn get_all() -> color_eyre::Result<Vec<Branch>> {
         out.push(Branch::try_from(branch).wrap_err_with(|| eyre!("error creating branch from result"))?);
     }
 
-    out.sort_by(|a, b| b.committer_date_time().cmp(a.committer_date_time()));
+    out.sort_unstable_by(|a, b| b.committer_date_time().cmp(a.committer_date_time()));
 
     Ok(out)
 }
@@ -231,7 +233,11 @@ pub fn fetch(branches: &[&str]) -> color_eyre::Result<()> {
             repo_path.display()
         )
     })?;
+    fetch_with_repo(&repo, branches)
+}
 
+/// Fetches branches using a pre-discovered repository, avoiding redundant filesystem walks.
+fn fetch_with_repo(repo: &Repository, branches: &[&str]) -> color_eyre::Result<()> {
     let mut callbacks = RemoteCallbacks::new();
     callbacks.credentials(|_url, username_from_url, _allowed_types| {
         Cred::ssh_key_from_agent(username_from_url.unwrap_or("git"))
@@ -257,12 +263,18 @@ pub fn fetch(branches: &[&str]) -> color_eyre::Result<()> {
 /// After this function returns, each remaining [`Branch::Remote`] has no local
 /// counterpart with the same short name.
 pub fn remove_redundant_remotes(branches: &mut Vec<Branch>) {
-    let mut local_names = HashSet::with_capacity(branches.len());
-    for branch in branches.iter() {
-        if let Branch::Local { name, .. } = branch {
-            local_names.insert(name.clone());
-        }
-    }
+    // Collect local branch names as owned `String`s. An owned `HashSet` is required because
+    // `retain` takes `&mut self`, which conflicts with any `&str` borrows into the same vec.
+    let local_names: HashSet<String> = branches
+        .iter()
+        .filter_map(|b| {
+            if let Branch::Local { name, .. } = b {
+                Some(name.clone())
+            } else {
+                None
+            }
+        })
+        .collect();
 
     branches.retain(|b| match b {
         Branch::Local { .. } => true,
