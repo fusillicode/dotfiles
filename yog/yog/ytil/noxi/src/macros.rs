@@ -44,6 +44,37 @@ macro_rules! __dict_key_to_cow {
     };
 }
 
+/// Implements [`nvim_oxi::conversion::FromObject`] and [`nvim_oxi::lua::Poppable`]
+/// for a type that derives [`serde::Deserialize`].
+///
+/// Eliminates the repeated boilerplate of deserializing Lua objects via `nvim_oxi::serde::Deserializer`.
+#[macro_export]
+macro_rules! impl_nvim_deserializable {
+    ($ty:ty) => {
+        impl ::nvim_oxi::conversion::FromObject for $ty {
+            fn from_object(obj: ::nvim_oxi::Object) -> ::std::result::Result<Self, ::nvim_oxi::conversion::Error> {
+                <Self as ::serde::Deserialize>::deserialize(::nvim_oxi::serde::Deserializer::new(obj))
+                    .map_err(::std::convert::Into::into)
+            }
+        }
+
+        impl ::nvim_oxi::lua::Poppable for $ty {
+            unsafe fn pop(
+                lstate: *mut ::nvim_oxi::lua::ffi::State,
+            ) -> ::std::result::Result<Self, ::nvim_oxi::lua::Error> {
+                // SAFETY: The caller (nvim-oxi framework) guarantees that:
+                // 1. `lstate` is a valid pointer to an initialized Lua state
+                // 2. The Lua stack has at least one value to pop
+                unsafe {
+                    let obj = ::nvim_oxi::Object::pop(lstate)?;
+                    <Self as ::nvim_oxi::conversion::FromObject>::from_object(obj)
+                        .map_err(::nvim_oxi::lua::Error::pop_error_from_err::<Self, _>)
+                }
+            }
+        }
+    };
+}
+
 /// Turns a Rust function into a [`nvim_oxi::Object`] [`nvim_oxi::Function`].
 #[macro_export]
 macro_rules! fn_from {
@@ -72,11 +103,11 @@ mod tests {
 
     #[test]
     fn dict_macro_creates_a_dictionary_with_basic_key_value_pairs() {
-        let actual = dict! { "foo": 1, bar: "baz", "num": 3i64 };
+        let actual = dict! { "foo": 1, bar: "baz", "num": 3_i64 };
         let expected = Dictionary::from_iter([
             ("bar", Object::from("baz")),
             ("foo", Object::from(1)),
-            ("num", Object::from(3i64)),
+            ("num", Object::from(3_i64)),
         ]);
         assert_eq!(actual, expected);
     }
@@ -85,8 +116,8 @@ mod tests {
     fn dict_macro_creates_nested_dictionaries() {
         let k = String::from("alpha");
         let inner = dict! { inner_key: "value" };
-        let actual = dict! { (k): 10i64, "beta": inner.clone() };
-        let expected = Dictionary::from_iter([("alpha", Object::from(10i64)), ("beta", Object::from(inner))]);
+        let actual = dict! { (k): 10_i64, "beta": inner.clone() };
+        let expected = Dictionary::from_iter([("alpha", Object::from(10_i64)), ("beta", Object::from(inner))]);
         assert_eq!(actual, expected);
     }
 

@@ -60,3 +60,30 @@ fn main() -> color_eyre::Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case("src/main.rs", 42, 7, "src/main.rs:42")]
+    #[case("yog/ytil/cmd/src/lib.rs", 1, 1, "yog/ytil/cmd/src/lib.rs:1")]
+    #[case("file.txt", 100, 50, "file.txt:100")]
+    fn format_hx_status_line_returns_path_with_line_number(
+        #[case] path: &str,
+        #[case] line: usize,
+        #[case] column: usize,
+        #[case] expected: &str,
+    ) {
+        let status = HxStatusLine {
+            file_path: PathBuf::from(path),
+            position: ytil_hx::HxCursorPosition { line, column },
+        };
+        assert2::let_assert!(Ok(result) = format_hx_status_line(&status));
+        pretty_assertions::assert_eq!(result, expected);
+    }
+}

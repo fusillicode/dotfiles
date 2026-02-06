@@ -4,10 +4,6 @@ use std::fmt::Write as _;
 
 use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
-use nvim_oxi::conversion::FromObject;
-use nvim_oxi::lua::Poppable;
-use nvim_oxi::lua::ffi::State;
-use nvim_oxi::serde::Deserializer;
 use serde::Deserialize;
 use strum::IntoEnumIterator;
 use ytil_noxi::buffer::CursorPosition;
@@ -60,25 +56,7 @@ pub struct Diagnostic {
     severity: DiagnosticSeverity,
 }
 
-/// Implementation of [`FromObject`] for [`Diagnostic`].
-impl FromObject for Diagnostic {
-    fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
-        Self::deserialize(Deserializer::new(obj)).map_err(Into::into)
-    }
-}
-
-/// Implementation of [`nvim_oxi::lua::Poppable`] for [`Diagnostic`].
-impl Poppable for Diagnostic {
-    unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
-        // SAFETY: The caller (nvim-oxi framework) guarantees that:
-        // 1. `lstate` is a valid pointer to an initialized Lua state
-        // 2. The Lua stack has at least one value to pop
-        unsafe {
-            let obj = Object::pop(lstate)?;
-            Self::from_object(obj).map_err(nvim_oxi::lua::Error::pop_error_from_err::<Self, _>)
-        }
-    }
-}
+ytil_noxi::impl_nvim_deserializable!(Diagnostic);
 
 /// Fixed-size aggregation of counts per [`DiagnosticSeverity`].
 #[derive(Clone, Copy, Debug, Default)]

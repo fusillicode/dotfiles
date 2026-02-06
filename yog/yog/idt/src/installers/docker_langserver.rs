@@ -13,17 +13,13 @@ impl Installer for DockerLangServer<'_> {
     }
 
     fn install(&self) -> color_eyre::Result<()> {
-        let target_dir = crate::downloaders::npm::run(
+        crate::installers::install_npm_tool(
             self.dev_tools_dir,
+            self.bin_dir,
+            self.bin_name(),
             "dockerfile-language-server-nodejs",
             &["dockerfile-language-server-nodejs"],
-        )?;
-
-        let target = target_dir.join(self.bin_name());
-        ytil_sys::file::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;
-        ytil_sys::file::chmod_x(target)?;
-
-        Ok(())
+        )
     }
 
     // NOTE: skip because JS is a shitshow...

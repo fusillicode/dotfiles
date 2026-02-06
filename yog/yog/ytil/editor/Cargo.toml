@@ -16,3 +16,6 @@ ytil_wezterm = { workspace = true }
 
 [dev-dependencies]
 assert2 = { workspace = true }
+
+[lints]
+workspace = true

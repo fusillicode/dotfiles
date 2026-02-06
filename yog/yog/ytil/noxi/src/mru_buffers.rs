@@ -93,8 +93,8 @@ impl FromStr for MruBuffer {
             eyre!("error extracting is_unlisted by idx | idx={is_unlisted_idx} mru_buffer_line={mru_buffer_line:?}")
         })? == "u";
 
-        // Skip entirely the other flags and the first '"' char.
-        let name_idx = is_unlisted_idx.saturating_add(7);
+        // Skip the unlisted/listed flag, other flags, and the opening '"' char.
+        let name_idx = is_unlisted_idx.saturating_add(6);
 
         let rest = mru_buffer_line.get(name_idx..).ok_or_else(|| {
             eyre!("error extracting name part by idx | idx={name_idx} mru_buffer_line={mru_buffer_line:?}")
@@ -164,7 +164,7 @@ mod tests {
         MruBuffer {
             id: 1,
             is_unlisted: true,
-            name: "ile.txt".to_string(),
+            name: "file.txt".to_string(),
             kind: BufferKind::Path,
         }
     )]
@@ -173,7 +173,7 @@ mod tests {
         MruBuffer {
             id: 2,
             is_unlisted: false,
-            name: "nother.txt".to_string(),
+            name: "another.txt".to_string(),
             kind: BufferKind::Path,
         }
     )]
@@ -182,8 +182,8 @@ mod tests {
         MruBuffer {
             id: 3,
             is_unlisted: false,
-            name: "No Name]".to_string(),
-            kind: BufferKind::Path,
+            name: "[No Name]".to_string(),
+            kind: BufferKind::NoName,
         }
     )]
     #[case(
@@ -191,8 +191,8 @@ mod tests {
         MruBuffer {
             id: 4,
             is_unlisted: false,
-            name: "erm://bash".to_string(),
-            kind: BufferKind::Path,
+            name: "term://bash".to_string(),
+            kind: BufferKind::Term,
         }
     )]
     #[case(
@@ -200,8 +200,8 @@ mod tests {
         MruBuffer {
             id: 5,
             is_unlisted: false,
-            name: "rug FAR results".to_string(),
-            kind: BufferKind::Path,
+            name: "Grug FAR results".to_string(),
+            kind: BufferKind::GrugFar,
         }
     )]
     #[case(
@@ -209,7 +209,7 @@ mod tests {
         MruBuffer {
             id: 6,
             is_unlisted: false,
-            name: "rimmed.txt".to_string(),
+            name: "trimmed.txt".to_string(),
             kind: BufferKind::Path,
         }
     )]
