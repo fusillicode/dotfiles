@@ -38,7 +38,7 @@ up_to_date = "✓"
 
 [git_commit]
 format = "[$hash | ]($style)"
-style = "dimmed white"
+style = "#777777"
 only_detached = false
 tag_disabled = true
 commit_hash_length = 7
@@ -47,7 +47,7 @@ commit_hash_length = 7
 command = "msg=$(git log -1 --pretty=format:%s 2>/dev/null); if [ ${#msg} -gt 33 ]; then echo \"${msg:0:33}…\"; else echo \"$msg\"; fi"
 when = "git rev-parse --git-dir 2>/dev/null"
 format = "[$output ]($style)"
-style = "dimmed white"
+style = "#777777"
 
 [git_metrics]
 disabled = false
