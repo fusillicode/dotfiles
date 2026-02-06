@@ -67,15 +67,14 @@ defaults write com.apple.finder _FXSortFoldersFirst -bool true
 defaults write com.apple.finder _FXSortFoldersFirstOnDesktop -bool true
 # List view: sort by date modified, ascending (oldest first)
 /usr/libexec/PlistBuddy \
-  -c "Set :StandardViewSettings:ExtendedListViewSettingsV2:sortColumn dateModified" \
-  -c "Set :StandardViewSettings:ExtendedListViewSettingsV2:sortDirection 0" \
   -c "Set :StandardViewSettings:ListViewSettings:sortColumn dateModified" \
-  -c "Set :StandardViewSettings:ListViewSettings:sortDirection 1" \
+  -c "Set :StandardViewSettings:ListViewSettings:columns:dateModified:ascending true" \
+  -c "Set :StandardViewSettings:ExtendedListViewSettingsV2:sortColumn dateModified" \
+  -c "Set :StandardViewSettings:ExtendedListViewSettingsV2:columns:1:ascending true" \
   "$REAL_HOME/Library/Preferences/com.apple.finder.plist" 2>/dev/null || true
-# Desktop: arrange by date modified, ascending (oldest first)
+# Desktop: arrange by date modified
 /usr/libexec/PlistBuddy \
   -c "Set :DesktopViewSettings:IconViewSettings:arrangeBy dateModified" \
-  -c "Set :DesktopViewSettings:IconViewSettings:sortDirection 1" \
   "$REAL_HOME/Library/Preferences/com.apple.finder.plist" 2>/dev/null || true
 # Delete .DS_Store files (fd is faster and auto-ignores .git/node_modules)
 info "Deleting .DS_Store files..."
