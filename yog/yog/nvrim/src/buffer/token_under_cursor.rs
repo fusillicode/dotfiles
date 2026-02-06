@@ -4,6 +4,8 @@
 //! filesystem inspection or URL parsing, returning a tagged Lua table.
 
 use std::borrow::Cow;
+use std::cell::RefCell;
+use std::collections::HashMap;
 
 use color_eyre::eyre::Context;
 use color_eyre::eyre::bail;
@@ -19,6 +21,12 @@ use ytil_noxi::buffer::BufferExt;
 use ytil_noxi::buffer::CursorPosition;
 use ytil_sys::file::FileCmdOutput;
 use ytil_sys::lsof::ProcessFilter;
+
+thread_local! {
+    /// Cache `file -I` results to avoid spawning a process per cursor movement / hover.
+    /// Keyed by path string; only successful results are cached.
+    static FILE_CMD_CACHE: RefCell<HashMap<String, FileCmdOutput>> = RefCell::new(HashMap::new());
+}
 
 /// Retrieve and classify the non-whitespace token under the cursor in the current window.
 ///
@@ -227,7 +235,7 @@ impl TokenUnderCursor {
         let lnum = parts.next().map(str::parse).transpose().ok().flatten();
         let col = parts.next().map(str::parse).transpose().ok().flatten();
 
-        Ok(match ytil_sys::file::exec_file_cmd(maybe_path)? {
+        Ok(match exec_file_cmd_cached(maybe_path)? {
             FileCmdOutput::BinaryFile(x) => Self::BinaryFile(x),
             FileCmdOutput::TextFile(path) => Self::TextFile { path, lnum, col },
             FileCmdOutput::Directory(x) => Self::Directory(x),
@@ -265,6 +273,19 @@ impl TokenUnderCursor {
         }
         Ok(self.clone())
     }
+}
+
+/// Cached wrapper around [`ytil_sys::file::exec_file_cmd`] that avoids spawning a `file -I`
+/// process for previously seen paths. Only successful results are cached.
+fn exec_file_cmd_cached(path: &str) -> color_eyre::Result<FileCmdOutput> {
+    FILE_CMD_CACHE.with(|cache| {
+        if let Some(cached) = cache.borrow().get(path).cloned() {
+            return Ok(cached);
+        }
+        let result = ytil_sys::file::exec_file_cmd(path)?;
+        cache.borrow_mut().insert(path.to_owned(), result.clone());
+        Ok(result)
+    })
 }
 
 /// Find the non-whitespace token in the supplied string `s` containing the visual index `idx`.

@@ -7,11 +7,14 @@ use ytil_cmd::CmdExt as _;
 
 const PATH_LINE_PREFIX: &str = "diff --git ";
 
-/// Retrieves the current `git diff` raw output with `-U0`.
+/// Retrieves the current `git diff` raw output with `-U0` as a single `String`.
+///
+/// Callers should pass the returned string to [`get_hunks`] which splits into lines internally,
+/// avoiding per-line `String` allocations.
 ///
 /// # Errors
 /// - `git diff` command fails.
-pub fn get_raw(path: Option<&Path>) -> color_eyre::Result<Vec<String>> {
+pub fn get_raw(path: Option<&Path>) -> color_eyre::Result<String> {
     let mut args = vec!["diff".into(), "-U0".into()];
 
     if let Some(path) = path {
@@ -20,21 +23,23 @@ pub fn get_raw(path: Option<&Path>) -> color_eyre::Result<Vec<String>> {
 
     let output = Command::new("git").args(args).exec()?;
 
-    Ok(ytil_cmd::extract_success_output(&output)?
-        .lines()
-        .map(str::to_string)
-        .collect())
+    ytil_cmd::extract_success_output(&output)
 }
 
-/// Extracts file paths and starting line numbers of hunks from `git diff` output.
+/// Extracts file paths and starting line numbers of hunks from raw `git diff` output.
+///
+/// Accepts a `&str` (the full diff output) and splits into lines internally, avoiding
+/// per-line `String` allocations.
 ///
 /// # Errors
 /// - Parsing diff output fails.
-pub fn get_hunks(raw_diff_output: &[String]) -> color_eyre::Result<Vec<(&str, usize)>> {
-    // Pre-allocate with estimated capacity: roughly 1 hunk per 4 diff lines
-    let mut out = Vec::with_capacity(raw_diff_output.len().saturating_div(4).max(1));
+pub fn get_hunks(raw_diff_output: &str) -> color_eyre::Result<Vec<(&str, usize)>> {
+    let lines: Vec<&str> = raw_diff_output.lines().collect();
 
-    for (raw_diff_line_idx, raw_diff_line) in raw_diff_output.iter().enumerate() {
+    // Pre-allocate with estimated capacity: roughly 1 hunk per 4 diff lines
+    let mut out = Vec::with_capacity(lines.len().saturating_div(4).max(1));
+
+    for (raw_diff_line_idx, raw_diff_line) in lines.iter().enumerate() {
         let Some(path_line) = raw_diff_line.strip_prefix(PATH_LINE_PREFIX) else {
             continue;
         };
@@ -53,7 +58,7 @@ pub fn get_hunks(raw_diff_output: &[String]) -> color_eyre::Result<Vec<(&str, us
         })?;
 
         let lnum_lines_start_idx = raw_diff_line_idx.saturating_add(1);
-        let maybe_lnum_lines = raw_diff_output
+        let maybe_lnum_lines = lines
             .get(lnum_lines_start_idx..)
             .ok_or_else(|| eyre!("error extracting lnum_lines from raw_diff_output | lnum_lines_start_idx={lnum_lines_start_idx} raw_diff_line_idx={raw_diff_line_idx}"))?;
 
@@ -108,93 +113,43 @@ mod tests {
 
     #[rstest]
     #[case::single_file_single_hunk(
-        vec![
-            "diff --git a/src/main.rs b/src/main.rs".to_string(),
-            "index 1234567..abcdef0 100644".to_string(),
-            "--- a/src/main.rs".to_string(),
-            "+++ b/src/main.rs".to_string(),
-            "@@ -42,7 +42,7 @@".to_string(),
-        ],
+        "diff --git a/src/main.rs b/src/main.rs\nindex 1234567..abcdef0 100644\n--- a/src/main.rs\n+++ b/src/main.rs\n@@ -42,7 +42,7 @@",
         vec![("src/main.rs", 42)]
     )]
     #[case::multiple_files(
-        vec![
-            "diff --git a/src/main.rs b/src/main.rs".to_string(),
-            "index 1234567..abcdef0 100644".to_string(),
-            "--- a/src/main.rs".to_string(),
-            "+++ b/src/main.rs".to_string(),
-            "@@ -10,5 +10,5 @@".to_string(),
-            "diff --git a/src/lib.rs b/src/lib.rs".to_string(),
-            "index fedcba9..7654321 100644".to_string(),
-            "--- a/src/lib.rs".to_string(),
-            "+++ b/src/lib.rs".to_string(),
-            "@@ -20,3 +20,3 @@".to_string(),
-        ],
+        "diff --git a/src/main.rs b/src/main.rs\nindex 1234567..abcdef0 100644\n--- a/src/main.rs\n+++ b/src/main.rs\n@@ -10,5 +10,5 @@\ndiff --git a/src/lib.rs b/src/lib.rs\nindex fedcba9..7654321 100644\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -20,3 +20,3 @@",
         vec![("src/main.rs", 10), ("src/lib.rs", 20)]
     )]
     #[case::multiple_hunks_same_file(
-        vec![
-            "diff --git a/src/main.rs b/src/main.rs".to_string(),
-            "index 1234567..abcdef0 100644".to_string(),
-            "--- a/src/main.rs".to_string(),
-            "+++ b/src/main.rs".to_string(),
-            "@@ -10,5 +10,5 @@".to_string(),
-            "@@ -50,2 +50,2 @@".to_string(),
-        ],
+        "diff --git a/src/main.rs b/src/main.rs\nindex 1234567..abcdef0 100644\n--- a/src/main.rs\n+++ b/src/main.rs\n@@ -10,5 +10,5 @@\n@@ -50,2 +50,2 @@",
         vec![("src/main.rs", 10), ("src/main.rs", 50)]
     )]
-    #[case::empty_input(vec![], vec![])]
+    #[case::empty_input("", vec![])]
     #[case::no_hunks(
-        vec!["diff --git a/src/main.rs b/src/main.rs".to_string()],
+        "diff --git a/src/main.rs b/src/main.rs",
         vec![]
     )]
     #[case::non_diff_lines_ignored(
-        vec![
-            "index 123..456 789".to_string(),
-            "diff --git a/src/main.rs b/src/main.rs".to_string(),
-            "index 1234567..abcdef0 100644".to_string(),
-            "--- a/src/main.rs".to_string(),
-            "+++ b/src/main.rs".to_string(),
-            "@@ -42,7 +42,7 @@".to_string(),
-        ],
+        "index 123..456 789\ndiff --git a/src/main.rs b/src/main.rs\nindex 1234567..abcdef0 100644\n--- a/src/main.rs\n+++ b/src/main.rs\n@@ -42,7 +42,7 @@",
         vec![("src/main.rs", 42)]
     )]
     #[case::multiple_files_with_multiple_hunks(
-        vec![
-            "diff --git a/src/main.rs b/src/main.rs".to_string(),
-            "index 1234567..abcdef0 100644".to_string(),
-            "--- a/src/main.rs".to_string(),
-            "+++ b/src/main.rs".to_string(),
-            "@@ -10,5 +10,5 @@".to_string(),
-            "@@ -50,2 +50,2 @@".to_string(),
-            "diff --git a/src/lib.rs b/src/lib.rs".to_string(),
-            "index fedcba9..7654321 100644".to_string(),
-            "--- a/src/lib.rs".to_string(),
-            "+++ b/src/lib.rs".to_string(),
-            "@@ -20,3 +20,3 @@".to_string(),
-            "@@ -60,1 +60,1 @@".to_string(),
-        ],
+        "diff --git a/src/main.rs b/src/main.rs\nindex 1234567..abcdef0 100644\n--- a/src/main.rs\n+++ b/src/main.rs\n@@ -10,5 +10,5 @@\n@@ -50,2 +50,2 @@\ndiff --git a/src/lib.rs b/src/lib.rs\nindex fedcba9..7654321 100644\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -20,3 +20,3 @@\n@@ -60,1 +60,1 @@",
         vec![("src/main.rs", 10), ("src/main.rs", 50), ("src/lib.rs", 20), ("src/lib.rs", 60)]
     )]
-    fn test_get_hunks_success(#[case] input: Vec<String>, #[case] expected: Vec<(&str, usize)>) {
-        assert2::let_assert!(Ok(result) = get_hunks(&input));
+    fn test_get_hunks_success(#[case] input: &str, #[case] expected: Vec<(&str, usize)>) {
+        assert2::let_assert!(Ok(result) = get_hunks(input));
         pretty_assertions::assert_eq!(result, expected);
     }
 
     #[rstest]
-    #[case::missing_b_delimiter(
-        vec!["diff --git a/src/main.rs".to_string()],
-        "error missing path prefix"
-    )]
+    #[case::missing_b_delimiter("diff --git a/src/main.rs", "error missing path prefix")]
     #[case::invalid_lnum(
-        vec![
-            "diff --git a/src/main.rs b/src/main.rs".to_string(),
-            "@@ -abc,5 +abc,5 @@".to_string(),
-        ],
+        "diff --git a/src/main.rs b/src/main.rs\n@@ -abc,5 +abc,5 @@",
         "error parsing new_lnum value"
     )]
-    fn test_get_hunks_error(#[case] input: Vec<String>, #[case] expected_error_contains: &str) {
-        assert2::let_assert!(Err(err) = get_hunks(&input));
+    fn test_get_hunks_error(#[case] input: &str, #[case] expected_error_contains: &str) {
+        assert2::let_assert!(Err(err) = get_hunks(input));
         assert!(err.to_string().contains(expected_error_contains));
     }
 

@@ -26,10 +26,10 @@ nvim-oxi = { git = "https://github.com/noib3/nvim-oxi", rev = "b1278b123dbac3908
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }
-url = { version = "2.5" }
+url = { workspace = true }
 ytil_cmd = { workspace = true }
 ytil_git = { workspace = true }
-ytil_noxi = { workspace = true, features = ["mockall", "testing"] }
+ytil_noxi = { workspace = true }
 ytil_sys = { workspace = true }
 ytil_wezterm = { workspace = true }
 
@@ -38,6 +38,7 @@ assert2 = { workspace = true }
 pretty_assertions = { workspace = true }
 rstest = { workspace = true }
 tempfile = { workspace = true }
+ytil_noxi = { workspace = true, features = ["mockall", "testing"] }
 
 [lints]
 workspace = true

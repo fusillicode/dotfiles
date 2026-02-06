@@ -174,16 +174,25 @@ impl Statusline<'_> {
             first = false;
         }
 
-        let current_buffer_path_segment = self
-            .current_buffer_path
-            .map(|buf_path| format!("{buf_path} "))
-            .unwrap_or_default();
-
-        format!(
-            "{workspace_diags_segment}%#StatusLine# {current_buffer_path_segment}{}:{} {current_buffer_diags_segment}%#StatusLine#",
+        // Build final statusline in a single pre-allocated buffer to avoid intermediate
+        // format! allocation and the current_buffer_path_segment temporary String.
+        let estimated_len = workspace_diags_segment
+            .len()
+            .saturating_add(current_buffer_diags_segment.len())
+            .saturating_add(self.current_buffer_path.map_or(0, str::len))
+            .saturating_add(40);
+        let mut out = String::with_capacity(estimated_len);
+        let _ = write!(out, "{workspace_diags_segment}%#StatusLine# ");
+        if let Some(buf_path) = self.current_buffer_path {
+            let _ = write!(out, "{buf_path} ");
+        }
+        let _ = write!(
+            out,
+            "{}:{} {current_buffer_diags_segment}%#StatusLine#",
             self.cursor_position.row,
             self.cursor_position.adjusted_col()
-        )
+        );
+        out
     }
 }
 

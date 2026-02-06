@@ -3,6 +3,7 @@
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::Arc;
 
 use color_eyre::eyre::WrapErr;
 use color_eyre::eyre::eyre;
@@ -26,7 +27,7 @@ pub mod repo;
 pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
     let repo =
         crate::repo::discover(Path::new(".")).wrap_err_with(|| eyre!("error getting repo | operation=status"))?;
-    let repo_root = crate::repo::get_root(&repo);
+    let repo_root = Arc::new(crate::repo::get_root(&repo));
 
     let mut opts = StatusOptions::default();
     opts.include_untracked(true);
@@ -39,7 +40,7 @@ pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
         .iter()
     {
         out.push(
-            GitStatusEntry::try_from((repo_root.clone(), &status_entry))
+            GitStatusEntry::try_from((Arc::clone(&repo_root), &status_entry))
                 .wrap_err_with(|| eyre!("error creating status entry | repo_root={}", repo_root.display()))?,
         );
     }
@@ -127,7 +128,8 @@ pub fn get_current_commit_hash(repo: &Repository) -> color_eyre::Result<String> 
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct GitStatusEntry {
     pub path: PathBuf,
-    pub repo_root: PathBuf,
+    /// Shared repository root; uses `Arc` to avoid cloning the `PathBuf` per entry.
+    pub repo_root: Arc<PathBuf>,
     pub conflicted: bool,
     pub ignored: bool,
     pub index_state: Option<IndexState>,
@@ -153,10 +155,10 @@ impl GitStatusEntry {
     }
 }
 
-impl TryFrom<(PathBuf, &StatusEntry<'_>)> for GitStatusEntry {
+impl TryFrom<(Arc<PathBuf>, &StatusEntry<'_>)> for GitStatusEntry {
     type Error = color_eyre::eyre::Error;
 
-    fn try_from((repo_root, value): (PathBuf, &StatusEntry<'_>)) -> Result<Self, Self::Error> {
+    fn try_from((repo_root, value): (Arc<PathBuf>, &StatusEntry<'_>)) -> Result<Self, Self::Error> {
         let status = value.status();
         let path = value
             .path()
@@ -305,7 +307,7 @@ mod tests {
     fn entry(index_state: Option<IndexState>, worktree_state: Option<WorktreeState>) -> GitStatusEntry {
         GitStatusEntry {
             path: "p".into(),
-            repo_root: ".".into(),
+            repo_root: Arc::new(".".into()),
             conflicted: false,
             ignored: false,
             index_state,

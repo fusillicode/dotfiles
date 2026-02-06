@@ -38,25 +38,26 @@ impl Deref for RenderablePullRequest {
 
 impl Display for RenderablePullRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let state = match self.merge_state {
-            PullRequestMergeState::Behind => "Behind".yellow().bold().to_string(),
-            PullRequestMergeState::Blocked => "Blocked".red().to_string(),
-            PullRequestMergeState::Clean => "Clean".green().to_string(),
-            PullRequestMergeState::Dirty => "Dirty".red().bold().to_string(),
-            PullRequestMergeState::Draft => "Draft".blue().bold().to_string(),
-            PullRequestMergeState::HasHooks => "HasHooks".magenta().to_string(),
-            PullRequestMergeState::Unknown => "Unknown".to_string(),
-            PullRequestMergeState::Unmergeable => "Unmergeable".red().bold().to_string(),
-            PullRequestMergeState::Unstable => "Unstable".magenta().bold().to_string(),
-        };
+        // Write directly to the formatter, avoiding intermediate String allocations from .to_string()
         write!(
             f,
-            // The spacing before the title is required to align it with the first line.
-            "{} {} {state}\n      {}",
+            "{} {} ",
             self.author.login.blue().bold(),
-            self.updated_at.format("%d-%m-%Y %H:%M UTC"),
-            self.title
-        )
+            self.updated_at.format("%d-%m-%Y %H:%M UTC")
+        )?;
+        match self.merge_state {
+            PullRequestMergeState::Behind => write!(f, "{}", "Behind".yellow().bold())?,
+            PullRequestMergeState::Blocked => write!(f, "{}", "Blocked".red())?,
+            PullRequestMergeState::Clean => write!(f, "{}", "Clean".green())?,
+            PullRequestMergeState::Dirty => write!(f, "{}", "Dirty".red().bold())?,
+            PullRequestMergeState::Draft => write!(f, "{}", "Draft".blue().bold())?,
+            PullRequestMergeState::HasHooks => write!(f, "{}", "HasHooks".magenta())?,
+            PullRequestMergeState::Unknown => write!(f, "Unknown")?,
+            PullRequestMergeState::Unmergeable => write!(f, "{}", "Unmergeable".red().bold())?,
+            PullRequestMergeState::Unstable => write!(f, "{}", "Unstable".magenta().bold())?,
+        }
+        // The spacing before the title is required to align it with the first line.
+        write!(f, "\n      {}", self.title)
     }
 }
 
@@ -98,13 +99,12 @@ enum SelectableOp {
 
 impl Display for SelectableOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let repr = match self {
-            Self::Approve => "Approve".green().bold().to_string(),
-            Self::ApproveAndMerge => "Approve & Merge".green().bold().to_string(),
-            Self::DependabotRebase => "Dependabot Rebase".blue().bold().to_string(),
-            Self::EnableAutoMerge => "Enable auto-merge".magenta().bold().to_string(),
-        };
-        write!(f, "{repr}")
+        match self {
+            Self::Approve => write!(f, "{}", "Approve".green().bold()),
+            Self::ApproveAndMerge => write!(f, "{}", "Approve & Merge".green().bold()),
+            Self::DependabotRebase => write!(f, "{}", "Dependabot Rebase".blue().bold()),
+            Self::EnableAutoMerge => write!(f, "{}", "Enable auto-merge".magenta().bold()),
+        }
     }
 }
 
@@ -298,20 +298,23 @@ fn pr_title_from_branch_name(branch_name: &str) -> color_eyre::Result<String> {
             })
         })?;
 
-    let title = parts
-        .enumerate()
-        .map(|(i, word)| {
-            if i == 0 {
-                let mut chars = word.chars();
-                let Some(first) = chars.next() else {
-                    return String::new();
-                };
-                return first.to_uppercase().chain(chars.as_str().chars()).collect();
+    let mut title = String::with_capacity(branch_name.len());
+    for (i, word) in parts.enumerate() {
+        if i > 0 {
+            title.push(' ');
+        }
+        if i == 0 {
+            let mut chars = word.chars();
+            if let Some(first) = chars.next() {
+                for c in first.to_uppercase() {
+                    title.push(c);
+                }
+                title.push_str(chars.as_str());
             }
-            word.to_string()
-        })
-        .collect::<Vec<_>>()
-        .join(" ");
+        } else {
+            title.push_str(word);
+        }
+    }
 
     if title.is_empty() {
         bail!("error empty title | branch_name={branch_name:?}");

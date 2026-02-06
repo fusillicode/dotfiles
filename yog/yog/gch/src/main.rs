@@ -35,37 +35,11 @@ impl Display for RenderableGitStatusEntry {
             return write!(f, "{} {}", "CC".red().bold(), self.path.display());
         }
 
-        let index_symbol = self.index_state.as_ref().map_or_else(
-            || " ".to_string(),
-            |s| match s {
-                IndexState::New => "A".green().bold().to_string(),
-                IndexState::Modified => "M".yellow().bold().to_string(),
-                IndexState::Deleted => "D".red().bold().to_string(),
-                IndexState::Renamed => "R".cyan().bold().to_string(),
-                IndexState::Typechange => "T".magenta().bold().to_string(),
-            },
-        );
+        // Write index symbol directly to formatter, avoiding intermediate String allocations.
+        write_index_symbol(f, self.index_state.as_ref(), self.ignored)?;
+        write_worktree_symbol(f, self.worktree_state.as_ref(), self.ignored)?;
 
-        let worktree_symbol = self.worktree_state.as_ref().map_or_else(
-            || " ".to_string(),
-            |s| match s {
-                WorktreeState::New => "A".green().bold().to_string(),
-                WorktreeState::Modified => "M".yellow().bold().to_string(),
-                WorktreeState::Deleted => "D".red().bold().to_string(),
-                WorktreeState::Renamed => "R".cyan().bold().to_string(),
-                WorktreeState::Typechange => "T".magenta().bold().to_string(),
-                WorktreeState::Unreadable => "U".red().bold().to_string(),
-            },
-        );
-
-        // Ignored marks as dimmed
-        let (index_symbol, worktree_symbol) = if self.ignored {
-            (index_symbol.dimmed().to_string(), worktree_symbol.dimmed().to_string())
-        } else {
-            (index_symbol, worktree_symbol)
-        };
-
-        write!(f, "{}{} {}", index_symbol, worktree_symbol, self.path.display())
+        write!(f, " {}", self.path.display())
     }
 }
 
@@ -81,11 +55,10 @@ pub enum Op {
 
 impl Display for Op {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let str_repr = match self {
-            Self::Discard => format!("{}", "Discard".red().bold()),
-            Self::Add => "Add".green().bold().to_string(),
-        };
-        write!(f, "{str_repr}")
+        match self {
+            Self::Discard => write!(f, "{}", "Discard".red().bold()),
+            Self::Add => write!(f, "{}", "Add".green().bold()),
+        }
     }
 }
 
@@ -148,6 +121,46 @@ fn add_entries(entries: &[&GitStatusEntry]) -> color_eyre::Result<()> {
         println!("{} {}", "Added".green().bold(), entry.path.display());
     }
     Ok(())
+}
+
+/// Write an index state symbol directly to the formatter, avoiding `.to_string()` allocations.
+fn write_index_symbol(f: &mut std::fmt::Formatter<'_>, state: Option<&IndexState>, dimmed: bool) -> std::fmt::Result {
+    match state {
+        None => write!(f, " "),
+        Some(IndexState::New) if dimmed => write!(f, "{}", "A".green().bold().dimmed()),
+        Some(IndexState::New) => write!(f, "{}", "A".green().bold()),
+        Some(IndexState::Modified) if dimmed => write!(f, "{}", "M".yellow().bold().dimmed()),
+        Some(IndexState::Modified) => write!(f, "{}", "M".yellow().bold()),
+        Some(IndexState::Deleted) if dimmed => write!(f, "{}", "D".red().bold().dimmed()),
+        Some(IndexState::Deleted) => write!(f, "{}", "D".red().bold()),
+        Some(IndexState::Renamed) if dimmed => write!(f, "{}", "R".cyan().bold().dimmed()),
+        Some(IndexState::Renamed) => write!(f, "{}", "R".cyan().bold()),
+        Some(IndexState::Typechange) if dimmed => write!(f, "{}", "T".magenta().bold().dimmed()),
+        Some(IndexState::Typechange) => write!(f, "{}", "T".magenta().bold()),
+    }
+}
+
+/// Write a worktree state symbol directly to the formatter, avoiding `.to_string()` allocations.
+fn write_worktree_symbol(
+    f: &mut std::fmt::Formatter<'_>,
+    state: Option<&WorktreeState>,
+    dimmed: bool,
+) -> std::fmt::Result {
+    match state {
+        None => write!(f, " "),
+        Some(WorktreeState::New) if dimmed => write!(f, "{}", "A".green().bold().dimmed()),
+        Some(WorktreeState::New) => write!(f, "{}", "A".green().bold()),
+        Some(WorktreeState::Modified) if dimmed => write!(f, "{}", "M".yellow().bold().dimmed()),
+        Some(WorktreeState::Modified) => write!(f, "{}", "M".yellow().bold()),
+        Some(WorktreeState::Deleted) if dimmed => write!(f, "{}", "D".red().bold().dimmed()),
+        Some(WorktreeState::Deleted) => write!(f, "{}", "D".red().bold()),
+        Some(WorktreeState::Renamed) if dimmed => write!(f, "{}", "R".cyan().bold().dimmed()),
+        Some(WorktreeState::Renamed) => write!(f, "{}", "R".cyan().bold()),
+        Some(WorktreeState::Typechange) if dimmed => write!(f, "{}", "T".magenta().bold().dimmed()),
+        Some(WorktreeState::Typechange) => write!(f, "{}", "T".magenta().bold()),
+        Some(WorktreeState::Unreadable) if dimmed => write!(f, "{}", "U".red().bold().dimmed()),
+        Some(WorktreeState::Unreadable) => write!(f, "{}", "U".red().bold()),
+    }
 }
 
 /// Stage or discard selected Git changes interactively.
