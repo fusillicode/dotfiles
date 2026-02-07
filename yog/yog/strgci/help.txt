@@ -1,0 +1,9 @@
+Usage: gci
+
+Print compact HEAD commit info for shell prompts.
+
+Output format: <hash> <relative_time> | <subject>
+
+Examples:
+  gci        a1b2c3d 3h | fix: resolve null pointer
+  gci        f4e5d6c 2d | feat: add user auth…
