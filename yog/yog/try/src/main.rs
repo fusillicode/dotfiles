@@ -10,9 +10,8 @@ use std::process::ExitStatusError;
 use std::time::Duration;
 use std::time::Instant;
 
-use color_eyre::eyre;
-use color_eyre::eyre::WrapErr;
-use color_eyre::eyre::bail;
+use rootcause::prelude::ResultExt;
+use rootcause::report;
 use ytil_sys::cli::Args;
 
 /// Exit condition for retry loop.
@@ -33,21 +32,19 @@ impl ExitCond {
 
 /// Parses [`ExitCond`] from string.
 impl FromStr for ExitCond {
-    type Err = eyre::Error;
+    type Err = rootcause::Report;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
             "ok" => Self::Ok,
             "ko" => Self::Ko,
-            unexpected => bail!("unexpected exit condition | value={unexpected}"),
+            unexpected => Err(report!("unexpected exit condition")).attach_with(|| format!("value={unexpected}"))?,
         })
     }
 }
 
 /// Re-run a command until success (ok) or failure (ko) with cooldown.
-fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
-
+fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
 
     if args.has_help() {
@@ -56,22 +53,24 @@ fn main() -> color_eyre::Result<()> {
     }
 
     let Some((cooldown_secs, args)) = args.split_first() else {
-        bail!("missing cooldown arg | args={args:#?}");
+        return Err(report!("missing cooldown arg")).attach_with(|| format!("args={args:#?}"));
     };
     let cooldown = Duration::from_secs(
         cooldown_secs
             .parse()
-            .with_context(|| format!("invalid cooldown secs | value={cooldown_secs}"))?,
+            .context("invalid cooldown secs")
+            .attach_with(|| format!("value={cooldown_secs}"))?,
     );
 
     let Some((exit_cond, args)) = args.split_first() else {
-        bail!("missing exit condition arg | args={args:#?}");
+        return Err(report!("missing exit condition arg")).attach_with(|| format!("args={args:#?}"));
     };
-    let exit_cond =
-        ExitCond::from_str(exit_cond).with_context(|| format!("invalid exit condition | args={args:#?}"))?;
+    let exit_cond = ExitCond::from_str(exit_cond)
+        .context("invalid exit condition")
+        .attach_with(|| format!("args={args:#?}"))?;
 
     let Some((program, program_args)) = args.split_first() else {
-        bail!("missing command arg | args={args:#?}");
+        return Err(report!("missing command arg")).attach_with(|| format!("args={args:#?}"));
     };
 
     let mut tries = vec![];
@@ -80,7 +79,8 @@ fn main() -> color_eyre::Result<()> {
         let output = Command::new(program)
             .args(program_args)
             .output()
-            .with_context(|| format!("error running cmd | program={program:?} args={program_args:?}"))?;
+            .context("error running cmd")
+            .attach_with(|| format!("program={program:?} args={program_args:?}"))?;
         tries.push(now.elapsed());
 
         let terminal_output = if output.status.success() {
@@ -96,8 +96,9 @@ fn main() -> color_eyre::Result<()> {
         std::thread::sleep(cooldown);
     }
 
-    let tries_count =
-        u32::try_from(tries.len()).with_context(|| format!("cannot convert tries len to u32 | len={}", tries.len()))?;
+    let tries_count = u32::try_from(tries.len())
+        .context("cannot convert tries len to u32")
+        .attach_with(|| format!("len={}", tries.len()))?;
     let total_time = tries.iter().fold(Duration::ZERO, |acc, &d| acc.saturating_add(d));
     let avg_runs_time = if tries_count > 0 {
         total_time.checked_div(tries_count).unwrap_or(Duration::ZERO)

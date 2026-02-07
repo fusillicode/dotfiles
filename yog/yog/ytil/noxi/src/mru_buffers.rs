@@ -2,9 +2,9 @@
 
 use std::str::FromStr;
 
-use color_eyre::eyre::Context as _;
-use color_eyre::eyre::eyre;
 use nvim_oxi::api::Buffer;
+use rootcause::prelude::ResultExt as _;
+use rootcause::report;
 
 /// Represents a most recently used buffer with its metadata.
 #[derive(Debug)]
@@ -71,7 +71,7 @@ impl<T: AsRef<str>> From<T> for BufferKind {
 /// - Extracting the unlisted flag fails.
 /// - Extracting the name fails.
 impl FromStr for MruBuffer {
-    type Err = color_eyre::eyre::Error;
+    type Err = rootcause::Report;
 
     fn from_str(mru_buffer_line: &str) -> Result<Self, Self::Err> {
         let mru_buffer_line = mru_buffer_line.trim();
@@ -79,19 +79,24 @@ impl FromStr for MruBuffer {
         let is_unlisted_idx = mru_buffer_line
             .char_indices()
             .find_map(|(idx, c)| if c.is_numeric() { None } else { Some(idx) })
-            .ok_or_else(|| eyre!("error finding buffer id end | mru_buffer_line={mru_buffer_line:?}"))?;
+            .ok_or_else(|| report!("error finding buffer id end"))
+            .attach_with(|| format!("mru_buffer_line={mru_buffer_line:?}"))?;
 
         let id: i32 = {
             let id = mru_buffer_line
                 .get(..is_unlisted_idx)
-                .ok_or_else(|| eyre!("error extracting buffer id | mru_buffer_line={mru_buffer_line:?}"))?;
+                .ok_or_else(|| report!("error extracting buffer id"))
+                .attach_with(|| format!("mru_buffer_line={mru_buffer_line:?}"))?;
             id.parse()
-                .wrap_err_with(|| format!("error parsing buffer id | id={id:?} mru_buffer_line={mru_buffer_line:?}"))?
+                .context("error parsing buffer id")
+                .attach_with(|| format!("id={id:?} mru_buffer_line={mru_buffer_line:?}"))?
         };
 
-        let is_unlisted = mru_buffer_line.get(is_unlisted_idx..=is_unlisted_idx).ok_or_else(|| {
-            eyre!("error extracting is_unlisted by idx | idx={is_unlisted_idx} mru_buffer_line={mru_buffer_line:?}")
-        })? == "u";
+        let is_unlisted = mru_buffer_line
+            .get(is_unlisted_idx..=is_unlisted_idx)
+            .ok_or_else(|| report!("error extracting is_unlisted by idx"))
+            .attach_with(|| format!("idx={is_unlisted_idx} mru_buffer_line={mru_buffer_line:?}"))?
+            == "u";
 
         // Find the opening '"' after the flags and extract the name between the quotes.
         // Nvim's `:ls` format is `%3d%c%c%c%c%c "%s"` (5 flag chars + space + quoted name),
@@ -99,15 +104,18 @@ impl FromStr for MruBuffer {
         let name_idx = mru_buffer_line
             .get(is_unlisted_idx..)
             .and_then(|s| s.find('"').map(|i| is_unlisted_idx.saturating_add(i).saturating_add(1)))
-            .ok_or_else(|| eyre!("error finding opening quote | mru_buffer_line={mru_buffer_line:?}"))?;
+            .ok_or_else(|| report!("error finding opening quote"))
+            .attach_with(|| format!("mru_buffer_line={mru_buffer_line:?}"))?;
 
-        let rest = mru_buffer_line.get(name_idx..).ok_or_else(|| {
-            eyre!("error extracting name part by idx | idx={name_idx} mru_buffer_line={mru_buffer_line:?}")
-        })?;
+        let rest = mru_buffer_line
+            .get(name_idx..)
+            .ok_or_else(|| report!("error extracting name part by idx"))
+            .attach_with(|| format!("idx={name_idx} mru_buffer_line={mru_buffer_line:?}"))?;
 
         let (name, _) = rest
             .split_once('"')
-            .ok_or_else(|| eyre!("error extracting name | rest={rest:?} mru_buffer_line={mru_buffer_line:?}"))?;
+            .ok_or_else(|| report!("error extracting name"))
+            .attach_with(|| format!("rest={rest:?} mru_buffer_line={mru_buffer_line:?}"))?;
 
         Ok(Self {
             id,
@@ -143,7 +151,7 @@ pub fn get() -> Option<Vec<MruBuffer>> {
 ///
 /// # Errors
 /// - Parsing any individual buffer line fails.
-fn parse_mru_buffers_output(mru_buffers_output: &str) -> color_eyre::Result<Vec<MruBuffer>> {
+fn parse_mru_buffers_output(mru_buffers_output: &str) -> rootcause::Result<Vec<MruBuffer>> {
     if mru_buffers_output.is_empty() {
         return Ok(vec![]);
     }

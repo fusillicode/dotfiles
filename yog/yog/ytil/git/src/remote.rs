@@ -1,7 +1,8 @@
-use color_eyre::eyre::bail;
-use color_eyre::eyre::eyre;
 use git2::Reference;
 use git2::Repository;
+use rootcause::bail;
+use rootcause::prelude::ResultExt;
+use rootcause::report;
 
 /// Retrieves the default remote HEAD reference from the repository.
 ///
@@ -11,7 +12,7 @@ use git2::Repository;
 ///
 /// # Errors
 /// - If no remote has a valid `HEAD` reference.
-pub fn get_default(repo: &Repository) -> color_eyre::Result<Reference<'_>> {
+pub fn get_default(repo: &Repository) -> rootcause::Result<Reference<'_>> {
     for remote_name in repo.remotes()?.iter().flatten() {
         if let Ok(default_remote_ref) = repo.find_reference(&format!("refs/remotes/{remote_name}/HEAD")) {
             return Ok(default_remote_ref);
@@ -27,13 +28,14 @@ pub fn get_default(repo: &Repository) -> color_eyre::Result<Reference<'_>> {
 /// - If finding a remote by name fails.
 /// - If a remote has no URL configured.
 /// - If URL has an unsupported protocol.
-pub fn get_https_urls(repo: &Repository) -> color_eyre::Result<Vec<String>> {
+pub fn get_https_urls(repo: &Repository) -> rootcause::Result<Vec<String>> {
     let mut https_urls = vec![];
     for remote_name in repo.remotes()?.iter().flatten() {
         let remote = repo.find_remote(remote_name)?;
         let url = remote
             .url()
-            .ok_or_else(|| eyre!("error invalid URL for remote | remote={remote_name:?}"))
+            .ok_or_else(|| report!("error invalid URL for remote"))
+            .attach_with(|| format!("remote={remote_name:?}"))
             .and_then(map_to_https_url)?;
         https_urls.push(url);
     }
@@ -57,7 +59,7 @@ impl GitProvider {
     /// # Rationale
     /// Header-based detection avoids parsing HTML content or relying on URL patterns,
     /// providing a more reliable and lightweight approach to provider identification.
-    pub fn get(url: &str) -> color_eyre::Result<Option<Self>> {
+    pub fn get(url: &str) -> rootcause::Result<Option<Self>> {
         let resp = ureq::get(url).call()?;
 
         for (name, _) in resp.headers() {
@@ -74,7 +76,7 @@ impl GitProvider {
     }
 }
 
-fn map_to_https_url(url: &str) -> color_eyre::Result<String> {
+fn map_to_https_url(url: &str) -> rootcause::Result<String> {
     if url.starts_with("https://") {
         return Ok(url.to_owned());
     }
@@ -85,7 +87,7 @@ fn map_to_https_url(url: &str) -> color_eyre::Result<String> {
     {
         return Ok(format!("https://{}", rest.replace(':', "/").trim_end_matches(".git")));
     }
-    bail!("error unsupported protocol for URL | url={url}")
+    Err(report!("error unsupported protocol for URL").attach(format!("url={url}")))
 }
 
 #[cfg(test)]

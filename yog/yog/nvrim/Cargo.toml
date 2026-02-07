@@ -15,7 +15,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 chrono = { workspace = true }
-color-eyre = { workspace = true }
 convert_case = { workspace = true }
 fkr = { path = "../fkr" }
 lit2 = { version = "1.0" }
@@ -23,6 +22,7 @@ nvim-oxi = { git = "https://github.com/noib3/nvim-oxi", rev = "b1278b123dbac3908
   "neovim-nightly",
   "mlua",
 ] }
+rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }

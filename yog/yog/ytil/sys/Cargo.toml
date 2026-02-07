@@ -12,10 +12,11 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 chrono = { workspace = true }
-color-eyre = { workspace = true }
 home = { workspace = true }
 itertools = { workspace = true }
+owo-colors = { workspace = true }
 pico-args = { version = "0.5" }
+rootcause = { workspace = true }
 serde = { workspace = true }
 ytil_cmd = { workspace = true }
 

@@ -1,8 +1,8 @@
 use std::path::Path;
 use std::process::Command;
 
-use color_eyre::eyre::Context;
-use color_eyre::eyre::eyre;
+use rootcause::prelude::ResultExt;
+use rootcause::report;
 use ytil_cmd::CmdExt as _;
 
 const PATH_LINE_PREFIX: &str = "diff --git ";
@@ -14,7 +14,7 @@ const PATH_LINE_PREFIX: &str = "diff --git ";
 ///
 /// # Errors
 /// - `git diff` command fails.
-pub fn get_raw(path: Option<&Path>) -> color_eyre::Result<String> {
+pub fn get_raw(path: Option<&Path>) -> rootcause::Result<String> {
     let mut args = vec!["diff".into(), "-U0".into()];
 
     if let Some(path) = path {
@@ -33,7 +33,7 @@ pub fn get_raw(path: Option<&Path>) -> color_eyre::Result<String> {
 ///
 /// # Errors
 /// - Parsing diff output fails.
-pub fn get_hunks(raw_diff_output: &str) -> color_eyre::Result<Vec<(&str, usize)>> {
+pub fn get_hunks(raw_diff_output: &str) -> rootcause::Result<Vec<(&str, usize)>> {
     let lines: Vec<&str> = raw_diff_output.lines().collect();
 
     // Pre-allocate with estimated capacity: roughly 1 hunk per 4 diff lines
@@ -46,21 +46,23 @@ pub fn get_hunks(raw_diff_output: &str) -> color_eyre::Result<Vec<(&str, usize)>
 
         let path_idx = path_line
             .find(" b/")
-            .ok_or_else(|| {
-                eyre!(
-                    "error missing path prefix in path_line | path_line={path_line:?} raw_diff_line_idx={raw_diff_line_idx} raw_diff_line={raw_diff_line:?}"
-                )
+            .ok_or_else(|| report!("error missing path prefix in path_line"))
+            .attach_with(|| {
+                format!("path_line={path_line:?} raw_diff_line_idx={raw_diff_line_idx} raw_diff_line={raw_diff_line:?}")
             })?
             .saturating_add(3);
 
-        let path = path_line.get(path_idx..).ok_or_else(|| {
-            eyre!("error extracting path from path_line | path_idx={path_idx} path_line={path_line:?} raw_diff_line_idx={raw_diff_line_idx} raw_diff_line={raw_diff_line:?}")
-        })?;
+        let path = path_line.get(path_idx..)
+            .ok_or_else(|| report!("error extracting path from path_line"))
+            .attach_with(|| format!("path_idx={path_idx} path_line={path_line:?} raw_diff_line_idx={raw_diff_line_idx} raw_diff_line={raw_diff_line:?}"))?;
 
         let lnum_lines_start_idx = raw_diff_line_idx.saturating_add(1);
         let maybe_lnum_lines = lines
             .get(lnum_lines_start_idx..)
-            .ok_or_else(|| eyre!("error extracting lnum_lines from raw_diff_output | lnum_lines_start_idx={lnum_lines_start_idx} raw_diff_line_idx={raw_diff_line_idx}"))?;
+            .ok_or_else(|| report!("error extracting lnum_lines from raw_diff_output"))
+            .attach_with(|| {
+                format!("lnum_lines_start_idx={lnum_lines_start_idx} raw_diff_line_idx={raw_diff_line_idx}")
+            })?;
 
         for maybe_lnum_line in maybe_lnum_lines {
             if maybe_lnum_line.starts_with(PATH_LINE_PREFIX) {
@@ -85,11 +87,12 @@ pub fn get_hunks(raw_diff_output: &str) -> color_eyre::Result<Vec<(&str, usize)>
 /// - If the hunk header line lacks sufficient space-separated parts.
 /// - If the newline number part is malformed (missing comma).
 /// - If the extracted line number value cannot be parsed as a valid [`usize`].
-fn extract_new_lnum_value(lnum_line: &str) -> color_eyre::Result<usize> {
+fn extract_new_lnum_value(lnum_line: &str) -> rootcause::Result<usize> {
     let new_lnum = lnum_line
         .split(' ')
         .nth(2)
-        .ok_or_else(|| eyre!("error missing new_lnum from lnum_line after split by space | lnum_line={lnum_line:?}"))?;
+        .ok_or_else(|| report!("error missing new_lnum from lnum_line after split by space"))
+        .attach_with(|| format!("lnum_line={lnum_line:?}"))?;
 
     let new_lnum_value = new_lnum
         .split(',')
@@ -98,11 +101,13 @@ fn extract_new_lnum_value(lnum_line: &str) -> color_eyre::Result<usize> {
             let trimmed = s.trim_start_matches('+');
             if trimmed.is_empty() { None } else { Some(trimmed) }
         })
-        .ok_or_else(|| eyre!("error malformed new_lnum in lnum_line | lnum_line={lnum_line:?}"))?;
+        .ok_or_else(|| report!("error malformed new_lnum in lnum_line"))
+        .attach_with(|| format!("lnum_line={lnum_line:?}"))?;
 
-    new_lnum_value.parse::<usize>().wrap_err_with(|| {
-        eyre!("error parsing new_lnum value as usize | lnum_value={new_lnum_value:?}, lnum_line={lnum_line:?}")
-    })
+    Ok(new_lnum_value
+        .parse::<usize>()
+        .context("error parsing new_lnum value as usize")
+        .attach_with(|| format!("lnum_value={new_lnum_value:?} lnum_line={lnum_line:?}"))?)
 }
 
 #[cfg(test)]

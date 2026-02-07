@@ -8,52 +8,50 @@
 use std::fs::Metadata;
 use std::path::Path;
 
-use color_eyre::Report;
-use color_eyre::eyre::bail;
-use color_eyre::owo_colors::OwoColorize;
+use owo_colors::OwoColorize;
+use rootcause::bail;
+use rootcause::report;
 use ytil_sys::cli::Args;
 
 /// Deletes one path after stripping the first ':' suffix segment.
 ///
 /// # Errors
 /// - Metadata retrieval or deletion fails.
-fn process(file: &str) -> color_eyre::Result<()> {
+fn process(file: &str) -> rootcause::Result<()> {
     let trimmed = before_first_colon(file);
     let path = Path::new(&trimmed);
 
-    path.symlink_metadata()
-        .map_err(|error| {
+    let metadata: Metadata = path.symlink_metadata().map_err(|error| {
+        eprintln!(
+            "Cannot read metadata of path={} error={}",
+            path.display(),
+            format!("{error:?}").red()
+        );
+        report!(error)
+    })?;
+
+    let ft = metadata.file_type();
+    if ft.is_file() || ft.is_symlink() {
+        std::fs::remove_file(path).inspect_err(|err| {
             eprintln!(
-                "Cannot read metadata of path={} error={}",
+                "Cannot delete file={} error={}",
                 path.display(),
-                format!("{error:?}").red()
+                format!("{err:?}").red()
             );
-            Report::from(error)
-        })
-        .and_then(|metadata: Metadata| -> color_eyre::Result<()> {
-            let ft = metadata.file_type();
-            if ft.is_file() || ft.is_symlink() {
-                std::fs::remove_file(path).inspect_err(|err| {
-                    eprintln!(
-                        "Cannot delete file={} error={}",
-                        path.display(),
-                        format!("{err:?}").red()
-                    );
-                })?;
-                return Ok(());
-            }
-            if ft.is_dir() {
-                std::fs::remove_dir_all(path).inspect_err(|err| {
-                    eprintln!(
-                        "Cannot delete dir={} error={}",
-                        path.display(),
-                        format!("{err:?}").red()
-                    );
-                })?;
-                return Ok(());
-            }
-            bail!("{}", format!("Not found path={}", path.display()).red())
-        })
+        })?;
+        return Ok(());
+    }
+    if ft.is_dir() {
+        std::fs::remove_dir_all(path).inspect_err(|err| {
+            eprintln!(
+                "Cannot delete dir={} error={}",
+                path.display(),
+                format!("{err:?}").red()
+            );
+        })?;
+        return Ok(());
+    }
+    bail!("{}", format!("Not found path={}", path.display()).red())
 }
 
 /// Strips suffix beginning at first ':'.
@@ -62,14 +60,12 @@ fn before_first_colon(s: &str) -> &str {
 }
 
 /// Remove files or directories passed as CLI args (recursive for dirs).
-fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
-
+fn main() {
     let files = ytil_sys::cli::get();
 
     if files.has_help() {
         println!("{}", include_str!("../help.txt"));
-        return Ok(());
+        return;
     }
 
     if files.is_empty() {
@@ -86,8 +82,6 @@ fn main() -> color_eyre::Result<()> {
     if any_errors {
         std::process::exit(1);
     }
-
-    Ok(())
 }
 
 #[cfg(test)]

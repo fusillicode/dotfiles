@@ -12,7 +12,7 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 chrono = { workspace = true }
-color-eyre = { workspace = true }
+rootcause = { workspace = true }
 ytil_git = { workspace = true }
 ytil_sys = { workspace = true }
 

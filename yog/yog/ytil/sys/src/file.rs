@@ -7,9 +7,8 @@ use std::process::Command;
 use std::process::Stdio;
 
 use chrono::Utc;
-use color_eyre::eyre::Context as _;
-use color_eyre::eyre::bail;
-use color_eyre::eyre::eyre;
+use rootcause::prelude::ResultExt as _;
+use rootcause::report;
 use serde::Serialize;
 use ytil_cmd::CmdExt as _;
 
@@ -42,7 +41,7 @@ pub enum FileCmdOutput {
 /// - launching or waiting on the `file` command fails
 /// - the command exits with non-success
 /// - standard output cannot be decoded as valid UTF-8
-pub fn exec_file_cmd(path: &str) -> color_eyre::Result<FileCmdOutput> {
+pub fn exec_file_cmd(path: &str) -> rootcause::Result<FileCmdOutput> {
     let stdout_bytes = Command::new("file").args(["-I", path]).exec()?.stdout;
     let stdout = std::str::from_utf8(&stdout_bytes)?.to_lowercase();
     if stdout.contains(" inode/directory;") {
@@ -66,22 +65,20 @@ pub fn exec_file_cmd(path: &str) -> color_eyre::Result<FileCmdOutput> {
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - Creating the symlink fails.
 /// - The existing link cannot be removed.
-pub fn ln_sf<P: AsRef<Path>>(target: &P, link: &P) -> color_eyre::Result<()> {
+pub fn ln_sf<P: AsRef<Path>>(target: &P, link: &P) -> rootcause::Result<()> {
     // Remove atomically without check-then-remove TOCTOU race, ignoring NotFound
     match std::fs::remove_file(link.as_ref()) {
         Ok(()) => {}
         Err(ref e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => {
-            return Err(e).wrap_err_with(|| eyre!("error removing existing link | link={}", link.as_ref().display()));
+            Err(e)
+                .context("error removing existing link")
+                .attach_with(|| format!("link={}", link.as_ref().display()))?;
         }
     }
-    std::os::unix::fs::symlink(target.as_ref(), link.as_ref()).wrap_err_with(|| {
-        eyre!(
-            "error creating symlink for target={} link={}",
-            target.as_ref().display(),
-            link.as_ref().display()
-        )
-    })?;
+    std::os::unix::fs::symlink(target.as_ref(), link.as_ref())
+        .context("error creating symlink")
+        .attach_with(|| format!("target={} link={}", target.as_ref().display(), link.as_ref().display()))?;
     Ok(())
 }
 
@@ -91,23 +88,21 @@ pub fn ln_sf<P: AsRef<Path>>(target: &P, link: &P) -> color_eyre::Result<()> {
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - Creating an individual symlink fails.
 /// - Traversing `target_dir` fails.
-pub fn ln_sf_files_in_dir<P: AsRef<std::path::Path>>(target_dir: P, link_dir: P) -> color_eyre::Result<()> {
+pub fn ln_sf_files_in_dir<P: AsRef<std::path::Path>>(target_dir: P, link_dir: P) -> rootcause::Result<()> {
     for target in std::fs::read_dir(&target_dir)
-        .wrap_err_with(|| eyre!("error reading directory | path={}", target_dir.as_ref().display()))?
+        .context("error reading directory")
+        .attach_with(|| format!("path={}", target_dir.as_ref().display()))?
     {
-        let target = target.wrap_err_with(|| eyre!("error getting target entry"))?.path();
+        let target = target.context("error getting target entry")?.path();
         if target.is_file() {
             let target_name = target
                 .file_name()
-                .ok_or_else(|| eyre!("error missing filename for target | path={}", target.display()))?;
+                .ok_or_else(|| report!("error missing filename for target"))
+                .attach_with(|| format!("path={}", target.display()))?;
             let link = link_dir.as_ref().join(target_name);
-            ln_sf(&target, &link).wrap_err_with(|| {
-                eyre!(
-                    "error creating symlink | target={} link={}",
-                    target.display(),
-                    link.display()
-                )
-            })?;
+            ln_sf(&target, &link)
+                .context("error creating symlink")
+                .attach_with(|| format!("target={} link={}", target.display(), link.display()))?;
         }
     }
     Ok(())
@@ -118,29 +113,34 @@ pub fn ln_sf_files_in_dir<P: AsRef<std::path::Path>>(target_dir: P, link_dir: P)
 /// # Errors
 /// - The clipboard program cannot be spawned.
 /// - The clipboard program exits with failure.
-pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
+pub fn cp_to_system_clipboard(content: &mut &[u8]) -> rootcause::Result<()> {
     let cmd = "pbcopy";
 
     let mut pbcopy_child = ytil_cmd::silent_cmd(cmd)
         .stdin(Stdio::piped())
         .spawn()
-        .wrap_err_with(|| eyre!("error spawning cmd | cmd={cmd:?}"))?;
+        .context("error spawning cmd")
+        .attach_with(|| format!("cmd={cmd:?}"))?;
 
     std::io::copy(
         content,
         pbcopy_child
             .stdin
             .as_mut()
-            .ok_or_else(|| eyre!("error getting cmd child stdin | cmd={cmd:?}"))?,
+            .ok_or_else(|| report!("error getting cmd child stdin"))
+            .attach_with(|| format!("cmd={cmd:?}"))?,
     )
-    .wrap_err_with(|| eyre!("error copying content to stdin | cmd={cmd:?}"))?;
+    .context("error copying content to stdin")
+    .attach_with(|| format!("cmd={cmd:?}"))?;
 
     if !pbcopy_child
         .wait()
-        .wrap_err_with(|| eyre!("error waiting for cmd | cmd={cmd:?}"))?
+        .context("error waiting for cmd")
+        .attach_with(|| format!("cmd={cmd:?}"))?
         .success()
     {
-        bail!("error copying to system clipboard | cmd={cmd:?} content={content:#?}");
+        Err(report!("error copying to system clipboard"))
+            .attach_with(|| format!("cmd={cmd:?} content={content:#?}"))?;
     }
 
     Ok(())
@@ -152,15 +152,17 @@ pub fn cp_to_system_clipboard(content: &mut &[u8]) -> color_eyre::Result<()> {
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - File metadata cannot be read.
 /// - Permissions cannot be updated.
-pub fn chmod_x<P: AsRef<Path>>(path: P) -> color_eyre::Result<()> {
+pub fn chmod_x<P: AsRef<Path>>(path: P) -> rootcause::Result<()> {
     let mut perms = std::fs::metadata(&path)
-        .wrap_err_with(|| eyre!("error reading metadata | path={}", path.as_ref().display()))?
+        .context("error reading metadata")
+        .attach_with(|| format!("path={}", path.as_ref().display()))?
         .permissions();
 
     perms.set_mode(0o755);
 
     std::fs::set_permissions(&path, perms)
-        .wrap_err_with(|| eyre!("error setting permissions | path={}", path.as_ref().display()))?;
+        .context("error setting permissions")
+        .attach_with(|| format!("path={}", path.as_ref().display()))?;
 
     Ok(())
 }
@@ -171,15 +173,16 @@ pub fn chmod_x<P: AsRef<Path>>(path: P) -> color_eyre::Result<()> {
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - A chmod operation fails.
 /// - Directory traversal fails.
-pub fn chmod_x_files_in_dir<P: AsRef<Path>>(dir: P) -> color_eyre::Result<()> {
-    for target_res in
-        std::fs::read_dir(&dir).wrap_err_with(|| eyre!("error reading directory | path={}", dir.as_ref().display()))?
+pub fn chmod_x_files_in_dir<P: AsRef<Path>>(dir: P) -> rootcause::Result<()> {
+    for target_res in std::fs::read_dir(&dir)
+        .context("error reading directory")
+        .attach_with(|| format!("path={}", dir.as_ref().display()))?
     {
-        let target = target_res
-            .wrap_err_with(|| eyre!("error getting directory entry"))?
-            .path();
+        let target = target_res.context("error getting directory entry")?.path();
         if target.is_file() {
-            chmod_x(&target).wrap_err_with(|| eyre!("error setting permissions | path={}", target.display()))?;
+            chmod_x(&target)
+                .context("error setting permissions")
+                .attach_with(|| format!("path={}", target.display()))?;
         }
     }
     Ok(())
@@ -197,31 +200,30 @@ pub fn chmod_x_files_in_dir<P: AsRef<Path>>(dir: P) -> color_eyre::Result<()> {
 /// - The atomic rename fails.
 /// - The destination's parent directory or file name cannot be resolved.
 /// - The temporary copy fails.
-pub fn atomic_cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
+pub fn atomic_cp(from: &Path, to: &Path) -> rootcause::Result<()> {
     // Removed explicit existence check to avoid TOCTOU race - let std::fs::copy
     // report the error if the source doesn't exist
     let tmp_name = format!(
         "{}.tmp-{}-{}",
         to.file_name()
-            .ok_or_else(|| eyre!("error getting file name | path={}", to.display()))?
+            .ok_or_else(|| report!("error getting file name"))
+            .attach_with(|| format!("path={}", to.display()))?
             .to_string_lossy(),
         std::process::id(),
         Utc::now().to_rfc3339()
     );
     let tmp_path = to
         .parent()
-        .ok_or_else(|| eyre!("error missing parent directory | path={}", to.display()))?
+        .ok_or_else(|| report!("error missing parent directory"))
+        .attach_with(|| format!("path={}", to.display()))?
         .join(tmp_name);
 
-    std::fs::copy(from, &tmp_path).with_context(|| {
-        format!(
-            "error copying file to temp | from={} temp={}",
-            from.display(),
-            tmp_path.display()
-        )
-    })?;
+    std::fs::copy(from, &tmp_path)
+        .context("error copying file to temp")
+        .attach_with(|| format!("from={} temp={}", from.display(), tmp_path.display()))?;
     std::fs::rename(&tmp_path, to)
-        .with_context(|| format!("error renaming file | from={} to={}", tmp_path.display(), to.display()))?;
+        .context("error renaming file")
+        .attach_with(|| format!("from={} to={}", tmp_path.display(), to.display()))?;
 
     Ok(())
 }
@@ -237,19 +239,21 @@ pub fn find_matching_recursively_in_dir(
     dir: &Path,
     matching_file_fn: impl Fn(&DirEntry) -> bool,
     skip_dir_fn: impl Fn(&DirEntry) -> bool,
-) -> color_eyre::Result<Vec<PathBuf>> {
+) -> rootcause::Result<Vec<PathBuf>> {
     let mut manifests = Vec::new();
     let mut queue = VecDeque::from([dir.to_path_buf()]);
 
     while let Some(dir) = queue.pop_front() {
-        for entry in
-            std::fs::read_dir(&dir).wrap_err_with(|| eyre!("error reading directory | path={}", dir.display()))?
+        for entry in std::fs::read_dir(&dir)
+            .context("error reading directory")
+            .attach_with(|| format!("path={}", dir.display()))?
         {
-            let entry = entry.wrap_err_with(|| eyre!("error getting entry"))?;
+            let entry = entry.context("error getting entry")?;
             let path = entry.path();
             let file_type = entry
                 .file_type()
-                .wrap_err_with(|| eyre!("error getting file type | entry={}", path.display()))?;
+                .context("error getting file type")
+                .attach_with(|| format!("entry={}", path.display()))?;
 
             if file_type.is_file() {
                 if matching_file_fn(&entry) {

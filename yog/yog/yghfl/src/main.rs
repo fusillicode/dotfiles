@@ -11,8 +11,8 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
 
-use color_eyre::eyre::bail;
-use color_eyre::eyre::eyre;
+use rootcause::prelude::ResultExt as _;
+use rootcause::report;
 use url::Url;
 use ytil_editor::Editor;
 use ytil_hx::HxCursorPosition;
@@ -25,10 +25,7 @@ use ytil_wezterm::get_sibling_pane_with_titles;
 ///
 /// # Errors
 /// - Expanding a home-relative path (starting with `~`) fails because the home directory cannot be determined.
-fn build_hx_cursor_absolute_file_path(
-    hx_cursor_file_path: &Path,
-    hx_pane: &WeztermPane,
-) -> color_eyre::Result<PathBuf> {
+fn build_hx_cursor_absolute_file_path(hx_cursor_file_path: &Path, hx_pane: &WeztermPane) -> rootcause::Result<PathBuf> {
     if let Ok(hx_cursor_file_path) = hx_cursor_file_path.strip_prefix("~") {
         return ytil_sys::dir::build_home_path(&[hx_cursor_file_path]);
     }
@@ -52,14 +49,15 @@ fn build_github_link<'a>(
     git_current_branch: &'a str,
     file_path: &'a Path,
     hx_cursor_position: &'a HxCursorPosition,
-) -> color_eyre::Result<Url> {
+) -> rootcause::Result<Url> {
     let mut file_path_parts = vec![];
     for component in file_path.components() {
         file_path_parts.push(
             component
                 .as_os_str()
                 .to_str()
-                .ok_or_else(|| eyre!("path component invalid utf-8 | component={component:#?}"))?,
+                .ok_or_else(|| report!("path component invalid utf-8"))
+                .attach_with(|| format!("component={component:#?}"))?,
         );
     }
 
@@ -67,7 +65,9 @@ fn build_github_link<'a>(
     let mut github_link = github_repo_url.clone();
     github_link
         .path_segments_mut()
-        .map_err(|()| eyre!("cannot extend url with segments | url={github_repo_url} segments={segments:#?}"))?
+        .map_err(|()| {
+            report!("cannot extend url with segments").attach(format!("url={github_repo_url} segments={segments:#?}"))
+        })?
         .extend(&segments);
     github_link.set_fragment(Some(&format!(
         "L{}C{}",
@@ -78,9 +78,7 @@ fn build_github_link<'a>(
 }
 
 /// Copy GitHub URL (file/line/col) for the current Helix buffer to clipboard.
-fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
-
+fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));
@@ -100,28 +98,28 @@ fn main() -> color_eyre::Result<()> {
             .stdout,
     )?;
 
-    let hx_status_line = HxStatusLine::from_str(wezterm_pane_text.lines().nth_back(1).ok_or_else(|| {
-        eyre!(
-            "missing hx status line | pane_id={} text={wezterm_pane_text:#?}",
-            hx_pane.pane_id
-        )
-    })?)?;
+    let hx_status_line = HxStatusLine::from_str(
+        wezterm_pane_text
+            .lines()
+            .nth_back(1)
+            .ok_or_else(|| report!("missing hx status line"))
+            .attach_with(|| format!("pane_id={} text={wezterm_pane_text:#?}", hx_pane.pane_id))?,
+    )?;
 
     let git_repo_root_path = Arc::new(ytil_git::repo::get_root(&ytil_git::repo::discover(
         &hx_status_line.file_path,
     )?));
 
     let get_git_current_branch =
-        std::thread::spawn(move || -> color_eyre::Result<String> { ytil_git::branch::get_current() });
+        std::thread::spawn(move || -> rootcause::Result<String> { ytil_git::branch::get_current() });
 
     let git_repo_root_path_clone = git_repo_root_path.clone();
-    let get_github_repo_url = std::thread::spawn(move || -> color_eyre::Result<Url> {
+    let get_github_repo_url = std::thread::spawn(move || -> rootcause::Result<Url> {
         match &ytil_gh::get_repo_urls(&git_repo_root_path_clone)?.as_slice() {
-            &[] => bail!("missing GitHub repo URL | repo_path={git_repo_root_path_clone:#?}"),
+            &[] => Err(report!("missing GitHub repo URL").attach(format!("repo_path={git_repo_root_path_clone:#?}")))?,
             &[one] => Ok(one.clone()),
-            multi => {
-                bail!("multiple GitHub repo URLs | URLs={multi:#?} repo_path={git_repo_root_path_clone:#?}")
-            }
+            multi => Err(report!("multiple GitHub repo URLs")
+                .attach(format!("URLs={multi:#?} repo_path={git_repo_root_path_clone:#?}")))?,
         }
     });
 

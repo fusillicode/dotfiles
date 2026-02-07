@@ -7,7 +7,7 @@ use std::path::PathBuf;
 /// - Executing the `python3 -m venv` command fails or returns a non-zero exit status.
 /// - Executing the shell pipeline to activate the venv and install packages fails.
 /// - A filesystem operation (create/read/write/remove) fails.
-pub fn run(dev_tools_dir: &Path, tool: &str, packages: &[&str]) -> color_eyre::Result<PathBuf> {
+pub fn run(dev_tools_dir: &Path, tool: &str, packages: &[&str]) -> rootcause::Result<PathBuf> {
     let dev_tools_repo_dir = dev_tools_dir.join(tool);
 
     std::fs::create_dir_all(&dev_tools_repo_dir)?;

@@ -14,7 +14,7 @@ impl Installer for Nvim<'_> {
         "nvim"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn install(&self) -> rootcause::Result<()> {
         // Compiling from sources because I can checkout specific refs in case of broken nightly builds.
         // Moreover...it's pretty badass 😎
         let nvim_source_dir = self.dev_tools_dir.join(self.bin_name()).join("source");

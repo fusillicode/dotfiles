@@ -9,9 +9,7 @@ use fkr::FkrOption;
 use ytil_sys::cli::Args;
 
 /// Entry point for the fake data generator CLI.
-fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
-
+fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));

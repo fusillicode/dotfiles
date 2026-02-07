@@ -6,12 +6,12 @@
 use core::fmt::Debug;
 use core::fmt::Display;
 
-use color_eyre::eyre::eyre;
 use inquire::InquireError;
 use inquire::MultiSelect;
 use inquire::Select;
 use inquire::Text;
 use inquire::ui::RenderConfig;
+use rootcause::report;
 use strum::EnumIter;
 use strum::IntoEnumIterator;
 
@@ -141,7 +141,7 @@ pub fn get_item_from_cli_args_or_select<'a, CAS, O, OBA, OF>(
     mut cli_arg_selector: CAS,
     items: Vec<O>,
     item_find_by_arg: OBA,
-) -> color_eyre::Result<Option<O>>
+) -> rootcause::Result<Option<O>>
 where
     O: Clone + Debug + Display,
     CAS: FnMut(&(usize, &String)) -> bool,
@@ -151,7 +151,7 @@ where
     if let Some((_, cli_arg)) = cli_args.iter().enumerate().find(|x| cli_arg_selector(x)) {
         let mut item_find = item_find_by_arg(cli_arg);
         return Ok(Some(items.iter().find(|x| item_find(*x)).cloned().ok_or_else(
-            || eyre!("missing item matching CLI arg | cli_arg={cli_arg} items={items:#?}"),
+            || report!("missing item matching CLI arg").attach(format!("cli_arg={cli_arg} items={items:#?}")),
         )?));
     }
     Ok(minimal_select(items)?)

@@ -9,12 +9,12 @@ use std::process::Command;
 
 use chrono::DateTime;
 use chrono::Utc;
-use color_eyre::eyre::Context;
-use color_eyre::eyre::bail;
-use color_eyre::eyre::eyre;
 use git2::Cred;
 use git2::RemoteCallbacks;
 use git2::Repository;
+use rootcause::bail;
+use rootcause::prelude::ResultExt;
+use rootcause::report;
 use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt as _;
 
@@ -27,14 +27,11 @@ use ytil_cmd::CmdExt as _;
 /// - If the repository cannot be opened.
 /// - If no remote has a valid `HEAD` reference.
 /// - If the branch name cannot be extracted from the reference target.
-pub fn get_default() -> color_eyre::Result<String> {
+pub fn get_default() -> rootcause::Result<String> {
     let repo_path = Path::new(".");
-    let repo = crate::repo::discover(repo_path).wrap_err_with(|| {
-        eyre!(
-            "error getting repo for getting default branch | path={}",
-            repo_path.display()
-        )
-    })?;
+    let repo = crate::repo::discover(repo_path)
+        .context("error getting repo for getting default branch")
+        .attach_with(|| format!("path={}", repo_path.display()))?;
 
     let default_remote_ref = crate::remote::get_default(&repo)?;
 
@@ -45,7 +42,8 @@ pub fn get_default() -> color_eyre::Result<String> {
     Ok(target
         .split('/')
         .next_back()
-        .ok_or_else(|| eyre!("error extracting default branch_name from target | target={target:?}"))?
+        .ok_or_else(|| report!("error extracting default branch_name from target"))
+        .attach_with(|| format!("target={target:?}"))?
         .to_string())
 }
 
@@ -53,54 +51,54 @@ pub fn get_default() -> color_eyre::Result<String> {
 ///
 /// # Errors
 /// - Repository discovery fails or HEAD is detached.
-pub fn get_current() -> color_eyre::Result<String> {
+pub fn get_current() -> rootcause::Result<String> {
     let repo_path = Path::new(".");
-    let repo = crate::repo::discover(repo_path).wrap_err_with(|| {
-        eyre!(
-            "error getting repo for getting current branch | path={}",
-            repo_path.display()
-        )
-    })?;
+    let repo = crate::repo::discover(repo_path)
+        .context("error getting repo for getting current branch")
+        .attach_with(|| format!("path={}", repo_path.display()))?;
 
     if repo
         .head_detached()
-        .wrap_err_with(|| eyre!("error checking if head is detached | path={}", repo_path.display()))?
+        .context("error checking if head is detached")
+        .attach_with(|| format!("path={}", repo_path.display()))?
     {
-        bail!("error head is detached | path={}", repo_path.display())
+        Err(report!("error head is detached")).attach_with(|| format!("path={}", repo_path.display()))?;
     }
 
     repo.head()
-        .wrap_err_with(|| eyre!("error getting head | path={}", repo_path.display()))?
+        .context("error getting head")
+        .attach_with(|| format!("path={}", repo_path.display()))?
         .shorthand()
         .map(str::to_string)
-        .ok_or_else(|| eyre!("error invalid branch shorthand UTF-8 | path={}", repo_path.display()))
+        .ok_or_else(|| report!("error invalid branch shorthand UTF-8"))
+        .attach_with(|| format!("path={}", repo_path.display()))
 }
 
 /// Create a new local branch at current HEAD (no checkout).
 ///
 /// # Errors
 /// - Repository discovery, HEAD resolution, or branch creation fails.
-pub fn create_from_default_branch(branch_name: &str, repo: Option<&Repository>) -> color_eyre::Result<()> {
+pub fn create_from_default_branch(branch_name: &str, repo: Option<&Repository>) -> rootcause::Result<()> {
     let repo = if let Some(repo) = repo {
         repo
     } else {
         let path = Path::new(".");
-        &crate::repo::discover(path).wrap_err_with(|| {
-            eyre!(
-                "error getting repo for creating new branch | path={} branch={branch_name:?}",
-                path.display()
-            )
-        })?
+        &crate::repo::discover(path)
+            .context("error getting repo for creating new branch")
+            .attach_with(|| format!("path={} branch={branch_name:?}", path.display()))?
     };
 
     let commit = repo
         .head()
-        .wrap_err_with(|| eyre!("error getting head | branch_name={branch_name:?}"))?
+        .context("error getting head")
+        .attach_with(|| format!("branch_name={branch_name:?}"))?
         .peel_to_commit()
-        .wrap_err_with(|| eyre!("error peeling head to commit | branch_name={branch_name:?}"))?;
+        .context("error peeling head to commit")
+        .attach_with(|| format!("branch_name={branch_name:?}"))?;
 
     repo.branch(branch_name, &commit, false)
-        .wrap_err_with(|| eyre!("error creating branch | branch_name={branch_name:?}"))?;
+        .context("error creating branch")
+        .attach_with(|| format!("branch_name={branch_name:?}"))?;
 
     Ok(())
 }
@@ -115,24 +113,21 @@ pub fn create_from_default_branch(branch_name: &str, repo: Option<&Repository>) 
 /// - No default remote can be determined.
 /// - The default remote cannot be found.
 /// - Pushing the branch fails.
-pub fn push(branch_name: &str, repo: Option<&Repository>) -> color_eyre::Result<()> {
+pub fn push(branch_name: &str, repo: Option<&Repository>) -> rootcause::Result<()> {
     let repo = if let Some(repo) = repo {
         repo
     } else {
         let path = Path::new(".");
-        &crate::repo::discover(path).wrap_err_with(|| {
-            eyre!(
-                "error getting repo for pushing new branch | path={} branch={branch_name:?}",
-                path.display()
-            )
-        })?
+        &crate::repo::discover(path)
+            .context("error getting repo for pushing new branch")
+            .attach_with(|| format!("path={} branch={branch_name:?}", path.display()))?
     };
 
     let default_remote = crate::remote::get_default(repo)?;
 
     let default_remote_name = default_remote
         .name()
-        .ok_or_else(|| eyre!("error missing name of default remote"))?
+        .ok_or_else(|| report!("error missing name of default remote"))?
         .trim_start_matches("refs/remotes/")
         .trim_end_matches("/HEAD");
 
@@ -147,9 +142,10 @@ pub fn push(branch_name: &str, repo: Option<&Repository>) -> color_eyre::Result<
     push_opts.remote_callbacks(callbacks);
 
     let branch_refspec = format!("refs/heads/{branch_name}");
-    remote.push(&[&branch_refspec], Some(&mut push_opts)).wrap_err_with(|| {
-        eyre!("error pushing branch to remote | branch_refspec={branch_refspec:?} default_remote_name={default_remote_name:?}")
-    })?;
+    remote
+        .push(&[&branch_refspec], Some(&mut push_opts))
+        .context("error pushing branch to remote")
+        .attach_with(|| format!("branch_refspec={branch_refspec:?} default_remote_name={default_remote_name:?}"))?;
 
     Ok(())
 }
@@ -177,22 +173,20 @@ pub fn switch(branch_name: &str) -> Result<(), Box<CmdError>> {
 /// - A branch name is not valid UTF-8.
 /// - Resolving the branch tip commit fails.
 /// - Converting the committer timestamp into a [`DateTime`] fails.
-pub fn get_all() -> color_eyre::Result<Vec<Branch>> {
+pub fn get_all() -> rootcause::Result<Vec<Branch>> {
     let repo_path = Path::new(".");
     let repo = crate::repo::discover(repo_path)
-        .wrap_err_with(|| eyre!("error getting repo for getting branches | path={}", repo_path.display()))?;
+        .context("error getting repo for getting branches")
+        .attach_with(|| format!("path={}", repo_path.display()))?;
 
     // Reuse the already-discovered repo for the fetch operation to avoid a redundant filesystem
     // walk in `repo::discover`.
-    fetch_with_repo(&repo, &[]).wrap_err_with(|| eyre!("error fetching branches"))?;
+    fetch_with_repo(&repo, &[]).context("error fetching branches")?;
 
     let mut out = vec![];
-    for branch_res in repo
-        .branches(None)
-        .wrap_err_with(|| eyre!("error enumerating branches"))?
-    {
-        let branch = branch_res.wrap_err_with(|| eyre!("error getting branch result"))?;
-        out.push(Branch::try_from(branch).wrap_err_with(|| eyre!("error creating branch from result"))?);
+    for branch_res in repo.branches(None).context("error enumerating branches")? {
+        let branch = branch_res.context("error getting branch result")?;
+        out.push(Branch::try_from(branch).context("error creating branch from result")?);
     }
 
     out.sort_unstable_by(|a, b| b.committer_date_time().cmp(a.committer_date_time()));
@@ -210,7 +204,7 @@ pub fn get_all() -> color_eyre::Result<Vec<Branch>> {
 /// - A branch name is not valid UTF-8.
 /// - Resolving the branch tip commit fails.
 /// - Converting the committer timestamp into a [`DateTime`] fails.
-pub fn get_all_no_redundant() -> color_eyre::Result<Vec<Branch>> {
+pub fn get_all_no_redundant() -> rootcause::Result<Vec<Branch>> {
     let mut branches = get_all()?;
     remove_redundant_remotes(&mut branches);
     Ok(branches)
@@ -225,19 +219,16 @@ pub fn get_all_no_redundant() -> color_eyre::Result<Vec<Branch>> {
 /// - The repository cannot be discovered.
 /// - The `origin` remote cannot be found.
 /// - Performing `git fetch` for the requested branches fails.
-pub fn fetch(branches: &[&str]) -> color_eyre::Result<()> {
+pub fn fetch(branches: &[&str]) -> rootcause::Result<()> {
     let repo_path = Path::new(".");
-    let repo = crate::repo::discover(repo_path).wrap_err_with(|| {
-        eyre!(
-            "error getting repo for fetching branches | path={} branches={branches:?}",
-            repo_path.display()
-        )
-    })?;
+    let repo = crate::repo::discover(repo_path)
+        .context("error getting repo for fetching branches")
+        .attach_with(|| format!("path={} branches={branches:?}", repo_path.display()))?;
     fetch_with_repo(&repo, branches)
 }
 
 /// Fetches branches using a pre-discovered repository, avoiding redundant filesystem walks.
-fn fetch_with_repo(repo: &Repository, branches: &[&str]) -> color_eyre::Result<()> {
+fn fetch_with_repo(repo: &Repository, branches: &[&str]) -> rootcause::Result<()> {
     let mut callbacks = RemoteCallbacks::new();
     callbacks.credentials(|_url, username_from_url, _allowed_types| {
         Cred::ssh_key_from_agent(username_from_url.unwrap_or("git"))
@@ -247,9 +238,10 @@ fn fetch_with_repo(repo: &Repository, branches: &[&str]) -> color_eyre::Result<(
     fetch_opts.remote_callbacks(callbacks);
 
     repo.find_remote("origin")
-        .wrap_err_with(|| eyre!("error finding origin remote"))?
+        .context("error finding origin remote")?
         .fetch(branches, Some(&mut fetch_opts), None)
-        .wrap_err_with(|| eyre!("error fetching branches={branches:?}"))?;
+        .context("error fetching branches")
+        .attach_with(|| format!("branches={branches:?}"))?;
 
     Ok(())
 }
@@ -340,15 +332,17 @@ impl Branch {
 /// - Resolving the branch tip commit fails.
 /// - Converting the committer timestamp into a [`DateTime`] fails.
 impl<'a> TryFrom<(git2::Branch<'a>, git2::BranchType)> for Branch {
-    type Error = color_eyre::eyre::Error;
+    type Error = rootcause::Report;
 
     fn try_from((raw_branch, branch_type): (git2::Branch<'a>, git2::BranchType)) -> Result<Self, Self::Error> {
         let branch_name = raw_branch
             .name()?
-            .ok_or_else(|| eyre!("error invalid branch name UTF-8 | branch_name={:?}", raw_branch.name()))?;
+            .ok_or_else(|| report!("error invalid branch name UTF-8"))
+            .attach_with(|| format!("branch_name={:?}", raw_branch.name()))?;
         let commit_time = raw_branch.get().peel_to_commit()?.committer().when();
         let committer_date_time = DateTime::from_timestamp(commit_time.seconds(), 0)
-            .ok_or_else(|| eyre!("error invalid commit timestamp | seconds={}", commit_time.seconds()))?;
+            .ok_or_else(|| report!("error invalid commit timestamp"))
+            .attach_with(|| format!("seconds={}", commit_time.seconds()))?;
 
         Ok(match branch_type {
             git2::BranchType::Local => Self::Local {

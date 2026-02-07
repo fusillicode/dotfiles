@@ -11,7 +11,7 @@ keywords = ["cli", "github", "helix", "editor", "links"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-color-eyre = { workspace = true }
+rootcause = { workspace = true }
 url = { workspace = true }
 ytil_editor = { workspace = true }
 ytil_gh = { workspace = true }

@@ -4,9 +4,8 @@
 use std::path::Path;
 use std::process::Command;
 
-use color_eyre::eyre::Context;
-use color_eyre::eyre::bail;
-use color_eyre::eyre::eyre;
+use rootcause::prelude::ResultExt;
+use rootcause::report;
 use url::Url;
 
 pub mod issue;
@@ -43,11 +42,12 @@ impl RepoViewField {
 /// - Spawning or executing the `gh repo view` command fails.
 /// - Command exits with non‑zero status.
 /// - Output is not valid UTF‑8.
-pub fn get_repo_view_field(field: &RepoViewField) -> color_eyre::Result<String> {
+pub fn get_repo_view_field(field: &RepoViewField) -> rootcause::Result<String> {
     let output = Command::new("gh")
         .args(["repo", "view", "--json", field.as_ref(), "--jq", &field.jq_repr()])
         .output()
-        .wrap_err_with(|| eyre!("error getting repo view field | field={field:?}"))?;
+        .context("error getting repo view field")
+        .attach_with(|| format!("field={field:?}"))?;
 
     ytil_cmd::extract_success_output(&output)
 }
@@ -59,22 +59,22 @@ pub fn get_repo_view_field(field: &RepoViewField) -> color_eyre::Result<String> 
 /// # Errors
 /// - Checking auth status fails.
 /// - The login command fails or exits with a non-zero status.
-pub fn log_into_github() -> color_eyre::Result<()> {
+pub fn log_into_github() -> rootcause::Result<()> {
     if ytil_cmd::silent_cmd("gh")
         .args(["auth", "status"])
         .status()
-        .wrap_err_with(|| eyre!("error checking gh auth status"))?
+        .context("error checking gh auth status")?
         .success()
     {
         return Ok(());
     }
 
-    ytil_cmd::silent_cmd("sh")
+    Ok(ytil_cmd::silent_cmd("sh")
         .args(["-c", "gh auth login"])
         .status()
-        .wrap_err_with(|| eyre!("error running gh auth login command"))?
+        .context("error running gh auth login command")?
         .exit_ok()
-        .wrap_err_with(|| eyre!("error running gh auth login"))
+        .context("error running gh auth login")?)
 }
 
 /// Retrieves the latest release tag name for the specified GitHub repository.
@@ -83,11 +83,12 @@ pub fn log_into_github() -> color_eyre::Result<()> {
 /// - Executing `gh` fails or returns a non-zero exit status.
 /// - UTF-8 conversion fails.
 /// - Invoking `gh api` fails.
-pub fn get_latest_release(repo: &str) -> color_eyre::Result<String> {
+pub fn get_latest_release(repo: &str) -> rootcause::Result<String> {
     let output = Command::new("gh")
         .args(["api", &format!("repos/{repo}/releases/latest"), "--jq=.tag_name"])
         .output()
-        .wrap_err_with(|| eyre!("error getting latest release | repo={repo:?}"))?;
+        .context("error getting latest release")
+        .attach_with(|| format!("repo={repo:?}"))?;
 
     ytil_cmd::extract_success_output(&output)
 }
@@ -98,13 +99,14 @@ pub fn get_latest_release(repo: &str) -> color_eyre::Result<String> {
 /// - Executing `gh` fails or returns a non-zero exit status.
 /// - Invoking `gh pr view` fails.
 /// - Output cannot be parsed.
-pub fn get_branch_name_from_url(url: &Url) -> color_eyre::Result<String> {
+pub fn get_branch_name_from_url(url: &Url) -> rootcause::Result<String> {
     let pr_id = extract_pr_id_form_url(url)?;
 
     let output = Command::new("gh")
         .args(["pr", "view", &pr_id, "--json", "headRefName", "--jq", ".headRefName"])
         .output()
-        .wrap_err_with(|| eyre!("error getting branch name | pr_id={pr_id:?}"))?;
+        .context("error getting branch name")
+        .attach_with(|| format!("pr_id={pr_id:?}"))?;
 
     ytil_cmd::extract_success_output(&output)
 }
@@ -117,18 +119,22 @@ pub fn get_branch_name_from_url(url: &Url) -> color_eyre::Result<String> {
 /// - The repository cannot be opened.
 /// - A remote cannot be resolved.
 /// - A remote URL is invalid UTF-8.
-pub fn get_repo_urls(repo_path: &Path) -> color_eyre::Result<Vec<Url>> {
+pub fn get_repo_urls(repo_path: &Path) -> rootcause::Result<Vec<Url>> {
     let repo = ytil_git::repo::discover(repo_path)
-        .wrap_err_with(|| eyre!("error opening repo | path={}", repo_path.display()))?;
+        .context("error opening repo")
+        .attach_with(|| format!("path={}", repo_path.display()))?;
     let mut repo_urls = vec![];
     for remote_name in repo.remotes()?.iter().flatten() {
         repo_urls.push(
             repo.find_remote(remote_name)
-                .wrap_err_with(|| eyre!("error finding remote | remote={remote_name:?}"))?
+                .context("error finding remote")
+                .attach_with(|| format!("remote={remote_name:?}"))?
                 .url()
                 .map(parse_github_url_from_git_remote_url)
-                .ok_or_else(|| eyre!("error invalid remote URL UTF-8 | remote={remote_name:?}"))
-                .wrap_err_with(|| eyre!("error parsing remote URL | remote={remote_name:?}"))??,
+                .ok_or_else(|| report!("error invalid remote URL UTF-8"))
+                .attach_with(|| format!("remote={remote_name:?}"))
+                .context("error parsing remote URL")
+                .attach_with(|| format!("remote={remote_name:?}"))??,
         );
     }
     Ok(repo_urls)
@@ -142,7 +148,7 @@ pub fn get_repo_urls(repo_path: &Path) -> color_eyre::Result<Vec<Url>> {
 ///
 /// # Errors
 /// - The URL cannot be parsed or lacks a path component.
-fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> color_eyre::Result<Url> {
+fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> rootcause::Result<Url> {
     if let Ok(mut url) = Url::parse(git_remote_url) {
         url.set_path(url.clone().path().trim_end_matches(".git"));
         return Ok(url);
@@ -151,9 +157,10 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> color_eyre::Res
     let path = git_remote_url
         .split_once(':')
         .map(|(_, path)| path.trim_end_matches(".git"))
-        .ok_or_else(|| eyre!("error extracting URL path | git_remote_url={git_remote_url:?}"))?;
+        .ok_or_else(|| report!("error extracting URL path"))
+        .attach_with(|| format!("git_remote_url={git_remote_url:?}"))?;
 
-    let mut url = Url::parse("https://github.com").wrap_err_with(|| eyre!("error parsing base GitHub URL"))?;
+    let mut url = Url::parse("https://github.com").context("error parsing base GitHub URL")?;
     url.set_path(path);
 
     Ok(url)
@@ -168,12 +175,14 @@ fn parse_github_url_from_git_remote_url(git_remote_url: &str) -> color_eyre::Res
 /// # Errors
 /// - Host is not `github.com`.
 /// - The PR id segment or query parameter is missing, empty, duplicated, or malformed.
-fn extract_pr_id_form_url(url: &Url) -> color_eyre::Result<String> {
+fn extract_pr_id_form_url(url: &Url) -> rootcause::Result<String> {
     let host = url
         .host_str()
-        .ok_or_else(|| eyre!("error extracting host from URL | url={url}"))?;
+        .ok_or_else(|| report!("error extracting host from URL"))
+        .attach_with(|| format!("url={url}"))?;
     if host != GITHUB_HOST {
-        bail!("error host mismatch | host={host:?} expected={GITHUB_HOST:?} URL={url}")
+        Err(report!("error host mismatch"))
+            .attach_with(|| format!("host={host:?} expected={GITHUB_HOST:?} URL={url}"))?;
     }
 
     // To handle URLs like:
@@ -189,7 +198,8 @@ fn extract_pr_id_form_url(url: &Url) -> color_eyre::Result<String> {
 
     let path_segments = url
         .path_segments()
-        .ok_or_else(|| eyre!("error URL cannot be base | url={url}"))?
+        .ok_or_else(|| report!("error URL cannot be base"))
+        .attach_with(|| format!("url={url}"))?
         .enumerate()
         .collect::<Vec<_>>();
 
@@ -201,19 +211,22 @@ fn extract_pr_id_form_url(url: &Url) -> color_eyre::Result<String> {
     {
         [(idx, _)] => Ok(path_segments
             .get(idx.saturating_add(1))
-            .ok_or_else(|| eyre!("error missing PR ID | url={url} path_segments={path_segments:#?}"))
+            .ok_or_else(|| report!("error missing PR ID"))
+            .attach_with(|| format!("url={url} path_segments={path_segments:#?}"))
             .and_then(|(_, pr_id)| {
                 if pr_id.is_empty() {
-                    return Err(eyre!("error empty PR ID | url={url} path_segments={path_segments:#?}"));
+                    return Err(
+                        report!("error empty PR ID").attach(format!("url={url} path_segments={path_segments:#?}"))
+                    );
                 }
                 Ok((*pr_id).to_string())
             })?),
-        [] => Err(eyre!(
-            "error missing PR ID prefix | prefix={GITHUB_PR_ID_PREFIX:?} url={url} path_segments={path_segments:#?}"
-        )),
-        _ => Err(eyre!(
-            "error multiple PR ID prefixes | prefix={GITHUB_PR_ID_PREFIX:?} url={url} path_segments={path_segments:#?}"
-        )),
+        [] => Err(report!("error missing PR ID prefix").attach(format!(
+            "prefix={GITHUB_PR_ID_PREFIX:?} url={url} path_segments={path_segments:#?}"
+        ))),
+        _ => Err(report!("error multiple PR ID prefixes").attach(format!(
+            "prefix={GITHUB_PR_ID_PREFIX:?} url={url} path_segments={path_segments:#?}"
+        ))),
     }
 }
 
@@ -228,8 +241,8 @@ mod tests {
         let url = Url::parse("mailto:foo@bar.com").unwrap();
         assert2::let_assert!(Err(err) = extract_pr_id_form_url(&url));
         assert_eq!(
-            err.to_string(),
-            "error extracting host from URL | url=mailto:foo@bar.com"
+            err.format_current_context().to_string(),
+            "error extracting host from URL"
         );
     }
 
@@ -237,50 +250,38 @@ mod tests {
     fn extract_pr_id_form_url_returns_the_expected_error_when_url_is_not_from_github() {
         let url = Url::parse("https://foo.bar").unwrap();
         assert2::let_assert!(Err(err) = extract_pr_id_form_url(&url));
-        let msg = err.to_string();
-        assert!(msg.starts_with("error host mismatch |"));
-        assert!(msg.contains(r#"host="foo.bar""#), "actual: {msg}");
-        assert!(msg.contains(r#"expected="github.com""#), "actual: {msg}");
-        assert!(msg.contains("URL=https://foo.bar/"), "actual: {msg}");
+        assert_eq!(err.format_current_context().to_string(), "error host mismatch");
     }
 
     #[test]
     fn extract_pr_id_form_url_returns_the_expected_error_when_url_doesnt_have_path_segments() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}")).unwrap();
         assert2::let_assert!(Err(err) = extract_pr_id_form_url(&url));
-        let msg = err.to_string();
-        assert!(msg.starts_with("error missing PR ID prefix |"), "actual: {msg}");
-        assert!(msg.contains("prefix=\"pull\""), "actual: {msg}");
-        assert!(msg.contains("url=https://github.com/"), "actual: {msg}");
+        assert_eq!(err.format_current_context().to_string(), "error missing PR ID prefix");
     }
 
     #[test]
     fn extract_pr_id_form_url_returns_the_expected_error_when_url_doesnt_have_pr_id() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/pull")).unwrap();
         assert2::let_assert!(Err(err) = extract_pr_id_form_url(&url));
-        let msg = err.to_string();
-        assert!(msg.starts_with("error missing PR ID |"), "actual: {msg}");
-        assert!(msg.contains("url=https://github.com/pull"), "actual: {msg}");
+        assert_eq!(err.format_current_context().to_string(), "error missing PR ID");
     }
 
     #[test]
     fn extract_pr_id_form_url_returns_the_expected_error_when_url_doenst_have_the_expected_pr_id_prefix() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/foo")).unwrap();
         assert2::let_assert!(Err(err) = extract_pr_id_form_url(&url));
-        let msg = err.to_string();
-        assert!(msg.starts_with("error missing PR ID prefix |"), "actual: {msg}");
-        assert!(msg.contains("prefix=\"pull\""), "actual: {msg}");
-        assert!(msg.contains("url=https://github.com/foo"), "actual: {msg}");
+        assert_eq!(err.format_current_context().to_string(), "error missing PR ID prefix");
     }
 
     #[test]
     fn extract_pr_id_form_url_returns_the_expected_error_when_url_has_multiple_pr_id_prefixes() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/pull/42/pull/43")).unwrap();
         assert2::let_assert!(Err(err) = extract_pr_id_form_url(&url));
-        let msg = err.to_string();
-        assert!(msg.starts_with("error multiple PR ID prefixes |"), "actual: {msg}");
-        assert!(msg.contains("prefix=\"pull\""), "actual: {msg}");
-        assert!(msg.contains("url=https://github.com/pull/42/pull/43"), "actual: {msg}");
+        assert_eq!(
+            err.format_current_context().to_string(),
+            "error multiple PR ID prefixes"
+        );
     }
 
     #[test]

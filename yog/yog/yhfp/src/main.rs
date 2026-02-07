@@ -7,7 +7,8 @@
 use core::str::FromStr;
 use std::process::Command;
 
-use color_eyre::eyre::eyre;
+use rootcause::prelude::ResultExt as _;
+use rootcause::report;
 use ytil_editor::Editor;
 use ytil_hx::HxStatusLine;
 use ytil_sys::cli::Args;
@@ -16,19 +17,18 @@ use ytil_sys::cli::Args;
 ///
 /// # Errors
 /// - UTF-8 conversion fails.
-fn format_hx_status_line(hx_status_line: &HxStatusLine) -> color_eyre::Result<String> {
+fn format_hx_status_line(hx_status_line: &HxStatusLine) -> rootcause::Result<String> {
     let file_path = hx_status_line
         .file_path
         .to_str()
-        .ok_or_else(|| eyre!("cannot convert path to str | path={:#?}", hx_status_line.file_path))?;
+        .ok_or_else(|| report!("cannot convert path to str"))
+        .attach_with(|| format!("path={}", hx_status_line.file_path.display()))?;
 
     Ok(format!("{file_path}:{}", hx_status_line.position.line))
 }
 
 /// Copy current Helix file path with line number to clipboard.
-fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
-
+fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));
@@ -52,7 +52,8 @@ fn main() -> color_eyre::Result<()> {
     let hx_status_line_str = wezterm_pane_text
         .lines()
         .nth_back(1)
-        .ok_or_else(|| eyre!("missing hx status line | pane_id={hx_pane_id} text={wezterm_pane_text:#?}"))?;
+        .ok_or_else(|| report!("missing hx status line"))
+        .attach_with(|| format!("pane_id={hx_pane_id} text={wezterm_pane_text:#?}"))?;
 
     let hx_status_line = HxStatusLine::from_str(hx_status_line_str)?;
 

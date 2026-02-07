@@ -124,17 +124,13 @@ mod tests {
     #[test]
     fn dictionary_ext_get_t_works_as_expected() {
         let dict = dict! { "foo": "42" };
-        let msg = dict.get_t::<nvim_oxi::String>("bar").unwrap_err().to_string();
-        assert!(msg.starts_with("missing dict value |"), "actual: {msg}");
-        assert!(msg.contains("query=[\n    \"bar\",\n]"), "actual: {msg}");
-        assert!(msg.contains("dict={ foo: \"42\" }"), "actual: {msg}");
+        assert2::let_assert!(Err(err) = dict.get_t::<nvim_oxi::String>("bar"));
+        assert_eq!(err.format_current_context().to_string(), "missing dict value");
         assert_eq!(dict.get_t::<nvim_oxi::String>("foo").unwrap(), "42");
 
         let dict = dict! { "foo": 42 };
-        assert_eq!(
-            dict.get_t::<nvim_oxi::String>("foo").unwrap_err().to_string(),
-            r#"value 42 of key "foo" in dict { foo: 42 } is Integer but String was expected"#
-        );
+        assert2::let_assert!(Err(err) = dict.get_t::<nvim_oxi::String>("foo"));
+        assert_eq!(err.format_current_context().to_string(), "unexpected object kind");
     }
 
     #[test]
@@ -143,10 +139,8 @@ mod tests {
         assert_eq!(dict.get_dict(&["bar"]).unwrap(), None);
 
         let dict = dict! { "foo": 42 };
-        assert_eq!(
-            dict.get_dict(&["foo"]).unwrap_err().to_string(),
-            r#"value 42 of key "foo" in dict { foo: 42 } is Integer but Dictionary was expected"#
-        );
+        assert2::let_assert!(Err(err) = dict.get_dict(&["foo"]));
+        assert_eq!(err.format_current_context().to_string(), "unexpected object kind");
 
         let expected = dict! { "bar": "42" };
         let dict = dict! { "foo": expected.clone() };
