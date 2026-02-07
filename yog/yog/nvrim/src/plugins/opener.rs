@@ -7,6 +7,7 @@ pub fn dict() -> Dictionary {
     dict! {
         "open_token_under_cursor": fn_from!(open_token_under_cursor),
         "copy_enclosing_function": fn_from!(copy_enclosing_function),
+        "reveal_in_finder": fn_from!(reveal_in_finder),
     }
 }
 
@@ -55,4 +56,28 @@ fn open_token_under_cursor(_: ()) -> Option<()> {
             })
             .ok(),
     }
+}
+
+fn reveal_in_finder(_: ()) -> Option<()> {
+    let file_path = ytil_noxi::buffer::get_absolute_path(Some(&nvim_oxi::api::get_current_buf()))?;
+    let Some(parent) = file_path.parent() else {
+        ytil_noxi::notify::error(format!(
+            "error no parent for current buffer file path | file_path={}",
+            file_path.display()
+        ));
+        return None;
+    };
+    let Some(parent_str) = parent.to_str() else {
+        ytil_noxi::notify::error(format!(
+            "error parent path is not valid UTF-8 | path={}",
+            parent.display()
+        ));
+        return None;
+    };
+    ytil_sys::open(parent_str)
+        .inspect_err(|err| {
+            ytil_noxi::notify::error(format!("error opening path | path={} error={err:#?}", parent.display()));
+        })
+        .ok()?;
+    Some(())
 }
