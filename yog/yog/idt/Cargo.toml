@@ -11,7 +11,8 @@ keywords = ["cli", "installer", "development", "tools", "language-server"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-color-eyre = { workspace = true }
+owo-colors = { workspace = true }
+rootcause = { workspace = true }
 sha2 = { workspace = true }
 tempfile = { workspace = true }
 ureq = { workspace = true }

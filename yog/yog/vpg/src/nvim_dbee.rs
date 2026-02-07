@@ -13,7 +13,7 @@ use crate::pgpass::PgpassEntry;
 /// # Errors
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - JSON serialization or deserialization fails.
-pub fn save_new_nvim_dbee_conns_file(updated_pg_pass_entry: &PgpassEntry, conns_path: &Path) -> color_eyre::Result<()> {
+pub fn save_new_nvim_dbee_conns_file(updated_pg_pass_entry: &PgpassEntry, conns_path: &Path) -> rootcause::Result<()> {
     let conns = get_updated_conns(updated_pg_pass_entry, conns_path)?;
 
     let mut tmp_path = PathBuf::from(conns_path);
@@ -34,7 +34,7 @@ pub fn save_new_nvim_dbee_conns_file(updated_pg_pass_entry: &PgpassEntry, conns_
 /// # Errors
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - JSON serialization or deserialization fails.
-fn get_updated_conns(updated_pg_pass_entry: &PgpassEntry, conns_path: &Path) -> color_eyre::Result<Vec<NvimDbeeConn>> {
+fn get_updated_conns(updated_pg_pass_entry: &PgpassEntry, conns_path: &Path) -> rootcause::Result<Vec<NvimDbeeConn>> {
     let updated_conn = NvimDbeeConn::from(updated_pg_pass_entry);
 
     // Returns just the updated conn if the conns file does not exist.

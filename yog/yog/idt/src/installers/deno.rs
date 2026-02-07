@@ -34,7 +34,7 @@ impl Installer for Deno<'_> {
         "deno"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn install(&self) -> rootcause::Result<()> {
         let repo = format!("{0}land/{0}", self.bin_name());
         let latest_release = ytil_gh::get_latest_release(&repo)?;
 

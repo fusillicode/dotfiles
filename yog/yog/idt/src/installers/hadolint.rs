@@ -34,7 +34,7 @@ impl Installer for Hadolint<'_> {
         "hadolint"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn install(&self) -> rootcause::Result<()> {
         let (arch, os) = self.target_arch_and_os();
 
         let filename = format!("{0}-{os}-{arch}", self.bin_name());

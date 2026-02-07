@@ -2,8 +2,6 @@
 
 use std::ops::Range;
 
-use color_eyre::eyre::Context as _;
-use color_eyre::eyre::bail;
 use nvim_oxi::Array;
 use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;
@@ -12,6 +10,8 @@ use nvim_oxi::api::opts::GetTextOpts;
 use nvim_oxi::conversion::FromObject;
 use nvim_oxi::lua::Poppable;
 use nvim_oxi::lua::ffi::State;
+use rootcause::prelude::ResultExt as _;
+use rootcause::report;
 use serde::Deserialize;
 use serde::Deserializer;
 
@@ -158,14 +158,14 @@ impl SelectionBounds {
     /// # Errors
     /// - Fails if retrieving either mark fails.
     /// - Fails if the two marks reference different buffers.
-    pub fn new() -> color_eyre::Result<Self> {
+    pub fn new() -> rootcause::Result<Self> {
         let cursor_pos = get_pos(".")?;
         let visual_pos = get_pos("v")?;
 
         let (start, end) = cursor_pos.sort(visual_pos);
 
         if start.buf_id != end.buf_id {
-            bail!("mismatched buffer ids | start={start:#?} end={end:#?}")
+            Err(report!("mismatched buffer ids")).attach_with(|| format!("start={start:#?} end={end:#?}"))?;
         }
 
         Ok(Self {
@@ -326,17 +326,20 @@ impl Poppable for Pos {
 ///
 /// On success, converts the raw 1-based tuple into a 0-based [`Pos`].
 /// On failure, emits an error notification via [`crate::notify::error`] and wraps the error with
-/// additional context using [`color_eyre::eyre`].
+/// additional context using [`rootcause`].
 ///
 /// # Errors
 /// - Calling `getpos()` fails.
 /// - Deserializing the returned tuple into [`Pos`] fails.
-fn get_pos(mark: &str) -> color_eyre::Result<Pos> {
-    nvim_oxi::api::call_function::<_, Pos>("getpos", Array::from_iter([mark]))
-        .inspect_err(|err| {
-            crate::notify::error(format!("error getting pos | mark={mark:?} error={err:#?}"));
-        })
-        .wrap_err_with(|| format!("error getting position | mark={mark:?}"))
+fn get_pos(mark: &str) -> rootcause::Result<Pos> {
+    Ok(
+        nvim_oxi::api::call_function::<_, Pos>("getpos", Array::from_iter([mark]))
+            .inspect_err(|err| {
+                crate::notify::error(format!("error getting pos | mark={mark:?} error={err:#?}"));
+            })
+            .context("error getting position")
+            .attach_with(|| format!("mark={mark:?}"))?,
+    )
 }
 
 #[cfg(test)]

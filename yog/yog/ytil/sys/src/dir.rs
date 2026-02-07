@@ -1,14 +1,15 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use color_eyre::eyre::OptionExt as _;
+use rootcause::option_ext::OptionExt as _;
+use rootcause::prelude::ResultExt as _;
 
 /// Builds a path starting from the home directory by appending the given parts, returning a [`PathBuf`].
 ///
 /// # Errors
 /// - The home directory cannot be determined.
-pub fn build_home_path<P: AsRef<Path>>(parts: &[P]) -> color_eyre::Result<PathBuf> {
-    let home_path = home::home_dir().ok_or_eyre("missing home dir | env=HOME")?;
+pub fn build_home_path<P: AsRef<Path>>(parts: &[P]) -> rootcause::Result<PathBuf> {
+    let home_path = home::home_dir().context("missing home dir").attach("env=HOME")?;
     Ok(build_path(home_path, parts))
 }
 
@@ -26,13 +27,13 @@ pub fn build_path<P: AsRef<Path>>(mut root: PathBuf, parts: &[P]) -> PathBuf {
 ///
 /// # Errors
 /// - Directory traversal fails (unexpected layout).
-pub fn get_workspace_root() -> color_eyre::Result<PathBuf> {
+pub fn get_workspace_root() -> rootcause::Result<PathBuf> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     Ok(manifest_dir
         .parent()
         .and_then(|p| p.parent())
         .and_then(|p| p.parent())
-        .ok_or_eyre(format!(
+        .context(format!(
             "cannot get workspace root | manifest_dir={}",
             manifest_dir.display()
         ))?

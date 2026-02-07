@@ -6,13 +6,12 @@
 
 use std::process::Command;
 
-use color_eyre::eyre::eyre;
+use rootcause::prelude::ResultExt as _;
+use rootcause::report;
 use ytil_sys::cli::Args;
 
 /// Display file contents or long‑list directories.
-fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
-
+fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
 
     if args.has_help() {
@@ -20,7 +19,10 @@ fn main() -> color_eyre::Result<()> {
         return Ok(());
     }
 
-    let path = args.first().ok_or_else(|| eyre!("missing path arg | args={args:#?}"))?;
+    let path = args
+        .first()
+        .ok_or_else(|| report!("missing path arg"))
+        .attach_with(|| format!("args={args:#?}"))?;
 
     let metadata = std::fs::metadata(path)?;
 
@@ -35,5 +37,5 @@ fn main() -> color_eyre::Result<()> {
         return Ok(Command::new("cat").args([path]).status()?.exit_ok()?);
     }
 
-    Err(eyre!("unsupported file type | path={path:?}"))
+    Err(report!("unsupported file type").attach(format!("path={path:?}")))
 }

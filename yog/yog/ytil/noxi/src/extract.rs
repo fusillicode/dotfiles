@@ -1,9 +1,9 @@
 //! Primitive extraction trait implementations for Nvim `Object` kinds.
 
-use color_eyre::eyre::Context;
 use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
 use nvim_oxi::ObjectKind;
+use rootcause::prelude::ResultExt;
 
 /// Trait for extracting typed values from Nvim objects.
 pub trait OxiExtract {
@@ -13,7 +13,7 @@ pub trait OxiExtract {
     ///
     /// # Errors
     /// - The value has a different kind than expected for the target type.
-    fn extract_from_dict(key: &str, value: &Object, dict: &Dictionary) -> color_eyre::Result<Self::Out>;
+    fn extract_from_dict(key: &str, value: &Object, dict: &Dictionary) -> rootcause::Result<Self::Out>;
 }
 
 /// Implementation for extracting [`String`] values from Nvim objects.
@@ -21,9 +21,10 @@ impl OxiExtract for nvim_oxi::String {
     type Out = String;
 
     /// Extract from dict.
-    fn extract_from_dict(key: &str, value: &Object, dict: &Dictionary) -> color_eyre::Result<Self::Out> {
+    fn extract_from_dict(key: &str, value: &Object, dict: &Dictionary) -> rootcause::Result<Self::Out> {
         let out = Self::try_from(value.clone())
-            .with_context(|| unexpected_kind_error_msg(value, key, dict, ObjectKind::String))?;
+            .context("unexpected object kind")
+            .attach_with(|| unexpected_kind_error_msg(value, key, dict, ObjectKind::String))?;
         Ok(out.to_string())
     }
 }
@@ -33,9 +34,10 @@ impl OxiExtract for nvim_oxi::Integer {
     type Out = Self;
 
     /// Extract from dict.
-    fn extract_from_dict(key: &str, value: &Object, dict: &Dictionary) -> color_eyre::Result<Self::Out> {
+    fn extract_from_dict(key: &str, value: &Object, dict: &Dictionary) -> rootcause::Result<Self::Out> {
         let out = Self::try_from(value.clone())
-            .with_context(|| unexpected_kind_error_msg(value, key, dict, ObjectKind::Integer))?;
+            .context("unexpected object kind")
+            .attach_with(|| unexpected_kind_error_msg(value, key, dict, ObjectKind::Integer))?;
         Ok(out)
     }
 }

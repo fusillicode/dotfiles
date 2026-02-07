@@ -12,7 +12,7 @@ impl Installer for VsCodeLangServers<'_> {
         "vscode-langservers-extracted"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn install(&self) -> rootcause::Result<()> {
         let target_dir = crate::downloaders::npm::run(self.dev_tools_dir, self.bin_name(), &[self.bin_name()])?;
 
         ytil_sys::file::ln_sf_files_in_dir(target_dir, (&self.bin_dir).into())?;

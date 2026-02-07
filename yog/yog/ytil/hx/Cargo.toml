@@ -14,8 +14,8 @@ categories = ["command-line-utilities", "development-tools"]
 fake = ["dep:fake"]
 
 [dependencies]
-color-eyre = { workspace = true }
 fake = { workspace = true, optional = true }
+rootcause = { workspace = true }
 
 [dev-dependencies]
 fake = { workspace = true }

@@ -38,7 +38,7 @@ impl Installer for Marksman<'_> {
         false
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn install(&self) -> rootcause::Result<()> {
         let (arch, os) = self.target_arch_and_os();
         let repo = format!("artempyanykh/{}", self.bin_name());
         let latest_release = ytil_gh::get_latest_release(&repo)?;

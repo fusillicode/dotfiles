@@ -3,6 +3,6 @@
 
 /// Run ad‑hoc experimental snippets and throwaway tests.
 #[allow(clippy::unnecessary_wraps, clippy::missing_const_for_fn)]
-fn main() -> color_eyre::Result<()> {
+fn main() -> rootcause::Result<()> {
     Ok(())
 }

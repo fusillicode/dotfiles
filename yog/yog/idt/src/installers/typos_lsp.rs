@@ -37,7 +37,7 @@ impl Installer for TyposLsp<'_> {
         false
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn install(&self) -> rootcause::Result<()> {
         let (arch, os) = self.target_arch_and_os();
 
         let repo = "tekumara/typos-vscode";

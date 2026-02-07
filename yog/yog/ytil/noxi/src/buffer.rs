@@ -5,13 +5,13 @@ use std::ops::RangeInclusive;
 use std::path::Path;
 use std::path::PathBuf;
 
-use color_eyre::eyre::Context;
-use color_eyre::eyre::eyre;
 use nvim_oxi::Array;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::SuperIterator;
 use nvim_oxi::api::Window;
 use nvim_oxi::api::opts::OptionOptsBuilder;
+use rootcause::prelude::ResultExt;
+use rootcause::report;
 
 use crate::visual_selection::Selection;
 
@@ -22,7 +22,7 @@ pub trait BufferExt: Debug {
     ///
     /// # Errors
     /// - Fetching the line fails or index is out of range.
-    fn get_line(&self, idx: usize) -> color_eyre::Result<nvim_oxi::String>;
+    fn get_line(&self, idx: usize) -> rootcause::Result<nvim_oxi::String>;
 
     /// Retrieves a range of lines from the buffer.
     ///
@@ -44,7 +44,7 @@ pub trait BufferExt: Debug {
         start: (usize, usize),
         end: (usize, usize),
         boundary: TextBoundary,
-    ) -> color_eyre::Result<String> {
+    ) -> rootcause::Result<String> {
         let (start_lnum, start_col) = start;
         let (end_lnum, end_col) = end;
 
@@ -57,11 +57,12 @@ pub trait BufferExt: Debug {
             let line = line.to_string_lossy();
             let line_start_idx = boundary.get_line_start_idx(line_idx, start_col);
             let line_end_idx = boundary.get_line_end_idx(&line, line_idx, last_line_idx, end_col);
-            let sub_line = line.get(line_start_idx..line_end_idx).ok_or_else(|| {
-                eyre!(
-                    "cannot extract substring from line | line={line:?} idx={line_idx} start_idx={line_start_idx} end_idx={line_end_idx}"
-                )
-            })?;
+            let sub_line = line
+                .get(line_start_idx..line_end_idx)
+                .ok_or_else(|| report!("cannot extract substring from line"))
+                .attach_with(|| {
+                    format!("line={line:?} idx={line_idx} start_idx={line_start_idx} end_idx={line_end_idx}")
+                })?;
             out.push_str(sub_line);
             if line_idx != last_line_idx {
                 out.push('\n');
@@ -99,7 +100,7 @@ pub trait BufferExt: Debug {
     ///
     /// # Errors
     /// - Buffer name retrieval or PID parsing fails.
-    fn get_pid(&self) -> color_eyre::Result<String>;
+    fn get_pid(&self) -> rootcause::Result<String>;
 }
 
 /// Defines boundaries for text selection within lines.
@@ -138,11 +139,13 @@ impl TextBoundary {
 }
 
 impl BufferExt for Buffer {
-    fn get_line(&self, idx: usize) -> color_eyre::Result<nvim_oxi::String> {
+    fn get_line(&self, idx: usize) -> rootcause::Result<nvim_oxi::String> {
         self.get_lines(idx..=idx, true)
-            .wrap_err_with(|| format!("error getting buffer line at index | idx={idx} buffer={self:?}"))?
+            .context("error getting buffer line at index")
+            .attach_with(|| format!("idx={idx} buffer={self:?}"))?
             .next()
-            .ok_or_else(|| eyre!("buffer line missing | idx={idx} buffer={self:#?}"))
+            .ok_or_else(|| report!("buffer line missing"))
+            .attach_with(|| format!("idx={idx} buffer={self:#?}"))
     }
 
     fn get_lines(
@@ -194,24 +197,28 @@ impl BufferExt for Buffer {
             .ok()
     }
 
-    fn get_pid(&self) -> color_eyre::Result<String> {
+    fn get_pid(&self) -> rootcause::Result<String> {
         let buf_name = self
             .get_name()
-            .wrap_err_with(|| eyre!("error getting name of buffer | buffer={self:#?}"))
+            .context("error getting name of buffer")
+            .attach_with(|| format!("buffer={self:#?}"))
             .map(|s| s.to_string_lossy().into_owned())?;
 
         if buf_name.starts_with("term://") {
-            let (_, pid_cmd) = buf_name.rsplit_once("//").ok_or_else(|| {
-                eyre!("error getting pid and cmd from buffer name | buffer={self:?} buffer_name={buf_name:?}")
-            })?;
+            let (_, pid_cmd) = buf_name
+                .rsplit_once("//")
+                .ok_or_else(|| report!("error getting pid and cmd from buffer name"))
+                .attach_with(|| format!("buffer={self:?} buffer_name={buf_name:?}"))?;
             let (pid, _) = pid_cmd
                 .rsplit_once(':')
-                .ok_or_else(|| eyre!("error getting pid from buffer name| buffer={self:?} buffer_name={buf_name:?}"))?;
+                .ok_or_else(|| report!("error getting pid from buffer name"))
+                .attach_with(|| format!("buffer={self:?} buffer_name={buf_name:?}"))?;
             return Ok(pid.to_owned());
         }
 
         let pid = nvim_oxi::api::call_function::<_, i32>("getpid", Array::new())
-            .wrap_err_with(|| eyre!("error getting pid of buffer | buffer={self:#?}"))?;
+            .context("error getting pid of buffer")
+            .attach_with(|| format!("buffer={self:#?}"))?;
 
         Ok(pid.to_string())
     }
@@ -282,7 +289,7 @@ pub fn set_current(buf: &Buffer) -> Option<()> {
 ///
 /// # Errors
 /// - Edit command or cursor positioning fails.
-pub fn open<T: AsRef<Path>>(path: T, line: Option<usize>, col: Option<usize>) -> color_eyre::Result<()> {
+pub fn open<T: AsRef<Path>>(path: T, line: Option<usize>, col: Option<usize>) -> rootcause::Result<()> {
     crate::common::exec_vim_cmd("edit", Some(&[path.as_ref().display().to_string()]))?;
     Window::current().set_cursor(line.unwrap_or_default(), col.unwrap_or_default())?;
     Ok(())
@@ -464,9 +471,9 @@ mod tests {
         let result = buffer.get_text_between((0, 10), (0, 15), TextBoundary::Exact);
 
         assert2::let_assert!(Err(err) = result);
-        pretty_assertions::assert_eq!(
-            err.to_string(),
-            r#"cannot extract substring from line | line="hello" idx=0 start_idx=10 end_idx=5"#
+        assert_eq!(
+            err.format_current_context().to_string(),
+            "cannot extract substring from line"
         );
     }
 
@@ -527,7 +534,7 @@ mod tests {
     }
 
     impl BufferExt for TestBuffer {
-        fn get_line(&self, _idx: usize) -> color_eyre::Result<nvim_oxi::String> {
+        fn get_line(&self, _idx: usize) -> rootcause::Result<nvim_oxi::String> {
             Ok("".into())
         }
 
@@ -553,7 +560,7 @@ mod tests {
             None
         }
 
-        fn get_pid(&self) -> color_eyre::Result<String> {
+        fn get_pid(&self) -> rootcause::Result<String> {
             Ok("42".to_owned())
         }
     }
@@ -588,7 +595,7 @@ pub mod mock {
     }
 
     impl BufferExt for MockBuffer {
-        fn get_line(&self, _idx: usize) -> color_eyre::Result<nvim_oxi::String> {
+        fn get_line(&self, _idx: usize) -> rootcause::Result<nvim_oxi::String> {
             Ok("".into())
         }
 
@@ -624,7 +631,7 @@ pub mod mock {
             None
         }
 
-        fn get_pid(&self) -> color_eyre::Result<String> {
+        fn get_pid(&self) -> rootcause::Result<String> {
             Ok("42".to_owned())
         }
     }

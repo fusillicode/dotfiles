@@ -13,7 +13,7 @@ use nvim_oxi::Array;
 /// # Errors
 /// - Invoking `inputlist()` fails.
 /// - The returned index cannot be converted to `usize` (negative or overflow).
-pub fn open<'a, I: Display>(prompt: &'a str, items: &'a [I]) -> color_eyre::Result<Option<&'a I>> {
+pub fn open<'a, I: Display>(prompt: &'a str, items: &'a [I]) -> rootcause::Result<Option<&'a I>> {
     let displayable_items: Vec<_> = items
         .iter()
         .enumerate()

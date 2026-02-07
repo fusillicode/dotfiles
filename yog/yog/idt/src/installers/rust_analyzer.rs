@@ -37,7 +37,7 @@ impl Installer for RustAnalyzer<'_> {
         false
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn install(&self) -> rootcause::Result<()> {
         let (arch, os) = self.target_arch_and_os();
 
         let target = crate::downloaders::http::run(

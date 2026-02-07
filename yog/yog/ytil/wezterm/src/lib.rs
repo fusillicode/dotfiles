@@ -6,8 +6,8 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-use color_eyre::eyre::WrapErr;
-use color_eyre::eyre::eyre;
+use rootcause::prelude::ResultExt;
+use rootcause::report;
 use serde::Deserialize;
 
 /// Generates a command string to send text to a specific [`WeztermPane`] using the `WezTerm` CLI.
@@ -31,14 +31,12 @@ pub fn activate_pane_cmd(pane_id: i64) -> String {
 /// - A required environment variable is missing or invalid Unicode.
 /// - `WEZTERM_PANE` cannot be parsed as an integer.
 /// - `WEZTERM_PANE` is unset.
-pub fn get_current_pane_id() -> color_eyre::Result<i64> {
-    std::env::var("WEZTERM_PANE")
-        .wrap_err_with(|| eyre!("error missing WEZTERM_PANE environment variable"))
-        .and_then(|value| {
-            value
-                .parse()
-                .wrap_err_with(|| eyre!("error parsing WEZTERM_PANE value as i64 | value={value:?}"))
-        })
+pub fn get_current_pane_id() -> rootcause::Result<i64> {
+    let value = std::env::var("WEZTERM_PANE").context("error missing WEZTERM_PANE environment variable")?;
+    Ok(value
+        .parse()
+        .context("error parsing WEZTERM_PANE value as i64")
+        .attach_with(|| format!("value={value:?}"))?)
 }
 
 /// Retrieves all `WezTerm` panes using the `WezTerm` CLI.
@@ -49,16 +47,15 @@ pub fn get_current_pane_id() -> color_eyre::Result<i64> {
 /// # Errors
 /// - Invoking `wezterm` (list command) fails or returns a non-zero exit status.
 /// - Output JSON cannot be deserialized into panes.
-pub fn get_all_panes(envs: &[(&str, &str)]) -> color_eyre::Result<Vec<WeztermPane>> {
+pub fn get_all_panes(envs: &[(&str, &str)]) -> rootcause::Result<Vec<WeztermPane>> {
     let mut cmd = Command::new("wezterm");
     cmd.args(["cli", "list", "--format", "json"]);
     cmd.envs(envs.iter().copied());
-    serde_json::from_slice(
-        &cmd.output()
-            .wrap_err_with(|| eyre!("error running wezterm cli list"))?
-            .stdout,
+    Ok(
+        serde_json::from_slice(&cmd.output().context("error running wezterm cli list")?.stdout)
+            .context("error parsing wezterm cli list output")
+            .attach("format=JSON")?,
     )
-    .wrap_err_with(|| eyre!("error parsing wezterm cli list output | format=JSON"))
 }
 
 /// Finds a sibling [`WeztermPane`] in the same tab that matches one of the given titles.
@@ -70,18 +67,20 @@ pub fn get_sibling_pane_with_titles(
     panes: &[WeztermPane],
     current_pane_id: i64,
     pane_titles: &[&str],
-) -> color_eyre::Result<WeztermPane> {
+) -> rootcause::Result<WeztermPane> {
     let current_pane_tab_id = panes
         .iter()
         .find(|w| w.pane_id == current_pane_id)
-        .ok_or_else(|| eyre!("error finding current pane | pane_id={current_pane_id} panes={panes:#?}"))?
+        .ok_or_else(|| report!("error finding current pane"))
+        .attach_with(|| format!("pane_id={current_pane_id} panes={panes:#?}"))?
         .tab_id;
 
     Ok(panes
         .iter()
         .find(|w| w.tab_id == current_pane_tab_id && pane_titles.contains(&w.title.as_str()))
         .ok_or_else(|| {
-            eyre!("error finding pane title in tab | pane_titles={pane_titles:#?} tab_id={current_pane_tab_id}")
+            report!("error finding pane title in tab")
+                .attach(format!("pane_titles={pane_titles:#?} tab_id={current_pane_tab_id}"))
         })?
         .clone())
 }

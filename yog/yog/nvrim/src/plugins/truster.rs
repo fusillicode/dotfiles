@@ -114,7 +114,7 @@ fn run_test_in_nvim_term(test_runner: &str, test_name: &str) -> Option<()> {
 /// # Errors
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - The path is not inside a Git repository.
-fn get_test_runner_for_path(path: &Path) -> color_eyre::Result<&'static str> {
+fn get_test_runner_for_path(path: &Path) -> rootcause::Result<&'static str> {
     let git_repo_root = ytil_git::repo::get_root(&ytil_git::repo::discover(path)?);
 
     if git_repo_root.join("Makefile.toml").exists() {

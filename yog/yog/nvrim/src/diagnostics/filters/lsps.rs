@@ -37,7 +37,7 @@ pub trait LspFilter {
     /// # Errors
     /// - Missing or invalid "source" key.
     /// - Missing or invalid "message" key.
-    fn get_diag_msg_or_skip(&self, buf_path: &str, lsp_diag: &Dictionary) -> color_eyre::Result<GetDiagMsgOutput> {
+    fn get_diag_msg_or_skip(&self, buf_path: &str, lsp_diag: &Dictionary) -> rootcause::Result<GetDiagMsgOutput> {
         if self
             .path_substring()
             .is_some_and(|path_substring| !buf_path.contains(path_substring))

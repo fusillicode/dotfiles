@@ -3,9 +3,9 @@
 //! Defines [`DiagnosticsFilter`] trait plus ordered creation of all active filters (message blacklist,
 //! source‑specific sets, related info deduper). Ordering is significant for short‑circuit behavior.
 
-use color_eyre::eyre::bail;
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
+use rootcause::bail;
 use ytil_noxi::buffer::BufferExt;
 use ytil_noxi::dict::DictionaryExt as _;
 
@@ -32,7 +32,7 @@ impl BufferWithPath {
 }
 
 impl TryFrom<Buffer> for BufferWithPath {
-    type Error = color_eyre::eyre::Error;
+    type Error = rootcause::Report;
 
     fn try_from(value: Buffer) -> Result<Self, Self::Error> {
         let path = value.get_name().map(|s| s.to_string_lossy().into_owned())?;
@@ -70,7 +70,7 @@ impl DiagnosticLocation {
 }
 
 impl TryFrom<&Dictionary> for DiagnosticLocation {
-    type Error = color_eyre::eyre::Error;
+    type Error = rootcause::Report;
 
     /// Attempts to convert an Nvim dictionary into a `DiagnosticLocation`.
     ///
@@ -115,7 +115,7 @@ pub trait DiagnosticsFilter {
     /// # Errors
     /// - Access to required diagnostic fields (dictionary keys) fails (missing key or wrong type).
     /// - Filter-specific logic (e.g. related info extraction) fails.
-    fn skip_diagnostic(&self, buf: &BufferWithPath, lsp_diag: &Dictionary) -> color_eyre::Result<bool>;
+    fn skip_diagnostic(&self, buf: &BufferWithPath, lsp_diag: &Dictionary) -> rootcause::Result<bool>;
 }
 
 /// A collection of diagnostic filters.
@@ -126,7 +126,7 @@ impl DiagnosticsFilters {
     ///
     /// # Errors
     /// - Constructing the related info filter fails (dictionary traversal or type mismatch).
-    pub fn all(lsp_diags: &[Dictionary]) -> color_eyre::Result<Self> {
+    pub fn all(lsp_diags: &[Dictionary]) -> rootcause::Result<Self> {
         let mut filters = TyposLspFilter::filters();
         filters.extend(HarperLsFilter::filters());
         filters.push(Box::new(RelatedInfoFilter::new(lsp_diags)?));
@@ -140,7 +140,7 @@ impl DiagnosticsFilter for DiagnosticsFilters {
     ///
     /// # Errors
     /// - A filter implementation (invoked in sequence) returns an error; it is propagated unchanged.
-    fn skip_diagnostic(&self, buf: &BufferWithPath, lsp_diag: &Dictionary) -> color_eyre::Result<bool> {
+    fn skip_diagnostic(&self, buf: &BufferWithPath, lsp_diag: &Dictionary) -> rootcause::Result<bool> {
         // The first filter that returns true skips the LSP diagnostic and all subsequent filters
         // evaluation.
         for filter in &self.0 {

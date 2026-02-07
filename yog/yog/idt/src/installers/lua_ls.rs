@@ -33,7 +33,7 @@ impl Installer for LuaLanguageServer<'_> {
         "lua-language-server"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn install(&self) -> rootcause::Result<()> {
         let (arch, os) = self.target_arch_and_os();
 
         // No `bin` link as it requires some local stuff so, leave the garbage in `dev-tools` and configure the LSP to

@@ -11,7 +11,8 @@ keywords = ["cli", "git", "github", "branch", "management"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-color-eyre = { workspace = true }
+owo-colors = { workspace = true }
+rootcause = { workspace = true }
 strum = { workspace = true }
 ytil_gh = { workspace = true }
 ytil_sys = { workspace = true }

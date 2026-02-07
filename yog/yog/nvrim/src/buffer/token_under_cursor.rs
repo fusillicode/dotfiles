@@ -7,14 +7,14 @@ use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use color_eyre::eyre::Context;
-use color_eyre::eyre::bail;
 use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::Window;
 use nvim_oxi::conversion::ToObject;
 use nvim_oxi::lua::ffi::State;
 use nvim_oxi::serde::Serializer;
+use rootcause::prelude::ResultExt;
+use rootcause::report;
 use serde::Serialize;
 use url::Url;
 use ytil_noxi::buffer::BufferExt;
@@ -58,9 +58,11 @@ pub fn get(_: ()) -> Option<TokenUnderCursor> {
 fn get_token_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &CursorPosition) -> Option<String> {
     let window_width = Window::current()
         .get_width()
-        .wrap_err("error getting window width")
+        .context("error getting window width")
         .and_then(|x| {
-            usize::try_from(x).wrap_err_with(|| format!("error converting window width to usize | width={x}"))
+            usize::try_from(x)
+                .context("error converting window width to usize")
+                .attach_with(|| format!("width={x}"))
         })
         .inspect_err(|err| ytil_noxi::notify::error(format!("{err}")))
         .ok()?
@@ -198,11 +200,11 @@ impl ToObject for TokenUnderCursor {
 /// 2. Otherwise, invokes [`ytil_sys::file::exec_file_cmd`] to check filesystem type.
 /// 3. Falls back to [`TokenUnderCursor::MaybeTextFile`] on errors or unknown kinds.
 impl TokenUnderCursor {
-    fn classify(value: &str) -> color_eyre::Result<Self> {
+    fn classify(value: &str) -> rootcause::Result<Self> {
         Self::classify_url(value).or_else(|_| Self::classify_not_url(value))
     }
 
-    fn classify_url(value: &str) -> color_eyre::Result<Self> {
+    fn classify_url(value: &str) -> rootcause::Result<Self> {
         let value = value
             .trim_matches('"')
             .trim_matches('`')
@@ -221,7 +223,7 @@ impl TokenUnderCursor {
         Ok(Url::parse(maybe_md_link).map(|_| Self::Url(maybe_md_link.to_string()))?)
     }
 
-    fn classify_not_url(value: &str) -> color_eyre::Result<Self> {
+    fn classify_not_url(value: &str) -> rootcause::Result<Self> {
         let mut parts = value.split(':');
 
         let Some(maybe_path) = parts.next() else {
@@ -245,14 +247,14 @@ impl TokenUnderCursor {
         })
     }
 
-    fn refine_word(&self, buffer: &Buffer) -> color_eyre::Result<Self> {
+    fn refine_word(&self, buffer: &Buffer) -> rootcause::Result<Self> {
         if let Self::MaybeTextFile { value, lnum, col } = self {
             let pid = buffer.get_pid()?;
 
             let mut lsof_res = ytil_sys::lsof::lsof(&ProcessFilter::Pid(&pid))?;
 
             let Some(process_desc) = lsof_res.get_mut(0) else {
-                bail!("error no process found for pid | pid={pid:?}");
+                return Err(report!("error no process found for pid")).attach_with(|| format!("pid={pid:?}"));
             };
 
             let maybe_path = {
@@ -277,7 +279,7 @@ impl TokenUnderCursor {
 
 /// Cached wrapper around [`ytil_sys::file::exec_file_cmd`] that avoids spawning a `file -I`
 /// process for previously seen paths. Only successful results are cached.
-fn exec_file_cmd_cached(path: &str) -> color_eyre::Result<FileCmdOutput> {
+fn exec_file_cmd_cached(path: &str) -> rootcause::Result<FileCmdOutput> {
     FILE_CMD_CACHE.with(|cache| {
         if let Some(cached) = cache.borrow().get(path).cloned() {
             return Ok(cached);
@@ -597,7 +599,7 @@ mod tests {
     #[case("[text](noturl)")]
     fn classify_url_when_cannot_classify_url_returns_the_expected_error(#[case] input: &str) {
         assert2::let_assert!(Err(err) = TokenUnderCursor::classify_url(input));
-        assert!(err.downcast_ref::<url::ParseError>().is_some());
+        assert!(err.downcast_current_context::<url::ParseError>().is_some());
     }
 
     #[rstest]

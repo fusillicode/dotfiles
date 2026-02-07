@@ -6,7 +6,8 @@
 
 use core::str::FromStr;
 
-use color_eyre::eyre::bail;
+use rootcause::prelude::ResultExt as _;
+use rootcause::report;
 use ytil_editor::Editor;
 use ytil_editor::FileToOpen;
 use ytil_sys::cli::Args;
@@ -30,7 +31,7 @@ impl Env {
 ///
 /// # Errors
 /// - A required environment variable is missing or invalid Unicode.
-fn get_enriched_path_env() -> color_eyre::Result<Env> {
+fn get_enriched_path_env() -> rootcause::Result<Env> {
     let enriched_path = [
         &std::env::var("PATH").unwrap_or_else(|_| String::new()),
         "/opt/homebrew/bin",
@@ -52,9 +53,7 @@ fn escape_single_quotes(s: &str) -> String {
 }
 
 /// Open files (optionally at line:col) in existing Nvim / Helix pane.
-fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
-
+fn main() -> rootcause::Result<()> {
     let enriched_path_env = get_enriched_path_env()?;
     let args = ytil_sys::cli::get();
 
@@ -64,11 +63,11 @@ fn main() -> color_eyre::Result<()> {
     }
 
     let Some(editor) = args.first().map(|x| Editor::from_str(x)).transpose()? else {
-        bail!("missing editor arg | args={args:#?}");
+        return Err(report!("missing editor arg")).attach_with(|| format!("args={args:#?}"));
     };
 
     let Some(file_to_open) = args.get(1) else {
-        bail!("missing file arg | args={args:#?}");
+        return Err(report!("missing file arg")).attach_with(|| format!("args={args:#?}"));
     };
 
     let pane_id = match args.get(2) {

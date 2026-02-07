@@ -2,10 +2,10 @@
 
 use core::fmt::Debug;
 
-use color_eyre::eyre::Context;
 use nvim_oxi::Array;
 use nvim_oxi::api::opts::CmdOpts;
 use nvim_oxi::api::types::CmdInfosBuilder;
+use rootcause::prelude::ResultExt;
 
 use crate::dict;
 
@@ -13,7 +13,7 @@ use crate::dict;
 ///
 /// # Errors
 /// - `setqflist` or `copen` command fails.
-pub fn open<'a>(entries: impl IntoIterator<Item = (&'a str, i64)> + Debug) -> color_eyre::Result<()> {
+pub fn open<'a>(entries: impl IntoIterator<Item = (&'a str, i64)> + Debug) -> rootcause::Result<()> {
     let mut qflist = vec![];
     for (filename, lnum) in entries {
         qflist.push(dict! {
@@ -27,9 +27,9 @@ pub fn open<'a>(entries: impl IntoIterator<Item = (&'a str, i64)> + Debug) -> co
     }
 
     nvim_oxi::api::call_function::<_, i64>("setqflist", (Array::from_iter(qflist),))
-        .wrap_err("error executing setqflist function")?;
+        .context("error executing setqflist function")?;
     nvim_oxi::api::cmd(&CmdInfosBuilder::default().cmd("copen").build(), &CmdOpts::default())
-        .wrap_err("error executing copen cmd")?;
+        .context("error executing copen cmd")?;
 
     Ok(())
 }

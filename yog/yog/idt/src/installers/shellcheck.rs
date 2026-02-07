@@ -37,7 +37,7 @@ impl Installer for Shellcheck<'_> {
         false
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn install(&self) -> rootcause::Result<()> {
         let (arch, os) = self.target_arch_and_os();
 
         let repo = format!("koalaman/{}", self.bin_name());

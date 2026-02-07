@@ -3,10 +3,8 @@
 use core::str::FromStr;
 use std::path::PathBuf;
 
-use color_eyre::eyre;
-use color_eyre::eyre::WrapErr;
-use color_eyre::eyre::bail;
-use color_eyre::eyre::eyre;
+use rootcause::prelude::ResultExt;
+use rootcause::report;
 
 /// Represents the parsed status line from Helix editor, containing filepath and cursor position.
 #[derive(Debug, Eq, PartialEq)]
@@ -20,7 +18,7 @@ pub struct HxStatusLine {
 
 /// Parses a [`HxStatusLine`] from a Helix editor status line string.
 impl FromStr for HxStatusLine {
-    type Err = eyre::Error;
+    type Err = rootcause::Report;
 
     fn from_str(hx_status_line: &str) -> Result<Self, Self::Err> {
         let hx_status_line = hx_status_line.trim();
@@ -30,18 +28,21 @@ impl FromStr for HxStatusLine {
         let path_left_separator_idx = elements
             .iter()
             .position(|x| x == &"`")
-            .ok_or_else(|| eyre!("error missing left path separator | elements={elements:#?}"))?;
+            .ok_or_else(|| report!("error missing left path separator"))
+            .attach_with(|| format!("elements={elements:#?}"))?;
         let path_right_separator_idx = elements
             .iter()
             .rposition(|x| x == &"`")
-            .ok_or_else(|| eyre!("error missing right path separator | elements={elements:#?}"))?;
+            .ok_or_else(|| report!("error missing right path separator"))
+            .attach_with(|| format!("elements={elements:#?}"))?;
 
         let path_slice_range = path_left_separator_idx..path_right_separator_idx;
         let path_slice = elements
             .get(path_slice_range.clone())
-            .ok_or_else(|| eyre!("error invalid path slice indices | range={path_slice_range:#?}"))?;
+            .ok_or_else(|| report!("error invalid path slice indices"))
+            .attach_with(|| format!("range={path_slice_range:#?}"))?;
         let ["`", path] = path_slice else {
-            bail!("missing path | elements={elements:#?}");
+            return Err(report!("missing path").attach(format!("elements={elements:#?}")));
         };
 
         Ok(Self {
@@ -49,7 +50,8 @@ impl FromStr for HxStatusLine {
             position: HxCursorPosition::from_str(
                 elements
                     .last()
-                    .ok_or_else(|| eyre!("error missing last element | elements={elements:#?}"))?,
+                    .ok_or_else(|| report!("error missing last element"))
+                    .attach_with(|| format!("elements={elements:#?}"))?,
             )?,
         })
     }
@@ -67,20 +69,23 @@ pub struct HxCursorPosition {
 
 /// Parses a [`HxCursorPosition`] from a string in the format "line:column".
 impl FromStr for HxCursorPosition {
-    type Err = eyre::Error;
+    type Err = rootcause::Report;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (line, column) = s
             .split_once(':')
-            .ok_or_else(|| eyre!("error missing line column delimiter | input={s}"))?;
+            .ok_or_else(|| report!("error missing line column delimiter"))
+            .attach_with(|| format!("input={s}"))?;
 
         Ok(Self {
             line: line
                 .parse()
-                .wrap_err_with(|| eyre!("invalid line number | input={s:?}"))?,
+                .context("invalid line number")
+                .attach_with(|| format!("input={s:?}"))?,
             column: column
                 .parse()
-                .wrap_err_with(|| eyre!("invalid column number | input={s:?}"))?,
+                .context("invalid column number")
+                .attach_with(|| format!("input={s:?}"))?,
         })
     }
 }

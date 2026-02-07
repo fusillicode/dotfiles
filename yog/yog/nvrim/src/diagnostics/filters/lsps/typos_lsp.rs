@@ -95,7 +95,7 @@ impl LspFilter for TyposLspFilter<'_> {
 }
 
 impl DiagnosticsFilter for TyposLspFilter<'_> {
-    fn skip_diagnostic(&self, buf: &BufferWithPath, lsp_diag: &nvim_oxi::Dictionary) -> color_eyre::Result<bool> {
+    fn skip_diagnostic(&self, buf: &BufferWithPath, lsp_diag: &nvim_oxi::Dictionary) -> rootcause::Result<bool> {
         let diag_msg = match self.get_diag_msg_or_skip(&buf.path, lsp_diag)? {
             GetDiagMsgOutput::Msg(diag_msg) => diag_msg,
             GetDiagMsgOutput::Skip => return Ok(false),
@@ -201,9 +201,6 @@ mod tests {
             source: "typos",
         };
         assert2::let_assert!(Err(err) = filter.skip_diagnostic(&buf, &diag));
-        pretty_assertions::assert_eq!(
-            err.to_string(),
-            "missing dict value | query=[\n    \"message\",\n] dict={ source: \"typos\" }"
-        );
+        assert_eq!(err.format_current_context().to_string(), "missing dict value");
     }
 }

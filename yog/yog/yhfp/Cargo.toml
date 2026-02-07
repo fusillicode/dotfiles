@@ -11,7 +11,7 @@ keywords = ["cli", "helix", "editor", "clipboard", "file-path"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-color-eyre = { workspace = true }
+rootcause = { workspace = true }
 ytil_editor = { workspace = true }
 ytil_hx = { workspace = true }
 ytil_sys = { workspace = true }

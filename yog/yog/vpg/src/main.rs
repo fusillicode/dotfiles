@@ -9,8 +9,8 @@
 use std::process::Command;
 use std::process::Stdio;
 
-use color_eyre::eyre::Context;
-use color_eyre::owo_colors::OwoColorize as _;
+use owo_colors::OwoColorize as _;
+use rootcause::prelude::ResultExt;
 use ytil_sys::cli::Args;
 
 use crate::pgpass::PgpassEntry;
@@ -25,24 +25,24 @@ mod vault;
 ///
 /// # Errors
 /// - Vault command fails or JSON deserialization fails.
-fn exec_vault_read_cmd(vault_path: &str) -> color_eyre::Result<VaultReadOutput> {
+fn exec_vault_read_cmd(vault_path: &str) -> rootcause::Result<VaultReadOutput> {
     let mut cmd = Command::new("vault");
     cmd.args(["read", vault_path, "--format=json"]);
 
     let cmd_stdout = &cmd.output()?.stdout;
 
-    serde_json::from_slice(cmd_stdout).with_context(|| {
-        str::from_utf8(cmd_stdout).map_or_else(
-            |error| format!("cmd stdout invalid utf-8 | cmd={cmd:#?} error={error:?}"),
-            |str_stdout| format!("cannot build VaultReadOutput from vault cmd {cmd:#?} stdout {str_stdout:?}"),
-        )
-    })
+    Ok(serde_json::from_slice(cmd_stdout)
+        .context("error deserializing vault command output")
+        .attach_with(|| {
+            str::from_utf8(cmd_stdout).map_or_else(
+                |error| format!("cmd={cmd:#?} error={error:?}"),
+                |str_stdout| format!("cmd={cmd:#?} stdout={str_stdout:?}"),
+            )
+        })?)
 }
 
 /// Update Postgres credentials from Vault, rewrite pgpass & nvim-dbee, optionally launch pgcli.
-fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
-
+fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));

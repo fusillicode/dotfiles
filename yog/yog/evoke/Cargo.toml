@@ -11,7 +11,8 @@ keywords = ["cli", "build", "automation", "deployment", "rust"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-color-eyre = { workspace = true }
+owo-colors = { workspace = true }
+rootcause = { workspace = true }
 ytil_cmd = { workspace = true }
 ytil_sys = { workspace = true }
 

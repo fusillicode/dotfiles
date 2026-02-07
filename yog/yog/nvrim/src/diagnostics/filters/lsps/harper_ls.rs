@@ -73,7 +73,7 @@ impl LspFilter for HarperLsFilter<'_> {
 }
 
 impl DiagnosticsFilter for HarperLsFilter<'_> {
-    fn skip_diagnostic(&self, buf: &BufferWithPath, lsp_diag: &Dictionary) -> color_eyre::Result<bool> {
+    fn skip_diagnostic(&self, buf: &BufferWithPath, lsp_diag: &Dictionary) -> rootcause::Result<bool> {
         let diag_msg = match self.get_diag_msg_or_skip(&buf.path, lsp_diag)? {
             GetDiagMsgOutput::Msg(diag_msg) => diag_msg,
             GetDiagMsgOutput::Skip => return Ok(false),

@@ -22,7 +22,7 @@ impl<T: Notifiable + ?Sized> Notifiable for &T {
     }
 }
 
-impl Notifiable for color_eyre::Report {
+impl Notifiable for rootcause::Report {
     fn to_msg(&self) -> impl AsRef<str> {
         self.to_string()
     }

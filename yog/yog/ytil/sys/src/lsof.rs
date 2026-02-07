@@ -2,9 +2,9 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
 
-use color_eyre::eyre::Context;
-use color_eyre::eyre::eyre;
 use itertools::Itertools as _;
+use rootcause::prelude::ResultExt;
+use rootcause::report;
 use ytil_cmd::CmdExt as _;
 
 #[derive(Debug)]
@@ -23,7 +23,7 @@ pub struct ProcessDescription {
 ///
 /// # Errors
 /// - lsof command execution or output parsing fails.
-pub fn lsof(process_filter: &ProcessFilter) -> color_eyre::Result<Vec<ProcessDescription>> {
+pub fn lsof(process_filter: &ProcessFilter) -> rootcause::Result<Vec<ProcessDescription>> {
     let cmd = "lsof";
 
     let process_filter = match process_filter {
@@ -37,34 +37,37 @@ pub fn lsof(process_filter: &ProcessFilter) -> color_eyre::Result<Vec<ProcessDes
     let stdout = Command::new(cmd)
         .args(&args)
         .exec()
-        .wrap_err_with(|| eyre!("error running cmd | cmd={cmd:?} args={args:?}"))?
+        .context("error running cmd")
+        .attach_with(|| format!("cmd={cmd:?} args={args:?}"))?
         .exit_ok()
-        .wrap_err_with(|| eyre!("error cmd exit not ok | cmd={cmd:?} args={args:?}"))?
+        .context("error cmd exit not ok")
+        .attach_with(|| format!("cmd={cmd:?} args={args:?}"))?
         .stdout;
 
     let output = str::from_utf8(&stdout)?;
     parse_lsof_output(output)
 }
 
-fn parse_lsof_output(output: &str) -> color_eyre::Result<Vec<ProcessDescription>> {
+fn parse_lsof_output(output: &str) -> rootcause::Result<Vec<ProcessDescription>> {
     let mut out = vec![];
     // The hardcoded 3 is tight to the lsof args.
     // Changes to lsof args will have impact on the chunks size.
     for mut line in &output.lines().chunks(3) {
         let pid = line
             .next()
-            .ok_or_else(|| eyre!("error missing pid in lsof line"))?
+            .ok_or_else(|| report!("error missing pid in lsof line"))?
             .trim_start_matches('p');
-        line.next().ok_or_else(|| eyre!("error missing f in lsof line"))?;
+        line.next().ok_or_else(|| report!("error missing f in lsof line"))?;
         let cwd = line
             .next()
-            .ok_or_else(|| eyre!("error missing cwd in lsof line"))?
+            .ok_or_else(|| report!("error missing cwd in lsof line"))?
             .trim_start_matches('n');
 
         out.push(ProcessDescription {
             pid: pid.to_owned(),
             cwd: PathBuf::from_str(cwd)
-                .wrap_err_with(|| format!("error constructing PathBuf from cwd | cwd={cwd:?}"))?,
+                .context("error constructing PathBuf from cwd")
+                .attach_with(|| format!("cwd={cwd:?}"))?,
         });
     }
     Ok(out)

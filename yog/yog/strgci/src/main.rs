@@ -7,8 +7,7 @@ use std::io::Write;
 use std::path::Path;
 
 use chrono::Utc;
-use color_eyre::eyre::WrapErr as _;
-use color_eyre::eyre::eyre;
+use rootcause::prelude::ResultExt as _;
 use ytil_sys::cli::Args as _;
 
 /// Maximum number of characters shown for the commit subject before truncating with `…`.
@@ -17,9 +16,7 @@ const MAX_SUBJECT_LEN: usize = 33;
 /// Short hash length (standard Git abbreviation).
 const SHORT_HASH_LEN: usize = 7;
 
-fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
-
+fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));
@@ -27,17 +24,15 @@ fn main() -> color_eyre::Result<()> {
     }
 
     let repo = ytil_git::repo::discover(Path::new("."))?;
-    let head = repo.head().wrap_err_with(|| eyre!("error resolving HEAD"))?;
-    let commit = head
-        .peel_to_commit()
-        .wrap_err_with(|| eyre!("error peeling HEAD to commit"))?;
+    let head = repo.head().context("error resolving HEAD")?;
+    let commit = head.peel_to_commit().context("error peeling HEAD to commit")?;
 
     let hash = commit.id().to_string();
     let short_hash = hash.get(..SHORT_HASH_LEN).unwrap_or(&hash);
 
     let commit_epoch = commit.time().seconds();
     let commit_seconds_delta = u64::try_from(Utc::now().timestamp().saturating_sub(commit_epoch).max(0))
-        .wrap_err_with(|| eyre!("negative time delta after clamp"))?;
+        .context("negative time delta after clamp")?;
 
     let out = std::io::stdout();
     let mut out = out.lock();

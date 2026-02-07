@@ -12,8 +12,9 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use color_eyre::eyre::eyre;
-use color_eyre::owo_colors::OwoColorize as _;
+use owo_colors::OwoColorize as _;
+use rootcause::prelude::ResultExt as _;
+use rootcause::report;
 use ytil_sys::SysInfo;
 use ytil_sys::cli::Args;
 
@@ -51,9 +52,7 @@ mod installers;
 ///
 /// # Errors
 /// Returns failing bin names; installers handle detailed error output.
-fn report<'a>(
-    installers_res: &'a [(&'a str, std::thread::Result<color_eyre::Result<()>>)],
-) -> Result<(), Vec<&'a str>> {
+fn report<'a>(installers_res: &'a [(&'a str, std::thread::Result<rootcause::Result<()>>)]) -> Result<(), Vec<&'a str>> {
     let mut errors_bins = vec![];
 
     for (bin_name, result) in installers_res {
@@ -79,9 +78,7 @@ fn report<'a>(
 
 /// Install language servers, linters, formatters, and developer helpers concurrently.
 #[allow(clippy::too_many_lines)]
-fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
-
+fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));
@@ -95,11 +92,13 @@ fn main() -> color_eyre::Result<()> {
 
     let dev_tools_dir = args
         .first()
-        .ok_or_else(|| eyre!("missing dev_tools_dir arg | args={args:#?}"))?
+        .ok_or_else(|| report!("missing dev_tools_dir arg"))
+        .attach_with(|| format!("args={args:#?}"))?
         .trim_end_matches('/');
     let bin_dir = args
         .get(1)
-        .ok_or_else(|| eyre!("missing bin_dir arg | args={args:#?}"))?
+        .ok_or_else(|| report!("missing bin_dir arg"))
+        .attach_with(|| format!("args={args:#?}"))?
         .trim_end_matches('/');
     let supplied_bin_names: Vec<&str> = args.iter().skip(2).map(AsRef::as_ref).collect();
 

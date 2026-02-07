@@ -12,7 +12,7 @@ impl Installer for GraphQlLsp<'_> {
         "graphql-lsp"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn install(&self) -> rootcause::Result<()> {
         crate::installers::install_npm_tool(
             self.dev_tools_dir,
             self.bin_dir,

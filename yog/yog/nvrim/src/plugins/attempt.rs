@@ -8,8 +8,8 @@ use std::path::PathBuf;
 
 use chrono::DateTime;
 use chrono::Local;
-use color_eyre::eyre::eyre;
 use nvim_oxi::Dictionary;
+use rootcause::report;
 
 const SCRATCHES_PATH_PARTS: &[&str] = &["yog", "nvrim", "src", "plugins", "attempt"];
 
@@ -83,7 +83,7 @@ fn create_scratch_file(_: ()) {
 ///
 /// # Errors
 /// Returns an error if the workspace root cannot be determined or the directory cannot be read.
-fn get_scratches_dir_content() -> color_eyre::Result<ReadDir> {
+fn get_scratches_dir_content() -> rootcause::Result<ReadDir> {
     ytil_sys::dir::get_workspace_root()
         .map(|workspace_root| ytil_sys::dir::build_path(workspace_root, SCRATCHES_PATH_PARTS))
         .inspect_err(|err| {
@@ -111,7 +111,7 @@ struct Scratch {
 
 impl Scratch {
     /// Attempts to build a [`Scratch`] file from a [`DirEntry`] result.
-    pub fn from(read_dir_res: std::io::Result<DirEntry>) -> Option<color_eyre::Result<Self>> {
+    pub fn from(read_dir_res: std::io::Result<DirEntry>) -> Option<rootcause::Result<Self>> {
         let path = match read_dir_res.map(|entry| entry.path()) {
             Ok(path) => path,
             Err(err) => return Some(Err(err.into())),
@@ -121,15 +121,27 @@ impl Scratch {
         }
         let display_name = match path.file_name().map(|s| s.to_string_lossy()) {
             Some(s) => s.to_string(),
-            None => return Some(Err(eyre!("error missing file name in path | path={}", path.display()))),
+            None => {
+                return Some(Err(
+                    report!("error missing file name in path").attach(format!("path={}", path.display()))
+                ));
+            }
         };
         let base_name = match path.file_stem().map(|s| s.to_string_lossy()) {
             Some(s) => s.to_string(),
-            None => return Some(Err(eyre!("error missing file stem in path | path={}", path.display()))),
+            None => {
+                return Some(Err(
+                    report!("error missing file stem in path").attach(format!("path={}", path.display()))
+                ));
+            }
         };
         let extension = match path.extension().map(|s| s.to_string_lossy()) {
             Some(s) => s.to_string(),
-            None => return Some(Err(eyre!("error missing extension in path | path={}", path.display()))),
+            None => {
+                return Some(Err(
+                    report!("error missing extension in path").attach(format!("path={}", path.display()))
+                ));
+            }
         };
 
         Some(Ok(Self {

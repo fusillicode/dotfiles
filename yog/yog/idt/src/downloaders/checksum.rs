@@ -2,16 +2,18 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
-use color_eyre::eyre::eyre;
+use rootcause::prelude::ResultExt as _;
+use rootcause::report;
 use sha2::Digest as _;
 
 /// Computes the SHA256 hex digest of the file at `path`.
 ///
 /// # Errors
 /// - The file cannot be opened or read.
-pub fn compute_sha256(path: &Path) -> color_eyre::Result<String> {
+pub fn compute_sha256(path: &Path) -> rootcause::Result<String> {
     let mut file = File::open(path)
-        .map_err(|err| eyre!("error opening file for checksum | path={} error={err}", path.display()))?;
+        .context("error opening file for checksum")
+        .attach_with(|| format!("path={}", path.display()))?;
 
     let mut hasher = sha2::Sha256::new();
     let mut buf = [0_u8; 8192];
@@ -19,13 +21,15 @@ pub fn compute_sha256(path: &Path) -> color_eyre::Result<String> {
     loop {
         let n = file
             .read(&mut buf)
-            .map_err(|err| eyre!("error reading file for checksum | path={} error={err}", path.display()))?;
+            .context("error reading file for checksum")
+            .attach_with(|| format!("path={}", path.display()))?;
         if n == 0 {
             break;
         }
         hasher.update(
             buf.get(..n)
-                .ok_or_else(|| eyre!("error slicing buffer | n={n} buf_len={}", buf.len()))?,
+                .ok_or_else(|| report!("error slicing buffer"))
+                .attach_with(|| format!("n={n} buf_len={}", buf.len()))?,
         );
     }
 
@@ -41,13 +45,15 @@ pub fn compute_sha256(path: &Path) -> color_eyre::Result<String> {
 /// - The checksums file download fails.
 /// - The file cannot be read as UTF-8.
 /// - No matching entry is found for `filename`.
-pub fn download_and_find_checksum(checksums_url: &str, filename: &str) -> color_eyre::Result<String> {
+pub fn download_and_find_checksum(checksums_url: &str, filename: &str) -> rootcause::Result<String> {
     let body = ureq::get(checksums_url)
         .call()
-        .map_err(|err| eyre!("error downloading checksums file | url={checksums_url} error={err}"))?
+        .context("error downloading checksums file")
+        .attach_with(|| format!("url={checksums_url}"))?
         .into_body()
         .read_to_string()
-        .map_err(|err| eyre!("error reading checksums response | url={checksums_url} error={err}"))?;
+        .context("error reading checksums response")
+        .attach_with(|| format!("url={checksums_url}"))?;
 
     parse_checksum(&body, filename)
 }
@@ -60,7 +66,7 @@ pub fn download_and_find_checksum(checksums_url: &str, filename: &str) -> color_
 ///
 /// # Errors
 /// - No matching entry found for `filename`.
-fn parse_checksum(content: &str, filename: &str) -> color_eyre::Result<String> {
+fn parse_checksum(content: &str, filename: &str) -> rootcause::Result<String> {
     let trimmed = content.trim();
 
     // Single-line file containing only a hex hash (per-file .sha256 pattern).
@@ -82,9 +88,7 @@ fn parse_checksum(content: &str, filename: &str) -> color_eyre::Result<String> {
         }
     }
 
-    Err(eyre!(
-        "error checksum entry not found | filename={filename:?} content={trimmed:?}"
-    ))
+    Err(report!("error checksum entry not found").attach(format!("filename={filename:?} content={trimmed:?}")))
 }
 
 /// Verifies that the file at `path` matches the `expected_hex` SHA256 hash.
@@ -92,15 +96,13 @@ fn parse_checksum(content: &str, filename: &str) -> color_eyre::Result<String> {
 /// # Errors
 /// - Computing the hash fails.
 /// - The computed hash does not match.
-pub fn verify(path: &Path, expected_hex: &str) -> color_eyre::Result<()> {
+pub fn verify(path: &Path, expected_hex: &str) -> rootcause::Result<()> {
     let actual = compute_sha256(path)?;
     let expected = expected_hex.to_lowercase();
 
     if actual != expected {
-        return Err(eyre!(
-            "error checksum mismatch | path={} expected={expected} actual={actual}",
-            path.display()
-        ));
+        return Err(report!("error checksum mismatch")
+            .attach(format!("path={} expected={expected} actual={actual}", path.display())));
     }
 
     Ok(())

@@ -5,11 +5,11 @@
 
 use std::collections::HashSet;
 
-use color_eyre::eyre::Context;
 use nvim_oxi::Array;
 use nvim_oxi::Dictionary;
 use nvim_oxi::ObjectKind;
 use nvim_oxi::conversion::FromObject;
+use rootcause::prelude::ResultExt;
 use ytil_noxi::dict::DictionaryExt;
 
 use crate::diagnostics::filters::BufferWithPath;
@@ -29,7 +29,7 @@ impl RelatedInfoFilter {
     ///
     /// # Errors
     /// - Extracting related information arrays fails (missing key or wrong type).
-    pub fn new(lsp_diags: &[Dictionary]) -> color_eyre::Result<Self> {
+    pub fn new(lsp_diags: &[Dictionary]) -> rootcause::Result<Self> {
         Ok(Self {
             rel_infos: Self::get_related_infos(lsp_diags)?,
         })
@@ -39,7 +39,7 @@ impl RelatedInfoFilter {
     ///
     /// # Errors
     /// - Traversing diagnostics fails (unexpected value kinds or conversion errors).
-    fn get_related_infos(lsp_diags: &[Dictionary]) -> color_eyre::Result<HashSet<RelatedInfo>> {
+    fn get_related_infos(lsp_diags: &[Dictionary]) -> rootcause::Result<HashSet<RelatedInfo>> {
         // Pre-allocate with estimated capacity (average ~2 related infos per diagnostic)
         let mut out = HashSet::with_capacity(lsp_diags.len().saturating_mul(2));
         for lsp_diag in lsp_diags {
@@ -52,9 +52,11 @@ impl RelatedInfoFilter {
                 continue;
             };
 
-            let rel_infos = Array::from_object(rel_infos.clone()).with_context(|| {
-                ytil_noxi::extract::unexpected_kind_error_msg(rel_infos, rel_infos_key, &lsp, ObjectKind::Array)
-            })?;
+            let rel_infos = Array::from_object(rel_infos.clone())
+                .context("unexpected object kind")
+                .attach_with(|| {
+                    ytil_noxi::extract::unexpected_kind_error_msg(rel_infos, rel_infos_key, &lsp, ObjectKind::Array)
+                })?;
             for rel_info in rel_infos {
                 let rel_info = Dictionary::try_from(rel_info)?;
                 out.insert(RelatedInfo::from_related_info(&rel_info)?);
@@ -69,7 +71,7 @@ impl DiagnosticsFilter for RelatedInfoFilter {
     ///
     /// # Errors
     /// - Building the candidate related info shape from the diagnostic fails.
-    fn skip_diagnostic(&self, _buf: &BufferWithPath, lsp_diag: &Dictionary) -> color_eyre::Result<bool> {
+    fn skip_diagnostic(&self, _buf: &BufferWithPath, lsp_diag: &Dictionary) -> rootcause::Result<bool> {
         if self.rel_infos.is_empty() {
             return Ok(false);
         }
@@ -102,7 +104,7 @@ impl RelatedInfo {
     ///
     /// # Errors
     /// - Required keys (`message`, `lnum`, `col`, `end_lnum`, `end_col`) are missing or of unexpected type.
-    fn from_lsp_diagnostic(lsp_diagnostic: &Dictionary) -> color_eyre::Result<Self> {
+    fn from_lsp_diagnostic(lsp_diagnostic: &Dictionary) -> rootcause::Result<Self> {
         Ok(Self {
             message: lsp_diagnostic.get_t::<nvim_oxi::String>("message")?,
             lnum: lsp_diagnostic.get_t::<nvim_oxi::Integer>("lnum")?,
@@ -116,7 +118,7 @@ impl RelatedInfo {
     ///
     /// # Errors
     /// - Required nested keys (range.start, range.end, message, line/character) are missing or wrong type.
-    fn from_related_info(rel_info: &Dictionary) -> color_eyre::Result<Self> {
+    fn from_related_info(rel_info: &Dictionary) -> rootcause::Result<Self> {
         let (start, end) = {
             let range_query = ["location", "range"];
             let range = rel_info.get_required_dict(&range_query)?;

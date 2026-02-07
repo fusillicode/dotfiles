@@ -3,9 +3,8 @@ use std::ffi::OsStr;
 use std::path::Path;
 use std::path::PathBuf;
 
-use color_eyre::eyre::Context as _;
-use color_eyre::eyre::eyre;
-use color_eyre::owo_colors::OwoColorize as _;
+use owo_colors::OwoColorize as _;
+use rootcause::prelude::ResultExt as _;
 
 /// Outcome of file removal operations.
 pub struct RmFilesOutcome {
@@ -21,16 +20,21 @@ pub struct RmFilesOutcome {
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - Directory traversal fails.
 /// - Removing a dead symlink fails.
-pub fn rm_dead_symlinks(dir: &str) -> color_eyre::Result<()> {
-    for entry_res in std::fs::read_dir(dir).wrap_err_with(|| eyre!("error reading directory | path={dir:?}"))? {
-        let entry = entry_res.wrap_err_with(|| eyre!("error getting entry"))?;
+pub fn rm_dead_symlinks(dir: &str) -> rootcause::Result<()> {
+    for entry_res in std::fs::read_dir(dir)
+        .context("error reading directory")
+        .attach_with(|| format!("path={dir:?}"))?
+    {
+        let entry = entry_res.context("error getting entry")?;
         let path = entry.path();
 
         let metadata = std::fs::symlink_metadata(&path)
-            .wrap_err_with(|| eyre!("error reading symlink metadata | path={}", path.display()))?;
+            .context("error reading symlink metadata")
+            .attach_with(|| format!("path={}", path.display()))?;
         if metadata.file_type().is_symlink() && std::fs::metadata(&path).is_err() {
             std::fs::remove_file(&path)
-                .wrap_err_with(|| eyre!("error removing dead symlink | path={}", path.display()))?;
+                .context("error removing dead symlink")
+                .attach_with(|| format!("path={}", path.display()))?;
             println!("{} {}", "Deleted dead symlink".cyan().bold(), path.display());
         }
     }

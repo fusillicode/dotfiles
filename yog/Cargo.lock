@@ -3,21 +3,6 @@
 version = 4
 
 [[package]]
-name = "addr2line"
-version = "0.25.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b5d307320b3181d6d7954e663bd7c774a838b8220fe0593c86d9fb09f498b4b"
-dependencies = [
- "gimli",
-]
-
-[[package]]
-name = "adler2"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
-
-[[package]]
 name = "ahash"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -146,21 +131,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
-name = "backtrace"
-version = "0.3.76"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb531853791a215d7c62a30daf0dde835f381ab5de4589cfe7c649d2cbe92bd6"
-dependencies = [
- "addr2line",
- "cfg-if",
- "libc",
- "miniz_oxide",
- "object",
- "rustc-demangle",
- "windows-link",
-]
-
-[[package]]
 name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -249,7 +219,7 @@ checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
 name = "catl"
 version = "0.1.0"
 dependencies = [
- "color-eyre",
+ "rootcause",
  "ytil_sys",
 ]
 
@@ -281,33 +251,6 @@ dependencies = [
  "num-traits",
  "serde",
  "windows-link",
-]
-
-[[package]]
-name = "color-eyre"
-version = "0.6.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5920befb47832a6d61ee3a3a846565cfa39b331331e68a3b1d1116630f2f26d"
-dependencies = [
- "backtrace",
- "color-spantrace",
- "eyre",
- "indenter",
- "once_cell",
- "owo-colors",
- "tracing-error",
-]
-
-[[package]]
-name = "color-spantrace"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8b88ea9df13354b55bc7234ebcce36e6ef896aca2e42a15de9e10edce01b427"
-dependencies = [
- "once_cell",
- "owo-colors",
- "tracing-core",
- "tracing-error",
 ]
 
 [[package]]
@@ -610,21 +553,12 @@ dependencies = [
 name = "evoke"
 version = "0.1.0"
 dependencies = [
- "color-eyre",
+ "owo-colors",
  "pretty_assertions",
+ "rootcause",
  "rstest",
  "ytil_cmd",
  "ytil_sys",
-]
-
-[[package]]
-name = "eyre"
-version = "0.6.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cd915d99f24784cdc19fd37ef22b97e3ff0ae756c7e492e9fbfe897d61e2aec"
-dependencies = [
- "indenter",
- "once_cell",
 ]
 
 [[package]]
@@ -656,8 +590,8 @@ checksum = "5baebc0774151f905a1a2cc41989300b1e6fbb29aff0ceffa1064fdd3088d582"
 name = "fkr"
 version = "0.1.0"
 dependencies = [
- "color-eyre",
  "fake",
+ "rootcause",
  "strum",
  "ytil_sys",
  "ytil_tui",
@@ -740,7 +674,8 @@ dependencies = [
 name = "gch"
 version = "0.1.0"
 dependencies = [
- "color-eyre",
+ "owo-colors",
+ "rootcause",
  "strum",
  "ytil_git",
  "ytil_sys",
@@ -752,7 +687,8 @@ name = "gcu"
 version = "0.1.0"
 dependencies = [
  "assert2",
- "color-eyre",
+ "owo-colors",
+ "rootcause",
  "rstest",
  "url",
  "ytil_gh",
@@ -799,20 +735,15 @@ name = "ghl"
 version = "0.1.0"
 dependencies = [
  "assert2",
- "color-eyre",
+ "owo-colors",
  "pretty_assertions",
+ "rootcause",
  "rstest",
  "strum",
  "ytil_gh",
  "ytil_sys",
  "ytil_tui",
 ]
-
-[[package]]
-name = "gimli"
-version = "0.32.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e629b9b98ef3dd8afe6ca2bd0f89306cec16d43d907889945bc5d6687f2f13c7"
 
 [[package]]
 name = "git2"
@@ -1007,8 +938,9 @@ name = "idt"
 version = "0.1.0"
 dependencies = [
  "assert2",
- "color-eyre",
+ "owo-colors",
  "pretty_assertions",
+ "rootcause",
  "rstest",
  "sha2",
  "tempfile",
@@ -1017,12 +949,6 @@ dependencies = [
  "ytil_gh",
  "ytil_sys",
 ]
-
-[[package]]
-name = "indenter"
-version = "0.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "964de6e86d545b246d84badc0fef527924ace5134f30641c203ef52ba83f58d5"
 
 [[package]]
 name = "indexmap"
@@ -1252,15 +1178,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
-name = "miniz_oxide"
-version = "0.8.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316"
-dependencies = [
- "adler2",
-]
-
-[[package]]
 name = "mio"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1276,7 +1193,7 @@ dependencies = [
 name = "miskatonic"
 version = "0.1.0"
 dependencies = [
- "color-eyre",
+ "rootcause",
 ]
 
 [[package]]
@@ -1362,9 +1279,9 @@ dependencies = [
  "askama",
  "assert2",
  "chrono",
- "color-eyre",
  "lightningcss",
  "pretty_assertions",
+ "rootcause",
  "ytil_cmd",
  "ytil_sys",
 ]
@@ -1439,12 +1356,12 @@ version = "0.1.0"
 dependencies = [
  "assert2",
  "chrono",
- "color-eyre",
  "convert_case 0.11.0",
  "fkr",
  "lit2",
  "nvim-oxi",
  "pretty_assertions",
+ "rootcause",
  "rstest",
  "serde",
  "serde_json",
@@ -1459,20 +1376,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "object"
-version = "0.37.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff76201f031d8863c38aa7f905eca4f53abbfa15f609db4277d44cd8938f33fe"
-dependencies = [
- "memchr",
-]
-
-[[package]]
 name = "oe"
 version = "0.1.0"
 dependencies = [
- "color-eyre",
  "pretty_assertions",
+ "rootcause",
  "rstest",
  "ytil_cmd",
  "ytil_editor",
@@ -1837,11 +1745,34 @@ name = "rmr"
 version = "0.1.0"
 dependencies = [
  "assert2",
- "color-eyre",
+ "owo-colors",
  "pretty_assertions",
+ "rootcause",
  "rstest",
  "tempfile",
  "ytil_sys",
+]
+
+[[package]]
+name = "rootcause"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a751633dcb95a6b1c954f0fa15c2afd9b4802640f8045432f68a1f4bde4b871"
+dependencies = [
+ "hashbrown",
+ "indexmap",
+ "rootcause-internals",
+ "rustc-hash",
+ "triomphe",
+]
+
+[[package]]
+name = "rootcause-internals"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9eeddca0d656f1a58ce3fc3f41b0b877a7e760460108712ad39b60181fdcb3e"
+dependencies = [
+ "triomphe",
 ]
 
 [[package]]
@@ -1872,12 +1803,6 @@ dependencies = [
  "syn 2.0.114",
  "unicode-ident",
 ]
-
-[[package]]
-name = "rustc-demangle"
-version = "0.1.27"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b50b8869d9fc858ce7266cce0194bd74df58b9d0e3f6df3a9fc8eb470d95c09d"
 
 [[package]]
 name = "rustc-hash"
@@ -2033,15 +1958,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sharded-slab"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6"
-dependencies = [
- "lazy_static",
-]
-
-[[package]]
 name = "shlex"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2113,8 +2029,8 @@ name = "strgci"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "color-eyre",
  "pretty_assertions",
+ "rootcause",
  "rstest",
  "ytil_git",
  "ytil_sys",
@@ -2185,9 +2101,10 @@ name = "tec"
 version = "0.1.0"
 dependencies = [
  "assert2",
- "color-eyre",
  "nomicon",
+ "owo-colors",
  "pretty_assertions",
+ "rootcause",
  "rstest",
  "thiserror 2.0.18",
  "ytil_cmd",
@@ -2313,47 +2230,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tracing"
-version = "0.1.44"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63e71662fa4b2a2c3a26f570f037eb95bb1f85397f3cd8076caed2f026a6d100"
-dependencies = [
- "pin-project-lite",
- "tracing-core",
-]
-
-[[package]]
-name = "tracing-core"
-version = "0.1.36"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
-dependencies = [
- "once_cell",
- "valuable",
-]
-
-[[package]]
-name = "tracing-error"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b1581020d7a273442f5b45074a6a57d5757ad0a47dac0e9f0bd57b81936f3db"
-dependencies = [
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "tracing-subscriber"
-version = "0.3.22"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f30143827ddab0d256fd843b7a66d164e9f271cfa0dde49142c5ca0ca291f1e"
-dependencies = [
- "sharded-slab",
- "thread_local",
- "tracing-core",
-]
-
-[[package]]
 name = "tree-sitter"
 version = "0.26.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2384,12 +2260,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "triomphe"
+version = "0.1.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd69c5aa8f924c7519d6372789a74eac5b94fb0f8fcf0d4a97eb0bfc3e785f39"
+
+[[package]]
 name = "try"
 version = "0.1.0"
 dependencies = [
  "assert2",
- "color-eyre",
  "pretty_assertions",
+ "rootcause",
  "ytil_sys",
 ]
 
@@ -2490,12 +2372,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "valuable"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
-
-[[package]]
 name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2512,7 +2388,8 @@ name = "vpg"
 version = "0.1.0"
 dependencies = [
  "assert2",
- "color-eyre",
+ "owo-colors",
+ "rootcause",
  "serde",
  "serde_json",
  "ytil_sys",
@@ -2782,8 +2659,8 @@ checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
 name = "yghfl"
 version = "0.1.0"
 dependencies = [
- "color-eyre",
  "fake",
+ "rootcause",
  "temp-env",
  "url",
  "ytil_editor",
@@ -2799,8 +2676,8 @@ name = "yhfp"
 version = "0.1.0"
 dependencies = [
  "assert2",
- "color-eyre",
  "pretty_assertions",
+ "rootcause",
  "rstest",
  "ytil_editor",
  "ytil_hx",
@@ -2836,7 +2713,7 @@ name = "ytil_cmd"
 version = "0.1.0"
 dependencies = [
  "assert2",
- "color-eyre",
+ "rootcause",
  "thiserror 2.0.18",
 ]
 
@@ -2845,7 +2722,7 @@ name = "ytil_editor"
 version = "0.1.0"
 dependencies = [
  "assert2",
- "color-eyre",
+ "rootcause",
  "ytil_wezterm",
 ]
 
@@ -2855,9 +2732,9 @@ version = "0.1.0"
 dependencies = [
  "assert2",
  "chrono",
- "color-eyre",
  "convert_case 0.11.0",
  "pretty_assertions",
+ "rootcause",
  "rstest",
  "serde",
  "serde_json",
@@ -2873,9 +2750,9 @@ version = "0.1.0"
 dependencies = [
  "assert2",
  "chrono",
- "color-eyre",
  "git2",
  "pretty_assertions",
+ "rootcause",
  "rstest",
  "tempfile",
  "ureq",
@@ -2886,8 +2763,8 @@ dependencies = [
 name = "ytil_hx"
 version = "0.1.0"
 dependencies = [
- "color-eyre",
  "fake",
+ "rootcause",
 ]
 
 [[package]]
@@ -2895,10 +2772,10 @@ name = "ytil_noxi"
 version = "0.1.0"
 dependencies = [
  "assert2",
- "color-eyre",
  "mockall",
  "nvim-oxi",
  "pretty_assertions",
+ "rootcause",
  "rstest",
  "serde",
  "tree-sitter",
@@ -2911,11 +2788,12 @@ version = "0.1.0"
 dependencies = [
  "assert2",
  "chrono",
- "color-eyre",
  "home",
  "itertools 0.14.0",
+ "owo-colors",
  "pico-args",
  "pretty_assertions",
+ "rootcause",
  "rstest",
  "serde",
  "tempfile",
@@ -2926,8 +2804,9 @@ dependencies = [
 name = "ytil_tui"
 version = "0.1.0"
 dependencies = [
- "color-eyre",
  "inquire",
+ "owo-colors",
+ "rootcause",
  "strum",
  "ytil_git",
 ]
@@ -2937,8 +2816,8 @@ name = "ytil_wezterm"
 version = "0.1.0"
 dependencies = [
  "assert2",
- "color-eyre",
  "fake",
+ "rootcause",
  "serde",
  "serde_json",
 ]

@@ -7,7 +7,7 @@ use core::fmt::Display;
 use std::ops::Deref;
 use std::path::Path;
 
-use color_eyre::owo_colors::OwoColorize;
+use owo_colors::OwoColorize;
 use strum::EnumIter;
 use strum::IntoEnumIterator;
 use ytil_git::GitStatusEntry;
@@ -66,7 +66,7 @@ impl Display for Op {
 ///
 /// # Errors
 /// - File removal, unstaging, or restore command fails.
-fn restore_entries(entries: &[&GitStatusEntry], branch: Option<&str>) -> color_eyre::Result<()> {
+fn restore_entries(entries: &[&GitStatusEntry], branch: Option<&str>) -> rootcause::Result<()> {
     // Avoid creating &&GitStatusEntry by copying the slice of &GitStatusEntry directly.
     let (new_entries, changed_entries): (Vec<&GitStatusEntry>, Vec<&GitStatusEntry>) =
         entries.iter().copied().partition(|entry| entry.is_new());
@@ -114,7 +114,7 @@ fn restore_entries(entries: &[&GitStatusEntry], branch: Option<&str>) -> color_e
 /// # Errors
 /// - Opening the repository via [`ytil_git::repo::discover`] fails.
 /// - Adding any path to the index via [`ytil_git::add_to_index`] fails.
-fn add_entries(entries: &[&GitStatusEntry]) -> color_eyre::Result<()> {
+fn add_entries(entries: &[&GitStatusEntry]) -> rootcause::Result<()> {
     let mut repo = ytil_git::repo::discover(Path::new("."))?;
     ytil_git::add_to_index(&mut repo, entries.iter().map(|entry| entry.path.as_path()))?;
     for entry in entries {
@@ -173,9 +173,7 @@ fn write_worktree_symbol(
 /// - Unstaging new index entries via [`ytil_git::unstage`] fails.
 /// - Restore command construction / execution via [`ytil_git::restore`] fails.
 /// - Opening repository via [`ytil_git::repo::discover`] or adding paths to index via [`ytil_git::add_to_index`] fails.
-fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
-
+fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));

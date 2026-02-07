@@ -2,11 +2,11 @@ use std::process::Command;
 
 use chrono::DateTime;
 use chrono::Utc;
-use color_eyre::eyre::Context as _;
-use color_eyre::eyre::bail;
-use color_eyre::eyre::eyre;
 use convert_case::Case;
 use convert_case::Casing as _;
+use rootcause::bail;
+use rootcause::prelude::ResultExt as _;
+use rootcause::report;
 use serde::Deserialize;
 use ytil_cmd::CmdExt;
 
@@ -23,15 +23,15 @@ impl CreatedIssue {
     ///
     /// # Errors
     /// - Output parsing fails.
-    fn new(title: &str, output: &str) -> color_eyre::Result<Self> {
-        let get_not_empty_field = |maybe_value: Option<&str>, field: &str| -> color_eyre::Result<String> {
+    fn new(title: &str, output: &str) -> rootcause::Result<Self> {
+        let get_not_empty_field = |maybe_value: Option<&str>, field: &str| -> rootcause::Result<String> {
             maybe_value
-                .ok_or_else(|| eyre!("error building CreateIssueOutput | missing={field:?} output={output:?}"))
+                .ok_or_else(|| report!("error building CreateIssueOutput"))
+                .attach_with(|| format!("missing={field:?} output={output:?}"))
                 .and_then(|s| {
                     if s.is_empty() {
-                        Err(eyre!(
-                            "error building CreateIssueOutput | empty={field:?} output={output:?}"
-                        ))
+                        Err(report!("error building CreateIssueOutput")
+                            .attach(format!("empty={field:?} output={output:?}")))
                     } else {
                         Ok(s.trim_matches('/').to_string())
                     }
@@ -81,7 +81,7 @@ pub struct Author {
 ///
 /// # Errors
 /// - Title is empty or `gh issue create` fails.
-pub fn create(title: &str) -> color_eyre::Result<CreatedIssue> {
+pub fn create(title: &str) -> rootcause::Result<CreatedIssue> {
     if title.is_empty() {
         bail!("cannot create GitHub issue with empty title")
     }
@@ -89,11 +89,13 @@ pub fn create(title: &str) -> color_eyre::Result<CreatedIssue> {
     let output = Command::new("gh")
         .args(["issue", "create", "--title", title, "--body", ""])
         .output()
-        .wrap_err_with(|| eyre!("error creating GitHub issue | title={title:?}"))?;
+        .context("error creating GitHub issue")
+        .attach_with(|| format!("title={title:?}"))?;
 
     let created_issue = ytil_cmd::extract_success_output(&output)
         .and_then(|output| CreatedIssue::new(title, &output))
-        .wrap_err_with(|| eyre!("error parsing created issue output | title={title:?}"))?;
+        .context("error parsing created issue output")
+        .attach_with(|| format!("title={title:?}"))?;
 
     Ok(created_issue)
 }
@@ -102,7 +104,7 @@ pub fn create(title: &str) -> color_eyre::Result<CreatedIssue> {
 ///
 /// # Errors
 /// - `gh issue develop` fails or output parsing fails.
-pub fn develop(issue_number: &str, checkout: bool) -> color_eyre::Result<DevelopOutput> {
+pub fn develop(issue_number: &str, checkout: bool) -> rootcause::Result<DevelopOutput> {
     let mut args = vec!["issue", "develop", issue_number];
 
     if checkout {
@@ -112,13 +114,15 @@ pub fn develop(issue_number: &str, checkout: bool) -> color_eyre::Result<Develop
     let output = Command::new("gh")
         .args(args)
         .exec()
-        .wrap_err_with(|| eyre!("error develop GitHub issue | issue_number={issue_number}"))?;
+        .context("error develop GitHub issue")
+        .attach_with(|| format!("issue_number={issue_number}"))?;
 
     let branch_ref = str::from_utf8(&output.stdout)?.trim().to_string();
     let branch_name = branch_ref
         .rsplit('/')
         .next()
-        .ok_or_else(|| eyre!("error extracting branch name from develop output | output={branch_ref:?}"))?
+        .ok_or_else(|| report!("error extracting branch name from develop output"))
+        .attach_with(|| format!("output={branch_ref:?}"))?
         .to_string();
 
     Ok(DevelopOutput {
@@ -131,11 +135,11 @@ pub fn develop(issue_number: &str, checkout: bool) -> color_eyre::Result<Develop
 ///
 /// # Errors
 /// - `gh issue list` fails or JSON deserialization fails.
-pub fn list() -> color_eyre::Result<Vec<ListedIssue>> {
+pub fn list() -> rootcause::Result<Vec<ListedIssue>> {
     let output = Command::new("gh")
         .args(["issue", "list", "--json", "number,title,author,updatedAt"])
         .exec()
-        .wrap_err_with(|| eyre!("error listing GitHub issues"))?;
+        .context("error listing GitHub issues")?;
 
     let list_output = str::from_utf8(&output.stdout)?.trim().to_string();
 
@@ -162,19 +166,16 @@ mod tests {
     }
 
     #[rstest]
-    #[case("", "error building CreateIssueOutput | empty=\"repo\" output=\"\"")]
-    #[case("issues", "error building CreateIssueOutput | empty=\"repo\" output=\"issues\"")]
-    #[case(
-        "https://github.com/owner/repo/123",
-        "error building CreateIssueOutput | missing=\"issue_nr\" output=\"https://github.com/owner/repo/123\""
-    )]
-    #[case(
-        "repo/issues",
-        "error building CreateIssueOutput | empty=\"issue_nr\" output=\"repo/issues\""
-    )]
-    fn created_issue_new_errors_on_invalid_output(#[case] output: &str, #[case] expected_error: &str) {
+    #[case("")]
+    #[case("issues")]
+    #[case("https://github.com/owner/repo/123")]
+    #[case("repo/issues")]
+    fn created_issue_new_errors_on_invalid_output(#[case] output: &str) {
         assert2::let_assert!(Err(err) = CreatedIssue::new("title", output));
-        pretty_assertions::assert_eq!(err.to_string(), expected_error);
+        assert_eq!(
+            err.format_current_context().to_string(),
+            "error building CreateIssueOutput"
+        );
     }
 
     #[rstest]

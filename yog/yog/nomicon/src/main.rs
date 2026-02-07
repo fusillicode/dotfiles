@@ -15,8 +15,8 @@ use std::path::PathBuf;
 
 use askama::Template;
 use chrono::Utc;
-use color_eyre::eyre::bail;
-use color_eyre::eyre::eyre;
+use rootcause::prelude::ResultExt as _;
+use rootcause::report;
 use ytil_sys::cli::Args;
 
 use crate::templates::components::footer::Footer;
@@ -34,7 +34,7 @@ mod templates;
 /// # Errors
 /// - Underlying `cp` command execution fails.
 /// - Destination directory cannot be written.
-fn copy_assets(doc_dir: &Path) -> color_eyre::Result<()> {
+fn copy_assets(doc_dir: &Path) -> rootcause::Result<()> {
     let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
     let dest = doc_dir.join("assets");
     ytil_cmd::silent_cmd("cp")
@@ -68,9 +68,7 @@ fn get_toml_values(content: &str, key: &str) -> Vec<String> {
 }
 
 /// Generate consolidated styled workspace documentation.
-fn main() -> color_eyre::eyre::Result<()> {
-    color_eyre::install()?;
-
+fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));
@@ -85,7 +83,7 @@ fn main() -> color_eyre::eyre::Result<()> {
     if let Err(err) = std::fs::remove_dir_all(&doc_dir)
         && !matches!(err.kind(), NotFound)
     {
-        bail!("cannot remove docs dir | doc_dir={} error={err}", doc_dir.display());
+        Err(report!("cannot remove docs dir")).attach_with(|| format!("doc_dir={} error={err}", doc_dir.display()))?;
     }
 
     // Always (re)generate docs for all workspace crates (including private items) first.
@@ -117,7 +115,8 @@ fn main() -> color_eyre::eyre::Result<()> {
         let desc = get_toml_values(&content, "description")
             .first()
             .cloned()
-            .ok_or_else(|| eyre!("missing crate description | cargo_toml={cargo_toml:#?}"))?;
+            .ok_or_else(|| report!("missing crate description"))
+            .attach_with(|| format!("cargo_toml={}", cargo_toml.display()))?;
 
         // Only include crates that actually have a generated index (documentation produced).
         for name in names {

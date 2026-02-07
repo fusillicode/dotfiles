@@ -7,7 +7,7 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use color_eyre::owo_colors::OwoColorize;
+use owo_colors::OwoColorize;
 use ytil_sys::cli::Args;
 
 /// List of binaries that should be copied after building.
@@ -50,16 +50,14 @@ where
 /// # Errors
 /// - [`ytil_sys::file::atomic_cp`] fails to copy.
 /// - The final rename or write cannot be performed.
-fn cp(from: &Path, to: &Path) -> color_eyre::Result<()> {
+fn cp(from: &Path, to: &Path) -> rootcause::Result<()> {
     ytil_sys::file::atomic_cp(from, to)?;
     println!("{} {} to {}", "Copied".green().bold(), from.display(), to.display());
     Ok(())
 }
 
 /// Format, lint, build, and deploy workspace binaries and Nvim libs.
-fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
-
+fn main() -> rootcause::Result<()> {
     let mut args = ytil_sys::cli::get();
 
     if args.has_help() {
