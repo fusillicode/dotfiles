@@ -55,6 +55,7 @@ static TYPOS_BLACKLIST: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
         "regulatorias",
         "responsable",
         "ser",
+        "sorce",
         "ue",
         "utiliza",
     ]
