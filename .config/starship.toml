@@ -38,6 +38,7 @@ up_to_date = "✓"
 
 [custom.git_commit_info]
 command = "strgci"
+ignore_timeout = true
 when = "command -v strgci >/dev/null 2>&1 && git rev-parse --git-dir 2>/dev/null"
 format = "[$output ]($style)"
 style = "#777777"
