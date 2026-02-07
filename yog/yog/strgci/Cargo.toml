@@ -1,0 +1,24 @@
+[package]
+name = "strgci"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Print compact HEAD commit info for shell prompts."
+keywords = ["cli", "git", "commit", "prompt", "starship"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+chrono = { workspace = true }
+color-eyre = { workspace = true }
+ytil_git = { workspace = true }
+ytil_sys = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+rstest = { workspace = true }
+
+[lints]
+workspace = true

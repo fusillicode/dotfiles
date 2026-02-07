@@ -2,7 +2,7 @@
 
 add_newline = true
 
-format = "$time$directory$git_branch$git_status$git_metrics$git_state$git_commit${custom.git_commit_msg}$line_break$status$character"
+format = "$time$directory$git_branch$git_status$git_metrics$git_state${custom.git_commit_info}$line_break$status$character"
 
 [time]
 disabled = false
@@ -36,16 +36,9 @@ up_to_date = "✓"
 
 [git_state]
 
-[git_commit]
-format = "[$hash | ]($style)"
-style = "#777777"
-only_detached = false
-tag_disabled = true
-commit_hash_length = 7
-
-[custom.git_commit_msg]
-command = "msg=$(git log -1 --pretty=format:%s 2>/dev/null); if [ ${#msg} -gt 33 ]; then echo \"${msg:0:33}…\"; else echo \"$msg\"; fi"
-when = "git rev-parse --git-dir 2>/dev/null"
+[custom.git_commit_info]
+command = "strgci"
+when = "command -v strgci >/dev/null 2>&1 && git rev-parse --git-dir 2>/dev/null"
 format = "[$output ]($style)"
 style = "#777777"
 
