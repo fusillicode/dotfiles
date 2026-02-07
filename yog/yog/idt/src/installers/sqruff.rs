@@ -4,7 +4,7 @@ use ytil_sys::Arch;
 use ytil_sys::Os;
 use ytil_sys::SysInfo;
 
-use crate::downloaders::curl::CurlDownloaderOption;
+use crate::downloaders::http::HttpDownloaderOption;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -33,18 +33,25 @@ impl Installer for Sqruff<'_> {
         "sqruff"
     }
 
+    fn should_verify_checksum(&self) -> bool {
+        false
+    }
+
     fn install(&self) -> color_eyre::Result<()> {
         let (arch, os) = self.target_arch_and_os();
+        let repo = format!("quarylabs/{}", self.bin_name());
+        let latest_release = ytil_gh::get_latest_release(&repo)?;
 
-        let target = crate::downloaders::curl::run(
+        let target = crate::downloaders::http::run(
             &format!(
-                "https://github.com/quarylabs/{0}/releases/latest/download/{0}-{os}-{arch}.tar.gz",
+                "https://github.com/{repo}/releases/download/{latest_release}/{0}-{os}-{arch}.tar.gz",
                 self.bin_name()
             ),
-            &CurlDownloaderOption::PipeIntoTar {
+            &HttpDownloaderOption::ExtractTarGz {
                 dest_dir: self.bin_dir,
                 dest_name: Some(self.bin_name()),
             },
+            None,
         )?;
 
         ytil_sys::file::chmod_x(target)?;

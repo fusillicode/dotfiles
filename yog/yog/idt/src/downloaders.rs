@@ -1,4 +1,5 @@
+pub mod checksum;
 pub mod composer;
-pub mod curl;
+pub mod http;
 pub mod npm;
 pub mod pip;

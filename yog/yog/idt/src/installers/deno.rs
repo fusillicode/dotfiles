@@ -4,7 +4,8 @@ use ytil_sys::Arch;
 use ytil_sys::Os;
 use ytil_sys::SysInfo;
 
-use crate::downloaders::curl::CurlDownloaderOption;
+use crate::downloaders::http::ChecksumSource;
+use crate::downloaders::http::HttpDownloaderOption;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -39,15 +40,20 @@ impl Installer for Deno<'_> {
 
         let (arch, os) = self.target_arch_and_os();
 
-        let target = crate::downloaders::curl::run(
-            &format!(
-                "https://github.com/{repo}/releases/download/{latest_release}/{}-{arch}-{os}.zip",
-                self.bin_name()
-            ),
-            &CurlDownloaderOption::PipeIntoTar {
+        let filename = format!("{}-{arch}-{os}.zip", self.bin_name());
+        let checksums_url =
+            format!("https://github.com/{repo}/releases/download/{latest_release}/{filename}.sha256sum");
+
+        let target = crate::downloaders::http::run(
+            &format!("https://github.com/{repo}/releases/download/{latest_release}/{filename}"),
+            &HttpDownloaderOption::ExtractTarGz {
                 dest_dir: self.bin_dir,
                 dest_name: Some(self.bin_name()),
             },
+            Some(&ChecksumSource {
+                checksums_url: &checksums_url,
+                filename: &filename,
+            }),
         )?;
 
         ytil_sys::file::chmod_x(&target)?;

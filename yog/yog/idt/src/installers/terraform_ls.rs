@@ -4,7 +4,8 @@ use ytil_sys::Arch;
 use ytil_sys::Os;
 use ytil_sys::SysInfo;
 
-use crate::downloaders::curl::CurlDownloaderOption;
+use crate::downloaders::http::ChecksumSource;
+use crate::downloaders::http::HttpDownloaderOption;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -37,17 +38,30 @@ impl Installer for TerraformLs<'_> {
         let (arch, os) = self.target_arch_and_os();
 
         let repo = format!("hashicorp/{}", self.bin_name());
-        let latest_release = &ytil_gh::get_latest_release(&repo)?[1..];
+        let latest_release_tag = ytil_gh::get_latest_release(&repo)?;
+        let latest_release = latest_release_tag.get(1..).ok_or_else(|| {
+            color_eyre::eyre::eyre!("error trimming 'v' prefix from release tag | tag={latest_release_tag:?}")
+        })?;
 
-        let target = crate::downloaders::curl::run(
+        let filename = format!("{0}_{latest_release}_{os}_{arch}.zip", self.bin_name());
+        let checksums_url = format!(
+            "https://releases.hashicorp.com/{0}/{latest_release}/{0}_{latest_release}_SHA256SUMS",
+            self.bin_name()
+        );
+
+        let target = crate::downloaders::http::run(
             &format!(
-                "https://releases.hashicorp.com/{0}/{latest_release}/{0}_{latest_release}_{os}_{arch}.zip",
+                "https://releases.hashicorp.com/{0}/{latest_release}/{filename}",
                 self.bin_name()
             ),
-            &CurlDownloaderOption::PipeIntoTar {
+            &HttpDownloaderOption::ExtractTarGz {
                 dest_dir: self.bin_dir,
                 dest_name: Some(self.bin_name()),
             },
+            Some(&ChecksumSource {
+                checksums_url: &checksums_url,
+                filename: &filename,
+            }),
         )?;
 
         ytil_sys::file::chmod_x(target)?;

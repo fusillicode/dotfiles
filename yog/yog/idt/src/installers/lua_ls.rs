@@ -4,7 +4,7 @@ use ytil_sys::Arch;
 use ytil_sys::Os;
 use ytil_sys::SysInfo;
 
-use crate::downloaders::curl::CurlDownloaderOption;
+use crate::downloaders::http::HttpDownloaderOption;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -43,15 +43,16 @@ impl Installer for LuaLanguageServer<'_> {
         let latest_release = ytil_gh::get_latest_release(&repo)?;
         std::fs::create_dir_all(&dev_tools_repo_dir)?;
 
-        let target_dir = crate::downloaders::curl::run(
+        let target_dir = crate::downloaders::http::run(
             &format!(
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}-{os}-{arch}.tar.gz",
                 self.bin_name()
             ),
-            &CurlDownloaderOption::PipeIntoTar {
+            &HttpDownloaderOption::ExtractTarGz {
                 dest_dir: &dev_tools_repo_dir,
                 dest_name: None,
             },
+            None,
         )?;
 
         ytil_sys::file::chmod_x(target_dir.join("bin").join(self.bin_name()))?;
@@ -62,5 +63,9 @@ impl Installer for LuaLanguageServer<'_> {
     // NOTE: skip because it's a shitshow...
     fn check_args(&self) -> Option<&[&str]> {
         None
+    }
+
+    fn should_verify_checksum(&self) -> bool {
+        false
     }
 }

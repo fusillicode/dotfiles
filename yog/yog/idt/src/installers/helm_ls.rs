@@ -4,7 +4,7 @@ use ytil_sys::Arch;
 use ytil_sys::Os;
 use ytil_sys::SysInfo;
 
-use crate::downloaders::curl::CurlDownloaderOption;
+use crate::downloaders::http::HttpDownloaderOption;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -35,15 +35,18 @@ impl Installer for HelmLs<'_> {
 
     fn install(&self) -> color_eyre::Result<()> {
         let (arch, os) = self.target_arch_and_os();
+        let repo = "mrjosh/helm-ls";
+        let latest_release = ytil_gh::get_latest_release(repo)?;
 
-        let target = crate::downloaders::curl::run(
+        let target = crate::downloaders::http::run(
             &format!(
-                "https://github.com/mrjosh/helm-ls/releases/latest/download/{}_{os}_{arch}",
+                "https://github.com/{repo}/releases/download/{latest_release}/{}_{os}_{arch}",
                 self.bin_name()
             ),
-            &CurlDownloaderOption::WriteTo {
+            &HttpDownloaderOption::WriteTo {
                 dest_path: &self.bin_dir.join(self.bin_name()),
             },
+            None,
         )?;
 
         ytil_sys::file::chmod_x(&target)?;
@@ -53,5 +56,9 @@ impl Installer for HelmLs<'_> {
 
     fn check_args(&self) -> Option<&[&str]> {
         Some(&["version"])
+    }
+
+    fn should_verify_checksum(&self) -> bool {
+        false
     }
 }

@@ -4,7 +4,8 @@ use ytil_sys::Arch;
 use ytil_sys::Os;
 use ytil_sys::SysInfo;
 
-use crate::downloaders::curl::CurlDownloaderOption;
+use crate::downloaders::http::ChecksumSource;
+use crate::downloaders::http::HttpDownloaderOption;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -21,7 +22,7 @@ impl SystemDependent for Hadolint<'_> {
             Os::Linux => "linux",
         };
         let arch = match arch {
-            Arch::Arm => "arm",
+            Arch::Arm => "arm64",
             Arch::X86 => "x86_64",
         };
         (arch, os)
@@ -36,14 +37,24 @@ impl Installer for Hadolint<'_> {
     fn install(&self) -> color_eyre::Result<()> {
         let (arch, os) = self.target_arch_and_os();
 
-        let target = crate::downloaders::curl::run(
+        let filename = format!("{0}-{os}-{arch}", self.bin_name());
+        let checksums_url = format!(
+            "https://github.com/{0}/{0}/releases/latest/download/{filename}.sha256",
+            self.bin_name()
+        );
+
+        let target = crate::downloaders::http::run(
             &format!(
-                "https://github.com/{0}/{0}/releases/latest/download/{0}-{os}-{arch}",
+                "https://github.com/{0}/{0}/releases/latest/download/{filename}",
                 self.bin_name()
             ),
-            &CurlDownloaderOption::WriteTo {
+            &HttpDownloaderOption::WriteTo {
                 dest_path: &self.bin_dir.join(self.bin_name()),
             },
+            Some(&ChecksumSource {
+                checksums_url: &checksums_url,
+                filename: &filename,
+            }),
         )?;
 
         ytil_sys::file::chmod_x(&target)?;
