@@ -88,11 +88,22 @@ pub trait Installer: Sync + Send {
         if check_res.is_some() {
             check_duration = Some(check_start.elapsed());
         }
+
+        let checksum_label = if self.should_verify_checksum() {
+            ""
+        } else {
+            "no_checksum "
+        };
+
         match check_res {
             Some(Ok(check_output)) => {
+                let styled_bin_name = if self.should_verify_checksum() {
+                    self.bin_name().green().bold().to_string()
+                } else {
+                    self.bin_name().yellow().bold().to_string()
+                };
                 println!(
-                    "{} {} check_output=\n{}",
-                    self.bin_name().green().bold(),
+                    "{styled_bin_name} {checksum_label}{} check_output=\n{}",
                     format_timing(start, past_install, check_duration),
                     check_output.trim_matches(|c| c == '\n' || c == '\r')
                 );
@@ -108,7 +119,7 @@ pub trait Installer: Sync + Send {
             }
             None => {
                 println!(
-                    "{} {}",
+                    "{} {checksum_label}{}",
                     self.bin_name().yellow().bold(),
                     format_timing(start, past_install, check_duration),
                 );
@@ -121,6 +132,13 @@ pub trait Installer: Sync + Send {
     /// Returns arguments for version check.
     fn check_args(&self) -> Option<&[&str]> {
         Some(&["--version"])
+    }
+
+    /// Whether the download is checksum-verified. Defaults to `true`.
+    ///
+    /// Override to return `false` for curl-based installers whose releases do not publish checksums.
+    fn should_verify_checksum(&self) -> bool {
+        true
     }
 }
 

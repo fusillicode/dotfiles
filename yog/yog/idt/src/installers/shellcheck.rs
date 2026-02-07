@@ -4,7 +4,7 @@ use ytil_sys::Arch;
 use ytil_sys::Os;
 use ytil_sys::SysInfo;
 
-use crate::downloaders::curl::CurlDownloaderOption;
+use crate::downloaders::http::HttpDownloaderOption;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -33,6 +33,10 @@ impl Installer for Shellcheck<'_> {
         "shellcheck"
     }
 
+    fn should_verify_checksum(&self) -> bool {
+        false
+    }
+
     fn install(&self) -> color_eyre::Result<()> {
         let (arch, os) = self.target_arch_and_os();
 
@@ -40,15 +44,16 @@ impl Installer for Shellcheck<'_> {
         let latest_release = ytil_gh::get_latest_release(&repo)?;
         let dest_dir = Path::new("/tmp");
 
-        crate::downloaders::curl::run(
+        crate::downloaders::http::run(
             &format!(
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}.{os}.{arch}.tar.xz",
                 self.bin_name()
             ),
-            &CurlDownloaderOption::PipeIntoTar {
+            &HttpDownloaderOption::ExtractTarGz {
                 dest_dir,
                 dest_name: None,
             },
+            None,
         )?;
 
         let target = self.bin_dir.join(self.bin_name());

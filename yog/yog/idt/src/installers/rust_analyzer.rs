@@ -4,7 +4,7 @@ use ytil_sys::Arch;
 use ytil_sys::Os;
 use ytil_sys::SysInfo;
 
-use crate::downloaders::curl::CurlDownloaderOption;
+use crate::downloaders::http::HttpDownloaderOption;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -33,17 +33,22 @@ impl Installer for RustAnalyzer<'_> {
         "rust-analyzer"
     }
 
+    fn should_verify_checksum(&self) -> bool {
+        false
+    }
+
     fn install(&self) -> color_eyre::Result<()> {
         let (arch, os) = self.target_arch_and_os();
 
-        let target = crate::downloaders::curl::run(
+        let target = crate::downloaders::http::run(
             &format!(
                 "https://github.com/rust-lang/{0}/releases/download/nightly/{0}-{arch}-{os}.gz",
                 self.bin_name()
             ),
-            &CurlDownloaderOption::PipeIntoZcat {
+            &HttpDownloaderOption::DecompressGz {
                 dest_path: &self.bin_dir.join(self.bin_name()),
             },
+            None,
         )?;
 
         ytil_sys::file::chmod_x(target)?;

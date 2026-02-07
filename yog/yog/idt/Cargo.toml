@@ -12,9 +12,17 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 color-eyre = { workspace = true }
+sha2 = { workspace = true }
+tempfile = { workspace = true }
+ureq = { workspace = true }
 ytil_cmd = { workspace = true }
 ytil_gh = { workspace = true }
 ytil_sys = { workspace = true }
+
+[dev-dependencies]
+assert2 = { workspace = true }
+pretty_assertions = { workspace = true }
+rstest = { workspace = true }
 
 [lints]
 workspace = true
