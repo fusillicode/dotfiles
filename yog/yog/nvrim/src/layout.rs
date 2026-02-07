@@ -3,6 +3,7 @@ use nvim_oxi::api::Buffer;
 use nvim_oxi::api::opts::CreateAutocmdOpts;
 use ytil_noxi::buffer::BufferExt;
 use ytil_noxi::mru_buffers::BufferKind;
+use ytil_noxi::mru_buffers::MruBuffer;
 
 /// [`Dictionary`] of Rust tests utilities.
 pub fn dict() -> Dictionary {
@@ -44,10 +45,12 @@ fn focus_term(width_perc: i32) -> Option<()> {
 
     let width = compute_width(width_perc)?;
 
-    // If there is NO VISIBLE terminal buffer.
-    if let Some(terminal_buffer) = nvim_oxi::api::list_bufs().find(BufferExt::is_terminal) {
+    // If there is a NON-VISIBLE listed terminal buffer.
+    // Uses mru_buffers::get() ("ls t") which only returns listed buffers,
+    // excluding unlisted plugin UI terminals (e.g. fzf-lua).
+    if let Some(mru_term) = ytil_noxi::mru_buffers::get().and_then(|bufs| bufs.into_iter().find(MruBuffer::is_term)) {
         ytil_noxi::common::exec_vim_script(&format!("leftabove vsplit | vertical resize {width}"), None);
-        ytil_noxi::buffer::set_current(&terminal_buffer)?;
+        ytil_noxi::buffer::set_current(&Buffer::from(&mru_term))?;
         return Some(());
     }
 
