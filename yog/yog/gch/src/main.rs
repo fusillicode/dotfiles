@@ -92,6 +92,16 @@ fn restore_entries(entries: &[&GitStatusEntry], branch: Option<&str>) -> rootcau
         return Ok(());
     }
 
+    // Unstage changed entries that have staged (index) changes before restoring the worktree.
+    // Without this, `git restore <path>` only restores the worktree from the index,
+    // leaving staged changes (Modified, Deleted, Renamed, Typechange) untouched.
+    let staged_changed_paths: Vec<String> = changed_entries
+        .iter()
+        .filter(|entry| entry.is_staged())
+        .map(|entry| entry.absolute_path().to_string_lossy().into_owned())
+        .collect();
+    ytil_git::unstage(staged_changed_paths.iter().map(String::as_str))?;
+
     let changed_entries_paths = changed_entries
         .iter()
         .map(|changed_entry| changed_entry.absolute_path().to_string_lossy().into_owned());

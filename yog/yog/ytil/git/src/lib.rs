@@ -62,7 +62,7 @@ where
     let mut cmd = Command::new("git");
     cmd.arg("restore");
     if let Some(branch) = branch {
-        cmd.arg(branch);
+        cmd.arg(format!("--source={branch}"));
     }
     for p in paths {
         cmd.arg(p.as_ref());
@@ -152,6 +152,11 @@ impl GitStatusEntry {
 
     pub fn is_new_in_index(&self) -> bool {
         self.index_state.as_ref().is_some_and(IndexState::is_new)
+    }
+
+    /// Returns `true` if the entry has any staged (index) changes.
+    pub const fn is_staged(&self) -> bool {
+        self.index_state.is_some()
     }
 }
 
@@ -280,6 +285,25 @@ mod tests {
     ) {
         let entry = entry(index_state, worktree_state);
         assert_eq!(entry.is_new(), expected);
+    }
+
+    #[rstest]
+    #[case::index_new(Some(IndexState::New), None, true)]
+    #[case::index_modified(Some(IndexState::Modified), None, true)]
+    #[case::index_deleted(Some(IndexState::Deleted), None, true)]
+    #[case::index_renamed(Some(IndexState::Renamed), None, true)]
+    #[case::index_typechange(Some(IndexState::Typechange), None, true)]
+    #[case::worktree_only_modified(None, Some(WorktreeState::Modified), false)]
+    #[case::worktree_only_new(None, Some(WorktreeState::New), false)]
+    #[case::both_staged_and_worktree(Some(IndexState::Modified), Some(WorktreeState::Modified), true)]
+    #[case::none(None, None, false)]
+    fn git_status_entry_is_staged_cases(
+        #[case] index_state: Option<IndexState>,
+        #[case] worktree_state: Option<WorktreeState>,
+        #[case] expected: bool,
+    ) {
+        let entry = entry(index_state, worktree_state);
+        assert_eq!(entry.is_staged(), expected);
     }
 
     #[rstest]
