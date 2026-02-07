@@ -4,10 +4,10 @@ use core::fmt::Debug;
 use core::fmt::Display;
 use std::rc::Rc;
 
-use color_eyre::eyre::eyre;
 use nvim_oxi::mlua;
 use nvim_oxi::mlua::IntoLua;
 use nvim_oxi::mlua::ObjectLike;
+use rootcause::report;
 
 /// Configuration for quickfix list population and display.
 ///
@@ -37,7 +37,7 @@ pub fn open<C, K, V>(
     opts: &(impl IntoIterator<Item = (K, V)> + Debug + Clone),
     callback: impl Fn(usize) + 'static,
     maybe_quickfix: Option<QuickfixConfig>,
-) -> color_eyre::Result<()>
+) -> rootcause::Result<()>
 where
     C: Display,
     K: IntoLua,
@@ -48,11 +48,13 @@ where
     let vim_ui_select = lua
         .globals()
         .get_path::<mlua::Function>("vim.ui.select")
-        .map_err(|err| eyre!("cannot fetch vim.ui.select function from Lua globals | error={err:#?}"))?;
+        .map_err(|err| report!("cannot fetch vim.ui.select function from Lua globals").attach(err.to_string()))?;
 
-    let opts_table = lua
-        .create_table_from(opts.clone())
-        .map_err(|err| eyre!("cannot create opts table | opts={opts:#?} error={err:#?}"))?;
+    let opts_table = lua.create_table_from(opts.clone()).map_err(|err| {
+        report!("cannot create opts table")
+            .attach(format!("opts={opts:#?}"))
+            .attach(err.to_string())
+    })?;
 
     let quickfix = maybe_quickfix.map(Rc::new);
 
@@ -64,7 +66,7 @@ where
                 {
                     let _ = crate::quickfix::open(quickfix.all_items.iter().map(|(s, i)| (s.as_str(), *i)))
                         .inspect_err(|err| {
-                            crate::notify::error(format!("error opening quickfix | error={err:#?}"));
+                            crate::notify::error(format!("error opening quickfix: {err:#}"));
                         });
                     return Ok(());
                 }
@@ -75,7 +77,9 @@ where
             },
         )
         .map_err(|err| {
-            eyre!("cannot create vim.ui.select callback | choices={choices:#?} opts={opts_table:#?} error={err:#?}")
+            report!("cannot create vim.ui.select callback")
+                .attach(format!("choices={choices:#?} opts={opts_table:#?}"))
+                .attach(err.to_string())
         })?;
 
     let vim_ui_choices = choices.into_iter().map(|c| c.to_string()).collect::<Vec<_>>();
@@ -83,7 +87,9 @@ where
     vim_ui_select
         .call::<()>((vim_ui_choices.clone(), opts_table.clone(), vim_ui_select_callback))
         .map_err(|err| {
-            eyre!("cannot call vim.ui.select | choices={vim_ui_choices:#?} opts={opts_table:#?} error={err:#?}")
+            report!("cannot call vim.ui.select")
+                .attach(format!("choices={vim_ui_choices:#?} opts={opts_table:#?}"))
+                .attach(err.to_string())
         })?;
 
     Ok(())

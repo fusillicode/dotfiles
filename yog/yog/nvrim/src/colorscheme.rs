@@ -3,7 +3,6 @@
 //! Exposes a dictionary with a `set` function applying base UI preferences (dark background, termguicolors)
 //! and custom highlight groups (diagnostics, statusline, general UI).
 
-use color_eyre::eyre::eyre;
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::SuperIterator;
 use nvim_oxi::api::opts::GetHighlightOpts;
@@ -12,6 +11,7 @@ use nvim_oxi::api::opts::SetHighlightOpts;
 use nvim_oxi::api::opts::SetHighlightOptsBuilder;
 use nvim_oxi::api::types::GetHlInfos;
 use nvim_oxi::api::types::HighlightInfos;
+use rootcause::report;
 
 const GLOBAL_BG: &str = "#002020";
 const GLOBAL_FG: &str = "#dcdcd7";
@@ -151,7 +151,7 @@ fn get_overridden_set_hl_opts(
     hl_name: &str,
     override_set_hl_opts: impl FnMut(SetHighlightOptsBuilder) -> SetHighlightOpts,
     opts_builder: Option<GetHighlightOptsBuilder>,
-) -> color_eyre::Result<SetHighlightOpts> {
+) -> rootcause::Result<SetHighlightOpts> {
     let mut get_hl_opts = opts_builder.unwrap_or_default();
     let hl_infos = get_hl_single(0, &get_hl_opts.name(hl_name).build())?;
     hl_opts_from_hl_infos(&hl_infos).map(override_set_hl_opts)
@@ -183,10 +183,10 @@ fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &SetHighlightOpts) {
 /// # Errors
 /// - Propagates failures from [`nvim_oxi::api::get_hl`] while notifying them to Neovim.
 /// - Returns an error in case of multiple infos ([`GetHlInfos::Map`]) for the given `hl_opts` .
-fn get_hl_single(ns_id: u32, hl_opts: &GetHighlightOpts) -> color_eyre::Result<HighlightInfos> {
+fn get_hl_single(ns_id: u32, hl_opts: &GetHighlightOpts) -> rootcause::Result<HighlightInfos> {
     get_hl(ns_id, hl_opts).and_then(|hl| match hl {
         GetHlInfos::Single(highlight_infos) => Ok(highlight_infos),
-        GetHlInfos::Map(hl_infos) => Err(eyre!(
+        GetHlInfos::Map(hl_infos) => Err(report!(
             "multiple highlight infos returned | hl_infos={:#?} hl_opts={hl_opts:#?}",
             hl_infos.collect::<Vec<_>>()
         )),
@@ -202,9 +202,9 @@ fn get_hl_single(ns_id: u32, hl_opts: &GetHighlightOpts) -> color_eyre::Result<H
 fn get_hl_multiple(
     ns_id: u32,
     hl_opts: &GetHighlightOpts,
-) -> color_eyre::Result<Vec<(nvim_oxi::String, HighlightInfos)>> {
+) -> rootcause::Result<Vec<(nvim_oxi::String, HighlightInfos)>> {
     get_hl(ns_id, hl_opts).and_then(|hl| match hl {
-        GetHlInfos::Single(hl_info) => Err(eyre!(
+        GetHlInfos::Single(hl_info) => Err(report!(
             "single highlight info returned | hl_info={hl_info:#?} hl_opts={hl_opts:#?}",
         )),
         GetHlInfos::Map(hl_infos) => Ok(hl_infos.into_iter().collect()),
@@ -218,7 +218,7 @@ fn get_hl_multiple(
 fn get_hl(
     ns_id: u32,
     hl_opts: &GetHighlightOpts,
-) -> color_eyre::Result<GetHlInfos<impl SuperIterator<(nvim_oxi::String, HighlightInfos)>>> {
+) -> rootcause::Result<GetHlInfos<impl SuperIterator<(nvim_oxi::String, HighlightInfos)>>> {
     nvim_oxi::api::get_hl(ns_id, hl_opts)
         .inspect_err(|err| {
             ytil_noxi::notify::error(format!(
@@ -230,11 +230,11 @@ fn get_hl(
 
 /// Builds a [`SetHighlightOptsBuilder`] from [`HighlightInfos`], applying only present fields via [`Option::map`].
 ///
-/// Returns a [`color_eyre::Result`]. Errors if `blend` (`u32`) cannot convert to `u8` and notifies it to Neovim.
+/// Returns a [`rootcause::Result`]. Errors if `blend` (`u32`) cannot convert to `u8` and notifies it to Neovim.
 ///
 /// # Errors
 /// - The `blend` value cannot fit into a `u8`.
-fn hl_opts_from_hl_infos(hl_infos: &HighlightInfos) -> color_eyre::Result<SetHighlightOptsBuilder> {
+fn hl_opts_from_hl_infos(hl_infos: &HighlightInfos) -> rootcause::Result<SetHighlightOptsBuilder> {
     let mut opts = get_default_hl_opts();
     hl_infos.altfont.map(|value| opts.altfont(value));
     hl_infos

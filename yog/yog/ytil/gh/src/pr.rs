@@ -2,7 +2,7 @@ use std::process::Command;
 
 use chrono::DateTime;
 use chrono::Utc;
-use color_eyre::eyre::bail;
+use rootcause::bail;
 use serde::Deserialize;
 use strum::EnumIter;
 use strum::EnumString;
@@ -53,7 +53,7 @@ pub fn get(
     repo: &str,
     search: Option<&str>,
     retain_fn: &dyn Fn(&PullRequest) -> bool,
-) -> color_eyre::Result<Vec<PullRequest>> {
+) -> rootcause::Result<Vec<PullRequest>> {
     let mut args = vec![
         "pr",
         "list",
@@ -84,7 +84,7 @@ pub fn get(
 /// # Errors
 /// - Spawning or executing the `gh pr merge` command fails.
 /// - Command exits with non‑zero status.
-pub fn merge(pr_number: usize) -> color_eyre::Result<()> {
+pub fn merge(pr_number: usize) -> rootcause::Result<()> {
     Command::new("gh")
         .args([
             "pr",
@@ -103,7 +103,7 @@ pub fn merge(pr_number: usize) -> color_eyre::Result<()> {
 /// # Errors
 /// - Spawning or executing `gh pr review` fails.
 /// - Command exits with non‑zero status.
-pub fn approve(pr_number: usize) -> color_eyre::Result<()> {
+pub fn approve(pr_number: usize) -> rootcause::Result<()> {
     Command::new("gh")
         .args(["pr", "review", &format!("{pr_number}"), "--approve"])
         .exec()?;
@@ -115,7 +115,7 @@ pub fn approve(pr_number: usize) -> color_eyre::Result<()> {
 /// # Errors
 /// - Spawning or executing `gh pr comment` fails.
 /// - Command exits with non‑zero status.
-pub fn dependabot_rebase(pr_number: usize) -> color_eyre::Result<()> {
+pub fn dependabot_rebase(pr_number: usize) -> rootcause::Result<()> {
     Command::new("gh")
         .args(["pr", "comment", &format!("{pr_number}"), "--body", "@dependabot rebase"])
         .exec()?;
@@ -127,7 +127,7 @@ pub fn dependabot_rebase(pr_number: usize) -> color_eyre::Result<()> {
 /// # Errors
 /// - Spawning or executing `gh pr merge` fails.
 /// - Command exits non-zero.
-pub fn enable_auto_merge(pr_number: usize) -> color_eyre::Result<()> {
+pub fn enable_auto_merge(pr_number: usize) -> rootcause::Result<()> {
     Command::new("gh")
         .args([
             "pr",
@@ -145,7 +145,7 @@ pub fn enable_auto_merge(pr_number: usize) -> color_eyre::Result<()> {
 ///
 /// # Errors
 /// - Title is empty or `gh pr create` fails.
-pub fn create(title: &str) -> color_eyre::Result<String> {
+pub fn create(title: &str) -> rootcause::Result<String> {
     if title.is_empty() {
         bail!("error cannot create GitHub PR with empty title");
     }

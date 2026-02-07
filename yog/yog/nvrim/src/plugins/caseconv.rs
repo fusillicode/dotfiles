@@ -5,10 +5,10 @@
 
 use core::fmt::Display;
 
-use color_eyre::eyre::Report;
 use convert_case::Case;
 use convert_case::Casing as _;
 use nvim_oxi::Dictionary;
+use rootcause::Report;
 
 /// Namespaced dictionary of case conversion helpers.
 ///
@@ -33,7 +33,7 @@ pub fn dict() -> Dictionary {
 ///
 /// # Errors
 /// Errors from [`ytil_noxi::vim_ui_select::open`] are reported via [`ytil_noxi::notify::error`]
-/// using the direct display representation of [`color_eyre::Report`].
+/// using the direct display representation of [`rootcause::Report`].
 ///
 /// # Notes
 /// Blockwise selections are treated as a contiguous span (not a rectangle).

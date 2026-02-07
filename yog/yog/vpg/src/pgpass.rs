@@ -6,8 +6,8 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
 
-use color_eyre::eyre::WrapErr;
-use color_eyre::eyre::bail;
+use rootcause::prelude::ResultExt;
+use rootcause::report;
 
 use crate::vault::VaultCreds;
 
@@ -32,7 +32,7 @@ impl<'a> PgpassFile<'a> {
     /// # Errors
     /// - A metadata line is not followed by a valid connection line.
     /// - A connection line cannot be parsed into [`ConnectionParams`].
-    pub fn parse(pgpass_content: &'a str) -> color_eyre::eyre::Result<Self> {
+    pub fn parse(pgpass_content: &'a str) -> rootcause::Result<Self> {
         let mut idx_lines = vec![];
         let mut entries = vec![];
 
@@ -61,7 +61,8 @@ impl<'a> PgpassFile<'a> {
 
                     continue;
                 }
-                bail!("missing pgpass connection line after metadata | metadata={metadata:#?} idx_line={idx_line:#?}")
+                Err(report!("missing pgpass connection line after metadata"))
+                    .attach_with(|| format!("metadata={metadata:#?} idx_line={idx_line:#?}"))?;
             }
         }
 
@@ -130,7 +131,7 @@ impl ConnectionParams {
 }
 
 impl TryFrom<(usize, &str)> for ConnectionParams {
-    type Error = color_eyre::eyre::Error;
+    type Error = rootcause::Report;
 
     fn try_from(idx_line @ (idx, line): (usize, &str)) -> Result<Self, Self::Error> {
         // Use splitn to avoid Vec allocation; pgpass format is exactly 5 colon-separated fields
@@ -138,9 +139,12 @@ impl TryFrom<(usize, &str)> for ConnectionParams {
         let (Some(host), Some(port_str), Some(db), Some(user), Some(pwd)) =
             (parts.next(), parts.next(), parts.next(), parts.next(), parts.next())
         else {
-            bail!("malformed pgpass connection line | idx_line={idx_line:#?}")
+            return Err(report!("malformed pgpass connection line")).attach_with(|| format!("idx_line={idx_line:#?}"));
         };
-        let port = port_str.parse().context(format!("unexpected port | port={port_str}"))?;
+        let port = port_str
+            .parse()
+            .context("unexpected port")
+            .attach_with(|| format!("port={port_str}"))?;
         Ok(Self {
             idx,
             host: host.to_string(),
@@ -166,7 +170,7 @@ pub fn save_new_pgpass_file(
     pgpass_idx_lines: Vec<(usize, &str)>,
     updated_conn_params: &ConnectionParams,
     pgpass_path: &Path,
-) -> color_eyre::Result<()> {
+) -> rootcause::Result<()> {
     let mut tmp_path = PathBuf::from(pgpass_path);
     tmp_path.set_file_name(".pgpass.tmp");
     let mut tmp_file = File::create(&tmp_path)?;
@@ -213,16 +217,15 @@ mod tests {
     #[test]
     fn creds_try_from_returns_an_error_if_port_is_not_a_number() {
         assert2::let_assert!(Err(err) = ConnectionParams::try_from((42, "host:foo:db:user:pwd")));
-        assert_eq!(format!("{err}"), "unexpected port | port=foo");
+        assert_eq!(err.format_current_context().to_string(), "unexpected port");
     }
 
     #[test]
     fn creds_try_from_returns_an_error_if_str_is_malformed() {
         assert2::let_assert!(Err(err) = ConnectionParams::try_from((42, "host:5432:db:user")));
         assert_eq!(
-            format!("{err}"),
-            "malformed pgpass connection line | idx_line=(\n    42,\n    \"host:5432:db:user\",\n)",
-            "unexpected {err}"
+            err.format_current_context().to_string(),
+            "malformed pgpass connection line"
         );
     }
 

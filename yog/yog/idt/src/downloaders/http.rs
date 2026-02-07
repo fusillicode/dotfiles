@@ -4,7 +4,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
-use color_eyre::eyre::eyre;
+use rootcause::prelude::ResultExt as _;
 
 pub enum HttpDownloaderOption<'a> {
     DecompressGz {
@@ -43,18 +43,20 @@ pub struct ChecksumSource<'a> {
 /// - A filesystem operation (create/read/write/remove) fails.
 /// - Checksum verification fails (mismatch).
 /// - Creating a temporary directory fails.
-pub fn run(url: &str, opt: &HttpDownloaderOption, checksum: Option<&ChecksumSource>) -> color_eyre::Result<PathBuf> {
+pub fn run(url: &str, opt: &HttpDownloaderOption, checksum: Option<&ChecksumSource>) -> rootcause::Result<PathBuf> {
     // Phase 1: Download to a temporary file.
-    let tmp_dir = tempfile::tempdir().map_err(|err| eyre!("error creating temp dir for download | error={err}"))?;
+    let tmp_dir = tempfile::tempdir().context("error creating temp dir for download")?;
     let tmp_file = tmp_dir.path().join("download");
 
     let resp = ureq::get(url)
         .call()
-        .map_err(|err| eyre!("error downloading | url={url} error={err}"))?;
+        .context("error downloading")
+        .attach_with(|| format!("url={url}"))?;
 
-    let mut file = File::create(&tmp_file).map_err(|err| eyre!("error creating temp file | error={err}"))?;
+    let mut file = File::create(&tmp_file).context("error creating temp file")?;
     std::io::copy(&mut resp.into_body().as_reader(), &mut file)
-        .map_err(|err| eyre!("error writing download to temp file | url={url} error={err}"))?;
+        .context("error writing download to temp file")
+        .attach_with(|| format!("url={url}"))?;
 
     // Phase 2: Checksum verification (only when a source is provided).
     if let Some(source) = checksum {
@@ -70,16 +72,15 @@ pub fn run(url: &str, opt: &HttpDownloaderOption, checksum: Option<&ChecksumSour
                 .args(["-dc"])
                 .arg(&tmp_file)
                 .output()
-                .map_err(|err| eyre!("error executing gzip -dc | error={err}"))?;
-            output
-                .status
-                .exit_ok()
-                .map_err(|err| eyre!("error gzip -dc exit status | error={err}"))?;
+                .context("error executing gzip -dc")?;
+            output.status.exit_ok().context("error gzip -dc exit status")?;
 
             let mut file = File::create(dest_path)
-                .map_err(|err| eyre!("error creating dest file | path={} error={err}", dest_path.display()))?;
+                .context("error creating dest file")
+                .attach_with(|| format!("path={}", dest_path.display()))?;
             file.write_all(&output.stdout)
-                .map_err(|err| eyre!("error writing dest file | path={} error={err}", dest_path.display()))?;
+                .context("error writing dest file")
+                .attach_with(|| format!("path={}", dest_path.display()))?;
 
             dest_path.into()
         }
@@ -97,21 +98,17 @@ pub fn run(url: &str, opt: &HttpDownloaderOption, checksum: Option<&ChecksumSour
             }
             tar_cmd
                 .status()
-                .map_err(|err| eyre!("error executing tar | error={err}"))?
+                .context("error executing tar")?
                 .exit_ok()
-                .map_err(|err| eyre!("error tar exit status | error={err}"))?;
+                .context("error tar exit status")?;
 
             dest_name.map_or_else(|| dest_dir.into(), |dn| dest_dir.join(dn))
         }
         HttpDownloaderOption::WriteTo { dest_path } => {
             // Use copy instead of rename to handle cross-filesystem moves (e.g. /tmp -> target).
-            std::fs::copy(&tmp_file, dest_path).map_err(|err| {
-                eyre!(
-                    "error copying temp file to dest | src={} dest={} error={err}",
-                    tmp_file.display(),
-                    dest_path.display()
-                )
-            })?;
+            std::fs::copy(&tmp_file, dest_path)
+                .context("error copying temp file to dest")
+                .attach_with(|| format!("src={} dest={}", tmp_file.display(), dest_path.display()))?;
 
             dest_path.into()
         }

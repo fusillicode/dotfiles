@@ -1,9 +1,9 @@
 //! Typed dictionary extraction helpers for Nvim objects.
 
-use color_eyre::eyre::Context;
-use color_eyre::eyre::eyre;
 use nvim_oxi::Dictionary;
 use nvim_oxi::ObjectKind;
+use rootcause::prelude::ResultExt;
+use rootcause::report;
 
 use crate::extract::OxiExtract;
 
@@ -17,7 +17,7 @@ pub trait DictionaryExt {
     /// # Errors
     /// - The key is missing.
     /// - The value exists but cannot be converted to the requested type (unexpected kind).
-    fn get_t<T: OxiExtract>(&self, key: &str) -> color_eyre::Result<T::Out>;
+    fn get_t<T: OxiExtract>(&self, key: &str) -> rootcause::Result<T::Out>;
 
     /// Gets an optional typed value from the dictionary using the [`OxiExtract`] trait.
     ///
@@ -26,7 +26,7 @@ pub trait DictionaryExt {
     ///
     /// # Errors
     /// - The value exists but cannot be converted to the requested type (unexpected kind).
-    fn get_opt_t<T: OxiExtract>(&self, key: &str) -> color_eyre::Result<Option<T::Out>>;
+    fn get_opt_t<T: OxiExtract>(&self, key: &str) -> rootcause::Result<Option<T::Out>>;
 
     /// Gets an optional nested [`Dictionary`] by traversing a sequence of keys.
     ///
@@ -35,7 +35,7 @@ pub trait DictionaryExt {
     ///
     /// # Errors
     /// - A value is found for an intermediate key but it is not a [`Dictionary`] (unexpected kind).
-    fn get_dict(&self, keys: &[&str]) -> color_eyre::Result<Option<Dictionary>>;
+    fn get_dict(&self, keys: &[&str]) -> rootcause::Result<Option<Dictionary>>;
 
     /// Gets a required nested [`Dictionary`] by traversing a sequence of keys.
     ///
@@ -45,43 +45,45 @@ pub trait DictionaryExt {
     /// # Errors
     /// - A key in the path is missing.
     /// - A value is found for an intermediate key but it is not a [`Dictionary`] (unexpected kind).
-    fn get_required_dict(&self, keys: &[&str]) -> color_eyre::Result<Dictionary>;
+    fn get_required_dict(&self, keys: &[&str]) -> rootcause::Result<Dictionary>;
 }
 
 /// Implementation of [`DictionaryExt`] for [`Dictionary`] providing typed getters.
 impl DictionaryExt for Dictionary {
-    fn get_t<T: OxiExtract>(&self, key: &str) -> color_eyre::Result<T::Out> {
+    fn get_t<T: OxiExtract>(&self, key: &str) -> rootcause::Result<T::Out> {
         let value = self.get(key).ok_or_else(|| no_value_matching(&[key], self))?;
         T::extract_from_dict(key, value, self)
     }
 
-    fn get_opt_t<T: OxiExtract>(&self, key: &str) -> color_eyre::Result<Option<T::Out>> {
+    fn get_opt_t<T: OxiExtract>(&self, key: &str) -> rootcause::Result<Option<T::Out>> {
         self.get(key)
             .map(|value| T::extract_from_dict(key, value, self))
             .transpose()
     }
 
-    fn get_dict(&self, keys: &[&str]) -> color_eyre::Result<Option<Dictionary>> {
+    fn get_dict(&self, keys: &[&str]) -> rootcause::Result<Option<Dictionary>> {
         let mut current = self.clone();
 
         for key in keys {
             let Some(obj) = current.get(key) else { return Ok(None) };
-            current = Self::try_from(obj.clone()).with_context(|| {
-                crate::extract::unexpected_kind_error_msg(obj, key, &current, ObjectKind::Dictionary)
-            })?;
+            current = Self::try_from(obj.clone())
+                .context("unexpected object kind")
+                .attach_with(|| {
+                    crate::extract::unexpected_kind_error_msg(obj, key, &current, ObjectKind::Dictionary)
+                })?;
         }
 
         Ok(Some(current))
     }
 
-    fn get_required_dict(&self, keys: &[&str]) -> color_eyre::Result<Dictionary> {
+    fn get_required_dict(&self, keys: &[&str]) -> rootcause::Result<Dictionary> {
         self.get_dict(keys)?.ok_or_else(|| no_value_matching(keys, self))
     }
 }
 
 /// Creates an error for missing value in [`Dictionary`].
-fn no_value_matching(query: &[&str], dict: &Dictionary) -> color_eyre::eyre::Error {
-    eyre!("missing dict value | query={query:#?} dict={dict:#?}")
+fn no_value_matching(query: &[&str], dict: &Dictionary) -> rootcause::Report {
+    report!("missing dict value").attach(format!("query={query:#?} dict={dict:#?}"))
 }
 
 #[cfg(test)]
@@ -93,9 +95,7 @@ mod tests {
     fn get_t_missing_key_errors() {
         let d = dict! { other: 1 };
         assert2::let_assert!(Err(err) = d.get_t::<nvim_oxi::String>("name"));
-        let msg = err.to_string();
-        assert!(msg.starts_with("missing dict value |"), "actual: {msg}");
-        assert!(msg.contains("query=[\n    \"name\",\n]"), "actual: {msg}");
+        assert_eq!(err.format_current_context().to_string(), "missing dict value");
     }
 
     #[test]
@@ -116,20 +116,13 @@ mod tests {
     fn get_dict_intermediate_wrong_type_errors() {
         let d = dict! { root: dict! { leaf: 1 } };
         assert2::let_assert!(Err(err) = d.get_dict(&["root", "leaf", "value"]));
-        let msg = err.to_string();
-        assert!(msg.contains(" is Integer but Dictionary was expected"), "actual: {msg}");
-        assert!(msg.contains("key \"leaf\""), "actual: {msg}");
+        assert_eq!(err.format_current_context().to_string(), "unexpected object kind");
     }
 
     #[test]
     fn get_required_dict_missing_errors() {
         let d = dict! { root: dict! { leaf: 1 } };
         assert2::let_assert!(Err(err) = d.get_required_dict(&["root", "branch"]));
-        let msg = err.to_string();
-        assert!(msg.starts_with("missing dict value |"), "actual: {msg}");
-        assert!(
-            msg.contains("query=[\n    \"root\",\n    \"branch\",\n]"),
-            "actual: {msg}"
-        );
+        assert_eq!(err.format_current_context().to_string(), "missing dict value");
     }
 }

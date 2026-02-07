@@ -17,15 +17,15 @@ ignored = ["lightningcss"]
 [dependencies]
 askama = { version = "0.15" }
 chrono = { workspace = true }
-color-eyre = { workspace = true }
+rootcause = { workspace = true }
 ytil_cmd = { workspace = true }
 ytil_sys = { workspace = true }
 
 [build-dependencies]
-color-eyre = { workspace = true }
 lightningcss = { version = "1.0.0-alpha.70", default-features = false, features = [
   "browserslist",
 ] }
+rootcause = { workspace = true }
 
 [dev-dependencies]
 assert2 = { workspace = true }

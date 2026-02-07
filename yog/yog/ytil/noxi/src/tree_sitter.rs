@@ -1,9 +1,8 @@
 use std::ops::Deref;
 use std::path::Path;
 
-use color_eyre::eyre::Context as _;
-use color_eyre::eyre::ensure;
-use color_eyre::eyre::eyre;
+use rootcause::prelude::ResultExt as _;
+use rootcause::report;
 use tree_sitter::Node;
 use tree_sitter::Parser;
 use tree_sitter::Point;
@@ -56,22 +55,24 @@ pub fn get_enclosing_fn_name_of_position(file_path: &Path) -> Option<String> {
 ///
 /// # Errors
 /// - A filesystem operation (open/read/write/remove) fails.
-fn get_enclosing_fn_name_of_position_internal(file_path: &Path, position: Point) -> color_eyre::Result<Option<String>> {
-    ensure!(
-        file_path.extension().is_some_and(|ext| ext == "rs"),
-        "invalid file extension | path={} expected_ext=\"rs\"",
-        file_path.display(),
-    );
-    let src = std::fs::read(file_path).with_context(|| format!("Error reading {}", file_path.display()))?;
+fn get_enclosing_fn_name_of_position_internal(file_path: &Path, position: Point) -> rootcause::Result<Option<String>> {
+    if file_path.extension().is_none_or(|ext| ext != "rs") {
+        Err(report!("invalid file extension"))
+            .attach_with(|| format!("path={} expected_ext=\"rs\"", file_path.display()))?;
+    }
+    let src = std::fs::read(file_path)
+        .context("error reading file")
+        .attach_with(|| format!("path={}", file_path.display()))?;
 
     let mut parser = Parser::new();
     parser
         .set_language(&tree_sitter_rust::LANGUAGE.into())
-        .with_context(|| "error setting parser language")?;
+        .context("error setting parser language")?;
 
     let src_tree = parser
         .parse(&src, None)
-        .ok_or_else(|| eyre!("error parsing Rust code | path={}", file_path.display()))?;
+        .ok_or_else(|| report!("error parsing Rust code"))
+        .attach_with(|| format!("path={}", file_path.display()))?;
 
     let node_at_position = src_tree.root_node().descendant_for_point_range(position, position);
 

@@ -6,9 +6,8 @@
 use core::str::FromStr;
 use std::path::Path;
 
-use color_eyre::eyre::WrapErr;
-use color_eyre::eyre::bail;
-use color_eyre::eyre::eyre;
+use rootcause::prelude::ResultExt;
+use rootcause::report;
 use ytil_wezterm::WeztermPane;
 
 /// Supported text editors for file operations.
@@ -43,13 +42,13 @@ impl Editor {
 
 /// Parses an [`Editor`] from a string representation.
 impl FromStr for Editor {
-    type Err = color_eyre::eyre::Error;
+    type Err = rootcause::Report;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {
             "hx" => Ok(Self::Hx),
             "nvim" | "nv" => Ok(Self::Nvim),
-            unknown => Err(eyre!("unknown editor | value={unknown}")),
+            unknown => Err(report!("unknown editor").attach(format!("value={unknown}"))),
         }
     }
 }
@@ -67,7 +66,7 @@ pub struct FileToOpen {
 
 /// Attempts to create a [`FileToOpen`] from a file path, pane ID, and list of panes.
 impl TryFrom<(&str, i64, &[WeztermPane])> for FileToOpen {
-    type Error = color_eyre::eyre::Error;
+    type Error = rootcause::Report;
 
     fn try_from((file_to_open, pane_id, panes): (&str, i64, &[WeztermPane])) -> Result<Self, Self::Error> {
         if Path::new(file_to_open).is_absolute() {
@@ -77,44 +76,53 @@ impl TryFrom<(&str, i64, &[WeztermPane])> for FileToOpen {
         let mut source_pane_absolute_cwd = panes
             .iter()
             .find(|pane| pane.pane_id == pane_id)
-            .ok_or_else(|| eyre!("missing pane | pane_id={pane_id} panes={panes:#?}"))?
+            .ok_or_else(|| report!("missing pane"))
+            .attach_with(|| format!("pane_id={pane_id} panes={panes:#?}"))?
             .absolute_cwd();
 
         source_pane_absolute_cwd.push(file_to_open);
 
-        Self::from_str(
+        Ok(Self::from_str(
             source_pane_absolute_cwd
                 .to_str()
-                .ok_or_else(|| eyre!("cannot get path str | path={source_pane_absolute_cwd:#?}"))?,
+                .ok_or_else(|| report!("cannot get path str"))
+                .attach_with(|| format!("path={}", source_pane_absolute_cwd.display()))?,
         )
-        .wrap_err_with(|| eyre!("error parsing file to open | file_to_open={file_to_open} pane_id={pane_id}"))
+        .context("error parsing file to open")
+        .attach_with(|| format!("file_to_open={file_to_open} pane_id={pane_id}"))?)
     }
 }
 
 /// Parses a [`FileToOpen`] from a string in the format "path:line:column".
 impl FromStr for FileToOpen {
-    type Err = color_eyre::eyre::Error;
+    type Err = rootcause::Report;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut parts = s.split(':');
-        let path = parts.next().ok_or_else(|| eyre!("file path missing | str={s}"))?;
+        let path = parts
+            .next()
+            .ok_or_else(|| report!("file path missing"))
+            .attach_with(|| format!("str={s}"))?;
         let line_nbr = parts
             .next()
             .map(str::parse::<i64>)
             .transpose()
-            .wrap_err_with(|| eyre!("invalid line number | str={s:?}"))?
+            .context("invalid line number")
+            .attach_with(|| format!("str={s:?}"))?
             .unwrap_or_default();
         let column = parts
             .next()
             .map(str::parse::<i64>)
             .transpose()
-            .wrap_err_with(|| eyre!("invalid column number | str={s:?}"))?
+            .context("invalid column number")
+            .attach_with(|| format!("str={s:?}"))?
             .unwrap_or_default();
         if !Path::new(path)
             .try_exists()
-            .wrap_err_with(|| eyre!("error checking if file exists | path={path:?}"))?
+            .context("error checking if file exists")
+            .attach_with(|| format!("path={path:?}"))?
         {
-            bail!("file missing | path={path}")
+            Err(report!("file missing")).attach_with(|| format!("path={path}"))?;
         }
 
         Ok(Self {

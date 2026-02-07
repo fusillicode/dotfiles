@@ -11,7 +11,7 @@ use std::process::Output;
 use std::time::Duration;
 use std::time::Instant;
 
-use color_eyre::owo_colors::OwoColorize;
+use owo_colors::OwoColorize;
 use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt as _;
 use ytil_sys::cli::Args;
@@ -329,9 +329,7 @@ fn format_timing(duration: Duration) -> String {
 }
 
 /// Run workspace lint suite concurrently (check or fix modes).
-fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
-
+fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));

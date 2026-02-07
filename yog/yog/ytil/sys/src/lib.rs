@@ -5,11 +5,9 @@ use std::process::Command;
 use std::str::FromStr;
 use std::thread::JoinHandle;
 
-use color_eyre::eyre;
-use color_eyre::eyre::Context;
-use color_eyre::eyre::bail;
-use color_eyre::eyre::eyre;
 pub use pico_args;
+use rootcause::prelude::ResultExt;
+use rootcause::report;
 use ytil_cmd::CmdExt as _;
 
 pub mod cli;
@@ -22,25 +20,27 @@ pub mod rm;
 ///
 /// # Errors
 /// - Task panicked or returned an error.
-pub fn join<T>(join_handle: JoinHandle<color_eyre::Result<T>>) -> Result<T, eyre::Error> {
+pub fn join<T>(join_handle: JoinHandle<rootcause::Result<T>>) -> Result<T, rootcause::Report> {
     join_handle
         .join()
-        .map_err(|err| eyre!("error joining handle | error={err:#?}"))?
+        .map_err(|err| report!("error joining handle").attach(format!("error={err:#?}")))?
 }
 
 /// Opens the given argument using the system's default app (`open` on macOS).
 ///
 /// # Errors
 /// - `open` command fails.
-pub fn open(arg: &str) -> color_eyre::Result<()> {
+pub fn open(arg: &str) -> rootcause::Result<()> {
     let cmd = "open";
     Command::new("sh")
         .arg("-c")
         .arg(format!("{cmd} '{arg}'"))
         .status()
-        .wrap_err_with(|| eyre!("error running cmd | cmd={cmd:?} arg={arg:?}"))?
+        .context("error running cmd")
+        .attach_with(|| format!("cmd={cmd:?} arg={arg:?}"))?
         .exit_ok()
-        .wrap_err_with(|| eyre!("error cmd exit not ok | cmd={cmd:?} arg={arg:?}"))?;
+        .context("error cmd exit not ok")
+        .attach_with(|| format!("cmd={cmd:?} arg={arg:?}"))?;
     Ok(())
 }
 
@@ -55,29 +55,32 @@ impl SysInfo {
     /// # Errors
     /// - If `uname -mo` command fails.
     /// - If `uname -mo` output is unexpected.
-    pub fn get() -> color_eyre::Result<Self> {
-        Command::new("uname")
+    pub fn get() -> rootcause::Result<Self> {
+        let output = Command::new("uname")
             .arg("-mo")
             .exec()
-            .wrap_err_with(|| eyre!(r#"error running cmd | cmd="uname" arg="-mo""#))
-            .and_then(|s| ytil_cmd::extract_success_output(&s))
-            .and_then(|f| Self::from_str(f.as_str()))
+            .context("error running cmd")
+            .attach(r#"cmd="uname" arg="-mo""#)?;
+        let s = ytil_cmd::extract_success_output(&output)?;
+        Self::from_str(s.as_str())
     }
 }
 
 impl FromStr for SysInfo {
-    type Err = color_eyre::eyre::Error;
+    type Err = rootcause::Report;
 
     fn from_str(output: &str) -> Result<Self, Self::Err> {
         let mut os_arch = output.split_ascii_whitespace();
 
         let os = os_arch
             .next()
-            .ok_or_else(|| eyre!("error missing os part in uname output | output={output:?}"))
+            .ok_or_else(|| report!("error missing os part in uname output"))
+            .attach_with(|| format!("output={output:?}"))
             .and_then(Os::from_str)?;
         let arch = os_arch
             .next()
-            .ok_or_else(|| eyre!("error missing arch part in uname output | output={output:?}"))
+            .ok_or_else(|| report!("error missing arch part in uname output"))
+            .attach_with(|| format!("output={output:?}"))
             .and_then(Arch::from_str)?;
 
         Ok(Self { os, arch })
@@ -91,15 +94,14 @@ pub enum Os {
 }
 
 impl FromStr for Os {
-    type Err = color_eyre::eyre::Error;
+    type Err = rootcause::Report;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value.to_lowercase().as_str() {
             "darwin" => Ok(Self::MacOs),
             "linux" => Ok(Self::Linux),
-            normalized_value => {
-                bail!("error unknown normalized os value | normalized_value={normalized_value:?} value={value:?} ")
-            }
+            normalized_value => Err(report!("error unknown normalized os value")
+                .attach(format!("normalized_value={normalized_value:?} value={value:?}"))),
         }
     }
 }
@@ -111,17 +113,14 @@ pub enum Arch {
 }
 
 impl FromStr for Arch {
-    type Err = color_eyre::eyre::Error;
+    type Err = rootcause::Report;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value.to_lowercase().as_str() {
             "x86_64" => Ok(Self::X86),
             "arm64" => Ok(Self::Arm),
-            normalized_value => {
-                bail!(
-                    "error unknown normalized arch value | value={value:?} normalized_value={normalized_value:?} value={value:?} "
-                )
-            }
+            normalized_value => Err(report!("error unknown normalized arch value")
+                .attach(format!("value={value:?} normalized_value={normalized_value:?}"))),
         }
     }
 }

@@ -8,11 +8,9 @@ use core::fmt::Display;
 use std::ops::Deref;
 use std::str::FromStr;
 
-use color_eyre::Section;
-use color_eyre::eyre::Context as _;
-use color_eyre::eyre::bail;
-use color_eyre::eyre::eyre;
-use color_eyre::owo_colors::OwoColorize;
+use owo_colors::OwoColorize;
+use rootcause::prelude::ResultExt as _;
+use rootcause::report;
 use strum::EnumIter;
 use ytil_gh::RepoViewField;
 use ytil_gh::issue::ListedIssue;
@@ -160,7 +158,7 @@ impl Op {
     /// # Errors
     /// Returns the same error contained in `res` (no transformation) so callers
     /// can continue combinators (`and_then`, etc.) if desired.
-    pub fn report(&self, pr: &PullRequest, res: color_eyre::Result<()>) -> color_eyre::Result<()> {
+    pub fn report(&self, pr: &PullRequest, res: rootcause::Result<()>) -> rootcause::Result<()> {
         res.inspect(|()| self.report_ok(pr)).inspect_err(|err| {
             self.report_error(pr, err);
         })
@@ -178,7 +176,7 @@ impl Op {
     }
 
     /// Emit a structured error report for a failed operation.
-    fn report_error(&self, pr: &PullRequest, error: &color_eyre::Report) {
+    fn report_error(&self, pr: &PullRequest, error: &rootcause::Report) {
         let msg = match self {
             Self::Approve => "approving",
             Self::Merge => "merging",
@@ -211,7 +209,7 @@ fn format_pr(pr: &PullRequest) -> String {
 ///
 /// # Errors
 /// - User interaction or GitHub CLI operations fail.
-fn create_issue_and_branch_from_default_branch() -> Result<(), color_eyre::eyre::Error> {
+fn create_issue_and_branch_from_default_branch() -> Result<(), rootcause::Report> {
     let Some(issue_title) = ytil_tui::text_prompt("Issue title:")?.map(|x| x.trim().to_string()) else {
         return Ok(());
     };
@@ -243,7 +241,7 @@ fn create_issue_and_branch_from_default_branch() -> Result<(), color_eyre::eyre:
 /// - If [`ytil_tui::git_branch::select`] fails.
 /// - If [`pr_title_from_branch_name`] fails.
 /// - If [`ytil_gh::pr::create`] fails.
-fn create_pr() -> Result<(), color_eyre::eyre::Error> {
+fn create_pr() -> Result<(), rootcause::Report> {
     let Some(branch) = ytil_tui::git_branch::select()? else {
         return Ok(());
     };
@@ -259,7 +257,7 @@ fn create_pr() -> Result<(), color_eyre::eyre::Error> {
 ///
 /// # Errors
 /// - Issue listing, user selection, or branch development fails.
-fn create_branch_from_issue() -> Result<(), color_eyre::eyre::Error> {
+fn create_branch_from_issue() -> Result<(), rootcause::Report> {
     let issues = ytil_gh::issue::list()?;
 
     let Some(issue) = ytil_tui::minimal_select(issues.into_iter().map(RenderableListedIssue).collect())? else {
@@ -286,17 +284,17 @@ fn create_branch_from_issue() -> Result<(), color_eyre::eyre::Error> {
 /// - Branch name has no parts separated by `-`.
 /// - The first part is not a valid usize for issue number.
 /// - The title parts result in an empty title.
-fn pr_title_from_branch_name(branch_name: &str) -> color_eyre::Result<String> {
+fn pr_title_from_branch_name(branch_name: &str) -> rootcause::Result<String> {
     let mut parts = branch_name.split('-');
 
-    let issue_number: usize = parts
+    let x = parts
         .next()
-        .ok_or_else(|| eyre!("error malformed branch_name | branch_name={branch_name:?}"))
-        .and_then(|x| {
-            x.parse().wrap_err_with(|| {
-                format!("error parsing issue number | branch_name={branch_name:?} issue_number={x:?}")
-            })
-        })?;
+        .ok_or_else(|| report!("error malformed branch_name"))
+        .attach_with(|| format!("branch_name={branch_name:?}"))?;
+    let issue_number: usize = x
+        .parse()
+        .context("error parsing issue number")
+        .attach_with(|| format!("branch_name={branch_name:?} issue_number={x:?}"))?;
 
     let mut title = String::with_capacity(branch_name.len());
     for (i, word) in parts.enumerate() {
@@ -317,7 +315,7 @@ fn pr_title_from_branch_name(branch_name: &str) -> color_eyre::Result<String> {
     }
 
     if title.is_empty() {
-        bail!("error empty title | branch_name={branch_name:?}");
+        Err(report!("error empty title")).attach_with(|| format!("branch_name={branch_name:?}"))?;
     }
 
     Ok(format!("[{issue_number}]: {title}"))
@@ -335,9 +333,7 @@ fn pr_title_from_branch_name(branch_name: &str) -> color_eyre::Result<String> {
 ///   [`ytil_tui::yes_no_select`]).
 /// - GitHub CLI invocation fails (issue and branch creation via [`ytil_gh::issue::create`] and
 ///   [`ytil_gh::issue::develop`]).
-fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
-
+fn main() -> rootcause::Result<()> {
     let mut pargs = Arguments::from_env();
     if pargs.has_help() {
         println!("{}", include_str!("../help.txt"));
@@ -366,14 +362,11 @@ fn main() -> color_eyre::Result<()> {
     let search_filter: Option<String> = pargs.opt_value_from_str("--search")?;
     let merge_state = pargs
         .opt_value_from_fn("--merge-state", PullRequestMergeState::from_str)
-        .with_section(|| {
+        .attach_with(|| {
             format!(
                 "accepted values are {:#?}",
                 PullRequestMergeState::iter().collect::<Vec<_>>()
             )
-            .red()
-            .bold()
-            .to_string()
         })?;
 
     let params = format!(
@@ -432,14 +425,11 @@ mod tests {
     }
 
     #[rstest]
-    #[case(
-        "abc-foo",
-        r#"error parsing issue number | branch_name="abc-foo" issue_number="abc""#
-    )]
-    #[case("42", r#"error empty title | branch_name="42""#)]
-    #[case("", r#"error parsing issue number | branch_name="" issue_number="""#)]
-    fn pr_title_from_branch_name_when_invalid_input_returns_error(#[case] input: &str, #[case] expected_error: &str) {
+    #[case("abc-foo", "error parsing issue number")]
+    #[case("42", "error empty title")]
+    #[case("", "error parsing issue number")]
+    fn pr_title_from_branch_name_when_invalid_input_returns_error(#[case] input: &str, #[case] expected_ctx: &str) {
         assert2::let_assert!(Err(err) = pr_title_from_branch_name(input));
-        pretty_assertions::assert_eq!(err.to_string(), expected_error);
+        assert_eq!(err.format_current_context().to_string(), expected_ctx);
     }
 }

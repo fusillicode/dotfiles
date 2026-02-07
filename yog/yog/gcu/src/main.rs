@@ -6,8 +6,9 @@
 
 use std::io::Write;
 
-use color_eyre::eyre::bail;
-use color_eyre::owo_colors::OwoColorize as _;
+use owo_colors::OwoColorize as _;
+use rootcause::prelude::ResultExt as _;
+use rootcause::report;
 use url::Url;
 use ytil_git::CmdError;
 use ytil_sys::cli::Args;
@@ -23,7 +24,7 @@ use ytil_sys::cli::Args;
 /// - Branch enumeration via [`ytil_git::branch::get_all_no_redundant`] fails (if `branches` is empty).
 /// - UI rendering via [`ytil_tui::minimal_select`] fails.
 /// - Branch switching via [`ytil_git::branch::switch`] fails.
-fn autocomplete_git_branches_and_switch() -> color_eyre::Result<()> {
+fn autocomplete_git_branches_and_switch() -> rootcause::Result<()> {
     let Some(branch) = ytil_tui::git_branch::select()? else {
         return Ok(());
     };
@@ -44,7 +45,7 @@ fn autocomplete_git_branches_and_switch() -> color_eyre::Result<()> {
 /// - GitHub authentication via [`ytil_gh::log_into_github`] fails (if URL).
 /// - Pull request branch name derivation via [`ytil_gh::get_branch_name_from_url`] fails (if URL).
 /// - Branch switching via [`ytil_git::branch::switch`] fails.
-fn handle_single_input_argument(arg: &str) -> color_eyre::Result<()> {
+fn handle_single_input_argument(arg: &str) -> rootcause::Result<()> {
     let branch_name = if let Ok(url) = Url::parse(arg) {
         ytil_gh::log_into_github()?;
         ytil_gh::get_branch_name_from_url(&url)?
@@ -71,7 +72,7 @@ fn handle_single_input_argument(arg: &str) -> color_eyre::Result<()> {
 /// - Branch creation via [`ytil_git::branch::create_from_default_branch`] or subsequent switching via
 ///   [`ytil_git::branch::switch`] fails.
 /// - Reading user confirmation input fails.
-fn create_branch_and_switch(branch_name: &str) -> color_eyre::Result<()> {
+fn create_branch_and_switch(branch_name: &str) -> rootcause::Result<()> {
     if !should_create_new_branch(branch_name)? {
         return Ok(());
     }
@@ -96,7 +97,7 @@ fn create_branch_and_switch(branch_name: &str) -> color_eyre::Result<()> {
 /// # Errors
 /// - Current branch discovery via [`ytil_git::branch::get_current`] fails.
 /// - Reading user confirmation input fails.
-fn should_create_new_branch(branch_name: &str) -> color_eyre::Result<bool> {
+fn should_create_new_branch(branch_name: &str) -> rootcause::Result<bool> {
     let default_branch = ytil_git::branch::get_default()?;
     if default_branch == branch_name {
         return Ok(true);
@@ -127,7 +128,7 @@ fn should_create_new_branch(branch_name: &str) -> color_eyre::Result<bool> {
 ///
 /// # Errors
 /// - sanitization produces an empty string.
-fn build_branch_name(args: &[&str]) -> color_eyre::Result<String> {
+fn build_branch_name(args: &[&str]) -> rootcause::Result<String> {
     fn is_permitted(c: char) -> bool {
         const PERMITTED_CHARS: [char; 3] = ['.', '/', '_'];
         c.is_alphanumeric() || PERMITTED_CHARS.contains(&c)
@@ -161,7 +162,7 @@ fn build_branch_name(args: &[&str]) -> color_eyre::Result<String> {
     }
 
     if branch_name.is_empty() {
-        bail!("branch name construction produced empty string | args={args:#?}")
+        Err(report!("branch name construction produced empty string")).attach_with(|| format!("args={args:#?}"))?;
     }
 
     Ok(branch_name)
@@ -198,9 +199,7 @@ fn ask_branching_from_not_default(branch_name: &str, default_branch_name: &str) 
 }
 
 /// Switch, create, and derive Git branches (including from GitHub PR URLs).
-fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
-
+fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));
@@ -229,11 +228,11 @@ mod tests {
     use super::*;
 
     #[rstest]
-    #[case::empty_input("", "branch name construction produced empty string | args=[\n    \"\",\n]")]
-    #[case::invalid_characters_only("❌", "branch name construction produced empty string | args=[\n    \"❌\",\n]")]
-    fn build_branch_name_fails_as_expected(#[case] input: &str, #[case] expected_output: &str) {
-        assert2::let_assert!(Err(actual_error) = build_branch_name(&[input]));
-        assert_eq!(format!("{actual_error}"), expected_output);
+    #[case::empty_input("", "branch name construction produced empty string")]
+    #[case::invalid_characters_only("❌", "branch name construction produced empty string")]
+    fn build_branch_name_fails_as_expected(#[case] input: &str, #[case] expected_ctx: &str) {
+        assert2::let_assert!(Err(err) = build_branch_name(&[input]));
+        assert_eq!(err.format_current_context().to_string(), expected_ctx);
     }
 
     #[rstest]

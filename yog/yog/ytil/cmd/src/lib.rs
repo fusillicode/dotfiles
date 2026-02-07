@@ -16,8 +16,7 @@ use std::process::ExitStatus;
 use std::process::Output;
 use std::process::Stdio;
 
-use color_eyre::eyre::Context as _;
-use color_eyre::eyre::eyre;
+use rootcause::prelude::ResultExt as _;
 
 /// Extension trait for [`Command`] to execute and handle errors.
 pub trait CmdExt {
@@ -29,7 +28,7 @@ pub trait CmdExt {
     /// - Non-zero exit with valid UTF-8 stderr ([`CmdError::CmdFailure`]).
     /// - Non-zero exit with invalid UTF-8 stderr ([`CmdError::FromUtf8`]).
     /// - Borrowed UTF-8 validation failure ([`CmdError::Utf8`]).
-    fn exec(&mut self) -> color_eyre::Result<Output, CmdError>;
+    fn exec(&mut self) -> Result<Output, CmdError>;
 }
 
 impl CmdExt for Command {
@@ -54,18 +53,15 @@ impl CmdExt for Command {
 ///
 /// # Errors
 /// - UTF-8 conversion fails.
-pub fn extract_success_output(output: &Output) -> color_eyre::Result<String> {
-    output
-        .status
-        .exit_ok()
-        .wrap_err_with(|| eyre!("command exited with non-zero status"))?;
+pub fn extract_success_output(output: &Output) -> rootcause::Result<String> {
+    output.status.exit_ok().context("command exited with non-zero status")?;
     Ok(std::str::from_utf8(&output.stdout)
-        .wrap_err_with(|| eyre!("error decoding command stdout"))?
+        .context("error decoding command stdout")?
         .trim()
         .into())
 }
 
-fn to_utf8_string(cmd: &Command, bytes: Vec<u8>) -> color_eyre::Result<String, CmdError> {
+fn to_utf8_string(cmd: &Command, bytes: Vec<u8>) -> Result<String, CmdError> {
     String::from_utf8(bytes).map_err(|error| CmdError::FromUtf8 {
         cmd: Cmd::from(cmd),
         source: error,

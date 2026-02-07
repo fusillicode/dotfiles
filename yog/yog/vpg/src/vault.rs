@@ -1,8 +1,7 @@
 use std::process::Command;
 
-use color_eyre::eyre::Context as _;
-use color_eyre::eyre::bail;
-use color_eyre::eyre::eyre;
+use rootcause::prelude::ResultExt as _;
+use rootcause::report;
 use serde::Deserialize;
 
 /// Response structure from Vault's secret read operations.
@@ -39,21 +38,17 @@ pub struct VaultCreds {
 /// - UTF-8 conversion fails.
 /// - OIDC/Okta login fails.
 /// - Token lookup fails for a reason other than permission denied.
-pub fn log_into_vault_if_required() -> color_eyre::Result<()> {
+pub fn log_into_vault_if_required() -> rootcause::Result<()> {
     let token_lookup = Command::new("vault").args(["token", "lookup"]).output()?;
     if token_lookup.status.success() {
         return Ok(());
     }
     let stderr = std::str::from_utf8(&token_lookup.stderr)
-        .wrap_err_with(|| {
-            eyre!(
-                "error invalid utf-8 stderr | cmd=\"vault token lookup\", stderr={:?}",
-                token_lookup.stderr
-            )
-        })?
+        .context("error invalid utf-8 stderr")
+        .attach_with(|| format!("cmd=\"vault token lookup\" stderr={:?}", token_lookup.stderr))?
         .trim();
     if !stderr.contains("permission denied") {
-        bail!("error checking vault token | stderr={stderr:?}")
+        Err(report!("error checking vault token")).attach_with(|| format!("stderr={stderr:?}"))?;
     }
 
     let login = Command::new("vault")
@@ -61,14 +56,10 @@ pub fn log_into_vault_if_required() -> color_eyre::Result<()> {
         .output()?;
     if !login.status.success() {
         let stderr = std::str::from_utf8(&login.stderr)
-            .wrap_err_with(|| {
-                eyre!(
-                    "error invalid utf-8 stderr | cmd=\"vault login\" stderr={:?}",
-                    login.stderr
-                )
-            })?
+            .context("error invalid utf-8 stderr")
+            .attach_with(|| format!("cmd=\"vault login\" stderr={:?}", login.stderr))?
             .trim();
-        bail!("error logging into vault | stderr={stderr:?}")
+        Err(report!("error logging into vault")).attach_with(|| format!("stderr={stderr:?}"))?;
     }
 
     Ok(())

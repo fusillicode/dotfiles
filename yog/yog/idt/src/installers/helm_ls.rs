@@ -33,7 +33,7 @@ impl Installer for HelmLs<'_> {
         "helm_ls"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn install(&self) -> rootcause::Result<()> {
         let (arch, os) = self.target_arch_and_os();
         let repo = "mrjosh/helm-ls";
         let latest_release = ytil_gh::get_latest_release(repo)?;

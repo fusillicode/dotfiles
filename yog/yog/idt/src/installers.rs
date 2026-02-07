@@ -2,7 +2,7 @@ use std::process::Command;
 use std::time::Duration;
 use std::time::Instant;
 
-use color_eyre::owo_colors::OwoColorize as _;
+use owo_colors::OwoColorize as _;
 use ytil_cmd::Cmd;
 use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt as _;
@@ -39,10 +39,10 @@ pub trait Installer: Sync + Send {
     fn bin_name(&self) -> &'static str;
 
     /// Installs the tool.
-    fn install(&self) -> color_eyre::Result<()>;
+    fn install(&self) -> rootcause::Result<()>;
 
     /// Checks if the tool is installed.
-    fn check(&self) -> Option<color_eyre::Result<String>> {
+    fn check(&self) -> Option<rootcause::Result<String>> {
         let check_args = self.check_args()?;
         let mut cmd = Command::new(self.bin_name());
         cmd.args(check_args);
@@ -67,7 +67,7 @@ pub trait Installer: Sync + Send {
     ///
     /// # Errors
     /// - Install or check phase fails.
-    fn run(&self) -> color_eyre::Result<()> {
+    fn run(&self) -> rootcause::Result<()> {
         let start = Instant::now();
 
         // Install phase
@@ -156,7 +156,7 @@ pub fn install_npm_tool(
     bin_name: &str,
     npm_name: &str,
     packages: &[&str],
-) -> color_eyre::Result<()> {
+) -> rootcause::Result<()> {
     let target_dir = crate::downloaders::npm::run(dev_tools_dir, npm_name, packages)?;
     let target = target_dir.join(bin_name);
     ytil_sys::file::ln_sf(&target, &bin_dir.join(bin_name))?;

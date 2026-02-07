@@ -11,7 +11,7 @@ impl Installer for Taplo<'_> {
         "taplo"
     }
 
-    fn install(&self) -> color_eyre::Result<()> {
+    fn install(&self) -> rootcause::Result<()> {
         // Installing with `cargo` because of:
         // 1. no particular requirements
         // 2. https://github.com/tamasfe/taplo/issues/542

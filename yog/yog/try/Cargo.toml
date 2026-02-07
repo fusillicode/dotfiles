@@ -11,7 +11,7 @@ keywords = ["cli", "retry", "command", "automation", "testing"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-color-eyre = { workspace = true }
+rootcause = { workspace = true }
 ytil_sys = { workspace = true }
 
 [dev-dependencies]

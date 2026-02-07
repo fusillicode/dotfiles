@@ -5,13 +5,13 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
 
-use color_eyre::eyre::WrapErr;
-use color_eyre::eyre::eyre;
 use git2::IntoCString;
 pub use git2::Repository;
 use git2::Status;
 use git2::StatusEntry;
 use git2::StatusOptions;
+use rootcause::prelude::ResultExt;
+use rootcause::report;
 pub use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt as _;
 
@@ -24,9 +24,10 @@ pub mod repo;
 ///
 /// # Errors
 /// - Repository discovery, status reading, or entry construction fails.
-pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
-    let repo =
-        crate::repo::discover(Path::new(".")).wrap_err_with(|| eyre!("error getting repo | operation=status"))?;
+pub fn get_status() -> rootcause::Result<Vec<GitStatusEntry>> {
+    let repo = crate::repo::discover(Path::new("."))
+        .context("error getting repo")
+        .attach("operation=status")?;
     let repo_root = Arc::new(crate::repo::get_root(&repo));
 
     let mut opts = StatusOptions::default();
@@ -36,12 +37,14 @@ pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
     let mut out = vec![];
     for status_entry in repo
         .statuses(Some(&mut opts))
-        .wrap_err_with(|| eyre!("error getting statuses | repo_root={}", repo_root.display()))?
+        .context("error getting statuses")
+        .attach_with(|| format!("repo_root={}", repo_root.display()))?
         .iter()
     {
         out.push(
             GitStatusEntry::try_from((Arc::clone(&repo_root), &status_entry))
-                .wrap_err_with(|| eyre!("error creating status entry | repo_root={}", repo_root.display()))?,
+                .context("error creating status entry")
+                .attach_with(|| format!("repo_root={}", repo_root.display()))?,
         );
     }
     Ok(out)
@@ -51,7 +54,7 @@ pub fn get_status() -> color_eyre::Result<Vec<GitStatusEntry>> {
 ///
 /// # Errors
 /// - `git restore` command fails.
-pub fn restore<I, P>(paths: I, branch: Option<&str>) -> color_eyre::Result<()>
+pub fn restore<I, P>(paths: I, branch: Option<&str>) -> rootcause::Result<()>
 where
     I: IntoIterator<Item = P>,
     P: AsRef<str>,
@@ -72,7 +75,7 @@ where
 ///
 /// # Errors
 /// - `git restore --staged` command fails.
-pub fn unstage<I, P>(paths: I) -> color_eyre::Result<()>
+pub fn unstage<I, P>(paths: I) -> rootcause::Result<()>
 where
     I: IntoIterator<Item = P>,
     P: AsRef<str>,
@@ -89,8 +92,7 @@ where
     if !has_paths {
         return Ok(());
     }
-    cmd.exec()
-        .wrap_err_with(|| eyre!("error restoring staged Git entries"))?;
+    cmd.exec().context("error restoring staged Git entries")?;
     Ok(())
 }
 
@@ -98,16 +100,16 @@ where
 ///
 /// # Errors
 /// - Loading, updating, or writing index fails.
-pub fn add_to_index<T, I>(repo: &mut Repository, paths: I) -> color_eyre::Result<()>
+pub fn add_to_index<T, I>(repo: &mut Repository, paths: I) -> rootcause::Result<()>
 where
     T: IntoCString,
     I: IntoIterator<Item = T>,
 {
-    let mut index = repo.index().wrap_err_with(|| eyre!("error loading index"))?;
+    let mut index = repo.index().context("error loading index")?;
     index
         .add_all(paths, git2::IndexAddOption::DEFAULT, None)
-        .wrap_err_with(|| eyre!("error adding paths to index"))?;
-    index.write().wrap_err_with(|| eyre!("error writing index"))?;
+        .context("error adding paths to index")?;
+    index.write().context("error writing index")?;
     Ok(())
 }
 
@@ -115,11 +117,9 @@ where
 ///
 /// # Errors
 /// - HEAD resolution fails.
-pub fn get_current_commit_hash(repo: &Repository) -> color_eyre::Result<String> {
-    let head = repo.head().wrap_err_with(|| eyre!("error getting repo head"))?;
-    let commit = head
-        .peel_to_commit()
-        .wrap_err_with(|| eyre!("error peeling head to commit"))?;
+pub fn get_current_commit_hash(repo: &Repository) -> rootcause::Result<String> {
+    let head = repo.head().context("error getting repo head")?;
+    let commit = head.peel_to_commit().context("error peeling head to commit")?;
     Ok(commit.id().to_string())
 }
 
@@ -156,14 +156,15 @@ impl GitStatusEntry {
 }
 
 impl TryFrom<(Arc<PathBuf>, &StatusEntry<'_>)> for GitStatusEntry {
-    type Error = color_eyre::eyre::Error;
+    type Error = rootcause::Report;
 
     fn try_from((repo_root, value): (Arc<PathBuf>, &StatusEntry<'_>)) -> Result<Self, Self::Error> {
         let status = value.status();
         let path = value
             .path()
             .map(PathBuf::from)
-            .ok_or_else(|| eyre!("error missing status path | context=StatusEntry"))?;
+            .ok_or_else(|| report!("error missing status path"))
+            .attach_with(|| "context=StatusEntry".to_string())?;
 
         Ok(Self {
             path,
