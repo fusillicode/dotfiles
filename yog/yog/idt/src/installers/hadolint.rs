@@ -4,8 +4,8 @@ use ytil_sys::Arch;
 use ytil_sys::Os;
 use ytil_sys::SysInfo;
 
-use crate::downloaders::http::ChecksumSource;
-use crate::downloaders::http::HttpDeflateOption;
+use crate::downloaders::http::deflate::ChecksumSource;
+use crate::downloaders::http::deflate::HttpDeflateOption;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -63,7 +63,7 @@ impl Installer for Hadolint<'_> {
     }
 
     // NOTE: skip because hadolint started to segfault...
-    fn check_args(&self) -> Option<&[&str]> {
+    fn health_check_args(&self) -> Option<&[&str]> {
         None
     }
 }

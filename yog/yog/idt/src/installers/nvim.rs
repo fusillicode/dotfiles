@@ -48,7 +48,7 @@ impl Installer for Nvim<'_> {
         Ok(())
     }
 
-    fn check_args(&self) -> Option<&[&str]> {
+    fn health_check_args(&self) -> Option<&[&str]> {
         Some(&["-V1", "-v"])
     }
 }

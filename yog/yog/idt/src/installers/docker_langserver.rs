@@ -23,7 +23,7 @@ impl Installer for DockerLangServer<'_> {
     }
 
     // NOTE: skip because JS is a shitshow...
-    fn check_args(&self) -> Option<&[&str]> {
+    fn health_check_args(&self) -> Option<&[&str]> {
         None
     }
 }

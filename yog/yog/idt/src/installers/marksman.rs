@@ -4,7 +4,7 @@ use ytil_sys::Arch;
 use ytil_sys::Os;
 use ytil_sys::SysInfo;
 
-use crate::downloaders::http::HttpDeflateOption;
+use crate::downloaders::http::deflate::HttpDeflateOption;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -41,7 +41,7 @@ impl Installer for Marksman<'_> {
     fn install(&self) -> rootcause::Result<()> {
         let (arch, os) = self.target_arch_and_os();
         let repo = format!("artempyanykh/{}", self.bin_name());
-        let latest_release = ytil_gh::get_latest_release(&repo)?;
+        let latest_release = crate::downloaders::http::github::get_latest_release_tag(&repo)?;
 
         let target = crate::downloaders::http::run(
             &format!(

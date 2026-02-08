@@ -41,14 +41,14 @@ pub trait Installer: Sync + Send {
     /// Installs the tool.
     fn install(&self) -> rootcause::Result<()>;
 
-    /// Checks if the tool is installed.
-    fn check(&self) -> Option<rootcause::Result<String>> {
-        let check_args = self.check_args()?;
+    /// Runs the installed binary to verify it is functional.
+    fn health_check(&self) -> Option<rootcause::Result<String>> {
+        let args = self.health_check_args()?;
         let mut cmd = Command::new(self.bin_name());
-        cmd.args(check_args);
+        cmd.args(args);
 
         #[allow(clippy::result_large_err)]
-        let check_res = cmd
+        let res = cmd
             .exec()
             .and_then(|output| {
                 std::str::from_utf8(&output.stdout)
@@ -60,13 +60,13 @@ pub trait Installer: Sync + Send {
             })
             .map_err(From::from);
 
-        Some(check_res)
+        Some(res)
     }
 
-    /// Execute install + optional check with timing output.
+    /// Execute install + optional health check with timing output.
     ///
     /// # Errors
-    /// - Install or check phase fails.
+    /// - Install or health check phase fails.
     fn run(&self) -> rootcause::Result<()> {
         let start = Instant::now();
 
@@ -81,47 +81,45 @@ pub trait Installer: Sync + Send {
 
         let past_install = Instant::now();
 
-        // Check phase (optional)
-        let mut check_duration = None;
-        let check_start = Instant::now();
-        let check_res = self.check();
-        if check_res.is_some() {
-            check_duration = Some(check_start.elapsed());
+        // Health check phase (optional)
+        let mut health_check_duration = None;
+        let health_check_start = Instant::now();
+        let health_check_res = self.health_check();
+        if health_check_res.is_some() {
+            health_check_duration = Some(health_check_start.elapsed());
         }
 
-        let checksum_label = if self.should_verify_checksum() {
-            ""
-        } else {
-            "no_checksum "
-        };
-
-        match check_res {
-            Some(Ok(check_output)) => {
+        match health_check_res {
+            Some(Ok(health_check_output)) => {
                 let styled_bin_name = if self.should_verify_checksum() {
                     self.bin_name().green().bold().to_string()
                 } else {
                     self.bin_name().yellow().bold().to_string()
                 };
                 println!(
-                    "{styled_bin_name} {checksum_label}{} check_output=\n{}",
-                    format_timing(start, past_install, check_duration),
-                    check_output.trim_matches(|c| c == '\n' || c == '\r')
+                    "{styled_bin_name} {} health_check_output=\n{}",
+                    format_timing(start, past_install, health_check_duration),
+                    health_check_output.trim_matches(|c| c == '\n' || c == '\r')
                 );
             }
             Some(Err(err)) => {
                 eprintln!(
-                    "{} error checking {} error=\n{}",
+                    "{} error in health check {} error=\n{}",
                     self.bin_name().red(),
-                    format_timing(start, past_install, check_duration),
+                    format_timing(start, past_install, health_check_duration),
                     format!("{err:#?}").red()
                 );
                 return Err(err);
             }
             None => {
+                let styled_bin_name = if self.should_verify_checksum() {
+                    self.bin_name().magenta().bold().to_string()
+                } else {
+                    self.bin_name().blue().bold().to_string()
+                };
                 println!(
-                    "{} {checksum_label}{}",
-                    self.bin_name().yellow().bold(),
-                    format_timing(start, past_install, check_duration),
+                    "{styled_bin_name} {}",
+                    format_timing(start, past_install, health_check_duration),
                 );
             }
         }
@@ -129,8 +127,8 @@ pub trait Installer: Sync + Send {
         Ok(())
     }
 
-    /// Returns arguments for version check.
-    fn check_args(&self) -> Option<&[&str]> {
+    /// Returns arguments for the health check (e.g. `--version`).
+    fn health_check_args(&self) -> Option<&[&str]> {
         Some(&["--version"])
     }
 
@@ -165,11 +163,11 @@ pub fn install_npm_tool(
 }
 
 /// Format phase timing summary line.
-fn format_timing(start: Instant, past_install: Instant, check: Option<Duration>) -> String {
+fn format_timing(start: Instant, past_install: Instant, health_check: Option<Duration>) -> String {
     format!(
-        "install_time={:?} check_time={:?} total_time={:?}",
+        "install_time={:?} health_check_time={:?} total_time={:?}",
         past_install.duration_since(start),
-        check,
+        health_check,
         start.elapsed()
     )
 }

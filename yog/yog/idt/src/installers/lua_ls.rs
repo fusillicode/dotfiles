@@ -4,7 +4,7 @@ use ytil_sys::Arch;
 use ytil_sys::Os;
 use ytil_sys::SysInfo;
 
-use crate::downloaders::http::HttpDeflateOption;
+use crate::downloaders::http::deflate::HttpDeflateOption;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -40,7 +40,7 @@ impl Installer for LuaLanguageServer<'_> {
         // point to the `bin` there.
         let repo = format!("LuaLS/{}", self.bin_name());
         let dev_tools_repo_dir = self.dev_tools_dir.join(self.bin_name());
-        let latest_release = ytil_gh::get_latest_release(&repo)?;
+        let latest_release = crate::downloaders::http::github::get_latest_release_tag(&repo)?;
         std::fs::create_dir_all(&dev_tools_repo_dir)?;
 
         let target_dir = crate::downloaders::http::run(
@@ -61,7 +61,7 @@ impl Installer for LuaLanguageServer<'_> {
     }
 
     // NOTE: skip because it's a shitshow...
-    fn check_args(&self) -> Option<&[&str]> {
+    fn health_check_args(&self) -> Option<&[&str]> {
         None
     }
 

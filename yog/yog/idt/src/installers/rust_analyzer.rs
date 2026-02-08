@@ -4,7 +4,7 @@ use ytil_sys::Arch;
 use ytil_sys::Os;
 use ytil_sys::SysInfo;
 
-use crate::downloaders::http::HttpDeflateOption;
+use crate::downloaders::http::deflate::HttpDeflateOption;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
