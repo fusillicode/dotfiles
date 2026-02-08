@@ -1,8 +1,0 @@
-{
-  "Binding Pry": {
-    "prefix": "bp",
-    "body": [
-      "import pdb; pdb.set_trace()"
-    ]
-  }
-}

@@ -1,8 +1,0 @@
-{
-  "Binding Pry": {
-    "prefix": "bp",
-    "body": [
-      "require 'pry'; binding.pry;"
-    ]
-  }
-}
