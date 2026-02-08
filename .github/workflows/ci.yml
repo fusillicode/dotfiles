@@ -111,12 +111,14 @@ jobs:
           verbose: true
 
       - name: Upload test results to Codecov
-        uses: codecov/test-results-action@v1
+        uses: codecov/codecov-action@v5
         if: steps.test_run.outcome == 'success'
         with:
           working-directory: yog
           files: ./target/coverage/nextest/ci/junit.xml
+          report_type: test_results
           disable_search: true
+          disable_telem: true
           fail_ci_if_error: true
           verbose: true
 
