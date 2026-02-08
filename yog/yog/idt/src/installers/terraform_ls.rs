@@ -5,8 +5,8 @@ use ytil_sys::Arch;
 use ytil_sys::Os;
 use ytil_sys::SysInfo;
 
-use crate::downloaders::http::ChecksumSource;
-use crate::downloaders::http::HttpDeflateOption;
+use crate::downloaders::http::deflate::ChecksumSource;
+use crate::downloaders::http::deflate::HttpDeflateOption;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -39,7 +39,7 @@ impl Installer for TerraformLs<'_> {
         let (arch, os) = self.target_arch_and_os();
 
         let repo = format!("hashicorp/{}", self.bin_name());
-        let latest_release_tag = ytil_gh::get_latest_release(&repo)?;
+        let latest_release_tag = crate::downloaders::http::github::get_latest_release_tag(&repo)?;
         let latest_release = latest_release_tag
             .get(1..)
             .ok_or_else(|| rootcause::report!("error trimming 'v' prefix from release tag"))

@@ -22,7 +22,7 @@ impl Installer for VsCodeLangServers<'_> {
     }
 
     // NOTE: skip because it's a shitshow...
-    fn check_args(&self) -> Option<&[&str]> {
+    fn health_check_args(&self) -> Option<&[&str]> {
         None
     }
 }
