@@ -52,7 +52,7 @@ fake = { version = "4.4", features = ["derive"] }
 nomicon = { path = "./yog/nomicon" }
 owo-colors = { version = "4" }
 pretty_assertions = { version = "1.4" }
-rootcause = { version = "0.11" }
+rootcause = { version = "0.12" }
 rstest = { version = "0.26" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
