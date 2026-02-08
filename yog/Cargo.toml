@@ -46,14 +46,9 @@ categories = ["command-line-utilities", "development-tools"]
 # Centralized shared dependencies (including those used only as dev-deps in member crates).
 # Member crates reference them with `{ workspace = true }` under their own [dev-dependencies].
 assert2 = { version = "0.3" }
-bitflags = { version = "2.9" }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 convert_case = { version = "0.11" }
 fake = { version = "4.4", features = ["derive"] }
-getrandom = { version = "0.4" }
-git2 = { version = "0.20", default-features = false, features = ["ssh"] }
-home = { version = "0.5" }
-itertools = { version = "0.14" }
 nomicon = { path = "./yog/nomicon" }
 owo-colors = { version = "4" }
 pretty_assertions = { version = "1.4" }
@@ -61,7 +56,6 @@ rootcause = { version = "0.11" }
 rstest = { version = "0.26" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
-sha2 = { version = "0.10" }
 strum = { version = "0.27", features = ["derive"] }
 tempfile = { version = "3.24" }
 thiserror = { version = "2.0" }
@@ -73,7 +67,6 @@ ytil_editor = { path = "./yog/ytil/editor" }
 ytil_gh = { path = "./yog/ytil/gh" }
 ytil_git = { path = "./yog/ytil/git" }
 ytil_hx = { path = "./yog/ytil/hx" }
-ytil_noxi = { path = "./yog/ytil/noxi" }
 ytil_sys = { path = "./yog/ytil/sys" }
 ytil_tui = { path = "./yog/ytil/tui" }
 ytil_wezterm = { path = "./yog/ytil/wezterm" }

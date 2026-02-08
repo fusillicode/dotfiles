@@ -5,7 +5,7 @@ use ytil_sys::Os;
 use ytil_sys::SysInfo;
 
 use crate::downloaders::http::ChecksumSource;
-use crate::downloaders::http::HttpDownloaderOption;
+use crate::downloaders::http::HttpDeflateOption;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -46,7 +46,7 @@ impl Installer for Deno<'_> {
 
         let target = crate::downloaders::http::run(
             &format!("https://github.com/{repo}/releases/download/{latest_release}/{filename}"),
-            &HttpDownloaderOption::ExtractTarGz {
+            &HttpDeflateOption::ExtractZip {
                 dest_dir: self.bin_dir,
                 dest_name: Some(self.bin_name()),
             },

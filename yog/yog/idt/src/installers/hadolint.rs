@@ -5,7 +5,7 @@ use ytil_sys::Os;
 use ytil_sys::SysInfo;
 
 use crate::downloaders::http::ChecksumSource;
-use crate::downloaders::http::HttpDownloaderOption;
+use crate::downloaders::http::HttpDeflateOption;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -48,7 +48,7 @@ impl Installer for Hadolint<'_> {
                 "https://github.com/{0}/{0}/releases/latest/download/{filename}",
                 self.bin_name()
             ),
-            &HttpDownloaderOption::WriteTo {
+            &HttpDeflateOption::WriteTo {
                 dest_path: &self.bin_dir.join(self.bin_name()),
             },
             Some(&ChecksumSource {

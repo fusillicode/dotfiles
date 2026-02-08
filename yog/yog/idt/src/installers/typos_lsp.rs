@@ -4,7 +4,7 @@ use ytil_sys::Arch;
 use ytil_sys::Os;
 use ytil_sys::SysInfo;
 
-use crate::downloaders::http::HttpDownloaderOption;
+use crate::downloaders::http::HttpDeflateOption;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -48,7 +48,7 @@ impl Installer for TyposLsp<'_> {
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}-{arch}-{os}.tar.gz",
                 self.bin_name()
             ),
-            &HttpDownloaderOption::ExtractTarGz {
+            &HttpDeflateOption::ExtractTarGz {
                 dest_dir: self.bin_dir,
                 dest_name: Some(self.bin_name()),
             },

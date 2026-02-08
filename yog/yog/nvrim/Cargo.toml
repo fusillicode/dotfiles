@@ -29,7 +29,7 @@ strum = { workspace = true }
 url = { workspace = true }
 ytil_cmd = { workspace = true }
 ytil_git = { workspace = true }
-ytil_noxi = { workspace = true }
+ytil_noxi = { path = "../ytil/noxi" }
 ytil_sys = { workspace = true }
 ytil_wezterm = { workspace = true }
 
@@ -38,7 +38,7 @@ assert2 = { workspace = true }
 pretty_assertions = { workspace = true }
 rstest = { workspace = true }
 tempfile = { workspace = true }
-ytil_noxi = { workspace = true, features = ["mockall", "testing"] }
+ytil_noxi = { path = "../ytil/noxi", features = ["mockall", "testing"] }
 
 [lints]
 workspace = true
