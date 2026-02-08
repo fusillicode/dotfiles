@@ -6,8 +6,7 @@ use ytil_noxi::mru_buffers::BufferKind;
 /// [`Dictionary`] of Rust tests utilities.
 pub fn dict() -> Dictionary {
     dict! {
-        "focus_term": fn_from!(focus_term),
-        "focus_buffer": fn_from!(focus_buffer),
+        "focus_vsplit": fn_from!(focus_vsplit),
         "smart_close_buffer": fn_from!(smart_close_buffer),
         "toggle_alternate_buffer": fn_from!(toggle_alternate_buffer),
     }
@@ -23,80 +22,48 @@ pub fn create_autocmd() {
     );
 }
 
-fn focus_term(width_perc: i32) -> Option<()> {
-    // Single MRU fetch -- source of truth for all terminal buffer lookups.
-    // Falls back to empty list on error, which degrades gracefully to path 4.
+fn focus_vsplit((term, width_perc): (bool, i32)) -> Option<()> {
+    // Single MRU fetch - source of truth for all terminal buffer lookups.
     let mru_bufs = ytil_noxi::mru_buffers::get().unwrap_or_default();
     let term_bufs: Vec<Buffer> = mru_bufs.iter().filter(|b| b.is_term()).map(Buffer::from).collect();
 
     let current_buf = nvim_oxi::api::get_current_buf();
 
-    // If current buffer IS terminal.
-    if term_bufs.contains(&current_buf) {
+    // If current buffer IS terminal OR file buffer (based on the supplied `term` value).
+    if (term && term_bufs.contains(&current_buf)) || (!term && !term_bufs.contains(&current_buf)) {
         ytil_noxi::common::exec_vim_script("only", None)?;
         return Some(());
     }
 
-    // If there is a VISIBLE terminal buffer.
-    if let Some(win) = nvim_oxi::api::list_wins()
-        .find(|win| ytil_noxi::window::get_buffer(win).is_some_and(|buf| term_bufs.contains(&buf)))
-    {
+    // If there is a VISIBLE terminal OR file buffer (based on the supplied `term` value).
+    if let Some(win) = nvim_oxi::api::list_wins().find(|win| {
+        ytil_noxi::window::get_buffer(win)
+            .is_some_and(|buf| (term && term_bufs.contains(&buf)) || (!term && !term_bufs.contains(&buf)))
+    }) {
         ytil_noxi::window::set_current(&win)?;
         return Some(());
     }
 
     let width = compute_width(width_perc)?;
+    let (leftabove, split_new_cmd) = if term { ("leftabove ", "term") } else { ("", "enew") };
 
-    // If there is a NON-VISIBLE listed terminal buffer.
-    if let Some(mru_term) = mru_bufs.iter().find(|b| b.is_term()) {
-        ytil_noxi::common::exec_vim_script(
-            &format!("leftabove vsplit | vertical resize {width} | buffer {}", mru_term.id),
-            None,
-        );
-        return Some(());
-    }
-
-    // If there is NO terminal buffer at all.
-    ytil_noxi::common::exec_vim_script(&format!("leftabove vsplit | vertical resize {width} | term"), None);
-
-    Some(())
-}
-
-fn focus_buffer(width_perc: i32) -> Option<()> {
-    // Single MRU fetch -- source of truth for all buffer lookups.
-    let mru_bufs = ytil_noxi::mru_buffers::get().unwrap_or_default();
-    let term_bufs: Vec<Buffer> = mru_bufs.iter().filter(|b| b.is_term()).map(Buffer::from).collect();
-
-    let current_buf = nvim_oxi::api::get_current_buf();
-
-    // If current buffer IS NOT terminal.
-    if !term_bufs.contains(&current_buf) {
-        ytil_noxi::common::exec_vim_script("only", None)?;
-        return Some(());
-    }
-
-    // If there is a VISIBLE file buffer (window whose buffer is not a terminal).
-    if let Some(win) = nvim_oxi::api::list_wins()
-        .find(|win| ytil_noxi::window::get_buffer(win).is_some_and(|buf| !term_bufs.contains(&buf)))
-    {
-        ytil_noxi::window::set_current(&win)?;
-        return Some(());
-    }
-
-    // If there is NO visible file buffer.
-    let width = compute_width(width_perc)?;
-
-    if let Some(mru_file) = mru_bufs
+    // If there is a NON-VISIBLE listed terminal OR file buffer (based on the supplied `term` value).
+    if let Some(mru_buf) = mru_bufs
         .iter()
-        .find(|b| matches!(b.kind, BufferKind::Path | BufferKind::NoName))
+        .find(|b| (term && b.is_term()) || (!term && matches!(b.kind, BufferKind::Path | BufferKind::NoName)))
     {
         ytil_noxi::common::exec_vim_script(
-            &format!("vsplit | vertical resize {width} | buffer {}", mru_file.id),
+            &format!("{leftabove}vsplit | vertical resize {width} | buffer {}", mru_buf.id),
             None,
         );
-    } else {
-        ytil_noxi::common::exec_vim_script(&format!("vsplit | vertical resize {width} | enew"), None);
+        return Some(());
     }
+
+    // If there is NO terminal buffer OR file buffer at all (based on the supplied `term` value).
+    ytil_noxi::common::exec_vim_script(
+        &format!("{leftabove}vsplit | vertical resize {width} | {split_new_cmd}"),
+        None,
+    );
 
     Some(())
 }
