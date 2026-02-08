@@ -12,8 +12,8 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 chrono = { workspace = true }
-home = { workspace = true }
-itertools = { workspace = true }
+home = { version = "0.5" }
+itertools = { version = "0.14" }
 owo-colors = { workspace = true }
 pico-args = { version = "0.5" }
 rootcause = { workspace = true }

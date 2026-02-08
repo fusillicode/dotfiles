@@ -4,7 +4,7 @@ use ytil_sys::Arch;
 use ytil_sys::Os;
 use ytil_sys::SysInfo;
 
-use crate::downloaders::http::HttpDownloaderOption;
+use crate::downloaders::http::HttpDeflateOption;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -43,7 +43,7 @@ impl Installer for HelmLs<'_> {
                 "https://github.com/{repo}/releases/download/{latest_release}/{}_{os}_{arch}",
                 self.bin_name()
             ),
-            &HttpDownloaderOption::WriteTo {
+            &HttpDeflateOption::WriteTo {
                 dest_path: &self.bin_dir.join(self.bin_name()),
             },
             None,

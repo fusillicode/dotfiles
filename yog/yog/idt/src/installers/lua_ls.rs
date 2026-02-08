@@ -4,7 +4,7 @@ use ytil_sys::Arch;
 use ytil_sys::Os;
 use ytil_sys::SysInfo;
 
-use crate::downloaders::http::HttpDownloaderOption;
+use crate::downloaders::http::HttpDeflateOption;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -48,7 +48,7 @@ impl Installer for LuaLanguageServer<'_> {
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}-{os}-{arch}.tar.gz",
                 self.bin_name()
             ),
-            &HttpDownloaderOption::ExtractTarGz {
+            &HttpDeflateOption::ExtractTarGz {
                 dest_dir: &dev_tools_repo_dir,
                 dest_name: None,
             },

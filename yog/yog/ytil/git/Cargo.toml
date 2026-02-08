@@ -12,7 +12,7 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 chrono = { workspace = true }
-git2 = { workspace = true }
+git2 = { version = "0.20", default-features = false, features = ["ssh"] }
 rootcause = { workspace = true }
 ureq = { workspace = true }
 ytil_cmd = { workspace = true }

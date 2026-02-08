@@ -6,7 +6,7 @@ use ytil_sys::Os;
 use ytil_sys::SysInfo;
 
 use crate::downloaders::http::ChecksumSource;
-use crate::downloaders::http::HttpDownloaderOption;
+use crate::downloaders::http::HttpDeflateOption;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -56,7 +56,7 @@ impl Installer for TerraformLs<'_> {
                 "https://releases.hashicorp.com/{0}/{latest_release}/{filename}",
                 self.bin_name()
             ),
-            &HttpDownloaderOption::ExtractTarGz {
+            &HttpDeflateOption::ExtractZip {
                 dest_dir: self.bin_dir,
                 dest_name: Some(self.bin_name()),
             },
