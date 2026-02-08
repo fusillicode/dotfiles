@@ -43,6 +43,9 @@ function preexec() { _set_title "$1"; }
 # Line editing (emacs mode; zsh defaults to vi when EDITOR contains "vi")
 bindkey -e
 
+# Subword navigation
+WORDCHARS='*?~&;!#$%^'
+
 # Shell options
 setopt ALWAYS_TO_END        # Move cursor to end on completion
 setopt AUTO_CD              # cd by typing directory name
