@@ -73,7 +73,7 @@ pub trait Installer: Sync + Send {
         // Install phase
         self.install().inspect_err(|err| {
             eprintln!(
-                "{} error installing error=\n{}",
+                "{} error installing\n{}",
                 self.bin_name().red().bold(),
                 format!("{err:#?}").red()
             );
@@ -104,7 +104,7 @@ pub trait Installer: Sync + Send {
             }
             Some(Err(err)) => {
                 eprintln!(
-                    "{} error in health check {} error=\n{}",
+                    "{} error in health check {}\n{}",
                     self.bin_name().red(),
                     format_timing(start, past_install, health_check_duration),
                     format!("{err:#?}").red()
@@ -113,9 +113,9 @@ pub trait Installer: Sync + Send {
             }
             None => {
                 let styled_bin_name = if self.should_verify_checksum() {
-                    self.bin_name().magenta().bold().to_string()
-                } else {
                     self.bin_name().blue().bold().to_string()
+                } else {
+                    self.bin_name().magenta().bold().to_string()
                 };
                 println!(
                     "{styled_bin_name} {}",
