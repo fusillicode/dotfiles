@@ -62,8 +62,7 @@ impl Installer for Hadolint<'_> {
         Ok(())
     }
 
-    // NOTE: skip because hadolint started to segfault...
     fn health_check_args(&self) -> Option<&[&str]> {
-        None
+        Some(&["--version"])
     }
 }
