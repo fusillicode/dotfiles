@@ -30,7 +30,7 @@ return {
       ssh = { border = style_opts['window']['border'], },
       keymaps_help = { border = style_opts['window']['border'], },
       keymaps = {
-        ['<esc>'] = ':bd!<cr>',
+        ['<esc>'] = 'actions.close',
         ['<s-l>'] = 'actions.select',
         ['<s-h>'] = 'actions.parent',
       },
