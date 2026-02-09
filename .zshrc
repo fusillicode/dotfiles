@@ -101,3 +101,6 @@ source "$_starship_cache"
 # Compile zsh scripts for faster loading
 [[ ~/.zshrc -nt ~/.zshrc.zwc ]] && zcompile ~/.zshrc
 [[ ~/.zsh_aliases -nt ~/.zsh_aliases.zwc ]] && zcompile ~/.zsh_aliases
+
+# Exit with 0 if everything's fine
+true
