@@ -57,7 +57,7 @@ rstest = { version = "0.26" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 strum = { version = "0.27", features = ["derive"] }
-tempfile = { version = "3.24" }
+tempfile = { version = "3.25" }
 thiserror = { version = "2.0" }
 ureq = { version = "3.2", default-features = false, features = ["rustls"] }
 url = { version = "2.5" }
