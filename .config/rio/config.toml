@@ -1,7 +1,7 @@
 ignore-selection-foreground-color = true
-line-height = 1
+line-height = 1.21
 option-as-alt = 'both'
-padding-y = [-12, -15]
+padding-y = [-10, -25]
 
 [navigation]
 mode = "TopTab"
@@ -12,13 +12,13 @@ decorations = "Disabled"
 
 [bindings]
 keys = [
-  { key = "]", with = "alt | shift", action = "MoveCurrentTabToNext" },
-  { key = "[", with = "alt | shift", action = "MoveCurrentTabToPrev" },
+  { key = "]", with = "control | alt", action = "MoveCurrentTabToNext" },
+  { key = "[", with = "control | alt", action = "MoveCurrentTabToPrev" },
 ]
 
 [fonts]
-size = 20
-family = "Inconsolata"
+size = 18
+family = "Cascadia Mono"
 
 [cursor]
 shape = 'block'
@@ -27,6 +27,7 @@ blinking-interval = 750
 
 [colors]
 bar = '#002020'
+tabs-active-highlight = '#00ffff'
 background = '#002020'
 cursor = '#ffffff'
 selection-background = '#505257'
