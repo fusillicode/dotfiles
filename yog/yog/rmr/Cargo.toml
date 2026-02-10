@@ -19,7 +19,7 @@ ytil_sys = { workspace = true }
 assert2 = { workspace = true }
 pretty_assertions = { workspace = true }
 rstest = { workspace = true }
-tempfile = "3.24"
+tempfile = "3.25"
 
 [lints]
 workspace = true
