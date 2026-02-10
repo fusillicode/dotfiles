@@ -21,6 +21,7 @@ pub mod marksman;
 pub mod nvim;
 pub mod prettierd;
 pub mod quicktype;
+pub mod rio;
 pub mod ruff_lsp;
 pub mod rust_analyzer;
 pub mod shellcheck;
