@@ -41,9 +41,22 @@ impl Installer for Rio<'_> {
         ytil_sys::file::ln_sf(&binary, &self.bin_dir.join(self.bin_name()))?;
         ytil_sys::file::chmod_x(&binary)?;
 
-        // Symlink into /Applications so Spotlight can find it.
-        let applications_link = Path::new("/Applications/Rio.app").to_path_buf();
-        ytil_sys::file::ln_sf(&app, &applications_link)?;
+        // Create a macOS Finder alias in /Applications so Spotlight can find it.
+        // Symlinks are invisible to Spotlight; Finder aliases are indexed properly.
+        let applications_alias = Path::new("/Applications/Rio.app");
+        if applications_alias.exists() || applications_alias.is_symlink() {
+            std::fs::remove_file(applications_alias)?;
+        }
+        silent_cmd("osascript")
+            .args([
+                "-e",
+                &format!(
+                    r#"tell application "Finder" to make alias file to POSIX file "{}" at POSIX file "/Applications""#,
+                    app.display(),
+                ),
+            ])
+            .status()?
+            .exit_ok()?;
 
         Ok(())
     }
