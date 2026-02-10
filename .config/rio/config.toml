@@ -1,0 +1,50 @@
+ignore-selection-foreground-color = true
+line-height = 1
+option-as-alt = 'both'
+padding-y = [-12, -15]
+
+[navigation]
+mode = "TopTab"
+
+[window]
+mode = "Maximized"
+decorations = "Disabled"
+
+[bindings]
+keys = [
+  { key = "]", with = "alt | shift", action = "MoveCurrentTabToNext" },
+  { key = "[", with = "alt | shift", action = "MoveCurrentTabToPrev" },
+]
+
+[fonts]
+size = 20
+family = "Inconsolata"
+
+[cursor]
+shape = 'block'
+blinking = true
+blinking-interval = 750
+
+[colors]
+bar = '#002020'
+background = '#002020'
+cursor = '#ffffff'
+selection-background = '#505257'
+
+black = '#505257'
+red = '#ec635c'
+green = '#8ce479'
+yellow = '#ffaa33'
+blue = '#6a6adf'
+magenta = '#ff00ff'
+cyan = '#00ffff'
+white = '#dcdcd7'
+
+light-black = '#505257'
+light-red = '#ec635c'
+light-green = '#8ce479'
+light-yellow = '#ffaa33'
+light-blue = '#6a6adf'
+light-magenta = '#ff00ff'
+light-cyan = '#00ffff'
+light-white = '#dcdcd7'

@@ -33,6 +33,7 @@ use crate::installers::marksman::Marksman;
 use crate::installers::nvim::Nvim;
 use crate::installers::prettierd::PrettierD;
 use crate::installers::quicktype::Quicktype;
+use crate::installers::rio::Rio;
 use crate::installers::ruff_lsp::RuffLsp;
 use crate::installers::rust_analyzer::RustAnalyzer;
 use crate::installers::shellcheck::Shellcheck;
@@ -160,6 +161,10 @@ fn main() -> rootcause::Result<()> {
             bin_dir: Path::new(bin_dir),
         }),
         Box::new(Quicktype {
+            dev_tools_dir: Path::new(dev_tools_dir),
+            bin_dir: Path::new(bin_dir),
+        }),
+        Box::new(Rio {
             dev_tools_dir: Path::new(dev_tools_dir),
             bin_dir: Path::new(bin_dir),
         }),
