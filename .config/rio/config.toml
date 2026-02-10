@@ -1,7 +1,7 @@
 ignore-selection-foreground-color = true
-line-height = 1.21
+line-height = 1.2
 option-as-alt = 'both'
-padding-y = [-10, -25]
+padding-y = [-10, -15]
 
 [navigation]
 mode = "TopTab"
@@ -17,7 +17,7 @@ keys = [
 ]
 
 [fonts]
-size = 18
+size = 17
 family = "Cascadia Mono"
 
 [cursor]
