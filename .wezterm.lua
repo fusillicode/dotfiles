@@ -23,11 +23,11 @@ end
 config.animation_fps = 1
 
 local background = '#002020'
-local foreground = '#DCDCD7'
+local foreground = '#c9c9c9'
 config.colors = {
   background = background,
   foreground = foreground,
-  cursor_bg = foreground,
+  cursor_bg = '#ffffff',
   cursor_border = background,
   tab_bar = {
     active_tab = { bg_color = background, fg_color = foreground, },

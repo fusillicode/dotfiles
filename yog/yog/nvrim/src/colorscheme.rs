@@ -24,12 +24,12 @@ use nvim_oxi::api::types::HighlightInfos;
 use rootcause::report;
 
 const GLOBAL_BG: &str = "#002020";
-const GLOBAL_FG: &str = "#dcdcd7";
+const GLOBAL_FG: &str = "#c9c9c9";
 
 const CURSOR_BG: &str = "white";
 const CURSOR_FG: &str = "black";
-const NON_TEXT_FG: &str = "NvimDarkGrey4";
-const COMMENTS_FG: &str = "NvimLightGrey4";
+const NON_TEXT_FG: &str = "#777777";
+const COMMENTS_FG: &str = "#777777";
 const NONE: &str = "none";
 
 const DIAG_ERROR_FG: &str = "#ec635c";
@@ -86,7 +86,7 @@ pub fn set(colorscheme: Option<String>) {
         ("LineNr", non_text_hl.clone()),
         ("Normal", LuaHlOpts::new().bg(GLOBAL_BG)),
         ("NormalFloat", LuaHlOpts::new().bg(GLOBAL_BG)),
-        ("StatusLine", non_text_hl),
+        ("StatusLine", non_text_hl.reverse(false)),
         ("TreesitterContext", LuaHlOpts::new().bg(TREESITTER_CONTEXT_BG)),
         ("WinSeparator", LuaHlOpts::new().fg(TREESITTER_CONTEXT_BG)),
         // Changing these will change the main foreground color.
@@ -260,6 +260,11 @@ impl LuaHlOpts {
 
     const fn bold(mut self, value: bool) -> Self {
         self.bold = Some(value);
+        self
+    }
+
+    const fn reverse(mut self, value: bool) -> Self {
+        self.reverse = Some(value);
         self
     }
 }
