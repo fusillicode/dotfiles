@@ -2,6 +2,7 @@ ignore-selection-foreground-color = true
 line-height = 1.2
 option-as-alt = 'both'
 padding-y = [-10, -15]
+performance = "High"
 
 [navigation]
 mode = "TopTab"
@@ -22,8 +23,7 @@ family = "Cascadia Mono"
 
 [cursor]
 shape = 'block'
-blinking = true
-blinking-interval = 750
+blinking = false
 
 [colors]
 bar = '#002020'
