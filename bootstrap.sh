@@ -28,7 +28,7 @@ safe_link "$dotfiles_dir/.config/mise" "$HOME/.config/mise"
 safe_link "$dotfiles_dir/.config/nvim" "$HOME/.config/nvim"
 safe_link "$dotfiles_dir/.config/opencode" "$HOME/.config/opencode"
 safe_link "$dotfiles_dir/.config/pgcli" "$HOME/.config/pgcli"
-safe_link "$dotfiles_dir/.config/rio" "$HOME/.config/rio"
+# safe_link "$dotfiles_dir/.config/rio" "$HOME/.config/rio"
 safe_link "$dotfiles_dir/.config/starship.toml" "$HOME/.config/starship.toml"
 
 # Symlink dotfiles in home directory

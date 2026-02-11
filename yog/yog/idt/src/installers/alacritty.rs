@@ -4,18 +4,18 @@ use ytil_cmd::silent_cmd;
 
 use crate::installers::Installer;
 
-pub struct Rio<'a> {
+pub struct Alacritty<'a> {
     pub dev_tools_dir: &'a Path,
     pub bin_dir: &'a Path,
 }
 
-impl Installer for Rio<'_> {
+impl Installer for Alacritty<'_> {
     fn bin_name(&self) -> &'static str {
-        "rio"
+        "alacritty"
     }
 
-    /// Builds Rio from source, symlinks the binary into `bin_dir`, and
-    /// copies `Rio.app` into `/Applications` (atomic swap).
+    /// Builds Alacritty from source, symlinks the binary into `bin_dir`, and
+    /// copies `Alacritty.app` into `/Applications` (atomic swap).
     fn install(&self) -> rootcause::Result<()> {
         let source_dir = self.dev_tools_dir.join(self.bin_name()).join("source");
 
@@ -25,12 +25,13 @@ impl Installer for Rio<'_> {
                 &format!(
                     r#"
                         ([ ! -d "{0}" ] && \
-                            git clone --depth=1 https://github.com/raphamorim/rio.git {0} || true) && \
+                            git clone --depth=1 https://github.com/alacritty/alacritty.git {0} || true) && \
                         cd {0} && \
-                        git fetch origin main --depth=1 && \
-                        git checkout origin/main && \
-                        rustup target add aarch64-apple-darwin && \
-                        make release-macos
+                        git fetch origin master --depth=1 && \
+                        git checkout origin/master && \
+                        rustup toolchain install stable --profile default && \
+                        rustup override set stable && \
+                        make app
                     "#,
                     source_dir.display(),
                 ),
@@ -38,13 +39,17 @@ impl Installer for Rio<'_> {
             .status()?
             .exit_ok()?;
 
-        let app = source_dir.join("release").join("Rio.app");
-        let binary = app.join("Contents").join("MacOS").join("rio");
+        let app = source_dir
+            .join("target")
+            .join("release")
+            .join("osx")
+            .join("Alacritty.app");
+        let binary = app.join("Contents").join("MacOS").join("alacritty");
         ytil_sys::file::ln_sf(&binary, &self.bin_dir.join(self.bin_name()))?;
         ytil_sys::file::chmod_x(&binary)?;
 
-        let applications_app = Path::new("/Applications/Rio.app");
-        let applications_app_old = Path::new("/Applications/Rio.app.old");
+        let applications_app = Path::new("/Applications/Alacritty.app");
+        let applications_app_old = Path::new("/Applications/Alacritty.app.old");
         if applications_app_old.exists() {
             std::fs::remove_dir_all(applications_app_old)?;
         }

@@ -7,6 +7,7 @@ use ytil_cmd::Cmd;
 use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt as _;
 
+pub mod alacritty;
 pub mod bash_language_server;
 pub mod commitlint;
 pub mod deno;
