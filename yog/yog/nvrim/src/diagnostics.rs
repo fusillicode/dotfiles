@@ -58,10 +58,11 @@ impl DiagnosticSeverity {
     /// Returns the canonical single-character symbol for this severity.
     pub const fn symbol(self) -> &'static str {
         match self {
-            Self::Error => "x",
-            Self::Warn => "⏶",
-            Self::Info => "◆",
-            Self::Hint | Self::Other => "",
+            Self::Error => "E",
+            Self::Warn => "W",
+            Self::Info => "I",
+            Self::Hint => "H",
+            Self::Other => "",
         }
     }
 }
