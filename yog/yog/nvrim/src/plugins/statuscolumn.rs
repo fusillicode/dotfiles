@@ -85,6 +85,7 @@ fn draw_statuscolumn(
     } else {
         out.push_str(EMPTY_SPACE);
     }
+    out.push_str(EMPTY_SPACE);
     if opts.is_some_and(|o| o.show_line_numbers) {
         out.push(' ');
         out.push_str("%=% ");
@@ -247,7 +248,7 @@ mod tests {
                 show_line_numbers: true,
             }),
         );
-        pretty_assertions::assert_eq!(out, format!("{EMPTY_SPACE}{EMPTY_SPACE} %=% 42 "));
+        pretty_assertions::assert_eq!(out, format!("{EMPTY_SPACE}{EMPTY_SPACE}{EMPTY_SPACE} %=% 42 "));
     }
 
     #[test]
@@ -264,8 +265,11 @@ mod tests {
                 show_line_numbers: true,
             }),
         );
-        // Canonical normalized error sign text is 'x'.
-        pretty_assertions::assert_eq!(out, format!("{EMPTY_SPACE}%#DiagnosticSignError#x%* %=% 42 "));
+        // Canonical normalized error sign text is 'E', followed by a Normal-highlighted space for constant width.
+        pretty_assertions::assert_eq!(
+            out,
+            format!("{EMPTY_SPACE}%#DiagnosticSignError#E%*{EMPTY_SPACE} %=% 42 ")
+        );
     }
 
     #[test]
@@ -279,7 +283,7 @@ mod tests {
                 show_line_numbers: true,
             }),
         );
-        pretty_assertions::assert_eq!(out, format!("%#GitSignsFoo#|%*{EMPTY_SPACE} %=% 42 "));
+        pretty_assertions::assert_eq!(out, format!("%#GitSignsFoo#|%*{EMPTY_SPACE}{EMPTY_SPACE} %=% 42 "));
     }
 
     #[test]
@@ -297,7 +301,10 @@ mod tests {
                 show_line_numbers: true,
             }),
         );
-        pretty_assertions::assert_eq!(out, "%#GitSignsFoo#|%*%#DiagnosticSignError#x%* %=% 42 ");
+        pretty_assertions::assert_eq!(
+            out,
+            format!("%#GitSignsFoo#|%*%#DiagnosticSignError#E%*{EMPTY_SPACE} %=% 42 ")
+        );
     }
 
     #[test]
@@ -318,7 +325,7 @@ mod tests {
     #[case(Some(Opts { show_line_numbers: false }))]
     fn draw_statuscolumn_when_line_numbers_disabled_returns_no_line_numbers(#[case] opts: Option<Opts>) {
         let out = draw_statuscolumn("foo", "42", std::iter::empty(), opts);
-        pretty_assertions::assert_eq!(out, format!("{EMPTY_SPACE}{EMPTY_SPACE}"));
+        pretty_assertions::assert_eq!(out, format!("{EMPTY_SPACE}{EMPTY_SPACE}{EMPTY_SPACE}"));
     }
 
     #[rstest]
@@ -330,7 +337,7 @@ mod tests {
             mk_extmark_meta(SignHlGroup::Git("GitSignsFoo".into()), "|"),
         ];
         let out = draw_statuscolumn("foo", "42", metas.into_iter(), opts);
-        pretty_assertions::assert_eq!(out, "%#GitSignsFoo#|%*%#DiagnosticSignError#x%*");
+        pretty_assertions::assert_eq!(out, format!("%#GitSignsFoo#|%*%#DiagnosticSignError#E%*{EMPTY_SPACE}"));
     }
 
     fn mk_extmark_meta(group: SignHlGroup, text: &str) -> ExtmarkMeta {
