@@ -12,6 +12,7 @@ offset = { x = 0, y = 7 }
 
 [colors]
 primary.background = "#002020"
+primary.foreground = "#c9c9c9"
 cursor = { text = "#000000", cursor = "#ffffff" }
 selection = { text = "CellForeground", background = "#505257" }
 normal.black = "#505257"
@@ -21,7 +22,7 @@ normal.yellow = "#ffaa33"
 normal.blue = "#6a6adf"
 normal.magenta = "#ff00ff"
 normal.cyan = "#00ffff"
-normal.white = "#dcdcd7"
+normal.white = "#c9c9c9"
 bright.black = "#505257"
 bright.red = "#ec635c"
 bright.green = "#8ce479"
@@ -29,7 +30,7 @@ bright.yellow = "#ffaa33"
 bright.blue = "#6a6adf"
 bright.magenta = "#ff00ff"
 bright.cyan = "#00ffff"
-bright.white = "#dcdcd7"
+bright.white = "#c9c9c9"
 
 [cursor]
 blink_interval = 750
