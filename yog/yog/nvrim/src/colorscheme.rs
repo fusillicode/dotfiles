@@ -2,13 +2,23 @@
 //!
 //! Exposes a dictionary with a `set` function applying base UI preferences (dark background, termguicolors)
 //! and custom highlight groups (diagnostics, statusline, general UI).
+//!
+//! # Note on `set_hl` implementation
+//!
+//! Highlight options are set through a Lua-based path (`vim.api.nvim_set_hl`) instead of the
+//! direct C FFI binding (`nvim_oxi::api::set_hl`). This works around an ABI mismatch between
+//! `nvim-oxi`'s `SetHighlightOpts` struct layout (targeting Neovim v0.11.3) and Neovim
+//! v0.12.0-dev (`886efcb853`), where the `cterm` field in `Dict(highlight)` changed from
+//! `Object` (32 bytes) to `DictAs(highlight_cterm)` / `Dict` (24 bytes), shifting all
+//! subsequent fields and causing validation errors.
+
+use core::fmt;
+use core::fmt::Display;
 
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::SuperIterator;
 use nvim_oxi::api::opts::GetHighlightOpts;
 use nvim_oxi::api::opts::GetHighlightOptsBuilder;
-use nvim_oxi::api::opts::SetHighlightOpts;
-use nvim_oxi::api::opts::SetHighlightOptsBuilder;
 use nvim_oxi::api::types::GetHlInfos;
 use nvim_oxi::api::types::HighlightInfos;
 use rootcause::report;
@@ -66,114 +76,85 @@ pub fn set(colorscheme: Option<String>) {
     crate::vim_opts::set("background", "dark", &opts);
     crate::vim_opts::set("termguicolors", true, &opts);
 
-    let non_text_hl = get_default_hl_opts().foreground(NON_TEXT_FG).background(NONE).build();
+    let non_text_hl = LuaHlOpts::new().fg(NON_TEXT_FG).bg(NONE);
 
     for (hl_name, hl_opts) in [
-        (
-            "Cursor",
-            get_default_hl_opts()
-                .foreground(CURSOR_FG)
-                .background(CURSOR_BG)
-                .build(),
-        ),
-        ("CursorLine", get_default_hl_opts().foreground(NONE).build()),
-        ("ErrorMsg", get_default_hl_opts().foreground(DIAG_ERROR_FG).build()),
-        (
-            "MsgArea",
-            get_default_hl_opts().foreground(COMMENTS_FG).background(NONE).build(),
-        ),
+        ("Cursor", LuaHlOpts::new().fg(CURSOR_FG).bg(CURSOR_BG)),
+        ("CursorLine", LuaHlOpts::new().fg(NONE)),
+        ("ErrorMsg", LuaHlOpts::new().fg(DIAG_ERROR_FG)),
+        ("MsgArea", LuaHlOpts::new().fg(COMMENTS_FG).bg(NONE)),
         ("LineNr", non_text_hl.clone()),
-        ("Normal", get_default_hl_opts().background(GLOBAL_BG).build()),
-        ("NormalFloat", get_default_hl_opts().background(GLOBAL_BG).build()),
+        ("Normal", LuaHlOpts::new().bg(GLOBAL_BG)),
+        ("NormalFloat", LuaHlOpts::new().bg(GLOBAL_BG)),
         ("StatusLine", non_text_hl),
-        (
-            "TreesitterContext",
-            get_default_hl_opts().background(TREESITTER_CONTEXT_BG).build(),
-        ),
-        (
-            "WinSeparator",
-            get_default_hl_opts().foreground(TREESITTER_CONTEXT_BG).build(),
-        ),
+        ("TreesitterContext", LuaHlOpts::new().bg(TREESITTER_CONTEXT_BG)),
+        ("WinSeparator", LuaHlOpts::new().fg(TREESITTER_CONTEXT_BG)),
         // Changing these will change the main foreground color.
-        ("@variable", get_default_hl_opts().foreground(GLOBAL_FG).build()),
-        ("Comment", get_default_hl_opts().foreground(COMMENTS_FG).build()),
-        ("Constant", get_default_hl_opts().foreground(GLOBAL_FG).build()),
-        ("Delimiter", get_default_hl_opts().foreground(GLOBAL_FG).build()),
-        // ("Function", get_default_hl_opts().foreground(FG).build()),
-        ("PreProc", get_default_hl_opts().foreground(GLOBAL_FG).build()),
-        ("Operator", get_default_hl_opts().foreground(GLOBAL_FG).build()),
-        (
-            "Statement",
-            get_default_hl_opts().foreground(GLOBAL_FG).bold(true).build(),
-        ),
-        ("Type", get_default_hl_opts().foreground(GLOBAL_FG).build()),
+        ("@variable", LuaHlOpts::new().fg(GLOBAL_FG)),
+        ("Comment", LuaHlOpts::new().fg(COMMENTS_FG)),
+        ("Constant", LuaHlOpts::new().fg(GLOBAL_FG)),
+        ("Delimiter", LuaHlOpts::new().fg(GLOBAL_FG)),
+        // ("Function", LuaHlOpts::new().fg(FG)),
+        ("PreProc", LuaHlOpts::new().fg(GLOBAL_FG)),
+        ("Operator", LuaHlOpts::new().fg(GLOBAL_FG)),
+        ("Statement", LuaHlOpts::new().fg(GLOBAL_FG).bold(true)),
+        ("Type", LuaHlOpts::new().fg(GLOBAL_FG)),
     ] {
         set_hl(0, hl_name, &hl_opts);
     }
 
     for (lvl, fg) in DIAGNOSTICS_FG {
-        // Errors are already notified by [`get_overridden_set_hl_opts`]
-        let _ = get_overridden_set_hl_opts(
+        // Errors are already notified by [`get_overridden_hl_opts`]
+        let _ = get_overridden_hl_opts(
             &format!("Diagnostic{lvl}"),
-            |mut hl_opts| hl_opts.foreground(fg).background(NONE).bold(true).build(),
+            |hl_opts| hl_opts.fg(fg).bg(NONE).bold(true),
             None,
         )
-        .map(|set_hl_opts| {
-            set_hl(0, &format!("Diagnostic{lvl}"), &set_hl_opts);
-            set_hl(0, &format!("DiagnosticStatusLine{lvl}"), &set_hl_opts);
+        .map(|hl_opts| {
+            set_hl(0, &format!("Diagnostic{lvl}"), &hl_opts);
+            set_hl(0, &format!("DiagnosticStatusLine{lvl}"), &hl_opts);
         });
 
         let diag_underline_hl_name = format!("DiagnosticUnderline{lvl}");
-        // Errors are already notified by [`get_overridden_set_hl_opts`]
-        let _ = get_overridden_set_hl_opts(
-            &diag_underline_hl_name,
-            |mut hl_opts| hl_opts.special(fg).background(NONE).build(),
-            None,
-        )
-        .map(|set_hl_opts| set_hl(0, &diag_underline_hl_name, &set_hl_opts));
+        // Errors are already notified by [`get_overridden_hl_opts`]
+        let _ = get_overridden_hl_opts(&diag_underline_hl_name, |hl_opts| hl_opts.special(fg).bg(NONE), None)
+            .map(|hl_opts| set_hl(0, &diag_underline_hl_name, &hl_opts));
     }
 
     for (hl_name, fg) in GITSIGNS_FG {
-        set_hl(0, hl_name, &get_default_hl_opts().foreground(fg).build());
+        set_hl(0, hl_name, &LuaHlOpts::new().fg(fg));
     }
 }
 
 /// Retrieves the current highlight options for a given highlight group and applies overrides.
 ///
 /// This function fetches the existing highlight information for the specified `hl_name`,
-/// and then applies the provided `override_set_hl_opts` function to modify the options.
+/// and then applies the provided `override_hl_opts` function to modify the options.
 /// This is useful for incrementally changing highlight groups based on their current state.
 ///
 /// # Errors
 /// - If [`get_hl_single`] fails to retrieve the highlight info.
-/// - If [`hl_opts_from_hl_infos`] fails to convert the highlight info.
-fn get_overridden_set_hl_opts(
+fn get_overridden_hl_opts(
     hl_name: &str,
-    override_set_hl_opts: impl FnMut(SetHighlightOptsBuilder) -> SetHighlightOpts,
+    override_hl_opts: impl FnOnce(LuaHlOpts) -> LuaHlOpts,
     opts_builder: Option<GetHighlightOptsBuilder>,
-) -> rootcause::Result<SetHighlightOpts> {
+) -> rootcause::Result<LuaHlOpts> {
     let mut get_hl_opts = opts_builder.unwrap_or_default();
     let hl_infos = get_hl_single(0, &get_hl_opts.name(hl_name).build())?;
-    hl_opts_from_hl_infos(&hl_infos).map(override_set_hl_opts)
+    Ok(override_hl_opts(LuaHlOpts::from(&hl_infos)))
 }
 
-/// Shorthand to start building [`SetHighlightOpts`].
-fn get_default_hl_opts() -> SetHighlightOptsBuilder {
-    SetHighlightOptsBuilder::default()
-}
-
-/// Sets a highlight group in the specified namespace, with error handling via Neovim notifications.
+/// Sets a highlight group in the specified namespace via Lua, bypassing the broken C FFI path.
 ///
-/// This function wraps [`nvim_oxi::api::set_hl`] to apply highlight options to a group.
+/// Executes `vim.api.nvim_set_hl(ns_id, hl_name, opts)` through Neovim's Lua interpreter.
 /// On failure, it notifies the error to Neovim instead of propagating it, ensuring
 /// the colorscheme setup continues gracefully.
-///
-/// # Errors
-/// Errors are notified to Neovim but not returned; the function always succeeds externally.
-fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &SetHighlightOpts) {
-    if let Err(err) = nvim_oxi::api::set_hl(ns_id, hl_name, hl_opts) {
+fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &LuaHlOpts) {
+    let lua_cmd = format!("lua vim.api.nvim_set_hl({ns_id}, '{hl_name}', {hl_opts})",);
+
+    if let Err(err) = nvim_oxi::api::command(&lua_cmd) {
         ytil_noxi::notify::error(format!(
-            "error setting highlight opts | hl_opts={hl_opts:#?} hl_name={hl_name:?} namespace={ns_id:?} error={err:#?}"
+            "error setting highlight opts | lua_cmd={lua_cmd:?} error={err:#?}"
         ));
     }
 }
@@ -228,50 +209,227 @@ fn get_hl(
         .map_err(From::from)
 }
 
-/// Builds a [`SetHighlightOptsBuilder`] from [`HighlightInfos`], applying only present fields via [`Option::map`].
+/// Highlight options that serialize to a Lua table literal for use with
+/// `vim.api.nvim_set_hl()`.
 ///
-/// Returns a [`rootcause::Result`]. Errors if `blend` (`u32`) cannot convert to `u8` and notifies it to Neovim.
-///
-/// # Errors
-/// - The `blend` value cannot fit into a `u8`.
-fn hl_opts_from_hl_infos(hl_infos: &HighlightInfos) -> rootcause::Result<SetHighlightOptsBuilder> {
-    let mut opts = get_default_hl_opts();
-    hl_infos.altfont.map(|value| opts.altfont(value));
-    hl_infos
-        .background
-        .map(|value| opts.background(&decimal_to_hex_color(value)));
-    hl_infos.bg_indexed.map(|value| opts.bg_indexed(value));
-    hl_infos
-        .blend
-        .map(u8::try_from)
-        .transpose()
-        .inspect_err(|err| {
-            ytil_noxi::notify::error(format!(
-                "cannot convert blend value to u8 | value={:?} error={err:#?}",
-                hl_infos.blend
-            ));
-        })?
-        .map(|value| opts.blend(value));
-    hl_infos.bold.map(|value| opts.bold(value));
-    hl_infos.fallback.map(|value| opts.fallback(value));
-    hl_infos.fg_indexed.map(|value| opts.fg_indexed(value));
-    hl_infos.force.map(|value| opts.force(value));
-    hl_infos
-        .foreground
-        .map(|value| opts.foreground(&decimal_to_hex_color(value)));
-    hl_infos.italic.map(|value| opts.italic(value));
-    hl_infos.reverse.map(|value| opts.reverse(value));
-    hl_infos.special.map(|value| opts.special(&decimal_to_hex_color(value)));
-    hl_infos.standout.map(|value| opts.standout(value));
-    hl_infos.strikethrough.map(|value| opts.strikethrough(value));
-    hl_infos.undercurl.map(|value| opts.undercurl(value));
-    hl_infos.underdash.map(|value| opts.underdashed(value));
-    hl_infos.underdot.map(|value| opts.underdotted(value));
-    hl_infos.underline.map(|value| opts.underline(value));
-    Ok(opts)
+/// This bypasses the `nvim-oxi` C FFI struct (`SetHighlightOpts`) whose layout
+/// diverges from Neovim master (see module-level docs).
+#[derive(Clone, Debug, Default)]
+struct LuaHlOpts {
+    foreground: Option<String>,
+    background: Option<String>,
+    special_color: Option<String>,
+    bold: Option<bool>,
+    italic: Option<bool>,
+    reverse: Option<bool>,
+    standout: Option<bool>,
+    strikethrough: Option<bool>,
+    underline: Option<bool>,
+    undercurl: Option<bool>,
+    underdouble: Option<bool>,
+    underdotted: Option<bool>,
+    underdashed: Option<bool>,
+    altfont: Option<bool>,
+    nocombine: Option<bool>,
+    fallback: Option<bool>,
+    fg_indexed: Option<bool>,
+    bg_indexed: Option<bool>,
+    force: Option<bool>,
+    blend: Option<u32>,
+}
+
+impl LuaHlOpts {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    fn fg(mut self, color: &str) -> Self {
+        self.foreground = Some(color.to_owned());
+        self
+    }
+
+    fn bg(mut self, color: &str) -> Self {
+        self.background = Some(color.to_owned());
+        self
+    }
+
+    fn special(mut self, color: &str) -> Self {
+        self.special_color = Some(color.to_owned());
+        self
+    }
+
+    const fn bold(mut self, value: bool) -> Self {
+        self.bold = Some(value);
+        self
+    }
+}
+
+impl From<&HighlightInfos> for LuaHlOpts {
+    fn from(infos: &HighlightInfos) -> Self {
+        let mut opts = Self::new();
+        if let Some(v) = infos.foreground {
+            opts.foreground = Some(decimal_to_hex_color(v));
+        }
+        if let Some(v) = infos.background {
+            opts.background = Some(decimal_to_hex_color(v));
+        }
+        if let Some(v) = infos.special {
+            opts.special_color = Some(decimal_to_hex_color(v));
+        }
+        opts.bold = infos.bold;
+        opts.italic = infos.italic;
+        opts.reverse = infos.reverse;
+        opts.standout = infos.standout;
+        opts.strikethrough = infos.strikethrough;
+        opts.underline = infos.underline;
+        opts.undercurl = infos.undercurl;
+        opts.underdouble = infos.underlineline;
+        opts.underdotted = infos.underdot;
+        opts.underdashed = infos.underdash;
+        opts.altfont = infos.altfont;
+        opts.fallback = infos.fallback;
+        opts.fg_indexed = infos.fg_indexed;
+        opts.bg_indexed = infos.bg_indexed;
+        opts.force = infos.force;
+        opts.blend = infos.blend;
+        opts
+    }
+}
+
+impl Display for LuaHlOpts {
+    /// Renders the options as a Lua table literal, e.g. `{ fg = 'black', bg = 'white', bold = true }`.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut entries: Vec<String> = Vec::new();
+
+        for (key, val) in [
+            ("fg", &self.foreground),
+            ("bg", &self.background),
+            ("sp", &self.special_color),
+        ] {
+            if let Some(v) = val {
+                entries.push(format!("{key} = '{v}'"));
+            }
+        }
+
+        for (key, val) in [
+            ("bold", self.bold),
+            ("italic", self.italic),
+            ("reverse", self.reverse),
+            ("standout", self.standout),
+            ("strikethrough", self.strikethrough),
+            ("underline", self.underline),
+            ("undercurl", self.undercurl),
+            ("underdouble", self.underdouble),
+            ("underdotted", self.underdotted),
+            ("underdashed", self.underdashed),
+            ("altfont", self.altfont),
+            ("nocombine", self.nocombine),
+            ("fallback", self.fallback),
+            ("fg_indexed", self.fg_indexed),
+            ("bg_indexed", self.bg_indexed),
+            ("force", self.force),
+        ] {
+            if let Some(v) = val {
+                entries.push(format!("{key} = {v}"));
+            }
+        }
+
+        if let Some(v) = self.blend {
+            entries.push(format!("blend = {v}"));
+        }
+
+        write!(f, "{{ {} }}", entries.join(", "))
+    }
 }
 
 /// Formats an RGB integer as a `#RRGGBB` hex string.
 fn decimal_to_hex_color(decimal: u32) -> String {
     format!("#{decimal:06X}")
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[test]
+    fn from_default_highlight_infos_produces_default_lua_hl_opts() {
+        let infos = HighlightInfos::default();
+        let opts = LuaHlOpts::from(&infos);
+        pretty_assertions::assert_eq!(opts.foreground, None);
+        pretty_assertions::assert_eq!(opts.background, None);
+        pretty_assertions::assert_eq!(opts.special_color, None);
+        pretty_assertions::assert_eq!(opts.bold, None);
+        pretty_assertions::assert_eq!(opts.blend, None);
+    }
+
+    #[rstest]
+    #[case(0x00_00_00, "#000000")]
+    #[case(0xFF_FF_FF, "#FFFFFF")]
+    #[case(0xFF_00_00, "#FF0000")]
+    #[case(0x00_20_20, "#002020")]
+    fn from_highlight_infos_converts_foreground_to_hex(#[case] rgb: u32, #[case] expected: &str) {
+        let mut infos = HighlightInfos::default();
+        infos.foreground = Some(rgb);
+        pretty_assertions::assert_eq!(LuaHlOpts::from(&infos).foreground.as_deref(), Some(expected));
+    }
+
+    #[rstest]
+    #[case(0xFF_FF_FF, "#FFFFFF")]
+    #[case(0x00_20_20, "#002020")]
+    fn from_highlight_infos_converts_background_to_hex(#[case] rgb: u32, #[case] expected: &str) {
+        let mut infos = HighlightInfos::default();
+        infos.background = Some(rgb);
+        pretty_assertions::assert_eq!(LuaHlOpts::from(&infos).background.as_deref(), Some(expected));
+    }
+
+    #[test]
+    fn from_highlight_infos_converts_special_to_hex() {
+        let mut infos = HighlightInfos::default();
+        infos.special = Some(0xFF_00_00);
+        pretty_assertions::assert_eq!(LuaHlOpts::from(&infos).special_color.as_deref(), Some("#FF0000"));
+    }
+
+    #[test]
+    fn from_highlight_infos_maps_boolean_fields() {
+        let mut infos = HighlightInfos::default();
+        infos.bold = Some(true);
+        infos.italic = Some(false);
+        infos.underline = Some(true);
+        infos.underdot = Some(true);
+        infos.underdash = Some(true);
+        infos.underlineline = Some(true);
+
+        let opts = LuaHlOpts::from(&infos);
+        pretty_assertions::assert_eq!(opts.bold, Some(true));
+        pretty_assertions::assert_eq!(opts.italic, Some(false));
+        pretty_assertions::assert_eq!(opts.underline, Some(true));
+        pretty_assertions::assert_eq!(opts.underdotted, Some(true));
+        pretty_assertions::assert_eq!(opts.underdashed, Some(true));
+        pretty_assertions::assert_eq!(opts.underdouble, Some(true));
+    }
+
+    #[test]
+    fn from_highlight_infos_maps_blend() {
+        let mut infos = HighlightInfos::default();
+        infos.blend = Some(50);
+        pretty_assertions::assert_eq!(LuaHlOpts::from(&infos).blend, Some(50));
+    }
+
+    #[rstest]
+    #[case(LuaHlOpts::new(), "{  }")]
+    #[case(LuaHlOpts::new().fg("black"), "{ fg = 'black' }")]
+    #[case(LuaHlOpts::new().bg("#002020"), "{ bg = '#002020' }")]
+    #[case(LuaHlOpts::new().fg("#002020").bg("white"), "{ fg = '#002020', bg = 'white' }")]
+    #[case(LuaHlOpts::new().bold(true), "{ bold = true }")]
+    #[case(LuaHlOpts::new().special("red"), "{ sp = 'red' }")]
+    #[case(LuaHlOpts { blend: Some(30), ..Default::default() }, "{ blend = 30 }")]
+    #[case(
+        LuaHlOpts::new().fg("black").bg("white").special("#FF0000").bold(true),
+        "{ fg = 'black', bg = 'white', sp = '#FF0000', bold = true }",
+    )]
+    fn display_renders_lua_table(#[case] opts: LuaHlOpts, #[case] expected: &str) {
+        pretty_assertions::assert_eq!(opts.to_string(), expected);
+    }
 }
