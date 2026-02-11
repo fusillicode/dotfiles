@@ -19,6 +19,7 @@ use ytil_sys::SysInfo;
 use ytil_sys::cli::Args;
 
 use crate::installers::Installer;
+use crate::installers::alacritty::Alacritty;
 use crate::installers::bash_language_server::BashLanguageServer;
 use crate::installers::commitlint::Commitlint;
 use crate::installers::deno::Deno;
@@ -109,6 +110,10 @@ fn main() -> rootcause::Result<()> {
     std::fs::create_dir_all(bin_dir)?;
 
     let all_installers: Vec<Box<dyn Installer>> = vec![
+        Box::new(Alacritty {
+            dev_tools_dir: Path::new(dev_tools_dir),
+            bin_dir: Path::new(bin_dir),
+        }),
         Box::new(BashLanguageServer {
             dev_tools_dir: Path::new(dev_tools_dir),
             bin_dir: Path::new(bin_dir),
