@@ -34,7 +34,7 @@ pub fn dict() -> Dictionary {
 }
 
 /// Draws the status line with diagnostic information.
-fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
+fn draw(diagnostics: Vec<Diagnostic>) -> String {
     let current_buffer = nvim_oxi::api::get_current_buf();
     let current_buffer_nr = current_buffer.handle();
 
@@ -53,18 +53,18 @@ fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
         path
     });
 
-    // Terminal buffers have a `term://...` name that is not useful in the statusline — suppress it.
-    let current_buffer_path = if current_buffer.is_terminal() {
-        None
+    // Terminal buffers have a `term://...` name and no meaningful cursor position — suppress both.
+    let (current_buffer_path, cursor_position) = if current_buffer.is_terminal() {
+        (None, None)
     } else {
-        current_buffer_path
+        (current_buffer_path, CursorPosition::get_current())
     };
 
     let mut statusline = Statusline {
         current_buffer_path: current_buffer_path.as_deref(),
         current_buffer_diags: SeverityBuckets::default(),
         workspace_diags: SeverityBuckets::default(),
-        cursor_position: CursorPosition::get_current()?,
+        cursor_position,
     };
     for diagnostic in diagnostics {
         statusline.workspace_diags.inc(diagnostic.severity);
@@ -73,7 +73,7 @@ fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
         }
     }
 
-    Some(statusline.draw())
+    statusline.draw()
 }
 
 /// Diagnostic emitted by Nvim for statusline aggregation.
@@ -142,7 +142,7 @@ struct Statusline<'a> {
     current_buffer_path: Option<&'a str>,
     current_buffer_diags: SeverityBuckets,
     workspace_diags: SeverityBuckets,
-    cursor_position: CursorPosition,
+    cursor_position: Option<CursorPosition>,
 }
 
 impl Statusline<'_> {
@@ -194,12 +194,10 @@ impl Statusline<'_> {
         if let Some(buf_path) = self.current_buffer_path {
             let _ = write!(out, "{buf_path} ");
         }
-        let _ = write!(
-            out,
-            "{}:{} {current_buffer_diags_segment}%#StatusLine#",
-            self.cursor_position.row,
-            self.cursor_position.adjusted_col()
-        );
+        if let Some(ref pos) = self.cursor_position {
+            let _ = write!(out, "{}:{} ", pos.row, pos.adjusted_col());
+        }
+        let _ = write!(out, "{current_buffer_diags_segment}%#StatusLine#");
         out
     }
 }
@@ -239,25 +237,25 @@ mod tests {
         current_buffer_path: Some("foo"),
         current_buffer_diags: SeverityBuckets::default(),
         workspace_diags: SeverityBuckets::default(),
-        cursor_position: CursorPosition { row: 42, col: 7 },
+        cursor_position: Some(CursorPosition { row: 42, col: 7 }),
     })]
     #[case::buffer_zero(Statusline {
         current_buffer_path: Some("foo"),
         current_buffer_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
         workspace_diags: SeverityBuckets::default(),
-        cursor_position: CursorPosition { row: 42, col: 7 },
+        cursor_position: Some(CursorPosition { row: 42, col: 7 }),
     })]
     #[case::workspace_zero(Statusline {
         current_buffer_path: Some("foo"),
         current_buffer_diags: SeverityBuckets::default(),
         workspace_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
-        cursor_position: CursorPosition { row: 42, col: 7 },
+        cursor_position: Some(CursorPosition { row: 42, col: 7 }),
     })]
     #[case::both_zero(Statusline {
         current_buffer_path: Some("foo"),
         current_buffer_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
         workspace_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
-        cursor_position: CursorPosition { row: 42, col: 7 },
+        cursor_position: Some(CursorPosition { row: 42, col: 7 }),
     })]
     fn statusline_draw_when_all_diagnostics_absent_or_zero_renders_plain_statusline(#[case] statusline: Statusline) {
         pretty_assertions::assert_eq!(statusline.draw(), "%#StatusLine# foo 42:8 %#StatusLine#");
@@ -271,7 +269,7 @@ mod tests {
                 .into_iter()
                 .collect(),
             workspace_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
-            cursor_position: CursorPosition { row: 42, col: 7 },
+            cursor_position: Some(CursorPosition { row: 42, col: 7 }),
         };
         pretty_assertions::assert_eq!(
             statusline.draw(),
@@ -287,7 +285,7 @@ mod tests {
             workspace_diags: [(DiagnosticSeverity::Info, 1), (DiagnosticSeverity::Error, 3)]
                 .into_iter()
                 .collect(),
-            cursor_position: CursorPosition { row: 42, col: 7 },
+            cursor_position: Some(CursorPosition { row: 42, col: 7 }),
         };
         pretty_assertions::assert_eq!(
             statusline.draw(),
@@ -305,7 +303,7 @@ mod tests {
             workspace_diags: [(DiagnosticSeverity::Info, 1), (DiagnosticSeverity::Error, 3)]
                 .into_iter()
                 .collect(), // unchanged (multi-element)
-            cursor_position: CursorPosition { row: 42, col: 7 },
+            cursor_position: Some(CursorPosition { row: 42, col: 7 }),
         };
         pretty_assertions::assert_eq!(
             statusline.draw(),
@@ -322,7 +320,7 @@ mod tests {
                 .into_iter()
                 .collect(), // multi-element unchanged
             workspace_diags: SeverityBuckets::default(),
-            cursor_position: CursorPosition { row: 42, col: 7 },
+            cursor_position: Some(CursorPosition { row: 42, col: 7 }),
         };
         pretty_assertions::assert_eq!(
             statusline.draw(),
@@ -362,7 +360,7 @@ mod tests {
             ]
             .into_iter()
             .collect(),
-            cursor_position: CursorPosition { row: 42, col: 7 },
+            cursor_position: Some(CursorPosition { row: 42, col: 7 }),
         };
         // Affirm draw output matches severity ordering; equality macro takes (actual, expected).
         pretty_assertions::assert_eq!(
@@ -372,15 +370,15 @@ mod tests {
     }
 
     #[test]
-    fn statusline_draw_when_no_buffer_path_omits_path_segment() {
-        // Terminal buffers (or unnamed buffers) have no path — verify no path segment appears.
+    fn statusline_draw_when_terminal_buffer_omits_path_and_cursor_position() {
+        // Terminal buffers have no path and no cursor position — verify neither appears.
         let statusline = Statusline {
             current_buffer_path: None,
             current_buffer_diags: SeverityBuckets::default(),
             workspace_diags: SeverityBuckets::default(),
-            cursor_position: CursorPosition { row: 1, col: 0 },
+            cursor_position: None,
         };
-        pretty_assertions::assert_eq!(statusline.draw(), "%#StatusLine# 1:1 %#StatusLine#");
+        pretty_assertions::assert_eq!(statusline.draw(), "%#StatusLine# %#StatusLine#");
     }
 
     #[rstest]
@@ -393,7 +391,7 @@ mod tests {
             current_buffer_path: Some("foo"),
             current_buffer_diags: SeverityBuckets::default(),
             workspace_diags: SeverityBuckets::default(),
-            cursor_position: CursorPosition { row: 10, col },
+            cursor_position: Some(CursorPosition { row: 10, col }),
         };
         pretty_assertions::assert_eq!(statusline.draw(), expected);
     }
