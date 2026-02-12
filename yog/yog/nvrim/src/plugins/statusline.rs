@@ -7,6 +7,7 @@ use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
 use serde::Deserialize;
 use strum::IntoEnumIterator;
+use ytil_noxi::buffer::BufferExt as _;
 use ytil_noxi::buffer::CursorPosition;
 
 use crate::diagnostics::DiagnosticSeverity;
@@ -51,6 +52,13 @@ fn draw(diagnostics: Vec<Diagnostic>) -> Option<String> {
         *cache.borrow_mut() = Some((current_buffer_nr, path.clone()));
         path
     });
+
+    // Terminal buffers have a `term://...` name that is not useful in the statusline — suppress it.
+    let current_buffer_path = if current_buffer.is_terminal() {
+        None
+    } else {
+        current_buffer_path
+    };
 
     let mut statusline = Statusline {
         current_buffer_path: current_buffer_path.as_deref(),
@@ -361,6 +369,18 @@ mod tests {
             statusline.draw(),
             "%#DiagnosticStatusLineError#8 %#DiagnosticStatusLineWarn#7 %#DiagnosticStatusLineInfo#6 %#DiagnosticStatusLineHint#5%#StatusLine# foo 42:8 %#DiagnosticStatusLineError#4 %#DiagnosticStatusLineWarn#3 %#DiagnosticStatusLineInfo#2 %#DiagnosticStatusLineHint#1 %#StatusLine#",
         );
+    }
+
+    #[test]
+    fn statusline_draw_when_no_buffer_path_omits_path_segment() {
+        // Terminal buffers (or unnamed buffers) have no path — verify no path segment appears.
+        let statusline = Statusline {
+            current_buffer_path: None,
+            current_buffer_diags: SeverityBuckets::default(),
+            workspace_diags: SeverityBuckets::default(),
+            cursor_position: CursorPosition { row: 1, col: 0 },
+        };
+        pretty_assertions::assert_eq!(statusline.draw(), "%#StatusLine# 1:1 %#StatusLine#");
     }
 
     #[rstest]
