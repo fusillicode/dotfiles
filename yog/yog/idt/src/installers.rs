@@ -1,11 +1,14 @@
+use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
 use std::time::Instant;
 
 use owo_colors::OwoColorize as _;
+use rootcause::bail;
 use ytil_cmd::Cmd;
 use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt as _;
+use ytil_cmd::silent_cmd;
 
 pub mod alacritty;
 pub mod bash_language_server;
@@ -149,10 +152,12 @@ pub trait SystemDependent {
 /// Common install pattern for npm-based tools: download via npm, symlink the binary, and make it executable.
 ///
 /// # Errors
-/// - npm download, symlink creation, or chmod fails.
+/// - If npm download fails.
+/// - If symlink creation fails.
+/// - If chmod fails.
 pub fn install_npm_tool(
-    dev_tools_dir: &std::path::Path,
-    bin_dir: &std::path::Path,
+    dev_tools_dir: &Path,
+    bin_dir: &Path,
     bin_name: &str,
     npm_name: &str,
     packages: &[&str],
@@ -161,6 +166,51 @@ pub fn install_npm_tool(
     let target = target_dir.join(bin_name);
     ytil_sys::file::ln_sf(&target, &bin_dir.join(bin_name))?;
     ytil_sys::file::chmod_x(target)?;
+    Ok(())
+}
+
+/// Common install pattern for macOS `.app` bundles built from source.
+///
+/// 1. symlink the binary into `bin_dir`
+/// 2. make it executable
+/// 3. copy the `.app` bundle into `/Applications` with an atomic swap
+///
+/// # Errors
+/// - If symlink creation fails.
+/// - If chmod fails.
+/// - If copy to `/Applications` fails.
+pub fn install_macos_app(app: &Path, bin_dir: &Path, bin_name: &str) -> rootcause::Result<()> {
+    let binary = app.join("Contents").join("MacOS").join(bin_name);
+
+    ytil_sys::file::ln_sf(&binary, &bin_dir.join(bin_name))?;
+    ytil_sys::file::chmod_x(&binary)?;
+
+    let Some(app_filename) = app.file_name().and_then(|n| n.to_str()) else {
+        bail!("app path has no valid UTF-8 file name: {}", app.display());
+    };
+
+    let applications_app = std::path::PathBuf::from(format!("/Applications/{app_filename}"));
+    let applications_app_old = std::path::PathBuf::from(format!("/Applications/{app_filename}.old"));
+
+    if applications_app_old.exists() {
+        std::fs::remove_dir_all(&applications_app_old)?;
+    }
+
+    if applications_app.is_symlink() {
+        std::fs::remove_file(&applications_app)?;
+    } else if applications_app.exists() {
+        std::fs::rename(&applications_app, &applications_app_old)?;
+    }
+
+    silent_cmd("cp")
+        .args(["-R", &app.display().to_string(), "/Applications/"])
+        .status()?
+        .exit_ok()?;
+
+    if applications_app_old.exists() {
+        std::fs::remove_dir_all(&applications_app_old)?;
+    }
+
     Ok(())
 }
 
