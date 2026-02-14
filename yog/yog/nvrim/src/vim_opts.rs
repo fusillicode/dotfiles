@@ -91,7 +91,7 @@ fn set_all(_: ()) {
     set("guicursor", "n-v-c:block,i-ci-ve:ver25", &global_scope);
     set("hlsearch", true, &global_scope);
     set("ignorecase", true, &global_scope);
-    set("laststatus", 3, &global_scope);
+    set("laststatus", 2, &global_scope);
     set("list", true, &global_scope);
     set("number", false, &global_scope);
     set("relativenumber", false, &global_scope);

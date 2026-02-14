@@ -77,16 +77,18 @@ pub fn set(colorscheme: Option<String>) {
     crate::vim_opts::set("termguicolors", true, &opts);
 
     let non_text_hl = LuaHlOpts::new().fg(NON_TEXT_FG).bg(NONE);
+    let statusline_hl = non_text_hl.clone().reverse(false);
 
     for (hl_name, hl_opts) in [
         ("Cursor", LuaHlOpts::new().fg(CURSOR_FG).bg(CURSOR_BG)),
         ("CursorLine", LuaHlOpts::new().fg(NONE)),
         ("ErrorMsg", LuaHlOpts::new().fg(DIAG_ERROR_FG)),
         ("MsgArea", LuaHlOpts::new().fg(COMMENTS_FG).bg(NONE)),
-        ("LineNr", non_text_hl.clone()),
+        ("LineNr", non_text_hl),
         ("Normal", LuaHlOpts::new().bg(GLOBAL_BG)),
         ("NormalFloat", LuaHlOpts::new().bg(GLOBAL_BG)),
-        ("StatusLine", non_text_hl.reverse(false)),
+        ("StatusLine", statusline_hl.clone()),
+        ("StatusLineNC", statusline_hl),
         ("TreesitterContext", LuaHlOpts::new().bg(TREESITTER_CONTEXT_BG)),
         ("WinSeparator", LuaHlOpts::new().fg(TREESITTER_CONTEXT_BG)),
         // Changing these will change the main foreground color.

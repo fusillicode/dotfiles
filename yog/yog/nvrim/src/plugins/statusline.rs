@@ -38,6 +38,13 @@ fn draw(diagnostics: Vec<Diagnostic>) -> String {
     let current_buffer = nvim_oxi::api::get_current_buf();
     let current_buffer_nr = current_buffer.handle();
 
+    // Return `%#Normal#` instead of empty string in case of terminal buffers
+    // to blend the statusline with the editor background even when a statusline
+    // background color is set.
+    if current_buffer.is_terminal() {
+        return "%#Normal#".to_string();
+    }
+
     // Use cached buffer path when the buffer handle hasn't changed (avoids FFI + PathBuf work on
     // every CursorMoved). The cache is invalidated implicitly when the handle changes (BufEnter).
     let current_buffer_path = CACHED_BUFFER_PATH.with(|cache| {
@@ -53,12 +60,7 @@ fn draw(diagnostics: Vec<Diagnostic>) -> String {
         path
     });
 
-    // Terminal buffers have a `term://...` name and no meaningful cursor position — suppress both.
-    let (current_buffer_path, cursor_position) = if current_buffer.is_terminal() {
-        (None, None)
-    } else {
-        (current_buffer_path, CursorPosition::get_current())
-    };
+    let cursor_position = CursorPosition::get_current();
 
     let mut statusline = Statusline {
         current_buffer_path: current_buffer_path.as_deref(),
@@ -370,8 +372,8 @@ mod tests {
     }
 
     #[test]
-    fn statusline_draw_when_terminal_buffer_omits_path_and_cursor_position() {
-        // Terminal buffers have no path and no cursor position — verify neither appears.
+    fn statusline_draw_when_no_path_and_no_cursor_renders_only_highlight_groups() {
+        // When both path and cursor position are absent, only the highlight groups remain.
         let statusline = Statusline {
             current_buffer_path: None,
             current_buffer_diags: SeverityBuckets::default(),
