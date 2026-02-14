@@ -125,6 +125,11 @@ pub fn rm_matching_files<P: AsRef<Path>>(
     let mut errors = vec![];
 
     while let Some(current_path) = stack.pop_back() {
+        // Skip paths removed during this traversal (e.g. a symlink target deleted by
+        // `handle_symlink` that later appears as its own directory entry).
+        if removed.contains(&current_path) {
+            continue;
+        }
         match std::fs::symlink_metadata(&current_path) {
             Ok(metadata) => {
                 let file_type = metadata.file_type();
