@@ -138,14 +138,14 @@ mod tests {
     #[case("ARM64", Arch::Arm)]
     fn arch_from_str_when_valid_input_returns_expected_arch(#[case] input: &str, #[case] expected: Arch) {
         let result = Arch::from_str(input);
-        assert2::let_assert!(Ok(arch) = result);
+        assert2::assert!(let Ok(arch) = result);
         pretty_assertions::assert_eq!(arch, expected);
     }
 
     #[test]
     fn arch_from_str_when_unknown_input_returns_error_with_message() {
         let result = Arch::from_str("unknown");
-        assert2::let_assert!(Err(err) = result);
+        assert2::assert!(let Err(err) = result);
         assert!(err.to_string().contains("error unknown normalized arch value"));
     }
 
@@ -156,14 +156,14 @@ mod tests {
     #[case("LINUX", Os::Linux)]
     fn os_from_str_when_valid_input_returns_expected_os(#[case] input: &str, #[case] expected: Os) {
         let result = Os::from_str(input);
-        assert2::let_assert!(Ok(os) = result);
+        assert2::assert!(let Ok(os) = result);
         pretty_assertions::assert_eq!(os, expected);
     }
 
     #[test]
     fn os_from_str_when_unknown_input_returns_error_with_message() {
         let result = Os::from_str("unknown");
-        assert2::let_assert!(Err(err) = result);
+        assert2::assert!(let Err(err) = result);
         assert!(err.to_string().contains("error unknown normalized os value"));
     }
 }

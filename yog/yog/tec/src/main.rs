@@ -420,7 +420,7 @@ mod tests {
 
         let result = LintFnResult::from(outcome);
 
-        assert2::let_assert!(Ok(LintFnSuccess::PlainMsg(msg)) = result.0);
+        assert2::assert!(let Ok(LintFnSuccess::PlainMsg(msg)) = result.0);
         pretty_assertions::assert_eq!(msg, "");
     }
 
@@ -433,7 +433,7 @@ mod tests {
 
         let result = LintFnResult::from(outcome);
 
-        assert2::let_assert!(Ok(LintFnSuccess::PlainMsg(msg)) = result.0);
+        assert2::assert!(let Ok(LintFnSuccess::PlainMsg(msg)) = result.0);
         assert!(msg.contains("Removed"));
         assert!(msg.contains("file1.txt"));
         assert!(msg.contains("file2.txt"));
@@ -451,7 +451,7 @@ mod tests {
 
         let result = LintFnResult::from(outcome);
 
-        assert2::let_assert!(Err(LintFnError::PlainMsg(msg)) = result.0);
+        assert2::assert!(let Err(LintFnError::PlainMsg(msg)) = result.0);
         assert!(msg.contains("Error removing"));
         assert!(msg.contains("\"badfile.txt\""));
         assert!(msg.contains("permission denied"));
@@ -466,7 +466,7 @@ mod tests {
 
         let result = LintFnResult::from(outcome);
 
-        assert2::let_assert!(Err(LintFnError::PlainMsg(msg)) = result.0);
+        assert2::assert!(let Err(LintFnError::PlainMsg(msg)) = result.0);
         assert!(msg.contains("Error removing"));
         assert!(msg.contains("file not found"));
     }
@@ -480,7 +480,7 @@ mod tests {
 
         let result = LintFnResult::from(outcome);
 
-        assert2::let_assert!(Err(LintFnError::PlainMsg(msg)) = result.0);
+        assert2::assert!(let Err(LintFnError::PlainMsg(msg)) = result.0);
         assert!(msg.contains("Removed"));
         assert!(msg.contains("goodfile.txt"));
         assert!(msg.contains("Error removing"));
@@ -512,7 +512,7 @@ mod tests {
         let result_lint = build_conditional_lint(changed_paths, extension, dummy_lint);
         let lint_result = result_lint(Path::new("/tmp"));
 
-        assert2::let_assert!(Ok(LintFnSuccess::PlainMsg(msg)) = lint_result.0);
+        assert2::assert!(let Ok(LintFnSuccess::PlainMsg(msg)) = lint_result.0);
         // Using contains instead of exact match because [`NO_OP`] [`Lint`] returns a colorized [`String`].
         assert!(msg.contains(expected));
     }

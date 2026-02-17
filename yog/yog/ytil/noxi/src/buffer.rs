@@ -381,7 +381,7 @@ mod tests {
 
         let result = buffer.get_text_between((0, 6), (0, 11), TextBoundary::Exact);
 
-        assert2::let_assert!(Ok(value) = result);
+        assert2::assert!(let Ok(value) = result);
         pretty_assertions::assert_eq!(value, "world");
     }
 
@@ -392,7 +392,7 @@ mod tests {
 
         let result = buffer.get_text_between((0, 6), (0, 11), TextBoundary::FromLineStart);
 
-        assert2::let_assert!(Ok(value) = result);
+        assert2::assert!(let Ok(value) = result);
         pretty_assertions::assert_eq!(value, "hello world");
     }
 
@@ -403,7 +403,7 @@ mod tests {
 
         let result = buffer.get_text_between((0, 0), (0, 5), TextBoundary::ToLineEnd);
 
-        assert2::let_assert!(Ok(value) = result);
+        assert2::assert!(let Ok(value) = result);
         pretty_assertions::assert_eq!(value, "hello world");
     }
 
@@ -414,7 +414,7 @@ mod tests {
 
         let result = buffer.get_text_between((0, 6), (0, 5), TextBoundary::FromLineStartToEnd);
 
-        assert2::let_assert!(Ok(value) = result);
+        assert2::assert!(let Ok(value) = result);
         pretty_assertions::assert_eq!(value, "hello world");
     }
 
@@ -429,7 +429,7 @@ mod tests {
 
         let result = buffer.get_text_between((0, 1), (2, 3), TextBoundary::Exact);
 
-        assert2::let_assert!(Ok(value) = result);
+        assert2::assert!(let Ok(value) = result);
         pretty_assertions::assert_eq!(value, "ine1\nline2\nlin");
     }
 
@@ -444,7 +444,7 @@ mod tests {
 
         let result = buffer.get_text_between((0, 1), (2, 3), TextBoundary::FromLineStartToEnd);
 
-        assert2::let_assert!(Ok(value) = result);
+        assert2::assert!(let Ok(value) = result);
         pretty_assertions::assert_eq!(value, "line1\nline2\nline3");
     }
 
@@ -459,7 +459,7 @@ mod tests {
 
         let result = buffer.get_text_between((0, 1), (2, 3), TextBoundary::ToLineEnd);
 
-        assert2::let_assert!(Ok(value) = result);
+        assert2::assert!(let Ok(value) = result);
         pretty_assertions::assert_eq!(value, "ine1\nline2\nline3");
     }
 
@@ -470,7 +470,7 @@ mod tests {
 
         let result = buffer.get_text_between((0, 10), (0, 15), TextBoundary::Exact);
 
-        assert2::let_assert!(Err(err) = result);
+        assert2::assert!(let Err(err) = result);
         assert_eq!(
             err.format_current_context().to_string(),
             "cannot extract substring from line"

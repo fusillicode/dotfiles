@@ -36,7 +36,7 @@ mod tests {
         let dummy_filter_template = DummyFilterTemplate {
             value: Utc.with_ymd_and_hms(2025, 1, 2, 3, 4, 5).unwrap(),
         };
-        assert2::let_assert!(Ok(res) = dummy_filter_template.render());
+        assert2::assert!(let Ok(res) = dummy_filter_template.render());
         pretty_assertions::assert_eq!(res, "2025-01-02T03:04:05Z");
     }
 }

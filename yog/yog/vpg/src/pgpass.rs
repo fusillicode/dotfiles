@@ -200,7 +200,7 @@ mod tests {
 
     #[test]
     fn creds_try_from_returns_the_expected_creds() {
-        assert2::let_assert!(Ok(actual) = ConnectionParams::try_from((42, "host:5432:db:user:pwd")));
+        assert2::assert!(let Ok(actual) = ConnectionParams::try_from((42, "host:5432:db:user:pwd")));
         assert_eq!(
             actual,
             ConnectionParams {
@@ -216,13 +216,13 @@ mod tests {
 
     #[test]
     fn creds_try_from_returns_an_error_if_port_is_not_a_number() {
-        assert2::let_assert!(Err(err) = ConnectionParams::try_from((42, "host:foo:db:user:pwd")));
+        assert2::assert!(let Err(err) = ConnectionParams::try_from((42, "host:foo:db:user:pwd")));
         assert_eq!(err.format_current_context().to_string(), "unexpected port");
     }
 
     #[test]
     fn creds_try_from_returns_an_error_if_str_is_malformed() {
-        assert2::let_assert!(Err(err) = ConnectionParams::try_from((42, "host:5432:db:user")));
+        assert2::assert!(let Err(err) = ConnectionParams::try_from((42, "host:5432:db:user")));
         assert_eq!(
             err.format_current_context().to_string(),
             "malformed pgpass connection line"

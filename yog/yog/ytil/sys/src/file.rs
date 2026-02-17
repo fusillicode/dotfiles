@@ -285,7 +285,7 @@ mod tests {
 
         let res = atomic_cp(&src, &dst);
 
-        assert2::let_assert!(Ok(()) = res);
+        assert2::assert!(let Ok(()) = res);
         assert_eq!(std::fs::read(&dst).unwrap(), b"hello");
     }
 
@@ -297,7 +297,7 @@ mod tests {
 
         let res = atomic_cp(&src, &dst);
 
-        assert2::let_assert!(Err(err) = res);
+        assert2::assert!(let Err(err) = res);
         // Error now comes from std::fs::copy wrapped with context
         assert!(err.to_string().contains("error copying file to temp"));
     }
@@ -316,7 +316,7 @@ mod tests {
             |e| e.path().extension().and_then(|s| s.to_str()) == Some("txt"),
             |_| false,
         );
-        assert2::let_assert!(Ok(mut found) = res);
+        assert2::assert!(let Ok(mut found) = res);
         found.sort();
 
         let mut expected = vec![dir.path().join("c.txt"), dir.path().join("a/b/d.txt")];

@@ -134,7 +134,7 @@ mod tests {
             "<string>": []
         });
 
-        assert2::let_assert!(Ok(parsed) = serde_json::from_value::<SqruffOutput>(value));
+        assert2::assert!(let Ok(parsed) = serde_json::from_value::<SqruffOutput>(value));
         pretty_assertions::assert_eq!(parsed, SqruffOutput { messages: vec![] });
     }
 
@@ -152,7 +152,7 @@ mod tests {
             ]
         });
 
-        assert2::let_assert!(Ok(res) = serde_json::from_value::<SqruffOutput>(value));
+        assert2::assert!(let Ok(res) = serde_json::from_value::<SqruffOutput>(value));
         pretty_assertions::assert_eq!(
             res,
             SqruffOutput {
@@ -191,7 +191,7 @@ mod tests {
             ]
         });
 
-        assert2::let_assert!(Ok(res) = serde_json::from_value::<SqruffOutput>(value));
+        assert2::assert!(let Ok(res) = serde_json::from_value::<SqruffOutput>(value));
         pretty_assertions::assert_eq!(
             res,
             SqruffOutput {

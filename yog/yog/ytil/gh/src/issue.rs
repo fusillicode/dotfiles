@@ -154,7 +154,7 @@ mod tests {
 
     #[test]
     fn created_issue_new_parses_valid_output() {
-        assert2::let_assert!(Ok(actual) = CreatedIssue::new("Test Issue", "https://github.com/owner/repo/issues/123"));
+        assert2::assert!(let Ok(actual) = CreatedIssue::new("Test Issue", "https://github.com/owner/repo/issues/123"));
         pretty_assertions::assert_eq!(
             actual,
             CreatedIssue {
@@ -171,7 +171,7 @@ mod tests {
     #[case("https://github.com/owner/repo/123")]
     #[case("repo/issues")]
     fn created_issue_new_errors_on_invalid_output(#[case] output: &str) {
-        assert2::let_assert!(Err(err) = CreatedIssue::new("title", output));
+        assert2::assert!(let Err(err) = CreatedIssue::new("title", output));
         assert_eq!(
             err.format_current_context().to_string(),
             "error building CreateIssueOutput"

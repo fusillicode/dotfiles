@@ -68,7 +68,7 @@ mod tests {
             source: "Test",
             message: "some message",
         };
-        assert2::let_assert!(Ok(result) = filter.get_diag_msg_or_skip("tests/main.rs", &diag));
+        assert2::assert!(let Ok(result) = filter.get_diag_msg_or_skip("tests/main.rs", &diag));
         pretty_assertions::assert_eq!(result, GetDiagMsgOutput::Skip);
     }
 
@@ -81,7 +81,7 @@ mod tests {
         let diag = dict! {
             message: "some message",
         };
-        assert2::let_assert!(Ok(result) = filter.get_diag_msg_or_skip("src/main.rs", &diag));
+        assert2::assert!(let Ok(result) = filter.get_diag_msg_or_skip("src/main.rs", &diag));
         pretty_assertions::assert_eq!(result, GetDiagMsgOutput::Skip);
     }
 
@@ -95,7 +95,7 @@ mod tests {
             source: "Other",
             message: "some message",
         };
-        assert2::let_assert!(Ok(result) = filter.get_diag_msg_or_skip("src/main.rs", &diag));
+        assert2::assert!(let Ok(result) = filter.get_diag_msg_or_skip("src/main.rs", &diag));
         pretty_assertions::assert_eq!(result, GetDiagMsgOutput::Skip);
     }
 
@@ -109,7 +109,7 @@ mod tests {
             source: "Test",
             message: "some message",
         };
-        assert2::let_assert!(Ok(result) = filter.get_diag_msg_or_skip("src/main.rs", &diag));
+        assert2::assert!(let Ok(result) = filter.get_diag_msg_or_skip("src/main.rs", &diag));
         pretty_assertions::assert_eq!(result, GetDiagMsgOutput::Msg("some message".to_string()));
     }
 
@@ -123,7 +123,7 @@ mod tests {
             source: "Test",
             message: "another message",
         };
-        assert2::let_assert!(Ok(result) = filter.get_diag_msg_or_skip("any/path.rs", &diag));
+        assert2::assert!(let Ok(result) = filter.get_diag_msg_or_skip("any/path.rs", &diag));
         pretty_assertions::assert_eq!(result, GetDiagMsgOutput::Msg("another message".to_string()));
     }
 
@@ -137,7 +137,7 @@ mod tests {
             source: "TestLSP",
             message: "some message",
         };
-        assert2::let_assert!(Ok(result) = filter.get_diag_msg_or_skip("any/path.rs", &diag));
+        assert2::assert!(let Ok(result) = filter.get_diag_msg_or_skip("any/path.rs", &diag));
         pretty_assertions::assert_eq!(result, GetDiagMsgOutput::Msg("some message".to_string()));
     }
 

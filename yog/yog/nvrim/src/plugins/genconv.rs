@@ -179,7 +179,7 @@ mod tests {
     #[case::white("255,255,255", "#ffffff")]
     #[case::red_with_extra_component("255,0,0,123", "#ff0000")]
     fn rgb_to_hex_when_valid_rgb_returns_hex(#[case] input: &str, #[case] expected: &str) {
-        assert2::let_assert!(Ok(actual) = rgb_to_hex(input));
+        assert2::assert!(let Ok(actual) = rgb_to_hex(input));
         pretty_assertions::assert_eq!(actual, expected);
     }
 
@@ -191,7 +191,7 @@ mod tests {
     #[case::invalid_green("255,abc,0", "cannot parse str as u8 color code")]
     #[case::invalid_blue("255,0,def", "cannot parse str as u8 color code")]
     fn rgb_to_hex_when_invalid_input_returns_error(#[case] input: &str, #[case] expected_ctx: &str) {
-        assert2::let_assert!(Err(err) = rgb_to_hex(input));
+        assert2::assert!(let Err(err) = rgb_to_hex(input));
         assert_eq!(err.format_current_context().to_string(), expected_ctx);
     }
 
@@ -210,13 +210,13 @@ mod tests {
         #[case] input: &str,
         #[case] expected: &str,
     ) {
-        assert2::let_assert!(Ok(actual) = date_time_str_to_chrono_parse_from_str(input));
+        assert2::assert!(let Ok(actual) = date_time_str_to_chrono_parse_from_str(input));
         pretty_assertions::assert_eq!(actual, expected);
     }
 
     #[test]
     fn date_time_str_to_chrono_parse_from_str_when_invalid_input_returns_error() {
-        assert2::let_assert!(Err(err) = date_time_str_to_chrono_parse_from_str("invalid"));
+        assert2::assert!(let Err(err) = date_time_str_to_chrono_parse_from_str("invalid"));
         assert_eq!(
             err.format_current_context().to_string(),
             "cannot get chrono parse_from_str for supplied input"
@@ -230,7 +230,7 @@ mod tests {
         #[case] input: &str,
         #[case] expected_ctx: &str,
     ) {
-        assert2::let_assert!(Err(err) = unix_timestamp_to_iso_8601_date_time(input));
+        assert2::assert!(let Err(err) = unix_timestamp_to_iso_8601_date_time(input));
         assert_eq!(err.format_current_context().to_string(), expected_ctx);
     }
 }
