@@ -22,7 +22,7 @@ ureq = { workspace = true }
 xz2 = { version = "0.1" }
 ytil_cmd = { workspace = true }
 ytil_sys = { workspace = true }
-zip = { version = "7.4", default-features = false, features = ["deflate"] }
+zip = { version = "8.0", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 assert2 = { workspace = true }
