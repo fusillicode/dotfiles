@@ -399,7 +399,7 @@ mod tests {
         let head_commit = repo.head().unwrap().peel_to_commit().unwrap();
         let branch = repo.branch("test-branch", &head_commit, false).unwrap();
 
-        assert2::let_assert!(Ok(result) = Branch::try_from((branch, git2::BranchType::Local)));
+        assert2::assert!(let Ok(result) = Branch::try_from((branch, git2::BranchType::Local)));
 
         pretty_assertions::assert_eq!(
             result,

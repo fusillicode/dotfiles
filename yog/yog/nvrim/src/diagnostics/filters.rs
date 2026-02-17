@@ -159,7 +159,7 @@ mod tests {
     #[test]
     fn try_from_valid_dictionary_succeeds() {
         let dict = create_diag(0, 1, 2, 3);
-        assert2::let_assert!(Ok(loc) = DiagnosticLocation::try_from(&dict));
+        assert2::assert!(let Ok(loc) = DiagnosticLocation::try_from(&dict));
         pretty_assertions::assert_eq!(loc.lnum, 0);
         pretty_assertions::assert_eq!(loc.col, 1);
         pretty_assertions::assert_eq!(loc.end_lnum, 2);
@@ -169,14 +169,14 @@ mod tests {
     #[test]
     fn try_from_missing_lnum_key_fails() {
         let dict = ytil_noxi::dict! { col: 1_i64, end_col: 3_i64, end_lnum: 2_i64 };
-        assert2::let_assert!(Err(err) = DiagnosticLocation::try_from(&dict));
+        assert2::assert!(let Err(err) = DiagnosticLocation::try_from(&dict));
         assert!(err.to_string().contains("missing dict value"));
     }
 
     #[test]
     fn try_from_wrong_type_for_lnum_fails() {
         let dict = ytil_noxi::dict! { lnum: "not_an_int", col: 1_i64, end_col: 3_i64, end_lnum: 2_i64 };
-        assert2::let_assert!(Err(err) = DiagnosticLocation::try_from(&dict));
+        assert2::assert!(let Err(err) = DiagnosticLocation::try_from(&dict));
         assert!(err.to_string().contains(r#"value "not_an_int" of key "lnum""#));
         assert!(err.to_string().contains("is String but Integer was expected"));
     }
@@ -184,14 +184,14 @@ mod tests {
     #[test]
     fn try_from_negative_lnum_fails() {
         let dict = create_diag(-1, 1, 2, 3);
-        assert2::let_assert!(Err(err) = DiagnosticLocation::try_from(&dict));
+        assert2::assert!(let Err(err) = DiagnosticLocation::try_from(&dict));
         assert!(err.to_string().contains("out of range"));
     }
 
     #[test]
     fn try_from_lnum_greater_than_end_lnum_fails() {
         let dict = create_diag(2, 1, 0, 3);
-        assert2::let_assert!(Err(err) = DiagnosticLocation::try_from(&dict));
+        assert2::assert!(let Err(err) = DiagnosticLocation::try_from(&dict));
         assert!(err.to_string().contains("inconsistent line boundaries"));
         assert!(err.to_string().contains("lnum 2 > end_lnum 0"));
     }
@@ -199,7 +199,7 @@ mod tests {
     #[test]
     fn try_from_col_greater_than_end_col_fails() {
         let dict = create_diag(0, 3, 0, 1);
-        assert2::let_assert!(Err(err) = DiagnosticLocation::try_from(&dict));
+        assert2::assert!(let Err(err) = DiagnosticLocation::try_from(&dict));
         assert!(err.to_string().contains("inconsistent col boundaries"));
         assert!(err.to_string().contains("col 3 > end_col 1 on same line"));
     }
@@ -207,7 +207,7 @@ mod tests {
     #[test]
     fn try_from_equal_boundaries_succeeds() {
         let dict = create_diag(1, 2, 1, 2);
-        assert2::let_assert!(Ok(loc) = DiagnosticLocation::try_from(&dict));
+        assert2::assert!(let Ok(loc) = DiagnosticLocation::try_from(&dict));
         pretty_assertions::assert_eq!(
             loc,
             DiagnosticLocation {

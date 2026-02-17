@@ -188,7 +188,7 @@ mod tests {
 
         let result = Scratch::from(Ok(entry));
 
-        assert2::let_assert!(Some(Ok(actual)) = result);
+        assert2::assert!(let Some(Ok(actual)) = result);
         pretty_assertions::assert_eq!(
             actual,
             Scratch {
@@ -224,7 +224,7 @@ mod tests {
 
         let result = Scratch::from(Ok(entry));
 
-        assert2::let_assert!(Some(Err(err)) = result);
+        assert2::assert!(let Some(Err(err)) = result);
         assert!(err.to_string().contains(expected_error));
     }
 
@@ -234,7 +234,7 @@ mod tests {
 
         let result = Scratch::from(Err(err));
 
-        assert2::let_assert!(Some(Err(e)) = result);
+        assert2::assert!(let Some(Err(e)) = result);
         assert!(e.to_string().contains("test error"));
     }
 

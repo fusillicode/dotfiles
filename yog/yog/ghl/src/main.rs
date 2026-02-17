@@ -429,7 +429,7 @@ mod tests {
     #[case("42", "error empty title")]
     #[case("", "error parsing issue number")]
     fn pr_title_from_branch_name_when_invalid_input_returns_error(#[case] input: &str, #[case] expected_ctx: &str) {
-        assert2::let_assert!(Err(err) = pr_title_from_branch_name(input));
+        assert2::assert!(let Err(err) = pr_title_from_branch_name(input));
         assert_eq!(err.format_current_context().to_string(), expected_ctx);
     }
 }

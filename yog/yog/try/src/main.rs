@@ -118,17 +118,17 @@ mod tests {
 
     #[test]
     fn exit_cond_from_str_when_ok_returns_ok_variant() {
-        assert2::let_assert!(Ok(ExitCond::Ok) = ExitCond::from_str("ok"));
+        assert2::assert!(let Ok(ExitCond::Ok) = ExitCond::from_str("ok"));
     }
 
     #[test]
     fn exit_cond_from_str_when_ko_returns_ko_variant() {
-        assert2::let_assert!(Ok(ExitCond::Ko) = ExitCond::from_str("ko"));
+        assert2::assert!(let Ok(ExitCond::Ko) = ExitCond::from_str("ko"));
     }
 
     #[test]
     fn exit_cond_from_str_when_invalid_returns_error() {
-        assert2::let_assert!(Err(err) = ExitCond::from_str("invalid"));
+        assert2::assert!(let Err(err) = ExitCond::from_str("invalid"));
         assert!(err.to_string().contains("unexpected exit condition"));
     }
 

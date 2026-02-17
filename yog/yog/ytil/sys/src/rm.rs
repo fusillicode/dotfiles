@@ -162,9 +162,9 @@ mod tests {
         let path = tmp.path().to_path_buf();
 
         // First remove
-        assert2::let_assert!(Ok(()) = rm_f(&path));
+        assert2::assert!(let Ok(()) = rm_f(&path));
         // Second remove, no error
-        assert2::let_assert!(Ok(()) = rm_f(&path));
+        assert2::assert!(let Ok(()) = rm_f(&path));
     }
 
     #[test]

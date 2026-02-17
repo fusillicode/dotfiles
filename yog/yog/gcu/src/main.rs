@@ -231,7 +231,7 @@ mod tests {
     #[case::empty_input("", "branch name construction produced empty string")]
     #[case::invalid_characters_only("❌", "branch name construction produced empty string")]
     fn build_branch_name_fails_as_expected(#[case] input: &str, #[case] expected_ctx: &str) {
-        assert2::let_assert!(Err(err) = build_branch_name(&[input]));
+        assert2::assert!(let Err(err) = build_branch_name(&[input]));
         assert_eq!(err.format_current_context().to_string(), expected_ctx);
     }
 
@@ -251,7 +251,7 @@ mod tests {
     #[case::special_chars_in_args(&["This", "---is.", "..a_test"], "this-is.-..a_test")]
     #[case::dependabot_path(&["dependabot/cargo/opentelemetry-0.27.1"], "dependabot/cargo/opentelemetry-0.27.1")]
     fn build_branch_name_succeeds_as_expected(#[case] input: &[&str], #[case] expected_output: &str) {
-        assert2::let_assert!(Ok(actual_output) = build_branch_name(input));
+        assert2::assert!(let Ok(actual_output) = build_branch_name(input));
         assert_eq!(actual_output, expected_output);
     }
 }

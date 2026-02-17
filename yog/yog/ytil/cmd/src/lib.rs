@@ -184,7 +184,7 @@ mod tests {
         let mut cmd = Command::new("bash");
         cmd.args(["-c", "echo -n ok"]);
 
-        assert2::let_assert!(Ok(out) = cmd.exec());
+        assert2::assert!(let Ok(out) = cmd.exec());
         assert!(out.status.success());
         assert_eq!(String::from_utf8(out.stdout).unwrap(), "ok");
         assert_eq!(String::from_utf8(out.stderr).unwrap(), "");
@@ -195,7 +195,7 @@ mod tests {
         let mut cmd = Command::new("bash");
         cmd.args(["-c", "echo foo error 1>&2; exit 7"]);
 
-        assert2::let_assert!(
+        assert2::assert!(let
             Err(CmdError::CmdFailure {
                 status,
                 stderr,

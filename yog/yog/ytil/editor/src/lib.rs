@@ -164,10 +164,10 @@ mod tests {
 
     #[test]
     fn editor_from_str_works_as_expected() {
-        assert2::let_assert!(Ok(Editor::Hx) = Editor::from_str("hx"));
-        assert2::let_assert!(Ok(Editor::Nvim) = Editor::from_str("nvim"));
-        assert2::let_assert!(Ok(Editor::Nvim) = Editor::from_str("nv"));
-        assert2::let_assert!(Err(err) = Editor::from_str("unknown"));
+        assert2::assert!(let Ok(Editor::Hx) = Editor::from_str("hx"));
+        assert2::assert!(let Ok(Editor::Nvim) = Editor::from_str("nvim"));
+        assert2::assert!(let Ok(Editor::Nvim) = Editor::from_str("nv"));
+        assert2::assert!(let Err(err) = Editor::from_str("unknown"));
         assert!(err.to_string().contains("unknown editor"));
     }
 
@@ -177,7 +177,7 @@ mod tests {
         // We should always have a Cargo.toml...
         let dummy_path = root_dir.join("Cargo.toml").to_string_lossy().into_owned();
 
-        assert2::let_assert!(Ok(f0) = FileToOpen::from_str(&dummy_path));
+        assert2::assert!(let Ok(f0) = FileToOpen::from_str(&dummy_path));
         let expected = FileToOpen {
             path: dummy_path.clone(),
             line_nbr: 0,
@@ -185,7 +185,7 @@ mod tests {
         };
         assert_eq!(f0, expected);
 
-        assert2::let_assert!(Ok(f1) = FileToOpen::from_str(&format!("{dummy_path}:3")));
+        assert2::assert!(let Ok(f1) = FileToOpen::from_str(&format!("{dummy_path}:3")));
         let expected = FileToOpen {
             path: dummy_path.clone(),
             line_nbr: 3,
@@ -193,7 +193,7 @@ mod tests {
         };
         assert_eq!(f1, expected);
 
-        assert2::let_assert!(Ok(f2) = FileToOpen::from_str(&format!("{dummy_path}:3:7")));
+        assert2::assert!(let Ok(f2) = FileToOpen::from_str(&format!("{dummy_path}:3:7")));
         let expected = FileToOpen {
             path: dummy_path,
             line_nbr: 3,
@@ -205,7 +205,7 @@ mod tests {
     #[test]
     fn try_from_errors_when_pane_is_missing() {
         let panes: Vec<WeztermPane> = vec![];
-        assert2::let_assert!(Err(err) = FileToOpen::try_from(("README.md", 999, panes.as_slice())));
+        assert2::assert!(let Err(err) = FileToOpen::try_from(("README.md", 999, panes.as_slice())));
         assert!(err.to_string().contains("missing pane"));
     }
 
@@ -213,7 +213,7 @@ mod tests {
     fn try_from_errors_when_relative_file_is_missing() {
         let dir = std::env::current_dir().unwrap();
         let panes = vec![pane_with(1, 1, &dir)];
-        assert2::let_assert!(
+        assert2::assert!(let
             Err(err) = FileToOpen::try_from(("definitely_missing_12345__file.rs", 1, panes.as_slice()))
         );
         assert!(err.to_string().contains("error parsing file to open"));
@@ -223,7 +223,7 @@ mod tests {
     fn try_from_resolves_relative_existing_file() {
         let dir = std::env::current_dir().unwrap();
         let panes = vec![pane_with(7, 1, &dir)];
-        assert2::let_assert!(Ok(file) = FileToOpen::try_from(("Cargo.toml", 7, panes.as_slice())));
+        assert2::assert!(let Ok(file) = FileToOpen::try_from(("Cargo.toml", 7, panes.as_slice())));
         let expected = FileToOpen {
             path: dir.join("Cargo.toml").to_string_lossy().into_owned(),
             line_nbr: 0,

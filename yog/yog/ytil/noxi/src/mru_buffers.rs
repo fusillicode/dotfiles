@@ -248,7 +248,7 @@ mod tests {
     )]
     fn from_str_when_valid_input_returns_mru_buffer(#[case] input: &str, #[case] expected: MruBuffer) {
         let result = MruBuffer::from_str(input);
-        assert2::let_assert!(Ok(mru_buffer) = result);
+        assert2::assert!(let Ok(mru_buffer) = result);
         pretty_assertions::assert_eq!(mru_buffer, expected);
     }
 
@@ -260,7 +260,7 @@ mod tests {
     #[case("1u%a  file.txt", "error finding opening quote")]
     fn from_str_when_invalid_input_returns_error(#[case] input: &str, #[case] expected_err_substr: &str) {
         let result = MruBuffer::from_str(input);
-        assert2::let_assert!(Err(err) = result);
+        assert2::assert!(let Err(err) = result);
         assert!(err.to_string().contains(expected_err_substr));
     }
 }

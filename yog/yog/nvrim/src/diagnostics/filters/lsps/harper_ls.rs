@@ -121,7 +121,7 @@ mod tests {
             end_lnum: 0,
             end_col: 6,
         };
-        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(&buf, &diag));
+        assert2::assert!(let Ok(res) = filter.skip_diagnostic(&buf, &diag));
         assert!(!res);
     }
 
@@ -142,7 +142,7 @@ mod tests {
             end_lnum: 0,
             end_col: 6,
         };
-        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(&buf, &diag));
+        assert2::assert!(let Ok(res) = filter.skip_diagnostic(&buf, &diag));
         assert!(!res);
     }
 
@@ -163,7 +163,7 @@ mod tests {
             end_lnum: 0,
             end_col: 6,
         };
-        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(&buf, &diag));
+        assert2::assert!(let Ok(res) = filter.skip_diagnostic(&buf, &diag));
         assert!(!res);
     }
 
@@ -184,7 +184,7 @@ mod tests {
             end_lnum: 0,
             end_col: 6,
         };
-        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(&buf, &diag));
+        assert2::assert!(let Ok(res) = filter.skip_diagnostic(&buf, &diag));
         assert!(!res);
     }
 
@@ -205,7 +205,7 @@ mod tests {
             end_lnum: 0,
             end_col: 6,
         };
-        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(&buf, &diag));
+        assert2::assert!(let Ok(res) = filter.skip_diagnostic(&buf, &diag));
         assert!(res);
     }
 
@@ -225,7 +225,7 @@ mod tests {
             col: 1,
             end_col: 7,
         };
-        assert2::let_assert!(Err(err) = filter.skip_diagnostic(&buf, &diag));
+        assert2::assert!(let Err(err) = filter.skip_diagnostic(&buf, &diag));
         assert!(err.to_string().contains("missing dict value"));
         assert!(err.to_string().contains(r#""end_lnum""#));
     }
@@ -247,7 +247,7 @@ mod tests {
             end_lnum: 0,
             end_col: 5,
         };
-        assert2::let_assert!(Err(err) = filter.skip_diagnostic(&buf, &diag));
+        assert2::assert!(let Err(err) = filter.skip_diagnostic(&buf, &diag));
         assert!(err.to_string().contains("inconsistent line boundaries"));
         assert!(err.to_string().contains("lnum 1 > end_lnum 0"));
     }
@@ -269,7 +269,7 @@ mod tests {
             end_lnum: 0,
             end_col: 0,
         };
-        assert2::let_assert!(Err(err) = filter.skip_diagnostic(&buf, &diag));
+        assert2::assert!(let Err(err) = filter.skip_diagnostic(&buf, &diag));
         assert!(err.to_string().contains("inconsistent col boundaries"));
         assert!(err.to_string().contains("col 5 > end_col 0"));
     }
@@ -291,7 +291,7 @@ mod tests {
             end_lnum: 0,
             end_col: 15,
         };
-        assert2::let_assert!(Err(err) = filter.skip_diagnostic(&buf, &diag));
+        assert2::assert!(let Err(err) = filter.skip_diagnostic(&buf, &diag));
         assert!(err.to_string().contains("cannot extract substring"));
     }
 
@@ -312,7 +312,7 @@ mod tests {
             end_lnum: 0,
             end_col: 5,
         };
-        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(&buf, &diag));
+        assert2::assert!(let Ok(res) = filter.skip_diagnostic(&buf, &diag));
         assert!(!res);
     }
 

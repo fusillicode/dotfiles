@@ -191,14 +191,14 @@ mod tests {
             pane_with(2, 10, "file:///host/home/user/project", "shell"),
             pane_with(3, 11, "file:///host/home/user/other", "hx"),
         ];
-        assert2::let_assert!(Ok(sibling) = get_sibling_pane_with_titles(&panes, 2, &["hx"]));
+        assert2::assert!(let Ok(sibling) = get_sibling_pane_with_titles(&panes, 2, &["hx"]));
         assert_eq!(sibling.pane_id, 1);
     }
 
     #[test]
     fn get_sibling_pane_with_titles_errors_when_no_title_match() {
         let panes = vec![pane_with(1, 10, "file:///host/home/user/project", "shell")];
-        assert2::let_assert!(Err(err) = get_sibling_pane_with_titles(&panes, 1, &["hx"]));
+        assert2::assert!(let Err(err) = get_sibling_pane_with_titles(&panes, 1, &["hx"]));
         assert!(err.to_string().contains("error finding pane title in tab"));
     }
 

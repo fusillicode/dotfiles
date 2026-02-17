@@ -84,7 +84,7 @@ mod tests {
             file_path: PathBuf::from(path),
             position: ytil_hx::HxCursorPosition { line, column },
         };
-        assert2::let_assert!(Ok(result) = format_hx_status_line(&status));
+        assert2::assert!(let Ok(result) = format_hx_status_line(&status));
         pretty_assertions::assert_eq!(result, expected);
     }
 }

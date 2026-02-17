@@ -163,7 +163,7 @@ mod tests {
 
     #[test]
     fn create_when_empty_title_returns_error() {
-        assert2::let_assert!(Err(err) = create(""));
+        assert2::assert!(let Err(err) = create(""));
         assert!(
             err.to_string()
                 .contains("error cannot create GitHub PR with empty title")
@@ -187,7 +187,7 @@ mod tests {
         let json = format!(
             r#"{{"number":1,"title":"t","author":{{"login":"a","is_bot":false}},"mergeStateStatus":"{status_str}","updatedAt":"2024-01-01T00:00:00Z"}}"#
         );
-        assert2::let_assert!(Ok(pr) = serde_json::from_str::<PullRequest>(&json));
+        assert2::assert!(let Ok(pr) = serde_json::from_str::<PullRequest>(&json));
         pretty_assertions::assert_eq!(pr.merge_state, expected);
     }
 }

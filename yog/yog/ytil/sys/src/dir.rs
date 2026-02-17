@@ -60,13 +60,13 @@ mod tests {
 
     #[test]
     fn build_home_path_returns_path_ending_with_parts() {
-        assert2::let_assert!(Ok(path) = build_home_path(&[".config", "test"]));
+        assert2::assert!(let Ok(path) = build_home_path(&[".config", "test"]));
         assert!(path.ends_with(".config/test"), "path={}", path.display());
     }
 
     #[test]
     fn get_workspace_root_returns_existing_directory() {
-        assert2::let_assert!(Ok(root) = get_workspace_root());
+        assert2::assert!(let Ok(root) = get_workspace_root());
         assert!(root.is_dir(), "root={}", root.display());
         // The workspace root should contain Cargo.toml
         assert!(root.join("Cargo.toml").exists(), "root={}", root.display());

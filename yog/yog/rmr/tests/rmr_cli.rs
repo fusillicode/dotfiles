@@ -12,7 +12,7 @@ fn rmr_with_single_file_with_suffix_deletes_file() {
 
     let res = run_rmr(&[&format!("{}:12", file_path.display())]);
 
-    assert2::let_assert!(Ok(status) = res);
+    assert2::assert!(let Ok(status) = res);
     pretty_assertions::assert_eq!(status.code(), Some(0));
     assert!(!file_path.exists());
 }
@@ -27,7 +27,7 @@ fn rmr_with_directory_with_suffix_deletes_directory_recursively() {
 
     let res = run_rmr(&[&format!("{}:99", inner_dir.display())]);
 
-    assert2::let_assert!(Ok(status) = res);
+    assert2::assert!(let Ok(status) = res);
     pretty_assertions::assert_eq!(status.code(), Some(0));
     assert!(!inner_dir.exists());
 }
@@ -40,8 +40,8 @@ fn rmr_with_nonexistent_path_returns_error_exit_code() {
 
     let res = run_rmr(&[&format!("{}:1:2", bogus.display())]);
 
-    assert2::let_assert!(Ok(status) = res);
-    assert2::let_assert!(Some(actual_exit_code) = status.code());
+    assert2::assert!(let Ok(status) = res);
+    assert2::assert!(let Some(actual_exit_code) = status.code());
     pretty_assertions::assert_eq!(actual_exit_code, 1);
 }
 

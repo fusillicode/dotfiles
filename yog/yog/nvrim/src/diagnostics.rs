@@ -163,7 +163,7 @@ mod tests {
     #[case("5", DiagnosticSeverity::Other)]
     #[case("\"unknown\"", DiagnosticSeverity::Other)]
     fn diagnostic_severity_deserializes_strings_as_expected(#[case] input: &str, #[case] expected: DiagnosticSeverity) {
-        assert2::let_assert!(Ok(sev) = serde_json::from_str::<DiagnosticSeverity>(input));
+        assert2::assert!(let Ok(sev) = serde_json::from_str::<DiagnosticSeverity>(input));
         assert_eq!(sev, expected);
     }
 
@@ -194,13 +194,13 @@ mod tests {
         #[case] expected: DiagnosticSeverity,
     ) {
         let json = input.to_string();
-        assert2::let_assert!(Ok(sev) = serde_json::from_str::<DiagnosticSeverity>(&json));
+        assert2::assert!(let Ok(sev) = serde_json::from_str::<DiagnosticSeverity>(&json));
         assert_eq!(sev, expected);
     }
 
     #[test]
     fn diagnostic_severity_deserializes_invalid_json_errors() {
-        assert2::let_assert!(Err(err) = serde_json::from_str::<DiagnosticSeverity>("error"));
+        assert2::assert!(let Err(err) = serde_json::from_str::<DiagnosticSeverity>("error"));
         let msg = err.to_string();
         assert!(msg.contains("expected value"), "unexpected error message: {msg}");
     }

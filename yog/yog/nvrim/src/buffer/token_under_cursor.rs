@@ -409,7 +409,7 @@ mod tests {
     fn token_under_cursor_classify_valid_url_returns_url() {
         let input = "https://example.com".to_string();
         let result = TokenUnderCursor::classify(&input);
-        assert2::let_assert!(Ok(actual) = result);
+        assert2::assert!(let Ok(actual) = result);
         pretty_assertions::assert_eq!(actual, TokenUnderCursor::Url(input));
     }
 
@@ -418,7 +418,7 @@ mod tests {
     fn token_under_cursor_classify_invalid_url_plain_word_returns_word() {
         let input = "noturl".to_string();
         let result = TokenUnderCursor::classify(&input);
-        assert2::let_assert!(Ok(actual) = result);
+        assert2::assert!(let Ok(actual) = result);
         pretty_assertions::assert_eq!(
             actual,
             TokenUnderCursor::MaybeTextFile {
@@ -436,7 +436,7 @@ mod tests {
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().into_owned();
         let result = TokenUnderCursor::classify(&path);
-        assert2::let_assert!(Ok(actual) = result);
+        assert2::assert!(let Ok(actual) = result);
         pretty_assertions::assert_eq!(
             actual,
             TokenUnderCursor::TextFile {
@@ -454,7 +454,7 @@ mod tests {
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().into_owned();
         let result = TokenUnderCursor::classify(&format!("{path}:10"));
-        assert2::let_assert!(Ok(actual) = result);
+        assert2::assert!(let Ok(actual) = result);
         pretty_assertions::assert_eq!(
             actual,
             TokenUnderCursor::TextFile {
@@ -472,7 +472,7 @@ mod tests {
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().into_owned();
         let result = TokenUnderCursor::classify(&format!("{path}:10:5"));
-        assert2::let_assert!(Ok(actual) = result);
+        assert2::assert!(let Ok(actual) = result);
         pretty_assertions::assert_eq!(
             actual,
             TokenUnderCursor::TextFile {
@@ -489,7 +489,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().to_string_lossy().into_owned();
         let result = TokenUnderCursor::classify(&path);
-        assert2::let_assert!(Ok(actual) = result);
+        assert2::assert!(let Ok(actual) = result);
         pretty_assertions::assert_eq!(actual, TokenUnderCursor::Directory(path));
     }
 
@@ -501,7 +501,7 @@ mod tests {
         std::io::Write::write_all(&mut temp_file, &[0, 1, 2, 255]).unwrap();
         let path = temp_file.path().to_string_lossy().into_owned();
         let result = TokenUnderCursor::classify(&path);
-        assert2::let_assert!(Ok(actual) = result);
+        assert2::assert!(let Ok(actual) = result);
         pretty_assertions::assert_eq!(actual, TokenUnderCursor::BinaryFile(path));
     }
 
@@ -510,7 +510,7 @@ mod tests {
     fn token_under_cursor_classify_nonexistent_path_returns_maybe_text_file() {
         let path = "/nonexistent/path".to_string();
         let result = TokenUnderCursor::classify(&path);
-        assert2::let_assert!(Ok(actual) = result);
+        assert2::assert!(let Ok(actual) = result);
         pretty_assertions::assert_eq!(
             actual,
             TokenUnderCursor::MaybeTextFile {
@@ -528,7 +528,7 @@ mod tests {
         let path = temp_file.path().to_string_lossy().into_owned();
         let input = format!("{path}:invalid");
         let result = TokenUnderCursor::classify(&input);
-        assert2::let_assert!(Ok(actual) = result);
+        assert2::assert!(let Ok(actual) = result);
         pretty_assertions::assert_eq!(
             actual,
             TokenUnderCursor::MaybeTextFile {
@@ -546,7 +546,7 @@ mod tests {
         let path = temp_file.path().to_string_lossy().into_owned();
         let input = format!("{path}:10:invalid");
         let result = TokenUnderCursor::classify(&input);
-        assert2::let_assert!(Ok(actual) = result);
+        assert2::assert!(let Ok(actual) = result);
         pretty_assertions::assert_eq!(
             actual,
             TokenUnderCursor::MaybeTextFile {
@@ -564,7 +564,7 @@ mod tests {
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().into_owned();
         let result = TokenUnderCursor::classify(&format!("{path}:10:5:extra"));
-        assert2::let_assert!(Ok(actual) = result);
+        assert2::assert!(let Ok(actual) = result);
         pretty_assertions::assert_eq!(
             actual,
             TokenUnderCursor::TextFile {
@@ -590,7 +590,7 @@ mod tests {
     #[case("(http://example.com)", "http://example.com")]
     #[case("`http://example.com`", "http://example.com")]
     fn classify_url_returns_the_token_url_under_curos(#[case] input: &str, #[case] expected_value: &str) {
-        assert2::let_assert!(Ok(actual) = TokenUnderCursor::classify_url(input));
+        assert2::assert!(let Ok(actual) = TokenUnderCursor::classify_url(input));
         pretty_assertions::assert_eq!(actual, TokenUnderCursor::Url(expected_value.to_string()));
     }
 
@@ -598,7 +598,7 @@ mod tests {
     #[case("not a url")]
     #[case("[text](noturl)")]
     fn classify_url_when_cannot_classify_url_returns_the_expected_error(#[case] input: &str) {
-        assert2::let_assert!(Err(err) = TokenUnderCursor::classify_url(input));
+        assert2::assert!(let Err(err) = TokenUnderCursor::classify_url(input));
         assert!(err.downcast_current_context::<url::ParseError>().is_some());
     }
 

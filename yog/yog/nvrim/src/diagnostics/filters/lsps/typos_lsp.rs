@@ -134,7 +134,7 @@ mod tests {
             source: "typos",
             message: "some test message",
         };
-        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(&buf, &diag));
+        assert2::assert!(let Ok(res) = filter.skip_diagnostic(&buf, &diag));
         assert!(!res);
     }
 
@@ -151,7 +151,7 @@ mod tests {
             source: "other",
             message: "some test message",
         };
-        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(&buf, &diag));
+        assert2::assert!(let Ok(res) = filter.skip_diagnostic(&buf, &diag));
         assert!(!res);
     }
 
@@ -168,7 +168,7 @@ mod tests {
             source: "typos",
             message: "some other message",
         };
-        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(&buf, &diag));
+        assert2::assert!(let Ok(res) = filter.skip_diagnostic(&buf, &diag));
         assert!(!res);
     }
 
@@ -185,7 +185,7 @@ mod tests {
             source: "typos",
             message: "some test message",
         };
-        assert2::let_assert!(Ok(res) = filter.skip_diagnostic(&buf, &diag));
+        assert2::assert!(let Ok(res) = filter.skip_diagnostic(&buf, &diag));
         assert!(res);
     }
 
@@ -201,7 +201,7 @@ mod tests {
         let diag = dict! {
             source: "typos",
         };
-        assert2::let_assert!(Err(err) = filter.skip_diagnostic(&buf, &diag));
+        assert2::assert!(let Err(err) = filter.skip_diagnostic(&buf, &diag));
         assert_eq!(err.format_current_context().to_string(), "missing dict value");
     }
 }
