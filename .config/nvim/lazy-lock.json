@@ -8,12 +8,12 @@
   "fidget.nvim": { "branch": "main", "commit": "7fa433a83118a70fe24c1ce88d5f0bd3453c0970" },
   "flatten.nvim": { "branch": "main", "commit": "72527798e75b5e34757491947c2cb853ce21dc0e" },
   "fzf": { "branch": "master", "commit": "b56d614ba2f901c64eed454f181badec0b1cedff" },
-  "fzf-lua": { "branch": "main", "commit": "5921997472574fca3880b62949eb8679dc6f5afc" },
+  "fzf-lua": { "branch": "main", "commit": "1749fedca3a0efdd47918f8b588f7c7abb4e5bd6" },
   "gitsigns.nvim": { "branch": "main", "commit": "9f3c6dd7868bcc116e9c1c1929ce063b978fa519" },
   "grug-far.nvim": { "branch": "main", "commit": "275dbedc96e61a6b8d1dfb28ba51586ddd233dcf" },
   "lazy.nvim": { "branch": "main", "commit": "306a05526ada86a7b30af95c5cc81ffba93fef97" },
   "multicursor.nvim": { "branch": "main", "commit": "630dd29dd696bc977cb81d7dd2fa6bb280f60fc4" },
-  "nvim-lint": { "branch": "master", "commit": "bcd1a44edbea8cd473af7e7582d3f7ffc60d8e81" },
+  "nvim-lint": { "branch": "master", "commit": "a3d17105a79fc12055c2a0d732665d9c2b1c2dc3" },
   "nvim-lspconfig": { "branch": "master", "commit": "44acfe887d4056f704ccc4f17513ed41c9e2b2e6" },
   "nvim-spider": { "branch": "main", "commit": "33faf3c5a3f6e9d568bcd63edd949a942d45362b" },
   "nvim-surround": { "branch": "main", "commit": "1098d7b3c34adcfa7feb3289ee434529abd4afd1" },
@@ -22,6 +22,6 @@
   "nvim-treesitter-pairs": { "branch": "master", "commit": "f8c195d4d8464cba6971bf8de2d6a5c8c109b37a" },
   "nvim-treesitter-textobjects": { "branch": "master", "commit": "5ca4aaa6efdcc59be46b95a3e876300cfead05ef" },
   "oil.nvim": { "branch": "master", "commit": "f55b25e493a7df76371cfadd0ded5004cb9cd48a" },
-  "opencode.nvim": { "branch": "main", "commit": "d080eb4e4f03cfdcb3c5eacc88cc4e17bd8c1980" },
-  "schemastore.nvim": { "branch": "main", "commit": "f59ce07433e466b6c7dca829e100a011fc23192f" }
+  "opencode.nvim": { "branch": "main", "commit": "14e8610a5fc7c246b37f3eaa7b493bde57de4077" },
+  "schemastore.nvim": { "branch": "main", "commit": "55ca969ceed5209d62cbf4c20cef023ff188b6c5" }
 }
