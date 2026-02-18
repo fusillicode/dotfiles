@@ -100,9 +100,9 @@ dependencies = [
 
 [[package]]
 name = "assert2"
-version = "0.3.17"
+version = "0.3.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3685c2321ee3b0a3f58fab864137399a020114c490b7f474c3ab8f0050257ba6"
+checksum = "25998e1bf5240479eb5b2c8f8705e327b44ecd2909f85380bc6791fa6ddb44a9"
 dependencies = [
  "assert2-macros",
  "diff",
@@ -113,9 +113,9 @@ dependencies = [
 
 [[package]]
 name = "assert2-macros"
-version = "0.3.17"
+version = "0.3.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e89e52707656819254663542ef750a429401d4d055ad0859b6f7232e60cbf2af"
+checksum = "fa964861c0814db0f8a06cf3bb694496e86c4a51f12aac660f62230e4c4407be"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -563,7 +563,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1913,7 +1913,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2232,7 +2232,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
