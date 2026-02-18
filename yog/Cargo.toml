@@ -97,6 +97,7 @@ verbose_file_reads = "deny"
 if_then_some_else_none = "deny"
 unseparated_literal_suffix = "deny"
 must_use_candidate = "allow"
+multiple_crate_versions = "allow"
 
 [workspace.lints.rust]
 warnings = "deny"
