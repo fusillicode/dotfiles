@@ -11,10 +11,9 @@ keywords = ["tui", "terminal", "prompt", "widgets"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-inquire = { version = "0.9", features = ["fuzzy-matcher"] }
 owo-colors = { workspace = true }
 rootcause = { workspace = true }
-strum = { workspace = true }
+skim = { version = "3" }
 ytil_git = { workspace = true }
 
 [lints]
