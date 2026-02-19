@@ -51,6 +51,50 @@ pub fn find_with_buffer(buffer_type: &str) -> Option<(Window, Buffer)> {
     })
 }
 
+/// Returns the first focusable floating window, if any.
+///
+/// Uses `call_function("nvim_win_get_config", ...)` returning a raw
+/// [`nvim_oxi::Dictionary`] instead of [`Window::get_config()`] to
+/// avoid full `WindowConfig` deserialization which fails when Neovim
+/// returns non-string `border` values.
+pub fn find_focusable_float() -> Option<Window> {
+    use nvim_oxi::conversion::FromObject;
+
+    for win in nvim_oxi::api::list_wins() {
+        let Ok(win_cfg) =
+            nvim_oxi::api::call_function::<_, nvim_oxi::Dictionary>("nvim_win_get_config", (win.clone(),)).inspect_err(
+                |err| {
+                    crate::notify::error(format!("error getting window config | window={win:?}, error={err:?}"));
+                },
+            )
+        else {
+            continue;
+        };
+
+        let is_floating = win_cfg
+            .get("relative")
+            .cloned()
+            .and_then(|obj| String::from_object(obj).ok())
+            .is_some_and(|s| !s.is_empty());
+
+        if !is_floating {
+            continue;
+        }
+
+        let is_focusable = win_cfg
+            .get("focusable")
+            .cloned()
+            .and_then(|obj| bool::from_object(obj).ok())
+            .unwrap_or(true);
+
+        if is_focusable {
+            return Some(win);
+        }
+    }
+
+    None
+}
+
 pub fn get_number(win: &Window) -> Option<u32> {
     win.get_number()
         .inspect_err(|err| crate::notify::error(format!("error getting window number | window={win:?} error={err:?}")))
