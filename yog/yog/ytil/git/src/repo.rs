@@ -16,11 +16,16 @@ pub fn discover(path: &Path) -> rootcause::Result<Repository> {
         .attach_with(|| format!("path={}", path.display()))?)
 }
 
-/// Absolute working tree root path for repository
+/// Absolute working tree root path for the repository (or worktree).
 ///
-/// Derived from [`Repository::commondir`] with any trailing `.git` removed (non‑bare repos).
-/// Bare repositories return their directory path unchanged.
+/// Uses [`Repository::workdir`] which returns the correct root for both regular
+/// repositories and linked worktrees. Falls back to [`Repository::commondir`]
+/// (with `.git` stripped) for bare repositories.
 pub fn get_root(repo: &Repository) -> PathBuf {
+    if let Some(workdir) = repo.workdir() {
+        return workdir.to_path_buf();
+    }
+    // Bare repository: derive root from commondir.
     repo.commondir()
         .components()
         .filter(|c| c.as_os_str() != ".git")
@@ -59,10 +64,22 @@ mod tests {
     }
 
     #[test]
-    fn get_root_returns_path_without_dot_git_suffix() {
+    fn get_root_returns_workdir() {
         let (_temp_dir, repo) = crate::tests::init_test_repo(None);
         let root = get_root(&repo);
-        pretty_assertions::assert_eq!(root.ends_with(".git"), false);
+        pretty_assertions::assert_eq!(root, repo.workdir().unwrap());
+    }
+
+    #[test]
+    fn get_root_in_worktree_returns_worktree_path() {
+        let (temp_dir, repo) = crate::tests::init_test_repo(None);
+
+        let wt_dir = temp_dir.path().join("my_worktree");
+        repo.worktree("my_worktree", &wt_dir, None).unwrap();
+
+        let wt_repo = Repository::open(&wt_dir).unwrap();
+        let root = get_root(&wt_repo);
+        pretty_assertions::assert_eq!(root, wt_dir.canonicalize().unwrap());
     }
 
     #[test]
