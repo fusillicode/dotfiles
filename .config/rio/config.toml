@@ -26,10 +26,10 @@ shape = 'block'
 blinking = false
 
 [colors]
-bar = '#002020'
+bar = '#000000'
 tabs-active-highlight = '#00ffff'
 foreground = '#c9c9c9'
-background = '#002020'
+background = '#000000'
 cursor = '#ffffff'
 selection-background = '#505257'
 

@@ -23,7 +23,7 @@ use nvim_oxi::api::types::GetHlInfos;
 use nvim_oxi::api::types::HighlightInfos;
 use rootcause::report;
 
-const GLOBAL_BG: &str = "#002020";
+const GLOBAL_BG: &str = "#000000";
 const GLOBAL_FG: &str = "#c9c9c9";
 
 const CURSOR_BG: &str = "white";
@@ -427,8 +427,8 @@ mod tests {
     #[rstest]
     #[case(LuaHlOpts::new(), "{  }")]
     #[case(LuaHlOpts::new().fg("black"), "{ fg = 'black' }")]
-    #[case(LuaHlOpts::new().bg("#002020"), "{ bg = '#002020' }")]
-    #[case(LuaHlOpts::new().fg("#002020").bg("white"), "{ fg = '#002020', bg = 'white' }")]
+    #[case(LuaHlOpts::new().bg("#000000"), "{ bg = '#000000' }")]
+    #[case(LuaHlOpts::new().fg("#000000").bg("white"), "{ fg = '#000000', bg = 'white' }")]
     #[case(LuaHlOpts::new().bold(true), "{ bold = true }")]
     #[case(LuaHlOpts::new().special("red"), "{ sp = 'red' }")]
     #[case(LuaHlOpts { blend: Some(30), ..Default::default() }, "{ blend = 30 }")]

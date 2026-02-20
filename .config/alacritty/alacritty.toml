@@ -11,7 +11,7 @@ size = 17
 offset = { x = 0, y = 8 }
 
 [colors]
-primary.background = "#002020"
+primary.background = "#000000"
 primary.foreground = "#c9c9c9"
 cursor = { text = "#000000", cursor = "#ffffff" }
 selection = { text = "CellForeground", background = "#505257" }
