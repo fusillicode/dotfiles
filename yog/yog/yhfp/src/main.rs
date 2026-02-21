@@ -28,6 +28,7 @@ fn format_hx_status_line(hx_status_line: &HxStatusLine) -> rootcause::Result<Str
 }
 
 /// Copy current Helix file path with line number to clipboard.
+#[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
     if args.has_help() {

@@ -44,6 +44,7 @@ impl FromStr for ExitCond {
 }
 
 /// Re-run a command until success (ok) or failure (ko) with cooldown.
+#[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
 

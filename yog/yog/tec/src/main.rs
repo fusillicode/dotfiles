@@ -329,6 +329,7 @@ fn format_timing(duration: Duration) -> String {
 }
 
 /// Run workspace lint suite concurrently (check or fix modes).
+#[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
     if args.has_help() {

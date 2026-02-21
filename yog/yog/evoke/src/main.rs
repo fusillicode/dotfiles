@@ -57,6 +57,7 @@ fn cp(from: &Path, to: &Path) -> rootcause::Result<()> {
 }
 
 /// Format, lint, build, and deploy workspace binaries and Nvim libs.
+#[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
     let mut args = ytil_sys::cli::get();
 

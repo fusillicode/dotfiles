@@ -1,34 +1,35 @@
 [workspace]
 resolver = "2"
 members = [
-    "yog/catl",
-    "yog/evoke",
-    "yog/fkr",
-    "yog/gch",
-    "yog/gcu",
-    "yog/ghl",
-    "yog/idt",
-    "yog/miskatonic",
-    "yog/nomicon",
-    "yog/nvrim",
-    "yog/oe",
-    "yog/rmr",
-    "yog/strgci",
-    "yog/tec",
-    "yog/try",
-    "yog/vpg",
-    "yog/yghfl",
-    "yog/yhfp",
-    # Utility libraries (ytil)
-    "yog/ytil/cmd",
-    "yog/ytil/editor",
-    "yog/ytil/gh",
-    "yog/ytil/git",
-    "yog/ytil/hx",
-    "yog/ytil/noxi",
-    "yog/ytil/sys",
-    "yog/ytil/tui",
-    "yog/ytil/wezterm",
+  "yog/catl",
+  "yog/evoke",
+  "yog/fkr",
+  "yog/gch",
+  "yog/gcu",
+  "yog/ghl",
+  "yog/idt",
+  "yog/miskatonic",
+  "yog/nomicon",
+  "yog/nvrim",
+  "yog/oe",
+  "yog/rmr",
+  "yog/strgci",
+  "yog/tec",
+  "yog/try",
+  "yog/vpg",
+  "yog/yghfl",
+  "yog/yhfp",
+  # Utility libraries (ytil)
+  "yog/ytil/cmd",
+  "yog/ytil/editor",
+  "yog/ytil/gh",
+  "yog/ytil/git",
+  "yog/ytil/hx",
+  "yog/ytil/noxi",
+  "yog/ytil/sys",
+  "yog/ytil/macros",
+  "yog/ytil/tui",
+  "yog/ytil/wezterm",
 ]
 
 [workspace.package]
@@ -45,7 +46,7 @@ categories = ["command-line-utilities", "development-tools"]
 
 # Centralized shared dependencies (including those used only as dev-deps in member crates).
 # Member crates reference them with `{ workspace = true }` under their own [dev-dependencies].
-assert2 = { version = "0.3" }
+assert2 = { version = "0.4" }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 convert_case = { version = "0.11" }
 fake = { version = "4.4", features = ["derive"] }
@@ -67,6 +68,7 @@ ytil_editor = { path = "./yog/ytil/editor" }
 ytil_gh = { path = "./yog/ytil/gh" }
 ytil_git = { path = "./yog/ytil/git" }
 ytil_hx = { path = "./yog/ytil/hx" }
+ytil_macros = { path = "./yog/ytil/macros" }
 ytil_sys = { path = "./yog/ytil/sys" }
 ytil_tui = { path = "./yog/ytil/tui" }
 ytil_wezterm = { path = "./yog/ytil/wezterm" }

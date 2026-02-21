@@ -42,6 +42,7 @@ fn exec_vault_read_cmd(vault_path: &str) -> rootcause::Result<VaultReadOutput> {
 }
 
 /// Update Postgres credentials from Vault, rewrite pgpass & nvim-dbee, optionally launch pgcli.
+#[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
     if args.has_help() {
