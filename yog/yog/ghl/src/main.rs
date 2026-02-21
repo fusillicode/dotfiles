@@ -44,18 +44,17 @@ impl Display for RenderablePullRequest {
             self.updated_at.format("%d-%m-%Y %H:%M UTC")
         )?;
         match self.merge_state {
-            PullRequestMergeState::Behind => write!(f, "{}", "Behind".yellow().bold())?,
-            PullRequestMergeState::Blocked => write!(f, "{}", "Blocked".red())?,
-            PullRequestMergeState::Clean => write!(f, "{}", "Clean".green())?,
-            PullRequestMergeState::Dirty => write!(f, "{}", "Dirty".red().bold())?,
-            PullRequestMergeState::Draft => write!(f, "{}", "Draft".blue().bold())?,
-            PullRequestMergeState::HasHooks => write!(f, "{}", "HasHooks".magenta())?,
+            PullRequestMergeState::Behind => write!(f, "{} ", "Behind".yellow().bold())?,
+            PullRequestMergeState::Blocked => write!(f, "{} ", "Blocked".red())?,
+            PullRequestMergeState::Clean => write!(f, "{} ", "Clean".green())?,
+            PullRequestMergeState::Dirty => write!(f, "{} ", "Dirty".red().bold())?,
+            PullRequestMergeState::Draft => write!(f, "{} ", "Draft".blue().bold())?,
+            PullRequestMergeState::HasHooks => write!(f, "{} ", "HasHooks".magenta())?,
             PullRequestMergeState::Unknown => write!(f, "Unknown")?,
-            PullRequestMergeState::Unmergeable => write!(f, "{}", "Unmergeable".red().bold())?,
-            PullRequestMergeState::Unstable => write!(f, "{}", "Unstable".magenta().bold())?,
+            PullRequestMergeState::Unmergeable => write!(f, "{} ", "Unmergeable".red().bold())?,
+            PullRequestMergeState::Unstable => write!(f, "{} ", "Unstable".magenta().bold())?,
         }
-        // The spacing before the title is required to align it with the first line.
-        write!(f, "\n      {}", self.title)
+        write!(f, "{}", self.title)
     }
 }
 
@@ -74,7 +73,7 @@ impl Display for RenderableListedIssue {
         write!(
             f,
             // The spacing before the title is required to align it with the first line.
-            "{} {} \n  {}",
+            "{} {} {}",
             self.author.login.blue().bold(),
             self.updated_at.format("%d-%m-%Y %H:%M UTC"),
             self.title
