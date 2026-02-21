@@ -333,6 +333,7 @@ fn pr_title_from_branch_name(branch_name: &str) -> rootcause::Result<String> {
 ///   [`ytil_tui::yes_no_select`]).
 /// - GitHub CLI invocation fails (issue and branch creation via [`ytil_gh::issue::create`] and
 ///   [`ytil_gh::issue::develop`]).
+#[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
     let mut pargs = Arguments::from_env();
     if pargs.has_help() {

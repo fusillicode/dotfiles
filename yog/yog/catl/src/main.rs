@@ -11,6 +11,7 @@ use rootcause::report;
 use ytil_sys::cli::Args;
 
 /// Display file contents or long‑list directories.
+#[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
 

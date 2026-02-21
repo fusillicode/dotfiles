@@ -78,6 +78,7 @@ fn build_github_link<'a>(
 }
 
 /// Copy GitHub URL (file/line/col) for the current Helix buffer to clipboard.
+#[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
     if args.has_help() {

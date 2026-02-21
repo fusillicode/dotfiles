@@ -199,6 +199,7 @@ fn ask_branching_from_not_default(branch_name: &str, default_branch_name: &str) 
 }
 
 /// Switch, create, and derive Git branches (including from GitHub PR URLs).
+#[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
     if args.has_help() {

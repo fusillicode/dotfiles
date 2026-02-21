@@ -53,6 +53,7 @@ fn escape_single_quotes(s: &str) -> String {
 }
 
 /// Open files (optionally at line:col) in existing Nvim / Helix pane.
+#[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
     let enriched_path_env = get_enriched_path_env()?;
     let args = ytil_sys::cli::get();

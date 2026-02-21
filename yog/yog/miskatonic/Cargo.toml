@@ -12,6 +12,7 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 rootcause = { workspace = true }
+ytil_sys = { workspace = true }
 
 [lints]
 workspace = true

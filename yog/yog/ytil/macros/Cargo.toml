@@ -1,0 +1,25 @@
+[package]
+name = "ytil_macros"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Proc-macro companion for #[main] attribute for bold-red error output."
+keywords = ["cli", "proc-macro", "error-handling"]
+categories = [
+  "command-line-utilities",
+  "development-tools::procedural-macro-helpers",
+]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = { version = "1" }
+quote = { version = "1" }
+syn = { version = "2", features = ["full"] }
+
+[lints]
+workspace = true

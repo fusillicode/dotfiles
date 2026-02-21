@@ -183,6 +183,7 @@ fn write_worktree_symbol(
 /// - Unstaging new index entries via [`ytil_git::unstage`] fails.
 /// - Restore command construction / execution via [`ytil_git::restore`] fails.
 /// - Opening repository via [`ytil_git::repo::discover`] or adding paths to index via [`ytil_git::add_to_index`] fails.
+#[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
     if args.has_help() {

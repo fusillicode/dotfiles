@@ -68,6 +68,7 @@ fn get_toml_values(content: &str, key: &str) -> Vec<String> {
 }
 
 /// Generate consolidated styled workspace documentation.
+#[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
     if args.has_help() {

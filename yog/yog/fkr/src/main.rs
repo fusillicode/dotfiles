@@ -9,6 +9,7 @@ use fkr::FkrOption;
 use ytil_sys::cli::Args;
 
 /// Entry point for the fake data generator CLI.
+#[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
     if args.has_help() {

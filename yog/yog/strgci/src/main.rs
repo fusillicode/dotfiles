@@ -16,6 +16,7 @@ const MAX_SUBJECT_LEN: usize = 33;
 /// Short hash length (standard Git abbreviation).
 const SHORT_HASH_LEN: usize = 7;
 
+#[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
     if args.has_help() {

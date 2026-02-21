@@ -5,16 +5,26 @@ use std::process::Command;
 use std::str::FromStr;
 use std::thread::JoinHandle;
 
+use owo_colors::OwoColorize as _;
 pub use pico_args;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 use ytil_cmd::CmdExt as _;
+pub use ytil_macros::main;
 
 pub mod cli;
 pub mod dir;
 pub mod file;
 pub mod lsof;
 pub mod rm;
+
+/// Runs `f` and, on error, prints the report in bold red to stderr then exits with code 1.
+pub fn run(f: impl FnOnce() -> rootcause::Result<()>) {
+    if let Err(err) = f() {
+        eprintln!("{}", format!("{err:?}").red().bold());
+        std::process::exit(1);
+    }
+}
 
 /// Joins a thread handle and returns the result.
 ///

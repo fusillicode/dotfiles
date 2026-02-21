@@ -19,6 +19,7 @@ pico-args = { version = "0.5" }
 rootcause = { workspace = true }
 serde = { workspace = true }
 ytil_cmd = { workspace = true }
+ytil_macros = { workspace = true }
 
 [dev-dependencies]
 assert2 = { workspace = true }
