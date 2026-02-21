@@ -72,6 +72,7 @@ return {
       },
     },
     fuzzy = {
+      prebuilt_binaries = { ignore_version_mismatch = true, },
       sorts = {
         function(a, b)
           return
