@@ -25,8 +25,8 @@ impl Display for RenderableBranch {
             f,
             "{} {} {}",
             self.name(),
-            styled_email.dimmed(),
-            styled_date_time.blue(),
+            styled_date_time.green(),
+            styled_email.blue().bold(),
         )
     }
 }
