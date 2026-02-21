@@ -33,6 +33,7 @@ zstyle ':completion:*' menu selection
 zstyle ':completion:*' matcher-list 'm:{a-z}={A-Z}'
 zstyle ':completion:*' list-colors ${(s.:.)LS_COLORS}
 zstyle ':completion:*' squeeze-slashes true
+zstyle ':completion:*' file-sort modification
 _comp_options+=(globdots)
 
 # Terminal title (shows current directory or running command)
