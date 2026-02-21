@@ -150,6 +150,24 @@ pub fn push(branch_name: &str, repo: Option<&Repository>) -> rootcause::Result<(
     Ok(())
 }
 
+/// Returns the name of the previously checked-out branch (`@{-1}`), if any.
+///
+/// Walks the HEAD reflog looking for the most recent checkout/switch entry and
+/// extracts the source branch name from the message.
+///
+/// Returns [`None`] when there is no recorded previous branch (e.g. fresh clone)
+/// or the reflog cannot be read.
+pub fn get_previous(repo: &Repository) -> Option<String> {
+    let reflog = repo.reflog("HEAD").ok()?;
+    reflog.iter().find_map(|entry| {
+        let msg = entry.message()?;
+        let rest = msg
+            .strip_prefix("checkout: moving from ")
+            .or_else(|| msg.strip_prefix("switch: moving from "))?;
+        Some(rest.rsplit_once(" to ")?.0.to_string())
+    })
+}
+
 /// Checkout a branch or detach HEAD.
 ///
 /// # Errors
@@ -166,22 +184,14 @@ pub fn switch(branch_name: &str) -> Result<(), Box<CmdError>> {
 /// sorted by last committer date (most recent first).
 ///
 /// # Errors
-/// - The repository cannot be discovered.
 /// - The 'origin' remote cannot be found.
 /// - Performing `git fetch` for all branches fails.
 /// - Enumerating branches fails.
 /// - A branch name is not valid UTF-8.
 /// - Resolving the branch tip commit fails.
 /// - Converting the committer timestamp into a [`DateTime`] fails.
-pub fn get_all() -> rootcause::Result<Vec<Branch>> {
-    let repo_path = Path::new(".");
-    let repo = crate::repo::discover(repo_path)
-        .context("error getting repo for getting branches")
-        .attach_with(|| format!("path={}", repo_path.display()))?;
-
-    // Reuse the already-discovered repo for the fetch operation to avoid a redundant filesystem
-    // walk in `repo::discover`.
-    fetch_with_repo(&repo, &[]).context("error fetching branches")?;
+pub fn get_all(repo: &Repository) -> rootcause::Result<Vec<Branch>> {
+    fetch_with_repo(repo, &[]).context("error fetching branches")?;
 
     let mut out = vec![];
     for branch_res in repo.branches(None).context("error enumerating branches")? {
@@ -197,15 +207,14 @@ pub fn get_all() -> rootcause::Result<Vec<Branch>> {
 /// Retrieves all branches without redundant remote duplicates.
 ///
 /// # Errors
-/// - The repository cannot be discovered.
 /// - The 'origin' remote cannot be found.
 /// - Performing `git fetch` for all branches fails.
 /// - Enumerating branches fails.
 /// - A branch name is not valid UTF-8.
 /// - Resolving the branch tip commit fails.
 /// - Converting the committer timestamp into a [`DateTime`] fails.
-pub fn get_all_no_redundant() -> rootcause::Result<Vec<Branch>> {
-    let mut branches = get_all()?;
+pub fn get_all_no_redundant(repo: &Repository) -> rootcause::Result<Vec<Branch>> {
+    let mut branches = get_all(repo)?;
     remove_redundant_remotes(&mut branches);
     Ok(branches)
 }
