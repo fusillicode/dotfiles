@@ -294,6 +294,8 @@ pub enum Branch {
     Local {
         /// The name of the branch (without refs/heads/ or refs/remotes/ prefix).
         name: String,
+        /// The email address of the last committer.
+        committer_email: String,
         /// The date and time when the last commit was made.
         committer_date_time: DateTime<Utc>,
     },
@@ -301,6 +303,8 @@ pub enum Branch {
     Remote {
         /// The name of the branch (without refs/heads/ or refs/remotes/ prefix).
         name: String,
+        /// The email address of the last committer.
+        committer_email: String,
         /// The date and time when the last commit was made.
         committer_date_time: DateTime<Utc>,
     },
@@ -319,6 +323,13 @@ impl Branch {
         self.name().trim_start_matches("origin/")
     }
 
+    /// Returns the email address of the last committer on this branch.
+    pub fn committer_email(&self) -> &str {
+        match self {
+            Self::Local { committer_email, .. } | Self::Remote { committer_email, .. } => committer_email,
+        }
+    }
+
     /// Returns the timestamp of the last commit on this branch.
     pub const fn committer_date_time(&self) -> &DateTime<Utc> {
         match self {
@@ -334,11 +345,12 @@ impl Branch {
 
 /// Attempts to convert a libgit2 branch and its type into our [`Branch`] enum.
 ///
-/// Extracts the branch name and last committer date from the raw branch.
+/// Extracts the branch name, last committer email and date from the raw branch.
 ///
 /// # Errors
 /// - Branch name is not valid UTF-8.
 /// - Resolving the branch tip commit fails.
+/// - Committer email is not valid UTF-8.
 /// - Converting the committer timestamp into a [`DateTime`] fails.
 impl<'a> TryFrom<(git2::Branch<'a>, git2::BranchType)> for Branch {
     type Error = rootcause::Report;
@@ -348,18 +360,25 @@ impl<'a> TryFrom<(git2::Branch<'a>, git2::BranchType)> for Branch {
             .name()?
             .ok_or_else(|| report!("error invalid branch name UTF-8"))
             .attach_with(|| format!("branch_name={:?}", raw_branch.name()))?;
-        let commit_time = raw_branch.get().peel_to_commit()?.committer().when();
-        let committer_date_time = DateTime::from_timestamp(commit_time.seconds(), 0)
+        let committer = raw_branch.get().peel_to_commit()?.committer().to_owned();
+        let committer_email = committer
+            .email()
+            .ok_or_else(|| report!("error invalid committer email UTF-8"))
+            .attach_with(|| format!("branch_name={branch_name:?}"))?
+            .to_string();
+        let committer_date_time = DateTime::from_timestamp(committer.when().seconds(), 0)
             .ok_or_else(|| report!("error invalid commit timestamp"))
-            .attach_with(|| format!("seconds={}", commit_time.seconds()))?;
+            .attach_with(|| format!("seconds={}", committer.when().seconds()))?;
 
         Ok(match branch_type {
             git2::BranchType::Local => Self::Local {
                 name: branch_name.to_string(),
+                committer_email,
                 committer_date_time,
             },
             git2::BranchType::Remote => Self::Remote {
                 name: branch_name.to_string(),
+                committer_email,
                 committer_date_time,
             },
         })
@@ -414,6 +433,7 @@ mod tests {
             result,
             Branch::Local {
                 name: "test-branch".to_string(),
+                committer_email: "test@example.com".to_string(),
                 committer_date_time: DateTime::from_timestamp(42, 0).unwrap(),
             }
         );
@@ -438,6 +458,7 @@ mod tests {
     #[case::local_variant(
         Branch::Local {
             name: "test".to_string(),
+            committer_email: "a@b.com".to_string(),
             committer_date_time: DateTime::from_timestamp(123_456, 0).unwrap(),
         },
         DateTime::from_timestamp(123_456, 0).unwrap()
@@ -445,6 +466,7 @@ mod tests {
     #[case::remote_variant(
         Branch::Remote {
             name: "origin/test".to_string(),
+            committer_email: "a@b.com".to_string(),
             committer_date_time: DateTime::from_timestamp(654_321, 0).unwrap(),
         },
         DateTime::from_timestamp(654_321, 0).unwrap()
@@ -459,6 +481,7 @@ mod tests {
     fn local(name: &str) -> Branch {
         Branch::Local {
             name: name.into(),
+            committer_email: String::new(),
             committer_date_time: DateTime::from_timestamp(0, 0).unwrap(),
         }
     }
@@ -466,6 +489,7 @@ mod tests {
     fn remote(name: &str) -> Branch {
         Branch::Remote {
             name: name.into(),
+            committer_email: String::new(),
             committer_date_time: DateTime::from_timestamp(0, 0).unwrap(),
         }
     }
