@@ -1,4 +1,5 @@
 vim.loader.enable()
+vim.lsp.log.set_level('OFF') -- To avoid giga huge LSP log...
 
 local nvrim = require('nvrim')
 nvrim.vim_opts.set_all()
