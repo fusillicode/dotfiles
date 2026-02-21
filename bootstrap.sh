@@ -44,6 +44,10 @@ safe_link "$dotfiles_dir/.zsh_aliases" "$HOME/.zsh_aliases"
 safe_link "$dotfiles_dir/.zshrc" "$HOME/.zshrc"
 safe_link "$dotfiles_dir/.zsh-fzf-custom-history" "$HOME/.zsh-fzf-custom-history"
 
+# Git hooks
+info "Symlinking git hooks..."
+safe_link "$dotfiles_dir/.githooks/pre-commit" "$dotfiles_dir/.git/hooks/pre-commit"
+
 # Copy gitconfig (not symlinked to allow local modifications)
 cp "$dotfiles_dir/.gitconfig" "$HOME/.gitconfig"
 
