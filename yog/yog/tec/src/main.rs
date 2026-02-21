@@ -30,8 +30,8 @@ use ytil_sys::rm::RmFilesOutcome;
 /// - Prints logical name, duration (`time=<Duration>`), status code, and stripped stdout or error.
 /// - Aggregate process exit code is 1 if any lint fails (non-zero status or panic), else 0.
 const LINTS_CHECK: &[(&str, LintBuilder)] = &[
-    ("clippy", |_| {
-        |path| {
+    ("clippy", |changed_paths| {
+        build_conditional_lint(changed_paths, Some(".rs"), |path| {
             LintFnResult::from(
                 Command::new("cargo")
                     .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
@@ -40,10 +40,10 @@ const LINTS_CHECK: &[(&str, LintBuilder)] = &[
                     .map(LintFnSuccess::CmdOutput)
                     .map_err(LintFnError::from),
             )
-        }
+        })
     }),
-    ("cargo fmt", |_| {
-        |path| {
+    ("cargo fmt", |changed_paths| {
+        build_conditional_lint(changed_paths, Some(".rs"), |path| {
             LintFnResult::from(
                 Command::new("cargo")
                     .args(["fmt", "--check"])
@@ -52,10 +52,10 @@ const LINTS_CHECK: &[(&str, LintBuilder)] = &[
                     .map(LintFnSuccess::CmdOutput)
                     .map_err(LintFnError::from),
             )
-        }
+        })
     }),
-    ("cargo-machete", |_| {
-        |path| {
+    ("cargo-machete", |changed_paths| {
+        build_conditional_lint(changed_paths, Some(".rs"), |path| {
             LintFnResult::from(
                 // Using `cargo-machete` rather than `cargo machete` to avoid issues caused by passing the
                 // `path`.
@@ -65,10 +65,10 @@ const LINTS_CHECK: &[(&str, LintBuilder)] = &[
                     .map(LintFnSuccess::CmdOutput)
                     .map_err(LintFnError::from),
             )
-        }
+        })
     }),
-    ("cargo-sort", |_| {
-        |path| {
+    ("cargo-sort", |changed_paths| {
+        build_conditional_lint(changed_paths, Some(".rs"), |path| {
             LintFnResult::from(
                 Command::new("cargo-sort")
                     .args(["--workspace", "--check", "--check-format"])
@@ -77,10 +77,10 @@ const LINTS_CHECK: &[(&str, LintBuilder)] = &[
                     .map(LintFnSuccess::CmdOutput)
                     .map_err(LintFnError::from),
             )
-        }
+        })
     }),
-    ("cargo-sort-derives", |_| {
-        |path| {
+    ("cargo-sort-derives", |changed_paths| {
+        build_conditional_lint(changed_paths, Some(".rs"), |path| {
             LintFnResult::from(
                 Command::new("cargo-sort-derives")
                     .args(["sort-derives", "--check"])
@@ -89,16 +89,16 @@ const LINTS_CHECK: &[(&str, LintBuilder)] = &[
                     .map(LintFnSuccess::CmdOutput)
                     .map_err(LintFnError::from),
             )
-        }
+        })
     }),
-    ("rust-doc-build", |_| {
-        |path| {
+    ("rust-doc-build", |changed_paths| {
+        build_conditional_lint(changed_paths, Some(".rs"), |path| {
             LintFnResult::from(
                 nomicon::generate_rust_doc(path)
                     .map(LintFnSuccess::CmdOutput)
                     .map_err(LintFnError::from),
             )
-        }
+        })
     }),
 ];
 
