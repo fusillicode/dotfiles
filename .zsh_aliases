@@ -22,6 +22,7 @@ alias gcnuke='git commit --amend --no-edit --no-verify --allow-empty && git push
 alias gbrr='git for-each-ref --sort=committerdate refs/heads/ --format="%(HEAD) %(color:yellow)%(refname:short)%(color:reset) %(color:red)%(objectname:short)%(color:reset) - %(contents:subject) %(color:green)(%(committerdate:relative))%(color:reset) %(color:blue)<%(authorname)>%(color:reset)"'
 alias gdh='git diff HEAD~1'
 alias gfp='git fetch --all --prune && git pull origin "$(git branch --show-current)"'
+alias gt='git --no-pager log --tags='*' --no-walk --reverse --pretty="format:%C(auto)%d%C(reset) %C(green)(%ci)%C(reset) %C(bold blue)%an%C(reset) %C(blue)<%ae>%C(reset)"'
 function gtnuke() {
   [[ -z "$1" ]] && { echo "Usage: gtnuke <tag>"; return 1; }
   echo "Force-push tag '$1'? [y/N] " && read -q && echo && \
