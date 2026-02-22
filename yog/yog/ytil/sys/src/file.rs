@@ -101,7 +101,7 @@ pub fn ln_sf_files_in_dir<P: AsRef<std::path::Path>>(target_dir: P, link_dir: P)
                 .attach_with(|| format!("path={}", target.display()))?;
             let link = link_dir.as_ref().join(target_name);
             ln_sf(&target, &link)
-                .context("error creating symlink")
+                .context("error linking file from directory")
                 .attach_with(|| format!("target={} link={}", target.display(), link.display()))?;
         }
     }
@@ -181,7 +181,7 @@ pub fn chmod_x_files_in_dir<P: AsRef<Path>>(dir: P) -> rootcause::Result<()> {
         let target = target_res.context("error getting directory entry")?.path();
         if target.is_file() {
             chmod_x(&target)
-                .context("error setting permissions")
+                .context("error setting file permissions in directory")
                 .attach_with(|| format!("path={}", target.display()))?;
         }
     }
