@@ -249,7 +249,7 @@ fn fetch_with_repo(repo: &Repository, branches: &[&str]) -> rootcause::Result<()
     repo.find_remote("origin")
         .context("error finding origin remote")?
         .fetch(branches, Some(&mut fetch_opts), None)
-        .context("error fetching branches")
+        .context("error performing fetch from origin remote")
         .attach_with(|| format!("branches={branches:?}"))?;
 
     Ok(())
