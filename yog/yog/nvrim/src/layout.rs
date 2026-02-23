@@ -63,9 +63,11 @@ fn focus_vsplit((split_kind, width_perc): (SplitKind, i32)) -> Option<()> {
     }
 
     // If there is a VISIBLE terminal OR file buffer (based on the supplied `term` value).
+    // Floating windows (e.g. fidget notifications) are excluded so they don't capture focus.
     if let Some(win) = nvim_oxi::api::list_wins().find(|win| {
-        ytil_noxi::window::get_buffer(win)
-            .is_some_and(|buf| (is_term && term_bufs.contains(&buf)) || (!is_term && !term_bufs.contains(&buf)))
+        !ytil_noxi::window::is_floating(win)
+            && ytil_noxi::window::get_buffer(win)
+                .is_some_and(|buf| (is_term && term_bufs.contains(&buf)) || (!is_term && !term_bufs.contains(&buf)))
     }) {
         ytil_noxi::window::set_current(&win)?;
         return Some(());

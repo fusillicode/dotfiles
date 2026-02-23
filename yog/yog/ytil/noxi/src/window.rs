@@ -65,31 +65,16 @@ pub fn find_with_buffer(buffer_type: &str) -> Option<(Window, Buffer)> {
 /// returns non-string `border` values.
 pub fn find_focusable_float(allowed_filetypes: &[&str]) -> Option<Window> {
     for win in nvim_oxi::api::list_wins() {
-        let Ok(win_cfg) =
-            nvim_oxi::api::call_function::<_, nvim_oxi::Dictionary>("nvim_win_get_config", (win.clone(),)).inspect_err(
-                |err| {
-                    crate::notify::error(format!("error getting window config | window={win:?}, error={err:?}"));
-                },
-            )
-        else {
-            continue;
-        };
-
-        let is_floating = win_cfg
-            .get("relative")
-            .cloned()
-            .and_then(|obj| String::from_object(obj).ok())
-            .is_some_and(|s| !s.is_empty());
-
-        if !is_floating {
+        if !is_floating(&win) {
             continue;
         }
 
-        let is_focusable = win_cfg
-            .get("focusable")
-            .cloned()
-            .and_then(|obj| bool::from_object(obj).ok())
-            .unwrap_or(true);
+        let is_focusable =
+            nvim_oxi::api::call_function::<_, nvim_oxi::Dictionary>("nvim_win_get_config", (win.clone(),))
+                .ok()
+                .and_then(|cfg| cfg.get("focusable").cloned())
+                .and_then(|obj| bool::from_object(obj).ok())
+                .unwrap_or(true);
 
         if !is_focusable {
             continue;
@@ -110,6 +95,14 @@ pub fn find_focusable_float(allowed_filetypes: &[&str]) -> Option<Window> {
     }
 
     None
+}
+
+pub fn is_floating(window: &Window) -> bool {
+    nvim_oxi::api::call_function::<_, nvim_oxi::Dictionary>("nvim_win_get_config", (window.clone(),))
+        .ok()
+        .and_then(|cfg| cfg.get("relative").cloned())
+        .and_then(|obj| String::from_object(obj).ok())
+        .is_some_and(|s| !s.is_empty())
 }
 
 pub fn get_number(win: &Window) -> Option<u32> {
