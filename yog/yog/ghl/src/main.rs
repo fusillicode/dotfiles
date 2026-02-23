@@ -50,7 +50,7 @@ impl Display for RenderablePullRequest {
             PullRequestMergeState::Dirty => write!(f, "{} ", "Dirty".red().bold())?,
             PullRequestMergeState::Draft => write!(f, "{} ", "Draft".blue().bold())?,
             PullRequestMergeState::HasHooks => write!(f, "{} ", "HasHooks".magenta())?,
-            PullRequestMergeState::Unknown => write!(f, "Unknown")?,
+            PullRequestMergeState::Unknown => write!(f, "Unknown ")?,
             PullRequestMergeState::Unmergeable => write!(f, "{} ", "Unmergeable".red().bold())?,
             PullRequestMergeState::Unstable => write!(f, "{} ", "Unstable".magenta().bold())?,
         }
