@@ -2,6 +2,8 @@
 
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::Window;
+use nvim_oxi::api::opts::OptionOptsBuilder;
+use nvim_oxi::conversion::FromObject;
 
 use crate::buffer::BufferExt;
 
@@ -51,15 +53,17 @@ pub fn find_with_buffer(buffer_type: &str) -> Option<(Window, Buffer)> {
     })
 }
 
-/// Returns the first focusable floating window, if any.
+/// Returns the first focusable floating window whose buffer filetype is in
+/// `allowed_filetypes`, if any.
+///
+/// This prevents notification floats (e.g. fidget) from capturing focus;
+/// only interactive floats (e.g. fzf-lua picker, filetype `"fzf"`) qualify.
 ///
 /// Uses `call_function("nvim_win_get_config", ...)` returning a raw
 /// [`nvim_oxi::Dictionary`] instead of [`Window::get_config()`] to
 /// avoid full `WindowConfig` deserialization which fails when Neovim
 /// returns non-string `border` values.
-pub fn find_focusable_float() -> Option<Window> {
-    use nvim_oxi::conversion::FromObject;
-
+pub fn find_focusable_float(allowed_filetypes: &[&str]) -> Option<Window> {
     for win in nvim_oxi::api::list_wins() {
         let Ok(win_cfg) =
             nvim_oxi::api::call_function::<_, nvim_oxi::Dictionary>("nvim_win_get_config", (win.clone(),)).inspect_err(
@@ -87,7 +91,20 @@ pub fn find_focusable_float() -> Option<Window> {
             .and_then(|obj| bool::from_object(obj).ok())
             .unwrap_or(true);
 
-        if is_focusable {
+        if !is_focusable {
+            continue;
+        }
+
+        let Some(buf) = get_buffer(&win) else {
+            continue;
+        };
+
+        let opts = OptionOptsBuilder::default().buf(buf).build();
+        let has_allowed_ft = nvim_oxi::api::get_option_value::<String>("filetype", &opts)
+            .ok()
+            .is_some_and(|ft| allowed_filetypes.contains(&ft.as_str()));
+
+        if has_allowed_ft {
             return Some(win);
         }
     }
