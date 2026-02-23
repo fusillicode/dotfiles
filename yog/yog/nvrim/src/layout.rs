@@ -56,8 +56,8 @@ fn focus_vsplit((split_kind, width_perc): (SplitKind, i32)) -> Option<()> {
         return Some(());
     }
 
-    // Prioritize focusable floating windows (e.g. fzf-lua picker) over underlying splits.
-    if !is_term && let Some(float_win) = ytil_noxi::window::find_focusable_float() {
+    // Prioritize fzf-lua floating windows over underlying splits.
+    if !is_term && let Some(float_win) = ytil_noxi::window::find_focusable_float(&["fzf"]) {
         ytil_noxi::window::set_current(&float_win)?;
         return Some(());
     }
