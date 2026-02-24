@@ -1,4 +1,5 @@
 # General
+alias -- -='cd -'
 alias nv='nvim'
 alias code='code-insiders'
 alias l='ls -llAtrh'
