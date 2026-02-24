@@ -175,6 +175,7 @@ fn base_skim_options() -> SkimOptions {
     let mut opts = SkimOptions::default();
     opts.reverse = true;
     opts.no_info = true;
+    opts.exact = true;
     opts.bind = vec!["enter:accept".into(), "esc:abort".into(), "ctrl-c:abort".into()];
     opts
 }
