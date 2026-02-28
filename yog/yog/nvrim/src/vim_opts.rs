@@ -82,6 +82,7 @@ fn set_all(_: ()) {
     let global_scope = global_scope();
 
     set("autoindent", true, &global_scope);
+    set("autoread", true, &global_scope);
     set("backspace", "indent,eol,start", &global_scope);
     set("breakindent", true, &global_scope);
     set("completeopt", "menuone,noselect", &global_scope);
