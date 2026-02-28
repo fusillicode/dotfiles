@@ -29,6 +29,12 @@ pub fn create() {
     );
 
     create_autocmd(
+        ["FocusGained", "BufEnter", "CursorHold"],
+        "AutoreadBuffers",
+        CreateAutocmdOptsBuilder::default().command(":silent! checktime"),
+    );
+
+    create_autocmd(
         ["FileType"],
         "QuickfixConfig",
         CreateAutocmdOptsBuilder::default().patterns(["qf"]).callback(|_| {
