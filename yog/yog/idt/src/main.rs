@@ -32,6 +32,7 @@ use crate::installers::helm_ls::HelmLs;
 use crate::installers::lua_ls::LuaLanguageServer;
 use crate::installers::marksman::Marksman;
 use crate::installers::nvim::Nvim;
+use crate::installers::opencode::Opencode;
 use crate::installers::prettierd::PrettierD;
 use crate::installers::quicktype::Quicktype;
 use crate::installers::rio::Rio;
@@ -161,6 +162,10 @@ fn main() -> rootcause::Result<()> {
         Box::new(Nvim {
             dev_tools_dir: Path::new(dev_tools_dir),
             bin_dir: Path::new(bin_dir),
+        }),
+        Box::new(Opencode {
+            bin_dir: Path::new(bin_dir),
+            sys_info: &sys_info,
         }),
         Box::new(PrettierD {
             dev_tools_dir: Path::new(dev_tools_dir),

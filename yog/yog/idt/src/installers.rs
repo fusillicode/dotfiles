@@ -23,6 +23,7 @@ pub mod helm_ls;
 pub mod lua_ls;
 pub mod marksman;
 pub mod nvim;
+pub mod opencode;
 pub mod prettierd;
 pub mod quicktype;
 pub mod rio;
