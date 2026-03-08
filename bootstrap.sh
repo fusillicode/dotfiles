@@ -30,6 +30,7 @@ safe_link "$dotfiles_dir/.config/opencode" "$HOME/.config/opencode"
 safe_link "$dotfiles_dir/.config/pgcli" "$HOME/.config/pgcli"
 # safe_link "$dotfiles_dir/.config/rio" "$HOME/.config/rio"
 safe_link "$dotfiles_dir/.config/starship.toml" "$HOME/.config/starship.toml"
+safe_link "$dotfiles_dir/.config/zellij" "$HOME/.config/zellij"
 
 # Symlink dotfiles in home directory
 info "Symlinking dotfiles to home directory..."
