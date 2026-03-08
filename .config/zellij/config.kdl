@@ -1,0 +1,139 @@
+pane_frames false
+show_startup_tips false
+default_layout "clean"
+copy_on_select true
+scroll_buffer_size 50000
+
+ui {
+    pane_frames {
+        hide_session_name true
+        rounded_corners true
+    }
+}
+
+themes {
+    minimal {
+        fg "#aaaaaa"
+        bg "#000000"
+        black "#000000"
+        red "#808080"
+        green "#ffffff"
+        yellow "#808080"
+        blue "#808080"
+        magenta "#808080"
+        cyan "#808080"
+        white "#ffffff"
+        orange "#808080"
+        ribbon_selected {
+            base 255 255 255
+            background 0 0 0
+            emphasis_0 255 255 255
+            emphasis_1 255 255 255
+            emphasis_2 255 255 255
+            emphasis_3 255 255 255
+        }
+        ribbon_unselected {
+            base 80 80 80
+            background 0 0 0
+            emphasis_0 80 80 80
+            emphasis_1 80 80 80
+            emphasis_2 80 80 80
+            emphasis_3 80 80 80
+        }
+        text_unselected {
+            base 80 80 80
+            background 0 0 0
+            emphasis_0 80 80 80
+            emphasis_1 80 80 80
+            emphasis_2 80 80 80
+            emphasis_3 80 80 80
+        }
+        text_selected {
+            base 255 255 255
+            background 80 82 87
+            emphasis_0 255 255 255
+            emphasis_1 255 255 255
+            emphasis_2 255 255 255
+            emphasis_3 255 255 255
+        }
+        frame_selected {
+            base 34 34 34
+            background 0 0 0
+            emphasis_0 34 34 34
+            emphasis_1 34 34 34
+            emphasis_2 34 34 34
+            emphasis_3 34 34 34
+        }
+        frame_unselected {
+            base 17 17 17
+            background 0 0 0
+            emphasis_0 17 17 17
+            emphasis_1 17 17 17
+            emphasis_2 17 17 17
+            emphasis_3 17 17 17
+        }
+    }
+}
+theme "minimal"
+
+keybinds clear-defaults=true {
+    normal {
+        bind "Super S" "Alt S" { SwitchToMode "Scroll"; }
+        bind "Ctrl q" { Quit; }
+        bind "Alt N" { NewTab; }
+        bind "Alt 1" { GoToTab 1; }
+        bind "Alt 2" { GoToTab 2; }
+        bind "Alt 3" { GoToTab 3; }
+        bind "Alt 4" { GoToTab 4; }
+        bind "Alt 5" { GoToTab 5; }
+        bind "Alt 6" { GoToTab 6; }
+        bind "Alt 7" { GoToTab 7; }
+        bind "Alt 8" { GoToTab 8; }
+        bind "Alt 9" { GoToTab 9; }
+        bind "Alt H" { GoToPreviousTab; }
+        bind "Alt L" { GoToNextTab; }
+        bind "Ctrl Alt h" { MoveTab "Left"; }
+        bind "Ctrl Alt l" { MoveTab "Right"; }
+        bind "Alt v" { NewPane "Right"; }
+        bind "Alt d" { NewPane "Down"; }
+        bind "Super R" "Alt R" { SwitchToMode "Resize"; }
+        bind "Super F" { ToggleFocusFullscreen; }
+        bind "Alt X" { CloseFocus; }
+        bind "Alt h" { MoveFocus "Left"; }
+        bind "Alt j" { MoveFocus "Down"; }
+        bind "Alt k" { MoveFocus "Up"; }
+        bind "Alt l" { MoveFocus "Right"; }
+        bind "Alt w" { CloseFocus; }
+    }
+    scroll {
+        bind "j" "Down" { ScrollDown; }
+        bind "k" "Up" { ScrollUp; }
+        bind "d" { HalfPageScrollDown; }
+        bind "u" { HalfPageScrollUp; }
+        bind "s" "/" { SwitchToMode "EnterSearch"; SearchInput 0; }
+        bind "e" { EditScrollback; SwitchToMode "Normal"; }
+        bind "Esc" "Super S" "Alt S" { SwitchToMode "Normal"; }
+    }
+    entersearch {
+        bind "Enter" { SwitchToMode "Search"; }
+        bind "Esc" { SwitchToMode "Normal"; }
+    }
+    search {
+        bind "j" "Down" { ScrollDown; }
+        bind "k" "Up" { ScrollUp; }
+        bind "n" { Search "down"; }
+        bind "N" { Search "up"; }
+        bind "Esc" "Super S" "Alt S" { SwitchToMode "Normal"; }
+    }
+    resize {
+        bind "h" "Left" { Resize "Increase Left"; }
+        bind "j" "Down" { Resize "Increase Down"; }
+        bind "k" "Up" { Resize "Increase Up"; }
+        bind "l" "Right" { Resize "Increase Right"; }
+        bind "H" { Resize "Decrease Left"; }
+        bind "J" { Resize "Decrease Down"; }
+        bind "K" { Resize "Decrease Up"; }
+        bind "L" { Resize "Decrease Right"; }
+        bind "Esc" "Super R" "Alt R" { SwitchToMode "Normal"; }
+    }
+}

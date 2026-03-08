@@ -5,6 +5,7 @@ alias code='code-insiders'
 alias l='ls -llAtrh'
 alias j='jq . -c'
 alias jl='jq . '
+alias zj='zellij'
 function sorce() { set -a && source "$@" && set +a; }
 function h() { fc -lnir 1; }
 

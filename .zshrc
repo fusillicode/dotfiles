@@ -38,8 +38,14 @@ _comp_options+=(globdots)
 
 # Terminal title (shows current directory or running command)
 function _set_title() { print -Pn "\e]0;$1\a"; }
-function precmd() { _set_title "%~"; }
-function preexec() { _set_title "$1"; }
+function precmd() {
+  _set_title "%~"
+  [[ -n "$ZELLIJ" ]] && zellij action rename-tab "${PWD/#$HOME/~}"
+}
+function preexec() {
+  _set_title "$1"
+  [[ -n "$ZELLIJ" ]] && zellij action rename-tab "${1%% *}"
+}
 
 # Line editing (emacs mode; zsh defaults to vi when EDITOR contains "vi")
 bindkey -e
@@ -102,6 +108,10 @@ source "$_starship_cache"
 # Compile zsh scripts for faster loading
 [[ ~/.zshrc -nt ~/.zshrc.zwc ]] && zcompile ~/.zshrc
 [[ ~/.zsh_aliases -nt ~/.zsh_aliases.zwc ]] && zcompile ~/.zsh_aliases
+
+if [[ -z "$ZELLIJ" ]] && (( $+commands[zellij] )); then
+    zellij attach -c default
+fi
 
 # Exit with 0 if everything's fine
 true

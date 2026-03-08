@@ -17,6 +17,7 @@ cargo install --force \
   sd \
   sqlx-cli \
   starship \
-  typos-cli
+  typos-cli \
+  zellij \
 
 cargo install cargo-audit --features=fix
