@@ -32,6 +32,7 @@ pub mod rust_analyzer;
 pub mod shellcheck;
 pub mod sql_language_server;
 pub mod sqruff;
+pub mod starship;
 pub mod taplo;
 pub mod terraform_ls;
 pub mod typescript_language_server;
