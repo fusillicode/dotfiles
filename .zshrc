@@ -46,7 +46,7 @@ function precmd() {
 function preexec() {
   _set_title "$1"
   _zellij_cmd="${1%% *}"
-  [[ -n "$ZELLIJ" ]] && zellij action rename-tab "${_zellij_cmd}|${PWD/#$HOME/~}"
+  [[ -n "$ZELLIJ" ]] && zellij action rename-tab "${_zellij_cmd} ${PWD/#$HOME/~}"
 }
 
 # Line editing (emacs mode; zsh defaults to vi when EDITOR contains "vi")
