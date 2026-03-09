@@ -40,11 +40,13 @@ _comp_options+=(globdots)
 function _set_title() { print -Pn "\e]0;$1\a"; }
 function precmd() {
   _set_title "%~"
+  _zellij_cmd=""
   [[ -n "$ZELLIJ" ]] && zellij action rename-tab "${PWD/#$HOME/~}"
 }
 function preexec() {
   _set_title "$1"
-  [[ -n "$ZELLIJ" ]] && zellij action rename-tab "${1%% *}"
+  _zellij_cmd="${1%% *}"
+  [[ -n "$ZELLIJ" ]] && zellij action rename-tab "[${_zellij_cmd}] ${PWD/#$HOME/~}"
 }
 
 # Line editing (emacs mode; zsh defaults to vi when EDITOR contains "vi")

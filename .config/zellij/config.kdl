@@ -94,15 +94,13 @@ keybinds clear-defaults=true {
         bind "Alt L" { GoToNextTab; }
         bind "Ctrl Alt h" { MoveTab "Left"; }
         bind "Ctrl Alt l" { MoveTab "Right"; }
-        bind "Alt v" { NewPane "Right"; }
-        bind "Alt d" { NewPane "Down"; }
+        bind "Alt V" { NewPane "Right"; }
+        bind "Alt D" { NewPane "Down"; }
         bind "Super R" "Alt R" { SwitchToMode "Resize"; }
-        bind "Super F" { ToggleFocusFullscreen; }
-        bind "Alt X" { CloseFocus; }
-        bind "Alt h" { MoveFocus "Left"; }
-        bind "Alt j" { MoveFocus "Down"; }
-        bind "Alt k" { MoveFocus "Up"; }
-        bind "Alt l" { MoveFocus "Right"; }
+        bind "Ctrl f" { ToggleFocusFullscreen; }
+        bind "Ctrl w" { CloseFocus; }
+        bind "Ctrl s" { FocusPreviousPane; }
+        bind "Ctrl h" { FocusNextPane; }
         bind "Alt w" { CloseFocus; }
     }
     scroll {
