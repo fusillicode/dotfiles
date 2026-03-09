@@ -36,18 +36,21 @@ zstyle ':completion:*' squeeze-slashes true
 zstyle ':completion:*' file-sort modification
 _comp_options+=(globdots)
 
-# Terminal title (shows current directory or running command)
+# Terminal title and zellij tab (using add-zsh-hook so starship doesn't clobber these)
+autoload -Uz add-zsh-hook
 function _set_title() { print -Pn "\e]0;$1\a"; }
-function precmd() {
+function _title_precmd() {
   _set_title "%~"
   _zellij_cmd=""
   [[ -n "$ZELLIJ" ]] && zellij action rename-tab "${PWD/#$HOME/~}"
 }
-function preexec() {
+function _title_preexec() {
   _set_title "$1"
   _zellij_cmd="${1%% *}"
   [[ -n "$ZELLIJ" ]] && zellij action rename-tab "${_zellij_cmd} ${PWD/#$HOME/~}"
 }
+add-zsh-hook precmd _title_precmd
+add-zsh-hook preexec _title_preexec
 
 # Line editing (emacs mode; zsh defaults to vi when EDITOR contains "vi")
 bindkey -e
