@@ -22,7 +22,7 @@ ytil_cmd = { workspace = true }
 ytil_sys = { workspace = true }
 
 [build-dependencies]
-lightningcss = { version = "1.0.0-alpha.70", default-features = false, features = [
+lightningcss = { version = "1.0.0-alpha.71", default-features = false, features = [
   "browserslist",
 ] }
 rootcause = { workspace = true }
