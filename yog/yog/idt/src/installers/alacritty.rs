@@ -47,6 +47,16 @@ impl Installer for Alacritty<'_> {
 
         crate::installers::install_macos_app(&app, self.bin_dir, self.bin_name())?;
 
+        // Alacritty sets TERM=alacritty, but programs need a matching terminfo entry to
+        // know the terminal's capabilities. Without it the system falls back to TERM=dumb,
+        // which breaks tools that depend on a capable terminal (e.g. starship, neovim).
+        // `tic` without sudo installs into ~/.terminfo/ which is checked first.
+        let terminfo = source_dir.join("extra").join("alacritty.info");
+        silent_cmd("tic")
+            .args(["-xe", "alacritty,alacritty-direct", &terminfo.display().to_string()])
+            .status()?
+            .exit_ok()?;
+
         Ok(())
     }
 
