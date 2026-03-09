@@ -41,6 +41,7 @@ use crate::installers::rust_analyzer::RustAnalyzer;
 use crate::installers::shellcheck::Shellcheck;
 use crate::installers::sql_language_server::SqlLanguageServer;
 use crate::installers::sqruff::Sqruff;
+use crate::installers::starship::Starship;
 use crate::installers::taplo::Taplo;
 use crate::installers::terraform_ls::TerraformLs;
 use crate::installers::typescript_language_server::TypescriptLanguageServer;
@@ -198,6 +199,9 @@ fn main() -> rootcause::Result<()> {
         }),
         Box::new(SqlLanguageServer {
             dev_tools_dir: Path::new(dev_tools_dir),
+            bin_dir: Path::new(bin_dir),
+        }),
+        Box::new(Starship {
             bin_dir: Path::new(bin_dir),
         }),
         Box::new(Taplo {

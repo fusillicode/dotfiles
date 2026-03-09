@@ -16,7 +16,6 @@ cargo install --force \
   ripgrep \
   sd \
   sqlx-cli \
-  starship \
   typos-cli \
 
 cargo install cargo-audit --features=fix
