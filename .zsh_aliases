@@ -32,7 +32,7 @@ function gtnuke() {
 }
 function gm() { git commit -m "$*"; }
 function gmm() { git commit --amend -m "$*"; }
-function glod() { git --no-pager log --graph --pretty="%Cred%h%Creset%C(auto)%d%Creset %s %Cgreen(%ad) %C(bold blue)%an <%ae>%Creset" -n "${1:-7}"; }
+function glod() { git --no-pager log --graph --first-parent --date=short --pretty="%Cred%h%Creset%C(auto)%d%Creset %s %Cgreen(%ad) %C(bold blue)%an <%ae>%Creset" -n "${1:-7}"; }
 
 # Kubernetes
 alias k='kubectl'

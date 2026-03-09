@@ -47,6 +47,7 @@ use crate::installers::typescript_language_server::TypescriptLanguageServer;
 use crate::installers::typos_lsp::TyposLsp;
 use crate::installers::vscode_langservers::VsCodeLangServers;
 use crate::installers::yaml_language_server::YamlLanguageServer;
+use crate::installers::zellij::Zellij;
 
 mod downloaders;
 mod installers;
@@ -220,6 +221,9 @@ fn main() -> rootcause::Result<()> {
         }),
         Box::new(YamlLanguageServer {
             dev_tools_dir: Path::new(dev_tools_dir),
+            bin_dir: Path::new(bin_dir),
+        }),
+        Box::new(Zellij {
             bin_dir: Path::new(bin_dir),
         }),
     ];

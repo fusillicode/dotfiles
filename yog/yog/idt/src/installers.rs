@@ -38,6 +38,7 @@ pub mod typescript_language_server;
 pub mod typos_lsp;
 pub mod vscode_langservers;
 pub mod yaml_language_server;
+pub mod zellij;
 
 /// Trait for installing development tools.
 pub trait Installer: Sync + Send {
