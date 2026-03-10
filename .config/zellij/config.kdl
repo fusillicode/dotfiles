@@ -94,7 +94,12 @@ keybinds clear-defaults=true {
         bind "Alt L" { GoToNextTab; }
         bind "Ctrl Alt h" { MoveTab "Left"; }
         bind "Ctrl Alt l" { MoveTab "Right"; }
-        bind "Alt V" { NewPane "Right"; }
+        bind "Alt V" {
+            NewPane "Right";
+            Resize "Increase Left";
+            Resize "Increase Left";
+            Resize "Increase Left";
+        }
         bind "Alt D" { NewPane "Down"; }
         bind "Super R" "Alt R" { SwitchToMode "Resize"; }
         bind "Ctrl f" { ToggleFocusFullscreen; }
