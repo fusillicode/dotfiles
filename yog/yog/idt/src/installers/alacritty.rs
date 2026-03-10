@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use rootcause::prelude::ResultExt as _;
 use ytil_cmd::silent_cmd;
 
 use crate::installers::Installer;
@@ -50,12 +51,23 @@ impl Installer for Alacritty<'_> {
         // Alacritty sets TERM=alacritty, but programs need a matching terminfo entry to
         // know the terminal's capabilities. Without it the system falls back to TERM=dumb,
         // which breaks tools that depend on a capable terminal (e.g. starship, neovim).
-        // `tic` without sudo installs into ~/.terminfo/ which is checked first.
-        let terminfo = source_dir.join("extra").join("alacritty.info");
-        silent_cmd("tic")
-            .args(["-xe", "alacritty,alacritty-direct", &terminfo.display().to_string()])
-            .status()?
-            .exit_ok()?;
+        // The app bundle ships pre-compiled entries; copy them to ~/.terminfo/ (no sudo,
+        // bypasses macOS SIP on /usr/share, avoids tic compatibility issues).
+        let home = std::env::var("HOME").context("error reading HOME env var")?;
+        let terminfo_dest = Path::new(&home).join(".terminfo").join("61");
+        std::fs::create_dir_all(&terminfo_dest)
+            .context("error creating ~/.terminfo/61")
+            .attach_with(|| format!("path={}", terminfo_dest.display()))?;
+
+        let bundled = app.join("Contents").join("Resources").join("61");
+        for entry in &["alacritty", "alacritty-direct"] {
+            let src = bundled.join(entry);
+            let dst = terminfo_dest.join(entry);
+            std::fs::copy(&src, &dst)
+                .context("error copying terminfo entry")
+                .attach_with(|| format!("src={}", src.display()))
+                .attach_with(|| format!("dst={}", dst.display()))?;
+        }
 
         Ok(())
     }

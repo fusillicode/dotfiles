@@ -1,4 +1,5 @@
 [tools]
+protoc = "latest"
 
 [settings]
 experimental = true
