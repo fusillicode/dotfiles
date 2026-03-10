@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use rootcause::prelude::ResultExt as _;
 use ytil_sys::Arch;
 use ytil_sys::Os;
 use ytil_sys::SysInfo;
@@ -57,12 +58,13 @@ impl Installer for Shellcheck<'_> {
         )?;
 
         let target = self.bin_dir.join(self.bin_name());
-        std::fs::rename(
-            dest_dir
-                .join(format!("{0}-{latest_release}", self.bin_name()))
-                .join(self.bin_name()),
-            &target,
-        )?;
+        let extracted = dest_dir
+            .join(format!("{0}-{latest_release}", self.bin_name()))
+            .join(self.bin_name());
+        std::fs::rename(&extracted, &target)
+            .context("error moving extracted shellcheck binary")
+            .attach_with(|| format!("from={}", extracted.display()))
+            .attach_with(|| format!("to={}", target.display()))?;
         ytil_sys::file::chmod_x(target)?;
 
         Ok(())

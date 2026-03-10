@@ -1,6 +1,8 @@
 use std::path::Path;
 use std::path::PathBuf;
 
+use rootcause::prelude::ResultExt as _;
+
 /// Downloads and installs Python packages using pip in a virtual environment.
 ///
 /// # Errors
@@ -10,12 +12,18 @@ use std::path::PathBuf;
 pub fn run(dev_tools_dir: &Path, tool: &str, packages: &[&str]) -> rootcause::Result<PathBuf> {
     let dev_tools_repo_dir = dev_tools_dir.join(tool);
 
-    std::fs::create_dir_all(&dev_tools_repo_dir)?;
+    std::fs::create_dir_all(&dev_tools_repo_dir)
+        .context("error creating pip tool directory")
+        .attach_with(|| format!("path={}", dev_tools_repo_dir.display()))?;
 
     ytil_cmd::silent_cmd("python3")
         .args(["-m", "venv", &dev_tools_repo_dir.join(".venv").to_string_lossy()])
-        .status()?
-        .exit_ok()?;
+        .status()
+        .context("failed to spawn python3 venv")?
+        .exit_ok()
+        .context("python3 venv creation failed")
+        .attach_with(|| format!("tool={tool}"))
+        .attach_with(|| format!("venv_dir={}", dev_tools_repo_dir.join(".venv").display()))?;
 
     ytil_cmd::silent_cmd("sh")
         .args([
@@ -29,8 +37,12 @@ pub fn run(dev_tools_dir: &Path, tool: &str, packages: &[&str]) -> rootcause::Re
                 packages = packages.join(" "),
             ),
         ])
-        .status()?
-        .exit_ok()?;
+        .status()
+        .context("failed to spawn pip install")?
+        .exit_ok()
+        .context("pip install failed")
+        .attach_with(|| format!("tool={tool}"))
+        .attach_with(|| format!("packages={packages:?}"))?;
 
     Ok(dev_tools_repo_dir.join(".venv").join("bin"))
 }

@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use rootcause::prelude::ResultExt as _;
 use ytil_cmd::silent_cmd;
 
 use crate::Installer;
@@ -38,8 +39,12 @@ impl Installer for Nvim<'_> {
                     nvim_release_dir.display(),
                 ),
             ])
-            .status()?
-            .exit_ok()?;
+            .status()
+            .context("failed to spawn build command")?
+            .exit_ok()
+            .context("build failed")
+            .attach_with(|| format!("tool={}", self.bin_name()))
+            .attach_with(|| format!("source_dir={}", nvim_source_dir.display()))?;
 
         let target = nvim_release_dir.join("bin").join(self.bin_name());
         ytil_sys::file::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;

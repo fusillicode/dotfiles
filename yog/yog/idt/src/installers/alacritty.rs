@@ -37,8 +37,12 @@ impl Installer for Alacritty<'_> {
                     source_dir.display(),
                 ),
             ])
-            .status()?
-            .exit_ok()?;
+            .status()
+            .context("failed to spawn build command")?
+            .exit_ok()
+            .context("build failed")
+            .attach_with(|| format!("tool={}", self.bin_name()))
+            .attach_with(|| format!("source_dir={}", source_dir.display()))?;
 
         let app = source_dir
             .join("target")
