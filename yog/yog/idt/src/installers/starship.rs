@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use rootcause::prelude::ResultExt as _;
 use ytil_cmd::CmdExt as _;
 use ytil_cmd::silent_cmd;
 
@@ -35,8 +36,12 @@ impl Installer for Starship<'_> {
                     cargo_target.display(),
                 ),
             ])
-            .status()?
-            .exit_ok()?;
+            .status()
+            .context("failed to spawn build command")?
+            .exit_ok()
+            .context("build failed")
+            .attach_with(|| format!("tool={}", self.bin_name()))
+            .attach_with(|| format!("source_dir={}", source_dir.display()))?;
 
         let target = cargo_target.join("release").join(self.bin_name());
         ytil_sys::file::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;

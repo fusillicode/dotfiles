@@ -1,6 +1,8 @@
 use std::path::Path;
 use std::path::PathBuf;
 
+use rootcause::prelude::ResultExt as _;
+
 /// Downloads and installs Node.js packages using npm.
 ///
 /// # Errors
@@ -9,7 +11,9 @@ use std::path::PathBuf;
 pub fn run(dev_tools_dir: &Path, tool: &str, packages: &[&str]) -> rootcause::Result<PathBuf> {
     let dev_tools_repo_dir = dev_tools_dir.join(tool);
 
-    std::fs::create_dir_all(&dev_tools_repo_dir)?;
+    std::fs::create_dir_all(&dev_tools_repo_dir)
+        .context("error creating npm tool directory")
+        .attach_with(|| format!("path={}", dev_tools_repo_dir.display()))?;
 
     let mut cmd_args = vec!["install"];
     if cfg!(debug_assertions) {
@@ -19,7 +23,14 @@ pub fn run(dev_tools_dir: &Path, tool: &str, packages: &[&str]) -> rootcause::Re
     cmd_args.extend_from_slice(&["--prefix", &dev_tools_repo_dir_bind]);
     cmd_args.extend_from_slice(packages);
 
-    ytil_cmd::silent_cmd("npm").args(cmd_args).status()?.exit_ok()?;
+    ytil_cmd::silent_cmd("npm")
+        .args(cmd_args)
+        .status()
+        .context("failed to spawn npm")?
+        .exit_ok()
+        .context("npm install failed")
+        .attach_with(|| format!("tool={tool}"))
+        .attach_with(|| format!("packages={packages:?}"))?;
 
     Ok(dev_tools_repo_dir.join("node_modules").join(".bin"))
 }

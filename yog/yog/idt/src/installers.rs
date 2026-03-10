@@ -5,6 +5,7 @@ use std::time::Instant;
 
 use owo_colors::OwoColorize as _;
 use rootcause::bail;
+use rootcause::prelude::ResultExt as _;
 use ytil_cmd::Cmd;
 use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt as _;
@@ -196,22 +197,34 @@ pub fn install_macos_app(app: &Path, bin_dir: &Path, bin_name: &str) -> rootcaus
     let applications_app_old = std::path::PathBuf::from(format!("/Applications/{app_filename}.old"));
 
     if applications_app_old.exists() {
-        std::fs::remove_dir_all(&applications_app_old)?;
+        std::fs::remove_dir_all(&applications_app_old)
+            .context("error removing old .app backup")
+            .attach_with(|| format!("path={}", applications_app_old.display()))?;
     }
 
     if applications_app.is_symlink() {
-        std::fs::remove_file(&applications_app)?;
+        std::fs::remove_file(&applications_app)
+            .context("error removing .app symlink")
+            .attach_with(|| format!("path={}", applications_app.display()))?;
     } else if applications_app.exists() {
-        std::fs::rename(&applications_app, &applications_app_old)?;
+        std::fs::rename(&applications_app, &applications_app_old)
+            .context("error renaming existing .app to .old")
+            .attach_with(|| format!("from={}", applications_app.display()))
+            .attach_with(|| format!("to={}", applications_app_old.display()))?;
     }
 
     silent_cmd("cp")
         .args(["-R", &app.display().to_string(), "/Applications/"])
-        .status()?
-        .exit_ok()?;
+        .status()
+        .context("failed to spawn cp for .app bundle")?
+        .exit_ok()
+        .context("cp .app bundle to /Applications failed")
+        .attach_with(|| format!("app={}", app.display()))?;
 
     if applications_app_old.exists() {
-        std::fs::remove_dir_all(&applications_app_old)?;
+        std::fs::remove_dir_all(&applications_app_old)
+            .context("error cleaning up old .app backup")
+            .attach_with(|| format!("path={}", applications_app_old.display()))?;
     }
 
     Ok(())
