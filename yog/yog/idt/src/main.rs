@@ -202,6 +202,7 @@ fn main() -> rootcause::Result<()> {
             bin_dir: Path::new(bin_dir),
         }),
         Box::new(Starship {
+            dev_tools_dir: Path::new(dev_tools_dir),
             bin_dir: Path::new(bin_dir),
         }),
         Box::new(Taplo {
@@ -228,6 +229,7 @@ fn main() -> rootcause::Result<()> {
             bin_dir: Path::new(bin_dir),
         }),
         Box::new(Zellij {
+            dev_tools_dir: Path::new(dev_tools_dir),
             bin_dir: Path::new(bin_dir),
         }),
     ];
