@@ -49,17 +49,6 @@ pub fn create() {
         }),
     );
 
-    if ytil_zellij::is_active() {
-        create_autocmd(
-            ["BufReadPost"],
-            "ZellijScrollbackEsc",
-            CreateAutocmdOptsBuilder::default().patterns(["*.dump"]).callback(|_| {
-                ytil_noxi::common::exec_vim_script("nnoremap <buffer> <silent> <esc> :q<cr>", None);
-                true
-            }),
-        );
-    }
-
     crate::plugins::scrolloff::create_autocmd();
     crate::layout::create_autocmd();
 }
