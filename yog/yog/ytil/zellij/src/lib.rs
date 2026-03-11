@@ -5,6 +5,7 @@
 
 use std::process::Command;
 
+use rootcause::prelude::ResultExt;
 use ytil_cmd::CmdExt;
 
 const BIN: &str = "zellij";
@@ -44,10 +45,13 @@ pub fn is_active() -> bool {
 pub fn list_sessions() -> rootcause::Result<Vec<Session>> {
     let mut cmd = Command::new(BIN);
     cmd.args(["list-sessions"]);
-    let output = cmd.output().map_err(|source| ytil_cmd::CmdError::Io {
-        cmd: ytil_cmd::Cmd::from(&cmd),
-        source,
-    })?;
+    let output = cmd
+        .output()
+        .map_err(|source| ytil_cmd::CmdError::Io {
+            cmd: ytil_cmd::Cmd::from(&cmd),
+            source,
+        })
+        .attach("operation=list-sessions")?;
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     Ok(stdout.lines().filter(|l| !l.is_empty()).map(Session::new).collect())
@@ -71,14 +75,11 @@ impl Session {
         let mut plain = String::with_capacity(line.len());
         let mut in_escape = false;
         for c in line.chars() {
-            if in_escape {
-                if c.is_ascii_alphabetic() {
-                    in_escape = false;
-                }
-            } else if c == '\x1b' {
-                in_escape = true;
-            } else {
-                plain.push(c);
+            match (in_escape, c) {
+                (true, c) if c.is_ascii_alphabetic() => in_escape = false,
+                (false, '\x1b') => in_escape = true,
+                (false, c) => plain.push(c),
+                _ => {}
             }
         }
 
@@ -89,6 +90,16 @@ impl Session {
     }
 }
 
+/// Forwards arbitrary arguments to `zellij` with inherited stdio.
+///
+/// # Errors
+/// - Invoking `zellij` fails or exits with a non-zero status.
+pub fn forward(args: &[String]) -> rootcause::Result<()> {
+    let mut cmd = Command::new(BIN);
+    cmd.args(args);
+    Ok(run_interactive(&mut cmd)?)
+}
+
 /// Prints `zellij --help` directly to the terminal, preserving ANSI colors.
 ///
 /// # Errors
@@ -96,14 +107,7 @@ impl Session {
 pub fn help() -> rootcause::Result<()> {
     let mut cmd = Command::new(BIN);
     cmd.arg("--help");
-    let status = cmd.status().map_err(|source| ytil_cmd::CmdError::Io {
-        cmd: ytil_cmd::Cmd::from(&cmd),
-        source,
-    })?;
-    if !status.success() {
-        return Err(rootcause::report!("zellij --help failed"));
-    }
-    Ok(())
+    Ok(run_interactive(&mut cmd)?)
 }
 
 /// Kills a running Zellij session by name.
@@ -111,7 +115,10 @@ pub fn help() -> rootcause::Result<()> {
 /// # Errors
 /// - Invoking `zellij kill-session` fails.
 pub fn kill_session(name: &str) -> rootcause::Result<()> {
-    ytil_cmd::silent_cmd(BIN).args(["kill-session", name]).exec()?;
+    ytil_cmd::silent_cmd(BIN)
+        .args(["kill-session", name])
+        .exec()
+        .attach(format!("session={name}"))?;
     Ok(())
 }
 
@@ -124,17 +131,11 @@ pub fn kill_session(name: &str) -> rootcause::Result<()> {
 /// - Invoking `zellij attach` or `zellij action switch-session` fails.
 pub fn attach_session(name: &str) -> rootcause::Result<()> {
     if is_active() {
-        action(&["switch-session", name])?;
+        action(&["switch-session", name]).attach(format!("session={name} mode=switch"))?;
     } else {
         let mut cmd = Command::new(BIN);
         cmd.args(["attach", name]);
-        let status = cmd.status().map_err(|source| ytil_cmd::CmdError::Io {
-            cmd: ytil_cmd::Cmd::from(&cmd),
-            source,
-        })?;
-        if !status.success() {
-            return Err(rootcause::report!("zellij attach failed").attach(format!("session={name}")));
-        }
+        run_interactive(&mut cmd).attach(format!("session={name}"))?;
     }
     Ok(())
 }
@@ -148,7 +149,32 @@ pub fn attach_session(name: &str) -> rootcause::Result<()> {
 pub fn delete_session(name: &str) -> rootcause::Result<()> {
     ytil_cmd::silent_cmd(BIN)
         .args(["delete-session", "--force", name])
-        .exec()?;
+        .exec()
+        .attach(format!("session={name}"))?;
+    Ok(())
+}
+
+/// Runs a [`Command`] with inherited stdio so the child process can interact with
+/// the terminal directly (preserving ANSI colors, TTY detection, and interactivity).
+///
+/// Because stdio is inherited rather than captured, `stderr` and `stdout` in the
+/// returned [`CmdError::CmdFailure`](ytil_cmd::CmdError::CmdFailure) are always
+/// empty — the user already saw whatever the child printed.
+fn run_interactive(cmd: &mut Command) -> Result<(), Box<ytil_cmd::CmdError>> {
+    let status = cmd.status().map_err(|source| {
+        Box::new(ytil_cmd::CmdError::Io {
+            cmd: ytil_cmd::Cmd::from(&*cmd),
+            source,
+        })
+    })?;
+    if !status.success() {
+        return Err(Box::new(ytil_cmd::CmdError::CmdFailure {
+            cmd: ytil_cmd::Cmd::from(&*cmd),
+            stderr: String::new(),
+            stdout: String::new(),
+            status,
+        }));
+    }
     Ok(())
 }
 
