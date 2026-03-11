@@ -78,7 +78,7 @@ theme "minimal"
 
 keybinds clear-defaults=true {
     normal {
-        bind "Super S" "Alt S" { SwitchToMode "Scroll"; }
+        bind "Super F" "Alt F" { EditScrollback; SwitchToMode "Normal"; }
         bind "Ctrl q" { Quit; }
         bind "Alt N" { NewTab; }
         bind "Alt 1" { GoToTab 1; }
@@ -115,7 +115,7 @@ keybinds clear-defaults=true {
         bind "u" { HalfPageScrollUp; }
         bind "s" "/" { SwitchToMode "EnterSearch"; SearchInput 0; }
         bind "e" { EditScrollback; SwitchToMode "Normal"; }
-        bind "Esc" "Super S" "Alt S" { SwitchToMode "Normal"; }
+        bind "Esc" "Super F" "Alt F" { SwitchToMode "Normal"; }
     }
     entersearch {
         bind "Enter" { SwitchToMode "Search"; }
@@ -126,7 +126,7 @@ keybinds clear-defaults=true {
         bind "k" "Up" { ScrollUp; }
         bind "n" { Search "down"; }
         bind "N" { Search "up"; }
-        bind "Esc" "Super S" "Alt S" { SwitchToMode "Normal"; }
+        bind "Esc" "Super F" "Alt F" { SwitchToMode "Normal"; }
     }
     resize {
         bind "h" "Left" { Resize "Increase Left"; }

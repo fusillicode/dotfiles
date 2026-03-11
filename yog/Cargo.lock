@@ -2281,6 +2281,7 @@ dependencies = [
  "ytil_noxi",
  "ytil_sys",
  "ytil_wezterm",
+ "ytil_zellij",
 ]
 
 [[package]]
@@ -4828,6 +4829,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ytil_zellij"
+version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
+ "rootcause",
+ "rstest",
+ "ytil_cmd",
+]
+
+[[package]]
 name = "zerocopy"
 version = "0.8.39"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4919,6 +4930,18 @@ dependencies = [
  "memchr",
  "typed-path",
  "zopfli",
+]
+
+[[package]]
+name = "zj"
+version = "0.1.0"
+dependencies = [
+ "owo-colors",
+ "rootcause",
+ "strum 0.28.0",
+ "ytil_sys",
+ "ytil_tui",
+ "ytil_zellij",
 ]
 
 [[package]]

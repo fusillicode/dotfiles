@@ -32,6 +32,7 @@ ytil_git = { workspace = true }
 ytil_noxi = { path = "../ytil/noxi" }
 ytil_sys = { workspace = true }
 ytil_wezterm = { workspace = true }
+ytil_zellij = { workspace = true }
 
 [dev-dependencies]
 assert2 = { workspace = true }

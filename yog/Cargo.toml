@@ -30,6 +30,8 @@ members = [
     "yog/ytil/sys",
     "yog/ytil/tui",
     "yog/ytil/wezterm",
+    "yog/ytil/zellij",
+    "yog/zj",
 ]
 
 [workspace.package]
@@ -72,6 +74,7 @@ ytil_macros = { path = "./yog/ytil/macros" }
 ytil_sys = { path = "./yog/ytil/sys" }
 ytil_tui = { path = "./yog/ytil/tui" }
 ytil_wezterm = { path = "./yog/ytil/wezterm" }
+ytil_zellij = { path = "./yog/ytil/zellij" }
 
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }

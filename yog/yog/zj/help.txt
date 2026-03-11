@@ -1,0 +1,16 @@
+Usage: zj [--help]
+
+Interactive Zellij session management.
+
+Running `zj` lists all sessions in a picker, lets you multi-select,
+then choose an action (Kill or Delete) to apply to the selected sessions.
+
+  Kill    Terminates running sessions.
+  Delete  Permanently removes sessions (including running ones).
+
+Options:
+  --help  Show this help message.
+
+Examples:
+  zj          Pick sessions and choose an action interactively.
+  zj --help   Show this help message.

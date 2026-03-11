@@ -1,0 +1,22 @@
+[package]
+name = "ytil_zellij"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Query and control `Zellij` panes via the CLI."
+keywords = ["zellij", "terminal", "pane", "multiplexer", "integration"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+rootcause = { workspace = true }
+ytil_cmd = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+rstest = { workspace = true }
+
+[lints]
+workspace = true
