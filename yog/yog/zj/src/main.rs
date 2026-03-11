@@ -6,6 +6,7 @@
 use core::fmt::Display;
 
 use owo_colors::OwoColorize;
+use rootcause::prelude::ResultExt;
 use strum::EnumIter;
 use strum::IntoEnumIterator;
 use ytil_sys::cli::Args;
@@ -18,7 +19,7 @@ impl Display for DisplaySession {
     }
 }
 
-#[derive(EnumIter)]
+#[derive(Debug, EnumIter)]
 enum Op {
     Attach,
     Kill,
@@ -38,11 +39,17 @@ impl Display for Op {
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
-    if args.has_help() || args.first().is_some_and(|a| a == "help") {
+
+    let is_zj_help = (args.len() == 1 && args.has_help()) || args.first().is_some_and(|a| a == "help");
+    if is_zj_help {
         ytil_zellij::help()?;
         println!();
         println!("{}", include_str!("../help.txt"));
         return Ok(());
+    }
+
+    if !args.is_empty() {
+        return ytil_zellij::forward(&args);
     }
 
     let sessions: Vec<DisplaySession> = ytil_zellij::list_sessions()?.into_iter().map(DisplaySession).collect();
@@ -68,21 +75,28 @@ fn main() -> rootcause::Result<()> {
                 return Ok(());
             }
             if let Some(session) = selected.first() {
-                ytil_zellij::attach_session(&session.0.name)?;
+                ytil_zellij::attach_session(&session.0.name)
+                    .attach(format!("op={op:?}"))
+                    .attach(format!("session={}", session.0.name))?;
             }
         }
         Op::Kill => {
             for session in &selected {
-                ytil_zellij::kill_session(&session.0.name)?;
+                ytil_zellij::kill_session(&session.0.name)
+                    .attach(format!("op={op:?}"))
+                    .attach(format!("session={}", session.0.name))?;
                 println!("{} {}", "Killed".yellow().bold(), session.0.name);
             }
         }
         Op::Delete => {
             for session in &selected {
-                ytil_zellij::delete_session(&session.0.name)?;
+                ytil_zellij::delete_session(&session.0.name)
+                    .attach(format!("op={op:?}"))
+                    .attach(format!("session={}", session.0.name))?;
                 println!("{} {}", "Deleted".red().bold(), session.0.name);
             }
         }
     }
+
     Ok(())
 }

@@ -1,17 +1,20 @@
-Usage: zj [--help]
+Usage: zj [command] [args...]
 
-Interactive Zellij session management.
+Interactive Zellij session management and zellij proxy.
 
-Running `zj` lists all sessions in a picker, lets you multi-select,
-then choose an action to apply to the selected sessions.
+Running `zj` with no arguments lists all sessions in a picker,
+lets you multi-select, then choose an action to apply:
 
   Attach  Connects to a session (single selection only).
   Kill    Terminates running sessions.
   Delete  Permanently removes sessions (including running ones).
 
+Any other arguments are forwarded directly to `zellij`.
+
 Options:
-  --help  Show this help message.
+  help, --help  Show this help message.
 
 Examples:
-  zj          Pick sessions and choose an action interactively.
-  zj --help   Show this help message.
+  zj                  Pick sessions and choose an action interactively.
+  zj help             Show this help message.
+  zj <args...>        Forward to `zellij <args...>`.
