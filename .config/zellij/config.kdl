@@ -78,7 +78,7 @@ theme "minimal"
 
 keybinds clear-defaults=true {
     normal {
-        bind "Super F" "Alt F" { EditScrollback; SwitchToMode "Normal"; }
+        bind "Alt F" { EditScrollback; SwitchToMode "Normal"; }
         bind "Ctrl q" { Quit; }
         bind "Alt N" { NewTab; }
         bind "Alt 1" { GoToTab 1; }
@@ -101,7 +101,7 @@ keybinds clear-defaults=true {
             Resize "Increase Left";
         }
         bind "Alt D" { NewPane "Down"; }
-        bind "Super R" "Alt R" { SwitchToMode "Resize"; }
+        bind "Alt R" { SwitchToMode "Resize"; }
         bind "Ctrl f" { ToggleFocusFullscreen; }
         bind "Ctrl w" { CloseFocus; }
         bind "Ctrl s" { FocusPreviousPane; }
@@ -115,18 +115,19 @@ keybinds clear-defaults=true {
         bind "u" { HalfPageScrollUp; }
         bind "s" "/" { SwitchToMode "EnterSearch"; SearchInput 0; }
         bind "e" { EditScrollback; SwitchToMode "Normal"; }
-        bind "Esc" "Super F" "Alt F" { SwitchToMode "Normal"; }
+        bind "Esc" "Alt F" { SwitchToMode "Normal"; }
     }
     entersearch {
         bind "Enter" { SwitchToMode "Search"; }
-        bind "Esc" { SwitchToMode "Normal"; }
+        bind "Esc" { SwitchToMode "Scroll"; }
     }
     search {
         bind "j" "Down" { ScrollDown; }
         bind "k" "Up" { ScrollUp; }
         bind "n" { Search "down"; }
         bind "N" { Search "up"; }
-        bind "Esc" "Super F" "Alt F" { SwitchToMode "Normal"; }
+        bind "Esc" { SwitchToMode "Scroll"; }
+        bind "Alt F" { SwitchToMode "Normal"; }
     }
     resize {
         bind "h" "Left" { Resize "Increase Left"; }
@@ -137,6 +138,6 @@ keybinds clear-defaults=true {
         bind "J" { Resize "Decrease Down"; }
         bind "K" { Resize "Decrease Up"; }
         bind "L" { Resize "Decrease Right"; }
-        bind "Esc" "Super R" "Alt R" { SwitchToMode "Normal"; }
+        bind "Esc" "Alt R" { SwitchToMode "Normal"; }
     }
 }
