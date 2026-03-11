@@ -42,7 +42,12 @@ pub fn is_active() -> bool {
 /// # Errors
 /// - Invoking `zellij list-sessions` fails.
 pub fn list_sessions() -> rootcause::Result<Vec<Session>> {
-    let output = Command::new(BIN).args(["list-sessions"]).exec()?;
+    let mut cmd = Command::new(BIN);
+    cmd.args(["list-sessions"]);
+    let output = cmd.output().map_err(|source| ytil_cmd::CmdError::Io {
+        cmd: ytil_cmd::Cmd::from(&cmd),
+        source,
+    })?;
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     Ok(stdout.lines().filter(|l| !l.is_empty()).map(Session::new).collect())
@@ -84,12 +89,53 @@ impl Session {
     }
 }
 
+/// Prints `zellij --help` directly to the terminal, preserving ANSI colors.
+///
+/// # Errors
+/// - Invoking `zellij --help` fails.
+pub fn help() -> rootcause::Result<()> {
+    let mut cmd = Command::new(BIN);
+    cmd.arg("--help");
+    let status = cmd.status().map_err(|source| ytil_cmd::CmdError::Io {
+        cmd: ytil_cmd::Cmd::from(&cmd),
+        source,
+    })?;
+    if !status.success() {
+        return Err(rootcause::report!("zellij --help failed"));
+    }
+    Ok(())
+}
+
 /// Kills a running Zellij session by name.
 ///
 /// # Errors
 /// - Invoking `zellij kill-session` fails.
 pub fn kill_session(name: &str) -> rootcause::Result<()> {
     ytil_cmd::silent_cmd(BIN).args(["kill-session", name]).exec()?;
+    Ok(())
+}
+
+/// Attaches to a Zellij session by name.
+///
+/// When already inside Zellij, switches to the session in-place to avoid nesting.
+/// When outside, spawns an interactive `zellij attach` with inherited stdio.
+///
+/// # Errors
+/// - Invoking `zellij attach` or `zellij action switch-session` fails.
+pub fn attach_session(name: &str) -> rootcause::Result<()> {
+    if is_active() {
+        action(&["switch-session", name])?;
+    } else {
+        let mut cmd = Command::new(BIN);
+        cmd.args(["attach", name]);
+        let status = cmd.status().map_err(|source| ytil_cmd::CmdError::Io {
+            cmd: ytil_cmd::Cmd::from(&cmd),
+            source,
+        })?;
+        if !status.success() {
+            return Err(rootcause::report!("zellij attach failed").attach(format!("session={name}")));
+        }
+    }
     Ok(())
 }
 
