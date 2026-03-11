@@ -42,9 +42,11 @@ pub fn get() -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
     use super::*;
 
-    #[rstest::rstest]
+    #[rstest]
     #[case::empty_vec(vec![], false)]
     #[case::no_help(vec!["arg1", "arg2"], false)]
     #[case::has_help(vec!["--help"], true)]
@@ -53,7 +55,7 @@ mod tests {
         pretty_assertions::assert_eq!(args.has_help(), expected);
     }
 
-    #[rstest::rstest]
+    #[rstest]
     #[case::empty_vec(Vec::<String>::new(), Vec::<String>::new())]
     #[case::clones_all(vec!["a".to_owned(), "b".to_owned()], vec!["a".to_owned(), "b".to_owned()])]
     fn all_for_vec_returns_clone(#[case] args: Vec<String>, #[case] expected: Vec<String>) {

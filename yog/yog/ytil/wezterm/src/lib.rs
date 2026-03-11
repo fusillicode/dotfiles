@@ -10,19 +10,21 @@ use rootcause::prelude::ResultExt;
 use rootcause::report;
 use serde::Deserialize;
 
+const BIN: &str = "wezterm";
+
 /// Generates a command string to send text to a specific [`WeztermPane`] using the `WezTerm` CLI.
 pub fn send_text_to_pane_cmd(text: &str, pane_id: i64) -> String {
-    format!("wezterm cli send-text {text} --pane-id '{pane_id}' --no-paste")
+    format!("{BIN} cli send-text {text} --pane-id '{pane_id}' --no-paste")
 }
 
 /// Generates a command string to submit (send a carriage return) to a specific [`WeztermPane`].
 pub fn submit_pane_cmd(pane_id: i64) -> String {
-    format!(r#"printf "\r" | wezterm cli send-text --pane-id '{pane_id}' --no-paste"#)
+    format!(r#"printf "\r" | {BIN} cli send-text --pane-id '{pane_id}' --no-paste"#)
 }
 
 /// Generates a command string to activate a specific [`WeztermPane`] using the `WezTerm` CLI.
 pub fn activate_pane_cmd(pane_id: i64) -> String {
-    format!("wezterm cli activate-pane --pane-id '{pane_id}'")
+    format!("{BIN} cli activate-pane --pane-id '{pane_id}'")
 }
 
 /// Retrieves the current pane ID from the `WEZTERM_PANE` environment variable.
@@ -48,7 +50,7 @@ pub fn get_current_pane_id() -> rootcause::Result<i64> {
 /// - Invoking `wezterm` (list command) fails or returns a non-zero exit status.
 /// - Output JSON cannot be deserialized into panes.
 pub fn get_all_panes(envs: &[(&str, &str)]) -> rootcause::Result<Vec<WeztermPane>> {
-    let mut cmd = Command::new("wezterm");
+    let mut cmd = Command::new(BIN);
     cmd.args(["cli", "list", "--format", "json"]);
     cmd.envs(envs.iter().copied());
     Ok(

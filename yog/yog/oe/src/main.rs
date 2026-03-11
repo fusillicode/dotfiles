@@ -107,9 +107,11 @@ fn main() -> rootcause::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
     use super::*;
 
-    #[rstest::rstest]
+    #[rstest]
     #[case::no_quotes("hello world", "hello world")]
     #[case::single_quote("it's here", "it'\\''s here")]
     #[case::multiple_quotes("a'b'c", "a'\\''b'\\''c")]
