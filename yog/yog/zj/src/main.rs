@@ -20,6 +20,7 @@ impl Display for DisplaySession {
 
 #[derive(EnumIter)]
 enum Op {
+    Attach,
     Kill,
     Delete,
 }
@@ -27,6 +28,7 @@ enum Op {
 impl Display for Op {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Attach => write!(f, "{}", "Attach".green().bold()),
             Self::Kill => write!(f, "{}", "Kill".yellow().bold()),
             Self::Delete => write!(f, "{}", "Delete".red().bold()),
         }
@@ -36,15 +38,13 @@ impl Display for Op {
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
-    if args.has_help() {
+    if args.has_help() || args.first().is_some_and(|a| a == "help") {
+        ytil_zellij::help()?;
+        println!();
         println!("{}", include_str!("../help.txt"));
         return Ok(());
     }
 
-    ls()
-}
-
-fn ls() -> rootcause::Result<()> {
     let sessions: Vec<DisplaySession> = ytil_zellij::list_sessions()?.into_iter().map(DisplaySession).collect();
     if sessions.is_empty() {
         println!("No sessions");
@@ -61,16 +61,26 @@ fn ls() -> rootcause::Result<()> {
         return Ok(());
     };
 
-    for session in &selected {
-        let name = &session.0.name;
-        match op {
-            Op::Kill => {
-                ytil_zellij::kill_session(name)?;
-                println!("{} {name}", "Killed".yellow().bold());
+    match op {
+        Op::Attach => {
+            if selected.len() > 1 {
+                println!("Cannot attach to multiple sessions, select only one.");
+                return Ok(());
             }
-            Op::Delete => {
-                ytil_zellij::delete_session(name)?;
-                println!("{} {name}", "Deleted".red().bold());
+            if let Some(session) = selected.first() {
+                ytil_zellij::attach_session(&session.0.name)?;
+            }
+        }
+        Op::Kill => {
+            for session in &selected {
+                ytil_zellij::kill_session(&session.0.name)?;
+                println!("{} {}", "Killed".yellow().bold(), session.0.name);
+            }
+        }
+        Op::Delete => {
+            for session in &selected {
+                ytil_zellij::delete_session(&session.0.name)?;
+                println!("{} {}", "Deleted".red().bold(), session.0.name);
             }
         }
     }
