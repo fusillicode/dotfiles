@@ -95,8 +95,7 @@ pub fn text_prompt(message: &str) -> rootcause::Result<Option<String>> {
 /// # Errors
 /// - [`skim`] fails to initialize or run.
 pub fn yes_no_select(title: &str) -> rootcause::Result<Option<bool>> {
-    let mut options = simple_prompt_options(title, "10%");
-    options.no_sort = true;
+    let options = simple_prompt_options(title, "10%");
 
     let Some(output) = run_simple_prompt(options.build(), "Yes\nNo")? else {
         return Ok(None);
@@ -170,12 +169,14 @@ fn find_selected_index(display_texts: &[String], item: &std::sync::Arc<dyn SkimI
     display_texts.iter().position(|t| *t == *output_text)
 }
 
-/// Shared [`SkimOptions`] base: reverse layout, no info line, accept/abort keybindings.
+/// Shared [`SkimOptions`] base: reverse layout, no info line, accept/abort keybindings,
+/// input-order preserved during filtering.
 fn base_skim_options() -> SkimOptions {
     let mut opts = SkimOptions::default();
     opts.reverse = true;
     opts.no_info = true;
     opts.exact = true;
+    opts.no_sort = true;
     opts.bind = vec!["enter:accept".into(), "esc:abort".into(), "ctrl-c:abort".into()];
     opts
 }
