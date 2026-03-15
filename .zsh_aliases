@@ -33,6 +33,7 @@ function gtnuke() {
   echo "Force-push tag '$1'? [y/N] " && read -q && echo && \
     git tag -f "$1" && git push origin "$1" -f
 }
+function gpat() { git add -N . && git diff HEAD > "$1.patch" && git reset -q && echo "$1.patch created"; }
 function gm() { git commit -m "$*"; }
 function gmm() { git commit --amend -m "$*"; }
 function glod() { git --no-pager log --graph --first-parent --date=short --pretty="%Cred%h%Creset%C(auto)%d%Creset %s %Cgreen(%ad) %C(bold blue)%an <%ae>%Creset" -n "${1:-7}"; }
