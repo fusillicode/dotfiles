@@ -4,6 +4,7 @@
 [core]
     filemode = false
     excludesfile = ~/.gitignore_global
+    pager = less -FRX
 [branch]
     autosetuprebase = always
 [diff]
