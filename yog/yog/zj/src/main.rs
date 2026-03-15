@@ -7,6 +7,7 @@ use core::fmt::Display;
 
 use owo_colors::OwoColorize;
 use rootcause::prelude::ResultExt;
+use rootcause::report;
 use strum::EnumIter;
 use strum::IntoEnumIterator;
 use ytil_sys::cli::Args;
@@ -22,6 +23,7 @@ impl Display for DisplaySession {
 #[derive(Debug, EnumIter)]
 enum Op {
     Attach,
+    Restart,
     Kill,
     Delete,
 }
@@ -30,9 +32,18 @@ impl Display for Op {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Attach => write!(f, "{}", "Attach".green().bold()),
+            Self::Restart => write!(f, "{}", "Restart".cyan().bold()),
             Self::Kill => write!(f, "{}", "Kill".yellow().bold()),
             Self::Delete => write!(f, "{}", "Delete".red().bold()),
         }
+    }
+}
+
+fn require_single(selected: &[DisplaySession]) -> rootcause::Result<&DisplaySession> {
+    if let [session] = selected {
+        Ok(session)
+    } else {
+        Err(report!("multiple sessions selected"))
     }
 }
 
@@ -70,15 +81,20 @@ fn main() -> rootcause::Result<()> {
 
     match op {
         Op::Attach => {
-            if selected.len() > 1 {
-                println!("Cannot attach to multiple sessions, select only one.");
-                return Ok(());
-            }
-            if let Some(session) = selected.first() {
-                ytil_zellij::attach_session(&session.0.name)
-                    .attach(format!("op={op:?}"))
-                    .attach(format!("session={}", session.0.name))?;
-            }
+            let session = require_single(&selected)?;
+            ytil_zellij::attach_session(&session.0.name)
+                .attach(format!("op={op:?}"))
+                .attach(format!("session={}", session.0.name))?;
+        }
+        Op::Restart => {
+            let session = require_single(&selected)?;
+            let name = &session.0.name;
+            ytil_zellij::kill_session(name)
+                .attach(format!("op={op:?}"))
+                .attach(format!("session={name}"))?;
+            ytil_zellij::attach_session(name)
+                .attach(format!("op={op:?}"))
+                .attach(format!("session={name}"))?;
         }
         Op::Kill => {
             for session in &selected {
