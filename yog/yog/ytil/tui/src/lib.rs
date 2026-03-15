@@ -177,15 +177,7 @@ fn base_skim_options() -> SkimOptions {
     opts.no_info = true;
     opts.exact = true;
     opts.no_sort = true;
-    opts.bind = vec![
-        "enter:accept".into(),
-        "esc:abort".into(),
-        "ctrl-c:abort".into(),
-        "ctrl-l:select".into(),
-        "right:select".into(),
-        "ctrl-x:deselect".into(),
-        "left:deselect".into(),
-    ];
+    opts.bind = vec!["enter:accept".into(), "esc:abort".into(), "ctrl-c:abort".into()];
     opts
 }
 
