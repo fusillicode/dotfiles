@@ -42,12 +42,12 @@ function _set_title() { print -Pn "\e]0;$1\a"; }
 function _title_precmd() {
   _set_title "%~"
   _zellij_cmd=""
-  [[ -n "$ZELLIJ" ]] && zellij action rename-tab "${PWD/#$HOME/~}"
+  [[ -n "$ZELLIJ" ]] && zellij action rename-tab -- "${PWD/#$HOME/~}"
 }
 function _title_preexec() {
   _set_title "$1"
   _zellij_cmd="${1%% *}"
-  [[ -n "$ZELLIJ" ]] && zellij action rename-tab "${_zellij_cmd} ${PWD/#$HOME/~}"
+  [[ -n "$ZELLIJ" ]] && zellij action rename-tab -- "${_zellij_cmd} ${PWD/#$HOME/~}"
 }
 add-zsh-hook precmd _title_precmd
 add-zsh-hook preexec _title_preexec
