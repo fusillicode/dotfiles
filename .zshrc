@@ -114,9 +114,5 @@ source "$_starship_cache"
 [[ ~/.zshrc -nt ~/.zshrc.zwc ]] && zcompile ~/.zshrc
 [[ ~/.zsh_aliases -nt ~/.zsh_aliases.zwc ]] && zcompile ~/.zsh_aliases
 
-if [[ -z "$ZELLIJ" ]] && (( $+commands[zellij] )); then
-    zellij attach -c default
-fi
-
 # Exit with 0 if everything's fine
 true
