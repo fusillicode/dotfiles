@@ -1,0 +1,26 @@
+layout {
+  default_tab_template split_direction="vertical" {
+    pane size=25 borderless=true {
+      plugin location="file:~/.config/zellij/plugins/agm.wasm"
+    }
+    children
+  }
+  tab name="Tab #1" {
+    pane
+  }
+}
+
+keybinds {
+  normal {
+    bind "Ctrl Alt j" { MoveTab "Left"; }
+    bind "Ctrl Alt k" { MoveTab "Right"; }
+    bind "Alt J" { GoToNextTab; }
+    bind "Alt K" { GoToPreviousTab; }
+    bind "Alt H" { FocusPreviousPane; }
+    bind "Alt L" { FocusNextPane; }
+    bind "Alt V" {
+      NewPane "Right";
+      Resize "Decrease Left";
+    }
+  }
+}

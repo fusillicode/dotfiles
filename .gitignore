@@ -1,4 +1,5 @@
 *.so
+*.wasm
 *style.min.css
 .DS_Store
 helix/runtime

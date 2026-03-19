@@ -1,0 +1,24 @@
+[package]
+name = "agm"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "CLI to handle agm Zellij sessions."
+keywords = ["cli", "zellij", "terminal", "tabs", "plugin"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+agm-core = { path = "core" }
+git2 = { workspace = true }
+owo-colors = { workspace = true }
+rootcause = { workspace = true }
+serde_json = { workspace = true }
+ytil_cmd = { workspace = true }
+ytil_sys = { workspace = true }
+ytil_zellij = { workspace = true }
+
+[lints]
+workspace = true

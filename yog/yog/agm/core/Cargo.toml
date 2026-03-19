@@ -1,0 +1,12 @@
+[package]
+name = "agm-core"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Common types shared between Zellij plugin and its helper CLI."
+keywords = ["lib", "zellij", "terminal", "tabs", "plugin"]
+categories = ["command-line-utilities", "development-tools"]
+publish = false
