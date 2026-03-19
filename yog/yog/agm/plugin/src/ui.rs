@@ -12,6 +12,7 @@ const INFO_ROWS: usize = 1;
 const MARKER: &str = " ";
 const SEPARATOR: char = '\u{2502}';
 
+const SEP_COLOR: &str = "\x1b[38;2;34;34;34m";
 const GREEN: &str = "\x1b[38;2;100;200;100m";
 const RED: &str = "\x1b[38;2;200;100;100m";
 const CYAN: &str = "\x1b[38;2;100;200;200m";
@@ -128,12 +129,6 @@ impl TabRow {
     }
 }
 
-const SEP_COLOR: &str = "\x1b[38;2;34;34;34m";
-
-fn write_separator(buf: &mut String, row_1based: usize, col: usize) {
-    let _ = write!(buf, "\x1b[{row_1based};{col}H{SEP_COLOR}{SEPARATOR}{RESET}");
-}
-
 pub fn render_frame(frame: &[TabRow], rows: usize, cols: usize, buf: &mut String) {
     if cols < 2 {
         return;
@@ -173,6 +168,10 @@ pub fn tab_index_at_row(frame: &[TabRow], click_row: usize, content_w: usize) ->
         y += height;
     }
     None
+}
+
+fn write_separator(buf: &mut String, row_1based: usize, col: usize) {
+    let _ = write!(buf, "\x1b[{row_1based};{col}H{SEP_COLOR}{SEPARATOR}{RESET}");
 }
 
 /// Count visible characters, skipping ANSI escape sequences.

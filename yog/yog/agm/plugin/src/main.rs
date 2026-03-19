@@ -308,13 +308,13 @@ impl ZellijPlugin for State {
 
             Event::CwdChanged(PaneId::Terminal(terminal_id), new_cwd, _clients) => {
                 let pane_data = self.panes_data.entry(terminal_id).or_default();
-                if pane_data.cwd.as_ref() != Some(&new_cwd) {
-                    pane_data.cwd = Some(new_cwd);
-                    self.fire_git_diffs(true);
-                    self.frame_dirty = true;
-                    return self.sync_frame();
+                if pane_data.cwd.as_ref() == Some(&new_cwd) {
+                    return false;
                 }
-                false
+                pane_data.cwd = Some(new_cwd);
+                self.fire_git_diffs(true);
+                self.frame_dirty = true;
+                self.sync_frame()
             }
 
             Event::RunCommandResult(exit_code, stdout, _stderr, context) => {
@@ -358,17 +358,14 @@ impl ZellijPlugin for State {
     }
 
     fn pipe(&mut self, pipe_message: PipeMessage) -> bool {
-        if pipe_message.name == agm_core::PIPE_NAME {
-            let changed = self.handle_agent_pipe(&pipe_message);
-            if changed {
-                self.frame_dirty = true;
-                self.sync_frame()
-            } else {
-                false
-            }
-        } else {
-            false
+        if pipe_message.name != agm_core::PIPE_NAME {
+            return false;
         }
+        if !self.handle_agent_pipe(&pipe_message) {
+            return false;
+        }
+        self.frame_dirty = true;
+        self.sync_frame()
     }
 }
 
