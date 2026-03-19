@@ -49,20 +49,20 @@ impl PaneData {
         true
     }
 
-    fn apply_agent_event(&mut self, pane_id: u32, agent: Agent, kind: AgentEventKind) -> bool {
-        match kind {
+    fn apply_agent_event(&mut self, event: &AgentEvent) -> bool {
+        match event.kind {
             AgentEventKind::Start | AgentEventKind::Busy => {
-                let changed_kind = self.agent_kind != Some(agent);
-                self.agent_kind = Some(agent);
+                let changed_kind = self.agent_kind != Some(event.agent);
+                self.agent_kind = Some(event.agent);
                 self.command = None;
                 let was_busy = self.is_busy;
-                self.is_busy = kind == AgentEventKind::Busy;
-                self.ensure_cwd(pane_id);
+                self.is_busy = event.kind == AgentEventKind::Busy;
+                self.ensure_cwd(event.pane_id);
                 changed_kind || self.is_busy != was_busy
             }
             AgentEventKind::Idle => {
-                if self.agent_kind != Some(agent) {
-                    self.agent_kind = Some(agent);
+                if self.agent_kind != Some(event.agent) {
+                    self.agent_kind = Some(event.agent);
                     self.command = None;
                 }
                 let was_busy = self.is_busy;
@@ -209,7 +209,7 @@ impl State {
         self.panes_data
             .entry(event.pane_id)
             .or_default()
-            .apply_agent_event(event.pane_id, event.agent, event.kind)
+            .apply_agent_event(&event)
     }
 
     fn handle_run_result(&mut self, exit_code: Option<i32>, stdout: &[u8], context: &BTreeMap<String, String>) -> bool {
