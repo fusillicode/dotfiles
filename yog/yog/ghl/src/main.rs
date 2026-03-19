@@ -2,7 +2,6 @@
 //!
 //! # Errors
 //! - Flag parsing, GitHub CLI invocation, or TUI interaction fails.
-#![feature(exit_status_error)]
 
 use core::fmt::Display;
 use std::ops::Deref;

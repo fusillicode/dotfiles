@@ -1,5 +1,4 @@
 //! Run ad-hoc experimental snippets and throwaway tests.
-#![feature(exit_status_error)]
 
 /// Run ad‑hoc experimental snippets and throwaway tests.
 #[ytil_sys::main]

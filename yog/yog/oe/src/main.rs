@@ -2,7 +2,6 @@
 //!
 //! # Errors
 //! - Argument parsing, pane discovery, or command execution fails.
-#![feature(exit_status_error)]
 
 use core::str::FromStr;
 

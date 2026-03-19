@@ -2,7 +2,6 @@
 //!
 //! # Errors
 //! - `WezTerm` command or status line parsing fails.
-#![feature(exit_status_error)]
 
 use core::str::FromStr;
 use std::process::Command;
