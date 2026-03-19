@@ -3,7 +3,6 @@
 //! # Errors
 //! - Interactive selection UI fails.
 //! - Writing the generated value to the clipboard fails.
-#![feature(exit_status_error)]
 
 use fkr::FkrOption;
 use ytil_sys::cli::Args;

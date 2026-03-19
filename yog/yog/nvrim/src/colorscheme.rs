@@ -152,7 +152,7 @@ fn get_overridden_hl_opts(
 /// On failure, it notifies the error to Neovim instead of propagating it, ensuring
 /// the colorscheme setup continues gracefully.
 fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &LuaHlOpts) {
-    let lua_cmd = format!("lua vim.api.nvim_set_hl({ns_id}, '{hl_name}', {hl_opts})",);
+    let lua_cmd = format!("lua vim.api.nvim_set_hl({ns_id}, '{hl_name}', {hl_opts})");
 
     if let Err(err) = nvim_oxi::api::command(&lua_cmd) {
         ytil_noxi::notify::error(format!(

@@ -4,7 +4,6 @@
 //! - External command fails or file I/O fails.
 //! - JSON serialization/deserialization fails.
 //! - Environment variable missing or user interaction fails.
-#![feature(exit_status_error)]
 
 use std::process::Command;
 use std::process::Stdio;

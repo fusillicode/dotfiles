@@ -2,7 +2,6 @@
 //!
 //! # Errors
 //! - Git operations, GitHub API calls, or user interaction fails.
-#![feature(exit_status_error)]
 
 use std::io::Write;
 

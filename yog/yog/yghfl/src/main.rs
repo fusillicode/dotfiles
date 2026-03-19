@@ -2,7 +2,6 @@
 //!
 //! # Errors
 //! - `WezTerm`, status line parsing, or Git operations fail.
-#![feature(exit_status_error)]
 
 use core::str::FromStr;
 use std::path::Component;
