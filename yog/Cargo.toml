@@ -1,6 +1,8 @@
 [workspace]
 resolver = "2"
+exclude = ["yog/agm/core"]
 members = [
+    "yog/agm",
     "yog/catl",
     "yog/evoke",
     "yog/fkr",
@@ -52,6 +54,7 @@ assert2 = { version = "0.4" }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 convert_case = { version = "0.11" }
 fake = { version = "5.1", features = ["derive"] }
+git2 = { version = "0.20", default-features = false }
 nomicon = { path = "./yog/nomicon" }
 owo-colors = { version = "4" }
 pretty_assertions = { version = "1.4" }

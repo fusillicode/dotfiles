@@ -140,6 +140,20 @@ pub fn attach_session(name: &str) -> rootcause::Result<()> {
     Ok(())
 }
 
+/// Creates a new Zellij session with the given layout and attaches to it.
+///
+/// Must be called from **outside** Zellij — the process replaces the current
+/// terminal with the new session (interactive, inherited stdio).
+///
+/// # Errors
+/// - Invoking `zellij` fails or exits with a non-zero exit status.
+pub fn new_session_with_layout(session: &str, layout: &str) -> rootcause::Result<()> {
+    let mut cmd = Command::new(BIN);
+    cmd.args(["--new-session-with-layout", layout, "--session", session]);
+    run_interactive(&mut cmd).attach(format!("session={session} layout={layout}"))?;
+    Ok(())
+}
+
 /// Deletes an exited (resurrectable) Zellij session by name.
 ///
 /// Uses `--force` to also handle running sessions.

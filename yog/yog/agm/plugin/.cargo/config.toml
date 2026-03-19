@@ -1,0 +1,8 @@
+[build]
+target = "wasm32-wasip1"
+
+# Override the workspace-level `-Ctarget-cpu=native` which is invalid for WASM.
+# target-specific rustflags replace (not merge with) [build].rustflags.
+# The value must be non-empty or Cargo falls through to the parent config.
+[target.wasm32-wasip1]
+rustflags = ["-Cpanic=abort"]

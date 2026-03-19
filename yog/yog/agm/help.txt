@@ -1,0 +1,22 @@
+agm - Launch a Zellij session with a vertical tab sidebar.
+
+USAGE:
+    agm [SESSION_NAME]
+    agm install [--debug]
+    agm hook AGENT PAYLOAD
+    agm git-stat PATH...
+
+ARGS:
+    SESSION_NAME    Session name (default: "agm")
+
+SUBCOMMANDS:
+    install         Build and deploy the WASM plugin, provision Claude and
+                    Cursor hooks. Pass --debug for an unoptimised build.
+    hook            Unified agent lifecycle hook entry point. Drains stdin,
+                    acknowledges with {}, and fires a Zellij pipe message.
+                    AGENT is "claude" or "cursor"; PAYLOAD is one of
+                    "start", "busy", "idle", "exit".
+    git-stat        Print "path insertions deletions untracked" per PATH
+                    (one line each, in argument order).
+
+Requires evoke to be run first (provisions plugin + layout).

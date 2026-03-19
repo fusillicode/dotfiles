@@ -18,6 +18,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
+name = "agm"
+version = "0.1.0"
+dependencies = [
+ "agm-core",
+ "git2",
+ "owo-colors",
+ "rootcause",
+ "serde_json",
+ "ytil_cmd",
+ "ytil_sys",
+ "ytil_zellij",
+]
+
+[[package]]
+name = "agm-core"
+version = "0.1.0"
+
+[[package]]
 name = "ahash"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
