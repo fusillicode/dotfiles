@@ -366,26 +366,6 @@ pub fn clean_state_dir(session: &str) {
     let _ = std::fs::remove_dir_all(session_state_dir(session));
 }
 
-pub fn clean_stale_state_files(session: &str, active_tab_ids: &std::collections::HashSet<usize>) {
-    let dir = session_state_dir(session);
-    let Ok(entries) = std::fs::read_dir(&dir) else { return };
-    for entry in entries.flatten() {
-        let name = entry.file_name();
-        let name_str = name.to_string_lossy();
-        let Some(id_str) = name_str.strip_prefix("tab-") else {
-            continue;
-        };
-        if id_str.contains('.') {
-            let _ = std::fs::remove_file(entry.path());
-            continue;
-        }
-        let Ok(tab_id) = id_str.parse::<usize>() else { continue };
-        if !active_tab_ids.contains(&tab_id) {
-            let _ = std::fs::remove_file(entry.path());
-        }
-    }
-}
-
 fn parse_bool(s: &str, name: &str) -> Result<bool, ParseError> {
     match s {
         "0" => Ok(false),

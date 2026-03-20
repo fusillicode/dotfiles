@@ -107,7 +107,6 @@ struct State {
     last_manifest: Option<PaneManifest>,
     home_dir: PathBuf,
     got_permissions: bool,
-    did_initial_cleanup: bool,
     frame_dirty: bool,
     last_cols: usize,
     last_frame: Option<Vec<TabRow>>,
@@ -476,11 +475,6 @@ impl ZellijPlugin for State {
                 let count_shrunk = tabs.len() < self.tabs.len();
                 self.tabs = tabs;
                 self.rebuild_pos_tab_id();
-                if !self.did_initial_cleanup {
-                    self.did_initial_cleanup = true;
-                    let active: HashSet<usize> = self.tabs.iter().map(|t| t.tab_id).collect();
-                    agm_core::clean_stale_state_files(&self.session_name, &active);
-                }
                 if count_shrunk {
                     self.prune_stale_entries();
                 }
