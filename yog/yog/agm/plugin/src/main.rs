@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::path::Path;
 use std::path::PathBuf;
 
 use agm_core::Agent;
@@ -106,7 +105,7 @@ struct State {
     tab_git_stats: HashMap<usize, GitStat>,
 
     last_manifest: Option<PaneManifest>,
-    home_dir: Option<PathBuf>,
+    home_dir: PathBuf,
     got_permissions: bool,
     did_initial_cleanup: bool,
     frame_dirty: bool,
@@ -428,13 +427,7 @@ impl State {
             return false;
         }
         self.frame_dirty = false;
-        let new_frame = compute_frame(
-            &self.tabs,
-            &self.tab_panes,
-            &self.panes_data,
-            &self.tab_git_stats,
-            self.home_dir.as_deref(),
-        );
+        let new_frame = compute_frame(self);
         let changed = self.last_frame.as_ref().is_none_or(|old| *old != new_frame);
         self.last_frame = Some(new_frame);
         changed
@@ -449,7 +442,9 @@ impl ZellijPlugin for State {
             .cloned()
             .or_else(|| std::env::var("ZELLIJ_SESSION_NAME").ok())
             .unwrap_or_else(|| "default".into());
-        self.home_dir = std::env::var_os("HOME").map(PathBuf::from);
+        self.home_dir = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .expect("error getting HOME env var");
         request_permission(&[
             PermissionType::ReadApplicationState,
             PermissionType::ChangeApplicationState,
@@ -630,19 +625,15 @@ fn priority_command_for_tab(
     None
 }
 
-fn compute_frame(
-    tabs: &[TabInfo],
-    tab_panes: &HashMap<usize, TabPanes>,
-    panes_data: &HashMap<u32, PaneData>,
-    tab_git_stats: &HashMap<usize, GitStat>,
-    home: Option<&Path>,
-) -> Vec<TabRow> {
-    tabs.iter()
+fn compute_frame(state: &State) -> Vec<TabRow> {
+    state
+        .tabs
+        .iter()
         .map(|tab| {
-            let focused = focused_pane_data(tab.tab_id, tab_panes, panes_data);
-            let priority_cmd = priority_command_for_tab(tab.tab_id, tab_panes, panes_data);
-            let git = tab_git_stats.get(&tab.tab_id).copied().unwrap_or_default();
-            TabRow::new(tab, focused, priority_cmd, git, home)
+            let focused = focused_pane_data(tab.tab_id, &state.tab_panes, &state.panes_data);
+            let priority_cmd = priority_command_for_tab(tab.tab_id, &state.tab_panes, &state.panes_data);
+            let git = state.tab_git_stats.get(&tab.tab_id).copied().unwrap_or_default();
+            TabRow::new(tab, focused, priority_cmd, git, &state.home_dir)
         })
         .collect()
 }
