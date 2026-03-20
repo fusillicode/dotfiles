@@ -35,7 +35,7 @@ impl TabRow {
         focused: Option<&PaneData>,
         priority_cmd: Option<(&str, bool)>,
         git: GitStat,
-        home: Option<&Path>,
+        home: &Path,
     ) -> Self {
         let path_label = focused
             .and_then(|e| e.cwd.as_ref())
@@ -184,14 +184,12 @@ fn visible_len(s: &str) -> usize {
     len
 }
 
-fn short_path(path: &Path, home: Option<&Path>) -> String {
-    if let Some(home) = home {
-        if path == home {
-            return "~".into();
-        }
-        if let Ok(rel) = path.strip_prefix(home) {
-            return format!("~/{}", rel.display());
-        }
+fn short_path(path: &Path, home: &Path) -> String {
+    if path == home {
+        return "~".into();
+    }
+    if let Ok(rel) = path.strip_prefix(home) {
+        return format!("~/{}", rel.display());
     }
     path.file_name()
         .map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned())
