@@ -14,7 +14,7 @@ use zellij_tile::prelude::*;
 
 mod ui;
 
-const REFRESH_INTERVAL_SECS: f64 = 10.0;
+const REFRESH_INTERVAL_SECS: f64 = 5.0;
 const CONTEXT_KEY_GIT_STAT: &str = "git-stat";
 
 #[derive(Default)]
@@ -50,10 +50,10 @@ impl PaneData {
     }
 
     fn apply_agent_event(&mut self, event: &AgentEvent) -> bool {
-        if let Some(current) = self.agent_kind {
-            if event.agent.priority() < current.priority() {
-                return false;
-            }
+        if let Some(current) = self.agent_kind
+            && event.agent.priority() < current.priority()
+        {
+            return false;
         }
         match event.kind {
             AgentEventKind::Start | AgentEventKind::Busy => {
@@ -149,13 +149,13 @@ impl State {
         let pids: Vec<u32> = tp.all.clone();
         for pid in pids {
             let pd = self.panes_data.entry(pid).or_default();
-            if pd.agent_kind.is_none() {
-                if let Some(agent) = detect_agent_from_running_command(pid) {
-                    pd.agent_kind = Some(agent);
-                    pd.command = None;
-                    pd.is_busy = false;
-                    pd.ensure_cwd(pid);
-                }
+            if pd.agent_kind.is_none()
+                && let Some(agent) = detect_agent_from_running_command(pid)
+            {
+                pd.agent_kind = Some(agent);
+                pd.command = None;
+                pd.is_busy = false;
+                pd.ensure_cwd(pid);
             }
         }
     }
@@ -189,18 +189,6 @@ impl State {
         let my = self.my_tab_id?;
         let focused = self.tab_panes.get(&my)?.focused?;
         self.panes_data.get(&focused)?.cwd.clone()
-    }
-
-    fn is_own_agent_busy(&self) -> bool {
-        let Some(my) = self.my_tab_id else { return false };
-        let Some(tp) = self.tab_panes.get(&my) else {
-            return false;
-        };
-        tp.all.iter().any(|pid| {
-            self.panes_data
-                .get(pid)
-                .is_some_and(|pd| pd.agent_kind.is_some() && pd.is_busy)
-        })
     }
 
     // ------------------------------------------------------------------
@@ -300,31 +288,26 @@ impl State {
                 *current = entry.git_stat;
                 changed = true;
             }
-            if let Some(agent) = entry.agent {
-                if let Some(tp) = self.tab_panes.get(&entry.tab_id) {
-                    let target = tp
-                        .all
-                        .iter()
-                        .find(|pid| {
-                            self.panes_data
-                                .get(pid)
-                                .is_some_and(|pd| pd.agent_kind.is_some())
-                        })
-                        .or(tp.all.first())
-                        .copied();
-                    if let Some(pid) = target {
-                        let pd = self.panes_data.entry(pid).or_default();
-                        if pd.agent_kind != Some(agent) {
-                            pd.agent_kind = Some(agent);
-                            pd.command = None;
-                            changed = true;
-                        }
-                        if pd.is_busy != entry.agent_busy {
-                            pd.is_busy = entry.agent_busy;
-                            changed = true;
-                        }
-                    }
-                }
+            let Some(agent) = entry.agent else { continue };
+            let Some(tp) = self.tab_panes.get(&entry.tab_id) else {
+                continue;
+            };
+            let target = tp
+                .all
+                .iter()
+                .find(|pid| self.panes_data.get(pid).is_some_and(|pd| pd.agent_kind.is_some()))
+                .or(tp.all.first())
+                .copied();
+            let Some(pid) = target else { continue };
+            let pd = self.panes_data.entry(pid).or_default();
+            if pd.agent_kind != Some(agent) {
+                pd.agent_kind = Some(agent);
+                pd.command = None;
+                changed = true;
+            }
+            if pd.is_busy != entry.agent_busy {
+                pd.is_busy = entry.agent_busy;
+                changed = true;
             }
         }
         if changed {
@@ -560,9 +543,7 @@ impl ZellijPlugin for State {
 
             Event::Timer(_) => {
                 if self.my_tab_id.is_some() {
-                    if self.is_own_agent_busy() {
-                        self.fire_own_git_stat();
-                    }
+                    self.fire_own_git_stat();
                     self.refresh_other_tabs();
                 }
                 set_timeout(REFRESH_INTERVAL_SECS);

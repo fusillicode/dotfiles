@@ -18,9 +18,6 @@ keybinds {
     bind "Alt K" { GoToPreviousTab; }
     bind "Alt H" { FocusPreviousPane; }
     bind "Alt L" { FocusNextPane; }
-    bind "Alt V" {
-      NewPane "Right";
-      Resize "Decrease Left";
-    }
+    bind "Alt V" { NewPane "Right"; }
   }
 }
