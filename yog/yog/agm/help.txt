@@ -16,7 +16,7 @@ SUBCOMMANDS:
                     acknowledges with {}, and fires a Zellij pipe message.
                     AGENT is "claude" or "cursor"; PAYLOAD is one of
                     "start", "busy", "idle", "exit".
-    git-stat        Print "path insertions deletions untracked" per PATH
-                    (one line each, in argument order).
+    git-stat        Print "path insertions deletions untracked worktree"
+                    per PATH (one line each, in argument order).
 
 Requires evoke to be run first (provisions plugin + layout).
