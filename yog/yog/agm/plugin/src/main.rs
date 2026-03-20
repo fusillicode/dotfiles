@@ -8,7 +8,7 @@ use agm_core::Agent;
 use agm_core::AgentEvent;
 use agm_core::AgentEventKind;
 use agm_core::GitStat;
-use agm_core::ParseError;
+use agm_core::TabStateEntry;
 use ui::TabRow;
 use zellij_tile::prelude::*;
 
@@ -50,6 +50,11 @@ impl PaneData {
     }
 
     fn apply_agent_event(&mut self, event: &AgentEvent) -> bool {
+        if let Some(current) = self.agent_kind {
+            if event.agent.priority() < current.priority() {
+                return false;
+            }
+        }
         match event.kind {
             AgentEventKind::Start | AgentEventKind::Busy => {
                 let changed_kind = self.agent_kind != Some(event.agent);
@@ -87,14 +92,23 @@ struct TabPanes {
 
 #[derive(Default)]
 struct State {
+    plugin_id: u32,
+    my_tab_id: Option<usize>,
+    session_name: String,
+
     tabs: Vec<TabInfo>,
+    pos_tab_id: HashMap<usize, usize>,
+
     panes_data: HashMap<u32, PaneData>,
     tab_panes: HashMap<usize, TabPanes>,
-    git_stats: HashMap<PathBuf, GitStat>,
-    pos_tab_id: HashMap<usize, usize>,
+    pane_to_tab: HashMap<u32, usize>,
+
+    tab_git_stats: HashMap<usize, GitStat>,
+
     last_manifest: Option<PaneManifest>,
     home_dir: Option<PathBuf>,
     got_permissions: bool,
+    did_initial_cleanup: bool,
     frame_dirty: bool,
     last_cols: usize,
     last_frame: Option<Vec<TabRow>>,
@@ -104,6 +118,225 @@ struct State {
 register_plugin!(State);
 
 impl State {
+    // ------------------------------------------------------------------
+    // Identity discovery
+    // ------------------------------------------------------------------
+
+    fn discover_my_tab(&mut self, manifest: &PaneManifest) {
+        if self.my_tab_id.is_some() {
+            return;
+        }
+        for (tab_pos, panes) in &manifest.panes {
+            for pane in panes {
+                if pane.is_plugin
+                    && pane.id == self.plugin_id
+                    && let Some(&tab_id) = self.pos_tab_id.get(tab_pos)
+                {
+                    self.my_tab_id = Some(tab_id);
+                    self.detect_own_agents();
+                    self.refresh_other_tabs();
+                    self.fire_own_git_stat();
+                    self.persist_own_state();
+                    return;
+                }
+            }
+        }
+    }
+
+    fn detect_own_agents(&mut self) {
+        let Some(my) = self.my_tab_id else { return };
+        let Some(tp) = self.tab_panes.get(&my) else { return };
+        let pids: Vec<u32> = tp.all.clone();
+        for pid in pids {
+            let pd = self.panes_data.entry(pid).or_default();
+            if pd.agent_kind.is_none() {
+                if let Some(agent) = detect_agent_from_running_command(pid) {
+                    pd.agent_kind = Some(agent);
+                    pd.command = None;
+                    pd.is_busy = false;
+                    pd.ensure_cwd(pid);
+                }
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Pane→tab mapping
+    // ------------------------------------------------------------------
+
+    fn rebuild_pane_to_tab(&mut self) {
+        self.pane_to_tab.clear();
+        for (&tab_id, tp) in &self.tab_panes {
+            for &pid in &tp.all {
+                self.pane_to_tab.insert(pid, tab_id);
+            }
+        }
+    }
+
+    fn tab_of_pane(&self, pane_id: u32) -> Option<usize> {
+        self.pane_to_tab.get(&pane_id).copied()
+    }
+
+    fn is_own_pane(&self, pane_id: u32) -> bool {
+        self.my_tab_id.is_some_and(|my| self.tab_of_pane(pane_id) == Some(my))
+    }
+
+    // ------------------------------------------------------------------
+    // Own-tab helpers
+    // ------------------------------------------------------------------
+
+    fn own_focused_cwd(&self) -> Option<PathBuf> {
+        let my = self.my_tab_id?;
+        let focused = self.tab_panes.get(&my)?.focused?;
+        self.panes_data.get(&focused)?.cwd.clone()
+    }
+
+    fn is_own_agent_busy(&self) -> bool {
+        let Some(my) = self.my_tab_id else { return false };
+        let Some(tp) = self.tab_panes.get(&my) else {
+            return false;
+        };
+        tp.all.iter().any(|pid| {
+            self.panes_data
+                .get(pid)
+                .is_some_and(|pd| pd.agent_kind.is_some() && pd.is_busy)
+        })
+    }
+
+    // ------------------------------------------------------------------
+    // Git stat (own tab only)
+    // ------------------------------------------------------------------
+
+    fn fire_own_git_stat(&self) {
+        let Some(cwd) = self.own_focused_cwd() else { return };
+        let cwd_str = cwd.display().to_string();
+        let args: Vec<&str> = vec!["agm", "git-stat", &cwd_str];
+        let mut ctx = BTreeMap::new();
+        ctx.insert(CONTEXT_KEY_GIT_STAT.into(), String::new());
+        run_command_with_env_variables_and_cwd(&args, BTreeMap::new(), cwd, ctx);
+    }
+
+    fn handle_git_stat_result(&mut self, exit_code: Option<i32>, stdout: &[u8]) -> bool {
+        if exit_code != Some(0) {
+            return false;
+        }
+        let Some(my_tab) = self.my_tab_id else {
+            return false;
+        };
+        let output = String::from_utf8_lossy(stdout);
+        let mut changed = false;
+        for line in output.lines() {
+            match GitStat::parse_line(line) {
+                Ok((_path, stat)) => {
+                    let entry = self.tab_git_stats.entry(my_tab).or_default();
+                    if *entry != stat {
+                        *entry = stat;
+                        changed = true;
+                    }
+                }
+                Err(e) => eprintln!("agm: {e}"),
+            }
+        }
+        if changed {
+            self.frame_dirty = true;
+            self.persist_own_state();
+        }
+        changed
+    }
+
+    // ------------------------------------------------------------------
+    // State persistence (own tab → file, immediate on change)
+    // ------------------------------------------------------------------
+
+    fn persist_own_state(&self) {
+        let Some(my_tab) = self.my_tab_id else { return };
+
+        let cwd = self.own_focused_cwd();
+        let (agent, agent_busy) = self.own_agent_info();
+        let git_stat = self.tab_git_stats.get(&my_tab).copied().unwrap_or_default();
+        let command = focused_pane_data(my_tab, &self.tab_panes, &self.panes_data).and_then(|pd| pd.command.clone());
+
+        let entry = TabStateEntry {
+            tab_id: my_tab,
+            cwd,
+            agent,
+            agent_busy,
+            git_stat,
+            command,
+        };
+        if let Err(e) = agm_core::write_state_file(&self.session_name, my_tab, &entry.to_file_content()) {
+            eprintln!("agm: persist: {e}");
+        }
+    }
+
+    fn own_agent_info(&self) -> (Option<Agent>, bool) {
+        let Some(my) = self.my_tab_id else { return (None, false) };
+        let Some(tp) = self.tab_panes.get(&my) else {
+            return (None, false);
+        };
+        for &pid in &tp.all {
+            if let Some(pd) = self.panes_data.get(&pid)
+                && let Some(agent) = pd.agent_kind
+            {
+                return (Some(agent), pd.is_busy);
+            }
+        }
+        (None, false)
+    }
+
+    // ------------------------------------------------------------------
+    // State bootstrap & refresh (read other tabs' files, direct I/O)
+    // ------------------------------------------------------------------
+
+    fn refresh_other_tabs(&mut self) -> bool {
+        let entries = agm_core::read_all_state_files(&self.session_name);
+        let mut changed = false;
+        for entry in entries {
+            if Some(entry.tab_id) == self.my_tab_id {
+                continue;
+            }
+            let current = self.tab_git_stats.entry(entry.tab_id).or_default();
+            if *current != entry.git_stat {
+                *current = entry.git_stat;
+                changed = true;
+            }
+            if let Some(agent) = entry.agent {
+                if let Some(tp) = self.tab_panes.get(&entry.tab_id) {
+                    let target = tp
+                        .all
+                        .iter()
+                        .find(|pid| {
+                            self.panes_data
+                                .get(pid)
+                                .is_some_and(|pd| pd.agent_kind.is_some())
+                        })
+                        .or(tp.all.first())
+                        .copied();
+                    if let Some(pid) = target {
+                        let pd = self.panes_data.entry(pid).or_default();
+                        if pd.agent_kind != Some(agent) {
+                            pd.agent_kind = Some(agent);
+                            pd.command = None;
+                            changed = true;
+                        }
+                        if pd.is_busy != entry.agent_busy {
+                            pd.is_busy = entry.agent_busy;
+                            changed = true;
+                        }
+                    }
+                }
+            }
+        }
+        if changed {
+            self.frame_dirty = true;
+        }
+        changed
+    }
+
+    // ------------------------------------------------------------------
+    // Pane manifest processing
+    // ------------------------------------------------------------------
+
     fn process_pane_manifest(&mut self, manifest: &PaneManifest) -> bool {
         let mut changed = false;
 
@@ -129,6 +362,7 @@ impl State {
 
                 if title_changed
                     && pane_data.agent_kind.is_none()
+                    && self.my_tab_id == Some(tab_id)
                     && let Some(agent) = detect_agent_from_running_command(pane.id)
                 {
                     pane_data.agent_kind = Some(agent);
@@ -155,7 +389,19 @@ impl State {
 
     fn prune_stale_entries(&mut self) {
         let active_tab_ids: HashSet<usize> = self.tabs.iter().map(|t| t.tab_id).collect();
-        self.tab_panes.retain(|tid, _| active_tab_ids.contains(tid));
+
+        let removed: Vec<usize> = self
+            .tab_panes
+            .keys()
+            .filter(|tid| !active_tab_ids.contains(tid))
+            .copied()
+            .collect();
+
+        for tid in &removed {
+            self.tab_panes.remove(tid);
+            self.tab_git_stats.remove(tid);
+            agm_core::remove_state_file(&self.session_name, *tid);
+        }
 
         let mut active_pane_ids: HashSet<u32> = HashSet::new();
         for tp in self.tab_panes.values() {
@@ -165,9 +411,6 @@ impl State {
             }
         }
         self.panes_data.retain(|pid, _| active_pane_ids.contains(pid));
-
-        let live = visible_cwds(&self.tabs, &self.tab_panes, &self.panes_data);
-        self.git_stats.retain(|cwd, _| live.contains(cwd));
     }
 
     fn rebuild_pos_tab_id(&mut self) {
@@ -175,27 +418,6 @@ impl State {
         for t in &self.tabs {
             self.pos_tab_id.insert(t.position, t.tab_id);
         }
-    }
-
-    fn fire_git_diffs(&self, only_missing: bool) {
-        let cwds: Vec<String> = visible_cwds(&self.tabs, &self.tab_panes, &self.panes_data)
-            .into_iter()
-            .filter(|cwd| !only_missing || !self.git_stats.contains_key(cwd))
-            .map(|p| p.display().to_string())
-            .collect();
-        if cwds.is_empty() {
-            return;
-        }
-        let mut args: Vec<&str> = vec!["agm", "git-stat"];
-        args.extend(cwds.iter().map(String::as_str));
-        let mut ctx = BTreeMap::new();
-        ctx.insert(CONTEXT_KEY_GIT_STAT.into(), String::new());
-        run_command_with_env_variables_and_cwd(
-            &args,
-            BTreeMap::new(),
-            PathBuf::from(cwds.first().map_or(".", String::as_str)),
-            ctx,
-        );
     }
 
     fn handle_agent_pipe(&mut self, msg: &PipeMessage) -> bool {
@@ -206,32 +428,16 @@ impl State {
                 return false;
             }
         };
-        self.panes_data
+        let is_own = self.is_own_pane(event.pane_id);
+        let changed = self
+            .panes_data
             .entry(event.pane_id)
             .or_default()
-            .apply_agent_event(&event)
-    }
-
-    fn handle_run_result(&mut self, exit_code: Option<i32>, stdout: &[u8], context: &BTreeMap<String, String>) -> bool {
-        if !context.contains_key(CONTEXT_KEY_GIT_STAT) || exit_code != Some(0) {
-            return false;
+            .apply_agent_event(&event);
+        if changed && is_own {
+            self.persist_own_state();
         }
-        let output = String::from_utf8_lossy(stdout);
-        let mut changed = false;
-        for line in output.lines() {
-            match GitStat::parse_line(line) {
-                Ok((path, stat)) => {
-                    let entry = self.git_stats.entry(path).or_default();
-                    if *entry != stat {
-                        *entry = stat;
-                        self.frame_dirty = true;
-                        changed = true;
-                    }
-                }
-                Err(e) => eprintln!("agm: {e}"),
-            }
-        }
-        if changed { self.sync_frame() } else { false }
+        changed
     }
 
     fn sync_frame(&mut self) -> bool {
@@ -243,7 +449,7 @@ impl State {
             &self.tabs,
             &self.tab_panes,
             &self.panes_data,
-            &self.git_stats,
+            &self.tab_git_stats,
             self.home_dir.as_deref(),
         );
         let changed = self.last_frame.as_ref().is_none_or(|old| *old != new_frame);
@@ -253,12 +459,19 @@ impl State {
 }
 
 impl ZellijPlugin for State {
-    fn load(&mut self, _configuration: BTreeMap<String, String>) {
+    fn load(&mut self, configuration: BTreeMap<String, String>) {
+        self.plugin_id = get_plugin_ids().plugin_id;
+        self.session_name = configuration
+            .get("session")
+            .cloned()
+            .or_else(|| std::env::var("ZELLIJ_SESSION_NAME").ok())
+            .unwrap_or_else(|| "default".into());
         self.home_dir = std::env::var_os("HOME").map(PathBuf::from);
         request_permission(&[
             PermissionType::ReadApplicationState,
             PermissionType::ChangeApplicationState,
             PermissionType::RunCommands,
+            PermissionType::FullHdAccess,
         ]);
         subscribe(&[EventType::PermissionRequestResult]);
     }
@@ -285,22 +498,34 @@ impl ZellijPlugin for State {
                 let count_shrunk = tabs.len() < self.tabs.len();
                 self.tabs = tabs;
                 self.rebuild_pos_tab_id();
+                if !self.did_initial_cleanup {
+                    self.did_initial_cleanup = true;
+                    let active: HashSet<usize> = self.tabs.iter().map(|t| t.tab_id).collect();
+                    agm_core::clean_stale_state_files(&self.session_name, &active);
+                }
                 if count_shrunk {
                     self.prune_stale_entries();
                 }
                 if let Some(manifest) = self.last_manifest.clone() {
                     self.process_pane_manifest(&manifest);
+                    self.rebuild_pane_to_tab();
+                    self.discover_my_tab(&manifest);
                 }
-                self.fire_git_diffs(true);
                 self.frame_dirty = true;
                 self.sync_frame()
             }
 
             Event::PaneUpdate(manifest) => {
                 let data_changed = self.process_pane_manifest(&manifest);
-                self.last_manifest = Some(manifest);
+                self.last_manifest = Some(manifest.clone());
+                self.rebuild_pane_to_tab();
+                self.discover_my_tab(&manifest);
+
                 if data_changed {
-                    self.fire_git_diffs(true);
+                    if self.my_tab_id.is_some() && !self.tab_git_stats.contains_key(&self.my_tab_id.unwrap()) {
+                        self.fire_own_git_stat();
+                    }
+                    self.persist_own_state();
                     self.frame_dirty = true;
                 }
                 self.sync_frame()
@@ -312,21 +537,36 @@ impl ZellijPlugin for State {
                     return false;
                 }
                 pane_data.cwd = Some(new_cwd);
-                self.fire_git_diffs(true);
+
+                let is_own = self.is_own_pane(terminal_id);
+                if is_own {
+                    self.fire_own_git_stat();
+                    self.persist_own_state();
+                } else if let Some(tab_id) = self.tab_of_pane(terminal_id) {
+                    self.tab_git_stats.remove(&tab_id);
+                }
+
                 self.frame_dirty = true;
                 self.sync_frame()
             }
 
             Event::RunCommandResult(exit_code, stdout, _stderr, context) => {
-                self.handle_run_result(exit_code, &stdout, &context)
+                if !context.contains_key(CONTEXT_KEY_GIT_STAT) {
+                    return false;
+                }
+                let changed = self.handle_git_stat_result(exit_code, &stdout);
+                if changed { self.sync_frame() } else { false }
             }
 
             Event::Timer(_) => {
-                if any_agent_busy(&self.panes_data) {
-                    self.fire_git_diffs(false);
+                if self.my_tab_id.is_some() {
+                    if self.is_own_agent_busy() {
+                        self.fire_own_git_stat();
+                    }
+                    self.refresh_other_tabs();
                 }
                 set_timeout(REFRESH_INTERVAL_SECS);
-                false
+                self.sync_frame()
             }
 
             Event::Mouse(Mouse::LeftClick(row, _col)) => {
@@ -369,34 +609,21 @@ impl ZellijPlugin for State {
     }
 }
 
-fn parse_pipe_msg(msg: &PipeMessage) -> Result<AgentEvent, ParseError> {
+// ---------------------------------------------------------------------------
+// Free functions
+// ---------------------------------------------------------------------------
+
+fn parse_pipe_msg(msg: &PipeMessage) -> Result<AgentEvent, agm_core::ParseError> {
     let raw_id = msg
         .args
         .get("pane_id")
-        .ok_or_else(|| ParseError::new("missing pane_id"))?;
-    let raw_agent = msg.args.get("agent").ok_or_else(|| ParseError::new("missing agent"))?;
+        .ok_or_else(|| agm_core::ParseError::new("missing pane_id"))?;
+    let raw_agent = msg
+        .args
+        .get("agent")
+        .ok_or_else(|| agm_core::ParseError::new("missing agent"))?;
     let raw_payload = msg.payload.as_deref().unwrap_or("");
     AgentEvent::parse(raw_id, raw_agent, raw_payload)
-}
-
-fn visible_cwds(
-    tabs: &[TabInfo],
-    tab_panes: &HashMap<usize, TabPanes>,
-    panes_data: &HashMap<u32, PaneData>,
-) -> HashSet<PathBuf> {
-    let mut seen = HashSet::new();
-    for tab in tabs {
-        if let Some(pane_data) = focused_pane_data(tab.tab_id, tab_panes, panes_data)
-            && let Some(cwd) = &pane_data.cwd
-        {
-            seen.insert(cwd.clone());
-        }
-    }
-    seen
-}
-
-fn any_agent_busy(panes_data: &HashMap<u32, PaneData>) -> bool {
-    panes_data.values().any(|e| e.agent_kind.is_some() && e.is_busy)
 }
 
 fn focused_pane_data<'a>(
@@ -426,14 +653,15 @@ fn compute_frame(
     tabs: &[TabInfo],
     tab_panes: &HashMap<usize, TabPanes>,
     panes_data: &HashMap<u32, PaneData>,
-    git_stats: &HashMap<PathBuf, GitStat>,
+    tab_git_stats: &HashMap<usize, GitStat>,
     home: Option<&Path>,
 ) -> Vec<TabRow> {
     tabs.iter()
         .map(|tab| {
             let focused = focused_pane_data(tab.tab_id, tab_panes, panes_data);
             let priority_cmd = priority_command_for_tab(tab.tab_id, tab_panes, panes_data);
-            TabRow::new(tab, focused, priority_cmd, git_stats, home)
+            let git = tab_git_stats.get(&tab.tab_id).copied().unwrap_or_default();
+            TabRow::new(tab, focused, priority_cmd, git, home)
         })
         .collect()
 }

@@ -257,6 +257,7 @@ fn main() -> rootcause::Result<()> {
     let session = args.first().map_or(SESSION_NAME, String::as_str);
 
     if !session_exists(session) {
+        agm_core::clean_state_dir(session);
         if ytil_zellij::is_active() {
             ytil_cmd::silent_cmd("zellij")
                 .args(["--new-session-with-layout", LAYOUT_NAME, "--session", session])

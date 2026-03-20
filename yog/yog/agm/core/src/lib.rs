@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 pub const PIPE_NAME: &str = "agm-agent";
+pub const EMPTY_FIELD: &str = "--";
 
 #[derive(Debug)]
 pub struct ParseError(String);
@@ -216,4 +217,183 @@ impl AgentEvent {
         let kind = AgentEventKind::parse(payload)?;
         Ok(Self { pane_id, agent, kind })
     }
+}
+
+// ---------------------------------------------------------------------------
+// Persisted tab state
+// ---------------------------------------------------------------------------
+
+pub fn state_base_dir() -> PathBuf {
+    #[cfg(target_os = "wasi")]
+    {
+        PathBuf::from("/cache")
+    }
+    #[cfg(not(target_os = "wasi"))]
+    {
+        let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
+        home.join(".local").join("share").join("agm")
+    }
+}
+
+pub fn session_state_dir(session: &str) -> PathBuf {
+    state_base_dir().join(session)
+}
+
+pub fn state_file_path(session: &str, tab_id: usize) -> PathBuf {
+    session_state_dir(session).join(format!("tab-{tab_id}"))
+}
+
+fn encode_opt(val: Option<&str>) -> &str {
+    val.unwrap_or(EMPTY_FIELD)
+}
+
+fn decode_opt(val: &str) -> Option<String> {
+    if val == EMPTY_FIELD { None } else { Some(val.to_owned()) }
+}
+
+fn decode_opt_path(val: &str) -> Option<PathBuf> {
+    if val == EMPTY_FIELD {
+        None
+    } else {
+        Some(PathBuf::from(val))
+    }
+}
+
+pub struct TabStateEntry {
+    pub tab_id: usize,
+    pub cwd: Option<PathBuf>,
+    pub agent: Option<Agent>,
+    pub agent_busy: bool,
+    pub git_stat: GitStat,
+    pub command: Option<String>,
+}
+
+impl TabStateEntry {
+    /// Format the 8 data fields (everything except tab_id) as file content.
+    pub fn to_file_content(&self) -> String {
+        let cwd_s = self.cwd.as_ref().map(|p| p.display().to_string());
+        let agent_s = self.agent.map(Agent::name);
+        format!(
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n",
+            encode_opt(cwd_s.as_deref()),
+            encode_opt(agent_s),
+            u8::from(self.agent_busy),
+            self.git_stat.insertions,
+            self.git_stat.deletions,
+            self.git_stat.new_files,
+            u8::from(self.git_stat.is_worktree),
+            encode_opt(self.command.as_deref()),
+        )
+    }
+
+    /// Parse 8 field lines (no tab_id prefix) produced by [`Self::to_file_content`].
+    pub fn parse_file_content(tab_id: usize, content: &str) -> Result<Self, ParseError> {
+        let mut l = content.lines();
+        let mut next = |name| l.next().ok_or_else(|| ParseError::new(format!("missing {name}")));
+
+        let cwd = decode_opt_path(next("cwd")?);
+        let agent_raw = next("agent")?;
+        let agent = if agent_raw == EMPTY_FIELD {
+            None
+        } else {
+            Some(Agent::from_name(agent_raw)?)
+        };
+        let agent_busy = parse_bool(next("busy")?, "busy")?;
+        let insertions = parse_usize(next("ins")?, "ins")?;
+        let deletions = parse_usize(next("del")?, "del")?;
+        let new_files = parse_usize(next("new")?, "new")?;
+        let is_worktree = parse_bool(next("wt")?, "wt")?;
+        let command = decode_opt(next("cmd")?);
+
+        Ok(Self {
+            tab_id,
+            cwd,
+            agent,
+            agent_busy,
+            git_stat: GitStat {
+                insertions,
+                deletions,
+                new_files,
+                is_worktree,
+            },
+            command,
+        })
+    }
+}
+
+/// List all persisted tab states for a session.
+pub fn read_all_state_files(session: &str) -> Vec<TabStateEntry> {
+    let dir = session_state_dir(session);
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        let Some(id_str) = name_str.strip_prefix("tab-") else {
+            continue;
+        };
+        if id_str.contains('.') {
+            continue;
+        }
+        let Ok(tab_id) = id_str.parse::<usize>() else { continue };
+        let Ok(content) = std::fs::read_to_string(entry.path()) else {
+            continue;
+        };
+        if let Ok(entry) = TabStateEntry::parse_file_content(tab_id, &content) {
+            out.push(entry);
+        }
+    }
+    out
+}
+
+/// Atomically write a state file (write .tmp then rename).
+pub fn write_state_file(session: &str, tab_id: usize, content: &str) -> std::io::Result<()> {
+    let dir = session_state_dir(session);
+    std::fs::create_dir_all(&dir)?;
+    let path = state_file_path(session, tab_id);
+    let tmp = path.with_extension("tmp");
+    std::fs::write(&tmp, content)?;
+    std::fs::rename(&tmp, &path)
+}
+
+pub fn remove_state_file(session: &str, tab_id: usize) {
+    let _ = std::fs::remove_file(state_file_path(session, tab_id));
+}
+
+pub fn clean_state_dir(session: &str) {
+    let _ = std::fs::remove_dir_all(session_state_dir(session));
+}
+
+pub fn clean_stale_state_files(session: &str, active_tab_ids: &std::collections::HashSet<usize>) {
+    let dir = session_state_dir(session);
+    let Ok(entries) = std::fs::read_dir(&dir) else { return };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        let Some(id_str) = name_str.strip_prefix("tab-") else {
+            continue;
+        };
+        if id_str.contains('.') {
+            let _ = std::fs::remove_file(entry.path());
+            continue;
+        }
+        let Ok(tab_id) = id_str.parse::<usize>() else { continue };
+        if !active_tab_ids.contains(&tab_id) {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+}
+
+fn parse_bool(s: &str, name: &str) -> Result<bool, ParseError> {
+    match s {
+        "0" => Ok(false),
+        "1" => Ok(true),
+        _ => Err(ParseError::new(format!("invalid {name} flag: {s:?}"))),
+    }
+}
+
+fn parse_usize(s: &str, name: &str) -> Result<usize, ParseError> {
+    s.parse().map_err(|_| ParseError::new(format!("invalid {name}: {s:?}")))
 }

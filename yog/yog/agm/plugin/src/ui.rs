@@ -1,7 +1,5 @@
-use std::collections::HashMap;
 use std::fmt::Write;
 use std::path::Path;
-use std::path::PathBuf;
 
 use agm_core::GitStat;
 use zellij_tile::prelude::*;
@@ -36,7 +34,7 @@ impl TabRow {
         tab: &TabInfo,
         focused: Option<&PaneData>,
         priority_cmd: Option<(&str, bool)>,
-        git_stats: &HashMap<PathBuf, GitStat>,
+        git: GitStat,
         home: Option<&Path>,
     ) -> Self {
         let path_label = focused
@@ -48,12 +46,6 @@ impl TabRow {
         } else {
             (focused.and_then(|e| e.command.clone()), false, false)
         };
-
-        let git = focused
-            .and_then(|e| e.cwd.as_ref())
-            .and_then(|cwd| git_stats.get(cwd))
-            .copied()
-            .unwrap_or_default();
 
         Self {
             active: tab.active,
