@@ -16,6 +16,7 @@ use agm_core::Agent;
 use agm_core::AgentEventKind;
 use agm_core::GitStat;
 use owo_colors::OwoColorize as _;
+use rootcause::prelude::ResultExt;
 use serde_json::Value;
 use ytil_cmd::CmdExt as _;
 use ytil_sys::cli::Args;
@@ -41,29 +42,51 @@ fn build_wasm(is_debug: bool) -> rootcause::Result<PathBuf> {
         .join("target");
     let wasm_target = workspace_target.join("wasm-plugins");
 
+    let target = "wasm32-wasip1";
+
     ytil_cmd::silent_cmd("rustup")
-        .args(["target", "add", "wasm32-wasip1"])
-        .status()?
-        .exit_ok()?;
+        .args(["target", "add", target])
+        .status()
+        .context("failed to spawn rustup command")
+        .attach_with(|| format!("target={target}"))?
+        .exit_ok()
+        .context("failed to add wasm32-wasip1 target")
+        .attach_with(|| format!("target={target}"))?;
 
     let mut cmd = ytil_cmd::silent_cmd("cargo");
-    cmd.args(["build", "--target", "wasm32-wasip1"]);
+    cmd.args(["build", "--target", target]);
     cmd.current_dir(&plugin_dir);
     cmd.env("CARGO_TARGET_DIR", &wasm_target);
     if !is_debug {
         cmd.arg("--release");
     }
-    cmd.status()?.exit_ok()?;
+    cmd.status()
+        .context("failed to spawn cargo build command")
+        .attach_with(|| format!("target={target}"))?
+        .exit_ok()
+        .context("failed to build wasm plugin")
+        .attach_with(|| format!("target={target}"))
+        .attach_with(|| format!("plugin_dir={}", plugin_dir.display()))?;
 
     let profile = if is_debug { "debug" } else { "release" };
     Ok(wasm_target.join("wasm32-wasip1").join(profile).join(WASM_FILENAME))
 }
 
 fn install_wasm(built: &Path) -> rootcause::Result<()> {
-    let install_dir = ytil_sys::dir::build_home_path(ZELLIJ_PLUGINS_PATH)?;
-    std::fs::create_dir_all(&install_dir)?;
+    let install_dir = ytil_sys::dir::build_home_path(ZELLIJ_PLUGINS_PATH)
+        .context("failed to determine zellij plugins directory")
+        .attach_with(|| format!("plugins_path={ZELLIJ_PLUGINS_PATH:?}"))?;
+
+    std::fs::create_dir_all(&install_dir)
+        .context("failed to create install directory")
+        .attach_with(|| format!("install_dir={}", install_dir.display()))?;
+
     let dest = install_dir.join(INSTALL_NAME);
-    ytil_sys::file::atomic_cp(built, &dest)?;
+    ytil_sys::file::atomic_cp(built, &dest)
+        .context("failed to copy wasm plugin to install location")
+        .attach_with(|| format!("from={}", built.display()))
+        .attach_with(|| format!("to={}", dest.display()))?;
+
     println!("{} {}", "Installed".green().bold(), dest.display());
     Ok(())
 }
@@ -74,16 +97,23 @@ fn provision_hooks(agent: Agent) -> rootcause::Result<()> {
         return Ok(());
     }
 
-    let Ok(path) = ytil_sys::dir::build_home_path(config) else {
+    let Ok(path) = ytil_sys::dir::build_home_path(config).attach_with(|| format!("agent={}", agent.name())) else {
         print_skipped(agent);
         return Ok(());
     };
 
     let mut doc: Value = if path.exists() {
-        let raw = std::fs::read_to_string(&path)?;
-        serde_json::from_str(&raw)?
+        let raw = std::fs::read_to_string(&path)
+            .context("failed to read config file")
+            .attach_with(|| format!("path={}", path.display()))
+            .attach_with(|| format!("agent={}", agent.name()))?;
+        serde_json::from_str(&raw)
+            .context("failed to parse config file")
+            .attach_with(|| format!("agent={}", agent.name()))?
     } else if path.parent().is_some_and(Path::is_dir) {
-        serde_json::from_str(agent.default_config())?
+        serde_json::from_str(agent.default_config())
+            .context("failed to parse default config")
+            .attach_with(|| format!("agent={}", agent.name()))?
     } else {
         print_skipped(agent);
         return Ok(());
@@ -112,14 +142,20 @@ fn provision_hooks(agent: Agent) -> rootcause::Result<()> {
         }
     }
 
-    let out = serde_json::to_string_pretty(&doc)? + "\n";
-    std::fs::write(&path, out)?;
+    let out =
+        serde_json::to_string_pretty(&doc).context(format!("failed to serialize config for {}", agent.name()))? + "\n";
+    std::fs::write(&path, out)
+        .context("failed to write config file")
+        .attach_with(|| format!("path={}", path.display()))
+        .attach_with(|| format!("agent={}", agent.name()))?;
+
     println!(
         "{} {} hooks in {}",
         "Provisioned".green().bold(),
         agent.name(),
         path.display()
     );
+
     Ok(())
 }
 
@@ -216,10 +252,10 @@ fn git_stat(cwd: &str) -> GitStat {
 }
 
 fn install(is_debug: bool) -> rootcause::Result<()> {
-    let built = build_wasm(is_debug)?;
-    install_wasm(&built)?;
-    provision_hooks(Agent::Claude)?;
-    provision_hooks(Agent::Cursor)?;
+    let built = build_wasm(is_debug).context("failed to build wasm plugin")?;
+    install_wasm(&built).context("failed to install wasm plugin")?;
+    provision_hooks(Agent::Claude).context("failed to provision Claude hooks")?;
+    provision_hooks(Agent::Cursor).context("failed to provision Cursor hooks")?;
     Ok(())
 }
 
