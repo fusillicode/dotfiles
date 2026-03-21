@@ -131,7 +131,9 @@ pub fn kill_session(name: &str) -> rootcause::Result<()> {
 /// - Invoking `zellij attach` or `zellij action switch-session` fails.
 pub fn attach_session(name: &str) -> rootcause::Result<()> {
     if is_active() {
-        action(&["switch-session", name]).attach(format!("session={name} mode=switch"))?;
+        action(&["switch-session", name])
+            .attach(format!("session={name}"))
+            .attach("mode=switch")?;
     } else {
         let mut cmd = Command::new(BIN);
         cmd.args(["attach", name]);
@@ -150,7 +152,9 @@ pub fn attach_session(name: &str) -> rootcause::Result<()> {
 pub fn new_session_with_layout(session: &str, layout: &str) -> rootcause::Result<()> {
     let mut cmd = Command::new(BIN);
     cmd.args(["--new-session-with-layout", layout, "--session", session]);
-    run_interactive(&mut cmd).attach(format!("session={session} layout={layout}"))?;
+    run_interactive(&mut cmd)
+        .attach(format!("session={session}"))
+        .attach(format!("layout={layout}"))?;
     Ok(())
 }
 
