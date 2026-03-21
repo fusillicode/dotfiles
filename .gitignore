@@ -2,5 +2,6 @@
 *.wasm
 *style.min.css
 .DS_Store
+.config/opencode/plugins/*
 helix/runtime
 target
