@@ -45,7 +45,11 @@ impl TabRow {
         let (command, is_agent, is_busy) = if let Some((name, busy)) = priority_cmd {
             (Some(name.to_owned()), true, busy)
         } else {
-            (focused.and_then(|e| e.command.clone()), false, false)
+            (
+                focused.and_then(|e| e.cmd.command_string().map(|s| s.to_string())),
+                false,
+                false,
+            )
         };
 
         Self {
@@ -234,6 +238,7 @@ mod tests {
     use std::path::Path;
     use std::path::PathBuf;
 
+    use agm_core::Cmd;
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -249,9 +254,7 @@ mod tests {
 
         let focused_pane = Some(PaneData {
             cwd: Some(PathBuf::from("/home/user/project")),
-            command: Some("nvim".to_string()),
-            is_busy: false,
-            agent_kind: None,
+            cmd: Cmd::Running("nvim".to_string()),
         });
         let git = GitStat::default();
         let home = Path::new("/home");
@@ -279,9 +282,7 @@ mod tests {
 
         let focused_pane = Some(PaneData {
             cwd: Some(PathBuf::from("/home/user")),
-            command: Some("zsh".to_string()),
-            is_busy: true,
-            agent_kind: None,
+            cmd: Cmd::Running("zsh".to_string()),
         });
         let git = GitStat::default();
         let home = Path::new("/home");
@@ -291,7 +292,7 @@ mod tests {
             path_label: "user".to_string(),
             command: Some("zsh".to_string()),
             is_agent: false,
-            is_busy: true,
+            is_busy: false,
             git: GitStat::default(),
         };
         let actual = TabRow::new(&tab, focused_pane.as_ref(), None, git, home);
@@ -309,9 +310,7 @@ mod tests {
 
         let focused_pane = Some(PaneData {
             cwd: None,
-            command: None,
-            is_busy: false,
-            agent_kind: None,
+            cmd: Cmd::None,
         });
         let priority_cmd = Some(("agent-task", true));
         let git = GitStat::default();
@@ -371,9 +370,7 @@ mod tests {
 
         let focused_pane = Some(PaneData {
             cwd: None,
-            command: None,
-            is_busy: false,
-            agent_kind: None,
+            cmd: Cmd::None,
         });
         let home = Path::new("/");
 
