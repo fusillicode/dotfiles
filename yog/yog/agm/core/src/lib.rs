@@ -219,7 +219,7 @@ impl Cmd {
         }
     }
 
-    pub fn command_string(&self) -> Option<&str> {
+    pub fn running_cmd(&self) -> Option<&str> {
         match self {
             Self::Running(s) => Some(s),
             _ => None,
@@ -331,7 +331,7 @@ pub struct TabStateEntry {
 impl TabStateEntry {
     pub fn to_file_content(&self) -> String {
         let cwd_s = self.cwd.as_ref().map(|p| p.display().to_string());
-        let cmd_s = self.cmd.command_string();
+        let cmd_s = self.cmd.running_cmd();
 
         format!(
             "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n",

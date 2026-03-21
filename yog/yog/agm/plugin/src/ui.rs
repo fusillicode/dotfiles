@@ -46,7 +46,7 @@ impl TabRow {
             (Some(name.to_owned()), true, busy)
         } else {
             (
-                focused.and_then(|e| e.cmd.command_string().map(|s| s.to_string())),
+                focused.and_then(|e| e.cmd.running_cmd().map(|s| s.to_string())),
                 false,
                 false,
             )
@@ -64,8 +64,7 @@ impl TabRow {
 
     fn write_path_lines(&self, buf: &mut String, y: &mut usize, width: usize, sep_col: usize) {
         let path_with_indent = format!("{MARKER}{}", self.path_label);
-        let bg = if self.active { ACTIVE_BG } else { "" };
-        let dim = if self.active { "" } else { DIM };
+        let (bg, dim) = if self.active { (ACTIVE_BG, "") } else { ("", DIM) };
 
         for line in wrap_lines(&path_with_indent, width) {
             let row = *y + 1;
@@ -77,14 +76,20 @@ impl TabRow {
     }
 
     fn write_info_line(&self, buf: &mut String, row_1based: usize, width: usize) {
-        let bg = if self.active { ACTIVE_BG } else { "" };
-        let fg = if self.active { "\x1b[39m" } else { DIM };
+        let (bg, fg) = if self.active {
+            (ACTIVE_BG, "")
+        } else {
+            ("\x1b[39m", DIM)
+        };
 
         let left = self.command.as_ref().map_or_else(String::new, |cmd| {
             if self.is_agent {
-                let indicator_color = if self.is_busy { AMBER } else { DIM };
-                let indicator = if self.is_busy { "\u{25cf}" } else { "\u{25cb}" };
-                format!(" {indicator_color}{indicator}{bg}{fg} {cmd}")
+                let (color, symbol) = if self.is_busy {
+                    (AMBER, "\u{25cf}")
+                } else {
+                    (DIM, "\u{25cb}")
+                };
+                format!(" {color}{symbol}{bg}{fg} {cmd}")
             } else {
                 format!(" {cmd}")
             }
