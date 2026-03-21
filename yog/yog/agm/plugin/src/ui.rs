@@ -20,6 +20,7 @@ const ACTIVE_BG: &str = "\x1b[48;2;40;40;50m";
 const RESET: &str = "\x1b[0m";
 
 #[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
 pub struct TabRow {
     pub active: bool,
     pub path_label: String,
@@ -226,4 +227,165 @@ fn pad(s: &str, width: usize) -> String {
         out.push(' ');
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+    use std::path::PathBuf;
+
+    use pretty_assertions::assert_eq;
+
+    use super::*;
+
+    #[test]
+    fn test_tab_row_new_active_with_path() {
+        let tab = TabInfo {
+            name: "test".to_string(),
+            active: true,
+            position: 0,
+            ..Default::default()
+        };
+
+        let focused_pane = Some(PaneData {
+            cwd: Some(PathBuf::from("/home/user/project")),
+            command: Some("nvim".to_string()),
+            is_busy: false,
+            agent_kind: None,
+        });
+        let git = GitStat::default();
+        let home = Path::new("/home");
+
+        let expected = TabRow {
+            active: true,
+            path_label: "user/project".to_string(),
+            command: Some("nvim".to_string()),
+            is_agent: false,
+            is_busy: false,
+            git: GitStat::default(),
+        };
+        let actual = TabRow::new(&tab, focused_pane.as_ref(), None, git, home);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_tab_row_new_inactive_with_home_dir() {
+        let tab = TabInfo {
+            name: "shell".to_string(),
+            active: false,
+            position: 1,
+            ..Default::default()
+        };
+
+        let focused_pane = Some(PaneData {
+            cwd: Some(PathBuf::from("/home/user")),
+            command: Some("zsh".to_string()),
+            is_busy: true,
+            agent_kind: None,
+        });
+        let git = GitStat::default();
+        let home = Path::new("/home");
+
+        let expected = TabRow {
+            active: false,
+            path_label: "user".to_string(),
+            command: Some("zsh".to_string()),
+            is_agent: false,
+            is_busy: true,
+            git: GitStat::default(),
+        };
+        let actual = TabRow::new(&tab, focused_pane.as_ref(), None, git, home);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_tab_row_new_with_priority_command() {
+        let tab = TabInfo {
+            name: "agent-tab".to_string(),
+            active: true,
+            position: 2,
+            ..Default::default()
+        };
+
+        let focused_pane = Some(PaneData {
+            cwd: None,
+            command: None,
+            is_busy: false,
+            agent_kind: None,
+        });
+        let priority_cmd = Some(("agent-task", true));
+        let git = GitStat::default();
+        let home = Path::new("/");
+
+        let expected = TabRow {
+            active: true,
+            path_label: "agent-tab".to_string(),
+            command: Some("agent-task".to_string()),
+            is_agent: true,
+            is_busy: true,
+            git: GitStat::default(),
+        };
+        let actual = TabRow::new(&tab, focused_pane.as_ref(), priority_cmd, git, home);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_tab_row_new_with_no_focused_pane() {
+        let tab = TabInfo {
+            name: "empty".to_string(),
+            active: true,
+            position: 3,
+            ..Default::default()
+        };
+
+        let focused_pane: Option<&PaneData> = None;
+        let git = GitStat::default();
+        let home = Path::new("/tmp");
+
+        let expected = TabRow {
+            active: true,
+            path_label: "empty".to_string(),
+            command: None,
+            is_agent: false,
+            is_busy: false,
+            git: GitStat::default(),
+        };
+        let actual = TabRow::new(&tab, focused_pane, None, git, home);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_tab_row_new_git_stat_copied() {
+        let git = GitStat {
+            insertions: 5,
+            deletions: 3,
+            ..Default::default()
+        };
+
+        let tab = TabInfo {
+            name: "git-tab".to_string(),
+            active: true,
+            position: 4,
+            ..Default::default()
+        };
+
+        let focused_pane = Some(PaneData {
+            cwd: None,
+            command: None,
+            is_busy: false,
+            agent_kind: None,
+        });
+        let home = Path::new("/");
+
+        let expected = TabRow {
+            active: true,
+            path_label: "git-tab".to_string(),
+            command: None,
+            is_agent: false,
+            is_busy: false,
+            git,
+        };
+        let actual = TabRow::new(&tab, focused_pane.as_ref(), None, git, home);
+        assert_eq!(actual, expected);
+    }
 }
