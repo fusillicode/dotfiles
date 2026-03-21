@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use agm_core::Agent;
 use agm_core::AgentEvent;
 use agm_core::AgentEventKind;
+use agm_core::Cmd;
 use agm_core::GitStat;
 use agm_core::TabStateEntry;
 use ui::TabRow;
@@ -19,9 +20,7 @@ const CONTEXT_KEY_GIT_STAT: &str = "git-stat";
 #[derive(Default)]
 pub struct PaneData {
     pub cwd: Option<PathBuf>,
-    pub command: Option<String>,
-    pub is_busy: bool,
-    pub agent_kind: Option<Agent>,
+    pub cmd: Cmd,
 }
 
 impl PaneData {
@@ -37,49 +36,41 @@ impl PaneData {
     }
 
     fn apply_title(&mut self, title: &str) -> bool {
-        if self.agent_kind.is_some() {
+        if self.cmd.is_agent() {
             return false;
         }
         let cmd = parse_pane_title(title);
-        if cmd == self.command {
+        let new_cmd = match cmd {
+            Some(s) => Cmd::Running(s),
+            None => Cmd::None,
+        };
+        if self.cmd == new_cmd {
             return false;
         }
-        self.command = cmd;
+        self.cmd = new_cmd;
         true
     }
 
     fn apply_agent_event(&mut self, event: &AgentEvent) -> bool {
-        if let Some(current) = self.agent_kind
+        // Determine current agent (if any) from command enum
+        let current_agent = self.cmd.agent_name().and_then(|name| Agent::from_name(name).ok());
+        if let Some(current) = current_agent
             && event.agent.priority() < current.priority()
         {
             return false;
         }
-        match event.kind {
-            AgentEventKind::Start | AgentEventKind::Busy => {
-                let changed_kind = self.agent_kind != Some(event.agent);
-                self.agent_kind = Some(event.agent);
-                self.command = None;
-                let was_busy = self.is_busy;
-                self.is_busy = event.kind == AgentEventKind::Busy;
-                self.ensure_cwd(event.pane_id);
-                changed_kind || self.is_busy != was_busy
-            }
-            AgentEventKind::Idle => {
-                if self.agent_kind != Some(event.agent) {
-                    self.agent_kind = Some(event.agent);
-                    self.command = None;
-                }
-                let was_busy = self.is_busy;
-                self.is_busy = false;
-                was_busy
-            }
-            AgentEventKind::Exit => {
-                let had_agent = self.agent_kind.is_some();
-                self.agent_kind = None;
-                self.is_busy = false;
-                had_agent
-            }
+        let new_cmd = Cmd::from(event);
+        let changed = self.cmd != new_cmd;
+        self.cmd = new_cmd;
+        if changed
+            && matches!(
+                event.kind,
+                AgentEventKind::Start | AgentEventKind::Busy | AgentEventKind::Idle
+            )
+        {
+            self.ensure_cwd(event.pane_id);
         }
+        changed
     }
 }
 
@@ -147,12 +138,10 @@ impl State {
         let pids: Vec<u32> = tp.all.clone();
         for pid in pids {
             let pd = self.panes_data.entry(pid).or_default();
-            if pd.agent_kind.is_none()
+            if !pd.cmd.is_agent()
                 && let Some(agent) = detect_agent_from_running_command(pid)
             {
-                pd.agent_kind = Some(agent);
-                pd.command = None;
-                pd.is_busy = false;
+                pd.cmd = Cmd::IdleAgent(agent);
                 pd.ensure_cwd(pid);
             }
         }
@@ -219,39 +208,42 @@ impl State {
     }
 
     fn persist_own_state(&self) {
-        let Some(my_tab) = self.my_tab_id else { return };
+        let Some(tab_id) = self.my_tab_id else { return };
 
-        let cwd = self.own_focused_cwd();
-        let (agent, agent_busy) = self.own_agent_info();
-        let git_stat = self.tab_git_stats.get(&my_tab).copied().unwrap_or_default();
-        let command = focused_pane_data(my_tab, &self.tab_panes, &self.panes_data).and_then(|pd| pd.command.clone());
+        let agent_cmd = self.own_agent_cmd();
+        let cmd = if agent_cmd.is_agent() {
+            agent_cmd
+        } else {
+            focused_pane_data(tab_id, &self.tab_panes, &self.panes_data)
+                .map(|pd| pd.cmd.clone())
+                .unwrap_or(Cmd::None)
+        };
 
         let entry = TabStateEntry {
-            tab_id: my_tab,
-            cwd,
-            agent,
-            agent_busy,
-            git_stat,
-            command,
+            tab_id,
+            cwd: self.own_focused_cwd(),
+            cmd,
+            git_stat: self.tab_git_stats.get(&tab_id).copied().unwrap_or_default(),
         };
-        if let Err(e) = agm_core::write_state_file(&self.session_name, my_tab, &entry.to_file_content()) {
+
+        if let Err(e) = agm_core::write_state_file(&self.session_name, tab_id, &entry.to_file_content()) {
             eprintln!("agm: persist: {e}");
         }
     }
 
-    fn own_agent_info(&self) -> (Option<Agent>, bool) {
-        let Some(my) = self.my_tab_id else { return (None, false) };
-        let Some(tp) = self.tab_panes.get(&my) else {
-            return (None, false);
+    fn own_agent_cmd(&self) -> Cmd {
+        let Some(tab_id) = self.my_tab_id else { return Cmd::None };
+        let Some(tab_panes) = self.tab_panes.get(&tab_id) else {
+            return Cmd::None;
         };
-        for &pid in &tp.all {
-            if let Some(pd) = self.panes_data.get(&pid)
-                && let Some(agent) = pd.agent_kind
+        for &pid in &tab_panes.all {
+            if let Some(pane_data) = self.panes_data.get(&pid)
+                && pane_data.cmd.is_agent()
             {
-                return (Some(agent), pd.is_busy);
+                return pane_data.cmd.clone();
             }
         }
-        (None, false)
+        Cmd::None
     }
 
     fn refresh_other_tabs(&mut self) -> bool {
@@ -266,25 +258,23 @@ impl State {
                 *current = entry.git_stat;
                 changed = true;
             }
-            let Some(agent) = entry.agent else { continue };
-            let Some(tp) = self.tab_panes.get(&entry.tab_id) else {
+            // Skip if no agent in this entry
+            if !entry.cmd.is_agent() {
+                continue;
+            }
+            let Some(tab_pane) = self.tab_panes.get(&entry.tab_id) else {
                 continue;
             };
-            let target = tp
+            let target = tab_pane
                 .all
                 .iter()
-                .find(|pid| self.panes_data.get(pid).is_some_and(|pd| pd.agent_kind.is_some()))
-                .or(tp.all.first())
+                .find(|pid| self.panes_data.get(pid).is_some_and(|pd| pd.cmd.is_agent()))
+                .or(tab_pane.all.first())
                 .copied();
             let Some(pid) = target else { continue };
             let pd = self.panes_data.entry(pid).or_default();
-            if pd.agent_kind != Some(agent) {
-                pd.agent_kind = Some(agent);
-                pd.command = None;
-                changed = true;
-            }
-            if pd.is_busy != entry.agent_busy {
-                pd.is_busy = entry.agent_busy;
+            if pd.cmd != entry.cmd {
+                pd.cmd = entry.cmd.clone();
                 changed = true;
             }
         }
@@ -318,13 +308,11 @@ impl State {
                 changed |= title_changed;
 
                 if title_changed
-                    && pane_data.agent_kind.is_none()
+                    && !pane_data.cmd.is_agent()
                     && self.my_tab_id == Some(tab_id)
                     && let Some(agent) = detect_agent_from_running_command(pane.id)
                 {
-                    pane_data.agent_kind = Some(agent);
-                    pane_data.command = None;
-                    pane_data.is_busy = false;
+                    pane_data.cmd = Cmd::IdleAgent(agent);
                     pane_data.ensure_cwd(pane.id);
                     changed = true;
                 }
@@ -585,9 +573,9 @@ fn priority_command_for_tab(
 ) -> Option<(&'static str, bool)> {
     for pid in &tab_panes.get(&tab_id)?.all {
         if let Some(pane_data) = panes_data.get(pid)
-            && let Some(kind) = pane_data.agent_kind
+            && let Some(name) = pane_data.cmd.agent_name()
         {
-            return Some((kind.name(), pane_data.is_busy));
+            return Some((name, pane_data.cmd.is_busy()));
         }
     }
     None

@@ -20,7 +20,7 @@ impl std::fmt::Display for ParseError {
 
 impl std::error::Error for ParseError {}
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct GitStat {
     pub insertions: usize,
     pub deletions: usize,
@@ -86,7 +86,7 @@ impl std::fmt::Display for GitStat {
     }
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Agent {
     Claude,
     Codex,
@@ -202,6 +202,72 @@ impl AgentEventKind {
     }
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub enum Cmd {
+    #[default]
+    None,
+    Running(String),
+    IdleAgent(Agent),
+    BusyAgent(Agent),
+}
+
+impl Cmd {
+    pub fn agent_name(&self) -> Option<&'static str> {
+        match self {
+            Self::IdleAgent(agent) | Self::BusyAgent(agent) => Some(agent.name()),
+            _ => None,
+        }
+    }
+
+    pub fn command_string(&self) -> Option<&str> {
+        match self {
+            Self::Running(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub fn is_agent(&self) -> bool {
+        matches!(self, Self::IdleAgent(_) | Self::BusyAgent(_))
+    }
+
+    pub fn is_busy(&self) -> bool {
+        matches!(self, Self::BusyAgent(_))
+    }
+
+    pub fn from_parts(agent: Option<Agent>, agent_busy: bool, command: Option<String>) -> Self {
+        match agent {
+            Some(agent) => {
+                if agent_busy {
+                    Self::BusyAgent(agent)
+                } else {
+                    Self::IdleAgent(agent)
+                }
+            }
+            None => command.map_or(Self::None, Self::Running),
+        }
+    }
+
+    pub fn into_parts(self) -> (Option<Agent>, bool, Option<String>) {
+        match self {
+            Self::None => (None, false, None),
+            Self::Running(cmd) => (None, false, Some(cmd)),
+            Self::IdleAgent(agent) => (Some(agent), false, None),
+            Self::BusyAgent(agent) => (Some(agent), true, None),
+        }
+    }
+}
+
+impl From<&AgentEvent> for Cmd {
+    fn from(value: &AgentEvent) -> Self {
+        match value.kind {
+            AgentEventKind::Start => Self::IdleAgent(value.agent),
+            AgentEventKind::Busy => Self::BusyAgent(value.agent),
+            AgentEventKind::Idle => Self::IdleAgent(value.agent),
+            AgentEventKind::Exit => Self::None,
+        }
+    }
+}
+
 pub struct AgentEvent {
     pub pane_id: u32,
     pub agent: Agent,
@@ -218,10 +284,6 @@ impl AgentEvent {
         Ok(Self { pane_id, agent, kind })
     }
 }
-
-// ---------------------------------------------------------------------------
-// Persisted tab state
-// ---------------------------------------------------------------------------
 
 pub fn state_base_dir() -> PathBuf {
     #[cfg(target_os = "wasi")]
@@ -262,31 +324,28 @@ fn decode_opt_path(val: &str) -> Option<PathBuf> {
 pub struct TabStateEntry {
     pub tab_id: usize,
     pub cwd: Option<PathBuf>,
-    pub agent: Option<Agent>,
-    pub agent_busy: bool,
+    pub cmd: Cmd,
     pub git_stat: GitStat,
-    pub command: Option<String>,
 }
 
 impl TabStateEntry {
-    /// Format the 8 data fields (everything except tab_id) as file content.
     pub fn to_file_content(&self) -> String {
         let cwd_s = self.cwd.as_ref().map(|p| p.display().to_string());
-        let agent_s = self.agent.map(Agent::name);
+        let cmd_s = self.cmd.command_string();
+
         format!(
             "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n",
             encode_opt(cwd_s.as_deref()),
-            encode_opt(agent_s),
-            u8::from(self.agent_busy),
+            encode_opt(self.cmd.agent_name()),
+            u8::from(self.cmd.is_busy()),
             self.git_stat.insertions,
             self.git_stat.deletions,
             self.git_stat.new_files,
             u8::from(self.git_stat.is_worktree),
-            encode_opt(self.command.as_deref()),
+            encode_opt(cmd_s),
         )
     }
 
-    /// Parse 8 field lines (no tab_id prefix) produced by [`Self::to_file_content`].
     pub fn parse_file_content(tab_id: usize, content: &str) -> Result<Self, ParseError> {
         let mut l = content.lines();
         let mut next = |name| l.next().ok_or_else(|| ParseError::new(format!("missing {name}")));
@@ -308,15 +367,13 @@ impl TabStateEntry {
         Ok(Self {
             tab_id,
             cwd,
-            agent,
-            agent_busy,
+            cmd: Cmd::from_parts(agent, agent_busy, command),
             git_stat: GitStat {
                 insertions,
                 deletions,
                 new_files,
                 is_worktree,
             },
-            command,
         })
     }
 }
