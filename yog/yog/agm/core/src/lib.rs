@@ -410,8 +410,6 @@ pub fn read_all_state_files(session: &str) -> Vec<TabStateEntry> {
 
 /// Atomically write a state file (write .tmp then rename).
 pub fn write_state_file(session: &str, tab_id: usize, content: &str) -> std::io::Result<()> {
-    let dir = session_state_dir(session);
-    std::fs::create_dir_all(&dir)?;
     let path = state_file_path(session, tab_id);
     let tmp = path.with_extension("tmp");
     std::fs::write(&tmp, content)?;
