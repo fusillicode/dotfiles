@@ -244,16 +244,10 @@ impl Cmd {
     }
 
     pub fn from_parts(agent: Option<Agent>, agent_busy: bool, command: Option<String>) -> Self {
-        match agent {
-            Some(agent) => {
-                if agent_busy {
-                    Self::BusyAgent(agent)
-                } else {
-                    Self::IdleAgent(agent)
-                }
-            }
-            None => command.map_or(Self::None, Self::Running),
-        }
+        let Some(agent) = agent else {
+            return command.map_or(Self::None, Self::Running);
+        };
+        (if agent_busy { Self::BusyAgent } else { Self::IdleAgent })(agent)
     }
 
     pub fn into_parts(self) -> (Option<Agent>, bool, Option<String>) {
