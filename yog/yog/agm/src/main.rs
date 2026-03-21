@@ -89,6 +89,9 @@ fn install_wasm(built: &Path) -> rootcause::Result<()> {
 }
 
 fn install_hooks(agent: Agent) -> rootcause::Result<()> {
+    if agent == Agent::Opencode {
+        return install_opencode_plugin();
+    }
     let config = agent.config_path();
     if config.is_empty() {
         return Ok(());
@@ -156,6 +159,55 @@ fn install_hooks(agent: Agent) -> rootcause::Result<()> {
     Ok(())
 }
 
+fn install_opencode_plugin() -> rootcause::Result<()> {
+    let config_path = Agent::Opencode.config_path();
+    let Ok(path) = ytil_sys::dir::build_home_path(config_path).attach("agent=opencode") else {
+        print_skipped(Agent::Opencode);
+        return Ok(());
+    };
+
+    let Some(dir) = path.parent() else {
+        print_skipped(Agent::Opencode);
+        return Ok(());
+    };
+
+    std::fs::create_dir_all(dir)
+        .context("failed to create opencode plugins directory")
+        .attach_with(|| format!("dir={}", dir.display()))?;
+
+    let plugin_content = r#"
+        export const AgmPlugin = async ({ project, client, $, directory, worktree }) => {
+          return {
+            event: async ({ event }) => {
+              switch (event.type) {
+                case "session.created":
+                  await $`agm hook opencode start`.quiet();
+                  break;
+                case "session.idle":
+                  await $`agm hook opencode idle`.quiet();
+                  break;
+                case "session.deleted":
+                  await $`agm hook opencode exit`.quiet();
+                  break;
+                default:
+                  break;
+              }
+            },
+            "tool.execute.before": async (input, output) => {
+              await $`agm hook opencode busy`.quiet();
+            },
+          };
+        };
+    "#;
+
+    std::fs::write(&path, plugin_content)
+        .context("failed to write opencode plugin file")
+        .attach_with(|| format!("path={}", path.display()))?;
+
+    println!("{} opencode plugin in {}", "Installed".green().bold(), path.display());
+    Ok(())
+}
+
 fn print_skipped(agent: Agent) {
     println!(
         "{} {} hooks — config not found",
@@ -178,6 +230,7 @@ fn find_agm_entry(agent: Agent, arr: &mut [Value]) -> Option<&mut Value> {
                 .and_then(|c| c.as_str())
                 .is_some_and(|c| c.contains("agm hook"))
         }),
+        Agent::Opencode => None,
     }
 }
 
@@ -187,6 +240,7 @@ fn new_hook_entry(agent: Agent, cmd: &str) -> Value {
             "hooks": [{ "type": "command", "command": cmd }]
         }),
         Agent::Cursor | Agent::Codex => serde_json::json!({ "command": cmd }),
+        Agent::Opencode => serde_json::json!({}),
     }
 }
 
@@ -253,6 +307,7 @@ fn install_plugin_and_hooks(is_debug: bool) -> rootcause::Result<()> {
     install_wasm(&built).context("failed to install wasm plugin")?;
     install_hooks(Agent::Claude).context("failed to install Claude hooks")?;
     install_hooks(Agent::Cursor).context("failed to install Cursor hooks")?;
+    install_hooks(Agent::Opencode).context("failed to install Opencode hooks")?;
     Ok(())
 }
 

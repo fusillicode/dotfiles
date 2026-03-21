@@ -91,6 +91,7 @@ pub enum Agent {
     Claude,
     Codex,
     Cursor,
+    Opencode,
 }
 
 impl Agent {
@@ -99,6 +100,7 @@ impl Agent {
             Self::Claude => "claude",
             Self::Codex => "codex",
             Self::Cursor => "cursor",
+            Self::Opencode => "opencode",
         }
     }
 
@@ -107,6 +109,7 @@ impl Agent {
             Self::Claude => r#"{"hooks":{}}"#,
             Self::Cursor => r#"{"version":1,"hooks":{}}"#,
             Self::Codex => "{}",
+            Self::Opencode => "{}",
         }
     }
 
@@ -115,6 +118,7 @@ impl Agent {
             Self::Claude => &[".claude", "settings.json"],
             Self::Cursor => &[".cursor", "hooks.json"],
             Self::Codex => &[],
+            Self::Opencode => &[".config", "opencode", "plugins", "agm.js"],
         }
     }
 
@@ -133,6 +137,7 @@ impl Agent {
                 ("sessionEnd", AgentEventKind::Exit),
             ],
             Self::Codex => &[],
+            Self::Opencode => &[],
         }
     }
 
@@ -141,6 +146,7 @@ impl Agent {
             "claude" => Ok(Self::Claude),
             "cursor" => Ok(Self::Cursor),
             "codex" => Ok(Self::Codex),
+            "opencode" => Ok(Self::Opencode),
             _ => Err(ParseError::new(format!("unknown agent {s:?}"))),
         }
     }
@@ -155,6 +161,7 @@ impl Agent {
             Self::Claude => 0,
             Self::Codex => 1,
             Self::Cursor => 2,
+            Self::Opencode => 3,
         }
     }
 
@@ -167,6 +174,8 @@ impl Agent {
             Some(Self::Cursor)
         } else if lower.contains("codex") {
             Some(Self::Codex)
+        } else if lower.contains("opencode") {
+            Some(Self::Opencode)
         } else {
             None
         }
