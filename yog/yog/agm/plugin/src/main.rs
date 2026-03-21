@@ -40,10 +40,7 @@ impl PaneData {
             return false;
         }
         let cmd = parse_pane_title(title);
-        let new_cmd = match cmd {
-            Some(s) => Cmd::Running(s),
-            None => Cmd::None,
-        };
+        let new_cmd = cmd.map_or_else(|| Cmd::None, Cmd::Running);
         if self.cmd == new_cmd {
             return false;
         }
