@@ -539,15 +539,14 @@ impl ZellijPlugin for State {
             }
 
             Event::Mouse(Mouse::LeftClick(row, _col)) => {
-                if let Ok(row_u) = usize::try_from(row) {
-                    let content_w = self.last_cols.saturating_sub(1);
-                    let frame = self.last_frame.as_deref().unwrap_or_default();
-                    if let Some(tab_idx) = ui::tab_index_at_row(frame, row_u, content_w)
-                        && let Some(tab) = self.tabs.get(tab_idx)
-                        && let Ok(pos) = u32::try_from(tab.position)
-                    {
-                        switch_tab_to(pos + 1);
-                    }
+                let Ok(row_u) = usize::try_from(row) else { return false };
+                let content_w = self.last_cols.saturating_sub(1);
+                let frame = self.last_frame.as_deref().unwrap_or_default();
+                if let Some(tab_idx) = ui::tab_index_at_row(frame, row_u, content_w)
+                    && let Some(tab) = self.tabs.get(tab_idx)
+                    && let Ok(pos) = u32::try_from(tab.position)
+                {
+                    switch_tab_to(pos + 1);
                 }
                 false
             }
