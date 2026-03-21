@@ -1,7 +1,7 @@
 //! Launch a Zellij session with a vertical tab sidebar plugin.
 //!
 //! Subcommands:
-//! - `install` — build the WASM plugin, deploy it, and provision Claude/Cursor hooks.
+//! - `install` — build the WASM plugin, deploy it, and install Claude/Cursor hooks.
 //! - `hook` — unified agent lifecycle hook entry point (used by Claude and Cursor hooks).
 //! - `git-stat` — print `path insertions deletions untracked` per path (one line each).
 //!
@@ -11,6 +11,7 @@
 
 use std::path::Path;
 use std::path::PathBuf;
+use std::process::Stdio;
 
 use agm_core::Agent;
 use agm_core::AgentEventKind;
@@ -27,10 +28,6 @@ const LAYOUT_NAME: &str = "agm";
 const ZELLIJ_PLUGINS_PATH: &[&str] = &[".config", "zellij", "plugins"];
 const WASM_FILENAME: &str = "agm-plugin.wasm";
 const INSTALL_NAME: &str = "agm.wasm";
-
-fn session_exists(name: &str) -> bool {
-    ytil_zellij::list_sessions().is_ok_and(|sessions| sessions.iter().any(|s| s.name == name))
-}
 
 fn build_wasm(is_debug: bool) -> rootcause::Result<PathBuf> {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -91,7 +88,7 @@ fn install_wasm(built: &Path) -> rootcause::Result<()> {
     Ok(())
 }
 
-fn provision_hooks(agent: Agent) -> rootcause::Result<()> {
+fn install_hooks(agent: Agent) -> rootcause::Result<()> {
     let config = agent.config_path();
     if config.is_empty() {
         return Ok(());
@@ -151,7 +148,7 @@ fn provision_hooks(agent: Agent) -> rootcause::Result<()> {
 
     println!(
         "{} {} hooks in {}",
-        "Provisioned".green().bold(),
+        "Installed".green().bold(),
         agent.name(),
         path.display()
     );
@@ -213,9 +210,9 @@ fn hook(raw_agent: &str, raw_payload: &str) {
             "--",
             kind.as_str(),
         ])
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .spawn();
 }
 
@@ -251,12 +248,31 @@ fn git_stat(cwd: &str) -> GitStat {
     }
 }
 
-fn install(is_debug: bool) -> rootcause::Result<()> {
+fn install_plugin_and_hooks(is_debug: bool) -> rootcause::Result<()> {
     let built = build_wasm(is_debug).context("failed to build wasm plugin")?;
     install_wasm(&built).context("failed to install wasm plugin")?;
-    provision_hooks(Agent::Claude).context("failed to provision Claude hooks")?;
-    provision_hooks(Agent::Cursor).context("failed to provision Cursor hooks")?;
+    install_hooks(Agent::Claude).context("failed to install Claude hooks")?;
+    install_hooks(Agent::Cursor).context("failed to install Cursor hooks")?;
     Ok(())
+}
+
+fn launch_session(args: &[String]) -> rootcause::Result<()> {
+    let session_name = args.first().map_or(SESSION_NAME, String::as_str);
+
+    if ytil_zellij::list_sessions().is_ok_and(|sessions| sessions.iter().any(|s| s.name == session_name)) {
+        ytil_zellij::attach_session(session_name)?;
+        return Ok(());
+    }
+
+    agm_core::clean_state_dir(session_name);
+    if ytil_zellij::is_active() {
+        ytil_cmd::silent_cmd("zellij")
+            .args(["--new-session-with-layout", LAYOUT_NAME, "--session", session_name])
+            .exec()?;
+        return Ok(());
+    }
+
+    ytil_zellij::new_session_with_layout(session_name, LAYOUT_NAME)
 }
 
 #[ytil_sys::main]
@@ -271,13 +287,13 @@ fn main() -> rootcause::Result<()> {
     match args.first().map(String::as_str) {
         Some("install") => {
             let is_debug = args.iter().any(|a| a == "--debug");
-            return install(is_debug);
+            install_plugin_and_hooks(is_debug)
         }
         Some("hook") => {
             let agent = args.get(1).map_or("", String::as_str);
             let payload = args.get(2).map_or("", String::as_str);
             hook(agent, payload);
-            return Ok(());
+            Ok(())
         }
         Some("git-stat") => {
             let paths = args.get(1..);
@@ -285,23 +301,8 @@ fn main() -> rootcause::Result<()> {
                 let stat = git_stat(cwd);
                 println!("{cwd} {stat}");
             }
-            return Ok(());
+            Ok(())
         }
-        _ => {}
+        _ => launch_session(&args),
     }
-
-    let session = args.first().map_or(SESSION_NAME, String::as_str);
-
-    if !session_exists(session) {
-        agm_core::clean_state_dir(session);
-        if ytil_zellij::is_active() {
-            ytil_cmd::silent_cmd("zellij")
-                .args(["--new-session-with-layout", LAYOUT_NAME, "--session", session])
-                .exec()?;
-        } else {
-            return ytil_zellij::new_session_with_layout(session, LAYOUT_NAME);
-        }
-    }
-
-    ytil_zellij::attach_session(session)
 }
