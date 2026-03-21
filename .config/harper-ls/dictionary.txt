@@ -57,6 +57,7 @@ UTF
 V1
 Vimscript
 WezTerm
+Zellij
 actix
 ampliado
 arg
