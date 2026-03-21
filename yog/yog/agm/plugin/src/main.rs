@@ -371,6 +371,7 @@ impl State {
     fn prune_stale_entries(&mut self) {
         let active_tab_ids: HashSet<usize> = self.tabs.iter().map(|t| t.tab_id).collect();
 
+        let mut removed_pane_ids = HashSet::new();
         let removed: Vec<usize> = self
             .tab_panes
             .keys()
@@ -379,19 +380,17 @@ impl State {
             .collect();
 
         for tid in &removed {
-            self.tab_panes.remove(tid);
-            self.tab_git_stats.remove(tid);
-            agm_core::remove_state_file(&self.session_name, *tid);
-        }
-
-        let mut active_pane_ids: HashSet<u32> = HashSet::new();
-        for tp in self.tab_panes.values() {
-            active_pane_ids.extend(&tp.all);
-            if let Some(f) = tp.focused {
-                active_pane_ids.insert(f);
+            if let Some(tp) = self.tab_panes.remove(tid) {
+                self.tab_git_stats.remove(tid);
+                agm_core::remove_state_file(&self.session_name, *tid);
+                removed_pane_ids.extend(tp.all);
+                if let Some(focused) = tp.focused {
+                    removed_pane_ids.insert(focused);
+                }
             }
         }
-        self.panes_data.retain(|pid, _| active_pane_ids.contains(pid));
+
+        self.panes_data.retain(|pid, _| !removed_pane_ids.contains(pid));
     }
 
     fn rebuild_pos_tab_id(&mut self) {
