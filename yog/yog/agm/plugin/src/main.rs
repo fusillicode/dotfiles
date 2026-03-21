@@ -361,7 +361,7 @@ impl State {
         }
     }
 
-    fn handle_agent_pipe(&mut self, msg: &PipeMessage) -> bool {
+    fn handle_pipe_message(&mut self, msg: &PipeMessage) -> bool {
         let event = match parse_pipe_msg(msg) {
             Ok(v) => v,
             Err(e) => {
@@ -534,7 +534,7 @@ impl ZellijPlugin for State {
         if pipe_message.name != agm_core::PIPE_NAME {
             return false;
         }
-        if !self.handle_agent_pipe(&pipe_message) {
+        if !self.handle_pipe_message(&pipe_message) {
             return false;
         }
         self.frame_dirty = true;
