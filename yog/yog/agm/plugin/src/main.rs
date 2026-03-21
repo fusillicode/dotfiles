@@ -410,6 +410,8 @@ impl ZellijPlugin for State {
             PermissionType::RunCommands,
             PermissionType::FullHdAccess,
         ]);
+        let dir = agm_core::session_state_dir(&self.session_name);
+        std::fs::create_dir_all(&dir).unwrap_or_else(|_| panic!("error creating dir {}", dir.display()));
         subscribe(&[EventType::PermissionRequestResult]);
     }
 
