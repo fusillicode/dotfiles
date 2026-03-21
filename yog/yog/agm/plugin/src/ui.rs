@@ -11,11 +11,11 @@ const MARKER: &str = " ";
 const SEPARATOR: char = '\u{2502}';
 
 const SEP_COLOR: &str = "\x1b[38;2;34;34;34m";
-const GREEN: &str = "\x1b[38;2;100;200;100m";
-const RED: &str = "\x1b[38;2;200;100;100m";
-const CYAN: &str = "\x1b[38;2;100;200;200m";
+const GREEN: &str = "\x1b[38;2;0;255;0m";
+const RED: &str = "\x1b[38;2;255;0;0m";
+const CYAN: &str = "\x1b[38;2;0;255;255m";
 const DIM: &str = "\x1b[38;2;100;100;110m";
-const AMBER: &str = "\x1b[38;2;230;180;80m";
+const AMBER: &str = "\x1b[38;2;255;255;0m";
 const ACTIVE_BG: &str = "\x1b[48;2;40;40;50m";
 const RESET: &str = "\x1b[0m";
 
