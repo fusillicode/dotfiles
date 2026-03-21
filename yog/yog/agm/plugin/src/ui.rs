@@ -88,7 +88,7 @@ impl TabRow {
 
         let mut stats: Vec<(&str, String)> = Vec::new();
         if self.git.is_worktree {
-            stats.push((CYAN, "W".into()));
+            stats.push((CYAN, "[W]".into()));
         }
         if self.git.insertions > 0 {
             stats.push((GREEN, format!("+{}", self.git.insertions)));
@@ -97,7 +97,7 @@ impl TabRow {
             stats.push((RED, format!("-{}", self.git.deletions)));
         }
         if self.git.new_files > 0 {
-            stats.push((CYAN, format!("?{}", self.git.new_files)));
+            stats.push((AMBER, format!("?{}", self.git.new_files)));
         }
 
         let right_visible_len: usize =
