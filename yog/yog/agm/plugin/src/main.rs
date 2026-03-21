@@ -567,12 +567,12 @@ fn priority_command_for_tab(
     tab_id: usize,
     tab_panes: &HashMap<usize, TabPanes>,
     panes_data: &HashMap<u32, PaneData>,
-) -> Option<(&'static str, bool)> {
+) -> Option<Cmd> {
     for pid in &tab_panes.get(&tab_id)?.all {
         if let Some(pane_data) = panes_data.get(pid)
-            && let Some(name) = pane_data.cmd.agent_name()
+            && pane_data.cmd.agent_name().is_some()
         {
-            return Some((name, pane_data.cmd.is_busy()));
+            return Some(pane_data.cmd.clone());
         }
     }
     None

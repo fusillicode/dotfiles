@@ -1,6 +1,7 @@
 use std::fmt::Write;
 use std::path::Path;
 
+use agm_core::Cmd;
 use agm_core::GitStat;
 use zellij_tile::prelude::*;
 
@@ -24,9 +25,7 @@ const RESET: &str = "\x1b[0m";
 pub struct TabRow {
     pub active: bool,
     pub path_label: String,
-    pub command: Option<String>,
-    pub is_agent: bool,
-    pub is_busy: bool,
+    pub cmd: Cmd,
     pub git: GitStat,
 }
 
@@ -34,7 +33,7 @@ impl TabRow {
     pub fn new(
         tab: &TabInfo,
         focused: Option<&PaneData>,
-        priority_cmd: Option<(&str, bool)>,
+        priority_cmd: Option<Cmd>,
         git: GitStat,
         home: &Path,
     ) -> Self {
@@ -42,22 +41,16 @@ impl TabRow {
             .and_then(|e| e.cwd.as_ref())
             .map_or_else(|| tab.name.clone(), |p| short_path(p, home));
 
-        let (command, is_agent, is_busy) = if let Some((name, busy)) = priority_cmd {
-            (Some(name.to_owned()), true, busy)
-        } else {
-            (
-                focused.and_then(|e| e.cmd.running_cmd().map(|s| s.to_string())),
-                false,
-                false,
-            )
-        };
+        let cmd = priority_cmd.unwrap_or_else(|| {
+            focused
+                .and_then(|e| e.cmd.running_cmd().map(|s| Cmd::Running(s.to_string())))
+                .unwrap_or(Cmd::None)
+        });
 
         Self {
             active: tab.active,
             path_label,
-            command,
-            is_agent,
-            is_busy,
+            cmd,
             git,
         }
     }
@@ -82,18 +75,16 @@ impl TabRow {
             ("\x1b[39m", DIM)
         };
 
-        let left = self.command.as_ref().map_or_else(String::new, |cmd| {
-            if self.is_agent {
-                let (color, symbol) = if self.is_busy {
-                    (AMBER, "\u{25cf}")
-                } else {
-                    (DIM, "\u{25cb}")
-                };
-                format!(" {color}{symbol}{bg}{fg} {cmd}")
-            } else {
-                format!(" {cmd}")
+        let left = match &self.cmd {
+            Cmd::None => String::new(),
+            Cmd::Running(cmd) => format!(" {cmd}"),
+            Cmd::IdleAgent(agent) => {
+                format!(" {DIM}○ {bg}{fg} {}", agent.name())
             }
-        });
+            Cmd::BusyAgent(agent) => {
+                format!(" {AMBER}● {bg}{fg} {}", agent.name())
+            }
+        };
 
         let mut stats: Vec<(&str, String)> = Vec::new();
         if self.git.is_worktree {
@@ -243,6 +234,7 @@ mod tests {
     use std::path::Path;
     use std::path::PathBuf;
 
+    use agm_core::Agent;
     use agm_core::Cmd;
     use pretty_assertions::assert_eq;
 
@@ -267,9 +259,7 @@ mod tests {
         let expected = TabRow {
             active: true,
             path_label: "user/project".to_string(),
-            command: Some("nvim".to_string()),
-            is_agent: false,
-            is_busy: false,
+            cmd: Cmd::Running("nvim".to_string()),
             git: GitStat::default(),
         };
         let actual = TabRow::new(&tab, focused_pane.as_ref(), None, git, home);
@@ -295,9 +285,7 @@ mod tests {
         let expected = TabRow {
             active: false,
             path_label: "user".to_string(),
-            command: Some("zsh".to_string()),
-            is_agent: false,
-            is_busy: false,
+            cmd: Cmd::Running("zsh".to_string()),
             git: GitStat::default(),
         };
         let actual = TabRow::new(&tab, focused_pane.as_ref(), None, git, home);
@@ -317,16 +305,14 @@ mod tests {
             cwd: None,
             cmd: Cmd::None,
         });
-        let priority_cmd = Some(("agent-task", true));
+        let priority_cmd = Some(Cmd::BusyAgent(Agent::Claude));
         let git = GitStat::default();
         let home = Path::new("/");
 
         let expected = TabRow {
             active: true,
             path_label: "agent-tab".to_string(),
-            command: Some("agent-task".to_string()),
-            is_agent: true,
-            is_busy: true,
+            cmd: Cmd::BusyAgent(Agent::Claude),
             git: GitStat::default(),
         };
         let actual = TabRow::new(&tab, focused_pane.as_ref(), priority_cmd, git, home);
@@ -349,9 +335,7 @@ mod tests {
         let expected = TabRow {
             active: true,
             path_label: "empty".to_string(),
-            command: None,
-            is_agent: false,
-            is_busy: false,
+            cmd: Cmd::None,
             git: GitStat::default(),
         };
         let actual = TabRow::new(&tab, focused_pane, None, git, home);
@@ -382,9 +366,7 @@ mod tests {
         let expected = TabRow {
             active: true,
             path_label: "git-tab".to_string(),
-            command: None,
-            is_agent: false,
-            is_busy: false,
+            cmd: Cmd::None,
             git,
         };
         let actual = TabRow::new(&tab, focused_pane.as_ref(), None, git, home);
