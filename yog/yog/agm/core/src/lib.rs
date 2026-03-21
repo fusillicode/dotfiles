@@ -20,7 +20,7 @@ impl std::fmt::Display for ParseError {
 
 impl std::error::Error for ParseError {}
 
-#[derive(Clone, Copy, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct GitStat {
     pub insertions: usize,
     pub deletions: usize,
