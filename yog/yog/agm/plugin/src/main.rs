@@ -116,13 +116,9 @@ struct State {
 register_plugin!(State);
 
 impl State {
-    // ------------------------------------------------------------------
-    // Identity discovery
-    // ------------------------------------------------------------------
-
-    fn discover_my_tab(&mut self, manifest: &PaneManifest) {
+    fn find_my_tab_id(&self, manifest: &PaneManifest) -> Option<usize> {
         if self.my_tab_id.is_some() {
-            return;
+            return None;
         }
         for (tab_pos, panes) in &manifest.panes {
             for pane in panes {
@@ -130,15 +126,19 @@ impl State {
                     && pane.id == self.plugin_id
                     && let Some(&tab_id) = self.pos_tab_id.get(tab_pos)
                 {
-                    self.my_tab_id = Some(tab_id);
-                    self.detect_own_agents();
-                    self.refresh_other_tabs();
-                    self.fire_own_git_stat();
-                    self.persist_own_state();
-                    return;
+                    return Some(tab_id);
                 }
             }
         }
+        None
+    }
+
+    fn refresh_state(&mut self, tab_id: usize) {
+        self.my_tab_id = Some(tab_id);
+        self.detect_own_agents();
+        self.refresh_other_tabs();
+        self.fire_own_git_stat();
+        self.persist_own_state();
     }
 
     fn detect_own_agents(&mut self) {
@@ -158,10 +158,6 @@ impl State {
         }
     }
 
-    // ------------------------------------------------------------------
-    // Pane→tab mapping
-    // ------------------------------------------------------------------
-
     fn rebuild_pane_to_tab(&mut self) {
         self.pane_to_tab.clear();
         for (&tab_id, tp) in &self.tab_panes {
@@ -179,19 +175,11 @@ impl State {
         self.my_tab_id.is_some_and(|my| self.tab_of_pane(pane_id) == Some(my))
     }
 
-    // ------------------------------------------------------------------
-    // Own-tab helpers
-    // ------------------------------------------------------------------
-
     fn own_focused_cwd(&self) -> Option<PathBuf> {
         let my = self.my_tab_id?;
         let focused = self.tab_panes.get(&my)?.focused?;
         self.panes_data.get(&focused)?.cwd.clone()
     }
-
-    // ------------------------------------------------------------------
-    // Git stat (own tab only)
-    // ------------------------------------------------------------------
 
     fn fire_own_git_stat(&self) {
         let Some(cwd) = self.own_focused_cwd() else { return };
@@ -230,10 +218,6 @@ impl State {
         changed
     }
 
-    // ------------------------------------------------------------------
-    // State persistence (own tab → file, immediate on change)
-    // ------------------------------------------------------------------
-
     fn persist_own_state(&self) {
         let Some(my_tab) = self.my_tab_id else { return };
 
@@ -269,10 +253,6 @@ impl State {
         }
         (None, false)
     }
-
-    // ------------------------------------------------------------------
-    // State bootstrap & refresh (read other tabs' files, direct I/O)
-    // ------------------------------------------------------------------
 
     fn refresh_other_tabs(&mut self) -> bool {
         let entries = agm_core::read_all_state_files(&self.session_name);
@@ -313,10 +293,6 @@ impl State {
         }
         changed
     }
-
-    // ------------------------------------------------------------------
-    // Pane manifest processing
-    // ------------------------------------------------------------------
 
     fn process_pane_manifest(&mut self, manifest: &PaneManifest) -> bool {
         let mut changed = false;
@@ -480,7 +456,9 @@ impl ZellijPlugin for State {
                 if let Some(manifest) = self.last_manifest.clone() {
                     self.process_pane_manifest(&manifest);
                     self.rebuild_pane_to_tab();
-                    self.discover_my_tab(&manifest);
+                    if let Some(tab_id) = self.find_my_tab_id(&manifest) {
+                        self.refresh_state(tab_id);
+                    }
                 }
                 self.frame_dirty = true;
                 self.sync_frame()
@@ -490,7 +468,9 @@ impl ZellijPlugin for State {
                 let data_changed = self.process_pane_manifest(&manifest);
                 self.last_manifest = Some(manifest.clone());
                 self.rebuild_pane_to_tab();
-                self.discover_my_tab(&manifest);
+                if let Some(tab_id) = self.find_my_tab_id(&manifest) {
+                    self.refresh_state(tab_id);
+                }
 
                 if data_changed {
                     if self.my_tab_id.is_some() && !self.tab_git_stats.contains_key(&self.my_tab_id.unwrap()) {
@@ -576,10 +556,6 @@ impl ZellijPlugin for State {
         self.sync_frame()
     }
 }
-
-// ---------------------------------------------------------------------------
-// Free functions
-// ---------------------------------------------------------------------------
 
 fn parse_pipe_msg(msg: &PipeMessage) -> Result<AgentEvent, agm_core::ParseError> {
     let raw_id = msg
