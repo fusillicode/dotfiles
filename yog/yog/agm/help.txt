@@ -10,11 +10,11 @@ ARGS:
     SESSION_NAME    Session name (default: "agm")
 
 SUBCOMMANDS:
-    install         Build and deploy the WASM plugin, provision Claude and
-                    Cursor hooks. Pass --debug for an unoptimised build.
+    install         Build and deploy the WASM plugin, provision Claude, Cursor,
+                    and Opencode hooks. Pass --debug for an unoptimised build.
     hook            Unified agent lifecycle hook entry point. Drains stdin,
                     acknowledges with {}, and fires a Zellij pipe message.
-                    AGENT is "claude" or "cursor"; PAYLOAD is one of
+                    AGENT is "claude", "cursor", or "opencode"; PAYLOAD is one of
                     "start", "busy", "idle", "exit".
     git-stat        Print "path insertions deletions untracked worktree"
                     per PATH (one line each, in argument order).

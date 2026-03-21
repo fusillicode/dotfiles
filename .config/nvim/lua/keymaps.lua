@@ -184,34 +184,6 @@ function M.nvim_spider(plugin)
   }
 end
 
-function M.opencode(plugin)
-  return {
-    { '<leader>oA', mode = 'n',           plugin and { function() require('opencode').ask() end, desc = 'Ask opencode', }, },
-    {
-      '<leader>oa',
-      mode = 'v',
-      plugin and {
-        function()
-          require('opencode').ask('@this: ',
-            { submit = true, })
-        end,
-        desc = 'Ask opencode about selection',
-      },
-    },
-    { '<leader>on', mode = 'n',           plugin and { function() require('opencode').command('session_new') end, desc = 'New session', }, },
-    { '<leader>oy', mode = 'n',           plugin and { function() require('opencode').command('messages_copy') end, desc = 'Copy last message', }, },
-    { '<leader>op', mode = { 'n', 'v', }, plugin and { function() require('opencode').select_prompt() end, desc = 'Select prompt', }, },
-    {
-      '<leader>oe',
-      mode = 'n',
-      plugin and {
-        function() require('opencode').prompt('Explain @cursor and its context') end,
-        desc = 'Explain code near cursor',
-      },
-    },
-  }
-end
-
 function M.set(keymaps)
   for idx, keymap in ipairs(keymaps) do
     local lhs = keymap[1]
