@@ -95,7 +95,6 @@ struct State {
     last_manifest: Option<PaneManifest>,
     home_dir: PathBuf,
     got_permissions: bool,
-    frame_dirty: bool,
     last_cols: usize,
     last_frame: Option<Vec<TabRow>>,
     render_buf: String,
@@ -197,10 +196,6 @@ impl State {
                 Err(e) => eprintln!("agm: {e}"),
             }
         }
-        if changed {
-            self.frame_dirty = true;
-            self.persist_own_state();
-        }
         changed
     }
 
@@ -274,9 +269,6 @@ impl State {
                 pd.cmd = entry.cmd.clone();
                 changed = true;
             }
-        }
-        if changed {
-            self.frame_dirty = true;
         }
         changed
     }
@@ -382,10 +374,6 @@ impl State {
     }
 
     fn sync_frame(&mut self) -> bool {
-        if !self.frame_dirty {
-            return false;
-        }
-        self.frame_dirty = false;
         let new_frame = compute_frame(self);
         let changed = self.last_frame.as_ref().is_none_or(|old| *old != new_frame);
         self.last_frame = Some(new_frame);
@@ -429,7 +417,6 @@ impl ZellijPlugin for State {
                 ]);
                 set_selectable(false);
                 set_timeout(REFRESH_INTERVAL_SECS);
-                self.frame_dirty = true;
                 self.sync_frame()
             }
 
@@ -447,7 +434,6 @@ impl ZellijPlugin for State {
                         self.refresh_state(tab_id);
                     }
                 }
-                self.frame_dirty = true;
                 self.sync_frame()
             }
 
@@ -464,9 +450,9 @@ impl ZellijPlugin for State {
                         self.fire_own_git_stat();
                     }
                     self.persist_own_state();
-                    self.frame_dirty = true;
+                    return self.sync_frame();
                 }
-                self.sync_frame()
+                false
             }
 
             Event::CwdChanged(PaneId::Terminal(terminal_id), new_cwd, _clients) => {
@@ -484,7 +470,6 @@ impl ZellijPlugin for State {
                     self.tab_git_stats.remove(&tab_id);
                 }
 
-                self.frame_dirty = true;
                 self.sync_frame()
             }
 
@@ -493,7 +478,11 @@ impl ZellijPlugin for State {
                     return false;
                 }
                 let changed = self.handle_git_stat_result(exit_code, &stdout);
-                if changed { self.sync_frame() } else { false }
+                if changed {
+                    self.persist_own_state();
+                    return self.sync_frame();
+                }
+                changed
             }
 
             Event::Timer(_) => {
@@ -539,7 +528,6 @@ impl ZellijPlugin for State {
         if !self.handle_pipe_message(&pipe_message) {
             return false;
         }
-        self.frame_dirty = true;
         self.sync_frame()
     }
 }
