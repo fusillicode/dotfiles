@@ -118,7 +118,7 @@ impl Agent {
             Self::Claude => &[".claude", "settings.json"],
             Self::Cursor => &[".cursor", "hooks.json"],
             Self::Codex => &[],
-            Self::Opencode => &[".config", "opencode", "plugins", "agm.js"],
+            Self::Opencode => &[".config", "opencode", "plugins", "agm.ts"],
         }
     }
 

@@ -89,9 +89,6 @@ fn install_wasm(built: &Path) -> rootcause::Result<()> {
 }
 
 fn install_hooks(agent: Agent) -> rootcause::Result<()> {
-    if agent == Agent::Opencode {
-        return install_opencode_plugin();
-    }
     let config = agent.config_path();
     if config.is_empty() {
         return Ok(());
@@ -176,28 +173,59 @@ fn install_opencode_plugin() -> rootcause::Result<()> {
         .attach_with(|| format!("dir={}", dir.display()))?;
 
     let plugin_content = r#"
-        export const AgmPlugin = async ({ project, client, $, directory, worktree }) => {
+        import { spawnSync } from "child_process";
+        import { Plugin, PluginEvent } from "@opencode-ai/plugin";
+
+        export const AgmHooksPlugin: Plugin = async ({ $ }) => {
+          let isThrottled = false;
+
+          try {
+            await $`which agm`.quiet();
+          } catch {
+            console.log("[AGM Hook] agm binary not found in PATH — plugin disabled");
+            return {}; // Gracefully exit if binary is missing
+          }
+
           return {
-            event: async ({ event }) => {
+            event: async ({ event }: { event: PluginEvent }) => {
+
               switch (event.type) {
-                case "session.created":
-                  await $`agm hook opencode start`.quiet();
+
+                case "message.part.updated":
+                  if (!isThrottled) {
+                    isThrottled = true;
+                    try {
+                      await $`agm hook opencode start`.quiet();
+                    } catch (e) {
+                      console.log("\n[ERROR] 7\n", e)
+                    }
+                  }
                   break;
+
                 case "session.idle":
-                  await $`agm hook opencode idle`.quiet();
+                  if (isThrottled) {
+                    isThrottled = false;
+                    try {
+                      await $`agm hook opencode idle`.quiet();
+                    } catch (e) {
+                      console.log("\n[ERROR] 8\n", e)
+                    }
+                  }
                   break;
-                case "session.deleted":
-                  await $`agm hook opencode exit`.quiet();
-                  break;
-                default:
+
+                case "server.instance.disposed":
+                  try {
+                    await $`agm hook opencode exit`.quiet();
+                  } catch (e) {
+                    console.log("\n[ERROR] 9\n", e)
+                  }
                   break;
               }
-            },
-            "tool.execute.before": async (input, output) => {
-              await $`agm hook opencode busy`.quiet();
-            },
+            }
           };
         };
+
+        export default AgmHooksPlugin;
     "#;
 
     std::fs::write(&path, plugin_content)
@@ -307,7 +335,7 @@ fn install_plugin_and_hooks(is_debug: bool) -> rootcause::Result<()> {
     install_wasm(&built).context("failed to install wasm plugin")?;
     install_hooks(Agent::Claude).context("failed to install Claude hooks")?;
     install_hooks(Agent::Cursor).context("failed to install Cursor hooks")?;
-    install_hooks(Agent::Opencode).context("failed to install Opencode hooks")?;
+    install_opencode_plugin().context("failed to install Opencode hooks")?;
     Ok(())
 }
 
