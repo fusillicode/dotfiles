@@ -3,9 +3,10 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
 
+use agm_core::AGENTS_PIPE;
 use agm_core::Agent;
-use agm_core::AgentEvent;
 use agm_core::AgentEventKind;
+use agm_core::AgentEventPayload;
 use agm_core::Cmd;
 use agm_core::GitStat;
 use agm_core::TabStateEntry;
@@ -14,381 +15,505 @@ use zellij_tile::prelude::*;
 
 mod ui;
 
-const REFRESH_INTERVAL_SECS: f64 = 5.0;
 const CONTEXT_KEY_GIT_STAT: &str = "git-stat";
+const SYNC_PIPE: &str = "agm-sync";
 
-#[derive(Default)]
-pub struct PaneData {
-    pub cwd: Option<PathBuf>,
-    pub cmd: Cmd,
+struct CurrentTab {
+    tab_id: usize,
+    seq: u64,
+    pane_ids: HashSet<u32>,
+    focused_pane_id: Option<u32>,
+    cwd: Option<PathBuf>,
+    agent_by_pane: HashMap<u32, Cmd>,
+    git_stat: GitStat,
 }
 
-impl PaneData {
-    fn ensure_cwd(&mut self, pane_id: u32) -> bool {
-        if self.cwd.is_some() {
-            return false;
+impl CurrentTab {
+    fn new(tab_id: usize) -> Self {
+        Self {
+            tab_id,
+            seq: 0,
+            pane_ids: HashSet::new(),
+            focused_pane_id: None,
+            cwd: None,
+            agent_by_pane: HashMap::new(),
+            git_stat: GitStat::default(),
         }
-        if let Ok(cwd) = get_pane_cwd(PaneId::Terminal(pane_id)) {
-            self.cwd = Some(cwd);
-            return true;
-        }
-        false
-    }
-
-    fn apply_title(&mut self, title: &str) -> bool {
-        if self.cmd.is_agent() {
-            return false;
-        }
-        let cmd = parse_pane_title(title);
-        let new_cmd = cmd.map_or_else(|| Cmd::None, Cmd::Running);
-        if self.cmd == new_cmd {
-            return false;
-        }
-        self.cmd = new_cmd;
-        true
-    }
-
-    fn apply_agent_event(&mut self, event: &AgentEvent) -> bool {
-        // Determine current agent (if any) from command enum
-        let current_agent = self.cmd.agent_name().and_then(|name| Agent::from_name(name).ok());
-        if let Some(current) = current_agent
-            && event.agent.priority() < current.priority()
-        {
-            return false;
-        }
-        let new_cmd = Cmd::from(event);
-        let changed = self.cmd != new_cmd;
-        self.cmd = new_cmd;
-        if changed
-            && matches!(
-                event.kind,
-                AgentEventKind::Start | AgentEventKind::Busy | AgentEventKind::Idle
-            )
-        {
-            self.ensure_cwd(event.pane_id);
-        }
-        changed
     }
 }
 
-#[derive(Default, Eq, PartialEq)]
-struct TabPanes {
-    focused: Option<u32>,
-    all: Vec<u32>,
+#[derive(Debug)]
+struct PipeEventParseError(String);
+
+impl PipeEventParseError {
+    fn new(msg: impl Into<String>) -> Self {
+        Self(msg.into())
+    }
+}
+
+impl std::fmt::Display for PipeEventParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for PipeEventParseError {}
+
+struct SyncRequestPayload {
+    requester_tab_id: usize,
+}
+
+impl SyncRequestPayload {
+    fn parse(msg: &PipeMessage) -> Result<Self, PipeEventParseError> {
+        let requester_tab_id = msg
+            .args
+            .get("requester_tab_id")
+            .ok_or_else(|| PipeEventParseError::new("missing requester_tab_id"))?
+            .parse::<usize>()
+            .map_err(|_| PipeEventParseError::new("invalid requester_tab_id"))?;
+        Ok(Self { requester_tab_id })
+    }
+
+    fn to_message(&self) -> MessageToPlugin {
+        let mut args = BTreeMap::new();
+        args.insert("type".to_string(), "sync_request".to_string());
+        args.insert("requester_tab_id".to_string(), self.requester_tab_id.to_string());
+        MessageToPlugin::new(SYNC_PIPE.to_string()).with_args(args)
+    }
+}
+
+#[derive(Clone)]
+struct StateSnapshotPayload {
+    tab_id: usize,
+    target_tab_id: Option<usize>,
+    seq: u64,
+    cwd: Option<PathBuf>,
+    cmd: Cmd,
+    git_stat: GitStat,
+}
+
+impl StateSnapshotPayload {
+    fn with_target(mut self, target_tab_id: usize) -> Self {
+        self.target_tab_id = Some(target_tab_id);
+        self
+    }
+
+    fn parse(msg: &PipeMessage) -> Result<Self, PipeEventParseError> {
+        let tab_id = msg
+            .args
+            .get("tab_id")
+            .ok_or_else(|| PipeEventParseError::new("missing tab_id"))?
+            .parse::<usize>()
+            .map_err(|_| PipeEventParseError::new("invalid tab_id"))?;
+        let seq = msg
+            .args
+            .get("seq")
+            .ok_or_else(|| PipeEventParseError::new("missing seq"))?
+            .parse::<u64>()
+            .map_err(|_| PipeEventParseError::new("invalid seq"))?;
+        let target_tab_id = msg
+            .args
+            .get("target_tab_id")
+            .map(|v| {
+                v.parse::<usize>()
+                    .map_err(|_| PipeEventParseError::new("invalid target_tab_id"))
+            })
+            .transpose()?;
+        let payload = msg
+            .payload
+            .as_ref()
+            .ok_or_else(|| PipeEventParseError::new("missing state_snapshot payload"))?;
+        let entry = TabStateEntry::parse_file_content(tab_id, payload)
+            .map_err(|e| PipeEventParseError::new(format!("invalid state_snapshot payload: {e}")))?;
+
+        Ok(Self {
+            tab_id,
+            target_tab_id,
+            seq,
+            cwd: entry.cwd,
+            cmd: entry.cmd,
+            git_stat: entry.git_stat,
+        })
+    }
+
+    fn to_message(&self) -> MessageToPlugin {
+        let entry = TabStateEntry {
+            tab_id: self.tab_id,
+            cwd: self.cwd.clone(),
+            cmd: self.cmd.clone(),
+            git_stat: self.git_stat,
+        };
+
+        let mut args = BTreeMap::new();
+        args.insert("type".to_string(), "state_snapshot".to_string());
+        args.insert("tab_id".to_string(), self.tab_id.to_string());
+        args.insert("seq".to_string(), self.seq.to_string());
+        if let Some(target_tab_id) = self.target_tab_id {
+            args.insert("target_tab_id".to_string(), target_tab_id.to_string());
+        }
+
+        MessageToPlugin::new(SYNC_PIPE.to_string())
+            .with_args(args)
+            .with_payload(entry.to_file_content())
+    }
+}
+
+impl From<&CurrentTab> for StateSnapshotPayload {
+    fn from(value: &CurrentTab) -> Self {
+        Self {
+            tab_id: value.tab_id,
+            target_tab_id: None,
+            seq: value.seq,
+            cwd: value.cwd.clone(),
+            cmd: local_display_cmd(value),
+            git_stat: value.git_stat,
+        }
+    }
+}
+
+enum PipeEvent {
+    SyncRequest(SyncRequestPayload),
+    StateSnapshot(StateSnapshotPayload),
+    Agent(AgentEventPayload),
+}
+
+impl PipeEvent {
+    fn parse(msg: &PipeMessage) -> Result<Option<Self>, PipeEventParseError> {
+        match msg.name.as_str() {
+            SYNC_PIPE => match msg.args.get("type").map(String::as_str) {
+                Some("sync_request") => Ok(Some(Self::SyncRequest(SyncRequestPayload::parse(msg)?))),
+                Some("state_snapshot") => Ok(Some(Self::StateSnapshot(StateSnapshotPayload::parse(msg)?))),
+                Some(other) => Err(PipeEventParseError::new(format!("unknown sync message type {other:?}"))),
+                None => Err(PipeEventParseError::new("missing sync message type")),
+            },
+            AGENTS_PIPE => {
+                let pane_id = msg
+                    .args
+                    .get("pane_id")
+                    .ok_or_else(|| PipeEventParseError::new("missing pane_id"))?;
+                let agent = msg
+                    .args
+                    .get("agent")
+                    .ok_or_else(|| PipeEventParseError::new("missing agent"))?;
+                let payload = msg.payload.as_deref().unwrap_or("");
+                let payload = AgentEventPayload::parse(pane_id, agent, payload)
+                    .map_err(|e| PipeEventParseError::new(e.to_string()))?;
+                Ok(Some(Self::Agent(payload)))
+            }
+            _ => Ok(None),
+        }
+    }
 }
 
 #[derive(Default)]
 struct State {
     plugin_id: u32,
-    my_tab_id: Option<usize>,
-    session_name: String,
-
-    tabs: Vec<TabInfo>,
-    pos_tab_id: HashMap<usize, usize>,
-
-    panes_data: HashMap<u32, PaneData>,
-    tab_panes: HashMap<usize, TabPanes>,
-    pane_to_tab: HashMap<u32, usize>,
-
-    tab_git_stats: HashMap<usize, GitStat>,
-
-    last_manifest: Option<PaneManifest>,
+    all_tabs: Vec<TabInfo>,
+    current_tab: Option<CurrentTab>,
+    other_tabs: HashMap<usize, StateSnapshotPayload>,
+    sync_requested: bool,
     home_dir: PathBuf,
-    got_permissions: bool,
+    frame: Vec<TabRow>,
     last_cols: usize,
-    last_frame: Option<Vec<TabRow>>,
     render_buf: String,
 }
 
 register_plugin!(State);
 
 impl State {
-    fn find_my_tab_id(&self, manifest: &PaneManifest) -> Option<usize> {
-        if self.my_tab_id.is_some() {
-            return None;
-        }
+    fn local_tab_id(&self) -> Option<usize> {
+        self.current_tab.as_ref().map(|local| local.tab_id)
+    }
+
+    fn tab_position(&self, tab_id: usize) -> Option<usize> {
+        self.all_tabs
+            .iter()
+            .find(|tab| tab.tab_id == tab_id)
+            .map(|tab| tab.position)
+    }
+
+    fn discover_local_tab_id(&self, manifest: &PaneManifest) -> Option<usize> {
         for (tab_pos, panes) in &manifest.panes {
-            for pane in panes {
-                if pane.is_plugin
-                    && pane.id == self.plugin_id
-                    && let Some(&tab_id) = self.pos_tab_id.get(tab_pos)
-                {
-                    return Some(tab_id);
-                }
+            let owns_this_tab = panes.iter().any(|pane| pane.is_plugin && pane.id == self.plugin_id);
+            if !owns_this_tab {
+                continue;
+            }
+
+            if let Some(tab) = self.all_tabs.iter().find(|tab| tab.position == *tab_pos) {
+                return Some(tab.tab_id);
             }
         }
+
         None
     }
 
-    fn refresh_state(&mut self, tab_id: usize) {
-        self.my_tab_id = Some(tab_id);
-        self.detect_own_agents();
-        self.refresh_other_tabs();
-        self.fire_own_git_stat();
-        self.persist_own_state();
+    fn ensure_local_tab(&mut self, manifest: &PaneManifest) -> bool {
+        let Some(tab_id) = self.discover_local_tab_id(manifest) else {
+            return false;
+        };
+
+        if self.current_tab.as_ref().is_some_and(|local| local.tab_id == tab_id) {
+            return false;
+        }
+
+        self.current_tab = Some(CurrentTab::new(tab_id));
+        self.other_tabs.remove(&tab_id);
+        self.sync_requested = false;
+        true
     }
 
-    fn detect_own_agents(&mut self) {
-        let Some(my) = self.my_tab_id else { return };
-        let Some(tp) = self.tab_panes.get(&my) else { return };
-        let pids: Vec<u32> = tp.all.clone();
-        for pid in pids {
-            let pd = self.panes_data.entry(pid).or_default();
-            if !pd.cmd.is_agent()
-                && let Some(agent) = detect_agent_from_running_command(pid)
-            {
-                pd.cmd = Cmd::IdleAgent(agent);
-                pd.ensure_cwd(pid);
+    fn refresh_local_from_manifest(&mut self, manifest: &PaneManifest) -> (bool, bool, bool) {
+        let Some(local_tab_id) = self.local_tab_id() else {
+            return (false, false, false);
+        };
+        let Some(tab_pos) = self.tab_position(local_tab_id) else {
+            return (false, false, false);
+        };
+        let Some(panes) = manifest.panes.get(&tab_pos) else {
+            return (false, false, false);
+        };
+
+        let mut pane_ids = HashSet::new();
+        let mut focused_pane_id = None;
+        for pane in panes.iter().filter(|pane| !pane.is_plugin) {
+            pane_ids.insert(pane.id);
+            if pane.is_focused {
+                focused_pane_id = Some(pane.id);
             }
         }
-    }
 
-    fn rebuild_pane_to_tab(&mut self) {
-        self.pane_to_tab.clear();
-        for (&tab_id, tp) in &self.tab_panes {
-            for &pid in &tp.all {
-                self.pane_to_tab.insert(pid, tab_id);
-            }
+        let Some(local) = self.current_tab.as_mut() else {
+            return (false, false, false);
+        };
+
+        let prev_cmd = local_display_cmd(local);
+
+        if local.pane_ids != pane_ids {
+            local.pane_ids = pane_ids.clone();
+            local.agent_by_pane.retain(|pane_id, _| pane_ids.contains(pane_id));
         }
+
+        let mut focused_changed = false;
+        if local.focused_pane_id != focused_pane_id {
+            local.focused_pane_id = focused_pane_id;
+            focused_changed = true;
+        }
+
+        let mut cwd_changed = false;
+        if let Some(pane_id) = local.focused_pane_id
+            && (focused_changed || local.cwd.is_none())
+            && let Ok(cwd) = get_pane_cwd(PaneId::Terminal(pane_id))
+            && local.cwd.as_ref() != Some(&cwd)
+        {
+            local.cwd = Some(cwd);
+            cwd_changed = true;
+        }
+
+        let cmd_changed = prev_cmd != local_display_cmd(local);
+        (focused_changed, cwd_changed, cmd_changed)
     }
 
-    fn tab_of_pane(&self, pane_id: u32) -> Option<usize> {
-        self.pane_to_tab.get(&pane_id).copied()
+    fn update_local_cwd(&mut self, pane_id: u32, cwd: PathBuf) -> bool {
+        let Some(local) = self.current_tab.as_mut() else {
+            return false;
+        };
+        if local.focused_pane_id != Some(pane_id) {
+            return false;
+        }
+        if local.cwd.as_ref() == Some(&cwd) {
+            return false;
+        }
+
+        local.cwd = Some(cwd);
+        true
     }
 
-    fn is_own_pane(&self, pane_id: u32) -> bool {
-        self.my_tab_id.is_some_and(|my| self.tab_of_pane(pane_id) == Some(my))
+    fn update_local_agent_event(&mut self, event_payload: AgentEventPayload) -> (bool, bool) {
+        let Some(local) = self.current_tab.as_mut() else {
+            return (false, false);
+        };
+        if !local.pane_ids.contains(&event_payload.pane_id) {
+            return (false, false);
+        }
+
+        let prev_cmd = local_display_cmd(local);
+        if !apply_agent_event(local, &event_payload) {
+            return (false, false);
+        }
+
+        let cmd_changed = prev_cmd != local_display_cmd(local);
+        let should_refresh_git = matches!(event_payload.kind, AgentEventKind::Idle);
+        (cmd_changed, should_refresh_git)
     }
 
-    fn own_focused_cwd(&self) -> Option<PathBuf> {
-        let my = self.my_tab_id?;
-        let focused = self.tab_panes.get(&my)?.focused?;
-        self.panes_data.get(&focused)?.cwd.clone()
-    }
-
-    fn fire_own_git_stat(&self) {
-        let Some(cwd) = self.own_focused_cwd() else { return };
-        let cwd_str = cwd.display().to_string();
-        let args: Vec<&str> = vec!["agm", "git-stat", &cwd_str];
-        let mut ctx = BTreeMap::new();
-        ctx.insert(CONTEXT_KEY_GIT_STAT.into(), String::new());
-        run_command_with_env_variables_and_cwd(&args, BTreeMap::new(), cwd, ctx);
-    }
-
-    fn handle_git_stat_result(&mut self, exit_code: Option<i32>, stdout: &[u8]) -> bool {
+    fn update_local_git_stat(&mut self, exit_code: Option<i32>, stdout: &[u8]) -> bool {
         if exit_code != Some(0) {
             return false;
         }
-        let Some(my_tab) = self.my_tab_id else {
+
+        let Some(cwd) = self.current_tab.as_ref().and_then(|local| local.cwd.clone()) else {
             return false;
         };
+
         let output = String::from_utf8_lossy(stdout);
-        let mut changed = false;
         for line in output.lines() {
-            match GitStat::parse_line(line) {
-                Ok((_path, stat)) => {
-                    let entry = self.tab_git_stats.entry(my_tab).or_default();
-                    if *entry != stat {
-                        *entry = stat;
-                        changed = true;
-                    }
-                }
-                Err(e) => eprintln!("agm: {e}"),
-            }
-        }
-        changed
-    }
-
-    fn persist_own_state(&self) {
-        let Some(tab_id) = self.my_tab_id else { return };
-
-        let agent_cmd = self.own_agent_cmd();
-        let cmd = if agent_cmd.is_agent() {
-            agent_cmd
-        } else {
-            focused_pane_data(tab_id, &self.tab_panes, &self.panes_data)
-                .map(|pd| pd.cmd.clone())
-                .unwrap_or(Cmd::None)
-        };
-
-        let entry = TabStateEntry {
-            tab_id,
-            cwd: self.own_focused_cwd(),
-            cmd,
-            git_stat: self.tab_git_stats.get(&tab_id).copied().unwrap_or_default(),
-        };
-
-        if let Err(e) = agm_core::write_state_file(&self.session_name, tab_id, &entry.to_file_content()) {
-            eprintln!("agm: persist: {e}");
-        }
-    }
-
-    fn own_agent_cmd(&self) -> Cmd {
-        let Some(tab_id) = self.my_tab_id else { return Cmd::None };
-        let Some(tab_panes) = self.tab_panes.get(&tab_id) else {
-            return Cmd::None;
-        };
-        for &pid in &tab_panes.all {
-            if let Some(pane_data) = self.panes_data.get(&pid)
-                && pane_data.cmd.is_agent()
-            {
-                return pane_data.cmd.clone();
-            }
-        }
-        Cmd::None
-    }
-
-    fn refresh_other_tabs(&mut self) -> bool {
-        let entries = agm_core::read_all_state_files(&self.session_name);
-        let mut changed = false;
-        for entry in entries {
-            if Some(entry.tab_id) == self.my_tab_id {
-                continue;
-            }
-            let current = self.tab_git_stats.entry(entry.tab_id).or_default();
-            if *current != entry.git_stat {
-                *current = entry.git_stat;
-                changed = true;
-            }
-            // Skip if no agent in this entry
-            if !entry.cmd.is_agent() {
-                continue;
-            }
-            let Some(tab_pane) = self.tab_panes.get(&entry.tab_id) else {
-                continue;
-            };
-            let target = tab_pane
-                .all
-                .iter()
-                .find(|pid| self.panes_data.get(pid).is_some_and(|pd| pd.cmd.is_agent()))
-                .or(tab_pane.all.first())
-                .copied();
-            let Some(pid) = target else { continue };
-            let pd = self.panes_data.entry(pid).or_default();
-            if pd.cmd != entry.cmd {
-                pd.cmd = entry.cmd.clone();
-                changed = true;
-            }
-        }
-        changed
-    }
-
-    fn process_pane_manifest(&mut self, manifest: &PaneManifest) -> bool {
-        let mut changed = false;
-
-        for (tab_pos, panes) in &manifest.panes {
-            let Some(&tab_id) = self.pos_tab_id.get(tab_pos) else {
+            let Ok((path, git_stat)) = GitStat::parse_line(line).inspect_err(|e| eprintln!("agm: {e}")) else {
                 continue;
             };
 
-            let mut all_ids: Vec<u32> = Vec::new();
-            let mut focused_id: Option<u32> = None;
-
-            for pane in panes.iter().filter(|p| !p.is_plugin) {
-                all_ids.push(pane.id);
-
-                if pane.is_focused {
-                    focused_id = Some(pane.id);
-                    changed |= self.panes_data.entry(pane.id).or_default().ensure_cwd(pane.id);
-                }
-
-                let pane_data = self.panes_data.entry(pane.id).or_default();
-                let title_changed = pane_data.apply_title(&pane.title);
-                changed |= title_changed;
-
-                if title_changed
-                    && !pane_data.cmd.is_agent()
-                    && self.my_tab_id == Some(tab_id)
-                    && let Some(agent) = detect_agent_from_running_command(pane.id)
-                {
-                    pane_data.cmd = Cmd::IdleAgent(agent);
-                    pane_data.ensure_cwd(pane.id);
-                    changed = true;
-                }
+            if path != cwd {
+                continue;
             }
 
-            let entry = self.tab_panes.entry(tab_id).or_default();
-            let new = TabPanes {
-                focused: focused_id,
-                all: all_ids,
+            let Some(local) = self.current_tab.as_mut() else {
+                return false;
             };
-            if *entry != new {
-                *entry = new;
-                changed = true;
-            }
-        }
-
-        changed
-    }
-
-    fn prune_stale_entries(&mut self) {
-        let active_tab_ids: HashSet<usize> = self.tabs.iter().map(|t| t.tab_id).collect();
-
-        let mut removed_pane_ids = HashSet::new();
-        let removed: Vec<usize> = self
-            .tab_panes
-            .keys()
-            .filter(|tid| !active_tab_ids.contains(tid))
-            .copied()
-            .collect();
-
-        for tid in &removed {
-            if let Some(tp) = self.tab_panes.remove(tid) {
-                self.tab_git_stats.remove(tid);
-                agm_core::remove_state_file(&self.session_name, *tid);
-                removed_pane_ids.extend(tp.all);
-                if let Some(focused) = tp.focused {
-                    removed_pane_ids.insert(focused);
-                }
-            }
-        }
-
-        self.panes_data.retain(|pid, _| !removed_pane_ids.contains(pid));
-    }
-
-    fn rebuild_pos_tab_id(&mut self) {
-        self.pos_tab_id.clear();
-        for t in &self.tabs {
-            self.pos_tab_id.insert(t.position, t.tab_id);
-        }
-    }
-
-    fn handle_pipe_message(&mut self, msg: &PipeMessage) -> bool {
-        let event = match parse_pipe_msg(msg) {
-            Ok(v) => v,
-            Err(e) => {
-                eprintln!("agm: {e}");
+            if local.git_stat == git_stat {
                 return false;
             }
-        };
-        let is_own = self.is_own_pane(event.pane_id);
-        let changed = self
-            .panes_data
-            .entry(event.pane_id)
-            .or_default()
-            .apply_agent_event(&event);
-        if changed && is_own {
-            self.persist_own_state();
+
+            local.git_stat = git_stat;
+            return true;
         }
+
+        false
+    }
+
+    fn bump_local_seq(&mut self) {
+        if let Some(local) = self.current_tab.as_mut() {
+            local.seq = local.seq.saturating_add(1);
+        }
+    }
+
+    fn send_sync_request(&mut self) {
+        let Some(requester_tab_id) = self.local_tab_id() else {
+            return;
+        };
+
+        pipe_message_to_plugin(SyncRequestPayload { requester_tab_id }.to_message());
+        self.sync_requested = true;
+    }
+
+    fn send_local_snapshot(&self, target_tab_id: Option<usize>) {
+        let Some(local) = self.current_tab.as_ref() else {
+            return;
+        };
+
+        let snapshot = StateSnapshotPayload::from(local);
+        let snapshot = if let Some(target_tab_id) = target_tab_id {
+            snapshot.with_target(target_tab_id)
+        } else {
+            snapshot
+        };
+        pipe_message_to_plugin(snapshot.to_message());
+    }
+
+    fn run_local_git_stat(&self) {
+        let Some(cwd) = self.current_tab.as_ref().and_then(|local| local.cwd.clone()) else {
+            return;
+        };
+
+        let cwd_str = cwd.display().to_string();
+        let args: Vec<&str> = vec!["agm", "git-stat", &cwd_str];
+        let mut context = BTreeMap::new();
+        context.insert(CONTEXT_KEY_GIT_STAT.into(), String::new());
+        run_command_with_env_variables_and_cwd(&args, BTreeMap::new(), cwd, context);
+    }
+
+    fn apply_remote_snapshot(&mut self, mut snapshot: StateSnapshotPayload) -> bool {
+        if self.local_tab_id() == Some(snapshot.tab_id) {
+            return false;
+        }
+
+        if let Some(target_tab_id) = snapshot.target_tab_id
+            && self.local_tab_id() != Some(target_tab_id)
+        {
+            return false;
+        }
+
+        if !self.all_tabs.iter().any(|tab| tab.tab_id == snapshot.tab_id) {
+            return false;
+        }
+
+        if self
+            .other_tabs
+            .get(&snapshot.tab_id)
+            .is_some_and(|remote| snapshot.seq <= remote.seq)
+        {
+            return false;
+        }
+
+        let changed = self.other_tabs.get(&snapshot.tab_id).is_none_or(|remote| {
+            remote.cwd != snapshot.cwd || remote.cmd != snapshot.cmd || remote.git_stat != snapshot.git_stat
+        });
+
+        snapshot.target_tab_id = None;
+        self.other_tabs.insert(snapshot.tab_id, snapshot);
         changed
+    }
+
+    fn prune_state_for_closed_tabs(&mut self) {
+        let known_tabs: HashSet<usize> = self.all_tabs.iter().map(|tab| tab.tab_id).collect();
+        if let Some(local_tab_id) = self.local_tab_id()
+            && !known_tabs.contains(&local_tab_id)
+        {
+            self.current_tab = None;
+            self.sync_requested = false;
+        }
+
+        let local_tab_id = self.local_tab_id();
+        self.other_tabs
+            .retain(|tab_id, _| known_tabs.contains(tab_id) && Some(*tab_id) != local_tab_id);
     }
 
     fn sync_frame(&mut self) -> bool {
-        let new_frame = compute_frame(self);
-        let changed = self.last_frame.as_ref().is_none_or(|old| *old != new_frame);
-        self.last_frame = Some(new_frame);
-        changed
+        let next = compute_frame(self);
+        if self.frame == next {
+            return false;
+        }
+
+        self.frame = next;
+        true
+    }
+
+    fn handle_pipe_event(&mut self, event: PipeEvent) -> bool {
+        match event {
+            PipeEvent::SyncRequest(request) => {
+                if self.local_tab_id() == Some(request.requester_tab_id) {
+                    return false;
+                }
+                self.send_local_snapshot(Some(request.requester_tab_id));
+                false
+            }
+            PipeEvent::StateSnapshot(snapshot) => {
+                if !self.apply_remote_snapshot(snapshot) {
+                    return false;
+                }
+                self.sync_frame()
+            }
+            PipeEvent::Agent(agent_event) => {
+                let (cmd_changed, should_refresh_git) = self.update_local_agent_event(agent_event);
+                if cmd_changed {
+                    self.bump_local_seq();
+                    self.send_local_snapshot(None);
+                }
+
+                if should_refresh_git {
+                    self.run_local_git_stat();
+                }
+
+                if !cmd_changed {
+                    return false;
+                }
+                self.sync_frame()
+            }
+        }
     }
 }
 
 impl ZellijPlugin for State {
-    fn load(&mut self, configuration: BTreeMap<String, String>) {
+    fn load(&mut self, _configuration: BTreeMap<String, String>) {
         self.plugin_id = get_plugin_ids().plugin_id;
-        self.session_name = configuration
-            .get("session")
-            .cloned()
-            .or_else(|| std::env::var("ZELLIJ_SESSION_NAME").ok())
-            .unwrap_or_else(|| "default".into());
         self.home_dir = std::env::var_os("HOME")
             .map(PathBuf::from)
             .expect("error getting HOME env var");
@@ -396,80 +521,62 @@ impl ZellijPlugin for State {
             PermissionType::ReadApplicationState,
             PermissionType::ChangeApplicationState,
             PermissionType::RunCommands,
-            PermissionType::FullHdAccess,
+            PermissionType::MessageAndLaunchOtherPlugins,
         ]);
-        let dir = agm_core::session_state_dir(&self.session_name);
-        std::fs::create_dir_all(&dir).unwrap_or_else(|_| panic!("error creating dir {}", dir.display()));
         subscribe(&[EventType::PermissionRequestResult]);
     }
 
     fn update(&mut self, event: Event) -> bool {
         match event {
             Event::PermissionRequestResult(PermissionStatus::Granted) => {
-                self.got_permissions = true;
                 subscribe(&[
                     EventType::TabUpdate,
                     EventType::PaneUpdate,
                     EventType::CwdChanged,
                     EventType::Mouse,
                     EventType::RunCommandResult,
-                    EventType::Timer,
                 ]);
                 set_selectable(false);
-                set_timeout(REFRESH_INTERVAL_SECS);
                 self.sync_frame()
             }
 
             Event::TabUpdate(tabs) => {
-                let count_shrunk = tabs.len() < self.tabs.len();
-                self.tabs = tabs;
-                self.rebuild_pos_tab_id();
-                if count_shrunk {
-                    self.prune_stale_entries();
-                }
-                if let Some(manifest) = self.last_manifest.clone() {
-                    self.process_pane_manifest(&manifest);
-                    self.rebuild_pane_to_tab();
-                    if let Some(tab_id) = self.find_my_tab_id(&manifest) {
-                        self.refresh_state(tab_id);
-                    }
-                }
+                self.all_tabs = tabs;
+                self.prune_state_for_closed_tabs();
                 self.sync_frame()
             }
 
             Event::PaneUpdate(manifest) => {
-                let data_changed = self.process_pane_manifest(&manifest);
-                self.last_manifest = Some(manifest.clone());
-                self.rebuild_pane_to_tab();
-                if let Some(tab_id) = self.find_my_tab_id(&manifest) {
-                    self.refresh_state(tab_id);
+                let local_created = self.ensure_local_tab(&manifest);
+                let (focused_changed, cwd_changed, cmd_changed) = self.refresh_local_from_manifest(&manifest);
+
+                if self.current_tab.is_some() && !self.sync_requested {
+                    self.send_sync_request();
                 }
 
-                if data_changed {
-                    if self.my_tab_id.is_some() && !self.tab_git_stats.contains_key(&self.my_tab_id.unwrap()) {
-                        self.fire_own_git_stat();
-                    }
-                    self.persist_own_state();
-                    return self.sync_frame();
+                if focused_changed || cwd_changed {
+                    self.run_local_git_stat();
                 }
-                false
-            }
 
-            Event::CwdChanged(PaneId::Terminal(terminal_id), new_cwd, _clients) => {
-                let pane_data = self.panes_data.entry(terminal_id).or_default();
-                if pane_data.cwd.as_ref() == Some(&new_cwd) {
+                if cwd_changed || cmd_changed {
+                    self.bump_local_seq();
+                    self.send_local_snapshot(None);
+                }
+
+                if !(local_created || cwd_changed || cmd_changed) {
                     return false;
                 }
-                pane_data.cwd = Some(new_cwd);
+                self.sync_frame()
+            }
 
-                let is_own = self.is_own_pane(terminal_id);
-                if is_own {
-                    self.fire_own_git_stat();
-                    self.persist_own_state();
-                } else if let Some(tab_id) = self.tab_of_pane(terminal_id) {
-                    self.tab_git_stats.remove(&tab_id);
+            Event::CwdChanged(PaneId::Terminal(pane_id), cwd, _clients) => {
+                if !self.update_local_cwd(pane_id, cwd) {
+                    return false;
                 }
 
+                self.bump_local_seq();
+                self.send_local_snapshot(None);
+                self.run_local_git_stat();
                 self.sync_frame()
             }
 
@@ -477,29 +584,22 @@ impl ZellijPlugin for State {
                 if !context.contains_key(CONTEXT_KEY_GIT_STAT) {
                     return false;
                 }
-                let changed = self.handle_git_stat_result(exit_code, &stdout);
-                if changed {
-                    self.persist_own_state();
-                    return self.sync_frame();
+                if !self.update_local_git_stat(exit_code, &stdout) {
+                    return false;
                 }
-                changed
-            }
 
-            Event::Timer(_) => {
-                if self.my_tab_id.is_some() {
-                    self.fire_own_git_stat();
-                    self.refresh_other_tabs();
-                }
-                set_timeout(REFRESH_INTERVAL_SECS);
+                self.bump_local_seq();
+                self.send_local_snapshot(None);
                 self.sync_frame()
             }
 
             Event::Mouse(Mouse::LeftClick(row, _col)) => {
-                let Ok(row_u) = usize::try_from(row) else { return false };
+                let Ok(row_u) = usize::try_from(row) else {
+                    return false;
+                };
                 let content_w = self.last_cols.saturating_sub(1);
-                let frame = self.last_frame.as_deref().unwrap_or_default();
-                if let Some(tab_idx) = ui::tab_index_at_row(frame, row_u, content_w)
-                    && let Some(tab) = self.tabs.get(tab_idx)
+                if let Some(tab_idx) = ui::tab_index_at_row(&self.frame, row_u, content_w)
+                    && let Some(tab) = self.all_tabs.get(tab_idx)
                     && let Ok(pos) = u32::try_from(tab.position)
                 {
                     switch_tab_to(pos + 1);
@@ -514,92 +614,102 @@ impl ZellijPlugin for State {
     fn render(&mut self, rows: usize, cols: usize) {
         self.last_cols = cols;
         self.render_buf.clear();
-        let frame = self.last_frame.as_deref().unwrap_or_default();
-        ui::render_frame(frame, rows, cols, &mut self.render_buf);
+        ui::render_frame(&self.frame, rows, cols, &mut self.render_buf);
         if !self.render_buf.is_empty() {
             print!("{}", self.render_buf);
         }
     }
 
     fn pipe(&mut self, pipe_message: PipeMessage) -> bool {
-        if pipe_message.name != agm_core::PIPE_NAME {
-            return false;
-        }
-        if !self.handle_pipe_message(&pipe_message) {
-            return false;
-        }
-        self.sync_frame()
+        let event = match PipeEvent::parse(&pipe_message) {
+            Ok(Some(event)) => event,
+            Ok(None) => return false,
+            Err(err) => {
+                eprintln!("agm: {err}");
+                return false;
+            }
+        };
+
+        self.handle_pipe_event(event)
     }
 }
 
-fn parse_pipe_msg(msg: &PipeMessage) -> Result<AgentEvent, agm_core::ParseError> {
-    let raw_id = msg
-        .args
-        .get("pane_id")
-        .ok_or_else(|| agm_core::ParseError::new("missing pane_id"))?;
-    let raw_agent = msg
-        .args
-        .get("agent")
-        .ok_or_else(|| agm_core::ParseError::new("missing agent"))?;
-    let raw_payload = msg.payload.as_deref().unwrap_or("");
-    AgentEvent::parse(raw_id, raw_agent, raw_payload)
+fn local_display_cmd(local: &CurrentTab) -> Cmd {
+    local
+        .agent_by_pane
+        .values()
+        .filter_map(|cmd| match cmd {
+            Cmd::BusyAgent(agent) => Some((agent.priority(), 1_u8, cmd.clone())),
+            Cmd::IdleAgent(agent) => Some((agent.priority(), 0_u8, cmd.clone())),
+            _ => None,
+        })
+        .max_by_key(|(priority, busy, _)| (*priority, *busy))
+        .map(|(_, _, cmd)| cmd)
+        .unwrap_or(Cmd::None)
 }
 
-fn focused_pane_data<'a>(
-    tab_id: usize,
-    tab_panes: &HashMap<usize, TabPanes>,
-    panes_data: &'a HashMap<u32, PaneData>,
-) -> Option<&'a PaneData> {
-    tab_panes.get(&tab_id)?.focused.and_then(|pid| panes_data.get(&pid))
-}
-
-fn priority_command_for_tab(
-    tab_id: usize,
-    tab_panes: &HashMap<usize, TabPanes>,
-    panes_data: &HashMap<u32, PaneData>,
-) -> Option<Cmd> {
-    for pid in &tab_panes.get(&tab_id)?.all {
-        if let Some(pane_data) = panes_data.get(pid)
-            && pane_data.cmd.agent_name().is_some()
-        {
-            return Some(pane_data.cmd.clone());
-        }
+fn apply_agent_event(local: &mut CurrentTab, event_payload: &AgentEventPayload) -> bool {
+    let mut current = local
+        .agent_by_pane
+        .get(&event_payload.pane_id)
+        .cloned()
+        .unwrap_or(Cmd::None);
+    if !apply_agent_event_to_cmd(&mut current, event_payload) {
+        return false;
     }
-    None
+
+    if current.is_agent() {
+        local.agent_by_pane.insert(event_payload.pane_id, current);
+    } else {
+        local.agent_by_pane.remove(&event_payload.pane_id);
+    }
+    true
+}
+
+fn apply_agent_event_to_cmd(cmd: &mut Cmd, event_payload: &AgentEventPayload) -> bool {
+    let current_agent = cmd.agent_name().and_then(|name| Agent::from_name(name).ok());
+    if let Some(current_agent) = current_agent
+        && event_payload.agent.priority() < current_agent.priority()
+    {
+        return false;
+    }
+
+    let next = Cmd::from(event_payload);
+    if *cmd == next {
+        return false;
+    }
+    *cmd = next;
+    true
 }
 
 fn compute_frame(state: &State) -> Vec<TabRow> {
     state
-        .tabs
+        .all_tabs
         .iter()
         .map(|tab| {
-            let focused = focused_pane_data(tab.tab_id, &state.tab_panes, &state.panes_data);
-            let priority_cmd = priority_command_for_tab(tab.tab_id, &state.tab_panes, &state.panes_data);
-            let git = state.tab_git_stats.get(&tab.tab_id).copied().unwrap_or_default();
-            TabRow::new(tab, focused, priority_cmd, git, &state.home_dir)
+            if state.local_tab_id() == Some(tab.tab_id)
+                && let Some(local) = state.current_tab.as_ref()
+            {
+                return TabRow::new(
+                    tab,
+                    local.cwd.as_ref(),
+                    local_display_cmd(local),
+                    local.git_stat,
+                    &state.home_dir,
+                );
+            }
+
+            if let Some(remote) = state.other_tabs.get(&tab.tab_id) {
+                return TabRow::new(
+                    tab,
+                    remote.cwd.as_ref(),
+                    remote.cmd.clone(),
+                    remote.git_stat,
+                    &state.home_dir,
+                );
+            }
+
+            TabRow::new(tab, None, Cmd::None, GitStat::default(), &state.home_dir)
         })
         .collect()
-}
-
-fn detect_agent_from_running_command(pane_id: u32) -> Option<Agent> {
-    let args = get_pane_running_command(PaneId::Terminal(pane_id)).ok()?;
-    args.iter()
-        .filter_map(|arg| {
-            let basename = arg.rsplit('/').next().unwrap_or(arg);
-            Agent::detect(basename)
-        })
-        .max_by_key(|a| a.priority())
-}
-
-fn parse_pane_title(title: &str) -> Option<String> {
-    let trimmed = title.trim();
-    if trimmed.is_empty() || trimmed.starts_with('~') || trimmed.starts_with('/') {
-        return None;
-    }
-    let name = trimmed.split_whitespace().next().unwrap_or("");
-    let name = name.rsplit('/').next().unwrap_or(name);
-    if name.is_empty() || name == "zsh" || name == "bash" || name == "fish" {
-        return None;
-    }
-    Some(name.to_owned())
 }
