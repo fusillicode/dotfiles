@@ -1,11 +1,10 @@
 use std::fmt::Write;
 use std::path::Path;
+use std::path::PathBuf;
 
 use agm_core::Cmd;
 use agm_core::GitStat;
 use zellij_tile::prelude::*;
-
-use super::PaneData;
 
 const INFO_ROWS: usize = 1;
 const MARKER: &str = " ";
@@ -18,6 +17,7 @@ const CYAN: &str = "\x1b[38;2;0;255;255m";
 const DIM: &str = "\x1b[38;2;100;100;110m";
 const AMBER: &str = "\x1b[38;2;255;170;62m";
 const ACTIVE_BG: &str = "\x1b[48;2;40;40;50m";
+const DEFAULT_FG: &str = "\x1b[39m";
 const RESET: &str = "\x1b[0m";
 
 #[derive(Clone, Eq, PartialEq)]
@@ -30,23 +30,8 @@ pub struct TabRow {
 }
 
 impl TabRow {
-    pub fn new(
-        tab: &TabInfo,
-        focused: Option<&PaneData>,
-        priority_cmd: Option<Cmd>,
-        git: GitStat,
-        home: &Path,
-    ) -> Self {
-        let path_label = focused
-            .and_then(|e| e.cwd.as_ref())
-            .map_or_else(|| tab.name.clone(), |p| short_path(p, home));
-
-        let cmd = priority_cmd.unwrap_or_else(|| {
-            focused
-                .and_then(|e| e.cmd.running_cmd().map(|s| Cmd::Running(s.to_string())))
-                .unwrap_or(Cmd::None)
-        });
-
+    pub fn new(tab: &TabInfo, cwd: Option<&PathBuf>, cmd: Cmd, git: GitStat, home: &Path) -> Self {
+        let path_label = cwd.map_or_else(|| tab.name.clone(), |path| short_path(path, home));
         Self {
             active: tab.active,
             path_label,
@@ -70,9 +55,9 @@ impl TabRow {
 
     fn write_info_line(&self, buf: &mut String, row_1based: usize, width: usize) {
         let (bg, fg) = if self.active {
-            (ACTIVE_BG, "")
+            (ACTIVE_BG, DEFAULT_FG)
         } else {
-            ("\x1b[39m", DIM)
+            ("", DIM)
         };
 
         let left = match &self.cmd {
@@ -249,10 +234,7 @@ mod tests {
             ..Default::default()
         };
 
-        let focused_pane = Some(PaneData {
-            cwd: Some(PathBuf::from("/home/user/project")),
-            cmd: Cmd::Running("nvim".to_string()),
-        });
+        let cwd = Some(PathBuf::from("/home/user/project"));
         let git = GitStat::default();
         let home = Path::new("/home");
 
@@ -262,7 +244,7 @@ mod tests {
             cmd: Cmd::Running("nvim".to_string()),
             git: GitStat::default(),
         };
-        let actual = TabRow::new(&tab, focused_pane.as_ref(), None, git, home);
+        let actual = TabRow::new(&tab, cwd.as_ref(), Cmd::Running("nvim".to_string()), git, home);
         assert_eq!(actual, expected);
     }
 
@@ -275,10 +257,7 @@ mod tests {
             ..Default::default()
         };
 
-        let focused_pane = Some(PaneData {
-            cwd: Some(PathBuf::from("/home/user")),
-            cmd: Cmd::Running("zsh".to_string()),
-        });
+        let cwd = Some(PathBuf::from("/home/user"));
         let git = GitStat::default();
         let home = Path::new("/home");
 
@@ -288,7 +267,7 @@ mod tests {
             cmd: Cmd::Running("zsh".to_string()),
             git: GitStat::default(),
         };
-        let actual = TabRow::new(&tab, focused_pane.as_ref(), None, git, home);
+        let actual = TabRow::new(&tab, cwd.as_ref(), Cmd::Running("zsh".to_string()), git, home);
         assert_eq!(actual, expected);
     }
 
@@ -301,11 +280,6 @@ mod tests {
             ..Default::default()
         };
 
-        let focused_pane = Some(PaneData {
-            cwd: None,
-            cmd: Cmd::None,
-        });
-        let priority_cmd = Some(Cmd::BusyAgent(Agent::Claude));
         let git = GitStat::default();
         let home = Path::new("/");
 
@@ -315,7 +289,7 @@ mod tests {
             cmd: Cmd::BusyAgent(Agent::Claude),
             git: GitStat::default(),
         };
-        let actual = TabRow::new(&tab, focused_pane.as_ref(), priority_cmd, git, home);
+        let actual = TabRow::new(&tab, None, Cmd::BusyAgent(Agent::Claude), git, home);
         assert_eq!(actual, expected);
     }
 
@@ -328,7 +302,6 @@ mod tests {
             ..Default::default()
         };
 
-        let focused_pane: Option<&PaneData> = None;
         let git = GitStat::default();
         let home = Path::new("/tmp");
 
@@ -338,7 +311,7 @@ mod tests {
             cmd: Cmd::None,
             git: GitStat::default(),
         };
-        let actual = TabRow::new(&tab, focused_pane, None, git, home);
+        let actual = TabRow::new(&tab, None, Cmd::None, git, home);
         assert_eq!(actual, expected);
     }
 
@@ -357,10 +330,6 @@ mod tests {
             ..Default::default()
         };
 
-        let focused_pane = Some(PaneData {
-            cwd: None,
-            cmd: Cmd::None,
-        });
         let home = Path::new("/");
 
         let expected = TabRow {
@@ -369,7 +338,7 @@ mod tests {
             cmd: Cmd::None,
             git,
         };
-        let actual = TabRow::new(&tab, focused_pane.as_ref(), None, git, home);
+        let actual = TabRow::new(&tab, None, Cmd::None, git, home);
         assert_eq!(actual, expected);
     }
 }

@@ -12,6 +12,7 @@
 use std::path::Path;
 use std::path::PathBuf;
 
+use agm_core::AGENTS_PIPE;
 use agm_core::Agent;
 use agm_core::GitStat;
 use owo_colors::OwoColorize as _;
@@ -248,13 +249,13 @@ fn find_agm_entry(agent: Agent, arr: &mut [Value]) -> Option<&mut Value> {
             group.get_mut("hooks")?.as_array_mut()?.iter_mut().find(|h| {
                 h.get("command")
                     .and_then(|c| c.as_str())
-                    .is_some_and(|c| c.contains(agm_core::PIPE_NAME))
+                    .is_some_and(|c| c.contains(AGENTS_PIPE))
             })
         }),
         Agent::Cursor | Agent::Codex => arr.iter_mut().find(|e| {
             e.get("command")
                 .and_then(|c| c.as_str())
-                .is_some_and(|c| c.contains(agm_core::PIPE_NAME))
+                .is_some_and(|c| c.contains(AGENTS_PIPE))
         }),
         Agent::Opencode => None,
     }
@@ -319,7 +320,6 @@ fn launch_session(args: &[String]) -> rootcause::Result<()> {
         return Ok(());
     }
 
-    agm_core::clean_state_dir(session_name);
     if ytil_zellij::is_active() {
         ytil_cmd::silent_cmd("zellij")
             .args(["--new-session-with-layout", LAYOUT_NAME, "--session", session_name])

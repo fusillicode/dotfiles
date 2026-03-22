@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-pub const PIPE_NAME: &str = "agm-agent";
+pub const AGENTS_PIPE: &str = "agm-agent";
 pub const EMPTY_FIELD: &str = "--";
 
 #[derive(Debug)]
@@ -153,7 +153,7 @@ impl Agent {
 
     pub fn hook_command(self, kind: AgentEventKind) -> String {
         format!(
-            "zellij pipe --name {PIPE_NAME} --args \"pane_id=$ZELLIJ_PANE_ID,agent={}\" -- {}",
+            "zellij pipe --name {AGENTS_PIPE} --args \"pane_id=$ZELLIJ_PANE_ID,agent={}\" -- {}",
             self.name(),
             kind.as_str()
         )
@@ -264,8 +264,8 @@ impl Cmd {
     }
 }
 
-impl From<&AgentEvent> for Cmd {
-    fn from(value: &AgentEvent) -> Self {
+impl From<&AgentEventPayload> for Cmd {
+    fn from(value: &AgentEventPayload) -> Self {
         match value.kind {
             AgentEventKind::Start => Self::IdleAgent(value.agent),
             AgentEventKind::Busy => Self::BusyAgent(value.agent),
@@ -275,13 +275,13 @@ impl From<&AgentEvent> for Cmd {
     }
 }
 
-pub struct AgentEvent {
+pub struct AgentEventPayload {
     pub pane_id: u32,
     pub agent: Agent,
     pub kind: AgentEventKind,
 }
 
-impl AgentEvent {
+impl AgentEventPayload {
     pub fn parse(pane_id: &str, agent: &str, payload: &str) -> Result<Self, ParseError> {
         let pane_id = pane_id
             .parse()
@@ -290,26 +290,6 @@ impl AgentEvent {
         let kind = AgentEventKind::parse(payload)?;
         Ok(Self { pane_id, agent, kind })
     }
-}
-
-pub fn state_base_dir() -> PathBuf {
-    #[cfg(target_os = "wasi")]
-    {
-        PathBuf::from("/cache")
-    }
-    #[cfg(not(target_os = "wasi"))]
-    {
-        let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
-        home.join(".local").join("share").join("agm")
-    }
-}
-
-pub fn session_state_dir(session: &str) -> PathBuf {
-    state_base_dir().join(session)
-}
-
-pub fn state_file_path(session: &str, tab_id: usize) -> PathBuf {
-    session_state_dir(session).join(format!("tab-{tab_id}"))
 }
 
 fn encode_opt(val: Option<&str>) -> &str {
@@ -383,49 +363,6 @@ impl TabStateEntry {
             },
         })
     }
-}
-
-/// List all persisted tab states for a session.
-pub fn read_all_state_files(session: &str) -> Vec<TabStateEntry> {
-    let dir = session_state_dir(session);
-    let Ok(entries) = std::fs::read_dir(&dir) else {
-        return Vec::new();
-    };
-    let mut out = Vec::new();
-    for entry in entries.flatten() {
-        let name = entry.file_name();
-        let name_str = name.to_string_lossy();
-        let Some(id_str) = name_str.strip_prefix("tab-") else {
-            continue;
-        };
-        if id_str.contains('.') {
-            continue;
-        }
-        let Ok(tab_id) = id_str.parse::<usize>() else { continue };
-        let Ok(content) = std::fs::read_to_string(entry.path()) else {
-            continue;
-        };
-        if let Ok(entry) = TabStateEntry::parse_file_content(tab_id, &content) {
-            out.push(entry);
-        }
-    }
-    out
-}
-
-/// Atomically write a state file (write .tmp then rename).
-pub fn write_state_file(session: &str, tab_id: usize, content: &str) -> std::io::Result<()> {
-    let path = state_file_path(session, tab_id);
-    let tmp = path.with_extension("tmp");
-    std::fs::write(&tmp, content)?;
-    std::fs::rename(&tmp, &path)
-}
-
-pub fn remove_state_file(session: &str, tab_id: usize) {
-    let _ = std::fs::remove_file(state_file_path(session, tab_id));
-}
-
-pub fn clean_state_dir(session: &str) {
-    let _ = std::fs::remove_dir_all(session_state_dir(session));
 }
 
 fn parse_bool(s: &str, name: &str) -> Result<bool, ParseError> {
