@@ -2,7 +2,7 @@
 //!
 //! Subcommands:
 //! - `install` — build the WASM plugin, deploy it, and install Claude/Cursor hooks.
-//! - `hook` — unified agent lifecycle hook entry point (used by Claude and Cursor hooks).
+//! - `git-stat` — print git statistics for a directory.
 //! - `git-stat` — print `path insertions deletions untracked` per path (one line each).
 //!
 //! # Errors
@@ -11,10 +11,8 @@
 
 use std::path::Path;
 use std::path::PathBuf;
-use std::process::Stdio;
 
 use agm_core::Agent;
-use agm_core::AgentEventKind;
 use agm_core::GitStat;
 use owo_colors::OwoColorize as _;
 use rootcause::prelude::ResultExt;
@@ -180,9 +178,9 @@ fn install_opencode_plugin() -> rootcause::Result<()> {
           let isThrottled = false;
 
           try {
-            await $`which agm`.quiet();
+            await $`which zellij`.quiet();
           } catch {
-            console.log("[AGM Hook] agm binary not found in PATH — plugin disabled");
+            console.log("[AGM Hook] zellij binary not found in PATH — plugin disabled");
             return {}; // Gracefully exit if binary is missing
           }
 
@@ -195,7 +193,7 @@ fn install_opencode_plugin() -> rootcause::Result<()> {
                   if (!isThrottled) {
                     isThrottled = true;
                     try {
-                      await $`agm hook opencode start`.quiet();
+                      await $`zellij pipe --name agm-agent --args "pane_id=$ZELLIJ_PANE_ID,agent=opencode" -- start`.quiet();
                     } catch (e) {
                       console.log("\n[ERROR] 7\n", e)
                     }
@@ -206,7 +204,7 @@ fn install_opencode_plugin() -> rootcause::Result<()> {
                   if (isThrottled) {
                     isThrottled = false;
                     try {
-                      await $`agm hook opencode idle`.quiet();
+                      await $`zellij pipe --name agm-agent --args "pane_id=$ZELLIJ_PANE_ID,agent=opencode" -- idle`.quiet();
                     } catch (e) {
                       console.log("\n[ERROR] 8\n", e)
                     }
@@ -215,7 +213,7 @@ fn install_opencode_plugin() -> rootcause::Result<()> {
 
                 case "server.instance.disposed":
                   try {
-                    await $`agm hook opencode exit`.quiet();
+                    await $`zellij pipe --name agm-agent --args "pane_id=$ZELLIJ_PANE_ID,agent=opencode" -- exit`.quiet();
                   } catch (e) {
                     console.log("\n[ERROR] 9\n", e)
                   }
@@ -250,13 +248,13 @@ fn find_agm_entry(agent: Agent, arr: &mut [Value]) -> Option<&mut Value> {
             group.get_mut("hooks")?.as_array_mut()?.iter_mut().find(|h| {
                 h.get("command")
                     .and_then(|c| c.as_str())
-                    .is_some_and(|c| c.contains("agm hook") || c.contains(agm_core::PIPE_NAME))
+                    .is_some_and(|c| c.contains(agm_core::PIPE_NAME))
             })
         }),
         Agent::Cursor | Agent::Codex => arr.iter_mut().find(|e| {
             e.get("command")
                 .and_then(|c| c.as_str())
-                .is_some_and(|c| c.contains("agm hook"))
+                .is_some_and(|c| c.contains(agm_core::PIPE_NAME))
         }),
         Agent::Opencode => None,
     }
@@ -270,32 +268,6 @@ fn new_hook_entry(agent: Agent, cmd: &str) -> Value {
         Agent::Cursor | Agent::Codex => serde_json::json!({ "command": cmd }),
         Agent::Opencode => serde_json::json!({}),
     }
-}
-
-fn hook(raw_agent: &str, raw_payload: &str) {
-    let _ = std::io::copy(&mut std::io::stdin().lock(), &mut std::io::sink());
-    println!("{{}}");
-    let Ok(pane_id) = std::env::var("ZELLIJ_PANE_ID") else {
-        return;
-    };
-    let (Ok(agent), Ok(kind)) = (Agent::from_name(raw_agent), AgentEventKind::parse(raw_payload)) else {
-        eprintln!("agm hook: invalid args agent={raw_agent:?} payload={raw_payload:?}");
-        return;
-    };
-    let _ = std::process::Command::new("zellij")
-        .args([
-            "pipe",
-            "--name",
-            agm_core::PIPE_NAME,
-            "--args",
-            &format!("pane_id={pane_id},agent={}", agent.name()),
-            "--",
-            kind.as_str(),
-        ])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn();
 }
 
 fn git_stat(cwd: &str) -> GitStat {
@@ -371,12 +343,6 @@ fn main() -> rootcause::Result<()> {
         Some("install") => {
             let is_debug = args.iter().any(|a| a == "--debug");
             install_plugin_and_hooks(is_debug)
-        }
-        Some("hook") => {
-            let agent = args.get(1).map_or("", String::as_str);
-            let payload = args.get(2).map_or("", String::as_str);
-            hook(agent, payload);
-            Ok(())
         }
         Some("git-stat") => {
             let paths = args.get(1..);
