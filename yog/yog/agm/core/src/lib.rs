@@ -152,7 +152,11 @@ impl Agent {
     }
 
     pub fn hook_command(self, kind: AgentEventKind) -> String {
-        format!("agm hook {} {}", self.name(), kind.as_str())
+        format!(
+            "zellij pipe --name {PIPE_NAME} --args \"pane_id=$ZELLIJ_PANE_ID,agent={}\" -- {}",
+            self.name(),
+            kind.as_str()
+        )
     }
 
     /// Higher means more specific — Cursor hosts Claude, so it wins when both match.
