@@ -59,33 +59,9 @@ impl std::fmt::Display for PipeEventParseError {
 
 impl std::error::Error for PipeEventParseError {}
 
-struct SyncRequestPayload {
-    requester_tab_id: usize,
-}
-
-impl SyncRequestPayload {
-    fn parse(msg: &PipeMessage) -> Result<Self, PipeEventParseError> {
-        let requester_tab_id = msg
-            .args
-            .get("requester_tab_id")
-            .ok_or_else(|| PipeEventParseError::new("missing requester_tab_id"))?
-            .parse::<usize>()
-            .map_err(|_| PipeEventParseError::new("invalid requester_tab_id"))?;
-        Ok(Self { requester_tab_id })
-    }
-
-    fn to_message(&self) -> MessageToPlugin {
-        let mut args = BTreeMap::new();
-        args.insert("type".to_string(), "sync_request".to_string());
-        args.insert("requester_tab_id".to_string(), self.requester_tab_id.to_string());
-        MessageToPlugin::new(SYNC_PIPE.to_string()).with_args(args)
-    }
-}
-
 #[derive(Clone)]
 struct StateSnapshotPayload {
     tab_id: usize,
-    target_tab_id: Option<usize>,
     seq: u64,
     cwd: Option<PathBuf>,
     cmd: Cmd,
@@ -93,11 +69,6 @@ struct StateSnapshotPayload {
 }
 
 impl StateSnapshotPayload {
-    fn with_target(mut self, target_tab_id: usize) -> Self {
-        self.target_tab_id = Some(target_tab_id);
-        self
-    }
-
     fn parse(msg: &PipeMessage) -> Result<Self, PipeEventParseError> {
         let tab_id = msg
             .args
@@ -111,14 +82,6 @@ impl StateSnapshotPayload {
             .ok_or_else(|| PipeEventParseError::new("missing seq"))?
             .parse::<u64>()
             .map_err(|_| PipeEventParseError::new("invalid seq"))?;
-        let target_tab_id = msg
-            .args
-            .get("target_tab_id")
-            .map(|v| {
-                v.parse::<usize>()
-                    .map_err(|_| PipeEventParseError::new("invalid target_tab_id"))
-            })
-            .transpose()?;
         let payload = msg
             .payload
             .as_ref()
@@ -128,7 +91,6 @@ impl StateSnapshotPayload {
 
         Ok(Self {
             tab_id,
-            target_tab_id,
             seq,
             cwd: entry.cwd,
             cmd: entry.cmd,
@@ -148,9 +110,6 @@ impl StateSnapshotPayload {
         args.insert("type".to_string(), "state_snapshot".to_string());
         args.insert("tab_id".to_string(), self.tab_id.to_string());
         args.insert("seq".to_string(), self.seq.to_string());
-        if let Some(target_tab_id) = self.target_tab_id {
-            args.insert("target_tab_id".to_string(), target_tab_id.to_string());
-        }
 
         MessageToPlugin::new(SYNC_PIPE.to_string())
             .with_args(args)
@@ -162,7 +121,6 @@ impl From<&CurrentTab> for StateSnapshotPayload {
     fn from(value: &CurrentTab) -> Self {
         Self {
             tab_id: value.tab_id,
-            target_tab_id: None,
             seq: value.seq,
             cwd: value.cwd.clone(),
             cmd: local_display_cmd(value),
@@ -172,17 +130,43 @@ impl From<&CurrentTab> for StateSnapshotPayload {
 }
 
 enum PipeEvent {
-    SyncRequest(SyncRequestPayload),
-    StateSnapshot(StateSnapshotPayload),
+    SyncRequest {
+        requester_plugin_id: u32,
+    },
+    StateSnapshot {
+        source_plugin_id: u32,
+        snapshot: StateSnapshotPayload,
+    },
     Agent(AgentEventPayload),
 }
 
 impl PipeEvent {
+    fn source_plugin_id(msg: &PipeMessage) -> Option<u32> {
+        match msg.source {
+            PipeSource::Plugin(plugin_id) => Some(plugin_id),
+            _ => None,
+        }
+    }
+
     fn parse(msg: &PipeMessage) -> Result<Option<Self>, PipeEventParseError> {
         match msg.name.as_str() {
             SYNC_PIPE => match msg.args.get("type").map(String::as_str) {
-                Some("sync_request") => Ok(Some(Self::SyncRequest(SyncRequestPayload::parse(msg)?))),
-                Some("state_snapshot") => Ok(Some(Self::StateSnapshot(StateSnapshotPayload::parse(msg)?))),
+                Some("sync_request") => {
+                    let Some(requester_plugin_id) = Self::source_plugin_id(msg) else {
+                        return Ok(None);
+                    };
+                    Ok(Some(Self::SyncRequest { requester_plugin_id }))
+                }
+                Some("state_snapshot") => {
+                    let Some(source_plugin_id) = Self::source_plugin_id(msg) else {
+                        return Ok(None);
+                    };
+                    let snapshot = StateSnapshotPayload::parse(msg)?;
+                    Ok(Some(Self::StateSnapshot {
+                        source_plugin_id,
+                        snapshot,
+                    }))
+                }
                 Some(other) => Err(PipeEventParseError::new(format!("unknown sync message type {other:?}"))),
                 None => Err(PipeEventParseError::new("missing sync message type")),
             },
@@ -210,7 +194,7 @@ struct State {
     plugin_id: u32,
     all_tabs: Vec<TabInfo>,
     current_tab: Option<CurrentTab>,
-    other_tabs: HashMap<usize, StateSnapshotPayload>,
+    other_tabs: HashMap<u32, StateSnapshotPayload>,
     sync_requested: bool,
     home_dir: PathBuf,
     frame: Vec<TabRow>,
@@ -225,48 +209,57 @@ impl State {
         self.current_tab.as_ref().map(|local| local.tab_id)
     }
 
-    fn tab_position(&self, tab_id: usize) -> Option<usize> {
-        self.all_tabs
-            .iter()
-            .find(|tab| tab.tab_id == tab_id)
-            .map(|tab| tab.position)
+    fn local_tab_position_in_manifest(&self, manifest: &PaneManifest) -> Option<usize> {
+        manifest.panes.iter().find_map(|(tab_pos, panes)| {
+            panes
+                .iter()
+                .any(|pane| pane.is_plugin && pane.id == self.plugin_id)
+                .then_some(*tab_pos)
+        })
     }
 
     fn discover_local_tab_id(&self, manifest: &PaneManifest) -> Option<usize> {
-        for (tab_pos, panes) in &manifest.panes {
-            let owns_this_tab = panes.iter().any(|pane| pane.is_plugin && pane.id == self.plugin_id);
-            if !owns_this_tab {
-                continue;
-            }
-
-            if let Some(tab) = self.all_tabs.iter().find(|tab| tab.position == *tab_pos) {
-                return Some(tab.tab_id);
-            }
-        }
-
-        None
+        let tab_pos = self.local_tab_position_in_manifest(manifest)?;
+        self.all_tabs
+            .iter()
+            .find(|tab| tab.position == tab_pos)
+            .map(|tab| tab.tab_id)
     }
 
     fn ensure_local_tab(&mut self, manifest: &PaneManifest) -> bool {
+        if let Some(local_tab_id) = self.current_tab.as_ref().map(|local| local.tab_id) {
+            if self.all_tabs.iter().any(|tab| tab.tab_id == local_tab_id) {
+                return false;
+            }
+
+            let Some(tab_id) = self.discover_local_tab_id(manifest) else {
+                return false;
+            };
+            if local_tab_id == tab_id {
+                return false;
+            }
+
+            if let Some(local) = self.current_tab.as_mut() {
+                local.tab_id = tab_id;
+            }
+            self.sync_requested = false;
+            return true;
+        }
+
         let Some(tab_id) = self.discover_local_tab_id(manifest) else {
             return false;
         };
 
-        if self.current_tab.as_ref().is_some_and(|local| local.tab_id == tab_id) {
-            return false;
-        }
-
         self.current_tab = Some(CurrentTab::new(tab_id));
-        self.other_tabs.remove(&tab_id);
         self.sync_requested = false;
         true
     }
 
     fn refresh_local_from_manifest(&mut self, manifest: &PaneManifest) -> (bool, bool, bool) {
-        let Some(local_tab_id) = self.local_tab_id() else {
+        if self.current_tab.is_none() {
             return (false, false, false);
-        };
-        let Some(tab_pos) = self.tab_position(local_tab_id) else {
+        }
+        let Some(tab_pos) = self.local_tab_position_in_manifest(manifest) else {
             return (false, false, false);
         };
         let Some(panes) = manifest.panes.get(&tab_pos) else {
@@ -386,26 +379,83 @@ impl State {
     }
 
     fn send_sync_request(&mut self) {
-        let Some(requester_tab_id) = self.local_tab_id() else {
+        if self.current_tab.is_none() {
             return;
-        };
+        }
 
-        pipe_message_to_plugin(SyncRequestPayload { requester_tab_id }.to_message());
+        let mut args = BTreeMap::new();
+        args.insert("type".to_string(), "sync_request".to_string());
+        pipe_message_to_plugin(MessageToPlugin::new(SYNC_PIPE.to_string()).with_args(args));
         self.sync_requested = true;
     }
 
-    fn send_local_snapshot(&self, target_tab_id: Option<usize>) {
+    fn send_local_snapshot(&self, target_plugin_id: Option<u32>) {
         let Some(local) = self.current_tab.as_ref() else {
             return;
         };
 
-        let snapshot = StateSnapshotPayload::from(local);
-        let snapshot = if let Some(target_tab_id) = target_tab_id {
-            snapshot.with_target(target_tab_id)
-        } else {
-            snapshot
+        let mut message = StateSnapshotPayload::from(local).to_message();
+        if let Some(target_plugin_id) = target_plugin_id {
+            message = message.with_destination_plugin_id(target_plugin_id);
+        }
+        pipe_message_to_plugin(message);
+    }
+
+    fn topology_changed(prev_tabs: &[TabInfo], next_tabs: &[TabInfo]) -> bool {
+        if prev_tabs.len() != next_tabs.len() {
+            return true;
+        }
+
+        prev_tabs
+            .iter()
+            .zip(next_tabs.iter())
+            .any(|(prev, next)| prev.tab_id != next.tab_id || prev.position != next.position)
+    }
+
+    fn remap_local_tab_id_after_tab_update(&mut self, prev_tabs: &[TabInfo]) -> bool {
+        let Some(local) = self.current_tab.as_mut() else {
+            return false;
         };
-        pipe_message_to_plugin(snapshot.to_message());
+        if self.all_tabs.iter().any(|tab| tab.tab_id == local.tab_id) {
+            return false;
+        }
+
+        let prev_ids: HashSet<usize> = prev_tabs.iter().map(|tab| tab.tab_id).collect();
+        let next_ids: HashSet<usize> = self.all_tabs.iter().map(|tab| tab.tab_id).collect();
+        let removed: HashSet<usize> = prev_ids.difference(&next_ids).copied().collect();
+        if !removed.contains(&local.tab_id) {
+            return false;
+        }
+
+        let mut added: Vec<&TabInfo> = self
+            .all_tabs
+            .iter()
+            .filter(|tab| !prev_ids.contains(&tab.tab_id))
+            .collect();
+        if added.is_empty() {
+            return false;
+        }
+
+        if added.len() > 1
+            && let Some(prev_local_tab) = prev_tabs.iter().find(|tab| tab.tab_id == local.tab_id)
+        {
+            let by_name: Vec<&TabInfo> = added
+                .iter()
+                .copied()
+                .filter(|tab| tab.name == prev_local_tab.name)
+                .collect();
+            if by_name.len() == 1 {
+                added = by_name;
+            }
+        }
+
+        if added.len() != 1 {
+            return false;
+        }
+
+        local.tab_id = added[0].tab_id;
+        self.sync_requested = false;
+        true
     }
 
     fn run_local_git_stat(&self) {
@@ -420,14 +470,12 @@ impl State {
         run_command_with_env_variables_and_cwd(&args, BTreeMap::new(), cwd, context);
     }
 
-    fn apply_remote_snapshot(&mut self, mut snapshot: StateSnapshotPayload) -> bool {
-        if self.local_tab_id() == Some(snapshot.tab_id) {
+    fn apply_remote_snapshot(&mut self, source_plugin_id: u32, snapshot: StateSnapshotPayload) -> bool {
+        if source_plugin_id == self.plugin_id {
             return false;
         }
 
-        if let Some(target_tab_id) = snapshot.target_tab_id
-            && self.local_tab_id() != Some(target_tab_id)
-        {
+        if self.local_tab_id() == Some(snapshot.tab_id) {
             return false;
         }
 
@@ -437,33 +485,33 @@ impl State {
 
         if self
             .other_tabs
-            .get(&snapshot.tab_id)
+            .get(&source_plugin_id)
             .is_some_and(|remote| snapshot.seq <= remote.seq)
         {
             return false;
         }
 
-        let changed = self.other_tabs.get(&snapshot.tab_id).is_none_or(|remote| {
+        let changed = self.other_tabs.get(&source_plugin_id).is_none_or(|remote| {
             remote.cwd != snapshot.cwd || remote.cmd != snapshot.cmd || remote.git_stat != snapshot.git_stat
         });
 
-        snapshot.target_tab_id = None;
-        self.other_tabs.insert(snapshot.tab_id, snapshot);
+        self.other_tabs.retain(|other_source_plugin_id, remote| {
+            *other_source_plugin_id == source_plugin_id || remote.tab_id != snapshot.tab_id
+        });
+        self.other_tabs.insert(source_plugin_id, snapshot);
         changed
     }
 
     fn prune_state_for_closed_tabs(&mut self) {
         let known_tabs: HashSet<usize> = self.all_tabs.iter().map(|tab| tab.tab_id).collect();
-        if let Some(local_tab_id) = self.local_tab_id()
-            && !known_tabs.contains(&local_tab_id)
-        {
-            self.current_tab = None;
-            self.sync_requested = false;
-        }
+        self.other_tabs.retain(|_, remote| known_tabs.contains(&remote.tab_id));
+    }
 
-        let local_tab_id = self.local_tab_id();
+    fn remote_snapshot_for_tab(&self, tab_id: usize) -> Option<&StateSnapshotPayload> {
         self.other_tabs
-            .retain(|tab_id, _| known_tabs.contains(tab_id) && Some(*tab_id) != local_tab_id);
+            .values()
+            .filter(|remote| remote.tab_id == tab_id)
+            .max_by_key(|remote| remote.seq)
     }
 
     fn sync_frame(&mut self) -> bool {
@@ -478,15 +526,18 @@ impl State {
 
     fn handle_pipe_event(&mut self, event: PipeEvent) -> bool {
         match event {
-            PipeEvent::SyncRequest(request) => {
-                if self.local_tab_id() == Some(request.requester_tab_id) {
+            PipeEvent::SyncRequest { requester_plugin_id } => {
+                if requester_plugin_id == self.plugin_id {
                     return false;
                 }
-                self.send_local_snapshot(Some(request.requester_tab_id));
+                self.send_local_snapshot(Some(requester_plugin_id));
                 false
             }
-            PipeEvent::StateSnapshot(snapshot) => {
-                if !self.apply_remote_snapshot(snapshot) {
+            PipeEvent::StateSnapshot {
+                source_plugin_id,
+                snapshot,
+            } => {
+                if !self.apply_remote_snapshot(source_plugin_id, snapshot) {
                     return false;
                 }
                 self.sync_frame()
@@ -540,9 +591,28 @@ impl ZellijPlugin for State {
                 self.sync_frame()
             }
 
-            Event::TabUpdate(tabs) => {
+            Event::TabUpdate(mut tabs) => {
+                let prev_tabs = self.all_tabs.clone();
+                tabs.sort_by_key(|tab| tab.position);
                 self.all_tabs = tabs;
+                let topology_changed = Self::topology_changed(&prev_tabs, &self.all_tabs);
+                let remapped_local_tab_id = self.remap_local_tab_id_after_tab_update(&prev_tabs);
+
+                if topology_changed {
+                    self.sync_requested = false;
+                }
+
+                if remapped_local_tab_id {
+                    self.bump_local_seq();
+                    self.send_local_snapshot(None);
+                }
+
                 self.prune_state_for_closed_tabs();
+
+                if self.current_tab.is_some() && !self.sync_requested {
+                    self.send_sync_request();
+                }
+
                 self.sync_frame()
             }
 
@@ -558,7 +628,7 @@ impl ZellijPlugin for State {
                     self.run_local_git_stat();
                 }
 
-                if cwd_changed || cmd_changed {
+                if local_created || cwd_changed || cmd_changed {
                     self.bump_local_seq();
                     self.send_local_snapshot(None);
                 }
@@ -699,7 +769,7 @@ fn compute_frame(state: &State) -> Vec<TabRow> {
                 );
             }
 
-            if let Some(remote) = state.other_tabs.get(&tab.tab_id) {
+            if let Some(remote) = state.remote_snapshot_for_tab(tab.tab_id) {
                 return TabRow::new(
                     tab,
                     remote.cwd.as_ref(),
@@ -712,4 +782,155 @@ fn compute_frame(state: &State) -> Vec<TabRow> {
             TabRow::new(tab, None, Cmd::None, GitStat::default(), &state.home_dir)
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use agm_core::Agent;
+    use pretty_assertions::assert_eq;
+
+    use super::*;
+
+    fn tab_with_name(tab_id: usize, position: usize, name: &str) -> TabInfo {
+        TabInfo {
+            tab_id,
+            position,
+            name: name.to_string(),
+            ..Default::default()
+        }
+    }
+
+    fn plugin_pane(plugin_id: u32) -> PaneInfo {
+        PaneInfo {
+            id: plugin_id,
+            is_plugin: true,
+            ..Default::default()
+        }
+    }
+
+    fn terminal_pane(pane_id: u32, focused: bool) -> PaneInfo {
+        PaneInfo {
+            id: pane_id,
+            is_focused: focused,
+            ..Default::default()
+        }
+    }
+
+    fn manifest(entries: Vec<(usize, Vec<PaneInfo>)>) -> PaneManifest {
+        let panes = entries.into_iter().collect::<HashMap<usize, Vec<PaneInfo>>>();
+        PaneManifest {
+            panes,
+            ..Default::default()
+        }
+    }
+
+    fn snapshot(tab_id: usize, seq: u64, cmd: Cmd) -> StateSnapshotPayload {
+        StateSnapshotPayload {
+            tab_id,
+            seq,
+            cwd: None,
+            cmd,
+            git_stat: GitStat::default(),
+        }
+    }
+
+    #[test]
+    fn pane_update_before_tab_update_does_not_rebind_local_tab_id() {
+        let mut state = State {
+            plugin_id: 7,
+            all_tabs: vec![tab_with_name(10, 0, "a"), tab_with_name(11, 1, "b")],
+            ..Default::default()
+        };
+
+        let initial_manifest = manifest(vec![(0, vec![plugin_pane(7), terminal_pane(42, true)])]);
+        assert!(state.ensure_local_tab(&initial_manifest));
+
+        let local = state.current_tab.as_mut().expect("missing local tab");
+        local.pane_ids.insert(42);
+        local.focused_pane_id = Some(42);
+        local.cwd = Some(PathBuf::from("/tmp/project"));
+        local.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Codex));
+
+        // Simulate a tab move where PaneUpdate arrives before TabUpdate:
+        // manifest already reflects new position, while all_tabs is still stale.
+        let moved_manifest = manifest(vec![(1, vec![plugin_pane(7), terminal_pane(42, true)])]);
+        assert!(!state.ensure_local_tab(&moved_manifest));
+        let _ = state.refresh_local_from_manifest(&moved_manifest);
+
+        let local = state.current_tab.as_ref().expect("missing local tab");
+        assert_eq!(local.tab_id, 10);
+        assert_eq!(local.cwd.as_deref(), Some(std::path::Path::new("/tmp/project")));
+        assert_eq!(local_display_cmd(local), Cmd::BusyAgent(Agent::Codex));
+    }
+
+    #[test]
+    fn pane_update_rebinds_local_tab_id_only_after_old_id_disappears() {
+        let mut state = State {
+            plugin_id: 7,
+            all_tabs: vec![tab_with_name(11, 0, "b"), tab_with_name(99, 1, "a")],
+            current_tab: Some(CurrentTab::new(10)),
+            ..Default::default()
+        };
+        let local = state.current_tab.as_mut().expect("missing local tab");
+        local.pane_ids.insert(42);
+        local.focused_pane_id = Some(42);
+        local.cwd = Some(PathBuf::from("/tmp/project"));
+        local.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Codex));
+
+        let manifest = manifest(vec![(1, vec![plugin_pane(7), terminal_pane(42, true)])]);
+        assert!(state.ensure_local_tab(&manifest));
+        let _ = state.refresh_local_from_manifest(&manifest);
+
+        let local = state.current_tab.as_ref().expect("missing local tab");
+        assert_eq!(local.tab_id, 99);
+        assert_eq!(local_display_cmd(local), Cmd::BusyAgent(Agent::Codex));
+    }
+
+    #[test]
+    fn remap_local_tab_id_after_tab_update_can_use_tab_name_when_many_ids_changed() {
+        let mut state = State {
+            current_tab: Some(CurrentTab::new(10)),
+            all_tabs: vec![tab_with_name(30, 1, "agent"), tab_with_name(40, 0, "shell")],
+            ..Default::default()
+        };
+
+        let prev_tabs = vec![tab_with_name(10, 0, "agent"), tab_with_name(20, 1, "shell")];
+        assert!(state.remap_local_tab_id_after_tab_update(&prev_tabs));
+        assert_eq!(state.local_tab_id(), Some(30));
+    }
+
+    #[test]
+    fn remote_snapshot_sequence_is_tracked_per_source_plugin() {
+        let mut state = State {
+            current_tab: Some(CurrentTab::new(1)),
+            all_tabs: vec![tab_with_name(1, 0, "local"), tab_with_name(2, 1, "remote")],
+            ..Default::default()
+        };
+
+        assert!(state.apply_remote_snapshot(100, snapshot(2, 10, Cmd::BusyAgent(Agent::Codex))));
+        assert!(state.apply_remote_snapshot(200, snapshot(2, 1, Cmd::IdleAgent(Agent::Claude))));
+
+        assert_eq!(state.other_tabs.len(), 1);
+        assert_eq!(
+            state.remote_snapshot_for_tab(2).map(|remote| remote.cmd.clone()),
+            Some(Cmd::IdleAgent(Agent::Claude))
+        );
+    }
+
+    #[test]
+    fn sync_request_is_ignored_when_not_sent_by_plugin() {
+        let mut args = BTreeMap::new();
+        args.insert("type".to_string(), "sync_request".to_string());
+        let msg = PipeMessage {
+            source: PipeSource::Cli("x".to_string()),
+            name: SYNC_PIPE.to_string(),
+            payload: None,
+            args,
+            is_private: false,
+        };
+        let parsed = PipeEvent::parse(&msg).expect("parse failed");
+        assert!(parsed.is_none());
+    }
 }
