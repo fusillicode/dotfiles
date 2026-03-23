@@ -45,6 +45,7 @@ name = "agm-plugin"
 version = "0.1.0"
 dependencies = [
  "agm-core",
+ "assert2",
  "pretty_assertions",
  "zellij-tile",
 ]
