@@ -4,17 +4,26 @@ pub const AGENTS_PIPE: &str = "agm-agent";
 pub const EMPTY_FIELD: &str = "--";
 
 #[derive(Debug)]
-pub struct ParseError(String);
+pub enum ParseError {
+    Missing(&'static str),
+    Invalid { field: &'static str, value: String },
+}
 
 impl ParseError {
-    pub fn new(msg: impl Into<String>) -> Self {
-        Self(msg.into())
+    pub fn invalid(field: &'static str, value: impl Into<String>) -> Self {
+        Self::Invalid {
+            field,
+            value: value.into(),
+        }
     }
 }
 
 impl std::fmt::Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.0)
+        match self {
+            ParseError::Missing(field) => write!(f, "missing {field}"),
+            ParseError::Invalid { field, value } => write!(f, "invalid {field}: {value}"),
+        }
     }
 }
 
@@ -33,34 +42,42 @@ impl GitStat {
         let mut parts = line.rsplitn(5, ' ');
         let is_worktree = parts
             .next()
-            .ok_or_else(|| ParseError::new("missing worktree field"))
+            .ok_or(ParseError::Missing("worktree field"))
             .and_then(|v| {
-                v.parse::<u8>()
-                    .map_err(|_| ParseError::new(format!("invalid worktree flag {v:?}")))
+                v.parse::<u8>().map_err(|_| ParseError::Invalid {
+                    field: "worktree",
+                    value: format!("{v:?}"),
+                })
             })?
             != 0;
         let new_files = parts
             .next()
-            .ok_or_else(|| ParseError::new("missing new_files field"))
+            .ok_or(ParseError::Missing("new_files field"))
             .and_then(|v| {
-                v.parse()
-                    .map_err(|_| ParseError::new(format!("invalid new_files {v:?}")))
+                v.parse().map_err(|_| ParseError::Invalid {
+                    field: "new_files",
+                    value: format!("{v:?}"),
+                })
             })?;
         let deletions = parts
             .next()
-            .ok_or_else(|| ParseError::new("missing deletions field"))
+            .ok_or(ParseError::Missing("deletions field"))
             .and_then(|v| {
-                v.parse()
-                    .map_err(|_| ParseError::new(format!("invalid deletions {v:?}")))
+                v.parse().map_err(|_| ParseError::Invalid {
+                    field: "deletions",
+                    value: format!("{v:?}"),
+                })
             })?;
         let insertions = parts
             .next()
-            .ok_or_else(|| ParseError::new("missing insertions field"))
+            .ok_or(ParseError::Missing("insertions field"))
             .and_then(|v| {
-                v.parse()
-                    .map_err(|_| ParseError::new(format!("invalid insertions {v:?}")))
+                v.parse().map_err(|_| ParseError::Invalid {
+                    field: "insertions",
+                    value: format!("{v:?}"),
+                })
             })?;
-        let path = PathBuf::from(parts.next().ok_or_else(|| ParseError::new("missing path field"))?);
+        let path = PathBuf::from(parts.next().ok_or(ParseError::Missing("path"))?);
         Ok((
             path,
             Self {
@@ -147,7 +164,10 @@ impl Agent {
             "cursor" => Ok(Self::Cursor),
             "codex" => Ok(Self::Codex),
             "opencode" => Ok(Self::Opencode),
-            _ => Err(ParseError::new(format!("unknown agent {s:?}"))),
+            _ => Err(ParseError::Invalid {
+                field: "agent",
+                value: format!("{s:?}"),
+            }),
         }
     }
 
@@ -210,7 +230,10 @@ impl AgentEventKind {
             "busy" => Ok(Self::Busy),
             "idle" => Ok(Self::Idle),
             "exit" => Ok(Self::Exit),
-            _ => Err(ParseError::new(format!("unknown event kind {s:?}"))),
+            _ => Err(ParseError::Invalid {
+                field: "event kind",
+                value: format!("{s:?}"),
+            }),
         }
     }
 }
@@ -284,9 +307,10 @@ pub struct AgentEventPayload {
 
 impl AgentEventPayload {
     pub fn parse(pane_id: &str, agent: &str, payload: &str) -> Result<Self, ParseError> {
-        let pane_id = pane_id
-            .parse()
-            .map_err(|_| ParseError::new(format!("invalid pane_id {pane_id:?}")))?;
+        let pane_id = pane_id.parse().map_err(|_| ParseError::Invalid {
+            field: "pane_id",
+            value: format!("{pane_id:?}"),
+        })?;
         let agent = Agent::from_name(agent)?;
         let kind = AgentEventKind::parse(payload)?;
         Ok(Self { pane_id, agent, kind })
@@ -317,12 +341,13 @@ pub struct TabStateEntry {
     pub git_stat: GitStat,
 }
 
-impl TabStateEntry {
-    pub fn to_file_content(&self) -> String {
+impl std::fmt::Display for TabStateEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let cwd_s = self.cwd.as_ref().map(|p| p.display().to_string());
         let cmd_s = self.cmd.running_cmd();
 
-        format!(
+        write!(
+            f,
             "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n",
             encode_opt(cwd_s.as_deref()),
             encode_opt(self.cmd.agent_name()),
@@ -334,10 +359,32 @@ impl TabStateEntry {
             encode_opt(cmd_s),
         )
     }
+}
 
-    pub fn parse_file_content(tab_id: usize, content: &str) -> Result<Self, ParseError> {
+fn parse_bool(s: &str, name: &'static str) -> Result<bool, ParseError> {
+    match s {
+        "0" => Ok(false),
+        "1" => Ok(true),
+        _ => Err(ParseError::Invalid {
+            field: name,
+            value: format!("{s:?}"),
+        }),
+    }
+}
+
+fn parse_usize(s: &str, name: &'static str) -> Result<usize, ParseError> {
+    s.parse().map_err(|_| ParseError::Invalid {
+        field: name,
+        value: format!("{s:?}"),
+    })
+}
+
+impl std::convert::TryFrom<(usize, &str)> for TabStateEntry {
+    type Error = ParseError;
+
+    fn try_from((tab_id, content): (usize, &str)) -> Result<Self, Self::Error> {
         let mut l = content.lines();
-        let mut next = |name| l.next().ok_or_else(|| ParseError::new(format!("missing {name}")));
+        let mut next = |name| l.next().ok_or(ParseError::Missing(name));
 
         let cwd = decode_opt_path(next("cwd")?);
         let agent_raw = next("agent")?;
@@ -367,20 +414,10 @@ impl TabStateEntry {
     }
 }
 
-fn parse_bool(s: &str, name: &str) -> Result<bool, ParseError> {
-    match s {
-        "0" => Ok(false),
-        "1" => Ok(true),
-        _ => Err(ParseError::new(format!("invalid {name} flag: {s:?}"))),
-    }
-}
-
-fn parse_usize(s: &str, name: &str) -> Result<usize, ParseError> {
-    s.parse().map_err(|_| ParseError::new(format!("invalid {name}: {s:?}")))
-}
-
 #[cfg(test)]
 mod tests {
+    use std::convert::TryFrom;
+
     use rstest::rstest;
 
     use super::*;
@@ -411,7 +448,7 @@ mod tests {
     #[case("cursor", Ok(Agent::Cursor))]
     #[case("codex", Ok(Agent::Codex))]
     #[case("opencode", Ok(Agent::Opencode))]
-    #[case("unknown", Err("unknown agent \"unknown\"".to_string()))]
+    #[case("unknown", Err("invalid agent: \"unknown\"".to_string()))]
     fn agent_from_name_works_as_expected(#[case] name: &str, #[case] expected: Result<Agent, String>) {
         let actual = Agent::from_name(name).map_err(|e| e.to_string());
         pretty_assertions::assert_eq!(actual, expected);
@@ -441,11 +478,8 @@ mod tests {
             },
         };
 
-        let content = entry.to_file_content();
-        assert2::assert!(let Ok(parsed) = TabStateEntry::parse_file_content(1, &content));
-        pretty_assertions::assert_eq!(
-            (parsed.cwd, parsed.cmd, parsed.git_stat),
-            (entry.cwd, entry.cmd, entry.git_stat)
-        );
+        let content = entry.to_string();
+        assert2::assert!(let Ok(parsed) = TabStateEntry::try_from((1, content.as_str())));
+        pretty_assertions::assert_eq!(parsed, entry);
     }
 }

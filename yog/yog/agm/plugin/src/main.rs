@@ -9,6 +9,7 @@ use agm_core::AgentEventKind;
 use agm_core::AgentEventPayload;
 use agm_core::Cmd;
 use agm_core::GitStat;
+use agm_core::ParseError;
 use agm_core::TabStateEntry;
 use ui::TabRow;
 use zellij_tile::prelude::*;
@@ -18,6 +19,7 @@ mod ui;
 const CONTEXT_KEY_GIT_STAT: &str = "git-stat";
 const SYNC_PIPE: &str = "agm-sync";
 
+#[cfg_attr(test, derive(Debug, PartialEq))]
 struct CurrentTab {
     tab_id: usize,
     seq: u64,
@@ -43,23 +45,24 @@ impl CurrentTab {
 }
 
 #[derive(Debug)]
-struct PipeEventParseError(String);
-
-impl PipeEventParseError {
-    fn new(msg: impl Into<String>) -> Self {
-        Self(msg.into())
-    }
+enum PipeEventError {
+    Parse(ParseError),
+    UnknownMsgName(String),
 }
 
-impl std::fmt::Display for PipeEventParseError {
+impl std::fmt::Display for PipeEventError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.0)
+        match self {
+            PipeEventError::Parse(err) => write!(f, "{err}"),
+            PipeEventError::UnknownMsgName(name) => write!(f, "unknown message name {name:?}"),
+        }
     }
 }
 
-impl std::error::Error for PipeEventParseError {}
+impl std::error::Error for PipeEventError {}
 
-#[derive(Clone)]
+#[cfg_attr(test, derive(PartialEq))]
+#[derive(Clone, Debug)]
 struct StateSnapshotPayload {
     tab_id: usize,
     seq: u64,
@@ -69,25 +72,41 @@ struct StateSnapshotPayload {
 }
 
 impl StateSnapshotPayload {
-    fn parse(msg: &PipeMessage) -> Result<Self, PipeEventParseError> {
+    fn parse(msg: &PipeMessage) -> Result<Self, PipeEventError> {
         let tab_id = msg
             .args
             .get("tab_id")
-            .ok_or_else(|| PipeEventParseError::new("missing tab_id"))?
-            .parse::<usize>()
-            .map_err(|_| PipeEventParseError::new("invalid tab_id"))?;
+            .ok_or(PipeEventError::Parse(ParseError::Missing("tab_id")))
+            .and_then(|v| {
+                v.parse::<usize>().map_err(|_| {
+                    PipeEventError::Parse(ParseError::Invalid {
+                        field: "tab_id",
+                        value: v.clone(),
+                    })
+                })
+            })?;
         let seq = msg
             .args
             .get("seq")
-            .ok_or_else(|| PipeEventParseError::new("missing seq"))?
-            .parse::<u64>()
-            .map_err(|_| PipeEventParseError::new("invalid seq"))?;
+            .ok_or(PipeEventError::Parse(ParseError::Missing("seq")))
+            .and_then(|v| {
+                v.parse::<u64>().map_err(|_| {
+                    PipeEventError::Parse(ParseError::Invalid {
+                        field: "seq",
+                        value: v.clone(),
+                    })
+                })
+            })?;
         let payload = msg
             .payload
             .as_ref()
-            .ok_or_else(|| PipeEventParseError::new("missing state_snapshot payload"))?;
-        let entry = TabStateEntry::parse_file_content(tab_id, payload)
-            .map_err(|e| PipeEventParseError::new(format!("invalid state_snapshot payload: {e}")))?;
+            .ok_or(PipeEventError::Parse(ParseError::Missing("state_snapshot payload")))?;
+        let entry = TabStateEntry::try_from((tab_id, payload.as_str())).map_err(|e| {
+            PipeEventError::Parse(ParseError::Invalid {
+                field: "state_snapshot payload",
+                value: e.to_string(),
+            })
+        })?;
 
         Ok(Self {
             tab_id,
@@ -113,7 +132,7 @@ impl StateSnapshotPayload {
 
         MessageToPlugin::new(SYNC_PIPE.to_string())
             .with_args(args)
-            .with_payload(entry.to_file_content())
+            .with_payload(entry.to_string())
     }
 }
 
@@ -140,51 +159,57 @@ enum PipeEvent {
     Agent(AgentEventPayload),
 }
 
-impl PipeEvent {
-    fn source_plugin_id(msg: &PipeMessage) -> Option<u32> {
-        match msg.source {
-            PipeSource::Plugin(plugin_id) => Some(plugin_id),
-            _ => None,
-        }
-    }
+impl TryFrom<&PipeMessage> for PipeEvent {
+    type Error = PipeEventError;
 
-    fn parse(msg: &PipeMessage) -> Result<Option<Self>, PipeEventParseError> {
+    fn try_from(msg: &PipeMessage) -> Result<Self, Self::Error> {
         match msg.name.as_str() {
             SYNC_PIPE => match msg.args.get("type").map(String::as_str) {
                 Some("sync_request") => {
-                    let Some(requester_plugin_id) = Self::source_plugin_id(msg) else {
-                        return Ok(None);
-                    };
-                    Ok(Some(Self::SyncRequest { requester_plugin_id }))
+                    let requester_plugin_id =
+                        Self::source_plugin_id(msg).ok_or(PipeEventError::Parse(ParseError::Missing("source")))?;
+                    Ok(Self::SyncRequest { requester_plugin_id })
                 }
                 Some("state_snapshot") => {
-                    let Some(source_plugin_id) = Self::source_plugin_id(msg) else {
-                        return Ok(None);
-                    };
+                    let source_plugin_id =
+                        Self::source_plugin_id(msg).ok_or(PipeEventError::Parse(ParseError::Missing("source")))?;
                     let snapshot = StateSnapshotPayload::parse(msg)?;
-                    Ok(Some(Self::StateSnapshot {
+                    Ok(Self::StateSnapshot {
                         source_plugin_id,
                         snapshot,
-                    }))
+                    })
                 }
-                Some(other) => Err(PipeEventParseError::new(format!("unknown sync message type {other:?}"))),
-                None => Err(PipeEventParseError::new("missing sync message type")),
+                Some(other) => Err(PipeEventError::UnknownMsgName(other.to_string())),
+                None => Err(PipeEventError::Parse(ParseError::Missing("sync message type"))),
             },
             AGENTS_PIPE => {
                 let pane_id = msg
                     .args
                     .get("pane_id")
-                    .ok_or_else(|| PipeEventParseError::new("missing pane_id"))?;
+                    .ok_or(PipeEventError::Parse(ParseError::Missing("pane_id")))?;
                 let agent = msg
                     .args
                     .get("agent")
-                    .ok_or_else(|| PipeEventParseError::new("missing agent"))?;
+                    .ok_or(PipeEventError::Parse(ParseError::Missing("agent")))?;
                 let payload = msg.payload.as_deref().unwrap_or("");
-                let payload = AgentEventPayload::parse(pane_id, agent, payload)
-                    .map_err(|e| PipeEventParseError::new(e.to_string()))?;
-                Ok(Some(Self::Agent(payload)))
+                let payload = AgentEventPayload::parse(pane_id, agent, payload).map_err(|e| {
+                    PipeEventError::Parse(ParseError::Invalid {
+                        field: "agent",
+                        value: e.to_string(),
+                    })
+                })?;
+                Ok(Self::Agent(payload))
             }
-            _ => Ok(None),
+            _ => Err(PipeEventError::UnknownMsgName(msg.name.clone())),
+        }
+    }
+}
+
+impl PipeEvent {
+    fn source_plugin_id(msg: &PipeMessage) -> Option<u32> {
+        match msg.source {
+            PipeSource::Plugin(plugin_id) => Some(plugin_id),
+            _ => None,
         }
     }
 }
@@ -691,9 +716,11 @@ impl ZellijPlugin for State {
     }
 
     fn pipe(&mut self, pipe_message: PipeMessage) -> bool {
-        let event = match PipeEvent::parse(&pipe_message) {
-            Ok(Some(event)) => event,
-            Ok(None) => return false,
+        let event = match PipeEvent::try_from(&pipe_message) {
+            Ok(event) => event,
+            Err(PipeEventError::UnknownMsgName(_)) | Err(PipeEventError::Parse(ParseError::Missing("source"))) => {
+                return false;
+            }
             Err(err) => {
                 eprintln!("agm: {err}");
                 return false;
@@ -788,9 +815,6 @@ fn compute_frame(state: &State) -> Vec<TabRow> {
 mod tests {
     use std::collections::HashMap;
 
-    use agm_core::Agent;
-    use pretty_assertions::assert_eq;
-
     use super::*;
 
     fn tab_with_name(tab_id: usize, position: usize, name: &str) -> TabInfo {
@@ -802,18 +826,18 @@ mod tests {
         }
     }
 
-    fn plugin_pane(plugin_id: u32) -> PaneInfo {
+    fn plugin_pane(id: u32) -> PaneInfo {
         PaneInfo {
-            id: plugin_id,
+            id,
             is_plugin: true,
             ..Default::default()
         }
     }
 
-    fn terminal_pane(pane_id: u32, focused: bool) -> PaneInfo {
+    fn terminal_pane(id: u32, is_focused: bool) -> PaneInfo {
         PaneInfo {
-            id: pane_id,
-            is_focused: focused,
+            id,
+            is_focused,
             ..Default::default()
         }
     }
@@ -857,9 +881,16 @@ mod tests {
         let _ = state.refresh_local_from_manifest(&moved_manifest);
 
         let local = state.current_tab.as_ref().expect("missing local tab");
-        assert_eq!(local.tab_id, 10);
-        assert_eq!(local.cwd.as_deref(), Some(std::path::Path::new("/tmp/project")));
-        assert_eq!(local_display_cmd(local), Cmd::BusyAgent(Agent::Codex));
+        let expected_local = CurrentTab {
+            tab_id: 10,
+            seq: 0,
+            pane_ids: [42].into_iter().collect(),
+            focused_pane_id: Some(42),
+            cwd: Some(PathBuf::from("/tmp/project")),
+            agent_by_pane: [(42, Cmd::BusyAgent(Agent::Codex))].into_iter().collect(),
+            git_stat: GitStat::default(),
+        };
+        pretty_assertions::assert_eq!(local, &expected_local);
     }
 
     #[test]
@@ -881,8 +912,16 @@ mod tests {
         let _ = state.refresh_local_from_manifest(&manifest);
 
         let local = state.current_tab.as_ref().expect("missing local tab");
-        assert_eq!(local.tab_id, 99);
-        assert_eq!(local_display_cmd(local), Cmd::BusyAgent(Agent::Codex));
+        let expected_local = CurrentTab {
+            tab_id: 99,
+            seq: 0,
+            pane_ids: [42].into_iter().collect(),
+            focused_pane_id: Some(42),
+            cwd: Some(PathBuf::from("/tmp/project")),
+            agent_by_pane: [(42, Cmd::BusyAgent(Agent::Codex))].into_iter().collect(),
+            git_stat: GitStat::default(),
+        };
+        pretty_assertions::assert_eq!(local, &expected_local);
     }
 
     #[test]
@@ -895,7 +934,7 @@ mod tests {
 
         let prev_tabs = vec![tab_with_name(10, 0, "agent"), tab_with_name(20, 1, "shell")];
         assert!(state.remap_local_tab_id_after_tab_update(&prev_tabs));
-        assert_eq!(state.local_tab_id(), Some(30));
+        pretty_assertions::assert_eq!(state.local_tab_id(), Some(30));
     }
 
     #[test]
@@ -909,11 +948,8 @@ mod tests {
         assert!(state.apply_remote_snapshot(100, snapshot(2, 10, Cmd::BusyAgent(Agent::Codex))));
         assert!(state.apply_remote_snapshot(200, snapshot(2, 1, Cmd::IdleAgent(Agent::Claude))));
 
-        assert_eq!(state.other_tabs.len(), 1);
-        assert_eq!(
-            state.remote_snapshot_for_tab(2).map(|remote| remote.cmd.clone()),
-            Some(Cmd::IdleAgent(Agent::Claude))
-        );
+        let expected = HashMap::from([(200, snapshot(2, 1, Cmd::IdleAgent(Agent::Claude)))]);
+        pretty_assertions::assert_eq!(state.other_tabs, expected);
     }
 
     #[test]
@@ -927,7 +963,7 @@ mod tests {
             args,
             is_private: false,
         };
-        let parsed = PipeEvent::parse(&msg).expect("parse failed");
-        assert!(parsed.is_none());
+        let parsed = PipeEvent::try_from(&msg);
+        assert2::assert!(let Err(PipeEventError::Parse(ParseError::Missing("source"))) = parsed);
     }
 }
