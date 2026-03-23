@@ -10,3 +10,10 @@ description = "Common types shared between Zellij plugin and its helper CLI."
 keywords = ["lib", "zellij", "terminal", "tabs", "plugin"]
 categories = ["command-line-utilities", "development-tools"]
 publish = false
+
+[dependencies]
+
+[dev-dependencies]
+assert2 = { workspace = true }
+pretty_assertions = { workspace = true }
+rstest = { workspace = true }

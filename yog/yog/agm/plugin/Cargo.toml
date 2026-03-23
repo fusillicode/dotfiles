@@ -11,8 +11,6 @@ keywords = ["zellij", "terminal", "tabs", "plugin", "wasm"]
 categories = ["zellij", "development-tools"]
 publish = false
 
-[workspace]
-
 [dependencies]
 agm-core = { path = "../core" }
 zellij-tile = { git = "https://github.com/zellij-org/zellij.git", branch = "main" }
