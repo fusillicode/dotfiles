@@ -186,7 +186,7 @@ impl Agent {
     }
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AgentEventKind {
     Start,
     Busy,
@@ -275,6 +275,7 @@ impl From<&AgentEventPayload> for Cmd {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AgentEventPayload {
     pub pane_id: u32,
     pub agent: Agent,
@@ -308,6 +309,7 @@ fn decode_opt_path(val: &str) -> Option<PathBuf> {
     }
 }
 
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub struct TabStateEntry {
     pub tab_id: usize,
     pub cwd: Option<PathBuf>,
@@ -375,4 +377,75 @@ fn parse_bool(s: &str, name: &str) -> Result<bool, ParseError> {
 
 fn parse_usize(s: &str, name: &str) -> Result<usize, ParseError> {
     s.parse().map_err(|_| ParseError::new(format!("invalid {name}: {s:?}")))
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case("/home/user/project 10 5 2 1", "/home/user/project", 10, 5, 2, true)]
+    #[case("/home/user/my project 10 5 2 0", "/home/user/my project", 10, 5, 2, false)]
+    fn git_stat_parse_line_works_as_expected(
+        #[case] line: &str,
+        #[case] expected_path: &str,
+        #[case] insertions: usize,
+        #[case] deletions: usize,
+        #[case] new_files: usize,
+        #[case] is_worktree: bool,
+    ) {
+        let expected_stat = GitStat {
+            insertions,
+            deletions,
+            new_files,
+            is_worktree,
+        };
+        assert2::assert!(let Ok((path, stat)) = GitStat::parse_line(line));
+        pretty_assertions::assert_eq!((path, stat), (PathBuf::from(expected_path), expected_stat));
+    }
+
+    #[rstest]
+    #[case("claude", Ok(Agent::Claude))]
+    #[case("cursor", Ok(Agent::Cursor))]
+    #[case("codex", Ok(Agent::Codex))]
+    #[case("opencode", Ok(Agent::Opencode))]
+    #[case("unknown", Err("unknown agent \"unknown\"".to_string()))]
+    fn agent_from_name_works_as_expected(#[case] name: &str, #[case] expected: Result<Agent, String>) {
+        let actual = Agent::from_name(name).map_err(|e| e.to_string());
+        pretty_assertions::assert_eq!(actual, expected);
+    }
+
+    #[rstest]
+    #[case("Claude-3.5-Sonnet", Some(Agent::Claude))]
+    #[case("Cursor-IDE", Some(Agent::Cursor))]
+    #[case("GitHub-Codex", Some(Agent::Codex))]
+    #[case("OpenCode-Agent", Some(Agent::Opencode))]
+    #[case("Vim", None)]
+    fn agent_detect_works_as_expected(#[case] name: &str, #[case] expected: Option<Agent>) {
+        pretty_assertions::assert_eq!(Agent::detect(name), expected);
+    }
+
+    #[test]
+    fn tab_state_entry_serialization_roundtrip_works_as_expected() {
+        let entry = TabStateEntry {
+            tab_id: 1,
+            cwd: Some(PathBuf::from("/tmp")),
+            cmd: Cmd::BusyAgent(Agent::Claude),
+            git_stat: GitStat {
+                insertions: 1,
+                deletions: 2,
+                new_files: 3,
+                is_worktree: true,
+            },
+        };
+
+        let content = entry.to_file_content();
+        assert2::assert!(let Ok(parsed) = TabStateEntry::parse_file_content(1, &content));
+        pretty_assertions::assert_eq!(
+            (parsed.cwd, parsed.cmd, parsed.git_stat),
+            (entry.cwd, entry.cmd, entry.git_stat)
+        );
+    }
 }

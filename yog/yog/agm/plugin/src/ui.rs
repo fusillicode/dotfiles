@@ -240,7 +240,7 @@ mod tests {
 
         let expected = TabRow {
             active: true,
-            path_label: "user/project".to_string(),
+            path_label: "~/user/project".to_string(),
             cmd: Cmd::Running("nvim".to_string()),
             git: GitStat::default(),
         };
@@ -263,7 +263,7 @@ mod tests {
 
         let expected = TabRow {
             active: false,
-            path_label: "user".to_string(),
+            path_label: "~/user".to_string(),
             cmd: Cmd::Running("zsh".to_string()),
             git: GitStat::default(),
         };

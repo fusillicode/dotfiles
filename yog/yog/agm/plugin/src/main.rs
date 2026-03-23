@@ -820,10 +820,7 @@ mod tests {
 
     fn manifest(entries: Vec<(usize, Vec<PaneInfo>)>) -> PaneManifest {
         let panes = entries.into_iter().collect::<HashMap<usize, Vec<PaneInfo>>>();
-        PaneManifest {
-            panes,
-            ..Default::default()
-        }
+        PaneManifest { panes }
     }
 
     fn snapshot(tab_id: usize, seq: u64, cmd: Cmd) -> StateSnapshotPayload {
