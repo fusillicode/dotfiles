@@ -10,7 +10,10 @@ ARGS:
 
 SUBCOMMANDS:
     install         Build and deploy the WASM plugin, provision Claude, Cursor,
-                    and Opencode hooks. Pass --debug for an unoptimised build.
+                    Codex, and Opencode hooks. Pass --debug for an unoptimised build.
+                    Codex hooks are JSON in ~/.codex/hooks.json; you must also enable
+                    them in ~/.codex/config.toml: [features] codex_hooks = true
+                    (hooks do not run on Windows Codex builds yet).
     git-stat        Print "path insertions deletions untracked worktree"
                     per PATH (one line each, in argument order).
 

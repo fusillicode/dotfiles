@@ -308,7 +308,10 @@ impl State {
 
         let mut pane_ids = HashSet::new();
         let mut focused_pane = None;
-        for pane in panes.iter().filter(|pane| !pane.is_plugin) {
+        for pane in panes
+            .iter()
+            .filter(|pane| !pane.is_plugin && !pane.exited && !pane.is_held)
+        {
             pane_ids.insert(pane.id);
             if pane.is_focused {
                 focused_pane = Some(FocusedPane {
@@ -334,6 +337,8 @@ impl State {
             local.focused_pane = focused_pane;
             focused_changed = true;
         }
+
+        reconcile_agent_by_pane_with_manifest(local, panes);
 
         let mut cwd_changed = false;
         if let Some(focused_pane) = local.focused_pane.as_ref()
@@ -778,11 +783,14 @@ fn local_display_cmd(local: &CurrentTab) -> Cmd {
         .max_by_key(|(priority, busy, _)| (*priority, *busy))
         .map(|(_, _, cmd)| cmd)
         .or_else(|| {
-            local
-                .focused_pane
-                .as_ref()
-                .and_then(|fp| fp.cmd.clone())
-                .map(Cmd::Running)
+            let fp = local.focused_pane.as_ref()?;
+            let cmd_line = fp.cmd.as_deref()?;
+            if let Some(exe) = parse_running_command(cmd_line)
+                && let Some(agent) = Agent::detect(&exe)
+            {
+                return Some(Cmd::IdleAgent(agent));
+            }
+            Some(Cmd::Running(cmd_line.to_string()))
         })
         .unwrap_or(Cmd::None)
 }
@@ -796,6 +804,49 @@ fn focused_pane_running_command(pane: &PaneInfo) -> Option<String> {
         .as_deref()
         .and_then(parse_running_command)
         .or_else(|| parse_pane_title(&pane.title))
+}
+
+/// Drop hook-driven agent state when the pane no longer runs that agent (e.g. Codex quit → shell).
+///
+/// Codex `hooks.json` has no session-exit hook; `Stop` is end-of-turn, not "quit the TUI". The
+/// manifest still updates the terminal command/title, so we reconcile here on every pane refresh.
+fn reconcile_agent_by_pane_with_manifest(local: &mut CurrentTab, panes: &[PaneInfo]) {
+    let tracked: Vec<u32> = local.agent_by_pane.keys().copied().collect();
+    for pane_id in tracked {
+        let Some(cmd) = local.agent_by_pane.get(&pane_id) else {
+            continue;
+        };
+        if !cmd.is_agent() {
+            continue;
+        }
+        let Some(stored) = cmd.agent_name().and_then(|n| Agent::from_name(n).ok()) else {
+            continue;
+        };
+
+        let Some(pane) = panes.iter().find(|p| p.id == pane_id && !p.is_plugin) else {
+            local.agent_by_pane.remove(&pane_id);
+            continue;
+        };
+        if pane.exited || pane.is_held {
+            local.agent_by_pane.remove(&pane_id);
+            continue;
+        }
+
+        let detected = focused_pane_running_command(pane).and_then(|exe| Agent::detect(&exe));
+        let has_exec_line = pane.terminal_command.as_ref().is_some_and(|s| !s.trim().is_empty());
+
+        match detected {
+            Some(d) if d != stored => {
+                local.agent_by_pane.remove(&pane_id);
+            }
+            // Title-only metadata is ambiguous (e.g. cwd path while Codex is running); rely on the
+            // shell-reported command line to detect "agent is gone" after quit.
+            None if has_exec_line => {
+                local.agent_by_pane.remove(&pane_id);
+            }
+            _ => {}
+        }
+    }
 }
 
 fn parse_running_command(command: &str) -> Option<String> {
@@ -1066,6 +1117,16 @@ mod tests {
     }
 
     #[test]
+    fn local_display_cmd_shows_idle_agent_when_focus_executable_matches_agent() {
+        let mut local = CurrentTab::new(1);
+        local.focused_pane = Some(FocusedPane {
+            id: 0,
+            cmd: Some("/opt/homebrew/bin/codex".to_string()),
+        });
+        pretty_assertions::assert_eq!(local_display_cmd(&local), Cmd::IdleAgent(Agent::Codex));
+    }
+
+    #[test]
     fn refresh_local_from_manifest_picks_focused_command_name() {
         let mut state = State {
             plugin_id: 7,
@@ -1143,6 +1204,32 @@ mod tests {
         assert!(cmd_changed);
         let local = state.current_tab.as_ref().expect("missing local tab");
         pretty_assertions::assert_eq!(local.focused_pane.as_ref().and_then(|fp| fp.cmd.as_deref()), None);
+        pretty_assertions::assert_eq!(local_display_cmd(local), Cmd::None);
+    }
+
+    #[test]
+    fn refresh_local_from_manifest_clears_agent_state_when_pane_process_changes() {
+        let mut state = State {
+            plugin_id: 7,
+            all_tabs: vec![tab_with_name(10, 0, "a")],
+            current_tab: Some(CurrentTab::new(10)),
+            ..Default::default()
+        };
+
+        let local = state.current_tab.as_mut().expect("missing local tab");
+        local.pane_ids.insert(42);
+        local.focused_pane = Some(FocusedPane {
+            id: 42,
+            cmd: Some("codex".to_string()),
+        });
+        local.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Codex));
+
+        let pane = terminal_pane_with_command(42, true, "/bin/zsh");
+        let manifest = manifest(vec![(0, vec![plugin_pane(7), pane])]);
+        let _ = state.refresh_local_from_manifest(&manifest, noop_pane_cwd);
+
+        let local = state.current_tab.as_ref().expect("missing local tab");
+        pretty_assertions::assert_eq!(local.agent_by_pane.get(&42), None);
         pretty_assertions::assert_eq!(local_display_cmd(local), Cmd::None);
     }
 
