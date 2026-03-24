@@ -19,13 +19,19 @@ mod ui;
 const CONTEXT_KEY_GIT_STAT: &str = "git-stat";
 const SYNC_PIPE: &str = "agm-sync";
 
+#[derive(Clone, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
+struct FocusedPane {
+    id: u32,
+    cmd: Option<String>,
+}
+
 #[cfg_attr(test, derive(Debug, PartialEq))]
 struct CurrentTab {
     tab_id: usize,
     seq: u64,
     pane_ids: HashSet<u32>,
-    focused_pane_id: Option<u32>,
-    focused_pane_command: Option<String>,
+    focused_pane: Option<FocusedPane>,
     cwd: Option<PathBuf>,
     agent_by_pane: HashMap<u32, Cmd>,
     git_stat: GitStat,
@@ -37,8 +43,7 @@ impl CurrentTab {
             tab_id,
             seq: 0,
             pane_ids: HashSet::new(),
-            focused_pane_id: None,
-            focused_pane_command: None,
+            focused_pane: None,
             cwd: None,
             agent_by_pane: HashMap::new(),
             git_stat: GitStat::default(),
@@ -294,13 +299,14 @@ impl State {
         };
 
         let mut pane_ids = HashSet::new();
-        let mut focused_pane_id = None;
-        let mut focused_pane_command = None;
+        let mut focused_pane = None;
         for pane in panes.iter().filter(|pane| !pane.is_plugin) {
             pane_ids.insert(pane.id);
             if pane.is_focused {
-                focused_pane_id = Some(pane.id);
-                focused_pane_command = focused_pane_running_command(pane);
+                focused_pane = Some(FocusedPane {
+                    id: pane.id,
+                    cmd: focused_pane_running_command(pane),
+                });
             }
         }
 
@@ -316,16 +322,15 @@ impl State {
         }
 
         let mut focused_changed = false;
-        if local.focused_pane_id != focused_pane_id {
-            local.focused_pane_id = focused_pane_id;
+        if local.focused_pane != focused_pane {
+            local.focused_pane = focused_pane;
             focused_changed = true;
         }
-        local.focused_pane_command = focused_pane_command;
 
         let mut cwd_changed = false;
-        if let Some(pane_id) = local.focused_pane_id
+        if let Some(focused_pane) = local.focused_pane.as_ref()
             && (focused_changed || local.cwd.is_none())
-            && let Ok(cwd) = get_pane_cwd(PaneId::Terminal(pane_id))
+            && let Ok(cwd) = get_pane_cwd(PaneId::Terminal(focused_pane.id))
             && local.cwd.as_ref() != Some(&cwd)
         {
             local.cwd = Some(cwd);
@@ -340,7 +345,7 @@ impl State {
         let Some(local) = self.current_tab.as_mut() else {
             return false;
         };
-        if local.focused_pane_id != Some(pane_id) {
+        if local.focused_pane.as_ref().map(|fp| fp.id) != Some(pane_id) {
             return false;
         }
         if local.cwd.as_ref() == Some(&cwd) {
@@ -747,7 +752,13 @@ fn local_display_cmd(local: &CurrentTab) -> Cmd {
         })
         .max_by_key(|(priority, busy, _)| (*priority, *busy))
         .map(|(_, _, cmd)| cmd)
-        .or_else(|| local.focused_pane_command.clone().map(Cmd::Running))
+        .or_else(|| {
+            local
+                .focused_pane
+                .as_ref()
+                .and_then(|fp| fp.cmd.clone())
+                .map(Cmd::Running)
+        })
         .unwrap_or(Cmd::None)
 }
 
@@ -922,7 +933,7 @@ mod tests {
 
         let local = state.current_tab.as_mut().expect("missing local tab");
         local.pane_ids.insert(42);
-        local.focused_pane_id = Some(42);
+        local.focused_pane = Some(FocusedPane { id: 42, cmd: None });
         local.cwd = Some(PathBuf::from("/tmp/project"));
         local.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Codex));
 
@@ -937,8 +948,7 @@ mod tests {
             tab_id: 10,
             seq: 0,
             pane_ids: [42].into_iter().collect(),
-            focused_pane_id: Some(42),
-            focused_pane_command: None,
+            focused_pane: Some(FocusedPane { id: 42, cmd: None }),
             cwd: Some(PathBuf::from("/tmp/project")),
             agent_by_pane: [(42, Cmd::BusyAgent(Agent::Codex))].into_iter().collect(),
             git_stat: GitStat::default(),
@@ -956,7 +966,7 @@ mod tests {
         };
         let local = state.current_tab.as_mut().expect("missing local tab");
         local.pane_ids.insert(42);
-        local.focused_pane_id = Some(42);
+        local.focused_pane = Some(FocusedPane { id: 42, cmd: None });
         local.cwd = Some(PathBuf::from("/tmp/project"));
         local.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Codex));
 
@@ -969,8 +979,7 @@ mod tests {
             tab_id: 99,
             seq: 0,
             pane_ids: [42].into_iter().collect(),
-            focused_pane_id: Some(42),
-            focused_pane_command: None,
+            focused_pane: Some(FocusedPane { id: 42, cmd: None }),
             cwd: Some(PathBuf::from("/tmp/project")),
             agent_by_pane: [(42, Cmd::BusyAgent(Agent::Codex))].into_iter().collect(),
             git_stat: GitStat::default(),
@@ -1009,14 +1018,20 @@ mod tests {
     #[test]
     fn local_display_cmd_falls_back_to_focused_non_agent_command() {
         let mut local = CurrentTab::new(1);
-        local.focused_pane_command = Some("cargo".to_string());
+        local.focused_pane = Some(FocusedPane {
+            id: 0,
+            cmd: Some("cargo".to_string()),
+        });
         pretty_assertions::assert_eq!(local_display_cmd(&local), Cmd::Running("cargo".to_string()));
     }
 
     #[test]
     fn local_display_cmd_prioritizes_agents_over_focused_non_agent_command() {
         let mut local = CurrentTab::new(1);
-        local.focused_pane_command = Some("cargo".to_string());
+        local.focused_pane = Some(FocusedPane {
+            id: 0,
+            cmd: Some("cargo".to_string()),
+        });
         local.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Codex));
         pretty_assertions::assert_eq!(local_display_cmd(&local), Cmd::BusyAgent(Agent::Codex));
     }
@@ -1032,7 +1047,7 @@ mod tests {
 
         let local = state.current_tab.as_mut().expect("missing local tab");
         local.pane_ids.insert(42);
-        local.focused_pane_id = Some(42);
+        local.focused_pane = Some(FocusedPane { id: 42, cmd: None });
         local.cwd = Some(PathBuf::from("/tmp/project"));
 
         let pane = terminal_pane_with_command(42, true, "/usr/bin/cargo test -p agm-plugin");
@@ -1041,7 +1056,10 @@ mod tests {
 
         assert!(cmd_changed);
         let local = state.current_tab.as_ref().expect("missing local tab");
-        pretty_assertions::assert_eq!(local.focused_pane_command.as_deref(), Some("cargo"));
+        pretty_assertions::assert_eq!(
+            local.focused_pane.as_ref().and_then(|fp| fp.cmd.as_deref()),
+            Some("cargo")
+        );
         pretty_assertions::assert_eq!(local_display_cmd(local), Cmd::Running("cargo".to_string()));
     }
 
@@ -1056,7 +1074,7 @@ mod tests {
 
         let local = state.current_tab.as_mut().expect("missing local tab");
         local.pane_ids.insert(42);
-        local.focused_pane_id = Some(42);
+        local.focused_pane = Some(FocusedPane { id: 42, cmd: None });
         local.cwd = Some(PathBuf::from("/tmp/project"));
 
         let pane = terminal_pane_with_title(42, true, "nvim");
@@ -1065,7 +1083,10 @@ mod tests {
 
         assert!(cmd_changed);
         let local = state.current_tab.as_ref().expect("missing local tab");
-        pretty_assertions::assert_eq!(local.focused_pane_command.as_deref(), Some("nvim"));
+        pretty_assertions::assert_eq!(
+            local.focused_pane.as_ref().and_then(|fp| fp.cmd.as_deref()),
+            Some("nvim")
+        );
         pretty_assertions::assert_eq!(local_display_cmd(local), Cmd::Running("nvim".to_string()));
     }
 
@@ -1080,9 +1101,11 @@ mod tests {
 
         let local = state.current_tab.as_mut().expect("missing local tab");
         local.pane_ids.insert(42);
-        local.focused_pane_id = Some(42);
+        local.focused_pane = Some(FocusedPane {
+            id: 42,
+            cmd: Some("nvim".to_string()),
+        });
         local.cwd = Some(PathBuf::from("/tmp/project"));
-        local.focused_pane_command = Some("nvim".to_string());
 
         let pane = terminal_pane_with_title(42, true, "/tmp/project");
         let manifest = manifest(vec![(0, vec![plugin_pane(7), pane])]);
@@ -1090,7 +1113,7 @@ mod tests {
 
         assert!(cmd_changed);
         let local = state.current_tab.as_ref().expect("missing local tab");
-        pretty_assertions::assert_eq!(local.focused_pane_command, None);
+        pretty_assertions::assert_eq!(local.focused_pane.as_ref().and_then(|fp| fp.cmd.as_deref()), None);
         pretty_assertions::assert_eq!(local_display_cmd(local), Cmd::None);
     }
 
