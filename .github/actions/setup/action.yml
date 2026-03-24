@@ -16,6 +16,10 @@ runs:
         rustup show
         rustc -V
 
+    - name: Add wasm target (agm-plugin)
+      shell: bash
+      run: rustup target add wasm32-wasip1
+
     - name: Install global cargo tools
       if: inputs.tools != ''
       uses: taiki-e/install-action@v2
