@@ -236,6 +236,10 @@ struct State {
 
 register_plugin!(State);
 
+fn zellij_terminal_pane_cwd(pane_id: u32) -> Option<PathBuf> {
+    get_pane_cwd(PaneId::Terminal(pane_id)).ok()
+}
+
 impl State {
     fn local_tab_id(&self) -> Option<usize> {
         self.current_tab.as_ref().map(|local| local.tab_id)
@@ -287,7 +291,11 @@ impl State {
         true
     }
 
-    fn refresh_local_from_manifest(&mut self, manifest: &PaneManifest) -> (bool, bool, bool) {
+    fn refresh_local_from_manifest(
+        &mut self,
+        manifest: &PaneManifest,
+        mut resolve_pane_cwd: impl FnMut(u32) -> Option<PathBuf>,
+    ) -> (bool, bool, bool) {
         if self.current_tab.is_none() {
             return (false, false, false);
         }
@@ -330,7 +338,7 @@ impl State {
         let mut cwd_changed = false;
         if let Some(focused_pane) = local.focused_pane.as_ref()
             && (focused_changed || local.cwd.is_none())
-            && let Ok(cwd) = get_pane_cwd(PaneId::Terminal(focused_pane.id))
+            && let Some(cwd) = resolve_pane_cwd(focused_pane.id)
             && local.cwd.as_ref() != Some(&cwd)
         {
             local.cwd = Some(cwd);
@@ -669,7 +677,8 @@ impl ZellijPlugin for State {
 
             Event::PaneUpdate(manifest) => {
                 let local_created = self.ensure_local_tab(&manifest);
-                let (focused_changed, cwd_changed, cmd_changed) = self.refresh_local_from_manifest(&manifest);
+                let (focused_changed, cwd_changed, cmd_changed) =
+                    self.refresh_local_from_manifest(&manifest, zellij_terminal_pane_cwd);
 
                 if self.current_tab.is_some() && !self.sync_requested {
                     self.send_sync_request();
@@ -878,6 +887,10 @@ mod tests {
 
     use super::*;
 
+    fn noop_pane_cwd(_pane_id: u32) -> Option<PathBuf> {
+        None
+    }
+
     fn tab_with_name(tab_id: usize, position: usize, name: &str) -> TabInfo {
         TabInfo {
             tab_id,
@@ -957,7 +970,7 @@ mod tests {
         // manifest already reflects new position, while all_tabs is still stale.
         let moved_manifest = manifest(vec![(1, vec![plugin_pane(7), terminal_pane(42, true)])]);
         assert!(!state.ensure_local_tab(&moved_manifest));
-        let _ = state.refresh_local_from_manifest(&moved_manifest);
+        let _ = state.refresh_local_from_manifest(&moved_manifest, noop_pane_cwd);
 
         let local = state.current_tab.as_ref().expect("missing local tab");
         let expected_local = CurrentTab {
@@ -988,7 +1001,7 @@ mod tests {
 
         let manifest = manifest(vec![(1, vec![plugin_pane(7), terminal_pane(42, true)])]);
         assert!(state.ensure_local_tab(&manifest));
-        let _ = state.refresh_local_from_manifest(&manifest);
+        let _ = state.refresh_local_from_manifest(&manifest, noop_pane_cwd);
 
         let local = state.current_tab.as_ref().expect("missing local tab");
         let expected_local = CurrentTab {
@@ -1068,7 +1081,7 @@ mod tests {
 
         let pane = terminal_pane_with_command(42, true, "/usr/bin/cargo test -p agm-plugin");
         let manifest = manifest(vec![(0, vec![plugin_pane(7), pane])]);
-        let (_focused_changed, _cwd_changed, cmd_changed) = state.refresh_local_from_manifest(&manifest);
+        let (_focused_changed, _cwd_changed, cmd_changed) = state.refresh_local_from_manifest(&manifest, noop_pane_cwd);
 
         assert!(cmd_changed);
         let local = state.current_tab.as_ref().expect("missing local tab");
@@ -1095,7 +1108,7 @@ mod tests {
 
         let pane = terminal_pane_with_title(42, true, "nvim");
         let manifest = manifest(vec![(0, vec![plugin_pane(7), pane])]);
-        let (_focused_changed, _cwd_changed, cmd_changed) = state.refresh_local_from_manifest(&manifest);
+        let (_focused_changed, _cwd_changed, cmd_changed) = state.refresh_local_from_manifest(&manifest, noop_pane_cwd);
 
         assert!(cmd_changed);
         let local = state.current_tab.as_ref().expect("missing local tab");
@@ -1125,7 +1138,7 @@ mod tests {
 
         let pane = terminal_pane_with_title(42, true, "/tmp/project");
         let manifest = manifest(vec![(0, vec![plugin_pane(7), pane])]);
-        let (_focused_changed, _cwd_changed, cmd_changed) = state.refresh_local_from_manifest(&manifest);
+        let (_focused_changed, _cwd_changed, cmd_changed) = state.refresh_local_from_manifest(&manifest, noop_pane_cwd);
 
         assert!(cmd_changed);
         let local = state.current_tab.as_ref().expect("missing local tab");
