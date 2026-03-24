@@ -374,37 +374,42 @@ impl State {
         (cmd_changed, should_refresh_git)
     }
 
-    fn update_local_git_stat(&mut self, exit_code: Option<i32>, stdout: &[u8]) -> bool {
+    fn update_local_git_stat(&mut self, requested_cwd: &PathBuf, exit_code: Option<i32>, stdout: &[u8]) -> bool {
         if exit_code != Some(0) {
             return false;
         }
 
-        let Some(cwd) = self.current_tab.as_ref().and_then(|local| local.cwd.clone()) else {
+        let Some(local_cwd) = self.current_tab.as_ref().and_then(|local| local.cwd.clone()) else {
             return false;
         };
+        if &local_cwd != requested_cwd {
+            return false;
+        }
 
         let output = String::from_utf8_lossy(stdout);
+        let mut new_stat = None;
         for line in output.lines() {
             let Ok((path, git_stat)) = GitStat::parse_line(line).inspect_err(|e| eprintln!("agm: {e}")) else {
                 continue;
             };
 
-            if path != cwd {
+            if path != *requested_cwd {
                 continue;
             }
-
-            let Some(local) = self.current_tab.as_mut() else {
-                return false;
-            };
-            if local.git_stat == git_stat {
-                return false;
-            }
-
-            local.git_stat = git_stat;
-            return true;
+            new_stat = Some(git_stat);
+            break;
         }
 
-        false
+        let Some(local) = self.current_tab.as_mut() else {
+            return false;
+        };
+        let new_stat = new_stat.unwrap_or_default();
+        if local.git_stat == new_stat {
+            return false;
+        }
+
+        local.git_stat = new_stat;
+        true
     }
 
     fn bump_local_seq(&mut self) {
@@ -434,6 +439,10 @@ impl State {
             message = message.with_destination_plugin_id(target_plugin_id);
         }
         pipe_message_to_plugin(message);
+    }
+
+    fn tab_is_active(tabs: &[TabInfo], tab_id: usize) -> bool {
+        tabs.iter().any(|tab| tab.tab_id == tab_id && tab.active)
     }
 
     fn topology_changed(prev_tabs: &[TabInfo], next_tabs: &[TabInfo]) -> bool {
@@ -501,7 +510,7 @@ impl State {
         let cwd_str = cwd.display().to_string();
         let args: Vec<&str> = vec!["agm", "git-stat", &cwd_str];
         let mut context = BTreeMap::new();
-        context.insert(CONTEXT_KEY_GIT_STAT.into(), String::new());
+        context.insert(CONTEXT_KEY_GIT_STAT.into(), cwd_str.clone());
         run_command_with_env_variables_and_cwd(&args, BTreeMap::new(), cwd, context);
     }
 
@@ -627,11 +636,15 @@ impl ZellijPlugin for State {
             }
 
             Event::TabUpdate(mut tabs) => {
-                let prev_tabs = self.all_tabs.clone();
+                let prev_local_tab_id = self.local_tab_id();
                 tabs.sort_by_key(|tab| tab.position);
-                self.all_tabs = tabs;
+                let prev_tabs = std::mem::replace(&mut self.all_tabs, tabs);
+                let was_active = prev_local_tab_id.is_some_and(|tab_id| Self::tab_is_active(&prev_tabs, tab_id));
                 let topology_changed = Self::topology_changed(&prev_tabs, &self.all_tabs);
                 let remapped_local_tab_id = self.remap_local_tab_id_after_tab_update(&prev_tabs);
+                let is_active = self
+                    .local_tab_id()
+                    .is_some_and(|tab_id| Self::tab_is_active(&self.all_tabs, tab_id));
 
                 if topology_changed {
                     self.sync_requested = false;
@@ -646,6 +659,9 @@ impl ZellijPlugin for State {
 
                 if self.current_tab.is_some() && !self.sync_requested {
                     self.send_sync_request();
+                }
+                if !was_active && is_active {
+                    self.run_local_git_stat();
                 }
 
                 self.sync_frame()
@@ -686,10 +702,10 @@ impl ZellijPlugin for State {
             }
 
             Event::RunCommandResult(exit_code, stdout, _stderr, context) => {
-                if !context.contains_key(CONTEXT_KEY_GIT_STAT) {
+                let Some(requested_cwd) = context.get(CONTEXT_KEY_GIT_STAT).map(PathBuf::from) else {
                     return false;
-                }
-                if !self.update_local_git_stat(exit_code, &stdout) {
+                };
+                if !self.update_local_git_stat(&requested_cwd, exit_code, &stdout) {
                     return false;
                 }
 
