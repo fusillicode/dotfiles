@@ -125,7 +125,7 @@ impl Agent {
         match self {
             Self::Claude => r#"{"hooks":{}}"#,
             Self::Cursor => r#"{"version":1,"hooks":{}}"#,
-            Self::Codex => "{}",
+            Self::Codex => r#"{"hooks":{}}"#,
             Self::Opencode => "{}",
         }
     }
@@ -134,7 +134,7 @@ impl Agent {
         match self {
             Self::Claude => &[".claude", "settings.json"],
             Self::Cursor => &[".cursor", "hooks.json"],
-            Self::Codex => &[],
+            Self::Codex => &[".codex", "hooks.json"],
             Self::Opencode => &[".config", "opencode", "plugins", "agm.ts"],
         }
     }
@@ -153,7 +153,13 @@ impl Agent {
                 ("stop", AgentEventKind::Idle),
                 ("sessionEnd", AgentEventKind::Exit),
             ],
-            Self::Codex => &[],
+            Self::Codex => &[
+                ("SessionStart", AgentEventKind::Start),
+                ("UserPromptSubmit", AgentEventKind::Busy),
+                // Fires while tools run (Codex may not emit another UserPromptSubmit until the next turn).
+                ("PreToolUse", AgentEventKind::Busy),
+                ("Stop", AgentEventKind::Idle),
+            ],
             Self::Opencode => &[],
         }
     }
@@ -172,11 +178,15 @@ impl Agent {
     }
 
     pub fn hook_command(self, kind: AgentEventKind) -> String {
-        format!(
+        // Codex (and similar) hook runners write JSON to the hook process stdin. `zellij pipe` only
+        // reads stdin when the payload argument is omitted, so that data would never be consumed and
+        // the hook can block or fail—then the plugin never receives events. Drain stdin first.
+        let pipe = format!(
             "zellij pipe --name {AGENTS_PIPE} --args \"pane_id=$ZELLIJ_PANE_ID,agent={}\" -- {}",
             self.name(),
             kind.as_str()
-        )
+        );
+        format!("cat >/dev/null 2>&1 && {pipe}")
     }
 
     /// Higher means more specific — Cursor hosts Claude, so it wins when both match.
@@ -225,7 +235,7 @@ impl AgentEventKind {
     }
 
     pub fn parse(s: &str) -> Result<Self, ParseError> {
-        match s {
+        match s.trim() {
             "start" => Ok(Self::Start),
             "busy" => Ok(Self::Busy),
             "idle" => Ok(Self::Idle),
@@ -307,11 +317,11 @@ pub struct AgentEventPayload {
 
 impl AgentEventPayload {
     pub fn parse(pane_id: &str, agent: &str, payload: &str) -> Result<Self, ParseError> {
-        let pane_id = pane_id.parse().map_err(|_| ParseError::Invalid {
+        let pane_id = pane_id.trim().parse().map_err(|_| ParseError::Invalid {
             field: "pane_id",
             value: format!("{pane_id:?}"),
         })?;
-        let agent = Agent::from_name(agent)?;
+        let agent = Agent::from_name(agent.trim())?;
         let kind = AgentEventKind::parse(payload)?;
         Ok(Self { pane_id, agent, kind })
     }

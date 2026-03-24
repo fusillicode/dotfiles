@@ -1,7 +1,7 @@
 //! Launch a Zellij session with a vertical tab sidebar plugin.
 //!
 //! Subcommands:
-//! - `install` — build the WASM plugin, deploy it, and install Claude/Cursor hooks.
+//! - `install` — build the WASM plugin, deploy it, and install Claude, Cursor, Codex, and Opencode hooks.
 //! - `git-stat` — print git statistics for a directory.
 //! - `git-stat` — print `path insertions deletions untracked` per path (one line each).
 //!
@@ -87,9 +87,32 @@ fn install_wasm(built: &Path) -> rootcause::Result<()> {
     Ok(())
 }
 
+/// Load the JSON hook config at `path`, or create it from [`Agent::default_config`] when missing.
+fn read_hooks_json_or_default(path: &Path, agent: Agent) -> rootcause::Result<Value> {
+    if path.exists() {
+        let raw = std::fs::read_to_string(path).context("failed to read config file")?;
+        let doc: Value = serde_json::from_str(&raw).context("failed to parse config file")?;
+        return Ok(doc);
+    }
+
+    let Some(parent) = path.parent() else {
+        return Err(rootcause::report!(
+            "hook config path has no parent directory: {}",
+            path.display()
+        ));
+    };
+
+    std::fs::create_dir_all(parent).context("failed to create agent config directory")?;
+
+    let doc: Value = serde_json::from_str(agent.default_config()).context("failed to parse default config")?;
+
+    Ok(doc)
+}
+
 fn install_hooks(agent: Agent) -> rootcause::Result<()> {
     let config = agent.config_path();
     if config.is_empty() {
+        print_skipped(agent);
         return Ok(());
     }
 
@@ -98,22 +121,9 @@ fn install_hooks(agent: Agent) -> rootcause::Result<()> {
         return Ok(());
     };
 
-    let mut doc: Value = if path.exists() {
-        let raw = std::fs::read_to_string(&path)
-            .context("failed to read config file")
-            .attach_with(|| format!("path={}", path.display()))
-            .attach_with(|| format!("agent={}", agent.name()))?;
-        serde_json::from_str(&raw)
-            .context("failed to parse config file")
-            .attach_with(|| format!("agent={}", agent.name()))?
-    } else if path.parent().is_some_and(Path::is_dir) {
-        serde_json::from_str(agent.default_config())
-            .context("failed to parse default config")
-            .attach_with(|| format!("agent={}", agent.name()))?
-    } else {
-        print_skipped(agent);
-        return Ok(());
-    };
+    let mut doc = read_hooks_json_or_default(&path, agent)
+        .attach_with(|| format!("path={}", path.display()))
+        .attach_with(|| format!("agent={}", agent.name()))?;
 
     let hooks = doc
         .as_object_mut()
@@ -245,14 +255,14 @@ fn print_skipped(agent: Agent) {
 
 fn find_agm_entry(agent: Agent, arr: &mut [Value]) -> Option<&mut Value> {
     match agent {
-        Agent::Claude => arr.iter_mut().find_map(|group| {
+        Agent::Claude | Agent::Codex => arr.iter_mut().find_map(|group| {
             group.get_mut("hooks")?.as_array_mut()?.iter_mut().find(|h| {
                 h.get("command")
                     .and_then(|c| c.as_str())
                     .is_some_and(|c| c.contains(AGENTS_PIPE))
             })
         }),
-        Agent::Cursor | Agent::Codex => arr.iter_mut().find(|e| {
+        Agent::Cursor => arr.iter_mut().find(|e| {
             e.get("command")
                 .and_then(|c| c.as_str())
                 .is_some_and(|c| c.contains(AGENTS_PIPE))
@@ -263,10 +273,10 @@ fn find_agm_entry(agent: Agent, arr: &mut [Value]) -> Option<&mut Value> {
 
 fn new_hook_entry(agent: Agent, cmd: &str) -> Value {
     match agent {
-        Agent::Claude => serde_json::json!({
+        Agent::Claude | Agent::Codex => serde_json::json!({
             "hooks": [{ "type": "command", "command": cmd }]
         }),
-        Agent::Cursor | Agent::Codex => serde_json::json!({ "command": cmd }),
+        Agent::Cursor => serde_json::json!({ "command": cmd }),
         Agent::Opencode => serde_json::json!({}),
     }
 }
@@ -308,6 +318,7 @@ fn install_plugin_and_hooks(is_debug: bool) -> rootcause::Result<()> {
     install_wasm(&built).context("failed to install wasm plugin")?;
     install_hooks(Agent::Claude).context("failed to install Claude hooks")?;
     install_hooks(Agent::Cursor).context("failed to install Cursor hooks")?;
+    install_hooks(Agent::Codex).context("failed to install Codex hooks")?;
     install_opencode_plugin().context("failed to install Opencode hooks")?;
     Ok(())
 }
