@@ -19,6 +19,11 @@ mod ui;
 const CONTEXT_KEY_GIT_STAT: &str = "git-stat";
 const SYNC_PIPE: &str = "agm-sync";
 
+// no-op symbol for tests builds so unit tests can link/run in CI.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+#[unsafe(no_mangle)]
+extern "C" fn host_run_plugin_command() {}
+
 #[derive(Clone, PartialEq)]
 #[cfg_attr(test, derive(Debug))]
 struct FocusedPane {

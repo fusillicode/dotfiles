@@ -122,8 +122,8 @@ jobs:
           fail_ci_if_error: true
           verbose: true
 
-  release:
-    name: Build release
+  release_native:
+    name: Build release (native)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -139,7 +139,30 @@ jobs:
       - name: Setup (no extra tools)
         uses: ./.github/actions/setup
 
-      - name: Build
+      - name: Build native workspace (exclude WASM plugin)
         working-directory: yog
         run: |
-          cargo build --release
+          cargo build --release --workspace --exclude agm-plugin
+
+  release_wasm_plugin:
+    name: Build release (agm-plugin wasm)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: yog
+          shared-key: wasm-plugin
+          cache-targets: true
+
+      - name: Setup (no extra tools)
+        uses: ./.github/actions/setup
+
+      - name: Build agm-plugin
+        working-directory: yog
+        run: |
+          rustup target add wasm32-wasip1
+          cargo build --release --manifest-path yog/agm/plugin/Cargo.toml --target wasm32-wasip1
