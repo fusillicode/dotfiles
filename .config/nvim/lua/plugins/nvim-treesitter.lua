@@ -4,7 +4,6 @@ return {
   branch = 'master',
   dependencies = {
     { 'nvim-treesitter/nvim-treesitter-textobjects', branch = 'master' },
-    'theHamsta/nvim-treesitter-pairs',
   },
   build = ':TSUpdate',
   config = function()
@@ -51,12 +50,6 @@ return {
           node_incremental = '<cr>',
           node_decremental = '<s-cr>',
         },
-      },
-      pairs = {
-        enable = true,
-        highlight_pair_events = { 'CursorMoved', },
-        keymaps = { goto_partner = 'mm', },
-        fallback_cmd_normal = 'normal! %',
       },
       sync_install = true,
       textobjects = {
