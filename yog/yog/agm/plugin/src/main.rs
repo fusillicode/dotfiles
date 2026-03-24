@@ -25,6 +25,7 @@ struct CurrentTab {
     seq: u64,
     pane_ids: HashSet<u32>,
     focused_pane_id: Option<u32>,
+    focused_pane_command: Option<String>,
     cwd: Option<PathBuf>,
     agent_by_pane: HashMap<u32, Cmd>,
     git_stat: GitStat,
@@ -37,6 +38,7 @@ impl CurrentTab {
             seq: 0,
             pane_ids: HashSet::new(),
             focused_pane_id: None,
+            focused_pane_command: None,
             cwd: None,
             agent_by_pane: HashMap::new(),
             git_stat: GitStat::default(),
@@ -293,10 +295,12 @@ impl State {
 
         let mut pane_ids = HashSet::new();
         let mut focused_pane_id = None;
+        let mut focused_pane_command = None;
         for pane in panes.iter().filter(|pane| !pane.is_plugin) {
             pane_ids.insert(pane.id);
             if pane.is_focused {
                 focused_pane_id = Some(pane.id);
+                focused_pane_command = focused_pane_running_command(pane);
             }
         }
 
@@ -316,6 +320,7 @@ impl State {
             local.focused_pane_id = focused_pane_id;
             focused_changed = true;
         }
+        local.focused_pane_command = focused_pane_command;
 
         let mut cwd_changed = false;
         if let Some(pane_id) = local.focused_pane_id
@@ -742,7 +747,36 @@ fn local_display_cmd(local: &CurrentTab) -> Cmd {
         })
         .max_by_key(|(priority, busy, _)| (*priority, *busy))
         .map(|(_, _, cmd)| cmd)
+        .or_else(|| local.focused_pane_command.clone().map(Cmd::Running))
         .unwrap_or(Cmd::None)
+}
+
+fn focused_pane_running_command(pane: &PaneInfo) -> Option<String> {
+    if pane.exited || pane.is_held {
+        return None;
+    }
+
+    pane.terminal_command
+        .as_deref()
+        .and_then(parse_running_command)
+        .or_else(|| parse_pane_title(&pane.title))
+}
+
+fn parse_running_command(command: &str) -> Option<String> {
+    let executable = command.split_whitespace().next()?;
+    let executable = executable.rsplit('/').next().unwrap_or(executable);
+    if executable.is_empty() || matches!(executable, "zsh" | "bash" | "fish") {
+        return None;
+    }
+    Some(executable.to_string())
+}
+
+fn parse_pane_title(title: &str) -> Option<String> {
+    let trimmed = title.trim();
+    if trimmed.is_empty() || trimmed.starts_with('~') || trimmed.starts_with('/') {
+        return None;
+    }
+    parse_running_command(trimmed)
 }
 
 fn apply_agent_event(local: &mut CurrentTab, event_payload: &AgentEventPayload) -> bool {
@@ -842,6 +876,24 @@ mod tests {
         }
     }
 
+    fn terminal_pane_with_command(id: u32, is_focused: bool, command: &str) -> PaneInfo {
+        PaneInfo {
+            id,
+            is_focused,
+            terminal_command: Some(command.to_string()),
+            ..Default::default()
+        }
+    }
+
+    fn terminal_pane_with_title(id: u32, is_focused: bool, title: &str) -> PaneInfo {
+        PaneInfo {
+            id,
+            is_focused,
+            title: title.to_string(),
+            ..Default::default()
+        }
+    }
+
     fn manifest(entries: Vec<(usize, Vec<PaneInfo>)>) -> PaneManifest {
         let panes = entries.into_iter().collect::<HashMap<usize, Vec<PaneInfo>>>();
         PaneManifest { panes }
@@ -886,6 +938,7 @@ mod tests {
             seq: 0,
             pane_ids: [42].into_iter().collect(),
             focused_pane_id: Some(42),
+            focused_pane_command: None,
             cwd: Some(PathBuf::from("/tmp/project")),
             agent_by_pane: [(42, Cmd::BusyAgent(Agent::Codex))].into_iter().collect(),
             git_stat: GitStat::default(),
@@ -917,6 +970,7 @@ mod tests {
             seq: 0,
             pane_ids: [42].into_iter().collect(),
             focused_pane_id: Some(42),
+            focused_pane_command: None,
             cwd: Some(PathBuf::from("/tmp/project")),
             agent_by_pane: [(42, Cmd::BusyAgent(Agent::Codex))].into_iter().collect(),
             git_stat: GitStat::default(),
@@ -950,6 +1004,102 @@ mod tests {
 
         let expected = HashMap::from([(200, snapshot(2, 1, Cmd::IdleAgent(Agent::Claude)))]);
         pretty_assertions::assert_eq!(state.other_tabs, expected);
+    }
+
+    #[test]
+    fn local_display_cmd_falls_back_to_focused_non_agent_command() {
+        let mut local = CurrentTab::new(1);
+        local.focused_pane_command = Some("cargo".to_string());
+        pretty_assertions::assert_eq!(local_display_cmd(&local), Cmd::Running("cargo".to_string()));
+    }
+
+    #[test]
+    fn local_display_cmd_prioritizes_agents_over_focused_non_agent_command() {
+        let mut local = CurrentTab::new(1);
+        local.focused_pane_command = Some("cargo".to_string());
+        local.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Codex));
+        pretty_assertions::assert_eq!(local_display_cmd(&local), Cmd::BusyAgent(Agent::Codex));
+    }
+
+    #[test]
+    fn refresh_local_from_manifest_picks_focused_command_name() {
+        let mut state = State {
+            plugin_id: 7,
+            all_tabs: vec![tab_with_name(10, 0, "a")],
+            current_tab: Some(CurrentTab::new(10)),
+            ..Default::default()
+        };
+
+        let local = state.current_tab.as_mut().expect("missing local tab");
+        local.pane_ids.insert(42);
+        local.focused_pane_id = Some(42);
+        local.cwd = Some(PathBuf::from("/tmp/project"));
+
+        let pane = terminal_pane_with_command(42, true, "/usr/bin/cargo test -p agm-plugin");
+        let manifest = manifest(vec![(0, vec![plugin_pane(7), pane])]);
+        let (_focused_changed, _cwd_changed, cmd_changed) = state.refresh_local_from_manifest(&manifest);
+
+        assert!(cmd_changed);
+        let local = state.current_tab.as_ref().expect("missing local tab");
+        pretty_assertions::assert_eq!(local.focused_pane_command.as_deref(), Some("cargo"));
+        pretty_assertions::assert_eq!(local_display_cmd(local), Cmd::Running("cargo".to_string()));
+    }
+
+    #[test]
+    fn refresh_local_from_manifest_falls_back_to_focused_pane_title() {
+        let mut state = State {
+            plugin_id: 7,
+            all_tabs: vec![tab_with_name(10, 0, "a")],
+            current_tab: Some(CurrentTab::new(10)),
+            ..Default::default()
+        };
+
+        let local = state.current_tab.as_mut().expect("missing local tab");
+        local.pane_ids.insert(42);
+        local.focused_pane_id = Some(42);
+        local.cwd = Some(PathBuf::from("/tmp/project"));
+
+        let pane = terminal_pane_with_title(42, true, "nvim");
+        let manifest = manifest(vec![(0, vec![plugin_pane(7), pane])]);
+        let (_focused_changed, _cwd_changed, cmd_changed) = state.refresh_local_from_manifest(&manifest);
+
+        assert!(cmd_changed);
+        let local = state.current_tab.as_ref().expect("missing local tab");
+        pretty_assertions::assert_eq!(local.focused_pane_command.as_deref(), Some("nvim"));
+        pretty_assertions::assert_eq!(local_display_cmd(local), Cmd::Running("nvim".to_string()));
+    }
+
+    #[test]
+    fn refresh_local_from_manifest_ignores_shell_or_path_titles() {
+        let mut state = State {
+            plugin_id: 7,
+            all_tabs: vec![tab_with_name(10, 0, "a")],
+            current_tab: Some(CurrentTab::new(10)),
+            ..Default::default()
+        };
+
+        let local = state.current_tab.as_mut().expect("missing local tab");
+        local.pane_ids.insert(42);
+        local.focused_pane_id = Some(42);
+        local.cwd = Some(PathBuf::from("/tmp/project"));
+        local.focused_pane_command = Some("nvim".to_string());
+
+        let pane = terminal_pane_with_title(42, true, "/tmp/project");
+        let manifest = manifest(vec![(0, vec![plugin_pane(7), pane])]);
+        let (_focused_changed, _cwd_changed, cmd_changed) = state.refresh_local_from_manifest(&manifest);
+
+        assert!(cmd_changed);
+        let local = state.current_tab.as_ref().expect("missing local tab");
+        pretty_assertions::assert_eq!(local.focused_pane_command, None);
+        pretty_assertions::assert_eq!(local_display_cmd(local), Cmd::None);
+    }
+
+    #[test]
+    fn parse_pane_title_ignores_shell_names() {
+        pretty_assertions::assert_eq!(parse_pane_title("zsh"), None);
+        pretty_assertions::assert_eq!(parse_pane_title("bash"), None);
+        pretty_assertions::assert_eq!(parse_pane_title("fish"), None);
+        pretty_assertions::assert_eq!(parse_pane_title("cargo test"), Some("cargo".to_string()));
     }
 
     #[test]
