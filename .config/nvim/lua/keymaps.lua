@@ -17,6 +17,7 @@ function M.set_lua_defined()
   keymap_set('n', 'gx', nvrim.plugins.opener.open_token_under_cursor)
   keymap_set({ 'n', 'v', }, '<leader>ye', nvrim.plugins.opener.copy_enclosing_function)
   keymap_set({ 'n', 'v', }, '<leader>p', nvrim.plugins.opener.reveal_in_finder)
+  keymap_set('n', 'mm', '%')
 
   -- <c-s> clashes with fwd search in terminal but I've never used it much.
   keymap_set({ 'n', 'v', 'i', 't', }, '<c-s>', function() nvrim.layout.focus_vsplit('term', 30) end)
