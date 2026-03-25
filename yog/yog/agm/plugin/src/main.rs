@@ -54,6 +54,26 @@ impl CurrentTab {
             git_stat: GitStat::default(),
         }
     }
+
+    fn run_local_git_stat(&self) {
+        let Some(ref cwd) = self.cwd else {
+            return;
+        };
+
+        let cwd_str = cwd.display().to_string();
+        let args: Vec<&str> = vec!["agm", "git-stat", &cwd_str];
+        let mut context = BTreeMap::new();
+        context.insert(CONTEXT_KEY_GIT_STAT.into(), cwd_str.clone());
+        run_command_with_env_variables_and_cwd(&args, BTreeMap::new(), cwd.to_path_buf(), context);
+    }
+
+    fn send_local_snapshot(&self, target_plugin_id: Option<u32>) {
+        let mut message = StateSnapshotPayload::from(self).to_message();
+        if let Some(target_plugin_id) = target_plugin_id {
+            message = message.with_destination_plugin_id(target_plugin_id);
+        }
+        pipe_message_to_plugin(message);
+    }
 }
 
 #[derive(Debug)]
@@ -246,8 +266,8 @@ fn zellij_terminal_pane_cwd(pane_id: u32) -> Option<PathBuf> {
 }
 
 impl State {
-    fn local_tab_id(&self) -> Option<usize> {
-        self.current_tab.as_ref().map(|local| local.tab_id)
+    fn current_tab_id(&self) -> Option<usize> {
+        self.current_tab.as_ref().map(|t| t.tab_id)
     }
 
     fn local_tab_position_in_manifest(&self, manifest: &PaneManifest) -> Option<usize> {
@@ -447,33 +467,6 @@ impl State {
         self.sync_requested = true;
     }
 
-    fn send_local_snapshot(&self, target_plugin_id: Option<u32>) {
-        let Some(local) = self.current_tab.as_ref() else {
-            return;
-        };
-
-        let mut message = StateSnapshotPayload::from(local).to_message();
-        if let Some(target_plugin_id) = target_plugin_id {
-            message = message.with_destination_plugin_id(target_plugin_id);
-        }
-        pipe_message_to_plugin(message);
-    }
-
-    fn tab_is_active(tabs: &[TabInfo], tab_id: usize) -> bool {
-        tabs.iter().any(|tab| tab.tab_id == tab_id && tab.active)
-    }
-
-    fn topology_changed(prev_tabs: &[TabInfo], next_tabs: &[TabInfo]) -> bool {
-        if prev_tabs.len() != next_tabs.len() {
-            return true;
-        }
-
-        prev_tabs
-            .iter()
-            .zip(next_tabs.iter())
-            .any(|(prev, next)| prev.tab_id != next.tab_id || prev.position != next.position)
-    }
-
     fn remap_local_tab_id_after_tab_update(&mut self, prev_tabs: &[TabInfo]) -> bool {
         let Some(local) = self.current_tab.as_mut() else {
             return false;
@@ -520,24 +513,12 @@ impl State {
         true
     }
 
-    fn run_local_git_stat(&self) {
-        let Some(cwd) = self.current_tab.as_ref().and_then(|local| local.cwd.clone()) else {
-            return;
-        };
-
-        let cwd_str = cwd.display().to_string();
-        let args: Vec<&str> = vec!["agm", "git-stat", &cwd_str];
-        let mut context = BTreeMap::new();
-        context.insert(CONTEXT_KEY_GIT_STAT.into(), cwd_str.clone());
-        run_command_with_env_variables_and_cwd(&args, BTreeMap::new(), cwd, context);
-    }
-
     fn apply_remote_snapshot(&mut self, source_plugin_id: u32, snapshot: StateSnapshotPayload) -> bool {
         if source_plugin_id == self.plugin_id {
             return false;
         }
 
-        if self.local_tab_id() == Some(snapshot.tab_id) {
+        if self.current_tab_id() == Some(snapshot.tab_id) {
             return false;
         }
 
@@ -581,7 +562,6 @@ impl State {
         if self.frame == next {
             return false;
         }
-
         self.frame = next;
         true
     }
@@ -592,7 +572,9 @@ impl State {
                 if requester_plugin_id == self.plugin_id {
                     return false;
                 }
-                self.send_local_snapshot(Some(requester_plugin_id));
+                if let Some(t) = self.current_tab.as_ref() {
+                    t.send_local_snapshot(Some(requester_plugin_id))
+                }
                 false
             }
             PipeEvent::StateSnapshot {
@@ -608,11 +590,13 @@ impl State {
                 let (cmd_changed, should_refresh_git) = self.update_local_agent_event(agent_event);
                 if cmd_changed {
                     self.bump_local_seq();
-                    self.send_local_snapshot(None);
+                    if let Some(t) = self.current_tab.as_ref() {
+                        t.send_local_snapshot(None)
+                    }
                 }
 
-                if should_refresh_git {
-                    self.run_local_git_stat();
+                if should_refresh_git && let Some(t) = self.current_tab.as_ref() {
+                    t.run_local_git_stat()
                 }
 
                 if !cmd_changed {
@@ -654,15 +638,16 @@ impl ZellijPlugin for State {
             }
 
             Event::TabUpdate(mut tabs) => {
-                let prev_local_tab_id = self.local_tab_id();
                 tabs.sort_by_key(|tab| tab.position);
                 let prev_tabs = std::mem::replace(&mut self.all_tabs, tabs);
-                let was_active = prev_local_tab_id.is_some_and(|tab_id| Self::tab_is_active(&prev_tabs, tab_id));
-                let topology_changed = Self::topology_changed(&prev_tabs, &self.all_tabs);
+                let was_active = self
+                    .current_tab_id()
+                    .is_some_and(|tab_id| tab_is_active(&prev_tabs, tab_id));
+                let topology_changed = topology_changed(&prev_tabs, &self.all_tabs);
                 let remapped_local_tab_id = self.remap_local_tab_id_after_tab_update(&prev_tabs);
                 let is_active = self
-                    .local_tab_id()
-                    .is_some_and(|tab_id| Self::tab_is_active(&self.all_tabs, tab_id));
+                    .current_tab_id()
+                    .is_some_and(|tab_id| tab_is_active(&self.all_tabs, tab_id));
 
                 if topology_changed {
                     self.sync_requested = false;
@@ -670,7 +655,9 @@ impl ZellijPlugin for State {
 
                 if remapped_local_tab_id {
                     self.bump_local_seq();
-                    self.send_local_snapshot(None);
+                    if let Some(t) = self.current_tab.as_ref() {
+                        t.send_local_snapshot(None)
+                    }
                 }
 
                 self.prune_state_for_closed_tabs();
@@ -678,8 +665,12 @@ impl ZellijPlugin for State {
                 if self.current_tab.is_some() && !self.sync_requested {
                     self.send_sync_request();
                 }
-                if !was_active && is_active {
-                    self.run_local_git_stat();
+
+                if !was_active
+                    && is_active
+                    && let Some(t) = self.current_tab.as_ref()
+                {
+                    t.run_local_git_stat()
                 }
 
                 self.sync_frame()
@@ -694,13 +685,17 @@ impl ZellijPlugin for State {
                     self.send_sync_request();
                 }
 
-                if focused_changed || cwd_changed {
-                    self.run_local_git_stat();
+                if (focused_changed || cwd_changed)
+                    && let Some(t) = self.current_tab.as_ref()
+                {
+                    t.run_local_git_stat()
                 }
 
                 if local_created || cwd_changed || cmd_changed {
                     self.bump_local_seq();
-                    self.send_local_snapshot(None);
+                    if let Some(t) = self.current_tab.as_ref() {
+                        t.send_local_snapshot(None)
+                    }
                 }
 
                 if !(local_created || cwd_changed || cmd_changed) {
@@ -715,8 +710,10 @@ impl ZellijPlugin for State {
                 }
 
                 self.bump_local_seq();
-                self.send_local_snapshot(None);
-                self.run_local_git_stat();
+                if let Some(t) = self.current_tab.as_ref() {
+                    t.send_local_snapshot(None);
+                    t.run_local_git_stat();
+                }
                 self.sync_frame()
             }
 
@@ -729,7 +726,9 @@ impl ZellijPlugin for State {
                 }
 
                 self.bump_local_seq();
-                self.send_local_snapshot(None);
+                if let Some(t) = self.current_tab.as_ref() {
+                    t.send_local_snapshot(None)
+                }
                 self.sync_frame()
             }
 
@@ -774,6 +773,19 @@ impl ZellijPlugin for State {
 
         self.handle_pipe_event(event)
     }
+}
+
+fn tab_is_active(tabs: &[TabInfo], tab_id: usize) -> bool {
+    tabs.iter().any(|tab| tab.active && tab.tab_id == tab_id)
+}
+
+fn topology_changed(x: &[TabInfo], y: &[TabInfo]) -> bool {
+    if x.len() != y.len() {
+        return true;
+    }
+    x.iter()
+        .zip(y.iter())
+        .any(|(a, b)| a.tab_id != b.tab_id || a.position != b.position)
 }
 
 fn local_display_cmd(local: &CurrentTab) -> Cmd {
@@ -910,7 +922,7 @@ fn compute_frame(state: &State) -> Vec<TabRow> {
         .all_tabs
         .iter()
         .map(|tab| {
-            if state.local_tab_id() == Some(tab.tab_id)
+            if state.current_tab_id() == Some(tab.tab_id)
                 && let Some(local) = state.current_tab.as_ref()
             {
                 return TabRow::new(
@@ -1082,7 +1094,7 @@ mod tests {
 
         let prev_tabs = vec![tab_with_name(10, 0, "agent"), tab_with_name(20, 1, "shell")];
         assert!(state.remap_local_tab_id_after_tab_update(&prev_tabs));
-        pretty_assertions::assert_eq!(state.local_tab_id(), Some(30));
+        pretty_assertions::assert_eq!(state.current_tab_id(), Some(30));
     }
 
     #[test]
