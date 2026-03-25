@@ -182,11 +182,11 @@ impl Agent {
         // reads stdin when the payload argument is omitted, so that data would never be consumed and
         // the hook can block or fail—then the plugin never receives events. Drain stdin first.
         let pipe = format!(
-            "zellij pipe --name {AGENTS_PIPE} --args \"pane_id=$ZELLIJ_PANE_ID,agent={}\" -- {}",
+            "zellij pipe --name {AGENTS_PIPE} --args \"pane_id=$ZELLIJ_PANE_ID,agent={}\" -- {} >/dev/null 2>&1 || true",
             self.name(),
             kind.as_str()
         );
-        format!("cat >/dev/null 2>&1 && {pipe}")
+        format!("cat >/dev/null 2>&1 || true; {pipe}")
     }
 
     /// Higher means more specific — Cursor hosts Claude, so it wins when both match.
@@ -261,19 +261,15 @@ impl Cmd {
     pub fn agent_name(&self) -> Option<&'static str> {
         match self {
             Self::IdleAgent(agent) | Self::BusyAgent(agent) => Some(agent.name()),
-            _ => None,
+            Self::None | Self::Running(_) => None,
         }
     }
 
     pub fn running_cmd(&self) -> Option<&str> {
         match self {
             Self::Running(s) => Some(s),
-            _ => None,
+            Self::None | Self::IdleAgent(_) | Self::BusyAgent(_) => None,
         }
-    }
-
-    pub fn is_agent(&self) -> bool {
-        matches!(self, Self::IdleAgent(_) | Self::BusyAgent(_))
     }
 
     pub fn is_busy(&self) -> bool {
@@ -472,6 +468,18 @@ mod tests {
     #[case("Vim", None)]
     fn agent_detect_works_as_expected(#[case] name: &str, #[case] expected: Option<Agent>) {
         pretty_assertions::assert_eq!(Agent::detect(name), expected);
+    }
+
+    #[rstest]
+    #[case(Agent::Claude)]
+    #[case(Agent::Cursor)]
+    #[case(Agent::Codex)]
+    #[case(Agent::Opencode)]
+    fn hook_command_never_fails_when_zellij_unavailable(#[case] agent: Agent) {
+        let cmd = agent.hook_command(AgentEventKind::Busy);
+        assert2::assert!(cmd.contains("cat >/dev/null 2>&1 || true;"));
+        assert2::assert!(cmd.contains("zellij pipe --name agm-agent"));
+        assert2::assert!(cmd.contains(">/dev/null 2>&1 || true"));
     }
 
     #[test]
