@@ -12,8 +12,8 @@ layout {
 
 keybinds {
   normal {
-    bind "Ctrl Alt j" { MoveTab "Left"; }
-    bind "Ctrl Alt k" { MoveTab "Right"; }
+    bind "Ctrl Alt j" { MoveTab "Right"; }
+    bind "Ctrl Alt k" { MoveTab "Left"; }
     bind "Alt J" { GoToNextTab; }
     bind "Alt K" { GoToPreviousTab; }
     bind "Alt H" { FocusPreviousPane; }
