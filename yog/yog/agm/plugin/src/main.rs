@@ -55,24 +55,27 @@ impl CurrentTab {
         }
     }
 
-    fn run_local_git_stat(&self) {
-        let Some(ref cwd) = self.cwd else {
-            return;
-        };
-
-        let cwd_str = cwd.display().to_string();
-        let args: Vec<&str> = vec!["agm", "git-stat", &cwd_str];
-        let mut context = BTreeMap::new();
-        context.insert(CONTEXT_KEY_GIT_STAT.into(), cwd_str.clone());
-        run_command_with_env_variables_and_cwd(&args, BTreeMap::new(), cwd.to_path_buf(), context);
-    }
-
-    fn send_local_snapshot(&self, target_plugin_id: Option<u32>) {
-        let mut message = StateSnapshotPayload::from(self).to_message();
-        if let Some(target_plugin_id) = target_plugin_id {
-            message = message.with_destination_plugin_id(target_plugin_id);
-        }
-        pipe_message_to_plugin(message);
+    fn cmd(&self) -> Cmd {
+        self.agent_by_pane
+            .values()
+            .filter_map(|cmd| match cmd {
+                Cmd::BusyAgent(agent) => Some((agent.priority(), 1_u8, cmd.clone())),
+                Cmd::IdleAgent(agent) => Some((agent.priority(), 0_u8, cmd.clone())),
+                _ => None,
+            })
+            .max_by_key(|(priority, busy, _)| (*priority, *busy))
+            .map(|(_, _, cmd)| cmd)
+            .or_else(|| {
+                let focused_pane = self.focused_pane.as_ref()?;
+                let cmd_line = focused_pane.cmd.as_deref()?;
+                if let Some(exe) = parse_running_command(cmd_line)
+                    && let Some(agent) = Agent::detect(&exe)
+                {
+                    return Some(Cmd::IdleAgent(agent));
+                }
+                Some(Cmd::Running(cmd_line.to_string()))
+            })
+            .unwrap_or(Cmd::None)
     }
 }
 
@@ -174,7 +177,7 @@ impl From<&CurrentTab> for StateSnapshotPayload {
             tab_id: value.tab_id,
             seq: value.seq,
             cwd: value.cwd.clone(),
-            cmd: local_display_cmd(value),
+            cmd: value.cmd(),
             git_stat: value.git_stat,
         }
     }
@@ -270,7 +273,7 @@ impl State {
         self.current_tab.as_ref().map(|t| t.tab_id)
     }
 
-    fn local_tab_position_in_manifest(&self, manifest: &PaneManifest) -> Option<usize> {
+    fn current_tab_position_in_manifest(&self, manifest: &PaneManifest) -> Option<usize> {
         manifest.panes.iter().find_map(|(tab_pos, panes)| {
             panes
                 .iter()
@@ -279,35 +282,35 @@ impl State {
         })
     }
 
-    fn discover_local_tab_id(&self, manifest: &PaneManifest) -> Option<usize> {
-        let tab_pos = self.local_tab_position_in_manifest(manifest)?;
+    fn discover_current_tab_id(&self, manifest: &PaneManifest) -> Option<usize> {
+        let tab_pos = self.current_tab_position_in_manifest(manifest)?;
         self.all_tabs
             .iter()
             .find(|tab| tab.position == tab_pos)
             .map(|tab| tab.tab_id)
     }
 
-    fn ensure_local_tab(&mut self, manifest: &PaneManifest) -> bool {
-        if let Some(local_tab_id) = self.current_tab.as_ref().map(|local| local.tab_id) {
-            if self.all_tabs.iter().any(|tab| tab.tab_id == local_tab_id) {
+    fn ensure_current_tab(&mut self, manifest: &PaneManifest) -> bool {
+        if let Some(current_tab_id) = self.current_tab.as_ref().map(|current_tab| current_tab.tab_id) {
+            if self.all_tabs.iter().any(|tab| tab.tab_id == current_tab_id) {
                 return false;
             }
 
-            let Some(tab_id) = self.discover_local_tab_id(manifest) else {
+            let Some(tab_id) = self.discover_current_tab_id(manifest) else {
                 return false;
             };
-            if local_tab_id == tab_id {
+            if current_tab_id == tab_id {
                 return false;
             }
 
-            if let Some(local) = self.current_tab.as_mut() {
-                local.tab_id = tab_id;
+            if let Some(current_tab) = self.current_tab.as_mut() {
+                current_tab.tab_id = tab_id;
             }
             self.sync_requested = false;
             return true;
         }
 
-        let Some(tab_id) = self.discover_local_tab_id(manifest) else {
+        let Some(tab_id) = self.discover_current_tab_id(manifest) else {
             return false;
         };
 
@@ -316,7 +319,7 @@ impl State {
         true
     }
 
-    fn refresh_local_from_manifest(
+    fn refresh_current_tab_from_manifest(
         &mut self,
         manifest: &PaneManifest,
         mut resolve_pane_cwd: impl FnMut(u32) -> Option<PathBuf>,
@@ -324,7 +327,7 @@ impl State {
         if self.current_tab.is_none() {
             return (false, false, false);
         }
-        let Some(tab_pos) = self.local_tab_position_in_manifest(manifest) else {
+        let Some(tab_pos) = self.current_tab_position_in_manifest(manifest) else {
             return (false, false, false);
         };
         let Some(panes) = manifest.panes.get(&tab_pos) else {
@@ -346,81 +349,87 @@ impl State {
             }
         }
 
-        let Some(local) = self.current_tab.as_mut() else {
+        let Some(current_tab) = self.current_tab.as_mut() else {
             return (false, false, false);
         };
 
-        let prev_cmd = local_display_cmd(local);
+        let prev_cmd = current_tab.cmd();
 
-        if local.pane_ids != pane_ids {
-            local.pane_ids = pane_ids.clone();
-            local.agent_by_pane.retain(|pane_id, _| pane_ids.contains(pane_id));
+        if current_tab.pane_ids != pane_ids {
+            current_tab.pane_ids = pane_ids.clone();
+            current_tab
+                .agent_by_pane
+                .retain(|pane_id, _| pane_ids.contains(pane_id));
         }
 
         let mut focused_changed = false;
-        if local.focused_pane != focused_pane {
-            local.focused_pane = focused_pane;
+        if current_tab.focused_pane != focused_pane {
+            current_tab.focused_pane = focused_pane;
             focused_changed = true;
         }
 
-        reconcile_agent_by_pane_with_manifest(local, panes);
+        reconcile_agent_by_pane_with_manifest(current_tab, panes);
 
         let mut cwd_changed = false;
-        if let Some(focused_pane) = local.focused_pane.as_ref()
-            && (focused_changed || local.cwd.is_none())
+        if let Some(focused_pane) = current_tab.focused_pane.as_ref()
+            && (focused_changed || current_tab.cwd.is_none())
             && let Some(cwd) = resolve_pane_cwd(focused_pane.id)
-            && local.cwd.as_ref() != Some(&cwd)
+            && current_tab.cwd.as_ref() != Some(&cwd)
         {
-            local.cwd = Some(cwd);
+            current_tab.cwd = Some(cwd);
             cwd_changed = true;
         }
 
-        let cmd_changed = prev_cmd != local_display_cmd(local);
+        let cmd_changed = prev_cmd != current_tab.cmd();
         (focused_changed, cwd_changed, cmd_changed)
     }
 
-    fn update_local_cwd(&mut self, pane_id: u32, cwd: PathBuf) -> bool {
-        let Some(local) = self.current_tab.as_mut() else {
+    fn update_current_tab_cwd(&mut self, pane_id: u32, cwd: PathBuf) -> bool {
+        let Some(current_tab) = self.current_tab.as_mut() else {
             return false;
         };
-        if local.focused_pane.as_ref().map(|fp| fp.id) != Some(pane_id) {
+        if current_tab.focused_pane.as_ref().map(|fp| fp.id) != Some(pane_id) {
             return false;
         }
-        if local.cwd.as_ref() == Some(&cwd) {
+        if current_tab.cwd.as_ref() == Some(&cwd) {
             return false;
         }
 
-        local.cwd = Some(cwd);
+        current_tab.cwd = Some(cwd);
         true
     }
 
-    fn update_local_agent_event(&mut self, event_payload: AgentEventPayload) -> (bool, bool) {
-        let Some(local) = self.current_tab.as_mut() else {
+    fn update_current_tab_agent_event(&mut self, event_payload: AgentEventPayload) -> (bool, bool) {
+        let Some(current_tab) = self.current_tab.as_mut() else {
             return (false, false);
         };
-        if !local.pane_ids.contains(&event_payload.pane_id) {
+        if !current_tab.pane_ids.contains(&event_payload.pane_id) {
             return (false, false);
         }
 
-        let prev_cmd = local_display_cmd(local);
-        if !apply_agent_event(local, &event_payload) {
+        let prev_cmd = current_tab.cmd();
+        if !apply_agent_event(current_tab, &event_payload) {
             return (false, false);
         }
 
-        let cmd_changed = prev_cmd != local_display_cmd(local);
+        let cmd_changed = prev_cmd != current_tab.cmd();
         let should_refresh_git = matches!(event_payload.kind, AgentEventKind::Idle);
         (cmd_changed, should_refresh_git)
     }
 
-    fn update_local_git_stat(&mut self, requested_cwd: &PathBuf, exit_code: Option<i32>, stdout: &[u8]) -> bool {
+    fn update_current_tab_git_stat(&mut self, requested_cwd: &PathBuf, exit_code: Option<i32>, stdout: &[u8]) -> bool {
         if exit_code != Some(0) {
             return false;
         }
 
-        let Some(local_cwd) = self.current_tab.as_ref().and_then(|local| local.cwd.clone()) else {
+        let Some(current_tab_cwd) = self
+            .current_tab
+            .as_ref()
+            .and_then(|current_tab| current_tab.cwd.clone())
+        else {
             return false;
         };
-        if &local_cwd != requested_cwd {
+        if &current_tab_cwd != requested_cwd {
             return false;
         }
 
@@ -438,21 +447,21 @@ impl State {
             break;
         }
 
-        let Some(local) = self.current_tab.as_mut() else {
+        let Some(current_tab) = self.current_tab.as_mut() else {
             return false;
         };
         let new_stat = new_stat.unwrap_or_default();
-        if local.git_stat == new_stat {
+        if current_tab.git_stat == new_stat {
             return false;
         }
 
-        local.git_stat = new_stat;
+        current_tab.git_stat = new_stat;
         true
     }
 
-    fn bump_local_seq(&mut self) {
-        if let Some(local) = self.current_tab.as_mut() {
-            local.seq = local.seq.saturating_add(1);
+    fn bump_current_tab_seq(&mut self) {
+        if let Some(current_tab) = self.current_tab.as_mut() {
+            current_tab.seq = current_tab.seq.saturating_add(1);
         }
     }
 
@@ -467,18 +476,18 @@ impl State {
         self.sync_requested = true;
     }
 
-    fn remap_local_tab_id_after_tab_update(&mut self, prev_tabs: &[TabInfo]) -> bool {
-        let Some(local) = self.current_tab.as_mut() else {
+    fn remap_current_tab_id_after_tab_update(&mut self, prev_tabs: &[TabInfo]) -> bool {
+        let Some(current_tab) = self.current_tab.as_mut() else {
             return false;
         };
-        if self.all_tabs.iter().any(|tab| tab.tab_id == local.tab_id) {
+        if self.all_tabs.iter().any(|tab| tab.tab_id == current_tab.tab_id) {
             return false;
         }
 
         let prev_ids: HashSet<usize> = prev_tabs.iter().map(|tab| tab.tab_id).collect();
         let next_ids: HashSet<usize> = self.all_tabs.iter().map(|tab| tab.tab_id).collect();
         let removed: HashSet<usize> = prev_ids.difference(&next_ids).copied().collect();
-        if !removed.contains(&local.tab_id) {
+        if !removed.contains(&current_tab.tab_id) {
             return false;
         }
 
@@ -492,12 +501,12 @@ impl State {
         }
 
         if added.len() > 1
-            && let Some(prev_local_tab) = prev_tabs.iter().find(|tab| tab.tab_id == local.tab_id)
+            && let Some(prev_current_tab) = prev_tabs.iter().find(|tab| tab.tab_id == current_tab.tab_id)
         {
             let by_name: Vec<&TabInfo> = added
                 .iter()
                 .copied()
-                .filter(|tab| tab.name == prev_local_tab.name)
+                .filter(|tab| tab.name == prev_current_tab.name)
                 .collect();
             if by_name.len() == 1 {
                 added = by_name;
@@ -508,7 +517,7 @@ impl State {
             return false;
         }
 
-        local.tab_id = added[0].tab_id;
+        current_tab.tab_id = added[0].tab_id;
         self.sync_requested = false;
         true
     }
@@ -572,9 +581,7 @@ impl State {
                 if requester_plugin_id == self.plugin_id {
                     return false;
                 }
-                if let Some(t) = self.current_tab.as_ref() {
-                    t.send_local_snapshot(Some(requester_plugin_id))
-                }
+                send_current_tab_snapshot(self.current_tab.as_ref(), Some(requester_plugin_id));
                 false
             }
             PipeEvent::StateSnapshot {
@@ -587,16 +594,14 @@ impl State {
                 self.sync_frame()
             }
             PipeEvent::Agent(agent_event) => {
-                let (cmd_changed, should_refresh_git) = self.update_local_agent_event(agent_event);
+                let (cmd_changed, should_refresh_git) = self.update_current_tab_agent_event(agent_event);
                 if cmd_changed {
-                    self.bump_local_seq();
-                    if let Some(t) = self.current_tab.as_ref() {
-                        t.send_local_snapshot(None)
-                    }
+                    self.bump_current_tab_seq();
+                    send_current_tab_snapshot(self.current_tab.as_ref(), None);
                 }
 
-                if should_refresh_git && let Some(t) = self.current_tab.as_ref() {
-                    t.run_local_git_stat()
+                if should_refresh_git {
+                    run_current_tab_git_stat(self.current_tab.as_ref());
                 }
 
                 if !cmd_changed {
@@ -644,7 +649,7 @@ impl ZellijPlugin for State {
                     .current_tab_id()
                     .is_some_and(|tab_id| tab_is_active(&prev_tabs, tab_id));
                 let topology_changed = topology_changed(&prev_tabs, &self.all_tabs);
-                let remapped_local_tab_id = self.remap_local_tab_id_after_tab_update(&prev_tabs);
+                let remapped_current_tab_id = self.remap_current_tab_id_after_tab_update(&prev_tabs);
                 let is_active = self
                     .current_tab_id()
                     .is_some_and(|tab_id| tab_is_active(&self.all_tabs, tab_id));
@@ -653,11 +658,9 @@ impl ZellijPlugin for State {
                     self.sync_requested = false;
                 }
 
-                if remapped_local_tab_id {
-                    self.bump_local_seq();
-                    if let Some(t) = self.current_tab.as_ref() {
-                        t.send_local_snapshot(None)
-                    }
+                if remapped_current_tab_id {
+                    self.bump_current_tab_seq();
+                    send_current_tab_snapshot(self.current_tab.as_ref(), None);
                 }
 
                 self.prune_state_for_closed_tabs();
@@ -666,54 +669,45 @@ impl ZellijPlugin for State {
                     self.send_sync_request();
                 }
 
-                if !was_active
-                    && is_active
-                    && let Some(t) = self.current_tab.as_ref()
-                {
-                    t.run_local_git_stat()
+                if !was_active && is_active {
+                    run_current_tab_git_stat(self.current_tab.as_ref());
                 }
 
                 self.sync_frame()
             }
 
             Event::PaneUpdate(manifest) => {
-                let local_created = self.ensure_local_tab(&manifest);
+                let current_tab_created = self.ensure_current_tab(&manifest);
                 let (focused_changed, cwd_changed, cmd_changed) =
-                    self.refresh_local_from_manifest(&manifest, zellij_terminal_pane_cwd);
+                    self.refresh_current_tab_from_manifest(&manifest, zellij_terminal_pane_cwd);
 
                 if self.current_tab.is_some() && !self.sync_requested {
                     self.send_sync_request();
                 }
 
-                if (focused_changed || cwd_changed)
-                    && let Some(t) = self.current_tab.as_ref()
-                {
-                    t.run_local_git_stat()
+                if focused_changed || cwd_changed {
+                    run_current_tab_git_stat(self.current_tab.as_ref());
                 }
 
-                if local_created || cwd_changed || cmd_changed {
-                    self.bump_local_seq();
-                    if let Some(t) = self.current_tab.as_ref() {
-                        t.send_local_snapshot(None)
-                    }
+                if current_tab_created || cwd_changed || cmd_changed {
+                    self.bump_current_tab_seq();
+                    send_current_tab_snapshot(self.current_tab.as_ref(), None);
                 }
 
-                if !(local_created || cwd_changed || cmd_changed) {
+                if !(current_tab_created || cwd_changed || cmd_changed) {
                     return false;
                 }
                 self.sync_frame()
             }
 
             Event::CwdChanged(PaneId::Terminal(pane_id), cwd, _clients) => {
-                if !self.update_local_cwd(pane_id, cwd) {
+                if !self.update_current_tab_cwd(pane_id, cwd) {
                     return false;
                 }
 
-                self.bump_local_seq();
-                if let Some(t) = self.current_tab.as_ref() {
-                    t.send_local_snapshot(None);
-                    t.run_local_git_stat();
-                }
+                self.bump_current_tab_seq();
+                send_current_tab_snapshot(self.current_tab.as_ref(), None);
+                run_current_tab_git_stat(self.current_tab.as_ref());
                 self.sync_frame()
             }
 
@@ -721,14 +715,12 @@ impl ZellijPlugin for State {
                 let Some(requested_cwd) = context.get(CONTEXT_KEY_GIT_STAT).map(PathBuf::from) else {
                     return false;
                 };
-                if !self.update_local_git_stat(&requested_cwd, exit_code, &stdout) {
+                if !self.update_current_tab_git_stat(&requested_cwd, exit_code, &stdout) {
                     return false;
                 }
 
-                self.bump_local_seq();
-                if let Some(t) = self.current_tab.as_ref() {
-                    t.send_local_snapshot(None)
-                }
+                self.bump_current_tab_seq();
+                send_current_tab_snapshot(self.current_tab.as_ref(), None);
                 self.sync_frame()
             }
 
@@ -775,6 +767,32 @@ impl ZellijPlugin for State {
     }
 }
 
+fn run_current_tab_git_stat(current_tab: Option<&CurrentTab>) {
+    let Some(current_tab) = current_tab else {
+        return;
+    };
+    let Some(ref cwd) = current_tab.cwd else {
+        return;
+    };
+
+    let cwd_str = cwd.display().to_string();
+    let args: Vec<&str> = vec!["agm", "git-stat", &cwd_str];
+    let mut context = BTreeMap::new();
+    context.insert(CONTEXT_KEY_GIT_STAT.into(), cwd_str.clone());
+    run_command_with_env_variables_and_cwd(&args, BTreeMap::new(), cwd.to_path_buf(), context);
+}
+
+fn send_current_tab_snapshot(current_tab: Option<&CurrentTab>, target_plugin_id: Option<u32>) {
+    let Some(current_tab) = current_tab else {
+        return;
+    };
+    let mut message = StateSnapshotPayload::from(current_tab).to_message();
+    if let Some(target_plugin_id) = target_plugin_id {
+        message = message.with_destination_plugin_id(target_plugin_id);
+    }
+    pipe_message_to_plugin(message);
+}
+
 fn tab_is_active(tabs: &[TabInfo], tab_id: usize) -> bool {
     tabs.iter().any(|tab| tab.active && tab.tab_id == tab_id)
 }
@@ -786,30 +804,6 @@ fn topology_changed(x: &[TabInfo], y: &[TabInfo]) -> bool {
     x.iter()
         .zip(y.iter())
         .any(|(a, b)| a.tab_id != b.tab_id || a.position != b.position)
-}
-
-fn local_display_cmd(local: &CurrentTab) -> Cmd {
-    local
-        .agent_by_pane
-        .values()
-        .filter_map(|cmd| match cmd {
-            Cmd::BusyAgent(agent) => Some((agent.priority(), 1_u8, cmd.clone())),
-            Cmd::IdleAgent(agent) => Some((agent.priority(), 0_u8, cmd.clone())),
-            _ => None,
-        })
-        .max_by_key(|(priority, busy, _)| (*priority, *busy))
-        .map(|(_, _, cmd)| cmd)
-        .or_else(|| {
-            let fp = local.focused_pane.as_ref()?;
-            let cmd_line = fp.cmd.as_deref()?;
-            if let Some(exe) = parse_running_command(cmd_line)
-                && let Some(agent) = Agent::detect(&exe)
-            {
-                return Some(Cmd::IdleAgent(agent));
-            }
-            Some(Cmd::Running(cmd_line.to_string()))
-        })
-        .unwrap_or(Cmd::None)
 }
 
 fn focused_pane_running_command(pane: &PaneInfo) -> Option<String> {
@@ -827,13 +821,13 @@ fn focused_pane_running_command(pane: &PaneInfo) -> Option<String> {
 ///
 /// Codex `hooks.json` has no session-exit hook; `Stop` is end-of-turn, not "quit the TUI". The
 /// manifest still updates the terminal command/title, so we reconcile here on every pane refresh.
-fn reconcile_agent_by_pane_with_manifest(local: &mut CurrentTab, panes: &[PaneInfo]) {
-    let tracked: Vec<u32> = local.agent_by_pane.keys().copied().collect();
+fn reconcile_agent_by_pane_with_manifest(current_tab: &mut CurrentTab, panes: &[PaneInfo]) {
+    let tracked: Vec<u32> = current_tab.agent_by_pane.keys().copied().collect();
     for pane_id in tracked {
-        let Some(cmd) = local.agent_by_pane.get(&pane_id) else {
+        let Some(cmd) = current_tab.agent_by_pane.get(&pane_id) else {
             continue;
         };
-        if !cmd.is_agent() {
+        if cmd.agent_name().is_none() {
             continue;
         }
         let Some(stored) = cmd.agent_name().and_then(|n| Agent::from_name(n).ok()) else {
@@ -841,11 +835,11 @@ fn reconcile_agent_by_pane_with_manifest(local: &mut CurrentTab, panes: &[PaneIn
         };
 
         let Some(pane) = panes.iter().find(|p| p.id == pane_id && !p.is_plugin) else {
-            local.agent_by_pane.remove(&pane_id);
+            current_tab.agent_by_pane.remove(&pane_id);
             continue;
         };
         if pane.exited || pane.is_held {
-            local.agent_by_pane.remove(&pane_id);
+            current_tab.agent_by_pane.remove(&pane_id);
             continue;
         }
 
@@ -853,13 +847,11 @@ fn reconcile_agent_by_pane_with_manifest(local: &mut CurrentTab, panes: &[PaneIn
         let has_exec_line = pane.terminal_command.as_ref().is_some_and(|s| !s.trim().is_empty());
 
         match detected {
-            Some(d) if d != stored => {
-                local.agent_by_pane.remove(&pane_id);
-            }
+            Some(d) if d != stored => {}
             // Title-only metadata is ambiguous (e.g. cwd path while Codex is running); rely on the
             // shell-reported command line to detect "agent is gone" after quit.
             None if has_exec_line => {
-                local.agent_by_pane.remove(&pane_id);
+                current_tab.agent_by_pane.remove(&pane_id);
             }
             _ => {}
         }
@@ -883,8 +875,8 @@ fn parse_pane_title(title: &str) -> Option<String> {
     parse_running_command(trimmed)
 }
 
-fn apply_agent_event(local: &mut CurrentTab, event_payload: &AgentEventPayload) -> bool {
-    let mut current = local
+fn apply_agent_event(current_tab: &mut CurrentTab, event_payload: &AgentEventPayload) -> bool {
+    let mut current = current_tab
         .agent_by_pane
         .get(&event_payload.pane_id)
         .cloned()
@@ -893,10 +885,10 @@ fn apply_agent_event(local: &mut CurrentTab, event_payload: &AgentEventPayload) 
         return false;
     }
 
-    if current.is_agent() {
-        local.agent_by_pane.insert(event_payload.pane_id, current);
+    if current.agent_name().is_some() {
+        current_tab.agent_by_pane.insert(event_payload.pane_id, current);
     } else {
-        local.agent_by_pane.remove(&event_payload.pane_id);
+        current_tab.agent_by_pane.remove(&event_payload.pane_id);
     }
     true
 }
@@ -923,14 +915,14 @@ fn compute_frame(state: &State) -> Vec<TabRow> {
         .iter()
         .map(|tab| {
             if state.current_tab_id() == Some(tab.tab_id)
-                && let Some(local) = state.current_tab.as_ref()
+                && let Some(current_tab) = state.current_tab.as_ref()
             {
                 return TabRow::new(
                     tab,
-                    local.cwd.as_ref(),
-                    local_display_cmd(local),
-                    local.git_stat,
-                    &state.home_dir,
+                    current_tab.cwd.as_ref(),
+                    current_tab.cmd(),
+                    current_tab.git_stat,
+                    state.home_dir.as_path(),
                 );
             }
 
@@ -940,11 +932,11 @@ fn compute_frame(state: &State) -> Vec<TabRow> {
                     remote.cwd.as_ref(),
                     remote.cmd.clone(),
                     remote.git_stat,
-                    &state.home_dir,
+                    state.home_dir.as_path(),
                 );
             }
 
-            TabRow::new(tab, None, Cmd::None, GitStat::default(), &state.home_dir)
+            TabRow::new(tab, None, Cmd::None, GitStat::default(), state.home_dir.as_path())
         })
         .collect()
 }
@@ -1018,7 +1010,7 @@ mod tests {
     }
 
     #[test]
-    fn pane_update_before_tab_update_does_not_rebind_local_tab_id() {
+    fn pane_update_before_tab_update_does_not_rebind_current_tab_id() {
         let mut state = State {
             plugin_id: 7,
             all_tabs: vec![tab_with_name(10, 0, "a"), tab_with_name(11, 1, "b")],
@@ -1026,22 +1018,22 @@ mod tests {
         };
 
         let initial_manifest = manifest(vec![(0, vec![plugin_pane(7), terminal_pane(42, true)])]);
-        assert!(state.ensure_local_tab(&initial_manifest));
+        assert!(state.ensure_current_tab(&initial_manifest));
 
-        let local = state.current_tab.as_mut().expect("missing local tab");
-        local.pane_ids.insert(42);
-        local.focused_pane = Some(FocusedPane { id: 42, cmd: None });
-        local.cwd = Some(PathBuf::from("/tmp/project"));
-        local.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Codex));
+        let current_tab = state.current_tab.as_mut().expect("missing current tab");
+        current_tab.pane_ids.insert(42);
+        current_tab.focused_pane = Some(FocusedPane { id: 42, cmd: None });
+        current_tab.cwd = Some(PathBuf::from("/tmp/project"));
+        current_tab.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Codex));
 
         // Simulate a tab move where PaneUpdate arrives before TabUpdate:
         // manifest already reflects new position, while all_tabs is still stale.
         let moved_manifest = manifest(vec![(1, vec![plugin_pane(7), terminal_pane(42, true)])]);
-        assert!(!state.ensure_local_tab(&moved_manifest));
-        let _ = state.refresh_local_from_manifest(&moved_manifest, noop_pane_cwd);
+        assert!(!state.ensure_current_tab(&moved_manifest));
+        let _ = state.refresh_current_tab_from_manifest(&moved_manifest, noop_pane_cwd);
 
-        let local = state.current_tab.as_ref().expect("missing local tab");
-        let expected_local = CurrentTab {
+        let current_tab = state.current_tab.as_ref().expect("missing current tab");
+        let expected_current_tab = CurrentTab {
             tab_id: 10,
             seq: 0,
             pane_ids: [42].into_iter().collect(),
@@ -1050,29 +1042,29 @@ mod tests {
             agent_by_pane: [(42, Cmd::BusyAgent(Agent::Codex))].into_iter().collect(),
             git_stat: GitStat::default(),
         };
-        pretty_assertions::assert_eq!(local, &expected_local);
+        pretty_assertions::assert_eq!(current_tab, &expected_current_tab);
     }
 
     #[test]
-    fn pane_update_rebinds_local_tab_id_only_after_old_id_disappears() {
+    fn pane_update_rebinds_current_tab_id_only_after_old_id_disappears() {
         let mut state = State {
             plugin_id: 7,
             all_tabs: vec![tab_with_name(11, 0, "b"), tab_with_name(99, 1, "a")],
             current_tab: Some(CurrentTab::new(10)),
             ..Default::default()
         };
-        let local = state.current_tab.as_mut().expect("missing local tab");
-        local.pane_ids.insert(42);
-        local.focused_pane = Some(FocusedPane { id: 42, cmd: None });
-        local.cwd = Some(PathBuf::from("/tmp/project"));
-        local.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Codex));
+        let current_tab = state.current_tab.as_mut().expect("missing current tab");
+        current_tab.pane_ids.insert(42);
+        current_tab.focused_pane = Some(FocusedPane { id: 42, cmd: None });
+        current_tab.cwd = Some(PathBuf::from("/tmp/project"));
+        current_tab.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Codex));
 
         let manifest = manifest(vec![(1, vec![plugin_pane(7), terminal_pane(42, true)])]);
-        assert!(state.ensure_local_tab(&manifest));
-        let _ = state.refresh_local_from_manifest(&manifest, noop_pane_cwd);
+        assert!(state.ensure_current_tab(&manifest));
+        let _ = state.refresh_current_tab_from_manifest(&manifest, noop_pane_cwd);
 
-        let local = state.current_tab.as_ref().expect("missing local tab");
-        let expected_local = CurrentTab {
+        let current_tab = state.current_tab.as_ref().expect("missing current tab");
+        let expected_current_tab = CurrentTab {
             tab_id: 99,
             seq: 0,
             pane_ids: [42].into_iter().collect(),
@@ -1081,11 +1073,11 @@ mod tests {
             agent_by_pane: [(42, Cmd::BusyAgent(Agent::Codex))].into_iter().collect(),
             git_stat: GitStat::default(),
         };
-        pretty_assertions::assert_eq!(local, &expected_local);
+        pretty_assertions::assert_eq!(current_tab, &expected_current_tab);
     }
 
     #[test]
-    fn remap_local_tab_id_after_tab_update_can_use_tab_name_when_many_ids_changed() {
+    fn remap_current_tab_id_after_tab_update_can_use_tab_name_when_many_ids_changed() {
         let mut state = State {
             current_tab: Some(CurrentTab::new(10)),
             all_tabs: vec![tab_with_name(30, 1, "agent"), tab_with_name(40, 0, "shell")],
@@ -1093,7 +1085,7 @@ mod tests {
         };
 
         let prev_tabs = vec![tab_with_name(10, 0, "agent"), tab_with_name(20, 1, "shell")];
-        assert!(state.remap_local_tab_id_after_tab_update(&prev_tabs));
+        assert!(state.remap_current_tab_id_after_tab_update(&prev_tabs));
         pretty_assertions::assert_eq!(state.current_tab_id(), Some(30));
     }
 
@@ -1113,38 +1105,38 @@ mod tests {
     }
 
     #[test]
-    fn local_display_cmd_falls_back_to_focused_non_agent_command() {
-        let mut local = CurrentTab::new(1);
-        local.focused_pane = Some(FocusedPane {
+    fn current_tab_cmd_falls_back_to_focused_non_agent_command() {
+        let mut current_tab = CurrentTab::new(1);
+        current_tab.focused_pane = Some(FocusedPane {
             id: 0,
             cmd: Some("cargo".to_string()),
         });
-        pretty_assertions::assert_eq!(local_display_cmd(&local), Cmd::Running("cargo".to_string()));
+        pretty_assertions::assert_eq!(current_tab.cmd(), Cmd::Running("cargo".to_string()));
     }
 
     #[test]
-    fn local_display_cmd_prioritizes_agents_over_focused_non_agent_command() {
-        let mut local = CurrentTab::new(1);
-        local.focused_pane = Some(FocusedPane {
+    fn current_tab_cmd_prioritizes_agents_over_focused_non_agent_command() {
+        let mut current_tab = CurrentTab::new(1);
+        current_tab.focused_pane = Some(FocusedPane {
             id: 0,
             cmd: Some("cargo".to_string()),
         });
-        local.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Codex));
-        pretty_assertions::assert_eq!(local_display_cmd(&local), Cmd::BusyAgent(Agent::Codex));
+        current_tab.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Codex));
+        pretty_assertions::assert_eq!(current_tab.cmd(), Cmd::BusyAgent(Agent::Codex));
     }
 
     #[test]
-    fn local_display_cmd_shows_idle_agent_when_focus_executable_matches_agent() {
-        let mut local = CurrentTab::new(1);
-        local.focused_pane = Some(FocusedPane {
+    fn current_tab_cmd_shows_idle_agent_when_focus_executable_matches_agent() {
+        let mut current_tab = CurrentTab::new(1);
+        current_tab.focused_pane = Some(FocusedPane {
             id: 0,
             cmd: Some("/opt/homebrew/bin/codex".to_string()),
         });
-        pretty_assertions::assert_eq!(local_display_cmd(&local), Cmd::IdleAgent(Agent::Codex));
+        pretty_assertions::assert_eq!(current_tab.cmd(), Cmd::IdleAgent(Agent::Codex));
     }
 
     #[test]
-    fn refresh_local_from_manifest_picks_focused_command_name() {
+    fn refresh_current_tab_from_manifest_picks_focused_command_name() {
         let mut state = State {
             plugin_id: 7,
             all_tabs: vec![tab_with_name(10, 0, "a")],
@@ -1152,26 +1144,27 @@ mod tests {
             ..Default::default()
         };
 
-        let local = state.current_tab.as_mut().expect("missing local tab");
-        local.pane_ids.insert(42);
-        local.focused_pane = Some(FocusedPane { id: 42, cmd: None });
-        local.cwd = Some(PathBuf::from("/tmp/project"));
+        let current_tab = state.current_tab.as_mut().expect("missing current tab");
+        current_tab.pane_ids.insert(42);
+        current_tab.focused_pane = Some(FocusedPane { id: 42, cmd: None });
+        current_tab.cwd = Some(PathBuf::from("/tmp/project"));
 
         let pane = terminal_pane_with_command(42, true, "/usr/bin/cargo test -p agm-plugin");
         let manifest = manifest(vec![(0, vec![plugin_pane(7), pane])]);
-        let (_focused_changed, _cwd_changed, cmd_changed) = state.refresh_local_from_manifest(&manifest, noop_pane_cwd);
+        let (_focused_changed, _cwd_changed, cmd_changed) =
+            state.refresh_current_tab_from_manifest(&manifest, noop_pane_cwd);
 
         assert!(cmd_changed);
-        let local = state.current_tab.as_ref().expect("missing local tab");
+        let current_tab = state.current_tab.as_ref().expect("missing current tab");
         pretty_assertions::assert_eq!(
-            local.focused_pane.as_ref().and_then(|fp| fp.cmd.as_deref()),
+            current_tab.focused_pane.as_ref().and_then(|fp| fp.cmd.as_deref()),
             Some("cargo")
         );
-        pretty_assertions::assert_eq!(local_display_cmd(local), Cmd::Running("cargo".to_string()));
+        pretty_assertions::assert_eq!(current_tab.cmd(), Cmd::Running("cargo".to_string()));
     }
 
     #[test]
-    fn refresh_local_from_manifest_falls_back_to_focused_pane_title() {
+    fn refresh_current_tab_from_manifest_falls_back_to_focused_pane_title() {
         let mut state = State {
             plugin_id: 7,
             all_tabs: vec![tab_with_name(10, 0, "a")],
@@ -1179,26 +1172,27 @@ mod tests {
             ..Default::default()
         };
 
-        let local = state.current_tab.as_mut().expect("missing local tab");
-        local.pane_ids.insert(42);
-        local.focused_pane = Some(FocusedPane { id: 42, cmd: None });
-        local.cwd = Some(PathBuf::from("/tmp/project"));
+        let current_tab = state.current_tab.as_mut().expect("missing current tab");
+        current_tab.pane_ids.insert(42);
+        current_tab.focused_pane = Some(FocusedPane { id: 42, cmd: None });
+        current_tab.cwd = Some(PathBuf::from("/tmp/project"));
 
         let pane = terminal_pane_with_title(42, true, "nvim");
         let manifest = manifest(vec![(0, vec![plugin_pane(7), pane])]);
-        let (_focused_changed, _cwd_changed, cmd_changed) = state.refresh_local_from_manifest(&manifest, noop_pane_cwd);
+        let (_focused_changed, _cwd_changed, cmd_changed) =
+            state.refresh_current_tab_from_manifest(&manifest, noop_pane_cwd);
 
         assert!(cmd_changed);
-        let local = state.current_tab.as_ref().expect("missing local tab");
+        let current_tab = state.current_tab.as_ref().expect("missing current tab");
         pretty_assertions::assert_eq!(
-            local.focused_pane.as_ref().and_then(|fp| fp.cmd.as_deref()),
+            current_tab.focused_pane.as_ref().and_then(|fp| fp.cmd.as_deref()),
             Some("nvim")
         );
-        pretty_assertions::assert_eq!(local_display_cmd(local), Cmd::Running("nvim".to_string()));
+        pretty_assertions::assert_eq!(current_tab.cmd(), Cmd::Running("nvim".to_string()));
     }
 
     #[test]
-    fn refresh_local_from_manifest_ignores_shell_or_path_titles() {
+    fn refresh_current_tab_from_manifest_ignores_shell_or_path_titles() {
         let mut state = State {
             plugin_id: 7,
             all_tabs: vec![tab_with_name(10, 0, "a")],
@@ -1206,26 +1200,27 @@ mod tests {
             ..Default::default()
         };
 
-        let local = state.current_tab.as_mut().expect("missing local tab");
-        local.pane_ids.insert(42);
-        local.focused_pane = Some(FocusedPane {
+        let current_tab = state.current_tab.as_mut().expect("missing current tab");
+        current_tab.pane_ids.insert(42);
+        current_tab.focused_pane = Some(FocusedPane {
             id: 42,
             cmd: Some("nvim".to_string()),
         });
-        local.cwd = Some(PathBuf::from("/tmp/project"));
+        current_tab.cwd = Some(PathBuf::from("/tmp/project"));
 
         let pane = terminal_pane_with_title(42, true, "/tmp/project");
         let manifest = manifest(vec![(0, vec![plugin_pane(7), pane])]);
-        let (_focused_changed, _cwd_changed, cmd_changed) = state.refresh_local_from_manifest(&manifest, noop_pane_cwd);
+        let (_focused_changed, _cwd_changed, cmd_changed) =
+            state.refresh_current_tab_from_manifest(&manifest, noop_pane_cwd);
 
         assert!(cmd_changed);
-        let local = state.current_tab.as_ref().expect("missing local tab");
-        pretty_assertions::assert_eq!(local.focused_pane.as_ref().and_then(|fp| fp.cmd.as_deref()), None);
-        pretty_assertions::assert_eq!(local_display_cmd(local), Cmd::None);
+        let current_tab = state.current_tab.as_ref().expect("missing current tab");
+        pretty_assertions::assert_eq!(current_tab.focused_pane.as_ref().and_then(|fp| fp.cmd.as_deref()), None);
+        pretty_assertions::assert_eq!(current_tab.cmd(), Cmd::None);
     }
 
     #[test]
-    fn refresh_local_from_manifest_clears_agent_state_when_pane_process_changes() {
+    fn refresh_current_tab_from_manifest_clears_agent_state_when_pane_process_changes() {
         let mut state = State {
             plugin_id: 7,
             all_tabs: vec![tab_with_name(10, 0, "a")],
@@ -1233,21 +1228,21 @@ mod tests {
             ..Default::default()
         };
 
-        let local = state.current_tab.as_mut().expect("missing local tab");
-        local.pane_ids.insert(42);
-        local.focused_pane = Some(FocusedPane {
+        let current_tab = state.current_tab.as_mut().expect("missing current tab");
+        current_tab.pane_ids.insert(42);
+        current_tab.focused_pane = Some(FocusedPane {
             id: 42,
             cmd: Some("codex".to_string()),
         });
-        local.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Codex));
+        current_tab.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Codex));
 
         let pane = terminal_pane_with_command(42, true, "/bin/zsh");
         let manifest = manifest(vec![(0, vec![plugin_pane(7), pane])]);
-        let _ = state.refresh_local_from_manifest(&manifest, noop_pane_cwd);
+        let _ = state.refresh_current_tab_from_manifest(&manifest, noop_pane_cwd);
 
-        let local = state.current_tab.as_ref().expect("missing local tab");
-        pretty_assertions::assert_eq!(local.agent_by_pane.get(&42), None);
-        pretty_assertions::assert_eq!(local_display_cmd(local), Cmd::None);
+        let current_tab = state.current_tab.as_ref().expect("missing current tab");
+        pretty_assertions::assert_eq!(current_tab.agent_by_pane.get(&42), None);
+        pretty_assertions::assert_eq!(current_tab.cmd(), Cmd::None);
     }
 
     #[test]
