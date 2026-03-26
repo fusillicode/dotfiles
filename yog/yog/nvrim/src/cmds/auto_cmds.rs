@@ -49,6 +49,13 @@ pub fn create() {
         }),
     );
 
+    // To avoid the ugly full gray and underlined code for things like cfg(test).
+    create_autocmd(
+        ["LspAttach"],
+        "LspInactiveCodeHighlight",
+        CreateAutocmdOptsBuilder::default().command(":lua vim.api.nvim_set_hl(0, '@lsp.mod.inactive', {})"),
+    );
+
     crate::plugins::scrolloff::create_autocmd();
     crate::layout::create_autocmd();
 }
