@@ -1,3 +1,4 @@
+use std::fmt::Write;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
@@ -6,7 +7,7 @@ use rootcause::prelude::ResultExt as _;
 use rootcause::report;
 use sha2::Digest as _;
 
-/// Computes the SHA256 hex digest of the file at `path`.
+/// Computes the Sha256 hex digest of the file at `path`.
 ///
 /// # Errors
 /// - The file cannot be opened or read.
@@ -33,7 +34,15 @@ pub fn compute_sha256(path: &Path) -> rootcause::Result<String> {
         );
     }
 
-    Ok(format!("{:x}", hasher.finalize()))
+    let digest = hasher.finalize();
+    let mut digest_hex = String::new();
+
+    for byte in digest {
+        write!(&mut digest_hex, "{byte:02x}")
+            .map_err(|err| report!("error formatting checksum").attach(format!("error={err:?}")))?;
+    }
+
+    Ok(digest_hex)
 }
 
 /// Downloads a checksums file from `checksums_url` and extracts the expected hash for `filename`.
@@ -61,7 +70,7 @@ pub fn download_and_find_checksum(checksums_url: &str, filename: &str) -> rootca
 /// Parse a checksums file content and find the hash for `filename`.
 ///
 /// Handles two formats:
-/// 1. Multi-line: `<hex_hash>  <filename>` (with one or two spaces)
+/// 1. Multiline: `<hex_hash>  <filename>` (with one or two spaces)
 /// 2. Single-line: just a hex hash (for per-file `.sha256` files)
 ///
 /// # Errors
@@ -69,18 +78,18 @@ pub fn download_and_find_checksum(checksums_url: &str, filename: &str) -> rootca
 fn parse_checksum(content: &str, filename: &str) -> rootcause::Result<String> {
     let trimmed = content.trim();
 
-    // Single-line file containing only a hex hash (per-file .sha256 pattern).
+    // Single-line file containing only a hex hash (per-file .Sha256 pattern).
     if !trimmed.contains(' ') && !trimmed.contains('\n') && !trimmed.is_empty() {
         return Ok(trimmed.to_owned());
     }
 
-    // Standard multi-line format: `<hash>  <filename>` or `<hash> <filename>`
+    // Standard multiline format: `<hash>  <filename>` or `<hash> <filename>`
     for line in trimmed.lines() {
         let line = line.trim();
         // Split at first whitespace
         if let Some((hash, rest)) = line.split_once(' ') {
             let rest = rest.trim_start();
-            // The filename in checksums files may have a leading `*` (binary mode indicator)
+            // The filename in checksums files may have leading `*` (binary mode indicator)
             let entry_filename = rest.strip_prefix('*').unwrap_or(rest);
             if entry_filename == filename {
                 return Ok(hash.to_owned());
@@ -91,7 +100,7 @@ fn parse_checksum(content: &str, filename: &str) -> rootcause::Result<String> {
     Err(report!("error checksum entry not found").attach(format!("filename={filename:?} content={trimmed:?}")))
 }
 
-/// Verifies that the file at `path` matches the `expected_hex` SHA256 hash.
+/// Verifies that the file at `path` matches the `expected_hex` Sha256 hash.
 ///
 /// # Errors
 /// - Computing the hash fails.
