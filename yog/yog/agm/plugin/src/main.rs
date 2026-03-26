@@ -831,12 +831,9 @@ fn sync_agent_by_pane_with_focused_pane(current_tab: &mut CurrentTab) {
     let Some(agent) = focused_pane.cmd.as_deref().and_then(Agent::detect) else {
         return;
     };
-    let Some(cmd) = current_tab.agent_by_pane.get(&focused_pane.id) else {
-        return;
-    };
-    match cmd {
-        Cmd::BusyAgent(current) | Cmd::IdleAgent(current) if *current == agent => {}
-        Cmd::BusyAgent(_) | Cmd::IdleAgent(_) | Cmd::None | Cmd::Running(_) => {
+    match current_tab.agent_by_pane.get(&focused_pane.id) {
+        Some(Cmd::BusyAgent(current) | Cmd::IdleAgent(current)) if *current == agent => {}
+        _ => {
             current_tab.agent_by_pane.insert(focused_pane.id, Cmd::IdleAgent(agent));
         }
     }
