@@ -21,6 +21,7 @@ DiagnosticSignWarn
 ESC
 FE
 FG
+FIXME
 GQL
 GitSigns
 HashMap
