@@ -43,13 +43,25 @@ impl TabRow {
     fn write_path_lines(&self, buf: &mut String, y: &mut usize, width: usize, sep_col: usize) {
         let path_with_indent = format!("{MARKER}{}", self.path_label);
         let (bg, dim) = if self.active { (ACTIVE_BG, "") } else { ("", DIM) };
+        let path_lines = wrap_lines(&path_with_indent, width);
+        let mut last_row = *y + 1;
+        let mut last_col = 1;
 
-        for line in wrap_lines(&path_with_indent, width) {
+        for (i, line) in path_lines.iter().enumerate() {
             let row = *y + 1;
-            let padded = pad(&line, width);
+            let padded = pad(line, width);
             let _ = write!(buf, "\x1b[{row};1H{bg}{dim}{padded}{RESET}");
             write_separator(buf, row, sep_col);
+            if i + 1 == path_lines.len() {
+                last_row = row;
+                last_col = line.chars().count() + 1;
+            }
             *y += 1;
+        }
+
+        if self.git.is_worktree {
+            let _ = write!(buf, "\x1b[{last_row};{last_col}H{bg}{CYAN} [W]{RESET}");
+            write_separator(buf, last_row, sep_col);
         }
     }
 
@@ -64,17 +76,14 @@ impl TabRow {
             Cmd::None => String::new(),
             Cmd::Running(cmd) => format!(" {cmd}"),
             Cmd::IdleAgent(agent) => {
-                format!(" {DIM}○ {bg}{fg} {}", agent.name())
+                format!(" {DIM}○ {bg}{fg}{}", agent.name())
             }
             Cmd::BusyAgent(agent) => {
-                format!(" {AMBER}● {bg}{fg} {}", agent.name())
+                format!(" {AMBER}● {bg}{fg}{}", agent.name())
             }
         };
 
         let mut stats: Vec<(&str, String)> = Vec::new();
-        if self.git.is_worktree {
-            stats.push((CYAN, "[W]".into()));
-        }
         if self.git.insertions > 0 {
             stats.push((GREEN, format!("+{}", self.git.insertions)));
         }
@@ -116,7 +125,8 @@ pub fn render_frame(frame: &[TabRow], rows: usize, cols: usize, buf: &mut String
 
     let mut y = 0;
     for entry in frame {
-        let path_height = wrap_lines(&format!("{MARKER}{}", entry.path_label), content_w).len();
+        let path_with_indent = path_with_worktree_indicator(entry);
+        let path_height = wrap_lines(&path_with_indent, content_w).len();
         let total = path_height + INFO_ROWS;
         if y + total > rows {
             break;
@@ -138,7 +148,7 @@ pub fn render_frame(frame: &[TabRow], rows: usize, cols: usize, buf: &mut String
 pub fn tab_index_at_row(frame: &[TabRow], click_row: usize, content_w: usize) -> Option<usize> {
     let mut y = 0;
     for (i, entry) in frame.iter().enumerate() {
-        let path_with_indent = format!("{MARKER}{}", entry.path_label);
+        let path_with_indent = path_with_worktree_indicator(entry);
         let height = wrap_lines(&path_with_indent, content_w).len() + INFO_ROWS;
         if click_row < y + height {
             return Some(i);
@@ -146,6 +156,11 @@ pub fn tab_index_at_row(frame: &[TabRow], click_row: usize, content_w: usize) ->
         y += height;
     }
     None
+}
+
+fn path_with_worktree_indicator(entry: &TabRow) -> String {
+    let maybe_idicator = if entry.git.is_worktree { " [W]" } else { "" };
+    format!("{MARKER}{}{}", entry.path_label, maybe_idicator)
 }
 
 fn write_separator(buf: &mut String, row_1based: usize, col: usize) {

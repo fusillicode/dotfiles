@@ -354,6 +354,7 @@ impl State {
         };
 
         let prev_cmd = current_tab.cmd();
+        let prev_focused_pane = current_tab.focused_pane.clone();
 
         if current_tab.pane_ids != pane_ids {
             current_tab.pane_ids = pane_ids.clone();
@@ -368,6 +369,8 @@ impl State {
             focused_changed = true;
         }
 
+        sync_agent_by_pane_with_focused_pane(current_tab);
+        clear_agent_by_pane_when_focused_agent_disappears(current_tab, prev_focused_pane.as_ref());
         reconcile_agent_by_pane_with_manifest(current_tab, panes);
 
         let mut cwd_changed = false;
@@ -817,10 +820,57 @@ fn focused_pane_running_command(pane: &PaneInfo) -> Option<String> {
         .or_else(|| parse_pane_title(&pane.title))
 }
 
-/// Drop hook-driven agent state when the pane no longer runs that agent (e.g. Codex quit → shell).
+/// Persist an agent once we have explicitly seen it in the focused pane.
 ///
-/// Codex `hooks.json` has no session-exit hook; `Stop` is end-of-turn, not "quit the TUI". The
-/// manifest still updates the terminal command/title, so we reconcile here on every pane refresh.
+/// This lets the tab keep showing that agent after focus moves to another pane, even if no hook
+/// has fired yet.
+fn sync_agent_by_pane_with_focused_pane(current_tab: &mut CurrentTab) {
+    let Some(focused_pane) = current_tab.focused_pane.as_ref() else {
+        return;
+    };
+    let Some(agent) = focused_pane.cmd.as_deref().and_then(Agent::detect) else {
+        return;
+    };
+    let Some(cmd) = current_tab.agent_by_pane.get(&focused_pane.id) else {
+        return;
+    };
+    match cmd {
+        Cmd::BusyAgent(current) | Cmd::IdleAgent(current) if *current == agent => {}
+        Cmd::BusyAgent(_) | Cmd::IdleAgent(_) | Cmd::None | Cmd::Running(_) => {
+            current_tab.agent_by_pane.insert(focused_pane.id, Cmd::IdleAgent(agent));
+        }
+    }
+}
+
+fn clear_agent_by_pane_when_focused_agent_disappears(
+    current_tab: &mut CurrentTab,
+    prev_focused_pane: Option<&FocusedPane>,
+) {
+    let Some(prev_focused_pane) = prev_focused_pane else {
+        return;
+    };
+    let Some(current_focused_pane) = current_tab.focused_pane.as_ref() else {
+        return;
+    };
+    if prev_focused_pane.id != current_focused_pane.id {
+        return;
+    }
+    if prev_focused_pane.cmd.as_deref().and_then(Agent::detect).is_none() {
+        return;
+    }
+    if current_focused_pane.cmd.as_deref().and_then(Agent::detect).is_some() {
+        return;
+    }
+    current_tab.agent_by_pane.remove(&current_focused_pane.id);
+}
+
+/// Drop hook-driven agent state when we have high-confidence evidence that the pane no longer runs
+/// that agent (e.g. focused Codex pane quit → shell).
+///
+/// For unfocused panes, Zellij's manifest metadata can fall back to shell/path information even
+/// while an agent TUI is still open. Clearing state from that data makes the agent disappear from
+/// the tab as soon as focus moves elsewhere, so only focused panes are reconciled against command
+/// metadata.
 fn reconcile_agent_by_pane_with_manifest(current_tab: &mut CurrentTab, panes: &[PaneInfo]) {
     let tracked: Vec<u32> = current_tab.agent_by_pane.keys().copied().collect();
     for pane_id in tracked {
@@ -844,13 +894,16 @@ fn reconcile_agent_by_pane_with_manifest(current_tab: &mut CurrentTab, panes: &[
         }
 
         let detected = focused_pane_running_command(pane).and_then(|exe| Agent::detect(&exe));
-        let has_exec_line = pane.terminal_command.as_ref().is_some_and(|s| !s.trim().is_empty());
+
+        if !pane.is_focused {
+            continue;
+        }
 
         match detected {
-            Some(d) if d != stored => {}
-            // Title-only metadata is ambiguous (e.g. cwd path while Codex is running); rely on the
-            // shell-reported command line to detect "agent is gone" after quit.
-            None if has_exec_line => {
+            Some(d) if d != stored => {
+                current_tab.agent_by_pane.remove(&pane_id);
+            }
+            None if pane.terminal_command.as_ref().is_some_and(|s| !s.trim().is_empty()) => {
                 current_tab.agent_by_pane.remove(&pane_id);
             }
             _ => {}
@@ -1243,6 +1296,97 @@ mod tests {
         let current_tab = state.current_tab.as_ref().expect("missing current tab");
         pretty_assertions::assert_eq!(current_tab.agent_by_pane.get(&42), None);
         pretty_assertions::assert_eq!(current_tab.cmd(), Cmd::None);
+    }
+
+    #[test]
+    fn refresh_current_tab_from_manifest_clears_agent_state_when_focused_pane_title_becomes_path() {
+        let mut state = State {
+            plugin_id: 7,
+            all_tabs: vec![tab_with_name(10, 0, "a")],
+            current_tab: Some(CurrentTab::new(10)),
+            ..Default::default()
+        };
+
+        let current_tab = state.current_tab.as_mut().expect("missing current tab");
+        current_tab.pane_ids.insert(42);
+        current_tab.focused_pane = Some(FocusedPane {
+            id: 42,
+            cmd: Some("codex".to_string()),
+        });
+        current_tab.agent_by_pane.insert(42, Cmd::IdleAgent(Agent::Codex));
+
+        let pane = terminal_pane_with_title(42, true, "/tmp/project");
+        let manifest = manifest(vec![(0, vec![plugin_pane(7), pane])]);
+        let _ = state.refresh_current_tab_from_manifest(&manifest, noop_pane_cwd);
+
+        let current_tab = state.current_tab.as_ref().expect("missing current tab");
+        pretty_assertions::assert_eq!(current_tab.agent_by_pane.get(&42), None);
+        pretty_assertions::assert_eq!(current_tab.cmd(), Cmd::None);
+    }
+
+    #[test]
+    fn refresh_current_tab_from_manifest_keeps_agent_state_for_unfocused_shell_metadata() {
+        let mut state = State {
+            plugin_id: 7,
+            all_tabs: vec![tab_with_name(10, 0, "a")],
+            current_tab: Some(CurrentTab::new(10)),
+            ..Default::default()
+        };
+
+        let current_tab = state.current_tab.as_mut().expect("missing current tab");
+        current_tab.pane_ids.extend([42, 43]);
+        current_tab.focused_pane = Some(FocusedPane {
+            id: 43,
+            cmd: Some("cargo".to_string()),
+        });
+        current_tab.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Codex));
+
+        let manifest = manifest(vec![(
+            0,
+            vec![
+                plugin_pane(7),
+                terminal_pane_with_command(42, false, "/bin/zsh"),
+                terminal_pane_with_command(43, true, "/usr/bin/cargo test"),
+            ],
+        )]);
+        let _ = state.refresh_current_tab_from_manifest(&manifest, noop_pane_cwd);
+
+        let current_tab = state.current_tab.as_ref().expect("missing current tab");
+        pretty_assertions::assert_eq!(current_tab.agent_by_pane.get(&42), Some(&Cmd::BusyAgent(Agent::Codex)));
+        pretty_assertions::assert_eq!(current_tab.cmd(), Cmd::BusyAgent(Agent::Codex));
+    }
+
+    #[test]
+    fn refresh_current_tab_from_manifest_persists_agent_seen_in_focused_pane() {
+        let mut state = State {
+            plugin_id: 7,
+            all_tabs: vec![tab_with_name(10, 0, "a")],
+            current_tab: Some(CurrentTab::new(10)),
+            ..Default::default()
+        };
+
+        let first_manifest = manifest(vec![(
+            0,
+            vec![
+                plugin_pane(7),
+                terminal_pane_with_command(42, true, "/opt/homebrew/bin/codex"),
+            ],
+        )]);
+        let _ = state.refresh_current_tab_from_manifest(&first_manifest, noop_pane_cwd);
+
+        let second_manifest = manifest(vec![(
+            0,
+            vec![
+                plugin_pane(7),
+                terminal_pane_with_title(42, false, "/tmp/project"),
+                terminal_pane_with_command(43, true, "/usr/bin/cargo test"),
+            ],
+        )]);
+        let _ = state.refresh_current_tab_from_manifest(&second_manifest, noop_pane_cwd);
+
+        let current_tab = state.current_tab.as_ref().expect("missing current tab");
+        pretty_assertions::assert_eq!(current_tab.agent_by_pane.get(&42), Some(&Cmd::IdleAgent(Agent::Codex)));
+        pretty_assertions::assert_eq!(current_tab.cmd(), Cmd::IdleAgent(Agent::Codex));
     }
 
     #[test]
