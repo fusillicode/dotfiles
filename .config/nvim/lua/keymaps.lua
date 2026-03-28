@@ -185,6 +185,35 @@ function M.nvim_spider(plugin)
   }
 end
 
+function M.nvim_tree_sitter()
+  return {
+    {
+      '<cr>',
+      mode = { 'n', 'x', },
+      { function()
+        if vim.treesitter.get_parser(nil, nil, { error = false, }) then
+          require('vim.treesitter._select').select_parent(vim.v.count1)
+        else
+          vim.lsp.buf.selection_range(vim.v.count1)
+        end
+      end,
+      },
+    },
+    {
+      '<s-cr>',
+      mode = { 'x', 'o', },
+      { function()
+        if vim.treesitter.get_parser(nil, nil, { error = false, }) then
+          require('vim.treesitter._select').select_child(vim.v.count1)
+        else
+          vim.lsp.buf.selection_range(-vim.v.count1)
+        end
+      end,
+      },
+    },
+  }
+end
+
 function M.set(keymaps)
   for idx, keymap in ipairs(keymaps) do
     local lhs = keymap[1]
