@@ -20,8 +20,7 @@ const ACTIVE_BG: &str = "\x1b[48;2;40;40;50m";
 const DEFAULT_FG: &str = "\x1b[39m";
 const RESET: &str = "\x1b[0m";
 
-#[derive(Clone, Eq, PartialEq)]
-#[cfg_attr(test, derive(Debug))]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TabRow {
     pub active: bool,
     pub path_label: String,

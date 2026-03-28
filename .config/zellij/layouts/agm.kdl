@@ -16,8 +16,9 @@ keybinds {
     bind "Ctrl Alt k" { MoveTab "Left"; }
     bind "Alt J" { GoToNextTab; }
     bind "Alt K" { GoToPreviousTab; }
-    bind "Alt H" { FocusPreviousPane; }
-    bind "Alt L" { FocusNextPane; }
+    // Using MoveFocus because Zellij FocusNextPane is bugged AF...
+    bind "Alt H" { MoveFocus "Left"; }
+    bind "Alt L" { MoveFocus "Left"; }
     bind "Alt V" { NewPane "Right"; }
   }
 }
