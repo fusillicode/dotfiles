@@ -11,6 +11,7 @@ use zellij_tile::prelude::*;
 
 use crate::state::CurrentTab;
 use crate::state::State;
+use crate::state::StateEvent;
 
 mod state;
 mod ui;
@@ -22,6 +23,8 @@ const SYNC_PIPE: &str = "agm-sync";
 #[cfg(all(test, not(target_arch = "wasm32")))]
 #[unsafe(no_mangle)]
 extern "C" fn host_run_plugin_command() {}
+
+// ── Pipe message parsing ──────────────────────────────────────────────────────
 
 enum PipeEvent {
     SyncRequest {
@@ -91,12 +94,12 @@ impl TryFrom<&PipeMessage> for PipeEvent {
 
 #[cfg_attr(test, derive(PartialEq))]
 #[derive(Clone, Debug)]
-struct StateSnapshotPayload {
-    tab_id: usize,
-    seq: u64,
-    cwd: Option<PathBuf>,
-    cmd: Cmd,
-    git_stat: GitStat,
+pub struct StateSnapshotPayload {
+    pub tab_id: usize,
+    pub seq: u64,
+    pub cwd: Option<PathBuf>,
+    pub cmd: Cmd,
+    pub git_stat: GitStat,
 }
 
 impl From<&CurrentTab> for StateSnapshotPayload {
@@ -168,12 +171,10 @@ impl From<&StateSnapshotPayload> for MessageToPlugin {
             cmd: value.cmd.clone(),
             git_stat: value.git_stat,
         };
-
         let mut args = BTreeMap::new();
         args.insert("type".to_string(), "state_snapshot".to_string());
         args.insert("tab_id".to_string(), value.tab_id.to_string());
         args.insert("seq".to_string(), value.seq.to_string());
-
         MessageToPlugin::new(SYNC_PIPE.to_string())
             .with_args(args)
             .with_payload(entry.to_string())
@@ -181,7 +182,7 @@ impl From<&StateSnapshotPayload> for MessageToPlugin {
 }
 
 #[derive(Debug)]
-enum PipeEventError {
+pub enum PipeEventError {
     Parse(ParseError),
     UnknownMsgName(String),
 }
@@ -196,6 +197,8 @@ impl std::fmt::Display for PipeEventError {
         }
     }
 }
+
+// ── Plugin entry point ────────────────────────────────────────────────────────
 
 register_plugin!(State);
 
@@ -230,89 +233,58 @@ impl ZellijPlugin for State {
 
             Event::TabUpdate(mut tabs) => {
                 tabs.sort_by_key(|tab| tab.position);
-                let prev_tabs = std::mem::replace(&mut self.all_tabs, tabs);
-
-                let was_active = self
-                    .current_tab_id()
-                    .is_some_and(|tab_id| tab_is_active(&prev_tabs, tab_id));
-
-                let topology_changed = topology_changed(&prev_tabs, &self.all_tabs);
-
-                let remapped_current_tab_id = self.remap_current_tab_id_after_tab_update(&prev_tabs);
-
-                let is_active = self
-                    .current_tab_id()
-                    .is_some_and(|tab_id| tab_is_active(&self.all_tabs, tab_id));
-
-                if topology_changed {
-                    self.sync_requested = false;
-                }
-
-                if remapped_current_tab_id {
-                    self.bump_current_tab_seq();
+                let events = self.events_from_tab_update(&tabs);
+                let frame_changed = self.apply_all(&events);
+                if events.iter().any(StateEvent::requires_snapshot) {
                     send_current_tab_snapshot(self.current_tab.as_ref(), None);
                 }
-
-                self.prune_state_for_closed_tabs();
-
-                if self.current_tab.is_some() && !self.sync_requested {
-                    self.send_sync_request();
-                }
-
-                if !was_active && is_active {
+                if events.iter().any(StateEvent::requires_git_refresh) {
                     run_current_tab_git_stat(self.current_tab.as_ref());
                 }
-
-                self.sync_frame()
+                if events.iter().any(|e| matches!(e, StateEvent::SyncRequested)) {
+                    send_sync_request_pipe();
+                }
+                // Tab topology always redraws the bar even if frame content is unchanged.
+                frame_changed || !events.is_empty()
             }
 
             Event::PaneUpdate(manifest) => {
-                let current_tab_created = self.ensure_current_tab(&manifest);
-
-                let (focused_changed, cwd_changed, cmd_changed) =
-                    self.refresh_current_tab_from_manifest(&manifest, zellij_terminal_pane_cwd);
-
-                if self.current_tab.is_some() && !self.sync_requested {
-                    self.send_sync_request();
-                }
-
-                if focused_changed || cwd_changed {
-                    run_current_tab_git_stat(self.current_tab.as_ref());
-                }
-
-                if current_tab_created || cwd_changed || cmd_changed {
-                    self.bump_current_tab_seq();
+                let events = self.events_from_pane_update(&manifest, zellij_terminal_pane_cwd);
+                let frame_changed = self.apply_all(&events);
+                if events.iter().any(StateEvent::requires_snapshot) {
                     send_current_tab_snapshot(self.current_tab.as_ref(), None);
                 }
-
-                if !(current_tab_created || cwd_changed || cmd_changed) {
-                    return false;
+                if events.iter().any(StateEvent::requires_git_refresh) {
+                    run_current_tab_git_stat(self.current_tab.as_ref());
                 }
-                self.sync_frame()
+                if events.iter().any(|e| matches!(e, StateEvent::SyncRequested)) {
+                    send_sync_request_pipe();
+                }
+                frame_changed || !events.is_empty()
             }
 
             Event::CwdChanged(PaneId::Terminal(pane_id), cwd, _clients) => {
-                if !self.update_current_tab_cwd(pane_id, cwd) {
-                    return false;
+                let events = self.events_from_cwd_changed(pane_id, cwd);
+                let frame_changed = self.apply_all(&events);
+                if events.iter().any(StateEvent::requires_snapshot) {
+                    send_current_tab_snapshot(self.current_tab.as_ref(), None);
                 }
-                self.bump_current_tab_seq();
-                send_current_tab_snapshot(self.current_tab.as_ref(), None);
-                run_current_tab_git_stat(self.current_tab.as_ref());
-                self.sync_frame()
+                if events.iter().any(StateEvent::requires_git_refresh) {
+                    run_current_tab_git_stat(self.current_tab.as_ref());
+                }
+                frame_changed || !events.is_empty()
             }
 
             Event::RunCommandResult(exit_code, stdout, _stderr, context) => {
                 let Some(requested_cwd) = context.get(CONTEXT_KEY_GIT_STAT).map(PathBuf::from) else {
                     return false;
                 };
-
-                if !self.update_current_tab_git_stat(&requested_cwd, exit_code, &stdout) {
-                    return false;
+                let events = self.events_from_run_command_result(&requested_cwd, exit_code, &stdout);
+                let frame_changed = self.apply_all(&events);
+                if events.iter().any(StateEvent::requires_snapshot) {
+                    send_current_tab_snapshot(self.current_tab.as_ref(), None);
                 }
-
-                self.bump_current_tab_seq();
-                send_current_tab_snapshot(self.current_tab.as_ref(), None);
-                self.sync_frame()
+                frame_changed || !events.is_empty()
             }
 
             Event::Mouse(Mouse::LeftClick(row, _col)) => {
@@ -366,33 +338,35 @@ impl ZellijPlugin for State {
                 source_plugin_id,
                 snapshot,
             } => {
-                if !self.apply_remote_snapshot(source_plugin_id, snapshot) {
-                    return false;
-                }
-                self.sync_frame()
+                let events = self.events_from_state_snapshot(source_plugin_id, &snapshot);
+                let frame_changed = self.apply_all(&events);
+                frame_changed || !events.is_empty()
             }
             PipeEvent::Agent(agent_event) => {
-                let (cmd_changed, should_refresh_git) = self.update_current_tab_agent_event(agent_event);
-                if cmd_changed {
-                    self.bump_current_tab_seq();
+                let events = self.events_from_agent_event(&agent_event);
+                let frame_changed = self.apply_all(&events);
+                if events.iter().any(StateEvent::requires_snapshot) {
                     send_current_tab_snapshot(self.current_tab.as_ref(), None);
                 }
-
-                if should_refresh_git {
-                    crate::run_current_tab_git_stat(self.current_tab.as_ref());
+                if events.iter().any(StateEvent::requires_git_refresh) {
+                    run_current_tab_git_stat(self.current_tab.as_ref());
                 }
-
-                if !cmd_changed {
-                    return false;
-                }
-                self.sync_frame()
+                frame_changed || !events.is_empty()
             }
         }
     }
 }
 
+// ── IO helpers ────────────────────────────────────────────────────────────────
+
 fn zellij_terminal_pane_cwd(pane_id: u32) -> Option<PathBuf> {
     get_pane_cwd(PaneId::Terminal(pane_id)).ok()
+}
+
+fn send_sync_request_pipe() {
+    let mut args = BTreeMap::new();
+    args.insert("type".to_string(), "sync_request".to_string());
+    pipe_message_to_plugin(MessageToPlugin::new(SYNC_PIPE.to_string()).with_args(args));
 }
 
 fn send_current_tab_snapshot(current_tab: Option<&CurrentTab>, target_plugin_id: Option<u32>) {
@@ -413,7 +387,6 @@ fn run_current_tab_git_stat(current_tab: Option<&CurrentTab>) {
     let Some(ref cwd) = current_tab.cwd else {
         return;
     };
-
     let cwd_str = cwd.display().to_string();
     let args: Vec<&str> = vec!["agm", "git-stat", &cwd_str];
     let mut context = BTreeMap::new();
@@ -421,22 +394,10 @@ fn run_current_tab_git_stat(current_tab: Option<&CurrentTab>) {
     run_command_with_env_variables_and_cwd(&args, BTreeMap::new(), cwd.to_path_buf(), context);
 }
 
-fn tab_is_active(tabs: &[TabInfo], tab_id: usize) -> bool {
-    tabs.iter().any(|tab| tab.active && tab.tab_id == tab_id)
-}
-
-fn topology_changed(x: &[TabInfo], y: &[TabInfo]) -> bool {
-    if x.len() != y.len() {
-        return true;
-    }
-    x.iter()
-        .zip(y.iter())
-        .any(|(a, b)| a.tab_id != b.tab_id || a.position != b.position)
-}
+// ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
 
     #[test]

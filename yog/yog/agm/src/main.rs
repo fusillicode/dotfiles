@@ -141,11 +141,8 @@ fn install_hooks(agent: Agent) -> rootcause::Result<()> {
             .as_array_mut()
             .ok_or_else(|| rootcause::report!("hooks.{event} is not an array"))?;
 
-        if let Some(entry) = find_agm_entry(agent, event_arr) {
-            entry["command"] = Value::String(cmd);
-        } else {
-            event_arr.push(new_hook_entry(agent, &cmd));
-        }
+        remove_agm_entries(agent, event_arr);
+        event_arr.push(new_hook_entry(agent, &cmd));
     }
 
     let out =
@@ -253,21 +250,27 @@ fn print_skipped(agent: Agent) {
     );
 }
 
-fn find_agm_entry(agent: Agent, arr: &mut [Value]) -> Option<&mut Value> {
+fn remove_agm_entries(agent: Agent, arr: &mut Vec<Value>) {
     match agent {
-        Agent::Claude | Agent::Codex => arr.iter_mut().find_map(|group| {
-            group.get_mut("hooks")?.as_array_mut()?.iter_mut().find(|h| {
-                h.get("command")
-                    .and_then(|c| c.as_str())
-                    .is_some_and(|c| c.contains(AGENTS_PIPE))
-            })
+        Agent::Claude | Agent::Codex => arr.retain(|group| {
+            !group
+                .get("hooks")
+                .and_then(|hooks| hooks.as_array())
+                .is_some_and(|hooks| {
+                    hooks.iter().any(|hook| {
+                        hook.get("command")
+                            .and_then(|c| c.as_str())
+                            .is_some_and(|c| c.contains(AGENTS_PIPE))
+                    })
+                })
         }),
-        Agent::Cursor => arr.iter_mut().find(|e| {
-            e.get("command")
+        Agent::Cursor => arr.retain(|entry| {
+            !entry
+                .get("command")
                 .and_then(|c| c.as_str())
                 .is_some_and(|c| c.contains(AGENTS_PIPE))
         }),
-        Agent::Opencode => None,
+        Agent::Opencode => {}
     }
 }
 

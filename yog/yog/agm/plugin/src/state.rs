@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -10,9 +9,124 @@ use agm_core::Cmd;
 use agm_core::GitStat;
 use zellij_tile::prelude::*;
 
-use crate::SYNC_PIPE;
 use crate::StateSnapshotPayload;
 use crate::ui::TabRow;
+
+// ── Domain events ─────────────────────────────────────────────────────────────
+
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
+pub enum StateEvent {
+    // Current-tab identity
+    TabCreated {
+        tab_id: usize,
+    },
+    TabRemapped {
+        new_tab_id: usize,
+    },
+
+    // Pane layout
+    PanesChanged {
+        new_pane_ids: HashSet<u32>,
+    },
+    FocusMoved {
+        new_pane: Option<FocusedPane>,
+    },
+
+    // Working directory
+    CwdChanged {
+        new_cwd: PathBuf,
+    },
+
+    // Agent lifecycle
+    /// First detection of an agent in a pane (idle by default).
+    AgentDetected {
+        pane_id: u32,
+        agent: Agent,
+    },
+    AgentBusy {
+        pane_id: u32,
+        agent: Agent,
+    },
+    /// Agent finished processing — also implies a git refresh.
+    AgentIdle {
+        pane_id: u32,
+        agent: Agent,
+    },
+    /// Agent exited, pane closed, or process replaced.
+    AgentLost {
+        pane_id: u32,
+    },
+
+    // Git statistics
+    GitStatChanged {
+        new_stat: GitStat,
+    },
+
+    // Remote tab display (other plugin instances)
+    RemoteTabUpdated {
+        source_plugin_id: u32,
+        snapshot: StateSnapshotPayload,
+        evict_ids: Vec<u32>,
+    },
+
+    // Tab bar topology
+    TopologyChanged,
+    /// Current tab just became Zellij's active tab.
+    BecameActive,
+
+    // Tab list management
+    /// Full replacement of the tab list (from a `TabUpdate` Zellij event).
+    /// Apply sets `self.all_tabs` and prunes closed remote tabs.
+    AllTabsReplaced {
+        new_tabs: Vec<TabInfo>,
+    },
+    /// A sync request pipe message should be sent to peer plugin instances.
+    /// Apply sets `self.sync_requested = true`.
+    SyncRequested,
+}
+
+impl StateEvent {
+    pub fn requires_snapshot(&self) -> bool {
+        match self {
+            Self::TabCreated { .. }
+            | Self::TabRemapped { .. }
+            | Self::FocusMoved { .. }
+            | Self::CwdChanged { .. }
+            | Self::GitStatChanged { .. }
+            | Self::AgentDetected { .. }
+            | Self::AgentBusy { .. }
+            | Self::AgentIdle { .. }
+            | Self::AgentLost { .. } => true,
+            Self::PanesChanged { .. }
+            | Self::RemoteTabUpdated { .. }
+            | Self::TopologyChanged
+            | Self::BecameActive
+            | Self::AllTabsReplaced { .. }
+            | Self::SyncRequested => false,
+        }
+    }
+
+    pub fn requires_git_refresh(&self) -> bool {
+        match self {
+            Self::AgentIdle { .. } | Self::FocusMoved { .. } | Self::CwdChanged { .. } => true,
+            Self::TabCreated { .. }
+            | Self::TabRemapped { .. }
+            | Self::PanesChanged { .. }
+            | Self::AgentDetected { .. }
+            | Self::AgentBusy { .. }
+            | Self::AgentLost { .. }
+            | Self::GitStatChanged { .. }
+            | Self::RemoteTabUpdated { .. }
+            | Self::TopologyChanged
+            | Self::BecameActive
+            | Self::AllTabsReplaced { .. }
+            | Self::SyncRequested => false,
+        }
+    }
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
 
 #[derive(Default)]
 pub struct State {
@@ -32,290 +146,421 @@ impl State {
         self.current_tab.as_ref().map(|t| t.tab_id)
     }
 
-    pub fn ensure_current_tab(&mut self, manifest: &PaneManifest) -> bool {
-        if let Some(current_tab_id) = self.current_tab.as_ref().map(|current_tab| current_tab.tab_id) {
-            if self.all_tabs.iter().any(|tab| tab.tab_id == current_tab_id) {
-                return false;
-            }
+    // ── Event derivation (pure, &self) ────────────────────────────────────────
 
-            let Some(tab_id) = self.discover_current_tab_id(manifest) else {
-                return false;
-            };
-
-            if current_tab_id == tab_id {
-                return false;
-            }
-
-            if let Some(current_tab) = self.current_tab.as_mut() {
-                current_tab.tab_id = tab_id;
-            }
-            self.sync_requested = false;
-            return true;
-        }
-
-        let Some(tab_id) = self.discover_current_tab_id(manifest) else {
-            return false;
-        };
-
-        self.current_tab = Some(CurrentTab::new(tab_id));
-        self.sync_requested = false;
-        true
-    }
-
-    pub fn refresh_current_tab_from_manifest(
-        &mut self,
+    /// Derives state events from a `PaneUpdate` Zellij event.
+    pub fn events_from_pane_update(
+        &self,
         manifest: &PaneManifest,
         mut resolve_pane_cwd: impl FnMut(u32) -> Option<PathBuf>,
-    ) -> (bool, bool, bool) {
-        if self.current_tab.is_none() {
-            return (false, false, false);
-        }
+    ) -> Vec<StateEvent> {
         let Some(tab_pos) = self.current_tab_position_in_manifest(manifest) else {
-            return (false, false, false);
+            return vec![];
         };
         let Some(panes) = manifest.panes.get(&tab_pos) else {
-            return (false, false, false);
+            return vec![];
         };
 
-        let mut pane_ids = HashSet::new();
-        let mut focused_pane = None;
-        for pane in panes
-            .iter()
-            .filter(|pane| !pane.is_plugin && !pane.exited && !pane.is_held)
-        {
-            pane_ids.insert(pane.id);
+        let mut events = vec![];
+
+        // 1. Tab identity
+        let current_tab_id = self.current_tab.as_ref().map(|ct| ct.tab_id);
+        let discovered_tab_id = self.all_tabs.iter().find(|t| t.position == tab_pos).map(|t| t.tab_id);
+
+        match (current_tab_id, discovered_tab_id) {
+            (None, Some(tab_id)) => {
+                events.push(StateEvent::TabCreated { tab_id });
+            }
+            (Some(current_id), Some(discovered_id)) if !self.all_tabs.iter().any(|t| t.tab_id == current_id) => {
+                events.push(StateEvent::TabRemapped {
+                    new_tab_id: discovered_id,
+                });
+            }
+            _ => {}
+        }
+
+        // Resolve current tab state (after potential identity event)
+        let effective_tab_id = match events.first() {
+            Some(StateEvent::TabCreated { tab_id }) => *tab_id,
+            Some(StateEvent::TabRemapped { new_tab_id }) => *new_tab_id,
+            _ => match current_tab_id {
+                Some(id) => id,
+                None => return events, // no tab, nothing more to do
+            },
+        };
+        let _ = effective_tab_id; // used implicitly via current_tab below
+
+        let current_tab = match self.current_tab.as_ref() {
+            Some(ct) => ct,
+            None => {
+                // Tab just created — nothing else to diff against
+                return events;
+            }
+        };
+
+        // 2. Pane set
+        let mut new_pane_ids = HashSet::new();
+        let mut new_focused_pane: Option<FocusedPane> = None;
+        for pane in panes.iter().filter(|p| !p.is_plugin && !p.exited && !p.is_held) {
+            new_pane_ids.insert(pane.id);
             if pane.is_focused {
-                focused_pane = Some(FocusedPane {
+                new_focused_pane = Some(FocusedPane {
                     id: pane.id,
                     cmd: focused_pane_running_command(pane),
                 });
             }
         }
 
-        let Some(current_tab) = self.current_tab.as_mut() else {
-            return (false, false, false);
-        };
-
-        let prev_cmd = current_tab.cmd();
-        let prev_focused_pane = current_tab.focused_pane.clone();
-
-        if current_tab.pane_ids != pane_ids {
-            current_tab.pane_ids = pane_ids.clone();
-            current_tab
-                .agent_by_pane
-                .retain(|pane_id, _| pane_ids.contains(pane_id));
+        if new_pane_ids != current_tab.pane_ids {
+            // AgentLost for removed panes
+            for removed in current_tab.pane_ids.difference(&new_pane_ids) {
+                if current_tab.agent_by_pane.contains_key(removed) {
+                    events.push(StateEvent::AgentLost { pane_id: *removed });
+                }
+            }
+            events.push(StateEvent::PanesChanged {
+                new_pane_ids: new_pane_ids.clone(),
+            });
         }
 
-        let mut focused_changed = false;
-        if current_tab.focused_pane != focused_pane {
-            current_tab.focused_pane = focused_pane;
-            focused_changed = true;
+        // 3. Focus
+        let focused_changed = new_focused_pane != current_tab.focused_pane;
+        if focused_changed {
+            events.push(StateEvent::FocusMoved {
+                new_pane: new_focused_pane.clone(),
+            });
         }
 
-        sync_agent_by_pane_with_focused_pane(current_tab);
-        clear_agent_by_pane_when_focused_agent_disappears(current_tab, prev_focused_pane.as_ref());
-        reconcile_agent_by_pane_with_manifest(current_tab, panes);
+        // 4. Agent reconciliation
+        events.extend(self.agent_events_from_manifest(
+            current_tab,
+            current_tab.focused_pane.as_ref(),
+            new_focused_pane.as_ref(),
+            panes,
+            &new_pane_ids,
+        ));
 
-        let mut cwd_changed = false;
-        if let Some(focused_pane) = current_tab.focused_pane.as_ref()
+        // 5. CWD
+        if let Some(focused) = new_focused_pane.as_ref()
             && (focused_changed || current_tab.cwd.is_none())
-            && let Some(cwd) = resolve_pane_cwd(focused_pane.id)
-            && current_tab.cwd.as_ref() != Some(&cwd)
+            && let Some(new_cwd) = resolve_pane_cwd(focused.id)
+            && current_tab.cwd.as_ref() != Some(&new_cwd)
         {
-            current_tab.cwd = Some(cwd);
-            cwd_changed = true;
+            events.push(StateEvent::CwdChanged { new_cwd });
         }
 
-        let cmd_changed = prev_cmd != current_tab.cmd();
-        (focused_changed, cwd_changed, cmd_changed)
+        // 6. Sync request: send when tab was just created/remapped, or hasn't been requested yet.
+        let has_resetter = events
+            .iter()
+            .any(|e| matches!(e, StateEvent::TabCreated { .. } | StateEvent::TabRemapped { .. }));
+        if has_resetter || (self.current_tab.is_some() && !self.sync_requested) {
+            events.push(StateEvent::SyncRequested);
+        }
+
+        events
     }
 
-    pub fn update_current_tab_cwd(&mut self, pane_id: u32, cwd: PathBuf) -> bool {
-        let Some(current_tab) = self.current_tab.as_mut() else {
-            return false;
+    /// Derives state events from a `TabUpdate` Zellij event.
+    /// `new_tabs` is the incoming sorted tab list; `self.all_tabs` is the previous list.
+    pub fn events_from_tab_update(&self, new_tabs: &[TabInfo]) -> Vec<StateEvent> {
+        let prev_tabs = &self.all_tabs;
+        let mut events = vec![];
+
+        events.push(StateEvent::AllTabsReplaced {
+            new_tabs: new_tabs.to_vec(),
+        });
+
+        let topology_changed = topology_changed(prev_tabs, new_tabs);
+        if topology_changed {
+            events.push(StateEvent::TopologyChanged);
+        }
+
+        // Was the current tab active before? Is it active now?
+        let was_active = self
+            .current_tab_id()
+            .is_some_and(|id| prev_tabs.iter().any(|t| t.active && t.tab_id == id));
+        let is_active = self
+            .current_tab_id()
+            .is_some_and(|id| new_tabs.iter().any(|t| t.active && t.tab_id == id));
+        if !was_active && is_active {
+            events.push(StateEvent::BecameActive);
+        }
+
+        // Remap: current tab_id gone, can we find it in the new list?
+        let has_remap = if let Some(new_id) = detect_remapped_tab_id(self.current_tab.as_ref(), prev_tabs, new_tabs) {
+            events.push(StateEvent::TabRemapped { new_tab_id: new_id });
+            true
+        } else {
+            false
         };
-        if current_tab.focused_pane.as_ref().map(|fp| fp.id) != Some(pane_id) {
-            return false;
-        }
-        if current_tab.cwd.as_ref() == Some(&cwd) {
-            return false;
+
+        // Sync request: needed when topology resets the sync flag, or it was never sent.
+        if self.current_tab.is_some() && (!self.sync_requested || topology_changed || has_remap) {
+            events.push(StateEvent::SyncRequested);
         }
 
-        current_tab.cwd = Some(cwd);
-        true
+        events
     }
 
-    pub fn update_current_tab_agent_event(&mut self, event_payload: AgentEventPayload) -> (bool, bool) {
-        let Some(current_tab) = self.current_tab.as_mut() else {
-            return (false, false);
+    /// Derives state events from a `CwdChanged` Zellij event.
+    pub fn events_from_cwd_changed(&self, pane_id: u32, cwd: PathBuf) -> Vec<StateEvent> {
+        let Some(ct) = self.current_tab.as_ref() else {
+            return vec![];
         };
-
-        if !current_tab.pane_ids.contains(&event_payload.pane_id) {
-            return (false, false);
+        if ct.focused_pane.as_ref().map(|fp| fp.id) != Some(pane_id) {
+            return vec![];
         }
-
-        let prev_cmd = current_tab.cmd();
-        if !apply_agent_event(current_tab, &event_payload) {
-            return (false, false);
+        if ct.cwd.as_ref() == Some(&cwd) {
+            return vec![];
         }
-
-        let cmd_changed = prev_cmd != current_tab.cmd();
-        let should_refresh_git = matches!(event_payload.kind, AgentEventKind::Idle);
-        (cmd_changed, should_refresh_git)
+        vec![StateEvent::CwdChanged { new_cwd: cwd }]
     }
 
-    pub fn update_current_tab_git_stat(
-        &mut self,
+    /// Derives state events from a `RunCommandResult` Zellij event (git-stat subprocess).
+    pub fn events_from_run_command_result(
+        &self,
         requested_cwd: &PathBuf,
         exit_code: Option<i32>,
         stdout: &[u8],
-    ) -> bool {
+    ) -> Vec<StateEvent> {
         if exit_code != Some(0) {
-            return false;
+            return vec![];
         }
-
-        let Some(current_tab_cwd) = self
-            .current_tab
-            .as_ref()
-            .and_then(|current_tab| current_tab.cwd.clone())
-        else {
-            return false;
+        let Some(ct) = self.current_tab.as_ref() else {
+            return vec![];
         };
-        if &current_tab_cwd != requested_cwd {
-            return false;
+        if ct.cwd.as_ref() != Some(requested_cwd) {
+            return vec![];
         }
 
         let output = String::from_utf8_lossy(stdout);
-        let mut new_stat = None;
         for line in output.lines() {
-            let Ok((path, git_stat)) = GitStat::parse_line(line).inspect_err(|e| eprintln!("agm: {e}")) else {
+            let Ok((path, new_stat)) = GitStat::parse_line(line).inspect_err(|e| eprintln!("agm: {e}")) else {
                 continue;
             };
-
             if path != *requested_cwd {
                 continue;
             }
-            new_stat = Some(git_stat);
-            break;
+            if ct.git_stat == new_stat {
+                return vec![];
+            }
+            return vec![StateEvent::GitStatChanged { new_stat }];
         }
+        vec![]
+    }
 
-        let Some(current_tab) = self.current_tab.as_mut() else {
-            return false;
+    /// Derives state events from an `Agent` pipe event.
+    pub fn events_from_agent_event(&self, event: &AgentEventPayload) -> Vec<StateEvent> {
+        let Some(ct) = self.current_tab.as_ref() else {
+            return vec![];
         };
-        let new_stat = new_stat.unwrap_or_default();
-        if current_tab.git_stat == new_stat {
-            return false;
+        if !ct.pane_ids.contains(&event.pane_id) {
+            return vec![];
         }
 
-        current_tab.git_stat = new_stat;
-        true
-    }
-
-    pub fn bump_current_tab_seq(&mut self) {
-        if let Some(current_tab) = self.current_tab.as_mut() {
-            current_tab.seq = current_tab.seq.saturating_add(1);
-        }
-    }
-
-    pub fn send_sync_request(&mut self) {
-        if self.current_tab.is_none() {
-            return;
-        }
-
-        let mut args = BTreeMap::new();
-        args.insert("type".to_string(), "sync_request".to_string());
-        pipe_message_to_plugin(MessageToPlugin::new(SYNC_PIPE.to_string()).with_args(args));
-        self.sync_requested = true;
-    }
-
-    pub fn remap_current_tab_id_after_tab_update(&mut self, prev_tabs: &[TabInfo]) -> bool {
-        let Some(current_tab) = self.current_tab.as_mut() else {
-            return false;
-        };
-        if self.all_tabs.iter().any(|tab| tab.tab_id == current_tab.tab_id) {
-            return false;
-        }
-
-        let prev_ids: HashSet<usize> = prev_tabs.iter().map(|tab| tab.tab_id).collect();
-        let next_ids: HashSet<usize> = self.all_tabs.iter().map(|tab| tab.tab_id).collect();
-        let removed: HashSet<usize> = prev_ids.difference(&next_ids).copied().collect();
-        if !removed.contains(&current_tab.tab_id) {
-            return false;
-        }
-
-        let mut added: Vec<&TabInfo> = self
-            .all_tabs
-            .iter()
-            .filter(|tab| !prev_ids.contains(&tab.tab_id))
-            .collect();
-        if added.is_empty() {
-            return false;
-        }
-
-        if added.len() > 1
-            && let Some(prev_current_tab) = prev_tabs.iter().find(|tab| tab.tab_id == current_tab.tab_id)
+        // Priority guard: don't apply a lower-priority agent over a higher-priority one.
+        let current = ct.agent_by_pane.get(&event.pane_id);
+        if current
+            .and_then(|c| c.agent_name())
+            .and_then(|n| Agent::from_name(n).ok())
+            .is_some_and(|current_agent| event.agent.priority() < current_agent.priority())
         {
-            let by_name: Vec<&TabInfo> = added
-                .iter()
-                .copied()
-                .filter(|tab| tab.name == prev_current_tab.name)
-                .collect();
-            if by_name.len() == 1 {
-                added = by_name;
+            return vec![];
+        }
+
+        let pane_id = event.pane_id;
+        let agent = event.agent;
+        match event.kind {
+            AgentEventKind::Start => {
+                if matches!(current, Some(Cmd::IdleAgent(a)) if *a == agent) {
+                    return vec![];
+                }
+                vec![StateEvent::AgentDetected { pane_id, agent }]
+            }
+            AgentEventKind::Busy => {
+                if matches!(current, Some(Cmd::BusyAgent(a)) if *a == agent) {
+                    return vec![];
+                }
+                vec![StateEvent::AgentBusy { pane_id, agent }]
+            }
+            AgentEventKind::Idle => {
+                if matches!(current, Some(Cmd::IdleAgent(a)) if *a == agent) {
+                    return vec![];
+                }
+                vec![StateEvent::AgentIdle { pane_id, agent }]
+            }
+            AgentEventKind::Exit => {
+                if current.is_none() {
+                    return vec![];
+                }
+                vec![StateEvent::AgentLost { pane_id }]
             }
         }
-
-        if added.len() != 1 {
-            return false;
-        }
-
-        current_tab.tab_id = added[0].tab_id;
-        self.sync_requested = false;
-        true
     }
 
-    pub fn apply_remote_snapshot(&mut self, source_plugin_id: u32, snapshot: StateSnapshotPayload) -> bool {
+    /// Derives state events from a `StateSnapshot` pipe event (remote tab sync).
+    pub fn events_from_state_snapshot(
+        &self,
+        source_plugin_id: u32,
+        snapshot: &StateSnapshotPayload,
+    ) -> Vec<StateEvent> {
         if source_plugin_id == self.plugin_id {
-            return false;
+            return vec![];
         }
-
         if self.current_tab_id() == Some(snapshot.tab_id) {
-            return false;
+            return vec![];
         }
-
-        if !self.all_tabs.iter().any(|tab| tab.tab_id == snapshot.tab_id) {
-            return false;
+        if !self.all_tabs.iter().any(|t| t.tab_id == snapshot.tab_id) {
+            return vec![];
         }
-
         if self
             .other_tabs
             .get(&source_plugin_id)
             .is_some_and(|remote| snapshot.seq <= remote.seq)
         {
-            return false;
+            return vec![];
         }
 
-        let changed = self.other_tabs.get(&source_plugin_id).is_none_or(|remote| {
-            remote.cwd != snapshot.cwd || remote.cmd != snapshot.cmd || remote.git_stat != snapshot.git_stat
-        });
+        let evict_ids: Vec<u32> = self
+            .other_tabs
+            .iter()
+            .filter(|&(id, remote)| *id != source_plugin_id && remote.tab_id == snapshot.tab_id)
+            .map(|(&id, _)| id)
+            .collect();
 
-        self.other_tabs.retain(|other_source_plugin_id, remote| {
-            *other_source_plugin_id == source_plugin_id || remote.tab_id != snapshot.tab_id
-        });
-        self.other_tabs.insert(source_plugin_id, snapshot);
-        changed
+        vec![StateEvent::RemoteTabUpdated {
+            source_plugin_id,
+            snapshot: snapshot.clone(),
+            evict_ids,
+        }]
     }
 
-    pub fn prune_state_for_closed_tabs(&mut self) {
-        let known_tabs: HashSet<usize> = self.all_tabs.iter().map(|tab| tab.tab_id).collect();
-        self.other_tabs.retain(|_, remote| known_tabs.contains(&remote.tab_id));
+    // ── Apply (all state mutations) ───────────────────────────────────────────
+
+    fn apply(&mut self, event: &StateEvent) {
+        match event {
+            StateEvent::TabCreated { tab_id } => {
+                self.current_tab = Some(CurrentTab::new(*tab_id));
+            }
+            StateEvent::TabRemapped { new_tab_id } => {
+                if let Some(ct) = self.current_tab.as_mut() {
+                    ct.tab_id = *new_tab_id;
+                }
+            }
+            StateEvent::PanesChanged { new_pane_ids } => {
+                if let Some(ct) = self.current_tab.as_mut() {
+                    ct.pane_ids = new_pane_ids.clone();
+                    ct.agent_by_pane.retain(|id, _| new_pane_ids.contains(id));
+                    if ct
+                        .last_focused_agent_pane_id
+                        .is_some_and(|pane_id| !new_pane_ids.contains(&pane_id))
+                    {
+                        ct.last_focused_agent_pane_id = None;
+                    }
+                }
+            }
+            StateEvent::FocusMoved { new_pane } => {
+                if let Some(ct) = self.current_tab.as_mut() {
+                    ct.focused_pane = new_pane.clone();
+                    if let Some(pane) = new_pane.as_ref()
+                        && ct.agent_by_pane.contains_key(&pane.id)
+                    {
+                        ct.last_focused_agent_pane_id = Some(pane.id);
+                    }
+                }
+            }
+            StateEvent::CwdChanged { new_cwd } => {
+                if let Some(ct) = self.current_tab.as_mut() {
+                    ct.cwd = Some(new_cwd.clone());
+                }
+            }
+            StateEvent::AgentDetected { pane_id, agent } => {
+                if let Some(ct) = self.current_tab.as_mut() {
+                    ct.agent_by_pane.entry(*pane_id).or_insert(Cmd::IdleAgent(*agent));
+                    if ct.focused_pane.as_ref().map(|pane| pane.id) == Some(*pane_id) {
+                        ct.last_focused_agent_pane_id = Some(*pane_id);
+                    }
+                }
+            }
+            StateEvent::AgentBusy { pane_id, agent } => {
+                if let Some(ct) = self.current_tab.as_mut() {
+                    ct.agent_by_pane.insert(*pane_id, Cmd::BusyAgent(*agent));
+                    if ct.focused_pane.as_ref().map(|pane| pane.id) == Some(*pane_id) {
+                        ct.last_focused_agent_pane_id = Some(*pane_id);
+                    }
+                }
+            }
+            StateEvent::AgentIdle { pane_id, agent } => {
+                if let Some(ct) = self.current_tab.as_mut() {
+                    ct.agent_by_pane.insert(*pane_id, Cmd::IdleAgent(*agent));
+                    if ct.focused_pane.as_ref().map(|pane| pane.id) == Some(*pane_id) {
+                        ct.last_focused_agent_pane_id = Some(*pane_id);
+                    }
+                }
+            }
+            StateEvent::AgentLost { pane_id } => {
+                if let Some(ct) = self.current_tab.as_mut() {
+                    ct.agent_by_pane.remove(pane_id);
+                    if ct.last_focused_agent_pane_id == Some(*pane_id) {
+                        ct.last_focused_agent_pane_id = None;
+                    }
+                }
+            }
+            StateEvent::GitStatChanged { new_stat } => {
+                if let Some(ct) = self.current_tab.as_mut() {
+                    ct.git_stat = *new_stat;
+                }
+            }
+            StateEvent::TopologyChanged => {}
+            StateEvent::AllTabsReplaced { new_tabs } => {
+                let known: HashSet<usize> = new_tabs.iter().map(|t| t.tab_id).collect();
+                self.other_tabs.retain(|_, remote| known.contains(&remote.tab_id));
+                self.all_tabs = new_tabs.clone();
+            }
+            StateEvent::SyncRequested => {
+                self.sync_requested = true;
+            }
+            StateEvent::RemoteTabUpdated {
+                source_plugin_id,
+                snapshot,
+                evict_ids,
+            } => {
+                for id in evict_ids {
+                    self.other_tabs.remove(id);
+                }
+                self.other_tabs.insert(*source_plugin_id, snapshot.clone());
+            }
+            StateEvent::BecameActive => {
+                // IO-only signal, no state to update.
+            }
+        }
+    }
+
+    /// Apply all events, bump seq if any require a snapshot, recompute frame.
+    /// Returns whether the frame changed (Zellij rerender signal).
+    pub fn apply_all(&mut self, events: &[StateEvent]) -> bool {
+        for event in events {
+            self.apply(event);
+        }
+        if events.iter().any(StateEvent::requires_snapshot) {
+            self.bump_current_tab_seq();
+        }
+        self.sync_frame()
+    }
+
+    // ── Remaining public helpers ──────────────────────────────────────────────
+
+    pub fn bump_current_tab_seq(&mut self) {
+        if let Some(ct) = self.current_tab.as_mut() {
+            ct.seq = ct.seq.saturating_add(1);
+        }
     }
 
     pub fn remote_snapshot_for_tab(&self, tab_id: usize) -> Option<&StateSnapshotPayload> {
         self.other_tabs
             .values()
-            .filter(|remote| remote.tab_id == tab_id)
-            .max_by_key(|remote| remote.seq)
+            .filter(|r| r.tab_id == tab_id)
+            .max_by_key(|r| r.seq)
     }
 
     pub fn sync_frame(&mut self) -> bool {
@@ -327,23 +572,84 @@ impl State {
         true
     }
 
-    fn discover_current_tab_id(&self, manifest: &PaneManifest) -> Option<usize> {
-        let tab_pos = self.current_tab_position_in_manifest(manifest)?;
-        self.all_tabs
-            .iter()
-            .find(|tab| tab.position == tab_pos)
-            .map(|tab| tab.tab_id)
-    }
+    // ── Private helpers ───────────────────────────────────────────────────────
 
     fn current_tab_position_in_manifest(&self, manifest: &PaneManifest) -> Option<usize> {
         manifest.panes.iter().find_map(|(tab_pos, panes)| {
             panes
                 .iter()
-                .any(|pane| pane.is_plugin && pane.id == self.plugin_id)
+                .any(|p| p.is_plugin && p.id == self.plugin_id)
                 .then_some(*tab_pos)
         })
     }
+
+    /// Pure: computes agent state changes implied by the new manifest.
+    /// Replaces the three former mutating helpers.
+    fn agent_events_from_manifest(
+        &self,
+        current_tab: &CurrentTab,
+        prev_focused_pane: Option<&FocusedPane>,
+        new_focused_pane: Option<&FocusedPane>,
+        panes: &[PaneInfo],
+        surviving_pane_ids: &HashSet<u32>,
+    ) -> Vec<StateEvent> {
+        let mut events = vec![];
+
+        // Detect new agent in the newly-focused pane (persist across focus moves).
+        if let Some(focused) = new_focused_pane
+            && let Some(agent) = focused.cmd.as_deref().and_then(Agent::detect)
+        {
+            match current_tab.agent_by_pane.get(&focused.id) {
+                Some(Cmd::BusyAgent(a) | Cmd::IdleAgent(a)) if *a == agent => {}
+                _ => {
+                    events.push(StateEvent::AgentDetected {
+                        pane_id: focused.id,
+                        agent,
+                    });
+                }
+            }
+        }
+
+        // Clear agent state when the focused pane no longer shows that agent.
+        if let Some(prev) = prev_focused_pane
+            && let Some(new) = new_focused_pane
+            && prev.id == new.id
+            && prev.cmd.as_deref().and_then(Agent::detect).is_some()
+            && new.cmd.as_deref().and_then(Agent::detect).is_none()
+        {
+            events.push(StateEvent::AgentLost { pane_id: new.id });
+        }
+
+        // Reconcile focused pane against manifest command metadata.
+        for (&pane_id, cmd) in &current_tab.agent_by_pane {
+            if !surviving_pane_ids.contains(&pane_id) {
+                continue; // already emitted AgentLost in events_from_pane_update
+            }
+            let Some(stored_agent) = cmd.agent_name().and_then(|n| Agent::from_name(n).ok()) else {
+                continue;
+            };
+            let Some(pane) = panes.iter().find(|p| p.id == pane_id && !p.is_plugin) else {
+                continue;
+            };
+            if pane.exited || pane.is_held || !pane.is_focused {
+                continue; // only reconcile focused panes
+            }
+            let detected = focused_pane_running_command(pane).and_then(|exe| Agent::detect(&exe));
+            let should_clear = match detected {
+                Some(d) if d != stored_agent => true,
+                None if pane.terminal_command.as_ref().is_some_and(|s| !s.trim().is_empty()) => true,
+                _ => false,
+            };
+            if should_clear {
+                events.push(StateEvent::AgentLost { pane_id });
+            }
+        }
+
+        events
+    }
 }
+
+// ── CurrentTab ────────────────────────────────────────────────────────────────
 
 #[cfg_attr(test, derive(Debug, PartialEq))]
 #[derive(Default)]
@@ -352,6 +658,7 @@ pub struct CurrentTab {
     pub seq: u64,
     pub pane_ids: HashSet<u32>,
     pub focused_pane: Option<FocusedPane>,
+    pub last_focused_agent_pane_id: Option<u32>,
     pub cwd: Option<PathBuf>,
     pub agent_by_pane: HashMap<u32, Cmd>,
     pub git_stat: GitStat,
@@ -366,63 +673,100 @@ impl CurrentTab {
     }
 
     pub fn cmd(&self) -> Cmd {
-        self.agent_by_pane
-            .values()
-            .filter_map(|cmd| match cmd {
-                Cmd::BusyAgent(agent) => Some((agent.priority(), 1_u8, cmd.clone())),
-                Cmd::IdleAgent(agent) => Some((agent.priority(), 0_u8, cmd.clone())),
-                _ => None,
-            })
-            .max_by_key(|(priority, busy, _)| (*priority, *busy))
-            .map(|(_, _, cmd)| cmd)
-            .or_else(|| {
-                let focused_pane = self.focused_pane.as_ref()?;
-                let cmd_line = focused_pane.cmd.as_deref()?;
-                if let Some(exe) = parse_running_command(cmd_line)
-                    && let Some(agent) = Agent::detect(&exe)
-                {
-                    return Some(Cmd::IdleAgent(agent));
-                }
-                Some(Cmd::Running(cmd_line.to_string()))
-            })
-            .unwrap_or(Cmd::None)
+        compute_cmd(
+            &self.agent_by_pane,
+            self.focused_pane.as_ref(),
+            self.last_focused_agent_pane_id,
+        )
     }
 }
 
-#[derive(Clone, Default, PartialEq)]
-#[cfg_attr(test, derive(Debug))]
+// ── FocusedPane ───────────────────────────────────────────────────────────────
+
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct FocusedPane {
-    id: u32,
-    cmd: Option<String>,
+    pub id: u32,
+    pub cmd: Option<String>,
 }
 
-fn clear_agent_by_pane_when_focused_agent_disappears(
-    current_tab: &mut CurrentTab,
-    prev_focused_pane: Option<&FocusedPane>,
-) {
-    let Some(prev_focused_pane) = prev_focused_pane else {
-        return;
-    };
-    let Some(current_focused_pane) = current_tab.focused_pane.as_ref() else {
-        return;
-    };
-    if prev_focused_pane.id != current_focused_pane.id {
-        return;
+// ── Frame computation ─────────────────────────────────────────────────────────
+
+fn compute_frame(state: &State) -> Vec<TabRow> {
+    state
+        .all_tabs
+        .iter()
+        .map(|tab| {
+            if state.current_tab_id() == Some(tab.tab_id)
+                && let Some(ct) = state.current_tab.as_ref()
+            {
+                return TabRow::new(tab, ct.cwd.as_ref(), ct.cmd(), ct.git_stat, state.home_dir.as_path());
+            }
+            if let Some(remote) = state.remote_snapshot_for_tab(tab.tab_id) {
+                return TabRow::new(
+                    tab,
+                    remote.cwd.as_ref(),
+                    remote.cmd.clone(),
+                    remote.git_stat,
+                    state.home_dir.as_path(),
+                );
+            }
+            TabRow::new(tab, None, Cmd::None, GitStat::default(), state.home_dir.as_path())
+        })
+        .collect()
+}
+
+// ── Pure helpers ──────────────────────────────────────────────────────────────
+
+/// The effective command for a tab:
+/// - focused agent wins
+/// - otherwise a single tracked agent wins
+/// - otherwise the last focused tracked agent wins
+/// - otherwise fall back to the focused pane command
+pub fn compute_cmd(
+    agent_by_pane: &HashMap<u32, Cmd>,
+    focused_pane: Option<&FocusedPane>,
+    last_focused_agent_pane_id: Option<u32>,
+) -> Cmd {
+    if let Some(focused_id) = focused_pane.map(|pane| pane.id)
+        && let Some(cmd @ (Cmd::BusyAgent(_) | Cmd::IdleAgent(_))) = agent_by_pane.get(&focused_id)
+    {
+        return cmd.clone();
     }
-    if prev_focused_pane.cmd.as_deref().and_then(Agent::detect).is_none() {
-        return;
+
+    if let Some(focused) = focused_pane
+        && let Some(cmd_line) = focused.cmd.as_deref()
+    {
+        if let Some(agent) = Agent::detect(cmd_line) {
+            return Cmd::IdleAgent(agent);
+        }
+        if let Some(exe) = parse_running_command(cmd_line)
+            && let Some(agent) = Agent::detect(&exe)
+        {
+            return Cmd::IdleAgent(agent);
+        }
     }
-    if current_focused_pane.cmd.as_deref().and_then(Agent::detect).is_some() {
-        return;
+
+    if agent_by_pane.len() == 1
+        && let Some(cmd @ (Cmd::BusyAgent(_) | Cmd::IdleAgent(_))) = agent_by_pane.values().next()
+    {
+        return cmd.clone();
     }
-    current_tab.agent_by_pane.remove(&current_focused_pane.id);
+
+    if let Some(last_focused_agent_pane_id) = last_focused_agent_pane_id
+        && let Some(cmd @ (Cmd::BusyAgent(_) | Cmd::IdleAgent(_))) = agent_by_pane.get(&last_focused_agent_pane_id)
+    {
+        return cmd.clone();
+    }
+
+    focused_pane
+        .and_then(|focused| focused.cmd.as_ref().map(|cmd_line| Cmd::Running(cmd_line.to_string())))
+        .unwrap_or(Cmd::None)
 }
 
 fn focused_pane_running_command(pane: &PaneInfo) -> Option<String> {
     if pane.exited || pane.is_held {
         return None;
     }
-
     pane.terminal_command
         .as_deref()
         .and_then(parse_running_command)
@@ -440,143 +784,63 @@ fn parse_running_command(command: &str) -> Option<String> {
 
 fn parse_pane_title(title: &str) -> Option<String> {
     let trimmed = title.trim();
-    if trimmed.is_empty() || trimmed.starts_with('~') || trimmed.starts_with('/') {
+    if trimmed.is_empty()
+        || trimmed.starts_with('~')
+        || trimmed.starts_with('/')
+        || trimmed == "Pane"
+        || trimmed.starts_with("Pane ")
+    {
         return None;
+    }
+    if Agent::detect(trimmed).is_some() {
+        return Some(trimmed.to_string());
     }
     parse_running_command(trimmed)
 }
 
-/// Persist an agent once we have explicitly seen it in the focused pane.
-///
-/// This lets the tab keep showing that agent after focus moves to another pane, even if no hook
-/// has fired yet.
-fn sync_agent_by_pane_with_focused_pane(current_tab: &mut CurrentTab) {
-    let Some(focused_pane) = current_tab.focused_pane.as_ref() else {
-        return;
-    };
-    let Some(agent) = focused_pane.cmd.as_deref().and_then(Agent::detect) else {
-        return;
-    };
-    match current_tab.agent_by_pane.get(&focused_pane.id) {
-        Some(Cmd::BusyAgent(current) | Cmd::IdleAgent(current)) if *current == agent => {}
-        _ => {
-            current_tab.agent_by_pane.insert(focused_pane.id, Cmd::IdleAgent(agent));
-        }
+fn topology_changed(x: &[TabInfo], y: &[TabInfo]) -> bool {
+    if x.len() != y.len() {
+        return true;
     }
+    x.iter()
+        .zip(y.iter())
+        .any(|(a, b)| a.tab_id != b.tab_id || a.position != b.position)
 }
 
-/// Drop hook-driven agent state when we have high-confidence evidence that the pane no longer runs
-/// that agent (e.g. focused Codex pane quit → shell).
-///
-/// For unfocused panes, Zellij manifest metadata can fall back to shell/path information even
-/// while an agent TUI is still open. Clearing state from that data makes the agent disappear from
-/// the tab as soon as focus moves elsewhere, so only focused panes are reconciled against command
-/// metadata.
-fn reconcile_agent_by_pane_with_manifest(current_tab: &mut CurrentTab, panes: &[PaneInfo]) {
-    let tracked: Vec<u32> = current_tab.agent_by_pane.keys().copied().collect();
-    for pane_id in tracked {
-        let Some(cmd) = current_tab.agent_by_pane.get(&pane_id) else {
-            continue;
-        };
-        if cmd.agent_name().is_none() {
-            continue;
-        }
-        let Some(stored) = cmd.agent_name().and_then(|n| Agent::from_name(n).ok()) else {
-            continue;
-        };
-
-        let Some(pane) = panes.iter().find(|p| p.id == pane_id && !p.is_plugin) else {
-            current_tab.agent_by_pane.remove(&pane_id);
-            continue;
-        };
-        if pane.exited || pane.is_held {
-            current_tab.agent_by_pane.remove(&pane_id);
-            continue;
-        }
-
-        let detected = focused_pane_running_command(pane).and_then(|exe| Agent::detect(&exe));
-
-        if !pane.is_focused {
-            continue;
-        }
-
-        match detected {
-            Some(d) if d != stored => {
-                current_tab.agent_by_pane.remove(&pane_id);
-            }
-            None if pane.terminal_command.as_ref().is_some_and(|s| !s.trim().is_empty()) => {
-                current_tab.agent_by_pane.remove(&pane_id);
-            }
-            _ => {}
-        }
-    }
-}
-
-fn compute_frame(state: &State) -> Vec<TabRow> {
-    state
-        .all_tabs
-        .iter()
-        .map(|tab| {
-            if state.current_tab_id() == Some(tab.tab_id)
-                && let Some(current_tab) = state.current_tab.as_ref()
-            {
-                return TabRow::new(
-                    tab,
-                    current_tab.cwd.as_ref(),
-                    current_tab.cmd(),
-                    current_tab.git_stat,
-                    state.home_dir.as_path(),
-                );
-            }
-
-            if let Some(remote) = state.remote_snapshot_for_tab(tab.tab_id) {
-                return TabRow::new(
-                    tab,
-                    remote.cwd.as_ref(),
-                    remote.cmd.clone(),
-                    remote.git_stat,
-                    state.home_dir.as_path(),
-                );
-            }
-
-            TabRow::new(tab, None, Cmd::None, GitStat::default(), state.home_dir.as_path())
-        })
-        .collect()
-}
-
-fn apply_agent_event(current_tab: &mut CurrentTab, event_payload: &AgentEventPayload) -> bool {
-    let mut current = current_tab
-        .agent_by_pane
-        .get(&event_payload.pane_id)
-        .cloned()
-        .unwrap_or(Cmd::None);
-    if !apply_agent_event_to_cmd(&mut current, event_payload) {
-        return false;
+/// Pure core of tab-id remapping after a tab move/rename.
+fn detect_remapped_tab_id(
+    current_tab: Option<&CurrentTab>,
+    prev_tabs: &[TabInfo],
+    new_tabs: &[TabInfo],
+) -> Option<usize> {
+    let current_tab = current_tab?;
+    if new_tabs.iter().any(|t| t.tab_id == current_tab.tab_id) {
+        return None; // tab_id still present, no remap needed
     }
 
-    if current.agent_name().is_some() {
-        current_tab.agent_by_pane.insert(event_payload.pane_id, current);
-    } else {
-        current_tab.agent_by_pane.remove(&event_payload.pane_id);
+    let prev_ids: HashSet<usize> = prev_tabs.iter().map(|t| t.tab_id).collect();
+    let next_ids: HashSet<usize> = new_tabs.iter().map(|t| t.tab_id).collect();
+    let removed: HashSet<usize> = prev_ids.difference(&next_ids).copied().collect();
+    if !removed.contains(&current_tab.tab_id) {
+        return None;
     }
-    true
-}
 
-fn apply_agent_event_to_cmd(cmd: &mut Cmd, event_payload: &AgentEventPayload) -> bool {
-    let current_agent = cmd.agent_name().and_then(|name| Agent::from_name(name).ok());
-    if let Some(current_agent) = current_agent
-        && event_payload.agent.priority() < current_agent.priority()
+    let mut added: Vec<&TabInfo> = new_tabs.iter().filter(|t| !prev_ids.contains(&t.tab_id)).collect();
+    if added.is_empty() {
+        return None;
+    }
+    if added.len() > 1
+        && let Some(prev_current) = prev_tabs.iter().find(|t| t.tab_id == current_tab.tab_id)
     {
-        return false;
+        let by_name: Vec<_> = added.iter().copied().filter(|t| t.name == prev_current.name).collect();
+        if by_name.len() == 1 {
+            added = by_name;
+        }
     }
-
-    let next = Cmd::from(event_payload);
-    if *cmd == next {
-        return false;
-    }
-    *cmd = next;
-    true
+    if added.len() == 1 { Some(added[0].tab_id) } else { None }
 }
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
@@ -632,8 +896,9 @@ mod tests {
     }
 
     fn manifest(entries: Vec<(usize, Vec<PaneInfo>)>) -> PaneManifest {
-        let panes = entries.into_iter().collect::<HashMap<usize, Vec<PaneInfo>>>();
-        PaneManifest { panes }
+        PaneManifest {
+            panes: entries.into_iter().collect(),
+        }
     }
 
     fn snapshot(tab_id: usize, seq: u64, cmd: Cmd) -> StateSnapshotPayload {
@@ -646,6 +911,12 @@ mod tests {
         }
     }
 
+    fn apply_pane_update(state: &mut State, manifest: &PaneManifest) -> Vec<StateEvent> {
+        let events = state.events_from_pane_update(manifest, noop_pane_cwd);
+        state.apply_all(&events);
+        events
+    }
+
     #[test]
     fn pane_update_before_tab_update_does_not_rebind_current_tab_id() {
         let mut state = State {
@@ -655,31 +926,41 @@ mod tests {
         };
 
         let initial_manifest = manifest(vec![(0, vec![plugin_pane(7), terminal_pane(42, true)])]);
-        assert!(state.ensure_current_tab(&initial_manifest));
+        let events = apply_pane_update(&mut state, &initial_manifest);
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, StateEvent::TabCreated { tab_id: 10 }))
+        );
 
-        let current_tab = state.current_tab.as_mut().expect("missing current tab");
-        current_tab.pane_ids.insert(42);
-        current_tab.focused_pane = Some(FocusedPane { id: 42, cmd: None });
-        current_tab.cwd = Some(PathBuf::from("/tmp/project"));
-        current_tab.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Codex));
+        let ct = state.current_tab.as_mut().unwrap();
+        ct.cwd = Some(PathBuf::from("/tmp/project"));
+        ct.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Codex));
 
         // Simulate a tab move where PaneUpdate arrives before TabUpdate:
         // manifest already reflects new position, while all_tabs is still stale.
         let moved_manifest = manifest(vec![(1, vec![plugin_pane(7), terminal_pane(42, true)])]);
-        assert!(!state.ensure_current_tab(&moved_manifest));
-        let _ = state.refresh_current_tab_from_manifest(&moved_manifest, noop_pane_cwd);
+        let events2 = apply_pane_update(&mut state, &moved_manifest);
+        // Plugin is now at position 1, which maps to tab 11, but tab 10 is still in all_tabs
+        // so no remap should happen — the tab_id should stay 10.
+        assert!(
+            !events2
+                .iter()
+                .any(|e| matches!(e, StateEvent::TabCreated { .. } | StateEvent::TabRemapped { .. }))
+        );
 
-        let current_tab = state.current_tab.as_ref().expect("missing current tab");
-        let expected_current_tab = CurrentTab {
+        let current_tab = state.current_tab.as_ref().unwrap();
+        let expected = CurrentTab {
             tab_id: 10,
-            seq: 0,
+            seq: 2, // bumped for TabCreated and again for FocusMoved
             pane_ids: [42].into_iter().collect(),
             focused_pane: Some(FocusedPane { id: 42, cmd: None }),
+            last_focused_agent_pane_id: Some(42),
             cwd: Some(PathBuf::from("/tmp/project")),
             agent_by_pane: [(42, Cmd::BusyAgent(Agent::Codex))].into_iter().collect(),
             git_stat: GitStat::default(),
         };
-        pretty_assertions::assert_eq!(current_tab, &expected_current_tab);
+        pretty_assertions::assert_eq!(current_tab, &expected);
     }
 
     #[test]
@@ -690,39 +971,50 @@ mod tests {
             current_tab: Some(CurrentTab::new(10)),
             ..Default::default()
         };
-        let current_tab = state.current_tab.as_mut().expect("missing current tab");
-        current_tab.pane_ids.insert(42);
-        current_tab.focused_pane = Some(FocusedPane { id: 42, cmd: None });
-        current_tab.cwd = Some(PathBuf::from("/tmp/project"));
-        current_tab.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Codex));
+        let ct = state.current_tab.as_mut().unwrap();
+        ct.pane_ids.insert(42);
+        ct.focused_pane = Some(FocusedPane { id: 42, cmd: None });
+        ct.cwd = Some(PathBuf::from("/tmp/project"));
+        ct.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Codex));
 
-        let manifest = manifest(vec![(1, vec![plugin_pane(7), terminal_pane(42, true)])]);
-        assert!(state.ensure_current_tab(&manifest));
-        let _ = state.refresh_current_tab_from_manifest(&manifest, noop_pane_cwd);
+        // Tab 10 is not in all_tabs; plugin is at position 1 → tab 99
+        let m = manifest(vec![(1, vec![plugin_pane(7), terminal_pane(42, true)])]);
+        let events = apply_pane_update(&mut state, &m);
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, StateEvent::TabRemapped { new_tab_id: 99 }))
+        );
 
-        let current_tab = state.current_tab.as_ref().expect("missing current tab");
-        let expected_current_tab = CurrentTab {
+        let current_tab = state.current_tab.as_ref().unwrap();
+        let expected = CurrentTab {
             tab_id: 99,
-            seq: 0,
+            seq: 1, // bumped by apply_all because TabRemapped requires a snapshot
             pane_ids: [42].into_iter().collect(),
             focused_pane: Some(FocusedPane { id: 42, cmd: None }),
+            last_focused_agent_pane_id: None,
             cwd: Some(PathBuf::from("/tmp/project")),
             agent_by_pane: [(42, Cmd::BusyAgent(Agent::Codex))].into_iter().collect(),
             git_stat: GitStat::default(),
         };
-        pretty_assertions::assert_eq!(current_tab, &expected_current_tab);
+        pretty_assertions::assert_eq!(current_tab, &expected);
     }
 
     #[test]
     fn remap_current_tab_id_after_tab_update_can_use_tab_name_when_many_ids_changed() {
         let mut state = State {
             current_tab: Some(CurrentTab::new(10)),
-            all_tabs: vec![tab_with_name(30, 1, "agent"), tab_with_name(40, 0, "shell")],
+            all_tabs: vec![tab_with_name(10, 0, "agent"), tab_with_name(20, 1, "shell")],
             ..Default::default()
         };
-
-        let prev_tabs = vec![tab_with_name(10, 0, "agent"), tab_with_name(20, 1, "shell")];
-        assert!(state.remap_current_tab_id_after_tab_update(&prev_tabs));
+        let new_tabs = vec![tab_with_name(30, 1, "agent"), tab_with_name(40, 0, "shell")];
+        let events = state.events_from_tab_update(&new_tabs);
+        state.apply_all(&events);
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, StateEvent::TabRemapped { new_tab_id: 30 }))
+        );
         pretty_assertions::assert_eq!(state.current_tab_id(), Some(30));
     }
 
@@ -734,8 +1026,13 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(state.apply_remote_snapshot(100, snapshot(2, 10, Cmd::BusyAgent(Agent::Codex))));
-        assert!(state.apply_remote_snapshot(200, snapshot(2, 1, Cmd::IdleAgent(Agent::Claude))));
+        let snap1 = snapshot(2, 10, Cmd::BusyAgent(Agent::Codex));
+        let events1 = state.events_from_state_snapshot(100, &snap1);
+        state.apply_all(&events1);
+
+        let snap2 = snapshot(2, 1, Cmd::IdleAgent(Agent::Claude));
+        let events2 = state.events_from_state_snapshot(200, &snap2);
+        state.apply_all(&events2);
 
         let expected = HashMap::from([(200, snapshot(2, 1, Cmd::IdleAgent(Agent::Claude)))]);
         pretty_assertions::assert_eq!(state.other_tabs, expected);
@@ -743,33 +1040,83 @@ mod tests {
 
     #[test]
     fn current_tab_cmd_falls_back_to_focused_non_agent_command() {
-        let mut current_tab = CurrentTab::new(1);
-        current_tab.focused_pane = Some(FocusedPane {
+        let mut ct = CurrentTab::new(1);
+        ct.focused_pane = Some(FocusedPane {
             id: 0,
             cmd: Some("cargo".to_string()),
         });
-        pretty_assertions::assert_eq!(current_tab.cmd(), Cmd::Running("cargo".to_string()));
+        pretty_assertions::assert_eq!(ct.cmd(), Cmd::Running("cargo".to_string()));
     }
 
     #[test]
     fn current_tab_cmd_prioritizes_agents_over_focused_non_agent_command() {
-        let mut current_tab = CurrentTab::new(1);
-        current_tab.focused_pane = Some(FocusedPane {
+        let mut ct = CurrentTab::new(1);
+        ct.focused_pane = Some(FocusedPane {
             id: 0,
             cmd: Some("cargo".to_string()),
         });
-        current_tab.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Codex));
-        pretty_assertions::assert_eq!(current_tab.cmd(), Cmd::BusyAgent(Agent::Codex));
+        ct.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Codex));
+        pretty_assertions::assert_eq!(ct.cmd(), Cmd::BusyAgent(Agent::Codex));
+    }
+
+    #[test]
+    fn current_tab_cmd_prefers_focused_agent_over_higher_priority_unfocused_agent() {
+        let mut ct = CurrentTab::new(1);
+        ct.focused_pane = Some(FocusedPane {
+            id: 42,
+            cmd: Some("claude".to_string()),
+        });
+        ct.last_focused_agent_pane_id = Some(42);
+        ct.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Claude));
+        ct.agent_by_pane.insert(43, Cmd::BusyAgent(Agent::Cursor));
+        pretty_assertions::assert_eq!(ct.cmd(), Cmd::BusyAgent(Agent::Claude));
+    }
+
+    #[test]
+    fn current_tab_cmd_keeps_single_agent_visible_when_focus_moves_to_non_agent_pane() {
+        let mut ct = CurrentTab::new(1);
+        ct.focused_pane = Some(FocusedPane {
+            id: 43,
+            cmd: Some("cargo".to_string()),
+        });
+        ct.last_focused_agent_pane_id = Some(42);
+        ct.agent_by_pane.insert(42, Cmd::IdleAgent(Agent::Claude));
+        pretty_assertions::assert_eq!(ct.cmd(), Cmd::IdleAgent(Agent::Claude));
+    }
+
+    #[test]
+    fn current_tab_cmd_prefers_visible_focused_agent_over_single_tracked_agent() {
+        let mut ct = CurrentTab::new(1);
+        ct.focused_pane = Some(FocusedPane {
+            id: 43,
+            cmd: Some("Cursor Agent".to_string()),
+        });
+        ct.last_focused_agent_pane_id = Some(42);
+        ct.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Claude));
+        pretty_assertions::assert_eq!(ct.cmd(), Cmd::IdleAgent(Agent::Cursor));
+    }
+
+    #[test]
+    fn current_tab_cmd_uses_last_focused_agent_when_multiple_agents_exist() {
+        let mut ct = CurrentTab::new(1);
+        ct.focused_pane = Some(FocusedPane {
+            id: 44,
+            cmd: Some("cargo".to_string()),
+        });
+        ct.last_focused_agent_pane_id = Some(42);
+        ct.agent_by_pane.insert(42, Cmd::IdleAgent(Agent::Claude));
+        ct.agent_by_pane.insert(43, Cmd::BusyAgent(Agent::Cursor));
+        pretty_assertions::assert_eq!(ct.cmd(), Cmd::IdleAgent(Agent::Claude));
     }
 
     #[test]
     fn current_tab_cmd_shows_idle_agent_when_focus_executable_matches_agent() {
-        let mut current_tab = CurrentTab::new(1);
-        current_tab.focused_pane = Some(FocusedPane {
+        let mut ct = CurrentTab::new(1);
+        ct.focused_pane = Some(FocusedPane {
             id: 0,
             cmd: Some("/opt/homebrew/bin/codex".to_string()),
         });
-        pretty_assertions::assert_eq!(current_tab.cmd(), Cmd::IdleAgent(Agent::Codex));
+        pretty_assertions::assert_eq!(ct.cmd(), Cmd::IdleAgent(Agent::Codex));
     }
 
     #[test]
@@ -780,24 +1127,19 @@ mod tests {
             current_tab: Some(CurrentTab::new(10)),
             ..Default::default()
         };
-
-        let current_tab = state.current_tab.as_mut().expect("missing current tab");
-        current_tab.pane_ids.insert(42);
-        current_tab.focused_pane = Some(FocusedPane { id: 42, cmd: None });
-        current_tab.cwd = Some(PathBuf::from("/tmp/project"));
+        let ct = state.current_tab.as_mut().unwrap();
+        ct.pane_ids.insert(42);
+        ct.focused_pane = Some(FocusedPane { id: 42, cmd: None });
+        ct.cwd = Some(PathBuf::from("/tmp/project"));
 
         let pane = terminal_pane_with_command(42, true, "/usr/bin/cargo test -p agm-plugin");
-        let manifest = manifest(vec![(0, vec![plugin_pane(7), pane])]);
-        let (_focused_changed, _cwd_changed, cmd_changed) =
-            state.refresh_current_tab_from_manifest(&manifest, noop_pane_cwd);
+        let m = manifest(vec![(0, vec![plugin_pane(7), pane])]);
+        let events = apply_pane_update(&mut state, &m);
 
-        assert!(cmd_changed);
-        let current_tab = state.current_tab.as_ref().expect("missing current tab");
-        pretty_assertions::assert_eq!(
-            current_tab.focused_pane.as_ref().and_then(|fp| fp.cmd.as_deref()),
-            Some("cargo")
-        );
-        pretty_assertions::assert_eq!(current_tab.cmd(), Cmd::Running("cargo".to_string()));
+        assert!(events.iter().any(|e| matches!(e, StateEvent::FocusMoved { .. })));
+        let ct = state.current_tab.as_ref().unwrap();
+        pretty_assertions::assert_eq!(ct.focused_pane.as_ref().and_then(|fp| fp.cmd.as_deref()), Some("cargo"));
+        pretty_assertions::assert_eq!(ct.cmd(), Cmd::Running("cargo".to_string()));
     }
 
     #[test]
@@ -808,24 +1150,19 @@ mod tests {
             current_tab: Some(CurrentTab::new(10)),
             ..Default::default()
         };
-
-        let current_tab = state.current_tab.as_mut().expect("missing current tab");
-        current_tab.pane_ids.insert(42);
-        current_tab.focused_pane = Some(FocusedPane { id: 42, cmd: None });
-        current_tab.cwd = Some(PathBuf::from("/tmp/project"));
+        let ct = state.current_tab.as_mut().unwrap();
+        ct.pane_ids.insert(42);
+        ct.focused_pane = Some(FocusedPane { id: 42, cmd: None });
+        ct.cwd = Some(PathBuf::from("/tmp/project"));
 
         let pane = terminal_pane_with_title(42, true, "nvim");
-        let manifest = manifest(vec![(0, vec![plugin_pane(7), pane])]);
-        let (_focused_changed, _cwd_changed, cmd_changed) =
-            state.refresh_current_tab_from_manifest(&manifest, noop_pane_cwd);
+        let m = manifest(vec![(0, vec![plugin_pane(7), pane])]);
+        let events = apply_pane_update(&mut state, &m);
 
-        assert!(cmd_changed);
-        let current_tab = state.current_tab.as_ref().expect("missing current tab");
-        pretty_assertions::assert_eq!(
-            current_tab.focused_pane.as_ref().and_then(|fp| fp.cmd.as_deref()),
-            Some("nvim")
-        );
-        pretty_assertions::assert_eq!(current_tab.cmd(), Cmd::Running("nvim".to_string()));
+        assert!(events.iter().any(|e| matches!(e, StateEvent::FocusMoved { .. })));
+        let ct = state.current_tab.as_ref().unwrap();
+        pretty_assertions::assert_eq!(ct.focused_pane.as_ref().and_then(|fp| fp.cmd.as_deref()), Some("nvim"));
+        pretty_assertions::assert_eq!(ct.cmd(), Cmd::Running("nvim".to_string()));
     }
 
     #[test]
@@ -836,24 +1173,22 @@ mod tests {
             current_tab: Some(CurrentTab::new(10)),
             ..Default::default()
         };
-
-        let current_tab = state.current_tab.as_mut().expect("missing current tab");
-        current_tab.pane_ids.insert(42);
-        current_tab.focused_pane = Some(FocusedPane {
+        let ct = state.current_tab.as_mut().unwrap();
+        ct.pane_ids.insert(42);
+        ct.focused_pane = Some(FocusedPane {
             id: 42,
             cmd: Some("nvim".to_string()),
         });
-        current_tab.cwd = Some(PathBuf::from("/tmp/project"));
+        ct.cwd = Some(PathBuf::from("/tmp/project"));
 
         let pane = terminal_pane_with_title(42, true, "/tmp/project");
-        let manifest = manifest(vec![(0, vec![plugin_pane(7), pane])]);
-        let (_focused_changed, _cwd_changed, cmd_changed) =
-            state.refresh_current_tab_from_manifest(&manifest, noop_pane_cwd);
+        let m = manifest(vec![(0, vec![plugin_pane(7), pane])]);
+        let events = apply_pane_update(&mut state, &m);
 
-        assert!(cmd_changed);
-        let current_tab = state.current_tab.as_ref().expect("missing current tab");
-        pretty_assertions::assert_eq!(current_tab.focused_pane.as_ref().and_then(|fp| fp.cmd.as_deref()), None);
-        pretty_assertions::assert_eq!(current_tab.cmd(), Cmd::None);
+        assert!(events.iter().any(|e| matches!(e, StateEvent::FocusMoved { .. })));
+        let ct = state.current_tab.as_ref().unwrap();
+        pretty_assertions::assert_eq!(ct.focused_pane.as_ref().and_then(|fp| fp.cmd.as_deref()), None);
+        pretty_assertions::assert_eq!(ct.cmd(), Cmd::None);
     }
 
     #[test]
@@ -864,22 +1199,21 @@ mod tests {
             current_tab: Some(CurrentTab::new(10)),
             ..Default::default()
         };
-
-        let current_tab = state.current_tab.as_mut().expect("missing current tab");
-        current_tab.pane_ids.insert(42);
-        current_tab.focused_pane = Some(FocusedPane {
+        let ct = state.current_tab.as_mut().unwrap();
+        ct.pane_ids.insert(42);
+        ct.focused_pane = Some(FocusedPane {
             id: 42,
             cmd: Some("codex".to_string()),
         });
-        current_tab.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Codex));
+        ct.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Codex));
 
         let pane = terminal_pane_with_command(42, true, "/bin/zsh");
-        let manifest = manifest(vec![(0, vec![plugin_pane(7), pane])]);
-        let _ = state.refresh_current_tab_from_manifest(&manifest, noop_pane_cwd);
+        let m = manifest(vec![(0, vec![plugin_pane(7), pane])]);
+        apply_pane_update(&mut state, &m);
 
-        let current_tab = state.current_tab.as_ref().expect("missing current tab");
-        pretty_assertions::assert_eq!(current_tab.agent_by_pane.get(&42), None);
-        pretty_assertions::assert_eq!(current_tab.cmd(), Cmd::None);
+        let ct = state.current_tab.as_ref().unwrap();
+        pretty_assertions::assert_eq!(ct.agent_by_pane.get(&42), None);
+        pretty_assertions::assert_eq!(ct.cmd(), Cmd::None);
     }
 
     #[test]
@@ -890,22 +1224,21 @@ mod tests {
             current_tab: Some(CurrentTab::new(10)),
             ..Default::default()
         };
-
-        let current_tab = state.current_tab.as_mut().expect("missing current tab");
-        current_tab.pane_ids.insert(42);
-        current_tab.focused_pane = Some(FocusedPane {
+        let ct = state.current_tab.as_mut().unwrap();
+        ct.pane_ids.insert(42);
+        ct.focused_pane = Some(FocusedPane {
             id: 42,
             cmd: Some("codex".to_string()),
         });
-        current_tab.agent_by_pane.insert(42, Cmd::IdleAgent(Agent::Codex));
+        ct.agent_by_pane.insert(42, Cmd::IdleAgent(Agent::Codex));
 
         let pane = terminal_pane_with_title(42, true, "/tmp/project");
-        let manifest = manifest(vec![(0, vec![plugin_pane(7), pane])]);
-        let _ = state.refresh_current_tab_from_manifest(&manifest, noop_pane_cwd);
+        let m = manifest(vec![(0, vec![plugin_pane(7), pane])]);
+        apply_pane_update(&mut state, &m);
 
-        let current_tab = state.current_tab.as_ref().expect("missing current tab");
-        pretty_assertions::assert_eq!(current_tab.agent_by_pane.get(&42), None);
-        pretty_assertions::assert_eq!(current_tab.cmd(), Cmd::None);
+        let ct = state.current_tab.as_ref().unwrap();
+        pretty_assertions::assert_eq!(ct.agent_by_pane.get(&42), None);
+        pretty_assertions::assert_eq!(ct.cmd(), Cmd::None);
     }
 
     #[test]
@@ -916,16 +1249,15 @@ mod tests {
             current_tab: Some(CurrentTab::new(10)),
             ..Default::default()
         };
-
-        let current_tab = state.current_tab.as_mut().expect("missing current tab");
-        current_tab.pane_ids.extend([42, 43]);
-        current_tab.focused_pane = Some(FocusedPane {
+        let ct = state.current_tab.as_mut().unwrap();
+        ct.pane_ids.extend([42, 43]);
+        ct.focused_pane = Some(FocusedPane {
             id: 43,
             cmd: Some("cargo".to_string()),
         });
-        current_tab.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Codex));
+        ct.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Codex));
 
-        let manifest = manifest(vec![(
+        let m = manifest(vec![(
             0,
             vec![
                 plugin_pane(7),
@@ -933,11 +1265,11 @@ mod tests {
                 terminal_pane_with_command(43, true, "/usr/bin/cargo test"),
             ],
         )]);
-        let _ = state.refresh_current_tab_from_manifest(&manifest, noop_pane_cwd);
+        apply_pane_update(&mut state, &m);
 
-        let current_tab = state.current_tab.as_ref().expect("missing current tab");
-        pretty_assertions::assert_eq!(current_tab.agent_by_pane.get(&42), Some(&Cmd::BusyAgent(Agent::Codex)));
-        pretty_assertions::assert_eq!(current_tab.cmd(), Cmd::BusyAgent(Agent::Codex));
+        let ct = state.current_tab.as_ref().unwrap();
+        pretty_assertions::assert_eq!(ct.agent_by_pane.get(&42), Some(&Cmd::BusyAgent(Agent::Codex)));
+        pretty_assertions::assert_eq!(ct.cmd(), Cmd::BusyAgent(Agent::Codex));
     }
 
     #[test]
@@ -949,16 +1281,16 @@ mod tests {
             ..Default::default()
         };
 
-        let first_manifest = manifest(vec![(
+        let first = manifest(vec![(
             0,
             vec![
                 plugin_pane(7),
                 terminal_pane_with_command(42, true, "/opt/homebrew/bin/codex"),
             ],
         )]);
-        let _ = state.refresh_current_tab_from_manifest(&first_manifest, noop_pane_cwd);
+        apply_pane_update(&mut state, &first);
 
-        let second_manifest = manifest(vec![(
+        let second = manifest(vec![(
             0,
             vec![
                 plugin_pane(7),
@@ -966,11 +1298,103 @@ mod tests {
                 terminal_pane_with_command(43, true, "/usr/bin/cargo test"),
             ],
         )]);
-        let _ = state.refresh_current_tab_from_manifest(&second_manifest, noop_pane_cwd);
+        apply_pane_update(&mut state, &second);
 
-        let current_tab = state.current_tab.as_ref().expect("missing current tab");
-        pretty_assertions::assert_eq!(current_tab.agent_by_pane.get(&42), Some(&Cmd::IdleAgent(Agent::Codex)));
-        pretty_assertions::assert_eq!(current_tab.cmd(), Cmd::IdleAgent(Agent::Codex));
+        let ct = state.current_tab.as_ref().unwrap();
+        pretty_assertions::assert_eq!(ct.agent_by_pane.get(&42), Some(&Cmd::IdleAgent(Agent::Codex)));
+        pretty_assertions::assert_eq!(ct.cmd(), Cmd::IdleAgent(Agent::Codex));
+    }
+
+    #[test]
+    fn refresh_current_tab_from_manifest_prefers_last_focused_agent_when_multiple_agents_exist() {
+        let mut state = State {
+            plugin_id: 7,
+            all_tabs: vec![tab_with_name(10, 0, "a")],
+            current_tab: Some(CurrentTab::new(10)),
+            ..Default::default()
+        };
+
+        let first = manifest(vec![(
+            0,
+            vec![
+                plugin_pane(7),
+                terminal_pane_with_command(42, true, "/opt/homebrew/bin/claude"),
+                terminal_pane_with_command(43, false, "/usr/local/bin/cursor-agent"),
+            ],
+        )]);
+        apply_pane_update(&mut state, &first);
+        state.apply_all(&state.events_from_agent_event(&AgentEventPayload {
+            pane_id: 42,
+            agent: Agent::Claude,
+            kind: AgentEventKind::Busy,
+        }));
+        state.apply_all(&state.events_from_agent_event(&AgentEventPayload {
+            pane_id: 43,
+            agent: Agent::Cursor,
+            kind: AgentEventKind::Busy,
+        }));
+
+        let second = manifest(vec![(
+            0,
+            vec![
+                plugin_pane(7),
+                terminal_pane_with_command(42, false, "/opt/homebrew/bin/claude"),
+                terminal_pane_with_command(43, true, "/usr/local/bin/cursor-agent"),
+            ],
+        )]);
+        apply_pane_update(&mut state, &second);
+        let ct = state.current_tab.as_ref().unwrap();
+        pretty_assertions::assert_eq!(ct.cmd(), Cmd::BusyAgent(Agent::Cursor));
+
+        let third = manifest(vec![(
+            0,
+            vec![
+                plugin_pane(7),
+                terminal_pane_with_command(42, true, "/opt/homebrew/bin/claude"),
+                terminal_pane_with_command(43, false, "/usr/local/bin/cursor-agent"),
+            ],
+        )]);
+        apply_pane_update(&mut state, &third);
+        let ct = state.current_tab.as_ref().unwrap();
+        pretty_assertions::assert_eq!(ct.cmd(), Cmd::BusyAgent(Agent::Claude));
+    }
+
+    #[test]
+    fn focus_move_between_agent_panes_bumps_seq_without_new_agent_events() {
+        let mut state = State {
+            plugin_id: 7,
+            all_tabs: vec![tab_with_name(10, 0, "a")],
+            current_tab: Some(CurrentTab::new(10)),
+            ..Default::default()
+        };
+        let ct = state.current_tab.as_mut().unwrap();
+        ct.seq = 5;
+        ct.pane_ids.extend([42, 43]);
+        ct.focused_pane = Some(FocusedPane {
+            id: 42,
+            cmd: Some("claude".to_string()),
+        });
+        ct.last_focused_agent_pane_id = Some(42);
+        ct.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Claude));
+        ct.agent_by_pane.insert(43, Cmd::BusyAgent(Agent::Cursor));
+
+        let m = manifest(vec![(
+            0,
+            vec![
+                plugin_pane(7),
+                terminal_pane_with_command(42, false, "/opt/homebrew/bin/claude"),
+                terminal_pane_with_command(43, true, "/usr/local/bin/cursor-agent"),
+            ],
+        )]);
+        let events = state.events_from_pane_update(&m, noop_pane_cwd);
+        assert!(events.iter().any(|e| matches!(e, StateEvent::FocusMoved { .. })));
+        assert!(events.iter().all(|e| !matches!(e, StateEvent::AgentDetected { .. })));
+
+        state.apply_all(&events);
+        let ct = state.current_tab.as_ref().unwrap();
+        pretty_assertions::assert_eq!(ct.seq, 6);
+        pretty_assertions::assert_eq!(ct.last_focused_agent_pane_id, Some(43));
+        pretty_assertions::assert_eq!(ct.cmd(), Cmd::BusyAgent(Agent::Cursor));
     }
 
     #[test]
@@ -979,5 +1403,11 @@ mod tests {
         pretty_assertions::assert_eq!(parse_pane_title("bash"), None);
         pretty_assertions::assert_eq!(parse_pane_title("fish"), None);
         pretty_assertions::assert_eq!(parse_pane_title("cargo test"), Some("cargo".to_string()));
+    }
+
+    #[test]
+    fn parse_pane_title_preserves_agent_titles_with_prefix_symbols() {
+        pretty_assertions::assert_eq!(parse_pane_title("✳ Claude Code"), Some("✳ Claude Code".to_string()));
+        pretty_assertions::assert_eq!(parse_pane_title("Cursor Agent"), Some("Cursor Agent".to_string()));
     }
 }
