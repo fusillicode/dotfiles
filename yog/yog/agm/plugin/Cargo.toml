@@ -17,4 +17,5 @@ zellij-tile = { git = "https://github.com/zellij-org/zellij.git", branch = "main
 
 [dev-dependencies]
 assert2 = { workspace = true }
-pretty_assertions = "1.4.0"
+pretty_assertions = { workspace = true }
+rstest = { workspace = true }

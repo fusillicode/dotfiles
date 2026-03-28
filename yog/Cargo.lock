@@ -47,6 +47,7 @@ dependencies = [
  "agm-core",
  "assert2",
  "pretty_assertions",
+ "rstest",
  "zellij-tile",
 ]
 
