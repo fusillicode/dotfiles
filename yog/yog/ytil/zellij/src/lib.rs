@@ -1,6 +1,6 @@
 //! Query and control `Zellij` sessions and panes via the CLI.
 //!
-//! Thin wrappers around `zellij` subcommands for session management, pane control, focus
+//! Thin wrappers around `zellij` subcommands for session management, pane control, focus,
 //! and text injection.
 
 use std::process::Command;
@@ -93,7 +93,7 @@ impl Session {
 /// Forwards arbitrary arguments to `zellij` with inherited stdio.
 ///
 /// # Errors
-/// - Invoking `zellij` fails or exits with a non-zero status.
+/// - Invoking `zellij` fails or exits with a nonzero status.
 pub fn forward(args: &[String]) -> rootcause::Result<()> {
     let mut cmd = Command::new(BIN);
     cmd.args(args);
@@ -110,7 +110,7 @@ pub fn help() -> rootcause::Result<()> {
     Ok(run_interactive(&mut cmd)?)
 }
 
-/// Kills a running Zellij session by name.
+/// Kills running Zellij session by name.
 ///
 /// # Errors
 /// - Invoking `zellij kill-session` fails.
@@ -148,7 +148,7 @@ pub fn attach_session(name: &str) -> rootcause::Result<()> {
 /// terminal with the new session (interactive, inherited stdio).
 ///
 /// # Errors
-/// - Invoking `zellij` fails or exits with a non-zero exit status.
+/// - Invoking `zellij` fails or exits with a nonzero exit status.
 pub fn new_session_with_layout(session: &str, layout: &str) -> rootcause::Result<()> {
     let mut cmd = Command::new(BIN);
     cmd.args(["--new-session-with-layout", layout, "--session", session]);
@@ -208,7 +208,7 @@ pub fn pane_count() -> rootcause::Result<usize> {
 /// Runs `zellij action <args…>`.
 ///
 /// # Errors
-/// - The `zellij` binary cannot be spawned or returns a non-zero exit status.
+/// - The `zellij` binary cannot be spawned or returns a nonzero exit status.
 pub fn action(args: &[&str]) -> rootcause::Result<()> {
     let full: Vec<&str> = std::iter::once("action").chain(args.iter().copied()).collect();
     ytil_cmd::silent_cmd(BIN).args(&full).exec()?;
