@@ -232,46 +232,23 @@ impl ZellijPlugin for State {
             }
 
             Event::TabUpdate(mut tabs) => {
-                tabs.sort_by_key(|tab| tab.position);
-                let events = self.events_from_tab_update(&tabs);
+                let events = self.events_from_tab_update(&mut tabs);
                 let frame_changed = self.apply_all(&events);
-                if events.iter().any(StateEvent::requires_snapshot) {
-                    send_current_tab_snapshot(self.current_tab.as_ref(), None);
-                }
-                if events.iter().any(StateEvent::requires_git_refresh) {
-                    run_current_tab_git_stat(self.current_tab.as_ref());
-                }
-                if events.iter().any(|e| matches!(e, StateEvent::SyncRequested)) {
-                    send_sync_request_pipe();
-                }
-                // Tab topology always redraws the bar even if frame content is unchanged.
+                handle_events(self.current_tab.as_ref(), &events);
                 frame_changed || !events.is_empty()
             }
 
             Event::PaneUpdate(manifest) => {
                 let events = self.events_from_pane_update(&manifest, zellij_terminal_pane_cwd);
                 let frame_changed = self.apply_all(&events);
-                if events.iter().any(StateEvent::requires_snapshot) {
-                    send_current_tab_snapshot(self.current_tab.as_ref(), None);
-                }
-                if events.iter().any(StateEvent::requires_git_refresh) {
-                    run_current_tab_git_stat(self.current_tab.as_ref());
-                }
-                if events.iter().any(|e| matches!(e, StateEvent::SyncRequested)) {
-                    send_sync_request_pipe();
-                }
+                handle_events(self.current_tab.as_ref(), &events);
                 frame_changed || !events.is_empty()
             }
 
             Event::CwdChanged(PaneId::Terminal(pane_id), cwd, _clients) => {
                 let events = self.events_from_cwd_changed(pane_id, cwd);
                 let frame_changed = self.apply_all(&events);
-                if events.iter().any(StateEvent::requires_snapshot) {
-                    send_current_tab_snapshot(self.current_tab.as_ref(), None);
-                }
-                if events.iter().any(StateEvent::requires_git_refresh) {
-                    run_current_tab_git_stat(self.current_tab.as_ref());
-                }
+                handle_events(self.current_tab.as_ref(), &events);
                 frame_changed || !events.is_empty()
             }
 
@@ -281,9 +258,7 @@ impl ZellijPlugin for State {
                 };
                 let events = self.events_from_run_command_result(&requested_cwd, exit_code, &stdout);
                 let frame_changed = self.apply_all(&events);
-                if events.iter().any(StateEvent::requires_snapshot) {
-                    send_current_tab_snapshot(self.current_tab.as_ref(), None);
-                }
+                handle_events(self.current_tab.as_ref(), &events);
                 frame_changed || !events.is_empty()
             }
 
@@ -345,12 +320,7 @@ impl ZellijPlugin for State {
             PipeEvent::Agent(agent_event) => {
                 let events = self.events_from_agent_event(&agent_event);
                 let frame_changed = self.apply_all(&events);
-                if events.iter().any(StateEvent::requires_snapshot) {
-                    send_current_tab_snapshot(self.current_tab.as_ref(), None);
-                }
-                if events.iter().any(StateEvent::requires_git_refresh) {
-                    run_current_tab_git_stat(self.current_tab.as_ref());
-                }
+                handle_events(self.current_tab.as_ref(), &events);
                 frame_changed || !events.is_empty()
             }
         }
@@ -359,11 +329,34 @@ impl ZellijPlugin for State {
 
 // ── IO helpers ────────────────────────────────────────────────────────────────
 
+fn handle_events(current_tab: Option<&CurrentTab>, events: &[StateEvent]) {
+    for event in events {
+        match event {
+            StateEvent::AgentIdle { .. } | StateEvent::FocusMoved { .. } | StateEvent::CwdChanged { .. } => {
+                run_current_tab_git_stat(current_tab);
+                send_current_tab_snapshot(current_tab, None);
+            }
+            StateEvent::TabCreated { .. }
+            | StateEvent::TabRemapped { .. }
+            | StateEvent::GitStatChanged { .. }
+            | StateEvent::AgentDetected { .. }
+            | StateEvent::AgentBusy { .. }
+            | StateEvent::AgentLost { .. } => send_current_tab_snapshot(current_tab, None),
+            StateEvent::SyncRequested => send_sync_request(),
+            StateEvent::PanesChanged { .. }
+            | StateEvent::RemoteTabUpdated { .. }
+            | StateEvent::TopologyChanged
+            | StateEvent::BecameActive
+            | StateEvent::AllTabsReplaced { .. } => {}
+        }
+    }
+}
+
 fn zellij_terminal_pane_cwd(pane_id: u32) -> Option<PathBuf> {
     get_pane_cwd(PaneId::Terminal(pane_id)).ok()
 }
 
-fn send_sync_request_pipe() {
+fn send_sync_request() {
     let mut args = BTreeMap::new();
     args.insert("type".to_string(), "sync_request".to_string());
     pipe_message_to_plugin(MessageToPlugin::new(SYNC_PIPE.to_string()).with_args(args));
