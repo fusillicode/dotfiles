@@ -882,7 +882,7 @@ mod tests {
     }
 
     #[test]
-    fn pane_update_before_tab_update_does_not_rebind_current_tab_id() {
+    fn test_pane_update_before_tab_update_does_not_rebind_current_tab_id() {
         let mut state = State {
             plugin_id: 7,
             all_tabs: vec![tab_with_name(10, 0, "a"), tab_with_name(11, 1, "b")],
@@ -929,7 +929,7 @@ mod tests {
     }
 
     #[test]
-    fn pane_update_rebinds_current_tab_id_only_after_old_id_disappears() {
+    fn test_pane_update_rebinds_current_tab_id_only_after_old_id_disappears() {
         let mut state = State {
             plugin_id: 7,
             all_tabs: vec![tab_with_name(11, 0, "b"), tab_with_name(99, 1, "a")],
@@ -965,7 +965,7 @@ mod tests {
     }
 
     #[test]
-    fn remap_current_tab_id_after_tab_update_can_use_tab_name_when_many_ids_changed() {
+    fn test_remap_current_tab_id_after_tab_update_can_use_tab_name_when_many_ids_changed() {
         let mut state = State {
             current_tab: Some(CurrentTab::new(10)),
             all_tabs: vec![tab_with_name(10, 0, "agent"), tab_with_name(20, 1, "shell")],
@@ -996,7 +996,7 @@ mod tests {
     }
 
     #[test]
-    fn remote_snapshot_sequence_is_tracked_per_source_plugin() {
+    fn test_remote_snapshot_sequence_is_tracked_per_source_plugin() {
         let mut state = State {
             current_tab: Some(CurrentTab::new(1)),
             all_tabs: vec![tab_with_name(1, 0, "local"), tab_with_name(2, 1, "remote")],
@@ -1058,7 +1058,7 @@ mod tests {
         None,
         Cmd::IdleAgent(Agent::Codex)
     )]
-    fn test_compute_cmd(
+    fn test_test_compute_cmd(
         #[case] agents: Vec<(u32, Cmd)>,
         #[case] focused: Option<(u32, &str)>,
         #[case] last_focused_agent_id: Option<u32>,
@@ -1077,7 +1077,7 @@ mod tests {
     }
 
     #[test]
-    fn refresh_current_tab_from_manifest_picks_focused_command_name() {
+    fn test_refresh_current_tab_from_manifest_picks_focused_command_name() {
         let mut state = State {
             plugin_id: 7,
             all_tabs: vec![tab_with_name(10, 0, "a")],
@@ -1110,7 +1110,7 @@ mod tests {
     }
 
     #[test]
-    fn refresh_current_tab_from_manifest_falls_back_to_focused_pane_title() {
+    fn test_refresh_current_tab_from_manifest_falls_back_to_focused_pane_title() {
         let mut state = State {
             plugin_id: 7,
             all_tabs: vec![tab_with_name(10, 0, "a")],
@@ -1143,7 +1143,7 @@ mod tests {
     }
 
     #[test]
-    fn refresh_current_tab_from_manifest_ignores_shell_or_path_titles() {
+    fn test_refresh_current_tab_from_manifest_ignores_shell_or_path_titles() {
         let mut state = State {
             plugin_id: 7,
             all_tabs: vec![tab_with_name(10, 0, "a")],
@@ -1176,7 +1176,7 @@ mod tests {
     }
 
     #[test]
-    fn refresh_current_tab_from_manifest_clears_agent_state_when_pane_process_changes() {
+    fn test_refresh_current_tab_from_manifest_clears_agent_state_when_pane_process_changes() {
         let mut state = State {
             plugin_id: 7,
             all_tabs: vec![tab_with_name(10, 0, "a")],
@@ -1213,7 +1213,7 @@ mod tests {
     }
 
     #[test]
-    fn refresh_current_tab_from_manifest_clears_agent_state_when_focused_pane_title_becomes_path() {
+    fn test_refrush_current_tab_from_manifest_clears_agent_state_when_focused_pane_title_becomes_path() {
         let mut state = State {
             plugin_id: 7,
             all_tabs: vec![tab_with_name(10, 0, "a")],
@@ -1249,7 +1249,7 @@ mod tests {
     }
 
     #[test]
-    fn refresh_current_tab_from_manifest_keeps_agent_state_for_unfocused_shell_metadata() {
+    fn test_refresh_current_tab_from_manifest_keeps_agent_state_for_unfocused_shell_metadata() {
         let mut state = State {
             plugin_id: 7,
             all_tabs: vec![tab_with_name(10, 0, "a")],
@@ -1282,7 +1282,7 @@ mod tests {
     }
 
     #[test]
-    fn refresh_current_tab_from_manifest_persists_agent_seen_in_focused_pane() {
+    fn test_refresh_current_tab_from_manifest_persists_agent_seen_in_focused_pane() {
         let mut state = State {
             plugin_id: 7,
             all_tabs: vec![tab_with_name(10, 0, "a")],
@@ -1348,7 +1348,7 @@ mod tests {
     }
 
     #[test]
-    fn refresh_current_tab_from_manifest_prefers_last_focused_agent_when_multiple_agents_exist() {
+    fn test_refresh_current_tab_from_manifest_prefers_last_focused_agent_when_multiple_agents_exist() {
         let mut state = State {
             plugin_id: 7,
             all_tabs: vec![tab_with_name(10, 0, "a")],
@@ -1402,7 +1402,7 @@ mod tests {
     }
 
     #[test]
-    fn focus_move_between_agent_panes_bumps_seq_without_new_agent_events() {
+    fn test_focus_move_between_agent_panes_bumps_seq_without_new_agent_events() {
         let mut state = State {
             plugin_id: 7,
             all_tabs: vec![tab_with_name(10, 0, "a")],
