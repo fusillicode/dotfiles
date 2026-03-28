@@ -108,6 +108,7 @@ pub enum Agent {
     Claude,
     Codex,
     Cursor,
+    Gemini,
     Opencode,
 }
 
@@ -117,6 +118,7 @@ impl Agent {
             Self::Claude => "claude",
             Self::Codex => "codex",
             Self::Cursor => "cursor",
+            Self::Gemini => "gemini",
             Self::Opencode => "opencode",
         }
     }
@@ -126,6 +128,7 @@ impl Agent {
             Self::Claude => r#"{"hooks":{}}"#,
             Self::Cursor => r#"{"version":1,"hooks":{}}"#,
             Self::Codex => r#"{"hooks":{}}"#,
+            Self::Gemini => r#"{"hooks":{}}"#,
             Self::Opencode => "{}",
         }
     }
@@ -135,6 +138,7 @@ impl Agent {
             Self::Claude => &[".claude", "settings.json"],
             Self::Cursor => &[".cursor", "hooks.json"],
             Self::Codex => &[".codex", "hooks.json"],
+            Self::Gemini => &[".gemini", "settings.json"],
             Self::Opencode => &[".config", "opencode", "plugins", "agm.ts"],
         }
     }
@@ -160,6 +164,14 @@ impl Agent {
                 ("PreToolUse", AgentEventKind::Busy),
                 ("Stop", AgentEventKind::Idle),
             ],
+            Self::Gemini => &[
+                ("SessionStart", AgentEventKind::Start),
+                ("BeforeAgent", AgentEventKind::Busy),
+                ("BeforeModel", AgentEventKind::Busy),
+                ("BeforeTool", AgentEventKind::Busy),
+                ("AfterAgent", AgentEventKind::Idle),
+                ("SessionEnd", AgentEventKind::Exit),
+            ],
             Self::Opencode => &[],
         }
     }
@@ -169,6 +181,7 @@ impl Agent {
             "claude" => Ok(Self::Claude),
             "cursor" => Ok(Self::Cursor),
             "codex" => Ok(Self::Codex),
+            "gemini" => Ok(Self::Gemini),
             "opencode" => Ok(Self::Opencode),
             _ => Err(ParseError::Invalid {
                 field: "agent",
@@ -186,7 +199,12 @@ impl Agent {
             self.name(),
             kind.as_str()
         );
-        format!("cat >/dev/null 2>&1 || true; {pipe}")
+        let echo = if matches!(self, Self::Gemini) {
+            "; echo '{}'"
+        } else {
+            ""
+        };
+        format!("cat >/dev/null 2>&1 || true; {pipe}{echo}")
     }
 
     /// Higher means more specific — Cursor hosts Claude, so it wins when both match.
@@ -195,7 +213,8 @@ impl Agent {
             Self::Claude => 0,
             Self::Codex => 1,
             Self::Cursor => 2,
-            Self::Opencode => 3,
+            Self::Gemini => 3,
+            Self::Opencode => 4,
         }
     }
 
@@ -208,6 +227,8 @@ impl Agent {
             Some(Self::Cursor)
         } else if lower.contains("codex") {
             Some(Self::Codex)
+        } else if lower.contains("gemini") {
+            Some(Self::Gemini)
         } else if lower.contains("opencode") {
             Some(Self::Opencode)
         } else {
@@ -453,6 +474,7 @@ mod tests {
     #[case("claude", Ok(Agent::Claude))]
     #[case("cursor", Ok(Agent::Cursor))]
     #[case("codex", Ok(Agent::Codex))]
+    #[case("gemini", Ok(Agent::Gemini))]
     #[case("opencode", Ok(Agent::Opencode))]
     #[case("unknown", Err("invalid agent: \"unknown\"".to_string()))]
     fn agent_from_name_works_as_expected(#[case] name: &str, #[case] expected: Result<Agent, String>) {
@@ -464,6 +486,7 @@ mod tests {
     #[case("Claude-3.5-Sonnet", Some(Agent::Claude))]
     #[case("Cursor-IDE", Some(Agent::Cursor))]
     #[case("GitHub-Codex", Some(Agent::Codex))]
+    #[case("Gemini-1.5-Pro", Some(Agent::Gemini))]
     #[case("OpenCode-Agent", Some(Agent::Opencode))]
     #[case("Vim", None)]
     fn agent_detect_works_as_expected(#[case] name: &str, #[case] expected: Option<Agent>) {
@@ -474,6 +497,7 @@ mod tests {
     #[case(Agent::Claude)]
     #[case(Agent::Cursor)]
     #[case(Agent::Codex)]
+    #[case(Agent::Gemini)]
     #[case(Agent::Opencode)]
     fn hook_command_never_fails_when_zellij_unavailable(#[case] agent: Agent) {
         let cmd = agent.hook_command(AgentEventKind::Busy);
