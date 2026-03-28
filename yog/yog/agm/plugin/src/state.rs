@@ -366,19 +366,13 @@ impl State {
         source_plugin_id: u32,
         snapshot: &StateSnapshotPayload,
     ) -> Vec<StateEvent> {
-        if source_plugin_id == self.plugin_id {
-            return vec![];
-        }
-        if self.current_tab_id() == Some(snapshot.tab_id) {
-            return vec![];
-        }
-        if !self.all_tabs.iter().any(|t| t.tab_id == snapshot.tab_id) {
-            return vec![];
-        }
-        if self
-            .other_tabs
-            .get(&source_plugin_id)
-            .is_some_and(|remote| snapshot.seq <= remote.seq)
+        if source_plugin_id == self.plugin_id
+            || self.current_tab_id() == Some(snapshot.tab_id)
+            || !self.all_tabs.iter().any(|t| t.tab_id == snapshot.tab_id)
+            || self
+                .other_tabs
+                .get(&source_plugin_id)
+                .is_some_and(|remote| snapshot.seq <= remote.seq)
         {
             return vec![];
         }
