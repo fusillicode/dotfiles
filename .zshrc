@@ -29,12 +29,18 @@ fi
 [[ ~/.zcompdump -nt ~/.zcompdump.zwc ]] && zcompile ~/.zcompdump
 
 # Completion styling
+zmodload zsh/complist
 zstyle ':completion:*' menu selection
 zstyle ':completion:*' matcher-list 'm:{a-z}={A-Z}'
 zstyle ':completion:*' list-colors ${(s.:.)LS_COLORS}
 zstyle ':completion:*' squeeze-slashes true
 zstyle ':completion:*' file-sort modification
 _comp_options+=(globdots)
+
+# Completion keybindings
+bindkey '^I' expand-or-complete
+bindkey '^[[Z' reverse-menu-complete
+bindkey -M menuselect '^[[Z' reverse-menu-complete
 
 # Terminal title and zellij tab (using add-zsh-hook so starship doesn't clobber these)
 autoload -Uz add-zsh-hook
