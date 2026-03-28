@@ -1,7 +1,7 @@
 //! Launch a Zellij session with a vertical tab sidebar plugin.
 //!
 //! Subcommands:
-//! - `install` — build the WASM plugin, deploy it, and install Claude, Cursor, Codex, and Opencode hooks.
+//! - `install` — build the WASM plugin, deploy it, and install Claude, Cursor, Codex, Gemini, and Opencode hooks.
 //! - `git-stat` — print git statistics for a directory.
 //! - `git-stat` — print `path insertions deletions untracked` per path (one line each).
 //!
@@ -252,7 +252,7 @@ fn print_skipped(agent: Agent) {
 
 fn remove_agm_entries(agent: Agent, arr: &mut Vec<Value>) {
     match agent {
-        Agent::Claude | Agent::Codex => arr.retain(|group| {
+        Agent::Claude | Agent::Codex | Agent::Gemini => arr.retain(|group| {
             !group
                 .get("hooks")
                 .and_then(|hooks| hooks.as_array())
@@ -276,7 +276,7 @@ fn remove_agm_entries(agent: Agent, arr: &mut Vec<Value>) {
 
 fn new_hook_entry(agent: Agent, cmd: &str) -> Value {
     match agent {
-        Agent::Claude | Agent::Codex => serde_json::json!({
+        Agent::Claude | Agent::Codex | Agent::Gemini => serde_json::json!({
             "hooks": [{ "type": "command", "command": cmd }]
         }),
         Agent::Cursor => serde_json::json!({ "command": cmd }),
@@ -322,6 +322,7 @@ fn install_plugin_and_hooks(is_debug: bool) -> rootcause::Result<()> {
     install_hooks(Agent::Claude).context("failed to install Claude hooks")?;
     install_hooks(Agent::Cursor).context("failed to install Cursor hooks")?;
     install_hooks(Agent::Codex).context("failed to install Codex hooks")?;
+    install_hooks(Agent::Gemini).context("failed to install Gemini hooks")?;
     install_opencode_plugin().context("failed to install Opencode hooks")?;
     Ok(())
 }
