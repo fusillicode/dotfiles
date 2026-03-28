@@ -12,10 +12,12 @@ layout {
 
 keybinds {
   normal {
-    bind "Ctrl Alt j" { MoveTab "Right"; }
-    bind "Ctrl Alt k" { MoveTab "Left"; }
-    bind "Alt J" { GoToNextTab; }
-    bind "Alt K" { GoToPreviousTab; }
+    bind "Ctrl Alt n" { MoveTab "Right"; }
+    bind "Ctrl Alt p" { MoveTab "Left"; }
+    bind "Alt N" { GoToNextTab; }
+    bind "Alt P" { GoToPreviousTab; }
+    bind "Alt J" { MoveFocus "Down"; }
+    bind "Alt K" { MoveFocus "Up"; }
     // Using MoveFocus because Zellij FocusNextPane is bugged AF...
     bind "Alt H" { MoveFocus "Left"; }
     bind "Alt L" { MoveFocus "Right"; }
