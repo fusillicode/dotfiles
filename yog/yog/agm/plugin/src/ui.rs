@@ -71,27 +71,9 @@ impl TabRow {
             ("", DIM)
         };
 
-        let left = match &self.cmd {
-            Cmd::None => String::new(),
-            Cmd::Running(cmd) => format!(" {cmd}"),
-            Cmd::IdleAgent(agent) => {
-                format!(" {DIM}○ {bg}{fg}{}", agent.name())
-            }
-            Cmd::BusyAgent(agent) => {
-                format!(" {AMBER}● {bg}{fg}{}", agent.name())
-            }
-        };
+        let left = display_cmd(&self.cmd, bg, fg);
 
-        let mut stats: Vec<(&str, String)> = Vec::new();
-        if self.git.insertions > 0 {
-            stats.push((GREEN, format!("+{}", self.git.insertions)));
-        }
-        if self.git.deletions > 0 {
-            stats.push((RED, format!("-{}", self.git.deletions)));
-        }
-        if self.git.new_files > 0 {
-            stats.push((AMBER, format!("?{}", self.git.new_files)));
-        }
+        let stats = display_git_stat(&self.git);
 
         let right_visible_len: usize =
             stats.iter().map(|(_, s)| s.chars().count()).sum::<usize>() + stats.len().saturating_sub(1);
@@ -155,6 +137,33 @@ pub fn tab_index_at_row(frame: &[TabRow], click_row: usize, content_w: usize) ->
         y += height;
     }
     None
+}
+
+fn display_cmd(cmd: &Cmd, bg: &str, fg: &str) -> String {
+    match cmd {
+        Cmd::None => String::new(),
+        Cmd::Running(cmd) => format!(" {cmd}"),
+        Cmd::IdleAgent(agent) => {
+            format!(" {DIM}○ {bg}{fg}{}", agent.name())
+        }
+        Cmd::BusyAgent(agent) => {
+            format!(" {AMBER}● {bg}{fg}{}", agent.name())
+        }
+    }
+}
+
+fn display_git_stat(git_stat: &GitStat) -> Vec<(&str, String)> {
+    let mut stats: Vec<(&str, String)> = Vec::new();
+    if git_stat.insertions > 0 {
+        stats.push((GREEN, format!("+{}", git_stat.insertions)));
+    }
+    if git_stat.deletions > 0 {
+        stats.push((RED, format!("-{}", git_stat.deletions)));
+    }
+    if git_stat.new_files > 0 {
+        stats.push((AMBER, format!("?{}", git_stat.new_files)));
+    }
+    stats
 }
 
 fn path_with_worktree_indicator(entry: &TabRow) -> String {
