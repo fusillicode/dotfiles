@@ -86,46 +86,6 @@ pub enum StateEvent {
     SyncRequested,
 }
 
-impl StateEvent {
-    pub fn requires_snapshot(&self) -> bool {
-        match self {
-            Self::TabCreated { .. }
-            | Self::TabRemapped { .. }
-            | Self::FocusMoved { .. }
-            | Self::CwdChanged { .. }
-            | Self::GitStatChanged { .. }
-            | Self::AgentDetected { .. }
-            | Self::AgentBusy { .. }
-            | Self::AgentIdle { .. }
-            | Self::AgentLost { .. } => true,
-            Self::PanesChanged { .. }
-            | Self::RemoteTabUpdated { .. }
-            | Self::TopologyChanged
-            | Self::BecameActive
-            | Self::AllTabsReplaced { .. }
-            | Self::SyncRequested => false,
-        }
-    }
-
-    pub fn requires_git_refresh(&self) -> bool {
-        match self {
-            Self::AgentIdle { .. } | Self::FocusMoved { .. } | Self::CwdChanged { .. } => true,
-            Self::TabCreated { .. }
-            | Self::TabRemapped { .. }
-            | Self::PanesChanged { .. }
-            | Self::AgentDetected { .. }
-            | Self::AgentBusy { .. }
-            | Self::AgentLost { .. }
-            | Self::GitStatChanged { .. }
-            | Self::RemoteTabUpdated { .. }
-            | Self::TopologyChanged
-            | Self::BecameActive
-            | Self::AllTabsReplaced { .. }
-            | Self::SyncRequested => false,
-        }
-    }
-}
-
 // ── State ─────────────────────────────────────────────────────────────────────
 
 #[derive(Default)]
@@ -262,7 +222,9 @@ impl State {
 
     /// Derives state events from a `TabUpdate` Zellij event.
     /// `new_tabs` is the incoming sorted tab list; `self.all_tabs` is the previous list.
-    pub fn events_from_tab_update(&self, new_tabs: &[TabInfo]) -> Vec<StateEvent> {
+    pub fn events_from_tab_update(&self, new_tabs: &mut [TabInfo]) -> Vec<StateEvent> {
+        new_tabs.sort_by_key(|tab| tab.position);
+
         let prev_tabs = &self.all_tabs;
         let mut events = vec![];
 
@@ -445,6 +407,7 @@ impl State {
             StateEvent::TabRemapped { new_tab_id } => {
                 if let Some(ct) = self.current_tab.as_mut() {
                     ct.tab_id = *new_tab_id;
+                    ct.seq = ct.seq.saturating_add(1);
                 }
             }
             StateEvent::PanesChanged { new_pane_ids } => {
@@ -457,6 +420,7 @@ impl State {
                     {
                         ct.last_focused_agent_pane_id = None;
                     }
+                    ct.seq = ct.seq.saturating_add(1);
                 }
             }
             StateEvent::FocusMoved { new_pane } => {
@@ -467,11 +431,13 @@ impl State {
                     {
                         ct.last_focused_agent_pane_id = Some(pane.id);
                     }
+                    ct.seq = ct.seq.saturating_add(1);
                 }
             }
             StateEvent::CwdChanged { new_cwd } => {
                 if let Some(ct) = self.current_tab.as_mut() {
                     ct.cwd = Some(new_cwd.clone());
+                    ct.seq = ct.seq.saturating_add(1);
                 }
             }
             StateEvent::AgentDetected { pane_id, agent } => {
@@ -480,6 +446,7 @@ impl State {
                     if ct.focused_pane.as_ref().map(|pane| pane.id) == Some(*pane_id) {
                         ct.last_focused_agent_pane_id = Some(*pane_id);
                     }
+                    ct.seq = ct.seq.saturating_add(1);
                 }
             }
             StateEvent::AgentBusy { pane_id, agent } => {
@@ -488,6 +455,7 @@ impl State {
                     if ct.focused_pane.as_ref().map(|pane| pane.id) == Some(*pane_id) {
                         ct.last_focused_agent_pane_id = Some(*pane_id);
                     }
+                    ct.seq = ct.seq.saturating_add(1);
                 }
             }
             StateEvent::AgentIdle { pane_id, agent } => {
@@ -496,6 +464,7 @@ impl State {
                     if ct.focused_pane.as_ref().map(|pane| pane.id) == Some(*pane_id) {
                         ct.last_focused_agent_pane_id = Some(*pane_id);
                     }
+                    ct.seq = ct.seq.saturating_add(1);
                 }
             }
             StateEvent::AgentLost { pane_id } => {
@@ -504,11 +473,13 @@ impl State {
                     if ct.last_focused_agent_pane_id == Some(*pane_id) {
                         ct.last_focused_agent_pane_id = None;
                     }
+                    ct.seq = ct.seq.saturating_add(1);
                 }
             }
             StateEvent::GitStatChanged { new_stat } => {
                 if let Some(ct) = self.current_tab.as_mut() {
                     ct.git_stat = *new_stat;
+                    ct.seq = ct.seq.saturating_add(1);
                 }
             }
             StateEvent::TopologyChanged => {}
@@ -542,19 +513,10 @@ impl State {
         for event in events {
             self.apply(event);
         }
-        if events.iter().any(StateEvent::requires_snapshot) {
-            self.bump_current_tab_seq();
-        }
         self.sync_frame()
     }
 
     // ── Remaining public helpers ──────────────────────────────────────────────
-
-    pub fn bump_current_tab_seq(&mut self) {
-        if let Some(ct) = self.current_tab.as_mut() {
-            ct.seq = ct.seq.saturating_add(1);
-        }
-    }
 
     pub fn remote_snapshot_for_tab(&self, tab_id: usize) -> Option<&StateSnapshotPayload> {
         self.other_tabs
@@ -1007,8 +969,8 @@ mod tests {
             all_tabs: vec![tab_with_name(10, 0, "agent"), tab_with_name(20, 1, "shell")],
             ..Default::default()
         };
-        let new_tabs = vec![tab_with_name(30, 1, "agent"), tab_with_name(40, 0, "shell")];
-        let events = state.events_from_tab_update(&new_tabs);
+        let mut new_tabs = vec![tab_with_name(30, 1, "agent"), tab_with_name(40, 0, "shell")];
+        let events = state.events_from_tab_update(&mut new_tabs);
         state.apply_all(&events);
         assert!(
             events
