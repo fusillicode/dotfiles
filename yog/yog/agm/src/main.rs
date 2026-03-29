@@ -9,6 +9,7 @@
 //! - Zellij invocation fails.
 #![feature(exit_status_error)]
 
+use rootcause::report;
 use ytil_cmd::CmdExt as _;
 use ytil_sys::cli::Args;
 
@@ -58,6 +59,7 @@ fn main() -> rootcause::Result<()> {
             }
             Ok(())
         }
-        _ => launch_session(&args),
+        None => launch_session(&args),
+        Some(unknown) => Err(report!("unknown argument {unknown}")),
     }
 }
