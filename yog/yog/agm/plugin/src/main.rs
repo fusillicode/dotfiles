@@ -394,7 +394,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn sync_request_is_ignored_when_not_sent_by_plugin() {
+    fn test_sync_request_is_ignored_when_not_sent_by_plugin() {
         let mut args = BTreeMap::new();
         args.insert("type".to_string(), "sync_request".to_string());
         let msg = PipeMessage {
