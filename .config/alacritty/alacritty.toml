@@ -6,9 +6,9 @@ option_as_alt = "Both"
 history = 99999
 
 [font]
-normal.family = "PT Mono"
-size = 17
-offset = { x = 0, y = 8 }
+normal.family = "AcPlus IBM BIOS"
+size = 15
+offset = { x = 0, y = 18 }
 
 [colors]
 primary.background = "#000000"
