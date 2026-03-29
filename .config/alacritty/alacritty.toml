@@ -6,9 +6,9 @@ option_as_alt = "Both"
 history = 99999
 
 [font]
-normal.family = "PT Mono"
-size = 17
-offset = { x = 0, y = 8 }
+normal.family = "PxPlus ToshibaSat 9x16"
+size = 19
+offset = { x = 0, y = 7 }
 
 [colors]
 primary.background = "#000000"
