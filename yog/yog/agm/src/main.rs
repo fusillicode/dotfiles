@@ -13,8 +13,7 @@ use rootcause::report;
 use ytil_cmd::CmdExt as _;
 use ytil_sys::cli::Args;
 
-mod git_stat;
-mod install;
+mod cmd;
 
 const SESSION_NAME: &str = "agm";
 const LAYOUT_NAME: &str = "agm";
@@ -49,17 +48,18 @@ fn main() -> rootcause::Result<()> {
     match args.first().map(String::as_str) {
         Some("install") => {
             let is_debug = args.iter().any(|a| a == "--debug");
-            install::install_plugin_and_hooks(is_debug)
+            cmd::install::install_plugin_and_hooks(is_debug)
         }
         Some("git-stat") => {
             let paths = args.get(1..);
             for cwd in paths.into_iter().flatten() {
-                let stat = git_stat::run(cwd);
+                let stat = cmd::git_stat::run(cwd);
                 println!("{cwd} {stat}");
             }
             Ok(())
         }
+        Some("resume") => cmd::resume::run(),
         None => launch_session(&args),
-        Some(unknown) => Err(report!("unknown argument {unknown}")),
+        Some(unknown) => Err(report!("unknown argument").attach(format!("argument={unknown}"))),
     }
 }

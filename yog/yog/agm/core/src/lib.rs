@@ -1,4 +1,7 @@
+use core::fmt::Display;
 use std::path::PathBuf;
+
+use strum::EnumIter;
 
 pub const AGENTS_PIPE: &str = "agm-agent";
 pub const EMPTY_FIELD: &str = "--";
@@ -103,7 +106,7 @@ impl std::fmt::Display for GitStat {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, EnumIter, Eq, PartialEq)]
 pub enum Agent {
     Claude,
     Codex,
@@ -234,6 +237,19 @@ impl Agent {
         } else {
             None
         }
+    }
+}
+
+impl Display for Agent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let repr = match self {
+            Self::Claude => "Claude",
+            Self::Codex => "Codex",
+            Self::Cursor => "Cursor",
+            Self::Gemini => "Gemini",
+            Self::Opencode => "Opencode",
+        };
+        write!(f, "{}", repr)
     }
 }
 

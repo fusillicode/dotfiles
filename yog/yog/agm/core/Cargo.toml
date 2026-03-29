@@ -12,6 +12,7 @@ categories = ["command-line-utilities", "development-tools"]
 publish = false
 
 [dependencies]
+strum = { workspace = true }
 
 [dev-dependencies]
 assert2 = { workspace = true }
