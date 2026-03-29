@@ -26,8 +26,10 @@ dependencies = [
  "owo-colors 4.3.0",
  "rootcause",
  "serde_json",
+ "strum 0.28.0",
  "ytil_cmd",
  "ytil_sys",
+ "ytil_tui",
  "ytil_zellij",
 ]
 
@@ -38,6 +40,7 @@ dependencies = [
  "assert2",
  "pretty_assertions",
  "rstest",
+ "strum 0.28.0",
 ]
 
 [[package]]
