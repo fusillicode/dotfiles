@@ -38,6 +38,7 @@ OOM
 OS
 Okta
 OpenAPI
+Opencode
 PID
 Prima
 RFC3339
