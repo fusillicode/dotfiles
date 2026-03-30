@@ -11,18 +11,15 @@ const BOLD: &str = "\x1b[1m";
 const SEPARATOR: char = '\u{2502}';
 
 const SEP_COLOR: &str = "\x1b[38;2;34;34;34m";
-const GREEN: &str = "\x1b[38;2;0;255;0m";
-const RED: &str = "\x1b[38;2;255;0;0m";
-const CYAN: &str = "\x1b[38;2;0;255;255m";
-const DIM: &str = "\x1b[38;2;100;100;110m";
-/// Bold, saturated amber — agent busy (same hue family as before, higher chroma).
-const BUSY_AGENT_FG: &str = "\x1b[1;38;2;255;200;0m";
-/// Focused tab: slightly lifted from the pane background.
-const ACTIVE_BG: &str = "\x1b[48;2;52;52;68m";
-/// Unfocused tab: same as default black pane.
-const INACTIVE_BG: &str = "\x1b[48;2;0;0;0m";
-const DEFAULT_FG: &str = "\x1b[39m";
-/// Inactive path/command text on black.
+const GIT_NEW_LINES_FG: &str = "\x1b[38;2;0;255;0m";
+const GIT_DEL_LINES_FG: &str = "\x1b[38;2;255;0;0m";
+const GIT_NEW_FILES_FG: &str = "\x1b[38;2;0;255;255m";
+const GIT_WORKTREE_FG: &str = "\x1b[38;2;255;255;255m";
+const AGENT_IDLE_FG: &str = "\x1b[38;2;100;100;110m";
+const AGENT_BUSY_FG: &str = "\x1b[1;38;2;255;255;0m";
+const TAB_ACTIVE_BG: &str = "\x1b[48;2;52;52;68m";
+const TAB_INACTIVE_BG: &str = "\x1b[48;2;0;0;0m";
+const TAB_DEFAULT_FG: &str = "\x1b[39m";
 const PATH_INACTIVE_FG: &str = "\x1b[38;2;142;145;160m";
 const RAIL_ACTIVE_FG: &str = "\x1b[38;2;190;150;255m";
 const RAIL_INACTIVE_FG: &str = "\x1b[38;2;0;0;0m";
@@ -52,9 +49,9 @@ impl TabRow {
         let path_line = path_line_for_wrap(self);
         let path_lines = wrap_lines(&path_line, inner_w);
         let (bg, path_fg) = if self.active {
-            (ACTIVE_BG, DEFAULT_FG)
+            (TAB_ACTIVE_BG, TAB_DEFAULT_FG)
         } else {
-            (INACTIVE_BG, PATH_INACTIVE_FG)
+            (TAB_INACTIVE_BG, PATH_INACTIVE_FG)
         };
         let rail = if self.active {
             format!("{RAIL_ACTIVE_FG}▎")
@@ -62,37 +59,66 @@ impl TabRow {
             format!("{RAIL_INACTIVE_FG}▏")
         };
 
-        for line in &path_lines {
+        let wt_suffix = if self.git.is_worktree { " [W]" } else { "" };
+        let wt_len = wt_suffix.chars().count();
+        let last_idx = path_lines.len().saturating_sub(1);
+
+        for (idx, line) in path_lines.iter().enumerate() {
             let row = *y + 1;
-            let padded = pad(line, inner_w);
-            if content_w >= 2 {
-                let _ = write!(buf, "\x1b[{row};1H{bg}{rail}{bg}{BOLD}{path_fg}{padded}{RESET}");
+            let prefix = if content_w >= 2 {
+                format!("\x1b[{row};1H{bg}{rail}{bg}{BOLD}")
             } else {
-                let _ = write!(buf, "\x1b[{row};1H{bg}{BOLD}{path_fg}{padded}{RESET}");
+                format!("\x1b[{row};1H{bg}{BOLD}")
+            };
+            buf.push_str(&prefix);
+
+            if idx == last_idx && wt_len > 0 {
+                let path_part = line.strip_suffix(wt_suffix).unwrap_or(line.as_str());
+                let padded_path = pad(path_part, inner_w.saturating_sub(wt_len));
+                let _ = write!(buf, "{path_fg}{padded_path}{GIT_WORKTREE_FG} [W]{RESET}");
+            } else {
+                let padded = pad(line, inner_w);
+                let _ = write!(buf, "{path_fg}{padded}{RESET}");
             }
+
             write_separator(buf, row, sep_col);
             *y += 1;
         }
     }
 
+    fn write_blank_line(&self, buf: &mut String, row_1based: usize, content_w: usize, sep_col: usize) {
+        let inner_w = tab_inner_width(content_w);
+        let bg = if self.active { TAB_ACTIVE_BG } else { TAB_INACTIVE_BG };
+        let blank = pad("", inner_w);
+        if content_w >= 2 {
+            let (rail_color, rail_char) = if self.active {
+                (RAIL_ACTIVE_FG, '▎')
+            } else {
+                (RAIL_INACTIVE_FG, '▏')
+            };
+            let _ = write!(buf, "\x1b[{row_1based};1H{bg}{rail_color}{rail_char}{bg}{blank}{RESET}");
+        } else {
+            let _ = write!(buf, "\x1b[{row_1based};1H{bg}{blank}{RESET}");
+        }
+        write_separator(buf, row_1based, sep_col);
+    }
+
     fn write_info_line(&self, buf: &mut String, row_1based: usize, content_w: usize, sep_col: usize) {
         let inner_w = tab_inner_width(content_w);
         let (bg, cmd_fg) = if self.active {
-            (ACTIVE_BG, DEFAULT_FG)
+            (TAB_ACTIVE_BG, TAB_DEFAULT_FG)
         } else {
-            (INACTIVE_BG, PATH_INACTIVE_FG)
+            (TAB_INACTIVE_BG, PATH_INACTIVE_FG)
         };
 
         let left = display_cmd(&self.cmd, bg, cmd_fg);
-        let wt = if self.git.is_worktree { " [W]" } else { "" };
-        let wt_vis = wt.chars().count();
 
         let stats = format_git_stat_parts(&self.git);
         let stats_vis: usize =
             stats.iter().map(|(_, s)| s.chars().count()).sum::<usize>() + stats.len().saturating_sub(1);
 
         let left_vis = visible_len(&left);
-        let gap = inner_w.saturating_sub(left_vis + wt_vis + stats_vis);
+        let gap = inner_w.saturating_sub(left_vis + stats_vis);
 
         let rail = if content_w >= 2 {
             if self.active {
@@ -104,7 +130,7 @@ impl TabRow {
             String::new()
         };
 
-        let _ = write!(buf, "\x1b[{row_1based};1H{rail}{bg}{cmd_fg}{left}{wt}");
+        let _ = write!(buf, "\x1b[{row_1based};1H{rail}{bg}{cmd_fg}{left}");
         for _ in 0..gap {
             buf.push(' ');
         }
@@ -133,19 +159,21 @@ pub fn render_frame(frame: &[TabRow], rows: usize, cols: usize, buf: &mut String
     for entry in frame {
         let inner_w = tab_inner_width(content_w);
         let path_height = wrap_lines(&path_line_for_wrap(entry), inner_w).len();
-        let total = path_height + INFO_ROWS;
+        let total = path_height + INFO_ROWS + 1;
         if y + total > rows {
             break;
         }
         entry.write_path_lines(buf, &mut y, content_w, sep_col);
         entry.write_info_line(buf, y + 1, content_w, sep_col);
         y += 1;
+        entry.write_blank_line(buf, y + 1, content_w, sep_col);
+        y += 1;
     }
 
     for row in y..rows {
         let r = row + 1;
         let blank = pad("", content_w);
-        let _ = write!(buf, "\x1b[{r};1H{blank}");
+        let _ = write!(buf, "\x1b[{r};1H{TAB_INACTIVE_BG}{blank}{RESET}");
         write_separator(buf, r, sep_col);
     }
 }
@@ -154,7 +182,7 @@ pub fn tab_index_at_row(frame: &[TabRow], click_row: usize, content_w: usize) ->
     let mut y = 0;
     for (i, entry) in frame.iter().enumerate() {
         let inner_w = tab_inner_width(content_w);
-        let height = wrap_lines(&path_line_for_wrap(entry), inner_w).len() + INFO_ROWS;
+        let height = wrap_lines(&path_line_for_wrap(entry), inner_w).len() + INFO_ROWS + 1;
         if click_row < y + height {
             return Some(i);
         }
@@ -166,12 +194,12 @@ pub fn tab_index_at_row(frame: &[TabRow], click_row: usize, content_w: usize) ->
 fn display_cmd(cmd: &Cmd, bg: &str, fg: &str) -> String {
     match cmd {
         Cmd::None => String::new(),
-        Cmd::Running(cmd) => format!(" {cmd}"),
+        Cmd::Running(cmd) => cmd.clone(),
         Cmd::IdleAgent(agent) => {
-            format!(" {DIM}○ {bg}{fg}{}", agent.name())
+            format!("{AGENT_IDLE_FG}○ {bg}{fg}{}", agent.name())
         }
         Cmd::BusyAgent(agent) => {
-            format!(" {BUSY_AGENT_FG}● {bg}{fg}{}", agent.name())
+            format!("{AGENT_BUSY_FG}● {bg}{fg}{}", agent.name())
         }
     }
 }
@@ -180,19 +208,23 @@ fn display_cmd(cmd: &Cmd, bg: &str, fg: &str) -> String {
 fn format_git_stat_parts(git_stat: &GitStat) -> Vec<(&'static str, String)> {
     let mut stats = Vec::new();
     if git_stat.insertions > 0 {
-        stats.push((GREEN, format!("+{}", git_stat.insertions)));
+        stats.push((GIT_NEW_LINES_FG, format!("+{}", git_stat.insertions)));
     }
     if git_stat.deletions > 0 {
-        stats.push((RED, format!("-{}", git_stat.deletions)));
+        stats.push((GIT_DEL_LINES_FG, format!("-{}", git_stat.deletions)));
     }
     if git_stat.new_files > 0 {
-        stats.push((CYAN, format!("?{}", git_stat.new_files)));
+        stats.push((GIT_NEW_FILES_FG, format!("?{}", git_stat.new_files)));
     }
     stats
 }
 
 fn path_line_for_wrap(entry: &TabRow) -> String {
-    entry.path_label.clone()
+    if entry.git.is_worktree {
+        format!("{} [W]", entry.path_label)
+    } else {
+        entry.path_label.clone()
+    }
 }
 
 /// Text width inside the content area: one column reserved for the left rail when `content_w >= 2`.
