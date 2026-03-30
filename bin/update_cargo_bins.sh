@@ -18,5 +18,6 @@ cargo install --force \
   sqlx-cli \
   tree-sitter-cli \
   typos-cli \
+  worktrunk \
 
 cargo install cargo-audit --features=fix

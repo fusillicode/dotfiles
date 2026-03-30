@@ -14,9 +14,8 @@ const SEP_COLOR: &str = "\x1b[38;2;34;34;34m";
 const GIT_NEW_LINES_FG: &str = "\x1b[38;2;0;255;0m";
 const GIT_DEL_LINES_FG: &str = "\x1b[38;2;255;0;0m";
 const GIT_NEW_FILES_FG: &str = "\x1b[38;2;0;255;255m";
-const GIT_WORKTREE_FG: &str = "\x1b[38;2;255;255;255m";
 const AGENT_IDLE_FG: &str = "\x1b[38;2;100;100;110m";
-const AGENT_BUSY_FG: &str = "\x1b[1;38;2;255;255;0m";
+const AGENT_BUSY_FG: &str = "\x1b[1;38;2;255;100;0m";
 const TAB_ACTIVE_BG: &str = "\x1b[48;2;52;52;68m";
 const TAB_INACTIVE_BG: &str = "\x1b[48;2;0;0;0m";
 const TAB_DEFAULT_FG: &str = "\x1b[39m";
@@ -46,8 +45,7 @@ impl TabRow {
 
     fn write_path_lines(&self, buf: &mut String, y: &mut usize, content_w: usize, sep_col: usize) {
         let inner_w = tab_inner_width(content_w);
-        let path_line = path_line_for_wrap(self);
-        let path_lines = wrap_lines(&path_line, inner_w);
+        let path_lines = wrap_lines(&self.path_label, inner_w);
         let (bg, path_fg) = if self.active {
             (TAB_ACTIVE_BG, TAB_DEFAULT_FG)
         } else {
@@ -59,11 +57,7 @@ impl TabRow {
             format!("{RAIL_INACTIVE_FG}▏")
         };
 
-        let wt_suffix = if self.git.is_worktree { " [W]" } else { "" };
-        let wt_len = wt_suffix.chars().count();
-        let last_idx = path_lines.len().saturating_sub(1);
-
-        for (idx, line) in path_lines.iter().enumerate() {
+        for line in path_lines.iter() {
             let row = *y + 1;
             let prefix = if content_w >= 2 {
                 format!("\x1b[{row};1H{bg}{rail}{bg}{BOLD}")
@@ -72,11 +66,7 @@ impl TabRow {
             };
             buf.push_str(&prefix);
 
-            if idx == last_idx && wt_len > 0 {
-                let path_part = line.strip_suffix(wt_suffix).unwrap_or(line.as_str());
-                let padded_path = pad(path_part, inner_w.saturating_sub(wt_len));
-                let _ = write!(buf, "{path_fg}{padded_path}{GIT_WORKTREE_FG} [W]{RESET}");
-            } else {
+            {
                 let padded = pad(line, inner_w);
                 let _ = write!(buf, "{path_fg}{padded}{RESET}");
             }
@@ -158,7 +148,7 @@ pub fn render_frame(frame: &[TabRow], rows: usize, cols: usize, buf: &mut String
     let mut y = 0;
     for entry in frame {
         let inner_w = tab_inner_width(content_w);
-        let path_height = wrap_lines(&path_line_for_wrap(entry), inner_w).len();
+        let path_height = wrap_lines(&entry.path_label, inner_w).len();
         let total = path_height + INFO_ROWS + 1;
         if y + total > rows {
             break;
@@ -182,7 +172,7 @@ pub fn tab_index_at_row(frame: &[TabRow], click_row: usize, content_w: usize) ->
     let mut y = 0;
     for (i, entry) in frame.iter().enumerate() {
         let inner_w = tab_inner_width(content_w);
-        let height = wrap_lines(&path_line_for_wrap(entry), inner_w).len() + INFO_ROWS + 1;
+        let height = wrap_lines(&entry.path_label, inner_w).len() + INFO_ROWS + 1;
         if click_row < y + height {
             return Some(i);
         }
@@ -217,14 +207,6 @@ fn format_git_stat_parts(git_stat: &GitStat) -> Vec<(&'static str, String)> {
         stats.push((GIT_NEW_FILES_FG, format!("?{}", git_stat.new_files)));
     }
     stats
-}
-
-fn path_line_for_wrap(entry: &TabRow) -> String {
-    if entry.git.is_worktree {
-        format!("{} [W]", entry.path_label)
-    } else {
-        entry.path_label.clone()
-    }
 }
 
 /// Text width inside the content area: one column reserved for the left rail when `content_w >= 2`.
