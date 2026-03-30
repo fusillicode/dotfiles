@@ -122,3 +122,5 @@ source "$_starship_cache"
 
 # Exit with 0 if everything's fine
 true
+
+if command -v wt >/dev/null 2>&1; then eval "$(command wt config shell init zsh)"; fi
