@@ -567,11 +567,14 @@ impl State {
         }
 
         // Clear agent state when the focused pane no longer shows that agent.
+        // Skip if the agent is explicitly busy — trust the hook over pane title changes
+        // (e.g. Cursor sets the pane title to the session name while processing).
         if let Some(prev) = prev_focused_pane
             && let Some(new) = new_focused_pane
             && prev.id == new.id
             && prev.cmd.as_deref().and_then(Agent::detect).is_some()
             && new.cmd.as_deref().and_then(Agent::detect).is_none()
+            && !matches!(current_tab.agent_by_pane.get(&new.id), Some(Cmd::BusyAgent(_)))
         {
             events.push(StateEvent::AgentLost { pane_id: new.id });
         }
@@ -1195,7 +1198,9 @@ mod tests {
                 StateEvent::FocusMoved {
                     new_pane: Some(FocusedPane { id: 42, cmd: None })
                 },
-                StateEvent::AgentLost { pane_id: 42 },
+                // Only one AgentLost: the detection-check is skipped for BusyAgent (the agent
+                // explicitly set itself busy via hook, so trust it over title changes), but the
+                // reconcile loop still clears it because terminal_command changed to zsh.
                 StateEvent::AgentLost { pane_id: 42 },
                 StateEvent::SyncRequested,
             ]
@@ -1240,6 +1245,47 @@ mod tests {
         let ct = state.current_tab.as_ref().unwrap();
         pretty_assertions::assert_eq!(ct.agent_by_pane.get(&42), None);
         pretty_assertions::assert_eq!(ct.cmd(), Cmd::None);
+    }
+
+    #[test]
+    fn test_busy_agent_not_cleared_when_pane_title_changes_to_session_name() {
+        // Regression: Cursor (and similar agents) change the pane title to the session name while
+        // processing. This must not clear BusyAgent state set by an explicit hook event.
+        let mut state = State {
+            plugin_id: 7,
+            all_tabs: vec![tab_with_name(10, 0, "a")],
+            current_tab: Some(CurrentTab::new(10)),
+            ..Default::default()
+        };
+        let ct = state.current_tab.as_mut().unwrap();
+        ct.pane_ids.insert(42);
+        ct.focused_pane = Some(FocusedPane {
+            id: 42,
+            cmd: Some("cursor".to_string()),
+        });
+        ct.agent_by_pane.insert(42, Cmd::BusyAgent(Agent::Cursor));
+
+        // Cursor changed pane title to session name; terminal_command is absent.
+        let pane = terminal_pane_with_title(42, true, "my-project-session");
+        let m = manifest(vec![(0, vec![plugin_pane(7), pane])]);
+        let events = apply_pane_update(&mut state, &m);
+
+        pretty_assertions::assert_eq!(
+            events,
+            vec![
+                StateEvent::FocusMoved {
+                    new_pane: Some(FocusedPane {
+                        id: 42,
+                        cmd: Some("my-project-session".to_string()),
+                    })
+                },
+                StateEvent::SyncRequested,
+            ]
+        );
+
+        let ct = state.current_tab.as_ref().unwrap();
+        pretty_assertions::assert_eq!(ct.agent_by_pane.get(&42), Some(&Cmd::BusyAgent(Agent::Cursor)));
+        pretty_assertions::assert_eq!(ct.cmd(), Cmd::BusyAgent(Agent::Cursor));
     }
 
     #[test]
