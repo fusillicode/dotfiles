@@ -77,7 +77,15 @@ themes {
 theme "minimal"
 
 keybinds clear-defaults=true {
+    unbind "Ctrl q"
+    unbind "Ctrl w"
+    shared_except "locked" {
+        bind "Alt Q" { Quit; }
+        bind "Alt W" { CloseFocus; }
+    }
     normal {
+        unbind "Ctrl q"
+        unbind "Ctrl w"
         bind "Alt S" { EditScrollback; SwitchToMode "Normal"; }
         bind "Ctrl q" { Quit; }
         bind "Alt T" { NewTab; }
