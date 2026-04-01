@@ -19,7 +19,7 @@ const AGENT_BUSY_FG: &str = "\x1b[1;38;2;0;255;255m";
 const TAB_INACTIVE_BG: &str = "\x1b[48;2;0;0;0m";
 const TAB_DEFAULT_FG: &str = "\x1b[39m";
 const PATH_INACTIVE_FG: &str = "\x1b[38;2;142;145;160m";
-const RAIL_ACTIVE_FG: &str = "\x1b[38;2;190;150;255m";
+const RAIL_ACTIVE_FG: &str = "\x1b[38;2;106;106;223m";
 const RAIL_INACTIVE_FG: &str = "\x1b[38;2;0;0;0m";
 const RESET: &str = "\x1b[0m";
 

@@ -19,14 +19,14 @@ themes {
         red "#ec635c"
         green "#8ce479"
         yellow "#808080"
-        blue "#808080"
+        blue "#6a6adf"
         magenta "#808080"
         cyan "#00ffff"
         white "#ffffff"
         orange "#808080"
         ribbon_selected {
             base 255 255 255
-            background 0 0 0
+            background 34 34 34
             emphasis_0 255 255 255
             emphasis_1 255 255 255
             emphasis_2 255 255 255
@@ -34,7 +34,7 @@ themes {
         }
         ribbon_unselected {
             base 80 80 80
-            background 0 0 0
+            background 34 34 34
             emphasis_0 80 80 80
             emphasis_1 80 80 80
             emphasis_2 80 80 80
@@ -42,7 +42,7 @@ themes {
         }
         text_unselected {
             base 80 80 80
-            background 0 0 0
+            background 34 34 34
             emphasis_0 80 80 80
             emphasis_1 80 80 80
             emphasis_2 80 80 80
@@ -58,19 +58,19 @@ themes {
         }
         frame_selected {
             base 34 34 34
-            background 0 0 0
+            background 34 34 34
             emphasis_0 34 34 34
             emphasis_1 34 34 34
             emphasis_2 34 34 34
             emphasis_3 34 34 34
         }
         frame_unselected {
-            base 17 17 17
-            background 0 0 0
-            emphasis_0 17 17 17
-            emphasis_1 17 17 17
-            emphasis_2 17 17 17
-            emphasis_3 17 17 17
+            base 34 34 34
+            background 34 34 34
+            emphasis_0 34 34 34
+            emphasis_1 34 34 34
+            emphasis_2 34 34 34
+            emphasis_3 34 34 34
         }
     }
 }
