@@ -35,8 +35,8 @@ const NONE: &str = "none";
 const DIAG_ERROR_FG: &str = "#ec635c";
 const DIAG_OK_FG: &str = "#8ce479";
 const DIAG_WARN_FG: &str = "#ffaa33";
-const DIAG_HINT_FG: &str = "NvimLightGrey3";
-const DIAG_INFO_FG: &str = "white";
+const DIAG_HINT_FG: &str = "#00ffff";
+const DIAG_INFO_FG: &str = "#00ffff";
 
 const GITSIGNS_ADDED: &str = DIAG_OK_FG;
 const GITSIGNS_CHANGED: &str = "#6a6adf";

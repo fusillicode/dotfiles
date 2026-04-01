@@ -11,12 +11,11 @@ const BOLD: &str = "\x1b[1m";
 const SEPARATOR: char = '\u{2502}';
 
 const SEP_COLOR: &str = "\x1b[38;2;34;34;34m";
-const GIT_NEW_LINES_FG: &str = "\x1b[38;2;0;255;0m";
-const GIT_DEL_LINES_FG: &str = "\x1b[38;2;255;0;0m";
+const GIT_NEW_LINES_FG: &str = "\x1b[38;2;140;228;121m";
+const GIT_DEL_LINES_FG: &str = "\x1b[38;2;236;99;92m";
 const GIT_NEW_FILES_FG: &str = "\x1b[38;2;0;255;255m";
 const AGENT_IDLE_FG: &str = "\x1b[38;2;100;100;110m";
-const AGENT_BUSY_FG: &str = "\x1b[1;38;2;255;100;0m";
-const TAB_ACTIVE_BG: &str = "\x1b[48;2;52;52;68m";
+const AGENT_BUSY_FG: &str = "\x1b[1;38;2;0;255;255m";
 const TAB_INACTIVE_BG: &str = "\x1b[48;2;0;0;0m";
 const TAB_DEFAULT_FG: &str = "\x1b[39m";
 const PATH_INACTIVE_FG: &str = "\x1b[38;2;142;145;160m";
@@ -46,11 +45,8 @@ impl TabRow {
     fn write_path_lines(&self, buf: &mut String, y: &mut usize, content_w: usize, sep_col: usize) {
         let inner_w = tab_inner_width(content_w);
         let path_lines = wrap_lines(&self.path_label, inner_w);
-        let (bg, path_fg) = if self.active {
-            (TAB_ACTIVE_BG, TAB_DEFAULT_FG)
-        } else {
-            (TAB_INACTIVE_BG, PATH_INACTIVE_FG)
-        };
+        let bg = TAB_INACTIVE_BG;
+        let path_fg = if self.active { TAB_DEFAULT_FG } else { PATH_INACTIVE_FG };
         let rail = if self.active {
             format!("{RAIL_ACTIVE_FG}▎")
         } else {
@@ -78,7 +74,7 @@ impl TabRow {
 
     fn write_blank_line(&self, buf: &mut String, row_1based: usize, content_w: usize, sep_col: usize) {
         let inner_w = tab_inner_width(content_w);
-        let bg = if self.active { TAB_ACTIVE_BG } else { TAB_INACTIVE_BG };
+        let bg = TAB_INACTIVE_BG;
         let blank = pad("", inner_w);
         if content_w >= 2 {
             let (rail_color, rail_char) = if self.active {
@@ -95,11 +91,8 @@ impl TabRow {
 
     fn write_info_line(&self, buf: &mut String, row_1based: usize, content_w: usize, sep_col: usize) {
         let inner_w = tab_inner_width(content_w);
-        let (bg, cmd_fg) = if self.active {
-            (TAB_ACTIVE_BG, TAB_DEFAULT_FG)
-        } else {
-            (TAB_INACTIVE_BG, PATH_INACTIVE_FG)
-        };
+        let bg = TAB_INACTIVE_BG;
+        let cmd_fg = if self.active { TAB_DEFAULT_FG } else { PATH_INACTIVE_FG };
 
         let left = display_cmd(&self.cmd, bg, cmd_fg);
 
