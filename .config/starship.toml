@@ -10,7 +10,7 @@ format = "[$time ]($style)"
 style = "white bold"
 
 [directory]
-style = "bold cyan"
+style = "bold #00ffff"
 read_only = " #"
 truncation_length = 0
 truncate_to_repo = false
