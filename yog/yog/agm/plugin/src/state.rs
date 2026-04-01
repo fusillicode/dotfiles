@@ -192,13 +192,7 @@ impl State {
         }
 
         // 4. Agent reconciliation
-        events.extend(self.agent_events_from_manifest(
-            current_tab,
-            current_tab.focused_pane.as_ref(),
-            new_focused_pane.as_ref(),
-            panes,
-            &new_pane_ids,
-        ));
+        events.extend(self.agent_events_from_manifest(current_tab, new_focused_pane.as_ref(), panes, &new_pane_ids));
 
         // 5. CWD
         if let Some(focused) = new_focused_pane.as_ref()
@@ -544,7 +538,6 @@ impl State {
     fn agent_events_from_manifest(
         &self,
         current_tab: &CurrentTab,
-        prev_focused_pane: Option<&FocusedPane>,
         new_focused_pane: Option<&FocusedPane>,
         panes: &[PaneInfo],
         surviving_pane_ids: &HashSet<u32>,
@@ -564,19 +557,6 @@ impl State {
                     });
                 }
             }
-        }
-
-        // Clear agent state when the focused pane no longer shows that agent.
-        // Skip if the agent is explicitly busy — trust the hook over pane title changes
-        // (e.g. Cursor sets the pane title to the session name while processing).
-        if let Some(prev) = prev_focused_pane
-            && let Some(new) = new_focused_pane
-            && prev.id == new.id
-            && prev.cmd.as_deref().and_then(Agent::detect).is_some()
-            && new.cmd.as_deref().and_then(Agent::detect).is_none()
-            && !matches!(current_tab.agent_by_pane.get(&new.id), Some(Cmd::BusyAgent(_)))
-        {
-            events.push(StateEvent::AgentLost { pane_id: new.id });
         }
 
         // Reconcile focused pane against manifest command metadata.
@@ -1212,7 +1192,7 @@ mod tests {
     }
 
     #[test]
-    fn test_refrush_current_tab_from_manifest_clears_agent_state_when_focused_pane_title_becomes_path() {
+    fn test_refresh_current_tab_from_manifest_keeps_idle_agent_when_focused_pane_title_becomes_path() {
         let mut state = State {
             plugin_id: 7,
             all_tabs: vec![tab_with_name(10, 0, "a")],
@@ -1237,14 +1217,63 @@ mod tests {
                 StateEvent::FocusMoved {
                     new_pane: Some(FocusedPane { id: 42, cmd: None })
                 },
-                StateEvent::AgentLost { pane_id: 42 },
                 StateEvent::SyncRequested,
             ]
         );
 
         let ct = state.current_tab.as_ref().unwrap();
-        pretty_assertions::assert_eq!(ct.agent_by_pane.get(&42), None);
-        pretty_assertions::assert_eq!(ct.cmd(), Cmd::None);
+        pretty_assertions::assert_eq!(ct.agent_by_pane.get(&42), Some(&Cmd::IdleAgent(Agent::Codex)));
+        pretty_assertions::assert_eq!(ct.cmd(), Cmd::IdleAgent(Agent::Codex));
+    }
+
+    #[test]
+    fn test_frame_keeps_agent_indicator_when_focused_pane_title_changes_to_cwd() {
+        let mut state = State {
+            plugin_id: 7,
+            all_tabs: vec![TabInfo {
+                tab_id: 10,
+                position: 0,
+                name: "agent".to_string(),
+                active: true,
+                ..Default::default()
+            }],
+            current_tab: Some(CurrentTab::new(10)),
+            home_dir: PathBuf::from("/home/user"),
+            ..Default::default()
+        };
+
+        let ct = state.current_tab.as_mut().unwrap();
+        ct.pane_ids.insert(42);
+        ct.focused_pane = Some(FocusedPane {
+            id: 42,
+            cmd: Some("codex".to_string()),
+        });
+        ct.cwd = Some(PathBuf::from("/home/user/project"));
+        ct.agent_by_pane.insert(42, Cmd::IdleAgent(Agent::Codex));
+
+        let pane = terminal_pane_with_title(42, true, "/home/user/project");
+        let m = manifest(vec![(0, vec![plugin_pane(7), pane])]);
+        let events = apply_pane_update(&mut state, &m);
+
+        pretty_assertions::assert_eq!(
+            events,
+            vec![
+                StateEvent::FocusMoved {
+                    new_pane: Some(FocusedPane { id: 42, cmd: None })
+                },
+                StateEvent::SyncRequested,
+            ]
+        );
+
+        pretty_assertions::assert_eq!(
+            state.frame,
+            vec![TabRow {
+                active: true,
+                path_label: "~/project".to_string(),
+                cmd: Cmd::IdleAgent(Agent::Codex),
+                git: GitStat::default(),
+            }]
+        );
     }
 
     #[test]
