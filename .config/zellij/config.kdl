@@ -89,7 +89,7 @@ keybinds clear-defaults=true {
         unbind "Ctrl w"
         bind "Alt S" { EditScrollback; SwitchToMode "Normal"; }
         bind "Ctrl q" { Quit; }
-        bind "Alt T" { NewTab; }
+        bind "Alt E" { NewTab; }
         bind "Alt 1" { GoToTab 1; }
         bind "Alt 2" { GoToTab 2; }
         bind "Alt 3" { GoToTab 3; }
