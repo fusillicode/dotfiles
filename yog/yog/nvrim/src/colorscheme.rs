@@ -30,6 +30,7 @@ const CURSOR_BG: &str = "white";
 const CURSOR_FG: &str = "black";
 const NON_TEXT_FG: &str = "#777777";
 const COMMENTS_FG: &str = "#777777";
+const NORMAL_FG: &str = "fg";
 const NONE: &str = "none";
 
 const DIAG_ERROR_FG: &str = "#ec635c";
@@ -82,6 +83,14 @@ pub fn set(colorscheme: Option<String>) {
     for (hl_name, hl_opts) in [
         ("Cursor", LuaHlOpts::new().fg(CURSOR_FG).bg(CURSOR_BG)),
         ("CursorLine", LuaHlOpts::new().fg(NONE)),
+        (
+            "DiagnosticUnnecessary",
+            LuaHlOpts::new()
+                .fg(NORMAL_FG)
+                .bg(NONE)
+                .underline(false)
+                .undercurl(false),
+        ),
         ("ErrorMsg", LuaHlOpts::new().fg(DIAG_ERROR_FG)),
         ("MsgArea", LuaHlOpts::new().fg(COMMENTS_FG).bg(NONE)),
         ("LineNr", non_text_hl),
@@ -119,8 +128,12 @@ pub fn set(colorscheme: Option<String>) {
 
         let diag_underline_hl_name = format!("DiagnosticUnderline{lvl}");
         // Errors are already notified by [`get_overridden_hl_opts`]
-        let _ = get_overridden_hl_opts(&diag_underline_hl_name, |hl_opts| hl_opts.special(fg).bg(NONE), None)
-            .map(|hl_opts| set_hl(0, &diag_underline_hl_name, &hl_opts));
+        let _ = get_overridden_hl_opts(
+            &diag_underline_hl_name,
+            |hl_opts| hl_opts.special(fg).bg(NONE).underline(false).undercurl(false),
+            None,
+        )
+        .map(|hl_opts| set_hl(0, &diag_underline_hl_name, &hl_opts));
     }
 
     for (hl_name, fg) in GITSIGNS_FG {
@@ -267,6 +280,16 @@ impl LuaHlOpts {
 
     const fn reverse(mut self, value: bool) -> Self {
         self.reverse = Some(value);
+        self
+    }
+
+    const fn underline(mut self, value: bool) -> Self {
+        self.underline = Some(value);
+        self
+    }
+
+    const fn undercurl(mut self, value: bool) -> Self {
+        self.undercurl = Some(value);
         self
     }
 }
