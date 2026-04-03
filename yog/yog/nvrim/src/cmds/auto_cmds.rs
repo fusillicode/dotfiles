@@ -53,7 +53,9 @@ pub fn create() {
     create_autocmd(
         ["LspAttach"],
         "LspInactiveCodeHighlight",
-        CreateAutocmdOptsBuilder::default().command(":lua vim.api.nvim_set_hl(0, '@lsp.mod.inactive', {})"),
+        CreateAutocmdOptsBuilder::default().command(
+            ":lua vim.api.nvim_set_hl(0, '@lsp.mod.inactive', { underline = false, undercurl = false, sp = 'none' })",
+        ),
     );
 
     crate::plugins::scrolloff::create_autocmd();
