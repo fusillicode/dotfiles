@@ -1,18 +1,19 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use agm_core::AGENTS_PIPE;
-use agm_core::AgentEventPayload;
 use agm_core::Cmd;
 use agm_core::GitStat;
 use agm_core::ParseError;
 use agm_core::TabStateEntry;
 use zellij_tile::prelude::*;
 
+use crate::events::PipeEvent;
+use crate::events::PipeEventError;
+use crate::events::StateEvent;
 use crate::state::CurrentTab;
 use crate::state::State;
-use crate::state::StateEvent;
 
+mod events;
 mod state;
 mod ui;
 
@@ -23,74 +24,6 @@ const SYNC_PIPE: &str = "agm-sync";
 #[cfg(all(test, not(target_arch = "wasm32")))]
 #[unsafe(no_mangle)]
 extern "C" fn host_run_plugin_command() {}
-
-// ── Pipe message parsing ──────────────────────────────────────────────────────
-
-enum PipeEvent {
-    SyncRequest {
-        requester_plugin_id: u32,
-    },
-    StateSnapshot {
-        source_plugin_id: u32,
-        snapshot: StateSnapshotPayload,
-    },
-    Agent(AgentEventPayload),
-}
-
-impl PipeEvent {
-    fn source_plugin_id(msg: &PipeMessage) -> Option<u32> {
-        match msg.source {
-            PipeSource::Plugin(plugin_id) => Some(plugin_id),
-            _ => None,
-        }
-    }
-}
-
-impl TryFrom<&PipeMessage> for PipeEvent {
-    type Error = PipeEventError;
-
-    fn try_from(msg: &PipeMessage) -> Result<Self, Self::Error> {
-        match msg.name.as_str() {
-            SYNC_PIPE => match msg.args.get("type").map(String::as_str) {
-                Some("sync_request") => {
-                    let requester_plugin_id =
-                        Self::source_plugin_id(msg).ok_or(PipeEventError::Parse(ParseError::Missing("source")))?;
-                    Ok(Self::SyncRequest { requester_plugin_id })
-                }
-                Some("state_snapshot") => {
-                    let source_plugin_id =
-                        Self::source_plugin_id(msg).ok_or(PipeEventError::Parse(ParseError::Missing("source")))?;
-                    let snapshot = StateSnapshotPayload::try_from(msg)?;
-                    Ok(Self::StateSnapshot {
-                        source_plugin_id,
-                        snapshot,
-                    })
-                }
-                Some(other) => Err(PipeEventError::UnknownMsgName(other.to_string())),
-                None => Err(PipeEventError::Parse(ParseError::Missing("sync message type"))),
-            },
-            AGENTS_PIPE => {
-                let pane_id = msg
-                    .args
-                    .get("pane_id")
-                    .ok_or(PipeEventError::Parse(ParseError::Missing("pane_id")))?;
-                let agent = msg
-                    .args
-                    .get("agent")
-                    .ok_or(PipeEventError::Parse(ParseError::Missing("agent")))?;
-                let payload = msg.payload.as_deref().unwrap_or("");
-                let payload = AgentEventPayload::parse(pane_id, agent, payload).map_err(|e| {
-                    PipeEventError::Parse(ParseError::Invalid {
-                        field: "agent",
-                        value: e.to_string(),
-                    })
-                })?;
-                Ok(Self::Agent(payload))
-            }
-            _ => Err(PipeEventError::UnknownMsgName(msg.name.clone())),
-        }
-    }
-}
 
 #[cfg_attr(test, derive(PartialEq))]
 #[derive(Clone, Debug)]
@@ -180,25 +113,6 @@ impl From<&StateSnapshotPayload> for MessageToPlugin {
             .with_payload(entry.to_string())
     }
 }
-
-#[derive(Debug)]
-pub enum PipeEventError {
-    Parse(ParseError),
-    UnknownMsgName(String),
-}
-
-impl std::error::Error for PipeEventError {}
-
-impl std::fmt::Display for PipeEventError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PipeEventError::Parse(err) => write!(f, "{err}"),
-            PipeEventError::UnknownMsgName(name) => write!(f, "unknown message name {name:?}"),
-        }
-    }
-}
-
-// ── Plugin entry point ────────────────────────────────────────────────────────
 
 register_plugin!(State);
 
@@ -327,8 +241,6 @@ impl ZellijPlugin for State {
     }
 }
 
-// ── IO helpers ────────────────────────────────────────────────────────────────
-
 fn handle_events(current_tab: Option<&CurrentTab>, events: &[StateEvent]) {
     for event in events {
         match event {
@@ -386,8 +298,6 @@ fn run_current_tab_git_stat(current_tab: Option<&CurrentTab>) {
     context.insert(CONTEXT_KEY_GIT_STAT.into(), cwd_str.clone());
     run_command_with_env_variables_and_cwd(&args, BTreeMap::new(), cwd.to_path_buf(), context);
 }
-
-// ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {

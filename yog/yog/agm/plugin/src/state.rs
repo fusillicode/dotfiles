@@ -10,83 +10,8 @@ use agm_core::GitStat;
 use zellij_tile::prelude::*;
 
 use crate::StateSnapshotPayload;
+use crate::events::StateEvent;
 use crate::ui::TabRow;
-
-// ── Domain events ─────────────────────────────────────────────────────────────
-
-#[derive(Debug)]
-#[cfg_attr(test, derive(PartialEq))]
-pub enum StateEvent {
-    // Current-tab identity
-    TabCreated {
-        tab_id: usize,
-    },
-    TabRemapped {
-        new_tab_id: usize,
-    },
-
-    // Pane layout
-    PanesChanged {
-        new_pane_ids: HashSet<u32>,
-    },
-    FocusMoved {
-        new_pane: Option<FocusedPane>,
-    },
-
-    // Working directory
-    CwdChanged {
-        new_cwd: PathBuf,
-    },
-
-    // Agent lifecycle
-    /// First detection of an agent in a pane (idle by default).
-    AgentDetected {
-        pane_id: u32,
-        agent: Agent,
-    },
-    AgentBusy {
-        pane_id: u32,
-        agent: Agent,
-    },
-    /// Agent finished processing — also implies a git refresh.
-    AgentIdle {
-        pane_id: u32,
-        agent: Agent,
-    },
-    /// Agent exited, pane closed, or process replaced.
-    AgentLost {
-        pane_id: u32,
-    },
-
-    // Git statistics
-    GitStatChanged {
-        new_stat: GitStat,
-    },
-
-    // Remote tab display (other plugin instances)
-    RemoteTabUpdated {
-        source_plugin_id: u32,
-        snapshot: StateSnapshotPayload,
-        evict_ids: Vec<u32>,
-    },
-
-    // Tab bar topology
-    TopologyChanged,
-    /// Current tab just became Zellij's active tab.
-    BecameActive,
-
-    // Tab list management
-    /// Full replacement of the tab list (from a `TabUpdate` Zellij event).
-    /// Apply sets `self.all_tabs` and prunes closed remote tabs.
-    AllTabsReplaced {
-        new_tabs: Vec<TabInfo>,
-    },
-    /// A sync request pipe message should be sent to peer plugin instances.
-    /// Apply sets `self.sync_requested = true`.
-    SyncRequested,
-}
-
-// ── State ─────────────────────────────────────────────────────────────────────
 
 #[derive(Default)]
 pub struct State {
@@ -105,8 +30,6 @@ impl State {
     pub fn current_tab_id(&self) -> Option<usize> {
         self.current_tab.as_ref().map(|t| t.tab_id)
     }
-
-    // ── Event derivation (pure, &self) ────────────────────────────────────────
 
     /// Derives state events from a `PaneUpdate` Zellij event.
     pub fn events_from_pane_update(
@@ -385,8 +308,6 @@ impl State {
         }]
     }
 
-    // ── Apply (all state mutations) ───────────────────────────────────────────
-
     fn apply(&mut self, event: &StateEvent) {
         match event {
             StateEvent::TabCreated { tab_id } => {
@@ -504,8 +425,6 @@ impl State {
         self.sync_frame()
     }
 
-    // ── Remaining public helpers ──────────────────────────────────────────────
-
     pub fn remote_snapshot_for_tab(&self, tab_id: usize) -> Option<&StateSnapshotPayload> {
         self.other_tabs
             .values()
@@ -521,8 +440,6 @@ impl State {
         self.frame = next;
         true
     }
-
-    // ── Private helpers ───────────────────────────────────────────────────────
 
     fn current_tab_position_in_manifest(&self, manifest: &PaneManifest) -> Option<usize> {
         manifest.panes.iter().find_map(|(tab_pos, panes)| {
@@ -588,8 +505,6 @@ impl State {
     }
 }
 
-// ── CurrentTab ────────────────────────────────────────────────────────────────
-
 #[cfg_attr(test, derive(Debug, PartialEq))]
 #[derive(Default)]
 pub struct CurrentTab {
@@ -620,15 +535,11 @@ impl CurrentTab {
     }
 }
 
-// ── FocusedPane ───────────────────────────────────────────────────────────────
-
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct FocusedPane {
     pub id: u32,
     pub cmd: Option<String>,
 }
-
-// ── Frame computation ─────────────────────────────────────────────────────────
 
 fn compute_frame(state: &State) -> Vec<TabRow> {
     state
@@ -653,8 +564,6 @@ fn compute_frame(state: &State) -> Vec<TabRow> {
         })
         .collect()
 }
-
-// ── Pure helpers ──────────────────────────────────────────────────────────────
 
 /// The effective command for a tab:
 /// - focused agent wins
@@ -778,8 +687,6 @@ fn detect_remapped_tab_id(
     }
     if added.len() == 1 { Some(added[0].tab_id) } else { None }
 }
-
-// ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
