@@ -6,7 +6,7 @@ use strum::EnumIter;
 pub const AGENTS_PIPE: &str = "agm-agent";
 pub const EMPTY_FIELD: &str = "--";
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ParseError {
     Missing(&'static str),
     Invalid { field: &'static str, value: String },
