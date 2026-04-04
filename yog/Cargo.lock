@@ -5982,8 +5982,11 @@ dependencies = [
 name = "ytil_tui"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "owo-colors 4.3.0",
+ "pretty_assertions",
  "rootcause",
+ "rstest",
  "skim",
  "ytil_git",
 ]

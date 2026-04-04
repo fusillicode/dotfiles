@@ -168,6 +168,21 @@ pub fn get_previous(repo: &Repository) -> Option<String> {
     })
 }
 
+/// Returns the configured Git user email for the repository, if present.
+///
+/// Looks up `user.email` using the repository's config resolution order.
+///
+/// # Errors
+/// - Reading repository configuration fails.
+pub fn get_user_email(repo: &Repository) -> rootcause::Result<Option<String>> {
+    let config = repo.config().context("error opening repo config")?;
+    match config.get_string("user.email") {
+        Ok(email) => Ok(Some(email)),
+        Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
+        Err(err) => Err(report!("error reading user.email from repo config").attach(err.to_string())),
+    }
+}
+
 /// Checkout a branch or detach HEAD.
 ///
 /// # Errors
@@ -288,7 +303,7 @@ pub fn remove_redundant_remotes(branches: &mut Vec<Branch>) {
 
 /// Local or remote branch with metadata about the last commit.
 #[derive(Clone, Debug)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
+#[cfg_attr(any(test, feature = "test-utils"), derive(Eq, PartialEq))]
 pub enum Branch {
     /// Local branch (under `refs/heads/`).
     Local {
