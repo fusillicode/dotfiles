@@ -11,10 +11,16 @@ keywords = ["tui", "terminal", "prompt", "widgets"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
+chrono = { workspace = true }
 owo-colors = { workspace = true }
 rootcause = { workspace = true }
 skim = { version = "3" }
 ytil_git = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+rstest = { workspace = true }
+ytil_git = { workspace = true, features = ["test-utils"] }
 
 [lints]
 workspace = true
