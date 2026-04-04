@@ -92,12 +92,12 @@ fn restore_entries(entries: &[&GitStatusEntry], branch: Option<&str>) -> rootcau
         return Ok(());
     }
 
-    // Unstage changed entries that have staged (index) changes before restoring the worktree.
-    // Without this, `git restore <path>` only restores the worktree from the index,
-    // leaving staged changes (Modified, Deleted, Renamed, Typechange) untouched.
+    // Unstage changed entries before restoring the worktree. Conflicted entries
+    // are included here because git reports then as unmerged but they still
+    // need to be reset by the discard flog.
     let staged_changed_paths: Vec<String> = changed_entries
         .iter()
-        .filter(|entry| entry.is_staged())
+        .filter(|entry| entry.is_staged() || entry.conflicted)
         .map(|entry| entry.absolute_path().to_string_lossy().into_owned())
         .collect();
     ytil_git::unstage(staged_changed_paths.iter().map(String::as_str))?;
