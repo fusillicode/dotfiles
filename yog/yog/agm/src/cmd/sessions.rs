@@ -149,7 +149,7 @@ fn delete_session(session: &RenderableSession) -> rootcause::Result<()> {
             .attach_with(|| format!("path={}", delete_path.display()))
             .attach_with(|| format!("session_id={}", session.0.id))?;
     }
-    println!("{session}");
+    println!("{} {session}", "Deleted".red().bold());
     Ok(())
 }
 
