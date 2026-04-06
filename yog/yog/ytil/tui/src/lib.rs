@@ -123,6 +123,27 @@ pub fn require_single<'a, T>(selected: &'a [T], item_name_plural: &str) -> rootc
     Ok(item)
 }
 
+pub fn display_fixed_width(value: &str, max_chars: usize) -> String {
+    let normalized = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    let chars: Vec<char> = normalized.chars().collect();
+
+    if chars.len() <= max_chars {
+        return normalized;
+    }
+
+    if max_chars == 0 {
+        return String::new();
+    }
+
+    if max_chars == 1 {
+        return "…".to_owned();
+    }
+
+    let mut trimmed: String = chars.into_iter().take(max_chars.saturating_sub(1)).collect();
+    trimmed.push('…');
+    trimmed
+}
+
 /// Returns an item derived from CLI args or asks the user to select one.
 ///
 /// Priority order:
@@ -218,6 +239,10 @@ fn select_options(multi: bool) -> SkimOptions {
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
+    use super::*;
+
     #[test]
     fn require_single_returns_only_item() {
         let selected = vec![1];
@@ -230,5 +255,14 @@ mod tests {
         let selected = vec![1, 2];
         assert2::assert!(let Err(err) = super::require_single(&selected, "items"));
         assert!(err.to_string().contains("expected exactly one selection"));
+    }
+
+    #[rstest]
+    #[case("hello world", 20, "hello world")]
+    #[case("abcdefghijklmnopqrstuvwxyz", 5, "abcd…")]
+    #[case("abc", 1, "…")]
+    #[case("abc", 0, "")]
+    fn display_fixed_width_trims_as_expected(#[case] value: &str, #[case] max_chars: usize, #[case] expected: &str) {
+        pretty_assertions::assert_eq!(display_fixed_width(value, max_chars), expected);
     }
 }

@@ -40,7 +40,7 @@ pub fn load_sessions() -> rootcause::Result<Vec<Session>> {
         }
         let mut session = crate::agent::session_parser::cursor::parse(&meta_hex, workspace)
             .attach_with(|| format!("store_db={}", store_db.display()))?;
-        session.updated_at = file_updated_at(&store_db)?.unwrap_or(session.created_at);
+        session.updated_at = super::file_updated_at(&store_db)?.unwrap_or(session.created_at);
         session.path = store_db.parent().map_or_else(|| store_db.clone(), Path::to_path_buf);
         sessions.push(session);
     }
@@ -106,14 +106,4 @@ fn read_strings_output(store_db: &Path) -> rootcause::Result<String> {
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
-}
-
-fn file_updated_at(path: &Path) -> rootcause::Result<Option<chrono::DateTime<chrono::Utc>>> {
-    let modified = std::fs::metadata(path)
-        .context("failed to read session metadata")
-        .attach_with(|| format!("path={}", path.display()))?
-        .modified()
-        .context("failed to read session modified time")
-        .attach_with(|| format!("path={}", path.display()))?;
-    Ok(Some(chrono::DateTime::<chrono::Utc>::from(modified)))
 }

@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use rootcause::prelude::ResultExt as _;
 
 use crate::agent::Agent;
@@ -25,21 +23,11 @@ pub fn load_sessions() -> rootcause::Result<Vec<Session>> {
         let mut session = crate::agent::session_parser::codex::parse(&content, session_name)
             .attach_with(|| format!("path={}", session_path.display()))?;
         if session.workspace.is_dir() {
-            session.updated_at = file_updated_at(&session_path)?.unwrap_or(session.created_at);
+            session.updated_at = super::file_updated_at(&session_path)?.unwrap_or(session.created_at);
             session.path = session_path;
             sessions.push(session);
         }
     }
 
     Ok(sessions)
-}
-
-fn file_updated_at(path: &Path) -> rootcause::Result<Option<chrono::DateTime<chrono::Utc>>> {
-    let modified = std::fs::metadata(path)
-        .context("failed to read session metadata")
-        .attach_with(|| format!("path={}", path.display()))?
-        .modified()
-        .context("failed to read session modified time")
-        .attach_with(|| format!("path={}", path.display()))?;
-    Ok(Some(chrono::DateTime::<chrono::Utc>::from(modified)))
 }
