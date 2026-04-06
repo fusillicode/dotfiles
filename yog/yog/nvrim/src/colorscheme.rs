@@ -130,7 +130,7 @@ pub fn set(colorscheme: Option<String>) {
         // Errors are already notified by [`get_overridden_hl_opts`]
         let _ = get_overridden_hl_opts(
             &diag_underline_hl_name,
-            |hl_opts| hl_opts.special(fg).bg(NONE).underline(false).undercurl(false),
+            |hl_opts| hl_opts.special(fg).bg(NONE).underline(true).undercurl(false),
             None,
         )
         .map(|hl_opts| set_hl(0, &diag_underline_hl_name, &hl_opts));
