@@ -17,8 +17,9 @@ pub fn run() -> rootcause::Result<()> {
     sessions.extend(agm_core::agent::session_loader::cursor::load_sessions()?);
 
     sessions.sort_by(|a, b| {
-        b.created_at
-            .cmp(&a.created_at)
+        b.updated_at
+            .cmp(&a.updated_at)
+            .then_with(|| b.created_at.cmp(&a.created_at))
             .then_with(|| a.name.cmp(&b.name))
             .then_with(|| a.id.cmp(&b.id))
     });
