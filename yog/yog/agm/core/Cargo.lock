@@ -3,5 +3,5 @@
 version = 4
 
 [[package]]
-name = "agm-core"
+name = "agm_core"
 version = "0.1.0"

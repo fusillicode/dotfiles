@@ -1,4 +1,4 @@
-use agm_core::GitStat;
+use agm_core::git_stat::GitStat;
 
 pub fn run(cwd: &str) -> GitStat {
     let Ok(repo) = git2::Repository::discover(cwd) else {

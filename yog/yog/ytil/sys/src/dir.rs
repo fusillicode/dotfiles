@@ -2,12 +2,14 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use rootcause::option_ext::OptionExt as _;
+#[cfg(not(target_arch = "wasm32"))]
 use rootcause::prelude::ResultExt as _;
 
 /// Builds a path starting from the home directory by appending the given parts, returning a [`PathBuf`].
 ///
 /// # Errors
 /// - The home directory cannot be determined.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn build_home_path<P: AsRef<Path>>(parts: &[P]) -> rootcause::Result<PathBuf> {
     let home_path = home::home_dir().context("missing home dir").attach("env=HOME")?;
     Ok(build_path(home_path, parts))
@@ -59,6 +61,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(target_arch = "wasm32"))]
     fn build_home_path_returns_path_ending_with_parts() {
         assert2::assert!(let Ok(path) = build_home_path(&[".config", "test"]));
         assert!(path.ends_with(".config/test"), "path={}", path.display());

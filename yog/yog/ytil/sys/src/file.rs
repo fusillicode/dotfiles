@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::fs::DirEntry;
+#[cfg(not(target_arch = "wasm32"))]
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
 use std::path::PathBuf;
@@ -76,8 +77,12 @@ pub fn ln_sf<P: AsRef<Path>>(target: &P, link: &P) -> rootcause::Result<()> {
                 .attach_with(|| format!("link={}", link.as_ref().display()))?;
         }
     }
+    #[cfg(not(target_arch = "wasm32"))]
     std::os::unix::fs::symlink(target.as_ref(), link.as_ref())
         .context("error creating symlink")
+        .attach_with(|| format!("target={} link={}", target.as_ref().display(), link.as_ref().display()))?;
+    #[cfg(target_arch = "wasm32")]
+    Err(report!("symlink is not supported on wasm32"))
         .attach_with(|| format!("target={} link={}", target.as_ref().display(), link.as_ref().display()))?;
     Ok(())
 }
@@ -153,13 +158,22 @@ pub fn cp_to_system_clipboard(content: &mut &[u8]) -> rootcause::Result<()> {
 /// - File metadata cannot be read.
 /// - Permissions cannot be updated.
 pub fn chmod_x<P: AsRef<Path>>(path: P) -> rootcause::Result<()> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = path;
+        Err(report!("chmod_x is not supported on wasm32"))?;
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     let mut perms = std::fs::metadata(&path)
         .context("error reading metadata")
         .attach_with(|| format!("path={}", path.as_ref().display()))?
         .permissions();
 
+    #[cfg(not(target_arch = "wasm32"))]
     perms.set_mode(0o755);
 
+    #[cfg(not(target_arch = "wasm32"))]
     std::fs::set_permissions(&path, perms)
         .context("error setting permissions")
         .attach_with(|| format!("path={}", path.as_ref().display()))?;
@@ -262,6 +276,10 @@ pub fn find_matching_recursively_in_dir(
                 continue;
             }
 
+            if !file_type.is_dir() {
+                continue;
+            }
+
             if skip_dir_fn(&entry) {
                 continue;
             }
@@ -322,5 +340,25 @@ mod tests {
         let mut expected = vec![dir.path().join("c.txt"), dir.path().join("a/b/d.txt")];
         expected.sort();
         assert_eq!(found, expected);
+    }
+
+    #[test]
+    fn find_matching_recursively_in_dir_skips_symlink_entries() {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let dir = tempfile::tempdir().unwrap();
+            std::fs::write(dir.path().join("c.txt"), b"c").unwrap();
+            std::fs::create_dir(dir.path().join("nested")).unwrap();
+            std::os::unix::fs::symlink(dir.path().join("nested"), dir.path().join("nested-link")).unwrap();
+
+            let res = find_matching_recursively_in_dir(
+                dir.path(),
+                |e| e.path().extension().and_then(|s| s.to_str()) == Some("txt"),
+                |_| false,
+            );
+
+            assert2::assert!(let Ok(found) = res);
+            pretty_assertions::assert_eq!(found, vec![dir.path().join("c.txt")]);
+        }
     }
 }
