@@ -14,7 +14,7 @@ categories = ["command-line-utilities", "development-tools"]
 chrono = { workspace = true }
 owo-colors = { workspace = true }
 rootcause = { workspace = true }
-skim = { version = "3" }
+skim = { version = "4" }
 ytil_git = { workspace = true }
 
 [dev-dependencies]
