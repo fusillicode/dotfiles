@@ -1,6 +1,4 @@
 use std::fmt::Display;
-use std::path::Path;
-use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
 
@@ -56,24 +54,29 @@ struct RenderableSession(Session);
 impl Display for RenderableSession {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let agent_name = match self.0.agent {
-            Agent::Claude => pad_right("CLAUDE", 6).red().bold().to_string(),
-            Agent::Codex => pad_right("CODEX", 6).green().bold().to_string(),
-            Agent::Cursor => pad_right("CURSOR", 6).bright_black().bold().to_string(),
-            Agent::Gemini | Agent::Opencode => pad_right(&self.0.agent.to_string(), 6),
+            Agent::Claude => "CLAUDE".red().bold().to_string(),
+            Agent::Codex => "CODEX".green().bold().to_string(),
+            Agent::Cursor => "CURSOR".bright_black().bold().to_string(),
+            Agent::Gemini | Agent::Opencode => self.0.agent.to_string(),
         };
 
-        let session_name = display_session_name(&self.0.name, 42);
-
-        let updated_label = pad_right(&self.0.updated_at.format("%d-%m-%Y %H:%M").to_string(), 16);
-        let created_label = pad_right(&self.0.created_at.format("%d-%m-%Y %H:%M").to_string(), 16);
+        let path_label = agm_core::short_path(
+            &self.0.workspace,
+            std::env::var_os("HOME")
+                .as_deref()
+                .map_or_else(|| std::path::Path::new("/"), std::path::Path::new),
+        );
+        let session_name = ytil_tui::display_fixed_width(&self.0.name, 42);
+        let updated_label = self.0.updated_at.format("%d/%m/%Y-%H:%M").to_string();
+        let created_label = self.0.created_at.format("%d/%m/%Y-%H:%M").to_string();
 
         write!(
             f,
             "{agent_name} {} {} {} {}",
+            path_label.blue(),
             session_name.white().bold(),
             updated_label.dimmed(),
             created_label.dimmed(),
-            render_workspace_path(&self.0.workspace).blue(),
         )
     }
 }
@@ -91,23 +94,6 @@ impl Display for Op {
             Self::Delete => write!(f, "{}", "Delete".red().bold()),
         }
     }
-}
-
-fn display_session_name(value: &str, max_chars: usize) -> String {
-    let normalized = value.split_whitespace().collect::<Vec<_>>().join(" ");
-    let chars: Vec<char> = normalized.chars().collect();
-    let (out, chars_count) = if chars.len() <= max_chars {
-        (normalized, max_chars)
-    } else {
-        let mut trimmed: String = chars.into_iter().take(max_chars).collect();
-        trimmed.push('…');
-        (trimmed, max_chars.saturating_add(1))
-    };
-    pad_right(&out, chars_count)
-}
-
-fn pad_right(value: &str, width: usize) -> String {
-    format!("{value:<width$}")
 }
 
 fn launch_session(RenderableSession(session): &RenderableSession) -> rootcause::Result<()> {
@@ -151,11 +137,4 @@ fn delete_session(session: &RenderableSession) -> rootcause::Result<()> {
     }
     println!("{} {session}", "Deleted".red().bold());
     Ok(())
-}
-
-fn render_workspace_path(path: &Path) -> String {
-    std::env::var_os("HOME").map(PathBuf::from).as_deref().map_or_else(
-        || agm_core::short_path(path, Path::new("/")),
-        |home| agm_core::short_path(path, home),
-    )
 }
