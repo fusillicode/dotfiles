@@ -1,11 +1,11 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use agm_core::AGENTS_PIPE;
-use agm_core::Agent;
-use agm_core::AgentEventPayload;
-use agm_core::GitStat;
 use agm_core::ParseError;
+use agm_core::agent::AGENTS_PIPE;
+use agm_core::agent::Agent;
+use agm_core::agent::AgentEventPayload;
+use agm_core::git_stat::GitStat;
 use zellij_tile::prelude::PipeMessage;
 use zellij_tile::prelude::PipeSource;
 use zellij_tile::prelude::TabInfo;
@@ -178,12 +178,12 @@ mod tests {
     use std::convert::TryFrom;
     use std::path::PathBuf;
 
-    use agm_core::Agent;
-    use agm_core::AgentEventKind;
-    use agm_core::AgentEventPayload;
     use agm_core::Cmd;
-    use agm_core::GitStat;
     use agm_core::TabStateEntry;
+    use agm_core::agent::Agent;
+    use agm_core::agent::AgentEventKind;
+    use agm_core::agent::AgentEventPayload;
+    use agm_core::git_stat::GitStat;
     use rstest::rstest;
     use zellij_tile::prelude::PipeMessage;
     use zellij_tile::prelude::PipeSource;

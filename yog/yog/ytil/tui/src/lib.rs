@@ -109,6 +109,20 @@ pub fn yes_no_select(title: &str) -> rootcause::Result<Option<bool>> {
     Ok(Some(selected_text.as_deref() == Some("Yes")))
 }
 
+/// Require exactly one selected item.
+///
+/// # Errors
+/// - More than one item is selected.
+/// - No items are selected.
+pub fn require_single<'a, T>(selected: &'a [T], item_name_plural: &str) -> rootcause::Result<&'a T> {
+    let [item] = selected else {
+        return Err(report!("expected exactly one selection")
+            .attach(format!("item_name_plural={item_name_plural}"))
+            .attach(format!("selected_count={}", selected.len())));
+    };
+    Ok(item)
+}
+
 /// Returns an item derived from CLI args or asks the user to select one.
 ///
 /// Priority order:
@@ -200,4 +214,21 @@ fn select_options(multi: bool) -> SkimOptions {
         opts.bind.extend(["ctrl-e:toggle".into(), "ctrl-a:toggle-all".into()]);
     }
     opts.build()
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn require_single_returns_only_item() {
+        let selected = vec![1];
+        assert2::assert!(let Ok(item) = super::require_single(&selected, "items"));
+        assert_eq!(*item, 1);
+    }
+
+    #[test]
+    fn require_single_errors_for_multiple_items() {
+        let selected = vec![1, 2];
+        assert2::assert!(let Err(err) = super::require_single(&selected, "items"));
+        assert!(err.to_string().contains("expected exactly one selection"));
+    }
 }

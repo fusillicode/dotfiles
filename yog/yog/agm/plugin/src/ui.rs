@@ -3,7 +3,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use agm_core::Cmd;
-use agm_core::GitStat;
+use agm_core::git_stat::GitStat;
 use zellij_tile::prelude::*;
 
 const INFO_ROWS: usize = 1;
@@ -33,7 +33,7 @@ pub struct TabRow {
 
 impl TabRow {
     pub fn new(tab: &TabInfo, cwd: Option<&PathBuf>, cmd: Cmd, git: GitStat, home: &Path) -> Self {
-        let path_label = cwd.map_or_else(|| tab.name.clone(), |path| sidebar_path(path, home));
+        let path_label = cwd.map_or_else(|| tab.name.clone(), |path| agm_core::short_path(path, home));
         Self {
             active: tab.active,
             path_label,
@@ -233,61 +233,6 @@ fn visible_len(s: &str) -> usize {
     len
 }
 
-fn path_dir_names(path: &Path) -> Vec<String> {
-    path.components()
-        .filter_map(|c| match c {
-            std::path::Component::Normal(s) => Some(s.to_string_lossy().into_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
-/// Each parent directory → its first character; last segment → full name.
-fn abbrev_path_dirs(names: &[String]) -> String {
-    match names.len() {
-        0 => String::new(),
-        1 => names[0].clone(),
-        n => {
-            let mut out = String::new();
-            for (i, name) in names.iter().enumerate() {
-                if i > 0 {
-                    out.push('/');
-                }
-                if i + 1 == n {
-                    out.push_str(name);
-                } else {
-                    out.push(name.chars().next().unwrap_or('·'));
-                }
-            }
-            out
-        }
-    }
-}
-
-/// Sidebar cwd string. Uses `~/…` when under `home` (unless `home` is `/`, which would match everything).
-fn sidebar_path(path: &Path, home: &Path) -> String {
-    if home != Path::new("/") {
-        if path == home {
-            return "~".into();
-        }
-        if let Ok(rel) = path.strip_prefix(home) {
-            let names = path_dir_names(rel);
-            return if names.is_empty() {
-                "~".into()
-            } else {
-                format!("~/{}", abbrev_path_dirs(&names))
-            };
-        }
-    }
-
-    let names = path_dir_names(path);
-    if names.is_empty() {
-        "/".into()
-    } else {
-        format!("/{}", abbrev_path_dirs(&names))
-    }
-}
-
 fn wrap_lines(text: &str, width: usize) -> Vec<String> {
     if width == 0 {
         return vec![String::new()];
@@ -326,8 +271,8 @@ mod tests {
     use std::path::Path;
     use std::path::PathBuf;
 
-    use agm_core::Agent;
     use agm_core::Cmd;
+    use agm_core::agent::Agent;
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -423,27 +368,27 @@ mod tests {
     }
 
     #[test]
-    fn sidebar_path_under_home() {
+    fn short_path_under_home() {
         let home = Path::new("/home/user");
         assert_eq!(
-            sidebar_path(Path::new("/home/user/src/pkg/myproject"), home),
+            agm_core::short_path(Path::new("/home/user/src/pkg/myproject"), home),
             "~/s/p/myproject"
         );
     }
 
     #[test]
-    fn sidebar_path_many_dirs() {
+    fn short_path_many_dirs() {
         let home = Path::new("/home/user");
         assert_eq!(
-            sidebar_path(Path::new("/home/user/one/two/three/four/five"), home),
+            agm_core::short_path(Path::new("/home/user/one/two/three/four/five"), home),
             "~/o/t/t/f/five"
         );
     }
 
     #[test]
-    fn sidebar_path_outside_home() {
+    fn short_path_outside_home() {
         let home = Path::new("/home/user");
-        assert_eq!(sidebar_path(Path::new("/opt/pkg/foo"), home), "/o/p/foo");
+        assert_eq!(agm_core::short_path(Path::new("/opt/pkg/foo"), home), "/o/p/foo");
     }
 
     #[test]

@@ -18,6 +18,7 @@ skim = { version = "3" }
 ytil_git = { workspace = true }
 
 [dev-dependencies]
+assert2 = { workspace = true }
 pretty_assertions = { workspace = true }
 rstest = { workspace = true }
 ytil_git = { workspace = true, features = ["test-utils"] }

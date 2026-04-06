@@ -7,7 +7,6 @@ use core::fmt::Display;
 
 use owo_colors::OwoColorize;
 use rootcause::prelude::ResultExt;
-use rootcause::report;
 use strum::EnumIter;
 use strum::IntoEnumIterator;
 use ytil_sys::cli::Args;
@@ -36,14 +35,6 @@ impl Display for Op {
             Self::Kill => write!(f, "{}", "Kill".yellow().bold()),
             Self::Delete => write!(f, "{}", "Delete".red().bold()),
         }
-    }
-}
-
-fn require_single(selected: &[DisplaySession]) -> rootcause::Result<&DisplaySession> {
-    if let [session] = selected {
-        Ok(session)
-    } else {
-        Err(report!("multiple sessions selected"))
     }
 }
 
@@ -81,13 +72,13 @@ fn main() -> rootcause::Result<()> {
 
     match op {
         Op::Attach => {
-            let session = require_single(&selected)?;
+            let session = ytil_tui::require_single(&selected, "sessions")?;
             ytil_zellij::attach_session(&session.0.name)
                 .attach(format!("op={op:?}"))
                 .attach(format!("session={}", session.0.name))?;
         }
         Op::Restart => {
-            let session = require_single(&selected)?;
+            let session = ytil_tui::require_single(&selected, "sessions")?;
             let name = &session.0.name;
             ytil_zellij::kill_session(name)
                 .attach(format!("op={op:?}"))

@@ -11,7 +11,7 @@ keywords = ["cli", "zellij", "terminal", "tabs", "plugin"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-agm-core = { path = "core" }
+agm_core = { path = "core" }
 git2 = { workspace = true }
 owo-colors = { workspace = true }
 rootcause = { workspace = true }

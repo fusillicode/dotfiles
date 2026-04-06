@@ -4,6 +4,7 @@ USAGE:
     agm [SESSION_NAME]
     agm install [--debug]
     agm git-stat PATH...
+    agm sessions
 
 ARGS:
     SESSION_NAME    Session name (default: "agm")
@@ -18,5 +19,7 @@ SUBCOMMANDS:
                     Gemini hooks are JSON in ~/.gemini/settings.json.
     git-stat        Print "path insertions deletions untracked worktree"
                     per PATH (one line each, in argument order).
+    sessions        Show Claude, Codex, and Cursor resumable sessions in a
+                    picker and launch the selected one.
 
 Requires evoke to be run first (provisions plugin + layout).

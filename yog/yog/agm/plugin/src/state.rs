@@ -2,11 +2,11 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use agm_core::Agent;
-use agm_core::AgentEventKind;
-use agm_core::AgentEventPayload;
 use agm_core::Cmd;
-use agm_core::GitStat;
+use agm_core::agent::Agent;
+use agm_core::agent::AgentEventKind;
+use agm_core::agent::AgentEventPayload;
+use agm_core::git_stat::GitStat;
 use zellij_tile::prelude::*;
 
 use crate::StateSnapshotPayload;

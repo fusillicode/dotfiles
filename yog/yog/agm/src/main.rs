@@ -58,7 +58,7 @@ fn main() -> rootcause::Result<()> {
             }
             Ok(())
         }
-        Some("resume") => cmd::resume::run(),
+        Some("sessions") => cmd::sessions::run(),
         None => launch_session(&args),
         Some(unknown) => Err(report!("unknown argument").attach(format!("argument={unknown}"))),
     }

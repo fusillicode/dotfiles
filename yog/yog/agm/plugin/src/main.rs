@@ -2,9 +2,9 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use agm_core::Cmd;
-use agm_core::GitStat;
 use agm_core::ParseError;
 use agm_core::TabStateEntry;
+use agm_core::git_stat::GitStat;
 use zellij_tile::prelude::*;
 
 use crate::events::PipeEvent;

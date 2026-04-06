@@ -12,7 +12,7 @@ categories = ["zellij", "development-tools"]
 publish = false
 
 [dependencies]
-agm-core = { path = "../core" }
+agm_core = { path = "../core" }
 zellij-tile = { git = "https://github.com/zellij-org/zellij.git", branch = "main" }
 
 [dev-dependencies]

@@ -12,7 +12,6 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 chrono = { workspace = true }
-home = { version = "0.5" }
 itertools = { version = "0.14" }
 owo-colors = { workspace = true }
 pico-args = { version = "0.5" }
@@ -20,6 +19,9 @@ rootcause = { workspace = true }
 serde = { workspace = true }
 ytil_cmd = { workspace = true }
 ytil_macros = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+home = { version = "0.5" }
 
 [dev-dependencies]
 assert2 = { workspace = true }

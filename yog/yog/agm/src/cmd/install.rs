@@ -1,8 +1,8 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use agm_core::AGENTS_PIPE;
-use agm_core::Agent;
+use agm_core::agent::AGENTS_PIPE;
+use agm_core::agent::Agent;
 use owo_colors::OwoColorize as _;
 use rootcause::prelude::ResultExt;
 use serde_json::Value;

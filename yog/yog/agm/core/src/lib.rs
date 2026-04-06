@@ -1,9 +1,14 @@
-use core::fmt::Display;
+pub mod agent;
+pub mod git_stat;
+
+use std::path::Path;
 use std::path::PathBuf;
 
-use strum::EnumIter;
+use crate::agent::Agent;
+use crate::agent::AgentEventKind;
+use crate::agent::AgentEventPayload;
+use crate::git_stat::GitStat;
 
-pub const AGENTS_PIPE: &str = "agm-agent";
 pub const EMPTY_FIELD: &str = "--";
 
 #[derive(Debug, PartialEq)]
@@ -32,255 +37,61 @@ impl std::fmt::Display for ParseError {
 
 impl std::error::Error for ParseError {}
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct GitStat {
-    pub insertions: usize,
-    pub deletions: usize,
-    pub new_files: usize,
-    pub is_worktree: bool,
-}
+/// Render a compact path label using `~/...` when under `home`, abbreviating all
+/// parent directories to a single character and keeping the last segment intact.
+pub fn short_path(path: &Path, home: &Path) -> String {
+    if home != Path::new("/") {
+        if path == home {
+            return "~".into();
+        }
+        if let Ok(rel) = path.strip_prefix(home) {
+            let names = path_dir_names(rel);
+            return if names.is_empty() {
+                "~".into()
+            } else {
+                format!("~/{}", abbrev_path_dirs(&names))
+            };
+        }
+    }
 
-impl GitStat {
-    pub fn parse_line(line: &str) -> Result<(PathBuf, Self), ParseError> {
-        let mut parts = line.rsplitn(5, ' ');
-        let is_worktree = parts
-            .next()
-            .ok_or(ParseError::Missing("worktree field"))
-            .and_then(|v| {
-                v.parse::<u8>().map_err(|_| ParseError::Invalid {
-                    field: "worktree",
-                    value: format!("{v:?}"),
-                })
-            })?
-            != 0;
-        let new_files = parts
-            .next()
-            .ok_or(ParseError::Missing("new_files field"))
-            .and_then(|v| {
-                v.parse().map_err(|_| ParseError::Invalid {
-                    field: "new_files",
-                    value: format!("{v:?}"),
-                })
-            })?;
-        let deletions = parts
-            .next()
-            .ok_or(ParseError::Missing("deletions field"))
-            .and_then(|v| {
-                v.parse().map_err(|_| ParseError::Invalid {
-                    field: "deletions",
-                    value: format!("{v:?}"),
-                })
-            })?;
-        let insertions = parts
-            .next()
-            .ok_or(ParseError::Missing("insertions field"))
-            .and_then(|v| {
-                v.parse().map_err(|_| ParseError::Invalid {
-                    field: "insertions",
-                    value: format!("{v:?}"),
-                })
-            })?;
-        let path = PathBuf::from(parts.next().ok_or(ParseError::Missing("path"))?);
-        Ok((
-            path,
-            Self {
-                insertions,
-                deletions,
-                new_files,
-                is_worktree,
-            },
-        ))
+    let names = path_dir_names(path);
+    if names.is_empty() {
+        "/".into()
+    } else {
+        format!("/{}", abbrev_path_dirs(&names))
     }
 }
 
-impl std::fmt::Display for GitStat {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{} {} {} {}",
-            self.insertions,
-            self.deletions,
-            self.new_files,
-            u8::from(self.is_worktree),
-        )
-    }
+fn path_dir_names(path: &Path) -> Vec<String> {
+    path.components()
+        .filter_map(|component| match component {
+            std::path::Component::Normal(segment) => Some(segment.to_string_lossy().into_owned()),
+            std::path::Component::Prefix(_)
+            | std::path::Component::RootDir
+            | std::path::Component::CurDir
+            | std::path::Component::ParentDir => None,
+        })
+        .collect()
 }
 
-#[derive(Clone, Copy, Debug, EnumIter, Eq, PartialEq)]
-pub enum Agent {
-    Claude,
-    Codex,
-    Cursor,
-    Gemini,
-    Opencode,
-}
-
-impl Agent {
-    pub const fn name(self) -> &'static str {
-        match self {
-            Self::Claude => "claude",
-            Self::Codex => "codex",
-            Self::Cursor => "cursor",
-            Self::Gemini => "gemini",
-            Self::Opencode => "opencode",
-        }
-    }
-
-    pub const fn default_config(self) -> &'static str {
-        match self {
-            Self::Claude => r#"{"hooks":{}}"#,
-            Self::Cursor => r#"{"version":1,"hooks":{}}"#,
-            Self::Codex => r#"{"hooks":{}}"#,
-            Self::Gemini => r#"{"hooks":{}}"#,
-            Self::Opencode => "{}",
-        }
-    }
-
-    pub const fn config_path(self) -> &'static [&'static str] {
-        match self {
-            Self::Claude => &[".claude", "settings.json"],
-            Self::Cursor => &[".cursor", "hooks.json"],
-            Self::Codex => &[".codex", "hooks.json"],
-            Self::Gemini => &[".gemini", "settings.json"],
-            Self::Opencode => &[".config", "opencode", "plugins", "agm.ts"],
-        }
-    }
-
-    pub const fn hook_events(self) -> &'static [(&'static str, AgentEventKind)] {
-        match self {
-            Self::Claude => &[
-                ("SessionStart", AgentEventKind::Start),
-                ("UserPromptSubmit", AgentEventKind::Busy),
-                ("Stop", AgentEventKind::Idle),
-                ("SessionEnd", AgentEventKind::Exit),
-            ],
-            Self::Cursor => &[
-                ("sessionStart", AgentEventKind::Start),
-                ("beforeSubmitPrompt", AgentEventKind::Busy),
-                ("stop", AgentEventKind::Idle),
-                ("sessionEnd", AgentEventKind::Exit),
-            ],
-            Self::Codex => &[
-                ("SessionStart", AgentEventKind::Start),
-                ("UserPromptSubmit", AgentEventKind::Busy),
-                // Fires while tools run (Codex may not emit another UserPromptSubmit until the next turn).
-                ("PreToolUse", AgentEventKind::Busy),
-                ("Stop", AgentEventKind::Idle),
-            ],
-            Self::Gemini => &[
-                ("SessionStart", AgentEventKind::Start),
-                ("BeforeAgent", AgentEventKind::Busy),
-                ("BeforeModel", AgentEventKind::Busy),
-                ("BeforeTool", AgentEventKind::Busy),
-                ("AfterAgent", AgentEventKind::Idle),
-                ("SessionEnd", AgentEventKind::Exit),
-            ],
-            Self::Opencode => &[],
-        }
-    }
-
-    pub fn from_name(s: &str) -> Result<Self, ParseError> {
-        match s {
-            "claude" => Ok(Self::Claude),
-            "cursor" => Ok(Self::Cursor),
-            "codex" => Ok(Self::Codex),
-            "gemini" => Ok(Self::Gemini),
-            "opencode" => Ok(Self::Opencode),
-            _ => Err(ParseError::Invalid {
-                field: "agent",
-                value: format!("{s:?}"),
-            }),
-        }
-    }
-
-    pub fn hook_command(self, kind: AgentEventKind) -> String {
-        // Codex (and similar) hook runners write JSON to the hook process stdin. `zellij pipe` only
-        // reads stdin when the payload argument is omitted, so that data would never be consumed and
-        // the hook can block or fail—then the plugin never receives events. Drain stdin first.
-        let pipe = format!(
-            "zellij pipe --name {AGENTS_PIPE} --args \"pane_id=$ZELLIJ_PANE_ID,agent={}\" -- {} >/dev/null 2>&1 || true",
-            self.name(),
-            kind.as_str()
-        );
-        let echo = if matches!(self, Self::Gemini) {
-            "; echo '{}'"
-        } else {
-            ""
-        };
-        format!("cat >/dev/null 2>&1 || true; {pipe}{echo}")
-    }
-
-    /// Higher means more specific — Cursor hosts Claude, so it wins when both match.
-    pub const fn priority(self) -> u8 {
-        match self {
-            Self::Claude => 0,
-            Self::Codex => 1,
-            Self::Cursor => 2,
-            Self::Gemini => 3,
-            Self::Opencode => 4,
-        }
-    }
-
-    /// Fuzzy match — checks if the lowercased name contains an agent identifier.
-    pub fn detect(name: &str) -> Option<Self> {
-        let lower = name.to_ascii_lowercase();
-        if lower.contains("claude") {
-            Some(Self::Claude)
-        } else if lower.contains("cursor") {
-            Some(Self::Cursor)
-        } else if lower.contains("codex") {
-            Some(Self::Codex)
-        } else if lower.contains("gemini") {
-            Some(Self::Gemini)
-        } else if lower.contains("opencode") {
-            Some(Self::Opencode)
-        } else {
-            None
-        }
-    }
-}
-
-impl Display for Agent {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let repr = match self {
-            Self::Claude => "Claude",
-            Self::Codex => "Codex",
-            Self::Cursor => "Cursor",
-            Self::Gemini => "Gemini",
-            Self::Opencode => "Opencode",
-        };
-        write!(f, "{}", repr)
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum AgentEventKind {
-    Start,
-    Busy,
-    Idle,
-    Exit,
-}
-
-impl AgentEventKind {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Start => "start",
-            Self::Busy => "busy",
-            Self::Idle => "idle",
-            Self::Exit => "exit",
-        }
-    }
-
-    pub fn parse(s: &str) -> Result<Self, ParseError> {
-        match s.trim() {
-            "start" => Ok(Self::Start),
-            "busy" => Ok(Self::Busy),
-            "idle" => Ok(Self::Idle),
-            "exit" => Ok(Self::Exit),
-            _ => Err(ParseError::Invalid {
-                field: "event kind",
-                value: format!("{s:?}"),
-            }),
+fn abbrev_path_dirs(names: &[String]) -> String {
+    match names.len() {
+        0 => String::new(),
+        1 => names.first().cloned().unwrap_or_default(),
+        total => {
+            let mut out = String::new();
+            for (idx, name) in names.iter().enumerate() {
+                if idx > 0 {
+                    out.push('/');
+                }
+                let is_last = idx == total.saturating_sub(1);
+                if is_last {
+                    out.push_str(name);
+                } else {
+                    out.push(name.chars().next().unwrap_or('·'));
+                }
+            }
+            out
         }
     }
 }
@@ -338,25 +149,6 @@ impl From<&AgentEventPayload> for Cmd {
             AgentEventKind::Idle => Self::IdleAgent(value.agent),
             AgentEventKind::Exit => Self::None,
         }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AgentEventPayload {
-    pub pane_id: u32,
-    pub agent: Agent,
-    pub kind: AgentEventKind,
-}
-
-impl AgentEventPayload {
-    pub fn parse(pane_id: &str, agent: &str, payload: &str) -> Result<Self, ParseError> {
-        let pane_id = pane_id.trim().parse().map_err(|_| ParseError::Invalid {
-            field: "pane_id",
-            value: format!("{pane_id:?}"),
-        })?;
-        let agent = Agent::from_name(agent.trim())?;
-        let kind = AgentEventKind::parse(payload)?;
-        Ok(Self { pane_id, agent, kind })
     }
 }
 
@@ -460,67 +252,9 @@ impl std::convert::TryFrom<(usize, &str)> for TabStateEntry {
 #[cfg(test)]
 mod tests {
     use std::convert::TryFrom;
-
-    use rstest::rstest;
+    use std::path::Path;
 
     use super::*;
-
-    #[rstest]
-    #[case("/home/user/project 10 5 2 1", "/home/user/project", 10, 5, 2, true)]
-    #[case("/home/user/my project 10 5 2 0", "/home/user/my project", 10, 5, 2, false)]
-    fn git_stat_parse_line_works_as_expected(
-        #[case] line: &str,
-        #[case] expected_path: &str,
-        #[case] insertions: usize,
-        #[case] deletions: usize,
-        #[case] new_files: usize,
-        #[case] is_worktree: bool,
-    ) {
-        let expected_stat = GitStat {
-            insertions,
-            deletions,
-            new_files,
-            is_worktree,
-        };
-        assert2::assert!(let Ok((path, stat)) = GitStat::parse_line(line));
-        pretty_assertions::assert_eq!((path, stat), (PathBuf::from(expected_path), expected_stat));
-    }
-
-    #[rstest]
-    #[case("claude", Ok(Agent::Claude))]
-    #[case("cursor", Ok(Agent::Cursor))]
-    #[case("codex", Ok(Agent::Codex))]
-    #[case("gemini", Ok(Agent::Gemini))]
-    #[case("opencode", Ok(Agent::Opencode))]
-    #[case("unknown", Err("invalid agent: \"unknown\"".to_string()))]
-    fn agent_from_name_works_as_expected(#[case] name: &str, #[case] expected: Result<Agent, String>) {
-        let actual = Agent::from_name(name).map_err(|e| e.to_string());
-        pretty_assertions::assert_eq!(actual, expected);
-    }
-
-    #[rstest]
-    #[case("Claude-3.5-Sonnet", Some(Agent::Claude))]
-    #[case("Cursor-IDE", Some(Agent::Cursor))]
-    #[case("GitHub-Codex", Some(Agent::Codex))]
-    #[case("Gemini-1.5-Pro", Some(Agent::Gemini))]
-    #[case("OpenCode-Agent", Some(Agent::Opencode))]
-    #[case("Vim", None)]
-    fn agent_detect_works_as_expected(#[case] name: &str, #[case] expected: Option<Agent>) {
-        pretty_assertions::assert_eq!(Agent::detect(name), expected);
-    }
-
-    #[rstest]
-    #[case(Agent::Claude)]
-    #[case(Agent::Cursor)]
-    #[case(Agent::Codex)]
-    #[case(Agent::Gemini)]
-    #[case(Agent::Opencode)]
-    fn hook_command_never_fails_when_zellij_unavailable(#[case] agent: Agent) {
-        let cmd = agent.hook_command(AgentEventKind::Busy);
-        assert2::assert!(cmd.contains("cat >/dev/null 2>&1 || true;"));
-        assert2::assert!(cmd.contains("zellij pipe --name agm-agent"));
-        assert2::assert!(cmd.contains(">/dev/null 2>&1 || true"));
-    }
 
     #[test]
     fn tab_state_entry_serialization_roundtrip_works_as_expected() {
@@ -539,5 +273,29 @@ mod tests {
         let content = entry.to_string();
         assert2::assert!(let Ok(parsed) = TabStateEntry::try_from((1, content.as_str())));
         pretty_assertions::assert_eq!(parsed, entry);
+    }
+
+    #[test]
+    fn short_path_under_home() {
+        let home = Path::new("/home/user");
+        pretty_assertions::assert_eq!(
+            super::short_path(Path::new("/home/user/src/pkg/myproject"), home),
+            "~/s/p/myproject"
+        );
+    }
+
+    #[test]
+    fn short_path_many_dirs() {
+        let home = Path::new("/home/user");
+        pretty_assertions::assert_eq!(
+            super::short_path(Path::new("/home/user/one/two/three/four/five"), home),
+            "~/o/t/t/f/five"
+        );
+    }
+
+    #[test]
+    fn short_path_outside_home() {
+        let home = Path::new("/home/user");
+        pretty_assertions::assert_eq!(super::short_path(Path::new("/opt/pkg/foo"), home), "/o/p/foo");
     }
 }
