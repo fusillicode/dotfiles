@@ -13,6 +13,7 @@ publish = false
 
 [dependencies]
 agm_core = { path = "../core" }
+ytil_tui = { workspace = true }
 zellij-tile = { git = "https://github.com/zellij-org/zellij.git", branch = "main" }
 
 [dev-dependencies]
