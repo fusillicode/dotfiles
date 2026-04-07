@@ -41,6 +41,7 @@ dependencies = [
  "assert2",
  "pretty_assertions",
  "rstest",
+ "ytil_tui",
  "zellij-tile",
 ]
 

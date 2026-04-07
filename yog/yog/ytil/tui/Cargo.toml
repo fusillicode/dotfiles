@@ -11,7 +11,7 @@ keywords = ["tui", "terminal", "prompt", "widgets"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-chrono = { workspace = true }
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 owo-colors = { workspace = true }
 rootcause = { workspace = true }
 skim = { version = "4" }
@@ -19,6 +19,7 @@ ytil_git = { workspace = true }
 
 [dev-dependencies]
 assert2 = { workspace = true }
+chrono = { workspace = true }
 pretty_assertions = { workspace = true }
 rstest = { workspace = true }
 ytil_git = { workspace = true, features = ["test-utils"] }
