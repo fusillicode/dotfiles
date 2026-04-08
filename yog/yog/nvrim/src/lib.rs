@@ -14,7 +14,7 @@ mod macros;
 
 /// [`nvim_oxi::api::Buffer`] helpers.
 mod buffer;
-/// CLI flags for `fd` and `ripgrep`.
+/// CLI flags for `fd` and `ripgrep`, used by plugins.
 mod cli;
 /// User commands.
 mod cmds;
@@ -24,6 +24,7 @@ mod colorscheme;
 mod diagnostics;
 /// Core (non‑plugin) keymaps.
 pub mod keymaps;
+/// Window layout helpers.
 pub mod layout;
 /// Utilities to handle linters output
 mod linters;
@@ -38,13 +39,12 @@ pub mod vim_opts;
 /// Plugin entry point.
 ///
 /// Returns a namespaced [`Dictionary`] whose values are grouped
-/// sub‑dictionaries (diagnostics, UI, CLI flags, keymaps, etc.) plus a
+/// sub‑dictionaries (diagnostics, UI, keymaps, plugin helpers, etc.) plus a
 /// few standalone helpers.
 #[ytil_noxi::plugin]
 fn nvrim() -> Dictionary {
     ytil_noxi::dict! {
         "buffer": buffer::dict(),
-        "cli": cli::dict(),
         "cmds": cmds::dict(),
         "colorscheme": colorscheme::dict(),
         "diagnostics": diagnostics::dict(),

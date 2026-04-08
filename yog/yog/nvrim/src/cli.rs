@@ -1,8 +1,6 @@
 //! CLI flag generation helpers for search tools (`fd`, `rg`).
 //!
-//! Centralizes glob blacklist + base flags; exposes a dictionary with per‑tool flag builders for Lua.
-
-use nvim_oxi::Dictionary;
+//! Centralizes glob blacklist + base flags for Rust and plugin-facing helpers.
 
 mod fd;
 mod rg;
@@ -17,14 +15,6 @@ pub const GLOB_BLACKLIST: [&str; 7] = [
     "**/.elixir_ls/*",
     "**/node_modules/*",
 ];
-
-/// [`Dictionary`] of CLI flag generators.
-pub fn dict() -> Dictionary {
-    dict! {
-        "get_fd_flags": fn_from!(fd::FdCliFlags::get),
-        "get_rg_flags": fn_from!(rg::RgCliFlags::get),
-    }
-}
 
 /// Trait for generating CLI flags for search tools.
 pub trait CliFlags {
@@ -42,4 +32,14 @@ pub trait CliFlags {
             .chain(GLOB_BLACKLIST.into_iter().map(Self::glob_flag))
             .collect::<Vec<_>>()
     }
+}
+
+/// Returns the `fd` flags used by `fzf-lua` file pickers.
+pub fn get_fd_flags((): ()) -> Vec<String> {
+    fd::FdCliFlags::get(())
+}
+
+/// Returns the `rg` flags used by `fzf-lua` grep pickers.
+pub fn get_rg_flags((): ()) -> Vec<String> {
+    rg::RgCliFlags::get(())
 }

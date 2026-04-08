@@ -64,10 +64,12 @@ return {
       },
       files      = {
         -- Jump to line! https://github.com/ibhagwan/fzf-lua/discussions/2032#discussioncomment-13046310
-        line_query = true,
+        line_query = function(q)
+          return nvrim.plugins.fzf_lua.parse_line_query(q, plugin.get_last_query())
+        end,
         winopts    = { title = '', },
         fzf_opts   = { ['--ansi'] = true, },
-        fd_opts    = table.concat(nvrim.cli.get_fd_flags(), ' '),
+        fd_opts    = table.concat(nvrim.plugins.fzf_lua.get_fd_flags(), ' '),
         git_icons  = true,
       },
       buffers    = {
@@ -77,7 +79,7 @@ return {
       grep       = vim.tbl_extend('error',
         {
           rg_glob        = true,
-          rg_opts        = table.concat(nvrim.cli.get_rg_flags(), ' '),
+          rg_opts        = table.concat(nvrim.plugins.fzf_lua.get_rg_flags(), ' '),
           hidden         = true,
           glob_flag      = '--iglob',
           glob_separator = '%s%-%-',
