@@ -51,7 +51,13 @@ impl Session {
             Agent::Claude => Ok(("claude", vec!["--resume".into(), self.id.clone()])),
             Agent::Codex => Ok((
                 "codex",
-                vec!["resume".into(), self.id.clone(), "--cd".into(), workspace.into()],
+                vec![
+                    "resume".into(),
+                    self.id.clone(),
+                    "--no-alt-screen".into(),
+                    "--cd".into(),
+                    workspace.into(),
+                ],
             )),
             Agent::Cursor => Ok((
                 "cursor-agent",
@@ -109,6 +115,7 @@ mod tests {
             vec![
                 "resume".to_owned(),
                 "session-id".to_owned(),
+                "--no-alt-screen".to_owned(),
                 "--cd".to_owned(),
                 workspace_str.to_owned(),
             ]
