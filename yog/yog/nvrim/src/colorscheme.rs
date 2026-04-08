@@ -384,7 +384,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn from_default_highlight_infos_produces_default_lua_hl_opts() {
+    fn test_from_default_highlight_infos_produces_default_lua_hl_opts() {
         let infos = HighlightInfos::default();
         let opts = LuaHlOpts::from(&infos);
         pretty_assertions::assert_eq!(opts.foreground, None);
@@ -399,7 +399,7 @@ mod tests {
     #[case(0xFF_FF_FF, "#FFFFFF")]
     #[case(0xFF_00_00, "#FF0000")]
     #[case(0x00_20_20, "#002020")]
-    fn from_highlight_infos_converts_foreground_to_hex(#[case] rgb: u32, #[case] expected: &str) {
+    fn test_from_highlight_infos_converts_foreground_to_hex(#[case] rgb: u32, #[case] expected: &str) {
         let mut infos = HighlightInfos::default();
         infos.foreground = Some(rgb);
         pretty_assertions::assert_eq!(LuaHlOpts::from(&infos).foreground.as_deref(), Some(expected));
@@ -408,21 +408,21 @@ mod tests {
     #[rstest]
     #[case(0xFF_FF_FF, "#FFFFFF")]
     #[case(0x00_20_20, "#002020")]
-    fn from_highlight_infos_converts_background_to_hex(#[case] rgb: u32, #[case] expected: &str) {
+    fn test_from_highlight_infos_converts_background_to_hex(#[case] rgb: u32, #[case] expected: &str) {
         let mut infos = HighlightInfos::default();
         infos.background = Some(rgb);
         pretty_assertions::assert_eq!(LuaHlOpts::from(&infos).background.as_deref(), Some(expected));
     }
 
     #[test]
-    fn from_highlight_infos_converts_special_to_hex() {
+    fn test_from_highlight_infos_converts_special_to_hex() {
         let mut infos = HighlightInfos::default();
         infos.special = Some(0xFF_00_00);
         pretty_assertions::assert_eq!(LuaHlOpts::from(&infos).special_color.as_deref(), Some("#FF0000"));
     }
 
     #[test]
-    fn from_highlight_infos_maps_boolean_fields() {
+    fn test_from_highlight_infos_maps_boolean_fields() {
         let mut infos = HighlightInfos::default();
         infos.bold = Some(true);
         infos.italic = Some(false);
@@ -441,7 +441,7 @@ mod tests {
     }
 
     #[test]
-    fn from_highlight_infos_maps_blend() {
+    fn test_from_highlight_infos_maps_blend() {
         let mut infos = HighlightInfos::default();
         infos.blend = Some(50);
         pretty_assertions::assert_eq!(LuaHlOpts::from(&infos).blend, Some(50));

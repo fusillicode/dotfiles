@@ -236,7 +236,7 @@ mod tests {
     #[case("gemini", Ok(Agent::Gemini))]
     #[case("opencode", Ok(Agent::Opencode))]
     #[case("unknown", Err("invalid agent: \"unknown\"".to_string()))]
-    fn agent_from_name_works_as_expected(#[case] name: &str, #[case] expected: Result<Agent, String>) {
+    fn test_agent_from_name_works_as_expected(#[case] name: &str, #[case] expected: Result<Agent, String>) {
         let actual = Agent::from_name(name).map_err(|e| e.to_string());
         pretty_assertions::assert_eq!(actual, expected);
     }
@@ -248,7 +248,7 @@ mod tests {
     #[case("Gemini-1.5-Pro", Some(Agent::Gemini))]
     #[case("OpenCode-Agent", Some(Agent::Opencode))]
     #[case("Vim", None)]
-    fn agent_detect_works_as_expected(#[case] name: &str, #[case] expected: Option<Agent>) {
+    fn test_agent_detect_works_as_expected(#[case] name: &str, #[case] expected: Option<Agent>) {
         pretty_assertions::assert_eq!(Agent::detect(name), expected);
     }
 
@@ -258,7 +258,7 @@ mod tests {
     #[case(Agent::Codex)]
     #[case(Agent::Gemini)]
     #[case(Agent::Opencode)]
-    fn hook_command_never_fails_when_zellij_unavailable(#[case] agent: Agent) {
+    fn test_hook_command_never_fails_when_zellij_unavailable(#[case] agent: Agent) {
         let cmd = agent.hook_command(AgentEventKind::Busy);
         assert2::assert!(cmd.contains("cat >/dev/null 2>&1 || true;"));
         assert2::assert!(cmd.contains("zellij pipe --name agm-agent"));

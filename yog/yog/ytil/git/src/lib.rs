@@ -278,7 +278,7 @@ mod tests {
     #[case::modified_index(Some(IndexState::Modified), None, false)]
     #[case::modified_worktree(None, Some(WorktreeState::Modified), false)]
     #[case::none(None, None, false)]
-    fn git_status_entry_is_new_cases(
+    fn test_git_status_entry_is_new_cases(
         #[case] index_state: Option<IndexState>,
         #[case] worktree_state: Option<WorktreeState>,
         #[case] expected: bool,
@@ -297,7 +297,7 @@ mod tests {
     #[case::worktree_only_new(None, Some(WorktreeState::New), false)]
     #[case::both_staged_and_worktree(Some(IndexState::Modified), Some(WorktreeState::Modified), true)]
     #[case::none(None, None, false)]
-    fn git_status_entry_is_staged_cases(
+    fn test_git_status_entry_is_staged_cases(
         #[case] index_state: Option<IndexState>,
         #[case] worktree_state: Option<WorktreeState>,
         #[case] expected: bool,
@@ -313,7 +313,7 @@ mod tests {
     #[case(Status::INDEX_RENAMED, Some(IndexState::Renamed))]
     #[case(Status::INDEX_TYPECHANGE, Some(IndexState::Typechange))]
     #[case(Status::WT_MODIFIED, None)]
-    fn index_state_new_maps_each_flag(#[case] input: Status, #[case] expected: Option<IndexState>) {
+    fn test_index_state_new_maps_each_flag(#[case] input: Status, #[case] expected: Option<IndexState>) {
         assert_eq!(IndexState::new(&input), expected);
     }
 
@@ -325,7 +325,7 @@ mod tests {
     #[case(Status::WT_TYPECHANGE, Some(WorktreeState::Typechange))]
     #[case(Status::WT_UNREADABLE, Some(WorktreeState::Unreadable))]
     #[case(Status::INDEX_MODIFIED, None)]
-    fn worktree_state_new_maps_each_flag(#[case] input: Status, #[case] expected: Option<WorktreeState>) {
+    fn test_worktree_state_new_maps_each_flag(#[case] input: Status, #[case] expected: Option<WorktreeState>) {
         assert_eq!(WorktreeState::new(&input), expected);
     }
 

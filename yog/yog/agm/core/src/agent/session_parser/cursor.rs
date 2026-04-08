@@ -142,13 +142,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn decodes_cursor_meta_hex_payload() {
+    fn test_decodes_cursor_meta_hex_payload() {
         assert2::assert!(let Ok(decoded) = decode_hex_string("7b226e616d65223a225361666520526562617365227d"));
         pretty_assertions::assert_eq!(decoded, "{\"name\":\"Safe Rebase\"}");
     }
 
     #[test]
-    fn parses_cursor_session_from_meta_json() {
+    fn test_parses_cursor_session_from_meta_json() {
         let tempdir = tempdir().unwrap();
         let workspace = tempdir.path().join("workspace");
         std::fs::create_dir_all(&workspace).unwrap();
@@ -161,7 +161,7 @@ mod tests {
     }
 
     #[test]
-    fn extracts_cursor_workspace_from_known_workspaces_first() {
+    fn test_extracts_cursor_workspace_from_known_workspaces_first() {
         let tempdir = tempdir().unwrap();
         let workspace = tempdir.path().join("work").join("dotfiles");
         std::fs::create_dir_all(&workspace).unwrap();
@@ -172,7 +172,7 @@ mod tests {
     }
 
     #[test]
-    fn extracts_cursor_workspace_from_generic_path_candidates() {
+    fn test_extracts_cursor_workspace_from_generic_path_candidates() {
         let tempdir = tempdir().unwrap();
         let workspace = tempdir.path().join("work").join("repo");
         let ignored = tempdir.path().join("home").join(".cursor");

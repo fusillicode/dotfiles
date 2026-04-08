@@ -257,7 +257,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn tab_state_entry_serialization_roundtrip_works_as_expected() {
+    fn test_tab_state_entry_serialization_roundtrip_works_as_expected() {
         let entry = TabStateEntry {
             tab_id: 1,
             cwd: Some(PathBuf::from("/tmp")),
@@ -276,7 +276,7 @@ mod tests {
     }
 
     #[test]
-    fn short_path_under_home() {
+    fn test_short_path_under_home() {
         let home = Path::new("/home/user");
         pretty_assertions::assert_eq!(
             super::short_path(Path::new("/home/user/src/pkg/myproject"), home),
@@ -285,7 +285,7 @@ mod tests {
     }
 
     #[test]
-    fn short_path_many_dirs() {
+    fn test_short_path_many_dirs() {
         let home = Path::new("/home/user");
         pretty_assertions::assert_eq!(
             super::short_path(Path::new("/home/user/one/two/three/four/five"), home),
@@ -294,7 +294,7 @@ mod tests {
     }
 
     #[test]
-    fn short_path_outside_home() {
+    fn test_short_path_outside_home() {
         let home = Path::new("/home/user");
         pretty_assertions::assert_eq!(super::short_path(Path::new("/opt/pkg/foo"), home), "/o/p/foo");
     }

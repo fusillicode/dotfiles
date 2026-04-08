@@ -178,7 +178,7 @@ mod tests {
     #[case::black("0,0,0", "#000000")]
     #[case::white("255,255,255", "#ffffff")]
     #[case::red_with_extra_component("255,0,0,123", "#ff0000")]
-    fn rgb_to_hex_when_valid_rgb_returns_hex(#[case] input: &str, #[case] expected: &str) {
+    fn test_rgb_to_hex_when_valid_rgb_returns_hex(#[case] input: &str, #[case] expected: &str) {
         assert2::assert!(let Ok(actual) = rgb_to_hex(input));
         pretty_assertions::assert_eq!(actual, expected);
     }
@@ -190,7 +190,7 @@ mod tests {
     #[case::out_of_range_red("256,0,0", "cannot parse str as u8 color code")]
     #[case::invalid_green("255,abc,0", "cannot parse str as u8 color code")]
     #[case::invalid_blue("255,0,def", "cannot parse str as u8 color code")]
-    fn rgb_to_hex_when_invalid_input_returns_error(#[case] input: &str, #[case] expected_ctx: &str) {
+    fn test_rgb_to_hex_when_invalid_input_returns_error(#[case] input: &str, #[case] expected_ctx: &str) {
         assert2::assert!(let Err(err) = rgb_to_hex(input));
         assert_eq!(err.format_current_context().to_string(), expected_ctx);
     }
@@ -215,7 +215,7 @@ mod tests {
     }
 
     #[test]
-    fn date_time_str_to_chrono_parse_from_str_when_invalid_input_returns_error() {
+    fn test_date_time_str_to_chrono_parse_from_str_when_invalid_input_returns_error() {
         assert2::assert!(let Err(err) = date_time_str_to_chrono_parse_from_str("invalid"));
         assert_eq!(
             err.format_current_context().to_string(),
@@ -226,7 +226,7 @@ mod tests {
     #[rstest]
     #[case::non_numeric_input("abc", "cannot convert input to i64")]
     #[case::empty_input("", "cannot convert input to i64")]
-    fn unix_timestamp_to_iso_8601_date_time_when_invalid_input_returns_error(
+    fn test_unix_timestamp_to_iso_8601_date_time_when_invalid_input_returns_error(
         #[case] input: &str,
         #[case] expected_ctx: &str,
     ) {

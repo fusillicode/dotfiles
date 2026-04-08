@@ -180,7 +180,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn exec_success_returns_output() {
+    fn test_exec_success_returns_output() {
         let mut cmd = Command::new("bash");
         cmd.args(["-c", "echo -n ok"]);
 
@@ -191,7 +191,7 @@ mod tests {
     }
 
     #[test]
-    fn exec_captures_non_zero_status() {
+    fn test_exec_captures_non_zero_status() {
         let mut cmd = Command::new("bash");
         cmd.args(["-c", "echo foo error 1>&2; exit 7"]);
 

@@ -51,14 +51,14 @@ mod tests {
     #[case::no_help(vec!["arg1", "arg2"], false)]
     #[case::has_help(vec!["--help"], true)]
     #[case::help_among_others(vec!["foo", "--help", "bar"], true)]
-    fn has_help_for_vec_returns_expected(#[case] args: Vec<&str>, #[case] expected: bool) {
+    fn test_has_help_for_vec_returns_expected(#[case] args: Vec<&str>, #[case] expected: bool) {
         pretty_assertions::assert_eq!(args.has_help(), expected);
     }
 
     #[rstest]
     #[case::empty_vec(Vec::<String>::new(), Vec::<String>::new())]
     #[case::clones_all(vec!["a".to_owned(), "b".to_owned()], vec!["a".to_owned(), "b".to_owned()])]
-    fn all_for_vec_returns_clone(#[case] args: Vec<String>, #[case] expected: Vec<String>) {
+    fn test_all_for_vec_returns_clone(#[case] args: Vec<String>, #[case] expected: Vec<String>) {
         pretty_assertions::assert_eq!(args.all(), expected);
     }
 }

@@ -157,7 +157,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn rm_f_is_idempotent_for_missing_path() {
+    fn test_rm_f_is_idempotent_for_missing_path() {
         let tmp = tempfile::NamedTempFile::new().unwrap();
         let path = tmp.path().to_path_buf();
 
@@ -168,7 +168,7 @@ mod tests {
     }
 
     #[test]
-    fn rm_matching_files_dry_run_collects_paths_without_removing() {
+    fn test_rm_matching_files_dry_run_collects_paths_without_removing() {
         let dir = tempfile::tempdir().unwrap();
         let ds_store = dir.path().join(".DS_Store");
         std::fs::write(&ds_store, b"dummy").unwrap();
@@ -181,7 +181,7 @@ mod tests {
     }
 
     #[test]
-    fn rm_matching_files_removes_matching_files() {
+    fn test_rm_matching_files_removes_matching_files() {
         let dir = tempfile::tempdir().unwrap();
         let ds_store = dir.path().join(".DS_Store");
         std::fs::write(&ds_store, b"dummy").unwrap();
@@ -194,7 +194,7 @@ mod tests {
     }
 
     #[test]
-    fn rm_matching_files_excludes_specified_dirs() {
+    fn test_rm_matching_files_excludes_specified_dirs() {
         let dir = tempfile::tempdir().unwrap();
         let excluded_dir = dir.path().join("node_modules");
         std::fs::create_dir(&excluded_dir).unwrap();
@@ -215,7 +215,7 @@ mod tests {
     }
 
     #[test]
-    fn rm_matching_files_handles_nested_files() {
+    fn test_rm_matching_files_handles_nested_files() {
         let dir = tempfile::tempdir().unwrap();
         let sub_dir = dir.path().join("subdir");
         std::fs::create_dir(&sub_dir).unwrap();
@@ -230,7 +230,7 @@ mod tests {
     }
 
     #[test]
-    fn rm_matching_files_collects_errors_for_unreadable_dirs() {
+    fn test_rm_matching_files_collects_errors_for_unreadable_dirs() {
         let dir = tempfile::tempdir().unwrap();
         let unreadable_dir = dir.path().join("unreadable");
         std::fs::create_dir(&unreadable_dir).unwrap();
@@ -244,7 +244,7 @@ mod tests {
     }
 
     #[test]
-    fn rm_matching_files_removes_symlink_and_target() {
+    fn test_rm_matching_files_removes_symlink_and_target() {
         let dir = tempfile::tempdir().unwrap();
         let target = dir.path().join("target.txt");
         std::fs::write(&target, b"content").unwrap();

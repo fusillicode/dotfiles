@@ -83,7 +83,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn build_resume_command_matches_agent() {
+    fn test_build_resume_command_matches_agent() {
         let tempdir = tempdir().unwrap();
         let workspace = tempdir.path().join("workspace");
         std::fs::create_dir_all(&workspace).unwrap();

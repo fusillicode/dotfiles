@@ -212,14 +212,14 @@ fn select_options(multi: bool) -> SkimOptions {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn require_single_returns_only_item() {
+    fn test_require_single_returns_only_item() {
         let selected = vec![1];
         assert2::assert!(let Ok(item) = super::require_single(&selected, "items"));
         assert_eq!(*item, 1);
     }
 
     #[test]
-    fn require_single_errors_for_multiple_items() {
+    fn test_require_single_errors_for_multiple_items() {
         let selected = vec![1, 2];
         assert2::assert!(let Err(err) = super::require_single(&selected, "items"));
         assert!(err.to_string().contains("expected exactly one selection"));

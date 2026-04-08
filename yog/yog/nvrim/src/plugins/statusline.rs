@@ -264,7 +264,7 @@ mod tests {
     }
 
     #[test]
-    fn statusline_draw_when_current_buffer_has_diagnostics_renders_buffer_prefix() {
+    fn test_statusline_draw_when_current_buffer_has_diagnostics_renders_buffer_prefix() {
         let statusline = Statusline {
             current_buffer_path: Some("foo"),
             current_buffer_diags: [(DiagnosticSeverity::Info, 1), (DiagnosticSeverity::Error, 3)]
@@ -280,7 +280,7 @@ mod tests {
     }
 
     #[test]
-    fn statusline_draw_when_workspace_has_diagnostics_renders_workspace_suffix() {
+    fn test_statusline_draw_when_workspace_has_diagnostics_renders_workspace_suffix() {
         let statusline = Statusline {
             current_buffer_path: Some("foo"),
             current_buffer_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
@@ -296,7 +296,7 @@ mod tests {
     }
 
     #[test]
-    fn statusline_draw_when_both_buffer_and_workspace_have_diagnostics_renders_both_prefix_and_suffix() {
+    fn test_statusline_draw_when_both_buffer_and_workspace_have_diagnostics_renders_both_prefix_and_suffix() {
         let statusline = Statusline {
             current_buffer_path: Some("foo"),
             current_buffer_diags: [(DiagnosticSeverity::Hint, 3), (DiagnosticSeverity::Warn, 2)]
@@ -314,7 +314,7 @@ mod tests {
     }
 
     #[test]
-    fn statusline_draw_when_buffer_diagnostics_inserted_unordered_orders_by_severity() {
+    fn test_statusline_draw_when_buffer_diagnostics_inserted_unordered_orders_by_severity() {
         // Insert in non-canonical order (Hint before Warn) and ensure output orders by severity (Warn then Hint).
         let statusline = Statusline {
             current_buffer_path: Some("foo"),
@@ -336,13 +336,13 @@ mod tests {
     #[case::info(DiagnosticSeverity::Info)]
     #[case::hint(DiagnosticSeverity::Hint)]
     #[case::other(DiagnosticSeverity::Other)]
-    fn draw_diagnostics_when_zero_count_returns_empty_string(#[case] severity: DiagnosticSeverity) {
+    fn test_draw_diagnostics_when_zero_count_returns_empty_string(#[case] severity: DiagnosticSeverity) {
         // Any severity with zero count should yield empty string.
         pretty_assertions::assert_eq!(draw_diagnostics((severity, 0)), String::new());
     }
 
     #[test]
-    fn statusline_draw_when_all_severity_counts_present_orders_buffer_and_workspace_diagnostics_by_severity() {
+    fn test_statusline_draw_when_all_severity_counts_present_orders_buffer_and_workspace_diagnostics_by_severity() {
         // Insert diagnostics in deliberately scrambled order to validate deterministic ordering.
         let statusline = Statusline {
             current_buffer_path: Some("foo"),
@@ -372,7 +372,7 @@ mod tests {
     }
 
     #[test]
-    fn statusline_draw_when_no_path_and_no_cursor_renders_only_highlight_groups() {
+    fn test_statusline_draw_when_no_path_and_no_cursor_renders_only_highlight_groups() {
         // When both path and cursor position are absent, only the highlight groups remain.
         let statusline = Statusline {
             current_buffer_path: None,
@@ -386,7 +386,7 @@ mod tests {
     #[rstest]
     #[case::zero_column(0, "%#StatusLine# foo 10:1 %#StatusLine#")]
     #[case::non_zero_column(5, "%#StatusLine# foo 10:6 %#StatusLine#")]
-    fn statusline_draw_when_cursor_column_renders_correctly(#[case] col: usize, #[case] expected: &str) {
+    fn test_statusline_draw_when_cursor_column_renders_correctly(#[case] col: usize, #[case] expected: &str) {
         // Column zero (internal 0-based) must render as 1 (human-facing).
         // Non-zero column must render raw + 1.
         let statusline = Statusline {

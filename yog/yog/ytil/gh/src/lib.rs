@@ -237,7 +237,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn extract_pr_id_form_url_returns_the_expected_error_when_host_cannot_be_extracted() {
+    fn test_extract_pr_id_form_url_returns_the_expected_error_when_host_cannot_be_extracted() {
         let url = Url::parse("mailto:foo@bar.com").unwrap();
         assert2::assert!(let Err(err) = extract_pr_id_form_url(&url));
         assert_eq!(
@@ -247,35 +247,35 @@ mod tests {
     }
 
     #[test]
-    fn extract_pr_id_form_url_returns_the_expected_error_when_url_is_not_from_github() {
+    fn test_extract_pr_id_form_url_returns_the_expected_error_when_url_is_not_from_github() {
         let url = Url::parse("https://foo.bar").unwrap();
         assert2::assert!(let Err(err) = extract_pr_id_form_url(&url));
         assert_eq!(err.format_current_context().to_string(), "error host mismatch");
     }
 
     #[test]
-    fn extract_pr_id_form_url_returns_the_expected_error_when_url_doesnt_have_path_segments() {
+    fn test_extract_pr_id_form_url_returns_the_expected_error_when_url_doesnt_have_path_segments() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}")).unwrap();
         assert2::assert!(let Err(err) = extract_pr_id_form_url(&url));
         assert_eq!(err.format_current_context().to_string(), "error missing PR ID prefix");
     }
 
     #[test]
-    fn extract_pr_id_form_url_returns_the_expected_error_when_url_doesnt_have_pr_id() {
+    fn test_extract_pr_id_form_url_returns_the_expected_error_when_url_doesnt_have_pr_id() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/pull")).unwrap();
         assert2::assert!(let Err(err) = extract_pr_id_form_url(&url));
         assert_eq!(err.format_current_context().to_string(), "error missing PR ID");
     }
 
     #[test]
-    fn extract_pr_id_form_url_returns_the_expected_error_when_url_doenst_have_the_expected_pr_id_prefix() {
+    fn test_extract_pr_id_form_url_returns_the_expected_error_when_url_doenst_have_the_expected_pr_id_prefix() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/foo")).unwrap();
         assert2::assert!(let Err(err) = extract_pr_id_form_url(&url));
         assert_eq!(err.format_current_context().to_string(), "error missing PR ID prefix");
     }
 
     #[test]
-    fn extract_pr_id_form_url_returns_the_expected_error_when_url_has_multiple_pr_id_prefixes() {
+    fn test_extract_pr_id_form_url_returns_the_expected_error_when_url_has_multiple_pr_id_prefixes() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/pull/42/pull/43")).unwrap();
         assert2::assert!(let Err(err) = extract_pr_id_form_url(&url));
         assert_eq!(
@@ -285,26 +285,26 @@ mod tests {
     }
 
     #[test]
-    fn extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_that_ends_with_the_pr_id() {
+    fn test_extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_that_ends_with_the_pr_id() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/pull/42")).unwrap();
         assert_eq!(extract_pr_id_form_url(&url).unwrap(), "42");
     }
 
     #[test]
-    fn extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_that_does_not_end_with_the_pr_id() {
+    fn test_extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_that_does_not_end_with_the_pr_id() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/pull/42/foo")).unwrap();
         assert_eq!(extract_pr_id_form_url(&url).unwrap(), "42");
     }
 
     #[test]
-    fn extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_if_pr_id_prefix_is_not_1st_path_segment()
-    {
+    fn test_extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_if_pr_id_prefix_is_not_1st_path_segment()
+     {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/foo/pull/42/foo")).unwrap();
         assert_eq!(extract_pr_id_form_url(&url).unwrap(), "42");
     }
 
     #[test]
-    fn extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_if_pr_is_in_query_string() {
+    fn test_extract_pr_id_form_url_returns_the_expected_pr_id_from_a_github_pr_url_if_pr_is_in_query_string() {
         let url = Url::parse(&format!(
             "https://{GITHUB_HOST}/<OWNER>/<REPO>/actions/runs/<RUN_ID>?pr=42"
         ))

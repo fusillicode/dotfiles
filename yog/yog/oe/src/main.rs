@@ -116,7 +116,7 @@ mod tests {
     #[case::multiple_quotes("a'b'c", "a'\\''b'\\''c")]
     #[case::only_quote("'", "'\\''")]
     #[case::empty("", "")]
-    fn escape_single_quotes_produces_expected_output(#[case] input: &str, #[case] expected: &str) {
+    fn test_escape_single_quotes_produces_expected_output(#[case] input: &str, #[case] expected: &str) {
         pretty_assertions::assert_eq!(escape_single_quotes(input), expected);
     }
 }

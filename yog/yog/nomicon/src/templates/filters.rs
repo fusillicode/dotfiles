@@ -26,7 +26,7 @@ mod tests {
     }
 
     #[test]
-    fn format_to_iso_8601_works_as_expected() {
+    fn test_format_to_iso_8601_works_as_expected() {
         #[derive(Template)]
         #[template(source = "{{ value | format_to_iso_8601 }}", ext = "txt")]
         struct DummyFilterTemplate {

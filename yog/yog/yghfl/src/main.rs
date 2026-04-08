@@ -147,7 +147,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_relative_to_home_dir() {
+    fn test_build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_relative_to_home_dir() {
         // Arrange
         temp_env::with_vars([("HOME", Some("/Users/Foo"))], || {
             let hx_status_line = HxStatusLine {
@@ -169,7 +169,7 @@ mod tests {
     }
 
     #[test]
-    fn build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_relative_to_hx_root() {
+    fn test_build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_relative_to_hx_root() {
         // Arrange
         let hx_status_line = HxStatusLine {
             file_path: Path::new("src/bar/baz.rs").into(),
@@ -189,7 +189,7 @@ mod tests {
     }
 
     #[test]
-    fn build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_absolute() {
+    fn test_build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_absolute() {
         // Arrange
         let hx_status_line = HxStatusLine {
             file_path: Path::new("/Users/Foo/dev/src/bar/baz.rs").into(),

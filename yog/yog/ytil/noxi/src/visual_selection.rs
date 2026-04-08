@@ -354,7 +354,7 @@ mod tests {
     #[case::same_line_self_lower_col(pos(1, 0), pos(1, 5), pos(1, 0), pos(1, 5))]
     #[case::same_line_self_higher_col(pos(1, 10), pos(1, 5), pos(1, 5), pos(1, 10))]
     #[case::positions_identical(pos(1, 5), pos(1, 5), pos(1, 5), pos(1, 5))]
-    fn pos_sort_returns_expected_order(
+    fn test_pos_sort_returns_expected_order(
         #[case] self_pos: Pos,
         #[case] other_pos: Pos,
         #[case] expected_first: Pos,

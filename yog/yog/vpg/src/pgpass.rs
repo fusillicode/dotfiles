@@ -199,7 +199,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn creds_try_from_returns_the_expected_creds() {
+    fn test_creds_try_from_returns_the_expected_creds() {
         assert2::assert!(let Ok(actual) = ConnectionParams::try_from((42, "host:5432:db:user:pwd")));
         assert_eq!(
             actual,
@@ -215,13 +215,13 @@ mod tests {
     }
 
     #[test]
-    fn creds_try_from_returns_an_error_if_port_is_not_a_number() {
+    fn test_creds_try_from_returns_an_error_if_port_is_not_a_number() {
         assert2::assert!(let Err(err) = ConnectionParams::try_from((42, "host:foo:db:user:pwd")));
         assert_eq!(err.format_current_context().to_string(), "unexpected port");
     }
 
     #[test]
-    fn creds_try_from_returns_an_error_if_str_is_malformed() {
+    fn test_creds_try_from_returns_an_error_if_str_is_malformed() {
         assert2::assert!(let Err(err) = ConnectionParams::try_from((42, "host:5432:db:user")));
         assert_eq!(
             err.format_current_context().to_string(),
@@ -230,7 +230,7 @@ mod tests {
     }
 
     #[test]
-    fn creds_db_url_returns_the_expected_output() {
+    fn test_creds_db_url_returns_the_expected_output() {
         assert_eq!(
             ConnectionParams {
                 idx: 42,

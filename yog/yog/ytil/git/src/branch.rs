@@ -436,7 +436,7 @@ mod tests {
     }
 
     #[test]
-    fn branch_try_from_converts_local_branch_successfully() {
+    fn test_branch_try_from_converts_local_branch_successfully() {
         let (_temp_dir, repo) = crate::tests::init_test_repo(Some(Time::new(42, 3)));
 
         let head_commit = repo.head().unwrap().peel_to_commit().unwrap();
@@ -457,7 +457,7 @@ mod tests {
     #[rstest]
     #[case::local_variant(local("main"), "main")]
     #[case::remote_variant(remote("origin/feature"), "origin/feature")]
-    fn branch_name_when_variant_returns_name(#[case] branch: Branch, #[case] expected: &str) {
+    fn test_branch_name_when_variant_returns_name(#[case] branch: Branch, #[case] expected: &str) {
         pretty_assertions::assert_eq!(branch.name(), expected);
     }
 
@@ -465,7 +465,7 @@ mod tests {
     #[case::local_no_origin(local("main"), "main")]
     #[case::remote_origin_prefix(remote("origin/main"), "main")]
     #[case::remote_other_prefix(remote("upstream/feature"), "upstream/feature")]
-    fn branch_name_no_origin_when_name_returns_trimmed(#[case] branch: Branch, #[case] expected: &str) {
+    fn test_branch_name_no_origin_when_name_returns_trimmed(#[case] branch: Branch, #[case] expected: &str) {
         pretty_assertions::assert_eq!(branch.name_no_origin(), expected);
     }
 

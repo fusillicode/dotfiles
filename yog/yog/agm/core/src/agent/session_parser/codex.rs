@@ -143,7 +143,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_codex_session_from_session_meta() {
+    fn test_parses_codex_session_from_session_meta() {
         let tempdir = tempdir().unwrap();
         let workspace = tempdir.path().join("workspace");
         std::fs::create_dir_all(&workspace).unwrap();
@@ -166,7 +166,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_codex_first_user_message_preview() {
+    fn test_parses_codex_first_user_message_preview() {
         let content = concat!(
             "{\"timestamp\":\"2026-03-20T06:30:20.312Z\",\"type\":\"session_meta\",\"payload\":{\"id\":\"019d09f0-0d96-7e23-94cd-1f6aad7cdc09\",\"timestamp\":\"2026-03-20T06:30:20.312Z\",\"cwd\":\"/tmp/workspace\"}}\n",
             "{\"timestamp\":\"2026-03-20T06:31:20.312Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"user_message\",\"message\":\"why can't I jump with rust-analyzer to these types?\"}}\n"
@@ -182,7 +182,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_codex_lines_with_unrelated_event_payloads() {
+    fn test_parses_codex_lines_with_unrelated_event_payloads() {
         let content = concat!(
             "{\"timestamp\":\"2026-03-20T06:29:20.312Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"total\":1}}}\n",
             "{\"timestamp\":\"2026-03-20T06:30:20.312Z\",\"type\":\"session_meta\",\"payload\":{\"id\":\"019d09f0-0d96-7e23-94cd-1f6aad7cdc09\",\"timestamp\":\"2026-03-20T06:30:20.312Z\",\"cwd\":\"/tmp/workspace\"}}\n",

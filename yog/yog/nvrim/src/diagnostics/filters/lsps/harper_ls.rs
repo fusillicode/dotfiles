@@ -105,7 +105,7 @@ mod tests {
     use crate::diagnostics::filters::BufferWithPath;
 
     #[test]
-    fn skip_diagnostic_when_path_substring_pattern_not_matched_returns_false() {
+    fn test_skip_diagnostic_when_path_substring_pattern_not_matched_returns_false() {
         let test_blacklist = map! {"stderr": set!["instead of"]};
         let filter = HarperLsFilter {
             source: "Harper",
@@ -126,7 +126,7 @@ mod tests {
     }
 
     #[test]
-    fn skip_diagnostic_when_source_mismatch_returns_false() {
+    fn test_skip_diagnostic_when_source_mismatch_returns_false() {
         let test_blacklist = map! {"stderr": set!["instead of"]};
         let filter = HarperLsFilter {
             source: "Harper",
@@ -147,7 +147,7 @@ mod tests {
     }
 
     #[test]
-    fn skip_diagnostic_when_diagnosed_text_not_in_blacklist_returns_false() {
+    fn test_skip_diagnostic_when_diagnosed_text_not_in_blacklist_returns_false() {
         let test_blacklist = map! {"stdout": set!["instead of"]};
         let filter = HarperLsFilter {
             source: "Harper",
@@ -168,7 +168,7 @@ mod tests {
     }
 
     #[test]
-    fn skip_diagnostic_when_diagnosed_text_in_blacklist_but_message_no_match_returns_false() {
+    fn test_skip_diagnostic_when_diagnosed_text_in_blacklist_but_message_no_match_returns_false() {
         let test_blacklist = map! {"stderr": set!["instead of"]};
         let filter = HarperLsFilter {
             source: "Harper",
@@ -189,7 +189,7 @@ mod tests {
     }
 
     #[test]
-    fn skip_diagnostic_when_all_conditions_met_returns_true() {
+    fn test_skip_diagnostic_when_all_conditions_met_returns_true() {
         let test_blacklist = map! {"stderr": set!["instead of"]};
         let filter = HarperLsFilter {
             source: "Harper",
@@ -210,7 +210,7 @@ mod tests {
     }
 
     #[test]
-    fn skip_diagnostic_when_diagnosed_text_cannot_be_extracted_returns_error() {
+    fn test_skip_diagnostic_when_diagnosed_text_cannot_be_extracted_returns_error() {
         let test_blacklist = map! {"stderr": set!["instead of"]};
         let filter = HarperLsFilter {
             source: "Harper",
@@ -231,7 +231,7 @@ mod tests {
     }
 
     #[test]
-    fn skip_diagnostic_when_lnum_greater_than_end_lnum_returns_error() {
+    fn test_skip_diagnostic_when_lnum_greater_than_end_lnum_returns_error() {
         let test_blacklist = map! {"stderr": set!["instead of"]};
         let filter = HarperLsFilter {
             source: "Harper",
@@ -253,7 +253,7 @@ mod tests {
     }
 
     #[test]
-    fn skip_diagnostic_when_col_greater_than_end_col_returns_error() {
+    fn test_skip_diagnostic_when_col_greater_than_end_col_returns_error() {
         let test_blacklist = map! {"stderr": set!["instead of"]};
         let filter = HarperLsFilter {
             source: "Harper",
@@ -275,7 +275,7 @@ mod tests {
     }
 
     #[test]
-    fn skip_diagnostic_when_start_col_out_of_bounds_returns_error() {
+    fn test_skip_diagnostic_when_start_col_out_of_bounds_returns_error() {
         let test_blacklist = map! {"stderr": set!["instead of"]};
         let filter = HarperLsFilter {
             source: "Harper",
@@ -296,7 +296,7 @@ mod tests {
     }
 
     #[test]
-    fn skip_diagnostic_when_empty_lines_returns_false() {
+    fn test_skip_diagnostic_when_empty_lines_returns_false() {
         let test_blacklist = map! {"stderr": set!["instead of"]};
         let filter = HarperLsFilter {
             source: "Harper",

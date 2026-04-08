@@ -295,7 +295,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn atomic_cp_copies_file_contents() {
+    fn test_atomic_cp_copies_file_contents() {
         let dir = tempfile::tempdir().unwrap();
         let src = dir.path().join("src.txt");
         let dst = dir.path().join("dst.txt");
@@ -308,7 +308,7 @@ mod tests {
     }
 
     #[test]
-    fn atomic_cp_errors_when_missing_source() {
+    fn test_atomic_cp_errors_when_missing_source() {
         let dir = tempfile::tempdir().unwrap();
         let src = dir.path().join("missing.txt");
         let dst = dir.path().join("dst.txt");
@@ -321,7 +321,7 @@ mod tests {
     }
 
     #[test]
-    fn find_matching_recursively_in_dir_returns_the_expected_paths() {
+    fn test_find_matching_recursively_in_dir_returns_the_expected_paths() {
         let dir = tempfile::tempdir().unwrap();
         // layout: a/, a/b/, c.txt, a/b/d.txt
         std::fs::create_dir(dir.path().join("a")).unwrap();
@@ -343,7 +343,7 @@ mod tests {
     }
 
     #[test]
-    fn find_matching_recursively_in_dir_skips_symlink_entries() {
+    fn test_find_matching_recursively_in_dir_skips_symlink_entries() {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let dir = tempfile::tempdir().unwrap();

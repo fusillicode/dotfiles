@@ -153,7 +153,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn created_issue_new_parses_valid_output() {
+    fn test_created_issue_new_parses_valid_output() {
         assert2::assert!(let Ok(actual) = CreatedIssue::new("Test Issue", "https://github.com/owner/repo/issues/123"));
         pretty_assertions::assert_eq!(
             actual,
@@ -170,7 +170,7 @@ mod tests {
     #[case("issues")]
     #[case("https://github.com/owner/repo/123")]
     #[case("repo/issues")]
-    fn created_issue_new_errors_on_invalid_output(#[case] output: &str) {
+    fn test_created_issue_new_errors_on_invalid_output(#[case] output: &str) {
         assert2::assert!(let Err(err) = CreatedIssue::new("title", output));
         assert_eq!(
             err.format_current_context().to_string(),
@@ -181,7 +181,7 @@ mod tests {
     #[rstest]
     #[case("Fix bug", "42", "42-fix-bug")]
     #[case("-Fix bug", "-42-", "42-fix-bug")]
-    fn created_issue_branch_name_formats_correctly(
+    fn test_created_issue_branch_name_formats_correctly(
         #[case] title: &str,
         #[case] issue_nr: &str,
         #[case] expected: &str,

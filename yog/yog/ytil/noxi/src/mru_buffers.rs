@@ -258,7 +258,7 @@ mod tests {
     #[case("au %a  \"file.txt\"", "error parsing buffer id")]
     #[case("1u%a  \"file.txt", "error extracting name")]
     #[case("1u%a  file.txt", "error finding opening quote")]
-    fn from_str_when_invalid_input_returns_error(#[case] input: &str, #[case] expected_err_substr: &str) {
+    fn test_from_str_when_invalid_input_returns_error(#[case] input: &str, #[case] expected_err_substr: &str) {
         let result = MruBuffer::from_str(input);
         assert2::assert!(let Err(err) = result);
         assert!(err.to_string().contains(expected_err_substr));

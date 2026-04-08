@@ -117,7 +117,7 @@ mod tests {
     #[case(CursorPosition { row:1, col: 5}, (0, 5))]
     #[case(CursorPosition { row:10, col: 20}, (9, 20))]
     #[case(CursorPosition { row:0, col: 0}, (0, 0))]
-    fn point_wrap_from_converts_neovim_cursor_to_tree_sitter_point(
+    fn test_point_wrap_from_converts_neovim_cursor_to_tree_sitter_point(
         #[case] input: CursorPosition,
         #[case] expected: (usize, usize),
     ) {
@@ -131,7 +131,7 @@ mod tests {
     }
 
     #[test]
-    fn point_wrap_deref_allows_direct_access_to_point() {
+    fn test_point_wrap_deref_allows_direct_access_to_point() {
         pretty_assertions::assert_eq!(
             *PointWrap::from(CursorPosition { row: 5, col: 10 }),
             Point { row: 4, column: 10 }
@@ -139,7 +139,7 @@ mod tests {
     }
 
     #[test]
-    fn get_enclosing_fn_name_of_node_returns_fn_name_when_inside_function() {
+    fn test_get_enclosing_fn_name_of_node_returns_fn_name_when_inside_function() {
         let result = with_node(
             b"fn test_function() { let x = 1; }",
             Point { row: 0, column: 20 },
@@ -149,7 +149,7 @@ mod tests {
     }
 
     #[test]
-    fn get_enclosing_fn_name_of_node_returns_none_when_not_inside_function() {
+    fn test_get_enclosing_fn_name_of_node_returns_none_when_not_inside_function() {
         let result = with_node(
             b"let x = 1;",
             Point { row: 0, column: 5 },
@@ -159,7 +159,7 @@ mod tests {
     }
 
     #[test]
-    fn get_enclosing_fn_name_of_node_returns_method_name_when_inside_method() {
+    fn test_get_enclosing_fn_name_of_node_returns_method_name_when_inside_method() {
         let result = with_node(
             b"impl Test { fn method(&self) { let x = 1; } }",
             Point { row: 0, column: 25 },
@@ -169,7 +169,7 @@ mod tests {
     }
 
     #[test]
-    fn get_enclosing_fn_name_of_node_returns_none_when_node_is_none() {
+    fn test_get_enclosing_fn_name_of_node_returns_none_when_node_is_none() {
         let result = get_enclosing_fn_name_of_node(b"fn test() {}", None);
         pretty_assertions::assert_eq!(result, None);
     }

@@ -166,7 +166,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn send_text_to_pane_cmd_returns_the_expected_bash_cmd_string() {
+    fn test_send_text_to_pane_cmd_returns_the_expected_bash_cmd_string() {
         assert_eq!(
             send_text_to_pane_cmd("echo hi", 7),
             "wezterm cli send-text echo hi --pane-id '7' --no-paste"
@@ -174,7 +174,7 @@ mod tests {
     }
 
     #[test]
-    fn submit_pane_cmd_returns_the_expected_bash_cmd_string() {
+    fn test_submit_pane_cmd_returns_the_expected_bash_cmd_string() {
         assert_eq!(
             submit_pane_cmd(3),
             "printf \"\\r\" | wezterm cli send-text --pane-id '3' --no-paste"
@@ -182,12 +182,12 @@ mod tests {
     }
 
     #[test]
-    fn activate_pane_cmd_returns_the_expected_bash_cmd_string() {
+    fn test_activate_pane_cmd_returns_the_expected_bash_cmd_string() {
         assert_eq!(activate_pane_cmd(9), "wezterm cli activate-pane --pane-id '9'");
     }
 
     #[test]
-    fn get_sibling_pane_with_titles_returns_the_expected_match_in_same_tab() {
+    fn test_get_sibling_pane_with_titles_returns_the_expected_match_in_same_tab() {
         let panes = vec![
             pane_with(1, 10, "file:///host/home/user/project", "hx"),
             pane_with(2, 10, "file:///host/home/user/project", "shell"),
@@ -198,21 +198,21 @@ mod tests {
     }
 
     #[test]
-    fn get_sibling_pane_with_titles_errors_when_no_title_match() {
+    fn test_get_sibling_pane_with_titles_errors_when_no_title_match() {
         let panes = vec![pane_with(1, 10, "file:///host/home/user/project", "shell")];
         assert2::assert!(let Err(err) = get_sibling_pane_with_titles(&panes, 1, &["hx"]));
         assert!(err.to_string().contains("error finding pane title in tab"));
     }
 
     #[test]
-    fn absolute_cwd_strips_file_uri_prefix() {
+    fn test_absolute_cwd_strips_file_uri_prefix() {
         let pane = pane_with(1, 10, "file:///localhost/Users/alice/src", "hx");
         let abs = pane.absolute_cwd();
         assert!(abs.starts_with("/Users/alice/src"));
     }
 
     #[test]
-    fn is_sibling_terminal_pane_of_works_as_expected() {
+    fn test_is_sibling_terminal_pane_of_works_as_expected() {
         let root = pane_with(1, 10, "file:///localhost/Users/alice/src", "hx");
         let child = pane_with(2, 10, "file:///localhost/Users/alice/src/project", "shell");
         let other_tab = pane_with(3, 11, "file:///localhost/Users/alice/src/project", "shell");
