@@ -239,7 +239,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn draw_statuscolumn_when_no_extmarks_returns_placeholders() {
+    fn test_draw_statuscolumn_when_no_extmarks_returns_placeholders() {
         let out = draw_statuscolumn(
             "foo",
             "42",
@@ -252,7 +252,7 @@ mod tests {
     }
 
     #[test]
-    fn draw_statuscolumn_when_diagnostic_error_and_warn_displays_error() {
+    fn test_draw_statuscolumn_when_diagnostic_error_and_warn_displays_error() {
         let metas = vec![
             mk_extmark_meta(SignHlGroup::DiagnosticError, "E"),
             mk_extmark_meta(SignHlGroup::DiagnosticWarn, "W"),
@@ -273,7 +273,7 @@ mod tests {
     }
 
     #[test]
-    fn draw_statuscolumn_when_git_sign_present_displays_git_sign() {
+    fn test_draw_statuscolumn_when_git_sign_present_displays_git_sign() {
         let metas = vec![mk_extmark_meta(SignHlGroup::Git("GitSignsFoo".into()), "|")];
         let out = draw_statuscolumn(
             "foo",
@@ -287,7 +287,7 @@ mod tests {
     }
 
     #[test]
-    fn draw_statuscolumn_when_diagnostics_and_git_sign_displays_both() {
+    fn test_draw_statuscolumn_when_diagnostics_and_git_sign_displays_both() {
         let metas = vec![
             mk_extmark_meta(SignHlGroup::DiagnosticError, "E"),
             mk_extmark_meta(SignHlGroup::DiagnosticWarn, "W"),
@@ -308,7 +308,7 @@ mod tests {
     }
 
     #[test]
-    fn draw_statuscolumn_when_grug_far_buffer_returns_single_space() {
+    fn test_draw_statuscolumn_when_grug_far_buffer_returns_single_space() {
         let out = draw_statuscolumn(
             "grug-far",
             "7",
@@ -323,7 +323,7 @@ mod tests {
     #[rstest]
     #[case(None)]
     #[case(Some(Opts { show_line_numbers: false }))]
-    fn draw_statuscolumn_when_line_numbers_disabled_returns_no_line_numbers(#[case] opts: Option<Opts>) {
+    fn test_draw_statuscolumn_when_line_numbers_disabled_returns_no_line_numbers(#[case] opts: Option<Opts>) {
         let out = draw_statuscolumn("foo", "42", std::iter::empty(), opts);
         pretty_assertions::assert_eq!(out, format!("{EMPTY_SPACE}{EMPTY_SPACE}{EMPTY_SPACE}"));
     }
@@ -331,7 +331,9 @@ mod tests {
     #[rstest]
     #[case(None)]
     #[case(Some(Opts { show_line_numbers: false }))]
-    fn draw_statuscolumn_when_line_numbers_disabled_with_extmarks_returns_no_line_numbers(#[case] opts: Option<Opts>) {
+    fn test_draw_statuscolumn_when_line_numbers_disabled_with_extmarks_returns_no_line_numbers(
+        #[case] opts: Option<Opts>,
+    ) {
         let metas = vec![
             mk_extmark_meta(SignHlGroup::DiagnosticError, "E"),
             mk_extmark_meta(SignHlGroup::Git("GitSignsFoo".into()), "|"),

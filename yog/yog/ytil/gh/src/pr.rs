@@ -162,7 +162,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn create_when_empty_title_returns_error() {
+    fn test_create_when_empty_title_returns_error() {
         assert2::assert!(let Err(err) = create(""));
         assert!(
             err.to_string()
@@ -180,7 +180,7 @@ mod tests {
     #[case("UNKNOWN", PullRequestMergeState::Unknown)]
     #[case("UNMERGEABLE", PullRequestMergeState::Unmergeable)]
     #[case("UNSTABLE", PullRequestMergeState::Unstable)]
-    fn pull_request_merge_state_deserializes_all_variants(
+    fn test_pull_request_merge_state_deserializes_all_variants(
         #[case] status_str: &str,
         #[case] expected: PullRequestMergeState,
     ) {

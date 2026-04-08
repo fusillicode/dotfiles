@@ -363,19 +363,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn cursor_position_adjusted_col_when_zero_returns_one() {
+    fn test_cursor_position_adjusted_col_when_zero_returns_one() {
         let pos = CursorPosition { row: 1, col: 0 };
         pretty_assertions::assert_eq!(pos.adjusted_col(), 1);
     }
 
     #[test]
-    fn cursor_position_adjusted_col_when_non_zero_increments_by_one() {
+    fn test_cursor_position_adjusted_col_when_non_zero_increments_by_one() {
         let pos = CursorPosition { row: 10, col: 7 };
         pretty_assertions::assert_eq!(pos.adjusted_col(), 8);
     }
 
     #[test]
-    fn buffer_ext_get_text_between_single_line_exact() {
+    fn test_buffer_ext_get_text_between_single_line_exact() {
         let mock = mock_buffer(vec!["hello world".to_string()], 0, 0);
         let buffer = TestBuffer { mock };
 
@@ -386,7 +386,7 @@ mod tests {
     }
 
     #[test]
-    fn buffer_ext_get_text_between_single_line_from_line_start() {
+    fn test_buffer_ext_get_text_between_single_line_from_line_start() {
         let mock = mock_buffer(vec!["hello world".to_string()], 0, 0);
         let buffer = TestBuffer { mock };
 
@@ -397,7 +397,7 @@ mod tests {
     }
 
     #[test]
-    fn buffer_ext_get_text_between_single_line_to_line_end() {
+    fn test_buffer_ext_get_text_between_single_line_to_line_end() {
         let mock = mock_buffer(vec!["hello world".to_string()], 0, 0);
         let buffer = TestBuffer { mock };
 
@@ -408,7 +408,7 @@ mod tests {
     }
 
     #[test]
-    fn buffer_ext_get_text_between_single_line_from_start_to_end() {
+    fn test_buffer_ext_get_text_between_single_line_from_start_to_end() {
         let mock = mock_buffer(vec!["hello world".to_string()], 0, 0);
         let buffer = TestBuffer { mock };
 
@@ -419,7 +419,7 @@ mod tests {
     }
 
     #[test]
-    fn buffer_ext_get_text_between_multiple_lines_exact() {
+    fn test_buffer_ext_get_text_between_multiple_lines_exact() {
         let mock = mock_buffer(
             vec!["line1".to_string(), "line2".to_string(), "line3".to_string()],
             0,
@@ -434,7 +434,7 @@ mod tests {
     }
 
     #[test]
-    fn buffer_ext_get_text_between_multiple_lines_from_start_to_end() {
+    fn test_buffer_ext_get_text_between_multiple_lines_from_start_to_end() {
         let mock = mock_buffer(
             vec!["line1".to_string(), "line2".to_string(), "line3".to_string()],
             0,
@@ -449,7 +449,7 @@ mod tests {
     }
 
     #[test]
-    fn buffer_ext_get_text_between_multiple_lines_to_line_end() {
+    fn test_buffer_ext_get_text_between_multiple_lines_to_line_end() {
         let mock = mock_buffer(
             vec!["line1".to_string(), "line2".to_string(), "line3".to_string()],
             0,
@@ -464,7 +464,7 @@ mod tests {
     }
 
     #[test]
-    fn buffer_ext_get_text_between_error_out_of_bounds() {
+    fn test_buffer_ext_get_text_between_error_out_of_bounds() {
         let mock = mock_buffer(vec!["hello".to_string()], 0, 0);
         let buffer = TestBuffer { mock };
 
@@ -486,7 +486,7 @@ mod tests {
     #[case::to_line_end_zero_line_idx(TextBoundary::ToLineEnd, 0, 5, 5)]
     #[case::from_line_start_zero_line_idx(TextBoundary::FromLineStart, 0, 5, 0)]
     #[case::from_line_start_to_end_zero_line_idx(TextBoundary::FromLineStartToEnd, 0, 5, 0)]
-    fn text_boundary_get_line_start_idx(
+    fn test_text_boundary_get_line_start_idx(
         #[case] boundary: TextBoundary,
         #[case] line_idx: usize,
         #[case] start_col: usize,
@@ -502,7 +502,7 @@ mod tests {
     #[case::from_line_start_line_idx_is_last(TextBoundary::FromLineStart, "hello", 1, 1, 3, 3)]
     #[case::to_line_end_line_idx_is_last(TextBoundary::ToLineEnd, "hello", 1, 1, 3, 5)]
     #[case::from_line_start_to_end_line_idx_is_last(TextBoundary::FromLineStartToEnd, "hello", 1, 1, 3, 5)]
-    fn text_boundary_get_line_end_idx(
+    fn test_text_boundary_get_line_end_idx(
         #[case] boundary: TextBoundary,
         #[case] line: &str,
         #[case] line_idx: usize,

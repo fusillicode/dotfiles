@@ -163,7 +163,10 @@ mod tests {
     #[case::without_plus("@@ -42,7 42,7 @@", 42)]
     #[case::without_comma("@@ -42,7 +42 @@", 42)]
     #[case::without_plus_or_comma("@@ -42,7 42 @@", 42)]
-    fn extract_new_lnum_value_when_valid_lnum_line_returns_correct_usize(#[case] input: &str, #[case] expected: usize) {
+    fn test_extract_new_lnum_value_when_valid_lnum_line_returns_correct_usize(
+        #[case] input: &str,
+        #[case] expected: usize,
+    ) {
         assert2::assert!(let Ok(result) = extract_new_lnum_value(input));
         pretty_assertions::assert_eq!(result, expected);
     }
@@ -172,7 +175,7 @@ mod tests {
     #[case::missing_new_lnum_part("@@ -42,7", "error missing new_lnum from lnum_line after split by space")]
     #[case::malformed_lnum("@@ -42,7 +,7 @@", "error malformed new_lnum in lnum_line")]
     #[case::lnum_value_not_numeric("@@ -42,7 +abc,7 @@", "error parsing new_lnum value as usize")]
-    fn extract_new_lnum_value_error_cases(#[case] input: &str, #[case] expected_error_contains: &str) {
+    fn test_extract_new_lnum_value_error_cases(#[case] input: &str, #[case] expected_error_contains: &str) {
         assert2::assert!(let Err(err) = extract_new_lnum_value(input));
         assert!(err.to_string().contains(expected_error_contains));
     }

@@ -173,7 +173,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_claude_session_from_jsonl_lines() {
+    fn test_parses_claude_session_from_jsonl_lines() {
         let tempdir = tempdir().unwrap();
         let workspace = tempdir.path().join("workspace");
         std::fs::create_dir_all(&workspace).unwrap();
@@ -193,7 +193,7 @@ mod tests {
     }
 
     #[test]
-    fn parsing_invalid_claude_timestamp_returns_error() {
+    fn test_parsing_invalid_claude_timestamp_returns_error() {
         let content = "{\"type\":\"progress\",\"timestamp\":\"not-a-date\",\"cwd\":\"/tmp/workspace\",\"sessionId\":\"8649a076-3ead-4d5a-9840-3200f0e1aae5\"}\n";
 
         assert2::assert!(let Err(err) = parse(content));
@@ -201,14 +201,14 @@ mod tests {
     }
 
     #[test]
-    fn parsing_claude_line_without_cwd_is_skipped() {
+    fn test_parsing_claude_line_without_cwd_is_skipped() {
         let content = "{\"type\":\"last-prompt\",\"sessionId\":\"8649a076-3ead-4d5a-9840-3200f0e1aae5\",\"lastPrompt\":\"hello\"}\n";
         assert2::assert!(let Err(err) = parse(content));
         assert!(err.to_string().contains("no Claude session record found"));
     }
 
     #[test]
-    fn parses_claude_first_user_message_preview() {
+    fn test_parses_claude_first_user_message_preview() {
         let content = concat!(
             "{\"type\":\"progress\",\"timestamp\":\"2026-03-26T16:51:01.119Z\",\"cwd\":\"/tmp/workspace\",\"sessionId\":\"8649a076-3ead-4d5a-9840-3200f0e1aae5\"}\n",
             "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"this is a very long first user message\"},\"timestamp\":\"2026-03-26T16:52:02.119Z\",\"cwd\":\"/tmp/workspace\",\"sessionId\":\"8649a076-3ead-4d5a-9840-3200f0e1aae5\"}\n"

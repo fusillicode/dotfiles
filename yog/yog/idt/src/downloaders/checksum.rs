@@ -128,20 +128,24 @@ mod tests {
     #[case::single_space("abc123 foo.tar.gz\n", "foo.tar.gz", "abc123")]
     #[case::binary_mode_indicator("abc123 *foo.tar.gz\n", "foo.tar.gz", "abc123")]
     #[case::single_line_hash("abc123def456\n", "anything", "abc123def456")]
-    fn parse_checksum_returns_expected_hash(#[case] content: &str, #[case] filename: &str, #[case] expected: &str) {
+    fn test_parse_checksum_returns_expected_hash(
+        #[case] content: &str,
+        #[case] filename: &str,
+        #[case] expected: &str,
+    ) {
         assert2::assert!(let Ok(hash) = parse_checksum(content, filename));
         pretty_assertions::assert_eq!(hash, expected);
     }
 
     #[test]
-    fn parse_checksum_returns_error_when_not_found() {
+    fn test_parse_checksum_returns_error_when_not_found() {
         let content = "abc123  foo.tar.gz\ndef456  bar.zip\n";
         assert2::assert!(let Err(err) = parse_checksum(content, "missing.txt"));
         assert!(err.to_string().contains("error checksum entry not found"));
     }
 
     #[test]
-    fn compute_sha256_returns_expected_hash() {
+    fn test_compute_sha256_returns_expected_hash() {
         let dir = tempfile::tempdir().unwrap();
         let file_path = dir.path().join("test.txt");
         std::fs::write(&file_path, b"hello world").unwrap();
@@ -151,7 +155,7 @@ mod tests {
     }
 
     #[test]
-    fn verify_succeeds_with_matching_hash() {
+    fn test_verify_succeeds_with_matching_hash() {
         let dir = tempfile::tempdir().unwrap();
         let file_path = dir.path().join("test.txt");
         std::fs::write(&file_path, b"hello world").unwrap();
@@ -165,7 +169,7 @@ mod tests {
     }
 
     #[test]
-    fn verify_fails_with_mismatched_hash() {
+    fn test_verify_fails_with_mismatched_hash() {
         let dir = tempfile::tempdir().unwrap();
         let file_path = dir.path().join("test.txt");
         std::fs::write(&file_path, b"hello world").unwrap();

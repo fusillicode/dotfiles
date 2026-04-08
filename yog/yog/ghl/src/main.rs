@@ -419,7 +419,7 @@ mod tests {
     #[case("43-foo-bar-baz", "[43]: Foo bar baz")]
     #[case("1-hello", "[1]: Hello")]
     #[case("123-long-branch-name-here", "[123]: Long branch name here")]
-    fn pr_title_from_branch_name_when_valid_input_formats_correctly(#[case] input: &str, #[case] expected: &str) {
+    fn test_pr_title_from_branch_name_when_valid_input_formats_correctly(#[case] input: &str, #[case] expected: &str) {
         pretty_assertions::assert_eq!(pr_title_from_branch_name(input).unwrap(), expected);
     }
 
@@ -427,7 +427,10 @@ mod tests {
     #[case("abc-foo", "error parsing issue number")]
     #[case("42", "error empty title")]
     #[case("", "error parsing issue number")]
-    fn pr_title_from_branch_name_when_invalid_input_returns_error(#[case] input: &str, #[case] expected_ctx: &str) {
+    fn test_pr_title_from_branch_name_when_invalid_input_returns_error(
+        #[case] input: &str,
+        #[case] expected_ctx: &str,
+    ) {
         assert2::assert!(let Err(err) = pr_title_from_branch_name(input));
         assert_eq!(err.format_current_context().to_string(), expected_ctx);
     }

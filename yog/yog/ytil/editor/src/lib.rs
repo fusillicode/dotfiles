@@ -143,7 +143,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn open_file_cmd_returns_the_expected_cmd_string() {
+    fn test_open_file_cmd_returns_the_expected_cmd_string() {
         let file = FileToOpen {
             path: "src/main.rs".into(),
             line_nbr: 12,
@@ -157,13 +157,13 @@ mod tests {
     }
 
     #[test]
-    fn pane_titles_are_the_expected_ones() {
+    fn test_pane_titles_are_the_expected_ones() {
         assert_eq!(Editor::Hx.pane_titles(), &["hx"]);
         assert_eq!(Editor::Nvim.pane_titles(), &["nvim", "nv"]);
     }
 
     #[test]
-    fn editor_from_str_works_as_expected() {
+    fn test_editor_from_str_works_as_expected() {
         assert2::assert!(let Ok(Editor::Hx) = Editor::from_str("hx"));
         assert2::assert!(let Ok(Editor::Nvim) = Editor::from_str("nvim"));
         assert2::assert!(let Ok(Editor::Nvim) = Editor::from_str("nv"));
@@ -172,7 +172,7 @@ mod tests {
     }
 
     #[test]
-    fn file_to_open_from_str_works_as_expected() {
+    fn test_file_to_open_from_str_works_as_expected() {
         let root_dir = std::env::current_dir().unwrap();
         // We should always have a Cargo.toml...
         let dummy_path = root_dir.join("Cargo.toml").to_string_lossy().into_owned();
@@ -203,14 +203,14 @@ mod tests {
     }
 
     #[test]
-    fn try_from_errors_when_pane_is_missing() {
+    fn test_try_from_errors_when_pane_is_missing() {
         let panes: Vec<WeztermPane> = vec![];
         assert2::assert!(let Err(err) = FileToOpen::try_from(("README.md", 999, panes.as_slice())));
         assert!(err.to_string().contains("missing pane"));
     }
 
     #[test]
-    fn try_from_errors_when_relative_file_is_missing() {
+    fn test_try_from_errors_when_relative_file_is_missing() {
         let dir = std::env::current_dir().unwrap();
         let panes = vec![pane_with(1, 1, &dir)];
         assert2::assert!(let
@@ -220,7 +220,7 @@ mod tests {
     }
 
     #[test]
-    fn try_from_resolves_relative_existing_file() {
+    fn test_try_from_resolves_relative_existing_file() {
         let dir = std::env::current_dir().unwrap();
         let panes = vec![pane_with(7, 1, &dir)];
         assert2::assert!(let Ok(file) = FileToOpen::try_from(("Cargo.toml", 7, panes.as_slice())));

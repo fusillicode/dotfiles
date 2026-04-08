@@ -98,7 +98,7 @@ mod tests {
     #[case::only_colon(":", "")]
     #[case::empty_string("", "")]
     #[case::unicode_characters("\u{03C0}:\u{03C4}:\u{03C9}", "\u{03C0}")]
-    fn before_first_colon_when_various_inputs_strips_after_first_colon_returns_expected(
+    fn test_before_first_colon_when_various_inputs_strips_after_first_colon_returns_expected(
         #[case] input: &str,
         #[case] expected: &str,
     ) {

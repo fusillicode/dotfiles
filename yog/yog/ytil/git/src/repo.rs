@@ -50,28 +50,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn discover_when_path_is_inside_repo_returns_repo() {
+    fn test_discover_when_path_is_inside_repo_returns_repo() {
         let (_temp_dir, repo) = crate::tests::init_test_repo(None);
         let workdir = repo.workdir().unwrap();
         assert2::assert!(let Ok(_repo) = discover(workdir));
     }
 
     #[test]
-    fn discover_when_path_is_not_a_repo_returns_error() {
+    fn test_discover_when_path_is_not_a_repo_returns_error() {
         let temp_dir = tempfile::TempDir::new().unwrap();
         assert2::assert!(let Err(err) = discover(temp_dir.path()));
         assert!(err.to_string().contains("error discovering repo"));
     }
 
     #[test]
-    fn get_root_returns_workdir() {
+    fn test_get_root_returns_workdir() {
         let (_temp_dir, repo) = crate::tests::init_test_repo(None);
         let root = get_root(&repo);
         pretty_assertions::assert_eq!(root, repo.workdir().unwrap());
     }
 
     #[test]
-    fn get_root_in_worktree_returns_worktree_path() {
+    fn test_get_root_in_worktree_returns_worktree_path() {
         let (temp_dir, repo) = crate::tests::init_test_repo(None);
 
         let wt_dir = temp_dir.path().join("my_worktree");
@@ -83,7 +83,7 @@ mod tests {
     }
 
     #[test]
-    fn get_relative_path_to_repo_when_path_inside_repo_returns_rooted_relative() {
+    fn test_get_relative_path_to_repo_when_path_inside_repo_returns_rooted_relative() {
         let (_temp_dir, repo) = crate::tests::init_test_repo(None);
         let workdir = repo.workdir().unwrap();
         let file_path = workdir.join("src").join("main.rs");
@@ -92,7 +92,7 @@ mod tests {
     }
 
     #[test]
-    fn get_relative_path_to_repo_when_path_outside_repo_returns_error() {
+    fn test_get_relative_path_to_repo_when_path_outside_repo_returns_error() {
         let (_temp_dir, repo) = crate::tests::init_test_repo(None);
         let outside_path = Path::new("/completely/different/path");
         assert2::assert!(let Err(_err) = get_relative_path_to_repo(outside_path, &repo));

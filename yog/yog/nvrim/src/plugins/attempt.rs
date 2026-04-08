@@ -177,7 +177,7 @@ mod tests {
     #[rstest]
     #[case("test.txt", "test.txt", "test", "txt")]
     #[case(".hidden.txt", ".hidden.txt", ".hidden", "txt")]
-    fn scratch_from_when_valid_file_returns_some_ok(
+    fn test_scratch_from_when_valid_file_returns_some_ok(
         #[case] file_name: &str,
         #[case] expected_display: &str,
         #[case] expected_base: &str,
@@ -201,7 +201,7 @@ mod tests {
     }
 
     #[test]
-    fn scratch_from_when_directory_returns_none() {
+    fn test_scratch_from_when_directory_returns_none() {
         let temp_dir = TempDir::new().unwrap();
         let sub_dir = temp_dir.path().join("subdir");
         std::fs::create_dir(&sub_dir).unwrap();
@@ -216,7 +216,7 @@ mod tests {
     #[rstest]
     #[case("test", "missing extension")]
     #[case(".hidden", "missing extension")]
-    fn scratch_from_when_invalid_file_returns_some_expected_error(
+    fn test_scratch_from_when_invalid_file_returns_some_expected_error(
         #[case] file_name: &str,
         #[case] expected_error: &str,
     ) {
@@ -229,7 +229,7 @@ mod tests {
     }
 
     #[test]
-    fn scratch_from_when_io_error_returns_some_expected_err() {
+    fn test_scratch_from_when_io_error_returns_some_expected_err() {
         let err = std::io::Error::new(std::io::ErrorKind::NotFound, "test error");
 
         let result = Scratch::from(Err(err));
@@ -239,7 +239,7 @@ mod tests {
     }
 
     #[test]
-    fn scratch_dest_file_path_returns_expected_path() {
+    fn test_scratch_dest_file_path_returns_expected_path() {
         let scratch = Scratch {
             display_name: "test.txt".to_string(),
             base_name: "test".to_string(),

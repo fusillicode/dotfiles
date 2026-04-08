@@ -85,7 +85,7 @@ mod tests {
     #[rstest]
     #[case("/home/user/project 10 5 2 1", "/home/user/project", 10, 5, 2, true)]
     #[case("/home/user/my project 10 5 2 0", "/home/user/my project", 10, 5, 2, false)]
-    fn git_stat_parse_line_works_as_expected(
+    fn test_git_stat_parse_line_works_as_expected(
         #[case] line: &str,
         #[case] expected_path: &str,
         #[case] insertions: usize,

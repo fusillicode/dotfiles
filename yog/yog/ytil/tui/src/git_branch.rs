@@ -143,7 +143,7 @@ mod tests {
     }
 
     #[test]
-    fn prioritize_branches_puts_only_the_wanted_number_of_branches_matching_email_before_rest() {
+    fn test_prioritize_branches_puts_only_the_wanted_number_of_branches_matching_email_before_rest() {
         let branches = vec![
             branch("other-1", "other@example.com", 100),
             branch("mine-1", "me@example.com", 99),

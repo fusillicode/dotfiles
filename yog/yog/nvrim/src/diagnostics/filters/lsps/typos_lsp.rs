@@ -122,7 +122,7 @@ mod tests {
     }
 
     #[test]
-    fn skip_diagnostic_when_buf_path_pattern_not_matched_returns_false() {
+    fn test_skip_diagnostic_when_buf_path_pattern_not_matched_returns_false() {
         let test_blacklist = set!["test"];
         let filter = TyposLspFilter {
             source: "typos",
@@ -139,7 +139,7 @@ mod tests {
     }
 
     #[test]
-    fn skip_diagnostic_when_source_mismatch_returns_false() {
+    fn test_skip_diagnostic_when_source_mismatch_returns_false() {
         let test_blacklist = set!["test"];
         let filter = TyposLspFilter {
             source: "typos",
@@ -156,7 +156,7 @@ mod tests {
     }
 
     #[test]
-    fn skip_diagnostic_when_message_does_not_contain_blacklisted_substring_returns_false() {
+    fn test_skip_diagnostic_when_message_does_not_contain_blacklisted_substring_returns_false() {
         let test_blacklist = set!["test"];
         let filter = TyposLspFilter {
             source: "typos",
@@ -173,7 +173,7 @@ mod tests {
     }
 
     #[test]
-    fn skip_diagnostic_when_message_contains_blacklisted_substring_returns_true() {
+    fn test_skip_diagnostic_when_message_contains_blacklisted_substring_returns_true() {
         let test_blacklist = set!["test"];
         let filter = TyposLspFilter {
             source: "typos",
@@ -190,7 +190,7 @@ mod tests {
     }
 
     #[test]
-    fn skip_diagnostic_when_missing_message_key_returns_error() {
+    fn test_skip_diagnostic_when_missing_message_key_returns_error() {
         let test_blacklist = set!["test"];
         let filter = TyposLspFilter {
             source: "typos",

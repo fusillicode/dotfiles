@@ -57,7 +57,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn get_diag_msg_or_skip_when_buf_path_not_matched_returns_skip() {
+    fn test_get_diag_msg_or_skip_when_buf_path_not_matched_returns_skip() {
         let filter = TestFilter {
             source: "Test",
             path_substring: Some("src/"),
@@ -71,7 +71,7 @@ mod tests {
     }
 
     #[test]
-    fn get_diag_msg_or_skip_when_buf_path_matched_but_source_none_returns_skip() {
+    fn test_get_diag_msg_or_skip_when_buf_path_matched_but_source_none_returns_skip() {
         let filter = TestFilter {
             source: "Test",
             path_substring: Some("src/"),
@@ -84,7 +84,7 @@ mod tests {
     }
 
     #[test]
-    fn get_diag_msg_or_skip_when_buf_path_matched_but_source_mismatch_returns_skip() {
+    fn test_get_diag_msg_or_skip_when_buf_path_matched_but_source_mismatch_returns_skip() {
         let filter = TestFilter {
             source: "Test",
             path_substring: Some("src/"),
@@ -98,7 +98,7 @@ mod tests {
     }
 
     #[test]
-    fn get_diag_msg_or_skip_when_buf_path_and_source_matches_returns_msg() {
+    fn test_get_diag_msg_or_skip_when_buf_path_and_source_matches_returns_msg() {
         let filter = TestFilter {
             source: "Test",
             path_substring: Some("src/"),
@@ -112,7 +112,7 @@ mod tests {
     }
 
     #[test]
-    fn get_diag_msg_or_skip_when_no_buf_path_and_source_matches_returns_msg() {
+    fn test_get_diag_msg_or_skip_when_no_buf_path_and_source_matches_returns_msg() {
         let filter = TestFilter {
             source: "Test",
             path_substring: None,
@@ -126,7 +126,7 @@ mod tests {
     }
 
     #[test]
-    fn get_diag_msg_or_skip_when_source_contains_filter_source_returns_msg() {
+    fn test_get_diag_msg_or_skip_when_source_contains_filter_source_returns_msg() {
         let filter = TestFilter {
             source: "Test",
             path_substring: None,

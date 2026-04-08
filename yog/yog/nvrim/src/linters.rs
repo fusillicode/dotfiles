@@ -101,7 +101,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn diagnostic_dict_from_msg_returns_the_expected_dict_from_msg() {
+    fn test_diagnostic_dict_from_msg_returns_the_expected_dict_from_msg() {
         let msg = SqruffMessage {
             code: Some("R001".to_string()),
             message: "Example message".to_string(),
@@ -129,7 +129,7 @@ mod tests {
     }
 
     #[test]
-    fn sqruff_output_deserializes_empty_messages() {
+    fn test_sqruff_output_deserializes_empty_messages() {
         let value = serde_json::json!({
             "<string>": []
         });
@@ -139,7 +139,7 @@ mod tests {
     }
 
     #[test]
-    fn sqruff_output_deserializes_single_message_with_code() {
+    fn test_sqruff_output_deserializes_single_message_with_code() {
         let value = serde_json::json!({
             "<string>": [
                 {
@@ -171,7 +171,7 @@ mod tests {
     }
 
     #[test]
-    fn sqruff_output_deserializes_multiple_messages_mixed_code() {
+    fn test_sqruff_output_deserializes_multiple_messages_mixed_code() {
         let value = serde_json::json!({
             "<string>": [
                 {

@@ -47,14 +47,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn build_path_appends_parts_to_root() {
+    fn test_build_path_appends_parts_to_root() {
         let root = PathBuf::from("/base");
         let result = build_path(root, &["a", "b", "c"]);
         pretty_assertions::assert_eq!(result, PathBuf::from("/base/a/b/c"));
     }
 
     #[test]
-    fn build_path_with_empty_parts_returns_root() {
+    fn test_build_path_with_empty_parts_returns_root() {
         let root = PathBuf::from("/base");
         let result = build_path(root, &[] as &[&str]);
         pretty_assertions::assert_eq!(result, PathBuf::from("/base"));
@@ -62,13 +62,13 @@ mod tests {
 
     #[test]
     #[cfg(not(target_arch = "wasm32"))]
-    fn build_home_path_returns_path_ending_with_parts() {
+    fn test_build_home_path_returns_path_ending_with_parts() {
         assert2::assert!(let Ok(path) = build_home_path(&[".config", "test"]));
         assert!(path.ends_with(".config/test"), "path={}", path.display());
     }
 
     #[test]
-    fn get_workspace_root_returns_existing_directory() {
+    fn test_get_workspace_root_returns_existing_directory() {
         assert2::assert!(let Ok(root) = get_workspace_root());
         assert!(root.is_dir(), "root={}", root.display());
         // The workspace root should contain Cargo.toml

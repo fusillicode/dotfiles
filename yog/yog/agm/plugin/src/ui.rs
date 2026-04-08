@@ -368,7 +368,7 @@ mod tests {
     }
 
     #[test]
-    fn short_path_under_home() {
+    fn test_short_path_under_home() {
         let home = Path::new("/home/user");
         assert_eq!(
             agm_core::short_path(Path::new("/home/user/src/pkg/myproject"), home),
@@ -377,7 +377,7 @@ mod tests {
     }
 
     #[test]
-    fn short_path_many_dirs() {
+    fn test_short_path_many_dirs() {
         let home = Path::new("/home/user");
         assert_eq!(
             agm_core::short_path(Path::new("/home/user/one/two/three/four/five"), home),
@@ -386,7 +386,7 @@ mod tests {
     }
 
     #[test]
-    fn short_path_outside_home() {
+    fn test_short_path_outside_home() {
         let home = Path::new("/home/user");
         assert_eq!(agm_core::short_path(Path::new("/opt/pkg/foo"), home), "/o/p/foo");
     }

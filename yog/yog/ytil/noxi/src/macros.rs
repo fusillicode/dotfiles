@@ -96,13 +96,13 @@ mod tests {
     use crate::dict::DictionaryExt as _;
 
     #[test]
-    fn dict_macro_empty_creates_empty_dictionary() {
+    fn test_dict_macro_empty_creates_empty_dictionary() {
         let actual = dict!();
         assert_eq!(actual.len(), 0);
     }
 
     #[test]
-    fn dict_macro_creates_a_dictionary_with_basic_key_value_pairs() {
+    fn test_dict_macro_creates_a_dictionary_with_basic_key_value_pairs() {
         let actual = dict! { "foo": 1, bar: "baz", "num": 3_i64 };
         let expected = Dictionary::from_iter([
             ("bar", Object::from("baz")),
@@ -113,7 +113,7 @@ mod tests {
     }
 
     #[test]
-    fn dict_macro_creates_nested_dictionaries() {
+    fn test_dict_macro_creates_nested_dictionaries() {
         let k = String::from("alpha");
         let inner = dict! { inner_key: "value" };
         let actual = dict! { (k): 10_i64, "beta": inner.clone() };
@@ -122,7 +122,7 @@ mod tests {
     }
 
     #[test]
-    fn dictionary_ext_get_t_works_as_expected() {
+    fn test_dictionary_ext_get_t_works_as_expected() {
         let dict = dict! { "foo": "42" };
         assert2::assert!(let Err(err) = dict.get_t::<nvim_oxi::String>("bar"));
         assert_eq!(err.format_current_context().to_string(), "missing dict value");
@@ -134,7 +134,7 @@ mod tests {
     }
 
     #[test]
-    fn dictionary_ext_get_dict_works_as_expected() {
+    fn test_dictionary_ext_get_dict_works_as_expected() {
         let dict = dict! { "foo": "42" };
         assert_eq!(dict.get_dict(&["bar"]).unwrap(), None);
 

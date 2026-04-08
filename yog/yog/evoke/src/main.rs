@@ -135,21 +135,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn drop_element_returns_true_and_removes_the_element_from_the_vec() {
+    fn test_drop_element_returns_true_and_removes_the_element_from_the_vec() {
         let mut input = vec![42, 7];
         assert!(drop_element(&mut input, &7));
         assert_eq!(input, vec![42]);
     }
 
     #[test]
-    fn drop_element_returns_false_and_does_nothing_to_a_non_empty_vec() {
+    fn test_drop_element_returns_false_and_does_nothing_to_a_non_empty_vec() {
         let mut input = vec![42, 7];
         assert!(!drop_element(&mut input, &3));
         assert_eq!(input, vec![42, 7]);
     }
 
     #[test]
-    fn drop_element_returns_false_and_does_nothing_to_an_empty_vec() {
+    fn test_drop_element_returns_false_and_does_nothing_to_an_empty_vec() {
         let mut input: Vec<usize> = vec![];
         assert!(!drop_element(&mut input, &3));
         assert!(input.is_empty());
@@ -161,7 +161,7 @@ mod tests {
     #[case::remove_more_than_exist(PathBuf::from("/home/user"), 5, PathBuf::from("/"))]
     #[case::root_path(PathBuf::from("/"), 1, PathBuf::from("/"))]
     #[case::empty_path(PathBuf::new(), 1, PathBuf::new())]
-    fn remove_last_n_dirs_works(#[case] mut initial: PathBuf, #[case] n: usize, #[case] expected: PathBuf) {
+    fn test_remove_last_n_dirs_works(#[case] mut initial: PathBuf, #[case] n: usize, #[case] expected: PathBuf) {
         remove_last_n_dirs(&mut initial, n);
         pretty_assertions::assert_eq!(initial, expected);
     }

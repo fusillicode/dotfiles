@@ -108,7 +108,7 @@ mod tests {
     #[case::six_months(15_552_000, "6mo")]
     #[case::one_year(31_536_000, "1y")]
     #[case::three_years(94_608_000, "3y")]
-    fn write_commit_relative_time_formats_correctly(#[case] secs: u64, #[case] expected: &str) {
+    fn test_write_commit_relative_time_formats_correctly(#[case] secs: u64, #[case] expected: &str) {
         let result = collect(|buf| write_commit_relative_time(buf, secs));
         pretty_assertions::assert_eq!(result, expected);
     }

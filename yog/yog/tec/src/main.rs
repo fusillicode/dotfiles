@@ -434,7 +434,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn from_rm_files_outcome_when_no_removed_no_errors_returns_success() {
+    fn test_from_rm_files_outcome_when_no_removed_no_errors_returns_success() {
         let outcome = RmFilesOutcome {
             removed: vec![],
             errors: vec![],
@@ -447,7 +447,7 @@ mod tests {
     }
 
     #[test]
-    fn from_rm_files_outcome_when_some_removed_no_errors_returns_success() {
+    fn test_from_rm_files_outcome_when_some_removed_no_errors_returns_success() {
         let outcome = RmFilesOutcome {
             removed: vec![PathBuf::from("file1.txt"), PathBuf::from("file2.txt")],
             errors: vec![],
@@ -462,7 +462,7 @@ mod tests {
     }
 
     #[test]
-    fn from_rm_files_outcome_when_no_removed_some_errors_returns_failure() {
+    fn test_from_rm_files_outcome_when_no_removed_some_errors_returns_failure() {
         let outcome = RmFilesOutcome {
             removed: vec![],
             errors: vec![(
@@ -480,7 +480,7 @@ mod tests {
     }
 
     #[test]
-    fn from_rm_files_outcome_when_error_without_path_returns_failure() {
+    fn test_from_rm_files_outcome_when_error_without_path_returns_failure() {
         let outcome = RmFilesOutcome {
             removed: vec![],
             errors: vec![(None, Error::new(ErrorKind::NotFound, "file not found"))],
@@ -494,7 +494,7 @@ mod tests {
     }
 
     #[test]
-    fn from_rm_files_outcome_when_mixed_removed_and_errors_returns_failure() {
+    fn test_from_rm_files_outcome_when_mixed_removed_and_errors_returns_failure() {
         let outcome = RmFilesOutcome {
             removed: vec![PathBuf::from("goodfile.txt")],
             errors: vec![(Some(PathBuf::from("badfile.txt")), Error::other("some error"))],

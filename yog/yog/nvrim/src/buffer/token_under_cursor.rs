@@ -397,7 +397,7 @@ mod tests {
     #[case("hello\nworld", 5, None)]
     #[case("hello\n\nworld", 5, None)]
     #[case("hello\n\nworld", 6, None)]
-    fn get_word_at_index_scenarios(#[case] s: &str, #[case] idx: usize, #[case] expected: Option<&str>) {
+    fn test_get_word_at_index_scenarios(#[case] s: &str, #[case] idx: usize, #[case] expected: Option<&str>) {
         pretty_assertions::assert_eq!(get_word_at_index(s, idx), expected);
     }
 
@@ -406,7 +406,7 @@ mod tests {
 
     #[test]
     #[cfg(target_os = "macos")]
-    fn token_under_cursor_classify_valid_url_returns_url() {
+    fn test_token_under_cursor_classify_valid_url_returns_url() {
         let input = "https://example.com".to_string();
         let result = TokenUnderCursor::classify(&input);
         assert2::assert!(let Ok(actual) = result);
@@ -415,7 +415,7 @@ mod tests {
 
     #[test]
     #[cfg(target_os = "macos")]
-    fn token_under_cursor_classify_invalid_url_plain_word_returns_word() {
+    fn test_token_under_cursor_classify_invalid_url_plain_word_returns_word() {
         let input = "noturl".to_string();
         let result = TokenUnderCursor::classify(&input);
         assert2::assert!(let Ok(actual) = result);
@@ -431,7 +431,7 @@ mod tests {
 
     #[test]
     #[cfg(target_os = "macos")]
-    fn token_under_cursor_classify_path_to_text_file_returns_text_file() {
+    fn test_token_under_cursor_classify_path_to_text_file_returns_text_file() {
         let mut temp_file = NamedTempFile::new().unwrap();
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().into_owned();
@@ -449,7 +449,7 @@ mod tests {
 
     #[test]
     #[cfg(target_os = "macos")]
-    fn token_under_cursor_classify_path_lnum_to_text_file_returns_text_file_with_lnum() {
+    fn test_token_under_cursor_classify_path_lnum_to_text_file_returns_text_file_with_lnum() {
         let mut temp_file = NamedTempFile::new().unwrap();
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().into_owned();
@@ -467,7 +467,7 @@ mod tests {
 
     #[test]
     #[cfg(target_os = "macos")]
-    fn token_under_cursor_classify_path_lnum_col_to_text_file_returns_text_file_with_lnum_col() {
+    fn test_token_under_cursor_classify_path_lnum_col_to_text_file_returns_text_file_with_lnum_col() {
         let mut temp_file = NamedTempFile::new().unwrap();
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().into_owned();
@@ -485,7 +485,7 @@ mod tests {
 
     #[test]
     #[cfg(target_os = "macos")]
-    fn token_under_cursor_classify_path_to_directory_returns_directory() {
+    fn test_token_under_cursor_classify_path_to_directory_returns_directory() {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().to_string_lossy().into_owned();
         let result = TokenUnderCursor::classify(&path);
@@ -495,7 +495,7 @@ mod tests {
 
     #[test]
     #[cfg(target_os = "macos")]
-    fn token_under_cursor_classify_path_to_binary_file_returns_binary_file() {
+    fn test_token_under_cursor_classify_path_to_binary_file_returns_binary_file() {
         let mut temp_file = NamedTempFile::new().unwrap();
         // Write some binary data
         std::io::Write::write_all(&mut temp_file, &[0, 1, 2, 255]).unwrap();
@@ -507,7 +507,7 @@ mod tests {
 
     #[test]
     #[cfg(target_os = "macos")]
-    fn token_under_cursor_classify_nonexistent_path_returns_maybe_text_file() {
+    fn test_token_under_cursor_classify_nonexistent_path_returns_maybe_text_file() {
         let path = "/nonexistent/path".to_string();
         let result = TokenUnderCursor::classify(&path);
         assert2::assert!(let Ok(actual) = result);
@@ -523,7 +523,7 @@ mod tests {
 
     #[test]
     #[cfg(target_os = "macos")]
-    fn token_under_cursor_classify_path_with_invalid_lnum_returns_maybe_text_file() {
+    fn test_token_under_cursor_classify_path_with_invalid_lnum_returns_maybe_text_file() {
         let temp_file = NamedTempFile::new().unwrap();
         let path = temp_file.path().to_string_lossy().into_owned();
         let input = format!("{path}:invalid");
@@ -541,7 +541,7 @@ mod tests {
 
     #[test]
     #[cfg(target_os = "macos")]
-    fn token_under_cursor_classify_path_with_invalid_col_returns_maybe_text_file() {
+    fn test_token_under_cursor_classify_path_with_invalid_col_returns_maybe_text_file() {
         let temp_file = NamedTempFile::new().unwrap();
         let path = temp_file.path().to_string_lossy().into_owned();
         let input = format!("{path}:10:invalid");
@@ -559,7 +559,7 @@ mod tests {
 
     #[test]
     #[cfg(target_os = "macos")]
-    fn token_under_cursor_classify_path_lnum_col_extra_ignores_extra() {
+    fn test_token_under_cursor_classify_path_lnum_col_extra_ignores_extra() {
         let mut temp_file = NamedTempFile::new().unwrap();
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().into_owned();
@@ -589,7 +589,7 @@ mod tests {
     #[case("http://example.com with text", "http://example.com")]
     #[case("(http://example.com)", "http://example.com")]
     #[case("`http://example.com`", "http://example.com")]
-    fn classify_url_returns_the_token_url_under_curos(#[case] input: &str, #[case] expected_value: &str) {
+    fn test_classify_url_returns_the_token_url_under_curos(#[case] input: &str, #[case] expected_value: &str) {
         assert2::assert!(let Ok(actual) = TokenUnderCursor::classify_url(input));
         pretty_assertions::assert_eq!(actual, TokenUnderCursor::Url(expected_value.to_string()));
     }
@@ -597,7 +597,7 @@ mod tests {
     #[rstest]
     #[case("not a url")]
     #[case("[text](noturl)")]
-    fn classify_url_when_cannot_classify_url_returns_the_expected_error(#[case] input: &str) {
+    fn test_classify_url_when_cannot_classify_url_returns_the_expected_error(#[case] input: &str) {
         assert2::assert!(let Err(err) = TokenUnderCursor::classify_url(input));
         assert!(err.downcast_current_context::<url::ParseError>().is_some());
     }
@@ -614,7 +614,7 @@ mod tests {
     #[case("no link", None)]
     #[case("[incomplete", None)]
     #[case("](empty)", Some("empty"))]
-    fn extract_markdown_link_works_as_expected(#[case] input: &str, #[case] expected: Option<&str>) {
+    fn test_extract_markdown_link_works_as_expected(#[case] input: &str, #[case] expected: Option<&str>) {
         pretty_assertions::assert_eq!(extract_markdown_link(input), expected);
     }
 
@@ -630,7 +630,7 @@ mod tests {
     #[case("https://a.com http://b.com", Some("https://a.com"))]
     #[case("https://example.com/path?query=value", Some("https://example.com/path?query=value"))]
     #[case("https://example.com:8080", Some("https://example.com:8080"))]
-    fn extract_https_or_http_link_scenarios(#[case] input: &str, #[case] expected: Option<&str>) {
+    fn test_extract_https_or_http_link_scenarios(#[case] input: &str, #[case] expected: Option<&str>) {
         pretty_assertions::assert_eq!(extract_https_or_http_link(input), expected);
     }
 }
