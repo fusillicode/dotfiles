@@ -1,6 +1,6 @@
 {
   "blink-cmp-words": { "branch": "main", "commit": "d6a56f532a1826b4f3aeed4d5e2fe7b8743a9244" },
-  "blink.cmp": { "branch": "main", "commit": "b4b7cbb52bab6c716b317433fa9348a070cccee5" },
+  "blink.cmp": { "branch": "main", "commit": "a327b19a419347084074cce77f6cd074f54705ac" },
   "blink.compat": { "branch": "main", "commit": "2ed6d9a28b07fa6f3bface818470605f8896408c" },
   "blink.pairs": { "branch": "main", "commit": "2da33da164fbbf5cf52214fb9e7db1096d55e0dc" },
   "conform.nvim": { "branch": "master", "commit": "086a40dc7ed8242c03be9f47fbcee68699cc2395" },
@@ -10,7 +10,7 @@
   "fzf": { "branch": "master", "commit": "18315000185a6e6461b9b4aa4a4cb6cd164e0e35" },
   "fzf-lua": { "branch": "main", "commit": "9f0432fdd7825ab163520045831a40b6df82ea28" },
   "gitsigns.nvim": { "branch": "main", "commit": "0d797daee85366bc242580e352a4f62d67557b84" },
-  "grug-far.nvim": { "branch": "main", "commit": "6f8c2097ab4422976063fefe0f29331e12a32334" },
+  "grug-far.nvim": { "branch": "main", "commit": "37d0eafc6a2dcf8641aa19fc2a8db5e391b7f16b" },
   "lazy.nvim": { "branch": "main", "commit": "306a05526ada86a7b30af95c5cc81ffba93fef97" },
   "multicursor.nvim": { "branch": "main", "commit": "704b99f10a72cc05d370cfeb294ff83412a8ab55" },
   "nvim-lint": { "branch": "master", "commit": "4b03656c09c1561f89b6aa0665c15d292ba9499d" },
@@ -19,7 +19,7 @@
   "nvim-surround": { "branch": "main", "commit": "9291040de8cd8a4439eb64c441e8d5d2bf884a5a" },
   "nvim-treesitter": { "branch": "main", "commit": "4916d6592ede8c07973490d9322f187e07dfefac" },
   "nvim-treesitter-context": { "branch": "master", "commit": "b0c45cefe2c8f7b55fc46f34e563bc428ef99636" },
-  "nvim-treesitter-textobjects": { "branch": "main", "commit": "93d60a475f0b08a8eceb99255863977d3a25f310" },
+  "nvim-treesitter-textobjects": { "branch": "main", "commit": "851e865342e5a4cb1ae23d31caf6e991e1c99f1e" },
   "oil.nvim": { "branch": "master", "commit": "0fcc83805ad11cf714a949c98c605ed717e0b83e" },
   "schemastore.nvim": { "branch": "main", "commit": "6d0329adb9c8cbe51b9a28299890a5eb104db7dc" }
 }
