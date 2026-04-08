@@ -8,7 +8,7 @@ history = 99999
 [font]
 normal.family = "PxPlus ToshibaSat 9x16"
 size = 19
-offset = { x = 0, y = 7 }
+offset = { x = 0, y = 0 }
 
 [colors]
 primary.background = "#000000"
