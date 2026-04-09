@@ -3,82 +3,101 @@
 //! Creates yank highlight, autosave, and quickfix configuration autocmds with resilient error
 //! reporting (failures logged, rest continue). Provides granular `create_autocmd` utility.
 
-use core::fmt::Debug;
-use core::marker::Copy;
-
-use nvim_oxi::api::opts::CreateAugroupOptsBuilder;
-use nvim_oxi::api::opts::CreateAutocmdOptsBuilder;
-use nvim_oxi::api::opts::SetKeymapOptsBuilder;
-use nvim_oxi::api::types::Mode;
-
 /// Creates Nvim autocommands and their augroups.
 ///
 /// Includes yank highlight, autosave on focus loss / buffer leave, and quickfix
 /// specific key mappings & configuration.
 pub fn create() {
-    create_autocmd(
-        ["TextYankPost"],
-        "YankHighlight",
-        CreateAutocmdOptsBuilder::default().command(":lua vim.highlight.on_yank()"),
-    );
+    create_lua_autocmd(&["TextYankPost"], "YankHighlight", None, "vim.highlight.on_yank()");
 
-    create_autocmd(
-        ["BufLeave", "FocusLost"],
+    create_lua_autocmd(
+        &["BufLeave", "FocusLost"],
         "AutosaveBuffers",
-        CreateAutocmdOptsBuilder::default().command(":silent! wa!"),
+        None,
+        "pcall(vim.cmd, 'silent! wa!')",
     );
 
-    create_autocmd(
-        ["FocusGained", "BufEnter", "CursorHold"],
+    create_lua_autocmd(
+        &["FocusGained", "BufEnter", "CursorHold"],
         "AutoreadBuffers",
-        CreateAutocmdOptsBuilder::default().command(":silent! checktime"),
+        None,
+        "pcall(vim.cmd, 'silent! checktime')",
     );
 
-    create_autocmd(
-        ["FileType"],
+    create_lua_autocmd(
+        &["FileType"],
         "QuickfixConfig",
-        CreateAutocmdOptsBuilder::default().patterns(["qf"]).callback(|_| {
-            let opts = SetKeymapOptsBuilder::default().noremap(true).build();
-
-            crate::keymaps::set(&[Mode::Normal], "<c-n>", ":cn<cr>", &opts);
-            crate::keymaps::set(&[Mode::Normal], "<c-p>", ":cp<cr>", &opts);
-            crate::keymaps::set(&[Mode::Normal], "<c-x>", ":ccl<cr>", &opts);
-            let _ = ytil_noxi::common::exec_vim_cmd("resize", Some(&["7"]));
-
-            true
-        }),
+        Some(&["qf"]),
+        r"
+local opts = { buffer = true, noremap = true }
+vim.keymap.set('n', '<C-n>', '<cmd>cn<cr>', opts)
+vim.keymap.set('n', '<C-p>', '<cmd>cp<cr>', opts)
+vim.keymap.set('n', '<C-x>', '<cmd>ccl<cr>', opts)
+vim.cmd('resize 7')
+",
     );
 
     // To avoid the ugly full gray and underlined code for things like cfg(test).
-    create_autocmd(
-        ["LspAttach"],
+    create_lua_autocmd(
+        &["LspAttach"],
         "LspInactiveCodeHighlight",
-        CreateAutocmdOptsBuilder::default().command(
-            ":lua vim.api.nvim_set_hl(0, '@lsp.mod.inactive', { underline = false, undercurl = false, sp = 'none' })",
-        ),
+        None,
+        "vim.api.nvim_set_hl(0, '@lsp.mod.inactive', { underline = false, undercurl = false, sp = 'none' })",
     );
 
     crate::plugins::scrolloff::create_autocmd();
     crate::layout::create_autocmd();
 }
 
-/// Creates an autocommand group and associated autocommands for `events`.
+/// Neovim master added `buf` to `Dict(create_autocmd)` before `callback` / `command`,
+/// while the pinned `nvim-oxi` revision still uses the older struct layout.
+/// Calling `nvim_oxi::api::create_autocmd()` against that Nvim build shifts the fields
+/// and triggers: `Validation("Required: 'command' or 'callback'")`.
 ///
-/// Errors are reported to Nvim (and swallowed) so that one failing definition
-/// does not abort the rest of the setup.
-pub fn create_autocmd<'a, I>(events: I, augroup_name: &str, opts_builder: &mut CreateAutocmdOptsBuilder)
-where
-    I: IntoIterator<Item = &'a str> + Debug + Copy,
-{
-    if let Err(err) =
-        nvim_oxi::api::create_augroup(augroup_name, &CreateAugroupOptsBuilder::default().clear(true).build())
-            .inspect_err(|err| {
-                ytil_noxi::notify::error(format!("error creating augroup | name={augroup_name:?} error={err:#?}"));
-            })
-            .and_then(|group| nvim_oxi::api::create_autocmd(events, &opts_builder.group(group).build()))
-    {
-        ytil_noxi::notify::error(format!(
-            "error creating auto command | augroup={augroup_name:?} events={events:#?} error={err:#?}"
-        ));
-    }
+/// Keep this Lua path until `nvim-oxi`'s `CreateAutocmdOpts` matches Neovim keyset again.
+pub fn create_lua_autocmd(events: &[&str], augroup_name: &str, patterns: Option<&[&str]>, callback_body: &str) {
+    let events_lua = to_lua_array(events);
+    let patterns_lua = patterns.map(to_lua_array);
+    let augroup_name_lua = to_lua_string(augroup_name);
+
+    let opts_lua = patterns_lua.map_or_else(
+        || format!("{{ group = group, callback = function() {callback_body} end }}"),
+        |patterns_lua| {
+            format!("{{ group = group, pattern = {patterns_lua}, callback = function() {callback_body} end }}")
+        },
+    );
+
+    let src = format!(
+        r#"
+lua << EOF
+local events = {events_lua}
+local augroup_name = {augroup_name_lua}
+local group = vim.api.nvim_create_augroup(augroup_name, {{ clear = true }})
+local ok, err = pcall(vim.api.nvim_create_autocmd, events, {opts_lua})
+if not ok then
+  vim.notify(
+    "error creating auto command | augroup=" .. string.format("%q", augroup_name) .. " events=" .. vim.inspect(events) .. " error=" .. tostring(err),
+    vim.log.levels.ERROR
+  )
+end
+EOF
+"#
+    );
+
+    let _ = ytil_noxi::common::exec_vim_script(&src, None);
+}
+
+fn to_lua_array(values: &[&str]) -> String {
+    format!(
+        "{{{}}}",
+        values
+            .iter()
+            .map(|value| to_lua_string(value))
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
+
+fn to_lua_string(value: &str) -> String {
+    format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
 }
