@@ -1,6 +1,5 @@
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
-use nvim_oxi::api::opts::CreateAutocmdOpts;
 use serde::Deserialize;
 use ytil_noxi::mru_buffers::BufferKind;
 
@@ -14,12 +13,11 @@ pub fn dict() -> Dictionary {
 }
 
 pub fn create_autocmd() {
-    crate::cmds::create_autocmd(
-        ["BufEnter", "WinEnter", "TermOpen"],
+    crate::cmds::create_lua_autocmd(
+        &["BufEnter", "WinEnter", "TermOpen"],
         "TerminalAutoInsertMode",
-        CreateAutocmdOpts::builder()
-            .patterns(["term://*"])
-            .command("startinsert"),
+        Some(&["term://*"]),
+        "vim.cmd('startinsert')",
     );
 }
 
