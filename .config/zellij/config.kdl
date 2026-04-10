@@ -58,20 +58,28 @@ themes {
             emphasis_3 255 255 255
         }
         frame_selected {
-            base 34 34 34
-            background 34 34 34
-            emphasis_0 34 34 34
-            emphasis_1 34 34 34
-            emphasis_2 34 34 34
-            emphasis_3 34 34 34
+            base 50 50 50
+            background 50 50 50
+            emphasis_0 50 50 50
+            emphasis_1 50 50 50
+            emphasis_2 50 50 50
+            emphasis_3 50 50 50
         }
         frame_unselected {
-            base 34 34 34
-            background 34 34 34
-            emphasis_0 34 34 34
-            emphasis_1 34 34 34
-            emphasis_2 34 34 34
-            emphasis_3 34 34 34
+            base 50 50 50
+            background 50 50 50
+            emphasis_0 50 50 50
+            emphasis_1 50 50 50
+            emphasis_2 50 50 50
+            emphasis_3 50 50 50
+        }
+        frame_highlight {
+            base 50 50 50
+            background 50 50 50
+            emphasis_0 50 50 50
+            emphasis_1 50 50 50
+            emphasis_2 50 50 50
+            emphasis_3 50 50 50
         }
     }
 }
