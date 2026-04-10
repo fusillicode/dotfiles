@@ -56,6 +56,7 @@ convert_case = { version = "0.11" }
 fake = { version = "5.1", features = ["derive"] }
 git2 = { version = "0.20", default-features = false }
 nomicon = { path = "./yog/nomicon" }
+nvim-oxi = { path = "../third_party/nvim-oxi", features = ["neovim-nightly", "mlua"] }
 owo-colors = { version = "4" }
 pretty_assertions = { version = "1.4" }
 rootcause = { version = "0.12" }

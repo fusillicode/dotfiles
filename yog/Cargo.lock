@@ -2934,7 +2934,6 @@ dependencies = [
 [[package]]
 name = "nvim-oxi"
 version = "0.6.0"
-source = "git+https://github.com/noib3/nvim-oxi?rev=b1278b123dbac3908f2686ebed6fdadbfef15be1#b1278b123dbac3908f2686ebed6fdadbfef15be1"
 dependencies = [
  "mlua",
  "nvim-oxi-api",
@@ -2947,7 +2946,6 @@ dependencies = [
 [[package]]
 name = "nvim-oxi-api"
 version = "0.6.0"
-source = "git+https://github.com/noib3/nvim-oxi?rev=b1278b123dbac3908f2686ebed6fdadbfef15be1#b1278b123dbac3908f2686ebed6fdadbfef15be1"
 dependencies = [
  "nvim-oxi-luajit",
  "nvim-oxi-macros",
@@ -2960,7 +2958,6 @@ dependencies = [
 [[package]]
 name = "nvim-oxi-luajit"
 version = "0.6.0"
-source = "git+https://github.com/noib3/nvim-oxi?rev=b1278b123dbac3908f2686ebed6fdadbfef15be1#b1278b123dbac3908f2686ebed6fdadbfef15be1"
 dependencies = [
  "thiserror 2.0.18",
 ]
@@ -2968,7 +2965,6 @@ dependencies = [
 [[package]]
 name = "nvim-oxi-macros"
 version = "0.6.0"
-source = "git+https://github.com/noib3/nvim-oxi?rev=b1278b123dbac3908f2686ebed6fdadbfef15be1#b1278b123dbac3908f2686ebed6fdadbfef15be1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2978,7 +2974,6 @@ dependencies = [
 [[package]]
 name = "nvim-oxi-types"
 version = "0.6.0"
-source = "git+https://github.com/noib3/nvim-oxi?rev=b1278b123dbac3908f2686ebed6fdadbfef15be1#b1278b123dbac3908f2686ebed6fdadbfef15be1"
 dependencies = [
  "libc",
  "nvim-oxi-luajit",
