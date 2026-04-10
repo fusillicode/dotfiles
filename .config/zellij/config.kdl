@@ -73,14 +73,6 @@ themes {
             emphasis_2 50 50 50
             emphasis_3 50 50 50
         }
-        frame_highlight {
-            base 50 50 50
-            background 50 50 50
-            emphasis_0 50 50 50
-            emphasis_1 50 50 50
-            emphasis_2 50 50 50
-            emphasis_3 50 50 50
-        }
     }
 }
 theme "minimal"
