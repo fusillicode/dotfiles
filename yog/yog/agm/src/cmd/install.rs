@@ -127,6 +127,8 @@ fn install_hooks(agent: Agent) -> rootcause::Result<()> {
         .as_object_mut()
         .ok_or_else(|| rootcause::report!("{} hooks is not an object", path.display()))?;
 
+    remove_all_agm_entries(agent, hooks);
+
     for &(event, payload) in agent.hook_events() {
         let cmd = agent.hook_command(payload);
         let event_arr = hooks
@@ -268,6 +270,21 @@ fn remove_agm_entries(agent: Agent, arr: &mut Vec<Value>) {
     }
 }
 
+fn remove_all_agm_entries(agent: Agent, hooks: &mut serde_json::Map<String, Value>) {
+    let empty_events: Vec<String> = hooks
+        .iter_mut()
+        .filter_map(|(event, value)| {
+            let arr = value.as_array_mut()?;
+            remove_agm_entries(agent, arr);
+            arr.is_empty().then(|| event.clone())
+        })
+        .collect();
+
+    for event in empty_events {
+        hooks.remove(&event);
+    }
+}
+
 fn new_hook_entry(agent: Agent, cmd: &str) -> Value {
     match agent {
         Agent::Claude | Agent::Codex | Agent::Gemini => serde_json::json!({
@@ -275,5 +292,38 @@ fn new_hook_entry(agent: Agent, cmd: &str) -> Value {
         }),
         Agent::Cursor => serde_json::json!({ "command": cmd }),
         Agent::Opencode => serde_json::json!({}),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use agm_core::agent::AgentEventKind;
+
+    use super::*;
+
+    #[test]
+    fn test_remove_all_agm_entries_removes_stale_codex_events() {
+        let mut hooks = serde_json::json!({
+            "PreToolUse": [
+                new_hook_entry(Agent::Codex, &Agent::Codex.hook_command(AgentEventKind::Busy)),
+                {
+                    "hooks": [{ "type": "command", "command": "echo keep-me" }]
+                }
+            ],
+            "SessionEnd": [new_hook_entry(Agent::Codex, &Agent::Codex.hook_command(AgentEventKind::Exit))],
+            "UserPromptSubmit": [new_hook_entry(Agent::Codex, &Agent::Codex.hook_command(AgentEventKind::Busy))]
+        });
+
+        remove_all_agm_entries(Agent::Codex, hooks.as_object_mut().unwrap());
+
+        let expected = serde_json::json!({
+            "PreToolUse": [
+                {
+                    "hooks": [{ "type": "command", "command": "echo keep-me" }]
+                }
+            ]
+        });
+
+        assert_eq!(hooks, expected);
     }
 }
