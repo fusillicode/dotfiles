@@ -7,11 +7,13 @@ on:
     paths:
       - ".github/**"
       - "yog/**"
+      - "third_paty/**"
       - codecov.yml
   pull_request:
     paths:
       - ".github/**"
       - "yog/**"
+      - "third_paty/**"
       - codecov.yml
 
 env:

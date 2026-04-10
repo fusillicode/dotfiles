@@ -16,10 +16,7 @@ testing = []
 
 [dependencies]
 mockall = { version = "0.14", optional = true }
-nvim-oxi = { git = "https://github.com/noib3/nvim-oxi", rev = "b1278b123dbac3908f2686ebed6fdadbfef15be1", features = [
-  "neovim-nightly",
-  "mlua",
-] }
+nvim-oxi = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 tree-sitter = { version = "0.26" }
