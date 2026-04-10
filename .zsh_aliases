@@ -24,9 +24,9 @@ alias gbrr='git for-each-ref --sort=committerdate refs/heads/ --format="%(HEAD) 
 alias gdh='git diff HEAD~1'
 alias gfp='git fetch --all --prune && git pull origin "$(git branch --show-current)"'
 function gt() {
-  git --no-pager log --tags="*" --no-walk --reverse --color=always \
+  git --no-pager log --tags="*" --no-walk --color=always \
     --pretty="format:%C(auto)%d%C(reset) %C(green)(%ci)%C(reset) %C(bold blue)%an%C(reset) %C(blue)<%ae>%C(reset)" \
-    | tail -n "${1:-7}"
+    | head -n "${1:-7}"
 }
 function gtnuke() {
   [[ -z "$1" ]] && { echo "Usage: gtnuke <tag>"; return 1; }
