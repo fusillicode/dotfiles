@@ -42,6 +42,10 @@ bindkey '^I' expand-or-complete
 bindkey '^[[Z' reverse-menu-complete
 bindkey -M menuselect '^[[Z' reverse-menu-complete
 
+# Make multiline pastes insert newlines literally instead of executing each line.
+autoload -Uz bracketed-paste-magic
+zle -N bracketed-paste bracketed-paste-magic
+
 # Terminal title and zellij tab (using add-zsh-hook so starship doesn't clobber these)
 autoload -Uz add-zsh-hook
 function _set_title() { print -Pn "\e]0;$1\a"; }
