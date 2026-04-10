@@ -10,12 +10,12 @@ const INFO_ROWS: usize = 1;
 const BOLD: &str = "\x1b[1m";
 const SEPARATOR: char = '\u{2502}';
 
-const SEP_COLOR: &str = "\x1b[38;2;34;34;34m";
+const SEP_COLOR: &str = "\x1b[38;2;50;50;50m";
 const GIT_NEW_LINES_FG: &str = "\x1b[38;2;140;228;121m";
 const GIT_DEL_LINES_FG: &str = "\x1b[38;2;236;99;92m";
 const GIT_NEW_FILES_FG: &str = "\x1b[38;2;0;255;255m";
 const AGENT_IDLE_FG: &str = "\x1b[38;2;100;100;110m";
-const AGENT_BUSY_FG: &str = "\x1b[1;38;2;0;255;255m";
+const AGENT_BUSY_FG: &str = "\x1b[1;38;2;255;0;255m";
 const TAB_INACTIVE_BG: &str = "\x1b[48;2;0;0;0m";
 const TAB_DEFAULT_FG: &str = "\x1b[39m";
 const PATH_INACTIVE_FG: &str = "\x1b[38;2;142;145;160m";
