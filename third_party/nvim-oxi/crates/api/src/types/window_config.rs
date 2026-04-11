@@ -283,31 +283,31 @@ impl FromObject for WindowConfig {
 pub struct WindowOpts {
     #[builder(mask)]
     mask: u64,
-    row: Float,
-    col: Float,
-    width: Integer,
-    height: Integer,
-    anchor: NvimString,
-    relative: NvimString,
-    split: NvimString,
-    win: WinHandle,
-    bufpos: Array,
     external: Boolean,
+    fixed: Boolean,
     focusable: Boolean,
+    footer: Object,
+    footer_pos: NvimString,
+    hide: Boolean,
+    height: Integer,
     #[cfg_attr(docsrs, doc(cfg(feature = "neovim-0-11")))]
     #[cfg(feature = "neovim-0-11")] // On 0.11 and Nightly.
     mouse: Boolean,
+    noautocmd: Boolean,
+    relative: NvimString,
+    row: Float,
+    style: NvimString,
     vertical: Boolean,
+    win: WinHandle,
+    width: Integer,
     zindex: Integer,
+    anchor: NvimString,
     border: Object,
+    bufpos: Array,
+    col: Float,
+    split: NvimString,
     title: Object,
     title_pos: NvimString,
-    footer: Object,
-    footer_pos: NvimString,
-    style: NvimString,
-    noautocmd: Boolean,
-    fixed: Boolean,
-    hide: Boolean,
     #[cfg(feature = "neovim-nightly")] // Only on Nightly.
     #[builder(skip)]
     _cmdline_offset: Integer,
@@ -464,7 +464,9 @@ impl TryFrom<WindowOpts> for WindowConfig {
             Editor,
             Win,
             Cursor,
+            Laststatus,
             Mouse,
+            Tabline,
         }
 
         let relative = match utils::empty_string_is_none(Deserializer::new(
@@ -477,7 +479,11 @@ impl TryFrom<WindowOpts> for WindowConfig {
                     Some(WindowRelativeTo::Window(win))
                 },
                 WindowRelative::Cursor => Some(WindowRelativeTo::Cursor),
+                WindowRelative::Laststatus => {
+                    Some(WindowRelativeTo::Laststatus)
+                },
                 WindowRelative::Mouse => Some(WindowRelativeTo::Mouse),
+                WindowRelative::Tabline => Some(WindowRelativeTo::Tabline),
             },
             None => None,
         };

@@ -226,6 +226,10 @@ pub struct SetExtmarkOpts {
     // This was an experimental option in Neovim 0.10 but has been removed from
     // the public API on nightly, even though it's still included in the opts.
     scoped: types::Boolean,
+
+    #[cfg(feature = "neovim-nightly")] // Only on Nightly.
+    #[builder(skip)]
+    _subpriority: Integer,
 }
 
 #[inline]
@@ -259,4 +263,20 @@ where
         .into_iter()
         .map(|(txt, hl)| Array::from_iter([txt.into().into(), hl.to_object()]))
         .collect::<Array>();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_set_extmark_opts_builder_sets_virt_text_pos() {
+        let opts = SetExtmarkOpts::builder()
+            .virt_text([("foo", "ErrorMsg")])
+            .virt_text_pos(ExtmarkVirtTextPosition::Inline)
+            .build();
+
+        assert_ne!(0, opts.mask);
+        assert_eq!("inline", opts.virt_text_pos.to_string_lossy());
+    }
 }

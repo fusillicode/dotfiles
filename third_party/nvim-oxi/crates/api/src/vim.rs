@@ -132,7 +132,9 @@ where
         .collect::<Array>();
 
     let mut err = nvim::Error::new();
-    unsafe { nvim_echo(chunks.non_owning(), history, opts, &mut err) };
+    unsafe {
+        let _ = nvim_echo(chunks.non_owning(), history, opts, &mut err);
+    };
     choose!(err, ())
 }
 
