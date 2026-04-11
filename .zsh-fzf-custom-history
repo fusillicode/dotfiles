@@ -32,7 +32,6 @@ function fzf-custom-history() {
     --exact \
     --info=inline \
     --height=7 \
-    --layout=reverse \
     --multi \
     --bind 'tab:accept' \
     --prompt='' \
@@ -52,6 +51,5 @@ function fzf-custom-history() {
 }
 zle -N fzf-custom-history
 bindkey '^R' fzf-custom-history
-bindkey '^N' fzf-custom-history
 bindkey '^P' fzf-custom-history
 bindkey '^[[A' fzf-custom-history
