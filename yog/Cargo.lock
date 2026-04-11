@@ -4463,7 +4463,6 @@ dependencies = [
  "assert2",
  "nomicon",
  "owo-colors 4.3.0",
- "pretty_assertions",
  "rootcause",
  "rstest",
  "thiserror 2.0.18",
