@@ -46,7 +46,7 @@ keywords.workspace = true
 
 [package.metadata.docs.rs]
 default-features = false
-features = ["__docsrs", "neovim-nightly", "libuv", "mlua", "test"]
+features = ["neovim-nightly", "libuv", "mlua", "mlua/vendored", "test"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
@@ -55,7 +55,6 @@ neovim-0-10 = ["api/neovim-0-10"]
 neovim-0-11 = ["api/neovim-0-10", "api/neovim-0-11"]
 neovim-nightly = ["neovim-0-11", "api/neovim-nightly"]
 
-__docsrs = ["mlua?/vendored"]
 __no_docsrs = ["mlua?/module"]
 
 libuv = ["dep:libuv"]

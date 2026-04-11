@@ -1,29 +1,57 @@
 /// Options passed to [`echo()`](crate::echo).
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, macros::OptsBuilder)]
 #[repr(C)]
 pub struct EchoOpts {
-    verbose: bool,
-}
+    #[builder(mask)]
+    mask: u64,
 
-impl EchoOpts {
-    #[inline(always)]
-    pub fn builder() -> EchoOptsBuilder {
-        EchoOptsBuilder::default()
-    }
-}
+    #[builder(argtype = "bool")]
+    err: types::Boolean,
 
-#[derive(Clone, Default)]
-pub struct EchoOptsBuilder(EchoOpts);
+    #[builder(argtype = "bool")]
+    verbose: types::Boolean,
 
-impl EchoOptsBuilder {
-    #[inline]
-    pub fn verbose(&mut self, verbose: bool) -> &mut Self {
-        self.0.verbose = verbose;
-        self
-    }
+    #[builder(method = "truncate", argtype = "bool")]
+    _truncate: types::Boolean,
 
-    #[inline]
-    pub fn build(&mut self) -> EchoOpts {
-        core::mem::take(&mut self.0)
-    }
+    #[builder(
+        generics = "S: Into<types::String>",
+        argtype = "S",
+        inline = "{0}.into()"
+    )]
+    kind: types::String,
+
+    #[builder(
+        generics = "Id: Into<types::Object>",
+        argtype = "Id",
+        inline = "{0}.into()"
+    )]
+    id: types::Object,
+
+    #[builder(
+        generics = "S: Into<types::String>",
+        argtype = "S",
+        inline = "{0}.into()"
+    )]
+    title: types::String,
+
+    #[builder(
+        generics = "S: Into<types::String>",
+        argtype = "S",
+        inline = "{0}.into()"
+    )]
+    status: types::String,
+
+    #[builder(argtype = "u32", inline = "{0} as types::Integer")]
+    percent: types::Integer,
+
+    #[builder(
+        generics = "S: Into<types::String>",
+        argtype = "S",
+        inline = "{0}.into()"
+    )]
+    source: types::String,
+
+    #[builder(argtype = "types::Dictionary")]
+    data: types::Dictionary,
 }

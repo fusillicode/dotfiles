@@ -9,7 +9,17 @@ use types::{
     serde::Deserializer,
 };
 
-use super::{CommandAddr, CommandArgs, CommandNArgs, CommandRange};
+use super::{
+    CommandAddr,
+    CommandArgs,
+    CommandComplete,
+    CommandNArgs,
+    CommandRange,
+};
+use crate::Buffer;
+
+type CommandPreviewArgs = (CommandArgs, Option<u32>, Option<Buffer>);
+pub type CommandPreviewCallback = Function<CommandPreviewArgs, u8>;
 
 #[non_exhaustive]
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Deserialize)]
@@ -27,7 +37,7 @@ pub struct CommandInfos {
     pub callback: Option<Function<CommandArgs, ()>>,
 
     /// Command complletion strategy.
-    pub complete: Option<String>,
+    pub complete: Option<CommandComplete>,
 
     /// TODO: docs
     pub complete_arg: Option<String>,
@@ -50,10 +60,13 @@ pub struct CommandInfos {
     #[serde(default)]
     pub nargs: CommandNArgs,
 
+    /// Preview callback triggered by the command.
+    pub preview: Option<CommandPreviewCallback>,
+
     /// TODO: docs
     pub range: Option<CommandRange>,
 
-    /// Whether the firrst argument to the command can be an optional register
+    /// Whether the first argument to the command can be an optional register
     /// name (like `:del`, `:put` or `:yank`).
     pub register: bool,
 

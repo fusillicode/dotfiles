@@ -44,7 +44,7 @@ unsafe extern "C" {
         history: bool,
         opts: *const EchoOpts,
         err: *mut Error,
-    );
+    ) -> Object;
 
     // https://github.com/neovim/neovim/blob/v0.10.0/src/nvim/api/vim.c#L826
     pub(crate) fn nvim_err_write(str: NvimStr);

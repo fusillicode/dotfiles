@@ -280,10 +280,11 @@ impl OptsField<'_> {
         for attr in &self.attrs {
             match &attr {
                 BuilderAttribute::ArgType(arg_type) => {
-                    field_type = arg_type.clone();
+                    field_type = arg_type.as_ref().clone();
                 },
 
                 BuilderAttribute::Generics(gens) => {
+                    let gens = gens.as_ref();
                     generics = Some(quote! { #gens });
                 },
 
@@ -437,12 +438,12 @@ enum BuilderAttribute {
     /// The `builder(argtype = "<type>")` attribute.
     ///
     /// TODO: docs
-    ArgType(Type),
+    ArgType(Box<Type>),
 
     /// The `builder(generics = "<generics>")` attribute.
     ///
     /// TODO: docs
-    Generics(Generics),
+    Generics(Box<Generics>),
 
     /// The `builder(inline = "<expr>")` attribute.
     ///
@@ -554,10 +555,10 @@ impl BuilderAttribute {
         };
 
         let this = if is_argtype {
-            parse_str(&lit).map(Self::ArgType)
+            parse_str(&lit).map(|ty| Self::ArgType(Box::new(ty)))
         } else if is_generics {
             let lit = format!("<{lit}>");
-            parse_str(&lit).map(Self::Generics)
+            parse_str(&lit).map(|gens| Self::Generics(Box::new(gens)))
         } else if is_inline {
             Ok(Self::Inline(lit))
         } else if is_method {
