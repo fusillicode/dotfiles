@@ -1,7 +1,6 @@
-//! Autocommand group and definition helpers.
-//!
-//! Creates yank highlight, autosave, and quickfix configuration autocmds with resilient error
-//! reporting (failures logged, rest continue). Provides granular `create_autocmd` utility.
+use nvim_oxi::api;
+use nvim_oxi::api::opts::CreateAugroupOpts;
+use nvim_oxi::api::opts::CreateAutocmdOpts;
 
 /// Creates Nvim autocommands and their augroups.
 ///
@@ -49,55 +48,32 @@ vim.cmd('resize 7')
     crate::layout::create_autocmd();
 }
 
-/// Neovim master added `buf` to `Dict(create_autocmd)` before `callback` / `command`,
-/// while the pinned `nvim-oxi` revision still uses the older struct layout.
-/// Calling `nvim_oxi::api::create_autocmd()` against that Nvim build shifts the fields
-/// and triggers: `Validation("Required: 'command' or 'callback'")`.
-///
-/// Keep this Lua path until `nvim-oxi`'s `CreateAutocmdOpts` matches Neovim keyset again.
+/// Creates an autocommand whose command executes the provided Lua snippet.
 pub fn create_lua_autocmd(events: &[&str], augroup_name: &str, patterns: Option<&[&str]>, callback_body: &str) {
-    let events_lua = to_lua_array(events);
-    let patterns_lua = patterns.map(to_lua_array);
-    let augroup_name_lua = to_lua_string(augroup_name);
+    let augroup_opts = CreateAugroupOpts::builder().clear(true).build();
+    let group = match api::create_augroup(augroup_name, &augroup_opts) {
+        Ok(group) => group,
+        Err(err) => {
+            ytil_noxi::notify::error(format!(
+                "error creating augroup | augroup={augroup_name:?} error={err:#?}"
+            ));
+            return;
+        }
+    };
 
-    let opts_lua = patterns_lua.map_or_else(
-        || format!("{{ group = group, callback = function() {callback_body} end }}"),
-        |patterns_lua| {
-            format!("{{ group = group, pattern = {patterns_lua}, callback = function() {callback_body} end }}")
-        },
-    );
+    let mut autocmd_opts = CreateAutocmdOpts::builder();
+    let _ = autocmd_opts
+        .group(group)
+        .command(format!("lua << EOF\n{callback_body}\nEOF"));
 
-    let src = format!(
-        r#"
-lua << EOF
-local events = {events_lua}
-local augroup_name = {augroup_name_lua}
-local group = vim.api.nvim_create_augroup(augroup_name, {{ clear = true }})
-local ok, err = pcall(vim.api.nvim_create_autocmd, events, {opts_lua})
-if not ok then
-  vim.notify(
-    "error creating auto command | augroup=" .. string.format("%q", augroup_name) .. " events=" .. vim.inspect(events) .. " error=" .. tostring(err),
-    vim.log.levels.ERROR
-  )
-end
-EOF
-"#
-    );
+    if let Some(patterns) = patterns {
+        let _ = autocmd_opts.patterns(patterns.iter().copied());
+    }
 
-    let _ = ytil_noxi::common::exec_vim_script(&src, None);
-}
-
-fn to_lua_array(values: &[&str]) -> String {
-    format!(
-        "{{{}}}",
-        values
-            .iter()
-            .map(|value| to_lua_string(value))
-            .collect::<Vec<_>>()
-            .join(", ")
-    )
-}
-
-fn to_lua_string(value: &str) -> String {
-    format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
+    let autocmd_opts = autocmd_opts.build();
+    if let Err(err) = api::create_autocmd(events.iter().copied(), &autocmd_opts) {
+        ytil_noxi::notify::error(format!(
+            "error creating auto command | augroup={augroup_name:?} events={events:#?} error={err:#?}"
+        ));
+    }
 }
