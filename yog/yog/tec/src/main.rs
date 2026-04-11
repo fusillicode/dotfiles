@@ -3,7 +3,6 @@
 //! # Errors
 //! - Workspace root discovery or lint execution fails.
 
-use std::fmt::Write;
 use std::ops::Deref;
 use std::path::Path;
 use std::process::Command;
@@ -15,7 +14,6 @@ use owo_colors::OwoColorize;
 use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt as _;
 use ytil_sys::cli::Args;
-use ytil_sys::rm::RmFilesOutcome;
 
 /// File suffixes considered Rust-related for conditional lint gating.
 const RUST_EXTENSIONS: &[&str] = &[".rs", "Cargo.toml"];
@@ -182,16 +180,6 @@ const LINTS_FIX: &[(&str, LintBuilder)] = &[
             )
         })
     }),
-    ("rm-ds-store", |changed_paths| {
-        build_conditional_lint(changed_paths, &[], |path| {
-            LintFnResult::from(ytil_sys::rm::rm_matching_files(
-                path,
-                ".DS_Store",
-                &[".git", "target"],
-                false,
-            ))
-        })
-    }),
     ("rust-doc-build", |changed_paths| {
         build_conditional_lint(changed_paths, RUST_EXTENSIONS, |path| {
             LintFnResult::from(
@@ -229,41 +217,14 @@ impl From<Result<LintFnSuccess, LintFnError>> for LintFnResult {
     }
 }
 
-/// Converts [`RmFilesOutcome`] into [`LintFnResult`].
-impl From<RmFilesOutcome> for LintFnResult {
-    fn from(value: RmFilesOutcome) -> Self {
-        let mut msg = String::new();
-        for path in value.removed {
-            let _ = writeln!(&mut msg, "{} {}", "Removed".green(), path.display());
-        }
-        for (path, err) in &value.errors {
-            let _ = writeln!(
-                &mut msg,
-                "{} path{} error={}",
-                "Error removing".red(),
-                path.as_ref().map(|p| format!(" {:?}", p.display())).unwrap_or_default(),
-                format!("{err}").red()
-            );
-        }
-        if value.errors.is_empty() {
-            Self(Ok(LintFnSuccess::PlainMsg(msg)))
-        } else {
-            Self(Err(LintFnError::PlainMsg(msg)))
-        }
-    }
-}
-
 /// Error type for [`Lint`] function execution failures.
 ///
 /// # Errors
 /// - [`LintFnError::CmdError`] Process spawning or execution failure.
-/// - [`LintFnError::PlainMsg`] Generic error with a plain message string.
 #[derive(Debug, thiserror::Error)]
 enum LintFnError {
     #[error(transparent)]
     CmdError(Box<CmdError>),
-    #[error("{0}")]
-    PlainMsg(String),
 }
 
 impl From<CmdError> for LintFnError {
@@ -282,7 +243,7 @@ impl From<Box<CmdError>> for LintFnError {
 ///
 /// # Variants
 /// - [`LintFnSuccess::CmdOutput`] Standard command output with status and streams.
-/// - [`LintFnSuccess::PlainMsg`] Simple string message (currently unused).
+/// - [`LintFnSuccess::PlainMsg`] Simple string message.
 enum LintFnSuccess {
     CmdOutput(Output),
     PlainMsg(String),
@@ -347,12 +308,6 @@ fn main() -> rootcause::Result<()> {
     }
     let fix_mode = args.first().is_some_and(|s| s == "fix");
 
-    let (start_msg, lints) = if fix_mode {
-        ("lints fix", LINTS_FIX)
-    } else {
-        ("lints check", LINTS_CHECK)
-    };
-
     let workspace_root = ytil_sys::dir::get_workspace_root()?;
 
     let repo = ytil_git::repo::discover(&workspace_root)?;
@@ -362,17 +317,11 @@ fn main() -> rootcause::Result<()> {
         .filter_map(|entry| entry.path().map(str::to_string))
         .collect::<Vec<_>>();
 
-    let has_rust_changes = changed_paths
-        .iter()
-        .any(|p| RUST_EXTENSIONS.iter().any(|ext| p.ends_with(ext)));
-
-    if !has_rust_changes {
-        println!(
-            "\n{}\n",
-            "No Rust-related changes detected, skipping lints.".cyan().bold()
-        );
-        return Ok(());
-    }
+    let (start_msg, lints) = if fix_mode {
+        ("lints fix", LINTS_FIX)
+    } else {
+        ("lints check", LINTS_CHECK)
+    };
 
     println!(
         "\nRunning {} {} in {}\n",
@@ -425,90 +374,9 @@ fn main() -> rootcause::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Error;
-    use std::io::ErrorKind;
-    use std::path::PathBuf;
-
     use rstest::rstest;
 
     use super::*;
-
-    #[test]
-    fn test_from_rm_files_outcome_when_no_removed_no_errors_returns_success() {
-        let outcome = RmFilesOutcome {
-            removed: vec![],
-            errors: vec![],
-        };
-
-        let result = LintFnResult::from(outcome);
-
-        assert2::assert!(let Ok(LintFnSuccess::PlainMsg(msg)) = result.0);
-        pretty_assertions::assert_eq!(msg, "");
-    }
-
-    #[test]
-    fn test_from_rm_files_outcome_when_some_removed_no_errors_returns_success() {
-        let outcome = RmFilesOutcome {
-            removed: vec![PathBuf::from("file1.txt"), PathBuf::from("file2.txt")],
-            errors: vec![],
-        };
-
-        let result = LintFnResult::from(outcome);
-
-        assert2::assert!(let Ok(LintFnSuccess::PlainMsg(msg)) = result.0);
-        assert!(msg.contains("Removed"));
-        assert!(msg.contains("file1.txt"));
-        assert!(msg.contains("file2.txt"));
-    }
-
-    #[test]
-    fn test_from_rm_files_outcome_when_no_removed_some_errors_returns_failure() {
-        let outcome = RmFilesOutcome {
-            removed: vec![],
-            errors: vec![(
-                Some(PathBuf::from("badfile.txt")),
-                Error::new(ErrorKind::PermissionDenied, "permission denied"),
-            )],
-        };
-
-        let result = LintFnResult::from(outcome);
-
-        assert2::assert!(let Err(LintFnError::PlainMsg(msg)) = result.0);
-        assert!(msg.contains("Error removing"));
-        assert!(msg.contains("\"badfile.txt\""));
-        assert!(msg.contains("permission denied"));
-    }
-
-    #[test]
-    fn test_from_rm_files_outcome_when_error_without_path_returns_failure() {
-        let outcome = RmFilesOutcome {
-            removed: vec![],
-            errors: vec![(None, Error::new(ErrorKind::NotFound, "file not found"))],
-        };
-
-        let result = LintFnResult::from(outcome);
-
-        assert2::assert!(let Err(LintFnError::PlainMsg(msg)) = result.0);
-        assert!(msg.contains("Error removing"));
-        assert!(msg.contains("file not found"));
-    }
-
-    #[test]
-    fn test_from_rm_files_outcome_when_mixed_removed_and_errors_returns_failure() {
-        let outcome = RmFilesOutcome {
-            removed: vec![PathBuf::from("goodfile.txt")],
-            errors: vec![(Some(PathBuf::from("badfile.txt")), Error::other("some error"))],
-        };
-
-        let result = LintFnResult::from(outcome);
-
-        assert2::assert!(let Err(LintFnError::PlainMsg(msg)) = result.0);
-        assert!(msg.contains("Removed"));
-        assert!(msg.contains("goodfile.txt"));
-        assert!(msg.contains("Error removing"));
-        assert!(msg.contains("\"badfile.txt\""));
-        assert!(msg.contains("some error"));
-    }
 
     #[rstest]
     #[case::multiple_files_no_extension_filter(
