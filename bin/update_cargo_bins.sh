@@ -11,8 +11,10 @@ cargo install --force \
   cargo-sort-derives \
   ccase \
   fd-find \
+  jnv \
   mise \
   pv \
+  qj \
   ripgrep \
   sd \
   sqlx-cli \
