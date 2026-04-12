@@ -75,9 +75,19 @@ fn set_all(_: ()) {
     set(&NV_MODE, "X", r#""_X"#, &default_opts);
 
     set(
-        &NV_MODE,
+        &[Mode::Normal],
         "<leader>yf",
-        r#":let @+ = expand("%") . ":" . line(".")<cr>"#,
+        r#":<c-u>let @+ = expand("%") . ":" . line(".")<cr>"#,
+        &default_opts,
+    );
+    set(
+        &[Mode::Visual],
+        "<leader>yf",
+        concat!(
+            r#":<c-u>let @+ = expand("%") . ":" . "#,
+            r#"min([line("'<"), line("'>")])"#,
+            r#" . (line("'<") == line("'>") ? "" : ":" . max([line("'<"), line("'>")]))<cr>"#,
+        ),
         &default_opts,
     );
     set(&[Mode::Visual], "y", "ygv<esc>", &default_opts);
