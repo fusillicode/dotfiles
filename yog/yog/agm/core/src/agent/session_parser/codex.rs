@@ -12,7 +12,6 @@ use crate::agent::session::Session;
 pub fn parse(content: &str, session_name: &str) -> rootcause::Result<Session> {
     let mut session = None;
     let mut first_user_message = None;
-    let mut updated_at = None;
 
     for (line_idx, line) in content.lines().enumerate() {
         let line = serde_json::from_str::<CodexLine>(line)
@@ -20,35 +19,47 @@ pub fn parse(content: &str, session_name: &str) -> rootcause::Result<Session> {
             .attach(format!("line_number={}", line_idx.saturating_add(1)))
             .attach(format!("line={line}"))?;
 
-        if let Some(timestamp) = line.timestamp() {
-            updated_at = Some(timestamp);
-        }
-
         if first_user_message.is_none() {
             first_user_message = line.first_user_message();
         }
 
-        let Some(meta) = line.into_session_meta() else {
-            continue;
-        };
-        let created_at = meta.payload.timestamp;
+        if session.is_none() {
+            let Some(meta) = line.into_session_meta() else {
+                continue;
+            };
+            let created_at = meta.payload.timestamp;
 
-        session.get_or_insert_with(|| {
-            Session::new(
+            session = Some(Session::new(
                 Agent::Codex,
                 meta.payload.id,
                 PathBuf::from(meta.payload.cwd),
                 first_user_message.clone(),
                 created_at,
-            )
-        });
+            ));
+        }
+
+        if session.is_some() && first_user_message.is_some() {
+            break;
+        }
     }
 
     let mut session = session
         .context("no Codex session_meta record found".to_owned())
         .attach(format!("session_name={session_name}"))?;
     session.name = first_user_message.as_deref().unwrap_or(session_name).to_string();
-    session.updated_at = updated_at.unwrap_or(session.created_at);
+
+    for line in content.lines().rev() {
+        let line = serde_json::from_str::<CodexLine>(line)
+            .context("failed to parse Codex session json line".to_owned())
+            .attach(format!("line={line}"))?;
+        let Some(timestamp) = line.timestamp() else {
+            continue;
+        };
+        session.updated_at = timestamp;
+        return Ok(session);
+    }
+
+    session.updated_at = session.created_at;
     Ok(session)
 }
 
@@ -143,7 +154,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parses_codex_session_from_session_meta() {
+    fn test_parse_codex_session_from_session_meta_uses_session_name_fallback() {
         let tempdir = tempdir().unwrap();
         let workspace = tempdir.path().join("workspace");
         std::fs::create_dir_all(&workspace).unwrap();
@@ -166,7 +177,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parses_codex_first_user_message_preview() {
+    fn test_parse_codex_session_with_first_user_message_sets_name_and_updated_at() {
         let content = concat!(
             "{\"timestamp\":\"2026-03-20T06:30:20.312Z\",\"type\":\"session_meta\",\"payload\":{\"id\":\"019d09f0-0d96-7e23-94cd-1f6aad7cdc09\",\"timestamp\":\"2026-03-20T06:30:20.312Z\",\"cwd\":\"/tmp/workspace\"}}\n",
             "{\"timestamp\":\"2026-03-20T06:31:20.312Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"user_message\",\"message\":\"why can't I jump with rust-analyzer to these types?\"}}\n"
@@ -182,19 +193,29 @@ mod tests {
     }
 
     #[test]
-    fn test_parses_codex_lines_with_unrelated_event_payloads() {
+    fn test_parse_codex_session_skips_middle_lines_after_top_loop_stops() {
         let content = concat!(
-            "{\"timestamp\":\"2026-03-20T06:29:20.312Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"total\":1}}}\n",
             "{\"timestamp\":\"2026-03-20T06:30:20.312Z\",\"type\":\"session_meta\",\"payload\":{\"id\":\"019d09f0-0d96-7e23-94cd-1f6aad7cdc09\",\"timestamp\":\"2026-03-20T06:30:20.312Z\",\"cwd\":\"/tmp/workspace\"}}\n",
-            "{\"timestamp\":\"2026-03-20T06:32:20.312Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"assistant_message\",\"message\":\"hello\"}}\n"
+            "{\"timestamp\":\"2026-03-20T06:31:20.312Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"user_message\",\"message\":\"first user msg\"}}\n",
+            "{\"bad\":\"json\"\n",
+            "{\"timestamp\":\"2026-03-20T06:32:20.312Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\"}}\n"
         );
+
         assert2::assert!(let Ok(session) = parse(content, "fallback-name"));
-        pretty_assertions::assert_eq!(session.id, "019d09f0-0d96-7e23-94cd-1f6aad7cdc09");
+        pretty_assertions::assert_eq!(session.name, "first user msg");
         pretty_assertions::assert_eq!(
             session.updated_at,
             chrono::DateTime::parse_from_rfc3339("2026-03-20T06:32:20.312Z")
                 .unwrap()
                 .to_utc()
         );
+    }
+
+    #[test]
+    fn test_parse_codex_session_with_invalid_scanned_line_returns_error() {
+        let content = "{\"timestamp\":\"not-a-date\",\"type\":\"session_meta\",\"payload\":{\"id\":\"019d09f0-0d96-7e23-94cd-1f6aad7cdc09\",\"timestamp\":\"2026-03-20T06:30:20.312Z\",\"cwd\":\"/tmp/workspace\"}}\n";
+
+        assert2::assert!(let Err(err) = parse(content, "fallback-name"));
+        assert!(err.to_string().contains("failed to parse Codex session json line"));
     }
 }
