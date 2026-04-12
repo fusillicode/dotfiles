@@ -18,6 +18,7 @@ return {
         css = { 'prettierd', },
         graphql = { 'prettierd', },
         javascript = { 'prettierd', },
+        json = { 'qj', },
         markdown = { 'prettierd', },
         sql = { 'sqruff', },
         typescript = { 'prettierd', },
