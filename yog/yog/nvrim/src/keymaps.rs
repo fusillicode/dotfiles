@@ -77,14 +77,14 @@ fn set_all(_: ()) {
     set(
         &[Mode::Normal],
         "<leader>yf",
-        r#":<c-u>let @+ = expand("%") . ":" . line(".")<cr>"#,
+        r#"yy:let @+ = expand("%") . ":" . line(".")<cr>"#,
         &default_opts,
     );
     set(
         &[Mode::Visual],
         "<leader>yf",
         concat!(
-            r#":<c-u>let @+ = expand("%") . ":" . "#,
+            r#"y:let @+ = expand("%") . ":" . "#,
             r#"min([line("'<"), line("'>")])"#,
             r#" . (line("'<") == line("'>") ? "" : ":" . max([line("'<"), line("'>")]))<cr>"#,
         ),
