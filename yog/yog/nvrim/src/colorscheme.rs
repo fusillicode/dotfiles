@@ -149,8 +149,7 @@ fn get_overridden_hl_opts(
 
 /// Sets a highlight group in the specified namespace.
 fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &HighlightOpts) {
-    let hl_opts = hl_opts.to_set_highlight_opts();
-    if let Err(err) = nvim_oxi::api::set_hl(ns_id, hl_name, &hl_opts) {
+    if let Err(err) = nvim_oxi::api::set_hl(ns_id, hl_name, &hl_opts.to_set_highlight_opts()) {
         ytil_noxi::notify::error(format!(
             "error setting highlight opts | hl_name={hl_name:?} hl_opts={hl_opts:#?} error={err:#?}"
         ));
@@ -273,73 +272,73 @@ impl HighlightOpts {
     }
 
     fn to_set_highlight_opts(&self) -> SetHighlightOpts {
-        let mut builder = SetHighlightOpts::builder();
+        let mut opts = SetHighlightOpts::builder();
 
         if let Some(v) = self.foreground.as_deref() {
-            let _ = builder.foreground(v);
+            let _ = opts.foreground(v);
         }
         if let Some(v) = self.background.as_deref() {
-            let _ = builder.background(v);
+            let _ = opts.background(v);
         }
         if let Some(v) = self.special_color.as_deref() {
-            let _ = builder.special(v);
+            let _ = opts.special(v);
         }
-
         if let Some(v) = self.bold {
-            let _ = builder.bold(v);
+            let _ = opts.bold(v);
         }
         if let Some(v) = self.italic {
-            let _ = builder.italic(v);
+            let _ = opts.italic(v);
         }
         if let Some(v) = self.reverse {
-            let _ = builder.reverse(v);
+            let _ = opts.reverse(v);
         }
         if let Some(v) = self.standout {
-            let _ = builder.standout(v);
+            let _ = opts.standout(v);
         }
         if let Some(v) = self.strikethrough {
-            let _ = builder.strikethrough(v);
+            let _ = opts.strikethrough(v);
         }
         if let Some(v) = self.underline {
-            let _ = builder.underline(v);
+            let _ = opts.underline(v);
         }
         if let Some(v) = self.undercurl {
-            let _ = builder.undercurl(v);
+            let _ = opts.undercurl(v);
         }
         if let Some(v) = self.underdouble {
-            let _ = builder.underdouble(v);
+            let _ = opts.underdouble(v);
         }
         if let Some(v) = self.underdotted {
-            let _ = builder.underdotted(v);
+            let _ = opts.underdotted(v);
         }
         if let Some(v) = self.underdashed {
-            let _ = builder.underdashed(v);
+            let _ = opts.underdashed(v);
         }
         if let Some(v) = self.altfont {
-            let _ = builder.altfont(v);
+            let _ = opts.altfont(v);
         }
         if let Some(v) = self.nocombine {
-            let _ = builder.nocombine(v);
+            let _ = opts.nocombine(v);
         }
         if let Some(v) = self.fallback {
-            let _ = builder.fallback(v);
+            let _ = opts.fallback(v);
         }
         if let Some(v) = self.fg_indexed {
-            let _ = builder.fg_indexed(v);
+            let _ = opts.fg_indexed(v);
         }
         if let Some(v) = self.bg_indexed {
-            let _ = builder.bg_indexed(v);
+            let _ = opts.bg_indexed(v);
         }
         if let Some(v) = self.force {
-            let _ = builder.force(v);
+            let _ = opts.force(v);
         }
-        if let Some(v) = self.blend
-            && let Ok(v) = v.try_into()
-        {
-            let _ = builder.blend(v);
+        if let Some(v) = self.blend {
+            let Ok(v) = v.try_into() else {
+                return opts.build();
+            };
+            let _ = opts.blend(v);
         }
 
-        builder.build()
+        opts.build()
     }
 }
 
@@ -462,26 +461,48 @@ mod tests {
             .undercurl(false);
 
         let mut expected = SetHighlightOpts::builder();
-        let _ = expected
-            .foreground("#000000")
-            .background("white")
-            .special("#FF0000")
-            .bold(true)
-            .reverse(false)
-            .underline(true)
-            .undercurl(false);
+        let _ = expected.foreground("#000000");
+        let _ = expected.background("white");
+        let _ = expected.special("#FF0000");
+        let _ = expected.bold(true);
+        let _ = expected.reverse(false);
+        let _ = expected.underline(true);
+        let _ = expected.undercurl(false);
+
+        pretty_assertions::assert_eq!(opts.to_set_highlight_opts(), expected.build(),);
+    }
+
+    #[test]
+    fn test_to_set_highlight_opts_maps_blend() {
+        let opts = HighlightOpts {
+            blend: Some(30),
+            ..Default::default()
+        };
+
+        let mut expected = SetHighlightOpts::builder();
+        let _ = expected.blend(30);
 
         pretty_assertions::assert_eq!(opts.to_set_highlight_opts(), expected.build());
     }
 
     #[test]
-    fn test_to_set_highlight_opts_converts_blend_to_u8() {
+    fn test_to_set_highlight_opts_ignores_out_of_range_blend() {
         let opts = HighlightOpts {
-            blend: Some(30),
+            blend: Some(u32::from(u8::MAX) + 1),
             ..Default::default()
         };
+
+        pretty_assertions::assert_eq!(opts.to_set_highlight_opts(), SetHighlightOpts::default());
+    }
+
+    #[test]
+    fn test_to_set_highlight_opts_preserves_false_attrs() {
+        let opts = HighlightOpts::new().reverse(false).underline(false);
+
         let mut expected = SetHighlightOpts::builder();
-        let _ = expected.blend(30);
+        let _ = expected.reverse(false);
+        let _ = expected.underline(false);
+
         pretty_assertions::assert_eq!(opts.to_set_highlight_opts(), expected.build());
     }
 }

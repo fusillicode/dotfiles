@@ -140,7 +140,6 @@ fn get_runtime_file() {
 }
 
 #[nvim_oxi::test]
-#[cfg_attr(feature = "neovim-0-11", ignore = "deprecated in 0.11")]
 fn hl_foreground() {
     let foreground = "#FF0000";
     let opts = SetHighlightOpts::builder()
@@ -150,12 +149,13 @@ fn hl_foreground() {
         .build();
     api::set_hl(0, "Header", &opts).unwrap();
 
-    let infos = api::get_hl_by_name("Header", true).unwrap();
+    let infos = get_highlight_by_name("Header");
     assert_eq!(infos.foreground, Some(hex_to_dec(foreground)));
+    assert_eq!(infos.bold, Some(true));
+    assert_eq!(infos.strikethrough, Some(true));
 }
 
 #[nvim_oxi::test]
-#[cfg_attr(feature = "neovim-0-11", ignore = "deprecated in 0.11")]
 fn hl_link() {
     let base_fg = "#579dd6";
     let base_opts = SetHighlightOpts::builder().foreground(base_fg).build();
@@ -164,7 +164,7 @@ fn hl_link() {
     let linked_opts = SetHighlightOpts::builder().link("Base").build();
     nvim_oxi::api::set_hl(0, "Linked", &linked_opts).unwrap();
 
-    let infos = api::get_hl_by_name("Linked", true).unwrap();
+    let infos = get_highlight_by_name("Linked");
     assert_eq!(infos.foreground, Some(hex_to_dec(base_fg)));
 }
 
@@ -173,7 +173,7 @@ fn hl_underline() {
     let opts = SetHighlightOpts::builder().underline(true).build();
     api::set_hl(0, "MatchParen", &opts).unwrap();
 
-    let infos = api::get_hl_by_name("MatchParen", true).unwrap();
+    let infos = get_highlight_by_name("MatchParen");
     assert_eq!(Some(true), infos.underline);
 }
 
@@ -339,6 +339,15 @@ fn hex_to_dec(hex_color: &str) -> u32 {
     assert!(hex_color[1..].chars().all(|c| c.is_ascii_digit()
         || ('a'..='f').contains(&c.to_ascii_lowercase())));
     u32::from_str_radix(&hex_color[1..], 16).unwrap()
+}
+
+fn get_highlight_by_name(name: &str) -> HighlightInfos {
+    let opts = GetHighlightOpts::builder().name(name).link(false).build();
+    let GetHlInfos::Single(infos) = api::get_hl(0, &opts).unwrap() else {
+        panic!("expected a single highlight");
+    };
+
+    infos
 }
 
 fn set_notification_provider<P, R>(mut provider: P)
