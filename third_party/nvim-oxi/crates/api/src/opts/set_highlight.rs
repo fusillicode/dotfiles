@@ -147,6 +147,7 @@ mod tests {
             .blink(true)
             .conceal(true)
             .dim(true)
+            .font("FiraCode Nerd Font")
             .overline(true)
             .update(true)
             .build();
@@ -154,6 +155,7 @@ mod tests {
         assert!(opts.blink);
         assert!(opts.conceal);
         assert!(opts.dim);
+        assert_eq!(opts.font, NvimString::from("FiraCode Nerd Font"));
         assert!(opts.overline);
         assert!(opts.update);
     }
@@ -278,4 +280,10 @@ pub struct SetHighlightOpts {
 
     #[builder(skip)]
     url: NvimString,
+
+    // NOTE: Neovim commit 1033739b60662661af61a07eb848552f2ce87e47 added
+    // `font` to Dict(highlight); keep nightly layout/mask in sync with
+    // `src/nvim/api/keysets_defs.h`.
+    #[builder(argtype = "&str", inline = "types::String::from({0})")]
+    font: NvimString,
 }
