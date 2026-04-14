@@ -101,42 +101,93 @@ pub enum Cmd {
     #[default]
     None,
     Running(String),
-    IdleAgent(Agent),
-    BusyAgent(Agent),
+    Agent {
+        agent: Agent,
+        state: AgentState,
+    },
 }
 
 impl Cmd {
-    pub fn agent_name(&self) -> Option<&'static str> {
+    pub const fn agent(agent: Agent, state: AgentState) -> Self {
+        Self::Agent { agent, state }
+    }
+
+    pub const fn waiting(agent: Agent, seen: bool) -> Self {
+        if seen {
+            Self::agent(agent, AgentState::Acknowledged)
+        } else {
+            Self::agent(agent, AgentState::NeedsAttention)
+        }
+    }
+
+    pub const fn tracked_agent(&self) -> Option<Agent> {
         match self {
-            Self::IdleAgent(agent) | Self::BusyAgent(agent) => Some(agent.name()),
+            Self::Agent { agent, .. } => Some(*agent),
             Self::None | Self::Running(_) => None,
         }
+    }
+
+    pub const fn agent_state(&self) -> Option<AgentState> {
+        match self {
+            Self::Agent { state, .. } => Some(*state),
+            Self::None | Self::Running(_) => None,
+        }
+    }
+
+    pub fn agent_name(&self) -> Option<&'static str> {
+        self.tracked_agent().map(Agent::name)
     }
 
     pub fn running_cmd(&self) -> Option<&str> {
         match self {
             Self::Running(s) => Some(s),
-            Self::None | Self::IdleAgent(_) | Self::BusyAgent(_) => None,
+            Self::None | Self::Agent { .. } => None,
         }
     }
 
     pub fn is_busy(&self) -> bool {
-        matches!(self, Self::BusyAgent(_))
+        matches!(
+            self,
+            Self::Agent {
+                state: AgentState::Busy,
+                ..
+            }
+        )
     }
 
-    pub fn from_parts(agent: Option<Agent>, agent_busy: bool, command: Option<String>) -> Self {
+    pub fn needs_attention(&self) -> bool {
+        matches!(
+            self,
+            Self::Agent {
+                state: AgentState::NeedsAttention,
+                ..
+            }
+        )
+    }
+
+    pub fn acknowledge(&mut self) -> bool {
+        let Self::Agent { state, .. } = self else {
+            return false;
+        };
+        if *state != AgentState::NeedsAttention {
+            return false;
+        }
+        *state = AgentState::Acknowledged;
+        true
+    }
+
+    pub fn from_parts(agent: Option<Agent>, agent_state: Option<AgentState>, command: Option<String>) -> Self {
         let Some(agent) = agent else {
             return command.map_or(Self::None, Self::Running);
         };
-        (if agent_busy { Self::BusyAgent } else { Self::IdleAgent })(agent)
+        Self::agent(agent, agent_state.unwrap_or(AgentState::Acknowledged))
     }
 
-    pub fn into_parts(self) -> (Option<Agent>, bool, Option<String>) {
+    pub fn into_parts(self) -> (Option<Agent>, Option<AgentState>, Option<String>) {
         match self {
-            Self::None => (None, false, None),
-            Self::Running(cmd) => (None, false, Some(cmd)),
-            Self::IdleAgent(agent) => (Some(agent), false, None),
-            Self::BusyAgent(agent) => (Some(agent), true, None),
+            Self::None => (None, None, None),
+            Self::Running(cmd) => (None, None, Some(cmd)),
+            Self::Agent { agent, state } => (Some(agent), Some(state), None),
         }
     }
 }
@@ -144,11 +195,106 @@ impl Cmd {
 impl From<&AgentEventPayload> for Cmd {
     fn from(value: &AgentEventPayload) -> Self {
         match value.kind {
-            AgentEventKind::Start => Self::IdleAgent(value.agent),
-            AgentEventKind::Busy => Self::BusyAgent(value.agent),
-            AgentEventKind::Idle => Self::IdleAgent(value.agent),
+            AgentEventKind::Start => Self::agent(value.agent, AgentState::Acknowledged),
+            AgentEventKind::Busy => Self::agent(value.agent, AgentState::Busy),
+            AgentEventKind::Idle => Self::agent(value.agent, AgentState::Acknowledged),
             AgentEventKind::Exit => Self::None,
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AgentState {
+    Busy,
+    NeedsAttention,
+    Acknowledged,
+}
+
+impl AgentState {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Busy => "busy",
+            Self::NeedsAttention => "needs_attention",
+            Self::Acknowledged => "acknowledged",
+        }
+    }
+
+    pub fn parse(s: &str) -> Result<Self, ParseError> {
+        match s {
+            "busy" => Ok(Self::Busy),
+            "needs_attention" | "waiting_unseen" => Ok(Self::NeedsAttention),
+            "acknowledged" | "waiting_seen" => Ok(Self::Acknowledged),
+            _ => Err(ParseError::invalid("agent_state", format!("{s:?}"))),
+        }
+    }
+}
+
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
+pub struct TabStateEntry {
+    pub tab_id: usize,
+    pub cwd: Option<PathBuf>,
+    pub cmd: Cmd,
+    pub git_stat: GitStat,
+}
+
+impl std::fmt::Display for TabStateEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let cwd_s = self.cwd.as_ref().map(|p| p.display().to_string());
+        let cmd_s = self.cmd.running_cmd();
+        let agent_state = self.cmd.agent_state().map(AgentState::as_str);
+
+        write!(
+            f,
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n",
+            encode_opt(cwd_s.as_deref()),
+            encode_opt(self.cmd.agent_name()),
+            encode_opt(agent_state),
+            self.git_stat.insertions,
+            self.git_stat.deletions,
+            self.git_stat.new_files,
+            u8::from(self.git_stat.is_worktree),
+            encode_opt(cmd_s),
+        )
+    }
+}
+
+impl std::convert::TryFrom<(usize, &str)> for TabStateEntry {
+    type Error = ParseError;
+
+    fn try_from((tab_id, content): (usize, &str)) -> Result<Self, Self::Error> {
+        let mut l = content.lines();
+        let mut next = |name| l.next().ok_or(ParseError::Missing(name));
+
+        let cwd = decode_opt_path(next("cwd")?);
+        let agent_raw = next("agent")?;
+        let agent = if agent_raw == EMPTY_FIELD {
+            None
+        } else {
+            Some(Agent::from_name(agent_raw)?)
+        };
+        let agent_state = match next("agent_state")? {
+            EMPTY_FIELD => None,
+            "0" => Some(AgentState::Acknowledged),
+            "1" => Some(AgentState::Busy),
+            value => Some(AgentState::parse(value)?),
+        };
+        let insertions = parse_usize(next("ins")?, "ins")?;
+        let deletions = parse_usize(next("del")?, "del")?;
+        let new_files = parse_usize(next("new")?, "new")?;
+        let is_worktree = parse_bool(next("wt")?, "wt")?;
+        let command = decode_opt(next("cmd")?);
+
+        Ok(Self {
+            tab_id,
+            cwd,
+            cmd: Cmd::from_parts(agent, agent_state, command),
+            git_stat: GitStat {
+                insertions,
+                deletions,
+                new_files,
+                is_worktree,
+            },
+        })
     }
 }
 
@@ -165,34 +311,6 @@ fn decode_opt_path(val: &str) -> Option<PathBuf> {
         None
     } else {
         Some(PathBuf::from(val))
-    }
-}
-
-#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
-pub struct TabStateEntry {
-    pub tab_id: usize,
-    pub cwd: Option<PathBuf>,
-    pub cmd: Cmd,
-    pub git_stat: GitStat,
-}
-
-impl std::fmt::Display for TabStateEntry {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let cwd_s = self.cwd.as_ref().map(|p| p.display().to_string());
-        let cmd_s = self.cmd.running_cmd();
-
-        write!(
-            f,
-            "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n",
-            encode_opt(cwd_s.as_deref()),
-            encode_opt(self.cmd.agent_name()),
-            u8::from(self.cmd.is_busy()),
-            self.git_stat.insertions,
-            self.git_stat.deletions,
-            self.git_stat.new_files,
-            u8::from(self.git_stat.is_worktree),
-            encode_opt(cmd_s),
-        )
     }
 }
 
@@ -214,41 +332,6 @@ fn parse_usize(s: &str, name: &'static str) -> Result<usize, ParseError> {
     })
 }
 
-impl std::convert::TryFrom<(usize, &str)> for TabStateEntry {
-    type Error = ParseError;
-
-    fn try_from((tab_id, content): (usize, &str)) -> Result<Self, Self::Error> {
-        let mut l = content.lines();
-        let mut next = |name| l.next().ok_or(ParseError::Missing(name));
-
-        let cwd = decode_opt_path(next("cwd")?);
-        let agent_raw = next("agent")?;
-        let agent = if agent_raw == EMPTY_FIELD {
-            None
-        } else {
-            Some(Agent::from_name(agent_raw)?)
-        };
-        let agent_busy = parse_bool(next("busy")?, "busy")?;
-        let insertions = parse_usize(next("ins")?, "ins")?;
-        let deletions = parse_usize(next("del")?, "del")?;
-        let new_files = parse_usize(next("new")?, "new")?;
-        let is_worktree = parse_bool(next("wt")?, "wt")?;
-        let command = decode_opt(next("cmd")?);
-
-        Ok(Self {
-            tab_id,
-            cwd,
-            cmd: Cmd::from_parts(agent, agent_busy, command),
-            git_stat: GitStat {
-                insertions,
-                deletions,
-                new_files,
-                is_worktree,
-            },
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::convert::TryFrom;
@@ -261,7 +344,7 @@ mod tests {
         let entry = TabStateEntry {
             tab_id: 1,
             cwd: Some(PathBuf::from("/tmp")),
-            cmd: Cmd::BusyAgent(Agent::Claude),
+            cmd: Cmd::agent(Agent::Claude, AgentState::NeedsAttention),
             git_stat: GitStat {
                 insertions: 1,
                 deletions: 2,
@@ -297,5 +380,16 @@ mod tests {
     fn test_short_path_outside_home() {
         let home = Path::new("/home/user");
         pretty_assertions::assert_eq!(super::short_path(Path::new("/opt/pkg/foo"), home), "/o/p/foo");
+    }
+
+    #[test]
+    fn test_cmd_acknowledge_needs_attention_transitions_to_acknowledged() {
+        let mut cmd = Cmd::agent(Agent::Codex, AgentState::NeedsAttention);
+
+        assert2::assert!(cmd.needs_attention());
+        assert2::assert!(cmd.acknowledge());
+        pretty_assertions::assert_eq!(cmd, Cmd::agent(Agent::Codex, AgentState::Acknowledged));
+        assert2::assert!(!cmd.needs_attention());
+        assert2::assert!(!cmd.acknowledge());
     }
 }

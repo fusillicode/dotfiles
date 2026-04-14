@@ -38,6 +38,9 @@ pub enum PipeEvent {
     SyncRequest {
         requester_plugin_id: u32,
     },
+    ActiveTab {
+        active_tab_id: usize,
+    },
     StateSnapshot {
         source_plugin_id: u32,
         snapshot: StateSnapshotPayload,
@@ -64,6 +67,21 @@ impl TryFrom<&PipeMessage> for PipeEvent {
                     let requester_plugin_id =
                         Self::source_plugin_id(msg).ok_or(PipeEventError::Parse(ParseError::Missing("source")))?;
                     Ok(Self::SyncRequest { requester_plugin_id })
+                }
+                Some("active_tab") => {
+                    let active_tab_id = msg
+                        .args
+                        .get("tab_id")
+                        .ok_or(PipeEventError::Parse(ParseError::Missing("tab_id")))
+                        .and_then(|tab_id| {
+                            tab_id.parse::<usize>().map_err(|_| {
+                                PipeEventError::Parse(ParseError::Invalid {
+                                    field: "tab_id",
+                                    value: tab_id.clone(),
+                                })
+                            })
+                        })?;
+                    Ok(Self::ActiveTab { active_tab_id })
                 }
                 Some("state_snapshot") => {
                     let source_plugin_id =
@@ -125,7 +143,7 @@ pub enum StateEvent {
     },
 
     // Agent lifecycle
-    /// First detection of an agent in a pane (idle by default).
+    /// First detection of an agent in a pane (waiting state inferred from focus).
     AgentDetected {
         pane_id: u32,
         agent: Agent,
@@ -154,6 +172,9 @@ pub enum StateEvent {
         source_plugin_id: u32,
         snapshot: StateSnapshotPayload,
         evict_ids: Vec<u32>,
+    },
+    ActiveTabChanged {
+        active_tab_id: usize,
     },
 
     // Tab bar topology
@@ -243,6 +264,19 @@ mod tests {
                 },
             },
         }
+    )]
+    #[case::active_tab(
+        PipeMessage {
+            source: PipeSource::Plugin(7),
+            name: SYNC_PIPE.to_string(),
+            payload: None,
+            args: BTreeMap::from([
+                (String::from("type"), String::from("active_tab")),
+                (String::from("tab_id"), String::from("17")),
+            ]),
+            is_private: false,
+        },
+        PipeEvent::ActiveTab { active_tab_id: 17 }
     )]
     #[case::agent(
         PipeMessage {
