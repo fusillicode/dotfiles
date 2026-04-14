@@ -146,8 +146,12 @@ impl ZellijPlugin for State {
             }
 
             Event::TabUpdate(mut tabs) => {
+                let active_tab_id = active_tab_id_from_tabs(&tabs);
                 let events = self.events_from_tab_update(&mut tabs);
                 let frame_changed = self.apply_all(&events);
+                if let Some(active_tab_id) = active_tab_id {
+                    send_active_tab(active_tab_id);
+                }
                 handle_events(self.current_tab.as_ref(), &events);
                 frame_changed || !events.is_empty()
             }
@@ -223,6 +227,11 @@ impl ZellijPlugin for State {
                 send_current_tab_snapshot(self.current_tab.as_ref(), Some(requester_plugin_id));
                 false
             }
+            PipeEvent::ActiveTab { active_tab_id } => {
+                let events = self.events_from_active_tab(active_tab_id);
+                let frame_changed = self.apply_all(&events);
+                frame_changed || !events.is_empty()
+            }
             PipeEvent::StateSnapshot {
                 source_plugin_id,
                 snapshot,
@@ -255,6 +264,7 @@ fn handle_events(current_tab: Option<&CurrentTab>, events: &[StateEvent]) {
             | StateEvent::AgentBusy { .. }
             | StateEvent::AgentLost { .. } => send_current_tab_snapshot(current_tab, None),
             StateEvent::SyncRequested => send_sync_request(),
+            StateEvent::ActiveTabChanged { .. } => {}
             StateEvent::PanesChanged { .. }
             | StateEvent::RemoteTabUpdated { .. }
             | StateEvent::TopologyChanged
@@ -272,6 +282,17 @@ fn send_sync_request() {
     let mut args = BTreeMap::new();
     args.insert("type".to_string(), "sync_request".to_string());
     pipe_message_to_plugin(MessageToPlugin::new(SYNC_PIPE.to_string()).with_args(args));
+}
+
+fn send_active_tab(active_tab_id: usize) {
+    let mut args = BTreeMap::new();
+    args.insert("type".to_string(), "active_tab".to_string());
+    args.insert("tab_id".to_string(), active_tab_id.to_string());
+    pipe_message_to_plugin(MessageToPlugin::new(SYNC_PIPE.to_string()).with_args(args));
+}
+
+fn active_tab_id_from_tabs(tabs: &[TabInfo]) -> Option<usize> {
+    tabs.iter().find(|tab| tab.active).map(|tab| tab.tab_id)
 }
 
 fn send_current_tab_snapshot(current_tab: Option<&CurrentTab>, target_plugin_id: Option<u32>) {
@@ -316,5 +337,25 @@ mod tests {
         };
         let parsed = PipeEvent::try_from(&msg);
         assert2::assert!(let Err(PipeEventError::Parse(ParseError::Missing("source"))) = parsed);
+    }
+
+    #[test]
+    fn test_active_tab_id_from_tabs_returns_active_tab_even_without_current_tab_state() {
+        let tabs = vec![
+            TabInfo {
+                tab_id: 10,
+                position: 0,
+                active: false,
+                ..Default::default()
+            },
+            TabInfo {
+                tab_id: 20,
+                position: 1,
+                active: true,
+                ..Default::default()
+            },
+        ];
+
+        pretty_assertions::assert_eq!(active_tab_id_from_tabs(&tabs), Some(20));
     }
 }

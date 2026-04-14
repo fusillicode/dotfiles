@@ -2,6 +2,7 @@ use std::fmt::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
+use agm_core::AgentState;
 use agm_core::Cmd;
 use agm_core::git_stat::GitStat;
 use zellij_tile::prelude::*;
@@ -14,8 +15,9 @@ const SEP_COLOR: &str = "\x1b[38;2;50;50;50m";
 const GIT_NEW_LINES_FG: &str = "\x1b[38;2;140;228;121m";
 const GIT_DEL_LINES_FG: &str = "\x1b[38;2;236;99;92m";
 const GIT_NEW_FILES_FG: &str = "\x1b[38;2;0;255;255m";
-const AGENT_IDLE_FG: &str = "\x1b[38;2;100;100;110m";
-const AGENT_BUSY_FG: &str = "\x1b[1;38;2;255;0;0m";
+const AGENT_WAITING_SEEN_FG: &str = "\x1b[38;2;100;100;110m";
+const AGENT_WAITING_UNSEEN_FG: &str = "\x1b[1;38;2;255;0;0m";
+const AGENT_BUSY_FG: &str = "\x1b[1;38;2;140;228;121m";
 const TAB_INACTIVE_BG: &str = "\x1b[48;2;0;0;0m";
 const TAB_DEFAULT_FG: &str = "\x1b[39m";
 const PATH_INACTIVE_FG: &str = "\x1b[38;2;142;145;160m";
@@ -178,12 +180,11 @@ fn display_cmd(cmd: &Cmd, bg: &str, fg: &str) -> String {
     match cmd {
         Cmd::None => String::new(),
         Cmd::Running(cmd) => cmd.clone(),
-        Cmd::IdleAgent(agent) => {
-            format!("{AGENT_IDLE_FG}○ {bg}{fg}{}", agent.name())
-        }
-        Cmd::BusyAgent(agent) => {
-            format!("{AGENT_BUSY_FG}● {bg}{fg}{}", agent.name())
-        }
+        Cmd::Agent { agent, state } => match state {
+            AgentState::NeedsAttention => format!("{AGENT_WAITING_UNSEEN_FG}● {bg}{fg}{}", agent.name()),
+            AgentState::Acknowledged => format!("{AGENT_WAITING_SEEN_FG}○ {bg}{fg}{}", agent.name()),
+            AgentState::Busy => format!("{AGENT_BUSY_FG}● {bg}{fg}{}", agent.name()),
+        },
     }
 }
 
@@ -338,10 +339,10 @@ mod tests {
         let expected = TabRow {
             active: true,
             path_label: "agent-tab".to_string(),
-            cmd: Cmd::BusyAgent(Agent::Claude),
+            cmd: Cmd::agent(Agent::Claude, AgentState::Busy),
             git: GitStat::default(),
         };
-        let actual = TabRow::new(&tab, None, Cmd::BusyAgent(Agent::Claude), git, home);
+        let actual = TabRow::new(&tab, None, Cmd::agent(Agent::Claude, AgentState::Busy), git, home);
         assert_eq!(actual, expected);
     }
 
@@ -365,6 +366,45 @@ mod tests {
         };
         let actual = TabRow::new(&tab, None, Cmd::None, git, home);
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_display_cmd_waiting_unseen_uses_red_filled_dot() {
+        let rendered = display_cmd(
+            &Cmd::agent(Agent::Codex, AgentState::NeedsAttention),
+            TAB_INACTIVE_BG,
+            TAB_DEFAULT_FG,
+        );
+        assert_eq!(
+            rendered,
+            format!("{AGENT_WAITING_UNSEEN_FG}● {TAB_INACTIVE_BG}{TAB_DEFAULT_FG}codex")
+        );
+    }
+
+    #[test]
+    fn test_display_cmd_waiting_seen_uses_empty_dot() {
+        let rendered = display_cmd(
+            &Cmd::agent(Agent::Codex, AgentState::Acknowledged),
+            TAB_INACTIVE_BG,
+            TAB_DEFAULT_FG,
+        );
+        assert_eq!(
+            rendered,
+            format!("{AGENT_WAITING_SEEN_FG}○ {TAB_INACTIVE_BG}{TAB_DEFAULT_FG}codex")
+        );
+    }
+
+    #[test]
+    fn test_display_cmd_busy_uses_green_filled_dot() {
+        let rendered = display_cmd(
+            &Cmd::agent(Agent::Codex, AgentState::Busy),
+            TAB_INACTIVE_BG,
+            TAB_DEFAULT_FG,
+        );
+        assert_eq!(
+            rendered,
+            format!("{AGENT_BUSY_FG}● {TAB_INACTIVE_BG}{TAB_DEFAULT_FG}codex")
+        );
     }
 
     #[test]
