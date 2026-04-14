@@ -11,7 +11,8 @@ ARGS:
 
 SUBCOMMANDS:
     install         Build and deploy the WASM plugin, provision Claude, Cursor,
-                    Codex, Gemini and Opencode hooks. Pass --debug for an
+                    Codex, Gemini and Opencode hooks, and install agm.kdl.
+                    Pass --debug for an
                     unoptimised build.
                     Codex hooks are JSON in ~/.codex/hooks.json; you must also enable
                     them in ~/.codex/config.toml: [features] codex_hooks = true
@@ -24,4 +25,4 @@ SUBCOMMANDS:
     sessions        Show Claude, Codex, and Cursor resumable sessions in a
                     picker and launch the selected one.
 
-Requires evoke to be run first (provisions plugin + layout).
+Run `agm install` once first, or use `evoke` which runs it for you.

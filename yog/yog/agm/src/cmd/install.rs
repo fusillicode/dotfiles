@@ -8,12 +8,15 @@ use rootcause::prelude::ResultExt;
 use serde_json::Value;
 
 const ZELLIJ_PLUGINS_PATH: &[&str] = &[".config", "zellij", "plugins"];
+const ZELLIJ_LAYOUTS_PATH: &[&str] = &[".config", "zellij", "layouts"];
 const WASM_FILENAME: &str = "agm-plugin.wasm";
 const INSTALL_NAME: &str = "agm.wasm";
+const LAYOUT_FILENAME: &str = "agm.kdl";
 
 pub fn install_plugin_and_hooks(is_debug: bool) -> rootcause::Result<()> {
     let wasm_path = build_wasm(is_debug).context("failed to build wasm plugin")?;
     install_wasm(&wasm_path).context("failed to install wasm plugin")?;
+    install_layout().context("failed to install zellij layout")?;
     install_hooks(Agent::Claude).context("failed to install Claude hooks")?;
     install_hooks(Agent::Cursor).context("failed to install Cursor hooks")?;
     install_hooks(Agent::Codex).context("failed to install Codex hooks")?;
@@ -75,6 +78,29 @@ fn install_wasm(built: &Path) -> rootcause::Result<()> {
     ytil_sys::file::atomic_cp(built, &dest)
         .context("failed to copy wasm plugin to install location")
         .attach_with(|| format!("from={}", built.display()))
+        .attach_with(|| format!("to={}", dest.display()))?;
+
+    println!("{} {}", "Installed".green().bold(), dest.display());
+    Ok(())
+}
+
+fn install_layout() -> rootcause::Result<()> {
+    let install_dir = ytil_sys::dir::build_home_path(ZELLIJ_LAYOUTS_PATH)
+        .context("failed to determine zellij layouts directory")
+        .attach_with(|| format!("layouts_path={ZELLIJ_LAYOUTS_PATH:?}"))?;
+
+    std::fs::create_dir_all(&install_dir)
+        .context("failed to create zellij layouts directory")
+        .attach_with(|| format!("install_dir={}", install_dir.display()))?;
+
+    let source = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("assets")
+        .join("zellij")
+        .join(LAYOUT_FILENAME);
+    let dest = install_dir.join(LAYOUT_FILENAME);
+    ytil_sys::file::atomic_cp(&source, &dest)
+        .context("failed to copy agm layout to install location")
+        .attach_with(|| format!("from={}", source.display()))
         .attach_with(|| format!("to={}", dest.display()))?;
 
     println!("{} {}", "Installed".green().bold(), dest.display());
@@ -174,64 +200,13 @@ fn install_opencode_plugin() -> rootcause::Result<()> {
         .context("failed to create opencode plugins directory")
         .attach_with(|| format!("dir={}", dir.display()))?;
 
-    let plugin_content = r#"
-        import { spawnSync } from "child_process";
-        import { Plugin, PluginEvent } from "@opencode-ai/plugin";
-
-        export const AgmHooksPlugin: Plugin = async ({ $ }) => {
-          let isThrottled = false;
-
-          try {
-            await $`which zellij`.quiet();
-          } catch {
-            console.log("[AGM Hook] zellij binary not found in PATH — plugin disabled");
-            return {}; // Gracefully exit if binary is missing
-          }
-
-          return {
-            event: async ({ event }: { event: PluginEvent }) => {
-
-              switch (event.type) {
-
-                case "message.part.updated":
-                  if (!isThrottled) {
-                    isThrottled = true;
-                    try {
-                      await $`zellij pipe --name agm-agent --args "pane_id=$ZELLIJ_PANE_ID,agent=opencode" -- start`.quiet();
-                    } catch (e) {
-                      console.log("\n[ERROR] 7\n", e)
-                    }
-                  }
-                  break;
-
-                case "session.idle":
-                  if (isThrottled) {
-                    isThrottled = false;
-                    try {
-                      await $`zellij pipe --name agm-agent --args "pane_id=$ZELLIJ_PANE_ID,agent=opencode" -- idle`.quiet();
-                    } catch (e) {
-                      console.log("\n[ERROR] 8\n", e)
-                    }
-                  }
-                  break;
-
-                case "server.instance.disposed":
-                  try {
-                    await $`zellij pipe --name agm-agent --args "pane_id=$ZELLIJ_PANE_ID,agent=opencode" -- exit`.quiet();
-                  } catch (e) {
-                    console.log("\n[ERROR] 9\n", e)
-                  }
-                  break;
-              }
-            }
-          };
-        };
-
-        export default AgmHooksPlugin;
-    "#;
-
-    std::fs::write(&path, plugin_content)
-        .context("failed to write opencode plugin file")
+    let template = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("assets")
+        .join("opencode")
+        .join("agm.ts");
+    ytil_sys::file::atomic_cp(&template, &path)
+        .context("failed to copy opencode plugin file")
+        .attach_with(|| format!("from={}", template.display()))
         .attach_with(|| format!("path={}", path.display()))?;
 
     println!("{} opencode plugin in {}", "Installed".green().bold(), path.display());
