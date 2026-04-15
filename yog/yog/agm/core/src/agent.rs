@@ -36,7 +36,7 @@ impl Agent {
             Self::Claude => r#"{"hooks":{}}"#,
             Self::Cursor => r#"{"version":1,"hooks":{}}"#,
             Self::Codex => r#"{"hooks":{}}"#,
-            Self::Gemini => r#"{"hooks":{}}"#,
+            Self::Gemini => r#"{"hooksConfig":{"enabled":true},"hooks":{}}"#,
             Self::Opencode => "{}",
         }
     }
@@ -101,11 +101,30 @@ impl Agent {
                 ("SessionStart", AgentEventKind::Start),
                 ("BeforeAgent", AgentEventKind::Busy),
                 ("BeforeModel", AgentEventKind::Busy),
+                ("BeforeToolSelection", AgentEventKind::Busy),
                 ("BeforeTool", AgentEventKind::Busy),
+                ("Notification", AgentEventKind::Idle),
                 ("AfterAgent", AgentEventKind::Idle),
                 ("SessionEnd", AgentEventKind::Exit),
             ],
             Self::Opencode => &[],
+        }
+    }
+
+    pub fn hook_name(self, event: &str) -> Option<&'static str> {
+        match self {
+            Self::Gemini => match event {
+                "SessionStart" => Some("agm-gemini-session-start"),
+                "BeforeAgent" => Some("agm-gemini-before-agent"),
+                "BeforeModel" => Some("agm-gemini-before-model"),
+                "BeforeToolSelection" => Some("agm-gemini-before-tool-selection"),
+                "BeforeTool" => Some("agm-gemini-before-tool"),
+                "Notification" => Some("agm-gemini-notification"),
+                "AfterAgent" => Some("agm-gemini-after-agent"),
+                "SessionEnd" => Some("agm-gemini-session-end"),
+                _ => None,
+            },
+            _ => None,
         }
     }
 
@@ -256,6 +275,37 @@ mod tests {
     #[case("Vim", None)]
     fn test_agent_detect_works_as_expected(#[case] name: &str, #[case] expected: Option<Agent>) {
         pretty_assertions::assert_eq!(Agent::detect(name), expected);
+    }
+
+    #[test]
+    fn test_agent_gemini_hook_events_match_supported_lifecycle() {
+        let expected = [
+            ("SessionStart", AgentEventKind::Start),
+            ("BeforeAgent", AgentEventKind::Busy),
+            ("BeforeModel", AgentEventKind::Busy),
+            ("BeforeToolSelection", AgentEventKind::Busy),
+            ("BeforeTool", AgentEventKind::Busy),
+            ("Notification", AgentEventKind::Idle),
+            ("AfterAgent", AgentEventKind::Idle),
+            ("SessionEnd", AgentEventKind::Exit),
+        ];
+
+        pretty_assertions::assert_eq!(Agent::Gemini.hook_events(), expected);
+    }
+
+    #[rstest]
+    #[case("SessionStart", Some("agm-gemini-session-start"))]
+    #[case("BeforeAgent", Some("agm-gemini-before-agent"))]
+    #[case("BeforeModel", Some("agm-gemini-before-model"))]
+    #[case("BeforeToolSelection", Some("agm-gemini-before-tool-selection"))]
+    #[case("BeforeTool", Some("agm-gemini-before-tool"))]
+    #[case("Notification", Some("agm-gemini-notification"))]
+    #[case("AfterAgent", Some("agm-gemini-after-agent"))]
+    #[case("SessionEnd", Some("agm-gemini-session-end"))]
+    #[case("Unknown", None)]
+    fn test_agent_gemini_hook_name_works_as_expected(#[case] event: &str, #[case] expected: Option<&str>) {
+        pretty_assertions::assert_eq!(Agent::Gemini.hook_name(event), expected);
+        pretty_assertions::assert_eq!(Agent::Claude.hook_name(event), None);
     }
 
     #[rstest]

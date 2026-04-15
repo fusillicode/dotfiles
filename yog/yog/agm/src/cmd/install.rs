@@ -5,6 +5,7 @@ use agm_core::agent::AGENTS_PIPE;
 use agm_core::agent::Agent;
 use owo_colors::OwoColorize as _;
 use rootcause::prelude::ResultExt;
+use serde_json::Map;
 use serde_json::Value;
 
 const ZELLIJ_PLUGINS_PATH: &[&str] = &[".config", "zellij", "plugins"];
@@ -12,6 +13,7 @@ const ZELLIJ_LAYOUTS_PATH: &[&str] = &[".config", "zellij", "layouts"];
 const WASM_FILENAME: &str = "agm-plugin.wasm";
 const INSTALL_NAME: &str = "agm.wasm";
 const LAYOUT_FILENAME: &str = "agm.kdl";
+const GEMINI_HOOK_NAME_PREFIX: &str = "agm-gemini-";
 
 pub fn install_plugin_and_hooks(is_debug: bool) -> rootcause::Result<()> {
     let wasm_path = build_wasm(is_debug).context("failed to build wasm plugin")?;
@@ -145,9 +147,15 @@ fn install_hooks(agent: Agent) -> rootcause::Result<()> {
         .attach_with(|| format!("path={}", path.display()))
         .attach_with(|| format!("agent={}", agent.name()))?;
 
-    let hooks = doc
+    let root = doc
         .as_object_mut()
-        .ok_or_else(|| rootcause::report!("{} root is not an object", path.display()))?
+        .ok_or_else(|| rootcause::report!("{} root is not an object", path.display()))?;
+
+    if matches!(agent, Agent::Gemini) {
+        ensure_gemini_hooks_enabled(root)?;
+    }
+
+    let hooks = root
         .entry("hooks")
         .or_insert_with(|| serde_json::json!({}))
         .as_object_mut()
@@ -164,7 +172,7 @@ fn install_hooks(agent: Agent) -> rootcause::Result<()> {
             .ok_or_else(|| rootcause::report!("hooks.{event} is not an array"))?;
 
         remove_agm_entries(agent, event_arr);
-        event_arr.push(new_hook_entry(agent, &cmd));
+        event_arr.push(new_hook_entry(agent, event, &cmd));
     }
 
     let out =
@@ -221,9 +229,49 @@ fn print_skipped(agent: Agent) {
     );
 }
 
+fn ensure_gemini_hooks_enabled(root: &mut Map<String, Value>) -> rootcause::Result<()> {
+    let hooks_config = root
+        .entry("hooksConfig")
+        .or_insert_with(|| serde_json::json!({}))
+        .as_object_mut()
+        .ok_or_else(|| rootcause::report!("hooksConfig is not an object"))?;
+
+    hooks_config.insert("enabled".to_string(), Value::Bool(true));
+
+    let disabled = hooks_config
+        .entry("disabled")
+        .or_insert_with(|| serde_json::json!([]))
+        .as_array_mut()
+        .ok_or_else(|| rootcause::report!("hooksConfig.disabled is not an array"))?;
+
+    disabled.retain(|entry| !is_agm_gemini_disabled_entry(entry));
+
+    Ok(())
+}
+
+fn is_agm_gemini_disabled_entry(entry: &Value) -> bool {
+    entry.as_str().is_some_and(|entry| {
+        entry.starts_with(GEMINI_HOOK_NAME_PREFIX) || (entry.contains(AGENTS_PIPE) && entry.contains("agent=gemini"))
+    })
+}
+
+fn is_agm_hook_command(command: &str) -> bool {
+    command.contains(AGENTS_PIPE)
+}
+
+fn is_agm_gemini_hook(hook: &Value) -> bool {
+    hook.get("name")
+        .and_then(|name| name.as_str())
+        .is_some_and(|name| name.starts_with(GEMINI_HOOK_NAME_PREFIX))
+        || hook
+            .get("command")
+            .and_then(|command| command.as_str())
+            .is_some_and(is_agm_hook_command)
+}
+
 fn remove_agm_entries(agent: Agent, arr: &mut Vec<Value>) {
     match agent {
-        Agent::Claude | Agent::Codex | Agent::Gemini => arr.retain(|group| {
+        Agent::Claude | Agent::Codex => arr.retain(|group| {
             !group
                 .get("hooks")
                 .and_then(|hooks| hooks.as_array())
@@ -231,15 +279,21 @@ fn remove_agm_entries(agent: Agent, arr: &mut Vec<Value>) {
                     hooks.iter().any(|hook| {
                         hook.get("command")
                             .and_then(|c| c.as_str())
-                            .is_some_and(|c| c.contains(AGENTS_PIPE))
+                            .is_some_and(is_agm_hook_command)
                     })
                 })
+        }),
+        Agent::Gemini => arr.retain(|group| {
+            !group
+                .get("hooks")
+                .and_then(|hooks| hooks.as_array())
+                .is_some_and(|hooks| hooks.iter().any(is_agm_gemini_hook))
         }),
         Agent::Cursor => arr.retain(|entry| {
             !entry
                 .get("command")
                 .and_then(|c| c.as_str())
-                .is_some_and(|c| c.contains(AGENTS_PIPE))
+                .is_some_and(is_agm_hook_command)
         }),
         Agent::Opencode => {}
     }
@@ -260,11 +314,21 @@ fn remove_all_agm_entries(agent: Agent, hooks: &mut serde_json::Map<String, Valu
     }
 }
 
-fn new_hook_entry(agent: Agent, cmd: &str) -> Value {
+fn new_hook_entry(agent: Agent, event: &str, cmd: &str) -> Value {
     match agent {
-        Agent::Claude | Agent::Codex | Agent::Gemini => serde_json::json!({
+        Agent::Claude | Agent::Codex => serde_json::json!({
             "hooks": [{ "type": "command", "command": cmd }]
         }),
+        Agent::Gemini => {
+            let mut hook = Map::from_iter([
+                ("type".to_string(), Value::String("command".to_string())),
+                ("command".to_string(), Value::String(cmd.to_string())),
+            ]);
+            if let Some(name) = agent.hook_name(event) {
+                hook.insert("name".to_string(), Value::String(name.to_string()));
+            }
+            serde_json::json!({ "hooks": [Value::Object(hook)] })
+        }
         Agent::Cursor => serde_json::json!({ "command": cmd }),
         Agent::Opencode => serde_json::json!({}),
     }
@@ -280,13 +344,17 @@ mod tests {
     fn test_remove_all_agm_entries_removes_stale_codex_events() {
         let mut hooks = serde_json::json!({
             "PreToolUse": [
-                new_hook_entry(Agent::Codex, &Agent::Codex.hook_command(AgentEventKind::Busy)),
+                new_hook_entry(Agent::Codex, "PreToolUse", &Agent::Codex.hook_command(AgentEventKind::Busy)),
                 {
                     "hooks": [{ "type": "command", "command": "echo keep-me" }]
                 }
             ],
-            "SessionEnd": [new_hook_entry(Agent::Codex, &Agent::Codex.hook_command(AgentEventKind::Exit))],
-            "UserPromptSubmit": [new_hook_entry(Agent::Codex, &Agent::Codex.hook_command(AgentEventKind::Busy))]
+            "SessionEnd": [new_hook_entry(Agent::Codex, "SessionEnd", &Agent::Codex.hook_command(AgentEventKind::Exit))],
+            "UserPromptSubmit": [new_hook_entry(
+                Agent::Codex,
+                "UserPromptSubmit",
+                &Agent::Codex.hook_command(AgentEventKind::Busy)
+            )]
         });
 
         remove_all_agm_entries(Agent::Codex, hooks.as_object_mut().unwrap());
@@ -300,5 +368,87 @@ mod tests {
         });
 
         assert_eq!(hooks, expected);
+    }
+
+    #[test]
+    fn test_ensure_gemini_hooks_enabled_unblocks_agm_without_touching_unrelated_entries() {
+        let mut root = serde_json::json!({
+            "hooksConfig": {
+                "enabled": false,
+                "disabled": [
+                    "agm-gemini-before-tool",
+                    "custom-hook",
+                    "cat >/dev/null 2>&1 || true; zellij pipe --name agm-agent --args \"pane_id=$ZELLIJ_PANE_ID,agent=gemini\" -- busy >/dev/null 2>&1 || true; echo '{}'"
+                ]
+            }
+        });
+
+        ensure_gemini_hooks_enabled(root.as_object_mut().unwrap()).unwrap();
+
+        let expected = serde_json::json!({
+            "hooksConfig": {
+                "enabled": true,
+                "disabled": ["custom-hook"]
+            }
+        });
+
+        assert_eq!(root, expected);
+    }
+
+    #[test]
+    fn test_remove_all_agm_entries_removes_stale_gemini_events_by_name_and_command() {
+        let mut hooks = serde_json::json!({
+            "BeforeTool": [
+                new_hook_entry(Agent::Gemini, "BeforeTool", &Agent::Gemini.hook_command(AgentEventKind::Busy)),
+                {
+                    "hooks": [{
+                        "type": "command",
+                        "command": "cat >/dev/null 2>&1 || true; zellij pipe --name agm-agent --args \"pane_id=$ZELLIJ_PANE_ID,agent=gemini\" -- busy >/dev/null 2>&1 || true; echo '{}'"
+                    }]
+                },
+                {
+                    "hooks": [{
+                        "type": "command",
+                        "command": "echo keep-me",
+                        "name": "custom-hook"
+                    }]
+                }
+            ]
+        });
+
+        remove_all_agm_entries(Agent::Gemini, hooks.as_object_mut().unwrap());
+
+        let expected = serde_json::json!({
+            "BeforeTool": [
+                {
+                    "hooks": [{
+                        "type": "command",
+                        "command": "echo keep-me",
+                        "name": "custom-hook"
+                    }]
+                }
+            ]
+        });
+
+        assert_eq!(hooks, expected);
+    }
+
+    #[test]
+    fn test_new_hook_entry_gemini_uses_stable_name() {
+        let actual = new_hook_entry(
+            Agent::Gemini,
+            "BeforeToolSelection",
+            &Agent::Gemini.hook_command(AgentEventKind::Busy),
+        );
+
+        let expected = serde_json::json!({
+            "hooks": [{
+                "type": "command",
+                "command": Agent::Gemini.hook_command(AgentEventKind::Busy),
+                "name": "agm-gemini-before-tool-selection"
+            }]
+        });
+
+        assert_eq!(actual, expected);
     }
 }
