@@ -19,7 +19,8 @@ SUBCOMMANDS:
                     (hooks do not run on Windows Codex builds yet).
                     Codex does not currently expose a separate approval-pending hook,
                     so approval/choice prompts may keep AGM green until Codex emits Stop.
-                    Gemini hooks are JSON in ~/.gemini/settings.json.
+                    Gemini hooks are JSON in ~/.gemini/settings.json; agm install also
+                    enables the Gemini hook system in hooksConfig.
     git-stat        Print "path insertions deletions untracked worktree"
                     per PATH (one line each, in argument order).
     sessions        Show Claude, Codex, and Cursor resumable sessions in a
