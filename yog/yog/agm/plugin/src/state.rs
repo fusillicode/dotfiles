@@ -44,6 +44,16 @@ impl State {
         self.current_tab.as_ref().map(|t| t.tab_id)
     }
 
+    fn bump_seq_if_active_state_changed(&mut self, was_active: bool) {
+        if was_active == self.current_tab_is_active() {
+            return;
+        }
+        let Some(ct) = self.current_tab.as_mut() else {
+            return;
+        };
+        ct.seq = ct.seq.saturating_add(1);
+    }
+
     fn push_became_active_events(&self, events: &mut Vec<StateEvent>) {
         events.push(StateEvent::BecameActive);
         if let Some(focused_pane) = self
@@ -373,6 +383,7 @@ impl State {
                     ct.pane_ids = new_pane_ids.clone();
                     ct.agent_by_pane.retain(|id, _| new_pane_ids.contains(id));
                     ct.busy_seq_by_pane.retain(|id, _| new_pane_ids.contains(id));
+                    ct.needs_attention_seq_by_pane.retain(|id, _| new_pane_ids.contains(id));
                     if ct
                         .last_focused_agent_pane_id
                         .is_some_and(|pane_id| !new_pane_ids.contains(&pane_id))
@@ -397,11 +408,19 @@ impl State {
                     ct.seq = ct.seq.saturating_add(1);
                 }
             }
-            StateEvent::AgentDetected { pane_id, agent } => {
+            StateEvent::AgentDetected { pane_id, agent } | StateEvent::AgentIdle { pane_id, agent } => {
                 let is_active = self.current_tab_is_active();
                 if let Some(ct) = self.current_tab.as_mut() {
+                    let next_seq = ct.seq.saturating_add(1);
                     let is_focused = is_active && pane_is_focused(ct.focused_pane.as_ref(), *pane_id);
-                    ct.agent_by_pane.insert(*pane_id, Cmd::waiting(*agent, is_focused));
+                    let cmd = Cmd::waiting(*agent, is_focused);
+                    ct.agent_by_pane.insert(*pane_id, cmd.clone());
+                    ct.busy_seq_by_pane.remove(pane_id);
+                    if cmd.needs_attention() {
+                        ct.needs_attention_seq_by_pane.entry(*pane_id).or_insert(next_seq);
+                    } else {
+                        ct.needs_attention_seq_by_pane.remove(pane_id);
+                    }
                     if is_focused {
                         ct.note_focused_agent_pane(*pane_id);
                     }
@@ -410,21 +429,13 @@ impl State {
             }
             StateEvent::AgentBusy { pane_id, agent } => {
                 if let Some(ct) = self.current_tab.as_mut() {
+                    let next_seq = ct.seq.saturating_add(1);
                     ct.agent_by_pane.insert(*pane_id, Cmd::agent(*agent, AgentState::Busy));
-                    ct.busy_seq_by_pane.insert(*pane_id, ct.seq.saturating_add(1));
-                    if ct.focused_pane.as_ref().map(|pane| pane.id) == Some(*pane_id) {
-                        ct.note_focused_agent_pane(*pane_id);
-                    }
-                    ct.seq = ct.seq.saturating_add(1);
-                }
-            }
-            StateEvent::AgentIdle { pane_id, agent } => {
-                let is_active = self.current_tab_is_active();
-                if let Some(ct) = self.current_tab.as_mut() {
-                    let is_focused = is_active && pane_is_focused(ct.focused_pane.as_ref(), *pane_id);
-                    ct.agent_by_pane.insert(*pane_id, Cmd::waiting(*agent, is_focused));
-                    ct.busy_seq_by_pane.remove(pane_id);
-                    if is_focused {
+                    ct.busy_seq_by_pane.entry(*pane_id).or_insert(next_seq);
+                    ct.needs_attention_seq_by_pane.remove(pane_id);
+                    if let Some(focused_pane) = ct.focused_pane.as_ref()
+                        && focused_pane.id == *pane_id
+                    {
                         ct.note_focused_agent_pane(*pane_id);
                     }
                     ct.seq = ct.seq.saturating_add(1);
@@ -434,6 +445,7 @@ impl State {
                 if let Some(ct) = self.current_tab.as_mut() {
                     ct.agent_by_pane.remove(pane_id);
                     ct.busy_seq_by_pane.remove(pane_id);
+                    ct.needs_attention_seq_by_pane.remove(pane_id);
                     if ct.last_focused_agent_pane_id == Some(*pane_id) {
                         ct.last_focused_agent_pane_id = None;
                     }
@@ -448,16 +460,20 @@ impl State {
             }
             StateEvent::TopologyChanged => {}
             StateEvent::AllTabsReplaced { new_tabs } => {
+                let was_active = self.current_tab_is_active();
                 let known: HashSet<usize> = new_tabs.iter().map(|t| t.tab_id).collect();
                 self.other_tabs.retain(|_, remote| known.contains(&remote.tab_id));
                 self.known_active_tab_id = new_tabs.iter().find(|tab| tab.active).map(|tab| tab.tab_id);
                 self.all_tabs = new_tabs.clone();
+                self.bump_seq_if_active_state_changed(was_active);
             }
             StateEvent::SyncRequested => {
                 self.sync_requested = true;
             }
             StateEvent::ActiveTabChanged { active_tab_id } => {
+                let was_active = self.current_tab_is_active();
                 self.known_active_tab_id = Some(*active_tab_id);
+                self.bump_seq_if_active_state_changed(was_active);
             }
             StateEvent::RemoteTabUpdated {
                 source_plugin_id,
@@ -469,9 +485,7 @@ impl State {
                 }
                 self.other_tabs.insert(*source_plugin_id, snapshot.clone());
             }
-            StateEvent::BecameActive => {
-                // IO-only signal, no state to update.
-            }
+            StateEvent::BecameActive => {}
         }
     }
 
@@ -582,6 +596,7 @@ pub struct CurrentTab {
     pub focused_pane: Option<FocusedPane>,
     pub last_focused_agent_pane_id: Option<u32>,
     pub busy_seq_by_pane: HashMap<u32, u64>,
+    pub needs_attention_seq_by_pane: HashMap<u32, u64>,
     pub cwd: Option<PathBuf>,
     pub agent_by_pane: HashMap<u32, Cmd>,
     pub git_stat: GitStat,
@@ -612,43 +627,29 @@ impl CurrentTab {
             return;
         };
         let _ = cmd.acknowledge();
+        self.needs_attention_seq_by_pane.remove(&pane_id);
         self.last_focused_agent_pane_id = Some(pane_id);
     }
 
-    pub fn cmd(&self) -> Cmd {
-        if let Some((pane_id, _)) = self.busy_seq_by_pane.iter().max_by_key(|(_, seq)| *seq)
-            && let Some(
-                cmd @ Cmd::Agent {
-                    state: AgentState::Busy,
-                    ..
-                },
-            ) = self.agent_by_pane.get(pane_id)
-        {
-            return cmd.clone();
+    pub fn display_cmd(&self, is_active: bool) -> Cmd {
+        if !self.is_mat() {
+            return self.non_mat_cmd();
         }
-
-        if let Some(cmd @ Cmd::Agent { .. }) = self.focused_pane_cmd() {
-            return cmd.clone();
+        if is_active {
+            return self.active_mat_cmd();
         }
+        self.inactive_mat_winner().unwrap_or(Cmd::None)
+    }
 
-        if let Some(agent) = self
-            .focused_pane
-            .as_ref()
-            .and_then(|focused| match focused.label.as_ref() {
-                Some(FocusedPaneLabel::TerminalCommand(cmd)) => Some(cmd.as_str()),
-                Some(FocusedPaneLabel::Title(_)) | None => None,
-            })
-            .and_then(Agent::detect)
-        {
-            return Cmd::agent(agent, AgentState::Acknowledged);
-        }
+    fn focused_pane_detected_agent_cmd(&self) -> Option<Cmd> {
+        let focused_pane = self.focused_pane.as_ref()?;
+        let FocusedPaneLabel::TerminalCommand(command) = focused_pane.label.as_ref()? else {
+            return None;
+        };
+        Agent::detect(command).map(|agent| Cmd::agent(agent, AgentState::Acknowledged))
+    }
 
-        if self.agent_by_pane.len() == 1
-            && let Some(cmd @ Cmd::Agent { .. }) = self.agent_by_pane.values().next()
-        {
-            return cmd.clone();
-        }
-
+    fn focused_running_cmd(&self) -> Cmd {
         self.focused_pane
             .as_ref()
             .and_then(|focused| match focused.label.as_ref() {
@@ -658,6 +659,82 @@ impl CurrentTab {
                 None => None,
             })
             .unwrap_or(Cmd::None)
+    }
+
+    fn active_mat_cmd(&self) -> Cmd {
+        self.focused_pane_cmd()
+            .cloned()
+            .or_else(|| self.focused_pane_detected_agent_cmd())
+            .unwrap_or_else(|| self.focused_running_cmd())
+    }
+
+    fn non_mat_cmd(&self) -> Cmd {
+        if let Some(cmd) = self.first_busy_cmd() {
+            return cmd;
+        }
+
+        if let Some(cmd) = self.focused_pane_cmd().cloned() {
+            return cmd;
+        }
+
+        if let Some(cmd) = self.focused_pane_detected_agent_cmd() {
+            return cmd;
+        }
+
+        if self.agent_by_pane.len() == 1
+            && let Some(cmd @ Cmd::Agent { .. }) = self.agent_by_pane.values().next()
+        {
+            return cmd.clone();
+        }
+
+        self.focused_running_cmd()
+    }
+
+    fn is_mat(&self) -> bool {
+        self.pane_ids.len() > 1 && self.agent_by_pane.len() > 1
+    }
+
+    fn first_busy_cmd(&self) -> Option<Cmd> {
+        let (&pane_id, _) = self.busy_seq_by_pane.iter().min_by_key(|(_, seq)| *seq)?;
+        if let Some(
+            cmd @ Cmd::Agent {
+                state: AgentState::Busy,
+                ..
+            },
+        ) = self.agent_by_pane.get(&pane_id)
+        {
+            return Some(cmd.clone());
+        }
+        None
+    }
+
+    fn inactive_mat_winner(&self) -> Option<Cmd> {
+        if !self.is_mat() {
+            return None;
+        }
+
+        if let Some((&pane_id, _)) = self.needs_attention_seq_by_pane.iter().min_by_key(|(_, seq)| *seq)
+            && let Some(cmd @ Cmd::Agent { .. }) = self.agent_by_pane.get(&pane_id)
+        {
+            return Some(cmd.clone());
+        }
+
+        if let Some((&pane_id, _)) = self.busy_seq_by_pane.iter().min_by_key(|(_, seq)| *seq)
+            && let Some(cmd @ Cmd::Agent { .. }) = self.agent_by_pane.get(&pane_id)
+        {
+            return Some(cmd.clone());
+        }
+
+        if let Some(pane_id) = self
+            .last_focused_agent_pane_id
+            .filter(|pane_id| self.agent_by_pane.contains_key(pane_id))
+            && let Some(cmd @ Cmd::Agent { .. }) = self.agent_by_pane.get(&pane_id)
+        {
+            return Some(cmd.clone());
+        }
+
+        let pane_id = self.agent_by_pane.keys().min().copied()?;
+        Some(self.agent_by_pane.get(&pane_id)?.clone())
     }
 }
 
@@ -678,6 +755,7 @@ fn pane_is_focused(focused_pane: Option<&FocusedPane>, pane_id: u32) -> bool {
 }
 
 fn compute_frame(state: &State) -> Vec<TabRow> {
+    let current_tab_is_active = state.current_tab_is_active();
     state
         .all_tabs
         .iter()
@@ -685,7 +763,13 @@ fn compute_frame(state: &State) -> Vec<TabRow> {
             if state.current_tab_id() == Some(tab.tab_id)
                 && let Some(ct) = state.current_tab.as_ref()
             {
-                return TabRow::new(tab, ct.cwd.as_ref(), ct.cmd(), ct.git_stat, state.home_dir.as_path());
+                return TabRow::new(
+                    tab,
+                    ct.cwd.as_ref(),
+                    ct.display_cmd(current_tab_is_active),
+                    ct.git_stat,
+                    state.home_dir.as_path(),
+                );
             }
             if let Some(remote) = state.remote_snapshot_for_tab(tab.tab_id) {
                 return TabRow::new(
@@ -883,6 +967,7 @@ mod tests {
             focused_pane: Some(FocusedPane { id: 42, label: None }),
             last_focused_agent_pane_id: Some(42),
             busy_seq_by_pane: HashMap::new(),
+            needs_attention_seq_by_pane: HashMap::new(),
             cwd: Some(PathBuf::from("/tmp/project")),
             agent_by_pane: [(42, Cmd::agent(Agent::Codex, AgentState::Busy))].into_iter().collect(),
             git_stat: GitStat::default(),
@@ -920,6 +1005,7 @@ mod tests {
             focused_pane: Some(FocusedPane { id: 42, label: None }),
             last_focused_agent_pane_id: None,
             busy_seq_by_pane: HashMap::new(),
+            needs_attention_seq_by_pane: HashMap::new(),
             cwd: Some(PathBuf::from("/tmp/project")),
             agent_by_pane: [(42, Cmd::agent(Agent::Codex, AgentState::Busy))].into_iter().collect(),
             git_stat: GitStat::default(),
@@ -991,11 +1077,11 @@ mod tests {
         vec![(42, 1)],
         Cmd::agent(Agent::Codex, AgentState::Busy)
     )]
-    #[case::last_busy_agent_wins(
+    #[case::first_busy_agent_wins(
         vec![(42, Cmd::agent(Agent::Claude, AgentState::Busy)), (43, Cmd::agent(Agent::Cursor, AgentState::Busy))],
         Some((42, "claude")),
         vec![(42, 1), (43, 2)],
-        Cmd::agent(Agent::Cursor, AgentState::Busy)
+        Cmd::agent(Agent::Claude, AgentState::Busy)
     )]
     #[case::single_idle_agent_wins_over_focus(
         vec![(42, Cmd::agent(Agent::Claude, AgentState::Acknowledged))],
@@ -1046,7 +1132,78 @@ mod tests {
             ..Default::default()
         };
 
-        pretty_assertions::assert_eq!(tab.cmd(), expected);
+        pretty_assertions::assert_eq!(tab.display_cmd(true), expected);
+    }
+
+    #[test]
+    fn test_current_tab_display_cmd_inactive_mat_prefers_first_attention_pane() {
+        let tab = CurrentTab {
+            pane_ids: [42, 43, 44].into_iter().collect(),
+            focused_pane: Some(FocusedPane {
+                id: 44,
+                label: Some(FocusedPaneLabel::TerminalCommand("cargo".to_string())),
+            }),
+            last_focused_agent_pane_id: Some(43),
+            needs_attention_seq_by_pane: [(42, 1), (43, 2)].into_iter().collect(),
+            agent_by_pane: [
+                (42, Cmd::agent(Agent::Claude, AgentState::NeedsAttention)),
+                (43, Cmd::agent(Agent::Cursor, AgentState::NeedsAttention)),
+            ]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        };
+
+        pretty_assertions::assert_eq!(
+            tab.display_cmd(false),
+            Cmd::agent(Agent::Claude, AgentState::NeedsAttention)
+        );
+    }
+
+    #[test]
+    fn test_current_tab_display_cmd_inactive_mat_prefers_first_busy_pane_when_no_attention_exists() {
+        let tab = CurrentTab {
+            pane_ids: [42, 43, 44].into_iter().collect(),
+            focused_pane: Some(FocusedPane {
+                id: 44,
+                label: Some(FocusedPaneLabel::TerminalCommand("cargo".to_string())),
+            }),
+            last_focused_agent_pane_id: Some(43),
+            busy_seq_by_pane: [(42, 1), (43, 2)].into_iter().collect(),
+            agent_by_pane: [
+                (42, Cmd::agent(Agent::Claude, AgentState::Busy)),
+                (43, Cmd::agent(Agent::Cursor, AgentState::Busy)),
+            ]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        };
+
+        pretty_assertions::assert_eq!(tab.display_cmd(false), Cmd::agent(Agent::Claude, AgentState::Busy));
+    }
+
+    #[test]
+    fn test_current_tab_display_cmd_inactive_mat_falls_back_to_last_focused_agent() {
+        let tab = CurrentTab {
+            pane_ids: [42, 43, 44].into_iter().collect(),
+            focused_pane: Some(FocusedPane {
+                id: 44,
+                label: Some(FocusedPaneLabel::TerminalCommand("cargo".to_string())),
+            }),
+            last_focused_agent_pane_id: Some(43),
+            agent_by_pane: [
+                (42, Cmd::agent(Agent::Claude, AgentState::Acknowledged)),
+                (43, Cmd::agent(Agent::Cursor, AgentState::Acknowledged)),
+            ]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        };
+
+        pretty_assertions::assert_eq!(
+            tab.display_cmd(false),
+            Cmd::agent(Agent::Cursor, AgentState::Acknowledged)
+        );
     }
 
     #[test]
@@ -1083,7 +1240,10 @@ mod tests {
             ct.agent_by_pane.get(&42),
             Some(&Cmd::agent(Agent::Codex, AgentState::NeedsAttention))
         );
-        pretty_assertions::assert_eq!(ct.cmd(), Cmd::agent(Agent::Codex, AgentState::NeedsAttention));
+        pretty_assertions::assert_eq!(
+            ct.display_cmd(true),
+            Cmd::agent(Agent::Codex, AgentState::NeedsAttention)
+        );
 
         state.apply_all(&[StateEvent::FocusMoved {
             new_pane: Some(FocusedPane {
@@ -1096,7 +1256,7 @@ mod tests {
             ct.agent_by_pane.get(&42),
             Some(&Cmd::agent(Agent::Codex, AgentState::Acknowledged))
         );
-        pretty_assertions::assert_eq!(ct.cmd(), Cmd::agent(Agent::Codex, AgentState::Acknowledged));
+        pretty_assertions::assert_eq!(ct.display_cmd(true), Cmd::agent(Agent::Codex, AgentState::Acknowledged));
     }
 
     #[test]
@@ -1133,7 +1293,10 @@ mod tests {
             ct.agent_by_pane.get(&42),
             Some(&Cmd::agent(Agent::Codex, AgentState::NeedsAttention))
         );
-        pretty_assertions::assert_eq!(ct.cmd(), Cmd::agent(Agent::Codex, AgentState::NeedsAttention));
+        pretty_assertions::assert_eq!(
+            ct.display_cmd(true),
+            Cmd::agent(Agent::Codex, AgentState::NeedsAttention)
+        );
     }
 
     #[test]
@@ -1176,7 +1339,10 @@ mod tests {
             ct.agent_by_pane.get(&42),
             Some(&Cmd::agent(Agent::Claude, AgentState::NeedsAttention))
         );
-        pretty_assertions::assert_eq!(ct.cmd(), Cmd::agent(Agent::Claude, AgentState::NeedsAttention));
+        pretty_assertions::assert_eq!(
+            ct.display_cmd(true),
+            Cmd::agent(Agent::Claude, AgentState::NeedsAttention)
+        );
     }
 
     #[test]
@@ -1229,7 +1395,10 @@ mod tests {
             ct.agent_by_pane.get(&42),
             Some(&Cmd::agent(Agent::Claude, AgentState::Acknowledged))
         );
-        pretty_assertions::assert_eq!(ct.cmd(), Cmd::agent(Agent::Claude, AgentState::Acknowledged));
+        pretty_assertions::assert_eq!(
+            ct.display_cmd(true),
+            Cmd::agent(Agent::Claude, AgentState::Acknowledged)
+        );
     }
 
     #[test]
@@ -1279,7 +1448,10 @@ mod tests {
             ct.agent_by_pane.get(&42),
             Some(&Cmd::agent(Agent::Claude, AgentState::NeedsAttention))
         );
-        pretty_assertions::assert_eq!(ct.cmd(), Cmd::agent(Agent::Claude, AgentState::NeedsAttention));
+        pretty_assertions::assert_eq!(
+            ct.display_cmd(true),
+            Cmd::agent(Agent::Claude, AgentState::NeedsAttention)
+        );
     }
 
     #[test]
@@ -1324,7 +1496,80 @@ mod tests {
             ct.agent_by_pane.get(&42),
             Some(&Cmd::agent(Agent::Claude, AgentState::Acknowledged))
         );
-        pretty_assertions::assert_eq!(ct.cmd(), Cmd::agent(Agent::Claude, AgentState::Acknowledged));
+        pretty_assertions::assert_eq!(
+            ct.display_cmd(true),
+            Cmd::agent(Agent::Claude, AgentState::Acknowledged)
+        );
+    }
+
+    #[test]
+    fn test_active_tab_sync_for_inactive_mat_does_not_override_focus_for_attention_winner() {
+        let mut state = State {
+            known_active_tab_id: Some(20),
+            all_tabs: vec![TabInfo {
+                tab_id: 10,
+                position: 0,
+                active: false,
+                ..Default::default()
+            }],
+            current_tab: Some(CurrentTab::new(10)),
+            ..Default::default()
+        };
+        let ct = state.current_tab.as_mut().unwrap();
+        ct.pane_ids.extend([42, 43, 44]);
+        ct.focused_pane = Some(FocusedPane {
+            id: 44,
+            label: Some(FocusedPaneLabel::TerminalCommand("cargo".to_string())),
+        });
+        ct.needs_attention_seq_by_pane.insert(42, 1);
+        ct.needs_attention_seq_by_pane.insert(43, 2);
+        ct.agent_by_pane
+            .insert(42, Cmd::agent(Agent::Claude, AgentState::NeedsAttention));
+        ct.agent_by_pane
+            .insert(43, Cmd::agent(Agent::Cursor, AgentState::NeedsAttention));
+
+        let events = state.events_from_active_tab(10);
+        pretty_assertions::assert_eq!(
+            events,
+            vec![
+                StateEvent::ActiveTabChanged { active_tab_id: 10 },
+                StateEvent::BecameActive,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_active_tab_sync_for_inactive_mat_does_not_override_focus_for_busy_winner() {
+        let mut state = State {
+            known_active_tab_id: Some(20),
+            all_tabs: vec![TabInfo {
+                tab_id: 10,
+                position: 0,
+                active: false,
+                ..Default::default()
+            }],
+            current_tab: Some(CurrentTab::new(10)),
+            ..Default::default()
+        };
+        let ct = state.current_tab.as_mut().unwrap();
+        ct.pane_ids.extend([42, 43, 44]);
+        ct.focused_pane = Some(FocusedPane {
+            id: 44,
+            label: Some(FocusedPaneLabel::TerminalCommand("cargo".to_string())),
+        });
+        ct.busy_seq_by_pane.insert(42, 1);
+        ct.busy_seq_by_pane.insert(43, 2);
+        ct.agent_by_pane.insert(42, Cmd::agent(Agent::Claude, AgentState::Busy));
+        ct.agent_by_pane.insert(43, Cmd::agent(Agent::Cursor, AgentState::Busy));
+
+        let events = state.events_from_active_tab(10);
+        pretty_assertions::assert_eq!(
+            events,
+            vec![
+                StateEvent::ActiveTabChanged { active_tab_id: 10 },
+                StateEvent::BecameActive,
+            ]
+        );
     }
 
     #[test]
@@ -1381,7 +1626,7 @@ mod tests {
             ]
         );
         let ct = state.current_tab.as_ref().unwrap();
-        pretty_assertions::assert_eq!(ct.cmd(), Cmd::Running("cargo".to_string()));
+        pretty_assertions::assert_eq!(ct.display_cmd(true), Cmd::Running("cargo".to_string()));
     }
 
     #[test]
@@ -1420,7 +1665,7 @@ mod tests {
             ]
         );
         let ct = state.current_tab.as_ref().unwrap();
-        pretty_assertions::assert_eq!(ct.cmd(), Cmd::Running("nvim".to_string()));
+        pretty_assertions::assert_eq!(ct.display_cmd(true), Cmd::Running("nvim".to_string()));
     }
 
     #[test]
@@ -1454,7 +1699,7 @@ mod tests {
         );
         let ct = state.current_tab.as_ref().unwrap();
         pretty_assertions::assert_eq!(ct.focused_pane, Some(FocusedPane { id: 42, label: None }));
-        pretty_assertions::assert_eq!(ct.cmd(), Cmd::None);
+        pretty_assertions::assert_eq!(ct.display_cmd(true), Cmd::None);
     }
 
     #[test]
@@ -1497,7 +1742,7 @@ mod tests {
                 label: Some(FocusedPaneLabel::Title("CLAUDE.…".to_string()))
             })
         );
-        pretty_assertions::assert_eq!(ct.cmd(), Cmd::Running("CLAUDE.…".to_string()));
+        pretty_assertions::assert_eq!(ct.display_cmd(true), Cmd::Running("CLAUDE.…".to_string()));
     }
 
     #[test]
@@ -1536,7 +1781,7 @@ mod tests {
 
         let ct = state.current_tab.as_ref().unwrap();
         pretty_assertions::assert_eq!(ct.agent_by_pane.get(&42), None);
-        pretty_assertions::assert_eq!(ct.cmd(), Cmd::None);
+        pretty_assertions::assert_eq!(ct.display_cmd(true), Cmd::None);
     }
 
     #[test]
@@ -1575,7 +1820,7 @@ mod tests {
             ct.agent_by_pane.get(&42),
             Some(&Cmd::agent(Agent::Codex, AgentState::Acknowledged))
         );
-        pretty_assertions::assert_eq!(ct.cmd(), Cmd::agent(Agent::Codex, AgentState::Acknowledged));
+        pretty_assertions::assert_eq!(ct.display_cmd(true), Cmd::agent(Agent::Codex, AgentState::Acknowledged));
     }
 
     #[test]
@@ -1671,7 +1916,7 @@ mod tests {
             ct.agent_by_pane.get(&42),
             Some(&Cmd::agent(Agent::Cursor, AgentState::Busy))
         );
-        pretty_assertions::assert_eq!(ct.cmd(), Cmd::agent(Agent::Cursor, AgentState::Busy));
+        pretty_assertions::assert_eq!(ct.display_cmd(true), Cmd::agent(Agent::Cursor, AgentState::Busy));
     }
 
     #[test]
@@ -1707,7 +1952,7 @@ mod tests {
             ct.agent_by_pane.get(&42),
             Some(&Cmd::agent(Agent::Codex, AgentState::Busy))
         );
-        pretty_assertions::assert_eq!(ct.cmd(), Cmd::agent(Agent::Codex, AgentState::Busy));
+        pretty_assertions::assert_eq!(ct.display_cmd(true), Cmd::agent(Agent::Codex, AgentState::Busy));
     }
 
     #[test]
@@ -1782,11 +2027,11 @@ mod tests {
             ct.agent_by_pane.get(&42),
             Some(&Cmd::agent(Agent::Codex, AgentState::Acknowledged))
         );
-        pretty_assertions::assert_eq!(ct.cmd(), Cmd::agent(Agent::Codex, AgentState::Acknowledged));
+        pretty_assertions::assert_eq!(ct.display_cmd(true), Cmd::agent(Agent::Codex, AgentState::Acknowledged));
     }
 
     #[test]
-    fn test_refresh_current_tab_from_manifest_prefers_last_busy_agent_when_multiple_agents_exist() {
+    fn test_refresh_current_tab_from_manifest_active_mat_follows_focused_busy_agent() {
         let mut state = State {
             plugin_id: 7,
             all_tabs: vec![tab_with_name(10, 0, "a")],
@@ -1824,7 +2069,7 @@ mod tests {
         )]);
         apply_pane_update(&mut state, &second);
         let ct = state.current_tab.as_ref().unwrap();
-        pretty_assertions::assert_eq!(ct.cmd(), Cmd::agent(Agent::Cursor, AgentState::Busy));
+        pretty_assertions::assert_eq!(ct.display_cmd(true), Cmd::agent(Agent::Cursor, AgentState::Busy));
 
         let third = manifest(vec![(
             0,
@@ -1836,7 +2081,8 @@ mod tests {
         )]);
         apply_pane_update(&mut state, &third);
         let ct = state.current_tab.as_ref().unwrap();
-        pretty_assertions::assert_eq!(ct.cmd(), Cmd::agent(Agent::Cursor, AgentState::Busy));
+        pretty_assertions::assert_eq!(ct.display_cmd(true), Cmd::agent(Agent::Claude, AgentState::Busy));
+        pretty_assertions::assert_eq!(ct.display_cmd(false), Cmd::agent(Agent::Claude, AgentState::Busy));
     }
 
     #[test]
@@ -1894,7 +2140,10 @@ mod tests {
         )]);
         apply_pane_update(&mut state, &second);
         let ct = state.current_tab.as_ref().unwrap();
-        pretty_assertions::assert_eq!(ct.cmd(), Cmd::agent(Agent::Claude, AgentState::Acknowledged));
+        pretty_assertions::assert_eq!(
+            ct.display_cmd(true),
+            Cmd::agent(Agent::Claude, AgentState::Acknowledged)
+        );
     }
 
     #[test]
@@ -1944,7 +2193,7 @@ mod tests {
         let ct = state.current_tab.as_ref().unwrap();
         pretty_assertions::assert_eq!(ct.seq, 6);
         pretty_assertions::assert_eq!(ct.last_focused_agent_pane_id, Some(43));
-        pretty_assertions::assert_eq!(ct.cmd(), Cmd::agent(Agent::Cursor, AgentState::Busy));
+        pretty_assertions::assert_eq!(ct.display_cmd(true), Cmd::agent(Agent::Cursor, AgentState::Busy));
     }
 
     #[rstest]
