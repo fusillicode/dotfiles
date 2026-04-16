@@ -4180,9 +4180,9 @@ checksum = "b2aa850e253778c88a04c3d7323b043aeda9d3e30d5971937c1855769763678e"
 
 [[package]]
 name = "skim"
-version = "4.5.1"
+version = "4.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca522a2d79d3849fa277f382526e93573e4fee9a733f769bb1162c1281cdacd5"
+checksum = "2c2d96f5e862d8d10a55695c6ce96fcfbc3ca09df5b6c87db6f6f154c5307944"
 dependencies = [
  "ansi-to-tui",
  "assert_enum_variants",
@@ -4205,7 +4205,6 @@ dependencies = [
  "mimalloc",
  "nix 0.31.2",
  "portable-pty",
- "rand 0.10.0",
  "ratatui",
  "regex",
  "roff",
@@ -4907,9 +4906,9 @@ dependencies = [
 
 [[package]]
 name = "tui-term"
-version = "0.3.3"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e676ed380f3015b1bbc07ce94c3fa7d7a450a4994b4ea2e1eca531e652bf6c4"
+checksum = "a338ded85dbe7f9ea2298321d126244f54e531e2b2006b97abdab8e47d6f3c88"
 dependencies = [
  "ratatui-core",
  "ratatui-widgets",
