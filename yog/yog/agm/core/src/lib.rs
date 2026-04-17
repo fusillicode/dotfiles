@@ -203,6 +203,59 @@ impl From<&AgentEventPayload> for Cmd {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum TabIndicator {
+    #[default]
+    None,
+    Empty,
+    Green,
+    Red,
+}
+
+impl TabIndicator {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Empty => "empty",
+            Self::Green => "green",
+            Self::Red => "red",
+        }
+    }
+
+    pub fn parse(s: &str) -> Result<Self, ParseError> {
+        match s {
+            "none" => Ok(Self::None),
+            "empty" => Ok(Self::Empty),
+            "green" => Ok(Self::Green),
+            "red" => Ok(Self::Red),
+            _ => Err(ParseError::invalid("indicator", format!("{s:?}"))),
+        }
+    }
+
+    pub const fn from_cmd(cmd: &Cmd) -> Self {
+        match cmd {
+            Cmd::Agent {
+                state: AgentState::NeedsAttention,
+                ..
+            } => Self::Red,
+            Cmd::Agent {
+                state: AgentState::Busy,
+                ..
+            } => Self::Green,
+            Cmd::Agent { .. } => Self::Empty,
+            Cmd::None | Cmd::Running(_) => Self::None,
+        }
+    }
+
+    pub const fn normalize_for_cmd(self, cmd: &Cmd) -> Self {
+        match (self, cmd) {
+            (Self::None, Cmd::Agent { .. }) => Self::from_cmd(cmd),
+            (Self::Empty, Cmd::None | Cmd::Running(_)) => Self::None,
+            _ => self,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AgentState {
     Busy,
@@ -234,6 +287,7 @@ pub struct TabStateEntry {
     pub tab_id: usize,
     pub cwd: Option<PathBuf>,
     pub cmd: Cmd,
+    pub indicator: TabIndicator,
     pub git_stat: GitStat,
 }
 
@@ -245,10 +299,11 @@ impl std::fmt::Display for TabStateEntry {
 
         write!(
             f,
-            "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n",
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n",
             encode_opt(cwd_s.as_deref()),
             encode_opt(self.cmd.agent_name()),
             encode_opt(agent_state),
+            self.indicator.as_str(),
             self.git_stat.insertions,
             self.git_stat.deletions,
             self.git_stat.new_files,
@@ -278,16 +333,27 @@ impl std::convert::TryFrom<(usize, &str)> for TabStateEntry {
             "1" => Some(AgentState::Busy),
             value => Some(AgentState::parse(value)?),
         };
-        let insertions = parse_usize(next("ins")?, "ins")?;
+        let indicator_or_ins = next("indicator")?;
+        let (indicator, insertions, has_explicit_indicator) = match TabIndicator::parse(indicator_or_ins) {
+            Ok(indicator) => (indicator, parse_usize(next("ins")?, "ins")?, true),
+            Err(_) => (TabIndicator::None, parse_usize(indicator_or_ins, "ins")?, false),
+        };
         let deletions = parse_usize(next("del")?, "del")?;
         let new_files = parse_usize(next("new")?, "new")?;
         let is_worktree = parse_bool(next("wt")?, "wt")?;
         let command = decode_opt(next("cmd")?);
+        let cmd = Cmd::from_parts(agent, agent_state, command);
+        let indicator = if has_explicit_indicator {
+            indicator.normalize_for_cmd(&cmd)
+        } else {
+            TabIndicator::from_cmd(&cmd)
+        };
 
         Ok(Self {
             tab_id,
             cwd,
-            cmd: Cmd::from_parts(agent, agent_state, command),
+            cmd,
+            indicator,
             git_stat: GitStat {
                 insertions,
                 deletions,
@@ -345,6 +411,7 @@ mod tests {
             tab_id: 1,
             cwd: Some(PathBuf::from("/tmp")),
             cmd: Cmd::agent(Agent::Claude, AgentState::NeedsAttention),
+            indicator: TabIndicator::Red,
             git_stat: GitStat {
                 insertions: 1,
                 deletions: 2,
@@ -356,6 +423,30 @@ mod tests {
         let content = entry.to_string();
         assert2::assert!(let Ok(parsed) = TabStateEntry::try_from((1, content.as_str())));
         pretty_assertions::assert_eq!(parsed, entry);
+    }
+
+    #[test]
+    fn test_tab_state_entry_legacy_parse_infers_indicator_from_cmd() {
+        let content = "/tmp\nclaude\nneeds_attention\n1\n2\n3\n1\n--\n";
+
+        assert2::assert!(let Ok(parsed) = TabStateEntry::try_from((1, content)));
+        pretty_assertions::assert_eq!(parsed.indicator, TabIndicator::Red);
+    }
+
+    #[test]
+    fn test_tab_state_entry_legacy_parse_infers_none_indicator_for_running_cmd() {
+        let content = "/tmp\n--\n--\n1\n2\n3\n1\ncargo\n";
+
+        assert2::assert!(let Ok(parsed) = TabStateEntry::try_from((1, content)));
+        pretty_assertions::assert_eq!(parsed.indicator, TabIndicator::None);
+    }
+
+    #[test]
+    fn test_tab_state_entry_explicit_empty_indicator_for_running_cmd_normalizes_to_none() {
+        let content = "/tmp\n--\n--\nempty\n1\n2\n3\n1\ncargo\n";
+
+        assert2::assert!(let Ok(parsed) = TabStateEntry::try_from((1, content)));
+        pretty_assertions::assert_eq!(parsed.indicator, TabIndicator::None);
     }
 
     #[test]
