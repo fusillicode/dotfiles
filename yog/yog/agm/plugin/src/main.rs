@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use agm_core::Cmd;
 use agm_core::ParseError;
+use agm_core::TabIndicator;
 use agm_core::TabStateEntry;
 use agm_core::git_stat::GitStat;
 use zellij_tile::prelude::*;
@@ -11,7 +12,9 @@ use crate::events::PipeEvent;
 use crate::events::PipeEventError;
 use crate::events::StateEvent;
 use crate::state::CurrentTab;
+use crate::state::FocusedPane;
 use crate::state::State;
+use crate::state::focused_pane_from_pane_info;
 
 mod events;
 mod state;
@@ -32,16 +35,18 @@ pub struct StateSnapshotPayload {
     pub seq: u64,
     pub cwd: Option<PathBuf>,
     pub cmd: Cmd,
+    pub indicator: TabIndicator,
     pub git_stat: GitStat,
 }
 
 impl StateSnapshotPayload {
-    fn from_current_tab(value: &CurrentTab, is_active: bool) -> Self {
+    fn from_current_tab(value: &CurrentTab) -> Self {
         Self {
             tab_id: value.tab_id,
             seq: value.seq,
             cwd: value.cwd.clone(),
-            cmd: value.display_cmd(is_active),
+            cmd: value.display_cmd(),
+            indicator: value.tab_indicator(),
             git_stat: value.git_stat,
         }
     }
@@ -91,6 +96,7 @@ impl TryFrom<&PipeMessage> for StateSnapshotPayload {
             seq,
             cwd: entry.cwd,
             cmd: entry.cmd,
+            indicator: entry.indicator,
             git_stat: entry.git_stat,
         })
     }
@@ -102,6 +108,7 @@ impl From<&StateSnapshotPayload> for MessageToPlugin {
             tab_id: value.tab_id,
             cwd: value.cwd.clone(),
             cmd: value.cmd.clone(),
+            indicator: value.indicator,
             git_stat: value.git_stat,
         };
         let mut args = BTreeMap::new();
@@ -147,7 +154,9 @@ impl ZellijPlugin for State {
 
             Event::TabUpdate(mut tabs) => {
                 let active_tab_id = active_tab_id_from_tabs(&tabs);
-                let events = self.events_from_tab_update(&mut tabs);
+                let landing_focus =
+                    active_tab_id.and_then(|active_tab_id| resolve_active_tab_landing_focus(active_tab_id, &tabs));
+                let events = self.events_from_tab_update(&mut tabs, landing_focus);
                 let frame_changed = self.apply_all(&events);
                 if let Some(active_tab_id) = active_tab_id {
                     send_active_tab(active_tab_id);
@@ -224,15 +233,12 @@ impl ZellijPlugin for State {
                 if requester_plugin_id == self.plugin_id {
                     return false;
                 }
-                send_current_tab_snapshot(
-                    self.current_tab.as_ref(),
-                    self.current_tab_is_active(),
-                    Some(requester_plugin_id),
-                );
+                send_current_tab_snapshot(self.current_tab.as_ref(), Some(requester_plugin_id));
                 false
             }
             PipeEvent::ActiveTab { active_tab_id } => {
-                let events = self.events_from_active_tab(active_tab_id);
+                let landing_focus = resolve_active_tab_landing_focus(active_tab_id, &self.all_tabs);
+                let events = self.events_from_active_tab(active_tab_id, landing_focus);
                 let frame_changed = self.apply_all(&events);
                 handle_events(self, &events);
                 frame_changed || !events.is_empty()
@@ -258,9 +264,9 @@ impl ZellijPlugin for State {
 fn handle_events(state: &State, events: &[StateEvent]) {
     for event in events {
         match event {
-            StateEvent::AgentIdle { .. } | StateEvent::FocusMoved { .. } | StateEvent::CwdChanged { .. } => {
+            StateEvent::AgentIdle { .. } | StateEvent::FocusChanged { .. } | StateEvent::CwdChanged { .. } => {
                 run_current_tab_git_stat(state.current_tab.as_ref());
-                send_current_tab_snapshot(state.current_tab.as_ref(), state.current_tab_is_active(), None);
+                send_current_tab_snapshot(state.current_tab.as_ref(), None);
             }
             StateEvent::TabCreated { .. }
             | StateEvent::TabRemapped { .. }
@@ -269,9 +275,7 @@ fn handle_events(state: &State, events: &[StateEvent]) {
             | StateEvent::AgentBusy { .. }
             | StateEvent::AgentLost { .. }
             | StateEvent::ActiveTabChanged { .. }
-            | StateEvent::BecameActive => {
-                send_current_tab_snapshot(state.current_tab.as_ref(), state.current_tab_is_active(), None)
-            }
+            | StateEvent::BecameActive => send_current_tab_snapshot(state.current_tab.as_ref(), None),
             StateEvent::SyncRequested => send_sync_request(),
             StateEvent::PanesChanged { .. }
             | StateEvent::RemoteTabUpdated { .. }
@@ -302,11 +306,22 @@ fn active_tab_id_from_tabs(tabs: &[TabInfo]) -> Option<usize> {
     tabs.iter().find(|tab| tab.active).map(|tab| tab.tab_id)
 }
 
-fn send_current_tab_snapshot(current_tab: Option<&CurrentTab>, is_active: bool, target_plugin_id: Option<u32>) {
+fn resolve_active_tab_landing_focus(active_tab_id: usize, tabs: &[TabInfo]) -> Option<FocusedPane> {
+    let active_tab_position = tabs.iter().find(|tab| tab.tab_id == active_tab_id)?.position;
+    let (focused_tab_position, focused_pane_id) = get_focused_pane_info().ok()?;
+    if focused_tab_position != active_tab_position {
+        return None;
+    }
+
+    let pane = get_pane_info(focused_pane_id)?;
+    focused_pane_from_pane_info(&pane)
+}
+
+fn send_current_tab_snapshot(current_tab: Option<&CurrentTab>, target_plugin_id: Option<u32>) {
     let Some(current_tab) = current_tab else {
         return;
     };
-    let mut message = MessageToPlugin::from(&StateSnapshotPayload::from_current_tab(current_tab, is_active));
+    let mut message = MessageToPlugin::from(&StateSnapshotPayload::from_current_tab(current_tab));
     if let Some(target_plugin_id) = target_plugin_id {
         message = message.with_destination_plugin_id(target_plugin_id);
     }

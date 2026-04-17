@@ -131,10 +131,12 @@ pub enum StateEvent {
 
     // Pane layout
     PanesChanged {
-        new_pane_ids: HashSet<u32>,
+        observed_pane_ids: HashSet<u32>,
+        retained_pane_ids: HashSet<u32>,
     },
-    FocusMoved {
+    FocusChanged {
         new_pane: Option<FocusedPane>,
+        acknowledge_existing_attention: bool,
     },
 
     // Working directory
@@ -233,6 +235,7 @@ mod tests {
                     tab_id: 17,
                     cwd: Some(PathBuf::from("/home/user/project")),
                     cmd: Cmd::Running("cargo test".to_string()),
+                    indicator: agm_core::TabIndicator::None,
                     git_stat: GitStat {
                         insertions: 3,
                         deletions: 1,
@@ -256,6 +259,7 @@ mod tests {
                 seq: 42,
                 cwd: Some(PathBuf::from("/home/user/project")),
                 cmd: Cmd::Running("cargo test".to_string()),
+                indicator: agm_core::TabIndicator::None,
                 git_stat: GitStat {
                     insertions: 3,
                     deletions: 1,

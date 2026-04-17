@@ -2,8 +2,8 @@ use std::fmt::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
-use agm_core::AgentState;
 use agm_core::Cmd;
+use agm_core::TabIndicator;
 use agm_core::git_stat::GitStat;
 use zellij_tile::prelude::*;
 
@@ -30,16 +30,25 @@ pub struct TabRow {
     pub active: bool,
     pub path_label: String,
     pub cmd: Cmd,
+    pub indicator: TabIndicator,
     pub git: GitStat,
 }
 
 impl TabRow {
-    pub fn new(tab: &TabInfo, cwd: Option<&PathBuf>, cmd: Cmd, git: GitStat, home: &Path) -> Self {
+    pub fn new(
+        tab: &TabInfo,
+        cwd: Option<&PathBuf>,
+        cmd: Cmd,
+        indicator: TabIndicator,
+        git: GitStat,
+        home: &Path,
+    ) -> Self {
         let path_label = cwd.map_or_else(|| tab.name.clone(), |path| agm_core::short_path(path, home));
         Self {
             active: tab.active,
             path_label,
             cmd,
+            indicator,
             git,
         }
     }
@@ -96,7 +105,7 @@ impl TabRow {
         let bg = TAB_INACTIVE_BG;
         let cmd_fg = if self.active { TAB_DEFAULT_FG } else { PATH_INACTIVE_FG };
 
-        let left = display_cmd(&self.cmd, bg, cmd_fg);
+        let left = display_left(self.indicator, &self.cmd, bg, cmd_fg);
 
         let stats = format_git_stat_parts(&self.git);
         let stats_vis: usize =
@@ -176,15 +185,23 @@ pub fn tab_index_at_row(frame: &[TabRow], click_row: usize, content_w: usize) ->
     None
 }
 
-fn display_cmd(cmd: &Cmd, bg: &str, fg: &str) -> String {
-    match cmd {
+fn display_left(indicator: TabIndicator, cmd: &Cmd, bg: &str, fg: &str) -> String {
+    let dot = match indicator {
+        TabIndicator::None => None,
+        TabIndicator::Red => Some(format!("{AGENT_WAITING_UNSEEN_FG}●")),
+        TabIndicator::Green => Some(format!("{AGENT_BUSY_FG}●")),
+        TabIndicator::Empty => Some(format!("{AGENT_WAITING_SEEN_FG}○")),
+    };
+    let label = match cmd {
         Cmd::None => String::new(),
         Cmd::Running(cmd) => cmd.clone(),
-        Cmd::Agent { agent, state } => match state {
-            AgentState::NeedsAttention => format!("{AGENT_WAITING_UNSEEN_FG}● {bg}{fg}{}", agent.name()),
-            AgentState::Acknowledged => format!("{AGENT_WAITING_SEEN_FG}○ {bg}{fg}{}", agent.name()),
-            AgentState::Busy => format!("{AGENT_BUSY_FG}● {bg}{fg}{}", agent.name()),
-        },
+        Cmd::Agent { agent, .. } => agent.name().to_string(),
+    };
+
+    match dot {
+        Some(dot) if label.is_empty() => format!("{dot}{bg}{fg}"),
+        Some(dot) => format!("{dot} {bg}{fg}{label}"),
+        None => label,
     }
 }
 
@@ -272,6 +289,7 @@ mod tests {
     use std::path::Path;
     use std::path::PathBuf;
 
+    use agm_core::AgentState;
     use agm_core::Cmd;
     use agm_core::agent::Agent;
     use pretty_assertions::assert_eq;
@@ -295,9 +313,17 @@ mod tests {
             active: true,
             path_label: "~/u/project".to_string(),
             cmd: Cmd::Running("nvim".to_string()),
+            indicator: TabIndicator::None,
             git: GitStat::default(),
         };
-        let actual = TabRow::new(&tab, cwd.as_ref(), Cmd::Running("nvim".to_string()), git, home);
+        let actual = TabRow::new(
+            &tab,
+            cwd.as_ref(),
+            Cmd::Running("nvim".to_string()),
+            TabIndicator::None,
+            git,
+            home,
+        );
         assert_eq!(actual, expected);
     }
 
@@ -318,9 +344,17 @@ mod tests {
             active: false,
             path_label: "~/user".to_string(),
             cmd: Cmd::Running("zsh".to_string()),
+            indicator: TabIndicator::None,
             git: GitStat::default(),
         };
-        let actual = TabRow::new(&tab, cwd.as_ref(), Cmd::Running("zsh".to_string()), git, home);
+        let actual = TabRow::new(
+            &tab,
+            cwd.as_ref(),
+            Cmd::Running("zsh".to_string()),
+            TabIndicator::None,
+            git,
+            home,
+        );
         assert_eq!(actual, expected);
     }
 
@@ -340,9 +374,17 @@ mod tests {
             active: true,
             path_label: "agent-tab".to_string(),
             cmd: Cmd::agent(Agent::Claude, AgentState::Busy),
+            indicator: TabIndicator::Green,
             git: GitStat::default(),
         };
-        let actual = TabRow::new(&tab, None, Cmd::agent(Agent::Claude, AgentState::Busy), git, home);
+        let actual = TabRow::new(
+            &tab,
+            None,
+            Cmd::agent(Agent::Claude, AgentState::Busy),
+            TabIndicator::Green,
+            git,
+            home,
+        );
         assert_eq!(actual, expected);
     }
 
@@ -362,16 +404,18 @@ mod tests {
             active: true,
             path_label: "empty".to_string(),
             cmd: Cmd::None,
+            indicator: TabIndicator::None,
             git: GitStat::default(),
         };
-        let actual = TabRow::new(&tab, None, Cmd::None, git, home);
+        let actual = TabRow::new(&tab, None, Cmd::None, TabIndicator::None, git, home);
         assert_eq!(actual, expected);
     }
 
     #[test]
-    fn test_display_cmd_waiting_unseen_uses_red_filled_dot() {
-        let rendered = display_cmd(
-            &Cmd::agent(Agent::Codex, AgentState::NeedsAttention),
+    fn test_display_left_waiting_unseen_uses_red_filled_dot() {
+        let rendered = display_left(
+            TabIndicator::Red,
+            &Cmd::agent(Agent::Codex, AgentState::Acknowledged),
             TAB_INACTIVE_BG,
             TAB_DEFAULT_FG,
         );
@@ -382,8 +426,9 @@ mod tests {
     }
 
     #[test]
-    fn test_display_cmd_waiting_seen_uses_empty_dot() {
-        let rendered = display_cmd(
+    fn test_display_left_waiting_seen_uses_empty_dot() {
+        let rendered = display_left(
+            TabIndicator::Empty,
             &Cmd::agent(Agent::Codex, AgentState::Acknowledged),
             TAB_INACTIVE_BG,
             TAB_DEFAULT_FG,
@@ -395,9 +440,10 @@ mod tests {
     }
 
     #[test]
-    fn test_display_cmd_busy_uses_green_filled_dot() {
-        let rendered = display_cmd(
-            &Cmd::agent(Agent::Codex, AgentState::Busy),
+    fn test_display_left_busy_uses_green_filled_dot() {
+        let rendered = display_left(
+            TabIndicator::Green,
+            &Cmd::agent(Agent::Codex, AgentState::Acknowledged),
             TAB_INACTIVE_BG,
             TAB_DEFAULT_FG,
         );
@@ -405,6 +451,23 @@ mod tests {
             rendered,
             format!("{AGENT_BUSY_FG}● {TAB_INACTIVE_BG}{TAB_DEFAULT_FG}codex")
         );
+    }
+
+    #[test]
+    fn test_display_left_none_indicator_renders_only_running_cmd_label() {
+        let rendered = display_left(
+            TabIndicator::None,
+            &Cmd::Running("cargo".to_string()),
+            TAB_INACTIVE_BG,
+            TAB_DEFAULT_FG,
+        );
+        assert_eq!(rendered, "cargo");
+    }
+
+    #[test]
+    fn test_display_left_none_indicator_renders_nothing_for_empty_cmd() {
+        let rendered = display_left(TabIndicator::None, &Cmd::None, TAB_INACTIVE_BG, TAB_DEFAULT_FG);
+        assert_eq!(rendered, "");
     }
 
     #[test]
@@ -452,9 +515,10 @@ mod tests {
             active: true,
             path_label: "git-tab".to_string(),
             cmd: Cmd::None,
+            indicator: TabIndicator::None,
             git,
         };
-        let actual = TabRow::new(&tab, None, Cmd::None, git, home);
+        let actual = TabRow::new(&tab, None, Cmd::None, TabIndicator::None, git, home);
         assert_eq!(actual, expected);
     }
 }
