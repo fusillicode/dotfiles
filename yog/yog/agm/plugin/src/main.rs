@@ -154,8 +154,9 @@ impl ZellijPlugin for State {
 
             Event::TabUpdate(mut tabs) => {
                 let active_tab_id = active_tab_id_from_tabs(&tabs);
-                let landing_focus =
-                    active_tab_id.and_then(|active_tab_id| resolve_active_tab_landing_focus(active_tab_id, &tabs));
+                let landing_focus = active_tab_id.and_then(|active_tab_id| {
+                    resolve_active_tab_landing_focus(active_tab_id, &tabs, self.current_tab.as_ref())
+                });
                 let events = self.events_from_tab_update(&mut tabs, landing_focus);
                 let frame_changed = self.apply_all(&events);
                 if let Some(active_tab_id) = active_tab_id {
@@ -237,7 +238,8 @@ impl ZellijPlugin for State {
                 false
             }
             PipeEvent::ActiveTab { active_tab_id } => {
-                let landing_focus = resolve_active_tab_landing_focus(active_tab_id, &self.all_tabs);
+                let landing_focus =
+                    resolve_active_tab_landing_focus(active_tab_id, &self.all_tabs, self.current_tab.as_ref());
                 let events = self.events_from_active_tab(active_tab_id, landing_focus);
                 let frame_changed = self.apply_all(&events);
                 handle_events(self, &events);
@@ -306,15 +308,48 @@ fn active_tab_id_from_tabs(tabs: &[TabInfo]) -> Option<usize> {
     tabs.iter().find(|tab| tab.active).map(|tab| tab.tab_id)
 }
 
-fn resolve_active_tab_landing_focus(active_tab_id: usize, tabs: &[TabInfo]) -> Option<FocusedPane> {
+fn resolve_active_tab_landing_focus(
+    active_tab_id: usize,
+    tabs: &[TabInfo],
+    current_tab: Option<&CurrentTab>,
+) -> Option<FocusedPane> {
+    resolve_active_tab_landing_focus_with(
+        active_tab_id,
+        tabs,
+        current_tab,
+        || get_focused_pane_info().ok(),
+        get_pane_info,
+    )
+}
+
+fn resolve_active_tab_landing_focus_with<GetFocusedPaneInfo, GetPaneInfo>(
+    active_tab_id: usize,
+    tabs: &[TabInfo],
+    current_tab: Option<&CurrentTab>,
+    mut get_focused_pane_info: GetFocusedPaneInfo,
+    mut get_pane_info: GetPaneInfo,
+) -> Option<FocusedPane>
+where
+    GetFocusedPaneInfo: FnMut() -> Option<(usize, PaneId)>,
+    GetPaneInfo: FnMut(PaneId) -> Option<PaneInfo>,
+{
     let active_tab_position = tabs.iter().find(|tab| tab.tab_id == active_tab_id)?.position;
-    let (focused_tab_position, focused_pane_id) = get_focused_pane_info().ok()?;
-    if focused_tab_position != active_tab_position {
-        return None;
+    if let Some((focused_tab_position, focused_pane_id)) = get_focused_pane_info()
+        && focused_tab_position == active_tab_position
+        && let Some(pane) = get_pane_info(focused_pane_id)
+        && let Some(focused_pane) = focused_pane_from_pane_info(&pane)
+    {
+        return Some(focused_pane);
     }
 
-    let pane = get_pane_info(focused_pane_id)?;
-    focused_pane_from_pane_info(&pane)
+    let current_tab = current_tab?;
+    current_tab.pane_ids.iter().find_map(|pane_id| {
+        let pane = get_pane_info(PaneId::Terminal(*pane_id))?;
+        if !pane.is_focused {
+            return None;
+        }
+        focused_pane_from_pane_info(&pane)
+    })
 }
 
 fn send_current_tab_snapshot(current_tab: Option<&CurrentTab>, target_plugin_id: Option<u32>) {
@@ -345,6 +380,7 @@ fn run_current_tab_git_stat(current_tab: Option<&CurrentTab>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::state::FocusedPaneLabel;
 
     #[test]
     fn test_sync_request_is_ignored_when_not_sent_by_plugin() {
@@ -379,5 +415,87 @@ mod tests {
         ];
 
         pretty_assertions::assert_eq!(active_tab_id_from_tabs(&tabs), Some(20));
+    }
+
+    #[test]
+    fn test_resolve_active_tab_landing_focus_falls_back_to_focused_tracked_pane_when_host_focus_missing() {
+        let tabs = vec![TabInfo {
+            tab_id: 20,
+            position: 1,
+            active: true,
+            ..Default::default()
+        }];
+        let current_tab = CurrentTab {
+            pane_ids: [42].into_iter().collect(),
+            ..CurrentTab::new(20)
+        };
+
+        let landing_focus = resolve_active_tab_landing_focus_with(
+            20,
+            &tabs,
+            Some(&current_tab),
+            || None,
+            |pane_id| match pane_id {
+                PaneId::Terminal(42) => Some(PaneInfo {
+                    id: 42,
+                    is_focused: true,
+                    terminal_command: Some("claude".to_string()),
+                    ..Default::default()
+                }),
+                _ => None,
+            },
+        );
+
+        assert_eq!(
+            landing_focus,
+            Some(FocusedPane {
+                id: 42,
+                label: Some(FocusedPaneLabel::TerminalCommand("claude".to_string())),
+            })
+        );
+    }
+
+    #[test]
+    fn test_resolve_active_tab_landing_focus_prefers_matching_host_focus_over_tracked_scan() {
+        let tabs = vec![TabInfo {
+            tab_id: 20,
+            position: 1,
+            active: true,
+            ..Default::default()
+        }];
+        let current_tab = CurrentTab {
+            pane_ids: [42].into_iter().collect(),
+            ..CurrentTab::new(20)
+        };
+
+        let landing_focus = resolve_active_tab_landing_focus_with(
+            20,
+            &tabs,
+            Some(&current_tab),
+            || Some((1, PaneId::Terminal(99))),
+            |pane_id| match pane_id {
+                PaneId::Terminal(99) => Some(PaneInfo {
+                    id: 99,
+                    is_focused: true,
+                    title: "Cursor Agent".to_string(),
+                    ..Default::default()
+                }),
+                PaneId::Terminal(42) => Some(PaneInfo {
+                    id: 42,
+                    is_focused: true,
+                    terminal_command: Some("claude".to_string()),
+                    ..Default::default()
+                }),
+                _ => None,
+            },
+        );
+
+        assert_eq!(
+            landing_focus,
+            Some(FocusedPane {
+                id: 99,
+                label: Some(FocusedPaneLabel::Title("Cursor …".to_string())),
+            })
+        );
     }
 }
