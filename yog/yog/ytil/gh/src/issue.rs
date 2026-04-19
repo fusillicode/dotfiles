@@ -19,6 +19,15 @@ pub struct CreatedIssue {
 }
 
 impl CreatedIssue {
+    /// Generates a branch name from the issue number and title.
+    pub fn branch_name(&self) -> String {
+        format!(
+            "{}-{}",
+            self.issue_nr.trim_matches('-'),
+            self.title.to_case(Case::Kebab).trim_matches('-')
+        )
+    }
+
     /// Creates a [`CreatedIssue`] from the `gh issue create` command output.
     ///
     /// # Errors
@@ -45,15 +54,6 @@ impl CreatedIssue {
             repo: get_not_empty_field(split.next(), "repo")?,
             issue_nr: get_not_empty_field(split.next(), "issue_nr")?,
         })
-    }
-
-    /// Generates a branch name from the issue number and title.
-    pub fn branch_name(&self) -> String {
-        format!(
-            "{}-{}",
-            self.issue_nr.trim_matches('-'),
-            self.title.to_case(Case::Kebab).trim_matches('-')
-        )
     }
 }
 

@@ -251,25 +251,6 @@ pub fn fetch(branches: &[&str]) -> rootcause::Result<()> {
     fetch_with_repo(&repo, branches)
 }
 
-/// Fetches branches using a pre-discovered repository, avoiding redundant filesystem walks.
-fn fetch_with_repo(repo: &Repository, branches: &[&str]) -> rootcause::Result<()> {
-    let mut callbacks = RemoteCallbacks::new();
-    callbacks.credentials(|_url, username_from_url, _allowed_types| {
-        Cred::ssh_key_from_agent(username_from_url.unwrap_or("git"))
-    });
-
-    let mut fetch_opts = git2::FetchOptions::new();
-    fetch_opts.remote_callbacks(callbacks);
-
-    repo.find_remote("origin")
-        .context("error finding origin remote")?
-        .fetch(branches, Some(&mut fetch_opts), None)
-        .context("error performing fetch from origin remote")
-        .attach_with(|| format!("branches={branches:?}"))?;
-
-    Ok(())
-}
-
 /// Removes remote branches that have a corresponding local branch of the same
 /// shortened name.
 ///
@@ -398,6 +379,25 @@ impl<'a> TryFrom<(git2::Branch<'a>, git2::BranchType)> for Branch {
             },
         })
     }
+}
+
+/// Fetches branches using a pre-discovered repository, avoiding redundant filesystem walks.
+fn fetch_with_repo(repo: &Repository, branches: &[&str]) -> rootcause::Result<()> {
+    let mut callbacks = RemoteCallbacks::new();
+    callbacks.credentials(|_url, username_from_url, _allowed_types| {
+        Cred::ssh_key_from_agent(username_from_url.unwrap_or("git"))
+    });
+
+    let mut fetch_opts = git2::FetchOptions::new();
+    fetch_opts.remote_callbacks(callbacks);
+
+    repo.find_remote("origin")
+        .context("error finding origin remote")?
+        .fetch(branches, Some(&mut fetch_opts), None)
+        .context("error performing fetch from origin remote")
+        .attach_with(|| format!("branches={branches:?}"))?;
+
+    Ok(())
 }
 
 #[cfg(test)]

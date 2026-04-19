@@ -67,6 +67,23 @@ pub fn download_and_find_checksum(checksums_url: &str, filename: &str) -> rootca
     parse_checksum(&body, filename)
 }
 
+/// Verifies that the file at `path` matches the `expected_hex` Sha256 hash.
+///
+/// # Errors
+/// - Computing the hash fails.
+/// - The computed hash does not match.
+pub fn verify(path: &Path, expected_hex: &str) -> rootcause::Result<()> {
+    let actual = compute_sha256(path)?;
+    let expected = expected_hex.to_lowercase();
+
+    if actual != expected {
+        return Err(report!("error checksum mismatch")
+            .attach(format!("path={} expected={expected} actual={actual}", path.display())));
+    }
+
+    Ok(())
+}
+
 /// Parse a checksums file content and find the hash for `filename`.
 ///
 /// Handles two formats:
@@ -98,23 +115,6 @@ fn parse_checksum(content: &str, filename: &str) -> rootcause::Result<String> {
     }
 
     Err(report!("error checksum entry not found").attach(format!("filename={filename:?} content={trimmed:?}")))
-}
-
-/// Verifies that the file at `path` matches the `expected_hex` Sha256 hash.
-///
-/// # Errors
-/// - Computing the hash fails.
-/// - The computed hash does not match.
-pub fn verify(path: &Path, expected_hex: &str) -> rootcause::Result<()> {
-    let actual = compute_sha256(path)?;
-    let expected = expected_hex.to_lowercase();
-
-    if actual != expected {
-        return Err(report!("error checksum mismatch")
-            .attach(format!("path={} expected={expected} actual={actual}", path.display())));
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]

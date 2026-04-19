@@ -1,5 +1,3 @@
-const HELP_ARG: &str = "--help";
-
 /// Abstraction over command-line argument collections.
 pub trait Args<T> {
     /// Checks if the help flag (`--help`) is present.
@@ -39,6 +37,8 @@ pub fn get() -> Vec<String> {
     args.next();
     args.collect::<Vec<String>>()
 }
+
+const HELP_ARG: &str = "--help";
 
 #[cfg(test)]
 mod tests {

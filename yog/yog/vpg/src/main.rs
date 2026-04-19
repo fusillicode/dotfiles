@@ -20,26 +20,6 @@ mod nvim_dbee;
 mod pgpass;
 mod vault;
 
-/// Executes the `vault` CLI to read a secret as JSON.
-///
-/// # Errors
-/// - Vault command fails or JSON deserialization fails.
-fn exec_vault_read_cmd(vault_path: &str) -> rootcause::Result<VaultReadOutput> {
-    let mut cmd = Command::new("vault");
-    cmd.args(["read", vault_path, "--format=json"]);
-
-    let cmd_stdout = &cmd.output()?.stdout;
-
-    Ok(serde_json::from_slice(cmd_stdout)
-        .context("error deserializing vault command output")
-        .attach_with(|| {
-            str::from_utf8(cmd_stdout).map_or_else(
-                |error| format!("cmd={cmd:#?} error={error:?}"),
-                |str_stdout| format!("cmd={cmd:#?} stdout={str_stdout:?}"),
-            )
-        })?)
-}
-
 /// Update Postgres credentials from Vault, rewrite pgpass & nvim-dbee, optionally launch pgcli.
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
@@ -116,4 +96,24 @@ fn main() -> rootcause::Result<()> {
     }
 
     Ok(())
+}
+
+/// Executes the `vault` CLI to read a secret as JSON.
+///
+/// # Errors
+/// - Vault command fails or JSON deserialization fails.
+fn exec_vault_read_cmd(vault_path: &str) -> rootcause::Result<VaultReadOutput> {
+    let mut cmd = Command::new("vault");
+    cmd.args(["read", vault_path, "--format=json"]);
+
+    let cmd_stdout = &cmd.output()?.stdout;
+
+    Ok(serde_json::from_slice(cmd_stdout)
+        .context("error deserializing vault command output")
+        .attach_with(|| {
+            str::from_utf8(cmd_stdout).map_or_else(
+                |error| format!("cmd={cmd:#?} error={error:?}"),
+                |str_stdout| format!("cmd={cmd:#?} stdout={str_stdout:?}"),
+            )
+        })?)
 }

@@ -12,6 +12,54 @@ use crate::diagnostics::filters::DiagnosticsFilter;
 use crate::diagnostics::filters::lsps::GetDiagMsgOutput;
 use crate::diagnostics::filters::lsps::LspFilter;
 
+pub struct TyposLspFilter<'a> {
+    /// LSP diagnostic source name; only diagnostics from this source are eligible for blacklist matching.
+    pub source: &'a str,
+    /// Blacklist of messages per source. References the static blacklist for one-time initialization.
+    pub blacklist: &'a HashSet<&'static str>,
+    /// Optional buffer path substring that must be contained within the buffer path for filtering to apply.
+    pub path_substring: Option<&'a str>,
+}
+
+impl TyposLspFilter<'_> {
+    /// Build typos LSP diagnostic filters.
+    ///
+    /// Returns a vector of boxed [`DiagnosticsFilter`] configured for the typos
+    /// language server. Includes a single [`TyposLspFilter`] that suppresses
+    /// false-positive spelling suggestions matching predefined substrings.
+    pub fn filters() -> Vec<Box<dyn DiagnosticsFilter>> {
+        vec![Box::new(TyposLspFilter {
+            source: "typos",
+            path_substring: None,
+            blacklist: &TYPOS_BLACKLIST,
+        })]
+    }
+}
+
+impl LspFilter for TyposLspFilter<'_> {
+    fn path_substring(&self) -> Option<&str> {
+        self.path_substring
+    }
+
+    fn source(&self) -> &str {
+        self.source
+    }
+}
+
+impl DiagnosticsFilter for TyposLspFilter<'_> {
+    fn skip_diagnostic(&self, buf: &BufferWithPath, lsp_diag: &nvim_oxi::Dictionary) -> rootcause::Result<bool> {
+        let diag_msg = match self.get_diag_msg_or_skip(&buf.path, lsp_diag)? {
+            GetDiagMsgOutput::Msg(diag_msg) => diag_msg,
+            GetDiagMsgOutput::Skip => return Ok(false),
+        };
+
+        Ok(self
+            .blacklist
+            .iter()
+            .any(|blacklisted_msg| diag_msg.contains(blacklisted_msg)))
+    }
+}
+
 /// Static blacklist initialized once on first access.
 /// Contains false-positive spelling suggestions to suppress.
 static TYPOS_BLACKLIST: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
@@ -60,54 +108,6 @@ static TYPOS_BLACKLIST: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
         "utiliza",
     ]
 });
-
-pub struct TyposLspFilter<'a> {
-    /// LSP diagnostic source name; only diagnostics from this source are eligible for blacklist matching.
-    pub source: &'a str,
-    /// Blacklist of messages per source. References the static blacklist for one-time initialization.
-    pub blacklist: &'a HashSet<&'static str>,
-    /// Optional buffer path substring that must be contained within the buffer path for filtering to apply.
-    pub path_substring: Option<&'a str>,
-}
-
-impl TyposLspFilter<'_> {
-    /// Build typos LSP diagnostic filters.
-    ///
-    /// Returns a vector of boxed [`DiagnosticsFilter`] configured for the typos
-    /// language server. Includes a single [`TyposLspFilter`] that suppresses
-    /// false-positive spelling suggestions matching predefined substrings.
-    pub fn filters() -> Vec<Box<dyn DiagnosticsFilter>> {
-        vec![Box::new(TyposLspFilter {
-            source: "typos",
-            path_substring: None,
-            blacklist: &TYPOS_BLACKLIST,
-        })]
-    }
-}
-
-impl LspFilter for TyposLspFilter<'_> {
-    fn path_substring(&self) -> Option<&str> {
-        self.path_substring
-    }
-
-    fn source(&self) -> &str {
-        self.source
-    }
-}
-
-impl DiagnosticsFilter for TyposLspFilter<'_> {
-    fn skip_diagnostic(&self, buf: &BufferWithPath, lsp_diag: &nvim_oxi::Dictionary) -> rootcause::Result<bool> {
-        let diag_msg = match self.get_diag_msg_or_skip(&buf.path, lsp_diag)? {
-            GetDiagMsgOutput::Msg(diag_msg) => diag_msg,
-            GetDiagMsgOutput::Skip => return Ok(false),
-        };
-
-        Ok(self
-            .blacklist
-            .iter()
-            .any(|blacklisted_msg| diag_msg.contains(blacklisted_msg)))
-    }
-}
 
 #[cfg(test)]
 mod tests {

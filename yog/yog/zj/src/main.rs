@@ -11,33 +11,6 @@ use strum::EnumIter;
 use strum::IntoEnumIterator;
 use ytil_sys::cli::Args;
 
-struct DisplaySession(ytil_zellij::Session);
-
-impl Display for DisplaySession {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0.display)
-    }
-}
-
-#[derive(Debug, EnumIter)]
-enum Op {
-    Attach,
-    Restart,
-    Kill,
-    Delete,
-}
-
-impl Display for Op {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Attach => write!(f, "{}", "Attach".green().bold()),
-            Self::Restart => write!(f, "{}", "Restart".cyan().bold()),
-            Self::Kill => write!(f, "{}", "Kill".yellow().bold()),
-            Self::Delete => write!(f, "{}", "Delete".red().bold()),
-        }
-    }
-}
-
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
@@ -106,4 +79,31 @@ fn main() -> rootcause::Result<()> {
     }
 
     Ok(())
+}
+
+struct DisplaySession(ytil_zellij::Session);
+
+impl Display for DisplaySession {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0.display)
+    }
+}
+
+#[derive(Debug, EnumIter)]
+enum Op {
+    Attach,
+    Restart,
+    Kill,
+    Delete,
+}
+
+impl Display for Op {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Attach => write!(f, "{}", "Attach".green().bold()),
+            Self::Restart => write!(f, "{}", "Restart".cyan().bold()),
+            Self::Kill => write!(f, "{}", "Kill".yellow().bold()),
+            Self::Delete => write!(f, "{}", "Delete".red().bold()),
+        }
+    }
 }

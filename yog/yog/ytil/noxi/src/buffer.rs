@@ -355,6 +355,77 @@ pub fn get_current_line() -> Option<String> {
         .ok()
 }
 
+#[cfg(any(test, feature = "mockall"))]
+pub mod mock {
+    use nvim_oxi::api::SuperIterator;
+
+    use crate::buffer::BufferExt;
+
+    #[derive(Debug)]
+    pub struct MockBuffer {
+        pub lines: Vec<String>,
+        pub buf_type: String,
+    }
+
+    impl MockBuffer {
+        pub fn new(lines: Vec<String>) -> Self {
+            Self {
+                lines,
+                buf_type: "test".to_string(),
+            }
+        }
+
+        pub fn with_buf_type(lines: Vec<String>, buf_type: &str) -> Self {
+            Self {
+                lines,
+                buf_type: buf_type.to_string(),
+            }
+        }
+    }
+
+    impl BufferExt for MockBuffer {
+        fn get_line(&self, _idx: usize) -> rootcause::Result<nvim_oxi::String> {
+            Ok("".into())
+        }
+
+        #[allow(clippy::needless_collect)]
+        fn get_lines(
+            &self,
+            line_range: std::ops::RangeInclusive<usize>,
+            _strict_indexing: bool,
+        ) -> Result<Box<dyn SuperIterator<nvim_oxi::String>>, nvim_oxi::api::Error> {
+            let start = *line_range.start();
+            let end = line_range.end().saturating_add(1);
+            let lines: Vec<nvim_oxi::String> = self
+                .lines
+                .get(start..end.min(self.lines.len()))
+                .unwrap_or(&[])
+                .iter()
+                .map(|s| nvim_oxi::String::from(s.as_str()))
+                .collect();
+            Ok(Box::new(lines.into_iter()) as Box<dyn SuperIterator<nvim_oxi::String>>)
+        }
+
+        fn set_text_at_cursor_pos(&mut self, _text: &str) {}
+
+        fn get_buf_type(&self) -> Option<String> {
+            Some(self.buf_type.clone())
+        }
+
+        fn get_channel(&self) -> Option<u32> {
+            None
+        }
+
+        fn send_command(&self, _cmd: &str) -> Option<()> {
+            None
+        }
+
+        fn get_pid(&self) -> rootcause::Result<String> {
+            Ok("42".to_owned())
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use mockall::predicate::*;
@@ -550,77 +621,6 @@ mod tests {
 
         fn get_buf_type(&self) -> Option<String> {
             None
-        }
-
-        fn get_channel(&self) -> Option<u32> {
-            None
-        }
-
-        fn send_command(&self, _cmd: &str) -> Option<()> {
-            None
-        }
-
-        fn get_pid(&self) -> rootcause::Result<String> {
-            Ok("42".to_owned())
-        }
-    }
-}
-
-#[cfg(any(test, feature = "mockall"))]
-pub mod mock {
-    use nvim_oxi::api::SuperIterator;
-
-    use crate::buffer::BufferExt;
-
-    #[derive(Debug)]
-    pub struct MockBuffer {
-        pub lines: Vec<String>,
-        pub buf_type: String,
-    }
-
-    impl MockBuffer {
-        pub fn new(lines: Vec<String>) -> Self {
-            Self {
-                lines,
-                buf_type: "test".to_string(),
-            }
-        }
-
-        pub fn with_buf_type(lines: Vec<String>, buf_type: &str) -> Self {
-            Self {
-                lines,
-                buf_type: buf_type.to_string(),
-            }
-        }
-    }
-
-    impl BufferExt for MockBuffer {
-        fn get_line(&self, _idx: usize) -> rootcause::Result<nvim_oxi::String> {
-            Ok("".into())
-        }
-
-        #[allow(clippy::needless_collect)]
-        fn get_lines(
-            &self,
-            line_range: std::ops::RangeInclusive<usize>,
-            _strict_indexing: bool,
-        ) -> Result<Box<dyn SuperIterator<nvim_oxi::String>>, nvim_oxi::api::Error> {
-            let start = *line_range.start();
-            let end = line_range.end().saturating_add(1);
-            let lines: Vec<nvim_oxi::String> = self
-                .lines
-                .get(start..end.min(self.lines.len()))
-                .unwrap_or(&[])
-                .iter()
-                .map(|s| nvim_oxi::String::from(s.as_str()))
-                .collect();
-            Ok(Box::new(lines.into_iter()) as Box<dyn SuperIterator<nvim_oxi::String>>)
-        }
-
-        fn set_text_at_cursor_pos(&mut self, _text: &str) {}
-
-        fn get_buf_type(&self) -> Option<String> {
-            Some(self.buf_type.clone())
         }
 
         fn get_channel(&self) -> Option<u32> {

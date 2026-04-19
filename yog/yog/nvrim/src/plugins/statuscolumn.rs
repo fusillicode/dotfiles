@@ -9,16 +9,16 @@ use ytil_noxi::buffer::BufferExt;
 
 use crate::diagnostics::DiagnosticSeverity;
 
-/// Markup for a visible space in the Nvim statuscolumn.
-/// Plain spaces (" ") are not rendered; they must be wrapped in highlight markup like `%#Normal# %*`.
-const EMPTY_SPACE: &str = "%#Normal# %*";
-
 /// [`Dictionary`] exposing statuscolumn draw helpers.
 pub fn dict() -> Dictionary {
     dict! {
         "draw": fn_from!(draw),
     }
 }
+
+/// Markup for a visible space in the Nvim statuscolumn.
+/// Plain spaces (" ") are not rendered; they must be wrapped in highlight markup like `%#Normal# %*`.
+const EMPTY_SPACE: &str = "%#Normal# %*";
 
 /// Draws the status column for the current buffer.
 fn draw((cur_lnum, extmarks, opts): (String, Vec<Extmark>, Option<Opts>)) -> Option<String> {

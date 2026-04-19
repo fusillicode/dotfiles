@@ -39,6 +39,11 @@ impl SplitKind {
 
 ytil_noxi::impl_nvim_deserializable!(SplitKind);
 
+pub fn compute_width(perc: i32) -> Option<i32> {
+    let total_width: i32 = crate::vim_opts::get("columns", &crate::vim_opts::global_scope())?;
+    Some((total_width.saturating_mul(perc)) / 100)
+}
+
 fn focus_vsplit((split_kind, width_perc): (SplitKind, i32)) -> Option<()> {
     // Single MRU fetch - source of truth for all terminal buffer lookups.
     let mru_bufs = ytil_noxi::mru_buffers::get().unwrap_or_default();
@@ -139,9 +144,4 @@ fn smart_close_buffer(force_close: Option<bool>) -> Option<()> {
     ytil_noxi::common::exec_vim_script(&format!("bd{force} {}", current_buffer.id), Option::default())?;
 
     Some(())
-}
-
-pub fn compute_width(perc: i32) -> Option<i32> {
-    let total_width: i32 = crate::vim_opts::get("columns", &crate::vim_opts::global_scope())?;
-    Some((total_width.saturating_mul(perc)) / 100)
 }

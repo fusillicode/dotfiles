@@ -8,13 +8,6 @@ use rootcause::prelude::ResultExt;
 use serde_json::Map;
 use serde_json::Value;
 
-const ZELLIJ_PLUGINS_PATH: &[&str] = &[".config", "zellij", "plugins"];
-const ZELLIJ_LAYOUTS_PATH: &[&str] = &[".config", "zellij", "layouts"];
-const WASM_FILENAME: &str = "agm-plugin.wasm";
-const INSTALL_NAME: &str = "agm.wasm";
-const LAYOUT_FILENAME: &str = "agm.kdl";
-const GEMINI_HOOK_NAME_PREFIX: &str = "agm-gemini-";
-
 pub fn install_plugin_and_hooks(is_debug: bool) -> rootcause::Result<()> {
     let wasm_path = build_wasm(is_debug).context("failed to build wasm plugin")?;
     install_wasm(&wasm_path).context("failed to install wasm plugin")?;
@@ -26,6 +19,13 @@ pub fn install_plugin_and_hooks(is_debug: bool) -> rootcause::Result<()> {
     install_opencode_plugin().context("failed to install Opencode hooks")?;
     Ok(())
 }
+
+const ZELLIJ_PLUGINS_PATH: &[&str] = &[".config", "zellij", "plugins"];
+const ZELLIJ_LAYOUTS_PATH: &[&str] = &[".config", "zellij", "layouts"];
+const WASM_FILENAME: &str = "agm-plugin.wasm";
+const INSTALL_NAME: &str = "agm.wasm";
+const LAYOUT_FILENAME: &str = "agm.kdl";
+const GEMINI_HOOK_NAME_PREFIX: &str = "agm-gemini-";
 
 fn build_wasm(is_debug: bool) -> rootcause::Result<PathBuf> {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));

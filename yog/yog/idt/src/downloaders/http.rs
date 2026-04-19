@@ -1,13 +1,12 @@
 use std::fs::File;
 use std::path::PathBuf;
 
+use deflate::ChecksumSource;
+use deflate::HttpDeflateOption;
 use rootcause::prelude::ResultExt as _;
 
 pub mod deflate;
 pub mod github;
-
-use deflate::ChecksumSource;
-use deflate::HttpDeflateOption;
 
 /// Downloads a file from the given URL with the specified [`HttpDeflateOption`].
 ///

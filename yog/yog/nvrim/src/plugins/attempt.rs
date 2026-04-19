@@ -11,14 +11,14 @@ use chrono::Local;
 use nvim_oxi::Dictionary;
 use rootcause::report;
 
-const SCRATCHES_PATH_PARTS: &[&str] = &["yog", "nvrim", "src", "plugins", "attempt"];
-
 /// [`Dictionary`] of scratch file utilities.
 pub fn dict() -> Dictionary {
     dict! {
         "create_scratch_file": fn_from!(create_scratch_file),
     }
 }
+
+const SCRATCHES_PATH_PARTS: &[&str] = &["yog", "nvrim", "src", "plugins", "attempt"];
 
 /// Creates a scratch file by selecting and copying a template file.
 ///

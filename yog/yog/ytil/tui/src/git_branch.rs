@@ -6,31 +6,6 @@ use owo_colors::OwoColorize as _;
 use rootcause::prelude::ResultExt as _;
 use ytil_git::branch::Branch;
 
-/// A wrapper around [`Branch`] for display purposes.
-struct RenderableBranch(pub Branch);
-
-impl Deref for RenderableBranch {
-    type Target = Branch;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl Display for RenderableBranch {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let styled_date_time = format!("({})", self.committer_date_time());
-        let styled_email = format!("<{}>", self.committer_email());
-        write!(
-            f,
-            "{} {} {}",
-            self.name(),
-            styled_date_time.green(),
-            styled_email.blue().bold(),
-        )
-    }
-}
-
 /// Prompts the user to select a branch from all available branches.
 ///
 /// The previously checked-out branch (`@{-1}`) is placed first when available.
@@ -54,6 +29,31 @@ pub fn select() -> rootcause::Result<Option<Branch>> {
     };
 
     Ok(Some(branch.0))
+}
+
+/// A wrapper around [`Branch`] for display purposes.
+struct RenderableBranch(pub Branch);
+
+impl Deref for RenderableBranch {
+    type Target = Branch;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Display for RenderableBranch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let styled_date_time = format!("({})", self.committer_date_time());
+        let styled_email = format!("<{}>", self.committer_email());
+        write!(
+            f,
+            "{} {} {}",
+            self.name(),
+            styled_date_time.green(),
+            styled_email.blue().bold(),
+        )
+    }
 }
 
 fn prioritize_branches(branches: Vec<Branch>, previous_branch: Option<&str>, user_email: Option<&str>) -> Vec<Branch> {

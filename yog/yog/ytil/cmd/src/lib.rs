@@ -61,13 +61,6 @@ pub fn extract_success_output(output: &Output) -> rootcause::Result<String> {
         .into())
 }
 
-fn to_utf8_string(cmd: &Command, bytes: Vec<u8>) -> Result<String, CmdError> {
-    String::from_utf8(bytes).map_err(|error| CmdError::FromUtf8 {
-        cmd: Cmd::from(cmd),
-        source: error,
-    })
-}
-
 /// Command execution errors with contextual details.
 ///
 /// Each variant embeds [`Cmd`] (program, args, cwd) for terse diagnostics. `Utf8`
@@ -173,6 +166,13 @@ pub fn silent_cmd(program: &str) -> Command {
         cmd.stdout(Stdio::null()).stderr(Stdio::null());
     }
     cmd
+}
+
+fn to_utf8_string(cmd: &Command, bytes: Vec<u8>) -> Result<String, CmdError> {
+    String::from_utf8(bytes).map_err(|error| CmdError::FromUtf8 {
+        cmd: Cmd::from(cmd),
+        source: error,
+    })
 }
 
 #[cfg(test)]

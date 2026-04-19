@@ -8,6 +8,13 @@ use nvim_oxi::api::opts::CreateCommandOpts;
 use nvim_oxi::api::opts::CreateCommandOptsBuilder;
 use nvim_oxi::api::types::CommandArgs;
 
+/// Creates user commands (including `Fkr` for random string generation).
+pub fn create() {
+    for (cmd_name, desc, cmd) in USER_CMDS {
+        create_user_cmd(cmd_name, cmd, &CreateCommandOptsBuilder::default().desc(desc).build());
+    }
+}
+
 const USER_CMDS: [(&str, &str, &str); 6] = [
     ("CopyAll", "Copy all", ":%y+"),
     ("Highlights", "FzfHighlights", ":FzfLua highlights"),
@@ -20,13 +27,6 @@ const USER_CMDS: [(&str, &str, &str); 6] = [
         ":lua require('nvrim').fkr.insert_string()",
     ),
 ];
-
-/// Creates user commands (including `Fkr` for random string generation).
-pub fn create() {
-    for (cmd_name, desc, cmd) in USER_CMDS {
-        create_user_cmd(cmd_name, cmd, &CreateCommandOptsBuilder::default().desc(desc).build());
-    }
-}
 
 /// Registers a single user command with Nvim.
 fn create_user_cmd<Cmd>(name: &str, command: Cmd, opts: &CreateCommandOpts)

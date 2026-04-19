@@ -194,6 +194,80 @@ const LINTS_FIX: &[(&str, LintBuilder)] = &[
 /// No-operation lint that reports "skipped" status.
 const LINT_NO_OP: Lint = |_| LintFnResult(Ok(LintFnSuccess::PlainMsg(format!("{}\n", "skipped".bold()))));
 
+/// Run workspace lint suite concurrently (check or fix modes).
+#[ytil_sys::main]
+fn main() -> rootcause::Result<()> {
+    let args = ytil_sys::cli::get();
+    if args.has_help() {
+        println!("{}", include_str!("../help.txt"));
+        return Ok(());
+    }
+    let fix_mode = args.first().is_some_and(|s| s == "fix");
+
+    let workspace_root = ytil_sys::dir::get_workspace_root()?;
+
+    let repo = ytil_git::repo::discover(&workspace_root)?;
+    let changed_paths = repo
+        .statuses(None)?
+        .iter()
+        .filter_map(|entry| entry.path().map(str::to_string))
+        .collect::<Vec<_>>();
+
+    let (start_msg, lints) = if fix_mode {
+        ("lints fix", LINTS_FIX)
+    } else {
+        ("lints check", LINTS_CHECK)
+    };
+
+    println!(
+        "\nRunning {} {} in {}\n",
+        start_msg.cyan().bold(),
+        format!("{:#?}", lints.iter().map(|(lint, _)| lint).collect::<Vec<_>>())
+            .white()
+            .bold(),
+        workspace_root.display().to_string().white().bold(),
+    );
+
+    // Spawn all lints in parallel.
+    let lints_handles: Vec<_> = lints
+        .iter()
+        .map(|(lint_name, lint_builder)| {
+            (
+                lint_name,
+                std::thread::spawn({
+                    let workspace_root = workspace_root.clone();
+                    let changed_paths = changed_paths.clone();
+                    move || run_and_report(lint_name, &workspace_root, lint_builder(&changed_paths))
+                }),
+            )
+        })
+        .collect();
+
+    let mut errors_count: i32 = 0;
+    for (_lint_name, handle) in lints_handles {
+        match handle.join().as_deref() {
+            Ok(Ok(_)) => (),
+            Ok(Err(_)) => errors_count = errors_count.saturating_add(1),
+            Err(join_err) => {
+                errors_count = errors_count.saturating_add(1);
+                eprintln!(
+                    "{} error={}",
+                    "Error joining thread".red().bold(),
+                    format!("{join_err:#?}").red()
+                );
+            }
+        }
+    }
+
+    println!(); // Cosmetic spacing.
+
+    if errors_count > 0 {
+        std::process::exit(1);
+    }
+
+    Ok(())
+}
+
 /// Function pointer type for a single lint invocation.
 type Lint = fn(&Path) -> LintFnResult;
 
@@ -296,80 +370,6 @@ fn report(lint_name: &str, lint_res: &Result<LintFnSuccess, LintFnError>, elapse
 /// Format lint duration into `time=<duration>` snippet.
 fn format_timing(duration: Duration) -> String {
     format!("time={duration:?}")
-}
-
-/// Run workspace lint suite concurrently (check or fix modes).
-#[ytil_sys::main]
-fn main() -> rootcause::Result<()> {
-    let args = ytil_sys::cli::get();
-    if args.has_help() {
-        println!("{}", include_str!("../help.txt"));
-        return Ok(());
-    }
-    let fix_mode = args.first().is_some_and(|s| s == "fix");
-
-    let workspace_root = ytil_sys::dir::get_workspace_root()?;
-
-    let repo = ytil_git::repo::discover(&workspace_root)?;
-    let changed_paths = repo
-        .statuses(None)?
-        .iter()
-        .filter_map(|entry| entry.path().map(str::to_string))
-        .collect::<Vec<_>>();
-
-    let (start_msg, lints) = if fix_mode {
-        ("lints fix", LINTS_FIX)
-    } else {
-        ("lints check", LINTS_CHECK)
-    };
-
-    println!(
-        "\nRunning {} {} in {}\n",
-        start_msg.cyan().bold(),
-        format!("{:#?}", lints.iter().map(|(lint, _)| lint).collect::<Vec<_>>())
-            .white()
-            .bold(),
-        workspace_root.display().to_string().white().bold(),
-    );
-
-    // Spawn all lints in parallel.
-    let lints_handles: Vec<_> = lints
-        .iter()
-        .map(|(lint_name, lint_builder)| {
-            (
-                lint_name,
-                std::thread::spawn({
-                    let workspace_root = workspace_root.clone();
-                    let changed_paths = changed_paths.clone();
-                    move || run_and_report(lint_name, &workspace_root, lint_builder(&changed_paths))
-                }),
-            )
-        })
-        .collect();
-
-    let mut errors_count: i32 = 0;
-    for (_lint_name, handle) in lints_handles {
-        match handle.join().as_deref() {
-            Ok(Ok(_)) => (),
-            Ok(Err(_)) => errors_count = errors_count.saturating_add(1),
-            Err(join_err) => {
-                errors_count = errors_count.saturating_add(1);
-                eprintln!(
-                    "{} error={}",
-                    "Error joining thread".red().bold(),
-                    format!("{join_err:#?}").red()
-                );
-            }
-        }
-    }
-
-    println!(); // Cosmetic spacing.
-
-    if errors_count > 0 {
-        std::process::exit(1);
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]

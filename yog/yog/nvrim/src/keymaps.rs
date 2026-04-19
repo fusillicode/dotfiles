@@ -9,9 +9,6 @@ use ytil_noxi::api::opts::SetKeymapOpts;
 use ytil_noxi::api::opts::SetKeymapOptsBuilder;
 use ytil_noxi::api::types::Mode;
 
-const NV_MODE: [Mode; 2] = [Mode::Normal, Mode::Visual];
-const NVOP_MODE: [Mode; 1] = [Mode::NormalVisualOperator];
-
 /// RHS used for the normal-mode `<Esc>` mapping (clear search + empty echo).
 pub const NORMAL_ESC: &str = r#":noh<cr>:echo""<cr>"#;
 
@@ -46,6 +43,9 @@ pub fn set(modes: &[Mode], lhs: &str, rhs: &str, opts: &SetKeymapOpts) {
 pub fn default_opts() -> SetKeymapOpts {
     SetKeymapOptsBuilder::default().silent(true).noremap(true).build()
 }
+
+const NV_MODE: [Mode; 2] = [Mode::Normal, Mode::Visual];
+const NVOP_MODE: [Mode; 1] = [Mode::NormalVisualOperator];
 
 /// Sets the core (non‑plugin) keymaps ported from the Lua `M.setup` function.
 ///

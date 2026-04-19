@@ -12,6 +12,30 @@ use url::Url;
 use ytil_git::CmdError;
 use ytil_sys::cli::Args;
 
+/// Switch, create, and derive Git branches (including from GitHub PR URLs).
+#[ytil_sys::main]
+fn main() -> rootcause::Result<()> {
+    let args = ytil_sys::cli::get();
+    if args.has_help() {
+        println!("{}", include_str!("../help.txt"));
+        return Ok(());
+    }
+    let args: Vec<_> = args.iter().map(String::as_str).collect();
+
+    match args.split_first() {
+        None => autocomplete_git_branches_and_switch(),
+        // Assumption: cannot create a branch with a name that starts with -
+        Some((hd, _)) if *hd == "-" => ytil_git::branch::switch(hd)
+            .inspect(|()| report_branch_switch(hd))
+            .map_err(From::from),
+        Some((hd, tail)) if *hd == "-b" => create_branch_and_switch(&build_branch_name(tail)?),
+        Some((hd, &[])) => handle_single_input_argument(hd),
+        _ => create_branch_and_switch(&build_branch_name(&args)?),
+    }?;
+
+    Ok(())
+}
+
 /// Interactive selection and switching of Git branches.
 ///
 /// Presents a minimal TUI listing the provided branches (or fetches recent local / remote branches
@@ -195,30 +219,6 @@ fn ask_branching_from_not_default(branch_name: &str, default_branch_name: &str) 
         branch_name.bold(),
         default_branch_name.bold()
     );
-}
-
-/// Switch, create, and derive Git branches (including from GitHub PR URLs).
-#[ytil_sys::main]
-fn main() -> rootcause::Result<()> {
-    let args = ytil_sys::cli::get();
-    if args.has_help() {
-        println!("{}", include_str!("../help.txt"));
-        return Ok(());
-    }
-    let args: Vec<_> = args.iter().map(String::as_str).collect();
-
-    match args.split_first() {
-        None => autocomplete_git_branches_and_switch(),
-        // Assumption: cannot create a branch with a name that starts with -
-        Some((hd, _)) if *hd == "-" => ytil_git::branch::switch(hd)
-            .inspect(|()| report_branch_switch(hd))
-            .map_err(From::from),
-        Some((hd, tail)) if *hd == "-b" => create_branch_and_switch(&build_branch_name(tail)?),
-        Some((hd, &[])) => handle_single_input_argument(hd),
-        _ => create_branch_and_switch(&build_branch_name(&args)?),
-    }?;
-
-    Ok(())
 }
 
 #[cfg(test)]

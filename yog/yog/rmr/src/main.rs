@@ -13,6 +13,31 @@ use rootcause::bail;
 use rootcause::report;
 use ytil_sys::cli::Args;
 
+/// Remove files or directories passed as CLI args (recursive for dirs).
+fn main() {
+    let files = ytil_sys::cli::get();
+
+    if files.has_help() {
+        println!("{}", include_str!("../help.txt"));
+        return;
+    }
+
+    if files.is_empty() {
+        println!("Nothing done");
+    }
+
+    let mut any_errors = false;
+    for file in &files {
+        if process(file).is_err() {
+            any_errors = true;
+        }
+    }
+
+    if any_errors {
+        std::process::exit(1);
+    }
+}
+
 /// Deletes one path after stripping the first ':' suffix segment.
 ///
 /// # Errors
@@ -57,31 +82,6 @@ fn process(file: &str) -> rootcause::Result<()> {
 /// Strips suffix beginning at first ':'.
 fn before_first_colon(s: &str) -> &str {
     s.split_once(':').map_or(s, |(before, _)| before)
-}
-
-/// Remove files or directories passed as CLI args (recursive for dirs).
-fn main() {
-    let files = ytil_sys::cli::get();
-
-    if files.has_help() {
-        println!("{}", include_str!("../help.txt"));
-        return;
-    }
-
-    if files.is_empty() {
-        println!("Nothing done");
-    }
-
-    let mut any_errors = false;
-    for file in &files {
-        if process(file).is_err() {
-            any_errors = true;
-        }
-    }
-
-    if any_errors {
-        std::process::exit(1);
-    }
 }
 
 #[cfg(test)]

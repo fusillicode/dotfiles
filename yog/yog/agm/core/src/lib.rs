@@ -1,6 +1,3 @@
-pub mod agent;
-pub mod git_stat;
-
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -8,6 +5,9 @@ use crate::agent::Agent;
 use crate::agent::AgentEventKind;
 use crate::agent::AgentEventPayload;
 use crate::git_stat::GitStat;
+
+pub mod agent;
+pub mod git_stat;
 
 pub const EMPTY_FIELD: &str = "--";
 
@@ -59,40 +59,6 @@ pub fn short_path(path: &Path, home: &Path) -> String {
         "/".into()
     } else {
         format!("/{}", abbrev_path_dirs(&names))
-    }
-}
-
-fn path_dir_names(path: &Path) -> Vec<String> {
-    path.components()
-        .filter_map(|component| match component {
-            std::path::Component::Normal(segment) => Some(segment.to_string_lossy().into_owned()),
-            std::path::Component::Prefix(_)
-            | std::path::Component::RootDir
-            | std::path::Component::CurDir
-            | std::path::Component::ParentDir => None,
-        })
-        .collect()
-}
-
-fn abbrev_path_dirs(names: &[String]) -> String {
-    match names.len() {
-        0 => String::new(),
-        1 => names.first().cloned().unwrap_or_default(),
-        total => {
-            let mut out = String::new();
-            for (idx, name) in names.iter().enumerate() {
-                if idx > 0 {
-                    out.push('/');
-                }
-                let is_last = idx == total.saturating_sub(1);
-                if is_last {
-                    out.push_str(name);
-                } else {
-                    out.push(name.chars().next().unwrap_or('·'));
-                }
-            }
-            out
-        }
     }
 }
 
@@ -361,6 +327,40 @@ impl std::convert::TryFrom<(usize, &str)> for TabStateEntry {
                 is_worktree,
             },
         })
+    }
+}
+
+fn path_dir_names(path: &Path) -> Vec<String> {
+    path.components()
+        .filter_map(|component| match component {
+            std::path::Component::Normal(segment) => Some(segment.to_string_lossy().into_owned()),
+            std::path::Component::Prefix(_)
+            | std::path::Component::RootDir
+            | std::path::Component::CurDir
+            | std::path::Component::ParentDir => None,
+        })
+        .collect()
+}
+
+fn abbrev_path_dirs(names: &[String]) -> String {
+    match names.len() {
+        0 => String::new(),
+        1 => names.first().cloned().unwrap_or_default(),
+        total => {
+            let mut out = String::new();
+            for (idx, name) in names.iter().enumerate() {
+                if idx > 0 {
+                    out.push('/');
+                }
+                let is_last = idx == total.saturating_sub(1);
+                if is_last {
+                    out.push_str(name);
+                } else {
+                    out.push(name.chars().next().unwrap_or('·'));
+                }
+            }
+            out
+        }
     }
 }
 

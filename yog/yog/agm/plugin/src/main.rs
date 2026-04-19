@@ -20,14 +20,6 @@ mod events;
 mod state;
 mod ui;
 
-const CONTEXT_KEY_GIT_STAT: &str = "git-stat";
-const SYNC_PIPE: &str = "agm-sync";
-
-// No-op symbol for tests builds so unit tests can link/run in CI.
-#[cfg(all(test, not(target_arch = "wasm32")))]
-#[unsafe(no_mangle)]
-extern "C" fn host_run_plugin_command() {}
-
 #[cfg_attr(test, derive(PartialEq))]
 #[derive(Clone, Debug)]
 pub struct StateSnapshotPayload {
@@ -120,6 +112,9 @@ impl From<&StateSnapshotPayload> for MessageToPlugin {
             .with_payload(entry.to_string())
     }
 }
+
+const CONTEXT_KEY_GIT_STAT: &str = "git-stat";
+const SYNC_PIPE: &str = "agm-sync";
 
 register_plugin!(State);
 
@@ -262,6 +257,11 @@ impl ZellijPlugin for State {
         }
     }
 }
+
+// No-op symbol for tests builds so unit tests can link/run in CI.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+#[unsafe(no_mangle)]
+extern "C" fn host_run_plugin_command() {}
 
 fn handle_events(state: &State, events: &[StateEvent]) {
     for event in events {
