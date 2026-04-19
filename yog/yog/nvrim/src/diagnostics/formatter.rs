@@ -23,41 +23,6 @@ pub fn format(diagnostic: Diagnostic) -> Option<String> {
     Some(format!("▶ {msg} [{src_and_code}]"))
 }
 
-/// Extracts LSP diagnostic message from [`LspData::rendered`] or directly from the supplied [`Diagnostic`].
-fn get_msg(diag: &Diagnostic) -> Option<&str> {
-    diag.user_data
-        .as_ref()
-        .and_then(|user_data| {
-            user_data
-                .lsp
-                .as_ref()
-                .and_then(|lsp| {
-                    lsp.data
-                        .as_ref()
-                        .and_then(|lsp_data| lsp_data.rendered.as_deref())
-                        .or(lsp.message.as_deref())
-                })
-                .or(diag.message.as_deref())
-        })
-        .or(diag.message.as_deref())
-}
-
-/// Extracts the "source" from [`Diagnostic::user_data`] or [`Diagnostic::source`].
-fn get_src(diag: &Diagnostic) -> Option<&str> {
-    diag.user_data
-        .as_ref()
-        .and_then(|user_data| user_data.lsp.as_ref().and_then(|lsp| lsp.source.as_deref()))
-        .or(diag.source.as_deref())
-}
-
-/// Extracts the "code" from [`Diagnostic::user_data`] or [`Diagnostic::code`].
-fn get_code(diag: &Diagnostic) -> Option<&str> {
-    diag.user_data
-        .as_ref()
-        .and_then(|user_data| user_data.lsp.as_ref().and_then(|lsp| lsp.code.as_deref()))
-        .or(diag.code.as_deref())
-}
-
 /// Represents a diagnostic from Nvim.
 #[derive(Debug, Deserialize)]
 pub struct Diagnostic {
@@ -97,4 +62,39 @@ pub struct Lsp {
 #[derive(Debug, Deserialize)]
 pub struct LspData {
     rendered: Option<String>,
+}
+
+/// Extracts LSP diagnostic message from [`LspData::rendered`] or directly from the supplied [`Diagnostic`].
+fn get_msg(diag: &Diagnostic) -> Option<&str> {
+    diag.user_data
+        .as_ref()
+        .and_then(|user_data| {
+            user_data
+                .lsp
+                .as_ref()
+                .and_then(|lsp| {
+                    lsp.data
+                        .as_ref()
+                        .and_then(|lsp_data| lsp_data.rendered.as_deref())
+                        .or(lsp.message.as_deref())
+                })
+                .or(diag.message.as_deref())
+        })
+        .or(diag.message.as_deref())
+}
+
+/// Extracts the "source" from [`Diagnostic::user_data`] or [`Diagnostic::source`].
+fn get_src(diag: &Diagnostic) -> Option<&str> {
+    diag.user_data
+        .as_ref()
+        .and_then(|user_data| user_data.lsp.as_ref().and_then(|lsp| lsp.source.as_deref()))
+        .or(diag.source.as_deref())
+}
+
+/// Extracts the "code" from [`Diagnostic::user_data`] or [`Diagnostic::code`].
+fn get_code(diag: &Diagnostic) -> Option<&str> {
+    diag.user_data
+        .as_ref()
+        .and_then(|user_data| user_data.lsp.as_ref().and_then(|lsp| lsp.code.as_deref()))
+        .or(diag.code.as_deref())
 }

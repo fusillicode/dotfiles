@@ -16,6 +16,21 @@ pub struct JumpEntry {
     pub lnum: i32,
 }
 
+/// Retrieves the current jumplist from Neovim.
+pub fn get() -> Option<Vec<JumpEntry>> {
+    Some(
+        nvim_oxi::api::call_function::<_, JumpList>("getjumplist", Array::new())
+            .inspect_err(|err| crate::notify::error(format!("error getting jumplist | error={err:?}")))
+            .ok()?
+            .0,
+    )
+}
+
+/// Internal representation of Neovim's jumplist structure.
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+struct JumpList(Vec<JumpEntry>, usize);
+
 impl FromObject for JumpList {
     fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
         Self::deserialize(nvim_oxi::serde::Deserializer::new(obj)).map_err(Into::into)
@@ -32,19 +47,4 @@ impl Poppable for JumpList {
             Self::from_object(obj).map_err(nvim_oxi::lua::Error::pop_error_from_err::<Self, _>)
         }
     }
-}
-
-/// Internal representation of Neovim's jumplist structure.
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-struct JumpList(Vec<JumpEntry>, usize);
-
-/// Retrieves the current jumplist from Neovim.
-pub fn get() -> Option<Vec<JumpEntry>> {
-    Some(
-        nvim_oxi::api::call_function::<_, JumpList>("getjumplist", Array::new())
-            .inspect_err(|err| crate::notify::error(format!("error getting jumplist | error={err:?}")))
-            .ok()?
-            .0,
-    )
 }

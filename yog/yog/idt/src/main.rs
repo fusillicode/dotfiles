@@ -53,34 +53,6 @@ use crate::installers::zellij::Zellij;
 mod downloaders;
 mod installers;
 
-/// Summarize installer thread outcomes; collect failing bin names.
-///
-/// # Errors
-/// Returns failing bin names; installers handle detailed error output.
-fn report<'a>(installers_res: &'a [(&'a str, std::thread::Result<rootcause::Result<()>>)]) -> Result<(), Vec<&'a str>> {
-    let mut errors_bins = vec![];
-
-    for (bin_name, result) in installers_res {
-        match result {
-            Err(err) => {
-                eprintln!(
-                    "{} installer thread panicked error={}",
-                    bin_name.red(), // removed bold
-                    format!("{err:#?}").red()
-                );
-                errors_bins.push(*bin_name);
-            }
-            Ok(Err(_)) => errors_bins.push(bin_name),
-            Ok(Ok(())) => {}
-        }
-    }
-
-    if errors_bins.is_empty() {
-        return Ok(());
-    }
-    Err(errors_bins)
-}
-
 /// Install language servers, linters, formatters, and developer helpers concurrently.
 #[ytil_sys::main]
 #[allow(clippy::too_many_lines)]
@@ -284,4 +256,32 @@ fn main() -> rootcause::Result<()> {
     ytil_sys::rm::rm_dead_symlinks(bin_dir)?;
 
     Ok(())
+}
+
+/// Summarize installer thread outcomes; collect failing bin names.
+///
+/// # Errors
+/// Returns failing bin names; installers handle detailed error output.
+fn report<'a>(installers_res: &'a [(&'a str, std::thread::Result<rootcause::Result<()>>)]) -> Result<(), Vec<&'a str>> {
+    let mut errors_bins = vec![];
+
+    for (bin_name, result) in installers_res {
+        match result {
+            Err(err) => {
+                eprintln!(
+                    "{} installer thread panicked error={}",
+                    bin_name.red(), // removed bold
+                    format!("{err:#?}").red()
+                );
+                errors_bins.push(*bin_name);
+            }
+            Ok(Err(_)) => errors_bins.push(bin_name),
+            Ok(Ok(())) => {}
+        }
+    }
+
+    if errors_bins.is_empty() {
+        return Ok(());
+    }
+    Err(errors_bins)
 }

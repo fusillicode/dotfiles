@@ -8,8 +8,6 @@ use std::process::Command;
 use rootcause::prelude::ResultExt;
 use ytil_cmd::CmdExt;
 
-const BIN: &str = "zellij";
-
 /// Cardinal direction for pane operations.
 #[derive(Clone, Copy, Debug)]
 pub enum Direction {
@@ -172,30 +170,6 @@ pub fn delete_session(name: &str) -> rootcause::Result<()> {
     Ok(())
 }
 
-/// Runs a [`Command`] with inherited stdio so the child process can interact with
-/// the terminal directly (preserving ANSI colors, TTY detection, and interactivity).
-///
-/// Because stdio is inherited rather than captured, `stderr` and `stdout` in the
-/// returned [`CmdError::CmdFailure`](ytil_cmd::CmdError::CmdFailure) are always
-/// empty — the user already saw whatever the child printed.
-fn run_interactive(cmd: &mut Command) -> Result<(), Box<ytil_cmd::CmdError>> {
-    let status = cmd.status().map_err(|source| {
-        Box::new(ytil_cmd::CmdError::Io {
-            cmd: ytil_cmd::Cmd::from(&*cmd),
-            source,
-        })
-    })?;
-    if !status.success() {
-        return Err(Box::new(ytil_cmd::CmdError::CmdFailure {
-            cmd: ytil_cmd::Cmd::from(&*cmd),
-            stderr: String::new(),
-            stdout: String::new(),
-            status,
-        }));
-    }
-    Ok(())
-}
-
 /// Returns the number of panes in the current tab.
 ///
 /// # Errors
@@ -289,6 +263,32 @@ pub fn new_pane(direction: Direction, command: &[&str]) -> rootcause::Result<()>
 pub fn resize_increase(direction: Direction, times: u32) -> rootcause::Result<()> {
     for _ in 0..times {
         action(&["resize", "increase", direction.as_str()])?;
+    }
+    Ok(())
+}
+
+const BIN: &str = "zellij";
+
+/// Runs a [`Command`] with inherited stdio so the child process can interact with
+/// the terminal directly (preserving ANSI colors, TTY detection, and interactivity).
+///
+/// Because stdio is inherited rather than captured, `stderr` and `stdout` in the
+/// returned [`CmdError::CmdFailure`](ytil_cmd::CmdError::CmdFailure) are always
+/// empty — the user already saw whatever the child printed.
+fn run_interactive(cmd: &mut Command) -> Result<(), Box<ytil_cmd::CmdError>> {
+    let status = cmd.status().map_err(|source| {
+        Box::new(ytil_cmd::CmdError::Io {
+            cmd: ytil_cmd::Cmd::from(&*cmd),
+            source,
+        })
+    })?;
+    if !status.success() {
+        return Err(Box::new(ytil_cmd::CmdError::CmdFailure {
+            cmd: ytil_cmd::Cmd::from(&*cmd),
+            stderr: String::new(),
+            stdout: String::new(),
+            status,
+        }));
     }
     Ok(())
 }

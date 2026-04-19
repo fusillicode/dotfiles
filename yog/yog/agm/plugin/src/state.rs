@@ -30,10 +30,6 @@ pub struct State {
 }
 
 impl State {
-    fn current_tab_is_active_in(tabs: &[TabInfo], current_tab_id: Option<usize>) -> bool {
-        current_tab_id.is_some_and(|id| tabs.iter().any(|tab| tab.active && tab.tab_id == id))
-    }
-
     pub(crate) fn current_tab_is_active(&self) -> bool {
         let current_tab_id = self.current_tab_id();
         self.known_active_tab_id
@@ -43,16 +39,6 @@ impl State {
 
     pub fn current_tab_id(&self) -> Option<usize> {
         self.current_tab.as_ref().map(|current_tab| current_tab.tab_id)
-    }
-
-    fn push_became_active_events(&self, events: &mut Vec<StateEvent>, landing_focus: Option<FocusedPane>) {
-        events.push(StateEvent::BecameActive);
-        if let Some(focused_pane) = landing_focus {
-            events.push(StateEvent::FocusChanged {
-                new_pane: Some(focused_pane),
-                acknowledge_existing_attention: true,
-            });
-        }
     }
 
     pub fn events_from_pane_update(
@@ -330,6 +316,61 @@ impl State {
         }]
     }
 
+    pub fn events_from_active_tab(&self, active_tab_id: usize, landing_focus: Option<FocusedPane>) -> Vec<StateEvent> {
+        if self.known_active_tab_id == Some(active_tab_id) {
+            if let Some(event) = self.same_tab_activation_focus_event(active_tab_id, landing_focus) {
+                return vec![event];
+            }
+            return vec![];
+        }
+
+        let mut events = vec![StateEvent::ActiveTabChanged { active_tab_id }];
+        let was_active = self.current_tab_is_active();
+        let is_active = self.current_tab_id() == Some(active_tab_id);
+        if !was_active && is_active {
+            self.push_became_active_events(&mut events, landing_focus);
+        }
+
+        events
+    }
+
+    pub fn apply_all(&mut self, events: &[StateEvent]) -> bool {
+        for event in events {
+            self.apply(event);
+        }
+        self.sync_frame()
+    }
+
+    pub fn remote_snapshot_for_tab(&self, tab_id: usize) -> Option<&StateSnapshotPayload> {
+        self.other_tabs
+            .values()
+            .filter(|remote| remote.tab_id == tab_id)
+            .max_by_key(|remote| remote.seq)
+    }
+
+    pub fn sync_frame(&mut self) -> bool {
+        let next_frame = compute_frame(self);
+        if self.frame == next_frame {
+            return false;
+        }
+        self.frame = next_frame;
+        true
+    }
+
+    fn current_tab_is_active_in(tabs: &[TabInfo], current_tab_id: Option<usize>) -> bool {
+        current_tab_id.is_some_and(|id| tabs.iter().any(|tab| tab.active && tab.tab_id == id))
+    }
+
+    fn push_became_active_events(&self, events: &mut Vec<StateEvent>, landing_focus: Option<FocusedPane>) {
+        events.push(StateEvent::BecameActive);
+        if let Some(focused_pane) = landing_focus {
+            events.push(StateEvent::FocusChanged {
+                new_pane: Some(focused_pane),
+                acknowledge_existing_attention: true,
+            });
+        }
+    }
+
     fn same_tab_activation_focus_event(
         &self,
         active_tab_id: usize,
@@ -358,24 +399,6 @@ impl State {
                 .pane_state_by_pane
                 .get(&landing_focus_id)
                 .is_some_and(|pane_state| pane_state.phase == AgentPanePhase::AttentionUnseen)
-    }
-
-    pub fn events_from_active_tab(&self, active_tab_id: usize, landing_focus: Option<FocusedPane>) -> Vec<StateEvent> {
-        if self.known_active_tab_id == Some(active_tab_id) {
-            if let Some(event) = self.same_tab_activation_focus_event(active_tab_id, landing_focus) {
-                return vec![event];
-            }
-            return vec![];
-        }
-
-        let mut events = vec![StateEvent::ActiveTabChanged { active_tab_id }];
-        let was_active = self.current_tab_is_active();
-        let is_active = self.current_tab_id() == Some(active_tab_id);
-        if !was_active && is_active {
-            self.push_became_active_events(&mut events, landing_focus);
-        }
-
-        events
     }
 
     fn apply(&mut self, event: &StateEvent) {
@@ -544,29 +567,6 @@ impl State {
             }
             StateEvent::TopologyChanged => {}
         }
-    }
-
-    pub fn apply_all(&mut self, events: &[StateEvent]) -> bool {
-        for event in events {
-            self.apply(event);
-        }
-        self.sync_frame()
-    }
-
-    pub fn remote_snapshot_for_tab(&self, tab_id: usize) -> Option<&StateSnapshotPayload> {
-        self.other_tabs
-            .values()
-            .filter(|remote| remote.tab_id == tab_id)
-            .max_by_key(|remote| remote.seq)
-    }
-
-    pub fn sync_frame(&mut self) -> bool {
-        let next_frame = compute_frame(self);
-        if self.frame == next_frame {
-            return false;
-        }
-        self.frame = next_frame;
-        true
     }
 
     fn current_tab_position_in_manifest(&self, manifest: &PaneManifest) -> Option<usize> {

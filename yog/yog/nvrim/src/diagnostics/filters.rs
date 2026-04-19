@@ -43,6 +43,50 @@ impl TryFrom<Buffer> for BufferWithPath {
     }
 }
 
+/// Trait for filtering diagnostics.
+pub trait DiagnosticsFilter {
+    /// Returns true if the diagnostic should be skipped.
+    ///
+    /// # Errors
+    /// - Access to required diagnostic fields (dictionary keys) fails (missing key or wrong type).
+    /// - Filter-specific logic (e.g. related info extraction) fails.
+    fn skip_diagnostic(&self, buf: &BufferWithPath, lsp_diag: &Dictionary) -> rootcause::Result<bool>;
+}
+
+/// A collection of diagnostic filters.
+pub struct DiagnosticsFilters(Vec<Box<dyn DiagnosticsFilter>>);
+
+impl DiagnosticsFilters {
+    /// Creates all available diagnostic filters. The order of filters is IMPORTANT.
+    ///
+    /// # Errors
+    /// - Constructing the related info filter fails (dictionary traversal or type mismatch).
+    pub fn all(lsp_diags: &[Dictionary]) -> rootcause::Result<Self> {
+        let mut filters = TyposLspFilter::filters();
+        filters.extend(HarperLsFilter::filters());
+        filters.push(Box::new(RelatedInfoFilter::new(lsp_diags)?));
+        Ok(Self(filters))
+    }
+}
+
+/// Implementation of [`DiagnosticsFilter`] for [`DiagnosticsFilters`].
+impl DiagnosticsFilter for DiagnosticsFilters {
+    /// Returns true if any filter skips the diagnostic.
+    ///
+    /// # Errors
+    /// - A filter implementation (invoked in sequence) returns an error; it is propagated unchanged.
+    fn skip_diagnostic(&self, buf: &BufferWithPath, lsp_diag: &Dictionary) -> rootcause::Result<bool> {
+        // The first filter that returns true skips the LSP diagnostic and all subsequent filters
+        // evaluation.
+        for filter in &self.0 {
+            if filter.skip_diagnostic(buf, lsp_diag)? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+}
+
 /// Represents the location of a diagnostic in a file.
 #[derive(Debug)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
@@ -105,50 +149,6 @@ impl TryFrom<&Dictionary> for DiagnosticLocation {
             end_col,
             end_lnum,
         })
-    }
-}
-
-/// Trait for filtering diagnostics.
-pub trait DiagnosticsFilter {
-    /// Returns true if the diagnostic should be skipped.
-    ///
-    /// # Errors
-    /// - Access to required diagnostic fields (dictionary keys) fails (missing key or wrong type).
-    /// - Filter-specific logic (e.g. related info extraction) fails.
-    fn skip_diagnostic(&self, buf: &BufferWithPath, lsp_diag: &Dictionary) -> rootcause::Result<bool>;
-}
-
-/// A collection of diagnostic filters.
-pub struct DiagnosticsFilters(Vec<Box<dyn DiagnosticsFilter>>);
-
-impl DiagnosticsFilters {
-    /// Creates all available diagnostic filters. The order of filters is IMPORTANT.
-    ///
-    /// # Errors
-    /// - Constructing the related info filter fails (dictionary traversal or type mismatch).
-    pub fn all(lsp_diags: &[Dictionary]) -> rootcause::Result<Self> {
-        let mut filters = TyposLspFilter::filters();
-        filters.extend(HarperLsFilter::filters());
-        filters.push(Box::new(RelatedInfoFilter::new(lsp_diags)?));
-        Ok(Self(filters))
-    }
-}
-
-/// Implementation of [`DiagnosticsFilter`] for [`DiagnosticsFilters`].
-impl DiagnosticsFilter for DiagnosticsFilters {
-    /// Returns true if any filter skips the diagnostic.
-    ///
-    /// # Errors
-    /// - A filter implementation (invoked in sequence) returns an error; it is propagated unchanged.
-    fn skip_diagnostic(&self, buf: &BufferWithPath, lsp_diag: &Dictionary) -> rootcause::Result<bool> {
-        // The first filter that returns true skips the LSP diagnostic and all subsequent filters
-        // evaluation.
-        for filter in &self.0 {
-            if filter.skip_diagnostic(buf, lsp_diag)? {
-                return Ok(true);
-            }
-        }
-        Ok(false)
     }
 }
 

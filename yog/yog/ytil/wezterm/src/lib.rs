@@ -10,8 +10,6 @@ use rootcause::prelude::ResultExt;
 use rootcause::report;
 use serde::Deserialize;
 
-const BIN: &str = "wezterm";
-
 /// Generates a command string to send text to a specific [`WeztermPane`] using the `WezTerm` CLI.
 pub fn send_text_to_pane_cmd(text: &str, pane_id: i64) -> String {
     format!("{BIN} cli send-text {text} --pane-id '{pane_id}' --no-paste")
@@ -160,6 +158,8 @@ pub struct WeztermPaneSize {
     /// Number of character rows in the pane.
     pub rows: i64,
 }
+
+const BIN: &str = "wezterm";
 
 #[cfg(test)]
 mod tests {

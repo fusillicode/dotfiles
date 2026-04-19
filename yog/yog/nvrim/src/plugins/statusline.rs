@@ -12,15 +12,6 @@ use ytil_noxi::buffer::CursorPosition;
 
 use crate::diagnostics::DiagnosticSeverity;
 
-const DRAW_TRIGGERS: &[&str] = &["DiagnosticChanged", "BufEnter", "CursorMoved"];
-
-thread_local! {
-    /// Cached `(buffer_handle, relative_path)` to avoid recomputing the buffer path on every
-    /// `CursorMoved` event. Automatically invalidated when the active buffer handle changes
-    /// (e.g. on `BufEnter`).
-    static CACHED_BUFFER_PATH: RefCell<Option<(i32, Option<String>)>> = const { RefCell::new(None) };
-}
-
 /// [`Dictionary`] exposing statusline draw helpers.
 ///
 /// Note: `draw_triggers` creates a new Object each call. This cannot be cached in a static
@@ -31,6 +22,26 @@ pub fn dict() -> Dictionary {
         "draw": fn_from!(draw),
         "draw_triggers": DRAW_TRIGGERS.iter().map(ToString::to_string).collect::<Object>()
     }
+}
+
+/// Diagnostic emitted by Nvim for statusline aggregation.
+#[derive(Deserialize)]
+pub struct Diagnostic {
+    /// The buffer number.
+    bufnr: i32,
+    /// The severity of the diagnostic.
+    severity: DiagnosticSeverity,
+}
+
+ytil_noxi::impl_nvim_deserializable!(Diagnostic);
+
+const DRAW_TRIGGERS: &[&str] = &["DiagnosticChanged", "BufEnter", "CursorMoved"];
+
+thread_local! {
+    /// Cached `(buffer_handle, relative_path)` to avoid recomputing the buffer path on every
+    /// `CursorMoved` event. Automatically invalidated when the active buffer handle changes
+    /// (e.g. on `BufEnter`).
+    static CACHED_BUFFER_PATH: RefCell<Option<(i32, Option<String>)>> = const { RefCell::new(None) };
 }
 
 /// Draws the status line with diagnostic information.
@@ -77,18 +88,6 @@ fn draw(diagnostics: Vec<Diagnostic>) -> String {
 
     statusline.draw()
 }
-
-/// Diagnostic emitted by Nvim for statusline aggregation.
-#[derive(Deserialize)]
-pub struct Diagnostic {
-    /// The buffer number.
-    bufnr: i32,
-    /// The severity of the diagnostic.
-    severity: DiagnosticSeverity,
-}
-
-ytil_noxi::impl_nvim_deserializable!(Diagnostic);
-
 /// Fixed-size aggregation of counts per [`DiagnosticSeverity`].
 #[derive(Clone, Copy, Debug, Default)]
 struct SeverityBuckets {

@@ -3,12 +3,11 @@
 //! Provides a dictionary exposing `create` which defines all autocommands and user commands by
 //! delegating to internal modules (`auto_cmds`, `user_cmds`).
 
+pub use auto_cmds::create_lua_autocmd;
 use nvim_oxi::Dictionary;
 
 mod auto_cmds;
 mod user_cmds;
-
-pub use auto_cmds::create_lua_autocmd;
 
 /// [`Dictionary`] of user command helpers.
 pub fn dict() -> Dictionary {

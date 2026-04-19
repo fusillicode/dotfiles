@@ -20,62 +20,6 @@ use ytil_sys::cli::Args;
 use ytil_wezterm::WeztermPane;
 use ytil_wezterm::get_sibling_pane_with_titles;
 
-/// Builds absolute file path for Helix cursor position.
-///
-/// # Errors
-/// - Expanding a home-relative path (starting with `~`) fails because the home directory cannot be determined.
-fn build_hx_cursor_absolute_file_path(hx_cursor_file_path: &Path, hx_pane: &WeztermPane) -> rootcause::Result<PathBuf> {
-    if let Ok(hx_cursor_file_path) = hx_cursor_file_path.strip_prefix("~") {
-        return ytil_sys::dir::build_home_path(&[hx_cursor_file_path]);
-    }
-
-    let mut components = hx_pane.cwd.components();
-    components.next();
-    components.next();
-
-    Ok(std::iter::once(Component::RootDir)
-        .chain(components)
-        .chain(hx_cursor_file_path.components())
-        .collect())
-}
-
-/// Builds GitHub link pointing to specific file and line.
-///
-/// # Errors
-/// - UTF-8 conversion fails.
-fn build_github_link<'a>(
-    github_repo_url: &'a Url,
-    git_current_branch: &'a str,
-    file_path: &'a Path,
-    hx_cursor_position: &'a HxCursorPosition,
-) -> rootcause::Result<Url> {
-    let mut file_path_parts = vec![];
-    for component in file_path.components() {
-        file_path_parts.push(
-            component
-                .as_os_str()
-                .to_str()
-                .ok_or_else(|| report!("path component invalid utf-8"))
-                .attach_with(|| format!("component={component:#?}"))?,
-        );
-    }
-
-    let segments = [&["tree", git_current_branch], file_path_parts.as_slice()].concat();
-    let mut github_link = github_repo_url.clone();
-    github_link
-        .path_segments_mut()
-        .map_err(|()| {
-            report!("cannot extend url with segments").attach(format!("url={github_repo_url} segments={segments:#?}"))
-        })?
-        .extend(&segments);
-    github_link.set_fragment(Some(&format!(
-        "L{}C{}",
-        hx_cursor_position.line, hx_cursor_position.column
-    )));
-
-    Ok(github_link)
-}
-
 /// Copy GitHub URL (file/line/col) for the current Helix buffer to clipboard.
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
@@ -137,6 +81,62 @@ fn main() -> rootcause::Result<()> {
     ytil_sys::file::cp_to_system_clipboard(&mut github_link.as_str().as_bytes())?;
 
     Ok(())
+}
+
+/// Builds absolute file path for Helix cursor position.
+///
+/// # Errors
+/// - Expanding a home-relative path (starting with `~`) fails because the home directory cannot be determined.
+fn build_hx_cursor_absolute_file_path(hx_cursor_file_path: &Path, hx_pane: &WeztermPane) -> rootcause::Result<PathBuf> {
+    if let Ok(hx_cursor_file_path) = hx_cursor_file_path.strip_prefix("~") {
+        return ytil_sys::dir::build_home_path(&[hx_cursor_file_path]);
+    }
+
+    let mut components = hx_pane.cwd.components();
+    components.next();
+    components.next();
+
+    Ok(std::iter::once(Component::RootDir)
+        .chain(components)
+        .chain(hx_cursor_file_path.components())
+        .collect())
+}
+
+/// Builds GitHub link pointing to specific file and line.
+///
+/// # Errors
+/// - UTF-8 conversion fails.
+fn build_github_link<'a>(
+    github_repo_url: &'a Url,
+    git_current_branch: &'a str,
+    file_path: &'a Path,
+    hx_cursor_position: &'a HxCursorPosition,
+) -> rootcause::Result<Url> {
+    let mut file_path_parts = vec![];
+    for component in file_path.components() {
+        file_path_parts.push(
+            component
+                .as_os_str()
+                .to_str()
+                .ok_or_else(|| report!("path component invalid utf-8"))
+                .attach_with(|| format!("component={component:#?}"))?,
+        );
+    }
+
+    let segments = [&["tree", git_current_branch], file_path_parts.as_slice()].concat();
+    let mut github_link = github_repo_url.clone();
+    github_link
+        .path_segments_mut()
+        .map_err(|()| {
+            report!("cannot extend url with segments").attach(format!("url={github_repo_url} segments={segments:#?}"))
+        })?
+        .extend(&segments);
+    github_link.set_fragment(Some(&format!(
+        "L{}C{}",
+        hx_cursor_position.line, hx_cursor_position.column
+    )));
+
+    Ok(github_link)
 }
 
 #[cfg(test)]

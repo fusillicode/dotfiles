@@ -11,46 +11,6 @@ use ytil_editor::Editor;
 use ytil_editor::FileToOpen;
 use ytil_sys::cli::Args;
 
-/// Wrapper for environment variables.
-struct Env {
-    /// The name of the environment variable (static string).
-    name: &'static str,
-    /// The value of the environment variable (dynamically constructed string).
-    value: String,
-}
-
-impl Env {
-    /// Returns environment variable as tuple.
-    pub fn by_ref(&self) -> (&'static str, &str) {
-        (self.name, &self.value)
-    }
-}
-
-/// Creates enriched PATH for `WezTerm` integration.
-///
-/// # Errors
-/// - A required environment variable is missing or invalid Unicode.
-fn get_enriched_path_env() -> rootcause::Result<Env> {
-    let enriched_path = [
-        &std::env::var("PATH").unwrap_or_else(|_| String::new()),
-        "/opt/homebrew/bin",
-        &ytil_sys::dir::build_home_path(&[".local", "bin"])?.to_string_lossy(),
-    ]
-    .join(":");
-
-    Ok(Env {
-        name: "PATH",
-        value: enriched_path,
-    })
-}
-
-/// Escape single quotes for safe embedding in shell single-quoted strings.
-///
-/// Replaces each `'` with `'\''` (end quote, escaped quote, begin quote).
-fn escape_single_quotes(s: &str) -> String {
-    s.replace('\'', "'\\''")
-}
-
 /// Open files (optionally at line:col) in existing Nvim / Helix pane.
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
@@ -102,6 +62,46 @@ fn main() -> rootcause::Result<()> {
         .spawn()?;
 
     Ok(())
+}
+
+/// Wrapper for environment variables.
+struct Env {
+    /// The name of the environment variable (static string).
+    name: &'static str,
+    /// The value of the environment variable (dynamically constructed string).
+    value: String,
+}
+
+impl Env {
+    /// Returns environment variable as tuple.
+    pub fn by_ref(&self) -> (&'static str, &str) {
+        (self.name, &self.value)
+    }
+}
+
+/// Creates enriched PATH for `WezTerm` integration.
+///
+/// # Errors
+/// - A required environment variable is missing or invalid Unicode.
+fn get_enriched_path_env() -> rootcause::Result<Env> {
+    let enriched_path = [
+        &std::env::var("PATH").unwrap_or_else(|_| String::new()),
+        "/opt/homebrew/bin",
+        &ytil_sys::dir::build_home_path(&[".local", "bin"])?.to_string_lossy(),
+    ]
+    .join(":");
+
+    Ok(Env {
+        name: "PATH",
+        value: enriched_path,
+    })
+}
+
+/// Escape single quotes for safe embedding in shell single-quoted strings.
+///
+/// Replaces each `'` with `'\''` (end quote, escaped quote, begin quote).
+fn escape_single_quotes(s: &str) -> String {
+    s.replace('\'', "'\\''")
 }
 
 #[cfg(test)]

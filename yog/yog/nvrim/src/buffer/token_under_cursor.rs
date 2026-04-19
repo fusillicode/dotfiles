@@ -22,12 +22,6 @@ use ytil_noxi::buffer::CursorPosition;
 use ytil_sys::file::FileCmdOutput;
 use ytil_sys::lsof::ProcessFilter;
 
-thread_local! {
-    /// Cache `file -I` results to avoid spawning a process per cursor movement / hover.
-    /// Keyed by path string; only successful results are cached.
-    static FILE_CMD_CACHE: RefCell<HashMap<String, FileCmdOutput>> = RefCell::new(HashMap::new());
-}
-
 /// Retrieve and classify the non-whitespace token under the cursor in the current window.
 ///
 /// Returns [`Option::None`] if the current line or cursor position cannot be obtained,
@@ -53,92 +47,6 @@ pub fn get(_: ()) -> Option<TokenUnderCursor> {
         .ok()?;
 
     Some(token_under_cursor)
-}
-
-fn get_token_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &CursorPosition) -> Option<String> {
-    let window_width = Window::current()
-        .get_width()
-        .context("error getting window width")
-        .and_then(|x| {
-            usize::try_from(x)
-                .context("error converting window width to usize")
-                .attach_with(|| format!("width={x}"))
-        })
-        .inspect_err(|err| ytil_noxi::notify::error(format!("{err}")))
-        .ok()?
-        .saturating_sub(1);
-
-    // Pre-allocate with reasonable capacity for typical token lengths
-    let mut out = Vec::with_capacity(128);
-    let mut word_end_idx = 0;
-    for (idx, current_char) in ytil_noxi::buffer::get_current_line()?.char_indices() {
-        word_end_idx = idx;
-        if idx < cursor_pos.col {
-            if current_char.is_ascii_whitespace() {
-                out.clear();
-            } else {
-                out.push(current_char);
-            }
-        } else if idx > cursor_pos.col {
-            if current_char.is_ascii_whitespace() {
-                break;
-            }
-            out.push(current_char);
-        } else if current_char.is_ascii_whitespace() {
-            out.clear();
-            out.push(current_char);
-            break;
-        } else {
-            out.push(current_char);
-        }
-    }
-
-    // Check rows before the cursor one.
-    if word_end_idx.saturating_sub(out.len()) == 0 {
-        'outer: for idx in (0..cursor_pos.row.saturating_sub(1)).rev() {
-            // Use Cow<str> to avoid allocation when string is valid UTF-8
-            let line_bytes = buffer.get_line(idx).ok()?;
-            let line: Cow<'_, str> = line_bytes.to_string_lossy();
-            if line.is_empty() {
-                break 'outer;
-            }
-            if let Some((_, prev)) = line.rsplit_once(' ') {
-                out.splice(0..0, prev.chars());
-                break;
-            }
-            if line.chars().count() < window_width {
-                break;
-            }
-            out.splice(0..0, line.chars());
-        }
-    }
-
-    // Check rows after the cursor one.
-    if word_end_idx >= window_width {
-        'outer: for idx in cursor_pos.row..usize::MAX {
-            // Use Cow<str> to avoid allocation when string is valid UTF-8
-            let line_bytes = buffer.get_line(idx).ok()?;
-            let line: Cow<'_, str> = line_bytes.to_string_lossy();
-            if line.is_empty() {
-                break 'outer;
-            }
-            if let Some((next, _)) = line.split_once(' ') {
-                out.extend(next.chars());
-                break;
-            }
-            out.extend(line.chars());
-            if line.chars().count() < window_width {
-                break;
-            }
-        }
-    }
-
-    Some(out.into_iter().collect())
-}
-
-fn get_token_under_cursor_in_normal_buffer(cursor_pos: &CursorPosition) -> Option<String> {
-    let current_line = ytil_noxi::buffer::get_current_line()?;
-    get_word_at_index(&current_line, cursor_pos.col).map(ToOwned::to_owned)
 }
 
 /// Classified representation of the token found under the cursor.
@@ -275,6 +183,98 @@ impl TokenUnderCursor {
         }
         Ok(self.clone())
     }
+}
+
+thread_local! {
+    /// Cache `file -I` results to avoid spawning a process per cursor movement / hover.
+    /// Keyed by path string; only successful results are cached.
+    static FILE_CMD_CACHE: RefCell<HashMap<String, FileCmdOutput>> = RefCell::new(HashMap::new());
+}
+
+fn get_token_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &CursorPosition) -> Option<String> {
+    let window_width = Window::current()
+        .get_width()
+        .context("error getting window width")
+        .and_then(|x| {
+            usize::try_from(x)
+                .context("error converting window width to usize")
+                .attach_with(|| format!("width={x}"))
+        })
+        .inspect_err(|err| ytil_noxi::notify::error(format!("{err}")))
+        .ok()?
+        .saturating_sub(1);
+
+    // Pre-allocate with reasonable capacity for typical token lengths
+    let mut out = Vec::with_capacity(128);
+    let mut word_end_idx = 0;
+    for (idx, current_char) in ytil_noxi::buffer::get_current_line()?.char_indices() {
+        word_end_idx = idx;
+        if idx < cursor_pos.col {
+            if current_char.is_ascii_whitespace() {
+                out.clear();
+            } else {
+                out.push(current_char);
+            }
+        } else if idx > cursor_pos.col {
+            if current_char.is_ascii_whitespace() {
+                break;
+            }
+            out.push(current_char);
+        } else if current_char.is_ascii_whitespace() {
+            out.clear();
+            out.push(current_char);
+            break;
+        } else {
+            out.push(current_char);
+        }
+    }
+
+    // Check rows before the cursor one.
+    if word_end_idx.saturating_sub(out.len()) == 0 {
+        'outer: for idx in (0..cursor_pos.row.saturating_sub(1)).rev() {
+            // Use Cow<str> to avoid allocation when string is valid UTF-8
+            let line_bytes = buffer.get_line(idx).ok()?;
+            let line: Cow<'_, str> = line_bytes.to_string_lossy();
+            if line.is_empty() {
+                break 'outer;
+            }
+            if let Some((_, prev)) = line.rsplit_once(' ') {
+                out.splice(0..0, prev.chars());
+                break;
+            }
+            if line.chars().count() < window_width {
+                break;
+            }
+            out.splice(0..0, line.chars());
+        }
+    }
+
+    // Check rows after the cursor one.
+    if word_end_idx >= window_width {
+        'outer: for idx in cursor_pos.row..usize::MAX {
+            // Use Cow<str> to avoid allocation when string is valid UTF-8
+            let line_bytes = buffer.get_line(idx).ok()?;
+            let line: Cow<'_, str> = line_bytes.to_string_lossy();
+            if line.is_empty() {
+                break 'outer;
+            }
+            if let Some((next, _)) = line.split_once(' ') {
+                out.extend(next.chars());
+                break;
+            }
+            out.extend(line.chars());
+            if line.chars().count() < window_width {
+                break;
+            }
+        }
+    }
+
+    Some(out.into_iter().collect())
+}
+
+fn get_token_under_cursor_in_normal_buffer(cursor_pos: &CursorPosition) -> Option<String> {
+    let current_line = ytil_noxi::buffer::get_current_line()?;
+    get_word_at_index(&current_line, cursor_pos.col).map(ToOwned::to_owned)
 }
 
 /// Cached wrapper around [`ytil_sys::file::exec_file_cmd`] that avoids spawning a `file -I`

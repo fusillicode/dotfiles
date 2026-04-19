@@ -12,20 +12,6 @@ use ytil_editor::Editor;
 use ytil_hx::HxStatusLine;
 use ytil_sys::cli::Args;
 
-/// Formats Helix status line into file path with line number.
-///
-/// # Errors
-/// - UTF-8 conversion fails.
-fn format_hx_status_line(hx_status_line: &HxStatusLine) -> rootcause::Result<String> {
-    let file_path = hx_status_line
-        .file_path
-        .to_str()
-        .ok_or_else(|| report!("cannot convert path to str"))
-        .attach_with(|| format!("path={}", hx_status_line.file_path.display()))?;
-
-    Ok(format!("{file_path}:{}", hx_status_line.position.line))
-}
-
 /// Copy current Helix file path with line number to clipboard.
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
@@ -60,6 +46,20 @@ fn main() -> rootcause::Result<()> {
     ytil_sys::file::cp_to_system_clipboard(&mut format_hx_status_line(&hx_status_line)?.as_bytes())?;
 
     Ok(())
+}
+
+/// Formats Helix status line into file path with line number.
+///
+/// # Errors
+/// - UTF-8 conversion fails.
+fn format_hx_status_line(hx_status_line: &HxStatusLine) -> rootcause::Result<String> {
+    let file_path = hx_status_line
+        .file_path
+        .to_str()
+        .ok_or_else(|| report!("cannot convert path to str"))
+        .attach_with(|| format!("path={}", hx_status_line.file_path.display()))?;
+
+    Ok(format!("{file_path}:{}", hx_status_line.position.line))
 }
 
 #[cfg(test)]

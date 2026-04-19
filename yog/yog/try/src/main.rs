@@ -14,35 +14,6 @@ use rootcause::prelude::ResultExt;
 use rootcause::report;
 use ytil_sys::cli::Args;
 
-/// Exit condition for retry loop.
-#[cfg_attr(test, derive(Debug))]
-enum ExitCond {
-    /// Exit when the command succeeds.
-    Ok,
-    /// Exit when the command fails.
-    Ko,
-}
-
-impl ExitCond {
-    /// Determines if the loop should break based on the exit condition and command result.
-    pub const fn should_break(&self, cmd_res: Result<(), ExitStatusError>) -> bool {
-        matches!((self, cmd_res), (Self::Ok, Ok(())) | (Self::Ko, Err(_)))
-    }
-}
-
-/// Parses [`ExitCond`] from string.
-impl FromStr for ExitCond {
-    type Err = rootcause::Report;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s {
-            "ok" => Self::Ok,
-            "ko" => Self::Ko,
-            unexpected => Err(report!("unexpected exit condition")).attach_with(|| format!("value={unexpected}"))?,
-        })
-    }
-}
-
 /// Re-run a command until success (ok) or failure (ko) with cooldown.
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
@@ -109,6 +80,35 @@ fn main() -> rootcause::Result<()> {
     println!("Summary:\n - tries {tries_count}\n - avg time {avg_runs_time:#?}");
 
     Ok(())
+}
+
+/// Exit condition for retry loop.
+#[cfg_attr(test, derive(Debug))]
+enum ExitCond {
+    /// Exit when the command succeeds.
+    Ok,
+    /// Exit when the command fails.
+    Ko,
+}
+
+impl ExitCond {
+    /// Determines if the loop should break based on the exit condition and command result.
+    pub const fn should_break(&self, cmd_res: Result<(), ExitStatusError>) -> bool {
+        matches!((self, cmd_res), (Self::Ok, Ok(())) | (Self::Ko, Err(_)))
+    }
+}
+
+/// Parses [`ExitCond`] from string.
+impl FromStr for ExitCond {
+    type Err = rootcause::Report;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "ok" => Self::Ok,
+            "ko" => Self::Ko,
+            unexpected => Err(report!("unexpected exit condition")).attach_with(|| format!("value={unexpected}"))?,
+        })
+    }
 }
 
 #[cfg(test)]

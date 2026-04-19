@@ -3,6 +3,14 @@
 //! Offer uniform, cancellable single / multi select prompts with fuzzy filtering and helpers
 //! to derive a value from CLI args or fallback to an interactive selector.
 
+#[cfg(not(target_arch = "wasm32"))]
+pub use interactive::*;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod git_branch;
+#[cfg(not(target_arch = "wasm32"))]
+mod interactive;
+
 pub fn display_fixed_width(value: &str, max_chars: usize) -> String {
     let normalized = value.split_whitespace().collect::<Vec<_>>().join(" ");
     let chars: Vec<char> = normalized.chars().collect();
@@ -23,13 +31,6 @@ pub fn display_fixed_width(value: &str, max_chars: usize) -> String {
     trimmed.push('…');
     trimmed
 }
-
-#[cfg(not(target_arch = "wasm32"))]
-pub mod git_branch;
-#[cfg(not(target_arch = "wasm32"))]
-mod interactive;
-#[cfg(not(target_arch = "wasm32"))]
-pub use interactive::*;
 
 #[cfg(test)]
 mod tests {

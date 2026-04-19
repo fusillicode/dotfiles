@@ -11,42 +11,6 @@ use nvim_oxi::api::types::GetHlInfos;
 use nvim_oxi::api::types::HighlightInfos;
 use rootcause::report;
 
-const GLOBAL_BG: &str = "#000000";
-const GLOBAL_FG: &str = "#c9c9c9";
-
-const CURSOR_BG: &str = "white";
-const CURSOR_FG: &str = "black";
-const NON_TEXT_FG: &str = "#777777";
-const COMMENTS_FG: &str = "#777777";
-const NORMAL_FG: &str = "fg";
-const NONE: &str = "none";
-
-const DIAG_ERROR_FG: &str = "#ec635c";
-const DIAG_OK_FG: &str = "#8ce479";
-const DIAG_WARN_FG: &str = "#ffaa33";
-const DIAG_HINT_FG: &str = "#00ffff";
-const DIAG_INFO_FG: &str = "#00ffff";
-
-const GITSIGNS_ADDED: &str = DIAG_OK_FG;
-const GITSIGNS_CHANGED: &str = "#6a6adf";
-const GITSIGNS_REMOVED: &str = DIAG_ERROR_FG;
-
-const TREESITTER_CONTEXT_BG: &str = "NvimDarkGrey3";
-
-const DIAGNOSTICS_FG: [(&str, &str); 5] = [
-    ("Error", DIAG_ERROR_FG),
-    ("Warn", DIAG_WARN_FG),
-    ("Ok", DIAG_OK_FG),
-    ("Hint", DIAG_HINT_FG),
-    ("Info", DIAG_INFO_FG),
-];
-
-const GITSIGNS_FG: [(&str, &str); 3] = [
-    ("Added", GITSIGNS_ADDED),
-    ("Changed", GITSIGNS_CHANGED),
-    ("Removed", GITSIGNS_REMOVED),
-];
-
 /// [`Dictionary`] with colorscheme and highlight helpers.
 pub fn dict() -> Dictionary {
     dict! {
@@ -128,6 +92,42 @@ pub fn set(colorscheme: Option<String>) {
         set_hl(0, hl_name, &HighlightOpts::new().fg(fg));
     }
 }
+
+const GLOBAL_BG: &str = "#000000";
+const GLOBAL_FG: &str = "#c9c9c9";
+
+const CURSOR_BG: &str = "white";
+const CURSOR_FG: &str = "black";
+const NON_TEXT_FG: &str = "#777777";
+const COMMENTS_FG: &str = "#777777";
+const NORMAL_FG: &str = "fg";
+const NONE: &str = "none";
+
+const DIAG_ERROR_FG: &str = "#ec635c";
+const DIAG_OK_FG: &str = "#8ce479";
+const DIAG_WARN_FG: &str = "#ffaa33";
+const DIAG_HINT_FG: &str = "#00ffff";
+const DIAG_INFO_FG: &str = "#00ffff";
+
+const GITSIGNS_ADDED: &str = DIAG_OK_FG;
+const GITSIGNS_CHANGED: &str = "#6a6adf";
+const GITSIGNS_REMOVED: &str = DIAG_ERROR_FG;
+
+const TREESITTER_CONTEXT_BG: &str = "NvimDarkGrey3";
+
+const DIAGNOSTICS_FG: [(&str, &str); 5] = [
+    ("Error", DIAG_ERROR_FG),
+    ("Warn", DIAG_WARN_FG),
+    ("Ok", DIAG_OK_FG),
+    ("Hint", DIAG_HINT_FG),
+    ("Info", DIAG_INFO_FG),
+];
+
+const GITSIGNS_FG: [(&str, &str); 3] = [
+    ("Added", GITSIGNS_ADDED),
+    ("Changed", GITSIGNS_CHANGED),
+    ("Removed", GITSIGNS_REMOVED),
+];
 
 /// Retrieves the current highlight options for a given highlight group and applies overrides.
 ///

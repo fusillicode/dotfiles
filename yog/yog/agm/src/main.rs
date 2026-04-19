@@ -18,24 +18,6 @@ mod cmd;
 const SESSION_NAME: &str = "agm";
 const LAYOUT_NAME: &str = "agm";
 
-fn launch_session(args: &[String]) -> rootcause::Result<()> {
-    let session_name = args.first().map_or(SESSION_NAME, String::as_str);
-
-    if ytil_zellij::list_sessions().is_ok_and(|sessions| sessions.iter().any(|s| s.name == session_name)) {
-        ytil_zellij::attach_session(session_name)?;
-        return Ok(());
-    }
-
-    if ytil_zellij::is_active() {
-        ytil_cmd::silent_cmd("zellij")
-            .args(["--new-session-with-layout", LAYOUT_NAME, "--session", session_name])
-            .exec()?;
-        return Ok(());
-    }
-
-    ytil_zellij::new_session_with_layout(session_name, LAYOUT_NAME)
-}
-
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
@@ -62,4 +44,22 @@ fn main() -> rootcause::Result<()> {
         None => launch_session(&args),
         Some(unknown) => Err(report!("unknown argument").attach(format!("argument={unknown}"))),
     }
+}
+
+fn launch_session(args: &[String]) -> rootcause::Result<()> {
+    let session_name = args.first().map_or(SESSION_NAME, String::as_str);
+
+    if ytil_zellij::list_sessions().is_ok_and(|sessions| sessions.iter().any(|s| s.name == session_name)) {
+        ytil_zellij::attach_session(session_name)?;
+        return Ok(());
+    }
+
+    if ytil_zellij::is_active() {
+        ytil_cmd::silent_cmd("zellij")
+            .args(["--new-session-with-layout", LAYOUT_NAME, "--session", session_name])
+            .exec()?;
+        return Ok(());
+    }
+
+    ytil_zellij::new_session_with_layout(session_name, LAYOUT_NAME)
 }
