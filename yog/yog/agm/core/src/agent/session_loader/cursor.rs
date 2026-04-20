@@ -40,6 +40,8 @@ pub fn load_sessions() -> rootcause::Result<Vec<Session>> {
         }
         let mut session = crate::agent::session_parser::cursor::parse(&meta_hex, workspace)
             .attach_with(|| format!("store_db={}", store_db.display()))?;
+        session.search_text =
+            crate::agent::session_parser::cursor::build_search_text_from_strings(&session.name, &strings_output);
         session.updated_at = super::file_updated_at(&store_db)?.unwrap_or(session.created_at);
         session.path = store_db.parent().map_or_else(|| store_db.clone(), Path::to_path_buf);
         sessions.push(session);

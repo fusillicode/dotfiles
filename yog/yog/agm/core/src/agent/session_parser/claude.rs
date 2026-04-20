@@ -8,11 +8,16 @@ use serde::Deserialize;
 use serde::de::IgnoredAny;
 
 use crate::agent::Agent;
+use crate::agent::session::SearchTextBuilder;
 use crate::agent::session::Session;
 
 pub fn parse(content: &str) -> rootcause::Result<Session> {
-    let mut session = None;
+    let mut session_id = None;
+    let mut workspace_dir = None;
+    let mut created_at = None;
+    let mut updated_at = None;
     let mut first_user_message = None;
+    let mut search_text = SearchTextBuilder::default();
 
     for (line_idx, line) in content.lines().enumerate() {
         let line = serde_json::from_str::<ClaudeSessionLine>(line)
@@ -20,61 +25,58 @@ pub fn parse(content: &str) -> rootcause::Result<Session> {
             .attach(format!("line_number={}", line_idx.saturating_add(1)))
             .attach(format!("line={line}"))?;
 
-        if first_user_message.is_none() {
-            first_user_message = line.first_user_message();
+        if let Some(timestamp) = line.timestamp() {
+            updated_at = Some(timestamp);
         }
 
-        if session.is_none() {
-            let Some(meta) = line.into_session_meta() else {
-                continue;
-            };
-            let created_at = meta.timestamp;
-
-            session = Some(Session::new(
-                Agent::Claude,
-                meta.session_id,
-                PathBuf::from(meta.cwd),
-                first_user_message.clone(),
-                created_at,
-            ));
+        if let Some(meta) = line.session_meta() {
+            session_id.get_or_insert_with(|| meta.session_id.to_owned());
+            workspace_dir.get_or_insert_with(|| PathBuf::from(meta.cwd));
+            created_at.get_or_insert(meta.timestamp);
         }
 
-        if session.is_some() && first_user_message.is_some() {
-            break;
+        if let Some(user_message) = line.user_search_text() {
+            if first_user_message.is_none() {
+                first_user_message = Some(user_message.clone());
+            }
+            search_text.push(&user_message);
+        }
+        if let Some(assistant_message) = line.assistant_search_text() {
+            search_text.push(&assistant_message);
         }
     }
 
-    let mut session = session.context("no Claude session record found".to_owned())?;
+    let session_id = session_id.context("no Claude session record found".to_owned())?;
+    let workspace_dir = workspace_dir.context("no Claude session record found".to_owned())?;
+    let created_at = created_at.context("no Claude session record found".to_owned())?;
+
+    let mut session = Session::new(
+        Agent::Claude,
+        session_id,
+        workspace_dir,
+        first_user_message.clone(),
+        created_at,
+    );
     if let Some(first_user_message) = first_user_message {
         session.name = first_user_message;
     }
+    session.search_text = search_text.build(&session.name);
+    session.updated_at = updated_at.unwrap_or(session.created_at);
 
-    for line in content.lines().rev() {
-        let line = serde_json::from_str::<ClaudeSessionLine>(line)
-            .context("failed to parse Claude session json line".to_owned())
-            .attach(format!("line={line}"))?;
-        let Some(timestamp) = line.timestamp() else {
-            continue;
-        };
-        session.updated_at = timestamp;
-        return Ok(session);
-    }
-
-    session.updated_at = session.created_at;
     Ok(session)
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 enum ClaudeSessionLine {
     #[serde(rename = "user")]
     User(ClaudeUserLine),
     #[serde(rename = "assistant")]
-    #[serde(alias = "progress")]
+    Assistant(ClaudeAssistantLine),
+    #[serde(rename = "progress")]
     #[serde(alias = "system")]
     #[serde(alias = "attachment")]
-    Metadata(ClaudeAgentLine),
+    Metadata(ClaudeMetadataLine),
     #[serde(rename = "queue-operation")]
     TimestampOnly(ClaudeTimestampedLine),
     #[serde(other)]
@@ -85,33 +87,40 @@ impl ClaudeSessionLine {
     fn timestamp(&self) -> Option<DateTime<Utc>> {
         match self {
             Self::User(line) => Some(line.timestamp),
+            Self::Assistant(line) => Some(line.timestamp),
             Self::Metadata(line) => Some(line.timestamp),
             Self::TimestampOnly(line) => Some(line.timestamp),
             Self::Other => None,
         }
     }
 
-    fn first_user_message(&self) -> Option<String> {
+    fn session_meta(&self) -> Option<ClaudeSessionMeta<'_>> {
         match self {
-            Self::User(line) => line.message.content.extract_text(),
-            Self::Metadata(_) | Self::TimestampOnly(_) | Self::Other => None,
+            Self::User(line) => Some(ClaudeSessionMeta::from(line)),
+            Self::Assistant(line) => Some(ClaudeSessionMeta::from(line)),
+            Self::Metadata(line) => Some(ClaudeSessionMeta::from(line)),
+            Self::TimestampOnly(_) | Self::Other => None,
         }
     }
 
-    fn into_session_meta(self) -> Option<ClaudeSessionMeta> {
+    fn user_search_text(&self) -> Option<String> {
         match self {
-            Self::User(line) => line.into_session_meta(),
-            Self::Metadata(line) => line.into_session_meta(),
-            Self::TimestampOnly(_) | Self::Other => None,
+            Self::User(line) if !line.is_meta => line.message.content.search_text(),
+            Self::User(_) | Self::Assistant(_) | Self::Metadata(_) | Self::TimestampOnly(_) | Self::Other => None,
+        }
+    }
+
+    fn assistant_search_text(&self) -> Option<String> {
+        match self {
+            Self::Assistant(line) => line.message.search_text(),
+            Self::User(_) | Self::Metadata(_) | Self::TimestampOnly(_) | Self::Other => None,
         }
     }
 }
 
-#[derive(Debug, Deserialize)]
-struct ClaudeSessionMeta {
-    #[serde(rename = "sessionId")]
-    session_id: String,
-    cwd: String,
+struct ClaudeSessionMeta<'a> {
+    session_id: &'a str,
+    cwd: &'a str,
     timestamp: DateTime<Utc>,
 }
 
@@ -121,46 +130,87 @@ struct ClaudeUserLine {
     session_id: String,
     cwd: String,
     timestamp: DateTime<Utc>,
-    message: ClaudeMessage,
+    #[serde(default, rename = "isMeta")]
+    is_meta: bool,
+    message: ClaudeUserMessage,
 }
 
 #[derive(Debug, Deserialize)]
-struct ClaudeAgentLine {
+struct ClaudeAssistantLine {
+    #[serde(rename = "sessionId")]
+    session_id: String,
+    cwd: String,
+    timestamp: DateTime<Utc>,
+    message: ClaudeAssistantMessage,
+}
+
+#[derive(Debug, Deserialize)]
+struct ClaudeMetadataLine {
     #[serde(rename = "sessionId")]
     session_id: String,
     cwd: String,
     timestamp: DateTime<Utc>,
 }
 
-impl ClaudeUserLine {
-    fn into_session_meta(self) -> Option<ClaudeSessionMeta> {
-        Some(ClaudeSessionMeta {
-            session_id: self.session_id,
-            cwd: self.cwd,
-            timestamp: self.timestamp,
-        })
+impl<'a> From<&'a ClaudeUserLine> for ClaudeSessionMeta<'a> {
+    fn from(value: &'a ClaudeUserLine) -> Self {
+        Self {
+            session_id: &value.session_id,
+            cwd: &value.cwd,
+            timestamp: value.timestamp,
+        }
     }
 }
 
-impl ClaudeAgentLine {
-    fn into_session_meta(self) -> Option<ClaudeSessionMeta> {
-        Some(ClaudeSessionMeta {
-            session_id: self.session_id,
-            cwd: self.cwd,
-            timestamp: self.timestamp,
-        })
+impl<'a> From<&'a ClaudeAssistantLine> for ClaudeSessionMeta<'a> {
+    fn from(value: &'a ClaudeAssistantLine) -> Self {
+        Self {
+            session_id: &value.session_id,
+            cwd: &value.cwd,
+            timestamp: value.timestamp,
+        }
     }
 }
 
-#[allow(dead_code)]
+impl<'a> From<&'a ClaudeMetadataLine> for ClaudeSessionMeta<'a> {
+    fn from(value: &'a ClaudeMetadataLine) -> Self {
+        Self {
+            session_id: &value.session_id,
+            cwd: &value.cwd,
+            timestamp: value.timestamp,
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 struct ClaudeTimestampedLine {
     timestamp: DateTime<Utc>,
 }
 
 #[derive(Debug, Deserialize)]
-struct ClaudeMessage {
+struct ClaudeUserMessage {
     content: ClaudeUserContent,
+}
+
+#[derive(Debug, Deserialize)]
+struct ClaudeAssistantMessage {
+    #[serde(default)]
+    content: Vec<ClaudeAssistantContentPart>,
+}
+
+impl ClaudeAssistantMessage {
+    fn search_text(&self) -> Option<String> {
+        let mut search_text = SearchTextBuilder::default();
+        for snippet in self
+            .content
+            .iter()
+            .filter_map(ClaudeAssistantContentPart::assistant_search_text)
+        {
+            search_text.push(snippet);
+        }
+        let search_text = search_text.build("");
+        (!search_text.is_empty()).then_some(search_text)
+    }
 }
 
 #[cfg_attr(test, derive(PartialEq))]
@@ -172,15 +222,20 @@ enum ClaudeUserContent {
 }
 
 impl ClaudeUserContent {
-    fn extract_text(&self) -> Option<String> {
+    fn search_text(&self) -> Option<String> {
         match self {
             Self::Text(text) => text.preview(),
-            Self::Parts(items) => items.iter().find_map(|item| {
-                let ClaudeUserContentPart::Text { text } = item else {
-                    return None;
-                };
-                text.preview()
-            }),
+            Self::Parts(items) => {
+                let mut search_text = SearchTextBuilder::default();
+                for snippet in items.iter().filter_map(|item| match item {
+                    ClaudeUserContentPart::Text { text } => text.preview(),
+                    ClaudeUserContentPart::ToolResult { .. } | ClaudeUserContentPart::Other => None,
+                }) {
+                    search_text.push(&snippet);
+                }
+                let search_text = search_text.build("");
+                (!search_text.is_empty()).then_some(search_text)
+            }
         }
     }
 }
@@ -200,6 +255,25 @@ enum ClaudeUserContentPart {
     Other,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum ClaudeAssistantContentPart {
+    Text {
+        text: String,
+    },
+    #[serde(other)]
+    Other,
+}
+
+impl ClaudeAssistantContentPart {
+    fn assistant_search_text(&self) -> Option<&str> {
+        match self {
+            Self::Text { text } => Some(text),
+            Self::Other => None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum ClaudeUserText {
     Plain(String),
@@ -209,6 +283,15 @@ enum ClaudeUserText {
 impl ClaudeUserText {
     fn preview(&self) -> Option<String> {
         match self {
+            Self::Plain(text)
+                if matches!(
+                    text.trim_start(),
+                    text if text.starts_with("<local-command-caveat>")
+                        || text.starts_with("<local-command-stdout>")
+                ) =>
+            {
+                None
+            }
             Self::Plain(text) => Some(text.clone()),
             Self::Cmd(command) => command.preview(),
         }
@@ -309,6 +392,7 @@ mod tests {
         pretty_assertions::assert_eq!(session.workspace, workspace);
         pretty_assertions::assert_eq!(session.id, "8649a076-3ead-4d5a-9840-3200f0e1aae5");
         pretty_assertions::assert_eq!(session.name, "workspace");
+        pretty_assertions::assert_eq!(session.search_text, "workspace");
     }
 
     #[test]
@@ -327,16 +411,22 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_claude_session_with_first_user_message_sets_name_and_updated_at() {
+    fn test_parse_claude_session_indexes_user_and_assistant_text() {
         let content = concat!(
             "{\"type\":\"progress\",\"timestamp\":\"2026-03-26T16:51:01.119Z\",\"cwd\":\"/tmp/workspace\",\"sessionId\":\"8649a076-3ead-4d5a-9840-3200f0e1aae5\"}\n",
-            "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"this is a very long first user message\"},\"timestamp\":\"2026-03-26T16:52:02.119Z\",\"cwd\":\"/tmp/workspace\",\"sessionId\":\"8649a076-3ead-4d5a-9840-3200f0e1aae5\"}\n"
+            "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"this is a very long first user message\"},\"timestamp\":\"2026-03-26T16:52:02.119Z\",\"cwd\":\"/tmp/workspace\",\"sessionId\":\"8649a076-3ead-4d5a-9840-3200f0e1aae5\"}\n",
+            "{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"hidden\"},{\"type\":\"text\",\"text\":\"assistant answer\"},{\"type\":\"tool_use\",\"name\":\"Read\"}]},\"timestamp\":\"2026-03-26T16:53:02.119Z\",\"cwd\":\"/tmp/workspace\",\"sessionId\":\"8649a076-3ead-4d5a-9840-3200f0e1aae5\"}\n"
         );
+
         assert2::assert!(let Ok(session) = parse(content));
         pretty_assertions::assert_eq!(session.name, "this is a very long first user message");
         pretty_assertions::assert_eq!(
+            session.search_text,
+            "this is a very long first user message assistant answer"
+        );
+        pretty_assertions::assert_eq!(
             session.updated_at,
-            chrono::DateTime::parse_from_rfc3339("2026-03-26T16:52:02.119Z")
+            chrono::DateTime::parse_from_rfc3339("2026-03-26T16:53:02.119Z")
                 .unwrap()
                 .to_utc()
         );
@@ -351,16 +441,31 @@ mod tests {
 
         assert2::assert!(let Ok(session) = parse(content));
         pretty_assertions::assert_eq!(session.name, "/privoly-admin install");
+        pretty_assertions::assert_eq!(session.search_text, "/privoly-admin install");
     }
 
     #[test]
-    fn test_extract_text_with_tool_result_then_text_returns_first_text_part() {
+    fn test_parse_claude_session_skips_meta_and_tool_result_only_user_rows() {
+        let content = concat!(
+            "{\"type\":\"progress\",\"timestamp\":\"2026-03-26T16:51:01.119Z\",\"cwd\":\"/tmp/workspace\",\"sessionId\":\"8649a076-3ead-4d5a-9840-3200f0e1aae5\"}\n",
+            "{\"type\":\"user\",\"isMeta\":true,\"message\":{\"role\":\"user\",\"content\":\"<local-command-caveat>ignore me</local-command-caveat>\"},\"timestamp\":\"2026-03-26T16:52:02.119Z\",\"cwd\":\"/tmp/workspace\",\"sessionId\":\"8649a076-3ead-4d5a-9840-3200f0e1aae5\"}\n",
+            "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"content\":\"ignored\"}]},\"timestamp\":\"2026-03-26T16:53:02.119Z\",\"cwd\":\"/tmp/workspace\",\"sessionId\":\"8649a076-3ead-4d5a-9840-3200f0e1aae5\"}\n",
+            "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"real prompt\"},\"timestamp\":\"2026-03-26T16:54:02.119Z\",\"cwd\":\"/tmp/workspace\",\"sessionId\":\"8649a076-3ead-4d5a-9840-3200f0e1aae5\"}\n"
+        );
+
+        assert2::assert!(let Ok(session) = parse(content));
+        pretty_assertions::assert_eq!(session.name, "real prompt");
+        pretty_assertions::assert_eq!(session.search_text, "real prompt");
+    }
+
+    #[test]
+    fn test_user_content_search_text_with_tool_result_then_text_returns_text() {
         let value = serde_json::from_str::<ClaudeUserContent>(
             r#"[{"type":"tool_result","content":"ignored"},{"type":"text","text":"later text"}]"#,
         )
         .unwrap();
 
-        pretty_assertions::assert_eq!(value.extract_text(), Some("later text".to_owned()));
+        pretty_assertions::assert_eq!(value.search_text(), Some("later text".to_owned()));
     }
 
     #[test]
@@ -378,26 +483,6 @@ mod tests {
                     args: Some("install".to_owned()),
                 }),
             }])
-        );
-    }
-
-    #[test]
-    fn test_parse_claude_session_skips_middle_lines_after_top_loop_stops() {
-        let content = concat!(
-            "{\"type\":\"progress\",\"timestamp\":\"2026-03-26T16:51:01.119Z\",\"cwd\":\"/tmp/workspace\",\"sessionId\":\"8649a076-3ead-4d5a-9840-3200f0e1aae5\"}\n",
-            "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"first user msg\"},\"timestamp\":\"2026-03-26T16:52:02.119Z\",\"cwd\":\"/tmp/workspace\",\"sessionId\":\"8649a076-3ead-4d5a-9840-3200f0e1aae5\"}\n",
-            "{\"type\":\"broken\"\n",
-            "{\"type\":\"system\",\"timestamp\":\"2026-03-26T16:53:02.119Z\",\"cwd\":\"/tmp/workspace\",\"sessionId\":\"8649a076-3ead-4d5a-9840-3200f0e1aae5\"}\n",
-            "{\"type\":\"last-prompt\",\"sessionId\":\"8649a076-3ead-4d5a-9840-3200f0e1aae5\",\"lastPrompt\":\"hello\"}\n"
-        );
-
-        assert2::assert!(let Ok(session) = parse(content));
-        pretty_assertions::assert_eq!(session.name, "first user msg");
-        pretty_assertions::assert_eq!(
-            session.updated_at,
-            chrono::DateTime::parse_from_rfc3339("2026-03-26T16:53:02.119Z")
-                .unwrap()
-                .to_utc()
         );
     }
 }

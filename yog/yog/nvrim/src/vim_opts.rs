@@ -4,8 +4,8 @@
 //! utilities wrapping [`nvim_oxi::api::set_option_value`], emitting notifications via
 //! Uses `ytil_noxi::notify::error` on failure.
 
-use core::fmt::Debug;
 use core::marker::Copy;
+use std::fmt::Debug;
 use std::fmt::Write as _;
 
 use nvim_oxi::Dictionary;

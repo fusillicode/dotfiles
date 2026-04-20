@@ -5945,9 +5945,11 @@ dependencies = [
  "chrono",
  "owo-colors 4.3.0",
  "pretty_assertions",
+ "ratatui",
  "rootcause",
  "rstest",
  "skim",
+ "tokio",
  "ytil_git",
 ]
 

@@ -3,7 +3,7 @@
 //! # Errors
 //! - Git operations or user interaction fails.
 
-use core::fmt::Display;
+use std::fmt::Display;
 use std::ops::Deref;
 use std::path::Path;
 
@@ -42,7 +42,9 @@ fn main() -> rootcause::Result<()> {
 
     let renderable_entries = git_status_entries.into_iter().map(RenderableGitStatusEntry).collect();
 
-    let Some(selected_entries) = ytil_tui::minimal_multi_select::<RenderableGitStatusEntry>(renderable_entries)? else {
+    let Some(selected_entries) =
+        ytil_tui::minimal_multi_select(renderable_entries, ToString::to_string, ToString::to_string)?
+    else {
         println!("\n\nNo entries selected");
         return Ok(());
     };

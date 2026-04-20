@@ -1,6 +1,6 @@
 //! Utilities for managing and displaying Nvim quickfix lists.
 
-use core::fmt::Debug;
+use std::fmt::Debug;
 
 use nvim_oxi::Array;
 use nvim_oxi::api::opts::CmdOpts;

@@ -3,7 +3,7 @@
 //! # Errors
 //! - Zellij CLI invocation or user interaction fails.
 
-use core::fmt::Display;
+use std::fmt::Display;
 
 use owo_colors::OwoColorize;
 use rootcause::prelude::ResultExt;
@@ -33,7 +33,7 @@ fn main() -> rootcause::Result<()> {
         return Ok(());
     }
 
-    let Some(selected) = ytil_tui::minimal_multi_select(sessions)? else {
+    let Some(selected) = ytil_tui::minimal_multi_select(sessions, ToString::to_string, ToString::to_string)? else {
         println!("\n\nNo sessions selected");
         return Ok(());
     };
