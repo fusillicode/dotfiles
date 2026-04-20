@@ -1,4 +1,4 @@
-use core::fmt::Display;
+use std::fmt::Display;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -80,7 +80,7 @@ pub struct PgpassEntry {
 }
 
 impl Display for PgpassEntry {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.metadata.alias)
     }
 }
@@ -95,7 +95,7 @@ pub struct Metadata {
 }
 
 impl Display for Metadata {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.alias)
     }
 }
@@ -157,7 +157,7 @@ impl TryFrom<(usize, &str)> for ConnectionParams {
 }
 
 impl Display for ConnectionParams {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}:{}:{}:{}:{}", self.host, self.port, self.db, self.user, self.pwd)
     }
 }

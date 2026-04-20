@@ -3,7 +3,7 @@
 //! This module provides functionality to filter, format, and sort LSP diagnostics
 //! received from language servers in Nvim.
 
-use core::fmt;
+use std::fmt;
 
 use nvim_oxi::Dictionary;
 use serde::de::Deserializer;

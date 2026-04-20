@@ -29,7 +29,11 @@ pub fn run() -> rootcause::Result<()> {
         return Ok(());
     }
 
-    let Some(selected) = ytil_tui::minimal_multi_select(sessions.into_iter().map(RenderableSession).collect())? else {
+    let renderable_sessions: Vec<RenderableSession> = sessions.into_iter().map(RenderableSession).collect();
+    let Some(selected) = ytil_tui::minimal_multi_select(renderable_sessions, ToString::to_string, |session| {
+        session.0.search_text.clone()
+    })?
+    else {
         println!("No sessions selected");
         return Ok(());
     };

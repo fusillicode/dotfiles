@@ -1,7 +1,7 @@
 //! Implementation of Nvim's vim.ui.select for interactive user selection.
 
-use core::fmt::Debug;
-use core::fmt::Display;
+use std::fmt::Debug;
+use std::fmt::Display;
 use std::rc::Rc;
 
 use nvim_oxi::mlua;

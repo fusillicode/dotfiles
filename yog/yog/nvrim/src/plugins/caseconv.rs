@@ -3,7 +3,7 @@
 //! Provides a namespaced [`Dictionary`] exposing selection conversion
 //! functionality (currently only case conversion via [`convert_case`]).
 
-use core::fmt::Display;
+use std::fmt::Display;
 
 use convert_case::Case;
 use convert_case::Casing as _;

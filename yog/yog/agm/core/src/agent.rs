@@ -1,4 +1,4 @@
-use core::fmt::Display;
+use std::fmt::Display;
 
 use strum::EnumIter;
 

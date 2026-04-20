@@ -1,26 +1,82 @@
-use core::fmt::Debug;
-use core::fmt::Display;
+use std::borrow::Cow;
+use std::fmt::Debug;
+use std::fmt::Display;
 use std::io::Cursor;
+use std::rc::Rc;
+use std::sync::Arc;
 
+use ratatui::text::Line;
 use rootcause::report;
+use skim::DisplayContext;
+use skim::MatchEngine;
+use skim::MatchEngineFactory;
+use skim::MatchRange;
+use skim::MatchResult;
 use skim::Skim;
 use skim::SkimItem;
+use skim::SkimItemReceiver;
 use skim::SkimOutput;
+use skim::matcher::Matcher as SkimMatcher;
 use skim::options::SkimOptions;
 use skim::prelude::SkimItemReader;
 use skim::prelude::SkimItemReaderOption;
+use skim::prelude::unbounded;
 
-/// Provides a minimal interactive multi-select prompt, returning [`Option::None`] if no options are
-/// provided, the user cancels, or no items are selected.
+/// Provides a minimal interactive multi-select prompt.
+///
+/// Returns [`Option::None`] if no options are provided, the user cancels, or no items are selected.
+/// Matching uses `search_text`, while rendering uses `display_text`.
 ///
 /// # Errors
 /// - [`skim`] fails to initialize or run.
-pub fn minimal_multi_select<T: Display>(opts: Vec<T>) -> rootcause::Result<Option<Vec<T>>> {
+pub fn minimal_multi_select<T, D, S>(
+    opts: Vec<T>,
+    mut display_text: D,
+    mut search_text: S,
+) -> rootcause::Result<Option<Vec<T>>>
+where
+    D: FnMut(&T) -> String,
+    S: FnMut(&T) -> String,
+{
     if opts.is_empty() {
         return Ok(None);
     }
 
-    let (output, display_texts) = run_skim_prompt(&opts, select_options(true))?;
+    let normalize = |value: &str| value.split_whitespace().collect::<Vec<_>>().join(" ");
+    let display_texts: Vec<String> = opts.iter().map(|opt| normalize(&display_text(opt))).collect();
+    let display_items = build_ansi_display_items(&display_texts)?;
+    let items: Vec<Arc<dyn SkimItem>> = opts
+        .iter()
+        .enumerate()
+        .map(|(index, opt)| {
+            let display_item = Arc::clone(display_items.get(index)?);
+            let visible_match_text = display_item.text().into_owned();
+            let hidden_search = normalize(&search_text(opt));
+            let search_corpus = if hidden_search.is_empty() || hidden_search == visible_match_text {
+                visible_match_text.clone()
+            } else {
+                format!("{visible_match_text} {hidden_search}")
+            };
+
+            Some(Arc::new(IndexedSkimItem {
+                output: index.to_string(),
+                display_item,
+                visible_text: visible_match_text,
+                search_corpus,
+            }) as Arc<dyn SkimItem>)
+        })
+        .collect::<Option<Vec<_>>>()
+        .ok_or_else(|| report!("missing ANSI display item while building skim rows"))?;
+
+    let (tx_items, rx_items) = unbounded();
+    tx_items
+        .send(items)
+        .map_err(|e| report!("failed to queue skim items").attach(e.to_string()))?;
+    drop(tx_items);
+
+    let options = select_options(true);
+    let output = run_skim_with_matcher(options, rx_items)?;
+
     if output.is_abort || output.selected_items.is_empty() {
         return Ok(None);
     }
@@ -28,9 +84,10 @@ pub fn minimal_multi_select<T: Display>(opts: Vec<T>) -> rootcause::Result<Optio
     let mut selected_indices: Vec<usize> = output
         .selected_items
         .iter()
-        .filter_map(|mi| find_selected_index(&display_texts, &mi.item))
+        .filter_map(|mi| mi.item.output().parse().ok())
         .collect();
     selected_indices.sort_unstable();
+    selected_indices.dedup();
 
     let mut indexed_opts: Vec<Option<T>> = opts.into_iter().map(Some).collect();
     let selected: Vec<T> = selected_indices
@@ -62,7 +119,10 @@ pub fn minimal_select<T: Display>(opts: Vec<T>) -> rootcause::Result<Option<T>> 
     let index = output
         .selected_items
         .first()
-        .and_then(|mi| find_selected_index(&display_texts, &mi.item))
+        .and_then(|mi| {
+            let output_text = mi.item.output();
+            display_texts.iter().position(|t| *t == *output_text)
+        })
         .ok_or_else(|| report!("failed to recover selected item index"))?;
 
     opts.into_iter()
@@ -146,6 +206,147 @@ where
     minimal_select(items)
 }
 
+#[derive(Debug)]
+struct IndexedSkimItem {
+    output: String,
+    display_item: Arc<dyn SkimItem>,
+    visible_text: String,
+    search_corpus: String,
+}
+
+impl SkimItem for IndexedSkimItem {
+    fn text(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.visible_text)
+    }
+
+    fn display(&self, context: DisplayContext) -> Line<'_> {
+        self.display_item.display(context)
+    }
+
+    fn output(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.output)
+    }
+}
+
+struct SearchCorpusEngineFactory {
+    inner: Rc<dyn MatchEngineFactory>,
+}
+
+impl SearchCorpusEngineFactory {
+    fn new(inner: Rc<dyn MatchEngineFactory>) -> Self {
+        Self { inner }
+    }
+}
+
+impl MatchEngineFactory for SearchCorpusEngineFactory {
+    fn create_engine_with_case(&self, query: &str, case: skim::CaseMatching) -> Box<dyn MatchEngine> {
+        Box::new(SearchCorpusEngine {
+            inner: self.inner.create_engine_with_case(query, case),
+        })
+    }
+}
+
+struct SearchCorpusEngine {
+    inner: Box<dyn MatchEngine>,
+}
+
+impl Display for SearchCorpusEngine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.inner)
+    }
+}
+
+impl MatchEngine for SearchCorpusEngine {
+    fn match_item(&self, item: &dyn SkimItem) -> Option<MatchResult> {
+        let Some(item) = item.as_any().downcast_ref::<IndexedSkimItem>() else {
+            return self.inner.match_item(item);
+        };
+
+        let mut result = self.inner.match_item(&item.search_corpus)?;
+        result.matched_range = clip_match_range(result.matched_range, item);
+        Some(result)
+    }
+}
+
+fn clip_match_range(match_range: MatchRange, item: &IndexedSkimItem) -> MatchRange {
+    let visible_char_len = item.visible_text.chars().count();
+    let visible_byte_len = item.visible_text.len();
+
+    match match_range {
+        MatchRange::Chars(indices) => {
+            MatchRange::Chars(indices.into_iter().filter(|index| *index < visible_char_len).collect())
+        }
+        MatchRange::CharRange(start, end) => {
+            if start >= visible_char_len {
+                MatchRange::Chars(Vec::new())
+            } else {
+                MatchRange::CharRange(start, end.min(visible_char_len))
+            }
+        }
+        MatchRange::ByteRange(start, end) => {
+            if start >= visible_byte_len {
+                MatchRange::Chars(Vec::new())
+            } else {
+                MatchRange::ByteRange(start, end.min(visible_byte_len))
+            }
+        }
+    }
+}
+
+fn run_skim_with_matcher(options: SkimOptions, source: SkimItemReceiver) -> rootcause::Result<SkimOutput> {
+    let (engine_factory, rank_builder) = SkimMatcher::create_engine_factory_with_builder(&options);
+    let matcher = SkimMatcher::builder(Rc::new(SearchCorpusEngineFactory::new(engine_factory)))
+        .case(options.case)
+        .rank_builder(rank_builder)
+        .build();
+
+    let mut skim = skim::Skim::init(options, Some(source))
+        .map_err(|e| report!("skim failed to initialize").attach(e.to_string()))?;
+    skim.app_mut().matcher = matcher;
+    skim.start();
+
+    if skim.should_enter() {
+        skim.init_tui()
+            .map_err(|e| report!("skim failed to initialize TUI").attach(e.to_string()))?;
+
+        let task = async {
+            skim.enter().await.map_err(|e| e.to_string())?;
+            skim.run().await.map_err(|e| e.to_string())?;
+            Ok::<(), String>(())
+        };
+
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            tokio::task::block_in_place(|| handle.block_on(task))
+                .map_err(|e| report!("skim failed to run").attach(e))?;
+        } else {
+            tokio::runtime::Runtime::new()
+                .map_err(|e| report!("failed to create tokio runtime").attach(e.to_string()))?
+                .block_on(task)
+                .map_err(|e| report!("skim failed to run").attach(e))?;
+        }
+    }
+
+    Ok(skim.output())
+}
+
+fn build_ansi_display_items(display_texts: &[String]) -> rootcause::Result<Vec<Arc<dyn SkimItem>>> {
+    let input = display_texts.join("\n");
+
+    let reader_opts = SkimItemReaderOption::default().ansi(true).build();
+    let receiver = SkimItemReader::new(reader_opts).of_bufread(Cursor::new(input));
+    let mut items = Vec::with_capacity(display_texts.len());
+    while let Ok(batch) = receiver.recv() {
+        items.extend(batch);
+    }
+
+    if items.len() != display_texts.len() {
+        return Err(report!("failed to build ANSI display items")
+            .attach(format!("expected={}", display_texts.len()))
+            .attach(format!("actual={}", items.len())));
+    }
+    Ok(items)
+}
+
 /// Runs [`skim`] with plain-text `input` lines and returns [`Option::None`] on abort.
 fn run_simple_prompt(options: SkimOptions, input: &str) -> rootcause::Result<Option<SkimOutput>> {
     let items = SkimItemReader::default().of_bufread(Cursor::new(input.to_owned()));
@@ -167,13 +368,6 @@ fn run_skim_prompt<T: Display>(opts: &[T], options: SkimOptions) -> rootcause::R
     let output =
         Skim::run_with(options, Some(items)).map_err(|e| report!("skim failed to run").attach(e.to_string()))?;
     Ok((output, display_texts))
-}
-
-/// Recovers the original source-vector index by matching a selected item's output text against the
-/// display texts collected before running skim.
-fn find_selected_index(display_texts: &[String], item: &std::sync::Arc<dyn SkimItem>) -> Option<usize> {
-    let output_text = item.output();
-    display_texts.iter().position(|t| *t == *output_text)
 }
 
 /// Shared [`SkimOptions`] base: reverse layout, no info line, accept/abort keybindings,
@@ -211,6 +405,13 @@ fn select_options(multi: bool) -> SkimOptions {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use pretty_assertions::assert_eq;
+    use skim::DisplayContext;
+    use skim::MatchRange;
+    use skim::SkimItem;
+
     #[test]
     fn test_require_single_returns_only_item() {
         let selected = vec![1];
@@ -223,5 +424,47 @@ mod tests {
         let selected = vec![1, 2];
         assert2::assert!(let Err(err) = super::require_single(&selected, "items"));
         assert!(err.to_string().contains("expected exactly one selection"));
+    }
+
+    #[test]
+    fn test_minimal_multi_select_line_serialization_sanitizes_fields() {
+        let normalize = |value: &str| value.split_whitespace().collect::<Vec<_>>().join(" ");
+        let display = normalize("\u{1b}[31mvisible\tvalue\nnext\u{1b}[0m");
+        let hidden_search = normalize("hidden\rvalue");
+        assert2::assert!(let Ok(mut display_items) = super::build_ansi_display_items(std::slice::from_ref(&display)));
+        let display_item = display_items.swap_remove(0);
+        let match_text = format!("{} {hidden_search}", display_item.text());
+
+        let item = super::IndexedSkimItem {
+            output: "3".to_owned(),
+            display_item,
+            visible_text: "visible value next".to_owned(),
+            search_corpus: match_text,
+        };
+
+        assert_eq!(item.output(), "3");
+        assert_eq!(item.text(), "visible value next");
+        assert_eq!(
+            item.display(DisplayContext::default())
+                .spans
+                .first()
+                .map(|span| span.content.as_ref()),
+            Some("visible value next")
+        );
+    }
+
+    #[test]
+    fn test_clip_match_range_char_indices_hides_hidden_only_match() {
+        let item = super::IndexedSkimItem {
+            output: "3".to_owned(),
+            display_item: Arc::new("visible value next".to_owned()),
+            visible_text: "visible value next".to_owned(),
+            search_corpus: "visible value next hidden value".to_owned(),
+        };
+
+        assert!(matches!(
+            super::clip_match_range(MatchRange::Chars(vec![20, 21]), &item),
+            MatchRange::Chars(indices) if indices.is_empty()
+        ));
     }
 }

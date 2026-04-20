@@ -8,7 +8,7 @@
 
 #![feature(error_generic_member_access, exit_status_error)]
 
-use core::fmt::Display;
+use std::fmt::Display;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -123,7 +123,7 @@ pub struct Cmd {
 
 /// Formats [`Cmd`] for display, showing command name, arguments, and working directory.
 impl Display for Cmd {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "Cmd=(name={:?} args={:?} cur_dir={:?})",

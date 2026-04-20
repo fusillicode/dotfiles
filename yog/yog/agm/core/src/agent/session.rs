@@ -12,11 +12,14 @@ pub struct Session {
     pub id: String,
     pub agent: Agent,
     pub name: String,
+    pub search_text: String,
     pub workspace: PathBuf,
     pub path: PathBuf,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
+
+const SEARCH_TEXT_MAX_BYTES: usize = 32 * 1024;
 
 impl Session {
     pub fn new(
@@ -37,6 +40,7 @@ impl Session {
         Self {
             id: session_id,
             agent,
+            search_text: name.clone(),
             name,
             workspace: workspace_dir,
             path: PathBuf::new(),
@@ -75,6 +79,115 @@ impl Session {
     }
 }
 
+#[derive(Debug, Default)]
+pub(crate) struct SearchTextBuilder {
+    snippets_text: String,
+    first_snippet: Option<String>,
+    last_snippet: Option<String>,
+    reached_limit: bool,
+}
+
+impl SearchTextBuilder {
+    pub(crate) fn push(&mut self, raw: &str) {
+        if self.reached_limit {
+            return;
+        }
+
+        let snippet = raw.split_whitespace().collect::<Vec<_>>().join(" ");
+        let Some(snippet) = (!snippet.is_empty()).then_some(snippet) else {
+            return;
+        };
+        if self.last_snippet.as_ref().is_some_and(|last| last == &snippet) {
+            return;
+        }
+        if self.first_snippet.is_none() {
+            self.first_snippet = Some(snippet.clone());
+        }
+
+        self.reached_limit = !push_normalized_snippet(&mut self.snippets_text, &mut self.last_snippet, snippet);
+    }
+
+    pub(crate) fn build(self, fallback: &str) -> String {
+        let fallback = fallback.split_whitespace().collect::<Vec<_>>().join(" ");
+        let Some(fallback) = (!fallback.is_empty()).then_some(fallback) else {
+            return self.snippets_text;
+        };
+
+        if self.first_snippet.as_ref().is_some_and(|first| first == &fallback) {
+            return self.snippets_text;
+        }
+
+        let mut search_text = String::new();
+        let mut last_snippet = None::<String>;
+        if !push_normalized_snippet(&mut search_text, &mut last_snippet, fallback) {
+            return search_text;
+        }
+        if self.snippets_text.is_empty() {
+            return search_text;
+        }
+
+        let separator_len = usize::from(!search_text.is_empty());
+        if search_text.len().saturating_add(separator_len) >= SEARCH_TEXT_MAX_BYTES {
+            return search_text;
+        }
+        if !search_text.is_empty() {
+            search_text.push(' ');
+        }
+
+        let remaining = SEARCH_TEXT_MAX_BYTES.saturating_sub(search_text.len());
+        if let Some(truncated) = truncate_to_boundary(&self.snippets_text, remaining) {
+            search_text.push_str(truncated);
+        }
+
+        search_text
+    }
+}
+
+fn push_normalized_snippet(search_text: &mut String, last_snippet: &mut Option<String>, snippet: String) -> bool {
+    let separator_len = usize::from(!search_text.is_empty());
+    if search_text.len().saturating_add(separator_len) >= SEARCH_TEXT_MAX_BYTES {
+        return false;
+    }
+    if !search_text.is_empty() {
+        search_text.push(' ');
+    }
+
+    let remaining = SEARCH_TEXT_MAX_BYTES.saturating_sub(search_text.len());
+    if remaining == 0 {
+        return false;
+    }
+
+    let snippet_len = snippet.len();
+    if let Some(truncated) = truncate_to_boundary(&snippet, remaining) {
+        let is_full_snippet = truncated.len() == snippet_len;
+        search_text.push_str(truncated);
+        *last_snippet = Some(snippet);
+        is_full_snippet
+    } else {
+        false
+    }
+}
+
+fn truncate_to_boundary(text: &str, max_bytes: usize) -> Option<&str> {
+    if max_bytes == 0 {
+        return None;
+    }
+    if text.len() <= max_bytes {
+        return Some(text);
+    }
+
+    let mut end = 0;
+    for (idx, ch) in text.char_indices() {
+        let next = idx.saturating_add(ch.len_utf8());
+        if next > max_bytes {
+            break;
+        }
+        end = next;
+    }
+
+    (end > 0).then_some(&text[..end])
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::DateTime;
@@ -93,6 +206,7 @@ mod tests {
             id: "session-id".into(),
             workspace: workspace.clone(),
             name: "session-name".into(),
+            search_text: "session-name".into(),
             path: PathBuf::new(),
             created_at: DateTime::from_timestamp_millis(1).unwrap().to_utc(),
             updated_at: DateTime::from_timestamp_millis(1).unwrap().to_utc(),
@@ -130,5 +244,34 @@ mod tests {
                 workspace_str.to_owned(),
             ]
         );
+    }
+
+    #[test]
+    fn test_session_new_sets_search_text_from_resolved_name() {
+        let tempdir = tempdir().unwrap();
+        let workspace = tempdir.path().join("workspace");
+        std::fs::create_dir_all(&workspace).unwrap();
+
+        let session = Session::new(
+            Agent::Codex,
+            "session-id".into(),
+            workspace,
+            Some("hello world".into()),
+            DateTime::from_timestamp_millis(1).unwrap().to_utc(),
+        );
+
+        pretty_assertions::assert_eq!(session.name, "hello world");
+        pretty_assertions::assert_eq!(session.search_text, "hello world");
+    }
+
+    #[test]
+    fn test_search_text_builder_normalizes_dedupes_and_falls_back() {
+        let mut builder = SearchTextBuilder::default();
+        for snippet in ["  fallback  ", "first\nline", "", "first line", "second\tline"] {
+            builder.push(snippet);
+        }
+        let search_text = builder.build("fallback");
+
+        pretty_assertions::assert_eq!(search_text, "fallback first line second line");
     }
 }

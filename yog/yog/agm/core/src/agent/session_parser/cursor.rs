@@ -7,6 +7,7 @@ use rootcause::report;
 use serde::Deserialize;
 
 use crate::agent::Agent;
+use crate::agent::session::SearchTextBuilder;
 use crate::agent::session::Session;
 
 pub fn parse(meta_hex: &str, workspace_dir: PathBuf) -> rootcause::Result<Session> {
@@ -47,6 +48,14 @@ pub(crate) fn decode_hex_string(raw: &str) -> rootcause::Result<String> {
     }
 
     Ok(String::from_utf8(bytes).context("decoded hex string is not utf8".to_owned())?)
+}
+
+pub fn build_search_text_from_strings(session_name: &str, strings_output: &str) -> String {
+    let mut search_text = SearchTextBuilder::default();
+    for line in strings_output.lines().filter_map(searchable_cursor_strings_line) {
+        search_text.push(&line);
+    }
+    search_text.build(session_name)
 }
 
 pub fn extract_cursor_workspace_from_strings(
@@ -100,6 +109,34 @@ fn extract_absolute_path_candidates(line: &str) -> Vec<String> {
     candidates.extend(extract_prefixed_candidates(line, "file:///"));
     candidates.extend(extract_prefixed_candidates(line, "/"));
     candidates
+}
+
+fn searchable_cursor_strings_line(line: &str) -> Option<String> {
+    let normalized = line.split_whitespace().collect::<Vec<_>>().join(" ");
+    let normalized = (!normalized.is_empty()).then_some(normalized)?;
+    if normalized.len() < 8 {
+        return None;
+    }
+    if !normalized.chars().any(char::is_alphabetic) || !normalized.chars().any(char::is_whitespace) {
+        return None;
+    }
+    if normalized.chars().all(|ch| ch.is_ascii_hexdigit()) {
+        return None;
+    }
+    if !extract_absolute_path_candidates(&normalized).is_empty() {
+        return None;
+    }
+
+    let lower = normalized.to_ascii_lowercase();
+    if lower.contains("create table")
+        || lower.contains("sqlite_")
+        || lower.contains("indexsqlite_")
+        || lower.starts_with("file:///")
+    {
+        return None;
+    }
+
+    Some(normalized)
 }
 
 fn extract_prefixed_candidates(line: &str, prefix: &str) -> Vec<String> {
@@ -182,5 +219,25 @@ mod tests {
         let strings_output = format!("garbage file://{}/src/main.rs trailing", workspace.display());
         let extracted = extract_cursor_workspace_from_strings(&strings_output, &[], &[ignored]);
         pretty_assertions::assert_eq!(extracted, Some(workspace.join("src")));
+    }
+
+    #[test]
+    fn test_build_search_text_from_strings_keeps_human_lines_and_filters_noise() {
+        let strings_output = concat!(
+            "CREATE TABLE blobs (id TEXT PRIMARY KEY, data BLOB);\n",
+            "indexsqlite_autoindex_blobs_1blobs\n",
+            "/Users/gianlu/data/dev/dotfiles/dotfiles/yog\n",
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\n",
+            "user asked about stalled sync job\n",
+            "user asked about stalled sync job\n",
+            "assistant suggested retrying the worker\n"
+        );
+
+        let search_text = build_search_text_from_strings("Cursor Session", strings_output);
+
+        pretty_assertions::assert_eq!(
+            search_text,
+            "Cursor Session user asked about stalled sync job assistant suggested retrying the worker"
+        );
     }
 }

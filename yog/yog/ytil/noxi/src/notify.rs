@@ -1,6 +1,6 @@
 //! Notification utilities for sending error and warning messages to Nvim.
 
-use core::fmt::Debug;
+use std::fmt::Debug;
 
 pub use nvim_oxi::api::opts;
 pub use nvim_oxi::api::types;

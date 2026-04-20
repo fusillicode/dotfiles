@@ -3,7 +3,7 @@
 //! # Errors
 //! - Flag parsing, GitHub CLI invocation, or TUI interaction fails.
 
-use core::fmt::Display;
+use std::fmt::Display;
 use std::ops::Deref;
 use std::str::FromStr;
 
@@ -89,7 +89,8 @@ fn main() -> rootcause::Result<()> {
         return Ok(());
     }
 
-    let Some(selected_prs) = ytil_tui::minimal_multi_select::<RenderablePullRequest>(renderable_prs)? else {
+    let Some(selected_prs) = ytil_tui::minimal_multi_select(renderable_prs, ToString::to_string, ToString::to_string)?
+    else {
         println!("No PRs selected");
         return Ok(());
     };
