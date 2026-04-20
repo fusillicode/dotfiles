@@ -81,7 +81,7 @@ function M.fzf_lua(plugin)
       { function() plugin.live_grep({ prompt = 'rg: ', search = nvrim.buffer.get_visual_selection_lines()[1], }) end, },
     },
 
-    { '<leader>h',  mode = 'n',           plugin and { function() plugin.resume({}) end, }, },
+    { '<leader>i',  mode = 'n',           plugin and { function() plugin.resume({}) end, }, },
     { '<leader>n',  mode = 'n',           plugin and { nvrim.plugins.attempt.create_scratch_file, }, },
     { '<leader>u',  mode = 'v',           plugin and { nvrim.plugins.caseconv.convert_selection, }, },
     { '<leader>k',  mode = 'v',           plugin and { nvrim.plugins.genconv.convert_selection, }, },
