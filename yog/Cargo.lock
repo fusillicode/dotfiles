@@ -2137,9 +2137,9 @@ dependencies = [
 
 [[package]]
 name = "interprocess"
-version = "2.4.1"
+version = "2.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce4c3c8f298ee3d5467f2616384e3560c750226cc3c620e5456d3b95783156f6"
+checksum = "069323743400cb7ab06a8fe5c1ed911d36b6919ec531661d034c89083629595b"
 dependencies = [
  "doctest-file",
  "futures-core",
@@ -3055,9 +3055,9 @@ checksum = "d05e27ee213611ffe7d6348b942e8f942b37114c00cc03cec254295a4a17852e"
 
 [[package]]
 name = "openssl-sys"
-version = "0.9.113"
+version = "0.9.114"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad2f2c0eba47118757e4c6d2bff2838f3e0523380021356e7875e858372ce644"
+checksum = "13ce1245cd07fcc4cfdb438f7507b0c7e4f3849a69fd84d52374c66d83741bb6"
 dependencies = [
  "cc",
  "libc",
@@ -5977,7 +5977,7 @@ dependencies = [
 [[package]]
 name = "zellij-tile"
 version = "0.45.0"
-source = "git+https://github.com/zellij-org/zellij.git?branch=main#aa29cbaf6631af0afca6aae427a97b3e478393b3"
+source = "git+https://github.com/zellij-org/zellij.git?branch=main#7d647f7b78992c22b0fb5af4746622b1a2552b73"
 dependencies = [
  "clap 3.2.25",
  "prost",
@@ -5991,7 +5991,7 @@ dependencies = [
 [[package]]
 name = "zellij-utils"
 version = "0.45.0"
-source = "git+https://github.com/zellij-org/zellij.git?branch=main#aa29cbaf6631af0afca6aae427a97b3e478393b3"
+source = "git+https://github.com/zellij-org/zellij.git?branch=main#7d647f7b78992c22b0fb5af4746622b1a2552b73"
 dependencies = [
  "anyhow",
  "backtrace",
