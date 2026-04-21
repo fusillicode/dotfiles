@@ -61,19 +61,23 @@ impl State {
             .find(|tab| tab.position == tab_pos)
             .map(|tab| tab.tab_id);
 
-        match (current_tab_id, discovered_tab_id) {
-            (None, Some(tab_id)) => {
-                events.push(StateEvent::TabCreated { tab_id });
-            }
-            (Some(current_id), Some(discovered_id)) if !self.all_tabs.iter().any(|tab| tab.tab_id == current_id) => {
-                events.push(StateEvent::TabRemapped {
-                    new_tab_id: discovered_id,
-                });
-            }
-            _ => {}
+        let bootstrapped_current_tab =
+            Self::bootstrap_current_tab_for_pane_update(self.current_tab.as_ref(), discovered_tab_id);
+        if let Some(current_tab) = bootstrapped_current_tab.as_ref() {
+            events.push(StateEvent::TabCreated {
+                tab_id: current_tab.tab_id,
+            });
         }
 
-        let Some(current_tab) = self.current_tab.as_ref() else {
+        if let (Some(current_id), Some(discovered_id)) = (current_tab_id, discovered_tab_id)
+            && !self.all_tabs.iter().any(|tab| tab.tab_id == current_id)
+        {
+            events.push(StateEvent::TabRemapped {
+                new_tab_id: discovered_id,
+            });
+        }
+
+        let Some(current_tab) = self.current_tab.as_ref().or(bootstrapped_current_tab.as_ref()) else {
             return events;
         };
 
@@ -131,7 +135,12 @@ impl State {
             });
         }
 
-        events.extend(self.agent_events_from_manifest(current_tab, new_focused_pane.as_ref(), panes, &new_pane_ids));
+        events.extend(Self::agent_events_from_manifest(
+            current_tab,
+            new_focused_pane.as_ref(),
+            panes,
+            &new_pane_ids,
+        ));
 
         if let Some(focused_pane) = new_focused_pane.as_ref()
             && (focused_metadata_changed || current_tab.cwd.is_none())
@@ -578,8 +587,18 @@ impl State {
         })
     }
 
+    fn bootstrap_current_tab_for_pane_update(
+        current_tab: Option<&CurrentTab>,
+        discovered_tab_id: Option<usize>,
+    ) -> Option<CurrentTab> {
+        if current_tab.is_some() {
+            return None;
+        }
+        let tab_id = discovered_tab_id?;
+        Some(CurrentTab::new(tab_id))
+    }
+
     fn agent_events_from_manifest(
-        &self,
         current_tab: &CurrentTab,
         new_focused_pane: Option<&FocusedPane>,
         panes: &[PaneInfo],
@@ -600,11 +619,7 @@ impl State {
             .pane_state_by_pane
             .get(&focused_pane.id)
             .map(|pane_state| pane_state.agent);
-        let detected_agent = pane
-            .terminal_command
-            .as_deref()
-            .and_then(parse_running_command)
-            .and_then(|command| Agent::detect(&command));
+        let detected_agent = detected_agent_from_pane_info(pane, focused_pane);
         let has_terminal_command = pane
             .terminal_command
             .as_ref()
@@ -644,11 +659,9 @@ impl State {
             if other_pane.exited || other_pane.is_held || !other_pane.is_focused {
                 continue;
             }
-            let detected_agent = other_pane
-                .terminal_command
-                .as_deref()
-                .and_then(parse_running_command)
-                .and_then(|command| Agent::detect(&command));
+            let detected_agent = focused_pane_from_pane_info(other_pane)
+                .as_ref()
+                .and_then(|focused_pane| detected_agent_from_pane_info(other_pane, focused_pane));
             let has_terminal_command = other_pane
                 .terminal_command
                 .as_ref()
@@ -903,6 +916,27 @@ pub(crate) fn focused_pane_from_pane_info(pane: &PaneInfo) -> Option<FocusedPane
             .map(FocusedPaneLabel::TerminalCommand)
             .or_else(|| focused_pane_title_label(pane).map(FocusedPaneLabel::Title)),
     })
+}
+
+fn detected_agent_from_pane_info(pane: &PaneInfo, focused_pane: &FocusedPane) -> Option<Agent> {
+    if let Some(command) = pane.terminal_command.as_deref().map(str::trim)
+        && !command.is_empty()
+    {
+        if let Some(running_command) = parse_running_command(command)
+            && let Some(agent) = Agent::detect(&running_command)
+        {
+            return Some(agent);
+        }
+
+        if let Some(agent) = Agent::detect(command) {
+            return Some(agent);
+        }
+    }
+
+    match focused_pane.label.as_ref() {
+        Some(FocusedPaneLabel::TerminalCommand(label)) | Some(FocusedPaneLabel::Title(label)) => Agent::detect(label),
+        None => None,
+    }
 }
 
 fn compute_frame(state: &State) -> Vec<TabRow> {
@@ -1170,6 +1204,150 @@ mod tests {
         assert_eq!(
             current_tab.display_cmd(),
             Cmd::agent(Agent::Claude, AgentState::Acknowledged)
+        );
+    }
+
+    #[test]
+    fn test_apply_pane_update_bootstraps_current_tab_and_detects_codex_on_first_update() {
+        let mut state = State {
+            plugin_id: 7,
+            all_tabs: vec![TabInfo {
+                active: true,
+                ..tab_with_name(10, 0, "a")
+            }],
+            ..Default::default()
+        };
+
+        let events = apply_pane_update(
+            &mut state,
+            &manifest(vec![(
+                0,
+                vec![plugin_pane(7), terminal_pane_with_command(42, true, "codex")],
+            )]),
+        );
+        assert_eq!(
+            events,
+            vec![
+                StateEvent::TabCreated { tab_id: 10 },
+                StateEvent::PanesChanged {
+                    observed_pane_ids: [42].into_iter().collect(),
+                    retained_pane_ids: [42].into_iter().collect(),
+                },
+                StateEvent::FocusChanged {
+                    new_pane: Some(FocusedPane {
+                        id: 42,
+                        label: Some(FocusedPaneLabel::TerminalCommand("codex".to_string())),
+                    }),
+                    acknowledge_existing_attention: false,
+                },
+                StateEvent::AgentDetected {
+                    pane_id: 42,
+                    agent: Agent::Codex,
+                },
+                StateEvent::SyncRequested,
+            ]
+        );
+
+        assert!(let Some(current_tab) = state.current_tab.as_ref());
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Empty);
+        assert_eq!(
+            current_tab.display_cmd(),
+            Cmd::agent(Agent::Codex, AgentState::Acknowledged)
+        );
+    }
+
+    #[test]
+    fn test_apply_pane_update_bootstraps_current_tab_without_detecting_non_agent_command() {
+        let mut state = State {
+            plugin_id: 7,
+            all_tabs: vec![TabInfo {
+                active: true,
+                ..tab_with_name(10, 0, "a")
+            }],
+            ..Default::default()
+        };
+
+        let events = apply_pane_update(
+            &mut state,
+            &manifest(vec![(
+                0,
+                vec![
+                    plugin_pane(7),
+                    terminal_pane_with_command(42, true, "/usr/bin/cargo test"),
+                ],
+            )]),
+        );
+        assert_eq!(
+            events,
+            vec![
+                StateEvent::TabCreated { tab_id: 10 },
+                StateEvent::PanesChanged {
+                    observed_pane_ids: [42].into_iter().collect(),
+                    retained_pane_ids: [42].into_iter().collect(),
+                },
+                StateEvent::FocusChanged {
+                    new_pane: Some(FocusedPane {
+                        id: 42,
+                        label: Some(FocusedPaneLabel::TerminalCommand("cargo".to_string())),
+                    }),
+                    acknowledge_existing_attention: false,
+                },
+                StateEvent::SyncRequested,
+            ]
+        );
+
+        assert!(let Some(current_tab) = state.current_tab.as_ref());
+        assert!(current_tab.pane_state_by_pane.is_empty());
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::None);
+        assert_eq!(current_tab.display_cmd(), Cmd::Running("cargo".to_string()));
+    }
+
+    #[test]
+    fn test_apply_pane_update_bootstraps_current_tab_and_detects_codex_from_title_on_first_update() {
+        let mut state = State {
+            plugin_id: 7,
+            all_tabs: vec![TabInfo {
+                active: true,
+                ..tab_with_name(10, 0, "a")
+            }],
+            ..Default::default()
+        };
+
+        let events = apply_pane_update(
+            &mut state,
+            &manifest(vec![(
+                0,
+                vec![plugin_pane(7), terminal_pane_with_title(42, true, "codex")],
+            )]),
+        );
+        assert_eq!(
+            events,
+            vec![
+                StateEvent::TabCreated { tab_id: 10 },
+                StateEvent::PanesChanged {
+                    observed_pane_ids: [42].into_iter().collect(),
+                    retained_pane_ids: [42].into_iter().collect(),
+                },
+                StateEvent::FocusChanged {
+                    new_pane: Some(FocusedPane {
+                        id: 42,
+                        label: Some(FocusedPaneLabel::Title("codex".to_string())),
+                    }),
+                    acknowledge_existing_attention: false,
+                },
+                StateEvent::AgentDetected {
+                    pane_id: 42,
+                    agent: Agent::Codex,
+                },
+                StateEvent::SyncRequested,
+            ]
+        );
+
+        assert!(let Some(current_tab) = state.current_tab.as_ref());
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Empty);
+        assert_eq!(
+            current_tab.display_cmd(),
+            Cmd::agent(Agent::Codex, AgentState::Acknowledged)
         );
     }
 
@@ -2237,6 +2415,25 @@ mod tests {
     fn test_parse_running_command_filters_shells() {
         assert_eq!(parse_running_command("/bin/zsh"), None);
         assert_eq!(parse_running_command("/usr/bin/cargo test"), Some("cargo".to_string()));
+    }
+
+    #[test]
+    fn test_detected_agent_from_pane_info_detects_wrapped_codex_terminal_command() {
+        let pane = terminal_pane_with_command(42, true, "/bin/zsh -lc codex");
+        let focused_pane = FocusedPane { id: 42, label: None };
+
+        assert_eq!(detected_agent_from_pane_info(&pane, &focused_pane), Some(Agent::Codex));
+    }
+
+    #[test]
+    fn test_detected_agent_from_pane_info_detects_codex_from_title_fallback() {
+        let pane = terminal_pane_with_title(42, true, "codex");
+        let focused_pane = FocusedPane {
+            id: 42,
+            label: Some(FocusedPaneLabel::Title("codex".to_string())),
+        };
+
+        assert_eq!(detected_agent_from_pane_info(&pane, &focused_pane), Some(Agent::Codex));
     }
 
     #[test]
