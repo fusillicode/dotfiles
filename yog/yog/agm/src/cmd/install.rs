@@ -349,6 +349,11 @@ mod tests {
                     "hooks": [{ "type": "command", "command": "echo keep-me" }]
                 }
             ],
+            "PermissionRequest": [new_hook_entry(
+                Agent::Codex,
+                "PermissionRequest",
+                &Agent::Codex.hook_command(AgentEventKind::Idle)
+            )],
             "SessionEnd": [new_hook_entry(Agent::Codex, "SessionEnd", &Agent::Codex.hook_command(AgentEventKind::Exit))],
             "UserPromptSubmit": [new_hook_entry(
                 Agent::Codex,

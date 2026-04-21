@@ -86,15 +86,13 @@ impl Agent {
                 ("sessionEnd", AgentEventKind::Exit),
             ],
             Self::Codex => &[
-                // NOTE: agm plugin can only switch Codex from busy -> waiting when
-                // Codex emits `Stop`; approval UIs may stay green upstream until
-                // Codex hooks support a separate approval-pending / choice-prompt
-                // hook. Codex currently expose turn-scoped lifecycle only,
-                // `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Stop`.
-                // Approval events requests #3247 and #3052.
+                // Codex can signal approval waits via `PermissionRequest`, but it
+                // still lacks a generic hook for arbitrary mid-turn clarification /
+                // choice prompts. Those may remain busy until `Stop`.
                 ("SessionStart", AgentEventKind::Start),
                 ("UserPromptSubmit", AgentEventKind::Busy),
                 ("PreToolUse", AgentEventKind::Busy),
+                ("PermissionRequest", AgentEventKind::Idle),
                 ("Stop", AgentEventKind::Idle),
             ],
             Self::Gemini => &[
