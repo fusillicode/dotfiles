@@ -17,8 +17,9 @@ SUBCOMMANDS:
                     Codex hooks are JSON in ~/.codex/hooks.json; you must also enable
                     them in ~/.codex/config.toml: [features] codex_hooks = true
                     (hooks do not run on Windows Codex builds yet).
-                    Codex does not currently expose a separate approval-pending hook,
-                    so approval/choice prompts may keep AGM green until Codex emits Stop.
+                    AGM installs Codex `PermissionRequest` hooks for approval waits.
+                    Other mid-turn choice/clarification prompts may still keep AGM
+                    green until Codex emits Stop.
                     Gemini hooks are JSON in ~/.gemini/settings.json; agm install also
                     enables the Gemini hook system in hooksConfig.
     git-stat        Print "path insertions deletions untracked worktree"
