@@ -49,9 +49,17 @@ impl TabRow {
         for line in path_lines.iter() {
             let row = *y + 1;
             let prefix = if content_w >= 2 {
-                format!("\x1b[{row};1H{bg}{rail}{bg}{BOLD}")
+                if self.active {
+                    format!("\x1b[{row};1H{bg}{rail}{bg}{BOLD}")
+                } else {
+                    format!("\x1b[{row};1H{bg}{rail}{bg}")
+                }
             } else {
-                format!("\x1b[{row};1H{bg}{BOLD}")
+                if self.active {
+                    format!("\x1b[{row};1H{bg}{BOLD}")
+                } else {
+                    format!("\x1b[{row};1H{bg}")
+                }
             };
             buf.push_str(&prefix);
 
@@ -177,7 +185,7 @@ const GIT_DEL_LINES_FG: &str = "\x1b[38;2;236;99;92m";
 const GIT_NEW_FILES_FG: &str = "\x1b[38;2;0;255;255m";
 const AGENT_WAITING_SEEN_FG: &str = "\x1b[38;2;100;100;110m";
 const AGENT_WAITING_UNSEEN_FG: &str = "\x1b[1;38;2;255;0;0m";
-const AGENT_BUSY_FG: &str = "\x1b[1;38;2;140;228;121m";
+const AGENT_BUSY_FG: &str = "\x1b[1;38;2;255;170;51m";
 const TAB_INACTIVE_BG: &str = "\x1b[48;2;0;0;0m";
 const TAB_DEFAULT_FG: &str = "\x1b[39m";
 const PATH_INACTIVE_FG: &str = "\x1b[38;2;119;119;119m";
@@ -188,9 +196,9 @@ const RESET: &str = "\x1b[0m";
 fn display_left(indicator: TabIndicator, cmd: &Cmd, bg: &str, fg: &str) -> String {
     let dot = match indicator {
         TabIndicator::None => None,
-        TabIndicator::Red => Some(format!("{AGENT_WAITING_UNSEEN_FG}●")),
-        TabIndicator::Green => Some(format!("{AGENT_BUSY_FG}●")),
-        TabIndicator::Empty => Some(format!("{AGENT_WAITING_SEEN_FG}○")),
+        TabIndicator::Red => Some(format!("{AGENT_WAITING_UNSEEN_FG}•")),
+        TabIndicator::Green => Some(format!("{AGENT_BUSY_FG}•")),
+        TabIndicator::Empty => Some(format!("{AGENT_WAITING_SEEN_FG}•")),
     };
     let label = match cmd {
         Cmd::None => String::new(),
@@ -359,6 +367,51 @@ mod tests {
     }
 
     #[test]
+    fn test_write_path_lines_active_uses_bold() {
+        let entry = TabRow {
+            active: true,
+            path_label: "tab".to_string(),
+            cmd: Cmd::None,
+            indicator: TabIndicator::None,
+            git: GitStat::default(),
+        };
+        let mut actual = String::new();
+        let mut y = 0;
+
+        entry.write_path_lines(&mut actual, &mut y, 4, 5);
+
+        assert_eq!(
+            actual,
+            format!(
+                "\x1b[1;1H{TAB_INACTIVE_BG}{RAIL_ACTIVE_FG}▎{TAB_INACTIVE_BG}{BOLD}{TAB_DEFAULT_FG}tab{RESET}\x1b[1;5H{SEP_COLOR}{SEPARATOR}{RESET}"
+            )
+        );
+    }
+
+    #[test]
+    fn test_write_path_lines_inactive_skips_bold() {
+        let entry = TabRow {
+            active: false,
+            path_label: "tab".to_string(),
+            cmd: Cmd::None,
+            indicator: TabIndicator::None,
+            git: GitStat::default(),
+        };
+        let mut actual = String::new();
+        let mut y = 0;
+
+        entry.write_path_lines(&mut actual, &mut y, 4, 5);
+
+        assert_eq!(
+            actual,
+            format!(
+                "\x1b[1;1H{TAB_INACTIVE_BG}{RAIL_INACTIVE_FG}▏{TAB_INACTIVE_BG}{PATH_INACTIVE_FG}tab{RESET}\x1b[1;5H{SEP_COLOR}{SEPARATOR}{RESET}"
+            )
+        );
+        assert!(!actual.contains(BOLD));
+    }
+
+    #[test]
     fn test_tab_row_new_with_priority_command() {
         let tab = TabInfo {
             name: "agent-tab".to_string(),
@@ -412,7 +465,7 @@ mod tests {
     }
 
     #[test]
-    fn test_display_left_waiting_unseen_uses_red_filled_dot() {
+    fn test_display_left_waiting_unseen_uses_small_red_dot() {
         let rendered = display_left(
             TabIndicator::Red,
             &Cmd::agent(Agent::Codex, AgentState::Acknowledged),
@@ -421,12 +474,12 @@ mod tests {
         );
         assert_eq!(
             rendered,
-            format!("{AGENT_WAITING_UNSEEN_FG}● {TAB_INACTIVE_BG}{TAB_DEFAULT_FG}codex")
+            format!("{AGENT_WAITING_UNSEEN_FG}• {TAB_INACTIVE_BG}{TAB_DEFAULT_FG}codex")
         );
     }
 
     #[test]
-    fn test_display_left_waiting_seen_uses_empty_dot() {
+    fn test_display_left_waiting_seen_uses_small_gray_dot() {
         let rendered = display_left(
             TabIndicator::Empty,
             &Cmd::agent(Agent::Codex, AgentState::Acknowledged),
@@ -435,12 +488,12 @@ mod tests {
         );
         assert_eq!(
             rendered,
-            format!("{AGENT_WAITING_SEEN_FG}○ {TAB_INACTIVE_BG}{TAB_DEFAULT_FG}codex")
+            format!("{AGENT_WAITING_SEEN_FG}• {TAB_INACTIVE_BG}{TAB_DEFAULT_FG}codex")
         );
     }
 
     #[test]
-    fn test_display_left_busy_uses_green_filled_dot() {
+    fn test_display_left_busy_uses_small_green_dot() {
         let rendered = display_left(
             TabIndicator::Green,
             &Cmd::agent(Agent::Codex, AgentState::Acknowledged),
@@ -449,7 +502,7 @@ mod tests {
         );
         assert_eq!(
             rendered,
-            format!("{AGENT_BUSY_FG}● {TAB_INACTIVE_BG}{TAB_DEFAULT_FG}codex")
+            format!("{AGENT_BUSY_FG}• {TAB_INACTIVE_BG}{TAB_DEFAULT_FG}codex")
         );
     }
 
