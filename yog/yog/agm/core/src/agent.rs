@@ -92,6 +92,7 @@ impl Agent {
                 ("SessionStart", AgentEventKind::Start),
                 ("UserPromptSubmit", AgentEventKind::Busy),
                 ("PreToolUse", AgentEventKind::Busy),
+                ("PostToolUse", AgentEventKind::Busy),
                 ("PermissionRequest", AgentEventKind::Idle),
                 ("Stop", AgentEventKind::Idle),
             ],

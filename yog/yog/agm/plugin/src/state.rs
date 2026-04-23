@@ -258,6 +258,7 @@ impl State {
 
         let pane_id = event.pane_id;
         let agent = event.agent;
+        let current_tab_is_active = self.current_tab_is_active();
         match event.kind {
             AgentEventKind::Start => {
                 if current_pane_state.is_some_and(|pane_state| pane_state.agent == agent) {
@@ -274,11 +275,7 @@ impl State {
                 vec![StateEvent::AgentBusy { pane_id, agent }]
             }
             AgentEventKind::Idle => {
-                let desired_phase = if current_tab.active_focus_pane_id == Some(pane_id) {
-                    AgentPanePhase::AttentionSeen
-                } else {
-                    AgentPanePhase::AttentionUnseen
-                };
+                let desired_phase = idle_phase_for_pane(current_tab, current_tab_is_active, pane_id);
                 if current_pane_state
                     .is_some_and(|pane_state| pane_state.agent == agent && pane_state.phase == desired_phase)
                 {
@@ -496,12 +493,9 @@ impl State {
                 }
             }
             StateEvent::AgentIdle { pane_id, agent } => {
+                let current_tab_is_active = self.current_tab_is_active();
                 if let Some(current_tab) = self.current_tab.as_mut() {
-                    let phase = if current_tab.active_focus_pane_id == Some(*pane_id) {
-                        AgentPanePhase::AttentionSeen
-                    } else {
-                        AgentPanePhase::AttentionUnseen
-                    };
+                    let phase = idle_phase_for_pane(current_tab, current_tab_is_active, *pane_id);
                     current_tab.transition_phase(*pane_id, *agent, phase);
                     current_tab.seq = current_tab.seq.saturating_add(1);
                 }
@@ -656,7 +650,7 @@ impl State {
             let Some(other_pane) = panes.iter().find(|pane| pane.id == pane_id && !pane.is_plugin) else {
                 continue;
             };
-            if other_pane.exited || other_pane.is_held || !other_pane.is_focused {
+            if other_pane.exited || other_pane.is_held {
                 continue;
             }
             let detected_agent = focused_pane_from_pane_info(other_pane)
@@ -936,6 +930,14 @@ fn detected_agent_from_pane_info(pane: &PaneInfo, focused_pane: &FocusedPane) ->
     match focused_pane.label.as_ref() {
         Some(FocusedPaneLabel::TerminalCommand(label)) | Some(FocusedPaneLabel::Title(label)) => Agent::detect(label),
         None => None,
+    }
+}
+
+fn idle_phase_for_pane(current_tab: &CurrentTab, current_tab_is_active: bool, pane_id: u32) -> AgentPanePhase {
+    if current_tab_is_active && current_tab.active_focus_pane_id == Some(pane_id) {
+        AgentPanePhase::AttentionSeen
+    } else {
+        AgentPanePhase::AttentionUnseen
     }
 }
 
@@ -1394,6 +1396,7 @@ mod tests {
     #[test]
     fn test_agent_idle_in_focused_pane_transitions_green_to_empty() {
         let mut state = State {
+            known_active_tab_id: Some(10),
             current_tab: Some(CurrentTab::new(10)),
             ..Default::default()
         };
@@ -1522,6 +1525,50 @@ mod tests {
     }
 
     #[test]
+    fn test_agent_idle_in_inactive_tab_with_stale_focus_transitions_to_red() {
+        let mut state = State {
+            known_active_tab_id: Some(20),
+            all_tabs: vec![tab_with_name(10, 0, "a"), tab_with_name(20, 1, "b")],
+            current_tab: Some(CurrentTab {
+                pane_ids: [42].into_iter().collect(),
+                focused_pane: Some(FocusedPane {
+                    id: 42,
+                    label: Some(FocusedPaneLabel::TerminalCommand("codex".to_string())),
+                }),
+                active_focus_pane_id: Some(42),
+                pane_state_by_pane: HashMap::from([(
+                    42,
+                    pane_state(Agent::Codex, AgentPanePhase::Running, PaneFocus::Focused, 1),
+                )]),
+                ..CurrentTab::new(10)
+            }),
+            ..Default::default()
+        };
+
+        let events = state.events_from_agent_event(&AgentEventPayload {
+            pane_id: 42,
+            agent: Agent::Codex,
+            kind: AgentEventKind::Idle,
+        });
+        assert_eq!(
+            events,
+            vec![StateEvent::AgentIdle {
+                pane_id: 42,
+                agent: Agent::Codex,
+            }]
+        );
+
+        let _ = state.apply_all(&events);
+
+        assert!(let Some(current_tab) = state.current_tab.as_ref());
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Red);
+        assert_eq!(
+            current_tab.current_row_display(false),
+            (Cmd::agent(Agent::Codex, AgentState::NeedsAttention), TabIndicator::Red,)
+        );
+    }
+
+    #[test]
     fn test_mat_indicator_red_wins_over_green() {
         let current_tab = CurrentTab {
             pane_ids: [42, 43].into_iter().collect(),
@@ -1542,6 +1589,34 @@ mod tests {
         assert_eq!(
             current_tab.display_cmd(),
             Cmd::agent(Agent::Codex, AgentState::NeedsAttention)
+        );
+    }
+
+    #[test]
+    fn test_current_row_display_inactive_mat_focused_running_agent_does_not_hide_red() {
+        let current_tab = CurrentTab {
+            pane_ids: [42, 43].into_iter().collect(),
+            focused_pane: Some(FocusedPane {
+                id: 43,
+                label: Some(FocusedPaneLabel::TerminalCommand("claude".to_string())),
+            }),
+            active_focus_pane_id: Some(43),
+            pane_state_by_pane: HashMap::from([
+                (
+                    42,
+                    pane_state(Agent::Codex, AgentPanePhase::AttentionUnseen, PaneFocus::Unfocused, 1),
+                ),
+                (
+                    43,
+                    pane_state(Agent::Claude, AgentPanePhase::Running, PaneFocus::Focused, 2),
+                ),
+            ]),
+            ..CurrentTab::new(10)
+        };
+
+        assert_eq!(
+            current_tab.current_row_display(false),
+            (Cmd::agent(Agent::Codex, AgentState::NeedsAttention), TabIndicator::Red,)
         );
     }
 
@@ -2292,6 +2367,7 @@ mod tests {
     #[test]
     fn test_attention_after_focus_restore_is_seen_immediately() {
         let mut state = State {
+            known_active_tab_id: Some(10),
             current_tab: Some(CurrentTab {
                 focused_pane: Some(FocusedPane {
                     id: 42,
@@ -2380,6 +2456,42 @@ mod tests {
     }
 
     #[test]
+    fn test_events_from_pane_update_clears_unfocused_tracked_agent_when_process_changes() {
+        let state = State {
+            plugin_id: 7,
+            all_tabs: vec![tab_with_name(10, 0, "a")],
+            current_tab: Some(CurrentTab {
+                pane_ids: [42, 43].into_iter().collect(),
+                focused_pane: Some(FocusedPane {
+                    id: 43,
+                    label: Some(FocusedPaneLabel::TerminalCommand("cargo".to_string())),
+                }),
+                active_focus_pane_id: Some(43),
+                pane_state_by_pane: HashMap::from([(
+                    42,
+                    pane_state(Agent::Codex, AgentPanePhase::AttentionUnseen, PaneFocus::Unfocused, 1),
+                )]),
+                ..CurrentTab::new(10)
+            }),
+            ..Default::default()
+        };
+
+        let manifest = manifest(vec![(
+            0,
+            vec![
+                plugin_pane(7),
+                terminal_pane_with_command(42, false, "/bin/zsh"),
+                terminal_pane_with_command(43, true, "cargo"),
+            ],
+        )]);
+        let events = state.events_from_pane_update(&manifest, noop_pane_cwd);
+        assert_eq!(
+            events,
+            vec![StateEvent::AgentLost { pane_id: 42 }, StateEvent::SyncRequested,]
+        );
+    }
+
+    #[test]
     fn test_compute_frame_uses_remote_indicator() {
         let state = State {
             all_tabs: vec![tab_with_name(10, 0, "remote")],
@@ -2398,6 +2510,35 @@ mod tests {
                 path_label: "remote".to_string(),
                 cmd: Cmd::Running("cargo".to_string()),
                 indicator: TabIndicator::None,
+                git: GitStat::default(),
+            }]
+        );
+    }
+
+    #[test]
+    fn test_compute_frame_uses_remote_attention_indicator() {
+        let state = State {
+            all_tabs: vec![tab_with_name(10, 0, "remote")],
+            other_tabs: HashMap::from([(
+                1,
+                snapshot(
+                    10,
+                    1,
+                    Cmd::agent(Agent::Codex, AgentState::NeedsAttention),
+                    TabIndicator::Red,
+                ),
+            )]),
+            ..Default::default()
+        };
+
+        let frame = compute_frame(&state);
+        assert_eq!(
+            frame,
+            vec![TabRow {
+                active: false,
+                path_label: "remote".to_string(),
+                cmd: Cmd::agent(Agent::Codex, AgentState::NeedsAttention),
+                indicator: TabIndicator::Red,
                 git: GitStat::default(),
             }]
         );
