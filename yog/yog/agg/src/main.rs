@@ -15,8 +15,8 @@ use ytil_sys::cli::Args;
 
 mod cmd;
 
-const SESSION_NAME: &str = "agm";
-const LAYOUT_NAME: &str = "agm";
+const SESSION_NAME: &str = "agg";
+const LAYOUT_NAME: &str = "agg";
 
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {

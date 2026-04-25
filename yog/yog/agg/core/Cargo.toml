@@ -1,5 +1,5 @@
 [package]
-name = "agm_core"
+name = "agg_core"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

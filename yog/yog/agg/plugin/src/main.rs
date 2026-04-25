@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use agm_core::Cmd;
-use agm_core::ParseError;
-use agm_core::TabIndicator;
-use agm_core::TabStateEntry;
-use agm_core::git_stat::GitStat;
+use agg_core::Cmd;
+use agg_core::ParseError;
+use agg_core::TabIndicator;
+use agg_core::TabStateEntry;
+use agg_core::git_stat::GitStat;
 use zellij_tile::prelude::*;
 
 use crate::events::PipeEvent;
@@ -114,7 +114,7 @@ impl From<&StateSnapshotPayload> for MessageToPlugin {
 }
 
 const CONTEXT_KEY_GIT_STAT: &str = "git-stat";
-const SYNC_PIPE: &str = "agm-sync";
+const SYNC_PIPE: &str = "agg-sync";
 
 register_plugin!(State);
 
@@ -219,7 +219,7 @@ impl ZellijPlugin for State {
                 return false;
             }
             Err(err) => {
-                eprintln!("agm: {err}");
+                eprintln!("agg: {err}");
                 return false;
             }
         };
@@ -371,7 +371,7 @@ fn run_current_tab_git_stat(current_tab: Option<&CurrentTab>) {
         return;
     };
     let cwd_str = cwd.display().to_string();
-    let args: Vec<&str> = vec!["agm", "git-stat", &cwd_str];
+    let args: Vec<&str> = vec!["agg", "git-stat", &cwd_str];
     let mut context = BTreeMap::new();
     context.insert(CONTEXT_KEY_GIT_STAT.into(), cwd_str.clone());
     run_command_with_env_variables_and_cwd(&args, BTreeMap::new(), cwd.to_path_buf(), context);

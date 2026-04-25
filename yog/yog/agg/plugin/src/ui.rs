@@ -2,9 +2,9 @@ use std::fmt::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
-use agm_core::Cmd;
-use agm_core::TabIndicator;
-use agm_core::git_stat::GitStat;
+use agg_core::Cmd;
+use agg_core::TabIndicator;
+use agg_core::git_stat::GitStat;
 use zellij_tile::prelude::*;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -25,7 +25,7 @@ impl TabRow {
         git: GitStat,
         home: &Path,
     ) -> Self {
-        let path_label = cwd.map_or_else(|| tab.name.clone(), |path| agm_core::short_path(path, home));
+        let path_label = cwd.map_or_else(|| tab.name.clone(), |path| agg_core::short_path(path, home));
         Self {
             active: tab.active,
             path_label,
@@ -297,9 +297,9 @@ mod tests {
     use std::path::Path;
     use std::path::PathBuf;
 
-    use agm_core::AgentState;
-    use agm_core::Cmd;
-    use agm_core::agent::Agent;
+    use agg_core::AgentState;
+    use agg_core::Cmd;
+    use agg_core::agent::Agent;
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -527,7 +527,7 @@ mod tests {
     fn test_short_path_under_home() {
         let home = Path::new("/home/user");
         assert_eq!(
-            agm_core::short_path(Path::new("/home/user/src/pkg/myproject"), home),
+            agg_core::short_path(Path::new("/home/user/src/pkg/myproject"), home),
             "~/s/p/myproject"
         );
     }
@@ -536,7 +536,7 @@ mod tests {
     fn test_short_path_many_dirs() {
         let home = Path::new("/home/user");
         assert_eq!(
-            agm_core::short_path(Path::new("/home/user/one/two/three/four/five"), home),
+            agg_core::short_path(Path::new("/home/user/one/two/three/four/five"), home),
             "~/o/t/t/f/five"
         );
     }
@@ -544,7 +544,7 @@ mod tests {
     #[test]
     fn test_short_path_outside_home() {
         let home = Path::new("/home/user");
-        assert_eq!(agm_core::short_path(Path::new("/opt/pkg/foo"), home), "/o/p/foo");
+        assert_eq!(agg_core::short_path(Path::new("/opt/pkg/foo"), home), "/o/p/foo");
     }
 
     #[test]

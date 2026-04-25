@@ -1,12 +1,12 @@
 import type { Plugin } from "@opencode-ai/plugin";
 import type { Event } from "@opencode-ai/sdk";
 
-type AgmEventKind = "start" | "busy" | "idle" | "exit";
+type AggEventKind = "start" | "busy" | "idle" | "exit";
 
 const AGENT = "opencode";
-const PIPE = "agm-agent";
+const PIPE = "agg-agent";
 
-function kindFromEvent(event: Event): AgmEventKind | undefined {
+function kindFromEvent(event: Event): AggEventKind | undefined {
   switch (event.type) {
     case "session.created":
       return "start";
@@ -26,7 +26,7 @@ function kindFromEvent(event: Event): AgmEventKind | undefined {
   }
 }
 
-export const AgmHooksPlugin: Plugin = async ({ $ }) => {
+export const AggHooksPlugin: Plugin = async ({ $ }) => {
   const paneID = process.env.ZELLIJ_PANE_ID;
   if (!paneID) {
     return {};
@@ -38,9 +38,9 @@ export const AgmHooksPlugin: Plugin = async ({ $ }) => {
     return {};
   }
 
-  let lastEvent: AgmEventKind | undefined;
+  let lastEvent: AggEventKind | undefined;
 
-  const send = async (kind: AgmEventKind) => {
+  const send = async (kind: AggEventKind) => {
     if (lastEvent === kind) {
       return;
     }
@@ -67,4 +67,4 @@ export const AgmHooksPlugin: Plugin = async ({ $ }) => {
   };
 };
 
-export default AgmHooksPlugin;
+export default AggHooksPlugin;
