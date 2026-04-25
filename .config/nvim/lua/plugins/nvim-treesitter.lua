@@ -10,7 +10,22 @@ return {
   },
   build = ':TSUpdate',
   config = function()
+    local jsonnet_filetypes = { 'jsonnet', 'libsonnet', }
+
+    vim.filetype.add({
+      extension = {
+        jsonnet = 'jsonnet',
+        libsonnet = 'libsonnet',
+      },
+    })
+
     require('nvim-treesitter').setup()
+    vim.treesitter.language.register('jsonnet', jsonnet_filetypes)
+
+    vim.api.nvim_create_autocmd('FileType', {
+      pattern = jsonnet_filetypes,
+      callback = function() vim.treesitter.start() end,
+    })
 
     -- ensure_installed equivalent
     require('nvim-treesitter.install').install({
@@ -28,6 +43,7 @@ return {
       'html',
       'javascript',
       'json',
+      'jsonnet',
       'kdl',
       'lua',
       'make',
