@@ -1,11 +1,11 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use agm_core::ParseError;
-use agm_core::agent::AGENTS_PIPE;
-use agm_core::agent::Agent;
-use agm_core::agent::AgentEventPayload;
-use agm_core::git_stat::GitStat;
+use agg_core::ParseError;
+use agg_core::agent::AGENTS_PIPE;
+use agg_core::agent::Agent;
+use agg_core::agent::AgentEventPayload;
+use agg_core::git_stat::GitStat;
 use zellij_tile::prelude::PipeMessage;
 use zellij_tile::prelude::PipeSource;
 use zellij_tile::prelude::TabInfo;
@@ -201,12 +201,12 @@ mod tests {
     use std::convert::TryFrom;
     use std::path::PathBuf;
 
-    use agm_core::Cmd;
-    use agm_core::TabStateEntry;
-    use agm_core::agent::Agent;
-    use agm_core::agent::AgentEventKind;
-    use agm_core::agent::AgentEventPayload;
-    use agm_core::git_stat::GitStat;
+    use agg_core::Cmd;
+    use agg_core::TabStateEntry;
+    use agg_core::agent::Agent;
+    use agg_core::agent::AgentEventKind;
+    use agg_core::agent::AgentEventPayload;
+    use agg_core::git_stat::GitStat;
     use rstest::rstest;
     use zellij_tile::prelude::PipeMessage;
     use zellij_tile::prelude::PipeSource;
@@ -235,7 +235,7 @@ mod tests {
                     tab_id: 17,
                     cwd: Some(PathBuf::from("/home/user/project")),
                     cmd: Cmd::Running("cargo test".to_string()),
-                    indicator: agm_core::TabIndicator::None,
+                    indicator: agg_core::TabIndicator::None,
                     git_stat: GitStat {
                         insertions: 3,
                         deletions: 1,
@@ -259,7 +259,7 @@ mod tests {
                 seq: 42,
                 cwd: Some(PathBuf::from("/home/user/project")),
                 cmd: Cmd::Running("cargo test".to_string()),
-                indicator: agm_core::TabIndicator::None,
+                indicator: agg_core::TabIndicator::None,
                 git_stat: GitStat {
                     insertions: 3,
                     deletions: 1,

@@ -9,7 +9,7 @@ pub mod session;
 pub mod session_loader;
 pub mod session_parser;
 
-pub const AGENTS_PIPE: &str = "agm-agent";
+pub const AGENTS_PIPE: &str = "agg-agent";
 
 #[derive(Clone, Copy, Debug, EnumIter, Eq, PartialEq)]
 pub enum Agent {
@@ -67,7 +67,7 @@ impl Agent {
             Self::Cursor => &[".cursor", "hooks.json"],
             Self::Codex => &[".codex", "hooks.json"],
             Self::Gemini => &[".gemini", "settings.json"],
-            Self::Opencode => &[".config", "opencode", "plugins", "agm.ts"],
+            Self::Opencode => &[".config", "opencode", "plugins", "agg.ts"],
         }
     }
 
@@ -113,14 +113,14 @@ impl Agent {
     pub fn hook_name(self, event: &str) -> Option<&'static str> {
         match self {
             Self::Gemini => match event {
-                "SessionStart" => Some("agm-gemini-session-start"),
-                "BeforeAgent" => Some("agm-gemini-before-agent"),
-                "BeforeModel" => Some("agm-gemini-before-model"),
-                "BeforeToolSelection" => Some("agm-gemini-before-tool-selection"),
-                "BeforeTool" => Some("agm-gemini-before-tool"),
-                "Notification" => Some("agm-gemini-notification"),
-                "AfterAgent" => Some("agm-gemini-after-agent"),
-                "SessionEnd" => Some("agm-gemini-session-end"),
+                "SessionStart" => Some("agg-gemini-session-start"),
+                "BeforeAgent" => Some("agg-gemini-before-agent"),
+                "BeforeModel" => Some("agg-gemini-before-model"),
+                "BeforeToolSelection" => Some("agg-gemini-before-tool-selection"),
+                "BeforeTool" => Some("agg-gemini-before-tool"),
+                "Notification" => Some("agg-gemini-notification"),
+                "AfterAgent" => Some("agg-gemini-after-agent"),
+                "SessionEnd" => Some("agg-gemini-session-end"),
                 _ => None,
             },
             _ => None,
@@ -293,14 +293,14 @@ mod tests {
     }
 
     #[rstest]
-    #[case("SessionStart", Some("agm-gemini-session-start"))]
-    #[case("BeforeAgent", Some("agm-gemini-before-agent"))]
-    #[case("BeforeModel", Some("agm-gemini-before-model"))]
-    #[case("BeforeToolSelection", Some("agm-gemini-before-tool-selection"))]
-    #[case("BeforeTool", Some("agm-gemini-before-tool"))]
-    #[case("Notification", Some("agm-gemini-notification"))]
-    #[case("AfterAgent", Some("agm-gemini-after-agent"))]
-    #[case("SessionEnd", Some("agm-gemini-session-end"))]
+    #[case("SessionStart", Some("agg-gemini-session-start"))]
+    #[case("BeforeAgent", Some("agg-gemini-before-agent"))]
+    #[case("BeforeModel", Some("agg-gemini-before-model"))]
+    #[case("BeforeToolSelection", Some("agg-gemini-before-tool-selection"))]
+    #[case("BeforeTool", Some("agg-gemini-before-tool"))]
+    #[case("Notification", Some("agg-gemini-notification"))]
+    #[case("AfterAgent", Some("agg-gemini-after-agent"))]
+    #[case("SessionEnd", Some("agg-gemini-session-end"))]
     #[case("Unknown", None)]
     fn test_agent_gemini_hook_name_works_as_expected(#[case] event: &str, #[case] expected: Option<&str>) {
         pretty_assertions::assert_eq!(Agent::Gemini.hook_name(event), expected);
@@ -316,7 +316,7 @@ mod tests {
     fn test_hook_command_never_fails_when_zellij_unavailable(#[case] agent: Agent) {
         let cmd = agent.hook_command(AgentEventKind::Busy);
         assert2::assert!(cmd.contains("cat >/dev/null 2>&1 || true;"));
-        assert2::assert!(cmd.contains("zellij pipe --name agm-agent"));
+        assert2::assert!(cmd.contains("zellij pipe --name agg-agent"));
         assert2::assert!(cmd.contains(">/dev/null 2>&1 || true"));
     }
 }

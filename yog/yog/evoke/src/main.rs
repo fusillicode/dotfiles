@@ -13,7 +13,7 @@ use ytil_sys::cli::Args;
 /// List of binaries that should be copied after building.
 /// NOTE: if a new binary is added this list must be updated!
 const BINS: &[&str] = &[
-    "agm", "catl", "fkr", "gch", "gcu", "ghl", "idt", "oe", "rmr", "strgci", "tec", "try", "vpg", "yghfl", "yhfp", "zj",
+    "agg", "catl", "fkr", "gch", "gcu", "ghl", "idt", "oe", "rmr", "strgci", "tec", "try", "vpg", "yghfl", "yhfp", "zj",
 ];
 /// List of library files that need to be renamed after building, mapping (`source_name`, `target_name`).
 const LIBS: &[(&str, &str)] = &[("libnvrim.dylib", "nvrim.so")];
@@ -84,12 +84,12 @@ fn main() -> rootcause::Result<()> {
         )?;
     }
 
-    let mut agm = std::process::Command::new(bins_path.join("agm"));
-    agm.arg("install");
+    let mut agg = std::process::Command::new(bins_path.join("agg"));
+    agg.arg("install");
     if is_debug {
-        agm.arg("--debug");
+        agg.arg("--debug");
     }
-    agm.status()?.exit_ok()?;
+    agg.status()?.exit_ok()?;
 
     Ok(())
 }

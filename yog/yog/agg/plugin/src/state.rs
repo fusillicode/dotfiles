@@ -2,13 +2,13 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use agm_core::AgentState;
-use agm_core::Cmd;
-use agm_core::TabIndicator;
-use agm_core::agent::Agent;
-use agm_core::agent::AgentEventKind;
-use agm_core::agent::AgentEventPayload;
-use agm_core::git_stat::GitStat;
+use agg_core::AgentState;
+use agg_core::Cmd;
+use agg_core::TabIndicator;
+use agg_core::agent::Agent;
+use agg_core::agent::AgentEventKind;
+use agg_core::agent::AgentEventPayload;
+use agg_core::git_stat::GitStat;
 use zellij_tile::prelude::*;
 
 use crate::StateSnapshotPayload;
@@ -228,7 +228,7 @@ impl State {
 
         let output = String::from_utf8_lossy(stdout);
         for line in output.lines() {
-            let Ok((path, new_stat)) = GitStat::parse_line(line).inspect_err(|error| eprintln!("agm: {error}")) else {
+            let Ok((path, new_stat)) = GitStat::parse_line(line).inspect_err(|error| eprintln!("agg: {error}")) else {
                 continue;
             };
             if path != *requested_cwd {

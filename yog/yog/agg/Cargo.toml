@@ -1,17 +1,17 @@
 [package]
-name = "agm"
+name = "agg"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "CLI to handle agm Zellij sessions."
+description = "CLI to handle agg Zellij sessions."
 keywords = ["cli", "zellij", "terminal", "tabs", "plugin"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-agm_core = { path = "core" }
+agg_core = { path = "core" }
 git2 = { workspace = true }
 owo-colors = { workspace = true }
 rootcause = { workspace = true }

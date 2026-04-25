@@ -1,9 +1,9 @@
 [workspace]
 resolver = "2"
 members = [
-    "yog/agm",
-    "yog/agm/core",
-    "yog/agm/plugin",
+    "yog/agg",
+    "yog/agg/core",
+    "yog/agg/plugin",
     "yog/catl",
     "yog/evoke",
     "yog/fkr",

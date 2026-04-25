@@ -2,8 +2,8 @@ use std::fmt::Display;
 use std::process::Command;
 use std::process::Stdio;
 
-use agm_core::agent::Agent;
-use agm_core::agent::session::Session;
+use agg_core::agent::Agent;
+use agg_core::agent::session::Session;
 use owo_colors::OwoColorize as _;
 use rootcause::prelude::ResultExt as _;
 use strum::EnumIter;
@@ -12,9 +12,9 @@ use strum::IntoEnumIterator as _;
 pub fn run() -> rootcause::Result<()> {
     let mut sessions = Vec::new();
 
-    sessions.extend(agm_core::agent::session_loader::claude::load_sessions()?);
-    sessions.extend(agm_core::agent::session_loader::codex::load_sessions()?);
-    sessions.extend(agm_core::agent::session_loader::cursor::load_sessions()?);
+    sessions.extend(agg_core::agent::session_loader::claude::load_sessions()?);
+    sessions.extend(agg_core::agent::session_loader::codex::load_sessions()?);
+    sessions.extend(agg_core::agent::session_loader::cursor::load_sessions()?);
 
     sessions.sort_by(|a, b| {
         b.updated_at
@@ -65,7 +65,7 @@ impl Display for RenderableSession {
             Agent::Gemini | Agent::Opencode => self.0.agent.to_string(),
         };
 
-        let path_label = agm_core::short_path(
+        let path_label = agg_core::short_path(
             &self.0.workspace,
             std::env::var_os("HOME")
                 .as_deref()

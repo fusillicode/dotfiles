@@ -1,5 +1,5 @@
 [package]
-name = "agm-plugin"
+name = "agg-plugin"
 version = "0.1.0"
 authors = ["Gian Lu"]
 edition = "2024"
@@ -12,7 +12,7 @@ categories = ["zellij", "development-tools"]
 publish = false
 
 [dependencies]
-agm_core = { path = "../core" }
+agg_core = { path = "../core" }
 ytil_tui = { workspace = true }
 zellij-tile = { git = "https://github.com/zellij-org/zellij.git", branch = "main" }
 
