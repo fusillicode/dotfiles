@@ -124,7 +124,7 @@ source "$_starship_cache"
 [[ ~/.zshrc -nt ~/.zshrc.zwc ]] && zcompile ~/.zshrc
 [[ ~/.zsh_aliases -nt ~/.zsh_aliases.zwc ]] && zcompile ~/.zsh_aliases
 
+eval "$(gcm init zsh)"
+
 # Exit with 0 if everything's fine
 true
-
-if command -v wt >/dev/null 2>&1; then eval "$(command wt config shell init zsh)"; fi

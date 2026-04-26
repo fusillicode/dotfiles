@@ -92,6 +92,11 @@ fn main() -> rootcause::Result<()> {
     }
     agg.status()?.exit_ok()?;
 
+    std::process::Command::new(bins_path.join("gcm"))
+        .arg("install")
+        .status()?
+        .exit_ok()?;
+
     Ok(())
 }
 
