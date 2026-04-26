@@ -3,7 +3,7 @@ Usage: gcm [install | init zsh | --pick | <branch-name>]
 Interactive current-branch rename helper.
 
 Modes:
-  gcm                  Pick recent branch; leaves `gcm <branch>` in zsh input.
+  gcm                 Pick recent branch; leaves `gcm <branch>` in zsh input (requires install).
   gcm <branch-name>   Rename current branch to <branch-name>.
   gcm install         Add the one-line zsh wrapper setup to ~/.zshrc.
   gcm init zsh        Print the zsh wrapper.

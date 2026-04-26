@@ -4,6 +4,7 @@ use std::path::Path;
 
 use owo_colors::OwoColorize as _;
 use rootcause::prelude::ResultExt as _;
+use rootcause::report;
 use ytil_git::branch::Branch;
 use ytil_sys::cli::Args as _;
 
@@ -18,7 +19,9 @@ fn main() -> rootcause::Result<()> {
 
     let args: Vec<_> = args.iter().map(String::as_str).collect();
     match args.as_slice() {
-        [] | ["--pick"] => pick_git_branch(),
+        [] => Err(report!("gcm shell wrapper is not installed or loaded")
+            .attach("run `gcm install` first, then restart zsh or source ~/.zshrc")),
+        ["--pick"] => pick_git_branch(),
         ["install"] => install_zsh_wrapper(),
         ["init", "zsh"] => {
             print!("{ZSH_WRAPPER}");
@@ -44,7 +47,7 @@ fn install_zsh_wrapper() -> rootcause::Result<()> {
         .map(|home| Path::new(&home).join(".zshrc"))?;
 
     install_zsh_wrapper_at(&zshrc)?;
-    println!("{} {}", ">".magenta().bold(), zshrc.display());
+    println!("{} gcm in {}", "Installed".green().bold(), zshrc.display());
 
     Ok(())
 }
