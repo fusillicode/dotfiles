@@ -16,7 +16,7 @@ runs:
         rustup show
         rustc -V
 
-    - name: Add wasm target (agm-plugin)
+    - name: Add wasm target (agg-plugin)
       shell: bash
       run: rustup target add wasm32-wasip1
 
