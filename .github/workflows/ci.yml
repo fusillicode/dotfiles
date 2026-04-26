@@ -144,10 +144,10 @@ jobs:
       - name: Build native workspace (exclude WASM plugin)
         working-directory: yog
         run: |
-          cargo build --release --workspace --exclude agm-plugin
+          cargo build --release --workspace --exclude agg-plugin
 
   release_wasm_plugin:
-    name: Build release (agm-plugin wasm)
+    name: Build release (agg-plugin wasm)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -163,8 +163,8 @@ jobs:
       - name: Setup (no extra tools)
         uses: ./.github/actions/setup
 
-      - name: Build agm-plugin
+      - name: Build agg-plugin
         working-directory: yog
         run: |
           rustup target add wasm32-wasip1
-          cargo build --release --manifest-path yog/agm/plugin/Cargo.toml --target wasm32-wasip1
+          cargo build --release --manifest-path yog/agg/plugin/Cargo.toml --target wasm32-wasip1
