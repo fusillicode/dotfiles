@@ -9,6 +9,7 @@ use std::process::Command;
 
 use chrono::DateTime;
 use chrono::Utc;
+use git2::BranchType;
 use git2::Cred;
 use git2::RemoteCallbacks;
 use git2::Repository;
@@ -99,6 +100,51 @@ pub fn create_from_default_branch(branch_name: &str, repo: Option<&Repository>) 
     repo.branch(branch_name, &commit, false)
         .context("error creating branch")
         .attach_with(|| format!("branch_name={branch_name:?}"))?;
+
+    Ok(())
+}
+
+/// Rename the current local branch.
+///
+/// Mirrors `git branch -m <branch_name>` semantics: the rename is not forced,
+/// so it fails when the target branch already exists.
+///
+/// # Errors
+/// - Repository discovery fails.
+/// - HEAD is detached or the current branch cannot be resolved.
+/// - The current local branch cannot be found.
+/// - The branch rename fails.
+pub fn rename_current(branch_name: &str, repo: Option<&Repository>) -> rootcause::Result<()> {
+    let repo = if let Some(repo) = repo {
+        repo
+    } else {
+        let path = Path::new(".");
+        &crate::repo::discover(path)
+            .context("error getting repo for renaming current branch")
+            .attach_with(|| format!("path={} branch={branch_name:?}", path.display()))?
+    };
+
+    let head = repo
+        .head()
+        .context("error getting repo head")
+        .attach_with(|| format!("repo_path={}", repo.path().display()))
+        .attach_with(|| format!("branch_name={branch_name:?}"))?;
+    let current_branch_name = head
+        .shorthand()
+        .ok_or_else(|| report!("error invalid current branch shorthand UTF-8"))
+        .attach_with(|| format!("repo_path={}", repo.path().display()))
+        .attach_with(|| format!("branch_name={branch_name:?}"))?;
+    let mut branch = repo
+        .find_branch(current_branch_name, BranchType::Local)
+        .context("error finding current branch")
+        .attach_with(|| format!("repo_path={}", repo.path().display()))
+        .attach_with(|| format!("current_branch_name={current_branch_name:?} branch_name={branch_name:?}"))?;
+
+    branch
+        .rename(branch_name, false)
+        .context("error renaming current branch")
+        .attach_with(|| format!("repo_path={}", repo.path().display()))
+        .attach_with(|| format!("current_branch_name={current_branch_name:?} branch_name={branch_name:?}"))?;
 
     Ok(())
 }
@@ -452,6 +498,28 @@ mod tests {
                 committer_date_time: DateTime::from_timestamp(42, 0).unwrap(),
             }
         );
+    }
+
+    #[test]
+    fn test_rename_current_renames_the_current_branch() {
+        let (_temp_dir, repo) = crate::tests::init_test_repo(None);
+
+        assert2::assert!(let Ok(()) = rename_current("renamed", Some(&repo)));
+
+        pretty_assertions::assert_eq!(repo.head().unwrap().shorthand(), Some("renamed"));
+        assert!(repo.find_branch("renamed", git2::BranchType::Local).is_ok());
+        assert!(repo.find_branch("master", git2::BranchType::Local).is_err());
+    }
+
+    #[test]
+    fn test_rename_current_fails_when_target_branch_already_exists() {
+        let (_temp_dir, repo) = crate::tests::init_test_repo(None);
+        let head_commit = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.branch("existing", &head_commit, false).unwrap();
+
+        assert2::assert!(let Err(err) = rename_current("existing", Some(&repo)));
+
+        assert!(err.to_string().contains("error renaming current branch"));
     }
 
     #[rstest]

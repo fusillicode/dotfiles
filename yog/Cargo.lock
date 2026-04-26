@@ -1660,6 +1660,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "gcm"
+version = "0.1.0"
+dependencies = [
+ "assert2",
+ "chrono",
+ "owo-colors 4.3.0",
+ "pretty_assertions",
+ "rootcause",
+ "rstest",
+ "tempfile",
+ "ytil_git",
+ "ytil_sys",
+ "ytil_tui",
+]
+
+[[package]]
 name = "gcu"
 version = "0.1.0"
 dependencies = [
