@@ -1,0 +1,29 @@
+[package]
+name = "gcm"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Prepare and execute current Git branch rename commands."
+keywords = ["cli", "git", "branch", "rename"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+chrono = { workspace = true }
+owo-colors = { workspace = true }
+rootcause = { workspace = true }
+ytil_git = { workspace = true }
+ytil_sys = { workspace = true }
+ytil_tui = { workspace = true }
+
+[dev-dependencies]
+assert2 = { workspace = true }
+pretty_assertions = { workspace = true }
+rstest = { workspace = true }
+tempfile = { workspace = true }
+ytil_git = { workspace = true, features = ["test-utils"] }
+
+[lints]
+workspace = true
