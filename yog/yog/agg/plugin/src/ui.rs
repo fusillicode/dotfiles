@@ -183,7 +183,6 @@ const SEP_COLOR: &str = "\x1b[38;2;50;50;50m";
 const GIT_NEW_LINES_FG: &str = "\x1b[38;2;140;228;121m";
 const GIT_DEL_LINES_FG: &str = "\x1b[38;2;236;99;92m";
 const GIT_NEW_FILES_FG: &str = "\x1b[38;2;0;255;255m";
-const AGENT_WAITING_SEEN_FG: &str = "\x1b[38;2;100;100;110m";
 const AGENT_WAITING_UNSEEN_FG: &str = "\x1b[38;2;255;0;0m";
 const AGENT_BUSY_FG: &str = "\x1b[38;2;255;170;51m";
 const TAB_INACTIVE_BG: &str = "\x1b[48;2;0;0;0m";
@@ -195,10 +194,9 @@ const RESET: &str = "\x1b[0m";
 
 fn display_left(indicator: TabIndicator, cmd: &Cmd, bg: &str, fg: &str) -> String {
     let dot = match indicator {
-        TabIndicator::None => None,
+        TabIndicator::None | TabIndicator::Empty => None,
         TabIndicator::Red => Some(format!("{AGENT_WAITING_UNSEEN_FG}•")),
         TabIndicator::Green => Some(format!("{AGENT_BUSY_FG}•")),
-        TabIndicator::Empty => Some(format!("{AGENT_WAITING_SEEN_FG}•")),
     };
     let label = match cmd {
         Cmd::None => String::new(),
@@ -479,17 +477,14 @@ mod tests {
     }
 
     #[test]
-    fn test_display_left_waiting_seen_uses_small_gray_dot() {
+    fn test_display_left_waiting_seen_renders_only_agent_name() {
         let rendered = display_left(
             TabIndicator::Empty,
             &Cmd::agent(Agent::Codex, AgentState::Acknowledged),
             TAB_INACTIVE_BG,
             TAB_DEFAULT_FG,
         );
-        assert_eq!(
-            rendered,
-            format!("{AGENT_WAITING_SEEN_FG}• {TAB_INACTIVE_BG}{TAB_DEFAULT_FG}codex")
-        );
+        assert_eq!(rendered, format!("codex"));
     }
 
     #[test]
