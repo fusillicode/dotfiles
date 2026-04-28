@@ -4202,12 +4202,13 @@ checksum = "b2aa850e253778c88a04c3d7323b043aeda9d3e30d5971937c1855769763678e"
 
 [[package]]
 name = "skim"
-version = "4.6.0"
+version = "4.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c2d96f5e862d8d10a55695c6ce96fcfbc3ca09df5b6c87db6f6f154c5307944"
+checksum = "e7701673d8f30d4eaebac3433b4d59552d9cd3e344a06f5c67cf9e865787d0ef"
 dependencies = [
  "ansi-to-tui",
  "assert_enum_variants",
+ "cfg_aliases 0.2.1",
  "clap 4.6.1",
  "clap_complete 4.6.2",
  "clap_complete_nushell",
