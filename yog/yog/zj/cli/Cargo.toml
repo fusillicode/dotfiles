@@ -1,0 +1,27 @@
+[package]
+name = "zj"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Interactive Zellij session management."
+keywords = ["cli", "zellij", "terminal", "session", "management"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+agg = { path = "../agg" }
+git2 = { workspace = true }
+owo-colors = { workspace = true }
+rootcause = { workspace = true }
+serde_json = { workspace = true }
+strum = { workspace = true }
+ytil_agents = { workspace = true }
+ytil_cmd = { workspace = true }
+ytil_sys = { workspace = true }
+ytil_tui = { workspace = true }
+ytil_zellij = { workspace = true }
+
+[lints]
+workspace = true

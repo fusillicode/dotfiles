@@ -1,9 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "yog/agg",
-    "yog/agg/core",
-    "yog/agg/plugin",
+    "yog/ags",
     "yog/catl",
     "yog/evoke",
     "yog/fkr",
@@ -24,6 +22,7 @@ members = [
     "yog/yghfl",
     "yog/yhfp",
     # Utility libraries (ytil)
+    "yog/ytil/agents",
     "yog/ytil/cmd",
     "yog/ytil/editor",
     "yog/ytil/gh",
@@ -35,9 +34,9 @@ members = [
     "yog/ytil/tui",
     "yog/ytil/wezterm",
     "yog/ytil/zellij",
-    "yog/zcp",
-    "yog/zcp/plugin",
-    "yog/zj",
+    "yog/zj/agg",
+    "yog/zj/cli",
+    "yog/zj/zcp",
 ]
 
 [workspace.package]
@@ -73,6 +72,7 @@ thiserror = { version = "2.0" }
 ureq = { version = "3.3", default-features = false, features = ["rustls"] }
 url = { version = "2.5" }
 
+ytil_agents = { path = "./yog/ytil/agents" }
 ytil_cmd = { path = "./yog/ytil/cmd" }
 ytil_editor = { path = "./yog/ytil/editor" }
 ytil_gh = { path = "./yog/ytil/gh" }

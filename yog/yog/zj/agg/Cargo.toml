@@ -1,0 +1,25 @@
+[package]
+name = "agg"
+version = "0.1.0"
+authors = ["Gian Lu"]
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/fusillicode/dotfiles"
+readme = "README.md"
+description = "Zellij plugin that shows a vertical tab bar with AI agents status and git stats."
+keywords = ["zellij", "terminal", "tabs", "plugin", "wasm"]
+categories = ["zellij", "development-tools"]
+publish = false
+
+[dependencies]
+ytil_agents = { workspace = true }
+ytil_tui = { workspace = true }
+zellij-tile = { git = "https://github.com/zellij-org/zellij.git", branch = "main" }
+
+[dev-dependencies]
+assert2 = { workspace = true }
+pretty_assertions = { workspace = true }
+rstest = { workspace = true }
+
+[lints]
+workspace = true

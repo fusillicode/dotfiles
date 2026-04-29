@@ -1,0 +1,25 @@
+Usage: zj [command] [args...]
+
+Interactive Zellij session management and zellij proxy.
+
+Commands:
+  install [--debug]  Build and install Zellij plugins, AGG layout, and agent hooks.
+
+Running `zj` with no arguments lists all sessions in a picker,
+lets you multi-select, then choose an action to apply:
+
+  Attach   Connects to a session (single selection only).
+  Restart  Kills and re-attaches to a session (single selection only).
+  Kill     Terminates running sessions.
+  Delete   Permanently removes sessions (including running ones).
+
+Any other arguments are forwarded directly to `zellij`.
+
+Options:
+  help, --help  Show this help message.
+
+Examples:
+  zj                  Pick sessions and choose an action interactively.
+  zj install          Install Zellij plugins and AGG agent hooks.
+  zj help             Show this help message.
+  zj <args...>        Forward to `zellij <args...>`.
