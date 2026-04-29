@@ -5992,6 +5992,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "zcp"
+version = "0.1.0"
+dependencies = [
+ "owo-colors 4.3.0",
+ "rootcause",
+ "ytil_cmd",
+ "ytil_sys",
+]
+
+[[package]]
+name = "zcp-plugin"
+version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
+ "zellij-tile",
+]
+
+[[package]]
 name = "zellij-tile"
 version = "0.45.0"
 source = "git+https://github.com/zellij-org/zellij.git?branch=main#5ab8b6870ccb475ec06fedd7ca3f891ef7bf51ff"

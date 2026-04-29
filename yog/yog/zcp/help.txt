@@ -1,0 +1,9 @@
+zcp - Install the Zellij smart-copy plugin.
+
+USAGE:
+    zcp install [--debug]
+
+SUBCOMMANDS:
+    install         Build and deploy the WASM plugin.
+                    Pass --debug for an unoptimised build.
+
