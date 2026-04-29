@@ -39,8 +39,8 @@ vi_mode_style = { shape = "Block", blinking = "On" }
 save_to_clipboard = false
 
 [keyboard]
-# Apparently `option_as_alt = "Both"` is not enough
 bindings = [
+  # Apparently `option_as_alt = "Both"` is not enough
   { key = "Left", mods = "Alt", chars = "\u001Bb" },
   { key = "Right", mods = "Alt", chars = "\u001Bf" },
 ]

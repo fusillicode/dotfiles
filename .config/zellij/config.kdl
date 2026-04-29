@@ -1,7 +1,7 @@
 pane_frames false
 show_startup_tips false
 default_layout "clean"
-copy_on_select true
+copy_on_select false
 scroll_buffer_size 50000
 mouse_hover_effects false
 
@@ -77,6 +77,10 @@ themes {
 }
 theme "minimal"
 
+load_plugins {
+    "file:~/.config/zellij/plugins/zcp.wasm"
+}
+
 keybinds clear-defaults=true {
     unbind "Ctrl q"
     unbind "Ctrl w"
@@ -101,6 +105,12 @@ keybinds clear-defaults=true {
         bind "Alt 9" { GoToTab 9; }
         bind "Alt H" { GoToPreviousTab; }
         bind "Alt L" { GoToNextTab; }
+        bind "Alt C" { Copy; }
+        bind "Alt X" {
+            MessagePlugin "file:~/.config/zellij/plugins/zcp.wasm" {
+                name "smart-copy"
+            }
+        }
         bind "Ctrl Alt h" { MoveTab "Left"; }
         bind "Ctrl Alt l" { MoveTab "Right"; }
         bind "Alt V" {
@@ -124,6 +134,12 @@ keybinds clear-defaults=true {
         bind "u" { HalfPageScrollUp; }
         bind "s" "/" { SwitchToMode "EnterSearch"; SearchInput 0; }
         bind "e" { EditScrollback; SwitchToMode "Normal"; }
+        bind "Alt C" { Copy; }
+        bind "Alt X" {
+            MessagePlugin "file:~/.config/zellij/plugins/zcp.wasm" {
+                name "smart-copy"
+            }
+        }
         bind "Esc" "Alt S" { SwitchToMode "Normal"; }
     }
     entersearch {

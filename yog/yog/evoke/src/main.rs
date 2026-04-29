@@ -6,6 +6,7 @@
 
 use std::path::Path;
 use std::path::PathBuf;
+use std::process::Command;
 
 use owo_colors::OwoColorize;
 use ytil_sys::cli::Args;
@@ -14,7 +15,7 @@ use ytil_sys::cli::Args;
 /// NOTE: if a new binary is added this list must be updated!
 const BINS: &[&str] = &[
     "agg", "catl", "fkr", "gch", "gcm", "gcu", "ghl", "idt", "oe", "rmr", "strgci", "tec", "try", "vpg", "yghfl",
-    "yhfp", "zj",
+    "yhfp", "zcp", "zj",
 ];
 /// List of library files that need to be renamed after building, mapping (`source_name`, `target_name`).
 const LIBS: &[(&str, &str)] = &[("libnvrim.dylib", "nvrim.so")];
@@ -85,17 +86,21 @@ fn main() -> rootcause::Result<()> {
         )?;
     }
 
-    let mut agg = std::process::Command::new(bins_path.join("agg"));
+    let mut agg = Command::new(bins_path.join("agg"));
     agg.arg("install");
     if is_debug {
         agg.arg("--debug");
     }
     agg.status()?.exit_ok()?;
 
-    std::process::Command::new(bins_path.join("gcm"))
-        .arg("install")
-        .status()?
-        .exit_ok()?;
+    let mut zcp = Command::new(bins_path.join("zcp"));
+    zcp.arg("install");
+    if is_debug {
+        zcp.arg("--debug");
+    }
+    zcp.status()?.exit_ok()?;
+
+    Command::new(bins_path.join("gcm")).arg("install").status()?.exit_ok()?;
 
     Ok(())
 }

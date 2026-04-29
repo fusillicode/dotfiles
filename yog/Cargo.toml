@@ -35,6 +35,8 @@ members = [
     "yog/ytil/tui",
     "yog/ytil/wezterm",
     "yog/ytil/zellij",
+    "yog/zcp",
+    "yog/zcp/plugin",
     "yog/zj",
 ]
 
