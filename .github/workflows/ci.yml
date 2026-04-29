@@ -141,13 +141,13 @@ jobs:
       - name: Setup (no extra tools)
         uses: ./.github/actions/setup
 
-      - name: Build native workspace (exclude WASM plugin)
+      - name: Build native workspace (exclude Zellij WASM plugins)
         working-directory: yog
         run: |
-          cargo build --release --workspace --exclude agg-plugin
+          cargo build --release --workspace --exclude agg --exclude zcp
 
-  release_wasm_plugin:
-    name: Build release (agg-plugin wasm)
+  release_wasm_plugins:
+    name: Build release (Zellij plugins wasm)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -157,14 +157,15 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: yog
-          shared-key: wasm-plugin
+          shared-key: wasm-plugins
           cache-targets: true
 
       - name: Setup (no extra tools)
         uses: ./.github/actions/setup
 
-      - name: Build agg-plugin
+      - name: Build Zellij plugins
         working-directory: yog
         run: |
           rustup target add wasm32-wasip1
-          cargo build --release --manifest-path yog/agg/plugin/Cargo.toml --target wasm32-wasip1
+          cargo build --release --manifest-path yog/zj/agg/Cargo.toml --target wasm32-wasip1
+          cargo build --release --manifest-path yog/zj/zcp/Cargo.toml --target wasm32-wasip1
