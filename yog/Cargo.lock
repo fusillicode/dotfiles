@@ -21,45 +21,24 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 name = "agg"
 version = "0.1.0"
 dependencies = [
- "agg_core",
- "git2",
- "owo-colors 4.3.0",
- "rootcause",
- "serde_json",
- "strum 0.28.0",
- "ytil_cmd",
- "ytil_sys",
- "ytil_tui",
- "ytil_zellij",
-]
-
-[[package]]
-name = "agg-plugin"
-version = "0.1.0"
-dependencies = [
- "agg_core",
  "assert2",
  "pretty_assertions",
  "rstest",
+ "ytil_agents",
  "ytil_tui",
  "zellij-tile",
 ]
 
 [[package]]
-name = "agg_core"
+name = "ags"
 version = "0.1.0"
 dependencies = [
- "assert2",
- "chrono",
- "pretty_assertions",
+ "owo-colors 4.3.0",
  "rootcause",
- "rstest",
- "rusqlite",
- "serde",
- "serde_json",
  "strum 0.28.0",
- "tempfile",
+ "ytil_agents",
  "ytil_sys",
+ "ytil_tui",
 ]
 
 [[package]]
@@ -5854,6 +5833,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "ytil_agents"
+version = "0.1.0"
+dependencies = [
+ "assert2",
+ "chrono",
+ "pretty_assertions",
+ "rootcause",
+ "rstest",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "strum 0.28.0",
+ "tempfile",
+ "ytil_sys",
+]
+
+[[package]]
 name = "ytil_cmd"
 version = "0.1.0"
 dependencies = [
@@ -5993,16 +5989,6 @@ dependencies = [
 
 [[package]]
 name = "zcp"
-version = "0.1.0"
-dependencies = [
- "owo-colors 4.3.0",
- "rootcause",
- "ytil_cmd",
- "ytil_sys",
-]
-
-[[package]]
-name = "zcp-plugin"
 version = "0.1.0"
 dependencies = [
  "pretty_assertions",
@@ -6172,9 +6158,14 @@ dependencies = [
 name = "zj"
 version = "0.1.0"
 dependencies = [
+ "agg",
+ "git2",
  "owo-colors 4.3.0",
  "rootcause",
+ "serde_json",
  "strum 0.28.0",
+ "ytil_agents",
+ "ytil_cmd",
  "ytil_sys",
  "ytil_tui",
  "ytil_zellij",

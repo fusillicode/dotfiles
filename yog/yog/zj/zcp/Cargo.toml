@@ -1,0 +1,21 @@
+[package]
+name = "zcp"
+version = "0.1.0"
+authors = ["Gian Lu"]
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/fusillicode/dotfiles"
+readme = "README.md"
+description = "Zellij plugin that smart-copies selected multiline shell commands."
+keywords = ["zellij", "clipboard", "copy", "plugin", "wasm"]
+categories = ["development-tools"]
+publish = false
+
+[dependencies]
+zellij-tile = { git = "https://github.com/zellij-org/zellij.git", branch = "main" }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+
+[lints]
+workspace = true

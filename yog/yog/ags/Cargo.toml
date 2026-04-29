@@ -1,0 +1,22 @@
+[package]
+name = "ags"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Interactive AI agent session management."
+keywords = ["agents", "sessions", "cli", "terminal", "tools"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+owo-colors = { workspace = true }
+rootcause = { workspace = true }
+strum = { workspace = true }
+ytil_agents = { workspace = true }
+ytil_sys = { workspace = true }
+ytil_tui = { workspace = true }
+
+[lints]
+workspace = true
