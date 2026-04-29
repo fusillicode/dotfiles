@@ -14,8 +14,8 @@ use ytil_sys::cli::Args;
 /// List of binaries that should be copied after building.
 /// NOTE: if a new binary is added this list must be updated!
 const BINS: &[&str] = &[
-    "agg", "catl", "fkr", "gch", "gcm", "gcu", "ghl", "idt", "oe", "rmr", "strgci", "tec", "try", "vpg", "yghfl",
-    "yhfp", "zcp", "zj",
+    "ags", "catl", "fkr", "gch", "gcm", "gcu", "ghl", "idt", "oe", "rmr", "strgci", "tec", "try", "vpg", "yghfl",
+    "yhfp", "zj",
 ];
 /// List of library files that need to be renamed after building, mapping (`source_name`, `target_name`).
 const LIBS: &[(&str, &str)] = &[("libnvrim.dylib", "nvrim.so")];
@@ -86,19 +86,12 @@ fn main() -> rootcause::Result<()> {
         )?;
     }
 
-    let mut agg = Command::new(bins_path.join("agg"));
-    agg.arg("install");
+    let mut zj = Command::new(bins_path.join("zj"));
+    zj.arg("install");
     if is_debug {
-        agg.arg("--debug");
+        zj.arg("--debug");
     }
-    agg.status()?.exit_ok()?;
-
-    let mut zcp = Command::new(bins_path.join("zcp"));
-    zcp.arg("install");
-    if is_debug {
-        zcp.arg("--debug");
-    }
-    zcp.status()?.exit_ok()?;
+    zj.status()?.exit_ok()?;
 
     Command::new(bins_path.join("gcm")).arg("install").status()?.exit_ok()?;
 
