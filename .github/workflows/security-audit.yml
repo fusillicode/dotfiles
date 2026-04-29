@@ -28,8 +28,9 @@ jobs:
       - name: Build auditable release and audit
         working-directory: yog
         run: |
-          # agg-plugin is a Zellij WASM plugin and should not be linked as a native Linux binary.
+          # agg and zcp are Zellij WASM plugins and should not be linked as native Linux binaries.
           rustup target add wasm32-wasip1
-          cargo auditable build --release --workspace --exclude agg-plugin
-          cargo build --release --manifest-path yog/agg/plugin/Cargo.toml --target wasm32-wasip1
+          cargo auditable build --release --workspace --exclude agg --exclude zcp
+          cargo build --release --manifest-path yog/zj/agg/Cargo.toml --target wasm32-wasip1
+          cargo build --release --manifest-path yog/zj/zcp/Cargo.toml --target wasm32-wasip1
           fd . './target/release' --type=executable --max-depth=1 --exec-batch cargo audit bin
