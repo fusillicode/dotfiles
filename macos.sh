@@ -9,7 +9,11 @@ source "$script_dir/log.sh"
 
 # Preserve original user when running with sudo
 REAL_USER="${SUDO_USER:-$USER}"
-REAL_HOME=$(eval echo "~$REAL_USER")
+REAL_HOME=$(dscl . -read "/Users/$REAL_USER" NFSHomeDirectory 2>/dev/null | sed 's/^NFSHomeDirectory: //' || true)
+if [ -z "$REAL_HOME" ] || [ ! -d "$REAL_HOME" ]; then
+  echo "Failed to resolve home directory for user: $REAL_USER" >&2
+  exit 1
+fi
 
 # If the Effective User ID (EUID) is not 0 (root), restart the script with sudo.
 if [ "$EUID" -ne 0 ]; then
@@ -67,14 +71,14 @@ defaults write com.apple.finder _FXSortFoldersFirst -bool true
 defaults write com.apple.finder _FXSortFoldersFirstOnDesktop -bool true
 # List view: sort by date modified, ascending (oldest first)
 /usr/libexec/PlistBuddy \
-  -c "Set :StandardViewSettings:ListViewSettings:sortColumn dateModified" \
-  -c "Set :StandardViewSettings:ListViewSettings:columns:dateModified:ascending true" \
-  -c "Set :StandardViewSettings:ExtendedListViewSettingsV2:sortColumn dateModified" \
+  -c "Set :StandardViewSettings:ListViewSettings:sortColumn name" \
+  -c "Set :StandardViewSettings:ListViewSettings:columns:name:ascending true" \
+  -c "Set :StandardViewSettings:ExtendedListViewSettingsV2:sortColumn name" \
   -c "Set :StandardViewSettings:ExtendedListViewSettingsV2:columns:1:ascending true" \
   "$REAL_HOME/Library/Preferences/com.apple.finder.plist" 2>/dev/null || true
 # Desktop: auto-arrange icons by date modified (latest at top-right)
 /usr/libexec/PlistBuddy \
-  -c "Set :DesktopViewSettings:IconViewSettings:arrangeBy dateModified" \
+  -c "Set :DesktopViewSettings:IconViewSettings:arrangeBy name" \
   "$REAL_HOME/Library/Preferences/com.apple.finder.plist" 2>/dev/null || true
 # Delete .DS_Store files (fd is faster and auto-ignores .git/node_modules)
 info "Deleting .DS_Store files..."
