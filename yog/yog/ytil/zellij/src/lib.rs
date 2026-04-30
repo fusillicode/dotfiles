@@ -8,6 +8,8 @@ use std::process::Command;
 use rootcause::prelude::ResultExt;
 use ytil_cmd::CmdExt;
 
+const BIN: &str = "zellij";
+
 /// Cardinal direction for pane operations.
 #[derive(Clone, Copy, Debug)]
 pub enum Direction {
@@ -266,8 +268,6 @@ pub fn resize_increase(direction: Direction, times: u32) -> rootcause::Result<()
     }
     Ok(())
 }
-
-const BIN: &str = "zellij";
 
 /// Runs a [`Command`] with inherited stdio so the child process can interact with
 /// the terminal directly (preserving ANSI colors, TTY detection, and interactivity).

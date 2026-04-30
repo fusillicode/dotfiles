@@ -8,6 +8,20 @@ use rootcause::report;
 use ytil_git::branch::Branch;
 use ytil_sys::cli::Args as _;
 
+const ZSHRC_INSTALL_LINE: &str = r#"eval "$(gcm init zsh)""#;
+const ZSH_WRAPPER: &str = r#"gcm() {
+  if (( $# == 0 )); then
+    local branch
+    branch="$(command gcm --pick)" || return
+    [[ -n "$branch" ]] || return
+    print -z -- "gcm ${(q)branch}"
+    return
+  fi
+
+  command gcm "$@"
+}
+"#;
+
 /// Prepare or execute a current Git branch rename.
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
@@ -156,20 +170,6 @@ impl Deref for RenderableBranch {
         &self.0
     }
 }
-
-const ZSHRC_INSTALL_LINE: &str = r#"eval "$(gcm init zsh)""#;
-const ZSH_WRAPPER: &str = r#"gcm() {
-  if (( $# == 0 )); then
-    local branch
-    branch="$(command gcm --pick)" || return
-    [[ -n "$branch" ]] || return
-    print -z -- "gcm ${(q)branch}"
-    return
-  fi
-
-  command gcm "$@"
-}
-"#;
 
 impl Display for RenderableBranch {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
