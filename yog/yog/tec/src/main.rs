@@ -194,6 +194,12 @@ const LINTS_FIX: &[(&str, LintBuilder)] = &[
 /// No-operation lint that reports "skipped" status.
 const LINT_NO_OP: Lint = |_| LintFnResult(Ok(LintFnSuccess::PlainMsg(format!("{}\n", "skipped".bold()))));
 
+/// Function pointer type for a single lint invocation.
+type Lint = fn(&Path) -> LintFnResult;
+
+/// Function pointer type for building lints based on file changes.
+type LintBuilder = fn(&[String]) -> Lint;
+
 /// Run workspace lint suite concurrently (check or fix modes).
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
@@ -267,12 +273,6 @@ fn main() -> rootcause::Result<()> {
 
     Ok(())
 }
-
-/// Function pointer type for a single lint invocation.
-type Lint = fn(&Path) -> LintFnResult;
-
-/// Function pointer type for building lints based on file changes.
-type LintBuilder = fn(&[String]) -> Lint;
 
 /// Newtype wrapper around [`Result<LintFnSuccess, LintFnError>`].
 struct LintFnResult(Result<LintFnSuccess, LintFnError>);

@@ -7,6 +7,23 @@ use agg::TabIndicator;
 use agg::git_stat::GitStat;
 use zellij_tile::prelude::*;
 
+const INFO_ROWS: usize = 1;
+const BOLD: &str = "\x1b[1m";
+const SEPARATOR: char = '\u{2502}';
+
+const SEP_COLOR: &str = "\x1b[38;2;50;50;50m";
+const GIT_NEW_LINES_FG: &str = "\x1b[38;2;140;228;121m";
+const GIT_DEL_LINES_FG: &str = "\x1b[38;2;236;99;92m";
+const GIT_NEW_FILES_FG: &str = "\x1b[38;2;0;255;255m";
+const AGENT_WAITING_UNSEEN_FG: &str = "\x1b[38;2;255;0;0m";
+const AGENT_BUSY_FG: &str = "\x1b[38;2;255;170;51m";
+const TAB_INACTIVE_BG: &str = "\x1b[48;2;0;0;0m";
+const TAB_DEFAULT_FG: &str = "\x1b[39m";
+const PATH_INACTIVE_FG: &str = "\x1b[38;2;119;119;119m";
+const RAIL_ACTIVE_FG: &str = "\x1b[38;2;106;106;223m";
+const RAIL_INACTIVE_FG: &str = "\x1b[38;2;0;0;0m";
+const RESET: &str = "\x1b[0m";
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TabRow {
     pub active: bool,
@@ -180,23 +197,6 @@ pub fn tab_index_at_row(frame: &[TabRow], click_row: usize, content_w: usize) ->
     }
     None
 }
-
-const INFO_ROWS: usize = 1;
-const BOLD: &str = "\x1b[1m";
-const SEPARATOR: char = '\u{2502}';
-
-const SEP_COLOR: &str = "\x1b[38;2;50;50;50m";
-const GIT_NEW_LINES_FG: &str = "\x1b[38;2;140;228;121m";
-const GIT_DEL_LINES_FG: &str = "\x1b[38;2;236;99;92m";
-const GIT_NEW_FILES_FG: &str = "\x1b[38;2;0;255;255m";
-const AGENT_WAITING_UNSEEN_FG: &str = "\x1b[38;2;255;0;0m";
-const AGENT_BUSY_FG: &str = "\x1b[38;2;255;170;51m";
-const TAB_INACTIVE_BG: &str = "\x1b[48;2;0;0;0m";
-const TAB_DEFAULT_FG: &str = "\x1b[39m";
-const PATH_INACTIVE_FG: &str = "\x1b[38;2;119;119;119m";
-const RAIL_ACTIVE_FG: &str = "\x1b[38;2;106;106;223m";
-const RAIL_INACTIVE_FG: &str = "\x1b[38;2;0;0;0m";
-const RESET: &str = "\x1b[0m";
 
 fn display_left(indicator: TabIndicator, cmd: &Cmd, bg: &str, fg: &str) -> String {
     let dot = match indicator {

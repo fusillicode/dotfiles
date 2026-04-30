@@ -18,6 +18,27 @@ use crate::diagnostics::filters::DiagnosticsFilter;
 use crate::diagnostics::filters::lsps::GetDiagMsgOutput;
 use crate::diagnostics::filters::lsps::LspFilter;
 
+/// Static blacklist initialized once on first access.
+/// Maps diagnostic text to sets of message substrings to suppress.
+static HARPER_BLACKLIST: LazyLock<HashMap<&'static str, HashSet<&'static str>>> = LazyLock::new(|| {
+    map! {
+        "has ": set!["You may be missing a preposition here"],
+        "stderr": set!["instead of"],
+        "stdout": set!["instead of"],
+        "stdin": set!["instead of"],
+        "deduper": set!["Did you mean to spell"],
+        "TODO": set!["Hyphenate"],
+        "FIXME": set!["Did you mean `IME`"],
+        "Resolve": set!["Insert `to` to complete the infinitive"],
+        "foreground": set!["This sentence does not start with a capital letter"],
+        "build": set!["This sentence does not start with a capital letter"],
+        "args": set!["Use `argument` instead of `arg`"],
+        "stack overflow": set!["Ensure proper capitalization of companies"],
+        "over all": set!["closed compound `overall`"],
+        "checkout": set!["not a compound noun"]
+    }
+});
+
 pub struct HarperLsFilter<'a> {
     /// LSP diagnostic source name; only diagnostics from this source are eligible for blacklist matching.
     pub source: &'a str,
@@ -75,27 +96,6 @@ impl DiagnosticsFilter for HarperLsFilter<'_> {
             .is_some_and(identity))
     }
 }
-
-/// Static blacklist initialized once on first access.
-/// Maps diagnostic text to sets of message substrings to suppress.
-static HARPER_BLACKLIST: LazyLock<HashMap<&'static str, HashSet<&'static str>>> = LazyLock::new(|| {
-    map! {
-        "has ": set!["You may be missing a preposition here"],
-        "stderr": set!["instead of"],
-        "stdout": set!["instead of"],
-        "stdin": set!["instead of"],
-        "deduper": set!["Did you mean to spell"],
-        "TODO": set!["Hyphenate"],
-        "FIXME": set!["Did you mean `IME`"],
-        "Resolve": set!["Insert `to` to complete the infinitive"],
-        "foreground": set!["This sentence does not start with a capital letter"],
-        "build": set!["This sentence does not start with a capital letter"],
-        "args": set!["Use `argument` instead of `arg`"],
-        "stack overflow": set!["Ensure proper capitalization of companies"],
-        "over all": set!["closed compound `overall`"],
-        "checkout": set!["not a compound noun"]
-    }
-});
 
 #[cfg(test)]
 mod tests {

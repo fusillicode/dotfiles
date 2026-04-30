@@ -5,6 +5,8 @@ use rootcause::prelude::ResultExt;
 use rootcause::report;
 use ytil_cmd::CmdExt as _;
 
+const PATH_LINE_PREFIX: &str = "diff --git ";
+
 /// Retrieves the current `git diff` raw output with `-U0` as a single `String`.
 ///
 /// Callers should pass the returned string to [`get_hunks`] which splits into lines internally,
@@ -78,8 +80,6 @@ pub fn get_hunks(raw_diff_output: &str) -> rootcause::Result<Vec<(&str, usize)>>
 
     Ok(out)
 }
-
-const PATH_LINE_PREFIX: &str = "diff --git ";
 
 /// Extracts the line number from a `git diff` hunk header line.
 ///
