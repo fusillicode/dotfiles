@@ -20,6 +20,9 @@ mod events;
 mod state;
 mod ui;
 
+const CONTEXT_KEY_GIT_STAT: &str = "git-stat";
+const SYNC_PIPE: &str = "agg-sync";
+
 #[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Clone, Debug)]
 pub struct StateSnapshotPayload {
@@ -112,9 +115,6 @@ impl From<&StateSnapshotPayload> for MessageToPlugin {
             .with_payload(entry.to_string())
     }
 }
-
-const CONTEXT_KEY_GIT_STAT: &str = "git-stat";
-const SYNC_PIPE: &str = "agg-sync";
 
 register_plugin!(State);
 

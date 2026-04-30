@@ -11,6 +11,13 @@ use url::Url;
 pub mod issue;
 pub mod pr;
 
+/// The GitHub host domain.
+const GITHUB_HOST: &str = "github.com";
+/// The URL path segment prefix for pull requests.
+const GITHUB_PR_ID_PREFIX: &str = "pull";
+/// The query parameter key used for pull request IDs in GitHub Actions URLs.
+const GITHUB_PR_ID_QUERY_KEY: &str = "pr";
+
 /// Repository fields available for querying via `gh repo view`.
 #[derive(strum::AsRefStr, Debug)]
 pub enum RepoViewField {
@@ -132,13 +139,6 @@ pub fn get_repo_urls(repo_path: &Path) -> rootcause::Result<Vec<Url>> {
     }
     Ok(repo_urls)
 }
-
-/// The GitHub host domain.
-const GITHUB_HOST: &str = "github.com";
-/// The URL path segment prefix for pull requests.
-const GITHUB_PR_ID_PREFIX: &str = "pull";
-/// The query parameter key used for pull request IDs in GitHub Actions URLs.
-const GITHUB_PR_ID_QUERY_KEY: &str = "pr";
 
 /// Converts a Git remote URL (SSH or HTTPS) to a canonical GitHub HTTPS URL without the `.git` suffix.
 ///
