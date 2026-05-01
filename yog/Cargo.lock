@@ -6002,7 +6002,7 @@ dependencies = [
 [[package]]
 name = "zellij-tile"
 version = "0.45.0"
-source = "git+https://github.com/zellij-org/zellij.git?branch=main#914953758357024d3c1aeaa496bfe8df906f8416"
+source = "git+https://github.com/zellij-org/zellij.git?branch=main#b5e39d54246a845bc293cf1521d367b39f476772"
 dependencies = [
  "clap 3.2.25",
  "prost",
@@ -6016,7 +6016,7 @@ dependencies = [
 [[package]]
 name = "zellij-utils"
 version = "0.45.0"
-source = "git+https://github.com/zellij-org/zellij.git?branch=main#914953758357024d3c1aeaa496bfe8df906f8416"
+source = "git+https://github.com/zellij-org/zellij.git?branch=main#b5e39d54246a845bc293cf1521d367b39f476772"
 dependencies = [
  "anyhow",
  "backtrace",
