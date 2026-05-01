@@ -92,14 +92,14 @@ impl Agent {
                 ("sessionEnd", AgentEventKind::Exit),
             ],
             Self::Codex => &[
-                // Codex can signal approval waits via `PermissionRequest`, but it
-                // still lacks a generic hook for arbitrary mid-turn clarification /
-                // choice prompts. Those may remain busy until `Stop`.
+                // `PermissionRequest` runs before Codex falls back to user or
+                // guardian approval, so it is not a reliable "waiting for user"
+                // signal. Keep it busy to avoid false red indicators.
                 ("SessionStart", AgentEventKind::Start),
                 ("UserPromptSubmit", AgentEventKind::Busy),
                 ("PreToolUse", AgentEventKind::Busy),
                 ("PostToolUse", AgentEventKind::Busy),
-                ("PermissionRequest", AgentEventKind::Idle),
+                ("PermissionRequest", AgentEventKind::Busy),
                 ("Stop", AgentEventKind::Idle),
             ],
             Self::Gemini => &[
@@ -277,5 +277,15 @@ mod tests {
         ];
 
         pretty_assertions::assert_eq!(Agent::Gemini.hook_events(), expected);
+    }
+
+    #[test]
+    fn test_agent_codex_permission_request_remains_busy() {
+        let permission_request_kind = Agent::Codex
+            .hook_events()
+            .iter()
+            .find_map(|(event, kind)| (*event == "PermissionRequest").then_some(*kind));
+
+        pretty_assertions::assert_eq!(permission_request_kind, Some(AgentEventKind::Busy));
     }
 }
