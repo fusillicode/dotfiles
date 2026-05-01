@@ -75,6 +75,27 @@ pub fn get_current() -> rootcause::Result<String> {
         .attach_with(|| format!("path={}", repo_path.display()))
 }
 
+/// Returns the branch checked out at or before `timestamp`, inferred from `HEAD` reflog.
+///
+/// Returns [`None`] when `path` is not in a repository, `HEAD` has no usable
+/// reflog, or no checkout/switch entry exists before the timestamp.
+pub fn get_at(path: &Path, timestamp: DateTime<Utc>) -> Option<String> {
+    let repo = crate::repo::discover(path).ok()?;
+    let reflog = repo.reflog("HEAD").ok()?;
+    let timestamp = timestamp.timestamp();
+    reflog
+        .iter()
+        .filter_map(|entry| {
+            Some((
+                entry.committer().when().seconds(),
+                branch_from_reflog_message(entry.message()?)?,
+            ))
+        })
+        .filter(|(entry_timestamp, _)| *entry_timestamp <= timestamp)
+        .max_by_key(|(entry_timestamp, _)| *entry_timestamp)
+        .map(|(_, branch)| branch)
+}
+
 /// Create a new local branch at current HEAD (no checkout).
 ///
 /// # Errors
@@ -446,8 +467,18 @@ fn fetch_with_repo(repo: &Repository, branches: &[&str]) -> rootcause::Result<()
     Ok(())
 }
 
+fn branch_from_reflog_message(message: &str) -> Option<String> {
+    let rest = message
+        .strip_prefix("checkout: moving from ")
+        .or_else(|| message.strip_prefix("switch: moving from "))?;
+    let (_, branch) = rest.rsplit_once(" to ")?;
+    let branch = branch.trim();
+    (!branch.is_empty()).then(|| branch.to_string())
+}
+
 #[cfg(test)]
 mod tests {
+    use git2::Signature;
     use git2::Time;
     use rstest::rstest;
 
@@ -522,6 +553,50 @@ mod tests {
         assert!(err.to_string().contains("error renaming current branch"));
     }
 
+    #[test]
+    fn test_get_at_when_path_is_not_git_repo_returns_none() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let timestamp = DateTime::from_timestamp(10, 0).unwrap();
+
+        let actual = get_at(temp_dir.path(), timestamp);
+
+        pretty_assertions::assert_eq!(actual, None);
+    }
+
+    #[test]
+    fn test_get_at_when_checkout_reflog_exists_returns_destination_branch_before_timestamp() {
+        let (_temp_dir, repo) = crate::tests::init_test_repo(None);
+        append_head_reflog(&repo, 10, "checkout: moving from master to feature/a");
+        append_head_reflog(&repo, 20, "checkout: moving from feature/a to feature/b");
+        append_head_reflog(&repo, 30, "checkout: moving from feature/b to feature/c");
+
+        let actual = get_at(repo.workdir().unwrap(), DateTime::from_timestamp(25, 0).unwrap());
+
+        pretty_assertions::assert_eq!(actual, Some("feature/b".to_string()));
+    }
+
+    #[test]
+    fn test_get_at_when_switch_reflog_exists_returns_destination_branch() {
+        let (_temp_dir, repo) = crate::tests::init_test_repo(None);
+        append_head_reflog(&repo, 10, "switch: moving from feature/a to main");
+
+        let actual = get_at(repo.workdir().unwrap(), DateTime::from_timestamp(10, 0).unwrap());
+
+        pretty_assertions::assert_eq!(actual, Some("main".to_string()));
+    }
+
+    #[test]
+    fn test_get_at_when_reflog_has_no_checkout_or_switch_before_timestamp_returns_none() {
+        let (_temp_dir, repo) = crate::tests::init_test_repo(None);
+        append_head_reflog(&repo, 10, "commit: message");
+        append_head_reflog(&repo, 20, "checkout: moving from main");
+        append_head_reflog(&repo, 30, "switch: moving from main to ");
+
+        let actual = get_at(repo.workdir().unwrap(), DateTime::from_timestamp(30, 0).unwrap());
+
+        pretty_assertions::assert_eq!(actual, None);
+    }
+
     #[rstest]
     #[case::local_variant(local("main"), "main")]
     #[case::remote_variant(remote("origin/feature"), "origin/feature")]
@@ -575,5 +650,13 @@ mod tests {
             committer_email: String::new(),
             committer_date_time: DateTime::from_timestamp(0, 0).unwrap(),
         }
+    }
+
+    fn append_head_reflog(repo: &Repository, timestamp: i64, message: &str) {
+        let oid = repo.head().unwrap().target().unwrap();
+        let sig = Signature::new("test", "test@example.com", &Time::new(timestamp, 0)).unwrap();
+        let mut reflog = repo.reflog("HEAD").unwrap();
+        reflog.append(oid, &sig, Some(message)).unwrap();
+        reflog.write().unwrap();
     }
 }

@@ -37,6 +37,7 @@ dependencies = [
  "rootcause",
  "strum 0.28.0",
  "ytil_agents",
+ "ytil_git",
  "ytil_sys",
  "ytil_tui",
 ]
