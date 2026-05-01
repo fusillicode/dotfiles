@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::fmt::Display;
 use std::process::Command;
 use std::process::Stdio;
@@ -27,9 +28,9 @@ pub fn run() -> rootcause::Result<()> {
         return Ok(());
     }
 
-    let renderable_sessions: Vec<RenderableSession> = sessions.into_iter().map(RenderableSession).collect();
+    let renderable_sessions: Vec<RenderableSession> = sessions.into_iter().map(RenderableSession::from).collect();
     let Some(selected) = ytil_tui::minimal_multi_select(renderable_sessions, ToString::to_string, |session| {
-        session.0.search_text.clone()
+        session.session.search_text.clone()
     })?
     else {
         println!("No sessions selected");
@@ -52,35 +53,71 @@ pub fn run() -> rootcause::Result<()> {
     }
 }
 
-struct RenderableSession(Session);
+struct RenderableSession {
+    session: Session,
+    branch: RefCell<Option<String>>,
+}
+
+impl From<Session> for RenderableSession {
+    fn from(session: Session) -> Self {
+        Self {
+            session,
+            branch: RefCell::default(),
+        }
+    }
+}
+
+impl RenderableSession {
+    fn branch(&self) -> Option<String> {
+        if let Some(branch) = self.branch.borrow().as_ref() {
+            return Some(branch.to_owned());
+        }
+
+        let branch = ytil_git::branch::get_at(&self.session.workspace, self.session.created_at)?;
+        *self.branch.borrow_mut() = Some(branch.clone());
+        Some(branch)
+    }
+}
 
 impl Display for RenderableSession {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let agent_name = match self.0.agent {
+        let agent_name = match self.session.agent {
             Agent::Claude => "CLAUDE".red().bold().to_string(),
             Agent::Codex => "CODEX".green().bold().to_string(),
             Agent::Cursor => "CURSOR".bright_black().bold().to_string(),
-            Agent::Gemini | Agent::Opencode => self.0.agent.to_string(),
+            Agent::Gemini | Agent::Opencode => self.session.agent.to_string(),
         };
 
         let path_label = ytil_tui::short_path(
-            &self.0.workspace,
+            &self.session.workspace,
             std::env::var_os("HOME")
                 .as_deref()
                 .map_or_else(|| std::path::Path::new("/"), std::path::Path::new),
         );
-        let session_name = ytil_tui::display_fixed_width(&self.0.name, 42);
-        let updated_label = self.0.updated_at.format("%d/%m/%Y-%H:%M").to_string();
-        let created_label = self.0.created_at.format("%d/%m/%Y-%H:%M").to_string();
+        let session_name = ytil_tui::display_fixed_width(&self.session.name, 42);
+        let updated_label = self.session.updated_at.format("%d/%m/%Y-%H:%M").to_string();
+        let created_label = self.session.created_at.format("%d/%m/%Y-%H:%M").to_string();
 
-        write!(
-            f,
-            "{agent_name} {} {} {} {}",
-            path_label.blue(),
-            session_name.white().bold(),
-            updated_label.dimmed(),
-            created_label.dimmed(),
-        )
+        if let Some(branch) = self.branch() {
+            write!(
+                f,
+                "{agent_name} {} {} {} {} {}",
+                path_label.blue(),
+                branch.cyan().dimmed(),
+                session_name.white().bold(),
+                updated_label.dimmed(),
+                created_label.dimmed(),
+            )
+        } else {
+            write!(
+                f,
+                "{agent_name} {} {} {} {}",
+                path_label.blue(),
+                session_name.white().bold(),
+                updated_label.dimmed(),
+                created_label.dimmed(),
+            )
+        }
     }
 }
 
@@ -99,7 +136,8 @@ impl Display for Op {
     }
 }
 
-fn launch_session(RenderableSession(session): &RenderableSession) -> rootcause::Result<()> {
+fn launch_session(session: &RenderableSession) -> rootcause::Result<()> {
+    let session = &session.session;
     let (program, args) = session.build_resume_command()?;
 
     let mut cmd = Command::new(program);
@@ -126,17 +164,17 @@ fn launch_session(RenderableSession(session): &RenderableSession) -> rootcause::
 }
 
 fn delete_session(session: &RenderableSession) -> rootcause::Result<()> {
-    let delete_path = &session.0.path;
+    let delete_path = &session.session.path;
     if delete_path.is_dir() {
         std::fs::remove_dir_all(delete_path)
             .context("failed to delete session directory")
             .attach_with(|| format!("path={}", delete_path.display()))
-            .attach_with(|| format!("session_id={}", session.0.id))?;
+            .attach_with(|| format!("session_id={}", session.session.id))?;
     } else {
         std::fs::remove_file(delete_path)
             .context("failed to delete session file")
             .attach_with(|| format!("path={}", delete_path.display()))
-            .attach_with(|| format!("session_id={}", session.0.id))?;
+            .attach_with(|| format!("session_id={}", session.session.id))?;
     }
     println!("{} {session}", "Deleted".red().bold());
     Ok(())
