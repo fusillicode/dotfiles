@@ -188,7 +188,7 @@ fn truncate_to_boundary(text: &str, max_bytes: usize) -> Option<&str> {
         end = next;
     }
 
-    (end > 0).then_some(&text[..end])
+    (end > 0).then(|| text.get(..end)).flatten()
 }
 
 #[cfg(test)]

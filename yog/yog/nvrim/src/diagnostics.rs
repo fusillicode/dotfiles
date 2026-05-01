@@ -31,7 +31,6 @@ pub fn dict() -> Dictionary {
 ///
 /// Variant order defines iteration order via [`EnumIter`] for stable rendering.
 #[derive(Clone, Copy, Debug, EnumCount, EnumIter, Eq, Hash, PartialEq)]
-#[allow(clippy::upper_case_acronyms)]
 pub enum DiagnosticSeverity {
     Error,
     Warn,

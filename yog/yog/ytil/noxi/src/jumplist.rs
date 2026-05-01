@@ -28,7 +28,10 @@ pub fn get() -> Option<Vec<JumpEntry>> {
 
 /// Internal representation of Neovim's jumplist structure.
 #[derive(Debug, Deserialize)]
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "jumplist index is decoded to match Neovim return shape but not currently used"
+)]
 struct JumpList(Vec<JumpEntry>, usize);
 
 impl FromObject for JumpList {

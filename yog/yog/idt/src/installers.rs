@@ -56,7 +56,10 @@ pub trait Installer: Sync + Send {
         let mut cmd = Command::new(self.bin_name());
         cmd.args(args);
 
-        #[allow(clippy::result_large_err)]
+        #[expect(
+            clippy::result_large_err,
+            reason = "installer health checks keep rootcause reports as the public error type"
+        )]
         let res = cmd
             .exec()
             .and_then(|output| {

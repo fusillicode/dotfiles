@@ -65,7 +65,7 @@ fn create_scratch_file(_: ()) {
                 ));
                 return;
             }
-            let _ = ytil_noxi::buffer::open(&dest, None, None);
+            drop(ytil_noxi::buffer::open(&dest, None, None));
         }
     };
 

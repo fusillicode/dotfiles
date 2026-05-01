@@ -199,18 +199,20 @@ impl SelectableOp {
     pub fn run(&self) -> Box<dyn Fn(&PullRequest)> {
         match self {
             Self::Approve => Box::new(|pr| {
-                let _ = Op::Approve.report(pr, ytil_gh::pr::approve(pr.number));
+                drop(Op::Approve.report(pr, ytil_gh::pr::approve(pr.number)));
             }),
             Self::ApproveAndMerge => Box::new(|pr| {
-                let _ = Op::Approve
-                    .report(pr, ytil_gh::pr::approve(pr.number))
-                    .and_then(|()| Op::Merge.report(pr, ytil_gh::pr::merge(pr.number)));
+                drop(
+                    Op::Approve
+                        .report(pr, ytil_gh::pr::approve(pr.number))
+                        .and_then(|()| Op::Merge.report(pr, ytil_gh::pr::merge(pr.number))),
+                );
             }),
             Self::DependabotRebase => Box::new(|pr| {
-                let _ = Op::DependabotRebase.report(pr, ytil_gh::pr::dependabot_rebase(pr.number));
+                drop(Op::DependabotRebase.report(pr, ytil_gh::pr::dependabot_rebase(pr.number)));
             }),
             Self::EnableAutoMerge => Box::new(|pr| {
-                let _ = Op::EnableAutoMerge.report(pr, ytil_gh::pr::enable_auto_merge(pr.number));
+                drop(Op::EnableAutoMerge.report(pr, ytil_gh::pr::enable_auto_merge(pr.number)));
             }),
         }
     }

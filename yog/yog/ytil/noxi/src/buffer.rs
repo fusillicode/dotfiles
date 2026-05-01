@@ -388,7 +388,10 @@ pub mod mock {
             Ok("".into())
         }
 
-        #[allow(clippy::needless_collect)]
+        #[expect(
+            clippy::needless_collect,
+            reason = "boxed trait object needs owned iterator over mock lines"
+        )]
         fn get_lines(
             &self,
             line_range: std::ops::RangeInclusive<usize>,
@@ -587,7 +590,10 @@ mod tests {
         );
     }
 
-    #[allow(clippy::needless_collect)]
+    #[expect(
+        clippy::needless_collect,
+        reason = "mock closure needs owned iterator independent from borrowed input"
+    )]
     fn mock_buffer(lines: Vec<String>, start_line: usize, end_line: usize) -> MockBufferExt {
         let mut mock = MockBufferExt::new();
         mock.expect_get_lines()
