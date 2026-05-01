@@ -29,6 +29,16 @@ impl Agent {
         }
     }
 
+    pub const fn short_name(self) -> &'static str {
+        match self {
+            Self::Claude => "cl",
+            Self::Codex => "cx",
+            Self::Cursor => "cu",
+            Self::Gemini => "gm",
+            Self::Opencode => "oc",
+        }
+    }
+
     pub const fn default_config(self) -> &'static str {
         match self {
             Self::Cursor => r#"{"version":1,"hooks":{}}"#,

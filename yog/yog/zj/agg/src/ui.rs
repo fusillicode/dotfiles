@@ -17,11 +17,11 @@ const GIT_DEL_LINES_FG: &str = "\x1b[38;2;236;99;92m";
 const GIT_NEW_FILES_FG: &str = "\x1b[38;2;0;255;255m";
 const AGENT_WAITING_UNSEEN_FG: &str = "\x1b[38;2;255;0;0m";
 const AGENT_BUSY_FG: &str = "\x1b[38;2;255;170;51m";
-const TAB_INACTIVE_BG: &str = "\x1b[48;2;0;0;0m";
+const TAB_INACTIVE_BG: &str = "\x1b[48;2;0;19;0m";
 const TAB_DEFAULT_FG: &str = "\x1b[39m";
 const PATH_INACTIVE_FG: &str = "\x1b[38;2;119;119;119m";
 const RAIL_ACTIVE_FG: &str = "\x1b[38;2;106;106;223m";
-const RAIL_INACTIVE_FG: &str = "\x1b[38;2;0;0;0m";
+const RAIL_INACTIVE_FG: &str = "\x1b[38;2;0;19;0m";
 const RESET: &str = "\x1b[0m";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -207,7 +207,7 @@ fn display_left(indicator: TabIndicator, cmd: &Cmd, bg: &str, fg: &str) -> Strin
     let label = match cmd {
         Cmd::None => String::new(),
         Cmd::Running(cmd) => cmd.clone(),
-        Cmd::Agent { agent, .. } => agent.name().to_string(),
+        Cmd::Agent { agent, .. } => agent.short_name().to_string(),
     };
 
     match dot {
@@ -482,7 +482,7 @@ mod tests {
         );
         assert_eq!(
             rendered,
-            format!("{BOLD}{AGENT_WAITING_UNSEEN_FG}•{RESET} {TAB_INACTIVE_BG}{TAB_DEFAULT_FG}codex")
+            format!("{BOLD}{AGENT_WAITING_UNSEEN_FG}•{RESET} {TAB_INACTIVE_BG}{TAB_DEFAULT_FG}cx")
         );
     }
 
@@ -494,7 +494,7 @@ mod tests {
             TAB_INACTIVE_BG,
             TAB_DEFAULT_FG,
         );
-        assert_eq!(rendered, format!("codex"));
+        assert_eq!(rendered, format!("cx"));
     }
 
     #[test]
@@ -507,7 +507,7 @@ mod tests {
         );
         assert_eq!(
             rendered,
-            format!("{BOLD}{AGENT_BUSY_FG}•{RESET} {TAB_INACTIVE_BG}{TAB_DEFAULT_FG}codex")
+            format!("{BOLD}{AGENT_BUSY_FG}•{RESET} {TAB_INACTIVE_BG}{TAB_DEFAULT_FG}cx")
         );
     }
 
