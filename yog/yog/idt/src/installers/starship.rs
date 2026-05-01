@@ -28,8 +28,8 @@ impl Installer for Starship<'_> {
                         ([ ! -d "{0}" ] && \
                             git clone --depth=1 https://github.com/starship/starship.git {0} || true) && \
                         cd {0} && \
-                        git fetch origin master --depth=1 && \
-                        git checkout origin/master && \
+                        git fetch origin main --depth=1 && \
+                        git checkout origin/main && \
                         CARGO_TARGET_DIR={1} cargo build --release
                     "#,
                     source_dir.display(),
