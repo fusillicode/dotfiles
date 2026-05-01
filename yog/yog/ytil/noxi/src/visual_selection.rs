@@ -3,6 +3,7 @@
 use std::ops::Range;
 
 use nvim_oxi::Array;
+use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::SuperIterator;
@@ -16,6 +17,7 @@ use serde::Deserialize;
 use serde::Deserializer;
 
 use crate::buffer::BufferExt;
+use crate::dict;
 
 /// Extract selected text lines from the current [`Buffer`] using the active Visual range.
 ///
@@ -31,8 +33,7 @@ use crate::buffer::BufferExt;
 /// - Blockwise (CTRL-V): currently treated like a plain characterwise span; rectangular shape is not preserved.
 ///
 /// On any Nvim API error (fetching marks, lines, or text) a notification is emitted and an
-/// empty [`Vec`] is returned. The resulting lines are also passed through [`nvim_oxi::dbg!`]
-/// (producing debug output) before being returned.
+/// empty [`Vec`] is returned.
 ///
 /// # Caveats
 /// - Relies on the live Visual selection; does not fall back to `'<` / `'>` marks.
@@ -41,6 +42,37 @@ use crate::buffer::BufferExt;
 ///   adjustment is performed.
 pub fn get_lines(_: ()) -> Vec<String> {
     get(()).map_or_else(Vec::new, |f| f.lines)
+}
+
+/// Extract the last Visual selection using persisted `'<` / `'>` marks.
+///
+/// This is meant for integrations that leave Visual mode before acting on the selected text.
+pub fn get_marked(_: ()) -> Option<Dictionary> {
+    let selection = get_from_visual_marks(())?;
+
+    Some(selection_to_dict(&selection))
+}
+
+/// Extract the persisted Visual selection if it matches the given Ex range; otherwise return the full line range.
+///
+/// The returned dictionary is intentionally format-agnostic: it contains selected lines, 0-based buffer coordinates,
+/// and the command prefix needed by Lua integrations.
+pub fn get_for_ex_range((line1, line2): (usize, usize)) -> Option<Dictionary> {
+    get_from_visual_marks(())
+        .filter(|selection| selection.matches_ex_range(line1, line2))
+        .or_else(|| get_line_range_selection(line1, line2))
+        .map(|selection| selection_to_dict(&selection))
+}
+
+/// Return the command-line range prefix for a persisted Visual selection.
+pub fn get_visual_range_command_prefix(_: ()) -> Option<String> {
+    let bounds = SelectionBounds::from_visual_marks()
+        .inspect_err(|err| {
+            crate::notify::error(format!("error creating visual selection bounds | error={err:#?}"));
+        })
+        .ok()?;
+
+    Some(visual_range_command_prefix(&bounds))
 }
 
 /// Return an owned [`Selection`] for the active Visual range.
@@ -52,39 +84,55 @@ pub fn get_lines(_: ()) -> Vec<String> {
 /// - Return [`None`] if the two marks reference different buffers.
 /// - Return [`None`] if getting lines or text fails.
 pub fn get(_: ()) -> Option<Selection> {
-    let Ok(mut bounds) = SelectionBounds::new().inspect_err(|err| {
-        crate::notify::error(format!("error creating selection bounds | error={err:#?}"));
-    }) else {
-        return None;
-    };
+    let mut bounds = SelectionBounds::new()
+        .inspect_err(|err| {
+            crate::notify::error(format!("error creating selection bounds | error={err:#?}"));
+        })
+        .ok()?;
 
+    get_selection(&mut bounds, nvim_oxi::api::get_mode().mode == "V")
+}
+
+/// Return an owned [`Selection`] for the persisted Visual marks.
+///
+/// On any Nvim API error (fetching marks, lines, or text) a notification is emitted and [`None`] is returned.
+pub fn get_from_visual_marks(_: ()) -> Option<Selection> {
+    let mut bounds = SelectionBounds::from_visual_marks()
+        .inspect_err(|err| {
+            crate::notify::error(format!("error creating visual selection bounds | error={err:#?}"));
+        })
+        .ok()?;
+
+    get_selection(&mut bounds, last_visual_mode().as_deref() == Some("V"))
+}
+
+fn get_selection(bounds: &mut SelectionBounds, is_linewise: bool) -> Option<Selection> {
     let current_buffer = Buffer::from(bounds.buf_id());
 
     // Handle linewise mode: grab full lines
-    if nvim_oxi::api::get_mode().mode == "V" {
+    if is_linewise {
         let end_lnum = bounds.end().lnum;
-        let Ok(last_line) = current_buffer.get_line(end_lnum).inspect_err(|err| {
-            crate::notify::error(format!(
-                "error getting selection last line | end_lnum={end_lnum} buffer={current_buffer:#?} error={err:#?}",
-            ));
-        }) else {
-            return None;
-        };
+        let last_line = current_buffer
+            .get_line(end_lnum)
+            .inspect_err(|err| {
+                crate::notify::error(format!(
+                    "error getting selection last line | end_lnum={end_lnum} buffer={current_buffer:#?} error={err:#?}",
+                ));
+            })
+            .ok()?;
         // Adjust bounds to start at column 0 and end at the last line's length
         bounds.start.col = 0;
         bounds.end.col = last_line.len();
         // end.lnum inclusive for lines range
-        let Ok(lines) = current_buffer
+        let lines = current_buffer
             .get_lines(bounds.start().lnum..=bounds.end().lnum, false)
             .inspect_err(|err| {
                 crate::notify::error(format!(
                     "error getting lines | buffer={current_buffer:#?} error={err:#?}"
                 ));
             })
-        else {
-            return None;
-        };
-        return Some(Selection::new(bounds, lines));
+            .ok()?;
+        return Some(Selection::new(bounds.clone(), lines));
     }
 
     // Charwise mode:
@@ -96,7 +144,7 @@ pub fn get(_: ()) -> Option<Selection> {
     }
 
     // For multi-line charwise selection rely on `nvim_buf_get_text` with an exclusive end.
-    let Ok(lines) = current_buffer
+    let lines = current_buffer
         .get_text(
             bounds.line_range(),
             bounds.start().col,
@@ -108,11 +156,76 @@ pub fn get(_: ()) -> Option<Selection> {
                 "error getting text | buffer={current_buffer:#?} bounds={bounds:#?} error={err:#?}"
             ));
         })
-    else {
+        .ok()?;
+
+    Some(Selection::new(bounds.clone(), lines))
+}
+
+fn last_visual_mode() -> Option<String> {
+    nvim_oxi::api::call_function::<_, String>("visualmode", Array::new())
+        .inspect_err(|err| {
+            crate::notify::error(format!("error getting last visual mode | error={err:#?}"));
+        })
+        .ok()
+}
+
+fn selection_to_dict(selection: &Selection) -> Dictionary {
+    dict! {
+        "lines": selection.lines().iter().map(String::as_str).collect::<Array>(),
+        "start": bound_to_array(selection.start()),
+        "end": bound_to_array(selection.end()),
+        "command_prefix": visual_range_command_prefix(&selection.bounds),
+    }
+}
+
+fn bound_to_array(bound: &Bound) -> Array {
+    Array::from_iter([usize_to_i64(bound.lnum), usize_to_i64(bound.col)])
+}
+
+fn usize_to_i64(value: usize) -> i64 {
+    i64::try_from(value).unwrap_or(i64::MAX)
+}
+
+fn visual_range_command_prefix(_bounds: &SelectionBounds) -> String {
+    "'<,'>".to_owned()
+}
+
+fn get_line_range_selection(line1: usize, line2: usize) -> Option<Selection> {
+    if line2 < line1 {
         return None;
+    }
+    let start_lnum = line1.checked_sub(1)?;
+    let end_lnum = line2.checked_sub(1)?;
+    let current_buffer = Buffer::current();
+    let last_line = current_buffer
+        .get_line(end_lnum)
+        .inspect_err(|err| {
+            crate::notify::error(format!(
+                "error getting range last line | end_lnum={end_lnum} buffer={current_buffer:#?} error={err:#?}",
+            ));
+        })
+        .ok()?;
+    let selected_lines = current_buffer
+        .get_lines(start_lnum..=end_lnum, true)
+        .inspect_err(|err| {
+            crate::notify::error(format!(
+                "error getting range lines | buffer={current_buffer:#?} error={err:#?}"
+            ));
+        })
+        .ok()?;
+    let bounds = SelectionBounds {
+        buf_id: current_buffer.handle(),
+        start: Bound {
+            lnum: start_lnum,
+            col: 0,
+        },
+        end: Bound {
+            lnum: end_lnum,
+            col: last_line.len(),
+        },
     };
 
-    Some(Selection::new(bounds, lines))
+    Some(Selection::new(bounds, selected_lines))
 }
 
 /// Owned selection content plus bounds.
@@ -162,7 +275,23 @@ impl SelectionBounds {
         let cursor_pos = get_pos(".")?;
         let visual_pos = get_pos("v")?;
 
-        let (start, end) = cursor_pos.sort(visual_pos);
+        Self::from_positions(cursor_pos, visual_pos)
+    }
+
+    /// Builds selection bounds from the persisted Visual selection marks.
+    ///
+    /// # Errors
+    /// - Fails if retrieving either mark fails.
+    /// - Fails if the two marks reference different buffers.
+    pub fn from_visual_marks() -> rootcause::Result<Self> {
+        let start_pos = get_pos("'<")?;
+        let end_pos = get_pos("'>")?;
+
+        Self::from_positions(start_pos, end_pos)
+    }
+
+    fn from_positions(first: Pos, second: Pos) -> rootcause::Result<Self> {
+        let (start, end) = first.sort(second);
 
         if start.buf_id != end.buf_id {
             Err(report!("mismatched buffer ids")).attach_with(|| format!("start={start:#?} end={end:#?}"))?;
@@ -202,7 +331,7 @@ impl SelectionBounds {
 }
 
 /// Single position (line, column) inside a buffer.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Bound {
     /// 0-based line number.
     pub lnum: usize,
@@ -238,6 +367,10 @@ impl Selection {
     /// Collected selected lines.
     pub fn lines(&self) -> &[String] {
         &self.lines
+    }
+
+    fn matches_ex_range(&self, line1: usize, line2: usize) -> bool {
+        self.start().lnum.checked_add(1) == Some(line1) && self.end().lnum.checked_add(1) == Some(line2)
     }
 
     /// Range of starting (inclusive) to ending (exclusive) line indices.
@@ -367,5 +500,35 @@ mod tests {
 
     fn pos(lnum: usize, col: usize) -> Pos {
         Pos { buf_id: 1, lnum, col }
+    }
+
+    #[test]
+    fn test_selection_bounds_from_positions_normalizes_reversed_coordinates() {
+        let result = SelectionBounds::from_positions(pos(4, 10), pos(2, 3));
+
+        assert2::assert!(let Ok(bounds) = result);
+        pretty_assertions::assert_eq!(*bounds.start(), Bound { lnum: 2, col: 3 });
+        pretty_assertions::assert_eq!(*bounds.end(), Bound { lnum: 4, col: 10 });
+    }
+
+    #[test]
+    fn test_selection_lines_returns_raw_selected_lines() {
+        let result = SelectionBounds::from_positions(pos(1, 2), pos(2, 8));
+
+        assert2::assert!(let Ok(bounds) = result);
+        let selection = Selection::new(
+            bounds,
+            vec![nvim_oxi::String::from("{\"b\":2}"), nvim_oxi::String::from("x")].into_iter(),
+        );
+
+        pretty_assertions::assert_eq!(selection.lines(), &["{\"b\":2}".to_string(), "x".to_string()]);
+    }
+
+    #[test]
+    fn test_visual_range_command_prefix_returns_visual_range() {
+        let result = SelectionBounds::from_positions(pos(1, 0), pos(3, 4));
+
+        assert2::assert!(let Ok(bounds) = result);
+        pretty_assertions::assert_eq!(visual_range_command_prefix(&bounds), "'<,'>");
     }
 }

@@ -42,6 +42,21 @@ end
 function M.fzf_lua(plugin)
   local lsp_cfg = { ignore_current_line = true, jump1 = true, includeDeclaration = false, }
 
+  local function visual_commands()
+    local range_prefix = nvrim.buffer.get_visual_range_command_prefix() or ''
+    plugin.commands({
+      prompt = 'Cmds: ',
+      actions = {
+        ['enter'] = function(selected)
+          if not selected[1] then return end
+          vim.cmd('stopinsert')
+          local with_range = selected[1] == 'ConformAt' or selected[1] == 'Format'
+          vim.fn.feedkeys((':%s%s'):format(with_range and range_prefix or '', selected[1]), 'nt')
+        end,
+      },
+    })
+  end
+
   return {
     {
       'gd',
@@ -67,7 +82,8 @@ function M.fzf_lua(plugin)
     { '<leader>b',  mode = { 'n', 'v', }, plugin and { function() plugin.buffers({ prompt = 'Buffers: ', }) end, }, },
     { '<leader>gs', mode = { 'n', 'v', }, plugin and { function() plugin.git_status({ prompt = 'Git status: ', }) end, }, },
     { '<leader>gc', mode = { 'n', 'v', }, plugin and { function() plugin.git_commits({ prompt = 'Git commits: ', }) end, }, },
-    { '<leader>c',  mode = { 'n', 'v', }, plugin and { function() plugin.commands({ prompt = 'Cmds: ', }) end, }, },
+    { '<leader>c',  mode = 'n',           plugin and { function() plugin.commands({ prompt = 'Cmds: ', }) end, }, },
+    { '<leader>c',  mode = 'v',           plugin and { visual_commands, }, },
 
     { '<leader>d',  mode = { 'n', 'v', }, plugin and { function() plugin.diagnostics_document({ prompt = 'Diags: ', }) end, }, },
     { '<leader>D',  mode = { 'n', 'v', }, plugin and { function() plugin.diagnostics_workspace({ prompt = '*Diags: ', sort = 0, }) end, }, },
