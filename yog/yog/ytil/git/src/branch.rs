@@ -507,8 +507,8 @@ mod tests {
         assert2::assert!(let Ok(()) = rename_current("renamed", Some(&repo)));
 
         pretty_assertions::assert_eq!(repo.head().unwrap().shorthand(), Some("renamed"));
-        assert!(repo.find_branch("renamed", git2::BranchType::Local).is_ok());
-        assert!(repo.find_branch("master", git2::BranchType::Local).is_err());
+        repo.find_branch("renamed", git2::BranchType::Local).unwrap();
+        assert2::assert!(let Err(_) = repo.find_branch("master", git2::BranchType::Local));
     }
 
     #[test]

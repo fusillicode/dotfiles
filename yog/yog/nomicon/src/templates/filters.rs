@@ -2,7 +2,12 @@
 //!
 //! Provides helpers to format various types in Askama templates.
 
-#![allow(clippy::unnecessary_wraps, clippy::inline_always, clippy::unused_self)]
+#![allow(
+    clippy::unnecessary_wraps,
+    clippy::inline_always,
+    clippy::unused_self,
+    reason = "askama filter signature is framework-defined"
+)]
 
 use chrono::DateTime;
 use chrono::SecondsFormat;

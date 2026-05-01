@@ -346,8 +346,9 @@ impl ClaudeCmdInvocation {
     fn parse(text: &str) -> Option<Self> {
         fn extract_tag(text: &str, tag: ClaudeCommandTag) -> Option<&str> {
             let start = text.find(tag.open())?.saturating_add(tag.open().len());
-            let end = text[start..].find(tag.close())?.saturating_add(start);
-            Some(&text[start..end])
+            let tail = text.get(start..)?;
+            let end = tail.find(tag.close())?.saturating_add(start);
+            text.get(start..end)
         }
 
         let name = extract_tag(text, ClaudeCommandTag::Name)

@@ -46,7 +46,6 @@ pub fn exec_vim_cmd(
 ///
 /// # Errors
 /// Errors are reported to Nvim via [`crate::notify::error`].
-#[allow(clippy::option_option)]
 pub fn exec_vim_script(src: &str, opts: Option<ExecOpts>) -> Option<Option<String>> {
     let opts = opts.unwrap_or_default();
     Some(

@@ -55,10 +55,9 @@ pub fn dict() -> Dictionary {
 }
 
 /// Sets the desired Neovim colorscheme and custom highlight groups.
-#[allow(clippy::needless_pass_by_value)]
 pub fn set(colorscheme: Option<String>) {
     if let Some(cs) = colorscheme {
-        let _ = ytil_noxi::common::exec_vim_cmd("colorscheme", Some(&[cs]));
+        drop(ytil_noxi::common::exec_vim_cmd("colorscheme", Some(&[cs])));
     }
 
     let opts = crate::vim_opts::global_scope();
@@ -104,24 +103,24 @@ pub fn set(colorscheme: Option<String>) {
 
     for (lvl, fg) in DIAGNOSTICS_FG {
         // Errors are already notified by [`get_overridden_hl_opts`]
-        let _ = get_overridden_hl_opts(
+        if let Ok(hl_opts) = get_overridden_hl_opts(
             &format!("Diagnostic{lvl}"),
             |hl_opts| hl_opts.fg(fg).bg(NONE).bold(true),
             None,
-        )
-        .map(|hl_opts| {
+        ) {
             set_hl(0, &format!("Diagnostic{lvl}"), &hl_opts);
             set_hl(0, &format!("DiagnosticStatusLine{lvl}"), &hl_opts);
-        });
+        }
 
         let diag_underline_hl_name = format!("DiagnosticUnderline{lvl}");
         // Errors are already notified by [`get_overridden_hl_opts`]
-        let _ = get_overridden_hl_opts(
+        if let Ok(hl_opts) = get_overridden_hl_opts(
             &diag_underline_hl_name,
             |hl_opts| hl_opts.special(fg).bg(NONE).underline(true).undercurl(false),
             None,
-        )
-        .map(|hl_opts| set_hl(0, &diag_underline_hl_name, &hl_opts));
+        ) {
+            set_hl(0, &diag_underline_hl_name, &hl_opts);
+        }
     }
 
     for (hl_name, fg) in GITSIGNS_FG {
@@ -176,7 +175,7 @@ fn get_hl_single(ns_id: u32, hl_opts: &GetHighlightOpts) -> rootcause::Result<Hi
 /// Errors:
 /// - Propagates failures from [`nvim_oxi::api::get_hl`] while notifying them to Neovim.
 /// - Returns an error if only a single highlight group ([`GetHlInfos::Single`]) is returned.
-#[allow(dead_code)]
+#[expect(dead_code, reason = "kept for debugging highlight maps")]
 fn get_hl_multiple(
     ns_id: u32,
     hl_opts: &GetHighlightOpts,
