@@ -1,7 +1,7 @@
 return {
   'stevearc/conform.nvim',
   event = 'BufWritePre',
-  cmd = { 'ConformInfo', 'ConformAt', },
+  cmd = { 'ConformInfo', 'ConformAt', 'Fmt', },
   config = function()
     local conform = require('conform')
     local nvrim = require('nvrim')
@@ -65,13 +65,15 @@ return {
     local function conform_at(args)
       local selection = nvrim.buffer.get_selection_for_ex_range(args.line1, args.line2)
       if not selection then return end
-      conform.format_lines(formatter_names(args, selection.lines), selection.lines, { async = true, }, function(err, formatted_lines)
-        if err then
-          vim.notify(err.message or err, vim.log.levels.ERROR)
-          return
-        end
-        vim.api.nvim_buf_set_text(0, selection.start[1], selection.start[2], selection['end'][1], selection['end'][2], formatted_lines)
-      end)
+      conform.format_lines(formatter_names(args, selection.lines), selection.lines, { async = true, },
+        function(err, formatted_lines)
+          if err then
+            vim.notify(err.message or err, vim.log.levels.ERROR)
+            return
+          end
+          vim.api.nvim_buf_set_text(0, selection.start[1], selection.start[2], selection['end'][1], selection['end'][2],
+            formatted_lines)
+        end)
     end
 
     local function format_range(args)
@@ -84,6 +86,6 @@ return {
     end
 
     vim.api.nvim_create_user_command('ConformAt', format_range, { nargs = '?', range = true, })
-    vim.api.nvim_create_user_command('Format', format_range, { nargs = '?', range = true, })
+    vim.api.nvim_create_user_command('Fmt', format_range, { nargs = '?', range = true, })
   end,
 }

@@ -50,7 +50,7 @@ function M.fzf_lua(plugin)
         ['enter'] = function(selected)
           if not selected[1] then return end
           vim.cmd('stopinsert')
-          local with_range = selected[1] == 'ConformAt' or selected[1] == 'Format'
+          local with_range = selected[1] == 'ConformAt' or selected[1] == 'fmt'
           vim.fn.feedkeys((':%s%s'):format(with_range and range_prefix or '', selected[1]), 'nt')
         end,
       },
