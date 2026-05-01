@@ -20,7 +20,6 @@ pub fn dict() -> Dictionary {
 }
 
 /// Generates a GitHub permalink for the current visual selection and copies it to the clipboard.
-#[allow(clippy::needless_pass_by_value)]
 fn get_link((link_type, open): (String, Option<bool>)) -> Option<()> {
     let selection = ytil_noxi::visual_selection::get(())?;
 

@@ -64,10 +64,9 @@ where
                 if let Some(quickfix) = &quickfix
                     && selected_value.is_some_and(|x| x == quickfix.trigger_value)
                 {
-                    let _ = crate::quickfix::open(quickfix.all_items.iter().map(|(s, i)| (s.as_str(), *i)))
-                        .inspect_err(|err| {
-                            crate::notify::error(format!("error opening quickfix: {err:#}"));
-                        });
+                    if let Err(err) = crate::quickfix::open(quickfix.all_items.iter().map(|(s, i)| (s.as_str(), *i))) {
+                        crate::notify::error(format!("error opening quickfix: {err:#}"));
+                    }
                     return Ok(());
                 }
                 if let Some(idx) = idx {

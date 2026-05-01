@@ -15,7 +15,10 @@ pub fn dict() -> Dictionary {
 }
 
 /// Parse raw `sqruff` JSON output into Nvim diagnostic [`Dictionary`].
-#[allow(clippy::needless_pass_by_value)]
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "nvim function binding requires owned Lua-converted arguments"
+)]
 fn parser(maybe_output: Option<nvim_oxi::String>) -> Vec<Dictionary> {
     let Some(output) = &maybe_output else {
         ytil_noxi::notify::warn(format!("sqruff output missing output={maybe_output:?}"));

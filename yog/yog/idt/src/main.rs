@@ -55,7 +55,6 @@ mod installers;
 
 /// Install language servers, linters, formatters, and developer helpers concurrently.
 #[ytil_sys::main]
-#[allow(clippy::too_many_lines)]
 fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
     if args.has_help() {

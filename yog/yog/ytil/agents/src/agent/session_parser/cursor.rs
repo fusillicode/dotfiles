@@ -146,9 +146,14 @@ fn searchable_cursor_strings_line(line: &str) -> Option<String> {
 fn extract_prefixed_candidates(line: &str, prefix: &str) -> Vec<String> {
     let mut candidates = Vec::new();
     let mut start = 0;
-    while let Some(offset) = line[start..].find(prefix) {
+    while let Some(search_area) = line.get(start..) {
+        let Some(offset) = search_area.find(prefix) else {
+            break;
+        };
         let absolute_start = start.saturating_add(offset);
-        let suffix = &line[absolute_start..];
+        let Some(suffix) = line.get(absolute_start..) else {
+            break;
+        };
         let candidate: String = suffix.chars().take_while(|ch| is_path_char(*ch)).collect();
         if !candidate.is_empty() {
             candidates.push(candidate);

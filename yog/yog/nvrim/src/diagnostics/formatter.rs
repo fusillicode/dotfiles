@@ -6,7 +6,10 @@
 use serde::Deserialize;
 
 /// Formats a diagnostic into a human-readable string.
-#[allow(clippy::needless_pass_by_value)]
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "nvim function binding requires owned Lua-converted arguments"
+)]
 pub fn format(diagnostic: Diagnostic) -> Option<String> {
     let Some(msg) = get_msg(&diagnostic).map(|s| s.trim_end_matches('.').to_string()) else {
         ytil_noxi::notify::error(format!("error missing diagnostic message | diagnostic={diagnostic:#?}"));

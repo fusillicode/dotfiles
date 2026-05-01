@@ -64,11 +64,11 @@ fn get_hunks(only_current_buffer: Option<bool>) {
             let Some((path, lnum)) = hunks.get(choice_idx) else {
                 return;
             };
-            let _ = ytil_noxi::buffer::open(path, Some(*lnum), None).inspect_err(|err| {
+            drop(ytil_noxi::buffer::open(path, Some(*lnum), None).inspect_err(|err| {
                 ytil_noxi::notify::error(format!(
                     "error opening buffer | path={path:?} lnum={lnum} error={err:#?}"
                 ));
-            });
+            }));
         }
     };
 

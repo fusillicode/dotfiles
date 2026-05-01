@@ -300,14 +300,17 @@ fn get_word_at_index(s: &str, idx: usize) -> Option<&str> {
     let byte_idx = convert_visual_to_byte_idx(s, idx)?;
 
     // If pointing to whitespace, no word.
-    if s[byte_idx..].chars().next().is_some_and(char::is_whitespace) {
+    if s.get(byte_idx..)
+        .and_then(|tail| tail.chars().next())
+        .is_some_and(char::is_whitespace)
+    {
         return None;
     }
 
     // Scan split words and see which span contains `byte_idx`.
     let mut pos = 0;
     for word in s.split_ascii_whitespace() {
-        let start = s[pos..].find(word)?.saturating_add(pos);
+        let start = s.get(pos..)?.find(word)?.saturating_add(pos);
         let end = start.saturating_add(word.len());
         if (start..=end).contains(&byte_idx) {
             return Some(word);
@@ -351,7 +354,10 @@ fn extract_markdown_link(input: &str) -> Option<&str> {
     )
 }
 
-#[allow(clippy::similar_names)]
+#[expect(
+    clippy::similar_names,
+    reason = "http and https index names mirror parsed URL schemes"
+)]
 fn extract_https_or_http_link(input: &str) -> Option<&str> {
     let start_idx = match (input.find("https://"), input.find("http://")) {
         (None, None) => None,
