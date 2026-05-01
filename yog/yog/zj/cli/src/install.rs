@@ -436,7 +436,7 @@ mod tests {
             "PermissionRequest": [new_hook_entry(
                 Agent::Codex,
                 "PermissionRequest",
-                &hook_command(Agent::Codex, AgentEventKind::Idle)
+                &hook_command(Agent::Codex, AgentEventKind::Busy)
             )],
             "SessionEnd": [new_hook_entry(Agent::Codex, "SessionEnd", &hook_command(Agent::Codex, AgentEventKind::Exit))],
             "UserPromptSubmit": [new_hook_entry(

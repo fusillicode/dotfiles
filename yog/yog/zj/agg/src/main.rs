@@ -136,6 +136,7 @@ impl ZellijPlugin for State {
             Event::PermissionRequestResult(PermissionStatus::Granted) => self.update_permission_granted(),
             Event::TabUpdate(tabs) => self.update_tabs(tabs),
             Event::PaneUpdate(manifest) => self.update_panes(manifest),
+            Event::PaneClosed(PaneId::Terminal(pane_id)) => self.update_pane_closed(pane_id),
             Event::CwdChanged(PaneId::Terminal(pane_id), cwd, _clients) => self.update_cwd(pane_id, cwd),
             Event::RunCommandResult(exit_code, stdout, _stderr, context) => {
                 self.update_run_command_result(exit_code, &stdout, &context)
@@ -246,6 +247,7 @@ fn update_permission_granted(state: &mut State) -> bool {
     subscribe(&[
         EventType::TabUpdate,
         EventType::PaneUpdate,
+        EventType::PaneClosed,
         EventType::CwdChanged,
         EventType::Mouse,
         EventType::RunCommandResult,
@@ -258,6 +260,7 @@ trait StateUpdateExt {
     fn update_permission_granted(&mut self) -> bool;
     fn update_tabs(&mut self, tabs: Vec<TabInfo>) -> bool;
     fn update_panes(&mut self, manifest: PaneManifest) -> bool;
+    fn update_pane_closed(&mut self, pane_id: u32) -> bool;
     fn update_cwd(&mut self, pane_id: u32, cwd: PathBuf) -> bool;
     fn update_run_command_result(
         &mut self,
@@ -289,6 +292,11 @@ impl StateUpdateExt for State {
 
     fn update_panes(&mut self, manifest: PaneManifest) -> bool {
         let events = self.events_from_pane_update(&manifest, zellij_terminal_pane_cwd);
+        self.apply_and_handle_events(&events)
+    }
+
+    fn update_pane_closed(&mut self, pane_id: u32) -> bool {
+        let events = self.events_from_pane_closed(pane_id);
         self.apply_and_handle_events(&events)
     }
 

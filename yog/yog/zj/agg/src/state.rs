@@ -204,6 +204,16 @@ impl State {
         vec![StateEvent::CwdChanged { new_cwd: cwd }]
     }
 
+    pub fn events_from_pane_closed(&self, pane_id: u32) -> Vec<StateEvent> {
+        let Some(current_tab) = self.current_tab.as_ref() else {
+            return vec![];
+        };
+        if !current_tab.pane_state_by_pane.contains_key(&pane_id) {
+            return vec![];
+        }
+        vec![StateEvent::AgentLost { pane_id }]
+    }
+
     pub fn events_from_run_command_result(
         &self,
         requested_cwd: &PathBuf,
@@ -939,6 +949,7 @@ fn detected_agent_from_pane_info(pane: &PaneInfo, focused_pane: &FocusedPane) ->
         if let Some(agent) = Agent::detect(command) {
             return Some(agent);
         }
+        return None;
     }
 
     match focused_pane.label.as_ref() {
@@ -2432,6 +2443,63 @@ mod tests {
     }
 
     #[test]
+    fn test_events_from_pane_update_ignores_stale_title_when_command_is_shell() {
+        let mut state = State {
+            plugin_id: 7,
+            all_tabs: vec![tab_with_name(10, 0, "a")],
+            current_tab: Some(CurrentTab {
+                pane_ids: std::iter::once(42).collect(),
+                focused_pane: Some(FocusedPane {
+                    id: 42,
+                    label: Some(FocusedPaneLabel::Title("Cursor …".to_string())),
+                }),
+                active_focus_pane_id: Some(42),
+                pane_state_by_pane: HashMap::from([(
+                    42,
+                    pane_state(Agent::Cursor, AgentPanePhase::AttentionSeen, PaneFocus::Focused, 1),
+                )]),
+                ..CurrentTab::new(10)
+            }),
+            ..Default::default()
+        };
+
+        let _ = state.apply_all(&[StateEvent::AgentLost { pane_id: 42 }]);
+        let manifest = manifest(vec![(
+            0,
+            vec![PaneInfo {
+                id: 42,
+                is_focused: true,
+                terminal_command: Some("/bin/zsh".to_string()),
+                title: "Cursor Agent".to_string(),
+                ..Default::default()
+            }],
+        )]);
+
+        let events = state.events_from_pane_update(&manifest, noop_pane_cwd);
+
+        assert_eq!(events, vec![]);
+    }
+
+    #[test]
+    fn test_events_from_pane_closed_removes_tracked_agent_immediately() {
+        let state = State {
+            current_tab: Some(CurrentTab {
+                pane_state_by_pane: HashMap::from([(
+                    42,
+                    pane_state(Agent::Cursor, AgentPanePhase::Running, PaneFocus::Unfocused, 1),
+                )]),
+                ..CurrentTab::new(10)
+            }),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            state.events_from_pane_closed(42),
+            vec![StateEvent::AgentLost { pane_id: 42 }]
+        );
+    }
+
+    #[test]
     fn test_events_from_pane_update_clears_tracked_agent_when_process_changes() {
         let state = State {
             plugin_id: 7,
@@ -2579,6 +2647,23 @@ mod tests {
         let focused_pane = FocusedPane { id: 42, label: None };
 
         assert_eq!(detected_agent_from_pane_info(&pane, &focused_pane), Some(Agent::Codex));
+    }
+
+    #[test]
+    fn test_detected_agent_from_pane_info_ignores_title_when_terminal_command_exists() {
+        let pane = PaneInfo {
+            id: 42,
+            is_focused: true,
+            terminal_command: Some("/bin/zsh".to_string()),
+            title: "Cursor Agent".to_string(),
+            ..Default::default()
+        };
+        let focused_pane = FocusedPane {
+            id: 42,
+            label: Some(FocusedPaneLabel::Title("Cursor …".to_string())),
+        };
+
+        assert_eq!(detected_agent_from_pane_info(&pane, &focused_pane), None);
     }
 
     #[test]
