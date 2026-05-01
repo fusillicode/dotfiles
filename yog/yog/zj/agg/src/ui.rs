@@ -201,8 +201,8 @@ pub fn tab_index_at_row(frame: &[TabRow], click_row: usize, content_w: usize) ->
 fn display_left(indicator: TabIndicator, cmd: &Cmd, bg: &str, fg: &str) -> String {
     let dot = match indicator {
         TabIndicator::None | TabIndicator::Empty => None,
-        TabIndicator::Red => Some(format!("{AGENT_WAITING_UNSEEN_FG}•")),
-        TabIndicator::Green => Some(format!("{AGENT_BUSY_FG}•")),
+        TabIndicator::Red => Some(format!("{BOLD}{AGENT_WAITING_UNSEEN_FG}•{RESET}")),
+        TabIndicator::Green => Some(format!("{BOLD}{AGENT_BUSY_FG}•{RESET}")),
     };
     let label = match cmd {
         Cmd::None => String::new(),
@@ -473,7 +473,7 @@ mod tests {
     }
 
     #[test]
-    fn test_display_left_waiting_unseen_uses_small_red_dot() {
+    fn test_display_left_waiting_unseen_uses_bold_red_dot() {
         let rendered = display_left(
             TabIndicator::Red,
             &Cmd::agent(Agent::Codex, AgentState::Acknowledged),
@@ -482,7 +482,7 @@ mod tests {
         );
         assert_eq!(
             rendered,
-            format!("{AGENT_WAITING_UNSEEN_FG}• {TAB_INACTIVE_BG}{TAB_DEFAULT_FG}codex")
+            format!("{BOLD}{AGENT_WAITING_UNSEEN_FG}•{RESET} {TAB_INACTIVE_BG}{TAB_DEFAULT_FG}codex")
         );
     }
 
@@ -498,7 +498,7 @@ mod tests {
     }
 
     #[test]
-    fn test_display_left_busy_uses_small_green_dot() {
+    fn test_display_left_busy_uses_bold_green_dot() {
         let rendered = display_left(
             TabIndicator::Green,
             &Cmd::agent(Agent::Codex, AgentState::Acknowledged),
@@ -507,7 +507,7 @@ mod tests {
         );
         assert_eq!(
             rendered,
-            format!("{AGENT_BUSY_FG}• {TAB_INACTIVE_BG}{TAB_DEFAULT_FG}codex")
+            format!("{BOLD}{AGENT_BUSY_FG}•{RESET} {TAB_INACTIVE_BG}{TAB_DEFAULT_FG}codex")
         );
     }
 
