@@ -82,10 +82,10 @@ impl RenderableSession {
 impl Display for RenderableSession {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let agent_name = match self.session.agent {
-            Agent::Claude => "CLAUDE".red().bold().to_string(),
-            Agent::Codex => "CODEX".green().bold().to_string(),
-            Agent::Cursor => "CURSOR".bright_black().bold().to_string(),
-            Agent::Gemini | Agent::Opencode => self.session.agent.to_string(),
+            Agent::Claude => self.session.agent.short_name().red().bold().to_string(),
+            Agent::Codex => self.session.agent.short_name().green().bold().to_string(),
+            Agent::Cursor => self.session.agent.short_name().bright_black().bold().to_string(),
+            Agent::Gemini | Agent::Opencode => self.session.agent.short_name().bold().to_string(),
         };
 
         let path_label = ytil_tui::short_path(
@@ -102,20 +102,20 @@ impl Display for RenderableSession {
             write!(
                 f,
                 "{agent_name} {} {} {} {} {}",
-                path_label.blue(),
-                branch.cyan().dimmed(),
-                session_name.white().bold(),
-                updated_label.dimmed(),
-                created_label.dimmed(),
+                path_label.cyan().bold(),
+                branch.white(),
+                session_name.dimmed().bold(),
+                updated_label.blue(),
+                created_label.blue(),
             )
         } else {
             write!(
                 f,
                 "{agent_name} {} {} {} {}",
-                path_label.blue(),
-                session_name.white().bold(),
-                updated_label.dimmed(),
-                created_label.dimmed(),
+                path_label.cyan().bold(),
+                session_name.dimmed().bold(),
+                updated_label.blue(),
+                created_label.blue(),
             )
         }
     }
