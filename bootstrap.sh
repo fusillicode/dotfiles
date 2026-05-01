@@ -124,7 +124,7 @@ fi
 
 # Cargo bins
 info "Installing cargo binaries..."
-/bin/bash "$script_dir"/bin/update_cargo_bins.sh
+/bin/bash "$script_dir"/bin/provision_cargo_bins.sh
 
 # mise (installed via cargo, now available)
 info "Updating mise..."
