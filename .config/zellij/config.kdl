@@ -123,8 +123,6 @@ keybinds clear-defaults=true {
         bind "Alt R" { SwitchToMode "Resize"; }
         bind "Alt F" { ToggleFocusFullscreen; }
         bind "Ctrl w" { CloseFocus; }
-        bind "Ctrl s" { FocusPreviousPane; }
-        bind "Ctrl h" { FocusNextPane; }
         bind "Alt w" { CloseFocus; }
     }
     scroll {

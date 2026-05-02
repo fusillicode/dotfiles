@@ -1,0 +1,234 @@
+# Directory jump widget.
+#
+# Tab opens an fzf directory browser from an empty prompt or single path token.
+# Command/argument contexts fall back to normal completion.
+
+## Trim leading and trailing whitespace from one string.
+function _dir_jump_trim() {
+  local value="$1"
+
+  # Remove leading whitespace.
+  # zsh trick: `${value%%[![:space:]]*}` finds the leading whitespace prefix.
+  value="${value#"${value%%[![:space:]]*}"}"
+
+  # Remove trailing whitespace.
+  # zsh trick: `${value##*[![:space:]]}` finds the trailing whitespace suffix.
+  print -r -- "${value%"${value##*[![:space:]]}"}"
+}
+
+## Return the current zle input buffer trimmed.
+function _dir_jump_input() {
+  _dir_jump_trim "$LBUFFER"
+}
+
+## True when Tab should open dir-jump instead of normal completion.
+function _dir_jump_is_path_context() {
+  [[ -z "$RBUFFER" ]] || return 1
+  [[ "$(_dir_jump_input)" != *[[:space:]]* ]]
+}
+
+## Split the typed path into base dir and fzf query globals.
+function _dir_jump_split_input() {
+  local input="$1"
+
+  # Split typed path into:
+  # - `_dir_jump_base`: directory whose children fzf should show
+  # - `_dir_jump_query`: initial fzf filter
+  #
+  # Examples:
+  # - ""        -> base=".",      query=""
+  # - "/"       -> base="/",      query=""
+  # - "~/data"  -> base="~",      query="data"
+  # - "foo/bar" -> base="foo",    query="bar"
+  # - "foo/"    -> base="foo",    query=""
+  if [[ -z "$input" ]]; then
+    _dir_jump_base="."
+    _dir_jump_query=""
+  elif [[ "$input" == "/" ]]; then
+    _dir_jump_base="/"
+    _dir_jump_query=""
+  elif [[ "$input" == */ ]]; then
+    _dir_jump_base="${input%/}"
+    _dir_jump_query=""
+  else
+    _dir_jump_base="${input:h}"
+    _dir_jump_query="${input:t}"
+  fi
+
+  [[ -n "$_dir_jump_base" ]] || _dir_jump_base="."
+}
+
+## Expand `~`, relative paths, and `..` into an absolute path.
+function _dir_jump_abs_path() {
+  local path="$1"
+
+  # Normalize the base path before using it.
+  # `${path:A}` resolves `.` / `..` and symlinks to an absolute path.
+  if [[ "$path" == \~ ]]; then
+    path="$HOME"
+  elif [[ "$path" == \~/* ]]; then
+    path="$HOME/${path#\~/}"
+  elif [[ "$path" != /* ]]; then
+    path="$PWD/$path"
+  fi
+
+  print -r -- "${path:A}"
+}
+
+## Shorten paths under HOME for display in the fzf prompt.
+function _dir_jump_pretty_path() {
+  local path="$1"
+
+  if [[ "$path" == "$HOME" ]]; then
+    print -r -- "~"
+  elif [[ "$path" == "$HOME/"* ]]; then
+    print -r -- "~/${path#$HOME/}"
+  else
+    print -r -- "$path"
+  fi
+}
+
+## Build the fzf prompt for the current browser directory.
+function _dir_jump_prompt() {
+  local path="$(_dir_jump_pretty_path "$1")"
+  [[ "$path" == "/" ]] && print -r -- "/ " || print -r -- "${path}/ "
+}
+
+## Print fzf rows as `label<TAB>absolute-path`.
+function _dir_jump_rows() {
+  local base="$1"
+  local query="$2"
+  local child name
+  local -a dirs
+
+  # `(ND/)` = no error if no match, include dotdirs, directories only.
+  # Root is special: "$base"/* would become //*, so handle "/" separately.
+  if [[ "$base" == "/" ]]; then
+    dirs=(/*(ND/))
+  else
+    dirs=("$base"/*(ND/))
+  fi
+
+  if (( ${#dirs} == 0 )); then
+    print -r -- "./	$base"
+    return
+  fi
+
+  for child in "${dirs[@]}"; do
+    name="${child:t}/"
+    print -r -- "${name}	${child}"
+  done
+}
+
+## Run fzf for one browser level and print its selected key/path output.
+function _dir_jump_fzf() {
+  local base="$1"
+  local query="$2"
+
+  _dir_jump_rows "$base" "$query" |
+    fzf \
+      --height 40% \
+      --reverse \
+      --no-info \
+      --no-separator \
+      --no-scrollbar \
+      --no-multi \
+      --cycle \
+      --gutter=' ' \
+      --pointer='' \
+      --marker='' \
+      --with-nth=1 \
+      --accept-nth=2 \
+      --delimiter=$'\t' \
+      --query="$query" \
+      --prompt="$(_dir_jump_prompt "$base")" \
+      --expect=tab,btab,ctrl-l,ctrl-h \
+      --bind 'esc:abort,ctrl-c:abort'
+}
+
+## Clear zle input and redraw the prompt after fzf exits.
+function _dir_jump_reset_prompt() {
+  LBUFFER=""
+  RBUFFER=""
+  zle reset-prompt
+}
+
+## Delegate to existing completion when dir-jump should not handle Tab.
+function _dir_jump_fallback_completion() {
+  if zle -l fzf-completion >/dev/null 2>&1; then
+    zle fzf-completion
+  else
+    zle expand-or-complete
+  fi
+}
+
+## Main zle widget bound to Tab.
+function _dir_jump() {
+  if ! _dir_jump_is_path_context || ! (( $+commands[fzf] )); then
+    _dir_jump_fallback_completion
+    return
+  fi
+
+  local base fzf_output key target
+  local -a output
+
+  _dir_jump_split_input "$(_dir_jump_input)"
+  base="$(_dir_jump_abs_path "$_dir_jump_base")"
+  [[ -d "$base" ]] || return
+
+  LBUFFER=""
+  RBUFFER=""
+  # Tell zle an external full-screen-ish program is about to run.
+  # Avoids prompt artifacts when fzf exits.
+  zle -I
+
+  while true; do
+    fzf_output="$(_dir_jump_fzf "$base" "$_dir_jump_query")" || {
+      _dir_jump_reset_prompt
+      return
+    }
+
+    # fzf output shapes:
+    # - Tab/Ctrl-L/Ctrl-H/Shift-Tab: first line is key, second line is selected target
+    # - Enter: one line only, the accepted target path
+    #
+    # `${(f)...}` splits the captured fzf output by newline into a zsh array.
+    output=(${(f)fzf_output})
+    key="${output[1]}"
+    target="${output[2]}"
+
+    if [[ -z "$target" && "$key" != "tab" && "$key" != "btab" && "$key" != "ctrl-l" && "$key" != "ctrl-h" ]]; then
+      # Enter did not come through --expect, so the first line is the target.
+      target="$key"
+      key="enter"
+    fi
+
+    case "$key" in
+      tab|ctrl-l)
+        [[ -d "$target" && "$target" != "$base" ]] || continue
+        base="$target"
+        _dir_jump_query=""
+        ;;
+      btab|ctrl-h)
+        if [[ "$base" != "/" ]]; then
+          base="${base:h}"
+          [[ -n "$base" ]] || base="/"
+        fi
+        _dir_jump_query=""
+        ;;
+      enter|"")
+        builtin cd -- "$base" || return
+        break
+        ;;
+      *)
+        _dir_jump_reset_prompt
+        return
+        ;;
+    esac
+  done
+
+  _dir_jump_reset_prompt
+}
+
+zle -N _dir_jump
+bindkey '^I' _dir_jump

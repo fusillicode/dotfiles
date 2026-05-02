@@ -26,7 +26,7 @@ source "$_fzf_cache"
 unset FZF_CTRL_R_COMMAND
 
 # Custom history widget
-function fzf-custom-history() {
+function _fzf_custom_history() {
   local selected
   selected=$(h | fzf \
     --exact \
@@ -49,7 +49,7 @@ function fzf-custom-history() {
   fi
   zle reset-prompt
 }
-zle -N fzf-custom-history
-bindkey '^R' fzf-custom-history
-bindkey '^P' fzf-custom-history
-bindkey '^[[A' fzf-custom-history
+zle -N _fzf_custom_history
+bindkey '^R' _fzf_custom_history
+bindkey '^P' _fzf_custom_history
+bindkey '^[[A' _fzf_custom_history
