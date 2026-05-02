@@ -126,5 +126,8 @@ source "$_starship_cache"
 
 eval "$(gcm init zsh)"
 
+# Directory jump owns Tab and must load after fzf/gcm keybindings.
+[[ -f "$HOME/.zsh-fzf-dir-jump" ]] && . "$HOME/.zsh-fzf-dir-jump"
+
 # Exit with 0 if everything's fine
 true
