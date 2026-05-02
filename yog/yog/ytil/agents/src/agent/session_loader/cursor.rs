@@ -16,7 +16,7 @@ use crate::agent::session::Session;
 /// Returns an error when Cursor metadata cannot be read or parsed.
 pub fn load_sessions() -> rootcause::Result<Vec<Session>> {
     let chats_root = ytil_sys::dir::build_home_path(Agent::Cursor.sessions_root_path())?;
-    let session_paths = ytil_sys::file::find_matching_recursively_in_dir(
+    let session_paths = crate::agent::session_loader::find_session_paths(
         &chats_root,
         |entry| entry.path().file_name().is_some_and(|name| name == "store.db"),
         |_| false,
@@ -46,7 +46,7 @@ pub fn load_sessions() -> rootcause::Result<Vec<Session>> {
             .attach_with(|| format!("store_db={}", store_db.display()))?;
         session.search_text =
             crate::agent::session_parser::cursor::build_search_text_from_strings(&session.name, &strings_output);
-        session.updated_at = super::file_updated_at(&store_db)?.unwrap_or(session.created_at);
+        session.updated_at = crate::agent::session_loader::file_updated_at(&store_db)?.unwrap_or(session.created_at);
         session.path = store_db.parent().map_or_else(|| store_db.clone(), Path::to_path_buf);
         sessions.push(session);
     }
@@ -58,7 +58,7 @@ fn load_known_workspaces() -> rootcause::Result<Vec<PathBuf>> {
     let root = ytil_sys::dir::build_home_path(&[".cursor", "projects"])?;
 
     let mut workspaces = Vec::new();
-    for path in ytil_sys::file::find_matching_recursively_in_dir(
+    for path in crate::agent::session_loader::find_session_paths(
         &root,
         |entry| {
             entry
