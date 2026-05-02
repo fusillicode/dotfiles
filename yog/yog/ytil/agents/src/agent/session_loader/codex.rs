@@ -10,7 +10,7 @@ use crate::agent::session::Session;
 /// session file cannot be parsed.
 pub fn load_sessions() -> rootcause::Result<Vec<Session>> {
     let root = ytil_sys::dir::build_home_path(Agent::Codex.sessions_root_path())?;
-    let session_paths = ytil_sys::file::find_matching_recursively_in_dir(
+    let session_paths = crate::agent::session_loader::find_session_paths(
         &root,
         |entry| entry.path().extension().is_some_and(|ext| ext == "jsonl"),
         |_| false,
