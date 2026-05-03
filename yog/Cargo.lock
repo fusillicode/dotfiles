@@ -5996,7 +5996,9 @@ name = "zcp"
 version = "0.1.0"
 dependencies = [
  "pretty_assertions",
+ "rstest",
  "zellij-tile",
+ "zellij-utils",
 ]
 
 [[package]]
@@ -6192,6 +6194,7 @@ name = "zop"
 version = "0.1.0"
 dependencies = [
  "pretty_assertions",
+ "rstest",
  "zellij-tile",
 ]
 

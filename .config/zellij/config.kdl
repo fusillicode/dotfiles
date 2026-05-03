@@ -109,7 +109,7 @@ keybinds clear-defaults=true {
         bind "Alt C" { Copy; }
         bind "Alt X" {
             MessagePlugin "file:~/.config/zellij/plugins/zcp.wasm" {
-                name "smart-copy"
+                name "zcp"
             }
         }
         bind "Ctrl Alt h" { MoveTab "Left"; }
@@ -136,7 +136,7 @@ keybinds clear-defaults=true {
         bind "Alt C" { Copy; }
         bind "Alt X" {
             MessagePlugin "file:~/.config/zellij/plugins/zcp.wasm" {
-                name "smart-copy"
+                name "zcp"
             }
         }
         bind "Esc" "Alt S" { SwitchToMode "Normal"; }
