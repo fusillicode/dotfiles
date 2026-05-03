@@ -2,8 +2,7 @@ use std::collections::BTreeMap;
 
 use zellij_tile::prelude::*;
 
-const SMART_COPY_PIPE: &str = "smart-copy";
-const DEFAULT_MESSAGE_PLUGIN_PIPE_SUFFIX: &str = "/zcp.wasm";
+const ZCP_PIPE: &str = "zcp";
 
 #[derive(Default)]
 struct State;
@@ -28,11 +27,15 @@ impl ZellijPlugin for State {
     }
 
     fn pipe(&mut self, pipe_message: PipeMessage) -> bool {
-        if !is_smart_copy_pipe_name(&pipe_message.name) {
+        if pipe_message.name != ZCP_PIPE {
             return false;
         }
 
-        copy_selection(selected_text_from_focused_pane(), copy_to_clipboard);
+        let Some(selection) = get_selected_text_from_focused_pane(get_focused_pane_info, get_pane_scrollback) else {
+            return false;
+        };
+
+        copy_to_clipboard(selection);
         false
     }
 }
@@ -41,124 +44,93 @@ impl ZellijPlugin for State {
 #[unsafe(no_mangle)]
 const extern "C" fn host_run_plugin_command() {}
 
-fn selected_text_from_focused_pane() -> Option<String> {
+fn get_selected_text_from_focused_pane(
+    get_focused_pane_info: impl FnOnce() -> Result<(usize, PaneId), String>,
+    get_pane_scrollback: impl FnOnce(PaneId, bool) -> Result<PaneContents, String>,
+) -> Option<String> {
     let Ok((_tab_idx, pane_id)) = get_focused_pane_info() else {
         return None;
     };
     let Ok(contents) = get_pane_scrollback(pane_id, false) else {
         return None;
     };
-    contents.get_selected_text()
-}
-
-fn is_smart_copy_pipe_name(name: &str) -> bool {
-    name == SMART_COPY_PIPE || name.ends_with(DEFAULT_MESSAGE_PLUGIN_PIPE_SUFFIX)
-}
-
-fn copy_selection(selection: Option<String>, copy: impl FnOnce(String)) -> bool {
-    let Some(selection) = selection else {
-        return false;
-    };
-
-    copy(normalize_selection(&selection));
-    true
-}
-
-fn normalize_selection(selection: &str) -> String {
-    selection.split('\n').map(str::trim).collect::<Vec<_>>().join(" ")
+    contents
+        .get_selected_text()
+        .map(|selection| selection.split('\n').map(str::trim).collect::<Vec<_>>().join(" "))
 }
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+    use zellij_utils::position::Position;
+
     use super::*;
 
-    #[test]
-    fn test_normalize_selection_joins_indented_flag_continuations() {
-        let actual = normalize_selection("cargo test\n  --package foo\n  -- --nocapture");
+    #[rstest]
+    #[case(
+        vec!["cargo test", "  --package foo", "  -- --nocapture"],
+        Position::new(0, 0),
+        Position::new(2, 16),
+        Some("cargo test --package foo -- --nocapture"),
+    )]
+    #[case(
+        vec!["  cargo test  ", "    --all-targets\t"],
+        Position::new(0, 0),
+        Position::new(1, 18),
+        Some("cargo test --all-targets"),
+    )]
+    #[case(
+        vec!["printf 'a  b'", "  --flag=value"],
+        Position::new(0, 0),
+        Position::new(1, 14),
+        Some("printf 'a  b' --flag=value"),
+    )]
+    fn test_get_selected_text_from_focused_pane_returns_normalized_selected_text(
+        #[case] viewport: Vec<&str>,
+        #[case] selection_start: Position,
+        #[case] selection_end: Position,
+        #[case] expected: Option<&str>,
+    ) {
+        let pane_id = PaneId::Terminal(1);
+        let pane_contents = PaneContents::new(
+            viewport.into_iter().map(str::to_string).collect(),
+            selection_start,
+            selection_end,
+        );
+        let actual = get_selected_text_from_focused_pane(
+            || Ok((0, pane_id)),
+            |actual_pane_id, get_full_scrollback| {
+                pretty_assertions::assert_eq!(actual_pane_id, pane_id);
+                pretty_assertions::assert_eq!(get_full_scrollback, false);
+                Ok(pane_contents)
+            },
+        );
 
-        pretty_assertions::assert_eq!(actual, "cargo test --package foo -- --nocapture");
+        pretty_assertions::assert_eq!(actual.as_deref(), expected);
     }
 
     #[test]
-    fn test_normalize_selection_trims_surrounding_indentation_and_whitespace() {
-        let actual = normalize_selection("  cargo test  \n    --all-targets\t");
+    fn test_get_selected_text_from_focused_pane_returns_none_when_no_pane_is_focused() {
+        let mut read_scrollback = false;
+        let actual = get_selected_text_from_focused_pane(
+            || Err("missing focused pane".to_string()),
+            |_pane_id, _get_full_scrollback| {
+                read_scrollback = true;
+                Ok(PaneContents::default())
+            },
+        );
 
-        pretty_assertions::assert_eq!(actual, "cargo test --all-targets");
+        pretty_assertions::assert_eq!(actual, None);
+        pretty_assertions::assert_eq!(read_scrollback, false);
     }
 
     #[test]
-    fn test_normalize_selection_preserves_interior_spaces_within_line() {
-        let actual = normalize_selection("printf 'a  b'\n  --flag=value");
+    fn test_get_selected_text_from_focused_pane_returns_none_when_no_text_is_selected() {
+        let actual = get_selected_text_from_focused_pane(
+            || Ok((0, PaneId::Terminal(1))),
+            |_pane_id, _get_full_scrollback| Ok(PaneContents::default()),
+        );
 
-        pretty_assertions::assert_eq!(actual, "printf 'a  b' --flag=value");
-    }
-
-    #[test]
-    fn test_normalize_selection_single_line_stays_single_line() {
-        let actual = normalize_selection("  cargo test  ");
-
-        pretty_assertions::assert_eq!(actual, "cargo test");
-    }
-
-    #[test]
-    fn test_normalize_selection_blank_line_still_copies() {
-        let actual = normalize_selection("cargo test\n\n  --all-targets");
-
-        pretty_assertions::assert_eq!(actual, "cargo test  --all-targets");
-    }
-
-    #[test]
-    fn test_normalize_selection_all_whitespace_still_copies_empty_text() {
-        let actual = normalize_selection("  \n\t");
-
-        pretty_assertions::assert_eq!(actual, " ");
-    }
-
-    #[test]
-    fn test_copy_selection_valid_smart_copy_selection_writes_clipboard_text() {
-        let mut copied = None;
-        let changed = copy_selection(Some("cargo test\n  --all-targets".to_string()), |text| {
-            copied = Some(text);
-        });
-
-        assert!(changed);
-        pretty_assertions::assert_eq!(copied.as_deref(), Some("cargo test --all-targets"));
-    }
-
-    #[test]
-    fn test_copy_selection_missing_selection_is_no_op() {
-        let mut copied = None;
-        let changed = copy_selection(None, |text| {
-            copied = Some(text);
-        });
-
-        assert!(!changed);
-        pretty_assertions::assert_eq!(copied, None);
-    }
-
-    #[test]
-    fn test_copy_selection_blank_line_selection_writes_clipboard_text() {
-        let mut copied = None;
-        let changed = copy_selection(Some("cargo test\n\n  --all-targets".to_string()), |text| {
-            copied = Some(text);
-        });
-
-        assert!(changed);
-        pretty_assertions::assert_eq!(copied.as_deref(), Some("cargo test  --all-targets"));
-    }
-
-    #[test]
-    fn test_is_smart_copy_pipe_name_accepts_explicit_name() {
-        assert!(is_smart_copy_pipe_name("smart-copy"));
-    }
-
-    #[test]
-    fn test_is_smart_copy_pipe_name_accepts_message_plugin_default_name() {
-        assert!(is_smart_copy_pipe_name("file:~/.config/zellij/plugins/zcp.wasm"));
-    }
-
-    #[test]
-    fn test_is_smart_copy_pipe_name_rejects_unrelated_pipe() {
-        assert!(!is_smart_copy_pipe_name("other"));
+        pretty_assertions::assert_eq!(actual, None);
     }
 }
