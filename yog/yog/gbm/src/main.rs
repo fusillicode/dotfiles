@@ -8,17 +8,17 @@ use rootcause::report;
 use ytil_git::branch::Branch;
 use ytil_sys::cli::Args as _;
 
-const ZSHRC_INSTALL_LINE: &str = r#"eval "$(gcm init zsh)""#;
-const ZSH_WRAPPER: &str = r#"gcm() {
+const ZSHRC_INSTALL_LINE: &str = r#"eval "$(gbm init zsh)""#;
+const ZSH_WRAPPER: &str = r#"gbm() {
   if (( $# == 0 )); then
     local branch
-    branch="$(command gcm --pick)" || return
+    branch="$(command gbm --pick)" || return
     [[ -n "$branch" ]] || return
-    print -z -- "gcm ${(q)branch}"
+    print -z -- "gbm ${(q)branch}"
     return
   fi
 
-  command gcm "$@"
+  command gbm "$@"
 }
 "#;
 
@@ -33,8 +33,8 @@ fn main() -> rootcause::Result<()> {
 
     let args: Vec<_> = args.iter().map(String::as_str).collect();
     match args.as_slice() {
-        [] => Err(report!("gcm shell wrapper is not installed or loaded")
-            .attach("run `gcm install` first, then restart zsh or source ~/.zshrc")),
+        [] => Err(report!("gbm shell wrapper is not installed or loaded")
+            .attach("run `gbm install` first, then restart zsh or source ~/.zshrc")),
         ["--pick"] => pick_git_branch(),
         ["install"] => install_zsh_wrapper(),
         ["init", "zsh"] => {
@@ -61,7 +61,7 @@ fn install_zsh_wrapper() -> rootcause::Result<()> {
         .map(|home| Path::new(&home).join(".zshrc"))?;
 
     install_zsh_wrapper_at(&zshrc)?;
-    println!("{} gcm in {}", "Installed".green().bold(), zshrc.display());
+    println!("{} gbm in {}", "Installed".green().bold(), zshrc.display());
 
     Ok(())
 }

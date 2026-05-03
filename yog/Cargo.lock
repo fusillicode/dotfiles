@@ -1629,19 +1629,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "gch"
-version = "0.1.0"
-dependencies = [
- "owo-colors 4.3.0",
- "rootcause",
- "strum 0.28.0",
- "ytil_git",
- "ytil_sys",
- "ytil_tui",
-]
-
-[[package]]
-name = "gcm"
+name = "gbm"
 version = "0.1.0"
 dependencies = [
  "assert2",
@@ -1651,6 +1639,18 @@ dependencies = [
  "rootcause",
  "rstest",
  "tempfile",
+ "ytil_git",
+ "ytil_sys",
+ "ytil_tui",
+]
+
+[[package]]
+name = "gch"
+version = "0.1.0"
+dependencies = [
+ "owo-colors 4.3.0",
+ "rootcause",
+ "strum 0.28.0",
  "ytil_git",
  "ytil_sys",
  "ytil_tui",
