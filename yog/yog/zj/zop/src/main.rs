@@ -150,7 +150,7 @@ impl State {
                 resize_focused_pane_with_direction(Resize::Increase, Direction::Left);
             }
             write_chars_to_pane_id(
-                &pending_open.target.shell_command(pending_open.source_cwd.as_ref()),
+                &pending_open.target.shell_cmd(pending_open.source_cwd.as_ref()),
                 opened_pane_id,
             );
         }
@@ -240,31 +240,23 @@ impl FileTarget {
         format!("+call cursor({}, {})", self.line, self.column)
     }
 
-    fn shell_command(&self, cwd: Option<&PathBuf>) -> String {
+    fn shell_cmd(&self, cwd: Option<&PathBuf>) -> String {
         let cd_prefix = cwd.map_or_else(String::new, |cwd| {
-            format!("cd {} && ", shell_single_quoted_string(&cwd.to_string_lossy()))
+            format!("cd {} && ", single_quoted_string(&cwd.to_string_lossy(), "'\\''"))
         });
         format!(
             "{cd_prefix}nvim {} -- {}\r",
-            shell_single_quoted_string(&self.cursor_arg()),
-            shell_single_quoted_string(&self.path.to_string_lossy())
+            single_quoted_string(&self.cursor_arg(), "'\\''"),
+            single_quoted_string(&self.path.to_string_lossy(), "'\\''")
         )
     }
 
-    fn edit_command(&self) -> String {
-        let path = self.path.to_string_lossy();
-        let mut quoted_path = String::from("'");
-        for ch in path.chars() {
-            if ch == '\'' {
-                quoted_path.push('\'');
-            }
-            quoted_path.push(ch);
-        }
-        quoted_path.push('\'');
-
+    fn edit_cmd(&self) -> String {
         format!(
-            ":silent execute 'edit ' . fnameescape({quoted_path}) | call cursor({}, {}) | redraw!\r",
-            self.line, self.column
+            ":silent execute 'edit ' . fnameescape({}) | call cursor({}, {}) | redraw!\r",
+            single_quoted_string(&self.path.to_string_lossy(), "''"),
+            self.line,
+            self.column
         )
     }
 }
@@ -397,21 +389,21 @@ fn open_in_existing_nvim(target_pane: &PaneInfo, target: &FileTarget) {
     let pane_id = PaneId::Terminal(target_pane.id);
     focus_pane_with_id(pane_id, false, false);
     write_to_pane_id(NVIM_NORMAL_MODE_KEYS.to_vec(), pane_id);
-    write_chars_to_pane_id(&target.edit_command(), pane_id);
+    write_chars_to_pane_id(&target.edit_cmd(), pane_id);
     write_to_pane_id(NVIM_REDRAW_KEYS.to_vec(), pane_id);
 }
 
 fn open_in_replaced_pane(target_pane: &PaneInfo, target: &FileTarget, cwd: Option<&PathBuf>) {
     let pane_id = PaneId::Terminal(target_pane.id);
     focus_pane_with_id(pane_id, false, false);
-    write_chars_to_pane_id(&target.shell_command(cwd), pane_id);
+    write_chars_to_pane_id(&target.shell_cmd(cwd), pane_id);
 }
 
-fn shell_single_quoted_string(input: &str) -> String {
+fn single_quoted_string(input: &str, escape: &str) -> String {
     let mut output = String::from("'");
     for ch in input.chars() {
         if ch == '\'' {
-            output.push_str("'\\''");
+            output.push_str(escape);
         } else {
             output.push(ch);
         }
@@ -522,8 +514,8 @@ mod tests {
         },
         ":silent execute 'edit ' . fnameescape('/tmp/foo''bar.rs') | call cursor(12, 3) | redraw!\r",
     )]
-    fn test_file_target_edit_command_returns_nvim_command(#[case] target: FileTarget, #[case] expected: &str) {
-        pretty_assertions::assert_eq!(target.edit_command(), expected);
+    fn test_file_target_edit_cmd_returns_nvim_command(#[case] target: FileTarget, #[case] expected: &str) {
+        pretty_assertions::assert_eq!(target.edit_cmd(), expected);
     }
 
     #[rstest]
@@ -545,12 +537,12 @@ mod tests {
         Some(PathBuf::from("/repo")),
         "cd '/repo' && nvim '+call cursor(12, 3)' -- '/repo/src/main.rs'\r",
     )]
-    fn test_file_target_shell_command_returns_nvim_command(
+    fn test_file_target_shell_cmd_returns_nvim_command(
         #[case] target: FileTarget,
         #[case] cwd: Option<PathBuf>,
         #[case] expected: &str,
     ) {
-        pretty_assertions::assert_eq!(target.shell_command(cwd.as_ref()), expected);
+        pretty_assertions::assert_eq!(target.shell_cmd(cwd.as_ref()), expected);
     }
 
     fn pane(
