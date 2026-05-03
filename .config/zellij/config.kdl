@@ -79,6 +79,7 @@ theme "minimal"
 
 load_plugins {
     "file:~/.config/zellij/plugins/zcp.wasm"
+    "file:~/.config/zellij/plugins/zop.wasm"
 }
 
 keybinds clear-defaults=true {

@@ -37,6 +37,7 @@ members = [
     "yog/zj/agg",
     "yog/zj/cli",
     "yog/zj/zcp",
+    "yog/zj/zop",
 ]
 
 [workspace.package]

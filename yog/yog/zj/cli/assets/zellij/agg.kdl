@@ -5,7 +5,7 @@ layout {
     }
     children
   }
-  tab name {
+  tab {
     pane
   }
 }
