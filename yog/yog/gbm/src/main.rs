@@ -61,7 +61,7 @@ fn install_zsh_wrapper() -> rootcause::Result<()> {
         .map(|home| Path::new(&home).join(".zshrc"))?;
 
     install_zsh_wrapper_at(&zshrc)?;
-    println!("{} gbm in {}", "Installed".green().bold(), zshrc.display());
+    println!("{} gbm in {}", "Patched".green().bold(), zshrc.display());
 
     Ok(())
 }

@@ -137,7 +137,7 @@ fn install_wasm_plugin(built: &Path, install_name: &str) -> rootcause::Result<()
         .attach_with(|| format!("from={}", built.display()))
         .attach_with(|| format!("to={}", dest.display()))?;
 
-    println!("{} {}", "Installed".green().bold(), dest.display());
+    println!("{} {}", "Copied".green().bold(), dest.display());
     Ok(())
 }
 
@@ -156,7 +156,7 @@ fn install_layout_file(source: &Path, layout_name: &str) -> rootcause::Result<()
         .attach_with(|| format!("from={}", source.display()))
         .attach_with(|| format!("to={}", dest.display()))?;
 
-    println!("{} {}", "Installed".green().bold(), dest.display());
+    println!("{} {}", "Copied".green().bold(), dest.display());
     Ok(())
 }
 
@@ -233,12 +233,7 @@ fn install_hooks(agent: Agent) -> rootcause::Result<()> {
         .attach_with(|| format!("path={}", path.display()))
         .attach_with(|| format!("agent={}", agent.name()))?;
 
-    println!(
-        "{} {} hooks in {}",
-        "Installed".green().bold(),
-        agent.name(),
-        path.display()
-    );
+    println!("{} hooks in {}", "Patched".green().bold(), path.display());
 
     Ok(())
 }
@@ -270,7 +265,7 @@ fn install_opencode_plugin() -> rootcause::Result<()> {
         .context("failed to write opencode plugin file")
         .attach_with(|| format!("path={}", path.display()))?;
 
-    println!("{} opencode plugin in {}", "Installed".green().bold(), path.display());
+    println!("{} opencode plugin in {}", "Copied".green().bold(), path.display());
     Ok(())
 }
 
