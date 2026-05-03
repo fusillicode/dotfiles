@@ -121,7 +121,7 @@ where
 }
 
 /// Copies a built binary or library from `from` to `to` using
-/// [`ytil_sys::file::atomic_cp`] and prints an "Installed" status line.
+/// [`ytil_sys::file::atomic_cp`] and prints an "Copied" status line.
 ///
 /// # Errors
 /// - [`ytil_sys::file::atomic_cp`] fails to copy.
