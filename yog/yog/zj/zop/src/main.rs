@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::path::Path;
 use std::path::PathBuf;
 
 use zellij_tile::prelude::*;
@@ -12,7 +11,6 @@ const DEFAULT_LINE: usize = 1;
 const EXISTS_CHECK_KIND: &str = "zop-exists-check";
 const CONTEXT_KIND: &str = "kind";
 const CONTEXT_REQUEST_ID: &str = "request_id";
-const RIGHT_PANE_RESIZE_LEFT_COUNT: usize = 2;
 const NVIM_NORMAL_MODE_KEYS: &[u8] = &[0x1c, 0x0e];
 const NVIM_REDRAW_KEYS: &[u8] = &[0x0c];
 
@@ -40,41 +38,34 @@ impl ZellijPlugin for State {
     }
 
     fn update(&mut self, event: Event) -> bool {
-        if event == Event::PermissionRequestResult(PermissionStatus::Granted) {
-            set_selectable(false);
-            subscribe(&[
-                EventType::PaneUpdate,
-                EventType::CwdChanged,
-                EventType::HighlightClicked,
-                EventType::RunCommandResult,
-            ]);
-            return false;
-        }
-
-        if let Event::PaneUpdate(pane_manifest) = &event {
-            self.handle_pane_update(pane_manifest.clone());
-            return false;
-        }
-
-        if let Event::CwdChanged(pane_id, cwd, _focused_client_ids) = &event {
-            self.pane_cwds.insert(*pane_id, cwd.clone());
-            Self::set_highlights_for_pane(*pane_id);
-            return false;
-        }
-
-        if let Event::HighlightClicked {
-            pane_id,
-            pattern: _,
-            matched_string,
-            context: _,
-        } = &event
-        {
-            self.handle_highlight_clicked(*pane_id, matched_string);
-            return false;
-        }
-
-        if let Event::RunCommandResult(exit_code, _stdout, _stderr, context) = &event {
-            self.handle_run_command_result(*exit_code, context);
+        #[expect(
+            clippy::wildcard_enum_match_arm,
+            reason = "zop only subscribes to a small Event subset"
+        )]
+        match event {
+            Event::PermissionRequestResult(PermissionStatus::Granted) => {
+                set_selectable(false);
+                subscribe(&[
+                    EventType::PaneUpdate,
+                    EventType::CwdChanged,
+                    EventType::HighlightClicked,
+                    EventType::RunCommandResult,
+                ]);
+            }
+            Event::PaneUpdate(pane_manifest) => self.handle_pane_update(pane_manifest),
+            Event::CwdChanged(pane_id, cwd, _focused_client_ids) => {
+                self.pane_cwds.insert(pane_id, cwd);
+                set_highlights_for_pane(pane_id);
+            }
+            Event::HighlightClicked {
+                pane_id,
+                matched_string,
+                ..
+            } => self.handle_highlight_clicked(pane_id, &matched_string),
+            Event::RunCommandResult(exit_code, _stdout, _stderr, context) => {
+                let _ = self.handle_run_command_result(exit_code, &context);
+            }
+            _ => {}
         }
 
         false
@@ -97,29 +88,12 @@ impl State {
                 if let Ok(cwd) = get_pane_cwd(*pane_id) {
                     self.pane_cwds.insert(*pane_id, cwd);
                 }
-                Self::set_highlights_for_pane(*pane_id);
+                set_highlights_for_pane(*pane_id);
             }
         }
         self.pane_cwds.retain(|pane_id, _cwd| current_panes.contains(pane_id));
         self.known_terminal_panes = current_panes;
         self.pane_manifest = Some(pane_manifest);
-    }
-
-    fn set_highlights_for_pane(pane_id: PaneId) {
-        set_pane_regex_highlights(
-            pane_id,
-            vec![RegexHighlight {
-                pattern: FILE_LOCATION_REGEX.to_owned(),
-                style: HighlightStyle::None,
-                layer: HighlightLayer::Tool,
-                context: BTreeMap::new(),
-                on_hover: true,
-                bold: false,
-                italic: false,
-                underline: true,
-                tooltip_text: Some("Open in nvim".to_owned()),
-            }],
-        );
     }
 
     fn handle_highlight_clicked(&mut self, source_pane_id: PaneId, matched_string: &str) {
@@ -143,6 +117,47 @@ impl State {
         self.check_file_exists_then_open(source_pane_id, target, source_cwd);
     }
 
+    fn handle_run_command_result(&mut self, exit_code: Option<i32>, context: &BTreeMap<String, String>) -> Option<()> {
+        (context.get(CONTEXT_KIND)? == EXISTS_CHECK_KIND).then_some(())?;
+        let request_id = context.get(CONTEXT_REQUEST_ID)?;
+        let pending_open = self.pending_nvim_opens.remove(request_id)?;
+        (exit_code == Some(0)).then_some(())?;
+        let manifest = self.pane_manifest.as_ref()?;
+        let tab_panes = panes_for_source_pane(manifest, pending_open.source_pane_id)?;
+        let source_pane = terminal_pane_by_id(tab_panes, pending_open.source_pane_id)?;
+
+        if let Some(target) = nearest_nvim_pane_with(tab_panes, source_pane, is_live_nvim_pane) {
+            open_in_existing_nvim(target, &pending_open.target);
+            return Some(());
+        }
+
+        if let Some(target) = first_right_terminal_pane_with(tab_panes, source_pane, is_live_nvim_pane) {
+            open_in_replaced_pane(target, &pending_open.target, pending_open.source_cwd.as_ref());
+            return Some(());
+        }
+
+        focus_pane_with_id(pending_open.source_pane_id, false, false);
+        if let Some(opened_pane_id) = open_terminal(
+            pending_open
+                .source_cwd
+                .clone()
+                .or_else(|| pending_open.target.path.parent().map(PathBuf::from))
+                .unwrap_or_else(|| PathBuf::from(".")),
+        ) {
+            move_pane_with_pane_id_in_direction(opened_pane_id, Direction::Right);
+            focus_pane_with_id(opened_pane_id, false, false);
+            for _ in 0..2 {
+                resize_focused_pane_with_direction(Resize::Increase, Direction::Left);
+            }
+            write_chars_to_pane_id(
+                &pending_open.target.shell_command(pending_open.source_cwd.as_ref()),
+                opened_pane_id,
+            );
+        }
+
+        Some(())
+    }
+
     fn check_file_exists_then_open(&mut self, source_pane_id: PaneId, target: FileTarget, source_cwd: Option<PathBuf>) {
         let request_id = self.next_request_id.to_string();
         self.next_request_id = self.next_request_id.saturating_add(1);
@@ -160,49 +175,6 @@ impl State {
 
         self.pending_nvim_opens.insert(request_id, pending_open);
         run_command_with_env_variables_and_cwd(&command, BTreeMap::new(), cwd, context);
-    }
-
-    fn handle_run_command_result(&mut self, exit_code: Option<i32>, context: &BTreeMap<String, String>) {
-        if context.get(CONTEXT_KIND).is_none_or(|kind| kind != EXISTS_CHECK_KIND) {
-            return;
-        }
-        let Some(request_id) = context.get(CONTEXT_REQUEST_ID) else {
-            return;
-        };
-        let Some(pending_open) = self.pending_nvim_opens.remove(request_id) else {
-            return;
-        };
-        if exit_code != Some(0) {
-            return;
-        }
-        let Some(manifest) = self.pane_manifest.as_ref() else {
-            return;
-        };
-        let Some(tab_panes) = panes_for_source_pane(manifest, pending_open.source_pane_id) else {
-            return;
-        };
-        let Some(source_pane) = terminal_pane_by_id(tab_panes, pending_open.source_pane_id) else {
-            return;
-        };
-        Self::open_target(tab_panes, source_pane, &pending_open);
-    }
-
-    fn open_target(tab_panes: &[PaneInfo], source_pane: &PaneInfo, pending_open: &PendingNvimOpen) {
-        if let Some(target) = nearest_nvim_pane_with(tab_panes, source_pane, is_live_nvim_pane) {
-            open_in_existing_nvim(target, &pending_open.target);
-            return;
-        }
-
-        if let Some(target) = first_right_terminal_pane_with(tab_panes, source_pane, is_live_nvim_pane) {
-            open_in_replaced_pane(target, &pending_open.target, pending_open.source_cwd.as_ref());
-            return;
-        }
-
-        open_in_new_pane(
-            pending_open.source_pane_id,
-            &pending_open.target,
-            pending_open.source_cwd.as_ref(),
-        );
     }
 }
 
@@ -264,13 +236,6 @@ impl FileTarget {
         Self { path, line, column }
     }
 
-    fn terminal_cwd(&self, source_cwd: Option<&PathBuf>) -> PathBuf {
-        source_cwd
-            .cloned()
-            .or_else(|| self.path.parent().map(Path::to_path_buf))
-            .unwrap_or_else(|| PathBuf::from("."))
-    }
-
     fn cursor_arg(&self) -> String {
         format!("+call cursor({}, {})", self.line, self.column)
     }
@@ -309,6 +274,23 @@ struct PendingNvimOpen {
     source_pane_id: PaneId,
     target: FileTarget,
     source_cwd: Option<PathBuf>,
+}
+
+fn set_highlights_for_pane(pane_id: PaneId) {
+    set_pane_regex_highlights(
+        pane_id,
+        vec![RegexHighlight {
+            pattern: FILE_LOCATION_REGEX.to_owned(),
+            style: HighlightStyle::None,
+            layer: HighlightLayer::Tool,
+            context: BTreeMap::new(),
+            on_hover: true,
+            bold: false,
+            italic: false,
+            underline: true,
+            tooltip_text: Some("Open in nvim".to_owned()),
+        }],
+    );
 }
 
 fn panes_for_source_pane(manifest: &PaneManifest, source_pane_id: PaneId) -> Option<&[PaneInfo]> {
@@ -423,22 +405,6 @@ fn open_in_replaced_pane(target_pane: &PaneInfo, target: &FileTarget, cwd: Optio
     let pane_id = PaneId::Terminal(target_pane.id);
     focus_pane_with_id(pane_id, false, false);
     write_chars_to_pane_id(&target.shell_command(cwd), pane_id);
-}
-
-fn open_in_new_pane(source_pane_id: PaneId, target: &FileTarget, cwd: Option<&PathBuf>) {
-    focus_pane_with_id(source_pane_id, false, false);
-    if let Some(opened_pane_id) = open_terminal(target.terminal_cwd(cwd)) {
-        move_pane_with_pane_id_in_direction(opened_pane_id, Direction::Right);
-        focus_pane_with_id(opened_pane_id, false, false);
-        resize_focused_pane_left_like_keymap();
-        write_chars_to_pane_id(&target.shell_command(cwd), opened_pane_id);
-    }
-}
-
-fn resize_focused_pane_left_like_keymap() {
-    for _ in 0..RIGHT_PANE_RESIZE_LEFT_COUNT {
-        resize_focused_pane_with_direction(Resize::Increase, Direction::Left);
-    }
 }
 
 fn shell_single_quoted_string(input: &str) -> String {
