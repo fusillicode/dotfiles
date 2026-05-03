@@ -20,6 +20,10 @@ const ZCP_PLUGIN: PluginInstallSpec = PluginInstallSpec {
     dir_name: "zcp",
     wasm_name: "zcp.wasm",
 };
+const ZOP_PLUGIN: PluginInstallSpec = PluginInstallSpec {
+    dir_name: "zop",
+    wasm_name: "zop.wasm",
+};
 const LAYOUT_FILENAME: &str = "agg.kdl";
 const GEMINI_HOOK_NAME_PREFIX: &str = "agg-gemini-";
 const OPENCODE_AGG_PLUGIN_PATH: &[&str] = &[".config", "opencode", "plugins", "agg.ts"];
@@ -79,6 +83,7 @@ fn install_layout() -> rootcause::Result<()> {
 pub fn install_all(is_debug: bool) -> rootcause::Result<()> {
     install_agg_plugin_and_hooks(is_debug)?;
     build_and_install_plugin(&ZCP_PLUGIN, is_debug).context("failed to install zcp wasm plugin")?;
+    build_and_install_plugin(&ZOP_PLUGIN, is_debug).context("failed to install zop wasm plugin")?;
     Ok(())
 }
 
