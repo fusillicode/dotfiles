@@ -1,0 +1,10 @@
+Usage: gbm [install | init zsh | --pick | <branch-name>]
+
+Interactive current-branch rename helper.
+
+Modes:
+  gbm                 Pick recent branch; leaves `gbm <branch>` in zsh input (requires install).
+  gbm <branch-name>   Rename current branch to <branch-name>.
+  gbm install         Add the one-line zsh wrapper setup to ~/.zshrc.
+  gbm init zsh        Print the zsh wrapper.
+  gbm --pick          Pick recent branch and print its name.
