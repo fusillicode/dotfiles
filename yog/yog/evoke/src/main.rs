@@ -14,7 +14,7 @@ use ytil_sys::cli::Args;
 /// List of binaries that should be copied after building.
 /// NOTE: if a new binary is added this list must be updated!
 const BINS: &[&str] = &[
-    "ags", "catl", "fkr", "gch", "gcm", "gcu", "ghl", "idt", "oe", "rmr", "strgci", "tec", "try", "vpg", "yghfl",
+    "ags", "catl", "fkr", "gbm", "gch", "gcu", "ghl", "idt", "oe", "rmr", "strgci", "tec", "try", "vpg", "yghfl",
     "yhfp", "zj",
 ];
 /// List of library files that need to be renamed after building, mapping (`source_name`, `target_name`).
@@ -93,7 +93,7 @@ fn main() -> rootcause::Result<()> {
     }
     zj.status()?.exit_ok()?;
 
-    Command::new(bins_path.join("gcm")).arg("install").status()?.exit_ok()?;
+    Command::new(bins_path.join("gbm")).arg("install").status()?.exit_ok()?;
 
     Ok(())
 }

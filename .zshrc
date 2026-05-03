@@ -124,7 +124,7 @@ source "$_starship_cache"
 [[ ~/.zshrc -nt ~/.zshrc.zwc ]] && zcompile ~/.zshrc
 [[ ~/.zsh_aliases -nt ~/.zsh_aliases.zwc ]] && zcompile ~/.zsh_aliases
 
-eval "$(gcm init zsh)"
+eval "$(gbm init zsh)"
 
 # Directory jump owns Tab and must load after fzf/gcm keybindings.
 [[ -f "$HOME/.zsh-fzf-dir-jump" ]] && . "$HOME/.zsh-fzf-dir-jump"
