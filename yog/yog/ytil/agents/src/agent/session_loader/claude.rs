@@ -28,8 +28,9 @@ pub fn load_sessions() -> rootcause::Result<Vec<Session>> {
         let content = std::fs::read_to_string(&session_path)
             .context("failed to read Claude session file")
             .attach_with(|| format!("path={}", session_path.display()))?;
-        let mut session = crate::agent::session_parser::claude::parse(&content)
+        let claude_session = crate::agent::session_parser::claude::parse(&content)
             .attach_with(|| format!("path={}", session_path.display()))?;
+        let mut session = Session::from(claude_session);
         if session.workspace.is_dir() {
             session.path = session_path;
             sessions.push(session);
