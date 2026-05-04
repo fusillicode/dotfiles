@@ -7,7 +7,7 @@ use agg::GitStat;
 use agg::ParseError;
 use agg::TabIndicator;
 use agg::TabStateEntry;
-use ytil_agents::agent::NudgeIcon;
+use ytil_agents::agent::AgentIcon;
 use zellij_tile::prelude::*;
 
 use crate::wasm::events::PipeEvent;
@@ -15,6 +15,7 @@ use crate::wasm::events::PipeEventError;
 use crate::wasm::events::StateEvent;
 use crate::wasm::state::CurrentTab;
 use crate::wasm::state::FocusedPane;
+use crate::wasm::state::Nudge;
 use crate::wasm::state::State;
 use crate::wasm::state::focused_pane_from_pane_info;
 use crate::wasm::ui;
@@ -49,7 +50,7 @@ impl StateSnapshotPayload {
 impl TryFrom<&PipeMessage> for StateSnapshotPayload {
     type Error = PipeEventError;
 
-    fn try_from(value: &PipeMessage) -> core::result::Result<Self, Self::Error> {
+    fn try_from(value: &PipeMessage) -> Result<Self, Self::Error> {
         let tab_id = value
             .args
             .get("tab_id")
@@ -365,32 +366,19 @@ fn handle_events(state: &mut State, events: &[StateEvent]) {
             | StateEvent::AllTabsReplaced { .. } => {}
         }
     }
-    send_nudges(state);
-}
-
-fn send_nudge(home_dir: &Path, nudge: &crate::wasm::state::Nudge) {
-    let title = nudge.title();
-    let body = nudge.body();
-    let icon_path = nudge_icon_path(home_dir, NudgeIcon::from(nudge.agent));
-    let icon_path = icon_path.to_string_lossy();
-    let args = ["agg", "nudge", title.as_str(), body.as_str(), icon_path.as_ref()];
-    run_command(&args, BTreeMap::new());
-}
-
-fn nudge_icon_path(home_dir: &Path, icon: NudgeIcon) -> PathBuf {
-    home_dir
-        .join(".cache")
-        .join("zj")
-        .join("agg")
-        .join("nudge-icons")
-        .join(format!("{}.png", icon.cache_key))
-}
-
-fn send_nudges(state: &mut State) {
     for (pane_id, nudge) in state.nudges() {
         state.mark_nudged(pane_id);
         send_nudge(&state.home_dir, &nudge);
     }
+}
+
+fn send_nudge(home_dir: &Path, nudge: &Nudge) {
+    let title = nudge.title();
+    let body = nudge.body();
+    let icon_path = AgentIcon::from(nudge.agent).path(home_dir);
+    let icon_path = icon_path.to_string_lossy();
+    let args = ["agg", "nudge", title.as_str(), body.as_str(), icon_path.as_ref()];
+    run_command(&args, BTreeMap::new());
 }
 
 fn zellij_terminal_pane_cwd(pane_id: u32) -> Option<PathBuf> {
