@@ -1,0 +1,6 @@
+Usage: zop [install [--debug]]
+
+Zellij opener plugin helper.
+
+Modes:
+  zop install [--debug]  Build and install the ZOP plugin.

@@ -4,9 +4,6 @@ Interactive Zellij session management and zellij proxy.
 
 Commands:
   install [--debug]     Build and install Zellij plugins, AGG layout, and agent hooks.
-  git-stat <paths...>   Print git status for paths. Used by AGG.
-  nudge <name> <body> [image-path]
-                        Send a desktop notification. Used by AGG.
 
 Running `zj` with no arguments lists all sessions in a picker,
 lets you multi-select, then choose an action to apply:
@@ -24,7 +21,5 @@ Options:
 Examples:
   zj                  Pick sessions and choose an action interactively.
   zj install          Install Zellij plugins and AGG agent hooks.
-  zj git-stat ~/repo  Print git status for a path.
-  zj nudge "Codex done" "~/repo tab 10 pane 42" ~/.cache/zj/agg/nude-icons/codex.png
   zj help             Show this help message.
   zj <args...>        Forward to `zellij <args...>`.

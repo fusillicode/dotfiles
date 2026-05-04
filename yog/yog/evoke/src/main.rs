@@ -14,8 +14,8 @@ use ytil_sys::cli::Args;
 /// List of binaries that should be copied after building.
 /// NOTE: if a new binary is added this list must be updated!
 const BINS: &[&str] = &[
-    "ags", "catl", "fkr", "gbm", "gch", "gcu", "ghl", "idt", "oe", "rmr", "strgci", "tec", "try", "vpg", "yghfl",
-    "yhfp", "zj",
+    "agg", "ags", "catl", "fkr", "gbm", "gch", "gcu", "ghl", "idt", "oe", "rmr", "strgci", "tec", "try", "vpg",
+    "yghfl", "yhfp", "zcp", "zj", "zop",
 ];
 /// List of library files that need to be renamed after building, mapping (`source_name`, `target_name`).
 const LIBS: &[(&str, &str)] = &[("libnvrim.dylib", "nvrim.so")];

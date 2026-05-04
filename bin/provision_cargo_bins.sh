@@ -24,6 +24,10 @@ declare -a desired_crates=(
   typos-cli
 )
 
+declare -a desired_git_crates=(
+  https://github.com/rtk-ai/rtk
+)
+
 cargo_crates() {
   cargo install --list | awk '
     /^[[:alnum:]_][^[:space:]]*[[:space:]]/ {
@@ -58,5 +62,13 @@ while IFS= read -r crate; do
       ;;
   esac
 done < <(cargo_crates | awk '!seen[$0]++')
+
+for repo in "${desired_git_crates[@]}"; do
+  info "cargo install --git $repo"
+  cargo install --git "$repo" && ok "$repo installed" || {
+    error "$repo failed"
+    failed=1
+  }
+done
 
 exit "$failed"

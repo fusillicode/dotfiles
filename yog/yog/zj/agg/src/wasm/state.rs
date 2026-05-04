@@ -12,9 +12,9 @@ use ytil_agents::agent::AgentEventKind;
 use ytil_agents::agent::AgentEventPayload;
 use zellij_tile::prelude::*;
 
-use crate::StateSnapshotPayload;
-use crate::events::StateEvent;
-use crate::ui::TabRow;
+use crate::wasm::events::StateEvent;
+use crate::wasm::plugin::StateSnapshotPayload;
+use crate::wasm::ui::TabRow;
 
 #[derive(Default)]
 pub struct State {

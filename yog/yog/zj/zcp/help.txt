@@ -1,0 +1,6 @@
+Usage: zcp [install [--debug]]
+
+Zellij smart-copy plugin helper.
+
+Modes:
+  zcp install [--debug]  Build and install the ZCP plugin.

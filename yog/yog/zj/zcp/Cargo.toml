@@ -14,6 +14,11 @@ publish = false
 [dependencies]
 zellij-tile = { git = "https://github.com/zellij-org/zellij.git", branch = "main" }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rootcause = { workspace = true }
+ytil_sys = { workspace = true }
+zj = { path = "../cli" }
+
 [dev-dependencies]
 pretty_assertions = { workspace = true }
 rstest = { workspace = true }
