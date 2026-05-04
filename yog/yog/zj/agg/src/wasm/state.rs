@@ -5,8 +5,8 @@ use std::path::PathBuf;
 
 use agg::AgentState;
 use agg::Cmd;
+use agg::GitStat;
 use agg::TabIndicator;
-use agg::git_stat::GitStat;
 use ytil_agents::agent::Agent;
 use ytil_agents::agent::AgentEventKind;
 use ytil_agents::agent::AgentEventPayload;

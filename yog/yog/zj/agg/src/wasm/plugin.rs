@@ -3,10 +3,10 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use agg::Cmd;
+use agg::GitStat;
 use agg::ParseError;
 use agg::TabIndicator;
 use agg::TabStateEntry;
-use agg::git_stat::GitStat;
 use ytil_agents::agent::NudgeIcon;
 use zellij_tile::prelude::*;
 

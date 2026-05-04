@@ -2,8 +2,8 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use agg::AGENTS_PIPE;
+use agg::GitStat;
 use agg::ParseError;
-use agg::git_stat::GitStat;
 use ytil_agents::agent::Agent;
 use ytil_agents::agent::AgentEventPayload;
 use zellij_tile::prelude::PipeMessage;
@@ -202,8 +202,8 @@ mod tests {
     use std::path::PathBuf;
 
     use agg::Cmd;
+    use agg::GitStat;
     use agg::TabStateEntry;
-    use agg::git_stat::GitStat;
     use rstest::rstest;
     use ytil_agents::agent::Agent;
     use ytil_agents::agent::AgentEventKind;
