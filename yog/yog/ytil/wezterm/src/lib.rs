@@ -212,7 +212,7 @@ mod tests {
     }
 
     #[test]
-    fn test_is_sibling_terminal_pane_of_works_as_expected() {
+    fn test_is_sibling_terminal_pane_of_when_pane_titles_match_returns_expected_bool() {
         let root = pane_with(1, 10, "file:///localhost/Users/alice/src", "hx");
         let child = pane_with(2, 10, "file:///localhost/Users/alice/src/project", "shell");
         let other_tab = pane_with(3, 11, "file:///localhost/Users/alice/src/project", "shell");

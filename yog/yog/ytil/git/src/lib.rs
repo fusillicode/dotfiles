@@ -13,7 +13,7 @@ use git2::StatusOptions;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 pub use ytil_cmd::CmdError;
-use ytil_cmd::CmdExt as _;
+use ytil_cmd::CmdExt;
 
 pub mod branch;
 pub mod diff;
@@ -278,7 +278,7 @@ mod tests {
     #[case::modified_index(Some(IndexState::Modified), None, false)]
     #[case::modified_worktree(None, Some(WorktreeState::Modified), false)]
     #[case::none(None, None, false)]
-    fn test_git_status_entry_is_new_cases(
+    fn test_git_status_entry_is_new_when_entry_varies_returns_expected_bool(
         #[case] index_state: Option<IndexState>,
         #[case] worktree_state: Option<WorktreeState>,
         #[case] expected: bool,
@@ -297,7 +297,7 @@ mod tests {
     #[case::worktree_only_new(None, Some(WorktreeState::New), false)]
     #[case::both_staged_and_worktree(Some(IndexState::Modified), Some(WorktreeState::Modified), true)]
     #[case::none(None, None, false)]
-    fn test_git_status_entry_is_staged_cases(
+    fn test_git_status_entry_is_staged_when_entry_varies_returns_expected_bool(
         #[case] index_state: Option<IndexState>,
         #[case] worktree_state: Option<WorktreeState>,
         #[case] expected: bool,

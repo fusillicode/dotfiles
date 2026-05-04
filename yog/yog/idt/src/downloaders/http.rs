@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use deflate::ChecksumSource;
 use deflate::HttpDeflateOption;
-use rootcause::prelude::ResultExt as _;
+use rootcause::prelude::ResultExt;
 
 pub mod deflate;
 pub mod github;

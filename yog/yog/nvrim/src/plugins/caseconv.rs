@@ -4,9 +4,10 @@
 //! functionality (currently only case conversion via [`convert_case`]).
 
 use std::fmt::Display;
+use std::fmt::Formatter;
 
 use convert_case::Case;
-use convert_case::Casing as _;
+use convert_case::Casing;
 use nvim_oxi::Dictionary;
 use rootcause::Report;
 
@@ -70,7 +71,7 @@ fn convert_selection(_: ()) {
 struct DisplayableCase<'a>(&'a Case<'a>);
 
 impl Display for DisplayableCase<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.0)
     }
 }

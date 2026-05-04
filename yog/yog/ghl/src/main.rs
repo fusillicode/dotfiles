@@ -4,11 +4,12 @@
 //! - Flag parsing, GitHub CLI invocation, or TUI interaction fails.
 
 use std::fmt::Display;
+use std::fmt::Formatter;
 use std::ops::Deref;
 use std::str::FromStr;
 
 use owo_colors::OwoColorize;
-use rootcause::prelude::ResultExt as _;
+use rootcause::prelude::ResultExt;
 use rootcause::report;
 use strum::EnumIter;
 use ytil_gh::RepoViewField;
@@ -16,7 +17,7 @@ use ytil_gh::issue::ListedIssue;
 use ytil_gh::pr::IntoEnumIterator;
 use ytil_gh::pr::PullRequest;
 use ytil_gh::pr::PullRequestMergeState;
-use ytil_sys::cli::Args as _;
+use ytil_sys::cli::Args;
 use ytil_sys::pico_args::Arguments;
 
 /// List and optionally batch‑merge GitHub pull requests interactively or create issues with associated branches.
@@ -125,7 +126,7 @@ impl Deref for RenderablePullRequest {
 }
 
 impl Display for RenderablePullRequest {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         // Write directly to the formatter, avoiding intermediate String allocations from .to_string()
         write!(
             f,
@@ -159,7 +160,7 @@ impl Deref for RenderableListedIssue {
 }
 
 impl Display for RenderableListedIssue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             // The spacing before the title is required to align it with the first line.
@@ -185,7 +186,7 @@ enum SelectableOp {
 }
 
 impl Display for SelectableOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Approve => write!(f, "{}", "Approve".green().bold()),
             Self::ApproveAndMerge => write!(f, "{}", "Approve & Merge".green().bold()),

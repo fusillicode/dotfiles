@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use chrono::DateTime;
-use rootcause::option_ext::OptionExt as _;
-use rootcause::prelude::ResultExt as _;
+use rootcause::option_ext::OptionExt;
+use rootcause::prelude::ResultExt;
 use rootcause::report;
 use serde::Deserialize;
 

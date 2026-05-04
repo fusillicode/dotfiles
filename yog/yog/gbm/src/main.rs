@@ -1,12 +1,13 @@
 use std::fmt::Display;
+use std::fmt::Formatter;
 use std::ops::Deref;
 use std::path::Path;
 
-use owo_colors::OwoColorize as _;
-use rootcause::prelude::ResultExt as _;
+use owo_colors::OwoColorize;
+use rootcause::prelude::ResultExt;
 use rootcause::report;
 use ytil_git::branch::Branch;
-use ytil_sys::cli::Args as _;
+use ytil_sys::cli::Args;
 
 const ZSHRC_INSTALL_LINE: &str = r#"eval "$(gbm init zsh)""#;
 const ZSH_WRAPPER: &str = r#"gbm() {
@@ -172,7 +173,7 @@ impl Deref for RenderableBranch {
 }
 
 impl Display for RenderableBranch {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let styled_date_time = format!("({})", self.committer_date_time());
         let styled_email = format!("<{}>", self.committer_email());
         write!(
@@ -209,7 +210,7 @@ mod tests {
         "missing",
         vec![branch("main", 30), branch("feature-a", 20)]
     )]
-    fn test_prioritize_current_branch_first_cases(
+    fn test_prioritize_current_branch_first_when_current_branch_varies_orders_expected_branches(
         #[case] branches: Vec<Branch>,
         #[case] current_branch: &str,
         #[case] expected: Vec<Branch>,

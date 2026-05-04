@@ -8,7 +8,7 @@ use fkr::FkrOption;
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
 use strum::IntoEnumIterator;
-use ytil_noxi::buffer::BufferExt as _;
+use ytil_noxi::buffer::BufferExt;
 
 /// [`Dictionary`] of random string generation helpers powered by [`fkr`].
 ///

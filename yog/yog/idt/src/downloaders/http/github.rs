@@ -1,4 +1,4 @@
-use rootcause::prelude::ResultExt as _;
+use rootcause::prelude::ResultExt;
 
 /// Fetches the latest release tag name for a GitHub repository.
 ///

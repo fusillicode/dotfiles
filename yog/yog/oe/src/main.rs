@@ -5,7 +5,7 @@
 
 use core::str::FromStr;
 
-use rootcause::prelude::ResultExt as _;
+use rootcause::prelude::ResultExt;
 use rootcause::report;
 use ytil_editor::Editor;
 use ytil_editor::FileToOpen;

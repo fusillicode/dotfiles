@@ -2,10 +2,10 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
 
-use itertools::Itertools as _;
+use itertools::Itertools;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
-use ytil_cmd::CmdExt as _;
+use ytil_cmd::CmdExt;
 
 #[derive(Debug)]
 pub enum ProcessFilter<'a> {

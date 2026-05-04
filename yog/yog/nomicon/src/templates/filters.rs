@@ -31,7 +31,7 @@ mod tests {
     }
 
     #[test]
-    fn test_format_to_iso_8601_works_as_expected() {
+    fn test_format_to_iso_8601_when_datetime_valid_returns_iso_8601_string() {
         #[derive(Template)]
         #[template(source = "{{ value | format_to_iso_8601 }}", ext = "txt")]
         struct DummyFilterTemplate {

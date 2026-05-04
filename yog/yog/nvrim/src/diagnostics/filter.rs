@@ -3,8 +3,6 @@
 //! Orchestrates buffer path filtering, message blacklist, and related info deduplication, returning
 //! retained diagnostics for display while reporting errors via notifications.
 
-use std::convert::identity;
-
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
 
@@ -53,7 +51,7 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
                     buffer_with_path.path()
                 ));
             })
-            .is_ok_and(identity)
+            .is_ok_and(std::convert::identity)
         {
             continue;
         }

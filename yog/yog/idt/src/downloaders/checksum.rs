@@ -3,9 +3,9 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
-use rootcause::prelude::ResultExt as _;
+use rootcause::prelude::ResultExt;
 use rootcause::report;
-use sha2::Digest as _;
+use sha2::Digest;
 
 /// Computes the Sha256 hex digest of the file at `path`.
 ///

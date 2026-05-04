@@ -4,7 +4,6 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::convert::identity;
 use std::sync::LazyLock;
 
 use lit2::map;
@@ -93,7 +92,7 @@ impl DiagnosticsFilter for HarperLsFilter<'_> {
                     .iter()
                     .any(|blacklisted_msg| diag_msg.contains(blacklisted_msg))
             })
-            .is_some_and(identity))
+            .is_some_and(std::convert::identity))
     }
 }
 

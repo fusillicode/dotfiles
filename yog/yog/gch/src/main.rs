@@ -4,6 +4,7 @@
 //! - Git operations or user interaction fails.
 
 use std::fmt::Display;
+use std::fmt::Formatter;
 use std::ops::Deref;
 use std::path::Path;
 
@@ -77,7 +78,7 @@ impl Deref for RenderableGitStatusEntry {
 }
 
 impl Display for RenderableGitStatusEntry {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         // Conflict overrides everything
         if self.conflicted {
             return write!(f, "{} {}", "CC".red().bold(), self.path.display());
@@ -102,7 +103,7 @@ pub enum Op {
 }
 
 impl Display for Op {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Discard => write!(f, "{}", "Discard".red().bold()),
             Self::Add => write!(f, "{}", "Add".green().bold()),
@@ -182,7 +183,7 @@ fn add_entries(entries: &[&GitStatusEntry]) -> rootcause::Result<()> {
 }
 
 /// Write an index state symbol directly to the formatter, avoiding `.to_string()` allocations.
-fn write_index_symbol(f: &mut std::fmt::Formatter<'_>, state: Option<&IndexState>, dimmed: bool) -> std::fmt::Result {
+fn write_index_symbol(f: &mut Formatter<'_>, state: Option<&IndexState>, dimmed: bool) -> std::fmt::Result {
     match state {
         None => write!(f, " "),
         Some(IndexState::New) if dimmed => write!(f, "{}", "A".green().bold().dimmed()),
@@ -199,11 +200,7 @@ fn write_index_symbol(f: &mut std::fmt::Formatter<'_>, state: Option<&IndexState
 }
 
 /// Write a worktree state symbol directly to the formatter, avoiding `.to_string()` allocations.
-fn write_worktree_symbol(
-    f: &mut std::fmt::Formatter<'_>,
-    state: Option<&WorktreeState>,
-    dimmed: bool,
-) -> std::fmt::Result {
+fn write_worktree_symbol(f: &mut Formatter<'_>, state: Option<&WorktreeState>, dimmed: bool) -> std::fmt::Result {
     match state {
         None => write!(f, " "),
         Some(WorktreeState::New) if dimmed => write!(f, "{}", "A".green().bold().dimmed()),

@@ -6,6 +6,7 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::ffi::c_int;
 
 use nvim_oxi::Object;
 use nvim_oxi::api::Buffer;
@@ -84,14 +85,16 @@ pub enum TokenUnderCursor {
 }
 
 impl nvim_oxi::lua::Pushable for TokenUnderCursor {
-    unsafe fn push(self, lstate: *mut State) -> Result<std::ffi::c_int, nvim_oxi::lua::Error> {
+    unsafe fn push(self, lstate: *mut State) -> Result<c_int, nvim_oxi::lua::Error> {
         // SAFETY: The caller (nvim-oxi framework) guarantees that:
         // 1. `lstate` is a valid pointer to an initialized Lua state
         // 2. The Lua stack has sufficient capacity for the pushed value
         unsafe {
-            self.to_object()
-                .map_err(nvim_oxi::lua::Error::push_error_from_err::<Self, _>)?
-                .push(lstate)
+            nvim_oxi::lua::Pushable::push(
+                self.to_object()
+                    .map_err(nvim_oxi::lua::Error::push_error_from_err::<Self, _>)?,
+                lstate,
+            )
         }
     }
 }
@@ -403,7 +406,11 @@ mod tests {
     #[case("hello\nworld", 5, None)]
     #[case("hello\n\nworld", 5, None)]
     #[case("hello\n\nworld", 6, None)]
-    fn test_get_word_at_index_scenarios(#[case] s: &str, #[case] idx: usize, #[case] expected: Option<&str>) {
+    fn test_get_word_at_index_when_cursor_position_varies_returns_expected_word(
+        #[case] s: &str,
+        #[case] idx: usize,
+        #[case] expected: Option<&str>,
+    ) {
         pretty_assertions::assert_eq!(get_word_at_index(s, idx), expected);
     }
 
@@ -620,7 +627,10 @@ mod tests {
     #[case("no link", None)]
     #[case("[incomplete", None)]
     #[case("](empty)", Some("empty"))]
-    fn test_extract_markdown_link_works_as_expected(#[case] input: &str, #[case] expected: Option<&str>) {
+    fn test_extract_markdown_link_when_input_varies_returns_expected_link(
+        #[case] input: &str,
+        #[case] expected: Option<&str>,
+    ) {
         pretty_assertions::assert_eq!(extract_markdown_link(input), expected);
     }
 
@@ -636,7 +646,10 @@ mod tests {
     #[case("https://a.com http://b.com", Some("https://a.com"))]
     #[case("https://example.com/path?query=value", Some("https://example.com/path?query=value"))]
     #[case("https://example.com:8080", Some("https://example.com:8080"))]
-    fn test_extract_https_or_http_link_scenarios(#[case] input: &str, #[case] expected: Option<&str>) {
+    fn test_extract_https_or_http_link_when_input_varies_returns_expected_link(
+        #[case] input: &str,
+        #[case] expected: Option<&str>,
+    ) {
         pretty_assertions::assert_eq!(extract_https_or_http_link(input), expected);
     }
 }

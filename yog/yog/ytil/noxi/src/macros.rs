@@ -93,7 +93,7 @@ mod tests {
     use nvim_oxi::Dictionary;
     use nvim_oxi::Object;
 
-    use crate::dict::DictionaryExt as _;
+    use crate::dict::DictionaryExt;
 
     #[test]
     fn test_dict_macro_empty_creates_empty_dictionary() {
@@ -122,7 +122,7 @@ mod tests {
     }
 
     #[test]
-    fn test_dictionary_ext_get_t_works_as_expected() {
+    fn test_dictionary_ext_get_t_when_key_exists_returns_typed_value() {
         let dict = dict! { "foo": "42" };
         assert2::assert!(let Err(err) = dict.get_t::<nvim_oxi::String>("bar"));
         assert_eq!(err.format_current_context().to_string(), "missing dict value");
@@ -134,7 +134,7 @@ mod tests {
     }
 
     #[test]
-    fn test_dictionary_ext_get_dict_works_as_expected() {
+    fn test_dictionary_ext_get_dict_when_key_exists_returns_dictionary() {
         let dict = dict! { "foo": "42" };
         assert_eq!(dict.get_dict(&["bar"]).unwrap(), None);
 

@@ -1,7 +1,7 @@
 use std::ops::Deref;
 use std::path::Path;
 
-use rootcause::prelude::ResultExt as _;
+use rootcause::prelude::ResultExt;
 use rootcause::report;
 use tree_sitter::Node;
 use tree_sitter::Parser;

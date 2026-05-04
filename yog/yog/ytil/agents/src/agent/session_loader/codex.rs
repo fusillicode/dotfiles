@@ -1,4 +1,4 @@
-use rootcause::prelude::ResultExt as _;
+use rootcause::prelude::ResultExt;
 
 use crate::agent::Agent;
 use crate::agent::session::Session;

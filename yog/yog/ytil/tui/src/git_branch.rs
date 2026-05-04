@@ -1,9 +1,10 @@
 use std::fmt::Display;
+use std::fmt::Formatter;
 use std::ops::Deref;
 use std::path::Path;
 
-use owo_colors::OwoColorize as _;
-use rootcause::prelude::ResultExt as _;
+use owo_colors::OwoColorize;
+use rootcause::prelude::ResultExt;
 use ytil_git::branch::Branch;
 
 /// Prompts the user to select a branch from all available branches.
@@ -43,7 +44,7 @@ impl Deref for RenderableBranch {
 }
 
 impl Display for RenderableBranch {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let styled_date_time = format!("({})", self.committer_date_time());
         let styled_email = format!("<{}>", self.committer_email());
         write!(

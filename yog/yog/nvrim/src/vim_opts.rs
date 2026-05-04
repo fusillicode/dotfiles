@@ -6,7 +6,7 @@
 
 use core::marker::Copy;
 use std::fmt::Debug;
-use std::fmt::Write as _;
+use std::fmt::Write;
 
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::opts::OptionOpts;

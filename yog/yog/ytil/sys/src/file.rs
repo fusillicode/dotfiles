@@ -1,17 +1,17 @@
 use std::collections::VecDeque;
 use std::fs::DirEntry;
 #[cfg(not(target_arch = "wasm32"))]
-use std::os::unix::fs::PermissionsExt as _;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
 
 use chrono::Utc;
-use rootcause::prelude::ResultExt as _;
+use rootcause::prelude::ResultExt;
 use rootcause::report;
 use serde::Serialize;
-use ytil_cmd::CmdExt as _;
+use ytil_cmd::CmdExt;
 
 /// Raw filesystem / MIME classification result returned by [`exec_file_cmd`].
 #[derive(Clone, Serialize)]

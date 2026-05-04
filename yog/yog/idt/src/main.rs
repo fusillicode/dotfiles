@@ -12,8 +12,8 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use owo_colors::OwoColorize as _;
-use rootcause::prelude::ResultExt as _;
+use owo_colors::OwoColorize;
+use rootcause::prelude::ResultExt;
 use rootcause::report;
 use ytil_sys::SysInfo;
 use ytil_sys::cli::Args;

@@ -1,6 +1,7 @@
 //! Statuscolumn drawing helpers for buffer-local indicators.
 
 use std::fmt::Display;
+use std::fmt::Formatter;
 
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
@@ -196,7 +197,7 @@ impl SignHlGroup {
 
 impl Display for SignHlGroup {
     /// Formats the highlight group as the raw group string.
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_str())
     }
 }

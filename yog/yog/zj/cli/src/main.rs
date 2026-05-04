@@ -6,6 +6,7 @@
 #![feature(exit_status_error)]
 
 use std::fmt::Display;
+use std::fmt::Formatter;
 
 use owo_colors::OwoColorize;
 use rootcause::prelude::ResultExt;
@@ -93,7 +94,7 @@ fn main() -> rootcause::Result<()> {
 struct DisplaySession(ytil_zellij::Session);
 
 impl Display for DisplaySession {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0.display)
     }
 }
@@ -107,7 +108,7 @@ enum Op {
 }
 
 impl Display for Op {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Attach => write!(f, "{}", "Attach".green().bold()),
             Self::Restart => write!(f, "{}", "Restart".cyan().bold()),

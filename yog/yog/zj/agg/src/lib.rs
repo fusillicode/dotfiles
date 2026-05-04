@@ -1,3 +1,6 @@
+use std::convert::TryFrom;
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::path::PathBuf;
 
 pub use ytil_agents::ParseError;
@@ -74,8 +77,8 @@ impl GitStat {
     }
 }
 
-impl std::fmt::Display for GitStat {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for GitStat {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "{} {} {} {}",
@@ -290,8 +293,8 @@ pub struct TabStateEntry {
     pub git_stat: GitStat,
 }
 
-impl std::fmt::Display for TabStateEntry {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for TabStateEntry {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let cwd_label = self.cwd.as_ref().map(|p| p.display().to_string());
         let command_label = self.cmd.running_cmd();
         let agent_state = self.cmd.agent_state().map(AgentState::as_str);
@@ -312,7 +315,7 @@ impl std::fmt::Display for TabStateEntry {
     }
 }
 
-impl std::convert::TryFrom<(usize, &str)> for TabStateEntry {
+impl TryFrom<(usize, &str)> for TabStateEntry {
     type Error = ParseError;
 
     fn try_from((tab_id, content): (usize, &str)) -> Result<Self, Self::Error> {
@@ -408,7 +411,7 @@ mod tests {
     #[rstest]
     #[case("/home/user/project 10 5 2 1", "/home/user/project", 10, 5, 2, true)]
     #[case("/home/user/my project 10 5 2 0", "/home/user/my project", 10, 5, 2, false)]
-    fn test_git_stat_parse_line_works_as_expected(
+    fn test_git_stat_parse_line_when_line_varies_returns_expected_stat(
         #[case] line: &str,
         #[case] expected_path: &str,
         #[case] insertions: usize,
@@ -427,7 +430,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tab_state_entry_serialization_roundtrip_works_as_expected() {
+    fn test_tab_state_entry_serialization_roundtrip_when_entry_valid_preserves_values() {
         let entry = TabStateEntry {
             tab_id: 1,
             cwd: Some(PathBuf::from("/tmp")),

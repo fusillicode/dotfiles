@@ -3,7 +3,7 @@
 //! This module provides functionality to filter, format, and sort LSP diagnostics
 //! received from language servers in Nvim.
 
-use std::fmt;
+use std::fmt::Formatter;
 
 use nvim_oxi::Dictionary;
 use serde::de::Deserializer;
@@ -77,7 +77,7 @@ impl<'de> serde::Deserialize<'de> for DiagnosticSeverity {
         impl Visitor<'_> for SevVisitor {
             type Value = DiagnosticSeverity;
 
-            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            fn expecting(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
                 write!(f, "a severity: 1-4 or (error|warn|info|hint) or short alias")
             }
 

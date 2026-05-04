@@ -1,3 +1,7 @@
+use std::error::Error;
+use std::fmt::Display;
+use std::fmt::Formatter;
+
 pub mod agent;
 
 #[derive(Debug, Eq, PartialEq)]
@@ -15,8 +19,8 @@ impl ParseError {
     }
 }
 
-impl std::fmt::Display for ParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for ParseError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Missing(field) => write!(f, "missing {field}"),
             Self::Invalid { field, value } => write!(f, "invalid {field}: {value}"),
@@ -24,4 +28,4 @@ impl std::fmt::Display for ParseError {
     }
 }
 
-impl std::error::Error for ParseError {}
+impl Error for ParseError {}

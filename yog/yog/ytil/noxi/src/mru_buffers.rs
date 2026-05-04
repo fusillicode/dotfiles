@@ -3,7 +3,7 @@
 use std::str::FromStr;
 
 use nvim_oxi::api::Buffer;
-use rootcause::prelude::ResultExt as _;
+use rootcause::prelude::ResultExt;
 use rootcause::report;
 
 /// Represents a most recently used buffer with its metadata.
