@@ -22,11 +22,18 @@ name = "agg"
 version = "0.1.0"
 dependencies = [
  "assert2",
+ "git2",
+ "notify-rust",
+ "owo-colors 4.3.0",
  "pretty_assertions",
+ "rootcause",
  "rstest",
+ "serde_json",
  "ytil_agents",
+ "ytil_sys",
  "ytil_tui",
  "zellij-tile",
+ "zj",
 ]
 
 [[package]]
@@ -6455,9 +6462,12 @@ name = "zcp"
 version = "0.1.0"
 dependencies = [
  "pretty_assertions",
+ "rootcause",
  "rstest",
+ "ytil_sys",
  "zellij-tile",
  "zellij-utils",
+ "zj",
 ]
 
 [[package]]
@@ -6623,14 +6633,9 @@ dependencies = [
 name = "zj"
 version = "0.1.0"
 dependencies = [
- "agg",
- "git2",
- "notify-rust",
  "owo-colors 4.3.0",
  "rootcause",
- "serde_json",
  "strum 0.28.0",
- "ytil_agents",
  "ytil_cmd",
  "ytil_sys",
  "ytil_tui",
@@ -6654,8 +6659,11 @@ name = "zop"
 version = "0.1.0"
 dependencies = [
  "pretty_assertions",
+ "rootcause",
  "rstest",
+ "ytil_sys",
  "zellij-tile",
+ "zj",
 ]
 
 [[package]]
