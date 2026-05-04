@@ -1,4 +1,6 @@
 use std::fmt::Display;
+use std::path::Path;
+use std::path::PathBuf;
 
 use strum::EnumIter;
 
@@ -235,11 +237,21 @@ impl AgentEventPayload {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct NudgeIcon {
+pub struct AgentIcon {
     pub cache_key: &'static str,
 }
 
-impl From<Agent> for NudgeIcon {
+impl AgentIcon {
+    pub fn dir(home_dir: &Path) -> PathBuf {
+        home_dir.join(".cache").join("yog").join("agents")
+    }
+
+    pub fn path(self, home_dir: &Path) -> PathBuf {
+        Self::dir(home_dir).join(format!("{}.png", self.cache_key))
+    }
+}
+
+impl From<Agent> for AgentIcon {
     fn from(agent: Agent) -> Self {
         match agent {
             Agent::Claude => Self { cache_key: "claude" },
@@ -312,9 +324,19 @@ mod tests {
     #[case(Agent::Codex, "codex")]
     #[case(Agent::Gemini, "gemini")]
     #[case(Agent::Opencode, "opencode")]
-    fn test_nudge_icon_from_agent_returns_agent_icon(#[case] agent: Agent, #[case] cache_key: &str) {
-        let icon = NudgeIcon::from(agent);
+    fn test_agent_icon_from_agent_returns_agent_icon(#[case] agent: Agent, #[case] cache_key: &str) {
+        let icon = AgentIcon::from(agent);
 
         pretty_assertions::assert_eq!(icon.cache_key, cache_key);
+    }
+
+    #[test]
+    fn test_agent_icon_path_uses_yog_agents_dir() {
+        let icon = AgentIcon::from(Agent::Codex);
+
+        pretty_assertions::assert_eq!(
+            icon.path(Path::new("/home/me")),
+            PathBuf::from("/home/me/.cache/yog/agents/codex.png")
+        );
     }
 }

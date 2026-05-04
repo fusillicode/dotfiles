@@ -36,7 +36,7 @@ pub struct Nudge {
     pub agent: Agent,
     pub tab_id: usize,
     pub pane_id: u32,
-    pub path_label: String,
+    pub path: String,
 }
 
 impl Nudge {
@@ -46,7 +46,7 @@ impl Nudge {
             return None;
         }
 
-        let path_label = current_tab.cwd.as_ref().map_or_else(
+        let path = current_tab.cwd.as_ref().map_or_else(
             || {
                 tabs.iter()
                     .find(|tab| tab.tab_id == current_tab.tab_id)
@@ -59,16 +59,16 @@ impl Nudge {
             agent: pane_state.agent,
             tab_id: current_tab.tab_id,
             pane_id,
-            path_label,
+            path,
         })
     }
 
     pub fn title(&self) -> String {
-        format!("{} done", self.agent)
+        format!("{} done in tab {}, pane {}", self.agent, self.tab_id, self.pane_id)
     }
 
     pub fn body(&self) -> String {
-        format!("{} tab {} pane {}", self.path_label, self.tab_id, self.pane_id)
+        self.path.clone()
     }
 }
 
@@ -1509,12 +1509,12 @@ mod tests {
                 agent: Agent::Codex,
                 tab_id: 10,
                 pane_id: 42,
-                path_label: ytil_tui::short_path(&PathBuf::from("/Users/me/project"), &PathBuf::from("/Users/me")),
+                path: ytil_tui::short_path(&PathBuf::from("/Users/me/project"), &PathBuf::from("/Users/me")),
             })
         );
         let nudge = nudge.expect("nudge");
-        assert_eq!(nudge.title(), "Codex done");
-        assert_eq!(nudge.body(), "~/project tab 10 pane 42");
+        assert_eq!(nudge.title(), "Codex done in tab 10, pane 42");
+        assert_eq!(nudge.body(), "~/project");
         assert_eq!(
             state.nudges(),
             vec![(
@@ -1523,7 +1523,7 @@ mod tests {
                     agent: Agent::Codex,
                     tab_id: 10,
                     pane_id: 42,
-                    path_label: ytil_tui::short_path(&PathBuf::from("/Users/me/project"), &PathBuf::from("/Users/me")),
+                    path: ytil_tui::short_path(&PathBuf::from("/Users/me/project"), &PathBuf::from("/Users/me")),
                 },
             )]
         );
@@ -1605,7 +1605,7 @@ mod tests {
                     agent: Agent::Codex,
                     tab_id: 10,
                     pane_id: 42,
-                    path_label: "project".to_string(),
+                    path: "project".to_string(),
                 },
             )]
         );
