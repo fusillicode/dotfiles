@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::fmt::Debug;
 use std::fmt::Display;
+use std::fmt::Formatter;
 use std::io::Cursor;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -16,11 +17,9 @@ use skim::Skim;
 use skim::SkimItem;
 use skim::SkimItemReceiver;
 use skim::SkimOutput;
-use skim::matcher::Matcher as SkimMatcher;
 use skim::options::SkimOptions;
 use skim::prelude::SkimItemReader;
 use skim::prelude::SkimItemReaderOption;
-use skim::prelude::unbounded;
 
 /// Provides a minimal interactive multi-select prompt.
 ///
@@ -68,7 +67,7 @@ where
         .collect::<Option<Vec<_>>>()
         .ok_or_else(|| report!("missing ANSI display item while building skim rows"))?;
 
-    let (tx_items, rx_items) = unbounded();
+    let (tx_items, rx_items) = skim::prelude::unbounded();
     tx_items
         .send(items)
         .map_err(|e| report!("failed to queue skim items").attach(e.to_string()))?;
@@ -197,13 +196,13 @@ where
     OBA: Fn(&'a str) -> OF,
     OF: FnMut(&O) -> bool + 'a,
 {
-    if let Some((_, cli_arg)) = cli_args.iter().enumerate().find(|x| cli_arg_selector(x)) {
-        let mut item_find = item_find_by_arg(cli_arg);
-        return Ok(Some(items.iter().find(|x| item_find(*x)).cloned().ok_or_else(
-            || report!("missing item matching CLI arg").attach(format!("cli_arg={cli_arg} items={items:#?}")),
-        )?));
-    }
-    minimal_select(items)
+    let Some((_, cli_arg)) = cli_args.iter().enumerate().find(|x| cli_arg_selector(x)) else {
+        return minimal_select(items);
+    };
+    let mut item_find = item_find_by_arg(cli_arg);
+    Ok(Some(items.iter().find(|x| item_find(*x)).cloned().ok_or_else(
+        || report!("missing item matching CLI arg").attach(format!("cli_arg={cli_arg} items={items:#?}")),
+    )?))
 }
 
 #[derive(Debug)]
@@ -251,7 +250,7 @@ struct SearchCorpusEngine {
 }
 
 impl Display for SearchCorpusEngine {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.inner)
     }
 }
@@ -294,8 +293,8 @@ fn clip_match_range(match_range: MatchRange, item: &IndexedSkimItem) -> MatchRan
 }
 
 fn run_skim_with_matcher(options: SkimOptions, source: SkimItemReceiver) -> rootcause::Result<SkimOutput> {
-    let (engine_factory, rank_builder) = SkimMatcher::create_engine_factory_with_builder(&options);
-    let matcher = SkimMatcher::builder(Rc::new(SearchCorpusEngineFactory::new(engine_factory)))
+    let (engine_factory, rank_builder) = skim::matcher::Matcher::create_engine_factory_with_builder(&options);
+    let matcher = skim::matcher::Matcher::builder(Rc::new(SearchCorpusEngineFactory::new(engine_factory)))
         .case(options.case)
         .rank_builder(rank_builder)
         .build();

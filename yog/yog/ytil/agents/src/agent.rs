@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use std::fmt::Formatter;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -165,7 +166,7 @@ impl Agent {
 }
 
 impl Display for Agent {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let repr = match self {
             Self::Claude => "Claude",
             Self::Codex => "Codex",
@@ -276,7 +277,10 @@ mod tests {
     #[case("gemini", Ok(Agent::Gemini))]
     #[case("opencode", Ok(Agent::Opencode))]
     #[case("unknown", Err("invalid agent: \"unknown\"".to_string()))]
-    fn test_agent_from_name_works_as_expected(#[case] name: &str, #[case] expected: Result<Agent, String>) {
+    fn test_agent_from_name_when_name_varies_returns_expected_result(
+        #[case] name: &str,
+        #[case] expected: Result<Agent, String>,
+    ) {
         let actual = Agent::from_name(name).map_err(|e| e.to_string());
         pretty_assertions::assert_eq!(actual, expected);
     }
@@ -288,7 +292,7 @@ mod tests {
     #[case("Gemini-1.5-Pro", Some(Agent::Gemini))]
     #[case("OpenCode-Agent", Some(Agent::Opencode))]
     #[case("Vim", None)]
-    fn test_agent_detect_works_as_expected(#[case] name: &str, #[case] expected: Option<Agent>) {
+    fn test_agent_detect_when_name_varies_returns_expected_agent(#[case] name: &str, #[case] expected: Option<Agent>) {
         pretty_assertions::assert_eq!(Agent::detect(name), expected);
     }
 

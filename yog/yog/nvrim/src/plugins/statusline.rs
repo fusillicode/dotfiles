@@ -1,13 +1,13 @@
 //! Statusline drawing helpers with diagnostics aggregation.
 
 use std::cell::RefCell;
-use std::fmt::Write as _;
+use std::fmt::Write;
 
 use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
 use serde::Deserialize;
 use strum::IntoEnumIterator;
-use ytil_noxi::buffer::BufferExt as _;
+use ytil_noxi::buffer::BufferExt;
 use ytil_noxi::buffer::CursorPosition;
 
 use crate::diagnostics::DiagnosticSeverity;

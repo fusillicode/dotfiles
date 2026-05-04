@@ -2,10 +2,10 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
-use rootcause::prelude::ResultExt as _;
+use rootcause::prelude::ResultExt;
 use rootcause::report;
 use rusqlite::Connection;
-use rusqlite::OptionalExtension as _;
+use rusqlite::OptionalExtension;
 
 use crate::agent::Agent;
 use crate::agent::session::Session;

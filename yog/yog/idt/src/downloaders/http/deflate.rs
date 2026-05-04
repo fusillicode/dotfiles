@@ -1,10 +1,11 @@
 use std::fs::File;
 use std::io::BufReader;
+use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
 
 use flate2::read::GzDecoder;
-use rootcause::prelude::ResultExt as _;
+use rootcause::prelude::ResultExt;
 use tar::Archive;
 use xz2::read::XzDecoder;
 
@@ -127,7 +128,7 @@ pub struct ChecksumSource<'a> {
 
 /// Extracts a tar archive to `dest_dir`. When `dest_name` is `Some`, only the matching entry is
 /// extracted; otherwise the entire archive is unpacked.
-fn extract_tar<R: std::io::Read>(
+fn extract_tar<R: Read>(
     mut archive: Archive<R>,
     archive_path: &Path,
     dest_dir: &Path,

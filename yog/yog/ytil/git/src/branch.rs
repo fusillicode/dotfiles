@@ -17,7 +17,7 @@ use rootcause::bail;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 use ytil_cmd::CmdError;
-use ytil_cmd::CmdExt as _;
+use ytil_cmd::CmdExt;
 
 /// Retrieves the default branch name from the Git repository.
 ///

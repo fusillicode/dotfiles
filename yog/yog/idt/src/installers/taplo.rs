@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use rootcause::prelude::ResultExt as _;
+use rootcause::prelude::ResultExt;
 
 use crate::Installer;
 

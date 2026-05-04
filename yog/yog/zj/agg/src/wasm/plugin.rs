@@ -17,11 +17,11 @@ use crate::wasm::state::CurrentTab;
 use crate::wasm::state::FocusedPane;
 use crate::wasm::state::Nudge;
 use crate::wasm::state::State;
-use crate::wasm::state::focused_pane_from_pane_info;
 use crate::wasm::ui;
 
-const CONTEXT_KEY_GIT_STAT: &str = "git-stat";
 pub const SYNC_PIPE: &str = "agg-sync";
+
+const CONTEXT_KEY_GIT_STAT: &str = "git-stat";
 
 #[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Clone, Debug)]
@@ -116,6 +116,74 @@ impl From<&StateSnapshotPayload> for MessageToPlugin {
     }
 }
 
+impl State {
+    fn apply_and_handle_events(&mut self, events: &[StateEvent]) -> bool {
+        let frame_changed = self.apply_all(events);
+        handle_events(self, events);
+        frame_changed || !events.is_empty()
+    }
+
+    fn update_permission_granted(&mut self) -> bool {
+        update_permission_granted(self)
+    }
+
+    fn update_tabs(&mut self, mut tabs: Vec<TabInfo>) -> bool {
+        let active_tab_id = tabs.iter().find(|tab| tab.active).map(|tab| tab.tab_id);
+        let landing_focus = active_tab_id.and_then(|active_tab_id| {
+            resolve_active_tab_landing_focus(active_tab_id, &tabs, self.current_tab.as_ref())
+        });
+        let events = self.events_from_tab_update(&mut tabs, landing_focus);
+        let frame_changed = self.apply_all(&events);
+        if let Some(active_tab_id) = active_tab_id {
+            send_active_tab(active_tab_id);
+        }
+        handle_events(self, &events);
+        frame_changed || !events.is_empty()
+    }
+
+    fn update_panes(&mut self, manifest: &PaneManifest) -> bool {
+        let events = self.events_from_pane_update(manifest, |pane_id| get_pane_cwd(PaneId::Terminal(pane_id)).ok());
+        self.apply_and_handle_events(&events)
+    }
+
+    fn update_pane_closed(&mut self, pane_id: u32) -> bool {
+        let events = self.events_from_pane_closed(pane_id);
+        self.apply_and_handle_events(&events)
+    }
+
+    fn update_cwd(&mut self, pane_id: u32, cwd: PathBuf) -> bool {
+        let events = self.events_from_cwd_changed(pane_id, cwd);
+        self.apply_and_handle_events(&events)
+    }
+
+    fn update_run_command_result(
+        &mut self,
+        exit_code: Option<i32>,
+        stdout: &[u8],
+        context: &BTreeMap<String, String>,
+    ) -> bool {
+        let Some(requested_cwd) = context.get(CONTEXT_KEY_GIT_STAT).map(PathBuf::from) else {
+            return false;
+        };
+        let events = self.events_from_run_command_result(&requested_cwd, exit_code, stdout);
+        self.apply_and_handle_events(&events)
+    }
+
+    fn update_mouse_left_click(&self, row: isize) -> bool {
+        let Ok(row) = usize::try_from(row) else {
+            return false;
+        };
+        let content_w = self.last_cols.saturating_sub(1);
+        if let Some(tab_idx) = ui::tab_index_at_row(&self.frame, row, content_w)
+            && let Some(tab) = self.all_tabs.get(tab_idx)
+            && let Ok(pos) = u32::try_from(tab.position)
+        {
+            switch_tab_to(pos.saturating_add(1));
+        }
+        false
+    }
+}
+
 impl ZellijPlugin for State {
     fn load(&mut self, _configuration: BTreeMap<String, String>) {
         self.plugin_id = get_plugin_ids().plugin_id;
@@ -133,7 +201,7 @@ impl ZellijPlugin for State {
         match event {
             Event::PermissionRequestResult(PermissionStatus::Granted) => self.update_permission_granted(),
             Event::TabUpdate(tabs) => self.update_tabs(tabs),
-            Event::PaneUpdate(manifest) => self.update_panes(manifest),
+            Event::PaneUpdate(manifest) => self.update_panes(&manifest),
             Event::PaneClosed(PaneId::Terminal(pane_id)) => self.update_pane_closed(pane_id),
             Event::CwdChanged(PaneId::Terminal(pane_id), cwd, _clients) => self.update_cwd(pane_id, cwd),
             Event::RunCommandResult(exit_code, stdout, _stderr, context) => {
@@ -254,91 +322,6 @@ fn update_permission_granted(state: &mut State) -> bool {
     state.sync_frame()
 }
 
-trait StateUpdateExt {
-    fn update_permission_granted(&mut self) -> bool;
-    fn update_tabs(&mut self, tabs: Vec<TabInfo>) -> bool;
-    fn update_panes(&mut self, manifest: PaneManifest) -> bool;
-    fn update_pane_closed(&mut self, pane_id: u32) -> bool;
-    fn update_cwd(&mut self, pane_id: u32, cwd: PathBuf) -> bool;
-    fn update_run_command_result(
-        &mut self,
-        exit_code: Option<i32>,
-        stdout: &[u8],
-        context: &BTreeMap<String, String>,
-    ) -> bool;
-    fn update_mouse_left_click(&mut self, row: isize) -> bool;
-}
-
-impl StateUpdateExt for State {
-    fn update_permission_granted(&mut self) -> bool {
-        update_permission_granted(self)
-    }
-
-    fn update_tabs(&mut self, mut tabs: Vec<TabInfo>) -> bool {
-        let active_tab_id = active_tab_id_from_tabs(&tabs);
-        let landing_focus = active_tab_id.and_then(|active_tab_id| {
-            resolve_active_tab_landing_focus(active_tab_id, &tabs, self.current_tab.as_ref())
-        });
-        let events = self.events_from_tab_update(&mut tabs, landing_focus);
-        let frame_changed = self.apply_all(&events);
-        if let Some(active_tab_id) = active_tab_id {
-            send_active_tab(active_tab_id);
-        }
-        handle_events(self, &events);
-        frame_changed || !events.is_empty()
-    }
-
-    fn update_panes(&mut self, manifest: PaneManifest) -> bool {
-        let events = self.events_from_pane_update(&manifest, zellij_terminal_pane_cwd);
-        self.apply_and_handle_events(&events)
-    }
-
-    fn update_pane_closed(&mut self, pane_id: u32) -> bool {
-        let events = self.events_from_pane_closed(pane_id);
-        self.apply_and_handle_events(&events)
-    }
-
-    fn update_cwd(&mut self, pane_id: u32, cwd: PathBuf) -> bool {
-        let events = self.events_from_cwd_changed(pane_id, cwd);
-        self.apply_and_handle_events(&events)
-    }
-
-    fn update_run_command_result(
-        &mut self,
-        exit_code: Option<i32>,
-        stdout: &[u8],
-        context: &BTreeMap<String, String>,
-    ) -> bool {
-        let Some(requested_cwd) = context.get(CONTEXT_KEY_GIT_STAT).map(PathBuf::from) else {
-            return false;
-        };
-        let events = self.events_from_run_command_result(&requested_cwd, exit_code, stdout);
-        self.apply_and_handle_events(&events)
-    }
-
-    fn update_mouse_left_click(&mut self, row: isize) -> bool {
-        let Ok(row) = usize::try_from(row) else {
-            return false;
-        };
-        let content_w = self.last_cols.saturating_sub(1);
-        if let Some(tab_idx) = ui::tab_index_at_row(&self.frame, row, content_w)
-            && let Some(tab) = self.all_tabs.get(tab_idx)
-            && let Ok(pos) = u32::try_from(tab.position)
-        {
-            switch_tab_to(pos.saturating_add(1));
-        }
-        false
-    }
-}
-
-impl State {
-    fn apply_and_handle_events(&mut self, events: &[StateEvent]) -> bool {
-        let frame_changed = self.apply_all(events);
-        handle_events(self, events);
-        frame_changed || !events.is_empty()
-    }
-}
-
 // No-op symbol for tests builds so unit tests can link/run in CI.
 #[cfg(all(test, not(target_arch = "wasm32")))]
 #[unsafe(no_mangle)]
@@ -381,10 +364,6 @@ fn send_nudge(home_dir: &Path, nudge: &Nudge) {
     run_command(&args, BTreeMap::new());
 }
 
-fn zellij_terminal_pane_cwd(pane_id: u32) -> Option<PathBuf> {
-    get_pane_cwd(PaneId::Terminal(pane_id)).ok()
-}
-
 fn send_sync_request() {
     let mut args = BTreeMap::new();
     args.insert("type".to_string(), "sync_request".to_string());
@@ -396,10 +375,6 @@ fn send_active_tab(active_tab_id: usize) {
     args.insert("type".to_string(), "active_tab".to_string());
     args.insert("tab_id".to_string(), active_tab_id.to_string());
     pipe_message_to_plugin(MessageToPlugin::new(SYNC_PIPE.to_string()).with_args(args));
-}
-
-fn active_tab_id_from_tabs(tabs: &[TabInfo]) -> Option<usize> {
-    tabs.iter().find(|tab| tab.active).map(|tab| tab.tab_id)
 }
 
 fn resolve_active_tab_landing_focus(
@@ -431,7 +406,7 @@ where
     if let Some((focused_tab_position, focused_pane_id)) = get_focused_pane_info()
         && focused_tab_position == active_tab_position
         && let Some(pane) = get_pane_info(focused_pane_id)
-        && let Some(focused_pane) = focused_pane_from_pane_info(&pane)
+        && let Some(focused_pane) = crate::wasm::state::focused_pane_from_pane_info(&pane)
     {
         return Some(focused_pane);
     }
@@ -442,7 +417,7 @@ where
         if !pane.is_focused {
             return None;
         }
-        focused_pane_from_pane_info(&pane)
+        crate::wasm::state::focused_pane_from_pane_info(&pane)
     })
 }
 
@@ -489,26 +464,6 @@ mod tests {
         };
         let parsed = PipeEvent::try_from(&msg);
         assert2::assert!(let Err(PipeEventError::Parse(ParseError::Missing("source"))) = parsed);
-    }
-
-    #[test]
-    fn test_active_tab_id_from_tabs_returns_active_tab_even_without_current_tab_state() {
-        let tabs = vec![
-            TabInfo {
-                tab_id: 10,
-                position: 0,
-                active: false,
-                ..Default::default()
-            },
-            TabInfo {
-                tab_id: 20,
-                position: 1,
-                active: true,
-                ..Default::default()
-            },
-        ];
-
-        pretty_assertions::assert_eq!(active_tab_id_from_tabs(&tabs), Some(20));
     }
 
     #[test]

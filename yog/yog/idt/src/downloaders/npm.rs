@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use rootcause::prelude::ResultExt as _;
+use rootcause::prelude::ResultExt;
 
 /// Downloads and installs Node.js packages using npm.
 ///

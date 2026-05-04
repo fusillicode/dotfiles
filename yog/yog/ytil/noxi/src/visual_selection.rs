@@ -11,7 +11,7 @@ use nvim_oxi::api::opts::GetTextOpts;
 use nvim_oxi::conversion::FromObject;
 use nvim_oxi::lua::Poppable;
 use nvim_oxi::lua::ffi::State;
-use rootcause::prelude::ResultExt as _;
+use rootcause::prelude::ResultExt;
 use rootcause::report;
 use serde::Deserialize;
 use serde::Deserializer;

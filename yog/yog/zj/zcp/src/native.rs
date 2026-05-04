@@ -1,4 +1,4 @@
-use ytil_sys::cli::Args as _;
+use ytil_sys::cli::Args;
 
 mod install;
 

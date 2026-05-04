@@ -1,9 +1,9 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use rootcause::option_ext::OptionExt as _;
+use rootcause::option_ext::OptionExt;
 #[cfg(not(target_arch = "wasm32"))]
-use rootcause::prelude::ResultExt as _;
+use rootcause::prelude::ResultExt;
 
 /// Builds a path starting from the home directory by appending the given parts, returning a [`PathBuf`].
 ///

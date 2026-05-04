@@ -7,7 +7,7 @@ use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
 use rootcause::bail;
 use ytil_noxi::buffer::BufferExt;
-use ytil_noxi::dict::DictionaryExt as _;
+use ytil_noxi::dict::DictionaryExt;
 
 use crate::diagnostics::filters::lsps::harper_ls::HarperLsFilter;
 use crate::diagnostics::filters::lsps::typos_lsp::TyposLspFilter;

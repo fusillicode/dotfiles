@@ -163,7 +163,7 @@ mod tests {
     }
 
     #[test]
-    fn test_editor_from_str_works_as_expected() {
+    fn test_editor_from_str_when_input_varies_returns_expected_editor() {
         assert2::assert!(let Ok(Editor::Hx) = Editor::from_str("hx"));
         assert2::assert!(let Ok(Editor::Nvim) = Editor::from_str("nvim"));
         assert2::assert!(let Ok(Editor::Nvim) = Editor::from_str("nv"));
@@ -172,7 +172,7 @@ mod tests {
     }
 
     #[test]
-    fn test_file_to_open_from_str_works_as_expected() {
+    fn test_file_to_open_from_str_when_input_varies_returns_expected_file() {
         let root_dir = std::env::current_dir().unwrap();
         // We should always have a Cargo.toml...
         let dummy_path = root_dir.join("Cargo.toml").to_string_lossy().into_owned();

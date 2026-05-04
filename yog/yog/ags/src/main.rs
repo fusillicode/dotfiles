@@ -1,6 +1,6 @@
 #![feature(exit_status_error)]
 
-use ytil_sys::cli::Args as _;
+use ytil_sys::cli::Args;
 
 mod sessions;
 

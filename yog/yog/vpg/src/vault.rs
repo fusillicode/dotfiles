@@ -1,6 +1,6 @@
 use std::process::Command;
 
-use rootcause::prelude::ResultExt as _;
+use rootcause::prelude::ResultExt;
 use rootcause::report;
 use serde::Deserialize;
 

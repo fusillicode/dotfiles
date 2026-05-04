@@ -1,4 +1,7 @@
 use std::collections::HashSet;
+use std::error::Error;
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::path::PathBuf;
 
 use agg::AGENTS_PIPE;
@@ -21,10 +24,10 @@ pub enum PipeEventError {
     UnknownMsgName(String),
 }
 
-impl std::error::Error for PipeEventError {}
+impl Error for PipeEventError {}
 
-impl std::fmt::Display for PipeEventError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for PipeEventError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Parse(err) => write!(f, "{err}"),
             Self::UnknownMsgName(name) => write!(f, "unknown message name {name:?}"),

@@ -4,7 +4,7 @@
 //! code ranges in the current buffer, using the repository's current commit hash for permalinks.
 //! The generated URL is automatically copied to the system clipboard.
 
-use std::fmt::Write as _;
+use std::fmt::Write;
 use std::path::Path;
 
 use nvim_oxi::Dictionary;

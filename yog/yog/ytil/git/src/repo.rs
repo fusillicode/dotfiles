@@ -2,8 +2,8 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use git2::Repository;
-use rootcause::option_ext::OptionExt as _;
-use rootcause::prelude::ResultExt as _;
+use rootcause::option_ext::OptionExt;
+use rootcause::prelude::ResultExt;
 
 /// Discover the Git repository containing `path` by walking
 /// parent directories upward until a repo root is found.

@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
 
-use rootcause::prelude::ResultExt as _;
+use rootcause::prelude::ResultExt;
 use rootcause::report;
 use url::Url;
 use ytil_editor::Editor;
@@ -18,7 +18,6 @@ use ytil_hx::HxCursorPosition;
 use ytil_hx::HxStatusLine;
 use ytil_sys::cli::Args;
 use ytil_wezterm::WeztermPane;
-use ytil_wezterm::get_sibling_pane_with_titles;
 
 /// Copy GitHub URL (file/line/col) for the current Helix buffer to clipboard.
 #[ytil_sys::main]
@@ -29,7 +28,7 @@ fn main() -> rootcause::Result<()> {
         return Ok(());
     }
 
-    let hx_pane = get_sibling_pane_with_titles(
+    let hx_pane = ytil_wezterm::get_sibling_pane_with_titles(
         &ytil_wezterm::get_all_panes(&[])?,
         ytil_wezterm::get_current_pane_id()?,
         Editor::Hx.pane_titles(),
@@ -147,7 +146,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_relative_to_home_dir() {
+    fn test_build_hx_cursor_absolute_file_path_when_path_is_home_relative_returns_home_path() {
         // Arrange
         temp_env::with_vars([("HOME", Some("/Users/Foo"))], || {
             let hx_status_line = HxStatusLine {
@@ -169,7 +168,7 @@ mod tests {
     }
 
     #[test]
-    fn test_build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_relative_to_hx_root() {
+    fn test_build_hx_cursor_absolute_file_path_when_path_is_relative_returns_pane_cwd_path() {
         // Arrange
         let hx_status_line = HxStatusLine {
             file_path: Path::new("src/bar/baz.rs").into(),
@@ -189,7 +188,7 @@ mod tests {
     }
 
     #[test]
-    fn test_build_hx_cursor_absolute_file_path_works_as_expected_with_file_path_as_absolute() {
+    fn test_build_hx_cursor_absolute_file_path_when_path_is_absolute_returns_same_path() {
         // Arrange
         let hx_status_line = HxStatusLine {
             file_path: Path::new("/Users/Foo/dev/src/bar/baz.rs").into(),

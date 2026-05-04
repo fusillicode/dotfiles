@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use owo_colors::OwoColorize as _;
+use owo_colors::OwoColorize;
 use rootcause::prelude::ResultExt;
 
 const ZELLIJ_PLUGINS_PATH: &[&str] = &[".config", "zellij", "plugins"];

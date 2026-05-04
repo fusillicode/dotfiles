@@ -113,11 +113,11 @@ fn drop_element<T, U: ?Sized>(vec: &mut Vec<T>, target: &U) -> bool
 where
     T: PartialEq<U>,
 {
-    if let Some(idx) = vec.iter().position(|x| x == target) {
-        vec.swap_remove(idx);
-        return true;
-    }
-    false
+    let Some(idx) = vec.iter().position(|x| x == target) else {
+        return false;
+    };
+    vec.swap_remove(idx);
+    true
 }
 
 /// Copies a built binary or library from `from` to `to` using
@@ -165,7 +165,11 @@ mod tests {
     #[case::remove_more_than_exist(PathBuf::from("/home/user"), 5, PathBuf::from("/"))]
     #[case::root_path(PathBuf::from("/"), 1, PathBuf::from("/"))]
     #[case::empty_path(PathBuf::new(), 1, PathBuf::new())]
-    fn test_remove_last_n_dirs_works(#[case] mut initial: PathBuf, #[case] n: usize, #[case] expected: PathBuf) {
+    fn test_remove_last_n_dirs_when_requested_count_varies_updates_path(
+        #[case] mut initial: PathBuf,
+        #[case] n: usize,
+        #[case] expected: PathBuf,
+    ) {
         remove_last_n_dirs(&mut initial, n);
         pretty_assertions::assert_eq!(initial, expected);
     }

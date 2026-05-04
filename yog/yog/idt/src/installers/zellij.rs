@@ -1,7 +1,6 @@
 use std::path::Path;
 
-use rootcause::prelude::ResultExt as _;
-use ytil_cmd::silent_cmd;
+use rootcause::prelude::ResultExt;
 
 use crate::Installer;
 
@@ -19,7 +18,7 @@ impl Installer for Zellij<'_> {
         let source_dir = self.dev_tools_dir.join(self.bin_name()).join("source");
         let cargo_target = self.dev_tools_dir.join("cargo-target");
 
-        silent_cmd("sh")
+        ytil_cmd::silent_cmd("sh")
             .args([
                 "-c",
                 &format!(

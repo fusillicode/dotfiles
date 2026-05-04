@@ -3,8 +3,8 @@ use std::ffi::OsStr;
 use std::path::Path;
 use std::path::PathBuf;
 
-use owo_colors::OwoColorize as _;
-use rootcause::prelude::ResultExt as _;
+use owo_colors::OwoColorize;
+use rootcause::prelude::ResultExt;
 
 /// Outcome of file removal operations.
 pub struct RmFilesOutcome {

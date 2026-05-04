@@ -12,7 +12,7 @@ use std::time::Instant;
 
 use owo_colors::OwoColorize;
 use ytil_cmd::CmdError;
-use ytil_cmd::CmdExt as _;
+use ytil_cmd::CmdExt;
 use ytil_sys::cli::Args;
 
 /// File suffixes considered Rust-related for conditional lint gating.
