@@ -15,12 +15,13 @@ use crate::agent::session::Session;
 ///
 /// # Errors
 /// Returns an error when the JSONL cannot be parsed or required session metadata is missing.
-pub fn parse(content: &str, session_name: &str) -> rootcause::Result<Session> {
+pub fn parse(content: &str, session_name: &str) -> rootcause::Result<CodexSession> {
     let mut session_id = None;
     let mut workspace_dir = None;
     let mut created_at = None;
     let mut updated_at = None;
     let mut first_user_message = None;
+    let mut is_subagent = false;
     let mut search_text = SearchTextBuilder::default();
 
     for (line_idx, line) in content.lines().enumerate() {
@@ -37,6 +38,7 @@ pub fn parse(content: &str, session_name: &str) -> rootcause::Result<Session> {
             session_id.get_or_insert_with(|| meta.id.clone());
             workspace_dir.get_or_insert_with(|| PathBuf::from(&meta.cwd));
             created_at.get_or_insert(meta.timestamp);
+            is_subagent |= meta.is_subagent();
         }
 
         if let Some(user_message) = line.user_search_text() {
@@ -60,18 +62,39 @@ pub fn parse(content: &str, session_name: &str) -> rootcause::Result<Session> {
         .context("no Codex session_meta record found".to_owned())
         .attach(format!("session_name={session_name}"))?;
 
-    let mut session = Session::new(
-        Agent::Codex,
-        session_id,
-        workspace_dir,
-        first_user_message.clone().or_else(|| Some(session_name.to_owned())),
-        created_at,
-    );
-    session.name = first_user_message.unwrap_or_else(|| session_name.to_owned());
-    session.search_text = search_text.build(&session.name);
-    session.updated_at = updated_at.unwrap_or(session.created_at);
+    let name = first_user_message.unwrap_or_else(|| session_name.to_owned());
+    let search_text = search_text.build(&name);
 
-    Ok(session)
+    Ok(CodexSession {
+        id: session_id,
+        name,
+        search_text,
+        workspace: workspace_dir,
+        created_at,
+        updated_at: updated_at.unwrap_or(created_at),
+        is_subagent,
+    })
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CodexSession {
+    pub id: String,
+    pub name: String,
+    pub search_text: String,
+    pub workspace: PathBuf,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub is_subagent: bool,
+}
+
+impl From<CodexSession> for Session {
+    fn from(value: CodexSession) -> Self {
+        let mut session = Self::new(Agent::Codex, value.id, value.workspace, None, value.created_at);
+        session.name = value.name;
+        session.search_text = value.search_text;
+        session.updated_at = value.updated_at;
+        session
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -135,6 +158,15 @@ struct CodexSessionMetaPayload {
     id: String,
     cwd: String,
     timestamp: DateTime<Utc>,
+    source: Option<serde_json::Value>,
+}
+
+impl CodexSessionMetaPayload {
+    fn is_subagent(&self) -> bool {
+        self.source
+            .as_ref()
+            .is_some_and(|source| source.get("subagent").is_some())
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -249,10 +281,11 @@ mod tests {
             workspace.display()
         );
 
-        assert2::assert!(let Ok(session) = parse(
+        assert2::assert!(let Ok(codex_session) = parse(
             &content,
             "rollout-2026-03-20T07-30-20-019d09f0-0d96-7e23-94cd-1f6aad7cdc09",
         ));
+        let session = Session::from(codex_session);
         pretty_assertions::assert_eq!(session.agent, Agent::Codex);
         pretty_assertions::assert_eq!(
             session.name,
@@ -298,6 +331,17 @@ mod tests {
 
         assert2::assert!(let Ok(session) = parse(content, "fallback-name"));
         pretty_assertions::assert_eq!(session.search_text, "first user msg");
+    }
+
+    #[test]
+    fn test_parse_codex_session_when_source_is_subagent_marks_session() {
+        let content = concat!(
+            "{\"timestamp\":\"2026-03-20T06:30:20.312Z\",\"type\":\"session_meta\",\"payload\":{\"id\":\"019d09f0-0d96-7e23-94cd-1f6aad7cdc09\",\"timestamp\":\"2026-03-20T06:30:20.312Z\",\"cwd\":\"/tmp/workspace\",\"source\":{\"subagent\":{\"other\":\"guardian\"}}}}\n",
+            "{\"timestamp\":\"2026-03-20T06:31:20.312Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"user_message\",\"message\":\"The following is the Codex agent history\"}}\n"
+        );
+
+        assert2::assert!(let Ok(session) = parse(content, "fallback-name"));
+        assert!(session.is_subagent);
     }
 
     #[test]

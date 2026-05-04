@@ -15,7 +15,7 @@ use crate::agent::session::Session;
 ///
 /// # Errors
 /// Returns an error when the JSONL cannot be parsed or required session metadata is missing.
-pub fn parse(content: &str) -> rootcause::Result<Session> {
+pub fn parse(content: &str) -> rootcause::Result<ClaudeSession> {
     let mut session_id = None;
     let mut workspace_dir = None;
     let mut created_at = None;
@@ -54,20 +54,43 @@ pub fn parse(content: &str) -> rootcause::Result<Session> {
     let workspace_dir = workspace_dir.context("no Claude session record found".to_owned())?;
     let created_at = created_at.context("no Claude session record found".to_owned())?;
 
-    let mut session = Session::new(
-        Agent::Claude,
-        session_id,
-        workspace_dir,
-        first_user_message.clone(),
-        created_at,
-    );
-    if let Some(first_user_message) = first_user_message {
-        session.name = first_user_message;
-    }
-    session.search_text = search_text.build(&session.name);
-    session.updated_at = updated_at.unwrap_or(session.created_at);
+    let name = first_user_message.unwrap_or_else(|| {
+        workspace_dir
+            .file_name()
+            .and_then(|name| name.to_str())
+            .filter(|name| !name.is_empty())
+            .map_or_else(|| session_id.clone(), str::to_owned)
+    });
+    let search_text = search_text.build(&name);
 
-    Ok(session)
+    Ok(ClaudeSession {
+        id: session_id,
+        name,
+        search_text,
+        workspace: workspace_dir,
+        created_at,
+        updated_at: updated_at.unwrap_or(created_at),
+    })
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClaudeSession {
+    pub id: String,
+    pub name: String,
+    pub search_text: String,
+    pub workspace: PathBuf,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<ClaudeSession> for Session {
+    fn from(value: ClaudeSession) -> Self {
+        let mut session = Self::new(Agent::Claude, value.id, value.workspace, None, value.created_at);
+        session.name = value.name;
+        session.search_text = value.search_text;
+        session.updated_at = value.updated_at;
+        session
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -392,7 +415,8 @@ mod tests {
         )
         .replace("__CWD__", &workspace.display().to_string());
 
-        assert2::assert!(let Ok(session) = parse(&content));
+        assert2::assert!(let Ok(claude_session) = parse(&content));
+        let session = Session::from(claude_session);
         pretty_assertions::assert_eq!(session.agent, Agent::Claude);
         pretty_assertions::assert_eq!(session.workspace, workspace);
         pretty_assertions::assert_eq!(session.id, "8649a076-3ead-4d5a-9840-3200f0e1aae5");
@@ -423,7 +447,8 @@ mod tests {
             "{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"hidden\"},{\"type\":\"text\",\"text\":\"assistant answer\"},{\"type\":\"tool_use\",\"name\":\"Read\"}]},\"timestamp\":\"2026-03-26T16:53:02.119Z\",\"cwd\":\"/tmp/workspace\",\"sessionId\":\"8649a076-3ead-4d5a-9840-3200f0e1aae5\"}\n"
         );
 
-        assert2::assert!(let Ok(session) = parse(content));
+        assert2::assert!(let Ok(claude_session) = parse(content));
+        let session = Session::from(claude_session);
         pretty_assertions::assert_eq!(session.name, "this is a very long first user message");
         pretty_assertions::assert_eq!(
             session.search_text,
@@ -444,7 +469,8 @@ mod tests {
             "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"<command-message>privoly-admin</command-message>\\n<command-name>/privoly-admin</command-name>\\n<command-args>install</command-args>\"},\"timestamp\":\"2026-03-26T16:52:02.119Z\",\"cwd\":\"/tmp/workspace\",\"sessionId\":\"8649a076-3ead-4d5a-9840-3200f0e1aae5\"}\n"
         );
 
-        assert2::assert!(let Ok(session) = parse(content));
+        assert2::assert!(let Ok(claude_session) = parse(content));
+        let session = Session::from(claude_session);
         pretty_assertions::assert_eq!(session.name, "/privoly-admin install");
         pretty_assertions::assert_eq!(session.search_text, "/privoly-admin install");
     }
@@ -458,7 +484,8 @@ mod tests {
             "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"real prompt\"},\"timestamp\":\"2026-03-26T16:54:02.119Z\",\"cwd\":\"/tmp/workspace\",\"sessionId\":\"8649a076-3ead-4d5a-9840-3200f0e1aae5\"}\n"
         );
 
-        assert2::assert!(let Ok(session) = parse(content));
+        assert2::assert!(let Ok(claude_session) = parse(content));
+        let session = Session::from(claude_session);
         pretty_assertions::assert_eq!(session.name, "real prompt");
         pretty_assertions::assert_eq!(session.search_text, "real prompt");
     }
