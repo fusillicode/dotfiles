@@ -35,7 +35,14 @@ struct PluginInstallSpec {
     wasm_name: &'static str,
 }
 
-pub fn install_agg_plugin_and_hooks(is_debug: bool) -> rootcause::Result<()> {
+pub fn run(is_debug: bool) -> rootcause::Result<()> {
+    install_agg_plugin_and_hooks(is_debug)?;
+    build_and_install_plugin(&ZCP_PLUGIN, is_debug).context("failed to install zcp wasm plugin")?;
+    build_and_install_plugin(&ZOP_PLUGIN, is_debug).context("failed to install zop wasm plugin")?;
+    Ok(())
+}
+
+fn install_agg_plugin_and_hooks(is_debug: bool) -> rootcause::Result<()> {
     build_and_install_plugin(&AGG_PLUGIN, is_debug).context("failed to install agg wasm plugin")?;
     install_layout().context("failed to install zellij layout")?;
     install_hooks(Agent::Claude).context("failed to install Claude hooks")?;
@@ -43,6 +50,7 @@ pub fn install_agg_plugin_and_hooks(is_debug: bool) -> rootcause::Result<()> {
     install_hooks(Agent::Codex).context("failed to install Codex hooks")?;
     install_hooks(Agent::Gemini).context("failed to install Gemini hooks")?;
     install_opencode_plugin().context("failed to install Opencode hooks")?;
+    ensure_nudge_icons_dir().context("failed to create nudge icons directory")?;
     Ok(())
 }
 
@@ -78,13 +86,6 @@ fn install_layout() -> rootcause::Result<()> {
         .join("zellij")
         .join(LAYOUT_FILENAME);
     install_layout_file(&source, LAYOUT_FILENAME)
-}
-
-pub fn install_all(is_debug: bool) -> rootcause::Result<()> {
-    install_agg_plugin_and_hooks(is_debug)?;
-    build_and_install_plugin(&ZCP_PLUGIN, is_debug).context("failed to install zcp wasm plugin")?;
-    build_and_install_plugin(&ZOP_PLUGIN, is_debug).context("failed to install zop wasm plugin")?;
-    Ok(())
 }
 
 fn build_wasm_plugin(
@@ -137,7 +138,7 @@ fn install_wasm_plugin(built: &Path, install_name: &str) -> rootcause::Result<()
         .attach_with(|| format!("from={}", built.display()))
         .attach_with(|| format!("to={}", dest.display()))?;
 
-    println!("{} {}", "Copied".green().bold(), dest.display());
+    println!("{} {} to {}", "Copied".green().bold(), built.display(), dest.display());
     Ok(())
 }
 
@@ -156,7 +157,7 @@ fn install_layout_file(source: &Path, layout_name: &str) -> rootcause::Result<()
         .attach_with(|| format!("from={}", source.display()))
         .attach_with(|| format!("to={}", dest.display()))?;
 
-    println!("{} {}", "Copied".green().bold(), dest.display());
+    println!("{} {} to {}", "Copied".green().bold(), source.display(), dest.display());
     Ok(())
 }
 
@@ -265,7 +266,23 @@ fn install_opencode_plugin() -> rootcause::Result<()> {
         .context("failed to write opencode plugin file")
         .attach_with(|| format!("path={}", path.display()))?;
 
-    println!("{} opencode plugin in {}", "Copied".green().bold(), path.display());
+    println!(
+        "{} {} to {}",
+        "Copied".green().bold(),
+        template.display(),
+        path.display()
+    );
+    Ok(())
+}
+
+fn ensure_nudge_icons_dir() -> rootcause::Result<()> {
+    let home_dir =
+        ytil_sys::dir::build_home_path(&[] as &[&str]).context("failed to determine nudge icon cache directory")?;
+    let icon_dir = home_dir.join(".cache").join("zj").join("agg").join("nude-icons");
+    std::fs::create_dir_all(&icon_dir)
+        .context("failed to create nudge icon cache directory")
+        .attach_with(|| format!("path={}", icon_dir.display()))?;
+    println!("{} local nudge icons in {}", "Using".green().bold(), icon_dir.display());
     Ok(())
 }
 
