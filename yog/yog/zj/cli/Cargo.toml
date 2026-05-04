@@ -13,6 +13,7 @@ categories = ["command-line-utilities", "development-tools"]
 [dependencies]
 agg = { path = "../agg" }
 git2 = { workspace = true }
+notify-rust = { version = "4.16.1" }
 owo-colors = { workspace = true }
 rootcause = { workspace = true }
 serde_json = { workspace = true }

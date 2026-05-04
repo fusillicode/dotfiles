@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::path::Path;
 use std::path::PathBuf;
 
 use agg::Cmd;
@@ -6,6 +7,7 @@ use agg::ParseError;
 use agg::TabIndicator;
 use agg::TabStateEntry;
 use agg::git_stat::GitStat;
+use ytil_agents::agent::NudgeIcon;
 use zellij_tile::prelude::*;
 
 use crate::events::PipeEvent;
@@ -346,7 +348,7 @@ impl State {
 #[unsafe(no_mangle)]
 const extern "C" fn host_run_plugin_command() {}
 
-fn handle_events(state: &State, events: &[StateEvent]) {
+fn handle_events(state: &mut State, events: &[StateEvent]) {
     for event in events {
         match event {
             StateEvent::AgentIdle { .. } | StateEvent::FocusChanged { .. } | StateEvent::CwdChanged { .. } => {
@@ -367,6 +369,32 @@ fn handle_events(state: &State, events: &[StateEvent]) {
             | StateEvent::TopologyChanged
             | StateEvent::AllTabsReplaced { .. } => {}
         }
+    }
+    send_nudges(state);
+}
+
+fn send_nudge(home_dir: &Path, nudge: &crate::state::Nudge) {
+    let title = nudge.title();
+    let body = nudge.body();
+    let icon_path = nudge_icon_path(home_dir, NudgeIcon::from(nudge.agent));
+    let icon_path = icon_path.to_string_lossy();
+    let args = ["zj", "nudge", title.as_str(), body.as_str(), icon_path.as_ref()];
+    run_command(&args, BTreeMap::new());
+}
+
+fn nudge_icon_path(home_dir: &Path, icon: NudgeIcon) -> PathBuf {
+    home_dir
+        .join(".cache")
+        .join("zj")
+        .join("agg")
+        .join("nude-icons")
+        .join(format!("{}.png", icon.cache_key))
+}
+
+fn send_nudges(state: &mut State) {
+    for (pane_id, nudge) in state.nudges() {
+        state.mark_nudged(pane_id);
+        send_nudge(&state.home_dir, &nudge);
     }
 }
 
