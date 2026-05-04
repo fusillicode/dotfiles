@@ -7,6 +7,7 @@ use serde_json::Map;
 use serde_json::Value;
 use ytil_agents::agent::Agent;
 use ytil_agents::agent::AgentEventKind;
+use ytil_agents::agent::AgentIcon;
 
 const AGG_PLUGIN: zj::PluginInstallSpec = zj::PluginInstallSpec {
     dir_name: "agg",
@@ -159,7 +160,7 @@ fn install_opencode_plugin() -> rootcause::Result<()> {
 fn ensure_nudge_icons_dir() -> rootcause::Result<()> {
     let home_dir =
         ytil_sys::dir::build_home_path(&[] as &[&str]).context("failed to determine nudge icon cache directory")?;
-    let icon_dir = home_dir.join(".cache").join("zj").join("agg").join("nudge-icons");
+    let icon_dir = AgentIcon::dir(&home_dir);
     std::fs::create_dir_all(&icon_dir)
         .context("failed to create nudge icon cache directory")
         .attach_with(|| format!("path={}", icon_dir.display()))?;
