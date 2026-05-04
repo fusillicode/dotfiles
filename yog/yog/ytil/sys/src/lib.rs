@@ -5,11 +5,11 @@ use std::process::Command;
 use std::str::FromStr;
 use std::thread::JoinHandle;
 
-use owo_colors::OwoColorize as _;
+use owo_colors::OwoColorize;
 pub use pico_args;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
-use ytil_cmd::CmdExt as _;
+use ytil_cmd::CmdExt;
 pub use ytil_macros::main;
 
 pub mod cli;

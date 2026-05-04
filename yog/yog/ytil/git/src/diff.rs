@@ -3,7 +3,7 @@ use std::process::Command;
 
 use rootcause::prelude::ResultExt;
 use rootcause::report;
-use ytil_cmd::CmdExt as _;
+use ytil_cmd::CmdExt;
 
 const PATH_LINE_PREFIX: &str = "diff --git ";
 
@@ -175,7 +175,10 @@ mod tests {
     #[case::missing_new_lnum_part("@@ -42,7", "error missing new_lnum from lnum_line after split by space")]
     #[case::malformed_lnum("@@ -42,7 +,7 @@", "error malformed new_lnum in lnum_line")]
     #[case::lnum_value_not_numeric("@@ -42,7 +abc,7 @@", "error parsing new_lnum value as usize")]
-    fn test_extract_new_lnum_value_error_cases(#[case] input: &str, #[case] expected_error_contains: &str) {
+    fn test_extract_new_lnum_value_when_input_invalid_returns_expected_error(
+        #[case] input: &str,
+        #[case] expected_error_contains: &str,
+    ) {
         assert2::assert!(let Err(err) = extract_new_lnum_value(input));
         assert!(err.to_string().contains(expected_error_contains));
     }

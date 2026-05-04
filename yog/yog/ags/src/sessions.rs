@@ -1,12 +1,13 @@
 use std::cell::RefCell;
 use std::fmt::Display;
+use std::fmt::Formatter;
 use std::process::Command;
 use std::process::Stdio;
 
-use owo_colors::OwoColorize as _;
-use rootcause::prelude::ResultExt as _;
+use owo_colors::OwoColorize;
+use rootcause::prelude::ResultExt;
 use strum::EnumIter;
-use strum::IntoEnumIterator as _;
+use strum::IntoEnumIterator;
 use ytil_agents::agent::Agent;
 use ytil_agents::agent::session::Session;
 
@@ -80,7 +81,7 @@ impl RenderableSession {
 }
 
 impl Display for RenderableSession {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let agent_name = match self.session.agent {
             Agent::Claude => self.session.agent.short_name().red().bold().to_string(),
             Agent::Codex => self.session.agent.short_name().green().bold().to_string(),
@@ -128,7 +129,7 @@ enum Op {
 }
 
 impl Display for Op {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Resume => write!(f, "{}", "Resume".green().bold()),
             Self::Delete => write!(f, "{}", "Delete".red().bold()),

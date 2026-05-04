@@ -8,7 +8,7 @@
 use std::process::Command;
 use std::process::Stdio;
 
-use owo_colors::OwoColorize as _;
+use owo_colors::OwoColorize;
 use rootcause::prelude::ResultExt;
 use ytil_sys::cli::Args;
 

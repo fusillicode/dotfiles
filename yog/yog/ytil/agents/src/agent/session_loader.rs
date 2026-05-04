@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use rootcause::prelude::ResultExt as _;
+use rootcause::prelude::ResultExt;
 
 use crate::agent::session::Session;
 

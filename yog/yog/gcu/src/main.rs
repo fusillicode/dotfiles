@@ -5,8 +5,8 @@
 
 use std::io::Write;
 
-use owo_colors::OwoColorize as _;
-use rootcause::prelude::ResultExt as _;
+use owo_colors::OwoColorize;
+use rootcause::prelude::ResultExt;
 use rootcause::report;
 use url::Url;
 use ytil_git::CmdError;

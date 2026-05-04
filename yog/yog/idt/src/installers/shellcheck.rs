@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use rootcause::prelude::ResultExt as _;
+use rootcause::prelude::ResultExt;
 use ytil_sys::Arch;
 use ytil_sys::Os;
 use ytil_sys::SysInfo;

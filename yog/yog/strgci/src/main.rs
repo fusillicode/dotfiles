@@ -7,8 +7,8 @@ use std::io::Write;
 use std::path::Path;
 
 use chrono::Utc;
-use rootcause::prelude::ResultExt as _;
-use ytil_sys::cli::Args as _;
+use rootcause::prelude::ResultExt;
+use ytil_sys::cli::Args;
 
 /// Maximum number of characters shown for the commit subject before truncating with `…`.
 const MAX_SUBJECT_LEN: usize = 33;

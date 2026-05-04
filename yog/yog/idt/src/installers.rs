@@ -1,15 +1,15 @@
 use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;
 use std::time::Instant;
 
-use owo_colors::OwoColorize as _;
+use owo_colors::OwoColorize;
 use rootcause::bail;
-use rootcause::prelude::ResultExt as _;
+use rootcause::prelude::ResultExt;
 use ytil_cmd::Cmd;
 use ytil_cmd::CmdError;
-use ytil_cmd::CmdExt as _;
-use ytil_cmd::silent_cmd;
+use ytil_cmd::CmdExt;
 
 pub mod alacritty;
 pub mod bash_language_server;
@@ -196,8 +196,8 @@ pub fn install_macos_app(app: &Path, bin_dir: &Path, bin_name: &str) -> rootcaus
         bail!("app path has no valid UTF-8 file name: {}", app.display());
     };
 
-    let applications_app = std::path::PathBuf::from(format!("/Applications/{app_filename}"));
-    let applications_app_old = std::path::PathBuf::from(format!("/Applications/{app_filename}.old"));
+    let applications_app = PathBuf::from(format!("/Applications/{app_filename}"));
+    let applications_app_old = PathBuf::from(format!("/Applications/{app_filename}.old"));
 
     if applications_app_old.exists() {
         std::fs::remove_dir_all(&applications_app_old)
@@ -216,7 +216,7 @@ pub fn install_macos_app(app: &Path, bin_dir: &Path, bin_name: &str) -> rootcaus
             .attach_with(|| format!("to={}", applications_app_old.display()))?;
     }
 
-    silent_cmd("cp")
+    ytil_cmd::silent_cmd("cp")
         .args(["-R", &app.display().to_string(), "/Applications/"])
         .status()
         .context("failed to spawn cp for .app bundle")?

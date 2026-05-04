@@ -140,13 +140,13 @@ mod tests {
 
     #[test]
     fn test_should_break_ok_cond_with_failure_result_returns_false() {
-        let err_result: Result<(), ExitStatusError> = std::process::Command::new("false").status().unwrap().exit_ok();
+        let err_result: Result<(), ExitStatusError> = Command::new("false").status().unwrap().exit_ok();
         pretty_assertions::assert_eq!(ExitCond::Ok.should_break(err_result), false);
     }
 
     #[test]
     fn test_should_break_ko_cond_with_failure_result_returns_true() {
-        let err_result: Result<(), ExitStatusError> = std::process::Command::new("false").status().unwrap().exit_ok();
+        let err_result: Result<(), ExitStatusError> = Command::new("false").status().unwrap().exit_ok();
         pretty_assertions::assert_eq!(ExitCond::Ko.should_break(err_result), true);
     }
 

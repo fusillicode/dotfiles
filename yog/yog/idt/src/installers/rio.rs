@@ -1,7 +1,6 @@
 use std::path::Path;
 
-use rootcause::prelude::ResultExt as _;
-use ytil_cmd::silent_cmd;
+use rootcause::prelude::ResultExt;
 
 use crate::installers::Installer;
 
@@ -20,7 +19,7 @@ impl Installer for Rio<'_> {
     fn install(&self) -> rootcause::Result<()> {
         let source_dir = self.dev_tools_dir.join(self.bin_name()).join("source");
 
-        silent_cmd("sh")
+        ytil_cmd::silent_cmd("sh")
             .args([
                 "-c",
                 &format!(

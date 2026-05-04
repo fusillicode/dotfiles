@@ -1,8 +1,8 @@
 use std::path::Path;
+use std::process::Command;
 
-use rootcause::prelude::ResultExt as _;
-use ytil_cmd::CmdExt as _;
-use ytil_cmd::silent_cmd;
+use rootcause::prelude::ResultExt;
+use ytil_cmd::CmdExt;
 
 use crate::Installer;
 
@@ -20,7 +20,7 @@ impl Installer for Starship<'_> {
         let source_dir = self.dev_tools_dir.join(self.bin_name()).join("source");
         let cargo_target = self.dev_tools_dir.join("cargo-target");
 
-        silent_cmd("sh")
+        ytil_cmd::silent_cmd("sh")
             .args([
                 "-c",
                 &format!(
@@ -53,7 +53,7 @@ impl Installer for Starship<'_> {
     fn health_check(&self) -> Option<rootcause::Result<String>> {
         // Starship refuses to run under TERM=dumb.
         // Override TERM so the health check succeeds regardless of the host terminal.
-        let res = std::process::Command::new(self.bin_name())
+        let res = Command::new(self.bin_name())
             .env("TERM", "xterm-256color")
             .args(["--version"])
             .exec()

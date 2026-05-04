@@ -9,6 +9,7 @@
 #![feature(error_generic_member_access, exit_status_error)]
 
 use std::fmt::Display;
+use std::fmt::Formatter;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -16,7 +17,7 @@ use std::process::ExitStatus;
 use std::process::Output;
 use std::process::Stdio;
 
-use rootcause::prelude::ResultExt as _;
+use rootcause::prelude::ResultExt;
 
 /// Extension trait for [`Command`] to execute and handle errors.
 pub trait CmdExt {
@@ -29,24 +30,6 @@ pub trait CmdExt {
     /// - Non-zero exit with invalid UTF-8 stderr ([`CmdError::FromUtf8`]).
     /// - Borrowed UTF-8 validation failure ([`CmdError::Utf8`]).
     fn exec(&mut self) -> Result<Output, CmdError>;
-}
-
-impl CmdExt for Command {
-    fn exec(&mut self) -> Result<Output, CmdError> {
-        let output = self.output().map_err(|source| CmdError::Io {
-            cmd: Cmd::from(&*self),
-            source,
-        })?;
-        if !output.status.success() {
-            return Err(CmdError::CmdFailure {
-                cmd: Cmd::from(&*self),
-                stderr: to_utf8_string(self, output.stderr)?,
-                stdout: to_utf8_string(self, output.stdout)?,
-                status: output.status,
-            });
-        }
-        Ok(output)
-    }
 }
 
 /// Extracts and validates successful command output, converting it to a trimmed string.
@@ -121,9 +104,46 @@ pub struct Cmd {
     name: String,
 }
 
+/// Creates a [`Command`] for `program`; silences stdout/stderr in release builds.
+///
+/// In debug (`debug_assertions`), output is inherited for easier troubleshooting.
+/// In release, both streams are redirected to [`Stdio::null()`] to keep logs quiet.
+pub fn silent_cmd(program: &str) -> Command {
+    let mut cmd = Command::new(program);
+    if !cfg!(debug_assertions) {
+        cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+    cmd
+}
+
+fn to_utf8_string(cmd: &Command, bytes: Vec<u8>) -> Result<String, CmdError> {
+    String::from_utf8(bytes).map_err(|error| CmdError::FromUtf8 {
+        cmd: Cmd::from(cmd),
+        source: error,
+    })
+}
+
+impl CmdExt for Command {
+    fn exec(&mut self) -> Result<Output, CmdError> {
+        let output = self.output().map_err(|source| CmdError::Io {
+            cmd: Cmd::from(&*self),
+            source,
+        })?;
+        if !output.status.success() {
+            return Err(CmdError::CmdFailure {
+                cmd: Cmd::from(&*self),
+                stderr: to_utf8_string(self, output.stderr)?,
+                stdout: to_utf8_string(self, output.stdout)?,
+                status: output.status,
+            });
+        }
+        Ok(output)
+    }
+}
+
 /// Formats [`Cmd`] for display, showing command name, arguments, and working directory.
 impl Display for Cmd {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "Cmd=(name={:?} args={:?} cur_dir={:?})",
@@ -154,25 +174,6 @@ impl From<&mut Command> for Cmd {
             cur_dir: value.get_current_dir().map(Path::to_path_buf),
         }
     }
-}
-
-/// Creates a [`Command`] for `program`; silences stdout/stderr in release builds.
-///
-/// In debug (`debug_assertions`), output is inherited for easier troubleshooting.
-/// In release, both streams are redirected to [`Stdio::null()`] to keep logs quiet.
-pub fn silent_cmd(program: &str) -> Command {
-    let mut cmd = Command::new(program);
-    if !cfg!(debug_assertions) {
-        cmd.stdout(Stdio::null()).stderr(Stdio::null());
-    }
-    cmd
-}
-
-fn to_utf8_string(cmd: &Command, bytes: Vec<u8>) -> Result<String, CmdError> {
-    String::from_utf8(bytes).map_err(|error| CmdError::FromUtf8 {
-        cmd: Cmd::from(cmd),
-        source: error,
-    })
 }
 
 #[cfg(test)]
