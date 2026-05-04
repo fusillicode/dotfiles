@@ -11,14 +11,9 @@ keywords = ["cli", "zellij", "terminal", "session", "management"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-agg = { path = "../agg" }
-git2 = { workspace = true }
-notify-rust = { version = "4.16.1" }
 owo-colors = { workspace = true }
 rootcause = { workspace = true }
-serde_json = { workspace = true }
 strum = { workspace = true }
-ytil_agents = { workspace = true }
 ytil_cmd = { workspace = true }
 ytil_sys = { workspace = true }
 ytil_tui = { workspace = true }

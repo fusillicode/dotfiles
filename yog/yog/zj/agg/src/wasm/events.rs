@@ -10,9 +10,9 @@ use zellij_tile::prelude::PipeMessage;
 use zellij_tile::prelude::PipeSource;
 use zellij_tile::prelude::TabInfo;
 
-use crate::SYNC_PIPE;
-use crate::StateSnapshotPayload;
-use crate::state::FocusedPane;
+use crate::wasm::plugin::SYNC_PIPE;
+use crate::wasm::plugin::StateSnapshotPayload;
+use crate::wasm::state::FocusedPane;
 
 #[derive(Debug)]
 #[cfg_attr(test, derive(Eq, PartialEq))]

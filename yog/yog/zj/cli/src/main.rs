@@ -13,9 +13,7 @@ use strum::EnumIter;
 use strum::IntoEnumIterator;
 use ytil_sys::cli::Args;
 
-mod git_stat;
 mod install;
-mod nudge;
 
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
@@ -29,28 +27,9 @@ fn main() -> rootcause::Result<()> {
         return Ok(());
     }
 
-    match args.first().map(String::as_str) {
-        Some("install") => {
-            let is_debug = args.iter().any(|a| a == "--debug");
-            return install::run(is_debug);
-        }
-        Some("git-stat") => {
-            let paths = args.get(1..);
-            for cwd in paths.into_iter().flatten() {
-                let stat = git_stat::run(cwd);
-                println!("{cwd} {stat}");
-            }
-            return Ok(());
-        }
-        Some("nudge") => {
-            let (name, body, image_path) = match args.as_slice() {
-                [_, name, body] => (name, body, None),
-                [_, name, body, image_path] => (name, body, Some(image_path.as_str())),
-                _ => rootcause::bail!("usage: zj nudge <name> <body> [image-path]"),
-            };
-            return nudge::run(name, body, image_path);
-        }
-        _ => {}
+    if args.first().map(String::as_str) == Some("install") {
+        let is_debug = args.iter().any(|a| a == "--debug");
+        return install::run(is_debug);
     }
 
     if !args.is_empty() {

@@ -1,5 +1,3 @@
-use agg::git_stat::GitStat;
-
 pub fn run(cwd: &str) -> GitStat {
     let Ok(repo) = git2::Repository::discover(cwd) else {
         return GitStat::default();
@@ -29,5 +27,26 @@ pub fn run(cwd: &str) -> GitStat {
         deletions,
         new_files,
         is_worktree,
+    }
+}
+
+#[derive(Default)]
+pub struct GitStat {
+    insertions: usize,
+    deletions: usize,
+    new_files: usize,
+    is_worktree: bool,
+}
+
+impl std::fmt::Display for GitStat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} {} {} {}",
+            self.insertions,
+            self.deletions,
+            self.new_files,
+            u8::from(self.is_worktree),
+        )
     }
 }
