@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::path::Path;
 use std::path::PathBuf;
 
 use agg::AgentState;
@@ -23,10 +24,52 @@ pub struct State {
     pub other_tabs: HashMap<u32, StateSnapshotPayload>,
     pub known_active_tab_id: Option<usize>,
     pub sync_requested: bool,
+    pub nudged_pane_ids: HashSet<u32>,
     pub home_dir: PathBuf,
     pub frame: Vec<TabRow>,
     pub last_cols: usize,
     pub render_buf: String,
+}
+
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
+pub struct Nudge {
+    pub agent: Agent,
+    pub tab_id: usize,
+    pub pane_id: u32,
+    pub path_label: String,
+}
+
+impl Nudge {
+    pub fn new(current_tab: &CurrentTab, tabs: &[TabInfo], home_dir: &Path, pane_id: u32) -> Option<Self> {
+        let pane_state = current_tab.pane_state_by_pane.get(&pane_id)?;
+        if pane_state.phase != AgentPanePhase::AttentionUnseen {
+            return None;
+        }
+
+        let path_label = current_tab.cwd.as_ref().map_or_else(
+            || {
+                tabs.iter()
+                    .find(|tab| tab.tab_id == current_tab.tab_id)
+                    .map_or_else(String::new, |tab| tab.name.clone())
+            },
+            |path| ytil_tui::short_path(path, home_dir),
+        );
+
+        Some(Self {
+            agent: pane_state.agent,
+            tab_id: current_tab.tab_id,
+            pane_id,
+            path_label,
+        })
+    }
+
+    pub fn title(&self) -> String {
+        format!("{} done", self.agent)
+    }
+
+    pub fn body(&self) -> String {
+        format!("{} tab {} pane {}", self.path_label, self.tab_id, self.pane_id)
+    }
 }
 
 impl State {
@@ -348,7 +391,33 @@ impl State {
         for event in events {
             self.apply(event);
         }
+        self.prune_nudges();
         self.sync_frame()
+    }
+
+    pub fn has_nudged(&self, pane_id: u32) -> bool {
+        self.nudged_pane_ids.contains(&pane_id)
+    }
+
+    pub fn nudges(&self) -> Vec<(u32, Nudge)> {
+        let Some(current_tab) = self.current_tab.as_ref() else {
+            return vec![];
+        };
+        let mut nudges = current_tab
+            .pane_state_by_pane
+            .iter()
+            .filter(|(pane_id, _)| !self.has_nudged(**pane_id))
+            .filter_map(|(pane_id, pane_state)| {
+                Nudge::new(current_tab, &self.all_tabs, &self.home_dir, *pane_id)
+                    .map(|nudge| (pane_state.phase_seq, *pane_id, nudge))
+            })
+            .collect::<Vec<_>>();
+        nudges.sort_by_key(|(phase_seq, pane_id, _)| (*phase_seq, *pane_id));
+        nudges.into_iter().map(|(_, pane_id, nudge)| (pane_id, nudge)).collect()
+    }
+
+    pub fn mark_nudged(&mut self, pane_id: u32) {
+        self.nudged_pane_ids.insert(pane_id);
     }
 
     pub fn remote_snapshot_for_tab(&self, tab_id: usize) -> Option<&StateSnapshotPayload> {
@@ -582,6 +651,19 @@ impl State {
         self.known_active_tab_id = new_tabs.iter().find(|tab| tab.active).map(|tab| tab.tab_id);
         self.all_tabs.clone_from(&new_tabs.to_vec());
         self.sync_active_change(was_active);
+    }
+
+    fn prune_nudges(&mut self) {
+        let Some(current_tab) = self.current_tab.as_ref() else {
+            self.nudged_pane_ids.clear();
+            return;
+        };
+        self.nudged_pane_ids.retain(|pane_id| {
+            current_tab
+                .pane_state_by_pane
+                .get(pane_id)
+                .is_some_and(|pane_state| pane_state.phase == AgentPanePhase::AttentionUnseen)
+        });
     }
 
     fn sync_active_change(&mut self, was_active: bool) {
@@ -1381,10 +1463,13 @@ mod tests {
     #[test]
     fn test_agent_idle_in_unfocused_pane_transitions_green_to_red() {
         let mut state = State {
+            all_tabs: vec![tab_with_name(10, 0, "fallback-tab")],
             current_tab: Some(CurrentTab::new(10)),
+            home_dir: PathBuf::from("/Users/me"),
             ..Default::default()
         };
         assert!(let Some(current_tab) = state.current_tab.as_mut());
+        current_tab.cwd = Some(PathBuf::from("/Users/me/project"));
         current_tab.pane_ids.extend([42, 43]);
         current_tab.focused_pane = Some(FocusedPane {
             id: 43,
@@ -1415,6 +1500,114 @@ mod tests {
         assert_eq!(
             current_tab.display_cmd(),
             Cmd::agent(Agent::Codex, AgentState::NeedsAttention)
+        );
+
+        let nudge = Nudge::new(current_tab, &state.all_tabs, &state.home_dir, 42);
+        assert_eq!(
+            nudge,
+            Some(Nudge {
+                agent: Agent::Codex,
+                tab_id: 10,
+                pane_id: 42,
+                path_label: ytil_tui::short_path(&PathBuf::from("/Users/me/project"), &PathBuf::from("/Users/me")),
+            })
+        );
+        let nudge = nudge.expect("nudge");
+        assert_eq!(nudge.title(), "Codex done");
+        assert_eq!(nudge.body(), "~/project tab 10 pane 42");
+        assert_eq!(
+            state.nudges(),
+            vec![(
+                42,
+                Nudge {
+                    agent: Agent::Codex,
+                    tab_id: 10,
+                    pane_id: 42,
+                    path_label: ytil_tui::short_path(&PathBuf::from("/Users/me/project"), &PathBuf::from("/Users/me")),
+                },
+            )]
+        );
+        assert!(!state.has_nudged(42));
+        state.mark_nudged(42);
+        assert!(state.has_nudged(42));
+        assert!(state.nudges().is_empty());
+    }
+
+    #[test]
+    fn test_agent_busy_clears_nudge_dedupe() {
+        let mut state = State {
+            current_tab: Some(CurrentTab::new(10)),
+            home_dir: PathBuf::from("/Users/me"),
+            ..Default::default()
+        };
+        assert!(let Some(current_tab) = state.current_tab.as_mut());
+        current_tab.cwd = Some(PathBuf::from("/Users/me/project"));
+        current_tab.pane_ids.insert(42);
+        current_tab.pane_state_by_pane.insert(
+            42,
+            pane_state(Agent::Codex, AgentPanePhase::Running, PaneFocus::Unfocused, 1),
+        );
+
+        let idle_events = state.events_from_agent_event(&AgentEventPayload {
+            pane_id: 42,
+            agent: Agent::Codex,
+            kind: AgentEventKind::Idle,
+        });
+        let _ = state.apply_all(&idle_events);
+        assert!(let Some(current_tab) = state.current_tab.as_ref());
+        assert!(Nudge::new(current_tab, &state.all_tabs, &state.home_dir, 42).is_some());
+        state.mark_nudged(42);
+
+        let busy_events = state.events_from_agent_event(&AgentEventPayload {
+            pane_id: 42,
+            agent: Agent::Codex,
+            kind: AgentEventKind::Busy,
+        });
+        let _ = state.apply_all(&busy_events);
+        assert!(state.nudged_pane_ids.is_empty());
+
+        let idle_events = state.events_from_agent_event(&AgentEventPayload {
+            pane_id: 42,
+            agent: Agent::Codex,
+            kind: AgentEventKind::Idle,
+        });
+        let _ = state.apply_all(&idle_events);
+        assert!(let Some(current_tab) = state.current_tab.as_ref());
+        assert!(Nudge::new(current_tab, &state.all_tabs, &state.home_dir, 42).is_some());
+    }
+
+    #[test]
+    fn test_nudges_include_attention_from_any_current_tab_focus_state() {
+        let state = State {
+            known_active_tab_id: Some(10),
+            current_tab: Some(CurrentTab {
+                pane_ids: HashSet::from([42, 99]),
+                focused_pane: Some(FocusedPane {
+                    id: 99,
+                    label: Some(FocusedPaneLabel::TerminalCommand(String::new())),
+                }),
+                pane_state_by_pane: HashMap::from([(
+                    42,
+                    pane_state(Agent::Codex, AgentPanePhase::AttentionUnseen, PaneFocus::Focused, 1),
+                )]),
+                ..CurrentTab::new(10)
+            }),
+            home_dir: PathBuf::from("/Users/me"),
+            all_tabs: vec![tab_with_name(10, 0, "project")],
+            ..Default::default()
+        };
+
+        assert_eq!(
+            state.nudges(),
+            vec![(
+                42,
+                Nudge {
+                    agent: Agent::Codex,
+                    tab_id: 10,
+                    pane_id: 42,
+                    path_label: "project".to_string(),
+                },
+            )]
         );
     }
 

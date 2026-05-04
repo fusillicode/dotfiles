@@ -234,6 +234,23 @@ impl AgentEventPayload {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct NudgeIcon {
+    pub cache_key: &'static str,
+}
+
+impl From<Agent> for NudgeIcon {
+    fn from(agent: Agent) -> Self {
+        match agent {
+            Agent::Claude => Self { cache_key: "claude" },
+            Agent::Codex => Self { cache_key: "codex" },
+            Agent::Cursor => Self { cache_key: "cursor" },
+            Agent::Gemini => Self { cache_key: "gemini" },
+            Agent::Opencode => Self { cache_key: "opencode" },
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
@@ -287,5 +304,17 @@ mod tests {
             .find_map(|(event, kind)| (*event == "PermissionRequest").then_some(*kind));
 
         pretty_assertions::assert_eq!(permission_request_kind, Some(AgentEventKind::Busy));
+    }
+
+    #[rstest]
+    #[case(Agent::Claude, "claude")]
+    #[case(Agent::Cursor, "cursor")]
+    #[case(Agent::Codex, "codex")]
+    #[case(Agent::Gemini, "gemini")]
+    #[case(Agent::Opencode, "opencode")]
+    fn test_nudge_icon_from_agent_returns_agent_icon(#[case] agent: Agent, #[case] cache_key: &str) {
+        let icon = NudgeIcon::from(agent);
+
+        pretty_assertions::assert_eq!(icon.cache_key, cache_key);
     }
 }
