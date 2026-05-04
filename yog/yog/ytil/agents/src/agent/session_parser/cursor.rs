@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use chrono::DateTime;
+use chrono::Utc;
 use rootcause::option_ext::OptionExt;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
@@ -14,7 +15,7 @@ use crate::agent::session::Session;
 ///
 /// # Errors
 /// Returns an error when the encoded metadata is invalid or contains an invalid timestamp.
-pub fn parse(meta_hex: &str, workspace_dir: PathBuf) -> rootcause::Result<Session> {
+pub fn parse(meta_hex: &str, workspace_dir: PathBuf) -> rootcause::Result<CursorSession> {
     let meta_json = decode_hex_string(meta_hex)
         .context("failed to decode Cursor meta payload".to_owned())
         .attach(format!("meta_hex={meta_hex}"))?;
@@ -28,13 +29,42 @@ pub fn parse(meta_hex: &str, workspace_dir: PathBuf) -> rootcause::Result<Sessio
         .attach(format!("session_id={}", doc.agent_id))
         .attach(format!("created_at_ms={}", doc.created_at))?;
 
-    Ok(Session::new(
-        Agent::Cursor,
-        doc.agent_id,
-        workspace_dir,
-        doc.name,
+    let name = doc.name.unwrap_or_else(|| {
+        workspace_dir
+            .file_name()
+            .and_then(|name| name.to_str())
+            .filter(|name| !name.is_empty())
+            .map_or_else(|| doc.agent_id.clone(), str::to_owned)
+    });
+
+    Ok(CursorSession {
+        id: doc.agent_id,
+        name: name.clone(),
+        search_text: name,
+        workspace: workspace_dir,
         created_at,
-    ))
+        updated_at: created_at,
+    })
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CursorSession {
+    pub id: String,
+    pub name: String,
+    pub search_text: String,
+    pub workspace: PathBuf,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<CursorSession> for Session {
+    fn from(value: CursorSession) -> Self {
+        let mut session = Self::new(Agent::Cursor, value.id, value.workspace, None, value.created_at);
+        session.name = value.name;
+        session.search_text = value.search_text;
+        session.updated_at = value.updated_at;
+        session
+    }
 }
 
 pub(crate) fn decode_hex_string(raw: &str) -> rootcause::Result<String> {
@@ -200,7 +230,8 @@ mod tests {
         std::fs::create_dir_all(&workspace).unwrap();
 
         let meta_hex = "7b226167656e744964223a2266626364393632362d623065642d343739632d623838372d376132633264313531376636222c226e616d65223a225361666520526562617365222c22637265617465644174223a313737343837373733383031337d";
-        assert2::assert!(let Ok(session) = parse(meta_hex, workspace.clone()));
+        assert2::assert!(let Ok(cursor_session) = parse(meta_hex, workspace.clone()));
+        let session = Session::from(cursor_session);
         pretty_assertions::assert_eq!(session.agent, Agent::Cursor);
         pretty_assertions::assert_eq!(session.workspace, workspace);
         pretty_assertions::assert_eq!(session.name, "Safe Rebase");

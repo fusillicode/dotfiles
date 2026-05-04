@@ -25,8 +25,12 @@ pub fn load_sessions() -> rootcause::Result<Vec<Session>> {
             .file_stem()
             .and_then(|name| name.to_str())
             .unwrap_or_default();
-        let mut session = crate::agent::session_parser::codex::parse(&content, session_name)
+        let codex_session = crate::agent::session_parser::codex::parse(&content, session_name)
             .attach_with(|| format!("path={}", session_path.display()))?;
+        if codex_session.is_subagent {
+            continue;
+        }
+        let mut session = Session::from(codex_session);
         if session.workspace.is_dir() {
             session.path = session_path;
             sessions.push(session);
