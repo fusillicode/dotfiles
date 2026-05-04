@@ -3,8 +3,8 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use agg::Cmd;
+use agg::GitStat;
 use agg::TabIndicator;
-use agg::git_stat::GitStat;
 use zellij_tile::prelude::*;
 
 const INFO_ROWS: usize = 1;
