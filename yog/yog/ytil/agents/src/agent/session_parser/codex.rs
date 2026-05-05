@@ -87,12 +87,12 @@ pub struct CodexSession {
     pub is_subagent: bool,
 }
 
-impl From<CodexSession> for Session {
-    fn from(value: CodexSession) -> Self {
-        let mut session = Self::new(Agent::Codex, value.id, value.workspace, None, value.created_at);
-        session.name = value.name;
-        session.search_text = value.search_text;
-        session.updated_at = value.updated_at;
+impl CodexSession {
+    pub fn into_session(self, path: PathBuf) -> Session {
+        let mut session = Session::new(Agent::Codex, self.id, self.workspace, path, None, self.created_at);
+        session.name = self.name;
+        session.search_text = self.search_text;
+        session.updated_at = self.updated_at;
         session
     }
 }
@@ -285,7 +285,7 @@ mod tests {
             &content,
             "rollout-2026-03-20T07-30-20-019d09f0-0d96-7e23-94cd-1f6aad7cdc09",
         ));
-        let session = Session::from(codex_session);
+        let session = codex_session.into_session(workspace.join("session.jsonl"));
         pretty_assertions::assert_eq!(session.agent, Agent::Codex);
         pretty_assertions::assert_eq!(
             session.name,

@@ -26,6 +26,7 @@ impl Session {
         agent: Agent,
         session_id: String,
         workspace_dir: PathBuf,
+        path: PathBuf,
         name: Option<String>,
         created_at: DateTime<Utc>,
     ) -> Self {
@@ -43,7 +44,7 @@ impl Session {
             search_text: name.clone(),
             name,
             workspace: workspace_dir,
-            path: PathBuf::new(),
+            path,
             created_at,
             updated_at: created_at,
         }
@@ -202,6 +203,7 @@ mod tests {
     fn test_build_resume_command_matches_agent() {
         let tempdir = tempdir().unwrap();
         let workspace = tempdir.path().join("workspace");
+        let path = tempdir.path().join("session.jsonl");
         std::fs::create_dir_all(&workspace).unwrap();
 
         let claude = Session {
@@ -210,7 +212,7 @@ mod tests {
             workspace: workspace.clone(),
             name: "session-name".into(),
             search_text: "session-name".into(),
-            path: PathBuf::new(),
+            path,
             created_at: DateTime::from_timestamp_millis(1).unwrap().to_utc(),
             updated_at: DateTime::from_timestamp_millis(1).unwrap().to_utc(),
         };
@@ -259,6 +261,7 @@ mod tests {
             Agent::Codex,
             "session-id".into(),
             workspace,
+            PathBuf::from("session.jsonl"),
             Some("hello world".into()),
             DateTime::from_timestamp_millis(1).unwrap().to_utc(),
         );
