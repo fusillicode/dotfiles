@@ -15,7 +15,7 @@ use zellij_tile::prelude::TabInfo;
 
 use crate::wasm::plugin::SYNC_PIPE;
 use crate::wasm::plugin::StateSnapshotPayload;
-use crate::wasm::state::FocusedPane;
+use crate::wasm::state::current_tab::FocusedPane;
 
 #[derive(Debug)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
