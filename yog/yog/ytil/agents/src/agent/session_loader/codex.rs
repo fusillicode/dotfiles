@@ -30,9 +30,8 @@ pub fn load_sessions() -> rootcause::Result<Vec<Session>> {
         if codex_session.is_subagent {
             continue;
         }
-        let mut session = Session::from(codex_session);
+        let session = codex_session.into_session(session_path);
         if session.workspace.is_dir() {
-            session.path = session_path;
             sessions.push(session);
         }
     }

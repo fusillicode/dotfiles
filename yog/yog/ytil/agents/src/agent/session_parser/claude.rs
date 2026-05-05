@@ -83,12 +83,12 @@ pub struct ClaudeSession {
     pub updated_at: DateTime<Utc>,
 }
 
-impl From<ClaudeSession> for Session {
-    fn from(value: ClaudeSession) -> Self {
-        let mut session = Self::new(Agent::Claude, value.id, value.workspace, None, value.created_at);
-        session.name = value.name;
-        session.search_text = value.search_text;
-        session.updated_at = value.updated_at;
+impl ClaudeSession {
+    pub fn into_session(self, path: PathBuf) -> Session {
+        let mut session = Session::new(Agent::Claude, self.id, self.workspace, path, None, self.created_at);
+        session.name = self.name;
+        session.search_text = self.search_text;
+        session.updated_at = self.updated_at;
         session
     }
 }
@@ -416,7 +416,7 @@ mod tests {
         .replace("__CWD__", &workspace.display().to_string());
 
         assert2::assert!(let Ok(claude_session) = parse(&content));
-        let session = Session::from(claude_session);
+        let session = claude_session.into_session(workspace.join("session.jsonl"));
         pretty_assertions::assert_eq!(session.agent, Agent::Claude);
         pretty_assertions::assert_eq!(session.workspace, workspace);
         pretty_assertions::assert_eq!(session.id, "8649a076-3ead-4d5a-9840-3200f0e1aae5");
@@ -448,7 +448,7 @@ mod tests {
         );
 
         assert2::assert!(let Ok(claude_session) = parse(content));
-        let session = Session::from(claude_session);
+        let session = claude_session.into_session(PathBuf::from("session.jsonl"));
         pretty_assertions::assert_eq!(session.name, "this is a very long first user message");
         pretty_assertions::assert_eq!(
             session.search_text,
@@ -470,7 +470,7 @@ mod tests {
         );
 
         assert2::assert!(let Ok(claude_session) = parse(content));
-        let session = Session::from(claude_session);
+        let session = claude_session.into_session(PathBuf::from("session.jsonl"));
         pretty_assertions::assert_eq!(session.name, "/privoly-admin install");
         pretty_assertions::assert_eq!(session.search_text, "/privoly-admin install");
     }
@@ -485,7 +485,7 @@ mod tests {
         );
 
         assert2::assert!(let Ok(claude_session) = parse(content));
-        let session = Session::from(claude_session);
+        let session = claude_session.into_session(PathBuf::from("session.jsonl"));
         pretty_assertions::assert_eq!(session.name, "real prompt");
         pretty_assertions::assert_eq!(session.search_text, "real prompt");
     }
