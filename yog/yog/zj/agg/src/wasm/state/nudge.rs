@@ -40,7 +40,7 @@ impl Nudge {
     }
 
     pub fn title(&self) -> String {
-        format!("🔴 {} done", self.agent)
+        format!("🔔 {} done", self.agent)
     }
 
     pub fn body(&self) -> String {
@@ -53,10 +53,6 @@ impl Nudge {
 }
 
 impl State {
-    pub fn has_nudged(&self, pane_id: u32) -> bool {
-        self.nudged_pane_ids.contains(&pane_id)
-    }
-
     pub fn nudges(&self) -> Vec<(u32, Nudge)> {
         let Some(current_tab) = self.current_tab.as_ref() else {
             return vec![];
@@ -64,7 +60,7 @@ impl State {
         let mut nudges = current_tab
             .pane_state_by_pane
             .iter()
-            .filter(|(pane_id, _)| !self.has_nudged(**pane_id))
+            .filter(|(pane_id, _)| !self.nudged_pane_ids.contains(*pane_id))
             .filter_map(|(pane_id, pane_state)| {
                 Nudge::new(current_tab, &self.all_tabs, &self.home_dir, *pane_id)
                     .map(|nudge| (pane_state.phase_seq, *pane_id, nudge))
@@ -121,7 +117,7 @@ mod tests {
         assert_eq!(nudge.tab_id, 10);
         assert_eq!(nudge.pane_id, 42);
         assert_eq!(nudge.path, "project");
-        assert_eq!(nudge.title(), "🔴 Codex done");
+        assert_eq!(nudge.title(), "🔔 Codex done");
         assert_eq!(nudge.body(), "project · t10 p42");
     }
 }
