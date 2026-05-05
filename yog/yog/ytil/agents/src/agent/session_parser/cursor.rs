@@ -57,12 +57,12 @@ pub struct CursorSession {
     pub updated_at: DateTime<Utc>,
 }
 
-impl From<CursorSession> for Session {
-    fn from(value: CursorSession) -> Self {
-        let mut session = Self::new(Agent::Cursor, value.id, value.workspace, None, value.created_at);
-        session.name = value.name;
-        session.search_text = value.search_text;
-        session.updated_at = value.updated_at;
+impl CursorSession {
+    pub fn into_session(self, path: PathBuf) -> Session {
+        let mut session = Session::new(Agent::Cursor, self.id, self.workspace, path, None, self.created_at);
+        session.name = self.name;
+        session.search_text = self.search_text;
+        session.updated_at = self.updated_at;
         session
     }
 }
@@ -231,7 +231,7 @@ mod tests {
 
         let meta_hex = "7b226167656e744964223a2266626364393632362d623065642d343739632d623838372d376132633264313531376636222c226e616d65223a225361666520526562617365222c22637265617465644174223a313737343837373733383031337d";
         assert2::assert!(let Ok(cursor_session) = parse(meta_hex, workspace.clone()));
-        let session = Session::from(cursor_session);
+        let session = cursor_session.into_session(workspace.join("store.db"));
         pretty_assertions::assert_eq!(session.agent, Agent::Cursor);
         pretty_assertions::assert_eq!(session.workspace, workspace);
         pretty_assertions::assert_eq!(session.name, "Safe Rebase");

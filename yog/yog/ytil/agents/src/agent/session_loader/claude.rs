@@ -30,9 +30,8 @@ pub fn load_sessions() -> rootcause::Result<Vec<Session>> {
             .attach_with(|| format!("path={}", session_path.display()))?;
         let claude_session = crate::agent::session_parser::claude::parse(&content)
             .attach_with(|| format!("path={}", session_path.display()))?;
-        let mut session = Session::from(claude_session);
+        let session = claude_session.into_session(session_path);
         if session.workspace.is_dir() {
-            session.path = session_path;
             sessions.push(session);
         }
     }
