@@ -13,10 +13,10 @@ use zellij_tile::prelude::*;
 use crate::wasm::events::PipeEvent;
 use crate::wasm::events::PipeEventError;
 use crate::wasm::events::StateEvent;
-use crate::wasm::state::CurrentTab;
-use crate::wasm::state::FocusedPane;
-use crate::wasm::state::Nudge;
 use crate::wasm::state::State;
+use crate::wasm::state::current_tab::CurrentTab;
+use crate::wasm::state::current_tab::FocusedPane;
+use crate::wasm::state::nudge::Nudge;
 use crate::wasm::ui;
 
 pub const SYNC_PIPE: &str = "agg-sync";
@@ -406,7 +406,7 @@ where
     if let Some((focused_tab_position, focused_pane_id)) = get_focused_pane_info()
         && focused_tab_position == active_tab_position
         && let Some(pane) = get_pane_info(focused_pane_id)
-        && let Some(focused_pane) = crate::wasm::state::focused_pane_from_pane_info(&pane)
+        && let Some(focused_pane) = crate::wasm::state::pane::focused_pane_from_pane_info(&pane)
     {
         return Some(focused_pane);
     }
@@ -417,7 +417,7 @@ where
         if !pane.is_focused {
             return None;
         }
-        crate::wasm::state::focused_pane_from_pane_info(&pane)
+        crate::wasm::state::pane::focused_pane_from_pane_info(&pane)
     })
 }
 
@@ -449,7 +449,7 @@ fn run_current_tab_git_stat(current_tab: Option<&CurrentTab>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wasm::state::FocusedPaneLabel;
+    use crate::wasm::state::current_tab::FocusedPaneLabel;
 
     #[test]
     fn test_sync_request_is_ignored_when_not_sent_by_plugin() {

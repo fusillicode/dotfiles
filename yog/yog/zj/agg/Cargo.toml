@@ -12,12 +12,12 @@ categories = ["zellij", "development-tools"]
 publish = false
 
 [dependencies]
-chrono = { workspace = true }
 ytil_agents = { workspace = true }
 ytil_tui = { workspace = true }
 zellij-tile = { git = "https://github.com/zellij-org/zellij.git", branch = "main" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+chrono = { workspace = true }
 git2 = { workspace = true }
 notify-rust = { version = "4.16.1" }
 owo-colors = { workspace = true }
