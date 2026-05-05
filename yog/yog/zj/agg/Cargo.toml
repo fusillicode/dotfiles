@@ -19,7 +19,7 @@ zellij-tile = { git = "https://github.com/zellij-org/zellij.git", branch = "main
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 chrono = { workspace = true }
 git2 = { workspace = true }
-notify-rust = { version = "4.16.1" }
+notify-rust = { version = "4.17.0" }
 owo-colors = { workspace = true }
 rootcause = { workspace = true }
 serde_json = { workspace = true }
