@@ -7,13 +7,6 @@ use crate::wasm::plugin::StateSnapshotPayload;
 use crate::wasm::ui::TabRow;
 
 impl State {
-    pub fn remote_snapshot_for_tab(&self, tab_id: usize) -> Option<&StateSnapshotPayload> {
-        self.other_tabs
-            .values()
-            .filter(|remote| remote.tab_id == tab_id)
-            .max_by_key(|remote| remote.seq)
-    }
-
     pub fn sync_frame(&mut self) -> bool {
         let next_frame = compute_frame(self);
         if self.frame == next_frame {
@@ -43,7 +36,7 @@ fn compute_frame(state: &State) -> Vec<TabRow> {
                     state.home_dir.as_path(),
                 );
             }
-            if let Some(remote) = state.remote_snapshot_for_tab(tab.tab_id) {
+            if let Some(remote) = remote_snapshot_for_tab(state, tab.tab_id) {
                 return TabRow::new(
                     tab,
                     remote.cwd.as_ref(),
@@ -64,6 +57,14 @@ fn compute_frame(state: &State) -> Vec<TabRow> {
             )
         })
         .collect()
+}
+
+fn remote_snapshot_for_tab(state: &State, tab_id: usize) -> Option<&StateSnapshotPayload> {
+    state
+        .other_tabs
+        .values()
+        .filter(|remote| remote.tab_id == tab_id)
+        .max_by_key(|remote| remote.seq)
 }
 
 #[cfg(test)]

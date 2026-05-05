@@ -184,6 +184,47 @@ impl CurrentTab {
             self.last_focused_agent_pane_id = Some(pane_id);
         }
     }
+
+    pub fn apply_panes_changed(&mut self, observed_pane_ids: &HashSet<u32>, retained_pane_ids: &HashSet<u32>) {
+        self.pane_ids.clone_from(retained_pane_ids);
+        self.missed_pane_updates_by_pane
+            .retain(|pane_id, _| retained_pane_ids.contains(pane_id));
+        for pane_id in retained_pane_ids {
+            if observed_pane_ids.contains(pane_id) {
+                self.missed_pane_updates_by_pane.remove(pane_id);
+            } else {
+                let missed = self.missed_pane_updates_by_pane.entry(*pane_id).or_insert(0);
+                *missed = missed.saturating_add(1);
+            }
+        }
+        self.pane_state_by_pane
+            .retain(|pane_id, _| retained_pane_ids.contains(pane_id));
+        if self
+            .last_focused_agent_pane_id
+            .is_some_and(|pane_id| !retained_pane_ids.contains(&pane_id))
+        {
+            self.last_focused_agent_pane_id = None;
+        }
+        if self
+            .active_focus_pane_id
+            .is_some_and(|pane_id| !retained_pane_ids.contains(&pane_id))
+        {
+            self.clear_active_focus();
+        }
+        self.seq = self.seq.saturating_add(1);
+    }
+
+    pub fn apply_agent_lost(&mut self, pane_id: u32) {
+        self.pane_state_by_pane.remove(&pane_id);
+        self.missed_pane_updates_by_pane.remove(&pane_id);
+        if self.last_focused_agent_pane_id == Some(pane_id) {
+            self.last_focused_agent_pane_id = None;
+        }
+        if self.active_focus_pane_id == Some(pane_id) {
+            self.active_focus_pane_id = None;
+        }
+        self.seq = self.seq.saturating_add(1);
+    }
 }
 
 #[cfg_attr(test, derive(Debug))]

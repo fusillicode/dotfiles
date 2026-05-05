@@ -33,7 +33,11 @@ impl State {
             StateEvent::PanesChanged {
                 observed_pane_ids,
                 retained_pane_ids,
-            } => self.apply_panes_changed(observed_pane_ids, retained_pane_ids),
+            } => {
+                if let Some(current_tab) = self.current_tab.as_mut() {
+                    current_tab.apply_panes_changed(observed_pane_ids, retained_pane_ids);
+                }
+            }
             StateEvent::FocusChanged {
                 new_pane,
                 acknowledge_existing_attention,
@@ -64,7 +68,11 @@ impl State {
                     current_tab.seq = current_tab.seq.saturating_add(1);
                 }
             }
-            StateEvent::AgentLost { pane_id } => self.apply_agent_lost(*pane_id),
+            StateEvent::AgentLost { pane_id } => {
+                if let Some(current_tab) = self.current_tab.as_mut() {
+                    current_tab.apply_agent_lost(*pane_id);
+                }
+            }
             StateEvent::GitStatChanged { new_stat } => {
                 if let Some(current_tab) = self.current_tab.as_mut() {
                     current_tab.git_stat = *new_stat;
@@ -91,40 +99,6 @@ impl State {
         }
     }
 
-    fn apply_panes_changed(&mut self, observed_pane_ids: &HashSet<u32>, retained_pane_ids: &HashSet<u32>) {
-        let Some(current_tab) = self.current_tab.as_mut() else {
-            return;
-        };
-        current_tab.pane_ids.clone_from(retained_pane_ids);
-        current_tab
-            .missed_pane_updates_by_pane
-            .retain(|pane_id, _| retained_pane_ids.contains(pane_id));
-        for pane_id in retained_pane_ids {
-            if observed_pane_ids.contains(pane_id) {
-                current_tab.missed_pane_updates_by_pane.remove(pane_id);
-            } else {
-                let missed = current_tab.missed_pane_updates_by_pane.entry(*pane_id).or_insert(0);
-                *missed = missed.saturating_add(1);
-            }
-        }
-        current_tab
-            .pane_state_by_pane
-            .retain(|pane_id, _| retained_pane_ids.contains(pane_id));
-        if current_tab
-            .last_focused_agent_pane_id
-            .is_some_and(|pane_id| !retained_pane_ids.contains(&pane_id))
-        {
-            current_tab.last_focused_agent_pane_id = None;
-        }
-        if current_tab
-            .active_focus_pane_id
-            .is_some_and(|pane_id| !retained_pane_ids.contains(&pane_id))
-        {
-            current_tab.clear_active_focus();
-        }
-        current_tab.seq = current_tab.seq.saturating_add(1);
-    }
-
     fn apply_focus_changed(&mut self, new_pane: Option<&FocusedPane>, acknowledge_existing_attention: bool) {
         let is_active = self.current_tab_is_active();
         let Some(current_tab) = self.current_tab.as_mut() else {
@@ -141,21 +115,6 @@ impl State {
             }
         } else {
             current_tab.clear_active_focus();
-        }
-        current_tab.seq = current_tab.seq.saturating_add(1);
-    }
-
-    fn apply_agent_lost(&mut self, pane_id: u32) {
-        let Some(current_tab) = self.current_tab.as_mut() else {
-            return;
-        };
-        current_tab.pane_state_by_pane.remove(&pane_id);
-        current_tab.missed_pane_updates_by_pane.remove(&pane_id);
-        if current_tab.last_focused_agent_pane_id == Some(pane_id) {
-            current_tab.last_focused_agent_pane_id = None;
-        }
-        if current_tab.active_focus_pane_id == Some(pane_id) {
-            current_tab.active_focus_pane_id = None;
         }
         current_tab.seq = current_tab.seq.saturating_add(1);
     }
