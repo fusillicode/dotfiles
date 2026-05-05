@@ -22,6 +22,7 @@ name = "agg"
 version = "0.1.0"
 dependencies = [
  "assert2",
+ "chrono",
  "git2",
  "notify-rust",
  "owo-colors 4.3.0",

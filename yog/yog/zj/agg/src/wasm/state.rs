@@ -7,6 +7,9 @@ use agg::AgentState;
 use agg::Cmd;
 use agg::GitStat;
 use agg::TabIndicator;
+use chrono::DateTime;
+use chrono::Local;
+use chrono::Utc;
 use ytil_agents::agent::Agent;
 use ytil_agents::agent::AgentEventKind;
 use ytil_agents::agent::AgentEventPayload;
@@ -37,10 +40,17 @@ pub struct Nudge {
     pub tab_id: usize,
     pub pane_id: u32,
     pub path: String,
+    pub timestamp: DateTime<Utc>,
 }
 
 impl Nudge {
-    pub fn new(current_tab: &CurrentTab, tabs: &[TabInfo], home_dir: &Path, pane_id: u32) -> Option<Self> {
+    pub fn new(
+        current_tab: &CurrentTab,
+        tabs: &[TabInfo],
+        home_dir: &Path,
+        pane_id: u32,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> Option<Self> {
         let pane_state = current_tab.pane_state_by_pane.get(&pane_id)?;
         if pane_state.phase != AgentPanePhase::AttentionUnseen {
             return None;
@@ -60,15 +70,23 @@ impl Nudge {
             tab_id: current_tab.tab_id,
             pane_id,
             path,
+            timestamp: timestamp.unwrap_or_else(|| Local::now().to_utc()),
         })
     }
 
     pub fn title(&self) -> String {
-        format!("{} done in tab {}, pane {}", self.agent, self.tab_id, self.pane_id)
+        format!(
+            "🔴 {} done {}",
+            self.agent,
+            self.timestamp.with_timezone(&Local).format("%H:%M:%S")
+        )
     }
 
     pub fn body(&self) -> String {
-        self.path.clone()
+        if self.path.is_empty() {
+            return format!("[tab {}, pane {}]", self.tab_id, self.pane_id);
+        }
+        format!("{} [tab {}, pane {}]", self.path, self.tab_id, self.pane_id)
     }
 }
 
@@ -408,7 +426,7 @@ impl State {
             .iter()
             .filter(|(pane_id, _)| !self.has_nudged(**pane_id))
             .filter_map(|(pane_id, pane_state)| {
-                Nudge::new(current_tab, &self.all_tabs, &self.home_dir, *pane_id)
+                Nudge::new(current_tab, &self.all_tabs, &self.home_dir, *pane_id, None)
                     .map(|nudge| (pane_state.phase_seq, *pane_id, nudge))
             })
             .collect::<Vec<_>>();
@@ -1166,6 +1184,7 @@ fn detect_remapped_tab_id(
 #[cfg(test)]
 mod tests {
     use assert2::assert;
+    use chrono::TimeZone;
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -1502,7 +1521,8 @@ mod tests {
             Cmd::agent(Agent::Codex, AgentState::NeedsAttention)
         );
 
-        let nudge = Nudge::new(current_tab, &state.all_tabs, &state.home_dir, 42);
+        let timestamp = Local.with_ymd_and_hms(2026, 5, 5, 9, 8, 7).unwrap().to_utc();
+        let nudge = Nudge::new(current_tab, &state.all_tabs, &state.home_dir, 42, Some(timestamp));
         assert_eq!(
             nudge,
             Some(Nudge {
@@ -1510,23 +1530,23 @@ mod tests {
                 tab_id: 10,
                 pane_id: 42,
                 path: ytil_tui::short_path(&PathBuf::from("/Users/me/project"), &PathBuf::from("/Users/me")),
+                timestamp,
             })
         );
         let nudge = nudge.expect("nudge");
-        assert_eq!(nudge.title(), "Codex done in tab 10, pane 42");
-        assert_eq!(nudge.body(), "~/project");
+        assert_eq!(nudge.title(), "🔴 Codex done 09:08:07");
+        assert_eq!(nudge.body(), "~/project [tab 10, pane 42]");
+        let nudges = state.nudges();
+        assert!(let [(42, nudge)] = nudges.as_slice());
+        assert_eq!(nudge.agent, Agent::Codex);
+        assert_eq!(nudge.tab_id, 10);
+        assert_eq!(nudge.pane_id, 42);
         assert_eq!(
-            state.nudges(),
-            vec![(
-                42,
-                Nudge {
-                    agent: Agent::Codex,
-                    tab_id: 10,
-                    pane_id: 42,
-                    path: ytil_tui::short_path(&PathBuf::from("/Users/me/project"), &PathBuf::from("/Users/me")),
-                },
-            )]
+            nudge.path,
+            ytil_tui::short_path(&PathBuf::from("/Users/me/project"), &PathBuf::from("/Users/me"))
         );
+        assert!(nudge.title().starts_with("🔴 Codex done "));
+        assert_eq!(nudge.body(), "~/project [tab 10, pane 42]");
         assert!(!state.has_nudged(42));
         state.mark_nudged(42);
         assert!(state.has_nudged(42));
@@ -1555,7 +1575,7 @@ mod tests {
         });
         let _ = state.apply_all(&idle_events);
         assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert!(Nudge::new(current_tab, &state.all_tabs, &state.home_dir, 42).is_some());
+        assert!(Nudge::new(current_tab, &state.all_tabs, &state.home_dir, 42, None).is_some());
         state.mark_nudged(42);
 
         let busy_events = state.events_from_agent_event(&AgentEventPayload {
@@ -1573,7 +1593,7 @@ mod tests {
         });
         let _ = state.apply_all(&idle_events);
         assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert!(Nudge::new(current_tab, &state.all_tabs, &state.home_dir, 42).is_some());
+        assert!(Nudge::new(current_tab, &state.all_tabs, &state.home_dir, 42, None).is_some());
     }
 
     #[test]
@@ -1597,18 +1617,14 @@ mod tests {
             ..Default::default()
         };
 
-        assert_eq!(
-            state.nudges(),
-            vec![(
-                42,
-                Nudge {
-                    agent: Agent::Codex,
-                    tab_id: 10,
-                    pane_id: 42,
-                    path: "project".to_string(),
-                },
-            )]
-        );
+        let nudges = state.nudges();
+        assert!(let [(42, nudge)] = nudges.as_slice());
+        assert_eq!(nudge.agent, Agent::Codex);
+        assert_eq!(nudge.tab_id, 10);
+        assert_eq!(nudge.pane_id, 42);
+        assert_eq!(nudge.path, "project");
+        assert!(nudge.title().starts_with("🔴 Codex done "));
+        assert_eq!(nudge.body(), "project [tab 10, pane 42]");
     }
 
     #[test]
