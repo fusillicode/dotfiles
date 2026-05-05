@@ -22,7 +22,7 @@ impl State {
     pub(crate) fn current_tab_is_active(&self) -> bool {
         let current_tab_id = self.current_tab_id();
         self.known_active_tab_id.map_or_else(
-            || Self::current_tab_is_active_in(&self.all_tabs, current_tab_id),
+            || current_tab_is_active_in(&self.all_tabs, current_tab_id),
             |active_tab_id| current_tab_id == Some(active_tab_id),
         )
     }
@@ -36,7 +36,7 @@ impl State {
         manifest: &PaneManifest,
         mut resolve_pane_cwd: impl FnMut(u32) -> Option<PathBuf>,
     ) -> Vec<StateEvent> {
-        let Some(tab_pos) = self.current_tab_position_in_manifest(manifest) else {
+        let Some(tab_pos) = current_tab_position_in_manifest(self.plugin_id, manifest) else {
             return vec![];
         };
         let Some(panes) = manifest.panes.get(&tab_pos) else {
@@ -52,7 +52,7 @@ impl State {
             .map(|tab| tab.tab_id);
 
         let bootstrapped_current_tab =
-            Self::bootstrap_current_tab_for_pane_update(self.current_tab.as_ref(), discovered_tab_id);
+            bootstrap_current_tab_for_pane_update(self.current_tab.as_ref(), discovered_tab_id);
         if let Some(current_tab) = bootstrapped_current_tab.as_ref() {
             events.push(StateEvent::TabCreated {
                 tab_id: current_tab.tab_id,
@@ -125,7 +125,7 @@ impl State {
             });
         }
 
-        events.extend(Self::agent_events_from_manifest(
+        events.extend(agent_events_from_manifest(
             current_tab,
             new_focused_pane.as_ref(),
             panes,
@@ -140,7 +140,7 @@ impl State {
             events.push(StateEvent::CwdChanged { new_cwd });
         }
 
-        self.push_pane_update_sync_event(&mut events);
+        push_pane_update_sync_event(self.current_tab.is_some(), self.sync_requested, &mut events);
 
         events
     }
@@ -161,10 +161,10 @@ impl State {
             events.push(StateEvent::TopologyChanged);
         }
 
-        let was_active = Self::current_tab_is_active_in(prev_tabs, self.current_tab_id());
-        let is_active = Self::current_tab_is_active_in(new_tabs, self.current_tab_id());
+        let was_active = current_tab_is_active_in(prev_tabs, self.current_tab_id());
+        let is_active = current_tab_is_active_in(new_tabs, self.current_tab_id());
         if !was_active && is_active {
-            Self::push_became_active_events(&mut events, landing_focus);
+            push_became_active_events(&mut events, landing_focus);
         }
 
         let has_remap =
@@ -317,7 +317,9 @@ impl State {
 
     pub fn events_from_active_tab(&self, active_tab_id: usize, landing_focus: Option<FocusedPane>) -> Vec<StateEvent> {
         if self.known_active_tab_id == Some(active_tab_id) {
-            if let Some(event) = self.same_tab_activation_focus_event(active_tab_id, landing_focus) {
+            if let Some(event) =
+                same_tab_activation_focus_event(self.current_tab.as_ref(), active_tab_id, landing_focus)
+            {
                 return vec![event];
             }
             return vec![];
@@ -327,160 +329,158 @@ impl State {
         let was_active = self.current_tab_is_active();
         let is_active = self.current_tab_id() == Some(active_tab_id);
         if !was_active && is_active {
-            Self::push_became_active_events(&mut events, landing_focus);
+            push_became_active_events(&mut events, landing_focus);
         }
 
         events
     }
+}
 
-    fn current_tab_is_active_in(tabs: &[TabInfo], current_tab_id: Option<usize>) -> bool {
-        current_tab_id.is_some_and(|id| tabs.iter().any(|tab| tab.active && tab.tab_id == id))
+fn current_tab_is_active_in(tabs: &[TabInfo], current_tab_id: Option<usize>) -> bool {
+    current_tab_id.is_some_and(|id| tabs.iter().any(|tab| tab.active && tab.tab_id == id))
+}
+
+fn push_became_active_events(events: &mut Vec<StateEvent>, landing_focus: Option<FocusedPane>) {
+    events.push(StateEvent::BecameActive);
+    if let Some(focused_pane) = landing_focus {
+        events.push(StateEvent::FocusChanged {
+            new_pane: Some(focused_pane),
+            acknowledge_existing_attention: true,
+        });
+    }
+}
+
+fn same_tab_activation_focus_event(
+    current_tab: Option<&CurrentTab>,
+    active_tab_id: usize,
+    landing_focus: Option<FocusedPane>,
+) -> Option<StateEvent> {
+    let current_tab = current_tab?;
+    if current_tab.tab_id != active_tab_id {
+        return None;
     }
 
-    fn push_became_active_events(events: &mut Vec<StateEvent>, landing_focus: Option<FocusedPane>) {
-        events.push(StateEvent::BecameActive);
-        if let Some(focused_pane) = landing_focus {
-            events.push(StateEvent::FocusChanged {
-                new_pane: Some(focused_pane),
-                acknowledge_existing_attention: true,
+    let landing_focus = landing_focus?;
+    should_reconcile_same_tab_activation_focus(current_tab, &landing_focus).then_some(StateEvent::FocusChanged {
+        new_pane: Some(landing_focus),
+        acknowledge_existing_attention: true,
+    })
+}
+
+fn should_reconcile_same_tab_activation_focus(current_tab: &CurrentTab, landing_focus: &FocusedPane) -> bool {
+    let landing_focus_id = landing_focus.id;
+    current_tab.pending_activation_focus_ack
+        || current_tab.active_focus_pane_id != Some(landing_focus_id)
+        || current_tab.focused_pane.as_ref().map(|pane| pane.id) != Some(landing_focus_id)
+        || current_tab
+            .pane_state_by_pane
+            .get(&landing_focus_id)
+            .is_some_and(|pane_state| pane_state.phase == AgentPanePhase::AttentionUnseen)
+}
+
+fn push_pane_update_sync_event(current_tab_exists: bool, sync_requested: bool, events: &mut Vec<StateEvent>) {
+    let has_resetter = events
+        .iter()
+        .any(|event| matches!(event, StateEvent::TabCreated { .. } | StateEvent::TabRemapped { .. }));
+    if has_resetter || current_tab_exists && !sync_requested {
+        events.push(StateEvent::SyncRequested);
+    }
+}
+
+fn current_tab_position_in_manifest(plugin_id: u32, manifest: &PaneManifest) -> Option<usize> {
+    manifest.panes.iter().find_map(|(tab_pos, panes)| {
+        panes
+            .iter()
+            .any(|pane| pane.is_plugin && pane.id == plugin_id)
+            .then_some(*tab_pos)
+    })
+}
+
+fn bootstrap_current_tab_for_pane_update(
+    current_tab: Option<&CurrentTab>,
+    discovered_tab_id: Option<usize>,
+) -> Option<CurrentTab> {
+    if current_tab.is_some() {
+        return None;
+    }
+    let tab_id = discovered_tab_id?;
+    Some(CurrentTab::new(tab_id))
+}
+
+fn agent_events_from_manifest(
+    current_tab: &CurrentTab,
+    new_focused_pane: Option<&FocusedPane>,
+    panes: &[PaneInfo],
+    surviving_pane_ids: &HashSet<u32>,
+) -> Vec<StateEvent> {
+    let mut events = vec![];
+    let Some(focused_pane) = new_focused_pane else {
+        return events;
+    };
+    let Some(pane) = panes.iter().find(|pane| pane.id == focused_pane.id && !pane.is_plugin) else {
+        return events;
+    };
+    if pane.exited || pane.is_held {
+        return events;
+    }
+
+    let stored_agent = current_tab
+        .pane_state_by_pane
+        .get(&focused_pane.id)
+        .map(|pane_state| pane_state.agent);
+    let detected_agent = detected_agent_from_pane_info(pane, focused_pane);
+    let has_terminal_command = pane
+        .terminal_command
+        .as_ref()
+        .is_some_and(|command| !command.trim().is_empty());
+
+    match (stored_agent, detected_agent) {
+        (Some(stored_agent), Some(detected_agent)) if stored_agent != detected_agent => {
+            events.push(StateEvent::AgentLost {
+                pane_id: focused_pane.id,
+            });
+            events.push(StateEvent::AgentDetected {
+                pane_id: focused_pane.id,
+                agent: detected_agent,
             });
         }
-    }
-
-    fn same_tab_activation_focus_event(
-        &self,
-        active_tab_id: usize,
-        landing_focus: Option<FocusedPane>,
-    ) -> Option<StateEvent> {
-        let current_tab = self.current_tab.as_ref()?;
-        if current_tab.tab_id != active_tab_id {
-            return None;
+        (None, Some(detected_agent)) => {
+            events.push(StateEvent::AgentDetected {
+                pane_id: focused_pane.id,
+                agent: detected_agent,
+            });
         }
-
-        let landing_focus = landing_focus?;
-        Self::should_reconcile_same_tab_activation_focus(current_tab, &landing_focus).then_some(
-            StateEvent::FocusChanged {
-                new_pane: Some(landing_focus),
-                acknowledge_existing_attention: true,
-            },
-        )
-    }
-
-    fn should_reconcile_same_tab_activation_focus(current_tab: &CurrentTab, landing_focus: &FocusedPane) -> bool {
-        let landing_focus_id = landing_focus.id;
-        current_tab.pending_activation_focus_ack
-            || current_tab.active_focus_pane_id != Some(landing_focus_id)
-            || current_tab.focused_pane.as_ref().map(|pane| pane.id) != Some(landing_focus_id)
-            || current_tab
-                .pane_state_by_pane
-                .get(&landing_focus_id)
-                .is_some_and(|pane_state| pane_state.phase == AgentPanePhase::AttentionUnseen)
-    }
-
-    fn push_pane_update_sync_event(&self, events: &mut Vec<StateEvent>) {
-        let has_resetter = events
-            .iter()
-            .any(|event| matches!(event, StateEvent::TabCreated { .. } | StateEvent::TabRemapped { .. }));
-        if has_resetter || self.current_tab.is_some() && !self.sync_requested {
-            events.push(StateEvent::SyncRequested);
+        (Some(_), None) if has_terminal_command => {
+            events.push(StateEvent::AgentLost {
+                pane_id: focused_pane.id,
+            });
         }
+        _ => {}
     }
 
-    fn current_tab_position_in_manifest(&self, manifest: &PaneManifest) -> Option<usize> {
-        manifest.panes.iter().find_map(|(tab_pos, panes)| {
-            panes
-                .iter()
-                .any(|pane| pane.is_plugin && pane.id == self.plugin_id)
-                .then_some(*tab_pos)
-        })
-    }
-
-    fn bootstrap_current_tab_for_pane_update(
-        current_tab: Option<&CurrentTab>,
-        discovered_tab_id: Option<usize>,
-    ) -> Option<CurrentTab> {
-        if current_tab.is_some() {
-            return None;
+    for (&pane_id, pane_state) in &current_tab.pane_state_by_pane {
+        if pane_id == focused_pane.id || !surviving_pane_ids.contains(&pane_id) {
+            continue;
         }
-        let tab_id = discovered_tab_id?;
-        Some(CurrentTab::new(tab_id))
-    }
-
-    fn agent_events_from_manifest(
-        current_tab: &CurrentTab,
-        new_focused_pane: Option<&FocusedPane>,
-        panes: &[PaneInfo],
-        surviving_pane_ids: &HashSet<u32>,
-    ) -> Vec<StateEvent> {
-        let mut events = vec![];
-        let Some(focused_pane) = new_focused_pane else {
-            return events;
+        let Some(other_pane) = panes.iter().find(|pane| pane.id == pane_id && !pane.is_plugin) else {
+            continue;
         };
-        let Some(pane) = panes.iter().find(|pane| pane.id == focused_pane.id && !pane.is_plugin) else {
-            return events;
-        };
-        if pane.exited || pane.is_held {
-            return events;
+        if other_pane.exited || other_pane.is_held {
+            continue;
         }
-
-        let stored_agent = current_tab
-            .pane_state_by_pane
-            .get(&focused_pane.id)
-            .map(|pane_state| pane_state.agent);
-        let detected_agent = detected_agent_from_pane_info(pane, focused_pane);
-        let has_terminal_command = pane
+        let detected_agent = focused_pane_from_pane_info(other_pane)
+            .as_ref()
+            .and_then(|focused_pane| detected_agent_from_pane_info(other_pane, focused_pane));
+        let has_terminal_command = other_pane
             .terminal_command
             .as_ref()
             .is_some_and(|command| !command.trim().is_empty());
-
-        match (stored_agent, detected_agent) {
-            (Some(stored_agent), Some(detected_agent)) if stored_agent != detected_agent => {
-                events.push(StateEvent::AgentLost {
-                    pane_id: focused_pane.id,
-                });
-                events.push(StateEvent::AgentDetected {
-                    pane_id: focused_pane.id,
-                    agent: detected_agent,
-                });
-            }
-            (None, Some(detected_agent)) => {
-                events.push(StateEvent::AgentDetected {
-                    pane_id: focused_pane.id,
-                    agent: detected_agent,
-                });
-            }
-            (Some(_), None) if has_terminal_command => {
-                events.push(StateEvent::AgentLost {
-                    pane_id: focused_pane.id,
-                });
-            }
-            _ => {}
+        if has_terminal_command && detected_agent != Some(pane_state.agent) {
+            events.push(StateEvent::AgentLost { pane_id });
         }
-
-        for (&pane_id, pane_state) in &current_tab.pane_state_by_pane {
-            if pane_id == focused_pane.id || !surviving_pane_ids.contains(&pane_id) {
-                continue;
-            }
-            let Some(other_pane) = panes.iter().find(|pane| pane.id == pane_id && !pane.is_plugin) else {
-                continue;
-            };
-            if other_pane.exited || other_pane.is_held {
-                continue;
-            }
-            let detected_agent = focused_pane_from_pane_info(other_pane)
-                .as_ref()
-                .and_then(|focused_pane| detected_agent_from_pane_info(other_pane, focused_pane));
-            let has_terminal_command = other_pane
-                .terminal_command
-                .as_ref()
-                .is_some_and(|command| !command.trim().is_empty());
-            if has_terminal_command && detected_agent != Some(pane_state.agent) {
-                events.push(StateEvent::AgentLost { pane_id });
-            }
-        }
-
-        events
     }
+
+    events
 }
 
 #[cfg(test)]
@@ -772,7 +772,7 @@ mod tests {
             })
         );
         let nudge = nudge.expect("nudge");
-        assert_eq!(nudge.title(), "🔴 Codex done");
+        assert_eq!(nudge.title(), "🔔 Codex done");
         assert_eq!(nudge.body(), "~/project · t10 p42");
         let nudges = state.nudges();
         assert!(let [(42, nudge)] = nudges.as_slice());
@@ -783,11 +783,11 @@ mod tests {
             nudge.path,
             ytil_tui::short_path(&PathBuf::from("/Users/me/project"), &PathBuf::from("/Users/me"))
         );
-        assert_eq!(nudge.title(), "🔴 Codex done");
+        assert_eq!(nudge.title(), "🔔 Codex done");
         assert_eq!(nudge.body(), "~/project · t10 p42");
-        assert!(!state.has_nudged(42));
+        assert!(!state.nudged_pane_ids.contains(&42));
         state.mark_nudged(42);
-        assert!(state.has_nudged(42));
+        assert!(state.nudged_pane_ids.contains(&42));
         assert!(state.nudges().is_empty());
     }
 
