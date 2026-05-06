@@ -32,6 +32,7 @@ dependencies = [
  "rstest",
  "serde_json",
  "ytil_agents",
+ "ytil_cmd",
  "ytil_sys",
  "ytil_tui",
  "ytil_zellij",
