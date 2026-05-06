@@ -9,7 +9,7 @@ use rootcause::report;
 use ytil_git::branch::Branch;
 use ytil_sys::cli::Args;
 
-const ZSHRC_INSTALL_LINE: &str = r#"eval "$(gbm init zsh)""#;
+const ZSHRC_INSTALL_LINE: &str = r#"(( $+commands[gbm] )) && eval "$(gbm init zsh)""#;
 const ZSH_WRAPPER: &str = r#"gbm() {
   if (( $# == 0 )); then
     local branch
@@ -244,7 +244,7 @@ mod tests {
     }
 
     #[test]
-    fn test_install_zsh_wrapper_at_appends_line_and_is_idempotent() {
+    fn test_install_zsh_wrapper_at_appends_guarded_line_and_is_idempotent() {
         let dir = tempfile::tempdir().unwrap();
         let zshrc = dir.path().join(".zshrc");
         std::fs::write(&zshrc, "source ~/.zshrc.local\n").unwrap();
