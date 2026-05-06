@@ -23,14 +23,26 @@ pub fn run() -> rootcause::Result<()> {
             return Ok(());
         }
         Some("nudge") => {
-            let (name, body, image_path) = match args.as_slice() {
-                [_, name, body] => (name, body, None),
-                [_, name, body, image_path] => (name, body, Some(image_path.as_str())),
-                _ => rootcause::bail!("usage: agg nudge <name> <body> [image-path]"),
+            let (summary, body, tab_id, pane_id, image_path) = match args.as_slice() {
+                [_, summary, body, tab_id, pane_id] => (summary, body, tab_id, pane_id, None),
+                [_, summary, body, tab_id, pane_id, image_path] => {
+                    (summary, body, tab_id, pane_id, Some(image_path.as_str()))
+                }
+                _ => rootcause::bail!("usage: agg nudge <summary> <body> <tab-id> <pane-id> [image-path]"),
             };
-            return nudge::run(name, body, image_path);
+            let tab_id = tab_id.parse()?;
+            let pane_id = pane_id.parse()?;
+            return nudge::run(nudge::RunInput {
+                summary,
+                body,
+                tab_id,
+                pane_id,
+                image_path,
+            });
         }
         _ => {}
     }
-    rootcause::bail!("usage: agg install [--debug] | agg git-stat <paths...> | agg nudge <name> <body> [image-path]")
+    rootcause::bail!(
+        "usage: agg install [--debug] | agg git-stat <paths...> | agg nudge <summary> <body> <tab-id> <pane-id> [image-path]"
+    )
 }
