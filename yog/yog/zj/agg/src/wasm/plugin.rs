@@ -356,11 +356,21 @@ fn handle_events(state: &mut State, events: &[StateEvent]) {
 }
 
 fn send_nudge(home_dir: &Path, nudge: &Nudge) {
-    let title = nudge.title();
+    let summary = nudge.summary();
     let body = nudge.body();
     let icon_path = AgentIcon::from(nudge.agent).path(home_dir);
     let icon_path = icon_path.to_string_lossy();
-    let args = ["agg", "nudge", title.as_str(), body.as_str(), icon_path.as_ref()];
+    let tab_id = nudge.tab_id.to_string();
+    let pane_id = nudge.pane_id.to_string();
+    let args = [
+        "agg",
+        "nudge",
+        summary.as_str(),
+        body.as_str(),
+        tab_id.as_str(),
+        pane_id.as_str(),
+        icon_path.as_ref(),
+    ];
     run_command(&args, BTreeMap::new());
 }
 

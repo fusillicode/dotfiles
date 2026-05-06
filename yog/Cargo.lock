@@ -24,6 +24,7 @@ dependencies = [
  "assert2",
  "chrono",
  "git2",
+ "mac-notification-sys",
  "notify-rust",
  "owo-colors 4.3.0",
  "pretty_assertions",
@@ -33,6 +34,7 @@ dependencies = [
  "ytil_agents",
  "ytil_sys",
  "ytil_tui",
+ "ytil_zellij",
  "zellij-tile",
  "zj",
 ]

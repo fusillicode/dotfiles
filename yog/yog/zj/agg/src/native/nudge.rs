@@ -1,25 +1,34 @@
-use std::path::Path;
-
 use chrono::Local;
-use notify_rust::Notification;
-use rootcause::prelude::ResultExt;
 
-pub fn run(summary: &str, body: &str, image_path: Option<&str>) -> rootcause::Result<()> {
+#[cfg(target_os = "macos")]
+mod macos;
+
+#[cfg(not(target_os = "macos"))]
+mod not_macos;
+
+#[derive(Clone, Copy)]
+pub struct RunInput<'a> {
+    pub summary: &'a str,
+    pub body: &'a str,
+    pub tab_id: usize,
+    pub pane_id: u32,
+    pub image_path: Option<&'a str>,
+}
+
+pub fn run(input: RunInput<'_>) -> rootcause::Result<()> {
+    let summary = format!("{} {}", input.summary, Local::now().format("%H:%M:%S"));
+    let input = RunInput {
+        summary: &summary,
+        ..input
+    };
+
     #[cfg(target_os = "macos")]
-    notify_rust::set_application("org.alacritty").context("failed to set notification application")?;
-
-    let summary = format!("{summary} {}", Local::now().format("%H:%M:%S"));
-    let mut notification = Notification::new();
-    notification.summary(&summary).body(body);
-    if let Some(image_path) = image_path.filter(|image_path| Path::new(image_path).is_file()) {
-        notification.image_path(image_path);
+    {
+        macos::run(input)
     }
-    notification
-        .show()
-        .context("failed to send desktop notification")
-        .attach_with(|| format!("summary={summary:?}"))
-        .attach_with(|| format!("body={body:?}"))
-        .attach_with(|| format!("image_path={image_path:?}"))?;
 
-    Ok(())
+    #[cfg(not(target_os = "macos"))]
+    {
+        not_macos::run(input)
+    }
 }

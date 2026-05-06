@@ -131,7 +131,7 @@ pub fn kill_session(name: &str) -> rootcause::Result<()> {
 /// - Invoking `zellij attach` or `zellij action switch-session` fails.
 pub fn attach_session(name: &str) -> rootcause::Result<()> {
     if is_active() {
-        action(&["switch-session", name])
+        action(None, &["switch-session", name])
             .attach(format!("session={name}"))
             .attach("mode=switch")?;
     } else {
@@ -181,13 +181,28 @@ pub fn pane_count() -> rootcause::Result<usize> {
     Ok(output.stdout.split(|&b| b == b'\n').filter(|l| !l.is_empty()).count())
 }
 
-/// Runs `zellij action <args…>`.
+/// Runs `zellij [--session <session>] action <args...>`.
 ///
 /// # Errors
 /// - The `zellij` binary cannot be spawned or returns a nonzero exit status.
-pub fn action(args: &[&str]) -> rootcause::Result<()> {
-    let full: Vec<&str> = std::iter::once("action").chain(args.iter().copied()).collect();
-    ytil_cmd::silent_cmd(BIN).args(&full).exec()?;
+pub fn action(session: Option<&str>, args: &[&str]) -> rootcause::Result<()> {
+    ytil_cmd::silent_cmd(BIN)
+        .args(zellij_action_args(session, args))
+        .exec()?;
+    Ok(())
+}
+
+/// Focuses a terminal pane by first selecting its tab and then selecting its pane.
+///
+/// # Errors
+/// - Either underlying `zellij action` call fails.
+pub fn focus_tab_terminal_pane(session: Option<&str>, tab_id: usize, pane_id: u32) -> rootcause::Result<()> {
+    let tab_id = tab_id.to_string();
+    let pane_id = format!("terminal_{pane_id}");
+    let tab_result = action(session, &["go-to-tab-by-id", &tab_id]);
+    let pane_result = action(session, &["focus-pane-id", &pane_id]);
+    tab_result?;
+    pane_result?;
     Ok(())
 }
 
@@ -213,7 +228,7 @@ pub fn focused_pane_command() -> rootcause::Result<Option<String>> {
 /// # Errors
 /// - The underlying `zellij action` call fails.
 pub fn move_focus(direction: Direction) -> rootcause::Result<()> {
-    action(&["move-focus", direction.as_str()])
+    action(None, &["move-focus", direction.as_str()])
 }
 
 /// Sends a raw byte (e.g. `27` for ESC) to the focused pane.
@@ -222,7 +237,7 @@ pub fn move_focus(direction: Direction) -> rootcause::Result<()> {
 /// - The underlying `zellij action` call fails.
 pub fn write_byte(byte: u8) -> rootcause::Result<()> {
     let s = byte.to_string();
-    action(&["write", &s])
+    action(None, &["write", &s])
 }
 
 /// Types a string into the focused pane as if the user typed it.
@@ -230,7 +245,7 @@ pub fn write_byte(byte: u8) -> rootcause::Result<()> {
 /// # Errors
 /// - The underlying `zellij action` call fails.
 pub fn write_chars(text: &str) -> rootcause::Result<()> {
-    action(&["write-chars", text])
+    action(None, &["write-chars", text])
 }
 
 /// Opens `$EDITOR` on `path` in a new pane in the given direction.
@@ -245,7 +260,7 @@ pub fn edit(path: &str, direction: Direction, line_number: Option<i64>) -> rootc
         lnum_str = n.to_string();
         args.extend(["--line-number", &lnum_str]);
     }
-    action(&args)
+    action(None, &args)
 }
 
 /// Opens a new pane running `command` in the given direction.
@@ -255,7 +270,7 @@ pub fn edit(path: &str, direction: Direction, line_number: Option<i64>) -> rootc
 pub fn new_pane(direction: Direction, command: &[&str]) -> rootcause::Result<()> {
     let mut args = vec!["new-pane", "--direction", direction.as_str(), "--"];
     args.extend(command);
-    action(&args)
+    action(None, &args)
 }
 
 /// Calls `zellij action resize increase <direction>` the given number of times.
@@ -264,7 +279,7 @@ pub fn new_pane(direction: Direction, command: &[&str]) -> rootcause::Result<()>
 /// - The underlying `zellij action` call fails.
 pub fn resize_increase(direction: Direction, times: u32) -> rootcause::Result<()> {
     for _ in 0..times {
-        action(&["resize", "increase", direction.as_str()])?;
+        action(None, &["resize", "increase", direction.as_str()])?;
     }
     Ok(())
 }
@@ -291,6 +306,17 @@ fn run_interactive(cmd: &mut Command) -> Result<(), Box<ytil_cmd::CmdError>> {
         }));
     }
     Ok(())
+}
+
+fn zellij_action_args(session: Option<&str>, action_args: &[&str]) -> Vec<String> {
+    let mut args = Vec::new();
+    if let Some(session) = session {
+        args.push("--session".to_string());
+        args.push(session.to_string());
+    }
+    args.push("action".to_string());
+    args.extend(action_args.iter().map(|arg| (*arg).to_string()));
+    args
 }
 
 #[cfg(test)]
@@ -332,5 +358,27 @@ mod tests {
     )]
     fn session_new_parses_list_sessions_line(#[case] input: &str, #[case] expected: Session) {
         pretty_assertions::assert_eq!(Session::new(input), expected);
+    }
+
+    #[test]
+    fn test_zellij_action_args_with_session_include_session_and_action() {
+        pretty_assertions::assert_eq!(
+            zellij_action_args(Some("work"), &["focus-pane-id", "terminal_42"]),
+            vec![
+                "--session".to_string(),
+                "work".to_string(),
+                "action".to_string(),
+                "focus-pane-id".to_string(),
+                "terminal_42".to_string(),
+            ],
+        );
+    }
+
+    #[test]
+    fn test_zellij_action_args_without_session_target_current_session() {
+        pretty_assertions::assert_eq!(
+            zellij_action_args(None, &["go-to-tab-by-id", "10"]),
+            vec!["action".to_string(), "go-to-tab-by-id".to_string(), "10".to_string(),],
+        );
     }
 }
