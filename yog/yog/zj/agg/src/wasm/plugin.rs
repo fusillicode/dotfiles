@@ -193,6 +193,7 @@ impl ZellijPlugin for State {
             PermissionType::ChangeApplicationState,
             PermissionType::RunCommands,
             PermissionType::MessageAndLaunchOtherPlugins,
+            PermissionType::ReadSessionEnvironmentVariables,
         ]);
         subscribe(&[EventType::PermissionRequestResult]);
     }
@@ -310,6 +311,13 @@ impl ZellijPlugin for State {
 }
 
 fn update_permission_granted(state: &mut State) -> bool {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let mut env_vars = zellij_tile::prelude::get_session_environment_variables();
+        state.zellij_session_name = env_vars
+            .remove("ZELLIJ_SESSION_NAME")
+            .filter(|session| !session.is_empty());
+    }
     subscribe(&[
         EventType::TabUpdate,
         EventType::PaneUpdate,
@@ -351,18 +359,18 @@ fn handle_events(state: &mut State, events: &[StateEvent]) {
     }
     for (pane_id, nudge) in state.nudges() {
         state.mark_nudged(pane_id);
-        send_nudge(&state.home_dir, &nudge);
+        send_nudge(&state.home_dir, state.zellij_session_name.as_deref(), &nudge);
     }
 }
 
-fn send_nudge(home_dir: &Path, nudge: &Nudge) {
+fn send_nudge(home_dir: &Path, session: Option<&str>, nudge: &Nudge) {
     let summary = nudge.summary();
     let body = nudge.body();
     let icon_path = AgentIcon::from(nudge.agent).path(home_dir);
     let icon_path = icon_path.to_string_lossy();
     let tab_id = nudge.tab_id.to_string();
     let pane_id = nudge.pane_id.to_string();
-    let args = [
+    let mut args = vec![
         "agg",
         "nudge",
         summary.as_str(),
@@ -371,6 +379,10 @@ fn send_nudge(home_dir: &Path, nudge: &Nudge) {
         pane_id.as_str(),
         icon_path.as_ref(),
     ];
+    if let Some(session) = session {
+        args.push("--session");
+        args.push(session);
+    }
     run_command(&args, BTreeMap::new());
 }
 

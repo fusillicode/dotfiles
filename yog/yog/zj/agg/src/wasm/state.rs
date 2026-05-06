@@ -26,6 +26,7 @@ pub struct State {
     pub sync_requested: bool,
     pub nudged_pane_ids: HashSet<u32>,
     pub home_dir: PathBuf,
+    pub zellij_session_name: Option<String>,
     pub frame: Vec<TabRow>,
     pub last_cols: usize,
     pub render_buf: String,
