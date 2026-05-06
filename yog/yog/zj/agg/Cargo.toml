@@ -16,6 +16,10 @@ ytil_agents = { workspace = true }
 ytil_tui = { workspace = true }
 zellij-tile = { git = "https://github.com/zellij-org/zellij.git", branch = "main" }
 
+[target.'cfg(all(not(target_arch = "wasm32"), target_os = "macos"))'.dependencies]
+mac-notification-sys = "0.6.12"
+ytil_zellij = { workspace = true }
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 chrono = { workspace = true }
 git2 = { workspace = true }

@@ -39,8 +39,8 @@ impl Nudge {
         })
     }
 
-    pub fn title(&self) -> String {
-        format!("🔔 {} done", self.agent)
+    pub fn summary(&self) -> String {
+        format!("{} done", self.agent)
     }
 
     pub fn body(&self) -> String {
@@ -117,7 +117,7 @@ mod tests {
         assert_eq!(nudge.tab_id, 10);
         assert_eq!(nudge.pane_id, 42);
         assert_eq!(nudge.path, "project");
-        assert_eq!(nudge.title(), "🔔 Codex done");
+        assert_eq!(nudge.summary(), "Codex done");
         assert_eq!(nudge.body(), "project · t10 p42");
     }
 }

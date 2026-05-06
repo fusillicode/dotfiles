@@ -772,7 +772,7 @@ mod tests {
             })
         );
         let nudge = nudge.expect("nudge");
-        assert_eq!(nudge.title(), "🔔 Codex done");
+        assert_eq!(nudge.summary(), "Codex done");
         assert_eq!(nudge.body(), "~/project · t10 p42");
         let nudges = state.nudges();
         assert!(let [(42, nudge)] = nudges.as_slice());
@@ -783,7 +783,7 @@ mod tests {
             nudge.path,
             ytil_tui::short_path(&PathBuf::from("/Users/me/project"), &PathBuf::from("/Users/me"))
         );
-        assert_eq!(nudge.title(), "🔔 Codex done");
+        assert_eq!(nudge.summary(), "Codex done");
         assert_eq!(nudge.body(), "~/project · t10 p42");
         assert!(!state.nudged_pane_ids.contains(&42));
         state.mark_nudged(42);
