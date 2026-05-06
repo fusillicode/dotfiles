@@ -189,12 +189,8 @@ struct FileTarget {
 
 impl FileTarget {
     fn parse(input: &str) -> Option<Self> {
-        let trimmed = input
-            .trim()
-            .trim_start_matches(['\'', '"', '(', '[', '{', '<'])
-            .trim_end_matches(|ch: char| {
-                ch.is_whitespace() || matches!(ch, ':' | ',' | '.' | '\'' | '"' | ')' | ']' | '}' | '>')
-            });
+        let trimmed =
+            input.trim_matches(|ch: char| ch.is_whitespace() || ch.is_control() || is_path_edge_delimiter(ch));
         if trimmed.is_empty() {
             return None;
         }
@@ -257,6 +253,13 @@ impl FileTarget {
             self.column
         )
     }
+}
+
+const fn is_path_edge_delimiter(ch: char) -> bool {
+    matches!(
+        ch,
+        ':' | ';' | ',' | '\'' | '"' | '(' | ')' | '[' | ']' | '{' | '}' | '<' | '>'
+    )
 }
 
 #[derive(Clone, Debug)]
@@ -426,6 +429,10 @@ mod tests {
     #[case("src/main.rs", Some(("src/main.rs", 1, 1)))]
     #[case("Cargo", Some(("Cargo", 1, 1)))]
     #[case("(Cargo.toml),", Some(("Cargo.toml", 1, 1)))]
+    #[case(":src/main.rs:", Some(("src/main.rs", 1, 1)))]
+    #[case("::src/main.rs:7:", Some(("src/main.rs", 7, 1)))]
+    #[case("<src/main.rs:7:9>,", Some(("src/main.rs", 7, 9)))]
+    #[case("foo:bar.rs", Some(("foo:bar.rs", 1, 1)))]
     #[case("https://example.test/file.rs", None)]
     fn test_file_target_parse_returns_target(#[case] input: &str, #[case] expected: Option<(&str, usize, usize)>) {
         let expected = expected.map(|(path, line, column)| FileTarget {
