@@ -44,11 +44,7 @@ impl Nudge {
     }
 
     pub fn body(&self) -> String {
-        let location = format!("t{} p{}", self.tab_id, self.pane_id);
-        if self.path.is_empty() {
-            return location;
-        }
-        format!("{} · {}", self.path, location)
+        self.path.clone()
     }
 }
 
@@ -118,6 +114,6 @@ mod tests {
         assert_eq!(nudge.pane_id, 42);
         assert_eq!(nudge.path, "project");
         assert_eq!(nudge.summary(), "Codex done");
-        assert_eq!(nudge.body(), "project · t10 p42");
+        assert_eq!(nudge.body(), "project");
     }
 }

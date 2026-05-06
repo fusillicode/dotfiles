@@ -16,7 +16,7 @@ pub struct RunInput<'a> {
 }
 
 pub fn run(input: RunInput<'_>) -> rootcause::Result<()> {
-    let summary = format!("{} {}", input.summary, Local::now().format("%H:%M:%S"));
+    let summary = format!("{} @ {}", input.summary, Local::now().format("%H:%M:%S"));
     let input = RunInput {
         summary: &summary,
         ..input
