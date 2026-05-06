@@ -1,9 +1,9 @@
-Usage: agg [install [--debug] | git-stat <paths...> | nudge <summary> <body> <tab-id> <pane-id> [image-path]]
+Usage: agg [install [--debug] | git-stat <paths...> | nudge <summary> <body> <tab-id> <pane-id> [image-path] [--session <session>]]
 
 Zellij AGG plugin helper.
 
 Modes:
   agg install [--debug]              Build and install AGG plugin, layout, hooks, and local assets.
   agg git-stat <paths...>            Print git status for paths. Used by AGG.
-  agg nudge <summary> <body> <tab-id> <pane-id> [image-path]
+  agg nudge <summary> <body> <tab-id> <pane-id> [image-path] [--session <session>]
                                      Send a desktop notification. Used by AGG.
