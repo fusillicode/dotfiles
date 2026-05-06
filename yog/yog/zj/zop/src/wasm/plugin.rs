@@ -5,9 +5,10 @@ use std::path::PathBuf;
 
 use zellij_tile::prelude::*;
 
+use crate::wasm::file_target::FileTarget;
+use crate::wasm::file_target::FileTargetReconstructed;
+
 const FILE_LOCATION_REGEX: &str = r"\S+";
-const DEFAULT_COLUMN: usize = 1;
-const DEFAULT_LINE: usize = 1;
 const EXISTS_CHECK_KIND: &str = "zop-exists-check";
 const CONTEXT_KIND: &str = "kind";
 const CONTEXT_REQUEST_ID: &str = "request_id";
@@ -31,6 +32,7 @@ impl ZellijPlugin for State {
             PermissionType::WriteToStdin,
             PermissionType::OpenTerminalsOrPlugins,
             PermissionType::RunCommands,
+            PermissionType::ReadPaneContents,
         ]);
         subscribe(&[EventType::PermissionRequestResult]);
     }
@@ -98,14 +100,24 @@ impl State {
         let Some(manifest) = self.pane_manifest.as_ref() else {
             return;
         };
-        let Some(target) = FileTarget::parse(matched_string) else {
+        let Some(tab_panes) = panes_for_source_pane(manifest, source_pane_id) else {
             return;
         };
-        let Some(target) = panes_for_source_pane(manifest, source_pane_id)
-            .filter(|tab_panes| terminal_pane_by_id(tab_panes, source_pane_id).is_some())
-            .map(|_| target)
-        else {
+        if terminal_pane_by_id(tab_panes, source_pane_id).is_none() {
             return;
+        }
+        let target = match get_pane_scrollback(source_pane_id, false)
+            .ok()
+            .map(|contents| FileTargetReconstructed::from_lines(&contents.viewport, matched_string))
+        {
+            Some(FileTargetReconstructed::Unique(target)) => target,
+            Some(FileTargetReconstructed::Ambiguous) => return,
+            Some(FileTargetReconstructed::NoMatch) | None => {
+                let Some(target) = FileTarget::parse(matched_string) else {
+                    return;
+                };
+                target
+            }
         };
         let source_cwd = get_pane_cwd(source_pane_id)
             .ok()
@@ -139,7 +151,7 @@ impl State {
             pending_open
                 .source_cwd
                 .clone()
-                .or_else(|| pending_open.target.path.parent().map(PathBuf::from))
+                .or_else(|| pending_open.target.parent_path().map(PathBuf::from))
                 .unwrap_or_else(|| PathBuf::from(".")),
         ) {
             move_pane_with_pane_id_in_direction(opened_pane_id, Direction::Right);
@@ -167,7 +179,7 @@ impl State {
         let mut context = BTreeMap::new();
         context.insert(CONTEXT_KIND.to_owned(), EXISTS_CHECK_KIND.to_owned());
         context.insert(CONTEXT_REQUEST_ID.to_owned(), request_id.clone());
-        let path = pending_open.target.path.to_string_lossy().to_string();
+        let path = pending_open.target.path().to_string_lossy().to_string();
         let command = ["/bin/sh", "-c", "test -e \"$1\"", "zop", &path];
         let cwd = pending_open.source_cwd.clone().unwrap_or_else(|| PathBuf::from("."));
 
@@ -179,88 +191,6 @@ impl State {
 #[cfg(all(test, not(target_arch = "wasm32")))]
 #[unsafe(no_mangle)]
 const extern "C" fn host_run_plugin_command() {}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct FileTarget {
-    path: PathBuf,
-    line: usize,
-    column: usize,
-}
-
-impl FileTarget {
-    fn parse(input: &str) -> Option<Self> {
-        let trimmed =
-            input.trim_matches(|ch: char| ch.is_whitespace() || ch.is_control() || is_path_edge_delimiter(ch));
-        if trimmed.is_empty() {
-            return None;
-        }
-
-        let Some((head, trailing_number)) = split_trailing_number(trimmed) else {
-            return Self::new(trimmed, DEFAULT_LINE, DEFAULT_COLUMN);
-        };
-
-        let (path, line, column) = if let Some((path, line)) = split_trailing_number(head) {
-            (path, line, trailing_number.max(DEFAULT_COLUMN))
-        } else {
-            (head, trailing_number, DEFAULT_COLUMN)
-        };
-
-        Self::new(path, line, column)
-    }
-
-    fn new(path: &str, line: usize, column: usize) -> Option<Self> {
-        if path.is_empty() || line == 0 || path.contains("://") {
-            return None;
-        }
-        Some(Self {
-            path: PathBuf::from(path),
-            line,
-            column,
-        })
-    }
-
-    fn resolve(self, cwd: Option<&PathBuf>) -> Self {
-        let Self { mut path, line, column } = self;
-        if !path.is_absolute()
-            && let Some(cwd) = cwd
-        {
-            path = cwd.join(path);
-        }
-
-        Self { path, line, column }
-    }
-
-    fn cursor_arg(&self) -> String {
-        format!("+call cursor({}, {})", self.line, self.column)
-    }
-
-    fn shell_cmd(&self, cwd: Option<&PathBuf>) -> String {
-        let cd_prefix = cwd.map_or_else(String::new, |cwd| {
-            format!("cd {} && ", single_quoted_string(&cwd.to_string_lossy(), "'\\''"))
-        });
-        format!(
-            "{cd_prefix}nvim {} -- {}\r",
-            single_quoted_string(&self.cursor_arg(), "'\\''"),
-            single_quoted_string(&self.path.to_string_lossy(), "'\\''")
-        )
-    }
-
-    fn edit_cmd(&self) -> String {
-        format!(
-            ":silent execute 'edit ' . fnameescape({}) | call cursor({}, {}) | redraw!\r",
-            single_quoted_string(&self.path.to_string_lossy(), "''"),
-            self.line,
-            self.column
-        )
-    }
-}
-
-const fn is_path_edge_delimiter(ch: char) -> bool {
-    matches!(
-        ch,
-        ':' | ';' | ',' | '\'' | '"' | '(' | ')' | '[' | ']' | '{' | '}' | '<' | '>'
-    )
-}
 
 #[derive(Clone, Debug)]
 struct PendingNvimOpen {
@@ -376,16 +306,6 @@ const fn vertically_overlaps(lhs: &PaneInfo, rhs: &PaneInfo) -> bool {
     lhs.pane_content_y < rhs_bottom && rhs.pane_content_y < lhs_bottom
 }
 
-fn split_trailing_number(input: &str) -> Option<(&str, usize)> {
-    let colon_pos = input.rfind(':')?;
-    let number = input.get(colon_pos.checked_add(1)?..)?;
-    if number.is_empty() || !number.chars().all(|ch| ch.is_ascii_digit()) {
-        return None;
-    }
-    let head = input.get(..colon_pos)?;
-    Some((head, number.parse().ok()?))
-}
-
 fn open_in_existing_nvim(target_pane: &PaneInfo, target: &FileTarget) {
     let pane_id = PaneId::Terminal(target_pane.id);
     focus_pane_with_id(pane_id, false, false);
@@ -400,75 +320,14 @@ fn open_in_replaced_pane(target_pane: &PaneInfo, target: &FileTarget, cwd: Optio
     write_chars_to_pane_id(&target.shell_cmd(cwd), pane_id);
 }
 
-fn single_quoted_string(input: &str, escape: &str) -> String {
-    let mut output = String::from("'");
-    for ch in input.chars() {
-        if ch == '\'' {
-            output.push_str(escape);
-        } else {
-            output.push(ch);
-        }
-    }
-    output.push('\'');
-    output
-}
-
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use zellij_tile::prelude::PaneInfo;
 
-    use super::*;
-
-    #[rstest]
-    #[case("/tmp/foo.rs:42", Some(("/tmp/foo.rs", 42, 1)))]
-    #[case("/tmp/foo.rs:42:9", Some(("/tmp/foo.rs", 42, 9)))]
-    #[case("src/main.rs:7", Some(("src/main.rs", 7, 1)))]
-    #[case("./src/main.rs:7", Some(("./src/main.rs", 7, 1)))]
-    #[case(".env:7", Some((".env", 7, 1)))]
-    #[case("Makefile:7", Some(("Makefile", 7, 1)))]
-    #[case("src/main.rs", Some(("src/main.rs", 1, 1)))]
-    #[case("Cargo", Some(("Cargo", 1, 1)))]
-    #[case("(Cargo.toml),", Some(("Cargo.toml", 1, 1)))]
-    #[case(":src/main.rs:", Some(("src/main.rs", 1, 1)))]
-    #[case("::src/main.rs:7:", Some(("src/main.rs", 7, 1)))]
-    #[case("<src/main.rs:7:9>,", Some(("src/main.rs", 7, 9)))]
-    #[case("foo:bar.rs", Some(("foo:bar.rs", 1, 1)))]
-    #[case("https://example.test/file.rs", None)]
-    fn test_file_target_parse_returns_target(#[case] input: &str, #[case] expected: Option<(&str, usize, usize)>) {
-        let expected = expected.map(|(path, line, column)| FileTarget {
-            path: PathBuf::from(path),
-            line,
-            column,
-        });
-
-        pretty_assertions::assert_eq!(FileTarget::parse(input), expected);
-    }
-
-    #[rstest]
-    #[case("src/main.rs", Some("/repo"), "/repo/src/main.rs")]
-    #[case("/tmp/main.rs", Some("/repo"), "/tmp/main.rs")]
-    #[case("src/main.rs", None, "src/main.rs")]
-    fn test_file_target_resolve_returns_resolved_target(
-        #[case] path: &str,
-        #[case] cwd: Option<&str>,
-        #[case] expected_path: &str,
-    ) {
-        let target = FileTarget {
-            path: PathBuf::from(path),
-            line: 7,
-            column: 3,
-        };
-        let cwd = cwd.map(PathBuf::from);
-
-        pretty_assertions::assert_eq!(
-            target.resolve(cwd.as_ref()),
-            FileTarget {
-                path: PathBuf::from(expected_path),
-                line: 7,
-                column: 3,
-            }
-        );
-    }
+    use crate::wasm::plugin::first_right_terminal_pane_with;
+    use crate::wasm::plugin::is_nvim_command;
+    use crate::wasm::plugin::nearest_nvim_pane_with;
 
     #[test]
     fn test_nearest_nvim_pane_multiple_nvim_panes_returns_closest() {
@@ -508,46 +367,6 @@ mod tests {
     #[case("preview", false)]
     fn test_is_nvim_command_matches_supported_binary_names(#[case] input: &str, #[case] expected: bool) {
         pretty_assertions::assert_eq!(is_nvim_command(input), expected);
-    }
-
-    #[rstest]
-    #[case(
-        FileTarget {
-            path: PathBuf::from("/tmp/foo'bar.rs"),
-            line: 12,
-            column: 3,
-        },
-        ":silent execute 'edit ' . fnameescape('/tmp/foo''bar.rs') | call cursor(12, 3) | redraw!\r",
-    )]
-    fn test_file_target_edit_cmd_returns_nvim_command(#[case] target: FileTarget, #[case] expected: &str) {
-        pretty_assertions::assert_eq!(target.edit_cmd(), expected);
-    }
-
-    #[rstest]
-    #[case(
-        FileTarget {
-            path: PathBuf::from("/tmp/foo'bar.rs"),
-            line: 12,
-            column: 3,
-        },
-        None,
-        "nvim '+call cursor(12, 3)' -- '/tmp/foo'\\''bar.rs'\r",
-    )]
-    #[case(
-        FileTarget {
-            path: PathBuf::from("/repo/src/main.rs"),
-            line: 12,
-            column: 3,
-        },
-        Some(PathBuf::from("/repo")),
-        "cd '/repo' && nvim '+call cursor(12, 3)' -- '/repo/src/main.rs'\r",
-    )]
-    fn test_file_target_shell_cmd_returns_nvim_command(
-        #[case] target: FileTarget,
-        #[case] cwd: Option<PathBuf>,
-        #[case] expected: &str,
-    ) {
-        pretty_assertions::assert_eq!(target.shell_cmd(cwd.as_ref()), expected);
     }
 
     fn pane(
