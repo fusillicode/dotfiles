@@ -77,9 +77,14 @@ pub fn global_scope() -> OptionOpts {
     OptionOptsBuilder::default().scope(OptionScope::Global).build()
 }
 
+fn local_scope() -> OptionOpts {
+    OptionOptsBuilder::default().scope(OptionScope::Local).build()
+}
+
 /// Sets the desired Nvim options.
 fn set_all(_: ()) {
     let global_scope = global_scope();
+    let local_scope = local_scope();
 
     set("autoindent", true, &global_scope);
     set("autoread", true, &global_scope);
@@ -105,11 +110,9 @@ fn set_all(_: ()) {
     set("smartcase", true, &global_scope);
     set("splitbelow", true, &global_scope);
     set("splitright", true, &global_scope);
-    set(
-        "statuscolumn",
-        r#"%{%v:lua.require("statuscolumn").draw(v:lnum)%}"#,
-        &global_scope,
-    );
+    let statuscolumn = r#"%{%v:lua.require("statuscolumn").draw(v:lnum)%}"#;
+    set("statuscolumn", statuscolumn, &global_scope);
+    set("statuscolumn", statuscolumn, &local_scope);
     set(
         "statusline",
         r#"%{%v:lua.require("statusline").draw()%}"#,
