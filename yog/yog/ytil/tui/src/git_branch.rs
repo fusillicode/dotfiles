@@ -89,7 +89,7 @@ mod tests {
     use rstest::rstest;
     use ytil_git::branch::Branch;
 
-    use super::prioritize_branches;
+    use super::*;
 
     #[rstest]
     #[case(

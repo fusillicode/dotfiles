@@ -2,13 +2,13 @@ use std::collections::HashSet;
 
 use zellij_tile::prelude::TabInfo;
 
-use super::State;
-use super::current_tab::AgentPanePhase;
-use super::current_tab::CurrentTab;
-use super::current_tab::FocusedPane;
-use super::current_tab::idle_phase_for_pane;
 use crate::wasm::events::StateEvent;
 use crate::wasm::plugin::StateSnapshotPayload;
+use crate::wasm::state::State;
+use crate::wasm::state::current_tab::AgentPanePhase;
+use crate::wasm::state::current_tab::CurrentTab;
+use crate::wasm::state::current_tab::FocusedPane;
+use crate::wasm::state::current_tab::idle_phase_for_pane;
 
 impl State {
     pub fn apply_all(&mut self, events: &[StateEvent]) -> bool {
