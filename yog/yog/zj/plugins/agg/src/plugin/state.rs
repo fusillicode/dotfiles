@@ -8,12 +8,13 @@ use crate::plugin::main::StateSnapshotPayload;
 use crate::plugin::state::current_tab::CurrentTab;
 use crate::plugin::ui::TabRow;
 
-mod apply;
 pub mod current_tab;
-mod events_from;
+pub mod events_from;
 mod frame;
 pub mod nudge;
 pub mod pane;
+mod queries;
+mod state_transitions;
 mod tabs;
 
 #[derive(Default)]
@@ -117,7 +118,7 @@ mod test_support {
     }
 
     pub fn apply_pane_update(state: &mut State, manifest: &PaneManifest) -> Vec<StateEvent> {
-        let events = state.events_from_pane_update(manifest, noop_pane_cwd);
+        let events = crate::plugin::state::events_from::pane_update::derive(state, manifest, noop_pane_cwd);
         let _ = state.apply_all(&events);
         events
     }

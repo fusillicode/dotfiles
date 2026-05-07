@@ -8,7 +8,6 @@ use crate::plugin::state::State;
 use crate::plugin::state::current_tab::AgentPanePhase;
 use crate::plugin::state::current_tab::CurrentTab;
 use crate::plugin::state::current_tab::FocusedPane;
-use crate::plugin::state::current_tab::idle_phase_for_pane;
 
 impl State {
     pub fn apply_all(&mut self, events: &[StateEvent]) -> bool {
@@ -63,7 +62,11 @@ impl State {
             StateEvent::AgentIdle { pane_id, agent } => {
                 let current_tab_is_active = self.current_tab_is_active();
                 if let Some(current_tab) = self.current_tab.as_mut() {
-                    let phase = idle_phase_for_pane(current_tab, current_tab_is_active, *pane_id);
+                    let phase = crate::plugin::state::current_tab::idle_phase_for_pane(
+                        current_tab,
+                        current_tab_is_active,
+                        *pane_id,
+                    );
                     current_tab.transition_phase(*pane_id, *agent, phase);
                     current_tab.seq = current_tab.seq.saturating_add(1);
                 }
@@ -203,29 +206,38 @@ mod tests {
             pane_state(Agent::Codex, AgentPanePhase::Running, PaneFocus::Unfocused, 1),
         );
 
-        let idle_events = state.events_from_agent_event(&AgentEventPayload {
-            pane_id: 42,
-            agent: Agent::Codex,
-            kind: AgentEventKind::Idle,
-        });
+        let idle_events = crate::plugin::state::events_from::agent::derive(
+            &state,
+            &AgentEventPayload {
+                pane_id: 42,
+                agent: Agent::Codex,
+                kind: AgentEventKind::Idle,
+            },
+        );
         let _ = state.apply_all(&idle_events);
         assert!(let Some(current_tab) = state.current_tab.as_ref());
         assert!(Nudge::new(current_tab, &state.all_tabs, &state.home_dir, 42).is_some());
         state.mark_nudged(42);
 
-        let busy_events = state.events_from_agent_event(&AgentEventPayload {
-            pane_id: 42,
-            agent: Agent::Codex,
-            kind: AgentEventKind::Busy,
-        });
+        let busy_events = crate::plugin::state::events_from::agent::derive(
+            &state,
+            &AgentEventPayload {
+                pane_id: 42,
+                agent: Agent::Codex,
+                kind: AgentEventKind::Busy,
+            },
+        );
         let _ = state.apply_all(&busy_events);
         assert!(state.nudged_pane_ids.is_empty());
 
-        let idle_events = state.events_from_agent_event(&AgentEventPayload {
-            pane_id: 42,
-            agent: Agent::Codex,
-            kind: AgentEventKind::Idle,
-        });
+        let idle_events = crate::plugin::state::events_from::agent::derive(
+            &state,
+            &AgentEventPayload {
+                pane_id: 42,
+                agent: Agent::Codex,
+                kind: AgentEventKind::Idle,
+            },
+        );
         let _ = state.apply_all(&idle_events);
         assert!(let Some(current_tab) = state.current_tab.as_ref());
         assert!(Nudge::new(current_tab, &state.all_tabs, &state.home_dir, 42).is_some());
@@ -347,5 +359,53 @@ mod tests {
         assert!(let Some(current_tab) = state.current_tab.as_ref());
         assert_eq!(current_tab.tab_indicator(), TabIndicator::None);
         assert_eq!(current_tab.display_cmd(), Cmd::None);
+    }
+
+    #[test]
+    fn test_mat_requires_each_pane_focus_to_clear_red() {
+        let mut state = State {
+            known_active_tab_id: Some(10),
+            current_tab: Some(CurrentTab {
+                pane_ids: [42, 43].into_iter().collect(),
+                pane_state_by_pane: HashMap::from([
+                    (
+                        42,
+                        pane_state(Agent::Claude, AgentPanePhase::AttentionUnseen, PaneFocus::Unfocused, 1),
+                    ),
+                    (
+                        43,
+                        pane_state(Agent::Cursor, AgentPanePhase::AttentionUnseen, PaneFocus::Unfocused, 2),
+                    ),
+                ]),
+                ..CurrentTab::new(10)
+            }),
+            ..Default::default()
+        };
+
+        let events_a = vec![StateEvent::FocusChanged {
+            new_pane: Some(FocusedPane {
+                id: 42,
+                label: Some(FocusedPaneLabel::TerminalCommand("claude".to_string())),
+            }),
+            acknowledge_existing_attention: true,
+        }];
+        let _ = state.apply_all(&events_a);
+        assert!(let Some(current_tab) = state.current_tab.as_ref());
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Red);
+
+        let events_b = vec![StateEvent::FocusChanged {
+            new_pane: Some(FocusedPane {
+                id: 43,
+                label: Some(FocusedPaneLabel::TerminalCommand("cursor".to_string())),
+            }),
+            acknowledge_existing_attention: true,
+        }];
+        let _ = state.apply_all(&events_b);
+        assert!(let Some(current_tab) = state.current_tab.as_ref());
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Empty);
+        assert_eq!(
+            current_tab.display_cmd(),
+            Cmd::agent(Agent::Cursor, AgentState::Acknowledged)
+        );
     }
 }

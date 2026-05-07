@@ -132,7 +132,7 @@ impl State {
         let landing_focus = active_tab_id.and_then(|active_tab_id| {
             resolve_active_tab_landing_focus(active_tab_id, &tabs, self.current_tab.as_ref())
         });
-        let events = self.events_from_tab_update(&mut tabs, landing_focus);
+        let events = crate::plugin::state::events_from::tab_update::derive(self, &mut tabs, landing_focus);
         let frame_changed = self.apply_all(&events);
         if let Some(active_tab_id) = active_tab_id {
             send_active_tab(active_tab_id);
@@ -142,17 +142,19 @@ impl State {
     }
 
     fn update_panes(&mut self, manifest: &PaneManifest) -> bool {
-        let events = self.events_from_pane_update(manifest, |pane_id| get_pane_cwd(PaneId::Terminal(pane_id)).ok());
+        let events = crate::plugin::state::events_from::pane_update::derive(self, manifest, |pane_id| {
+            get_pane_cwd(PaneId::Terminal(pane_id)).ok()
+        });
         self.apply_and_handle_events(&events)
     }
 
     fn update_pane_closed(&mut self, pane_id: u32) -> bool {
-        let events = self.events_from_pane_closed(pane_id);
+        let events = crate::plugin::state::events_from::pane_close::derive(self, pane_id);
         self.apply_and_handle_events(&events)
     }
 
     fn update_cwd(&mut self, pane_id: u32, cwd: PathBuf) -> bool {
-        let events = self.events_from_cwd_changed(pane_id, cwd);
+        let events = crate::plugin::state::events_from::cwd::derive(self, pane_id, cwd);
         self.apply_and_handle_events(&events)
     }
 
@@ -165,7 +167,7 @@ impl State {
         let Some(requested_cwd) = context.get(CONTEXT_KEY_GIT_STAT).map(PathBuf::from) else {
             return false;
         };
-        let events = self.events_from_run_command_result(&requested_cwd, exit_code, stdout);
+        let events = crate::plugin::state::events_from::run_command::derive(self, &requested_cwd, exit_code, stdout);
         self.apply_and_handle_events(&events)
     }
 
@@ -287,7 +289,7 @@ impl ZellijPlugin for State {
             PipeEvent::ActiveTab { active_tab_id } => {
                 let landing_focus =
                     resolve_active_tab_landing_focus(active_tab_id, &self.all_tabs, self.current_tab.as_ref());
-                let events = self.events_from_active_tab(active_tab_id, landing_focus);
+                let events = crate::plugin::state::events_from::active_tab::derive(self, active_tab_id, landing_focus);
                 let frame_changed = self.apply_all(&events);
                 handle_events(self, &events);
                 frame_changed || !events.is_empty()
@@ -296,12 +298,12 @@ impl ZellijPlugin for State {
                 source_plugin_id,
                 snapshot,
             } => {
-                let events = self.events_from_state_snapshot(source_plugin_id, &snapshot);
+                let events = crate::plugin::state::events_from::snapshot::derive(self, source_plugin_id, &snapshot);
                 let frame_changed = self.apply_all(&events);
                 frame_changed || !events.is_empty()
             }
             PipeEvent::Agent(agent_event) => {
-                let events = self.events_from_agent_event(&agent_event);
+                let events = crate::plugin::state::events_from::agent::derive(self, &agent_event);
                 let frame_changed = self.apply_all(&events);
                 handle_events(self, &events);
                 frame_changed || !events.is_empty()
