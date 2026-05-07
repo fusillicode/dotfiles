@@ -4,7 +4,7 @@ use mac_notification_sys::NotificationResponse;
 use rootcause::prelude::ResultExt;
 use ytil_cmd::CmdExt;
 
-use super::NudgeInput;
+use crate::native::nudge::NudgeInput;
 
 const TERMINAL_BUNDLE_ID: &str = "org.alacritty";
 const TERMINAL_ACTIVATE_SCRIPT: &str = "tell application id \"org.alacritty\" to activate";

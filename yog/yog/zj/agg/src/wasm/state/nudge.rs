@@ -3,9 +3,9 @@ use std::path::Path;
 use ytil_agents::agent::Agent;
 use zellij_tile::prelude::TabInfo;
 
-use super::State;
-use super::current_tab::AgentPanePhase;
-use super::current_tab::CurrentTab;
+use crate::wasm::state::State;
+use crate::wasm::state::current_tab::AgentPanePhase;
+use crate::wasm::state::current_tab::CurrentTab;
 
 #[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub struct Nudge {

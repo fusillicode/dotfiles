@@ -35,7 +35,11 @@ pub enum HttpDeflateOption<'a> {
 }
 
 impl HttpDeflateOption<'_> {
-    pub(crate) fn process(&self, tmp_file: &Path) -> rootcause::Result<PathBuf> {
+    /// Process the downloaded temporary file according to this deflate option.
+    ///
+    /// # Errors
+    /// Returns an error when filesystem, decompression, archive extraction, or zip extraction fails.
+    pub fn process(&self, tmp_file: &Path) -> rootcause::Result<PathBuf> {
         match self {
             Self::DecompressGz { dest_path } => {
                 let input = File::open(tmp_file)

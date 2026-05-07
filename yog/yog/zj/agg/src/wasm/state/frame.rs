@@ -2,8 +2,8 @@ use agg::Cmd;
 use agg::GitStat;
 use agg::TabIndicator;
 
-use super::State;
 use crate::wasm::plugin::StateSnapshotPayload;
+use crate::wasm::state::State;
 use crate::wasm::ui::TabRow;
 
 impl State {
