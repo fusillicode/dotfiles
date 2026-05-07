@@ -14,7 +14,7 @@ pub struct FileTarget {
 impl FileTarget {
     pub fn parse(input: &str) -> Option<Self> {
         let input = fold_path_match(input);
-        let trimmed = input.trim_matches(is_path_edge_delimiter);
+        let trimmed = input.trim_matches(is_path_edge_delimiter).trim_end_matches('.');
         if trimmed.is_empty() {
             return None;
         }
@@ -251,11 +251,15 @@ mod file_target_tests {
     #[rstest]
     #[case("/tmp/foo.rs:42", Some(("/tmp/foo.rs", 42, 1)))]
     #[case("/tmp/foo.rs:42:9", Some(("/tmp/foo.rs", 42, 9)))]
+    #[case("/Users/gianlu/data/dev/project/src/main.rs:232", Some(("/Users/gianlu/data/dev/project/src/main.rs", 232, 1)))]
+    #[case("/Users/gianlu/data/dev/project/src/main.rs:244.", Some(("/Users/gianlu/data/dev/project/src/main.rs", 244, 1)))]
     #[case("src/main.rs:7", Some(("src/main.rs", 7, 1)))]
+    #[case("src/main.rs:244.", Some(("src/main.rs", 244, 1)))]
     #[case("./src/main.rs:7", Some(("./src/main.rs", 7, 1)))]
     #[case(".env:7", Some((".env", 7, 1)))]
     #[case("Makefile:7", Some(("Makefile", 7, 1)))]
     #[case("src/main.rs", Some(("src/main.rs", 1, 1)))]
+    #[case("kweb-nexus-external/configs/policy.yaml.", Some(("kweb-nexus-external/configs/policy.yaml", 1, 1)))]
     #[case("Cargo", Some(("Cargo", 1, 1)))]
     #[case("(Cargo.toml),", Some(("Cargo.toml", 1, 1)))]
     #[case(":src/main.rs:", Some(("src/main.rs", 1, 1)))]
