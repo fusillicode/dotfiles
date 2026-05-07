@@ -34,10 +34,10 @@ members = [
     "yog/ytil/tui",
     "yog/ytil/wezterm",
     "yog/ytil/zellij",
-    "yog/zj/agg",
     "yog/zj/cli",
-    "yog/zj/zcp",
-    "yog/zj/zop",
+    "yog/zj/plugins/agg",
+    "yog/zj/plugins/zcp",
+    "yog/zj/plugins/zop",
 ]
 
 [workspace.package]

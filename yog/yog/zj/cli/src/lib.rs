@@ -57,6 +57,7 @@ fn build_wasm(spec: &PluginInstallSpec, is_debug: bool) -> rootcause::Result<Pat
     let plugin_dir = manifest_dir
         .parent()
         .ok_or_else(|| rootcause::report!("cannot resolve zj dir from CARGO_MANIFEST_DIR"))?
+        .join("plugins")
         .join(spec.dir_name);
     let workspace_target = manifest_dir
         .parent()
