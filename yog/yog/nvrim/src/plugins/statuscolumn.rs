@@ -10,90 +10,15 @@ use ytil_noxi::buffer::BufferExt;
 
 use crate::diagnostics::DiagnosticSeverity;
 
+/// Markup for a visible space in the Nvim statuscolumn.
+/// Plain spaces (" ") are not rendered; they must be wrapped in highlight markup like `%#Normal# %*`.
+const EMPTY_SPACE: &str = "%#Normal# %*";
+
 /// [`Dictionary`] exposing statuscolumn draw helpers.
 pub fn dict() -> Dictionary {
     dict! {
         "draw": fn_from!(draw),
     }
-}
-
-/// Markup for a visible space in the Nvim statuscolumn.
-/// Plain spaces (" ") are not rendered; they must be wrapped in highlight markup like `%#Normal# %*`.
-const EMPTY_SPACE: &str = "%#Normal# %*";
-
-/// Draws the status column for the current buffer.
-fn draw((cur_lnum, extmarks, opts): (String, Vec<Extmark>, Option<Opts>)) -> Option<String> {
-    let current_buffer = Buffer::current();
-    let buf_type = current_buffer.get_buf_type()?;
-
-    Some(draw_statuscolumn(
-        &buf_type,
-        &cur_lnum,
-        extmarks.into_iter().filter_map(Extmark::into_meta),
-        opts,
-    ))
-}
-
-/// Constructs the status column string for the current line.
-fn draw_statuscolumn(
-    current_buffer_type: &str,
-    cur_lnum: &str,
-    metas: impl Iterator<Item = ExtmarkMeta>,
-    opts: Option<Opts>,
-) -> String {
-    if current_buffer_type == "grug-far" || current_buffer_type == "terminal" {
-        return String::new();
-    }
-
-    let mut highest_severity_diag: Option<SelectedDiag> = None;
-    let mut git_extmark: Option<ExtmarkMeta> = None;
-
-    for meta in metas {
-        match meta.sign_hl_group {
-            SignHlGroup::DiagnosticError
-            | SignHlGroup::DiagnosticWarn
-            | SignHlGroup::DiagnosticInfo
-            | SignHlGroup::DiagnosticHint
-            | SignHlGroup::DiagnosticOk => {
-                let rank = meta.sign_hl_group.rank();
-                match &highest_severity_diag {
-                    Some(sel) if sel.rank >= rank => {}
-                    _ => highest_severity_diag = Some(SelectedDiag { rank, meta }),
-                }
-            }
-            SignHlGroup::Git(_) if git_extmark.is_none() => git_extmark = Some(meta),
-            SignHlGroup::Git(_) | SignHlGroup::Other(_) => {}
-        }
-        // Early break: if we already have top severity (Error rank 5) and have determined git presence
-        // (either captured or impossible to capture later because we already saw a git sign or caller provided none).
-        if let Some(sel) = &highest_severity_diag
-            && sel.rank == 5
-            && git_extmark.is_some()
-        {
-            break;
-        }
-    }
-
-    // Capacity heuristic: each sign ~ 32 chars + lnum + static separators.
-    let mut out = String::with_capacity(cur_lnum.len().saturating_add(64));
-    if let Some(git_extmark) = git_extmark {
-        git_extmark.write(&mut out);
-    } else {
-        out.push_str(EMPTY_SPACE);
-    }
-    if let Some(highest_severity_diag) = highest_severity_diag {
-        highest_severity_diag.meta.write(&mut out);
-    } else {
-        out.push_str(EMPTY_SPACE);
-    }
-    out.push_str(EMPTY_SPACE);
-    if opts.is_some_and(|o| o.show_line_numbers) {
-        out.push(' ');
-        out.push_str("%=% ");
-        out.push_str(cur_lnum);
-        out.push(' ');
-    }
-    out
 }
 
 /// Configuration options for the status column.
@@ -231,6 +156,81 @@ impl<'de> serde::Deserialize<'de> for SignHlGroup {
             Self::Other(s)
         })
     }
+}
+
+/// Draws the status column for the current buffer.
+fn draw((cur_lnum, extmarks, opts): (String, Vec<Extmark>, Option<Opts>)) -> Option<String> {
+    let current_buffer = Buffer::current();
+    let buf_type = current_buffer.get_buf_type()?;
+
+    Some(draw_statuscolumn(
+        &buf_type,
+        &cur_lnum,
+        extmarks.into_iter().filter_map(Extmark::into_meta),
+        opts,
+    ))
+}
+
+/// Constructs the status column string for the current line.
+fn draw_statuscolumn(
+    current_buffer_type: &str,
+    cur_lnum: &str,
+    metas: impl Iterator<Item = ExtmarkMeta>,
+    opts: Option<Opts>,
+) -> String {
+    if current_buffer_type == "grug-far" || current_buffer_type == "terminal" {
+        return String::new();
+    }
+
+    let mut highest_severity_diag: Option<SelectedDiag> = None;
+    let mut git_extmark: Option<ExtmarkMeta> = None;
+
+    for meta in metas {
+        match meta.sign_hl_group {
+            SignHlGroup::DiagnosticError
+            | SignHlGroup::DiagnosticWarn
+            | SignHlGroup::DiagnosticInfo
+            | SignHlGroup::DiagnosticHint
+            | SignHlGroup::DiagnosticOk => {
+                let rank = meta.sign_hl_group.rank();
+                match &highest_severity_diag {
+                    Some(sel) if sel.rank >= rank => {}
+                    _ => highest_severity_diag = Some(SelectedDiag { rank, meta }),
+                }
+            }
+            SignHlGroup::Git(_) if git_extmark.is_none() => git_extmark = Some(meta),
+            SignHlGroup::Git(_) | SignHlGroup::Other(_) => {}
+        }
+        // Early break: if we already have top severity (Error rank 5) and have determined git presence
+        // (either captured or impossible to capture later because we already saw a git sign or caller provided none).
+        if let Some(sel) = &highest_severity_diag
+            && sel.rank == 5
+            && git_extmark.is_some()
+        {
+            break;
+        }
+    }
+
+    // Capacity heuristic: each sign ~ 32 chars + lnum + static separators.
+    let mut out = String::with_capacity(cur_lnum.len().saturating_add(64));
+    if let Some(git_extmark) = git_extmark {
+        git_extmark.write(&mut out);
+    } else {
+        out.push_str(EMPTY_SPACE);
+    }
+    if let Some(highest_severity_diag) = highest_severity_diag {
+        highest_severity_diag.meta.write(&mut out);
+    } else {
+        out.push_str(EMPTY_SPACE);
+    }
+    out.push_str(EMPTY_SPACE);
+    if opts.is_some_and(|o| o.show_line_numbers) {
+        out.push(' ');
+        out.push_str("%=% ");
+        out.push_str(cur_lnum);
+        out.push(' ');
+    }
+    out
 }
 
 #[cfg(test)]

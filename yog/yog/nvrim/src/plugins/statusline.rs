@@ -12,17 +12,7 @@ use ytil_noxi::buffer::CursorPosition;
 
 use crate::diagnostics::DiagnosticSeverity;
 
-/// [`Dictionary`] exposing statusline draw helpers.
-///
-/// Note: `draw_triggers` creates a new Object each call. This cannot be cached in a static
-/// because [`nvim_oxi::Object`] is tied to the Neovim Lua state (not Sync) and unavailable at
-/// static initialization. Since [`dict()`] is called once at plugin init, the overhead is minimal.
-pub fn dict() -> Dictionary {
-    dict! {
-        "draw": fn_from!(draw),
-        "draw_triggers": DRAW_TRIGGERS.iter().map(ToString::to_string).collect::<Object>()
-    }
-}
+const DRAW_TRIGGERS: &[&str] = &["DiagnosticChanged", "BufEnter", "CursorMoved"];
 
 /// Diagnostic emitted by Nvim for statusline aggregation.
 #[derive(Deserialize)]
@@ -35,7 +25,17 @@ pub struct Diagnostic {
 
 ytil_noxi::impl_nvim_deserializable!(Diagnostic);
 
-const DRAW_TRIGGERS: &[&str] = &["DiagnosticChanged", "BufEnter", "CursorMoved"];
+/// [`Dictionary`] exposing statusline draw helpers.
+///
+/// Note: `draw_triggers` creates a new Object each call. This cannot be cached in a static
+/// because [`nvim_oxi::Object`] is tied to the Neovim Lua state (not Sync) and unavailable at
+/// static initialization. Since [`dict()`] is called once at plugin init, the overhead is minimal.
+pub fn dict() -> Dictionary {
+    dict! {
+        "draw": fn_from!(draw),
+        "draw_triggers": DRAW_TRIGGERS.iter().map(ToString::to_string).collect::<Object>()
+    }
+}
 
 thread_local! {
     /// Cached `(buffer_handle, relative_path)` to avoid recomputing the buffer path on every
@@ -44,50 +44,6 @@ thread_local! {
     static CACHED_BUFFER_PATH: RefCell<Option<(i32, Option<String>)>> = const { RefCell::new(None) };
 }
 
-/// Draws the status line with diagnostic information.
-fn draw(diagnostics: Vec<Diagnostic>) -> String {
-    let current_buffer = nvim_oxi::api::get_current_buf();
-    let current_buffer_nr = current_buffer.handle();
-
-    // Return `%#Normal#` instead of empty string in case of terminal buffers
-    // to blend the statusline with the editor background even when a statusline
-    // background color is set.
-    if current_buffer.is_terminal() {
-        return "%#Normal#".to_string();
-    }
-
-    // Use cached buffer path when the buffer handle hasn't changed (avoids FFI + PathBuf work on
-    // every CursorMoved). The cache is invalidated implicitly when the handle changes (BufEnter).
-    let current_buffer_path = CACHED_BUFFER_PATH.with(|cache| {
-        let cached = cache.borrow();
-        if let Some((handle, ref path)) = *cached
-            && handle == current_buffer_nr
-        {
-            return path.clone();
-        }
-        drop(cached);
-        let path = ytil_noxi::buffer::get_relative_path_to_cwd(&current_buffer).map(|x| x.display().to_string());
-        *cache.borrow_mut() = Some((current_buffer_nr, path.clone()));
-        path
-    });
-
-    let cursor_position = CursorPosition::get_current();
-
-    let mut statusline = Statusline {
-        current_buffer_path: current_buffer_path.as_deref(),
-        current_buffer_diags: SeverityBuckets::default(),
-        workspace_diags: SeverityBuckets::default(),
-        cursor_position,
-    };
-    for diagnostic in diagnostics {
-        statusline.workspace_diags.inc(diagnostic.severity);
-        if current_buffer_nr == diagnostic.bufnr {
-            statusline.current_buffer_diags.inc(diagnostic.severity);
-        }
-    }
-
-    statusline.draw()
-}
 /// Fixed-size aggregation of counts per [`DiagnosticSeverity`].
 #[derive(Clone, Copy, Debug, Default)]
 struct SeverityBuckets {
@@ -201,6 +157,51 @@ impl Statusline<'_> {
         let _ = write!(out, "{current_buffer_diags_segment}%#StatusLine#");
         out
     }
+}
+
+/// Draws the status line with diagnostic information.
+fn draw(diagnostics: Vec<Diagnostic>) -> String {
+    let current_buffer = nvim_oxi::api::get_current_buf();
+    let current_buffer_nr = current_buffer.handle();
+
+    // Return `%#Normal#` instead of empty string in case of terminal buffers
+    // to blend the statusline with the editor background even when a statusline
+    // background color is set.
+    if current_buffer.is_terminal() {
+        return "%#Normal#".to_string();
+    }
+
+    // Use cached buffer path when the buffer handle hasn't changed (avoids FFI + PathBuf work on
+    // every CursorMoved). The cache is invalidated implicitly when the handle changes (BufEnter).
+    let current_buffer_path = CACHED_BUFFER_PATH.with(|cache| {
+        let cached = cache.borrow();
+        if let Some((handle, ref path)) = *cached
+            && handle == current_buffer_nr
+        {
+            return path.clone();
+        }
+        drop(cached);
+        let path = ytil_noxi::buffer::get_relative_path_to_cwd(&current_buffer).map(|x| x.display().to_string());
+        *cache.borrow_mut() = Some((current_buffer_nr, path.clone()));
+        path
+    });
+
+    let cursor_position = CursorPosition::get_current();
+
+    let mut statusline = Statusline {
+        current_buffer_path: current_buffer_path.as_deref(),
+        current_buffer_diags: SeverityBuckets::default(),
+        workspace_diags: SeverityBuckets::default(),
+        cursor_position,
+    };
+    for diagnostic in diagnostics {
+        statusline.workspace_diags.inc(diagnostic.severity);
+        if current_buffer_nr == diagnostic.bufnr {
+            statusline.current_buffer_diags.inc(diagnostic.severity);
+        }
+    }
+
+    statusline.draw()
 }
 
 /// Writes the diagnostic count directly to the target string, avoiding intermediate allocation.

@@ -24,3 +24,13 @@ allowed-duplicate-crates = [
   "windows_x86_64_gnullvm",
   "windows_x86_64_msvc",
 ]
+module-item-order-groupings = [
+  ["extern_crate", ["extern_crate"]],
+  ["imports", ["use"]],
+  ["modules", ["foreign_mod", "mod"]],
+  ["global_asm", ["global_asm"]],
+  ["constants", ["const", "static"]],
+  ["aliases", ["ty_alias"]],
+  ["items", ["macro", "enum", "struct", "union", "trait", "trait_alias", "impl", "fn"]],
+]
+source-item-ordering = ["module"]
