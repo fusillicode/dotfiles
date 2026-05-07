@@ -3,7 +3,7 @@ use std::path::Path;
 use notify_rust::Notification;
 use rootcause::prelude::ResultExt;
 
-use super::NudgeInput;
+use crate::native::nudge::NudgeInput;
 
 pub fn run(input: NudgeInput<'_>) -> rootcause::Result<()> {
     let mut notification = Notification::new();

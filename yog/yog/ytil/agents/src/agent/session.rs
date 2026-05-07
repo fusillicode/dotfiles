@@ -86,7 +86,7 @@ impl Session {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct SearchTextBuilder {
+pub struct SearchTextBuilder {
     snippets_text: String,
     first_snippet: Option<String>,
     last_snippet: Option<String>,
@@ -94,7 +94,7 @@ pub(crate) struct SearchTextBuilder {
 }
 
 impl SearchTextBuilder {
-    pub(crate) fn push(&mut self, raw: &str) {
+    pub fn push(&mut self, raw: &str) {
         if self.reached_limit {
             return;
         }
@@ -113,7 +113,7 @@ impl SearchTextBuilder {
         self.reached_limit = !push_normalized_snippet(&mut self.snippets_text, &mut self.last_snippet, &snippet);
     }
 
-    pub(crate) fn build(self, fallback: &str) -> String {
+    pub fn build(self, fallback: &str) -> String {
         let fallback = fallback.split_whitespace().collect::<Vec<_>>().join(" ");
         let Some(fallback) = (!fallback.is_empty()).then_some(fallback) else {
             return self.snippets_text;

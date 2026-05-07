@@ -325,9 +325,7 @@ mod tests {
     use rstest::rstest;
     use zellij_tile::prelude::PaneInfo;
 
-    use crate::wasm::plugin::first_right_terminal_pane_with;
-    use crate::wasm::plugin::is_nvim_command;
-    use crate::wasm::plugin::nearest_nvim_pane_with;
+    use super::*;
 
     #[test]
     fn test_nearest_nvim_pane_multiple_nvim_panes_returns_closest() {

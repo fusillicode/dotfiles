@@ -9,21 +9,21 @@ use ytil_agents::agent::AgentEventKind;
 use ytil_agents::agent::AgentEventPayload;
 use zellij_tile::prelude::*;
 
-use super::State;
-use super::current_tab::AgentPanePhase;
-use super::current_tab::CurrentTab;
-use super::current_tab::FocusedPane;
-use super::current_tab::FocusedPaneLabel;
-use super::current_tab::idle_phase_for_pane;
-use super::pane::detected_agent_from_pane_info;
-use super::pane::focused_pane_from_pane_info;
-use super::tabs::detect_remapped_tab_id;
-use super::tabs::topology_changed;
 use crate::wasm::events::StateEvent;
 use crate::wasm::plugin::StateSnapshotPayload;
+use crate::wasm::state::State;
+use crate::wasm::state::current_tab::AgentPanePhase;
+use crate::wasm::state::current_tab::CurrentTab;
+use crate::wasm::state::current_tab::FocusedPane;
+use crate::wasm::state::current_tab::FocusedPaneLabel;
+use crate::wasm::state::current_tab::idle_phase_for_pane;
+use crate::wasm::state::pane::detected_agent_from_pane_info;
+use crate::wasm::state::pane::focused_pane_from_pane_info;
+use crate::wasm::state::tabs::detect_remapped_tab_id;
+use crate::wasm::state::tabs::topology_changed;
 
 impl State {
-    pub(crate) fn current_tab_is_active(&self) -> bool {
+    pub fn current_tab_is_active(&self) -> bool {
         let current_tab_id = self.current_tab_id();
         self.known_active_tab_id.map_or_else(
             || current_tab_is_active_in(&self.all_tabs, current_tab_id),

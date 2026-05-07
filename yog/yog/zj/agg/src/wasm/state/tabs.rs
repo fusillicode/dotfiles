@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use zellij_tile::prelude::TabInfo;
 
-use super::current_tab::CurrentTab;
+use crate::wasm::state::current_tab::CurrentTab;
 
 pub fn topology_changed(x: &[TabInfo], y: &[TabInfo]) -> bool {
     if x.len() != y.len() {

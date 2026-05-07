@@ -67,7 +67,7 @@ impl CursorSession {
     }
 }
 
-pub(crate) fn decode_hex_string(raw: &str) -> rootcause::Result<String> {
+fn decode_hex_string(raw: &str) -> rootcause::Result<String> {
     let hex = raw.trim();
 
     if !hex.len().is_multiple_of(2) {

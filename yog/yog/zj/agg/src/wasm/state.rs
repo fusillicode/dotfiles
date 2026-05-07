@@ -44,12 +44,12 @@ mod test_support {
     use zellij_tile::prelude::PaneManifest;
     use zellij_tile::prelude::TabInfo;
 
-    use super::State;
-    use super::current_tab::AgentPanePhase;
-    use super::current_tab::AgentPaneState;
-    use super::current_tab::PaneFocus;
     use crate::wasm::events::StateEvent;
     use crate::wasm::plugin::StateSnapshotPayload;
+    use crate::wasm::state::State;
+    use crate::wasm::state::current_tab::AgentPanePhase;
+    use crate::wasm::state::current_tab::AgentPaneState;
+    use crate::wasm::state::current_tab::PaneFocus;
 
     pub fn noop_pane_cwd(_pane_id: u32) -> Option<PathBuf> {
         None

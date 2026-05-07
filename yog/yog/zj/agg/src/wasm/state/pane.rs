@@ -1,8 +1,8 @@
 use ytil_agents::agent::Agent;
 use zellij_tile::prelude::PaneInfo;
 
-use super::current_tab::FocusedPane;
-use super::current_tab::FocusedPaneLabel;
+use crate::wasm::state::current_tab::FocusedPane;
+use crate::wasm::state::current_tab::FocusedPaneLabel;
 
 pub fn focused_pane_from_pane_info(pane: &PaneInfo) -> Option<FocusedPane> {
     if pane.is_plugin || pane.exited || pane.is_held {
