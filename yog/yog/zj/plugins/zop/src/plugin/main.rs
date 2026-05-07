@@ -8,7 +8,12 @@ use zellij_tile::prelude::*;
 use crate::plugin::file_target::FileTarget;
 use crate::plugin::file_target::FileTargetReconstructed;
 
-const FILE_LOCATION_REGEX: &str = r"\S+";
+const FILE_LOCATION_REGEX: &str = concat!(
+    r"(?:",
+    r"/[A-Za-z0-9._+\-@%,#=~!${}\[\]:][A-Za-z0-9/._+\-@%,#=~!${}\[\]:]*",
+    r"|(?:\.{1,2}/|[A-Za-z0-9._+\-@%,#=~!${}\[\]:]+/)[A-Za-z0-9/._+\-@%,#=~!${}\[\]:]*",
+    r")",
+);
 const EXISTS_CHECK_KIND: &str = "zop-exists-check";
 const CONTEXT_KIND: &str = "kind";
 const CONTEXT_REQUEST_ID: &str = "request_id";
@@ -106,18 +111,15 @@ impl State {
         if terminal_pane_by_id(tab_panes, source_pane_id).is_none() {
             return;
         }
-        let target = match get_pane_scrollback(source_pane_id, false)
-            .ok()
-            .map(|contents| FileTargetReconstructed::from_lines(&contents.viewport, matched_string))
-        {
-            Some(FileTargetReconstructed::Unique(target)) => target,
-            Some(FileTargetReconstructed::Ambiguous) => return,
-            Some(FileTargetReconstructed::NoMatch) | None => {
-                let Some(target) = FileTarget::parse(matched_string) else {
-                    return;
-                };
-                target
-            }
+        let Some(target) = FileTarget::parse(matched_string).or_else(|| {
+            get_pane_scrollback(source_pane_id, false).ok().and_then(|contents| {
+                match FileTargetReconstructed::from_lines(&contents.viewport, matched_string) {
+                    FileTargetReconstructed::Unique(target) => Some(target),
+                    FileTargetReconstructed::Ambiguous | FileTargetReconstructed::NoMatch => None,
+                }
+            })
+        }) else {
+            return;
         };
         let source_cwd = get_pane_cwd(source_pane_id)
             .ok()
