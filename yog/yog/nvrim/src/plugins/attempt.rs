@@ -11,6 +11,8 @@ use chrono::Local;
 use nvim_oxi::Dictionary;
 use rootcause::report;
 
+const SCRATCHES_PATH_PARTS: &[&str] = &["yog", "nvrim", "src", "plugins", "attempt"];
+
 /// [`Dictionary`] of scratch file utilities.
 pub fn dict() -> Dictionary {
     dict! {
@@ -18,7 +20,76 @@ pub fn dict() -> Dictionary {
     }
 }
 
-const SCRATCHES_PATH_PARTS: &[&str] = &["yog", "nvrim", "src", "plugins", "attempt"];
+/// An available scratch file.
+#[derive(Clone, Debug)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
+struct Scratch {
+    /// The name shown when selecting the scratch file.
+    display_name: String,
+    /// The base name of the scratch file without extension.
+    base_name: String,
+    /// The file extension of the scratch file.
+    extension: String,
+    /// The full path to the scratch file.
+    path: PathBuf,
+}
+
+impl Scratch {
+    /// Attempts to build a [`Scratch`] file from a [`DirEntry`] result.
+    pub fn from(read_dir_res: std::io::Result<DirEntry>) -> Option<rootcause::Result<Self>> {
+        let path = match read_dir_res.map(|entry| entry.path()) {
+            Ok(path) => path,
+            Err(err) => return Some(Err(err.into())),
+        };
+        if !path.is_file() {
+            return None;
+        }
+        let display_name = match path.file_name().map(|s| s.to_string_lossy()) {
+            Some(s) => s.to_string(),
+            None => {
+                return Some(Err(
+                    report!("error missing file name in path").attach(format!("path={}", path.display()))
+                ));
+            }
+        };
+        let base_name = match path.file_stem().map(|s| s.to_string_lossy()) {
+            Some(s) => s.to_string(),
+            None => {
+                return Some(Err(
+                    report!("error missing file stem in path").attach(format!("path={}", path.display()))
+                ));
+            }
+        };
+        let extension = match path.extension().map(|s| s.to_string_lossy()) {
+            Some(s) => s.to_string(),
+            None => {
+                return Some(Err(
+                    report!("error missing extension in path").attach(format!("path={}", path.display()))
+                ));
+            }
+        };
+
+        Some(Ok(Self {
+            display_name,
+            base_name,
+            extension,
+            path,
+        }))
+    }
+
+    /// Generates the destination file path for the scratch.
+    ///
+    /// The path is constructed as `{dest_dir}/{base_name}-{timestamp}.{extension}` where timestamp is a provided
+    /// [`Local`] [`DateTime`].
+    pub fn dest_file_path(&self, dest_dir: &Path, date_time: DateTime<Local>) -> PathBuf {
+        dest_dir.join(format!(
+            "{}-{}.{}",
+            self.base_name,
+            date_time.format("%Y%m%d-%H%M%S"),
+            self.extension
+        ))
+    }
+}
 
 /// Creates a scratch file by selecting and copying a template file.
 ///
@@ -93,77 +164,6 @@ fn get_scratches_dir_content() -> rootcause::Result<ReadDir> {
         .inspect_err(|err| {
             ytil_noxi::notify::error(format!("error reading attempt files dir | error={err:#?}"));
         })
-}
-
-/// An available scratch file.
-#[derive(Clone, Debug)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
-struct Scratch {
-    /// The name shown when selecting the scratch file.
-    display_name: String,
-    /// The base name of the scratch file without extension.
-    base_name: String,
-    /// The file extension of the scratch file.
-    extension: String,
-    /// The full path to the scratch file.
-    path: PathBuf,
-}
-
-impl Scratch {
-    /// Attempts to build a [`Scratch`] file from a [`DirEntry`] result.
-    pub fn from(read_dir_res: std::io::Result<DirEntry>) -> Option<rootcause::Result<Self>> {
-        let path = match read_dir_res.map(|entry| entry.path()) {
-            Ok(path) => path,
-            Err(err) => return Some(Err(err.into())),
-        };
-        if !path.is_file() {
-            return None;
-        }
-        let display_name = match path.file_name().map(|s| s.to_string_lossy()) {
-            Some(s) => s.to_string(),
-            None => {
-                return Some(Err(
-                    report!("error missing file name in path").attach(format!("path={}", path.display()))
-                ));
-            }
-        };
-        let base_name = match path.file_stem().map(|s| s.to_string_lossy()) {
-            Some(s) => s.to_string(),
-            None => {
-                return Some(Err(
-                    report!("error missing file stem in path").attach(format!("path={}", path.display()))
-                ));
-            }
-        };
-        let extension = match path.extension().map(|s| s.to_string_lossy()) {
-            Some(s) => s.to_string(),
-            None => {
-                return Some(Err(
-                    report!("error missing extension in path").attach(format!("path={}", path.display()))
-                ));
-            }
-        };
-
-        Some(Ok(Self {
-            display_name,
-            base_name,
-            extension,
-            path,
-        }))
-    }
-
-    /// Generates the destination file path for the scratch.
-    ///
-    /// The path is constructed as `{dest_dir}/{base_name}-{timestamp}.{extension}` where timestamp is a provided
-    /// [`Local`] [`DateTime`].
-    pub fn dest_file_path(&self, dest_dir: &Path, date_time: DateTime<Local>) -> PathBuf {
-        dest_dir.join(format!(
-            "{}-{}.{}",
-            self.base_name,
-            date_time.format("%Y%m%d-%H%M%S"),
-            self.extension
-        ))
-    }
 }
 
 #[cfg(test)]

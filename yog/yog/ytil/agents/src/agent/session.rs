@@ -7,6 +7,8 @@ use rootcause::report;
 
 use crate::agent::Agent;
 
+const SEARCH_TEXT_MAX_BYTES: usize = 32 * 1024;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Session {
     pub id: String,
@@ -18,8 +20,6 @@ pub struct Session {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
-
-const SEARCH_TEXT_MAX_BYTES: usize = 32 * 1024;
 
 impl Session {
     pub fn new(
