@@ -6446,7 +6446,7 @@ dependencies = [
 [[package]]
 name = "zellij-tile"
 version = "0.45.0"
-source = "git+https://github.com/zellij-org/zellij.git?branch=main#5ef8176c431e0b1a4c5a5362d05926ead7661b6d"
+source = "git+https://github.com/zellij-org/zellij.git?branch=main#cc86e31b840cfd1993f256513047dfe980408398"
 dependencies = [
  "clap 3.2.25",
  "prost",
@@ -6460,7 +6460,7 @@ dependencies = [
 [[package]]
 name = "zellij-utils"
 version = "0.45.0"
-source = "git+https://github.com/zellij-org/zellij.git?branch=main#5ef8176c431e0b1a4c5a5362d05926ead7661b6d"
+source = "git+https://github.com/zellij-org/zellij.git?branch=main#cc86e31b840cfd1993f256513047dfe980408398"
 dependencies = [
  "anyhow",
  "backtrace",
@@ -6505,7 +6505,7 @@ dependencies = [
  "url",
  "uuid",
  "winapi",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
