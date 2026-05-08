@@ -23,15 +23,9 @@ jobs:
       - name: Setup (cargo-audit, cargo-auditable)
         uses: ./.github/actions/setup
         with:
-          tools: "cargo-audit,cargo-auditable,fd-find"
+          tools: "cargo-audit,cargo-auditable"
 
       - name: Build auditable release and audit
         working-directory: yog
         run: |
-          # agg, zcp, and zop are Zellij WASM plugins and should not be linked as native Linux binaries.
-          rustup target add wasm32-wasip1
-          cargo auditable build --release --workspace --exclude agg --exclude zcp --exclude zop
-          cargo build --release --manifest-path yog/zj/agg/Cargo.toml --target wasm32-wasip1
-          cargo build --release --manifest-path yog/zj/zcp/Cargo.toml --target wasm32-wasip1
-          cargo build --release --manifest-path yog/zj/zop/Cargo.toml --target wasm32-wasip1
-          fd . './target/release' --type=executable --max-depth=1 --exec-batch cargo audit bin
+          cargo run --quiet --bin evoke -- ci audit

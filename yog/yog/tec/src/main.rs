@@ -31,8 +31,8 @@ const RUST_EXTENSIONS: &[&str] = &[".rs", "Cargo.toml"];
 /// - Prints logical name, duration (`time=<Duration>`), status code, and stripped stdout or error.
 /// - Aggregate process exit code is 1 if any lint fails (non-zero status or panic), else 0.
 const LINTS_CHECK: &[(&str, LintBuilder)] = &[
-    ("clippy", |changed_paths| {
-        build_conditional_lint(changed_paths, RUST_EXTENSIONS, |path| {
+    ("clippy", |ctx| {
+        build_conditional_lint(ctx, RUST_EXTENSIONS, |path| {
             LintFnResult::from(
                 Command::new("cargo")
                     .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
@@ -43,8 +43,8 @@ const LINTS_CHECK: &[(&str, LintBuilder)] = &[
             )
         })
     }),
-    ("cargo fmt", |changed_paths| {
-        build_conditional_lint(changed_paths, RUST_EXTENSIONS, |path| {
+    ("cargo fmt", |ctx| {
+        build_conditional_lint(ctx, RUST_EXTENSIONS, |path| {
             LintFnResult::from(
                 Command::new("cargo")
                     .args(["fmt", "--check"])
@@ -55,8 +55,8 @@ const LINTS_CHECK: &[(&str, LintBuilder)] = &[
             )
         })
     }),
-    ("cargo-machete", |changed_paths| {
-        build_conditional_lint(changed_paths, RUST_EXTENSIONS, |path| {
+    ("cargo-machete", |ctx| {
+        build_conditional_lint(ctx, RUST_EXTENSIONS, |path| {
             LintFnResult::from(
                 // Using `cargo-machete` rather than `cargo machete` to avoid issues caused by passing the
                 // `path`.
@@ -68,8 +68,8 @@ const LINTS_CHECK: &[(&str, LintBuilder)] = &[
             )
         })
     }),
-    ("cargo-sort", |changed_paths| {
-        build_conditional_lint(changed_paths, RUST_EXTENSIONS, |path| {
+    ("cargo-sort", |ctx| {
+        build_conditional_lint(ctx, RUST_EXTENSIONS, |path| {
             LintFnResult::from(
                 Command::new("cargo-sort")
                     .args(["--workspace", "--check", "--check-format"])
@@ -80,8 +80,8 @@ const LINTS_CHECK: &[(&str, LintBuilder)] = &[
             )
         })
     }),
-    ("cargo-sort-derives", |changed_paths| {
-        build_conditional_lint(changed_paths, RUST_EXTENSIONS, |path| {
+    ("cargo-sort-derives", |ctx| {
+        build_conditional_lint(ctx, RUST_EXTENSIONS, |path| {
             LintFnResult::from(
                 Command::new("cargo-sort-derives")
                     .args(["sort-derives", "--check"])
@@ -92,8 +92,8 @@ const LINTS_CHECK: &[(&str, LintBuilder)] = &[
             )
         })
     }),
-    ("rust-doc-build", |changed_paths| {
-        build_conditional_lint(changed_paths, RUST_EXTENSIONS, |path| {
+    ("rust-doc-build", |ctx| {
+        build_conditional_lint(ctx, RUST_EXTENSIONS, |path| {
             LintFnResult::from(
                 nomicon::generate_rust_doc(path)
                     .map(LintFnSuccess::CmdOutput)
@@ -121,8 +121,8 @@ const LINTS_CHECK: &[(&str, LintBuilder)] = &[
 /// - Deterministic ordered output aids CI log diffing while retaining concurrency for speed.
 /// - Mirrors structure of [`LINTS_CHECK`] for predictable maintenance (additions require updating both tables).
 const LINTS_FIX: &[(&str, LintBuilder)] = &[
-    ("clippy", |changed_paths| {
-        build_conditional_lint(changed_paths, RUST_EXTENSIONS, |path| {
+    ("clippy", |ctx| {
+        build_conditional_lint(ctx, RUST_EXTENSIONS, |path| {
             LintFnResult::from(
                 Command::new("cargo")
                     .args(["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
@@ -133,8 +133,8 @@ const LINTS_FIX: &[(&str, LintBuilder)] = &[
             )
         })
     }),
-    ("cargo fmt", |changed_paths| {
-        build_conditional_lint(changed_paths, RUST_EXTENSIONS, |path| {
+    ("cargo fmt", |ctx| {
+        build_conditional_lint(ctx, RUST_EXTENSIONS, |path| {
             LintFnResult::from(
                 Command::new("cargo")
                     .args(["fmt"])
@@ -145,8 +145,8 @@ const LINTS_FIX: &[(&str, LintBuilder)] = &[
             )
         })
     }),
-    ("cargo-machete", |changed_paths| {
-        build_conditional_lint(changed_paths, RUST_EXTENSIONS, |path| {
+    ("cargo-machete", |ctx| {
+        build_conditional_lint(ctx, RUST_EXTENSIONS, |path| {
             LintFnResult::from(
                 Command::new("cargo-machete")
                     .args(["--fix", "--with-metadata", &path.display().to_string()])
@@ -156,8 +156,8 @@ const LINTS_FIX: &[(&str, LintBuilder)] = &[
             )
         })
     }),
-    ("cargo-sort", |changed_paths| {
-        build_conditional_lint(changed_paths, RUST_EXTENSIONS, |path| {
+    ("cargo-sort", |ctx| {
+        build_conditional_lint(ctx, RUST_EXTENSIONS, |path| {
             LintFnResult::from(
                 Command::new("cargo-sort")
                     .args(["--workspace"])
@@ -168,8 +168,8 @@ const LINTS_FIX: &[(&str, LintBuilder)] = &[
             )
         })
     }),
-    ("cargo-sort-derives", |changed_paths| {
-        build_conditional_lint(changed_paths, RUST_EXTENSIONS, |path| {
+    ("cargo-sort-derives", |ctx| {
+        build_conditional_lint(ctx, RUST_EXTENSIONS, |path| {
             LintFnResult::from(
                 Command::new("cargo-sort-derives")
                     .args(["sort-derives"])
@@ -180,8 +180,8 @@ const LINTS_FIX: &[(&str, LintBuilder)] = &[
             )
         })
     }),
-    ("rust-doc-build", |changed_paths| {
-        build_conditional_lint(changed_paths, RUST_EXTENSIONS, |path| {
+    ("rust-doc-build", |ctx| {
+        build_conditional_lint(ctx, RUST_EXTENSIONS, |path| {
             LintFnResult::from(
                 nomicon::generate_rust_doc(path)
                     .map(LintFnSuccess::CmdOutput)
@@ -198,7 +198,13 @@ const LINT_NO_OP: Lint = |_| LintFnResult(Ok(LintFnSuccess::PlainMsg(format!("{}
 type Lint = fn(&Path) -> LintFnResult;
 
 /// Function pointer type for building lints based on file changes.
-type LintBuilder = fn(&[String]) -> Lint;
+type LintBuilder = fn(&LintScope) -> Lint;
+
+#[derive(Clone)]
+enum LintScope {
+    Changed(Vec<String>),
+    Full,
+}
 
 /// Run workspace lint suite concurrently (check or fix modes).
 #[ytil_sys::main]
@@ -208,16 +214,20 @@ fn main() -> rootcause::Result<()> {
         println!("{}", include_str!("../help.txt"));
         return Ok(());
     }
-    let fix_mode = args.first().is_some_and(|s| s == "fix");
-
+    let fix_mode = args.iter().any(|s| matches!(s.as_str(), "--fix" | "fix"));
     let workspace_root = ytil_sys::dir::get_workspace_root()?;
 
-    let repo = ytil_git::repo::discover(&workspace_root)?;
-    let changed_paths = repo
-        .statuses(None)?
-        .iter()
-        .filter_map(|entry| entry.path().map(str::to_string))
-        .collect::<Vec<_>>();
+    let ctx = if args.iter().any(|s| s == "--all") {
+        LintScope::Full
+    } else {
+        let repo = ytil_git::repo::discover(&workspace_root)?;
+        LintScope::Changed(
+            repo.statuses(None)?
+                .iter()
+                .filter_map(|entry| entry.path().map(str::to_string))
+                .collect::<Vec<_>>(),
+        )
+    };
 
     let (start_msg, lints) = if fix_mode {
         ("lints fix", LINTS_FIX)
@@ -242,8 +252,8 @@ fn main() -> rootcause::Result<()> {
                 lint_name,
                 std::thread::spawn({
                     let workspace_root = workspace_root.clone();
-                    let changed_paths = changed_paths.clone();
-                    move || run_and_report(lint_name, &workspace_root, lint_builder(&changed_paths))
+                    let ctx = ctx.clone();
+                    move || run_and_report(lint_name, &workspace_root, lint_builder(&ctx))
                 }),
             )
         })
@@ -326,15 +336,18 @@ enum LintFnSuccess {
 /// Conditionally returns the supplied lint or [`LINT_NO_OP`] based on file changes.
 ///
 /// An empty `extensions` slice means the lint is unconditional (always runs).
-fn build_conditional_lint(changed_paths: &[String], extensions: &[&str], lint: Lint) -> Lint {
-    if extensions.is_empty()
-        || changed_paths
-            .iter()
-            .any(|path| extensions.iter().any(|ext| path.ends_with(ext)))
-    {
-        lint
-    } else {
-        LINT_NO_OP
+fn build_conditional_lint(ctx: &LintScope, extensions: &[&str], lint: Lint) -> Lint {
+    match ctx {
+        LintScope::Full => lint,
+        LintScope::Changed(changed_paths)
+            if extensions.is_empty()
+                || changed_paths
+                    .iter()
+                    .any(|path| extensions.iter().any(|ext| path.ends_with(ext))) =>
+        {
+            lint
+        }
+        LintScope::Changed(_) => LINT_NO_OP,
     }
 }
 
@@ -409,12 +422,23 @@ mod tests {
         #[case] extensions: &[&str],
         #[case] expected: &str,
     ) {
-        let result_lint = build_conditional_lint(changed_paths, extensions, dummy_lint);
+        let ctx = LintScope::Changed(changed_paths.to_vec());
+        let result_lint = build_conditional_lint(&ctx, extensions, dummy_lint);
         let lint_result = result_lint(Path::new("/tmp"));
 
         assert2::assert!(let Ok(LintFnSuccess::PlainMsg(msg)) = lint_result.0);
         // Using contains instead of exact match because [`NO_OP`] [`Lint`] returns a colorized [`String`].
         assert!(msg.contains(expected));
+    }
+
+    #[test]
+    fn test_build_conditional_lint_when_scope_full_returns_lint() {
+        let ctx = LintScope::Full;
+        let result_lint = build_conditional_lint(&ctx, RUST_EXTENSIONS, dummy_lint);
+        let lint_result = result_lint(Path::new("/tmp"));
+
+        assert2::assert!(let Ok(LintFnSuccess::PlainMsg(msg)) = lint_result.0);
+        assert!(msg.contains("dummy success"));
     }
 
     fn dummy_lint(_path: &Path) -> LintFnResult {

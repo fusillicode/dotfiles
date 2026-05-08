@@ -1,6 +1,10 @@
-Usage: evoke [--debug] [bins_path] [cargo_target_path] [nvim_libs_path]
+Usage:
+  evoke [--debug] [bins_path] [cargo_target_path] [nvim_libs_path]
+  evoke ci [all | lint | test | release-native | release-wasm | audit]
 
 Format, lint, build, and deploy workspace binaries and Nvim libs.
+Run CI-equivalent checks without installing local binaries or patching shell config.
+`evoke ci` runs the main CI and security audit workflow checks.
 
 Options:
   --debug  Use debug profile; skip clippy; copy from target/debug.
@@ -14,3 +18,6 @@ Examples:
   evoke                          Format, lint, build release, copy bins/libs.
   evoke --debug                  Format, build debug (skip clippy), copy.
   evoke ~/.local/bin /tmp/target ~/.config/nvim/lua
+  evoke ci lint                  Run the CI lint job locally.
+  evoke ci release-wasm          Build Zellij plugin WASM artifacts like CI.
+  evoke ci                       Run all CI-equivalent checks, including audit.
