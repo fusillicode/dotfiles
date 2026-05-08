@@ -272,7 +272,7 @@ mod tests {
         let _ = state.apply_all(&events);
 
         assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Empty);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
         assert_eq!(
             current_tab.display_cmd(),
             Cmd::agent(Agent::Codex, AgentState::Acknowledged)
@@ -280,7 +280,7 @@ mod tests {
     }
 
     #[test]
-    fn test_focus_changed_to_seen_attention_with_running_peer_transitions_red_to_green() {
+    fn test_focus_changed_to_seen_attention_with_running_peer_transitions_unseen_to_busy() {
         let mut state = State {
             known_active_tab_id: Some(10),
             current_tab: Some(CurrentTab::new(10)),
@@ -312,12 +312,12 @@ mod tests {
         let _ = state.apply_all(&events);
 
         assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Green);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Busy);
         assert_eq!(current_tab.display_cmd(), Cmd::agent(Agent::Claude, AgentState::Busy));
     }
 
     #[test]
-    fn test_running_resets_seen_attention_to_green() {
+    fn test_running_resets_seen_attention_to_busy() {
         let mut state = State {
             current_tab: Some(CurrentTab::new(10)),
             ..Default::default()
@@ -336,7 +336,7 @@ mod tests {
         let _ = state.apply_all(&events);
 
         assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Green);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Busy);
         assert_eq!(current_tab.display_cmd(), Cmd::agent(Agent::Codex, AgentState::Busy));
     }
 
@@ -357,12 +357,12 @@ mod tests {
         let _ = state.apply_all(&events);
 
         assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::None);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::NoAgent);
         assert_eq!(current_tab.display_cmd(), Cmd::None);
     }
 
     #[test]
-    fn test_mat_requires_each_pane_focus_to_clear_red() {
+    fn test_mat_requires_each_pane_focus_to_clear_unseen() {
         let mut state = State {
             known_active_tab_id: Some(10),
             current_tab: Some(CurrentTab {
@@ -391,7 +391,7 @@ mod tests {
         }];
         let _ = state.apply_all(&events_a);
         assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Red);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Unseen);
 
         let events_b = vec![StateEvent::FocusChanged {
             new_pane: Some(FocusedPane {
@@ -402,7 +402,7 @@ mod tests {
         }];
         let _ = state.apply_all(&events_b);
         assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Empty);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
         assert_eq!(
             current_tab.display_cmd(),
             Cmd::agent(Agent::Cursor, AgentState::Acknowledged)

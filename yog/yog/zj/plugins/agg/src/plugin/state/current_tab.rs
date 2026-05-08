@@ -34,21 +34,21 @@ impl CurrentTab {
 
     pub fn tab_indicator(&self) -> TabIndicator {
         if self.pane_state_by_pane.is_empty() {
-            TabIndicator::None
+            TabIndicator::NoAgent
         } else if self
             .pane_state_by_pane
             .values()
             .any(|pane_state| pane_state.phase == AgentPanePhase::AttentionUnseen)
         {
-            TabIndicator::Red
+            TabIndicator::Unseen
         } else if self
             .pane_state_by_pane
             .values()
             .any(|pane_state| pane_state.phase == AgentPanePhase::Running)
         {
-            TabIndicator::Green
+            TabIndicator::Busy
         } else {
-            TabIndicator::Empty
+            TabIndicator::Seen
         }
     }
 
@@ -89,7 +89,7 @@ impl CurrentTab {
         }
 
         if focused_pane_id.is_some() || self.focused_pane.is_some() {
-            return (self.focused_running_cmd(), TabIndicator::None);
+            return (self.focused_running_cmd(), TabIndicator::NoAgent);
         }
 
         (self.display_cmd(), self.tab_indicator())
@@ -292,7 +292,7 @@ mod tests {
     use crate::plugin::state::test_support::*;
 
     #[test]
-    fn test_mat_indicator_red_wins_over_green() {
+    fn test_mat_indicator_unseen_wins_over_busy() {
         let current_tab = CurrentTab {
             pane_ids: [42, 43].into_iter().collect(),
             pane_state_by_pane: HashMap::from([
@@ -308,7 +308,7 @@ mod tests {
             ..CurrentTab::new(10)
         };
 
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Red);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Unseen);
         assert_eq!(
             current_tab.display_cmd(),
             Cmd::agent(Agent::Codex, AgentState::NeedsAttention)
@@ -316,7 +316,7 @@ mod tests {
     }
 
     #[test]
-    fn test_current_row_display_inactive_mat_focused_running_agent_does_not_hide_red() {
+    fn test_current_row_display_inactive_mat_focused_running_agent_does_not_hide_unseen() {
         let current_tab = CurrentTab {
             pane_ids: [42, 43].into_iter().collect(),
             focused_pane: Some(FocusedPane {
@@ -339,12 +339,15 @@ mod tests {
 
         assert_eq!(
             current_tab.current_row_display(false),
-            (Cmd::agent(Agent::Codex, AgentState::NeedsAttention), TabIndicator::Red,)
+            (
+                Cmd::agent(Agent::Codex, AgentState::NeedsAttention),
+                TabIndicator::Unseen,
+            )
         );
     }
 
     #[test]
-    fn test_current_row_display_active_mat_hides_dot_for_focused_non_agent_until_other_pane_turns_red() {
+    fn test_current_row_display_active_mat_hides_dot_for_focused_non_agent_until_other_pane_unseen() {
         let mut current_tab = CurrentTab {
             pane_ids: [42, 43].into_iter().collect(),
             focused_pane: Some(FocusedPane {
@@ -361,13 +364,16 @@ mod tests {
 
         assert_eq!(
             current_tab.current_row_display(true),
-            (Cmd::Running("cargo".to_string()), TabIndicator::None)
+            (Cmd::Running("cargo".to_string()), TabIndicator::NoAgent)
         );
 
         current_tab.transition_phase(42, Agent::Codex, AgentPanePhase::AttentionUnseen);
         assert_eq!(
             current_tab.current_row_display(true),
-            (Cmd::agent(Agent::Codex, AgentState::NeedsAttention), TabIndicator::Red,)
+            (
+                Cmd::agent(Agent::Codex, AgentState::NeedsAttention),
+                TabIndicator::Unseen,
+            )
         );
     }
 
@@ -384,7 +390,10 @@ mod tests {
             ..CurrentTab::new(10)
         };
 
-        assert_eq!(current_tab.current_row_display(true), (Cmd::None, TabIndicator::None));
+        assert_eq!(
+            current_tab.current_row_display(true),
+            (Cmd::None, TabIndicator::NoAgent)
+        );
     }
 
     #[test]
@@ -411,12 +420,12 @@ mod tests {
 
         assert_eq!(
             current_tab.current_row_display(false),
-            (Cmd::agent(Agent::Codex, AgentState::Busy), TabIndicator::Green,)
+            (Cmd::agent(Agent::Codex, AgentState::Busy), TabIndicator::Busy,)
         );
     }
 
     #[test]
-    fn test_current_row_display_inactive_mat_blank_focused_non_agent_uses_red_over_green() {
+    fn test_current_row_display_inactive_mat_blank_focused_non_agent_uses_unseen_over_busy() {
         let current_tab = CurrentTab {
             pane_ids: [42, 43, 44].into_iter().collect(),
             focused_pane: Some(FocusedPane { id: 43, label: None }),
@@ -436,12 +445,15 @@ mod tests {
 
         assert_eq!(
             current_tab.current_row_display(false),
-            (Cmd::agent(Agent::Codex, AgentState::NeedsAttention), TabIndicator::Red,)
+            (
+                Cmd::agent(Agent::Codex, AgentState::NeedsAttention),
+                TabIndicator::Unseen,
+            )
         );
     }
 
     #[test]
-    fn test_current_row_display_inactive_mat_blank_focused_non_agent_uses_green_over_empty() {
+    fn test_current_row_display_inactive_mat_blank_focused_non_agent_uses_busy_over_seen() {
         let current_tab = CurrentTab {
             pane_ids: [42, 43, 44].into_iter().collect(),
             focused_pane: Some(FocusedPane { id: 43, label: None }),
@@ -461,7 +473,7 @@ mod tests {
 
         assert_eq!(
             current_tab.current_row_display(false),
-            (Cmd::agent(Agent::Codex, AgentState::Busy), TabIndicator::Green,)
+            (Cmd::agent(Agent::Codex, AgentState::Busy), TabIndicator::Busy,)
         );
     }
 
@@ -469,7 +481,7 @@ mod tests {
     fn test_new_state_starts_without_indicator_after_restart() {
         let current_tab = CurrentTab::new(10);
 
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::None);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::NoAgent);
         assert_eq!(current_tab.display_cmd(), Cmd::None);
     }
 }

@@ -116,7 +116,7 @@ mod tests {
 
         let _ = state.apply_all(&events);
         assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Empty);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
         assert_eq!(current_tab.active_focus_pane_id, Some(42));
         assert_eq!(
             current_tab
@@ -128,7 +128,7 @@ mod tests {
     }
 
     #[test]
-    fn test_active_tab_change_keeps_red_when_landing_on_other_pane() {
+    fn test_active_tab_change_keeps_unseen_when_landing_on_other_pane() {
         let mut state = State {
             known_active_tab_id: Some(20),
             all_tabs: vec![tab_with_name(10, 0, "a")],
@@ -163,7 +163,7 @@ mod tests {
         let _ = state.apply_all(&events);
 
         assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Red);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Unseen);
         assert_eq!(current_tab.active_focus_pane_id, Some(43));
         assert_eq!(
             current_tab
@@ -181,7 +181,10 @@ mod tests {
         );
         assert_eq!(
             current_tab.current_row_display(true),
-            (Cmd::agent(Agent::Claude, AgentState::NeedsAttention), TabIndicator::Red,)
+            (
+                Cmd::agent(Agent::Claude, AgentState::NeedsAttention),
+                TabIndicator::Unseen,
+            )
         );
     }
 
@@ -218,7 +221,7 @@ mod tests {
 
         assert!(let Some(current_tab) = state.current_tab.as_ref());
         assert!(current_tab.pending_activation_focus_ack);
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Red);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Unseen);
 
         let pane_update_events = apply_pane_update(
             &mut state,
@@ -248,7 +251,7 @@ mod tests {
         assert!(let Some(current_tab) = state.current_tab.as_ref());
         assert!(!current_tab.pending_activation_focus_ack);
         assert_eq!(current_tab.active_focus_pane_id, Some(42));
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Empty);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
         assert_eq!(
             current_tab
                 .pane_state_by_pane
@@ -304,7 +307,7 @@ mod tests {
         assert!(let Some(current_tab) = state.current_tab.as_ref());
         assert!(current_tab.pending_activation_focus_ack);
         assert_eq!(state.known_active_tab_id, Some(10));
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Red);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Unseen);
 
         let pipe_events = derive(
             &state,
@@ -329,7 +332,7 @@ mod tests {
         assert!(let Some(current_tab) = state.current_tab.as_ref());
         assert!(!current_tab.pending_activation_focus_ack);
         assert_eq!(current_tab.active_focus_pane_id, Some(42));
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Empty);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
         assert_eq!(
             current_tab
                 .pane_state_by_pane
@@ -383,7 +386,7 @@ mod tests {
         assert!(let Some(current_tab) = state.current_tab.as_ref());
         assert!(!current_tab.pending_activation_focus_ack);
         assert_eq!(current_tab.active_focus_pane_id, Some(43));
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Red);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Unseen);
 
         let pipe_events = derive(
             &state,
@@ -407,7 +410,7 @@ mod tests {
 
         assert!(let Some(current_tab) = state.current_tab.as_ref());
         assert_eq!(current_tab.active_focus_pane_id, Some(42));
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Empty);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
         assert_eq!(
             current_tab
                 .pane_state_by_pane

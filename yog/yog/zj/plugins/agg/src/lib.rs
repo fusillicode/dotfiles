@@ -199,19 +199,19 @@ impl From<&AgentEventPayload> for Cmd {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum TabIndicator {
     #[default]
-    None,
-    Empty,
-    Green,
-    Red,
+    NoAgent,
+    Seen,
+    Busy,
+    Unseen,
 }
 
 impl TabIndicator {
     pub const fn as_str(self) -> &'static str {
         match self {
-            Self::None => "none",
-            Self::Empty => "empty",
-            Self::Green => "green",
-            Self::Red => "red",
+            Self::NoAgent => "no_agent",
+            Self::Seen => "seen",
+            Self::Busy => "busy",
+            Self::Unseen => "unseen",
         }
     }
 
@@ -221,10 +221,10 @@ impl TabIndicator {
     /// Returns [`ParseError`] when `s` is not a supported indicator value.
     pub fn parse(s: &str) -> Result<Self, ParseError> {
         match s {
-            "none" => Ok(Self::None),
-            "empty" => Ok(Self::Empty),
-            "green" => Ok(Self::Green),
-            "red" => Ok(Self::Red),
+            "no_agent" => Ok(Self::NoAgent),
+            "seen" => Ok(Self::Seen),
+            "busy" => Ok(Self::Busy),
+            "unseen" => Ok(Self::Unseen),
             _ => Err(ParseError::invalid("indicator", format!("{s:?}"))),
         }
     }
@@ -234,21 +234,21 @@ impl TabIndicator {
             Cmd::Agent {
                 state: AgentState::NeedsAttention,
                 ..
-            } => Self::Red,
+            } => Self::Unseen,
             Cmd::Agent {
                 state: AgentState::Busy,
                 ..
-            } => Self::Green,
-            Cmd::Agent { .. } => Self::Empty,
-            Cmd::None | Cmd::Running(_) => Self::None,
+            } => Self::Busy,
+            Cmd::Agent { .. } => Self::Seen,
+            Cmd::None | Cmd::Running(_) => Self::NoAgent,
         }
     }
 
     #[must_use]
     pub const fn normalize_for_cmd(self, cmd: &Cmd) -> Self {
         match (self, cmd) {
-            (Self::None, Cmd::Agent { .. }) => Self::from_cmd(cmd),
-            (Self::Empty, Cmd::None | Cmd::Running(_)) => Self::None,
+            (Self::NoAgent, Cmd::Agent { .. }) => Self::from_cmd(cmd),
+            (Self::Seen, Cmd::None | Cmd::Running(_)) => Self::NoAgent,
             _ => self,
         }
     }
@@ -338,7 +338,7 @@ impl TryFrom<(usize, &str)> for TabStateEntry {
         let indicator_or_ins = next("indicator")?;
         let (indicator, insertions, has_explicit_indicator) = match TabIndicator::parse(indicator_or_ins) {
             Ok(indicator) => (indicator, parse_usize(next("ins")?, "ins")?, true),
-            Err(_) => (TabIndicator::None, parse_usize(indicator_or_ins, "ins")?, false),
+            Err(_) => (TabIndicator::NoAgent, parse_usize(indicator_or_ins, "ins")?, false),
         };
         let deletions = parse_usize(next("del")?, "del")?;
         let new_files = parse_usize(next("new")?, "new")?;
@@ -435,7 +435,7 @@ mod tests {
             tab_id: 1,
             cwd: Some(PathBuf::from("/tmp")),
             cmd: Cmd::agent(Agent::Claude, AgentState::NeedsAttention),
-            indicator: TabIndicator::Red,
+            indicator: TabIndicator::Unseen,
             git_stat: GitStat {
                 insertions: 1,
                 deletions: 2,
@@ -449,28 +449,41 @@ mod tests {
         pretty_assertions::assert_eq!(parsed, entry);
     }
 
+    #[rstest]
+    #[case("no_agent", TabIndicator::NoAgent)]
+    #[case("seen", TabIndicator::Seen)]
+    #[case("busy", TabIndicator::Busy)]
+    #[case("unseen", TabIndicator::Unseen)]
+    fn test_tab_indicator_parse_when_value_is_semantic_returns_expected(
+        #[case] value: &str,
+        #[case] expected: TabIndicator,
+    ) {
+        assert2::assert!(let Ok(parsed) = TabIndicator::parse(value));
+        pretty_assertions::assert_eq!(parsed, expected);
+    }
+
     #[test]
     fn test_tab_state_entry_legacy_parse_infers_indicator_from_cmd() {
         let content = "/tmp\nclaude\nneeds_attention\n1\n2\n3\n1\n--\n";
 
         assert2::assert!(let Ok(parsed) = TabStateEntry::try_from((1, content)));
-        pretty_assertions::assert_eq!(parsed.indicator, TabIndicator::Red);
+        pretty_assertions::assert_eq!(parsed.indicator, TabIndicator::Unseen);
     }
 
     #[test]
-    fn test_tab_state_entry_legacy_parse_infers_none_indicator_for_running_cmd() {
+    fn test_tab_state_entry_legacy_parse_infers_no_agent_indicator_for_running_cmd() {
         let content = "/tmp\n--\n--\n1\n2\n3\n1\ncargo\n";
 
         assert2::assert!(let Ok(parsed) = TabStateEntry::try_from((1, content)));
-        pretty_assertions::assert_eq!(parsed.indicator, TabIndicator::None);
+        pretty_assertions::assert_eq!(parsed.indicator, TabIndicator::NoAgent);
     }
 
     #[test]
-    fn test_tab_state_entry_explicit_empty_indicator_for_running_cmd_normalizes_to_none() {
-        let content = "/tmp\n--\n--\nempty\n1\n2\n3\n1\ncargo\n";
+    fn test_tab_state_entry_explicit_seen_indicator_for_running_cmd_normalizes_to_no_agent() {
+        let content = "/tmp\n--\n--\nseen\n1\n2\n3\n1\ncargo\n";
 
         assert2::assert!(let Ok(parsed) = TabStateEntry::try_from((1, content)));
-        pretty_assertions::assert_eq!(parsed.indicator, TabIndicator::None);
+        pretty_assertions::assert_eq!(parsed.indicator, TabIndicator::NoAgent);
     }
 
     #[test]

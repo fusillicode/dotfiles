@@ -368,7 +368,7 @@ mod tests {
     use crate::plugin::state::test_support::*;
 
     #[test]
-    fn test_apply_pane_update_first_detected_agent_starts_empty_until_busy() {
+    fn test_apply_pane_update_first_detected_agent_starts_seen_until_busy() {
         let mut state = State {
             plugin_id: 7,
             known_active_tab_id: Some(10),
@@ -404,7 +404,7 @@ mod tests {
         );
 
         assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Empty);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
         assert_eq!(
             current_tab.display_cmd(),
             Cmd::agent(Agent::Claude, AgentState::Acknowledged)
@@ -453,7 +453,7 @@ mod tests {
         );
 
         assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Empty);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
         assert_eq!(
             current_tab.display_cmd(),
             Cmd::agent(Agent::Codex, AgentState::Acknowledged)
@@ -502,7 +502,7 @@ mod tests {
 
         assert!(let Some(current_tab) = state.current_tab.as_ref());
         assert!(current_tab.pane_state_by_pane.is_empty());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::None);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::NoAgent);
         assert_eq!(current_tab.display_cmd(), Cmd::Running("cargo".to_string()));
     }
 
@@ -548,7 +548,7 @@ mod tests {
         );
 
         assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Empty);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
         assert_eq!(
             current_tab.display_cmd(),
             Cmd::agent(Agent::Codex, AgentState::Acknowledged)
@@ -611,7 +611,7 @@ mod tests {
             current_tab.display_cmd(),
             Cmd::agent(Agent::Codex, AgentState::Acknowledged)
         );
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Empty);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
         assert!(let Some(row) = state.frame.first());
         assert_eq!(row.path_label, "~/project");
         assert_eq!(row.cmd, Cmd::agent(Agent::Codex, AgentState::Acknowledged));
@@ -662,7 +662,7 @@ mod tests {
                     seq: 0,
                     cwd: Some(PathBuf::from("/Users/me/project")),
                     cmd: Cmd::agent(Agent::Codex, AgentState::Acknowledged),
-                    indicator: TabIndicator::Empty,
+                    indicator: TabIndicator::Seen,
                     git_stat: GitStat::default(),
                 },
                 evict_ids: vec![],
@@ -756,14 +756,14 @@ mod tests {
 
         assert!(let Some(current_tab) = state.current_tab.as_ref());
         assert_eq!(current_tab.pane_ids, HashSet::from([42, 43]));
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Green);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Busy);
         assert_eq!(current_tab.display_cmd(), Cmd::agent(Agent::Codex, AgentState::Busy));
 
         state.sync_frame();
         let frame = &state.frame;
         assert!(let Some(row) = frame.first());
         assert_eq!(row.cmd, Cmd::agent(Agent::Claude, AgentState::Busy));
-        assert_eq!(row.indicator, TabIndicator::Green);
+        assert_eq!(row.indicator, TabIndicator::Busy);
     }
 
     #[test]
@@ -813,7 +813,7 @@ mod tests {
 
         assert!(let Some(current_tab) = state.current_tab.as_ref());
         assert_eq!(current_tab.pane_ids, HashSet::from([43]));
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Green);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Busy);
         assert_eq!(current_tab.display_cmd(), Cmd::agent(Agent::Claude, AgentState::Busy));
     }
 
@@ -970,7 +970,7 @@ mod tests {
         );
 
         assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Empty);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
         assert_eq!(
             current_tab.display_cmd(),
             Cmd::agent(Agent::Codex, AgentState::Acknowledged)
