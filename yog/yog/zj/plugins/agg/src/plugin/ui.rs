@@ -200,9 +200,9 @@ pub fn tab_index_at_row(frame: &[TabRow], click_row: usize, content_w: usize) ->
 
 fn display_left(indicator: TabIndicator, cmd: &Cmd, bg: &str, fg: &str) -> String {
     let dot = match indicator {
-        TabIndicator::None | TabIndicator::Empty => None,
-        TabIndicator::Red => Some(format!("{BOLD}{AGENT_WAITING_UNSEEN_FG}•{RESET}")),
-        TabIndicator::Green => Some(format!("{BOLD}{AGENT_BUSY_FG}•{RESET}")),
+        TabIndicator::NoAgent | TabIndicator::Seen => None,
+        TabIndicator::Unseen => Some(format!("{BOLD}{AGENT_WAITING_UNSEEN_FG}•{RESET}")),
+        TabIndicator::Busy => Some(format!("{BOLD}{AGENT_BUSY_FG}•{RESET}")),
     };
     let label = match cmd {
         Cmd::None => String::new(),
@@ -329,14 +329,14 @@ mod tests {
             active: true,
             path_label: "~/u/project".to_string(),
             cmd: Cmd::Running("nvim".to_string()),
-            indicator: TabIndicator::None,
+            indicator: TabIndicator::NoAgent,
             git: GitStat::default(),
         };
         let actual = TabRow::new(
             &tab,
             cwd.as_ref(),
             Cmd::Running("nvim".to_string()),
-            TabIndicator::None,
+            TabIndicator::NoAgent,
             git,
             home,
         );
@@ -360,14 +360,14 @@ mod tests {
             active: false,
             path_label: "~/user".to_string(),
             cmd: Cmd::Running("zsh".to_string()),
-            indicator: TabIndicator::None,
+            indicator: TabIndicator::NoAgent,
             git: GitStat::default(),
         };
         let actual = TabRow::new(
             &tab,
             cwd.as_ref(),
             Cmd::Running("zsh".to_string()),
-            TabIndicator::None,
+            TabIndicator::NoAgent,
             git,
             home,
         );
@@ -380,7 +380,7 @@ mod tests {
             active: true,
             path_label: "tab".to_string(),
             cmd: Cmd::None,
-            indicator: TabIndicator::None,
+            indicator: TabIndicator::NoAgent,
             git: GitStat::default(),
         };
         let mut actual = String::new();
@@ -402,7 +402,7 @@ mod tests {
             active: false,
             path_label: "tab".to_string(),
             cmd: Cmd::None,
-            indicator: TabIndicator::None,
+            indicator: TabIndicator::NoAgent,
             git: GitStat::default(),
         };
         let mut actual = String::new();
@@ -435,14 +435,14 @@ mod tests {
             active: true,
             path_label: "agent-tab".to_string(),
             cmd: Cmd::agent(Agent::Claude, AgentState::Busy),
-            indicator: TabIndicator::Green,
+            indicator: TabIndicator::Busy,
             git: GitStat::default(),
         };
         let actual = TabRow::new(
             &tab,
             None,
             Cmd::agent(Agent::Claude, AgentState::Busy),
-            TabIndicator::Green,
+            TabIndicator::Busy,
             git,
             home,
         );
@@ -452,7 +452,7 @@ mod tests {
     #[test]
     fn test_tab_row_new_with_no_focused_pane() {
         let tab = TabInfo {
-            name: "empty".to_string(),
+            name: "blank".to_string(),
             active: true,
             position: 3,
             ..Default::default()
@@ -463,19 +463,19 @@ mod tests {
 
         let expected = TabRow {
             active: true,
-            path_label: "empty".to_string(),
+            path_label: "blank".to_string(),
             cmd: Cmd::None,
-            indicator: TabIndicator::None,
+            indicator: TabIndicator::NoAgent,
             git: GitStat::default(),
         };
-        let actual = TabRow::new(&tab, None, Cmd::None, TabIndicator::None, git, home);
+        let actual = TabRow::new(&tab, None, Cmd::None, TabIndicator::NoAgent, git, home);
         assert_eq!(actual, expected);
     }
 
     #[test]
-    fn test_display_left_waiting_unseen_uses_bold_red_dot() {
+    fn test_display_left_unseen_uses_bold_attention_dot() {
         let rendered = display_left(
-            TabIndicator::Red,
+            TabIndicator::Unseen,
             &Cmd::agent(Agent::Codex, AgentState::Acknowledged),
             TAB_INACTIVE_BG,
             TAB_DEFAULT_FG,
@@ -487,9 +487,9 @@ mod tests {
     }
 
     #[test]
-    fn test_display_left_waiting_seen_renders_only_agent_name() {
+    fn test_display_left_seen_renders_only_agent_name() {
         let rendered = display_left(
-            TabIndicator::Empty,
+            TabIndicator::Seen,
             &Cmd::agent(Agent::Codex, AgentState::Acknowledged),
             TAB_INACTIVE_BG,
             TAB_DEFAULT_FG,
@@ -498,9 +498,9 @@ mod tests {
     }
 
     #[test]
-    fn test_display_left_busy_uses_bold_green_dot() {
+    fn test_display_left_busy_uses_bold_dot() {
         let rendered = display_left(
-            TabIndicator::Green,
+            TabIndicator::Busy,
             &Cmd::agent(Agent::Codex, AgentState::Acknowledged),
             TAB_INACTIVE_BG,
             TAB_DEFAULT_FG,
@@ -512,9 +512,9 @@ mod tests {
     }
 
     #[test]
-    fn test_display_left_none_indicator_renders_only_running_cmd_label() {
+    fn test_display_left_no_agent_indicator_renders_only_running_cmd_label() {
         let rendered = display_left(
-            TabIndicator::None,
+            TabIndicator::NoAgent,
             &Cmd::Running("cargo".to_string()),
             TAB_INACTIVE_BG,
             TAB_DEFAULT_FG,
@@ -523,8 +523,8 @@ mod tests {
     }
 
     #[test]
-    fn test_display_left_none_indicator_renders_nothing_for_empty_cmd() {
-        let rendered = display_left(TabIndicator::None, &Cmd::None, TAB_INACTIVE_BG, TAB_DEFAULT_FG);
+    fn test_display_left_no_agent_indicator_renders_nothing_for_empty_cmd() {
+        let rendered = display_left(TabIndicator::NoAgent, &Cmd::None, TAB_INACTIVE_BG, TAB_DEFAULT_FG);
         assert_eq!(rendered, "");
     }
 
@@ -549,10 +549,10 @@ mod tests {
             active: true,
             path_label: "git-tab".to_string(),
             cmd: Cmd::None,
-            indicator: TabIndicator::None,
+            indicator: TabIndicator::NoAgent,
             git,
         };
-        let actual = TabRow::new(&tab, None, Cmd::None, TabIndicator::None, git, home);
+        let actual = TabRow::new(&tab, None, Cmd::None, TabIndicator::NoAgent, git, home);
         assert_eq!(actual, expected);
     }
 }
