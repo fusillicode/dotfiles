@@ -1549,10 +1549,13 @@ dependencies = [
 name = "evoke"
 version = "0.1.0"
 dependencies = [
+ "assert2",
  "owo-colors 4.3.0",
  "pretty_assertions",
  "rootcause",
  "rstest",
+ "serde",
+ "serde_json",
  "ytil_cmd",
  "ytil_sys",
 ]

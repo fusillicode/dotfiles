@@ -13,10 +13,13 @@ categories = ["command-line-utilities", "development-tools"]
 [dependencies]
 owo-colors = { workspace = true }
 rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 ytil_cmd = { workspace = true }
 ytil_sys = { workspace = true }
 
 [dev-dependencies]
+assert2 = { workspace = true }
 pretty_assertions = { workspace = true }
 rstest = { workspace = true }
 

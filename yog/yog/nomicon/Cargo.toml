@@ -23,7 +23,7 @@ ytil_sys = { workspace = true }
 
 [build-dependencies]
 lightningcss = { version = "1.0.0-alpha.71", default-features = false, features = [
-  "browserslist",
+    "browserslist",
 ] }
 rootcause = { workspace = true }
 

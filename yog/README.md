@@ -13,7 +13,11 @@ Bunch of _personal_ command-line utilities built-in [Rust](https://www.rust-lang
 > [!IMPORTANT]
 > Requirements:
 
+- `cargo-audit`
+- `cargo-auditable`
+- `cargo-llvm-cov`
 - `cargo-machete`
+- `cargo-nextest`
 - `cargo-sort`
 - `cargo-sort-derives`
 - `curl`
@@ -33,9 +37,16 @@ Bunch of _personal_ command-line utilities built-in [Rust](https://www.rust-lang
 cargo run --bin evoke
 ```
 
+> [!NOTE]
+> To run all CI workflow checks:
+
+```console
+cargo run --bin evoke -- ci
+```
+
 > [!TIP]
 > To install a new release of bins and libs compiled in debug mode:
 
 ```console
-cargo run --bin evoke -- debug
+cargo run --bin evoke -- --debug
 ```
