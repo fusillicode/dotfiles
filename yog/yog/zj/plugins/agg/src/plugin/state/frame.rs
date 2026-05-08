@@ -51,7 +51,7 @@ fn compute_frame(state: &State) -> Vec<TabRow> {
                 tab,
                 None,
                 Cmd::None,
-                TabIndicator::None,
+                TabIndicator::NoAgent,
                 GitStat::default(),
                 state.home_dir.as_path(),
             )
@@ -87,7 +87,7 @@ mod tests {
     use crate::plugin::state::test_support::*;
 
     #[test]
-    fn test_compute_frame_active_mat_follows_focused_agent_when_other_pane_is_green() {
+    fn test_compute_frame_active_mat_follows_focused_agent_when_other_pane_is_busy() {
         let mut state = State {
             plugin_id: 7,
             known_active_tab_id: Some(10),
@@ -167,7 +167,7 @@ mod tests {
 
         assert!(let Some(current_tab) = state.current_tab.as_ref());
         assert_eq!(current_tab.display_cmd(), Cmd::agent(Agent::Codex, AgentState::Busy));
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Green);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Busy);
 
         let frame = compute_frame(&state);
         assert_eq!(
@@ -176,7 +176,7 @@ mod tests {
                 active: true,
                 path_label: "a".to_string(),
                 cmd: Cmd::agent(Agent::Claude, AgentState::Acknowledged),
-                indicator: TabIndicator::Empty,
+                indicator: TabIndicator::Seen,
                 git: GitStat::default(),
             }]
         );
@@ -188,7 +188,7 @@ mod tests {
             all_tabs: vec![tab_with_name(10, 0, "remote")],
             other_tabs: HashMap::from([(
                 1,
-                snapshot(10, 1, Cmd::Running("cargo".to_string()), TabIndicator::None),
+                snapshot(10, 1, Cmd::Running("cargo".to_string()), TabIndicator::NoAgent),
             )]),
             ..Default::default()
         };
@@ -200,7 +200,7 @@ mod tests {
                 active: false,
                 path_label: "remote".to_string(),
                 cmd: Cmd::Running("cargo".to_string()),
-                indicator: TabIndicator::None,
+                indicator: TabIndicator::NoAgent,
                 git: GitStat::default(),
             }]
         );
@@ -216,7 +216,7 @@ mod tests {
                     10,
                     1,
                     Cmd::agent(Agent::Codex, AgentState::NeedsAttention),
-                    TabIndicator::Red,
+                    TabIndicator::Unseen,
                 ),
             )]),
             ..Default::default()
@@ -229,7 +229,7 @@ mod tests {
                 active: false,
                 path_label: "remote".to_string(),
                 cmd: Cmd::agent(Agent::Codex, AgentState::NeedsAttention),
-                indicator: TabIndicator::Red,
+                indicator: TabIndicator::Unseen,
                 git: GitStat::default(),
             }]
         );

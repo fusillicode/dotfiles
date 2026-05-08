@@ -81,7 +81,7 @@ mod tests {
     use crate::plugin::state::test_support::*;
 
     #[test]
-    fn test_agent_start_sets_empty_state() {
+    fn test_agent_start_sets_seen_indicator() {
         let mut state = State {
             current_tab: Some(CurrentTab::new(10)),
             ..Default::default()
@@ -107,7 +107,7 @@ mod tests {
 
         let _ = state.apply_all(&events);
         assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Empty);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
         assert_eq!(
             current_tab.display_cmd(),
             Cmd::agent(Agent::Codex, AgentState::Acknowledged)
@@ -115,7 +115,7 @@ mod tests {
     }
 
     #[test]
-    fn test_agent_idle_in_unfocused_pane_transitions_green_to_red() {
+    fn test_agent_idle_in_unfocused_pane_transitions_busy_to_unseen() {
         let mut state = State {
             all_tabs: vec![tab_with_name(10, 0, "fallback-tab")],
             current_tab: Some(CurrentTab::new(10)),
@@ -153,7 +153,7 @@ mod tests {
 
         let _ = state.apply_all(&events);
         assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Red);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Unseen);
         assert_eq!(
             current_tab.display_cmd(),
             Cmd::agent(Agent::Codex, AgentState::NeedsAttention)
@@ -190,7 +190,7 @@ mod tests {
     }
 
     #[test]
-    fn test_agent_idle_in_focused_pane_transitions_green_to_empty() {
+    fn test_agent_idle_in_focused_pane_transitions_busy_to_seen() {
         let mut state = State {
             known_active_tab_id: Some(10),
             current_tab: Some(CurrentTab::new(10)),
@@ -219,7 +219,7 @@ mod tests {
         let _ = state.apply_all(&events);
 
         assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Empty);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
         assert_eq!(
             current_tab.display_cmd(),
             Cmd::agent(Agent::Codex, AgentState::Acknowledged)
@@ -227,7 +227,7 @@ mod tests {
     }
 
     #[test]
-    fn test_agent_idle_in_inactive_tab_with_stale_focus_transitions_to_red() {
+    fn test_agent_idle_in_inactive_tab_with_stale_focus_transitions_to_unseen() {
         let mut state = State {
             known_active_tab_id: Some(20),
             all_tabs: vec![tab_with_name(10, 0, "a"), tab_with_name(20, 1, "b")],
@@ -266,10 +266,13 @@ mod tests {
         let _ = state.apply_all(&events);
 
         assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Red);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Unseen);
         assert_eq!(
             current_tab.current_row_display(false),
-            (Cmd::agent(Agent::Codex, AgentState::NeedsAttention), TabIndicator::Red,)
+            (
+                Cmd::agent(Agent::Codex, AgentState::NeedsAttention),
+                TabIndicator::Unseen,
+            )
         );
     }
 
@@ -300,7 +303,7 @@ mod tests {
         let _ = state.apply_all(&events);
 
         assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Empty);
+        assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
         assert_eq!(
             current_tab.display_cmd(),
             Cmd::agent(Agent::Claude, AgentState::Acknowledged)

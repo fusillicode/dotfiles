@@ -238,7 +238,7 @@ mod tests {
                     tab_id: 17,
                     cwd: Some(PathBuf::from("/home/user/project")),
                     cmd: Cmd::Running("cargo test".to_string()),
-                    indicator: agg::TabIndicator::None,
+                    indicator: agg::TabIndicator::NoAgent,
                     git_stat: GitStat {
                         insertions: 3,
                         deletions: 1,
@@ -262,7 +262,7 @@ mod tests {
                 seq: 42,
                 cwd: Some(PathBuf::from("/home/user/project")),
                 cmd: Cmd::Running("cargo test".to_string()),
-                indicator: agg::TabIndicator::None,
+                indicator: agg::TabIndicator::NoAgent,
                 git_stat: GitStat {
                     insertions: 3,
                     deletions: 1,
