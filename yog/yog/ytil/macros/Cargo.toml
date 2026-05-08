@@ -8,10 +8,7 @@ repository.workspace = true
 readme.workspace = true
 description = "Proc-macro companion for #[main] attribute for bold-red error output."
 keywords = ["cli", "proc-macro", "error-handling"]
-categories = [
-    "command-line-utilities",
-    "development-tools::procedural-macro-helpers",
-]
+categories = ["command-line-utilities", "development-tools::procedural-macro-helpers"]
 
 [lib]
 proc-macro = true

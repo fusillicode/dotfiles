@@ -1,10 +1,12 @@
-Usage: tec [--fix]
+Usage: tec [--all] [--fix]
 
 Run workspace lint suite concurrently (check or fix modes).
 
 Options:
+  --all  Run lints even when no Rust-related local changes are detected.
   --fix  Run lints that support automatic fixes (default: check mode).
 
 Examples:
-  tec      Run non-mutating lints.
+  tec        Run non-mutating lints for Rust-related local changes.
+  tec --all  Run all non-mutating lints.
   tec --fix  Run lints with automatic fixes.
