@@ -142,7 +142,7 @@ fn fold_path_match(input: &str) -> String {
         .collect()
 }
 
-fn is_path_edge_delimiter(ch: char) -> bool {
+const fn is_path_edge_delimiter(ch: char) -> bool {
     ch.is_whitespace()
         || ch.is_control()
         || matches!(
