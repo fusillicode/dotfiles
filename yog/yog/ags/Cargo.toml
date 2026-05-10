@@ -11,13 +11,21 @@ keywords = ["agents", "sessions", "cli", "terminal", "tools"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
+chrono = { workspace = true }
 owo-colors = { workspace = true }
 rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 strum = { workspace = true }
 ytil_agents = { workspace = true }
 ytil_git = { workspace = true }
 ytil_sys = { workspace = true }
 ytil_tui = { workspace = true }
+
+[dev-dependencies]
+assert2 = { workspace = true }
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

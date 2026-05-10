@@ -44,9 +44,15 @@ dependencies = [
 name = "ags"
 version = "0.1.0"
 dependencies = [
+ "assert2",
+ "chrono",
  "owo-colors 4.3.0",
+ "pretty_assertions",
  "rootcause",
+ "serde",
+ "serde_json",
  "strum 0.28.0",
+ "tempfile",
  "ytil_agents",
  "ytil_git",
  "ytil_sys",
