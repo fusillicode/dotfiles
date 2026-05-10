@@ -1,9 +1,20 @@
 use agg::GitStat;
 
 pub fn run(cwd: &str) -> GitStat {
+    let path = cwd.into();
     let Ok(repo) = git2::Repository::discover(cwd) else {
-        return GitStat::default();
+        return GitStat {
+            path,
+            branch: None,
+            ..Default::default()
+        };
     };
+
+    let branch = repo
+        .head()
+        .ok()
+        .filter(git2::Reference::is_branch)
+        .and_then(|head| head.shorthand().map(str::to_string));
 
     let (insertions, deletions) = repo
         .diff_index_to_workdir(None, None)
@@ -23,6 +34,8 @@ pub fn run(cwd: &str) -> GitStat {
         });
 
     GitStat {
+        path,
+        branch,
         insertions,
         deletions,
         new_files,
