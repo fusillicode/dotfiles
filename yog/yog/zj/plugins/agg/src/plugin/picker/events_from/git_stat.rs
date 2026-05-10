@@ -1,7 +1,5 @@
 use std::path::PathBuf;
 
-use agg::GitStat;
-
 use crate::plugin::picker::state::PickerEvent;
 
 pub fn derive(requested_cwd: &PathBuf, exit_code: Option<i32>, stdout: &[u8]) -> Vec<PickerEvent> {
@@ -10,13 +8,10 @@ pub fn derive(requested_cwd: &PathBuf, exit_code: Option<i32>, stdout: &[u8]) ->
     }
 
     let output = String::from_utf8_lossy(stdout);
-    for line in output.lines() {
-        let Ok(stat) = line
-            .parse::<GitStat>()
-            .inspect_err(|error| eprintln!("agg picker: {error}"))
-        else {
-            continue;
-        };
+    let Ok(stats) = agg::parse_git_stat_records(&output).inspect_err(|error| eprintln!("agg picker: {error}")) else {
+        return vec![];
+    };
+    for stat in stats {
         if stat.path != *requested_cwd {
             continue;
         }
@@ -45,6 +40,7 @@ mod tests {
             deletions: 1,
             new_files: 3,
             is_worktree: false,
+            ..Default::default()
         };
         let stdout = stat.to_string();
 
@@ -63,6 +59,7 @@ mod tests {
             deletions: 1,
             new_files: 3,
             is_worktree: false,
+            ..Default::default()
         }
         .to_string();
 
