@@ -3,9 +3,8 @@ use ytil_agents::agent::AgentEventPayload;
 use zellij_tile::prelude::PipeMessage;
 
 use crate::plugin::picker::state::PickerEvent;
-use crate::plugin::picker::state::PickerState;
 
-pub fn derive(state: &PickerState, msg: &PipeMessage) -> Vec<PickerEvent> {
+pub fn derive(msg: &PipeMessage) -> Vec<PickerEvent> {
     if msg.name != AGENTS_PIPE {
         return vec![];
     }
@@ -23,7 +22,7 @@ pub fn derive(state: &PickerState, msg: &PipeMessage) -> Vec<PickerEvent> {
         return vec![];
     };
 
-    crate::plugin::picker::events_from::picker_event(state, PickerEvent::AgentUpdated { event })
+    vec![PickerEvent::AgentUpdated { event }]
 }
 
 #[cfg(test)]
@@ -34,8 +33,6 @@ mod tests {
     use ytil_agents::agent::Agent;
     use ytil_agents::agent::AgentEventKind;
     use ytil_agents::agent::AgentEventPayload;
-    use zellij_tile::prelude::PaneInfo;
-    use zellij_tile::prelude::PaneManifest;
     use zellij_tile::prelude::PipeMessage;
     use zellij_tile::prelude::PipeSource;
 
@@ -43,19 +40,6 @@ mod tests {
 
     #[test]
     fn test_derive_agent_event_returns_update_for_agg_agent_pipe() {
-        let mut state = PickerState::default();
-        let manifest = PaneManifest {
-            panes: std::iter::once((
-                0,
-                vec![PaneInfo {
-                    id: 42,
-                    terminal_command: Some("codex".to_string()),
-                    ..Default::default()
-                }],
-            ))
-            .collect(),
-        };
-        let _ = state.update_panes(&manifest, |_| None, |_| Some(vec![String::from("codex")]));
         let msg = PipeMessage {
             source: PipeSource::Keybind,
             name: AGENTS_PIPE.to_string(),
@@ -67,7 +51,7 @@ mod tests {
             is_private: false,
         };
 
-        let events = derive(&state, &msg);
+        let events = derive(&msg);
 
         assert_eq!(
             events,

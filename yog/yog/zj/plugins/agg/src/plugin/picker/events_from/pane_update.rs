@@ -12,7 +12,7 @@ pub fn derive(
     resolve_pane_command: impl FnMut(u32) -> Option<Vec<String>>,
 ) -> Vec<PickerEvent> {
     let panes = state.pane_observations(manifest, resolve_pane_cwd, resolve_pane_command);
-    crate::plugin::picker::events_from::picker_event(state, PickerEvent::PanesUpdated { panes })
+    vec![PickerEvent::PanesUpdated { panes }]
 }
 
 #[cfg(test)]
@@ -52,7 +52,7 @@ mod tests {
         assert_eq!(events.len(), 1);
         assert2::assert!(let PickerEvent::PanesUpdated { .. } = &events[0]);
 
-        apply_events(&mut state, &events);
+        apply_events(&mut state, events);
         assert_eq!(
             state.frame(),
             vec![PickerRow {
@@ -66,7 +66,7 @@ mod tests {
         );
     }
 
-    fn apply_events(state: &mut PickerState, events: &[PickerEvent]) {
+    fn apply_events(state: &mut PickerState, events: Vec<PickerEvent>) {
         for event in events {
             let _ = state.apply_event(event);
         }
