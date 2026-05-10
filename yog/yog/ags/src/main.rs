@@ -1,5 +1,3 @@
-#![feature(exit_status_error)]
-
 use ytil_sys::cli::Args;
 
 mod sessions;
@@ -11,6 +9,10 @@ fn main() -> rootcause::Result<()> {
     if args.has_help() {
         println!("{}", include_str!("../help.txt"));
         return Ok(());
+    }
+
+    if args.as_slice() == ["list", "--json"] {
+        return sessions::list_json();
     }
 
     sessions::run()
