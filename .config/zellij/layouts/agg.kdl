@@ -22,7 +22,7 @@ keybinds {
     bind "Alt H" { MoveFocus "Left"; }
     bind "Alt L" { MoveFocus "Right"; }
     bind "Shift Alt Enter" {
-      LaunchOrFocusPlugin "file:~/.config/zellij/plugins/agg.wasm" {
+      LaunchPlugin "file:~/.config/zellij/plugins/agg.wasm" {
         floating true
         move_to_focused_tab true
         view "picker"
