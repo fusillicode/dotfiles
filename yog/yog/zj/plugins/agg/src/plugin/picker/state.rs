@@ -20,11 +20,16 @@ use crate::plugin::picker::ui::PickerRow;
 pub struct PickerState {
     pub query: String,
     selected: usize,
+    selected_pane_id: Option<u32>,
+    filtered_entry_indices: Vec<usize>,
+    filter_ready: bool,
     pane_entries: Vec<PaneEntry>,
-    session_entries: Vec<SessionEntry>,
+    sessions_by_key: HashMap<(String, String), SessionEntry>,
     cwds_by_pane: HashMap<u32, PathBuf>,
     commands_by_pane: HashMap<u32, Vec<String>>,
     git_stats_by_cwd: HashMap<PathBuf, GitStat>,
+    git_stat_cwds_to_refresh: HashSet<PathBuf>,
+    git_stat_cwds_in_flight: HashSet<PathBuf>,
     all_tabs: Vec<TabInfo>,
     floating_width: Option<String>,
     floating_height: Option<String>,
@@ -148,6 +153,9 @@ impl PickerState {
                 let cwd = (!self.cwds_by_pane.contains_key(&pane.id))
                     .then(|| resolve_pane_cwd(pane.id))
                     .flatten();
+                let command = (!self.commands_by_pane.contains_key(&pane.id))
+                    .then(|| resolve_pane_command(pane.id))
+                    .flatten();
                 observations.push(PaneObservation {
                     tab_position,
                     pane_id: pane.id,
@@ -158,7 +166,7 @@ impl PickerState {
                     title_label: crate::plugin::pane::title_label_from_title(&pane.title),
                     is_focused: pane.is_focused,
                     cwd,
-                    command: resolve_pane_command(pane.id),
+                    command,
                 });
             }
         }
@@ -179,6 +187,9 @@ impl PickerState {
         crate::plugin::picker::entry::sort_by_tab_order(&mut self.pane_entries, &self.all_tabs);
         let ordered_pane_ids = self.pane_entries.iter().map(|entry| entry.pane_id);
         let order_changed = !ordered_pane_ids.eq(previous_order);
+        if changed || order_changed {
+            self.mark_filter_dirty();
+        }
         let selection_changed = self.select_initial_focus(None);
         changed || order_changed || selection_changed
     }
@@ -197,11 +208,17 @@ impl PickerState {
     fn update_panes_from_observations(&mut self, observations: &[PaneObservation]) -> bool {
         let mut next_entries = Vec::new();
         let mut live_pane_ids = HashSet::new();
+        let mut git_refresh_queued = false;
 
         for pane in observations {
             live_pane_ids.insert(pane.pane_id);
             if let Some(cwd) = pane.cwd.clone() {
-                self.cwds_by_pane.insert(pane.pane_id, cwd);
+                let cwd_changed = self.cwds_by_pane.get(&pane.pane_id) != Some(&cwd);
+                self.cwds_by_pane.insert(pane.pane_id, cwd.clone());
+                if cwd_changed {
+                    self.git_stat_cwds_to_refresh.insert(cwd);
+                    git_refresh_queued = true;
+                }
             }
             if let Some(command) = pane.command.clone() {
                 self.commands_by_pane.insert(pane.pane_id, command);
@@ -213,46 +230,48 @@ impl PickerState {
         self.commands_by_pane
             .retain(|pane_id, _| live_pane_ids.contains(pane_id));
         crate::plugin::picker::entry::sort_by_tab_order(&mut next_entries, &self.all_tabs);
-        crate::plugin::picker::state::attach_sessions_to_entries(&mut next_entries, &self.session_entries);
+        crate::plugin::picker::state::attach_sessions_to_entries(&mut next_entries, &self.sessions_by_key);
         let entries_changed = self.pane_entries != next_entries;
         self.pane_entries = next_entries;
+        if entries_changed {
+            self.mark_filter_dirty();
+        }
         let focused_pane_id = observations
             .iter()
             .find(|pane| pane.is_focused)
             .map(|pane| pane.pane_id);
         let selection_changed = self.select_initial_focus(focused_pane_id);
-        entries_changed || selection_changed
+        entries_changed || selection_changed || git_refresh_queued
     }
 
     pub fn update_cwd(&mut self, pane_id: u32, cwd: &Path) -> bool {
         let cwd = cwd.to_path_buf();
+        let cwd_changed = self.cwds_by_pane.get(&pane_id) != Some(&cwd);
         self.cwds_by_pane.insert(pane_id, cwd.clone());
-        let git_stat = self.git_stats_by_cwd.get(&cwd);
-        let mut changed = false;
-        for entry in &mut self.pane_entries {
-            if entry.pane_id == pane_id {
-                changed |= entry.apply_cwd(cwd.clone(), git_stat.cloned().unwrap_or_default());
-            }
+        if cwd_changed {
+            self.git_stat_cwds_to_refresh.insert(cwd.clone());
         }
+        let git_stat = self.git_stats_by_cwd.get(&cwd).cloned().unwrap_or_default();
+        let Some(entry) = self.pane_entries.iter_mut().find(|entry| entry.pane_id == pane_id) else {
+            return cwd_changed;
+        };
+        let mut changed = entry.apply_cwd(cwd, git_stat);
         if changed {
-            changed |=
-                crate::plugin::picker::state::attach_sessions_to_entries(&mut self.pane_entries, &self.session_entries);
+            self.mark_filter_dirty();
             changed |= self.clamp_selection();
         }
-        changed
+        changed || cwd_changed
     }
 
     pub fn update_command(&mut self, pane_id: u32, command: &[String]) -> bool {
         self.commands_by_pane.insert(pane_id, command.to_owned());
-        let mut changed = false;
-        for entry in &mut self.pane_entries {
-            if entry.pane_id == pane_id {
-                changed |= entry.apply_command(command.to_owned());
-            }
-        }
+        let Some(entry) = self.pane_entries.iter_mut().find(|entry| entry.pane_id == pane_id) else {
+            return false;
+        };
+        let mut changed = entry.apply_command(command.to_owned());
         if changed {
-            changed |=
-                crate::plugin::picker::state::attach_sessions_to_entries(&mut self.pane_entries, &self.session_entries);
+            changed |= entry.attach_session(&self.sessions_by_key);
+            self.mark_filter_dirty();
             changed |= self.clamp_selection();
         }
         changed
@@ -263,53 +282,72 @@ impl PickerState {
         self.commands_by_pane.remove(&pane_id);
         let old_len = self.pane_entries.len();
         self.pane_entries.retain(|entry| entry.pane_id != pane_id);
+        if old_len != self.pane_entries.len() {
+            self.mark_filter_dirty();
+        }
         let selection_changed = self.clamp_selection();
         old_len != self.pane_entries.len() || selection_changed
     }
 
     pub fn update_sessions(&mut self, session_entries: Vec<SessionEntry>) -> bool {
-        let sessions_changed = self.session_entries != session_entries;
-        self.session_entries = session_entries;
+        let next_sessions_by_key = crate::plugin::picker::state::index_session_entries(session_entries);
+        let sessions_changed = self.sessions_by_key != next_sessions_by_key;
+        self.sessions_by_key = next_sessions_by_key;
         let entries_changed =
-            crate::plugin::picker::state::attach_sessions_to_entries(&mut self.pane_entries, &self.session_entries);
+            crate::plugin::picker::state::attach_sessions_to_entries(&mut self.pane_entries, &self.sessions_by_key);
+        if entries_changed {
+            self.mark_filter_dirty();
+        }
         let selection_changed = self.clamp_selection();
         sessions_changed || entries_changed || selection_changed
     }
 
     pub fn update_agent(&mut self, event: &AgentEventPayload) -> bool {
-        let mut changed = false;
-        for entry in &mut self.pane_entries {
-            changed |= entry.apply_agent_event(event);
+        let Some(entry) = self
+            .pane_entries
+            .iter_mut()
+            .find(|entry| entry.pane_id == event.pane_id)
+        else {
+            return false;
+        };
+        let mut changed = entry.apply_agent_event(event);
+        if changed {
+            self.mark_filter_dirty();
+            changed |= self.clamp_selection();
         }
         changed
     }
 
-    pub fn git_stat_cwds(&self) -> Vec<PathBuf> {
-        let mut cwds = Vec::new();
-        let mut seen = HashSet::new();
-        for entry in &self.pane_entries {
-            let Some(cwd) = entry.cwd.as_ref() else {
-                continue;
-            };
-            if seen.insert(cwd) {
-                cwds.push(cwd.clone());
+    pub fn take_git_stat_cwds_to_request(&mut self) -> Vec<PathBuf> {
+        let mut cwds = self.git_stat_cwds_to_refresh.drain().collect::<Vec<_>>();
+        cwds.sort();
+        let mut requests = Vec::new();
+        for cwd in cwds {
+            if self.git_stat_cwds_in_flight.insert(cwd.clone()) {
+                requests.push(cwd);
             }
         }
-        cwds
+        requests
+    }
+
+    pub fn finish_git_stat_request(&mut self, cwd: &Path) {
+        self.git_stat_cwds_in_flight.remove(cwd);
     }
 
     pub fn handle_key(&mut self, key: &KeyWithModifier) -> PickerAction {
         match key.bare_key {
             BareKey::Esc if key.has_no_modifiers() => PickerAction::Close,
-            BareKey::Enter if key.has_no_modifiers() => self
-                .filtered_entries()
-                .nth(self.selected)
-                .map_or(PickerAction::None, |entry| PickerAction::Focus(entry.pane_id)),
+            BareKey::Enter if key.has_no_modifiers() => {
+                self.ensure_filter();
+                self.selected_entry()
+                    .map_or(PickerAction::None, |entry| PickerAction::Focus(entry.pane_id))
+            }
             BareKey::Backspace if key.has_no_modifiers() => {
                 if self.query.pop().is_none() {
                     return PickerAction::None;
                 }
                 self.selection_touched = true;
+                self.mark_filter_dirty();
                 self.clamp_selection();
                 PickerAction::Redraw
             }
@@ -322,6 +360,7 @@ impl PickerState {
             {
                 self.query.push(c);
                 self.selection_touched = true;
+                self.mark_filter_dirty();
                 self.clamp_selection();
                 PickerAction::Redraw
             }
@@ -350,10 +389,37 @@ impl PickerState {
         }
     }
 
-    pub fn frame(&self) -> Vec<PickerRow> {
-        self.filtered_entries()
+    pub fn visible_frame(&mut self, capacity: usize) -> Vec<PickerRow> {
+        self.ensure_filter();
+        if capacity == 0 {
+            return Vec::new();
+        }
+        let start = self.selected.saturating_add(1).saturating_sub(capacity);
+        self.filtered_entry_indices
+            .iter()
             .enumerate()
-            .map(|(idx, entry)| entry.row(idx == self.selected))
+            .skip(start)
+            .take(capacity)
+            .filter_map(|(idx, entry_idx)| {
+                self.pane_entries
+                    .get(*entry_idx)
+                    .map(|entry| entry.row(idx == self.selected))
+            })
+            .collect()
+    }
+
+    #[cfg(test)]
+    pub fn frame(&mut self) -> Vec<PickerRow> {
+        self.mark_filter_dirty();
+        self.ensure_filter();
+        self.filtered_entry_indices
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, entry_idx)| {
+                self.pane_entries
+                    .get(*entry_idx)
+                    .map(|entry| entry.row(idx == self.selected))
+            })
             .collect()
     }
 
@@ -381,48 +447,59 @@ impl PickerState {
                 changed |= entry.apply_git_stat(stat.clone());
             }
         }
+        if changed {
+            self.mark_filter_dirty();
+            changed |= self.clamp_selection();
+        }
         changed
     }
 
-    fn filtered_entries(&self) -> impl Iterator<Item = &PaneEntry> {
+    fn filtered_entries(&self) -> impl Iterator<Item = (usize, &PaneEntry)> {
         let query = self.query.trim().to_ascii_lowercase();
         self.pane_entries
             .iter()
-            .filter(move |entry| entry.matches_normalized_query(&query))
+            .enumerate()
+            .filter(move |(_, entry)| entry.matches_normalized_query(&query))
     }
 
     fn select_next(&mut self) -> PickerAction {
-        let filtered_len = self.filtered_entries().count();
+        self.ensure_filter();
+        let filtered_len = self.filtered_entry_indices.len();
         if filtered_len <= 1 {
             return PickerAction::None;
         }
         self.selection_touched = true;
-        self.selected = self
+        let selected = self
             .selected
             .checked_add(1)
             .filter(|next| *next < filtered_len)
             .unwrap_or(0);
+        self.set_selected(selected);
         PickerAction::Redraw
     }
 
     fn select_previous(&mut self) -> PickerAction {
-        let filtered_len = self.filtered_entries().count();
+        self.ensure_filter();
+        let filtered_len = self.filtered_entry_indices.len();
         if filtered_len <= 1 {
             return PickerAction::None;
         }
         self.selection_touched = true;
-        self.selected = self
+        let selected = self
             .selected
             .checked_sub(1)
             .unwrap_or_else(|| filtered_len.saturating_sub(1));
+        self.set_selected(selected);
         PickerAction::Redraw
     }
 
     fn select_initial_focus(&mut self, observed_focused_pane_id: Option<u32>) -> bool {
         let old_selected = self.selected;
+        let old_selected_pane_id = self.selected_pane_id;
+        self.ensure_filter();
         if self.selection_touched || !self.query.is_empty() {
             self.clamp_selection();
-            return old_selected != self.selected;
+            return old_selected != self.selected || old_selected_pane_id != self.selected_pane_id;
         }
 
         let active_tab = self.all_tabs.iter().find(|tab| tab.active);
@@ -430,45 +507,116 @@ impl PickerState {
             .and_then(|tab| self.initial_focus_by_tab.get(&tab.tab_id))
             .map(|focus| focus.pane_id)
             .or(observed_focused_pane_id);
-        let selected = focus_pane_id.and_then(|focus_pane_id| {
-            let mut filtered_entries = self.filtered_entries();
-            filtered_entries.position(|entry| entry.pane_id == focus_pane_id)
-        });
+        let selected = focus_pane_id.and_then(|focus_pane_id| self.filtered_position_for_pane(focus_pane_id));
         let selected = selected.or_else(|| {
             let active_tab = active_tab?;
-            self.filtered_entries()
-                .position(|entry| entry.tab_position == active_tab.position)
+            self.filtered_entry_indices.iter().position(|entry_idx| {
+                self.pane_entries
+                    .get(*entry_idx)
+                    .is_some_and(|entry| entry.tab_position == active_tab.position)
+            })
         });
         if let Some(selected) = selected {
-            self.selected = selected;
+            self.set_selected(selected);
         } else {
             self.clamp_selection();
         }
-        old_selected != self.selected
+        old_selected != self.selected || old_selected_pane_id != self.selected_pane_id
     }
 
     fn clamp_selection(&mut self) -> bool {
         let old_selected = self.selected;
-        let filtered_len = self.filtered_entries().count();
+        let old_selected_pane_id = self.selected_pane_id;
+        self.ensure_filter();
+        let filtered_len = self.filtered_entry_indices.len();
         if filtered_len == 0 {
-            self.selected = 0;
+            self.set_selected(0);
         } else if self.selected >= filtered_len {
-            self.selected = filtered_len.saturating_sub(1);
+            self.set_selected(filtered_len.saturating_sub(1));
+        } else {
+            self.set_selected(self.selected);
         }
-        old_selected != self.selected
+        old_selected != self.selected || old_selected_pane_id != self.selected_pane_id
+    }
+
+    const fn mark_filter_dirty(&mut self) {
+        self.filter_ready = false;
+    }
+
+    fn ensure_filter(&mut self) -> bool {
+        if self.filter_ready {
+            return false;
+        }
+
+        let old_indices = self.filtered_entry_indices.clone();
+        let old_selected = self.selected;
+        let old_selected_pane_id = self.selected_pane_id;
+        let selected_pane_id = self
+            .selected_pane_id
+            .or_else(|| self.selected_entry().map(|entry| entry.pane_id));
+
+        self.filtered_entry_indices = self.filtered_entries().map(|(idx, _)| idx).collect();
+        if let Some(selected) = selected_pane_id.and_then(|pane_id| self.filtered_position_for_pane(pane_id)) {
+            self.selected = selected;
+        } else if self.filtered_entry_indices.is_empty() {
+            self.selected = 0;
+        } else if self.selected >= self.filtered_entry_indices.len() {
+            self.selected = self.filtered_entry_indices.len().saturating_sub(1);
+        }
+        self.refresh_selected_pane_id();
+        self.filter_ready = true;
+
+        old_indices != self.filtered_entry_indices
+            || old_selected != self.selected
+            || old_selected_pane_id != self.selected_pane_id
+    }
+
+    fn set_selected(&mut self, selected: usize) {
+        self.selected = selected;
+        self.refresh_selected_pane_id();
+    }
+
+    fn selected_entry(&self) -> Option<&PaneEntry> {
+        self.filtered_entry_indices
+            .get(self.selected)
+            .and_then(|entry_idx| self.pane_entries.get(*entry_idx))
+    }
+
+    fn refresh_selected_pane_id(&mut self) {
+        self.selected_pane_id = self.selected_entry().map(|entry| entry.pane_id);
+    }
+
+    fn filtered_position_for_pane(&self, pane_id: u32) -> Option<usize> {
+        self.filtered_entry_indices.iter().position(|entry_idx| {
+            self.pane_entries
+                .get(*entry_idx)
+                .is_some_and(|entry| entry.pane_id == pane_id)
+        })
     }
 }
 
-fn attach_sessions_to_entries(pane_entries: &mut [PaneEntry], sessions: &[SessionEntry]) -> bool {
+fn attach_sessions_to_entries(
+    pane_entries: &mut [PaneEntry],
+    sessions_by_key: &HashMap<(String, String), SessionEntry>,
+) -> bool {
     let mut changed = false;
     for entry in pane_entries {
-        changed |= entry.attach_session(sessions);
+        changed |= entry.attach_session(sessions_by_key);
     }
     changed
 }
 
+fn index_session_entries(session_entries: Vec<SessionEntry>) -> HashMap<(String, String), SessionEntry> {
+    let mut sessions_by_key = HashMap::new();
+    for session in session_entries {
+        sessions_by_key.insert((session.agent.clone(), session.session_id.clone()), session);
+    }
+    sessions_by_key
+}
+
 #[cfg(test)]
 mod tests {
+    use std::cell::Cell;
     use std::collections::BTreeSet;
     use std::path::PathBuf;
 
@@ -875,6 +1023,156 @@ mod tests {
         for query in ["1", "42", "project", "codex", "cx"] {
             assert2::assert!(entry.matches_normalized_query(query));
         }
+    }
+
+    #[test]
+    fn test_handle_key_selection_uses_cached_filter_for_large_result() {
+        let mut state = PickerState {
+            pane_entries: (0..1_000)
+                .map(|idx| {
+                    PaneEntry::new(
+                        0,
+                        idx,
+                        Some(PathBuf::from(format!("/tmp/work-{idx}"))),
+                        vec![String::from("cargo")],
+                        None,
+                    )
+                })
+                .collect(),
+            ..Default::default()
+        };
+        for c in "work".chars() {
+            assert_eq!(state.handle_key(&key(BareKey::Char(c))), PickerAction::Redraw);
+        }
+        assert_eq!(state.filtered_entry_indices.len(), 1_000);
+        let filtered_entry_indices = state.filtered_entry_indices.clone();
+
+        assert_eq!(state.handle_key(&key(BareKey::Down)), PickerAction::Redraw);
+
+        assert_eq!(state.selected, 1);
+        assert_eq!(state.filtered_entry_indices, filtered_entry_indices);
+        assert_eq!(state.handle_key(&key(BareKey::Enter)), PickerAction::Focus(1));
+    }
+
+    #[test]
+    fn test_visible_frame_materializes_only_capacity_rows_and_keeps_selection_visible() {
+        let mut state = PickerState {
+            pane_entries: (0..8)
+                .map(|idx| {
+                    PaneEntry::new(
+                        0,
+                        idx,
+                        Some(PathBuf::from(format!("/tmp/pane-{idx}"))),
+                        vec![String::from("cargo")],
+                        None,
+                    )
+                })
+                .collect(),
+            ..Default::default()
+        };
+        for _ in 0..5 {
+            assert_eq!(state.handle_key(&key(BareKey::Down)), PickerAction::Redraw);
+        }
+
+        let frame = state.visible_frame(2);
+
+        assert_eq!(frame.len(), 2);
+        assert_eq!(
+            frame.iter().map(|row| row.cwd_label.as_str()).collect::<Vec<_>>(),
+            vec!["/tmp/pane-4", "/tmp/pane-5"]
+        );
+        assert_eq!(
+            frame.iter().map(|row| row.selected).collect::<Vec<_>>(),
+            vec![false, true]
+        );
+    }
+
+    #[test]
+    fn test_pane_update_resolves_running_command_only_for_uncached_panes() {
+        let mut state = PickerState::default();
+        let manifest = PaneManifest {
+            panes: std::iter::once((
+                0,
+                vec![
+                    terminal_pane_with_command(42, "zsh"),
+                    terminal_pane_with_command(43, "zsh"),
+                ],
+            ))
+            .collect(),
+        };
+        let command_calls = Cell::new(0);
+
+        let _ = state.update_panes(
+            &manifest,
+            |pane_id| Some(PathBuf::from(format!("/tmp/pane-{pane_id}"))),
+            |pane_id| {
+                command_calls.set(command_calls.get() + 1);
+                Some(vec![format!("cmd-{pane_id}")])
+            },
+        );
+        let _ = state.update_panes(
+            &manifest,
+            |pane_id| Some(PathBuf::from(format!("/tmp/changed-{pane_id}"))),
+            |pane_id| {
+                command_calls.set(command_calls.get() + 1);
+                Some(vec![format!("changed-{pane_id}")])
+            },
+        );
+
+        assert_eq!(command_calls.get(), 2);
+        assert_eq!(
+            state
+                .pane_entries
+                .iter()
+                .map(|entry| entry.command_args.clone())
+                .collect::<Vec<_>>(),
+            vec![vec![String::from("cmd-42")], vec![String::from("cmd-43")]]
+        );
+    }
+
+    #[test]
+    fn test_git_stat_refreshes_first_seen_and_cwd_changes_not_command_changes() {
+        let mut state = PickerState::default();
+        let manifest = PaneManifest {
+            panes: std::iter::once((0, vec![terminal_pane_with_command(42, "zsh")])).collect(),
+        };
+
+        let _ = state.update_panes(
+            &manifest,
+            |_| Some(PathBuf::from("/tmp/repo")),
+            |_| Some(vec![String::from("cargo")]),
+        );
+        assert_eq!(state.take_git_stat_cwds_to_request(), vec![PathBuf::from("/tmp/repo")]);
+
+        assert2::assert!(state.update_command(42, &[String::from("nvim")]));
+        assert_eq!(state.take_git_stat_cwds_to_request(), Vec::<PathBuf>::new());
+
+        assert2::assert!(state.update_cwd(42, &PathBuf::from("/tmp/other")));
+        assert_eq!(state.take_git_stat_cwds_to_request(), vec![PathBuf::from("/tmp/other")]);
+    }
+
+    #[test]
+    fn test_git_stat_requests_dedupe_while_in_flight() {
+        let mut state = PickerState::default();
+        let manifest = PaneManifest {
+            panes: std::iter::once((0, vec![terminal_pane_with_command(42, "zsh")])).collect(),
+        };
+        let repo = PathBuf::from("/tmp/repo");
+        let other = PathBuf::from("/tmp/other");
+        let _ = state.update_panes(&manifest, |_| Some(repo.clone()), |_| Some(vec![String::from("cargo")]));
+
+        assert_eq!(state.take_git_stat_cwds_to_request(), vec![repo.clone()]);
+        assert2::assert!(state.update_cwd(42, &other));
+        assert_eq!(state.take_git_stat_cwds_to_request(), vec![other.clone()]);
+        assert2::assert!(state.update_cwd(42, &repo));
+        assert_eq!(state.take_git_stat_cwds_to_request(), Vec::<PathBuf>::new());
+
+        state.finish_git_stat_request(&repo);
+        assert2::assert!(state.update_cwd(42, &other));
+        assert_eq!(state.take_git_stat_cwds_to_request(), Vec::<PathBuf>::new());
+        state.finish_git_stat_request(&other);
+        assert2::assert!(state.update_cwd(42, &repo));
+        assert_eq!(state.take_git_stat_cwds_to_request(), vec![repo]);
     }
 
     #[test]

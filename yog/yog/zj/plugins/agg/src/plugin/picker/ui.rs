@@ -4,7 +4,7 @@ use agg::Cmd;
 use agg::GitStat;
 use agg::TabIndicator;
 
-const ENTRY_ROWS: usize = 3;
+pub const ENTRY_ROWS: usize = 3;
 const PICKER_SELECTED_BG: &str = "\x1b[48;2;50;50;50m";
 const TAB_DEFAULT_FG: &str = "\x1b[39m";
 const SUMMARY_FG: &str = "\x1b[38;2;119;119;119m";

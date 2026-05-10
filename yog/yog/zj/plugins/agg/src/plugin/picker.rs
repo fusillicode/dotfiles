@@ -51,8 +51,9 @@ pub fn update_permission_granted(state: &mut PickerState) -> bool {
     true
 }
 
-pub fn render(state: &PickerState, rows: usize, cols: usize, buf: &mut String) {
-    let frame = state.frame();
+pub fn render(state: &mut PickerState, rows: usize, cols: usize, buf: &mut String) {
+    let capacity = rows.saturating_sub(1) / crate::plugin::picker::ui::ENTRY_ROWS;
+    let frame = state.visible_frame(capacity);
     crate::plugin::picker::ui::render_frame(&frame, &state.query, rows, cols, buf);
 }
 
@@ -97,11 +98,7 @@ pub fn update_command(state: &mut PickerState, pane_id: PaneId, command: &[Strin
         return false;
     };
     let events = crate::plugin::picker::events_from::command::derive(pane_id, command.to_owned());
-    let changed = apply_events(state, events);
-    if changed {
-        run_git_stats(state);
-    }
-    changed
+    apply_events(state, events)
 }
 
 pub fn update_key(state: &mut PickerState, key: &KeyWithModifier) -> bool {
@@ -170,6 +167,7 @@ pub fn update_run_command_result(
             let Some(cwd) = context.get(CONTEXT_CWD).map(PathBuf::from) else {
                 return false;
             };
+            state.finish_git_stat_request(&cwd);
             let events = crate::plugin::picker::events_from::git_stat::derive(&cwd, exit_code, stdout);
             apply_events(state, events)
         }
@@ -191,8 +189,8 @@ fn run_ags_sessions() {
     zellij_tile::prelude::run_command(&["ags", "list", "--json"], context);
 }
 
-fn run_git_stats(state: &PickerState) {
-    for cwd in state.git_stat_cwds() {
+fn run_git_stats(state: &mut PickerState) {
+    for cwd in state.take_git_stat_cwds_to_request() {
         crate::plugin::picker::run_git_stat(cwd);
     }
 }

@@ -216,7 +216,7 @@ impl ZellijPlugin for State {
     fn render(&mut self, rows: usize, cols: usize) {
         self.last_cols = cols;
         self.render_buf.clear();
-        match &self.view {
+        match &mut self.view {
             ViewState::TabBar(tab_bar) => {
                 crate::plugin::tab_bar::render(tab_bar, rows, cols, &mut self.render_buf);
             }
