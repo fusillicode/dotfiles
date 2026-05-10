@@ -118,9 +118,12 @@ fn cp(from: &Path, to: &Path) -> rootcause::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use rstest::rstest;
 
-    use super::*;
+    use crate::local::drop_element;
+    use crate::local::remove_last_n_dirs;
 
     #[test]
     fn test_drop_element_returns_true_and_removes_the_element_from_the_vec() {

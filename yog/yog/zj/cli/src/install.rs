@@ -3,10 +3,12 @@ use std::process::Command;
 
 use rootcause::prelude::ResultExt;
 
+const PLUGINS: &[&str] = &["agg", "zcp", "zop"];
+
 pub fn run(is_debug: bool) -> rootcause::Result<()> {
-    run_plugin_install("agg", is_debug)?;
-    run_plugin_install("zcp", is_debug)?;
-    run_plugin_install("zop", is_debug)?;
+    for plugin in PLUGINS {
+        run_plugin_install(plugin, is_debug)?;
+    }
     Ok(())
 }
 
