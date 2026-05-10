@@ -3,9 +3,8 @@ use std::path::PathBuf;
 use agg::GitStat;
 
 use crate::plugin::picker::state::PickerEvent;
-use crate::plugin::picker::state::PickerState;
 
-pub fn derive(state: &PickerState, requested_cwd: &PathBuf, exit_code: Option<i32>, stdout: &[u8]) -> Vec<PickerEvent> {
+pub fn derive(requested_cwd: &PathBuf, exit_code: Option<i32>, stdout: &[u8]) -> Vec<PickerEvent> {
     if exit_code != Some(0) {
         return vec![];
     }
@@ -18,7 +17,7 @@ pub fn derive(state: &PickerState, requested_cwd: &PathBuf, exit_code: Option<i3
         if cwd != *requested_cwd {
             continue;
         }
-        return crate::plugin::picker::events_from::picker_event(state, PickerEvent::GitStatUpdated { cwd, stat });
+        return vec![PickerEvent::GitStatUpdated { cwd, stat }];
     }
 
     vec![]
@@ -35,11 +34,10 @@ mod tests {
 
     #[test]
     fn test_derive_git_stat_returns_update_for_matching_requested_cwd() {
-        let state = PickerState::default();
         let cwd = PathBuf::from("/tmp/repo");
         let stdout = b"/tmp/repo 2 1 3 0\n/tmp/other 4 5 6 0\n";
 
-        let events = derive(&state, &cwd, Some(0), stdout);
+        let events = derive(&cwd, Some(0), stdout);
 
         assert_eq!(
             events,
