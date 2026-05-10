@@ -20,8 +20,7 @@ pub fn run() -> rootcause::Result<()> {
         }
         Some("git-stat") => {
             for cwd in args.get(1..).into_iter().flatten() {
-                let stat = git_stat::run(cwd);
-                println!("{cwd} {stat}");
+                println!("{}", git_stat::run(cwd));
             }
             return Ok(());
         }

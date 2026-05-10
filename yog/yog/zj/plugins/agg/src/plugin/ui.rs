@@ -1,3 +1,4 @@
+use agg::Cmd;
 use agg::GitStat;
 use agg::TabIndicator;
 
@@ -14,6 +15,24 @@ pub fn agent_dot(indicator: TabIndicator, bg: &str, fg: &str) -> Option<String> 
         TabIndicator::Unseen => Some(format!("{BOLD}{AGENT_WAITING_UNSEEN_FG}•{RESET}{bg}{fg}")),
         TabIndicator::Busy => Some(format!("{BOLD}{AGENT_BUSY_FG}•{RESET}{bg}{fg}")),
         TabIndicator::NoAgent | TabIndicator::Seen => None,
+    }
+}
+
+pub fn cmd_label(cmd: &Cmd) -> &str {
+    match cmd {
+        Cmd::None => "",
+        Cmd::Running(cmd) => cmd,
+        Cmd::Agent { agent, .. } => agent.short_name(),
+    }
+}
+
+pub fn display_left(indicator: TabIndicator, cmd: &Cmd, bg: &str, fg: &str) -> String {
+    let dot = crate::plugin::ui::agent_dot(indicator, bg, fg);
+    let label = crate::plugin::ui::cmd_label(cmd);
+    match dot {
+        Some(dot) if label.is_empty() => dot,
+        Some(dot) => format!("{dot} {label}"),
+        None => label.to_string(),
     }
 }
 

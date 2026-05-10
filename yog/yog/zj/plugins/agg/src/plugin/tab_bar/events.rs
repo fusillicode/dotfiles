@@ -161,6 +161,7 @@ mod tests {
                         deletions: 1,
                         new_files: 2,
                         is_worktree: true,
+                        ..Default::default()
                     },
                 }
                 .to_string(),
@@ -187,6 +188,7 @@ mod tests {
                     deletions: 1,
                     new_files: 2,
                     is_worktree: true,
+                    ..Default::default()
                 },
             },
         }

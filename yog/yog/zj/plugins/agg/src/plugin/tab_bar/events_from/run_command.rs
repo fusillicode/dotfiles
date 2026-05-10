@@ -19,10 +19,10 @@ pub fn derive(state: &TabBarState, requested_cwd: &PathBuf, exit_code: Option<i3
 
     let output = String::from_utf8_lossy(stdout);
     for line in output.lines() {
-        let Ok((path, new_stat)) = GitStat::parse_line(line).inspect_err(|error| eprintln!("agg: {error}")) else {
+        let Ok(new_stat) = line.parse::<GitStat>().inspect_err(|error| eprintln!("agg: {error}")) else {
             continue;
         };
-        if path != *requested_cwd {
+        if new_stat.path != *requested_cwd {
             continue;
         }
         if current_tab.git_stat == new_stat {

@@ -29,7 +29,6 @@ mod tests {
     #[test]
     fn test_derive_pane_update_returns_event_before_apply() {
         let mut state = PickerState::default();
-        state.home_dir = PathBuf::from("/tmp");
         let manifest = PaneManifest {
             panes: std::iter::once((
                 0,
@@ -57,11 +56,12 @@ mod tests {
             state.frame(),
             vec![PickerRow {
                 selected: true,
-                cwd_label: "~/repo".to_string(),
-                summary: String::new(),
-                label: "cx".to_string(),
-                marker: agg::TabIndicator::Seen,
+                cwd_label: "/tmp/repo".to_string(),
+                branch_label: "-".to_string(),
                 git: agg::GitStat::default(),
+                cmd: agg::Cmd::agent(ytil_agents::agent::Agent::Codex, agg::AgentState::Acknowledged),
+                indicator: agg::TabIndicator::Seen,
+                session_summary: String::new(),
             }]
         );
     }

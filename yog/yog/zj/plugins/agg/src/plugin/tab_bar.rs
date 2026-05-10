@@ -76,7 +76,7 @@ impl StateSnapshotPayload {
             cwd: value.cwd.clone(),
             cmd: value.display_cmd(),
             indicator: value.tab_indicator(),
-            git_stat: value.git_stat,
+            git_stat: value.git_stat.clone(),
         }
     }
 }
@@ -151,7 +151,7 @@ impl From<&StateSnapshotPayload> for MessageToPlugin {
             cwd: value.cwd.clone(),
             cmd: value.cmd.clone(),
             indicator: value.indicator,
-            git_stat: value.git_stat,
+            git_stat: value.git_stat.clone(),
         };
         let mut args = BTreeMap::new();
         args.insert("type".to_string(), "state_snapshot".to_string());

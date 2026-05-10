@@ -87,7 +87,7 @@ impl TabBarState {
             }
             Event::GitStatChanged { new_stat } => {
                 if let Some(current_tab) = self.current_tab.as_mut() {
-                    current_tab.git_stat = *new_stat;
+                    current_tab.git_stat = new_stat.clone();
                     current_tab.seq = current_tab.seq.saturating_add(1);
                 }
             }

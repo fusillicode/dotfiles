@@ -1,6 +1,7 @@
-use std::path::Path;
 use std::path::PathBuf;
 
+use agg::AgentState;
+use agg::Cmd;
 use agg::GitStat;
 use agg::TabIndicator;
 use ytil_agents::agent::Agent;
@@ -27,8 +28,9 @@ pub struct PaneEntry {
     session_id: Option<String>,
     tab_active: bool,
     is_focused: bool,
+    branch: Option<String>,
     git: GitStat,
-    pub session_summary: Option<String>,
+    session_summary: Option<String>,
     pub session_display: Option<String>,
     pub session_search: Option<String>,
     search_text: String,
@@ -76,6 +78,7 @@ impl PaneEntry {
             session_id: None,
             tab_active: false,
             is_focused: false,
+            branch: None,
             git: GitStat::default(),
             session_summary: None,
             session_display: None,
@@ -185,19 +188,25 @@ impl PaneEntry {
     }
 
     pub fn apply_git_stat(&mut self, stat: GitStat) -> bool {
-        let changed = self.git != stat;
+        let branch = stat.branch.clone();
+        let branch_changed = self.branch != branch;
+        let stat_changed = self.git != stat;
+        self.branch = branch;
         self.git = stat;
-        changed
+        if branch_changed {
+            self.refresh_search_text();
+        }
+        branch_changed || stat_changed
     }
 
     pub fn apply_cwd(&mut self, cwd: PathBuf, stat: GitStat) -> bool {
         let cwd_changed = self.cwd.as_ref() != Some(&cwd);
         self.cwd = Some(cwd);
-        let stat_changed = self.apply_git_stat(stat);
+        let git_changed = self.apply_git_stat(stat);
         if cwd_changed {
             self.refresh_search_text();
         }
-        cwd_changed || stat_changed
+        cwd_changed || git_changed
     }
 
     pub fn attach_session(&mut self, sessions: &[SessionEntry]) -> bool {
@@ -252,18 +261,29 @@ impl PaneEntry {
         self.search_text.contains(query)
     }
 
-    pub fn row(&self, selected: bool, home_dir: &Path) -> PickerRow {
+    pub fn row(&self, selected: bool) -> PickerRow {
         PickerRow {
             selected,
             cwd_label: self
                 .cwd
                 .as_ref()
-                .map_or_else(|| String::from("-"), |cwd| ytil_tui::short_path(cwd, home_dir)),
-            summary: self.session_summary.clone().unwrap_or_default(),
-            label: self.label.clone().unwrap_or_default(),
-            marker: self.marker,
-            git: self.git,
+                .map_or_else(|| String::from("-"), |cwd| cwd.display().to_string()),
+            branch_label: self.branch.clone().unwrap_or_else(|| "-".to_string()),
+            git: self.git.clone(),
+            cmd: self.cmd(),
+            indicator: self.marker,
+            session_summary: self.session_summary.clone().unwrap_or_default(),
         }
+    }
+
+    fn cmd(&self) -> Cmd {
+        let agent_state = self.agent.map(|_| match self.marker {
+            TabIndicator::Busy => AgentState::Busy,
+            TabIndicator::Unseen => AgentState::NeedsAttention,
+            TabIndicator::NoAgent | TabIndicator::Seen => AgentState::Acknowledged,
+        });
+        let command = self.agent.is_none().then(|| self.label.clone()).flatten();
+        Cmd::from_parts(self.agent, agent_state, command)
     }
 
     fn refresh_search_text(&mut self) {
@@ -271,13 +291,14 @@ impl PaneEntry {
             .cwd
             .as_ref()
             .map_or_else(String::new, |cwd| cwd.display().to_string());
+        let branch = self.branch.as_deref().unwrap_or_default();
         let label = self.label.as_deref().unwrap_or_default();
         let command = self.command_args.join(" ");
         let session_display = self.session_display.as_deref().unwrap_or_default();
         let session_search = self.session_search.as_deref().unwrap_or_default();
         self.search_text = format!(
-            "{} {} {} {} {} {} {}",
-            self.tab_number, self.pane_id, cwd, command, label, session_display, session_search
+            "{} {} {} {} {} {} {} {}",
+            self.tab_number, self.pane_id, cwd, branch, command, label, session_display, session_search
         )
         .to_ascii_lowercase();
     }

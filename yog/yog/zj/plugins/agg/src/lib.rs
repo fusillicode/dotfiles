@@ -12,81 +12,59 @@ pub use ytil_tui::short_path;
 pub const AGENTS_PIPE: &str = "agg-agent";
 pub const EMPTY_FIELD: &str = "--";
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct GitStat {
+    pub path: PathBuf,
+    pub branch: Option<String>,
     pub insertions: usize,
     pub deletions: usize,
     pub new_files: usize,
     pub is_worktree: bool,
 }
 
-impl GitStat {
-    /// Parse one serialized git-stat line.
-    ///
-    /// # Errors
-    /// Returns [`ParseError`] when the line is missing fields or contains invalid numeric values.
-    pub fn parse_line(line: &str) -> Result<(PathBuf, Self), ParseError> {
-        let mut parts = line.rsplitn(5, ' ');
-        let is_worktree = parts
-            .next()
-            .ok_or(ParseError::Missing("worktree field"))
-            .and_then(|v| {
-                v.parse::<u8>().map_err(|_| ParseError::Invalid {
-                    field: "worktree",
-                    value: format!("{v:?}"),
-                })
-            })?
-            != 0;
-        let new_files = parts
-            .next()
-            .ok_or(ParseError::Missing("new_files field"))
-            .and_then(|v| {
-                v.parse().map_err(|_| ParseError::Invalid {
-                    field: "new_files",
-                    value: format!("{v:?}"),
-                })
-            })?;
-        let deletions = parts
-            .next()
-            .ok_or(ParseError::Missing("deletions field"))
-            .and_then(|v| {
-                v.parse().map_err(|_| ParseError::Invalid {
-                    field: "deletions",
-                    value: format!("{v:?}"),
-                })
-            })?;
-        let insertions = parts
-            .next()
-            .ok_or(ParseError::Missing("insertions field"))
-            .and_then(|v| {
-                v.parse().map_err(|_| ParseError::Invalid {
-                    field: "insertions",
-                    value: format!("{v:?}"),
-                })
-            })?;
-        let path = PathBuf::from(parts.next().ok_or(ParseError::Missing("path"))?);
-        Ok((
-            path,
-            Self {
-                insertions,
-                deletions,
-                new_files,
-                is_worktree,
-            },
-        ))
-    }
-}
-
 impl Display for GitStat {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let path = encode_git_stat_field(&self.path.display().to_string());
+        let branch = self.branch.as_deref().map(encode_git_stat_field).unwrap_or_default();
         write!(
             f,
-            "{} {} {} {}",
+            "{path}\t{branch}\t{}\t{}\t{}\t{}",
             self.insertions,
             self.deletions,
             self.new_files,
-            u8::from(self.is_worktree),
+            u8::from(self.is_worktree)
         )
+    }
+}
+
+impl std::str::FromStr for GitStat {
+    type Err = ParseError;
+
+    fn from_str(line: &str) -> Result<Self, Self::Err> {
+        let mut fields = line.split('\t');
+        let mut next = |name| fields.next().ok_or(ParseError::Missing(name));
+
+        let path = PathBuf::from(decode_git_stat_field(next("path")?, "path")?);
+        let branch = decode_git_stat_field(next("branch")?, "branch")?;
+        let insertions = parse_usize(next("ins")?, "ins")?;
+        let deletions = parse_usize(next("del")?, "del")?;
+        let new_files = parse_usize(next("new")?, "new")?;
+        let is_worktree = parse_bool(next("wt")?, "wt")?;
+        if fields.next().is_some() {
+            return Err(ParseError::Invalid {
+                field: "git_stat",
+                value: "too many fields".to_string(),
+            });
+        }
+
+        Ok(Self {
+            path,
+            branch: (!branch.is_empty()).then_some(branch),
+            insertions,
+            deletions,
+            new_files,
+            is_worktree,
+        })
     }
 }
 
@@ -361,6 +339,7 @@ impl TryFrom<(usize, &str)> for TabStateEntry {
                 deletions,
                 new_files,
                 is_worktree,
+                ..Default::default()
             },
         })
     }
@@ -380,6 +359,50 @@ fn decode_opt_path(val: &str) -> Option<PathBuf> {
     } else {
         Some(PathBuf::from(val))
     }
+}
+
+fn encode_git_stat_field(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for ch in value.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '\t' => out.push_str("\\t"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            _ => out.push(ch),
+        }
+    }
+    out
+}
+
+fn decode_git_stat_field(value: &str, name: &'static str) -> Result<String, ParseError> {
+    let mut out = String::with_capacity(value.len());
+    let mut chars = value.chars();
+    while let Some(ch) = chars.next() {
+        if ch != '\\' {
+            out.push(ch);
+            continue;
+        }
+        let Some(escaped) = chars.next() else {
+            return Err(ParseError::Invalid {
+                field: name,
+                value: "trailing escape".to_string(),
+            });
+        };
+        match escaped {
+            '\\' => out.push('\\'),
+            't' => out.push('\t'),
+            'n' => out.push('\n'),
+            'r' => out.push('\r'),
+            _ => {
+                return Err(ParseError::Invalid {
+                    field: name,
+                    value: format!("invalid escape \\{escaped}"),
+                });
+            }
+        }
+    }
+    Ok(out)
 }
 
 fn parse_bool(s: &str, name: &'static str) -> Result<bool, ParseError> {
@@ -408,25 +431,36 @@ mod tests {
 
     use super::*;
 
-    #[rstest]
-    #[case("/home/user/project 10 5 2 1", "/home/user/project", 10, 5, 2, true)]
-    #[case("/home/user/my project 10 5 2 0", "/home/user/my project", 10, 5, 2, false)]
-    fn test_git_stat_parse_line_when_line_varies_returns_expected_stat(
-        #[case] line: &str,
-        #[case] expected_path: &str,
-        #[case] insertions: usize,
-        #[case] deletions: usize,
-        #[case] new_files: usize,
-        #[case] is_worktree: bool,
-    ) {
-        let expected_stat = GitStat {
-            insertions,
-            deletions,
-            new_files,
-            is_worktree,
+    #[test]
+    fn test_git_stat_wire_roundtrip_when_fields_need_escaping_preserves_values() {
+        let stat = GitStat {
+            path: PathBuf::from("/tmp/re\\po\nx"),
+            branch: Some("feat\tone\\two".to_string()),
+            insertions: 2,
+            deletions: 1,
+            new_files: 3,
+            is_worktree: true,
         };
-        assert2::assert!(let Ok((path, stat)) = GitStat::parse_line(line));
-        pretty_assertions::assert_eq!((path, stat), (PathBuf::from(expected_path), expected_stat));
+
+        let line = stat.to_string();
+        assert2::assert!(let Ok(parsed) = line.parse::<GitStat>());
+
+        pretty_assertions::assert_eq!(line, "/tmp/re\\\\po\\nx\tfeat\\tone\\\\two\t2\t1\t3\t1");
+        pretty_assertions::assert_eq!(parsed, stat);
+    }
+
+    #[test]
+    fn test_git_stat_wire_parse_when_branch_empty_returns_none() {
+        assert2::assert!(let Ok(parsed) = "/tmp/repo\t\t0\t0\t0\t0".parse::<GitStat>());
+
+        pretty_assertions::assert_eq!(
+            parsed,
+            GitStat {
+                path: PathBuf::from("/tmp/repo"),
+                branch: None,
+                ..Default::default()
+            }
+        );
     }
 
     #[test]
@@ -441,6 +475,7 @@ mod tests {
                 deletions: 2,
                 new_files: 3,
                 is_worktree: true,
+                ..Default::default()
             },
         };
 
