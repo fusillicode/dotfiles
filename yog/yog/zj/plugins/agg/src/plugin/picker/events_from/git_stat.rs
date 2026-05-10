@@ -11,13 +11,16 @@ pub fn derive(requested_cwd: &PathBuf, exit_code: Option<i32>, stdout: &[u8]) ->
 
     let output = String::from_utf8_lossy(stdout);
     for line in output.lines() {
-        let Ok((cwd, stat)) = GitStat::parse_line(line).inspect_err(|error| eprintln!("agg picker: {error}")) else {
+        let Ok(stat) = line
+            .parse::<GitStat>()
+            .inspect_err(|error| eprintln!("agg picker: {error}"))
+        else {
             continue;
         };
-        if cwd != *requested_cwd {
+        if stat.path != *requested_cwd {
             continue;
         }
-        return vec![PickerEvent::GitStatUpdated { cwd, stat }];
+        return vec![PickerEvent::GitStatUpdated { stat }];
     }
 
     vec![]
@@ -33,23 +36,38 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_derive_git_stat_returns_update_for_matching_requested_cwd() {
+    fn test_derive_returns_branch_and_stat_for_matching_requested_cwd() {
         let cwd = PathBuf::from("/tmp/repo");
-        let stdout = b"/tmp/repo 2 1 3 0\n/tmp/other 4 5 6 0\n";
+        let stat = GitStat {
+            path: cwd.clone(),
+            branch: Some("main".to_string()),
+            insertions: 2,
+            deletions: 1,
+            new_files: 3,
+            is_worktree: false,
+        };
+        let stdout = stat.to_string();
 
-        let events = derive(&cwd, Some(0), stdout);
+        let events = derive(&cwd, Some(0), stdout.as_bytes());
 
-        assert_eq!(
-            events,
-            vec![PickerEvent::GitStatUpdated {
-                cwd,
-                stat: GitStat {
-                    insertions: 2,
-                    deletions: 1,
-                    new_files: 3,
-                    is_worktree: false,
-                },
-            }]
-        );
+        assert_eq!(events, vec![PickerEvent::GitStatUpdated { stat }]);
+    }
+
+    #[test]
+    fn test_derive_ignores_other_cwds() {
+        let cwd = PathBuf::from("/tmp/repo");
+        let stdout = GitStat {
+            path: PathBuf::from("/tmp/other"),
+            branch: Some("main".to_string()),
+            insertions: 2,
+            deletions: 1,
+            new_files: 3,
+            is_worktree: false,
+        }
+        .to_string();
+
+        let events = derive(&cwd, Some(0), stdout.as_bytes());
+
+        assert_eq!(events, vec![]);
     }
 }

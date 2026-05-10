@@ -119,7 +119,7 @@ impl TabRow {
         let bg = TAB_INACTIVE_BG;
         let cmd_fg = if self.active { TAB_DEFAULT_FG } else { PATH_INACTIVE_FG };
 
-        let left = display_left(self.indicator, &self.cmd, bg, cmd_fg);
+        let left = crate::plugin::ui::display_left(self.indicator, &self.cmd, bg, cmd_fg);
 
         let stats = crate::plugin::ui::git_stat_parts(&self.git);
         let stats_vis = stats
@@ -203,20 +203,6 @@ pub fn tab_index_at_row(frame: &[TabRow], click_row: usize, content_w: usize) ->
         y = y.saturating_add(height);
     }
     None
-}
-
-fn display_left(indicator: TabIndicator, cmd: &Cmd, bg: &str, fg: &str) -> String {
-    let dot = crate::plugin::ui::agent_dot(indicator, "", "");
-    let label = match cmd {
-        Cmd::None => String::new(),
-        Cmd::Running(cmd) => cmd.clone(),
-        Cmd::Agent { agent, .. } => agent.short_name().to_string(),
-    };
-    match dot {
-        Some(dot) if label.is_empty() => format!("{dot}{bg}{fg}"),
-        Some(dot) => format!("{dot} {bg}{fg}{label}"),
-        None => label,
-    }
 }
 
 /// Text width inside the content area: one column reserved for the left rail when `content_w >= 2`.
@@ -434,7 +420,7 @@ mod tests {
 
     #[test]
     fn test_display_left_unseen_uses_bold_attention_dot() {
-        let rendered = display_left(
+        let rendered = crate::plugin::ui::display_left(
             TabIndicator::Unseen,
             &Cmd::agent(Agent::Codex, AgentState::Acknowledged),
             TAB_INACTIVE_BG,
@@ -443,7 +429,7 @@ mod tests {
         assert_eq!(
             rendered,
             format!(
-                "{}{}•{} {TAB_INACTIVE_BG}{TAB_DEFAULT_FG}cx",
+                "{}{}•{}{TAB_INACTIVE_BG}{TAB_DEFAULT_FG} cx",
                 crate::plugin::ui::BOLD,
                 crate::plugin::ui::AGENT_WAITING_UNSEEN_FG,
                 crate::plugin::ui::RESET
@@ -453,7 +439,7 @@ mod tests {
 
     #[test]
     fn test_display_left_seen_renders_only_agent_name() {
-        let rendered = display_left(
+        let rendered = crate::plugin::ui::display_left(
             TabIndicator::Seen,
             &Cmd::agent(Agent::Codex, AgentState::Acknowledged),
             TAB_INACTIVE_BG,
@@ -464,7 +450,7 @@ mod tests {
 
     #[test]
     fn test_display_left_busy_uses_bold_dot() {
-        let rendered = display_left(
+        let rendered = crate::plugin::ui::display_left(
             TabIndicator::Busy,
             &Cmd::agent(Agent::Codex, AgentState::Acknowledged),
             TAB_INACTIVE_BG,
@@ -473,7 +459,7 @@ mod tests {
         assert_eq!(
             rendered,
             format!(
-                "{}{}•{} {TAB_INACTIVE_BG}{TAB_DEFAULT_FG}cx",
+                "{}{}•{}{TAB_INACTIVE_BG}{TAB_DEFAULT_FG} cx",
                 crate::plugin::ui::BOLD,
                 crate::plugin::ui::AGENT_BUSY_FG,
                 crate::plugin::ui::RESET
@@ -483,7 +469,7 @@ mod tests {
 
     #[test]
     fn test_display_left_no_agent_indicator_renders_only_running_cmd_label() {
-        let rendered = display_left(
+        let rendered = crate::plugin::ui::display_left(
             TabIndicator::NoAgent,
             &Cmd::Running("cargo".to_string()),
             TAB_INACTIVE_BG,
@@ -494,7 +480,8 @@ mod tests {
 
     #[test]
     fn test_display_left_no_agent_indicator_renders_nothing_for_empty_cmd() {
-        let rendered = display_left(TabIndicator::NoAgent, &Cmd::None, TAB_INACTIVE_BG, TAB_DEFAULT_FG);
+        let rendered =
+            crate::plugin::ui::display_left(TabIndicator::NoAgent, &Cmd::None, TAB_INACTIVE_BG, TAB_DEFAULT_FG);
         assert_eq!(rendered, "");
     }
 
@@ -520,7 +507,7 @@ mod tests {
             path_label: "-".to_string(),
             cmd: Cmd::None,
             indicator: TabIndicator::NoAgent,
-            git,
+            git: git.clone(),
         };
         let actual = TabRow::new(&tab, None, Cmd::None, TabIndicator::NoAgent, git, home);
         assert_eq!(actual, expected);

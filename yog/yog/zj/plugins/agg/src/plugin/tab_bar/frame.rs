@@ -28,7 +28,7 @@ fn compute_frame(state: &TabBarState) -> Vec<TabRow> {
                     current_tab.cwd.as_ref(),
                     cmd,
                     indicator,
-                    current_tab.git_stat,
+                    current_tab.git_stat.clone(),
                     state.home_dir.as_path(),
                 );
             }
@@ -38,7 +38,7 @@ fn compute_frame(state: &TabBarState) -> Vec<TabRow> {
                     remote.cwd.as_ref(),
                     remote.cmd.clone(),
                     remote.indicator,
-                    remote.git_stat,
+                    remote.git_stat.clone(),
                     state.home_dir.as_path(),
                 );
             }

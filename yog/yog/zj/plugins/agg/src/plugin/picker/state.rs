@@ -19,7 +19,6 @@ use crate::plugin::picker::ui::PickerRow;
 #[derive(Default)]
 pub struct PickerState {
     pub query: String,
-    pub home_dir: PathBuf,
     selected: usize,
     pane_entries: Vec<PaneEntry>,
     session_entries: Vec<SessionEntry>,
@@ -56,7 +55,7 @@ pub enum PickerEvent {
     CwdUpdated { pane_id: u32, cwd: PathBuf },
     CommandUpdated { pane_id: u32, command: Vec<String> },
     AgentUpdated { event: AgentEventPayload },
-    GitStatUpdated { cwd: PathBuf, stat: GitStat },
+    GitStatUpdated { stat: GitStat },
     SessionsUpdated { sessions: Vec<SessionEntry> },
 }
 
@@ -92,7 +91,7 @@ impl PickerState {
             PickerEvent::CwdUpdated { pane_id, cwd } => self.update_cwd(pane_id, &cwd),
             PickerEvent::CommandUpdated { pane_id, command } => self.update_command(pane_id, &command),
             PickerEvent::AgentUpdated { event } => self.update_agent(&event),
-            PickerEvent::GitStatUpdated { cwd, stat } => self.update_git_stat(&cwd, stat),
+            PickerEvent::GitStatUpdated { stat } => self.update_git_stat(&stat),
             PickerEvent::SessionsUpdated { sessions } => self.update_sessions(sessions),
         }
     }
@@ -228,11 +227,11 @@ impl PickerState {
     pub fn update_cwd(&mut self, pane_id: u32, cwd: &Path) -> bool {
         let cwd = cwd.to_path_buf();
         self.cwds_by_pane.insert(pane_id, cwd.clone());
-        let stat = self.git_stats_by_cwd.get(&cwd).copied().unwrap_or_default();
+        let git_stat = self.git_stats_by_cwd.get(&cwd);
         let mut changed = false;
         for entry in &mut self.pane_entries {
             if entry.pane_id == pane_id {
-                changed |= entry.apply_cwd(cwd.clone(), stat);
+                changed |= entry.apply_cwd(cwd.clone(), git_stat.cloned().unwrap_or_default());
             }
         }
         if changed {
@@ -354,7 +353,7 @@ impl PickerState {
     pub fn frame(&self) -> Vec<PickerRow> {
         self.filtered_entries()
             .enumerate()
-            .map(|(idx, entry)| entry.row(idx == self.selected, &self.home_dir))
+            .map(|(idx, entry)| entry.row(idx == self.selected))
             .collect()
     }
 
@@ -368,17 +367,18 @@ impl PickerState {
         if let Some(cwd) = entry.cwd.as_ref()
             && let Some(stat) = self.git_stats_by_cwd.get(cwd)
         {
-            entry.apply_git_stat(*stat);
+            entry.apply_git_stat(stat.clone());
         }
         entry
     }
 
-    fn update_git_stat(&mut self, cwd: &Path, stat: GitStat) -> bool {
-        let previous = self.git_stats_by_cwd.insert(cwd.to_path_buf(), stat);
-        let mut changed = previous != Some(stat);
+    fn update_git_stat(&mut self, stat: &GitStat) -> bool {
+        let cwd = stat.path.clone();
+        let previous = self.git_stats_by_cwd.insert(cwd.clone(), stat.clone());
+        let mut changed = previous.as_ref() != Some(stat);
         for entry in &mut self.pane_entries {
-            if entry.cwd.as_deref() == Some(cwd) {
-                changed |= entry.apply_git_stat(stat);
+            if entry.cwd.as_deref() == Some(cwd.as_path()) {
+                changed |= entry.apply_git_stat(stat.clone());
             }
         }
         changed
@@ -598,7 +598,7 @@ mod tests {
                 .iter()
                 .map(|row| row.cwd_label.as_str())
                 .collect::<Vec<_>>(),
-            vec!["~/t/pane-10", "~/t/pane-11", "~/t/pane-20", "~/t/pane-21",]
+            vec!["/tmp/pane-10", "/tmp/pane-11", "/tmp/pane-20", "/tmp/pane-21",]
         );
     }
 
@@ -904,7 +904,7 @@ mod tests {
     }
 
     #[test]
-    fn test_frame_shows_attached_ags_session_summary() {
+    fn test_frame_carries_attached_ags_session_summary() {
         let mut state = PickerState {
             pane_entries: vec![PaneEntry::new(
                 0,
@@ -932,7 +932,7 @@ mod tests {
 
         let frame = state.frame();
         assert_eq!(
-            frame.first().map(|row| row.summary.as_str()),
+            frame.first().map(|row| row.session_summary.as_str()),
             Some("how to solve this warning")
         );
     }
@@ -959,20 +959,20 @@ mod tests {
             ..Default::default()
         };
         let stat = agg::GitStat {
+            path: PathBuf::from("/tmp/repo"),
+            branch: Some("main".to_string()),
             insertions: 2,
             deletions: 1,
             new_files: 3,
             is_worktree: false,
         };
 
-        assert2::assert!(state.apply_event(PickerEvent::GitStatUpdated {
-            cwd: PathBuf::from("/tmp/repo"),
-            stat,
-        }));
+        assert2::assert!(state.apply_event(PickerEvent::GitStatUpdated { stat: stat.clone() }));
 
         let frame = state.frame();
-        assert_eq!(frame.first().map(|row| row.git), Some(stat));
-        assert_eq!(frame.get(1).map(|row| row.git), Some(agg::GitStat::default()));
+        assert_eq!(frame.first().map(|row| &row.git), Some(&stat));
+        assert_eq!(frame.first().map(|row| row.branch_label.as_str()), Some("main"));
+        assert_eq!(frame.get(1).map(|row| &row.git), Some(&agg::GitStat::default()));
     }
 
     #[test]
@@ -996,7 +996,7 @@ mod tests {
             },
         }));
         assert_eq!(
-            state.frame().first().map(|row| row.marker),
+            state.frame().first().map(|row| row.indicator),
             Some(agg::TabIndicator::Busy)
         );
 
@@ -1008,7 +1008,7 @@ mod tests {
             },
         }));
         assert_eq!(
-            state.frame().first().map(|row| row.marker),
+            state.frame().first().map(|row| row.indicator),
             Some(agg::TabIndicator::Unseen)
         );
 
@@ -1025,7 +1025,7 @@ mod tests {
         let _ = state.update_panes(&focused_manifest, |_| None, |_| Some(vec![String::from("codex")]));
 
         assert_eq!(
-            state.frame().first().map(|row| row.marker),
+            state.frame().first().map(|row| row.indicator),
             Some(agg::TabIndicator::Seen)
         );
     }
