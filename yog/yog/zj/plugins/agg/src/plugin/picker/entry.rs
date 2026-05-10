@@ -40,18 +40,15 @@ impl PaneEntry {
         cached_command: Option<Vec<String>>,
         tabs: &[TabInfo],
     ) -> Self {
-        let command_args = cached_command.unwrap_or_else(|| {
-            pane.terminal_command
-                .as_deref()
-                .map(|command| command.split_whitespace().map(str::to_string).collect())
-                .unwrap_or_default()
-        });
+        let command_args = cached_command
+            .or_else(|| pane.terminal_command_args.clone())
+            .unwrap_or_default();
         let mut entry = Self::new(
             pane.tab_position,
             pane.pane_id,
             cached_cwd,
             command_args,
-            crate::plugin::picker::entry::title_label_from_title(&pane.title),
+            pane.title_label.clone(),
         );
         entry.is_focused = pane.is_focused;
         entry.apply_tab_metadata(tabs);
@@ -96,7 +93,7 @@ impl PaneEntry {
 
     pub fn apply_command(&mut self, command_args: Vec<String>) {
         self.command_args = command_args;
-        self.agent = crate::plugin::picker::entry::agent_from_command_args(&self.command_args);
+        self.agent = crate::plugin::pane::agent_from_command_args(&self.command_args);
         self.session_id = crate::plugin::picker::entry::resume_session_id_from_command_args(&self.command_args);
         self.marker = if self.agent.is_some() {
             TabIndicator::Seen
@@ -106,7 +103,7 @@ impl PaneEntry {
         self.label = self
             .agent
             .map(|agent| agent.short_name().to_string())
-            .or_else(|| crate::plugin::picker::entry::label_from_command_args(&self.command_args))
+            .or_else(|| crate::plugin::pane::label_from_command_args(&self.command_args))
             .or_else(|| self.label.clone());
     }
 
@@ -157,7 +154,7 @@ impl PaneEntry {
                 if self.agent == Some(event.agent) {
                     self.agent = None;
                     self.marker = TabIndicator::NoAgent;
-                    self.label = crate::plugin::picker::entry::label_from_command_args(&self.command_args);
+                    self.label = crate::plugin::pane::label_from_command_args(&self.command_args);
                 }
             }
         }
@@ -239,26 +236,6 @@ pub fn sort_by_tab_order(pane_entries: &mut [PaneEntry], tabs: &[TabInfo]) {
     });
 }
 
-fn agent_from_command_args(args: &[String]) -> Option<Agent> {
-    let command = args.first()?;
-    Agent::detect(crate::plugin::picker::entry::command_name(command)).or_else(|| Agent::detect(&args.join(" ")))
-}
-
-fn command_name(command: &str) -> &str {
-    command.rsplit('/').next().unwrap_or(command)
-}
-
-fn label_from_command_args(args: &[String]) -> Option<String> {
-    let executable = args
-        .first()
-        .map(String::as_str)
-        .map(crate::plugin::picker::entry::command_name)?;
-    if executable.is_empty() || matches!(executable, "zsh" | "bash" | "fish") {
-        return None;
-    }
-    Some(executable.to_string())
-}
-
 fn matching_session<'a>(entry: &PaneEntry, sessions: &'a [SessionEntry]) -> Option<&'a SessionEntry> {
     let agent = entry.agent?;
     let session_id = entry.session_id.as_deref()?;
@@ -271,7 +248,7 @@ fn resume_session_id_from_command_args(args: &[String]) -> Option<String> {
     let command = args
         .first()
         .map(String::as_str)
-        .map(crate::plugin::picker::entry::command_name)?;
+        .map(crate::plugin::pane::command_name)?;
     match command {
         "codex" => crate::plugin::picker::entry::codex_resume_id(args),
         "claude" | "cursor-agent" => crate::plugin::picker::entry::resume_flag_id(args),
@@ -297,14 +274,4 @@ fn resume_flag_id(args: &[String]) -> Option<String> {
         }
     }
     None
-}
-
-fn title_label_from_title(title: &str) -> Option<String> {
-    let title = title.trim();
-    (!title.is_empty()
-        && !title.starts_with('~')
-        && !title.starts_with('/')
-        && title != "Pane"
-        && !title.starts_with("Pane "))
-    .then(|| ytil_tui::display_fixed_width(title, 8))
 }

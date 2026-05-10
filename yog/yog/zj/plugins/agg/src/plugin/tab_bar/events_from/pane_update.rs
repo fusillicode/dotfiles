@@ -8,12 +8,12 @@ use agg::TabIndicator;
 use zellij_tile::prelude::PaneInfo;
 use zellij_tile::prelude::PaneManifest;
 
+use crate::plugin::pane::FocusedPane;
+use crate::plugin::pane::FocusedPaneLabel;
 use crate::plugin::tab_bar::Event;
 use crate::plugin::tab_bar::StateSnapshotPayload;
 use crate::plugin::tab_bar::TabBarState;
 use crate::plugin::tab_bar::current_tab::CurrentTab;
-use crate::plugin::tab_bar::current_tab::FocusedPane;
-use crate::plugin::tab_bar::current_tab::FocusedPaneLabel;
 
 pub fn derive(
     state: &TabBarState,
@@ -65,7 +65,7 @@ pub fn derive(
     let new_pane_ids: HashSet<u32> = displayable_terminal_panes(panes).map(|pane| pane.id).collect();
     let new_focused_pane = displayable_terminal_panes(panes)
         .find(|pane| pane.is_focused)
-        .and_then(crate::plugin::tab_bar::pane::focused_pane_from_pane_info);
+        .and_then(crate::plugin::pane::focused_pane_from_pane_info);
     let new_display_pane = display_pane_for_manifest_tab(panes, display_tab_is_active);
 
     if new_pane_ids != current_tab.pane_ids {
@@ -155,7 +155,7 @@ fn display_cwd_change(
 fn displayable_terminal_panes(panes: &[PaneInfo]) -> impl Iterator<Item = &PaneInfo> {
     panes
         .iter()
-        .filter(|pane| crate::plugin::tab_bar::pane::is_displayable_terminal_pane(pane))
+        .filter(|pane| crate::plugin::pane::is_displayable_terminal_pane(pane))
 }
 
 fn display_pane_for_manifest_tab(panes: &[PaneInfo], tab_is_active: bool) -> Option<FocusedPane> {
@@ -163,10 +163,10 @@ fn display_pane_for_manifest_tab(panes: &[PaneInfo], tab_is_active: bool) -> Opt
     let mut first_displayable_terminal_pane = None;
     for pane in displayable_terminal_panes(panes) {
         if first_displayable_terminal_pane.is_none() {
-            first_displayable_terminal_pane = crate::plugin::tab_bar::pane::focused_pane_from_pane_info(pane);
+            first_displayable_terminal_pane = crate::plugin::pane::focused_pane_from_pane_info(pane);
         }
         if pane.is_focused {
-            focused_pane = crate::plugin::tab_bar::pane::focused_pane_from_pane_info(pane);
+            focused_pane = crate::plugin::pane::focused_pane_from_pane_info(pane);
         }
     }
     if tab_is_active {
@@ -236,7 +236,7 @@ fn snapshot_from_manifest_tab(
     pane: &PaneInfo,
     cwd: Option<PathBuf>,
 ) -> StateSnapshotPayload {
-    let cmd = crate::plugin::tab_bar::pane::detected_agent_from_pane_info(pane, display_pane).map_or_else(
+    let cmd = crate::plugin::pane::detected_agent_from_pane_info(pane, display_pane).map_or_else(
         || {
             display_pane.label.as_ref().map_or(Cmd::None, |label| match label {
                 FocusedPaneLabel::TerminalCommand(command) | FocusedPaneLabel::Title(command) => {
@@ -307,7 +307,7 @@ fn agent_changes_from_manifest(
         .pane_state_by_pane
         .get(&display_pane.id)
         .map(|pane_state| pane_state.agent);
-    let detected_agent = crate::plugin::tab_bar::pane::detected_agent_from_pane_info(pane, display_pane);
+    let detected_agent = crate::plugin::pane::detected_agent_from_pane_info(pane, display_pane);
     let has_terminal_command = pane
         .terminal_command
         .as_ref()
@@ -347,11 +347,9 @@ fn agent_changes_from_manifest(
         if other_pane.exited || other_pane.is_held {
             continue;
         }
-        let detected_agent = crate::plugin::tab_bar::pane::focused_pane_from_pane_info(other_pane)
+        let detected_agent = crate::plugin::pane::focused_pane_from_pane_info(other_pane)
             .as_ref()
-            .and_then(|focused_pane| {
-                crate::plugin::tab_bar::pane::detected_agent_from_pane_info(other_pane, focused_pane)
-            });
+            .and_then(|focused_pane| crate::plugin::pane::detected_agent_from_pane_info(other_pane, focused_pane));
         let has_terminal_command = other_pane
             .terminal_command
             .as_ref()
@@ -379,13 +377,13 @@ mod tests {
     use zellij_tile::prelude::PaneInfo;
     use zellij_tile::prelude::TabInfo;
 
+    use crate::plugin::pane::FocusedPane;
+    use crate::plugin::pane::FocusedPaneLabel;
     use crate::plugin::tab_bar::Event;
     use crate::plugin::tab_bar::StateSnapshotPayload;
     use crate::plugin::tab_bar::TabBarState;
     use crate::plugin::tab_bar::current_tab::AgentPanePhase;
     use crate::plugin::tab_bar::current_tab::CurrentTab;
-    use crate::plugin::tab_bar::current_tab::FocusedPane;
-    use crate::plugin::tab_bar::current_tab::FocusedPaneLabel;
     use crate::plugin::tab_bar::current_tab::PaneFocus;
     use crate::plugin::tab_bar::events_from::pane_update::*;
     use crate::plugin::tab_bar::test_support::*;
