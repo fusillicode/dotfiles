@@ -16,9 +16,11 @@ use crate::diagnostics::filters::lsps::LspFilter;
 /// Contains false-positive spelling suggestions to suppress.
 static TYPOS_BLACKLIST: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     set![
+        "AGS",
         "accidentes",
         "aci",
         "administrar",
+        "ags",
         "anual",
         "aplicable",
         "autor",

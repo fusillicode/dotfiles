@@ -5,6 +5,7 @@ use std::process::Command;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 use rusqlite::Connection;
+use rusqlite::OpenFlags;
 use rusqlite::OptionalExtension;
 
 use crate::agent::Agent;
@@ -89,7 +90,7 @@ fn load_known_workspaces() -> rootcause::Result<Vec<PathBuf>> {
 }
 
 fn read_meta_hex(store_db: &Path) -> rootcause::Result<Option<String>> {
-    let connection = Connection::open(store_db)
+    let connection = Connection::open_with_flags(store_db, OpenFlags::SQLITE_OPEN_READ_ONLY)
         .context("failed to open Cursor store db")
         .attach_with(|| format!("store_db={}", store_db.display()))?;
     Ok(connection
