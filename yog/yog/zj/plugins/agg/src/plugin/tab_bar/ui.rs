@@ -42,13 +42,23 @@ impl TabRow {
         git: GitStat,
         home: &Path,
     ) -> Self {
-        let path_label = cwd.map_or_else(|| tab.name.clone(), |path| ytil_tui::short_path(path, home));
+        let path_label = cwd.map_or_else(|| String::from("-"), |path| ytil_tui::short_path(path, home));
         Self {
             active: tab.active,
             path_label,
             cmd,
             indicator,
             git,
+        }
+    }
+
+    pub fn placeholder(tab: &TabInfo) -> Self {
+        Self {
+            active: tab.active,
+            path_label: tab.name.clone(),
+            cmd: Cmd::None,
+            indicator: TabIndicator::NoAgent,
+            git: GitStat::default(),
         }
     }
 
@@ -310,7 +320,7 @@ mod tests {
     use pretty_assertions::assert_eq;
     use ytil_agents::agent::Agent;
 
-    use super::*;
+    use crate::plugin::tab_bar::ui::*;
 
     #[test]
     fn test_tab_row_new_active_with_path() {
@@ -433,7 +443,7 @@ mod tests {
 
         let expected = TabRow {
             active: true,
-            path_label: "agent-tab".to_string(),
+            path_label: "-".to_string(),
             cmd: Cmd::agent(Agent::Claude, AgentState::Busy),
             indicator: TabIndicator::Busy,
             git: GitStat::default(),
@@ -450,16 +460,13 @@ mod tests {
     }
 
     #[test]
-    fn test_tab_row_new_with_no_focused_pane() {
+    fn test_tab_row_placeholder_uses_tab_name() {
         let tab = TabInfo {
             name: "blank".to_string(),
             active: true,
             position: 3,
             ..Default::default()
         };
-
-        let git = GitStat::default();
-        let home = Path::new("/tmp");
 
         let expected = TabRow {
             active: true,
@@ -468,7 +475,7 @@ mod tests {
             indicator: TabIndicator::NoAgent,
             git: GitStat::default(),
         };
-        let actual = TabRow::new(&tab, None, Cmd::None, TabIndicator::NoAgent, git, home);
+        let actual = TabRow::placeholder(&tab);
         assert_eq!(actual, expected);
     }
 
@@ -547,7 +554,7 @@ mod tests {
 
         let expected = TabRow {
             active: true,
-            path_label: "git-tab".to_string(),
+            path_label: "-".to_string(),
             cmd: Cmd::None,
             indicator: TabIndicator::NoAgent,
             git,

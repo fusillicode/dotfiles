@@ -1,8 +1,8 @@
-use crate::plugin::events::StateEvent;
-use crate::plugin::main::StateSnapshotPayload;
-use crate::plugin::state::State;
+use crate::plugin::tab_bar::Event;
+use crate::plugin::tab_bar::StateSnapshotPayload;
+use crate::plugin::tab_bar::TabBarState;
 
-pub fn derive(state: &State, source_plugin_id: u32, snapshot: &StateSnapshotPayload) -> Vec<StateEvent> {
+pub fn derive(state: &TabBarState, source_plugin_id: u32, snapshot: &StateSnapshotPayload) -> Vec<Event> {
     if source_plugin_id == state.plugin_id
         || state.current_tab_id() == Some(snapshot.tab_id)
         || !state.all_tabs.iter().any(|tab| tab.tab_id == snapshot.tab_id)
@@ -21,7 +21,7 @@ pub fn derive(state: &State, source_plugin_id: u32, snapshot: &StateSnapshotPayl
         .map(|(&plugin_id, _)| plugin_id)
         .collect();
 
-    vec![StateEvent::RemoteTabUpdated {
+    vec![Event::RemoteTabUpdated {
         source_plugin_id,
         snapshot: snapshot.clone(),
         evict_ids,

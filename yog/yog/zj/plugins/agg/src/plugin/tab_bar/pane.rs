@@ -1,11 +1,15 @@
 use ytil_agents::agent::Agent;
 use zellij_tile::prelude::PaneInfo;
 
-use crate::plugin::state::current_tab::FocusedPane;
-use crate::plugin::state::current_tab::FocusedPaneLabel;
+use crate::plugin::tab_bar::current_tab::FocusedPane;
+use crate::plugin::tab_bar::current_tab::FocusedPaneLabel;
+
+pub const fn is_displayable_terminal_pane(pane: &PaneInfo) -> bool {
+    !pane.is_plugin && !pane.is_suppressed
+}
 
 pub fn focused_pane_from_pane_info(pane: &PaneInfo) -> Option<FocusedPane> {
-    if pane.is_plugin || pane.exited || pane.is_held {
+    if !is_displayable_terminal_pane(pane) {
         return None;
     }
 
@@ -43,9 +47,6 @@ pub fn detected_agent_from_pane_info(pane: &PaneInfo, focused_pane: &FocusedPane
 }
 
 pub fn focused_pane_title_label(pane: &PaneInfo) -> Option<String> {
-    if pane.exited || pane.is_held {
-        return None;
-    }
     let title = pane.title.trim();
     (!title.is_empty()
         && !title.starts_with('~')
@@ -68,8 +69,28 @@ pub fn parse_running_command(command: &str) -> Option<String> {
 mod tests {
     use pretty_assertions::assert_eq;
 
-    use super::*;
-    use crate::plugin::state::test_support::*;
+    use crate::plugin::tab_bar::pane::*;
+    use crate::plugin::tab_bar::test_support::*;
+
+    #[test]
+    fn test_is_displayable_terminal_pane_matches_picker_visibility() {
+        assert!(is_displayable_terminal_pane(&terminal_pane_with_command(
+            42, true, "zsh"
+        )));
+        assert!(is_displayable_terminal_pane(&PaneInfo {
+            exited: true,
+            ..terminal_pane_with_command(43, false, "gkg")
+        }));
+        assert!(is_displayable_terminal_pane(&PaneInfo {
+            is_held: true,
+            ..terminal_pane_with_command(44, false, "gkg")
+        }));
+        assert!(!is_displayable_terminal_pane(&plugin_pane(7)));
+        assert!(!is_displayable_terminal_pane(&PaneInfo {
+            is_suppressed: true,
+            ..terminal_pane_with_command(45, false, "zsh")
+        }));
+    }
 
     #[test]
     fn test_parse_running_command_filters_shells() {
@@ -118,6 +139,13 @@ mod tests {
         assert_eq!(
             focused_pane_title_label(&terminal_pane_with_title(42, true, "/tmp/project")),
             None
+        );
+        assert_eq!(
+            focused_pane_title_label(&PaneInfo {
+                is_held: true,
+                ..terminal_pane_with_title(43, false, "gkg")
+            }),
+            Some("gkg".to_string())
         );
         assert_eq!(
             focused_pane_title_label(&terminal_pane_with_title(42, true, "Cursor Agent")),
