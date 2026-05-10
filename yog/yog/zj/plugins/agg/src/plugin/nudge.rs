@@ -81,8 +81,8 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use crate::plugin::nudge::*;
-    use crate::plugin::tab_bar::current_tab::FocusedPane;
-    use crate::plugin::tab_bar::current_tab::FocusedPaneLabel;
+    use crate::plugin::pane::FocusedPane;
+    use crate::plugin::pane::FocusedPaneLabel;
     use crate::plugin::tab_bar::current_tab::PaneFocus;
     use crate::plugin::tab_bar::test_support::*;
 

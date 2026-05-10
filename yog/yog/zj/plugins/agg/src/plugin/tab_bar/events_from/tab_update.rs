@@ -1,8 +1,8 @@
 use zellij_tile::prelude::TabInfo;
 
+use crate::plugin::pane::FocusedPane;
 use crate::plugin::tab_bar::Event;
 use crate::plugin::tab_bar::TabBarState;
-use crate::plugin::tab_bar::current_tab::FocusedPane;
 
 pub fn derive(state: &TabBarState, new_tabs: &mut [TabInfo], landing_focus: Option<FocusedPane>) -> Vec<Event> {
     new_tabs.sort_by_key(|tab| tab.position);

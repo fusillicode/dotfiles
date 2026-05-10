@@ -1,8 +1,8 @@
+use crate::plugin::pane::FocusedPane;
 use crate::plugin::tab_bar::Event;
 use crate::plugin::tab_bar::TabBarState;
 use crate::plugin::tab_bar::current_tab::AgentPanePhase;
 use crate::plugin::tab_bar::current_tab::CurrentTab;
-use crate::plugin::tab_bar::current_tab::FocusedPane;
 
 pub fn derive(state: &TabBarState, active_tab_id: usize, landing_focus: Option<FocusedPane>) -> Vec<Event> {
     if state.known_active_tab_id == Some(active_tab_id) {
@@ -62,12 +62,12 @@ mod tests {
     use ytil_agents::agent::Agent;
     use zellij_tile::prelude::TabInfo;
 
+    use crate::plugin::pane::FocusedPane;
+    use crate::plugin::pane::FocusedPaneLabel;
     use crate::plugin::tab_bar::Event;
     use crate::plugin::tab_bar::TabBarState;
     use crate::plugin::tab_bar::current_tab::AgentPanePhase;
     use crate::plugin::tab_bar::current_tab::CurrentTab;
-    use crate::plugin::tab_bar::current_tab::FocusedPane;
-    use crate::plugin::tab_bar::current_tab::FocusedPaneLabel;
     use crate::plugin::tab_bar::current_tab::PaneFocus;
     use crate::plugin::tab_bar::events_from::active_tab::*;
     use crate::plugin::tab_bar::test_support::*;

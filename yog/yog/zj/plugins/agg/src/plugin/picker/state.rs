@@ -77,8 +77,8 @@ pub struct SessionEntry {
 pub struct PaneObservation {
     pub tab_position: usize,
     pub pane_id: u32,
-    pub terminal_command: Option<String>,
-    pub title: String,
+    pub terminal_command_args: Option<Vec<String>>,
+    pub title_label: Option<String>,
     pub is_focused: bool,
     cwd: Option<PathBuf>,
     command: Option<Vec<String>>,
@@ -170,15 +170,21 @@ impl PickerState {
     ) -> Vec<PaneObservation> {
         let mut observations = Vec::new();
         for (&tab_position, panes) in &manifest.panes {
-            for pane in panes.iter().filter(|pane| !pane.is_plugin && !pane.is_suppressed) {
+            for pane in panes
+                .iter()
+                .filter(|pane| crate::plugin::pane::is_displayable_terminal_pane(pane))
+            {
                 let cwd = (!self.cwds_by_pane.contains_key(&pane.id))
                     .then(|| resolve_pane_cwd(pane.id))
                     .flatten();
                 observations.push(PaneObservation {
                     tab_position,
                     pane_id: pane.id,
-                    terminal_command: pane.terminal_command.clone(),
-                    title: pane.title.clone(),
+                    terminal_command_args: pane
+                        .terminal_command
+                        .as_deref()
+                        .map(|command| command.split_whitespace().map(str::to_string).collect()),
+                    title_label: crate::plugin::pane::title_label_from_title(&pane.title),
                     is_focused: pane.is_focused,
                     cwd,
                     command: resolve_pane_command(pane.id),

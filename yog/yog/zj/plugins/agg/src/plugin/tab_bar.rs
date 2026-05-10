@@ -20,8 +20,8 @@ use zellij_tile::prelude::PipeMessage;
 use zellij_tile::prelude::TabInfo;
 
 use crate::plugin::nudge::Nudge;
+use crate::plugin::pane::FocusedPane;
 use crate::plugin::tab_bar::current_tab::CurrentTab;
-use crate::plugin::tab_bar::current_tab::FocusedPane;
 use crate::plugin::tab_bar::events::PipeEvent;
 use crate::plugin::tab_bar::events::PipeEventError;
 use crate::plugin::tab_bar::ui::TabRow;
@@ -30,7 +30,6 @@ pub mod current_tab;
 pub mod events;
 pub mod events_from;
 mod frame;
-pub mod pane;
 mod queries;
 mod state_transitions;
 mod tabs;
@@ -452,7 +451,7 @@ where
     if let Some((focused_tab_position, focused_pane_id)) = get_focused_pane_info()
         && focused_tab_position == active_tab_position
         && let Some(pane) = get_pane_info(focused_pane_id)
-        && let Some(focused_pane) = crate::plugin::tab_bar::pane::focused_pane_from_pane_info(&pane)
+        && let Some(focused_pane) = crate::plugin::pane::focused_pane_from_pane_info(&pane)
     {
         return Some(focused_pane);
     }
@@ -463,7 +462,7 @@ where
         if !pane.is_focused {
             return None;
         }
-        crate::plugin::tab_bar::pane::focused_pane_from_pane_info(&pane)
+        crate::plugin::pane::focused_pane_from_pane_info(&pane)
     })
 }
 
@@ -593,10 +592,10 @@ mod tests {
     use zellij_tile::prelude::PipeSource;
     use zellij_tile::prelude::TabInfo;
 
+    use crate::plugin::pane::FocusedPane;
+    use crate::plugin::pane::FocusedPaneLabel;
     use crate::plugin::tab_bar::AGG_SYNC_PIPE;
     use crate::plugin::tab_bar::current_tab::CurrentTab;
-    use crate::plugin::tab_bar::current_tab::FocusedPane;
-    use crate::plugin::tab_bar::current_tab::FocusedPaneLabel;
     use crate::plugin::tab_bar::events::PipeEvent;
     use crate::plugin::tab_bar::events::PipeEventError;
 

@@ -2,12 +2,12 @@ use std::collections::HashSet;
 
 use zellij_tile::prelude::TabInfo;
 
+use crate::plugin::pane::FocusedPane;
 use crate::plugin::tab_bar::Event;
 use crate::plugin::tab_bar::StateSnapshotPayload;
 use crate::plugin::tab_bar::TabBarState;
 use crate::plugin::tab_bar::current_tab::AgentPanePhase;
 use crate::plugin::tab_bar::current_tab::CurrentTab;
-use crate::plugin::tab_bar::current_tab::FocusedPane;
 
 impl TabBarState {
     pub fn apply_all(&mut self, events: &[Event]) -> bool {
@@ -201,7 +201,7 @@ mod tests {
     use ytil_agents::agent::AgentEventPayload;
 
     use crate::plugin::nudge::Nudge;
-    use crate::plugin::tab_bar::current_tab::FocusedPaneLabel;
+    use crate::plugin::pane::FocusedPaneLabel;
     use crate::plugin::tab_bar::current_tab::PaneFocus;
     use crate::plugin::tab_bar::state_transitions::*;
     use crate::plugin::tab_bar::test_support::*;

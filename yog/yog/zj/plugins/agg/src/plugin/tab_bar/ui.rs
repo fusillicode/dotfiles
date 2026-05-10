@@ -8,21 +8,14 @@ use agg::TabIndicator;
 use zellij_tile::prelude::*;
 
 const INFO_ROWS: usize = 1;
-const BOLD: &str = "\x1b[1m";
 const SEPARATOR: char = '\u{2502}';
 
 const SEP_COLOR: &str = "\x1b[38;2;50;50;50m";
-const GIT_NEW_LINES_FG: &str = "\x1b[38;2;140;228;121m";
-const GIT_DEL_LINES_FG: &str = "\x1b[38;2;236;99;92m";
-const GIT_NEW_FILES_FG: &str = "\x1b[38;2;0;255;255m";
-const AGENT_WAITING_UNSEEN_FG: &str = "\x1b[38;2;255;0;0m";
-const AGENT_BUSY_FG: &str = "\x1b[38;2;255;170;51m";
 const TAB_INACTIVE_BG: &str = "\x1b[48;2;0;19;0m";
 const TAB_DEFAULT_FG: &str = "\x1b[39m";
 const PATH_INACTIVE_FG: &str = "\x1b[38;2;119;119;119m";
 const RAIL_ACTIVE_FG: &str = "\x1b[38;2;106;106;223m";
 const RAIL_INACTIVE_FG: &str = "\x1b[38;2;0;19;0m";
-const RESET: &str = "\x1b[0m";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TabRow {
@@ -77,13 +70,13 @@ impl TabRow {
             let row = y.saturating_add(1);
             let prefix = if content_w >= 2 {
                 if self.active {
-                    format!("\x1b[{row};1H{bg}{rail}{bg}{BOLD}")
+                    format!("\x1b[{row};1H{bg}{rail}{bg}{}", crate::plugin::ui::BOLD)
                 } else {
                     format!("\x1b[{row};1H{bg}{rail}{bg}")
                 }
             } else {
                 if self.active {
-                    format!("\x1b[{row};1H{bg}{BOLD}")
+                    format!("\x1b[{row};1H{bg}{}", crate::plugin::ui::BOLD)
                 } else {
                     format!("\x1b[{row};1H{bg}")
                 }
@@ -91,8 +84,8 @@ impl TabRow {
             buf.push_str(&prefix);
 
             {
-                let padded = pad(line, inner_w);
-                let _ = write!(buf, "{path_fg}{padded}{RESET}");
+                let padded = crate::plugin::ui::pad(line, inner_w);
+                let _ = write!(buf, "{path_fg}{padded}{}", crate::plugin::ui::RESET);
             }
 
             write_separator(buf, row, sep_col);
@@ -103,16 +96,20 @@ impl TabRow {
     fn write_blank_line(&self, buf: &mut String, row_1based: usize, content_w: usize, sep_col: usize) {
         let inner_w = tab_inner_width(content_w);
         let bg = TAB_INACTIVE_BG;
-        let blank = pad("", inner_w);
+        let blank = crate::plugin::ui::pad("", inner_w);
         if content_w >= 2 {
             let (rail_color, rail_char) = if self.active {
                 (RAIL_ACTIVE_FG, '▎')
             } else {
                 (RAIL_INACTIVE_FG, '▏')
             };
-            let _ = write!(buf, "\x1b[{row_1based};1H{bg}{rail_color}{rail_char}{bg}{blank}{RESET}");
+            let _ = write!(
+                buf,
+                "\x1b[{row_1based};1H{bg}{rail_color}{rail_char}{bg}{blank}{}",
+                crate::plugin::ui::RESET
+            );
         } else {
-            let _ = write!(buf, "\x1b[{row_1based};1H{bg}{blank}{RESET}");
+            let _ = write!(buf, "\x1b[{row_1based};1H{bg}{blank}{}", crate::plugin::ui::RESET);
         }
         write_separator(buf, row_1based, sep_col);
     }
@@ -124,14 +121,14 @@ impl TabRow {
 
         let left = display_left(self.indicator, &self.cmd, bg, cmd_fg);
 
-        let stats = format_git_stat_parts(&self.git);
+        let stats = crate::plugin::ui::git_stat_parts(&self.git);
         let stats_vis = stats
             .iter()
             .map(|(_, s)| s.chars().count())
             .sum::<usize>()
             .saturating_add(stats.len().saturating_sub(1));
 
-        let left_vis = visible_len(&left);
+        let left_vis = crate::plugin::ui::visible_len(&left);
         let gap = inner_w.saturating_sub(left_vis.saturating_add(stats_vis));
 
         let rail = if content_w >= 2 {
@@ -157,7 +154,7 @@ impl TabRow {
                 buf.push_str(text);
             }
         }
-        buf.push_str(RESET);
+        buf.push_str(crate::plugin::ui::RESET);
         write_separator(buf, row_1based, sep_col);
     }
 }
@@ -186,8 +183,8 @@ pub fn render_frame(frame: &[TabRow], rows: usize, cols: usize, buf: &mut String
 
     for row in y..rows {
         let r = row.saturating_add(1);
-        let blank = pad("", content_w);
-        let _ = write!(buf, "\x1b[{r};1H{TAB_INACTIVE_BG}{blank}{RESET}");
+        let blank = crate::plugin::ui::pad("", content_w);
+        let _ = write!(buf, "\x1b[{r};1H{TAB_INACTIVE_BG}{blank}{}", crate::plugin::ui::RESET);
         write_separator(buf, r, sep_col);
     }
 }
@@ -209,37 +206,17 @@ pub fn tab_index_at_row(frame: &[TabRow], click_row: usize, content_w: usize) ->
 }
 
 fn display_left(indicator: TabIndicator, cmd: &Cmd, bg: &str, fg: &str) -> String {
-    let dot = match indicator {
-        TabIndicator::NoAgent | TabIndicator::Seen => None,
-        TabIndicator::Unseen => Some(format!("{BOLD}{AGENT_WAITING_UNSEEN_FG}•{RESET}")),
-        TabIndicator::Busy => Some(format!("{BOLD}{AGENT_BUSY_FG}•{RESET}")),
-    };
+    let dot = crate::plugin::ui::agent_dot(indicator, "", "");
     let label = match cmd {
         Cmd::None => String::new(),
         Cmd::Running(cmd) => cmd.clone(),
         Cmd::Agent { agent, .. } => agent.short_name().to_string(),
     };
-
     match dot {
         Some(dot) if label.is_empty() => format!("{dot}{bg}{fg}"),
         Some(dot) => format!("{dot} {bg}{fg}{label}"),
         None => label,
     }
-}
-
-/// Compact tokens; `write_info_line` inserts exactly one ASCII space between each part.
-fn format_git_stat_parts(git_stat: &GitStat) -> Vec<(&'static str, String)> {
-    let mut stats = Vec::new();
-    if git_stat.insertions > 0 {
-        stats.push((GIT_NEW_LINES_FG, format!("+{}", git_stat.insertions)));
-    }
-    if git_stat.deletions > 0 {
-        stats.push((GIT_DEL_LINES_FG, format!("-{}", git_stat.deletions)));
-    }
-    if git_stat.new_files > 0 {
-        stats.push((GIT_NEW_FILES_FG, format!("?{}", git_stat.new_files)));
-    }
-    stats
 }
 
 /// Text width inside the content area: one column reserved for the left rail when `content_w >= 2`.
@@ -252,25 +229,11 @@ fn tab_inner_width(content_w: usize) -> usize {
 }
 
 fn write_separator(buf: &mut String, row_1based: usize, col: usize) {
-    let _ = write!(buf, "\x1b[{row_1based};{col}H{SEP_COLOR}{SEPARATOR}{RESET}");
-}
-
-/// Count visible characters, skipping ANSI escape sequences.
-fn visible_len(s: &str) -> usize {
-    let mut len = 0_usize;
-    let mut in_escape = false;
-    for c in s.chars() {
-        if in_escape {
-            if c == 'm' {
-                in_escape = false;
-            }
-        } else if c == '\x1b' {
-            in_escape = true;
-        } else {
-            len = len.saturating_add(1);
-        }
-    }
-    len
+    let _ = write!(
+        buf,
+        "\x1b[{row_1based};{col}H{SEP_COLOR}{SEPARATOR}{}",
+        crate::plugin::ui::RESET
+    );
 }
 
 fn wrap_lines(text: &str, width: usize) -> Vec<String> {
@@ -293,21 +256,6 @@ fn wrap_lines(text: &str, width: usize) -> Vec<String> {
         lines.push(line);
     }
     lines
-}
-
-fn pad(s: &str, width: usize) -> String {
-    let chars: Vec<char> = s.chars().collect();
-    if chars.len() >= width {
-        return chars.into_iter().take(width).collect();
-    }
-    let mut out = String::with_capacity(width);
-    for c in &chars {
-        out.push(*c);
-    }
-    for _ in chars.len()..width {
-        out.push(' ');
-    }
-    out
 }
 
 #[cfg(test)]
@@ -401,7 +349,10 @@ mod tests {
         assert_eq!(
             actual,
             format!(
-                "\x1b[1;1H{TAB_INACTIVE_BG}{RAIL_ACTIVE_FG}▎{TAB_INACTIVE_BG}{BOLD}{TAB_DEFAULT_FG}tab{RESET}\x1b[1;5H{SEP_COLOR}{SEPARATOR}{RESET}"
+                "\x1b[1;1H{TAB_INACTIVE_BG}{RAIL_ACTIVE_FG}▎{TAB_INACTIVE_BG}{}{TAB_DEFAULT_FG}tab{}\x1b[1;5H{SEP_COLOR}{SEPARATOR}{}",
+                crate::plugin::ui::BOLD,
+                crate::plugin::ui::RESET,
+                crate::plugin::ui::RESET
             )
         );
     }
@@ -423,10 +374,12 @@ mod tests {
         assert_eq!(
             actual,
             format!(
-                "\x1b[1;1H{TAB_INACTIVE_BG}{RAIL_INACTIVE_FG}▏{TAB_INACTIVE_BG}{PATH_INACTIVE_FG}tab{RESET}\x1b[1;5H{SEP_COLOR}{SEPARATOR}{RESET}"
+                "\x1b[1;1H{TAB_INACTIVE_BG}{RAIL_INACTIVE_FG}▏{TAB_INACTIVE_BG}{PATH_INACTIVE_FG}tab{}\x1b[1;5H{SEP_COLOR}{SEPARATOR}{}",
+                crate::plugin::ui::RESET,
+                crate::plugin::ui::RESET
             )
         );
-        assert!(!actual.contains(BOLD));
+        assert!(!actual.contains(crate::plugin::ui::BOLD));
     }
 
     #[test]
@@ -489,7 +442,12 @@ mod tests {
         );
         assert_eq!(
             rendered,
-            format!("{BOLD}{AGENT_WAITING_UNSEEN_FG}•{RESET} {TAB_INACTIVE_BG}{TAB_DEFAULT_FG}cx")
+            format!(
+                "{}{}•{} {TAB_INACTIVE_BG}{TAB_DEFAULT_FG}cx",
+                crate::plugin::ui::BOLD,
+                crate::plugin::ui::AGENT_WAITING_UNSEEN_FG,
+                crate::plugin::ui::RESET
+            )
         );
     }
 
@@ -514,7 +472,12 @@ mod tests {
         );
         assert_eq!(
             rendered,
-            format!("{BOLD}{AGENT_BUSY_FG}•{RESET} {TAB_INACTIVE_BG}{TAB_DEFAULT_FG}cx")
+            format!(
+                "{}{}•{} {TAB_INACTIVE_BG}{TAB_DEFAULT_FG}cx",
+                crate::plugin::ui::BOLD,
+                crate::plugin::ui::AGENT_BUSY_FG,
+                crate::plugin::ui::RESET
+            )
         );
     }
 

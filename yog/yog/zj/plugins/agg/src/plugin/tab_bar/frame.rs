@@ -69,11 +69,11 @@ mod tests {
     use ytil_agents::agent::Agent;
     use zellij_tile::prelude::TabInfo;
 
+    use crate::plugin::pane::FocusedPane;
+    use crate::plugin::pane::FocusedPaneLabel;
     use crate::plugin::tab_bar::Event;
     use crate::plugin::tab_bar::current_tab::AgentPanePhase;
     use crate::plugin::tab_bar::current_tab::CurrentTab;
-    use crate::plugin::tab_bar::current_tab::FocusedPane;
-    use crate::plugin::tab_bar::current_tab::FocusedPaneLabel;
     use crate::plugin::tab_bar::current_tab::PaneFocus;
     use crate::plugin::tab_bar::frame::*;
     use crate::plugin::tab_bar::test_support::*;

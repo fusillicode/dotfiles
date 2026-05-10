@@ -8,6 +8,9 @@ use agg::GitStat;
 use agg::TabIndicator;
 use ytil_agents::agent::Agent;
 
+use crate::plugin::pane::FocusedPane;
+use crate::plugin::pane::FocusedPaneLabel;
+
 #[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 #[derive(Default)]
 pub struct CurrentTab {
@@ -264,18 +267,6 @@ pub enum PaneFocus {
     Unfocused,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct FocusedPane {
-    pub id: u32,
-    pub label: Option<FocusedPaneLabel>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum FocusedPaneLabel {
-    TerminalCommand(String),
-    Title(String),
-}
-
 pub fn idle_phase_for_pane(current_tab: &CurrentTab, current_tab_is_active: bool, pane_id: u32) -> AgentPanePhase {
     if current_tab_is_active && current_tab.active_focus_pane_id == Some(pane_id) {
         AgentPanePhase::AttentionSeen
@@ -288,6 +279,8 @@ pub fn idle_phase_for_pane(current_tab: &CurrentTab, current_tab_is_active: bool
 mod tests {
     use pretty_assertions::assert_eq;
 
+    use crate::plugin::pane::FocusedPane;
+    use crate::plugin::pane::FocusedPaneLabel;
     use crate::plugin::tab_bar::current_tab::*;
     use crate::plugin::tab_bar::test_support::*;
 
