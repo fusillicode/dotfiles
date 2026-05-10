@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use agg::AgentState;
@@ -209,8 +210,8 @@ impl PaneEntry {
         cwd_changed || git_changed
     }
 
-    pub fn attach_session(&mut self, sessions: &[SessionEntry]) -> bool {
-        let session = crate::plugin::picker::entry::matching_session(self, sessions);
+    pub fn attach_session(&mut self, sessions_by_key: &HashMap<(String, String), SessionEntry>) -> bool {
+        let session = crate::plugin::picker::entry::matching_session(self, sessions_by_key);
         let next_summary = session.and_then(|session| session.summary.as_deref());
         let next_display = session.map(|session| session.display.as_str());
         let next_search = session.map(|session| session.search.as_str());
@@ -314,12 +315,13 @@ pub fn sort_by_tab_order(pane_entries: &mut [PaneEntry], tabs: &[TabInfo]) {
     });
 }
 
-fn matching_session<'a>(entry: &PaneEntry, sessions: &'a [SessionEntry]) -> Option<&'a SessionEntry> {
+fn matching_session<'a>(
+    entry: &PaneEntry,
+    sessions_by_key: &'a HashMap<(String, String), SessionEntry>,
+) -> Option<&'a SessionEntry> {
     let agent = entry.agent?;
     let session_id = entry.session_id.as_deref()?;
-    sessions
-        .iter()
-        .find(|session| session.agent == agent.name() && session.session_id == session_id)
+    sessions_by_key.get(&(agent.name().to_string(), session_id.to_string()))
 }
 
 fn resume_session_id_from_command_args(args: &[String]) -> Option<String> {
