@@ -30,6 +30,7 @@ dependencies = [
  "pretty_assertions",
  "rootcause",
  "rstest",
+ "serde",
  "serde_json",
  "ytil_agents",
  "ytil_cmd",
