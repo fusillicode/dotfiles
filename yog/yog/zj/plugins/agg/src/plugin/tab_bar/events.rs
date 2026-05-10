@@ -1,21 +1,15 @@
-use std::collections::HashSet;
 use std::error::Error;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::path::PathBuf;
 
 use agg::AGENTS_PIPE;
-use agg::GitStat;
 use agg::ParseError;
-use ytil_agents::agent::Agent;
 use ytil_agents::agent::AgentEventPayload;
 use zellij_tile::prelude::PipeMessage;
 use zellij_tile::prelude::PipeSource;
-use zellij_tile::prelude::TabInfo;
 
-use crate::plugin::main::SYNC_PIPE;
-use crate::plugin::main::StateSnapshotPayload;
-use crate::plugin::state::current_tab::FocusedPane;
+use crate::plugin::tab_bar::AGG_SYNC_PIPE;
+use crate::plugin::tab_bar::StateSnapshotPayload;
 
 #[derive(Debug)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
@@ -65,7 +59,7 @@ impl TryFrom<&PipeMessage> for PipeEvent {
 
     fn try_from(msg: &PipeMessage) -> Result<Self, Self::Error> {
         match msg.name.as_str() {
-            SYNC_PIPE => match msg.args.get("type").map(String::as_str) {
+            AGG_SYNC_PIPE => match msg.args.get("type").map(String::as_str) {
                 Some("sync_request") => {
                     let requester_plugin_id =
                         Self::source_plugin_id(msg).ok_or(PipeEventError::Parse(ParseError::Missing("source")))?;
@@ -121,83 +115,6 @@ impl TryFrom<&PipeMessage> for PipeEvent {
     }
 }
 
-#[derive(Debug)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
-pub enum StateEvent {
-    // Current-tab identity
-    TabCreated {
-        tab_id: usize,
-    },
-    TabRemapped {
-        new_tab_id: usize,
-    },
-
-    // Pane layout
-    PanesChanged {
-        observed_pane_ids: HashSet<u32>,
-        retained_pane_ids: HashSet<u32>,
-    },
-    FocusChanged {
-        new_pane: Option<FocusedPane>,
-        acknowledge_existing_attention: bool,
-    },
-
-    // Working directory
-    CwdChanged {
-        new_cwd: PathBuf,
-    },
-
-    // Agent lifecycle
-    /// First detection of an agent in a pane (waiting state inferred from focus).
-    AgentDetected {
-        pane_id: u32,
-        agent: Agent,
-    },
-    AgentBusy {
-        pane_id: u32,
-        agent: Agent,
-    },
-    /// Agent finished processing — also implies a git refresh.
-    AgentIdle {
-        pane_id: u32,
-        agent: Agent,
-    },
-    /// Agent exited, pane closed, or process replaced.
-    AgentLost {
-        pane_id: u32,
-    },
-
-    // Git statistics
-    GitStatChanged {
-        new_stat: GitStat,
-    },
-
-    // Remote tab display (other plugin instances)
-    RemoteTabUpdated {
-        source_plugin_id: u32,
-        snapshot: StateSnapshotPayload,
-        evict_ids: Vec<u32>,
-    },
-    ActiveTabChanged {
-        active_tab_id: usize,
-    },
-
-    // Tab bar topology
-    TopologyChanged,
-    /// Current tab just became Zellij's active tab.
-    BecameActive,
-
-    // Tab list management
-    /// Full replacement of the tab list (from a `TabUpdate` Zellij event).
-    /// Apply sets `self.all_tabs` and prunes closed remote tabs.
-    AllTabsReplaced {
-        new_tabs: Vec<TabInfo>,
-    },
-    /// A sync request pipe message should be sent to peer plugin instances.
-    /// Apply sets `self.sync_requested = true`.
-    SyncRequested,
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
@@ -214,13 +131,13 @@ mod tests {
     use zellij_tile::prelude::PipeMessage;
     use zellij_tile::prelude::PipeSource;
 
-    use super::*;
+    use crate::plugin::tab_bar::events::*;
 
     #[rstest]
     #[case::sync_request(
         PipeMessage {
             source: PipeSource::Plugin(7),
-            name: SYNC_PIPE.to_string(),
+            name: AGG_SYNC_PIPE.to_string(),
             payload: None,
             args: BTreeMap::from([(String::from("type"), String::from("sync_request"))]),
             is_private: false,
@@ -232,7 +149,7 @@ mod tests {
     #[case::state_snapshot(
         PipeMessage {
             source: PipeSource::Plugin(7),
-            name: SYNC_PIPE.to_string(),
+            name: AGG_SYNC_PIPE.to_string(),
             payload: Some(
                 TabStateEntry {
                     tab_id: 17,
@@ -252,6 +169,7 @@ mod tests {
                 (String::from("type"), String::from("state_snapshot")),
                 (String::from("tab_id"), String::from("17")),
                 (String::from("seq"), String::from("42")),
+                (String::from("focused_pane_id"), String::from("99")),
             ]),
             is_private: false,
         },
@@ -260,6 +178,7 @@ mod tests {
             snapshot: StateSnapshotPayload {
                 tab_id: 17,
                 seq: 42,
+                focused_pane_id: Some(99),
                 cwd: Some(PathBuf::from("/home/user/project")),
                 cmd: Cmd::Running("cargo test".to_string()),
                 indicator: agg::TabIndicator::NoAgent,
@@ -275,7 +194,7 @@ mod tests {
     #[case::active_tab(
         PipeMessage {
             source: PipeSource::Plugin(7),
-            name: SYNC_PIPE.to_string(),
+            name: AGG_SYNC_PIPE.to_string(),
             payload: None,
             args: BTreeMap::from([
                 (String::from("type"), String::from("active_tab")),
@@ -310,7 +229,7 @@ mod tests {
     #[case::missing_sync_type(
         PipeMessage {
             source: PipeSource::Plugin(7),
-            name: SYNC_PIPE.to_string(),
+            name: AGG_SYNC_PIPE.to_string(),
             payload: None,
             args: BTreeMap::from([
                 (String::from("tab_id"), String::from("17")),
@@ -323,7 +242,7 @@ mod tests {
     #[case::unknown_sync_type(
         PipeMessage {
             source: PipeSource::Plugin(7),
-            name: SYNC_PIPE.to_string(),
+            name: AGG_SYNC_PIPE.to_string(),
             payload: None,
             args: BTreeMap::from([(String::from("type"), String::from("unexpected"))]),
             is_private: false,
@@ -333,7 +252,7 @@ mod tests {
     #[case::missing_source_for_sync_request(
         PipeMessage {
             source: PipeSource::Keybind,
-            name: SYNC_PIPE.to_string(),
+            name: AGG_SYNC_PIPE.to_string(),
             payload: None,
             args: BTreeMap::from([(String::from("type"), String::from("sync_request"))]),
             is_private: false,

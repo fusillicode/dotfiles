@@ -1,10 +1,10 @@
-use crate::plugin::events::StateEvent;
-use crate::plugin::state::State;
-use crate::plugin::state::current_tab::AgentPanePhase;
-use crate::plugin::state::current_tab::CurrentTab;
-use crate::plugin::state::current_tab::FocusedPane;
+use crate::plugin::tab_bar::Event;
+use crate::plugin::tab_bar::TabBarState;
+use crate::plugin::tab_bar::current_tab::AgentPanePhase;
+use crate::plugin::tab_bar::current_tab::CurrentTab;
+use crate::plugin::tab_bar::current_tab::FocusedPane;
 
-pub fn derive(state: &State, active_tab_id: usize, landing_focus: Option<FocusedPane>) -> Vec<StateEvent> {
+pub fn derive(state: &TabBarState, active_tab_id: usize, landing_focus: Option<FocusedPane>) -> Vec<Event> {
     if state.known_active_tab_id == Some(active_tab_id) {
         if let Some(event) = same_tab_activation_focus_event(state.current_tab.as_ref(), active_tab_id, landing_focus) {
             return vec![event];
@@ -12,11 +12,11 @@ pub fn derive(state: &State, active_tab_id: usize, landing_focus: Option<Focused
         return vec![];
     }
 
-    let mut events = vec![StateEvent::ActiveTabChanged { active_tab_id }];
+    let mut events = vec![Event::ActiveTabChanged { active_tab_id }];
     let was_active = state.current_tab_is_active();
     let is_active = state.current_tab_id() == Some(active_tab_id);
     if !was_active && is_active {
-        crate::plugin::state::events_from::push_became_active(&mut events, landing_focus);
+        crate::plugin::tab_bar::events_from::push_became_active(&mut events, landing_focus);
     }
 
     events
@@ -26,14 +26,14 @@ fn same_tab_activation_focus_event(
     current_tab: Option<&CurrentTab>,
     active_tab_id: usize,
     landing_focus: Option<FocusedPane>,
-) -> Option<StateEvent> {
+) -> Option<Event> {
     let current_tab = current_tab?;
     if current_tab.tab_id != active_tab_id {
         return None;
     }
 
     let landing_focus = landing_focus?;
-    should_reconcile_same_tab_activation_focus(current_tab, &landing_focus).then_some(StateEvent::FocusChanged {
+    should_reconcile_same_tab_activation_focus(current_tab, &landing_focus).then_some(Event::FocusChanged {
         new_pane: Some(landing_focus),
         acknowledge_existing_attention: true,
     })
@@ -62,19 +62,19 @@ mod tests {
     use ytil_agents::agent::Agent;
     use zellij_tile::prelude::TabInfo;
 
-    use super::*;
-    use crate::plugin::events::StateEvent;
-    use crate::plugin::state::State;
-    use crate::plugin::state::current_tab::AgentPanePhase;
-    use crate::plugin::state::current_tab::CurrentTab;
-    use crate::plugin::state::current_tab::FocusedPane;
-    use crate::plugin::state::current_tab::FocusedPaneLabel;
-    use crate::plugin::state::current_tab::PaneFocus;
-    use crate::plugin::state::test_support::*;
+    use crate::plugin::tab_bar::Event;
+    use crate::plugin::tab_bar::TabBarState;
+    use crate::plugin::tab_bar::current_tab::AgentPanePhase;
+    use crate::plugin::tab_bar::current_tab::CurrentTab;
+    use crate::plugin::tab_bar::current_tab::FocusedPane;
+    use crate::plugin::tab_bar::current_tab::FocusedPaneLabel;
+    use crate::plugin::tab_bar::current_tab::PaneFocus;
+    use crate::plugin::tab_bar::events_from::active_tab::*;
+    use crate::plugin::tab_bar::test_support::*;
 
     #[test]
     fn test_active_tab_change_restores_focus_and_acknowledges_landing_unseen_attention() {
-        let mut state = State {
+        let mut state = TabBarState {
             known_active_tab_id: Some(20),
             all_tabs: vec![tab_with_name(10, 0, "a")],
             current_tab: Some(CurrentTab {
@@ -102,9 +102,9 @@ mod tests {
         assert_eq!(
             events,
             vec![
-                StateEvent::ActiveTabChanged { active_tab_id: 10 },
-                StateEvent::BecameActive,
-                StateEvent::FocusChanged {
+                Event::ActiveTabChanged { active_tab_id: 10 },
+                Event::BecameActive,
+                Event::FocusChanged {
                     new_pane: Some(FocusedPane {
                         id: 42,
                         label: Some(FocusedPaneLabel::TerminalCommand("claude".to_string())),
@@ -129,7 +129,7 @@ mod tests {
 
     #[test]
     fn test_active_tab_change_keeps_unseen_when_landing_on_other_pane() {
-        let mut state = State {
+        let mut state = TabBarState {
             known_active_tab_id: Some(20),
             all_tabs: vec![tab_with_name(10, 0, "a")],
             current_tab: Some(CurrentTab {
@@ -190,7 +190,7 @@ mod tests {
 
     #[test]
     fn test_active_tab_change_without_host_focus_acknowledges_matching_pane_on_first_pane_update() {
-        let mut state = State {
+        let mut state = TabBarState {
             plugin_id: 7,
             known_active_tab_id: Some(20),
             all_tabs: vec![tab_with_name(10, 0, "a")],
@@ -212,10 +212,7 @@ mod tests {
         let activation_events = derive(&state, 10, None);
         assert_eq!(
             activation_events,
-            vec![
-                StateEvent::ActiveTabChanged { active_tab_id: 10 },
-                StateEvent::BecameActive,
-            ]
+            vec![Event::ActiveTabChanged { active_tab_id: 10 }, Event::BecameActive,]
         );
         let _ = state.apply_all(&activation_events);
 
@@ -237,14 +234,14 @@ mod tests {
         assert_eq!(
             pane_update_events,
             vec![
-                StateEvent::FocusChanged {
+                Event::FocusChanged {
                     new_pane: Some(FocusedPane {
                         id: 42,
                         label: Some(FocusedPaneLabel::TerminalCommand("claude".to_string())),
                     }),
                     acknowledge_existing_attention: true,
                 },
-                StateEvent::SyncRequested,
+                Event::SyncRequested,
             ]
         );
 
@@ -263,7 +260,7 @@ mod tests {
 
     #[test]
     fn test_active_tab_pipe_acknowledges_landing_focus_after_tab_update_pending_ack() {
-        let mut state = State {
+        let mut state = TabBarState {
             known_active_tab_id: Some(20),
             all_tabs: vec![TabInfo {
                 tab_id: 20,
@@ -292,14 +289,14 @@ mod tests {
             active: true,
             ..tab_with_name(10, 0, "a")
         }];
-        let tab_update_events = crate::plugin::state::events_from::tab_update::derive(&state, &mut tabs, None);
+        let tab_update_events = crate::plugin::tab_bar::events_from::tab_update::derive(&state, &mut tabs, None);
         assert_eq!(
             tab_update_events,
             vec![
-                StateEvent::AllTabsReplaced { new_tabs: tabs.clone() },
-                StateEvent::TopologyChanged,
-                StateEvent::BecameActive,
-                StateEvent::SyncRequested,
+                Event::AllTabsReplaced { new_tabs: tabs.clone() },
+                Event::TopologyChanged,
+                Event::BecameActive,
+                Event::SyncRequested,
             ]
         );
         let _ = state.apply_all(&tab_update_events);
@@ -319,7 +316,7 @@ mod tests {
         );
         assert_eq!(
             pipe_events,
-            vec![StateEvent::FocusChanged {
+            vec![Event::FocusChanged {
                 new_pane: Some(FocusedPane {
                     id: 42,
                     label: Some(FocusedPaneLabel::TerminalCommand("claude".to_string())),
@@ -344,7 +341,7 @@ mod tests {
 
     #[test]
     fn test_active_tab_pipe_reconciles_real_landing_focus_after_stale_tab_update_focus() {
-        let mut state = State {
+        let mut state = TabBarState {
             known_active_tab_id: Some(20),
             all_tabs: vec![TabInfo {
                 tab_id: 20,
@@ -373,7 +370,7 @@ mod tests {
             active: true,
             ..tab_with_name(10, 0, "a")
         }];
-        let tab_update_events = crate::plugin::state::events_from::tab_update::derive(
+        let tab_update_events = crate::plugin::tab_bar::events_from::tab_update::derive(
             &state,
             &mut tabs,
             Some(FocusedPane {
@@ -398,7 +395,7 @@ mod tests {
         );
         assert_eq!(
             pipe_events,
-            vec![StateEvent::FocusChanged {
+            vec![Event::FocusChanged {
                 new_pane: Some(FocusedPane {
                     id: 42,
                     label: Some(FocusedPaneLabel::TerminalCommand("claude".to_string())),
@@ -422,7 +419,7 @@ mod tests {
 
     #[test]
     fn test_active_tab_pipe_matching_landing_focus_with_no_unseen_attention_is_noop() {
-        let state = State {
+        let state = TabBarState {
             known_active_tab_id: Some(10),
             current_tab: Some(CurrentTab {
                 pane_ids: std::iter::once(42).collect(),

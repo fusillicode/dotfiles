@@ -237,7 +237,7 @@ pub struct AgentPaneState {
 }
 
 impl AgentPaneState {
-    const fn cmd(self) -> Cmd {
+    pub const fn cmd(self) -> Cmd {
         Cmd::agent(
             self.agent,
             match self.phase {
@@ -288,8 +288,8 @@ pub fn idle_phase_for_pane(current_tab: &CurrentTab, current_tab_is_active: bool
 mod tests {
     use pretty_assertions::assert_eq;
 
-    use super::*;
-    use crate::plugin::state::test_support::*;
+    use crate::plugin::tab_bar::current_tab::*;
+    use crate::plugin::tab_bar::test_support::*;
 
     #[test]
     fn test_mat_indicator_unseen_wins_over_busy() {

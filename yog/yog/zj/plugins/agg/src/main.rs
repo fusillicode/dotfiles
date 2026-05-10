@@ -7,7 +7,7 @@ mod plugin;
 use zellij_tile::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
-register_plugin!(plugin::state::State);
+register_plugin!(plugin::main::State);
 
 #[cfg(not(target_arch = "wasm32"))]
 #[ytil_sys::main]

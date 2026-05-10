@@ -1,11 +1,11 @@
 use ytil_agents::agent::AgentEventKind;
 use ytil_agents::agent::AgentEventPayload;
 
-use crate::plugin::events::StateEvent;
-use crate::plugin::state::State;
-use crate::plugin::state::current_tab::AgentPanePhase;
+use crate::plugin::tab_bar::Event;
+use crate::plugin::tab_bar::TabBarState;
+use crate::plugin::tab_bar::current_tab::AgentPanePhase;
 
-pub fn derive(state: &State, event: &AgentEventPayload) -> Vec<StateEvent> {
+pub fn derive(state: &TabBarState, event: &AgentEventPayload) -> Vec<Event> {
     let Some(current_tab) = state.current_tab.as_ref() else {
         return vec![];
     };
@@ -26,7 +26,7 @@ pub fn derive(state: &State, event: &AgentEventPayload) -> Vec<StateEvent> {
             if current_pane_state.is_some_and(|pane_state| pane_state.agent == agent) {
                 return vec![];
             }
-            vec![StateEvent::AgentDetected { pane_id, agent }]
+            vec![Event::AgentDetected { pane_id, agent }]
         }
         AgentEventKind::Busy => {
             if current_pane_state
@@ -34,23 +34,23 @@ pub fn derive(state: &State, event: &AgentEventPayload) -> Vec<StateEvent> {
             {
                 return vec![];
             }
-            vec![StateEvent::AgentBusy { pane_id, agent }]
+            vec![Event::AgentBusy { pane_id, agent }]
         }
         AgentEventKind::Idle => {
             let desired_phase =
-                crate::plugin::state::current_tab::idle_phase_for_pane(current_tab, current_tab_is_active, pane_id);
+                crate::plugin::tab_bar::current_tab::idle_phase_for_pane(current_tab, current_tab_is_active, pane_id);
             if current_pane_state
                 .is_some_and(|pane_state| pane_state.agent == agent && pane_state.phase == desired_phase)
             {
                 return vec![];
             }
-            vec![StateEvent::AgentIdle { pane_id, agent }]
+            vec![Event::AgentIdle { pane_id, agent }]
         }
         AgentEventKind::Exit => {
             if current_pane_state.is_none() {
                 return vec![];
             }
-            vec![StateEvent::AgentLost { pane_id }]
+            vec![Event::AgentLost { pane_id }]
         }
     }
 }
@@ -69,20 +69,20 @@ mod tests {
     use ytil_agents::agent::AgentEventKind;
     use ytil_agents::agent::AgentEventPayload;
 
-    use super::*;
-    use crate::plugin::events::StateEvent;
-    use crate::plugin::state::State;
-    use crate::plugin::state::current_tab::AgentPanePhase;
-    use crate::plugin::state::current_tab::CurrentTab;
-    use crate::plugin::state::current_tab::FocusedPane;
-    use crate::plugin::state::current_tab::FocusedPaneLabel;
-    use crate::plugin::state::current_tab::PaneFocus;
-    use crate::plugin::state::nudge::Nudge;
-    use crate::plugin::state::test_support::*;
+    use crate::plugin::nudge::Nudge;
+    use crate::plugin::tab_bar::Event;
+    use crate::plugin::tab_bar::TabBarState;
+    use crate::plugin::tab_bar::current_tab::AgentPanePhase;
+    use crate::plugin::tab_bar::current_tab::CurrentTab;
+    use crate::plugin::tab_bar::current_tab::FocusedPane;
+    use crate::plugin::tab_bar::current_tab::FocusedPaneLabel;
+    use crate::plugin::tab_bar::current_tab::PaneFocus;
+    use crate::plugin::tab_bar::events_from::agent::*;
+    use crate::plugin::tab_bar::test_support::*;
 
     #[test]
     fn test_agent_start_sets_seen_indicator() {
-        let mut state = State {
+        let mut state = TabBarState {
             current_tab: Some(CurrentTab::new(10)),
             ..Default::default()
         };
@@ -99,7 +99,7 @@ mod tests {
         );
         assert_eq!(
             events,
-            vec![StateEvent::AgentDetected {
+            vec![Event::AgentDetected {
                 pane_id: 42,
                 agent: Agent::Codex,
             }]
@@ -116,7 +116,7 @@ mod tests {
 
     #[test]
     fn test_agent_idle_in_unfocused_pane_transitions_busy_to_unseen() {
-        let mut state = State {
+        let mut state = TabBarState {
             all_tabs: vec![tab_with_name(10, 0, "fallback-tab")],
             current_tab: Some(CurrentTab::new(10)),
             home_dir: PathBuf::from("/Users/me"),
@@ -145,7 +145,7 @@ mod tests {
         );
         assert_eq!(
             events,
-            vec![StateEvent::AgentIdle {
+            vec![Event::AgentIdle {
                 pane_id: 42,
                 agent: Agent::Codex,
             }]
@@ -191,7 +191,7 @@ mod tests {
 
     #[test]
     fn test_agent_idle_in_focused_pane_transitions_busy_to_seen() {
-        let mut state = State {
+        let mut state = TabBarState {
             known_active_tab_id: Some(10),
             current_tab: Some(CurrentTab::new(10)),
             ..Default::default()
@@ -228,7 +228,7 @@ mod tests {
 
     #[test]
     fn test_agent_idle_in_inactive_tab_with_stale_focus_transitions_to_unseen() {
-        let mut state = State {
+        let mut state = TabBarState {
             known_active_tab_id: Some(20),
             all_tabs: vec![tab_with_name(10, 0, "a"), tab_with_name(20, 1, "b")],
             current_tab: Some(CurrentTab {
@@ -257,7 +257,7 @@ mod tests {
         );
         assert_eq!(
             events,
-            vec![StateEvent::AgentIdle {
+            vec![Event::AgentIdle {
                 pane_id: 42,
                 agent: Agent::Codex,
             }]
@@ -278,7 +278,7 @@ mod tests {
 
     #[test]
     fn test_attention_after_focus_restore_is_seen_immediately() {
-        let mut state = State {
+        let mut state = TabBarState {
             known_active_tab_id: Some(10),
             current_tab: Some(CurrentTab {
                 focused_pane: Some(FocusedPane {

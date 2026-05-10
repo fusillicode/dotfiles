@@ -2,10 +2,10 @@ use std::path::PathBuf;
 
 use agg::GitStat;
 
-use crate::plugin::events::StateEvent;
-use crate::plugin::state::State;
+use crate::plugin::tab_bar::Event;
+use crate::plugin::tab_bar::TabBarState;
 
-pub fn derive(state: &State, requested_cwd: &PathBuf, exit_code: Option<i32>, stdout: &[u8]) -> Vec<StateEvent> {
+pub fn derive(state: &TabBarState, requested_cwd: &PathBuf, exit_code: Option<i32>, stdout: &[u8]) -> Vec<Event> {
     if exit_code != Some(0) {
         return vec![];
     }
@@ -28,7 +28,7 @@ pub fn derive(state: &State, requested_cwd: &PathBuf, exit_code: Option<i32>, st
         if current_tab.git_stat == new_stat {
             return vec![];
         }
-        return vec![StateEvent::GitStatChanged { new_stat }];
+        return vec![Event::GitStatChanged { new_stat }];
     }
 
     vec![]

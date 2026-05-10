@@ -8,18 +8,18 @@ use agg::TabIndicator;
 use zellij_tile::prelude::PaneInfo;
 use zellij_tile::prelude::PaneManifest;
 
-use crate::plugin::events::StateEvent;
-use crate::plugin::main::StateSnapshotPayload;
-use crate::plugin::state::State;
-use crate::plugin::state::current_tab::CurrentTab;
-use crate::plugin::state::current_tab::FocusedPane;
-use crate::plugin::state::current_tab::FocusedPaneLabel;
+use crate::plugin::tab_bar::Event;
+use crate::plugin::tab_bar::StateSnapshotPayload;
+use crate::plugin::tab_bar::TabBarState;
+use crate::plugin::tab_bar::current_tab::CurrentTab;
+use crate::plugin::tab_bar::current_tab::FocusedPane;
+use crate::plugin::tab_bar::current_tab::FocusedPaneLabel;
 
 pub fn derive(
-    state: &State,
+    state: &TabBarState,
     manifest: &PaneManifest,
     mut resolve_pane_cwd: impl FnMut(u32) -> Option<PathBuf>,
-) -> Vec<StateEvent> {
+) -> Vec<Event> {
     let Some(tab_pos) = current_tab_position_in_manifest(state.plugin_id, manifest) else {
         return vec![];
     };
@@ -37,7 +37,7 @@ pub fn derive(
 
     let bootstrapped_current_tab = bootstrap_current_tab_for_pane_update(state.current_tab.as_ref(), discovered_tab_id);
     if let Some(current_tab) = bootstrapped_current_tab.as_ref() {
-        events.push(StateEvent::TabCreated {
+        events.push(Event::TabCreated {
             tab_id: current_tab.tab_id,
         });
     }
@@ -45,7 +45,7 @@ pub fn derive(
     if let (Some(current_id), Some(discovered_id)) = (current_tab_id, discovered_tab_id)
         && !state.all_tabs.iter().any(|tab| tab.tab_id == current_id)
     {
-        events.push(StateEvent::TabRemapped {
+        events.push(Event::TabRemapped {
             new_tab_id: discovered_id,
         });
     }
@@ -58,14 +58,14 @@ pub fn derive(
         .filter(|id| state.all_tabs.iter().any(|tab| tab.tab_id == *id))
         .or(discovered_tab_id);
     let display_tab_is_active = state.known_active_tab_id.map_or_else(
-        || crate::plugin::state::queries::current_tab_is_active_in(&state.all_tabs, display_tab_id),
+        || crate::plugin::tab_bar::queries::current_tab_is_active_in(&state.all_tabs, display_tab_id),
         |active_tab_id| display_tab_id == Some(active_tab_id),
     );
 
-    let new_pane_ids: HashSet<u32> = live_terminal_panes(panes).map(|pane| pane.id).collect();
-    let new_focused_pane = live_terminal_panes(panes)
+    let new_pane_ids: HashSet<u32> = displayable_terminal_panes(panes).map(|pane| pane.id).collect();
+    let new_focused_pane = displayable_terminal_panes(panes)
         .find(|pane| pane.is_focused)
-        .and_then(crate::plugin::state::pane::focused_pane_from_pane_info);
+        .and_then(crate::plugin::tab_bar::pane::focused_pane_from_pane_info);
     let new_display_pane = display_pane_for_manifest_tab(panes, display_tab_is_active);
 
     if new_pane_ids != current_tab.pane_ids {
@@ -84,12 +84,12 @@ pub fn derive(
             {
                 retained_pane_ids.insert(*removed_pane_id);
             } else {
-                events.push(StateEvent::AgentLost {
+                events.push(Event::AgentLost {
                     pane_id: *removed_pane_id,
                 });
             }
         }
-        events.push(StateEvent::PanesChanged {
+        events.push(Event::PanesChanged {
             observed_pane_ids,
             retained_pane_ids,
         });
@@ -102,7 +102,7 @@ pub fn derive(
     let pending_activation_focus_ack =
         state.current_tab_is_active() && current_tab.pending_activation_focus_ack && new_focus_pane_id.is_some();
     if display_metadata_changed || focus_tracking_changed || pending_activation_focus_ack {
-        events.push(StateEvent::FocusChanged {
+        events.push(Event::FocusChanged {
             new_pane: new_display_pane.clone(),
             acknowledge_existing_attention: pending_activation_focus_ack
                 || state.current_tab_is_active() && focused_pane_id_changed && new_focus_pane_id.is_some(),
@@ -116,12 +116,14 @@ pub fn derive(
         &new_pane_ids,
     ));
 
-    if let Some(display_pane) = new_display_pane.as_ref()
-        && (display_metadata_changed || current_tab.cwd.is_none())
-        && let Some(new_cwd) = resolve_pane_cwd(display_pane.id)
-        && current_tab.cwd.as_ref() != Some(&new_cwd)
-    {
-        events.push(StateEvent::CwdChanged { new_cwd });
+    if let Some(event) = display_cwd_change(
+        state,
+        current_tab,
+        display_metadata_changed,
+        new_display_pane.as_ref(),
+        &mut resolve_pane_cwd,
+    ) {
+        events.push(event);
     }
 
     let remote_events = remote_tab_changes(state, manifest, tab_pos, &mut resolve_pane_cwd);
@@ -132,36 +134,54 @@ pub fn derive(
     events
 }
 
-fn live_terminal_panes(panes: &[PaneInfo]) -> impl Iterator<Item = &PaneInfo> {
+fn display_cwd_change(
+    state: &TabBarState,
+    current_tab: &CurrentTab,
+    display_metadata_changed: bool,
+    display_pane: Option<&FocusedPane>,
+    resolve_pane_cwd: &mut impl FnMut(u32) -> Option<PathBuf>,
+) -> Option<Event> {
+    let display_pane = display_pane?;
+    if !display_metadata_changed && current_tab.cwd.is_some() {
+        return None;
+    }
+    let new_cwd = resolve_pane_cwd(display_pane.id).or_else(|| state.cwds_by_pane.get(&display_pane.id).cloned())?;
+    (current_tab.cwd.as_ref() != Some(&new_cwd)).then_some(Event::CwdChanged {
+        pane_id: display_pane.id,
+        new_cwd,
+    })
+}
+
+fn displayable_terminal_panes(panes: &[PaneInfo]) -> impl Iterator<Item = &PaneInfo> {
     panes
         .iter()
-        .filter(|pane| !pane.is_plugin && !pane.exited && !pane.is_held)
+        .filter(|pane| crate::plugin::tab_bar::pane::is_displayable_terminal_pane(pane))
 }
 
 fn display_pane_for_manifest_tab(panes: &[PaneInfo], tab_is_active: bool) -> Option<FocusedPane> {
     let mut focused_pane = None;
-    let mut first_live_terminal_pane = None;
-    for pane in live_terminal_panes(panes) {
-        if first_live_terminal_pane.is_none() {
-            first_live_terminal_pane = crate::plugin::state::pane::focused_pane_from_pane_info(pane);
+    let mut first_displayable_terminal_pane = None;
+    for pane in displayable_terminal_panes(panes) {
+        if first_displayable_terminal_pane.is_none() {
+            first_displayable_terminal_pane = crate::plugin::tab_bar::pane::focused_pane_from_pane_info(pane);
         }
         if pane.is_focused {
-            focused_pane = crate::plugin::state::pane::focused_pane_from_pane_info(pane);
+            focused_pane = crate::plugin::tab_bar::pane::focused_pane_from_pane_info(pane);
         }
     }
     if tab_is_active {
         focused_pane
     } else {
-        focused_pane.or(first_live_terminal_pane)
+        focused_pane.or(first_displayable_terminal_pane)
     }
 }
 
 fn remote_tab_changes(
-    state: &State,
+    state: &TabBarState,
     manifest: &PaneManifest,
     current_tab_pos: usize,
     resolve_pane_cwd: &mut impl FnMut(u32) -> Option<PathBuf>,
-) -> Vec<StateEvent> {
+) -> Vec<Event> {
     let mut events = vec![];
     for (&tab_pos, panes) in &manifest.panes {
         if tab_pos == current_tab_pos {
@@ -183,13 +203,15 @@ fn remote_tab_changes(
             continue;
         };
 
-        let snapshot = snapshot_from_manifest_tab(tab.tab_id, &display_pane, pane, resolve_pane_cwd(display_pane.id));
+        let cwd = resolve_pane_cwd(display_pane.id).or_else(|| state.cwds_by_pane.get(&display_pane.id).cloned());
+        let snapshot = snapshot_from_manifest_tab(tab.tab_id, &display_pane, pane, cwd);
         if state.other_tabs.get(&source_plugin_id).is_some_and(|existing| {
             existing.seq > 0
                 || existing.tab_id == snapshot.tab_id
                     && existing.cwd == snapshot.cwd
                     && existing.cmd == snapshot.cmd
                     && existing.indicator == snapshot.indicator
+                    && existing.focused_pane_id == snapshot.focused_pane_id
         }) {
             continue;
         }
@@ -199,7 +221,7 @@ fn remote_tab_changes(
             .filter(|&(plugin_id, remote)| *plugin_id != source_plugin_id && remote.tab_id == snapshot.tab_id)
             .map(|(&plugin_id, _)| plugin_id)
             .collect();
-        events.push(StateEvent::RemoteTabUpdated {
+        events.push(Event::RemoteTabUpdated {
             source_plugin_id,
             snapshot,
             evict_ids,
@@ -214,7 +236,7 @@ fn snapshot_from_manifest_tab(
     pane: &PaneInfo,
     cwd: Option<PathBuf>,
 ) -> StateSnapshotPayload {
-    let cmd = crate::plugin::state::pane::detected_agent_from_pane_info(pane, display_pane).map_or_else(
+    let cmd = crate::plugin::tab_bar::pane::detected_agent_from_pane_info(pane, display_pane).map_or_else(
         || {
             display_pane.label.as_ref().map_or(Cmd::None, |label| match label {
                 FocusedPaneLabel::TerminalCommand(command) | FocusedPaneLabel::Title(command) => {
@@ -227,6 +249,7 @@ fn snapshot_from_manifest_tab(
     StateSnapshotPayload {
         tab_id,
         seq: 0,
+        focused_pane_id: Some(display_pane.id),
         cwd,
         indicator: TabIndicator::from_cmd(&cmd),
         cmd,
@@ -234,12 +257,12 @@ fn snapshot_from_manifest_tab(
     }
 }
 
-fn push_sync_request(current_tab_exists: bool, sync_requested: bool, events: &mut Vec<StateEvent>) {
+fn push_sync_request(current_tab_exists: bool, sync_requested: bool, events: &mut Vec<Event>) {
     let has_resetter = events
         .iter()
-        .any(|event| matches!(event, StateEvent::TabCreated { .. } | StateEvent::TabRemapped { .. }));
+        .any(|event| matches!(event, Event::TabCreated { .. } | Event::TabRemapped { .. }));
     if has_resetter || current_tab_exists && !sync_requested {
-        events.push(StateEvent::SyncRequested);
+        events.push(Event::SyncRequested);
     }
 }
 
@@ -268,7 +291,7 @@ fn agent_changes_from_manifest(
     display_pane: Option<&FocusedPane>,
     panes: &[PaneInfo],
     surviving_pane_ids: &HashSet<u32>,
-) -> Vec<StateEvent> {
+) -> Vec<Event> {
     let mut events = vec![];
     let Some(display_pane) = display_pane else {
         return events;
@@ -284,7 +307,7 @@ fn agent_changes_from_manifest(
         .pane_state_by_pane
         .get(&display_pane.id)
         .map(|pane_state| pane_state.agent);
-    let detected_agent = crate::plugin::state::pane::detected_agent_from_pane_info(pane, display_pane);
+    let detected_agent = crate::plugin::tab_bar::pane::detected_agent_from_pane_info(pane, display_pane);
     let has_terminal_command = pane
         .terminal_command
         .as_ref()
@@ -292,22 +315,22 @@ fn agent_changes_from_manifest(
 
     match (stored_agent, detected_agent) {
         (Some(stored_agent), Some(detected_agent)) if stored_agent != detected_agent => {
-            events.push(StateEvent::AgentLost {
+            events.push(Event::AgentLost {
                 pane_id: display_pane.id,
             });
-            events.push(StateEvent::AgentDetected {
+            events.push(Event::AgentDetected {
                 pane_id: display_pane.id,
                 agent: detected_agent,
             });
         }
         (None, Some(detected_agent)) => {
-            events.push(StateEvent::AgentDetected {
+            events.push(Event::AgentDetected {
                 pane_id: display_pane.id,
                 agent: detected_agent,
             });
         }
         (Some(_), None) if has_terminal_command => {
-            events.push(StateEvent::AgentLost {
+            events.push(Event::AgentLost {
                 pane_id: display_pane.id,
             });
         }
@@ -324,17 +347,17 @@ fn agent_changes_from_manifest(
         if other_pane.exited || other_pane.is_held {
             continue;
         }
-        let detected_agent = crate::plugin::state::pane::focused_pane_from_pane_info(other_pane)
+        let detected_agent = crate::plugin::tab_bar::pane::focused_pane_from_pane_info(other_pane)
             .as_ref()
             .and_then(|focused_pane| {
-                crate::plugin::state::pane::detected_agent_from_pane_info(other_pane, focused_pane)
+                crate::plugin::tab_bar::pane::detected_agent_from_pane_info(other_pane, focused_pane)
             });
         let has_terminal_command = other_pane
             .terminal_command
             .as_ref()
             .is_some_and(|command| !command.trim().is_empty());
         if has_terminal_command && detected_agent != Some(pane_state.agent) {
-            events.push(StateEvent::AgentLost { pane_id });
+            events.push(Event::AgentLost { pane_id });
         }
     }
 
@@ -356,20 +379,20 @@ mod tests {
     use zellij_tile::prelude::PaneInfo;
     use zellij_tile::prelude::TabInfo;
 
-    use super::*;
-    use crate::plugin::events::StateEvent;
-    use crate::plugin::main::StateSnapshotPayload;
-    use crate::plugin::state::State;
-    use crate::plugin::state::current_tab::AgentPanePhase;
-    use crate::plugin::state::current_tab::CurrentTab;
-    use crate::plugin::state::current_tab::FocusedPane;
-    use crate::plugin::state::current_tab::FocusedPaneLabel;
-    use crate::plugin::state::current_tab::PaneFocus;
-    use crate::plugin::state::test_support::*;
+    use crate::plugin::tab_bar::Event;
+    use crate::plugin::tab_bar::StateSnapshotPayload;
+    use crate::plugin::tab_bar::TabBarState;
+    use crate::plugin::tab_bar::current_tab::AgentPanePhase;
+    use crate::plugin::tab_bar::current_tab::CurrentTab;
+    use crate::plugin::tab_bar::current_tab::FocusedPane;
+    use crate::plugin::tab_bar::current_tab::FocusedPaneLabel;
+    use crate::plugin::tab_bar::current_tab::PaneFocus;
+    use crate::plugin::tab_bar::events_from::pane_update::*;
+    use crate::plugin::tab_bar::test_support::*;
 
     #[test]
     fn test_apply_pane_update_first_detected_agent_starts_seen_until_busy() {
-        let mut state = State {
+        let mut state = TabBarState {
             plugin_id: 7,
             known_active_tab_id: Some(10),
             all_tabs: vec![tab_with_name(10, 0, "a")],
@@ -395,11 +418,11 @@ mod tests {
         assert_eq!(
             events,
             vec![
-                StateEvent::AgentDetected {
+                Event::AgentDetected {
                     pane_id: 42,
                     agent: Agent::Claude,
                 },
-                StateEvent::SyncRequested,
+                Event::SyncRequested,
             ]
         );
 
@@ -413,7 +436,7 @@ mod tests {
 
     #[test]
     fn test_apply_pane_update_bootstraps_current_tab_and_detects_codex_on_first_update() {
-        let mut state = State {
+        let mut state = TabBarState {
             plugin_id: 7,
             all_tabs: vec![TabInfo {
                 active: true,
@@ -432,23 +455,23 @@ mod tests {
         assert_eq!(
             events,
             vec![
-                StateEvent::TabCreated { tab_id: 10 },
-                StateEvent::PanesChanged {
+                Event::TabCreated { tab_id: 10 },
+                Event::PanesChanged {
                     observed_pane_ids: std::iter::once(42).collect(),
                     retained_pane_ids: std::iter::once(42).collect(),
                 },
-                StateEvent::FocusChanged {
+                Event::FocusChanged {
                     new_pane: Some(FocusedPane {
                         id: 42,
                         label: Some(FocusedPaneLabel::TerminalCommand("codex".to_string())),
                     }),
                     acknowledge_existing_attention: false,
                 },
-                StateEvent::AgentDetected {
+                Event::AgentDetected {
                     pane_id: 42,
                     agent: Agent::Codex,
                 },
-                StateEvent::SyncRequested,
+                Event::SyncRequested,
             ]
         );
 
@@ -462,7 +485,7 @@ mod tests {
 
     #[test]
     fn test_apply_pane_update_bootstraps_current_tab_without_detecting_non_agent_command() {
-        let mut state = State {
+        let mut state = TabBarState {
             plugin_id: 7,
             all_tabs: vec![TabInfo {
                 active: true,
@@ -484,19 +507,19 @@ mod tests {
         assert_eq!(
             events,
             vec![
-                StateEvent::TabCreated { tab_id: 10 },
-                StateEvent::PanesChanged {
+                Event::TabCreated { tab_id: 10 },
+                Event::PanesChanged {
                     observed_pane_ids: std::iter::once(42).collect(),
                     retained_pane_ids: std::iter::once(42).collect(),
                 },
-                StateEvent::FocusChanged {
+                Event::FocusChanged {
                     new_pane: Some(FocusedPane {
                         id: 42,
                         label: Some(FocusedPaneLabel::TerminalCommand("cargo".to_string())),
                     }),
                     acknowledge_existing_attention: false,
                 },
-                StateEvent::SyncRequested,
+                Event::SyncRequested,
             ]
         );
 
@@ -508,7 +531,7 @@ mod tests {
 
     #[test]
     fn test_apply_pane_update_bootstraps_current_tab_and_detects_codex_from_title_on_first_update() {
-        let mut state = State {
+        let mut state = TabBarState {
             plugin_id: 7,
             all_tabs: vec![TabInfo {
                 active: true,
@@ -527,23 +550,23 @@ mod tests {
         assert_eq!(
             events,
             vec![
-                StateEvent::TabCreated { tab_id: 10 },
-                StateEvent::PanesChanged {
+                Event::TabCreated { tab_id: 10 },
+                Event::PanesChanged {
                     observed_pane_ids: std::iter::once(42).collect(),
                     retained_pane_ids: std::iter::once(42).collect(),
                 },
-                StateEvent::FocusChanged {
+                Event::FocusChanged {
                     new_pane: Some(FocusedPane {
                         id: 42,
                         label: Some(FocusedPaneLabel::Title("codex".to_string())),
                     }),
                     acknowledge_existing_attention: false,
                 },
-                StateEvent::AgentDetected {
+                Event::AgentDetected {
                     pane_id: 42,
                     agent: Agent::Codex,
                 },
-                StateEvent::SyncRequested,
+                Event::SyncRequested,
             ]
         );
 
@@ -556,8 +579,8 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_pane_update_bootstraps_inactive_tab_from_first_live_terminal() {
-        let mut state = State {
+    fn test_apply_pane_update_bootstraps_inactive_tab_from_first_displayable_terminal() {
+        let mut state = TabBarState {
             plugin_id: 7,
             all_tabs: vec![
                 tab_with_name(10, 0, "Tab #1"),
@@ -581,26 +604,27 @@ mod tests {
         assert_eq!(
             events,
             vec![
-                StateEvent::TabCreated { tab_id: 10 },
-                StateEvent::PanesChanged {
+                Event::TabCreated { tab_id: 10 },
+                Event::PanesChanged {
                     observed_pane_ids: std::iter::once(42).collect(),
                     retained_pane_ids: std::iter::once(42).collect(),
                 },
-                StateEvent::FocusChanged {
+                Event::FocusChanged {
                     new_pane: Some(FocusedPane {
                         id: 42,
                         label: Some(FocusedPaneLabel::TerminalCommand("codex".to_string())),
                     }),
                     acknowledge_existing_attention: false,
                 },
-                StateEvent::AgentDetected {
+                Event::AgentDetected {
                     pane_id: 42,
                     agent: Agent::Codex,
                 },
-                StateEvent::CwdChanged {
+                Event::CwdChanged {
+                    pane_id: 42,
                     new_cwd: PathBuf::from("/Users/me/project"),
                 },
-                StateEvent::SyncRequested,
+                Event::SyncRequested,
             ]
         );
 
@@ -619,7 +643,7 @@ mod tests {
 
     #[test]
     fn test_apply_pane_update_hydrates_remote_tabs_from_manifest() {
-        let mut state = State {
+        let mut state = TabBarState {
             plugin_id: 7,
             known_active_tab_id: Some(10),
             all_tabs: vec![
@@ -655,11 +679,12 @@ mod tests {
         );
         assert_eq!(
             events,
-            vec![StateEvent::RemoteTabUpdated {
+            vec![Event::RemoteTabUpdated {
                 source_plugin_id: 8,
                 snapshot: StateSnapshotPayload {
                     tab_id: 20,
                     seq: 0,
+                    focused_pane_id: Some(43),
                     cwd: Some(PathBuf::from("/Users/me/project")),
                     cmd: Cmd::agent(Agent::Codex, AgentState::Acknowledged),
                     indicator: TabIndicator::Seen,
@@ -676,8 +701,154 @@ mod tests {
     }
 
     #[test]
+    fn test_apply_pane_update_hydrates_remote_tab_from_held_manifest_pane() {
+        let mut state = TabBarState {
+            plugin_id: 7,
+            known_active_tab_id: Some(10),
+            all_tabs: vec![
+                TabInfo {
+                    active: true,
+                    ..tab_with_name(10, 0, "Tab #1")
+                },
+                tab_with_name(20, 1, "Tab #4"),
+            ],
+            current_tab: Some(CurrentTab {
+                pane_ids: std::iter::once(42).collect(),
+                focused_pane: Some(FocusedPane { id: 42, label: None }),
+                active_focus_pane_id: Some(42),
+                cwd: Some(PathBuf::from("/Users/me/current")),
+                ..CurrentTab::new(10)
+            }),
+            sync_requested: true,
+            cwds_by_pane: HashMap::from([(43, PathBuf::from("/Users/me/project"))]),
+            home_dir: PathBuf::from("/Users/me"),
+            ..Default::default()
+        };
+
+        let events = derive(
+            &state,
+            &manifest(vec![
+                (
+                    0,
+                    vec![plugin_pane(7), terminal_pane_with_command(42, true, "/bin/zsh")],
+                ),
+                (
+                    1,
+                    vec![
+                        plugin_pane(8),
+                        PaneInfo {
+                            is_held: true,
+                            ..terminal_pane_with_title(43, false, "gkg")
+                        },
+                    ],
+                ),
+            ]),
+            noop_pane_cwd,
+        );
+        assert_eq!(
+            events,
+            vec![Event::RemoteTabUpdated {
+                source_plugin_id: 8,
+                snapshot: StateSnapshotPayload {
+                    tab_id: 20,
+                    seq: 0,
+                    focused_pane_id: Some(43),
+                    cwd: Some(PathBuf::from("/Users/me/project")),
+                    cmd: Cmd::Running("gkg".to_string()),
+                    indicator: TabIndicator::NoAgent,
+                    git_stat: GitStat::default(),
+                },
+                evict_ids: vec![],
+            }]
+        );
+
+        let _ = state.apply_all(&events);
+        assert!(let Some(row) = state.frame.get(1));
+        assert_eq!(row.path_label, "~/project");
+        assert_eq!(row.cmd, Cmd::Running("gkg".to_string()));
+    }
+
+    #[test]
+    fn test_apply_pane_update_updates_remote_tab_when_only_focus_changes() {
+        let mut state = TabBarState {
+            plugin_id: 7,
+            known_active_tab_id: Some(10),
+            all_tabs: vec![
+                TabInfo {
+                    active: true,
+                    ..tab_with_name(10, 0, "Tab #1")
+                },
+                tab_with_name(20, 1, "Tab #2"),
+            ],
+            current_tab: Some(CurrentTab {
+                pane_ids: std::iter::once(42).collect(),
+                focused_pane: Some(FocusedPane { id: 42, label: None }),
+                active_focus_pane_id: Some(42),
+                cwd: Some(PathBuf::from("/Users/me/current")),
+                ..CurrentTab::new(10)
+            }),
+            other_tabs: HashMap::from([(
+                8,
+                StateSnapshotPayload {
+                    tab_id: 20,
+                    seq: 0,
+                    focused_pane_id: Some(43),
+                    cwd: Some(PathBuf::from("/Users/me/project")),
+                    cmd: Cmd::agent(Agent::Codex, AgentState::Acknowledged),
+                    indicator: TabIndicator::Seen,
+                    git_stat: GitStat::default(),
+                },
+            )]),
+            sync_requested: true,
+            home_dir: PathBuf::from("/Users/me"),
+            ..Default::default()
+        };
+
+        let events = derive(
+            &state,
+            &manifest(vec![
+                (
+                    0,
+                    vec![plugin_pane(7), terminal_pane_with_command(42, true, "/bin/zsh")],
+                ),
+                (
+                    1,
+                    vec![
+                        plugin_pane(8),
+                        terminal_pane_with_command(43, false, "codex"),
+                        terminal_pane_with_command(44, true, "codex"),
+                    ],
+                ),
+            ]),
+            |pane_id| (pane_id == 44).then(|| PathBuf::from("/Users/me/project")),
+        );
+        assert_eq!(
+            events,
+            vec![Event::RemoteTabUpdated {
+                source_plugin_id: 8,
+                snapshot: StateSnapshotPayload {
+                    tab_id: 20,
+                    seq: 0,
+                    focused_pane_id: Some(44),
+                    cwd: Some(PathBuf::from("/Users/me/project")),
+                    cmd: Cmd::agent(Agent::Codex, AgentState::Acknowledged),
+                    indicator: TabIndicator::Seen,
+                    git_stat: GitStat::default(),
+                },
+                evict_ids: vec![],
+            }]
+        );
+
+        let _ = state.apply_all(&events);
+        assert_eq!(
+            state.other_tabs.get(&8).and_then(|snapshot| snapshot.focused_pane_id),
+            Some(44)
+        );
+    }
+
+    #[test]
     fn test_apply_pane_update_active_tab_without_focused_pane_does_not_fake_focus() {
-        let state = State {
+        let state = TabBarState {
             plugin_id: 7,
             known_active_tab_id: Some(10),
             all_tabs: vec![TabInfo {
@@ -699,18 +870,18 @@ mod tests {
         assert_eq!(
             events,
             vec![
-                StateEvent::PanesChanged {
+                Event::PanesChanged {
                     observed_pane_ids: std::iter::once(42).collect(),
                     retained_pane_ids: std::iter::once(42).collect(),
                 },
-                StateEvent::SyncRequested,
+                Event::SyncRequested,
             ]
         );
     }
 
     #[test]
     fn test_partial_manifest_does_not_drop_running_agent_on_first_miss() {
-        let mut state = State {
+        let mut state = TabBarState {
             plugin_id: 7,
             known_active_tab_id: Some(10),
             all_tabs: vec![tab_with_name(10, 0, "a")],
@@ -746,11 +917,11 @@ mod tests {
         assert_eq!(
             partial_events,
             vec![
-                StateEvent::PanesChanged {
+                Event::PanesChanged {
                     observed_pane_ids: std::iter::once(43).collect(),
                     retained_pane_ids: [42, 43].into_iter().collect(),
                 },
-                StateEvent::SyncRequested,
+                Event::SyncRequested,
             ]
         );
 
@@ -768,7 +939,7 @@ mod tests {
 
     #[test]
     fn test_partial_manifest_drops_missing_running_agent_after_second_miss() {
-        let mut state = State {
+        let mut state = TabBarState {
             plugin_id: 7,
             known_active_tab_id: Some(10),
             all_tabs: vec![tab_with_name(10, 0, "a")],
@@ -803,8 +974,8 @@ mod tests {
         assert_eq!(
             partial_events,
             vec![
-                StateEvent::AgentLost { pane_id: 42 },
-                StateEvent::PanesChanged {
+                Event::AgentLost { pane_id: 42 },
+                Event::PanesChanged {
                     observed_pane_ids: std::iter::once(43).collect(),
                     retained_pane_ids: std::iter::once(43).collect(),
                 },
@@ -819,7 +990,7 @@ mod tests {
 
     #[test]
     fn test_pane_update_ignores_stale_title_when_command_is_shell() {
-        let mut state = State {
+        let mut state = TabBarState {
             plugin_id: 7,
             all_tabs: vec![tab_with_name(10, 0, "a")],
             current_tab: Some(CurrentTab {
@@ -838,7 +1009,7 @@ mod tests {
             ..Default::default()
         };
 
-        let _ = state.apply_all(&[StateEvent::AgentLost { pane_id: 42 }]);
+        let _ = state.apply_all(&[Event::AgentLost { pane_id: 42 }]);
         let manifest = manifest(vec![(
             0,
             vec![PaneInfo {
@@ -857,7 +1028,7 @@ mod tests {
 
     #[test]
     fn test_pane_update_clears_tracked_agent_when_process_changes() {
-        let state = State {
+        let state = TabBarState {
             plugin_id: 7,
             all_tabs: vec![tab_with_name(10, 0, "a")],
             current_tab: Some(CurrentTab {
@@ -884,19 +1055,19 @@ mod tests {
         assert_eq!(
             events,
             vec![
-                StateEvent::FocusChanged {
+                Event::FocusChanged {
                     new_pane: Some(FocusedPane { id: 42, label: None }),
                     acknowledge_existing_attention: false,
                 },
-                StateEvent::AgentLost { pane_id: 42 },
-                StateEvent::SyncRequested,
+                Event::AgentLost { pane_id: 42 },
+                Event::SyncRequested,
             ]
         );
     }
 
     #[test]
     fn test_pane_update_clears_unfocused_tracked_agent_when_process_changes() {
-        let state = State {
+        let state = TabBarState {
             plugin_id: 7,
             all_tabs: vec![tab_with_name(10, 0, "a")],
             current_tab: Some(CurrentTab {
@@ -924,15 +1095,12 @@ mod tests {
             ],
         )]);
         let events = derive(&state, &manifest, noop_pane_cwd);
-        assert_eq!(
-            events,
-            vec![StateEvent::AgentLost { pane_id: 42 }, StateEvent::SyncRequested,]
-        );
+        assert_eq!(events, vec![Event::AgentLost { pane_id: 42 }, Event::SyncRequested,]);
     }
 
     #[test]
     fn test_apply_pane_update_keeps_idle_agent_when_title_becomes_path() {
-        let mut state = State {
+        let mut state = TabBarState {
             plugin_id: 7,
             all_tabs: vec![tab_with_name(10, 0, "a")],
             current_tab: Some(CurrentTab {
@@ -961,11 +1129,11 @@ mod tests {
         assert_eq!(
             events,
             vec![
-                StateEvent::FocusChanged {
+                Event::FocusChanged {
                     new_pane: Some(FocusedPane { id: 42, label: None }),
                     acknowledge_existing_attention: false,
                 },
-                StateEvent::SyncRequested,
+                Event::SyncRequested,
             ]
         );
 

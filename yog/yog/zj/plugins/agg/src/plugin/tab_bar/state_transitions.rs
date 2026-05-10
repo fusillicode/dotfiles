@@ -2,15 +2,15 @@ use std::collections::HashSet;
 
 use zellij_tile::prelude::TabInfo;
 
-use crate::plugin::events::StateEvent;
-use crate::plugin::main::StateSnapshotPayload;
-use crate::plugin::state::State;
-use crate::plugin::state::current_tab::AgentPanePhase;
-use crate::plugin::state::current_tab::CurrentTab;
-use crate::plugin::state::current_tab::FocusedPane;
+use crate::plugin::tab_bar::Event;
+use crate::plugin::tab_bar::StateSnapshotPayload;
+use crate::plugin::tab_bar::TabBarState;
+use crate::plugin::tab_bar::current_tab::AgentPanePhase;
+use crate::plugin::tab_bar::current_tab::CurrentTab;
+use crate::plugin::tab_bar::current_tab::FocusedPane;
 
-impl State {
-    pub fn apply_all(&mut self, events: &[StateEvent]) -> bool {
+impl TabBarState {
+    pub fn apply_all(&mut self, events: &[Event]) -> bool {
         for event in events {
             self.apply(event);
         }
@@ -18,18 +18,18 @@ impl State {
         self.sync_frame()
     }
 
-    fn apply(&mut self, event: &StateEvent) {
+    fn apply(&mut self, event: &Event) {
         match event {
-            StateEvent::TabCreated { tab_id } => {
+            Event::TabCreated { tab_id } => {
                 self.current_tab = Some(CurrentTab::new(*tab_id));
             }
-            StateEvent::TabRemapped { new_tab_id } => {
+            Event::TabRemapped { new_tab_id } => {
                 if let Some(current_tab) = self.current_tab.as_mut() {
                     current_tab.tab_id = *new_tab_id;
                     current_tab.seq = current_tab.seq.saturating_add(1);
                 }
             }
-            StateEvent::PanesChanged {
+            Event::PanesChanged {
                 observed_pane_ids,
                 retained_pane_ids,
             } => {
@@ -37,32 +37,41 @@ impl State {
                     current_tab.apply_panes_changed(observed_pane_ids, retained_pane_ids);
                 }
             }
-            StateEvent::FocusChanged {
+            Event::FocusChanged {
                 new_pane,
                 acknowledge_existing_attention,
             } => self.apply_focus_changed(new_pane.as_ref(), *acknowledge_existing_attention),
-            StateEvent::CwdChanged { new_cwd } => {
+            Event::CwdChanged { pane_id, new_cwd } => {
+                self.cwds_by_pane.insert(*pane_id, new_cwd.clone());
                 if let Some(current_tab) = self.current_tab.as_mut() {
-                    current_tab.cwd = Some(new_cwd.clone());
-                    current_tab.seq = current_tab.seq.saturating_add(1);
+                    let is_display_pane = current_tab
+                        .focused_pane
+                        .as_ref()
+                        .map(|focused_pane| focused_pane.id)
+                        .or(current_tab.active_focus_pane_id)
+                        == Some(*pane_id);
+                    if is_display_pane && current_tab.cwd.as_ref() != Some(new_cwd) {
+                        current_tab.cwd = Some(new_cwd.clone());
+                        current_tab.seq = current_tab.seq.saturating_add(1);
+                    }
                 }
             }
-            StateEvent::AgentDetected { pane_id, agent } => {
+            Event::AgentDetected { pane_id, agent } => {
                 if let Some(current_tab) = self.current_tab.as_mut() {
                     current_tab.transition_phase(*pane_id, *agent, AgentPanePhase::AttentionSeen);
                     current_tab.seq = current_tab.seq.saturating_add(1);
                 }
             }
-            StateEvent::AgentBusy { pane_id, agent } => {
+            Event::AgentBusy { pane_id, agent } => {
                 if let Some(current_tab) = self.current_tab.as_mut() {
                     current_tab.transition_phase(*pane_id, *agent, AgentPanePhase::Running);
                     current_tab.seq = current_tab.seq.saturating_add(1);
                 }
             }
-            StateEvent::AgentIdle { pane_id, agent } => {
+            Event::AgentIdle { pane_id, agent } => {
                 let current_tab_is_active = self.current_tab_is_active();
                 if let Some(current_tab) = self.current_tab.as_mut() {
-                    let phase = crate::plugin::state::current_tab::idle_phase_for_pane(
+                    let phase = crate::plugin::tab_bar::current_tab::idle_phase_for_pane(
                         current_tab,
                         current_tab_is_active,
                         *pane_id,
@@ -71,34 +80,34 @@ impl State {
                     current_tab.seq = current_tab.seq.saturating_add(1);
                 }
             }
-            StateEvent::AgentLost { pane_id } => {
+            Event::AgentLost { pane_id } => {
                 if let Some(current_tab) = self.current_tab.as_mut() {
                     current_tab.apply_agent_lost(*pane_id);
                 }
             }
-            StateEvent::GitStatChanged { new_stat } => {
+            Event::GitStatChanged { new_stat } => {
                 if let Some(current_tab) = self.current_tab.as_mut() {
                     current_tab.git_stat = *new_stat;
                     current_tab.seq = current_tab.seq.saturating_add(1);
                 }
             }
-            StateEvent::RemoteTabUpdated {
+            Event::RemoteTabUpdated {
                 source_plugin_id,
                 snapshot,
                 evict_ids,
             } => self.apply_remote_tab_updated(*source_plugin_id, snapshot, evict_ids),
-            StateEvent::ActiveTabChanged { active_tab_id } => self.apply_active_tab_changed(*active_tab_id),
-            StateEvent::AllTabsReplaced { new_tabs } => self.apply_all_tabs_replaced(new_tabs),
-            StateEvent::SyncRequested => {
+            Event::ActiveTabChanged { active_tab_id } => self.apply_active_tab_changed(*active_tab_id),
+            Event::AllTabsReplaced { new_tabs } => self.apply_all_tabs_replaced(new_tabs),
+            Event::SyncRequested => {
                 self.sync_requested = true;
             }
-            StateEvent::BecameActive => {
+            Event::BecameActive => {
                 if let Some(current_tab) = self.current_tab.as_mut() {
                     current_tab.pending_activation_focus_ack = true;
                     current_tab.seq = current_tab.seq.saturating_add(1);
                 }
             }
-            StateEvent::TopologyChanged => {}
+            Event::TopologyChanged => {}
         }
     }
 
@@ -108,6 +117,12 @@ impl State {
             return;
         };
         current_tab.focused_pane = new_pane.cloned();
+        if let Some(cwd) = new_pane
+            .and_then(|focused_pane| self.cwds_by_pane.get(&focused_pane.id))
+            .cloned()
+        {
+            current_tab.cwd = Some(cwd);
+        }
         if is_active {
             current_tab.sync_active_focus(
                 new_pane.map(|focused_pane| focused_pane.id),
@@ -185,15 +200,15 @@ mod tests {
     use ytil_agents::agent::AgentEventKind;
     use ytil_agents::agent::AgentEventPayload;
 
-    use super::*;
-    use crate::plugin::state::current_tab::FocusedPaneLabel;
-    use crate::plugin::state::current_tab::PaneFocus;
-    use crate::plugin::state::nudge::Nudge;
-    use crate::plugin::state::test_support::*;
+    use crate::plugin::nudge::Nudge;
+    use crate::plugin::tab_bar::current_tab::FocusedPaneLabel;
+    use crate::plugin::tab_bar::current_tab::PaneFocus;
+    use crate::plugin::tab_bar::state_transitions::*;
+    use crate::plugin::tab_bar::test_support::*;
 
     #[test]
     fn test_agent_busy_clears_nudge_dedupe() {
-        let mut state = State {
+        let mut state = TabBarState {
             current_tab: Some(CurrentTab::new(10)),
             home_dir: PathBuf::from("/Users/me"),
             ..Default::default()
@@ -206,7 +221,7 @@ mod tests {
             pane_state(Agent::Codex, AgentPanePhase::Running, PaneFocus::Unfocused, 1),
         );
 
-        let idle_events = crate::plugin::state::events_from::agent::derive(
+        let idle_events = crate::plugin::tab_bar::events_from::agent::derive(
             &state,
             &AgentEventPayload {
                 pane_id: 42,
@@ -219,7 +234,7 @@ mod tests {
         assert!(Nudge::new(current_tab, &state.all_tabs, &state.home_dir, 42).is_some());
         state.mark_nudged(42);
 
-        let busy_events = crate::plugin::state::events_from::agent::derive(
+        let busy_events = crate::plugin::tab_bar::events_from::agent::derive(
             &state,
             &AgentEventPayload {
                 pane_id: 42,
@@ -230,7 +245,7 @@ mod tests {
         let _ = state.apply_all(&busy_events);
         assert!(state.nudged_pane_ids.is_empty());
 
-        let idle_events = crate::plugin::state::events_from::agent::derive(
+        let idle_events = crate::plugin::tab_bar::events_from::agent::derive(
             &state,
             &AgentEventPayload {
                 pane_id: 42,
@@ -244,8 +259,25 @@ mod tests {
     }
 
     #[test]
+    fn test_focus_changed_uses_cached_cwd_for_display_pane() {
+        let mut state = TabBarState {
+            current_tab: Some(CurrentTab::new(10)),
+            cwds_by_pane: HashMap::from([(42, PathBuf::from("/Users/me/project"))]),
+            ..Default::default()
+        };
+
+        let _ = state.apply_all(&[Event::FocusChanged {
+            new_pane: Some(FocusedPane { id: 42, label: None }),
+            acknowledge_existing_attention: false,
+        }]);
+
+        assert!(let Some(current_tab) = state.current_tab.as_ref());
+        assert_eq!(current_tab.cwd, Some(PathBuf::from("/Users/me/project")));
+    }
+
+    #[test]
     fn test_focus_changed_acknowledges_unseen_attention() {
-        let mut state = State {
+        let mut state = TabBarState {
             known_active_tab_id: Some(10),
             current_tab: Some(CurrentTab::new(10)),
             ..Default::default()
@@ -262,7 +294,7 @@ mod tests {
             pane_state(Agent::Codex, AgentPanePhase::AttentionUnseen, PaneFocus::Unfocused, 1),
         );
 
-        let events = vec![StateEvent::FocusChanged {
+        let events = vec![Event::FocusChanged {
             new_pane: Some(FocusedPane {
                 id: 42,
                 label: Some(FocusedPaneLabel::TerminalCommand("codex".to_string())),
@@ -281,7 +313,7 @@ mod tests {
 
     #[test]
     fn test_focus_changed_to_seen_attention_with_running_peer_transitions_unseen_to_busy() {
-        let mut state = State {
+        let mut state = TabBarState {
             known_active_tab_id: Some(10),
             current_tab: Some(CurrentTab::new(10)),
             ..Default::default()
@@ -302,7 +334,7 @@ mod tests {
             pane_state(Agent::Claude, AgentPanePhase::Running, PaneFocus::Focused, 2),
         );
 
-        let events = vec![StateEvent::FocusChanged {
+        let events = vec![Event::FocusChanged {
             new_pane: Some(FocusedPane {
                 id: 42,
                 label: Some(FocusedPaneLabel::TerminalCommand("codex".to_string())),
@@ -318,7 +350,7 @@ mod tests {
 
     #[test]
     fn test_running_resets_seen_attention_to_busy() {
-        let mut state = State {
+        let mut state = TabBarState {
             current_tab: Some(CurrentTab::new(10)),
             ..Default::default()
         };
@@ -329,7 +361,7 @@ mod tests {
             pane_state(Agent::Codex, AgentPanePhase::AttentionSeen, PaneFocus::Unfocused, 1),
         );
 
-        let events = vec![StateEvent::AgentBusy {
+        let events = vec![Event::AgentBusy {
             pane_id: 42,
             agent: Agent::Codex,
         }];
@@ -342,7 +374,7 @@ mod tests {
 
     #[test]
     fn test_agent_lost_removes_unseen_attention() {
-        let mut state = State {
+        let mut state = TabBarState {
             current_tab: Some(CurrentTab {
                 pane_state_by_pane: HashMap::from([(
                     42,
@@ -353,7 +385,7 @@ mod tests {
             ..Default::default()
         };
 
-        let events = vec![StateEvent::AgentLost { pane_id: 42 }];
+        let events = vec![Event::AgentLost { pane_id: 42 }];
         let _ = state.apply_all(&events);
 
         assert!(let Some(current_tab) = state.current_tab.as_ref());
@@ -363,7 +395,7 @@ mod tests {
 
     #[test]
     fn test_mat_requires_each_pane_focus_to_clear_unseen() {
-        let mut state = State {
+        let mut state = TabBarState {
             known_active_tab_id: Some(10),
             current_tab: Some(CurrentTab {
                 pane_ids: [42, 43].into_iter().collect(),
@@ -382,7 +414,7 @@ mod tests {
             ..Default::default()
         };
 
-        let events_a = vec![StateEvent::FocusChanged {
+        let events_a = vec![Event::FocusChanged {
             new_pane: Some(FocusedPane {
                 id: 42,
                 label: Some(FocusedPaneLabel::TerminalCommand("claude".to_string())),
@@ -393,7 +425,7 @@ mod tests {
         assert!(let Some(current_tab) = state.current_tab.as_ref());
         assert_eq!(current_tab.tab_indicator(), TabIndicator::Unseen);
 
-        let events_b = vec![StateEvent::FocusChanged {
+        let events_b = vec![Event::FocusChanged {
             new_pane: Some(FocusedPane {
                 id: 43,
                 label: Some(FocusedPaneLabel::TerminalCommand("cursor".to_string())),
