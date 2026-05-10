@@ -1,5 +1,5 @@
+use crate::plugin::pane::FocusedPane;
 use crate::plugin::tab_bar::Event;
-use crate::plugin::tab_bar::current_tab::FocusedPane;
 
 pub mod active_tab;
 pub mod agent;

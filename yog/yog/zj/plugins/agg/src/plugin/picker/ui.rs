@@ -3,16 +3,9 @@ use std::fmt::Write;
 use agg::GitStat;
 use agg::TabIndicator;
 
-const BOLD: &str = "\x1b[1m";
-const AGENT_WAITING_UNSEEN_FG: &str = "\x1b[38;2;255;0;0m";
-const AGENT_BUSY_FG: &str = "\x1b[38;2;255;170;51m";
-const GIT_NEW_LINES_FG: &str = "\x1b[38;2;140;228;121m";
-const GIT_DEL_LINES_FG: &str = "\x1b[38;2;236;99;92m";
-const GIT_NEW_FILES_FG: &str = "\x1b[38;2;0;255;255m";
 const PICKER_SELECTED_BG: &str = "\x1b[48;2;50;50;50m";
 const TAB_DEFAULT_FG: &str = "\x1b[39m";
 const SUMMARY_FG: &str = "\x1b[38;2;119;119;119m";
-const RESET: &str = "\x1b[0m";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PickerRow {
@@ -29,11 +22,11 @@ pub fn render_frame(frame: &[PickerRow], query: &str, rows: usize, cols: usize, 
         return;
     }
 
-    let header = crate::plugin::picker::ui::pad(&format!("/{query}"), cols);
+    let header = crate::plugin::ui::pad(&format!("/{query}"), cols);
     let _ = write!(buf, "\x1b[1;1H{header}");
 
     let rendered_rows = if frame.is_empty() && rows > 1 {
-        let empty = crate::plugin::picker::ui::pad("-", cols);
+        let empty = crate::plugin::ui::pad("-", cols);
         let _ = write!(buf, "\x1b[2;1H{empty}");
         2
     } else {
@@ -41,14 +34,14 @@ pub fn render_frame(frame: &[PickerRow], query: &str, rows: usize, cols: usize, 
         for (idx, row) in frame.iter().take(rows.saturating_sub(1)).enumerate() {
             let row_1based = idx.saturating_add(2);
             let content = crate::plugin::picker::ui::row_content(row, cols);
-            let _ = write!(buf, "\x1b[{row_1based};1H{content}{RESET}");
+            let _ = write!(buf, "\x1b[{row_1based};1H{content}{}", crate::plugin::ui::RESET);
             last_rendered_row = row_1based;
         }
         last_rendered_row
     };
 
     for row in rendered_rows.saturating_add(1)..=rows {
-        let blank = crate::plugin::picker::ui::pad("", cols);
+        let blank = crate::plugin::ui::pad("", cols);
         let _ = write!(buf, "\x1b[{row};1H{blank}");
     }
 }
@@ -62,12 +55,12 @@ fn row_content(row: &PickerRow, cols: usize) -> String {
     if cols <= prefix_w {
         return format!(
             "{bg}{TAB_DEFAULT_FG}{}",
-            crate::plugin::picker::ui::pad(&ytil_tui::display_fixed_width(&prefix_plain, cols), cols)
+            crate::plugin::ui::pad(&ytil_tui::display_fixed_width(&prefix_plain, cols), cols)
         );
     }
 
     let available = cols.saturating_sub(prefix_w);
-    let git_parts = crate::plugin::picker::ui::git_stat_parts(&row.git);
+    let git_parts = crate::plugin::ui::git_stat_parts(&row.git);
     let git_wanted = git_parts
         .iter()
         .map(|(_, value)| value.chars().count())
@@ -110,10 +103,10 @@ fn row_content(row: &PickerRow, cols: usize) -> String {
     let git = crate::plugin::picker::ui::git_stat_with_color(&git_parts, git_width, bg, TAB_DEFAULT_FG);
 
     let mut out = prefix;
-    out.push_str(BOLD);
+    out.push_str(crate::plugin::ui::BOLD);
     out.push_str(TAB_DEFAULT_FG);
     out.push_str(&cwd);
-    out.push_str(RESET);
+    out.push_str(crate::plugin::ui::RESET);
     out.push_str(bg);
     out.push_str(TAB_DEFAULT_FG);
     if git_width > 0 {
@@ -128,11 +121,11 @@ fn row_content(row: &PickerRow, cols: usize) -> String {
         out.push(' ');
         out.push_str(SUMMARY_FG);
         out.push_str(&summary);
-        out.push_str(RESET);
+        out.push_str(crate::plugin::ui::RESET);
         out.push_str(bg);
         out.push_str(TAB_DEFAULT_FG);
     }
-    crate::plugin::picker::ui::pad_ansi(&out, cols)
+    crate::plugin::ui::pad_ansi(&out, cols)
 }
 
 fn git_stat_with_color(parts: &[(&'static str, String)], width: usize, bg: &str, fg: &str) -> String {
@@ -150,24 +143,10 @@ fn git_stat_with_color(parts: &[(&'static str, String)], width: usize, bg: &str,
         out.push_str(color);
         out.push_str(value);
     }
-    out.push_str(RESET);
+    out.push_str(crate::plugin::ui::RESET);
     out.push_str(bg);
     out.push_str(fg);
     out
-}
-
-fn git_stat_parts(git_stat: &GitStat) -> Vec<(&'static str, String)> {
-    let mut stats = Vec::new();
-    if git_stat.insertions > 0 {
-        stats.push((GIT_NEW_LINES_FG, format!("+{}", git_stat.insertions)));
-    }
-    if git_stat.deletions > 0 {
-        stats.push((GIT_DEL_LINES_FG, format!("-{}", git_stat.deletions)));
-    }
-    if git_stat.new_files > 0 {
-        stats.push((GIT_NEW_FILES_FG, format!("?{}", git_stat.new_files)));
-    }
-    stats
 }
 
 fn agent_width(label: &str, marker: TabIndicator, available: usize) -> usize {
@@ -188,11 +167,7 @@ fn agent_with_marker(label: &str, marker: TabIndicator, width: usize, bg: &str, 
     if width == 0 {
         return String::new();
     }
-    let dot = match marker {
-        TabIndicator::Unseen => Some(format!("{BOLD}{AGENT_WAITING_UNSEEN_FG}•{RESET}{bg}{fg}")),
-        TabIndicator::Busy => Some(format!("{BOLD}{AGENT_BUSY_FG}•{RESET}{bg}{fg}")),
-        TabIndicator::NoAgent | TabIndicator::Seen => None,
-    };
+    let dot = crate::plugin::ui::agent_dot(marker, bg, fg);
     match dot {
         Some(dot) if label.is_empty() || width < 3 => dot,
         Some(dot) => {
@@ -201,50 +176,6 @@ fn agent_with_marker(label: &str, marker: TabIndicator, width: usize, bg: &str, 
         }
         None => ytil_tui::display_fixed_width(label, width),
     }
-}
-
-fn visible_len(s: &str) -> usize {
-    let mut len = 0_usize;
-    let mut in_escape = false;
-    for c in s.chars() {
-        if in_escape {
-            if c == 'm' {
-                in_escape = false;
-            }
-        } else if c == '\x1b' {
-            in_escape = true;
-        } else {
-            len = len.saturating_add(1);
-        }
-    }
-    len
-}
-
-fn pad(s: &str, width: usize) -> String {
-    let chars: Vec<char> = s.chars().collect();
-    if chars.len() >= width {
-        return chars.into_iter().take(width).collect();
-    }
-    let mut out = String::with_capacity(width);
-    for c in &chars {
-        out.push(*c);
-    }
-    for _ in chars.len()..width {
-        out.push(' ');
-    }
-    out
-}
-
-fn pad_ansi(s: &str, width: usize) -> String {
-    let len = crate::plugin::picker::ui::visible_len(s);
-    if len >= width {
-        return s.to_string();
-    }
-    let mut out = String::from(s);
-    for _ in len..width {
-        out.push(' ');
-    }
-    out
 }
 
 #[cfg(test)]
@@ -271,7 +202,7 @@ mod tests {
         assert2::assert!(rendered.contains("\x1b[1;1H/car"));
         assert2::assert!(rendered.contains("\x1b[2;1H"));
         assert2::assert!(plain.contains("> ~/project cargo"));
-        assert_eq!(visible_len(&row_content(&frame[0], 24)), 24);
+        assert_eq!(crate::plugin::ui::visible_len(&row_content(&frame[0], 24)), 24);
     }
 
     #[test]
@@ -292,9 +223,9 @@ mod tests {
         assert2::assert!(plain_text(&rendered).contains("> ~/project cx how to solve this warning"));
         assert_eq!(
             plain_text(&content),
-            pad("> ~/project cx how to solve this warning", 52)
+            crate::plugin::ui::pad("> ~/project cx how to solve this warning", 52)
         );
-        assert_eq!(visible_len(&content), 52);
+        assert_eq!(crate::plugin::ui::visible_len(&content), 52);
     }
 
     #[test]
@@ -310,9 +241,17 @@ mod tests {
 
         let content = row_content(&row, 44);
 
-        assert2::assert!(content.contains(&format!("{BOLD}{AGENT_BUSY_FG}•{RESET}")));
-        assert_eq!(plain_text(&content), pad("> ~/project • cx solve warning", 44));
-        assert_eq!(visible_len(&content), 44);
+        assert2::assert!(content.contains(&format!(
+            "{}{}•{}",
+            crate::plugin::ui::BOLD,
+            crate::plugin::ui::AGENT_BUSY_FG,
+            crate::plugin::ui::RESET
+        )));
+        assert_eq!(
+            plain_text(&content),
+            crate::plugin::ui::pad("> ~/project • cx solve warning", 44)
+        );
+        assert_eq!(crate::plugin::ui::visible_len(&content), 44);
     }
 
     #[test]
@@ -333,11 +272,14 @@ mod tests {
 
         let content = row_content(&row, 52);
 
-        assert2::assert!(content.contains(GIT_NEW_LINES_FG));
-        assert2::assert!(content.contains(GIT_DEL_LINES_FG));
-        assert2::assert!(content.contains(GIT_NEW_FILES_FG));
-        assert_eq!(plain_text(&content), pad("> ~/project +2 -1 ?3 cx solve warning", 52));
-        assert_eq!(visible_len(&content), 52);
+        assert2::assert!(content.contains(crate::plugin::ui::GIT_NEW_LINES_FG));
+        assert2::assert!(content.contains(crate::plugin::ui::GIT_DEL_LINES_FG));
+        assert2::assert!(content.contains(crate::plugin::ui::GIT_NEW_FILES_FG));
+        assert_eq!(
+            plain_text(&content),
+            crate::plugin::ui::pad("> ~/project +2 -1 ?3 cx solve warning", 52)
+        );
+        assert_eq!(crate::plugin::ui::visible_len(&content), 52);
     }
 
     fn plain_text(value: &str) -> String {

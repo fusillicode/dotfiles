@@ -1,8 +1,17 @@
 use ytil_agents::agent::Agent;
 use zellij_tile::prelude::PaneInfo;
 
-use crate::plugin::tab_bar::current_tab::FocusedPane;
-use crate::plugin::tab_bar::current_tab::FocusedPaneLabel;
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct FocusedPane {
+    pub id: u32,
+    pub label: Option<FocusedPaneLabel>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum FocusedPaneLabel {
+    TerminalCommand(String),
+    Title(String),
+}
 
 pub const fn is_displayable_terminal_pane(pane: &PaneInfo) -> bool {
     !pane.is_plugin && !pane.is_suppressed
@@ -20,7 +29,7 @@ pub fn focused_pane_from_pane_info(pane: &PaneInfo) -> Option<FocusedPane> {
             .as_deref()
             .and_then(parse_running_command)
             .map(FocusedPaneLabel::TerminalCommand)
-            .or_else(|| focused_pane_title_label(pane).map(FocusedPaneLabel::Title)),
+            .or_else(|| title_label_from_title(&pane.title).map(FocusedPaneLabel::Title)),
     })
 }
 
@@ -46,8 +55,30 @@ pub fn detected_agent_from_pane_info(pane: &PaneInfo, focused_pane: &FocusedPane
     }
 }
 
-pub fn focused_pane_title_label(pane: &PaneInfo) -> Option<String> {
-    let title = pane.title.trim();
+pub fn parse_running_command(command: &str) -> Option<String> {
+    let executable = command.split_whitespace().next()?;
+    let executable = command_name(executable);
+    if is_shell(executable) {
+        return None;
+    }
+    Some(executable.to_string())
+}
+
+pub fn agent_from_command_args(args: &[String]) -> Option<Agent> {
+    let command = args.first()?;
+    Agent::detect(command_name(command)).or_else(|| Agent::detect(&args.join(" ")))
+}
+
+pub fn label_from_command_args(args: &[String]) -> Option<String> {
+    let executable = args.first().map(String::as_str).map(command_name)?;
+    if is_shell(executable) {
+        return None;
+    }
+    Some(executable.to_string())
+}
+
+pub fn title_label_from_title(title: &str) -> Option<String> {
+    let title = title.trim();
     (!title.is_empty()
         && !title.starts_with('~')
         && !title.starts_with('/')
@@ -56,21 +87,46 @@ pub fn focused_pane_title_label(pane: &PaneInfo) -> Option<String> {
     .then(|| ytil_tui::display_fixed_width(title, 8))
 }
 
-pub fn parse_running_command(command: &str) -> Option<String> {
-    let executable = command.split_whitespace().next()?;
-    let executable = executable.rsplit('/').next().unwrap_or(executable);
-    if executable.is_empty() || matches!(executable, "zsh" | "bash" | "fish") {
-        return None;
-    }
-    Some(executable.to_string())
+pub fn command_name(command: &str) -> &str {
+    command.rsplit('/').next().unwrap_or(command)
+}
+
+fn is_shell(executable: &str) -> bool {
+    executable.is_empty() || matches!(executable, "zsh" | "bash" | "fish")
 }
 
 #[cfg(test)]
 mod tests {
     use pretty_assertions::assert_eq;
+    use zellij_tile::prelude::PaneInfo;
 
-    use crate::plugin::tab_bar::pane::*;
-    use crate::plugin::tab_bar::test_support::*;
+    use super::*;
+
+    fn plugin_pane(id: u32) -> PaneInfo {
+        PaneInfo {
+            id,
+            is_plugin: true,
+            ..Default::default()
+        }
+    }
+
+    fn terminal_pane_with_command(id: u32, is_focused: bool, command: &str) -> PaneInfo {
+        PaneInfo {
+            id,
+            is_focused,
+            terminal_command: Some(command.to_string()),
+            ..Default::default()
+        }
+    }
+
+    fn terminal_pane_with_title(id: u32, is_focused: bool, title: &str) -> PaneInfo {
+        PaneInfo {
+            id,
+            is_focused,
+            title: title.to_string(),
+            ..Default::default()
+        }
+    }
 
     #[test]
     fn test_is_displayable_terminal_pane_matches_picker_visibility() {
@@ -135,21 +191,9 @@ mod tests {
     }
 
     #[test]
-    fn test_focused_pane_title_label_filters_paths() {
-        assert_eq!(
-            focused_pane_title_label(&terminal_pane_with_title(42, true, "/tmp/project")),
-            None
-        );
-        assert_eq!(
-            focused_pane_title_label(&PaneInfo {
-                is_held: true,
-                ..terminal_pane_with_title(43, false, "gkg")
-            }),
-            Some("gkg".to_string())
-        );
-        assert_eq!(
-            focused_pane_title_label(&terminal_pane_with_title(42, true, "Cursor Agent")),
-            Some("Cursor …".to_string())
-        );
+    fn test_title_label_from_title_filters_paths() {
+        assert_eq!(title_label_from_title("/tmp/project"), None);
+        assert_eq!(title_label_from_title("gkg"), Some("gkg".to_string()));
+        assert_eq!(title_label_from_title("Cursor Agent"), Some("Cursor …".to_string()));
     }
 }
