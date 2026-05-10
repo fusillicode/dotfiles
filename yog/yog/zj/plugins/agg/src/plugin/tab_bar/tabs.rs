@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use zellij_tile::prelude::TabInfo;
 
-use crate::plugin::state::current_tab::CurrentTab;
+use crate::plugin::tab_bar::current_tab::CurrentTab;
 
 pub fn topology_changed(x: &[TabInfo], y: &[TabInfo]) -> bool {
     if x.len() != y.len() {
@@ -59,8 +59,8 @@ pub fn detect_remapped_tab_id(
 mod tests {
     use pretty_assertions::assert_eq;
 
-    use super::*;
-    use crate::plugin::state::test_support::*;
+    use crate::plugin::tab_bar::tabs::*;
+    use crate::plugin::tab_bar::test_support::*;
 
     #[test]
     fn test_detect_remapped_tab_id_prefers_matching_name() {

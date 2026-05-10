@@ -1,12 +1,8 @@
-use agg::Cmd;
-use agg::GitStat;
-use agg::TabIndicator;
+use crate::plugin::tab_bar::StateSnapshotPayload;
+use crate::plugin::tab_bar::TabBarState;
+use crate::plugin::tab_bar::ui::TabRow;
 
-use crate::plugin::main::StateSnapshotPayload;
-use crate::plugin::state::State;
-use crate::plugin::ui::TabRow;
-
-impl State {
+impl TabBarState {
     pub fn sync_frame(&mut self) -> bool {
         let next_frame = compute_frame(self);
         if self.frame == next_frame {
@@ -17,7 +13,7 @@ impl State {
     }
 }
 
-fn compute_frame(state: &State) -> Vec<TabRow> {
+fn compute_frame(state: &TabBarState) -> Vec<TabRow> {
     let current_tab_is_active = state.current_tab_is_active();
     state
         .all_tabs
@@ -47,19 +43,12 @@ fn compute_frame(state: &State) -> Vec<TabRow> {
                 );
             }
 
-            TabRow::new(
-                tab,
-                None,
-                Cmd::None,
-                TabIndicator::NoAgent,
-                GitStat::default(),
-                state.home_dir.as_path(),
-            )
+            TabRow::placeholder(tab)
         })
         .collect()
 }
 
-fn remote_snapshot_for_tab(state: &State, tab_id: usize) -> Option<&StateSnapshotPayload> {
+fn remote_snapshot_for_tab(state: &TabBarState, tab_id: usize) -> Option<&StateSnapshotPayload> {
     state
         .other_tabs
         .values()
@@ -72,23 +61,26 @@ mod tests {
     use std::collections::HashMap;
 
     use agg::AgentState;
+    use agg::Cmd;
+    use agg::GitStat;
+    use agg::TabIndicator;
     use assert2::assert;
     use pretty_assertions::assert_eq;
     use ytil_agents::agent::Agent;
     use zellij_tile::prelude::TabInfo;
 
-    use super::*;
-    use crate::plugin::events::StateEvent;
-    use crate::plugin::state::current_tab::AgentPanePhase;
-    use crate::plugin::state::current_tab::CurrentTab;
-    use crate::plugin::state::current_tab::FocusedPane;
-    use crate::plugin::state::current_tab::FocusedPaneLabel;
-    use crate::plugin::state::current_tab::PaneFocus;
-    use crate::plugin::state::test_support::*;
+    use crate::plugin::tab_bar::Event;
+    use crate::plugin::tab_bar::current_tab::AgentPanePhase;
+    use crate::plugin::tab_bar::current_tab::CurrentTab;
+    use crate::plugin::tab_bar::current_tab::FocusedPane;
+    use crate::plugin::tab_bar::current_tab::FocusedPaneLabel;
+    use crate::plugin::tab_bar::current_tab::PaneFocus;
+    use crate::plugin::tab_bar::frame::*;
+    use crate::plugin::tab_bar::test_support::*;
 
     #[test]
     fn test_compute_frame_active_mat_follows_focused_agent_when_other_pane_is_busy() {
-        let mut state = State {
+        let mut state = TabBarState {
             plugin_id: 7,
             known_active_tab_id: Some(10),
             all_tabs: vec![TabInfo {
@@ -125,15 +117,15 @@ mod tests {
         assert_eq!(
             split_events,
             vec![
-                StateEvent::PanesChanged {
+                Event::PanesChanged {
                     observed_pane_ids: [42, 43].into_iter().collect(),
                     retained_pane_ids: [42, 43].into_iter().collect(),
                 },
-                StateEvent::FocusChanged {
+                Event::FocusChanged {
                     new_pane: Some(FocusedPane { id: 43, label: None }),
                     acknowledge_existing_attention: true,
                 },
-                StateEvent::SyncRequested,
+                Event::SyncRequested,
             ]
         );
 
@@ -151,14 +143,14 @@ mod tests {
         assert_eq!(
             claude_events,
             vec![
-                StateEvent::FocusChanged {
+                Event::FocusChanged {
                     new_pane: Some(FocusedPane {
                         id: 43,
                         label: Some(FocusedPaneLabel::TerminalCommand("claude".to_string())),
                     }),
                     acknowledge_existing_attention: false,
                 },
-                StateEvent::AgentDetected {
+                Event::AgentDetected {
                     pane_id: 43,
                     agent: Agent::Claude,
                 },
@@ -174,7 +166,7 @@ mod tests {
             frame,
             vec![TabRow {
                 active: true,
-                path_label: "a".to_string(),
+                path_label: "-".to_string(),
                 cmd: Cmd::agent(Agent::Claude, AgentState::Acknowledged),
                 indicator: TabIndicator::Seen,
                 git: GitStat::default(),
@@ -184,7 +176,7 @@ mod tests {
 
     #[test]
     fn test_compute_frame_uses_remote_indicator() {
-        let state = State {
+        let state = TabBarState {
             all_tabs: vec![tab_with_name(10, 0, "remote")],
             other_tabs: HashMap::from([(
                 1,
@@ -198,7 +190,7 @@ mod tests {
             frame,
             vec![TabRow {
                 active: false,
-                path_label: "remote".to_string(),
+                path_label: "-".to_string(),
                 cmd: Cmd::Running("cargo".to_string()),
                 indicator: TabIndicator::NoAgent,
                 git: GitStat::default(),
@@ -208,7 +200,7 @@ mod tests {
 
     #[test]
     fn test_compute_frame_uses_remote_attention_indicator() {
-        let state = State {
+        let state = TabBarState {
             all_tabs: vec![tab_with_name(10, 0, "remote")],
             other_tabs: HashMap::from([(
                 1,
@@ -227,7 +219,7 @@ mod tests {
             frame,
             vec![TabRow {
                 active: false,
-                path_label: "remote".to_string(),
+                path_label: "-".to_string(),
                 cmd: Cmd::agent(Agent::Codex, AgentState::NeedsAttention),
                 indicator: TabIndicator::Unseen,
                 git: GitStat::default(),

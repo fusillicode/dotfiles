@@ -1,8 +1,8 @@
 use zellij_tile::prelude::TabInfo;
 
-use crate::plugin::state::State;
+use crate::plugin::tab_bar::TabBarState;
 
-impl State {
+impl TabBarState {
     pub fn current_tab_is_active(&self) -> bool {
         let current_tab_id = self.current_tab_id();
         self.known_active_tab_id.map_or_else(
