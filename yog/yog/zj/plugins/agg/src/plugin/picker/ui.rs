@@ -9,7 +9,8 @@ const PICKER_SELECTED_BG: &str = "\x1b[48;2;50;50;50m";
 const TAB_DEFAULT_FG: &str = "\x1b[39m";
 const SUMMARY_FG: &str = "\x1b[38;2;119;119;119m";
 const RAIL_SELECTED_FG: &str = "\x1b[38;2;106;106;223m";
-const SUMMARY_MAX_WIDTH: usize = 42;
+const SUMMARY_MAX_WIDTH: usize = 80;
+const COMMIT_SUMMARY_MAX_WIDTH: usize = 80;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PickerRow {
@@ -78,27 +79,47 @@ fn info_line(row: &PickerRow, cols: usize) -> String {
     let inner_w = cols.saturating_sub(1);
     let available = inner_w;
     let git_parts = crate::plugin::ui::git_stat_parts(&row.git);
+    let commit_label = crate::plugin::picker::ui::commit_label(&row.git);
     let git_wanted = git_parts
         .iter()
         .map(|(_, value)| value.chars().count())
         .sum::<usize>()
         .saturating_add(git_parts.len().saturating_sub(1));
+    let commit_wanted = commit_label.chars().count();
     let mut branch_width = row.branch_label.chars().count();
     let mut git_width = git_wanted;
+    let mut commit_width = commit_wanted;
     let mut used_width = branch_width
         .saturating_add(git_width)
-        .saturating_add(usize::from(branch_width > 0 && git_width > 0));
+        .saturating_add(commit_width)
+        .saturating_add(usize::from(branch_width > 0 && git_width > 0))
+        .saturating_add(usize::from(commit_width > 0 && (branch_width > 0 || git_width > 0)));
     if used_width > available {
         git_width = 0;
     }
     used_width = branch_width
         .saturating_add(git_width)
-        .saturating_add(usize::from(branch_width > 0 && git_width > 0));
+        .saturating_add(commit_width)
+        .saturating_add(usize::from(branch_width > 0 && git_width > 0))
+        .saturating_add(usize::from(commit_width > 0 && (branch_width > 0 || git_width > 0)));
+    if used_width > available && commit_width > 0 {
+        let prefix_width = branch_width
+            .saturating_add(git_width)
+            .saturating_add(usize::from(branch_width > 0 && git_width > 0));
+        let separator = usize::from(prefix_width > 0);
+        commit_width = available.saturating_sub(prefix_width).saturating_sub(separator);
+    }
+    used_width = branch_width
+        .saturating_add(git_width)
+        .saturating_add(commit_width)
+        .saturating_add(usize::from(branch_width > 0 && git_width > 0))
+        .saturating_add(usize::from(commit_width > 0 && (branch_width > 0 || git_width > 0)));
     if used_width > available {
         branch_width = branch_width.min(available);
     }
     let branch = ytil_tui::display_fixed_width(&row.branch_label, branch_width);
     let git = crate::plugin::picker::ui::git_stat_with_color(&git_parts, git_width, bg, TAB_DEFAULT_FG);
+    let commit = ytil_tui::display_fixed_width(&commit_label, commit_width);
 
     let mut out = crate::plugin::picker::ui::line_prefix(row);
     if branch_width > 0 {
@@ -109,6 +130,14 @@ fn info_line(row: &PickerRow, cols: usize) -> String {
             out.push(' ');
         }
         out.push_str(&git);
+    }
+    if commit_width > 0 {
+        if branch_width > 0 || git_width > 0 {
+            out.push(' ');
+        }
+        out.push_str(SUMMARY_FG);
+        out.push_str(&commit);
+        out.push_str(crate::plugin::ui::RESET);
     }
     out.push_str(bg);
     out.push_str(TAB_DEFAULT_FG);
@@ -175,6 +204,14 @@ fn git_stat_with_color(parts: &[(&'static str, String)], width: usize, bg: &str,
     out
 }
 
+fn commit_label(git: &GitStat) -> String {
+    let Some(last_commit) = git.last_commit.as_ref() else {
+        return String::new();
+    };
+    let summary = ytil_tui::display_fixed_width(&last_commit.summary, COMMIT_SUMMARY_MAX_WIDTH);
+    format!("{} {} | {summary}", last_commit.short_sha, last_commit.age)
+}
+
 fn cmd_with_color(row: &PickerRow, width: usize, bg: &str, fg: &str) -> String {
     if width == 0 {
         return String::new();
@@ -196,6 +233,7 @@ fn cmd_with_color(row: &PickerRow, width: usize, bg: &str, fg: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use agg::LastCommit;
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -317,6 +355,11 @@ mod tests {
             cwd_label: "~/project".to_string(),
             branch_label: "main".to_string(),
             git: GitStat {
+                last_commit: Some(LastCommit {
+                    short_sha: "abc1234".to_string(),
+                    age: "2m".to_string(),
+                    summary: "fix branch metadata".to_string(),
+                }),
                 insertions: 2,
                 deletions: 1,
                 new_files: 3,
@@ -333,11 +376,46 @@ mod tests {
         assert2::assert!(lines[1].contains(crate::plugin::ui::GIT_NEW_LINES_FG));
         assert2::assert!(lines[1].contains(crate::plugin::ui::GIT_DEL_LINES_FG));
         assert2::assert!(lines[1].contains(crate::plugin::ui::GIT_NEW_FILES_FG));
-        assert_eq!(plain_text(&lines[1]), crate::plugin::ui::pad("▎main +2 -1 ?3", 52));
+        assert2::assert!(lines[1].contains(SUMMARY_FG));
+        assert_eq!(
+            plain_text(&lines[1]),
+            crate::plugin::ui::pad("▎main +2 -1 ?3 abc1234 2m | fix branch metadata", 52)
+        );
         assert_eq!(plain_text(&lines[2]), crate::plugin::ui::pad("▎cx solve warning", 52));
         for line in lines {
             assert_eq!(crate::plugin::ui::visible_len(&line), 52);
         }
+    }
+
+    #[test]
+    fn test_info_line_caps_commit_summary_to_80() {
+        let row = PickerRow {
+            selected: true,
+            cwd_label: "~/project".to_string(),
+            branch_label: "main".to_string(),
+            git: GitStat {
+                last_commit: Some(LastCommit {
+                    short_sha: "abc1234".to_string(),
+                    age: "1w".to_string(),
+                    summary: "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz".to_string(),
+                }),
+                ..Default::default()
+            },
+            cmd: Cmd::None,
+            indicator: TabIndicator::NoAgent,
+            session_summary: String::new(),
+        };
+
+        let line = info_line(&row, 120);
+
+        assert_eq!(
+            plain_text(&line),
+            crate::plugin::ui::pad(
+                "▎main abc1234 1w | abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza…",
+                120,
+            )
+        );
+        assert_eq!(crate::plugin::ui::visible_len(&line), 120);
     }
 
     #[test]
@@ -356,6 +434,30 @@ mod tests {
 
         assert_eq!(plain_text(&line), "▎cx abcdefghijklmno…");
         assert_eq!(crate::plugin::ui::visible_len(&line), 20);
+    }
+
+    #[test]
+    fn test_cmd_line_caps_attached_session_summary_to_80() {
+        let row = PickerRow {
+            selected: true,
+            cwd_label: "~/project".to_string(),
+            branch_label: "main".to_string(),
+            git: GitStat::default(),
+            cmd: Cmd::agent(ytil_agents::agent::Agent::Codex, agg::AgentState::Acknowledged),
+            indicator: TabIndicator::Seen,
+            session_summary: "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz".to_string(),
+        };
+
+        let line = cmd_line(&row, 100);
+
+        assert_eq!(
+            plain_text(&line),
+            crate::plugin::ui::pad(
+                "▎cx abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza…",
+                100,
+            )
+        );
+        assert_eq!(crate::plugin::ui::visible_len(&line), 100);
     }
 
     #[test]

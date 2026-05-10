@@ -487,7 +487,7 @@ fn run_current_tab_git_stat(current_tab: Option<&CurrentTab>) {
     let cwd_str = cwd.display().to_string();
     let mut context = BTreeMap::new();
     context.insert(CONTEXT_KEY_GIT_STAT.into(), cwd_str.clone());
-    let args: Vec<&str> = vec!["agg", "git-stat", &cwd_str];
+    let args: Vec<&str> = vec!["agg", "git-stat", "tab-bar", &cwd_str];
     zellij_tile::prelude::run_command_with_env_variables_and_cwd(&args, BTreeMap::new(), cwd.clone(), context);
 }
 

@@ -1263,6 +1263,7 @@ mod tests {
             deletions: 1,
             new_files: 3,
             is_worktree: false,
+            ..Default::default()
         };
 
         assert2::assert!(state.apply_event(PickerEvent::GitStatUpdated { stat: stat.clone() }));

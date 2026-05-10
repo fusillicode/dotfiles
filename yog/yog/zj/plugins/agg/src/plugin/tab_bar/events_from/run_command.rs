@@ -1,7 +1,5 @@
 use std::path::PathBuf;
 
-use agg::GitStat;
-
 use crate::plugin::tab_bar::Event;
 use crate::plugin::tab_bar::TabBarState;
 
@@ -18,10 +16,10 @@ pub fn derive(state: &TabBarState, requested_cwd: &PathBuf, exit_code: Option<i3
     }
 
     let output = String::from_utf8_lossy(stdout);
-    for line in output.lines() {
-        let Ok(new_stat) = line.parse::<GitStat>().inspect_err(|error| eprintln!("agg: {error}")) else {
-            continue;
-        };
+    let Ok(records) = agg::parse_git_stat_records(&output).inspect_err(|error| eprintln!("agg: {error}")) else {
+        return vec![];
+    };
+    for new_stat in records {
         if new_stat.path != *requested_cwd {
             continue;
         }

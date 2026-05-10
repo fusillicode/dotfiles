@@ -5,7 +5,7 @@ mod install;
 mod nudge;
 
 const NUDGE_USAGE: &str = "usage: agg nudge <summary> <body> <tab-id> <pane-id> [image-path] [--session <session>]";
-const USAGE: &str = "usage: agg install [--debug] | agg git-stat <paths...> | agg nudge <summary> <body> <tab-id> <pane-id> [image-path] [--session <session>]";
+const USAGE: &str = "usage: agg install [--debug] | agg git-stat <tab-bar|picker> <paths...> | agg nudge <summary> <body> <tab-id> <pane-id> [image-path] [--session <session>]";
 
 pub fn run() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
@@ -19,8 +19,16 @@ pub fn run() -> rootcause::Result<()> {
             return install::run(args.iter().any(|arg| arg == "--debug"));
         }
         Some("git-stat") => {
-            for cwd in args.get(1..).into_iter().flatten() {
-                println!("{}", git_stat::run(cwd));
+            let Some(use_case) = args.get(1).and_then(|arg| arg.parse().ok()) else {
+                rootcause::bail!(USAGE);
+            };
+            let mut first = true;
+            for cwd in args.get(2..).into_iter().flatten() {
+                if !first {
+                    println!();
+                }
+                print!("{}", git_stat::run(cwd, use_case));
+                first = false;
             }
             return Ok(());
         }

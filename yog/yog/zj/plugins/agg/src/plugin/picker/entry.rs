@@ -194,7 +194,7 @@ impl PaneEntry {
         let stat_changed = self.git != stat;
         self.branch = branch;
         self.git = stat;
-        if branch_changed {
+        if stat_changed {
             self.refresh_search_text();
         }
         branch_changed || stat_changed
@@ -293,13 +293,26 @@ impl PaneEntry {
             .as_ref()
             .map_or_else(String::new, |cwd| cwd.display().to_string());
         let branch = self.branch.as_deref().unwrap_or_default();
+        let (commit_sha, commit_age, commit_summary) = self.git.last_commit.as_ref().map_or(("", "", ""), |commit| {
+            (commit.short_sha.as_str(), commit.age.as_str(), commit.summary.as_str())
+        });
         let label = self.label.as_deref().unwrap_or_default();
         let command = self.command_args.join(" ");
         let session_display = self.session_display.as_deref().unwrap_or_default();
         let session_search = self.session_search.as_deref().unwrap_or_default();
         self.search_text = format!(
-            "{} {} {} {} {} {} {} {}",
-            self.tab_number, self.pane_id, cwd, branch, command, label, session_display, session_search
+            "{} {} {} {} {} {} {} {} {} {} {}",
+            self.tab_number,
+            self.pane_id,
+            cwd,
+            branch,
+            commit_sha,
+            commit_age,
+            commit_summary,
+            command,
+            label,
+            session_display,
+            session_search
         )
         .to_ascii_lowercase();
     }

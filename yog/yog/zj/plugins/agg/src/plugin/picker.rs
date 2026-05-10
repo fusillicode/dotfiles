@@ -200,7 +200,7 @@ fn run_git_stat(cwd: PathBuf) {
     let mut context = BTreeMap::new();
     context.insert(CONTEXT_KIND.to_string(), CONTEXT_GIT_STAT.to_string());
     context.insert(CONTEXT_CWD.to_string(), cwd_str.clone());
-    let args: Vec<&str> = vec!["agg", "git-stat", &cwd_str];
+    let args: Vec<&str> = vec!["agg", "git-stat", "picker", &cwd_str];
     zellij_tile::prelude::run_command_with_env_variables_and_cwd(&args, BTreeMap::new(), cwd, context);
 }
 

@@ -40,7 +40,7 @@ pub enum PipeEvent {
     },
     StateSnapshot {
         source_plugin_id: u32,
-        snapshot: StateSnapshotPayload,
+        snapshot: Box<StateSnapshotPayload>,
     },
     Agent(AgentEventPayload),
 }
@@ -86,7 +86,7 @@ impl TryFrom<&PipeMessage> for PipeEvent {
                     let snapshot = StateSnapshotPayload::try_from(msg)?;
                     Ok(Self::StateSnapshot {
                         source_plugin_id,
-                        snapshot,
+                        snapshot: Box::new(snapshot),
                     })
                 }
                 Some(other) => Err(PipeEventError::UnknownMsgName(other.to_string())),
@@ -176,7 +176,7 @@ mod tests {
         },
         PipeEvent::StateSnapshot {
             source_plugin_id: 7,
-            snapshot: StateSnapshotPayload {
+            snapshot: Box::new(StateSnapshotPayload {
                 tab_id: 17,
                 seq: 42,
                 focused_pane_id: Some(99),
@@ -190,7 +190,7 @@ mod tests {
                     is_worktree: true,
                     ..Default::default()
                 },
-            },
+            }),
         }
     )]
     #[case::active_tab(

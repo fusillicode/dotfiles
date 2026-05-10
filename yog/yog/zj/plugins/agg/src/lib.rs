@@ -11,24 +11,37 @@ pub use ytil_tui::short_path;
 
 pub const AGENTS_PIPE: &str = "agg-agent";
 pub const EMPTY_FIELD: &str = "--";
+const GIT_STAT_FIELD_COUNT: usize = 9;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct GitStat {
     pub path: PathBuf,
     pub branch: Option<String>,
+    pub last_commit: Option<LastCommit>,
     pub insertions: usize,
     pub deletions: usize,
     pub new_files: usize,
     pub is_worktree: bool,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LastCommit {
+    pub short_sha: String,
+    pub age: String,
+    pub summary: String,
+}
+
 impl Display for GitStat {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let path = encode_git_stat_field(&self.path.display().to_string());
         let branch = self.branch.as_deref().map(encode_git_stat_field).unwrap_or_default();
+        let last_commit = self
+            .last_commit
+            .as_ref()
+            .map_or_else(|| "\n\n".to_string(), ToString::to_string);
         write!(
             f,
-            "{path}\t{branch}\t{}\t{}\t{}\t{}",
+            "{path}\n{branch}\n{}\n{}\n{}\n{}\n{last_commit}",
             self.insertions,
             self.deletions,
             self.new_files,
@@ -37,11 +50,20 @@ impl Display for GitStat {
     }
 }
 
+impl Display for LastCommit {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let short_sha = encode_git_stat_field(&self.short_sha);
+        let age = encode_git_stat_field(&self.age);
+        let summary = encode_git_stat_field(&self.summary);
+        write!(f, "{short_sha}\n{age}\n{summary}")
+    }
+}
+
 impl std::str::FromStr for GitStat {
     type Err = ParseError;
 
-    fn from_str(line: &str) -> Result<Self, Self::Err> {
-        let mut fields = line.split('\t');
+    fn from_str(record: &str) -> Result<Self, Self::Err> {
+        let mut fields = record.split('\n');
         let mut next = |name| fields.next().ok_or(ParseError::Missing(name));
 
         let path = PathBuf::from(decode_git_stat_field(next("path")?, "path")?);
@@ -50,6 +72,14 @@ impl std::str::FromStr for GitStat {
         let deletions = parse_usize(next("del")?, "del")?;
         let new_files = parse_usize(next("new")?, "new")?;
         let is_worktree = parse_bool(next("wt")?, "wt")?;
+        let short_sha_field = next("last_commit_short_sha")?;
+        let age_field = next("last_commit_age")?;
+        let summary_field = next("last_commit_summary")?;
+        let last_commit = if short_sha_field.is_empty() && age_field.is_empty() && summary_field.is_empty() {
+            None
+        } else {
+            Some(format!("{short_sha_field}\n{age_field}\n{summary_field}").parse()?)
+        };
         if fields.next().is_some() {
             return Err(ParseError::Invalid {
                 field: "git_stat",
@@ -60,12 +90,70 @@ impl std::str::FromStr for GitStat {
         Ok(Self {
             path,
             branch: (!branch.is_empty()).then_some(branch),
+            last_commit,
             insertions,
             deletions,
             new_files,
             is_worktree,
         })
     }
+}
+
+impl std::str::FromStr for LastCommit {
+    type Err = ParseError;
+
+    fn from_str(record: &str) -> Result<Self, Self::Err> {
+        let mut fields = record.split('\n');
+        let mut next = |name| fields.next().ok_or(ParseError::Missing(name));
+
+        let short_sha = decode_git_stat_field(next("last_commit_short_sha")?, "last_commit_short_sha")?;
+        let age = decode_git_stat_field(next("last_commit_age")?, "last_commit_age")?;
+        let summary = decode_git_stat_field(next("last_commit_summary")?, "last_commit_summary")?;
+        if fields.next().is_some() {
+            return Err(ParseError::Invalid {
+                field: "last_commit",
+                value: "too many fields".to_string(),
+            });
+        }
+        if short_sha.is_empty() || age.is_empty() {
+            return Err(ParseError::Invalid {
+                field: "last_commit",
+                value: "incomplete".to_string(),
+            });
+        }
+
+        Ok(Self {
+            short_sha,
+            age,
+            summary,
+        })
+    }
+}
+
+/// Parse one or more newline-field [`GitStat`] records.
+///
+/// # Errors
+/// Returns [`ParseError`] if the record has an incomplete field count or any field is invalid.
+pub fn parse_git_stat_records(output: &str) -> Result<Vec<GitStat>, ParseError> {
+    if output.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let fields = output.split('\n').collect::<Vec<_>>();
+    if fields.len() % GIT_STAT_FIELD_COUNT != 0 {
+        return Err(ParseError::Invalid {
+            field: "git_stat",
+            value: format!(
+                "expected fields in chunks of {GIT_STAT_FIELD_COUNT}, got {}",
+                fields.len()
+            ),
+        });
+    }
+
+    fields
+        .chunks(GIT_STAT_FIELD_COUNT)
+        .map(|fields| fields.join("\n").parse())
+        .collect()
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -436,22 +524,30 @@ mod tests {
         let stat = GitStat {
             path: PathBuf::from("/tmp/re\\po\nx"),
             branch: Some("feat\tone\\two".to_string()),
+            last_commit: Some(LastCommit {
+                short_sha: "abc1234".to_string(),
+                age: "2m".to_string(),
+                summary: "fix picker\tbranch metadata".to_string(),
+            }),
             insertions: 2,
             deletions: 1,
             new_files: 3,
             is_worktree: true,
         };
 
-        let line = stat.to_string();
-        assert2::assert!(let Ok(parsed) = line.parse::<GitStat>());
+        let record = stat.to_string();
+        assert2::assert!(let Ok(parsed) = record.parse::<GitStat>());
 
-        pretty_assertions::assert_eq!(line, "/tmp/re\\\\po\\nx\tfeat\\tone\\\\two\t2\t1\t3\t1");
+        pretty_assertions::assert_eq!(
+            record,
+            "/tmp/re\\\\po\\nx\nfeat\\tone\\\\two\n2\n1\n3\n1\nabc1234\n2m\nfix picker\\tbranch metadata"
+        );
         pretty_assertions::assert_eq!(parsed, stat);
     }
 
     #[test]
     fn test_git_stat_wire_parse_when_branch_empty_returns_none() {
-        assert2::assert!(let Ok(parsed) = "/tmp/repo\t\t0\t0\t0\t0".parse::<GitStat>());
+        assert2::assert!(let Ok(parsed) = "/tmp/repo\n\n0\n0\n0\n0\n\n\n".parse::<GitStat>());
 
         pretty_assertions::assert_eq!(
             parsed,
@@ -461,6 +557,60 @@ mod tests {
                 ..Default::default()
             }
         );
+    }
+
+    #[test]
+    fn test_last_commit_wire_roundtrip_allows_empty_summary() {
+        let commit = LastCommit {
+            short_sha: "abc1234".to_string(),
+            age: "2m".to_string(),
+            summary: String::new(),
+        };
+
+        let record = commit.to_string();
+        assert2::assert!(let Ok(parsed) = record.parse::<LastCommit>());
+
+        pretty_assertions::assert_eq!(record, "abc1234\n2m\n");
+        pretty_assertions::assert_eq!(parsed, commit);
+    }
+
+    #[test]
+    fn test_last_commit_wire_parse_when_required_field_missing_returns_error() {
+        assert2::assert!(let Err(err) = "\n2m\nsummary".parse::<LastCommit>());
+
+        pretty_assertions::assert_eq!(
+            err,
+            ParseError::Invalid {
+                field: "last_commit",
+                value: "incomplete".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_git_stat_records_when_multiple_records_returns_all() {
+        let first = GitStat {
+            path: PathBuf::from("/tmp/one"),
+            branch: Some("main".to_string()),
+            ..Default::default()
+        };
+        let second = GitStat {
+            path: PathBuf::from("/tmp/two"),
+            branch: Some("next".to_string()),
+            last_commit: Some(LastCommit {
+                short_sha: "def5678".to_string(),
+                age: "1d".to_string(),
+                summary: "ship newline format".to_string(),
+            }),
+            insertions: 4,
+            is_worktree: true,
+            ..Default::default()
+        };
+        let output = format!("{first}\n{second}");
+
+        assert2::assert!(let Ok(parsed) = parse_git_stat_records(&output));
+
+        pretty_assertions::assert_eq!(parsed, vec![first, second]);
     }
 
     #[test]
