@@ -58,8 +58,8 @@ pub fn render(state: &PickerState, rows: usize, cols: usize, buf: &mut String) {
 }
 
 pub fn update_tabs(state: &mut PickerState, tabs: Vec<TabInfo>) -> bool {
-    let events = crate::plugin::picker::events_from::tab_update::derive(state, tabs);
-    apply_events(state, &events)
+    let events = crate::plugin::picker::events_from::tab_update::derive(tabs);
+    apply_events(state, events)
 }
 
 pub fn update_panes(state: &mut PickerState, manifest: &PaneManifest) -> bool {
@@ -69,7 +69,7 @@ pub fn update_panes(state: &mut PickerState, manifest: &PaneManifest) -> bool {
         |pane_id| zellij_tile::prelude::get_pane_cwd(PaneId::Terminal(pane_id)).ok(),
         |pane_id| zellij_tile::prelude::get_pane_running_command(PaneId::Terminal(pane_id)).ok(),
     );
-    let changed = apply_events(state, &events);
+    let changed = apply_events(state, events);
     if changed {
         run_git_stats(state);
     }
@@ -77,13 +77,13 @@ pub fn update_panes(state: &mut PickerState, manifest: &PaneManifest) -> bool {
 }
 
 pub fn update_pane_closed(state: &mut PickerState, pane_id: u32) -> bool {
-    let events = crate::plugin::picker::events_from::pane_close::derive(state, pane_id);
-    apply_events(state, &events)
+    let events = crate::plugin::picker::events_from::pane_close::derive(pane_id);
+    apply_events(state, events)
 }
 
 pub fn update_cwd(state: &mut PickerState, pane_id: u32, cwd: PathBuf) -> bool {
-    let events = crate::plugin::picker::events_from::cwd::derive(state, pane_id, cwd);
-    let changed = apply_events(state, &events);
+    let events = crate::plugin::picker::events_from::cwd::derive(pane_id, cwd);
+    let changed = apply_events(state, events);
     if changed {
         run_git_stats(state);
     }
@@ -97,8 +97,8 @@ pub fn update_command(state: &mut PickerState, pane_id: PaneId, command: &[Strin
     let PaneId::Terminal(pane_id) = pane_id else {
         return false;
     };
-    let events = crate::plugin::picker::events_from::command::derive(state, pane_id, command.to_owned());
-    let changed = apply_events(state, &events);
+    let events = crate::plugin::picker::events_from::command::derive(pane_id, command.to_owned());
+    let changed = apply_events(state, events);
     if changed {
         run_git_stats(state);
     }
@@ -106,8 +106,7 @@ pub fn update_command(state: &mut PickerState, pane_id: PaneId, command: &[Strin
 }
 
 pub fn update_key(state: &mut PickerState, key: &KeyWithModifier) -> bool {
-    let (events, action) = crate::plugin::picker::events_from::key::derive(state, key);
-    let changed = apply_events(state, &events);
+    let action = state.handle_key(key);
     match action {
         PickerAction::Close => {
             zellij_tile::prelude::close_self();
@@ -119,7 +118,7 @@ pub fn update_key(state: &mut PickerState, key: &KeyWithModifier) -> bool {
             false
         }
         PickerAction::Redraw => true,
-        PickerAction::None => changed,
+        PickerAction::None => false,
     }
 }
 
@@ -137,8 +136,8 @@ pub fn pipe(state: &mut PickerState, pipe_message: &PipeMessage) -> bool {
         };
         return state.set_initial_focus_pane(snapshot.tab_id, focused_pane_id, snapshot.seq);
     }
-    let events = crate::plugin::picker::events_from::agent::derive(state, pipe_message);
-    apply_events(state, &events)
+    let events = crate::plugin::picker::events_from::agent::derive(pipe_message);
+    apply_events(state, events)
 }
 
 pub fn update_run_command_result(
@@ -159,8 +158,8 @@ pub fn update_run_command_result(
             }
             match crate::plugin::picker::events_from::sessions::parse(stdout) {
                 Ok(entries) => {
-                    let events = crate::plugin::picker::events_from::sessions::derive(state, entries);
-                    apply_events(state, &events)
+                    let events = crate::plugin::picker::events_from::sessions::derive(entries);
+                    apply_events(state, events)
                 }
                 Err(err) => {
                     eprintln!("agg picker: failed to parse ags sessions: {err}");
@@ -172,19 +171,19 @@ pub fn update_run_command_result(
             let Some(cwd) = context.get(CONTEXT_CWD).map(PathBuf::from) else {
                 return false;
             };
-            let events = crate::plugin::picker::events_from::git_stat::derive(state, &cwd, exit_code, stdout);
-            apply_events(state, &events)
+            let events = crate::plugin::picker::events_from::git_stat::derive(&cwd, exit_code, stdout);
+            apply_events(state, events)
         }
         Some(_) | None => false,
     }
 }
 
-fn apply_events(state: &mut PickerState, events: &[PickerEvent]) -> bool {
+fn apply_events(state: &mut PickerState, events: Vec<PickerEvent>) -> bool {
     let mut changed = false;
     for event in events {
         changed |= state.apply_event(event);
     }
-    changed || !events.is_empty()
+    changed
 }
 
 fn run_ags_sessions() {

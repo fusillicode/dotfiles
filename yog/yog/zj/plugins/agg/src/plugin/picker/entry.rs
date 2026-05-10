@@ -31,6 +31,7 @@ pub struct PaneEntry {
     pub session_summary: Option<String>,
     pub session_display: Option<String>,
     pub session_search: Option<String>,
+    search_text: String,
 }
 
 impl PaneEntry {
@@ -68,7 +69,7 @@ impl PaneEntry {
             tab_id: None,
             pane_id,
             cwd,
-            command_args,
+            command_args: Vec::new(),
             label: title_label,
             marker: TabIndicator::NoAgent,
             agent: None,
@@ -79,8 +80,9 @@ impl PaneEntry {
             session_summary: None,
             session_display: None,
             session_search: None,
+            search_text: String::new(),
         };
-        entry.apply_command(entry.command_args.clone());
+        entry.apply_command(command_args);
         if entry.agent.is_none() {
             entry.agent = entry.label.as_deref().and_then(Agent::detect);
             if let Some(agent) = entry.agent {
@@ -88,10 +90,17 @@ impl PaneEntry {
                 entry.label = Some(agent.short_name().to_string());
             }
         }
+        entry.refresh_search_text();
         entry
     }
 
-    pub fn apply_command(&mut self, command_args: Vec<String>) {
+    pub fn apply_command(&mut self, command_args: Vec<String>) -> bool {
+        let old_agent = self.agent;
+        let old_session_id = self.session_id.clone();
+        let old_marker = self.marker;
+        let old_label = self.label.clone();
+        let command_changed = self.command_args != command_args;
+
         self.command_args = command_args;
         self.agent = crate::plugin::pane::agent_from_command_args(&self.command_args);
         self.session_id = crate::plugin::picker::entry::resume_session_id_from_command_args(&self.command_args);
@@ -105,6 +114,16 @@ impl PaneEntry {
             .map(|agent| agent.short_name().to_string())
             .or_else(|| crate::plugin::pane::label_from_command_args(&self.command_args))
             .or_else(|| self.label.clone());
+
+        let changed = command_changed
+            || old_agent != self.agent
+            || old_session_id != self.session_id
+            || old_marker != self.marker
+            || old_label != self.label;
+        if changed {
+            self.refresh_search_text();
+        }
+        changed
     }
 
     pub fn inherit_agent_state(&mut self, previous: &Self) {
@@ -158,7 +177,11 @@ impl PaneEntry {
                 }
             }
         }
-        old_agent != self.agent || old_marker != self.marker || old_label != self.label
+        let changed = old_agent != self.agent || old_marker != self.marker || old_label != self.label;
+        if changed {
+            self.refresh_search_text();
+        }
+        changed
     }
 
     pub fn apply_git_stat(&mut self, stat: GitStat) -> bool {
@@ -167,19 +190,42 @@ impl PaneEntry {
         changed
     }
 
-    pub fn attach_session(&mut self, sessions: &[SessionEntry]) {
-        self.session_summary = None;
-        self.session_display = None;
-        self.session_search = None;
-        let Some(session) = crate::plugin::picker::entry::matching_session(self, sessions) else {
-            return;
-        };
-        self.session_summary.clone_from(&session.summary);
-        self.session_display = Some(session.display.clone());
-        self.session_search = Some(session.search.clone());
+    pub fn apply_cwd(&mut self, cwd: PathBuf, stat: GitStat) -> bool {
+        let cwd_changed = self.cwd.as_ref() != Some(&cwd);
+        self.cwd = Some(cwd);
+        let stat_changed = self.apply_git_stat(stat);
+        if cwd_changed {
+            self.refresh_search_text();
+        }
+        cwd_changed || stat_changed
     }
 
-    pub fn apply_tab_metadata(&mut self, tabs: &[TabInfo]) {
+    pub fn attach_session(&mut self, sessions: &[SessionEntry]) -> bool {
+        let session = crate::plugin::picker::entry::matching_session(self, sessions);
+        let next_summary = session.and_then(|session| session.summary.as_deref());
+        let next_display = session.map(|session| session.display.as_str());
+        let next_search = session.map(|session| session.search.as_str());
+
+        let changed = self.session_summary.as_deref() != next_summary
+            || self.session_display.as_deref() != next_display
+            || self.session_search.as_deref() != next_search;
+        if !changed {
+            return false;
+        }
+
+        self.session_summary = session.and_then(|session| session.summary.clone());
+        self.session_display = session.map(|session| session.display.clone());
+        self.session_search = session.map(|session| session.search.clone());
+        self.refresh_search_text();
+        true
+    }
+
+    pub fn apply_tab_metadata(&mut self, tabs: &[TabInfo]) -> bool {
+        let old_tab_number = self.tab_number;
+        let old_tab_id = self.tab_id;
+        let old_tab_active = self.tab_active;
+        let old_marker = self.marker;
+
         if let Some(tab) = tabs.iter().find(|tab| tab.position == self.tab_position) {
             self.tab_number = tab.position.saturating_add(1);
             self.tab_id = Some(tab.tab_id);
@@ -188,11 +234,22 @@ impl PaneEntry {
                 self.marker = TabIndicator::Seen;
             }
         }
+
+        let changed = old_tab_number != self.tab_number
+            || old_tab_id != self.tab_id
+            || old_tab_active != self.tab_active
+            || old_marker != self.marker;
+        if old_tab_number != self.tab_number {
+            self.refresh_search_text();
+        }
+        changed
     }
 
-    pub fn matches_query(&self, query: &str) -> bool {
-        let query = query.trim().to_ascii_lowercase();
-        query.is_empty() || self.search_text().contains(&query)
+    pub fn matches_normalized_query(&self, query: &str) -> bool {
+        if query.is_empty() {
+            return true;
+        }
+        self.search_text.contains(query)
     }
 
     pub fn row(&self, selected: bool, home_dir: &Path) -> PickerRow {
@@ -209,7 +266,7 @@ impl PaneEntry {
         }
     }
 
-    fn search_text(&self) -> String {
+    fn refresh_search_text(&mut self) {
         let cwd = self
             .cwd
             .as_ref()
@@ -218,11 +275,11 @@ impl PaneEntry {
         let command = self.command_args.join(" ");
         let session_display = self.session_display.as_deref().unwrap_or_default();
         let session_search = self.session_search.as_deref().unwrap_or_default();
-        format!(
+        self.search_text = format!(
             "{} {} {} {} {} {} {}",
             self.tab_number, self.pane_id, cwd, command, label, session_display, session_search
         )
-        .to_ascii_lowercase()
+        .to_ascii_lowercase();
     }
 }
 

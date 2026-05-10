@@ -1,9 +1,8 @@
 use crate::plugin::picker::state::PickerEvent;
-use crate::plugin::picker::state::PickerState;
 use crate::plugin::picker::state::SessionEntry;
 
-pub fn derive(state: &PickerState, sessions: Vec<SessionEntry>) -> Vec<PickerEvent> {
-    crate::plugin::picker::events_from::picker_event(state, PickerEvent::SessionsUpdated { sessions })
+pub fn derive(sessions: Vec<SessionEntry>) -> Vec<PickerEvent> {
+    vec![PickerEvent::SessionsUpdated { sessions }]
 }
 
 pub fn parse(stdout: &[u8]) -> serde_json::Result<Vec<SessionEntry>> {
