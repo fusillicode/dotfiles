@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::Path;
 use std::path::PathBuf;
 
 use agg::AgentState;
@@ -15,7 +16,7 @@ use crate::plugin::picker::state::SessionEntry;
 use crate::plugin::picker::ui::PickerRow;
 
 #[cfg_attr(test, derive(Debug))]
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Eq, PartialEq)]
 pub struct PaneEntry {
     pub tab_position: usize,
     tab_number: usize,
@@ -262,13 +263,10 @@ impl PaneEntry {
         self.search_text.contains(query)
     }
 
-    pub fn row(&self, selected: bool) -> PickerRow {
+    pub fn row(&self, selected: bool, home_dir: &Path) -> PickerRow {
         PickerRow {
             selected,
-            cwd_label: self
-                .cwd
-                .as_ref()
-                .map_or_else(|| String::from("-"), |cwd| cwd.display().to_string()),
+            cwd_label: path_label(self.cwd.as_deref(), home_dir),
             branch_label: self.branch.clone().unwrap_or_else(|| "-".to_string()),
             git: self.git.clone(),
             cmd: self.cmd(),
@@ -316,6 +314,21 @@ impl PaneEntry {
         )
         .to_ascii_lowercase();
     }
+}
+
+fn path_label(cwd: Option<&Path>, home_dir: &Path) -> String {
+    let Some(cwd) = cwd else {
+        return "-".to_string();
+    };
+    if !home_dir.as_os_str().is_empty() && home_dir != Path::new("/") {
+        if cwd == home_dir {
+            return "~".to_string();
+        }
+        if let Ok(relative) = cwd.strip_prefix(home_dir) {
+            return format!("~/{}", relative.display());
+        }
+    }
+    cwd.display().to_string()
 }
 
 pub fn sort_by_tab_order(pane_entries: &mut [PaneEntry], tabs: &[TabInfo]) {
@@ -367,4 +380,32 @@ fn resume_flag_id(args: &[String]) -> Option<String> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case("/Users/me", "~")]
+    #[case("/Users/me/project", "~/project")]
+    #[case("/Users/me/data/dev/work", "~/data/dev/work")]
+    fn test_row_when_cwd_is_under_home_uses_home_relative_label(#[case] cwd: &str, #[case] expected: &str) {
+        let entry = PaneEntry::new(0, 1, Some(PathBuf::from(cwd)), Vec::new(), None);
+
+        let row = entry.row(false, Path::new("/Users/me"));
+
+        pretty_assertions::assert_eq!(row.cwd_label, expected);
+    }
+
+    #[test]
+    fn test_row_when_cwd_is_outside_home_keeps_absolute_label() {
+        let entry = PaneEntry::new(0, 1, Some(PathBuf::from("/opt/project")), Vec::new(), None);
+
+        let row = entry.row(false, Path::new("/Users/me"));
+
+        pretty_assertions::assert_eq!(row.cwd_label, "/opt/project");
+    }
 }

@@ -25,7 +25,8 @@ const CONTEXT_AGS_SESSIONS: &str = "ags_sessions";
 const CONTEXT_GIT_STAT: &str = "git_stat";
 const CONTEXT_CWD: &str = "cwd";
 
-pub fn load(state: &mut PickerState, _home_dir: PathBuf, config: &BTreeMap<String, String>) {
+pub fn load(state: &mut PickerState, home_dir: PathBuf, config: &BTreeMap<String, String>) {
+    state.home_dir = home_dir;
     state.set_floating_size(config.get("width").cloned(), config.get("height").cloned());
 }
 
