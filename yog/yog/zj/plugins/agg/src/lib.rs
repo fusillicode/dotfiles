@@ -1,7 +1,9 @@
 use std::convert::TryFrom;
+use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 pub use ytil_agents::ParseError;
 use ytil_agents::agent::Agent;
@@ -32,7 +34,7 @@ pub struct LastCommit {
 }
 
 impl Display for GitStat {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let path = encode_git_stat_field(&self.path.display().to_string());
         let branch = self.branch.as_deref().map(encode_git_stat_field).unwrap_or_default();
         let last_commit = self
@@ -51,7 +53,7 @@ impl Display for GitStat {
 }
 
 impl Display for LastCommit {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let short_sha = encode_git_stat_field(&self.short_sha);
         let age = encode_git_stat_field(&self.age);
         let summary = encode_git_stat_field(&self.summary);
@@ -59,7 +61,7 @@ impl Display for LastCommit {
     }
 }
 
-impl std::str::FromStr for GitStat {
+impl FromStr for GitStat {
     type Err = ParseError;
 
     fn from_str(record: &str) -> Result<Self, Self::Err> {
@@ -99,7 +101,7 @@ impl std::str::FromStr for GitStat {
     }
 }
 
-impl std::str::FromStr for LastCommit {
+impl FromStr for LastCommit {
     type Err = ParseError;
 
     fn from_str(record: &str) -> Result<Self, Self::Err> {

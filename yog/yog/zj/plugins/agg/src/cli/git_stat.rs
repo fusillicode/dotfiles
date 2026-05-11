@@ -1,23 +1,47 @@
+use std::fmt;
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::str::FromStr;
+
 use agg::GitStat;
 use agg::LastCommit;
 
 const COMMIT_SUMMARY_MAX_WIDTH: usize = 80;
 const SHORT_SHA_LEN: usize = 7;
 
+/// Git stat collection mode.
 #[derive(Clone, Copy)]
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub enum UseCase {
     TabBar,
     Picker,
 }
 
-impl std::str::FromStr for UseCase {
-    type Err = ();
+/// Error returned when a git stat collection mode is unknown.
+pub struct UseCaseParseError {
+    value: String,
+}
+
+impl Display for UseCaseParseError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "unknown git-stat use case {:?}, expected tab-bar or picker",
+            self.value
+        )
+    }
+}
+
+impl FromStr for UseCase {
+    type Err = UseCaseParseError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {
             "tab-bar" => Ok(Self::TabBar),
             "picker" => Ok(Self::Picker),
-            _ => Err(()),
+            _ => Err(UseCaseParseError {
+                value: value.to_string(),
+            }),
         }
     }
 }
@@ -103,19 +127,38 @@ fn commit_age_label(committed_at: i64, now: i64) -> String {
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
     use super::*;
 
-    #[test]
-    fn test_use_case_from_str_returns_known_use_cases() {
-        assert2::assert!(matches!("tab-bar".parse::<UseCase>(), Ok(UseCase::TabBar)));
-        assert2::assert!(matches!("picker".parse::<UseCase>(), Ok(UseCase::Picker)));
-        assert2::assert!("full".parse::<UseCase>().is_err());
+    #[rstest]
+    #[case("tab-bar", UseCase::TabBar)]
+    #[case("picker", UseCase::Picker)]
+    fn test_use_case_from_str_when_known_returns_use_case(#[case] input: &str, #[case] expected: UseCase) {
+        assert2::assert!(let Ok(actual) = input.parse::<UseCase>());
+
+        pretty_assertions::assert_eq!(actual, expected);
     }
 
     #[test]
-    fn test_commit_age_label_formats_relative_age_units() {
-        pretty_assertions::assert_eq!(commit_age_label(1_000, 1_125), "2m");
-        pretty_assertions::assert_eq!(commit_age_label(1_000, 87_400), "1d");
-        pretty_assertions::assert_eq!(commit_age_label(1_000, 605_800), "1w");
+    fn test_use_case_from_str_when_unknown_returns_descriptive_error() {
+        assert2::assert!(let Err(err) = "full".parse::<UseCase>());
+
+        pretty_assertions::assert_eq!(
+            err.to_string(),
+            "unknown git-stat use case \"full\", expected tab-bar or picker"
+        );
+    }
+
+    #[rstest]
+    #[case(1_000, 1_125, "2m")]
+    #[case(1_000, 87_400, "1d")]
+    #[case(1_000, 605_800, "1w")]
+    fn test_commit_age_label_formats_relative_age_units(
+        #[case] committed_at: i64,
+        #[case] now: i64,
+        #[case] expected: &str,
+    ) {
+        pretty_assertions::assert_eq!(commit_age_label(committed_at, now), expected);
     }
 }

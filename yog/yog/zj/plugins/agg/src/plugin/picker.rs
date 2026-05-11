@@ -259,7 +259,8 @@ mod tests {
             .into_iter()
             .collect(),
         };
-        let _ = state.update_panes(&manifest, |_| None, |_| None);
+        let events = crate::plugin::picker::events_from::pane_update::derive(&state, &manifest, |_| None, |_| None);
+        let _ = apply_events(&mut state, events);
         let msg = PipeMessage {
             source: PipeSource::Plugin(7),
             name: AGG_SYNC_PIPE.to_string(),
@@ -284,6 +285,9 @@ mod tests {
 
         assert2::assert!(pipe(&mut state, &msg));
 
-        assert_eq!(state.frame().get(1).map(|row| row.selected), Some(true));
+        assert_eq!(
+            state.visible_frame(usize::MAX).get(1).map(|row| row.selected),
+            Some(true)
+        );
     }
 }

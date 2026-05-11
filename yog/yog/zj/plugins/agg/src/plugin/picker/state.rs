@@ -194,17 +194,6 @@ impl PickerState {
         changed || order_changed || selection_changed
     }
 
-    #[cfg(test)]
-    pub fn update_panes(
-        &mut self,
-        manifest: &PaneManifest,
-        resolve_pane_cwd: impl FnMut(u32) -> Option<PathBuf>,
-        resolve_pane_command: impl FnMut(u32) -> Option<Vec<String>>,
-    ) -> bool {
-        let observations = self.pane_observations(manifest, resolve_pane_cwd, resolve_pane_command);
-        self.update_panes_from_observations(&observations)
-    }
-
     fn update_panes_from_observations(&mut self, observations: &[PaneObservation]) -> bool {
         let mut next_entries = Vec::new();
         let mut live_pane_ids = HashSet::new();
@@ -400,21 +389,6 @@ impl PickerState {
             .enumerate()
             .skip(start)
             .take(capacity)
-            .filter_map(|(idx, entry_idx)| {
-                self.pane_entries
-                    .get(*entry_idx)
-                    .map(|entry| entry.row(idx == self.selected))
-            })
-            .collect()
-    }
-
-    #[cfg(test)]
-    pub fn frame(&mut self) -> Vec<PickerRow> {
-        self.mark_filter_dirty();
-        self.ensure_filter();
-        self.filtered_entry_indices
-            .iter()
-            .enumerate()
             .filter_map(|(idx, entry_idx)| {
                 self.pane_entries
                     .get(*entry_idx)
@@ -645,6 +619,21 @@ mod tests {
         }
     }
 
+    fn update_panes(
+        state: &mut PickerState,
+        manifest: &PaneManifest,
+        resolve_pane_cwd: impl FnMut(u32) -> Option<PathBuf>,
+        resolve_pane_command: impl FnMut(u32) -> Option<Vec<String>>,
+    ) -> bool {
+        let observations = state.pane_observations(manifest, resolve_pane_cwd, resolve_pane_command);
+        state.update_panes_from_observations(&observations)
+    }
+
+    fn frame(state: &mut PickerState) -> Vec<PickerRow> {
+        state.mark_filter_dirty();
+        state.visible_frame(usize::MAX)
+    }
+
     fn session_entry(agent: &str, workspace: &str, session_id: &str, search: &str, updated_at: &str) -> SessionEntry {
         SessionEntry {
             agent: agent.to_string(),
@@ -732,7 +721,8 @@ mod tests {
             .collect(),
         };
 
-        assert2::assert!(state.update_panes(
+        assert2::assert!(update_panes(
+            &mut state,
             &manifest,
             |pane_id| Some(PathBuf::from(format!("/tmp/pane-{pane_id}"))),
             |pane_id| Some(vec![format!("cmd-{pane_id}")]),
@@ -741,8 +731,7 @@ mod tests {
         let pane_ids = state.pane_entries.iter().map(|entry| entry.pane_id).collect::<Vec<_>>();
         assert_eq!(pane_ids, vec![10, 11, 20, 21]);
         assert_eq!(
-            state
-                .frame()
+            frame(&mut state)
                 .iter()
                 .map(|row| row.cwd_label.as_str())
                 .collect::<Vec<_>>(),
@@ -767,10 +756,10 @@ mod tests {
             .collect(),
         };
 
-        assert2::assert!(state.update_panes(&manifest, |_| None, |_| None));
+        assert2::assert!(update_panes(&mut state, &manifest, |_| None, |_| None));
 
         assert_eq!(state.selected, 1);
-        assert_eq!(state.frame().get(1).map(|row| row.selected), Some(true));
+        assert_eq!(frame(&mut state).get(1).map(|row| row.selected), Some(true));
     }
 
     #[test]
@@ -798,10 +787,10 @@ mod tests {
             .collect(),
         };
 
-        assert2::assert!(state.update_panes(&manifest, |_| None, |_| None));
+        assert2::assert!(update_panes(&mut state, &manifest, |_| None, |_| None));
 
         assert_eq!(state.selected, 1);
-        assert_eq!(state.frame().get(1).map(|row| row.selected), Some(true));
+        assert_eq!(frame(&mut state).get(1).map(|row| row.selected), Some(true));
     }
 
     #[test]
@@ -825,10 +814,10 @@ mod tests {
             .collect(),
         };
 
-        assert2::assert!(state.update_panes(&manifest, |_| None, |_| None));
+        assert2::assert!(update_panes(&mut state, &manifest, |_| None, |_| None));
 
         assert_eq!(state.selected, 1);
-        assert_eq!(state.frame().get(1).map(|row| row.selected), Some(true));
+        assert_eq!(frame(&mut state).get(1).map(|row| row.selected), Some(true));
     }
 
     #[test]
@@ -850,13 +839,13 @@ mod tests {
             ))
             .collect(),
         };
-        let _ = state.update_panes(&manifest, |_| None, |_| None);
+        let _ = update_panes(&mut state, &manifest, |_| None, |_| None);
 
         assert2::assert!(state.set_initial_focus_pane(10, 43, 2));
         assert2::assert!(!state.set_initial_focus_pane(10, 42, 1));
 
         assert_eq!(state.selected, 1);
-        assert_eq!(state.frame().get(1).map(|row| row.selected), Some(true));
+        assert_eq!(frame(&mut state).get(1).map(|row| row.selected), Some(true));
     }
 
     #[test]
@@ -878,13 +867,13 @@ mod tests {
             ))
             .collect(),
         };
-        let _ = state.update_panes(&manifest, |_| None, |_| None);
+        let _ = update_panes(&mut state, &manifest, |_| None, |_| None);
 
         assert2::assert!(!state.set_initial_focus_pane(10, 42, 1));
         assert2::assert!(state.set_initial_focus_pane(10, 43, 2));
 
         assert_eq!(state.selected, 1);
-        assert_eq!(state.frame().get(1).map(|row| row.selected), Some(true));
+        assert_eq!(frame(&mut state).get(1).map(|row| row.selected), Some(true));
     }
 
     #[test]
@@ -907,13 +896,13 @@ mod tests {
             ))
             .collect(),
         };
-        let _ = state.update_panes(&manifest, |_| None, |_| None);
+        let _ = update_panes(&mut state, &manifest, |_| None, |_| None);
         let ctrl_n = KeyWithModifier::new_with_modifiers(BareKey::Char('n'), BTreeSet::from([KeyModifier::Ctrl]));
 
         assert_eq!(state.selected, 0);
         assert_eq!(state.handle_key(&ctrl_n), PickerAction::Redraw);
         assert_eq!(state.selected, 1);
-        let _ = state.update_panes(&manifest, |_| None, |_| None);
+        let _ = update_panes(&mut state, &manifest, |_| None, |_| None);
 
         assert_eq!(state.selected, 1);
     }
@@ -931,7 +920,7 @@ mod tests {
             .collect(),
         };
 
-        assert2::assert!(state.update_panes(&manifest, |_| None, |_| None));
+        assert2::assert!(update_panes(&mut state, &manifest, |_| None, |_| None));
         assert_eq!(state.selected, 0);
         assert2::assert!(state.update_tabs(vec![
             TabInfo {
@@ -948,7 +937,7 @@ mod tests {
         ]));
 
         assert_eq!(state.selected, 1);
-        assert_eq!(state.frame().get(1).map(|row| row.selected), Some(true));
+        assert_eq!(frame(&mut state).get(1).map(|row| row.selected), Some(true));
     }
 
     #[test]
@@ -975,12 +964,12 @@ mod tests {
             .into_iter()
             .collect(),
         };
-        let _ = state.update_panes(&manifest, |_| None, |_| None);
+        let _ = update_panes(&mut state, &manifest, |_| None, |_| None);
 
         assert2::assert!(!state.set_initial_focus_pane(20, 43, 1));
 
         assert_eq!(state.selected, 0);
-        assert_eq!(state.frame().first().map(|row| row.selected), Some(true));
+        assert_eq!(frame(&mut state).first().map(|row| row.selected), Some(true));
     }
 
     #[test]
@@ -1102,7 +1091,8 @@ mod tests {
         };
         let command_calls = Cell::new(0);
 
-        let _ = state.update_panes(
+        let _ = update_panes(
+            &mut state,
             &manifest,
             |pane_id| Some(PathBuf::from(format!("/tmp/pane-{pane_id}"))),
             |pane_id| {
@@ -1110,7 +1100,8 @@ mod tests {
                 Some(vec![format!("cmd-{pane_id}")])
             },
         );
-        let _ = state.update_panes(
+        let _ = update_panes(
+            &mut state,
             &manifest,
             |pane_id| Some(PathBuf::from(format!("/tmp/changed-{pane_id}"))),
             |pane_id| {
@@ -1137,7 +1128,8 @@ mod tests {
             panes: std::iter::once((0, vec![terminal_pane_with_command(42, "zsh")])).collect(),
         };
 
-        let _ = state.update_panes(
+        let _ = update_panes(
+            &mut state,
             &manifest,
             |_| Some(PathBuf::from("/tmp/repo")),
             |_| Some(vec![String::from("cargo")]),
@@ -1159,7 +1151,12 @@ mod tests {
         };
         let repo = PathBuf::from("/tmp/repo");
         let other = PathBuf::from("/tmp/other");
-        let _ = state.update_panes(&manifest, |_| Some(repo.clone()), |_| Some(vec![String::from("cargo")]));
+        let _ = update_panes(
+            &mut state,
+            &manifest,
+            |_| Some(repo.clone()),
+            |_| Some(vec![String::from("cargo")]),
+        );
 
         assert_eq!(state.take_git_stat_cwds_to_request(), vec![repo.clone()]);
         assert2::assert!(state.update_cwd(42, &other));
@@ -1197,7 +1194,7 @@ mod tests {
         )]));
 
         state.query = String::from("BILLING");
-        let frame = state.frame();
+        let frame = frame(&mut state);
         assert_eq!(frame.len(), 1);
     }
 
@@ -1228,7 +1225,7 @@ mod tests {
 
         let _ = state.update_sessions(vec![session]);
 
-        let frame = state.frame();
+        let frame = frame(&mut state);
         assert_eq!(
             frame.first().map(|row| row.session_summary.as_str()),
             Some("how to solve this warning")
@@ -1268,7 +1265,7 @@ mod tests {
 
         assert2::assert!(state.apply_event(PickerEvent::GitStatUpdated { stat: stat.clone() }));
 
-        let frame = state.frame();
+        let frame = frame(&mut state);
         assert_eq!(frame.first().map(|row| &row.git), Some(&stat));
         assert_eq!(frame.first().map(|row| row.branch_label.as_str()), Some("main"));
         assert_eq!(frame.get(1).map(|row| &row.git), Some(&agg::GitStat::default()));
@@ -1285,7 +1282,7 @@ mod tests {
         let manifest = PaneManifest {
             panes: std::iter::once((0, vec![terminal_pane_with_command(42, "codex")])).collect(),
         };
-        let _ = state.update_panes(&manifest, |_| None, |_| Some(vec![String::from("codex")]));
+        let _ = update_panes(&mut state, &manifest, |_| None, |_| Some(vec![String::from("codex")]));
 
         assert2::assert!(state.apply_event(PickerEvent::AgentUpdated {
             event: AgentEventPayload {
@@ -1295,7 +1292,7 @@ mod tests {
             },
         }));
         assert_eq!(
-            state.frame().first().map(|row| row.indicator),
+            frame(&mut state).first().map(|row| row.indicator),
             Some(agg::TabIndicator::Busy)
         );
 
@@ -1307,7 +1304,7 @@ mod tests {
             },
         }));
         assert_eq!(
-            state.frame().first().map(|row| row.indicator),
+            frame(&mut state).first().map(|row| row.indicator),
             Some(agg::TabIndicator::Unseen)
         );
 
@@ -1321,10 +1318,15 @@ mod tests {
             ))
             .collect(),
         };
-        let _ = state.update_panes(&focused_manifest, |_| None, |_| Some(vec![String::from("codex")]));
+        let _ = update_panes(
+            &mut state,
+            &focused_manifest,
+            |_| None,
+            |_| Some(vec![String::from("codex")]),
+        );
 
         assert_eq!(
-            state.frame().first().map(|row| row.indicator),
+            frame(&mut state).first().map(|row| row.indicator),
             Some(agg::TabIndicator::Seen)
         );
     }
@@ -1351,7 +1353,7 @@ mod tests {
             "2026-05-09T09:00:00Z",
         )]));
 
-        assert_eq!(state.frame().len(), 1);
+        assert_eq!(frame(&mut state).len(), 1);
         assert_eq!(
             state
                 .pane_entries
