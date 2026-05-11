@@ -53,7 +53,7 @@ mod tests {
 
         apply_events(&mut state, events);
         assert_eq!(
-            state.frame(),
+            state.visible_frame(usize::MAX),
             vec![PickerRow {
                 selected: true,
                 cwd_label: "/tmp/repo".to_string(),
