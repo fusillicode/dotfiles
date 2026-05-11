@@ -18,6 +18,7 @@ use crate::plugin::picker::ui::PickerRow;
 
 #[derive(Default)]
 pub struct PickerState {
+    pub home_dir: PathBuf,
     pub query: String,
     selected: usize,
     selected_pane_id: Option<u32>,
@@ -392,7 +393,7 @@ impl PickerState {
             .filter_map(|(idx, entry_idx)| {
                 self.pane_entries
                     .get(*entry_idx)
-                    .map(|entry| entry.row(idx == self.selected))
+                    .map(|entry| entry.row(idx == self.selected, &self.home_dir))
             })
             .collect()
     }
