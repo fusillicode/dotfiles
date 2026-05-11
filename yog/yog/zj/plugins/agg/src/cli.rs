@@ -19,8 +19,12 @@ pub fn run() -> rootcause::Result<()> {
             return install::run(args.iter().any(|arg| arg == "--debug"));
         }
         Some("git-stat") => {
-            let Some(use_case) = args.get(1).and_then(|arg| arg.parse().ok()) else {
+            let Some(use_case) = args.get(1) else {
                 rootcause::bail!(USAGE);
+            };
+            let use_case = match use_case.parse() {
+                Ok(use_case) => use_case,
+                Err(err) => rootcause::bail!("{err}"),
             };
             let mut first = true;
             for cwd in args.get(2..).into_iter().flatten() {
