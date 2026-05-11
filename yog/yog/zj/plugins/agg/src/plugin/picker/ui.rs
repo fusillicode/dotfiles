@@ -7,12 +7,13 @@ use agg::TabIndicator;
 pub const ENTRY_ROWS: usize = 3;
 const PICKER_SELECTED_BG: &str = "\x1b[48;2;50;50;50m";
 const TAB_DEFAULT_FG: &str = "\x1b[39m";
+const PATH_STYLE: &str = "\x1b[1m\x1b[38;2;0;255;255m";
 const SUMMARY_FG: &str = "\x1b[38;2;119;119;119m";
 const RAIL_SELECTED_FG: &str = "\x1b[38;2;106;106;223m";
 const SUMMARY_MAX_WIDTH: usize = 80;
 const COMMIT_SUMMARY_MAX_WIDTH: usize = 80;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub struct PickerRow {
     pub selected: bool,
     pub cwd_label: String,
@@ -21,6 +22,11 @@ pub struct PickerRow {
     pub cmd: Cmd,
     pub indicator: TabIndicator,
     pub session_summary: String,
+}
+
+struct LinePart<'a> {
+    style: &'a str,
+    value: &'a str,
 }
 
 pub fn render_frame(frame: &[PickerRow], query: &str, rows: usize, cols: usize, buf: &mut String) {
@@ -43,8 +49,8 @@ pub fn render_frame(frame: &[PickerRow], query: &str, rows: usize, cols: usize, 
         for row in frame.iter().skip(start).take(capacity) {
             for line in [
                 crate::plugin::picker::ui::path_line(row, cols),
-                crate::plugin::picker::ui::info_line(row, cols),
                 crate::plugin::picker::ui::cmd_line(row, cols),
+                crate::plugin::ui::pad("", cols),
             ] {
                 let _ = write!(buf, "\x1b[{row_1based};1H{line}{}", crate::plugin::ui::RESET);
                 row_1based = row_1based.saturating_add(1);
@@ -62,83 +68,32 @@ pub fn render_frame(frame: &[PickerRow], query: &str, rows: usize, cols: usize, 
 fn path_line(row: &PickerRow, cols: usize) -> String {
     let bg = if row.selected { PICKER_SELECTED_BG } else { "" };
     let inner_w = cols.saturating_sub(1);
-    let mut out = crate::plugin::picker::ui::line_prefix(row);
-    if row.selected {
-        out.push_str(crate::plugin::ui::BOLD);
-    }
-    out.push_str(TAB_DEFAULT_FG);
-    out.push_str(&ytil_tui::display_fixed_width(&row.cwd_label, inner_w));
-    out.push_str(crate::plugin::ui::RESET);
-    out.push_str(bg);
-    out.push_str(TAB_DEFAULT_FG);
-    crate::plugin::ui::pad_ansi(&out, cols)
-}
-
-fn info_line(row: &PickerRow, cols: usize) -> String {
-    let bg = if row.selected { PICKER_SELECTED_BG } else { "" };
-    let inner_w = cols.saturating_sub(1);
-    let available = inner_w;
     let git_parts = crate::plugin::ui::git_stat_parts(&row.git);
     let commit_label = crate::plugin::picker::ui::commit_label(&row.git);
-    let git_wanted = git_parts
-        .iter()
-        .map(|(_, value)| value.chars().count())
-        .sum::<usize>()
-        .saturating_add(git_parts.len().saturating_sub(1));
-    let commit_wanted = commit_label.chars().count();
-    let mut branch_width = row.branch_label.chars().count();
-    let mut git_width = git_wanted;
-    let mut commit_width = commit_wanted;
-    let mut used_width = branch_width
-        .saturating_add(git_width)
-        .saturating_add(commit_width)
-        .saturating_add(usize::from(branch_width > 0 && git_width > 0))
-        .saturating_add(usize::from(commit_width > 0 && (branch_width > 0 || git_width > 0)));
-    if used_width > available {
-        git_width = 0;
+    let mut parts = Vec::new();
+    parts.push(LinePart {
+        style: PATH_STYLE,
+        value: &row.cwd_label,
+    });
+    parts.push(LinePart { style: "", value: " " });
+    parts.push(LinePart {
+        style: "",
+        value: &row.branch_label,
+    });
+    for (color, value) in &git_parts {
+        parts.push(LinePart { style: "", value: " " });
+        parts.push(LinePart { style: color, value });
     }
-    used_width = branch_width
-        .saturating_add(git_width)
-        .saturating_add(commit_width)
-        .saturating_add(usize::from(branch_width > 0 && git_width > 0))
-        .saturating_add(usize::from(commit_width > 0 && (branch_width > 0 || git_width > 0)));
-    if used_width > available && commit_width > 0 {
-        let prefix_width = branch_width
-            .saturating_add(git_width)
-            .saturating_add(usize::from(branch_width > 0 && git_width > 0));
-        let separator = usize::from(prefix_width > 0);
-        commit_width = available.saturating_sub(prefix_width).saturating_sub(separator);
+    if !commit_label.is_empty() {
+        parts.push(LinePart { style: "", value: " " });
+        parts.push(LinePart {
+            style: SUMMARY_FG,
+            value: &commit_label,
+        });
     }
-    used_width = branch_width
-        .saturating_add(git_width)
-        .saturating_add(commit_width)
-        .saturating_add(usize::from(branch_width > 0 && git_width > 0))
-        .saturating_add(usize::from(commit_width > 0 && (branch_width > 0 || git_width > 0)));
-    if used_width > available {
-        branch_width = branch_width.min(available);
-    }
-    let branch = ytil_tui::display_fixed_width(&row.branch_label, branch_width);
-    let git = crate::plugin::picker::ui::git_stat_with_color(&git_parts, git_width, bg, TAB_DEFAULT_FG);
-    let commit = ytil_tui::display_fixed_width(&commit_label, commit_width);
 
     let mut out = crate::plugin::picker::ui::line_prefix(row);
-    if branch_width > 0 {
-        out.push_str(&branch);
-    }
-    if git_width > 0 {
-        if branch_width > 0 {
-            out.push(' ');
-        }
-        out.push_str(&git);
-    }
-    if commit_width > 0 {
-        if branch_width > 0 || git_width > 0 {
-            out.push(' ');
-        }
-        out.push_str(SUMMARY_FG);
-        out.push_str(&commit);
-        out.push_str(crate::plugin::ui::RESET);
-    }
+    crate::plugin::picker::ui::push_line_parts(&mut out, &parts, inner_w, bg, TAB_DEFAULT_FG);
     out.push_str(bg);
     out.push_str(TAB_DEFAULT_FG);
     crate::plugin::ui::pad_ansi(&out, cols)
@@ -176,32 +131,58 @@ fn cmd_line(row: &PickerRow, cols: usize) -> String {
     crate::plugin::ui::pad_ansi(&out, cols)
 }
 
+fn push_line_parts(out: &mut String, parts: &[LinePart<'_>], width: usize, bg: &str, fg: &str) {
+    if width == 0 {
+        return;
+    }
+    let total_width = parts.iter().map(|part| part.value.chars().count()).sum::<usize>();
+    let visible_width = if total_width > width {
+        width.saturating_sub(1)
+    } else {
+        width
+    };
+    let mut remaining = visible_width;
+    let mut truncated_style = parts.first().map_or("", |part| part.style);
+    for part in parts {
+        if remaining == 0 {
+            truncated_style = part.style;
+            break;
+        }
+        let part_width = part.value.chars().count();
+        let take = remaining.min(part_width);
+        if take > 0 {
+            crate::plugin::picker::ui::push_line_part(out, part.style, part.value.chars().take(take), bg, fg);
+        }
+        remaining = remaining.saturating_sub(take);
+        if take < part_width {
+            truncated_style = part.style;
+            break;
+        }
+    }
+    if total_width > width {
+        crate::plugin::picker::ui::push_line_part(out, truncated_style, "…".chars(), bg, fg);
+    }
+}
+
+fn push_line_part(out: &mut String, style: &str, chars: impl Iterator<Item = char>, bg: &str, fg: &str) {
+    if !style.is_empty() {
+        out.push_str(style);
+    }
+    for ch in chars {
+        out.push(ch);
+    }
+    if !style.is_empty() {
+        out.push_str(crate::plugin::ui::RESET);
+        out.push_str(bg);
+        out.push_str(fg);
+    }
+}
+
 fn line_prefix(row: &PickerRow) -> String {
     if row.selected {
         return format!("{PICKER_SELECTED_BG}{RAIL_SELECTED_FG}▎{PICKER_SELECTED_BG}{TAB_DEFAULT_FG}");
     }
     format!(" {TAB_DEFAULT_FG}")
-}
-
-fn git_stat_with_color(parts: &[(&'static str, String)], width: usize, bg: &str, fg: &str) -> String {
-    if width == 0 {
-        return String::new();
-    }
-    if parts.is_empty() {
-        return String::new();
-    }
-    let mut out = String::new();
-    for (idx, (color, value)) in parts.iter().enumerate() {
-        if idx > 0 {
-            out.push(' ');
-        }
-        out.push_str(color);
-        out.push_str(value);
-    }
-    out.push_str(crate::plugin::ui::RESET);
-    out.push_str(bg);
-    out.push_str(fg);
-    out
 }
 
 fn commit_label(git: &GitStat) -> String {
@@ -255,14 +236,13 @@ mod tests {
         let plain = plain_text(&rendered);
         let lines = [
             path_line(&frame[0], 24),
-            info_line(&frame[0], 24),
             cmd_line(&frame[0], 24),
+            crate::plugin::ui::pad("", 24),
         ];
 
         assert2::assert!(rendered.contains("\x1b[1;1H/car"));
         assert2::assert!(rendered.contains("\x1b[2;1H"));
-        assert2::assert!(plain.contains("▎~/project"));
-        assert2::assert!(plain.contains("▎main"));
+        assert2::assert!(plain.contains("▎~/project main"));
         assert2::assert!(plain.contains("▎cargo"));
         for line in lines {
             assert_eq!(crate::plugin::ui::visible_len(&line), 24);
@@ -283,22 +263,16 @@ mod tests {
         let mut rendered = String::new();
 
         render_frame(&frame, "", 5, 52, &mut rendered);
-        let lines = [
-            path_line(&frame[0], 52),
-            info_line(&frame[0], 52),
-            cmd_line(&frame[0], 52),
-        ];
+        let lines = [path_line(&frame[0], 52), cmd_line(&frame[0], 52)];
 
-        assert2::assert!(plain_text(&rendered).contains("▎~/project"));
-        assert2::assert!(plain_text(&rendered).contains("▎feature/some-very-long-branch-name"));
+        assert2::assert!(plain_text(&rendered).contains("▎~/project feature/some-very-long-branch-name"));
         assert2::assert!(plain_text(&rendered).contains("▎cx how to solve this warning"));
-        assert_eq!(plain_text(&lines[0]), crate::plugin::ui::pad("▎~/project", 52));
         assert_eq!(
-            plain_text(&lines[1]),
-            crate::plugin::ui::pad("▎feature/some-very-long-branch-name", 52)
+            plain_text(&lines[0]),
+            crate::plugin::ui::pad("▎~/project feature/some-very-long-branch-name", 52)
         );
         assert_eq!(
-            plain_text(&lines[2]),
+            plain_text(&lines[1]),
             crate::plugin::ui::pad("▎cx how to solve this warning", 52)
         );
     }
@@ -315,23 +289,23 @@ mod tests {
             session_summary: String::new(),
         };
 
-        let lines = [path_line(&row, 44), info_line(&row, 44), cmd_line(&row, 44)];
+        let lines = [path_line(&row, 44), cmd_line(&row, 44)];
 
-        assert2::assert!(lines[2].contains(&format!(
+        assert2::assert!(lines[1].contains(&format!(
             "{}{}•{}{PICKER_SELECTED_BG}{TAB_DEFAULT_FG} ",
             crate::plugin::ui::BOLD,
             crate::plugin::ui::AGENT_BUSY_FG,
             crate::plugin::ui::RESET
         )));
-        assert_eq!(plain_text(&lines[1]), crate::plugin::ui::pad("▎main", 44));
-        assert_eq!(plain_text(&lines[2]), crate::plugin::ui::pad("▎• cx", 44));
+        assert_eq!(plain_text(&lines[0]), crate::plugin::ui::pad("▎~/project main", 44));
+        assert_eq!(plain_text(&lines[1]), crate::plugin::ui::pad("▎• cx", 44));
         for line in lines {
             assert_eq!(crate::plugin::ui::visible_len(&line), 44);
         }
     }
 
     #[test]
-    fn test_info_line_clips_long_branch_instead_of_hiding_it() {
+    fn test_path_line_trims_combined_path_metadata() {
         let row = PickerRow {
             selected: true,
             cwd_label: "~/project".to_string(),
@@ -342,10 +316,10 @@ mod tests {
             session_summary: String::new(),
         };
 
-        let line = info_line(&row, 12);
+        let line = path_line(&row, 20);
 
-        assert_eq!(plain_text(&line), "▎feature/su…");
-        assert_eq!(crate::plugin::ui::visible_len(&line), 12);
+        assert_eq!(plain_text(&line), "▎~/project feature/…");
+        assert_eq!(crate::plugin::ui::visible_len(&line), 20);
     }
 
     #[test]
@@ -371,24 +345,25 @@ mod tests {
             session_summary: "solve warning".to_string(),
         };
 
-        let lines = [path_line(&row, 52), info_line(&row, 52), cmd_line(&row, 52)];
+        let lines = [path_line(&row, 80), cmd_line(&row, 80)];
 
-        assert2::assert!(lines[1].contains(crate::plugin::ui::GIT_NEW_LINES_FG));
-        assert2::assert!(lines[1].contains(crate::plugin::ui::GIT_DEL_LINES_FG));
-        assert2::assert!(lines[1].contains(crate::plugin::ui::GIT_NEW_FILES_FG));
-        assert2::assert!(lines[1].contains(SUMMARY_FG));
+        assert2::assert!(lines[0].contains(PATH_STYLE));
+        assert2::assert!(lines[0].contains(crate::plugin::ui::GIT_NEW_LINES_FG));
+        assert2::assert!(lines[0].contains(crate::plugin::ui::GIT_DEL_LINES_FG));
+        assert2::assert!(lines[0].contains(crate::plugin::ui::GIT_NEW_FILES_FG));
+        assert2::assert!(lines[0].contains(SUMMARY_FG));
         assert_eq!(
-            plain_text(&lines[1]),
-            crate::plugin::ui::pad("▎main +2 -1 ?3 abc1234 2m | fix branch metadata", 52)
+            plain_text(&lines[0]),
+            crate::plugin::ui::pad("▎~/project main +2 -1 ?3 abc1234 2m | fix branch metadata", 80)
         );
-        assert_eq!(plain_text(&lines[2]), crate::plugin::ui::pad("▎cx solve warning", 52));
+        assert_eq!(plain_text(&lines[1]), crate::plugin::ui::pad("▎cx solve warning", 80));
         for line in lines {
-            assert_eq!(crate::plugin::ui::visible_len(&line), 52);
+            assert_eq!(crate::plugin::ui::visible_len(&line), 80);
         }
     }
 
     #[test]
-    fn test_info_line_caps_commit_summary_to_80() {
+    fn test_path_line_caps_commit_summary_to_80() {
         let row = PickerRow {
             selected: true,
             cwd_label: "~/project".to_string(),
@@ -406,12 +381,12 @@ mod tests {
             session_summary: String::new(),
         };
 
-        let line = info_line(&row, 120);
+        let line = path_line(&row, 120);
 
         assert_eq!(
             plain_text(&line),
             crate::plugin::ui::pad(
-                "▎main abc1234 1w | abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza…",
+                "▎~/project main abc1234 1w | abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza…",
                 120,
             )
         );
@@ -471,7 +446,7 @@ mod tests {
             indicator: TabIndicator::NoAgent,
             session_summary: String::new(),
         };
-        let lines = [path_line(&row, 24), info_line(&row, 24), cmd_line(&row, 24)];
+        let lines = [path_line(&row, 24), cmd_line(&row, 24)];
 
         for line in lines {
             assert2::assert!(!plain_text(&line).contains('▏'));
@@ -479,7 +454,7 @@ mod tests {
         }
         assert_eq!(
             plain_text(&path_line(&row, 24)),
-            crate::plugin::ui::pad(" ~/project", 24)
+            crate::plugin::ui::pad(" ~/project main", 24)
         );
     }
 
