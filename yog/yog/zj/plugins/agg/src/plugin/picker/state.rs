@@ -343,8 +343,12 @@ impl PickerState {
             }
             BareKey::Down if key.has_no_modifiers() => self.select_next(),
             BareKey::Char('n') if key.has_only_modifiers(&[KeyModifier::Ctrl]) => self.select_next(),
+            BareKey::Char('n') if key.has_only_modifiers(&[KeyModifier::Shift, KeyModifier::Alt]) => self.select_next(),
             BareKey::Up if key.has_no_modifiers() => self.select_previous(),
             BareKey::Char('p') if key.has_only_modifiers(&[KeyModifier::Ctrl]) => self.select_previous(),
+            BareKey::Char('p') if key.has_only_modifiers(&[KeyModifier::Shift, KeyModifier::Alt]) => {
+                self.select_previous()
+            }
             BareKey::Char(c)
                 if !c.is_control() && (key.has_no_modifiers() || key.has_only_modifiers(&[KeyModifier::Shift])) =>
             {
@@ -385,24 +389,31 @@ impl PickerState {
             return Vec::new();
         }
         let start = self.selected.saturating_add(1).saturating_sub(capacity);
-        self.filtered_entry_indices
+        let mut rows = Vec::new();
+        let mut previous_tab_position = None;
+        for (idx, entry_idx) in self
+            .filtered_entry_indices
             .iter()
             .enumerate()
             .skip(start)
             .take(capacity)
-            .filter_map(|(idx, entry_idx)| {
-                self.pane_entries
-                    .get(*entry_idx)
-                    .map(|entry| entry.row(idx == self.selected, &self.home_dir))
-            })
-            .collect()
+        {
+            let Some(entry) = self.pane_entries.get(*entry_idx) else {
+                continue;
+            };
+            let show_tab_label = previous_tab_position != Some(entry.tab_position);
+            previous_tab_position = Some(entry.tab_position);
+            rows.push(entry.row(idx == self.selected, &self.home_dir, show_tab_label));
+        }
+        rows
     }
 
     fn entry_from_observation(&self, pane: &PaneObservation) -> PaneEntry {
         let cached_cwd = self.cwds_by_pane.get(&pane.pane_id).cloned();
         let cached_command = self.commands_by_pane.get(&pane.pane_id).cloned();
-        let mut entry = PaneEntry::from_observation(pane, cached_cwd, cached_command, &self.all_tabs);
-        if let Some(previous) = self.pane_entries.iter().find(|entry| entry.pane_id == pane.pane_id) {
+        let previous = self.pane_entries.iter().find(|entry| entry.pane_id == pane.pane_id);
+        let mut entry = PaneEntry::from_observation(pane, cached_cwd, cached_command, &self.all_tabs, previous);
+        if let Some(previous) = previous {
             entry.inherit_agent_state(previous);
         }
         if let Some(cwd) = entry.cwd.as_ref()
@@ -596,6 +607,7 @@ mod tests {
     use std::path::PathBuf;
 
     use pretty_assertions::assert_eq;
+    use rstest::rstest;
     use ytil_agents::agent::Agent;
     use ytil_agents::agent::AgentEventKind;
     use ytil_agents::agent::AgentEventPayload;
@@ -610,6 +622,10 @@ mod tests {
 
     fn key(bare_key: BareKey) -> KeyWithModifier {
         KeyWithModifier::new(bare_key)
+    }
+
+    fn modified_key(bare_key: BareKey, modifiers: &[KeyModifier]) -> KeyWithModifier {
+        KeyWithModifier::new_with_modifiers(bare_key, modifiers.iter().copied().collect())
     }
 
     fn terminal_pane_with_command(id: u32, command: &str) -> PaneInfo {
@@ -998,6 +1014,135 @@ mod tests {
 
         let pane_ids = state.pane_entries.iter().map(|entry| entry.pane_id).collect::<Vec<_>>();
         assert_eq!(pane_ids, vec![10, 11, 30]);
+    }
+
+    #[test]
+    fn test_update_tabs_keeps_selected_pane_after_tab_order_changes() {
+        let mut state = PickerState {
+            pane_entries: vec![
+                PaneEntry::new(0, 42, None, vec![String::from("cargo")], None),
+                PaneEntry::new(1, 43, None, vec![String::from("nvim")], None),
+            ],
+            ..Default::default()
+        };
+        let _ = state.update_tabs(vec![
+            TabInfo {
+                tab_id: 10,
+                position: 0,
+                ..Default::default()
+            },
+            TabInfo {
+                tab_id: 20,
+                position: 1,
+                ..Default::default()
+            },
+        ]);
+        assert_eq!(state.handle_key(&key(BareKey::Down)), PickerAction::Redraw);
+
+        assert2::assert!(state.update_tabs(vec![
+            TabInfo {
+                tab_id: 20,
+                position: 0,
+                ..Default::default()
+            },
+            TabInfo {
+                tab_id: 10,
+                position: 1,
+                ..Default::default()
+            },
+        ]));
+
+        assert_eq!(state.selected_pane_id, Some(43));
+        assert_eq!(state.selected, 0);
+    }
+
+    #[test]
+    fn test_update_panes_keeps_stable_tab_id_when_panes_refresh_before_tabs_after_tab_move() {
+        let mut state = PickerState::default();
+        let _ = state.update_tabs(vec![
+            TabInfo {
+                tab_id: 10,
+                position: 0,
+                ..Default::default()
+            },
+            TabInfo {
+                tab_id: 20,
+                position: 1,
+                ..Default::default()
+            },
+        ]);
+        let manifest = PaneManifest {
+            panes: std::iter::once((1, vec![terminal_pane_with_command(43, "nvim")])).collect(),
+        };
+        let _ = update_panes(&mut state, &manifest, |_| None, |_| None);
+        let rows = frame(&mut state);
+        assert_eq!(rows.first().map(|row| row.tab_label.as_str()), Some("T20"));
+        assert_eq!(rows.first().map(|row| row.pane_label.as_str()), Some("P43"));
+
+        let stale_tabs_manifest = PaneManifest {
+            panes: std::iter::once((0, vec![terminal_pane_with_command(43, "nvim")])).collect(),
+        };
+        let _ = update_panes(&mut state, &stale_tabs_manifest, |_| None, |_| None);
+        let rows = frame(&mut state);
+        assert_eq!(rows.first().map(|row| row.tab_label.as_str()), Some("T20"));
+        assert_eq!(rows.first().map(|row| row.pane_label.as_str()), Some("P43"));
+
+        let _ = state.update_tabs(vec![
+            TabInfo {
+                tab_id: 20,
+                position: 0,
+                ..Default::default()
+            },
+            TabInfo {
+                tab_id: 10,
+                position: 1,
+                ..Default::default()
+            },
+        ]);
+
+        let rows = frame(&mut state);
+        assert_eq!(rows.first().map(|row| row.tab_label.as_str()), Some("T20"));
+        assert_eq!(rows.first().map(|row| row.pane_label.as_str()), Some("P43"));
+    }
+
+    #[test]
+    fn test_visible_frame_shows_tab_label_only_at_group_start() {
+        let mut state = PickerState::default();
+        let _ = state.update_tabs(vec![
+            TabInfo {
+                tab_id: 10,
+                position: 0,
+                ..Default::default()
+            },
+            TabInfo {
+                tab_id: 20,
+                position: 1,
+                ..Default::default()
+            },
+        ]);
+        let manifest = PaneManifest {
+            panes: [
+                (
+                    0,
+                    vec![
+                        terminal_pane_with_command(42, "cargo"),
+                        terminal_pane_with_command(43, "nvim"),
+                    ],
+                ),
+                (1, vec![terminal_pane_with_command(44, "git")]),
+            ]
+            .into_iter()
+            .collect(),
+        };
+        let _ = update_panes(&mut state, &manifest, |_| None, |_| None);
+
+        let rows = frame(&mut state);
+        let labels = rows
+            .iter()
+            .map(|row| (row.tab_label.as_str(), row.pane_label.as_str()))
+            .collect::<Vec<_>>();
+
+        assert_eq!(labels, vec![("T10", "P42"), ("", "P43"), ("T20", "P44")]);
     }
 
     #[test]
@@ -1427,6 +1572,52 @@ mod tests {
         assert_eq!(state.selected, 1);
         assert_eq!(state.handle_key(&ctrl_p), PickerAction::Redraw);
         assert_eq!(state.selected, 0);
+    }
+
+    #[rstest]
+    #[case('n', 0, 1)]
+    #[case('p', 2, 1)]
+    fn test_handle_key_when_shift_alt_selection_key_moves_to_adjacent_row(
+        #[case] c: char,
+        #[case] selected: usize,
+        #[case] expected_selected: usize,
+    ) {
+        let mut state = PickerState {
+            selected,
+            pane_entries: vec![
+                PaneEntry::new(0, 42, None, vec![String::from("cargo")], None),
+                PaneEntry::new(0, 43, None, vec![String::from("nvim")], None),
+                PaneEntry::new(1, 44, None, vec![String::from("zsh")], None),
+                PaneEntry::new(2, 45, None, vec![String::from("git")], None),
+            ],
+            ..Default::default()
+        };
+
+        assert_eq!(
+            state.handle_key(&modified_key(BareKey::Char(c), &[KeyModifier::Shift, KeyModifier::Alt])),
+            PickerAction::Redraw
+        );
+        assert_eq!(state.selected, expected_selected);
+        assert_eq!(state.query, "");
+    }
+
+    #[rstest]
+    #[case('n')]
+    #[case('p')]
+    fn test_handle_key_when_shift_alt_selection_key_has_one_visible_tab_still_moves_by_row(#[case] c: char) {
+        let mut state = PickerState {
+            pane_entries: vec![
+                PaneEntry::new(0, 42, None, vec![String::from("cargo")], None),
+                PaneEntry::new(0, 43, None, vec![String::from("nvim")], None),
+            ],
+            ..Default::default()
+        };
+
+        assert_eq!(
+            state.handle_key(&modified_key(BareKey::Char(c), &[KeyModifier::Shift, KeyModifier::Alt])),
+            PickerAction::Redraw
+        );
+        assert_eq!(state.selected, 1);
     }
 
     #[test]

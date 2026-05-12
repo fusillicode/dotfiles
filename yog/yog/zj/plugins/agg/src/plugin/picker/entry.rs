@@ -44,6 +44,7 @@ impl PaneEntry {
         cached_cwd: Option<PathBuf>,
         cached_command: Option<Vec<String>>,
         tabs: &[TabInfo],
+        previous: Option<&Self>,
     ) -> Self {
         let command_args = cached_command
             .or_else(|| pane.terminal_command_args.clone())
@@ -56,6 +57,9 @@ impl PaneEntry {
             pane.title_label.clone(),
         );
         entry.is_focused = pane.is_focused;
+        if let Some(previous) = previous {
+            entry.tab_id = previous.tab_id;
+        }
         entry.apply_tab_metadata(tabs);
         entry
     }
@@ -232,12 +236,18 @@ impl PaneEntry {
     }
 
     pub fn apply_tab_metadata(&mut self, tabs: &[TabInfo]) -> bool {
+        let old_tab_position = self.tab_position;
         let old_tab_number = self.tab_number;
         let old_tab_id = self.tab_id;
         let old_tab_active = self.tab_active;
         let old_marker = self.marker;
 
-        if let Some(tab) = tabs.iter().find(|tab| tab.position == self.tab_position) {
+        let tab = self
+            .tab_id
+            .and_then(|tab_id| tabs.iter().find(|tab| tab.tab_id == tab_id))
+            .or_else(|| tabs.iter().find(|tab| tab.position == self.tab_position));
+        if let Some(tab) = tab {
+            self.tab_position = tab.position;
             self.tab_number = tab.position.saturating_add(1);
             self.tab_id = Some(tab.tab_id);
             self.tab_active = tab.active;
@@ -249,8 +259,9 @@ impl PaneEntry {
         let changed = old_tab_number != self.tab_number
             || old_tab_id != self.tab_id
             || old_tab_active != self.tab_active
-            || old_marker != self.marker;
-        if old_tab_number != self.tab_number {
+            || old_marker != self.marker
+            || old_tab_position != self.tab_position;
+        if old_tab_number != self.tab_number || old_tab_id != self.tab_id {
             self.refresh_search_text();
         }
         changed
@@ -263,9 +274,14 @@ impl PaneEntry {
         self.search_text.contains(query)
     }
 
-    pub fn row(&self, selected: bool, home_dir: &Path) -> PickerRow {
+    pub fn row(&self, selected: bool, home_dir: &Path, show_tab_label: bool) -> PickerRow {
         PickerRow {
             selected,
+            tab_label: show_tab_label
+                .then(|| self.tab_id.map(|tab_id| format!("T{tab_id}")))
+                .flatten()
+                .unwrap_or_default(),
+            pane_label: format!("P{}", self.pane_id),
             cwd_label: path_label(self.cwd.as_deref(), home_dir),
             branch_label: self.branch.clone().unwrap_or_else(|| "-".to_string()),
             git: self.git.clone(),
@@ -295,13 +311,17 @@ impl PaneEntry {
             (commit.short_sha.as_str(), commit.age.as_str(), commit.summary.as_str())
         });
         let label = self.label.as_deref().unwrap_or_default();
+        let tab_label = self.tab_id.map(|tab_id| format!("T{tab_id}")).unwrap_or_default();
+        let pane_label = format!("P{}", self.pane_id);
         let command = self.command_args.join(" ");
         let session_display = self.session_display.as_deref().unwrap_or_default();
         let session_search = self.session_search.as_deref().unwrap_or_default();
         self.search_text = format!(
-            "{} {} {} {} {} {} {} {} {} {} {}",
+            "{} {} {} {} {} {} {} {} {} {} {} {} {}",
             self.tab_number,
+            tab_label,
             self.pane_id,
+            pane_label,
             cwd,
             branch,
             commit_sha,
@@ -395,7 +415,7 @@ mod tests {
     fn test_row_when_cwd_is_under_home_uses_home_relative_label(#[case] cwd: &str, #[case] expected: &str) {
         let entry = PaneEntry::new(0, 1, Some(PathBuf::from(cwd)), Vec::new(), None);
 
-        let row = entry.row(false, Path::new("/Users/me"));
+        let row = entry.row(false, Path::new("/Users/me"), true);
 
         pretty_assertions::assert_eq!(row.cwd_label, expected);
     }
@@ -404,8 +424,48 @@ mod tests {
     fn test_row_when_cwd_is_outside_home_keeps_absolute_label() {
         let entry = PaneEntry::new(0, 1, Some(PathBuf::from("/opt/project")), Vec::new(), None);
 
-        let row = entry.row(false, Path::new("/Users/me"));
+        let row = entry.row(false, Path::new("/Users/me"), true);
 
         pretty_assertions::assert_eq!(row.cwd_label, "/opt/project");
+    }
+
+    #[test]
+    fn test_row_includes_tab_and_pane_label() {
+        let mut entry = PaneEntry::new(2, 3, Some(PathBuf::from("/tmp/project")), Vec::new(), None);
+        let _ = entry.apply_tab_metadata(&[TabInfo {
+            tab_id: 77,
+            position: 2,
+            ..Default::default()
+        }]);
+
+        let row = entry.row(false, Path::new("/Users/me"), true);
+
+        pretty_assertions::assert_eq!(row.tab_label, "T77");
+        pretty_assertions::assert_eq!(row.pane_label, "P3");
+    }
+
+    #[test]
+    fn test_row_when_tab_id_is_unknown_uses_blank_tab_label() {
+        let entry = PaneEntry::new(2, 3, Some(PathBuf::from("/tmp/project")), Vec::new(), None);
+
+        let row = entry.row(false, Path::new("/Users/me"), true);
+
+        pretty_assertions::assert_eq!(row.tab_label, "");
+        pretty_assertions::assert_eq!(row.pane_label, "P3");
+    }
+
+    #[test]
+    fn test_search_matches_displayed_tab_and_pane_labels() {
+        let mut entry = PaneEntry::new(2, 42, Some(PathBuf::from("/tmp/project")), Vec::new(), None);
+
+        let _ = entry.apply_tab_metadata(&[TabInfo {
+            tab_id: 77,
+            position: 2,
+            ..Default::default()
+        }]);
+
+        for query in ["t77", "p42", "77", "42"] {
+            assert2::assert!(entry.matches_normalized_query(query));
+        }
     }
 }
