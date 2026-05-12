@@ -12,8 +12,6 @@ layout {
 
 keybinds {
   normal {
-    bind "Ctrl Alt n" { MoveTab "Right"; }
-    bind "Ctrl Alt p" { MoveTab "Left"; }
     bind "Alt N" { GoToNextTab; }
     bind "Alt P" { GoToPreviousTab; }
     bind "Alt J" { MoveFocus "Down"; }
@@ -21,7 +19,7 @@ keybinds {
     // Using MoveFocus because Zellij FocusNextPane is bugged AF...
     bind "Alt H" { MoveFocus "Left"; }
     bind "Alt L" { MoveFocus "Right"; }
-    bind "Shift Alt Enter" {
+    bind "Shift Alt Enter" "Ctrl Alt Enter" {
       LaunchPlugin "file:~/.config/zellij/plugins/agg.wasm" {
         floating true
         move_to_focused_tab true
