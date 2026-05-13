@@ -5,7 +5,7 @@ mod install;
 mod nudge;
 
 const NUDGE_USAGE: &str = "usage: agg nudge <summary> <body> <tab-id> <pane-id> [image-path] [--session <session>]";
-const USAGE: &str = "usage: agg install [--debug] | agg git-stat <tab-bar|picker> <paths...> | agg nudge <summary> <body> <tab-id> <pane-id> [image-path] [--session <session>]";
+const USAGE: &str = "usage: agg install [--debug] | agg git-stat <tbar|ppick> <paths...> | agg nudge <summary> <body> <tab-id> <pane-id> [image-path] [--session <session>]";
 
 pub fn run() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();

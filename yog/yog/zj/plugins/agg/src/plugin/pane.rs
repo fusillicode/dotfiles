@@ -129,7 +129,7 @@ mod tests {
     }
 
     #[test]
-    fn test_is_displayable_terminal_pane_matches_picker_visibility() {
+    fn test_is_displayable_terminal_pane_matches_ppick_visibility() {
         assert!(is_displayable_terminal_pane(&terminal_pane_with_command(
             42, true, "zsh"
         )));

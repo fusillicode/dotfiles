@@ -30,7 +30,7 @@ keybinds {
       LaunchPlugin "file:~/.config/zellij/plugins/agg.wasm" {
         floating true
         move_to_focused_tab true
-        view "picker"
+        component "ppick"
         y "0"
         width "68%"
         height "45%"
