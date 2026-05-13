@@ -13,102 +13,102 @@ use zellij_tile::prelude::PipeMessage;
 use zellij_tile::prelude::TabInfo;
 use zellij_tile::prelude::ZellijPlugin;
 
-use crate::plugin::picker::state::PickerState;
-use crate::plugin::tab_bar::TabBarState;
+use crate::plugin::ppick::state::PpickState;
+use crate::plugin::tbar::TbarState;
 
-#[cfg_attr(test, derive(Debug))]
-#[derive(Clone, Copy, Default, Eq, PartialEq)]
-pub enum View {
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
+#[derive(Clone, Copy, Default)]
+pub enum Component {
     #[default]
-    TabBar,
-    Picker,
+    Tbar,
+    Ppick,
 }
 
-impl From<&BTreeMap<String, String>> for View {
+impl From<&BTreeMap<String, String>> for Component {
     fn from(config: &BTreeMap<String, String>) -> Self {
-        if config.get("view").is_some_and(|value| value == "picker") {
-            Self::Picker
+        if config.get("component").is_some_and(|value| value == "ppick") {
+            Self::Ppick
         } else {
-            Self::TabBar
+            Self::Tbar
         }
     }
 }
 
-pub enum ViewState {
-    TabBar(Box<TabBarState>),
-    Picker(Box<PickerState>),
+pub enum ComponentState {
+    Tbar(Box<TbarState>),
+    Ppick(Box<PpickState>),
 }
 
-impl Default for ViewState {
+impl Default for ComponentState {
     fn default() -> Self {
-        Self::TabBar(Box::default())
+        Self::Tbar(Box::default())
     }
 }
 
-impl From<View> for ViewState {
-    fn from(value: View) -> Self {
+impl From<Component> for ComponentState {
+    fn from(value: Component) -> Self {
         match value {
-            View::TabBar => Self::TabBar(Box::default()),
-            View::Picker => Self::Picker(Box::default()),
+            Component::Tbar => Self::Tbar(Box::default()),
+            Component::Ppick => Self::Ppick(Box::default()),
         }
     }
 }
 
 #[derive(Default)]
 pub struct State {
-    pub view: ViewState,
+    pub component: ComponentState,
     pub last_cols: usize,
     pub render_buf: String,
 }
 
 impl State {
     fn update_permission_granted(&mut self) -> bool {
-        match &mut self.view {
-            ViewState::TabBar(tab_bar) => crate::plugin::tab_bar::update_permission_granted(tab_bar),
-            ViewState::Picker(picker) => crate::plugin::picker::update_permission_granted(picker),
+        match &mut self.component {
+            ComponentState::Tbar(tbar) => crate::plugin::tbar::update_permission_granted(tbar),
+            ComponentState::Ppick(ppick) => crate::plugin::ppick::update_permission_granted(ppick),
         }
     }
 
     fn update_tabs(&mut self, tabs: Vec<TabInfo>) -> bool {
-        match &mut self.view {
-            ViewState::TabBar(tab_bar) => crate::plugin::tab_bar::update_tabs(tab_bar, tabs),
-            ViewState::Picker(picker) => crate::plugin::picker::update_tabs(picker, tabs),
+        match &mut self.component {
+            ComponentState::Tbar(tbar) => crate::plugin::tbar::update_tabs(tbar, tabs),
+            ComponentState::Ppick(ppick) => crate::plugin::ppick::update_tabs(ppick, tabs),
         }
     }
 
     fn update_panes(&mut self, manifest: &PaneManifest) -> bool {
-        match &mut self.view {
-            ViewState::TabBar(tab_bar) => crate::plugin::tab_bar::update_panes(tab_bar, manifest),
-            ViewState::Picker(picker) => crate::plugin::picker::update_panes(picker, manifest),
+        match &mut self.component {
+            ComponentState::Tbar(tbar) => crate::plugin::tbar::update_panes(tbar, manifest),
+            ComponentState::Ppick(ppick) => crate::plugin::ppick::update_panes(ppick, manifest),
         }
     }
 
     fn update_pane_closed(&mut self, pane_id: u32) -> bool {
-        match &mut self.view {
-            ViewState::TabBar(tab_bar) => crate::plugin::tab_bar::update_pane_closed(tab_bar, pane_id),
-            ViewState::Picker(picker) => crate::plugin::picker::update_pane_closed(picker, pane_id),
+        match &mut self.component {
+            ComponentState::Tbar(tbar) => crate::plugin::tbar::update_pane_closed(tbar, pane_id),
+            ComponentState::Ppick(ppick) => crate::plugin::ppick::update_pane_closed(ppick, pane_id),
         }
     }
 
     fn update_cwd(&mut self, pane_id: u32, cwd: PathBuf) -> bool {
-        match &mut self.view {
-            ViewState::TabBar(tab_bar) => crate::plugin::tab_bar::update_cwd(tab_bar, pane_id, cwd),
-            ViewState::Picker(picker) => crate::plugin::picker::update_cwd(picker, pane_id, cwd),
+        match &mut self.component {
+            ComponentState::Tbar(tbar) => crate::plugin::tbar::update_cwd(tbar, pane_id, cwd),
+            ComponentState::Ppick(ppick) => crate::plugin::ppick::update_cwd(ppick, pane_id, cwd),
         }
     }
 
     fn update_command(&mut self, pane_id: PaneId, command: &[String], is_foreground: bool) -> bool {
-        let ViewState::Picker(picker) = &mut self.view else {
+        let ComponentState::Ppick(ppick) = &mut self.component else {
             return false;
         };
-        crate::plugin::picker::update_command(picker, pane_id, command, is_foreground)
+        crate::plugin::ppick::update_command(ppick, pane_id, command, is_foreground)
     }
 
     fn update_key(&mut self, key: &KeyWithModifier) -> bool {
-        let ViewState::Picker(picker) = &mut self.view else {
+        let ComponentState::Ppick(ppick) = &mut self.component else {
             return false;
         };
-        crate::plugin::picker::update_key(picker, key)
+        crate::plugin::ppick::update_key(ppick, key)
     }
 
     fn update_run_command_result(
@@ -118,31 +118,31 @@ impl State {
         stderr: &[u8],
         context: &BTreeMap<String, String>,
     ) -> bool {
-        match &mut self.view {
-            ViewState::TabBar(tab_bar) => {
-                crate::plugin::tab_bar::update_run_command_result(tab_bar, exit_code, stdout, context)
+        match &mut self.component {
+            ComponentState::Tbar(tbar) => {
+                crate::plugin::tbar::update_run_command_result(tbar, exit_code, stdout, context)
             }
-            ViewState::Picker(picker) => {
-                crate::plugin::picker::update_run_command_result(picker, exit_code, stdout, stderr, context)
+            ComponentState::Ppick(ppick) => {
+                crate::plugin::ppick::update_run_command_result(ppick, exit_code, stdout, stderr, context)
             }
         }
     }
 
     fn update_mouse_left_click(&self, row: isize) -> bool {
-        let ViewState::TabBar(tab_bar) = &self.view else {
+        let ComponentState::Tbar(tbar) = &self.component else {
             return false;
         };
-        crate::plugin::tab_bar::update_mouse_left_click(tab_bar, row, self.last_cols)
+        crate::plugin::tbar::update_mouse_left_click(tbar, row, self.last_cols)
     }
 }
 
 impl ZellijPlugin for State {
     fn load(&mut self, config: BTreeMap<String, String>) {
-        self.view = ViewState::from(View::from(&config));
+        self.component = ComponentState::from(Component::from(&config));
         let home_dir = std::env::var_os("HOME").map_or_else(|| PathBuf::from("/"), PathBuf::from);
-        match &mut self.view {
-            ViewState::TabBar(tab_bar) => crate::plugin::tab_bar::load(tab_bar, home_dir),
-            ViewState::Picker(picker) => crate::plugin::picker::load(picker, home_dir, &config),
+        match &mut self.component {
+            ComponentState::Tbar(tbar) => crate::plugin::tbar::load(tbar, home_dir),
+            ComponentState::Ppick(ppick) => crate::plugin::ppick::load(ppick, home_dir, &config),
         }
         zellij_tile::prelude::request_permission(&[
             PermissionType::ReadApplicationState,
@@ -216,12 +216,12 @@ impl ZellijPlugin for State {
     fn render(&mut self, rows: usize, cols: usize) {
         self.last_cols = cols;
         self.render_buf.clear();
-        match &mut self.view {
-            ViewState::TabBar(tab_bar) => {
-                crate::plugin::tab_bar::render(tab_bar, rows, cols, &mut self.render_buf);
+        match &mut self.component {
+            ComponentState::Tbar(tbar) => {
+                crate::plugin::tbar::render(tbar, rows, cols, &mut self.render_buf);
             }
-            ViewState::Picker(picker) => {
-                crate::plugin::picker::render(picker, rows, cols, &mut self.render_buf);
+            ComponentState::Ppick(ppick) => {
+                crate::plugin::ppick::render(ppick, rows, cols, &mut self.render_buf);
             }
         }
         if !self.render_buf.is_empty() {
@@ -230,9 +230,9 @@ impl ZellijPlugin for State {
     }
 
     fn pipe(&mut self, pipe_message: PipeMessage) -> bool {
-        match &mut self.view {
-            ViewState::TabBar(tab_bar) => crate::plugin::tab_bar::pipe(tab_bar, &pipe_message),
-            ViewState::Picker(picker) => crate::plugin::picker::pipe(picker, &pipe_message),
+        match &mut self.component {
+            ComponentState::Tbar(tbar) => crate::plugin::tbar::pipe(tbar, &pipe_message),
+            ComponentState::Ppick(ppick) => crate::plugin::ppick::pipe(ppick, &pipe_message),
         }
     }
 }
@@ -250,30 +250,30 @@ mod tests {
     use zellij_tile::prelude::PipeSource;
     use zellij_tile::prelude::ZellijPlugin;
 
+    use crate::plugin::main::Component;
+    use crate::plugin::main::ComponentState;
     use crate::plugin::main::State;
-    use crate::plugin::main::View;
-    use crate::plugin::main::ViewState;
-    use crate::plugin::tab_bar::AGG_SYNC_PIPE;
+    use crate::plugin::tbar::AGG_SYNC_PIPE;
 
     #[test]
-    fn test_view_from_defaults_to_tab_bar_for_missing_or_unknown_view() {
-        assert_eq!(View::from(&BTreeMap::new()), View::TabBar);
+    fn test_component_from_defaults_to_tbar_for_missing_or_unknown_component() {
+        assert_eq!(Component::from(&BTreeMap::new()), Component::Tbar);
         assert_eq!(
-            View::from(&BTreeMap::from([(String::from("view"), String::from("unknown"))])),
-            View::TabBar
+            Component::from(&BTreeMap::from([(String::from("component"), String::from("unknown"),)])),
+            Component::Tbar
         );
     }
 
     #[test]
-    fn test_view_from_selects_picker_for_picker_view() {
+    fn test_component_from_selects_ppick_for_ppick_component() {
         assert_eq!(
-            View::from(&BTreeMap::from([(String::from("view"), String::from("picker"))])),
-            View::Picker
+            Component::from(&BTreeMap::from([(String::from("component"), String::from("ppick"))])),
+            Component::Ppick
         );
     }
 
     #[test]
-    fn test_pipe_returns_false_for_picker_view() {
+    fn test_pipe_returns_false_for_ppick_component() {
         let mut args = BTreeMap::new();
         args.insert("type".to_string(), "sync_request".to_string());
         let msg = PipeMessage {
@@ -284,7 +284,7 @@ mod tests {
             is_private: false,
         };
         let mut state = State {
-            view: ViewState::Picker(Box::default()),
+            component: ComponentState::Ppick(Box::default()),
             ..Default::default()
         };
 

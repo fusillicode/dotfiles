@@ -13,8 +13,8 @@ const SHORT_SHA_LEN: usize = 7;
 #[derive(Clone, Copy)]
 #[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub enum UseCase {
-    TabBar,
-    Picker,
+    Tbar,
+    Ppick,
 }
 
 /// Error returned when a git stat collection mode is unknown.
@@ -24,11 +24,7 @@ pub struct UseCaseParseError {
 
 impl Display for UseCaseParseError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "unknown git-stat use case {:?}, expected tab-bar or picker",
-            self.value
-        )
+        write!(f, "unknown git-stat use case {:?}, expected tbar or ppick", self.value)
     }
 }
 
@@ -37,8 +33,8 @@ impl FromStr for UseCase {
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {
-            "tab-bar" => Ok(Self::TabBar),
-            "picker" => Ok(Self::Picker),
+            "tbar" => Ok(Self::Tbar),
+            "ppick" => Ok(Self::Ppick),
             _ => Err(UseCaseParseError {
                 value: value.to_string(),
             }),
@@ -57,8 +53,8 @@ pub fn run(cwd: &str, use_case: UseCase) -> GitStat {
     };
 
     let (branch, last_commit) = match use_case {
-        UseCase::TabBar => (None, None),
-        UseCase::Picker => {
+        UseCase::Tbar => (None, None),
+        UseCase::Ppick => {
             let branch = repo
                 .head()
                 .ok()
@@ -132,8 +128,8 @@ mod tests {
     use super::*;
 
     #[rstest]
-    #[case("tab-bar", UseCase::TabBar)]
-    #[case("picker", UseCase::Picker)]
+    #[case("tbar", UseCase::Tbar)]
+    #[case("ppick", UseCase::Ppick)]
     fn test_use_case_from_str_when_known_returns_use_case(#[case] input: &str, #[case] expected: UseCase) {
         assert2::assert!(let Ok(actual) = input.parse::<UseCase>());
 
@@ -146,7 +142,7 @@ mod tests {
 
         pretty_assertions::assert_eq!(
             err.to_string(),
-            "unknown git-stat use case \"full\", expected tab-bar or picker"
+            "unknown git-stat use case \"full\", expected tbar or ppick"
         );
     }
 

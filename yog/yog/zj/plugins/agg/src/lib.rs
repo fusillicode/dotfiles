@@ -529,7 +529,7 @@ mod tests {
             last_commit: Some(LastCommit {
                 short_sha: "abc1234".to_string(),
                 age: "2m".to_string(),
-                summary: "fix picker\tbranch metadata".to_string(),
+                summary: "fix ppick\tbranch metadata".to_string(),
             }),
             insertions: 2,
             deletions: 1,
@@ -542,7 +542,7 @@ mod tests {
 
         pretty_assertions::assert_eq!(
             record,
-            "/tmp/re\\\\po\\nx\nfeat\\tone\\\\two\n2\n1\n3\n1\nabc1234\n2m\nfix picker\\tbranch metadata"
+            "/tmp/re\\\\po\\nx\nfeat\\tone\\\\two\n2\n1\n3\n1\nabc1234\n2m\nfix ppick\\tbranch metadata"
         );
         pretty_assertions::assert_eq!(parsed, stat);
     }
