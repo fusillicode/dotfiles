@@ -1,5 +1,6 @@
 [build]
-rustflags = ["-Ctarget-cpu=native"]
+# Enabling this will cause 'error: rustc interrupted by SIGILL' in CI
+# rustflags = ["-Ctarget-cpu=native"]
 rustdocflags = ["-D", "warnings"]
 
 [target.x86_64-apple-darwin]
