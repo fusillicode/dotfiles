@@ -3,9 +3,9 @@ use std::path::Path;
 use ytil_agents::agent::Agent;
 use zellij_tile::prelude::TabInfo;
 
-use crate::plugin::tab_bar::TabBarState;
-use crate::plugin::tab_bar::current_tab::AgentPanePhase;
-use crate::plugin::tab_bar::current_tab::CurrentTab;
+use crate::plugin::tbar::TbarState;
+use crate::plugin::tbar::current_tab::AgentPanePhase;
+use crate::plugin::tbar::current_tab::CurrentTab;
 
 #[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub struct Nudge {
@@ -48,7 +48,7 @@ impl Nudge {
     }
 }
 
-impl TabBarState {
+impl TbarState {
     pub fn nudges(&self) -> Vec<(u32, Nudge)> {
         let Some(current_tab) = self.current_tab.as_ref() else {
             return vec![];
@@ -83,12 +83,12 @@ mod tests {
     use crate::plugin::nudge::*;
     use crate::plugin::pane::FocusedPane;
     use crate::plugin::pane::FocusedPaneLabel;
-    use crate::plugin::tab_bar::current_tab::PaneFocus;
-    use crate::plugin::tab_bar::test_support::*;
+    use crate::plugin::tbar::current_tab::PaneFocus;
+    use crate::plugin::tbar::test_support::*;
 
     #[test]
     fn test_nudges_include_attention_from_any_current_tab_focus_state() {
-        let state = TabBarState {
+        let state = TbarState {
             known_active_tab_id: Some(10),
             current_tab: Some(CurrentTab {
                 pane_ids: HashSet::from([42, 99]),
