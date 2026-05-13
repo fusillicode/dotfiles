@@ -1,0 +1,5 @@
+- is it fine to have transfers api published even if we still don't know the specs?
+- incremental approach is ok? start with iban iban and then iban email and iban tag?
+  - if transfers are on transfer and krak and have different shape/metadata, pws-api will need to store everything long term
+- how can i verify a created transfer?
+- idempotency key
