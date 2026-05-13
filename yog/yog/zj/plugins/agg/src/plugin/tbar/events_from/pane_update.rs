@@ -254,6 +254,7 @@ fn snapshot_from_manifest_tab(
         indicator: TabIndicator::from_cmd(&cmd),
         cmd,
         git_stat: GitStat::default(),
+        pane_agents: vec![],
     }
 }
 
@@ -687,6 +688,7 @@ mod tests {
                     cmd: Cmd::agent(Agent::Codex, AgentState::Acknowledged),
                     indicator: TabIndicator::Seen,
                     git_stat: GitStat::default(),
+                    pane_agents: vec![],
                 },
                 evict_ids: vec![],
             }]
@@ -755,6 +757,7 @@ mod tests {
                     cmd: Cmd::Running("gkg".to_string()),
                     indicator: TabIndicator::NoAgent,
                     git_stat: GitStat::default(),
+                    pane_agents: vec![],
                 },
                 evict_ids: vec![],
             }]
@@ -795,6 +798,7 @@ mod tests {
                     cmd: Cmd::agent(Agent::Codex, AgentState::Acknowledged),
                     indicator: TabIndicator::Seen,
                     git_stat: GitStat::default(),
+                    pane_agents: vec![],
                 },
             )]),
             sync_requested: true,
@@ -832,6 +836,7 @@ mod tests {
                     cmd: Cmd::agent(Agent::Codex, AgentState::Acknowledged),
                     indicator: TabIndicator::Seen,
                     git_stat: GitStat::default(),
+                    pane_agents: vec![],
                 },
                 evict_ids: vec![],
             }]

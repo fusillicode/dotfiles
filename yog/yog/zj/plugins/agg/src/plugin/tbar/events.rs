@@ -131,6 +131,7 @@ mod tests {
     use zellij_tile::prelude::PipeMessage;
     use zellij_tile::prelude::PipeSource;
 
+    use crate::plugin::tbar::PaneAgentSnapshot;
     use crate::plugin::tbar::events::*;
 
     #[rstest]
@@ -150,7 +151,8 @@ mod tests {
         PipeMessage {
             source: PipeSource::Plugin(7),
             name: AGG_SYNC_PIPE.to_string(),
-            payload: Some(
+            payload: Some(format!(
+                "{}99\tcodex\tbusy\n",
                 TabStateEntry {
                     tab_id: 17,
                     cwd: Some(PathBuf::from("/home/user/project")),
@@ -164,8 +166,7 @@ mod tests {
                         ..Default::default()
                     },
                 }
-                .to_string(),
-            ),
+            )),
             args: BTreeMap::from([
                 (String::from("type"), String::from("state_snapshot")),
                 (String::from("tab_id"), String::from("17")),
@@ -190,6 +191,11 @@ mod tests {
                     is_worktree: true,
                     ..Default::default()
                 },
+                pane_agents: vec![PaneAgentSnapshot {
+                    pane_id: 99,
+                    agent: Agent::Codex,
+                    indicator: agg::TabIndicator::Busy,
+                }],
             }),
         }
     )]
