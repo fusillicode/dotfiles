@@ -14,6 +14,7 @@ use zellij_tile::prelude::TabInfo;
 use crate::plugin::ppick::state::PaneObservation;
 use crate::plugin::ppick::state::SessionEntry;
 use crate::plugin::ppick::ui::PpickRow;
+use crate::plugin::tbar::PaneAgentSnapshot;
 
 #[cfg_attr(test, derive(Debug))]
 #[derive(Eq, PartialEq)]
@@ -143,52 +144,42 @@ impl PaneEntry {
     }
 
     pub fn apply_agent_event(&mut self, event: &AgentEventPayload) -> bool {
-        if self.pane_id != event.pane_id {
-            return false;
-        }
-        if self
-            .agent
-            .is_some_and(|agent| event.agent.priority() < agent.priority())
-        {
-            return false;
-        }
-
-        let old_agent = self.agent;
-        let old_marker = self.marker;
-        let old_label = self.label.clone();
+        let snapshot = |indicator| PaneAgentSnapshot {
+            pane_id: event.pane_id,
+            agent: event.agent,
+            indicator,
+        };
         match event.kind {
-            AgentEventKind::Start => {
-                self.agent = Some(event.agent);
-                self.marker = TabIndicator::Seen;
-                self.label = Some(event.agent.short_name().to_string());
-            }
-            AgentEventKind::Busy => {
-                self.agent = Some(event.agent);
-                self.marker = TabIndicator::Busy;
-                self.label = Some(event.agent.short_name().to_string());
-            }
+            AgentEventKind::Start => self.apply_agent_snapshot(snapshot(TabIndicator::Seen)),
+            AgentEventKind::Busy => self.apply_agent_snapshot(snapshot(TabIndicator::Busy)),
             AgentEventKind::Idle => {
-                self.agent = Some(event.agent);
-                self.marker = if self.tab_active && self.is_focused {
+                let indicator = if self.tab_active && self.is_focused {
                     TabIndicator::Seen
                 } else {
                     TabIndicator::Unseen
                 };
-                self.label = Some(event.agent.short_name().to_string());
+                self.apply_agent_snapshot(snapshot(indicator))
             }
             AgentEventKind::Exit => {
-                if self.agent == Some(event.agent) {
-                    self.agent = None;
-                    self.marker = TabIndicator::NoAgent;
-                    self.label = crate::plugin::pane::label_from_command_args(&self.command_args);
+                if self.pane_id == event.pane_id && self.agent == Some(event.agent) {
+                    self.set_agent_marker(None, TabIndicator::NoAgent)
+                } else {
+                    false
                 }
             }
         }
-        let changed = old_agent != self.agent || old_marker != self.marker || old_label != self.label;
-        if changed {
-            self.refresh_search_text();
+    }
+
+    pub fn apply_agent_snapshot(&mut self, snapshot: PaneAgentSnapshot) -> bool {
+        if self.pane_id != snapshot.pane_id
+            || self
+                .agent
+                .is_some_and(|agent| snapshot.agent.priority() < agent.priority())
+        {
+            return false;
         }
-        changed
+
+        self.set_agent_marker(Some(snapshot.agent), snapshot.indicator)
     }
 
     pub fn apply_git_stat(&mut self, stat: GitStat) -> bool {
@@ -293,6 +284,20 @@ impl PaneEntry {
         });
         let command = self.agent.is_none().then(|| self.label.clone()).flatten();
         Cmd::from_parts(self.agent, agent_state, command)
+    }
+
+    fn set_agent_marker(&mut self, agent: Option<Agent>, marker: TabIndicator) -> bool {
+        let label = agent
+            .map(|agent| agent.short_name().to_string())
+            .or_else(|| crate::plugin::pane::label_from_command_args(&self.command_args));
+        let changed = self.agent != agent || self.marker != marker || self.label != label;
+        self.agent = agent;
+        self.marker = marker;
+        self.label = label;
+        if changed {
+            self.refresh_search_text();
+        }
+        changed
     }
 
     fn refresh_search_text(&mut self) {

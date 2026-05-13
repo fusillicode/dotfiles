@@ -131,10 +131,7 @@ pub fn pipe(state: &mut PpickState, pipe_message: &PipeMessage) -> bool {
         else {
             return false;
         };
-        let Some(focused_pane_id) = snapshot.focused_pane_id else {
-            return false;
-        };
-        return state.set_initial_focus_pane(snapshot.tab_id, focused_pane_id, snapshot.seq);
+        return state.apply_state_snapshot(&snapshot);
     }
     let events = crate::plugin::ppick::events_from::agent::derive(pipe_message);
     apply_events(state, events)

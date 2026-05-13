@@ -15,6 +15,8 @@ use zellij_tile::prelude::TabInfo;
 
 use crate::plugin::ppick::entry::PaneEntry;
 use crate::plugin::ppick::ui::PpickRow;
+use crate::plugin::tbar::PaneAgentSnapshot;
+use crate::plugin::tbar::StateSnapshotPayload;
 
 #[derive(Default)]
 pub struct PpickState {
@@ -28,6 +30,7 @@ pub struct PpickState {
     sessions_by_key: HashMap<(String, String), SessionEntry>,
     cwds_by_pane: HashMap<u32, PathBuf>,
     commands_by_pane: HashMap<u32, Vec<String>>,
+    agent_snapshots_by_pane: HashMap<u32, PaneAgentSnapshot>,
     git_stats_by_cwd: HashMap<PathBuf, GitStat>,
     git_stat_cwds_to_refresh: HashSet<PathBuf>,
     git_stat_cwds_in_flight: HashSet<PathBuf>,
@@ -148,6 +151,14 @@ impl PpickState {
         self.select_initial_focus(None)
     }
 
+    pub fn apply_state_snapshot(&mut self, snapshot: &StateSnapshotPayload) -> bool {
+        let mut changed = snapshot
+            .focused_pane_id
+            .is_some_and(|pane_id| self.set_initial_focus_pane(snapshot.tab_id, pane_id, snapshot.seq));
+        changed |= self.update_agent_snapshots(&snapshot.pane_agents);
+        changed
+    }
+
     pub fn pane_observations(
         &self,
         manifest: &PaneManifest,
@@ -266,6 +277,8 @@ impl PpickState {
         self.cwds_by_pane.retain(|pane_id, _| live_pane_ids.contains(pane_id));
         self.commands_by_pane
             .retain(|pane_id, _| live_pane_ids.contains(pane_id));
+        self.agent_snapshots_by_pane
+            .retain(|pane_id, _| live_pane_ids.contains(pane_id));
         crate::plugin::ppick::entry::sort_by_tab_order(&mut next_entries, &self.all_tabs);
         crate::plugin::ppick::state::attach_sessions_to_entries(&mut next_entries, &self.sessions_by_key);
         let entries_changed = self.pane_entries != next_entries;
@@ -306,6 +319,9 @@ impl PpickState {
             return false;
         };
         let mut changed = entry.apply_command(command.to_owned());
+        if let Some(snapshot) = self.agent_snapshots_by_pane.get(&pane_id) {
+            changed |= entry.apply_agent_snapshot(*snapshot);
+        }
         if changed {
             changed |= entry.attach_session(&self.sessions_by_key);
             self.mark_filter_dirty();
@@ -317,6 +333,7 @@ impl PpickState {
     pub fn remove_pane(&mut self, pane_id: u32) -> bool {
         self.cwds_by_pane.remove(&pane_id);
         self.commands_by_pane.remove(&pane_id);
+        self.agent_snapshots_by_pane.remove(&pane_id);
         let old_len = self.pane_entries.len();
         self.pane_entries.retain(|entry| entry.pane_id != pane_id);
         if old_len != self.pane_entries.len() {
@@ -348,6 +365,28 @@ impl PpickState {
             return false;
         };
         let mut changed = entry.apply_agent_event(event);
+        self.agent_snapshots_by_pane.remove(&event.pane_id);
+        if changed {
+            self.mark_filter_dirty();
+            changed |= self.clamp_selection();
+        }
+        changed
+    }
+
+    pub fn update_agent_snapshots(&mut self, snapshots: &[PaneAgentSnapshot]) -> bool {
+        let mut changed = false;
+        for snapshot in snapshots {
+            if self.agent_snapshots_by_pane.get(&snapshot.pane_id) != Some(snapshot) {
+                self.agent_snapshots_by_pane.insert(snapshot.pane_id, *snapshot);
+            }
+            if let Some(entry) = self
+                .pane_entries
+                .iter_mut()
+                .find(|entry| entry.pane_id == snapshot.pane_id)
+            {
+                changed |= entry.apply_agent_snapshot(*snapshot);
+            }
+        }
         if changed {
             self.mark_filter_dirty();
             changed |= self.clamp_selection();
@@ -452,6 +491,9 @@ impl PpickState {
         let mut entry = PaneEntry::from_observation(pane, cached_cwd, cached_command, &self.all_tabs, previous);
         if let Some(previous) = previous {
             entry.inherit_agent_state(previous);
+        }
+        if let Some(snapshot) = self.agent_snapshots_by_pane.get(&pane.pane_id) {
+            entry.apply_agent_snapshot(*snapshot);
         }
         if let Some(cwd) = entry.cwd.as_ref()
             && let Some(stat) = self.git_stats_by_cwd.get(cwd)
@@ -1538,6 +1580,148 @@ mod tests {
             frame(&mut state).first().map(|row| row.indicator),
             Some(agg::TabIndicator::Unseen)
         );
+
+        let focused_manifest = PaneManifest {
+            panes: std::iter::once((
+                0,
+                vec![PaneInfo {
+                    is_focused: true,
+                    ..terminal_pane_with_command(42, "codex")
+                }],
+            ))
+            .collect(),
+        };
+        let _ = update_panes(
+            &mut state,
+            &focused_manifest,
+            |_| None,
+            |_| Some(vec![String::from("codex")]),
+        );
+
+        assert_eq!(
+            frame(&mut state).first().map(|row| row.indicator),
+            Some(agg::TabIndicator::Seen)
+        );
+    }
+
+    #[test]
+    fn test_state_snapshot_before_pane_update_hydrates_busy_agent() {
+        let mut state = PpickState::default();
+        let snapshot = StateSnapshotPayload {
+            tab_id: 10,
+            seq: 1,
+            focused_pane_id: Some(42),
+            cwd: None,
+            cmd: agg::Cmd::None,
+            indicator: agg::TabIndicator::NoAgent,
+            git_stat: agg::GitStat::default(),
+            pane_agents: vec![PaneAgentSnapshot {
+                pane_id: 42,
+                agent: Agent::Codex,
+                indicator: agg::TabIndicator::Busy,
+            }],
+        };
+        let _ = state.apply_state_snapshot(&snapshot);
+        let _ = state.update_tabs(vec![TabInfo {
+            tab_id: 10,
+            active: true,
+            position: 0,
+            ..Default::default()
+        }]);
+        let manifest = PaneManifest {
+            panes: std::iter::once((0, vec![terminal_pane_with_command(42, "codex")])).collect(),
+        };
+
+        let _ = update_panes(&mut state, &manifest, |_| None, |_| Some(vec![String::from("codex")]));
+
+        assert_eq!(
+            frame(&mut state).first().map(|row| row.indicator),
+            Some(agg::TabIndicator::Busy)
+        );
+    }
+
+    #[test]
+    fn test_state_snapshot_after_pane_update_replaces_seen_with_unseen() {
+        let mut state = PpickState::default();
+        let _ = state.update_tabs(vec![TabInfo {
+            tab_id: 10,
+            active: true,
+            position: 0,
+            ..Default::default()
+        }]);
+        let manifest = PaneManifest {
+            panes: std::iter::once((0, vec![terminal_pane_with_command(42, "codex")])).collect(),
+        };
+        let _ = update_panes(&mut state, &manifest, |_| None, |_| Some(vec![String::from("codex")]));
+        assert_eq!(
+            frame(&mut state).first().map(|row| row.indicator),
+            Some(agg::TabIndicator::Seen)
+        );
+
+        let snapshot = StateSnapshotPayload {
+            tab_id: 10,
+            seq: 1,
+            focused_pane_id: Some(42),
+            cwd: None,
+            cmd: agg::Cmd::None,
+            indicator: agg::TabIndicator::NoAgent,
+            git_stat: agg::GitStat::default(),
+            pane_agents: vec![PaneAgentSnapshot {
+                pane_id: 42,
+                agent: Agent::Codex,
+                indicator: agg::TabIndicator::Unseen,
+            }],
+        };
+
+        assert2::assert!(state.apply_state_snapshot(&snapshot));
+
+        assert_eq!(
+            frame(&mut state).first().map(|row| row.indicator),
+            Some(agg::TabIndicator::Unseen)
+        );
+    }
+
+    #[test]
+    fn test_agent_event_invalidates_state_snapshot_cache() {
+        let mut state = PpickState::default();
+        let snapshot = StateSnapshotPayload {
+            tab_id: 10,
+            seq: 1,
+            focused_pane_id: Some(42),
+            cwd: None,
+            cmd: agg::Cmd::None,
+            indicator: agg::TabIndicator::NoAgent,
+            git_stat: agg::GitStat::default(),
+            pane_agents: vec![PaneAgentSnapshot {
+                pane_id: 42,
+                agent: Agent::Codex,
+                indicator: agg::TabIndicator::Busy,
+            }],
+        };
+        let _ = state.apply_state_snapshot(&snapshot);
+        let _ = state.update_tabs(vec![TabInfo {
+            tab_id: 10,
+            active: true,
+            position: 0,
+            ..Default::default()
+        }]);
+        let manifest = PaneManifest {
+            panes: std::iter::once((0, vec![terminal_pane_with_command(42, "codex")])).collect(),
+        };
+        let _ = update_panes(&mut state, &manifest, |_| None, |_| Some(vec![String::from("codex")]));
+
+        assert_eq!(
+            frame(&mut state).first().map(|row| row.indicator),
+            Some(agg::TabIndicator::Busy)
+        );
+
+        assert2::assert!(state.apply_event(PpickEvent::AgentUpdated {
+            event: AgentEventPayload {
+                pane_id: 42,
+                agent: Agent::Codex,
+                kind: AgentEventKind::Idle,
+            },
+        }));
 
         let focused_manifest = PaneManifest {
             panes: std::iter::once((
