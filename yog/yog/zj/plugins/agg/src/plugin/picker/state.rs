@@ -32,8 +32,11 @@ pub struct PickerState {
     git_stat_cwds_to_refresh: HashSet<PathBuf>,
     git_stat_cwds_in_flight: HashSet<PathBuf>,
     all_tabs: Vec<TabInfo>,
+    floating_y: Option<String>,
     floating_width: Option<String>,
     floating_height: Option<String>,
+    floating_display_rows: Option<usize>,
+    floating_display_columns: Option<usize>,
     floating_size_applied: bool,
     initial_focus_by_tab: HashMap<usize, InitialFocus>,
     selection_touched: bool,
@@ -102,7 +105,8 @@ impl PickerState {
         }
     }
 
-    pub fn set_floating_size(&mut self, width: Option<String>, height: Option<String>) {
+    pub fn set_floating_coordinates(&mut self, y: Option<String>, width: Option<String>, height: Option<String>) {
+        self.floating_y = y;
         self.floating_width = width;
         self.floating_height = height;
         self.floating_size_applied = false;
@@ -112,14 +116,19 @@ impl PickerState {
         if self.floating_size_applied {
             return None;
         }
-        let coordinates = FloatingPaneCoordinates::new(
-            None,
-            None,
-            self.floating_width.clone(),
-            self.floating_height.clone(),
-            None,
-            Some(false),
-        )?;
+        let coordinates = match (self.floating_display_rows, self.floating_display_columns) {
+            (Some(display_rows), Some(display_columns)) => {
+                self.centered_floating_coordinates(display_rows, display_columns)
+            }
+            _ => FloatingPaneCoordinates::new(
+                None,
+                self.floating_y.clone(),
+                self.floating_width.clone(),
+                self.floating_height.clone(),
+                None,
+                Some(false),
+            ),
+        }?;
         self.floating_size_applied = true;
         Some(coordinates)
     }
@@ -175,6 +184,7 @@ impl PickerState {
     }
 
     pub fn update_tabs(&mut self, mut tabs: Vec<TabInfo>) -> bool {
+        let display_area_changed = self.update_floating_display_area(&tabs);
         tabs.sort_by_key(|tab| tab.position);
         let mut changed = self.all_tabs != tabs;
         self.all_tabs = tabs;
@@ -192,7 +202,44 @@ impl PickerState {
             self.mark_filter_dirty();
         }
         let selection_changed = self.select_initial_focus(None);
-        changed || order_changed || selection_changed
+        changed || order_changed || selection_changed || display_area_changed
+    }
+
+    fn update_floating_display_area(&mut self, tabs: &[TabInfo]) -> bool {
+        let Some(active_tab) = tabs.iter().find(|tab| tab.active) else {
+            return false;
+        };
+        if active_tab.display_area_rows == 0 || active_tab.display_area_columns == 0 {
+            return false;
+        }
+
+        let display_area_changed = self.floating_display_rows != Some(active_tab.display_area_rows)
+            || self.floating_display_columns != Some(active_tab.display_area_columns);
+        if display_area_changed {
+            self.floating_display_rows = Some(active_tab.display_area_rows);
+            self.floating_display_columns = Some(active_tab.display_area_columns);
+            self.floating_size_applied = false;
+        }
+        display_area_changed
+    }
+
+    fn centered_floating_coordinates(
+        &self,
+        display_rows: usize,
+        display_columns: usize,
+    ) -> Option<FloatingPaneCoordinates> {
+        let width = fixed_cells(self.floating_width.as_deref(), display_columns);
+        let height = fixed_cells(self.floating_height.as_deref(), display_rows);
+        let x = width.map(|width| display_columns.saturating_sub(width) / 2);
+        let y = fixed_cells(self.floating_y.as_deref(), display_rows);
+        FloatingPaneCoordinates::new(
+            x.map(|x| x.to_string()),
+            y.map(|y| y.to_string()),
+            width.map(|width| width.to_string()),
+            height.map(|height| height.to_string()),
+            None,
+            Some(false),
+        )
     }
 
     fn update_panes_from_observations(&mut self, observations: &[PaneObservation]) -> bool {
@@ -343,12 +390,8 @@ impl PickerState {
             }
             BareKey::Down if key.has_no_modifiers() => self.select_next(),
             BareKey::Char('n') if key.has_only_modifiers(&[KeyModifier::Ctrl]) => self.select_next(),
-            BareKey::Char('n') if key.has_only_modifiers(&[KeyModifier::Shift, KeyModifier::Alt]) => self.select_next(),
             BareKey::Up if key.has_no_modifiers() => self.select_previous(),
             BareKey::Char('p') if key.has_only_modifiers(&[KeyModifier::Ctrl]) => self.select_previous(),
-            BareKey::Char('p') if key.has_only_modifiers(&[KeyModifier::Shift, KeyModifier::Alt]) => {
-                self.select_previous()
-            }
             BareKey::Char(c)
                 if !c.is_control() && (key.has_no_modifiers() || key.has_only_modifiers(&[KeyModifier::Shift])) =>
             {
@@ -389,23 +432,17 @@ impl PickerState {
             return Vec::new();
         }
         let start = self.selected.saturating_add(1).saturating_sub(capacity);
-        let mut rows = Vec::new();
-        let mut previous_tab_position = None;
-        for (idx, entry_idx) in self
-            .filtered_entry_indices
+        self.filtered_entry_indices
             .iter()
             .enumerate()
             .skip(start)
             .take(capacity)
-        {
-            let Some(entry) = self.pane_entries.get(*entry_idx) else {
-                continue;
-            };
-            let show_tab_label = previous_tab_position != Some(entry.tab_position);
-            previous_tab_position = Some(entry.tab_position);
-            rows.push(entry.row(idx == self.selected, &self.home_dir, show_tab_label));
-        }
-        rows
+            .filter_map(|(idx, entry_idx)| {
+                self.pane_entries
+                    .get(*entry_idx)
+                    .map(|entry| entry.row(idx == self.selected, &self.home_dir))
+            })
+            .collect()
     }
 
     fn entry_from_observation(&self, pane: &PaneObservation) -> PaneEntry {
@@ -581,6 +618,19 @@ impl PickerState {
     }
 }
 
+fn fixed_cells(value: Option<&str>, total: usize) -> Option<usize> {
+    let value = value?;
+    if let Some(percent) = value.strip_suffix('%') {
+        let percent = percent.parse::<usize>().ok()?;
+        if percent > 100 {
+            return None;
+        }
+        Some(total.saturating_mul(percent) / 100)
+    } else {
+        value.parse::<usize>().ok()
+    }
+}
+
 fn attach_sessions_to_entries(
     pane_entries: &mut [PaneEntry],
     sessions_by_key: &HashMap<(String, String), SessionEntry>,
@@ -607,7 +657,6 @@ mod tests {
     use std::path::PathBuf;
 
     use pretty_assertions::assert_eq;
-    use rstest::rstest;
     use ytil_agents::agent::Agent;
     use ytil_agents::agent::AgentEventKind;
     use ytil_agents::agent::AgentEventPayload;
@@ -622,10 +671,6 @@ mod tests {
 
     fn key(bare_key: BareKey) -> KeyWithModifier {
         KeyWithModifier::new(bare_key)
-    }
-
-    fn modified_key(bare_key: BareKey, modifiers: &[KeyModifier]) -> KeyWithModifier {
-        KeyWithModifier::new_with_modifiers(bare_key, modifiers.iter().copied().collect())
     }
 
     fn terminal_pane_with_command(id: u32, command: &str) -> PaneInfo {
@@ -664,22 +709,68 @@ mod tests {
     }
 
     #[test]
-    fn test_take_floating_coordinates_uses_configured_width_and_height_once() {
+    fn test_take_floating_coordinates_centers_inside_active_display_area() {
         let mut state = PickerState::default();
-        state.set_floating_size(Some(String::from("90%")), Some(String::from("80%")));
+        state.set_floating_coordinates(
+            Some(String::from("2")),
+            Some(String::from("68%")),
+            Some(String::from("45%")),
+        );
+        let _ = state.update_tabs(vec![TabInfo {
+            active: true,
+            display_area_rows: 100,
+            display_area_columns: 320,
+            ..Default::default()
+        }]);
 
         assert_eq!(
             state.take_floating_coordinates(),
             FloatingPaneCoordinates::new(
-                None,
-                None,
-                Some(String::from("90%")),
-                Some(String::from("80%")),
+                Some(String::from("51")),
+                Some(String::from("2")),
+                Some(String::from("217")),
+                Some(String::from("45")),
                 None,
                 Some(false),
             )
         );
         assert_eq!(state.take_floating_coordinates(), None);
+    }
+
+    #[test]
+    fn test_take_floating_coordinates_reapplies_after_display_area_changes() {
+        let mut state = PickerState::default();
+        state.set_floating_coordinates(
+            Some(String::from("0")),
+            Some(String::from("68%")),
+            Some(String::from("45%")),
+        );
+        let _ = state.update_tabs(vec![TabInfo {
+            active: true,
+            display_area_rows: 100,
+            display_area_columns: 320,
+            ..Default::default()
+        }]);
+        let _ = state.take_floating_coordinates();
+
+        let _ = state.update_tabs(vec![TabInfo {
+            active: true,
+            display_area_rows: 100,
+            display_area_columns: 200,
+            ..Default::default()
+        }]);
+
+        assert_eq!(
+            state.take_floating_coordinates(),
+            FloatingPaneCoordinates::new(
+                Some(String::from("32")),
+                Some(String::from("0")),
+                Some(String::from("136")),
+                Some(String::from("45")),
+                None,
+                Some(false),
+            )
+        );
     }
 
     #[test]
@@ -1076,16 +1167,14 @@ mod tests {
         };
         let _ = update_panes(&mut state, &manifest, |_| None, |_| None);
         let rows = frame(&mut state);
-        assert_eq!(rows.first().map(|row| row.tab_label.as_str()), Some("T20"));
-        assert_eq!(rows.first().map(|row| row.pane_label.as_str()), Some("P43"));
+        assert_eq!(rows.first().map(|row| row.pane_label.as_str()), Some("20:43"));
 
         let stale_tabs_manifest = PaneManifest {
             panes: std::iter::once((0, vec![terminal_pane_with_command(43, "nvim")])).collect(),
         };
         let _ = update_panes(&mut state, &stale_tabs_manifest, |_| None, |_| None);
         let rows = frame(&mut state);
-        assert_eq!(rows.first().map(|row| row.tab_label.as_str()), Some("T20"));
-        assert_eq!(rows.first().map(|row| row.pane_label.as_str()), Some("P43"));
+        assert_eq!(rows.first().map(|row| row.pane_label.as_str()), Some("20:43"));
 
         let _ = state.update_tabs(vec![
             TabInfo {
@@ -1101,12 +1190,11 @@ mod tests {
         ]);
 
         let rows = frame(&mut state);
-        assert_eq!(rows.first().map(|row| row.tab_label.as_str()), Some("T20"));
-        assert_eq!(rows.first().map(|row| row.pane_label.as_str()), Some("P43"));
+        assert_eq!(rows.first().map(|row| row.pane_label.as_str()), Some("20:43"));
     }
 
     #[test]
-    fn test_visible_frame_shows_tab_label_only_at_group_start() {
+    fn test_visible_frame_shows_compact_pane_label_for_each_entry() {
         let mut state = PickerState::default();
         let _ = state.update_tabs(vec![
             TabInfo {
@@ -1137,12 +1225,9 @@ mod tests {
         let _ = update_panes(&mut state, &manifest, |_| None, |_| None);
 
         let rows = frame(&mut state);
-        let labels = rows
-            .iter()
-            .map(|row| (row.tab_label.as_str(), row.pane_label.as_str()))
-            .collect::<Vec<_>>();
+        let labels = rows.iter().map(|row| row.pane_label.as_str()).collect::<Vec<_>>();
 
-        assert_eq!(labels, vec![("T10", "P42"), ("", "P43"), ("T20", "P44")]);
+        assert_eq!(labels, vec!["10:42", "10:43", "20:44"]);
     }
 
     #[test]
@@ -1155,7 +1240,7 @@ mod tests {
             None,
         );
 
-        for query in ["1", "42", "project", "codex", "cx"] {
+        for query in ["42", "project", "codex", "cx"] {
             assert2::assert!(entry.matches_normalized_query(query));
         }
     }
@@ -1572,52 +1657,6 @@ mod tests {
         assert_eq!(state.selected, 1);
         assert_eq!(state.handle_key(&ctrl_p), PickerAction::Redraw);
         assert_eq!(state.selected, 0);
-    }
-
-    #[rstest]
-    #[case('n', 0, 1)]
-    #[case('p', 2, 1)]
-    fn test_handle_key_when_shift_alt_selection_key_moves_to_adjacent_row(
-        #[case] c: char,
-        #[case] selected: usize,
-        #[case] expected_selected: usize,
-    ) {
-        let mut state = PickerState {
-            selected,
-            pane_entries: vec![
-                PaneEntry::new(0, 42, None, vec![String::from("cargo")], None),
-                PaneEntry::new(0, 43, None, vec![String::from("nvim")], None),
-                PaneEntry::new(1, 44, None, vec![String::from("zsh")], None),
-                PaneEntry::new(2, 45, None, vec![String::from("git")], None),
-            ],
-            ..Default::default()
-        };
-
-        assert_eq!(
-            state.handle_key(&modified_key(BareKey::Char(c), &[KeyModifier::Shift, KeyModifier::Alt])),
-            PickerAction::Redraw
-        );
-        assert_eq!(state.selected, expected_selected);
-        assert_eq!(state.query, "");
-    }
-
-    #[rstest]
-    #[case('n')]
-    #[case('p')]
-    fn test_handle_key_when_shift_alt_selection_key_has_one_visible_tab_still_moves_by_row(#[case] c: char) {
-        let mut state = PickerState {
-            pane_entries: vec![
-                PaneEntry::new(0, 42, None, vec![String::from("cargo")], None),
-                PaneEntry::new(0, 43, None, vec![String::from("nvim")], None),
-            ],
-            ..Default::default()
-        };
-
-        assert_eq!(
-            state.handle_key(&modified_key(BareKey::Char(c), &[KeyModifier::Shift, KeyModifier::Alt])),
-            PickerAction::Redraw
-        );
-        assert_eq!(state.selected, 1);
     }
 
     #[test]
