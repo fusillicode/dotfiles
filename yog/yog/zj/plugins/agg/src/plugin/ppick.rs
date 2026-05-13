@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::path::Path;
 use std::path::PathBuf;
 
 use zellij_tile::prelude::EventType;
@@ -10,16 +11,19 @@ use zellij_tile::prelude::PipeMessage;
 use zellij_tile::prelude::TabInfo;
 
 use crate::plugin::ppick::state::PpickAction;
-use crate::plugin::ppick::state::PpickEvent;
 use crate::plugin::ppick::state::PpickState;
 use crate::plugin::tbar::AGG_SYNC_PIPE;
 use crate::plugin::tbar::StateSnapshotPayload;
 
+mod decode;
 mod entry;
-pub mod events_from;
 pub mod state;
 pub mod ui;
 
+// Unlike tbar, ppick does not keep a semantic event pipeline. Tbar fans one host
+// input into tab, sync, git-stat, and nudge transitions; ppick inputs map to one
+// local state mutation plus local side effects, so raw decoding stays in `decode`
+// and mutation stays on `PpickState`.
 const CONTEXT_KIND: &str = "kind";
 const CONTEXT_AGS_SESSIONS: &str = "ags_sessions";
 const CONTEXT_GIT_STAT: &str = "git_stat";
@@ -60,20 +64,17 @@ pub fn render(state: &mut PpickState, rows: usize, cols: usize, buf: &mut String
 }
 
 pub fn update_tabs(state: &mut PpickState, tabs: Vec<TabInfo>) -> bool {
-    let events = crate::plugin::ppick::events_from::tab_update::derive(tabs);
-    let changed = apply_events(state, events);
+    let changed = state.update_tabs(tabs);
     let coordinates_changed = apply_floating_coordinates(state);
     changed || coordinates_changed
 }
 
 pub fn update_panes(state: &mut PpickState, manifest: &PaneManifest) -> bool {
-    let events = crate::plugin::ppick::events_from::pane_update::derive(
-        state,
+    let changed = state.update_panes(
         manifest,
         |pane_id| zellij_tile::prelude::get_pane_cwd(PaneId::Terminal(pane_id)).ok(),
         |pane_id| zellij_tile::prelude::get_pane_running_command(PaneId::Terminal(pane_id)).ok(),
     );
-    let changed = apply_events(state, events);
     if changed {
         run_git_stats(state);
     }
@@ -81,13 +82,11 @@ pub fn update_panes(state: &mut PpickState, manifest: &PaneManifest) -> bool {
 }
 
 pub fn update_pane_closed(state: &mut PpickState, pane_id: u32) -> bool {
-    let events = crate::plugin::ppick::events_from::pane_close::derive(pane_id);
-    apply_events(state, events)
+    state.remove_pane(pane_id)
 }
 
-pub fn update_cwd(state: &mut PpickState, pane_id: u32, cwd: PathBuf) -> bool {
-    let events = crate::plugin::ppick::events_from::cwd::derive(pane_id, cwd);
-    let changed = apply_events(state, events);
+pub fn update_cwd(state: &mut PpickState, pane_id: u32, cwd: &Path) -> bool {
+    let changed = state.update_cwd(pane_id, cwd);
     if changed {
         run_git_stats(state);
     }
@@ -101,8 +100,7 @@ pub fn update_command(state: &mut PpickState, pane_id: PaneId, command: &[String
     let PaneId::Terminal(pane_id) = pane_id else {
         return false;
     };
-    let events = crate::plugin::ppick::events_from::command::derive(pane_id, command.to_owned());
-    apply_events(state, events)
+    state.update_command(pane_id, command)
 }
 
 pub fn update_key(state: &mut PpickState, key: &KeyWithModifier) -> bool {
@@ -133,8 +131,7 @@ pub fn pipe(state: &mut PpickState, pipe_message: &PipeMessage) -> bool {
         };
         return state.apply_state_snapshot(&snapshot);
     }
-    let events = crate::plugin::ppick::events_from::agent::derive(pipe_message);
-    apply_events(state, events)
+    crate::plugin::ppick::decode::agent_event_from_pipe(pipe_message).is_some_and(|event| state.update_agent(&event))
 }
 
 pub fn update_run_command_result(
@@ -150,11 +147,8 @@ pub fn update_run_command_result(
                 eprintln!("agg ppick: ags list --json failed: {}", String::from_utf8_lossy(stderr));
                 return false;
             }
-            match crate::plugin::ppick::events_from::sessions::parse(stdout) {
-                Ok(entries) => {
-                    let events = crate::plugin::ppick::events_from::sessions::derive(entries);
-                    apply_events(state, events)
-                }
+            match crate::plugin::ppick::decode::sessions_from_stdout(stdout) {
+                Ok(entries) => state.update_sessions(entries),
                 Err(err) => {
                     eprintln!("agg ppick: failed to parse ags sessions: {err}");
                     false
@@ -166,19 +160,11 @@ pub fn update_run_command_result(
                 return false;
             };
             state.finish_git_stat_request(&cwd);
-            let events = crate::plugin::ppick::events_from::git_stat::derive(&cwd, exit_code, stdout);
-            apply_events(state, events)
+            crate::plugin::ppick::decode::git_stat_from_run_command(&cwd, exit_code, stdout)
+                .is_some_and(|stat| state.update_git_stat(&stat))
         }
         Some(_) | None => false,
     }
-}
-
-fn apply_events(state: &mut PpickState, events: Vec<PpickEvent>) -> bool {
-    let mut changed = false;
-    for event in events {
-        changed |= state.apply_event(event);
-    }
-    changed
 }
 
 fn apply_floating_coordinates(state: &mut PpickState) -> bool {
@@ -266,8 +252,7 @@ mod tests {
             .into_iter()
             .collect(),
         };
-        let events = crate::plugin::ppick::events_from::pane_update::derive(&state, &manifest, |_| None, |_| None);
-        let _ = apply_events(&mut state, events);
+        let _ = state.update_panes(&manifest, |_| None, |_| None);
         let msg = PipeMessage {
             source: PipeSource::Plugin(7),
             name: AGG_SYNC_PIPE.to_string(),
