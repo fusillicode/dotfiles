@@ -93,7 +93,7 @@ impl State {
     fn update_cwd(&mut self, pane_id: u32, cwd: PathBuf) -> bool {
         match &mut self.component {
             ComponentState::Tbar(tbar) => crate::plugin::tbar::update_cwd(tbar, pane_id, cwd),
-            ComponentState::Ppick(ppick) => crate::plugin::ppick::update_cwd(ppick, pane_id, cwd),
+            ComponentState::Ppick(ppick) => crate::plugin::ppick::update_cwd(ppick, pane_id, &cwd),
         }
     }
 

@@ -59,18 +59,6 @@ pub enum PpickAction {
     Focus(u32),
 }
 
-#[derive(Debug, Eq, PartialEq)]
-pub enum PpickEvent {
-    TabsUpdated { tabs: Vec<TabInfo> },
-    PanesUpdated { panes: Vec<PaneObservation> },
-    PaneRemoved { pane_id: u32 },
-    CwdUpdated { pane_id: u32, cwd: PathBuf },
-    CommandUpdated { pane_id: u32, command: Vec<String> },
-    AgentUpdated { event: AgentEventPayload },
-    GitStatUpdated { stat: GitStat },
-    SessionsUpdated { sessions: Vec<SessionEntry> },
-}
-
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct SessionEntry {
     pub agent: String,
@@ -95,19 +83,6 @@ pub struct PaneObservation {
 }
 
 impl PpickState {
-    pub fn apply_event(&mut self, event: PpickEvent) -> bool {
-        match event {
-            PpickEvent::TabsUpdated { tabs } => self.update_tabs(tabs),
-            PpickEvent::PanesUpdated { panes } => self.update_panes_from_observations(&panes),
-            PpickEvent::PaneRemoved { pane_id } => self.remove_pane(pane_id),
-            PpickEvent::CwdUpdated { pane_id, cwd } => self.update_cwd(pane_id, &cwd),
-            PpickEvent::CommandUpdated { pane_id, command } => self.update_command(pane_id, &command),
-            PpickEvent::AgentUpdated { event } => self.update_agent(&event),
-            PpickEvent::GitStatUpdated { stat } => self.update_git_stat(&stat),
-            PpickEvent::SessionsUpdated { sessions } => self.update_sessions(sessions),
-        }
-    }
-
     pub fn set_floating_coordinates(&mut self, y: Option<String>, width: Option<String>, height: Option<String>) {
         self.floating_y = y;
         self.floating_width = width;
@@ -159,7 +134,17 @@ impl PpickState {
         changed
     }
 
-    pub fn pane_observations(
+    pub fn update_panes(
+        &mut self,
+        manifest: &PaneManifest,
+        resolve_pane_cwd: impl FnMut(u32) -> Option<PathBuf>,
+        resolve_pane_command: impl FnMut(u32) -> Option<Vec<String>>,
+    ) -> bool {
+        let observations = self.pane_observations(manifest, resolve_pane_cwd, resolve_pane_command);
+        self.update_panes_from_observations(&observations)
+    }
+
+    fn pane_observations(
         &self,
         manifest: &PaneManifest,
         mut resolve_pane_cwd: impl FnMut(u32) -> Option<PathBuf>,
@@ -503,7 +488,7 @@ impl PpickState {
         entry
     }
 
-    fn update_git_stat(&mut self, stat: &GitStat) -> bool {
+    pub fn update_git_stat(&mut self, stat: &GitStat) -> bool {
         let cwd = stat.path.clone();
         let previous = self.git_stats_by_cwd.insert(cwd.clone(), stat.clone());
         let mut changed = previous.as_ref() != Some(stat);
@@ -729,8 +714,7 @@ mod tests {
         resolve_pane_cwd: impl FnMut(u32) -> Option<PathBuf>,
         resolve_pane_command: impl FnMut(u32) -> Option<Vec<String>>,
     ) -> bool {
-        let observations = state.pane_observations(manifest, resolve_pane_cwd, resolve_pane_command);
-        state.update_panes_from_observations(&observations)
+        state.update_panes(manifest, resolve_pane_cwd, resolve_pane_command)
     }
 
     fn frame(state: &mut PpickState) -> Vec<PpickRow> {
@@ -1536,7 +1520,7 @@ mod tests {
             ..Default::default()
         };
 
-        assert2::assert!(state.apply_event(PpickEvent::GitStatUpdated { stat: stat.clone() }));
+        assert2::assert!(state.update_git_stat(&stat));
 
         let frame = frame(&mut state);
         assert_eq!(frame.first().map(|row| &row.git), Some(&stat));
@@ -1557,24 +1541,20 @@ mod tests {
         };
         let _ = update_panes(&mut state, &manifest, |_| None, |_| Some(vec![String::from("codex")]));
 
-        assert2::assert!(state.apply_event(PpickEvent::AgentUpdated {
-            event: AgentEventPayload {
-                pane_id: 42,
-                agent: Agent::Codex,
-                kind: AgentEventKind::Busy,
-            },
+        assert2::assert!(state.update_agent(&AgentEventPayload {
+            pane_id: 42,
+            agent: Agent::Codex,
+            kind: AgentEventKind::Busy,
         }));
         assert_eq!(
             frame(&mut state).first().map(|row| row.indicator),
             Some(agg::TabIndicator::Busy)
         );
 
-        assert2::assert!(state.apply_event(PpickEvent::AgentUpdated {
-            event: AgentEventPayload {
-                pane_id: 42,
-                agent: Agent::Codex,
-                kind: AgentEventKind::Idle,
-            },
+        assert2::assert!(state.update_agent(&AgentEventPayload {
+            pane_id: 42,
+            agent: Agent::Codex,
+            kind: AgentEventKind::Idle,
         }));
         assert_eq!(
             frame(&mut state).first().map(|row| row.indicator),
@@ -1715,12 +1695,10 @@ mod tests {
             Some(agg::TabIndicator::Busy)
         );
 
-        assert2::assert!(state.apply_event(PpickEvent::AgentUpdated {
-            event: AgentEventPayload {
-                pane_id: 42,
-                agent: Agent::Codex,
-                kind: AgentEventKind::Idle,
-            },
+        assert2::assert!(state.update_agent(&AgentEventPayload {
+            pane_id: 42,
+            agent: Agent::Codex,
+            kind: AgentEventKind::Idle,
         }));
 
         let focused_manifest = PaneManifest {
