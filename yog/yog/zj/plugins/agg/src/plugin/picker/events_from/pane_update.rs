@@ -56,8 +56,7 @@ mod tests {
             state.visible_frame(usize::MAX),
             vec![PickerRow {
                 selected: true,
-                tab_label: String::new(),
-                pane_label: "P42".to_string(),
+                pane_label: "42".to_string(),
                 cwd_label: "/tmp/repo".to_string(),
                 branch_label: "-".to_string(),
                 git: agg::GitStat::default(),
