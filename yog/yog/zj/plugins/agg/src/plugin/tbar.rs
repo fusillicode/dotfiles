@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fmt::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -37,6 +38,7 @@ pub mod ui;
 
 pub const AGG_SYNC_PIPE: &str = "agg-sync";
 const CONTEXT_KEY_GIT_STAT: &str = "git-stat";
+const TAB_STATE_ENTRY_LINES: usize = 9;
 
 #[derive(Default)]
 pub struct TbarState {
@@ -63,10 +65,32 @@ pub struct StateSnapshotPayload {
     pub cmd: Cmd,
     pub indicator: TabIndicator,
     pub git_stat: GitStat,
+    pub pane_agents: Vec<PaneAgentSnapshot>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PaneAgentSnapshot {
+    pub pane_id: u32,
+    pub agent: Agent,
+    pub indicator: TabIndicator,
 }
 
 impl StateSnapshotPayload {
     pub fn from_current_tab(value: &CurrentTab) -> Self {
+        let mut pane_agents = value
+            .pane_state_by_pane
+            .iter()
+            .map(|(&pane_id, pane_state)| {
+                let cmd = pane_state.cmd();
+                PaneAgentSnapshot {
+                    pane_id,
+                    agent: pane_state.agent,
+                    indicator: TabIndicator::from_cmd(&cmd),
+                }
+            })
+            .collect::<Vec<_>>();
+        pane_agents.sort_by_key(|pane| pane.pane_id);
+
         Self {
             tab_id: value.tab_id,
             seq: value.seq,
@@ -77,6 +101,7 @@ impl StateSnapshotPayload {
             cmd: value.display_cmd(),
             indicator: value.tab_indicator(),
             git_stat: value.git_stat.clone(),
+            pane_agents,
         }
     }
 }
@@ -140,6 +165,7 @@ impl TryFrom<&PipeMessage> for StateSnapshotPayload {
             cmd: entry.cmd,
             indicator: entry.indicator,
             git_stat: entry.git_stat,
+            pane_agents: parse_pane_agent_snapshots(payload)?,
         })
     }
 }
@@ -160,10 +186,63 @@ impl From<&StateSnapshotPayload> for MessageToPlugin {
         if let Some(focused_pane_id) = value.focused_pane_id {
             args.insert("focused_pane_id".to_string(), focused_pane_id.to_string());
         }
+        let mut payload = entry.to_string();
+        for pane in &value.pane_agents {
+            let _ = writeln!(
+                payload,
+                "{}\t{}\t{}",
+                pane.pane_id,
+                pane.agent.name(),
+                pane.indicator.as_str()
+            );
+        }
         Self::new(AGG_SYNC_PIPE.to_string())
             .with_args(args)
-            .with_payload(entry.to_string())
+            .with_payload(payload)
     }
+}
+
+fn parse_pane_agent_snapshots(payload: &str) -> Result<Vec<PaneAgentSnapshot>, PipeEventError> {
+    payload
+        .lines()
+        .skip(TAB_STATE_ENTRY_LINES)
+        .filter(|line| !line.is_empty())
+        .map(parse_pane_agent_snapshot)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(PipeEventError::Parse)
+}
+
+fn parse_pane_agent_snapshot(line: &str) -> Result<PaneAgentSnapshot, ParseError> {
+    let mut fields = line.split('\t');
+    let pane_id = fields
+        .next()
+        .ok_or(ParseError::Missing("pane_agent pane_id"))
+        .and_then(|value| {
+            value.parse::<u32>().map_err(|_| ParseError::Invalid {
+                field: "pane_agent pane_id",
+                value: value.to_string(),
+            })
+        })?;
+    let agent = fields
+        .next()
+        .ok_or(ParseError::Missing("pane_agent agent"))
+        .and_then(Agent::from_name)?;
+    let indicator = fields
+        .next()
+        .ok_or(ParseError::Missing("pane_agent indicator"))
+        .and_then(TabIndicator::parse)?;
+    if fields.next().is_some() {
+        return Err(ParseError::Invalid {
+            field: "pane_agent",
+            value: line.to_string(),
+        });
+    }
+
+    Ok(PaneAgentSnapshot {
+        pane_id,
+        agent,
+        indicator,
+    })
 }
 
 #[derive(Debug)]
@@ -573,6 +652,7 @@ pub mod test_support {
             cmd,
             indicator,
             git_stat: GitStat::default(),
+            pane_agents: vec![],
         }
     }
 
@@ -585,7 +665,13 @@ pub mod test_support {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
+    use agg::AgentState;
+    use agg::Cmd;
+    use agg::TabIndicator;
     use pretty_assertions::assert_eq;
+    use ytil_agents::agent::Agent;
     use zellij_tile::prelude::PaneId;
     use zellij_tile::prelude::PaneInfo;
     use zellij_tile::prelude::PipeMessage;
@@ -595,9 +681,14 @@ mod tests {
     use crate::plugin::pane::FocusedPane;
     use crate::plugin::pane::FocusedPaneLabel;
     use crate::plugin::tbar::AGG_SYNC_PIPE;
+    use crate::plugin::tbar::PaneAgentSnapshot;
+    use crate::plugin::tbar::StateSnapshotPayload;
+    use crate::plugin::tbar::current_tab::AgentPanePhase;
     use crate::plugin::tbar::current_tab::CurrentTab;
+    use crate::plugin::tbar::current_tab::PaneFocus;
     use crate::plugin::tbar::events::PipeEvent;
     use crate::plugin::tbar::events::PipeEventError;
+    use crate::plugin::tbar::test_support::pane_state;
 
     #[test]
     fn test_sync_request_from_cli_fails_without_source_plugin_id() {
@@ -615,6 +706,43 @@ mod tests {
         assert2::assert!(
             let Err(PipeEventError::Parse(agg::ParseError::Missing("source"))) = parsed
         );
+    }
+
+    #[test]
+    fn test_state_snapshot_from_current_tab_includes_sorted_pane_agent_states() {
+        let current_tab = CurrentTab {
+            pane_state_by_pane: HashMap::from([
+                (
+                    43,
+                    pane_state(Agent::Claude, AgentPanePhase::AttentionUnseen, PaneFocus::Unfocused, 2),
+                ),
+                (
+                    42,
+                    pane_state(Agent::Codex, AgentPanePhase::Running, PaneFocus::Focused, 1),
+                ),
+            ]),
+            ..CurrentTab::new(10)
+        };
+
+        let snapshot = StateSnapshotPayload::from_current_tab(&current_tab);
+
+        assert_eq!(
+            snapshot.pane_agents,
+            vec![
+                PaneAgentSnapshot {
+                    pane_id: 42,
+                    agent: Agent::Codex,
+                    indicator: TabIndicator::Busy,
+                },
+                PaneAgentSnapshot {
+                    pane_id: 43,
+                    agent: Agent::Claude,
+                    indicator: TabIndicator::Unseen,
+                },
+            ]
+        );
+        assert_eq!(snapshot.cmd, Cmd::agent(Agent::Claude, AgentState::NeedsAttention));
+        assert_eq!(snapshot.indicator, TabIndicator::Unseen);
     }
 
     #[test]
