@@ -27,7 +27,11 @@ const CONTEXT_CWD: &str = "cwd";
 
 pub fn load(state: &mut PickerState, home_dir: PathBuf, config: &BTreeMap<String, String>) {
     state.home_dir = home_dir;
-    state.set_floating_size(config.get("width").cloned(), config.get("height").cloned());
+    state.set_floating_coordinates(
+        config.get("y").cloned(),
+        config.get("width").cloned(),
+        config.get("height").cloned(),
+    );
 }
 
 pub fn update_permission_granted(state: &mut PickerState) -> bool {
@@ -44,10 +48,7 @@ pub fn update_permission_granted(state: &mut PickerState) -> bool {
     sync_args.insert("type".to_string(), "sync_request".to_string());
     zellij_tile::prelude::pipe_message_to_plugin(MessageToPlugin::new(AGG_SYNC_PIPE.to_string()).with_args(sync_args));
     zellij_tile::prelude::set_selectable(true);
-    if let Some(coordinates) = state.take_floating_coordinates() {
-        let plugin_id = zellij_tile::prelude::get_plugin_ids().plugin_id;
-        zellij_tile::prelude::change_floating_panes_coordinates(vec![(PaneId::Plugin(plugin_id), coordinates)]);
-    }
+    apply_floating_coordinates(state);
     crate::plugin::picker::run_ags_sessions();
     true
 }
@@ -60,7 +61,9 @@ pub fn render(state: &mut PickerState, rows: usize, cols: usize, buf: &mut Strin
 
 pub fn update_tabs(state: &mut PickerState, tabs: Vec<TabInfo>) -> bool {
     let events = crate::plugin::picker::events_from::tab_update::derive(tabs);
-    apply_events(state, events)
+    let changed = apply_events(state, events);
+    let coordinates_changed = apply_floating_coordinates(state);
+    changed || coordinates_changed
 }
 
 pub fn update_panes(state: &mut PickerState, manifest: &PaneManifest) -> bool {
@@ -182,6 +185,15 @@ fn apply_events(state: &mut PickerState, events: Vec<PickerEvent>) -> bool {
         changed |= state.apply_event(event);
     }
     changed
+}
+
+fn apply_floating_coordinates(state: &mut PickerState) -> bool {
+    let Some(coordinates) = state.take_floating_coordinates() else {
+        return false;
+    };
+    let plugin_id = zellij_tile::prelude::get_plugin_ids().plugin_id;
+    zellij_tile::prelude::change_floating_panes_coordinates(vec![(PaneId::Plugin(plugin_id), coordinates)]);
+    true
 }
 
 fn run_ags_sessions() {
