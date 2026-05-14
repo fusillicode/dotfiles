@@ -45,10 +45,15 @@ impl TabRow {
         }
     }
 
-    pub fn placeholder(tab: &TabInfo) -> Self {
+    pub fn placeholder(tab: &TabInfo, home: &Path) -> Self {
+        let path_label = if tab.name.starts_with('/') {
+            ytil_tui::short_path(Path::new(&tab.name), home)
+        } else {
+            tab.name.clone()
+        };
         Self {
             active: tab.active,
-            path_label: tab.name.clone(),
+            path_label,
             cmd: Cmd::None,
             indicator: TabIndicator::NoAgent,
             git: GitStat::default(),
@@ -414,7 +419,27 @@ mod tests {
             indicator: TabIndicator::NoAgent,
             git: GitStat::default(),
         };
-        let actual = TabRow::placeholder(&tab);
+        let actual = TabRow::placeholder(&tab, Path::new("/home"));
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_tab_row_placeholder_shortens_absolute_tab_name() {
+        let tab = TabInfo {
+            name: "/Users/me/src/pkg/project".to_string(),
+            active: true,
+            position: 3,
+            ..Default::default()
+        };
+
+        let expected = TabRow {
+            active: true,
+            path_label: "~/s/p/project".to_string(),
+            cmd: Cmd::None,
+            indicator: TabIndicator::NoAgent,
+            git: GitStat::default(),
+        };
+        let actual = TabRow::placeholder(&tab, Path::new("/Users/me"));
         assert_eq!(actual, expected);
     }
 
