@@ -3,7 +3,7 @@ use std::process::Command;
 
 use rootcause::prelude::ResultExt;
 
-const PLUGINS: &[&str] = &["agg", "zcp", "zop"];
+const PLUGINS: &[&str] = &["agg", "zcp", "znt", "zop"];
 
 pub fn run(is_debug: bool) -> rootcause::Result<()> {
     for plugin in PLUGINS {
