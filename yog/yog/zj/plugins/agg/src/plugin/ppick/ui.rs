@@ -44,13 +44,9 @@ pub fn render_frame(frame: &[PpickRow], query: &str, rows: usize, cols: usize, b
         let _ = write!(buf, "\x1b[2;1H{empty}");
         2
     } else {
-        let capacity = rows.saturating_sub(1) / ENTRY_ROWS;
-        let selected = frame.iter().position(|row| row.selected).unwrap_or(0);
-        let start = selected.saturating_add(1).saturating_sub(capacity);
-        let visible_rows = frame.iter().skip(start).take(capacity).collect::<Vec<_>>();
-        let pane_label_width = crate::plugin::ppick::ui::label_width(visible_rows.iter().map(|row| &row.pane_label));
+        let pane_label_width = crate::plugin::ppick::ui::label_width(frame.iter().map(|row| &row.pane_label));
         let mut row_1based = 2_usize;
-        for row in visible_rows {
+        for row in frame {
             for line in [
                 crate::plugin::ppick::ui::path_line_with_widths(row, cols, pane_label_width),
                 crate::plugin::ppick::ui::cmd_line(row, cols),
@@ -492,50 +488,6 @@ mod tests {
             plain_text(&path_line(&row, 24)),
             crate::plugin::ui::pad(" 1:42 ~/project main", 24)
         );
-    }
-
-    #[test]
-    fn test_render_frame_keeps_selected_entry_visible() {
-        let frame = vec![
-            PpickRow {
-                selected: false,
-                pane_label: "1:42".to_string(),
-                cwd_label: "~/first".to_string(),
-                branch_label: "main".to_string(),
-                git: GitStat::default(),
-                cmd: Cmd::None,
-                indicator: TabIndicator::NoAgent,
-                session_summary: String::new(),
-            },
-            PpickRow {
-                selected: false,
-                pane_label: "1:42".to_string(),
-                cwd_label: "~/second".to_string(),
-                branch_label: "main".to_string(),
-                git: GitStat::default(),
-                cmd: Cmd::None,
-                indicator: TabIndicator::NoAgent,
-                session_summary: String::new(),
-            },
-            PpickRow {
-                selected: true,
-                pane_label: "1:42".to_string(),
-                cwd_label: "~/third".to_string(),
-                branch_label: "main".to_string(),
-                git: GitStat::default(),
-                cmd: Cmd::None,
-                indicator: TabIndicator::NoAgent,
-                session_summary: String::new(),
-            },
-        ];
-        let mut rendered = String::new();
-
-        render_frame(&frame, "", 7, 24, &mut rendered);
-        let plain = plain_text(&rendered);
-
-        assert2::assert!(!plain.contains("~/first"));
-        assert2::assert!(plain.contains("~/second"));
-        assert2::assert!(plain.contains("~/third"));
     }
 
     fn plain_text(value: &str) -> String {
