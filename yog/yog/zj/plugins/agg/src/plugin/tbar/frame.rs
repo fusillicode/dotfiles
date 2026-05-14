@@ -43,7 +43,7 @@ fn compute_frame(state: &TbarState) -> Vec<TabRow> {
                 );
             }
 
-            TabRow::placeholder(tab)
+            TabRow::placeholder(tab, state.home_dir.as_path())
         })
         .collect()
 }

@@ -7,6 +7,7 @@ use agg::ParseError;
 use ytil_agents::agent::AgentEventPayload;
 use zellij_tile::prelude::PipeMessage;
 use zellij_tile::prelude::PipeSource;
+use zellij_tile::prelude::TabInfo;
 
 use crate::plugin::tbar::AGG_SYNC_PIPE;
 use crate::plugin::tbar::StateSnapshotPayload;
@@ -37,6 +38,10 @@ pub enum PipeEvent {
     },
     ActiveTab {
         active_tab_id: usize,
+    },
+    TabTopology {
+        source_plugin_id: u32,
+        tabs: Vec<TabInfo>,
     },
     StateSnapshot {
         source_plugin_id: u32,
@@ -79,6 +84,21 @@ impl TryFrom<&PipeMessage> for PipeEvent {
                             })
                         })?;
                     Ok(Self::ActiveTab { active_tab_id })
+                }
+                Some("tab_topology") => {
+                    let source_plugin_id =
+                        Self::source_plugin_id(msg).ok_or(PipeEventError::Parse(ParseError::Missing("source")))?;
+                    let payload = msg
+                        .payload
+                        .as_deref()
+                        .ok_or(PipeEventError::Parse(ParseError::Missing("tab_topology payload")))?;
+                    let tabs = serde_json::from_str(payload).map_err(|error| {
+                        PipeEventError::Parse(ParseError::Invalid {
+                            field: "tab_topology payload",
+                            value: error.to_string(),
+                        })
+                    })?;
+                    Ok(Self::TabTopology { source_plugin_id, tabs })
                 }
                 Some("state_snapshot") => {
                     let source_plugin_id =
@@ -130,6 +150,7 @@ mod tests {
     use ytil_agents::agent::AgentEventPayload;
     use zellij_tile::prelude::PipeMessage;
     use zellij_tile::prelude::PipeSource;
+    use zellij_tile::prelude::TabInfo;
 
     use crate::plugin::tbar::PaneAgentSnapshot;
     use crate::plugin::tbar::events::*;
@@ -211,6 +232,34 @@ mod tests {
             is_private: false,
         },
         PipeEvent::ActiveTab { active_tab_id: 17 }
+    )]
+    #[case::tab_topology(
+        {
+            let tabs = vec![TabInfo {
+                tab_id: 17,
+                position: 1,
+                name: "project".to_string(),
+                active: true,
+                ..Default::default()
+            }];
+            PipeMessage {
+                source: PipeSource::Plugin(7),
+                name: AGG_SYNC_PIPE.to_string(),
+                payload: Some(serde_json::to_string(&tabs).unwrap()),
+                args: BTreeMap::from([(String::from("type"), String::from("tab_topology"))]),
+                is_private: false,
+            }
+        },
+        PipeEvent::TabTopology {
+            source_plugin_id: 7,
+            tabs: vec![TabInfo {
+                tab_id: 17,
+                position: 1,
+                name: "project".to_string(),
+                active: true,
+                ..Default::default()
+            }],
+        }
     )]
     #[case::agent(
         PipeMessage {

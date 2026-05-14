@@ -335,6 +335,7 @@ pub fn update_tabs(state: &mut TbarState, mut tabs: Vec<TabInfo>) -> bool {
         .and_then(|active_tab_id| resolve_active_tab_landing_focus(active_tab_id, &tabs, state.current_tab.as_ref()));
     let events = crate::plugin::tbar::events_from::tab_update::derive(state, &mut tabs, landing_focus);
     let frame_changed = state.apply_all(&events);
+    send_tab_topology(&tabs);
     if let Some(active_tab_id) = active_tab_id {
         send_active_tab(active_tab_id);
     }
@@ -414,6 +415,12 @@ pub fn pipe(state: &mut TbarState, pipe_message: &PipeMessage) -> bool {
             handle_events(state, &events);
             frame_changed || !events.is_empty()
         }
+        PipeEvent::TabTopology { source_plugin_id, tabs } => {
+            if source_plugin_id == state.plugin_id {
+                return false;
+            }
+            apply_synced_tab_topology(state, tabs)
+        }
         PipeEvent::StateSnapshot {
             source_plugin_id,
             snapshot,
@@ -429,6 +436,14 @@ pub fn pipe(state: &mut TbarState, pipe_message: &PipeMessage) -> bool {
             frame_changed || !events.is_empty()
         }
     }
+}
+
+fn apply_synced_tab_topology(state: &mut TbarState, mut tabs: Vec<TabInfo>) -> bool {
+    tabs.sort_by_key(|tab| tab.position);
+    if state.all_tabs == tabs {
+        return false;
+    }
+    state.apply_all(&[Event::AllTabsReplaced { new_tabs: tabs }])
 }
 
 fn apply_and_handle_events(state: &mut TbarState, events: &[Event]) -> bool {
@@ -499,6 +514,19 @@ fn send_active_tab(active_tab_id: usize) {
     args.insert("type".to_string(), "active_tab".to_string());
     args.insert("tab_id".to_string(), active_tab_id.to_string());
     zellij_tile::prelude::pipe_message_to_plugin(MessageToPlugin::new(AGG_SYNC_PIPE.to_string()).with_args(args));
+}
+
+fn send_tab_topology(tabs: &[TabInfo]) {
+    let Ok(payload) = serde_json::to_string(tabs).inspect_err(|error| eprintln!("agg: {error}")) else {
+        return;
+    };
+    let mut args = BTreeMap::new();
+    args.insert("type".to_string(), "tab_topology".to_string());
+    zellij_tile::prelude::pipe_message_to_plugin(
+        MessageToPlugin::new(AGG_SYNC_PIPE.to_string())
+            .with_args(args)
+            .with_payload(payload),
+    );
 }
 
 fn resolve_active_tab_landing_focus(
@@ -683,6 +711,7 @@ mod tests {
     use crate::plugin::tbar::AGG_SYNC_PIPE;
     use crate::plugin::tbar::PaneAgentSnapshot;
     use crate::plugin::tbar::StateSnapshotPayload;
+    use crate::plugin::tbar::TbarState;
     use crate::plugin::tbar::current_tab::AgentPanePhase;
     use crate::plugin::tbar::current_tab::CurrentTab;
     use crate::plugin::tbar::current_tab::PaneFocus;
@@ -743,6 +772,61 @@ mod tests {
         );
         assert_eq!(snapshot.cmd, Cmd::agent(Agent::Claude, AgentState::NeedsAttention));
         assert_eq!(snapshot.indicator, TabIndicator::Unseen);
+    }
+
+    #[test]
+    fn test_pipe_tab_topology_updates_hidden_tab_state_without_rebroadcast() {
+        let tabs = vec![
+            TabInfo {
+                tab_id: 20,
+                position: 0,
+                name: "new".to_string(),
+                active: true,
+                ..Default::default()
+            },
+            TabInfo {
+                tab_id: 10,
+                position: 1,
+                name: "old".to_string(),
+                active: false,
+                ..Default::default()
+            },
+        ];
+        let mut state = TbarState {
+            plugin_id: 7,
+            known_active_tab_id: Some(10),
+            all_tabs: vec![
+                TabInfo {
+                    tab_id: 10,
+                    position: 0,
+                    name: "old".to_string(),
+                    active: true,
+                    ..Default::default()
+                },
+                TabInfo {
+                    tab_id: 20,
+                    position: 1,
+                    name: "new".to_string(),
+                    active: false,
+                    ..Default::default()
+                },
+            ],
+            current_tab: Some(CurrentTab::new(10)),
+            sync_requested: false,
+            ..Default::default()
+        };
+        let msg = PipeMessage {
+            source: PipeSource::Plugin(8),
+            name: AGG_SYNC_PIPE.to_string(),
+            payload: Some(serde_json::to_string(&tabs).unwrap()),
+            args: std::collections::BTreeMap::from([(String::from("type"), String::from("tab_topology"))]),
+            is_private: false,
+        };
+
+        assert!(crate::plugin::tbar::pipe(&mut state, &msg));
+        assert_eq!(state.all_tabs, tabs);
+        assert_eq!(state.known_active_tab_id, Some(20));
+        assert!(!state.sync_requested);
     }
 
     #[test]
