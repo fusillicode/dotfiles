@@ -7,6 +7,7 @@ use agg::GitStat;
 use agg::TabIndicator;
 use zellij_tile::prelude::PaneInfo;
 use zellij_tile::prelude::PaneManifest;
+use zellij_tile::prelude::TabInfo;
 
 use crate::plugin::pane::FocusedPane;
 use crate::plugin::pane::FocusedPaneLabel;
@@ -29,11 +30,9 @@ pub fn derive(
 
     let mut events = vec![];
     let current_tab_id = state.current_tab.as_ref().map(|current_tab| current_tab.tab_id);
-    let discovered_tab_id = state
-        .all_tabs
-        .iter()
-        .find(|tab| tab.position == tab_pos)
-        .map(|tab| tab.tab_id);
+    let discovered_tab_id =
+        stable_tab_for_manifest_position(&state.all_tabs, tab_pos, panes, state.current_tab.is_some())
+            .map(|tab| tab.tab_id);
 
     let bootstrapped_current_tab = bootstrap_current_tab_for_pane_update(state.current_tab.as_ref(), discovered_tab_id);
     if let Some(current_tab) = bootstrapped_current_tab.as_ref() {
@@ -187,15 +186,16 @@ fn remote_tab_changes(
         if tab_pos == current_tab_pos {
             continue;
         }
-        let Some(tab) = state.all_tabs.iter().find(|tab| tab.position == tab_pos) else {
+        let Some(source_plugin_id) = panes.iter().find(|pane| pane.is_plugin).map(|pane| pane.id) else {
+            continue;
+        };
+        let existing_remote = state.other_tabs.contains_key(&source_plugin_id);
+        let Some(tab) = stable_tab_for_manifest_position(&state.all_tabs, tab_pos, panes, existing_remote) else {
             continue;
         };
         if state.current_tab_id() == Some(tab.tab_id) {
             continue;
         }
-        let Some(source_plugin_id) = panes.iter().find(|pane| pane.is_plugin).map(|pane| pane.id) else {
-            continue;
-        };
         let Some(display_pane) = display_pane_for_manifest_tab(panes, tab.active) else {
             continue;
         };
@@ -204,17 +204,11 @@ fn remote_tab_changes(
         };
 
         let cwd = resolve_pane_cwd(display_pane.id).or_else(|| state.cwds_by_pane.get(&display_pane.id).cloned());
-        let snapshot = snapshot_from_manifest_tab(tab.tab_id, &display_pane, pane, cwd);
-        if state.other_tabs.get(&source_plugin_id).is_some_and(|existing| {
-            existing.seq > 0
-                || existing.tab_id == snapshot.tab_id
-                    && existing.cwd == snapshot.cwd
-                    && existing.cmd == snapshot.cmd
-                    && existing.indicator == snapshot.indicator
-                    && existing.focused_pane_id == snapshot.focused_pane_id
-        }) {
+        let manifest_snapshot = snapshot_from_manifest_tab(tab.tab_id, &display_pane, pane, cwd);
+        let existing_remote = state.other_tabs.get(&source_plugin_id);
+        let Some(snapshot) = remote_manifest_update(existing_remote, manifest_snapshot) else {
             continue;
-        }
+        };
         let evict_ids = state
             .other_tabs
             .iter()
@@ -265,6 +259,73 @@ fn push_sync_request(current_tab_exists: bool, sync_requested: bool, events: &mu
     if has_resetter || current_tab_exists && !sync_requested {
         events.push(Event::SyncRequested);
     }
+}
+
+/// Issue: `TabUpdate` and `PaneManifest` can describe different moments while `znt`
+/// moves a focused new tab. Solution: ignore unstable position joins until plugin id anchors the tab.
+fn stable_tab_for_manifest_position<'a>(
+    tabs: &'a [TabInfo],
+    tab_pos: usize,
+    panes: &[PaneInfo],
+    allow_focused_inactive: bool,
+) -> Option<&'a TabInfo> {
+    let tab = tabs.iter().find(|tab| tab.position == tab_pos)?;
+    if !allow_focused_inactive && panes.iter().any(|pane| pane.is_focused) && !tab.active {
+        return None;
+    }
+    Some(tab)
+}
+
+/// Issue: real pipe snapshots own agent state but can arrive before cwd. Solution:
+/// hydrate only same-tab manifest metadata and keep snapshot seq/status/git state.
+fn remote_manifest_update(
+    existing: Option<&StateSnapshotPayload>,
+    manifest: StateSnapshotPayload,
+) -> Option<StateSnapshotPayload> {
+    let Some(existing) = existing else {
+        return Some(manifest);
+    };
+
+    if existing.seq == 0 {
+        let unchanged = existing.tab_id == manifest.tab_id
+            && existing.cwd == manifest.cwd
+            && existing.cmd == manifest.cmd
+            && existing.indicator == manifest.indicator
+            && existing.focused_pane_id == manifest.focused_pane_id;
+        return (!unchanged).then_some(manifest);
+    }
+
+    if existing.tab_id != manifest.tab_id {
+        return None;
+    }
+
+    let StateSnapshotPayload {
+        focused_pane_id,
+        cwd,
+        cmd,
+        indicator,
+        ..
+    } = manifest;
+    let hydrate_path = cwd.is_some() && existing.cwd != cwd;
+    let hydrate_focus = focused_pane_id.is_some() && existing.focused_pane_id != focused_pane_id;
+    let seed_command = matches!(&existing.cmd, Cmd::None) && !matches!(&cmd, Cmd::None);
+    if !(hydrate_path || hydrate_focus || seed_command) {
+        return None;
+    }
+
+    let mut merged = existing.clone();
+    if hydrate_path {
+        merged.cwd = cwd;
+    }
+    if hydrate_focus {
+        merged.focused_pane_id = focused_pane_id;
+    }
+    if seed_command {
+        merged.cmd = cmd;
+        merged.indicator = indicator;
+    }
+
+    Some(merged)
 }
 
 fn current_tab_position_in_manifest(plugin_id: u32, manifest: &PaneManifest) -> Option<usize> {
@@ -578,6 +639,71 @@ mod tests {
     }
 
     #[test]
+    fn test_apply_pane_update_waits_when_focused_manifest_position_maps_to_inactive_tab() {
+        let state = TbarState {
+            plugin_id: 7,
+            all_tabs: vec![
+                tab_with_name(10, 0, "old-left"),
+                tab_with_name(20, 1, "stale-position"),
+                TabInfo {
+                    active: true,
+                    ..tab_with_name(30, 2, "new-tab")
+                },
+            ],
+            ..Default::default()
+        };
+
+        let events = derive(
+            &state,
+            &manifest(vec![(
+                1,
+                vec![plugin_pane(7), terminal_pane_with_command(42, true, "/bin/zsh")],
+            )]),
+            noop_pane_cwd,
+        );
+
+        assert_eq!(events, vec![]);
+    }
+
+    #[test]
+    fn test_apply_pane_update_does_not_hydrate_remote_tab_from_mismatched_active_position() {
+        let state = TbarState {
+            plugin_id: 7,
+            known_active_tab_id: Some(30),
+            all_tabs: vec![
+                tab_with_name(10, 0, "current"),
+                tab_with_name(20, 1, "stale-position"),
+                TabInfo {
+                    active: true,
+                    ..tab_with_name(30, 2, "new-tab")
+                },
+            ],
+            current_tab: Some(CurrentTab {
+                pane_ids: std::iter::once(42).collect(),
+                focused_pane: Some(FocusedPane { id: 42, label: None }),
+                cwd: Some(PathBuf::from("/Users/me/current")),
+                ..CurrentTab::new(10)
+            }),
+            sync_requested: true,
+            ..Default::default()
+        };
+
+        let events = derive(
+            &state,
+            &manifest(vec![
+                (
+                    0,
+                    vec![plugin_pane(7), terminal_pane_with_command(42, false, "/bin/zsh")],
+                ),
+                (1, vec![plugin_pane(8), terminal_pane_with_command(43, true, "codex")]),
+            ]),
+            |pane_id| (pane_id == 43).then(|| PathBuf::from("/Users/me/new-tab")),
+        );
+
+        assert_eq!(events, vec![]);
+    }
+
+    #[test]
     fn test_apply_pane_update_bootstraps_inactive_tab_from_first_displayable_terminal() {
         let mut state = TbarState {
             plugin_id: 7,
@@ -846,6 +972,74 @@ mod tests {
         assert_eq!(
             state.other_tabs.get(&8).and_then(|snapshot| snapshot.focused_pane_id),
             Some(44)
+        );
+    }
+
+    #[test]
+    fn test_apply_pane_update_repairs_existing_remote_cwd_from_manifest() {
+        let state = TbarState {
+            plugin_id: 7,
+            known_active_tab_id: Some(10),
+            all_tabs: vec![
+                TabInfo {
+                    active: true,
+                    ..tab_with_name(10, 0, "Tab #1")
+                },
+                tab_with_name(20, 1, "Tab #2"),
+            ],
+            current_tab: Some(CurrentTab {
+                pane_ids: std::iter::once(42).collect(),
+                focused_pane: Some(FocusedPane { id: 42, label: None }),
+                active_focus_pane_id: Some(42),
+                cwd: Some(PathBuf::from("/Users/me/current")),
+                ..CurrentTab::new(10)
+            }),
+            other_tabs: HashMap::from([(
+                8,
+                StateSnapshotPayload {
+                    tab_id: 20,
+                    seq: 7,
+                    focused_pane_id: Some(43),
+                    cwd: None,
+                    cmd: Cmd::agent(Agent::Codex, AgentState::Busy),
+                    indicator: TabIndicator::Busy,
+                    git_stat: GitStat::default(),
+                    pane_agents: vec![],
+                },
+            )]),
+            sync_requested: true,
+            home_dir: PathBuf::from("/Users/me"),
+            ..Default::default()
+        };
+
+        let events = derive(
+            &state,
+            &manifest(vec![
+                (
+                    0,
+                    vec![plugin_pane(7), terminal_pane_with_command(42, true, "/bin/zsh")],
+                ),
+                (1, vec![plugin_pane(8), terminal_pane_with_command(43, false, "codex")]),
+            ]),
+            |pane_id| (pane_id == 43).then(|| PathBuf::from("/Users/me/project")),
+        );
+
+        assert_eq!(
+            events,
+            vec![Event::RemoteTabUpdated {
+                source_plugin_id: 8,
+                snapshot: StateSnapshotPayload {
+                    tab_id: 20,
+                    seq: 7,
+                    focused_pane_id: Some(43),
+                    cwd: Some(PathBuf::from("/Users/me/project")),
+                    cmd: Cmd::agent(Agent::Codex, AgentState::Busy),
+                    indicator: TabIndicator::Busy,
+                    git_stat: GitStat::default(),
+                    pane_agents: vec![],
+                },
+                evict_ids: vec![],
+            }]
         );
     }
 

@@ -4,7 +4,7 @@ use agg::TabIndicator;
 
 pub const BOLD: &str = "\x1b[1m";
 pub const AGENT_WAITING_UNSEEN_FG: &str = "\x1b[38;2;255;0;0m";
-pub const AGENT_BUSY_FG: &str = "\x1b[38;2;255;170;51m";
+pub const AGENT_BUSY_FG: &str = "\x1b[38;2;140;228;121m";
 pub const GIT_NEW_LINES_FG: &str = "\x1b[38;2;140;228;121m";
 pub const GIT_DEL_LINES_FG: &str = "\x1b[38;2;236;99;92m";
 pub const GIT_NEW_FILES_FG: &str = "\x1b[38;2;0;255;255m";
