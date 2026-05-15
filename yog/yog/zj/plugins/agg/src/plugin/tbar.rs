@@ -18,6 +18,7 @@ use zellij_tile::prelude::PaneId;
 use zellij_tile::prelude::PaneInfo;
 use zellij_tile::prelude::PaneManifest;
 use zellij_tile::prelude::PipeMessage;
+use zellij_tile::prelude::SessionInfo;
 use zellij_tile::prelude::TabInfo;
 
 use crate::plugin::nudge::Nudge;
@@ -315,6 +316,7 @@ pub fn update_permission_granted(state: &mut TbarState) -> bool {
     }
     zellij_tile::prelude::subscribe(&[
         EventType::TabUpdate,
+        EventType::SessionUpdate,
         EventType::PaneUpdate,
         EventType::PaneClosed,
         EventType::CwdChanged,
@@ -333,10 +335,44 @@ pub fn update_tabs(state: &mut TbarState, mut tabs: Vec<TabInfo>) -> bool {
     let active_tab_id = tabs.iter().find(|tab| tab.active).map(|tab| tab.tab_id);
     let landing_focus = active_tab_id
         .and_then(|active_tab_id| resolve_active_tab_landing_focus(active_tab_id, &tabs, state.current_tab.as_ref()));
-    let events = crate::plugin::tbar::events_from::tab_update::derive(state, &mut tabs, landing_focus);
+    update_host_tabs(state, &mut tabs, active_tab_id, landing_focus, true)
+}
+
+pub fn update_sessions(state: &mut TbarState, sessions: &[SessionInfo]) -> bool {
+    let Some(session) = sessions.iter().find(|session| session.is_current_session) else {
+        return false;
+    };
+    let mut tabs = session.tabs.clone();
+    tabs.sort_by_key(|tab| tab.position);
+    // SessionUpdate is authoritative only for host-owned tab topology. During
+    // normal focus movement it can carry active/focus metadata at different
+    // times than TabUpdate/active_tab, so same-topology updates are ignored.
+    // The close-tab bug this fixes is a topology change: a znt-created tab can
+    // disappear from SessionUpdate without agg receiving a matching TabUpdate.
+    if !crate::plugin::tbar::tabs::topology_changed(&state.all_tabs, &tabs) {
+        return false;
+    }
+    let active_tab_id = tabs.iter().find(|tab| tab.active).map(|tab| tab.tab_id);
+    update_host_tabs(state, &mut tabs, active_tab_id, None, false)
+}
+
+fn update_host_tabs(
+    state: &mut TbarState,
+    tabs: &mut [TabInfo],
+    active_tab_id: Option<usize>,
+    landing_focus: Option<FocusedPane>,
+    broadcast: bool,
+) -> bool {
+    tabs.sort_by_key(|tab| tab.position);
+    if state.all_tabs == tabs {
+        return false;
+    }
+    let events = crate::plugin::tbar::events_from::tab_update::derive(state, tabs, landing_focus);
     let frame_changed = state.apply_all(&events);
-    send_tab_topology(&tabs);
-    if let Some(active_tab_id) = active_tab_id {
+    if broadcast {
+        send_tab_topology(tabs);
+    }
+    if broadcast && let Some(active_tab_id) = active_tab_id {
         send_active_tab(active_tab_id);
     }
     handle_events(state, &events);
@@ -440,6 +476,12 @@ pub fn pipe(state: &mut TbarState, pipe_message: &PipeMessage) -> bool {
 
 fn apply_synced_tab_topology(state: &mut TbarState, mut tabs: Vec<TabInfo>) -> bool {
     tabs.sort_by_key(|tab| tab.position);
+    // tab_topology is sent by peer agg instances and may arrive late. Use it
+    // only to bootstrap empty state; after host topology exists, accepting it
+    // can replay stale active flags or reintroduce a tab removed by SessionUpdate.
+    if !state.all_tabs.is_empty() {
+        return false;
+    }
     if state.all_tabs == tabs {
         return false;
     }
@@ -704,6 +746,7 @@ mod tests {
     use zellij_tile::prelude::PaneInfo;
     use zellij_tile::prelude::PipeMessage;
     use zellij_tile::prelude::PipeSource;
+    use zellij_tile::prelude::SessionInfo;
     use zellij_tile::prelude::TabInfo;
 
     use crate::plugin::pane::FocusedPane;
@@ -775,7 +818,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pipe_tab_topology_updates_hidden_tab_state_without_rebroadcast() {
+    fn test_pipe_tab_topology_bootstraps_empty_hidden_tab_state_without_rebroadcast() {
         let tabs = vec![
             TabInfo {
                 tab_id: 20,
@@ -794,24 +837,6 @@ mod tests {
         ];
         let mut state = TbarState {
             plugin_id: 7,
-            known_active_tab_id: Some(10),
-            all_tabs: vec![
-                TabInfo {
-                    tab_id: 10,
-                    position: 0,
-                    name: "old".to_string(),
-                    active: true,
-                    ..Default::default()
-                },
-                TabInfo {
-                    tab_id: 20,
-                    position: 1,
-                    name: "new".to_string(),
-                    active: false,
-                    ..Default::default()
-                },
-            ],
-            current_tab: Some(CurrentTab::new(10)),
             sync_requested: false,
             ..Default::default()
         };
@@ -827,6 +852,231 @@ mod tests {
         assert_eq!(state.all_tabs, tabs);
         assert_eq!(state.known_active_tab_id, Some(20));
         assert!(!state.sync_requested);
+    }
+
+    #[test]
+    fn test_session_update_replaces_closed_tab_and_prunes_remote_snapshot() {
+        let mut state = TbarState {
+            plugin_id: 7,
+            known_active_tab_id: Some(30),
+            all_tabs: vec![
+                TabInfo {
+                    tab_id: 10,
+                    position: 0,
+                    active: false,
+                    ..Default::default()
+                },
+                TabInfo {
+                    tab_id: 20,
+                    position: 1,
+                    active: false,
+                    ..Default::default()
+                },
+                TabInfo {
+                    tab_id: 30,
+                    position: 2,
+                    active: true,
+                    ..Default::default()
+                },
+            ],
+            other_tabs: HashMap::from([
+                (
+                    8,
+                    crate::plugin::tbar::test_support::snapshot(20, 1, Cmd::None, TabIndicator::NoAgent),
+                ),
+                (
+                    9,
+                    crate::plugin::tbar::test_support::snapshot(30, 1, Cmd::None, TabIndicator::NoAgent),
+                ),
+            ]),
+            ..Default::default()
+        };
+        let host_tabs = vec![
+            TabInfo {
+                tab_id: 10,
+                position: 0,
+                active: false,
+                ..Default::default()
+            },
+            TabInfo {
+                tab_id: 20,
+                position: 1,
+                active: true,
+                ..Default::default()
+            },
+        ];
+
+        assert!(crate::plugin::tbar::update_sessions(
+            &mut state,
+            &[SessionInfo {
+                is_current_session: true,
+                tabs: host_tabs.clone(),
+                ..Default::default()
+            }],
+        ));
+
+        assert_eq!(state.all_tabs, host_tabs);
+        assert_eq!(state.known_active_tab_id, Some(20));
+        assert_eq!(state.other_tabs.len(), 1);
+        assert!(state.other_tabs.contains_key(&8));
+    }
+
+    #[test]
+    fn test_session_update_ignores_same_topology_active_change() {
+        let host_tabs = vec![
+            TabInfo {
+                tab_id: 10,
+                position: 0,
+                active: true,
+                ..Default::default()
+            },
+            TabInfo {
+                tab_id: 20,
+                position: 1,
+                active: false,
+                ..Default::default()
+            },
+        ];
+        let mut state = TbarState {
+            plugin_id: 7,
+            known_active_tab_id: Some(10),
+            all_tabs: host_tabs.clone(),
+            current_tab: Some(CurrentTab::new(10)),
+            ..Default::default()
+        };
+        let same_topology_focus_move = vec![
+            TabInfo {
+                tab_id: 10,
+                position: 0,
+                active: false,
+                ..Default::default()
+            },
+            TabInfo {
+                tab_id: 20,
+                position: 1,
+                active: true,
+                ..Default::default()
+            },
+        ];
+
+        assert!(!crate::plugin::tbar::update_sessions(
+            &mut state,
+            &[SessionInfo {
+                is_current_session: true,
+                tabs: same_topology_focus_move,
+                ..Default::default()
+            }],
+        ));
+
+        assert_eq!(state.all_tabs, host_tabs);
+        assert_eq!(state.known_active_tab_id, Some(10));
+    }
+
+    #[test]
+    fn test_pipe_tab_topology_does_not_reintroduce_host_removed_tab() {
+        let host_tabs = vec![
+            TabInfo {
+                tab_id: 10,
+                position: 0,
+                active: false,
+                ..Default::default()
+            },
+            TabInfo {
+                tab_id: 20,
+                position: 1,
+                active: true,
+                ..Default::default()
+            },
+        ];
+        let mut state = TbarState {
+            plugin_id: 7,
+            known_active_tab_id: Some(20),
+            all_tabs: host_tabs.clone(),
+            current_tab: Some(CurrentTab::new(10)),
+            ..Default::default()
+        };
+        let stale_tabs = vec![
+            TabInfo {
+                tab_id: 10,
+                position: 0,
+                active: false,
+                ..Default::default()
+            },
+            TabInfo {
+                tab_id: 20,
+                position: 1,
+                active: false,
+                ..Default::default()
+            },
+            TabInfo {
+                tab_id: 30,
+                position: 2,
+                active: true,
+                ..Default::default()
+            },
+        ];
+        let msg = PipeMessage {
+            source: PipeSource::Plugin(9),
+            name: AGG_SYNC_PIPE.to_string(),
+            payload: Some(serde_json::to_string(&stale_tabs).unwrap()),
+            args: std::collections::BTreeMap::from([(String::from("type"), String::from("tab_topology"))]),
+            is_private: false,
+        };
+
+        assert!(!crate::plugin::tbar::pipe(&mut state, &msg));
+
+        assert_eq!(state.all_tabs, host_tabs);
+        assert_eq!(state.known_active_tab_id, Some(20));
+    }
+
+    #[test]
+    fn test_pipe_tab_topology_does_not_replay_active_tab_after_host_state_exists() {
+        let host_tabs = vec![
+            TabInfo {
+                tab_id: 10,
+                position: 0,
+                active: false,
+                ..Default::default()
+            },
+            TabInfo {
+                tab_id: 20,
+                position: 1,
+                active: true,
+                ..Default::default()
+            },
+        ];
+        let mut state = TbarState {
+            plugin_id: 7,
+            known_active_tab_id: Some(20),
+            all_tabs: host_tabs.clone(),
+            ..Default::default()
+        };
+        let stale_active_tabs = vec![
+            TabInfo {
+                tab_id: 10,
+                position: 0,
+                active: true,
+                ..Default::default()
+            },
+            TabInfo {
+                tab_id: 20,
+                position: 1,
+                active: false,
+                ..Default::default()
+            },
+        ];
+        let msg = PipeMessage {
+            source: PipeSource::Plugin(9),
+            name: AGG_SYNC_PIPE.to_string(),
+            payload: Some(serde_json::to_string(&stale_active_tabs).unwrap()),
+            args: std::collections::BTreeMap::from([(String::from("type"), String::from("tab_topology"))]),
+            is_private: false,
+        };
+
+        assert!(!crate::plugin::tbar::pipe(&mut state, &msg));
+
+        assert_eq!(state.all_tabs, host_tabs);
+        assert_eq!(state.known_active_tab_id, Some(20));
     }
 
     #[test]
