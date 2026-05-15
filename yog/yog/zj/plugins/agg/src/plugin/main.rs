@@ -90,6 +90,12 @@ impl ZellijPlugin for State {
                 ComponentState::Tbar(tbar) => crate::plugin::tbar::update_tabs(tbar, tabs),
                 ComponentState::Ppick(ppick) => crate::plugin::ppick::update_tabs(ppick, tabs),
             },
+            // znt-created tab closes can reach agg as SessionUpdate without a
+            // matching TabUpdate, so tbar must consume this host-owned tab list.
+            Event::SessionUpdate(sessions, _resurrectable_sessions) => match &mut self.component {
+                ComponentState::Tbar(tbar) => crate::plugin::tbar::update_sessions(tbar, &sessions),
+                ComponentState::Ppick(_) => false,
+            },
             Event::PaneUpdate(manifest) => match &mut self.component {
                 ComponentState::Tbar(tbar) => crate::plugin::tbar::update_panes(tbar, &manifest),
                 ComponentState::Ppick(ppick) => crate::plugin::ppick::update_panes(ppick, &manifest),
