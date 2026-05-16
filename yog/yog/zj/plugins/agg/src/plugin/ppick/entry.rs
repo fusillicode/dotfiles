@@ -260,6 +260,10 @@ impl PaneEntry {
         self.search_text.contains(query)
     }
 
+    pub const fn is_agent_pane(&self) -> bool {
+        self.agent.is_some()
+    }
+
     pub fn row(&self, selected: bool, home_dir: &Path) -> PpickRow {
         PpickRow {
             selected,
@@ -466,5 +470,11 @@ mod tests {
         for query in ["77:42", "77", "42"] {
             assert2::assert!(entry.matches_normalized_query(query));
         }
+    }
+
+    #[test]
+    fn test_is_agent_pane_tracks_detected_agent() {
+        assert2::assert!(PaneEntry::new(0, 42, None, vec![String::from("codex")], None).is_agent_pane());
+        assert2::assert!(!PaneEntry::new(0, 43, None, vec![String::from("cargo")], None).is_agent_pane());
     }
 }
