@@ -10,6 +10,7 @@ use zellij_tile::prelude::PermissionType;
 use zellij_tile::prelude::PipeMessage;
 use zellij_tile::prelude::ZellijPlugin;
 
+use crate::plugin::ppick::state::PpickMode;
 use crate::plugin::ppick::state::PpickState;
 use crate::plugin::tbar::TbarState;
 
@@ -19,14 +20,15 @@ pub enum Component {
     #[default]
     Tbar,
     Ppick,
+    Apick,
 }
 
 impl From<&BTreeMap<String, String>> for Component {
     fn from(config: &BTreeMap<String, String>) -> Self {
-        if config.get("component").is_some_and(|value| value == "ppick") {
-            Self::Ppick
-        } else {
-            Self::Tbar
+        match config.get("component").map(String::as_str) {
+            Some("ppick") => Self::Ppick,
+            Some("apick") => Self::Apick,
+            Some(_) | None => Self::Tbar,
         }
     }
 }
@@ -47,6 +49,7 @@ impl From<Component> for ComponentState {
         match value {
             Component::Tbar => Self::Tbar(Box::default()),
             Component::Ppick => Self::Ppick(Box::default()),
+            Component::Apick => Self::Ppick(Box::new(PpickState::new(PpickMode::AgentsOnly))),
         }
     }
 }
@@ -167,6 +170,8 @@ const extern "C" fn host_run_plugin_command() {}
 mod tests {
     use std::collections::BTreeMap;
 
+    use zellij_tile::prelude::PaneInfo;
+    use zellij_tile::prelude::PaneManifest;
     use zellij_tile::prelude::PipeMessage;
     use zellij_tile::prelude::PipeSource;
     use zellij_tile::prelude::ZellijPlugin;
@@ -191,6 +196,46 @@ mod tests {
             Component::from(&BTreeMap::from([(String::from("component"), String::from("ppick"))])),
             Component::Ppick
         );
+    }
+
+    #[test]
+    fn test_component_from_selects_apick_for_apick_component() {
+        assert_eq!(
+            Component::from(&BTreeMap::from([(String::from("component"), String::from("apick"))])),
+            Component::Apick
+        );
+    }
+
+    #[test]
+    fn test_component_state_from_apick_builds_agent_only_picker() {
+        assert2::assert!(let ComponentState::Ppick(mut ppick) = ComponentState::from(Component::Apick));
+        let manifest = PaneManifest {
+            panes: std::iter::once((
+                0,
+                vec![
+                    PaneInfo {
+                        id: 42,
+                        terminal_command: Some(String::from("cargo")),
+                        ..Default::default()
+                    },
+                    PaneInfo {
+                        id: 43,
+                        terminal_command: Some(String::from("codex")),
+                        ..Default::default()
+                    },
+                ],
+            ))
+            .collect(),
+        };
+
+        let _ = ppick.update_panes(&manifest, |_| None, |_| None);
+        let labels = ppick
+            .visible_frame(usize::MAX)
+            .into_iter()
+            .map(|row| row.pane_label)
+            .collect::<Vec<_>>();
+
+        assert_eq!(labels, vec![String::from("43")]);
     }
 
     #[test]

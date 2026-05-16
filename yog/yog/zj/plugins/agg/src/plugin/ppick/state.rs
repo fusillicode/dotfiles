@@ -18,8 +18,25 @@ use crate::plugin::ppick::ui::PpickRow;
 use crate::plugin::tbar::PaneAgentSnapshot;
 use crate::plugin::tbar::StateSnapshotPayload;
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum PpickMode {
+    #[default]
+    AllPanes,
+    AgentsOnly,
+}
+
+impl PpickMode {
+    const fn includes_entry(self, entry: &PaneEntry) -> bool {
+        match self {
+            Self::AllPanes => true,
+            Self::AgentsOnly => entry.is_agent_pane(),
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct PpickState {
+    mode: PpickMode,
     pub home_dir: PathBuf,
     pub query: String,
     selected: usize,
@@ -83,6 +100,13 @@ pub struct PaneObservation {
 }
 
 impl PpickState {
+    pub fn new(mode: PpickMode) -> Self {
+        Self {
+            mode,
+            ..Default::default()
+        }
+    }
+
     pub fn set_floating_coordinates(&mut self, y: Option<String>, width: Option<String>, height: Option<String>) {
         self.floating_y = y;
         self.floating_width = width;
@@ -469,6 +493,14 @@ impl PpickState {
             .collect()
     }
 
+    pub fn should_close_empty_picker(&mut self) -> bool {
+        if self.mode != PpickMode::AgentsOnly || !self.query.is_empty() {
+            return false;
+        }
+        self.ensure_filter();
+        self.filtered_entry_indices.is_empty()
+    }
+
     fn entry_from_observation(&self, pane: &PaneObservation) -> PaneEntry {
         let cached_cwd = self.cwds_by_pane.get(&pane.pane_id).cloned();
         let cached_command = self.commands_by_pane.get(&pane.pane_id).cloned();
@@ -506,9 +538,11 @@ impl PpickState {
 
     fn filtered_entries(&self) -> impl Iterator<Item = (usize, &PaneEntry)> {
         let query = self.query.trim().to_ascii_lowercase();
+        let mode = self.mode;
         self.pane_entries
             .iter()
             .enumerate()
+            .filter(move |(_, entry)| mode.includes_entry(entry))
             .filter(move |(_, entry)| entry.matches_normalized_query(&query))
     }
 
@@ -1254,6 +1288,69 @@ mod tests {
         let labels = rows.iter().map(|row| row.pane_label.as_str()).collect::<Vec<_>>();
 
         assert_eq!(labels, vec!["10:42", "10:43", "20:44"]);
+    }
+
+    #[test]
+    fn test_agent_only_mode_filters_non_agent_panes_and_keeps_seen_busy_and_unseen_agents() {
+        let mut busy = PaneEntry::new(0, 44, None, vec![String::from("claude")], None);
+        let _ = busy.apply_agent_snapshot(PaneAgentSnapshot {
+            pane_id: 44,
+            agent: Agent::Claude,
+            indicator: agg::TabIndicator::Busy,
+        });
+        let mut unseen = PaneEntry::new(0, 45, None, vec![String::from("cursor-agent")], None);
+        let _ = unseen.apply_agent_snapshot(PaneAgentSnapshot {
+            pane_id: 45,
+            agent: Agent::Cursor,
+            indicator: agg::TabIndicator::Unseen,
+        });
+        let mut state = PpickState {
+            pane_entries: vec![
+                PaneEntry::new(0, 42, None, vec![String::from("cargo")], None),
+                PaneEntry::new(0, 43, None, vec![String::from("codex")], None),
+                busy,
+                unseen,
+            ],
+            ..PpickState::new(PpickMode::AgentsOnly)
+        };
+
+        let rows = frame(&mut state);
+        let labels = rows.iter().map(|row| row.pane_label.as_str()).collect::<Vec<_>>();
+        let indicators = rows.iter().map(|row| row.indicator).collect::<Vec<_>>();
+
+        assert_eq!(labels, vec!["43", "44", "45"]);
+        assert_eq!(
+            indicators,
+            vec![
+                agg::TabIndicator::Seen,
+                agg::TabIndicator::Busy,
+                agg::TabIndicator::Unseen,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_agent_only_mode_closes_empty_picker_only_without_query() {
+        let mut state = PpickState {
+            pane_entries: vec![PaneEntry::new(0, 42, None, vec![String::from("cargo")], None)],
+            ..PpickState::new(PpickMode::AgentsOnly)
+        };
+
+        assert2::assert!(state.should_close_empty_picker());
+
+        state.query = String::from("codex");
+        state.mark_filter_dirty();
+        assert2::assert!(!state.should_close_empty_picker());
+    }
+
+    #[test]
+    fn test_all_panes_mode_does_not_close_empty_picker() {
+        let mut state = PpickState {
+            pane_entries: vec![PaneEntry::new(0, 42, None, vec![String::from("cargo")], None)],
+            ..Default::default()
+        };
+
+        assert2::assert!(!state.should_close_empty_picker());
     }
 
     #[test]
