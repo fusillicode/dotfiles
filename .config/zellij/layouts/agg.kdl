@@ -26,11 +26,11 @@ keybinds {
         name "zcp"
       }
     }
-    bind "Shift Alt Enter" "Ctrl Alt Enter" {
+    bind "Shift Alt Enter" {
       LaunchPlugin "file:~/.config/zellij/plugins/agg.wasm" {
         floating true
         move_to_focused_tab true
-        component "ppick"
+        component "apick"
         y "0"
         width "68%"
         height "45%"

@@ -78,6 +78,10 @@ pub fn update_panes(state: &mut PpickState, manifest: &PaneManifest) -> bool {
     if changed {
         run_git_stats(state);
     }
+    if state.should_close_empty_picker() {
+        zellij_tile::prelude::close_self();
+        return false;
+    }
     changed
 }
 
