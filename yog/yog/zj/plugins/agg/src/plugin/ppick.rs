@@ -1,3 +1,11 @@
+//! Picker component adapter.
+//!
+//! Unlike tbar, ppick does not keep a semantic event pipeline. Tbar fans one
+//! host input into tab, sync, git-stat, and nudge transitions; ppick inputs map
+//! to one local state mutation plus local side effects. Raw decoding and side
+//! effects stay here; receiver-owned cache, filter, and selection invariants
+//! stay as `PpickState` methods even when their impls are split by domain.
+
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
@@ -20,10 +28,6 @@ mod entry;
 pub mod state;
 pub mod ui;
 
-// Unlike tbar, ppick does not keep a semantic event pipeline. Tbar fans one host
-// input into tab, sync, git-stat, and nudge transitions; ppick inputs map to one
-// local state mutation plus local side effects, so raw decoding stays in `decode`
-// and mutation stays on `PpickState`.
 const CONTEXT_KIND: &str = "kind";
 const CONTEXT_AGS_SESSIONS: &str = "ags_sessions";
 const CONTEXT_GIT_STAT: &str = "git_stat";
