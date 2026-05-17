@@ -433,8 +433,6 @@ mod tests {
     use agg::Cmd;
     use agg::GitStat;
     use agg::TabIndicator;
-    use assert2::assert;
-    use pretty_assertions::assert_eq;
     use ytil_agents::agent::Agent;
     use zellij_tile::prelude::PaneInfo;
     use zellij_tile::prelude::TabInfo;
@@ -475,7 +473,7 @@ mod tests {
                 vec![plugin_pane(7), terminal_pane_with_command(42, true, "claude")],
             )]),
         );
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             events,
             vec![
                 Event::AgentDetected {
@@ -486,9 +484,9 @@ mod tests {
             ]
         );
 
-        assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
-        assert_eq!(
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
+        pretty_assertions::assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
+        pretty_assertions::assert_eq!(
             current_tab.display_cmd(),
             Cmd::agent(Agent::Claude, AgentState::Acknowledged)
         );
@@ -512,7 +510,7 @@ mod tests {
                 vec![plugin_pane(7), terminal_pane_with_command(42, true, "codex")],
             )]),
         );
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             events,
             vec![
                 Event::TabCreated { tab_id: 10 },
@@ -535,9 +533,9 @@ mod tests {
             ]
         );
 
-        assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
-        assert_eq!(
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
+        pretty_assertions::assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
+        pretty_assertions::assert_eq!(
             current_tab.display_cmd(),
             Cmd::agent(Agent::Codex, AgentState::Acknowledged)
         );
@@ -564,7 +562,7 @@ mod tests {
                 ],
             )]),
         );
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             events,
             vec![
                 Event::TabCreated { tab_id: 10 },
@@ -583,10 +581,10 @@ mod tests {
             ]
         );
 
-        assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert!(current_tab.pane_state_by_pane.is_empty());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::NoAgent);
-        assert_eq!(current_tab.display_cmd(), Cmd::Running("cargo".to_string()));
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
+        assert2::assert!(current_tab.pane_state_by_pane.is_empty());
+        pretty_assertions::assert_eq!(current_tab.tab_indicator(), TabIndicator::NoAgent);
+        pretty_assertions::assert_eq!(current_tab.display_cmd(), Cmd::Running("cargo".to_string()));
     }
 
     #[test]
@@ -607,7 +605,7 @@ mod tests {
                 vec![plugin_pane(7), terminal_pane_with_title(42, true, "codex")],
             )]),
         );
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             events,
             vec![
                 Event::TabCreated { tab_id: 10 },
@@ -630,9 +628,9 @@ mod tests {
             ]
         );
 
-        assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
-        assert_eq!(
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
+        pretty_assertions::assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
+        pretty_assertions::assert_eq!(
             current_tab.display_cmd(),
             Cmd::agent(Agent::Codex, AgentState::Acknowledged)
         );
@@ -662,7 +660,7 @@ mod tests {
             noop_pane_cwd,
         );
 
-        assert_eq!(events, vec![]);
+        pretty_assertions::assert_eq!(events, vec![]);
     }
 
     #[test]
@@ -700,7 +698,7 @@ mod tests {
             |pane_id| (pane_id == 43).then(|| PathBuf::from("/Users/me/new-tab")),
         );
 
-        assert_eq!(events, vec![]);
+        pretty_assertions::assert_eq!(events, vec![]);
     }
 
     #[test]
@@ -726,7 +724,7 @@ mod tests {
             )]),
             |pane_id| (pane_id == 42).then(|| cwd.clone()),
         );
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             events,
             vec![
                 Event::TabCreated { tab_id: 10 },
@@ -754,16 +752,16 @@ mod tests {
         );
 
         let _ = state.apply_all(&events);
-        assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.cwd, Some(PathBuf::from("/Users/me/project")));
-        assert_eq!(
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
+        pretty_assertions::assert_eq!(current_tab.cwd, Some(PathBuf::from("/Users/me/project")));
+        pretty_assertions::assert_eq!(
             current_tab.display_cmd(),
             Cmd::agent(Agent::Codex, AgentState::Acknowledged)
         );
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
-        assert!(let Some(row) = state.frame.first());
-        assert_eq!(row.path_label, "~/project");
-        assert_eq!(row.cmd, Cmd::agent(Agent::Codex, AgentState::Acknowledged));
+        pretty_assertions::assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
+        assert2::assert!(let Some(row) = state.frame.first());
+        pretty_assertions::assert_eq!(row.path_label, "~/project");
+        pretty_assertions::assert_eq!(row.cmd, Cmd::agent(Agent::Codex, AgentState::Acknowledged));
     }
 
     #[test]
@@ -802,7 +800,7 @@ mod tests {
             ]),
             |pane_id| (pane_id == 43).then(|| remote_cwd.clone()),
         );
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             events,
             vec![Event::RemoteTabUpdated {
                 source_plugin_id: 8,
@@ -821,9 +819,9 @@ mod tests {
         );
 
         let _ = state.apply_all(&events);
-        assert!(let Some(row) = state.frame.get(1));
-        assert_eq!(row.path_label, "~/project");
-        assert_eq!(row.cmd, Cmd::agent(Agent::Codex, AgentState::Acknowledged));
+        assert2::assert!(let Some(row) = state.frame.get(1));
+        pretty_assertions::assert_eq!(row.path_label, "~/project");
+        pretty_assertions::assert_eq!(row.cmd, Cmd::agent(Agent::Codex, AgentState::Acknowledged));
     }
 
     #[test]
@@ -871,7 +869,7 @@ mod tests {
             ]),
             noop_pane_cwd,
         );
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             events,
             vec![Event::RemoteTabUpdated {
                 source_plugin_id: 8,
@@ -890,9 +888,9 @@ mod tests {
         );
 
         let _ = state.apply_all(&events);
-        assert!(let Some(row) = state.frame.get(1));
-        assert_eq!(row.path_label, "~/project");
-        assert_eq!(row.cmd, Cmd::Running("gkg".to_string()));
+        assert2::assert!(let Some(row) = state.frame.get(1));
+        pretty_assertions::assert_eq!(row.path_label, "~/project");
+        pretty_assertions::assert_eq!(row.cmd, Cmd::Running("gkg".to_string()));
     }
 
     #[test]
@@ -950,7 +948,7 @@ mod tests {
             ]),
             |pane_id| (pane_id == 44).then(|| PathBuf::from("/Users/me/project")),
         );
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             events,
             vec![Event::RemoteTabUpdated {
                 source_plugin_id: 8,
@@ -969,7 +967,7 @@ mod tests {
         );
 
         let _ = state.apply_all(&events);
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             state.other_tabs.get(&8).and_then(|snapshot| snapshot.focused_pane_id),
             Some(44)
         );
@@ -1024,7 +1022,7 @@ mod tests {
             |pane_id| (pane_id == 43).then(|| PathBuf::from("/Users/me/project")),
         );
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             events,
             vec![Event::RemoteTabUpdated {
                 source_plugin_id: 8,
@@ -1064,7 +1062,7 @@ mod tests {
             )]),
             |pane_id| (pane_id == 42).then(|| PathBuf::from("/Users/me/project")),
         );
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             events,
             vec![
                 Event::PanesChanged {
@@ -1111,7 +1109,7 @@ mod tests {
                 vec![plugin_pane(7), terminal_pane_with_command(43, true, "claude")],
             )]),
         );
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             partial_events,
             vec![
                 Event::PanesChanged {
@@ -1122,16 +1120,16 @@ mod tests {
             ]
         );
 
-        assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.pane_ids, HashSet::from([42, 43]));
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Busy);
-        assert_eq!(current_tab.display_cmd(), Cmd::agent(Agent::Codex, AgentState::Busy));
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
+        pretty_assertions::assert_eq!(current_tab.pane_ids, HashSet::from([42, 43]));
+        pretty_assertions::assert_eq!(current_tab.tab_indicator(), TabIndicator::Busy);
+        pretty_assertions::assert_eq!(current_tab.display_cmd(), Cmd::agent(Agent::Codex, AgentState::Busy));
 
         state.sync_frame();
         let frame = &state.frame;
-        assert!(let Some(row) = frame.first());
-        assert_eq!(row.cmd, Cmd::agent(Agent::Claude, AgentState::Busy));
-        assert_eq!(row.indicator, TabIndicator::Busy);
+        assert2::assert!(let Some(row) = frame.first());
+        pretty_assertions::assert_eq!(row.cmd, Cmd::agent(Agent::Claude, AgentState::Busy));
+        pretty_assertions::assert_eq!(row.indicator, TabIndicator::Busy);
     }
 
     #[test]
@@ -1168,7 +1166,7 @@ mod tests {
         )]);
         let _ = apply_pane_update(&mut state, &partial_manifest);
         let partial_events = apply_pane_update(&mut state, &partial_manifest);
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             partial_events,
             vec![
                 Event::AgentLost { pane_id: 42 },
@@ -1179,10 +1177,10 @@ mod tests {
             ]
         );
 
-        assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.pane_ids, HashSet::from([43]));
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Busy);
-        assert_eq!(current_tab.display_cmd(), Cmd::agent(Agent::Claude, AgentState::Busy));
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
+        pretty_assertions::assert_eq!(current_tab.pane_ids, HashSet::from([43]));
+        pretty_assertions::assert_eq!(current_tab.tab_indicator(), TabIndicator::Busy);
+        pretty_assertions::assert_eq!(current_tab.display_cmd(), Cmd::agent(Agent::Claude, AgentState::Busy));
     }
 
     #[test]
@@ -1220,7 +1218,7 @@ mod tests {
 
         let events = derive(&state, &manifest, noop_pane_cwd);
 
-        assert_eq!(events, vec![]);
+        pretty_assertions::assert_eq!(events, vec![]);
     }
 
     #[test]
@@ -1249,7 +1247,7 @@ mod tests {
             vec![plugin_pane(7), terminal_pane_with_command(42, true, "/bin/zsh")],
         )]);
         let events = derive(&state, &manifest, noop_pane_cwd);
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             events,
             vec![
                 Event::FocusChanged {
@@ -1292,7 +1290,7 @@ mod tests {
             ],
         )]);
         let events = derive(&state, &manifest, noop_pane_cwd);
-        assert_eq!(events, vec![Event::AgentLost { pane_id: 42 }, Event::SyncRequested,]);
+        pretty_assertions::assert_eq!(events, vec![Event::AgentLost { pane_id: 42 }, Event::SyncRequested,]);
     }
 
     #[test]
@@ -1323,7 +1321,7 @@ mod tests {
                 vec![plugin_pane(7), terminal_pane_with_title(42, true, "/tmp/project")],
             )]),
         );
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             events,
             vec![
                 Event::FocusChanged {
@@ -1334,9 +1332,9 @@ mod tests {
             ]
         );
 
-        assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
-        assert_eq!(
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
+        pretty_assertions::assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
+        pretty_assertions::assert_eq!(
             current_tab.display_cmd(),
             Cmd::agent(Agent::Codex, AgentState::Acknowledged)
         );

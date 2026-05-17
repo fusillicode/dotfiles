@@ -19,15 +19,13 @@ mod tests {
     use std::collections::HashMap;
     use std::path::PathBuf;
 
-    use pretty_assertions::assert_eq;
-
     use crate::plugin::tbar::Event;
     use crate::plugin::tbar::TbarState;
     use crate::plugin::tbar::events_from::cwd::*;
 
     #[test]
     fn test_derive_caches_non_display_pane_cwd() {
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             derive(&TbarState::default(), 42, PathBuf::from("/tmp/project")),
             vec![Event::CwdChanged {
                 pane_id: 42,
@@ -43,6 +41,6 @@ mod tests {
             ..Default::default()
         };
 
-        assert_eq!(derive(&state, 42, PathBuf::from("/tmp/project")), vec![]);
+        pretty_assertions::assert_eq!(derive(&state, 42, PathBuf::from("/tmp/project")), vec![]);
     }
 }

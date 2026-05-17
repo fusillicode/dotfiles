@@ -406,7 +406,6 @@ fn select_options(multi: bool) -> SkimOptions {
 mod tests {
     use std::sync::Arc;
 
-    use pretty_assertions::assert_eq;
     use skim::DisplayContext;
     use skim::MatchRange;
     use skim::SkimItem;
@@ -415,7 +414,7 @@ mod tests {
     fn test_require_single_returns_only_item() {
         let selected = vec![1];
         assert2::assert!(let Ok(item) = super::require_single(&selected, "items"));
-        assert_eq!(*item, 1);
+        pretty_assertions::assert_eq!(*item, 1);
     }
 
     #[test]
@@ -441,9 +440,9 @@ mod tests {
             search_corpus: match_text,
         };
 
-        assert_eq!(item.output(), "3");
-        assert_eq!(item.text(), "visible value next");
-        assert_eq!(
+        pretty_assertions::assert_eq!(item.output(), "3");
+        pretty_assertions::assert_eq!(item.text(), "visible value next");
+        pretty_assertions::assert_eq!(
             item.display(DisplayContext::default())
                 .spans
                 .first()

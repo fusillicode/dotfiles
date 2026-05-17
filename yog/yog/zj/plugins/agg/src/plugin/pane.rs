@@ -97,7 +97,6 @@ fn is_shell(executable: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use pretty_assertions::assert_eq;
     use zellij_tile::prelude::PaneInfo;
 
     use super::*;
@@ -150,8 +149,8 @@ mod tests {
 
     #[test]
     fn test_parse_running_command_filters_shells() {
-        assert_eq!(parse_running_command("/bin/zsh"), None);
-        assert_eq!(parse_running_command("/usr/bin/cargo test"), Some("cargo".to_string()));
+        pretty_assertions::assert_eq!(parse_running_command("/bin/zsh"), None);
+        pretty_assertions::assert_eq!(parse_running_command("/usr/bin/cargo test"), Some("cargo".to_string()));
     }
 
     #[test]
@@ -159,7 +158,7 @@ mod tests {
         let pane = terminal_pane_with_command(42, true, "/bin/zsh -lc codex");
         let focused_pane = FocusedPane { id: 42, label: None };
 
-        assert_eq!(detected_agent_from_pane_info(&pane, &focused_pane), Some(Agent::Codex));
+        pretty_assertions::assert_eq!(detected_agent_from_pane_info(&pane, &focused_pane), Some(Agent::Codex));
     }
 
     #[test]
@@ -176,7 +175,7 @@ mod tests {
             label: Some(FocusedPaneLabel::Title("Cursor …".to_string())),
         };
 
-        assert_eq!(detected_agent_from_pane_info(&pane, &focused_pane), None);
+        pretty_assertions::assert_eq!(detected_agent_from_pane_info(&pane, &focused_pane), None);
     }
 
     #[test]
@@ -187,13 +186,13 @@ mod tests {
             label: Some(FocusedPaneLabel::Title("codex".to_string())),
         };
 
-        assert_eq!(detected_agent_from_pane_info(&pane, &focused_pane), Some(Agent::Codex));
+        pretty_assertions::assert_eq!(detected_agent_from_pane_info(&pane, &focused_pane), Some(Agent::Codex));
     }
 
     #[test]
     fn test_title_label_from_title_filters_paths() {
-        assert_eq!(title_label_from_title("/tmp/project"), None);
-        assert_eq!(title_label_from_title("gkg"), Some("gkg".to_string()));
-        assert_eq!(title_label_from_title("Cursor Agent"), Some("Cursor …".to_string()));
+        pretty_assertions::assert_eq!(title_label_from_title("/tmp/project"), None);
+        pretty_assertions::assert_eq!(title_label_from_title("gkg"), Some("gkg".to_string()));
+        pretty_assertions::assert_eq!(title_label_from_title("Cursor Agent"), Some("Cursor …".to_string()));
     }
 }

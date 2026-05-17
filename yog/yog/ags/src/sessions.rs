@@ -284,7 +284,6 @@ fn delete_session(session: &RenderableSession) -> rootcause::Result<()> {
 #[cfg(test)]
 mod tests {
     use chrono::DateTime;
-    use pretty_assertions::assert_eq;
     use tempfile::tempdir;
 
     use super::*;
@@ -296,7 +295,7 @@ mod tests {
 
         let search = search_corpus(display, hidden);
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             search,
             "cx ~/repo branch session name 09/05/2026-10:00 first user prompt assistant reply"
         );
@@ -323,15 +322,15 @@ mod tests {
 
         assert2::assert!(row.display.starts_with("cx ~/repo fix issue"));
         assert2::assert!(row.search.contains("hidden prompt"));
-        assert_eq!(row.agent, "codex");
-        assert_eq!(row.workspace, workspace);
-        assert_eq!(row.session_id, "session-id");
-        assert_eq!(row.summary, "fix issue");
-        assert_eq!(
+        pretty_assertions::assert_eq!(row.agent, "codex");
+        pretty_assertions::assert_eq!(row.workspace, workspace);
+        pretty_assertions::assert_eq!(row.session_id, "session-id");
+        pretty_assertions::assert_eq!(row.summary, "fix issue");
+        pretty_assertions::assert_eq!(
             row.updated_at,
             DateTime::from_timestamp(1_700_000_100, 0).unwrap().to_utc()
         );
-        assert_eq!(row.resume_program, "codex");
-        assert_eq!(row.resume_args.first().map(String::as_str), Some("resume"));
+        pretty_assertions::assert_eq!(row.resume_program, "codex");
+        pretty_assertions::assert_eq!(row.resume_args.first().map(String::as_str), Some("resume"));
     }
 }

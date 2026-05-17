@@ -256,7 +256,6 @@ mod tests {
 
     use agg::AgentState;
     use agg::Cmd;
-    use pretty_assertions::assert_eq;
     use ytil_agents::agent::Agent;
 
     use crate::plugin::tbar::ui::*;
@@ -289,7 +288,7 @@ mod tests {
             git,
             home,
         );
-        assert_eq!(actual, expected);
+        pretty_assertions::assert_eq!(actual, expected);
     }
 
     #[test]
@@ -320,7 +319,7 @@ mod tests {
             git,
             home,
         );
-        assert_eq!(actual, expected);
+        pretty_assertions::assert_eq!(actual, expected);
     }
 
     #[test]
@@ -337,7 +336,7 @@ mod tests {
 
         entry.write_path_lines(&mut actual, &mut y, 4, 5);
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             actual,
             format!(
                 "\x1b[1;1H{TAB_INACTIVE_BG}{RAIL_ACTIVE_FG}▎{TAB_INACTIVE_BG}{}{TAB_DEFAULT_FG}tab{}\x1b[1;5H{SEP_COLOR}{SEPARATOR}{}",
@@ -362,7 +361,7 @@ mod tests {
 
         entry.write_path_lines(&mut actual, &mut y, 4, 5);
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             actual,
             format!(
                 "\x1b[1;1H{TAB_INACTIVE_BG}{RAIL_INACTIVE_FG}▏{TAB_INACTIVE_BG}{PATH_INACTIVE_FG}tab{}\x1b[1;5H{SEP_COLOR}{SEPARATOR}{}",
@@ -400,7 +399,7 @@ mod tests {
             git,
             home,
         );
-        assert_eq!(actual, expected);
+        pretty_assertions::assert_eq!(actual, expected);
     }
 
     #[test]
@@ -420,7 +419,7 @@ mod tests {
             git: GitStat::default(),
         };
         let actual = TabRow::placeholder(&tab, Path::new("/home"));
-        assert_eq!(actual, expected);
+        pretty_assertions::assert_eq!(actual, expected);
     }
 
     #[test]
@@ -440,7 +439,7 @@ mod tests {
             git: GitStat::default(),
         };
         let actual = TabRow::placeholder(&tab, Path::new("/Users/me"));
-        assert_eq!(actual, expected);
+        pretty_assertions::assert_eq!(actual, expected);
     }
 
     #[test]
@@ -451,7 +450,7 @@ mod tests {
             TAB_INACTIVE_BG,
             TAB_DEFAULT_FG,
         );
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             rendered,
             format!(
                 "{}{}•{}{TAB_INACTIVE_BG}{TAB_DEFAULT_FG} cx",
@@ -470,7 +469,7 @@ mod tests {
             TAB_INACTIVE_BG,
             TAB_DEFAULT_FG,
         );
-        assert_eq!(rendered, format!("cx"));
+        pretty_assertions::assert_eq!(rendered, format!("cx"));
     }
 
     #[test]
@@ -481,7 +480,7 @@ mod tests {
             TAB_INACTIVE_BG,
             TAB_DEFAULT_FG,
         );
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             rendered,
             format!(
                 "{}{}•{}{TAB_INACTIVE_BG}{TAB_DEFAULT_FG} cx",
@@ -500,14 +499,14 @@ mod tests {
             TAB_INACTIVE_BG,
             TAB_DEFAULT_FG,
         );
-        assert_eq!(rendered, "cargo");
+        pretty_assertions::assert_eq!(rendered, "cargo");
     }
 
     #[test]
     fn test_display_left_no_agent_indicator_renders_nothing_for_empty_cmd() {
         let rendered =
             crate::plugin::ui::display_left(TabIndicator::NoAgent, &Cmd::None, TAB_INACTIVE_BG, TAB_DEFAULT_FG);
-        assert_eq!(rendered, "");
+        pretty_assertions::assert_eq!(rendered, "");
     }
 
     #[test]
@@ -535,6 +534,6 @@ mod tests {
             git: git.clone(),
         };
         let actual = TabRow::new(&tab, None, Cmd::None, TabIndicator::NoAgent, git, home);
-        assert_eq!(actual, expected);
+        pretty_assertions::assert_eq!(actual, expected);
     }
 }

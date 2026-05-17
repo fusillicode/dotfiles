@@ -170,7 +170,6 @@ mod tests {
     use std::collections::BTreeSet;
     use std::path::PathBuf;
 
-    use pretty_assertions::assert_eq;
     use ytil_agents::agent::Agent;
     use ytil_agents::agent::AgentEventKind;
     use ytil_agents::agent::AgentEventPayload;
@@ -239,7 +238,7 @@ mod tests {
             ..Default::default()
         }]);
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             state.take_floating_coordinates(),
             FloatingPaneCoordinates::new(
                 Some(String::from("51")),
@@ -250,7 +249,7 @@ mod tests {
                 Some(false),
             )
         );
-        assert_eq!(state.take_floating_coordinates(), None);
+        pretty_assertions::assert_eq!(state.take_floating_coordinates(), None);
     }
 
     #[test]
@@ -276,7 +275,7 @@ mod tests {
             ..Default::default()
         }]);
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             state.take_floating_coordinates(),
             FloatingPaneCoordinates::new(
                 Some(String::from("32")),
@@ -353,8 +352,8 @@ mod tests {
         ));
 
         let pane_ids = state.pane_entries.iter().map(|entry| entry.pane_id).collect::<Vec<_>>();
-        assert_eq!(pane_ids, vec![10, 11, 20, 21]);
-        assert_eq!(
+        pretty_assertions::assert_eq!(pane_ids, vec![10, 11, 20, 21]);
+        pretty_assertions::assert_eq!(
             frame(&mut state)
                 .iter()
                 .map(|row| row.cwd_label.as_str())
@@ -382,8 +381,8 @@ mod tests {
 
         assert2::assert!(update_panes(&mut state, &manifest, |_| None, |_| None));
 
-        assert_eq!(state.selected, 1);
-        assert_eq!(frame(&mut state).get(1).map(|row| row.selected), Some(true));
+        pretty_assertions::assert_eq!(state.selected, 1);
+        pretty_assertions::assert_eq!(frame(&mut state).get(1).map(|row| row.selected), Some(true));
     }
 
     #[test]
@@ -413,8 +412,8 @@ mod tests {
 
         assert2::assert!(update_panes(&mut state, &manifest, |_| None, |_| None));
 
-        assert_eq!(state.selected, 1);
-        assert_eq!(frame(&mut state).get(1).map(|row| row.selected), Some(true));
+        pretty_assertions::assert_eq!(state.selected, 1);
+        pretty_assertions::assert_eq!(frame(&mut state).get(1).map(|row| row.selected), Some(true));
     }
 
     #[test]
@@ -440,8 +439,8 @@ mod tests {
 
         assert2::assert!(update_panes(&mut state, &manifest, |_| None, |_| None));
 
-        assert_eq!(state.selected, 1);
-        assert_eq!(frame(&mut state).get(1).map(|row| row.selected), Some(true));
+        pretty_assertions::assert_eq!(state.selected, 1);
+        pretty_assertions::assert_eq!(frame(&mut state).get(1).map(|row| row.selected), Some(true));
     }
 
     #[test]
@@ -468,8 +467,8 @@ mod tests {
         assert2::assert!(state.set_initial_focus_pane(10, 43, 2));
         assert2::assert!(!state.set_initial_focus_pane(10, 42, 1));
 
-        assert_eq!(state.selected, 1);
-        assert_eq!(frame(&mut state).get(1).map(|row| row.selected), Some(true));
+        pretty_assertions::assert_eq!(state.selected, 1);
+        pretty_assertions::assert_eq!(frame(&mut state).get(1).map(|row| row.selected), Some(true));
     }
 
     #[test]
@@ -496,8 +495,8 @@ mod tests {
         assert2::assert!(!state.set_initial_focus_pane(10, 42, 1));
         assert2::assert!(state.set_initial_focus_pane(10, 43, 2));
 
-        assert_eq!(state.selected, 1);
-        assert_eq!(frame(&mut state).get(1).map(|row| row.selected), Some(true));
+        pretty_assertions::assert_eq!(state.selected, 1);
+        pretty_assertions::assert_eq!(frame(&mut state).get(1).map(|row| row.selected), Some(true));
     }
 
     #[test]
@@ -523,12 +522,12 @@ mod tests {
         let _ = update_panes(&mut state, &manifest, |_| None, |_| None);
         let ctrl_n = KeyWithModifier::new_with_modifiers(BareKey::Char('n'), BTreeSet::from([KeyModifier::Ctrl]));
 
-        assert_eq!(state.selected, 0);
-        assert_eq!(state.handle_key(&ctrl_n), PpickAction::Redraw);
-        assert_eq!(state.selected, 1);
+        pretty_assertions::assert_eq!(state.selected, 0);
+        pretty_assertions::assert_eq!(state.handle_key(&ctrl_n), PpickAction::Redraw);
+        pretty_assertions::assert_eq!(state.selected, 1);
         let _ = update_panes(&mut state, &manifest, |_| None, |_| None);
 
-        assert_eq!(state.selected, 1);
+        pretty_assertions::assert_eq!(state.selected, 1);
     }
 
     #[test]
@@ -545,7 +544,7 @@ mod tests {
         };
 
         assert2::assert!(update_panes(&mut state, &manifest, |_| None, |_| None));
-        assert_eq!(state.selected, 0);
+        pretty_assertions::assert_eq!(state.selected, 0);
         assert2::assert!(state.update_tabs(vec![
             TabInfo {
                 tab_id: 10,
@@ -560,8 +559,8 @@ mod tests {
             },
         ]));
 
-        assert_eq!(state.selected, 1);
-        assert_eq!(frame(&mut state).get(1).map(|row| row.selected), Some(true));
+        pretty_assertions::assert_eq!(state.selected, 1);
+        pretty_assertions::assert_eq!(frame(&mut state).get(1).map(|row| row.selected), Some(true));
     }
 
     #[test]
@@ -592,8 +591,8 @@ mod tests {
 
         assert2::assert!(!state.set_initial_focus_pane(20, 43, 1));
 
-        assert_eq!(state.selected, 0);
-        assert_eq!(frame(&mut state).first().map(|row| row.selected), Some(true));
+        pretty_assertions::assert_eq!(state.selected, 0);
+        pretty_assertions::assert_eq!(frame(&mut state).first().map(|row| row.selected), Some(true));
     }
 
     #[test]
@@ -620,7 +619,7 @@ mod tests {
         assert2::assert!(state.update_tabs(state.all_tabs.clone()));
 
         let pane_ids = state.pane_entries.iter().map(|entry| entry.pane_id).collect::<Vec<_>>();
-        assert_eq!(pane_ids, vec![10, 11, 30]);
+        pretty_assertions::assert_eq!(pane_ids, vec![10, 11, 30]);
     }
 
     #[test]
@@ -644,7 +643,7 @@ mod tests {
                 ..Default::default()
             },
         ]);
-        assert_eq!(state.handle_key(&key(BareKey::Down)), PpickAction::Redraw);
+        pretty_assertions::assert_eq!(state.handle_key(&key(BareKey::Down)), PpickAction::Redraw);
 
         assert2::assert!(state.update_tabs(vec![
             TabInfo {
@@ -659,8 +658,8 @@ mod tests {
             },
         ]));
 
-        assert_eq!(state.selected_pane_id, Some(43));
-        assert_eq!(state.selected, 0);
+        pretty_assertions::assert_eq!(state.selected_pane_id, Some(43));
+        pretty_assertions::assert_eq!(state.selected, 0);
     }
 
     #[test]
@@ -683,14 +682,14 @@ mod tests {
         };
         let _ = update_panes(&mut state, &manifest, |_| None, |_| None);
         let rows = frame(&mut state);
-        assert_eq!(rows.first().map(|row| row.pane_label.as_str()), Some("20:43"));
+        pretty_assertions::assert_eq!(rows.first().map(|row| row.pane_label.as_str()), Some("20:43"));
 
         let stale_tabs_manifest = PaneManifest {
             panes: std::iter::once((0, vec![terminal_pane_with_command(43, "nvim")])).collect(),
         };
         let _ = update_panes(&mut state, &stale_tabs_manifest, |_| None, |_| None);
         let rows = frame(&mut state);
-        assert_eq!(rows.first().map(|row| row.pane_label.as_str()), Some("20:43"));
+        pretty_assertions::assert_eq!(rows.first().map(|row| row.pane_label.as_str()), Some("20:43"));
 
         let _ = state.update_tabs(vec![
             TabInfo {
@@ -706,7 +705,7 @@ mod tests {
         ]);
 
         let rows = frame(&mut state);
-        assert_eq!(rows.first().map(|row| row.pane_label.as_str()), Some("20:43"));
+        pretty_assertions::assert_eq!(rows.first().map(|row| row.pane_label.as_str()), Some("20:43"));
     }
 
     #[test]
@@ -743,7 +742,7 @@ mod tests {
         let rows = frame(&mut state);
         let labels = rows.iter().map(|row| row.pane_label.as_str()).collect::<Vec<_>>();
 
-        assert_eq!(labels, vec!["10:42", "10:43", "20:44"]);
+        pretty_assertions::assert_eq!(labels, vec!["10:42", "10:43", "20:44"]);
     }
 
     #[test]
@@ -774,8 +773,8 @@ mod tests {
         let labels = rows.iter().map(|row| row.pane_label.as_str()).collect::<Vec<_>>();
         let indicators = rows.iter().map(|row| row.indicator).collect::<Vec<_>>();
 
-        assert_eq!(labels, vec!["43", "44", "45"]);
-        assert_eq!(
+        pretty_assertions::assert_eq!(labels, vec!["43", "44", "45"]);
+        pretty_assertions::assert_eq!(
             indicators,
             vec![
                 agg::TabIndicator::Seen,
@@ -841,16 +840,16 @@ mod tests {
             ..Default::default()
         };
         for c in "work".chars() {
-            assert_eq!(state.handle_key(&key(BareKey::Char(c))), PpickAction::Redraw);
+            pretty_assertions::assert_eq!(state.handle_key(&key(BareKey::Char(c))), PpickAction::Redraw);
         }
-        assert_eq!(state.filtered_entry_indices.len(), 1_000);
+        pretty_assertions::assert_eq!(state.filtered_entry_indices.len(), 1_000);
         let filtered_entry_indices = state.filtered_entry_indices.clone();
 
-        assert_eq!(state.handle_key(&key(BareKey::Down)), PpickAction::Redraw);
+        pretty_assertions::assert_eq!(state.handle_key(&key(BareKey::Down)), PpickAction::Redraw);
 
-        assert_eq!(state.selected, 1);
-        assert_eq!(state.filtered_entry_indices, filtered_entry_indices);
-        assert_eq!(state.handle_key(&key(BareKey::Enter)), PpickAction::Focus(1));
+        pretty_assertions::assert_eq!(state.selected, 1);
+        pretty_assertions::assert_eq!(state.filtered_entry_indices, filtered_entry_indices);
+        pretty_assertions::assert_eq!(state.handle_key(&key(BareKey::Enter)), PpickAction::Focus(1));
     }
 
     #[test]
@@ -870,17 +869,17 @@ mod tests {
             ..Default::default()
         };
         for _ in 0..5 {
-            assert_eq!(state.handle_key(&key(BareKey::Down)), PpickAction::Redraw);
+            pretty_assertions::assert_eq!(state.handle_key(&key(BareKey::Down)), PpickAction::Redraw);
         }
 
         let frame = state.visible_frame(2);
 
-        assert_eq!(frame.len(), 2);
-        assert_eq!(
+        pretty_assertions::assert_eq!(frame.len(), 2);
+        pretty_assertions::assert_eq!(
             frame.iter().map(|row| row.cwd_label.as_str()).collect::<Vec<_>>(),
             vec!["/tmp/pane-4", "/tmp/pane-5"]
         );
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             frame.iter().map(|row| row.selected).collect::<Vec<_>>(),
             vec![false, true]
         );
@@ -920,8 +919,8 @@ mod tests {
             },
         );
 
-        assert_eq!(command_calls.get(), 2);
-        assert_eq!(
+        pretty_assertions::assert_eq!(command_calls.get(), 2);
+        pretty_assertions::assert_eq!(
             state
                 .pane_entries
                 .iter()
@@ -944,13 +943,13 @@ mod tests {
             |_| Some(PathBuf::from("/tmp/repo")),
             |_| Some(vec![String::from("cargo")]),
         );
-        assert_eq!(state.take_git_stat_cwds_to_request(), vec![PathBuf::from("/tmp/repo")]);
+        pretty_assertions::assert_eq!(state.take_git_stat_cwds_to_request(), vec![PathBuf::from("/tmp/repo")]);
 
         assert2::assert!(state.update_command(42, &[String::from("nvim")]));
-        assert_eq!(state.take_git_stat_cwds_to_request(), Vec::<PathBuf>::new());
+        pretty_assertions::assert_eq!(state.take_git_stat_cwds_to_request(), Vec::<PathBuf>::new());
 
         assert2::assert!(state.update_cwd(42, &PathBuf::from("/tmp/other")));
-        assert_eq!(state.take_git_stat_cwds_to_request(), vec![PathBuf::from("/tmp/other")]);
+        pretty_assertions::assert_eq!(state.take_git_stat_cwds_to_request(), vec![PathBuf::from("/tmp/other")]);
     }
 
     #[test]
@@ -968,18 +967,18 @@ mod tests {
             |_| Some(vec![String::from("cargo")]),
         );
 
-        assert_eq!(state.take_git_stat_cwds_to_request(), vec![repo.clone()]);
+        pretty_assertions::assert_eq!(state.take_git_stat_cwds_to_request(), vec![repo.clone()]);
         assert2::assert!(state.update_cwd(42, &other));
-        assert_eq!(state.take_git_stat_cwds_to_request(), vec![other.clone()]);
+        pretty_assertions::assert_eq!(state.take_git_stat_cwds_to_request(), vec![other.clone()]);
         assert2::assert!(state.update_cwd(42, &repo));
-        assert_eq!(state.take_git_stat_cwds_to_request(), Vec::<PathBuf>::new());
+        pretty_assertions::assert_eq!(state.take_git_stat_cwds_to_request(), Vec::<PathBuf>::new());
 
         state.finish_git_stat_request(&repo);
         assert2::assert!(state.update_cwd(42, &other));
-        assert_eq!(state.take_git_stat_cwds_to_request(), Vec::<PathBuf>::new());
+        pretty_assertions::assert_eq!(state.take_git_stat_cwds_to_request(), Vec::<PathBuf>::new());
         state.finish_git_stat_request(&other);
         assert2::assert!(state.update_cwd(42, &repo));
-        assert_eq!(state.take_git_stat_cwds_to_request(), vec![repo]);
+        pretty_assertions::assert_eq!(state.take_git_stat_cwds_to_request(), vec![repo]);
     }
 
     #[test]
@@ -1005,7 +1004,7 @@ mod tests {
 
         state.query = String::from("BILLING");
         let frame = frame(&mut state);
-        assert_eq!(frame.len(), 1);
+        pretty_assertions::assert_eq!(frame.len(), 1);
     }
 
     #[test]
@@ -1036,7 +1035,7 @@ mod tests {
         let _ = state.update_sessions(vec![session]);
 
         let frame = frame(&mut state);
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             frame.first().map(|row| row.session_summary.as_str()),
             Some("how to solve this warning")
         );
@@ -1076,9 +1075,9 @@ mod tests {
         assert2::assert!(state.update_git_stat(&stat));
 
         let frame = frame(&mut state);
-        assert_eq!(frame.first().map(|row| &row.git), Some(&stat));
-        assert_eq!(frame.first().map(|row| row.branch_label.as_str()), Some("main"));
-        assert_eq!(frame.get(1).map(|row| &row.git), Some(&agg::GitStat::default()));
+        pretty_assertions::assert_eq!(frame.first().map(|row| &row.git), Some(&stat));
+        pretty_assertions::assert_eq!(frame.first().map(|row| row.branch_label.as_str()), Some("main"));
+        pretty_assertions::assert_eq!(frame.get(1).map(|row| &row.git), Some(&agg::GitStat::default()));
     }
 
     #[test]
@@ -1099,7 +1098,7 @@ mod tests {
             agent: Agent::Codex,
             kind: AgentEventKind::Busy,
         }));
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             frame(&mut state).first().map(|row| row.indicator),
             Some(agg::TabIndicator::Busy)
         );
@@ -1109,7 +1108,7 @@ mod tests {
             agent: Agent::Codex,
             kind: AgentEventKind::Idle,
         }));
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             frame(&mut state).first().map(|row| row.indicator),
             Some(agg::TabIndicator::Unseen)
         );
@@ -1131,7 +1130,7 @@ mod tests {
             |_| Some(vec![String::from("codex")]),
         );
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             frame(&mut state).first().map(|row| row.indicator),
             Some(agg::TabIndicator::Seen)
         );
@@ -1167,7 +1166,7 @@ mod tests {
 
         let _ = update_panes(&mut state, &manifest, |_| None, |_| Some(vec![String::from("codex")]));
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             frame(&mut state).first().map(|row| row.indicator),
             Some(agg::TabIndicator::Busy)
         );
@@ -1186,7 +1185,7 @@ mod tests {
             panes: std::iter::once((0, vec![terminal_pane_with_command(42, "codex")])).collect(),
         };
         let _ = update_panes(&mut state, &manifest, |_| None, |_| Some(vec![String::from("codex")]));
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             frame(&mut state).first().map(|row| row.indicator),
             Some(agg::TabIndicator::Seen)
         );
@@ -1208,7 +1207,7 @@ mod tests {
 
         assert2::assert!(state.apply_state_snapshot(&snapshot));
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             frame(&mut state).first().map(|row| row.indicator),
             Some(agg::TabIndicator::Unseen)
         );
@@ -1243,7 +1242,7 @@ mod tests {
         };
         let _ = update_panes(&mut state, &manifest, |_| None, |_| Some(vec![String::from("codex")]));
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             frame(&mut state).first().map(|row| row.indicator),
             Some(agg::TabIndicator::Busy)
         );
@@ -1271,7 +1270,7 @@ mod tests {
             |_| Some(vec![String::from("codex")]),
         );
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             frame(&mut state).first().map(|row| row.indicator),
             Some(agg::TabIndicator::Seen)
         );
@@ -1299,8 +1298,8 @@ mod tests {
             "2026-05-09T09:00:00Z",
         )]));
 
-        assert_eq!(frame(&mut state).len(), 1);
-        assert_eq!(
+        pretty_assertions::assert_eq!(frame(&mut state).len(), 1);
+        pretty_assertions::assert_eq!(
             state
                 .pane_entries
                 .first()
@@ -1327,7 +1326,7 @@ mod tests {
             session_entry("codex", "/tmp/repo", "exact", "exact hidden", "2026-05-09T09:00:00Z"),
         ]);
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             state
                 .pane_entries
                 .first()
@@ -1343,13 +1342,13 @@ mod tests {
             ..Default::default()
         };
 
-        assert_eq!(state.handle_key(&key(BareKey::Char('c'))), PpickAction::Redraw);
-        assert_eq!(state.handle_key(&key(BareKey::Backspace)), PpickAction::Redraw);
-        assert_eq!(state.query, "");
-        assert_eq!(state.handle_key(&key(BareKey::Esc)), PpickAction::Close);
-        assert_eq!(state.handle_key(&key(BareKey::Enter)), PpickAction::Focus(42));
-        assert_eq!(state.handle_key(&key(BareKey::Char('x'))), PpickAction::Redraw);
-        assert_eq!(state.handle_key(&key(BareKey::Enter)), PpickAction::None);
+        pretty_assertions::assert_eq!(state.handle_key(&key(BareKey::Char('c'))), PpickAction::Redraw);
+        pretty_assertions::assert_eq!(state.handle_key(&key(BareKey::Backspace)), PpickAction::Redraw);
+        pretty_assertions::assert_eq!(state.query, "");
+        pretty_assertions::assert_eq!(state.handle_key(&key(BareKey::Esc)), PpickAction::Close);
+        pretty_assertions::assert_eq!(state.handle_key(&key(BareKey::Enter)), PpickAction::Focus(42));
+        pretty_assertions::assert_eq!(state.handle_key(&key(BareKey::Char('x'))), PpickAction::Redraw);
+        pretty_assertions::assert_eq!(state.handle_key(&key(BareKey::Enter)), PpickAction::None);
     }
 
     #[test]
@@ -1364,14 +1363,14 @@ mod tests {
         let ctrl_n = KeyWithModifier::new_with_modifiers(BareKey::Char('n'), BTreeSet::from([KeyModifier::Ctrl]));
         let ctrl_p = KeyWithModifier::new_with_modifiers(BareKey::Char('p'), BTreeSet::from([KeyModifier::Ctrl]));
 
-        assert_eq!(state.handle_key(&ctrl_n), PpickAction::Redraw);
-        assert_eq!(state.selected, 1);
-        assert_eq!(state.handle_key(&ctrl_n), PpickAction::Redraw);
-        assert_eq!(state.selected, 0);
-        assert_eq!(state.handle_key(&ctrl_p), PpickAction::Redraw);
-        assert_eq!(state.selected, 1);
-        assert_eq!(state.handle_key(&ctrl_p), PpickAction::Redraw);
-        assert_eq!(state.selected, 0);
+        pretty_assertions::assert_eq!(state.handle_key(&ctrl_n), PpickAction::Redraw);
+        pretty_assertions::assert_eq!(state.selected, 1);
+        pretty_assertions::assert_eq!(state.handle_key(&ctrl_n), PpickAction::Redraw);
+        pretty_assertions::assert_eq!(state.selected, 0);
+        pretty_assertions::assert_eq!(state.handle_key(&ctrl_p), PpickAction::Redraw);
+        pretty_assertions::assert_eq!(state.selected, 1);
+        pretty_assertions::assert_eq!(state.handle_key(&ctrl_p), PpickAction::Redraw);
+        pretty_assertions::assert_eq!(state.selected, 0);
     }
 
     #[test]
@@ -1384,10 +1383,10 @@ mod tests {
             ..Default::default()
         };
 
-        assert_eq!(empty_state.handle_key(&ctrl_n), PpickAction::None);
-        assert_eq!(empty_state.handle_key(&ctrl_p), PpickAction::None);
-        assert_eq!(single_state.handle_key(&ctrl_n), PpickAction::None);
-        assert_eq!(single_state.handle_key(&ctrl_p), PpickAction::None);
-        assert_eq!(single_state.selected, 0);
+        pretty_assertions::assert_eq!(empty_state.handle_key(&ctrl_n), PpickAction::None);
+        pretty_assertions::assert_eq!(empty_state.handle_key(&ctrl_p), PpickAction::None);
+        pretty_assertions::assert_eq!(single_state.handle_key(&ctrl_n), PpickAction::None);
+        pretty_assertions::assert_eq!(single_state.handle_key(&ctrl_p), PpickAction::None);
+        pretty_assertions::assert_eq!(single_state.selected, 0);
     }
 }

@@ -277,7 +277,6 @@ pub fn idle_phase_for_pane(current_tab: &CurrentTab, current_tab_is_active: bool
 
 #[cfg(test)]
 mod tests {
-    use pretty_assertions::assert_eq;
 
     use crate::plugin::pane::FocusedPane;
     use crate::plugin::pane::FocusedPaneLabel;
@@ -301,8 +300,8 @@ mod tests {
             ..CurrentTab::new(10)
         };
 
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Unseen);
-        assert_eq!(
+        pretty_assertions::assert_eq!(current_tab.tab_indicator(), TabIndicator::Unseen);
+        pretty_assertions::assert_eq!(
             current_tab.display_cmd(),
             Cmd::agent(Agent::Codex, AgentState::NeedsAttention)
         );
@@ -330,7 +329,7 @@ mod tests {
             ..CurrentTab::new(10)
         };
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             current_tab.current_row_display(false),
             (
                 Cmd::agent(Agent::Codex, AgentState::NeedsAttention),
@@ -355,13 +354,13 @@ mod tests {
             ..CurrentTab::new(10)
         };
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             current_tab.current_row_display(true),
             (Cmd::Running("cargo".to_string()), TabIndicator::NoAgent)
         );
 
         current_tab.transition_phase(42, Agent::Codex, AgentPanePhase::AttentionUnseen);
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             current_tab.current_row_display(true),
             (
                 Cmd::agent(Agent::Codex, AgentState::NeedsAttention),
@@ -383,7 +382,7 @@ mod tests {
             ..CurrentTab::new(10)
         };
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             current_tab.current_row_display(true),
             (Cmd::None, TabIndicator::NoAgent)
         );
@@ -411,7 +410,7 @@ mod tests {
             ..CurrentTab::new(10)
         };
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             current_tab.current_row_display(false),
             (Cmd::agent(Agent::Codex, AgentState::Busy), TabIndicator::Busy,)
         );
@@ -436,7 +435,7 @@ mod tests {
             ..CurrentTab::new(10)
         };
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             current_tab.current_row_display(false),
             (
                 Cmd::agent(Agent::Codex, AgentState::NeedsAttention),
@@ -464,7 +463,7 @@ mod tests {
             ..CurrentTab::new(10)
         };
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             current_tab.current_row_display(false),
             (Cmd::agent(Agent::Codex, AgentState::Busy), TabIndicator::Busy,)
         );
@@ -474,7 +473,7 @@ mod tests {
     fn test_new_state_starts_without_indicator_after_restart() {
         let current_tab = CurrentTab::new(10);
 
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::NoAgent);
-        assert_eq!(current_tab.display_cmd(), Cmd::None);
+        pretty_assertions::assert_eq!(current_tab.tab_indicator(), TabIndicator::NoAgent);
+        pretty_assertions::assert_eq!(current_tab.display_cmd(), Cmd::None);
     }
 }

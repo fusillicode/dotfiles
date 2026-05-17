@@ -213,7 +213,6 @@ mod tests {
     use agg::GitStat;
     use agg::TabIndicator;
     use agg::TabStateEntry;
-    use pretty_assertions::assert_eq;
     use zellij_tile::prelude::PaneInfo;
     use zellij_tile::prelude::PaneManifest;
     use zellij_tile::prelude::PipeMessage;
@@ -285,7 +284,7 @@ mod tests {
 
         assert2::assert!(pipe(&mut state, &msg));
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             state.visible_frame(usize::MAX).get(1).map(|row| row.selected),
             Some(true)
         );

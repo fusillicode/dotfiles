@@ -57,8 +57,6 @@ mod tests {
     use agg::AgentState;
     use agg::Cmd;
     use agg::TabIndicator;
-    use assert2::assert;
-    use pretty_assertions::assert_eq;
     use ytil_agents::agent::Agent;
     use zellij_tile::prelude::TabInfo;
 
@@ -99,7 +97,7 @@ mod tests {
                 label: Some(FocusedPaneLabel::TerminalCommand("claude".to_string())),
             }),
         );
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             events,
             vec![
                 Event::ActiveTabChanged { active_tab_id: 10 },
@@ -115,10 +113,10 @@ mod tests {
         );
 
         let _ = state.apply_all(&events);
-        assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
-        assert_eq!(current_tab.active_focus_pane_id, Some(42));
-        assert_eq!(
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
+        pretty_assertions::assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
+        pretty_assertions::assert_eq!(current_tab.active_focus_pane_id, Some(42));
+        pretty_assertions::assert_eq!(
             current_tab
                 .pane_state_by_pane
                 .get(&42)
@@ -162,24 +160,24 @@ mod tests {
         );
         let _ = state.apply_all(&events);
 
-        assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Unseen);
-        assert_eq!(current_tab.active_focus_pane_id, Some(43));
-        assert_eq!(
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
+        pretty_assertions::assert_eq!(current_tab.tab_indicator(), TabIndicator::Unseen);
+        pretty_assertions::assert_eq!(current_tab.active_focus_pane_id, Some(43));
+        pretty_assertions::assert_eq!(
             current_tab
                 .pane_state_by_pane
                 .get(&42)
                 .map(|pane_state| pane_state.phase),
             Some(AgentPanePhase::AttentionUnseen)
         );
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             current_tab
                 .pane_state_by_pane
                 .get(&43)
                 .map(|pane_state| pane_state.phase),
             Some(AgentPanePhase::AttentionSeen)
         );
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             current_tab.current_row_display(true),
             (
                 Cmd::agent(Agent::Claude, AgentState::NeedsAttention),
@@ -210,15 +208,15 @@ mod tests {
         };
 
         let activation_events = derive(&state, 10, None);
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             activation_events,
             vec![Event::ActiveTabChanged { active_tab_id: 10 }, Event::BecameActive,]
         );
         let _ = state.apply_all(&activation_events);
 
-        assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert!(current_tab.pending_activation_focus_ack);
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Unseen);
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
+        assert2::assert!(current_tab.pending_activation_focus_ack);
+        pretty_assertions::assert_eq!(current_tab.tab_indicator(), TabIndicator::Unseen);
 
         let pane_update_events = apply_pane_update(
             &mut state,
@@ -231,7 +229,7 @@ mod tests {
                 ],
             )]),
         );
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             pane_update_events,
             vec![
                 Event::FocusChanged {
@@ -245,11 +243,11 @@ mod tests {
             ]
         );
 
-        assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert!(!current_tab.pending_activation_focus_ack);
-        assert_eq!(current_tab.active_focus_pane_id, Some(42));
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
-        assert_eq!(
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
+        assert2::assert!(!current_tab.pending_activation_focus_ack);
+        pretty_assertions::assert_eq!(current_tab.active_focus_pane_id, Some(42));
+        pretty_assertions::assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
+        pretty_assertions::assert_eq!(
             current_tab
                 .pane_state_by_pane
                 .get(&42)
@@ -290,7 +288,7 @@ mod tests {
             ..tab_with_name(10, 0, "a")
         }];
         let tab_update_events = crate::plugin::tbar::events_from::tab_update::derive(&state, &mut tabs, None);
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             tab_update_events,
             vec![
                 Event::AllTabsReplaced { new_tabs: tabs.clone() },
@@ -301,10 +299,10 @@ mod tests {
         );
         let _ = state.apply_all(&tab_update_events);
 
-        assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert!(current_tab.pending_activation_focus_ack);
-        assert_eq!(state.known_active_tab_id, Some(10));
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Unseen);
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
+        assert2::assert!(current_tab.pending_activation_focus_ack);
+        pretty_assertions::assert_eq!(state.known_active_tab_id, Some(10));
+        pretty_assertions::assert_eq!(current_tab.tab_indicator(), TabIndicator::Unseen);
 
         let pipe_events = derive(
             &state,
@@ -314,7 +312,7 @@ mod tests {
                 label: Some(FocusedPaneLabel::TerminalCommand("claude".to_string())),
             }),
         );
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             pipe_events,
             vec![Event::FocusChanged {
                 new_pane: Some(FocusedPane {
@@ -326,11 +324,11 @@ mod tests {
         );
         let _ = state.apply_all(&pipe_events);
 
-        assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert!(!current_tab.pending_activation_focus_ack);
-        assert_eq!(current_tab.active_focus_pane_id, Some(42));
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
-        assert_eq!(
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
+        assert2::assert!(!current_tab.pending_activation_focus_ack);
+        pretty_assertions::assert_eq!(current_tab.active_focus_pane_id, Some(42));
+        pretty_assertions::assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
+        pretty_assertions::assert_eq!(
             current_tab
                 .pane_state_by_pane
                 .get(&42)
@@ -380,10 +378,10 @@ mod tests {
         );
         let _ = state.apply_all(&tab_update_events);
 
-        assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert!(!current_tab.pending_activation_focus_ack);
-        assert_eq!(current_tab.active_focus_pane_id, Some(43));
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Unseen);
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
+        assert2::assert!(!current_tab.pending_activation_focus_ack);
+        pretty_assertions::assert_eq!(current_tab.active_focus_pane_id, Some(43));
+        pretty_assertions::assert_eq!(current_tab.tab_indicator(), TabIndicator::Unseen);
 
         let pipe_events = derive(
             &state,
@@ -393,7 +391,7 @@ mod tests {
                 label: Some(FocusedPaneLabel::TerminalCommand("claude".to_string())),
             }),
         );
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             pipe_events,
             vec![Event::FocusChanged {
                 new_pane: Some(FocusedPane {
@@ -405,10 +403,10 @@ mod tests {
         );
         let _ = state.apply_all(&pipe_events);
 
-        assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.active_focus_pane_id, Some(42));
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
-        assert_eq!(
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
+        pretty_assertions::assert_eq!(current_tab.active_focus_pane_id, Some(42));
+        pretty_assertions::assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
+        pretty_assertions::assert_eq!(
             current_tab
                 .pane_state_by_pane
                 .get(&42)
@@ -446,6 +444,6 @@ mod tests {
             }),
         );
 
-        assert_eq!(events, vec![]);
+        pretty_assertions::assert_eq!(events, vec![]);
     }
 }
