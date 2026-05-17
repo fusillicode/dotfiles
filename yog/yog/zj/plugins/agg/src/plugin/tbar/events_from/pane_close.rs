@@ -15,7 +15,6 @@ pub fn derive(state: &TbarState, pane_id: u32) -> Vec<Event> {
 mod tests {
     use std::collections::HashMap;
 
-    use pretty_assertions::assert_eq;
     use ytil_agents::agent::Agent;
 
     use crate::plugin::tbar::Event;
@@ -39,6 +38,6 @@ mod tests {
             ..Default::default()
         };
 
-        assert_eq!(derive(&state, 42), vec![Event::AgentLost { pane_id: 42 }]);
+        pretty_assertions::assert_eq!(derive(&state, 42), vec![Event::AgentLost { pane_id: 42 }]);
     }
 }

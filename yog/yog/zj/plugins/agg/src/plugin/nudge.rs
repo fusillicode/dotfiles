@@ -38,14 +38,6 @@ impl Nudge {
             path,
         })
     }
-
-    pub fn summary(&self) -> String {
-        format!("{} done", self.agent)
-    }
-
-    pub fn body(&self) -> String {
-        self.path.clone()
-    }
 }
 
 impl TbarState {
@@ -77,9 +69,6 @@ mod tests {
     use std::collections::HashSet;
     use std::path::PathBuf;
 
-    use assert2::assert;
-    use pretty_assertions::assert_eq;
-
     use crate::plugin::nudge::*;
     use crate::plugin::pane::FocusedPane;
     use crate::plugin::pane::FocusedPaneLabel;
@@ -107,13 +96,17 @@ mod tests {
             ..Default::default()
         };
 
-        let nudges = state.nudges();
-        assert!(let [(42, nudge)] = nudges.as_slice());
-        assert_eq!(nudge.agent, Agent::Codex);
-        assert_eq!(nudge.tab_id, 10);
-        assert_eq!(nudge.pane_id, 42);
-        assert_eq!(nudge.path, "project");
-        assert_eq!(nudge.summary(), "Codex done");
-        assert_eq!(nudge.body(), "project");
+        pretty_assertions::assert_eq!(
+            state.nudges(),
+            vec![(
+                42,
+                Nudge {
+                    agent: Agent::Codex,
+                    tab_id: 10,
+                    pane_id: 42,
+                    path: "project".to_string(),
+                },
+            )]
+        );
     }
 }

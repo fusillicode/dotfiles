@@ -57,7 +57,6 @@ pub fn detect_remapped_tab_id(
 
 #[cfg(test)]
 mod tests {
-    use pretty_assertions::assert_eq;
 
     use crate::plugin::tbar::tabs::*;
     use crate::plugin::tbar::test_support::*;
@@ -68,7 +67,7 @@ mod tests {
         let prev_tabs = vec![tab_with_name(10, 0, "agent")];
         let new_tabs = vec![tab_with_name(20, 0, "other"), tab_with_name(30, 1, "agent")];
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             detect_remapped_tab_id(Some(&current_tab), &prev_tabs, &new_tabs),
             Some(30)
         );

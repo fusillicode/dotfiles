@@ -41,7 +41,6 @@ mod tests {
     use std::collections::BTreeMap;
     use std::path::PathBuf;
 
-    use pretty_assertions::assert_eq;
     use ytil_agents::agent::Agent;
     use ytil_agents::agent::AgentEventKind;
     use ytil_agents::agent::AgentEventPayload;
@@ -65,7 +64,7 @@ mod tests {
 
         let event = agent_event_from_pipe(&msg);
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             event,
             Some(AgentEventPayload {
                 pane_id: 42,
@@ -91,7 +90,7 @@ mod tests {
 
         let parsed = git_stat_from_run_command(&cwd, Some(0), stdout.as_bytes());
 
-        assert_eq!(parsed, Some(stat));
+        pretty_assertions::assert_eq!(parsed, Some(stat));
     }
 
     #[test]
@@ -110,7 +109,7 @@ mod tests {
 
         let parsed = git_stat_from_run_command(&cwd, Some(0), stdout.as_bytes());
 
-        assert_eq!(parsed, None);
+        pretty_assertions::assert_eq!(parsed, None);
     }
 
     #[test]
@@ -119,7 +118,7 @@ mod tests {
 
         let entries = sessions_from_stdout(stdout).unwrap();
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             entries,
             vec![SessionEntry {
                 agent: "codex".to_string(),

@@ -17,11 +17,8 @@ pub struct NudgeInput<'a> {
 }
 
 pub fn run(input: NudgeInput<'_>) -> rootcause::Result<()> {
-    let summary = format!("{} @ {}", input.summary, Local::now().format("%H:%M:%S"));
-    let input = NudgeInput {
-        summary: &summary,
-        ..input
-    };
+    let body = format!("{} {}", input.body, Local::now().format("%H:%M:%S"));
+    let input = NudgeInput { body: &body, ..input };
 
     #[cfg(target_os = "macos")]
     {

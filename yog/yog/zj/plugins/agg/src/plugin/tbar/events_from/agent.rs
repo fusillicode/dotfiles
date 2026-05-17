@@ -63,8 +63,6 @@ mod tests {
     use agg::AgentState;
     use agg::Cmd;
     use agg::TabIndicator;
-    use assert2::assert;
-    use pretty_assertions::assert_eq;
     use ytil_agents::agent::Agent;
     use ytil_agents::agent::AgentEventKind;
     use ytil_agents::agent::AgentEventPayload;
@@ -86,7 +84,7 @@ mod tests {
             current_tab: Some(CurrentTab::new(10)),
             ..Default::default()
         };
-        assert!(let Some(current_tab) = state.current_tab.as_mut());
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_mut());
         current_tab.pane_ids.insert(42);
 
         let events = derive(
@@ -97,7 +95,7 @@ mod tests {
                 kind: AgentEventKind::Start,
             },
         );
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             events,
             vec![Event::AgentDetected {
                 pane_id: 42,
@@ -106,9 +104,9 @@ mod tests {
         );
 
         let _ = state.apply_all(&events);
-        assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
-        assert_eq!(
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
+        pretty_assertions::assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
+        pretty_assertions::assert_eq!(
             current_tab.display_cmd(),
             Cmd::agent(Agent::Codex, AgentState::Acknowledged)
         );
@@ -122,7 +120,7 @@ mod tests {
             home_dir: PathBuf::from("/Users/me"),
             ..Default::default()
         };
-        assert!(let Some(current_tab) = state.current_tab.as_mut());
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_mut());
         current_tab.cwd = Some(PathBuf::from("/Users/me/project"));
         current_tab.pane_ids.extend([42, 43]);
         current_tab.focused_pane = Some(FocusedPane {
@@ -143,7 +141,7 @@ mod tests {
                 kind: AgentEventKind::Idle,
             },
         );
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             events,
             vec![Event::AgentIdle {
                 pane_id: 42,
@@ -152,15 +150,15 @@ mod tests {
         );
 
         let _ = state.apply_all(&events);
-        assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Unseen);
-        assert_eq!(
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
+        pretty_assertions::assert_eq!(current_tab.tab_indicator(), TabIndicator::Unseen);
+        pretty_assertions::assert_eq!(
             current_tab.display_cmd(),
             Cmd::agent(Agent::Codex, AgentState::NeedsAttention)
         );
 
         let nudge = Nudge::new(current_tab, &state.all_tabs, &state.home_dir, 42);
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             nudge,
             Some(Nudge {
                 agent: Agent::Codex,
@@ -170,23 +168,20 @@ mod tests {
             })
         );
         let nudge = nudge.expect("nudge");
-        assert_eq!(nudge.summary(), "Codex done");
-        assert_eq!(nudge.body(), "~/project");
+        pretty_assertions::assert_eq!(nudge.path, "~/project");
         let nudges = state.nudges();
-        assert!(let [(42, nudge)] = nudges.as_slice());
-        assert_eq!(nudge.agent, Agent::Codex);
-        assert_eq!(nudge.tab_id, 10);
-        assert_eq!(nudge.pane_id, 42);
-        assert_eq!(
+        assert2::assert!(let [(42, nudge)] = nudges.as_slice());
+        pretty_assertions::assert_eq!(nudge.agent, Agent::Codex);
+        pretty_assertions::assert_eq!(nudge.tab_id, 10);
+        pretty_assertions::assert_eq!(nudge.pane_id, 42);
+        pretty_assertions::assert_eq!(
             nudge.path,
             ytil_tui::short_path(&PathBuf::from("/Users/me/project"), &PathBuf::from("/Users/me"))
         );
-        assert_eq!(nudge.summary(), "Codex done");
-        assert_eq!(nudge.body(), "~/project");
-        assert!(!state.nudged_pane_ids.contains(&42));
+        assert2::assert!(!state.nudged_pane_ids.contains(&42));
         state.mark_nudged(42);
-        assert!(state.nudged_pane_ids.contains(&42));
-        assert!(state.nudges().is_empty());
+        assert2::assert!(state.nudged_pane_ids.contains(&42));
+        assert2::assert!(state.nudges().is_empty());
     }
 
     #[test]
@@ -196,7 +191,7 @@ mod tests {
             current_tab: Some(CurrentTab::new(10)),
             ..Default::default()
         };
-        assert!(let Some(current_tab) = state.current_tab.as_mut());
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_mut());
         current_tab.pane_ids.insert(42);
         current_tab.focused_pane = Some(FocusedPane {
             id: 42,
@@ -218,9 +213,9 @@ mod tests {
         );
         let _ = state.apply_all(&events);
 
-        assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
-        assert_eq!(
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
+        pretty_assertions::assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
+        pretty_assertions::assert_eq!(
             current_tab.display_cmd(),
             Cmd::agent(Agent::Codex, AgentState::Acknowledged)
         );
@@ -255,7 +250,7 @@ mod tests {
                 kind: AgentEventKind::Idle,
             },
         );
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             events,
             vec![Event::AgentIdle {
                 pane_id: 42,
@@ -265,9 +260,9 @@ mod tests {
 
         let _ = state.apply_all(&events);
 
-        assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Unseen);
-        assert_eq!(
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
+        pretty_assertions::assert_eq!(current_tab.tab_indicator(), TabIndicator::Unseen);
+        pretty_assertions::assert_eq!(
             current_tab.current_row_display(false),
             (
                 Cmd::agent(Agent::Codex, AgentState::NeedsAttention),
@@ -302,9 +297,9 @@ mod tests {
         );
         let _ = state.apply_all(&events);
 
-        assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
-        assert_eq!(
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
+        pretty_assertions::assert_eq!(current_tab.tab_indicator(), TabIndicator::Seen);
+        pretty_assertions::assert_eq!(
             current_tab.display_cmd(),
             Cmd::agent(Agent::Claude, AgentState::Acknowledged)
         );

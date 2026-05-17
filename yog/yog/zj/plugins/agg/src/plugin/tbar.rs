@@ -523,8 +523,7 @@ fn handle_events(state: &mut TbarState, events: &[Event]) {
 }
 
 fn send_nudge(home_dir: &Path, session: Option<&str>, nudge: &Nudge) {
-    let summary = nudge.summary();
-    let body = nudge.body();
+    let body = nudge.agent.to_string();
     let icon_path = AgentIcon::from(nudge.agent).path(home_dir);
     let icon_path = icon_path.to_string_lossy();
     let tab_id = nudge.tab_id.to_string();
@@ -532,7 +531,7 @@ fn send_nudge(home_dir: &Path, session: Option<&str>, nudge: &Nudge) {
     let mut args = vec![
         "agg",
         "nudge",
-        summary.as_str(),
+        nudge.path.as_str(),
         body.as_str(),
         tab_id.as_str(),
         pane_id.as_str(),
@@ -740,7 +739,6 @@ mod tests {
     use agg::AgentState;
     use agg::Cmd;
     use agg::TabIndicator;
-    use pretty_assertions::assert_eq;
     use ytil_agents::agent::Agent;
     use zellij_tile::prelude::PaneId;
     use zellij_tile::prelude::PaneInfo;
@@ -798,7 +796,7 @@ mod tests {
 
         let snapshot = StateSnapshotPayload::from_current_tab(&current_tab);
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             snapshot.pane_agents,
             vec![
                 PaneAgentSnapshot {
@@ -813,8 +811,8 @@ mod tests {
                 },
             ]
         );
-        assert_eq!(snapshot.cmd, Cmd::agent(Agent::Claude, AgentState::NeedsAttention));
-        assert_eq!(snapshot.indicator, TabIndicator::Unseen);
+        pretty_assertions::assert_eq!(snapshot.cmd, Cmd::agent(Agent::Claude, AgentState::NeedsAttention));
+        pretty_assertions::assert_eq!(snapshot.indicator, TabIndicator::Unseen);
     }
 
     #[test]
@@ -849,8 +847,8 @@ mod tests {
         };
 
         assert!(crate::plugin::tbar::pipe(&mut state, &msg));
-        assert_eq!(state.all_tabs, tabs);
-        assert_eq!(state.known_active_tab_id, Some(20));
+        pretty_assertions::assert_eq!(state.all_tabs, tabs);
+        pretty_assertions::assert_eq!(state.known_active_tab_id, Some(20));
         assert!(!state.sync_requested);
     }
 
@@ -915,9 +913,9 @@ mod tests {
             }],
         ));
 
-        assert_eq!(state.all_tabs, host_tabs);
-        assert_eq!(state.known_active_tab_id, Some(20));
-        assert_eq!(state.other_tabs.len(), 1);
+        pretty_assertions::assert_eq!(state.all_tabs, host_tabs);
+        pretty_assertions::assert_eq!(state.known_active_tab_id, Some(20));
+        pretty_assertions::assert_eq!(state.other_tabs.len(), 1);
         assert!(state.other_tabs.contains_key(&8));
     }
 
@@ -968,8 +966,8 @@ mod tests {
             }],
         ));
 
-        assert_eq!(state.all_tabs, host_tabs);
-        assert_eq!(state.known_active_tab_id, Some(10));
+        pretty_assertions::assert_eq!(state.all_tabs, host_tabs);
+        pretty_assertions::assert_eq!(state.known_active_tab_id, Some(10));
     }
 
     #[test]
@@ -1025,8 +1023,8 @@ mod tests {
 
         assert!(!crate::plugin::tbar::pipe(&mut state, &msg));
 
-        assert_eq!(state.all_tabs, host_tabs);
-        assert_eq!(state.known_active_tab_id, Some(20));
+        pretty_assertions::assert_eq!(state.all_tabs, host_tabs);
+        pretty_assertions::assert_eq!(state.known_active_tab_id, Some(20));
     }
 
     #[test]
@@ -1075,8 +1073,8 @@ mod tests {
 
         assert!(!crate::plugin::tbar::pipe(&mut state, &msg));
 
-        assert_eq!(state.all_tabs, host_tabs);
-        assert_eq!(state.known_active_tab_id, Some(20));
+        pretty_assertions::assert_eq!(state.all_tabs, host_tabs);
+        pretty_assertions::assert_eq!(state.known_active_tab_id, Some(20));
     }
 
     #[test]
@@ -1108,7 +1106,7 @@ mod tests {
             },
         );
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             landing_focus,
             Some(FocusedPane {
                 id: 42,
@@ -1152,7 +1150,7 @@ mod tests {
             },
         );
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             landing_focus,
             Some(FocusedPane {
                 id: 99,
