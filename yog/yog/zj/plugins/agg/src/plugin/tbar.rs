@@ -344,15 +344,21 @@ pub fn update_sessions(state: &mut TbarState, sessions: &[SessionInfo]) -> bool 
     };
     let mut tabs = session.tabs.clone();
     tabs.sort_by_key(|tab| tab.position);
-    // SessionUpdate is authoritative only for host-owned tab topology. During
-    // normal focus movement it can carry active/focus metadata at different
-    // times than TabUpdate/active_tab, so same-topology updates are ignored.
-    // The close-tab bug this fixes is a topology change: a znt-created tab can
-    // disappear from SessionUpdate without agg receiving a matching TabUpdate.
-    if !crate::plugin::tbar::tabs::topology_changed(&state.all_tabs, &tabs) {
-        return false;
-    }
     let active_tab_id = tabs.iter().find(|tab| tab.active).map(|tab| tab.tab_id);
+    // SessionUpdate is host-authoritative. For same-topology updates, copy only
+    // the active bit so first focus into an unhydrated tab can move the rail
+    // without replaying stale tab metadata. For topology changes, consume the
+    // full host tab list because a closed tab can disappear before TabUpdate.
+    if !crate::plugin::tbar::tabs::topology_changed(&state.all_tabs, &tabs) {
+        let Some(active_tab_id) = active_tab_id else {
+            return false;
+        };
+        let mut active_tabs = state.all_tabs.clone();
+        for tab in &mut active_tabs {
+            tab.active = tab.tab_id == active_tab_id;
+        }
+        return update_host_tabs(state, &mut active_tabs, Some(active_tab_id), None, false);
+    }
     update_host_tabs(state, &mut tabs, active_tab_id, None, false)
 }
 
@@ -920,7 +926,78 @@ mod tests {
     }
 
     #[test]
-    fn test_session_update_ignores_same_topology_active_change() {
+    fn test_session_update_preserves_same_topology_tab_metadata() {
+        let host_tabs = vec![
+            TabInfo {
+                tab_id: 10,
+                position: 0,
+                name: "canonical-first".to_string(),
+                active: true,
+                ..Default::default()
+            },
+            TabInfo {
+                tab_id: 20,
+                position: 1,
+                name: "canonical-second".to_string(),
+                active: false,
+                ..Default::default()
+            },
+        ];
+        let mut state = TbarState {
+            plugin_id: 7,
+            known_active_tab_id: Some(10),
+            all_tabs: host_tabs,
+            current_tab: Some(CurrentTab::new(10)),
+            ..Default::default()
+        };
+        let same_topology_focus_move = vec![
+            TabInfo {
+                tab_id: 10,
+                position: 0,
+                name: "stale-first".to_string(),
+                active: false,
+                ..Default::default()
+            },
+            TabInfo {
+                tab_id: 20,
+                position: 1,
+                name: "stale-second".to_string(),
+                active: true,
+                ..Default::default()
+            },
+        ];
+
+        assert!(crate::plugin::tbar::update_sessions(
+            &mut state,
+            &[SessionInfo {
+                is_current_session: true,
+                tabs: same_topology_focus_move,
+                ..Default::default()
+            }],
+        ));
+
+        let expected_tabs = vec![
+            TabInfo {
+                tab_id: 10,
+                position: 0,
+                name: "canonical-first".to_string(),
+                active: false,
+                ..Default::default()
+            },
+            TabInfo {
+                tab_id: 20,
+                position: 1,
+                name: "canonical-second".to_string(),
+                active: true,
+                ..Default::default()
+            },
+        ];
+        pretty_assertions::assert_eq!(state.all_tabs, expected_tabs);
+        pretty_assertions::assert_eq!(state.known_active_tab_id, Some(20));
+    }
+
+    #[test]
+    fn test_session_update_moves_active_rail_before_target_tab_hydrates() {
         let host_tabs = vec![
             TabInfo {
                 tab_id: 10,
@@ -938,11 +1015,11 @@ mod tests {
         let mut state = TbarState {
             plugin_id: 7,
             known_active_tab_id: Some(10),
-            all_tabs: host_tabs.clone(),
+            all_tabs: host_tabs,
             current_tab: Some(CurrentTab::new(10)),
             ..Default::default()
         };
-        let same_topology_focus_move = vec![
+        let first_focus_to_unhydrated_tab = vec![
             TabInfo {
                 tab_id: 10,
                 position: 0,
@@ -957,17 +1034,20 @@ mod tests {
             },
         ];
 
-        assert!(!crate::plugin::tbar::update_sessions(
+        assert!(crate::plugin::tbar::update_sessions(
             &mut state,
             &[SessionInfo {
                 is_current_session: true,
-                tabs: same_topology_focus_move,
+                tabs: first_focus_to_unhydrated_tab,
                 ..Default::default()
             }],
         ));
 
-        pretty_assertions::assert_eq!(state.all_tabs, host_tabs);
-        pretty_assertions::assert_eq!(state.known_active_tab_id, Some(10));
+        assert2::assert!(let Some(first) = state.frame.first());
+        assert2::assert!(let Some(second) = state.frame.get(1));
+        pretty_assertions::assert_eq!(first.active, false);
+        pretty_assertions::assert_eq!(second.active, true);
+        pretty_assertions::assert_eq!(state.known_active_tab_id, Some(20));
     }
 
     #[test]
