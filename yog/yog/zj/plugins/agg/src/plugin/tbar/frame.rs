@@ -64,8 +64,6 @@ mod tests {
     use agg::Cmd;
     use agg::GitStat;
     use agg::TabIndicator;
-    use assert2::assert;
-    use pretty_assertions::assert_eq;
     use ytil_agents::agent::Agent;
     use zellij_tile::prelude::TabInfo;
 
@@ -114,7 +112,7 @@ mod tests {
                 ],
             )]),
         );
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             split_events,
             vec![
                 Event::PanesChanged {
@@ -140,7 +138,7 @@ mod tests {
                 ],
             )]),
         );
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             claude_events,
             vec![
                 Event::FocusChanged {
@@ -157,12 +155,12 @@ mod tests {
             ]
         );
 
-        assert!(let Some(current_tab) = state.current_tab.as_ref());
-        assert_eq!(current_tab.display_cmd(), Cmd::agent(Agent::Codex, AgentState::Busy));
-        assert_eq!(current_tab.tab_indicator(), TabIndicator::Busy);
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
+        pretty_assertions::assert_eq!(current_tab.display_cmd(), Cmd::agent(Agent::Codex, AgentState::Busy));
+        pretty_assertions::assert_eq!(current_tab.tab_indicator(), TabIndicator::Busy);
 
         let frame = compute_frame(&state);
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             frame,
             vec![TabRow {
                 active: true,
@@ -186,7 +184,7 @@ mod tests {
         };
 
         let frame = compute_frame(&state);
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             frame,
             vec![TabRow {
                 active: false,
@@ -215,7 +213,7 @@ mod tests {
         };
 
         let frame = compute_frame(&state);
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             frame,
             vec![TabRow {
                 active: false,

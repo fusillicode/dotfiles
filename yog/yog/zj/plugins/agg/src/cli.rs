@@ -106,8 +106,8 @@ mod tests {
     #[test]
     fn test_nudge_args_try_from_with_image_path_and_zj_session_returns_args() {
         let args = vec![
-            "Codex done".to_string(),
             "/repo".to_string(),
+            "Codex".to_string(),
             "7".to_string(),
             "42".to_string(),
             "/icon.png".to_string(),
@@ -120,8 +120,8 @@ mod tests {
         pretty_assertions::assert_eq!(
             parsed,
             NudgeArgs {
-                summary: "Codex done",
-                body: "/repo",
+                summary: "/repo",
+                body: "Codex",
                 tab_id: "7",
                 pane_id: "42",
                 image_path: Some("/icon.png"),
@@ -133,8 +133,8 @@ mod tests {
     #[test]
     fn test_nudge_args_try_from_without_zj_session_returns_args() {
         let args = vec![
-            "Codex done".to_string(),
             "/repo".to_string(),
+            "Codex".to_string(),
             "7".to_string(),
             "42".to_string(),
         ];
@@ -144,8 +144,8 @@ mod tests {
         pretty_assertions::assert_eq!(
             parsed,
             NudgeArgs {
-                summary: "Codex done",
-                body: "/repo",
+                summary: "/repo",
+                body: "Codex",
                 tab_id: "7",
                 pane_id: "42",
                 image_path: None,

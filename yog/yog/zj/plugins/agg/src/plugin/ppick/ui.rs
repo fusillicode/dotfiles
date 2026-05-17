@@ -234,7 +234,6 @@ fn cmd_with_color(row: &PpickRow, width: usize, bg: &str, fg: &str) -> String {
 #[cfg(test)]
 mod tests {
     use agg::LastCommit;
-    use pretty_assertions::assert_eq;
 
     use super::*;
 
@@ -265,7 +264,7 @@ mod tests {
         assert2::assert!(plain.contains("▎1:42 ~/project main"));
         assert2::assert!(plain.contains("▎cargo"));
         for line in lines {
-            assert_eq!(crate::plugin::ui::visible_len(&line), 32);
+            pretty_assertions::assert_eq!(crate::plugin::ui::visible_len(&line), 32);
         }
     }
 
@@ -288,11 +287,11 @@ mod tests {
 
         assert2::assert!(plain_text(&rendered).contains("▎1:42 ~/project feature/some-very-long-branch-name"));
         assert2::assert!(plain_text(&rendered).contains("▎cx how to solve this warning"));
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             plain_text(&lines[0]),
             crate::plugin::ui::pad("▎1:42 ~/project feature/some-very-long-branch-name", 64)
         );
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             plain_text(&lines[1]),
             crate::plugin::ui::pad("▎cx how to solve this warning", 64)
         );
@@ -319,13 +318,13 @@ mod tests {
             crate::plugin::ui::AGENT_BUSY_FG,
             crate::plugin::ui::RESET
         )));
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             plain_text(&lines[0]),
             crate::plugin::ui::pad("▎1:42 ~/project main", 44)
         );
-        assert_eq!(plain_text(&lines[1]), crate::plugin::ui::pad("▎• cx", 44));
+        pretty_assertions::assert_eq!(plain_text(&lines[1]), crate::plugin::ui::pad("▎• cx", 44));
         for line in lines {
-            assert_eq!(crate::plugin::ui::visible_len(&line), 44);
+            pretty_assertions::assert_eq!(crate::plugin::ui::visible_len(&line), 44);
         }
     }
 
@@ -344,8 +343,8 @@ mod tests {
 
         let line = path_line(&row, 20);
 
-        assert_eq!(plain_text(&line), "▎1:42 ~/project fea…");
-        assert_eq!(crate::plugin::ui::visible_len(&line), 20);
+        pretty_assertions::assert_eq!(plain_text(&line), "▎1:42 ~/project fea…");
+        pretty_assertions::assert_eq!(crate::plugin::ui::visible_len(&line), 20);
     }
 
     #[test]
@@ -380,13 +379,13 @@ mod tests {
         assert2::assert!(lines[0].contains(crate::plugin::ui::GIT_DEL_LINES_FG));
         assert2::assert!(lines[0].contains(crate::plugin::ui::GIT_NEW_FILES_FG));
         assert2::assert!(lines[0].contains(SUMMARY_FG));
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             plain_text(&lines[0]),
             crate::plugin::ui::pad("▎1:42 ~/project main +2 -1 ?3 abc1234 2m | fix branch metadata", 80)
         );
-        assert_eq!(plain_text(&lines[1]), crate::plugin::ui::pad("▎cx solve warning", 80));
+        pretty_assertions::assert_eq!(plain_text(&lines[1]), crate::plugin::ui::pad("▎cx solve warning", 80));
         for line in lines {
-            assert_eq!(crate::plugin::ui::visible_len(&line), 80);
+            pretty_assertions::assert_eq!(crate::plugin::ui::visible_len(&line), 80);
         }
     }
 
@@ -412,14 +411,14 @@ mod tests {
 
         let line = path_line(&row, 120);
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             plain_text(&line),
             crate::plugin::ui::pad(
                 "▎1:42 ~/project main abc1234 1w | abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza…",
                 120,
             )
         );
-        assert_eq!(crate::plugin::ui::visible_len(&line), 120);
+        pretty_assertions::assert_eq!(crate::plugin::ui::visible_len(&line), 120);
     }
 
     #[test]
@@ -437,8 +436,8 @@ mod tests {
 
         let line = cmd_line(&row, 20);
 
-        assert_eq!(plain_text(&line), "▎cx abcdefghijklmno…");
-        assert_eq!(crate::plugin::ui::visible_len(&line), 20);
+        pretty_assertions::assert_eq!(plain_text(&line), "▎cx abcdefghijklmno…");
+        pretty_assertions::assert_eq!(crate::plugin::ui::visible_len(&line), 20);
     }
 
     #[test]
@@ -456,14 +455,14 @@ mod tests {
 
         let line = cmd_line(&row, 100);
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             plain_text(&line),
             crate::plugin::ui::pad(
                 "▎cx abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza…",
                 100,
             )
         );
-        assert_eq!(crate::plugin::ui::visible_len(&line), 100);
+        pretty_assertions::assert_eq!(crate::plugin::ui::visible_len(&line), 100);
     }
 
     #[test]
@@ -482,9 +481,9 @@ mod tests {
 
         for line in lines {
             assert2::assert!(!plain_text(&line).contains('▏'));
-            assert_eq!(crate::plugin::ui::visible_len(&line), 24);
+            pretty_assertions::assert_eq!(crate::plugin::ui::visible_len(&line), 24);
         }
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             plain_text(&path_line(&row, 24)),
             crate::plugin::ui::pad(" 1:42 ~/project main", 24)
         );
