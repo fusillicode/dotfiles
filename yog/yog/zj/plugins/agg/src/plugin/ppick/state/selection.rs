@@ -134,14 +134,14 @@ impl PpickState {
             return false;
         }
 
-        let old_indices = self.filtered_entry_indices.clone();
         let old_selected = self.selected;
         let old_selected_pane_id = self.selected_pane_id;
         let selected_pane_id = self
             .selected_pane_id
             .or_else(|| self.selected_entry().map(|entry| entry.pane_id));
 
-        self.filtered_entry_indices = self.filtered_entries().map(|(idx, _)| idx).collect();
+        let new_indices = self.filtered_entries().map(|(idx, _)| idx).collect();
+        let old_indices = std::mem::replace(&mut self.filtered_entry_indices, new_indices);
         if let Some(selected) = selected_pane_id.and_then(|pane_id| self.filtered_position_for_pane(pane_id)) {
             self.selected = selected;
         } else if self.filtered_entry_indices.is_empty() {
