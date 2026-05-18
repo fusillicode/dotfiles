@@ -7,7 +7,8 @@ use nvim_oxi::api::opts::CreateAutocmdOpts;
 /// Includes yank highlight, autosave on focus loss / buffer leave, and quickfix
 /// specific key mappings & configuration.
 pub fn create() {
-    create_lua_autocmd(&["TextYankPost"], "YankHighlight", None, "vim.highlight.on_yank()");
+    // `hl_op` is the supported replacement for the deprecated yank helper.
+    create_lua_autocmd(&["TextYankPost"], "YankHighlight", None, "vim.hl.hl_op()");
 
     create_lua_autocmd(
         &["BufLeave", "FocusLost"],
