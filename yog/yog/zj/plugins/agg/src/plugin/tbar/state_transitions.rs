@@ -7,13 +7,16 @@ use crate::plugin::tbar::Event;
 use crate::plugin::tbar::StateSnapshotPayload;
 use crate::plugin::tbar::TbarState;
 use crate::plugin::tbar::current_tab::AgentPanePhase;
+use crate::plugin::tbar::current_tab::AgentPaneSource;
 use crate::plugin::tbar::current_tab::CurrentTab;
 
 impl TbarState {
     pub fn apply_all(&mut self, events: &[Event]) -> bool {
         for event in events {
             self.apply(event);
+            self.sync_current_display_cwd();
         }
+        self.sync_current_display_cwd();
         self.prune_nudges();
         self.sync_frame()
     }
@@ -43,28 +46,16 @@ impl TbarState {
             } => self.apply_focus_changed(new_pane.as_ref(), *acknowledge_existing_attention),
             Event::CwdChanged { pane_id, new_cwd } => {
                 self.cwds_by_pane.insert(*pane_id, new_cwd.clone());
-                if let Some(current_tab) = self.current_tab.as_mut() {
-                    let is_display_pane = current_tab
-                        .focused_pane
-                        .as_ref()
-                        .map(|focused_pane| focused_pane.id)
-                        .or(current_tab.active_focus_pane_id)
-                        == Some(*pane_id);
-                    if is_display_pane && current_tab.cwd.as_ref() != Some(new_cwd) {
-                        current_tab.cwd = Some(new_cwd.clone());
-                        current_tab.seq = current_tab.seq.saturating_add(1);
-                    }
-                }
             }
-            Event::AgentDetected { pane_id, agent } => {
+            Event::AgentDetected { pane_id, agent, source } => {
                 if let Some(current_tab) = self.current_tab.as_mut() {
-                    current_tab.transition_phase(*pane_id, *agent, AgentPanePhase::AttentionSeen);
+                    current_tab.transition_phase(*pane_id, *agent, AgentPanePhase::AttentionSeen, *source);
                     current_tab.seq = current_tab.seq.saturating_add(1);
                 }
             }
             Event::AgentBusy { pane_id, agent } => {
                 if let Some(current_tab) = self.current_tab.as_mut() {
-                    current_tab.transition_phase(*pane_id, *agent, AgentPanePhase::Running);
+                    current_tab.transition_phase(*pane_id, *agent, AgentPanePhase::Running, AgentPaneSource::Pipe);
                     current_tab.seq = current_tab.seq.saturating_add(1);
                 }
             }
@@ -76,13 +67,13 @@ impl TbarState {
                         current_tab_is_active,
                         *pane_id,
                     );
-                    current_tab.transition_phase(*pane_id, *agent, phase);
+                    current_tab.transition_phase(*pane_id, *agent, phase, AgentPaneSource::Pipe);
                     current_tab.seq = current_tab.seq.saturating_add(1);
                 }
             }
-            Event::AgentLost { pane_id } => {
+            Event::AgentLost { pane_id, source } => {
                 if let Some(current_tab) = self.current_tab.as_mut() {
-                    current_tab.apply_agent_lost(*pane_id);
+                    current_tab.apply_agent_lost(*pane_id, *source);
                 }
             }
             Event::GitStatChanged { new_stat } => {
@@ -117,12 +108,6 @@ impl TbarState {
             return;
         };
         current_tab.focused_pane = new_pane.cloned();
-        if let Some(cwd) = new_pane
-            .and_then(|focused_pane| self.cwds_by_pane.get(&focused_pane.id))
-            .cloned()
-        {
-            current_tab.cwd = Some(cwd);
-        }
         if is_active {
             current_tab.sync_active_focus(
                 new_pane.map(|focused_pane| focused_pane.id),
@@ -133,6 +118,37 @@ impl TbarState {
             }
         } else {
             current_tab.clear_active_focus();
+        }
+        current_tab.seq = current_tab.seq.saturating_add(1);
+    }
+
+    /// Display cwd is pane-scoped. If Zellij momentarily withholds cwd for the winning pane,
+    /// keep only that same pane's previous cwd so the row never pairs one pane's agent with another pane's path.
+    fn sync_current_display_cwd(&mut self) {
+        let is_active = self.current_tab_is_active();
+        let Some(current_tab) = self.current_tab.as_mut() else {
+            return;
+        };
+        let display = current_tab.current_row_display_source(is_active, &self.cwds_by_pane);
+        let Some(pane_id) = display.pane_id else {
+            return;
+        };
+        let Some(cwd) = display.cwd else {
+            #[cfg(not(test))]
+            eprintln!("agg: missing display cwd for terminal pane {pane_id}");
+            return;
+        };
+        if current_tab.cwd_pane_id == Some(pane_id) && current_tab.cwd.as_ref() == Some(&cwd) {
+            return;
+        }
+        current_tab.cwd_pane_id = Some(pane_id);
+        current_tab.cwd = Some(cwd);
+        if current_tab
+            .cwd
+            .as_ref()
+            .is_some_and(|cwd| current_tab.git_stat.path != *cwd)
+        {
+            current_tab.git_stat = agg::GitStat::default();
         }
         current_tab.seq = current_tab.seq.saturating_add(1);
     }
@@ -200,6 +216,7 @@ mod tests {
 
     use crate::plugin::nudge::Nudge;
     use crate::plugin::pane::FocusedPaneLabel;
+    use crate::plugin::tbar::current_tab::AgentLossSource;
     use crate::plugin::tbar::current_tab::PaneFocus;
     use crate::plugin::tbar::state_transitions::*;
     use crate::plugin::tbar::test_support::*;
@@ -383,12 +400,34 @@ mod tests {
             ..Default::default()
         };
 
-        let events = vec![Event::AgentLost { pane_id: 42 }];
+        let events = vec![Event::AgentLost {
+            pane_id: 42,
+            source: AgentLossSource::Pipe,
+        }];
         let _ = state.apply_all(&events);
 
         assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
         pretty_assertions::assert_eq!(current_tab.tab_indicator(), TabIndicator::NoAgent);
         pretty_assertions::assert_eq!(current_tab.display_cmd(), Cmd::None);
+    }
+
+    #[test]
+    fn test_manifest_agent_lost_does_not_clear_pipe_owned_agent() {
+        let mut state = TbarState {
+            current_tab: Some(CurrentTab::new(10)),
+            ..Default::default()
+        };
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_mut());
+        current_tab.pane_ids.insert(42);
+        current_tab.transition_phase(42, Agent::Codex, AgentPanePhase::Running, AgentPaneSource::Pipe);
+
+        let _ = state.apply_all(&[Event::AgentLost {
+            pane_id: 42,
+            source: AgentLossSource::Manifest,
+        }]);
+
+        assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
+        pretty_assertions::assert_eq!(current_tab.display_cmd(), Cmd::agent(Agent::Codex, AgentState::Busy));
     }
 
     #[test]
