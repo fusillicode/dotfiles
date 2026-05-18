@@ -207,28 +207,6 @@ impl Cmd {
         }
     }
 
-    /// Returns whether manifest-derived path/focus metadata may hydrate this command.
-    ///
-    /// Hydration must match the authoritative command identity; agent state can differ,
-    /// and [`Self::None`] accepts manifest data so empty snapshots can be seeded.
-    pub fn matches_manifest_hydration(&self, manifest: &Self) -> bool {
-        match (self, manifest) {
-            (
-                Self::Agent {
-                    agent: existing_agent, ..
-                },
-                Self::Agent {
-                    agent: manifest_agent, ..
-                },
-            ) => existing_agent == manifest_agent,
-            (Self::Running(existing_command), Self::Running(manifest_command)) => existing_command == manifest_command,
-            (Self::None, Self::None | Self::Running(_) | Self::Agent { .. }) => true,
-            (Self::Running(_) | Self::Agent { .. }, Self::None)
-            | (Self::Running(_), Self::Agent { .. })
-            | (Self::Agent { .. }, Self::Running(_)) => false,
-        }
-    }
-
     pub const fn is_busy(&self) -> bool {
         matches!(
             self,
@@ -704,41 +682,5 @@ mod tests {
         pretty_assertions::assert_eq!(cmd, Cmd::agent(Agent::Codex, AgentState::Acknowledged));
         assert2::assert!(!cmd.needs_attention());
         assert2::assert!(!cmd.acknowledge());
-    }
-
-    #[rstest]
-    #[case(Cmd::None, Cmd::None, true)]
-    #[case(Cmd::None, Cmd::Running(String::from("cargo")), true)]
-    #[case(Cmd::None, Cmd::agent(Agent::Codex, AgentState::Acknowledged), true)]
-    #[case(Cmd::Running(String::from("cargo")), Cmd::Running(String::from("cargo")), true)]
-    #[case(Cmd::Running(String::from("cargo")), Cmd::Running(String::from("gkg")), false)]
-    #[case(Cmd::Running(String::from("cargo")), Cmd::None, false)]
-    #[case(
-        Cmd::Running(String::from("cargo")),
-        Cmd::agent(Agent::Codex, AgentState::Acknowledged),
-        false
-    )]
-    #[case(
-        Cmd::agent(Agent::Codex, AgentState::Busy),
-        Cmd::agent(Agent::Codex, AgentState::Acknowledged),
-        true
-    )]
-    #[case(
-        Cmd::agent(Agent::Codex, AgentState::Acknowledged),
-        Cmd::agent(Agent::Claude, AgentState::Acknowledged),
-        false
-    )]
-    #[case(Cmd::agent(Agent::Codex, AgentState::Acknowledged), Cmd::None, false)]
-    #[case(
-        Cmd::agent(Agent::Codex, AgentState::Acknowledged),
-        Cmd::Running(String::from("cargo")),
-        false
-    )]
-    fn test_cmd_matches_manifest_hydration_returns_expected(
-        #[case] existing: Cmd,
-        #[case] manifest: Cmd,
-        #[case] expected: bool,
-    ) {
-        pretty_assertions::assert_eq!(existing.matches_manifest_hydration(&manifest), expected);
     }
 }
