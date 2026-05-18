@@ -52,8 +52,9 @@ pub fn get_option_info2(name: &str, opts: &OptionOpts) -> Result<OptionInfos> {
 /// Binding to [`nvim_get_option_value()`][1].
 ///
 /// Gets the local value of an option if it exists, or the global value
-/// otherwise. Local values always correspond to the current buffer or
-/// window, unless [`buf`](crate::opts::OptionOptsBuilder::buf) or
+/// otherwise. Local values always correspond to the current buffer, tabpage or
+/// window, unless [`buf`](crate::opts::OptionOptsBuilder::buf),
+/// [`tab`](crate::opts::OptionOptsBuilder::tab) or
 /// [`win`](crate::opts::OptionOptsBuilder::win) is set in `opts`.
 ///
 /// [1]: https://neovim.io/doc/user/api.html#nvim_get_option_value()
@@ -73,7 +74,8 @@ where
 /// Sets the value of an option. The behaviour of this function matches that of
 /// `:set`: for global-local options, both the global and local value are set
 /// unless specified otherwise in the [`scope`](OptionOptsBuilder::scope)
-/// field of `opts`.
+/// field of `opts`. Tab-local options can be targeted with
+/// [`tab`](OptionOptsBuilder::tab).
 ///
 /// [1]: https://neovim.io/doc/user/api.html#nvim_set_option_value()
 pub fn set_option_value<Opt>(

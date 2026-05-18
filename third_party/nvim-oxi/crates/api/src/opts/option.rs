@@ -1,7 +1,7 @@
 use serde::Serialize;
 use types::conversion::FromObject;
 
-use crate::{Buffer, Window};
+use crate::{Buffer, TabPage, Window};
 
 /// Options passed to [`get_option_value()`](crate::get_option_value) and
 /// [`set_option_value()`](crate::set_option_value).
@@ -19,6 +19,11 @@ pub struct OptionOpts {
 
     #[builder(argtype = "Buffer", inline = "{0}.0")]
     buf: types::BufHandle,
+
+    /// Keep this field in sync with Neovim's `Dict(option)` layout. Nightly
+    /// added `tab`; omitting it shifts later option mask bits.
+    #[builder(argtype = "TabPage", inline = "{0}.0")]
+    tab: types::TabHandle,
 
     #[builder(
         generics = "F: Into<types::String>",
