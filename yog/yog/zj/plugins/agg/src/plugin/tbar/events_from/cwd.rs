@@ -5,7 +5,10 @@ use crate::plugin::tbar::TbarState;
 
 pub fn derive(state: &TbarState, pane_id: u32, cwd: PathBuf) -> Vec<Event> {
     let display_cwd_changed = state.current_tab.as_ref().is_some_and(|current_tab| {
-        current_tab.focused_pane.as_ref().map(|focused_pane| focused_pane.id) == Some(pane_id)
+        current_tab
+            .current_row_display_source(state.current_tab_is_active(), &state.cwds_by_pane)
+            .pane_id
+            == Some(pane_id)
             && current_tab.cwd.as_ref() != Some(&cwd)
     });
     if state.cwds_by_pane.get(&pane_id) == Some(&cwd) && !display_cwd_changed {

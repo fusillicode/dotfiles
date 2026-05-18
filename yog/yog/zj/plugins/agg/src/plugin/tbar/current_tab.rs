@@ -23,7 +23,17 @@ pub struct CurrentTab {
     pub active_focus_pane_id: Option<u32>,
     pub last_focused_agent_pane_id: Option<u32>,
     pub pane_state_by_pane: HashMap<u32, AgentPaneState>,
+    pub cwd_pane_id: Option<u32>,
     pub cwd: Option<PathBuf>,
+    pub git_stat: GitStat,
+}
+
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
+pub struct CurrentTabDisplay {
+    pub pane_id: Option<u32>,
+    pub cwd: Option<PathBuf>,
+    pub cmd: Cmd,
+    pub indicator: TabIndicator,
     pub git_stat: GitStat,
 }
 
@@ -56,18 +66,58 @@ impl CurrentTab {
     }
 
     pub fn display_cmd(&self) -> Cmd {
+        self.display_cmd_source().1
+    }
+
+    fn display_cmd_source(&self) -> (Option<u32>, Cmd) {
         if let Some(pane_id) = self.winner_pane_id()
             && let Some(pane_state) = self.pane_state_by_pane.get(&pane_id)
         {
-            return pane_state.cmd();
+            return (Some(pane_id), pane_state.cmd());
         }
 
-        self.focused_running_cmd()
+        (
+            self.focused_pane.as_ref().map(|focused_pane| focused_pane.id),
+            self.focused_running_cmd(),
+        )
     }
 
     pub fn current_row_display(&self, is_active: bool) -> (Cmd, TabIndicator) {
+        let (_, cmd, indicator) = self.current_row_display_parts(is_active);
+        (cmd, indicator)
+    }
+
+    pub fn current_row_display_source(
+        &self,
+        is_active: bool,
+        cwds_by_pane: &HashMap<u32, PathBuf>,
+    ) -> CurrentTabDisplay {
+        let (pane_id, cmd, indicator) = self.current_row_display_parts(is_active);
+        let cwd = pane_id.and_then(|pane_id| self.cwd_for_pane(pane_id, cwds_by_pane));
+        let git_stat = self.git_stat_for_display(cwd.as_ref());
+        CurrentTabDisplay {
+            pane_id,
+            cwd,
+            cmd,
+            indicator,
+            git_stat,
+        }
+    }
+
+    fn git_stat_for_display(&self, cwd: Option<&PathBuf>) -> GitStat {
+        // Keep all visible row data tied to the selected pane target; stale git state from another cwd must not
+        // survive when an unfocused agent pane wins the tab display.
+        if cwd == Some(&self.git_stat.path) {
+            self.git_stat.clone()
+        } else {
+            GitStat::default()
+        }
+    }
+
+    fn current_row_display_parts(&self, is_active: bool) -> (Option<u32>, Cmd, TabIndicator) {
         if !self.is_active_mat(is_active) {
-            return (self.display_cmd(), self.tab_indicator());
+            let (pane_id, cmd) = self.display_cmd_source();
+            return (pane_id, cmd, self.tab_indicator());
         }
 
         if let Some(pane_id) = self.first_unfocused_pane_in_phase(AgentPanePhase::AttentionUnseen)
@@ -75,7 +125,7 @@ impl CurrentTab {
         {
             let cmd = pane_state.cmd();
             let indicator = TabIndicator::from_cmd(&cmd);
-            return (cmd, indicator);
+            return (Some(pane_id), cmd, indicator);
         }
 
         let focused_pane_id = self
@@ -88,14 +138,22 @@ impl CurrentTab {
         {
             let cmd = pane_state.cmd();
             let indicator = TabIndicator::from_cmd(&cmd);
-            return (cmd, indicator);
+            return (Some(pane_id), cmd, indicator);
         }
 
         if focused_pane_id.is_some() || self.focused_pane.is_some() {
-            return (self.focused_running_cmd(), TabIndicator::NoAgent);
+            return (focused_pane_id, self.focused_running_cmd(), TabIndicator::NoAgent);
         }
 
-        (self.display_cmd(), self.tab_indicator())
+        let (pane_id, cmd) = self.display_cmd_source();
+        (pane_id, cmd, self.tab_indicator())
+    }
+
+    fn cwd_for_pane(&self, pane_id: u32, cwds_by_pane: &HashMap<u32, PathBuf>) -> Option<PathBuf> {
+        cwds_by_pane
+            .get(&pane_id)
+            .cloned()
+            .or_else(|| (self.cwd_pane_id == Some(pane_id)).then(|| self.cwd.clone()).flatten())
     }
 
     fn focused_running_cmd(&self) -> Cmd {
@@ -168,7 +226,7 @@ impl CurrentTab {
         }
     }
 
-    pub fn transition_phase(&mut self, pane_id: u32, agent: Agent, phase: AgentPanePhase) {
+    pub fn transition_phase(&mut self, pane_id: u32, agent: Agent, phase: AgentPanePhase, source: AgentPaneSource) {
         let focus = if self.active_focus_pane_id == Some(pane_id) {
             PaneFocus::Focused
         } else {
@@ -180,6 +238,7 @@ impl CurrentTab {
                 agent,
                 phase,
                 focus,
+                source,
                 phase_seq: self.seq.saturating_add(1),
             },
         );
@@ -217,7 +276,17 @@ impl CurrentTab {
         self.seq = self.seq.saturating_add(1);
     }
 
-    pub fn apply_agent_lost(&mut self, pane_id: u32) {
+    pub fn apply_agent_lost(&mut self, pane_id: u32, source: AgentLossSource) {
+        // Wrapper-launched agents can leave Zellij's manifest showing the wrapper/title.
+        // Preserve pipe-owned agent state until the pipe exit or pane close owns the loss.
+        if source == AgentLossSource::Manifest
+            && self
+                .pane_state_by_pane
+                .get(&pane_id)
+                .is_some_and(|pane_state| pane_state.source == AgentPaneSource::Pipe)
+        {
+            return;
+        }
         self.pane_state_by_pane.remove(&pane_id);
         self.missed_pane_updates_by_pane.remove(&pane_id);
         if self.last_focused_agent_pane_id == Some(pane_id) {
@@ -236,6 +305,7 @@ pub struct AgentPaneState {
     pub agent: Agent,
     pub phase: AgentPanePhase,
     pub focus: PaneFocus,
+    pub source: AgentPaneSource,
     pub phase_seq: u64,
 }
 
@@ -265,6 +335,19 @@ pub enum AgentPanePhase {
 pub enum PaneFocus {
     Focused,
     Unfocused,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AgentPaneSource {
+    Manifest,
+    Pipe,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AgentLossSource {
+    Manifest,
+    Pipe,
+    PaneClosed,
 }
 
 pub fn idle_phase_for_pane(current_tab: &CurrentTab, current_tab_is_active: bool, pane_id: u32) -> AgentPanePhase {
@@ -359,7 +442,12 @@ mod tests {
             (Cmd::Running("cargo".to_string()), TabIndicator::NoAgent)
         );
 
-        current_tab.transition_phase(42, Agent::Codex, AgentPanePhase::AttentionUnseen);
+        current_tab.transition_phase(
+            42,
+            Agent::Codex,
+            AgentPanePhase::AttentionUnseen,
+            AgentPaneSource::Manifest,
+        );
         pretty_assertions::assert_eq!(
             current_tab.current_row_display(true),
             (
@@ -413,6 +501,118 @@ mod tests {
         pretty_assertions::assert_eq!(
             current_tab.current_row_display(false),
             (Cmd::agent(Agent::Codex, AgentState::Busy), TabIndicator::Busy,)
+        );
+    }
+
+    #[test]
+    fn test_current_row_display_source_inactive_uses_winner_pane_cwd() {
+        let current_tab = CurrentTab {
+            pane_ids: [42, 43].into_iter().collect(),
+            focused_pane: Some(FocusedPane {
+                id: 43,
+                label: Some(FocusedPaneLabel::TerminalCommand("claude".to_string())),
+            }),
+            active_focus_pane_id: Some(43),
+            cwd_pane_id: Some(43),
+            cwd: Some(PathBuf::from("/Users/me/claude")),
+            pane_state_by_pane: HashMap::from([
+                (
+                    42,
+                    pane_state(Agent::Codex, AgentPanePhase::Running, PaneFocus::Unfocused, 1),
+                ),
+                (
+                    43,
+                    pane_state(Agent::Claude, AgentPanePhase::Running, PaneFocus::Focused, 2),
+                ),
+            ]),
+            ..CurrentTab::new(10)
+        };
+        let cwds_by_pane = HashMap::from([
+            (42, PathBuf::from("/Users/me/codex")),
+            (43, PathBuf::from("/Users/me/claude")),
+        ]);
+
+        pretty_assertions::assert_eq!(
+            current_tab.current_row_display_source(false, &cwds_by_pane),
+            CurrentTabDisplay {
+                pane_id: Some(42),
+                cwd: Some(PathBuf::from("/Users/me/codex")),
+                cmd: Cmd::agent(Agent::Codex, AgentState::Busy),
+                indicator: TabIndicator::Busy,
+                git_stat: GitStat::default(),
+            }
+        );
+    }
+
+    #[test]
+    fn test_current_row_display_source_uses_git_stat_for_display_cwd_only() {
+        let current_tab = CurrentTab {
+            pane_ids: [42, 43].into_iter().collect(),
+            git_stat: GitStat {
+                path: PathBuf::from("/Users/me/shell"),
+                insertions: 7,
+                ..GitStat::default()
+            },
+            pane_state_by_pane: HashMap::from([(
+                42,
+                pane_state(Agent::Codex, AgentPanePhase::Running, PaneFocus::Unfocused, 1),
+            )]),
+            ..CurrentTab::new(10)
+        };
+        let cwds_by_pane = HashMap::from([
+            (42, PathBuf::from("/Users/me/codex")),
+            (43, PathBuf::from("/Users/me/shell")),
+        ]);
+
+        let display = current_tab.current_row_display_source(false, &cwds_by_pane);
+
+        pretty_assertions::assert_eq!(display.pane_id, Some(42));
+        pretty_assertions::assert_eq!(display.cwd, Some(PathBuf::from("/Users/me/codex")));
+        pretty_assertions::assert_eq!(display.git_stat, GitStat::default());
+    }
+
+    #[test]
+    fn test_current_row_display_source_reuses_git_stat_for_same_display_cwd() {
+        let display_cwd = PathBuf::from("/Users/me/project");
+        let git_stat = GitStat {
+            path: display_cwd.clone(),
+            insertions: 7,
+            ..GitStat::default()
+        };
+        let current_tab = CurrentTab {
+            pane_ids: [42, 43].into_iter().collect(),
+            git_stat: git_stat.clone(),
+            pane_state_by_pane: HashMap::from([(
+                42,
+                pane_state(Agent::Codex, AgentPanePhase::Running, PaneFocus::Unfocused, 1),
+            )]),
+            ..CurrentTab::new(10)
+        };
+        let cwds_by_pane = HashMap::from([(42, display_cwd.clone()), (43, display_cwd)]);
+
+        let display = current_tab.current_row_display_source(false, &cwds_by_pane);
+
+        pretty_assertions::assert_eq!(display.pane_id, Some(42));
+        pretty_assertions::assert_eq!(display.git_stat, git_stat);
+    }
+
+    #[test]
+    fn test_current_row_display_source_uses_previous_same_pane_cwd_when_cache_misses() {
+        let current_tab = CurrentTab {
+            pane_ids: [42, 43].into_iter().collect(),
+            cwd_pane_id: Some(42),
+            cwd: Some(PathBuf::from("/Users/me/codex")),
+            pane_state_by_pane: HashMap::from([(
+                42,
+                pane_state(Agent::Codex, AgentPanePhase::Running, PaneFocus::Unfocused, 1),
+            )]),
+            ..CurrentTab::new(10)
+        };
+        let cwds_by_pane = HashMap::from([(43, PathBuf::from("/Users/me/other"))]);
+
+        pretty_assertions::assert_eq!(
+            current_tab.current_row_display_source(false, &cwds_by_pane).cwd,
+            Some(PathBuf::from("/Users/me/codex"))
         );
     }
 
