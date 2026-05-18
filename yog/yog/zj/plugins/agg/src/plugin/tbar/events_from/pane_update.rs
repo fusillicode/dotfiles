@@ -65,7 +65,7 @@ pub fn derive(
     let new_focused_pane = displayable_terminal_panes(panes)
         .find(|pane| pane.is_focused)
         .and_then(crate::plugin::pane::focused_pane_from_pane_info);
-    let new_display_pane = display_pane_for_manifest_tab(panes, display_tab_is_active, None);
+    let new_display_pane = display_pane_for_manifest_tab(panes, display_tab_is_active);
 
     if new_pane_ids != current_tab.pane_ids {
         let observed_pane_ids = new_pane_ids.clone();
@@ -118,7 +118,6 @@ pub fn derive(
     if let Some(event) = display_cwd_change(
         state,
         current_tab,
-        display_tab_is_active,
         display_metadata_changed,
         new_display_pane.as_ref(),
         &mut resolve_pane_cwd,
@@ -137,21 +136,19 @@ pub fn derive(
 fn display_cwd_change(
     state: &TbarState,
     current_tab: &CurrentTab,
-    display_tab_is_active: bool,
     display_metadata_changed: bool,
     display_pane: Option<&FocusedPane>,
     resolve_pane_cwd: &mut impl FnMut(u32) -> Option<PathBuf>,
 ) -> Option<Event> {
     let display_pane = display_pane?;
-    let pane_id = current_tab.display_cwd_pane_id(display_tab_is_active, Some(display_pane.id))?;
-    // Display metadata can move to an agent before its cwd is cached; retry until that pane has a cwd.
-    let cached_display_cwd = state.cwds_by_pane.get(&pane_id);
-    if !display_metadata_changed && cached_display_cwd.is_some() {
+    if !display_metadata_changed && current_tab.cwd.is_some() {
         return None;
     }
-    let new_cwd = resolve_pane_cwd(pane_id).or_else(|| cached_display_cwd.cloned())?;
-    (cached_display_cwd != Some(&new_cwd) || current_tab.cwd.as_ref() != Some(&new_cwd))
-        .then_some(Event::CwdChanged { pane_id, new_cwd })
+    let new_cwd = resolve_pane_cwd(display_pane.id).or_else(|| state.cwds_by_pane.get(&display_pane.id).cloned())?;
+    (current_tab.cwd.as_ref() != Some(&new_cwd)).then_some(Event::CwdChanged {
+        pane_id: display_pane.id,
+        new_cwd,
+    })
 }
 
 fn displayable_terminal_panes(panes: &[PaneInfo]) -> impl Iterator<Item = &PaneInfo> {
@@ -160,11 +157,7 @@ fn displayable_terminal_panes(panes: &[PaneInfo]) -> impl Iterator<Item = &PaneI
         .filter(|pane| crate::plugin::pane::is_displayable_terminal_pane(pane))
 }
 
-fn display_pane_for_manifest_tab(
-    panes: &[PaneInfo],
-    tab_is_active: bool,
-    existing_remote: Option<&StateSnapshotPayload>,
-) -> Option<FocusedPane> {
+fn display_pane_for_manifest_tab(panes: &[PaneInfo], tab_is_active: bool) -> Option<FocusedPane> {
     let mut focused_pane = None;
     let mut first_displayable_terminal_pane = None;
     for pane in displayable_terminal_panes(panes) {
@@ -178,60 +171,8 @@ fn display_pane_for_manifest_tab(
     if tab_is_active {
         focused_pane
     } else {
-        if let Some(snapshot_pane) = existing_remote
-            .filter(|remote| remote.seq > 0)
-            .and_then(|remote| manifest_agent_pane_for_snapshot(panes, remote))
-        {
-            return Some(snapshot_pane);
-        }
-        let focused_pane_is_agent = focused_pane.as_ref().is_some_and(|focused_pane| {
-            panes
-                .iter()
-                .find(|pane| pane.id == focused_pane.id && !pane.is_plugin)
-                .and_then(|pane| crate::plugin::pane::detected_agent_from_pane_info(pane, focused_pane))
-                .is_some()
-        });
-        if focused_pane_is_agent {
-            focused_pane
-        } else {
-            manifest_agent_pane(panes)
-                .or(focused_pane)
-                .or(first_displayable_terminal_pane)
-        }
+        focused_pane.or(first_displayable_terminal_pane)
     }
-}
-
-/// Issue: a remote snapshot can report several panes for the same agent.
-/// Prefer its focused pane when it still detects as that agent, then fall back to pane metadata.
-fn manifest_agent_pane_for_snapshot(panes: &[PaneInfo], snapshot: &StateSnapshotPayload) -> Option<FocusedPane> {
-    let agent = snapshot.cmd.tracked_agent()?;
-    let pane_for_id = |pane_id| -> Option<FocusedPane> {
-        let pane = displayable_terminal_panes(panes).find(|pane| pane.id == pane_id)?;
-        let focused_pane = crate::plugin::pane::focused_pane_from_pane_info(pane)?;
-        (crate::plugin::pane::detected_agent_from_pane_info(pane, &focused_pane) == Some(agent)).then_some(focused_pane)
-    };
-    if let Some(pane_id) = snapshot.focused_pane_id
-        && let Some(focused_pane) = pane_for_id(pane_id)
-    {
-        return Some(focused_pane);
-    }
-    let pane_id = snapshot
-        .pane_agents
-        .iter()
-        .find(|pane| pane.agent == agent && pane.indicator == snapshot.indicator)
-        .or_else(|| snapshot.pane_agents.iter().find(|pane| pane.agent == agent))
-        .map(|pane| pane.pane_id)
-        .or(snapshot.focused_pane_id)?;
-    pane_for_id(pane_id)
-}
-
-/// Issue: inactive manifest fallback used the last focused pane even when an idle agent existed.
-/// Prefer any agent pane so no-dot agent tabs still show the agent path.
-fn manifest_agent_pane(panes: &[PaneInfo]) -> Option<FocusedPane> {
-    displayable_terminal_panes(panes).find_map(|pane| {
-        let focused_pane = crate::plugin::pane::focused_pane_from_pane_info(pane)?;
-        crate::plugin::pane::detected_agent_from_pane_info(pane, &focused_pane).map(|_| focused_pane)
-    })
 }
 
 fn remote_tab_changes(
@@ -248,15 +189,14 @@ fn remote_tab_changes(
         let Some(source_plugin_id) = panes.iter().find(|pane| pane.is_plugin).map(|pane| pane.id) else {
             continue;
         };
-        let existing_remote = state.other_tabs.get(&source_plugin_id);
-        let Some(tab) = stable_tab_for_manifest_position(&state.all_tabs, tab_pos, panes, existing_remote.is_some())
-        else {
+        let existing_remote = state.other_tabs.contains_key(&source_plugin_id);
+        let Some(tab) = stable_tab_for_manifest_position(&state.all_tabs, tab_pos, panes, existing_remote) else {
             continue;
         };
         if state.current_tab_id() == Some(tab.tab_id) {
             continue;
         }
-        let Some(display_pane) = display_pane_for_manifest_tab(panes, tab.active, existing_remote) else {
+        let Some(display_pane) = display_pane_for_manifest_tab(panes, tab.active) else {
             continue;
         };
         let Some(pane) = panes.iter().find(|pane| pane.id == display_pane.id && !pane.is_plugin) else {
@@ -265,6 +205,7 @@ fn remote_tab_changes(
 
         let cwd = resolve_pane_cwd(display_pane.id).or_else(|| state.cwds_by_pane.get(&display_pane.id).cloned());
         let manifest_snapshot = snapshot_from_manifest_tab(tab.tab_id, &display_pane, pane, cwd);
+        let existing_remote = state.other_tabs.get(&source_plugin_id);
         let Some(snapshot) = remote_manifest_update(existing_remote, manifest_snapshot) else {
             continue;
         };
@@ -365,11 +306,9 @@ fn remote_manifest_update(
         indicator,
         ..
     } = manifest;
+    let hydrate_path = cwd.is_some() && existing.cwd != cwd;
+    let hydrate_focus = focused_pane_id.is_some() && existing.focused_pane_id != focused_pane_id;
     let seed_command = matches!(&existing.cmd, Cmd::None) && !matches!(&cmd, Cmd::None);
-    let hydrate_matches_command = existing.cmd.matches_manifest_hydration(&cmd);
-    let hydrate_path = hydrate_matches_command && cwd.is_some() && existing.cwd != cwd;
-    let hydrate_focus =
-        hydrate_matches_command && focused_pane_id.is_some() && existing.focused_pane_id != focused_pane_id;
     if !(hydrate_path || hydrate_focus || seed_command) {
         return None;
     }
@@ -501,7 +440,6 @@ mod tests {
     use crate::plugin::pane::FocusedPane;
     use crate::plugin::pane::FocusedPaneLabel;
     use crate::plugin::tbar::Event;
-    use crate::plugin::tbar::PaneAgentSnapshot;
     use crate::plugin::tbar::StateSnapshotPayload;
     use crate::plugin::tbar::TbarState;
     use crate::plugin::tbar::current_tab::AgentPanePhase;
@@ -827,121 +765,6 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_pane_update_retries_missing_inactive_agent_cwd() {
-        let mut state = TbarState {
-            plugin_id: 7,
-            known_active_tab_id: Some(20),
-            all_tabs: vec![tab_with_name(10, 0, "Tab #1")],
-            current_tab: Some(CurrentTab {
-                pane_ids: [42, 43].into_iter().collect(),
-                focused_pane: Some(FocusedPane {
-                    id: 43,
-                    label: Some(FocusedPaneLabel::TerminalCommand("zsh".to_string())),
-                }),
-                cwd: Some(PathBuf::from("/Users/me/focused")),
-                last_focused_agent_pane_id: Some(42),
-                pane_state_by_pane: HashMap::from([(
-                    42,
-                    pane_state(Agent::Codex, AgentPanePhase::AttentionSeen, PaneFocus::Unfocused, 1),
-                )]),
-                ..CurrentTab::new(10)
-            }),
-            sync_requested: true,
-            cwds_by_pane: HashMap::from([(43, PathBuf::from("/Users/me/focused"))]),
-            home_dir: PathBuf::from("/Users/me"),
-            ..Default::default()
-        };
-        let manifest = manifest(vec![(
-            0,
-            vec![
-                plugin_pane(7),
-                terminal_pane_with_command(42, false, "codex"),
-                terminal_pane_with_command(43, true, "/bin/zsh"),
-            ],
-        )]);
-
-        let first_events = derive(&state, &manifest, |_| None);
-        pretty_assertions::assert_eq!(
-            first_events,
-            vec![Event::FocusChanged {
-                new_pane: Some(FocusedPane {
-                    id: 42,
-                    label: Some(FocusedPaneLabel::TerminalCommand("codex".to_string())),
-                }),
-                acknowledge_existing_attention: false,
-            }]
-        );
-
-        let _ = state.apply_all(&first_events);
-        assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
-        pretty_assertions::assert_eq!(current_tab.display_cwd(false, &state.cwds_by_pane), None);
-
-        let second_events = derive(&state, &manifest, |pane_id| {
-            (pane_id == 42).then(|| PathBuf::from("/Users/me/agent"))
-        });
-        pretty_assertions::assert_eq!(
-            second_events,
-            vec![Event::CwdChanged {
-                pane_id: 42,
-                new_cwd: PathBuf::from("/Users/me/agent"),
-            }]
-        );
-    }
-
-    #[test]
-    fn test_apply_pane_update_inactive_cwd_uses_busy_agent_winner() {
-        let state = TbarState {
-            plugin_id: 7,
-            known_active_tab_id: Some(20),
-            all_tabs: vec![tab_with_name(10, 0, "Tab #1")],
-            current_tab: Some(CurrentTab {
-                pane_ids: [41, 42].into_iter().collect(),
-                focused_pane: Some(FocusedPane {
-                    id: 42,
-                    label: Some(FocusedPaneLabel::TerminalCommand("codex".to_string())),
-                }),
-                cwd: Some(PathBuf::from("/Users/me/codex")),
-                last_focused_agent_pane_id: Some(42),
-                pane_state_by_pane: HashMap::from([
-                    (
-                        41,
-                        pane_state(Agent::Claude, AgentPanePhase::Running, PaneFocus::Unfocused, 1),
-                    ),
-                    (
-                        42,
-                        pane_state(Agent::Codex, AgentPanePhase::AttentionSeen, PaneFocus::Focused, 2),
-                    ),
-                ]),
-                ..CurrentTab::new(10)
-            }),
-            sync_requested: true,
-            cwds_by_pane: HashMap::from([(42, PathBuf::from("/Users/me/codex"))]),
-            home_dir: PathBuf::from("/Users/me"),
-            ..Default::default()
-        };
-        let manifest = manifest(vec![(
-            0,
-            vec![
-                plugin_pane(7),
-                terminal_pane_with_command(41, false, "claude"),
-                terminal_pane_with_command(42, true, "codex"),
-            ],
-        )]);
-
-        let events = derive(&state, &manifest, |pane_id| {
-            (pane_id == 41).then(|| PathBuf::from("/Users/me/claude"))
-        });
-
-        pretty_assertions::assert_eq!(
-            events,
-            vec![Event::CwdChanged {
-                pane_id: 41,
-                new_cwd: PathBuf::from("/Users/me/claude"),
-            }]
-        );
-    }
-
-    #[test]
     fn test_apply_pane_update_hydrates_remote_tabs_from_manifest() {
         let mut state = TbarState {
             plugin_id: 7,
@@ -999,457 +822,6 @@ mod tests {
         assert2::assert!(let Some(row) = state.frame.get(1));
         pretty_assertions::assert_eq!(row.path_label, "~/project");
         pretty_assertions::assert_eq!(row.cmd, Cmd::agent(Agent::Codex, AgentState::Acknowledged));
-    }
-
-    #[test]
-    fn test_apply_pane_update_remote_inactive_tab_prefers_idle_agent_pane_cwd() {
-        let state = TbarState {
-            plugin_id: 7,
-            known_active_tab_id: Some(10),
-            all_tabs: vec![
-                TabInfo {
-                    active: true,
-                    ..tab_with_name(10, 0, "Tab #1")
-                },
-                tab_with_name(20, 1, "Tab #2"),
-            ],
-            current_tab: Some(CurrentTab {
-                pane_ids: std::iter::once(42).collect(),
-                focused_pane: Some(FocusedPane { id: 42, label: None }),
-                active_focus_pane_id: Some(42),
-                cwd: Some(PathBuf::from("/Users/me/current")),
-                ..CurrentTab::new(10)
-            }),
-            other_tabs: HashMap::from([(8, snapshot(20, 0, Cmd::None, TabIndicator::NoAgent))]),
-            sync_requested: true,
-            home_dir: PathBuf::from("/Users/me"),
-            ..Default::default()
-        };
-
-        let events = derive(
-            &state,
-            &manifest(vec![
-                (
-                    0,
-                    vec![plugin_pane(7), terminal_pane_with_command(42, true, "/bin/zsh")],
-                ),
-                (
-                    1,
-                    vec![
-                        plugin_pane(8),
-                        terminal_pane_with_command(43, false, "codex"),
-                        terminal_pane_with_command(44, true, "/bin/zsh"),
-                    ],
-                ),
-            ]),
-            |pane_id| match pane_id {
-                43 => Some(PathBuf::from("/Users/me/agent")),
-                44 => Some(PathBuf::from("/Users/me/focused")),
-                _ => None,
-            },
-        );
-
-        pretty_assertions::assert_eq!(
-            events,
-            vec![Event::RemoteTabUpdated {
-                source_plugin_id: 8,
-                snapshot: StateSnapshotPayload {
-                    tab_id: 20,
-                    seq: 0,
-                    focused_pane_id: Some(43),
-                    cwd: Some(PathBuf::from("/Users/me/agent")),
-                    cmd: Cmd::agent(Agent::Codex, AgentState::Acknowledged),
-                    indicator: TabIndicator::Seen,
-                    git_stat: GitStat::default(),
-                    pane_agents: vec![],
-                },
-                evict_ids: vec![],
-            }]
-        );
-    }
-
-    #[test]
-    fn test_apply_pane_update_remote_inactive_tab_keeps_existing_agent_cwd_aligned() {
-        let state = TbarState {
-            plugin_id: 7,
-            known_active_tab_id: Some(10),
-            all_tabs: vec![
-                TabInfo {
-                    active: true,
-                    ..tab_with_name(10, 0, "Tab #1")
-                },
-                tab_with_name(20, 1, "Tab #2"),
-            ],
-            current_tab: Some(CurrentTab {
-                pane_ids: std::iter::once(42).collect(),
-                focused_pane: Some(FocusedPane { id: 42, label: None }),
-                active_focus_pane_id: Some(42),
-                cwd: Some(PathBuf::from("/Users/me/current")),
-                ..CurrentTab::new(10)
-            }),
-            other_tabs: HashMap::from([(
-                8,
-                StateSnapshotPayload {
-                    tab_id: 20,
-                    seq: 7,
-                    focused_pane_id: Some(44),
-                    cwd: Some(PathBuf::from("/Users/me/old")),
-                    cmd: Cmd::agent(Agent::Claude, AgentState::Acknowledged),
-                    indicator: TabIndicator::Seen,
-                    git_stat: GitStat::default(),
-                    pane_agents: vec![
-                        PaneAgentSnapshot {
-                            pane_id: 43,
-                            agent: Agent::Codex,
-                            indicator: TabIndicator::Seen,
-                        },
-                        PaneAgentSnapshot {
-                            pane_id: 45,
-                            agent: Agent::Claude,
-                            indicator: TabIndicator::Seen,
-                        },
-                    ],
-                },
-            )]),
-            sync_requested: true,
-            home_dir: PathBuf::from("/Users/me"),
-            ..Default::default()
-        };
-
-        let events = derive(
-            &state,
-            &manifest(vec![
-                (
-                    0,
-                    vec![plugin_pane(7), terminal_pane_with_command(42, true, "/bin/zsh")],
-                ),
-                (
-                    1,
-                    vec![
-                        plugin_pane(8),
-                        terminal_pane_with_command(43, false, "codex"),
-                        terminal_pane_with_command(44, true, "/bin/zsh"),
-                        terminal_pane_with_command(45, false, "claude"),
-                    ],
-                ),
-            ]),
-            |pane_id| match pane_id {
-                43 => Some(PathBuf::from("/Users/me/codex")),
-                44 => Some(PathBuf::from("/Users/me/focused")),
-                45 => Some(PathBuf::from("/Users/me/claude")),
-                _ => None,
-            },
-        );
-
-        pretty_assertions::assert_eq!(
-            events,
-            vec![Event::RemoteTabUpdated {
-                source_plugin_id: 8,
-                snapshot: StateSnapshotPayload {
-                    tab_id: 20,
-                    seq: 7,
-                    focused_pane_id: Some(45),
-                    cwd: Some(PathBuf::from("/Users/me/claude")),
-                    cmd: Cmd::agent(Agent::Claude, AgentState::Acknowledged),
-                    indicator: TabIndicator::Seen,
-                    git_stat: GitStat::default(),
-                    pane_agents: vec![
-                        PaneAgentSnapshot {
-                            pane_id: 43,
-                            agent: Agent::Codex,
-                            indicator: TabIndicator::Seen,
-                        },
-                        PaneAgentSnapshot {
-                            pane_id: 45,
-                            agent: Agent::Claude,
-                            indicator: TabIndicator::Seen,
-                        },
-                    ],
-                },
-                evict_ids: vec![],
-            }]
-        );
-    }
-
-    #[test]
-    fn test_apply_pane_update_remote_inactive_tab_prefers_snapshot_focus_for_same_agent() {
-        let state = TbarState {
-            plugin_id: 7,
-            known_active_tab_id: Some(10),
-            all_tabs: vec![
-                TabInfo {
-                    active: true,
-                    ..tab_with_name(10, 0, "Tab #1")
-                },
-                tab_with_name(20, 1, "Tab #2"),
-            ],
-            current_tab: Some(CurrentTab {
-                pane_ids: std::iter::once(42).collect(),
-                focused_pane: Some(FocusedPane { id: 42, label: None }),
-                active_focus_pane_id: Some(42),
-                cwd: Some(PathBuf::from("/Users/me/current")),
-                ..CurrentTab::new(10)
-            }),
-            other_tabs: HashMap::from([(
-                8,
-                StateSnapshotPayload {
-                    tab_id: 20,
-                    seq: 7,
-                    focused_pane_id: Some(45),
-                    cwd: Some(PathBuf::from("/Users/me/old")),
-                    cmd: Cmd::agent(Agent::Codex, AgentState::Acknowledged),
-                    indicator: TabIndicator::Seen,
-                    git_stat: GitStat::default(),
-                    pane_agents: vec![
-                        PaneAgentSnapshot {
-                            pane_id: 43,
-                            agent: Agent::Codex,
-                            indicator: TabIndicator::Seen,
-                        },
-                        PaneAgentSnapshot {
-                            pane_id: 45,
-                            agent: Agent::Codex,
-                            indicator: TabIndicator::Seen,
-                        },
-                    ],
-                },
-            )]),
-            sync_requested: true,
-            home_dir: PathBuf::from("/Users/me"),
-            ..Default::default()
-        };
-
-        let events = derive(
-            &state,
-            &manifest(vec![
-                (
-                    0,
-                    vec![plugin_pane(7), terminal_pane_with_command(42, true, "/bin/zsh")],
-                ),
-                (
-                    1,
-                    vec![
-                        plugin_pane(8),
-                        terminal_pane_with_command(43, false, "codex"),
-                        terminal_pane_with_command(44, true, "/bin/zsh"),
-                        terminal_pane_with_command(45, false, "codex"),
-                    ],
-                ),
-            ]),
-            |pane_id| match pane_id {
-                43 => Some(PathBuf::from("/Users/me/other-codex")),
-                44 => Some(PathBuf::from("/Users/me/focused")),
-                45 => Some(PathBuf::from("/Users/me/codex-winner")),
-                _ => None,
-            },
-        );
-
-        pretty_assertions::assert_eq!(
-            events,
-            vec![Event::RemoteTabUpdated {
-                source_plugin_id: 8,
-                snapshot: StateSnapshotPayload {
-                    tab_id: 20,
-                    seq: 7,
-                    focused_pane_id: Some(45),
-                    cwd: Some(PathBuf::from("/Users/me/codex-winner")),
-                    cmd: Cmd::agent(Agent::Codex, AgentState::Acknowledged),
-                    indicator: TabIndicator::Seen,
-                    git_stat: GitStat::default(),
-                    pane_agents: vec![
-                        PaneAgentSnapshot {
-                            pane_id: 43,
-                            agent: Agent::Codex,
-                            indicator: TabIndicator::Seen,
-                        },
-                        PaneAgentSnapshot {
-                            pane_id: 45,
-                            agent: Agent::Codex,
-                            indicator: TabIndicator::Seen,
-                        },
-                    ],
-                },
-                evict_ids: vec![],
-            }]
-        );
-    }
-
-    #[test]
-    fn test_apply_pane_update_remote_inactive_tab_skips_cwd_from_different_agent() {
-        let state = TbarState {
-            plugin_id: 7,
-            known_active_tab_id: Some(10),
-            all_tabs: vec![
-                TabInfo {
-                    active: true,
-                    ..tab_with_name(10, 0, "Tab #1")
-                },
-                tab_with_name(20, 1, "Tab #2"),
-            ],
-            current_tab: Some(CurrentTab {
-                pane_ids: std::iter::once(42).collect(),
-                focused_pane: Some(FocusedPane { id: 42, label: None }),
-                active_focus_pane_id: Some(42),
-                cwd: Some(PathBuf::from("/Users/me/current")),
-                ..CurrentTab::new(10)
-            }),
-            other_tabs: HashMap::from([(
-                8,
-                StateSnapshotPayload {
-                    tab_id: 20,
-                    seq: 7,
-                    focused_pane_id: Some(45),
-                    cwd: Some(PathBuf::from("/Users/me/claude")),
-                    cmd: Cmd::agent(Agent::Claude, AgentState::Acknowledged),
-                    indicator: TabIndicator::Seen,
-                    git_stat: GitStat::default(),
-                    pane_agents: vec![],
-                },
-            )]),
-            sync_requested: true,
-            home_dir: PathBuf::from("/Users/me"),
-            ..Default::default()
-        };
-
-        let events = derive(
-            &state,
-            &manifest(vec![
-                (
-                    0,
-                    vec![plugin_pane(7), terminal_pane_with_command(42, true, "/bin/zsh")],
-                ),
-                (
-                    1,
-                    vec![
-                        plugin_pane(8),
-                        terminal_pane_with_command(43, false, "codex"),
-                        terminal_pane_with_command(44, true, "/bin/zsh"),
-                    ],
-                ),
-            ]),
-            |pane_id| match pane_id {
-                43 => Some(PathBuf::from("/Users/me/codex")),
-                44 => Some(PathBuf::from("/Users/me/focused")),
-                _ => None,
-            },
-        );
-
-        pretty_assertions::assert_eq!(events, vec![]);
-    }
-
-    #[test]
-    fn test_apply_pane_update_remote_inactive_tab_skips_agent_cwd_for_non_agent_snapshot() {
-        let state = TbarState {
-            plugin_id: 7,
-            known_active_tab_id: Some(10),
-            all_tabs: vec![
-                TabInfo {
-                    active: true,
-                    ..tab_with_name(10, 0, "Tab #1")
-                },
-                tab_with_name(20, 1, "Tab #2"),
-            ],
-            current_tab: Some(CurrentTab {
-                pane_ids: std::iter::once(42).collect(),
-                focused_pane: Some(FocusedPane { id: 42, label: None }),
-                active_focus_pane_id: Some(42),
-                cwd: Some(PathBuf::from("/Users/me/current")),
-                ..CurrentTab::new(10)
-            }),
-            other_tabs: HashMap::from([(
-                8,
-                StateSnapshotPayload {
-                    tab_id: 20,
-                    seq: 7,
-                    focused_pane_id: Some(44),
-                    cwd: Some(PathBuf::from("/Users/me/focused")),
-                    cmd: Cmd::Running("zsh".to_string()),
-                    indicator: TabIndicator::NoAgent,
-                    git_stat: GitStat::default(),
-                    pane_agents: vec![],
-                },
-            )]),
-            sync_requested: true,
-            home_dir: PathBuf::from("/Users/me"),
-            ..Default::default()
-        };
-
-        let events = derive(
-            &state,
-            &manifest(vec![
-                (
-                    0,
-                    vec![plugin_pane(7), terminal_pane_with_command(42, true, "/bin/zsh")],
-                ),
-                (
-                    1,
-                    vec![
-                        plugin_pane(8),
-                        terminal_pane_with_command(43, false, "codex"),
-                        terminal_pane_with_command(44, true, "/bin/zsh"),
-                    ],
-                ),
-            ]),
-            |pane_id| match pane_id {
-                43 => Some(PathBuf::from("/Users/me/codex")),
-                44 => Some(PathBuf::from("/Users/me/focused")),
-                _ => None,
-            },
-        );
-
-        pretty_assertions::assert_eq!(events, vec![]);
-    }
-
-    #[test]
-    fn test_apply_pane_update_remote_inactive_tab_skips_cwd_for_different_running_command_snapshot() {
-        let state = TbarState {
-            plugin_id: 7,
-            known_active_tab_id: Some(10),
-            all_tabs: vec![
-                TabInfo {
-                    active: true,
-                    ..tab_with_name(10, 0, "Tab #1")
-                },
-                tab_with_name(20, 1, "Tab #2"),
-            ],
-            current_tab: Some(CurrentTab {
-                pane_ids: std::iter::once(42).collect(),
-                focused_pane: Some(FocusedPane { id: 42, label: None }),
-                active_focus_pane_id: Some(42),
-                cwd: Some(PathBuf::from("/Users/me/current")),
-                ..CurrentTab::new(10)
-            }),
-            other_tabs: HashMap::from([(
-                8,
-                StateSnapshotPayload {
-                    tab_id: 20,
-                    seq: 7,
-                    focused_pane_id: Some(45),
-                    cwd: Some(PathBuf::from("/Users/me/gkg")),
-                    cmd: Cmd::Running("gkg".to_string()),
-                    indicator: TabIndicator::NoAgent,
-                    git_stat: GitStat::default(),
-                    pane_agents: vec![],
-                },
-            )]),
-            sync_requested: true,
-            home_dir: PathBuf::from("/Users/me"),
-            ..Default::default()
-        };
-
-        let events = derive(
-            &state,
-            &manifest(vec![
-                (
-                    0,
-                    vec![plugin_pane(7), terminal_pane_with_command(42, true, "/bin/zsh")],
-                ),
-                (1, vec![plugin_pane(8), terminal_pane_with_command(43, true, "cargo")]),
-            ]),
-            |pane_id| (pane_id == 43).then(|| PathBuf::from("/Users/me/cargo")),
-        );
-
-        pretty_assertions::assert_eq!(events, vec![]);
     }
 
     #[test]

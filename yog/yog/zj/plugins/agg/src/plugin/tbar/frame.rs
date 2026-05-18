@@ -23,10 +23,9 @@ fn compute_frame(state: &TbarState) -> Vec<TabRow> {
                 && let Some(current_tab) = state.current_tab.as_ref()
             {
                 let (cmd, indicator) = current_tab.current_row_display(current_tab_is_active);
-                let cwd = current_tab.display_cwd(current_tab_is_active, &state.cwds_by_pane);
                 return TabRow::new(
                     tab,
-                    cwd,
+                    current_tab.cwd.as_ref(),
                     cmd,
                     indicator,
                     current_tab.git_stat.clone(),
@@ -60,7 +59,6 @@ fn remote_snapshot_for_tab(state: &TbarState, tab_id: usize) -> Option<&StateSna
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use std::path::PathBuf;
 
     use agg::AgentState;
     use agg::Cmd;
@@ -171,52 +169,6 @@ mod tests {
                 indicator: TabIndicator::Seen,
                 git: GitStat::default(),
             }]
-        );
-    }
-
-    #[test]
-    fn test_compute_frame_inactive_current_tab_uses_agent_pane_cwd() {
-        let state = TbarState {
-            known_active_tab_id: Some(20),
-            all_tabs: vec![
-                tab_with_name(10, 0, "agent"),
-                TabInfo {
-                    active: true,
-                    ..tab_with_name(20, 1, "other")
-                },
-            ],
-            current_tab: Some(CurrentTab {
-                pane_ids: [42, 43].into_iter().collect(),
-                focused_pane: Some(FocusedPane {
-                    id: 43,
-                    label: Some(FocusedPaneLabel::TerminalCommand("zsh".to_string())),
-                }),
-                cwd: Some(PathBuf::from("/Users/me/focused")),
-                pane_state_by_pane: HashMap::from([(
-                    42,
-                    pane_state(Agent::Codex, AgentPanePhase::Running, PaneFocus::Unfocused, 1),
-                )]),
-                ..CurrentTab::new(10)
-            }),
-            cwds_by_pane: HashMap::from([
-                (42, PathBuf::from("/Users/me/agent")),
-                (43, PathBuf::from("/Users/me/focused")),
-            ]),
-            home_dir: PathBuf::from("/Users/me"),
-            ..Default::default()
-        };
-
-        let frame = compute_frame(&state);
-
-        pretty_assertions::assert_eq!(
-            frame[0],
-            TabRow {
-                active: false,
-                path_label: "~/agent".to_string(),
-                cmd: Cmd::agent(Agent::Codex, AgentState::Busy),
-                indicator: TabIndicator::Busy,
-                git: GitStat::default(),
-            }
         );
     }
 
