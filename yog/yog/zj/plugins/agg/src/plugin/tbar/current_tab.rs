@@ -114,28 +114,6 @@ impl CurrentTab {
         is_active && self.pane_ids.len() > 1
     }
 
-    /// Issue: inactive rows can mix a sibling agent with the last focused cwd.
-    /// Use only the agent winner path; a missing cache is better than a stale sibling cwd.
-    pub fn display_cwd<'a>(&'a self, is_active: bool, cwds_by_pane: &'a HashMap<u32, PathBuf>) -> Option<&'a PathBuf> {
-        if is_active {
-            return self.cwd.as_ref();
-        }
-        if let Some(pane_id) = self.display_cwd_pane_id(is_active, None) {
-            return cwds_by_pane.get(&pane_id);
-        }
-        self.cwd.as_ref()
-    }
-
-    /// Returns the pane whose cwd should be hydrated for row display.
-    /// Active rows use the observed display pane; inactive rows use the aggregate winner first.
-    pub fn display_cwd_pane_id(&self, is_active: bool, display_pane_id: Option<u32>) -> Option<u32> {
-        if is_active {
-            display_pane_id
-        } else {
-            self.winner_pane_id().or(display_pane_id)
-        }
-    }
-
     fn winner_pane_id(&self) -> Option<u32> {
         self.first_pane_in_phase(AgentPanePhase::AttentionUnseen)
             .or_else(|| self.first_pane_in_phase(AgentPanePhase::Running))
@@ -408,72 +386,6 @@ mod tests {
             current_tab.current_row_display(true),
             (Cmd::None, TabIndicator::NoAgent)
         );
-    }
-
-    #[test]
-    fn test_display_cwd_inactive_uses_seen_agent_pane() {
-        let focused_cwd = PathBuf::from("/Users/me/focused");
-        let agent_cwd = PathBuf::from("/Users/me/agent");
-        let other_agent_cwd = PathBuf::from("/Users/me/other-agent");
-        let current_tab = CurrentTab {
-            pane_ids: [41, 42, 43].into_iter().collect(),
-            focused_pane: Some(FocusedPane {
-                id: 43,
-                label: Some(FocusedPaneLabel::TerminalCommand("zsh".to_string())),
-            }),
-            cwd: Some(focused_cwd.clone()),
-            last_focused_agent_pane_id: Some(42),
-            pane_state_by_pane: HashMap::from([
-                (
-                    41,
-                    pane_state(Agent::Claude, AgentPanePhase::AttentionSeen, PaneFocus::Unfocused, 1),
-                ),
-                (
-                    42,
-                    pane_state(Agent::Codex, AgentPanePhase::AttentionSeen, PaneFocus::Unfocused, 2),
-                ),
-            ]),
-            ..CurrentTab::new(10)
-        };
-        let cwds_by_pane = HashMap::from([
-            (41, other_agent_cwd),
-            (42, agent_cwd.clone()),
-            (43, focused_cwd.clone()),
-        ]);
-
-        pretty_assertions::assert_eq!(
-            current_tab.current_row_display(false),
-            (Cmd::agent(Agent::Codex, AgentState::Acknowledged), TabIndicator::Seen)
-        );
-        pretty_assertions::assert_eq!(current_tab.display_cwd(false, &cwds_by_pane), Some(&agent_cwd));
-        pretty_assertions::assert_eq!(current_tab.display_cwd(true, &cwds_by_pane), Some(&focused_cwd));
-    }
-
-    #[test]
-    fn test_display_cwd_inactive_does_not_fallback_to_focused_cwd_when_agent_cwd_missing() {
-        let focused_cwd = PathBuf::from("/Users/me/focused");
-        let current_tab = CurrentTab {
-            pane_ids: [42, 43].into_iter().collect(),
-            focused_pane: Some(FocusedPane {
-                id: 43,
-                label: Some(FocusedPaneLabel::TerminalCommand("zsh".to_string())),
-            }),
-            cwd: Some(focused_cwd.clone()),
-            last_focused_agent_pane_id: Some(42),
-            pane_state_by_pane: HashMap::from([(
-                42,
-                pane_state(Agent::Codex, AgentPanePhase::AttentionSeen, PaneFocus::Unfocused, 1),
-            )]),
-            ..CurrentTab::new(10)
-        };
-        let cwds_by_pane = HashMap::from([(43, focused_cwd.clone())]);
-
-        pretty_assertions::assert_eq!(
-            current_tab.current_row_display(false),
-            (Cmd::agent(Agent::Codex, AgentState::Acknowledged), TabIndicator::Seen)
-        );
-        pretty_assertions::assert_eq!(current_tab.display_cwd(false, &cwds_by_pane), None);
-        pretty_assertions::assert_eq!(current_tab.display_cwd(true, &cwds_by_pane), Some(&focused_cwd));
     }
 
     #[test]

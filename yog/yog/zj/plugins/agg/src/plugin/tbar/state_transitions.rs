@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::path::PathBuf;
 
 use zellij_tile::prelude::TabInfo;
 
@@ -42,7 +41,21 @@ impl TbarState {
                 new_pane,
                 acknowledge_existing_attention,
             } => self.apply_focus_changed(new_pane.as_ref(), *acknowledge_existing_attention),
-            Event::CwdChanged { pane_id, new_cwd } => self.apply_cwd_changed(*pane_id, new_cwd),
+            Event::CwdChanged { pane_id, new_cwd } => {
+                self.cwds_by_pane.insert(*pane_id, new_cwd.clone());
+                if let Some(current_tab) = self.current_tab.as_mut() {
+                    let is_display_pane = current_tab
+                        .focused_pane
+                        .as_ref()
+                        .map(|focused_pane| focused_pane.id)
+                        .or(current_tab.active_focus_pane_id)
+                        == Some(*pane_id);
+                    if is_display_pane && current_tab.cwd.as_ref() != Some(new_cwd) {
+                        current_tab.cwd = Some(new_cwd.clone());
+                        current_tab.seq = current_tab.seq.saturating_add(1);
+                    }
+                }
+            }
             Event::AgentDetected { pane_id, agent } => {
                 if let Some(current_tab) = self.current_tab.as_mut() {
                     current_tab.transition_phase(*pane_id, *agent, AgentPanePhase::AttentionSeen);
@@ -122,37 +135,6 @@ impl TbarState {
             current_tab.clear_active_focus();
         }
         current_tab.seq = current_tab.seq.saturating_add(1);
-    }
-
-    fn apply_cwd_changed(&mut self, pane_id: u32, new_cwd: &PathBuf) {
-        let is_active = self.current_tab_is_active();
-        let old_display_cwd = self
-            .current_tab
-            .as_ref()
-            .and_then(|current_tab| current_tab.display_cwd(is_active, &self.cwds_by_pane))
-            .cloned();
-        self.cwds_by_pane.insert(pane_id, new_cwd.clone());
-        let new_display_cwd = self
-            .current_tab
-            .as_ref()
-            .and_then(|current_tab| current_tab.display_cwd(is_active, &self.cwds_by_pane))
-            .cloned();
-        if let Some(current_tab) = self.current_tab.as_mut() {
-            let updates_focused_cwd_cache = current_tab
-                .focused_pane
-                .as_ref()
-                .map(|focused_pane| focused_pane.id)
-                .or(current_tab.active_focus_pane_id)
-                == Some(pane_id);
-            let focused_cwd_cache_changed = updates_focused_cwd_cache && current_tab.cwd.as_ref() != Some(new_cwd);
-            if focused_cwd_cache_changed {
-                current_tab.cwd = Some(new_cwd.clone());
-            }
-            // Non-focused pane cwd can drive inactive display, so seq tracks the chosen display cwd.
-            if focused_cwd_cache_changed || old_display_cwd != new_display_cwd {
-                current_tab.seq = current_tab.seq.saturating_add(1);
-            }
-        }
     }
 
     fn apply_remote_tab_updated(&mut self, source_plugin_id: u32, snapshot: &StateSnapshotPayload, evict_ids: &[u32]) {
@@ -289,46 +271,6 @@ mod tests {
 
         assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
         pretty_assertions::assert_eq!(current_tab.cwd, Some(PathBuf::from("/Users/me/project")));
-    }
-
-    #[test]
-    fn test_cwd_changed_for_inactive_agent_display_pane_bumps_seq() {
-        let mut state = TbarState {
-            known_active_tab_id: Some(20),
-            current_tab: Some(CurrentTab {
-                seq: 7,
-                pane_ids: [42, 43].into_iter().collect(),
-                focused_pane: Some(FocusedPane {
-                    id: 43,
-                    label: Some(FocusedPaneLabel::TerminalCommand("zsh".to_string())),
-                }),
-                cwd: Some(PathBuf::from("/Users/me/focused")),
-                pane_state_by_pane: HashMap::from([(
-                    42,
-                    pane_state(Agent::Codex, AgentPanePhase::Running, PaneFocus::Unfocused, 1),
-                )]),
-                ..CurrentTab::new(10)
-            }),
-            cwds_by_pane: HashMap::from([
-                (42, PathBuf::from("/Users/me/agent-old")),
-                (43, PathBuf::from("/Users/me/focused")),
-            ]),
-            ..Default::default()
-        };
-
-        let _ = state.apply_all(&[Event::CwdChanged {
-            pane_id: 42,
-            new_cwd: PathBuf::from("/Users/me/agent-new"),
-        }]);
-
-        assert2::assert!(let Some(current_tab) = state.current_tab.as_ref());
-        let expected_display_cwd = PathBuf::from("/Users/me/agent-new");
-        pretty_assertions::assert_eq!(current_tab.seq, 8);
-        pretty_assertions::assert_eq!(current_tab.cwd, Some(PathBuf::from("/Users/me/focused")));
-        pretty_assertions::assert_eq!(
-            current_tab.display_cwd(false, &state.cwds_by_pane),
-            Some(&expected_display_cwd)
-        );
     }
 
     #[test]
