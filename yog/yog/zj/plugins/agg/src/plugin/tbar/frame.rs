@@ -22,13 +22,13 @@ fn compute_frame(state: &TbarState) -> Vec<TabRow> {
             if state.current_tab_id() == Some(tab.tab_id)
                 && let Some(current_tab) = state.current_tab.as_ref()
             {
-                let (cmd, indicator) = current_tab.current_row_display(current_tab_is_active);
+                let display = current_tab.current_row_display_source(current_tab_is_active, &state.cwds_by_pane);
                 return TabRow::new(
                     tab,
-                    current_tab.cwd.as_ref(),
-                    cmd,
-                    indicator,
-                    current_tab.git_stat.clone(),
+                    display.cwd.as_ref(),
+                    display.cmd,
+                    display.indicator,
+                    display.git_stat,
                     state.home_dir.as_path(),
                 );
             }
@@ -59,6 +59,7 @@ fn remote_snapshot_for_tab(state: &TbarState, tab_id: usize) -> Option<&StateSna
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::path::PathBuf;
 
     use agg::AgentState;
     use agg::Cmd;
@@ -71,6 +72,7 @@ mod tests {
     use crate::plugin::pane::FocusedPaneLabel;
     use crate::plugin::tbar::Event;
     use crate::plugin::tbar::current_tab::AgentPanePhase;
+    use crate::plugin::tbar::current_tab::AgentPaneSource;
     use crate::plugin::tbar::current_tab::CurrentTab;
     use crate::plugin::tbar::current_tab::PaneFocus;
     use crate::plugin::tbar::frame::*;
@@ -98,6 +100,11 @@ mod tests {
                 )]),
                 ..CurrentTab::new(10)
             }),
+            cwds_by_pane: HashMap::from([
+                (42, PathBuf::from("/Users/me/codex")),
+                (43, PathBuf::from("/Users/me/claude")),
+            ]),
+            home_dir: PathBuf::from("/Users/me"),
             ..Default::default()
         };
 
@@ -123,10 +130,13 @@ mod tests {
                     new_pane: Some(FocusedPane { id: 43, label: None }),
                     acknowledge_existing_attention: true,
                 },
+                Event::CwdChanged {
+                    pane_id: 43,
+                    new_cwd: PathBuf::from("/Users/me/claude"),
+                },
                 Event::SyncRequested,
             ]
         );
-
         let claude_events = apply_pane_update(
             &mut state,
             &manifest(vec![(
@@ -151,6 +161,7 @@ mod tests {
                 Event::AgentDetected {
                     pane_id: 43,
                     agent: Agent::Claude,
+                    source: AgentPaneSource::Manifest,
                 },
             ]
         );
@@ -164,9 +175,47 @@ mod tests {
             frame,
             vec![TabRow {
                 active: true,
-                path_label: "-".to_string(),
+                path_label: "~/claude".to_string(),
                 cmd: Cmd::agent(Agent::Claude, AgentState::Acknowledged),
                 indicator: TabIndicator::Seen,
+                git: GitStat::default(),
+            }]
+        );
+    }
+
+    #[test]
+    fn test_compute_frame_active_mat_focused_shell_uses_focused_cwd() {
+        let state = TbarState {
+            known_active_tab_id: Some(10),
+            all_tabs: vec![TabInfo {
+                active: true,
+                ..tab_with_name(10, 0, "a")
+            }],
+            current_tab: Some(CurrentTab {
+                pane_ids: [42, 43].into_iter().collect(),
+                focused_pane: Some(FocusedPane { id: 43, label: None }),
+                active_focus_pane_id: Some(43),
+                pane_state_by_pane: HashMap::from([(
+                    42,
+                    pane_state(Agent::Codex, AgentPanePhase::Running, PaneFocus::Unfocused, 1),
+                )]),
+                ..CurrentTab::new(10)
+            }),
+            cwds_by_pane: HashMap::from([
+                (42, PathBuf::from("/Users/me/codex")),
+                (43, PathBuf::from("/Users/me/shell")),
+            ]),
+            home_dir: PathBuf::from("/Users/me"),
+            ..Default::default()
+        };
+
+        pretty_assertions::assert_eq!(
+            compute_frame(&state),
+            vec![TabRow {
+                active: true,
+                path_label: "~/shell".to_string(),
+                cmd: Cmd::None,
+                indicator: TabIndicator::NoAgent,
                 git: GitStat::default(),
             }]
         );
@@ -194,6 +243,53 @@ mod tests {
                 git: GitStat::default(),
             }]
         );
+    }
+
+    #[test]
+    fn test_compute_frame_inactive_current_tab_uses_winner_pane_cwd() {
+        let state = TbarState {
+            known_active_tab_id: Some(20),
+            all_tabs: vec![tab_with_name(10, 0, "current")],
+            current_tab: Some(CurrentTab {
+                pane_ids: [42, 43].into_iter().collect(),
+                focused_pane: Some(FocusedPane {
+                    id: 43,
+                    label: Some(FocusedPaneLabel::TerminalCommand("claude".to_string())),
+                }),
+                cwd_pane_id: Some(43),
+                cwd: Some(PathBuf::from("/Users/me/claude")),
+                git_stat: GitStat {
+                    path: PathBuf::from("/Users/me/claude"),
+                    insertions: 9,
+                    ..GitStat::default()
+                },
+                pane_state_by_pane: HashMap::from([
+                    (
+                        42,
+                        pane_state(Agent::Codex, AgentPanePhase::Running, PaneFocus::Unfocused, 1),
+                    ),
+                    (
+                        43,
+                        pane_state(Agent::Claude, AgentPanePhase::Running, PaneFocus::Focused, 2),
+                    ),
+                ]),
+                ..CurrentTab::new(10)
+            }),
+            cwds_by_pane: HashMap::from([
+                (42, PathBuf::from("/Users/me/codex")),
+                (43, PathBuf::from("/Users/me/claude")),
+            ]),
+            home_dir: PathBuf::from("/Users/me"),
+            ..Default::default()
+        };
+
+        let frame = compute_frame(&state);
+
+        assert2::assert!(let Some(row) = frame.first());
+        pretty_assertions::assert_eq!(row.path_label, "~/codex");
+        pretty_assertions::assert_eq!(row.cmd, Cmd::agent(Agent::Codex, AgentState::Busy));
+        pretty_assertions::assert_eq!(row.indicator, TabIndicator::Busy);
+        pretty_assertions::assert_eq!(row.git, GitStat::default());
     }
 
     #[test]

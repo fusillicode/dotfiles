@@ -23,6 +23,8 @@ use zellij_tile::prelude::TabInfo;
 
 use crate::plugin::nudge::Nudge;
 use crate::plugin::pane::FocusedPane;
+use crate::plugin::tbar::current_tab::AgentLossSource;
+use crate::plugin::tbar::current_tab::AgentPaneSource;
 use crate::plugin::tbar::current_tab::CurrentTab;
 use crate::plugin::tbar::events::PipeEvent;
 use crate::plugin::tbar::events::PipeEventError;
@@ -62,6 +64,7 @@ pub struct StateSnapshotPayload {
     pub tab_id: usize,
     pub seq: u64,
     pub focused_pane_id: Option<u32>,
+    pub cwd_pane_id: Option<u32>,
     pub cwd: Option<PathBuf>,
     pub cmd: Cmd,
     pub indicator: TabIndicator,
@@ -77,7 +80,7 @@ pub struct PaneAgentSnapshot {
 }
 
 impl StateSnapshotPayload {
-    pub fn from_current_tab(value: &CurrentTab) -> Self {
+    pub fn from_current_tab(value: &CurrentTab, cwds_by_pane: &HashMap<u32, PathBuf>) -> Self {
         let mut pane_agents = value
             .pane_state_by_pane
             .iter()
@@ -91,6 +94,7 @@ impl StateSnapshotPayload {
             })
             .collect::<Vec<_>>();
         pane_agents.sort_by_key(|pane| pane.pane_id);
+        let display = value.current_row_display_source(false, cwds_by_pane);
 
         Self {
             tab_id: value.tab_id,
@@ -98,10 +102,11 @@ impl StateSnapshotPayload {
             focused_pane_id: value
                 .active_focus_pane_id
                 .or_else(|| value.focused_pane.as_ref().map(|focused_pane| focused_pane.id)),
-            cwd: value.cwd.clone(),
-            cmd: value.display_cmd(),
-            indicator: value.tab_indicator(),
-            git_stat: value.git_stat.clone(),
+            cwd_pane_id: display.pane_id,
+            cwd: display.cwd,
+            cmd: display.cmd,
+            indicator: display.indicator,
+            git_stat: display.git_stat,
             pane_agents,
         }
     }
@@ -147,6 +152,18 @@ impl TryFrom<&PipeMessage> for StateSnapshotPayload {
                 })
             })
             .transpose()?;
+        let cwd_pane_id = value
+            .args
+            .get("cwd_pane_id")
+            .map(|v| {
+                v.parse::<u32>().map_err(|_| {
+                    PipeEventError::Parse(ParseError::Invalid {
+                        field: "cwd_pane_id",
+                        value: v.clone(),
+                    })
+                })
+            })
+            .transpose()?;
         let payload = value
             .payload
             .as_ref()
@@ -162,6 +179,7 @@ impl TryFrom<&PipeMessage> for StateSnapshotPayload {
             tab_id,
             seq,
             focused_pane_id,
+            cwd_pane_id,
             cwd: entry.cwd,
             cmd: entry.cmd,
             indicator: entry.indicator,
@@ -186,6 +204,9 @@ impl From<&StateSnapshotPayload> for MessageToPlugin {
         args.insert("seq".to_string(), value.seq.to_string());
         if let Some(focused_pane_id) = value.focused_pane_id {
             args.insert("focused_pane_id".to_string(), focused_pane_id.to_string());
+        }
+        if let Some(cwd_pane_id) = value.cwd_pane_id {
+            args.insert("cwd_pane_id".to_string(), cwd_pane_id.to_string());
         }
         let mut payload = entry.to_string();
         for pane in &value.pane_agents {
@@ -270,6 +291,7 @@ pub enum Event {
     AgentDetected {
         pane_id: u32,
         agent: Agent,
+        source: AgentPaneSource,
     },
     AgentBusy {
         pane_id: u32,
@@ -281,6 +303,7 @@ pub enum Event {
     },
     AgentLost {
         pane_id: u32,
+        source: AgentLossSource,
     },
     GitStatChanged {
         new_stat: GitStat,
@@ -374,6 +397,7 @@ fn update_host_tabs(
         return false;
     }
     let events = crate::plugin::tbar::events_from::tab_update::derive(state, tabs, landing_focus);
+    let cwd_changed = cache_focus_cwds_for_events(state, &events);
     let frame_changed = state.apply_all(&events);
     if broadcast {
         send_tab_topology(tabs);
@@ -382,7 +406,7 @@ fn update_host_tabs(
         send_active_tab(active_tab_id);
     }
     handle_events(state, &events);
-    frame_changed || !events.is_empty()
+    cwd_changed || frame_changed || !events.is_empty()
 }
 
 pub fn update_panes(state: &mut TbarState, manifest: &PaneManifest) -> bool {
@@ -446,16 +470,17 @@ pub fn pipe(state: &mut TbarState, pipe_message: &PipeMessage) -> bool {
             if requester_plugin_id == state.plugin_id {
                 return false;
             }
-            send_current_tab_snapshot(state.current_tab.as_ref(), Some(requester_plugin_id));
+            send_current_tab_snapshot(state, Some(requester_plugin_id));
             false
         }
         PipeEvent::ActiveTab { active_tab_id } => {
             let landing_focus =
                 resolve_active_tab_landing_focus(active_tab_id, &state.all_tabs, state.current_tab.as_ref());
             let events = crate::plugin::tbar::events_from::active_tab::derive(state, active_tab_id, landing_focus);
+            let cwd_changed = cache_focus_cwds_for_events(state, &events);
             let frame_changed = state.apply_all(&events);
             handle_events(state, &events);
-            frame_changed || !events.is_empty()
+            cwd_changed || frame_changed || !events.is_empty()
         }
         PipeEvent::TabTopology { source_plugin_id, tabs } => {
             if source_plugin_id == state.plugin_id {
@@ -472,12 +497,67 @@ pub fn pipe(state: &mut TbarState, pipe_message: &PipeMessage) -> bool {
             frame_changed || !events.is_empty()
         }
         PipeEvent::Agent(agent_event) => {
+            // Agent pipes are broadcast across tbars; hydrate cwd only for panes owned by this plugin.
+            let is_current_pane = state
+                .current_tab
+                .as_ref()
+                .is_some_and(|current_tab| current_tab.pane_ids.contains(&agent_event.pane_id));
+            let cwd_changed =
+                if matches!(agent_event.kind, ytil_agents::agent::AgentEventKind::Exit) || !is_current_pane {
+                    false
+                } else {
+                    cache_pane_cwd(state, agent_event.pane_id)
+                };
             let events = crate::plugin::tbar::events_from::agent::derive(state, &agent_event);
             let frame_changed = state.apply_all(&events);
             handle_events(state, &events);
-            frame_changed || !events.is_empty()
+            if cwd_changed && events.is_empty() {
+                run_current_tab_git_stat(state);
+                send_current_tab_snapshot(state, None);
+            }
+            cwd_changed || frame_changed || !events.is_empty()
         }
     }
+}
+
+fn cache_pane_cwd(state: &mut TbarState, pane_id: u32) -> bool {
+    let Ok(cwd) = zellij_tile::prelude::get_pane_cwd(PaneId::Terminal(pane_id)) else {
+        eprintln!("agg: missing cwd for terminal pane {pane_id}");
+        return false;
+    };
+    if state.cwds_by_pane.get(&pane_id) == Some(&cwd) {
+        return false;
+    }
+    state.cwds_by_pane.insert(pane_id, cwd);
+    true
+}
+
+fn cache_focus_cwds_for_events(state: &mut TbarState, events: &[Event]) -> bool {
+    let mut changed = false;
+    for pane_id in events.iter().filter_map(|event| match event {
+        Event::FocusChanged {
+            new_pane: Some(pane), ..
+        } => Some(pane.id),
+        Event::TabCreated { .. }
+        | Event::TabRemapped { .. }
+        | Event::PanesChanged { .. }
+        | Event::FocusChanged { new_pane: None, .. }
+        | Event::CwdChanged { .. }
+        | Event::AgentDetected { .. }
+        | Event::AgentBusy { .. }
+        | Event::AgentIdle { .. }
+        | Event::AgentLost { .. }
+        | Event::GitStatChanged { .. }
+        | Event::RemoteTabUpdated { .. }
+        | Event::ActiveTabChanged { .. }
+        | Event::TopologyChanged
+        | Event::BecameActive
+        | Event::AllTabsReplaced { .. }
+        | Event::SyncRequested => None,
+    }) {
+        changed |= cache_pane_cwd(state, pane_id);
+    }
+    changed
 }
 
 fn apply_synced_tab_topology(state: &mut TbarState, mut tabs: Vec<TabInfo>) -> bool {
@@ -495,26 +575,32 @@ fn apply_synced_tab_topology(state: &mut TbarState, mut tabs: Vec<TabInfo>) -> b
 }
 
 fn apply_and_handle_events(state: &mut TbarState, events: &[Event]) -> bool {
+    let cwd_changed = cache_focus_cwds_for_events(state, events);
     let frame_changed = state.apply_all(events);
     handle_events(state, events);
-    frame_changed || !events.is_empty()
+    cwd_changed || frame_changed || !events.is_empty()
 }
 
 fn handle_events(state: &mut TbarState, events: &[Event]) {
     for event in events {
         match event {
-            Event::AgentIdle { .. } | Event::FocusChanged { .. } | Event::CwdChanged { .. } => {
-                run_current_tab_git_stat(state.current_tab.as_ref());
-                send_current_tab_snapshot(state.current_tab.as_ref(), None);
+            Event::GitStatChanged { .. } => {
+                // Git-stat results refresh current state; rerunning here would make same-path updates self-suppress.
+                send_current_tab_snapshot(state, None);
             }
             Event::TabCreated { .. }
             | Event::TabRemapped { .. }
-            | Event::GitStatChanged { .. }
             | Event::AgentDetected { .. }
             | Event::AgentBusy { .. }
             | Event::AgentLost { .. }
             | Event::ActiveTabChanged { .. }
-            | Event::BecameActive => send_current_tab_snapshot(state.current_tab.as_ref(), None),
+            | Event::BecameActive
+            | Event::AgentIdle { .. }
+            | Event::FocusChanged { .. }
+            | Event::CwdChanged { .. } => {
+                run_current_tab_git_stat(state);
+                send_current_tab_snapshot(state, None);
+            }
             Event::SyncRequested => send_sync_request(),
             Event::PanesChanged { .. }
             | Event::RemoteTabUpdated { .. }
@@ -620,29 +706,36 @@ where
     })
 }
 
-fn send_current_tab_snapshot(current_tab: Option<&CurrentTab>, target_plugin_id: Option<u32>) {
-    let Some(current_tab) = current_tab else {
+fn send_current_tab_snapshot(state: &TbarState, target_plugin_id: Option<u32>) {
+    let Some(current_tab) = state.current_tab.as_ref() else {
         return;
     };
-    let mut message = MessageToPlugin::from(&StateSnapshotPayload::from_current_tab(current_tab));
+    let mut message = MessageToPlugin::from(&StateSnapshotPayload::from_current_tab(
+        current_tab,
+        &state.cwds_by_pane,
+    ));
     if let Some(target_plugin_id) = target_plugin_id {
         message = message.with_destination_plugin_id(target_plugin_id);
     }
     zellij_tile::prelude::pipe_message_to_plugin(message);
 }
 
-fn run_current_tab_git_stat(current_tab: Option<&CurrentTab>) {
-    let Some(current_tab) = current_tab else {
+fn run_current_tab_git_stat(state: &TbarState) {
+    let Some(current_tab) = state.current_tab.as_ref() else {
         return;
     };
-    let Some(ref cwd) = current_tab.cwd else {
+    let display = current_tab.current_row_display_source(state.current_tab_is_active(), &state.cwds_by_pane);
+    let Some(cwd) = display.cwd else {
+        if let Some(pane_id) = display.pane_id {
+            eprintln!("agg: missing display cwd for terminal pane {pane_id}");
+        }
         return;
     };
     let cwd_str = cwd.display().to_string();
     let mut context = BTreeMap::new();
     context.insert(CONTEXT_KEY_GIT_STAT.into(), cwd_str.clone());
     let args: Vec<&str> = vec!["agg", "git-stat", "tbar", &cwd_str];
-    zellij_tile::prelude::run_command_with_env_variables_and_cwd(&args, BTreeMap::new(), cwd.clone(), context);
+    zellij_tile::prelude::run_command_with_env_variables_and_cwd(&args, BTreeMap::new(), cwd, context);
 }
 
 #[cfg(test)]
@@ -661,6 +754,7 @@ pub mod test_support {
     use crate::plugin::tbar::StateSnapshotPayload;
     use crate::plugin::tbar::TbarState;
     use crate::plugin::tbar::current_tab::AgentPanePhase;
+    use crate::plugin::tbar::current_tab::AgentPaneSource;
     use crate::plugin::tbar::current_tab::AgentPaneState;
     use crate::plugin::tbar::current_tab::PaneFocus;
 
@@ -714,6 +808,7 @@ pub mod test_support {
             agent,
             phase,
             focus,
+            source: AgentPaneSource::Manifest,
             phase_seq,
         }
     }
@@ -723,6 +818,7 @@ pub mod test_support {
             tab_id,
             seq,
             focused_pane_id: None,
+            cwd_pane_id: None,
             cwd: None,
             cmd,
             indicator,
@@ -741,9 +837,11 @@ pub mod test_support {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::path::PathBuf;
 
     use agg::AgentState;
     use agg::Cmd;
+    use agg::GitStat;
     use agg::TabIndicator;
     use ytil_agents::agent::Agent;
     use zellij_tile::prelude::PaneId;
@@ -799,8 +897,9 @@ mod tests {
             ]),
             ..CurrentTab::new(10)
         };
+        let cwds_by_pane = HashMap::from([(43, PathBuf::from("/Users/me/claude"))]);
 
-        let snapshot = StateSnapshotPayload::from_current_tab(&current_tab);
+        let snapshot = StateSnapshotPayload::from_current_tab(&current_tab, &cwds_by_pane);
 
         pretty_assertions::assert_eq!(
             snapshot.pane_agents,
@@ -819,6 +918,41 @@ mod tests {
         );
         pretty_assertions::assert_eq!(snapshot.cmd, Cmd::agent(Agent::Claude, AgentState::NeedsAttention));
         pretty_assertions::assert_eq!(snapshot.indicator, TabIndicator::Unseen);
+        pretty_assertions::assert_eq!(snapshot.cwd_pane_id, Some(43));
+        pretty_assertions::assert_eq!(snapshot.cwd, Some(PathBuf::from("/Users/me/claude")));
+    }
+
+    #[test]
+    fn test_state_snapshot_from_active_mat_uses_inactive_agent_winner_not_focused_shell() {
+        let current_tab = CurrentTab {
+            pane_ids: [42, 43].into_iter().collect(),
+            focused_pane: Some(FocusedPane { id: 43, label: None }),
+            active_focus_pane_id: Some(43),
+            cwd_pane_id: Some(43),
+            cwd: Some(PathBuf::from("/Users/me/shell")),
+            git_stat: GitStat {
+                path: PathBuf::from("/Users/me/shell"),
+                insertions: 9,
+                ..GitStat::default()
+            },
+            pane_state_by_pane: HashMap::from([(
+                42,
+                pane_state(Agent::Codex, AgentPanePhase::Running, PaneFocus::Unfocused, 1),
+            )]),
+            ..CurrentTab::new(10)
+        };
+        let cwds_by_pane = HashMap::from([
+            (42, PathBuf::from("/Users/me/codex")),
+            (43, PathBuf::from("/Users/me/shell")),
+        ]);
+
+        let snapshot = StateSnapshotPayload::from_current_tab(&current_tab, &cwds_by_pane);
+
+        pretty_assertions::assert_eq!(snapshot.cwd_pane_id, Some(42));
+        pretty_assertions::assert_eq!(snapshot.cwd, Some(PathBuf::from("/Users/me/codex")));
+        pretty_assertions::assert_eq!(snapshot.cmd, Cmd::agent(Agent::Codex, AgentState::Busy));
+        pretty_assertions::assert_eq!(snapshot.indicator, TabIndicator::Busy);
+        pretty_assertions::assert_eq!(snapshot.git_stat, GitStat::default());
     }
 
     #[test]

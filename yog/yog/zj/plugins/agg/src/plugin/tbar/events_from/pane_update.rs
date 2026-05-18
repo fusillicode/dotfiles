@@ -14,6 +14,8 @@ use crate::plugin::pane::FocusedPaneLabel;
 use crate::plugin::tbar::Event;
 use crate::plugin::tbar::StateSnapshotPayload;
 use crate::plugin::tbar::TbarState;
+use crate::plugin::tbar::current_tab::AgentLossSource;
+use crate::plugin::tbar::current_tab::AgentPaneSource;
 use crate::plugin::tbar::current_tab::CurrentTab;
 
 pub fn derive(
@@ -85,6 +87,7 @@ pub fn derive(
             } else {
                 events.push(Event::AgentLost {
                     pane_id: *removed_pane_id,
+                    source: AgentLossSource::PaneClosed,
                 });
             }
         }
@@ -141,7 +144,7 @@ fn display_cwd_change(
     resolve_pane_cwd: &mut impl FnMut(u32) -> Option<PathBuf>,
 ) -> Option<Event> {
     let display_pane = display_pane?;
-    if !display_metadata_changed && current_tab.cwd.is_some() {
+    if !display_metadata_changed && current_tab.cwd_pane_id == Some(display_pane.id) && current_tab.cwd.is_some() {
         return None;
     }
     let new_cwd = resolve_pane_cwd(display_pane.id).or_else(|| state.cwds_by_pane.get(&display_pane.id).cloned())?;
@@ -244,6 +247,7 @@ fn snapshot_from_manifest_tab(
         tab_id,
         seq: 0,
         focused_pane_id: Some(display_pane.id),
+        cwd_pane_id: Some(display_pane.id),
         cwd,
         indicator: TabIndicator::from_cmd(&cmd),
         cmd,
@@ -288,6 +292,7 @@ fn remote_manifest_update(
 
     if existing.seq == 0 {
         let unchanged = existing.tab_id == manifest.tab_id
+            && existing.cwd_pane_id == manifest.cwd_pane_id
             && existing.cwd == manifest.cwd
             && existing.cmd == manifest.cmd
             && existing.indicator == manifest.indicator
@@ -301,12 +306,18 @@ fn remote_manifest_update(
 
     let StateSnapshotPayload {
         focused_pane_id,
+        cwd_pane_id,
         cwd,
         cmd,
         indicator,
         ..
     } = manifest;
-    let hydrate_path = cwd.is_some() && existing.cwd != cwd;
+    let cwd_pane_matches = existing
+        .cwd_pane_id
+        .is_none_or(|existing_cwd_pane_id| cwd_pane_id == Some(existing_cwd_pane_id));
+    // A real pipe snapshot owns the displayed cwd. A later manifest sample can
+    // describe another pane in the same tab, so only hydrate cwd from the same pane.
+    let hydrate_path = cwd.is_some() && existing.cwd != cwd && cwd_pane_matches;
     let hydrate_focus = focused_pane_id.is_some() && existing.focused_pane_id != focused_pane_id;
     let seed_command = matches!(&existing.cmd, Cmd::None) && !matches!(&cmd, Cmd::None);
     if !(hydrate_path || hydrate_focus || seed_command) {
@@ -315,6 +326,7 @@ fn remote_manifest_update(
 
     let mut merged = existing.clone();
     if hydrate_path {
+        merged.cwd_pane_id = cwd_pane_id;
         merged.cwd = cwd;
     }
     if hydrate_focus {
@@ -379,21 +391,25 @@ fn agent_changes_from_manifest(
         (Some(stored_agent), Some(detected_agent)) if stored_agent != detected_agent => {
             events.push(Event::AgentLost {
                 pane_id: display_pane.id,
+                source: AgentLossSource::Manifest,
             });
             events.push(Event::AgentDetected {
                 pane_id: display_pane.id,
                 agent: detected_agent,
+                source: AgentPaneSource::Manifest,
             });
         }
         (None, Some(detected_agent)) => {
             events.push(Event::AgentDetected {
                 pane_id: display_pane.id,
                 agent: detected_agent,
+                source: AgentPaneSource::Manifest,
             });
         }
         (Some(_), None) if has_terminal_command => {
             events.push(Event::AgentLost {
                 pane_id: display_pane.id,
+                source: AgentLossSource::Manifest,
             });
         }
         _ => {}
@@ -417,7 +433,10 @@ fn agent_changes_from_manifest(
             .as_ref()
             .is_some_and(|command| !command.trim().is_empty());
         if has_terminal_command && detected_agent != Some(pane_state.agent) {
-            events.push(Event::AgentLost { pane_id });
+            events.push(Event::AgentLost {
+                pane_id,
+                source: AgentLossSource::Manifest,
+            });
         }
     }
 
@@ -440,9 +459,12 @@ mod tests {
     use crate::plugin::pane::FocusedPane;
     use crate::plugin::pane::FocusedPaneLabel;
     use crate::plugin::tbar::Event;
+    use crate::plugin::tbar::PaneAgentSnapshot;
     use crate::plugin::tbar::StateSnapshotPayload;
     use crate::plugin::tbar::TbarState;
+    use crate::plugin::tbar::current_tab::AgentLossSource;
     use crate::plugin::tbar::current_tab::AgentPanePhase;
+    use crate::plugin::tbar::current_tab::AgentPaneSource;
     use crate::plugin::tbar::current_tab::CurrentTab;
     use crate::plugin::tbar::current_tab::PaneFocus;
     use crate::plugin::tbar::events_from::pane_update::*;
@@ -479,6 +501,7 @@ mod tests {
                 Event::AgentDetected {
                     pane_id: 42,
                     agent: Agent::Claude,
+                    source: AgentPaneSource::Manifest,
                 },
                 Event::SyncRequested,
             ]
@@ -528,6 +551,7 @@ mod tests {
                 Event::AgentDetected {
                     pane_id: 42,
                     agent: Agent::Codex,
+                    source: AgentPaneSource::Manifest,
                 },
                 Event::SyncRequested,
             ]
@@ -623,6 +647,7 @@ mod tests {
                 Event::AgentDetected {
                     pane_id: 42,
                     agent: Agent::Codex,
+                    source: AgentPaneSource::Manifest,
                 },
                 Event::SyncRequested,
             ]
@@ -742,6 +767,7 @@ mod tests {
                 Event::AgentDetected {
                     pane_id: 42,
                     agent: Agent::Codex,
+                    source: AgentPaneSource::Manifest,
                 },
                 Event::CwdChanged {
                     pane_id: 42,
@@ -808,6 +834,7 @@ mod tests {
                     tab_id: 20,
                     seq: 0,
                     focused_pane_id: Some(43),
+                    cwd_pane_id: Some(43),
                     cwd: Some(PathBuf::from("/Users/me/project")),
                     cmd: Cmd::agent(Agent::Codex, AgentState::Acknowledged),
                     indicator: TabIndicator::Seen,
@@ -877,6 +904,7 @@ mod tests {
                     tab_id: 20,
                     seq: 0,
                     focused_pane_id: Some(43),
+                    cwd_pane_id: Some(43),
                     cwd: Some(PathBuf::from("/Users/me/project")),
                     cmd: Cmd::Running("gkg".to_string()),
                     indicator: TabIndicator::NoAgent,
@@ -918,6 +946,7 @@ mod tests {
                     tab_id: 20,
                     seq: 0,
                     focused_pane_id: Some(43),
+                    cwd_pane_id: Some(43),
                     cwd: Some(PathBuf::from("/Users/me/project")),
                     cmd: Cmd::agent(Agent::Codex, AgentState::Acknowledged),
                     indicator: TabIndicator::Seen,
@@ -956,6 +985,7 @@ mod tests {
                     tab_id: 20,
                     seq: 0,
                     focused_pane_id: Some(44),
+                    cwd_pane_id: Some(44),
                     cwd: Some(PathBuf::from("/Users/me/project")),
                     cmd: Cmd::agent(Agent::Codex, AgentState::Acknowledged),
                     indicator: TabIndicator::Seen,
@@ -998,6 +1028,7 @@ mod tests {
                     tab_id: 20,
                     seq: 7,
                     focused_pane_id: Some(43),
+                    cwd_pane_id: None,
                     cwd: None,
                     cmd: Cmd::agent(Agent::Codex, AgentState::Busy),
                     indicator: TabIndicator::Busy,
@@ -1030,6 +1061,7 @@ mod tests {
                     tab_id: 20,
                     seq: 7,
                     focused_pane_id: Some(43),
+                    cwd_pane_id: Some(43),
                     cwd: Some(PathBuf::from("/Users/me/project")),
                     cmd: Cmd::agent(Agent::Codex, AgentState::Busy),
                     indicator: TabIndicator::Busy,
@@ -1039,6 +1071,127 @@ mod tests {
                 evict_ids: vec![],
             }]
         );
+    }
+
+    #[test]
+    fn test_apply_pane_update_does_not_overwrite_snapshot_cwd_from_different_manifest_pane() {
+        let mut state = TbarState {
+            plugin_id: 7,
+            known_active_tab_id: Some(10),
+            all_tabs: vec![
+                TabInfo {
+                    active: true,
+                    ..tab_with_name(10, 0, "Tab #1")
+                },
+                tab_with_name(20, 1, "Tab #2"),
+            ],
+            current_tab: Some(CurrentTab {
+                pane_ids: std::iter::once(42).collect(),
+                focused_pane: Some(FocusedPane { id: 42, label: None }),
+                active_focus_pane_id: Some(42),
+                cwd: Some(PathBuf::from("/Users/me/current")),
+                ..CurrentTab::new(10)
+            }),
+            other_tabs: HashMap::from([(
+                8,
+                StateSnapshotPayload {
+                    tab_id: 20,
+                    seq: 7,
+                    focused_pane_id: Some(44),
+                    cwd_pane_id: Some(43),
+                    cwd: Some(PathBuf::from("/Users/me/codex")),
+                    cmd: Cmd::agent(Agent::Codex, AgentState::Busy),
+                    indicator: TabIndicator::Busy,
+                    git_stat: GitStat::default(),
+                    pane_agents: vec![PaneAgentSnapshot {
+                        pane_id: 43,
+                        agent: Agent::Codex,
+                        indicator: TabIndicator::Busy,
+                    }],
+                },
+            )]),
+            sync_requested: true,
+            home_dir: PathBuf::from("/Users/me"),
+            ..Default::default()
+        };
+
+        let events = derive(
+            &state,
+            &manifest(vec![
+                (
+                    0,
+                    vec![plugin_pane(7), terminal_pane_with_command(42, true, "/bin/zsh")],
+                ),
+                (
+                    1,
+                    vec![
+                        plugin_pane(8),
+                        terminal_pane_with_command(43, false, "codex"),
+                        terminal_pane_with_command(44, true, "/bin/zsh"),
+                    ],
+                ),
+            ]),
+            |pane_id| (pane_id == 44).then(|| PathBuf::from("/Users/me")),
+        );
+
+        pretty_assertions::assert_eq!(events, vec![]);
+        assert2::assert!(state.sync_frame());
+        assert2::assert!(let Some(row) = state.frame.get(1));
+        pretty_assertions::assert_eq!(row.path_label, "~/codex");
+        pretty_assertions::assert_eq!(row.cmd, Cmd::agent(Agent::Codex, AgentState::Busy));
+    }
+
+    #[test]
+    fn test_apply_pane_update_keeps_pipe_agent_when_wrapper_manifest_shows_project_title() {
+        let mut current_tab = CurrentTab {
+            pane_ids: std::iter::once(42).collect(),
+            focused_pane: Some(FocusedPane {
+                id: 42,
+                label: Some(FocusedPaneLabel::Title("dotfiles".to_string())),
+            }),
+            active_focus_pane_id: Some(42),
+            ..CurrentTab::new(10)
+        };
+        current_tab.transition_phase(42, Agent::Codex, AgentPanePhase::Running, AgentPaneSource::Pipe);
+        let mut state = TbarState {
+            plugin_id: 7,
+            known_active_tab_id: Some(10),
+            all_tabs: vec![TabInfo {
+                active: true,
+                ..tab_with_name(10, 0, "Tab #1")
+            }],
+            current_tab: Some(current_tab),
+            sync_requested: true,
+            home_dir: PathBuf::from("/Users/me"),
+            ..Default::default()
+        };
+
+        let events = derive(
+            &state,
+            &manifest(vec![(
+                0,
+                vec![
+                    plugin_pane(7),
+                    PaneInfo {
+                        title: "dotfiles".to_string(),
+                        ..terminal_pane_with_command(42, true, "/bin/zsh")
+                    },
+                ],
+            )]),
+            noop_pane_cwd,
+        );
+
+        pretty_assertions::assert_eq!(
+            events,
+            vec![Event::AgentLost {
+                pane_id: 42,
+                source: AgentLossSource::Manifest,
+            }]
+        );
+        let _ = state.apply_all(&events);
+        assert2::assert!(let Some(row) = state.frame.first());
+        pretty_assertions::assert_eq!(row.cmd, Cmd::agent(Agent::Codex, AgentState::Busy));
+        pretty_assertions::assert_eq!(row.indicator, TabIndicator::Busy);
     }
 
     #[test]
@@ -1169,7 +1322,10 @@ mod tests {
         pretty_assertions::assert_eq!(
             partial_events,
             vec![
-                Event::AgentLost { pane_id: 42 },
+                Event::AgentLost {
+                    pane_id: 42,
+                    source: AgentLossSource::PaneClosed,
+                },
                 Event::PanesChanged {
                     observed_pane_ids: std::iter::once(43).collect(),
                     retained_pane_ids: std::iter::once(43).collect(),
@@ -1204,7 +1360,10 @@ mod tests {
             ..Default::default()
         };
 
-        let _ = state.apply_all(&[Event::AgentLost { pane_id: 42 }]);
+        let _ = state.apply_all(&[Event::AgentLost {
+            pane_id: 42,
+            source: AgentLossSource::Pipe,
+        }]);
         let manifest = manifest(vec![(
             0,
             vec![PaneInfo {
@@ -1254,7 +1413,10 @@ mod tests {
                     new_pane: Some(FocusedPane { id: 42, label: None }),
                     acknowledge_existing_attention: false,
                 },
-                Event::AgentLost { pane_id: 42 },
+                Event::AgentLost {
+                    pane_id: 42,
+                    source: AgentLossSource::Manifest,
+                },
                 Event::SyncRequested,
             ]
         );
@@ -1290,7 +1452,16 @@ mod tests {
             ],
         )]);
         let events = derive(&state, &manifest, noop_pane_cwd);
-        pretty_assertions::assert_eq!(events, vec![Event::AgentLost { pane_id: 42 }, Event::SyncRequested,]);
+        pretty_assertions::assert_eq!(
+            events,
+            vec![
+                Event::AgentLost {
+                    pane_id: 42,
+                    source: AgentLossSource::Manifest,
+                },
+                Event::SyncRequested,
+            ]
+        );
     }
 
     #[test]

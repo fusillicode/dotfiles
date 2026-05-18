@@ -3,7 +3,9 @@ use ytil_agents::agent::AgentEventPayload;
 
 use crate::plugin::tbar::Event;
 use crate::plugin::tbar::TbarState;
+use crate::plugin::tbar::current_tab::AgentLossSource;
 use crate::plugin::tbar::current_tab::AgentPanePhase;
+use crate::plugin::tbar::current_tab::AgentPaneSource;
 
 pub fn derive(state: &TbarState, event: &AgentEventPayload) -> Vec<Event> {
     let Some(current_tab) = state.current_tab.as_ref() else {
@@ -26,7 +28,11 @@ pub fn derive(state: &TbarState, event: &AgentEventPayload) -> Vec<Event> {
             if current_pane_state.is_some_and(|pane_state| pane_state.agent == agent) {
                 return vec![];
             }
-            vec![Event::AgentDetected { pane_id, agent }]
+            vec![Event::AgentDetected {
+                pane_id,
+                agent,
+                source: AgentPaneSource::Pipe,
+            }]
         }
         AgentEventKind::Busy => {
             if current_pane_state
@@ -50,7 +56,10 @@ pub fn derive(state: &TbarState, event: &AgentEventPayload) -> Vec<Event> {
             if current_pane_state.is_none() {
                 return vec![];
             }
-            vec![Event::AgentLost { pane_id }]
+            vec![Event::AgentLost {
+                pane_id,
+                source: AgentLossSource::Pipe,
+            }]
         }
     }
 }
@@ -73,6 +82,7 @@ mod tests {
     use crate::plugin::tbar::Event;
     use crate::plugin::tbar::TbarState;
     use crate::plugin::tbar::current_tab::AgentPanePhase;
+    use crate::plugin::tbar::current_tab::AgentPaneSource;
     use crate::plugin::tbar::current_tab::CurrentTab;
     use crate::plugin::tbar::current_tab::PaneFocus;
     use crate::plugin::tbar::events_from::agent::*;
@@ -100,6 +110,7 @@ mod tests {
             vec![Event::AgentDetected {
                 pane_id: 42,
                 agent: Agent::Codex,
+                source: AgentPaneSource::Pipe,
             }]
         );
 

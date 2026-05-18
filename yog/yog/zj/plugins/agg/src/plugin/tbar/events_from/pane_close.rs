@@ -1,5 +1,6 @@
 use crate::plugin::tbar::Event;
 use crate::plugin::tbar::TbarState;
+use crate::plugin::tbar::current_tab::AgentLossSource;
 
 pub fn derive(state: &TbarState, pane_id: u32) -> Vec<Event> {
     let Some(current_tab) = state.current_tab.as_ref() else {
@@ -8,7 +9,10 @@ pub fn derive(state: &TbarState, pane_id: u32) -> Vec<Event> {
     if !current_tab.pane_state_by_pane.contains_key(&pane_id) {
         return vec![];
     }
-    vec![Event::AgentLost { pane_id }]
+    vec![Event::AgentLost {
+        pane_id,
+        source: AgentLossSource::PaneClosed,
+    }]
 }
 
 #[cfg(test)]
@@ -38,6 +42,12 @@ mod tests {
             ..Default::default()
         };
 
-        pretty_assertions::assert_eq!(derive(&state, 42), vec![Event::AgentLost { pane_id: 42 }]);
+        pretty_assertions::assert_eq!(
+            derive(&state, 42),
+            vec![Event::AgentLost {
+                pane_id: 42,
+                source: AgentLossSource::PaneClosed,
+            }]
+        );
     }
 }
