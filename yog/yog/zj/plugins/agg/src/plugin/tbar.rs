@@ -35,6 +35,7 @@ pub mod events;
 pub mod events_from;
 mod frame;
 mod queries;
+mod side_effects;
 mod state_transitions;
 mod tabs;
 pub mod ui;
@@ -521,7 +522,17 @@ pub fn pipe(state: &mut TbarState, pipe_message: &PipeMessage) -> bool {
 }
 
 fn cache_pane_cwd(state: &mut TbarState, pane_id: u32) -> bool {
-    let Ok(cwd) = zellij_tile::prelude::get_pane_cwd(PaneId::Terminal(pane_id)) else {
+    cache_pane_cwd_with(state, pane_id, |pane_id| {
+        zellij_tile::prelude::get_pane_cwd(PaneId::Terminal(pane_id)).ok()
+    })
+}
+
+fn cache_pane_cwd_with<GetPaneCwd>(state: &mut TbarState, pane_id: u32, mut get_pane_cwd: GetPaneCwd) -> bool
+where
+    GetPaneCwd: FnMut(u32) -> Option<PathBuf>,
+{
+    let Some(cwd) = get_pane_cwd(pane_id) else {
+        #[cfg(not(test))]
         eprintln!("agg: missing cwd for terminal pane {pane_id}");
         return false;
     };
@@ -533,6 +544,22 @@ fn cache_pane_cwd(state: &mut TbarState, pane_id: u32) -> bool {
 }
 
 fn cache_focus_cwds_for_events(state: &mut TbarState, events: &[Event]) -> bool {
+    cache_focus_cwds_for_events_with(state, events, |pane_id| {
+        zellij_tile::prelude::get_pane_cwd(PaneId::Terminal(pane_id)).ok()
+    })
+}
+
+// Hydrate focus-event cwd only when the focused pane has no usable cwd in local
+// state. This preserves first-focus correctness without synchronously asking
+// Zellij for cwd on every cached tab switch.
+fn cache_focus_cwds_for_events_with<GetPaneCwd>(
+    state: &mut TbarState,
+    events: &[Event],
+    mut get_pane_cwd: GetPaneCwd,
+) -> bool
+where
+    GetPaneCwd: FnMut(u32) -> Option<PathBuf>,
+{
     let mut changed = false;
     for pane_id in events.iter().filter_map(|event| match event {
         Event::FocusChanged {
@@ -555,9 +582,22 @@ fn cache_focus_cwds_for_events(state: &mut TbarState, events: &[Event]) -> bool 
         | Event::AllTabsReplaced { .. }
         | Event::SyncRequested => None,
     }) {
-        changed |= cache_pane_cwd(state, pane_id);
+        // Focus changes can arrive before CwdChanged. Once the cwd is already
+        // represented by pane cache or same-pane fallback, the displayed path
+        // stays correct without another host lookup.
+        if !focus_cwd_is_cached(state, pane_id) {
+            changed |= cache_pane_cwd_with(state, pane_id, &mut get_pane_cwd);
+        }
     }
     changed
+}
+
+fn focus_cwd_is_cached(state: &TbarState, pane_id: u32) -> bool {
+    state.cwds_by_pane.contains_key(&pane_id)
+        || state
+            .current_tab
+            .as_ref()
+            .is_some_and(|current_tab| current_tab.cwd_pane_id == Some(pane_id) && current_tab.cwd.is_some())
 }
 
 fn apply_synced_tab_topology(state: &mut TbarState, mut tabs: Vec<TabInfo>) -> bool {
@@ -582,30 +622,13 @@ fn apply_and_handle_events(state: &mut TbarState, events: &[Event]) -> bool {
 }
 
 fn handle_events(state: &mut TbarState, events: &[Event]) {
-    for event in events {
-        match event {
-            Event::GitStatChanged { .. } => {
-                // Git-stat results refresh current state; rerunning here would make same-path updates self-suppress.
-                send_current_tab_snapshot(state, None);
-            }
-            Event::TabCreated { .. }
-            | Event::TabRemapped { .. }
-            | Event::AgentDetected { .. }
-            | Event::AgentBusy { .. }
-            | Event::AgentLost { .. }
-            | Event::ActiveTabChanged { .. }
-            | Event::BecameActive
-            | Event::AgentIdle { .. }
-            | Event::FocusChanged { .. }
-            | Event::CwdChanged { .. } => {
-                run_current_tab_git_stat(state);
-                send_current_tab_snapshot(state, None);
-            }
-            Event::SyncRequested => send_sync_request(),
-            Event::PanesChanged { .. }
-            | Event::RemoteTabUpdated { .. }
-            | Event::TopologyChanged
-            | Event::AllTabsReplaced { .. } => {}
+    // Side effects are derived after state transitions so git-stat and
+    // snapshots use the same display source that will be rendered in the tbar.
+    for side_effect in side_effects::derive(state, events) {
+        match side_effect {
+            side_effects::SideEffect::RunCurrentTabGitStat => run_current_tab_git_stat(state),
+            side_effects::SideEffect::SendCurrentTabSnapshot => send_current_tab_snapshot(state, None),
+            side_effects::SideEffect::SendSyncRequest => send_sync_request(),
         }
     }
     for (pane_id, nudge) in state.nudges() {
@@ -854,6 +877,7 @@ mod tests {
     use crate::plugin::pane::FocusedPane;
     use crate::plugin::pane::FocusedPaneLabel;
     use crate::plugin::tbar::AGG_SYNC_PIPE;
+    use crate::plugin::tbar::Event;
     use crate::plugin::tbar::PaneAgentSnapshot;
     use crate::plugin::tbar::StateSnapshotPayload;
     use crate::plugin::tbar::TbarState;
@@ -880,6 +904,70 @@ mod tests {
         assert2::assert!(
             let Err(PipeEventError::Parse(agg::ParseError::Missing("source"))) = parsed
         );
+    }
+
+    #[test]
+    fn test_cache_focus_cwds_for_events_skips_host_lookup_when_focus_cwd_is_cached() {
+        let mut state = TbarState {
+            cwds_by_pane: HashMap::from([(42, PathBuf::from("/Users/me/project"))]),
+            ..Default::default()
+        };
+        let mut calls = 0;
+
+        let changed = super::cache_focus_cwds_for_events_with(&mut state, &[focus_changed_event(42)], |_| {
+            calls += 1;
+            Some(PathBuf::from("/Users/me/project"))
+        });
+
+        assert!(!changed);
+        pretty_assertions::assert_eq!(calls, 0);
+    }
+
+    #[test]
+    fn test_cache_focus_cwds_for_events_skips_host_lookup_when_same_pane_fallback_exists() {
+        let mut state = TbarState {
+            current_tab: Some(CurrentTab {
+                cwd_pane_id: Some(42),
+                cwd: Some(PathBuf::from("/Users/me/project")),
+                ..CurrentTab::new(10)
+            }),
+            ..Default::default()
+        };
+        let mut calls = 0;
+
+        let changed = super::cache_focus_cwds_for_events_with(&mut state, &[focus_changed_event(42)], |_| {
+            calls += 1;
+            Some(PathBuf::from("/Users/me/project"))
+        });
+
+        assert!(!changed);
+        pretty_assertions::assert_eq!(calls, 0);
+    }
+
+    #[test]
+    fn test_cache_focus_cwds_for_events_hydrates_missing_focus_cwd() {
+        let mut state = TbarState::default();
+        let mut calls = 0;
+
+        let changed = super::cache_focus_cwds_for_events_with(&mut state, &[focus_changed_event(42)], |pane_id| {
+            calls += 1;
+            pretty_assertions::assert_eq!(pane_id, 42);
+            Some(PathBuf::from("/Users/me/project"))
+        });
+
+        assert!(changed);
+        pretty_assertions::assert_eq!(calls, 1);
+        pretty_assertions::assert_eq!(state.cwds_by_pane.get(&42), Some(&PathBuf::from("/Users/me/project")));
+    }
+
+    fn focus_changed_event(pane_id: u32) -> Event {
+        Event::FocusChanged {
+            new_pane: Some(FocusedPane {
+                id: pane_id,
+                label: None,
+            }),
+            acknowledge_existing_attention: false,
+        }
     }
 
     #[test]
