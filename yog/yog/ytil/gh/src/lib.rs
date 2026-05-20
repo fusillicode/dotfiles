@@ -124,18 +124,19 @@ pub fn get_repo_urls(repo_path: &Path) -> rootcause::Result<Vec<Url>> {
         .context("error opening repo")
         .attach_with(|| format!("path={}", repo_path.display()))?;
     let mut repo_urls = vec![];
-    for remote_name in repo.remotes()?.iter().flatten() {
-        repo_urls.push(
-            repo.find_remote(remote_name)
-                .context("error finding remote")
-                .attach_with(|| format!("remote={remote_name:?}"))?
-                .url()
-                .map(parse_github_url_from_git_remote_url)
-                .ok_or_else(|| report!("error invalid remote URL UTF-8"))
-                .attach_with(|| format!("remote={remote_name:?}"))
-                .context("error parsing remote URL")
-                .attach_with(|| format!("remote={remote_name:?}"))??,
-        );
+    for remote_name in repo.remotes()?.iter().filter_map(Result::ok).flatten() {
+        let remote = repo
+            .find_remote(remote_name)
+            .context("error finding remote")
+            .attach_with(|| format!("remote={remote_name:?}"))?;
+        let remote_url = remote
+            .url()
+            .context("error invalid remote URL UTF-8")
+            .attach_with(|| format!("remote={remote_name:?}"))?;
+        let repo_url = parse_github_url_from_git_remote_url(remote_url)
+            .context("error parsing remote URL")
+            .attach_with(|| format!("remote={remote_name:?}"))?;
+        repo_urls.push(repo_url);
     }
     Ok(repo_urls)
 }

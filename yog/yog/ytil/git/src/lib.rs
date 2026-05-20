@@ -11,7 +11,6 @@ use git2::Status;
 use git2::StatusEntry;
 use git2::StatusOptions;
 use rootcause::prelude::ResultExt;
-use rootcause::report;
 pub use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt;
 
@@ -167,8 +166,8 @@ impl TryFrom<(Arc<PathBuf>, &StatusEntry<'_>)> for GitStatusEntry {
         let status = value.status();
         let path = value
             .path()
+            .context("error reading status path")
             .map(PathBuf::from)
-            .ok_or_else(|| report!("error missing status path"))
             .attach_with(|| "context=StatusEntry".to_string())?;
 
         Ok(Self {

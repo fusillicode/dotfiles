@@ -40,7 +40,9 @@ fn main() -> rootcause::Result<()> {
     write!(out, "{short_hash} ")?;
     write_commit_relative_time(&mut out, commit_seconds_delta)?;
     write!(out, " | ")?;
-    write_commit_truncated_msg(&mut out, commit.summary().unwrap_or(""), MAX_SUBJECT_LEN)?;
+    // Commit subject is only prompt decoration; keep the previous empty fallback for missing
+    // or undecodable libgit2 summaries.
+    write_commit_truncated_msg(&mut out, commit.summary().ok().flatten().unwrap_or(""), MAX_SUBJECT_LEN)?;
     writeln!(out)?;
 
     Ok(())
