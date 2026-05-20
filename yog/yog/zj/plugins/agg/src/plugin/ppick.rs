@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 
+use ytil_agents::agent::session::SessionKey;
 use zellij_tile::prelude::EventType;
 use zellij_tile::prelude::KeyWithModifier;
 use zellij_tile::prelude::MessageToPlugin;
@@ -30,6 +31,7 @@ pub mod ui;
 
 const CONTEXT_KIND: &str = "kind";
 const CONTEXT_AGS_SESSIONS: &str = "ags_sessions";
+const CONTEXT_AGS_SESSION_KEYS: &str = "ags_session_keys";
 const CONTEXT_GIT_STAT: &str = "git_stat";
 const CONTEXT_CWD: &str = "cwd";
 
@@ -57,7 +59,6 @@ pub fn update_permission_granted(state: &mut PpickState) -> bool {
     zellij_tile::prelude::pipe_message_to_plugin(MessageToPlugin::new(AGG_SYNC_PIPE.to_string()).with_args(sync_args));
     zellij_tile::prelude::set_selectable(true);
     apply_floating_coordinates(state);
-    crate::plugin::ppick::run_ags_sessions();
     true
 }
 
@@ -79,6 +80,7 @@ pub fn update_panes(state: &mut PpickState, manifest: &PaneManifest) -> bool {
         |pane_id| zellij_tile::prelude::get_pane_cwd(PaneId::Terminal(pane_id)).ok(),
         |pane_id| zellij_tile::prelude::get_pane_running_command(PaneId::Terminal(pane_id)).ok(),
     );
+    run_ags_sessions(state);
     if changed {
         run_git_stats(state);
     }
@@ -108,7 +110,11 @@ pub fn update_command(state: &mut PpickState, pane_id: PaneId, command: &[String
     let PaneId::Terminal(pane_id) = pane_id else {
         return false;
     };
-    state.update_command(pane_id, command)
+    let changed = state.update_command(pane_id, command);
+    if changed {
+        run_ags_sessions(state);
+    }
+    changed
 }
 
 pub fn update_key(state: &mut PpickState, key: &KeyWithModifier) -> bool {
@@ -151,6 +157,18 @@ pub fn update_run_command_result(
 ) -> bool {
     match context.get(CONTEXT_KIND).map(String::as_str) {
         Some(CONTEXT_AGS_SESSIONS) => {
+            let Some(requested_session_keys) = context
+                .get(CONTEXT_AGS_SESSION_KEYS)
+                .and_then(|value| parse_session_key_context(value))
+            else {
+                eprintln!("agg ppick: missing or invalid ags session request context");
+                return false;
+            };
+            // AGS requests are asynchronous; stale results must not replace the
+            // session data attached to the current pane/command snapshot.
+            if !state.is_current_session_request(&requested_session_keys) {
+                return false;
+            }
             if exit_code != Some(0) {
                 eprintln!("agg ppick: ags list --json failed: {}", String::from_utf8_lossy(stderr));
                 return false;
@@ -175,6 +193,14 @@ pub fn update_run_command_result(
     }
 }
 
+fn parse_session_key_context(value: &str) -> Option<Vec<SessionKey>> {
+    let mut keys = Vec::new();
+    for line in value.lines() {
+        keys.push(line.parse().ok()?);
+    }
+    Some(keys)
+}
+
 fn apply_floating_coordinates(state: &mut PpickState) -> bool {
     let Some(coordinates) = state.take_floating_coordinates() else {
         return false;
@@ -184,10 +210,23 @@ fn apply_floating_coordinates(state: &mut PpickState) -> bool {
     true
 }
 
-fn run_ags_sessions() {
+// Keep AGS search text out of the plugin heap except for sessions attached to
+// open panes; the unfiltered history payload can exceed Zellij's WASM limit.
+fn run_ags_sessions(state: &mut PpickState) {
+    let session_keys = state.take_session_keys_to_request();
+    if session_keys.is_empty() {
+        return;
+    }
     let mut context = BTreeMap::new();
     context.insert(CONTEXT_KIND.to_string(), CONTEXT_AGS_SESSIONS.to_string());
-    zellij_tile::prelude::run_command(&["ags", "list", "--json"], context);
+    let session_args = session_keys.into_iter().map(|key| key.to_string()).collect::<Vec<_>>();
+    context.insert(CONTEXT_AGS_SESSION_KEYS.to_string(), session_args.join("\n"));
+    let mut args = vec!["ags", "list", "--json"];
+    for session_arg in &session_args {
+        args.push("--session");
+        args.push(session_arg);
+    }
+    zellij_tile::prelude::run_command(&args, context);
 }
 
 fn run_git_stats(state: &mut PpickState) {
@@ -213,6 +252,10 @@ mod tests {
     use agg::GitStat;
     use agg::TabIndicator;
     use agg::TabStateEntry;
+    use ytil_agents::agent::Agent;
+    use ytil_agents::agent::session::SessionKey;
+    use zellij_tile::prelude::BareKey;
+    use zellij_tile::prelude::KeyWithModifier;
     use zellij_tile::prelude::PaneInfo;
     use zellij_tile::prelude::PaneManifest;
     use zellij_tile::prelude::PipeMessage;
@@ -288,5 +331,42 @@ mod tests {
             state.visible_frame(usize::MAX).get(1).map(|row| row.selected),
             Some(true)
         );
+    }
+
+    #[test]
+    fn test_update_run_command_result_ignores_stale_ags_session_request() {
+        let mut state = PpickState::default();
+        let manifest = PaneManifest {
+            panes: std::iter::once((0, vec![terminal_pane_with_command(42, "zsh")])).collect(),
+        };
+        let _ = state.update_panes(
+            &manifest,
+            |_| Some(PathBuf::from("/tmp/repo")),
+            |_| Some(vec![String::from("codex"), String::from("resume"), String::from("old")]),
+        );
+        pretty_assertions::assert_eq!(
+            state.take_session_keys_to_request(),
+            vec![SessionKey::new(Agent::Codex, "old")]
+        );
+        assert2::assert!(state.update_command(
+            42,
+            &[String::from("codex"), String::from("resume"), String::from("new")]
+        ));
+        pretty_assertions::assert_eq!(
+            state.take_session_keys_to_request(),
+            vec![SessionKey::new(Agent::Codex, "new")]
+        );
+        let stdout = br#"[{"agent":"codex","workspace":"/tmp/repo","session_id":"old","summary":"old summary","display":"cx ~/repo old","search":"old hidden","updated_at":"2026-05-09T10:00:00Z","resume_program":"codex","resume_args":["resume","old"]}]"#;
+        let context = BTreeMap::from([
+            (CONTEXT_KIND.to_string(), CONTEXT_AGS_SESSIONS.to_string()),
+            (CONTEXT_AGS_SESSION_KEYS.to_string(), String::from("codex:old")),
+        ]);
+
+        assert2::assert!(!update_run_command_result(&mut state, Some(0), stdout, b"", &context));
+
+        for c in "old hidden".chars() {
+            let _ = state.handle_key(&KeyWithModifier::new(BareKey::Char(c)));
+        }
+        pretty_assertions::assert_eq!(state.visible_frame(usize::MAX).len(), 0);
     }
 }

@@ -1,4 +1,7 @@
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -8,6 +11,48 @@ use rootcause::report;
 use crate::agent::Agent;
 
 const SEARCH_TEXT_MAX_BYTES: usize = 32 * 1024;
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct SessionKey {
+    agent: Agent,
+    id: String,
+}
+
+impl SessionKey {
+    pub fn new(agent: Agent, id: impl Into<String>) -> Self {
+        Self { agent, id: id.into() }
+    }
+
+    pub const fn agent(&self) -> Agent {
+        self.agent
+    }
+
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+}
+
+impl Display for SessionKey {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.agent.name(), self.id)
+    }
+}
+
+impl FromStr for SessionKey {
+    type Err = rootcause::Report;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let Some((agent, id)) = value.split_once(':') else {
+            return Err(report!("invalid session key").attach(format!("value={value}")));
+        };
+        let agent =
+            Agent::from_name(agent).map_err(|err| report!("invalid session key agent").attach(err.to_string()))?;
+        if id.is_empty() {
+            return Err(report!("invalid session key").attach(format!("value={value}")));
+        }
+        Ok(Self::new(agent, id))
+    }
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Session {
@@ -200,11 +245,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_session_key_string_round_trip_uses_agent_session_format() {
+        assert2::assert!(let Ok(key) = "codex:session-id".parse::<SessionKey>());
+
+        pretty_assertions::assert_eq!(key, SessionKey::new(Agent::Codex, "session-id"));
+        pretty_assertions::assert_eq!(key.to_string(), "codex:session-id");
+    }
+
+    #[test]
     fn test_build_resume_command_matches_agent() {
-        let tempdir = tempdir().unwrap();
+        let tempdir = tempdir().expect("tempdir should be created");
         let workspace = tempdir.path().join("workspace");
         let path = tempdir.path().join("session.jsonl");
-        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::create_dir_all(&workspace).expect("workspace should be created");
+        let created_at = DateTime::from_timestamp_millis(1).expect("test timestamp should be valid");
 
         let claude = Session {
             agent: Agent::Claude,
@@ -213,8 +267,8 @@ mod tests {
             name: "session-name".into(),
             search_text: "session-name".into(),
             path,
-            created_at: DateTime::from_timestamp_millis(1).unwrap().to_utc(),
-            updated_at: DateTime::from_timestamp_millis(1).unwrap().to_utc(),
+            created_at: created_at.to_utc(),
+            updated_at: created_at.to_utc(),
         };
         let codex = Session {
             agent: Agent::Codex,
@@ -227,7 +281,7 @@ mod tests {
 
         assert2::assert!(let Ok((_, claude_args)) = claude.build_resume_command());
         pretty_assertions::assert_eq!(claude_args, vec!["--resume".to_owned(), "session-id".to_owned()]);
-        assert2::assert!(let Some(workspace_str) = workspace.to_str());
+        let workspace_str = workspace.to_str().expect("workspace test path should be utf8");
         assert2::assert!(let Ok((_, codex_args)) = codex.build_resume_command());
         pretty_assertions::assert_eq!(
             codex_args,
@@ -253,9 +307,10 @@ mod tests {
 
     #[test]
     fn test_session_new_sets_search_text_from_resolved_name() {
-        let tempdir = tempdir().unwrap();
+        let tempdir = tempdir().expect("tempdir should be created");
         let workspace = tempdir.path().join("workspace");
-        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::create_dir_all(&workspace).expect("workspace should be created");
+        let created_at = DateTime::from_timestamp_millis(1).expect("test timestamp should be valid");
 
         let session = Session::new(
             Agent::Codex,
@@ -263,7 +318,7 @@ mod tests {
             workspace,
             PathBuf::from("session.jsonl"),
             Some("hello world".into()),
-            DateTime::from_timestamp_millis(1).unwrap().to_utc(),
+            created_at.to_utc(),
         );
 
         pretty_assertions::assert_eq!(session.name, "hello world");

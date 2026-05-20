@@ -9,6 +9,7 @@ use agg::TabIndicator;
 use ytil_agents::agent::Agent;
 use ytil_agents::agent::AgentEventKind;
 use ytil_agents::agent::AgentEventPayload;
+use ytil_agents::agent::session::SessionKey;
 use zellij_tile::prelude::TabInfo;
 
 use crate::plugin::ppick::state::PaneObservation;
@@ -204,7 +205,7 @@ impl PaneEntry {
         cwd_changed || git_changed
     }
 
-    pub fn attach_session(&mut self, sessions_by_key: &HashMap<(String, String), SessionEntry>) -> bool {
+    pub fn attach_session(&mut self, sessions_by_key: &HashMap<SessionKey, SessionEntry>) -> bool {
         let session = crate::plugin::ppick::entry::matching_session(self, sessions_by_key);
         let next_summary = session.and_then(|session| session.summary.as_deref());
         let next_display = session.map(|session| session.display.as_str());
@@ -262,6 +263,10 @@ impl PaneEntry {
 
     pub const fn is_agent_pane(&self) -> bool {
         self.agent.is_some()
+    }
+
+    pub fn session_key(&self) -> Option<SessionKey> {
+        Some(SessionKey::new(self.agent?, self.session_id.clone()?))
     }
 
     pub fn row(&self, selected: bool, home_dir: &Path) -> PpickRow {
@@ -368,11 +373,10 @@ pub fn sort_by_tab_order(pane_entries: &mut [PaneEntry], tabs: &[TabInfo]) {
 
 fn matching_session<'a>(
     entry: &PaneEntry,
-    sessions_by_key: &'a HashMap<(String, String), SessionEntry>,
+    sessions_by_key: &'a HashMap<SessionKey, SessionEntry>,
 ) -> Option<&'a SessionEntry> {
-    let agent = entry.agent?;
-    let session_id = entry.session_id.as_deref()?;
-    sessions_by_key.get(&(agent.name().to_string(), session_id.to_string()))
+    let key = entry.session_key()?;
+    sessions_by_key.get(&key)
 }
 
 fn resume_session_id_from_command_args(args: &[String]) -> Option<String> {
