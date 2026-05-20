@@ -16,12 +16,7 @@ use crate::agent::session::Session;
 /// # Errors
 /// Returns an error when the encoded metadata is invalid or contains an invalid timestamp.
 pub fn parse(meta_hex: &str, workspace_dir: PathBuf) -> rootcause::Result<CursorSession> {
-    let meta_json = decode_hex_string(meta_hex)
-        .context("failed to decode Cursor meta payload".to_owned())
-        .attach(format!("meta_hex={meta_hex}"))?;
-    let doc = serde_json::from_str::<CursorMeta>(&meta_json)
-        .context("failed to parse Cursor session metadata".to_owned())
-        .attach(format!("meta_json={meta_json}"))?;
+    let doc = parse_meta(meta_hex)?;
 
     let created_at = DateTime::from_timestamp_millis(doc.created_at)
         .map(|datetime| datetime.to_utc())
@@ -45,6 +40,23 @@ pub fn parse(meta_hex: &str, workspace_dir: PathBuf) -> rootcause::Result<Cursor
         created_at,
         updated_at: created_at,
     })
+}
+
+/// Parse only the session id from Cursor metadata.
+///
+/// # Errors
+/// Returns an error when the encoded metadata is invalid or missing required fields.
+pub fn parse_session_id(meta_hex: &str) -> rootcause::Result<String> {
+    parse_meta(meta_hex).map(|meta| meta.agent_id)
+}
+
+fn parse_meta(meta_hex: &str) -> rootcause::Result<CursorMeta> {
+    let meta_json = decode_hex_string(meta_hex)
+        .context("failed to decode Cursor meta payload".to_owned())
+        .attach(format!("meta_hex={meta_hex}"))?;
+    Ok(serde_json::from_str::<CursorMeta>(&meta_json)
+        .context("failed to parse Cursor session metadata".to_owned())
+        .attach(format!("meta_json={meta_json}"))?)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

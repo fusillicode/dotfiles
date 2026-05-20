@@ -9,16 +9,17 @@ use std::process::Stdio;
 
 use owo_colors::OwoColorize;
 use rootcause::prelude::ResultExt;
-#[cfg(not(unix))]
 use rootcause::report;
 use serde::Serialize;
 use strum::EnumIter;
 use strum::IntoEnumIterator;
 use ytil_agents::agent::Agent;
 use ytil_agents::agent::session::Session;
+use ytil_agents::agent::session::SessionKey;
 
-pub fn list_json() -> rootcause::Result<()> {
-    let sessions = load_sorted_sessions()?;
+pub fn list_json(args: &[String]) -> rootcause::Result<()> {
+    let session_keys = parse_json_session_keys(args)?;
+    let sessions = load_sorted_sessions_by_key(&session_keys)?;
     let home_dir = std::env::var_os("HOME").map_or_else(|| std::path::PathBuf::from("/"), std::path::PathBuf::from);
     let rows = sessions
         .into_iter()
@@ -31,6 +32,30 @@ pub fn list_json() -> rootcause::Result<()> {
         serde_json::to_string(&rows).context("failed to serialize sessions")?
     );
     Ok(())
+}
+
+fn parse_json_session_keys(args: &[String]) -> rootcause::Result<Vec<SessionKey>> {
+    let mut session_keys = Vec::new();
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--session" => {
+                let Some(key) = args.next() else {
+                    return Err(report!("missing --session value"));
+                };
+                session_keys.push(key.parse()?);
+            }
+            unexpected => {
+                return Err(report!("unknown ags list --json arg").attach(format!("arg={unexpected}")));
+            }
+        }
+    }
+    if session_keys.is_empty() {
+        return Err(report!("ags list --json requires at least one --session"));
+    }
+    session_keys.sort();
+    session_keys.dedup();
+    Ok(session_keys)
 }
 
 pub fn run() -> rootcause::Result<()> {
@@ -69,6 +94,17 @@ pub fn run() -> rootcause::Result<()> {
 fn load_sorted_sessions() -> rootcause::Result<Vec<Session>> {
     let mut sessions = Vec::new();
     sessions.extend(ytil_agents::agent::session_loader::load_sessions()?);
+    sort_sessions(&mut sessions);
+    Ok(sessions)
+}
+
+fn load_sorted_sessions_by_key(keys: &[SessionKey]) -> rootcause::Result<Vec<Session>> {
+    let mut sessions = ytil_agents::agent::session_loader::load_sessions_by_key(keys)?;
+    sort_sessions(&mut sessions);
+    Ok(sessions)
+}
+
+fn sort_sessions(sessions: &mut [Session]) {
     sessions.sort_by(|a, b| {
         b.updated_at
             .cmp(&a.updated_at)
@@ -76,7 +112,6 @@ fn load_sorted_sessions() -> rootcause::Result<Vec<Session>> {
             .then_with(|| a.name.cmp(&b.name))
             .then_with(|| a.id.cmp(&b.id))
     });
-    Ok(sessions)
 }
 
 struct RenderableSession {
@@ -303,9 +338,11 @@ mod tests {
 
     #[test]
     fn test_json_session_renders_plain_ags_summary_and_resume_command() {
-        let dir = tempdir().unwrap();
+        let dir = tempdir().expect("tempdir should be created");
         let workspace = dir.path().join("repo");
-        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::create_dir_all(&workspace).expect("workspace should be created");
+        let created_at = DateTime::from_timestamp(1_700_000_000, 0).expect("test timestamp should be valid");
+        let updated_at = DateTime::from_timestamp(1_700_000_100, 0).expect("test timestamp should be valid");
         let session = Session {
             id: "session-id".to_string(),
             agent: Agent::Codex,
@@ -313,12 +350,12 @@ mod tests {
             search_text: "hidden prompt".to_string(),
             workspace: workspace.clone(),
             path: dir.path().join("session.jsonl"),
-            created_at: DateTime::from_timestamp(1_700_000_000, 0).unwrap().to_utc(),
-            updated_at: DateTime::from_timestamp(1_700_000_100, 0).unwrap().to_utc(),
+            created_at: created_at.to_utc(),
+            updated_at: updated_at.to_utc(),
         };
         let renderable = RenderableSession::from(session);
 
-        let row = JsonSession::new(&renderable, dir.path()).unwrap();
+        assert2::assert!(let Ok(row) = JsonSession::new(&renderable, dir.path()));
 
         assert2::assert!(row.display.starts_with("cx ~/repo fix issue"));
         assert2::assert!(row.search.contains("hidden prompt"));
@@ -326,11 +363,26 @@ mod tests {
         pretty_assertions::assert_eq!(row.workspace, workspace);
         pretty_assertions::assert_eq!(row.session_id, "session-id");
         pretty_assertions::assert_eq!(row.summary, "fix issue");
-        pretty_assertions::assert_eq!(
-            row.updated_at,
-            DateTime::from_timestamp(1_700_000_100, 0).unwrap().to_utc()
-        );
+        pretty_assertions::assert_eq!(row.updated_at, updated_at.to_utc());
         pretty_assertions::assert_eq!(row.resume_program, "codex");
         pretty_assertions::assert_eq!(row.resume_args.first().map(String::as_str), Some("resume"));
+    }
+
+    #[test]
+    fn test_parse_json_session_keys_requires_at_least_one_session_key() {
+        assert2::assert!(let Err(err) = parse_json_session_keys(&[]));
+        assert!(err.to_string().contains("requires at least one --session"));
+    }
+
+    #[test]
+    fn test_parse_json_session_keys_parses_and_dedupes_requested_session_keys() {
+        assert2::assert!(let Ok(session_keys) = parse_json_session_keys(&[
+            String::from("--session"),
+            String::from("codex:target"),
+            String::from("--session"),
+            String::from("codex:target"),
+        ]));
+
+        pretty_assertions::assert_eq!(session_keys, [SessionKey::new(Agent::Codex, "target")]);
     }
 }

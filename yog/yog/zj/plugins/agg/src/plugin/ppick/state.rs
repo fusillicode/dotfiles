@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use agg::GitStat;
 use serde::Deserialize;
+use ytil_agents::agent::session::SessionKey;
 use zellij_tile::prelude::BareKey;
 use zellij_tile::prelude::KeyModifier;
 use zellij_tile::prelude::KeyWithModifier;
@@ -45,7 +46,8 @@ pub struct PpickState {
     filtered_entry_indices: Vec<usize>,
     filter_ready: bool,
     pane_entries: Vec<PaneEntry>,
-    sessions_by_key: HashMap<(String, String), SessionEntry>,
+    sessions_by_key: HashMap<SessionKey, SessionEntry>,
+    requested_session_keys: Vec<SessionKey>,
     cwds_by_pane: HashMap<u32, PathBuf>,
     commands_by_pane: HashMap<u32, Vec<String>>,
     agent_snapshots_by_pane: HashMap<u32, PaneAgentSnapshot>,
@@ -1335,6 +1337,39 @@ mod tests {
                 .first()
                 .and_then(|entry| entry.session_search.as_deref()),
             Some("exact hidden")
+        );
+    }
+
+    #[test]
+    fn test_take_session_keys_to_request_only_requests_current_agent_session_ids_once() {
+        let mut state = PpickState {
+            pane_entries: vec![
+                PaneEntry::new(
+                    0,
+                    42,
+                    Some(PathBuf::from("/tmp/repo")),
+                    vec![String::from("codex"), String::from("resume"), String::from("target")],
+                    None,
+                ),
+                PaneEntry::new(0, 43, Some(PathBuf::from("/tmp/repo")), vec![String::from("zsh")], None),
+            ],
+            ..Default::default()
+        };
+
+        pretty_assertions::assert_eq!(
+            state.take_session_keys_to_request(),
+            vec![SessionKey::new(Agent::Codex, "target")]
+        );
+        pretty_assertions::assert_eq!(state.take_session_keys_to_request(), Vec::<SessionKey>::new());
+
+        assert2::assert!(state.update_command(
+            42,
+            &[String::from("codex"), String::from("resume"), String::from("next")]
+        ));
+
+        pretty_assertions::assert_eq!(
+            state.take_session_keys_to_request(),
+            vec![SessionKey::new(Agent::Codex, "next")]
         );
     }
 
