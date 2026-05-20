@@ -12,7 +12,7 @@ pub mod session;
 pub mod session_loader;
 pub mod session_parser;
 
-#[derive(Clone, Copy, Debug, EnumIter, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, EnumIter, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum Agent {
     Claude,
     Codex,

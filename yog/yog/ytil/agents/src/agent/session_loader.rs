@@ -1,9 +1,12 @@
+use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
 
 use rootcause::prelude::ResultExt;
 
+use crate::agent::Agent;
 use crate::agent::session::Session;
+use crate::agent::session::SessionKey;
 
 pub mod claude;
 pub mod codex;
@@ -19,6 +22,25 @@ pub fn load_sessions() -> rootcause::Result<Vec<Session>> {
     sessions.extend(codex::load_sessions()?);
     sessions.extend(cursor::load_sessions()?);
     Ok(sessions)
+}
+
+/// Load only the requested resumable sessions from their owning agent stores.
+///
+/// # Errors
+/// Returns an error when a matching supported session cannot be read or parsed.
+pub fn load_sessions_by_key(keys: &[SessionKey]) -> rootcause::Result<Vec<Session>> {
+    let mut sessions = Vec::new();
+    sessions.extend(claude::load_sessions_by_key(keys)?);
+    sessions.extend(codex::load_sessions_by_key(keys)?);
+    sessions.extend(cursor::load_sessions_by_key(keys)?);
+    Ok(sessions)
+}
+
+fn requested_ids(keys: &[SessionKey], agent: Agent) -> HashSet<&str> {
+    keys.iter()
+        .filter(|key| key.agent() == agent)
+        .map(SessionKey::id)
+        .collect()
 }
 
 fn find_session_paths(

@@ -11,8 +11,9 @@ fn main() -> rootcause::Result<()> {
         return Ok(());
     }
 
-    if args.as_slice() == ["list", "--json"] {
-        return sessions::list_json();
+    let args = args.as_slice();
+    if args.first().map(String::as_str) == Some("list") && args.get(1).map(String::as_str) == Some("--json") {
+        return sessions::list_json(args.get(2..).unwrap_or_default());
     }
 
     sessions::run()
