@@ -36,7 +36,10 @@ pub fn get_default() -> rootcause::Result<String> {
 
     let default_remote_ref = crate::remote::get_default(&repo)?;
 
-    let Some(target) = default_remote_ref.symbolic_target() else {
+    let Some(target) = default_remote_ref
+        .symbolic_target()
+        .context("error reading default remote symbolic target")?
+    else {
         bail!("error missing default branch");
     };
 
@@ -66,13 +69,15 @@ pub fn get_current() -> rootcause::Result<String> {
         Err(report!("error head is detached")).attach_with(|| format!("path={}", repo_path.display()))?;
     }
 
-    repo.head()
+    let head = repo
+        .head()
         .context("error getting head")
-        .attach_with(|| format!("path={}", repo_path.display()))?
+        .attach_with(|| format!("path={}", repo_path.display()))?;
+    let branch_name = head
         .shorthand()
-        .map(str::to_string)
-        .ok_or_else(|| report!("error invalid branch shorthand UTF-8"))
-        .attach_with(|| format!("path={}", repo_path.display()))
+        .context("error invalid branch shorthand UTF-8")
+        .attach_with(|| format!("path={}", repo_path.display()))?;
+    Ok(branch_name.to_string())
 }
 
 /// Returns the branch checked out at or before `timestamp`, inferred from `HEAD` reflog.
@@ -86,10 +91,10 @@ pub fn get_at(path: &Path, timestamp: DateTime<Utc>) -> Option<String> {
     reflog
         .iter()
         .filter_map(|entry| {
-            Some((
-                entry.committer().when().seconds(),
-                branch_from_reflog_message(entry.message()?)?,
-            ))
+            // git2 decodes reflog messages lazily; unreadable or missing messages cannot
+            // prove branch history, so this lookup skips only that entry.
+            let message = entry.message().ok()??;
+            Some((entry.committer().when().seconds(), branch_from_reflog_message(message)?))
         })
         .filter(|(entry_timestamp, _)| *entry_timestamp <= timestamp)
         .max_by_key(|(entry_timestamp, _)| *entry_timestamp)
@@ -152,7 +157,7 @@ pub fn rename_current(branch_name: &str, repo: Option<&Repository>) -> rootcause
         .attach_with(|| format!("branch_name={branch_name:?}"))?;
     let current_branch_name = head
         .shorthand()
-        .ok_or_else(|| report!("error invalid current branch shorthand UTF-8"))
+        .context("error invalid current branch shorthand UTF-8")
         .attach_with(|| format!("repo_path={}", repo.path().display()))
         .attach_with(|| format!("branch_name={branch_name:?}"))?;
     let mut branch = repo
@@ -194,7 +199,7 @@ pub fn push(branch_name: &str, repo: Option<&Repository>) -> rootcause::Result<(
 
     let default_remote_name = default_remote
         .name()
-        .ok_or_else(|| report!("error missing name of default remote"))?
+        .context("error reading name of default remote")?
         .trim_start_matches("refs/remotes/")
         .trim_end_matches("/HEAD");
 
@@ -227,7 +232,7 @@ pub fn push(branch_name: &str, repo: Option<&Repository>) -> rootcause::Result<(
 pub fn get_previous(repo: &Repository) -> Option<String> {
     let reflog = repo.reflog("HEAD").ok()?;
     reflog.iter().find_map(|entry| {
-        let msg = entry.message()?;
+        let msg = entry.message().ok()??;
         let rest = msg
             .strip_prefix("checkout: moving from ")
             .or_else(|| msg.strip_prefix("switch: moving from "))?;
@@ -426,7 +431,7 @@ impl<'a> TryFrom<(git2::Branch<'a>, git2::BranchType)> for Branch {
         let committer = raw_branch.get().peel_to_commit()?.committer().to_owned();
         let committer_email = committer
             .email()
-            .ok_or_else(|| report!("error invalid committer email UTF-8"))
+            .context("error invalid committer email UTF-8")
             .attach_with(|| format!("branch_name={branch_name:?}"))?
             .to_string();
         let committer_date_time = DateTime::from_timestamp(committer.when().seconds(), 0)
@@ -537,7 +542,7 @@ mod tests {
 
         assert2::assert!(let Ok(()) = rename_current("renamed", Some(&repo)));
 
-        pretty_assertions::assert_eq!(repo.head().unwrap().shorthand(), Some("renamed"));
+        pretty_assertions::assert_eq!(repo.head().unwrap().shorthand().unwrap(), "renamed");
         repo.find_branch("renamed", git2::BranchType::Local).unwrap();
         assert2::assert!(let Err(_) = repo.find_branch("master", git2::BranchType::Local));
     }
