@@ -58,7 +58,7 @@ assert2 = { version = "0.4" }
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 convert_case = { version = "0.11" }
 fake = { version = "5.1", features = ["derive"] }
-git2 = { version = "0.20", default-features = false }
+git2 = { version = "0.21", default-features = false }
 nomicon = { path = "./yog/nomicon" }
 nvim-oxi = { path = "../third_party/nvim-oxi", features = ["neovim-nightly", "mlua"] }
 owo-colors = { version = "4" }
