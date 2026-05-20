@@ -224,7 +224,7 @@ fn main() -> rootcause::Result<()> {
         LintScope::Changed(
             repo.statuses(None)?
                 .iter()
-                .filter_map(|entry| entry.path().map(str::to_string))
+                .filter_map(|entry| entry.path().ok().map(str::to_string))
                 .collect::<Vec<_>>(),
         )
     };

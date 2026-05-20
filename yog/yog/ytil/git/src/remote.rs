@@ -13,7 +13,7 @@ use rootcause::report;
 /// # Errors
 /// - If no remote has a valid `HEAD` reference.
 pub fn get_default(repo: &Repository) -> rootcause::Result<Reference<'_>> {
-    for remote_name in repo.remotes()?.iter().flatten() {
+    for remote_name in repo.remotes()?.iter().filter_map(Result::ok).flatten() {
         if let Ok(default_remote_ref) = repo.find_reference(&format!("refs/remotes/{remote_name}/HEAD")) {
             return Ok(default_remote_ref);
         }
@@ -30,13 +30,13 @@ pub fn get_default(repo: &Repository) -> rootcause::Result<Reference<'_>> {
 /// - If URL has an unsupported protocol.
 pub fn get_https_urls(repo: &Repository) -> rootcause::Result<Vec<String>> {
     let mut https_urls = vec![];
-    for remote_name in repo.remotes()?.iter().flatten() {
+    for remote_name in repo.remotes()?.iter().filter_map(Result::ok).flatten() {
         let remote = repo.find_remote(remote_name)?;
         let url = remote
             .url()
-            .ok_or_else(|| report!("error invalid URL for remote"))
-            .attach_with(|| format!("remote={remote_name:?}"))
-            .and_then(map_to_https_url)?;
+            .context("error invalid URL for remote")
+            .attach_with(|| format!("remote={remote_name:?}"))?;
+        let url = map_to_https_url(url)?;
         https_urls.push(url);
     }
     Ok(https_urls)

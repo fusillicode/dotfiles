@@ -59,7 +59,7 @@ pub fn run(cwd: &str, use_case: UseCase) -> GitStat {
                 .head()
                 .ok()
                 .filter(git2::Reference::is_branch)
-                .and_then(|head| head.shorthand().map(str::to_string));
+                .and_then(|head| head.shorthand().ok().map(str::to_string));
             (branch, last_commit_metadata(&repo))
         }
     };
@@ -100,6 +100,8 @@ fn last_commit_metadata(repo: &git2::Repository) -> Option<LastCommit> {
     let age = commit_age_label(commit.time().seconds(), chrono::Utc::now().timestamp());
     let summary = commit
         .summary()
+        .ok()
+        .flatten()
         .map(|summary| ytil_tui::display_fixed_width(summary, COMMIT_SUMMARY_MAX_WIDTH))
         .unwrap_or_default();
     Some(LastCommit {
