@@ -47,10 +47,12 @@ autoload -Uz bracketed-paste-magic
 zle -N bracketed-paste bracketed-paste-magic
 
 # Terminal title and zellij tab (using add-zsh-hook so starship doesn't clobber these)
+# Keep command titles raw: commands can contain prompt escapes such as URL `%5B` so
+# only expand prompt escapes for the idle cwd title.
 autoload -Uz add-zsh-hook
-function _set_title() { print -Pn "\e]0;$1\a"; }
+function _set_title() { printf '\033]0;%s\007' "$1"; }
 function _title_precmd() {
-  _set_title "%~"
+  _set_title "${(%):-%~}"
   _zellij_cmd=""
   [[ -n "$ZELLIJ" ]] && zellij action rename-tab -- "${PWD/#$HOME/~}" &!
 }
