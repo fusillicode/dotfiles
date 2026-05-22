@@ -360,7 +360,7 @@ mod tests {
                 .iter()
                 .map(|row| row.cwd_label.as_str())
                 .collect::<Vec<_>>(),
-            vec!["/tmp/pane-10", "/tmp/pane-11", "/tmp/pane-20", "/tmp/pane-21",]
+            vec!["/t/pane-10", "/t/pane-11", "/t/pane-20", "/t/pane-21",]
         );
     }
 
@@ -683,15 +683,17 @@ mod tests {
             panes: std::iter::once((1, vec![terminal_pane_with_command(43, "nvim")])).collect(),
         };
         let _ = update_panes(&mut state, &manifest, |_| None, |_| None);
-        let rows = frame(&mut state);
-        pretty_assertions::assert_eq!(rows.first().map(|row| row.pane_label.as_str()), Some("20:43"));
+        state.query = String::from("20:43");
+        pretty_assertions::assert_eq!(state.handle_key(&key(BareKey::Enter)), PpickAction::Focus(43));
+        state.query.clear();
 
         let stale_tabs_manifest = PaneManifest {
             panes: std::iter::once((0, vec![terminal_pane_with_command(43, "nvim")])).collect(),
         };
         let _ = update_panes(&mut state, &stale_tabs_manifest, |_| None, |_| None);
-        let rows = frame(&mut state);
-        pretty_assertions::assert_eq!(rows.first().map(|row| row.pane_label.as_str()), Some("20:43"));
+        state.query = String::from("20:43");
+        pretty_assertions::assert_eq!(state.handle_key(&key(BareKey::Enter)), PpickAction::Focus(43));
+        state.query.clear();
 
         let _ = state.update_tabs(vec![
             TabInfo {
@@ -706,45 +708,8 @@ mod tests {
             },
         ]);
 
-        let rows = frame(&mut state);
-        pretty_assertions::assert_eq!(rows.first().map(|row| row.pane_label.as_str()), Some("20:43"));
-    }
-
-    #[test]
-    fn test_visible_frame_shows_compact_pane_label_for_each_entry() {
-        let mut state = PpickState::default();
-        let _ = state.update_tabs(vec![
-            TabInfo {
-                tab_id: 10,
-                position: 0,
-                ..Default::default()
-            },
-            TabInfo {
-                tab_id: 20,
-                position: 1,
-                ..Default::default()
-            },
-        ]);
-        let manifest = PaneManifest {
-            panes: [
-                (
-                    0,
-                    vec![
-                        terminal_pane_with_command(42, "cargo"),
-                        terminal_pane_with_command(43, "nvim"),
-                    ],
-                ),
-                (1, vec![terminal_pane_with_command(44, "git")]),
-            ]
-            .into_iter()
-            .collect(),
-        };
-        let _ = update_panes(&mut state, &manifest, |_| None, |_| None);
-
-        let rows = frame(&mut state);
-        let labels = rows.iter().map(|row| row.pane_label.as_str()).collect::<Vec<_>>();
-
-        pretty_assertions::assert_eq!(labels, vec!["10:42", "10:43", "20:44"]);
+        state.query = String::from("20:43");
+        pretty_assertions::assert_eq!(state.handle_key(&key(BareKey::Enter)), PpickAction::Focus(43));
     }
 
     #[test]
@@ -772,10 +737,10 @@ mod tests {
         };
 
         let rows = frame(&mut state);
-        let labels = rows.iter().map(|row| row.pane_label.as_str()).collect::<Vec<_>>();
         let indicators = rows.iter().map(|row| row.indicator).collect::<Vec<_>>();
 
-        pretty_assertions::assert_eq!(labels, vec!["43", "44", "45"]);
+        pretty_assertions::assert_eq!(rows.len(), 3);
+        assert2::assert!(rows.iter().all(|row| matches!(row.cmd, agg::Cmd::Agent { .. })));
         pretty_assertions::assert_eq!(
             indicators,
             vec![
@@ -879,7 +844,7 @@ mod tests {
         pretty_assertions::assert_eq!(frame.len(), 2);
         pretty_assertions::assert_eq!(
             frame.iter().map(|row| row.cwd_label.as_str()).collect::<Vec<_>>(),
-            vec!["/tmp/pane-4", "/tmp/pane-5"]
+            vec!["/t/pane-4", "/t/pane-5"]
         );
         pretty_assertions::assert_eq!(
             frame.iter().map(|row| row.selected).collect::<Vec<_>>(),

@@ -13,6 +13,7 @@ const AGG_PLUGIN: zj::PluginInstallSpec = zj::PluginInstallSpec {
     dir_name: "agg",
     wasm_name: "agg.wasm",
 };
+const AGG_INSTALLED_WASM_NAMES: &[&str] = &["agg-tbar.wasm", "agg-apick.wasm"];
 const AGENTS_PIPE: &str = "agg-agent";
 const LAYOUT_FILENAME: &str = "agg.kdl";
 const GEMINI_HOOK_NAME_PREFIX: &str = "agg-gemini-";
@@ -21,7 +22,8 @@ const OPENCODE_TEMPLATE_FILENAME: &str = "agg.ts.template";
 const OPENCODE_PIPE_PLACEHOLDER: &str = "{{AGENTS_PIPE}}";
 
 pub fn run(is_debug: bool) -> rootcause::Result<()> {
-    zj::build_and_install_plugin(&AGG_PLUGIN, is_debug).context("failed to install agg wasm plugin")?;
+    zj::build_and_install_plugin_copies(&AGG_PLUGIN, AGG_INSTALLED_WASM_NAMES, is_debug)
+        .context("failed to install agg wasm plugins")?;
     install_layout().context("failed to install zellij layout")?;
     install_hooks(Agent::Claude).context("failed to install Claude hooks")?;
     install_hooks(Agent::Cursor).context("failed to install Cursor hooks")?;

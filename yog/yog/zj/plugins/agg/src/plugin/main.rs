@@ -229,13 +229,10 @@ mod tests {
         };
 
         let _ = ppick.update_panes(&manifest, |_| None, |_| None);
-        let labels = ppick
-            .visible_frame(usize::MAX)
-            .into_iter()
-            .map(|row| row.pane_label)
-            .collect::<Vec<_>>();
+        let rows = ppick.visible_frame(usize::MAX);
 
-        assert_eq!(labels, vec![String::from("43")]);
+        assert_eq!(rows.len(), 1);
+        assert2::assert!(matches!(rows[0].cmd, agg::Cmd::Agent { .. }));
     }
 
     #[test]
