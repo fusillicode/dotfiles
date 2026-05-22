@@ -20,12 +20,27 @@ pub struct PluginInstallSpec {
 /// # Errors
 /// Returns an error when the WASM target cannot be installed, the plugin build fails, or the artifact cannot be copied.
 pub fn build_and_install_plugin(spec: &PluginInstallSpec, is_debug: bool) -> rootcause::Result<()> {
+    build_and_install_plugin_copies(spec, &[spec.wasm_name], is_debug)
+}
+
+/// Build a Zellij WASM plugin once and copy it into the local Zellij plugins directory under multiple names.
+///
+/// # Errors
+/// Returns an error when the WASM target cannot be installed, the plugin build fails, or any artifact copy fails.
+pub fn build_and_install_plugin_copies(
+    spec: &PluginInstallSpec,
+    install_names: &[&str],
+    is_debug: bool,
+) -> rootcause::Result<()> {
     let wasm_path = build_wasm(spec, is_debug)
         .context("failed to build wasm plugin")
         .attach_with(|| format!("plugin={}", spec.dir_name))?;
-    install_wasm_plugin(&wasm_path, spec.wasm_name)
-        .context("failed to install wasm plugin")
-        .attach_with(|| format!("plugin={}", spec.dir_name))?;
+    for install_name in install_names {
+        install_wasm_plugin(&wasm_path, install_name)
+            .context("failed to install wasm plugin")
+            .attach_with(|| format!("plugin={}", spec.dir_name))
+            .attach_with(|| format!("install_name={install_name}"))?;
+    }
     Ok(())
 }
 
