@@ -272,10 +272,6 @@ impl PaneEntry {
     pub fn row(&self, selected: bool, home_dir: &Path) -> PpickRow {
         PpickRow {
             selected,
-            pane_label: self.tab_id.map_or_else(
-                || self.pane_id.to_string(),
-                |tab_id| format!("{tab_id}:{}", self.pane_id),
-            ),
             cwd_label: path_label(self.cwd.as_deref(), home_dir),
             branch_label: self.branch.clone().unwrap_or_else(|| "-".to_string()),
             git: self.git.clone(),
@@ -347,18 +343,12 @@ impl PaneEntry {
 }
 
 fn path_label(cwd: Option<&Path>, home_dir: &Path) -> String {
-    let Some(cwd) = cwd else {
-        return "-".to_string();
+    let home_dir = if home_dir.as_os_str().is_empty() {
+        Path::new("/")
+    } else {
+        home_dir
     };
-    if !home_dir.as_os_str().is_empty() && home_dir != Path::new("/") {
-        if cwd == home_dir {
-            return "~".to_string();
-        }
-        if let Ok(relative) = cwd.strip_prefix(home_dir) {
-            return format!("~/{}", relative.display());
-        }
-    }
-    cwd.display().to_string()
+    cwd.map_or_else(|| "-".to_string(), |cwd| ytil_tui::short_path(cwd, home_dir))
 }
 
 pub fn sort_by_tab_order(pane_entries: &mut [PaneEntry], tabs: &[TabInfo]) {
@@ -420,8 +410,9 @@ mod tests {
     #[rstest]
     #[case("/Users/me", "~")]
     #[case("/Users/me/project", "~/project")]
-    #[case("/Users/me/data/dev/work", "~/data/dev/work")]
-    fn test_row_when_cwd_is_under_home_uses_home_relative_label(#[case] cwd: &str, #[case] expected: &str) {
+    #[case("/Users/me/data/dev/work", "~/d/d/work")]
+    #[case("/Users/me/data/dev/dotfiles/dotfiles", "~/d/d/d/dotfiles")]
+    fn test_row_when_cwd_is_under_home_uses_short_home_relative_label(#[case] cwd: &str, #[case] expected: &str) {
         let entry = PaneEntry::new(0, 1, Some(PathBuf::from(cwd)), Vec::new(), None);
 
         let row = entry.row(false, Path::new("/Users/me"));
@@ -430,35 +421,21 @@ mod tests {
     }
 
     #[test]
-    fn test_row_when_cwd_is_outside_home_keeps_absolute_label() {
+    fn test_row_when_cwd_is_outside_home_uses_short_absolute_label() {
         let entry = PaneEntry::new(0, 1, Some(PathBuf::from("/opt/project")), Vec::new(), None);
 
         let row = entry.row(false, Path::new("/Users/me"));
 
-        pretty_assertions::assert_eq!(row.cwd_label, "/opt/project");
+        pretty_assertions::assert_eq!(row.cwd_label, "/o/project");
     }
 
     #[test]
-    fn test_row_includes_compact_pane_label() {
-        let mut entry = PaneEntry::new(2, 3, Some(PathBuf::from("/tmp/project")), Vec::new(), None);
-        let _ = entry.apply_tab_metadata(&[TabInfo {
-            tab_id: 77,
-            position: 2,
-            ..Default::default()
-        }]);
+    fn test_row_when_home_is_empty_uses_short_absolute_label() {
+        let entry = PaneEntry::new(0, 1, Some(PathBuf::from("/tmp/project")), Vec::new(), None);
 
-        let row = entry.row(false, Path::new("/Users/me"));
+        let row = entry.row(false, Path::new(""));
 
-        pretty_assertions::assert_eq!(row.pane_label, "77:3");
-    }
-
-    #[test]
-    fn test_row_when_tab_id_is_unknown_uses_pane_id_label() {
-        let entry = PaneEntry::new(2, 3, Some(PathBuf::from("/tmp/project")), Vec::new(), None);
-
-        let row = entry.row(false, Path::new("/Users/me"));
-
-        pretty_assertions::assert_eq!(row.pane_label, "3");
+        pretty_assertions::assert_eq!(row.cwd_label, "/t/project");
     }
 
     #[test]

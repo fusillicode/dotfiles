@@ -5,19 +5,21 @@ use agg::GitStat;
 use agg::TabIndicator;
 
 pub const ENTRY_ROWS: usize = 3;
-const PICKER_SELECTED_BG: &str = "\x1b[48;2;50;50;50m";
+const PICKER_SELECTED_BG: &str = "\x1b[48;2;42;42;42m";
 const TAB_DEFAULT_FG: &str = "\x1b[39m";
-const TAB_PANE_FG: &str = "\x1b[37m";
-const PATH_STYLE: &str = "\x1b[1m\x1b[38;2;0;255;255m";
-const SUMMARY_FG: &str = "\x1b[38;2;119;119;119m";
-const RAIL_SELECTED_FG: &str = "\x1b[38;2;106;106;223m";
+const PATH_STYLE: &str = "\x1b[38;2;119;119;119m";
+const BRANCH_FG: &str = "\x1b[38;2;208;208;208m";
+const AGENT_LABEL_FG: &str = "\x1b[38;2;218;215;255m";
+const RUNNING_CMD_FG: &str = "\x1b[38;2;208;208;208m";
+const SESSION_SUMMARY_FG: &str = "\x1b[38;2;189;189;189m";
+const COMMIT_FG: &str = "\x1b[38;2;138;138;138m";
+const RAIL_SELECTED_FG: &str = "\x1b[38;2;124;124;255m";
 const SUMMARY_MAX_WIDTH: usize = 80;
 const COMMIT_SUMMARY_MAX_WIDTH: usize = 80;
 
 #[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub struct PpickRow {
     pub selected: bool,
-    pub pane_label: String,
     pub cwd_label: String,
     pub branch_label: String,
     pub git: GitStat,
@@ -44,12 +46,11 @@ pub fn render_frame(frame: &[PpickRow], query: &str, rows: usize, cols: usize, b
         let _ = write!(buf, "\x1b[2;1H{empty}");
         2
     } else {
-        let pane_label_width = crate::plugin::ppick::ui::label_width(frame.iter().map(|row| &row.pane_label));
         let mut row_1based = 2_usize;
         for row in frame {
             for line in [
-                crate::plugin::ppick::ui::path_line_with_widths(row, cols, pane_label_width),
                 crate::plugin::ppick::ui::cmd_line(row, cols),
+                crate::plugin::ppick::ui::metadata_line(row, cols),
                 crate::plugin::ui::pad("", cols),
             ] {
                 let _ = write!(buf, "\x1b[{row_1based};1H{line}{}", crate::plugin::ui::RESET);
@@ -67,30 +68,22 @@ pub fn render_frame(frame: &[PpickRow], query: &str, rows: usize, cols: usize, b
 
 #[cfg(test)]
 fn path_line(row: &PpickRow, cols: usize) -> String {
-    crate::plugin::ppick::ui::path_line_with_widths(row, cols, crate::plugin::ppick::ui::label_width([&row.pane_label]))
+    crate::plugin::ppick::ui::metadata_line(row, cols)
 }
 
-fn path_line_with_widths(row: &PpickRow, cols: usize, pane_label_width: usize) -> String {
+fn metadata_line(row: &PpickRow, cols: usize) -> String {
     let bg = if row.selected { PICKER_SELECTED_BG } else { "" };
     let inner_w = cols.saturating_sub(1);
     let git_parts = crate::plugin::ui::git_stat_parts(&row.git);
     let commit_label = crate::plugin::ppick::ui::commit_label(&row.git);
-    let pane_label = crate::plugin::ui::pad(
-        &ytil_tui::display_fixed_width(&row.pane_label, pane_label_width),
-        pane_label_width,
-    );
     let mut parts = vec![
-        LinePart {
-            style: TAB_PANE_FG,
-            value: &pane_label,
-        },
         LinePart {
             style: PATH_STYLE,
             value: &row.cwd_label,
         },
         LinePart { style: "", value: " " },
         LinePart {
-            style: "",
+            style: BRANCH_FG,
             value: &row.branch_label,
         },
     ];
@@ -101,7 +94,7 @@ fn path_line_with_widths(row: &PpickRow, cols: usize, pane_label_width: usize) -
     if !commit_label.is_empty() {
         parts.push(LinePart { style: "", value: " " });
         parts.push(LinePart {
-            style: SUMMARY_FG,
+            style: COMMIT_FG,
             value: &commit_label,
         });
     }
@@ -111,11 +104,6 @@ fn path_line_with_widths(row: &PpickRow, cols: usize, pane_label_width: usize) -
     out.push_str(bg);
     out.push_str(TAB_DEFAULT_FG);
     crate::plugin::ui::pad_ansi(&out, cols)
-}
-
-fn label_width<'a>(labels: impl IntoIterator<Item = &'a String>) -> usize {
-    let max_len = labels.into_iter().map(|label| label.chars().count()).max().unwrap_or(0);
-    if max_len == 0 { 0 } else { max_len.saturating_add(1) }
 }
 
 fn cmd_line(row: &PpickRow, cols: usize) -> String {
@@ -141,7 +129,7 @@ fn cmd_line(row: &PpickRow, cols: usize) -> String {
         if cmd_width > 0 {
             out.push(' ');
         }
-        out.push_str(SUMMARY_FG);
+        out.push_str(SESSION_SUMMARY_FG);
         out.push_str(&ytil_tui::display_fixed_width(&row.session_summary, summary_width));
         out.push_str(crate::plugin::ui::RESET);
     }
@@ -216,19 +204,37 @@ fn cmd_with_color(row: &PpickRow, width: usize, bg: &str, fg: &str) -> String {
     if width == 0 {
         return String::new();
     }
-    let rendered = crate::plugin::ui::display_left(row.indicator, &row.cmd, bg, fg);
-    if crate::plugin::ui::visible_len(&rendered) <= width {
-        return crate::plugin::ui::pad_ansi(&rendered, width);
-    }
     let label = crate::plugin::ui::cmd_label(&row.cmd);
-    match crate::plugin::ui::agent_dot(row.indicator, bg, fg) {
+    let label_style = crate::plugin::ppick::ui::cmd_label_style(&row.cmd);
+    let dot_restore_fg = if label.is_empty() { fg } else { label_style };
+    match crate::plugin::ui::agent_dot(row.indicator, bg, dot_restore_fg) {
         Some(dot) if width < 3 || label.is_empty() => crate::plugin::ui::pad_ansi(&dot, width),
         Some(dot) => {
-            let label = ytil_tui::display_fixed_width(label, width.saturating_sub(2));
+            let label =
+                crate::plugin::ppick::ui::styled_fixed_label(label, width.saturating_sub(2), label_style, bg, fg);
             format!("{dot} {label}")
         }
-        None => ytil_tui::display_fixed_width(label, width),
+        None => crate::plugin::ppick::ui::styled_fixed_label(label, width, label_style, bg, fg),
     }
+}
+
+const fn cmd_label_style(cmd: &Cmd) -> &'static str {
+    match cmd {
+        Cmd::Agent { .. } => AGENT_LABEL_FG,
+        Cmd::Running(_) => RUNNING_CMD_FG,
+        Cmd::None => "",
+    }
+}
+
+fn styled_fixed_label(label: &str, width: usize, style: &str, bg: &str, fg: &str) -> String {
+    if width == 0 {
+        return String::new();
+    }
+    let label = ytil_tui::display_fixed_width(label, width);
+    if style.is_empty() {
+        return label;
+    }
+    format!("{style}{label}{}{bg}{fg}", crate::plugin::ui::RESET)
 }
 
 #[cfg(test)]
@@ -241,7 +247,6 @@ mod tests {
     fn test_render_frame_compact_entries() {
         let frame = vec![PpickRow {
             selected: true,
-            pane_label: "1:42".to_string(),
             cwd_label: "~/project".to_string(),
             branch_label: "main".to_string(),
             git: GitStat::default(),
@@ -254,25 +259,25 @@ mod tests {
         render_frame(&frame, "car", 5, 32, &mut rendered);
         let plain = plain_text(&rendered);
         let lines = [
-            path_line(&frame[0], 32),
             cmd_line(&frame[0], 32),
+            path_line(&frame[0], 32),
             crate::plugin::ui::pad("", 32),
         ];
 
         assert2::assert!(rendered.contains("\x1b[1;1H/car"));
         assert2::assert!(rendered.contains("\x1b[2;1H"));
-        assert2::assert!(plain.contains("▎1:42 ~/project main"));
         assert2::assert!(plain.contains("▎cargo"));
+        assert2::assert!(plain.contains("▎~/project main"));
+        assert2::assert!(plain.find("▎cargo") < plain.find("▎~/project main"));
         for line in lines {
             pretty_assertions::assert_eq!(crate::plugin::ui::visible_len(&line), 32);
         }
     }
 
     #[test]
-    fn test_render_frame_orders_path_branch_and_agent() {
+    fn test_render_frame_orders_agent_before_path_metadata() {
         let frame = vec![PpickRow {
             selected: true,
-            pane_label: "1:42".to_string(),
             cwd_label: "~/project".to_string(),
             branch_label: "feature/some-very-long-branch-name".to_string(),
             git: GitStat::default(),
@@ -283,16 +288,20 @@ mod tests {
         let mut rendered = String::new();
 
         render_frame(&frame, "", 5, 64, &mut rendered);
-        let lines = [path_line(&frame[0], 64), cmd_line(&frame[0], 64)];
+        let lines = [cmd_line(&frame[0], 64), path_line(&frame[0], 64)];
+        let plain = plain_text(&rendered);
 
-        assert2::assert!(plain_text(&rendered).contains("▎1:42 ~/project feature/some-very-long-branch-name"));
-        assert2::assert!(plain_text(&rendered).contains("▎cx how to solve this warning"));
-        pretty_assertions::assert_eq!(
-            plain_text(&lines[0]),
-            crate::plugin::ui::pad("▎1:42 ~/project feature/some-very-long-branch-name", 64)
+        assert2::assert!(plain.contains("▎cx how to solve this warning"));
+        assert2::assert!(plain.contains("▎~/project feature/some-very-long-branch-name"));
+        assert2::assert!(
+            plain.find("▎cx how to solve this warning") < plain.find("▎~/project feature/some-very-long-branch-name")
         );
         pretty_assertions::assert_eq!(
             plain_text(&lines[1]),
+            crate::plugin::ui::pad("▎~/project feature/some-very-long-branch-name", 64)
+        );
+        pretty_assertions::assert_eq!(
+            plain_text(&lines[0]),
             crate::plugin::ui::pad("▎cx how to solve this warning", 64)
         );
     }
@@ -301,7 +310,6 @@ mod tests {
     fn test_cmd_line_busy_agent_uses_tbar_indicator_before_agent_name() {
         let row = PpickRow {
             selected: true,
-            pane_label: "1:42".to_string(),
             cwd_label: "~/project".to_string(),
             branch_label: "main".to_string(),
             git: GitStat::default(),
@@ -313,15 +321,12 @@ mod tests {
         let lines = [path_line(&row, 44), cmd_line(&row, 44)];
 
         assert2::assert!(lines[1].contains(&format!(
-            "{}{}•{}{PICKER_SELECTED_BG}{TAB_DEFAULT_FG} ",
+            "{}{}•{}{PICKER_SELECTED_BG}{AGENT_LABEL_FG} ",
             crate::plugin::ui::BOLD,
             crate::plugin::ui::AGENT_BUSY_FG,
             crate::plugin::ui::RESET
         )));
-        pretty_assertions::assert_eq!(
-            plain_text(&lines[0]),
-            crate::plugin::ui::pad("▎1:42 ~/project main", 44)
-        );
+        pretty_assertions::assert_eq!(plain_text(&lines[0]), crate::plugin::ui::pad("▎~/project main", 44));
         pretty_assertions::assert_eq!(plain_text(&lines[1]), crate::plugin::ui::pad("▎• cx", 44));
         for line in lines {
             pretty_assertions::assert_eq!(crate::plugin::ui::visible_len(&line), 44);
@@ -332,7 +337,6 @@ mod tests {
     fn test_path_line_trims_combined_path_metadata() {
         let row = PpickRow {
             selected: true,
-            pane_label: "1:42".to_string(),
             cwd_label: "~/project".to_string(),
             branch_label: "feature/super-long-branch".to_string(),
             git: GitStat::default(),
@@ -343,15 +347,14 @@ mod tests {
 
         let line = path_line(&row, 20);
 
-        pretty_assertions::assert_eq!(plain_text(&line), "▎1:42 ~/project fea…");
+        pretty_assertions::assert_eq!(plain_text(&line), "▎~/project feature/…");
         pretty_assertions::assert_eq!(crate::plugin::ui::visible_len(&line), 20);
     }
 
     #[test]
-    fn test_entry_lines_order_path_git_and_agent() {
+    fn test_entry_lines_render_agent_and_muted_path_metadata() {
         let row = PpickRow {
             selected: true,
-            pane_label: "1:42".to_string(),
             cwd_label: "~/project".to_string(),
             branch_label: "main".to_string(),
             git: GitStat {
@@ -374,14 +377,17 @@ mod tests {
         let lines = [path_line(&row, 80), cmd_line(&row, 80)];
 
         assert2::assert!(lines[0].contains(PATH_STYLE));
-        assert2::assert!(lines[0].contains(TAB_PANE_FG));
+        assert2::assert!(!lines[0].contains(crate::plugin::ui::BOLD));
+        assert2::assert!(lines[0].contains(BRANCH_FG));
         assert2::assert!(lines[0].contains(crate::plugin::ui::GIT_NEW_LINES_FG));
         assert2::assert!(lines[0].contains(crate::plugin::ui::GIT_DEL_LINES_FG));
         assert2::assert!(lines[0].contains(crate::plugin::ui::GIT_NEW_FILES_FG));
-        assert2::assert!(lines[0].contains(SUMMARY_FG));
+        assert2::assert!(lines[0].contains(COMMIT_FG));
+        assert2::assert!(lines[1].contains(AGENT_LABEL_FG));
+        assert2::assert!(lines[1].contains(SESSION_SUMMARY_FG));
         pretty_assertions::assert_eq!(
             plain_text(&lines[0]),
-            crate::plugin::ui::pad("▎1:42 ~/project main +2 -1 ?3 abc1234 2m | fix branch metadata", 80)
+            crate::plugin::ui::pad("▎~/project main +2 -1 ?3 abc1234 2m | fix branch metadata", 80)
         );
         pretty_assertions::assert_eq!(plain_text(&lines[1]), crate::plugin::ui::pad("▎cx solve warning", 80));
         for line in lines {
@@ -393,7 +399,6 @@ mod tests {
     fn test_path_line_caps_commit_summary_to_80() {
         let row = PpickRow {
             selected: true,
-            pane_label: "1:42".to_string(),
             cwd_label: "~/project".to_string(),
             branch_label: "main".to_string(),
             git: GitStat {
@@ -414,7 +419,7 @@ mod tests {
         pretty_assertions::assert_eq!(
             plain_text(&line),
             crate::plugin::ui::pad(
-                "▎1:42 ~/project main abc1234 1w | abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza…",
+                "▎~/project main abc1234 1w | abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza…",
                 120,
             )
         );
@@ -425,7 +430,6 @@ mod tests {
     fn test_cmd_line_trims_attached_session_summary() {
         let row = PpickRow {
             selected: true,
-            pane_label: "1:42".to_string(),
             cwd_label: "~/project".to_string(),
             branch_label: "main".to_string(),
             git: GitStat::default(),
@@ -444,7 +448,6 @@ mod tests {
     fn test_cmd_line_caps_attached_session_summary_to_80() {
         let row = PpickRow {
             selected: true,
-            pane_label: "1:42".to_string(),
             cwd_label: "~/project".to_string(),
             branch_label: "main".to_string(),
             git: GitStat::default(),
@@ -469,7 +472,6 @@ mod tests {
     fn test_inactive_entry_lines_do_not_render_empty_rail() {
         let row = PpickRow {
             selected: false,
-            pane_label: "1:42".to_string(),
             cwd_label: "~/project".to_string(),
             branch_label: "main".to_string(),
             git: GitStat::default(),
@@ -485,7 +487,7 @@ mod tests {
         }
         pretty_assertions::assert_eq!(
             plain_text(&path_line(&row, 24)),
-            crate::plugin::ui::pad(" 1:42 ~/project main", 24)
+            crate::plugin::ui::pad(" ~/project main", 24)
         );
     }
 
