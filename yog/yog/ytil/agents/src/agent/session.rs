@@ -106,13 +106,7 @@ impl Session {
             Agent::Claude => Ok(("claude", vec!["--resume".into(), self.id.clone()])),
             Agent::Codex => Ok((
                 "codex",
-                vec![
-                    "resume".into(),
-                    self.id.clone(),
-                    "--no-alt-screen".into(),
-                    "--cd".into(),
-                    workspace.into(),
-                ],
+                self.build_codex_resume_args(workspace, std::env::var_os("ZELLIJ").is_some()),
             )),
             Agent::Cursor => Ok((
                 "cursor-agent",
@@ -127,6 +121,18 @@ impl Session {
                 Err(report!("resume is not supported for this agent").attach(format!("agent={}", self.agent)))
             }
         }
+    }
+
+    fn build_codex_resume_args(&self, workspace: &str, is_zellij: bool) -> Vec<String> {
+        let mut args = vec!["resume".into(), self.id.clone()];
+        // In Zellij, Codex's mouse-aware TUI captures wheel events before
+        // Zellij can use them for inline scrollback. Keep inline mode only
+        // outside Zellij, where terminal scrollback works as intended.
+        if !is_zellij {
+            args.push("--no-alt-screen".into());
+        }
+        args.extend(["--cd".into(), workspace.into()]);
+        args
     }
 }
 
@@ -282,13 +288,21 @@ mod tests {
         assert2::assert!(let Ok((_, claude_args)) = claude.build_resume_command());
         pretty_assertions::assert_eq!(claude_args, vec!["--resume".to_owned(), "session-id".to_owned()]);
         let workspace_str = workspace.to_str().expect("workspace test path should be utf8");
-        assert2::assert!(let Ok((_, codex_args)) = codex.build_resume_command());
         pretty_assertions::assert_eq!(
-            codex_args,
+            codex.build_codex_resume_args(workspace_str, false),
             vec![
                 "resume".to_owned(),
                 "session-id".to_owned(),
                 "--no-alt-screen".to_owned(),
+                "--cd".to_owned(),
+                workspace_str.to_owned(),
+            ]
+        );
+        pretty_assertions::assert_eq!(
+            codex.build_codex_resume_args(workspace_str, true),
+            vec![
+                "resume".to_owned(),
+                "session-id".to_owned(),
                 "--cd".to_owned(),
                 workspace_str.to_owned(),
             ]
