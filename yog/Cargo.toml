@@ -65,7 +65,7 @@ owo-colors = { version = "4" }
 pretty_assertions = { version = "1.4" }
 rootcause = { version = "0.12" }
 rstest = { version = "0.26" }
-rusqlite = { version = "0.39", features = ["bundled"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 strum = { version = "0.28", features = ["derive"] }
