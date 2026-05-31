@@ -15,7 +15,6 @@ use muxr_core::AttachRequest;
 use muxr_core::ClientRequest;
 use muxr_core::INTERNAL_SERVER_ARG;
 use muxr_core::LayoutSnapshot;
-use muxr_core::PROTOCOL_VERSION;
 use muxr_core::RenderUpdate;
 use muxr_core::ServerEvent;
 use muxr_core::SessionName;
@@ -200,7 +199,7 @@ async fn open_session(
     match self::attach(session, &paths, terminal_size.clone()).await {
         Ok(attached_session) => return Ok(attached_session),
         Err(attach_failure) => {
-            self::handle_attach_failure(&paths, attach_failure).await?;
+            self::handle_attach_failure(attach_failure)?;
             self::cleanup_stale_session_files(&paths)?;
         }
     }
@@ -219,7 +218,6 @@ async fn attach(
     tokio::time::timeout(
         ATTACH_TIMEOUT,
         connection.send_request(&ClientRequest::Attach(AttachRequest {
-            protocol_version: PROTOCOL_VERSION,
             session: session.clone(),
             terminal_size,
         })),
@@ -233,16 +231,7 @@ async fn attach(
         .map_err(|_| AttachFailure::Unusable(report!("timed out waiting for muxr attach response")))?
         .map_err(AttachFailure::Unusable)?
     {
-        Some(ServerEvent::Attached(attached)) => {
-            if attached.protocol_version != PROTOCOL_VERSION {
-                return Err(AttachFailure::Rejected(
-                    report!("muxr server protocol version mismatch")
-                        .attach(format!("expected={PROTOCOL_VERSION}"))
-                        .attach(format!("actual={}", attached.protocol_version)),
-                ));
-            }
-            attached.layout
-        }
+        Some(ServerEvent::Attached(attached)) => attached.layout,
         Some(ServerEvent::Error(error)) => {
             return Err(AttachFailure::Rejected(
                 report!("muxr server rejected attach")
@@ -376,46 +365,22 @@ async fn forward_client_requests(
     Ok(())
 }
 
-async fn handle_attach_failure(paths: &SessionPaths, attach_failure: AttachFailure) -> rootcause::Result<()> {
+fn handle_attach_failure(attach_failure: AttachFailure) -> rootcause::Result<()> {
     match attach_failure {
         AttachFailure::Rejected(attach_error) => {
             // A structured muxr rejection proves the socket is live even if pid metadata is missing or stale.
             Err(attach_error).attach("socket returned a structured muxr response")
         }
         AttachFailure::Unusable(attach_error) => {
-            if self::session_socket_is_live(paths).await? {
-                return Err(attach_error).attach("socket responded to muxr liveness probe");
-            }
+            // Even stale/incompatible servers may still answer Ping; an unusable attach is the compatibility signal.
+            drop(attach_error);
             Ok(())
         }
     }
 }
 
-async fn session_socket_is_live(paths: &SessionPaths) -> rootcause::Result<bool> {
-    if !paths.socket.exists() {
-        return Ok(false);
-    }
-
-    let Ok(mut connection) = self::connect_with_timeout(paths).await else {
-        return Ok(false);
-    };
-
-    if tokio::time::timeout(ATTACH_TIMEOUT, connection.send_request(&ClientRequest::Ping))
-        .await
-        .is_err()
-    {
-        return Ok(false);
-    }
-
-    let Ok(Ok(Some(_event))) = tokio::time::timeout(ATTACH_TIMEOUT, connection.recv_event()).await else {
-        return Ok(false);
-    };
-
-    Ok(true)
-}
-
 fn cleanup_stale_session_files(paths: &SessionPaths) -> rootcause::Result<()> {
-    // Callers must prove the socket is not a live muxr server before removing files; pid files are only hints.
+    // Structured rejections stop before cleanup; unusable attach failures may be stale incompatible servers.
     self::remove_file_if_exists(&paths.socket)?;
     self::remove_file_if_exists(&paths.pid)?;
     Ok(())
@@ -645,7 +610,7 @@ mod tests {
             fs::create_dir_all(&paths.root)?;
             fs::write(&paths.pid, std::process::id().to_string())?;
 
-            handle_attach_failure(&paths, AttachFailure::Unusable(report!("connect failed"))).await?;
+            handle_attach_failure(AttachFailure::Unusable(report!("connect failed")))?;
             cleanup_stale_session_files(&paths)?;
 
             assert2::assert!(!paths.pid.exists());
@@ -662,45 +627,24 @@ mod tests {
             fs::create_dir_all(&paths.root)?;
             let _listener = ServerListener::bind(&paths.socket)?;
 
-            assert2::assert!(
-                handle_attach_failure(&paths, AttachFailure::Rejected(report!("already attached")))
-                    .await
-                    .is_err()
-            );
+            assert2::assert!(handle_attach_failure(AttachFailure::Rejected(report!("already attached"))).is_err());
             assert2::assert!(paths.socket.exists());
             Ok(())
         })
     }
 
     #[test]
-    fn test_session_socket_is_live_when_server_replies_pong_returns_true() -> rootcause::Result<()> {
+    fn test_cleanup_stale_session_files_when_attach_is_unusable_removes_live_socket_path() -> rootcause::Result<()> {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
             let (_, paths) = self::session_paths(tempdir.path(), "work")?;
             fs::create_dir_all(&paths.root)?;
-            let listener = ServerListener::bind(&paths.socket)?;
-            let handle = tokio::spawn(async move {
-                let mut connection = listener.accept().await?;
-                assert2::assert!(matches!(connection.recv_request().await?, Some(ClientRequest::Ping)));
-                connection.send_event(&ServerEvent::Pong).await?;
-                Ok::<(), rootcause::Report>(())
-            });
+            let _listener = ServerListener::bind(&paths.socket)?;
 
-            pretty_assertions::assert_eq!(session_socket_is_live(&paths).await?, true);
-            handle
-                .await
-                .map_err(|error| report!("muxr liveness test socket task panicked").attach(format!("{error}")))??;
-            Ok(())
-        })
-    }
+            handle_attach_failure(AttachFailure::Unusable(report!("failed to attach")))?;
+            cleanup_stale_session_files(&paths)?;
 
-    #[test]
-    fn test_session_socket_is_live_when_socket_is_missing_returns_false() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
-            let tempdir = tempfile::tempdir()?;
-            let (_, paths) = self::session_paths(tempdir.path(), "work")?;
-
-            pretty_assertions::assert_eq!(session_socket_is_live(&paths).await?, false);
+            assert2::assert!(!paths.socket.exists());
             Ok(())
         })
     }
@@ -1136,7 +1080,7 @@ mod tests {
                 0,
                 0,
                 vec![render_cell("a"), render_cell("b")],
-            )],
+            )?],
         )
     }
 
@@ -1146,7 +1090,7 @@ mod tests {
             2,
             TerminalSize::new(2, 1)?,
             muxr_core::RenderCursor::new(0, 1, true),
-            vec![muxr_core::RenderRowSpan::new(0, 0, vec![render_cell("x")])],
+            vec![muxr_core::RenderRowSpan::new(0, 0, vec![render_cell("x")])?],
         )
     }
 

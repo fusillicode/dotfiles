@@ -18,7 +18,6 @@ use muxr_core::ClientKeyModifiers;
 use muxr_core::ClientMousePosition;
 use muxr_core::ClientRequest;
 use muxr_core::LayoutSnapshot;
-use muxr_core::PROTOCOL_VERSION;
 use muxr_core::PaneId;
 use muxr_core::PaneScrollDirection;
 use muxr_core::RenderBaseline;
@@ -285,7 +284,7 @@ impl RenderComposer {
             .enumerate()
             .map(|(row, cells)| {
                 let row = u16::try_from(row).context("muxr composite render row overflowed")?;
-                Ok(RenderRowSpan::new(row, 0, cells))
+                RenderRowSpan::new(row, 0, cells)
             })
             .collect::<rootcause::Result<Vec<_>>>()?;
 
@@ -544,23 +543,23 @@ fn paste_snapshot(
     for span in snapshot.rows() {
         let row = region
             .row()
-            .checked_add(span.row)
+            .checked_add(span.row())
             .ok_or_else(|| report!("muxr pane row offset overflowed"))?;
         let col = region
             .col()
-            .checked_add(span.col)
+            .checked_add(span.col())
             .ok_or_else(|| report!("muxr pane col offset overflowed"))?;
         let target_row = rows
             .get_mut(usize::from(row))
             .ok_or_else(|| report!("muxr pane row outside composite frame"))?;
         let col = usize::from(col);
         let end_col = col
-            .checked_add(span.cells.len())
+            .checked_add(span.cells().len())
             .ok_or_else(|| report!("muxr pane span end overflowed"))?;
         if end_col > target_row.len() {
             return Err(report!("muxr pane span outside composite frame").attach(format!("pane_id={}", region.id())));
         }
-        for (target, cell) in target_row.iter_mut().skip(col).zip(span.cells.iter()) {
+        for (target, cell) in target_row.iter_mut().skip(col).zip(span.cells().iter()) {
             *target = cell.clone();
         }
     }
@@ -606,7 +605,7 @@ fn paste_borders(rows: &mut [Vec<RenderCell>], borders: &[PaneBorder]) -> rootca
 }
 
 fn paste_border_cell(target: &mut RenderCell, glyph: &'static str) {
-    let glyph = match (target.text.as_str(), glyph) {
+    let glyph = match (target.text(), glyph) {
         ("│", "─") | ("─", "│") | ("┼", _) => "┼",
         _ => glyph,
     };
@@ -775,15 +774,6 @@ async fn handle_client(
         }
     };
 
-    if attach_request.protocol_version != PROTOCOL_VERSION {
-        let _sent = self::send_connection_event_with_timeout(
-            &mut connection,
-            &ServerEvent::Error(ServerError::protocol_version_mismatch(attach_request.protocol_version)),
-        )
-        .await?;
-        return Ok(());
-    }
-
     if active_client.swap(true, Ordering::AcqRel) {
         let _sent = self::send_connection_event_with_timeout(
             &mut connection,
@@ -870,15 +860,7 @@ async fn send_attached_response_and_baseline(
     layout: LayoutSnapshot,
     render_baseline: RenderUpdate,
 ) -> rootcause::Result<bool> {
-    if !self::send_writer_event_with_timeout(
-        event_writer,
-        &ServerEvent::Attached(AttachAccepted {
-            protocol_version: PROTOCOL_VERSION,
-            layout,
-        }),
-    )
-    .await?
-    {
+    if !self::send_writer_event_with_timeout(event_writer, &ServerEvent::Attached(AttachAccepted { layout })).await? {
         return Ok(false);
     }
     self::send_writer_event_with_timeout(event_writer, &ServerEvent::Render(render_baseline)).await
@@ -1679,16 +1661,16 @@ mod tests {
                 return Err(report!("expected server attached response"));
             };
 
-            pretty_assertions::assert_eq!(attached.layout.active_tab.as_ref(), "tab-1");
-            let Some(tab) = attached.layout.tabs.first() else {
+            pretty_assertions::assert_eq!(attached.layout.active_tab().as_ref(), "tab-1");
+            let Some(tab) = attached.layout.tabs().first() else {
                 return Err(report!("expected one tab in layout snapshot"));
             };
-            pretty_assertions::assert_eq!(tab.id.as_ref(), "tab-1");
-            pretty_assertions::assert_eq!(tab.active_pane.as_ref(), "pane-1");
-            let Some(pane) = tab.panes.first() else {
+            pretty_assertions::assert_eq!(tab.id().as_ref(), "tab-1");
+            pretty_assertions::assert_eq!(tab.active_pane().as_ref(), "pane-1");
+            let Some(pane) = tab.panes().first() else {
                 return Err(report!("expected one pane in layout snapshot"));
             };
-            pretty_assertions::assert_eq!(pane.id.as_ref(), "pane-1");
+            pretty_assertions::assert_eq!(pane.id().as_ref(), "pane-1");
 
             connection.send_request(&ClientRequest::Detach).await?;
             self::read_connection_until_detached(&mut connection).await?;
@@ -1757,39 +1739,6 @@ mod tests {
             self::detach_client(responsive_client).await?;
 
             drop(stuck_client);
-            self::join_server(handle)
-        })
-    }
-
-    #[test]
-    fn test_serve_when_protocol_version_mismatches_returns_structured_error() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
-            let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server(&session, &paths, 1);
-
-            self::wait_for_socket(&paths.socket)?;
-
-            let mut connection = self::connect_client(&paths).await?;
-            connection
-                .send_request(&ClientRequest::Attach(AttachRequest {
-                    protocol_version: PROTOCOL_VERSION.saturating_add(1),
-                    session,
-                    terminal_size: self::terminal_size()?,
-                }))
-                .await?;
-
-            let Some(ServerEvent::Error(error)) = connection.recv_event().await? else {
-                return Err(report!("expected protocol version mismatch error"));
-            };
-
-            pretty_assertions::assert_eq!(
-                error,
-                ServerError::ProtocolVersionMismatch {
-                    expected: PROTOCOL_VERSION,
-                    actual: PROTOCOL_VERSION.saturating_add(1),
-                },
-            );
             self::join_server(handle)
         })
     }
@@ -2096,10 +2045,10 @@ mod tests {
             .and_then(|row| row.get(1))
             .ok_or_else(|| report!("expected junction border cell"))?;
 
-        pretty_assertions::assert_eq!(vertical_cell.text, "│");
-        pretty_assertions::assert_eq!(horizontal_cell.text, "─");
-        pretty_assertions::assert_eq!(junction_cell.text, "┼");
-        pretty_assertions::assert_eq!(vertical_cell.style, self::border_style());
+        pretty_assertions::assert_eq!(vertical_cell.text(), "│");
+        pretty_assertions::assert_eq!(horizontal_cell.text(), "─");
+        pretty_assertions::assert_eq!(junction_cell.text(), "┼");
+        pretty_assertions::assert_eq!(vertical_cell.style(), self::border_style());
         Ok(())
     }
 
@@ -2448,9 +2397,9 @@ mod tests {
                 .await?;
 
             let layout = self::read_until_layout(&mut client).await?;
-            pretty_assertions::assert_eq!(layout.active_tab.as_ref(), "tab-2");
+            pretty_assertions::assert_eq!(layout.active_tab().as_ref(), "tab-2");
             pretty_assertions::assert_eq!(
-                layout.tabs.iter().map(|tab| tab.id.as_ref()).collect::<Vec<_>>(),
+                layout.tabs().iter().map(|tab| tab.id().as_ref()).collect::<Vec<_>>(),
                 vec!["tab-1", "tab-2"],
             );
             self::assert_layout_metadata_tabs(&paths, &["tab-1", "tab-2"], "tab-2")?;
@@ -2475,9 +2424,14 @@ mod tests {
 
             self::wait_for_socket(&paths.socket)?;
             let client = self::open_attached_client(&session, &paths).await?;
-            pretty_assertions::assert_eq!(client.layout.active_tab.as_ref(), "tab-2");
+            pretty_assertions::assert_eq!(client.layout.active_tab().as_ref(), "tab-2");
             pretty_assertions::assert_eq!(
-                client.layout.tabs.iter().map(|tab| tab.id.as_ref()).collect::<Vec<_>>(),
+                client
+                    .layout
+                    .tabs()
+                    .iter()
+                    .map(|tab| tab.id().as_ref())
+                    .collect::<Vec<_>>(),
                 vec!["tab-1", "tab-2"],
             );
             self::detach_client(client).await?;
@@ -2504,10 +2458,13 @@ mod tests {
                 .await?;
 
             let layout = self::read_until_layout(&mut client).await?;
-            let tab = layout.tabs.first().ok_or_else(|| report!("expected tab after split"))?;
-            pretty_assertions::assert_eq!(tab.active_pane.as_ref(), "pane-2");
+            let tab = layout
+                .tabs()
+                .first()
+                .ok_or_else(|| report!("expected tab after split"))?;
+            pretty_assertions::assert_eq!(tab.active_pane().as_ref(), "pane-2");
             pretty_assertions::assert_eq!(
-                tab.panes.iter().map(|pane| pane.id.as_ref()).collect::<Vec<_>>(),
+                tab.panes().iter().map(|pane| pane.id().as_ref()).collect::<Vec<_>>(),
                 vec!["pane-1", "pane-2"],
             );
 
@@ -2552,10 +2509,13 @@ mod tests {
                 .await?;
 
             let layout = self::read_until_layout(&mut client).await?;
-            let tab = layout.tabs.first().ok_or_else(|| report!("expected tab after close"))?;
-            pretty_assertions::assert_eq!(tab.active_pane.as_ref(), "pane-1");
+            let tab = layout
+                .tabs()
+                .first()
+                .ok_or_else(|| report!("expected tab after close"))?;
+            pretty_assertions::assert_eq!(tab.active_pane().as_ref(), "pane-1");
             pretty_assertions::assert_eq!(
-                tab.panes.iter().map(|pane| pane.id.as_ref()).collect::<Vec<_>>(),
+                tab.panes().iter().map(|pane| pane.id().as_ref()).collect::<Vec<_>>(),
                 vec!["pane-1"],
             );
 
@@ -2637,12 +2597,12 @@ mod tests {
 
             let layout = self::read_until_layout(&mut client).await?;
             let tab = layout
-                .tabs
+                .tabs()
                 .first()
                 .ok_or_else(|| report!("expected tab after resize"))?;
-            pretty_assertions::assert_eq!(tab.active_pane.as_ref(), "pane-2");
+            pretty_assertions::assert_eq!(tab.active_pane().as_ref(), "pane-2");
             pretty_assertions::assert_eq!(
-                tab.panes.iter().map(|pane| pane.id.as_ref()).collect::<Vec<_>>(),
+                tab.panes().iter().map(|pane| pane.id().as_ref()).collect::<Vec<_>>(),
                 vec!["pane-1", "pane-2"],
             );
             let config = self::server_config(tempdir.path(), "work")?;
@@ -2975,24 +2935,24 @@ mod tests {
     fn layout_tab_ids(layout: &Layout) -> rootcause::Result<Vec<String>> {
         Ok(layout
             .snapshot()?
-            .tabs
+            .tabs()
             .iter()
-            .map(|tab| tab.id.as_ref().to_owned())
+            .map(|tab| tab.id().as_ref().to_owned())
             .collect::<Vec<_>>())
     }
 
     fn layout_active_tab_pane_ids(layout: &Layout) -> rootcause::Result<Vec<String>> {
         let snapshot = layout.snapshot()?;
         let active_tab = snapshot
-            .tabs
+            .tabs()
             .iter()
-            .find(|tab| tab.id == snapshot.active_tab)
+            .find(|tab| tab.id() == snapshot.active_tab())
             .ok_or_else(|| report!("expected active tab in muxr test layout snapshot"))?;
 
         Ok(active_tab
-            .panes
+            .panes()
             .iter()
-            .map(|pane| pane.id.as_ref().to_owned())
+            .map(|pane| pane.id().as_ref().to_owned())
             .collect())
     }
 
@@ -3095,7 +3055,6 @@ mod tests {
 
     fn attach_request(session: &SessionName) -> rootcause::Result<ClientRequest> {
         Ok(ClientRequest::Attach(AttachRequest {
-            protocol_version: PROTOCOL_VERSION,
             session: session.clone(),
             terminal_size: self::terminal_size()?,
         }))
@@ -3259,14 +3218,14 @@ mod tests {
 
     fn render_update_text(update: &RenderUpdate) -> String {
         match update {
-            RenderUpdate::Baseline(baseline) => self::render_rows_text(&baseline.rows),
-            RenderUpdate::Diff(diff) => self::render_rows_text(&diff.rows),
+            RenderUpdate::Baseline(baseline) => self::render_rows_text(baseline.rows()),
+            RenderUpdate::Diff(diff) => self::render_rows_text(diff.rows()),
         }
     }
 
     fn render_rows_text(rows: &[RenderRowSpan]) -> String {
         rows.iter()
-            .map(|row| row.cells.iter().map(|cell| cell.text.as_str()).collect::<String>())
+            .map(|row| row.cells().iter().map(RenderCell::text).collect::<String>())
             .collect()
     }
 

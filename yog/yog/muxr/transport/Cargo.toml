@@ -16,7 +16,6 @@ futures-util = { version = "0.3", default-features = false, features = ["sink", 
 interprocess = { version = "2.4", default-features = false, features = ["tokio"] }
 muxr_core = { workspace = true }
 rootcause = { workspace = true }
-serde_json = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { version = "0.7", default-features = false, features = ["codec"] }
 
