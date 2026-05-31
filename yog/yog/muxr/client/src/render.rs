@@ -29,10 +29,16 @@ use muxr_core::TerminalSize;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
+use crate::copy::SelectionRange;
+
 const BRACKETED_PASTE_DISABLE: &[u8] = b"\x1b[?2004l";
 const BRACKETED_PASTE_ENABLE: &[u8] = b"\x1b[?2004h";
 const MOUSE_BUTTON_CAPTURE_DISABLE: &[u8] = b"\x1b[?1000l";
 const MOUSE_BUTTON_CAPTURE_ENABLE: &[u8] = b"\x1b[?1000h";
+const MOUSE_BUTTON_EVENT_CAPTURE_DISABLE: &[u8] = b"\x1b[?1002l";
+const MOUSE_BUTTON_EVENT_CAPTURE_ENABLE: &[u8] = b"\x1b[?1002h";
+const MOUSE_ANY_EVENT_CAPTURE_DISABLE: &[u8] = b"\x1b[?1003l";
+const MOUSE_ANY_EVENT_CAPTURE_ENABLE: &[u8] = b"\x1b[?1003h";
 const MOUSE_SGR_DISABLE: &[u8] = b"\x1b[?1006l";
 const MOUSE_SGR_ENABLE: &[u8] = b"\x1b[?1006h";
 
@@ -124,11 +130,12 @@ impl FrameBuffer {
         }))
     }
 
-    pub fn queue_at(
+    pub fn queue_at_with_selection(
         &self,
         stdout: &mut impl Write,
         changes: &RenderFrameChanges,
         row_offset: u16,
+        selection: Option<&SelectionRange>,
     ) -> rootcause::Result<()> {
         if self.cursor.as_ref() != Some(&changes.cursor) {
             return Err(report!("muxr render changes do not match current frame buffer cursor"));
@@ -136,11 +143,42 @@ impl FrameBuffer {
         reset_style(stdout)?;
         let mut active_style = RenderStyle::default();
         for row in &changes.rows {
-            render_row_span(stdout, row, &mut active_style, row_offset)?;
+            render_row_span(stdout, row, &mut active_style, row_offset, selection)?;
         }
         reset_style(stdout)?;
         render_cursor(stdout, &changes.cursor, row_offset)?;
         Ok(())
+    }
+
+    pub fn row_redraw_changes(&self, changed_rows: &[u16]) -> rootcause::Result<Option<RenderFrameChanges>> {
+        let Some(cursor) = self.cursor.clone() else {
+            return Ok(None);
+        };
+        let Some(size) = &self.size else {
+            return Ok(None);
+        };
+
+        let mut rows = Vec::new();
+        for row in changed_rows {
+            if *row >= size.rows() {
+                continue;
+            }
+            let Some(cells) = self.rows.get(usize::from(*row)) else {
+                return Err(report!("muxr frame buffer row is missing").attach(format!("row={row}")));
+            };
+            rows.push(RenderRowSpan::new(*row, 0, cells.clone())?);
+        }
+
+        Ok(Some(RenderFrameChanges {
+            cursor,
+            full_redraw: false,
+            rows,
+        }))
+    }
+
+    #[must_use]
+    pub fn cell(&self, row: u16, col: u16) -> Option<&RenderCell> {
+        self.rows.get(usize::from(row))?.get(usize::from(col))
     }
 }
 
@@ -160,6 +198,25 @@ pub fn queue_synchronized_update_end(stdout: &mut impl Write, mode: Synchronized
     stdout
         .write_all(mode.end_sequence())
         .context("failed to write muxr synchronized render end")?;
+    Ok(())
+}
+
+/// Enable or disable outer-terminal any-motion mouse capture.
+///
+/// Pane applications request this mode dynamically. Button-event capture remains enabled, so disabling any-motion
+/// returns the client to the lower-volume mouse mode.
+///
+/// # Errors
+/// - The terminal mode sequence cannot be written or flushed.
+pub fn set_mouse_any_motion_capture(stdout: &mut impl Write, enabled: bool) -> rootcause::Result<()> {
+    if enabled {
+        queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_ENABLE)?;
+    } else {
+        queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_DISABLE)?;
+    }
+    stdout
+        .flush()
+        .context("failed to flush muxr any-motion mouse capture")?;
     Ok(())
 }
 
@@ -227,6 +284,7 @@ fn render_row_span(
     row: &RenderRowSpan,
     active_style: &mut RenderStyle,
     row_offset: u16,
+    selection: Option<&SelectionRange>,
 ) -> rootcause::Result<()> {
     let rendered_row = row
         .row()
@@ -235,14 +293,19 @@ fn render_row_span(
     queue_command(stdout, MoveTo(row.col(), rendered_row))?;
     let mut run_style = None;
     let mut run_text = String::new();
-    for cell in row.cells() {
+    for (index, cell) in row.cells().iter().enumerate() {
         if matches!(cell.width(), RenderCellWidth::WideContinuation) {
             continue;
         }
 
-        if run_style != Some(cell.style()) {
+        let cell_col = row
+            .col()
+            .checked_add(u16::try_from(index).context("muxr render cell index overflowed")?)
+            .ok_or_else(|| report!("muxr render cell column overflowed"))?;
+        let cell_style = self::selected_style(cell.style(), selection, row.row(), cell_col);
+        if run_style != Some(cell_style) {
             flush_text_run(stdout, active_style, run_style, &mut run_text)?;
-            run_style = Some(cell.style());
+            run_style = Some(cell_style);
         }
         if cell.text().is_empty() {
             run_text.push(' ');
@@ -253,6 +316,13 @@ fn render_row_span(
     flush_text_run(stdout, active_style, run_style, &mut run_text)?;
 
     Ok(())
+}
+
+fn selected_style(mut style: RenderStyle, selection: Option<&SelectionRange>, row: u16, col: u16) -> RenderStyle {
+    if selection.is_some_and(|selection| selection.contains(row, col)) {
+        style.attrs = style.attrs.set_inverse(true);
+    }
+    style
 }
 
 fn flush_text_run(
@@ -335,7 +405,10 @@ fn apply_enabled_attrs(stdout: &mut impl Write, attrs: RenderTextStyle) -> rootc
 pub fn enter_terminal(stdout: &mut impl Write) -> rootcause::Result<()> {
     queue_command(stdout, EnterAlternateScreen)?;
     queue_bytes(stdout, BRACKETED_PASTE_ENABLE)?;
+    // Clear stale any-motion capture; the renderer re-enables it only when a pane requests that mode.
+    queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_DISABLE)?;
     queue_bytes(stdout, MOUSE_BUTTON_CAPTURE_ENABLE)?;
+    queue_bytes(stdout, MOUSE_BUTTON_EVENT_CAPTURE_ENABLE)?;
     queue_bytes(stdout, MOUSE_SGR_ENABLE)?;
     queue_command(stdout, Clear(ClearType::All))?;
     queue_command(stdout, Hide)?;
@@ -352,6 +425,8 @@ pub fn enter_terminal(stdout: &mut impl Write) -> rootcause::Result<()> {
 /// - The terminal restore commands cannot be written or flushed.
 pub fn restore_terminal(stdout: &mut impl Write) -> rootcause::Result<()> {
     queue_bytes(stdout, MOUSE_SGR_DISABLE)?;
+    queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_DISABLE)?;
+    queue_bytes(stdout, MOUSE_BUTTON_EVENT_CAPTURE_DISABLE)?;
     queue_bytes(stdout, MOUSE_BUTTON_CAPTURE_DISABLE)?;
     queue_bytes(stdout, BRACKETED_PASTE_DISABLE)?;
     queue_command(stdout, LeaveAlternateScreen)?;
@@ -454,6 +529,21 @@ mod tests {
     }
 
     #[test]
+    fn test_frame_buffer_row_redraw_changes_when_rows_are_supplied_returns_only_requested_rows() -> rootcause::Result<()>
+    {
+        let frame_buffer = applied_frame_buffer()?;
+
+        let changes = frame_buffer
+            .row_redraw_changes(&[1])?
+            .ok_or_else(|| report!("expected row redraw changes"))?;
+
+        assert2::assert!(!changes.full_redraw);
+        pretty_assertions::assert_eq!(changes.rows.len(), 1);
+        pretty_assertions::assert_eq!(changes.rows[0].row(), 1);
+        Ok(())
+    }
+
+    #[test]
     fn test_frame_buffer_queue_when_changes_arrive_writes_terminal_commands_without_flushing() -> rootcause::Result<()>
     {
         let mut frame_buffer = FrameBuffer::default();
@@ -462,7 +552,7 @@ mod tests {
         };
         let mut output = CountingWriter::default();
 
-        frame_buffer.queue_at(&mut output, &changes, 0)?;
+        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, None)?;
 
         let rendered = output.rendered_string()?;
         assert2::assert!(rendered.contains('a'));
@@ -479,7 +569,7 @@ mod tests {
         };
         let mut output = Vec::new();
 
-        frame_buffer.queue_at(&mut output, &changes, 1)?;
+        frame_buffer.queue_at_with_selection(&mut output, &changes, 1, None)?;
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
         assert2::assert!(rendered.contains("\x1b[2;1H"));
@@ -499,7 +589,7 @@ mod tests {
         };
         let mut output = Vec::new();
 
-        frame_buffer.queue_at(&mut output, &changes, 0)?;
+        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, None)?;
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
         let foreground_escape = expected_escape(ExpectedEscape::Foreground(RenderColor::Indexed(1)))?;
@@ -533,7 +623,7 @@ mod tests {
         };
         let mut output = Vec::new();
 
-        frame_buffer.queue_at(&mut output, &changes, 0)?;
+        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, None)?;
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
         let expected_escape = expected_escape(expected)?;
@@ -550,10 +640,29 @@ mod tests {
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
         assert2::assert!(rendered.contains("\x1b[?1049h"));
         assert2::assert!(rendered.contains("\x1b[?2004h"));
+        assert2::assert!(rendered.contains("\x1b[?1003l"));
         assert2::assert!(rendered.contains("\x1b[?1000h"));
+        assert2::assert!(rendered.contains("\x1b[?1002h"));
+        assert2::assert!(!rendered.contains("\x1b[?1003h"));
         assert2::assert!(rendered.contains("\x1b[?1006h"));
         assert2::assert!(rendered.contains("\x1b[2J"));
         assert2::assert!(rendered.contains("\x1b[?25l"));
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::enabled(true, "\x1b[?1003h")]
+    #[case::disabled(false, "\x1b[?1003l")]
+    fn test_set_mouse_any_motion_capture_writes_expected_sequence(
+        #[case] enabled: bool,
+        #[case] expected: &str,
+    ) -> rootcause::Result<()> {
+        let mut output = CountingWriter::default();
+
+        set_mouse_any_motion_capture(&mut output, enabled)?;
+
+        pretty_assertions::assert_eq!(output.rendered_string()?, expected);
+        pretty_assertions::assert_eq!(output.flushes, 1);
         Ok(())
     }
 
@@ -607,6 +716,8 @@ mod tests {
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
         assert2::assert!(rendered.contains("\x1b[?1006l"));
+        assert2::assert!(rendered.contains("\x1b[?1003l"));
+        assert2::assert!(rendered.contains("\x1b[?1002l"));
         assert2::assert!(rendered.contains("\x1b[?1000l"));
         assert2::assert!(rendered.contains("\x1b[?2004l"));
         assert2::assert!(rendered.contains("\x1b[?1049l"));

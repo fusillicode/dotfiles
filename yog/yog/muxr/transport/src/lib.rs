@@ -351,8 +351,10 @@ mod tests {
     #[case::pong(ServerEvent::Pong)]
     #[case::attached(ServerEvent::Attached(AttachAccepted {
         layout: layout_snapshot()?,
+        pane_regions: pane_regions_snapshot()?,
     }))]
     #[case::layout(ServerEvent::Layout(layout_snapshot()?))]
+    #[case::pane_regions(ServerEvent::PaneRegions(pane_regions_snapshot()?))]
     fn test_transport_when_server_event_round_trips_returns_original(
         #[case] event: ServerEvent,
     ) -> rootcause::Result<()> {
@@ -442,5 +444,17 @@ mod tests {
         let pane = PaneSnapshot::new(active_pane.clone(), "shell");
         let tab = TabSnapshot::new(active_tab.clone(), "default", active_pane, vec![pane])?;
         LayoutSnapshot::new(active_tab, vec![tab])
+    }
+
+    fn pane_regions_snapshot() -> rootcause::Result<muxr_core::PaneRegionsSnapshot> {
+        muxr_core::PaneRegionsSnapshot::new(vec![muxr_core::PaneRegionSnapshot::new(
+            PaneId::new("pane-1")?,
+            0,
+            0,
+            80,
+            24,
+            muxr_core::PaneMouseMode::None,
+            0,
+        )?])
     }
 }

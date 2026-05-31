@@ -155,6 +155,7 @@ pub struct AttachRequest {
 #[derive(rkyv::Archive, Clone, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct AttachAccepted {
     pub layout: LayoutSnapshot,
+    pub pane_regions: PaneRegionsSnapshot,
 }
 
 #[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
@@ -370,6 +371,221 @@ where
         let snapshot = PaneSnapshot::new(id, title);
         snapshot.validate().map_err(self::rkyv_deserialize_error::<D::Error>)?;
         Ok(snapshot)
+    }
+}
+
+/// Mouse tracking mode requested by the application running in a pane.
+#[derive(rkyv::Archive, Clone, Copy, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
+pub enum PaneMouseMode {
+    AnyMotion,
+    ButtonMotion,
+    None,
+    Press,
+    PressRelease,
+}
+
+impl PaneMouseMode {
+    /// Return whether the pane application requested any terminal mouse tracking mode.
+    #[must_use]
+    pub const fn tracking_enabled(self) -> bool {
+        !matches!(self, Self::None)
+    }
+
+    /// Return whether the outer terminal must report motion even when no button is pressed.
+    #[must_use]
+    pub const fn needs_any_motion_capture(self) -> bool {
+        matches!(self, Self::AnyMotion)
+    }
+}
+
+#[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
+pub struct PaneRegionSnapshot {
+    id: PaneId,
+    col: u16,
+    row: u16,
+    cols: u16,
+    mouse_mode: PaneMouseMode,
+    rows: u16,
+    visible_top_row: u64,
+}
+
+impl PaneRegionSnapshot {
+    /// Build a visible pane region for the current rendered frame.
+    ///
+    /// # Errors
+    /// - The pane id is invalid.
+    /// - The region has zero columns or rows.
+    /// - The region row or column range overflows.
+    pub fn new(
+        id: PaneId,
+        col: u16,
+        row: u16,
+        cols: u16,
+        rows: u16,
+        mouse_mode: PaneMouseMode,
+        visible_top_row: u64,
+    ) -> rootcause::Result<Self> {
+        let region = Self {
+            id,
+            col,
+            row,
+            cols,
+            mouse_mode,
+            rows,
+            visible_top_row,
+        };
+        region.validate()?;
+        Ok(region)
+    }
+
+    #[must_use]
+    pub const fn col(&self) -> u16 {
+        self.col
+    }
+
+    #[must_use]
+    pub const fn cols(&self) -> u16 {
+        self.cols
+    }
+
+    #[must_use]
+    pub const fn id(&self) -> &PaneId {
+        &self.id
+    }
+
+    /// Return the pane application's current terminal mouse tracking mode.
+    #[must_use]
+    pub const fn mouse_mode(&self) -> PaneMouseMode {
+        self.mouse_mode
+    }
+
+    /// Return whether the pane application requested terminal mouse tracking.
+    #[must_use]
+    pub const fn mouse_tracking_enabled(&self) -> bool {
+        self.mouse_mode.tracking_enabled()
+    }
+
+    #[must_use]
+    pub const fn row(&self) -> u16 {
+        self.row
+    }
+
+    #[must_use]
+    pub const fn rows(&self) -> u16 {
+        self.rows
+    }
+
+    /// Return the stable content row rendered at the top of this pane's visible viewport.
+    #[must_use]
+    pub const fn visible_top_row(&self) -> u64 {
+        self.visible_top_row
+    }
+
+    #[must_use]
+    pub const fn contains(&self, row: u16, col: u16) -> bool {
+        let Some(end_row) = self.row.checked_add(self.rows) else {
+            return false;
+        };
+        let Some(end_col) = self.col.checked_add(self.cols) else {
+            return false;
+        };
+
+        row >= self.row && row < end_row && col >= self.col && col < end_col
+    }
+
+    fn validate(&self) -> rootcause::Result<()> {
+        self::validate_layout_id("pane", self.id.as_ref())?;
+        if self.cols == 0 {
+            return Err(report!("invalid muxr pane region").attach("reason=cols must be nonzero"));
+        }
+        if self.rows == 0 {
+            return Err(report!("invalid muxr pane region").attach("reason=rows must be nonzero"));
+        }
+        if self.col.checked_add(self.cols).is_none() {
+            return Err(report!("invalid muxr pane region").attach("reason=column range overflowed"));
+        }
+        if self.row.checked_add(self.rows).is_none() {
+            return Err(report!("invalid muxr pane region").attach("reason=row range overflowed"));
+        }
+        Ok(())
+    }
+}
+
+impl<D> rkyv::Deserialize<PaneRegionSnapshot, D> for ArchivedPaneRegionSnapshot
+where
+    D: rkyv::rancor::Fallible + ?Sized,
+    D::Error: rkyv::rancor::Source,
+{
+    fn deserialize(&self, deserializer: &mut D) -> Result<PaneRegionSnapshot, D::Error> {
+        let id = rkyv::Deserialize::<PaneId, D>::deserialize(&self.id, deserializer)?;
+        let col = rkyv::Deserialize::<u16, D>::deserialize(&self.col, deserializer)?;
+        let row = rkyv::Deserialize::<u16, D>::deserialize(&self.row, deserializer)?;
+        let cols = rkyv::Deserialize::<u16, D>::deserialize(&self.cols, deserializer)?;
+        let rows = rkyv::Deserialize::<u16, D>::deserialize(&self.rows, deserializer)?;
+        let mouse_mode = rkyv::Deserialize::<PaneMouseMode, D>::deserialize(&self.mouse_mode, deserializer)?;
+        let visible_top_row = rkyv::Deserialize::<u64, D>::deserialize(&self.visible_top_row, deserializer)?;
+        PaneRegionSnapshot::new(id, col, row, cols, rows, mouse_mode, visible_top_row)
+            .map_err(self::rkyv_deserialize_error::<D::Error>)
+    }
+}
+
+#[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
+pub struct PaneRegionsSnapshot {
+    regions: Vec<PaneRegionSnapshot>,
+}
+
+impl PaneRegionsSnapshot {
+    /// Build the pane regions for the currently rendered tab.
+    ///
+    /// # Errors
+    /// - The region list is empty.
+    /// - Any region is invalid.
+    /// - Any pane id appears more than once.
+    pub fn new(regions: Vec<PaneRegionSnapshot>) -> rootcause::Result<Self> {
+        let snapshot = Self { regions };
+        snapshot.validate()?;
+        Ok(snapshot)
+    }
+
+    #[must_use]
+    pub fn regions(&self) -> &[PaneRegionSnapshot] {
+        &self.regions
+    }
+
+    #[must_use]
+    pub fn pane_at(&self, position: ClientMousePosition) -> Option<&PaneRegionSnapshot> {
+        self.regions()
+            .iter()
+            .find(|region| region.contains(position.row, position.col))
+    }
+
+    fn validate(&self) -> rootcause::Result<()> {
+        if self.regions.is_empty() {
+            return Err(report!("invalid muxr pane regions snapshot").attach("reason=regions must not be empty"));
+        }
+
+        let mut seen_pane_ids = BTreeSet::new();
+        for region in &self.regions {
+            region.validate()?;
+            if !seen_pane_ids.insert(region.id.as_ref()) {
+                return Err(report!("invalid muxr pane regions snapshot")
+                    .attach("reason=duplicate pane id")
+                    .attach(format!("pane_id={}", region.id)));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl<D> rkyv::Deserialize<PaneRegionsSnapshot, D> for ArchivedPaneRegionsSnapshot
+where
+    D: rkyv::rancor::Fallible + ?Sized,
+    D::Error: rkyv::rancor::Source,
+{
+    fn deserialize(&self, deserializer: &mut D) -> Result<PaneRegionsSnapshot, D::Error> {
+        let regions = rkyv::Deserialize::<Vec<PaneRegionSnapshot>, D>::deserialize(&self.regions, deserializer)?;
+        PaneRegionsSnapshot::new(regions).map_err(self::rkyv_deserialize_error::<D::Error>)
     }
 }
 
@@ -1027,6 +1243,59 @@ impl ClientMousePosition {
     }
 }
 
+/// Press or release phase for an SGR mouse event captured by the muxr client.
+#[derive(rkyv::Archive, Clone, Copy, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
+pub enum ClientMouseEventPhase {
+    /// Button press, wheel, or button-motion event.
+    Press,
+    /// Button release event.
+    Release,
+}
+
+/// Mouse event captured from the outer terminal before server-side pane translation.
+#[derive(rkyv::Archive, Clone, Copy, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
+pub struct ClientMouseEvent {
+    button: u16,
+    phase: ClientMouseEventPhase,
+    position: ClientMousePosition,
+}
+
+impl ClientMouseEvent {
+    /// Build a captured mouse event from its SGR button code, phase, and viewport position.
+    #[must_use]
+    pub const fn new(button: u16, phase: ClientMouseEventPhase, position: ClientMousePosition) -> Self {
+        Self {
+            button,
+            phase,
+            position,
+        }
+    }
+
+    /// Return the SGR button code, including modifier, wheel, and motion bits.
+    #[must_use]
+    pub const fn button(&self) -> u16 {
+        self.button
+    }
+
+    /// Return whether the event is a press/motion/wheel event or a release event.
+    #[must_use]
+    pub const fn phase(&self) -> ClientMouseEventPhase {
+        self.phase
+    }
+
+    /// Return the event position in client viewport coordinates.
+    #[must_use]
+    pub const fn position(&self) -> ClientMousePosition {
+        self.position
+    }
+
+    /// Return the same event with a translated position.
+    #[must_use]
+    pub const fn with_position(self, position: ClientMousePosition) -> Self {
+        Self { position, ..self }
+    }
+}
+
 #[derive(rkyv::Archive, Clone, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 #[serde(tag = "code", content = "msg", rename_all = "snake_case")]
 pub enum ServerError {
@@ -1073,7 +1342,12 @@ pub enum ClientRequest {
     Input(Vec<u8>),
     Paste(Vec<u8>),
     Key(ClientKey),
+    Mouse(ClientMouseEvent),
     ScrollPaneAt {
+        position: ClientMousePosition,
+        direction: PaneScrollDirection,
+    },
+    ScrollPaneLineAt {
         position: ClientMousePosition,
         direction: PaneScrollDirection,
     },
@@ -1086,6 +1360,7 @@ pub enum ServerEvent {
     Ping,
     Pong,
     Layout(LayoutSnapshot),
+    PaneRegions(PaneRegionsSnapshot),
     Render(RenderUpdate),
     Error(ServerError),
     Detached,
@@ -1177,9 +1452,18 @@ mod tests {
     #[case::input(ClientRequest::Input(vec![b'a', b'b', b'\n']))]
     #[case::paste(ClientRequest::Paste(vec![b'a', b'\n', b'b', b'\n']))]
     #[case::key(ClientRequest::Key(client_key()))]
+    #[case::mouse(ClientRequest::Mouse(ClientMouseEvent::new(
+        0,
+        ClientMouseEventPhase::Press,
+        ClientMousePosition::new(2, 3),
+    )))]
     #[case::scroll(ClientRequest::ScrollPaneAt {
         position: ClientMousePosition::new(2, 3),
         direction: PaneScrollDirection::Up,
+    })]
+    #[case::scroll_line(ClientRequest::ScrollPaneLineAt {
+        position: ClientMousePosition::new(2, 3),
+        direction: PaneScrollDirection::Down,
     })]
     #[case::focus_pane_at(ClientRequest::FocusPaneAt(ClientMousePosition::new(2, 3)))]
     fn test_client_request_codec_when_frame_round_trips_returns_original(
@@ -1194,6 +1478,7 @@ mod tests {
     #[case::ping(ServerEvent::Ping)]
     #[case::pong(ServerEvent::Pong)]
     #[case::layout(ServerEvent::Layout(layout_snapshot()?))]
+    #[case::pane_regions(ServerEvent::PaneRegions(pane_regions_snapshot()?))]
     #[case::render_baseline(ServerEvent::Render(RenderUpdate::Baseline(render_baseline()?)))]
     #[case::render_diff(ServerEvent::Render(RenderUpdate::Diff(render_diff()?)))]
     #[case::error(ServerEvent::Error(ServerError::unexpected_request(ClientRequest::Detach)))]
@@ -1226,6 +1511,7 @@ mod tests {
                     vec![pane_snapshot("pane-1", "shell")?],
                 )?],
             },
+            pane_regions: pane_regions_snapshot()?,
         });
         let encoded = encode_server_event(&event)?;
 
@@ -1541,6 +1827,7 @@ mod tests {
     fn attach_accepted() -> rootcause::Result<AttachAccepted> {
         Ok(AttachAccepted {
             layout: layout_snapshot()?,
+            pane_regions: pane_regions_snapshot()?,
         })
     }
 
@@ -1558,6 +1845,18 @@ mod tests {
         let pane = PaneSnapshot::new(active_pane.clone(), "shell");
         let tab = TabSnapshot::new(active_tab.clone(), "default", active_pane, vec![pane])?;
         LayoutSnapshot::new(active_tab, vec![tab])
+    }
+
+    fn pane_regions_snapshot() -> rootcause::Result<PaneRegionsSnapshot> {
+        PaneRegionsSnapshot::new(vec![PaneRegionSnapshot::new(
+            PaneId::new("pane-1")?,
+            0,
+            0,
+            80,
+            24,
+            PaneMouseMode::None,
+            0,
+        )?])
     }
 
     fn tab_snapshot(

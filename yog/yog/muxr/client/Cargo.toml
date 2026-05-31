@@ -16,6 +16,7 @@ muxr_core = { workspace = true }
 muxr_transport = { workspace = true }
 rootcause = { workspace = true }
 tokio = { workspace = true }
+ytil_sys = { workspace = true }
 
 [dev-dependencies]
 assert2 = { workspace = true }
