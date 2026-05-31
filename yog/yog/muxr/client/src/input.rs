@@ -1,8 +1,9 @@
 use muxr_core::ClientKey;
 use muxr_core::ClientKeyCode;
 use muxr_core::ClientKeyModifiers;
+use muxr_core::ClientMouseEvent;
+use muxr_core::ClientMouseEventPhase;
 use muxr_core::ClientMousePosition;
-use muxr_core::PaneScrollDirection;
 
 const CTRL_N: u8 = 0x0e;
 const CTRL_P: u8 = 0x10;
@@ -13,14 +14,11 @@ const BRACKETED_PASTE_START: &[u8] = b"\x1b[200~";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DecodedInput {
+    CopySelection,
     Input(Vec<u8>),
     Key(ClientKey),
-    MouseFocus(ClientMousePosition),
+    Mouse(ClientMouseEvent),
     Paste(Vec<u8>),
-    Scroll {
-        position: ClientMousePosition,
-        direction: PaneScrollDirection,
-    },
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -33,12 +31,8 @@ enum PendingInput {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SgrMouseEvent {
-    Focus(ClientMousePosition),
+    Event(ClientMouseEvent),
     Ignored,
-    Scroll {
-        position: ClientMousePosition,
-        direction: PaneScrollDirection,
-    },
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -86,8 +80,8 @@ impl InputDecoder {
     }
 
     #[must_use]
-    pub fn has_pending(&self) -> bool {
-        self.pending != PendingInput::None
+    pub const fn needs_idle_timeout(&self) -> bool {
+        matches!(self.pending, PendingInput::EscapeSequence(_))
     }
 
     fn push_byte(&mut self, byte: u8, input: &mut Vec<u8>, decoded: &mut Vec<DecodedInput>) {
@@ -138,6 +132,14 @@ impl InputDecoder {
 
 fn finish_escape_sequence(bytes: Vec<u8>, input: &mut Vec<u8>, decoded: &mut Vec<DecodedInput>) {
     if let [ESC, byte] = bytes.as_slice()
+        && *byte == b'C'
+    {
+        self::push_input(decoded, input);
+        decoded.push(DecodedInput::CopySelection);
+        return;
+    }
+
+    if let [ESC, byte] = bytes.as_slice()
         && let Some(key) = self::key_for_escaped_byte(*byte)
     {
         self::push_key(decoded, input, key);
@@ -152,9 +154,8 @@ fn finish_escape_sequence(bytes: Vec<u8>, input: &mut Vec<u8>, decoded: &mut Vec
     if let Some(event) = self::sgr_mouse_event(&bytes) {
         self::push_input(decoded, input);
         match event {
-            SgrMouseEvent::Focus(position) => decoded.push(DecodedInput::MouseFocus(position)),
             SgrMouseEvent::Ignored => {}
-            SgrMouseEvent::Scroll { position, direction } => decoded.push(DecodedInput::Scroll { position, direction }),
+            SgrMouseEvent::Event(event) => decoded.push(DecodedInput::Mouse(event)),
         }
         return;
     }
@@ -202,50 +203,40 @@ fn sgr_mouse_event(bytes: &[u8]) -> Option<SgrMouseEvent> {
     if bytes.first() != Some(&ESC) || bytes.get(1) != Some(&b'[') || bytes.get(2) != Some(&b'<') {
         return None;
     }
-    if bytes.last() != Some(&b'M') {
-        return Some(SgrMouseEvent::Ignored);
-    }
-    let Some(body_end) = bytes.len().checked_sub(1) else {
+    let release = match bytes.last() {
+        Some(b'M') => false,
+        Some(b'm') => true,
+        Some(_) | None => return Some(SgrMouseEvent::Ignored),
+    };
+    let phase = if release {
+        ClientMouseEventPhase::Release
+    } else {
+        ClientMouseEventPhase::Press
+    };
+    let Some((button, position)) = self::sgr_mouse_button_and_position(bytes) else {
         return Some(SgrMouseEvent::Ignored);
     };
-    let Some(body) = bytes.get(3..body_end) else {
-        return Some(SgrMouseEvent::Ignored);
-    };
+    Some(SgrMouseEvent::Event(ClientMouseEvent::new(button, phase, position)))
+}
+
+fn sgr_mouse_button_and_position(bytes: &[u8]) -> Option<(u16, ClientMousePosition)> {
+    let body_end = bytes.len().checked_sub(1)?;
+    let body = bytes.get(3..body_end)?;
     let mut parts = body.split(|byte| *byte == b';');
-    let Some(button) = parts.next().and_then(self::parse_mouse_number) else {
-        return Some(SgrMouseEvent::Ignored);
-    };
-    let Some(col) = parts
+    let button = parts.next().and_then(self::parse_mouse_number)?;
+    let col = parts
         .next()
         .and_then(self::parse_mouse_number)
-        .and_then(|col| col.checked_sub(1))
-    else {
-        return Some(SgrMouseEvent::Ignored);
-    };
-    let Some(row) = parts
+        .and_then(|col| col.checked_sub(1))?;
+    let row = parts
         .next()
         .and_then(self::parse_mouse_number)
-        .and_then(|row| row.checked_sub(1))
-    else {
-        return Some(SgrMouseEvent::Ignored);
-    };
+        .and_then(|row| row.checked_sub(1))?;
     if parts.next().is_some() {
-        return Some(SgrMouseEvent::Ignored);
+        return None;
     }
 
-    let position = ClientMousePosition::new(row, col);
-    match button {
-        0 => Some(SgrMouseEvent::Focus(position)),
-        64 => Some(SgrMouseEvent::Scroll {
-            position,
-            direction: PaneScrollDirection::Up,
-        }),
-        65 => Some(SgrMouseEvent::Scroll {
-            position,
-            direction: PaneScrollDirection::Down,
-        }),
-        _ => Some(SgrMouseEvent::Ignored),
-    }
+    Some((button, ClientMousePosition::new(row, col)))
 }
 
 fn parse_mouse_number(raw: &[u8]) -> Option<u16> {
@@ -334,6 +325,13 @@ mod tests {
     }
 
     #[test]
+    fn test_input_decoder_decode_when_copy_shortcut_arrives_returns_copy_selection() {
+        let mut decoder = InputDecoder::default();
+
+        pretty_assertions::assert_eq!(decoder.decode(b"\x1bC"), vec![DecodedInput::CopySelection]);
+    }
+
+    #[test]
     fn test_input_decoder_decode_when_shortcut_is_between_input_splits_actions() {
         let mut decoder = InputDecoder::default();
 
@@ -361,7 +359,7 @@ mod tests {
         let mut decoder = InputDecoder::default();
 
         pretty_assertions::assert_eq!(decoder.decode(b"\x1b"), Vec::<DecodedInput>::new());
-        assert2::assert!(decoder.has_pending());
+        assert2::assert!(decoder.needs_idle_timeout());
         pretty_assertions::assert_eq!(
             decoder.decode(b"E"),
             vec![DecodedInput::Key(key(
@@ -370,7 +368,7 @@ mod tests {
                 b"\x1bE",
             ))]
         );
-        assert2::assert!(!decoder.has_pending());
+        assert2::assert!(!decoder.needs_idle_timeout());
     }
 
     #[test]
@@ -378,7 +376,7 @@ mod tests {
         let mut decoder = InputDecoder::default();
 
         pretty_assertions::assert_eq!(decoder.decode(b"\x1b"), Vec::<DecodedInput>::new());
-        assert2::assert!(decoder.has_pending());
+        assert2::assert!(decoder.needs_idle_timeout());
         pretty_assertions::assert_eq!(
             decoder.finalize(),
             vec![DecodedInput::Key(key(
@@ -387,7 +385,7 @@ mod tests {
                 b"\x1b",
             ))]
         );
-        assert2::assert!(!decoder.has_pending());
+        assert2::assert!(!decoder.needs_idle_timeout());
     }
 
     #[test]
@@ -396,9 +394,9 @@ mod tests {
         let bytes = b"\x1b[1";
 
         pretty_assertions::assert_eq!(decoder.decode(bytes), Vec::<DecodedInput>::new());
-        assert2::assert!(decoder.has_pending());
+        assert2::assert!(decoder.needs_idle_timeout());
         pretty_assertions::assert_eq!(decoder.finalize(), vec![DecodedInput::Input(bytes.to_vec())]);
-        assert2::assert!(!decoder.has_pending());
+        assert2::assert!(!decoder.needs_idle_timeout());
     }
 
     #[rstest]
@@ -427,7 +425,7 @@ mod tests {
         let mut decoder = InputDecoder::default();
 
         pretty_assertions::assert_eq!(decoder.decode(b"\x1b["), Vec::<DecodedInput>::new());
-        assert2::assert!(decoder.has_pending());
+        assert2::assert!(decoder.needs_idle_timeout());
         pretty_assertions::assert_eq!(
             decoder.decode(b"D"),
             vec![DecodedInput::Key(key(
@@ -436,7 +434,7 @@ mod tests {
                 b"\x1b[D",
             ))]
         );
-        assert2::assert!(!decoder.has_pending());
+        assert2::assert!(!decoder.needs_idle_timeout());
     }
 
     #[test]
@@ -454,46 +452,83 @@ mod tests {
         let mut decoder = InputDecoder::default();
 
         pretty_assertions::assert_eq!(decoder.decode(b"\x1b[200~echo"), Vec::<DecodedInput>::new());
-        assert2::assert!(decoder.has_pending());
+        assert2::assert!(!decoder.needs_idle_timeout());
         pretty_assertions::assert_eq!(
             decoder.decode(b" hi\n\x1b[201~"),
             vec![DecodedInput::Paste(b"echo hi\n".to_vec())]
         );
-        assert2::assert!(!decoder.has_pending());
+        assert2::assert!(!decoder.needs_idle_timeout());
     }
 
     #[rstest]
-    #[case::wheel_up(b"\x1b[<64;10;5M", PaneScrollDirection::Up)]
-    #[case::wheel_down(b"\x1b[<65;10;5M", PaneScrollDirection::Down)]
-    fn test_input_decoder_decode_when_mouse_wheel_arrives_returns_scroll(
+    #[case::bare_escape(b"\x1b")]
+    #[case::incomplete_csi(b"\x1b[")]
+    fn test_input_decoder_needs_idle_timeout_when_escape_prefix_is_pending(#[case] bytes: &[u8]) {
+        let mut decoder = InputDecoder::default();
+
+        pretty_assertions::assert_eq!(decoder.decode(bytes), Vec::<DecodedInput>::new());
+
+        assert2::assert!(decoder.needs_idle_timeout());
+    }
+
+    #[rstest]
+    #[case::wheel_up(b"\x1b[<64;10;5M", 64)]
+    #[case::wheel_down(b"\x1b[<65;10;5M", 65)]
+    fn test_input_decoder_decode_when_mouse_wheel_arrives_returns_mouse_event(
         #[case] bytes: &[u8],
-        #[case] direction: PaneScrollDirection,
+        #[case] button: u16,
     ) {
         let mut decoder = InputDecoder::default();
 
         pretty_assertions::assert_eq!(
             decoder.decode(bytes),
-            vec![DecodedInput::Scroll {
-                position: ClientMousePosition::new(4, 9),
-                direction,
-            }]
+            vec![DecodedInput::Mouse(ClientMouseEvent::new(
+                button,
+                ClientMouseEventPhase::Press,
+                ClientMousePosition::new(4, 9),
+            ))]
         );
     }
 
     #[test]
-    fn test_input_decoder_decode_when_mouse_click_arrives_returns_focus_position() {
+    fn test_input_decoder_decode_when_mouse_click_arrives_returns_mouse_event() {
         let mut decoder = InputDecoder::default();
 
         pretty_assertions::assert_eq!(
             decoder.decode(b"\x1b[<0;10;5M"),
-            vec![DecodedInput::MouseFocus(ClientMousePosition::new(4, 9))]
+            vec![DecodedInput::Mouse(ClientMouseEvent::new(
+                0,
+                ClientMouseEventPhase::Press,
+                ClientMousePosition::new(4, 9),
+            ))]
         );
     }
 
     #[test]
-    fn test_input_decoder_decode_when_mouse_release_arrives_consumes_event() {
+    fn test_input_decoder_decode_when_mouse_drag_arrives_returns_mouse_event() {
         let mut decoder = InputDecoder::default();
 
-        pretty_assertions::assert_eq!(decoder.decode(b"\x1b[<0;10;5m"), Vec::<DecodedInput>::new());
+        pretty_assertions::assert_eq!(
+            decoder.decode(b"\x1b[<32;10;5M"),
+            vec![DecodedInput::Mouse(ClientMouseEvent::new(
+                32,
+                ClientMouseEventPhase::Press,
+                ClientMousePosition::new(4, 9),
+            ))]
+        );
+    }
+
+    #[test]
+    fn test_input_decoder_decode_when_mouse_release_arrives_returns_mouse_event() {
+        let mut decoder = InputDecoder::default();
+
+        pretty_assertions::assert_eq!(
+            decoder.decode(b"\x1b[<0;10;5m"),
+            vec![DecodedInput::Mouse(ClientMouseEvent::new(
+                0,
+                ClientMouseEventPhase::Release,
+                ClientMousePosition::new(4, 9),
+            ))]
+        );
     }
 }
