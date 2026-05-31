@@ -1,6 +1,6 @@
 use muxr_core::PaneId;
 
-use crate::layout::PaneFocusDirection;
+use crate::pane_focus::PaneFocusDirection;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PaneLayout {
