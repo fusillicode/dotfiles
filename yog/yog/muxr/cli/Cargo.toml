@@ -1,0 +1,31 @@
+[package]
+name = "muxr-cli"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "muxr command-line interface."
+keywords = ["muxr", "terminal", "multiplexer", "client", "cli"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "muxr"
+path = "src/main.rs"
+
+[dependencies]
+muxr_client = { workspace = true }
+muxr_core = { workspace = true }
+muxr_server = { workspace = true }
+rootcause = { workspace = true }
+ytil_sys = { workspace = true }
+
+[dev-dependencies]
+assert2 = { workspace = true }
+pretty_assertions = { workspace = true }
+rstest = { workspace = true }
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

@@ -3006,6 +3006,83 @@ dependencies = [
 ]
 
 [[package]]
+name = "muxr-cli"
+version = "0.1.0"
+dependencies = [
+ "assert2",
+ "muxr-client",
+ "muxr-core",
+ "muxr-server",
+ "pretty_assertions",
+ "rootcause",
+ "rstest",
+ "tempfile",
+ "ytil_sys",
+]
+
+[[package]]
+name = "muxr-client"
+version = "0.1.0"
+dependencies = [
+ "assert2",
+ "crossterm 0.29.0",
+ "muxr-core",
+ "muxr-transport",
+ "pretty_assertions",
+ "rootcause",
+ "rstest",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
+name = "muxr-core"
+version = "0.1.0"
+dependencies = [
+ "assert2",
+ "pretty_assertions",
+ "rootcause",
+ "rstest",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "muxr-server"
+version = "0.1.0"
+dependencies = [
+ "assert2",
+ "muxr-core",
+ "muxr-transport",
+ "portable-pty",
+ "pretty_assertions",
+ "rootcause",
+ "rstest",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "vt100",
+]
+
+[[package]]
+name = "muxr-transport"
+version = "0.1.0"
+dependencies = [
+ "assert2",
+ "bytes",
+ "futures-util",
+ "interprocess",
+ "muxr-core",
+ "pretty_assertions",
+ "rootcause",
+ "rstest",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "names"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

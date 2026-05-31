@@ -1,0 +1,30 @@
+[package]
+name = "muxr-server"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "muxr terminal multiplexer session server."
+keywords = ["muxr", "terminal", "multiplexer", "server", "session"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+muxr_core = { workspace = true }
+muxr_transport = { workspace = true }
+portable-pty = { workspace = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+vt100 = { workspace = true }
+
+[dev-dependencies]
+assert2 = { workspace = true }
+pretty_assertions = { workspace = true }
+rstest = { workspace = true }
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

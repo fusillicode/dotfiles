@@ -1,0 +1,24 @@
+[package]
+name = "muxr-core"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Shared session, path, layout, and protocol types for muxr."
+keywords = ["muxr", "terminal", "multiplexer", "session", "protocol"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+assert2 = { workspace = true }
+pretty_assertions = { workspace = true }
+rstest = { workspace = true }
+
+[lints]
+workspace = true
