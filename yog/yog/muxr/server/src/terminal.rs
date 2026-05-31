@@ -1,3 +1,4 @@
+use muxr_core::PaneMouseMode;
 use muxr_core::PaneScrollDirection;
 use muxr_core::RenderCell;
 use muxr_core::RenderColor;
@@ -6,6 +7,8 @@ use muxr_core::RenderRowSpan;
 use muxr_core::RenderStyle;
 use muxr_core::RenderTextStyle;
 use muxr_core::TerminalSize;
+use rootcause::prelude::ResultExt;
+use rootcause::report;
 
 const SCROLLBACK_ROWS: usize = 10_000;
 const SCROLL_LINES_PER_WHEEL_EVENT: usize = 5;
@@ -36,6 +39,57 @@ impl TerminalSnapshot {
 
 pub struct TerminalState {
     parser: vt100::Parser<TerminalCallbacks>,
+}
+
+/// Mouse reporting protocol requested by the application running in a pane.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TerminalMouseProtocol {
+    encoding: TerminalMouseProtocolEncoding,
+    mode: TerminalMouseProtocolMode,
+}
+
+impl TerminalMouseProtocol {
+    /// Build a terminal mouse protocol snapshot.
+    #[must_use]
+    pub const fn new(mode: TerminalMouseProtocolMode, encoding: TerminalMouseProtocolEncoding) -> Self {
+        Self { encoding, mode }
+    }
+
+    /// Return the coordinate/button encoding requested by the pane application.
+    #[must_use]
+    pub const fn encoding(self) -> TerminalMouseProtocolEncoding {
+        self.encoding
+    }
+
+    /// Return which mouse events should be reported to the pane application.
+    #[must_use]
+    pub const fn mode(self) -> TerminalMouseProtocolMode {
+        self.mode
+    }
+}
+
+/// Mouse event encoding requested by the pane application.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TerminalMouseProtocolEncoding {
+    /// X10 default byte encoding.
+    Default,
+    /// SGR `CSI < ... M/m` encoding.
+    Sgr,
+    /// Deprecated UTF-8 coordinate encoding.
+    Utf8,
+}
+
+/// Mouse event set requested by the pane application.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TerminalMouseProtocolMode {
+    /// Report any motion.
+    AnyMotion,
+    /// Report button motion.
+    ButtonMotion,
+    /// Report button presses only.
+    Press,
+    /// Report button presses and releases.
+    PressRelease,
 }
 
 #[derive(Default)]
@@ -107,11 +161,19 @@ impl TerminalState {
     }
 
     pub fn scroll(&mut self, direction: PaneScrollDirection) -> bool {
+        self.scroll_lines(direction, SCROLL_LINES_PER_WHEEL_EVENT)
+    }
+
+    pub fn scroll_one_line(&mut self, direction: PaneScrollDirection) -> bool {
+        self.scroll_lines(direction, 1)
+    }
+
+    fn scroll_lines(&mut self, direction: PaneScrollDirection, lines: usize) -> bool {
         let screen = self.parser.screen_mut();
         let before = screen.scrollback();
         let next = match direction {
-            PaneScrollDirection::Down => before.saturating_sub(SCROLL_LINES_PER_WHEEL_EVENT),
-            PaneScrollDirection::Up => before.saturating_add(SCROLL_LINES_PER_WHEEL_EVENT),
+            PaneScrollDirection::Down => before.saturating_sub(lines),
+            PaneScrollDirection::Up => before.saturating_add(lines),
         };
         screen.set_scrollback(next);
         screen.scrollback() != before
@@ -124,8 +186,50 @@ impl TerminalState {
         screen.scrollback() != before
     }
 
+    pub fn visible_top_row(&mut self) -> rootcause::Result<u64> {
+        let screen = self.parser.screen_mut();
+        let offset = screen.scrollback();
+        // vt100 exposes the current viewport offset but not the current scrollback length.
+        // Asking it to clamp an oversized scrollback request gives the exact length; restore before returning.
+        screen.set_scrollback(usize::MAX);
+        let scrollback_len = screen.scrollback();
+        screen.set_scrollback(offset);
+        let visible_top_row = scrollback_len
+            .checked_sub(offset)
+            .ok_or_else(|| report!("muxr pane scrollback offset exceeded length"))?;
+        Ok(u64::try_from(visible_top_row).context("muxr pane visible top row overflowed")?)
+    }
+
     pub fn bracketed_paste_enabled(&self) -> bool {
         self.parser.screen().bracketed_paste()
+    }
+
+    pub fn mouse_protocol(&self) -> Option<TerminalMouseProtocol> {
+        let mode = match self.parser.screen().mouse_protocol_mode() {
+            vt100::MouseProtocolMode::None => return None,
+            vt100::MouseProtocolMode::Press => TerminalMouseProtocolMode::Press,
+            vt100::MouseProtocolMode::PressRelease => TerminalMouseProtocolMode::PressRelease,
+            vt100::MouseProtocolMode::ButtonMotion => TerminalMouseProtocolMode::ButtonMotion,
+            vt100::MouseProtocolMode::AnyMotion => TerminalMouseProtocolMode::AnyMotion,
+        };
+        let encoding = match self.parser.screen().mouse_protocol_encoding() {
+            vt100::MouseProtocolEncoding::Default => TerminalMouseProtocolEncoding::Default,
+            vt100::MouseProtocolEncoding::Sgr => TerminalMouseProtocolEncoding::Sgr,
+            vt100::MouseProtocolEncoding::Utf8 => TerminalMouseProtocolEncoding::Utf8,
+        };
+        Some(TerminalMouseProtocol::new(mode, encoding))
+    }
+
+    pub fn mouse_mode(&self) -> PaneMouseMode {
+        let Some(protocol) = self.mouse_protocol() else {
+            return PaneMouseMode::None;
+        };
+        match protocol.mode() {
+            TerminalMouseProtocolMode::AnyMotion => PaneMouseMode::AnyMotion,
+            TerminalMouseProtocolMode::ButtonMotion => PaneMouseMode::ButtonMotion,
+            TerminalMouseProtocolMode::Press => PaneMouseMode::Press,
+            TerminalMouseProtocolMode::PressRelease => PaneMouseMode::PressRelease,
+        }
     }
 
     pub fn snapshot(&self) -> rootcause::Result<TerminalSnapshot> {
@@ -280,12 +384,47 @@ mod tests {
     }
 
     #[test]
+    fn test_terminal_state_visible_top_row_when_scrolled_tracks_current_viewport() -> rootcause::Result<()> {
+        let mut terminal = TerminalState::new(&TerminalSize::new(8, 2)?);
+
+        terminal.process(b"one\ntwo\nthree");
+        let bottom_top_row = terminal.visible_top_row()?;
+        assert2::assert!(terminal.scroll(PaneScrollDirection::Up));
+        let scrolled_snapshot = self::snapshot_text(&terminal.snapshot()?);
+
+        let scrolled_top_row = terminal.visible_top_row()?;
+
+        pretty_assertions::assert_eq!(self::snapshot_text(&terminal.snapshot()?), scrolled_snapshot);
+        assert2::assert!(scrolled_top_row < bottom_top_row);
+        Ok(())
+    }
+
+    #[test]
     fn test_terminal_state_bracketed_paste_when_mode_is_enabled_returns_true() -> rootcause::Result<()> {
         let mut terminal = TerminalState::new(&terminal_size()?);
 
         terminal.process(b"\x1b[?2004h");
 
         assert2::assert!(terminal.bracketed_paste_enabled());
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_mouse_protocol_when_sgr_button_motion_is_enabled_returns_protocol() -> rootcause::Result<()>
+    {
+        let mut terminal = TerminalState::new(&terminal_size()?);
+
+        terminal.process(b"\x1b[?1002h\x1b[?1006h");
+
+        pretty_assertions::assert_eq!(
+            terminal.mouse_protocol(),
+            Some(TerminalMouseProtocol::new(
+                TerminalMouseProtocolMode::ButtonMotion,
+                TerminalMouseProtocolEncoding::Sgr,
+            )),
+        );
+        pretty_assertions::assert_eq!(terminal.mouse_mode(), PaneMouseMode::ButtonMotion);
+        assert2::assert!(terminal.mouse_mode().tracking_enabled());
         Ok(())
     }
 

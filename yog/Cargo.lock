@@ -3076,6 +3076,7 @@ dependencies = [
  "rstest",
  "tempfile",
  "tokio",
+ "ytil_sys",
 ]
 
 [[package]]

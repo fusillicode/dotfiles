@@ -15,10 +15,13 @@ use muxr_core::AttachAccepted;
 use muxr_core::ClientKey;
 use muxr_core::ClientKeyCode;
 use muxr_core::ClientKeyModifiers;
+use muxr_core::ClientMouseEvent;
 use muxr_core::ClientMousePosition;
 use muxr_core::ClientRequest;
 use muxr_core::LayoutSnapshot;
 use muxr_core::PaneId;
+use muxr_core::PaneRegionSnapshot;
+use muxr_core::PaneRegionsSnapshot;
 use muxr_core::PaneScrollDirection;
 use muxr_core::RenderBaseline;
 use muxr_core::RenderCell;
@@ -197,6 +200,12 @@ struct RenderComposer {
     next_seq: u64,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RenderDiffReason {
+    DirtyFrame,
+    RegionChanged,
+}
+
 impl RenderComposer {
     const fn new() -> Self {
         Self {
@@ -211,7 +220,10 @@ impl RenderComposer {
         runtimes: &PaneRuntimes,
         size: &TerminalSize,
     ) -> rootcause::Result<RenderUpdate> {
-        let mut frame = Self::current_frame(layout, runtimes, size)?;
+        self.render_frame_baseline(Self::current_frame(layout, runtimes, size)?)
+    }
+
+    fn render_frame_baseline(&mut self, mut frame: CompositeFrame) -> rootcause::Result<RenderUpdate> {
         frame.seq = self.next_sequence()?;
         let baseline = RenderBaseline::new(frame.seq, frame.size.clone(), frame.cursor.clone(), frame.rows.clone())?;
         self.last_sent = Some(frame);
@@ -223,15 +235,27 @@ impl RenderComposer {
         layout: &Layout,
         runtimes: &PaneRuntimes,
         size: &TerminalSize,
+        reason: RenderDiffReason,
     ) -> rootcause::Result<Option<RenderUpdate>> {
         let Some(previous) = self.last_sent.as_ref() else {
             return Ok(Some(self.render_baseline(layout, runtimes, size)?));
         };
-        let mut frame = Self::current_frame(layout, runtimes, size)?;
+        let frame = Self::current_frame(layout, runtimes, size)?;
         if frame.size != previous.size {
-            return Ok(Some(self.render_baseline(layout, runtimes, size)?));
+            return Ok(Some(self.render_frame_baseline(frame)?));
         }
 
+        self.render_frame_diff(frame, reason)
+    }
+
+    fn render_frame_diff(
+        &mut self,
+        mut frame: CompositeFrame,
+        reason: RenderDiffReason,
+    ) -> rootcause::Result<Option<RenderUpdate>> {
+        let Some(previous) = self.last_sent.as_ref() else {
+            return Ok(Some(self.render_frame_baseline(frame)?));
+        };
         let (previous_seq, cursor_changed, rows) = {
             let rows = previous
                 .rows
@@ -242,7 +266,7 @@ impl RenderComposer {
                 .collect::<Vec<_>>();
             (previous.seq, frame.cursor != previous.cursor, rows)
         };
-        if rows.is_empty() && !cursor_changed {
+        if rows.is_empty() && !cursor_changed && reason == RenderDiffReason::DirtyFrame {
             return Ok(None);
         }
 
@@ -635,11 +659,18 @@ struct AttachedPtySink {
 struct AttachedSessionState<'a> {
     config: &'a ServerConfig,
     layout: &'a Mutex<Layout>,
+    pane_regions: PaneRegionsSnapshot,
     pty_event_sender: &'a mpsc::SyncSender<PtyEvent>,
     render_composer: &'a mut RenderComposer,
     runtimes: &'a Mutex<PaneRuntimes>,
     sink_guards: &'a mut Vec<AttachedPtySink>,
     terminal_size: TerminalSize,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PaneScrollAmount {
+    Line,
+    Wheel,
 }
 
 fn attach_pane_sinks(
@@ -763,7 +794,9 @@ async fn handle_client(
         | ClientRequest::Input(_)
         | ClientRequest::Paste(_)
         | ClientRequest::Key(_)
+        | ClientRequest::Mouse(_)
         | ClientRequest::ScrollPaneAt { .. }
+        | ClientRequest::ScrollPaneLineAt { .. }
         | ClientRequest::FocusPaneAt(_)) => {
             let _sent = self::send_connection_event_with_timeout(
                 &mut connection,
@@ -800,9 +833,12 @@ async fn handle_client(
     let (pty_event_sender, pty_event_receiver) = mpsc::sync_channel(OUTPUT_EVENT_CHANNEL_LIMIT);
     let mut sink_guards = self::attach_pane_sinks(runtimes, &pty_event_sender)?;
     let (mut request_reader, mut event_writer) = connection.split();
-    let (layout_snapshot, mut render_composer, render_baseline) =
+    let (layout_snapshot, pane_regions, mut render_composer, render_baseline) =
         self::initial_attached_render(layout, runtimes, &attach_request.terminal_size)?;
-    if !self::send_attached_response_and_baseline(&mut event_writer, layout_snapshot, render_baseline).await? {
+    let attached_pane_regions = pane_regions.clone();
+    if !self::send_attached_response_and_baseline(&mut event_writer, layout_snapshot, pane_regions, render_baseline)
+        .await?
+    {
         return Ok(());
     }
 
@@ -817,6 +853,7 @@ async fn handle_client(
     let mut attached_state = AttachedSessionState {
         config,
         layout,
+        pane_regions: attached_pane_regions,
         pty_event_sender: &pty_event_sender,
         render_composer: &mut render_composer,
         runtimes,
@@ -844,23 +881,56 @@ fn initial_attached_render(
     layout: &Mutex<Layout>,
     runtimes: &Mutex<PaneRuntimes>,
     terminal_size: &TerminalSize,
-) -> rootcause::Result<(LayoutSnapshot, RenderComposer, RenderUpdate)> {
+) -> rootcause::Result<(LayoutSnapshot, PaneRegionsSnapshot, RenderComposer, RenderUpdate)> {
     let mut render_composer = RenderComposer::new();
     let layout = self::lock_mutex(layout, "layout")?;
     let runtimes = self::lock_mutex(runtimes, "pane runtimes")?;
     let layout_snapshot = layout.snapshot()?;
+    let pane_regions = self::pane_regions_snapshot(&layout, &runtimes, terminal_size)?;
     let render_baseline = render_composer.render_baseline(&layout, &runtimes, terminal_size)?;
     drop(runtimes);
     drop(layout);
-    Ok((layout_snapshot, render_composer, render_baseline))
+    Ok((layout_snapshot, pane_regions, render_composer, render_baseline))
+}
+
+fn pane_regions_snapshot(
+    layout: &Layout,
+    runtimes: &PaneRuntimes,
+    terminal_size: &TerminalSize,
+) -> rootcause::Result<PaneRegionsSnapshot> {
+    let regions = layout
+        .pane_regions(terminal_size)?
+        .into_iter()
+        .map(|region| {
+            let handle = runtimes.handle(region.id())?;
+            let mouse_mode = handle.mouse_mode()?;
+            let visible_top_row = handle.visible_top_row()?;
+            PaneRegionSnapshot::new(
+                region.id().clone(),
+                region.col(),
+                region.row(),
+                region.cols(),
+                region.rows(),
+                mouse_mode,
+                visible_top_row,
+            )
+        })
+        .collect::<rootcause::Result<Vec<_>>>()?;
+    PaneRegionsSnapshot::new(regions)
 }
 
 async fn send_attached_response_and_baseline(
     event_writer: &mut ServerEventWriter,
     layout: LayoutSnapshot,
+    pane_regions: PaneRegionsSnapshot,
     render_baseline: RenderUpdate,
 ) -> rootcause::Result<bool> {
-    if !self::send_writer_event_with_timeout(event_writer, &ServerEvent::Attached(AttachAccepted { layout })).await? {
+    if !self::send_writer_event_with_timeout(
+        event_writer,
+        &ServerEvent::Attached(AttachAccepted { layout, pane_regions }),
+    )
+    .await?
+    {
         return Ok(false);
     }
     self::send_writer_event_with_timeout(event_writer, &ServerEvent::Render(render_baseline)).await
@@ -996,13 +1066,30 @@ async fn flush_render_diff(
         return Ok(true);
     }
 
-    let update = {
+    let (pane_regions, update) = {
         let layout = self::lock_mutex(state.layout, "layout")?;
         let runtimes = self::lock_mutex(state.runtimes, "pane runtimes")?;
-        state
+        let pane_regions = self::pane_regions_snapshot(&layout, &runtimes, &state.terminal_size)?;
+        let reason = if pane_regions == state.pane_regions {
+            RenderDiffReason::DirtyFrame
+        } else {
+            // Scrollback can move the viewport without changing the visible pixels. Send an empty diff in that case so
+            // clients can complete scroll-dependent state after the matching PaneRegions event.
+            RenderDiffReason::RegionChanged
+        };
+        let update = state
             .render_composer
-            .render_diff(&layout, &runtimes, &state.terminal_size)?
+            .render_diff(&layout, &runtimes, &state.terminal_size, reason)?;
+        drop(runtimes);
+        drop(layout);
+        (pane_regions, update)
     };
+    if pane_regions != state.pane_regions {
+        if !self::send_writer_event_with_timeout(event_writer, &ServerEvent::PaneRegions(pane_regions.clone())).await? {
+            return Ok(false);
+        }
+        state.pane_regions = pane_regions;
+    }
     if let Some(update) = update
         && !self::send_writer_event_with_timeout(event_writer, &ServerEvent::Render(update)).await?
     {
@@ -1014,22 +1101,26 @@ async fn flush_render_diff(
 
 async fn send_layout_and_baseline(
     event_writer: &mut ServerEventWriter,
-    layout: &Mutex<Layout>,
-    runtimes: &Mutex<PaneRuntimes>,
-    render_composer: &mut RenderComposer,
-    terminal_size: &TerminalSize,
+    state: &mut AttachedSessionState<'_>,
 ) -> rootcause::Result<bool> {
-    let (layout_snapshot, render_update) = {
-        let layout = self::lock_mutex(layout, "layout")?;
-        let runtimes = self::lock_mutex(runtimes, "pane runtimes")?;
+    let (layout_snapshot, pane_regions, render_update) = {
+        let layout = self::lock_mutex(state.layout, "layout")?;
+        let runtimes = self::lock_mutex(state.runtimes, "pane runtimes")?;
         (
             layout.snapshot()?,
-            render_composer.render_baseline(&layout, &runtimes, terminal_size)?,
+            self::pane_regions_snapshot(&layout, &runtimes, &state.terminal_size)?,
+            state
+                .render_composer
+                .render_baseline(&layout, &runtimes, &state.terminal_size)?,
         )
     };
     if !self::send_writer_event_with_timeout(event_writer, &ServerEvent::Layout(layout_snapshot)).await? {
         return Ok(false);
     }
+    if !self::send_writer_event_with_timeout(event_writer, &ServerEvent::PaneRegions(pane_regions.clone())).await? {
+        return Ok(false);
+    }
+    state.pane_regions = pane_regions;
     self::send_writer_event_with_timeout(event_writer, &ServerEvent::Render(render_update)).await
 }
 
@@ -1056,14 +1147,7 @@ async fn resize_panes_and_render(
     state: &mut AttachedSessionState<'_>,
 ) -> rootcause::Result<bool> {
     self::resize_panes_to_layout(state.layout, state.runtimes, &state.terminal_size)?;
-    self::send_layout_and_baseline(
-        event_writer,
-        state.layout,
-        state.runtimes,
-        state.render_composer,
-        &state.terminal_size,
-    )
-    .await
+    self::send_layout_and_baseline(event_writer, state).await
 }
 
 async fn handle_attached_request(
@@ -1094,12 +1178,16 @@ async fn handle_attached_request(
         Some(ClientRequest::Key(key)) => {
             self::handle_key_request(key, event_writer, state, input_mode, render_dirty).await
         }
+        Some(ClientRequest::Mouse(event)) => {
+            self::handle_mouse_event_request(event, event_writer, state, render_dirty).await
+        }
         Some(ClientRequest::ScrollPaneAt { position, direction }) => {
             // Wheel packets include their own coordinates, so route scrollback by pointer position without stealing
             // keyboard focus from the active pane.
             if !self::handle_scroll_pane_at_request(
                 position,
                 direction,
+                PaneScrollAmount::Wheel,
                 state.layout,
                 state.runtimes,
                 &state.terminal_size,
@@ -1111,19 +1199,27 @@ async fn handle_attached_request(
             *render_dirty = true;
             Ok(true)
         }
+        Some(ClientRequest::ScrollPaneLineAt { position, direction }) => {
+            if !self::handle_scroll_pane_at_request(
+                position,
+                direction,
+                PaneScrollAmount::Line,
+                state.layout,
+                state.runtimes,
+                &state.terminal_size,
+            )? {
+                return Ok(true);
+            }
+            // Edge-drag autoscroll uses one-line steps but can still outpace render IO; keep it coalesced on the
+            // normal render tick.
+            *render_dirty = true;
+            Ok(true)
+        }
         Some(ClientRequest::FocusPaneAt(position)) => {
             if !self::handle_focus_pane_at_request(position, state.config, state.layout, &state.terminal_size)? {
                 return Ok(true);
             }
-            if !self::send_layout_and_baseline(
-                event_writer,
-                state.layout,
-                state.runtimes,
-                state.render_composer,
-                &state.terminal_size,
-            )
-            .await?
-            {
+            if !self::send_layout_and_baseline(event_writer, state).await? {
                 return Ok(false);
             }
             Ok(true)
@@ -1136,15 +1232,7 @@ async fn handle_attached_request(
             Ok(true)
         }
         Some(ClientRequest::RenderResync) => {
-            if !self::send_layout_and_baseline(
-                event_writer,
-                state.layout,
-                state.runtimes,
-                state.render_composer,
-                &state.terminal_size,
-            )
-            .await?
-            {
+            if !self::send_layout_and_baseline(event_writer, state).await? {
                 return Ok(false);
             }
             Ok(true)
@@ -1246,14 +1334,7 @@ async fn handle_command_request(
             if !self::handle_focus_pane_command(direction, state.config, state.layout, &state.terminal_size)? {
                 return Ok(true);
             }
-            self::send_layout_and_baseline(
-                event_writer,
-                state.layout,
-                state.runtimes,
-                state.render_composer,
-                &state.terminal_size,
-            )
-            .await
+            self::send_layout_and_baseline(event_writer, state).await
         }
         ClientCommand::EnterResizeMode | ClientCommand::ExitMode => Ok(true),
     }
@@ -1417,6 +1498,7 @@ fn handle_focus_pane_at_request(
 fn handle_scroll_pane_at_request(
     position: ClientMousePosition,
     direction: PaneScrollDirection,
+    amount: PaneScrollAmount,
     layout: &Mutex<Layout>,
     runtimes: &Mutex<PaneRuntimes>,
     terminal_size: &TerminalSize,
@@ -1432,7 +1514,81 @@ fn handle_scroll_pane_at_request(
     };
 
     let runtimes = self::lock_mutex(runtimes, "pane runtimes")?;
-    runtimes.handle(&pane_id)?.scroll(direction)
+    match amount {
+        PaneScrollAmount::Line => runtimes.handle(&pane_id)?.scroll_one_line(direction),
+        PaneScrollAmount::Wheel => runtimes.handle(&pane_id)?.scroll(direction),
+    }
+}
+
+async fn handle_mouse_event_request(
+    event: ClientMouseEvent,
+    event_writer: &mut ServerEventWriter,
+    state: &mut AttachedSessionState<'_>,
+    render_dirty: &mut bool,
+) -> rootcause::Result<bool> {
+    let Some(region) = self::mouse_event_region(state.layout, state.runtimes, &state.terminal_size, event.position())?
+    else {
+        return Ok(true);
+    };
+    let handle = {
+        let runtimes = self::lock_mutex(state.runtimes, "pane runtimes")?;
+        let handle = runtimes.handle(region.id())?;
+        drop(runtimes);
+        handle
+    };
+    let write_result = handle.write_mouse_event(event, &region)?;
+    if let Some(scrolled_to_bottom) = write_result {
+        *render_dirty |= scrolled_to_bottom;
+    }
+    // Forwarded hover, wheel, and drag events belong to the pointed pane, but only an intentional button press changes
+    // muxr focus.
+    if !self::mouse_event_focuses_pane(event) {
+        return Ok(true);
+    }
+    if !self::handle_focus_pane_at_request(event.position(), state.config, state.layout, &state.terminal_size)? {
+        return Ok(true);
+    }
+    self::send_layout_and_baseline(event_writer, state).await
+}
+
+fn mouse_event_focuses_pane(event: ClientMouseEvent) -> bool {
+    event.phase() == muxr_core::ClientMouseEventPhase::Press
+        && event.button() & (32 | 64) == 0
+        && event.button() & 0b11 != 0b11
+}
+
+fn mouse_event_region(
+    layout: &Mutex<Layout>,
+    runtimes: &Mutex<PaneRuntimes>,
+    terminal_size: &TerminalSize,
+    position: ClientMousePosition,
+) -> rootcause::Result<Option<PaneRegionSnapshot>> {
+    let region = {
+        let layout = self::lock_mutex(layout, "layout")?;
+        let region = layout
+            .pane_regions(terminal_size)?
+            .into_iter()
+            .find(|region| region.contains(position.row, position.col));
+        drop(layout);
+        let Some(region) = region else {
+            return Ok(None);
+        };
+        region
+    };
+    let runtimes = self::lock_mutex(runtimes, "pane runtimes")?;
+    let handle = runtimes.handle(region.id())?;
+    let mouse_mode = handle.mouse_mode()?;
+    let visible_top_row = handle.visible_top_row()?;
+    drop(runtimes);
+    Ok(Some(PaneRegionSnapshot::new(
+        region.id().clone(),
+        region.col(),
+        region.row(),
+        region.cols(),
+        region.rows(),
+        mouse_mode,
+        visible_top_row,
+    )?))
 }
 
 const fn resolve_key(input_mode: &mut ServerInputMode, key: &ClientKey) -> KeyResolution {
@@ -1583,7 +1739,7 @@ mod tests {
 
     const SERVER_READY_TIMEOUT: Duration = Duration::from_secs(2);
 
-    type PaneRegionSnapshot = (String, u16, u16, u16, u16);
+    type PaneRegionTuple = (String, u16, u16, u16, u16);
 
     struct AttachedTestClient {
         layout: LayoutSnapshot,
@@ -2052,6 +2208,57 @@ mod tests {
         Ok(())
     }
 
+    #[rstest::rstest]
+    #[case::dirty_frame(RenderDiffReason::DirtyFrame, false)]
+    #[case::region_changed(RenderDiffReason::RegionChanged, true)]
+    fn test_render_composer_render_frame_diff_when_pixels_are_unchanged_respects_reason(
+        #[case] reason: RenderDiffReason,
+        #[case] expected_diff: bool,
+    ) -> rootcause::Result<()> {
+        let size = TerminalSize::new(2, 1)?;
+        let cursor = RenderCursor::new(0, 0, false);
+        let rows = vec![RenderRowSpan::new(
+            0,
+            0,
+            vec![
+                RenderCell::narrow("a", RenderStyle::default()),
+                RenderCell::narrow("b", RenderStyle::default()),
+            ],
+        )?];
+        let previous = CompositeFrame {
+            cursor: cursor.clone(),
+            rows: rows.clone(),
+            seq: 1,
+            size: size.clone(),
+        };
+        let current = CompositeFrame {
+            cursor,
+            rows,
+            seq: 0,
+            size,
+        };
+        let mut composer = RenderComposer {
+            last_sent: Some(previous),
+            next_seq: 2,
+        };
+
+        let update = composer.render_frame_diff(current, reason)?;
+
+        if !expected_diff {
+            pretty_assertions::assert_eq!(update, None);
+            pretty_assertions::assert_eq!(composer.next_seq, 2);
+            return Ok(());
+        }
+
+        let Some(RenderUpdate::Diff(diff)) = update else {
+            return Err(report!("expected muxr region-change diff"));
+        };
+        pretty_assertions::assert_eq!(diff.base_seq(), 1);
+        pretty_assertions::assert_eq!(diff.seq(), 2);
+        assert2::assert!(diff.rows().is_empty());
+        Ok(())
+    }
+
     #[test]
     fn test_layout_close_when_nested_pane_closes_collapses_parent_split() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
@@ -2481,6 +2688,45 @@ mod tests {
     }
 
     #[test]
+    fn test_serve_when_no_button_mouse_motion_arrives_does_not_focus_hovered_pane() -> rootcause::Result<()> {
+        self::runtime()?.block_on(async {
+            let tempdir = tempfile::tempdir()?;
+            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), ShellCommand::new("/bin/cat"));
+
+            self::wait_for_socket(&paths.socket)?;
+            let mut client = self::open_attached_client(&session, &paths).await?;
+            client
+                .writer
+                .send_request(&ClientRequest::Key(ClientKey::new(
+                    ClientKeyCode::Char('V'),
+                    ClientKeyModifiers::SHIFT_ALT,
+                    b"\x1bV".to_vec(),
+                )))
+                .await?;
+            drop(self::read_until_layout(&mut client).await?);
+
+            client
+                .writer
+                .send_request(&ClientRequest::Mouse(ClientMouseEvent::new(
+                    35,
+                    muxr_core::ClientMouseEventPhase::Press,
+                    muxr_core::ClientMousePosition::new(0, 0),
+                )))
+                .await?;
+            client
+                .writer
+                .send_request(&ClientRequest::Input(b"still-pane-2\n".to_vec()))
+                .await?;
+
+            self::read_until_render_contains(&mut client, b"still-pane-2").await?;
+            self::assert_layout_metadata_panes(&paths, &["pane-1", "pane-2"], "pane-2")?;
+            self::detach_client(client).await?;
+            self::join_server(handle)
+        })
+    }
+
+    #[test]
     fn test_serve_when_close_pane_key_arrives_removes_active_pane_and_keeps_remaining_pty() -> rootcause::Result<()> {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
@@ -2873,7 +3119,11 @@ mod tests {
                 Some(ServerEvent::Detached) => break,
                 Some(ServerEvent::Ping) => client.writer.send_request(&ClientRequest::Pong).await?,
                 Some(
-                    ServerEvent::Attached(_) | ServerEvent::Pong | ServerEvent::Layout(_) | ServerEvent::Render(_),
+                    ServerEvent::Attached(_)
+                    | ServerEvent::Pong
+                    | ServerEvent::Layout(_)
+                    | ServerEvent::PaneRegions(_)
+                    | ServerEvent::Render(_),
                 ) => {}
                 Some(event) => return Err(report!("expected detached event").attach(format!("{event:?}"))),
                 None => return Err(report!("expected detached event")),
@@ -2956,10 +3206,7 @@ mod tests {
             .collect())
     }
 
-    fn layout_active_tab_pane_regions(
-        layout: &Layout,
-        size: &TerminalSize,
-    ) -> rootcause::Result<Vec<PaneRegionSnapshot>> {
+    fn layout_active_tab_pane_regions(layout: &Layout, size: &TerminalSize) -> rootcause::Result<Vec<PaneRegionTuple>> {
         Ok(layout
             .pane_regions(size)?
             .iter()
@@ -3084,7 +3331,11 @@ mod tests {
                     return Err(report!("muxr test server returned error").attach(format!("{error:?}")));
                 }
                 ServerEvent::Ping => client.writer.send_request(&ClientRequest::Pong).await?,
-                ServerEvent::Attached(_) | ServerEvent::Pong | ServerEvent::Render(_) | ServerEvent::Detached => {}
+                ServerEvent::Attached(_)
+                | ServerEvent::Pong
+                | ServerEvent::PaneRegions(_)
+                | ServerEvent::Render(_)
+                | ServerEvent::Detached => {}
             }
         }
     }
@@ -3116,7 +3367,11 @@ mod tests {
                 ServerEvent::Error(error) => {
                     return Err(report!("muxr test server returned error").attach(format!("{error:?}")));
                 }
-                ServerEvent::Attached(_) | ServerEvent::Pong | ServerEvent::Layout(_) | ServerEvent::Detached => {}
+                ServerEvent::Attached(_)
+                | ServerEvent::Pong
+                | ServerEvent::Layout(_)
+                | ServerEvent::PaneRegions(_)
+                | ServerEvent::Detached => {}
             }
         }
     }
@@ -3151,6 +3406,7 @@ mod tests {
                 | ServerEvent::Ping
                 | ServerEvent::Pong
                 | ServerEvent::Layout(_)
+                | ServerEvent::PaneRegions(_)
                 | ServerEvent::Detached => {}
             }
         }
@@ -3181,7 +3437,13 @@ mod tests {
                     return Err(report!("muxr test server returned error").attach(format!("{error:?}")));
                 }
                 Ok(Ok(
-                    Some(ServerEvent::Attached(_) | ServerEvent::Pong | ServerEvent::Layout(_) | ServerEvent::Detached)
+                    Some(
+                        ServerEvent::Attached(_)
+                        | ServerEvent::Pong
+                        | ServerEvent::Layout(_)
+                        | ServerEvent::PaneRegions(_)
+                        | ServerEvent::Detached,
+                    )
                     | None,
                 ))
                 | Err(_) => {}
@@ -3206,7 +3468,11 @@ mod tests {
                 }
                 Ok(Ok(
                     Some(
-                        ServerEvent::Attached(_) | ServerEvent::Pong | ServerEvent::Layout(_) | ServerEvent::Render(_),
+                        ServerEvent::Attached(_)
+                        | ServerEvent::Pong
+                        | ServerEvent::Layout(_)
+                        | ServerEvent::PaneRegions(_)
+                        | ServerEvent::Render(_),
                     )
                     | None,
                 ))
