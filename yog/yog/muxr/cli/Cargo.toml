@@ -15,9 +15,9 @@ name = "muxr"
 path = "src/main.rs"
 
 [dependencies]
-muxr_client = { workspace = true }
+muxr_client = { package = "muxr-client", path = "../client" }
 muxr_core = { workspace = true }
-muxr_server = { workspace = true }
+muxr_server = { package = "muxr-server", path = "../server" }
 rootcause = { workspace = true }
 ytil_sys = { workspace = true }
 
