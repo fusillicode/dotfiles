@@ -38,7 +38,7 @@ const ATTACH_TIMEOUT: Duration = Duration::from_secs(2);
 const SERVER_READY_TIMEOUT: Duration = Duration::from_secs(2);
 const AMBIGUOUS_INPUT_TIMEOUT: Duration = Duration::from_millis(50);
 const STDIN_BUFFER_SIZE: usize = 8192;
-const TABBAR_ROWS: u16 = 1;
+const TAB_BAR_ROWS: u16 = 1;
 const CONTROL_REQUEST_CHANNEL_LIMIT: usize = 128;
 const INPUT_REQUEST_CHANNEL_LIMIT: usize = 1024;
 
@@ -175,9 +175,9 @@ impl ClientRenderer {
             crate::render::queue_full_redraw_start(&mut frame)?;
         }
         if render_chrome {
-            crate::tabbar::queue(&mut frame, &self.layout)?;
+            crate::tab_bar::queue(&mut frame, &self.layout)?;
         }
-        self.frame_buffer.queue_at(&mut frame, changes, TABBAR_ROWS)?;
+        self.frame_buffer.queue_at(&mut frame, changes, TAB_BAR_ROWS)?;
         crate::render::queue_synchronized_update_end(&mut frame, self.synchronized_output)?;
         stdout
             .write_all(&frame)
@@ -456,7 +456,7 @@ fn current_terminal_size() -> rootcause::Result<TerminalSize> {
 }
 
 fn pane_size_for_terminal(size: &TerminalSize) -> rootcause::Result<TerminalSize> {
-    let rows = size.rows().saturating_sub(TABBAR_ROWS).max(1);
+    let rows = size.rows().saturating_sub(TAB_BAR_ROWS).max(1);
     TerminalSize::new(size.cols(), rows)
 }
 
@@ -549,7 +549,7 @@ fn send_decoded_input(input_sender: &tokio::sync::mpsc::Sender<ClientRequest>, d
                 }
             }
             DecodedInput::MouseFocus(position) => {
-                let Some(row) = position.row.checked_sub(TABBAR_ROWS) else {
+                let Some(row) = position.row.checked_sub(TAB_BAR_ROWS) else {
                     continue;
                 };
                 let request = ClientRequest::FocusPaneAt(muxr_core::ClientMousePosition::new(row, position.col));
@@ -558,7 +558,7 @@ fn send_decoded_input(input_sender: &tokio::sync::mpsc::Sender<ClientRequest>, d
                 }
             }
             DecodedInput::Scroll { position, direction } => {
-                let Some(row) = position.row.checked_sub(TABBAR_ROWS) else {
+                let Some(row) = position.row.checked_sub(TAB_BAR_ROWS) else {
                     continue;
                 };
                 let request = ClientRequest::ScrollPaneAt {
@@ -933,7 +933,7 @@ mod tests {
     }
 
     #[test]
-    fn test_send_decoded_input_when_mouse_focus_arrives_offsets_tabbar_row() {
+    fn test_send_decoded_input_when_mouse_focus_arrives_offsets_tab_bar_row() {
         let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
 
         assert2::assert!(send_decoded_input(
@@ -948,7 +948,7 @@ mod tests {
     }
 
     #[test]
-    fn test_send_decoded_input_when_mouse_focus_is_on_tabbar_drops_request() {
+    fn test_send_decoded_input_when_mouse_focus_is_on_tab_bar_drops_request() {
         let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
 
         assert2::assert!(send_decoded_input(
@@ -986,7 +986,7 @@ mod tests {
     }
 
     #[test]
-    fn test_send_decoded_input_when_scroll_arrives_offsets_tabbar_row() {
+    fn test_send_decoded_input_when_scroll_arrives_offsets_tab_bar_row() {
         let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
 
         assert2::assert!(send_decoded_input(
@@ -1007,7 +1007,7 @@ mod tests {
     }
 
     #[test]
-    fn test_send_decoded_input_when_scroll_is_on_tabbar_drops_request() {
+    fn test_send_decoded_input_when_scroll_is_on_tab_bar_drops_request() {
         let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
 
         assert2::assert!(send_decoded_input(
@@ -1025,7 +1025,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pane_size_for_terminal_when_tabbar_has_room_reserves_one_row() -> rootcause::Result<()> {
+    fn test_pane_size_for_terminal_when_tab_bar_has_room_reserves_one_row() -> rootcause::Result<()> {
         pretty_assertions::assert_eq!(
             pane_size_for_terminal(&TerminalSize::new(80, 24)?)?,
             TerminalSize::new(80, 23)?,
@@ -1063,10 +1063,10 @@ mod tests {
         assert2::assert!(terminal_output.starts_with("\x1b[?2026h"));
         assert2::assert!(terminal_output.ends_with("\x1b[?2026l"));
         let clear_index = terminal_output.find("\x1b[2J").unwrap_or(usize::MAX);
-        let tabbar_index = terminal_output.find("[2:tab 2]").unwrap_or(usize::MAX);
+        let tab_bar_index = terminal_output.find("[2:tab 2]").unwrap_or(usize::MAX);
         let pane_index = terminal_output.find("ab").unwrap_or(usize::MAX);
-        assert2::assert!(clear_index < tabbar_index);
-        assert2::assert!(tabbar_index < pane_index);
+        assert2::assert!(clear_index < tab_bar_index);
+        assert2::assert!(tab_bar_index < pane_index);
         Ok(())
     }
 

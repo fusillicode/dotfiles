@@ -28,14 +28,14 @@ pub fn queue(stdout: &mut impl Write, layout: &LayoutSnapshot) -> rootcause::Res
     queue_command(stdout, SetForegroundColor(Color::White))?;
     queue_command(stdout, SetAttribute(Attribute::Bold))?;
     queue_command(stdout, Clear(ClearType::CurrentLine))?;
-    queue_command(stdout, Print(format_tabbar(layout)))?;
+    queue_command(stdout, Print(format_tab_bar(layout)))?;
     queue_command(stdout, ResetColor)?;
     queue_command(stdout, SetAttribute(Attribute::Reset))?;
     queue_command(stdout, RestorePosition)?;
     Ok(())
 }
 
-fn format_tabbar(layout: &LayoutSnapshot) -> String {
+fn format_tab_bar(layout: &LayoutSnapshot) -> String {
     layout
         .tabs
         .iter()
@@ -68,7 +68,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_format_tabbar_when_second_tab_is_active_marks_active_tab() -> rootcause::Result<()> {
+    fn test_format_tab_bar_when_second_tab_is_active_marks_active_tab() -> rootcause::Result<()> {
         let layout = muxr_core::LayoutSnapshot::new(
             muxr_core::TabId::new("tab-2")?,
             vec![
@@ -87,12 +87,12 @@ mod tests {
             ],
         )?;
 
-        pretty_assertions::assert_eq!(format_tabbar(&layout), " 1:default  [2:tab 2]");
+        pretty_assertions::assert_eq!(format_tab_bar(&layout), " 1:default  [2:tab 2]");
         Ok(())
     }
 
     #[test]
-    fn test_queue_when_layout_is_rendered_writes_tabbar_without_flushing() -> rootcause::Result<()> {
+    fn test_queue_when_layout_is_rendered_writes_tab_bar_without_flushing() -> rootcause::Result<()> {
         let active_tab = muxr_core::TabId::new("tab-1")?;
         let active_pane = muxr_core::PaneId::new("pane-1")?;
         let pane = muxr_core::PaneSnapshot::new(active_pane.clone(), "shell");
@@ -116,7 +116,7 @@ mod tests {
 
     impl CountingWriter {
         fn rendered_string(&self) -> rootcause::Result<String> {
-            Ok(String::from_utf8(self.bytes.clone()).context("muxr tabbar test output was not utf8")?)
+            Ok(String::from_utf8(self.bytes.clone()).context("muxr tab bar test output was not utf8")?)
         }
     }
 

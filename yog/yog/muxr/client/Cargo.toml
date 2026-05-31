@@ -11,7 +11,7 @@ keywords = ["muxr", "terminal", "multiplexer", "client", "cli"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-crossterm = { workspace = true }
+crossterm = { version = "0.29" }
 muxr_core = { workspace = true }
 muxr_transport = { workspace = true }
 rootcause = { workspace = true }

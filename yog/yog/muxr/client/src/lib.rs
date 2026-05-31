@@ -3,4 +3,4 @@ pub use client::start;
 mod client;
 mod input;
 mod render;
-mod tabbar;
+mod tab_bar;

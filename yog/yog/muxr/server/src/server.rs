@@ -21,7 +21,6 @@ use muxr_core::LayoutSnapshot;
 use muxr_core::PROTOCOL_VERSION;
 use muxr_core::PaneId;
 use muxr_core::PaneScrollDirection;
-use muxr_core::PaneSnapshot;
 use muxr_core::RenderBaseline;
 use muxr_core::RenderCell;
 use muxr_core::RenderColor;
@@ -35,8 +34,6 @@ use muxr_core::ServerError;
 use muxr_core::ServerEvent;
 use muxr_core::SessionName;
 use muxr_core::SessionPaths;
-use muxr_core::TabId;
-use muxr_core::TabSnapshot;
 use muxr_core::TerminalSize;
 use muxr_transport::ServerConnection;
 use muxr_transport::ServerEventWriter;
@@ -44,11 +41,18 @@ use muxr_transport::ServerListener;
 use muxr_transport::ServerRequestReader;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
-use serde::Deserialize;
-use serde::Deserializer;
-use serde::Serialize;
 
 use crate::history::pane_output_path;
+use crate::layout::ClosePaneOutcome;
+use crate::layout::Layout;
+use crate::layout::PaneExitOutcome;
+use crate::layout::PaneFocusDirection;
+use crate::layout::PaneResizeDirection;
+use crate::layout::PaneSplitAxis;
+use crate::layout::SessionMetadata;
+use crate::layout::region::PaneBorder;
+use crate::layout::region::PaneBorderAxis;
+use crate::layout::region::PaneRegion;
 use crate::pty::PtyEvent;
 use crate::pty::PtyExitStatus;
 use crate::pty::PtyHandle;
@@ -78,1016 +82,12 @@ const PRIVATE_DIR_MODE: u32 = 0o700;
 const PRIVATE_SOCKET_MODE: u32 = 0o600;
 const RENDER_FRAME_INTERVAL: Duration = Duration::from_millis(16);
 
-const INITIAL_PANE_ID: &str = "pane-1";
-const INITIAL_TAB_ID: &str = "tab-1";
-const INITIAL_TAB_TITLE: &str = "default";
-const LAYOUT_VERSION: u16 = 4;
-const SPLIT_RATIO_SCALE: u16 = 1000;
-const SPLIT_RATIO_HALF_SCALE: u16 = 500;
-const DEFAULT_SPLIT_RATIO: u16 = 500;
-const MIN_SPLIT_RATIO: u16 = 50;
-const MAX_SPLIT_RATIO: u16 = 950;
-const SPLIT_RESIZE_STEP: u16 = 50;
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ServerConfig {
     session: SessionName,
     paths: SessionPaths,
     max_accepted_connections: Option<usize>,
     shell_command: ShellCommand,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct SessionMetadata {
-    command_label: String,
-    cwd: String,
-    started_at: u64,
-}
-
-impl SessionMetadata {
-    fn new(config: &ServerConfig) -> rootcause::Result<Self> {
-        Ok(Self {
-            command_label: config.shell_command.label(),
-            cwd: std::env::current_dir()
-                .context("failed to read muxr server cwd")?
-                .to_string_lossy()
-                .into_owned(),
-            started_at: self::unix_timestamp_millis()?,
-        })
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-struct Layout {
-    active_tab: TabId,
-    session: SessionName,
-    tabs: Vec<Tab>,
-}
-
-impl Layout {
-    fn initial(config: &ServerConfig, metadata: SessionMetadata) -> rootcause::Result<Self> {
-        let pane_id = PaneId::new(INITIAL_PANE_ID)?;
-        let tab_id = TabId::new(INITIAL_TAB_ID)?;
-
-        Ok(Self {
-            active_tab: tab_id.clone(),
-            session: config.session.clone(),
-            tabs: vec![Tab {
-                active_pane: pane_id.clone(),
-                id: tab_id,
-                pane_tree: PaneNode::leaf(Pane {
-                    command_label: metadata.command_label.clone(),
-                    cwd: metadata.cwd,
-                    exit_status: None,
-                    exited_at: None,
-                    focus_seq: 1,
-                    id: pane_id,
-                    started_at: metadata.started_at,
-                    title: metadata.command_label,
-                }),
-                title: INITIAL_TAB_TITLE.to_owned(),
-            }],
-        })
-    }
-
-    fn from_persisted(config: &ServerConfig, persisted: PersistedLayoutOwned) -> rootcause::Result<Self> {
-        if persisted.version != LAYOUT_VERSION {
-            return Err(report!("unsupported muxr layout metadata version")
-                .attach(format!("expected={LAYOUT_VERSION}"))
-                .attach(format!("actual={}", persisted.version)));
-        }
-        if persisted.session != config.session {
-            return Err(report!("muxr layout metadata session mismatch")
-                .attach(format!("expected={}", config.session))
-                .attach(format!("actual={}", persisted.session)));
-        }
-
-        let layout = Self {
-            active_tab: persisted.active_tab,
-            session: persisted.session,
-            tabs: persisted.tabs,
-        };
-        // Persisted layout bypasses constructors; rebuilding a snapshot validates tab and pane invariants.
-        layout.snapshot()?;
-        Ok(layout)
-    }
-
-    fn snapshot(&self) -> rootcause::Result<LayoutSnapshot> {
-        let tabs = self
-            .tabs
-            .iter()
-            .map(Tab::snapshot)
-            .collect::<rootcause::Result<Vec<_>>>()?;
-        LayoutSnapshot::new(self.active_tab.clone(), tabs)
-    }
-
-    fn create_tab(&mut self, metadata: SessionMetadata) -> rootcause::Result<PaneId> {
-        let tab_index = self.active_tab_index()?;
-        let tab_number = self.next_tab_number()?;
-        let pane_number = self.next_pane_number()?;
-        let tab_id = TabId::new(format!("tab-{tab_number}"))?;
-        let pane_id = PaneId::new(format!("pane-{pane_number}"))?;
-        let insert_index = tab_index
-            .checked_add(1)
-            .ok_or_else(|| report!("muxr tab insert index overflowed"))?;
-
-        self.tabs.insert(
-            insert_index,
-            Tab {
-                active_pane: pane_id.clone(),
-                id: tab_id.clone(),
-                pane_tree: PaneNode::leaf(Pane {
-                    command_label: metadata.command_label.clone(),
-                    cwd: metadata.cwd,
-                    exit_status: None,
-                    exited_at: None,
-                    focus_seq: 1,
-                    id: pane_id.clone(),
-                    started_at: metadata.started_at,
-                    title: metadata.command_label,
-                }),
-                title: format!("tab {tab_number}"),
-            },
-        );
-        self.active_tab = tab_id;
-        Ok(pane_id)
-    }
-
-    fn split_active_pane(&mut self, metadata: SessionMetadata, split_axis: PaneSplitAxis) -> rootcause::Result<PaneId> {
-        let pane_number = self.next_pane_number()?;
-        let pane_id = PaneId::new(format!("pane-{pane_number}"))?;
-        let tab = self.active_tab_mut()?;
-        let focus_seq = tab.next_focus_seq()?;
-        let new_pane = Pane {
-            command_label: metadata.command_label.clone(),
-            cwd: metadata.cwd,
-            exit_status: None,
-            exited_at: None,
-            focus_seq,
-            id: pane_id.clone(),
-            started_at: metadata.started_at,
-            title: metadata.command_label,
-        };
-        tab.split_active_pane(&new_pane, split_axis)?;
-        tab.active_pane = pane_id.clone();
-        Ok(pane_id)
-    }
-
-    fn resize_active_pane(&mut self, direction: PaneResizeDirection) -> rootcause::Result<bool> {
-        self.active_tab_mut()?.resize_active_pane(direction)
-    }
-
-    fn focus_pane_at(&mut self, size: &TerminalSize, position: ClientMousePosition) -> rootcause::Result<bool> {
-        self.active_tab_mut()?.focus_pane_at(size, position)
-    }
-
-    fn focus_pane_direction(&mut self, size: &TerminalSize, direction: PaneFocusDirection) -> rootcause::Result<bool> {
-        self.active_tab_mut()?.focus_pane_direction(size, direction)
-    }
-
-    fn pane_at(&self, size: &TerminalSize, position: ClientMousePosition) -> rootcause::Result<Option<PaneId>> {
-        self.active_tab()?.pane_at(size, position)
-    }
-
-    fn close_active_pane(&mut self, exited_at: u64) -> rootcause::Result<ClosePaneOutcome> {
-        let active_tab_index = self.active_tab_index()?;
-        let final_pane = self.tabs.len() == 1
-            && self
-                .tabs
-                .get(active_tab_index)
-                .ok_or_else(|| report!("muxr active tab index is outside server layout"))?
-                .pane_count()
-                == 1;
-        let active_pane = self
-            .tabs
-            .get(active_tab_index)
-            .ok_or_else(|| report!("muxr active tab index is outside server layout"))?
-            .active_pane
-            .clone();
-
-        if final_pane {
-            self.tabs
-                .get_mut(active_tab_index)
-                .ok_or_else(|| report!("muxr active tab index is outside server layout"))?
-                .mark_pane_exited(&active_pane, exited_at, None)?;
-            return Ok(ClosePaneOutcome::Final { pane_id: active_pane });
-        }
-
-        if self
-            .tabs
-            .get(active_tab_index)
-            .ok_or_else(|| report!("muxr active tab index is outside server layout"))?
-            .pane_count()
-            == 1
-        {
-            self.remove_tab_at(active_tab_index)?;
-        } else {
-            let tab = self
-                .tabs
-                .get_mut(active_tab_index)
-                .ok_or_else(|| report!("muxr active tab index is outside server layout"))?;
-            let fallback_pane = tab.remove_pane(&active_pane)?;
-            let _focused = tab.focus_pane(fallback_pane)?;
-        }
-
-        Ok(ClosePaneOutcome::Removed { pane_id: active_pane })
-    }
-
-    fn remove_exited_pane(
-        &mut self,
-        pane_id: &PaneId,
-        exited_at: u64,
-        exit_status: Option<PtyExitStatus>,
-    ) -> rootcause::Result<PaneExitOutcome> {
-        let tab_index = self.pane_tab_index(pane_id)?;
-
-        if self.tabs.len() == 1
-            && self
-                .tabs
-                .get(tab_index)
-                .ok_or_else(|| report!("muxr exited pane tab is missing"))?
-                .pane_count()
-                == 1
-        {
-            let tab = self
-                .tabs
-                .get_mut(tab_index)
-                .ok_or_else(|| report!("muxr final pane tab is missing"))?;
-            tab.mark_pane_exited(pane_id, exited_at, exit_status)?;
-            return Ok(PaneExitOutcome::Final);
-        }
-
-        if self
-            .tabs
-            .get(tab_index)
-            .ok_or_else(|| report!("muxr exited pane tab is missing"))?
-            .pane_count()
-            == 1
-        {
-            self.remove_tab_at(tab_index)?;
-            return Ok(PaneExitOutcome::Removed);
-        }
-
-        let tab = self
-            .tabs
-            .get_mut(tab_index)
-            .ok_or_else(|| report!("muxr exited pane tab is missing"))?;
-        let removed_active_pane = tab.active_pane == *pane_id;
-        let fallback_pane = tab.remove_pane(pane_id)?;
-        if removed_active_pane {
-            let _focused = tab.focus_pane(fallback_pane)?;
-        }
-        Ok(PaneExitOutcome::Removed)
-    }
-
-    fn focus_previous_tab(&mut self) -> rootcause::Result<()> {
-        let tab_index = self.active_tab_index()?;
-        let previous_index = if tab_index == 0 {
-            self.tabs.len().saturating_sub(1)
-        } else {
-            tab_index.saturating_sub(1)
-        };
-        self.active_tab = self
-            .tabs
-            .get(previous_index)
-            .ok_or_else(|| report!("muxr previous tab is missing from server layout"))?
-            .id
-            .clone();
-        Ok(())
-    }
-
-    fn focus_next_tab(&mut self) -> rootcause::Result<()> {
-        let tab_index = self.active_tab_index()?;
-        let next_index = tab_index
-            .checked_add(1)
-            .filter(|index| *index < self.tabs.len())
-            .unwrap_or(0);
-        self.active_tab = self
-            .tabs
-            .get(next_index)
-            .ok_or_else(|| report!("muxr next tab is missing from server layout"))?
-            .id
-            .clone();
-        Ok(())
-    }
-
-    fn move_active_tab_previous(&mut self) -> rootcause::Result<()> {
-        let tab_index = self.active_tab_index()?;
-        if tab_index > 0 {
-            self.tabs.swap(tab_index, tab_index.saturating_sub(1));
-        }
-        Ok(())
-    }
-
-    fn move_active_tab_next(&mut self) -> rootcause::Result<()> {
-        let tab_index = self.active_tab_index()?;
-        let Some(next_index) = tab_index.checked_add(1) else {
-            return Err(report!("muxr next tab index overflowed"));
-        };
-        if next_index < self.tabs.len() {
-            self.tabs.swap(tab_index, next_index);
-        }
-        Ok(())
-    }
-
-    fn active_tab_index(&self) -> rootcause::Result<usize> {
-        self.tabs
-            .iter()
-            .position(|tab| tab.id == self.active_tab)
-            .ok_or_else(|| {
-                report!("muxr active tab is missing from server layout")
-                    .attach(format!("active_tab={}", self.active_tab))
-            })
-    }
-
-    fn active_tab(&self) -> rootcause::Result<&Tab> {
-        self.tabs.iter().find(|tab| tab.id == self.active_tab).ok_or_else(|| {
-            report!("muxr active tab is missing from server layout").attach(format!("active_tab={}", self.active_tab))
-        })
-    }
-
-    fn active_tab_mut(&mut self) -> rootcause::Result<&mut Tab> {
-        let active_tab = self.active_tab.clone();
-        self.tabs.iter_mut().find(|tab| tab.id == active_tab).ok_or_else(|| {
-            report!("muxr active tab is missing from server layout").attach(format!("active_tab={active_tab}"))
-        })
-    }
-
-    fn active_pane_id(&self) -> rootcause::Result<PaneId> {
-        Ok(self.active_tab()?.active_pane.clone())
-    }
-
-    fn pane_regions(&self, size: &TerminalSize) -> rootcause::Result<Vec<PaneRegion>> {
-        Ok(self.pane_layout(size)?.regions)
-    }
-
-    fn pane_layout(&self, size: &TerminalSize) -> rootcause::Result<PaneLayout> {
-        self.active_tab()?.pane_layout(size)
-    }
-
-    fn pane_tab_index(&self, pane_id: &PaneId) -> rootcause::Result<usize> {
-        for (tab_index, tab) in self.tabs.iter().enumerate() {
-            if tab.contains_pane(pane_id) {
-                return Ok(tab_index);
-            }
-        }
-
-        Err(report!("muxr pane is missing from server layout").attach(format!("pane_id={pane_id}")))
-    }
-
-    fn remove_tab_at(&mut self, tab_index: usize) -> rootcause::Result<()> {
-        self.tabs.remove(tab_index);
-        if !self.tabs.iter().any(|tab| tab.id == self.active_tab) {
-            let next_tab_index = if tab_index >= self.tabs.len() {
-                tab_index.saturating_sub(1)
-            } else {
-                tab_index
-            };
-            let next_tab = self
-                .tabs
-                .get(next_tab_index)
-                .ok_or_else(|| report!("muxr next tab is missing after pane removal"))?;
-            self.active_tab = next_tab.id.clone();
-        }
-        Ok(())
-    }
-
-    fn next_tab_number(&self) -> rootcause::Result<u64> {
-        self::next_number(self.tabs.iter().map(|tab| tab.id.as_ref()), "tab-")
-    }
-
-    fn next_pane_number(&self) -> rootcause::Result<u64> {
-        self::next_number(self.tabs.iter().flat_map(Tab::pane_ids), "pane-")
-    }
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-enum PaneSplitAxis {
-    Horizontal,
-    Vertical,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[serde(transparent)]
-struct PaneSplitRatio(u16);
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum PaneSplitResize {
-    DecreaseFirst,
-    IncreaseFirst,
-}
-
-impl PaneSplitRatio {
-    const fn balanced() -> Self {
-        Self(DEFAULT_SPLIT_RATIO)
-    }
-
-    fn new(value: u16) -> rootcause::Result<Self> {
-        if !(MIN_SPLIT_RATIO..=MAX_SPLIT_RATIO).contains(&value) {
-            return Err(report!("muxr pane split ratio is outside supported bounds")
-                .attach(format!("min={MIN_SPLIT_RATIO}"))
-                .attach(format!("max={MAX_SPLIT_RATIO}"))
-                .attach(format!("actual={value}")));
-        }
-        Ok(Self(value))
-    }
-
-    fn resized(self, resize: PaneSplitResize) -> Self {
-        match resize {
-            PaneSplitResize::DecreaseFirst => Self(self.0.saturating_sub(SPLIT_RESIZE_STEP).max(MIN_SPLIT_RATIO)),
-            PaneSplitResize::IncreaseFirst => Self(self.0.saturating_add(SPLIT_RESIZE_STEP).min(MAX_SPLIT_RATIO)),
-        }
-    }
-
-    fn split_lengths(self, total: u16) -> rootcause::Result<(u16, u16)> {
-        if total < 2 {
-            return Err(report!("muxr terminal is too small for pane split").attach(format!("cells={total}")));
-        }
-        let max_first = total
-            .checked_sub(1)
-            .ok_or_else(|| report!("muxr pane split max length underflowed"))?;
-
-        let scaled = u32::from(total)
-            .checked_mul(u32::from(self.0))
-            .ok_or_else(|| report!("muxr pane split ratio multiplication overflowed"))?;
-        let rounded = scaled
-            .checked_add(u32::from(SPLIT_RATIO_HALF_SCALE))
-            .ok_or_else(|| report!("muxr pane split ratio rounding overflowed"))?;
-        let first = rounded
-            .checked_div(u32::from(SPLIT_RATIO_SCALE))
-            .ok_or_else(|| report!("muxr pane split ratio divisor was zero"))?
-            .clamp(1, u32::from(max_first));
-        let first = u16::try_from(first).context("muxr pane split ratio result overflowed")?;
-        let second = total
-            .checked_sub(first)
-            .ok_or_else(|| report!("muxr pane split ratio produced an invalid second length"))?;
-
-        Ok((first, second))
-    }
-}
-
-impl<'de> Deserialize<'de> for PaneSplitRatio {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = u16::deserialize(deserializer)?;
-        Self::new(value).map_err(|error| serde::de::Error::custom(format!("{error:#}")))
-    }
-}
-
-impl PaneSplitResize {
-    const fn for_direction(axis: PaneSplitAxis, direction: PaneResizeDirection) -> Option<Self> {
-        match (axis, direction) {
-            (PaneSplitAxis::Horizontal, PaneResizeDirection::Up)
-            | (PaneSplitAxis::Vertical, PaneResizeDirection::Left) => Some(Self::DecreaseFirst),
-            (PaneSplitAxis::Horizontal, PaneResizeDirection::Down)
-            | (PaneSplitAxis::Vertical, PaneResizeDirection::Right) => Some(Self::IncreaseFirst),
-            (PaneSplitAxis::Horizontal, PaneResizeDirection::Left | PaneResizeDirection::Right)
-            | (PaneSplitAxis::Vertical, PaneResizeDirection::Down | PaneResizeDirection::Up) => None,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-enum ClosePaneOutcome {
-    Final { pane_id: PaneId },
-    Removed { pane_id: PaneId },
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum PaneExitOutcome {
-    Final,
-    Removed,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum PaneFocusDirection {
-    Down,
-    Left,
-    Right,
-    Up,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum PaneResizeDirection {
-    Down,
-    Left,
-    Right,
-    Up,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-struct Tab {
-    active_pane: PaneId,
-    id: TabId,
-    pane_tree: PaneNode,
-    title: String,
-}
-
-impl Tab {
-    fn snapshot(&self) -> rootcause::Result<TabSnapshot> {
-        let panes = self.panes().into_iter().map(Pane::snapshot).collect();
-        TabSnapshot::new(self.id.clone(), self.title.clone(), self.active_pane.clone(), panes)
-    }
-
-    fn split_active_pane(&mut self, new_pane: &Pane, split_axis: PaneSplitAxis) -> rootcause::Result<()> {
-        if !self.pane_tree.split_pane(&self.active_pane, new_pane, split_axis)? {
-            return Err(report!("muxr active pane is missing from server layout")
-                .attach(format!("active_pane={}", self.active_pane)));
-        }
-        Ok(())
-    }
-
-    fn resize_active_pane(&mut self, direction: PaneResizeDirection) -> rootcause::Result<bool> {
-        self.pane_tree.resize_pane(&self.active_pane, direction)
-    }
-
-    fn focus_pane_at(&mut self, size: &TerminalSize, position: ClientMousePosition) -> rootcause::Result<bool> {
-        let Some(pane_id) = self.pane_at(size, position)? else {
-            return Ok(false);
-        };
-
-        self.focus_pane(pane_id)
-    }
-
-    fn focus_pane_direction(&mut self, size: &TerminalSize, direction: PaneFocusDirection) -> rootcause::Result<bool> {
-        let layout = self.pane_layout(size)?;
-        let active_region = layout
-            .regions
-            .iter()
-            .find(|region| region.id == self.active_pane)
-            .ok_or_else(|| {
-                report!("muxr active pane is missing from active tab layout")
-                    .attach(format!("active_pane={}", self.active_pane))
-            })?;
-        let Some(next_pane_id) = layout
-            .regions
-            .iter()
-            .filter(|region| region.id != active_region.id)
-            .filter(|region| region.is_adjacent_to(active_region, direction))
-            .max_by_key(|region| region.focus_seq)
-            .map(|region| region.id.clone())
-        else {
-            return Ok(false);
-        };
-
-        self.focus_pane(next_pane_id)
-    }
-
-    fn focus_pane(&mut self, pane_id: PaneId) -> rootcause::Result<bool> {
-        if self.active_pane == pane_id {
-            return Ok(false);
-        }
-
-        let focus_seq = self.next_focus_seq()?;
-        let Some(pane) = self.pane_tree.pane_mut(&pane_id) else {
-            return Err(report!("muxr pane is missing from active tab").attach(format!("pane_id={pane_id}")));
-        };
-        pane.focus_seq = focus_seq;
-        self.active_pane = pane_id;
-        Ok(true)
-    }
-
-    fn pane_at(&self, size: &TerminalSize, position: ClientMousePosition) -> rootcause::Result<Option<PaneId>> {
-        Ok(self
-            .pane_layout(size)?
-            .regions
-            .iter()
-            .find(|region| region.contains(position.row, position.col))
-            .map(|region| region.id.clone()))
-    }
-
-    fn remove_pane(&mut self, pane_id: &PaneId) -> rootcause::Result<PaneId> {
-        self.pane_tree.remove_pane(pane_id)
-    }
-
-    fn mark_pane_exited(
-        &mut self,
-        pane_id: &PaneId,
-        exited_at: u64,
-        exit_status: Option<PtyExitStatus>,
-    ) -> rootcause::Result<()> {
-        let Some(pane) = self.pane_tree.pane_mut(pane_id) else {
-            return Err(report!("muxr pane is missing from server layout").attach(format!("pane_id={pane_id}")));
-        };
-
-        pane.exited_at = Some(exited_at);
-        pane.exit_status = exit_status;
-        Ok(())
-    }
-
-    fn pane_count(&self) -> usize {
-        self.pane_tree.pane_count()
-    }
-
-    fn contains_pane(&self, pane_id: &PaneId) -> bool {
-        self.pane_tree.contains_pane(pane_id)
-    }
-
-    fn pane_ids(&self) -> Vec<&str> {
-        let mut ids = Vec::new();
-        self.pane_tree.append_pane_ids(&mut ids);
-        ids
-    }
-
-    fn panes(&self) -> Vec<&Pane> {
-        let mut panes = Vec::new();
-        self.pane_tree.append_panes(&mut panes);
-        panes
-    }
-
-    fn next_focus_seq(&self) -> rootcause::Result<u64> {
-        self.panes()
-            .iter()
-            .map(|pane| pane.focus_seq)
-            .max()
-            .unwrap_or(0)
-            .checked_add(1)
-            .ok_or_else(|| report!("muxr pane focus sequence overflowed"))
-    }
-
-    fn pane_layout(&self, size: &TerminalSize) -> rootcause::Result<PaneLayout> {
-        let mut layout = PaneLayout::default();
-        self.pane_tree
-            .append_layout(0, 0, size.rows(), size.cols(), &mut layout)?;
-        Ok(layout)
-    }
-}
-
-// Pane splits are a tree so a new split mutates only the active leaf; a tab-wide axis would reflow siblings.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-enum PaneNode {
-    Leaf {
-        pane: Pane,
-    },
-    Split {
-        axis: PaneSplitAxis,
-        first_ratio: PaneSplitRatio,
-        first: Box<Self>,
-        second: Box<Self>,
-    },
-}
-
-impl PaneNode {
-    const fn leaf(pane: Pane) -> Self {
-        Self::Leaf { pane }
-    }
-
-    fn split_pane(&mut self, pane_id: &PaneId, new_pane: &Pane, split_axis: PaneSplitAxis) -> rootcause::Result<bool> {
-        match self {
-            Self::Leaf { pane } if pane.id == *pane_id => {
-                let old_pane = pane.clone();
-                *self = Self::Split {
-                    axis: split_axis,
-                    first_ratio: PaneSplitRatio::balanced(),
-                    first: Box::new(Self::leaf(old_pane)),
-                    second: Box::new(Self::leaf(new_pane.clone())),
-                };
-                Ok(true)
-            }
-            Self::Leaf { .. } => Ok(false),
-            Self::Split { first, second, .. } => {
-                if first.split_pane(pane_id, new_pane, split_axis)? {
-                    return Ok(true);
-                }
-                second.split_pane(pane_id, new_pane, split_axis)
-            }
-        }
-    }
-
-    fn resize_pane(&mut self, pane_id: &PaneId, direction: PaneResizeDirection) -> rootcause::Result<bool> {
-        match self {
-            Self::Leaf { .. } => Ok(false),
-            Self::Split {
-                axis,
-                first_ratio,
-                first,
-                second,
-            } => {
-                let child_resized = if first.contains_pane(pane_id) {
-                    first.resize_pane(pane_id, direction)?
-                } else if second.contains_pane(pane_id) {
-                    second.resize_pane(pane_id, direction)?
-                } else {
-                    return Ok(false);
-                };
-                if child_resized {
-                    return Ok(true);
-                }
-
-                let Some(resize) = PaneSplitResize::for_direction(*axis, direction) else {
-                    return Ok(false);
-                };
-                let resized_ratio = first_ratio.resized(resize);
-                if resized_ratio == *first_ratio {
-                    return Ok(false);
-                }
-
-                *first_ratio = resized_ratio;
-                Ok(true)
-            }
-        }
-    }
-
-    fn remove_pane(&mut self, pane_id: &PaneId) -> rootcause::Result<PaneId> {
-        let Some(fallback_pane) = self.remove_leaf(pane_id)? else {
-            return Err(report!("muxr pane is missing from server layout").attach(format!("pane_id={pane_id}")));
-        };
-        Ok(fallback_pane)
-    }
-
-    fn remove_leaf(&mut self, pane_id: &PaneId) -> rootcause::Result<Option<PaneId>> {
-        match self {
-            Self::Leaf { pane } if pane.id == *pane_id => {
-                Err(report!("muxr cannot remove a pane leaf without a sibling").attach(format!("pane_id={pane_id}")))
-            }
-            Self::Split { first, second, .. } if first.contains_pane(pane_id) => {
-                if first.pane_count() == 1 {
-                    let replacement = (**second).clone();
-                    let fallback_pane = replacement.first_pane_id();
-                    *self = replacement;
-                    Ok(Some(fallback_pane))
-                } else {
-                    first.remove_leaf(pane_id)
-                }
-            }
-            Self::Split { first, second, .. } if second.contains_pane(pane_id) => {
-                if second.pane_count() == 1 {
-                    let replacement = (**first).clone();
-                    let fallback_pane = replacement.first_pane_id();
-                    *self = replacement;
-                    Ok(Some(fallback_pane))
-                } else {
-                    second.remove_leaf(pane_id)
-                }
-            }
-            Self::Leaf { .. } | Self::Split { .. } => Ok(None),
-        }
-    }
-
-    fn pane_count(&self) -> usize {
-        match self {
-            Self::Leaf { .. } => 1,
-            Self::Split { first, second, .. } => first.pane_count().saturating_add(second.pane_count()),
-        }
-    }
-
-    fn contains_pane(&self, pane_id: &PaneId) -> bool {
-        match self {
-            Self::Leaf { pane } => pane.id == *pane_id,
-            Self::Split { first, second, .. } => first.contains_pane(pane_id) || second.contains_pane(pane_id),
-        }
-    }
-
-    fn first_pane_id(&self) -> PaneId {
-        match self {
-            Self::Leaf { pane } => pane.id.clone(),
-            Self::Split { first, .. } => first.first_pane_id(),
-        }
-    }
-
-    fn pane_mut(&mut self, pane_id: &PaneId) -> Option<&mut Pane> {
-        match self {
-            Self::Leaf { pane } if pane.id == *pane_id => Some(pane),
-            Self::Leaf { .. } => None,
-            Self::Split { first, second, .. } => first.pane_mut(pane_id).or_else(|| second.pane_mut(pane_id)),
-        }
-    }
-
-    fn append_pane_ids<'a>(&'a self, ids: &mut Vec<&'a str>) {
-        match self {
-            Self::Leaf { pane } => ids.push(pane.id.as_ref()),
-            Self::Split { first, second, .. } => {
-                first.append_pane_ids(ids);
-                second.append_pane_ids(ids);
-            }
-        }
-    }
-
-    fn append_panes<'a>(&'a self, panes: &mut Vec<&'a Pane>) {
-        match self {
-            Self::Leaf { pane } => panes.push(pane),
-            Self::Split { first, second, .. } => {
-                first.append_panes(panes);
-                second.append_panes(panes);
-            }
-        }
-    }
-
-    fn append_layout(
-        &self,
-        row: u16,
-        col: u16,
-        rows: u16,
-        cols: u16,
-        layout: &mut PaneLayout,
-    ) -> rootcause::Result<()> {
-        match self {
-            Self::Leaf { pane } => {
-                layout.regions.push(PaneRegion {
-                    col,
-                    cols,
-                    focus_seq: pane.focus_seq,
-                    id: pane.id.clone(),
-                    row,
-                    rows,
-                });
-                Ok(())
-            }
-            Self::Split {
-                axis,
-                first_ratio,
-                first,
-                second,
-            } => match axis {
-                PaneSplitAxis::Horizontal => {
-                    let content_rows = rows
-                        .checked_sub(1)
-                        .ok_or_else(|| report!("muxr terminal is too small for horizontal pane border"))?;
-                    let (first_rows, second_rows) = first_ratio.split_lengths(content_rows)?;
-                    let border_row = row
-                        .checked_add(first_rows)
-                        .ok_or_else(|| report!("muxr pane border row overflowed"))?;
-                    let second_row = row
-                        .checked_add(first_rows)
-                        .and_then(|value| value.checked_add(1))
-                        .ok_or_else(|| report!("muxr pane split row overflowed"))?;
-                    first.append_layout(row, col, first_rows, cols, layout)?;
-                    layout.borders.push(PaneBorder {
-                        axis: PaneBorderAxis::Horizontal,
-                        col,
-                        len: cols,
-                        row: border_row,
-                    });
-                    second.append_layout(second_row, col, second_rows, cols, layout)
-                }
-                PaneSplitAxis::Vertical => {
-                    let content_cols = cols
-                        .checked_sub(1)
-                        .ok_or_else(|| report!("muxr terminal is too small for vertical pane border"))?;
-                    let (first_cols, second_cols) = first_ratio.split_lengths(content_cols)?;
-                    let border_col = col
-                        .checked_add(first_cols)
-                        .ok_or_else(|| report!("muxr pane border col overflowed"))?;
-                    let second_col = col
-                        .checked_add(first_cols)
-                        .and_then(|value| value.checked_add(1))
-                        .ok_or_else(|| report!("muxr pane split col overflowed"))?;
-                    first.append_layout(row, col, rows, first_cols, layout)?;
-                    layout.borders.push(PaneBorder {
-                        axis: PaneBorderAxis::Vertical,
-                        col: border_col,
-                        len: rows,
-                        row,
-                    });
-                    second.append_layout(row, second_col, rows, second_cols, layout)
-                }
-            },
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-struct Pane {
-    command_label: String,
-    cwd: String,
-    exit_status: Option<PtyExitStatus>,
-    exited_at: Option<u64>,
-    focus_seq: u64,
-    id: PaneId,
-    started_at: u64,
-    title: String,
-}
-
-impl Pane {
-    fn snapshot(&self) -> PaneSnapshot {
-        PaneSnapshot::new(self.id.clone(), self.title.clone())
-    }
-}
-
-#[derive(Serialize)]
-struct PersistedLayout<'a> {
-    version: u16,
-    session: &'a SessionName,
-    active_tab: &'a TabId,
-    tabs: &'a [Tab],
-}
-
-#[derive(Deserialize)]
-struct PersistedLayoutOwned {
-    version: u16,
-    session: SessionName,
-    active_tab: TabId,
-    tabs: Vec<Tab>,
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-struct PaneLayout {
-    borders: Vec<PaneBorder>,
-    regions: Vec<PaneRegion>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct PaneBorder {
-    axis: PaneBorderAxis,
-    col: u16,
-    len: u16,
-    row: u16,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum PaneBorderAxis {
-    Horizontal,
-    Vertical,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct PaneRegion {
-    col: u16,
-    cols: u16,
-    focus_seq: u64,
-    id: PaneId,
-    row: u16,
-    rows: u16,
-}
-
-impl PaneRegion {
-    const fn contains(&self, row: u16, col: u16) -> bool {
-        let Some(end_row) = self.row.checked_add(self.rows) else {
-            return false;
-        };
-        let Some(end_col) = self.col.checked_add(self.cols) else {
-            return false;
-        };
-
-        row >= self.row && row < end_row && col >= self.col && col < end_col
-    }
-
-    fn is_adjacent_to(&self, other: &Self, direction: PaneFocusDirection) -> bool {
-        // Muxr pane regions exclude the separator cell, so visible neighbors have a one-cell gap where Zellij's
-        // frame-inclusive pane geometry uses exact edge equality.
-        match direction {
-            PaneFocusDirection::Left => self.is_directly_left_of(other) && self.horizontally_overlaps_with(other),
-            PaneFocusDirection::Right => self.is_directly_right_of(other) && self.horizontally_overlaps_with(other),
-            PaneFocusDirection::Up => self.is_directly_above(other) && self.vertically_overlaps_with(other),
-            PaneFocusDirection::Down => self.is_directly_below(other) && self.vertically_overlaps_with(other),
-        }
-    }
-
-    fn is_directly_left_of(&self, other: &Self) -> bool {
-        Self::edges_are_adjacent(self.end_col(), u32::from(other.col))
-    }
-
-    fn is_directly_right_of(&self, other: &Self) -> bool {
-        Self::edges_are_adjacent(other.end_col(), u32::from(self.col))
-    }
-
-    fn is_directly_above(&self, other: &Self) -> bool {
-        Self::edges_are_adjacent(self.end_row(), u32::from(other.row))
-    }
-
-    fn is_directly_below(&self, other: &Self) -> bool {
-        Self::edges_are_adjacent(other.end_row(), u32::from(self.row))
-    }
-
-    fn horizontally_overlaps_with(&self, other: &Self) -> bool {
-        Self::ranges_overlap(
-            u32::from(self.row),
-            u32::from(self.rows),
-            u32::from(other.row),
-            u32::from(other.rows),
-        )
-    }
-
-    fn vertically_overlaps_with(&self, other: &Self) -> bool {
-        Self::ranges_overlap(
-            u32::from(self.col),
-            u32::from(self.cols),
-            u32::from(other.col),
-            u32::from(other.cols),
-        )
-    }
-
-    fn end_col(&self) -> u32 {
-        u32::from(self.col).saturating_add(u32::from(self.cols))
-    }
-
-    fn end_row(&self) -> u32 {
-        u32::from(self.row).saturating_add(u32::from(self.rows))
-    }
-
-    fn edges_are_adjacent(edge: u32, start: u32) -> bool {
-        edge == start || edge.checked_add(1) == Some(start)
-    }
-
-    const fn ranges_overlap(first_start: u32, first_len: u32, second_start: u32, second_len: u32) -> bool {
-        let first_end = first_start.saturating_add(first_len);
-        let second_end = second_start.saturating_add(second_len);
-
-        first_start < second_end && second_start < first_end
-    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1122,17 +122,15 @@ struct PaneRuntimes {
 impl PaneRuntimes {
     fn spawn_for_layout(config: &ServerConfig, layout: &Layout, size: &TerminalSize) -> rootcause::Result<Self> {
         let mut panes = Vec::new();
-        for tab in &layout.tabs {
-            for pane in tab.panes() {
-                panes.push(PaneRuntime {
-                    id: pane.id.clone(),
-                    session: PtySession::spawn(
-                        &config.shell_command,
-                        size,
-                        &self::pane_output_path(&config.paths.panes, &pane.id),
-                    )?,
-                });
-            }
+        for pane_id in layout.pane_ids() {
+            panes.push(PaneRuntime {
+                session: PtySession::spawn(
+                    &config.shell_command,
+                    size,
+                    &self::pane_output_path(&config.paths.panes, &pane_id),
+                )?,
+                id: pane_id,
+            });
         }
         Ok(Self { panes })
     }
@@ -1175,8 +173,8 @@ impl PaneRuntimes {
 
     fn resize_panes(&self, regions: &[PaneRegion]) -> rootcause::Result<()> {
         for region in regions {
-            self.handle(&region.id)?
-                .resize(&TerminalSize::new(region.cols, region.rows)?)?;
+            self.handle(region.id())?
+                .resize(&TerminalSize::new(region.cols(), region.rows())?)?;
         }
         Ok(())
     }
@@ -1265,22 +263,22 @@ impl RenderComposer {
         let mut rows = self::empty_render_rows(size);
         let mut cursor = RenderCursor::new(0, 0, false);
 
-        for region in &pane_layout.regions {
-            let snapshot = runtimes.snapshot(&region.id)?;
+        for region in pane_layout.regions() {
+            let snapshot = runtimes.snapshot(region.id())?;
             self::paste_snapshot(&mut rows, region, &snapshot)?;
-            if region.id == active_pane && snapshot.cursor().visible {
+            if region.id() == &active_pane && snapshot.cursor().visible {
                 let row = region
-                    .row
+                    .row()
                     .checked_add(snapshot.cursor().row)
                     .ok_or_else(|| report!("muxr composite cursor row overflowed"))?;
                 let col = region
-                    .col
+                    .col()
                     .checked_add(snapshot.cursor().col)
                     .ok_or_else(|| report!("muxr composite cursor col overflowed"))?;
                 cursor = RenderCursor::new(row, col, true);
             }
         }
-        self::paste_borders(&mut rows, &pane_layout.borders)?;
+        self::paste_borders(&mut rows, pane_layout.borders())?;
 
         let rows = rows
             .into_iter()
@@ -1376,17 +374,17 @@ async fn serve_async(config: &ServerConfig) -> rootcause::Result<()> {
     self::secure_socket_file(&config.paths.socket)?;
     fs::write(&config.paths.pid, std::process::id().to_string()).context("failed to write muxr server pid")?;
     let initial_size = TerminalSize::new(80, 24)?;
-    let metadata = SessionMetadata::new(config)?;
-    let layout = match self::load_layout_metadata(&config.paths, config)? {
+    let metadata = self::session_metadata(config)?;
+    let layout = match crate::layout::persisted::load_metadata(&config.paths, &config.session)? {
         Some(layout) => layout,
-        None => Layout::initial(config, metadata)?,
+        None => Layout::initial(&config.session, metadata)?,
     };
     let runtimes = PaneRuntimes::spawn_for_layout(config, &layout, &initial_size)?;
     let layout = Arc::new(Mutex::new(layout));
     let runtimes = Arc::new(Mutex::new(runtimes));
     {
         let locked_layout = self::lock_mutex(layout.as_ref(), "layout")?;
-        self::write_layout_metadata(&config.paths, &locked_layout)?;
+        crate::layout::persisted::write_metadata(&config.paths, &locked_layout)?;
     }
     let active_client = Arc::new(AtomicBool::new(false));
     let mut accepted_connections = 0_usize;
@@ -1498,43 +496,6 @@ fn validate_private_mode(path: &Path, label: &str, expected_mode: u32) -> rootca
     Ok(())
 }
 
-fn write_layout_metadata(paths: &SessionPaths, layout: &Layout) -> rootcause::Result<()> {
-    let layout = PersistedLayout {
-        version: LAYOUT_VERSION,
-        session: &layout.session,
-        active_tab: &layout.active_tab,
-        tabs: &layout.tabs,
-    };
-    let encoded = serde_json::to_vec_pretty(&layout).context("failed to serialize muxr layout metadata")?;
-
-    fs::write(&paths.layout, encoded).context("failed to write muxr layout metadata")?;
-    Ok(())
-}
-
-fn load_layout_metadata(paths: &SessionPaths, config: &ServerConfig) -> rootcause::Result<Option<Layout>> {
-    let encoded = match fs::read(&paths.layout) {
-        Ok(encoded) => encoded,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(error).context("failed to read muxr layout metadata")?,
-    };
-    let persisted: PersistedLayoutOwned =
-        serde_json::from_slice(&encoded).context("failed to parse muxr layout metadata")?;
-
-    Ok(Some(Layout::from_persisted(config, persisted)?))
-}
-
-fn next_number<'a>(ids: impl Iterator<Item = &'a str>, prefix: &str) -> rootcause::Result<u64> {
-    let max_number = ids
-        .filter_map(|id| id.strip_prefix(prefix))
-        .filter_map(|suffix| suffix.parse::<u64>().ok())
-        .max()
-        .unwrap_or(0);
-
-    max_number
-        .checked_add(1)
-        .ok_or_else(|| report!("muxr layout id counter overflowed").attach(format!("prefix={prefix}")))
-}
-
 fn unix_timestamp_millis() -> rootcause::Result<u64> {
     let millis = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1542,6 +503,17 @@ fn unix_timestamp_millis() -> rootcause::Result<u64> {
         .as_millis();
 
     Ok(u64::try_from(millis).context("muxr layout metadata timestamp overflowed")?)
+}
+
+fn session_metadata(config: &ServerConfig) -> rootcause::Result<SessionMetadata> {
+    Ok(SessionMetadata::new(
+        config.shell_command.label(),
+        std::env::current_dir()
+            .context("failed to read muxr server cwd")?
+            .to_string_lossy()
+            .into_owned(),
+        self::unix_timestamp_millis()?,
+    ))
 }
 
 fn lock_mutex<'a, T>(mutex: &'a Mutex<T>, name: &str) -> rootcause::Result<MutexGuard<'a, T>> {
@@ -1560,22 +532,22 @@ fn paste_snapshot(
     region: &PaneRegion,
     snapshot: &TerminalSnapshot,
 ) -> rootcause::Result<()> {
-    if snapshot.size().cols() != region.cols || snapshot.size().rows() != region.rows {
+    if snapshot.size().cols() != region.cols() || snapshot.size().rows() != region.rows() {
         return Err(report!("muxr pane snapshot size does not match region")
-            .attach(format!("pane_id={}", region.id))
+            .attach(format!("pane_id={}", region.id()))
             .attach(format!("snapshot_cols={}", snapshot.size().cols()))
             .attach(format!("snapshot_rows={}", snapshot.size().rows()))
-            .attach(format!("region_cols={}", region.cols))
-            .attach(format!("region_rows={}", region.rows)));
+            .attach(format!("region_cols={}", region.cols()))
+            .attach(format!("region_rows={}", region.rows())));
     }
 
     for span in snapshot.rows() {
         let row = region
-            .row
+            .row()
             .checked_add(span.row)
             .ok_or_else(|| report!("muxr pane row offset overflowed"))?;
         let col = region
-            .col
+            .col()
             .checked_add(span.col)
             .ok_or_else(|| report!("muxr pane col offset overflowed"))?;
         let target_row = rows
@@ -1586,7 +558,7 @@ fn paste_snapshot(
             .checked_add(span.cells.len())
             .ok_or_else(|| report!("muxr pane span end overflowed"))?;
         if end_col > target_row.len() {
-            return Err(report!("muxr pane span outside composite frame").attach(format!("pane_id={}", region.id)));
+            return Err(report!("muxr pane span outside composite frame").attach(format!("pane_id={}", region.id())));
         }
         for (target, cell) in target_row.iter_mut().skip(col).zip(span.cells.iter()) {
             *target = cell.clone();
@@ -1597,33 +569,33 @@ fn paste_snapshot(
 
 fn paste_borders(rows: &mut [Vec<RenderCell>], borders: &[PaneBorder]) -> rootcause::Result<()> {
     for border in borders {
-        match border.axis {
+        match border.axis() {
             PaneBorderAxis::Horizontal => {
                 let target_row = rows
-                    .get_mut(usize::from(border.row))
+                    .get_mut(usize::from(border.row()))
                     .ok_or_else(|| report!("muxr horizontal pane border row outside composite frame"))?;
-                let start_col = usize::from(border.col);
+                let start_col = usize::from(border.col());
                 let end_col = start_col
-                    .checked_add(usize::from(border.len))
+                    .checked_add(usize::from(border.len()))
                     .ok_or_else(|| report!("muxr horizontal pane border end overflowed"))?;
                 if end_col > target_row.len() {
                     return Err(report!("muxr horizontal pane border outside composite frame"));
                 }
-                for target in target_row.iter_mut().skip(start_col).take(usize::from(border.len)) {
+                for target in target_row.iter_mut().skip(start_col).take(usize::from(border.len())) {
                     self::paste_border_cell(target, "─");
                 }
             }
             PaneBorderAxis::Vertical => {
                 let end_row = border
-                    .row
-                    .checked_add(border.len)
+                    .row()
+                    .checked_add(border.len())
                     .ok_or_else(|| report!("muxr vertical pane border end overflowed"))?;
-                for row in border.row..end_row {
+                for row in border.row()..end_row {
                     let target_row = rows
                         .get_mut(usize::from(row))
                         .ok_or_else(|| report!("muxr vertical pane border row outside composite frame"))?;
                     let target = target_row
-                        .get_mut(usize::from(border.col))
+                        .get_mut(usize::from(border.col()))
                         .ok_or_else(|| report!("muxr vertical pane border col outside composite frame"))?;
                     self::paste_border_cell(target, "│");
                 }
@@ -1738,7 +710,7 @@ fn reap_exited_panes(
             }
             removed_panes.push(pane_id.clone());
         }
-        self::write_layout_metadata(paths, &layout)?;
+        crate::layout::persisted::write_metadata(paths, &layout)?;
         drop(layout);
 
         let mut runtimes = self::lock_mutex(runtimes, "pane runtimes")?;
@@ -2346,7 +1318,7 @@ fn handle_tab_command(
     let pane_id = match command {
         TabCommand::Create => {
             let previous_layout = layout.clone();
-            let pane_id = layout.create_tab(SessionMetadata::new(config)?)?;
+            let pane_id = layout.create_tab(self::session_metadata(config)?)?;
             Some(self::spawn_pane_or_restore_layout(
                 &mut layout,
                 previous_layout,
@@ -2373,7 +1345,7 @@ fn handle_tab_command(
             None
         }
     };
-    self::write_layout_metadata(&config.paths, &layout)?;
+    crate::layout::persisted::write_metadata(&config.paths, &layout)?;
     drop(layout);
     Ok(pane_id)
 }
@@ -2387,10 +1359,10 @@ fn handle_split_pane_command(
 ) -> rootcause::Result<PaneId> {
     let mut layout = self::lock_mutex(layout, "layout")?;
     let previous_layout = layout.clone();
-    let pane_id = layout.split_active_pane(SessionMetadata::new(config)?, split_axis)?;
+    let pane_id = layout.split_active_pane(self::session_metadata(config)?, split_axis)?;
     let pane_id =
         self::spawn_pane_or_restore_layout(&mut layout, previous_layout, pane_id, config, runtimes, terminal_size)?;
-    self::write_layout_metadata(&config.paths, &layout)?;
+    crate::layout::persisted::write_metadata(&config.paths, &layout)?;
     drop(layout);
     Ok(pane_id)
 }
@@ -2411,7 +1383,7 @@ fn handle_close_pane_command(
         runtimes.remove(&pane_id);
         drop(runtimes);
     }
-    self::write_layout_metadata(&config.paths, &layout)?;
+    crate::layout::persisted::write_metadata(&config.paths, &layout)?;
     drop(layout);
     Ok(outcome)
 }
@@ -2424,7 +1396,7 @@ fn handle_resize_pane_command(
     let mut layout = self::lock_mutex(layout, "layout")?;
     let resized = layout.resize_active_pane(direction)?;
     if resized {
-        self::write_layout_metadata(&config.paths, &layout)?;
+        crate::layout::persisted::write_metadata(&config.paths, &layout)?;
     }
     drop(layout);
     Ok(resized)
@@ -2439,7 +1411,7 @@ fn handle_focus_pane_command(
     let mut layout = self::lock_mutex(layout, "layout")?;
     let focused = layout.focus_pane_direction(terminal_size, direction)?;
     if focused {
-        self::write_layout_metadata(&config.paths, &layout)?;
+        crate::layout::persisted::write_metadata(&config.paths, &layout)?;
     }
     drop(layout);
     Ok(focused)
@@ -2454,7 +1426,7 @@ fn handle_focus_pane_at_request(
     let mut layout = self::lock_mutex(layout, "layout")?;
     let focused = layout.focus_pane_at(terminal_size, position)?;
     if focused {
-        self::write_layout_metadata(&config.paths, &layout)?;
+        crate::layout::persisted::write_metadata(&config.paths, &layout)?;
     }
     drop(layout);
     Ok(focused)
@@ -2843,22 +1815,22 @@ mod tests {
     fn test_layout_tab_commands_when_tabs_exist_mutates_active_tab_and_order() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
+        let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
 
         layout.create_tab(self::metadata("sh", 2))?;
         layout.create_tab(self::metadata("sh", 3))?;
-        pretty_assertions::assert_eq!(self::layout_tab_ids(&layout), vec!["tab-1", "tab-2", "tab-3"]);
-        pretty_assertions::assert_eq!(layout.active_tab.as_ref(), "tab-3");
+        pretty_assertions::assert_eq!(self::layout_tab_ids(&layout)?, vec!["tab-1", "tab-2", "tab-3"]);
+        pretty_assertions::assert_eq!(layout.active_tab_id().as_ref(), "tab-3");
 
         layout.focus_previous_tab()?;
-        pretty_assertions::assert_eq!(layout.active_tab.as_ref(), "tab-2");
+        pretty_assertions::assert_eq!(layout.active_tab_id().as_ref(), "tab-2");
         layout.move_active_tab_previous()?;
-        pretty_assertions::assert_eq!(self::layout_tab_ids(&layout), vec!["tab-2", "tab-1", "tab-3"]);
-        pretty_assertions::assert_eq!(layout.active_tab.as_ref(), "tab-2");
+        pretty_assertions::assert_eq!(self::layout_tab_ids(&layout)?, vec!["tab-2", "tab-1", "tab-3"]);
+        pretty_assertions::assert_eq!(layout.active_tab_id().as_ref(), "tab-2");
         layout.move_active_tab_next()?;
-        pretty_assertions::assert_eq!(self::layout_tab_ids(&layout), vec!["tab-1", "tab-2", "tab-3"]);
+        pretty_assertions::assert_eq!(self::layout_tab_ids(&layout)?, vec!["tab-1", "tab-2", "tab-3"]);
         layout.focus_next_tab()?;
-        pretty_assertions::assert_eq!(layout.active_tab.as_ref(), "tab-3");
+        pretty_assertions::assert_eq!(layout.active_tab_id().as_ref(), "tab-3");
         Ok(())
     }
 
@@ -2866,12 +1838,12 @@ mod tests {
     fn test_layout_split_and_close_when_multiple_panes_updates_active_pane() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
+        let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
 
         let pane_id = layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
 
         pretty_assertions::assert_eq!(pane_id.as_ref(), "pane-2");
-        pretty_assertions::assert_eq!(layout.active_tab()?.active_pane.as_ref(), "pane-2");
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.as_ref(), "pane-2");
         pretty_assertions::assert_eq!(self::layout_active_tab_pane_ids(&layout)?, vec!["pane-1", "pane-2"]);
 
         let close = layout.close_active_pane(3)?;
@@ -2882,7 +1854,7 @@ mod tests {
                 pane_id: PaneId::new("pane-2")?,
             },
         );
-        pretty_assertions::assert_eq!(layout.active_tab()?.active_pane.as_ref(), "pane-1");
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.as_ref(), "pane-1");
         pretty_assertions::assert_eq!(self::layout_active_tab_pane_ids(&layout)?, vec!["pane-1"]);
         Ok(())
     }
@@ -2892,7 +1864,7 @@ mod tests {
         let tempdir = tempfile::tempdir()?;
         let mut config = self::server_config(tempdir.path(), "work")?;
         config.shell_command = ShellCommand::new("/bin/muxr-missing-shell");
-        let initial_layout = Layout::initial(&config, self::metadata("sh", 1))?;
+        let initial_layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
         let layout = Mutex::new(initial_layout.clone());
         let runtimes = Mutex::new(PaneRuntimes { panes: Vec::new() });
 
@@ -2919,7 +1891,7 @@ mod tests {
         let tempdir = tempfile::tempdir()?;
         let mut config = self::server_config(tempdir.path(), "work")?;
         config.shell_command = ShellCommand::new("/bin/muxr-missing-shell");
-        let initial_layout = Layout::initial(&config, self::metadata("sh", 1))?;
+        let initial_layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
         let layout = Mutex::new(initial_layout.clone());
         let runtimes = Mutex::new(PaneRuntimes { panes: Vec::new() });
 
@@ -2952,14 +1924,14 @@ mod tests {
     ) -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
+        let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
 
         pretty_assertions::assert_eq!(
             layout.focus_pane_at(&TerminalSize::new(80, 24)?, position)?,
             expected_changed,
         );
-        pretty_assertions::assert_eq!(layout.active_tab()?.active_pane.as_ref(), expected_active_pane);
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.as_ref(), expected_active_pane);
         Ok(())
     }
 
@@ -2973,13 +1945,13 @@ mod tests {
     ) -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
+        let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
 
         let pane_id = layout.pane_at(&TerminalSize::new(80, 24)?, position)?;
 
         pretty_assertions::assert_eq!(pane_id.as_ref().map(std::convert::AsRef::as_ref), expected_pane);
-        pretty_assertions::assert_eq!(layout.active_tab()?.active_pane.as_ref(), "pane-2");
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.as_ref(), "pane-2");
         Ok(())
     }
 
@@ -2995,14 +1967,14 @@ mod tests {
     ) -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
+        let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
 
         pretty_assertions::assert_eq!(
             layout.focus_pane_direction(&TerminalSize::new(80, 24)?, direction)?,
             expected_changed,
         );
-        pretty_assertions::assert_eq!(layout.active_tab()?.active_pane.as_ref(), expected_active_pane);
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.as_ref(), expected_active_pane);
         Ok(())
     }
 
@@ -3011,18 +1983,18 @@ mod tests {
     {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
+        let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
         layout.split_active_pane(self::metadata("sh", 3), PaneSplitAxis::Horizontal)?;
 
         assert2::assert!(layout.focus_pane_direction(&TerminalSize::new(80, 24)?, PaneFocusDirection::Up)?);
-        pretty_assertions::assert_eq!(layout.active_tab()?.active_pane.as_ref(), "pane-2");
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.as_ref(), "pane-2");
         assert2::assert!(layout.focus_pane_direction(&TerminalSize::new(80, 24)?, PaneFocusDirection::Left)?);
-        pretty_assertions::assert_eq!(layout.active_tab()?.active_pane.as_ref(), "pane-1");
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.as_ref(), "pane-1");
 
         assert2::assert!(layout.focus_pane_direction(&TerminalSize::new(80, 24)?, PaneFocusDirection::Right)?);
 
-        pretty_assertions::assert_eq!(layout.active_tab()?.active_pane.as_ref(), "pane-2");
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.as_ref(), "pane-2");
         Ok(())
     }
 
@@ -3052,12 +2024,12 @@ mod tests {
     ) -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
+        let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
 
         layout.split_active_pane(self::metadata("sh", 2), first_axis)?;
         layout.split_active_pane(self::metadata("sh", 3), second_axis)?;
 
-        pretty_assertions::assert_eq!(layout.active_tab()?.active_pane.as_ref(), "pane-3");
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.as_ref(), "pane-3");
         pretty_assertions::assert_eq!(
             self::layout_active_tab_pane_ids(&layout)?,
             vec!["pane-1", "pane-2", "pane-3"]
@@ -3088,7 +2060,7 @@ mod tests {
     ) -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
+        let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
 
         layout.split_active_pane(self::metadata("sh", 2), split_axis)?;
 
@@ -3106,18 +2078,8 @@ mod tests {
         self::paste_borders(
             &mut rows,
             &[
-                PaneBorder {
-                    axis: PaneBorderAxis::Vertical,
-                    col: 1,
-                    len: 3,
-                    row: 0,
-                },
-                PaneBorder {
-                    axis: PaneBorderAxis::Horizontal,
-                    col: 0,
-                    len: 3,
-                    row: 1,
-                },
+                PaneBorder::new(PaneBorderAxis::Vertical, 1, 0, 3),
+                PaneBorder::new(PaneBorderAxis::Horizontal, 0, 1, 3),
             ],
         )?;
 
@@ -3145,7 +2107,7 @@ mod tests {
     fn test_layout_close_when_nested_pane_closes_collapses_parent_split() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
+        let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
 
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
         layout.split_active_pane(self::metadata("sh", 3), PaneSplitAxis::Horizontal)?;
@@ -3157,7 +2119,7 @@ mod tests {
                 pane_id: PaneId::new("pane-3")?,
             },
         );
-        pretty_assertions::assert_eq!(layout.active_tab()?.active_pane.as_ref(), "pane-2");
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.as_ref(), "pane-2");
         pretty_assertions::assert_eq!(self::layout_active_tab_pane_ids(&layout)?, vec!["pane-1", "pane-2"]);
         pretty_assertions::assert_eq!(
             self::layout_active_tab_pane_regions(&layout, &TerminalSize::new(80, 24)?)?,
@@ -3209,7 +2171,7 @@ mod tests {
     ) -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
+        let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
 
         layout.split_active_pane(self::metadata("sh", 2), split_axis)?;
 
@@ -3229,7 +2191,7 @@ mod tests {
     fn test_layout_resize_nested_splits_resizes_nearest_matching_axis() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
+        let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
 
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
         layout.split_active_pane(self::metadata("sh", 3), PaneSplitAxis::Horizontal)?;
@@ -3261,16 +2223,16 @@ mod tests {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
         fs::create_dir_all(&config.paths.root)?;
-        let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
+        let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
 
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
         layout.split_active_pane(self::metadata("sh", 3), PaneSplitAxis::Horizontal)?;
-        self::write_layout_metadata(&config.paths, &layout)?;
+        crate::layout::persisted::write_metadata(&config.paths, &layout)?;
 
-        let loaded = self::load_layout_metadata(&config.paths, &config)?
+        let loaded = crate::layout::persisted::load_metadata(&config.paths, &config.session)?
             .ok_or_else(|| report!("expected muxr layout metadata to load"))?;
 
-        pretty_assertions::assert_eq!(loaded.active_tab()?.active_pane.as_ref(), "pane-3");
+        pretty_assertions::assert_eq!(loaded.active_pane_id()?.as_ref(), "pane-3");
         pretty_assertions::assert_eq!(
             self::layout_active_tab_pane_regions(&loaded, &TerminalSize::new(80, 24)?)?,
             vec![
@@ -3287,13 +2249,13 @@ mod tests {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
         fs::create_dir_all(&config.paths.root)?;
-        let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
+        let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
 
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
         assert2::assert!(layout.resize_active_pane(PaneResizeDirection::Left)?);
-        self::write_layout_metadata(&config.paths, &layout)?;
+        crate::layout::persisted::write_metadata(&config.paths, &layout)?;
 
-        let loaded = self::load_layout_metadata(&config.paths, &config)?
+        let loaded = crate::layout::persisted::load_metadata(&config.paths, &config.session)?
             .ok_or_else(|| report!("expected muxr layout metadata to load"))?;
 
         pretty_assertions::assert_eq!(
@@ -3504,9 +2466,9 @@ mod tests {
             let tempdir = tempfile::tempdir()?;
             let config = self::server_config(tempdir.path(), "work")?;
             fs::create_dir_all(&config.paths.root)?;
-            let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
+            let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
             layout.create_tab(self::metadata("sh", 2))?;
-            self::write_layout_metadata(&config.paths, &layout)?;
+            crate::layout::persisted::write_metadata(&config.paths, &layout)?;
             let paths = config.paths.clone();
             let session = config.session.clone();
             let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), ShellCommand::new("/bin/cat"));
@@ -3684,7 +2646,7 @@ mod tests {
                 vec!["pane-1", "pane-2"],
             );
             let config = self::server_config(tempdir.path(), "work")?;
-            let persisted = self::load_layout_metadata(&paths, &config)?
+            let persisted = crate::layout::persisted::load_metadata(&paths, &config.session)?
                 .ok_or_else(|| report!("expected muxr layout metadata to load"))?;
             pretty_assertions::assert_eq!(
                 self::layout_active_tab_pane_regions(&persisted, &TerminalSize::new(80, 24)?)?,
@@ -4007,19 +2969,31 @@ mod tests {
     }
 
     fn metadata(command_label: &str, started_at: u64) -> SessionMetadata {
-        SessionMetadata {
-            command_label: command_label.to_owned(),
-            cwd: "/tmp".to_owned(),
-            started_at,
-        }
+        SessionMetadata::new(command_label.to_owned(), "/tmp".to_owned(), started_at)
     }
 
-    fn layout_tab_ids(layout: &Layout) -> Vec<&str> {
-        layout.tabs.iter().map(|tab| tab.id.as_ref()).collect::<Vec<_>>()
+    fn layout_tab_ids(layout: &Layout) -> rootcause::Result<Vec<String>> {
+        Ok(layout
+            .snapshot()?
+            .tabs
+            .iter()
+            .map(|tab| tab.id.as_ref().to_owned())
+            .collect::<Vec<_>>())
     }
 
-    fn layout_active_tab_pane_ids(layout: &Layout) -> rootcause::Result<Vec<&str>> {
-        Ok(layout.active_tab()?.pane_ids())
+    fn layout_active_tab_pane_ids(layout: &Layout) -> rootcause::Result<Vec<String>> {
+        let snapshot = layout.snapshot()?;
+        let active_tab = snapshot
+            .tabs
+            .iter()
+            .find(|tab| tab.id == snapshot.active_tab)
+            .ok_or_else(|| report!("expected active tab in muxr test layout snapshot"))?;
+
+        Ok(active_tab
+            .panes
+            .iter()
+            .map(|pane| pane.id.as_ref().to_owned())
+            .collect())
     }
 
     fn layout_active_tab_pane_regions(
@@ -4031,11 +3005,11 @@ mod tests {
             .iter()
             .map(|region| {
                 (
-                    region.id.as_ref().to_owned(),
-                    region.col,
-                    region.row,
-                    region.cols,
-                    region.rows,
+                    region.id().as_ref().to_owned(),
+                    region.col(),
+                    region.row(),
+                    region.cols(),
+                    region.rows(),
                 )
             })
             .collect())
@@ -4047,9 +3021,9 @@ mod tests {
     ) -> rootcause::Result<Vec<(PaneBorderAxis, u16, u16, u16)>> {
         Ok(layout
             .pane_layout(size)?
-            .borders
+            .borders()
             .iter()
-            .map(|border| (border.axis, border.col, border.row, border.len))
+            .map(|border| (border.axis(), border.col(), border.row(), border.len()))
             .collect())
     }
 
@@ -4306,7 +3280,7 @@ mod tests {
                 .context("failed to parse muxr test layout metadata")?;
         let pane = &layout["tabs"][0]["pane_tree"]["pane"];
 
-        pretty_assertions::assert_eq!(layout["version"].as_u64(), Some(u64::from(LAYOUT_VERSION)));
+        pretty_assertions::assert_eq!(layout["version"].as_u64(), Some(u64::from(crate::layout::VERSION)));
         pretty_assertions::assert_eq!(layout["session"].as_str(), Some("work"));
         pretty_assertions::assert_eq!(layout["active_tab"].as_str(), Some("tab-1"));
         pretty_assertions::assert_eq!(layout["tabs"][0]["active_pane"].as_str(), Some("pane-1"));

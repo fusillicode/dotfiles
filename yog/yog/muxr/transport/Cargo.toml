@@ -11,14 +11,14 @@ keywords = ["muxr", "terminal", "multiplexer", "transport", "ipc"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-bytes = { workspace = true }
-futures-util = { workspace = true }
-interprocess = { workspace = true }
+bytes = { version = "1.11" }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+interprocess = { version = "2.4", default-features = false, features = ["tokio"] }
 muxr_core = { workspace = true }
 rootcause = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
-tokio-util = { workspace = true }
+tokio-util = { version = "0.7", default-features = false, features = ["codec"] }
 
 [dev-dependencies]
 assert2 = { workspace = true }
