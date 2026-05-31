@@ -29,7 +29,7 @@ use muxr_core::TerminalSize;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
-use crate::copy::SelectionRange;
+use crate::client::copy_selection::SelectionRange;
 
 const BRACKETED_PASTE_DISABLE: &[u8] = b"\x1b[?2004l";
 const BRACKETED_PASTE_ENABLE: &[u8] = b"\x1b[?2004h";
