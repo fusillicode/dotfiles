@@ -147,7 +147,7 @@ impl TerminalState {
                     .collect();
                 RenderRowSpan::new(row, 0, cells)
             })
-            .collect();
+            .collect::<rootcause::Result<Vec<_>>>()?;
 
         Ok(TerminalSnapshot { cursor, rows, size })
     }
@@ -213,12 +213,7 @@ mod tests {
         let Some(row) = snapshot.rows().first() else {
             return Err(report!("expected first render row"));
         };
-        let rendered = row
-            .cells
-            .iter()
-            .take(2)
-            .map(|cell| cell.text.as_str())
-            .collect::<String>();
+        let rendered = row.cells().iter().take(2).map(RenderCell::text).collect::<String>();
 
         pretty_assertions::assert_eq!(rendered, "hi");
         Ok(())
@@ -315,7 +310,7 @@ mod tests {
         snapshot
             .rows()
             .iter()
-            .flat_map(|row| row.cells.iter().map(|cell| cell.text.as_str()))
+            .flat_map(|row| row.cells().iter().map(RenderCell::text))
             .collect()
     }
 }

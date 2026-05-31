@@ -1,7 +1,9 @@
 use std::collections::BTreeSet;
 use std::fmt;
+use std::io;
 use std::num::NonZeroU16;
 
+use rkyv::util::AlignedVec;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 use serde::Deserialize;
@@ -10,10 +12,10 @@ use serde::Serialize;
 
 use crate::SessionName;
 
-pub const PROTOCOL_VERSION: u16 = 12;
+const PROTOCOL_FRAME_MAGIC: &[u8; 9] = b"MUXR-RKYV";
 
 /// PTY terminal dimensions with nonzero columns and rows.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(rkyv::Archive, Clone, Debug, Deserialize, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct TerminalSize {
     cols: NonZeroU16,
     rows: NonZeroU16,
@@ -48,7 +50,7 @@ impl TerminalSize {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
 #[serde(transparent)]
 pub struct TabId(String);
 
@@ -85,7 +87,18 @@ impl fmt::Display for TabId {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+impl<D> rkyv::Deserialize<TabId, D> for ArchivedTabId
+where
+    D: rkyv::rancor::Fallible + ?Sized,
+    D::Error: rkyv::rancor::Source,
+{
+    fn deserialize(&self, deserializer: &mut D) -> Result<TabId, D::Error> {
+        let raw = rkyv::Deserialize::<String, D>::deserialize(&self.0, deserializer)?;
+        TabId::new(raw).map_err(self::rkyv_deserialize_error::<D::Error>)
+    }
+}
+
+#[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
 #[serde(transparent)]
 pub struct PaneId(String);
 
@@ -122,23 +135,32 @@ impl fmt::Display for PaneId {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+impl<D> rkyv::Deserialize<PaneId, D> for ArchivedPaneId
+where
+    D: rkyv::rancor::Fallible + ?Sized,
+    D::Error: rkyv::rancor::Source,
+{
+    fn deserialize(&self, deserializer: &mut D) -> Result<PaneId, D::Error> {
+        let raw = rkyv::Deserialize::<String, D>::deserialize(&self.0, deserializer)?;
+        PaneId::new(raw).map_err(self::rkyv_deserialize_error::<D::Error>)
+    }
+}
+
+#[derive(rkyv::Archive, Clone, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct AttachRequest {
-    pub protocol_version: u16,
     pub session: SessionName,
     pub terminal_size: TerminalSize,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(rkyv::Archive, Clone, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct AttachAccepted {
-    pub protocol_version: u16,
     pub layout: LayoutSnapshot,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct LayoutSnapshot {
-    pub active_tab: TabId,
-    pub tabs: Vec<TabSnapshot>,
+    active_tab: TabId,
+    tabs: Vec<TabSnapshot>,
 }
 
 impl LayoutSnapshot {
@@ -155,11 +177,17 @@ impl LayoutSnapshot {
         Ok(snapshot)
     }
 
-    /// Validate layout invariants after direct construction or deserialization.
-    ///
-    /// # Errors
-    /// - The active tab, tab list, any tab's active pane, or pane ids are inconsistent.
-    pub fn validate(&self) -> rootcause::Result<()> {
+    #[must_use]
+    pub const fn active_tab(&self) -> &TabId {
+        &self.active_tab
+    }
+
+    #[must_use]
+    pub fn tabs(&self) -> &[TabSnapshot] {
+        &self.tabs
+    }
+
+    fn validate(&self) -> rootcause::Result<()> {
         self::validate_layout_id("tab", self.active_tab.as_ref())?;
         if self.tabs.is_empty() {
             return Err(report!("invalid muxr layout snapshot").attach("reason=tabs must not be empty"));
@@ -194,12 +222,24 @@ impl LayoutSnapshot {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+impl<D> rkyv::Deserialize<LayoutSnapshot, D> for ArchivedLayoutSnapshot
+where
+    D: rkyv::rancor::Fallible + ?Sized,
+    D::Error: rkyv::rancor::Source,
+{
+    fn deserialize(&self, deserializer: &mut D) -> Result<LayoutSnapshot, D::Error> {
+        let active_tab = rkyv::Deserialize::<TabId, D>::deserialize(&self.active_tab, deserializer)?;
+        let tabs = rkyv::Deserialize::<Vec<TabSnapshot>, D>::deserialize(&self.tabs, deserializer)?;
+        LayoutSnapshot::new(active_tab, tabs).map_err(self::rkyv_deserialize_error::<D::Error>)
+    }
+}
+
+#[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct TabSnapshot {
-    pub active_pane: PaneId,
-    pub id: TabId,
-    pub panes: Vec<PaneSnapshot>,
-    pub title: String,
+    active_pane: PaneId,
+    id: TabId,
+    panes: Vec<PaneSnapshot>,
+    title: String,
 }
 
 impl TabSnapshot {
@@ -223,6 +263,26 @@ impl TabSnapshot {
         };
         snapshot.validate()?;
         Ok(snapshot)
+    }
+
+    #[must_use]
+    pub const fn active_pane(&self) -> &PaneId {
+        &self.active_pane
+    }
+
+    #[must_use]
+    pub const fn id(&self) -> &TabId {
+        &self.id
+    }
+
+    #[must_use]
+    pub fn panes(&self) -> &[PaneSnapshot] {
+        &self.panes
+    }
+
+    #[must_use]
+    pub fn title(&self) -> &str {
+        &self.title
     }
 
     fn validate(&self) -> rootcause::Result<()> {
@@ -255,10 +315,24 @@ impl TabSnapshot {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+impl<D> rkyv::Deserialize<TabSnapshot, D> for ArchivedTabSnapshot
+where
+    D: rkyv::rancor::Fallible + ?Sized,
+    D::Error: rkyv::rancor::Source,
+{
+    fn deserialize(&self, deserializer: &mut D) -> Result<TabSnapshot, D::Error> {
+        let active_pane = rkyv::Deserialize::<PaneId, D>::deserialize(&self.active_pane, deserializer)?;
+        let id = rkyv::Deserialize::<TabId, D>::deserialize(&self.id, deserializer)?;
+        let panes = rkyv::Deserialize::<Vec<PaneSnapshot>, D>::deserialize(&self.panes, deserializer)?;
+        let title = rkyv::Deserialize::<String, D>::deserialize(&self.title, deserializer)?;
+        TabSnapshot::new(id, title, active_pane, panes).map_err(self::rkyv_deserialize_error::<D::Error>)
+    }
+}
+
+#[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct PaneSnapshot {
-    pub id: PaneId,
-    pub title: String,
+    id: PaneId,
+    title: String,
 }
 
 impl PaneSnapshot {
@@ -270,8 +344,32 @@ impl PaneSnapshot {
         }
     }
 
+    #[must_use]
+    pub const fn id(&self) -> &PaneId {
+        &self.id
+    }
+
+    #[must_use]
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+
     fn validate(&self) -> rootcause::Result<()> {
         self::validate_layout_id("pane", self.id.as_ref())
+    }
+}
+
+impl<D> rkyv::Deserialize<PaneSnapshot, D> for ArchivedPaneSnapshot
+where
+    D: rkyv::rancor::Fallible + ?Sized,
+    D::Error: rkyv::rancor::Source,
+{
+    fn deserialize(&self, deserializer: &mut D) -> Result<PaneSnapshot, D::Error> {
+        let id = rkyv::Deserialize::<PaneId, D>::deserialize(&self.id, deserializer)?;
+        let title = rkyv::Deserialize::<String, D>::deserialize(&self.title, deserializer)?;
+        let snapshot = PaneSnapshot::new(id, title);
+        snapshot.validate().map_err(self::rkyv_deserialize_error::<D::Error>)?;
+        Ok(snapshot)
     }
 }
 
@@ -305,31 +403,25 @@ fn validate_layout_id(kind: &'static str, id: &str) -> rootcause::Result<()> {
     Ok(())
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+fn rkyv_deserialize_error<E>(error: impl fmt::Display) -> E
+where
+    E: rkyv::rancor::Source,
+{
+    <E as rkyv::rancor::Source>::new(io::Error::new(io::ErrorKind::InvalidData, error.to_string()))
+}
+
+#[derive(rkyv::Archive, Clone, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub enum RenderUpdate {
     Baseline(RenderBaseline),
     Diff(RenderDiff),
 }
 
-impl RenderUpdate {
-    /// Validate a render update received through public fields or deserialization.
-    ///
-    /// # Errors
-    /// - The baseline or diff violates render protocol invariants.
-    pub fn validate(&self) -> rootcause::Result<()> {
-        match self {
-            Self::Baseline(baseline) => baseline.validate(),
-            Self::Diff(diff) => diff.validate(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct RenderBaseline {
-    pub cursor: RenderCursor,
-    pub rows: Vec<RenderRowSpan>,
-    pub seq: u64,
-    pub size: TerminalSize,
+    cursor: RenderCursor,
+    rows: Vec<RenderRowSpan>,
+    seq: u64,
+    size: TerminalSize,
 }
 
 impl RenderBaseline {
@@ -353,6 +445,31 @@ impl RenderBaseline {
         };
         baseline.validate()?;
         Ok(baseline)
+    }
+
+    #[must_use]
+    pub fn into_parts(self) -> (u64, TerminalSize, RenderCursor, Vec<RenderRowSpan>) {
+        (self.seq, self.size, self.cursor, self.rows)
+    }
+
+    #[must_use]
+    pub const fn cursor(&self) -> &RenderCursor {
+        &self.cursor
+    }
+
+    #[must_use]
+    pub fn rows(&self) -> &[RenderRowSpan] {
+        &self.rows
+    }
+
+    #[must_use]
+    pub const fn seq(&self) -> u64 {
+        self.seq
+    }
+
+    #[must_use]
+    pub const fn size(&self) -> &TerminalSize {
+        &self.size
     }
 
     fn validate(&self) -> rootcause::Result<()> {
@@ -385,13 +502,27 @@ impl RenderBaseline {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+impl<D> rkyv::Deserialize<RenderBaseline, D> for ArchivedRenderBaseline
+where
+    D: rkyv::rancor::Fallible + ?Sized,
+    D::Error: rkyv::rancor::Source,
+{
+    fn deserialize(&self, deserializer: &mut D) -> Result<RenderBaseline, D::Error> {
+        let cursor = rkyv::Deserialize::<RenderCursor, D>::deserialize(&self.cursor, deserializer)?;
+        let rows = rkyv::Deserialize::<Vec<RenderRowSpan>, D>::deserialize(&self.rows, deserializer)?;
+        let seq = rkyv::Deserialize::<u64, D>::deserialize(&self.seq, deserializer)?;
+        let size = rkyv::Deserialize::<TerminalSize, D>::deserialize(&self.size, deserializer)?;
+        RenderBaseline::new(seq, size, cursor, rows).map_err(self::rkyv_deserialize_error::<D::Error>)
+    }
+}
+
+#[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct RenderDiff {
-    pub base_seq: u64,
-    pub cursor: RenderCursor,
-    pub rows: Vec<RenderRowSpan>,
-    pub seq: u64,
-    pub size: TerminalSize,
+    base_seq: u64,
+    cursor: RenderCursor,
+    rows: Vec<RenderRowSpan>,
+    seq: u64,
+    size: TerminalSize,
 }
 
 impl RenderDiff {
@@ -419,6 +550,36 @@ impl RenderDiff {
         Ok(diff)
     }
 
+    #[must_use]
+    pub fn into_parts(self) -> (u64, u64, TerminalSize, RenderCursor, Vec<RenderRowSpan>) {
+        (self.base_seq, self.seq, self.size, self.cursor, self.rows)
+    }
+
+    #[must_use]
+    pub const fn base_seq(&self) -> u64 {
+        self.base_seq
+    }
+
+    #[must_use]
+    pub const fn cursor(&self) -> &RenderCursor {
+        &self.cursor
+    }
+
+    #[must_use]
+    pub fn rows(&self) -> &[RenderRowSpan] {
+        &self.rows
+    }
+
+    #[must_use]
+    pub const fn seq(&self) -> u64 {
+        self.seq
+    }
+
+    #[must_use]
+    pub const fn size(&self) -> &TerminalSize {
+        &self.size
+    }
+
     fn validate(&self) -> rootcause::Result<()> {
         if self.base_seq == 0 {
             return Err(report!("invalid muxr render diff").attach("reason=base_seq must be nonzero"));
@@ -438,7 +599,22 @@ impl RenderDiff {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+impl<D> rkyv::Deserialize<RenderDiff, D> for ArchivedRenderDiff
+where
+    D: rkyv::rancor::Fallible + ?Sized,
+    D::Error: rkyv::rancor::Source,
+{
+    fn deserialize(&self, deserializer: &mut D) -> Result<RenderDiff, D::Error> {
+        let base_seq = rkyv::Deserialize::<u64, D>::deserialize(&self.base_seq, deserializer)?;
+        let cursor = rkyv::Deserialize::<RenderCursor, D>::deserialize(&self.cursor, deserializer)?;
+        let rows = rkyv::Deserialize::<Vec<RenderRowSpan>, D>::deserialize(&self.rows, deserializer)?;
+        let seq = rkyv::Deserialize::<u64, D>::deserialize(&self.seq, deserializer)?;
+        let size = rkyv::Deserialize::<TerminalSize, D>::deserialize(&self.size, deserializer)?;
+        RenderDiff::new(base_seq, seq, size, cursor, rows).map_err(self::rkyv_deserialize_error::<D::Error>)
+    }
+}
+
+#[derive(rkyv::Archive, Clone, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct RenderCursor {
     pub col: u16,
     pub row: u16,
@@ -467,17 +643,38 @@ impl RenderCursor {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct RenderRowSpan {
-    pub cells: Vec<RenderCell>,
-    pub col: u16,
-    pub row: u16,
+    cells: Vec<RenderCell>,
+    col: u16,
+    row: u16,
 }
 
 impl RenderRowSpan {
+    /// Build a row span with nonempty cells and valid wide-cell pairing.
+    ///
+    /// # Errors
+    /// - The row span has no cells.
+    /// - A wide cell is not followed by exactly one continuation cell.
+    pub fn new(row: u16, col: u16, cells: Vec<RenderCell>) -> rootcause::Result<Self> {
+        let span = Self { cells, col, row };
+        span.validate_cells()?;
+        Ok(span)
+    }
+
     #[must_use]
-    pub const fn new(row: u16, col: u16, cells: Vec<RenderCell>) -> Self {
-        Self { cells, col, row }
+    pub fn cells(&self) -> &[RenderCell] {
+        &self.cells
+    }
+
+    #[must_use]
+    pub const fn col(&self) -> u16 {
+        self.col
+    }
+
+    #[must_use]
+    pub const fn row(&self) -> u16 {
+        self.row
     }
 
     /// Return the number of terminal grid cells covered by this row span.
@@ -490,9 +687,7 @@ impl RenderRowSpan {
     }
 
     fn validate(&self, rows: u16, cols: u16) -> rootcause::Result<()> {
-        if self.cells.is_empty() {
-            return Err(report!("invalid muxr render row span").attach("reason=cells must not be empty"));
-        }
+        self.validate_cells()?;
         let width = self.width()?;
         let Some(end_col) = self.col.checked_add(width) else {
             return Err(report!("invalid muxr render row span").attach("reason=column range overflowed"));
@@ -505,13 +700,17 @@ impl RenderRowSpan {
                 .attach(format!("rows={rows}"))
                 .attach(format!("cols={cols}")));
         }
-        self.validate_wide_cells()?;
-
         Ok(())
     }
 
+    fn validate_cells(&self) -> rootcause::Result<()> {
+        if self.cells.is_empty() {
+            return Err(report!("invalid muxr render row span").attach("reason=cells must not be empty"));
+        }
+        self.validate_wide_cells()
+    }
+
     fn validate_wide_cells(&self) -> rootcause::Result<()> {
-        // Deserialized protocol frames can bypass constructors; validate wide-cell pairing before renderers consume it.
         let mut wide_cell_index = None;
 
         for (index, cell) in self.cells.iter().enumerate() {
@@ -555,6 +754,19 @@ impl RenderRowSpan {
     }
 }
 
+impl<D> rkyv::Deserialize<RenderRowSpan, D> for ArchivedRenderRowSpan
+where
+    D: rkyv::rancor::Fallible + ?Sized,
+    D::Error: rkyv::rancor::Source,
+{
+    fn deserialize(&self, deserializer: &mut D) -> Result<RenderRowSpan, D::Error> {
+        let cells = rkyv::Deserialize::<Vec<RenderCell>, D>::deserialize(&self.cells, deserializer)?;
+        let col = rkyv::Deserialize::<u16, D>::deserialize(&self.col, deserializer)?;
+        let row = rkyv::Deserialize::<u16, D>::deserialize(&self.row, deserializer)?;
+        RenderRowSpan::new(row, col, cells).map_err(self::rkyv_deserialize_error::<D::Error>)
+    }
+}
+
 fn invalid_wide_cell_sequence(reason: &'static str, index: usize) -> rootcause::Report {
     report!("invalid muxr render row span")
         .attach("reason=invalid wide-cell sequence")
@@ -562,11 +774,11 @@ fn invalid_wide_cell_sequence(reason: &'static str, index: usize) -> rootcause::
         .attach(format!("cell_index={index}"))
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct RenderCell {
-    pub style: RenderStyle,
-    pub text: String,
-    pub width: RenderCellWidth,
+    style: RenderStyle,
+    text: String,
+    width: RenderCellWidth,
 }
 
 impl RenderCell {
@@ -596,23 +808,62 @@ impl RenderCell {
             width: RenderCellWidth::WideContinuation,
         }
     }
+
+    #[must_use]
+    pub const fn style(&self) -> RenderStyle {
+        self.style
+    }
+
+    #[must_use]
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+
+    #[must_use]
+    pub const fn width(&self) -> RenderCellWidth {
+        self.width
+    }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+impl<D> rkyv::Deserialize<RenderCell, D> for ArchivedRenderCell
+where
+    D: rkyv::rancor::Fallible + ?Sized,
+    D::Error: rkyv::rancor::Source,
+{
+    fn deserialize(&self, deserializer: &mut D) -> Result<RenderCell, D::Error> {
+        let style = rkyv::Deserialize::<RenderStyle, D>::deserialize(&self.style, deserializer)?;
+        let text = rkyv::Deserialize::<String, D>::deserialize(&self.text, deserializer)?;
+        let width = rkyv::Deserialize::<RenderCellWidth, D>::deserialize(&self.width, deserializer)?;
+        match width {
+            RenderCellWidth::Narrow => Ok(RenderCell::narrow(text, style)),
+            RenderCellWidth::Wide => Ok(RenderCell::wide(text, style)),
+            RenderCellWidth::WideContinuation => {
+                if !text.is_empty() {
+                    return Err(self::rkyv_deserialize_error::<D::Error>(
+                        "wide continuation cells must not carry text",
+                    ));
+                }
+                Ok(RenderCell::wide_continuation(style))
+            }
+        }
+    }
+}
+
+#[derive(rkyv::Archive, Clone, Copy, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub enum RenderCellWidth {
     Narrow,
     Wide,
     WideContinuation,
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(rkyv::Archive, Clone, Copy, Debug, Default, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct RenderStyle {
     pub attrs: RenderTextStyle,
     pub bg: RenderColor,
     pub fg: RenderColor,
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(rkyv::Archive, Clone, Copy, Debug, Default, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 #[serde(transparent)]
 pub struct RenderTextStyle(u8);
 
@@ -691,7 +942,7 @@ impl RenderTextStyle {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(rkyv::Archive, Clone, Copy, Debug, Default, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub enum RenderColor {
     #[default]
     Default,
@@ -704,7 +955,7 @@ pub enum RenderColor {
 }
 
 /// Normalized key code carried with the original terminal bytes.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(rkyv::Archive, Clone, Copy, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub enum ClientKeyCode {
     Backspace,
     Char(char),
@@ -719,7 +970,7 @@ pub enum ClientKeyCode {
 }
 
 /// Keyboard modifiers observed by the muxr client.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(rkyv::Archive, Clone, Copy, Debug, Default, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct ClientKeyModifiers {
     pub alt: bool,
     pub ctrl: bool,
@@ -739,7 +990,7 @@ impl ClientKeyModifiers {
 }
 
 /// One ordered keyboard event from the muxr client.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(rkyv::Archive, Clone, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct ClientKey {
     pub code: ClientKeyCode,
     pub modifiers: ClientKeyModifiers,
@@ -757,13 +1008,13 @@ impl ClientKey {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(rkyv::Archive, Clone, Copy, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub enum PaneScrollDirection {
     Down,
     Up,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(rkyv::Archive, Clone, Copy, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct ClientMousePosition {
     pub row: u16,
     pub col: u16,
@@ -776,24 +1027,15 @@ impl ClientMousePosition {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(rkyv::Archive, Clone, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 #[serde(tag = "code", content = "msg", rename_all = "snake_case")]
 pub enum ServerError {
     ClientAlreadyAttached,
-    ProtocolVersionMismatch { expected: u16, actual: u16 },
     SessionMismatch { expected: SessionName, actual: SessionName },
     UnexpectedRequest { request: Box<ClientRequest> },
 }
 
 impl ServerError {
-    #[must_use]
-    pub const fn protocol_version_mismatch(actual: u16) -> Self {
-        Self::ProtocolVersionMismatch {
-            expected: PROTOCOL_VERSION,
-            actual,
-        }
-    }
-
     #[must_use]
     pub fn unexpected_request(request: ClientRequest) -> Self {
         Self::UnexpectedRequest {
@@ -805,7 +1047,6 @@ impl ServerError {
     pub const fn code(&self) -> &'static str {
         match self {
             Self::ClientAlreadyAttached => "client_already_attached",
-            Self::ProtocolVersionMismatch { .. } => "protocol_version_mismatch",
             Self::SessionMismatch { .. } => "session_mismatch",
             Self::UnexpectedRequest { .. } => "unexpected_request",
         }
@@ -815,16 +1056,13 @@ impl ServerError {
     pub fn msg(&self) -> String {
         match self {
             Self::ClientAlreadyAttached => "a muxr client is already attached to this session".to_owned(),
-            Self::ProtocolVersionMismatch { expected, actual } => {
-                format!("expected protocol version {expected}, got {actual}")
-            }
             Self::SessionMismatch { expected, actual } => format!("expected session {expected}, got {actual}"),
             Self::UnexpectedRequest { request } => format!("unexpected client request during attach: {request:?}"),
         }
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(rkyv::Archive, Clone, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub enum ClientRequest {
     Attach(AttachRequest),
     Ping,
@@ -842,7 +1080,7 @@ pub enum ClientRequest {
     FocusPaneAt(ClientMousePosition),
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(rkyv::Archive, Clone, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub enum ServerEvent {
     Attached(AttachAccepted),
     Ping,
@@ -853,71 +1091,74 @@ pub enum ServerEvent {
     Detached,
 }
 
-impl ServerEvent {
-    fn validate(&self) -> rootcause::Result<()> {
-        // Wire frames and public struct literals can bypass constructors; validate before transport/render use.
-        match self {
-            Self::Attached(attached) => attached.layout.validate()?,
-            Self::Layout(layout) => layout.validate()?,
-            Self::Render(update) => update.validate()?,
-            Self::Ping | Self::Pong | Self::Error(_) | Self::Detached => {}
-        }
-
-        Ok(())
-    }
-}
-
-/// Encode a client request as a JSON protocol payload.
+/// Encode a client request as a rkyv protocol payload.
 ///
 /// # Errors
-/// - The request cannot be serialized as JSON.
+/// - The request cannot be serialized.
 pub fn encode_client_request(request: &ClientRequest) -> rootcause::Result<Vec<u8>> {
-    encode_json_line(request)
+    let payload = rkyv::to_bytes::<rkyv::rancor::Error>(request)
+        .map_err(|error| report!("failed to serialize muxr protocol frame").attach(format!("{error:?}")))?;
+    Ok(self::encode_protocol_frame(payload.as_slice()))
 }
 
-/// Decode a client request from one JSON protocol payload.
+/// Decode a client request from one rkyv protocol payload.
 ///
 /// # Errors
-/// - The frame is empty or not a valid client request JSON payload.
+/// - The frame is empty or not a valid client request payload.
+/// - The decoded request cannot be deserialized into valid domain values.
 pub fn decode_client_request(line: &[u8]) -> rootcause::Result<ClientRequest> {
-    decode_json_line(line)
+    let payload = self::decode_protocol_payload(line)?;
+    let archived = rkyv::access::<rkyv::Archived<ClientRequest>, rkyv::rancor::Error>(&payload)
+        .map_err(|error| report!("failed to validate muxr protocol frame").attach(format!("{error:?}")))?;
+    rkyv::deserialize::<ClientRequest, rkyv::rancor::Error>(archived)
+        .map_err(|error| report!("failed to deserialize muxr protocol frame").attach(format!("{error:?}")))
 }
 
-/// Encode a server event as a JSON protocol payload.
+/// Encode a server event as a rkyv protocol payload.
 ///
 /// # Errors
-/// - The event cannot be serialized as JSON.
+/// - The event cannot be serialized.
 pub fn encode_server_event(event: &ServerEvent) -> rootcause::Result<Vec<u8>> {
-    event.validate()?;
-    encode_json_line(event)
+    let payload = rkyv::to_bytes::<rkyv::rancor::Error>(event)
+        .map_err(|error| report!("failed to serialize muxr protocol frame").attach(format!("{error:?}")))?;
+    Ok(self::encode_protocol_frame(payload.as_slice()))
 }
 
-/// Decode a server event from one JSON protocol payload.
+/// Decode a server event from one rkyv protocol payload.
 ///
 /// # Errors
-/// - The frame is empty or not a valid server event JSON payload.
+/// - The frame is empty or not a valid server event payload.
+/// - The decoded event cannot be deserialized into valid domain values.
 pub fn decode_server_event(line: &[u8]) -> rootcause::Result<ServerEvent> {
-    let event: ServerEvent = decode_json_line(line)?;
-    event.validate()?;
-    Ok(event)
+    let payload = self::decode_protocol_payload(line)?;
+    let archived = rkyv::access::<rkyv::Archived<ServerEvent>, rkyv::rancor::Error>(&payload)
+        .map_err(|error| report!("failed to validate muxr protocol frame").attach(format!("{error:?}")))?;
+    rkyv::deserialize::<ServerEvent, rkyv::rancor::Error>(archived)
+        .map_err(|error| report!("failed to deserialize muxr protocol frame").attach(format!("{error:?}")))
 }
 
-fn encode_json_line<T>(value: &T) -> rootcause::Result<Vec<u8>>
-where
-    T: Serialize,
-{
-    Ok(serde_json::to_vec(value).context("failed to serialize muxr protocol frame")?)
+fn encode_protocol_frame(payload: &[u8]) -> Vec<u8> {
+    let mut frame = PROTOCOL_FRAME_MAGIC.to_vec();
+    frame.extend_from_slice(payload);
+    frame
 }
 
-fn decode_json_line<T>(line: &[u8]) -> rootcause::Result<T>
-where
-    T: for<'de> Deserialize<'de>,
-{
-    if line.is_empty() {
+fn decode_protocol_payload(frame: &[u8]) -> rootcause::Result<AlignedVec> {
+    if frame.is_empty() {
         return Err(report!("empty muxr protocol frame"));
     }
-
-    Ok(serde_json::from_slice(line).context("failed to deserialize muxr protocol frame")?)
+    let Some(payload) = frame.strip_prefix(PROTOCOL_FRAME_MAGIC) else {
+        return Err(report!("invalid muxr protocol frame")
+            .attach("reason=missing rkyv frame magic")
+            .attach(format!("magic={PROTOCOL_FRAME_MAGIC:?}")));
+    };
+    if payload.is_empty() {
+        return Err(report!("empty muxr protocol payload"));
+    }
+    // Socket buffers have arbitrary byte alignment; rkyv checked access requires aligned archived bytes.
+    let mut aligned = AlignedVec::with_capacity(payload.len());
+    aligned.extend_from_slice(payload);
+    Ok(aligned)
 }
 
 #[cfg(test)]
@@ -967,9 +1208,8 @@ mod tests {
     #[test]
     fn test_server_event_codec_when_render_update_is_invalid_returns_error() -> rootcause::Result<()> {
         let event = invalid_render_event()?;
-        let encoded = serde_json::to_vec(&event)?;
+        let encoded = encode_server_event(&event)?;
 
-        assert2::assert!(encode_server_event(&event).is_err());
         assert2::assert!(decode_server_event(&encoded).is_err());
         Ok(())
     }
@@ -977,7 +1217,6 @@ mod tests {
     #[test]
     fn test_server_event_codec_when_attached_layout_is_invalid_returns_error() -> rootcause::Result<()> {
         let event = ServerEvent::Attached(AttachAccepted {
-            protocol_version: PROTOCOL_VERSION,
             layout: LayoutSnapshot {
                 active_tab: TabId::new("missing")?,
                 tabs: vec![tab_snapshot(
@@ -988,9 +1227,8 @@ mod tests {
                 )?],
             },
         });
-        let encoded = serde_json::to_vec(&event)?;
+        let encoded = encode_server_event(&event)?;
 
-        assert2::assert!(encode_server_event(&event).is_err());
         assert2::assert!(decode_server_event(&encoded).is_err());
         Ok(())
     }
@@ -1006,28 +1244,17 @@ mod tests {
                 vec![pane_snapshot("pane-1", "shell")?],
             )?],
         });
-        let encoded = serde_json::to_vec(&event)?;
+        let encoded = encode_server_event(&event)?;
 
-        assert2::assert!(encode_server_event(&event).is_err());
         assert2::assert!(decode_server_event(&encoded).is_err());
         Ok(())
     }
 
     #[test]
-    fn test_server_error_protocol_version_mismatch_returns_structured_error() {
-        let error = ServerError::protocol_version_mismatch(1);
+    fn test_client_request_codec_when_frame_magic_is_missing_returns_error() {
+        let encoded = b"not-muxr-rkyv";
 
-        pretty_assertions::assert_eq!(
-            error,
-            ServerError::ProtocolVersionMismatch {
-                expected: PROTOCOL_VERSION,
-                actual: 1,
-            },
-        );
-        pretty_assertions::assert_eq!(
-            error.msg(),
-            format!("expected protocol version {PROTOCOL_VERSION}, got 1")
-        );
+        assert2::assert!(decode_client_request(encoded).is_err());
     }
 
     #[rstest]
@@ -1158,7 +1385,7 @@ mod tests {
     #[rstest]
     #[case::zero_seq(0, 80, 24, render_rows(80, 24))]
     #[case::short_rows(1, 80, 24, render_rows(80, 23))]
-    #[case::out_of_bounds_row(1, 80, 24, vec![RenderRowSpan::new(24, 0, render_cells(80))])]
+    #[case::out_of_bounds_row(1, 80, 24, vec![raw_render_row_span(24, 0, render_cells(80))])]
     fn test_render_baseline_new_when_frame_is_invalid_returns_error(
         #[case] seq: u64,
         #[case] cols: u16,
@@ -1184,7 +1411,7 @@ mod tests {
                 seq,
                 TerminalSize::new(80, 24)?,
                 RenderCursor::new(0, 0, true),
-                vec![RenderRowSpan::new(0, 0, render_cells(1))],
+                vec![RenderRowSpan::new(0, 0, render_cells(1))?],
             )
             .is_err()
         );
@@ -1192,9 +1419,9 @@ mod tests {
     }
 
     #[rstest]
-    #[case::empty_cells(RenderRowSpan::new(0, 0, Vec::new()))]
-    #[case::col_out_of_bounds(RenderRowSpan::new(0, 80, render_cells(1)))]
-    #[case::span_too_wide(RenderRowSpan::new(0, 79, render_cells(2)))]
+    #[case::empty_cells(raw_render_row_span(0, 0, Vec::new()))]
+    #[case::col_out_of_bounds(raw_render_row_span(0, 80, render_cells(1)))]
+    #[case::span_too_wide(raw_render_row_span(0, 79, render_cells(2)))]
     fn test_render_diff_new_when_row_span_is_invalid_returns_error(
         #[case] row: RenderRowSpan,
     ) -> rootcause::Result<()> {
@@ -1212,22 +1439,22 @@ mod tests {
     }
 
     #[rstest]
-    #[case::wide_without_continuation(RenderRowSpan::new(
+    #[case::wide_without_continuation(raw_render_row_span(
         0,
         0,
         vec![RenderCell::wide("字", RenderStyle::default())]
     ))]
-    #[case::continuation_without_wide(RenderRowSpan::new(
+    #[case::continuation_without_wide(raw_render_row_span(
         0,
         0,
         vec![RenderCell::wide_continuation(RenderStyle::default())]
     ))]
-    #[case::wide_followed_by_narrow(RenderRowSpan::new(
+    #[case::wide_followed_by_narrow(raw_render_row_span(
         0,
         0,
         vec![RenderCell::wide("字", RenderStyle::default()), render_cell("x")]
     ))]
-    #[case::double_continuation(RenderRowSpan::new(
+    #[case::double_continuation(raw_render_row_span(
         0,
         0,
         vec![
@@ -1254,7 +1481,7 @@ mod tests {
 
     #[test]
     fn test_render_baseline_new_when_wide_cell_sequence_is_invalid_returns_error() -> rootcause::Result<()> {
-        let rows = vec![RenderRowSpan::new(
+        let rows = vec![raw_render_row_span(
             0,
             0,
             vec![RenderCell::wide("字", RenderStyle::default()), render_cell("x")],
@@ -1275,7 +1502,7 @@ mod tests {
                 RenderCell::wide("字", RenderStyle::default()),
                 RenderCell::wide_continuation(RenderStyle::default()),
             ],
-        );
+        )?;
 
         let diff = RenderDiff::new(
             1,
@@ -1298,7 +1525,7 @@ mod tests {
                 RenderCell::wide("字", RenderStyle::default()),
                 RenderCell::wide_continuation(RenderStyle::default()),
             ],
-        );
+        )?;
 
         pretty_assertions::assert_eq!(row.width()?, 2);
         Ok(())
@@ -1306,7 +1533,6 @@ mod tests {
 
     fn client_attach_request() -> rootcause::Result<AttachRequest> {
         Ok(AttachRequest {
-            protocol_version: PROTOCOL_VERSION,
             session: "work".parse()?,
             terminal_size: terminal_size(80, 24)?,
         })
@@ -1314,7 +1540,6 @@ mod tests {
 
     fn attach_accepted() -> rootcause::Result<AttachAccepted> {
         Ok(AttachAccepted {
-            protocol_version: PROTOCOL_VERSION,
             layout: layout_snapshot()?,
         })
     }
@@ -1386,12 +1611,12 @@ mod tests {
                     0,
                     0,
                     vec![render_cell("a"), render_cell("b"), render_cell("c"), render_cell("d")],
-                ),
+                )?,
                 RenderRowSpan::new(
                     1,
                     0,
                     vec![render_cell("e"), render_cell("f"), render_cell("g"), render_cell("h")],
-                ),
+                )?,
             ],
         )
     }
@@ -1402,7 +1627,7 @@ mod tests {
             2,
             terminal_size(4, 2)?,
             RenderCursor::new(1, 3, true),
-            vec![RenderRowSpan::new(1, 1, vec![render_cell("x"), render_cell("y")])],
+            vec![RenderRowSpan::new(1, 1, vec![render_cell("x"), render_cell("y")])?],
         )
     }
 
@@ -1410,7 +1635,7 @@ mod tests {
         Ok(ServerEvent::Render(RenderUpdate::Diff(RenderDiff {
             base_seq: 1,
             cursor: RenderCursor::new(0, 0, true),
-            rows: vec![RenderRowSpan::new(
+            rows: vec![raw_render_row_span(
                 0,
                 0,
                 vec![RenderCell::wide_continuation(RenderStyle::default())],
@@ -1422,8 +1647,12 @@ mod tests {
 
     fn render_rows(cols: u16, rows: u16) -> Vec<RenderRowSpan> {
         (0..rows)
-            .map(|row| RenderRowSpan::new(row, 0, render_cells(cols)))
+            .map(|row| raw_render_row_span(row, 0, render_cells(cols)))
             .collect()
+    }
+
+    fn raw_render_row_span(row: u16, col: u16, cells: Vec<RenderCell>) -> RenderRowSpan {
+        RenderRowSpan { cells, col, row }
     }
 
     fn render_cells(cols: u16) -> Vec<RenderCell> {

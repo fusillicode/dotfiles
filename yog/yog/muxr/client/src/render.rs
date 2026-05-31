@@ -78,22 +78,22 @@ pub struct FrameBuffer {
 
 impl FrameBuffer {
     pub fn apply(&mut self, update: RenderUpdate) -> rootcause::Result<ApplyOutcome> {
-        update.validate()?;
         match update {
             RenderUpdate::Baseline(baseline) => {
-                let mut rows = empty_rows(&baseline.size);
-                for row in &baseline.rows {
+                let (seq, size, cursor, spans) = baseline.into_parts();
+                let mut rows = empty_rows(&size);
+                for row in &spans {
                     apply_span_to_rows(&mut rows, row)?;
                 }
 
-                self.cursor = Some(baseline.cursor.clone());
+                self.cursor = Some(cursor.clone());
                 self.rows = rows;
-                self.seq = Some(baseline.seq);
-                self.size = Some(baseline.size);
+                self.seq = Some(seq);
+                self.size = Some(size);
                 Ok(ApplyOutcome::Applied(RenderFrameChanges {
-                    cursor: baseline.cursor,
+                    cursor,
                     full_redraw: true,
-                    rows: baseline.rows,
+                    rows: spans,
                 }))
             }
             RenderUpdate::Diff(diff) => self.apply_diff(diff),
@@ -101,25 +101,26 @@ impl FrameBuffer {
     }
 
     fn apply_diff(&mut self, diff: RenderDiff) -> rootcause::Result<ApplyOutcome> {
-        if self.seq != Some(diff.base_seq) || self.size.as_ref() != Some(&diff.size) {
+        let (base_seq, seq, size, cursor, spans) = diff.into_parts();
+        if self.seq != Some(base_seq) || self.size.as_ref() != Some(&size) {
             return Ok(ApplyOutcome::NeedsResync);
         }
 
-        // Validate the full diff before mutating so malformed deserialized frames cannot leave a partial buffer.
-        for row in &diff.rows {
+        // Validate the full diff before mutating so a stale frame cannot leave a partial buffer.
+        for row in &spans {
             validate_span_against_rows(&self.rows, row)?;
         }
-        for row in &diff.rows {
+        for row in &spans {
             apply_span_to_rows(&mut self.rows, row)?;
         }
 
-        self.cursor = Some(diff.cursor.clone());
-        self.seq = Some(diff.seq);
-        self.size = Some(diff.size);
+        self.cursor = Some(cursor.clone());
+        self.seq = Some(seq);
+        self.size = Some(size);
         Ok(ApplyOutcome::Applied(RenderFrameChanges {
-            cursor: diff.cursor,
+            cursor,
             full_redraw: false,
-            rows: diff.rows,
+            rows: spans,
         }))
     }
 
@@ -191,30 +192,30 @@ fn empty_rows(size: &TerminalSize) -> Vec<Vec<RenderCell>> {
 
 fn apply_span_to_rows(rows: &mut [Vec<RenderCell>], span: &RenderRowSpan) -> rootcause::Result<()> {
     validate_span_against_rows(rows, span)?;
-    let Some(row) = rows.get_mut(usize::from(span.row)) else {
-        return Err(report!("muxr render row outside frame").attach(format!("row={}", span.row)));
+    let Some(row) = rows.get_mut(usize::from(span.row())) else {
+        return Err(report!("muxr render row outside frame").attach(format!("row={}", span.row())));
     };
-    let col = usize::from(span.col);
+    let col = usize::from(span.col());
 
-    for (target, cell) in row.iter_mut().skip(col).zip(span.cells.iter()) {
+    for (target, cell) in row.iter_mut().skip(col).zip(span.cells().iter()) {
         *target = cell.clone();
     }
     Ok(())
 }
 
 fn validate_span_against_rows(rows: &[Vec<RenderCell>], span: &RenderRowSpan) -> rootcause::Result<()> {
-    let Some(row) = rows.get(usize::from(span.row)) else {
-        return Err(report!("muxr render row outside frame").attach(format!("row={}", span.row)));
+    let Some(row) = rows.get(usize::from(span.row())) else {
+        return Err(report!("muxr render row outside frame").attach(format!("row={}", span.row())));
     };
-    let col = usize::from(span.col);
+    let col = usize::from(span.col());
     let end = col
-        .checked_add(span.cells.len())
+        .checked_add(span.cells().len())
         .ok_or_else(|| report!("muxr render span column overflowed"))?;
     if end > row.len() {
         return Err(report!("muxr render span outside frame")
-            .attach(format!("row={}", span.row))
-            .attach(format!("col={}", span.col))
-            .attach(format!("cells={}", span.cells.len()))
+            .attach(format!("row={}", span.row()))
+            .attach(format!("col={}", span.col()))
+            .attach(format!("cells={}", span.cells().len()))
             .attach(format!("cols={}", row.len())));
     }
 
@@ -228,25 +229,25 @@ fn render_row_span(
     row_offset: u16,
 ) -> rootcause::Result<()> {
     let rendered_row = row
-        .row
+        .row()
         .checked_add(row_offset)
         .ok_or_else(|| report!("muxr render row offset overflowed"))?;
-    queue_command(stdout, MoveTo(row.col, rendered_row))?;
+    queue_command(stdout, MoveTo(row.col(), rendered_row))?;
     let mut run_style = None;
     let mut run_text = String::new();
-    for cell in &row.cells {
-        if matches!(cell.width, RenderCellWidth::WideContinuation) {
+    for cell in row.cells() {
+        if matches!(cell.width(), RenderCellWidth::WideContinuation) {
             continue;
         }
 
-        if run_style != Some(cell.style) {
+        if run_style != Some(cell.style()) {
             flush_text_run(stdout, active_style, run_style, &mut run_text)?;
-            run_style = Some(cell.style);
+            run_style = Some(cell.style());
         }
-        if cell.text.is_empty() {
+        if cell.text().is_empty() {
             run_text.push(' ');
         } else {
-            run_text.push_str(&cell.text);
+            run_text.push_str(cell.text());
         }
     }
     flush_text_run(stdout, active_style, run_style, &mut run_text)?;
@@ -431,7 +432,7 @@ mod tests {
             10,
             terminal_size()?,
             RenderCursor::new(0, 0, true),
-            vec![RenderRowSpan::new(0, 0, vec![render_cell("x")])],
+            vec![RenderRowSpan::new(0, 0, vec![render_cell("x")])?],
         )?))?;
 
         pretty_assertions::assert_eq!(outcome, ApplyOutcome::NeedsResync);
@@ -449,30 +450,6 @@ mod tests {
         assert2::assert!(!changes.full_redraw);
         pretty_assertions::assert_eq!(changes.rows.len(), 1);
         pretty_assertions::assert_eq!(frame_buffer.seq, Some(2));
-        Ok(())
-    }
-
-    #[test]
-    fn test_frame_buffer_apply_when_diff_span_is_invalid_does_not_mutate_frame() -> rootcause::Result<()> {
-        let mut frame_buffer = applied_frame_buffer()?;
-        let rows_before = frame_buffer.rows.clone();
-        let cursor_before = frame_buffer.cursor.clone();
-        let diff = RenderDiff {
-            base_seq: 1,
-            cursor: RenderCursor::new(1, 1, true),
-            rows: vec![
-                RenderRowSpan::new(0, 0, vec![render_cell("x")]),
-                RenderRowSpan::new(1, 2, vec![render_cell("z")]),
-            ],
-            seq: 2,
-            size: terminal_size()?,
-        };
-
-        assert2::assert!(frame_buffer.apply(RenderUpdate::Diff(diff)).is_err());
-
-        pretty_assertions::assert_eq!(frame_buffer.rows, rows_before);
-        pretty_assertions::assert_eq!(frame_buffer.cursor, cursor_before);
-        pretty_assertions::assert_eq!(frame_buffer.seq, Some(1));
         Ok(())
     }
 
@@ -676,8 +653,8 @@ mod tests {
             terminal_size()?,
             RenderCursor::new(0, 0, true),
             vec![
-                RenderRowSpan::new(0, 0, vec![render_cell("a"), render_cell("b")]),
-                RenderRowSpan::new(1, 0, vec![render_cell("c"), render_cell("d")]),
+                RenderRowSpan::new(0, 0, vec![render_cell("a"), render_cell("b")])?,
+                RenderRowSpan::new(1, 0, vec![render_cell("c"), render_cell("d")])?,
             ],
         )
     }
@@ -688,7 +665,7 @@ mod tests {
             2,
             terminal_size()?,
             RenderCursor::new(1, 1, true),
-            vec![RenderRowSpan::new(1, 1, vec![render_cell("x")])],
+            vec![RenderRowSpan::new(1, 1, vec![render_cell("x")])?],
         )
     }
 
@@ -705,7 +682,7 @@ mod tests {
                     RenderCell::narrow("b", style),
                     RenderCell::narrow("c", style),
                 ],
-            )],
+            )?],
         )
     }
 

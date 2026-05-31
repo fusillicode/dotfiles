@@ -6,7 +6,6 @@ pub use protocol::ClientKeyModifiers;
 pub use protocol::ClientMousePosition;
 pub use protocol::ClientRequest;
 pub use protocol::LayoutSnapshot;
-pub use protocol::PROTOCOL_VERSION;
 pub use protocol::PaneId;
 pub use protocol::PaneScrollDirection;
 pub use protocol::PaneSnapshot;

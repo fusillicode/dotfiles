@@ -1,5 +1,6 @@
 use std::env;
 use std::fmt;
+use std::io;
 use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -18,7 +19,7 @@ const SOCKET_HASH_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
 const SOCKET_HASH_PRIME: u64 = 0x0000_0100_0000_01b3;
 const SOCKET_PATH_MAX_BYTES: usize = 103;
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize)]
+#[derive(rkyv::Archive, Clone, Debug, Eq, Hash, PartialEq, Serialize, rkyv::Serialize)]
 #[serde(transparent)]
 pub struct SessionName(String);
 
@@ -77,6 +78,19 @@ impl FromStr for SessionName {
         }
 
         Ok(Self(raw.to_owned()))
+    }
+}
+
+impl<D> rkyv::Deserialize<SessionName, D> for ArchivedSessionName
+where
+    D: rkyv::rancor::Fallible + ?Sized,
+    D::Error: rkyv::rancor::Source,
+{
+    fn deserialize(&self, deserializer: &mut D) -> Result<SessionName, D::Error> {
+        let raw = rkyv::Deserialize::<String, D>::deserialize(&self.0, deserializer)?;
+        raw.parse().map_err(|error: rootcause::Report| {
+            <D::Error as rkyv::rancor::Source>::new(io::Error::new(io::ErrorKind::InvalidData, error.to_string()))
+        })
     }
 }
 
@@ -190,8 +204,12 @@ mod tests {
     }
 
     #[test]
-    fn test_session_name_deserialize_when_name_is_invalid_returns_error() {
-        assert2::assert!(serde_json::from_str::<SessionName>("\"../x\"").is_err());
+    fn test_session_name_rkyv_deserialize_when_name_is_invalid_returns_error() -> rootcause::Result<()> {
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&SessionName("../x".to_owned()))?;
+        let archived = rkyv::access::<rkyv::Archived<SessionName>, rkyv::rancor::Error>(&bytes)?;
+
+        assert2::assert!(rkyv::deserialize::<SessionName, rkyv::rancor::Error>(archived).is_err());
+        Ok(())
     }
 
     #[test]
