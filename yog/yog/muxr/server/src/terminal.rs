@@ -129,10 +129,6 @@ impl TerminalState {
     }
 
     pub fn snapshot(&self) -> rootcause::Result<TerminalSnapshot> {
-        self.current_snapshot()
-    }
-
-    fn current_snapshot(&self) -> rootcause::Result<TerminalSnapshot> {
         let screen = self.parser.screen();
         let (rows, cols) = screen.size();
         let size = TerminalSize::new(cols, rows)?;

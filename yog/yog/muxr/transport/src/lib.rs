@@ -56,7 +56,7 @@ impl ClientConnection {
     }
 
     #[must_use]
-    pub fn from_stream(stream: LocalSocketStream) -> Self {
+    fn from_stream(stream: LocalSocketStream) -> Self {
         let (writer, reader) = frame_socket(stream).split();
         Self {
             reader: ClientEventReader { reader },
@@ -122,7 +122,7 @@ pub struct ServerConnection {
 
 impl ServerConnection {
     #[must_use]
-    pub fn from_stream(stream: LocalSocketStream) -> Self {
+    fn from_stream(stream: LocalSocketStream) -> Self {
         let (writer, reader) = frame_socket(stream).split();
         Self { reader, writer }
     }
@@ -306,19 +306,22 @@ where
 mod tests {
     use std::path::Path;
 
+    use muxr_core::AttachAccepted;
     use muxr_core::ClientKey;
     use muxr_core::ClientKeyCode;
     use muxr_core::ClientKeyModifiers;
+    use muxr_core::LayoutSnapshot;
     use muxr_core::PROTOCOL_VERSION;
+    use muxr_core::PaneId;
+    use muxr_core::PaneSnapshot;
     use muxr_core::RenderCell;
     use muxr_core::RenderCursor;
     use muxr_core::RenderDiff;
     use muxr_core::RenderRowSpan;
     use muxr_core::RenderStyle;
     use muxr_core::RenderUpdate;
-    use muxr_core::ServerHello;
-    use muxr_core::ServerPid;
-    use muxr_core::SessionName;
+    use muxr_core::TabId;
+    use muxr_core::TabSnapshot;
     use muxr_core::TerminalSize;
     use rstest::rstest;
 
@@ -353,18 +356,11 @@ mod tests {
     #[rstest]
     #[case::ping(ServerEvent::Ping)]
     #[case::pong(ServerEvent::Pong)]
-    #[case::hello(ServerEvent::Hello(ServerHello {
+    #[case::attached(ServerEvent::Attached(AttachAccepted {
         protocol_version: PROTOCOL_VERSION,
-        session: SessionName::default(),
-        server_pid: ServerPid::new(123)?,
-        layout: muxr_core::LayoutSnapshot::single_pane("tab-1", "default", "pane-1", "shell")?,
+        layout: layout_snapshot()?,
     }))]
-    #[case::layout(ServerEvent::Layout(muxr_core::LayoutSnapshot::single_pane(
-        "tab-1",
-        "default",
-        "pane-1",
-        "shell"
-    )?))]
+    #[case::layout(ServerEvent::Layout(layout_snapshot()?))]
     fn test_transport_when_server_event_round_trips_returns_original(
         #[case] event: ServerEvent,
     ) -> rootcause::Result<()> {
@@ -465,5 +461,13 @@ mod tests {
             seq: 2,
             size: TerminalSize::new(80, 24)?,
         })))
+    }
+
+    fn layout_snapshot() -> rootcause::Result<LayoutSnapshot> {
+        let active_tab = TabId::new("tab-1")?;
+        let active_pane = PaneId::new("pane-1")?;
+        let pane = PaneSnapshot::new(active_pane.clone(), "shell");
+        let tab = TabSnapshot::new(active_tab.clone(), "default", active_pane, vec![pane])?;
+        LayoutSnapshot::new(active_tab, vec![tab])
     }
 }

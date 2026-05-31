@@ -93,7 +93,11 @@ mod tests {
 
     #[test]
     fn test_queue_when_layout_is_rendered_writes_tabbar_without_flushing() -> rootcause::Result<()> {
-        let layout = muxr_core::LayoutSnapshot::single_pane("tab-1", "default", "pane-1", "shell")?;
+        let active_tab = muxr_core::TabId::new("tab-1")?;
+        let active_pane = muxr_core::PaneId::new("pane-1")?;
+        let pane = muxr_core::PaneSnapshot::new(active_pane.clone(), "shell");
+        let tab = muxr_core::TabSnapshot::new(active_tab.clone(), "default", active_pane, vec![pane])?;
+        let layout = muxr_core::LayoutSnapshot::new(active_tab, vec![tab])?;
         let mut output = CountingWriter::default();
 
         queue(&mut output, &layout)?;

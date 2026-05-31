@@ -11,7 +11,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use muxr_core::ClientCommand;
+use muxr_core::AttachAccepted;
 use muxr_core::ClientKey;
 use muxr_core::ClientKeyCode;
 use muxr_core::ClientKeyModifiers;
@@ -19,9 +19,7 @@ use muxr_core::ClientMousePosition;
 use muxr_core::ClientRequest;
 use muxr_core::LayoutSnapshot;
 use muxr_core::PROTOCOL_VERSION;
-use muxr_core::PaneFocusDirection;
 use muxr_core::PaneId;
-use muxr_core::PaneResizeDirection;
 use muxr_core::PaneScrollDirection;
 use muxr_core::PaneSnapshot;
 use muxr_core::RenderBaseline;
@@ -35,8 +33,6 @@ use muxr_core::RenderTextStyle;
 use muxr_core::RenderUpdate;
 use muxr_core::ServerError;
 use muxr_core::ServerEvent;
-use muxr_core::ServerHello;
-use muxr_core::ServerPid;
 use muxr_core::SessionName;
 use muxr_core::SessionPaths;
 use muxr_core::TabId;
@@ -58,7 +54,7 @@ use crate::pty::PtyExitStatus;
 use crate::pty::PtyHandle;
 use crate::pty::PtySession;
 use crate::pty::PtySinkGuard;
-pub use crate::pty::ShellCommand;
+use crate::pty::ShellCommand;
 use crate::terminal::TerminalSnapshot;
 
 const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(10);
@@ -81,6 +77,7 @@ const OUTPUT_EVENT_CHANNEL_LIMIT: usize = 1024;
 const PRIVATE_DIR_MODE: u32 = 0o700;
 const PRIVATE_SOCKET_MODE: u32 = 0o600;
 const RENDER_FRAME_INTERVAL: Duration = Duration::from_millis(16);
+
 const INITIAL_PANE_ID: &str = "pane-1";
 const INITIAL_TAB_ID: &str = "tab-1";
 const INITIAL_TAB_TITLE: &str = "default";
@@ -93,11 +90,11 @@ const MAX_SPLIT_RATIO: u16 = 950;
 const SPLIT_RESIZE_STEP: u16 = 50;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ServerConfig {
-    pub session: SessionName,
-    pub paths: SessionPaths,
-    pub max_accepted_connections: Option<usize>,
-    pub shell_command: ShellCommand,
+struct ServerConfig {
+    session: SessionName,
+    paths: SessionPaths,
+    max_accepted_connections: Option<usize>,
+    shell_command: ShellCommand,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -121,13 +118,13 @@ impl SessionMetadata {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-struct SessionLayout {
+struct Layout {
     active_tab: TabId,
     session: SessionName,
-    tabs: Vec<SessionTab>,
+    tabs: Vec<Tab>,
 }
 
-impl SessionLayout {
+impl Layout {
     fn initial(config: &ServerConfig, metadata: SessionMetadata) -> rootcause::Result<Self> {
         let pane_id = PaneId::new(INITIAL_PANE_ID)?;
         let tab_id = TabId::new(INITIAL_TAB_ID)?;
@@ -135,10 +132,10 @@ impl SessionLayout {
         Ok(Self {
             active_tab: tab_id.clone(),
             session: config.session.clone(),
-            tabs: vec![SessionTab {
+            tabs: vec![Tab {
                 active_pane: pane_id.clone(),
                 id: tab_id,
-                pane_tree: PaneNode::leaf(SessionPane {
+                pane_tree: PaneNode::leaf(Pane {
                     command_label: metadata.command_label.clone(),
                     cwd: metadata.cwd,
                     exit_status: None,
@@ -170,7 +167,8 @@ impl SessionLayout {
             session: persisted.session,
             tabs: persisted.tabs,
         };
-        drop(layout.snapshot()?);
+        // Persisted layout bypasses constructors; rebuilding a snapshot validates tab and pane invariants.
+        layout.snapshot()?;
         Ok(layout)
     }
 
@@ -178,7 +176,7 @@ impl SessionLayout {
         let tabs = self
             .tabs
             .iter()
-            .map(SessionTab::snapshot)
+            .map(Tab::snapshot)
             .collect::<rootcause::Result<Vec<_>>>()?;
         LayoutSnapshot::new(self.active_tab.clone(), tabs)
     }
@@ -195,10 +193,10 @@ impl SessionLayout {
 
         self.tabs.insert(
             insert_index,
-            SessionTab {
+            Tab {
                 active_pane: pane_id.clone(),
                 id: tab_id.clone(),
-                pane_tree: PaneNode::leaf(SessionPane {
+                pane_tree: PaneNode::leaf(Pane {
                     command_label: metadata.command_label.clone(),
                     cwd: metadata.cwd,
                     exit_status: None,
@@ -220,7 +218,7 @@ impl SessionLayout {
         let pane_id = PaneId::new(format!("pane-{pane_number}"))?;
         let tab = self.active_tab_mut()?;
         let focus_seq = tab.next_focus_seq()?;
-        let new_pane = SessionPane {
+        let new_pane = Pane {
             command_label: metadata.command_label.clone(),
             cwd: metadata.cwd,
             exit_status: None,
@@ -272,10 +270,7 @@ impl SessionLayout {
                 .get_mut(active_tab_index)
                 .ok_or_else(|| report!("muxr active tab index is outside server layout"))?
                 .mark_pane_exited(&active_pane, exited_at, None)?;
-            return Ok(ClosePaneOutcome {
-                final_pane: true,
-                pane_id: active_pane,
-            });
+            return Ok(ClosePaneOutcome::Final { pane_id: active_pane });
         }
 
         if self
@@ -295,10 +290,7 @@ impl SessionLayout {
             let _focused = tab.focus_pane(fallback_pane)?;
         }
 
-        Ok(ClosePaneOutcome {
-            final_pane: false,
-            pane_id: active_pane,
-        })
+        Ok(ClosePaneOutcome::Removed { pane_id: active_pane })
     }
 
     fn remove_exited_pane(
@@ -408,13 +400,13 @@ impl SessionLayout {
             })
     }
 
-    fn active_tab(&self) -> rootcause::Result<&SessionTab> {
+    fn active_tab(&self) -> rootcause::Result<&Tab> {
         self.tabs.iter().find(|tab| tab.id == self.active_tab).ok_or_else(|| {
             report!("muxr active tab is missing from server layout").attach(format!("active_tab={}", self.active_tab))
         })
     }
 
-    fn active_tab_mut(&mut self) -> rootcause::Result<&mut SessionTab> {
+    fn active_tab_mut(&mut self) -> rootcause::Result<&mut Tab> {
         let active_tab = self.active_tab.clone();
         self.tabs.iter_mut().find(|tab| tab.id == active_tab).ok_or_else(|| {
             report!("muxr active tab is missing from server layout").attach(format!("active_tab={active_tab}"))
@@ -465,7 +457,7 @@ impl SessionLayout {
     }
 
     fn next_pane_number(&self) -> rootcause::Result<u64> {
-        self::next_number(self.tabs.iter().flat_map(SessionTab::pane_ids), "pane-")
+        self::next_number(self.tabs.iter().flat_map(Tab::pane_ids), "pane-")
     }
 }
 
@@ -478,6 +470,12 @@ enum PaneSplitAxis {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(transparent)]
 struct PaneSplitRatio(u16);
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PaneSplitResize {
+    DecreaseFirst,
+    IncreaseFirst,
+}
 
 impl PaneSplitRatio {
     const fn balanced() -> Self {
@@ -538,12 +536,6 @@ impl<'de> Deserialize<'de> for PaneSplitRatio {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum PaneSplitResize {
-    DecreaseFirst,
-    IncreaseFirst,
-}
-
 impl PaneSplitResize {
     const fn for_direction(axis: PaneSplitAxis, direction: PaneResizeDirection) -> Option<Self> {
         match (axis, direction) {
@@ -558,9 +550,9 @@ impl PaneSplitResize {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct ClosePaneOutcome {
-    final_pane: bool,
-    pane_id: PaneId,
+enum ClosePaneOutcome {
+    Final { pane_id: PaneId },
+    Removed { pane_id: PaneId },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -569,21 +561,37 @@ enum PaneExitOutcome {
     Removed,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PaneFocusDirection {
+    Down,
+    Left,
+    Right,
+    Up,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PaneResizeDirection {
+    Down,
+    Left,
+    Right,
+    Up,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-struct SessionTab {
+struct Tab {
     active_pane: PaneId,
     id: TabId,
     pane_tree: PaneNode,
     title: String,
 }
 
-impl SessionTab {
+impl Tab {
     fn snapshot(&self) -> rootcause::Result<TabSnapshot> {
-        let panes = self.panes().into_iter().map(SessionPane::snapshot).collect();
+        let panes = self.panes().into_iter().map(Pane::snapshot).collect();
         TabSnapshot::new(self.id.clone(), self.title.clone(), self.active_pane.clone(), panes)
     }
 
-    fn split_active_pane(&mut self, new_pane: &SessionPane, split_axis: PaneSplitAxis) -> rootcause::Result<()> {
+    fn split_active_pane(&mut self, new_pane: &Pane, split_axis: PaneSplitAxis) -> rootcause::Result<()> {
         if !self.pane_tree.split_pane(&self.active_pane, new_pane, split_axis)? {
             return Err(report!("muxr active pane is missing from server layout")
                 .attach(format!("active_pane={}", self.active_pane)));
@@ -683,7 +691,7 @@ impl SessionTab {
         ids
     }
 
-    fn panes(&self) -> Vec<&SessionPane> {
+    fn panes(&self) -> Vec<&Pane> {
         let mut panes = Vec::new();
         self.pane_tree.append_panes(&mut panes);
         panes
@@ -712,7 +720,7 @@ impl SessionTab {
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum PaneNode {
     Leaf {
-        pane: SessionPane,
+        pane: Pane,
     },
     Split {
         axis: PaneSplitAxis,
@@ -723,23 +731,18 @@ enum PaneNode {
 }
 
 impl PaneNode {
-    const fn leaf(pane: SessionPane) -> Self {
+    const fn leaf(pane: Pane) -> Self {
         Self::Leaf { pane }
     }
 
-    fn split_pane(
-        &mut self,
-        pane_id: &PaneId,
-        new_pane: &SessionPane,
-        split_axis: PaneSplitAxis,
-    ) -> rootcause::Result<bool> {
+    fn split_pane(&mut self, pane_id: &PaneId, new_pane: &Pane, split_axis: PaneSplitAxis) -> rootcause::Result<bool> {
         match self {
             Self::Leaf { pane } if pane.id == *pane_id => {
-                let old_pane = std::mem::replace(self, Self::leaf(new_pane.clone()));
+                let old_pane = pane.clone();
                 *self = Self::Split {
                     axis: split_axis,
                     first_ratio: PaneSplitRatio::balanced(),
-                    first: Box::new(old_pane),
+                    first: Box::new(Self::leaf(old_pane)),
                     second: Box::new(Self::leaf(new_pane.clone())),
                 };
                 Ok(true)
@@ -803,7 +806,7 @@ impl PaneNode {
             Self::Split { first, second, .. } if first.contains_pane(pane_id) => {
                 if first.pane_count() == 1 {
                     let replacement = (**second).clone();
-                    let fallback_pane = replacement.first_pane_id()?;
+                    let fallback_pane = replacement.first_pane_id();
                     *self = replacement;
                     Ok(Some(fallback_pane))
                 } else {
@@ -813,7 +816,7 @@ impl PaneNode {
             Self::Split { first, second, .. } if second.contains_pane(pane_id) => {
                 if second.pane_count() == 1 {
                     let replacement = (**first).clone();
-                    let fallback_pane = replacement.first_pane_id()?;
+                    let fallback_pane = replacement.first_pane_id();
                     *self = replacement;
                     Ok(Some(fallback_pane))
                 } else {
@@ -838,14 +841,14 @@ impl PaneNode {
         }
     }
 
-    fn first_pane_id(&self) -> rootcause::Result<PaneId> {
+    fn first_pane_id(&self) -> PaneId {
         match self {
-            Self::Leaf { pane } => Ok(pane.id.clone()),
+            Self::Leaf { pane } => pane.id.clone(),
             Self::Split { first, .. } => first.first_pane_id(),
         }
     }
 
-    fn pane_mut(&mut self, pane_id: &PaneId) -> Option<&mut SessionPane> {
+    fn pane_mut(&mut self, pane_id: &PaneId) -> Option<&mut Pane> {
         match self {
             Self::Leaf { pane } if pane.id == *pane_id => Some(pane),
             Self::Leaf { .. } => None,
@@ -863,7 +866,7 @@ impl PaneNode {
         }
     }
 
-    fn append_panes<'a>(&'a self, panes: &mut Vec<&'a SessionPane>) {
+    fn append_panes<'a>(&'a self, panes: &mut Vec<&'a Pane>) {
         match self {
             Self::Leaf { pane } => panes.push(pane),
             Self::Split { first, second, .. } => {
@@ -947,7 +950,7 @@ impl PaneNode {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-struct SessionPane {
+struct Pane {
     command_label: String,
     cwd: String,
     exit_status: Option<PtyExitStatus>,
@@ -958,7 +961,7 @@ struct SessionPane {
     title: String,
 }
 
-impl SessionPane {
+impl Pane {
     fn snapshot(&self) -> PaneSnapshot {
         PaneSnapshot::new(self.id.clone(), self.title.clone())
     }
@@ -969,7 +972,7 @@ struct PersistedLayout<'a> {
     version: u16,
     session: &'a SessionName,
     active_tab: &'a TabId,
-    tabs: &'a [SessionTab],
+    tabs: &'a [Tab],
 }
 
 #[derive(Deserialize)]
@@ -977,7 +980,7 @@ struct PersistedLayoutOwned {
     version: u16,
     session: SessionName,
     active_tab: TabId,
-    tabs: Vec<SessionTab>,
+    tabs: Vec<Tab>,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -1087,6 +1090,26 @@ impl PaneRegion {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ClientCommand {
+    ClosePane,
+    EnterResizeMode,
+    ExitMode,
+    FocusPane(PaneFocusDirection),
+    ResizePane(PaneResizeDirection),
+    SplitPane(PaneSplitAxis),
+    Tab(TabCommand),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TabCommand {
+    Create,
+    FocusNext,
+    FocusPrevious,
+    MoveNext,
+    MovePrevious,
+}
+
 struct PaneRuntime {
     id: PaneId,
     session: PtySession,
@@ -1097,7 +1120,7 @@ struct PaneRuntimes {
 }
 
 impl PaneRuntimes {
-    fn spawn_for_layout(config: &ServerConfig, layout: &SessionLayout, size: &TerminalSize) -> rootcause::Result<Self> {
+    fn spawn_for_layout(config: &ServerConfig, layout: &Layout, size: &TerminalSize) -> rootcause::Result<Self> {
         let mut panes = Vec::new();
         for tab in &layout.tabs {
             for pane in tab.panes() {
@@ -1187,7 +1210,7 @@ impl RenderComposer {
 
     fn render_baseline(
         &mut self,
-        layout: &SessionLayout,
+        layout: &Layout,
         runtimes: &PaneRuntimes,
         size: &TerminalSize,
     ) -> rootcause::Result<RenderUpdate> {
@@ -1200,11 +1223,11 @@ impl RenderComposer {
 
     fn render_diff(
         &mut self,
-        layout: &SessionLayout,
+        layout: &Layout,
         runtimes: &PaneRuntimes,
         size: &TerminalSize,
     ) -> rootcause::Result<Option<RenderUpdate>> {
-        let Some(previous) = self.last_sent.clone() else {
+        let Some(previous) = self.last_sent.as_ref() else {
             return Ok(Some(self.render_baseline(layout, runtimes, size)?));
         };
         let mut frame = Self::current_frame(layout, runtimes, size)?;
@@ -1212,25 +1235,28 @@ impl RenderComposer {
             return Ok(Some(self.render_baseline(layout, runtimes, size)?));
         }
 
-        let rows = previous
-            .rows
-            .iter()
-            .zip(frame.rows.iter())
-            .filter(|(previous_row, current_row)| previous_row != current_row)
-            .map(|(_previous_row, current_row)| current_row.clone())
-            .collect::<Vec<_>>();
-        if rows.is_empty() && frame.cursor == previous.cursor {
+        let (previous_seq, cursor_changed, rows) = {
+            let rows = previous
+                .rows
+                .iter()
+                .zip(frame.rows.iter())
+                .filter(|(previous_row, current_row)| previous_row != current_row)
+                .map(|(_previous_row, current_row)| current_row.clone())
+                .collect::<Vec<_>>();
+            (previous.seq, frame.cursor != previous.cursor, rows)
+        };
+        if rows.is_empty() && !cursor_changed {
             return Ok(None);
         }
 
         frame.seq = self.next_sequence()?;
-        let diff = RenderDiff::new(previous.seq, frame.seq, frame.size.clone(), frame.cursor.clone(), rows)?;
+        let diff = RenderDiff::new(previous_seq, frame.seq, frame.size.clone(), frame.cursor.clone(), rows)?;
         self.last_sent = Some(frame);
         Ok(Some(RenderUpdate::Diff(diff)))
     }
 
     fn current_frame(
-        layout: &SessionLayout,
+        layout: &Layout,
         runtimes: &PaneRuntimes,
         size: &TerminalSize,
     ) -> rootcause::Result<CompositeFrame> {
@@ -1332,12 +1358,7 @@ pub fn serve_session(session: &SessionName) -> rootcause::Result<()> {
     })
 }
 
-/// Run a muxr Unix socket server for one session.
-///
-/// # Errors
-/// - Session directories, pid file, Unix listener, or PTY setup fails.
-/// - Accepted client connections fail protocol handling.
-pub fn serve(config: &ServerConfig) -> rootcause::Result<()> {
+fn serve(config: &ServerConfig) -> rootcause::Result<()> {
     self::run_async(self::serve_async(config))
 }
 
@@ -1358,7 +1379,7 @@ async fn serve_async(config: &ServerConfig) -> rootcause::Result<()> {
     let metadata = SessionMetadata::new(config)?;
     let layout = match self::load_layout_metadata(&config.paths, config)? {
         Some(layout) => layout,
-        None => SessionLayout::initial(config, metadata)?,
+        None => Layout::initial(config, metadata)?,
     };
     let runtimes = PaneRuntimes::spawn_for_layout(config, &layout, &initial_size)?;
     let layout = Arc::new(Mutex::new(layout));
@@ -1372,8 +1393,10 @@ async fn serve_async(config: &ServerConfig) -> rootcause::Result<()> {
     let mut handles = Vec::new();
 
     loop {
-        if self::reap_exited_panes(&config.paths, &layout, &runtimes)?.final_pane_exhausted
-            || self::lock_mutex(runtimes.as_ref(), "pane runtimes")?.is_empty()
+        if matches!(
+            self::reap_exited_panes(&config.paths, &layout, &runtimes)?,
+            ReapResult::Final
+        ) || self::lock_mutex(runtimes.as_ref(), "pane runtimes")?.is_empty()
         {
             break;
         }
@@ -1475,7 +1498,7 @@ fn validate_private_mode(path: &Path, label: &str, expected_mode: u32) -> rootca
     Ok(())
 }
 
-fn write_layout_metadata(paths: &SessionPaths, layout: &SessionLayout) -> rootcause::Result<()> {
+fn write_layout_metadata(paths: &SessionPaths, layout: &Layout) -> rootcause::Result<()> {
     let layout = PersistedLayout {
         version: LAYOUT_VERSION,
         session: &layout.session,
@@ -1488,7 +1511,7 @@ fn write_layout_metadata(paths: &SessionPaths, layout: &SessionLayout) -> rootca
     Ok(())
 }
 
-fn load_layout_metadata(paths: &SessionPaths, config: &ServerConfig) -> rootcause::Result<Option<SessionLayout>> {
+fn load_layout_metadata(paths: &SessionPaths, config: &ServerConfig) -> rootcause::Result<Option<Layout>> {
     let encoded = match fs::read(&paths.layout) {
         Ok(encoded) => encoded,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -1497,7 +1520,7 @@ fn load_layout_metadata(paths: &SessionPaths, config: &ServerConfig) -> rootcaus
     let persisted: PersistedLayoutOwned =
         serde_json::from_slice(&encoded).context("failed to parse muxr layout metadata")?;
 
-    Ok(Some(SessionLayout::from_persisted(config, persisted)?))
+    Ok(Some(Layout::from_persisted(config, persisted)?))
 }
 
 fn next_number<'a>(ids: impl Iterator<Item = &'a str>, prefix: &str) -> rootcause::Result<u64> {
@@ -1626,10 +1649,11 @@ const fn border_style() -> RenderStyle {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct ReapResult {
-    final_pane_exhausted: bool,
-    layout_changed: bool,
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ReapResult {
+    Final,
+    NoExitedPanes,
+    Removed,
 }
 
 struct AttachedPtySink {
@@ -1639,7 +1663,7 @@ struct AttachedPtySink {
 
 struct AttachedSessionState<'a> {
     config: &'a ServerConfig,
-    layout: &'a Mutex<SessionLayout>,
+    layout: &'a Mutex<Layout>,
     pty_event_sender: &'a mpsc::SyncSender<PtyEvent>,
     render_composer: &'a mut RenderComposer,
     runtimes: &'a Mutex<PaneRuntimes>,
@@ -1676,16 +1700,8 @@ fn attach_pane_sink(
     })
 }
 
-fn remove_pane_sink(sink_guards: &mut Vec<AttachedPtySink>, pane_id: &PaneId) {
-    sink_guards.retain(|sink| sink.pane_id != *pane_id);
-}
-
-fn pane_sinks_are_current(sink_guards: &[AttachedPtySink]) -> bool {
-    sink_guards.iter().all(|sink| sink.guard.is_output_current())
-}
-
 fn resize_panes_to_layout(
-    layout: &Mutex<SessionLayout>,
+    layout: &Mutex<Layout>,
     runtimes: &Mutex<PaneRuntimes>,
     size: &TerminalSize,
 ) -> rootcause::Result<()> {
@@ -1699,7 +1715,7 @@ fn resize_panes_to_layout(
 
 fn reap_exited_panes(
     paths: &SessionPaths,
-    layout: &Mutex<SessionLayout>,
+    layout: &Mutex<Layout>,
     runtimes: &Mutex<PaneRuntimes>,
 ) -> rootcause::Result<ReapResult> {
     let exited_panes = {
@@ -1707,17 +1723,17 @@ fn reap_exited_panes(
         runtimes.exited_panes()?
     };
     if exited_panes.is_empty() {
-        return Ok(ReapResult::default());
+        return Ok(ReapResult::NoExitedPanes);
     }
 
     let exited_at = self::unix_timestamp_millis()?;
-    let mut final_pane_exhausted = false;
+    let mut result = ReapResult::Removed;
     {
         let mut layout = self::lock_mutex(layout, "layout")?;
         let mut removed_panes = Vec::new();
         for (pane_id, exit_status) in &exited_panes {
             match layout.remove_exited_pane(pane_id, exited_at, exit_status.clone())? {
-                PaneExitOutcome::Final => final_pane_exhausted = true,
+                PaneExitOutcome::Final => result = ReapResult::Final,
                 PaneExitOutcome::Removed => {}
             }
             removed_panes.push(pane_id.clone());
@@ -1732,16 +1748,13 @@ fn reap_exited_panes(
         drop(runtimes);
     }
 
-    Ok(ReapResult {
-        final_pane_exhausted,
-        layout_changed: true,
-    })
+    Ok(result)
 }
 
 fn spawn_client_task(
     config: &ServerConfig,
     active_client: &Arc<AtomicBool>,
-    layout: &Arc<Mutex<SessionLayout>>,
+    layout: &Arc<Mutex<Layout>>,
     runtimes: &Arc<Mutex<PaneRuntimes>>,
     connection: ServerConnection,
     handles: &mut Vec<tokio::task::JoinHandle<rootcause::Result<()>>>,
@@ -1759,19 +1772,19 @@ async fn handle_client(
     config: &ServerConfig,
     mut connection: ServerConnection,
     active_client: &AtomicBool,
-    layout: &Mutex<SessionLayout>,
+    layout: &Mutex<Layout>,
     runtimes: &Mutex<PaneRuntimes>,
 ) -> rootcause::Result<()> {
     let Ok(Ok(Some(request))) = tokio::time::timeout(CLIENT_HANDSHAKE_TIMEOUT, connection.recv_request()).await else {
         return Ok(());
     };
 
-    let hello = match request {
+    let attach_request = match request {
         ClientRequest::Ping => {
             let _sent = self::send_connection_event_with_timeout(&mut connection, &ServerEvent::Pong).await?;
             return Ok(());
         }
-        ClientRequest::Hello(hello) => hello,
+        ClientRequest::Attach(attach_request) => attach_request,
         request @ (ClientRequest::Pong
         | ClientRequest::Detach
         | ClientRequest::RenderResync
@@ -1783,17 +1796,17 @@ async fn handle_client(
         | ClientRequest::FocusPaneAt(_)) => {
             let _sent = self::send_connection_event_with_timeout(
                 &mut connection,
-                &ServerEvent::Error(ServerError::unexpected_request(&request)),
+                &ServerEvent::Error(ServerError::unexpected_request(request)),
             )
             .await?;
             return Ok(());
         }
     };
 
-    if hello.protocol_version != PROTOCOL_VERSION {
+    if attach_request.protocol_version != PROTOCOL_VERSION {
         let _sent = self::send_connection_event_with_timeout(
             &mut connection,
-            &ServerEvent::Error(ServerError::protocol_version_mismatch(hello.protocol_version)),
+            &ServerEvent::Error(ServerError::protocol_version_mismatch(attach_request.protocol_version)),
         )
         .await?;
         return Ok(());
@@ -1802,29 +1815,32 @@ async fn handle_client(
     if active_client.swap(true, Ordering::AcqRel) {
         let _sent = self::send_connection_event_with_timeout(
             &mut connection,
-            &ServerEvent::Error(ServerError::client_already_attached()),
+            &ServerEvent::Error(ServerError::ClientAlreadyAttached),
         )
         .await?;
         return Ok(());
     }
     let _client_slot_guard = ClientSlotGuard { active_client };
 
-    if hello.session != config.session {
+    if attach_request.session != config.session {
         let _sent = self::send_connection_event_with_timeout(
             &mut connection,
-            &ServerEvent::Error(ServerError::session_mismatch(&config.session, &hello.session)),
+            &ServerEvent::Error(ServerError::SessionMismatch {
+                expected: config.session.clone(),
+                actual: attach_request.session.clone(),
+            }),
         )
         .await?;
         return Ok(());
     }
 
-    self::resize_panes_to_layout(layout, runtimes, &hello.terminal_size)?;
+    self::resize_panes_to_layout(layout, runtimes, &attach_request.terminal_size)?;
     let (pty_event_sender, pty_event_receiver) = mpsc::sync_channel(OUTPUT_EVENT_CHANNEL_LIMIT);
     let mut sink_guards = self::attach_pane_sinks(runtimes, &pty_event_sender)?;
     let (mut request_reader, mut event_writer) = connection.split();
     let (layout_snapshot, mut render_composer, render_baseline) =
-        self::initial_attached_render(layout, runtimes, &hello.terminal_size)?;
-    if !self::send_attached_hello_and_baseline(&mut event_writer, config, layout_snapshot, render_baseline).await? {
+        self::initial_attached_render(layout, runtimes, &attach_request.terminal_size)?;
+    if !self::send_attached_response_and_baseline(&mut event_writer, layout_snapshot, render_baseline).await? {
         return Ok(());
     }
 
@@ -1843,7 +1859,7 @@ async fn handle_client(
         render_composer: &mut render_composer,
         runtimes,
         sink_guards: &mut sink_guards,
-        terminal_size: hello.terminal_size,
+        terminal_size: attach_request.terminal_size,
     };
     let result = self::run_attached_client(
         &mut request_reader,
@@ -1863,7 +1879,7 @@ async fn handle_client(
 }
 
 fn initial_attached_render(
-    layout: &Mutex<SessionLayout>,
+    layout: &Mutex<Layout>,
     runtimes: &Mutex<PaneRuntimes>,
     terminal_size: &TerminalSize,
 ) -> rootcause::Result<(LayoutSnapshot, RenderComposer, RenderUpdate)> {
@@ -1877,18 +1893,15 @@ fn initial_attached_render(
     Ok((layout_snapshot, render_composer, render_baseline))
 }
 
-async fn send_attached_hello_and_baseline(
+async fn send_attached_response_and_baseline(
     event_writer: &mut ServerEventWriter,
-    config: &ServerConfig,
     layout: LayoutSnapshot,
     render_baseline: RenderUpdate,
 ) -> rootcause::Result<bool> {
     if !self::send_writer_event_with_timeout(
         event_writer,
-        &ServerEvent::Hello(ServerHello {
+        &ServerEvent::Attached(AttachAccepted {
             protocol_version: PROTOCOL_VERSION,
-            session: config.session.clone(),
-            server_pid: ServerPid::new(std::process::id())?,
             layout,
         }),
     )
@@ -1922,7 +1935,7 @@ async fn run_attached_client(
     loop {
         // A dropped PTY sink means live output is already stale; release the
         // active slot instead of draining old frames into a slow client.
-        if !self::pane_sinks_are_current(state.sink_guards) {
+        if !state.sink_guards.iter().all(|sink| sink.guard.is_output_current()) {
             return Ok(());
         }
         if let Some(started_at) = heartbeat_started_at
@@ -2012,7 +2025,7 @@ async fn handle_pty_event(
 ) -> rootcause::Result<bool> {
     match event {
         Some(PtyEvent::Exited) => Ok(!self::handle_reaped_panes(state, event_writer).await?),
-        Some(PtyEvent::Output) => {
+        Some(PtyEvent::OutputReady) => {
             *render_dirty = true;
             Ok(true)
         }
@@ -2047,7 +2060,7 @@ async fn flush_render_diff(
 
 async fn send_layout_and_baseline(
     event_writer: &mut ServerEventWriter,
-    layout: &Mutex<SessionLayout>,
+    layout: &Mutex<Layout>,
     runtimes: &Mutex<PaneRuntimes>,
     render_composer: &mut RenderComposer,
     terminal_size: &TerminalSize,
@@ -2070,21 +2083,18 @@ async fn handle_reaped_panes(
     state: &mut AttachedSessionState<'_>,
     event_writer: &mut ServerEventWriter,
 ) -> rootcause::Result<bool> {
-    let reap = self::reap_exited_panes(&state.config.paths, state.layout, state.runtimes)?;
-    if reap.final_pane_exhausted {
-        return Ok(true);
-    }
-    if reap.layout_changed {
-        let live_panes = {
-            let runtimes = self::lock_mutex(state.runtimes, "pane runtimes")?;
-            runtimes.panes.iter().map(|pane| pane.id.clone()).collect::<Vec<_>>()
-        };
-        state.sink_guards.retain(|sink| live_panes.contains(&sink.pane_id));
-        if !self::resize_panes_and_render(event_writer, state).await? {
-            return Ok(true);
+    match self::reap_exited_panes(&state.config.paths, state.layout, state.runtimes)? {
+        ReapResult::Final => Ok(true),
+        ReapResult::NoExitedPanes => Ok(false),
+        ReapResult::Removed => {
+            let live_panes = {
+                let runtimes = self::lock_mutex(state.runtimes, "pane runtimes")?;
+                runtimes.panes.iter().map(|pane| pane.id.clone()).collect::<Vec<_>>()
+            };
+            state.sink_guards.retain(|sink| live_panes.contains(&sink.pane_id));
+            Ok(!self::resize_panes_and_render(event_writer, state).await?)
         }
     }
-    Ok(false)
 }
 
 async fn resize_panes_and_render(
@@ -2190,10 +2200,10 @@ async fn handle_attached_request(
             *heartbeat_started_at = None;
             Ok(true)
         }
-        Some(request @ ClientRequest::Hello(_)) => {
+        Some(request @ ClientRequest::Attach(_)) => {
             let _sent = self::send_writer_event_with_timeout(
                 event_writer,
-                &ServerEvent::Error(ServerError::unexpected_request(&request)),
+                &ServerEvent::Error(ServerError::unexpected_request(request)),
             )
             .await?;
             Ok(false)
@@ -2226,11 +2236,7 @@ async fn handle_command_request(
     state: &mut AttachedSessionState<'_>,
 ) -> rootcause::Result<bool> {
     match command {
-        ClientCommand::CreateTab
-        | ClientCommand::FocusPreviousTab
-        | ClientCommand::FocusNextTab
-        | ClientCommand::MoveTabPrevious
-        | ClientCommand::MoveTabNext => {
+        ClientCommand::Tab(command) => {
             if let Some(pane_id) = self::handle_tab_command(
                 command,
                 state.config,
@@ -2246,9 +2252,9 @@ async fn handle_command_request(
             }
             self::resize_panes_and_render(event_writer, state).await
         }
-        ClientCommand::SplitPaneHorizontal | ClientCommand::SplitPaneVertical => {
+        ClientCommand::SplitPane(split_axis) => {
             let pane_id = self::handle_split_pane_command(
-                command,
+                split_axis,
                 state.config,
                 state.layout,
                 state.runtimes,
@@ -2263,12 +2269,18 @@ async fn handle_command_request(
         }
         ClientCommand::ClosePane => {
             let outcome = self::handle_close_pane_command(state.config, state.layout, state.runtimes)?;
-            self::remove_pane_sink(state.sink_guards, &outcome.pane_id);
-            if outcome.final_pane {
-                let _sent = self::send_writer_event_with_timeout(event_writer, &ServerEvent::Detached).await?;
-                return Ok(false);
+            match &outcome {
+                ClosePaneOutcome::Final { pane_id } | ClosePaneOutcome::Removed { pane_id } => {
+                    state.sink_guards.retain(|sink| &sink.pane_id != pane_id);
+                }
             }
-            self::resize_panes_and_render(event_writer, state).await
+            match outcome {
+                ClosePaneOutcome::Final { .. } => {
+                    let _sent = self::send_writer_event_with_timeout(event_writer, &ServerEvent::Detached).await?;
+                    Ok(false)
+                }
+                ClosePaneOutcome::Removed { .. } => self::resize_panes_and_render(event_writer, state).await,
+            }
         }
         ClientCommand::ResizePane(direction) => {
             if !self::handle_resize_pane_command(direction, state.config, state.layout)? {
@@ -2293,7 +2305,7 @@ async fn handle_command_request(
     }
 }
 
-fn active_pane_handle(layout: &Mutex<SessionLayout>, runtimes: &Mutex<PaneRuntimes>) -> rootcause::Result<PtyHandle> {
+fn active_pane_handle(layout: &Mutex<Layout>, runtimes: &Mutex<PaneRuntimes>) -> rootcause::Result<PtyHandle> {
     let active_pane = {
         let layout = self::lock_mutex(layout, "layout")?;
         layout.active_pane_id()?
@@ -2302,46 +2314,63 @@ fn active_pane_handle(layout: &Mutex<SessionLayout>, runtimes: &Mutex<PaneRuntim
     runtimes.handle(&active_pane)
 }
 
-fn handle_tab_command(
-    command: ClientCommand,
+fn spawn_pane_or_restore_layout(
+    layout: &mut Layout,
+    previous_layout: Layout,
+    pane_id: PaneId,
     config: &ServerConfig,
-    layout: &Mutex<SessionLayout>,
+    runtimes: &Mutex<PaneRuntimes>,
+    terminal_size: &TerminalSize,
+) -> rootcause::Result<PaneId> {
+    // New panes update layout and runtimes together; rollback the layout if PTY spawn fails so render cannot see
+    // pane metadata without a runtime.
+    let spawn_result = match self::lock_mutex(runtimes, "pane runtimes") {
+        Ok(mut runtimes) => runtimes.spawn_pane(pane_id.clone(), config, terminal_size),
+        Err(error) => Err(error),
+    };
+    if let Err(error) = spawn_result {
+        *layout = previous_layout;
+        return Err(error).attach("rolled back muxr layout after pane spawn failure");
+    }
+    Ok(pane_id)
+}
+
+fn handle_tab_command(
+    command: TabCommand,
+    config: &ServerConfig,
+    layout: &Mutex<Layout>,
     runtimes: &Mutex<PaneRuntimes>,
     terminal_size: &TerminalSize,
 ) -> rootcause::Result<Option<PaneId>> {
     let mut layout = self::lock_mutex(layout, "layout")?;
     let pane_id = match command {
-        ClientCommand::CreateTab => {
+        TabCommand::Create => {
+            let previous_layout = layout.clone();
             let pane_id = layout.create_tab(SessionMetadata::new(config)?)?;
-            let mut runtimes = self::lock_mutex(runtimes, "pane runtimes")?;
-            runtimes.spawn_pane(pane_id.clone(), config, terminal_size)?;
-            drop(runtimes);
-            Some(pane_id)
+            Some(self::spawn_pane_or_restore_layout(
+                &mut layout,
+                previous_layout,
+                pane_id,
+                config,
+                runtimes,
+                terminal_size,
+            )?)
         }
-        ClientCommand::FocusPreviousTab => {
+        TabCommand::FocusPrevious => {
             layout.focus_previous_tab()?;
             None
         }
-        ClientCommand::FocusNextTab => {
+        TabCommand::FocusNext => {
             layout.focus_next_tab()?;
             None
         }
-        ClientCommand::MoveTabPrevious => {
+        TabCommand::MovePrevious => {
             layout.move_active_tab_previous()?;
             None
         }
-        ClientCommand::MoveTabNext => {
+        TabCommand::MoveNext => {
             layout.move_active_tab_next()?;
             None
-        }
-        command @ (ClientCommand::ClosePane
-        | ClientCommand::EnterResizeMode
-        | ClientCommand::ExitMode
-        | ClientCommand::FocusPane(_)
-        | ClientCommand::ResizePane(_)
-        | ClientCommand::SplitPaneHorizontal
-        | ClientCommand::SplitPaneVertical) => {
-            return Err(report!("muxr non-tab command reached tab handler").attach(format!("{command:?}")));
         }
     };
     self::write_layout_metadata(&config.paths, &layout)?;
@@ -2350,35 +2379,17 @@ fn handle_tab_command(
 }
 
 fn handle_split_pane_command(
-    command: ClientCommand,
+    split_axis: PaneSplitAxis,
     config: &ServerConfig,
-    layout: &Mutex<SessionLayout>,
+    layout: &Mutex<Layout>,
     runtimes: &Mutex<PaneRuntimes>,
     terminal_size: &TerminalSize,
 ) -> rootcause::Result<PaneId> {
-    let split_axis = match command {
-        ClientCommand::SplitPaneHorizontal => PaneSplitAxis::Horizontal,
-        ClientCommand::SplitPaneVertical => PaneSplitAxis::Vertical,
-        command @ (ClientCommand::ClosePane
-        | ClientCommand::CreateTab
-        | ClientCommand::EnterResizeMode
-        | ClientCommand::ExitMode
-        | ClientCommand::FocusPane(_)
-        | ClientCommand::FocusNextTab
-        | ClientCommand::FocusPreviousTab
-        | ClientCommand::MoveTabNext
-        | ClientCommand::MoveTabPrevious
-        | ClientCommand::ResizePane(_)) => {
-            return Err(report!("muxr non-split command reached split handler").attach(format!("{command:?}")));
-        }
-    };
     let mut layout = self::lock_mutex(layout, "layout")?;
+    let previous_layout = layout.clone();
     let pane_id = layout.split_active_pane(SessionMetadata::new(config)?, split_axis)?;
-    {
-        let mut runtimes = self::lock_mutex(runtimes, "pane runtimes")?;
-        runtimes.spawn_pane(pane_id.clone(), config, terminal_size)?;
-        drop(runtimes);
-    }
+    let pane_id =
+        self::spawn_pane_or_restore_layout(&mut layout, previous_layout, pane_id, config, runtimes, terminal_size)?;
     self::write_layout_metadata(&config.paths, &layout)?;
     drop(layout);
     Ok(pane_id)
@@ -2386,15 +2397,18 @@ fn handle_split_pane_command(
 
 fn handle_close_pane_command(
     config: &ServerConfig,
-    layout: &Mutex<SessionLayout>,
+    layout: &Mutex<Layout>,
     runtimes: &Mutex<PaneRuntimes>,
 ) -> rootcause::Result<ClosePaneOutcome> {
     let exited_at = self::unix_timestamp_millis()?;
     let mut layout = self::lock_mutex(layout, "layout")?;
     let outcome = layout.close_active_pane(exited_at)?;
+    let pane_id = match &outcome {
+        ClosePaneOutcome::Final { pane_id } | ClosePaneOutcome::Removed { pane_id } => pane_id.clone(),
+    };
     {
         let mut runtimes = self::lock_mutex(runtimes, "pane runtimes")?;
-        runtimes.remove(&outcome.pane_id);
+        runtimes.remove(&pane_id);
         drop(runtimes);
     }
     self::write_layout_metadata(&config.paths, &layout)?;
@@ -2405,7 +2419,7 @@ fn handle_close_pane_command(
 fn handle_resize_pane_command(
     direction: PaneResizeDirection,
     config: &ServerConfig,
-    layout: &Mutex<SessionLayout>,
+    layout: &Mutex<Layout>,
 ) -> rootcause::Result<bool> {
     let mut layout = self::lock_mutex(layout, "layout")?;
     let resized = layout.resize_active_pane(direction)?;
@@ -2419,7 +2433,7 @@ fn handle_resize_pane_command(
 fn handle_focus_pane_command(
     direction: PaneFocusDirection,
     config: &ServerConfig,
-    layout: &Mutex<SessionLayout>,
+    layout: &Mutex<Layout>,
     terminal_size: &TerminalSize,
 ) -> rootcause::Result<bool> {
     let mut layout = self::lock_mutex(layout, "layout")?;
@@ -2434,7 +2448,7 @@ fn handle_focus_pane_command(
 fn handle_focus_pane_at_request(
     position: ClientMousePosition,
     config: &ServerConfig,
-    layout: &Mutex<SessionLayout>,
+    layout: &Mutex<Layout>,
     terminal_size: &TerminalSize,
 ) -> rootcause::Result<bool> {
     let mut layout = self::lock_mutex(layout, "layout")?;
@@ -2449,7 +2463,7 @@ fn handle_focus_pane_at_request(
 fn handle_scroll_pane_at_request(
     position: ClientMousePosition,
     direction: PaneScrollDirection,
-    layout: &Mutex<SessionLayout>,
+    layout: &Mutex<Layout>,
     runtimes: &Mutex<PaneRuntimes>,
     terminal_size: &TerminalSize,
 ) -> rootcause::Result<bool> {
@@ -2476,17 +2490,21 @@ const fn resolve_key(input_mode: &mut ServerInputMode, key: &ClientKey) -> KeyRe
 
 const fn resolve_normal_key(input_mode: &mut ServerInputMode, key: &ClientKey) -> KeyResolution {
     match (&key.code, key.modifiers) {
-        (ClientKeyCode::Char('E'), ClientKeyModifiers::SHIFT_ALT) => KeyResolution::Command(ClientCommand::CreateTab),
+        (ClientKeyCode::Char('E'), ClientKeyModifiers::SHIFT_ALT) => {
+            KeyResolution::Command(ClientCommand::Tab(TabCommand::Create))
+        }
         (ClientKeyCode::Char('P'), ClientKeyModifiers::SHIFT_ALT) => {
-            KeyResolution::Command(ClientCommand::FocusPreviousTab)
+            KeyResolution::Command(ClientCommand::Tab(TabCommand::FocusPrevious))
         }
         (ClientKeyCode::Char('N'), ClientKeyModifiers::SHIFT_ALT) => {
-            KeyResolution::Command(ClientCommand::FocusNextTab)
+            KeyResolution::Command(ClientCommand::Tab(TabCommand::FocusNext))
         }
         (ClientKeyCode::Char('p'), ClientKeyModifiers::CTRL_ALT) => {
-            KeyResolution::Command(ClientCommand::MoveTabPrevious)
+            KeyResolution::Command(ClientCommand::Tab(TabCommand::MovePrevious))
         }
-        (ClientKeyCode::Char('n'), ClientKeyModifiers::CTRL_ALT) => KeyResolution::Command(ClientCommand::MoveTabNext),
+        (ClientKeyCode::Char('n'), ClientKeyModifiers::CTRL_ALT) => {
+            KeyResolution::Command(ClientCommand::Tab(TabCommand::MoveNext))
+        }
         (ClientKeyCode::Char('H'), ClientKeyModifiers::SHIFT_ALT) => {
             KeyResolution::Command(ClientCommand::FocusPane(PaneFocusDirection::Left))
         }
@@ -2500,10 +2518,10 @@ const fn resolve_normal_key(input_mode: &mut ServerInputMode, key: &ClientKey) -
             KeyResolution::Command(ClientCommand::FocusPane(PaneFocusDirection::Right))
         }
         (ClientKeyCode::Char('V'), ClientKeyModifiers::SHIFT_ALT) => {
-            KeyResolution::Command(ClientCommand::SplitPaneVertical)
+            KeyResolution::Command(ClientCommand::SplitPane(PaneSplitAxis::Vertical))
         }
         (ClientKeyCode::Char('D'), ClientKeyModifiers::SHIFT_ALT) => {
-            KeyResolution::Command(ClientCommand::SplitPaneHorizontal)
+            KeyResolution::Command(ClientCommand::SplitPane(PaneSplitAxis::Horizontal))
         }
         (ClientKeyCode::Char('W'), ClientKeyModifiers::SHIFT_ALT) => KeyResolution::Command(ClientCommand::ClosePane),
         (ClientKeyCode::Char('R'), ClientKeyModifiers::SHIFT_ALT) => {
@@ -2597,7 +2615,7 @@ mod tests {
     use std::thread;
     use std::time::Instant;
 
-    use muxr_core::ClientHello;
+    use muxr_core::AttachRequest;
     use muxr_core::ClientKey;
     use muxr_core::ClientKeyCode;
     use muxr_core::ClientKeyModifiers;
@@ -2616,7 +2634,6 @@ mod tests {
     struct AttachedTestClient {
         layout: LayoutSnapshot,
         reader: ClientEventReader,
-        server_pid: ServerPid,
         writer: ClientRequestWriter,
     }
 
@@ -2654,17 +2671,14 @@ mod tests {
             drop(self::open_attached_client(&session, &paths).await?);
             tokio::time::sleep(Duration::from_millis(25)).await;
 
-            pretty_assertions::assert_eq!(
-                self::attach_and_detach(&session, &paths).await?,
-                ServerPid::new(std::process::id())?,
-            );
+            self::attach_and_detach(&session, &paths).await?;
 
             self::join_server(handle)
         })
     }
 
     #[test]
-    fn test_serve_when_reattached_reports_same_server_pid() -> rootcause::Result<()> {
+    fn test_serve_when_reattached_accepts_second_attach() -> rootcause::Result<()> {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
             let (session, paths) = self::session_paths(tempdir.path(), "work")?;
@@ -2672,10 +2686,9 @@ mod tests {
 
             self::wait_for_socket(&paths.socket)?;
 
-            let first_pid = self::attach_and_detach(&session, &paths).await?;
-            let second_pid = self::attach_and_detach(&session, &paths).await?;
+            self::attach_and_detach(&session, &paths).await?;
+            self::attach_and_detach(&session, &paths).await?;
 
-            pretty_assertions::assert_eq!(second_pid, first_pid);
             self::join_server(handle)
         })
     }
@@ -2689,13 +2702,13 @@ mod tests {
 
             self::wait_for_socket(&paths.socket)?;
             let mut connection = self::connect_client(&paths).await?;
-            connection.send_request(&self::hello_request(&session)?).await?;
-            let Some(ServerEvent::Hello(hello)) = connection.recv_event().await? else {
-                return Err(report!("expected server hello"));
+            connection.send_request(&self::attach_request(&session)?).await?;
+            let Some(ServerEvent::Attached(attached)) = connection.recv_event().await? else {
+                return Err(report!("expected server attached response"));
             };
 
-            pretty_assertions::assert_eq!(hello.layout.active_tab.as_ref(), "tab-1");
-            let Some(tab) = hello.layout.tabs.first() else {
+            pretty_assertions::assert_eq!(attached.layout.active_tab.as_ref(), "tab-1");
+            let Some(tab) = attached.layout.tabs.first() else {
                 return Err(report!("expected one tab in layout snapshot"));
             };
             pretty_assertions::assert_eq!(tab.id.as_ref(), "tab-1");
@@ -2722,19 +2735,19 @@ mod tests {
             let mut first_client = self::open_attached_client(&session, &paths).await?;
             let mut second_client = self::connect_client(&paths).await?;
 
-            second_client.send_request(&self::hello_request(&session)?).await?;
+            second_client.send_request(&self::attach_request(&session)?).await?;
             let Some(ServerEvent::Error(error)) = second_client.recv_event().await? else {
                 return Err(report!("expected second attach rejection"));
             };
 
-            assert2::assert!(matches!(error, ServerError::ClientAlreadyAttached(_)));
+            pretty_assertions::assert_eq!(error, ServerError::ClientAlreadyAttached);
             first_client.writer.send_request(&ClientRequest::Detach).await?;
             self::join_server(handle)
         })
     }
 
     #[test]
-    fn test_serve_when_client_never_sends_hello_does_not_occupy_attach_slot() -> rootcause::Result<()> {
+    fn test_serve_when_client_never_sends_attach_request_does_not_occupy_attach_slot() -> rootcause::Result<()> {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
             let (session, paths) = self::session_paths(tempdir.path(), "work")?;
@@ -2743,10 +2756,7 @@ mod tests {
             self::wait_for_socket(&paths.socket)?;
             let idle_client = self::connect_client(&paths).await?;
 
-            pretty_assertions::assert_eq!(
-                self::attach_and_detach(&session, &paths).await?,
-                ServerPid::new(std::process::id())?,
-            );
+            self::attach_and_detach(&session, &paths).await?;
 
             drop(idle_client);
             self::join_server(handle)
@@ -2762,7 +2772,7 @@ mod tests {
 
             self::wait_for_socket(&paths.socket)?;
             let mut stuck_client = self::connect_client(&paths).await?;
-            stuck_client.send_request(&self::hello_request(&session)?).await?;
+            stuck_client.send_request(&self::attach_request(&session)?).await?;
             tokio::time::sleep(
                 CLIENT_HEARTBEAT_INTERVAL
                     + CLIENT_HEARTBEAT_TIMEOUT
@@ -2790,7 +2800,7 @@ mod tests {
 
             let mut connection = self::connect_client(&paths).await?;
             connection
-                .send_request(&ClientRequest::Hello(ClientHello {
+                .send_request(&ClientRequest::Attach(AttachRequest {
                     protocol_version: PROTOCOL_VERSION.saturating_add(1),
                     session,
                     terminal_size: self::terminal_size()?,
@@ -2801,7 +2811,13 @@ mod tests {
                 return Err(report!("expected protocol version mismatch error"));
             };
 
-            assert2::assert!(matches!(error, ServerError::ProtocolVersionMismatch(_)));
+            pretty_assertions::assert_eq!(
+                error,
+                ServerError::ProtocolVersionMismatch {
+                    expected: PROTOCOL_VERSION,
+                    actual: PROTOCOL_VERSION.saturating_add(1),
+                },
+            );
             self::join_server(handle)
         })
     }
@@ -2818,19 +2834,16 @@ mod tests {
             probe.send_request(&ClientRequest::Ping).await?;
             pretty_assertions::assert_eq!(probe.recv_event().await?, Some(ServerEvent::Pong));
 
-            pretty_assertions::assert_eq!(
-                self::attach_and_detach(&session, &paths).await?,
-                ServerPid::new(std::process::id())?,
-            );
+            self::attach_and_detach(&session, &paths).await?;
             self::join_server(handle)
         })
     }
 
     #[test]
-    fn test_session_layout_tab_commands_when_tabs_exist_mutates_active_tab_and_order() -> rootcause::Result<()> {
+    fn test_layout_tab_commands_when_tabs_exist_mutates_active_tab_and_order() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = SessionLayout::initial(&config, self::metadata("sh", 1))?;
+        let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
 
         layout.create_tab(self::metadata("sh", 2))?;
         layout.create_tab(self::metadata("sh", 3))?;
@@ -2850,10 +2863,10 @@ mod tests {
     }
 
     #[test]
-    fn test_session_layout_split_and_close_when_multiple_panes_updates_active_pane() -> rootcause::Result<()> {
+    fn test_layout_split_and_close_when_multiple_panes_updates_active_pane() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = SessionLayout::initial(&config, self::metadata("sh", 1))?;
+        let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
 
         let pane_id = layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
 
@@ -2863,10 +2876,68 @@ mod tests {
 
         let close = layout.close_active_pane(3)?;
 
-        pretty_assertions::assert_eq!(close.pane_id.as_ref(), "pane-2");
-        assert2::assert!(!close.final_pane);
+        pretty_assertions::assert_eq!(
+            close,
+            ClosePaneOutcome::Removed {
+                pane_id: PaneId::new("pane-2")?,
+            },
+        );
         pretty_assertions::assert_eq!(layout.active_tab()?.active_pane.as_ref(), "pane-1");
         pretty_assertions::assert_eq!(self::layout_active_tab_pane_ids(&layout)?, vec!["pane-1"]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_handle_tab_command_when_pane_spawn_fails_restores_layout() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let mut config = self::server_config(tempdir.path(), "work")?;
+        config.shell_command = ShellCommand::new("/bin/muxr-missing-shell");
+        let initial_layout = Layout::initial(&config, self::metadata("sh", 1))?;
+        let layout = Mutex::new(initial_layout.clone());
+        let runtimes = Mutex::new(PaneRuntimes { panes: Vec::new() });
+
+        assert2::assert!(
+            handle_tab_command(
+                TabCommand::Create,
+                &config,
+                &layout,
+                &runtimes,
+                &TerminalSize::new(80, 24)?,
+            )
+            .is_err()
+        );
+
+        let layout = self::lock_mutex(&layout, "layout")?;
+        pretty_assertions::assert_eq!(*layout, initial_layout);
+        pretty_assertions::assert_eq!(self::lock_mutex(&runtimes, "pane runtimes")?.panes.len(), 0);
+        assert2::assert!(!config.paths.layout.exists());
+        Ok(())
+    }
+
+    #[test]
+    fn test_handle_split_pane_command_when_pane_spawn_fails_restores_layout() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let mut config = self::server_config(tempdir.path(), "work")?;
+        config.shell_command = ShellCommand::new("/bin/muxr-missing-shell");
+        let initial_layout = Layout::initial(&config, self::metadata("sh", 1))?;
+        let layout = Mutex::new(initial_layout.clone());
+        let runtimes = Mutex::new(PaneRuntimes { panes: Vec::new() });
+
+        assert2::assert!(
+            handle_split_pane_command(
+                PaneSplitAxis::Vertical,
+                &config,
+                &layout,
+                &runtimes,
+                &TerminalSize::new(80, 24)?,
+            )
+            .is_err()
+        );
+
+        let layout = self::lock_mutex(&layout, "layout")?;
+        pretty_assertions::assert_eq!(*layout, initial_layout);
+        pretty_assertions::assert_eq!(self::lock_mutex(&runtimes, "pane runtimes")?.panes.len(), 0);
+        assert2::assert!(!config.paths.layout.exists());
         Ok(())
     }
 
@@ -2874,14 +2945,14 @@ mod tests {
     #[case::first_pane(ClientMousePosition::new(0, 0), "pane-1", true)]
     #[case::border(ClientMousePosition::new(0, 40), "pane-2", false)]
     #[case::second_pane(ClientMousePosition::new(0, 41), "pane-2", false)]
-    fn test_session_layout_focus_pane_at_when_mouse_position_arrives_updates_active_pane(
+    fn test_layout_focus_pane_at_when_mouse_position_arrives_updates_active_pane(
         #[case] position: ClientMousePosition,
         #[case] expected_active_pane: &str,
         #[case] expected_changed: bool,
     ) -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = SessionLayout::initial(&config, self::metadata("sh", 1))?;
+        let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
 
         pretty_assertions::assert_eq!(
@@ -2896,13 +2967,13 @@ mod tests {
     #[case::first_pane(ClientMousePosition::new(0, 0), Some("pane-1"))]
     #[case::border(ClientMousePosition::new(0, 40), None)]
     #[case::second_pane(ClientMousePosition::new(0, 41), Some("pane-2"))]
-    fn test_session_layout_pane_at_when_mouse_position_arrives_returns_pane_without_focus_change(
+    fn test_layout_pane_at_when_mouse_position_arrives_returns_pane_without_focus_change(
         #[case] position: ClientMousePosition,
         #[case] expected_pane: Option<&str>,
     ) -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = SessionLayout::initial(&config, self::metadata("sh", 1))?;
+        let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
 
         let pane_id = layout.pane_at(&TerminalSize::new(80, 24)?, position)?;
@@ -2917,14 +2988,14 @@ mod tests {
     #[case::right_edge(PaneFocusDirection::Right, "pane-2", false)]
     #[case::up_edge(PaneFocusDirection::Up, "pane-2", false)]
     #[case::down_edge(PaneFocusDirection::Down, "pane-2", false)]
-    fn test_session_layout_focus_pane_direction_when_adjacent_pane_exists_updates_active_pane(
+    fn test_layout_focus_pane_direction_when_adjacent_pane_exists_updates_active_pane(
         #[case] direction: PaneFocusDirection,
         #[case] expected_active_pane: &str,
         #[case] expected_changed: bool,
     ) -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = SessionLayout::initial(&config, self::metadata("sh", 1))?;
+        let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
 
         pretty_assertions::assert_eq!(
@@ -2936,11 +3007,11 @@ mod tests {
     }
 
     #[test]
-    fn test_session_layout_focus_pane_direction_when_multiple_adjacent_panes_exist_uses_recent_focus()
-    -> rootcause::Result<()> {
+    fn test_layout_focus_pane_direction_when_multiple_adjacent_panes_exist_uses_recent_focus() -> rootcause::Result<()>
+    {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = SessionLayout::initial(&config, self::metadata("sh", 1))?;
+        let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
         layout.split_active_pane(self::metadata("sh", 3), PaneSplitAxis::Horizontal)?;
 
@@ -2974,14 +3045,14 @@ mod tests {
             ("pane-3", 41, 13, 39, 11),
         ],
     )]
-    fn test_session_layout_split_when_nested_splits_only_active_pane(
+    fn test_layout_split_when_nested_splits_only_active_pane(
         #[case] first_axis: PaneSplitAxis,
         #[case] second_axis: PaneSplitAxis,
         #[case] expected_regions: Vec<(&str, u16, u16, u16, u16)>,
     ) -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = SessionLayout::initial(&config, self::metadata("sh", 1))?;
+        let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
 
         layout.split_active_pane(self::metadata("sh", 2), first_axis)?;
         layout.split_active_pane(self::metadata("sh", 3), second_axis)?;
@@ -3011,13 +3082,13 @@ mod tests {
         PaneSplitAxis::Horizontal,
         vec![(PaneBorderAxis::Horizontal, 0, 12, 80)],
     )]
-    fn test_session_layout_split_when_split_exists_reserves_border_cell(
+    fn test_layout_split_when_split_exists_reserves_border_cell(
         #[case] split_axis: PaneSplitAxis,
         #[case] expected_borders: Vec<(PaneBorderAxis, u16, u16, u16)>,
     ) -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = SessionLayout::initial(&config, self::metadata("sh", 1))?;
+        let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
 
         layout.split_active_pane(self::metadata("sh", 2), split_axis)?;
 
@@ -3071,17 +3142,21 @@ mod tests {
     }
 
     #[test]
-    fn test_session_layout_close_when_nested_pane_closes_collapses_parent_split() -> rootcause::Result<()> {
+    fn test_layout_close_when_nested_pane_closes_collapses_parent_split() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = SessionLayout::initial(&config, self::metadata("sh", 1))?;
+        let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
 
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
         layout.split_active_pane(self::metadata("sh", 3), PaneSplitAxis::Horizontal)?;
         let close = layout.close_active_pane(3)?;
 
-        assert2::assert!(!close.final_pane);
-        pretty_assertions::assert_eq!(close.pane_id.as_ref(), "pane-3");
+        pretty_assertions::assert_eq!(
+            close,
+            ClosePaneOutcome::Removed {
+                pane_id: PaneId::new("pane-3")?,
+            },
+        );
         pretty_assertions::assert_eq!(layout.active_tab()?.active_pane.as_ref(), "pane-2");
         pretty_assertions::assert_eq!(self::layout_active_tab_pane_ids(&layout)?, vec!["pane-1", "pane-2"]);
         pretty_assertions::assert_eq!(
@@ -3127,14 +3202,14 @@ mod tests {
             ("pane-2", 0, 14, 80, 10),
         ],
     )]
-    fn test_session_layout_resize_active_pane_when_resize_command_arrives_updates_geometry(
+    fn test_layout_resize_active_pane_when_resize_command_arrives_updates_geometry(
         #[case] split_axis: PaneSplitAxis,
         #[case] direction: PaneResizeDirection,
         #[case] expected_regions: Vec<(&str, u16, u16, u16, u16)>,
     ) -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = SessionLayout::initial(&config, self::metadata("sh", 1))?;
+        let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
 
         layout.split_active_pane(self::metadata("sh", 2), split_axis)?;
 
@@ -3151,10 +3226,10 @@ mod tests {
     }
 
     #[test]
-    fn test_session_layout_resize_nested_splits_resizes_nearest_matching_axis() -> rootcause::Result<()> {
+    fn test_layout_resize_nested_splits_resizes_nearest_matching_axis() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = SessionLayout::initial(&config, self::metadata("sh", 1))?;
+        let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
 
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
         layout.split_active_pane(self::metadata("sh", 3), PaneSplitAxis::Horizontal)?;
@@ -3182,11 +3257,11 @@ mod tests {
     }
 
     #[test]
-    fn test_session_layout_metadata_when_nested_panes_exist_round_trips_tree() -> rootcause::Result<()> {
+    fn test_layout_metadata_when_nested_panes_exist_round_trips_tree() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
         fs::create_dir_all(&config.paths.root)?;
-        let mut layout = SessionLayout::initial(&config, self::metadata("sh", 1))?;
+        let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
 
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
         layout.split_active_pane(self::metadata("sh", 3), PaneSplitAxis::Horizontal)?;
@@ -3208,11 +3283,11 @@ mod tests {
     }
 
     #[test]
-    fn test_session_layout_metadata_when_resized_panes_exist_round_trips_split_ratio() -> rootcause::Result<()> {
+    fn test_layout_metadata_when_resized_panes_exist_round_trips_split_ratio() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
         fs::create_dir_all(&config.paths.root)?;
-        let mut layout = SessionLayout::initial(&config, self::metadata("sh", 1))?;
+        let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
 
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
         assert2::assert!(layout.resize_active_pane(PaneResizeDirection::Left)?);
@@ -3236,31 +3311,31 @@ mod tests {
         ClientKeyCode::Char('E'),
         ClientKeyModifiers::SHIFT_ALT,
         b"\x1bE",
-        ClientCommand::CreateTab
+        ClientCommand::Tab(TabCommand::Create)
     )]
     #[case::focus_previous_tab(
         ClientKeyCode::Char('P'),
         ClientKeyModifiers::SHIFT_ALT,
         b"\x1bP",
-        ClientCommand::FocusPreviousTab
+        ClientCommand::Tab(TabCommand::FocusPrevious)
     )]
     #[case::focus_next_tab(
         ClientKeyCode::Char('N'),
         ClientKeyModifiers::SHIFT_ALT,
         b"\x1bN",
-        ClientCommand::FocusNextTab
+        ClientCommand::Tab(TabCommand::FocusNext)
     )]
     #[case::move_tab_previous(
         ClientKeyCode::Char('p'),
         ClientKeyModifiers::CTRL_ALT,
         b"\x1b\x10",
-        ClientCommand::MoveTabPrevious
+        ClientCommand::Tab(TabCommand::MovePrevious)
     )]
     #[case::move_tab_next(
         ClientKeyCode::Char('n'),
         ClientKeyModifiers::CTRL_ALT,
         b"\x1b\x0e",
-        ClientCommand::MoveTabNext
+        ClientCommand::Tab(TabCommand::MoveNext)
     )]
     #[case::focus_pane_left(
         ClientKeyCode::Char('H'),
@@ -3290,13 +3365,13 @@ mod tests {
         ClientKeyCode::Char('V'),
         ClientKeyModifiers::SHIFT_ALT,
         b"\x1bV",
-        ClientCommand::SplitPaneVertical
+        ClientCommand::SplitPane(PaneSplitAxis::Vertical)
     )]
     #[case::split_pane_horizontal(
         ClientKeyCode::Char('D'),
         ClientKeyModifiers::SHIFT_ALT,
         b"\x1bD",
-        ClientCommand::SplitPaneHorizontal
+        ClientCommand::SplitPane(PaneSplitAxis::Horizontal)
     )]
     #[case::close_pane(
         ClientKeyCode::Char('W'),
@@ -3386,7 +3461,7 @@ mod tests {
                 )))
                 .await?;
 
-            self::read_until_output_contains(&mut client, b"x").await?;
+            self::read_until_render_contains(&mut client, b"x").await?;
             self::detach_client(client).await?;
             self::join_server(handle)
         })
@@ -3429,7 +3504,7 @@ mod tests {
             let tempdir = tempfile::tempdir()?;
             let config = self::server_config(tempdir.path(), "work")?;
             fs::create_dir_all(&config.paths.root)?;
-            let mut layout = SessionLayout::initial(&config, self::metadata("sh", 1))?;
+            let mut layout = Layout::initial(&config, self::metadata("sh", 1))?;
             layout.create_tab(self::metadata("sh", 2))?;
             self::write_layout_metadata(&config.paths, &layout)?;
             let paths = config.paths.clone();
@@ -3478,7 +3553,7 @@ mod tests {
                 .writer
                 .send_request(&ClientRequest::Input(b"new-pane\n".to_vec()))
                 .await?;
-            self::read_until_output_contains(&mut client, b"new-pane").await?;
+            self::read_until_render_contains(&mut client, b"new-pane").await?;
             self::assert_layout_metadata_panes(&paths, &["pane-1", "pane-2"], "pane-2")?;
 
             self::detach_client(client).await?;
@@ -3526,7 +3601,7 @@ mod tests {
                 .writer
                 .send_request(&ClientRequest::Input(b"remaining\n".to_vec()))
                 .await?;
-            self::read_until_output_contains(&mut client, b"remaining").await?;
+            self::read_until_render_contains(&mut client, b"remaining").await?;
             self::assert_layout_metadata_panes(&paths, &["pane-1"], "pane-1")?;
 
             self::detach_client(client).await?;
@@ -3608,7 +3683,8 @@ mod tests {
                 tab.panes.iter().map(|pane| pane.id.as_ref()).collect::<Vec<_>>(),
                 vec!["pane-1", "pane-2"],
             );
-            let persisted = self::load_layout_metadata(&paths, &self::server_config(tempdir.path(), "work")?)?
+            let config = self::server_config(tempdir.path(), "work")?;
+            let persisted = self::load_layout_metadata(&paths, &config)?
                 .ok_or_else(|| report!("expected muxr layout metadata to load"))?;
             pretty_assertions::assert_eq!(
                 self::layout_active_tab_pane_regions(&persisted, &TerminalSize::new(80, 24)?)?,
@@ -3633,7 +3709,7 @@ mod tests {
                     b"x\n".to_vec(),
                 )))
                 .await?;
-            self::read_until_output_contains(&mut client, b"x").await?;
+            self::read_until_render_contains(&mut client, b"x").await?;
             self::detach_client(client).await?;
             self::join_server(handle)
         })
@@ -3655,13 +3731,13 @@ mod tests {
 
             self::wait_for_socket(&paths.socket)?;
             let mut first_client = self::open_attached_client(&session, &paths).await?;
-            self::read_until_output_contains(&mut first_client, b"first").await?;
+            self::read_until_render_contains(&mut first_client, b"first").await?;
             self::detach_client(first_client).await?;
 
             tokio::time::sleep(Duration::from_millis(1200)).await;
 
             let mut second_client = self::open_attached_client(&session, &paths).await?;
-            self::read_until_output_contains(&mut second_client, b"second").await?;
+            self::read_until_render_contains(&mut second_client, b"second").await?;
             self::detach_client(second_client).await?;
 
             self::join_server(handle)
@@ -3684,9 +3760,9 @@ mod tests {
 
             self::wait_for_socket(&paths.socket)?;
             let mut connection = self::connect_client(&paths).await?;
-            connection.send_request(&self::hello_request(&session)?).await?;
-            let Some(ServerEvent::Hello(_)) = connection.recv_event().await? else {
-                return Err(report!("expected server hello"));
+            connection.send_request(&self::attach_request(&session)?).await?;
+            let Some(ServerEvent::Attached(_)) = connection.recv_event().await? else {
+                return Err(report!("expected server attached response"));
             };
             let (mut reader, mut writer) = connection.split();
             let flood_handle = tokio::spawn(async move {
@@ -3697,7 +3773,7 @@ mod tests {
                 }
             });
 
-            let read_result = self::read_reader_until_output_contains(&mut reader, b"ready").await;
+            let read_result = self::read_reader_until_render_contains(&mut reader, b"ready").await;
             drop(reader);
             flood_handle.abort();
             drop(flood_handle.await);
@@ -3722,11 +3798,11 @@ mod tests {
 
             self::wait_for_socket(&paths.socket)?;
             let mut connection = self::connect_client(&paths).await?;
-            connection.send_request(&self::hello_request(&session)?).await?;
-            let Some(ServerEvent::Hello(_)) = connection.recv_event().await? else {
-                return Err(report!("expected server hello"));
+            connection.send_request(&self::attach_request(&session)?).await?;
+            let Some(ServerEvent::Attached(_)) = connection.recv_event().await? else {
+                return Err(report!("expected server attached response"));
             };
-            self::read_connection_until_output(&mut connection).await?;
+            self::read_connection_until_render_contains(&mut connection, b"x").await?;
             connection.send_request(&ClientRequest::Detach).await?;
             self::read_connection_until_detached(&mut connection).await?;
 
@@ -3846,29 +3922,22 @@ mod tests {
     ) -> rootcause::Result<AttachedTestClient> {
         let mut connection = self::connect_client(paths).await?;
 
-        connection.send_request(&self::hello_request(session)?).await?;
+        connection.send_request(&self::attach_request(session)?).await?;
         let event = connection.recv_event().await?;
-        let Some(ServerEvent::Hello(hello)) = event else {
-            return Err(report!("expected server hello").attach(format!("{event:?}")));
+        let Some(ServerEvent::Attached(attached)) = event else {
+            return Err(report!("expected server attached response").attach(format!("{event:?}")));
         };
-        let server_pid = hello.server_pid;
-        let layout = hello.layout;
+        let layout = attached.layout;
         let (reader, writer) = connection.split();
 
-        Ok(AttachedTestClient {
-            layout,
-            reader,
-            server_pid,
-            writer,
-        })
+        Ok(AttachedTestClient { layout, reader, writer })
     }
 
-    async fn attach_and_detach(session: &SessionName, paths: &SessionPaths) -> rootcause::Result<ServerPid> {
+    async fn attach_and_detach(session: &SessionName, paths: &SessionPaths) -> rootcause::Result<()> {
         let client = self::open_attached_client(session, paths).await?;
-        let pid = client.server_pid;
 
         self::detach_client(client).await?;
-        Ok(pid)
+        Ok(())
     }
 
     async fn detach_client(mut client: AttachedTestClient) -> rootcause::Result<()> {
@@ -3882,11 +3951,7 @@ mod tests {
                 Some(ServerEvent::Detached) => break,
                 Some(ServerEvent::Ping) => client.writer.send_request(&ClientRequest::Pong).await?,
                 Some(
-                    ServerEvent::Hello(_)
-                    | ServerEvent::Pong
-                    | ServerEvent::Layout(_)
-                    | ServerEvent::Render(_)
-                    | ServerEvent::Output(_),
+                    ServerEvent::Attached(_) | ServerEvent::Pong | ServerEvent::Layout(_) | ServerEvent::Render(_),
                 ) => {}
                 Some(event) => return Err(report!("expected detached event").attach(format!("{event:?}"))),
                 None => return Err(report!("expected detached event")),
@@ -3949,16 +4014,16 @@ mod tests {
         }
     }
 
-    fn layout_tab_ids(layout: &SessionLayout) -> Vec<&str> {
-        layout.tabs.iter().map(|tab| tab.id.as_ref()).collect()
+    fn layout_tab_ids(layout: &Layout) -> Vec<&str> {
+        layout.tabs.iter().map(|tab| tab.id.as_ref()).collect::<Vec<_>>()
     }
 
-    fn layout_active_tab_pane_ids(layout: &SessionLayout) -> rootcause::Result<Vec<&str>> {
+    fn layout_active_tab_pane_ids(layout: &Layout) -> rootcause::Result<Vec<&str>> {
         Ok(layout.active_tab()?.pane_ids())
     }
 
     fn layout_active_tab_pane_regions(
-        layout: &SessionLayout,
+        layout: &Layout,
         size: &TerminalSize,
     ) -> rootcause::Result<Vec<PaneRegionSnapshot>> {
         Ok(layout
@@ -3977,7 +4042,7 @@ mod tests {
     }
 
     fn layout_active_tab_pane_borders(
-        layout: &SessionLayout,
+        layout: &Layout,
         size: &TerminalSize,
     ) -> rootcause::Result<Vec<(PaneBorderAxis, u16, u16, u16)>> {
         Ok(layout
@@ -4054,8 +4119,8 @@ mod tests {
         }
     }
 
-    fn hello_request(session: &SessionName) -> rootcause::Result<ClientRequest> {
-        Ok(ClientRequest::Hello(ClientHello {
+    fn attach_request(session: &SessionName) -> rootcause::Result<ClientRequest> {
+        Ok(ClientRequest::Attach(AttachRequest {
             protocol_version: PROTOCOL_VERSION,
             session: session.clone(),
             terminal_size: self::terminal_size()?,
@@ -4086,25 +4151,19 @@ mod tests {
                     return Err(report!("muxr test server returned error").attach(format!("{error:?}")));
                 }
                 ServerEvent::Ping => client.writer.send_request(&ClientRequest::Pong).await?,
-                ServerEvent::Hello(_)
-                | ServerEvent::Pong
-                | ServerEvent::Render(_)
-                | ServerEvent::Output(_)
-                | ServerEvent::Detached => {}
+                ServerEvent::Attached(_) | ServerEvent::Pong | ServerEvent::Render(_) | ServerEvent::Detached => {}
             }
         }
     }
 
-    async fn read_until_output_contains(client: &mut AttachedTestClient, needle: &[u8]) -> rootcause::Result<()> {
+    async fn read_until_render_contains(client: &mut AttachedTestClient, needle: &[u8]) -> rootcause::Result<()> {
         let started_at = Instant::now();
-        let mut output = Vec::new();
         let mut rendered = String::new();
+        let needle = String::from_utf8_lossy(needle);
 
         loop {
             if started_at.elapsed() > SERVER_READY_TIMEOUT {
-                return Err(report!("timed out waiting for muxr pty output")
-                    .attach(String::from_utf8_lossy(&output).into_owned())
-                    .attach(rendered));
+                return Err(report!("timed out waiting for muxr rendered pty output").attach(rendered));
             }
 
             let event = match tokio::time::timeout(Duration::from_millis(50), client.reader.recv_event()).await {
@@ -4114,15 +4173,9 @@ mod tests {
             };
 
             match event {
-                ServerEvent::Output(bytes) => {
-                    output.extend_from_slice(&bytes);
-                    if self::contains_bytes(&output, needle) {
-                        return Ok(());
-                    }
-                }
                 ServerEvent::Render(update) => {
                     rendered.push_str(&self::render_update_text(&update));
-                    if self::render_update_contains(&update, needle) {
+                    if rendered.contains(needle.as_ref()) {
                         return Ok(());
                     }
                 }
@@ -4130,21 +4183,19 @@ mod tests {
                 ServerEvent::Error(error) => {
                     return Err(report!("muxr test server returned error").attach(format!("{error:?}")));
                 }
-                ServerEvent::Hello(_) | ServerEvent::Pong | ServerEvent::Layout(_) | ServerEvent::Detached => {}
+                ServerEvent::Attached(_) | ServerEvent::Pong | ServerEvent::Layout(_) | ServerEvent::Detached => {}
             }
         }
     }
 
-    async fn read_reader_until_output_contains(reader: &mut ClientEventReader, needle: &[u8]) -> rootcause::Result<()> {
+    async fn read_reader_until_render_contains(reader: &mut ClientEventReader, needle: &[u8]) -> rootcause::Result<()> {
         let started_at = Instant::now();
-        let mut output = Vec::new();
         let mut rendered = String::new();
+        let needle = String::from_utf8_lossy(needle);
 
         loop {
             if started_at.elapsed() > SERVER_READY_TIMEOUT {
-                return Err(report!("timed out waiting for muxr pty output")
-                    .attach(String::from_utf8_lossy(&output).into_owned())
-                    .attach(rendered));
+                return Err(report!("timed out waiting for muxr rendered pty output").attach(rendered));
             }
 
             let event = match tokio::time::timeout(Duration::from_millis(50), reader.recv_event()).await {
@@ -4154,22 +4205,16 @@ mod tests {
             };
 
             match event {
-                ServerEvent::Output(bytes) => {
-                    output.extend_from_slice(&bytes);
-                    if self::contains_bytes(&output, needle) {
-                        return Ok(());
-                    }
-                }
                 ServerEvent::Render(update) => {
                     rendered.push_str(&self::render_update_text(&update));
-                    if self::render_update_contains(&update, needle) {
+                    if rendered.contains(needle.as_ref()) {
                         return Ok(());
                     }
                 }
                 ServerEvent::Error(error) => {
                     return Err(report!("muxr test server returned error").attach(format!("{error:?}")));
                 }
-                ServerEvent::Hello(_)
+                ServerEvent::Attached(_)
                 | ServerEvent::Ping
                 | ServerEvent::Pong
                 | ServerEvent::Layout(_)
@@ -4178,18 +4223,23 @@ mod tests {
         }
     }
 
-    async fn read_connection_until_output(connection: &mut ClientConnection) -> rootcause::Result<()> {
+    async fn read_connection_until_render_contains(
+        connection: &mut ClientConnection,
+        needle: &[u8],
+    ) -> rootcause::Result<()> {
         let started_at = Instant::now();
+        let mut rendered = String::new();
+        let needle = String::from_utf8_lossy(needle);
 
         loop {
             if started_at.elapsed() > SERVER_READY_TIMEOUT {
-                return Err(report!("timed out waiting for muxr output event"));
+                return Err(report!("timed out waiting for muxr rendered pty output").attach(rendered));
             }
 
             match tokio::time::timeout(Duration::from_millis(50), connection.recv_event()).await {
-                Ok(Ok(Some(ServerEvent::Output(_)))) => return Ok(()),
                 Ok(Ok(Some(ServerEvent::Render(update)))) => {
-                    if self::render_update_contains(&update, b"x") {
+                    rendered.push_str(&self::render_update_text(&update));
+                    if rendered.contains(needle.as_ref()) {
                         return Ok(());
                     }
                 }
@@ -4198,7 +4248,7 @@ mod tests {
                     return Err(report!("muxr test server returned error").attach(format!("{error:?}")));
                 }
                 Ok(Ok(
-                    Some(ServerEvent::Hello(_) | ServerEvent::Pong | ServerEvent::Layout(_) | ServerEvent::Detached)
+                    Some(ServerEvent::Attached(_) | ServerEvent::Pong | ServerEvent::Layout(_) | ServerEvent::Detached)
                     | None,
                 ))
                 | Err(_) => {}
@@ -4223,11 +4273,7 @@ mod tests {
                 }
                 Ok(Ok(
                     Some(
-                        ServerEvent::Hello(_)
-                        | ServerEvent::Pong
-                        | ServerEvent::Layout(_)
-                        | ServerEvent::Render(_)
-                        | ServerEvent::Output(_),
+                        ServerEvent::Attached(_) | ServerEvent::Pong | ServerEvent::Layout(_) | ServerEvent::Render(_),
                     )
                     | None,
                 ))
@@ -4235,15 +4281,6 @@ mod tests {
                 Ok(Err(error)) => return Err(error),
             }
         }
-    }
-
-    fn contains_bytes(haystack: &[u8], needle: &[u8]) -> bool {
-        haystack.windows(needle.len()).any(|window| window == needle)
-    }
-
-    fn render_update_contains(update: &RenderUpdate, needle: &[u8]) -> bool {
-        let needle = String::from_utf8_lossy(needle);
-        self::render_update_text(update).contains(needle.as_ref())
     }
 
     fn render_update_text(update: &RenderUpdate) -> String {

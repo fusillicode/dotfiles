@@ -94,7 +94,7 @@ mod tests {
     #[rstest]
     #[case::start_without_session(&["start"], "default")]
     #[case::start_with_session(&["start", "work"], "work")]
-    fn test_parse_when_start_args_vary_returns_start_session(
+    fn test_parse_when_start_args_vary_returns_start_command(
         #[case] raw: &[&str],
         #[case] expected_session: &str,
     ) -> rootcause::Result<()> {
