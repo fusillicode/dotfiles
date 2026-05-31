@@ -1,0 +1,56 @@
+use std::sync::Mutex;
+
+use muxr_core::PaneId;
+use muxr_core::TabId;
+use muxr_core::TerminalSize;
+use rootcause::report;
+
+use crate::server::PaneRuntimes;
+use crate::server::ServerConfig;
+use crate::state::Pane;
+use crate::state::PaneNode;
+use crate::state::SessionLayout;
+use crate::state::SessionMetadata;
+use crate::state::Tab;
+
+impl SessionLayout {
+    pub fn create_tab(&mut self, metadata: SessionMetadata) -> rootcause::Result<PaneId> {
+        let tab_index = self.active_tab_index()?;
+        let tab_number = self.next_tab_number()?;
+        let pane_number = self.next_pane_number()?;
+        let tab_id = TabId::new(format!("tab-{tab_number}"))?;
+        let pane_id = PaneId::new(format!("pane-{pane_number}"))?;
+        let insert_index = tab_index
+            .checked_add(1)
+            .ok_or_else(|| report!("muxr tab insert index overflowed"))?;
+
+        self.entries.insert(
+            insert_index,
+            Tab {
+                active_pane: pane_id.clone(),
+                id: tab_id.clone(),
+                pane_tree: PaneNode::leaf(Pane::new(
+                    pane_id.clone(),
+                    metadata.command_label,
+                    metadata.cwd,
+                    metadata.started_at,
+                    1,
+                )),
+                title: format!("tab {tab_number}"),
+            },
+        );
+        self.active_tab = tab_id;
+        Ok(pane_id)
+    }
+}
+
+pub fn handle_create_tab(
+    layout: &mut SessionLayout,
+    config: &ServerConfig,
+    runtimes: &Mutex<PaneRuntimes>,
+    terminal_size: &TerminalSize,
+) -> rootcause::Result<PaneId> {
+    let previous_layout = layout.clone();
+    let pane_id = layout.create_tab(crate::server::session_metadata(config)?)?;
+    crate::server::spawn_pane_or_restore_layout(layout, previous_layout, pane_id, config, runtimes, terminal_size)
+}

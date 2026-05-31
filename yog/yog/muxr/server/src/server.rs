@@ -16,13 +16,11 @@ use muxr_core::ClientKey;
 use muxr_core::ClientKeyCode;
 use muxr_core::ClientKeyModifiers;
 use muxr_core::ClientMouseEvent;
-use muxr_core::ClientMousePosition;
 use muxr_core::ClientRequest;
 use muxr_core::LayoutSnapshot;
 use muxr_core::PaneId;
 use muxr_core::PaneRegionSnapshot;
 use muxr_core::PaneRegionsSnapshot;
-use muxr_core::PaneScrollDirection;
 use muxr_core::RenderBaseline;
 use muxr_core::RenderCell;
 use muxr_core::RenderColor;
@@ -44,23 +42,24 @@ use muxr_transport::ServerRequestReader;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
+use crate::geometry::PaneBorder;
+use crate::geometry::PaneBorderAxis;
+use crate::geometry::PaneRegion;
 use crate::history::pane_output_path;
-use crate::layout::ClosePaneOutcome;
-use crate::layout::Layout;
-use crate::layout::PaneExitOutcome;
-use crate::layout::PaneFocusDirection;
-use crate::layout::PaneResizeDirection;
-use crate::layout::PaneSplitAxis;
-use crate::layout::SessionMetadata;
-use crate::layout::region::PaneBorder;
-use crate::layout::region::PaneBorderAxis;
-use crate::layout::region::PaneRegion;
+use crate::pane_close::ClosePaneOutcome;
+use crate::pane_close::PaneExitOutcome;
+use crate::pane_focus::PaneFocusDirection;
+use crate::pane_resize::PaneResizeDirection;
+use crate::pane_scroll::PaneScrollAmount;
+use crate::pane_split::PaneSplitAxis;
 use crate::pty::PtyEvent;
 use crate::pty::PtyExitStatus;
 use crate::pty::PtyHandle;
 use crate::pty::PtySession;
 use crate::pty::PtySinkGuard;
 use crate::pty::ShellCommand;
+use crate::state::SessionLayout;
+use crate::state::SessionMetadata;
 use crate::terminal::TerminalSnapshot;
 
 const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(10);
@@ -85,11 +84,11 @@ const PRIVATE_SOCKET_MODE: u32 = 0o600;
 const RENDER_FRAME_INTERVAL: Duration = Duration::from_millis(16);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct ServerConfig {
-    session: SessionName,
-    paths: SessionPaths,
+pub struct ServerConfig {
+    pub session: SessionName,
+    pub paths: SessionPaths,
     max_accepted_connections: Option<usize>,
-    shell_command: ShellCommand,
+    pub shell_command: ShellCommand,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -117,12 +116,12 @@ struct PaneRuntime {
     session: PtySession,
 }
 
-struct PaneRuntimes {
+pub struct PaneRuntimes {
     panes: Vec<PaneRuntime>,
 }
 
 impl PaneRuntimes {
-    fn spawn_for_layout(config: &ServerConfig, layout: &Layout, size: &TerminalSize) -> rootcause::Result<Self> {
+    fn spawn_for_layout(config: &ServerConfig, layout: &SessionLayout, size: &TerminalSize) -> rootcause::Result<Self> {
         let mut panes = Vec::new();
         for pane_id in layout.pane_ids() {
             panes.push(PaneRuntime {
@@ -137,7 +136,7 @@ impl PaneRuntimes {
         Ok(Self { panes })
     }
 
-    fn spawn_pane(&mut self, pane_id: PaneId, config: &ServerConfig, size: &TerminalSize) -> rootcause::Result<()> {
+    pub fn spawn_pane(&mut self, pane_id: PaneId, config: &ServerConfig, size: &TerminalSize) -> rootcause::Result<()> {
         let history_path = self::pane_output_path(&config.paths.panes, &pane_id);
         self.panes.push(PaneRuntime {
             id: pane_id,
@@ -146,7 +145,7 @@ impl PaneRuntimes {
         Ok(())
     }
 
-    fn handle(&self, pane_id: &PaneId) -> rootcause::Result<PtyHandle> {
+    pub fn handle(&self, pane_id: &PaneId) -> rootcause::Result<PtyHandle> {
         self.panes
             .iter()
             .find(|pane| pane.id == *pane_id)
@@ -154,7 +153,7 @@ impl PaneRuntimes {
             .ok_or_else(|| report!("muxr pane runtime is missing").attach(format!("pane_id={pane_id}")))
     }
 
-    fn remove(&mut self, pane_id: &PaneId) {
+    pub fn remove(&mut self, pane_id: &PaneId) {
         self.panes.retain(|pane| pane.id != *pane_id);
     }
 
@@ -216,7 +215,7 @@ impl RenderComposer {
 
     fn render_baseline(
         &mut self,
-        layout: &Layout,
+        layout: &SessionLayout,
         runtimes: &PaneRuntimes,
         size: &TerminalSize,
     ) -> rootcause::Result<RenderUpdate> {
@@ -232,7 +231,7 @@ impl RenderComposer {
 
     fn render_diff(
         &mut self,
-        layout: &Layout,
+        layout: &SessionLayout,
         runtimes: &PaneRuntimes,
         size: &TerminalSize,
         reason: RenderDiffReason,
@@ -277,7 +276,7 @@ impl RenderComposer {
     }
 
     fn current_frame(
-        layout: &Layout,
+        layout: &SessionLayout,
         runtimes: &PaneRuntimes,
         size: &TerminalSize,
     ) -> rootcause::Result<CompositeFrame> {
@@ -398,16 +397,16 @@ async fn serve_async(config: &ServerConfig) -> rootcause::Result<()> {
     fs::write(&config.paths.pid, std::process::id().to_string()).context("failed to write muxr server pid")?;
     let initial_size = TerminalSize::new(80, 24)?;
     let metadata = self::session_metadata(config)?;
-    let layout = match crate::layout::persisted::load_metadata(&config.paths, &config.session)? {
+    let layout = match crate::state::persisted::load_metadata(&config.paths, &config.session)? {
         Some(layout) => layout,
-        None => Layout::initial(&config.session, metadata)?,
+        None => SessionLayout::initial(&config.session, metadata)?,
     };
     let runtimes = PaneRuntimes::spawn_for_layout(config, &layout, &initial_size)?;
     let layout = Arc::new(Mutex::new(layout));
     let runtimes = Arc::new(Mutex::new(runtimes));
     {
         let locked_layout = self::lock_mutex(layout.as_ref(), "layout")?;
-        crate::layout::persisted::write_metadata(&config.paths, &locked_layout)?;
+        crate::state::persisted::write_metadata(&config.paths, &locked_layout)?;
     }
     let active_client = Arc::new(AtomicBool::new(false));
     let mut accepted_connections = 0_usize;
@@ -519,7 +518,7 @@ fn validate_private_mode(path: &Path, label: &str, expected_mode: u32) -> rootca
     Ok(())
 }
 
-fn unix_timestamp_millis() -> rootcause::Result<u64> {
+pub fn unix_timestamp_millis() -> rootcause::Result<u64> {
     let millis = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .context("failed to read system time for muxr layout metadata")?
@@ -528,7 +527,7 @@ fn unix_timestamp_millis() -> rootcause::Result<u64> {
     Ok(u64::try_from(millis).context("muxr layout metadata timestamp overflowed")?)
 }
 
-fn session_metadata(config: &ServerConfig) -> rootcause::Result<SessionMetadata> {
+pub fn session_metadata(config: &ServerConfig) -> rootcause::Result<SessionMetadata> {
     Ok(SessionMetadata::new(
         config.shell_command.label(),
         std::env::current_dir()
@@ -539,7 +538,7 @@ fn session_metadata(config: &ServerConfig) -> rootcause::Result<SessionMetadata>
     ))
 }
 
-fn lock_mutex<'a, T>(mutex: &'a Mutex<T>, name: &str) -> rootcause::Result<MutexGuard<'a, T>> {
+pub fn lock_mutex<'a, T>(mutex: &'a Mutex<T>, name: &str) -> rootcause::Result<MutexGuard<'a, T>> {
     mutex.lock().map_err(|_| report!("poisoned muxr {name} mutex"))
 }
 
@@ -658,19 +657,13 @@ struct AttachedPtySink {
 
 struct AttachedSessionState<'a> {
     config: &'a ServerConfig,
-    layout: &'a Mutex<Layout>,
+    layout: &'a Mutex<SessionLayout>,
     pane_regions: PaneRegionsSnapshot,
     pty_event_sender: &'a mpsc::SyncSender<PtyEvent>,
     render_composer: &'a mut RenderComposer,
     runtimes: &'a Mutex<PaneRuntimes>,
     sink_guards: &'a mut Vec<AttachedPtySink>,
     terminal_size: TerminalSize,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum PaneScrollAmount {
-    Line,
-    Wheel,
 }
 
 fn attach_pane_sinks(
@@ -703,7 +696,7 @@ fn attach_pane_sink(
 }
 
 fn resize_panes_to_layout(
-    layout: &Mutex<Layout>,
+    layout: &Mutex<SessionLayout>,
     runtimes: &Mutex<PaneRuntimes>,
     size: &TerminalSize,
 ) -> rootcause::Result<()> {
@@ -717,7 +710,7 @@ fn resize_panes_to_layout(
 
 fn reap_exited_panes(
     paths: &SessionPaths,
-    layout: &Mutex<Layout>,
+    layout: &Mutex<SessionLayout>,
     runtimes: &Mutex<PaneRuntimes>,
 ) -> rootcause::Result<ReapResult> {
     let exited_panes = {
@@ -740,7 +733,7 @@ fn reap_exited_panes(
             }
             removed_panes.push(pane_id.clone());
         }
-        crate::layout::persisted::write_metadata(paths, &layout)?;
+        crate::state::persisted::write_metadata(paths, &layout)?;
         drop(layout);
 
         let mut runtimes = self::lock_mutex(runtimes, "pane runtimes")?;
@@ -756,7 +749,7 @@ fn reap_exited_panes(
 fn spawn_client_task(
     config: &ServerConfig,
     active_client: &Arc<AtomicBool>,
-    layout: &Arc<Mutex<Layout>>,
+    layout: &Arc<Mutex<SessionLayout>>,
     runtimes: &Arc<Mutex<PaneRuntimes>>,
     connection: ServerConnection,
     handles: &mut Vec<tokio::task::JoinHandle<rootcause::Result<()>>>,
@@ -774,7 +767,7 @@ async fn handle_client(
     config: &ServerConfig,
     mut connection: ServerConnection,
     active_client: &AtomicBool,
-    layout: &Mutex<Layout>,
+    layout: &Mutex<SessionLayout>,
     runtimes: &Mutex<PaneRuntimes>,
 ) -> rootcause::Result<()> {
     let Ok(Ok(Some(request))) = tokio::time::timeout(CLIENT_HANDSHAKE_TIMEOUT, connection.recv_request()).await else {
@@ -878,7 +871,7 @@ async fn handle_client(
 }
 
 fn initial_attached_render(
-    layout: &Mutex<Layout>,
+    layout: &Mutex<SessionLayout>,
     runtimes: &Mutex<PaneRuntimes>,
     terminal_size: &TerminalSize,
 ) -> rootcause::Result<(LayoutSnapshot, PaneRegionsSnapshot, RenderComposer, RenderUpdate)> {
@@ -894,7 +887,7 @@ fn initial_attached_render(
 }
 
 fn pane_regions_snapshot(
-    layout: &Layout,
+    layout: &SessionLayout,
     runtimes: &PaneRuntimes,
     terminal_size: &TerminalSize,
 ) -> rootcause::Result<PaneRegionsSnapshot> {
@@ -1184,7 +1177,7 @@ async fn handle_attached_request(
         Some(ClientRequest::ScrollPaneAt { position, direction }) => {
             // Wheel packets include their own coordinates, so route scrollback by pointer position without stealing
             // keyboard focus from the active pane.
-            if !self::handle_scroll_pane_at_request(
+            if !crate::pane_scroll::handle_scroll_pane_at_request(
                 position,
                 direction,
                 PaneScrollAmount::Wheel,
@@ -1200,7 +1193,7 @@ async fn handle_attached_request(
             Ok(true)
         }
         Some(ClientRequest::ScrollPaneLineAt { position, direction }) => {
-            if !self::handle_scroll_pane_at_request(
+            if !crate::pane_scroll::handle_scroll_pane_at_request(
                 position,
                 direction,
                 PaneScrollAmount::Line,
@@ -1216,7 +1209,12 @@ async fn handle_attached_request(
             Ok(true)
         }
         Some(ClientRequest::FocusPaneAt(position)) => {
-            if !self::handle_focus_pane_at_request(position, state.config, state.layout, &state.terminal_size)? {
+            if !crate::pane_focus::handle_focus_pane_at_request(
+                position,
+                state.config,
+                state.layout,
+                &state.terminal_size,
+            )? {
                 return Ok(true);
             }
             if !self::send_layout_and_baseline(event_writer, state).await? {
@@ -1279,23 +1277,55 @@ async fn handle_command_request(
 ) -> rootcause::Result<bool> {
     match command {
         ClientCommand::Tab(command) => {
-            if let Some(pane_id) = self::handle_tab_command(
-                command,
-                state.config,
-                state.layout,
-                state.runtimes,
-                &state.terminal_size,
-            )? {
-                state.sink_guards.push(self::attach_pane_sink(
-                    state.runtimes,
-                    state.pty_event_sender,
-                    &pane_id,
-                )?);
+            match command {
+                TabCommand::Create => {
+                    let pane_id = {
+                        let mut layout = self::lock_mutex(state.layout, "layout")?;
+                        let pane_id = crate::tab_create::handle_create_tab(
+                            &mut layout,
+                            state.config,
+                            state.runtimes,
+                            &state.terminal_size,
+                        )?;
+                        crate::state::persisted::write_metadata(&state.config.paths, &layout)?;
+                        drop(layout);
+                        pane_id
+                    };
+                    state.sink_guards.push(self::attach_pane_sink(
+                        state.runtimes,
+                        state.pty_event_sender,
+                        &pane_id,
+                    )?);
+                }
+                TabCommand::FocusPrevious => {
+                    let mut layout = self::lock_mutex(state.layout, "layout")?;
+                    crate::tab_focus::handle_focus_previous_tab(&mut layout)?;
+                    crate::state::persisted::write_metadata(&state.config.paths, &layout)?;
+                    drop(layout);
+                }
+                TabCommand::FocusNext => {
+                    let mut layout = self::lock_mutex(state.layout, "layout")?;
+                    crate::tab_focus::handle_focus_next_tab(&mut layout)?;
+                    crate::state::persisted::write_metadata(&state.config.paths, &layout)?;
+                    drop(layout);
+                }
+                TabCommand::MovePrevious => {
+                    let mut layout = self::lock_mutex(state.layout, "layout")?;
+                    crate::tab_move::handle_move_active_tab_previous(&mut layout)?;
+                    crate::state::persisted::write_metadata(&state.config.paths, &layout)?;
+                    drop(layout);
+                }
+                TabCommand::MoveNext => {
+                    let mut layout = self::lock_mutex(state.layout, "layout")?;
+                    crate::tab_move::handle_move_active_tab_next(&mut layout)?;
+                    crate::state::persisted::write_metadata(&state.config.paths, &layout)?;
+                    drop(layout);
+                }
             }
             self::resize_panes_and_render(event_writer, state).await
         }
         ClientCommand::SplitPane(split_axis) => {
-            let pane_id = self::handle_split_pane_command(
+            let pane_id = crate::pane_split::handle_split_pane_command(
                 split_axis,
                 state.config,
                 state.layout,
@@ -1310,7 +1340,7 @@ async fn handle_command_request(
             self::resize_panes_and_render(event_writer, state).await
         }
         ClientCommand::ClosePane => {
-            let outcome = self::handle_close_pane_command(state.config, state.layout, state.runtimes)?;
+            let outcome = crate::pane_close::handle_close_pane_command(state.config, state.layout, state.runtimes)?;
             match &outcome {
                 ClosePaneOutcome::Final { pane_id } | ClosePaneOutcome::Removed { pane_id } => {
                     state.sink_guards.retain(|sink| &sink.pane_id != pane_id);
@@ -1325,13 +1355,18 @@ async fn handle_command_request(
             }
         }
         ClientCommand::ResizePane(direction) => {
-            if !self::handle_resize_pane_command(direction, state.config, state.layout)? {
+            if !crate::pane_resize::handle_resize_pane_command(direction, state.config, state.layout)? {
                 return Ok(true);
             }
             self::resize_panes_and_render(event_writer, state).await
         }
         ClientCommand::FocusPane(direction) => {
-            if !self::handle_focus_pane_command(direction, state.config, state.layout, &state.terminal_size)? {
+            if !crate::pane_focus::handle_focus_pane_command(
+                direction,
+                state.config,
+                state.layout,
+                &state.terminal_size,
+            )? {
                 return Ok(true);
             }
             self::send_layout_and_baseline(event_writer, state).await
@@ -1340,7 +1375,7 @@ async fn handle_command_request(
     }
 }
 
-fn active_pane_handle(layout: &Mutex<Layout>, runtimes: &Mutex<PaneRuntimes>) -> rootcause::Result<PtyHandle> {
+fn active_pane_handle(layout: &Mutex<SessionLayout>, runtimes: &Mutex<PaneRuntimes>) -> rootcause::Result<PtyHandle> {
     let active_pane = {
         let layout = self::lock_mutex(layout, "layout")?;
         layout.active_pane_id()?
@@ -1349,9 +1384,9 @@ fn active_pane_handle(layout: &Mutex<Layout>, runtimes: &Mutex<PaneRuntimes>) ->
     runtimes.handle(&active_pane)
 }
 
-fn spawn_pane_or_restore_layout(
-    layout: &mut Layout,
-    previous_layout: Layout,
+pub fn spawn_pane_or_restore_layout(
+    layout: &mut SessionLayout,
+    previous_layout: SessionLayout,
     pane_id: PaneId,
     config: &ServerConfig,
     runtimes: &Mutex<PaneRuntimes>,
@@ -1370,163 +1405,14 @@ fn spawn_pane_or_restore_layout(
     Ok(pane_id)
 }
 
-fn handle_tab_command(
-    command: TabCommand,
-    config: &ServerConfig,
-    layout: &Mutex<Layout>,
-    runtimes: &Mutex<PaneRuntimes>,
-    terminal_size: &TerminalSize,
-) -> rootcause::Result<Option<PaneId>> {
-    let mut layout = self::lock_mutex(layout, "layout")?;
-    let pane_id = match command {
-        TabCommand::Create => {
-            let previous_layout = layout.clone();
-            let pane_id = layout.create_tab(self::session_metadata(config)?)?;
-            Some(self::spawn_pane_or_restore_layout(
-                &mut layout,
-                previous_layout,
-                pane_id,
-                config,
-                runtimes,
-                terminal_size,
-            )?)
-        }
-        TabCommand::FocusPrevious => {
-            layout.focus_previous_tab()?;
-            None
-        }
-        TabCommand::FocusNext => {
-            layout.focus_next_tab()?;
-            None
-        }
-        TabCommand::MovePrevious => {
-            layout.move_active_tab_previous()?;
-            None
-        }
-        TabCommand::MoveNext => {
-            layout.move_active_tab_next()?;
-            None
-        }
-    };
-    crate::layout::persisted::write_metadata(&config.paths, &layout)?;
-    drop(layout);
-    Ok(pane_id)
-}
-
-fn handle_split_pane_command(
-    split_axis: PaneSplitAxis,
-    config: &ServerConfig,
-    layout: &Mutex<Layout>,
-    runtimes: &Mutex<PaneRuntimes>,
-    terminal_size: &TerminalSize,
-) -> rootcause::Result<PaneId> {
-    let mut layout = self::lock_mutex(layout, "layout")?;
-    let previous_layout = layout.clone();
-    let pane_id = layout.split_active_pane(self::session_metadata(config)?, split_axis)?;
-    let pane_id =
-        self::spawn_pane_or_restore_layout(&mut layout, previous_layout, pane_id, config, runtimes, terminal_size)?;
-    crate::layout::persisted::write_metadata(&config.paths, &layout)?;
-    drop(layout);
-    Ok(pane_id)
-}
-
-fn handle_close_pane_command(
-    config: &ServerConfig,
-    layout: &Mutex<Layout>,
-    runtimes: &Mutex<PaneRuntimes>,
-) -> rootcause::Result<ClosePaneOutcome> {
-    let exited_at = self::unix_timestamp_millis()?;
-    let mut layout = self::lock_mutex(layout, "layout")?;
-    let outcome = layout.close_active_pane(exited_at)?;
-    let pane_id = match &outcome {
-        ClosePaneOutcome::Final { pane_id } | ClosePaneOutcome::Removed { pane_id } => pane_id.clone(),
-    };
-    {
-        let mut runtimes = self::lock_mutex(runtimes, "pane runtimes")?;
-        runtimes.remove(&pane_id);
-        drop(runtimes);
-    }
-    crate::layout::persisted::write_metadata(&config.paths, &layout)?;
-    drop(layout);
-    Ok(outcome)
-}
-
-fn handle_resize_pane_command(
-    direction: PaneResizeDirection,
-    config: &ServerConfig,
-    layout: &Mutex<Layout>,
-) -> rootcause::Result<bool> {
-    let mut layout = self::lock_mutex(layout, "layout")?;
-    let resized = layout.resize_active_pane(direction)?;
-    if resized {
-        crate::layout::persisted::write_metadata(&config.paths, &layout)?;
-    }
-    drop(layout);
-    Ok(resized)
-}
-
-fn handle_focus_pane_command(
-    direction: PaneFocusDirection,
-    config: &ServerConfig,
-    layout: &Mutex<Layout>,
-    terminal_size: &TerminalSize,
-) -> rootcause::Result<bool> {
-    let mut layout = self::lock_mutex(layout, "layout")?;
-    let focused = layout.focus_pane_direction(terminal_size, direction)?;
-    if focused {
-        crate::layout::persisted::write_metadata(&config.paths, &layout)?;
-    }
-    drop(layout);
-    Ok(focused)
-}
-
-fn handle_focus_pane_at_request(
-    position: ClientMousePosition,
-    config: &ServerConfig,
-    layout: &Mutex<Layout>,
-    terminal_size: &TerminalSize,
-) -> rootcause::Result<bool> {
-    let mut layout = self::lock_mutex(layout, "layout")?;
-    let focused = layout.focus_pane_at(terminal_size, position)?;
-    if focused {
-        crate::layout::persisted::write_metadata(&config.paths, &layout)?;
-    }
-    drop(layout);
-    Ok(focused)
-}
-
-fn handle_scroll_pane_at_request(
-    position: ClientMousePosition,
-    direction: PaneScrollDirection,
-    amount: PaneScrollAmount,
-    layout: &Mutex<Layout>,
-    runtimes: &Mutex<PaneRuntimes>,
-    terminal_size: &TerminalSize,
-) -> rootcause::Result<bool> {
-    let pane_id = {
-        let layout = self::lock_mutex(layout, "layout")?;
-        let pane_id = layout.pane_at(terminal_size, position)?;
-        drop(layout);
-        let Some(pane_id) = pane_id else {
-            return Ok(false);
-        };
-        pane_id
-    };
-
-    let runtimes = self::lock_mutex(runtimes, "pane runtimes")?;
-    match amount {
-        PaneScrollAmount::Line => runtimes.handle(&pane_id)?.scroll_one_line(direction),
-        PaneScrollAmount::Wheel => runtimes.handle(&pane_id)?.scroll(direction),
-    }
-}
-
 async fn handle_mouse_event_request(
     event: ClientMouseEvent,
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
     render_dirty: &mut bool,
 ) -> rootcause::Result<bool> {
-    let Some(region) = self::mouse_event_region(state.layout, state.runtimes, &state.terminal_size, event.position())?
+    let Some(region) =
+        crate::pane_focus::mouse_event_region(state.layout, state.runtimes, &state.terminal_size, event.position())?
     else {
         return Ok(true);
     };
@@ -1542,53 +1428,18 @@ async fn handle_mouse_event_request(
     }
     // Forwarded hover, wheel, and drag events belong to the pointed pane, but only an intentional button press changes
     // muxr focus.
-    if !self::mouse_event_focuses_pane(event) {
+    if !crate::pane_focus::mouse_event_focuses_pane(event) {
         return Ok(true);
     }
-    if !self::handle_focus_pane_at_request(event.position(), state.config, state.layout, &state.terminal_size)? {
+    if !crate::pane_focus::handle_focus_pane_at_request(
+        event.position(),
+        state.config,
+        state.layout,
+        &state.terminal_size,
+    )? {
         return Ok(true);
     }
     self::send_layout_and_baseline(event_writer, state).await
-}
-
-fn mouse_event_focuses_pane(event: ClientMouseEvent) -> bool {
-    event.phase() == muxr_core::ClientMouseEventPhase::Press
-        && event.button() & (32 | 64) == 0
-        && event.button() & 0b11 != 0b11
-}
-
-fn mouse_event_region(
-    layout: &Mutex<Layout>,
-    runtimes: &Mutex<PaneRuntimes>,
-    terminal_size: &TerminalSize,
-    position: ClientMousePosition,
-) -> rootcause::Result<Option<PaneRegionSnapshot>> {
-    let region = {
-        let layout = self::lock_mutex(layout, "layout")?;
-        let region = layout
-            .pane_regions(terminal_size)?
-            .into_iter()
-            .find(|region| region.contains(position.row, position.col));
-        drop(layout);
-        let Some(region) = region else {
-            return Ok(None);
-        };
-        region
-    };
-    let runtimes = self::lock_mutex(runtimes, "pane runtimes")?;
-    let handle = runtimes.handle(region.id())?;
-    let mouse_mode = handle.mouse_mode()?;
-    let visible_top_row = handle.visible_top_row()?;
-    drop(runtimes);
-    Ok(Some(PaneRegionSnapshot::new(
-        region.id().clone(),
-        region.col(),
-        region.row(),
-        region.cols(),
-        region.rows(),
-        mouse_mode,
-        visible_top_row,
-    )?))
 }
 
 const fn resolve_key(input_mode: &mut ServerInputMode, key: &ClientKey) -> KeyResolution {
@@ -1729,6 +1580,7 @@ mod tests {
     use muxr_core::ClientKey;
     use muxr_core::ClientKeyCode;
     use muxr_core::ClientKeyModifiers;
+    use muxr_core::ClientMousePosition;
     use muxr_core::RenderRowSpan;
     use muxr_core::RenderUpdate;
     use muxr_transport::ClientConnection;
@@ -1920,7 +1772,7 @@ mod tests {
     fn test_layout_tab_commands_when_tabs_exist_mutates_active_tab_and_order() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
+        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
 
         layout.create_tab(self::metadata("sh", 2))?;
         layout.create_tab(self::metadata("sh", 3))?;
@@ -1943,7 +1795,7 @@ mod tests {
     fn test_layout_split_and_close_when_multiple_panes_updates_active_pane() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
+        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
 
         let pane_id = layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
 
@@ -1965,24 +1817,19 @@ mod tests {
     }
 
     #[test]
-    fn test_handle_tab_command_when_pane_spawn_fails_restores_layout() -> rootcause::Result<()> {
+    fn test_handle_create_tab_when_pane_spawn_fails_restores_layout() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let mut config = self::server_config(tempdir.path(), "work")?;
         config.shell_command = ShellCommand::new("/bin/muxr-missing-shell");
-        let initial_layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
+        let initial_layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
         let layout = Mutex::new(initial_layout.clone());
         let runtimes = Mutex::new(PaneRuntimes { panes: Vec::new() });
 
-        assert2::assert!(
-            handle_tab_command(
-                TabCommand::Create,
-                &config,
-                &layout,
-                &runtimes,
-                &TerminalSize::new(80, 24)?,
-            )
-            .is_err()
-        );
+        let create_result = {
+            let mut layout = self::lock_mutex(&layout, "layout")?;
+            crate::tab_create::handle_create_tab(&mut layout, &config, &runtimes, &TerminalSize::new(80, 24)?)
+        };
+        assert2::assert!(create_result.is_err());
 
         let layout = self::lock_mutex(&layout, "layout")?;
         pretty_assertions::assert_eq!(*layout, initial_layout);
@@ -1996,12 +1843,12 @@ mod tests {
         let tempdir = tempfile::tempdir()?;
         let mut config = self::server_config(tempdir.path(), "work")?;
         config.shell_command = ShellCommand::new("/bin/muxr-missing-shell");
-        let initial_layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
+        let initial_layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
         let layout = Mutex::new(initial_layout.clone());
         let runtimes = Mutex::new(PaneRuntimes { panes: Vec::new() });
 
         assert2::assert!(
-            handle_split_pane_command(
+            crate::pane_split::handle_split_pane_command(
                 PaneSplitAxis::Vertical,
                 &config,
                 &layout,
@@ -2029,7 +1876,7 @@ mod tests {
     ) -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
+        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
 
         pretty_assertions::assert_eq!(
@@ -2050,7 +1897,7 @@ mod tests {
     ) -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
+        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
 
         let pane_id = layout.pane_at(&TerminalSize::new(80, 24)?, position)?;
@@ -2072,7 +1919,7 @@ mod tests {
     ) -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
+        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
 
         pretty_assertions::assert_eq!(
@@ -2088,7 +1935,7 @@ mod tests {
     {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
+        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
         layout.split_active_pane(self::metadata("sh", 3), PaneSplitAxis::Horizontal)?;
 
@@ -2129,7 +1976,7 @@ mod tests {
     ) -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
+        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
 
         layout.split_active_pane(self::metadata("sh", 2), first_axis)?;
         layout.split_active_pane(self::metadata("sh", 3), second_axis)?;
@@ -2165,7 +2012,7 @@ mod tests {
     ) -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
+        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
 
         layout.split_active_pane(self::metadata("sh", 2), split_axis)?;
 
@@ -2263,7 +2110,7 @@ mod tests {
     fn test_layout_close_when_nested_pane_closes_collapses_parent_split() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
+        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
 
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
         layout.split_active_pane(self::metadata("sh", 3), PaneSplitAxis::Horizontal)?;
@@ -2327,7 +2174,7 @@ mod tests {
     ) -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
+        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
 
         layout.split_active_pane(self::metadata("sh", 2), split_axis)?;
 
@@ -2347,7 +2194,7 @@ mod tests {
     fn test_layout_resize_nested_splits_resizes_nearest_matching_axis() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
+        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
 
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
         layout.split_active_pane(self::metadata("sh", 3), PaneSplitAxis::Horizontal)?;
@@ -2379,13 +2226,13 @@ mod tests {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
         fs::create_dir_all(&config.paths.root)?;
-        let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
+        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
 
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
         layout.split_active_pane(self::metadata("sh", 3), PaneSplitAxis::Horizontal)?;
-        crate::layout::persisted::write_metadata(&config.paths, &layout)?;
+        crate::state::persisted::write_metadata(&config.paths, &layout)?;
 
-        let loaded = crate::layout::persisted::load_metadata(&config.paths, &config.session)?
+        let loaded = crate::state::persisted::load_metadata(&config.paths, &config.session)?
             .ok_or_else(|| report!("expected muxr layout metadata to load"))?;
 
         pretty_assertions::assert_eq!(loaded.active_pane_id()?.as_ref(), "pane-3");
@@ -2405,13 +2252,13 @@ mod tests {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
         fs::create_dir_all(&config.paths.root)?;
-        let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
+        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
 
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
         assert2::assert!(layout.resize_active_pane(PaneResizeDirection::Left)?);
-        crate::layout::persisted::write_metadata(&config.paths, &layout)?;
+        crate::state::persisted::write_metadata(&config.paths, &layout)?;
 
-        let loaded = crate::layout::persisted::load_metadata(&config.paths, &config.session)?
+        let loaded = crate::state::persisted::load_metadata(&config.paths, &config.session)?
             .ok_or_else(|| report!("expected muxr layout metadata to load"))?;
 
         pretty_assertions::assert_eq!(
@@ -2622,9 +2469,9 @@ mod tests {
             let tempdir = tempfile::tempdir()?;
             let config = self::server_config(tempdir.path(), "work")?;
             fs::create_dir_all(&config.paths.root)?;
-            let mut layout = Layout::initial(&config.session, self::metadata("sh", 1))?;
+            let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
             layout.create_tab(self::metadata("sh", 2))?;
-            crate::layout::persisted::write_metadata(&config.paths, &layout)?;
+            crate::state::persisted::write_metadata(&config.paths, &layout)?;
             let paths = config.paths.clone();
             let session = config.session.clone();
             let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), ShellCommand::new("/bin/cat"));
@@ -2852,7 +2699,7 @@ mod tests {
                 vec!["pane-1", "pane-2"],
             );
             let config = self::server_config(tempdir.path(), "work")?;
-            let persisted = crate::layout::persisted::load_metadata(&paths, &config.session)?
+            let persisted = crate::state::persisted::load_metadata(&paths, &config.session)?
                 .ok_or_else(|| report!("expected muxr layout metadata to load"))?;
             pretty_assertions::assert_eq!(
                 self::layout_active_tab_pane_regions(&persisted, &TerminalSize::new(80, 24)?)?,
@@ -3182,7 +3029,7 @@ mod tests {
         SessionMetadata::new(command_label.to_owned(), "/tmp".to_owned(), started_at)
     }
 
-    fn layout_tab_ids(layout: &Layout) -> rootcause::Result<Vec<String>> {
+    fn layout_tab_ids(layout: &SessionLayout) -> rootcause::Result<Vec<String>> {
         Ok(layout
             .snapshot()?
             .tabs()
@@ -3191,7 +3038,7 @@ mod tests {
             .collect::<Vec<_>>())
     }
 
-    fn layout_active_tab_pane_ids(layout: &Layout) -> rootcause::Result<Vec<String>> {
+    fn layout_active_tab_pane_ids(layout: &SessionLayout) -> rootcause::Result<Vec<String>> {
         let snapshot = layout.snapshot()?;
         let active_tab = snapshot
             .tabs()
@@ -3206,7 +3053,10 @@ mod tests {
             .collect())
     }
 
-    fn layout_active_tab_pane_regions(layout: &Layout, size: &TerminalSize) -> rootcause::Result<Vec<PaneRegionTuple>> {
+    fn layout_active_tab_pane_regions(
+        layout: &SessionLayout,
+        size: &TerminalSize,
+    ) -> rootcause::Result<Vec<PaneRegionTuple>> {
         Ok(layout
             .pane_regions(size)?
             .iter()
@@ -3223,7 +3073,7 @@ mod tests {
     }
 
     fn layout_active_tab_pane_borders(
-        layout: &Layout,
+        layout: &SessionLayout,
         size: &TerminalSize,
     ) -> rootcause::Result<Vec<(PaneBorderAxis, u16, u16, u16)>> {
         Ok(layout
@@ -3505,7 +3355,7 @@ mod tests {
                 .context("failed to parse muxr test layout metadata")?;
         let pane = &layout["tabs"][0]["pane_tree"]["pane"];
 
-        pretty_assertions::assert_eq!(layout["version"].as_u64(), Some(u64::from(crate::layout::VERSION)));
+        pretty_assertions::assert_eq!(layout["version"].as_u64(), Some(u64::from(crate::state::VERSION)));
         pretty_assertions::assert_eq!(layout["session"].as_str(), Some("work"));
         pretty_assertions::assert_eq!(layout["active_tab"].as_str(), Some("tab-1"));
         pretty_assertions::assert_eq!(layout["tabs"][0]["active_pane"].as_str(), Some("pane-1"));

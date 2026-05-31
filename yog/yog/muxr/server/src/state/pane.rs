@@ -1,117 +1,35 @@
 use muxr_core::PaneId;
+use muxr_core::PaneSnapshot;
 use rootcause::report;
+use serde::Deserialize;
+use serde::Serialize;
 
-use crate::layout::Pane;
-use crate::layout::PaneNode;
-use crate::layout::PaneResizeDirection;
-use crate::layout::PaneSplitAxis;
-use crate::layout::PaneSplitRatio;
-use crate::layout::PaneSplitResize;
-use crate::layout::region::PaneBorder;
-use crate::layout::region::PaneBorderAxis;
-use crate::layout::region::PaneLayout;
-use crate::layout::region::PaneRegion;
+use crate::geometry::PaneBorder;
+use crate::geometry::PaneBorderAxis;
+use crate::geometry::PaneLayout;
+use crate::geometry::PaneRegion;
+use crate::pane_split::PaneSplitAxis;
+use crate::pane_split::PaneSplitRatio;
+use crate::pty::PtyExitStatus;
+
+// Pane splits are a tree so a new split mutates only the active leaf; a tab-wide axis would reflow siblings.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum PaneNode {
+    Leaf {
+        pane: Pane,
+    },
+    Split {
+        axis: PaneSplitAxis,
+        first_ratio: PaneSplitRatio,
+        first: Box<Self>,
+        second: Box<Self>,
+    },
+}
 
 impl PaneNode {
     pub const fn leaf(pane: Pane) -> Self {
         Self::Leaf { pane }
-    }
-
-    pub fn split_pane(
-        &mut self,
-        pane_id: &PaneId,
-        new_pane: &Pane,
-        split_axis: PaneSplitAxis,
-    ) -> rootcause::Result<bool> {
-        match self {
-            Self::Leaf { pane } if pane.id == *pane_id => {
-                let old_pane = pane.clone();
-                *self = Self::Split {
-                    axis: split_axis,
-                    first_ratio: PaneSplitRatio::balanced(),
-                    first: Box::new(Self::leaf(old_pane)),
-                    second: Box::new(Self::leaf(new_pane.clone())),
-                };
-                Ok(true)
-            }
-            Self::Leaf { .. } => Ok(false),
-            Self::Split { first, second, .. } => {
-                if first.split_pane(pane_id, new_pane, split_axis)? {
-                    return Ok(true);
-                }
-                second.split_pane(pane_id, new_pane, split_axis)
-            }
-        }
-    }
-
-    pub fn resize_pane(&mut self, pane_id: &PaneId, direction: PaneResizeDirection) -> rootcause::Result<bool> {
-        match self {
-            Self::Leaf { .. } => Ok(false),
-            Self::Split {
-                axis,
-                first_ratio,
-                first,
-                second,
-            } => {
-                let child_resized = if first.contains_pane(pane_id) {
-                    first.resize_pane(pane_id, direction)?
-                } else if second.contains_pane(pane_id) {
-                    second.resize_pane(pane_id, direction)?
-                } else {
-                    return Ok(false);
-                };
-                if child_resized {
-                    return Ok(true);
-                }
-
-                let Some(resize) = PaneSplitResize::for_direction(*axis, direction) else {
-                    return Ok(false);
-                };
-                let resized_ratio = first_ratio.resized(resize);
-                if resized_ratio == *first_ratio {
-                    return Ok(false);
-                }
-
-                *first_ratio = resized_ratio;
-                Ok(true)
-            }
-        }
-    }
-
-    pub fn remove_pane(&mut self, pane_id: &PaneId) -> rootcause::Result<PaneId> {
-        let Some(fallback_pane) = self.remove_leaf(pane_id)? else {
-            return Err(report!("muxr pane is missing from server layout").attach(format!("pane_id={pane_id}")));
-        };
-        Ok(fallback_pane)
-    }
-
-    fn remove_leaf(&mut self, pane_id: &PaneId) -> rootcause::Result<Option<PaneId>> {
-        match self {
-            Self::Leaf { pane } if pane.id == *pane_id => {
-                Err(report!("muxr cannot remove a pane leaf without a sibling").attach(format!("pane_id={pane_id}")))
-            }
-            Self::Split { first, second, .. } if first.contains_pane(pane_id) => {
-                if first.pane_count() == 1 {
-                    let replacement = (**second).clone();
-                    let fallback_pane = replacement.first_pane_id();
-                    *self = replacement;
-                    Ok(Some(fallback_pane))
-                } else {
-                    first.remove_leaf(pane_id)
-                }
-            }
-            Self::Split { first, second, .. } if second.contains_pane(pane_id) => {
-                if second.pane_count() == 1 {
-                    let replacement = (**first).clone();
-                    let fallback_pane = replacement.first_pane_id();
-                    *self = replacement;
-                    Ok(Some(fallback_pane))
-                } else {
-                    second.remove_leaf(pane_id)
-                }
-            }
-            Self::Leaf { .. } | Self::Split { .. } => Ok(None),
-        }
     }
 
     pub fn pane_count(&self) -> usize {
@@ -125,13 +43,6 @@ impl PaneNode {
         match self {
             Self::Leaf { pane } => pane.id == *pane_id,
             Self::Split { first, second, .. } => first.contains_pane(pane_id) || second.contains_pane(pane_id),
-        }
-    }
-
-    fn first_pane_id(&self) -> PaneId {
-        match self {
-            Self::Leaf { pane } => pane.id.clone(),
-            Self::Split { first, .. } => first.first_pane_id(),
         }
     }
 
@@ -216,5 +127,53 @@ impl PaneNode {
                 }
             },
         }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct Pane {
+    command_label: String,
+    cwd: String,
+    exit_status: Option<PtyExitStatus>,
+    exited_at: Option<u64>,
+    focus_seq: u64,
+    id: PaneId,
+    started_at: u64,
+    title: String,
+}
+
+impl Pane {
+    pub fn new(id: PaneId, command_label: String, cwd: String, started_at: u64, focus_seq: u64) -> Self {
+        Self {
+            command_label: command_label.clone(),
+            cwd,
+            exit_status: None,
+            exited_at: None,
+            focus_seq,
+            id,
+            started_at,
+            title: command_label,
+        }
+    }
+
+    pub const fn id(&self) -> &PaneId {
+        &self.id
+    }
+
+    pub const fn focus_seq(&self) -> u64 {
+        self.focus_seq
+    }
+
+    pub const fn set_focus_seq(&mut self, focus_seq: u64) {
+        self.focus_seq = focus_seq;
+    }
+
+    pub fn mark_exited(&mut self, exited_at: u64, exit_status: Option<PtyExitStatus>) {
+        self.exited_at = Some(exited_at);
+        self.exit_status = exit_status;
+    }
+
+    pub fn snapshot(&self) -> PaneSnapshot {
+        PaneSnapshot::new(self.id.clone(), self.title.clone())
     }
 }

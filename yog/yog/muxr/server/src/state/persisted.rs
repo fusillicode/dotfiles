@@ -8,9 +8,9 @@ use rootcause::report;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::layout::Layout;
-use crate::layout::Tab;
-use crate::layout::VERSION;
+use crate::state::SessionLayout;
+use crate::state::Tab;
+use crate::state::VERSION;
 
 #[derive(Serialize)]
 struct PersistedLayout<'a> {
@@ -28,7 +28,7 @@ struct PersistedLayoutOwned {
     tabs: Vec<Tab>,
 }
 
-impl Layout {
+impl SessionLayout {
     fn from_persisted(session: &SessionName, persisted: PersistedLayoutOwned) -> rootcause::Result<Self> {
         if persisted.version != VERSION {
             return Err(report!("unsupported muxr layout metadata version")
@@ -43,8 +43,8 @@ impl Layout {
 
         let layout = Self {
             active_tab: persisted.active_tab,
+            entries: persisted.tabs,
             session: persisted.session,
-            tabs: persisted.tabs,
         };
         // Persisted layout bypasses constructors; rebuilding a snapshot validates tab and pane invariants.
         layout.snapshot()?;
@@ -52,19 +52,19 @@ impl Layout {
     }
 }
 
-pub fn write_metadata(paths: &SessionPaths, layout: &Layout) -> rootcause::Result<()> {
+pub fn write_metadata(paths: &SessionPaths, layout: &SessionLayout) -> rootcause::Result<()> {
     let layout = PersistedLayout {
         version: VERSION,
         session: &layout.session,
         active_tab: &layout.active_tab,
-        tabs: &layout.tabs,
+        tabs: &layout.entries,
     };
     let encoded = serde_json::to_vec_pretty(&layout).context("failed to encode muxr layout metadata")?;
     fs::write(&paths.layout, encoded).context("failed to write muxr layout metadata")?;
     Ok(())
 }
 
-pub fn load_metadata(paths: &SessionPaths, session: &SessionName) -> rootcause::Result<Option<Layout>> {
+pub fn load_metadata(paths: &SessionPaths, session: &SessionName) -> rootcause::Result<Option<SessionLayout>> {
     // Read is the source of truth: a separate exists check can race with cleanup,
     // while NotFound still means there is no persisted layout to restore.
     let bytes = match fs::read(&paths.layout) {
@@ -75,5 +75,5 @@ pub fn load_metadata(paths: &SessionPaths, session: &SessionName) -> rootcause::
     let persisted: PersistedLayoutOwned =
         serde_json::from_slice(&bytes).context("failed to parse muxr layout metadata")?;
 
-    Ok(Some(Layout::from_persisted(session, persisted)?))
+    Ok(Some(SessionLayout::from_persisted(session, persisted)?))
 }
