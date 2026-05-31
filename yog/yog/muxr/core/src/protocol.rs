@@ -1,6 +1,6 @@
+use std::collections::BTreeSet;
 use std::fmt;
 use std::num::NonZeroU16;
-use std::num::NonZeroU32;
 
 use rootcause::prelude::ResultExt;
 use rootcause::report;
@@ -10,7 +10,7 @@ use serde::Serialize;
 
 use crate::SessionName;
 
-pub const PROTOCOL_VERSION: u16 = 9;
+pub const PROTOCOL_VERSION: u16 = 12;
 
 /// PTY terminal dimensions with nonzero columns and rows.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -45,31 +45,6 @@ impl TerminalSize {
     #[must_use]
     pub const fn rows(&self) -> u16 {
         self.rows.get()
-    }
-}
-
-/// Process id for a running muxr server.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(transparent)]
-pub struct ServerPid(NonZeroU32);
-
-impl ServerPid {
-    /// Build a server pid, rejecting zero because pid `0` is not an addressable muxr server process.
-    ///
-    /// # Errors
-    /// - The pid is zero.
-    pub fn new(pid: u32) -> rootcause::Result<Self> {
-        let Some(pid) = NonZeroU32::new(pid) else {
-            return Err(report!("invalid muxr server pid").attach("pid=0"));
-        };
-
-        Ok(Self(pid))
-    }
-
-    /// Return the raw process id.
-    #[must_use]
-    pub const fn get(self) -> u32 {
-        self.0.get()
     }
 }
 
@@ -148,17 +123,15 @@ impl fmt::Display for PaneId {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct ClientHello {
+pub struct AttachRequest {
     pub protocol_version: u16,
     pub session: SessionName,
     pub terminal_size: TerminalSize,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct ServerHello {
+pub struct AttachAccepted {
     pub protocol_version: u16,
-    pub session: SessionName,
-    pub server_pid: ServerPid,
     pub layout: LayoutSnapshot,
 }
 
@@ -182,23 +155,6 @@ impl LayoutSnapshot {
         Ok(snapshot)
     }
 
-    /// Build the initial one-tab, one-pane shell layout.
-    ///
-    /// # Errors
-    /// - The provided tab or pane id is invalid.
-    pub fn single_pane(
-        tab_id: impl Into<String>,
-        tab_title: impl Into<String>,
-        pane_id: impl Into<String>,
-        pane_title: impl Into<String>,
-    ) -> rootcause::Result<Self> {
-        let active_tab = TabId::new(tab_id)?;
-        let active_pane = PaneId::new(pane_id)?;
-        let pane = PaneSnapshot::new(active_pane.clone(), pane_title);
-        let tab = TabSnapshot::new(active_tab.clone(), tab_title, active_pane, vec![pane])?;
-        Self::new(active_tab, vec![tab])
-    }
-
     /// Validate layout invariants after direct construction or deserialization.
     ///
     /// # Errors
@@ -214,25 +170,23 @@ impl LayoutSnapshot {
                 .attach(format!("active_tab={}", self.active_tab)));
         }
 
-        let mut seen_tab_ids = Vec::new();
-        let mut seen_pane_ids = Vec::new();
+        let mut seen_tab_ids = BTreeSet::new();
+        let mut seen_pane_ids = BTreeSet::new();
         for tab in &self.tabs {
             tab.validate()?;
-            if seen_tab_ids.contains(&&tab.id) {
+            if !seen_tab_ids.insert(tab.id.as_ref()) {
                 return Err(report!("invalid muxr layout snapshot")
                     .attach("reason=duplicate tab id")
                     .attach(format!("tab_id={}", tab.id)));
             }
-            seen_tab_ids.push(&tab.id);
 
             for pane in &tab.panes {
-                if seen_pane_ids.contains(&&pane.id) {
+                if !seen_pane_ids.insert(pane.id.as_ref()) {
                     return Err(report!("invalid muxr layout snapshot")
                         .attach("reason=duplicate pane id")
                         .attach(format!("tab_id={}", tab.id))
                         .attach(format!("pane_id={}", pane.id)));
                 }
-                seen_pane_ids.push(&pane.id);
             }
         }
 
@@ -286,14 +240,10 @@ impl TabSnapshot {
                 .attach(format!("active_pane={}", self.active_pane)));
         }
 
-        for (index, pane) in self.panes.iter().enumerate() {
+        let mut seen_pane_ids = BTreeSet::new();
+        for pane in &self.panes {
             pane.validate()?;
-            if self
-                .panes
-                .iter()
-                .skip(index.saturating_add(1))
-                .any(|other_pane| other_pane.id == pane.id)
-            {
+            if !seen_pane_ids.insert(pane.id.as_ref()) {
                 return Err(report!("invalid muxr tab snapshot")
                     .attach("reason=duplicate pane id")
                     .attach(format!("tab_id={}", self.id))
@@ -807,38 +757,6 @@ impl ClientKey {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum ClientCommand {
-    ClosePane,
-    CreateTab,
-    EnterResizeMode,
-    ExitMode,
-    FocusPane(PaneFocusDirection),
-    FocusNextTab,
-    FocusPreviousTab,
-    MoveTabNext,
-    MoveTabPrevious,
-    ResizePane(PaneResizeDirection),
-    SplitPaneHorizontal,
-    SplitPaneVertical,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum PaneFocusDirection {
-    Down,
-    Left,
-    Right,
-    Up,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum PaneResizeDirection {
-    Down,
-    Left,
-    Right,
-    Up,
-}
-
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum PaneScrollDirection {
     Down,
@@ -847,84 +765,68 @@ pub enum PaneScrollDirection {
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ClientMousePosition {
-    pub col: u16,
     pub row: u16,
+    pub col: u16,
 }
 
 impl ClientMousePosition {
     #[must_use]
     pub const fn new(row: u16, col: u16) -> Self {
-        Self { col, row }
+        Self { row, col }
     }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "code", content = "msg", rename_all = "snake_case")]
 pub enum ServerError {
-    ClientAlreadyAttached(String),
-    CommandNotImplemented(String),
-    ProtocolVersionMismatch(String),
-    SessionMismatch(String),
-    UnexpectedRequest(String),
+    ClientAlreadyAttached,
+    ProtocolVersionMismatch { expected: u16, actual: u16 },
+    SessionMismatch { expected: SessionName, actual: SessionName },
+    UnexpectedRequest { request: Box<ClientRequest> },
 }
 
 impl ServerError {
     #[must_use]
-    pub fn client_already_attached() -> Self {
-        Self::ClientAlreadyAttached("a muxr client is already attached to this session".to_owned())
+    pub const fn protocol_version_mismatch(actual: u16) -> Self {
+        Self::ProtocolVersionMismatch {
+            expected: PROTOCOL_VERSION,
+            actual,
+        }
     }
 
     #[must_use]
-    pub fn command_not_implemented(command: &ClientCommand) -> Self {
-        Self::CommandNotImplemented(format!("muxr command is not implemented yet: {command:?}"))
-    }
-
-    #[must_use]
-    pub fn protocol_version_mismatch(actual: u16) -> Self {
-        Self::ProtocolVersionMismatch(format!("expected protocol version {PROTOCOL_VERSION}, got {actual}"))
-    }
-
-    #[must_use]
-    pub fn session_mismatch(expected: &SessionName, actual: &SessionName) -> Self {
-        Self::SessionMismatch(format!("expected session {expected}, got {actual}"))
-    }
-
-    #[must_use]
-    pub fn unexpected_request(request: &ClientRequest) -> Self {
-        Self::UnexpectedRequest(format!("unexpected client request during attach: {request:?}"))
+    pub fn unexpected_request(request: ClientRequest) -> Self {
+        Self::UnexpectedRequest {
+            request: Box::new(request),
+        }
     }
 
     #[must_use]
     pub const fn code(&self) -> &'static str {
         match self {
-            Self::ClientAlreadyAttached(_) => "client_already_attached",
-            Self::CommandNotImplemented(_) => "command_not_implemented",
-            Self::ProtocolVersionMismatch(_) => "protocol_version_mismatch",
-            Self::SessionMismatch(_) => "session_mismatch",
-            Self::UnexpectedRequest(_) => "unexpected_request",
+            Self::ClientAlreadyAttached => "client_already_attached",
+            Self::ProtocolVersionMismatch { .. } => "protocol_version_mismatch",
+            Self::SessionMismatch { .. } => "session_mismatch",
+            Self::UnexpectedRequest { .. } => "unexpected_request",
         }
     }
 
     #[must_use]
-    pub const fn is_command_not_implemented(&self) -> bool {
-        matches!(self, Self::CommandNotImplemented(_))
-    }
-
-    #[must_use]
-    pub fn msg(&self) -> &str {
+    pub fn msg(&self) -> String {
         match self {
-            Self::ClientAlreadyAttached(msg)
-            | Self::CommandNotImplemented(msg)
-            | Self::ProtocolVersionMismatch(msg)
-            | Self::SessionMismatch(msg)
-            | Self::UnexpectedRequest(msg) => msg,
+            Self::ClientAlreadyAttached => "a muxr client is already attached to this session".to_owned(),
+            Self::ProtocolVersionMismatch { expected, actual } => {
+                format!("expected protocol version {expected}, got {actual}")
+            }
+            Self::SessionMismatch { expected, actual } => format!("expected session {expected}, got {actual}"),
+            Self::UnexpectedRequest { request } => format!("unexpected client request during attach: {request:?}"),
         }
     }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum ClientRequest {
-    Hello(ClientHello),
+    Attach(AttachRequest),
     Ping,
     Pong,
     Detach,
@@ -942,12 +844,11 @@ pub enum ClientRequest {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum ServerEvent {
-    Hello(ServerHello),
+    Attached(AttachAccepted),
     Ping,
     Pong,
     Layout(LayoutSnapshot),
     Render(RenderUpdate),
-    Output(Vec<u8>),
     Error(ServerError),
     Detached,
 }
@@ -956,10 +857,10 @@ impl ServerEvent {
     fn validate(&self) -> rootcause::Result<()> {
         // Wire frames and public struct literals can bypass constructors; validate before transport/render use.
         match self {
-            Self::Hello(hello) => hello.layout.validate()?,
+            Self::Attached(attached) => attached.layout.validate()?,
             Self::Layout(layout) => layout.validate()?,
             Self::Render(update) => update.validate()?,
-            Self::Ping | Self::Pong | Self::Output(_) | Self::Error(_) | Self::Detached => {}
+            Self::Ping | Self::Pong | Self::Error(_) | Self::Detached => {}
         }
 
         Ok(())
@@ -1026,7 +927,7 @@ mod tests {
     use super::*;
 
     #[rstest]
-    #[case::hello(ClientRequest::Hello(client_hello()?))]
+    #[case::attach(ClientRequest::Attach(client_attach_request()?))]
     #[case::ping(ClientRequest::Ping)]
     #[case::pong(ClientRequest::Pong)]
     #[case::detach(ClientRequest::Detach)]
@@ -1048,14 +949,13 @@ mod tests {
     }
 
     #[rstest]
-    #[case::hello(ServerEvent::Hello(server_hello()?))]
+    #[case::attached(ServerEvent::Attached(attach_accepted()?))]
     #[case::ping(ServerEvent::Ping)]
     #[case::pong(ServerEvent::Pong)]
     #[case::layout(ServerEvent::Layout(layout_snapshot()?))]
     #[case::render_baseline(ServerEvent::Render(RenderUpdate::Baseline(render_baseline()?)))]
     #[case::render_diff(ServerEvent::Render(RenderUpdate::Diff(render_diff()?)))]
-    #[case::output(ServerEvent::Output(b"shell output\n".to_vec()))]
-    #[case::error(ServerEvent::Error(ServerError::unexpected_request(&ClientRequest::Detach)))]
+    #[case::error(ServerEvent::Error(ServerError::unexpected_request(ClientRequest::Detach)))]
     #[case::detached(ServerEvent::Detached)]
     fn test_server_event_codec_when_frame_round_trips_returns_original(
         #[case] event: ServerEvent,
@@ -1075,11 +975,9 @@ mod tests {
     }
 
     #[test]
-    fn test_server_event_codec_when_hello_layout_is_invalid_returns_error() -> rootcause::Result<()> {
-        let event = ServerEvent::Hello(ServerHello {
+    fn test_server_event_codec_when_attached_layout_is_invalid_returns_error() -> rootcause::Result<()> {
+        let event = ServerEvent::Attached(AttachAccepted {
             protocol_version: PROTOCOL_VERSION,
-            session: "work".parse()?,
-            server_pid: ServerPid::new(123)?,
             layout: LayoutSnapshot {
                 active_tab: TabId::new("missing")?,
                 tabs: vec![tab_snapshot(
@@ -1119,18 +1017,17 @@ mod tests {
     fn test_server_error_protocol_version_mismatch_returns_structured_error() {
         let error = ServerError::protocol_version_mismatch(1);
 
-        assert2::assert!(
-            matches!(error, ServerError::ProtocolVersionMismatch(ref msg) if msg.contains("expected protocol version 9") && msg.contains("got 1"))
+        pretty_assertions::assert_eq!(
+            error,
+            ServerError::ProtocolVersionMismatch {
+                expected: PROTOCOL_VERSION,
+                actual: 1,
+            },
         );
-    }
-
-    #[test]
-    fn test_server_error_command_not_implemented_returns_nonfatal_structured_error() {
-        let error = ServerError::command_not_implemented(&ClientCommand::SplitPaneVertical);
-
-        pretty_assertions::assert_eq!(error.code(), "command_not_implemented");
-        assert2::assert!(error.is_command_not_implemented());
-        assert2::assert!(error.msg().contains("SplitPaneVertical"));
+        pretty_assertions::assert_eq!(
+            error.msg(),
+            format!("expected protocol version {PROTOCOL_VERSION}, got 1")
+        );
     }
 
     #[rstest]
@@ -1256,21 +1153,6 @@ mod tests {
     })]
     fn test_layout_snapshot_validate_when_layout_is_invalid_returns_error(#[case] layout: LayoutSnapshot) {
         assert2::assert!(layout.validate().is_err());
-    }
-
-    #[test]
-    fn test_server_pid_new_when_pid_is_zero_returns_error() {
-        assert2::assert!(ServerPid::new(0).is_err());
-    }
-
-    #[test]
-    fn test_server_pid_codec_when_pid_round_trips_as_number() -> rootcause::Result<()> {
-        let encoded = serde_json::to_string(&ServerPid::new(123)?)?;
-
-        pretty_assertions::assert_eq!(encoded, "123");
-        pretty_assertions::assert_eq!(serde_json::from_str::<ServerPid>(&encoded)?, ServerPid::new(123)?);
-        assert2::assert!(serde_json::from_str::<ServerPid>("0").is_err());
-        Ok(())
     }
 
     #[rstest]
@@ -1422,19 +1304,17 @@ mod tests {
         Ok(())
     }
 
-    fn client_hello() -> rootcause::Result<ClientHello> {
-        Ok(ClientHello {
+    fn client_attach_request() -> rootcause::Result<AttachRequest> {
+        Ok(AttachRequest {
             protocol_version: PROTOCOL_VERSION,
             session: "work".parse()?,
             terminal_size: terminal_size(80, 24)?,
         })
     }
 
-    fn server_hello() -> rootcause::Result<ServerHello> {
-        Ok(ServerHello {
+    fn attach_accepted() -> rootcause::Result<AttachAccepted> {
+        Ok(AttachAccepted {
             protocol_version: PROTOCOL_VERSION,
-            session: "work".parse()?,
-            server_pid: ServerPid::new(123)?,
             layout: layout_snapshot()?,
         })
     }
@@ -1448,7 +1328,11 @@ mod tests {
     }
 
     fn layout_snapshot() -> rootcause::Result<LayoutSnapshot> {
-        LayoutSnapshot::single_pane("tab-1", "default", "pane-1", "shell")
+        let active_tab = TabId::new("tab-1")?;
+        let active_pane = PaneId::new("pane-1")?;
+        let pane = PaneSnapshot::new(active_pane.clone(), "shell");
+        let tab = TabSnapshot::new(active_tab.clone(), "default", active_pane, vec![pane])?;
+        LayoutSnapshot::new(active_tab, vec![tab])
     }
 
     fn tab_snapshot(

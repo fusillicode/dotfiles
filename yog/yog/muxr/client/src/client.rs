@@ -5,21 +5,19 @@ use std::io::Read;
 use std::io::Write;
 use std::os::unix::process::CommandExt;
 use std::path::Path;
-use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
-use muxr_core::ClientHello;
+use muxr_core::AttachRequest;
 use muxr_core::ClientRequest;
 use muxr_core::INTERNAL_SERVER_ARG;
 use muxr_core::LayoutSnapshot;
 use muxr_core::PROTOCOL_VERSION;
 use muxr_core::RenderUpdate;
 use muxr_core::ServerEvent;
-use muxr_core::ServerPid;
 use muxr_core::SessionName;
 use muxr_core::SessionPaths;
 use muxr_core::TerminalSize;
@@ -45,22 +43,6 @@ const CONTROL_REQUEST_CHANNEL_LIMIT: usize = 128;
 const INPUT_REQUEST_CHANNEL_LIMIT: usize = 1024;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct StartResult {
-    pub session: SessionName,
-    pub socket: PathBuf,
-    pub server_pid: ServerPid,
-    pub started_server: bool,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum PidStatus {
-    Malformed { raw: String },
-    Missing,
-    Running { pid: ServerPid },
-    Stale { pid: ServerPid },
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
 enum StdinRead {
     Bytes(Vec<u8>),
     Eof,
@@ -82,61 +64,15 @@ pub fn start(session: &SessionName, server_executable: &Path) -> rootcause::Resu
     })
 }
 
-/// Start or attach to a muxr session, then detach after validating the handshake.
-///
-/// # Errors
-/// - The session paths cannot be resolved.
-/// - The server cannot be started, attached, or detached.
-pub fn start_session(session: &SessionName, server_executable: &Path) -> rootcause::Result<StartResult> {
-    self::run_async(self::attach_and_detach(session, server_executable))
-}
-
-/// Read the muxr server pid file and classify whether that process is usable.
-///
-/// # Errors
-/// - The pid file cannot be read.
-/// - The local process table cannot be queried.
-pub fn read_pid_status(paths: &SessionPaths) -> rootcause::Result<PidStatus> {
-    let raw = match fs::read_to_string(&paths.pid) {
-        Ok(raw) => raw,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(PidStatus::Missing),
-        Err(error) => return Err(error).context("failed to read muxr pid file")?,
-    };
-    let trimmed = raw.trim();
-    let Ok(pid) = trimmed.parse::<u32>() else {
-        return Ok(PidStatus::Malformed { raw });
-    };
-
-    let Ok(pid) = ServerPid::new(pid) else {
-        return Ok(PidStatus::Malformed { raw });
-    };
-
-    if self::process_exists(pid)? {
-        Ok(PidStatus::Running { pid })
-    } else {
-        Ok(PidStatus::Stale { pid })
-    }
-}
-
 struct AttachedSession {
     layout: LayoutSnapshot,
     reader: ClientEventReader,
-    result: StartResult,
     writer: ClientRequestWriter,
 }
 
 enum AttachFailure {
     Rejected(rootcause::Report),
     Unusable(rootcause::Report),
-}
-
-impl AttachFailure {
-    #[cfg(test)]
-    fn into_report(self) -> rootcause::Report {
-        match self {
-            Self::Rejected(error) | Self::Unusable(error) => error,
-        }
-    }
 }
 
 struct TerminalGuard {
@@ -262,10 +198,7 @@ async fn open_session(
     let paths = SessionPaths::from_home(session)?;
 
     match self::attach(session, &paths, terminal_size.clone()).await {
-        Ok(mut attached_session) => {
-            attached_session.result.started_server = false;
-            return Ok(attached_session);
-        }
+        Ok(attached_session) => return Ok(attached_session),
         Err(attach_failure) => {
             self::handle_attach_failure(&paths, attach_failure).await?;
             self::cleanup_stale_session_files(&paths)?;
@@ -285,26 +218,30 @@ async fn attach(
 
     tokio::time::timeout(
         ATTACH_TIMEOUT,
-        connection.send_request(&self::hello_request(session, terminal_size)),
+        connection.send_request(&ClientRequest::Attach(AttachRequest {
+            protocol_version: PROTOCOL_VERSION,
+            session: session.clone(),
+            terminal_size,
+        })),
     )
     .await
-    .map_err(|_| AttachFailure::Unusable(report!("timed out writing muxr attach hello")))?
+    .map_err(|_| AttachFailure::Unusable(report!("timed out writing muxr attach request")))?
     .map_err(AttachFailure::Unusable)?;
 
-    let (server_pid, layout) = match tokio::time::timeout(ATTACH_TIMEOUT, connection.recv_event())
+    let layout = match tokio::time::timeout(ATTACH_TIMEOUT, connection.recv_event())
         .await
         .map_err(|_| AttachFailure::Unusable(report!("timed out waiting for muxr attach response")))?
         .map_err(AttachFailure::Unusable)?
     {
-        Some(ServerEvent::Hello(hello)) => {
-            if hello.protocol_version != PROTOCOL_VERSION {
+        Some(ServerEvent::Attached(attached)) => {
+            if attached.protocol_version != PROTOCOL_VERSION {
                 return Err(AttachFailure::Rejected(
                     report!("muxr server protocol version mismatch")
                         .attach(format!("expected={PROTOCOL_VERSION}"))
-                        .attach(format!("actual={}", hello.protocol_version)),
+                        .attach(format!("actual={}", attached.protocol_version)),
                 ));
             }
-            (hello.server_pid, hello.layout)
+            attached.layout
         }
         Some(ServerEvent::Error(error)) => {
             return Err(AttachFailure::Rejected(
@@ -322,17 +259,7 @@ async fn attach(
     };
 
     let (reader, writer) = connection.split();
-    Ok(AttachedSession {
-        layout,
-        reader,
-        result: StartResult {
-            session: session.clone(),
-            socket: paths.socket.clone(),
-            server_pid,
-            started_server: false,
-        },
-        writer,
-    })
+    Ok(AttachedSession { layout, reader, writer })
 }
 
 async fn connect_with_timeout(paths: &SessionPaths) -> Result<ClientConnection, AttachFailure> {
@@ -351,10 +278,7 @@ async fn attach_started_server(
 
     loop {
         match self::attach(session, paths, terminal_size.clone()).await {
-            Ok(mut attached_session) => {
-                attached_session.result.started_server = true;
-                return Ok(attached_session);
-            }
+            Ok(attached_session) => return Ok(attached_session),
             Err(AttachFailure::Rejected(error)) => return Err(error),
             Err(AttachFailure::Unusable(error)) => {
                 // Socket path creation can win the race against listener readiness after spawning the server.
@@ -366,36 +290,6 @@ async fn attach_started_server(
 
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
-}
-
-async fn attach_and_detach(session: &SessionName, server_executable: &Path) -> rootcause::Result<StartResult> {
-    let attached_session = self::open_session(session, TerminalSize::new(80, 24)?, server_executable).await?;
-
-    self::send_detach_and_wait(attached_session).await
-}
-
-async fn send_detach_and_wait(mut attached_session: AttachedSession) -> rootcause::Result<StartResult> {
-    attached_session.writer.send_request(&ClientRequest::Detach).await?;
-
-    loop {
-        match attached_session.reader.recv_event().await? {
-            Some(ServerEvent::Detached) => break,
-            Some(ServerEvent::Error(error)) => {
-                return Err(report!("muxr server returned error while detaching")
-                    .attach(format!("code={}", error.code()))
-                    .attach(format!("msg={}", error.msg())));
-            }
-            Some(ServerEvent::Ping) => attached_session.writer.send_request(&ClientRequest::Pong).await?,
-            // Buffered output can legitimately precede the detach ack when a session is reused.
-            Some(ServerEvent::Output(_) | ServerEvent::Pong | ServerEvent::Layout(_) | ServerEvent::Render(_)) => {}
-            Some(event @ ServerEvent::Hello(_)) => {
-                return Err(report!("unexpected muxr server detach event").attach(format!("{event:?}")));
-            }
-            None => return Err(report!("muxr server closed before detach ack")),
-        }
-    }
-
-    Ok(attached_session.result)
 }
 
 async fn run_interactive(mut attached_session: AttachedSession, initial_size: TerminalSize) -> rootcause::Result<()> {
@@ -413,7 +307,6 @@ async fn run_interactive(mut attached_session: AttachedSession, initial_size: Te
     while let Some(event) = attached_session.reader.recv_event().await? {
         match event {
             ServerEvent::Detached => break,
-            ServerEvent::Error(error) if error.is_command_not_implemented() => {}
             ServerEvent::Error(error) => {
                 return Err(report!("muxr server returned error")
                     .attach(format!("code={}", error.code()))
@@ -435,11 +328,7 @@ async fn run_interactive(mut attached_session: AttachedSession, initial_size: Te
                     }
                 }
             },
-            ServerEvent::Hello(_) | ServerEvent::Pong => {}
-            ServerEvent::Output(bytes) => {
-                stdout.write_all(&bytes).context("failed to write muxr pty output")?;
-                stdout.flush().context("failed to flush muxr pty output")?;
-            }
+            ServerEvent::Attached(_) | ServerEvent::Pong => {}
         }
     }
 
@@ -497,7 +386,6 @@ async fn handle_attach_failure(paths: &SessionPaths, attach_failure: AttachFailu
             if self::session_socket_is_live(paths).await? {
                 return Err(attach_error).attach("socket responded to muxr liveness probe");
             }
-            drop(attach_error);
             Ok(())
         }
     }
@@ -554,19 +442,6 @@ fn server_command(session: &SessionName, server_executable: &Path) -> Command {
     command
 }
 
-fn process_exists(pid: ServerPid) -> rootcause::Result<bool> {
-    let status = Command::new("kill")
-        .arg("-0")
-        .arg(pid.get().to_string())
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .context("failed to query muxr server pid")?;
-
-    Ok(status.success())
-}
-
 fn remove_file_if_exists(path: &Path) -> rootcause::Result<()> {
     match fs::remove_file(path) {
         Ok(()) => Ok(()),
@@ -583,14 +458,6 @@ fn current_terminal_size() -> rootcause::Result<TerminalSize> {
 fn pane_size_for_terminal(size: &TerminalSize) -> rootcause::Result<TerminalSize> {
     let rows = size.rows().saturating_sub(TABBAR_ROWS).max(1);
     TerminalSize::new(size.cols(), rows)
-}
-
-fn hello_request(session: &SessionName, terminal_size: TerminalSize) -> ClientRequest {
-    ClientRequest::Hello(ClientHello {
-        protocol_version: PROTOCOL_VERSION,
-        session: session.clone(),
-        terminal_size,
-    })
 }
 
 fn spawn_stdin_forwarder(input_sender: tokio::sync::mpsc::Sender<ClientRequest>) -> thread::JoinHandle<()> {
@@ -761,66 +628,14 @@ mod tests {
     use muxr_core::ClientKeyCode;
     use muxr_core::ClientKeyModifiers;
     use muxr_core::LayoutSnapshot;
+    use muxr_core::PaneId;
+    use muxr_core::PaneSnapshot;
     use muxr_core::ServerError;
-    use muxr_core::ServerHello;
+    use muxr_core::TabId;
+    use muxr_core::TabSnapshot;
     use muxr_transport::ServerListener;
-    use rstest::rstest;
 
     use super::*;
-
-    #[test]
-    fn test_read_pid_status_when_pid_file_is_missing_returns_missing() -> rootcause::Result<()> {
-        let tempdir = tempfile::tempdir()?;
-        let (_, paths) = self::session_paths(tempdir.path(), "work")?;
-
-        pretty_assertions::assert_eq!(read_pid_status(&paths)?, PidStatus::Missing);
-        Ok(())
-    }
-
-    #[rstest]
-    #[case::not_a_number("abc")]
-    #[case::zero("0")]
-    fn test_read_pid_status_when_pid_file_is_malformed_returns_malformed(#[case] raw: &str) -> rootcause::Result<()> {
-        let tempdir = tempfile::tempdir()?;
-        let (_, paths) = self::session_paths(tempdir.path(), "work")?;
-        fs::create_dir_all(&paths.root)?;
-        fs::write(&paths.pid, raw)?;
-
-        pretty_assertions::assert_eq!(read_pid_status(&paths)?, PidStatus::Malformed { raw: raw.to_owned() },);
-        Ok(())
-    }
-
-    #[test]
-    fn test_read_pid_status_when_pid_file_process_is_missing_returns_stale() -> rootcause::Result<()> {
-        let tempdir = tempfile::tempdir()?;
-        let (_, paths) = self::session_paths(tempdir.path(), "work")?;
-        fs::create_dir_all(&paths.root)?;
-        fs::write(&paths.pid, u32::MAX.to_string())?;
-
-        pretty_assertions::assert_eq!(
-            read_pid_status(&paths)?,
-            PidStatus::Stale {
-                pid: ServerPid::new(u32::MAX)?
-            },
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_read_pid_status_when_pid_file_process_is_running_returns_running() -> rootcause::Result<()> {
-        let tempdir = tempfile::tempdir()?;
-        let (_, paths) = self::session_paths(tempdir.path(), "work")?;
-        fs::create_dir_all(&paths.root)?;
-        fs::write(&paths.pid, std::process::id().to_string())?;
-
-        pretty_assertions::assert_eq!(
-            read_pid_status(&paths)?,
-            PidStatus::Running {
-                pid: ServerPid::new(std::process::id())?
-            },
-        );
-        Ok(())
-    }
 
     #[test]
     fn test_cleanup_stale_session_files_when_running_pid_has_missing_socket_removes_pid() -> rootcause::Result<()> {
@@ -835,43 +650,6 @@ mod tests {
 
             assert2::assert!(!paths.pid.exists());
             assert2::assert!(!paths.socket.exists());
-            Ok(())
-        })
-    }
-
-    #[test]
-    fn test_attach_when_pid_file_is_missing_after_hello_uses_server_pid_from_hello() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
-            let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            fs::create_dir_all(&paths.root)?;
-            let listener = ServerListener::bind(&paths.socket)?;
-            let server_session = session.clone();
-            let handle = tokio::spawn(async move {
-                let mut connection = listener.accept().await?;
-                assert2::assert!(matches!(
-                    connection.recv_request().await?,
-                    Some(ClientRequest::Hello(_))
-                ));
-                connection
-                    .send_event(&ServerEvent::Hello(ServerHello {
-                        protocol_version: PROTOCOL_VERSION,
-                        session: server_session,
-                        server_pid: ServerPid::new(4242)?,
-                        layout: self::layout_snapshot()?,
-                    }))
-                    .await?;
-                Ok::<(), rootcause::Report>(())
-            });
-
-            let attached_session = attach(&session, &paths, TerminalSize::new(80, 24)?)
-                .await
-                .map_err(AttachFailure::into_report)?;
-
-            pretty_assertions::assert_eq!(attached_session.result.server_pid, ServerPid::new(4242)?);
-            handle
-                .await
-                .map_err(|error| report!("muxr client test socket task panicked").attach(format!("{error}")))??;
             Ok(())
         })
     }
@@ -949,80 +727,25 @@ mod tests {
                 let mut connection = listener.accept().await?;
                 assert2::assert!(matches!(
                     connection.recv_request().await?,
-                    Some(ClientRequest::Hello(_))
+                    Some(ClientRequest::Attach(_))
                 ));
                 connection
-                    .send_event(&ServerEvent::Error(ServerError::client_already_attached()))
+                    .send_event(&ServerEvent::Error(ServerError::ClientAlreadyAttached))
                     .await?;
                 Ok::<(), rootcause::Report>(())
             });
 
-            let attach_error = attach(&session, &paths, TerminalSize::new(80, 24)?)
-                .await
-                .map_or_else(AttachFailure::into_report, |_| report!("expected rejected attach"));
+            let attach_error = attach(&session, &paths, TerminalSize::new(80, 24)?).await.map_or_else(
+                |failure| match failure {
+                    AttachFailure::Rejected(error) | AttachFailure::Unusable(error) => error,
+                },
+                |_| report!("expected rejected attach"),
+            );
 
             assert2::assert!(attach_error.to_string().contains("muxr server rejected attach"));
             handle
                 .await
                 .map_err(|error| report!("muxr rejected attach test task panicked").attach(format!("{error}")))??;
-            Ok(())
-        })
-    }
-
-    #[test]
-    fn test_attach_and_detach_when_output_and_ping_precede_detached_returns_result() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
-            let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            fs::create_dir_all(&paths.root)?;
-            let listener = ServerListener::bind(&paths.socket)?;
-            let server_session = session.clone();
-            let handle = tokio::spawn(async move {
-                let mut connection = listener.accept().await?;
-                assert2::assert!(matches!(
-                    connection.recv_request().await?,
-                    Some(ClientRequest::Hello(_))
-                ));
-                connection
-                    .send_event(&ServerEvent::Hello(ServerHello {
-                        protocol_version: PROTOCOL_VERSION,
-                        session: server_session,
-                        server_pid: ServerPid::new(4242)?,
-                        layout: self::layout_snapshot()?,
-                    }))
-                    .await?;
-                connection
-                    .send_event(&ServerEvent::Output(b"buffered".to_vec()))
-                    .await?;
-                connection.send_event(&ServerEvent::Ping).await?;
-
-                let mut saw_detach = false;
-                let mut saw_pong = false;
-                for _ in 0..2 {
-                    match connection.recv_request().await? {
-                        Some(ClientRequest::Detach) => saw_detach = true,
-                        Some(ClientRequest::Pong) => saw_pong = true,
-                        Some(request) => {
-                            return Err(report!("unexpected muxr detach test request").attach(format!("{request:?}")));
-                        }
-                        None => return Err(report!("muxr detach test client closed early")),
-                    }
-                }
-                assert2::assert!(saw_detach);
-                assert2::assert!(saw_pong);
-                connection.send_event(&ServerEvent::Detached).await?;
-                Ok::<(), rootcause::Report>(())
-            });
-
-            let attached_session = attach(&session, &paths, TerminalSize::new(80, 24)?)
-                .await
-                .map_err(AttachFailure::into_report)?;
-            let result = send_detach_and_wait(attached_session).await?;
-
-            pretty_assertions::assert_eq!(result.server_pid, ServerPid::new(4242)?);
-            handle
-                .await
-                .map_err(|error| report!("muxr detach test socket task panicked").attach(format!("{error}")))??;
             Ok(())
         })
     }
@@ -1377,7 +1100,11 @@ mod tests {
     }
 
     fn layout_snapshot() -> rootcause::Result<LayoutSnapshot> {
-        LayoutSnapshot::single_pane("tab-1", "default", "pane-1", "shell")
+        let active_tab = TabId::new("tab-1")?;
+        let active_pane = PaneId::new("pane-1")?;
+        let pane = PaneSnapshot::new(active_pane.clone(), "shell");
+        let tab = TabSnapshot::new(active_tab.clone(), "default", active_pane, vec![pane])?;
+        LayoutSnapshot::new(active_tab, vec![tab])
     }
 
     fn two_tab_layout() -> rootcause::Result<LayoutSnapshot> {

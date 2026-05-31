@@ -243,19 +243,15 @@ fn render_row_span(
             flush_text_run(stdout, active_style, run_style, &mut run_text)?;
             run_style = Some(cell.style);
         }
-        push_cell_text(&mut run_text, cell);
+        if cell.text.is_empty() {
+            run_text.push(' ');
+        } else {
+            run_text.push_str(&cell.text);
+        }
     }
     flush_text_run(stdout, active_style, run_style, &mut run_text)?;
 
     Ok(())
-}
-
-fn push_cell_text(run_text: &mut String, cell: &RenderCell) {
-    if cell.text.is_empty() {
-        run_text.push(' ');
-    } else {
-        run_text.push_str(&cell.text);
-    }
 }
 
 fn flush_text_run(
@@ -668,7 +664,9 @@ mod tests {
 
     fn applied_frame_buffer() -> rootcause::Result<FrameBuffer> {
         let mut frame_buffer = FrameBuffer::default();
-        drop(frame_buffer.apply(RenderUpdate::Baseline(render_baseline()?))?);
+        let ApplyOutcome::Applied(_) = frame_buffer.apply(RenderUpdate::Baseline(render_baseline()?))? else {
+            return Err(rootcause::report!("expected applied muxr render baseline"));
+        };
         Ok(frame_buffer)
     }
 

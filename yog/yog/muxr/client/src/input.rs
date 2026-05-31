@@ -163,84 +163,25 @@ fn finish_escape_sequence(bytes: Vec<u8>, input: &mut Vec<u8>, decoded: &mut Vec
 }
 
 fn key_for_plain_byte(byte: u8) -> Option<ClientKey> {
-    match byte {
-        b'h' => Some(self::key(ClientKeyCode::Char('h'), ClientKeyModifiers::NONE, &[byte])),
-        b'j' => Some(self::key(ClientKeyCode::Char('j'), ClientKeyModifiers::NONE, &[byte])),
-        b'k' => Some(self::key(ClientKeyCode::Char('k'), ClientKeyModifiers::NONE, &[byte])),
-        b'l' => Some(self::key(ClientKeyCode::Char('l'), ClientKeyModifiers::NONE, &[byte])),
-        _ => None,
-    }
+    let code = match byte {
+        b'h' | b'j' | b'k' | b'l' => ClientKeyCode::Char(char::from(byte)),
+        _ => return None,
+    };
+
+    Some(self::key(code, ClientKeyModifiers::NONE, &[byte]))
 }
 
 fn key_for_escaped_byte(byte: u8) -> Option<ClientKey> {
-    match byte {
-        CTRL_N => Some(self::key(
-            ClientKeyCode::Char('n'),
-            ClientKeyModifiers::CTRL_ALT,
-            &[ESC, byte],
-        )),
-        CTRL_P => Some(self::key(
-            ClientKeyCode::Char('p'),
-            ClientKeyModifiers::CTRL_ALT,
-            &[ESC, byte],
-        )),
-        b'D' => Some(self::key(
-            ClientKeyCode::Char('D'),
-            ClientKeyModifiers::SHIFT_ALT,
-            &[ESC, byte],
-        )),
-        b'E' => Some(self::key(
-            ClientKeyCode::Char('E'),
-            ClientKeyModifiers::SHIFT_ALT,
-            &[ESC, byte],
-        )),
-        b'H' => Some(self::key(
-            ClientKeyCode::Char('H'),
-            ClientKeyModifiers::SHIFT_ALT,
-            &[ESC, byte],
-        )),
-        b'J' => Some(self::key(
-            ClientKeyCode::Char('J'),
-            ClientKeyModifiers::SHIFT_ALT,
-            &[ESC, byte],
-        )),
-        b'K' => Some(self::key(
-            ClientKeyCode::Char('K'),
-            ClientKeyModifiers::SHIFT_ALT,
-            &[ESC, byte],
-        )),
-        b'L' => Some(self::key(
-            ClientKeyCode::Char('L'),
-            ClientKeyModifiers::SHIFT_ALT,
-            &[ESC, byte],
-        )),
-        b'N' => Some(self::key(
-            ClientKeyCode::Char('N'),
-            ClientKeyModifiers::SHIFT_ALT,
-            &[ESC, byte],
-        )),
-        b'P' => Some(self::key(
-            ClientKeyCode::Char('P'),
-            ClientKeyModifiers::SHIFT_ALT,
-            &[ESC, byte],
-        )),
-        b'R' => Some(self::key(
-            ClientKeyCode::Char('R'),
-            ClientKeyModifiers::SHIFT_ALT,
-            &[ESC, byte],
-        )),
-        b'V' => Some(self::key(
-            ClientKeyCode::Char('V'),
-            ClientKeyModifiers::SHIFT_ALT,
-            &[ESC, byte],
-        )),
-        b'W' => Some(self::key(
-            ClientKeyCode::Char('W'),
-            ClientKeyModifiers::SHIFT_ALT,
-            &[ESC, byte],
-        )),
-        _ => None,
-    }
+    let (code, modifiers) = match byte {
+        CTRL_N => (ClientKeyCode::Char('n'), ClientKeyModifiers::CTRL_ALT),
+        CTRL_P => (ClientKeyCode::Char('p'), ClientKeyModifiers::CTRL_ALT),
+        b'D' | b'E' | b'H' | b'J' | b'K' | b'L' | b'N' | b'P' | b'R' | b'V' | b'W' => {
+            (ClientKeyCode::Char(char::from(byte)), ClientKeyModifiers::SHIFT_ALT)
+        }
+        _ => return None,
+    };
+
+    Some(self::key(code, modifiers, &[ESC, byte]))
 }
 
 fn key_for_csi_sequence(bytes: &[u8]) -> Option<ClientKey> {
@@ -335,13 +276,9 @@ fn is_pending_escape_complete(bytes: &[u8]) -> bool {
 
     match bytes {
         [ESC] | [ESC, b'['] | [ESC, b'[', b'<'] => false,
-        [ESC, b'[', rest @ ..] => rest.last().is_some_and(|byte| is_csi_final_byte(*byte)),
+        [ESC, b'[', rest @ ..] => rest.last().is_some_and(|byte| (0x40..=0x7e).contains(byte)),
         _ => true,
     }
-}
-
-fn is_csi_final_byte(byte: u8) -> bool {
-    (0x40..=0x7e).contains(&byte)
 }
 
 fn push_input(decoded: &mut Vec<DecodedInput>, input: &mut Vec<u8>) {
