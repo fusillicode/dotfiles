@@ -11,7 +11,7 @@ use serde::Serialize;
 
 pub const DEFAULT_SESSION_NAME: &str = "default";
 pub const INTERNAL_SERVER_ARG: &str = "--server";
-pub const STATE_HOME_PARTS: &[&str] = &[".local", "state", "muxr"];
+const STATE_HOME_PARTS: &[&str] = &[".local", "state", "muxr"];
 
 const SOCKET_HOME_PARTS: &[&str] = &["s"];
 const SOCKET_HASH_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;

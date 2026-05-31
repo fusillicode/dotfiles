@@ -49,6 +49,7 @@ impl ShellCommand {
     }
 
     #[must_use]
+    #[cfg(test)]
     pub fn arg(mut self, arg: impl Into<String>) -> Self {
         self.args.push(arg.into());
         self
@@ -83,7 +84,7 @@ impl ShellCommand {
 #[derive(Debug)]
 pub enum PtyEvent {
     Exited,
-    Output,
+    OutputReady,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -207,7 +208,7 @@ impl PtyHandle {
 
         // PTY-bound input should reveal the live viewport before an app echoes typed bytes; some apps do not echo, so
         // callers need the changed flag to redraw immediately after resetting scrollback.
-        let scrolled_to_bottom = self.scroll_to_bottom()?;
+        let scrolled_to_bottom = lock_mutex(&self.state.terminal, "pty terminal")?.scroll_to_bottom();
         self::write_pty_bytes(
             self.writer.as_ref(),
             bytes,
@@ -239,10 +240,6 @@ impl PtyHandle {
 
     pub fn scroll(&self, direction: PaneScrollDirection) -> rootcause::Result<bool> {
         Ok(lock_mutex(&self.state.terminal, "pty terminal")?.scroll(direction))
-    }
-
-    fn scroll_to_bottom(&self) -> rootcause::Result<bool> {
-        Ok(lock_mutex(&self.state.terminal, "pty terminal")?.scroll_to_bottom())
     }
 
     pub fn exit_status(&self) -> rootcause::Result<Option<PtyExitStatus>> {
@@ -350,9 +347,9 @@ impl PtyState {
 
         let mut active_sink = lock_mutex(&self.active_sink, "pty active sink")?;
         if let Some(sink) = active_sink.as_ref() {
-            match sink.sender.try_send(PtyEvent::Output) {
-                Ok(()) | Err(TrySendError::Full(PtyEvent::Output)) => {}
-                Err(TrySendError::Disconnected(PtyEvent::Output)) => {
+            match sink.sender.try_send(PtyEvent::OutputReady) {
+                Ok(()) | Err(TrySendError::Full(PtyEvent::OutputReady)) => {}
+                Err(TrySendError::Disconnected(PtyEvent::OutputReady)) => {
                     sink.output_current.store(false, Ordering::Release);
                     *active_sink = None;
                 }
@@ -532,7 +529,7 @@ mod tests {
         let _guard = state.attach_sink(sender)?;
         pretty_assertions::assert_eq!(state.append_output(b"after")?, Vec::<Vec<u8>>::new());
 
-        assert2::assert!(matches!(receiver.recv(), Ok(PtyEvent::Output)));
+        assert2::assert!(matches!(receiver.recv(), Ok(PtyEvent::OutputReady)));
         Ok(())
     }
 
@@ -551,7 +548,7 @@ mod tests {
 
         assert2::assert!(lock_mutex(&state.active_sink, "pty active sink")?.is_some());
         assert2::assert!(output_current.load(Ordering::Acquire));
-        assert2::assert!(matches!(receiver.recv(), Ok(PtyEvent::Output)));
+        assert2::assert!(matches!(receiver.recv(), Ok(PtyEvent::OutputReady)));
         Ok(())
     }
 
