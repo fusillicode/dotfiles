@@ -11,6 +11,11 @@ members = [
     "yog/ghl",
     "yog/idt",
     "yog/miskatonic",
+    "yog/muxr/cli",
+    "yog/muxr/client",
+    "yog/muxr/core",
+    "yog/muxr/server",
+    "yog/muxr/transport",
     "yog/nomicon",
     "yog/nvrim",
     "yog/oe",
@@ -55,13 +60,22 @@ categories = ["command-line-utilities", "development-tools"]
 # Centralized shared dependencies (including those used only as dev-deps in member crates).
 # Member crates reference them with `{ workspace = true }` under their own [dev-dependencies].
 assert2 = { version = "0.4" }
+bytes = { version = "1.11" }
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 convert_case = { version = "0.11" }
+crossterm = { version = "0.29" }
 fake = { version = "5.1", features = ["derive"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 git2 = { version = "0.21", default-features = false }
+interprocess = { version = "2.4", default-features = false, features = ["tokio"] }
+muxr_client = { package = "muxr-client", path = "./yog/muxr/client" }
+muxr_core = { package = "muxr-core", path = "./yog/muxr/core" }
+muxr_server = { package = "muxr-server", path = "./yog/muxr/server" }
+muxr_transport = { package = "muxr-transport", path = "./yog/muxr/transport" }
 nomicon = { path = "./yog/nomicon" }
 nvim-oxi = { path = "../third_party/nvim-oxi", features = ["neovim-nightly", "mlua"] }
 owo-colors = { version = "4" }
+portable-pty = { version = "0.9" }
 pretty_assertions = { version = "1.4" }
 rootcause = { version = "0.12" }
 rstest = { version = "0.26" }
@@ -71,8 +85,11 @@ serde_json = { version = "1.0" }
 strum = { version = "0.28", features = ["derive"] }
 tempfile = { version = "3.25" }
 thiserror = { version = "2.0" }
+tokio = { version = "1.48", default-features = false, features = ["io-util", "macros", "rt-multi-thread", "sync", "time"] }
+tokio-util = { version = "0.7", default-features = false, features = ["codec"] }
 ureq = { version = "3.3", default-features = false, features = ["rustls"] }
 url = { version = "2.5" }
+vt100 = { version = "0.16" }
 
 ytil_agents = { path = "./yog/ytil/agents" }
 ytil_cmd = { path = "./yog/ytil/cmd" }
