@@ -311,15 +311,8 @@ mod tests {
     use muxr_core::ClientKeyCode;
     use muxr_core::ClientKeyModifiers;
     use muxr_core::LayoutSnapshot;
-    use muxr_core::PROTOCOL_VERSION;
     use muxr_core::PaneId;
     use muxr_core::PaneSnapshot;
-    use muxr_core::RenderCell;
-    use muxr_core::RenderCursor;
-    use muxr_core::RenderDiff;
-    use muxr_core::RenderRowSpan;
-    use muxr_core::RenderStyle;
-    use muxr_core::RenderUpdate;
     use muxr_core::TabId;
     use muxr_core::TabSnapshot;
     use muxr_core::TerminalSize;
@@ -357,7 +350,6 @@ mod tests {
     #[case::ping(ServerEvent::Ping)]
     #[case::pong(ServerEvent::Pong)]
     #[case::attached(ServerEvent::Attached(AttachAccepted {
-        protocol_version: PROTOCOL_VERSION,
         layout: layout_snapshot()?,
     }))]
     #[case::layout(ServerEvent::Layout(layout_snapshot()?))]
@@ -387,10 +379,7 @@ mod tests {
             let (mut client_writer, _client_reader) = Framed::new(client, LengthDelimitedCodec::new()).split();
             let (_server_writer, mut server_reader) = Framed::new(server, LengthDelimitedCodec::new()).split();
 
-            client_writer
-                .send(Bytes::from_static(b"{not-json"))
-                .await
-                .context("failed to write invalid test frame")?;
+            send_frame(&mut client_writer, b"MUXR-BINV".to_vec()).await?;
 
             assert2::assert!(recv_client_request_frame(&mut server_reader).await.is_err());
             Ok(())
@@ -398,19 +387,17 @@ mod tests {
     }
 
     #[test]
-    fn test_transport_when_invalid_render_event_is_received_returns_error() -> rootcause::Result<()> {
+    fn test_transport_when_empty_payload_is_received_returns_error() -> rootcause::Result<()> {
         let runtime = tokio::runtime::Runtime::new().context("failed to build muxr transport test runtime")?;
 
         runtime.block_on(async {
             let (client, server) = tokio::io::duplex(1024);
-            let (_client_writer, mut client_reader) = Framed::new(client, LengthDelimitedCodec::new()).split();
-            let (mut server_writer, _server_reader) = Framed::new(server, LengthDelimitedCodec::new()).split();
-            let frame = serde_json::to_vec(&invalid_render_event()?)
-                .context("failed to serialize invalid render event test frame")?;
+            let (mut client_writer, _client_reader) = Framed::new(client, LengthDelimitedCodec::new()).split();
+            let (_server_writer, mut server_reader) = Framed::new(server, LengthDelimitedCodec::new()).split();
 
-            send_frame(&mut server_writer, frame).await?;
+            send_frame(&mut client_writer, b"MUXR-RKYV".to_vec()).await?;
 
-            assert2::assert!(recv_server_event_frame(&mut client_reader).await.is_err());
+            assert2::assert!(recv_client_request_frame(&mut server_reader).await.is_err());
             Ok(())
         })
     }
@@ -447,20 +434,6 @@ mod tests {
         let error = ServerListener::bind(&path).map_or_else(|error| error, |_| report!("expected path length error"));
 
         assert2::assert!(error.to_string().contains("muxr socket path is too long"));
-    }
-
-    fn invalid_render_event() -> rootcause::Result<ServerEvent> {
-        Ok(ServerEvent::Render(RenderUpdate::Diff(RenderDiff {
-            base_seq: 1,
-            cursor: RenderCursor::new(0, 0, true),
-            rows: vec![RenderRowSpan::new(
-                0,
-                0,
-                vec![RenderCell::wide_continuation(RenderStyle::default())],
-            )],
-            seq: 2,
-            size: TerminalSize::new(80, 24)?,
-        })))
     }
 
     fn layout_snapshot() -> rootcause::Result<LayoutSnapshot> {

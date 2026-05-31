@@ -37,15 +37,15 @@ pub fn queue(stdout: &mut impl Write, layout: &LayoutSnapshot) -> rootcause::Res
 
 fn format_tab_bar(layout: &LayoutSnapshot) -> String {
     layout
-        .tabs
+        .tabs()
         .iter()
         .enumerate()
         .map(|(index, tab)| {
             let ordinal = index.saturating_add(1);
-            if tab.id == layout.active_tab {
-                format!("[{}:{}]", ordinal, tab.title)
+            if tab.id() == layout.active_tab() {
+                format!("[{}:{}]", ordinal, tab.title())
             } else {
-                format!(" {}:{} ", ordinal, tab.title)
+                format!(" {}:{} ", ordinal, tab.title())
             }
         })
         .collect::<Vec<_>>()

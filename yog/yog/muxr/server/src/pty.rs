@@ -577,7 +577,7 @@ mod tests {
         let rendered = snapshot
             .rows()
             .iter()
-            .flat_map(|row| row.cells.iter().map(|cell| cell.text.as_str()))
+            .flat_map(|row| row.cells().iter().map(muxr_core::RenderCell::text))
             .collect::<String>();
 
         assert2::assert!(rendered.contains("history"));
