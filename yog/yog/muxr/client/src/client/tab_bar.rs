@@ -76,13 +76,19 @@ mod tests {
                     muxr_core::TabId::new("tab-1")?,
                     "default",
                     muxr_core::PaneId::new("pane-1")?,
-                    vec![muxr_core::PaneSnapshot::new(muxr_core::PaneId::new("pane-1")?, "shell")],
+                    vec![muxr_core::PaneSnapshot {
+                        id: muxr_core::PaneId::new("pane-1")?,
+                        title: "shell".to_owned(),
+                    }],
                 )?,
                 muxr_core::TabSnapshot::new(
                     muxr_core::TabId::new("tab-2")?,
                     "tab 2",
                     muxr_core::PaneId::new("pane-2")?,
-                    vec![muxr_core::PaneSnapshot::new(muxr_core::PaneId::new("pane-2")?, "shell")],
+                    vec![muxr_core::PaneSnapshot {
+                        id: muxr_core::PaneId::new("pane-2")?,
+                        title: "shell".to_owned(),
+                    }],
                 )?,
             ],
         )?;
@@ -95,7 +101,10 @@ mod tests {
     fn test_queue_when_layout_is_rendered_writes_tab_bar_without_flushing() -> rootcause::Result<()> {
         let active_tab = muxr_core::TabId::new("tab-1")?;
         let active_pane = muxr_core::PaneId::new("pane-1")?;
-        let pane = muxr_core::PaneSnapshot::new(active_pane.clone(), "shell");
+        let pane = muxr_core::PaneSnapshot {
+            id: active_pane.clone(),
+            title: "shell".to_owned(),
+        };
         let tab = muxr_core::TabSnapshot::new(active_tab.clone(), "default", active_pane, vec![pane])?;
         let layout = muxr_core::LayoutSnapshot::new(active_tab, vec![tab])?;
         let mut output = CountingWriter::default();

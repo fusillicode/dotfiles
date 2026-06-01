@@ -11,7 +11,8 @@ use serde::Serialize;
 use crate::server::PaneRuntimes;
 use crate::server::ServerConfig;
 use crate::state::Pane;
-use crate::state::PaneNode;
+use crate::state::PaneState;
+use crate::state::PaneTree;
 use crate::state::SessionLayout;
 use crate::state::SessionMetadata;
 use crate::state::Tab;
@@ -108,13 +109,15 @@ impl SessionLayout {
         let pane_id = PaneId::new(format!("pane-{pane_number}"))?;
         let tab = self.active_tab_mut()?;
         let focus_seq = tab.next_focus_seq()?;
-        let new_pane = Pane::new(
-            pane_id.clone(),
-            metadata.command_label,
-            metadata.cwd,
-            metadata.started_at,
+        let new_pane = Pane {
+            command_label: metadata.command_label.clone(),
+            cwd: metadata.cwd,
             focus_seq,
-        );
+            id: pane_id.clone(),
+            started_at: metadata.started_at,
+            state: PaneState::Running,
+            title: metadata.command_label,
+        };
         tab.split_active_pane(&new_pane, split_axis)?;
         tab.active_pane = pane_id.clone();
         Ok(pane_id)
@@ -131,7 +134,7 @@ impl Tab {
     }
 }
 
-impl PaneNode {
+impl PaneTree {
     pub fn split_pane(
         &mut self,
         pane_id: &PaneId,
@@ -139,17 +142,17 @@ impl PaneNode {
         split_axis: PaneSplitAxis,
     ) -> rootcause::Result<bool> {
         match self {
-            Self::Leaf { pane } if pane.id() == pane_id => {
+            Self::Pane(pane) if pane.id == *pane_id => {
                 let old_pane = pane.clone();
                 *self = Self::Split {
                     axis: split_axis,
                     first_ratio: PaneSplitRatio::balanced(),
-                    first: Box::new(Self::leaf(old_pane)),
-                    second: Box::new(Self::leaf(new_pane.clone())),
+                    first: Box::new(Self::Pane(old_pane)),
+                    second: Box::new(Self::Pane(new_pane.clone())),
                 };
                 Ok(true)
             }
-            Self::Leaf { .. } => Ok(false),
+            Self::Pane(_) => Ok(false),
             Self::Split { first, second, .. } => {
                 if first.split_pane(pane_id, new_pane, split_axis)? {
                     return Ok(true);

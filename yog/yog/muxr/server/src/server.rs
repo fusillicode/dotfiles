@@ -160,12 +160,17 @@ impl PaneRuntimes {
         self.panes.is_empty()
     }
 
-    fn exited_panes(&self) -> rootcause::Result<Vec<(PaneId, Option<PtyExitStatus>)>> {
+    fn exited_panes(&self) -> rootcause::Result<Vec<(PaneId, PtyExitStatus)>> {
         let mut exited_panes = Vec::new();
         for pane in &self.panes {
             let handle = pane.session.handle();
             if handle.has_exited()? {
-                exited_panes.push((pane.id.clone(), handle.exit_status()?));
+                let Some(exit_status) = handle.exit_status()? else {
+                    return Err(
+                        report!("muxr exited pane is missing exit status").attach(format!("pane_id={}", pane.id))
+                    );
+                };
+                exited_panes.push((pane.id.clone(), exit_status));
             }
         }
         Ok(exited_panes)
@@ -173,8 +178,8 @@ impl PaneRuntimes {
 
     fn resize_panes(&self, regions: &[PaneRegion]) -> rootcause::Result<()> {
         for region in regions {
-            self.handle(region.id())?
-                .resize(&TerminalSize::new(region.cols(), region.rows())?)?;
+            self.handle(&region.id)?
+                .resize(&TerminalSize::new(region.area.size.cols, region.area.size.rows)?)?;
         }
         Ok(())
     }
@@ -192,7 +197,6 @@ struct CompositeFrame {
     size: TerminalSize,
 }
 
-#[derive(Default)]
 struct RenderComposer {
     last_sent: Option<CompositeFrame>,
     next_seq: u64,
@@ -204,14 +208,16 @@ enum RenderDiffReason {
     RegionChanged,
 }
 
-impl RenderComposer {
-    const fn new() -> Self {
+impl Default for RenderComposer {
+    fn default() -> Self {
         Self {
             last_sent: None,
             next_seq: 1,
         }
     }
+}
 
+impl RenderComposer {
     fn render_baseline(
         &mut self,
         layout: &SessionLayout,
@@ -285,21 +291,33 @@ impl RenderComposer {
         let pane_layout = layout.pane_layout(size)?;
         let active_pane = layout.active_pane_id()?;
         let mut rows = self::empty_render_rows(size);
-        let mut cursor = RenderCursor::new(0, 0, false);
+        let mut cursor = RenderCursor {
+            row: 0,
+            col: 0,
+            visible: false,
+        };
 
         for region in pane_layout.regions() {
-            let snapshot = runtimes.snapshot(region.id())?;
+            let snapshot = runtimes.snapshot(&region.id)?;
             self::paste_snapshot(&mut rows, region, &snapshot)?;
-            if region.id() == &active_pane && snapshot.cursor().visible {
+            if region.id == active_pane && snapshot.cursor().visible {
                 let row = region
-                    .row()
+                    .area
+                    .origin
+                    .row
                     .checked_add(snapshot.cursor().row)
                     .ok_or_else(|| report!("muxr composite cursor row overflowed"))?;
                 let col = region
-                    .col()
+                    .area
+                    .origin
+                    .col
                     .checked_add(snapshot.cursor().col)
                     .ok_or_else(|| report!("muxr composite cursor col overflowed"))?;
-                cursor = RenderCursor::new(row, col, true);
+                cursor = RenderCursor {
+                    row,
+                    col,
+                    visible: true,
+                };
             }
         }
         crate::pane_borders::paste_borders(&mut rows, pane_layout.borders(), Some(&active_pane), border_mode)?;
@@ -383,7 +401,7 @@ pub fn serve_session(session: &SessionName) -> rootcause::Result<()> {
         session: session.clone(),
         paths,
         max_accepted_connections: None,
-        shell_command: ShellCommand::default_from_env(),
+        shell_command: ShellCommand::default_from_env()?,
     })
 }
 
@@ -418,7 +436,7 @@ async fn serve_async(config: &ServerConfig) -> rootcause::Result<()> {
         crate::state::persisted::write_metadata(&config.paths, &locked_layout)?;
     }
     let active_client = Arc::new(AtomicBool::new(false));
-    let delete_sessions = Arc::new(DeleteSessions::new());
+    let delete_sessions = Arc::new(DeleteSessions::default());
     let mut accepted_connections = 0_usize;
     let mut handles = Vec::new();
 
@@ -555,14 +573,14 @@ pub fn unix_timestamp_millis() -> rootcause::Result<u64> {
 }
 
 pub fn session_metadata(config: &ServerConfig) -> rootcause::Result<SessionMetadata> {
-    Ok(SessionMetadata::new(
-        config.shell_command.label(),
-        std::env::current_dir()
+    Ok(SessionMetadata {
+        command_label: config.shell_command.label(),
+        cwd: std::env::current_dir()
             .context("failed to read muxr server cwd")?
             .to_string_lossy()
             .into_owned(),
-        self::unix_timestamp_millis()?,
-    ))
+        started_at: self::unix_timestamp_millis()?,
+    })
 }
 
 pub fn lock_mutex<'a, T>(mutex: &'a Mutex<T>, name: &str) -> rootcause::Result<MutexGuard<'a, T>> {
@@ -581,22 +599,26 @@ fn paste_snapshot(
     region: &PaneRegion,
     snapshot: &TerminalSnapshot,
 ) -> rootcause::Result<()> {
-    if snapshot.size().cols() != region.cols() || snapshot.size().rows() != region.rows() {
+    if snapshot.size().cols() != region.area.size.cols || snapshot.size().rows() != region.area.size.rows {
         return Err(report!("muxr pane snapshot size does not match region")
-            .attach(format!("pane_id={}", region.id()))
+            .attach(format!("pane_id={}", region.id))
             .attach(format!("snapshot_cols={}", snapshot.size().cols()))
             .attach(format!("snapshot_rows={}", snapshot.size().rows()))
-            .attach(format!("region_cols={}", region.cols()))
-            .attach(format!("region_rows={}", region.rows())));
+            .attach(format!("region_cols={}", region.area.size.cols))
+            .attach(format!("region_rows={}", region.area.size.rows)));
     }
 
     for span in snapshot.rows() {
         let row = region
-            .row()
+            .area
+            .origin
+            .row
             .checked_add(span.row())
             .ok_or_else(|| report!("muxr pane row offset overflowed"))?;
         let col = region
-            .col()
+            .area
+            .origin
+            .col
             .checked_add(span.col())
             .ok_or_else(|| report!("muxr pane col offset overflowed"))?;
         let target_row = rows
@@ -607,7 +629,7 @@ fn paste_snapshot(
             .checked_add(span.cells().len())
             .ok_or_else(|| report!("muxr pane span end overflowed"))?;
         if end_col > target_row.len() {
-            return Err(report!("muxr pane span outside composite frame").attach(format!("pane_id={}", region.id())));
+            return Err(report!("muxr pane span outside composite frame").attach(format!("pane_id={}", region.id)));
         }
         for (target, cell) in target_row.iter_mut().skip(col).zip(span.cells().iter()) {
             *target = cell.clone();
@@ -876,7 +898,7 @@ fn initial_attached_render(
     runtimes: &Mutex<PaneRuntimes>,
     terminal_size: &TerminalSize,
 ) -> rootcause::Result<(LayoutSnapshot, PaneRegionsSnapshot, RenderComposer, RenderUpdate)> {
-    let mut render_composer = RenderComposer::new();
+    let mut render_composer = RenderComposer::default();
     let layout = self::lock_mutex(layout, "layout")?;
     let runtimes = self::lock_mutex(runtimes, "pane runtimes")?;
     let layout_snapshot = layout.snapshot()?;
@@ -897,15 +919,15 @@ fn pane_regions_snapshot(
         .pane_regions(terminal_size)?
         .into_iter()
         .map(|region| {
-            let handle = runtimes.handle(region.id())?;
+            let handle = runtimes.handle(&region.id)?;
             let mouse_mode = handle.mouse_mode()?;
             let visible_top_row = handle.visible_top_row()?;
             PaneRegionSnapshot::new(
-                region.id().clone(),
-                region.col(),
-                region.row(),
-                region.cols(),
-                region.rows(),
+                region.id,
+                region.area.origin.col,
+                region.area.origin.row,
+                region.area.size.cols,
+                region.area.size.rows,
                 mouse_mode,
                 visible_top_row,
             )
@@ -1433,7 +1455,7 @@ async fn handle_mouse_event_request(
     render_dirty: &mut bool,
 ) -> rootcause::Result<bool> {
     let Some(region) =
-        crate::pane_focus::mouse_event_region(state.layout, state.runtimes, &state.terminal_size, event.position())?
+        crate::pane_focus::mouse_event_region(state.layout, state.runtimes, &state.terminal_size, event.position)?
     else {
         return Ok(true);
     };
@@ -1453,7 +1475,7 @@ async fn handle_mouse_event_request(
         return Ok(true);
     }
     if !crate::pane_focus::handle_focus_pane_at_request(
-        event.position(),
+        event.position,
         state.config,
         state.layout,
         &state.terminal_size,
@@ -1708,7 +1730,7 @@ mod tests {
             let Some(pane) = tab.panes().first() else {
                 return Err(report!("expected one pane in layout snapshot"));
             };
-            pretty_assertions::assert_eq!(pane.id().as_ref(), "pane-1");
+            pretty_assertions::assert_eq!(pane.id.as_ref(), "pane-1");
 
             connection.send_request(&ClientRequest::Detach).await?;
             self::read_connection_until_detached(&mut connection).await?;
@@ -1825,7 +1847,7 @@ mod tests {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
             let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(&session, &paths, None, ShellCommand::new("/bin/cat"));
+            let handle = self::spawn_test_server_with_shell(&session, &paths, None, self::shell_command("/bin/cat"));
 
             self::wait_for_socket(&paths.socket)?;
             let _attached_client = self::open_attached_client(&session, &paths).await?;
@@ -1894,7 +1916,7 @@ mod tests {
     fn test_handle_create_tab_when_pane_spawn_fails_restores_layout() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let mut config = self::server_config(tempdir.path(), "work")?;
-        config.shell_command = ShellCommand::new("/bin/muxr-missing-shell");
+        config.shell_command = self::shell_command("/bin/muxr-missing-shell");
         let initial_layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
         let layout = Mutex::new(initial_layout.clone());
         let runtimes = Mutex::new(PaneRuntimes { panes: Vec::new() });
@@ -1916,7 +1938,7 @@ mod tests {
     fn test_handle_split_pane_command_when_pane_spawn_fails_restores_layout() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let mut config = self::server_config(tempdir.path(), "work")?;
-        config.shell_command = ShellCommand::new("/bin/muxr-missing-shell");
+        config.shell_command = self::shell_command("/bin/muxr-missing-shell");
         let initial_layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
         let layout = Mutex::new(initial_layout.clone());
         let runtimes = Mutex::new(PaneRuntimes { panes: Vec::new() });
@@ -1940,9 +1962,9 @@ mod tests {
     }
 
     #[rstest::rstest]
-    #[case::first_pane(ClientMousePosition::new(0, 0), "pane-1", true)]
-    #[case::border(ClientMousePosition::new(0, 40), "pane-2", false)]
-    #[case::second_pane(ClientMousePosition::new(0, 41), "pane-2", false)]
+    #[case::first_pane(ClientMousePosition { row: 0, col: 0 }, "pane-1", true)]
+    #[case::border(ClientMousePosition { row: 0, col: 40 }, "pane-2", false)]
+    #[case::second_pane(ClientMousePosition { row: 0, col: 41 }, "pane-2", false)]
     fn test_layout_focus_pane_at_when_mouse_position_arrives_updates_active_pane(
         #[case] position: ClientMousePosition,
         #[case] expected_active_pane: &str,
@@ -1962,9 +1984,9 @@ mod tests {
     }
 
     #[rstest::rstest]
-    #[case::first_pane(ClientMousePosition::new(0, 0), Some("pane-1"))]
-    #[case::border(ClientMousePosition::new(0, 40), None)]
-    #[case::second_pane(ClientMousePosition::new(0, 41), Some("pane-2"))]
+    #[case::first_pane(ClientMousePosition { row: 0, col: 0 }, Some("pane-1"))]
+    #[case::border(ClientMousePosition { row: 0, col: 40 }, None)]
+    #[case::second_pane(ClientMousePosition { row: 0, col: 41 }, Some("pane-2"))]
     fn test_layout_pane_at_when_mouse_position_arrives_returns_pane_without_focus_change(
         #[case] position: ClientMousePosition,
         #[case] expected_pane: Option<&str>,
@@ -2105,7 +2127,11 @@ mod tests {
         #[case] expected_diff: bool,
     ) -> rootcause::Result<()> {
         let size = TerminalSize::new(2, 1)?;
-        let cursor = RenderCursor::new(0, 0, false);
+        let cursor = RenderCursor {
+            row: 0,
+            col: 0,
+            visible: false,
+        };
         let rows = vec![RenderRowSpan::new(
             0,
             0,
@@ -2393,7 +2419,11 @@ mod tests {
         #[case] command: ClientCommand,
     ) {
         let mut input_mode = ServerInputMode::Normal;
-        let key = ClientKey::new(code, modifiers, raw_bytes.to_vec());
+        let key = ClientKey {
+            code,
+            modifiers,
+            raw_bytes: raw_bytes.to_vec(),
+        };
 
         pretty_assertions::assert_eq!(resolve_key(&mut input_mode, &key), KeyResolution::Command(command),);
         pretty_assertions::assert_eq!(input_mode, ServerInputMode::Normal);
@@ -2402,7 +2432,11 @@ mod tests {
     #[test]
     fn test_resolve_key_when_unbound_key_arrives_returns_raw() {
         let mut input_mode = ServerInputMode::Normal;
-        let key = ClientKey::new(ClientKeyCode::Char('x'), ClientKeyModifiers::NONE, b"x".to_vec());
+        let key = ClientKey {
+            code: ClientKeyCode::Char('x'),
+            modifiers: ClientKeyModifiers::NONE,
+            raw_bytes: b"x".to_vec(),
+        };
 
         pretty_assertions::assert_eq!(resolve_key(&mut input_mode, &key), KeyResolution::Raw);
         pretty_assertions::assert_eq!(input_mode, ServerInputMode::Normal);
@@ -2422,7 +2456,11 @@ mod tests {
         #[case] command: ClientCommand,
     ) {
         let mut input_mode = ServerInputMode::Resize;
-        let key = ClientKey::new(code, ClientKeyModifiers::NONE, b"x".to_vec());
+        let key = ClientKey {
+            code,
+            modifiers: ClientKeyModifiers::NONE,
+            raw_bytes: b"x".to_vec(),
+        };
 
         pretty_assertions::assert_eq!(resolve_key(&mut input_mode, &key), KeyResolution::Command(command),);
         pretty_assertions::assert_eq!(input_mode, ServerInputMode::Resize);
@@ -2431,12 +2469,16 @@ mod tests {
     #[test]
     fn test_resolve_key_when_resize_mode_enter_and_exit_arrive_updates_server_mode() {
         let mut input_mode = ServerInputMode::Normal;
-        let enter = ClientKey::new(
-            ClientKeyCode::Char('R'),
-            ClientKeyModifiers::SHIFT_ALT,
-            b"\x1bR".to_vec(),
-        );
-        let exit = ClientKey::new(ClientKeyCode::Esc, ClientKeyModifiers::NONE, b"\x1b".to_vec());
+        let enter = ClientKey {
+            code: ClientKeyCode::Char('R'),
+            modifiers: ClientKeyModifiers::SHIFT_ALT,
+            raw_bytes: b"\x1bR".to_vec(),
+        };
+        let exit = ClientKey {
+            code: ClientKeyCode::Esc,
+            modifiers: ClientKeyModifiers::NONE,
+            raw_bytes: b"\x1b".to_vec(),
+        };
 
         pretty_assertions::assert_eq!(
             resolve_key(&mut input_mode, &enter),
@@ -2455,17 +2497,17 @@ mod tests {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
             let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), ShellCommand::new("/bin/cat"));
+            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_command("/bin/cat"));
 
             self::wait_for_socket(&paths.socket)?;
             let mut client = self::open_attached_client(&session, &paths).await?;
             client
                 .writer
-                .send_request(&ClientRequest::Key(ClientKey::new(
-                    ClientKeyCode::Char('x'),
-                    ClientKeyModifiers::NONE,
-                    b"x\n".to_vec(),
-                )))
+                .send_request(&ClientRequest::Key(ClientKey {
+                    code: ClientKeyCode::Char('x'),
+                    modifiers: ClientKeyModifiers::NONE,
+                    raw_bytes: b"x\n".to_vec(),
+                }))
                 .await?;
 
             self::read_until_render_contains(&mut client, b"x").await?;
@@ -2479,17 +2521,17 @@ mod tests {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
             let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), ShellCommand::new("/bin/cat"));
+            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_command("/bin/cat"));
 
             self::wait_for_socket(&paths.socket)?;
             let mut client = self::open_attached_client(&session, &paths).await?;
             client
                 .writer
-                .send_request(&ClientRequest::Key(ClientKey::new(
-                    ClientKeyCode::Char('E'),
-                    ClientKeyModifiers::SHIFT_ALT,
-                    b"\x1bE".to_vec(),
-                )))
+                .send_request(&ClientRequest::Key(ClientKey {
+                    code: ClientKeyCode::Char('E'),
+                    modifiers: ClientKeyModifiers::SHIFT_ALT,
+                    raw_bytes: b"\x1bE".to_vec(),
+                }))
                 .await?;
 
             let layout = self::read_until_layout(&mut client).await?;
@@ -2516,7 +2558,7 @@ mod tests {
             crate::state::persisted::write_metadata(&config.paths, &layout)?;
             let paths = config.paths.clone();
             let session = config.session.clone();
-            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), ShellCommand::new("/bin/cat"));
+            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_command("/bin/cat"));
 
             self::wait_for_socket(&paths.socket)?;
             let client = self::open_attached_client(&session, &paths).await?;
@@ -2540,17 +2582,17 @@ mod tests {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
             let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), ShellCommand::new("/bin/cat"));
+            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_command("/bin/cat"));
 
             self::wait_for_socket(&paths.socket)?;
             let mut client = self::open_attached_client(&session, &paths).await?;
             client
                 .writer
-                .send_request(&ClientRequest::Key(ClientKey::new(
-                    ClientKeyCode::Char('V'),
-                    ClientKeyModifiers::SHIFT_ALT,
-                    b"\x1bV".to_vec(),
-                )))
+                .send_request(&ClientRequest::Key(ClientKey {
+                    code: ClientKeyCode::Char('V'),
+                    modifiers: ClientKeyModifiers::SHIFT_ALT,
+                    raw_bytes: b"\x1bV".to_vec(),
+                }))
                 .await?;
 
             let layout = self::read_until_layout(&mut client).await?;
@@ -2560,7 +2602,7 @@ mod tests {
                 .ok_or_else(|| report!("expected tab after split"))?;
             pretty_assertions::assert_eq!(tab.active_pane().as_ref(), "pane-2");
             pretty_assertions::assert_eq!(
-                tab.panes().iter().map(|pane| pane.id().as_ref()).collect::<Vec<_>>(),
+                tab.panes().iter().map(|pane| pane.id.as_ref()).collect::<Vec<_>>(),
                 vec!["pane-1", "pane-2"],
             );
 
@@ -2581,27 +2623,27 @@ mod tests {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
             let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), ShellCommand::new("/bin/cat"));
+            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_command("/bin/cat"));
 
             self::wait_for_socket(&paths.socket)?;
             let mut client = self::open_attached_client(&session, &paths).await?;
             client
                 .writer
-                .send_request(&ClientRequest::Key(ClientKey::new(
-                    ClientKeyCode::Char('V'),
-                    ClientKeyModifiers::SHIFT_ALT,
-                    b"\x1bV".to_vec(),
-                )))
+                .send_request(&ClientRequest::Key(ClientKey {
+                    code: ClientKeyCode::Char('V'),
+                    modifiers: ClientKeyModifiers::SHIFT_ALT,
+                    raw_bytes: b"\x1bV".to_vec(),
+                }))
                 .await?;
             drop(self::read_until_layout(&mut client).await?);
 
             client
                 .writer
-                .send_request(&ClientRequest::Mouse(ClientMouseEvent::new(
-                    35,
-                    muxr_core::ClientMouseEventPhase::Press,
-                    muxr_core::ClientMousePosition::new(0, 0),
-                )))
+                .send_request(&ClientRequest::Mouse(ClientMouseEvent {
+                    button: 35,
+                    phase: muxr_core::ClientMouseEventPhase::Press,
+                    position: muxr_core::ClientMousePosition { row: 0, col: 0 },
+                }))
                 .await?;
             client
                 .writer
@@ -2620,27 +2662,27 @@ mod tests {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
             let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), ShellCommand::new("/bin/cat"));
+            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_command("/bin/cat"));
 
             self::wait_for_socket(&paths.socket)?;
             let mut client = self::open_attached_client(&session, &paths).await?;
             client
                 .writer
-                .send_request(&ClientRequest::Key(ClientKey::new(
-                    ClientKeyCode::Char('V'),
-                    ClientKeyModifiers::SHIFT_ALT,
-                    b"\x1bV".to_vec(),
-                )))
+                .send_request(&ClientRequest::Key(ClientKey {
+                    code: ClientKeyCode::Char('V'),
+                    modifiers: ClientKeyModifiers::SHIFT_ALT,
+                    raw_bytes: b"\x1bV".to_vec(),
+                }))
                 .await?;
             drop(self::read_until_layout(&mut client).await?);
 
             client
                 .writer
-                .send_request(&ClientRequest::Key(ClientKey::new(
-                    ClientKeyCode::Char('W'),
-                    ClientKeyModifiers::SHIFT_ALT,
-                    b"\x1bW".to_vec(),
-                )))
+                .send_request(&ClientRequest::Key(ClientKey {
+                    code: ClientKeyCode::Char('W'),
+                    modifiers: ClientKeyModifiers::SHIFT_ALT,
+                    raw_bytes: b"\x1bW".to_vec(),
+                }))
                 .await?;
 
             let layout = self::read_until_layout(&mut client).await?;
@@ -2650,7 +2692,7 @@ mod tests {
                 .ok_or_else(|| report!("expected tab after close"))?;
             pretty_assertions::assert_eq!(tab.active_pane().as_ref(), "pane-1");
             pretty_assertions::assert_eq!(
-                tab.panes().iter().map(|pane| pane.id().as_ref()).collect::<Vec<_>>(),
+                tab.panes().iter().map(|pane| pane.id.as_ref()).collect::<Vec<_>>(),
                 vec!["pane-1"],
             );
 
@@ -2670,18 +2712,18 @@ mod tests {
     fn test_serve_when_final_pane_is_closed_persists_and_exits() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-        let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), ShellCommand::new("/bin/cat"));
+        let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_command("/bin/cat"));
 
         self::runtime()?.block_on(async {
             self::wait_for_socket(&paths.socket)?;
             let mut client = self::open_attached_client(&session, &paths).await?;
             client
                 .writer
-                .send_request(&ClientRequest::Key(ClientKey::new(
-                    ClientKeyCode::Char('W'),
-                    ClientKeyModifiers::SHIFT_ALT,
-                    b"\x1bW".to_vec(),
-                )))
+                .send_request(&ClientRequest::Key(ClientKey {
+                    code: ClientKeyCode::Char('W'),
+                    modifiers: ClientKeyModifiers::SHIFT_ALT,
+                    raw_bytes: b"\x1bW".to_vec(),
+                }))
                 .await?;
             self::read_client_until_detached(&mut client).await?;
             drop(client);
@@ -2700,35 +2742,35 @@ mod tests {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
             let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), ShellCommand::new("/bin/cat"));
+            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_command("/bin/cat"));
 
             self::wait_for_socket(&paths.socket)?;
             let mut client = self::open_attached_client(&session, &paths).await?;
             client
                 .writer
-                .send_request(&ClientRequest::Key(ClientKey::new(
-                    ClientKeyCode::Char('V'),
-                    ClientKeyModifiers::SHIFT_ALT,
-                    b"\x1bV".to_vec(),
-                )))
+                .send_request(&ClientRequest::Key(ClientKey {
+                    code: ClientKeyCode::Char('V'),
+                    modifiers: ClientKeyModifiers::SHIFT_ALT,
+                    raw_bytes: b"\x1bV".to_vec(),
+                }))
                 .await?;
             drop(self::read_until_layout(&mut client).await?);
             client
                 .writer
-                .send_request(&ClientRequest::Key(ClientKey::new(
-                    ClientKeyCode::Char('R'),
-                    ClientKeyModifiers::SHIFT_ALT,
-                    b"\x1bR".to_vec(),
-                )))
+                .send_request(&ClientRequest::Key(ClientKey {
+                    code: ClientKeyCode::Char('R'),
+                    modifiers: ClientKeyModifiers::SHIFT_ALT,
+                    raw_bytes: b"\x1bR".to_vec(),
+                }))
                 .await?;
             drop(self::read_until_layout(&mut client).await?);
             client
                 .writer
-                .send_request(&ClientRequest::Key(ClientKey::new(
-                    ClientKeyCode::Char('h'),
-                    ClientKeyModifiers::NONE,
-                    b"h".to_vec(),
-                )))
+                .send_request(&ClientRequest::Key(ClientKey {
+                    code: ClientKeyCode::Char('h'),
+                    modifiers: ClientKeyModifiers::NONE,
+                    raw_bytes: b"h".to_vec(),
+                }))
                 .await?;
 
             let layout = self::read_until_layout(&mut client).await?;
@@ -2738,7 +2780,7 @@ mod tests {
                 .ok_or_else(|| report!("expected tab after resize"))?;
             pretty_assertions::assert_eq!(tab.active_pane().as_ref(), "pane-2");
             pretty_assertions::assert_eq!(
-                tab.panes().iter().map(|pane| pane.id().as_ref()).collect::<Vec<_>>(),
+                tab.panes().iter().map(|pane| pane.id.as_ref()).collect::<Vec<_>>(),
                 vec!["pane-1", "pane-2"],
             );
             let config = self::server_config(tempdir.path(), "work")?;
@@ -2753,19 +2795,19 @@ mod tests {
             );
             client
                 .writer
-                .send_request(&ClientRequest::Key(ClientKey::new(
-                    ClientKeyCode::Esc,
-                    ClientKeyModifiers::NONE,
-                    b"\x1b".to_vec(),
-                )))
+                .send_request(&ClientRequest::Key(ClientKey {
+                    code: ClientKeyCode::Esc,
+                    modifiers: ClientKeyModifiers::NONE,
+                    raw_bytes: b"\x1b".to_vec(),
+                }))
                 .await?;
             client
                 .writer
-                .send_request(&ClientRequest::Key(ClientKey::new(
-                    ClientKeyCode::Char('x'),
-                    ClientKeyModifiers::NONE,
-                    b"x\n".to_vec(),
-                )))
+                .send_request(&ClientRequest::Key(ClientKey {
+                    code: ClientKeyCode::Char('x'),
+                    modifiers: ClientKeyModifiers::NONE,
+                    raw_bytes: b"x\n".to_vec(),
+                }))
                 .await?;
             self::read_until_render_contains(&mut client, b"x").await?;
             self::detach_client(client).await?;
@@ -2782,7 +2824,7 @@ mod tests {
                 &session,
                 &paths,
                 Some(2),
-                ShellCommand::new("/bin/sh")
+                self::shell_command("/bin/sh")
                     .arg("-c")
                     .arg("printf first; sleep 1; printf second; sleep 30"),
             );
@@ -2811,7 +2853,7 @@ mod tests {
                 &session,
                 &paths,
                 Some(1),
-                ShellCommand::new("/bin/sh")
+                self::shell_command("/bin/sh")
                     .arg("-c")
                     .arg("sleep 0.1; printf ready; sleep 30"),
             );
@@ -2851,7 +2893,9 @@ mod tests {
                 &session,
                 &paths,
                 Some(1),
-                ShellCommand::new("/bin/sh").arg("-c").arg("while :; do printf x; done"),
+                self::shell_command("/bin/sh")
+                    .arg("-c")
+                    .arg("while :; do printf x; done"),
             );
 
             self::wait_for_socket(&paths.socket)?;
@@ -2876,7 +2920,7 @@ mod tests {
             &session,
             &paths,
             None,
-            ShellCommand::new("/bin/sh").arg("-c").arg("printf done"),
+            self::shell_command("/bin/sh").arg("-c").arg("printf done"),
         );
 
         self::wait_for_socket(&paths.socket)?;
@@ -2896,7 +2940,7 @@ mod tests {
             &session,
             &paths,
             None,
-            ShellCommand::new("/bin/sh").arg("-c").arg("exit 7"),
+            self::shell_command("/bin/sh").arg("-c").arg("exit 7"),
         );
 
         self::wait_for_socket(&paths.socket)?;
@@ -2915,7 +2959,7 @@ mod tests {
             session,
             paths: paths.clone(),
             max_accepted_connections: None,
-            shell_command: ShellCommand::new("/bin/muxr-missing-shell"),
+            shell_command: self::shell_command("/bin/muxr-missing-shell"),
         });
 
         assert2::assert!(result.is_err());
@@ -2933,7 +2977,7 @@ mod tests {
             session,
             paths,
             Some(max_accepted_connections),
-            ShellCommand::new("/bin/sh").arg("-c").arg("sleep 30"),
+            self::shell_command("/bin/sh").arg("-c").arg("sleep 30"),
         )
     }
 
@@ -3058,18 +3102,26 @@ mod tests {
         ))
     }
 
+    fn shell_command(program: &str) -> ShellCommand {
+        ShellCommand::new(program).expect("test shell command must have a nonempty program path")
+    }
+
     fn server_config(base: &Path, raw: &str) -> rootcause::Result<ServerConfig> {
         let (session, paths) = self::session_paths(base, raw)?;
         Ok(ServerConfig {
             session,
             paths,
             max_accepted_connections: None,
-            shell_command: ShellCommand::new("/bin/sh"),
+            shell_command: self::shell_command("/bin/sh"),
         })
     }
 
     fn metadata(command_label: &str, started_at: u64) -> SessionMetadata {
-        SessionMetadata::new(command_label.to_owned(), "/tmp".to_owned(), started_at)
+        SessionMetadata {
+            command_label: command_label.to_owned(),
+            cwd: "/tmp".to_owned(),
+            started_at,
+        }
     }
 
     fn layout_tab_ids(layout: &SessionLayout) -> rootcause::Result<Vec<String>> {
@@ -3092,7 +3144,7 @@ mod tests {
         Ok(active_tab
             .panes()
             .iter()
-            .map(|pane| pane.id().as_ref().to_owned())
+            .map(|pane| pane.id.as_ref().to_owned())
             .collect())
     }
 
@@ -3105,11 +3157,11 @@ mod tests {
             .iter()
             .map(|region| {
                 (
-                    region.id().as_ref().to_owned(),
-                    region.col(),
-                    region.row(),
-                    region.cols(),
-                    region.rows(),
+                    region.id.as_ref().to_owned(),
+                    region.area.origin.col,
+                    region.area.origin.row,
+                    region.area.size.cols,
+                    region.area.size.rows,
                 )
             })
             .collect())
@@ -3401,7 +3453,7 @@ mod tests {
         let layout: serde_json::Value =
             serde_json::from_slice(&fs::read(&paths.layout).context("failed to read muxr test layout metadata")?)
                 .context("failed to parse muxr test layout metadata")?;
-        let pane = &layout["tabs"][0]["pane_tree"]["pane"];
+        let pane = &layout["tabs"][0]["pane_tree"];
 
         pretty_assertions::assert_eq!(layout["version"].as_u64(), Some(u64::from(crate::state::VERSION)));
         pretty_assertions::assert_eq!(layout["session"].as_str(), Some("work"));
@@ -3410,9 +3462,10 @@ mod tests {
         pretty_assertions::assert_eq!(pane["id"].as_str(), Some("pane-1"));
         pretty_assertions::assert_eq!(pane["command_label"].as_str(), Some("sh"));
         assert2::assert!(pane["started_at"].as_u64().is_some());
-        assert2::assert!(pane["exited_at"].as_u64().is_some());
-        pretty_assertions::assert_eq!(pane["exit_status"]["code"].as_u64(), Some(expected_code));
-        pretty_assertions::assert_eq!(pane["exit_status"]["success"].as_bool(), Some(expected_success));
+        pretty_assertions::assert_eq!(pane["state"]["kind"].as_str(), Some("process_exited"));
+        assert2::assert!(pane["state"]["at"].as_u64().is_some());
+        pretty_assertions::assert_eq!(pane["state"]["status"]["code"].as_u64(), Some(expected_code));
+        pretty_assertions::assert_eq!(pane["state"]["status"]["success"].as_bool(), Some(expected_success));
         Ok(())
     }
 
@@ -3449,7 +3502,7 @@ mod tests {
         let layout: serde_json::Value =
             serde_json::from_slice(&fs::read(&paths.layout).context("failed to read muxr test layout metadata")?)
                 .context("failed to parse muxr test layout metadata")?;
-        let actual_panes = self::json_pane_tree_leaf_ids(&layout["tabs"][0]["pane_tree"])?;
+        let actual_panes = self::json_pane_tree_pane_ids(&layout["tabs"][0]["pane_tree"])?;
 
         pretty_assertions::assert_eq!(layout["tabs"][0]["active_pane"].as_str(), Some(expected_active));
         pretty_assertions::assert_eq!(actual_panes, expected_panes.to_vec());
@@ -3460,37 +3513,38 @@ mod tests {
         let layout: serde_json::Value =
             serde_json::from_slice(&fs::read(&paths.layout).context("failed to read muxr test layout metadata")?)
                 .context("failed to parse muxr test layout metadata")?;
-        let pane = &layout["tabs"][0]["pane_tree"]["pane"];
+        let pane = &layout["tabs"][0]["pane_tree"];
 
         pretty_assertions::assert_eq!(layout["active_tab"].as_str(), Some("tab-1"));
         pretty_assertions::assert_eq!(layout["tabs"][0]["active_pane"].as_str(), Some("pane-1"));
         pretty_assertions::assert_eq!(pane["id"].as_str(), Some("pane-1"));
-        assert2::assert!(pane["exited_at"].as_u64().is_some());
-        assert2::assert!(pane["exit_status"].is_null());
+        pretty_assertions::assert_eq!(pane["state"]["kind"].as_str(), Some("closed"));
+        assert2::assert!(pane["state"]["at"].as_u64().is_some());
+        assert2::assert!(pane["state"].get("status").is_none());
         Ok(())
     }
 
-    fn json_pane_tree_leaf_ids(node: &serde_json::Value) -> rootcause::Result<Vec<&str>> {
+    fn json_pane_tree_pane_ids(node: &serde_json::Value) -> rootcause::Result<Vec<&str>> {
         let mut ids = Vec::new();
-        self::collect_json_pane_tree_leaf_ids(node, &mut ids)?;
+        self::collect_json_pane_tree_pane_ids(node, &mut ids)?;
         Ok(ids)
     }
 
-    fn collect_json_pane_tree_leaf_ids<'a>(
+    fn collect_json_pane_tree_pane_ids<'a>(
         node: &'a serde_json::Value,
         ids: &mut Vec<&'a str>,
     ) -> rootcause::Result<()> {
         match node["kind"].as_str() {
-            Some("leaf") => {
-                let Some(id) = node["pane"]["id"].as_str() else {
+            Some("pane") => {
+                let Some(id) = node["id"].as_str() else {
                     return Err(report!("muxr test layout metadata pane id is missing"));
                 };
                 ids.push(id);
                 Ok(())
             }
             Some("split") => {
-                self::collect_json_pane_tree_leaf_ids(&node["first"], ids)?;
-                self::collect_json_pane_tree_leaf_ids(&node["second"], ids)
+                self::collect_json_pane_tree_pane_ids(&node["first"], ids)?;
+                self::collect_json_pane_tree_pane_ids(&node["second"], ids)
             }
             Some(kind) => {
                 Err(report!("muxr test layout metadata pane tree kind is invalid").attach(format!("kind={kind}")))

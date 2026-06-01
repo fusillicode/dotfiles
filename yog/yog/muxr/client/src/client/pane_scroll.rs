@@ -9,18 +9,18 @@ pub struct ScrollAction {
 }
 
 pub const fn scroll_action(event: ClientMouseEvent) -> Option<ScrollAction> {
-    if event.button() & 64 == 0 {
+    if event.button & 64 == 0 {
         return None;
     }
 
-    match event.button() & 0b11 {
+    match event.button & 0b11 {
         0 => Some(ScrollAction {
             direction: PaneScrollDirection::Up,
-            position: event.position(),
+            position: event.position,
         }),
         1 => Some(ScrollAction {
             direction: PaneScrollDirection::Down,
-            position: event.position(),
+            position: event.position,
         }),
         _ => None,
     }

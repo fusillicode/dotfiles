@@ -1,3 +1,4 @@
+use muxr_core::ClientMousePosition;
 use muxr_core::PaneId;
 use muxr_core::TerminalSize;
 use rootcause::report;
@@ -5,7 +6,72 @@ use rootcause::report;
 use crate::pane_borders::PaneBorder;
 use crate::pane_borders::PaneBorderAxis;
 use crate::pane_split::PaneSplitAxis;
-use crate::state::PaneNode;
+use crate::pane_split::PaneSplitRatio;
+use crate::state::PaneTree;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PanePosition {
+    pub row: u16,
+    pub col: u16,
+}
+
+impl From<ClientMousePosition> for PanePosition {
+    fn from(position: ClientMousePosition) -> Self {
+        Self {
+            row: position.row,
+            col: position.col,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PaneSize {
+    pub rows: u16,
+    pub cols: u16,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PaneArea {
+    pub origin: PanePosition,
+    pub size: PaneSize,
+}
+
+impl PaneArea {
+    pub fn contains(self, position: PanePosition) -> bool {
+        let row = u32::from(position.row);
+        let col = u32::from(position.col);
+
+        row >= u32::from(self.origin.row)
+            && row < self.end_row_exclusive()
+            && col >= u32::from(self.origin.col)
+            && col < self.end_col_exclusive()
+    }
+
+    pub const fn end_col(self) -> Option<u16> {
+        self.origin.col.checked_add(self.size.cols)
+    }
+
+    pub fn end_col_exclusive(self) -> u32 {
+        u32::from(self.origin.col).saturating_add(u32::from(self.size.cols))
+    }
+
+    pub const fn end_row(self) -> Option<u16> {
+        self.origin.row.checked_add(self.size.rows)
+    }
+
+    pub fn end_row_exclusive(self) -> u32 {
+        u32::from(self.origin.row).saturating_add(u32::from(self.size.rows))
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct PaneSplitLayout {
+    border_axis: PaneBorderAxis,
+    border_len: u16,
+    border_position: PanePosition,
+    first_area: PaneArea,
+    second_area: PaneArea,
+}
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PaneLayout {
@@ -14,9 +80,16 @@ pub struct PaneLayout {
 }
 
 impl PaneLayout {
-    pub fn from_pane_tree(pane_tree: &PaneNode, size: &TerminalSize) -> rootcause::Result<Self> {
+    pub fn from_pane_tree(pane_tree: &PaneTree, size: &TerminalSize) -> rootcause::Result<Self> {
         let mut layout = Self::default();
-        layout.append_pane_tree(pane_tree, 0, 0, size.rows(), size.cols())?;
+        let area = PaneArea {
+            origin: PanePosition { row: 0, col: 0 },
+            size: PaneSize {
+                rows: size.rows(),
+                cols: size.cols(),
+            },
+        };
+        layout.append_tree(pane_tree, area)?;
         Ok(layout)
     }
 
@@ -42,147 +115,174 @@ impl PaneLayout {
         })
     }
 
-    fn append_pane_tree(
-        &mut self,
-        pane_tree: &PaneNode,
-        row: u16,
-        col: u16,
-        rows: u16,
-        cols: u16,
-    ) -> rootcause::Result<()> {
+    fn append_tree(&mut self, pane_tree: &PaneTree, area: PaneArea) -> rootcause::Result<()> {
         match pane_tree {
-            PaneNode::Leaf { pane } => {
-                self.push_region(PaneRegion::new(
-                    pane.id().clone(),
-                    col,
-                    row,
-                    cols,
-                    rows,
-                    pane.focus_seq(),
-                ));
+            PaneTree::Pane(pane) => {
+                self.push_region(PaneRegion {
+                    area,
+                    focus_seq: pane.focus_seq,
+                    id: pane.id.clone(),
+                });
                 Ok(())
             }
-            PaneNode::Split {
+            PaneTree::Split {
                 axis,
                 first_ratio,
                 first,
                 second,
             } => match axis {
-                PaneSplitAxis::Horizontal => {
-                    let content_rows = rows
-                        .checked_sub(1)
-                        .ok_or_else(|| report!("muxr terminal is too small for horizontal pane border"))?;
-                    let (first_rows, second_rows) = first_ratio.split_lengths(content_rows)?;
-                    let border_row = row
-                        .checked_add(first_rows)
-                        .ok_or_else(|| report!("muxr pane border row overflowed"))?;
-                    let second_row = row
-                        .checked_add(first_rows)
-                        .and_then(|value| value.checked_add(1))
-                        .ok_or_else(|| report!("muxr pane split row overflowed"))?;
-                    let first_region_start = self.regions().len();
-                    self.append_pane_tree(first, row, col, first_rows, cols)?;
-                    let first_regions = self.regions_added_since(first_region_start)?;
-                    let second_region_start = self.regions().len();
-                    self.append_pane_tree(second, second_row, col, second_rows, cols)?;
-                    let second_regions = self.regions_added_since(second_region_start)?;
-                    self.push_border(PaneBorder::with_adjacent_regions(
-                        PaneBorderAxis::Horizontal,
-                        col,
-                        border_row,
-                        cols,
-                        &first_regions,
-                        &second_regions,
-                    )?);
-                    Ok(())
-                }
-                PaneSplitAxis::Vertical => {
-                    let content_cols = cols
-                        .checked_sub(1)
-                        .ok_or_else(|| report!("muxr terminal is too small for vertical pane border"))?;
-                    let (first_cols, second_cols) = first_ratio.split_lengths(content_cols)?;
-                    let border_col = col
-                        .checked_add(first_cols)
-                        .ok_or_else(|| report!("muxr pane border col overflowed"))?;
-                    let second_col = col
-                        .checked_add(first_cols)
-                        .and_then(|value| value.checked_add(1))
-                        .ok_or_else(|| report!("muxr pane split col overflowed"))?;
-                    let first_region_start = self.regions().len();
-                    self.append_pane_tree(first, row, col, rows, first_cols)?;
-                    let first_regions = self.regions_added_since(first_region_start)?;
-                    let second_region_start = self.regions().len();
-                    self.append_pane_tree(second, row, second_col, rows, second_cols)?;
-                    let second_regions = self.regions_added_since(second_region_start)?;
-                    self.push_border(PaneBorder::with_adjacent_regions(
-                        PaneBorderAxis::Vertical,
-                        border_col,
-                        row,
-                        rows,
-                        &first_regions,
-                        &second_regions,
-                    )?);
-                    Ok(())
-                }
+                PaneSplitAxis::Horizontal => self.append_horizontal_split(*first_ratio, first, second, area),
+                PaneSplitAxis::Vertical => self.append_vertical_split(*first_ratio, first, second, area),
             },
         }
+    }
+
+    fn append_horizontal_split(
+        &mut self,
+        first_ratio: PaneSplitRatio,
+        first: &PaneTree,
+        second: &PaneTree,
+        area: PaneArea,
+    ) -> rootcause::Result<()> {
+        let content_rows = area
+            .size
+            .rows
+            .checked_sub(1)
+            .ok_or_else(|| report!("muxr terminal is too small for horizontal pane border"))?;
+        let (first_rows, second_rows) = first_ratio.split_lengths(content_rows)?;
+        let border_row = area
+            .origin
+            .row
+            .checked_add(first_rows)
+            .ok_or_else(|| report!("muxr pane border row overflowed"))?;
+        let second_row = area
+            .origin
+            .row
+            .checked_add(first_rows)
+            .and_then(|value| value.checked_add(1))
+            .ok_or_else(|| report!("muxr pane split row overflowed"))?;
+        let first_area = PaneArea {
+            origin: area.origin,
+            size: PaneSize {
+                rows: first_rows,
+                cols: area.size.cols,
+            },
+        };
+        let second_area = PaneArea {
+            origin: PanePosition {
+                row: second_row,
+                col: area.origin.col,
+            },
+            size: PaneSize {
+                rows: second_rows,
+                cols: area.size.cols,
+            },
+        };
+        self.append_split(
+            first,
+            second,
+            PaneSplitLayout {
+                border_axis: PaneBorderAxis::Horizontal,
+                border_len: area.size.cols,
+                border_position: PanePosition {
+                    row: border_row,
+                    col: area.origin.col,
+                },
+                first_area,
+                second_area,
+            },
+        )
+    }
+
+    fn append_vertical_split(
+        &mut self,
+        first_ratio: PaneSplitRatio,
+        first: &PaneTree,
+        second: &PaneTree,
+        area: PaneArea,
+    ) -> rootcause::Result<()> {
+        let content_cols = area
+            .size
+            .cols
+            .checked_sub(1)
+            .ok_or_else(|| report!("muxr terminal is too small for vertical pane border"))?;
+        let (first_cols, second_cols) = first_ratio.split_lengths(content_cols)?;
+        let border_col = area
+            .origin
+            .col
+            .checked_add(first_cols)
+            .ok_or_else(|| report!("muxr pane border col overflowed"))?;
+        let second_col = area
+            .origin
+            .col
+            .checked_add(first_cols)
+            .and_then(|value| value.checked_add(1))
+            .ok_or_else(|| report!("muxr pane split col overflowed"))?;
+        let first_area = PaneArea {
+            origin: area.origin,
+            size: PaneSize {
+                rows: area.size.rows,
+                cols: first_cols,
+            },
+        };
+        let second_area = PaneArea {
+            origin: PanePosition {
+                row: area.origin.row,
+                col: second_col,
+            },
+            size: PaneSize {
+                rows: area.size.rows,
+                cols: second_cols,
+            },
+        };
+        self.append_split(
+            first,
+            second,
+            PaneSplitLayout {
+                border_axis: PaneBorderAxis::Vertical,
+                border_len: area.size.rows,
+                border_position: PanePosition {
+                    row: area.origin.row,
+                    col: border_col,
+                },
+                first_area,
+                second_area,
+            },
+        )
+    }
+
+    fn append_split(
+        &mut self,
+        first: &PaneTree,
+        second: &PaneTree,
+        split_layout: PaneSplitLayout,
+    ) -> rootcause::Result<()> {
+        let first_region_start = self.regions().len();
+        self.append_tree(first, split_layout.first_area)?;
+        let first_regions = self.regions_added_since(first_region_start)?;
+        let second_region_start = self.regions().len();
+        self.append_tree(second, split_layout.second_area)?;
+        let second_regions = self.regions_added_since(second_region_start)?;
+        self.push_border(PaneBorder::with_adjacent_regions(
+            split_layout.border_axis,
+            split_layout.border_position,
+            split_layout.border_len,
+            &first_regions,
+            &second_regions,
+        )?);
+        Ok(())
     }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaneRegion {
-    col: u16,
-    cols: u16,
-    focus_seq: u64,
-    id: PaneId,
-    row: u16,
-    rows: u16,
+    pub area: PaneArea,
+    pub focus_seq: u64,
+    pub id: PaneId,
 }
 
 impl PaneRegion {
-    pub const fn new(id: PaneId, col: u16, row: u16, cols: u16, rows: u16, focus_seq: u64) -> Self {
-        Self {
-            col,
-            cols,
-            focus_seq,
-            id,
-            row,
-            rows,
-        }
-    }
-
-    pub const fn id(&self) -> &PaneId {
-        &self.id
-    }
-
-    pub const fn focus_seq(&self) -> u64 {
-        self.focus_seq
-    }
-
-    pub const fn col(&self) -> u16 {
-        self.col
-    }
-
-    pub const fn cols(&self) -> u16 {
-        self.cols
-    }
-
-    pub const fn row(&self) -> u16 {
-        self.row
-    }
-
-    pub const fn rows(&self) -> u16 {
-        self.rows
-    }
-
-    pub const fn contains(&self, row: u16, col: u16) -> bool {
-        let Some(end_row) = self.row.checked_add(self.rows) else {
-            return false;
-        };
-        let Some(end_col) = self.col.checked_add(self.cols) else {
-            return false;
-        };
-
-        row >= self.row && row < end_row && col >= self.col && col < end_col
+    pub fn contains(&self, position: PanePosition) -> bool {
+        self.area.contains(position)
     }
 }

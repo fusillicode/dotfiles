@@ -47,12 +47,20 @@ pub struct ShellCommand {
 }
 
 impl ShellCommand {
-    #[must_use]
-    pub fn new(program: impl Into<PathBuf>) -> Self {
-        Self {
-            program: program.into(),
-            args: Vec::new(),
+    /// Build a shell command for a muxr pane.
+    ///
+    /// # Errors
+    /// - The program path is empty.
+    pub fn new(program: impl Into<PathBuf>) -> rootcause::Result<Self> {
+        let program = program.into();
+        if program.as_os_str().is_empty() {
+            return Err(report!("invalid muxr shell command").attach("reason=program path must not be empty"));
         }
+
+        Ok(Self {
+            program,
+            args: Vec::new(),
+        })
     }
 
     #[must_use]
@@ -62,8 +70,11 @@ impl ShellCommand {
         self
     }
 
-    #[must_use]
-    pub fn default_from_env() -> Self {
+    /// Build the default shell command from `$SHELL`, falling back to `/bin/sh`.
+    ///
+    /// # Errors
+    /// - The selected program path is empty.
+    pub fn default_from_env() -> rootcause::Result<Self> {
         let program = env::var_os("SHELL")
             .filter(|value| !value.as_os_str().is_empty())
             .map_or_else(default_shell_path, PathBuf::from);
@@ -488,11 +499,11 @@ fn pty_mouse_event_bytes(
     region: &PaneRegionSnapshot,
     protocol: TerminalMouseProtocol,
 ) -> rootcause::Result<Option<Vec<u8>>> {
-    if !self::mouse_protocol_reports_event(event, protocol.mode()) {
+    if !self::mouse_protocol_reports_event(event, protocol.mode) {
         return Ok(None);
     }
 
-    let Some((row, col)) = self::pane_local_mouse_position(event.position(), region) else {
+    let Some((row, col)) = self::pane_local_mouse_position(event.position, region) else {
         return Ok(None);
     };
     let row = row.checked_add(1).ok_or_else(|| report!("muxr mouse row overflowed"))?;
@@ -500,7 +511,7 @@ fn pty_mouse_event_bytes(
         .checked_add(1)
         .ok_or_else(|| report!("muxr mouse column overflowed"))?;
 
-    match protocol.encoding() {
+    match protocol.encoding {
         TerminalMouseProtocolEncoding::Sgr => Ok(Some(self::sgr_mouse_event_bytes(event, row, col))),
         TerminalMouseProtocolEncoding::Default => Ok(self::default_mouse_event_bytes(event, row, col)),
         TerminalMouseProtocolEncoding::Utf8 => Ok(self::utf8_mouse_event_bytes(event, row, col)),
@@ -508,8 +519,8 @@ fn pty_mouse_event_bytes(
 }
 
 fn mouse_protocol_reports_event(event: ClientMouseEvent, mode: TerminalMouseProtocolMode) -> bool {
-    let is_motion = event.button() & 32 != 0;
-    let is_release = event.phase() == ClientMouseEventPhase::Release;
+    let is_motion = event.button & 32 != 0;
+    let is_release = event.phase == ClientMouseEventPhase::Release;
     match mode {
         TerminalMouseProtocolMode::Press => !is_release && !is_motion,
         TerminalMouseProtocolMode::PressRelease => !is_motion,
@@ -520,7 +531,7 @@ fn mouse_protocol_reports_event(event: ClientMouseEvent, mode: TerminalMouseProt
 }
 
 const fn mouse_event_is_no_button_motion(event: ClientMouseEvent) -> bool {
-    event.button() & 32 != 0 && event.button() & 0b11 == 0b11
+    event.button & 32 != 0 && event.button & 0b11 == 0b11
 }
 
 fn pane_local_mouse_position(
@@ -537,18 +548,18 @@ fn pane_local_mouse_position(
 }
 
 fn sgr_mouse_event_bytes(event: ClientMouseEvent, row: u16, col: u16) -> Vec<u8> {
-    let final_byte = match event.phase() {
+    let final_byte = match event.phase {
         ClientMouseEventPhase::Press => "M",
         ClientMouseEventPhase::Release => "m",
     };
-    format!("\x1b[<{};{col};{row}{final_byte}", event.button()).into_bytes()
+    format!("\x1b[<{};{col};{row}{final_byte}", event.button).into_bytes()
 }
 
 fn default_mouse_event_bytes(event: ClientMouseEvent, row: u16, col: u16) -> Option<Vec<u8>> {
-    let button = if event.phase() == ClientMouseEventPhase::Release {
-        (event.button() & !0b11) | 0b11
+    let button = if event.phase == ClientMouseEventPhase::Release {
+        (event.button & !0b11) | 0b11
     } else {
-        event.button()
+        event.button
     };
     let button = u8::try_from(button.checked_add(32)?).ok()?;
     let col = u8::try_from(col.checked_add(32)?).ok()?;
@@ -558,10 +569,10 @@ fn default_mouse_event_bytes(event: ClientMouseEvent, row: u16, col: u16) -> Opt
 }
 
 fn utf8_mouse_event_bytes(event: ClientMouseEvent, row: u16, col: u16) -> Option<Vec<u8>> {
-    let button = if event.phase() == ClientMouseEventPhase::Release {
-        (event.button() & !0b11) | 0b11
+    let button = if event.phase == ClientMouseEventPhase::Release {
+        (event.button & !0b11) | 0b11
     } else {
-        event.button()
+        event.button
     };
     let mut bytes = b"\x1b[M".to_vec();
     self::push_utf8_mouse_value(&mut bytes, button.checked_add(32)?)?;
@@ -637,6 +648,11 @@ fn spawn_reader_thread(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_shell_command_new_when_program_is_empty_returns_error() {
+        assert2::assert!(ShellCommand::new("").is_err());
+    }
 
     #[test]
     fn test_spawn_reader_thread_when_pty_reaches_eof_does_not_mark_child_exited() -> rootcause::Result<()> {
@@ -736,11 +752,11 @@ mod tests {
     #[test]
     fn test_pty_mouse_event_bytes_when_sgr_mouse_is_enabled_translates_to_pane_local_position() -> rootcause::Result<()>
     {
-        let event = ClientMouseEvent::new(
-            0,
-            ClientMouseEventPhase::Press,
-            muxr_core::ClientMousePosition::new(4, 7),
-        );
+        let event = ClientMouseEvent {
+            button: 0,
+            phase: ClientMouseEventPhase::Press,
+            position: muxr_core::ClientMousePosition { row: 4, col: 7 },
+        };
         let region = PaneRegionSnapshot::new(
             muxr_core::PaneId::new("pane-1")?,
             5,
@@ -755,10 +771,10 @@ mod tests {
             pty_mouse_event_bytes(
                 event,
                 &region,
-                TerminalMouseProtocol::new(
-                    TerminalMouseProtocolMode::PressRelease,
-                    TerminalMouseProtocolEncoding::Sgr,
-                ),
+                TerminalMouseProtocol {
+                    mode: TerminalMouseProtocolMode::PressRelease,
+                    encoding: TerminalMouseProtocolEncoding::Sgr
+                },
             )?,
             Some(b"\x1b[<0;3;2M".to_vec()),
         );
@@ -767,11 +783,11 @@ mod tests {
 
     #[test]
     fn test_pty_mouse_event_bytes_when_protocol_ignores_motion_returns_none() -> rootcause::Result<()> {
-        let event = ClientMouseEvent::new(
-            32,
-            ClientMouseEventPhase::Press,
-            muxr_core::ClientMousePosition::new(4, 7),
-        );
+        let event = ClientMouseEvent {
+            button: 32,
+            phase: ClientMouseEventPhase::Press,
+            position: muxr_core::ClientMousePosition { row: 4, col: 7 },
+        };
         let region = PaneRegionSnapshot::new(
             muxr_core::PaneId::new("pane-1")?,
             5,
@@ -786,7 +802,10 @@ mod tests {
             pty_mouse_event_bytes(
                 event,
                 &region,
-                TerminalMouseProtocol::new(TerminalMouseProtocolMode::Press, TerminalMouseProtocolEncoding::Sgr,),
+                TerminalMouseProtocol {
+                    mode: TerminalMouseProtocolMode::Press,
+                    encoding: TerminalMouseProtocolEncoding::Sgr
+                },
             )?,
             None,
         );
@@ -795,11 +814,11 @@ mod tests {
 
     #[test]
     fn test_pty_mouse_event_bytes_when_button_motion_gets_no_button_motion_returns_none() -> rootcause::Result<()> {
-        let event = ClientMouseEvent::new(
-            35,
-            ClientMouseEventPhase::Press,
-            muxr_core::ClientMousePosition::new(4, 7),
-        );
+        let event = ClientMouseEvent {
+            button: 35,
+            phase: ClientMouseEventPhase::Press,
+            position: muxr_core::ClientMousePosition { row: 4, col: 7 },
+        };
         let region = PaneRegionSnapshot::new(
             muxr_core::PaneId::new("pane-1")?,
             5,
@@ -814,10 +833,10 @@ mod tests {
             pty_mouse_event_bytes(
                 event,
                 &region,
-                TerminalMouseProtocol::new(
-                    TerminalMouseProtocolMode::ButtonMotion,
-                    TerminalMouseProtocolEncoding::Sgr,
-                ),
+                TerminalMouseProtocol {
+                    mode: TerminalMouseProtocolMode::ButtonMotion,
+                    encoding: TerminalMouseProtocolEncoding::Sgr
+                },
             )?,
             None,
         );
@@ -826,11 +845,11 @@ mod tests {
 
     #[test]
     fn test_pty_mouse_event_bytes_when_any_motion_gets_no_button_motion_reports_event() -> rootcause::Result<()> {
-        let event = ClientMouseEvent::new(
-            35,
-            ClientMouseEventPhase::Press,
-            muxr_core::ClientMousePosition::new(4, 7),
-        );
+        let event = ClientMouseEvent {
+            button: 35,
+            phase: ClientMouseEventPhase::Press,
+            position: muxr_core::ClientMousePosition { row: 4, col: 7 },
+        };
         let region = PaneRegionSnapshot::new(
             muxr_core::PaneId::new("pane-1")?,
             5,
@@ -845,7 +864,10 @@ mod tests {
             pty_mouse_event_bytes(
                 event,
                 &region,
-                TerminalMouseProtocol::new(TerminalMouseProtocolMode::AnyMotion, TerminalMouseProtocolEncoding::Sgr,),
+                TerminalMouseProtocol {
+                    mode: TerminalMouseProtocolMode::AnyMotion,
+                    encoding: TerminalMouseProtocolEncoding::Sgr
+                },
             )?,
             Some(b"\x1b[<35;3;2M".to_vec()),
         );
@@ -854,11 +876,11 @@ mod tests {
 
     #[test]
     fn test_pty_mouse_event_bytes_when_utf8_mouse_is_enabled_writes_utf8_values() -> rootcause::Result<()> {
-        let event = ClientMouseEvent::new(
-            0,
-            ClientMouseEventPhase::Press,
-            muxr_core::ClientMousePosition::new(4, 7),
-        );
+        let event = ClientMouseEvent {
+            button: 0,
+            phase: ClientMouseEventPhase::Press,
+            position: muxr_core::ClientMousePosition { row: 4, col: 7 },
+        };
         let region = PaneRegionSnapshot::new(
             muxr_core::PaneId::new("pane-1")?,
             5,
@@ -873,10 +895,10 @@ mod tests {
             pty_mouse_event_bytes(
                 event,
                 &region,
-                TerminalMouseProtocol::new(
-                    TerminalMouseProtocolMode::PressRelease,
-                    TerminalMouseProtocolEncoding::Utf8,
-                ),
+                TerminalMouseProtocol {
+                    mode: TerminalMouseProtocolMode::PressRelease,
+                    encoding: TerminalMouseProtocolEncoding::Utf8
+                },
             )?,
             Some(b"\x1b[M #\"".to_vec()),
         );
