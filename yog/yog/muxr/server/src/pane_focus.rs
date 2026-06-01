@@ -8,6 +8,7 @@ use muxr_core::PaneRegionSnapshot;
 use muxr_core::TerminalSize;
 use rootcause::report;
 
+use crate::pane_layout::PaneRegion;
 use crate::server::PaneRuntimes;
 use crate::server::ServerConfig;
 use crate::state::SessionLayout;
@@ -62,7 +63,7 @@ impl Tab {
             .regions()
             .iter()
             .filter(|region| region.id() != active_region.id())
-            .filter(|region| region.is_adjacent_to(active_region, direction))
+            .filter(|region| self::pane_regions_are_adjacent(region, active_region, direction))
             .max_by_key(|region| region.focus_seq())
             .map(|region| region.id().clone())
         else {
@@ -119,6 +120,41 @@ pub fn handle_focus_pane_at_request(
 
 pub fn mouse_event_focuses_pane(event: ClientMouseEvent) -> bool {
     event.phase() == ClientMouseEventPhase::Press && event.button() & (32 | 64) == 0 && event.button() & 0b11 != 0b11
+}
+
+fn pane_regions_are_adjacent(region: &PaneRegion, other: &PaneRegion, direction: PaneFocusDirection) -> bool {
+    // Muxr pane regions exclude the separator cell, so visible neighbors have a one-cell gap where Zellij's
+    // frame-inclusive pane geometry uses exact edge equality.
+    let region_col = u32::from(region.col());
+    let region_row = u32::from(region.row());
+    let region_end_col = region_col.saturating_add(u32::from(region.cols()));
+    let region_end_row = region_row.saturating_add(u32::from(region.rows()));
+    let other_col = u32::from(other.col());
+    let other_row = u32::from(other.row());
+    let other_end_col = other_col.saturating_add(u32::from(other.cols()));
+    let other_end_row = other_row.saturating_add(u32::from(other.rows()));
+    let horizontally_overlaps =
+        self::ranges_overlap(region_row, u32::from(region.rows()), other_row, u32::from(other.rows()));
+    let vertically_overlaps =
+        self::ranges_overlap(region_col, u32::from(region.cols()), other_col, u32::from(other.cols()));
+
+    match direction {
+        PaneFocusDirection::Left => self::edges_are_adjacent(region_end_col, other_col) && horizontally_overlaps,
+        PaneFocusDirection::Right => self::edges_are_adjacent(other_end_col, region_col) && horizontally_overlaps,
+        PaneFocusDirection::Up => self::edges_are_adjacent(region_end_row, other_row) && vertically_overlaps,
+        PaneFocusDirection::Down => self::edges_are_adjacent(other_end_row, region_row) && vertically_overlaps,
+    }
+}
+
+fn edges_are_adjacent(edge: u32, start: u32) -> bool {
+    edge == start || edge.checked_add(1) == Some(start)
+}
+
+const fn ranges_overlap(first_start: u32, first_len: u32, second_start: u32, second_len: u32) -> bool {
+    let first_end = first_start.saturating_add(first_len);
+    let second_end = second_start.saturating_add(second_len);
+
+    first_start < second_end && second_start < first_end
 }
 
 pub fn mouse_event_region(

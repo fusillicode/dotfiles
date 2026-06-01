@@ -7,7 +7,7 @@ use rootcause::report;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::geometry::PaneLayout;
+use crate::pane_layout::PaneLayout;
 use crate::state::Pane;
 use crate::state::PaneNode;
 
@@ -65,9 +65,6 @@ impl Tab {
     }
 
     pub fn pane_layout(&self, size: &TerminalSize) -> rootcause::Result<PaneLayout> {
-        let mut layout = PaneLayout::default();
-        self.pane_tree
-            .append_layout(0, 0, size.rows(), size.cols(), &mut layout)?;
-        Ok(layout)
+        PaneLayout::from_pane_tree(&self.pane_tree, size)
     }
 }

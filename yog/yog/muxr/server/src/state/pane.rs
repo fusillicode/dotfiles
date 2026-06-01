@@ -1,13 +1,8 @@
 use muxr_core::PaneId;
 use muxr_core::PaneSnapshot;
-use rootcause::report;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::geometry::PaneBorder;
-use crate::geometry::PaneBorderAxis;
-use crate::geometry::PaneLayout;
-use crate::geometry::PaneRegion;
 use crate::pane_split::PaneSplitAxis;
 use crate::pane_split::PaneSplitRatio;
 use crate::pty::PtyExitStatus;
@@ -71,61 +66,6 @@ impl PaneNode {
                 first.append_panes(panes);
                 second.append_panes(panes);
             }
-        }
-    }
-
-    pub fn append_layout(
-        &self,
-        row: u16,
-        col: u16,
-        rows: u16,
-        cols: u16,
-        layout: &mut PaneLayout,
-    ) -> rootcause::Result<()> {
-        match self {
-            Self::Leaf { pane } => {
-                layout.push_region(PaneRegion::new(pane.id.clone(), col, row, cols, rows, pane.focus_seq));
-                Ok(())
-            }
-            Self::Split {
-                axis,
-                first_ratio,
-                first,
-                second,
-            } => match axis {
-                PaneSplitAxis::Horizontal => {
-                    let content_rows = rows
-                        .checked_sub(1)
-                        .ok_or_else(|| report!("muxr terminal is too small for horizontal pane border"))?;
-                    let (first_rows, second_rows) = first_ratio.split_lengths(content_rows)?;
-                    let border_row = row
-                        .checked_add(first_rows)
-                        .ok_or_else(|| report!("muxr pane border row overflowed"))?;
-                    let second_row = row
-                        .checked_add(first_rows)
-                        .and_then(|value| value.checked_add(1))
-                        .ok_or_else(|| report!("muxr pane split row overflowed"))?;
-                    first.append_layout(row, col, first_rows, cols, layout)?;
-                    layout.push_border(PaneBorder::new(PaneBorderAxis::Horizontal, col, border_row, cols));
-                    second.append_layout(second_row, col, second_rows, cols, layout)
-                }
-                PaneSplitAxis::Vertical => {
-                    let content_cols = cols
-                        .checked_sub(1)
-                        .ok_or_else(|| report!("muxr terminal is too small for vertical pane border"))?;
-                    let (first_cols, second_cols) = first_ratio.split_lengths(content_cols)?;
-                    let border_col = col
-                        .checked_add(first_cols)
-                        .ok_or_else(|| report!("muxr pane border col overflowed"))?;
-                    let second_col = col
-                        .checked_add(first_cols)
-                        .and_then(|value| value.checked_add(1))
-                        .ok_or_else(|| report!("muxr pane split col overflowed"))?;
-                    first.append_layout(row, col, rows, first_cols, layout)?;
-                    layout.push_border(PaneBorder::new(PaneBorderAxis::Vertical, border_col, row, rows));
-                    second.append_layout(row, second_col, rows, second_cols, layout)
-                }
-            },
         }
     }
 }

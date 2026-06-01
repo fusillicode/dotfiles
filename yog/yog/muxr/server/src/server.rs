@@ -24,12 +24,10 @@ use muxr_core::PaneRegionSnapshot;
 use muxr_core::PaneRegionsSnapshot;
 use muxr_core::RenderBaseline;
 use muxr_core::RenderCell;
-use muxr_core::RenderColor;
 use muxr_core::RenderCursor;
 use muxr_core::RenderDiff;
 use muxr_core::RenderRowSpan;
 use muxr_core::RenderStyle;
-use muxr_core::RenderTextStyle;
 use muxr_core::RenderUpdate;
 use muxr_core::ServerError;
 use muxr_core::ServerEvent;
@@ -43,13 +41,12 @@ use muxr_transport::ServerRequestReader;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
-use crate::geometry::PaneBorder;
-use crate::geometry::PaneBorderAxis;
-use crate::geometry::PaneRegion;
 use crate::history::pane_output_path;
+use crate::pane_borders::BorderRenderMode;
 use crate::pane_close::ClosePaneOutcome;
 use crate::pane_close::PaneExitOutcome;
 use crate::pane_focus::PaneFocusDirection;
+use crate::pane_layout::PaneRegion;
 use crate::pane_resize::PaneResizeDirection;
 use crate::pane_scroll::PaneScrollAmount;
 use crate::pane_split::PaneSplitAxis;
@@ -220,8 +217,9 @@ impl RenderComposer {
         layout: &SessionLayout,
         runtimes: &PaneRuntimes,
         size: &TerminalSize,
+        border_mode: BorderRenderMode,
     ) -> rootcause::Result<RenderUpdate> {
-        self.render_frame_baseline(Self::current_frame(layout, runtimes, size)?)
+        self.render_frame_baseline(Self::current_frame(layout, runtimes, size, border_mode)?)
     }
 
     fn render_frame_baseline(&mut self, mut frame: CompositeFrame) -> rootcause::Result<RenderUpdate> {
@@ -237,11 +235,12 @@ impl RenderComposer {
         runtimes: &PaneRuntimes,
         size: &TerminalSize,
         reason: RenderDiffReason,
+        border_mode: BorderRenderMode,
     ) -> rootcause::Result<Option<RenderUpdate>> {
         let Some(previous) = self.last_sent.as_ref() else {
-            return Ok(Some(self.render_baseline(layout, runtimes, size)?));
+            return Ok(Some(self.render_baseline(layout, runtimes, size, border_mode)?));
         };
-        let frame = Self::current_frame(layout, runtimes, size)?;
+        let frame = Self::current_frame(layout, runtimes, size, border_mode)?;
         if frame.size != previous.size {
             return Ok(Some(self.render_frame_baseline(frame)?));
         }
@@ -281,6 +280,7 @@ impl RenderComposer {
         layout: &SessionLayout,
         runtimes: &PaneRuntimes,
         size: &TerminalSize,
+        border_mode: BorderRenderMode,
     ) -> rootcause::Result<CompositeFrame> {
         let pane_layout = layout.pane_layout(size)?;
         let active_pane = layout.active_pane_id()?;
@@ -302,7 +302,7 @@ impl RenderComposer {
                 cursor = RenderCursor::new(row, col, true);
             }
         }
-        self::paste_borders(&mut rows, pane_layout.borders())?;
+        crate::pane_borders::paste_borders(&mut rows, pane_layout.borders(), Some(&active_pane), border_mode)?;
 
         let rows = rows
             .into_iter()
@@ -357,6 +357,13 @@ enum ServerInputMode {
     #[default]
     Normal,
     Resize,
+}
+
+const fn border_render_mode(input_mode: ServerInputMode) -> BorderRenderMode {
+    match input_mode {
+        ServerInputMode::Normal => BorderRenderMode::Focus,
+        ServerInputMode::Resize => BorderRenderMode::Resize,
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -609,60 +616,6 @@ fn paste_snapshot(
     Ok(())
 }
 
-fn paste_borders(rows: &mut [Vec<RenderCell>], borders: &[PaneBorder]) -> rootcause::Result<()> {
-    for border in borders {
-        match border.axis() {
-            PaneBorderAxis::Horizontal => {
-                let target_row = rows
-                    .get_mut(usize::from(border.row()))
-                    .ok_or_else(|| report!("muxr horizontal pane border row outside composite frame"))?;
-                let start_col = usize::from(border.col());
-                let end_col = start_col
-                    .checked_add(usize::from(border.len()))
-                    .ok_or_else(|| report!("muxr horizontal pane border end overflowed"))?;
-                if end_col > target_row.len() {
-                    return Err(report!("muxr horizontal pane border outside composite frame"));
-                }
-                for target in target_row.iter_mut().skip(start_col).take(usize::from(border.len())) {
-                    self::paste_border_cell(target, "─");
-                }
-            }
-            PaneBorderAxis::Vertical => {
-                let end_row = border
-                    .row()
-                    .checked_add(border.len())
-                    .ok_or_else(|| report!("muxr vertical pane border end overflowed"))?;
-                for row in border.row()..end_row {
-                    let target_row = rows
-                        .get_mut(usize::from(row))
-                        .ok_or_else(|| report!("muxr vertical pane border row outside composite frame"))?;
-                    let target = target_row
-                        .get_mut(usize::from(border.col()))
-                        .ok_or_else(|| report!("muxr vertical pane border col outside composite frame"))?;
-                    self::paste_border_cell(target, "│");
-                }
-            }
-        }
-    }
-    Ok(())
-}
-
-fn paste_border_cell(target: &mut RenderCell, glyph: &'static str) {
-    let glyph = match (target.text(), glyph) {
-        ("│", "─") | ("─", "│") | ("┼", _) => "┼",
-        _ => glyph,
-    };
-    *target = RenderCell::narrow(glyph, self::border_style());
-}
-
-const fn border_style() -> RenderStyle {
-    RenderStyle {
-        attrs: RenderTextStyle::empty().set_dim(true),
-        bg: RenderColor::Default,
-        fg: RenderColor::Indexed(8),
-    }
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ReapResult {
     Final,
@@ -678,6 +631,7 @@ struct AttachedPtySink {
 struct AttachedSessionState<'a> {
     config: &'a ServerConfig,
     delete_sessions: &'a DeleteSessions,
+    input_mode: ServerInputMode,
     layout: &'a Mutex<SessionLayout>,
     pane_regions: PaneRegionsSnapshot,
     pty_event_sender: &'a mpsc::SyncSender<PtyEvent>,
@@ -852,6 +806,7 @@ async fn handle_client(
     let mut attached_state = AttachedSessionState {
         config,
         delete_sessions,
+        input_mode: ServerInputMode::Normal,
         layout,
         pane_regions: attached_pane_regions,
         pty_event_sender: &pty_event_sender,
@@ -926,7 +881,8 @@ fn initial_attached_render(
     let runtimes = self::lock_mutex(runtimes, "pane runtimes")?;
     let layout_snapshot = layout.snapshot()?;
     let pane_regions = self::pane_regions_snapshot(&layout, &runtimes, terminal_size)?;
-    let render_baseline = render_composer.render_baseline(&layout, &runtimes, terminal_size)?;
+    let render_baseline =
+        render_composer.render_baseline(&layout, &runtimes, terminal_size, BorderRenderMode::Focus)?;
     drop(runtimes);
     drop(layout);
     Ok((layout_snapshot, pane_regions, render_composer, render_baseline))
@@ -987,7 +943,6 @@ async fn run_attached_client(
         .ok_or_else(|| report!("muxr heartbeat interval overflowed"))?;
     let mut heartbeat = tokio::time::interval_at(heartbeat_start, CLIENT_HEARTBEAT_INTERVAL);
     let mut heartbeat_started_at: Option<tokio::time::Instant> = None;
-    let mut input_mode = ServerInputMode::Normal;
     let render_start = tokio::time::Instant::now()
         .checked_add(RENDER_FRAME_INTERVAL)
         .ok_or_else(|| report!("muxr render frame interval overflowed"))?;
@@ -1035,7 +990,7 @@ async fn run_attached_client(
                 },
                 request = request_reader.recv_request() => {
                     request_turn = false;
-                    if !self::handle_attached_request(request?, event_writer, state, &mut heartbeat_started_at, &mut input_mode, &mut render_dirty).await? {
+                    if !self::handle_attached_request(request?, event_writer, state, &mut heartbeat_started_at, &mut render_dirty).await? {
                         return Ok(());
                     }
                 },
@@ -1076,7 +1031,7 @@ async fn run_attached_client(
                 },
                 request = request_reader.recv_request() => {
                     request_turn = false;
-                    if !self::handle_attached_request(request?, event_writer, state, &mut heartbeat_started_at, &mut input_mode, &mut render_dirty).await? {
+                    if !self::handle_attached_request(request?, event_writer, state, &mut heartbeat_started_at, &mut render_dirty).await? {
                         return Ok(());
                     }
                 },
@@ -1121,9 +1076,13 @@ async fn flush_render_diff(
             // clients can complete scroll-dependent state after the matching PaneRegions event.
             RenderDiffReason::RegionChanged
         };
-        let update = state
-            .render_composer
-            .render_diff(&layout, &runtimes, &state.terminal_size, reason)?;
+        let update = state.render_composer.render_diff(
+            &layout,
+            &runtimes,
+            &state.terminal_size,
+            reason,
+            self::border_render_mode(state.input_mode),
+        )?;
         drop(runtimes);
         drop(layout);
         (pane_regions, update)
@@ -1153,9 +1112,12 @@ async fn send_layout_and_baseline(
         (
             layout.snapshot()?,
             self::pane_regions_snapshot(&layout, &runtimes, &state.terminal_size)?,
-            state
-                .render_composer
-                .render_baseline(&layout, &runtimes, &state.terminal_size)?,
+            state.render_composer.render_baseline(
+                &layout,
+                &runtimes,
+                &state.terminal_size,
+                self::border_render_mode(state.input_mode),
+            )?,
         )
     };
     if !self::send_writer_event_with_timeout(event_writer, &ServerEvent::Layout(layout_snapshot)).await? {
@@ -1199,7 +1161,6 @@ async fn handle_attached_request(
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
     heartbeat_started_at: &mut Option<tokio::time::Instant>,
-    input_mode: &mut ServerInputMode,
     render_dirty: &mut bool,
 ) -> rootcause::Result<bool> {
     match request {
@@ -1223,9 +1184,7 @@ async fn handle_attached_request(
             }
             Ok(true)
         }
-        Some(ClientRequest::Key(key)) => {
-            self::handle_key_request(key, event_writer, state, input_mode, render_dirty).await
-        }
+        Some(ClientRequest::Key(key)) => self::handle_key_request(key, event_writer, state, render_dirty).await,
         Some(ClientRequest::Mouse(event)) => {
             self::handle_mouse_event_request(event, event_writer, state, render_dirty).await
         }
@@ -1311,10 +1270,9 @@ async fn handle_key_request(
     key: ClientKey,
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
-    input_mode: &mut ServerInputMode,
     render_dirty: &mut bool,
 ) -> rootcause::Result<bool> {
-    match self::resolve_key(input_mode, &key) {
+    match self::resolve_key(&mut state.input_mode, &key) {
         KeyResolution::Command(command) => self::handle_command_request(command, event_writer, state).await,
         KeyResolution::Raw => {
             if self::active_pane_handle(state.layout, state.runtimes)?.write_input(&key.raw_bytes)? {
@@ -1331,54 +1289,7 @@ async fn handle_command_request(
     state: &mut AttachedSessionState<'_>,
 ) -> rootcause::Result<bool> {
     match command {
-        ClientCommand::Tab(command) => {
-            match command {
-                TabCommand::Create => {
-                    let pane_id = {
-                        let mut layout = self::lock_mutex(state.layout, "layout")?;
-                        let pane_id = crate::tab_create::handle_create_tab(
-                            &mut layout,
-                            state.config,
-                            state.runtimes,
-                            &state.terminal_size,
-                        )?;
-                        crate::state::persisted::write_metadata(&state.config.paths, &layout)?;
-                        drop(layout);
-                        pane_id
-                    };
-                    state.sink_guards.push(self::attach_pane_sink(
-                        state.runtimes,
-                        state.pty_event_sender,
-                        &pane_id,
-                    )?);
-                }
-                TabCommand::FocusPrevious => {
-                    let mut layout = self::lock_mutex(state.layout, "layout")?;
-                    crate::tab_focus::handle_focus_previous_tab(&mut layout)?;
-                    crate::state::persisted::write_metadata(&state.config.paths, &layout)?;
-                    drop(layout);
-                }
-                TabCommand::FocusNext => {
-                    let mut layout = self::lock_mutex(state.layout, "layout")?;
-                    crate::tab_focus::handle_focus_next_tab(&mut layout)?;
-                    crate::state::persisted::write_metadata(&state.config.paths, &layout)?;
-                    drop(layout);
-                }
-                TabCommand::MovePrevious => {
-                    let mut layout = self::lock_mutex(state.layout, "layout")?;
-                    crate::tab_move::handle_move_active_tab_previous(&mut layout)?;
-                    crate::state::persisted::write_metadata(&state.config.paths, &layout)?;
-                    drop(layout);
-                }
-                TabCommand::MoveNext => {
-                    let mut layout = self::lock_mutex(state.layout, "layout")?;
-                    crate::tab_move::handle_move_active_tab_next(&mut layout)?;
-                    crate::state::persisted::write_metadata(&state.config.paths, &layout)?;
-                    drop(layout);
-                }
-            }
-            self::resize_panes_and_render(event_writer, state).await
-        }
+        ClientCommand::Tab(command) => self::handle_tab_command_request(command, event_writer, state).await,
         ClientCommand::SplitPane(split_axis) => {
             let pane_id = crate::pane_split::handle_split_pane_command(
                 split_axis,
@@ -1426,8 +1337,63 @@ async fn handle_command_request(
             }
             self::send_layout_and_baseline(event_writer, state).await
         }
-        ClientCommand::EnterResizeMode | ClientCommand::ExitMode => Ok(true),
+        ClientCommand::EnterResizeMode | ClientCommand::ExitMode => {
+            self::send_layout_and_baseline(event_writer, state).await
+        }
     }
+}
+
+async fn handle_tab_command_request(
+    command: TabCommand,
+    event_writer: &mut ServerEventWriter,
+    state: &mut AttachedSessionState<'_>,
+) -> rootcause::Result<bool> {
+    match command {
+        TabCommand::Create => {
+            let pane_id = {
+                let mut layout = self::lock_mutex(state.layout, "layout")?;
+                let pane_id = crate::tab_create::handle_create_tab(
+                    &mut layout,
+                    state.config,
+                    state.runtimes,
+                    &state.terminal_size,
+                )?;
+                crate::state::persisted::write_metadata(&state.config.paths, &layout)?;
+                drop(layout);
+                pane_id
+            };
+            state.sink_guards.push(self::attach_pane_sink(
+                state.runtimes,
+                state.pty_event_sender,
+                &pane_id,
+            )?);
+        }
+        TabCommand::FocusPrevious => {
+            let mut layout = self::lock_mutex(state.layout, "layout")?;
+            crate::tab_focus::handle_focus_previous_tab(&mut layout)?;
+            crate::state::persisted::write_metadata(&state.config.paths, &layout)?;
+            drop(layout);
+        }
+        TabCommand::FocusNext => {
+            let mut layout = self::lock_mutex(state.layout, "layout")?;
+            crate::tab_focus::handle_focus_next_tab(&mut layout)?;
+            crate::state::persisted::write_metadata(&state.config.paths, &layout)?;
+            drop(layout);
+        }
+        TabCommand::MovePrevious => {
+            let mut layout = self::lock_mutex(state.layout, "layout")?;
+            crate::tab_move::handle_move_active_tab_previous(&mut layout)?;
+            crate::state::persisted::write_metadata(&state.config.paths, &layout)?;
+            drop(layout);
+        }
+        TabCommand::MoveNext => {
+            let mut layout = self::lock_mutex(state.layout, "layout")?;
+            crate::tab_move::handle_move_active_tab_next(&mut layout)?;
+            crate::state::persisted::write_metadata(&state.config.paths, &layout)?;
+            drop(layout);
+        }
+    }
+    self::resize_panes_and_render(event_writer, state).await
 }
 
 fn active_pane_handle(layout: &Mutex<SessionLayout>, runtimes: &Mutex<PaneRuntimes>) -> rootcause::Result<PtyHandle> {
@@ -1651,6 +1617,7 @@ mod tests {
     use muxr_transport::ClientRequestWriter;
 
     use super::*;
+    use crate::pane_borders::PaneBorderAxis;
 
     const SERVER_READY_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -2127,38 +2094,6 @@ mod tests {
             self::layout_active_tab_pane_borders(&layout, &TerminalSize::new(80, 24)?)?,
             expected_borders
         );
-        Ok(())
-    }
-
-    #[test]
-    fn test_paste_borders_when_borders_are_rendered_uses_box_drawing_style() -> rootcause::Result<()> {
-        let mut rows = self::empty_render_rows(&TerminalSize::new(3, 3)?);
-
-        self::paste_borders(
-            &mut rows,
-            &[
-                PaneBorder::new(PaneBorderAxis::Vertical, 1, 0, 3),
-                PaneBorder::new(PaneBorderAxis::Horizontal, 0, 1, 3),
-            ],
-        )?;
-
-        let vertical_cell = rows
-            .first()
-            .and_then(|row| row.get(1))
-            .ok_or_else(|| report!("expected vertical border cell"))?;
-        let horizontal_cell = rows
-            .get(1)
-            .and_then(|row| row.first())
-            .ok_or_else(|| report!("expected horizontal border cell"))?;
-        let junction_cell = rows
-            .get(1)
-            .and_then(|row| row.get(1))
-            .ok_or_else(|| report!("expected junction border cell"))?;
-
-        pretty_assertions::assert_eq!(vertical_cell.text(), "│");
-        pretty_assertions::assert_eq!(horizontal_cell.text(), "─");
-        pretty_assertions::assert_eq!(junction_cell.text(), "┼");
-        pretty_assertions::assert_eq!(vertical_cell.style(), self::border_style());
         Ok(())
     }
 
@@ -2786,6 +2721,7 @@ mod tests {
                     b"\x1bR".to_vec(),
                 )))
                 .await?;
+            drop(self::read_until_layout(&mut client).await?);
             client
                 .writer
                 .send_request(&ClientRequest::Key(ClientKey::new(
@@ -3074,7 +3010,6 @@ mod tests {
                 Some(ServerEvent::Ping) => client.writer.send_request(&ClientRequest::Pong).await?,
                 Some(
                     ServerEvent::Attached(_)
-                    | ServerEvent::Deleted
                     | ServerEvent::Pong
                     | ServerEvent::Layout(_)
                     | ServerEvent::PaneRegions(_)
