@@ -9,6 +9,7 @@ mod pane_scroll;
 mod pane_split;
 mod pty;
 mod server;
+mod sessions_delete;
 mod state;
 mod tab_create;
 mod tab_focus;

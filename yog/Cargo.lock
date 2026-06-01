@@ -3056,11 +3056,14 @@ dependencies = [
  "muxr-client",
  "muxr-core",
  "muxr-server",
+ "owo-colors 4.3.0",
  "pretty_assertions",
  "rootcause",
  "rstest",
+ "strum 0.28.0",
  "tempfile",
  "ytil_sys",
+ "ytil_tui",
 ]
 
 [[package]]
@@ -3068,6 +3071,7 @@ name = "muxr-client"
 version = "0.1.0"
 dependencies = [
  "assert2",
+ "chrono",
  "crossterm 0.29.0",
  "muxr-core",
  "muxr-transport",
