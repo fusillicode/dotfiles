@@ -259,7 +259,7 @@ async fn run_interactive(mut attached_session: AttachedSession, initial_size: Te
                     break;
                 };
                 match event {
-                    ServerEvent::Detached => break,
+                    ServerEvent::Deleted | ServerEvent::Detached => break,
                     ServerEvent::Error(error) => {
                         return Err(report!("muxr server returned error")
                             .attach(format!("code={}", error.code()))

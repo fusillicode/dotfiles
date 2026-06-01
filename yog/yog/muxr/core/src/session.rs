@@ -104,6 +104,21 @@ pub struct SessionPaths {
 }
 
 impl SessionPaths {
+    /// Return the root directory containing all muxr session directories under `$HOME`.
+    ///
+    /// # Errors
+    /// - `HOME` is unavailable in the current environment.
+    pub fn sessions_root_from_home() -> rootcause::Result<PathBuf> {
+        let home = env::var_os("HOME").ok_or_else(|| report!("missing HOME env for muxr state root"))?;
+        Ok(Self::sessions_root_from_home_path(PathBuf::from(home)))
+    }
+
+    /// Return the root directory containing all muxr session directories under an explicit home path.
+    #[must_use]
+    pub fn sessions_root_from_home_path(home: PathBuf) -> PathBuf {
+        Self::state_root_from_home_path(home).join("sessions")
+    }
+
     /// Build muxr session paths under `$HOME/.local/state/muxr`.
     ///
     /// # Errors
@@ -114,8 +129,23 @@ impl SessionPaths {
         Self::from_home_path(PathBuf::from(home), session)
     }
 
+    /// Build muxr session paths from an explicit sessions root.
+    ///
+    /// # Errors
+    /// - The sessions root has no parent state directory.
+    /// - The derived Unix socket path is too long for the platform socket address.
+    pub fn from_sessions_root_path(sessions_root: &Path, session: &SessionName) -> rootcause::Result<Self> {
+        let state_root = sessions_root
+            .parent()
+            .ok_or_else(|| report!("muxr sessions root has no parent"))?;
+        Self::from_state_root_path(state_root, session)
+    }
+
     fn from_home_path(home: PathBuf, session: &SessionName) -> rootcause::Result<Self> {
-        let state_root = STATE_HOME_PARTS.iter().fold(home, |path, part| path.join(part));
+        Self::from_state_root_path(&Self::state_root_from_home_path(home), session)
+    }
+
+    fn from_state_root_path(state_root: &Path, session: &SessionName) -> rootcause::Result<Self> {
         let root = state_root.join("sessions").join(session.as_ref());
         let socket = state_root
             .join(
@@ -133,6 +163,10 @@ impl SessionPaths {
             panes: root.join("panes"),
             root,
         })
+    }
+
+    fn state_root_from_home_path(home: PathBuf) -> PathBuf {
+        STATE_HOME_PARTS.iter().fold(home, |path, part| path.join(part))
     }
 }
 

@@ -46,16 +46,22 @@ fn test_muxr_start_when_session_is_reused_attaches_to_same_server_and_cleans_up_
 }
 
 #[test]
-fn test_muxr_when_no_args_prints_help() -> rootcause::Result<()> {
+fn test_muxr_when_no_args_and_no_sessions_starts_default_session() -> rootcause::Result<()> {
     let home = tempfile::Builder::new()
         .prefix("muxr-cli.")
         .tempdir_in("/tmp")
         .context("failed to create muxr cli test home")?;
+    let session = SessionName::default();
+    let paths = session_paths(home.path(), &session);
 
     let output = run_muxr(home.path(), [])?;
 
     assert2::assert!(output.status.success());
-    assert2::assert!(String::from_utf8_lossy(&output.stdout).contains("muxr start [session]"));
+    let _pid = read_pid(&paths)?;
+
+    let exit = run_muxr_with_stdin(home.path(), ["start", session.as_ref()], b"exit\n")?;
+    assert2::assert!(exit.status.success());
+    wait_for_cleanup(&paths)?;
     Ok(())
 }
 
