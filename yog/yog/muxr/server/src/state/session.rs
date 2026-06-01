@@ -7,8 +7,8 @@ use muxr_core::TerminalSize;
 use rootcause::report;
 use serde::Deserialize;
 
-use crate::geometry::PaneLayout;
-use crate::geometry::PaneRegion;
+use crate::pane_layout::PaneLayout;
+use crate::pane_layout::PaneRegion;
 use crate::state::Pane;
 use crate::state::PaneNode;
 use crate::state::Tab;
