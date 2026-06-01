@@ -7,45 +7,48 @@ use muxr_core::RenderStyle;
 use muxr_core::RenderTextStyle;
 use rootcause::report;
 
+use crate::pane_layout::PanePosition;
 use crate::pane_layout::PaneRegion;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaneBorder {
     axis: PaneBorderAxis,
-    col: u16,
     len: u16,
     owner_cells: Vec<PaneBorderCellOwners>,
-    row: u16,
+    position: PanePosition,
 }
 
 impl PaneBorder {
     pub fn with_adjacent_regions(
         axis: PaneBorderAxis,
-        col: u16,
-        row: u16,
+        position: PanePosition,
         len: u16,
         first_regions: &[PaneRegion],
         second_regions: &[PaneRegion],
     ) -> rootcause::Result<Self> {
         let mut owner_cells = Vec::new();
         for offset in 0..len {
-            let (cell_row, cell_col) = match axis {
-                PaneBorderAxis::Horizontal => (
-                    row,
-                    col.checked_add(offset)
+            let cell_position = match axis {
+                PaneBorderAxis::Horizontal => PanePosition {
+                    row: position.row,
+                    col: position
+                        .col
+                        .checked_add(offset)
                         .ok_or_else(|| report!("muxr horizontal pane border owner col overflowed"))?,
-                ),
-                PaneBorderAxis::Vertical => (
-                    row.checked_add(offset)
+                },
+                PaneBorderAxis::Vertical => PanePosition {
+                    row: position
+                        .row
+                        .checked_add(offset)
                         .ok_or_else(|| report!("muxr vertical pane border owner row overflowed"))?,
-                    col,
-                ),
+                    col: position.col,
+                },
             };
             let pane_ids = first_regions
                 .iter()
                 .chain(second_regions)
-                .filter(|region| self::pane_region_owns_border_cell(region, axis, cell_row, cell_col))
-                .map(|region| region.id().clone())
+                .filter(|region| self::pane_region_owns_border_cell(region, axis, cell_position))
+                .map(|region| region.id.clone())
                 .collect::<Vec<_>>();
             if !pane_ids.is_empty() {
                 owner_cells.push(PaneBorderCellOwners { offset, pane_ids });
@@ -54,10 +57,9 @@ impl PaneBorder {
 
         Ok(Self {
             axis,
-            col,
             len,
             owner_cells,
-            row,
+            position,
         })
     }
 
@@ -66,7 +68,7 @@ impl PaneBorder {
     }
 
     pub const fn col(&self) -> u16 {
-        self.col
+        self.position.col
     }
 
     pub const fn len(&self) -> u16 {
@@ -74,11 +76,11 @@ impl PaneBorder {
     }
 
     pub const fn row(&self) -> u16 {
-        self.row
+        self.position.row
     }
 
-    pub fn is_owned_by(&self, row: u16, col: u16, pane_id: &PaneId) -> bool {
-        let Some(offset) = self.cell_offset(row, col) else {
+    pub fn is_owned_by(&self, position: PanePosition, pane_id: &PaneId) -> bool {
+        let Some(offset) = self.cell_offset(position) else {
             return false;
         };
 
@@ -91,14 +93,14 @@ impl PaneBorder {
         })
     }
 
-    fn cell_offset(&self, row: u16, col: u16) -> Option<u16> {
+    fn cell_offset(&self, position: PanePosition) -> Option<u16> {
         match self.axis {
-            PaneBorderAxis::Horizontal if row == self.row => {
-                let offset = col.checked_sub(self.col)?;
+            PaneBorderAxis::Horizontal if position.row == self.position.row => {
+                let offset = position.col.checked_sub(self.position.col)?;
                 (offset < self.len).then_some(offset)
             }
-            PaneBorderAxis::Vertical if col == self.col => {
-                let offset = row.checked_sub(self.row)?;
+            PaneBorderAxis::Vertical if position.col == self.position.col => {
+                let offset = position.row.checked_sub(self.position.row)?;
                 (offset < self.len).then_some(offset)
             }
             PaneBorderAxis::Horizontal | PaneBorderAxis::Vertical => None,
@@ -118,26 +120,26 @@ pub enum PaneBorderAxis {
     Vertical,
 }
 
-fn pane_region_owns_border_cell(region: &PaneRegion, axis: PaneBorderAxis, row: u16, col: u16) -> bool {
+fn pane_region_owns_border_cell(region: &PaneRegion, axis: PaneBorderAxis, position: PanePosition) -> bool {
     match axis {
         PaneBorderAxis::Horizontal => {
             // Pane regions exclude separator cells; extending the perpendicular span by exactly one cell
             // gives split junctions to the pane corner without coloring unrelated diagonal border cells.
-            let col = u32::from(col);
-            let start_col = u32::from(region.col()).saturating_sub(1);
-            let end_col = u32::from(region.col()).saturating_add(u32::from(region.cols()));
+            let col = u32::from(position.col);
+            let start_col = u32::from(region.area.origin.col).saturating_sub(1);
+            let end_col = region.area.end_col_exclusive();
             let contains_col = col >= start_col && col <= end_col;
-            let touches_top = row.checked_add(1) == Some(region.row()) && contains_col;
-            let touches_bottom = region.row().checked_add(region.rows()) == Some(row) && contains_col;
+            let touches_top = position.row.checked_add(1) == Some(region.area.origin.row) && contains_col;
+            let touches_bottom = region.area.end_row() == Some(position.row) && contains_col;
             touches_top || touches_bottom
         }
         PaneBorderAxis::Vertical => {
-            let row = u32::from(row);
-            let start_row = u32::from(region.row()).saturating_sub(1);
-            let end_row = u32::from(region.row()).saturating_add(u32::from(region.rows()));
+            let row = u32::from(position.row);
+            let start_row = u32::from(region.area.origin.row).saturating_sub(1);
+            let end_row = region.area.end_row_exclusive();
             let contains_row = row >= start_row && row <= end_row;
-            let touches_left = col.checked_add(1) == Some(region.col()) && contains_row;
-            let touches_right = region.col().checked_add(region.cols()) == Some(col) && contains_row;
+            let touches_left = position.col.checked_add(1) == Some(region.area.origin.col) && contains_row;
+            let touches_right = region.area.end_col() == Some(position.col) && contains_row;
             touches_left || touches_right
         }
     }
@@ -280,7 +282,7 @@ fn border_style_for_cell(
     active_pane: Option<&PaneId>,
     border_mode: BorderRenderMode,
 ) -> RenderStyle {
-    if active_pane.is_some_and(|pane_id| border.is_owned_by(row, col, pane_id)) {
+    if active_pane.is_some_and(|pane_id| border.is_owned_by(PanePosition { row, col }, pane_id)) {
         return match border_mode {
             BorderRenderMode::Focus => self::focused_border_style(),
             BorderRenderMode::Resize => self::resize_border_style(),
@@ -522,10 +524,24 @@ mod tests {
 
     use super::*;
     use crate::pane_focus::PaneFocusDirection;
+    use crate::pane_layout::PaneArea;
+    use crate::pane_layout::PanePosition;
     use crate::pane_layout::PaneRegion;
+    use crate::pane_layout::PaneSize;
     use crate::pane_split::PaneSplitAxis;
     use crate::state::SessionLayout;
     use crate::state::SessionMetadata;
+
+    fn pane_region(id: PaneId, row: u16, col: u16, rows: u16, cols: u16, focus_seq: u64) -> PaneRegion {
+        PaneRegion {
+            area: PaneArea {
+                origin: PanePosition { row, col },
+                size: PaneSize { rows, cols },
+            },
+            focus_seq,
+            id,
+        }
+    }
 
     #[rstest::rstest]
     #[case::vertical_corner(PaneBorderAxis::Vertical, 1, 0, 3, 1, 1)]
@@ -539,17 +555,25 @@ mod tests {
         #[case] cell_row: u16,
     ) -> rootcause::Result<()> {
         let active_pane = PaneId::new("pane-active")?;
-        let active_region = PaneRegion::new(active_pane.clone(), 2, 2, 1, 1, 1);
+        let active_region = self::pane_region(active_pane.clone(), 2, 2, 1, 1, 1);
         let border = PaneBorder::with_adjacent_regions(
             axis,
-            border_col,
-            border_row,
+            PanePosition {
+                row: border_row,
+                col: border_col,
+            },
             border_len,
             &[],
             std::slice::from_ref(&active_region),
         )?;
 
-        assert2::assert!(border.is_owned_by(cell_row, cell_col, &active_pane));
+        assert2::assert!(border.is_owned_by(
+            PanePosition {
+                row: cell_row,
+                col: cell_col
+            },
+            &active_pane
+        ));
         Ok(())
     }
 
@@ -565,17 +589,25 @@ mod tests {
         #[case] cell_row: u16,
     ) -> rootcause::Result<()> {
         let active_pane = PaneId::new("pane-active")?;
-        let active_region = PaneRegion::new(active_pane.clone(), 2, 2, 1, 1, 1);
+        let active_region = self::pane_region(active_pane.clone(), 2, 2, 1, 1, 1);
         let border = PaneBorder::with_adjacent_regions(
             axis,
-            border_col,
-            border_row,
+            PanePosition {
+                row: border_row,
+                col: border_col,
+            },
             border_len,
             &[],
             std::slice::from_ref(&active_region),
         )?;
 
-        assert2::assert!(!border.is_owned_by(cell_row, cell_col, &active_pane));
+        assert2::assert!(!border.is_owned_by(
+            PanePosition {
+                row: cell_row,
+                col: cell_col
+            },
+            &active_pane
+        ));
         Ok(())
     }
 
@@ -648,8 +680,20 @@ mod tests {
         self::paste_borders(
             &mut rows,
             &[
-                PaneBorder::with_adjacent_regions(PaneBorderAxis::Vertical, 1, 0, 3, &[], &[])?,
-                PaneBorder::with_adjacent_regions(PaneBorderAxis::Horizontal, 0, 1, 3, &[], &[])?,
+                PaneBorder::with_adjacent_regions(
+                    PaneBorderAxis::Vertical,
+                    PanePosition { row: 0, col: 1 },
+                    3,
+                    &[],
+                    &[],
+                )?,
+                PaneBorder::with_adjacent_regions(
+                    PaneBorderAxis::Horizontal,
+                    PanePosition { row: 1, col: 0 },
+                    3,
+                    &[],
+                    &[],
+                )?,
             ],
             None,
             BorderRenderMode::Focus,
@@ -684,11 +728,10 @@ mod tests {
     ) -> rootcause::Result<()> {
         let mut rows = self::empty_render_rows(&TerminalSize::new(3, 3)?);
         let active_pane = PaneId::new("pane-1")?;
-        let active_region = PaneRegion::new(active_pane.clone(), 0, 0, 1, 3, 1);
+        let active_region = self::pane_region(active_pane.clone(), 0, 0, 3, 1, 1);
         let border = PaneBorder::with_adjacent_regions(
             PaneBorderAxis::Vertical,
-            1,
-            0,
+            PanePosition { row: 0, col: 1 },
             3,
             std::slice::from_ref(&active_region),
             &[],
@@ -714,11 +757,10 @@ mod tests {
     ) -> rootcause::Result<()> {
         let mut rows = self::empty_render_rows(&TerminalSize::new(3, 3)?);
         let active_pane = PaneId::new("pane-1")?;
-        let active_region = PaneRegion::new(active_pane.clone(), 0, 1, 3, 1, 1);
+        let active_region = self::pane_region(active_pane.clone(), 1, 0, 1, 3, 1);
         let horizontal_border = PaneBorder::with_adjacent_regions(
             PaneBorderAxis::Horizontal,
-            0,
-            0,
+            PanePosition { row: 0, col: 0 },
             3,
             &[],
             std::slice::from_ref(&active_region),
@@ -727,7 +769,13 @@ mod tests {
         self::paste_borders(
             &mut rows,
             &[
-                PaneBorder::with_adjacent_regions(PaneBorderAxis::Vertical, 0, 0, 3, &[], &[])?,
+                PaneBorder::with_adjacent_regions(
+                    PaneBorderAxis::Vertical,
+                    PanePosition { row: 0, col: 0 },
+                    3,
+                    &[],
+                    &[],
+                )?,
                 horizontal_border,
             ],
             Some(&active_pane),
@@ -754,12 +802,11 @@ mod tests {
         let mut rows = self::empty_render_rows(&TerminalSize::new(3, 3)?);
         let top_right_pane = PaneId::new("pane-top-right")?;
         let active_pane = PaneId::new("pane-bottom-right")?;
-        let top_right_region = PaneRegion::new(top_right_pane, 2, 0, 1, 1, 1);
-        let active_region = PaneRegion::new(active_pane.clone(), 2, 2, 1, 1, 2);
+        let top_right_region = self::pane_region(top_right_pane, 0, 2, 1, 1, 1);
+        let active_region = self::pane_region(active_pane.clone(), 2, 2, 1, 1, 2);
         let border = PaneBorder::with_adjacent_regions(
             PaneBorderAxis::Vertical,
-            1,
-            0,
+            PanePosition { row: 0, col: 1 },
             3,
             &[],
             &[top_right_region, active_region],
@@ -794,6 +841,10 @@ mod tests {
     }
 
     fn metadata(command_label: &str, started_at: u64) -> SessionMetadata {
-        SessionMetadata::new(command_label.to_owned(), "/tmp".to_owned(), started_at)
+        SessionMetadata {
+            command_label: command_label.to_owned(),
+            cwd: "/tmp".to_owned(),
+            started_at,
+        }
     }
 }

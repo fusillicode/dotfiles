@@ -44,28 +44,10 @@ pub struct TerminalState {
 /// Mouse reporting protocol requested by the application running in a pane.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TerminalMouseProtocol {
-    encoding: TerminalMouseProtocolEncoding,
-    mode: TerminalMouseProtocolMode,
-}
-
-impl TerminalMouseProtocol {
-    /// Build a terminal mouse protocol snapshot.
-    #[must_use]
-    pub const fn new(mode: TerminalMouseProtocolMode, encoding: TerminalMouseProtocolEncoding) -> Self {
-        Self { encoding, mode }
-    }
-
-    /// Return the coordinate/button encoding requested by the pane application.
-    #[must_use]
-    pub const fn encoding(self) -> TerminalMouseProtocolEncoding {
-        self.encoding
-    }
-
-    /// Return which mouse events should be reported to the pane application.
-    #[must_use]
-    pub const fn mode(self) -> TerminalMouseProtocolMode {
-        self.mode
-    }
+    /// Coordinate/button encoding requested by the pane application.
+    pub encoding: TerminalMouseProtocolEncoding,
+    /// Mouse events requested by the pane application.
+    pub mode: TerminalMouseProtocolMode,
 }
 
 /// Mouse event encoding requested by the pane application.
@@ -217,14 +199,14 @@ impl TerminalState {
             vt100::MouseProtocolEncoding::Sgr => TerminalMouseProtocolEncoding::Sgr,
             vt100::MouseProtocolEncoding::Utf8 => TerminalMouseProtocolEncoding::Utf8,
         };
-        Some(TerminalMouseProtocol::new(mode, encoding))
+        Some(TerminalMouseProtocol { encoding, mode })
     }
 
     pub fn mouse_mode(&self) -> PaneMouseMode {
         let Some(protocol) = self.mouse_protocol() else {
             return PaneMouseMode::None;
         };
-        match protocol.mode() {
+        match protocol.mode {
             TerminalMouseProtocolMode::AnyMotion => PaneMouseMode::AnyMotion,
             TerminalMouseProtocolMode::ButtonMotion => PaneMouseMode::ButtonMotion,
             TerminalMouseProtocolMode::Press => PaneMouseMode::Press,
@@ -239,7 +221,11 @@ impl TerminalState {
         let (cursor_row, cursor_col) = screen.cursor_position();
         let cursor_visible =
             screen.scrollback() == 0 && !screen.hide_cursor() && cursor_row < rows && cursor_col < cols;
-        let cursor = RenderCursor::new(cursor_row, cursor_col, cursor_visible);
+        let cursor = RenderCursor {
+            row: cursor_row,
+            col: cursor_col,
+            visible: cursor_visible,
+        };
         let rows = (0..rows)
             .map(|row| {
                 let cells = (0..cols)
@@ -418,10 +404,10 @@ mod tests {
 
         pretty_assertions::assert_eq!(
             terminal.mouse_protocol(),
-            Some(TerminalMouseProtocol::new(
-                TerminalMouseProtocolMode::ButtonMotion,
-                TerminalMouseProtocolEncoding::Sgr,
-            )),
+            Some(TerminalMouseProtocol {
+                mode: TerminalMouseProtocolMode::ButtonMotion,
+                encoding: TerminalMouseProtocolEncoding::Sgr
+            }),
         );
         pretty_assertions::assert_eq!(terminal.mouse_mode(), PaneMouseMode::ButtonMotion);
         assert2::assert!(terminal.mouse_mode().tracking_enabled());

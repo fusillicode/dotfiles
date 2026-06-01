@@ -1,5 +1,6 @@
 pub use self::pane::Pane;
-pub use self::pane::PaneNode;
+pub use self::pane::PaneState;
+pub use self::pane::PaneTree;
 pub use self::session::SessionLayout;
 pub use self::session::SessionMetadata;
 pub use self::tab::Tab;

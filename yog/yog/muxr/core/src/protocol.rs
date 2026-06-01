@@ -303,7 +303,6 @@ impl TabSnapshot {
 
         let mut seen_pane_ids = BTreeSet::new();
         for pane in &self.panes {
-            pane.validate()?;
             if !seen_pane_ids.insert(pane.id.as_ref()) {
                 return Err(report!("invalid muxr tab snapshot")
                     .attach("reason=duplicate pane id")
@@ -332,32 +331,10 @@ where
 
 #[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct PaneSnapshot {
-    id: PaneId,
-    title: String,
-}
-
-impl PaneSnapshot {
-    #[must_use]
-    pub fn new(id: PaneId, title: impl Into<String>) -> Self {
-        Self {
-            id,
-            title: title.into(),
-        }
-    }
-
-    #[must_use]
-    pub const fn id(&self) -> &PaneId {
-        &self.id
-    }
-
-    #[must_use]
-    pub fn title(&self) -> &str {
-        &self.title
-    }
-
-    fn validate(&self) -> rootcause::Result<()> {
-        self::validate_layout_id("pane", self.id.as_ref())
-    }
+    /// Stable pane id.
+    pub id: PaneId,
+    /// Pane title displayed in tab and pane UI.
+    pub title: String,
 }
 
 impl<D> rkyv::Deserialize<PaneSnapshot, D> for ArchivedPaneSnapshot
@@ -368,9 +345,7 @@ where
     fn deserialize(&self, deserializer: &mut D) -> Result<PaneSnapshot, D::Error> {
         let id = rkyv::Deserialize::<PaneId, D>::deserialize(&self.id, deserializer)?;
         let title = rkyv::Deserialize::<String, D>::deserialize(&self.title, deserializer)?;
-        let snapshot = PaneSnapshot::new(id, title);
-        snapshot.validate().map_err(self::rkyv_deserialize_error::<D::Error>)?;
-        Ok(snapshot)
+        Ok(PaneSnapshot { id, title })
     }
 }
 
@@ -838,11 +813,6 @@ pub struct RenderCursor {
 }
 
 impl RenderCursor {
-    #[must_use]
-    pub const fn new(row: u16, col: u16, visible: bool) -> Self {
-        Self { col, row, visible }
-    }
-
     fn validate(&self, rows: u16, cols: u16) -> rootcause::Result<()> {
         if !self.visible {
             return Ok(());
@@ -1194,15 +1164,26 @@ pub struct ClientKeyModifiers {
 }
 
 impl ClientKeyModifiers {
-    pub const ALT: Self = Self::new(true, false, false);
-    pub const CTRL_ALT: Self = Self::new(true, true, false);
-    pub const NONE: Self = Self::new(false, false, false);
-    pub const SHIFT_ALT: Self = Self::new(true, false, true);
-
-    #[must_use]
-    pub const fn new(alt: bool, ctrl: bool, shift: bool) -> Self {
-        Self { alt, ctrl, shift }
-    }
+    pub const ALT: Self = Self {
+        alt: true,
+        ctrl: false,
+        shift: false,
+    };
+    pub const CTRL_ALT: Self = Self {
+        alt: true,
+        ctrl: true,
+        shift: false,
+    };
+    pub const NONE: Self = Self {
+        alt: false,
+        ctrl: false,
+        shift: false,
+    };
+    pub const SHIFT_ALT: Self = Self {
+        alt: true,
+        ctrl: false,
+        shift: true,
+    };
 }
 
 /// One ordered keyboard event from the muxr client.
@@ -1213,17 +1194,6 @@ pub struct ClientKey {
     pub raw_bytes: Vec<u8>,
 }
 
-impl ClientKey {
-    #[must_use]
-    pub const fn new(code: ClientKeyCode, modifiers: ClientKeyModifiers, raw_bytes: Vec<u8>) -> Self {
-        Self {
-            code,
-            modifiers,
-            raw_bytes,
-        }
-    }
-}
-
 #[derive(rkyv::Archive, Clone, Copy, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub enum PaneScrollDirection {
     Down,
@@ -1232,15 +1202,10 @@ pub enum PaneScrollDirection {
 
 #[derive(rkyv::Archive, Clone, Copy, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct ClientMousePosition {
+    /// Zero-based row in the client viewport.
     pub row: u16,
+    /// Zero-based column in the client viewport.
     pub col: u16,
-}
-
-impl ClientMousePosition {
-    #[must_use]
-    pub const fn new(row: u16, col: u16) -> Self {
-        Self { row, col }
-    }
 }
 
 /// Press or release phase for an SGR mouse event captured by the muxr client.
@@ -1255,45 +1220,12 @@ pub enum ClientMouseEventPhase {
 /// Mouse event captured from the outer terminal before server-side pane translation.
 #[derive(rkyv::Archive, Clone, Copy, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct ClientMouseEvent {
-    button: u16,
-    phase: ClientMouseEventPhase,
-    position: ClientMousePosition,
-}
-
-impl ClientMouseEvent {
-    /// Build a captured mouse event from its SGR button code, phase, and viewport position.
-    #[must_use]
-    pub const fn new(button: u16, phase: ClientMouseEventPhase, position: ClientMousePosition) -> Self {
-        Self {
-            button,
-            phase,
-            position,
-        }
-    }
-
-    /// Return the SGR button code, including modifier, wheel, and motion bits.
-    #[must_use]
-    pub const fn button(&self) -> u16 {
-        self.button
-    }
-
-    /// Return whether the event is a press/motion/wheel event or a release event.
-    #[must_use]
-    pub const fn phase(&self) -> ClientMouseEventPhase {
-        self.phase
-    }
-
-    /// Return the event position in client viewport coordinates.
-    #[must_use]
-    pub const fn position(&self) -> ClientMousePosition {
-        self.position
-    }
-
-    /// Return the same event with a translated position.
-    #[must_use]
-    pub const fn with_position(self, position: ClientMousePosition) -> Self {
-        Self { position, ..self }
-    }
+    /// SGR button code, including modifier, wheel, and motion bits.
+    pub button: u16,
+    /// Press/motion/wheel or release phase.
+    pub phase: ClientMouseEventPhase,
+    /// Position in client viewport coordinates.
+    pub position: ClientMousePosition,
 }
 
 #[derive(rkyv::Archive, Clone, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
@@ -1455,20 +1387,20 @@ mod tests {
     #[case::input(ClientRequest::Input(vec![b'a', b'b', b'\n']))]
     #[case::paste(ClientRequest::Paste(vec![b'a', b'\n', b'b', b'\n']))]
     #[case::key(ClientRequest::Key(client_key()))]
-    #[case::mouse(ClientRequest::Mouse(ClientMouseEvent::new(
-        0,
-        ClientMouseEventPhase::Press,
-        ClientMousePosition::new(2, 3),
-    )))]
+    #[case::mouse(ClientRequest::Mouse(ClientMouseEvent {
+        button: 0,
+        phase: ClientMouseEventPhase::Press,
+        position: ClientMousePosition { row: 2, col: 3 },
+    }))]
     #[case::scroll(ClientRequest::ScrollPaneAt {
-        position: ClientMousePosition::new(2, 3),
+        position: ClientMousePosition { row: 2, col: 3 },
         direction: PaneScrollDirection::Up,
     })]
     #[case::scroll_line(ClientRequest::ScrollPaneLineAt {
-        position: ClientMousePosition::new(2, 3),
+        position: ClientMousePosition { row: 2, col: 3 },
         direction: PaneScrollDirection::Down,
     })]
-    #[case::focus_pane_at(ClientRequest::FocusPaneAt(ClientMousePosition::new(2, 3)))]
+    #[case::focus_pane_at(ClientRequest::FocusPaneAt(ClientMousePosition { row: 2, col: 3 }))]
     fn test_client_request_codec_when_frame_round_trips_returns_original(
         #[case] request: ClientRequest,
     ) -> rootcause::Result<()> {
@@ -1683,7 +1615,19 @@ mod tests {
         #[case] render_rows: Vec<RenderRowSpan>,
     ) -> rootcause::Result<()> {
         let size = TerminalSize::new(cols, rows)?;
-        assert2::assert!(RenderBaseline::new(seq, size, RenderCursor::new(0, 0, true), render_rows).is_err());
+        assert2::assert!(
+            RenderBaseline::new(
+                seq,
+                size,
+                RenderCursor {
+                    row: 0,
+                    col: 0,
+                    visible: true
+                },
+                render_rows
+            )
+            .is_err()
+        );
         Ok(())
     }
 
@@ -1700,7 +1644,11 @@ mod tests {
                 base_seq,
                 seq,
                 TerminalSize::new(80, 24)?,
-                RenderCursor::new(0, 0, true),
+                RenderCursor {
+                    row: 0,
+                    col: 0,
+                    visible: true
+                },
                 vec![RenderRowSpan::new(0, 0, render_cells(1))?],
             )
             .is_err()
@@ -1720,7 +1668,11 @@ mod tests {
                 1,
                 2,
                 TerminalSize::new(80, 24)?,
-                RenderCursor::new(0, 0, true),
+                RenderCursor {
+                    row: 0,
+                    col: 0,
+                    visible: true
+                },
                 vec![row],
             )
             .is_err()
@@ -1761,7 +1713,11 @@ mod tests {
                 1,
                 2,
                 TerminalSize::new(80, 24)?,
-                RenderCursor::new(0, 0, true),
+                RenderCursor {
+                    row: 0,
+                    col: 0,
+                    visible: true
+                },
                 vec![row],
             )
             .is_err()
@@ -1778,7 +1734,17 @@ mod tests {
         )];
 
         assert2::assert!(
-            RenderBaseline::new(1, TerminalSize::new(2, 1)?, RenderCursor::new(0, 0, true), rows).is_err()
+            RenderBaseline::new(
+                1,
+                TerminalSize::new(2, 1)?,
+                RenderCursor {
+                    row: 0,
+                    col: 0,
+                    visible: true
+                },
+                rows
+            )
+            .is_err()
         );
         Ok(())
     }
@@ -1798,7 +1764,11 @@ mod tests {
             1,
             2,
             TerminalSize::new(80, 24)?,
-            RenderCursor::new(0, 0, true),
+            RenderCursor {
+                row: 0,
+                col: 0,
+                visible: true,
+            },
             vec![row],
         )?;
 
@@ -1836,17 +1806,20 @@ mod tests {
     }
 
     fn client_key() -> ClientKey {
-        ClientKey::new(
-            ClientKeyCode::Char('E'),
-            ClientKeyModifiers::SHIFT_ALT,
-            vec![b'\x1b', b'E'],
-        )
+        ClientKey {
+            code: ClientKeyCode::Char('E'),
+            modifiers: ClientKeyModifiers::SHIFT_ALT,
+            raw_bytes: vec![b'\x1b', b'E'],
+        }
     }
 
     fn layout_snapshot() -> rootcause::Result<LayoutSnapshot> {
         let active_tab = TabId::new("tab-1")?;
         let active_pane = PaneId::new("pane-1")?;
-        let pane = PaneSnapshot::new(active_pane.clone(), "shell");
+        let pane = PaneSnapshot {
+            id: active_pane.clone(),
+            title: "shell".to_owned(),
+        };
         let tab = TabSnapshot::new(active_tab.clone(), "default", active_pane, vec![pane])?;
         LayoutSnapshot::new(active_tab, vec![tab])
     }
@@ -1873,7 +1846,10 @@ mod tests {
     }
 
     fn pane_snapshot(id: &str, title: &str) -> rootcause::Result<PaneSnapshot> {
-        Ok(PaneSnapshot::new(PaneId::new(id)?, title))
+        Ok(PaneSnapshot {
+            id: PaneId::new(id)?,
+            title: title.to_owned(),
+        })
     }
 
     fn raw_tab_snapshot(id: &str, title: &str, active_pane: &str, panes: Vec<PaneSnapshot>) -> TabSnapshot {
@@ -1908,7 +1884,11 @@ mod tests {
         RenderBaseline::new(
             1,
             terminal_size(4, 2)?,
-            RenderCursor::new(1, 2, true),
+            RenderCursor {
+                row: 1,
+                col: 2,
+                visible: true,
+            },
             vec![
                 RenderRowSpan::new(
                     0,
@@ -1929,7 +1909,11 @@ mod tests {
             1,
             2,
             terminal_size(4, 2)?,
-            RenderCursor::new(1, 3, true),
+            RenderCursor {
+                row: 1,
+                col: 3,
+                visible: true,
+            },
             vec![RenderRowSpan::new(1, 1, vec![render_cell("x"), render_cell("y")])?],
         )
     }
@@ -1937,7 +1921,11 @@ mod tests {
     fn invalid_render_event() -> rootcause::Result<ServerEvent> {
         Ok(ServerEvent::Render(RenderUpdate::Diff(RenderDiff {
             base_seq: 1,
-            cursor: RenderCursor::new(0, 0, true),
+            cursor: RenderCursor {
+                row: 0,
+                col: 0,
+                visible: true,
+            },
             rows: vec![raw_render_row_span(
                 0,
                 0,

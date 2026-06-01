@@ -6,7 +6,7 @@ use rootcause::report;
 use crate::pty::PtyExitStatus;
 use crate::server::PaneRuntimes;
 use crate::server::ServerConfig;
-use crate::state::PaneNode;
+use crate::state::PaneTree;
 use crate::state::SessionLayout;
 use crate::state::Tab;
 
@@ -43,7 +43,7 @@ impl SessionLayout {
             self.entries
                 .get_mut(active_tab_index)
                 .ok_or_else(|| report!("muxr active tab index is outside server layout"))?
-                .mark_pane_exited(&active_pane, exited_at, None)?;
+                .mark_pane_closed(&active_pane, exited_at)?;
             return Ok(ClosePaneOutcome::Final { pane_id: active_pane });
         }
 
@@ -71,7 +71,7 @@ impl SessionLayout {
         &mut self,
         pane_id: &PaneId,
         exited_at: u64,
-        exit_status: Option<PtyExitStatus>,
+        exit_status: PtyExitStatus,
     ) -> rootcause::Result<PaneExitOutcome> {
         let tab_index = self.pane_tab_index(pane_id)?;
 
@@ -87,7 +87,7 @@ impl SessionLayout {
                 .entries
                 .get_mut(tab_index)
                 .ok_or_else(|| report!("muxr final pane tab is missing"))?;
-            tab.mark_pane_exited(pane_id, exited_at, exit_status)?;
+            tab.mark_pane_process_exited(pane_id, exited_at, exit_status)?;
             return Ok(PaneExitOutcome::Final);
         }
 
@@ -120,33 +120,42 @@ impl Tab {
         self.pane_tree.remove_pane(pane_id)
     }
 
-    pub fn mark_pane_exited(
+    fn mark_pane_closed(&mut self, pane_id: &PaneId, exited_at: u64) -> rootcause::Result<()> {
+        let Some(pane) = self.pane_tree.pane_mut(pane_id) else {
+            return Err(report!("muxr pane is missing from server layout").attach(format!("pane_id={pane_id}")));
+        };
+
+        pane.mark_closed(exited_at);
+        Ok(())
+    }
+
+    fn mark_pane_process_exited(
         &mut self,
         pane_id: &PaneId,
         exited_at: u64,
-        exit_status: Option<PtyExitStatus>,
+        exit_status: PtyExitStatus,
     ) -> rootcause::Result<()> {
         let Some(pane) = self.pane_tree.pane_mut(pane_id) else {
             return Err(report!("muxr pane is missing from server layout").attach(format!("pane_id={pane_id}")));
         };
 
-        pane.mark_exited(exited_at, exit_status);
+        pane.mark_process_exited(exited_at, exit_status);
         Ok(())
     }
 }
 
-impl PaneNode {
+impl PaneTree {
     pub fn remove_pane(&mut self, pane_id: &PaneId) -> rootcause::Result<PaneId> {
-        let Some(fallback_pane) = self.remove_leaf(pane_id)? else {
+        let Some(fallback_pane) = self.remove_pane_from_split(pane_id)? else {
             return Err(report!("muxr pane is missing from server layout").attach(format!("pane_id={pane_id}")));
         };
         Ok(fallback_pane)
     }
 
-    fn remove_leaf(&mut self, pane_id: &PaneId) -> rootcause::Result<Option<PaneId>> {
+    fn remove_pane_from_split(&mut self, pane_id: &PaneId) -> rootcause::Result<Option<PaneId>> {
         match self {
-            Self::Leaf { pane } if pane.id() == pane_id => {
-                Err(report!("muxr cannot remove a pane leaf without a sibling").attach(format!("pane_id={pane_id}")))
+            Self::Pane(pane) if pane.id == *pane_id => {
+                Err(report!("muxr cannot remove a pane without a sibling").attach(format!("pane_id={pane_id}")))
             }
             Self::Split { first, second, .. } if first.contains_pane(pane_id) => {
                 if first.pane_count() == 1 {
@@ -155,7 +164,7 @@ impl PaneNode {
                     *self = replacement;
                     Ok(Some(fallback_pane))
                 } else {
-                    first.remove_leaf(pane_id)
+                    first.remove_pane_from_split(pane_id)
                 }
             }
             Self::Split { first, second, .. } if second.contains_pane(pane_id) => {
@@ -165,16 +174,16 @@ impl PaneNode {
                     *self = replacement;
                     Ok(Some(fallback_pane))
                 } else {
-                    second.remove_leaf(pane_id)
+                    second.remove_pane_from_split(pane_id)
                 }
             }
-            Self::Leaf { .. } | Self::Split { .. } => Ok(None),
+            Self::Pane(_) | Self::Split { .. } => Ok(None),
         }
     }
 
     fn first_pane_id(&self) -> PaneId {
         match self {
-            Self::Leaf { pane } => pane.id().clone(),
+            Self::Pane(pane) => pane.id.clone(),
             Self::Split { first, .. } => first.first_pane_id(),
         }
     }

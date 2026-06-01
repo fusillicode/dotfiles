@@ -8,18 +8,12 @@ use muxr_transport::ServerConnection;
 use muxr_transport::ServerEventWriter;
 use rootcause::prelude::ResultExt;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct DeleteSessions {
     requested: AtomicBool,
 }
 
 impl DeleteSessions {
-    pub const fn new() -> Self {
-        Self {
-            requested: AtomicBool::new(false),
-        }
-    }
-
     pub fn is_requested(&self) -> bool {
         self.requested.load(Ordering::Acquire)
     }

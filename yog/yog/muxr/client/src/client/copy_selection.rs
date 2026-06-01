@@ -4,7 +4,6 @@ use muxr_core::ClientMousePosition;
 use muxr_core::PaneId;
 use muxr_core::PaneRegionSnapshot;
 use muxr_core::PaneRegionsSnapshot;
-use muxr_core::RenderCell;
 use muxr_core::RenderCellWidth;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
@@ -136,7 +135,11 @@ impl SelectionState {
             return Ok(());
         };
         self.set_selected(
-            Some(SelectionRange::new(drag.region.clone(), drag.anchor, focus)),
+            Some(SelectionRange {
+                anchor: drag.anchor,
+                focus,
+                region: drag.region.clone(),
+            }),
             frame_buffer,
         )
     }
@@ -153,7 +156,11 @@ impl SelectionState {
             self.set_selected(None, frame_buffer)?;
             return Ok(());
         };
-        let selected = (raw_focus != drag.raw_anchor).then(|| SelectionRange::new(drag.region, drag.anchor, focus));
+        let selected = (raw_focus != drag.raw_anchor).then_some(SelectionRange {
+            anchor: drag.anchor,
+            focus,
+            region: drag.region,
+        });
         self.set_selected(selected, frame_buffer)
     }
 
@@ -204,20 +211,11 @@ pub struct SelectionRange {
 
 impl SelectionRange {
     #[must_use]
-    const fn new(
-        region: PaneRegionSnapshot,
-        anchor: SelectionContentPosition,
-        focus: SelectionContentPosition,
-    ) -> Self {
-        Self { anchor, focus, region }
-    }
-
-    #[must_use]
     pub fn contains(&self, row: u16, col: u16) -> bool {
         if !self.region.contains(row, col) {
             return false;
         }
-        let Some(position) = self::content_position(ClientMousePosition::new(row, col), &self.region) else {
+        let Some(position) = self::content_position(ClientMousePosition { row, col }, &self.region) else {
             return false;
         };
 
@@ -306,11 +304,6 @@ struct SelectionContentPosition {
 
 impl SelectionContentPosition {
     #[must_use]
-    const fn new(row: u64, col: u16) -> Self {
-        Self { col, row }
-    }
-
-    #[must_use]
     const fn clamp_col(self, last_col: u16) -> Self {
         Self {
             col: if self.col > last_col { last_col } else { self.col },
@@ -336,22 +329,6 @@ struct SelectionBounds {
 struct CachedSelectionCell {
     text: String,
     width: RenderCellWidth,
-}
-
-impl CachedSelectionCell {
-    fn from_cell(cell: &RenderCell) -> Self {
-        Self {
-            text: cell.text().to_owned(),
-            width: cell.width(),
-        }
-    }
-
-    const fn blank() -> Self {
-        Self {
-            text: String::new(),
-            width: RenderCellWidth::Narrow,
-        }
-    }
 }
 
 pub fn copy_to_clipboard(text: &str) -> rootcause::Result<()> {
@@ -417,9 +394,16 @@ fn cached_row_cells(
     let mut cells = Vec::with_capacity(usize::from(region.cols()));
     for local_col in 0..region.cols() {
         let absolute_col = self::absolute_col(region, local_col)?;
-        let cell = frame_buffer
-            .cell(row, absolute_col)
-            .map_or_else(CachedSelectionCell::blank, CachedSelectionCell::from_cell);
+        let cell = frame_buffer.cell(row, absolute_col).map_or_else(
+            || CachedSelectionCell {
+                text: String::new(),
+                width: RenderCellWidth::Narrow,
+            },
+            |cell| CachedSelectionCell {
+                text: cell.text().to_owned(),
+                width: cell.width(),
+            },
+        );
         cells.push(cell);
     }
     Ok(cells)
@@ -459,11 +443,23 @@ pub fn word_selection_at(
 
     let start_col = self::word_start_col(frame_buffer, position.row, position.col, &region);
     let end_col = self::word_end_col(frame_buffer, position.row, position.col, &region);
-    Some(SelectionRange::new(
-        region.clone(),
-        self::content_position(ClientMousePosition::new(position.row, start_col), &region)?,
-        self::content_position(ClientMousePosition::new(position.row, end_col), &region)?,
-    ))
+    Some(SelectionRange {
+        anchor: self::content_position(
+            ClientMousePosition {
+                row: position.row,
+                col: start_col,
+            },
+            &region,
+        )?,
+        focus: self::content_position(
+            ClientMousePosition {
+                row: position.row,
+                col: end_col,
+            },
+            &region,
+        )?,
+        region: region.clone(),
+    })
 }
 
 fn word_start_col(frame_buffer: &FrameBuffer, row: u16, col: u16, region: &PaneRegionSnapshot) -> u16 {
@@ -531,10 +527,10 @@ fn content_position(position: ClientMousePosition, region: &PaneRegionSnapshot) 
     let row = region
         .visible_top_row()
         .checked_add(u64::from(position.row.saturating_sub(region.row())))?;
-    Some(SelectionContentPosition::new(
+    Some(SelectionContentPosition {
+        col: position.col.saturating_sub(region.col()),
         row,
-        position.col.saturating_sub(region.col()),
-    ))
+    })
 }
 
 fn visible_position(region: &PaneRegionSnapshot, position: SelectionContentPosition) -> Option<ClientMousePosition> {
@@ -542,7 +538,10 @@ fn visible_position(region: &PaneRegionSnapshot, position: SelectionContentPosit
         return None;
     }
     let row = self::visible_row_for_content_row(region, position.row)?;
-    Some(ClientMousePosition::new(row, region.col().checked_add(position.col)?))
+    Some(ClientMousePosition {
+        row,
+        col: region.col().checked_add(position.col)?,
+    })
 }
 
 fn visible_row_for_content_row(region: &PaneRegionSnapshot, row: u64) -> Option<u16> {
@@ -584,21 +583,24 @@ fn selectable_position(
     };
     // Mouse reports can land on the continuation half of a wide cell; snap back so copy/render keeps the glyph.
     if matches!(previous_cell.width(), RenderCellWidth::Wide) {
-        ClientMousePosition::new(position.row, previous_col)
+        ClientMousePosition {
+            row: position.row,
+            col: previous_col,
+        }
     } else {
         position
     }
 }
 
 fn clamp_to_region(position: ClientMousePosition, region: &PaneRegionSnapshot) -> ClientMousePosition {
-    ClientMousePosition::new(
-        position
+    ClientMousePosition {
+        row: position
             .row
             .clamp(region.row(), self::last_region_row_saturating(region)),
-        position
+        col: position
             .col
             .clamp(region.col(), self::last_region_col_saturating(region)),
-    )
+    }
 }
 
 const fn last_region_col_saturating(region: &PaneRegionSnapshot) -> u16 {
@@ -627,12 +629,12 @@ mod tests {
         let frame_buffer = FrameBuffer::default();
 
         assert2::assert!(!selection.apply(
-            SelectionInput::Start(ClientMousePosition::new(0, 2)),
+            SelectionInput::Start(ClientMousePosition { row: 0, col: 2 }),
             &pane_regions()?,
             &frame_buffer,
         )?);
         assert2::assert!(selection.apply(
-            SelectionInput::Update(ClientMousePosition::new(0, 8)),
+            SelectionInput::Update(ClientMousePosition { row: 0, col: 8 }),
             &pane_regions()?,
             &frame_buffer,
         )?);
@@ -654,12 +656,12 @@ mod tests {
         let mut selection = SelectionState::default();
 
         selection.apply(
-            SelectionInput::Start(ClientMousePosition::new(0, 1)),
+            SelectionInput::Start(ClientMousePosition { row: 0, col: 1 }),
             &pane_regions()?,
             &frame_buffer,
         )?;
         selection.apply(
-            SelectionInput::End(ClientMousePosition::new(0, 9)),
+            SelectionInput::End(ClientMousePosition { row: 0, col: 9 }),
             &pane_regions()?,
             &frame_buffer,
         )?;
@@ -676,12 +678,12 @@ mod tests {
         let mut selection = SelectionState::default();
 
         selection.apply(
-            SelectionInput::Start(ClientMousePosition::new(0, 1)),
+            SelectionInput::Start(ClientMousePosition { row: 0, col: 1 }),
             &wide_pane_regions()?,
             &frame_buffer,
         )?;
         selection.apply(
-            SelectionInput::End(ClientMousePosition::new(0, 2)),
+            SelectionInput::End(ClientMousePosition { row: 0, col: 2 }),
             &wide_pane_regions()?,
             &frame_buffer,
         )?;
@@ -702,7 +704,11 @@ mod tests {
         frame_buffer.apply(RenderUpdate::Baseline(render_baseline()?))?;
         let mut selection = SelectionState::default();
 
-        assert2::assert!(selection.select_word(ClientMousePosition::new(0, 8), &pane_regions()?, &frame_buffer,)?);
+        assert2::assert!(selection.select_word(
+            ClientMousePosition { row: 0, col: 8 },
+            &pane_regions()?,
+            &frame_buffer,
+        )?);
 
         pretty_assertions::assert_eq!(selection.selected_text(), Some("right".to_owned()));
         Ok(())
@@ -719,7 +725,7 @@ mod tests {
         let mut selection = SelectionState::default();
 
         assert2::assert!(selection.select_word(
-            ClientMousePosition::new(0, col),
+            ClientMousePosition { row: 0, col },
             &wide_pane_regions()?,
             &frame_buffer,
         )?);
@@ -740,12 +746,12 @@ mod tests {
         let mut selection = SelectionState::default();
 
         selection.apply(
-            SelectionInput::Start(ClientMousePosition::new(1, 0)),
+            SelectionInput::Start(ClientMousePosition { row: 1, col: 0 }),
             &three_row_pane_regions(10)?,
             &frame_buffer,
         )?;
         selection.apply(
-            SelectionInput::End(ClientMousePosition::new(1, 1)),
+            SelectionInput::End(ClientMousePosition { row: 1, col: 1 }),
             &three_row_pane_regions(10)?,
             &frame_buffer,
         )?;
@@ -769,12 +775,12 @@ mod tests {
         let mut selection = SelectionState::default();
 
         selection.apply(
-            SelectionInput::Start(ClientMousePosition::new(0, 0)),
+            SelectionInput::Start(ClientMousePosition { row: 0, col: 0 }),
             &three_row_pane_regions(9)?,
             &frame_buffer,
         )?;
         selection.apply(
-            SelectionInput::Update(ClientMousePosition::new(2, 1)),
+            SelectionInput::Update(ClientMousePosition { row: 2, col: 1 }),
             &three_row_pane_regions(9)?,
             &frame_buffer,
         )?;
@@ -782,7 +788,7 @@ mod tests {
         assert2::assert!(selection.clear_if_regions_changed(&three_row_pane_regions(10)?));
         selection.refresh_visible_rows(&frame_buffer)?;
         selection.apply(
-            SelectionInput::Update(ClientMousePosition::new(2, 1)),
+            SelectionInput::Update(ClientMousePosition { row: 2, col: 1 }),
             &three_row_pane_regions(10)?,
             &frame_buffer,
         )?;
@@ -798,12 +804,12 @@ mod tests {
         let mut selection = SelectionState::default();
 
         selection.apply(
-            SelectionInput::Start(ClientMousePosition::new(0, 0)),
+            SelectionInput::Start(ClientMousePosition { row: 0, col: 0 }),
             &three_row_pane_regions(9)?,
             &frame_buffer,
         )?;
         selection.apply(
-            SelectionInput::Update(ClientMousePosition::new(2, 1)),
+            SelectionInput::Update(ClientMousePosition { row: 2, col: 1 }),
             &three_row_pane_regions(9)?,
             &frame_buffer,
         )?;
@@ -811,7 +817,7 @@ mod tests {
         assert2::assert!(selection.clear_if_regions_changed(&three_row_pane_regions(13)?));
         selection.refresh_visible_rows(&frame_buffer)?;
         selection.apply(
-            SelectionInput::Update(ClientMousePosition::new(2, 1)),
+            SelectionInput::Update(ClientMousePosition { row: 2, col: 1 }),
             &three_row_pane_regions(13)?,
             &frame_buffer,
         )?;
@@ -855,7 +861,11 @@ mod tests {
         RenderBaseline::new(
             1,
             TerminalSize::new(11, 1)?,
-            RenderCursor::new(0, 0, true),
+            RenderCursor {
+                row: 0,
+                col: 0,
+                visible: true,
+            },
             vec![RenderRowSpan::new(
                 0,
                 0,
@@ -872,7 +882,11 @@ mod tests {
         RenderBaseline::new(
             1,
             TerminalSize::new(3, 1)?,
-            RenderCursor::new(0, 0, true),
+            RenderCursor {
+                row: 0,
+                col: 0,
+                visible: true,
+            },
             vec![RenderRowSpan::new(
                 0,
                 0,
@@ -889,7 +903,11 @@ mod tests {
         RenderBaseline::new(
             1,
             TerminalSize::new(2, 3)?,
-            RenderCursor::new(0, 0, true),
+            RenderCursor {
+                row: 0,
+                col: 0,
+                visible: true,
+            },
             vec![
                 RenderRowSpan::new(0, 0, first.chars().map(render_cell).collect())?,
                 RenderRowSpan::new(1, 0, second.chars().map(render_cell).collect())?,
