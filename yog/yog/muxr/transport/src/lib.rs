@@ -324,11 +324,7 @@ mod tests {
     #[case::ping(ClientRequest::Ping)]
     #[case::pong(ClientRequest::Pong)]
     #[case::detach(ClientRequest::Detach)]
-    #[case::key(ClientRequest::Key(ClientKey::new(
-        ClientKeyCode::Char('E'),
-        ClientKeyModifiers::SHIFT_ALT,
-        b"\x1bE".to_vec()
-    )))]
+    #[case::key(ClientRequest::Key(ClientKey { code: ClientKeyCode::Char('E'), modifiers: ClientKeyModifiers::SHIFT_ALT, raw_bytes: b"\x1bE".to_vec() }))]
     fn test_transport_when_client_request_round_trips_returns_original(
         #[case] request: ClientRequest,
     ) -> rootcause::Result<()> {
@@ -441,7 +437,10 @@ mod tests {
     fn layout_snapshot() -> rootcause::Result<LayoutSnapshot> {
         let active_tab = TabId::new("tab-1")?;
         let active_pane = PaneId::new("pane-1")?;
-        let pane = PaneSnapshot::new(active_pane.clone(), "shell");
+        let pane = PaneSnapshot {
+            id: active_pane.clone(),
+            title: "shell".to_owned(),
+        };
         let tab = TabSnapshot::new(active_tab.clone(), "default", active_pane, vec![pane])?;
         LayoutSnapshot::new(active_tab, vec![tab])
     }

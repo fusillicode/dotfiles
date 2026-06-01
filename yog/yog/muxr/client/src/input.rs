@@ -216,7 +216,11 @@ fn sgr_mouse_event(bytes: &[u8]) -> Option<SgrMouseEvent> {
     let Some((button, position)) = self::sgr_mouse_button_and_position(bytes) else {
         return Some(SgrMouseEvent::Ignored);
     };
-    Some(SgrMouseEvent::Event(ClientMouseEvent::new(button, phase, position)))
+    Some(SgrMouseEvent::Event(ClientMouseEvent {
+        button,
+        phase,
+        position,
+    }))
 }
 
 fn sgr_mouse_button_and_position(bytes: &[u8]) -> Option<(u16, ClientMousePosition)> {
@@ -236,7 +240,7 @@ fn sgr_mouse_button_and_position(bytes: &[u8]) -> Option<(u16, ClientMousePositi
         return None;
     }
 
-    Some((button, ClientMousePosition::new(row, col)))
+    Some((button, ClientMousePosition { row, col }))
 }
 
 fn parse_mouse_number(raw: &[u8]) -> Option<u16> {
@@ -281,7 +285,11 @@ fn push_input(decoded: &mut Vec<DecodedInput>, input: &mut Vec<u8>) {
 }
 
 fn key(code: ClientKeyCode, modifiers: ClientKeyModifiers, raw_bytes: &[u8]) -> ClientKey {
-    ClientKey::new(code, modifiers, raw_bytes.to_vec())
+    ClientKey {
+        code,
+        modifiers,
+        raw_bytes: raw_bytes.to_vec(),
+    }
 }
 
 #[cfg(test)]
@@ -482,11 +490,11 @@ mod tests {
 
         pretty_assertions::assert_eq!(
             decoder.decode(bytes),
-            vec![DecodedInput::Mouse(ClientMouseEvent::new(
+            vec![DecodedInput::Mouse(ClientMouseEvent {
                 button,
-                ClientMouseEventPhase::Press,
-                ClientMousePosition::new(4, 9),
-            ))]
+                phase: ClientMouseEventPhase::Press,
+                position: ClientMousePosition { row: 4, col: 9 },
+            })]
         );
     }
 
@@ -496,11 +504,11 @@ mod tests {
 
         pretty_assertions::assert_eq!(
             decoder.decode(b"\x1b[<0;10;5M"),
-            vec![DecodedInput::Mouse(ClientMouseEvent::new(
-                0,
-                ClientMouseEventPhase::Press,
-                ClientMousePosition::new(4, 9),
-            ))]
+            vec![DecodedInput::Mouse(ClientMouseEvent {
+                button: 0,
+                phase: ClientMouseEventPhase::Press,
+                position: ClientMousePosition { row: 4, col: 9 },
+            })]
         );
     }
 
@@ -510,11 +518,11 @@ mod tests {
 
         pretty_assertions::assert_eq!(
             decoder.decode(b"\x1b[<32;10;5M"),
-            vec![DecodedInput::Mouse(ClientMouseEvent::new(
-                32,
-                ClientMouseEventPhase::Press,
-                ClientMousePosition::new(4, 9),
-            ))]
+            vec![DecodedInput::Mouse(ClientMouseEvent {
+                button: 32,
+                phase: ClientMouseEventPhase::Press,
+                position: ClientMousePosition { row: 4, col: 9 },
+            })]
         );
     }
 
@@ -524,11 +532,11 @@ mod tests {
 
         pretty_assertions::assert_eq!(
             decoder.decode(b"\x1b[<0;10;5m"),
-            vec![DecodedInput::Mouse(ClientMouseEvent::new(
-                0,
-                ClientMouseEventPhase::Release,
-                ClientMousePosition::new(4, 9),
-            ))]
+            vec![DecodedInput::Mouse(ClientMouseEvent {
+                button: 0,
+                phase: ClientMouseEventPhase::Release,
+                position: ClientMousePosition { row: 4, col: 9 },
+            })]
         );
     }
 }

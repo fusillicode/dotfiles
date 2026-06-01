@@ -9,13 +9,13 @@ use serde::Serialize;
 
 use crate::pane_layout::PaneLayout;
 use crate::state::Pane;
-use crate::state::PaneNode;
+use crate::state::PaneTree;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Tab {
     pub active_pane: PaneId,
     pub id: TabId,
-    pub pane_tree: PaneNode,
+    pub pane_tree: PaneTree,
     pub title: String,
 }
 
@@ -30,8 +30,8 @@ impl Tab {
             .pane_layout(size)?
             .regions()
             .iter()
-            .find(|region| region.contains(position.row, position.col))
-            .map(|region| region.id().clone()))
+            .find(|region| region.contains(position.into()))
+            .map(|region| region.id.clone()))
     }
 
     pub fn pane_count(&self) -> usize {
@@ -57,7 +57,7 @@ impl Tab {
     pub fn next_focus_seq(&self) -> rootcause::Result<u64> {
         self.panes()
             .iter()
-            .map(|pane| pane.focus_seq())
+            .map(|pane| pane.focus_seq)
             .max()
             .unwrap_or(0)
             .checked_add(1)

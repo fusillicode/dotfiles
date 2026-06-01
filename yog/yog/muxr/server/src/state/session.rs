@@ -10,7 +10,8 @@ use serde::Deserialize;
 use crate::pane_layout::PaneLayout;
 use crate::pane_layout::PaneRegion;
 use crate::state::Pane;
-use crate::state::PaneNode;
+use crate::state::PaneState;
+use crate::state::PaneTree;
 use crate::state::Tab;
 
 const INITIAL_PANE_ID: &str = "pane-1";
@@ -22,16 +23,6 @@ pub struct SessionMetadata {
     pub command_label: String,
     pub cwd: String,
     pub started_at: u64,
-}
-
-impl SessionMetadata {
-    pub const fn new(command_label: String, cwd: String, started_at: u64) -> Self {
-        Self {
-            command_label,
-            cwd,
-            started_at,
-        }
-    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
@@ -51,13 +42,15 @@ impl SessionLayout {
             entries: vec![Tab {
                 active_pane: pane_id.clone(),
                 id: tab_id,
-                pane_tree: PaneNode::leaf(Pane::new(
-                    pane_id,
-                    metadata.command_label,
-                    metadata.cwd,
-                    metadata.started_at,
-                    1,
-                )),
+                pane_tree: PaneTree::Pane(Pane {
+                    command_label: metadata.command_label.clone(),
+                    cwd: metadata.cwd,
+                    focus_seq: 1,
+                    id: pane_id,
+                    started_at: metadata.started_at,
+                    state: PaneState::Running,
+                    title: metadata.command_label,
+                }),
                 title: INITIAL_TAB_TITLE.to_owned(),
             }],
             session: session.clone(),
@@ -117,7 +110,7 @@ impl SessionLayout {
         self.entries
             .iter()
             .flat_map(Tab::panes)
-            .map(|pane| pane.id().clone())
+            .map(|pane| pane.id.clone())
             .collect()
     }
 

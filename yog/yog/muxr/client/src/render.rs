@@ -506,7 +506,11 @@ mod tests {
             9,
             10,
             terminal_size()?,
-            RenderCursor::new(0, 0, true),
+            RenderCursor {
+                row: 0,
+                col: 0,
+                visible: true,
+            },
             vec![RenderRowSpan::new(0, 0, vec![render_cell("x")])?],
         )?))?;
 
@@ -762,7 +766,11 @@ mod tests {
         muxr_core::RenderBaseline::new(
             1,
             terminal_size()?,
-            RenderCursor::new(0, 0, true),
+            RenderCursor {
+                row: 0,
+                col: 0,
+                visible: true,
+            },
             vec![
                 RenderRowSpan::new(0, 0, vec![render_cell("a"), render_cell("b")])?,
                 RenderRowSpan::new(1, 0, vec![render_cell("c"), render_cell("d")])?,
@@ -775,7 +783,11 @@ mod tests {
             1,
             2,
             terminal_size()?,
-            RenderCursor::new(1, 1, true),
+            RenderCursor {
+                row: 1,
+                col: 1,
+                visible: true,
+            },
             vec![RenderRowSpan::new(1, 1, vec![render_cell("x")])?],
         )
     }
@@ -784,7 +796,11 @@ mod tests {
         muxr_core::RenderBaseline::new(
             1,
             TerminalSize::new(3, 1)?,
-            RenderCursor::new(0, 0, true),
+            RenderCursor {
+                row: 0,
+                col: 0,
+                visible: true,
+            },
             vec![RenderRowSpan::new(
                 0,
                 0,

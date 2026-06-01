@@ -343,7 +343,7 @@ async fn handle_mouse_input_action(
     renderer: &mut ClientRenderer,
     stdout: &mut impl Write,
 ) -> rootcause::Result<bool> {
-    let Some(position) = self::pane_position(event.position()) else {
+    let Some(position) = self::pane_position(event.position) else {
         // Captured app drags can finish over muxr chrome; forward them clamped to the captured pane before dropping
         // ordinary chrome-row mouse packets.
         if renderer.has_mouse_capture()
@@ -368,7 +368,7 @@ async fn handle_mouse_input_action(
         }
         return Ok(true);
     };
-    let event = event.with_position(position);
+    let event = ClientMouseEvent { position, ..event };
     if let Some(event) = renderer.mouse_request_for_event(event) {
         return self::send_mouse_request(input_sender, event).await;
     }
@@ -414,7 +414,7 @@ async fn send_mouse_request(
     input_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
     event: ClientMouseEvent,
 ) -> rootcause::Result<bool> {
-    if event.button() & (32 | 64) != 0 {
+    if event.button & (32 | 64) != 0 {
         return Ok(!matches!(
             self::send_droppable_request(input_sender, ClientRequest::Mouse(event)),
             DroppableSendOutcome::Closed
@@ -688,14 +688,14 @@ fn send_droppable_input_action(
 }
 
 const fn mouse_event_can_be_dropped(event: ClientMouseEvent) -> bool {
-    event.button() & (32 | 64) != 0
+    event.button & (32 | 64) != 0
 }
 
 fn pane_position(position: muxr_core::ClientMousePosition) -> Option<muxr_core::ClientMousePosition> {
-    Some(muxr_core::ClientMousePosition::new(
-        position.row.checked_sub(TAB_BAR_ROWS)?,
-        position.col,
-    ))
+    Some(muxr_core::ClientMousePosition {
+        row: position.row.checked_sub(TAB_BAR_ROWS)?,
+        col: position.col,
+    })
 }
 
 fn spawn_resize_forwarder(
@@ -912,11 +912,11 @@ mod tests {
             let (_reader, writer) = connection.split();
             let (control_sender, control_receiver) = tokio::sync::mpsc::channel(1);
             let (input_sender, input_receiver) = tokio::sync::mpsc::channel(3);
-            let key = ClientKey::new(
-                ClientKeyCode::Char('E'),
-                ClientKeyModifiers::SHIFT_ALT,
-                b"\x1bE".to_vec(),
-            );
+            let key = ClientKey {
+                code: ClientKeyCode::Char('E'),
+                modifiers: ClientKeyModifiers::SHIFT_ALT,
+                raw_bytes: b"\x1bE".to_vec(),
+            };
             assert2::assert!(input_sender.try_send(ClientRequest::Input(b"a".to_vec())).is_ok());
             assert2::assert!(input_sender.try_send(ClientRequest::Key(key.clone())).is_ok());
             assert2::assert!(input_sender.try_send(ClientRequest::Input(b"b".to_vec())).is_ok());
@@ -991,11 +991,11 @@ mod tests {
     #[test]
     fn test_send_decoded_input_when_key_arrives_uses_input_queue_in_order() {
         let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(3);
-        let key = ClientKey::new(
-            ClientKeyCode::Char('E'),
-            ClientKeyModifiers::SHIFT_ALT,
-            b"\x1bE".to_vec(),
-        );
+        let key = ClientKey {
+            code: ClientKeyCode::Char('E'),
+            modifiers: ClientKeyModifiers::SHIFT_ALT,
+            raw_bytes: b"\x1bE".to_vec(),
+        };
 
         assert2::assert!(send_decoded_input(
             &input_sender,
@@ -1040,11 +1040,11 @@ mod tests {
     #[test]
     fn test_send_decoded_input_when_mouse_arrives_emits_local_mouse_action() {
         let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
-        let event = ClientMouseEvent::new(
-            0,
-            ClientMouseEventPhase::Press,
-            muxr_core::ClientMousePosition::new(4, 9),
-        );
+        let event = ClientMouseEvent {
+            button: 0,
+            phase: ClientMouseEventPhase::Press,
+            position: muxr_core::ClientMousePosition { row: 4, col: 9 },
+        };
 
         assert2::assert!(send_decoded_input(&input_sender, vec![DecodedInput::Mouse(event)]));
 
@@ -1056,11 +1056,11 @@ mod tests {
     {
         let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
         assert2::assert!(input_sender.try_send(ClientInputAction::CopySelection).is_ok());
-        let event = ClientMouseEvent::new(
-            32,
-            ClientMouseEventPhase::Press,
-            muxr_core::ClientMousePosition::new(4, 9),
-        );
+        let event = ClientMouseEvent {
+            button: 32,
+            phase: ClientMouseEventPhase::Press,
+            position: muxr_core::ClientMousePosition { row: 4, col: 9 },
+        };
         let (result_sender, result_receiver) = std::sync::mpsc::channel();
         let handle = thread::spawn(move || {
             let _ = result_sender.send(send_decoded_input(&input_sender, vec![DecodedInput::Mouse(event)]));
@@ -1107,11 +1107,11 @@ mod tests {
 
             assert2::assert!(
                 handle_client_input_action(
-                    ClientInputAction::Mouse(ClientMouseEvent::new(
-                        0,
-                        ClientMouseEventPhase::Press,
-                        muxr_core::ClientMousePosition::new(1, 1),
-                    )),
+                    ClientInputAction::Mouse(ClientMouseEvent {
+                        button: 0,
+                        phase: ClientMouseEventPhase::Press,
+                        position: muxr_core::ClientMousePosition { row: 1, col: 1 }
+                    }),
                     &input_sender,
                     &mut renderer,
                     &mut output,
@@ -1121,7 +1121,10 @@ mod tests {
 
             pretty_assertions::assert_eq!(
                 input_receiver.recv().await,
-                Some(ClientRequest::FocusPaneAt(muxr_core::ClientMousePosition::new(0, 1))),
+                Some(ClientRequest::FocusPaneAt(muxr_core::ClientMousePosition {
+                    row: 0,
+                    col: 1
+                })),
             );
             Ok(())
         })
@@ -1146,11 +1149,11 @@ mod tests {
 
             assert2::assert!(
                 handle_client_input_action(
-                    ClientInputAction::Mouse(ClientMouseEvent::new(
-                        0,
-                        ClientMouseEventPhase::Press,
-                        muxr_core::ClientMousePosition::new(1, 0),
-                    )),
+                    ClientInputAction::Mouse(ClientMouseEvent {
+                        button: 0,
+                        phase: ClientMouseEventPhase::Press,
+                        position: muxr_core::ClientMousePosition { row: 1, col: 0 }
+                    }),
                     &input_sender,
                     &mut renderer,
                     &mut output,
@@ -1159,11 +1162,11 @@ mod tests {
             );
             assert2::assert!(
                 handle_client_input_action(
-                    ClientInputAction::Mouse(ClientMouseEvent::new(
-                        0,
-                        ClientMouseEventPhase::Release,
-                        muxr_core::ClientMousePosition::new(0, 1),
-                    )),
+                    ClientInputAction::Mouse(ClientMouseEvent {
+                        button: 0,
+                        phase: ClientMouseEventPhase::Release,
+                        position: muxr_core::ClientMousePosition { row: 0, col: 1 }
+                    }),
                     &input_sender,
                     &mut renderer,
                     &mut output,
@@ -1173,7 +1176,10 @@ mod tests {
 
             pretty_assertions::assert_eq!(
                 input_receiver.recv().await,
-                Some(ClientRequest::FocusPaneAt(muxr_core::ClientMousePosition::new(0, 0))),
+                Some(ClientRequest::FocusPaneAt(muxr_core::ClientMousePosition {
+                    row: 0,
+                    col: 0
+                })),
             );
             pretty_assertions::assert_eq!(renderer.selected_text(), Some("ab".to_owned()),);
             Ok(())
@@ -1193,11 +1199,11 @@ mod tests {
 
             assert2::assert!(
                 handle_client_input_action(
-                    ClientInputAction::Mouse(ClientMouseEvent::new(
-                        0,
-                        ClientMouseEventPhase::Press,
-                        muxr_core::ClientMousePosition::new(1, 0),
-                    )),
+                    ClientInputAction::Mouse(ClientMouseEvent {
+                        button: 0,
+                        phase: ClientMouseEventPhase::Press,
+                        position: muxr_core::ClientMousePosition { row: 1, col: 0 }
+                    }),
                     &input_sender,
                     &mut renderer,
                     &mut output,
@@ -1206,11 +1212,11 @@ mod tests {
             );
             assert2::assert!(
                 handle_client_input_action(
-                    ClientInputAction::Mouse(ClientMouseEvent::new(
-                        32,
-                        ClientMouseEventPhase::Press,
-                        muxr_core::ClientMousePosition::new(0, 0),
-                    )),
+                    ClientInputAction::Mouse(ClientMouseEvent {
+                        button: 32,
+                        phase: ClientMouseEventPhase::Press,
+                        position: muxr_core::ClientMousePosition { row: 0, col: 0 }
+                    }),
                     &input_sender,
                     &mut renderer,
                     &mut output,
@@ -1220,13 +1226,16 @@ mod tests {
 
             pretty_assertions::assert_eq!(
                 self::recv_client_request(&mut input_receiver).await?,
-                Some(ClientRequest::FocusPaneAt(muxr_core::ClientMousePosition::new(0, 0))),
+                Some(ClientRequest::FocusPaneAt(muxr_core::ClientMousePosition {
+                    row: 0,
+                    col: 0
+                })),
             );
             pretty_assertions::assert_eq!(
                 self::recv_client_request(&mut input_receiver).await?,
                 Some(ClientRequest::ScrollPaneLineAt {
                     direction: PaneScrollDirection::Up,
-                    position: muxr_core::ClientMousePosition::new(0, 0),
+                    position: muxr_core::ClientMousePosition { row: 0, col: 0 },
                 }),
             );
             Ok(())
@@ -1243,13 +1252,16 @@ mod tests {
         );
         let mut output = CountingWriter::default();
         renderer.apply_render(&mut output, muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
-        renderer.apply_selection_input(&mut output, SelectionInput::Start(ClientMousePosition::new(0, 0)))?;
+        renderer.apply_selection_input(
+            &mut output,
+            SelectionInput::Start(ClientMousePosition { row: 0, col: 0 }),
+        )?;
         let initial = renderer
-            .set_selection_edge_drag(ClientMousePosition::new(2, 1), None)
+            .set_selection_edge_drag(ClientMousePosition { row: 2, col: 1 }, None)
             .ok_or_else(|| report!("expected initial muxr edge scroll request"))?;
         let expected = ClientRequest::ScrollPaneLineAt {
             direction: PaneScrollDirection::Down,
-            position: ClientMousePosition::new(0, 1),
+            position: ClientMousePosition { row: 0, col: 1 },
         };
         pretty_assertions::assert_eq!(initial.request(), &expected);
         assert2::assert!(send_edge_scroll_request(&input_sender, &mut renderer, initial));
@@ -1279,9 +1291,12 @@ mod tests {
         );
         let mut output = CountingWriter::default();
         renderer.apply_render(&mut output, muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
-        renderer.apply_selection_input(&mut output, SelectionInput::Start(ClientMousePosition::new(0, 0)))?;
+        renderer.apply_selection_input(
+            &mut output,
+            SelectionInput::Start(ClientMousePosition { row: 0, col: 0 }),
+        )?;
         let request = renderer
-            .set_selection_edge_drag(ClientMousePosition::new(2, 1), None)
+            .set_selection_edge_drag(ClientMousePosition { row: 2, col: 1 }, None)
             .ok_or_else(|| report!("expected muxr edge scroll request"))?;
 
         assert2::assert!(send_edge_scroll_request(&input_sender, &mut renderer, request));
@@ -1292,7 +1307,7 @@ mod tests {
             input_receiver.blocking_recv(),
             Some(ClientRequest::ScrollPaneLineAt {
                 direction: PaneScrollDirection::Down,
-                position: ClientMousePosition::new(0, 1),
+                position: ClientMousePosition { row: 0, col: 1 },
             }),
         );
         Ok(())
@@ -1311,11 +1326,11 @@ mod tests {
 
             assert2::assert!(
                 handle_client_input_action(
-                    ClientInputAction::Mouse(ClientMouseEvent::new(
-                        0,
-                        ClientMouseEventPhase::Press,
-                        muxr_core::ClientMousePosition::new(1, 1),
-                    )),
+                    ClientInputAction::Mouse(ClientMouseEvent {
+                        button: 0,
+                        phase: ClientMouseEventPhase::Press,
+                        position: muxr_core::ClientMousePosition { row: 1, col: 1 }
+                    }),
                     &input_sender,
                     &mut renderer,
                     &mut output,
@@ -1325,11 +1340,11 @@ mod tests {
 
             pretty_assertions::assert_eq!(
                 input_receiver.recv().await,
-                Some(ClientRequest::Mouse(ClientMouseEvent::new(
-                    0,
-                    ClientMouseEventPhase::Press,
-                    muxr_core::ClientMousePosition::new(0, 1),
-                ))),
+                Some(ClientRequest::Mouse(ClientMouseEvent {
+                    button: 0,
+                    phase: ClientMouseEventPhase::Press,
+                    position: muxr_core::ClientMousePosition { row: 0, col: 1 }
+                })),
             );
             pretty_assertions::assert_eq!(output.flushes, 0);
             Ok(())
@@ -1350,11 +1365,11 @@ mod tests {
 
             assert2::assert!(
                 handle_client_input_action(
-                    ClientInputAction::Mouse(ClientMouseEvent::new(
-                        0,
-                        ClientMouseEventPhase::Press,
-                        muxr_core::ClientMousePosition::new(1, 1),
-                    )),
+                    ClientInputAction::Mouse(ClientMouseEvent {
+                        button: 0,
+                        phase: ClientMouseEventPhase::Press,
+                        position: muxr_core::ClientMousePosition { row: 1, col: 1 }
+                    }),
                     &input_sender,
                     &mut renderer,
                     &mut output,
@@ -1363,11 +1378,11 @@ mod tests {
             );
             assert2::assert!(
                 handle_client_input_action(
-                    ClientInputAction::Mouse(ClientMouseEvent::new(
-                        32,
-                        ClientMouseEventPhase::Press,
-                        muxr_core::ClientMousePosition::new(1, 3),
-                    )),
+                    ClientInputAction::Mouse(ClientMouseEvent {
+                        button: 32,
+                        phase: ClientMouseEventPhase::Press,
+                        position: muxr_core::ClientMousePosition { row: 1, col: 3 }
+                    }),
                     &input_sender,
                     &mut renderer,
                     &mut output,
@@ -1376,11 +1391,11 @@ mod tests {
             );
             assert2::assert!(
                 handle_client_input_action(
-                    ClientInputAction::Mouse(ClientMouseEvent::new(
-                        0,
-                        ClientMouseEventPhase::Release,
-                        muxr_core::ClientMousePosition::new(0, 3),
-                    )),
+                    ClientInputAction::Mouse(ClientMouseEvent {
+                        button: 0,
+                        phase: ClientMouseEventPhase::Release,
+                        position: muxr_core::ClientMousePosition { row: 0, col: 3 }
+                    }),
                     &input_sender,
                     &mut renderer,
                     &mut output,
@@ -1389,11 +1404,11 @@ mod tests {
             );
             assert2::assert!(
                 handle_client_input_action(
-                    ClientInputAction::Mouse(ClientMouseEvent::new(
-                        32,
-                        ClientMouseEventPhase::Press,
-                        muxr_core::ClientMousePosition::new(1, 3),
-                    )),
+                    ClientInputAction::Mouse(ClientMouseEvent {
+                        button: 32,
+                        phase: ClientMouseEventPhase::Press,
+                        position: muxr_core::ClientMousePosition { row: 1, col: 3 }
+                    }),
                     &input_sender,
                     &mut renderer,
                     &mut output,
@@ -1403,27 +1418,27 @@ mod tests {
 
             pretty_assertions::assert_eq!(
                 self::recv_client_request(&mut input_receiver).await?,
-                Some(ClientRequest::Mouse(ClientMouseEvent::new(
-                    0,
-                    ClientMouseEventPhase::Press,
-                    muxr_core::ClientMousePosition::new(0, 1),
-                ))),
+                Some(ClientRequest::Mouse(ClientMouseEvent {
+                    button: 0,
+                    phase: ClientMouseEventPhase::Press,
+                    position: muxr_core::ClientMousePosition { row: 0, col: 1 }
+                })),
             );
             pretty_assertions::assert_eq!(
                 self::recv_client_request(&mut input_receiver).await?,
-                Some(ClientRequest::Mouse(ClientMouseEvent::new(
-                    32,
-                    ClientMouseEventPhase::Press,
-                    muxr_core::ClientMousePosition::new(0, 1),
-                ))),
+                Some(ClientRequest::Mouse(ClientMouseEvent {
+                    button: 32,
+                    phase: ClientMouseEventPhase::Press,
+                    position: muxr_core::ClientMousePosition { row: 0, col: 1 }
+                })),
             );
             pretty_assertions::assert_eq!(
                 self::recv_client_request(&mut input_receiver).await?,
-                Some(ClientRequest::Mouse(ClientMouseEvent::new(
-                    0,
-                    ClientMouseEventPhase::Release,
-                    muxr_core::ClientMousePosition::new(0, 1),
-                ))),
+                Some(ClientRequest::Mouse(ClientMouseEvent {
+                    button: 0,
+                    phase: ClientMouseEventPhase::Release,
+                    position: muxr_core::ClientMousePosition { row: 0, col: 1 }
+                })),
             );
             assert2::assert!(matches!(
                 input_receiver.try_recv(),
@@ -1473,7 +1488,10 @@ mod tests {
     fn layout_snapshot() -> rootcause::Result<LayoutSnapshot> {
         let active_tab = TabId::new("tab-1")?;
         let active_pane = PaneId::new("pane-1")?;
-        let pane = PaneSnapshot::new(active_pane.clone(), "shell");
+        let pane = PaneSnapshot {
+            id: active_pane.clone(),
+            title: "shell".to_owned(),
+        };
         let tab = TabSnapshot::new(active_tab.clone(), "default", active_pane, vec![pane])?;
         LayoutSnapshot::new(active_tab, vec![tab])
     }
@@ -1533,7 +1551,11 @@ mod tests {
         muxr_core::RenderBaseline::new(
             1,
             TerminalSize::new(2, 1)?,
-            muxr_core::RenderCursor::new(0, 1, true),
+            muxr_core::RenderCursor {
+                row: 0,
+                col: 1,
+                visible: true,
+            },
             vec![muxr_core::RenderRowSpan::new(
                 0,
                 0,

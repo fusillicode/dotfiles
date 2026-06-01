@@ -8,7 +8,8 @@ use rootcause::report;
 use crate::server::PaneRuntimes;
 use crate::server::ServerConfig;
 use crate::state::Pane;
-use crate::state::PaneNode;
+use crate::state::PaneState;
+use crate::state::PaneTree;
 use crate::state::SessionLayout;
 use crate::state::SessionMetadata;
 use crate::state::Tab;
@@ -29,13 +30,15 @@ impl SessionLayout {
             Tab {
                 active_pane: pane_id.clone(),
                 id: tab_id.clone(),
-                pane_tree: PaneNode::leaf(Pane::new(
-                    pane_id.clone(),
-                    metadata.command_label,
-                    metadata.cwd,
-                    metadata.started_at,
-                    1,
-                )),
+                pane_tree: PaneTree::Pane(Pane {
+                    command_label: metadata.command_label.clone(),
+                    cwd: metadata.cwd,
+                    focus_seq: 1,
+                    id: pane_id.clone(),
+                    started_at: metadata.started_at,
+                    state: PaneState::Running,
+                    title: metadata.command_label,
+                }),
                 title: format!("tab {tab_number}"),
             },
         );

@@ -54,7 +54,7 @@ impl Tab {
         let active_region = layout
             .regions()
             .iter()
-            .find(|region| region.id() == &self.active_pane)
+            .find(|region| region.id == self.active_pane)
             .ok_or_else(|| {
                 report!("muxr active pane is missing from active tab layout")
                     .attach(format!("active_pane={}", self.active_pane))
@@ -62,10 +62,10 @@ impl Tab {
         let Some(next_pane_id) = layout
             .regions()
             .iter()
-            .filter(|region| region.id() != active_region.id())
+            .filter(|region| region.id != active_region.id)
             .filter(|region| self::pane_regions_are_adjacent(region, active_region, direction))
-            .max_by_key(|region| region.focus_seq())
-            .map(|region| region.id().clone())
+            .max_by_key(|region| region.focus_seq)
+            .map(|region| region.id.clone())
         else {
             return Ok(false);
         };
@@ -119,24 +119,32 @@ pub fn handle_focus_pane_at_request(
 }
 
 pub fn mouse_event_focuses_pane(event: ClientMouseEvent) -> bool {
-    event.phase() == ClientMouseEventPhase::Press && event.button() & (32 | 64) == 0 && event.button() & 0b11 != 0b11
+    event.phase == ClientMouseEventPhase::Press && event.button & (32 | 64) == 0 && event.button & 0b11 != 0b11
 }
 
 fn pane_regions_are_adjacent(region: &PaneRegion, other: &PaneRegion, direction: PaneFocusDirection) -> bool {
     // Muxr pane regions exclude the separator cell, so visible neighbors have a one-cell gap where Zellij's
     // frame-inclusive pane geometry uses exact edge equality.
-    let region_col = u32::from(region.col());
-    let region_row = u32::from(region.row());
-    let region_end_col = region_col.saturating_add(u32::from(region.cols()));
-    let region_end_row = region_row.saturating_add(u32::from(region.rows()));
-    let other_col = u32::from(other.col());
-    let other_row = u32::from(other.row());
-    let other_end_col = other_col.saturating_add(u32::from(other.cols()));
-    let other_end_row = other_row.saturating_add(u32::from(other.rows()));
-    let horizontally_overlaps =
-        self::ranges_overlap(region_row, u32::from(region.rows()), other_row, u32::from(other.rows()));
-    let vertically_overlaps =
-        self::ranges_overlap(region_col, u32::from(region.cols()), other_col, u32::from(other.cols()));
+    let region_col = u32::from(region.area.origin.col);
+    let region_row = u32::from(region.area.origin.row);
+    let region_end_col = region.area.end_col_exclusive();
+    let region_end_row = region.area.end_row_exclusive();
+    let other_col = u32::from(other.area.origin.col);
+    let other_row = u32::from(other.area.origin.row);
+    let other_end_col = other.area.end_col_exclusive();
+    let other_end_row = other.area.end_row_exclusive();
+    let horizontally_overlaps = self::ranges_overlap(
+        region_row,
+        u32::from(region.area.size.rows),
+        other_row,
+        u32::from(other.area.size.rows),
+    );
+    let vertically_overlaps = self::ranges_overlap(
+        region_col,
+        u32::from(region.area.size.cols),
+        other_col,
+        u32::from(other.area.size.cols),
+    );
 
     match direction {
         PaneFocusDirection::Left => self::edges_are_adjacent(region_end_col, other_col) && horizontally_overlaps,
@@ -168,7 +176,7 @@ pub fn mouse_event_region(
         let region = layout
             .pane_regions(terminal_size)?
             .into_iter()
-            .find(|region| region.contains(position.row, position.col));
+            .find(|region| region.contains(position.into()));
         drop(layout);
         let Some(region) = region else {
             return Ok(None);
@@ -176,16 +184,16 @@ pub fn mouse_event_region(
         region
     };
     let runtimes = crate::server::lock_mutex(runtimes, "pane runtimes")?;
-    let handle = runtimes.handle(region.id())?;
+    let handle = runtimes.handle(&region.id)?;
     let mouse_mode = handle.mouse_mode()?;
     let visible_top_row = handle.visible_top_row()?;
     drop(runtimes);
     Ok(Some(PaneRegionSnapshot::new(
-        region.id().clone(),
-        region.col(),
-        region.row(),
-        region.cols(),
-        region.rows(),
+        region.id,
+        region.area.origin.col,
+        region.area.origin.row,
+        region.area.size.cols,
+        region.area.size.rows,
         mouse_mode,
         visible_top_row,
     )?))

@@ -355,14 +355,17 @@ impl ClientRenderer {
 
     pub fn mouse_request_for_event(&mut self, event: ClientMouseEvent) -> Option<ClientMouseEvent> {
         if let Some(capture) = self.mouse_capture.as_ref() {
-            let event = event.with_position(self::clamp_mouse_position_to_region(event.position(), &capture.region));
-            if event.phase() == ClientMouseEventPhase::Release {
+            let event = ClientMouseEvent {
+                position: self::clamp_mouse_position_to_region(event.position, &capture.region),
+                ..event
+            };
+            if event.phase == ClientMouseEventPhase::Release {
                 self.mouse_capture = None;
             }
             return Some(event);
         }
 
-        let region = self.pane_regions.pane_at(event.position())?;
+        let region = self.pane_regions.pane_at(event.position)?;
         if !region.mouse_tracking_enabled() {
             return None;
         }
@@ -423,7 +426,7 @@ impl ClientRenderer {
             direction,
             pane_id,
             previous_visible_top_row,
-            ClientMousePosition::new(row, col),
+            ClientMousePosition { row, col },
         )
     }
 
@@ -440,10 +443,10 @@ impl ClientRenderer {
     fn selection_edge_drag_position(&self) -> Option<ClientMousePosition> {
         let drag = self.selection_edge_drag.as_ref()?;
         let region = self::region_for_pane_id(&self.pane_regions, &drag.pane_id)?;
-        Some(ClientMousePosition::new(
-            self::selection_edge_row(region, drag.direction),
-            drag.col.clamp(region.col(), self::last_region_col_saturating(region)),
-        ))
+        Some(ClientMousePosition {
+            row: self::selection_edge_row(region, drag.direction),
+            col: drag.col.clamp(region.col(), self::last_region_col_saturating(region)),
+        })
     }
 
     pub fn selection_edge_scroll_request(&self) -> Option<SelectionEdgeScrollRequest> {
@@ -545,14 +548,14 @@ fn region_for_pane_id<'a>(regions: &'a PaneRegionsSnapshot, pane_id: &PaneId) ->
 }
 
 fn clamp_mouse_position_to_region(position: ClientMousePosition, region: &PaneRegionSnapshot) -> ClientMousePosition {
-    ClientMousePosition::new(
-        position
+    ClientMousePosition {
+        row: position
             .row
             .clamp(region.row(), self::last_region_row_saturating(region)),
-        position
+        col: position
             .col
             .clamp(region.col(), self::last_region_col_saturating(region)),
-    )
+    }
 }
 
 const fn selection_edge_row(region: &PaneRegionSnapshot, direction: PaneScrollDirection) -> u16 {
@@ -571,7 +574,7 @@ const fn last_region_row_saturating(region: &PaneRegionSnapshot) -> u16 {
 }
 
 fn mouse_event_starts_capture(event: ClientMouseEvent) -> bool {
-    event.phase() == ClientMouseEventPhase::Press && event.button() & (32 | 64) == 0 && event.button() & 0b11 != 0b11
+    event.phase == ClientMouseEventPhase::Press && event.button & (32 | 64) == 0 && event.button & 0b11 != 0b11
 }
 
 #[cfg(test)]
@@ -697,11 +700,11 @@ mod tests {
 
         renderer.apply_selection_input(
             &mut output,
-            SelectionInput::Start(muxr_core::ClientMousePosition::new(0, 0)),
+            SelectionInput::Start(muxr_core::ClientMousePosition { row: 0, col: 0 }),
         )?;
         renderer.apply_selection_input(
             &mut output,
-            SelectionInput::Update(muxr_core::ClientMousePosition::new(0, 1)),
+            SelectionInput::Update(muxr_core::ClientMousePosition { row: 0, col: 1 }),
         )?;
 
         let selection_output = output.rendered_string()?;
@@ -725,11 +728,11 @@ mod tests {
         )?;
         renderer.apply_selection_input(
             &mut initial_output,
-            SelectionInput::Start(muxr_core::ClientMousePosition::new(0, 0)),
+            SelectionInput::Start(muxr_core::ClientMousePosition { row: 0, col: 0 }),
         )?;
         renderer.apply_selection_input(
             &mut initial_output,
-            SelectionInput::End(muxr_core::ClientMousePosition::new(0, 1)),
+            SelectionInput::End(muxr_core::ClientMousePosition { row: 0, col: 1 }),
         )?;
         let mut output = CountingWriter::default();
 
@@ -755,17 +758,23 @@ mod tests {
             &mut output,
             muxr_core::RenderUpdate::Baseline(three_row_render_baseline("aa", "bb", "cc")?),
         )?;
-        renderer.apply_selection_input(&mut output, SelectionInput::Start(ClientMousePosition::new(0, 0)))?;
+        renderer.apply_selection_input(
+            &mut output,
+            SelectionInput::Start(ClientMousePosition { row: 0, col: 0 }),
+        )?;
         let scroll_request = renderer
-            .set_selection_edge_drag(ClientMousePosition::new(3, 1), None)
+            .set_selection_edge_drag(ClientMousePosition { row: 3, col: 1 }, None)
             .map(|request| request.into_parts().1);
-        renderer.apply_selection_input(&mut output, SelectionInput::Update(ClientMousePosition::new(3, 1)))?;
+        renderer.apply_selection_input(
+            &mut output,
+            SelectionInput::Update(ClientMousePosition { row: 3, col: 1 }),
+        )?;
 
         pretty_assertions::assert_eq!(
             scroll_request,
             Some(ClientRequest::ScrollPaneLineAt {
                 direction: PaneScrollDirection::Down,
-                position: ClientMousePosition::new(2, 1),
+                position: ClientMousePosition { row: 2, col: 1 },
             }),
         );
 
@@ -798,8 +807,11 @@ mod tests {
             muxr_core::RenderUpdate::Baseline(word_render_baseline()?),
         )?;
         let now = Instant::now();
-        let first_position = ClientMousePosition::new(0, first_col);
-        let second_position = ClientMousePosition::new(0, second_col);
+        let first_position = ClientMousePosition { row: 0, col: first_col };
+        let second_position = ClientMousePosition {
+            row: 0,
+            col: second_col,
+        };
         let second_click_at = now
             .checked_add(Duration::from_millis(100))
             .ok_or_else(|| report!("muxr double-click selection test instant overflowed"))?;
@@ -828,7 +840,7 @@ mod tests {
             muxr_core::RenderUpdate::Baseline(word_render_baseline()?),
         )?;
         let now = Instant::now();
-        let position = ClientMousePosition::new(0, 4);
+        let position = ClientMousePosition { row: 0, col: 4 };
         let second_click_at = now
             .checked_add(Duration::from_millis(100))
             .ok_or_else(|| report!("muxr retained double-click selection test instant overflowed"))?;
@@ -872,13 +884,16 @@ mod tests {
     fn click_target(row: u16, col: u16) -> rootcause::Result<ClickTarget> {
         Ok(ClickTarget::Cell {
             pane_id: muxr_core::PaneId::new("pane-1")?,
-            position: muxr_core::ClientMousePosition::new(row, col),
+            position: muxr_core::ClientMousePosition { row, col },
         })
     }
     fn layout_snapshot() -> rootcause::Result<LayoutSnapshot> {
         let active_tab = TabId::new("tab-1")?;
         let active_pane = PaneId::new("pane-1")?;
-        let pane = PaneSnapshot::new(active_pane.clone(), "shell");
+        let pane = PaneSnapshot {
+            id: active_pane.clone(),
+            title: "shell".to_owned(),
+        };
         let tab = TabSnapshot::new(active_tab.clone(), "default", active_pane, vec![pane])?;
         LayoutSnapshot::new(active_tab, vec![tab])
     }
@@ -943,13 +958,19 @@ mod tests {
                     muxr_core::TabId::new("tab-1")?,
                     "default",
                     muxr_core::PaneId::new("pane-1")?,
-                    vec![muxr_core::PaneSnapshot::new(muxr_core::PaneId::new("pane-1")?, "shell")],
+                    vec![muxr_core::PaneSnapshot {
+                        id: muxr_core::PaneId::new("pane-1")?,
+                        title: "shell".to_owned(),
+                    }],
                 )?,
                 muxr_core::TabSnapshot::new(
                     muxr_core::TabId::new("tab-2")?,
                     "tab 2",
                     muxr_core::PaneId::new("pane-2")?,
-                    vec![muxr_core::PaneSnapshot::new(muxr_core::PaneId::new("pane-2")?, "shell")],
+                    vec![muxr_core::PaneSnapshot {
+                        id: muxr_core::PaneId::new("pane-2")?,
+                        title: "shell".to_owned(),
+                    }],
                 )?,
             ],
         )
@@ -959,7 +980,11 @@ mod tests {
         muxr_core::RenderBaseline::new(
             1,
             TerminalSize::new(2, 1)?,
-            muxr_core::RenderCursor::new(0, 1, true),
+            muxr_core::RenderCursor {
+                row: 0,
+                col: 1,
+                visible: true,
+            },
             vec![muxr_core::RenderRowSpan::new(
                 0,
                 0,
@@ -972,7 +997,11 @@ mod tests {
         muxr_core::RenderBaseline::new(
             1,
             TerminalSize::new(7, 1)?,
-            muxr_core::RenderCursor::new(0, 1, true),
+            muxr_core::RenderCursor {
+                row: 0,
+                col: 1,
+                visible: true,
+            },
             vec![muxr_core::RenderRowSpan::new(
                 0,
                 0,
@@ -989,7 +1018,11 @@ mod tests {
         muxr_core::RenderBaseline::new(
             1,
             TerminalSize::new(2, 3)?,
-            muxr_core::RenderCursor::new(0, 1, true),
+            muxr_core::RenderCursor {
+                row: 0,
+                col: 1,
+                visible: true,
+            },
             vec![
                 muxr_core::RenderRowSpan::new(0, 0, first.chars().map(|ch| render_cell(&ch.to_string())).collect())?,
                 muxr_core::RenderRowSpan::new(1, 0, second.chars().map(|ch| render_cell(&ch.to_string())).collect())?,
@@ -1003,7 +1036,11 @@ mod tests {
             1,
             2,
             TerminalSize::new(2, 1)?,
-            muxr_core::RenderCursor::new(0, 1, true),
+            muxr_core::RenderCursor {
+                row: 0,
+                col: 1,
+                visible: true,
+            },
             vec![muxr_core::RenderRowSpan::new(0, 0, vec![render_cell("x")])?],
         )
     }

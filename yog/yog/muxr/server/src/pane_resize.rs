@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use crate::pane_split::PaneSplitAxis;
 use crate::pane_split::PaneSplitResize;
 use crate::server::ServerConfig;
-use crate::state::PaneNode;
+use crate::state::PaneTree;
 use crate::state::SessionLayout;
 use crate::state::Tab;
 
@@ -27,14 +27,14 @@ impl Tab {
     }
 }
 
-impl PaneNode {
+impl PaneTree {
     pub fn resize_pane(
         &mut self,
         pane_id: &muxr_core::PaneId,
         direction: PaneResizeDirection,
     ) -> rootcause::Result<bool> {
         match self {
-            Self::Leaf { .. } => Ok(false),
+            Self::Pane(_) => Ok(false),
             Self::Split {
                 axis,
                 first_ratio,
