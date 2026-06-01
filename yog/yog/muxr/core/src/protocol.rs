@@ -1334,6 +1334,7 @@ impl ServerError {
 #[derive(rkyv::Archive, Clone, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub enum ClientRequest {
     Attach(AttachRequest),
+    DeleteSession,
     Ping,
     Pong,
     Detach,
@@ -1357,6 +1358,7 @@ pub enum ClientRequest {
 #[derive(rkyv::Archive, Clone, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub enum ServerEvent {
     Attached(AttachAccepted),
+    Deleted,
     Ping,
     Pong,
     Layout(LayoutSnapshot),
@@ -1444,6 +1446,7 @@ mod tests {
 
     #[rstest]
     #[case::attach(ClientRequest::Attach(client_attach_request()?))]
+    #[case::delete_session(ClientRequest::DeleteSession)]
     #[case::ping(ClientRequest::Ping)]
     #[case::pong(ClientRequest::Pong)]
     #[case::detach(ClientRequest::Detach)]
@@ -1475,6 +1478,7 @@ mod tests {
 
     #[rstest]
     #[case::attached(ServerEvent::Attached(attach_accepted()?))]
+    #[case::deleted(ServerEvent::Deleted)]
     #[case::ping(ServerEvent::Ping)]
     #[case::pong(ServerEvent::Pong)]
     #[case::layout(ServerEvent::Layout(layout_snapshot()?))]

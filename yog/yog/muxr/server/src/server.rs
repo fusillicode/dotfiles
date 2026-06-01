@@ -12,6 +12,7 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use muxr_core::AttachAccepted;
+use muxr_core::AttachRequest;
 use muxr_core::ClientKey;
 use muxr_core::ClientKeyCode;
 use muxr_core::ClientKeyModifiers;
@@ -58,6 +59,7 @@ use crate::pty::PtyHandle;
 use crate::pty::PtySession;
 use crate::pty::PtySinkGuard;
 use crate::pty::ShellCommand;
+use crate::sessions_delete::DeleteSessions;
 use crate::state::SessionLayout;
 use crate::state::SessionMetadata;
 use crate::terminal::TerminalSnapshot;
@@ -409,10 +411,15 @@ async fn serve_async(config: &ServerConfig) -> rootcause::Result<()> {
         crate::state::persisted::write_metadata(&config.paths, &locked_layout)?;
     }
     let active_client = Arc::new(AtomicBool::new(false));
+    let delete_sessions = Arc::new(DeleteSessions::new());
     let mut accepted_connections = 0_usize;
     let mut handles = Vec::new();
 
     loop {
+        if delete_sessions.is_requested() {
+            break;
+        }
+
         if matches!(
             self::reap_exited_panes(&config.paths, &layout, &runtimes)?,
             ReapResult::Final
@@ -429,7 +436,15 @@ async fn serve_async(config: &ServerConfig) -> rootcause::Result<()> {
                 accepted_connections = accepted_connections
                     .checked_add(1)
                     .ok_or_else(|| report!("muxr accepted connection count overflowed"))?;
-                self::spawn_client_task(config, &active_client, &layout, &runtimes, connection, &mut handles);
+                self::spawn_client_task(
+                    config,
+                    &active_client,
+                    &delete_sessions,
+                    &layout,
+                    &runtimes,
+                    connection,
+                    &mut handles,
+                );
 
                 if let Some(max_accepted_connections) = config.max_accepted_connections
                     && accepted_connections >= max_accepted_connections
@@ -442,6 +457,11 @@ async fn serve_async(config: &ServerConfig) -> rootcause::Result<()> {
     }
 
     self::join_client_tasks(handles).await?;
+    if delete_sessions.is_requested() {
+        drop(runtimes);
+        drop(layout);
+        crate::sessions_delete::remove_session_files(&config.paths)?;
+    }
     Ok(())
 }
 
@@ -657,6 +677,7 @@ struct AttachedPtySink {
 
 struct AttachedSessionState<'a> {
     config: &'a ServerConfig,
+    delete_sessions: &'a DeleteSessions,
     layout: &'a Mutex<SessionLayout>,
     pane_regions: PaneRegionsSnapshot,
     pty_event_sender: &'a mpsc::SyncSender<PtyEvent>,
@@ -749,17 +770,27 @@ fn reap_exited_panes(
 fn spawn_client_task(
     config: &ServerConfig,
     active_client: &Arc<AtomicBool>,
+    delete_sessions: &Arc<DeleteSessions>,
     layout: &Arc<Mutex<SessionLayout>>,
     runtimes: &Arc<Mutex<PaneRuntimes>>,
     connection: ServerConnection,
     handles: &mut Vec<tokio::task::JoinHandle<rootcause::Result<()>>>,
 ) {
     let active_client = Arc::clone(active_client);
+    let delete_sessions = Arc::clone(delete_sessions);
     let config = config.clone();
     let layout = Arc::clone(layout);
     let runtimes = Arc::clone(runtimes);
     handles.push(tokio::spawn(async move {
-        self::handle_client(&config, connection, &active_client, &layout, &runtimes).await
+        self::handle_client(
+            &config,
+            connection,
+            &active_client,
+            &delete_sessions,
+            &layout,
+            &runtimes,
+        )
+        .await
     }));
 }
 
@@ -767,37 +798,12 @@ async fn handle_client(
     config: &ServerConfig,
     mut connection: ServerConnection,
     active_client: &AtomicBool,
+    delete_sessions: &DeleteSessions,
     layout: &Mutex<SessionLayout>,
     runtimes: &Mutex<PaneRuntimes>,
 ) -> rootcause::Result<()> {
-    let Ok(Ok(Some(request))) = tokio::time::timeout(CLIENT_HANDSHAKE_TIMEOUT, connection.recv_request()).await else {
+    let Some(attach_request) = self::handle_client_handshake(&mut connection, delete_sessions).await? else {
         return Ok(());
-    };
-
-    let attach_request = match request {
-        ClientRequest::Ping => {
-            let _sent = self::send_connection_event_with_timeout(&mut connection, &ServerEvent::Pong).await?;
-            return Ok(());
-        }
-        ClientRequest::Attach(attach_request) => attach_request,
-        request @ (ClientRequest::Pong
-        | ClientRequest::Detach
-        | ClientRequest::RenderResync
-        | ClientRequest::Resize(_)
-        | ClientRequest::Input(_)
-        | ClientRequest::Paste(_)
-        | ClientRequest::Key(_)
-        | ClientRequest::Mouse(_)
-        | ClientRequest::ScrollPaneAt { .. }
-        | ClientRequest::ScrollPaneLineAt { .. }
-        | ClientRequest::FocusPaneAt(_)) => {
-            let _sent = self::send_connection_event_with_timeout(
-                &mut connection,
-                &ServerEvent::Error(ServerError::unexpected_request(request)),
-            )
-            .await?;
-            return Ok(());
-        }
     };
 
     if active_client.swap(true, Ordering::AcqRel) {
@@ -845,6 +851,7 @@ async fn handle_client(
     });
     let mut attached_state = AttachedSessionState {
         config,
+        delete_sessions,
         layout,
         pane_regions: attached_pane_regions,
         pty_event_sender: &pty_event_sender,
@@ -868,6 +875,45 @@ async fn handle_client(
         .await
         .map_err(|error| report!("muxr server pty bridge task panicked").attach(format!("{error}")))?;
     result
+}
+
+async fn handle_client_handshake(
+    connection: &mut ServerConnection,
+    delete_sessions: &DeleteSessions,
+) -> rootcause::Result<Option<AttachRequest>> {
+    let Ok(Ok(Some(request))) = tokio::time::timeout(CLIENT_HANDSHAKE_TIMEOUT, connection.recv_request()).await else {
+        return Ok(None);
+    };
+
+    match request {
+        ClientRequest::DeleteSession => {
+            crate::sessions_delete::handle_handshake_delete(connection, delete_sessions).await?;
+            Ok(None)
+        }
+        ClientRequest::Ping => {
+            let _sent = self::send_connection_event_with_timeout(connection, &ServerEvent::Pong).await?;
+            Ok(None)
+        }
+        ClientRequest::Attach(attach_request) => Ok(Some(attach_request)),
+        request @ (ClientRequest::Pong
+        | ClientRequest::Detach
+        | ClientRequest::RenderResync
+        | ClientRequest::Resize(_)
+        | ClientRequest::Input(_)
+        | ClientRequest::Paste(_)
+        | ClientRequest::Key(_)
+        | ClientRequest::Mouse(_)
+        | ClientRequest::ScrollPaneAt { .. }
+        | ClientRequest::ScrollPaneLineAt { .. }
+        | ClientRequest::FocusPaneAt(_)) => {
+            let _sent = self::send_connection_event_with_timeout(
+                connection,
+                &ServerEvent::Error(ServerError::unexpected_request(request)),
+            )
+            .await?;
+            Ok(None)
+        }
+    }
 }
 
 fn initial_attached_render(
@@ -958,6 +1004,11 @@ async fn run_attached_client(
         if let Some(started_at) = heartbeat_started_at
             && started_at.elapsed() > CLIENT_HEARTBEAT_TIMEOUT
         {
+            return Ok(());
+        }
+        if state.delete_sessions.is_requested() {
+            // The delete requester already received the explicit ack; attached clients can observe connection close.
+            // Waiting to notify a slow attached terminal would delay server-owned cleanup of the selected session.
             return Ok(());
         }
 
@@ -1154,6 +1205,10 @@ async fn handle_attached_request(
     match request {
         Some(ClientRequest::Detach) => {
             let _sent = self::send_writer_event_with_timeout(event_writer, &ServerEvent::Detached).await?;
+            Ok(false)
+        }
+        Some(ClientRequest::DeleteSession) => {
+            crate::sessions_delete::handle_attached_delete(event_writer, state.delete_sessions).await?;
             Ok(false)
         }
         Some(ClientRequest::Input(bytes)) => {
@@ -1515,7 +1570,11 @@ const fn resolve_resize_key(input_mode: &mut ServerInputMode, key: &ClientKey) -
     }
 }
 
-async fn send_connection_event_with_timeout(
+/// Send one event on a pre-attach connection with the server's bounded write timeout.
+///
+/// # Errors
+/// This function currently returns `Ok(false)` for send failures and timeouts instead of an error.
+pub async fn send_connection_event_with_timeout(
     connection: &mut ServerConnection,
     event: &ServerEvent,
 ) -> rootcause::Result<bool> {
@@ -1525,7 +1584,11 @@ async fn send_connection_event_with_timeout(
     }
 }
 
-async fn send_writer_event_with_timeout(
+/// Send one event on an attached-client writer with the server's bounded write timeout.
+///
+/// # Errors
+/// This function currently returns `Ok(false)` for send failures and timeouts instead of an error.
+pub async fn send_writer_event_with_timeout(
     writer: &mut ServerEventWriter,
     event: &ServerEvent,
 ) -> rootcause::Result<bool> {
@@ -1765,6 +1828,50 @@ mod tests {
 
             self::attach_and_detach(&session, &paths).await?;
             self::join_server(handle)
+        })
+    }
+
+    #[test]
+    fn test_serve_when_delete_session_is_first_request_stops_server_and_removes_state() -> rootcause::Result<()> {
+        self::runtime()?.block_on(async {
+            let tempdir = tempfile::tempdir()?;
+            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+            let handle = self::spawn_test_server(&session, &paths, 2);
+
+            self::wait_for_socket(&paths.socket)?;
+            self::wait_for_path(&paths.layout)?;
+            let mut delete_client = self::connect_client(&paths).await?;
+
+            delete_client.send_request(&ClientRequest::DeleteSession).await?;
+            pretty_assertions::assert_eq!(delete_client.recv_event().await?, Some(ServerEvent::Deleted));
+            self::join_server_with_timeout(handle)?;
+
+            assert2::assert!(!paths.root.exists());
+            assert2::assert!(!paths.socket.exists());
+            assert2::assert!(!paths.pid.exists());
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn test_serve_when_delete_session_arrives_while_client_is_attached_removes_state() -> rootcause::Result<()> {
+        self::runtime()?.block_on(async {
+            let tempdir = tempfile::tempdir()?;
+            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+            let handle = self::spawn_test_server_with_shell(&session, &paths, None, ShellCommand::new("/bin/cat"));
+
+            self::wait_for_socket(&paths.socket)?;
+            let _attached_client = self::open_attached_client(&session, &paths).await?;
+            let mut delete_client = self::connect_client(&paths).await?;
+
+            delete_client.send_request(&ClientRequest::DeleteSession).await?;
+            pretty_assertions::assert_eq!(delete_client.recv_event().await?, Some(ServerEvent::Deleted));
+            self::join_server_with_timeout(handle)?;
+
+            assert2::assert!(!paths.root.exists());
+            assert2::assert!(!paths.socket.exists());
+            assert2::assert!(!paths.pid.exists());
+            Ok(())
         })
     }
 
@@ -2967,6 +3074,7 @@ mod tests {
                 Some(ServerEvent::Ping) => client.writer.send_request(&ClientRequest::Pong).await?,
                 Some(
                     ServerEvent::Attached(_)
+                    | ServerEvent::Deleted
                     | ServerEvent::Pong
                     | ServerEvent::Layout(_)
                     | ServerEvent::PaneRegions(_)
@@ -3182,6 +3290,7 @@ mod tests {
                 }
                 ServerEvent::Ping => client.writer.send_request(&ClientRequest::Pong).await?,
                 ServerEvent::Attached(_)
+                | ServerEvent::Deleted
                 | ServerEvent::Pong
                 | ServerEvent::PaneRegions(_)
                 | ServerEvent::Render(_)
@@ -3218,6 +3327,7 @@ mod tests {
                     return Err(report!("muxr test server returned error").attach(format!("{error:?}")));
                 }
                 ServerEvent::Attached(_)
+                | ServerEvent::Deleted
                 | ServerEvent::Pong
                 | ServerEvent::Layout(_)
                 | ServerEvent::PaneRegions(_)
@@ -3253,6 +3363,7 @@ mod tests {
                     return Err(report!("muxr test server returned error").attach(format!("{error:?}")));
                 }
                 ServerEvent::Attached(_)
+                | ServerEvent::Deleted
                 | ServerEvent::Ping
                 | ServerEvent::Pong
                 | ServerEvent::Layout(_)
@@ -3289,6 +3400,7 @@ mod tests {
                 Ok(Ok(
                     Some(
                         ServerEvent::Attached(_)
+                        | ServerEvent::Deleted
                         | ServerEvent::Pong
                         | ServerEvent::Layout(_)
                         | ServerEvent::PaneRegions(_)
@@ -3319,6 +3431,7 @@ mod tests {
                 Ok(Ok(
                     Some(
                         ServerEvent::Attached(_)
+                        | ServerEvent::Deleted
                         | ServerEvent::Pong
                         | ServerEvent::Layout(_)
                         | ServerEvent::PaneRegions(_)
