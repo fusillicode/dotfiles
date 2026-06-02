@@ -491,11 +491,12 @@ struct BorderCell {
     style: RenderStyle,
 }
 
+// Border chrome can use exact RGB for pane state contrast; indexed colors remain useful for palette-sized accents.
 const fn border_style() -> RenderStyle {
     RenderStyle {
         attrs: RenderTextStyle::empty().set_dim(true),
         bg: RenderColor::Default,
-        fg: RenderColor::Indexed(8),
+        fg: RenderColor::Rgb { r: 50, g: 50, b: 50 },
     }
 }
 
@@ -503,7 +504,7 @@ const fn focused_border_style() -> RenderStyle {
     RenderStyle {
         attrs: RenderTextStyle::empty().set_bold(true),
         bg: RenderColor::Default,
-        fg: RenderColor::Indexed(39),
+        fg: RenderColor::Rgb { r: 132, g: 132, b: 132 },
     }
 }
 
@@ -511,7 +512,7 @@ const fn resize_border_style() -> RenderStyle {
     RenderStyle {
         attrs: RenderTextStyle::empty().set_bold(true),
         bg: RenderColor::Default,
-        fg: RenderColor::Indexed(220),
+        fg: RenderColor::Indexed(166),
     }
 }
 

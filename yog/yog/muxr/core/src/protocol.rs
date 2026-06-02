@@ -1132,12 +1132,10 @@ impl RenderTextStyle {
 pub enum RenderColor {
     #[default]
     Default,
+    /// Xterm 256-color palette index (`38;5;<n>` / `48;5;<n>`), used when terminal-theme-relative colors are enough.
     Indexed(u8),
-    Rgb {
-        r: u8,
-        g: u8,
-        b: u8,
-    },
+    /// Explicit 24-bit RGB color (`38;2;r;g;b` / `48;2;r;g;b`) for exact colors.
+    Rgb { r: u8, g: u8, b: u8 },
 }
 
 /// Normalized key code carried with the original terminal bytes.
